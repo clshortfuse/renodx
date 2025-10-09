@@ -29,11 +29,8 @@ float4 main(
   float4 _34 = t0.Load(int3(_10, _11, 0));
 
   // if (RENODX_TONE_MAP_TYPE > 1) {
-  //   // float clamp_value = Uncharted2Tonemap1(100.f);
-  //   float clamp_value = 5.f;
+  //   float clamp_value = 0.5f;
   //   _34.rgb = ClampPostProcessing(_34.rgb, clamp_value);
-
-  //   //_34.rgb = Uncharted2Tonemap1(_34.rgb);
   // }
 
   float _41 = ((_14 * CustomPixelConsts_032.x) * cb12_073x) - _19;

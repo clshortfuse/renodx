@@ -86,7 +86,7 @@ OutputSignature main(
   // outputColor.rgb = renodx::draw::SwapChainPass(outputColor.rgb);
   // outputColor.w = ((_24.w - _29.w) * _24.w) + _29.w;
   outputColor1.w = lerp(_29.w, _24.w, _24.w);
-  outputColor1.w = renodx::math::SafePow(outputColor1.w, gamma);
+  outputColor1.w = renodx::math::SafePow(outputColor1.w, 1.f / gamma);
 
   //SV_Target = outputColor;
   SV_Target_1.rgb = renodx::color::gamma::EncodeSafe(outputColor1.rgb, gamma);
@@ -196,9 +196,9 @@ OutputSignature main(
 
     outputColor = float4(_140, _141, _142, _143);
   } else {
-    float4 intermediateColor;
-    intermediateColor.w = saturate(_24.w * 2.0f);
-    intermediateColor.xyz = linearGameColor.xyz;
+    // float4 intermediateColor;
+    // intermediateColor.w = saturate(_24.w * 2.0f);
+    // intermediateColor.xyz = linearGameColor.xyz;
   
     // intermediateColor.xyz = CustomTonemap(intermediateColor.xyz);
     // intermediateColor.xyz = renodx::effects::ApplyFilmGrain(
@@ -208,17 +208,17 @@ OutputSignature main(
     //     CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
     // intermediateColor.rgb = renodx::draw::RenderIntermediatePass(intermediateColor.rgb);
 
-    //blend game + ui
-    intermediateColor.xyz *= -0.6699999570846558f;
-    intermediateColor.xyz *= intermediateColor.w;
-    intermediateColor.xyz += linearGameColor;
-    outputColor.xyz = linearUiColor - intermediateColor.xyz;
-    outputColor.w = _24.w + -1.0f;
-    outputColor *= _24.w;
-    outputColor.xyz += intermediateColor.xyz;
-    outputColor.w += 1.0f;
+    // //blend game + ui
+    // intermediateColor.xyz *= -0.6699999570846558f;
+    // intermediateColor.xyz *= intermediateColor.w;
+    // intermediateColor.xyz += linearGameColor;
+    // outputColor.xyz = linearUiColor - intermediateColor.xyz;
+    // outputColor.w = _24.w + -1.0f;
+    // outputColor *= _24.w;
+    // outputColor.xyz += intermediateColor.xyz;
+    // outputColor.w += 1.0f;
 
-    //outputColor = HandleUICompositing(float4(linearUiColor, _24.w), intermediateColor);
+    outputColor = HandleUICompositing(float4(linearUiColor, _24.w), float4(linearGameColor, _29.w));
 
     //float _116 = _24.w * 2.0f;
     //float _117 = saturate(_116);
@@ -251,7 +251,7 @@ OutputSignature main(
   }
 
   // outputColor.rgb = renodx::color::bt2020::from::BT709(outputColor.rgb);
-  // outputColor.rgb = renodx::color::pq::EncodeSafe(outputColor.rgb, 1.f);
+  // outputColor.rgb = renodx::color::pq::EncodeSafe(outputColor.rgb, RENODX_GRAPHICS_WHITE_NITS);
   // SV_Target = outputColor;
   SV_Target.rgb = renodx::draw::SwapChainPass(outputColor.rgb);
   SV_Target.w = outputColor.w;

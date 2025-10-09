@@ -66,6 +66,13 @@ const std::unordered_map<std::string, float> FILMIC_VALUES = {
     //{"FxSunShaftStrength", 60.f},
 };
 
+const std::unordered_map<std::string, float> SDR_DEFAULT_VALUES = {
+  {"ToneMapType", 0.f},
+  {"SceneGradeSaturationCorrection", 0.f},
+  {"SceneGradeBlowoutRestoration", 0.f},
+  {"ColorGradeHighlights", 50.f},
+};
+
 const std::unordered_map<std::string, float> CANNOT_PRESET_VALUES = {
     {"ToneMapPeakNits", 0},
     {"ToneMapGameNits", 0},
@@ -100,7 +107,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
         .labels = {"Vanilla", "SDR in HDR", "Piecewise Reinhard"},
-        .parse = [](float value) { return value; },
+        .parse = [](float value) { if (!last_is_hdr) { return 0.f; } return value; },
         .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
@@ -158,12 +165,14 @@ renodx::utils::settings::Settings settings = {
             }
           }
         },
+        .is_visible = []() { return last_is_hdr; }
     },
         new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Purist",
         .section = "Presets",
         .group = "button-line-1",
+        .is_enabled = []() { return last_is_hdr; },
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
@@ -177,6 +186,7 @@ renodx::utils::settings::Settings settings = {
             }
           }
         },
+        .is_visible = []() { return last_is_hdr; }
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -197,6 +207,28 @@ renodx::utils::settings::Settings settings = {
             }
           }
         },
+        .is_visible = []() { return last_is_hdr; }
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "SDR Vanilla",
+        .section = "Presets",
+        .group = "button-line-1",
+        .is_enabled = []() { return !last_is_hdr; },
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            if (SDR_DEFAULT_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, SDR_DEFAULT_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+        .is_visible = []() { return !last_is_hdr; }
     },
     //     new renodx::utils::settings::Setting{
     //     .key = "ToneMapHueProcessor",
@@ -444,7 +476,7 @@ renodx::utils::settings::Settings settings = {
             "US CRT",
             "JPN CRT",
         },
-        //.is_visible = []() { return settings[0]->GetValue() >= 1 && last_is_hdr; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1 && last_is_hdr; },
     },
 
     // new renodx::utils::settings::Setting{
@@ -483,7 +515,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Approximately emulate SDR behavior, or upgrade bloom parameters for an HDR input.",
         .labels = {"SDR Approximate", "HDR Upgrade"},
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1; },
-        .parse = [](float value) { return value; },
+        .parse = [](float value) { if (!last_is_hdr) { return 0.f; } return value; },
         .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
         new renodx::utils::settings::Setting{
