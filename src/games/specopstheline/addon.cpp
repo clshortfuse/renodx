@@ -48,7 +48,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        .labels = {"Vanilla", "None", "ACES(Doesn't Work)", "RenoDRT"},
         .is_visible = []() { return current_settings_mode == 1; },
     },
     new renodx::utils::settings::Setting{
@@ -78,9 +78,9 @@ renodx::utils::settings::Settings settings = {
         .default_value = 203.f,
         .label = "UI Brightness",
         .section = "Tone Mapping",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits",
-        .min = 48.f,
-        .max = 500.f,
+        .tooltip = "Changing the UI brightness slightly affects the gamma",
+        .min = 203.f,
+        .max = 203.f,
     },
     new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
@@ -279,11 +279,11 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
       .key = "FxVignette",
       .binding = &shader_injection.custom_vignette,
-      .default_value = 0.f,
+      .default_value = 50.f,
       .label = "Vignette",
       .section = "Effects",
       .max = 100.f,
-      .parse = [](float value) { return value * 0.01f; },
+      .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
@@ -314,7 +314,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "F6AUTeWJHM");
         },
     },
     new renodx::utils::settings::Setting{
@@ -341,7 +341,7 @@ void OnPresetOff() {
    renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
    renodx::utils::settings::UpdateSetting("SwapChainCustomColorSpace", 0.f);
    renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
-   renodx::utils::settings::UpdateSetting("FxVignette", 0.f);
+   renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
    renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
 }
 
@@ -362,8 +362,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::swapchain::expected_constant_buffer_index = 13;
       renodx::mods::swapchain::expected_constant_buffer_space = 50;
-      renodx::mods::swapchain::force_borderless = true;
-      renodx::mods::swapchain::prevent_full_screen = true;
+      renodx::mods::swapchain::force_borderless = false;
+      renodx::mods::swapchain::prevent_full_screen = false;
       renodx::mods::swapchain::force_screen_tearing = false;
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::set_color_space = false;
@@ -374,6 +374,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         };
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
+
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::b8g8r8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+      });
+            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r16g16b16a16_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .ignore_size = true,
+          .use_resource_view_cloning = true,
+      });
+
 
       break;
     case DLL_PROCESS_DETACH:
