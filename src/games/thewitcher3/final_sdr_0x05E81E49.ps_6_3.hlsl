@@ -39,33 +39,59 @@ float4 main(
   float4 SV_Target;
   float4 _20 = t1.Load(int3(int(SV_Position.x - CustomPixelConsts_016.x), int(SV_Position.y - CustomPixelConsts_016.y), 0));
   float4 _25 = t0.SampleLevel(s1, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-  float _30 = CustomPixelConsts_032.y * CustomPixelConsts_032.x;  // gamma slider
+  float _30 = CustomPixelConsts_032.y * CustomPixelConsts_032.x; // gamma
 
-  float gamma = 2.2f;
-  float4 linearGameColor = _25;
-  float4 linearUiColor = _20;
+  //float inv_gamma = _30;
+  //float gamma = CustomPixelConsts_032.z;
 
-  linearGameColor.xyz = ApplyRCAS(linearGameColor.xyz, TEXCOORD, t0, s1);
-  //linearGameColor.xyz = CustomTonemap(linearGameColor.xyz, SdrConfig());
-  linearGameColor.xyz = renodx::effects::ApplyFilmGrain(
-      linearGameColor.xyz,
+  // float gamma = 2.2f;
+  // float inv_gamma = 1.f / 2.2f;
+
+  float3 gamma_game_color = _25.rgb;
+  float3 gamma_ui_color = _20.rgb;
+
+  float game_alpha = _25.w;
+  float ui_alpha = _20.w;
+
+  float3 linear_game_color = renodx::color::gamma::Decode(gamma_game_color);
+
+  linear_game_color.xyz = ApplyRCAS(linear_game_color.xyz, TEXCOORD, t0, s1);
+  linear_game_color.xyz = CustomTonemap(linear_game_color.xyz, SdrConfig());
+  linear_game_color.xyz = renodx::effects::ApplyFilmGrain(
+      linear_game_color.xyz,
       float2(TEXCOORD.x, TEXCOORD.y),
       CUSTOM_RANDOM,
       CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
 
-  float3 gammaGameColor = saturate(pow(linearGameColor.xyz, _30));
-  float _46 = gammaGameColor.x;
-  float _47 = gammaGameColor.y;
-  float _48 = gammaGameColor.z;
+  float3 linear_ui_color = renodx::color::gamma::Decode(gamma_ui_color);
+
+  float4 outputColor = HandleUICompositing(float4(linear_ui_color, ui_alpha), float4(linear_game_color, game_alpha));
+
+  SV_Target.rgb = renodx::color::gamma::Encode(outputColor.rgb);
+  SV_Target.w = outputColor.w;
+
+  // SV_Target.rgb = exp2(log2(((linear_ui_color - linear_game_color) * ui_alpha) + linear_game_color) * gamma);
+  // SV_Target.w = exp2(log2(lerp(game_alpha, ui_alpha, ui_alpha)) * gamma);
+
   
 
-  // float _46 = (pow(_25.x, _30));
-  // float _47 = (pow(_25.y, _30));
-  // float _48 = (pow(_25.z, _30));
-
-  SV_Target.x = exp2(log2((((pow(_20.x, _30)) - _46) * _20.w) + _46) * CustomPixelConsts_032.z);
-  SV_Target.y = exp2(log2((((pow(_20.y, _30)) - _47) * _20.w) + _47) * CustomPixelConsts_032.z);
-  SV_Target.z = exp2(log2((((pow(_20.z, _30)) - _48) * _20.w) + _48) * CustomPixelConsts_032.z);
-  SV_Target.w = exp2(log2(lerp(_25.w, _20.w, _20.w)) * CustomPixelConsts_032.z);
   return SV_Target;
 }
+
+// float4 main(
+//   noperspective float4 SV_Position : SV_Position,
+//   linear float2 TEXCOORD : TEXCOORD
+// ) : SV_Target {
+//   float4 SV_Target;
+//   float4 _20 = t1.Load(int3(int(SV_Position.x - CustomPixelConsts_016.x), int(SV_Position.y - CustomPixelConsts_016.y), 0));
+//   float4 _25 = t0.SampleLevel(s1, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+//   float _30 = CustomPixelConsts_032.y * CustomPixelConsts_032.x;
+//   float _46 = (pow(_25.x, _30));
+//   float _47 = (pow(_25.y, _30));
+//   float _48 = (pow(_25.z, _30));
+//   SV_Target.x = exp2(log2((((pow(_20.x, _30)) - _46) * _20.w) + _46) * CustomPixelConsts_032.z);
+//   SV_Target.y = exp2(log2((((pow(_20.y, _30)) - _47) * _20.w) + _47) * CustomPixelConsts_032.z);
+//   SV_Target.z = exp2(log2((((pow(_20.z, _30)) - _48) * _20.w) + _48) * CustomPixelConsts_032.z);
+//   SV_Target.w = exp2(log2(lerp(_25.w, _20.w, _20.w)) * CustomPixelConsts_032.z);
+//   return SV_Target;
+// }

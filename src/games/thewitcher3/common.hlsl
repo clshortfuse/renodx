@@ -181,6 +181,7 @@ float max3(float3 color) {
 
 float4 ColorGradingSDR(float3 rgbHdr)
 {
+  if (RENODX_TONE_MAP_TYPE < 2) return float4(rgbHdr, 0.f);
   // Find the maximum component
 
   float gMax = max3(rgbHdr);
@@ -197,6 +198,7 @@ float4 ColorGradingSDR(float3 rgbHdr)
 }
 
 float3 ColorGradeHDR(float4 rgbGraded) {
+  if (RENODX_TONE_MAP_TYPE < 2) return rgbGraded.rgb;
   return rgbGraded.rgb / rgbGraded.w;
 }
 
@@ -226,10 +228,10 @@ float3 applyDice(float3 color, float paperWhite = RENODX_DIFFUSE_WHITE_NITS, flo
 
 renodx::draw::Config SdrConfig() {
   renodx::draw::Config config = renodx::draw::BuildConfig();
-  config.peak_white_nits = 80.f;
-  config.diffuse_white_nits = 80.f;
-  config.graphics_white_nits = 80.f;
-  config.reno_drt_white_clip = 1.5f;
+  config.peak_white_nits = renodx::color::srgb::REFERENCE_WHITE;
+  config.diffuse_white_nits = renodx::color::srgb::REFERENCE_WHITE;
+  config.graphics_white_nits = renodx::color::srgb::REFERENCE_WHITE;
+  //config.reno_drt_white_clip = 1.f;
   return config;
 }
 
@@ -249,6 +251,7 @@ float3 CustomTonemap(float3 color, renodx::draw::Config config = renodx::draw::B
   }
   float peak_white_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;
   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;
+  float white_clip = config.reno_drt_white_clip;
   // return color;
   // float3 outputColor = renodx::draw::ToneMapPass(color, config);
   float3 outputColor;
@@ -294,4 +297,25 @@ float3 ClampPostProcessing(float3 value, float clamp_value) {
   outputColor.y = min(value.y, clamp_value);
   outputColor.z = min(value.z, clamp_value);
   return outputColor;
+}
+
+float4 HandleUICompositing(float4 ui_color_linear, float4 scene_color_linear) {
+  float3 ui_color;
+  ui_color.rgb = renodx::color::srgb::EncodeSafe(ui_color_linear.rgb);
+
+  float3 scene_color_srgb = renodx::color::srgb::EncodeSafe(scene_color_linear.rgb);
+
+  // Blend in SRGB based on opacity
+  float3 composited_color = lerp(scene_color_srgb, ui_color.rgb, saturate(ui_color_linear.a));
+  float3 linear_color = renodx::color::srgb::DecodeSafe(composited_color);
+
+  float4 output_color;
+  output_color.rgb = linear_color;
+  output_color.a = ui_color_linear.a;
+
+  return output_color;
+}
+
+float4 HandleUICompositingHDR(float4 ui_color_linear, float4 scene_color_linear) {
+  return HandleUICompositing(ui_color_linear * (RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS), scene_color_linear);
 }
