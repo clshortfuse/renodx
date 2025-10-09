@@ -229,7 +229,11 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   sc_desc.BufferCount = 2;
   sc_desc.Width = host_resource_info->desc.texture.width;
   sc_desc.Height = host_resource_info->desc.texture.height;
-  sc_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  if (target_format == reshade::api::format::r10g10b10a2_unorm) {
+    sc_desc.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
+  } else {
+    sc_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  }
   fullscreen_desc.RefreshRate.Numerator = 0;
   fullscreen_desc.RefreshRate.Denominator = 0;
   sc_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -360,7 +364,11 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
 
   IDXGISwapChain3* swapChain3 = nullptr;
   if (SUCCEEDED(proxy_swap_chain->QueryInterface(IID_PPV_ARGS(&swapChain3)))) {
-    swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
+    if (target_color_space == reshade::api::color_space::hdr10_st2084) {
+      swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+    } else {
+      swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
+    }
     swapChain3->Release();
   }
 
