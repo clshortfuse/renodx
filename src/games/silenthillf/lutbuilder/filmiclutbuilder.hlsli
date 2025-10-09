@@ -91,59 +91,6 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
-float GetUnrealFilmicMidGrayScale() {
-  const float untonemapped = 0.18f;
-  float _1007 = log2(untonemapped) * 0.3010300099849701f;
-  float _976 = (FilmBlackClip + 1.0f) - FilmToe;
-  float _978 = FilmWhiteClip + 1.0f;
-  float _980 = _978 - FilmShoulder;
-  float _998;
-  if (FilmToe > 0.800000011920929f) {
-    _998 = (((0.8199999928474426f - FilmToe) / FilmSlope) + -0.7447274923324585f);
-  } else {
-    float _989 = (FilmBlackClip + 0.18000000715255737f) / _976;
-    _998 = (-0.7447274923324585f - ((log2(_989 / (2.0f - _989)) * 0.3465735912322998f) * (_976 / FilmSlope)));
-  }
-  float _1001 = ((1.0f - FilmToe) / FilmSlope) - _998;
-  float _1003 = (FilmShoulder / FilmSlope) - _1001;
-  float _1013 = FilmSlope * (_1007 + _1001);
-  float _1016 = _976 * 2.0f;
-  float _1018 = (FilmSlope * -2.0f) / _976;
-  float _1019 = _1007 - _998;
-  float _1040 = _980 * 2.0f;
-  float _1042 = (FilmSlope * 2.0f) / _980;
-  float _1067 = select((_1007 < _998), ((_1016 / (exp2((_1019 * 1.4426950216293335f) * _1018) + 1.0f)) - FilmBlackClip), _1013);
-  float _1076 = _1003 - _998;
-  float _1080 = saturate(_1019 / _1076);
-  bool _1083 = (_1003 < _998);
-  float _1087 = select(_1083, (1.0f - _1080), _1080);
-  float _1108 = (((_1087 * _1087) * (select((_1007 > _1003), (_978 - (_1040 / (exp2(((_1007 - _1003) * 1.4426950216293335f) * _1042) + 1.0f))), _1013) - _1067)) * (3.0f - (_1087 * 2.0f))) + _1067;
-
-  return _1108 / 0.162f;  // 0.162 is roughly the default output mid-gray value for Unreal Engine's filmic tonemapper
-}
-
-float3 ApplyACES(float3 untonemapped_ap1) {
-  const float ACES_MIN = 0.0001f;
-  float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
-  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-  const float mid_gray_scale = GetUnrealFilmicMidGrayScale();
-
-  untonemapped_ap1 *= 1.62f;  // set up midgray to match UE defaults, then allow midgray matching to adjust further based on parameters
-
-  if (RENODX_GAMMA_CORRECTION != 0.f) {
-    aces_max = renodx::color::correct::Gamma(aces_max, true);
-    aces_min = renodx::color::correct::Gamma(aces_min, true);
-  }
-  aces_max /= mid_gray_scale;
-  aces_min /= mid_gray_scale;
-
-  float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
-
-  tonemapped_ap1 *= mid_gray_scale;
-
-  return tonemapped_ap1;
-}
-
 float3 ApplyPostToneMapDesaturation(float3 tonemapped) {
   float grayscale = renodx::color::y::from::AP1(tonemapped);
   return max(0.f, lerp(grayscale, tonemapped, 0.93f));
@@ -192,6 +139,47 @@ UNREALFILMIC_GENERATOR(float)
 UNREALFILMIC_GENERATOR(float3)
 UNREALFILMIC_GENERATOR(float4)
 #undef UNREALFILMIC_GENERATOR
+
+float3 ApplyACES(float3 untonemapped_ap1) {
+#if 1
+  const float ACES_MID = 0.1f;
+  const float ACES_MIN = 0.0001f;
+  float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
+  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+
+  if (RENODX_GAMMA_CORRECTION != 0.f) {
+    aces_max = renodx::color::correct::Gamma(aces_max, true);
+    aces_min = renodx::color::correct::Gamma(aces_min, true);
+  }
+
+  const float EXPOSURE_SCALE = (1.62f);  // UE Filmic with default params matches ACES with 1.62x exposure (found using Desmos)
+  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMap(0.18f / EXPOSURE_SCALE) / (ACES_MID);
+
+  aces_max /= MID_GRAY_SCALE;
+  aces_min /= MID_GRAY_SCALE;
+
+  untonemapped_ap1 *= EXPOSURE_SCALE;  // adjust exposure to match UE defaults, then allow midgray matching to adjust further based on parameters
+
+  float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
+
+  tonemapped_ap1 *= MID_GRAY_SCALE;
+
+#else  // use ReinhardPiecewiseExtended instead of ACES
+  const float EXPOSURE_SCALE = (0.8f);  // Narkowicz, which UE filmic is based on, adjusts exposure by 0.8x
+  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMap(0.18f / EXPOSURE_SCALE) / (0.18f);
+  float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  if (RENODX_GAMMA_CORRECTION != 0.f) {
+    peak_ratio = renodx::color::correct::Gamma(peak_ratio, true);
+  }
+  peak_ratio /= MID_GRAY_SCALE;
+
+  untonemapped_ap1 *= EXPOSURE_SCALE;
+  float3 tonemapped_ap1 = renodx::tonemap::ReinhardPiecewiseExtended(untonemapped_ap1, 100.f, peak_ratio, 0.5f);
+  tonemapped_ap1 *= MID_GRAY_SCALE;
+#endif
+
+  return tonemapped_ap1;
+}
 
 float3 LerpToneMapStrength(float3 tonemapped, float3 preRRT) {
   preRRT = min(100.f, preRRT);  // prevented artifacts during night vision in Robocop
