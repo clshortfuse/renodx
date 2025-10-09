@@ -107,7 +107,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
         .labels = {"Vanilla", "SDR in HDR", "Piecewise Reinhard"},
-        .parse = [](float value) { if (!last_is_hdr) { return 0.f; } return value; },
+        .parse = [](float value) { return value; },
         .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
@@ -515,7 +515,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Approximately emulate SDR behavior, or upgrade bloom parameters for an HDR input.",
         .labels = {"SDR Approximate", "HDR Upgrade"},
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1; },
-        .parse = [](float value) { if (!last_is_hdr) { return 0.f; } return value; },
+        .parse = [](float value) { return value; },
         .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
         new renodx::utils::settings::Setting{
