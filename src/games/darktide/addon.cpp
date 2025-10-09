@@ -278,6 +278,22 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
+// If you're including dlssfix then make sure it loads first!
+void ConfigureDLSSFix() {
+  const std::string global_dlss_fix_name = "RENODX-DLSSFIX";
+  const std::string dlss_path_key = "DLSSPath";
+  const std::string streamline_path_key = "StreamlinePath";
+
+  // const std::string default_dlss_path = R"(..\..\Plugins\DLSS\Binaries\ThirdParty\Win64\nvngx_dlss.dll)";
+  // const std::string default_streamline_path = R"(..\..\Plugins\DLSS\Binaries\ThirdParty\Win64\sl.interposer.dll)";
+
+  const std::string dlss_path = R"(..\launcher\nvngx_dlss.dll)";
+  const std::string streamline_path = R"(..\launcher\sl.interposer.dll)";
+
+  reshade::set_config_value(nullptr, global_dlss_fix_name.c_str(), dlss_path_key.c_str(), dlss_path.c_str());
+  reshade::set_config_value(nullptr, global_dlss_fix_name.c_str(), streamline_path_key.c_str(), streamline_path.c_str());
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -343,7 +359,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_addon(h_module);
       break;
   }
-
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
