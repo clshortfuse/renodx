@@ -9,6 +9,50 @@ float4 OutputHDR10(float4 color) {
   return float4(pq_color, color.a);
 }
 
+float3 ChrominanceOKLab(
+    float3 incorrect_color,
+    float3 reference_color,
+    float strength = 1.f,
+    float clamp_chrominance_loss = 0.f) {
+  if (strength == 0.f) return incorrect_color;
+
+  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
+  float3 reference_lab = renodx::color::oklab::from::BT709(reference_color);
+
+  float2 incorrect_ab = incorrect_lab.yz;
+  float2 reference_ab = reference_lab.yz;
+
+  // Compute chrominance (magnitude of the a–b vector)
+  float incorrect_chrominance = length(incorrect_ab);
+  float correct_chrominance = length(reference_ab);
+
+  // Scale original chrominance vector toward target chrominance
+  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
+  float scale = lerp(1.f, chrominance_ratio, strength);
+
+  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
+  scale = lerp(scale, 1.0f, t * clamp_chrominance_loss);
+
+  incorrect_lab.yz = incorrect_ab * scale;
+
+  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
+  return result;
+}
+
+float3 GammaCorrectHuePreserving(float3 incorrect_color) {
+  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
+
+  const float y_in = max(0, renodx::color::y::from::BT709(incorrect_color));
+  const float y_out = renodx::color::correct::Gamma(y_in);
+
+  float3 lum = incorrect_color * (y_in > 0 ? y_out / y_in : 0.f);
+
+  // use chrominance from per channel gamma correction
+  float3 result = ChrominanceOKLab(lum, ch, 1.f, 1.f);
+
+  return result;
+}
+
 bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout float4 output_color, uint output_mode = 0u) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
   float ui_alpha = ui_color_gamma.a;
@@ -39,7 +83,11 @@ bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout flo
   // blend in gamma, choose between sRGB and gamma based on setting
   float3 scene_color_gamma;
   if (RENODX_GAMMA_CORRECTION) {
-    scene_color_gamma = renodx::color::srgb::EncodeSafe(scene_color_linear);
+    if (RENODX_GAMMA_CORRECTION == 2.f) {
+      scene_color_gamma = renodx::color::gamma::EncodeSafe(GammaCorrectHuePreserving(scene_color_linear));
+    } else {
+      scene_color_gamma = renodx::color::srgb::EncodeSafe(scene_color_linear);
+    }
   } else {
     scene_color_gamma = renodx::color::gamma::EncodeSafe(scene_color_linear);
   }
@@ -76,9 +124,9 @@ bool HandleIntermediateCompositing(float4 ui_color_gamma, float4 scene_color_pq,
   float3 scene_color_gamma = renodx::color::srgb::EncodeSafe(scene_color_linear);
 
   float3 composited_color_gamma = ui_color_linear + scene_color_linear * (1.0 - ui_alpha);
-  float3 composited_color_linear = renodx::color::srgb::DecodeSafe(composited_color_gamma);
+  composited_color_gamma = (composited_color_gamma) * (RENODX_DIFFUSE_WHITE_NITS / 80.f);  // original shader divides by 80.f
 
-  output_color = float4(composited_color_linear, ui_alpha);
+  output_color = float4(composited_color_gamma, ui_alpha);
 
   return true;
 }
