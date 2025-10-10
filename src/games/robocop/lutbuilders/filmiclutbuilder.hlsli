@@ -374,19 +374,27 @@ float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma,
 }
 
 float3 RestoreSaturationLoss(float3 color_input_unclamped, float3 color_input_clamped, float3 color_output, renodx::lut::Config lut_config) {
-  float3 clamped = color_input_clamped;
+  const float chroma_epsilon = 1e-6f;
 
   float3 perceptual_in = renodx::color::oklab::from::BT709(color_input_unclamped);
   float3 perceptual_clamped = renodx::color::oklab::from::BT709(color_input_clamped);
   float3 perceptual_out = renodx::color::oklab::from::BT709(color_output);
 
-  float chroma_in = distance(perceptual_in.yz, 0);
-  float chroma_clamped = distance(perceptual_clamped.yz, 0);
-  float chroma_out = distance(perceptual_out.yz, 0);
-  float chroma_loss = renodx::math::DivideSafe(chroma_in, chroma_clamped, 0.f);
-  float chroma_new = chroma_out * chroma_loss;
+  float chroma_in = length(perceptual_in.yz);
+  float chroma_clamped = length(perceptual_clamped.yz);
+  float chroma_out = length(perceptual_out.yz);
 
-  perceptual_out.yz *= lerp(1.f, renodx::math::DivideSafe(chroma_new, chroma_out, 1.f), lut_config.recolor);
+  float safe_chroma_out = max(chroma_out, chroma_epsilon);
+  float2 direction_out = perceptual_out.yz / safe_chroma_out;
+
+  // project the clipped chroma onto the LUT hue and add it back, but never exceed original saturation
+  float chroma_lost = max(0.f, dot(perceptual_in.yz - perceptual_clamped.yz, direction_out));
+  float chroma_target = chroma_out + chroma_lost;
+  float chroma_cap = max(chroma_out, chroma_in);
+  float chroma_limit = min(chroma_target, chroma_cap);
+
+  float chroma_blend = lerp(chroma_out, chroma_limit, lut_config.recolor);
+  perceptual_out.yz = direction_out * chroma_blend;
 
   return renodx::color::bt709::from::OkLab(perceptual_out);
 }
