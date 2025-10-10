@@ -276,6 +276,24 @@ float3 Luminance(float3 incorrect_color, float3 correct_color, float strength = 
       strength);
 }
 
+float3 GamutCompress(float3 color, float grayscale) {
+  // Desaturate (move towards grayscale) until no channel is below 0
+  float lowest_negative_channel = min(0.f, min(color.r, min(color.g, color.b)));
+  float distance = grayscale - lowest_negative_channel;
+
+  float ratio = renodx::math::DivideSafe(-lowest_negative_channel, distance, 0.f);
+
+  // if grayscale is 0, ratio is 0 via DivideSafe, so no change
+  // if minchannel is 0, ratio is 0, so no change
+  color = lerp(grayscale, color, 1.f - ratio);
+
+  return color;
+}
+
+float3 GamutCompress(float3 color) {
+  return GamutCompress(color, renodx::color::y::from::BT709(color));
+}
+
 }  // namespace correct
 }  // namespace color
 }  // namespace renodx
