@@ -110,23 +110,28 @@ bool HandleIntermediateCompositing(float4 ui_color_gamma, float4 scene_color_pq,
 
   // linearize UI and scale to ratio of scene brightness
   float3 ui_color_linear;
-  if (RENODX_GAMMA_CORRECTION_UI) {
-    ui_color_linear = renodx::color::gamma::DecodeSafe(ui_color_gamma.rgb) * RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  if (RENODX_GAMMA_CORRECTION_UI != 0.f) {
+    ui_color_linear = renodx::color::gamma::DecodeSafe(ui_color_gamma.rgb);
   } else {
-    ui_color_linear = renodx::color::srgb::DecodeSafe(ui_color_gamma.rgb) * RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+    ui_color_linear = renodx::color::srgb::DecodeSafe(ui_color_gamma.rgb);
   }
-  ui_color_linear = renodx::color::bt2020::from::BT709(ui_color_linear);
 
   // linearize scene, normalize brightness
-  float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color_pq.rgb, RENODX_DIFFUSE_WHITE_NITS);
+  float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color_pq.rgb, RENODX_GRAPHICS_WHITE_NITS);
+  scene_color_linear = renodx::color::bt709::from::BT2020(scene_color_linear);
 
-  ui_color_gamma.rgb = renodx::color::srgb::EncodeSafe(ui_color_linear.rgb);
-  float3 scene_color_gamma = renodx::color::srgb::EncodeSafe(scene_color_linear);
+  // blend in gamma
+  ui_color_gamma.rgb = renodx::color::gamma::EncodeSafe(ui_color_linear);
+  float3 scene_color_gamma = renodx::color::gamma::EncodeSafe(scene_color_linear);
+  float3 composited_color_gamma = ui_color_gamma.rgb + scene_color_gamma * (1.0 - ui_alpha);
 
-  float3 composited_color_gamma = ui_color_linear + scene_color_linear * (1.0 - ui_alpha);
-  composited_color_gamma = (composited_color_gamma) * (RENODX_DIFFUSE_WHITE_NITS / 80.f);  // original shader divides by 80.f
+  // back to linear BT.2020
+  float3 composited_color_linear = renodx::color::gamma::DecodeSafe(composited_color_gamma);
+  composited_color_linear = renodx::color::bt2020::from::BT709(composited_color_linear);
+  composited_color_linear *= RENODX_GRAPHICS_WHITE_NITS / 80.f;  // shader originally divided by 80.f
 
-  output_color = float4(composited_color_gamma, ui_alpha);
+  output_color = float4(composited_color_linear, ui_alpha);
 
   return true;
 }
+
