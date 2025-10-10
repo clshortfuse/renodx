@@ -78,7 +78,8 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
 
   const float y_normalized = y / mid_gray;
   const float highlight_mask = 1.f / mid_gray;
-  const float shadow_mask = mid_gray;
+  float shadow_mask = 1.f;
+  if (config.shadows < 1.f) shadow_mask = mid_gray;
 
   // contrast & flare
   float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
@@ -95,7 +96,7 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
 
   const float y_final = y_shadowed * mid_gray;
 
-  color *= (y > 0 ? (y_final / y) : 0);
+  color = renodx::color::correct::Luminance(color, y, y_final);
 
   return color;
 }
@@ -312,7 +313,7 @@ void ApplyFilmicToneMap(
   cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
 
   float3 untonemapped = untonemapped_pre_grade;
-  if (RENODX_TONE_MAP_TYPE != 4.f) {
+  if (RENODX_TONE_MAP_TYPE != 4.f && RENODX_TONE_MAP_TYPE != 0.f) {
     untonemapped = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_pre_grade, untonemapped_lum, cg_config);
   }
 
@@ -329,7 +330,7 @@ void ApplyFilmicToneMap(
       tonemapped = lerp(tonemapped, hdr_tonemapped, saturate(blend_factor));
     }
   }
-  if (RENODX_TONE_MAP_TYPE != 4.f) {
+  if (RENODX_TONE_MAP_TYPE != 4.f && RENODX_TONE_MAP_TYPE != 0.f) {
     tonemapped = renodx::color::ap1::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::AP1(tonemapped), renodx::color::bt709::from::AP1(LerpToneMapStrength(untonemapped, float3(preRRT_r, preRRT_g, preRRT_b))), untonemapped_lum, cg_config));
   }
 
