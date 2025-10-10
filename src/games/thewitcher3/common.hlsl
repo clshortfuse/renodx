@@ -296,6 +296,7 @@ float3 ClampPostProcessing(float3 value, float clamp_value) {
   outputColor.x = min(value.x, clamp_value);
   outputColor.y = min(value.y, clamp_value);
   outputColor.z = min(value.z, clamp_value);
+  //outputColor = ToneMapMaxCLL(value);
   return outputColor;
 }
 

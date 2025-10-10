@@ -35,8 +35,14 @@ float4 main(
 ) : SV_Target {
   float4 SV_Target;
 
-  float _35 = float(int(CustomPixelConsts_064.x)) + (CustomPixelConsts_016.x * ((float((uint)((int)(int(SV_Position.x)) - (int)(int(CustomPixelConsts_064.z)))) + 0.5f) / CustomPixelConsts_048.x));
-  float _36 = float(int(CustomPixelConsts_064.y)) + (CustomPixelConsts_016.y * ((float((uint)((int)(int(SV_Position.y)) - (int)(int(CustomPixelConsts_064.w)))) + 0.5f) / CustomPixelConsts_048.y));
+  float4 CC016 = CustomPixelConsts_016;
+  float4 CC048 = CustomPixelConsts_048;
+
+  //CC016 = CUSTOM_BLOOM_RADIUS;
+  //CC048 /= CUSTOM_BLOOM_RADIUS;
+
+  float _35 = float(int(CustomPixelConsts_064.x)) + (CC016.x * ((float((uint)((int)(int(SV_Position.x)) - (int)(int(CustomPixelConsts_064.z)))) + 0.5f) / CC048.x));
+  float _36 = float(int(CustomPixelConsts_064.y)) + (CC016.y * ((float((uint)((int)(int(SV_Position.y)) - (int)(int(CustomPixelConsts_064.w)))) + 0.5f) / CC048.y));
 
   float _45 = (CustomPixelConsts_080.x + 0.5f) / CustomPixelConsts_000.x;
   float _46 = (CustomPixelConsts_080.y + 0.5f) / CustomPixelConsts_000.y;
@@ -111,15 +117,18 @@ float4 main(
   // }
 
   if (RENODX_TONE_MAP_TYPE > 1.f && BLOOM_EMULATION == 1) {
-    // CC144 = exp2(CC144); // luminance / color weights
-      CC096.x = log(CC096.x * 100.f); // final bloom intensity
+    // CC144 *= 100.f; // luminance / color weights
+    // CC096.x = renodx::tonemap::ExponentialRollOff(CC096.x, 2.f, 10.f) * CUSTOM_BLOOM; // final bloom intensity
+    CC096.x = min(CC096.x, 10.f * CUSTOM_BLOOM_INTENSITY);
     // CC096.x = max(log(CC096.x), 10.f);      // final bloom intensity
     // CC096.x = min(CC096.x * 0.3f, 10.f);  // final bloom intensity
-    //CC096.x = log10(CC096.x) * 10.f;
-      //CC128.y /= 10.f; // knee / curve coefficient
-    //CC128.y = log(CC128.y);
-    //CC112.x = min(1.5f, CC112.x); // max clamp
-    //CC128.x = 1.f; // bloom threshold
+    // CC096.x = log10(CC096.x) * 10.f;
+    // CC128.y = min(CC128.y, 0.01f); // knee / curve coefficient
+    CC128.y *= (log(CUSTOM_BLOOM_CURVE) + 1.f);
+    // CC128.y = exp(CC128.y);
+    // CC112.x = min(1.5f, CC112.x); // max clamp
+    //CC128.x = renodx::tonemap::ExponentialRollOff(CC128.x);
+    CC128.x = max(CUSTOM_BLOOM_THRESHOLD, CC128.x); // bloom threshold
   }
 
   // FIXED PARAMETERS

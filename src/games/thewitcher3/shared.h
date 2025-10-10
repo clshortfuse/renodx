@@ -43,14 +43,19 @@
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_LUT_STRENGTH                    shader_injection.custom_lut_strength
 //#define CUSTOM_POST_MAXCLL                     shader_injection.custom_post_maxcll
-#define BLOOM_EMULATION                        shader_injection.bloom_emulation
-#define CUSTOM_BLOOM                           shader_injection.custom_bloom
 #define CUSTOM_LENS_DIRT                       shader_injection.custom_lens_dirt
 #define CUSTOM_SUNSHAFTS_STRENGTH              shader_injection.custom_sunshafts_strength
 #define CUSTOM_DEPTH_BLUR                      shader_injection.custom_depth_blur
 #define CUSTOM_SHARPENING_TYPE                shader_injection.custom_sharpening_type
 #define CUSTOM_SHARPNESS                      shader_injection.custom_sharpness
 #define CUSTOM_TONEMAP_EXPOSURE                shader_injection.tone_map_exposure
+
+#define BLOOM_EMULATION                        shader_injection.bloom_emulation
+#define CUSTOM_BLOOM                           shader_injection.custom_bloom
+#define CUSTOM_BLOOM_INTENSITY                 shader_injection.custom_bloom_intensity
+#define CUSTOM_BLOOM_THRESHOLD                 shader_injection.custom_bloom_threshold
+#define CUSTOM_BLOOM_CURVE                     shader_injection.custom_bloom_curve
+//#define CUSTOM_BLOOM_RADIUS                    shader_injection.custom_bloom_radius
 
 //#define UTILITY_COMPARISON                    shader_injection.utility_comparison
 //#define UTILITY_HUD                            shader_injection.utility_hud
@@ -87,14 +92,19 @@ struct ShaderInjectData {
   float custom_random;
   float custom_lut_strength;
   //float custom_post_maxcll;
-  float bloom_emulation;
-  float custom_bloom;
   float custom_lens_dirt;
   float custom_sunshafts_strength;
   float custom_tone_map_exposure;
   float custom_depth_blur;
   float custom_sharpening_type;
   float custom_sharpness;
+
+  float custom_bloom;
+  float bloom_emulation;
+  float custom_bloom_intensity;
+  float custom_bloom_threshold;
+  float custom_bloom_curve;
+  //float custom_bloom_radius;
 
   //float utility_comparison;
   //float utility_hud;
