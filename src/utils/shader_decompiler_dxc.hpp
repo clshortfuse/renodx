@@ -525,7 +525,7 @@ class Decompiler {
        */
       // ; SV_DepthLessEqual        0    N/A oDepthLE  DEPTHLE   float    YES
 
-      static auto regex = std::regex{R"(; (\S+)\s+(\S+)\s+((?:(?:x| )(?:y| )(?:z| )(?:w| ))|(?:N\/A))\s+(\S+)\s+(\S+)\s+(\S+)\s*((?:[xyzw]+)|(?:YES)|))"};
+      static auto regex = std::regex{R"(; (\S+)\s+(\S+)\s+((?:(?:x| )(?:y| )(?:z| )(?:w| ))|(?:N\/A))\s+(\S+)\s+(\S+)\s+(\S+)\s*((?:[xyzw ]+)|(?:YES)|))"};
       auto [name, index, mask, dxregister, sysValue, format, used] = StringViewMatch<7>(line, regex);
 
       this->name = name;
