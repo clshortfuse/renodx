@@ -415,17 +415,17 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   float3 color_output = renodx::lut::LinearOutput(lut_output_color, lut_config);
   [branch]
   if (lut_config.scaling != 0.f) {
-    float3 lut_black = SamplePacked1DLut(renodx::lut::ConvertInput(0, lut_config), lut_config.lut_sampler, lut_texture);
+    float3 lut_black = SamplePacked1DLut(float3(0, 0, 0), lut_config.lut_sampler, lut_texture);
     float3 lut_black_linear = renodx::lut::LinearOutput(lut_black, lut_config);
     float lut_black_y = max(0, renodx::color::y::from::BT709(lut_black_linear));
     if (lut_black_y > 0.f) {
-      float3 lut_mid = SamplePacked1DLut(renodx::lut::ConvertInput(lut_black_y, lut_config), lut_config.lut_sampler, lut_texture);  // set midpoint based on black to avoid black crush
-      float lut_shift = (renodx::color::y::from::BT709(renodx::lut::LinearOutput(lut_mid, lut_config)) + lut_black_y) / lut_black_y;
+      float3 lut_black_pivot = SamplePacked1DLut(renodx::lut::ConvertInput(lut_black_y, lut_config), lut_config.lut_sampler, lut_texture);  // set midpoint based on black to avoid black crush
+      float lut_shift = (renodx::color::y::from::BT709(renodx::lut::LinearOutput(lut_black_pivot, lut_config)) + lut_black_y) / lut_black_y;
 
       float3 unclamped_gamma = Unclamp(
           renodx::lut::GammaOutput(lut_output_color, lut_config),
           renodx::lut::GammaOutput(lut_black, lut_config),
-          renodx::lut::GammaOutput(lut_mid, lut_config),
+          renodx::lut::GammaOutput(lut_black_pivot, lut_config),
           renodx::lut::ConvertInput(color_input * lut_shift, lut_config));
 
       float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
