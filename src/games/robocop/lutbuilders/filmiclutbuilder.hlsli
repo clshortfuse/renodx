@@ -250,15 +250,6 @@ float3 ApplyBlueCorrection(float3 tonemapped) {
   return float3(_1149, _1150, _1151);
 }
 
-float3 ApplyUnrealFilmicToneMapByLuminance(float3 untonemapped) {
-  float untonemapped_lum = renodx::color::y::from::AP1(untonemapped);
-  float4 tonemaps = ApplyUnrealFilmicToneMap(float4(untonemapped, untonemapped_lum));
-  float3 channel_tonemapped = tonemaps.xyz;
-  float3 luminance_tonemapped = renodx::color::correct::Luminance(untonemapped, untonemapped_lum, tonemaps.a, 1.f);
-
-  return renodx::color::correct::ChrominanceOKLab(luminance_tonemapped, channel_tonemapped);
-}
-
 float3 ApplyUnrealFilmicToneMapByLuminance(float3 untonemapped, float3 preRRT) {
   float untonemapped_lum = renodx::color::y::from::AP1(untonemapped);
   float4 tonemaps = ApplyUnrealFilmicToneMap(float4(untonemapped, untonemapped_lum));
@@ -273,7 +264,8 @@ float3 ApplyUnrealFilmicToneMapByLuminance(float3 untonemapped, float3 preRRT) {
   luminance_tonemapped = ApplyPostToneMapDesaturation(luminance_tonemapped);
   luminance_tonemapped = LerpToneMapStrength(luminance_tonemapped, preRRT);
 
-  return renodx::color::correct::ChrominanceOKLab(luminance_tonemapped, channel_tonemapped);
+  // added max(0, color) as negatives are clamped later but we need to clamp early for chrominance correction
+  return renodx::color::correct::ChrominanceOKLab(luminance_tonemapped, max(0, channel_tonemapped));
 }
 
 float3 ApplyVanillaToneMap(float3 untonemapped, float3 preRRT) {
@@ -330,6 +322,9 @@ void ApplyFilmicToneMap(
       tonemapped = lerp(tonemapped, hdr_tonemapped, saturate(blend_factor));
     }
   }
+
+  tonemapped = max(0, tonemapped);
+
   if (RENODX_TONE_MAP_TYPE != 4.f && RENODX_TONE_MAP_TYPE != 0.f) {
     tonemapped = renodx::color::ap1::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::AP1(tonemapped), renodx::color::bt709::from::AP1(LerpToneMapStrength(untonemapped, float3(preRRT_r, preRRT_g, preRRT_b))), untonemapped_lum, cg_config));
   }
@@ -374,30 +369,44 @@ float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma,
   return unclamped_gamma;
 }
 
-float3 RestoreSaturationLoss(float3 color_input_unclamped, float3 color_input_clamped, float3 color_output, renodx::lut::Config lut_config) {
-  const float chroma_epsilon = 1e-6f;
+float3 GamutDecompress(float3 color, float grayscale, float saturation_scale) {
+  return lerp(grayscale, color, 1.f / saturation_scale);
+}
 
-  float3 perceptual_in = renodx::color::oklab::from::BT709(color_input_unclamped);
-  float3 perceptual_clamped = renodx::color::oklab::from::BT709(color_input_clamped);
-  float3 perceptual_out = renodx::color::oklab::from::BT709(color_output);
+// This might be confusing syntax
+float3 GamutDecompress(float3 color, float saturation_scale) {
+  float grayscale = renodx::color::y::from::BT709(color);
+  return GamutDecompress(color, grayscale, saturation_scale);
+}
 
-  float chroma_in = length(perceptual_in.yz);
-  float chroma_clamped = length(perceptual_clamped.yz);
-  float chroma_out = length(perceptual_out.yz);
+float3 GamutCompress(float3 color, float grayscale, float saturation_scale) {
+  return lerp(grayscale, color, saturation_scale);
+}
 
-  float safe_chroma_out = max(chroma_out, chroma_epsilon);
-  float2 direction_out = perceptual_out.yz / safe_chroma_out;
+float ComputeGamutCompressionScale(float3 color, float grayscale) {
+  // Desaturate (move towards grayscale) until no channel is below 0
+  float lowest_negative_channel = min(0.f, min(color.r, min(color.g, color.b)));
+  float distance = grayscale - lowest_negative_channel;
 
-  // project the clipped chroma onto the LUT hue and add it back, but never exceed original saturation
-  float chroma_lost = max(0.f, dot(perceptual_in.yz - perceptual_clamped.yz, direction_out));
-  float chroma_target = chroma_out + chroma_lost;
-  float chroma_cap = max(chroma_out, chroma_in);
-  float chroma_limit = min(chroma_target, chroma_cap);
+  float ratio = renodx::math::DivideSafe(-lowest_negative_channel, distance, 0.f);
 
-  float chroma_blend = lerp(chroma_out, chroma_limit, lut_config.recolor);
-  perceptual_out.yz = direction_out * chroma_blend;
+  // if grayscale is 0, ratio is 0 via DivideSafe, so no change
+  // if minchannel is 0, ratio is 0, so no change
+  float saturation_scale = 1.f - ratio;
+  return saturation_scale;
+}
 
-  return renodx::color::bt709::from::OkLab(perceptual_out);
+float ComputeGamutCompressionScale(float3 color) {
+  float grayscale = renodx::color::y::from::BT709(color);
+  return ComputeGamutCompressionScale(color, grayscale);
+}
+
+float3 GamutCompress(float3 color, float grayscale) {
+  return lerp(grayscale, color, ComputeGamutCompressionScale(color, grayscale));
+}
+
+float3 GamutCompress(float3 color) {
+  return GamutCompress(color, renodx::color::y::from::BT709(color));
 }
 
 float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 color_input) {
@@ -408,7 +417,16 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   lut_config.recolor = 1.f;
 
   float3 color_input_unclamped = color_input;
-  color_input = CorrectOutOfRangeColor(color_input, true, false, 1.f, 0.5f, 0.5f, false);
+
+  float compression_scale = 1.f;
+  const float perceptual_gamma = 2.2f;
+  if (lut_config.recolor != 0.f) {
+    float grayscale = renodx::color::gamma::EncodeSafe(renodx::color::y::from::BT709((color_input)), perceptual_gamma);
+    color_input = renodx::color::gamma::EncodeSafe(color_input, perceptual_gamma);
+    compression_scale = ComputeGamutCompressionScale(color_input, grayscale);
+    color_input = GamutCompress(color_input, grayscale, compression_scale);
+    color_input = renodx::color::gamma::DecodeSafe(color_input, perceptual_gamma);
+  }
 
   float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lut_output_color = SamplePacked1DLut(lut_input_color, lut_config.lut_sampler, lut_texture);
@@ -435,7 +453,9 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   } else {
   }
   if (lut_config.recolor != 0.f) {
-    color_output = RestoreSaturationLoss(color_input_unclamped, color_input, color_output, lut_config);
+    color_output = renodx::color::gamma::EncodeSafe(color_output, perceptual_gamma);
+    color_output = (GamutDecompress(color_output, compression_scale));
+    color_output = renodx::color::gamma::DecodeSafe(color_output, perceptual_gamma);
   }
 
   return color_output;
@@ -445,11 +465,28 @@ void SampleLUTUpgradeToneMap(float3 color_lut_input, SamplerState lut_sampler, T
   float3 color_output = color_lut_input;
 
   if (RENODX_TONE_MAP_TYPE != 4.f) {
+#if 1
     float3 color_lut_input_tonemapped = ToneMapMaxCLL(color_lut_input);
     float3 lutted = SampleLUTSRGBInSRGBOut(lut_texture, lut_sampler, color_lut_input_tonemapped);
     color_output = renodx::tonemap::UpgradeToneMap(color_lut_input, color_lut_input_tonemapped, lutted, CUSTOM_LUT_STRENGTH);
+#else
+    float3 color = color_lut_input;
+    float max_channel = renodx::math::Max(color.r, color.g, color.b);
+    max_channel = max(1e-6, max_channel);
+
+    // Clamp HDR to 0-1 range, and calculate scale for re-expansion
+    const float u = 0.525;
+    float q = (2.0 - u - 1.0 / u + max_channel * (2.0 + 2.0 / u - max_channel / u)) / 4.0;
+    float clamped = (abs(1.0 - max_channel) < u) ? q : saturate(max_channel);
+    float scale = clamped / max_channel;
+
+    color *= scale;
+    color = SampleLUTSRGBInSRGBOut(lut_texture, lut_sampler, color);
+    color /= scale;
+    color_output = color;
+#endif
   } else {
-    color_output = renodx::color::srgb::DecodeSafe(SamplePacked1DLut(renodx::color::srgb::EncodeSafe(color_lut_input), lut_sampler, lut_texture));
+    color_output = renodx::color::srgb::DecodeSafe(SamplePacked1DLut(renodx::color::srgb::Encode(saturate(color_lut_input)), lut_sampler, lut_texture));
     color_output = lerp(color_lut_input, color_output, CUSTOM_LUT_STRENGTH);
   }
   output_r = color_output.r, output_g = color_output.g, output_b = color_output.b;
