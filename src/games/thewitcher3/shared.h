@@ -57,6 +57,8 @@
 #define CUSTOM_BLOOM_CURVE                     shader_injection.custom_bloom_curve
 //#define CUSTOM_BLOOM_RADIUS                    shader_injection.custom_bloom_radius
 
+#define CUSTOM_INVERSE_TONEMAP                 shader_injection.custom_inverse_tonemap
+
 //#define UTILITY_COMPARISON                    shader_injection.utility_comparison
 //#define UTILITY_HUD                            shader_injection.utility_hud
 
@@ -98,6 +100,8 @@ struct ShaderInjectData {
   float custom_depth_blur;
   float custom_sharpening_type;
   float custom_sharpness;
+
+  float custom_inverse_tonemap;
 
   float custom_bloom;
   float bloom_emulation;
