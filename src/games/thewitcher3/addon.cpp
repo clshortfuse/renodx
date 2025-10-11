@@ -41,14 +41,16 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
 };
 
 const std::unordered_map<std::string, float> PURIST_VALUES = {
+    {"CustomInverseTonemap", 0.f},
     {"SceneGradeSaturationCorrection", 0.f},
     {"ColorGradeHighlights", 50.f},
     {"BloomEmulation", 0.f},
 };
 
 const std::unordered_map<std::string, float> FILMIC_VALUES = {
+    //{"CustomInverseTonemap", 0.f},
     {"ColorGradeExposure", 0.80f},
-    {"ColorGradeHighlights", 63.f},
+    {"ColorGradeHighlights", 56.f},
     {"ColorGradeShadows", 54.f},
     {"ColorGradeContrast", 45.f},
     {"ColorGradeSaturation", 45.f},
@@ -68,6 +70,7 @@ const std::unordered_map<std::string, float> FILMIC_VALUES = {
 
 const std::unordered_map<std::string, float> SDR_DEFAULT_VALUES = {
   {"ToneMapType", 0.f},
+  {"CustomInverseTonemap", 0.f},
   {"SceneGradeSaturationCorrection", 0.f},
   {"SceneGradeBlowoutRestoration", 0.f},
   {"ColorGradeHighlights", 50.f},
@@ -145,6 +148,18 @@ renodx::utils::settings::Settings settings = {
         .min = 80.f,
         .max = 500.f,
         .is_visible = []() { return last_is_hdr; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CustomInverseTonemap",
+        .binding = &shader_injection.custom_inverse_tonemap,
+        .default_value = 20.f,
+        .label = "HDR Boost",
+        .section = "Tone Mapping",
+        .tooltip = "Artificial but pleasing boost to highlight strength",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 1 && last_is_hdr; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1 && last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -377,7 +392,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 55.f,
+        .default_value = 50.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -768,6 +783,11 @@ renodx::utils::settings::Settings settings = {
         .label = "HDR RCAS by Lilium",
         .section = "About",
     },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Thanks to Pumbo for the HDR Boost function",
+        .section = "About",
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "HUGE thanks to the whole community of RenoDX modders for their help on this one <3",
@@ -790,6 +810,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("SceneGradeBlowoutRestoration", 0.f);
   renodx::utils::settings::UpdateSetting("SceneGradeStrength", 100.f);
 
+  renodx::utils::settings::UpdateSetting("CustomInverseTonemap", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
@@ -810,6 +831,10 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("FxSunShaftStrength", 50.f);
   renodx::utils::settings::UpdateSetting("FxDepthBlur", 50.f);
   renodx::utils::settings::UpdateSetting("FxSharpness", 0.f);
+
+  renodx::utils::settings::UpdateSetting("FxBloomMaxIntensity", 50.f);
+  renodx::utils::settings::UpdateSetting("FxBloomMinThreshold", 0.f);
+  renodx::utils::settings::UpdateSetting("FxBloomCurve", 50.f);
 }
 
 bool fired_on_init_swapchain = false;

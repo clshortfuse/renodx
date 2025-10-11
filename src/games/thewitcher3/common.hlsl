@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./luma/Color.hlsl"
 
 float3 BT709FromHueMethod(float3 color) {
   if (CUSTOM_SCENE_HUE_METHOD == 0) {  // OKLab
@@ -20,6 +21,35 @@ float3 HueMethodFromBT709(float3 color) {
     color = renodx::color::oklch::from::BT709(color);
   }
   return color;
+}
+
+float3 FakeHDR(float3 Color, float NormalizationPoint = 0.02, float FakeHDRIntensity = 0.5, float SaturationExpansionIntensity = 0.0, uint Method = 0, uint ColorSpace = CS_DEFAULT)
+{
+  if (Method == 0)  // Per channel (and optionally restores the luminance of the per channel boosted, given that this naturally expands saturation)
+  {
+    float3 normalizedColor = Color / NormalizationPoint;
+    // Expand highlights with a power curve
+    normalizedColor = select(normalizedColor > 1., pow(normalizedColor, 1. + FakeHDRIntensity), normalizedColor);
+    // normalizedColor = normalizedColor > 1.0 ? pow(normalizedColor, 1.0 + FakeHDRIntensity) : normalizedColor;
+    Color = lerp(RestoreLuminance(Color, normalizedColor * NormalizationPoint, (bool)ColorSpace), normalizedColor * NormalizationPoint, SaturationExpansionIntensity);
+  }
+  else if (Method == 1 || Method == 2)
+  {
+    float colorValue = 0.0;
+    if (Method == 1)  // By rgb max (will not boost whites any more than pure colors, and results depend on the color space)
+      colorValue = max3(Color);
+    else if (Method == 2)  // By luminance (will mostly ignore blues)
+      colorValue = GetLuminance(Color, ColorSpace);
+    float normalizedColorValue = colorValue / NormalizationPoint;
+    normalizedColorValue = normalizedColorValue > 1.0 ? pow(normalizedColorValue, 1.0 + FakeHDRIntensity) : normalizedColorValue;
+    float expansionRatio = safeDivision(normalizedColorValue * NormalizationPoint, colorValue, 1);  // Fallback to 1
+    Color *= expansionRatio;
+
+    // Expand saturation as well, on highlights only
+    if (SaturationExpansionIntensity != 0.0)  // Optional optimization, given this would usually be hardcoded to 0
+      Color = Saturation(Color, lerp(1.0, expansionRatio, SaturationExpansionIntensity), ColorSpace);
+  }
+  return Color;
 }
 
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
@@ -155,8 +185,8 @@ float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, flo
     outputColor = lerp(tonemapped_bt709, untonemapped_midgray, saturate(tonemapped_bt709_y));
   }
   outputColor = renodx::color::correct::Chrominance(outputColor, lerp(tonemapped_bt709, tonemapped_bt709_ch, saturate(tonemapped_bt709_y / mid_gray)), 1.f, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
-  //outputColor = renodx::color::correct::Chrominance(outputColor, tonemapped_bt709_ch, 1.f, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
-
+  // outputColor = renodx::color::correct::Chrominance(outputColor, tonemapped_bt709_ch, 1.f, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
+  //outputColor = FakeHDR(outputColor, 0.10f, CUSTOM_INVERSE_TONEMAP, 0.0f, 1);
   return outputColor;
 }
 
@@ -169,12 +199,6 @@ float ColorGradeSmoothClamp(float x)
   float q = (2.0 - u - 1.0 / u + x * (2.0 + 2.0 / u - x / u)) / 4.0;
 
   return (abs(1.0 - x) < u) ? q : saturate(x);
-}
-
-float max3(float3 color) {
-  float outputColor = max(color.r, color.g);
-  outputColor = max(outputColor, color.b);
-  return outputColor;
 }
 
 // Approximate SDR color grading with an HDR image
@@ -242,20 +266,17 @@ float3 CustomTonemap(float3 color, renodx::draw::Config config = renodx::draw::B
   configsat.dechroma = RENODX_TONE_MAP_BLOWOUT;
   configsat.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
 
-  if (RENODX_TONE_MAP_TYPE < 2.f) {
-    if (RENODX_TONE_MAP_TYPE == 1.f) {
+
+  if (RENODX_TONE_MAP_TYPE == 1.f) {
       return saturate(color);
-    }
-    color = ApplySaturationBlowoutHighlightSaturation(color, renodx::color::y::from::BT709(color), configsat);
-    return color;
   }
+
   float peak_white_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;
   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;
-  float white_clip = config.reno_drt_white_clip;
-  // return color;
-  // float3 outputColor = renodx::draw::ToneMapPass(color, config);
-  float3 outputColor;
-  outputColor = renodx::tonemap::ReinhardPiecewise(color, peak_white_nits / diffuse_white_nits, 0.5f);
+
+  float3 outputColor = color;
+  outputColor = FakeHDR(outputColor, 0.10f, CUSTOM_INVERSE_TONEMAP, 0.0f, 1);
+  if (RENODX_TONE_MAP_TYPE == 2.f) outputColor = renodx::tonemap::ReinhardPiecewise(outputColor, peak_white_nits / diffuse_white_nits, 0.5f);
   outputColor = ApplySaturationBlowoutHighlightSaturation(outputColor, renodx::color::y::from::BT709(outputColor), configsat);
   return outputColor;
 }
