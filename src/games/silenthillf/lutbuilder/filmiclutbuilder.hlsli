@@ -1,20 +1,6 @@
 #include "./Cbuffers/Cbuffers_LUTBuilder.hlsli"
 #include "./lutbuildercommon.hlsli"
 
-/// Applies Exponential Roll-Off tonemapping using the maximum channel.
-/// Used to fit the color into a 0–output_max range for SDR LUT compatibility.
-float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.5f, float output_max = 1.f) {
-  float peak = max(color.r, max(color.g, color.b));
-  peak = min(peak, 100.f);
-  float log_peak = log2(peak);
-
-  // Apply exponential shoulder in log space
-  float log_mapped = renodx::tonemap::ExponentialRollOff(log_peak, log2(rolloff_start), log2(output_max));
-  float scale = exp2(log_mapped - log_peak);  // How much to compress all channels
-
-  return min(output_max, color * scale);
-}
-
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
     return untonemapped;
@@ -196,30 +182,25 @@ float3 ApplyBlueCorrection(float3 tonemapped) {
   return float3(_1149, _1150, _1151);
 }
 
-float3 ApplyUnrealFilmicToneMapByLuminance(float3 untonemapped) {
-  float untonemapped_lum = renodx::color::y::from::AP1(untonemapped);
-  float4 tonemaps = ApplyUnrealFilmicToneMap(float4(untonemapped, untonemapped_lum));
-  float3 channel_tonemapped = tonemaps.xyz;
-  float3 luminance_tonemapped = renodx::color::correct::Luminance(untonemapped, untonemapped_lum, tonemaps.a, 1.f);
-
-  return renodx::color::correct::ChrominanceOKLab(luminance_tonemapped, channel_tonemapped);
-}
-
 float3 ApplyUnrealFilmicToneMapByLuminance(float3 untonemapped, float3 preRRT) {
   float untonemapped_lum = renodx::color::y::from::AP1(untonemapped);
   float4 tonemaps = ApplyUnrealFilmicToneMap(float4(untonemapped, untonemapped_lum));
   float3 channel_tonemapped = tonemaps.xyz;
   float3 luminance_tonemapped = renodx::color::correct::Luminance(untonemapped, untonemapped_lum, tonemaps.a, 1.f);
+  luminance_tonemapped = ApplyPostToneMapDesaturation(luminance_tonemapped);
+  luminance_tonemapped = LerpToneMapStrength(luminance_tonemapped, preRRT);
 
   // blue correction has a massive effect on the final result, so we include before chrominance correction
   channel_tonemapped = ApplyPostToneMapDesaturation(channel_tonemapped);
   channel_tonemapped = LerpToneMapStrength(channel_tonemapped, preRRT);
   channel_tonemapped = ApplyBlueCorrection(channel_tonemapped);
 
-  luminance_tonemapped = ApplyPostToneMapDesaturation(luminance_tonemapped);
-  luminance_tonemapped = LerpToneMapStrength(luminance_tonemapped, preRRT);
+  channel_tonemapped = renodx::color::bt709::from::AP1(max(0, channel_tonemapped));
+  luminance_tonemapped = renodx::color::bt709::from::AP1(max(0, luminance_tonemapped));
 
-  return renodx::color::correct::ChrominanceOKLab(luminance_tonemapped, channel_tonemapped);
+  float3 final = renodx::color::correct::ChrominanceOKLab(luminance_tonemapped, channel_tonemapped);
+
+  return renodx::color::ap1::from::BT709(final);
 }
 
 float3 ApplyVanillaToneMap(float3 untonemapped, float3 preRRT) {
@@ -279,6 +260,9 @@ void ApplyFilmicToneMap(
       tonemapped = lerp(tonemapped, hdr_tonemapped, saturate(blend_factor));
     }
   }
+
+  tonemapped = max(0, tonemapped);
+
   if (RENODX_TONE_MAP_TYPE != 4.f && RENODX_TONE_MAP_TYPE != 0.f) {
     tonemapped = renodx::color::ap1::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::AP1(tonemapped), renodx::color::bt709::from::AP1(LerpToneMapStrength(untonemapped, float3(preRRT_r, preRRT_g, preRRT_b))), untonemapped_lum, cg_config));
   }
@@ -288,6 +272,29 @@ void ApplyFilmicToneMap(
 }
 
 #if LUTBUILDER_HASH == 0x9D93A8D5 || LUTBUILDER_HASH == 0x4A0DBF57 || LUTBUILDER_HASH == 0x0654FE73 || LUTBUILDER_HASH == 0xF87C0AD7
+
+/// Applies Exponential Roll-Off tonemapping using the maximum channel.
+/// Used to fit the color into a 0–output_max range for SDR LUT compatibility.
+float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.5f, float output_max = 1.f) {
+  float peak = max(color.r, max(color.g, color.b));
+  peak = min(peak, 100.f);
+  float log_peak = log2(peak);
+
+  // Apply exponential shoulder in log space
+  float log_mapped = renodx::tonemap::ExponentialRollOff(log_peak, log2(rolloff_start), log2(output_max));
+  float scale = exp2(log_mapped - log_peak);  // How much to compress all channels
+
+  return min(output_max, color * scale);
+}
+
+renodx::lut::Config CreateSRGBInSRGBOutLUTConfig() {
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.scaling = CUSTOM_LUT_SCALING;
+  lut_config.type_input = renodx::lut::config::type::SRGB;
+  lut_config.type_output = renodx::lut::config::type::SRGB;
+  lut_config.recolor = 0.f;
+  return lut_config;
+}
 
 float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
   const float3 added_gamma = black_gamma;
@@ -327,13 +334,7 @@ float3 SamplePacked1DLut(
 }
 
 float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 color_input) {
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.scaling = CUSTOM_LUT_SCALING;
-  lut_config.type_input = renodx::lut::config::type::SRGB;
-  lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.recolor = 0.f;
-
-  color_input = CorrectOutOfRangeColor(color_input, true, false, 1.f, 0.5f, 0.5f, false);
+  renodx::lut::Config lut_config = CreateSRGBInSRGBOutLUTConfig();
 
   float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lut_output_color = SamplePacked1DLut(lut_input_color, lut_config.lut_sampler, lut_texture);
@@ -411,13 +412,7 @@ float3 Sample2Packed1DLuts(
 }
 
 float3 Sample2LUTSRGBInSRGBOut(Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, SamplerState lut_sampler1, SamplerState lut_sampler2, float3 color_input) {
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.scaling = CUSTOM_LUT_SCALING;
-  lut_config.type_input = renodx::lut::config::type::SRGB;
-  lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.recolor = 0.f;
-
-  color_input = CorrectOutOfRangeColor(color_input, true, false, 1.f, 0.5f, 0.5f, false);
+  renodx::lut::Config lut_config = CreateSRGBInSRGBOutLUTConfig();
 
   float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lut_output_color = Sample2Packed1DLuts(lut_input_color, lut_sampler1, lut_sampler2, lut_texture1, lut_texture2);
