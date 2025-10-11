@@ -91,6 +91,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION       shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT                    shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                      shader_injection.tone_map_flare
+#define RENODX_TONE_MAP_CLAMP_PEAK                 -1.f
 #define RENODX_COLOR_GRADE_STRENGTH                shader_injection.color_grade_strength
 #define RENODX_RENO_DRT_TONE_MAP_METHOD            renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_TONE_MAP_HUE_CORRECTION             0.f
