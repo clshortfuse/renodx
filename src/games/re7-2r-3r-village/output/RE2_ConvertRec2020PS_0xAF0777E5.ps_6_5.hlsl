@@ -25,7 +25,7 @@ float4 main(noperspective float4 SV_Position: SV_Position,
   float3 bt2020Color = max(0.f, renodx::color::bt2020::from::BT709(bt709Color.rgb));
 
 #if 1
-  bt2020Color = ApplyExponentialRolloff(bt2020Color, diffuse_white, displayMaxNits);
+  bt2020Color = ApplyDisplayMap(bt2020Color, diffuse_white, displayMaxNits);
 #endif
 
   float3 pqColor = renodx::color::pq::Encode(bt2020Color, diffuse_white);

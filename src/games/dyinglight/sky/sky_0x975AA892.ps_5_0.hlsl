@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "./sky.hlsli"
 // ---- Created with 3Dmigoto v1.4.1 on Wed Jul  2 02:45:18 2025
 Texture2D<float4> t0 : register(t0);
 
@@ -44,12 +44,15 @@ void main(
   if (CUSTOM_IMPROVED_SUN == 0.f) {
     threshold = ORIGINAL_THRESHOLD;
     sun_brightness = 1.f;
+    r0.x = cmp(threshold < r0.x);  // SUN_THRESHOLD originally 0.999985337
+    r0.x = r0.x ? cb0[0].w * sun_brightness : 0;
   } else {
     threshold = SUN_THRESHOLD;
     sun_brightness = SUN_BRIGHTNESS_BOOST;
+    float sunMask = smoothstep(threshold - SUN_SOFTNESS, threshold, r0.x);
+    r0.x = sunMask * cb0[0].w * sun_brightness;
   }
-  r0.x = cmp(threshold < r0.x);  // SUN_THRESHOLD originally 0.999985337
-  r0.x = r0.x ? cb0[0].w * sun_brightness: 0;
+
   r0.w = cb0[5].w * r0.z + cb0[6].x;
   r0.z = r0.z * r0.z;
   r0.z = r0.z * 0.238732412 + 0.238732412;
@@ -64,7 +67,7 @@ void main(
   r0.yz = -r0.yy * float2(12742000, 12742000) + r0.zw;
   r0.y = 0.5 * r0.y;
   r0.z = r0.z * 0.5 + -r0.y;
-  r2.xyzw = t0.Sample(s0_s, v2.xy).xyzw; // clouds
+  r2.xyzw = t0.Sample(s0_s, v2.xy).xyzw;  // clouds
   r3.xyzw = cb0[1].xyzw * r2.xyzw;
   r2.xyzw = -r2.wwww * cb0[1].wwww + float4(1, 1, 1, 1);
   r0.y = r3.w * r0.z + r0.y;
@@ -80,5 +83,10 @@ void main(
   r0.xyz = r0.yzw * r0.xxx + r0.yzw;
   o0.xyz = cb0[2].www * r0.xyz;
   o0.w = 0;
+
+  o0.rgb = ApplyBoostSky(o0.rgb);
+
+  // o0.rgb *= 10.f;
+
   return;
 }

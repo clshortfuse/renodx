@@ -60,6 +60,19 @@ void main(
     r2.z = saturate(dot(r0.yzw, r4.xyz));
     r4.xyz = cb0[0].xyz * r0.xxx;
     r5.xyzw = t1.SampleLevel(s2_s, v2.xy, 0).xyzw;
+#if 0
+    // Alternate specular shading: use Schlick Fresnel without the whitening ramp
+    r0.x = r5.w * r5.w;
+    r3.xyz = normalize(-r3.xyz * r1.yyy + cb0[1].xyz);
+    r2.x = saturate(dot(r0.yzw, r3.xyz));
+    r2.y = saturate(dot(cb0[1].xyz, r3.xyz));
+    r2.xyzw = max(float4(0.00999999978, 0.00999999978, 0.00999999978, 0.00999999978), r2.xyzw);
+    float3 specF0 = saturate(r5.xyz);
+    float VoH = saturate(dot(cb0[1].xyz, r3.xyz));
+    float fresnelTerm = pow(saturate(1.0 - VoH), 5.0);
+    r0.yzw = specF0 + (float3(1.0, 1.0, 1.0) - specF0) * fresnelTerm;
+    r1.y = cmp(-1 >= r1.w);
+#else
     r0.x = r5.w * r5.w;
     r3.xyz = -r3.xyz * r1.yyy + cb0[1].xyz;
     r1.y = dot(r3.xyz, r3.xyz);
@@ -73,6 +86,7 @@ void main(
     r3.xyz = float3(1, 1, 1) + -r5.xyz;
     r0.yzw = saturate(r3.xyz * r0.yyy + r5.xyz);
     r1.y = cmp(-1 >= r1.w);
+#endif
     r0.yzw = r1.yyy ? float3(0, 0, 0) : r0.yzw;
     r1.z = r0.x * 0.997500002 + 0.00249999994;
     r1.w = r1.z * r1.z;
