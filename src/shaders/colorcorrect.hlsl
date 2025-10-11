@@ -276,18 +276,40 @@ float3 Luminance(float3 incorrect_color, float3 correct_color, float strength = 
       strength);
 }
 
-float3 GamutCompress(float3 color, float grayscale) {
+float3 GamutDecompress(float3 color, float grayscale, float saturation_scale) {
+  return lerp(grayscale, color, 1.f / saturation_scale);
+}
+
+float3 GamutDecompress(float3 color, float saturation_scale) {
+  float grayscale = renodx::color::y::from::BT709(color);
+  return GamutDecompress(color, grayscale, saturation_scale);
+}
+
+float3 GamutCompress(float3 color, float grayscale, float saturation_scale) {
+  return lerp(grayscale, color, saturation_scale);
+}
+
+float ComputeGamutCompressionScale(float3 color, float grayscale) {
   // Desaturate (move towards grayscale) until no channel is below 0
   float lowest_negative_channel = min(0.f, min(color.r, min(color.g, color.b)));
+
   float distance = grayscale - lowest_negative_channel;
 
   float ratio = renodx::math::DivideSafe(-lowest_negative_channel, distance, 0.f);
 
   // if grayscale is 0, ratio is 0 via DivideSafe, so no change
   // if minchannel is 0, ratio is 0, so no change
-  color = lerp(grayscale, color, 1.f - ratio);
+  float saturation_scale = 1.f - ratio;
+  return saturation_scale;
+}
 
-  return color;
+float ComputeGamutCompressionScale(float3 color) {
+  float grayscale = renodx::color::y::from::BT709(color);
+  return ComputeGamutCompressionScale(color, grayscale);
+}
+
+float3 GamutCompress(float3 color, float grayscale) {
+  return lerp(grayscale, color, ComputeGamutCompressionScale(color, grayscale));
 }
 
 float3 GamutCompress(float3 color) {
