@@ -433,7 +433,8 @@ renodx::utils::settings::Settings settings = {
               {"ColorGradeHighlights", 65.f},
               {"ColorGradeContrast", 65.f},
               {"ColorGradeSaturation", 60.f},
-              {"ColorGradeBlowout", 40.f},
+              {"ColorGradeBlowout", 10.f},
+              {"FxSaturationClip", 25.f},
               {"FxBloom", 40.f},
               {"FxHeroLight", 20.f},
           });
