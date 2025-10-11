@@ -8,6 +8,18 @@
 #include "./reinhard.hlsl"
 #include "./tonemap/daniele.hlsl"
 
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK
+#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK 0
+#endif
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE
+#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE 0
+#endif
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD
+#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD 0
+#endif
+
 namespace renodx {
 namespace tonemap {
 namespace renodrt {
@@ -412,7 +424,10 @@ float3 NeutralSDR(float3 bt709, bool per_channel = false) {
   renodrt_config.per_channel = per_channel;
   renodrt_config.hue_correction_strength = 0.f;
   renodrt_config.working_color_space = 0u;
-  renodrt_config.clamp_color_space = 0u;
+  renodrt_config.tone_map_method = RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD;
+  renodrt_config.clamp_peak = RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK;
+  renodrt_config.clamp_color_space = RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE;
+  
 
   return BT709(bt709, renodrt_config);
 }
