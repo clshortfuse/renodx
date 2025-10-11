@@ -82,6 +82,9 @@ std::atomic_bool shaders_pane_show_compute_shaders = true;
 uint32_t skip_draw_count = 0;
 std::atomic_uint32_t device_data_index = 0;
 
+// https://learn.microsoft.com/windows/win32/inputdev/virtual-key-codes
+std::atomic_uint32_t snapshot_hotkey = 0;
+
 struct ResourceBind {
   enum class BindType : std::uint8_t {
     SRV = 0,
@@ -2990,6 +2993,11 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
     DrawSettingDecimalTextbox("FPS Limit", "FPSLimit", &renodx::utils::swapchain::fps_limit);
   }
 
+  {
+    // TODO: add hotkey input field
+    reshade::set_config_value(nullptr, "renodx-dev", "SnapshotHotkey", snapshot_hotkey);
+  }
+
   ImGui::Text("%s", (std::string("Build: ") + __DATE__ + " " + renodx::utils::date::ISO_DATE_TIME).c_str());
 }
 
@@ -3520,6 +3528,7 @@ void InitializeUserSettings() {
   }
   for (const auto& [key, value] : std::vector<std::pair<const char*, std::atomic_uint32_t*>>({
            {"TraceInitialFrameCount", &renodx::utils::trace::trace_initial_frame_count},
+           {"SnapshotHotkey", &snapshot_hotkey},
        })) {
     uint32_t temp = *value;
     if (reshade::get_config_value(nullptr, "renodx-dev", key, temp)) {
@@ -3656,7 +3665,11 @@ void OnPresent(
   }
 
   auto* device = swapchain->get_device();
-  DeviceData* data = nullptr;
+  DeviceData* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) {
+    return;
+  }
+
   if (setting_live_reload) {
     if (!renodx::utils::shader::compiler::watcher::IsEnabled()) {
       renodx::utils::shader::compiler::watcher::Start();
@@ -3673,6 +3686,14 @@ void OnPresent(
 
   if (setting_auto_dump) {
     renodx::utils::shader::dump::DumpAllPending();
+  }
+
+  // If the last key pressed is the snapshot hotkey, queue one
+  if (snapshot_hotkey != 0
+      && data != nullptr && data->runtime != nullptr
+      && data->runtime->last_key_pressed() == snapshot_hotkey) {
+    snapshot_queued_device = device;
+    renodx::utils::trace::trace_scheduled = true;
   }
 
   if (snapshot_device == nullptr) {
