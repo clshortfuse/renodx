@@ -91,7 +91,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping & Color Grading",
         .tooltip = "Hue retention strength.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type == 3.f; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 2.f || shader_injection.tone_map_type == 3.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
