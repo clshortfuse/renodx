@@ -18,7 +18,7 @@ float4 main(
   float _41 = _35.z * _34;
 
   float3 untonemapped = float3(_39, _40, _41);
-  untonemapped = PreTonemapSliders(untonemapped);
+  //untonemapped = PreTonemapSliders(untonemapped);
 
   float3 tonemapped_bt709_ch = Uncharted2Tonemap1(untonemapped);
   float y_in = renodx::color::y::from::BT709(untonemapped);

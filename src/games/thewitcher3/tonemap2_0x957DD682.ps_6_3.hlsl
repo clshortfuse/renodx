@@ -24,7 +24,7 @@ float4 main(
   _41 = _35.z * _34;
 
   float3 untonemapped_1 = float3(_39, _40, _41);
-  untonemapped_1 = PreTonemapSliders(untonemapped_1);
+  //untonemapped_1 = PreTonemapSliders(untonemapped_1);
 
   float3 tonemapped_bt709_ch_1 = Uncharted2Tonemap1(untonemapped_1);
   float y_in_1 = renodx::color::y::from::BT709(untonemapped_1);
@@ -40,7 +40,7 @@ float4 main(
   _119 = _35.z * _116;
 
   float3 untonemapped_2 = float3(_117, _118, _119);
-  untonemapped_2 = PreTonemapSliders(untonemapped_2);
+  //untonemapped_2 = PreTonemapSliders(untonemapped_2);
 
   float3 tonemapped_bt709_ch_2 = Uncharted2Tonemap2(untonemapped_2);
   float y_in_2 = renodx::color::y::from::BT709(untonemapped_2);
