@@ -266,7 +266,6 @@ float3 CustomTonemap(float3 color, renodx::draw::Config config = renodx::draw::B
   configsat.dechroma = RENODX_TONE_MAP_BLOWOUT;
   configsat.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
 
-
   if (RENODX_TONE_MAP_TYPE == 1.f) {
       return saturate(color);
   }
@@ -275,6 +274,7 @@ float3 CustomTonemap(float3 color, renodx::draw::Config config = renodx::draw::B
   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;
 
   float3 outputColor = color;
+  outputColor = PreTonemapSliders(outputColor);
   outputColor = FakeHDR(outputColor, 0.10f, CUSTOM_INVERSE_TONEMAP, 0.0f, 1);
   if (RENODX_TONE_MAP_TYPE == 2.f) outputColor = renodx::tonemap::ReinhardPiecewise(outputColor, peak_white_nits / diffuse_white_nits, 0.5f);
   outputColor = ApplySaturationBlowoutHighlightSaturation(outputColor, renodx::color::y::from::BT709(outputColor), configsat);
