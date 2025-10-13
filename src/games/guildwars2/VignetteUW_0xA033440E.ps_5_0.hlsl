@@ -33,6 +33,6 @@ void main(
   r0.yzw = cb0[0].xyz * r1.xyz;
   r1.xyz = r0.yzw + r0.yzw;
   r1.xyzw = float4(-1,-1,-1,-1) + r1.xyzw;
-  o0.xyzw = r0.xxxx * r1.xyzw * injectedData.fxVignetteUW + float4(1,1,1,1);
+  o0.xyzw = r0.xxxx * r1.xyzw * CUSTOM_VIGNETTE_UW + float4(1,1,1,1);
   return;
 }

@@ -21,13 +21,13 @@ float Min(float x, float y, float z, float w) {
 float3 ApplyRCAS(
     float3 center_color, float2 tex_coord,
     Texture2D<float4> SamplerFrameBuffer_TEX, SamplerState SamplerFrameBuffer_SMP_s) {
-  if (injectedData.fxSharpen == 0.f) return center_color;  // Skip sharpening if amount is zero
+  if (CUSTOM_SHARPEN == 0.f) return center_color;  // Skip sharpening if amount is zero
 
 #define ENABLE_NOISE_REMOVAL           1u // Always good to be enabled
 #define ENABLE_NORMALIZATION           1u
 //#define SHARPENING_NORMALIZATION_POINT RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS
 //#define SHARPENING_NORMALIZATION_POINT 125
-#define SHARPENING_NORMALIZATION_POINT (injectedData.toneMapPeakNits / injectedData.toneMapGameNits)
+#define SHARPENING_NORMALIZATION_POINT (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS)
 
   uint width, height;
   SamplerFrameBuffer_TEX.GetDimensions(width, height);
@@ -89,7 +89,7 @@ float3 ApplyRCAS(
 
   float lobe = max(float(-FSR_RCAS_LIMIT),
                    min(localLobe, 0.f))
-               * injectedData.fxSharpen;
+               * CUSTOM_SHARPEN;
 
 #if ENABLE_NOISE_REMOVAL
   float bLuma2x = bLum * 2.f;

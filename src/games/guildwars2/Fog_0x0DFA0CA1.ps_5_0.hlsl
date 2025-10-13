@@ -35,6 +35,6 @@ void main(
   r1.xyzw = r0.yyyy * r2.xyzw + r1.xyzw;
   r0.y = v1.x * r1.w;
   o0.xyz = r1.xyz + r1.xyz;
-  o0.w = r0.y * r0.x * injectedData.fxFog;
+  o0.w = r0.y * r0.x * shader_injection.fxFog;
   return;
 }

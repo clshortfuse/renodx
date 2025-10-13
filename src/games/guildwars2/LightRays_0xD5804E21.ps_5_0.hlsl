@@ -33,7 +33,7 @@ void main(
     r3.w = t1.Sample(s1_s, r3.xy).w;
     r4.xyzw = r4.xyzw * r3.wwww;
     r4.xyzw = r4.xyzw * r0.wwww;
-    r2.xyzw = r4.xyzw * cb0[2].zzzz * injectedData.fxLightRays + r2.xyzw;
+    r2.xyzw = r4.xyzw * cb0[2].zzzz * CUSTOM_LIGHT_RAYS + r2.xyzw;
     r0.w = cb0[2].y * r0.w;
     i += 1;
   }

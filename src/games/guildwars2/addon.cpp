@@ -21,7 +21,6 @@ ShaderInjectData shader_injection;
 
 namespace {
 
-bool isUnderWater = false;
 bool isLUT = false;
 bool isColorTint = false;
 bool isOutline = false;
@@ -283,10 +282,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     isColorTint = true;
     ppcheck = true;
     isOutline = true;
-    return true;
-    }),
-    CustomShaderEntryCallback(0xA033440E, [](reshade::api::command_list* cmd_list) {    // vignette (underwater)
-    isUnderWater = true;
     return true;
     }),
     CustomShaderEntryCallback(0xC3C88324, [](reshade::api::command_list* cmd_list) {    // copy
@@ -868,8 +863,6 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  shader_injection.isUnderWater = isUnderWater;
-  isUnderWater = false;
   toggleNote = ppcheck;
   ppcheck = false;
   shader_injection.stateCheck = 0.f;

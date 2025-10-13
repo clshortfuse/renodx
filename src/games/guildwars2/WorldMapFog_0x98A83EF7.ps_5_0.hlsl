@@ -22,7 +22,7 @@ void main(
   r0.xyzw = r1.wwww * r2.xyzw + r0.xyzw;
   r0.w = dot(r0.ww, cb0[0].ww);
   o0.xyzw = r0.xyzw;
-  if (injectedData.stateCheck == 3.f) {
+  if (CUSTOM_STATE_CHECK == 3.f) {
   r0.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
   o0.rgb = HalfWayScale(r0.xyz);
   }

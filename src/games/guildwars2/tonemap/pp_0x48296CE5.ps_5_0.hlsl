@@ -17,13 +17,13 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyz = applyCA(t0, s0_s, v0, injectedData.fxCA);
+  r0.xyz = applyCA(t0, s0_s, v0, CUSTOM_CA);
   r0.w = t0.Sample(s0_s, v0.xy).w;
   r1.xyz = t1.Sample(s1_s, w0.xy).xyz;
   r1.w = renodx::color::y::from::BT709(r0.xyz);
-  r0.xyz = lerp(r1.www, r0.xyz, lerp(1.f, cb0[5].w, injectedData.colorGradeTint));
-  r1.xyz = cb0[0].xyz * r1.xyz * injectedData.fxBloom;
-  if(injectedData.toneMapType == 0.f){
+  r0.xyz = lerp(r1.www, r0.xyz, lerp(1.f, cb0[5].w, CUSTOM_COLOR_TINT));
+  r1.xyz = cb0[0].xyz * r1.xyz * CUSTOM_BLOOM;
+  if(RENODX_TONE_MAP_TYPE == 0.f){
     r0.xyz = float3(1,1,1) + -r0.xyz;
     r1.xyz = -r1.xyz * float3(2,2,2) + float3(1,1,1);
     r0.xyz = -r0.xyz * r1.xyz + float3(1,1,1);
@@ -32,10 +32,10 @@ void main(
   }
   r0.w = r0.w * 2 + -1;
   if (r0.w < -0.01) {
-    r1.xyz = lerp(1.f, cb0[4].xyz, injectedData.fxSelectionOutline) * r0.xyz;
+    r1.xyz = lerp(1.f, cb0[4].xyz, CUSTOM_SELECTION_OUTLINE) * r0.xyz;
   } else {
     if (r0.w > 0.01) {
-      r1.xyz = lerp(1.f, cb0[2].xyz, injectedData.fxSelectionOutline) * r0.xyz;
+      r1.xyz = lerp(1.f, cb0[2].xyz, CUSTOM_SELECTION_OUTLINE) * r0.xyz;
     } else {
       r0.w = 1.2 * cb0[6].z;
       r2.z = cb0[6].x * r0.w;
@@ -53,15 +53,15 @@ void main(
       r1.w = t0.Sample(s0_s, r2.zw).w;
       r0.w = r1.w + r0.w;
       r2.xyz = cb0[3].xyz + -r0.xyz;
-      r2.xyz = injectedData.fxSelectionOutline * cb0[3].www * r2.xyz + r0.xyz;
+      r2.xyz = CUSTOM_SELECTION_OUTLINE * cb0[3].www * r2.xyz + r0.xyz;
       r3.xyz = cb0[1].xyz + -r0.xyz;
-      r3.xyz = injectedData.fxSelectionOutline * cb0[1].www * r3.xyz + r0.xyz;
+      r3.xyz = CUSTOM_SELECTION_OUTLINE * cb0[1].www * r3.xyz + r0.xyz;
       r0.xyz = (r0.w > 2.04) ? r3.xyz : r0.xyz;
       r1.xyz = (r0.w < 1.96) ? r2.xyz : r0.xyz;
     }
   }
   r0.rgb = renodx::color::srgb::DecodeSafe(r1.rgb);
-  r0.rgb = applyVignette(r0.rgb, v0, injectedData.fxVignette);
+  r0.rgb = applyVignette(r0.rgb, v0, CUSTOM_VIGNETTE);
   r0.rgb = applyUserTonemap(r0.rgb);
   o0.rgb = renodx::color::srgb::EncodeSafe(r0.rgb);
   o0.w = 0;

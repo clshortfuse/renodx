@@ -38,7 +38,7 @@ void main(
   r0.w = r2.y * r0.w;
   r0.y = r0.y * r2.x + r0.w;
   r2.y = r0.z * r2.z + r0.y;
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     r2.y = saturate(r2.y);
   }
   r0.y = mul(renodx::color::BT709_TO_XYZ_MAT[2].rgb, r1.xyz);
@@ -59,7 +59,7 @@ void main(
   r0.y = mul(renodx::color::XYZ_TO_BT709_MAT[1].rgb, r2.xyz);
   r0.z = mul(renodx::color::XYZ_TO_BT709_MAT[2].rgb, r2.xyz);
   r1.yz = renodx::math::SignSqrt(r0.yz);
-  r1.rgb = lerp(preLA, r1.rgb, injectedData.fxLightAdaptation);
+  r1.rgb = lerp(preLA, r1.rgb, CUSTOM_LIGHT_ADAPTATION);
   o0.xyz = r0.xxx * (1.0 / 255.0) + r1.xyz;
   o0.rgb = renodx::color::bt709::clamp::BT2020(o0.rgb);
   return;
