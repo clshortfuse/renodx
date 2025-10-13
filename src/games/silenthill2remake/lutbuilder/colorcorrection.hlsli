@@ -5,7 +5,7 @@
 
 // Restores the source color hue (and optionally brightness) through Oklab (this works on colors beyond SDR in brightness and gamut too).
 // The strength sweet spot for a strong hue restoration seems to be 0.75, while for chrominance, going up to 1 is ok.
-float3 RestoreHueAndChrominance(float3 targetColor, float3 sourceColor, float hueStrength = 0.75, float chrominanceStrength = 1.0, float minChrominanceChange = 0.0, float maxChrominanceChange = renodx::math::FLT32_MAX, float lightnessStrength = 0.0) {
+float3 RestoreHueAndChrominance(float3 targetColor, float3 sourceColor, float hueStrength = 0.75, float chrominanceStrength = 1.0, float minChrominanceChange = 0.0, float maxChrominanceChange = renodx::math::FLT32_MAX, float lightnessStrength = 0.0, float clampChrominanceLoss = 0.0) {
   if (hueStrength == 0.0 && chrominanceStrength == 0.0 && lightnessStrength == 0.0)  // Static optimization (useful if the param is const)
     return targetColor;
 
@@ -41,14 +41,21 @@ float3 RestoreHueAndChrominance(float3 targetColor, float3 sourceColor, float hu
     float targetChrominanceRatio = renodx::math::SafeDivision(sourceChrominance, currentChrominance, 1);
     // Optional safe boundaries (0.333x to 2x is a decent range)
     targetChrominanceRatio = clamp(targetChrominanceRatio, minChrominanceChange, maxChrominanceChange);
-    targetOklab.yz *= lerp(1.0, targetChrominanceRatio, chrominanceStrength);
+    float chromaScale = lerp(1.0, targetChrominanceRatio, chrominanceStrength);
+
+    if (clampChrominanceLoss > 0.0) {
+      float needsClamp = 1.0f - step(1.0f, chromaScale);  // 1 when chromaScale < 1
+      chromaScale = lerp(chromaScale, 1.0f, needsClamp * clampChrominanceLoss);
+    }
+
+    targetOklab.yz *= chromaScale;
   }
 
   return renodx::color::bt709::from::OkLab(targetOklab);
 }
 
 // Linear BT.709 in and out. Restore the fog hue and chrominance, to indeed have a look closer to vanilla
-float3 FixColorFade(float3 Scene, float3 Fade) {
+float3 FixColorFade(float3 Scene, float3 Fade, float clampChrominanceLoss = 0.0) {
   const float FogCorrectionAverageBrightness = SHADOW_COLOR_OFFSET_BRIGHTNESS_BIAS;  // increase to limit effect to darker parts
   const float FogCorrectionMinBrightness = 0.0;
   const float FogCorrectionHue = 0.8;  // 1 might break and turn brown due to divisions by 0 or something, anyway fog is usually grey in Cronos, even if there's a slight different white point between the working and output color spaces (D60 vs D65)
@@ -67,7 +74,7 @@ float3 FixColorFade(float3 Scene, float3 Fade) {
   const float fogBrightness = saturate((FogCorrectionAverageBrightness * sceneOklab.x) + FogCorrectionMinBrightness);  // Restore an optional min amount of fog on black and a good amount of fog on non black backgrounds
   const float fogHue = FogCorrectionHue * saturate(length(fadeOklab.yz) / sqrt(2.0));                                  // Restoring the fog hue might look good if the fog was colorful, but if it was just grey, then it'd randomly shift the background hue to an ugly value, so we scale the fog hue restoration by the chrominance of the fade (it seems like it's usually white/grey in Cronos)
   const float fogChrominance = FogCorrectionChrominance;                                                               // Restore the fog chrominance to a 100%, which means we'd either desaturate or saturate the background
-  sceneWithFog = RestoreHueAndChrominance(Scene, sceneWithFog, fogHue, fogChrominance, 0.f, renodx::math::FLT32_MAX, fogBrightness);
+  sceneWithFog = RestoreHueAndChrominance(Scene, sceneWithFog, fogHue, fogChrominance, 0.f, renodx::math::FLT32_MAX, fogBrightness, clampChrominanceLoss);
 
   return lerp(prevSceneWithFog, sceneWithFog, FogCorrectionIntensity);
 }
@@ -113,7 +120,7 @@ float3 ColorCorrectShadows(float3 WorkingColor,
   WorkingColor = pow(WorkingColor * (1.0 / 0.18), ColorContrast.xyz * ColorContrast.w) * 0.18;
   WorkingColor = pow(WorkingColor, 1.0 / (ColorGamma.xyz * ColorGamma.w));
   if (SHADOW_COLOR_OFFSET_FIX_TYPE == 1) {
-    WorkingColor = renodx::color::ap1::from::BT709(FixColorFade(renodx::color::bt709::from::AP1(WorkingColor * (ColorGain.xyz * ColorGain.w)), renodx::color::bt709::from::AP1(ColorOffset.xyz + ColorOffset.w)));  // pumbo haze fix
+    WorkingColor = renodx::color::ap1::from::BT709(FixColorFade(renodx::color::bt709::from::AP1(WorkingColor * (ColorGain.xyz * ColorGain.w)), renodx::color::bt709::from::AP1(ColorOffset.xyz + ColorOffset.w), SHADOW_COLOR_OFFSET_CHROMINANCE_RESTORATION));  // pumbo haze fix
   } else {
     WorkingColor = WorkingColor * (ColorGain.xyz * ColorGain.w) + (ColorOffset.xyz + ColorOffset.w);  // original code
   }
