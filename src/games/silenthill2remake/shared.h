@@ -30,6 +30,7 @@ struct ShaderInjectData {
 
   float shadow_color_offset_fix_type;
   float shadow_color_offset_brightness_bias;
+  float color_offset_midtones_highliqhts;
 
 #if ENABLE_CUSTOM_GRAIN
   float custom_random;
@@ -69,6 +70,7 @@ cbuffer cb13 : register(b13, space50) {
 #define CUSTOM_LUT_STRENGTH                  shader_injection.custom_lut_strength
 #define CUSTOM_LUT_SCALING                   shader_injection.custom_lut_scaling
 #define SHADOW_COLOR_OFFSET_FIX_TYPE         shader_injection.shadow_color_offset_fix_type
+#define COLOR_OFFSET_MIDTONES_HIGHLIGHTS     shader_injection.color_offset_midtones_highliqhts
 #define SHADOW_COLOR_OFFSET_BRIGHTNESS_BIAS  shader_injection.shadow_color_offset_brightness_bias
 
 #if ENABLE_CUSTOM_GRAIN
@@ -102,6 +104,7 @@ cbuffer cb13 : register(b13, space50) {
 #define CUSTOM_LUT_STRENGTH                  1.f
 #define CUSTOM_LUT_SCALING                   1.f
 #define SHADOW_COLOR_OFFSET_FIX_TYPE         1.f
+#define COLOR_OFFSET_MIDTONES_HIGHLIGHTS     1.f
 #define SHADOW_COLOR_OFFSET_BRIGHTNESS_BIAS  6.f
 
 #define CUSTOM_RANDOM         0.f

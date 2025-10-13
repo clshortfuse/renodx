@@ -82,7 +82,7 @@ float3 ColorCorrect(float3 WorkingColor,
   WorkingColor = max(0, lerp(Luma.xxx, WorkingColor, ColorSaturation.xyz * ColorSaturation.w));
   WorkingColor = pow(WorkingColor * (1.0 / 0.18), ColorContrast.xyz * ColorContrast.w) * 0.18;
   WorkingColor = pow(WorkingColor, 1.0 / (ColorGamma.xyz * ColorGamma.w));
-  if (SHADOW_COLOR_OFFSET_FIX_TYPE == 1) {
+  if (SHADOW_COLOR_OFFSET_FIX_TYPE == 1 && COLOR_OFFSET_MIDTONES_HIGHLIGHTS != 0.f) {
     WorkingColor = renodx::color::ap1::from::BT709(FixColorFade(renodx::color::bt709::from::AP1(WorkingColor * (ColorGain.xyz * ColorGain.w)), renodx::color::bt709::from::AP1(ColorOffset.xyz + ColorOffset.w)));  // pumbo haze fix
   } else {
     WorkingColor = WorkingColor * (ColorGain.xyz * ColorGain.w) + (ColorOffset.xyz + ColorOffset.w);  // original code

@@ -221,6 +221,16 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla (Off)", "On"},
     },
     new renodx::utils::settings::Setting{
+        .key = "ApplyPumboFixOnMidtonesHighlights",
+        .binding = &shader_injection.color_offset_midtones_highliqhts,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Apply Black Floor Fix to Midtones and Highlights",
+        .section = "Tone Mapping & Color Grading",
+        .tooltip = "Apply Pumbo Black Floor Fix Math on Midtones & Highlights.",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "ShadowColorOffsetBrightnessBias",
         .binding = &shader_injection.shadow_color_offset_brightness_bias,
         .default_value = 6.f,
