@@ -67,7 +67,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapGammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .label = "SDR EOTF Emulation",
         .section = "Tone Mapping & Color Grading",
         .tooltip = "Emulates a 2.2 EOTF",
@@ -78,7 +78,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapScaling",
         .binding = &shader_injection.tone_map_per_channel,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "Scaling",
         .section = "Tone Mapping & Color Grading",
         .tooltip = "Luminance scales colors consistently while per-channel blows out and hue shifts",
@@ -233,19 +233,19 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ShadowColorOffsetBrightnessBias",
         .binding = &shader_injection.shadow_color_offset_brightness_bias,
-        .default_value = 6.f,
+        .default_value = 8.f,
         .label = "Shadow Offset Brightness Bias",
         .section = "Pumbo Black Floor Fix",
         .tooltip = "Adjusts how much of the game's shadow offset we subtract when restoring the shadow floor.",
         .min = 1.f,
-        .max = 11.f,
+        .max = 15.f,
         .format = "%.2f",
         .is_enabled = []() { return shader_injection.shadow_color_offset_fix_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ShadowColorOffsetChrominanceRestoration",
         .binding = &shader_injection.shadow_color_offset_chrominance_restoration,
-        .default_value = 0.f,
+        .default_value = 30.f,
         .label = "Chrominance Restoration",
         .section = "Pumbo Black Floor Fix",
         .tooltip = "Limits the amount of chrominance loss from Pumbo black floor fix.",
@@ -330,6 +330,22 @@ renodx::utils::settings::Settings settings = {
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended Settings",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ToneMapGammaCorrection", 0.f},
+              {"ToneMapScaling", 0.f},
+              {"ToneMapHueCorrection", 50.f},
+              {"ShadowColorOffsetBrightnessBias", 1.25f},
+              {"ShadowColorOffsetChrominanceRestoration", 100.f},
+          });
         },
     },
     new renodx::utils::settings::Setting{
