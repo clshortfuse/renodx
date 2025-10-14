@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "./CBuffers/CBuffers_LUTbuilder.hlsli"
 #if USES_SDR_LUTS
 
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
@@ -52,14 +52,15 @@ float3 SamplePacked1DLut(
   return lutted_srgb;
 }
 
-float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 color_input) {
+float3 SampleLUTSRGBInSRGBOut(
+    Texture2D<float4> lut_texture,
+    SamplerState lut_sampler,
+    float3 color_input) {
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.scaling = CUSTOM_LUT_SCALING;
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.recolor = 0.f;
-
-  color_input = CorrectOutOfRangeColor(color_input, true, false, 1.f, 1.f, 0.f, false);
 
   float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lut_output_color = SamplePacked1DLut(lut_input_color, lut_config.lut_sampler, lut_texture);
@@ -136,14 +137,15 @@ float3 Sample2Packed1DLuts(
   return lutted_srgb;
 }
 
-float3 Sample2LUTSRGBInSRGBOut(Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, SamplerState lut_sampler1, SamplerState lut_sampler2, float3 color_input) {
+float3 Sample2LUTSRGBInSRGBOut(
+    Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2,
+    SamplerState lut_sampler1, SamplerState lut_sampler2,
+    float3 color_input) {
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.scaling = CUSTOM_LUT_SCALING;
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.recolor = 0.f;
-
-  color_input = CorrectOutOfRangeColor(color_input, true, false, 1.f, 1.f, 0.f, false);
 
   float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lut_output_color = Sample2Packed1DLuts(lut_input_color, lut_sampler1, lut_sampler2, lut_texture1, lut_texture2);
@@ -176,7 +178,11 @@ float3 Sample2LUTSRGBInSRGBOut(Texture2D<float4> lut_texture1, Texture2D<float4>
   return color_output;
 }
 
-void Sample2LUTsUpgradeToneMap(float3 color_lut_input, SamplerState lut_sampler1, SamplerState lut_sampler2, Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, inout float output_r, inout float output_g, inout float output_b) {
+void Sample2LUTsUpgradeToneMap(
+    float3 color_lut_input,
+    SamplerState lut_sampler1, SamplerState lut_sampler2,
+    Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2,
+    inout float output_r, inout float output_g, inout float output_b) {
   float3 color_output = color_lut_input;
 
   if (RENODX_TONE_MAP_TYPE != 4.f) {
@@ -189,4 +195,115 @@ void Sample2LUTsUpgradeToneMap(float3 color_lut_input, SamplerState lut_sampler1
   }
   output_r = color_output.r, output_g = color_output.g, output_b = color_output.b;
 }
-#endif // USES_LUTS
+
+// blending 4 LUTs
+float3 Sample4Packed1DLuts(
+    float3 color_srgb,
+    SamplerState Samplers_1,
+    SamplerState Samplers_2,
+    SamplerState Samplers_3,
+    SamplerState Samplers_4,
+    Texture2D<float4> Textures_1,
+    Texture2D<float4> Textures_2,
+    Texture2D<float4> Textures_3,
+    Texture2D<float4> Textures_4) {
+  color_srgb = saturate(color_srgb);
+  float _884 = color_srgb.r, _895 = color_srgb.g, _906 = color_srgb.b;
+
+  float _910 = (_895 * 0.9375f) + 0.03125f;
+  float _917 = _906 * 15.0f;
+  float _918 = floor(_917);
+  float _919 = _917 - _918;
+  float _921 = (_918 + ((_884 * 0.9375f) + 0.03125f)) * 0.0625f;
+  float4 _924 = Textures_1.SampleLevel(Samplers_1, float2(_921, _910), 0.0f);
+  float _928 = _921 + 0.0625f;
+  float4 _929 = Textures_1.SampleLevel(Samplers_1, float2(_928, _910), 0.0f);
+  float4 _951 = Textures_2.SampleLevel(Samplers_2, float2(_921, _910), 0.0f);
+  float4 _955 = Textures_2.SampleLevel(Samplers_2, float2(_928, _910), 0.0f);
+  float4 _977 = Textures_3.SampleLevel(Samplers_3, float2(_921, _910), 0.0f);
+  float4 _981 = Textures_3.SampleLevel(Samplers_3, float2(_928, _910), 0.0f);
+  float4 _1004 = Textures_4.SampleLevel(Samplers_4, float2(_921, _910), 0.0f);
+  float4 _1008 = Textures_4.SampleLevel(Samplers_4, float2(_928, _910), 0.0f);
+  float _1027 = (((((((lerp(_924.x, _929.x, _919)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _884)) + ((lerp(_951.x, _955.x, _919)) * (LUTWeights[0].z))) + ((lerp(_977.x, _981.x, _919)) * (LUTWeights[0].w))) + ((lerp(_1004.x, _1008.x, _919)) * (LUTWeights[1].x))));
+  float _1028 = (((((((lerp(_924.y, _929.y, _919)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _895)) + ((lerp(_951.y, _955.y, _919)) * (LUTWeights[0].z))) + ((lerp(_977.y, _981.y, _919)) * (LUTWeights[0].w))) + ((lerp(_1004.y, _1008.y, _919)) * (LUTWeights[1].x))));
+  float _1029 = (((((((lerp(_924.z, _929.z, _919)) * (LUTWeights[0].y)) + ((LUTWeights[0].x) * _906)) + ((lerp(_951.z, _955.z, _919)) * (LUTWeights[0].z))) + ((lerp(_977.z, _981.z, _919)) * (LUTWeights[0].w))) + ((lerp(_1004.z, _1008.z, _919)) * (LUTWeights[1].x))));
+
+  float3 lutted_srgb = float3(_1027, _1028, _1029);
+  return lutted_srgb;
+}
+
+float3 Sample4LUTSRGBInSRGBOut(
+    Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, Texture2D<float4> lut_texture3, Texture2D<float4> lut_texture4,
+    SamplerState lut_sampler1, SamplerState lut_sampler2, SamplerState lut_sampler3, SamplerState lut_sampler4,
+    float3 color_input) {
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.scaling = CUSTOM_LUT_SCALING;
+  lut_config.type_input = renodx::lut::config::type::SRGB;
+  lut_config.type_output = renodx::lut::config::type::SRGB;
+  lut_config.recolor = 0.f;
+
+  float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
+  float3 lut_output_color = Sample4Packed1DLuts(
+      lut_input_color,
+      lut_sampler1, lut_sampler2, lut_sampler3, lut_sampler4,
+      lut_texture1, lut_texture2, lut_texture3, lut_texture4);
+  float3 color_output = renodx::lut::LinearOutput(lut_output_color, lut_config);
+  [branch]
+  if (lut_config.scaling != 0.f) {
+    float3 lut_black = Sample4Packed1DLuts(
+        renodx::lut::ConvertInput(0, lut_config),
+        lut_sampler1, lut_sampler2, lut_sampler3, lut_sampler4,
+        lut_texture1, lut_texture2, lut_texture3, lut_texture4);
+    float3 lut_black_linear = renodx::lut::LinearOutput(lut_black, lut_config);
+    float lut_black_y = max(0, renodx::color::y::from::BT709(lut_black_linear));
+    if (lut_black_y > 0.f) {
+      float3 lut_mid = Sample4Packed1DLuts(
+          renodx::lut::ConvertInput(lut_black_y, lut_config),
+          lut_sampler1, lut_sampler2, lut_sampler3, lut_sampler4,
+          lut_texture1, lut_texture2, lut_texture3, lut_texture4);  // set midpoint based on black to avoid black crush
+      float lut_shift = (renodx::color::y::from::BT709(renodx::lut::LinearOutput(lut_mid, lut_config)) + lut_black_y) / lut_black_y;
+
+      float3 unclamped_gamma = Unclamp(
+          renodx::lut::GammaOutput(lut_output_color, lut_config),
+          renodx::lut::GammaOutput(lut_black, lut_config),
+          renodx::lut::GammaOutput(lut_mid, lut_config),
+          renodx::lut::ConvertInput(color_input * lut_shift, lut_config));
+
+      float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
+      float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
+      color_output = recolored;
+    }
+  } else {
+  }
+  if (lut_config.recolor != 0.f) {
+    color_output = renodx::lut::RestoreSaturationLoss(color_input, color_output, lut_config);
+  }
+
+  return color_output;
+}
+
+void Sample4LUTsUpgradeToneMap(
+    float3 color_lut_input,
+    SamplerState lut_sampler1, SamplerState lut_sampler2, SamplerState lut_sampler3, SamplerState lut_sampler4,
+    Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, Texture2D<float4> lut_texture3, Texture2D<float4> lut_texture4,
+    inout float output_r, inout float output_g, inout float output_b) {
+  float3 color_output = color_lut_input;
+
+  if (RENODX_TONE_MAP_TYPE != 4.f) {
+    float3 color_lut_input_tonemapped = ToneMapMaxCLL(color_lut_input);
+    float3 lutted = Sample4LUTSRGBInSRGBOut(
+        lut_texture1, lut_texture2, lut_texture3, lut_texture4,
+        lut_sampler1, lut_sampler2, lut_sampler3, lut_sampler4,
+        color_lut_input_tonemapped);
+    color_output = renodx::tonemap::UpgradeToneMap(color_lut_input, color_lut_input_tonemapped, lutted, CUSTOM_LUT_STRENGTH);
+  } else {
+    color_output = renodx::color::srgb::DecodeSafe(Sample4Packed1DLuts(
+        renodx::color::srgb::EncodeSafe(color_lut_input),
+        lut_sampler1, lut_sampler2, lut_sampler3, lut_sampler4,
+        lut_texture1, lut_texture2, lut_texture3, lut_texture4));
+    color_output = lerp(color_lut_input, color_output, CUSTOM_LUT_STRENGTH);
+  }
+  output_r = color_output.r, output_g = color_output.g, output_b = color_output.b;
+}
+
+#endif  // USES_SDR_LUTS

@@ -1,6 +1,7 @@
 #include "../shared.h"
 #include "./CBuffers/CBuffers_LUTbuilder.hlsli"
 #include "./colorcorrection.hlsli"
+#include "./lutsampling.hlsli"
 
 // From Pumbo
 // This basically does gamut mapping, however it's not focused on gamut as primaries, but on peak white.

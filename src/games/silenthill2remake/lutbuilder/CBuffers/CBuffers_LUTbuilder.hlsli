@@ -1,3 +1,6 @@
+#ifndef RENODX_SILENTHILL2_CBUFFERS_LUTBUILDER_H
+#define RENODX_SILENTHILL2_CBUFFERS_LUTBUILDER_H
+
 #include "../../shared.h"
 
 // the list of variables in cb0 in lutbuilder 0x865E53FC is a superset of all the others
@@ -172,7 +175,14 @@ static const float4 ColorOffsetHighlights = float4(cb0_034x, cb0_034y, cb0_034z,
 static const float ColorCorrectionShadowsMax = asfloat(cb0_035z);
 static const float ColorCorrectionHighlightsMin = asfloat(cb0_035w);
 static const float ColorCorrectionHighlightsMax = asfloat(cb0_036x);
-#endif
+#endif  // ENABLE_CUSTOM_COLOR_CORRECTION
+
+#if USES_SDR_LUTS
+static float4 LUTWeights[2] = {
+  float4(cb0_005x, cb0_005y, cb0_005z, cb0_005w),
+  float4(cb0_006x, 0.f, 0.f, 0.f)  // only x is populated in SH2; the rest are unused
+};
+#endif  // USES_SDR_LUTS
 
 static uint output_device = uint(cb0_040w);
 static uint output_gamut = uint(cb0_041x);
@@ -186,3 +196,5 @@ void ApplyLUTOutputOverrides() {
     expand_gamut = 0.f;
   }
 }
+
+#endif  // RENODX_SILENTHILL2_CBUFFERS_LUTBUILDER_H
