@@ -58,7 +58,7 @@ float3 RestoreHueAndChrominance(float3 targetColor, float3 sourceColor, float hu
 float3 FixColorFade(float3 Scene, float3 Fade, float clampChrominanceLoss = 0.0) {
   const float FogCorrectionAverageBrightness = SHADOW_COLOR_OFFSET_BRIGHTNESS_BIAS;  // increase to limit effect to darker parts
   const float FogCorrectionMinBrightness = 0.0;
-  const float FogCorrectionHue = 0.8;  // 1 might break and turn brown due to divisions by 0 or something, anyway fog is usually grey in Cronos, even if there's a slight different white point between the working and output color spaces (D60 vs D65)
+  const float FogCorrectionHue = 1.0;  // 1 might break and turn brown due to divisions by 0 or something, anyway fog is usually grey in Cronos, even if there's a slight different white point between the working and output color spaces (D60 vs D65)
   const float FogCorrectionChrominance = 1.0;
   const float FogCorrectionIntensity = 1.0;
 
@@ -120,7 +120,11 @@ float3 ColorCorrectShadows(float3 WorkingColor,
   WorkingColor = pow(WorkingColor * (1.0 / 0.18), ColorContrast.xyz * ColorContrast.w) * 0.18;
   WorkingColor = pow(WorkingColor, 1.0 / (ColorGamma.xyz * ColorGamma.w));
   if (SHADOW_COLOR_OFFSET_FIX_TYPE == 1) {
-    WorkingColor = renodx::color::ap1::from::BT709(FixColorFade(renodx::color::bt709::from::AP1(WorkingColor * (ColorGain.xyz * ColorGain.w)), renodx::color::bt709::from::AP1(ColorOffset.xyz + ColorOffset.w), SHADOW_COLOR_OFFSET_CHROMINANCE_RESTORATION));  // pumbo haze fix
+    WorkingColor = renodx::color::ap1::from::BT709(
+        FixColorFade(renodx::color::bt709::from::AP1(WorkingColor * (ColorGain.xyz * ColorGain.w)),
+                     renodx::color::bt709::from::AP1(ColorOffset.xyz + ColorOffset.w),
+                     SHADOW_COLOR_OFFSET_CHROMINANCE_RESTORATION));  // pumbo haze fix
+    WorkingColor = max(0, WorkingColor);                             // clamp to AP1
   } else {
     WorkingColor = WorkingColor * (ColorGain.xyz * ColorGain.w) + (ColorOffset.xyz + ColorOffset.w);  // original code
   }

@@ -81,7 +81,7 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
 #define UNREALFILMIC_GENERATOR(T)                                                                                                                                                                                                                                                            \
   T ApplyUnrealFilmicToneMap(T untonemapped) {                                                                                                                                                                                                                                               \
     float film_black_clip = FilmBlackClip;                                                                                                                                                                                                                                                   \
-    if (OVERRIDE_BLACK_CLIP && RENODX_TONE_MAP_TYPE == 3.f) {                                                                                                                                                                                                                                \
+    if (OVERRIDE_BLACK_CLIP && RENODX_TONE_MAP_TYPE == 3.f && is_hdr) {                                                                                                                                                                                                                                \
       float target_black_nits = 0.0001f / RENODX_DIFFUSE_WHITE_NITS;                                                                                                                                                                                                                         \
       if (RENODX_GAMMA_CORRECTION) target_black_nits = renodx::color::correct::Gamma(target_black_nits, true);                                                                                                                                                                               \
       film_black_clip = target_black_nits * -1.f;                                                                                                                                                                                                                                            \
@@ -216,6 +216,15 @@ float3 ApplyVanillaToneMap(float3 untonemapped, float3 preRRT) {
   return tonemapped;
 }
 
+float3 ApplyVanillaToneMapSDR(float3 untonemapped, float3 preRRT) {
+  float3 tonemapped = ApplyUnrealFilmicToneMap(untonemapped);
+  tonemapped = ApplyPostToneMapDesaturation(tonemapped);
+  tonemapped = LerpToneMapStrength(tonemapped, preRRT);
+  tonemapped = ApplyBlueCorrection(tonemapped);
+
+  return tonemapped;
+}
+
 void ApplyFilmicToneMap(
     float input_r,
     float input_g,
@@ -229,6 +238,12 @@ void ApplyFilmicToneMap(
   float _827 = preRRT_r, _828 = preRRT_g, _829 = preRRT_b;
   float3 tonemapped;
   float3 untonemapped_pre_grade = float3(input_r, input_g, input_b);
+
+  if (!is_hdr) {  // if SDR, just apply vanilla tone map with no grading
+    tonemapped = ApplyVanillaToneMapSDR(untonemapped_pre_grade, float3(preRRT_r, preRRT_g, preRRT_b));
+    output_r = tonemapped.r, output_g = tonemapped.g, output_b = tonemapped.b;
+    return;
+  }
 
   renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
   cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;

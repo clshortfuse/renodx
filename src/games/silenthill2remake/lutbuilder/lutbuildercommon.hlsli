@@ -95,8 +95,8 @@ bool GenerateOutput(float r, float g, float b, inout float4 SV_Target) {
   final_color = ApplyGammaCorrection(final_color);
 
   float3 bt2020_color = renodx::color::bt2020::from::BT709(final_color);
-#if 1
-  bt2020_color = CorrectOutOfRangeColor(bt2020_color, true, false, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 1.f, 0.f, true);
+#if 0
+  // bt2020_color = CorrectOutOfRangeColor(bt2020_color, true, false, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 1.f, 0.f, true);
 #else
   float grayscale = renodx::color::y::from::BT2020(bt2020_color);
   grayscale = renodx::color::srgb::EncodeSafe(max(0, grayscale));
