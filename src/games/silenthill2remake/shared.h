@@ -2,7 +2,7 @@
 #define SRC_GAMES_SILENTHILL2REMAKE_SHARED_H_
 
 #define ENABLE_SLIDERS                 1
-#define USES_SDR_LUTS                  0
+#define USES_SDR_LUTS                  1
 #define ENABLE_CUSTOM_COLOR_CORRECTION 1
 #define ENABLE_CUSTOM_GRAIN            0
 
