@@ -1,10 +1,6 @@
 #ifndef SRC_GUILDWARS2_SHARED_H_
 #define SRC_GUILDWARS2_SHARED_H_
 
-#ifndef __cplusplus
-#include "../../shaders/renodx.hlsl"
-#endif
-
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
@@ -112,6 +108,9 @@ cbuffer cb13 : register(b13) {
 #define CUSTOM_RANDOM2                                shader_injection.random_2
 #define CUSTOM_RANDOM3                                shader_injection.random_3
 #define CUSTOM_STATE_CHECK                            shader_injection.stateCheck
+#endif
+#ifndef __cplusplus
+#include "../../shaders/renodx.hlsl"
 #endif
 
 #endif  // SRC_GUILDWARS2_SHARED_H_

@@ -28,7 +28,7 @@ void main(
   r0.w = pow(r0.w, cb0[2].w);
   r0.w = cb0[3].w * r0.w * CUSTOM_COLOR_TINT;
   r1.x = renodx::color::y::from::BT709(r0.xyz);
-  r0.xyz = lerp(r1.xxx, r0.xyz, (1.f, cb0[1].w, CUSTOM_COLOR_TINT));
+  r0.xyz = lerp(r1.xxx, r0.xyz, lerp(1.f, cb0[1].w, CUSTOM_COLOR_TINT));
   r0.xyz = lerp(r0.xyz, cb0[3].xyz * r1.xxx, r0.w);
   r1.xyz = t1.Sample(s1_s, w0.xy).xyz;
   r1.xyz = cb0[0].xyz * r1.xyz * CUSTOM_BLOOM;

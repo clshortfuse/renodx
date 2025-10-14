@@ -282,7 +282,7 @@ float3 applyUserTonemap(float3 untonemapped, Texture2D lutTexture, SamplerState 
   config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
   config.gamma_correction = RENODX_GAMMA_CORRECTION;
   config.exposure = RENODX_TONE_MAP_EXPOSURE;
-  config.highlights = shader_injection.colorGradeHighlights;
+  config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
   config.shadows = RENODX_TONE_MAP_SHADOWS;
   config.contrast = RENODX_TONE_MAP_CONTRAST;
   config.saturation = RENODX_TONE_MAP_SATURATION;
@@ -336,7 +336,7 @@ float3 applyUserTonemap(float3 untonemapped) {
   config.game_nits = RENODX_DIFFUSE_WHITE_NITS;
   config.gamma_correction = RENODX_GAMMA_CORRECTION;
   config.exposure = RENODX_TONE_MAP_EXPOSURE;
-  config.highlights = shader_injection.colorGradeHighlights;
+  config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
   config.shadows = RENODX_TONE_MAP_SHADOWS;
   config.contrast = RENODX_TONE_MAP_CONTRAST;
   config.saturation = RENODX_TONE_MAP_SATURATION;
