@@ -126,6 +126,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Force Display HDR",
         .tooltip = "Forces Display into HDR mode on game start (if supported)",
         .labels = {"Off", "On"},
+        .is_global = true,
         .is_visible = []() { return current_settings_mode >= 2; },
 
     },
