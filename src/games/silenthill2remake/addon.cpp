@@ -226,6 +226,7 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 4; },
         .parse = [](float value) { return value * 0.01f; },
     },
+#if ENABLE_CUSTOM_COLOR_CORRECTION
     new renodx::utils::settings::Setting{
         .key = "ShadowColorOffsetFixType",
         .binding = &shader_injection.shadow_color_offset_fix_type,
@@ -269,6 +270,8 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.shadow_color_offset_fix_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
+#endif  // ENABLE_CUSTOM_COLOR_CORRECTION
+
 // new renodx::utils::settings::Setting{
 //     .key = "FixPostProcess",
 //     .binding = &shader_injection.fix_post_process,
