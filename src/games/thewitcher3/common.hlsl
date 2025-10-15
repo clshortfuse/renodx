@@ -282,7 +282,8 @@ float3 CustomTonemap(float3 color, renodx::draw::Config config = renodx::draw::B
 }
 
 float GetSunshaftScale() {
-  return CUSTOM_SUNSHAFTS_STRENGTH;
+  return 1.f;
+  //return CUSTOM_SUNSHAFTS_STRENGTH;
 }
 
 float GetBloomScale() {
@@ -340,4 +341,25 @@ float4 HandleUICompositing(float4 ui_color_linear, float4 scene_color_linear) {
 
 float4 HandleUICompositingHDR(float4 ui_color_linear, float4 scene_color_linear) {
   return HandleUICompositing(ui_color_linear * (RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS), scene_color_linear);
+}
+
+float Normalize(float x, float minVal, float maxVal)
+{
+  return saturate((x - minVal) / (maxVal - minVal));
+}
+
+float Rescale(float y, float minVal, float maxVal)
+{
+  return lerp(minVal, maxVal, y);
+}
+
+float s_curve(float value) {
+  return 1 / (1 + exp(-value));
+}
+
+float s_curve_bloom_intensity(float value) {
+  value = Normalize(value, 0.f, 15.f);
+  // value = 1 / (1 + exp(-10 * (value - 0.5)));
+  value = s_curve(value);
+  return Rescale(value, 0.f, 15.f);
 }
