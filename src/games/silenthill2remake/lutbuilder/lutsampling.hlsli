@@ -197,6 +197,112 @@ void Sample2LUTsUpgradeToneMap(
 }
 
 // blending 4 LUTs
+float3 Sample3Packed1DLuts(
+    float3 color_srgb,
+    SamplerState Samplers_1,
+    SamplerState Samplers_2,
+    SamplerState Samplers_3,
+    Texture2D<float4> Textures_1,
+    Texture2D<float4> Textures_2,
+    Texture2D<float4> Textures_3) {
+  color_srgb = saturate(color_srgb);
+  float _1189 = color_srgb.r, _1200 = color_srgb.g, _1211 = color_srgb.b;
+
+  float _1215 = (_1200 * 0.9375f) + 0.03125f;
+  float _1222 = _1211 * 15.0f;
+  float _1223 = floor(_1222);
+  float _1224 = _1222 - _1223;
+  float _1226 = (_1223 + ((_1189 * 0.9375f) + 0.03125f)) * 0.0625f;
+  float4 _1229 = Textures_1.SampleLevel(Samplers_1, float2(_1226, _1215), 0.0f);
+  float _1233 = _1226 + 0.0625f;
+  float4 _1234 = Textures_1.SampleLevel(Samplers_1, float2(_1233, _1215), 0.0f);
+  float4 _1256 = Textures_2.SampleLevel(Samplers_2, float2(_1226, _1215), 0.0f);
+  float4 _1260 = Textures_2.SampleLevel(Samplers_2, float2(_1233, _1215), 0.0f);
+  float4 _1282 = Textures_3.SampleLevel(Samplers_3, float2(_1226, _1215), 0.0f);
+  float4 _1286 = Textures_3.SampleLevel(Samplers_3, float2(_1233, _1215), 0.0f);
+  float _1305 = ((((((lerp(_1229.x, _1234.x, _1224))*cb0_005y) + (cb0_005x * _1189)) + ((lerp(_1256.x, _1260.x, _1224))*cb0_005z)) + ((lerp(_1282.x, _1286.x, _1224))*cb0_005w)));
+  float _1306 = ((((((lerp(_1229.y, _1234.y, _1224))*cb0_005y) + (cb0_005x * _1200)) + ((lerp(_1256.y, _1260.y, _1224))*cb0_005z)) + ((lerp(_1282.y, _1286.y, _1224))*cb0_005w)));
+  float _1307 = ((((((lerp(_1229.z, _1234.z, _1224))*cb0_005y) + (cb0_005x * _1211)) + ((lerp(_1256.z, _1260.z, _1224))*cb0_005z)) + ((lerp(_1282.z, _1286.z, _1224))*cb0_005w)));
+
+  float3 lutted_srgb = float3(_1305, _1306, _1307);
+  return lutted_srgb;
+}
+
+float3 Sample3LUTSRGBInSRGBOut(
+    Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, Texture2D<float4> lut_texture3,
+    SamplerState lut_sampler1, SamplerState lut_sampler2, SamplerState lut_sampler3,
+    float3 color_input) {
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.scaling = CUSTOM_LUT_SCALING;
+  lut_config.type_input = renodx::lut::config::type::SRGB;
+  lut_config.type_output = renodx::lut::config::type::SRGB;
+  lut_config.recolor = 0.f;
+
+  float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
+  float3 lut_output_color = Sample3Packed1DLuts(
+      lut_input_color,
+      lut_sampler1, lut_sampler2, lut_sampler3,
+      lut_texture1, lut_texture2, lut_texture3);
+  float3 color_output = renodx::lut::LinearOutput(lut_output_color, lut_config);
+  [branch]
+  if (lut_config.scaling != 0.f) {
+    float3 lut_black = Sample3Packed1DLuts(
+        renodx::lut::ConvertInput(0, lut_config),
+        lut_sampler1, lut_sampler2, lut_sampler3,
+        lut_texture1, lut_texture2, lut_texture3);
+    float3 lut_black_linear = renodx::lut::LinearOutput(lut_black, lut_config);
+    float lut_black_y = max(0, renodx::color::y::from::BT709(lut_black_linear));
+    if (lut_black_y > 0.f) {
+      float3 lut_mid = Sample3Packed1DLuts(
+          renodx::lut::ConvertInput(lut_black_y, lut_config),
+          lut_sampler1, lut_sampler2, lut_sampler3,
+          lut_texture1, lut_texture2, lut_texture3);  // set midpoint based on black to avoid black crush
+      float lut_shift = (renodx::color::y::from::BT709(renodx::lut::LinearOutput(lut_mid, lut_config)) + lut_black_y) / lut_black_y;
+
+      float3 unclamped_gamma = Unclamp(
+          renodx::lut::GammaOutput(lut_output_color, lut_config),
+          renodx::lut::GammaOutput(lut_black, lut_config),
+          renodx::lut::GammaOutput(lut_mid, lut_config),
+          renodx::lut::ConvertInput(color_input * lut_shift, lut_config));
+
+      float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
+      float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
+      color_output = recolored;
+    }
+  } else {
+  }
+  if (lut_config.recolor != 0.f) {
+    color_output = renodx::lut::RestoreSaturationLoss(color_input, color_output, lut_config);
+  }
+
+  return color_output;
+}
+
+void Sample3LUTsUpgradeToneMap(
+    float3 color_lut_input,
+    SamplerState lut_sampler1, SamplerState lut_sampler2, SamplerState lut_sampler3,
+    Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, Texture2D<float4> lut_texture3,
+    inout float output_r, inout float output_g, inout float output_b) {
+  float3 color_output = color_lut_input;
+
+  if (RENODX_TONE_MAP_TYPE != 4.f) {
+    float3 color_lut_input_tonemapped = ToneMapMaxCLL(color_lut_input);
+    float3 lutted = Sample3LUTSRGBInSRGBOut(
+        lut_texture1, lut_texture2, lut_texture3,
+        lut_sampler1, lut_sampler2, lut_sampler3,
+        color_lut_input_tonemapped);
+    color_output = renodx::tonemap::UpgradeToneMap(color_lut_input, color_lut_input_tonemapped, lutted, CUSTOM_LUT_STRENGTH);
+  } else {
+    color_output = renodx::color::srgb::DecodeSafe(Sample3Packed1DLuts(
+        renodx::color::srgb::EncodeSafe(color_lut_input),
+        lut_sampler1, lut_sampler2, lut_sampler3,
+        lut_texture1, lut_texture2, lut_texture3));
+    color_output = lerp(color_lut_input, color_output, CUSTOM_LUT_STRENGTH);
+  }
+  output_r = color_output.r, output_g = color_output.g, output_b = color_output.b;
+}
+
+// blending 4 LUTs
 float3 Sample4Packed1DLuts(
     float3 color_srgb,
     SamplerState Samplers_1,
