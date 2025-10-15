@@ -282,6 +282,38 @@ void main(
   float _175 = ((mad(-0.06368283927440643f, _140, mad(-0.32929131388664246f, _137, (_134 * 1.370412826538086f))) - _134) * _159) + _134;
   float _176 = ((mad(-0.010861567221581936f, _140, mad(1.0970908403396606f, _137, (_134 * -0.08343426138162613f))) - _137) * _159) + _137;
   float _177 = ((mad(1.203694462776184f, _140, mad(-0.09862564504146576f, _137, (_134 * -0.02579325996339321f))) - _140) * _159) + _140;
+
+#if 1
+  float _543;
+  float _545;
+  float _547;
+  ApplyColorCorrection(
+      _175, _176, _177,
+      _543, _545, _547,
+      ColorSaturation,
+      ColorContrast,
+      ColorGamma,
+      ColorGain,
+      ColorOffset,
+      ColorSaturationShadows,
+      ColorContrastShadows,
+      ColorGammaShadows,
+      ColorGainShadows,
+      ColorOffsetShadows,
+      ColorSaturationHighlights,
+      ColorContrastHighlights,
+      ColorGammaHighlights,
+      ColorGainHighlights,
+      ColorOffsetHighlights,
+      ColorSaturationMidtones,
+      ColorContrastMidtones,
+      ColorGammaMidtones,
+      ColorGainMidtones,
+      ColorOffsetMidtones,
+      ColorCorrectionShadowsMax,
+      ColorCorrectionHighlightsMin,
+      ColorCorrectionHighlightsMax);
+#else
   float _178 = dot(float3(_175, _176, _177), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
   float _192 = cb0_019w + cb0_024w;
   float _206 = cb0_018w * cb0_023w;
@@ -310,6 +342,8 @@ void main(
   float _543 = ((_429 * (((cb0_019x + cb0_034x) + _326) + (((cb0_018x * cb0_033x) * _335) * exp2(log2(exp2(((cb0_016x * cb0_031x) * _353) * log2(max(0.0f, ((((cb0_015x * cb0_030x) * _362) * _252) + _178)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017x * cb0_032x) * _344)))))) + (_317 * (((cb0_019x + cb0_024x) + _192) + (((cb0_018x * cb0_023x) * _206) * exp2(log2(exp2(((cb0_016x * cb0_021x) * _234) * log2(max(0.0f, ((((cb0_015x * cb0_020x) * _248) * _252) + _178)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017x * cb0_022x) * _220))))))) + ((((cb0_019x + cb0_029x) + _438) + (((cb0_018x * cb0_028x) * _447) * exp2(log2(exp2(((cb0_016x * cb0_026x) * _465) * log2(max(0.0f, ((((cb0_015x * cb0_025x) * _474) * _252) + _178)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017x * cb0_027x) * _456))))) * _532);
   float _545 = ((_429 * (((cb0_019y + cb0_034y) + _326) + (((cb0_018y * cb0_033y) * _335) * exp2(log2(exp2(((cb0_016y * cb0_031y) * _353) * log2(max(0.0f, ((((cb0_015y * cb0_030y) * _362) * _253) + _178)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_032y) * _344)))))) + (_317 * (((cb0_019y + cb0_024y) + _192) + (((cb0_018y * cb0_023y) * _206) * exp2(log2(exp2(((cb0_016y * cb0_021y) * _234) * log2(max(0.0f, ((((cb0_015y * cb0_020y) * _248) * _253) + _178)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_022y) * _220))))))) + ((((cb0_019y + cb0_029y) + _438) + (((cb0_018y * cb0_028y) * _447) * exp2(log2(exp2(((cb0_016y * cb0_026y) * _465) * log2(max(0.0f, ((((cb0_015y * cb0_025y) * _474) * _253) + _178)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_027y) * _456))))) * _532);
   float _547 = ((_429 * (((cb0_019z + cb0_034z) + _326) + (((cb0_018z * cb0_033z) * _335) * exp2(log2(exp2(((cb0_016z * cb0_031z) * _353) * log2(max(0.0f, ((((cb0_015z * cb0_030z) * _362) * _254) + _178)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_032z) * _344)))))) + (_317 * (((cb0_019z + cb0_024z) + _192) + (((cb0_018z * cb0_023z) * _206) * exp2(log2(exp2(((cb0_016z * cb0_021z) * _234) * log2(max(0.0f, ((((cb0_015z * cb0_020z) * _248) * _254) + _178)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_022z) * _220))))))) + ((((cb0_019z + cb0_029z) + _438) + (((cb0_018z * cb0_028z) * _447) * exp2(log2(exp2(((cb0_016z * cb0_026z) * _465) * log2(max(0.0f, ((((cb0_015z * cb0_025z) * _474) * _254) + _178)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_027z) * _456))))) * _532);
+#endif
+
   float _583 = ((mad(0.061360642313957214f, _547, mad(-4.540197551250458e-09f, _545, (_543 * 0.9386394023895264f))) - _543) * cb0_036y) + _543;
   float _584 = ((mad(0.169205904006958f, _547, mad(0.8307942152023315f, _545, (_543 * 6.775371730327606e-08f))) - _545) * cb0_036y) + _545;
   float _585 = (mad(-2.3283064365386963e-10f, _545, (_543 * -9.313225746154785e-10f)) * cb0_036y) + _547;
@@ -371,6 +405,20 @@ void main(
   float _715 = max(0.0f, mad(-0.09967592358589172f, _647, mad(1.17622971534729f, _646, (_704 * -0.07655377686023712f))));
   float _716 = max(0.0f, mad(0.9977163076400757f, _647, mad(-0.006032449658960104f, _646, (_704 * 0.008316148072481155f))));
   float _717 = dot(float3(_714, _715, _716), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+  float _763 = (lerp(_717, _714, 0.9599999785423279f));
+  float _764 = (lerp(_717, _715, 0.9599999785423279f));
+  float _765 = (lerp(_717, _716, 0.9599999785423279f));
+
+#if 1
+  float _905, _906, _907;
+  ApplyFilmicToneMap(_763, _764, _765,
+                     _583, _584, _585,
+                     _905, _906, _907);
+#else
+  _763 = log2(_763) * 0.3010300099849701f;
+  _764 = log2(_764) * 0.3010300099849701f;
+  _765 = log2(_765) * 0.3010300099849701f;
+
   float _731 = (cb0_037w + 1.0f) - cb0_037y;
   float _734 = cb0_038x + 1.0f;
   float _736 = _734 - cb0_037z;
@@ -382,9 +430,6 @@ void main(
   }
   float _757 = ((1.0f - cb0_037y) / cb0_037x) - _754;
   float _759 = (cb0_037z / cb0_037x) - _757;
-  float _763 = log2(lerp(_717, _714, 0.9599999785423279f)) * 0.3010300099849701f;
-  float _764 = log2(lerp(_717, _715, 0.9599999785423279f)) * 0.3010300099849701f;
-  float _765 = log2(lerp(_717, _716, 0.9599999785423279f)) * 0.3010300099849701f;
   float _769 = cb0_037x * (_763 + _757);
   float _770 = cb0_037x * (_764 + _757);
   float _771 = cb0_037x * (_765 + _757);
@@ -416,9 +461,20 @@ void main(
   float _905 = ((mad(-0.06537103652954102f, _889, mad(1.451815478503704e-06f, _888, (_887 * 1.065374732017517f))) - _887) * cb0_036y) + _887;
   float _906 = ((mad(-0.20366770029067993f, _889, mad(1.2036634683609009f, _888, (_887 * -2.57161445915699e-07f))) - _888) * cb0_036y) + _888;
   float _907 = ((mad(0.9999996423721313f, _889, mad(2.0954757928848267e-08f, _888, (_887 * 1.862645149230957e-08f))) - _889) * cb0_036y) + _889;
-  float _920 = saturate(max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _907, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _906, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _905)))));
-  float _921 = saturate(max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _907, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _906, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _905)))));
-  float _922 = saturate(max(0.0f, mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _907, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _906, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _905)))));
+#endif
+
+  float _920 = ((mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _907, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _906, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _905)))));
+  float _921 = ((mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _907, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _906, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _905)))));
+  float _922 = ((mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _907, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _906, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _905)))));
+
+#if 1
+  float _1047, _1048, _1049;
+  Sample2LUTsUpgradeToneMap(
+      float3(_920, _921, _922),
+      s0, s1,
+      t0, t1,
+      _1047, _1048, _1049);
+#else
   if (_920 < 0.0031306699384003878f) {
     _933 = (_920 * 12.920000076293945f);
   } else {
@@ -450,12 +506,19 @@ void main(
   float _1047 = select((_1023 > 0.040449999272823334f), exp2(log2((_1023 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1023 * 0.07739938050508499f));
   float _1048 = select((_1024 > 0.040449999272823334f), exp2(log2((_1024 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1024 * 0.07739938050508499f));
   float _1049 = select((_1025 > 0.040449999272823334f), exp2(log2((_1025 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1025 * 0.07739938050508499f));
+#endif
+
   float _1075 = cb0_014x * (((cb0_039y + (cb0_039x * _1047)) * _1047) + cb0_039z);
   float _1076 = cb0_014y * (((cb0_039y + (cb0_039x * _1048)) * _1048) + cb0_039z);
   float _1077 = cb0_014z * (((cb0_039y + (cb0_039x * _1049)) * _1049) + cb0_039z);
   float _1084 = ((cb0_013x - _1075) * cb0_013w) + _1075;
   float _1085 = ((cb0_013y - _1076) * cb0_013w) + _1076;
   float _1086 = ((cb0_013z - _1077) * cb0_013w) + _1077;
+
+  if (GenerateOutput(_1084, _1085, _1086, u0[SV_DispatchThreadID])) {
+    return;
+  }
+
   float _1087 = cb0_014x * mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _547, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _545, (_543 * (UniformBufferConstants_WorkingColorSpace_192[0].x))));
   float _1088 = cb0_014y * mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _547, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _545, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _543)));
   float _1089 = cb0_014z * mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _547, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _545, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _543)));
