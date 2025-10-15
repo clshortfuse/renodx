@@ -404,6 +404,8 @@ static void Use(DWORD fdw_reason) {
 
       break;
     case DLL_PROCESS_DETACH:
+      if (!internal::attached) return;
+      internal::attached = false;
       reshade::unregister_event<reshade::addon_event::init_device>(internal::OnInitDevice);
       reshade::unregister_event<reshade::addon_event::init_pipeline>(internal::OnInitPipeline);
       reshade::unregister_event<reshade::addon_event::present>(internal::OnPresent);

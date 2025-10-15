@@ -1,9 +1,9 @@
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Thu Sep  4 10:29:13 2025
-Texture2D<float4> t1 : register(t1);
+Texture2D<float4> t1 : register(t1);  // 1D-LUT
 
-Texture2D<float4> t0 : register(t0);
+Texture2D<float4> t0 : register(t0);  // Render
 
 SamplerState s1_s : register(s1);
 
@@ -70,28 +70,46 @@ void main(
     renodrt_config.clamp_color_space = -1.f;
 
     float3 neutral_sdr = lerp(
-        renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config),
+        renodx::tonemap::renodrt::NeutralSDR(untonemapped),
         renodx::tonemap::ExponentialRollOff(untonemapped, 0.75f),
         CUSTOM_SATURATION_CLIP);
 
-    neutral_sdr = renodx::color::correct::Hue(neutral_sdr, untonemapped, 1.f - CUSTOM_HUE_CLIP);
+    // Apply hue clip in perceptual space (OKLab)
+    float3 neutral_sdr_perceptual = renodx::color::oklab::from::BT709(neutral_sdr);
+    float3 untonemapped_perceptual = renodx::color::oklab::from::BT709(untonemapped);
+    float neutral_sdr_chrominance = length(neutral_sdr_perceptual.yz);
+    float untonemapped_chrominance = length(untonemapped_perceptual.yz);
+    float2 new_ab = lerp(neutral_sdr_perceptual.yz, untonemapped_perceptual.yz, 1.f - CUSTOM_HUE_CLIP);
+    float adjusted_chrominance = length(new_ab);
+    new_ab *= renodx::math::DivideSafe(neutral_sdr_chrominance, adjusted_chrominance, 1.f);
+    neutral_sdr_perceptual.yz = new_ab;
+    neutral_sdr = renodx::color::bt709::from::OkLab(neutral_sdr_perceptual);
 
-    float3 neutral_gamma = renodx::color::srgb::Encode(abs(neutral_sdr));
+    float3 lut_input_color = renodx::color::correct::GamutCompress(neutral_sdr);
+    float in_gamut_chrominance = length(renodx::color::oklab::from::BT709(lut_input_color).yz);
+    float gamut_compress_chrominance_loss = in_gamut_chrominance / neutral_sdr_chrominance;
+    gamma_color = renodx::color::srgb::Encode(lut_input_color);
 
-    float max_channel = max(max(max(neutral_gamma.r, neutral_gamma.g), neutral_gamma.b), 1.f);
-    float3 lut_input_color = neutral_gamma / max_channel;
-    gamma_color = lut_input_color;
-    gamma_color.r = t1.Sample(s1_s, float2(gamma_color.r, 0.125)).r;
-    gamma_color.g = t1.Sample(s1_s, float2(gamma_color.g, 0.375)).g;
-    gamma_color.b = t1.Sample(s1_s, float2(gamma_color.b, 0.625)).b;
+    float max_channel = max(max(max(gamma_color.r, gamma_color.g), gamma_color.b), 1.f);
+    gamma_color = gamma_color / max_channel;
+    gamma_color.r = t1.Sample(s0_s, float2(gamma_color.r, 0.125)).r;
+    gamma_color.g = t1.Sample(s0_s, float2(gamma_color.g, 0.375)).g;
+    gamma_color.b = t1.Sample(s0_s, float2(gamma_color.b, 0.625)).b;
     gamma_color = gamma_color * max_channel;
+
+    // Back to linear for BT2020 restoration
+    gamma_color = renodx::color::srgb::DecodeSafe(gamma_color);
+    float3 post_lut_perceptual = renodx::color::oklab::from::BT709(gamma_color);
+    float post_lut_chrominance = length(post_lut_perceptual.yz);
+    float restored_chrominance = 1.f / gamut_compress_chrominance_loss;
+    post_lut_perceptual.yz *= restored_chrominance;
+    gamma_color = renodx::color::bt709::from::OkLab(post_lut_perceptual);
+
+    // Back to gamma for vanilla desaturation
+    gamma_color = renodx::color::srgb::EncodeSafe(gamma_color);
     float luma = dot(gamma_color, float3(0.219999999, 0.707000017, 0.0710000023));
     // Lerp luminance to desaturate
     gamma_color.rgb = lerp(luma, gamma_color.rgb, cb0[2].z);  // 0 = black & white
-    neutral_sdr = lut_input_color;
-    float neutral_luma = dot(neutral_sdr, float3(0.219999999, 0.707000017, 0.0710000023));
-    neutral_sdr.rgb = lerp(neutral_luma, neutral_sdr.rgb, cb0[2].z);  // 0 = black & white
-    neutral_sdr = renodx::color::srgb::DecodeSafe(neutral_sdr);
 
     float3 graded_color = renodx::color::srgb::DecodeSafe(gamma_color);
 

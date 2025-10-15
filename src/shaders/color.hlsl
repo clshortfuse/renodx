@@ -772,10 +772,11 @@ static const float2x2 UVStarToUVStarPrime = {
 
 float3 BT709(float3 bt709) {
   float3 xyY = xyY::from::BT709(bt709);
+  if (xyY[2] == 0.f) return 0;
 
   float3 UVD = mul(xyToUVD, float3(xyY.xy, 1.f));
 
-  float2 UV = UVD.xy /= UVD.z;
+  float2 UV = UVD.xy / UVD.z;
 
   float2 UVStar = float2(1.39656225667f, 1.4513954287f) * UV / (abs(UV) + float2(1.49217352929f, 1.52488637914f));
 

@@ -77,6 +77,20 @@ float3 ColorSpaces(float3 color, float input_color_space, float output_color_spa
   return color;
 }
 
+float Luminance(float3 color, float color_space) {
+  [branch]
+  if (color_space == COLOR_SPACE_BT2020) {
+    return renodx::color::y::from::BT2020(color);
+  } else {
+    [branch]
+    if (color_space == COLOR_SPACE_AP1) {
+      return renodx::color::y::from::AP1(color);
+    } else {
+      return renodx::color::y::from::BT709(color);
+    }
+  }
+}
+
 }  // namespace convert
 }  // namespace color
 }  // namespace renodx

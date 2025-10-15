@@ -631,6 +631,8 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
 
       break;
     case DLL_PROCESS_DETACH:
+      if (!attached) return;
+      attached = false;
       reshade::unregister_overlay(overlay_title.c_str(), OnRegisterOverlay);
       break;
   }

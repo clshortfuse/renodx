@@ -24,6 +24,7 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  [branch]
   if (RENODX_TONE_MAP_TYPE == 0) {
     r0.yw = float2(0.125, 0.375);
     r1.xyzw = t0.Sample(s0_s, v1.xy).zxyw;
@@ -41,30 +42,62 @@ void main(
     o0.xyz = cb0[2].xxx * r0.xyz + r0.www;
 
     o0 = saturate(o0);
-    return;
+
+    o0.rgb = renodx::color::srgb::Decode(o0.rgb);
+  } else {
+    float4 sampled_color = t0.Sample(s0_s, v1.xy).rgba;
+    o0.a = sampled_color.a;
+
+    float3 gamma_color = sampled_color.rgb;
+
+    float3 untonemapped = renodx::color::srgb::Decode(gamma_color.rgb);
+
+    float3 neutral_sdr = lerp(
+        renodx::tonemap::renodrt::NeutralSDR(untonemapped),
+        renodx::tonemap::ExponentialRollOff(untonemapped, 0.75f),
+        CUSTOM_SATURATION_CLIP);
+
+    // Apply hue clip in perceptual space (OKLab)
+    float3 neutral_sdr_perceptual = renodx::color::oklab::from::BT709(neutral_sdr);
+    float3 untonemapped_perceptual = renodx::color::oklab::from::BT709(untonemapped);
+    float neutral_sdr_chrominance = length(neutral_sdr_perceptual.yz);
+    float untonemapped_chrominance = length(untonemapped_perceptual.yz);
+    float2 new_ab = lerp(neutral_sdr_perceptual.yz, untonemapped_perceptual.yz, 1.f - CUSTOM_HUE_CLIP);
+    float adjusted_chrominance = length(new_ab);
+    new_ab *= renodx::math::DivideSafe(neutral_sdr_chrominance, adjusted_chrominance, 1.f);
+    neutral_sdr_perceptual.yz = new_ab;
+    neutral_sdr = renodx::color::bt709::from::OkLab(neutral_sdr_perceptual);
+
+    float3 lut_input_color = renodx::color::correct::GamutCompress(neutral_sdr);
+    float in_gamut_chrominance = length(renodx::color::oklab::from::BT709(lut_input_color).yz);
+    float gamut_compress_chrominance_loss = in_gamut_chrominance / neutral_sdr_chrominance;
+    gamma_color = renodx::color::srgb::Encode(lut_input_color);
+
+    float max_channel = max(max(max(gamma_color.r, gamma_color.g), gamma_color.b), 1.f);
+    gamma_color = gamma_color / max_channel;
+    gamma_color.r = t1.Sample(s1_s, float2(gamma_color.r, 0.125)).r;
+    gamma_color.g = t1.Sample(s1_s, float2(gamma_color.g, 0.375)).g;
+    gamma_color.b = t1.Sample(s1_s, float2(gamma_color.b, 0.625)).b;
+    gamma_color = gamma_color * max_channel;
+
+    // Back to linear for BT2020 restoration
+    gamma_color = renodx::color::srgb::DecodeSafe(gamma_color);
+    float3 post_lut_perceptual = renodx::color::oklab::from::BT709(gamma_color);
+    float post_lut_chrominance = length(post_lut_perceptual.yz);
+    float restored_chrominance = 1.f / gamut_compress_chrominance_loss;
+    post_lut_perceptual.yz *= restored_chrominance;
+    gamma_color = renodx::color::bt709::from::OkLab(post_lut_perceptual);
+
+    // Back to gamma for vanilla desaturation
+    gamma_color = renodx::color::srgb::EncodeSafe(gamma_color);
+    float luma = dot(gamma_color, float3(0.219999999, 0.707000017, 0.0710000023));
+    // Lerp luminance to desaturate
+    gamma_color.rgb = lerp(luma, gamma_color.rgb, cb0[2].x);
+
+    float3 graded_color = renodx::color::srgb::DecodeSafe(gamma_color);
+
+    o0.rgb = renodx::draw::ToneMapPass(untonemapped, graded_color, neutral_sdr);
   }
-
-  float4 sampled_color = t0.Sample(s0_s, v1.xy).rgba;
-  o0.a = sampled_color.a;
-
-  float3 gamma_color = sampled_color.rgb;
-
-  float3 untonemapped = renodx::color::srgb::Decode(gamma_color.rgb);
-
-  float3 neutral_sdr = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
-
-  
-  gamma_color = renodx::color::srgb::Encode(neutral_sdr);
-
-  gamma_color.r = t1.Sample(s1_s, float2(gamma_color.r, 0.125)).r;
-  gamma_color.g = t1.Sample(s1_s, float2(gamma_color.g, 0.375)).g;
-  gamma_color.b = t1.Sample(s1_s, float2(gamma_color.b, 0.625)).b;
-  float luma = dot(gamma_color, float3(0.219999999, 0.707000017, 0.0710000023));
-  gamma_color.rgb = lerp(luma, gamma_color.rgb, cb0[2].x);
-
-  float3 graded_color = renodx::color::srgb::Decode(gamma_color);
-
-  float3 tonemapped = renodx::draw::ToneMapPass(untonemapped, graded_color, neutral_sdr);
-  o0.rgb = renodx::draw::RenderIntermediatePass(tonemapped);
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }
