@@ -33,29 +33,6 @@ float4 Sample2DPackedLUT(float3 srgb_color, SamplerState lut_sampler, Texture2D<
   return lut_sample;
 }
 
-float3 CorrectBlackPerChannel(float3 color_input, float3 lut_color, float3 lut_black_rgb, float strength) {
-  float3 input_y = renodx::color::y::from::BT709(abs(color_input));
-  float3 color_y = renodx::color::y::from::BT709(abs(lut_color));
-  float3 a = lut_black_rgb;
-  float3 b = lerp(0.f, lut_black_rgb, strength);
-  float3 g = input_y;
-  float3 h = color_y;
-
-  float3 new_y = h - pow(a, pow(1.f + g, renodx::math::DivideSafe(b, a, 0.f)));
-
-  float3 safe_ratio = renodx::math::DivideSafe(saturate(min(h, new_y)), h, 1.f);
-  return lut_color * safe_ratio;
-}
-
-float3 CorrectBlackChrominance(float3 color_input, float3 lut_color, float3 lut_black_rgb, float lut_black_y, float strength) {
-  float3 ch = CorrectBlackPerChannel(color_input, lut_color, lut_black_rgb, strength);
-  float3 lum = renodx::lut::CorrectBlack(color_input, lut_color, lut_black_y, strength);
-
-  float3 corrected = renodx::color::correct::ChrominanceOKLab(lum, ch);
-
-  return corrected;
-}
-
 float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 srgb_input) {
   float4 lut_sample = Sample2DPackedLUT(srgb_input, lut_sampler, lut_texture);
 
@@ -417,7 +394,7 @@ float3 ApplyDisplayMap(float3 color_input, float peak_ratio) {
 }
 
 float3 ApplyDithering(float3 color_input, float screen_pos_x, float screen_pos_y) {
-  if (CUSTOM_DITHERING)
+  if (CUSTOM_DITHERING == 0.f)
     return color_input;
 
   // Constants for HDR10 PQ dithering
@@ -443,7 +420,7 @@ float3 ApplyDithering(float3 color_input, float screen_pos_x, float screen_pos_y
   // Apply dithering in PQ space
   float3 encoded_pq = renodx::color::pq::EncodeSafe(color_input, RENODX_DIFFUSE_WHITE_NITS);
   float3 dithered_pq = encoded_pq + dither;
-  return renodx::color::pq::DecodeSafe(dithered_pq, RENODX_DIFFUSE_WHITE_NITS);
+  return renodx::color::pq::DecodeSafe(saturate(dithered_pq), RENODX_DIFFUSE_WHITE_NITS);
 }
 
 float3 ApplyFade(float3 color_input, float fade) {
