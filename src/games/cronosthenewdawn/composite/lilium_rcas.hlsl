@@ -1,32 +1,13 @@
 #include "../shared.h"
 
-float Max(float x, float y, float z) {
-  return max(x, max(y, z));
-}
-
-float Max(float x, float y, float z, float w) {
-  return max(x, max(y, max(z, w)));
-}
-
-float Min(float x, float y, float z) {
-  return min(x, min(y, z));
-}
-
-float Min(float x, float y, float z, float w) {
-  return min(x, min(y, min(z, w)));
-}
-
 // from Lilium
 // RCAS - Robust Contrast Adaptive Sharpening
-float3 ApplyRCAS(
+float3 ApplyLiliumRCAS(
     float3 center_color, float2 tex_coord,
     Texture2D<float4> SamplerFrameBuffer_TEX, SamplerState SamplerFrameBuffer_SMP_s) {
-  if (CUSTOM_SHARPNESS == 0.f) return center_color;  // Skip sharpening if amount is zero
-
-#define ENABLE_NOISE_REMOVAL           1u // Always good to be enabled
+#define ENABLE_NOISE_REMOVAL           1u  // Always good to be enabled
 #define ENABLE_NORMALIZATION           1u
-//#define SHARPENING_NORMALIZATION_POINT RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS
-#define SHARPENING_NORMALIZATION_POINT 125
+#define SHARPENING_NORMALIZATION_POINT RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS
 
   uint width, height;
   SamplerFrameBuffer_TEX.GetDimensions(width, height);
@@ -59,15 +40,15 @@ float3 ApplyRCAS(
   static const float2 peakC = float2(1.f, -4.f);
 
   // Calculate luminance of center and neighbors
-  float bLum = renodx::color::y::from::BT709(b);
-  float dLum = renodx::color::y::from::BT709(d);
-  float eLum = renodx::color::y::from::BT709(e);
-  float fLum = renodx::color::y::from::BT709(f);
-  float hLum = renodx::color::y::from::BT709(h);
+  float bLum = renodx::color::y::from::BT2020(b);
+  float dLum = renodx::color::y::from::BT2020(d);
+  float eLum = renodx::color::y::from::BT2020(e);
+  float fLum = renodx::color::y::from::BT2020(f);
+  float hLum = renodx::color::y::from::BT2020(h);
 
   // Min and max of ring.
-  float min4Lum = Min(bLum, dLum, fLum, hLum);
-  float max4Lum = Max(bLum, dLum, fLum, hLum);
+  float min4Lum = renodx::math::Min(bLum, dLum, fLum, hLum);
+  float max4Lum = renodx::math::Max(bLum, dLum, fLum, hLum);
 
   // 0.99 found through testing -> see my latest desmos or https://www.desmos.com/calculator/4dyqhishpl
   // this helps reducing massive overshoot that would happen otherwise
@@ -103,8 +84,8 @@ float3 ApplyRCAS(
              + 0.25f * hLuma2x
              - eLuma2x;
 
-  float maxLuma2x = Max(Max(bLuma2x, dLuma2x, eLuma2x), fLuma2x, hLuma2x);
-  float minLuma2x = Min(Min(bLuma2x, dLuma2x, eLuma2x), fLuma2x, hLuma2x);
+  float maxLuma2x = renodx::math::Max(renodx::math::Max(bLuma2x, dLuma2x, eLuma2x), fLuma2x, hLuma2x);
+  float minLuma2x = renodx::math::Min(renodx::math::Min(bLuma2x, dLuma2x, eLuma2x), fLuma2x, hLuma2x);
 
   nz = saturate(abs(nz) * rcp(maxLuma2x - minLuma2x));
   nz = -0.5f * nz + 1.f;
