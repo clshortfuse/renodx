@@ -24,8 +24,9 @@
 #define CUSTOM_SHARPENING                    2.f
 #define CUSTOM_DITHERING                     1.f
 
-#define LUT_SCALING_MAX 1.f
-#define BLOOM_SCALING_MAX 0.25f
+#define RENODX_TONE_MAP_SHOULDER_START 1.f
+#define LUT_SCALING_MAX                1.f
+#define BLOOM_SCALING_MAX              0.25f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -58,8 +59,6 @@ struct ShaderInjectData {
 // cbuffer shader_injection : register(b13, space50) {
 //   ShaderInjectData shader_injection : packoffset(c0);
 // }
-
-#define RENODX_TONE_MAP_SHOULDER_START 0.39f
 
 // #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 // #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
