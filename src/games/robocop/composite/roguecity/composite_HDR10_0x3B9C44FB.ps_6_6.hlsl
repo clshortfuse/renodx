@@ -36,7 +36,7 @@ float4 main(
   float4 _11 = UITexture.Sample(UISampler, float2(TEXCOORD.x, TEXCOORD.y));        // UI - sRGB
   float4 _59 = SceneTexture.Sample(SceneSampler, float2(TEXCOORD.x, TEXCOORD.y));  // PQ
 
-  if (HandleUICompositing(_11, _59, SV_Target)) {
+  if (HandleUICompositing(_11, _59, SV_Target, TEXCOORD.xy, SceneTexture, SceneSampler)) {
     return SV_Target;
   }
 
