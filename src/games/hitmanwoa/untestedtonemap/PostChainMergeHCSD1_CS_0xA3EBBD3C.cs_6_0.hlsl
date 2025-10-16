@@ -1,11 +1,11 @@
 #include "../common.hlsl"
 
 cbuffer _28_30 : register(b2, space0) {
-  float4 _30_m0[153] : packoffset(c0);
+  float4 _30_m0[154] : packoffset(c0);
 };
 
 cbuffer _33_35 : register(b5, space0) {
-  float4 _35_m0[12] : packoffset(c0);
+  float4 _35_m0[13] : packoffset(c0);
 };
 
 Texture2DArray<float4> _8 : register(t0, space0);
