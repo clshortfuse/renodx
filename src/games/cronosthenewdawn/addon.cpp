@@ -30,34 +30,6 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("\nSliders in this section do not apply in real time.\nToggle HDR in game settings or restart the game in order to apply changes.\n\n"),
-        .section = "Black Floor Fix",
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ShadowColorOffsetFixType",
-        .binding = &shader_injection.shadow_color_offset_fix_type,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
-        .label = "Black Floor Fix - Mode",
-        .section = "Tone Mapping & Color Grading",
-        .tooltip = "Sets the black floor fix mode",
-        .labels = {"Vanilla (No fix)", "Zero shadow color offset", "Pumbo"},
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ShadowColorOffsetFixContrastOffset",
-        .binding = &shader_injection.shadow_color_offset_fix_contrast_offset,
-        .default_value = 40.f,
-        .can_reset = true,
-        .label = "Black Floor Fix - Contrast Offset",
-        .section = "Tone Mapping & Color Grading",
-        .tooltip = "Intensity of the contrast offset, raising visibility in shadows",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.shadow_color_offset_fix_type != 0; },
-        .parse = [](float value) { return value * 0.5f; },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("\nSliders in this section do not apply in real time.\nToggle HDR in game settings or restart the game in order to apply changes.\n\n"),
         .section = "Tone Mapping & Color Grading",
         .is_visible = []() { return last_is_hdr; },
     },
@@ -236,13 +208,62 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("\nSliders in this section do not apply in real time.\nToggle HDR in game settings or restart the game in order to apply changes.\n\n"),
+        .section = "Pumbo Black Floor Fix",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ShadowColorOffsetFixType",
+        .binding = &shader_injection.shadow_color_offset_fix_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Pumbo Black Floor Fix",
+        .section = "Pumbo Black Floor Fix",
+        .tooltip = "Sets the black floor fix mode",
+        .labels = {"Vanilla (Off)", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ApplyPumboFixOnMidtonesHighlights",
+        .binding = &shader_injection.color_offset_midtones_highliqhts,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Apply to Midtones and Highlights",
+        .section = "Pumbo Black Floor Fix",
+        .tooltip = "Apply Pumbo Black Floor Fix Math on Midtones & Highlights.",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ShadowColorOffsetBrightnessBias",
+        .binding = &shader_injection.shadow_color_offset_brightness_bias,
+        .default_value = 4.f,
+        .label = "Shadow Offset Brightness Bias",
+        .section = "Pumbo Black Floor Fix",
+        .tooltip = "Adjusts how much of the game's shadow offset we subtract when restoring the shadow floor.",
+        .min = 1.f,
+        .max = 15.f,
+        .format = "%.2f",
+        .is_enabled = []() { return shader_injection.shadow_color_offset_fix_type != 0; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ShadowColorOffsetChrominanceRestoration",
+        .binding = &shader_injection.shadow_color_offset_chrominance_restoration,
+        .default_value = 30.f,
+        .label = "Chrominance Restoration",
+        .section = "Pumbo Black Floor Fix",
+        .tooltip = "Limits the amount of chrominance loss from Pumbo black floor fix.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.shadow_color_offset_fix_type != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxRCAS",
         .binding = &shader_injection.custom_sharpness,
         .default_value = 0.f,
         .label = "RCAS Sharpening",
         .section = "Effects",
         .tooltip = "Adds RCAS, as implemented by Lilium for HDR.",
-        .parse = [](float value) { return value * 0.01f; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
         .is_visible = []() { return last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
@@ -275,27 +296,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Options",
         .group = "button-line-1",
         .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-          }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Match SDR",
-        .section = "Options",
-        .group = "button-line-1",
-        .on_change = []() {
           renodx::utils::settings::ResetSettings();
-          renodx::utils::settings::UpdateSettings({
-              {"ToneMapGammaCorrection", 1.f},
-              {"ToneMapScaling", 1.f},
-              {"OverrideBlackClip", 0.f},
-          });
         },
-        .is_visible = []() { return last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -378,8 +380,6 @@ renodx::utils::settings::Settings settings = {
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
-      {"ShadowColorOffsetFixType", 0.f},
-      {"ShadowColorOffsetFixContrastOffset", 0.f},
       {"ToneMapType", 0.f},
       {"ToneMapPeakNits", 0.f},
       {"toneMapGameNits", 203.f},
@@ -396,8 +396,9 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
-      {"ColorGradeLUTStrength", 0.f},
-      {"ColorGradeLUTScaling", 0.f},
+      {"ShadowColorOffsetFixType", 0.f},
+      {"ShadowColorOffsetBrightnessBias", 0.f},
+      {"ShadowColorOffsetChrominanceRestoration", 0.f},
       {"FxRCAS", 0.f}
   });
 }
@@ -411,8 +412,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[5]->default_value = peak.value();
-    settings[5]->can_reset = true;
+    settings[2]->default_value = peak.value();
+    settings[2]->can_reset = true;
   }
 }
 
