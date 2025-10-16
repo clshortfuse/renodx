@@ -34,8 +34,8 @@
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 //#define RENODX_RENO_DRT_WHITE_CLIP             100.f
 //#define CUSTOM_SCENE_GRADE_METHOD              shader_injection.scene_grade_method
-#define CUSTOM_SCENE_HUE_METHOD                0.f
-//#define CUSTOM_SCENE_GRADE_HUE_CORRECTION      shader_injection.scene_grade_hue_correction
+#define CUSTOM_SCENE_HUE_METHOD                shader_injection.scene_hue_method
+#define CUSTOM_SCENE_GRADE_HUE_CORRECTION      shader_injection.scene_grade_hue_correction
 #define CUSTOM_SCENE_GRADE_SATURATION_CORRECTION shader_injection.scene_grade_saturation_correction
 #define CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION shader_injection.scene_grade_blowout_restoration
 //#define CUSTOM_SCENE_GRADE_HUE_SHIFT           shader_injection.scene_grade_hue_shift
@@ -87,9 +87,9 @@ struct ShaderInjectData {
   float tone_map_color_grade_strength;
   float swap_chain_custom_color_space;
   //float scene_grade_method;
-  //float scene_hue_method;
+  float scene_hue_method;
+  float scene_grade_hue_correction;
   float scene_grade_strength;
-  //float scene_grade_hue_correction;
   float scene_grade_saturation_correction;
   float scene_grade_blowout_restoration;
   //float scene_grade_hue_shift;

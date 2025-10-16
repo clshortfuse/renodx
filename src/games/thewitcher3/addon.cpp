@@ -43,6 +43,7 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
 const std::unordered_map<std::string, float> PURIST_VALUES = {
     {"CustomInverseTonemap", 0.f},
     {"SceneGradeSaturationCorrection", 0.f},
+    {"SceneGradeHueCorrection", 30.f},
     //{"ColorGradeHighlights", 50.f},
     //{"BloomEmulation", 0.f},
 };
@@ -354,6 +355,31 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
     },
+        new renodx::utils::settings::Setting{
+        .key = "SceneGradeHueMethod",
+        .binding = &shader_injection.scene_hue_method,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Hue Method",
+        .section = "Scene Grading",
+        .tooltip = "Method used by Hue Correction.",
+        .labels = {"OKLab", "ICtCp", "darkTable UCS"},
+         .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1; },
+        .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
+    },
+        new renodx::utils::settings::Setting{
+        .key = "SceneGradeHueCorrection",
+        .binding = &shader_injection.scene_grade_hue_correction,
+        .default_value = 0.f,
+        .label = "Hue Correction",
+        .section = "Scene Grading",
+        .tooltip = "Shifts hues towards the original SDR tonemap.",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1; },
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
+    },
             new renodx::utils::settings::Setting{
         .key = "SceneGradeStrength",
         .binding = &shader_injection.scene_grade_strength,
@@ -625,7 +651,7 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "ADJUST WITH CAUTION",
         .section = "Bloom Advanced",
-        .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 2.f && last_is_hdr; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxBloomPeak",
@@ -636,8 +662,9 @@ renodx::utils::settings::Settings settings = {
         //.tooltip = "Adjusts the max intensity value the game's dynamic bloom parameters can use.",
         .min = 1.f,
         .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
+        .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
             new renodx::utils::settings::Setting{
         .key = "FxBloomRolloff",
@@ -648,8 +675,9 @@ renodx::utils::settings::Settings settings = {
         //.tooltip = "Adjusts the max intensity value the game's dynamic bloom parameters can use.",
         .min = 1.f,
         .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1; },
         .parse = [](float value) { return value * 0.1f; },
-        .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
+        .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
         new renodx::utils::settings::Setting{
         .key = "FxSunshaftPeak",
@@ -660,8 +688,9 @@ renodx::utils::settings::Settings settings = {
         //.tooltip = "Adjusts the max intensity value the game's dynamic bloom parameters can use.",
         .min = 1.f,
         .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
+        .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
 
         new renodx::utils::settings::Setting{
@@ -673,8 +702,9 @@ renodx::utils::settings::Settings settings = {
         //.tooltip = "Adjusts the max intensity value the game's dynamic bloom parameters can use.",
         .min = 1.f,
         .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1; },
         .parse = [](float value) { return value * 0.1f; },
-        .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
+        .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
     // new renodx::utils::settings::Setting{
     //     .key = "FxBloomMinThreshold",
