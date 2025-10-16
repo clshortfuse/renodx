@@ -112,8 +112,8 @@ void main(
 // 0.25f - (1.f / 16.f)
 #define FSR_RCAS_LIMIT 0.1875f
 
-      const float sharpness_strength = 0.75f;
-      float sharpness = (_cbCAS_000.S_cbCAS_032.x == 0.0f) ? 0.0f : exp2(-(1.0f - sharpness_strength));
+      const float sharpness_strength = 0.5f;
+      float sharpness = exp2(-(1.0f - sharpness_strength));
       float lobe = max(float(-FSR_RCAS_LIMIT), min(local_lobe, 0.f)) * sharpness;
 
       // Noise detection.
