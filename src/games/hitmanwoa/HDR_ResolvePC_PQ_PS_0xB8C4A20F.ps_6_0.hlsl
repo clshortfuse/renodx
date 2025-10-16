@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "./common.hlsli"
 
 struct S_cbHDRResolve {
   float4 S_cbHDRResolve_000;
