@@ -1,5 +1,5 @@
 // from PostChainMergeC2_CS_0x30C605C8.cs_6_0
-#include "../common.hlsl"
+#include "../common.hlsli"
 cbuffer _24_26 : register(b5, space0) {
   float4 _26_m0[13] : packoffset(c0);
 };
@@ -63,7 +63,7 @@ void main(SPIRV_Cross_Input stage_input) {
 }
 
 /*
-#include "../common.hlsl"
+#include "../common.hlsli"
 cbuffer _24_26 : register(b5, space0)
 {
     float4 _26_m0[12] : packoffset(c0);

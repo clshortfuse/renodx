@@ -24,6 +24,9 @@
 #define CUSTOM_SHARPENING                    2.f
 #define CUSTOM_DITHERING                     1.f
 
+#define LUT_SCALING_MAX 1.f
+#define BLOOM_SCALING_MAX 0.25f
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {

@@ -1,4 +1,4 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 cbuffer _26_28 : register(b2, space0) {
   float4 _28_m0[154] : packoffset(c0);
 };
