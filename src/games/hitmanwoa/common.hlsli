@@ -133,7 +133,7 @@ float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   [branch]
   if (lut_config.scaling != 0.f) {
     float3 lutBlack = Sample2DPackedLUT(renodx::lut::ConvertInput(0, lut_config), lut_sampler, lut_texture).rgb;
-    float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.14f, lut_config), lut_sampler, lut_texture).rgb;  // adjust to not crush
+    float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.15f, lut_config), lut_sampler, lut_texture).rgb;  // adjust to not crush
 
     // float3 lutWhite = Sample2DPackedLUT(renodx::lut::ConvertInput(1.f, lut_config), lut_sampler, lut_texture).rgb;
     float3 lutWhite = 1.f;
@@ -177,7 +177,7 @@ float4 SampleLUTSRGBInLinearOut(Texture2D<float4> lut_texture, SamplerState lut_
   [branch]
   if (lut_config.scaling != 0.f) {
     float3 lutBlack = Sample2DPackedLUT(renodx::lut::ConvertInput(0, lut_config), lut_sampler, lut_texture).rgb;
-    float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.14f, lut_config), lut_sampler, lut_texture).rgb;  // adjust to not crush
+    float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.15f, lut_config), lut_sampler, lut_texture).rgb;  // adjust to not crush
     
     // float3 lutWhite = Sample2DPackedLUT(renodx::lut::ConvertInput(1.f, lut_config), lut_sampler, lut_texture).rgb;
     float3 lutWhite = 1.f;
