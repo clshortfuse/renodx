@@ -185,8 +185,7 @@ float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, flo
     outputColor = lerp(tonemapped_bt709, untonemapped_midgray, saturate(tonemapped_bt709_y));
   }
   outputColor = renodx::color::correct::Chrominance(outputColor, lerp(tonemapped_bt709, tonemapped_bt709_ch, saturate(tonemapped_bt709_y / mid_gray)), 1.f, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
-  // outputColor = renodx::color::correct::Chrominance(outputColor, tonemapped_bt709_ch, 1.f, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
-  //outputColor = FakeHDR(outputColor, 0.10f, CUSTOM_INVERSE_TONEMAP, 0.0f, 1);
+  if (RENODX_TONE_MAP_TYPE > 1.f) outputColor = renodx::color::correct::Hue(outputColor, tonemapped_bt709_ch, CUSTOM_SCENE_GRADE_HUE_CORRECTION, CUSTOM_SCENE_HUE_METHOD);
   return outputColor;
 }
 
