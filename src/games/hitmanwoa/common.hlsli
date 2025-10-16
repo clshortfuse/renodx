@@ -120,23 +120,6 @@ float3 CorrectBlackChrominance(float3 color_input, float3 lut_color, float3 lut_
 
 float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 srgb_input) {
   float4 lut_sample = Sample2DPackedLUT(srgb_input, lut_sampler, lut_texture);
-  // return lut_sample;
-  // if (RENODX_COLOR_GRADE_SCALING > 0.f) {
-  //   float3 min_black = max(0, Sample2DPackedLUT(0.f, lut_sampler, lut_texture).rgb);
-  //   float3 lut_min_rgb = pow(min_black, 2.2f);
-  //   float lut_min_y = renodx::color::y::from::BT709(max(0, lut_min_rgb));
-  //   if (lut_min_y > 0) {
-  //     float3 mid_gray = pow(Sample2DPackedLUT(renodx::color::srgb::EncodeSafe(0.18), lut_sampler, lut_texture).rgb, 2.2f);
-  //     float3 linear_color_input_adjusted = pow(srgb_input, 2.2f) * mid_gray / 0.18f;
-  //     float3 linear_lutted = pow(lut_sample.rgb, 2.2f);
-  //     float3 corrected_black = CorrectBlackChrominance(linear_color_input_adjusted, linear_lutted, lut_min_rgb, lut_min_y, 1.f);
-  //     // float3 corrected_black = CorrectBlackPerChannel(linear_color_input_adjusted, linear_lutted, lut_min_rgb, 1.f);
-  //     // float3 corrected_black = renodx::lut::CorrectBlack(linear_color_input_adjusted, linear_lutted, lut_min_y, 1.f);
-  //     corrected_black = max(0, corrected_black);
-  //     lut_sample.rgb = lerp(pow(lut_sample.rgb, 2.2f), corrected_black, RENODX_COLOR_GRADE_SCALING);
-  //     lut_sample.rgb = pow(lut_sample.rgb, 1.f / 2.2f);
-  //   }
-  // }
 
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.scaling = RENODX_COLOR_GRADE_SCALING;
@@ -150,12 +133,12 @@ float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   [branch]
   if (lut_config.scaling != 0.f) {
     float3 lutBlack = Sample2DPackedLUT(renodx::lut::ConvertInput(0, lut_config), lut_sampler, lut_texture).rgb;
-    float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.18f, lut_config), lut_sampler, lut_texture).rgb;
+    float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.14f, lut_config), lut_sampler, lut_texture).rgb;  // adjust to not crush
+
     // float3 lutWhite = Sample2DPackedLUT(renodx::lut::ConvertInput(1.f, lut_config), lut_sampler, lut_texture).rgb;
     float3 lutWhite = 1.f;
 
     lutBlack = lerp(lutBlack, renodx::color::srgb::Encode(renodx::color::gamma::Decode(lutBlack)), 0.07f);
-    // lutMid = lerp(lutMid, renodx::color::srgb::Encode(renodx::color::gamma::Decode(lutBlack)), 0.25f);
 
     float3 unclamped_gamma = renodx::lut::Unclamp(
         renodx::lut::GammaOutput(lutOutputColor, lut_config),
@@ -164,7 +147,7 @@ float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
         renodx::lut::GammaOutput(lutWhite, lut_config),
         srgb_input);
     float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
-    float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
+    float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling * LUT_SCALING_MAX);
     color_output = recolored;
   } else {
   }
@@ -181,23 +164,6 @@ float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
 
 float4 SampleLUTSRGBInLinearOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 srgb_input) {
   float4 lut_sample = Sample2DPackedLUT(srgb_input, lut_sampler, lut_texture);
-  // if (RENODX_COLOR_GRADE_SCALING > 0.f) {
-  // float black = 0.f;
-  // float mid = 0.18f;
-  //   float3 min_black = Sample2DPackedLUT(black, lut_sampler, lut_texture).rgb;
-  //   float3 lut_min_rgb = pow(min_black, 2.2f);
-  //   float lut_min_y = renodx::color::y::from::BT709(max(0, lut_min_rgb));
-  //   if (lut_min_y > 0) {
-  //     float3 mid_gray = renodx::color::correct::GammaSafe(Sample2DPackedLUT(renodx::color::srgb::EncodeSafe(mid), lut_sampler, lut_texture).rgb);
-  //     float3 linear_color_input_adjusted = pow(srgb_input, 2.2f) * mid_gray / 0.18f;
-  //     float3 lutted_gamma_corrected = renodx::color::correct::GammaSafe(lut_sample.rgb);
-  //     float3 corrected_black = CorrectBlackChrominance(linear_color_input_adjusted, lutted_gamma_corrected, lut_min_rgb, lut_min_y, 1.f);
-  //     // float3 corrected_black = renodx::lut::CorrectBlack(linear_color_input_adjusted, lutted_gamma_corrected, lut_min_y, 1.f);
-  //     corrected_black = max(0, corrected_black);
-  //     lut_sample.rgb = lerp(renodx::color::correct::GammaSafe(lut_sample.rgb), corrected_black, RENODX_COLOR_GRADE_SCALING);
-  //     lut_sample.rgb = renodx::color::correct::GammaSafe(lut_sample.rgb, true);
-  //   }
-  // }
 
   renodx::lut::Config lut_config = renodx::lut::config::Create();
   lut_config.scaling = RENODX_COLOR_GRADE_SCALING;
@@ -211,12 +177,12 @@ float4 SampleLUTSRGBInLinearOut(Texture2D<float4> lut_texture, SamplerState lut_
   [branch]
   if (lut_config.scaling != 0.f) {
     float3 lutBlack = Sample2DPackedLUT(renodx::lut::ConvertInput(0, lut_config), lut_sampler, lut_texture).rgb;
-    float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.18f, lut_config), lut_sampler, lut_texture).rgb;
+    float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.14f, lut_config), lut_sampler, lut_texture).rgb;  // adjust to not crush
+    
     // float3 lutWhite = Sample2DPackedLUT(renodx::lut::ConvertInput(1.f, lut_config), lut_sampler, lut_texture).rgb;
     float3 lutWhite = 1.f;
 
     lutBlack = lerp(lutBlack, renodx::color::srgb::Encode(renodx::color::gamma::Decode(lutBlack)), 0.07f);
-    // lutMid = lerp(lutMid, renodx::color::srgb::Encode(renodx::color::gamma::Decode(lutBlack)), 0.25f);
 
     float3 unclamped_gamma = renodx::lut::Unclamp(
         renodx::lut::GammaOutput(lutOutputColor, lut_config),
@@ -225,7 +191,7 @@ float4 SampleLUTSRGBInLinearOut(Texture2D<float4> lut_texture, SamplerState lut_
         renodx::lut::GammaOutput(lutWhite, lut_config),
         srgb_input);
     float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
-    float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
+    float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling * LUT_SCALING_MAX);
     color_output = recolored;
   } else {
   }
@@ -247,7 +213,7 @@ float3 ScaleBloom(float3 color_scene, float3 tex_bloom, float bloom_strength) {
     float scene_luminance = renodx::color::y::from::BT709(color_scene) * mid_gray_bloomed;
     float bloom_blend = saturate(smoothstep(0.f, 0.18f, scene_luminance));
     float3 bloom_scaled = lerp(0.f, bloom_color, bloom_blend);
-    bloom_color = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * 0.25f);
+    bloom_color = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * BLOOM_SCALING_MAX);
   }
 
   return CUSTOM_BLOOM * bloom_color + color_scene;
