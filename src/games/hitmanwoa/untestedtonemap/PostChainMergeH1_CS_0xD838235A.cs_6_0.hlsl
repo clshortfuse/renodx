@@ -1,10 +1,10 @@
 #include "../common.hlsl"
 cbuffer _26_28 : register(b2, space0) {
-  float4 _28_m0[153] : packoffset(c0);
+  float4 _28_m0[154] : packoffset(c0);
 };
 
 cbuffer _31_33 : register(b5, space0) {
-  float4 _33_m0[12] : packoffset(c0);
+  float4 _33_m0[13] : packoffset(c0);
 };
 
 Texture2DArray<float4> _8 : register(t0, space0);
@@ -44,23 +44,26 @@ void comp_main() {
   float4 _156 = _8.SampleLevel(_36, float3(_83, _84, float(_62)), 0.0f);
   float4 _164 = _11.SampleLevel(_36, float2(_83, _84), 0.0f);
   float _194 = asfloat(_18.Load(5u).x);
-  float _222 = clamp(1.0f - (_33_m0[9u].y * frac(sin((_33_m0[10u].z + floor(_33_m0[9u].z * _73)) + ((_33_m0[10u].z + floor(_33_m0[9u].z * _74)) * 0.0129898004233837127685546875f)) * 43758.546875f)), 0.0f, 1.0f);
-#if 1
 
   float3 bloomed_color = ScaleBloom(_156.rgb, _164.rgb, _33_m0[9u].x);
 
-  // this shader doesn't use a tonemapper, so our custom `HDR tonemap` will just be untonemapped with `saturate()` removed
-  float3 color_combined = (bloomed_color * _33_m0[7u].xyz) * _194;
-  // add vignette and grain
-  float3 tonemapped = (_33_m0[4u].xyz * _137) + ((((_33_m0[5u].xyz - 0.5f) * _129 + 0.5f) * 2.0f) * color_combined * _33_m0[10u].y * _222);
+  float _195 = (bloomed_color.r * _33_m0[7u].x) * _194;
+  float _196 = (bloomed_color.g * _33_m0[7u].y) * _194;
+  float _197 = (bloomed_color.b * _33_m0[7u].z) * _194;
+  float _228 = clamp(1.0f - (_33_m0[9u].y * frac(sin((_33_m0[10u].z + floor(_33_m0[9u].z * _73)) + ((_33_m0[10u].z + floor(_33_m0[9u].z * _74)) * 0.0129898004233837127685546875f)) * 43758.546875f)), 0.0f, 1.0f);
 
+#if 1
+  float3 combined_color = float3(_195, _196, _197);
+  float3 tonemapped = ApplyCustomSimpleReinhardToneMap(combined_color);
+  tonemapped = (_33_m0[4u].xyz * _137) + (((((_33_m0[5u].xyz - 0.5f) * _129) + 0.5f) * 2.0f) * (tonemapped * _33_m0[10u].y) * _228);
   float3 final_color = ToneMapMaxCLLAndSampleGamma2LUT16AndFinalizeOutput(tonemapped, _14, _36, _33_m0[8u].y, _83, _84, _33_m0[11u].x);
 
-  _22[uint3(_71, _72, _62)] = float4(final_color, 0.0f);
+  _22[uint3(_71, _72, _62)] = float4(final_color, 0.f);
 #else
-  float4 _254 = _14.SampleLevel(_36, float3((clamp((_33_m0[4u].x * _137) + ((((((_33_m0[5u].x + (-0.5f)) * _129) + 0.5f) * 2.0f) * clamp(((((_33_m0[9u].x * _164.x) + _156.x) * _33_m0[7u].x) * _33_m0[10u].y) * _194, 0.0f, 1.0f)) * _222), 0.0f, 1.0f) * 0.9375f) + 0.03125f, (clamp((_33_m0[4u].y * _137) + ((((((_33_m0[5u].y + (-0.5f)) * _129) + 0.5f) * 2.0f) * clamp(((((_33_m0[9u].x * _164.y) + _156.y) * _33_m0[7u].y) * _33_m0[10u].y) * _194, 0.0f, 1.0f)) * _222), 0.0f, 1.0f) * 0.9375f) + 0.03125f, (clamp((_33_m0[4u].z * _137) + ((((((_33_m0[5u].z + (-0.5f)) * _129) + 0.5f) * 2.0f) * clamp(((((_33_m0[9u].x * _164.z) + _156.z) * _33_m0[7u].z) * _33_m0[10u].y) * _194, 0.0f, 1.0f)) * _222), 0.0f, 1.0f) * 0.9375f) + 0.03125f), 0.0f);
-  float _269 = (frac(sin(dot(float2(_83, _84), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) * 0.0039215688593685626983642578125f) + (-0.00196078442968428134918212890625f);
-  _22[uint3(_71, _72, _62)] = float4((_269 + _254.x) * _33_m0[11u].x, (_269 + _254.y) * _33_m0[11u].x, (_269 + _254.z) * _33_m0[11u].x, 0.0f);
+
+  float4 _263 = _14.SampleLevel(_36, float3((sqrt(clamp((_33_m0[4u].x * _137) + ((((((_33_m0[5u].x + (-0.5f)) * _129) + 0.5f) * 2.0f) * clamp((_195 / (_195 + 1.0f)) * _33_m0[10u].y, 0.0f, 1.0f)) * _228), 0.0f, 1.0f)) * 0.9375f) + 0.03125f, (sqrt(clamp((_33_m0[4u].y * _137) + ((((((_33_m0[5u].y + (-0.5f)) * _129) + 0.5f) * 2.0f) * clamp((_196 / (_196 + 1.0f)) * _33_m0[10u].y, 0.0f, 1.0f)) * _228), 0.0f, 1.0f)) * 0.9375f) + 0.03125f, (sqrt(clamp((_33_m0[4u].z * _137) + ((((((_33_m0[5u].z + (-0.5f)) * _129) + 0.5f) * 2.0f) * clamp((_197 / (_197 + 1.0f)) * _33_m0[10u].y, 0.0f, 1.0f)) * _228), 0.0f, 1.0f)) * 0.9375f) + 0.03125f), 0.0f);
+  float _278 = (frac(sin(dot(float2(_83, _84), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) * 0.0039215688593685626983642578125f) + (-0.00196078442968428134918212890625f);
+  _22[uint3(_71, _72, _62)] = float4((_278 + _263.x) * _33_m0[11u].x, (_278 + _263.y) * _33_m0[11u].x, (_278 + _263.z) * _33_m0[11u].x, 0.0f);
 #endif
 }
 
