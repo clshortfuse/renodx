@@ -18,13 +18,13 @@
 #define RENODX_COLOR_GRADE_STRENGTH          1.f
 #define RENODX_COLOR_GRADE_SCALING           1.f
 #define RENODX_LUT_SAMPLING_TYPE             1.f  // 0 = default, 1 = replace linear/gamma2 input with srgb input and add lut offsets
-#define CUSTOM_BLOOM                         0.75f
+#define CUSTOM_BLOOM                         0.6f
 #define CUSTOM_BLOOM_SCALING                 1.f
 #define CUSTOM_LUT_TETRAHEDRAL               1.f
 #define CUSTOM_SHARPENING                    2.f
 #define CUSTOM_DITHERING                     1.f
 
-#define RENODX_TONE_MAP_SHOULDER_START 1.f
+#define RENODX_TONE_MAP_SHOULDER_START 0.5f
 #define LUT_SCALING_MAX                1.f
 #define BLOOM_SCALING_MAX              0.25f
 
