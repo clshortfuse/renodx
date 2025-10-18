@@ -15,6 +15,7 @@
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
+#include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
@@ -234,7 +235,17 @@ renodx::utils::settings::Settings settings = {
     // },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Discord",
+        .label = "RenoDX Discord",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "Ce9bQHQrSV");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den Discord",
         .section = "Links",
         .group = "button-line-2",
         .tint = 0x5865F2,
@@ -271,16 +282,66 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/musaqh"); },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-3",
+        .tint = 0xFF5A16,
+        .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse"); },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- GAMMA CORRECTION slider controls game brightness\n"
-                             "- You can check the exact value of game brightness by checking the max nits of the main menu\n"
+        .label = std::string("- Requires HDR on in game"),
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- GAMMA CORRECTION slider controls game brightness (paper white)\n"
                              "- MAX. INTENSITY slider controls peak brightness\n"
-                             "- Formula for peak brightness: MAX. INTENSITY slider * paper white / 2\n"),
+                             "- Formula for peak brightness: MAX. INTENSITY slider * paper white / 2\n"
+                             "- e.g. MAX.INTENSITY 10.00 and GAMMA CORRECTION 1.00 = 200 nits paper white, 1000 nits peak\n"
+                             "+--------+-------------+\n"
+                             "| Slider | Paper White |\n"
+                             "+--------+-------------+\n"
+                             "|  0.80  |     100     |\n"
+                             "+--------+-------------+\n"
+                             "|  0.82  |     108     |\n"
+                             "+--------+-------------+\n"
+                             "|  0.85  |     117     |\n"
+                             "+--------+-------------+\n"
+                             "|  0.88  |     128     |\n"
+                             "+--------+-------------+\n"
+                             "|  0.90  |     140     |\n"
+                             "+--------+-------------+\n"
+                             "|  0.93  |     152     |\n"
+                             "+--------+-------------+\n"
+                             "|  0.95  |     167     |\n"
+                             "+--------+-------------+\n"
+                             "|  0.97  |     181     |\n"
+                             "+--------+-------------+\n"
+                             "|  1.00  |     200     |\n"
+                             "+--------+-------------+\n"
+                             "|  1.02  |     221     |\n"
+                             "+--------+-------------+\n"
+                             "|  1.05  |     242     |\n"
+                             "+--------+-------------+\n"
+                             "|  1.07  |     268     |\n"
+                             "+--------+-------------+\n"
+                             "|  1.10  |     300     |\n"
+                             "+--------+-------------+\n"
+                             "|  1.12  |     331     |\n"
+                             "+--------+-------------+\n"
+                             "|  1.15  |     370     |\n"
+                             "+--------+-------------+\n"
+                             "|  1.18  |     416     |\n"
+                             "+--------+-------------+\n"
+                             "|  1.20  |     468     |\n"
+                             "+--------+-------------+\n"),
         .section = "About",
     },
 };
@@ -383,6 +444,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::allow_multiple_push_constants = true;
 
+#if FORCE_HDR10
+        renodx::mods::swapchain::SetUseHDR10();
+#endif
+
         initialized = true;
       }
 
@@ -401,5 +466,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   // renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders);
 
+#if FORCE_HDR10
+  renodx::mods::swapchain::Use(fdw_reason);
+#endif
   return TRUE;
 }
