@@ -244,17 +244,12 @@ float3 ScaleBloom(float3 color_scene, float3 tex_bloom, float bloom_strength) {
   return CUSTOM_BLOOM * bloom_color + color_scene;
 }
 
-/// Applies Exponential Roll-Off tonemapping using the maximum channel.
-/// Used to fit the color into a 0–output_max range for SDR LUT compatibility.
-float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.25f, float output_max = 1.f) {
+// Reinhard piecewise shoulder driven by the channel max to compress into output_max.
+float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.375f, float output_max = 1.f, float channel_max = 100.f) {
   float peak = renodx::math::Max(color.r, color.g, color.b);
-  peak = min(peak, 100.f);
-  float log_peak = log2(peak);
 
-  // Apply exponential shoulder in log space
-  float log_mapped = renodx::tonemap::ExponentialRollOff(log_peak, log2(rolloff_start), log2(output_max));
-  float scale = exp2(log_mapped - log_peak);  // How much to compress all channels
-
+  float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, channel_max, output_max, rolloff_start);
+  float scale = renodx::math::DivideSafe(mapped_peak, peak, 0.f);
   float3 tonemapped = color * scale;
 
   tonemapped = CorrectOutOfRangeColor(tonemapped, true, true, 0.5f, 0.5f, 1.f);
