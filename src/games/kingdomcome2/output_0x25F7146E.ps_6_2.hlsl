@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./common.hlsl"
 
 Texture2D<float4> luminanceTex : register(t1);
 
@@ -62,7 +63,9 @@ float4 main(
   float4 _103 = vignettingTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
   float3 _105 = bloomTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
   float4 _109 = luminanceTex.Load(int3(0, 0, 0));
+
   float3 _113 = hdrTex.Load(int3(int(SV_Position.x), int(SV_Position.y), 0));
+  _113.rgb *= CalculateExposure(_109.y);  // New Luminance
   float4 _117 = sunShaftsTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
   float _131 = ((_117.x * 0.1599999964237213f) * SunShafts_SunCol.x) + _113.x;
   float _132 = ((_117.y * 0.1599999964237213f) * SunShafts_SunCol.y) + _113.y;
@@ -71,7 +74,6 @@ float4 main(
   float _173 = ((saturate(HDRBloomColor.x) * (_105.x - _131)) + _131) * _156;
   float _174 = ((saturate(HDRBloomColor.y) * (_105.y - _132)) + _132) * _156;
   float _175 = ((saturate(HDRBloomColor.z) * (_105.z - _133)) + _133) * _156;
-
   float _176 = dot(float3(_173, _174, _175), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
   float _191 = ((HDRColorBalance.w * (_173 - _176)) + _176) * HDRColorBalance.x;
   float _192 = ((HDRColorBalance.w * (_174 - _176)) + _176) * HDRColorBalance.y;
@@ -89,9 +91,9 @@ float4 main(
   float _217 = HDRFilmCurve.z * 0.0020000000949949026f;
   float _238 = HDRFilmCurve.z * 0.03333333134651184f;
   float _242 = ((((_207 + _208) * HDRFilmCurve.w) + _217) / (((_207 + _202) * HDRFilmCurve.w) + 0.06000000238418579f)) - _238;
-  float _249 = saturate(saturate((((((_204 + _208) * _196) + _217) / (((_204 + _202) * _196) + 0.06000000238418579f)) - _238) / _242));
-  float _250 = saturate(saturate((((((_205 + _208) * _197) + _217) / (((_205 + _202) * _197) + 0.06000000238418579f)) - _238) / _242));
-  float _251 = saturate(saturate((((((_206 + _208) * _198) + _217) / (((_206 + _202) * _198) + 0.06000000238418579f)) - _238) / _242));
+  float _249 = saturate((((((_204 + _208) * _196) + _217) / (((_204 + _202) * _196) + 0.06000000238418579f)) - _238) / _242);
+  float _250 = saturate((((((_205 + _208) * _197) + _217) / (((_205 + _202) * _197) + 0.06000000238418579f)) - _238) / _242);
+  float _251 = saturate((((((_206 + _208) * _198) + _217) / (((_206 + _202) * _198) + 0.06000000238418579f)) - _238) / _242);
   float _281 = (saturate(select((_250 < 0.0031308000907301903f), (_250 * 12.920000076293945f), (((pow(_250, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f))) * 0.9375f) + 0.03125f;
   float _282 = saturate(select((_251 < 0.0031308000907301903f), (_251 * 12.920000076293945f), (((pow(_251, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f))) * 15.0f;
   float _283 = frac(_282);
@@ -186,14 +188,17 @@ float4 main(
     _518 = color_bt2020.g;
     _520 = color_bt2020.b;
   }
-  float brightness = HDRDisplayParams.x;  // 19.3;
-  // brightness = 255.f;
-  float _530 = ((brightness - HDRTonemappingParams.y) * HDRTonemappingParams.z) / HDRTonemappingParams.x;
-  float _531 = _530 + HDRTonemappingParams.y;
-  float _535 = brightness - ((_530 * HDRTonemappingParams.x) + HDRTonemappingParams.y);
-  float _537 = _516 / HDRTonemappingParams.y;
-  float _538 = _518 / HDRTonemappingParams.y;
-  float _539 = _520 / HDRTonemappingParams.y;
+  // Sky brightness I think
+  float brightness = HDRDisplayParams.x;  // 19.3 by day 10 by night
+  float contrast = HDRTonemappingParams.y;
+  float shadow = HDRTonemappingParams.w;
+
+  float _530 = ((brightness - contrast) * HDRTonemappingParams.z) / HDRTonemappingParams.x;
+  float _531 = _530 + contrast;
+  float _535 = brightness - ((_530 * HDRTonemappingParams.x) + contrast);
+  float _537 = _516 / contrast;
+  float _538 = _518 / contrast;
+  float _539 = _520 / contrast;
   float _540 = saturate(_537);
   float _541 = saturate(_538);
   float _542 = saturate(_539);
@@ -204,9 +209,9 @@ float4 main(
   float _562 = select((_518 < _531), 0.0f, 1.0f);
   float _563 = select((_520 < _531), 0.0f, 1.0f);
   float _577 = (-0.0f - ((brightness * HDRTonemappingParams.x) / _535)) / brightness;
-  float _620 = ((((1.0f - _550) * HDRTonemappingParams.y) * (pow(_537, HDRTonemappingParams.w))) + ((_550 - _561) * (lerp(HDRTonemappingParams.y, _516, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_516 - _531) * 1.4426950216293335f) * _577) * _535)) * _561);
-  float _621 = ((((1.0f - _552) * HDRTonemappingParams.y) * (pow(_538, HDRTonemappingParams.w))) + ((_552 - _562) * (lerp(HDRTonemappingParams.y, _518, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_518 - _531) * 1.4426950216293335f) * _577) * _535)) * _562);
-  float _622 = ((((1.0f - _554) * HDRTonemappingParams.y) * (pow(_539, HDRTonemappingParams.w))) + ((_554 - _563) * (lerp(HDRTonemappingParams.y, _520, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_520 - _531) * 1.4426950216293335f) * _577) * _535)) * _563);
+  float _620 = ((((1.0f - _550) * contrast) * (pow(_537, shadow))) + ((_550 - _561) * (lerp(contrast, _516, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_516 - _531) * 1.4426950216293335f) * _577) * _535)) * _561);
+  float _621 = ((((1.0f - _552) * contrast) * (pow(_538, shadow))) + ((_552 - _562) * (lerp(contrast, _518, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_518 - _531) * 1.4426950216293335f) * _577) * _535)) * _562);
+  float _622 = ((((1.0f - _554) * contrast) * (pow(_539, shadow))) + ((_554 - _563) * (lerp(contrast, _520, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_520 - _531) * 1.4426950216293335f) * _577) * _535)) * _563);
   color_bt709 = renodx::color::bt709::from::BT2020(float3(_620, _621, _622));
   if (RENODX_TONE_MAP_TYPE) {
     _620 = color_bt709.r;
@@ -214,12 +219,12 @@ float4 main(
     _622 = color_bt709.b;
   }
 
-  // GamutExpansion
   if (RENODX_TONE_MAP_TYPE) {
     SV_Target.rgb = float3(_620, _621, _622);
     SV_Target.rgb = renodx::draw::ToneMapPass(SV_Target.rgb);
     SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
   } else {
+    // GamutExpansion
     float _634 = saturate((max(max(_620, _621), _622) + -1.5f) * 0.2222222238779068f);
     float _635 = 1.0f - _634;
     float _642 = (_635 * mad(0.17753799259662628f, _621, (_620 * 0.8224619626998901f))) + (_634 * _620);
