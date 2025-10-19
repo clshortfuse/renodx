@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./common.hlsl"
 
 Texture2D<float4> luminanceTex : register(t1);
 
@@ -63,6 +64,7 @@ float4 main(
   float3 _105 = bloomTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
   float4 _109 = luminanceTex.Load(int3(0, 0, 0));
   float3 _113 = hdrTex.Load(int3(int(SV_Position.x), int(SV_Position.y), 0));
+  _113.rgb *= CalculateExposure(_109.y);  // New Luminance
   float4 _117 = sunShaftsTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
   float _131 = ((_117.x * 0.1599999964237213f) * SunShafts_SunCol.x) + _113.x;
   float _132 = ((_117.y * 0.1599999964237213f) * SunShafts_SunCol.y) + _113.y;
@@ -204,12 +206,12 @@ float4 main(
     _647 = color_bt709.b;
   }
 
-  // GamutExpansion
   if (RENODX_TONE_MAP_TYPE) {
     SV_Target.rgb = float3(_645, _646, _647);
     SV_Target.rgb = renodx::draw::ToneMapPass(SV_Target.rgb);
     SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
   } else {
+    // Gamut Expansion
     float _659 = saturate((max(max(_645, _646), _647) + -1.5f) * 0.2222222238779068f);
     float _660 = 1.0f - _659;
     float _667 = (_660 * mad(0.17753799259662628f, _646, (_645 * 0.8224619626998901f))) + (_659 * _645);

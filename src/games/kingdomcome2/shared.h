@@ -32,7 +32,7 @@ cbuffer shader_injection : register(b13) {
 
 #define RENODX_TONE_MAP_TYPE                          shader_injection.tone_map_type
 #define RENODX_PEAK_WHITE_NITS                        shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS                     shader_injection.diffuse_white_nits * 0.35f
+#define RENODX_DIFFUSE_WHITE_NITS                     shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS                    shader_injection.graphics_white_nits
 #define RENODX_TONE_MAP_EXPOSURE                      shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS                    shader_injection.tone_map_highlights
@@ -46,9 +46,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_OUTPUT_PRESET               renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_SCRGB
 #define RENODX_INTERMEDIATE_ENCODING                  renodx::draw::GAMMA_CORRECTION_NONE
-#define RENODX_GAMMA_CORRECTION                       renodx::draw::GAMMA_CORRECTION_GAMMA_2_2
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION           1.f
-#define RENODX_RENO_DRT_WHITE_CLIP                    10.f
+#define RENODX_RENO_DRT_WHITE_CLIP                    15.f
 #define RENODX_TONE_MAP_CLAMP_PEAK                    -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1
