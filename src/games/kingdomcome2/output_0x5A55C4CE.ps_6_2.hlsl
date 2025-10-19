@@ -174,36 +174,29 @@ float4 main(
   float _543 = (_527 * _102) * _539;
   float _545 = (_528 * _102) * _539;
 
-  color_bt2020 = renodx::color::bt2020::from::BT709(float3(_541, _543, _545));
-  if (RENODX_TONE_MAP_TYPE) {
-    _541 = color_bt2020.r;
-    _543 = color_bt2020.g;
-    _545 = color_bt2020.b;
-  }
-  float _555 = ((HDRDisplayParams.x - HDRTonemappingParams.y) * HDRTonemappingParams.z) / HDRTonemappingParams.x;
-  float _556 = _555 + HDRTonemappingParams.y;
-  float _560 = HDRDisplayParams.x - ((_555 * HDRTonemappingParams.x) + HDRTonemappingParams.y);
-  float _562 = _541 / HDRTonemappingParams.y;
-  float _563 = _543 / HDRTonemappingParams.y;
-  float _564 = _545 / HDRTonemappingParams.y;
-  float _565 = saturate(_562);
-  float _566 = saturate(_563);
-  float _567 = saturate(_564);
-  float _575 = (_565 * _565) * (3.0f - (_565 * 2.0f));
-  float _577 = (_566 * _566) * (3.0f - (_566 * 2.0f));
-  float _579 = (_567 * _567) * (3.0f - (_567 * 2.0f));
-  float _586 = select((_541 < _556), 0.0f, 1.0f);
-  float _587 = select((_543 < _556), 0.0f, 1.0f);
-  float _588 = select((_545 < _556), 0.0f, 1.0f);
-  float _602 = (-0.0f - ((HDRDisplayParams.x * HDRTonemappingParams.x) / _560)) / HDRDisplayParams.x;
-  float _645 = ((((1.0f - _575) * HDRTonemappingParams.y) * (pow(_562, HDRTonemappingParams.w))) + ((_575 - _586) * (lerp(HDRTonemappingParams.y, _541, HDRTonemappingParams.x)))) + ((HDRDisplayParams.x - (exp2(((_541 - _556) * 1.4426950216293335f) * _602) * _560)) * _586);
-  float _646 = ((((1.0f - _577) * HDRTonemappingParams.y) * (pow(_563, HDRTonemappingParams.w))) + ((_577 - _587) * (lerp(HDRTonemappingParams.y, _543, HDRTonemappingParams.x)))) + ((HDRDisplayParams.x - (exp2(((_543 - _556) * 1.4426950216293335f) * _602) * _560)) * _587);
-  float _647 = ((((1.0f - _579) * HDRTonemappingParams.y) * (pow(_564, HDRTonemappingParams.w))) + ((_579 - _588) * (lerp(HDRTonemappingParams.y, _545, HDRTonemappingParams.x)))) + ((HDRDisplayParams.x - (exp2(((_545 - _556) * 1.4426950216293335f) * _602) * _560)) * _588);
-  color_bt709 = renodx::color::bt709::from::BT2020(float3(_645, _646, _647));
-  if (RENODX_TONE_MAP_TYPE) {
-    _645 = color_bt709.r;
-    _646 = color_bt709.g;
-    _647 = color_bt709.b;
+  float _645 = _541;
+  float _646 = _543;
+  float _647 = _545;
+  if (!RENODX_TONE_MAP_TYPE) {
+    float _555 = ((HDRDisplayParams.x - HDRTonemappingParams.y) * HDRTonemappingParams.z) / HDRTonemappingParams.x;
+    float _556 = _555 + HDRTonemappingParams.y;
+    float _560 = HDRDisplayParams.x - ((_555 * HDRTonemappingParams.x) + HDRTonemappingParams.y);
+    float _562 = _541 / HDRTonemappingParams.y;
+    float _563 = _543 / HDRTonemappingParams.y;
+    float _564 = _545 / HDRTonemappingParams.y;
+    float _565 = saturate(_562);
+    float _566 = saturate(_563);
+    float _567 = saturate(_564);
+    float _575 = (_565 * _565) * (3.0f - (_565 * 2.0f));
+    float _577 = (_566 * _566) * (3.0f - (_566 * 2.0f));
+    float _579 = (_567 * _567) * (3.0f - (_567 * 2.0f));
+    float _586 = select((_541 < _556), 0.0f, 1.0f);
+    float _587 = select((_543 < _556), 0.0f, 1.0f);
+    float _588 = select((_545 < _556), 0.0f, 1.0f);
+    float _602 = (-0.0f - ((HDRDisplayParams.x * HDRTonemappingParams.x) / _560)) / HDRDisplayParams.x;
+    _645 = ((((1.0f - _575) * HDRTonemappingParams.y) * (pow(_562, HDRTonemappingParams.w))) + ((_575 - _586) * (lerp(HDRTonemappingParams.y, _541, HDRTonemappingParams.x)))) + ((HDRDisplayParams.x - (exp2(((_541 - _556) * 1.4426950216293335f) * _602) * _560)) * _586);
+    _646 = ((((1.0f - _577) * HDRTonemappingParams.y) * (pow(_563, HDRTonemappingParams.w))) + ((_577 - _587) * (lerp(HDRTonemappingParams.y, _543, HDRTonemappingParams.x)))) + ((HDRDisplayParams.x - (exp2(((_543 - _556) * 1.4426950216293335f) * _602) * _560)) * _587);
+    _647 = ((((1.0f - _579) * HDRTonemappingParams.y) * (pow(_564, HDRTonemappingParams.w))) + ((_579 - _588) * (lerp(HDRTonemappingParams.y, _545, HDRTonemappingParams.x)))) + ((HDRDisplayParams.x - (exp2(((_545 - _556) * 1.4426950216293335f) * _602) * _560)) * _588);
   }
 
   if (RENODX_TONE_MAP_TYPE) {
