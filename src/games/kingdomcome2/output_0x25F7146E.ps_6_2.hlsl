@@ -181,42 +181,35 @@ float4 main(
   float _518 = _502 * _514;
   float _520 = _503 * _514; */
 
-  // GT tonemapper
-  color_bt2020 = renodx::color::bt2020::from::BT709(float3(_516, _518, _520));
-  if (RENODX_TONE_MAP_TYPE) {
-    _516 = color_bt2020.r;
-    _518 = color_bt2020.g;
-    _520 = color_bt2020.b;
-  }
-  // Sky brightness I think
-  float brightness = HDRDisplayParams.x;  // 19.3 by day 10 by night
-  float contrast = HDRTonemappingParams.y;
-  float shadow = HDRTonemappingParams.w;
+  float _620 = _516;
+  float _621 = _518;
+  float _622 = _520;
+  if (!RENODX_TONE_MAP_TYPE) {
+    // GT tonemapper
+    // Sky brightness I think
+    float brightness = HDRDisplayParams.x;  // 19.3 by day 10 by night
+    float contrast = HDRTonemappingParams.y;
+    float shadow = HDRTonemappingParams.w;
 
-  float _530 = ((brightness - contrast) * HDRTonemappingParams.z) / HDRTonemappingParams.x;
-  float _531 = _530 + contrast;
-  float _535 = brightness - ((_530 * HDRTonemappingParams.x) + contrast);
-  float _537 = _516 / contrast;
-  float _538 = _518 / contrast;
-  float _539 = _520 / contrast;
-  float _540 = saturate(_537);
-  float _541 = saturate(_538);
-  float _542 = saturate(_539);
-  float _550 = (_540 * _540) * (3.0f - (_540 * 2.0f));
-  float _552 = (_541 * _541) * (3.0f - (_541 * 2.0f));
-  float _554 = (_542 * _542) * (3.0f - (_542 * 2.0f));
-  float _561 = select((_516 < _531), 0.0f, 1.0f);
-  float _562 = select((_518 < _531), 0.0f, 1.0f);
-  float _563 = select((_520 < _531), 0.0f, 1.0f);
-  float _577 = (-0.0f - ((brightness * HDRTonemappingParams.x) / _535)) / brightness;
-  float _620 = ((((1.0f - _550) * contrast) * (pow(_537, shadow))) + ((_550 - _561) * (lerp(contrast, _516, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_516 - _531) * 1.4426950216293335f) * _577) * _535)) * _561);
-  float _621 = ((((1.0f - _552) * contrast) * (pow(_538, shadow))) + ((_552 - _562) * (lerp(contrast, _518, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_518 - _531) * 1.4426950216293335f) * _577) * _535)) * _562);
-  float _622 = ((((1.0f - _554) * contrast) * (pow(_539, shadow))) + ((_554 - _563) * (lerp(contrast, _520, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_520 - _531) * 1.4426950216293335f) * _577) * _535)) * _563);
-  color_bt709 = renodx::color::bt709::from::BT2020(float3(_620, _621, _622));
-  if (RENODX_TONE_MAP_TYPE) {
-    _620 = color_bt709.r;
-    _621 = color_bt709.g;
-    _622 = color_bt709.b;
+    float _530 = ((brightness - contrast) * HDRTonemappingParams.z) / HDRTonemappingParams.x;
+    float _531 = _530 + contrast;
+    float _535 = brightness - ((_530 * HDRTonemappingParams.x) + contrast);
+    float _537 = _516 / contrast;
+    float _538 = _518 / contrast;
+    float _539 = _520 / contrast;
+    float _540 = saturate(_537);
+    float _541 = saturate(_538);
+    float _542 = saturate(_539);
+    float _550 = (_540 * _540) * (3.0f - (_540 * 2.0f));
+    float _552 = (_541 * _541) * (3.0f - (_541 * 2.0f));
+    float _554 = (_542 * _542) * (3.0f - (_542 * 2.0f));
+    float _561 = select((_516 < _531), 0.0f, 1.0f);
+    float _562 = select((_518 < _531), 0.0f, 1.0f);
+    float _563 = select((_520 < _531), 0.0f, 1.0f);
+    float _577 = (-0.0f - ((brightness * HDRTonemappingParams.x) / _535)) / brightness;
+    _620 = ((((1.0f - _550) * contrast) * (pow(_537, shadow))) + ((_550 - _561) * (lerp(contrast, _516, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_516 - _531) * 1.4426950216293335f) * _577) * _535)) * _561);
+    _621 = ((((1.0f - _552) * contrast) * (pow(_538, shadow))) + ((_552 - _562) * (lerp(contrast, _518, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_518 - _531) * 1.4426950216293335f) * _577) * _535)) * _562);
+    _622 = ((((1.0f - _554) * contrast) * (pow(_539, shadow))) + ((_554 - _563) * (lerp(contrast, _520, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_520 - _531) * 1.4426950216293335f) * _577) * _535)) * _563);
   }
 
   if (RENODX_TONE_MAP_TYPE) {

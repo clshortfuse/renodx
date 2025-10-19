@@ -47,7 +47,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_OUTPUT_PRESET               renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_SCRGB
 #define RENODX_INTERMEDIATE_ENCODING                  renodx::draw::GAMMA_CORRECTION_NONE
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION           1.f
-#define RENODX_RENO_DRT_WHITE_CLIP                    15.f
+#define RENODX_RENO_DRT_WHITE_CLIP                    100.f
 #define RENODX_TONE_MAP_CLAMP_PEAK                    -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1
