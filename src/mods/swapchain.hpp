@@ -186,6 +186,7 @@ static SwapChainUpgradeTarget auto_upgrade_target = {
 static HANDLE device_proxy_sync_event;
 static std::atomic<bool> device_proxy_exit_thread = false;
 static std::atomic<bool> device_proxy_thread_running = false;
+static bool use_device_proxy_thread = false;
 static bool device_proxy_creation_failed = false;
 
 static thread_local SwapChainUpgradeTarget* local_applied_target = nullptr;
@@ -195,8 +196,6 @@ static thread_local std::optional<reshade::api::resource_desc> local_original_re
 static thread_local std::optional<reshade::api::resource_view_desc> local_original_resource_view_desc;
 
 // Methods
-
-
 
 static void DeviceProxyThread() {
   device_proxy_thread_running = true;
@@ -372,10 +371,12 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
     swapChain3->Release();
   }
 
-  assert(device_proxy_thread_running == false);
-  device_proxy_exit_thread = false;
-  static std::thread device_proxy_render_thread(DeviceProxyThread);
-  device_proxy_render_thread.detach();
+  if (use_device_proxy_thread) {
+    assert(device_proxy_thread_running == false);
+    device_proxy_exit_thread = false;
+    static std::thread device_proxy_render_thread(DeviceProxyThread);
+    device_proxy_render_thread.detach();
+  }
 
   return proxy_device;
 }
@@ -3101,6 +3102,7 @@ static void OnBeginRenderPass(
   if (new_rts == nullptr) return;
   cmd_list->end_render_pass();
   cmd_list->begin_render_pass(count, new_rts, ds);
+  free(new_rts);
 }
 
 static void OnEndRenderPass(reshade::api::command_list* cmd_list) {
@@ -3115,6 +3117,7 @@ inline bool OnClearRenderTargetView(
     const float color[4],
     uint32_t rect_count,
     const reshade::api::rect* rects) {
+  if (rtv.handle == 0) return false;
   auto clone = GetResourceViewClone(rtv);
   if (clone.handle != 0) {
     cmd_list->clear_render_target_view(clone, color, rect_count, rects);
@@ -3538,23 +3541,29 @@ inline void OnPresent(
     // claiming the shared handle. When keyed mutex is available this is not
     // needed, but for the DX9 fallback we rely on a CPU-side handoff.
 
-    const std::lock_guard<std::shared_mutex> lock(g_last_device_proxy_mutex);
+    {
+      const std::lock_guard<std::shared_mutex> lock(g_last_device_proxy_mutex);
 
-    // Should DXGIKeyedMutex acquire
-    queue->get_immediate_command_list()->copy_resource(swapchain_clone, resource_clone_info->clone);
-    queue->flush_immediate_command_list();
-    if (device_proxy_wait_idle_source) {
-      // Should DXGIKeyedMutex release
-      queue->wait_idle();
+      // Should DXGIKeyedMutex acquire
+      queue->get_immediate_command_list()->copy_resource(swapchain_clone, resource_clone_info->clone);
+      queue->flush_immediate_command_list();
+      if (device_proxy_wait_idle_source) {
+        // Should DXGIKeyedMutex release
+        queue->wait_idle();
+      }
+
+      // Publish the shared handle and resource under the lock so the consumer
+      // cannot observe a partially-written handoff.
+      last_device_proxy_shared_handle = resource_clone_info->shared_handle;
+      last_device_proxy_shared_resource = resource_clone_info->proxy_resource;
     }
 
-    // Publish the shared handle and resource under the lock so the consumer
-    // cannot observe a partially-written handoff.
-    last_device_proxy_shared_handle = resource_clone_info->shared_handle;
-    last_device_proxy_shared_resource = resource_clone_info->proxy_resource;
-
     // Trigger a DX11 Present which will start the swapchain proxy steps on DX11
-    SetEvent(device_proxy_sync_event);  // Signal the DX11 render thread
+    if (use_device_proxy_thread) {
+      SetEvent(device_proxy_sync_event);  // Signal the DX11 render thread
+    } else {
+      proxy_swap_chain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+    }
 
     // last_device_proxy_shared_handle = nullptr;
     // last_device_proxy_shared_resource = {0u};
