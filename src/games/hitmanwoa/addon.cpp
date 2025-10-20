@@ -15,9 +15,9 @@
 
 #include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
-#include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
@@ -414,6 +414,27 @@ bool fired_on_init_swapchain = false;
 //   }
 // }
 
+#if FORCE_HDR10
+bool hdr10_init_event_registered = false;
+
+void OnInitSwapchainForceHDR10(reshade::api::swapchain* swapchain, bool resize) {
+  auto* device = swapchain->get_device();
+  if (device == nullptr) return;
+
+  const auto desc = device->get_resource_desc(swapchain->get_current_back_buffer());
+  const bool hdr_back_buffer =
+      desc.texture.format == reshade::api::format::r10g10b10a2_unorm || desc.texture.format == reshade::api::format::r10g10b10a2_typeless;
+
+  const auto current_space = swapchain->get_color_space();
+
+  if (hdr_back_buffer && current_space != reshade::api::color_space::hdr10_st2084) {
+    renodx::utils::swapchain::ChangeColorSpace(swapchain, reshade::api::color_space::hdr10_st2084);
+  } else if (!hdr_back_buffer && current_space == reshade::api::color_space::hdr10_st2084) {
+    renodx::utils::swapchain::ChangeColorSpace(swapchain, reshade::api::color_space::srgb_nonlinear);
+  }
+}
+#endif
+
 bool initialized = false;
 
 }  // namespace
@@ -445,7 +466,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::allow_multiple_push_constants = true;
 
 #if FORCE_HDR10
-        renodx::mods::swapchain::SetUseHDR10();
+        if (!hdr10_init_event_registered) {
+          reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchainForceHDR10);
+          hdr10_init_event_registered = true;
+        }
 #endif
 
         initialized = true;
@@ -453,6 +477,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
+#if FORCE_HDR10
+      if (hdr10_init_event_registered) {
+        reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchainForceHDR10);
+        hdr10_init_event_registered = false;
+      }
+#endif
       // reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
@@ -466,8 +496,5 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   // renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders);
 
-#if FORCE_HDR10
-  renodx::mods::swapchain::Use(fdw_reason);
-#endif
   return TRUE;
 }
