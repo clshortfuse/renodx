@@ -14,10 +14,18 @@ static const float FLT16_MAX = 65504.f;
 static const float FLT32_MIN = CROSS_COMPILE(asfloat(0x00800000), 1.17549435082228750797e-38);
 static const float FLT32_MAX = CROSS_COMPILE(asfloat(0x7F7FFFFF), 3.40282346638528859812e+38);
 static const float FLT_MIN = CROSS_COMPILE(asfloat(0x00800000), 1.17549435082228750797e-38);
-static const float FLT_MAX = CROSS_COMPILE(asfloat(0x7F7FFFFF), 3.40282346638528859812e+38);;
+static const float FLT_MAX = CROSS_COMPILE(asfloat(0x7F7FFFFF), 3.40282346638528859812e+38);
+
 static const float INFINITY = CROSS_COMPILE(asfloat(0x7F800000), 1.0 / 0.0);
 static const float NEG_INFINITY = CROSS_COMPILE(asfloat(0xFF800000), -1.0 / 0.0);
 static const float PI = 3.14159265358979323846f;
+
+static const float FLT10_EPSILON = CROSS_COMPILE(asfloat(0x3C00 + 0x0040), 0.0078125);         // 2^-7
+static const float FLT11_EPSILON = CROSS_COMPILE(asfloat(0x3C00 + 0x0020), 0.00390625);        // 2^-8
+static const float FLT12_EPSILON = CROSS_COMPILE(asfloat(0x3C00 + 0x0010), 0.001953125);       // 2^-9
+static const float FLT16_EPSILON = CROSS_COMPILE(asfloat(0x3C00 + 0x0004), 0.0009765625);      // 2^-10
+static const float FLT32_EPSILON = CROSS_COMPILE(asfloat(0x34000000), 1.1920928955078125e-7);  // 2^-23
+static const float FLT_EPSILON = CROSS_COMPILE(asfloat(0x34000000), 1.1920928955078125e-7);    // 2^-23
 
 #if __SHADER_TARGET_MAJOR >= 6 || defined(VULKAN)
 #define SIGN_FUNCTION_GENERATOR(T) \
@@ -107,20 +115,66 @@ float4 DivideSafe(float4 dividend, float4 divisor, float4 fallback) {
                 DivideSafe(dividend.w, divisor.w, fallback.w));
 }
 
-float Max(float x, float y, float z) {
-  return max(x, max(y, z));
-}
-
-float Max(float x, float y, float z, float w) {
-  return max(x, max(y, max(z, w)));
+float Min(float x, float y) {
+  return min(x, y);
 }
 
 float Min(float x, float y, float z) {
-  return min(x, min(y, z));
+  return Min(x, Min(y, z));
 }
 
 float Min(float x, float y, float z, float w) {
-  return min(x, min(y, min(z, w)));
+  return Min(x, Min(y, z, w));
+}
+
+float Min(float2 xy) {
+  return Min(xy.x, xy.y);
+}
+
+float Min(float3 xyz) {
+  return Min(xyz.x, xyz.y, xyz.z);
+}
+
+float Min(float4 xyzw) {
+  return Min(xyzw.x, xyzw.y, xyzw.z, xyzw.w);
+}
+
+float Max(float x, float y) {
+  return max(x, y);
+}
+
+float Max(float x, float y, float z) {
+  return Max(x, Max(y, z));
+}
+
+float Max(float x, float y, float z, float w) {
+  return Max(x, Max(y, z, w));
+}
+
+float Max(float2 xy) {
+  return Max(xy.x, xy.y);
+}
+
+float Max(float3 xyz) {
+  return Max(xyz.x, xyz.y, xyz.z);
+}
+
+float Max(float4 xyzw) {
+  return Max(xyzw.x, xyzw.y, xyzw.z, xyzw.w);
+}
+
+// Linear Normalization
+// normalize() is reserved in HLSL
+float Rescale(float x, float x_min, float x_max, float y_min = 0, float y_max = 1, bool clamp = false) {
+  float value = lerp(y_min, y_max, (x - x_min) / (x_max - x_min));
+  if (clamp) {
+    value = saturate(value);
+  }
+  return value;
+}
+
+float Rescale(float x, float x_min, float x_max, bool clamp) {
+  return Rescale(x, x_min, x_max, 0.f, 1.f, clamp);
 }
 
 float3x3 Invert3x3(float3x3 m) {
