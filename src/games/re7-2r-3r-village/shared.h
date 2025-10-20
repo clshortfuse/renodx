@@ -1,6 +1,8 @@
 #ifndef SRC_RE7_RE2R_RE3R_REVILLAGE_SHARED_H_
 #define SRC_RE7_RE2R_RE3R_REVILLAGE_SHARED_H_
 
+#define FORCE_HDR10 1  // fixes NVAPI washed out issue
+
 #ifndef __cplusplus
 
 #define GAMMA_CORRECTION    1u
