@@ -59,7 +59,7 @@ struct ShaderInjectData {
 
   float custom_film_grain_toggle;
   float custom_hdr_boost;
-  float padding2;
+  float gamma_correction;
   float padding3;
 };
 
@@ -90,8 +90,12 @@ float4 shader_injection[8] : register(c50);
 
 #define CUSTOM_FILM_GRAIN_TOGGLE               shader_injection[4][0]
 #define CUSTOM_HDR_BOOST                       shader_injection[4][1]
+#define RENODX_GAMMA_CORRECTION                shader_injection[4][2]
 
 #define RENODX_RENO_DRT_TONE_MAP_METHOD renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
+#define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ
+#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
 #else
 #if ((__SHADER_TARGET_MAJOR == 5 && __SHADER_TARGET_MINOR >= 1) || __SHADER_TARGET_MAJOR >= 6)
 cbuffer shader_injection : register(b13, space50) {
@@ -107,7 +111,6 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_GRAPHICS_WHITE_NITS             shader_injection.graphics_white_nits
 #define RENODX_COLOR_GRADE_STRENGTH            shader_injection.color_grade_strength
 #define RENODX_TONE_MAP_TYPE                   shader_injection.tone_map_type
-#define RENODX_GAMMA_CORRECTION                1.f
 #define RENODX_TONE_MAP_EXPOSURE               shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS             shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS                shader_injection.tone_map_shadows
@@ -121,7 +124,11 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_FILM_GRAIN_TOGGLE               shader_injection.custom_film_grain_toggle
 #define CUSTOM_HDR_BOOST                       shader_injection.custom_hdr_boost
+#define RENODX_GAMMA_CORRECTION                shader_injection.gamma_correction
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
+#define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ
+#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
 
 #endif
 

@@ -151,8 +151,8 @@ float3 ReinhardPiecewise(float3 color) {
 float3 CustomSDRTonemap(float3 color) {
   //return saturate(color);
   if (RENODX_TONE_MAP_TYPE == 0.f) return saturate(color);
-  //return NeutralSDRYLerp(color);
-  return ToneMapMaxCLL(color);
+  return NeutralSDRYLerp(color);
+  //return ToneMapMaxCLL(color);
 }
 
 float3 CustomUpgradeTonemap(float3 ungraded, float3 graded, float3 ungraded_sdr) {
