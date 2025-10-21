@@ -1,3 +1,4 @@
+#include "./common.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.4.1 on Mon Jun  2 09:44:31 2025
@@ -57,26 +58,18 @@ void main(
   r0.w = dot(r0.xyz, SceneScaledLuminanceWeights.xyz);
   r0.xyz = r0.xyz * SceneShadowsAndDesaturation.www + GammaOverlayColor.xyz;
   r0.xyz = r0.xyz + r0.www;
-  r0.xyz = saturate(GammaColorScaleAndInverse.xyz * r0.xyz);
+  if (RENODX_TONE_MAP_TYPE == 0) {
+    r0.xyz = saturate(GammaColorScaleAndInverse.xyz * r0.xyz);
+  } else {
+    r0.xyz = GammaColorScaleAndInverse.xyz * r0.xyz;
+  }
   r0.xyz = max(float3(9.99999975e-05,9.99999975e-05,9.99999975e-05), r0.xyz);
   r0.xyz = log2(r0.xyz);
   r0.xyz = GammaColorScaleAndInverse.www * r0.xyz;
   o0.xyz = exp2(r0.xyz);
 
   o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
-  if (RENODX_TONE_MAP_TYPE == 0) {
-    o0.rgb = saturate(o0.rgb);
-  } else {
-    o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
-  }
-  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
-    o0.rgb = renodx::effects::ApplyFilmGrain(
-        o0.rgb,
-        v1.xy,
-        CUSTOM_RANDOM,
-        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
-        1.f);
-  }
+  o0.rgb = ToneMapPass(untonemapped, o0.rgb, v1);
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   o0.w = 0;
   return;

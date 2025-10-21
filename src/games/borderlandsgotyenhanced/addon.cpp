@@ -21,7 +21,7 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-__ALL_CUSTOM_SHADERS
+__ALL_CUSTOM_SHADERS,
 };
 
 ShaderInjectData shader_injection;
@@ -102,17 +102,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .is_visible = []() { return current_settings_mode == 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapWorkingColorSpace",
-        .binding = &shader_injection.tone_map_working_color_space,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Working Color Space",
-        .section = "Tone Mapping",
-        .labels = {"BT709", "BT2020", "AP1"},
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .is_visible = []() { return current_settings_mode == 1; },
     },
@@ -324,7 +313,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "F6AUTeWJHM");
         },
     },
     new renodx::utils::settings::Setting{
@@ -355,6 +344,21 @@ void OnPresetOff() {
    renodx::utils::settings::UpdateSetting("CellShading", 1.f);
 }
 
+bool fired_on_init_swapchain = false;
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (fired_on_init_swapchain) return;
+
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  if (peak.has_value()) {
+    settings[2]->default_value = roundf(peak.value());
+  } else {
+    settings[2]->default_value = 1000.f;
+  }
+
+  settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -377,15 +381,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .ignore_size = true,
           .use_resource_view_cloning = true,
       });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-      });
 
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;
     case DLL_PROCESS_DETACH:  
       reshade::unregister_addon(h_module);
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;
   }
   renodx::utils::random::Use(fdw_reason);
