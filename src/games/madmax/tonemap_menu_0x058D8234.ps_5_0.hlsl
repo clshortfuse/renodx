@@ -1,3 +1,4 @@
+#include "./common.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.4.1 on Sat Jun 21 11:20:03 2025
@@ -29,6 +30,7 @@ void main(
   o0.w = r0.w;
   // r0.xyz = InstanceConsts[0].yyy * r0.xyz;
   // o0.xyz = exp2(r0.xyz);
-  o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
+  o0.rgb = FilmGrain(r0.rgb, v1);
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }
