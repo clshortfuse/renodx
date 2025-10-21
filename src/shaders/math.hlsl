@@ -177,6 +177,18 @@ float Rescale(float x, float x_min, float x_max, bool clamp) {
   return Rescale(x, x_min, x_max, 0.f, 1.f, clamp);
 }
 
+float3 Rescale(float3 x, float3 x_min, float3 x_max, float3 y_min = float3(0, 0, 0), float3 y_max = float3(1, 1, 1), bool clamp = false) {
+  float3 value = lerp(y_min, y_max, (x - x_min) / (x_max - x_min));
+  if (clamp) {
+    value = saturate(value);
+  }
+  return value;
+}
+
+float3 Rescale(float3 x, float3 x_min, float3 x_max, bool clamp) {
+  return Rescale(x, x_min, x_max, float3(0, 0, 0), float3(1, 1, 1), clamp);
+}
+
 float3x3 Invert3x3(float3x3 m) {
   float a = m[0][0], b = m[0][1], c = m[0][2];
   float d = m[1][0], e = m[1][1], f = m[1][2];
