@@ -1,3 +1,4 @@
+#include "./common.hlsl"
 #include "./shared.h"
 
 float4 BloomTintAndScreenBlendThreshold : register( c0 );
@@ -77,20 +78,8 @@ float4 main(PS_IN i) : COLOR
 	r2 = tex2D(ColorGradingLUT, r0.yzzw);                                 // texld_pp r2, r0.yzzw, s3
 	r0.yzw = (-r1.xxyz + r2.xxyz).yzw;                                    // add r0.yzw, -r1.xxy, r2.xxy
 	o.xyz = r0.x * r0.yzw + r1.xyz;                                       // mad_pp oC0.xyz, r0.x, r0.yzw, r1.xyz
-	
-    if (RENODX_TONE_MAP_TYPE == 0) {
-      o.rgb = saturate(o.rgb);
-    } else {
-      o.rgb = renodx::draw::ToneMapPass(untonemapped, o.rgb);
-    }
-    if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
-      o.rgb = renodx::effects::ApplyFilmGrain(
-          o.rgb,
-          i.texcoord1.xy,
-          CUSTOM_RANDOM,
-          CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
-          1.f);
-    }
+
+    o.rgb = ToneMapPass(untonemapped, o.rgb);
     o.rgb = renodx::draw::RenderIntermediatePass(o.rgb);
     o.rgb = renodx::color::srgb::DecodeSafe(o.rgb);
     o.w = 0;                                                              // mov oC0.w, c1.z

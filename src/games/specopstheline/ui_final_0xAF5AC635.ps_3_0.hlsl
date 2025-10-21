@@ -1,5 +1,5 @@
 #include "./shared.h"
-
+#include "./common.hlsl"
 float3 ColorScale : register( c0 );
 float4 OverlayColor : register(c4);
 float InverseGamma : register(c5);
@@ -14,6 +14,7 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
 	float3 r2;
 	
 	r0 = tex2D(SceneColorTexture, texcoord);            // texld_pp r0, v0, s0
+  r0.rgb = FilmGrain(r0.rgb, texcoord);
 	r1.xyz = r0.xyz * ColorScale.xyz;                   // mul_pp r1.xyz, r0.xyz, c0.xyz
 	r2.xyz = ColorScale.xyz;                            // mov_pp r2.xyz, c0.xyz
 	r0.xyz = r0.xyz * -r2.xyz + OverlayColor.xyz;       // mad_pp r0.xyz, r0.xyz, -r2.xyz, c4.xyz
@@ -30,6 +31,6 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
   r0.xyz = r0.xyz * InverseGamma.x;                   // mul r0.xyz, r0.xyz, c5.x
   o.x = exp2(r0.x);                                   // exp oC0.x, r0.x
   o.y = exp2(r0.y);                                   // exp oC0.y, r0.y
-  o.z = exp2(r0.z);                                   // exp oC0.z, r0.z 
+  o.z = exp2(r0.z);                                   // exp oC0.z, r0.z
 	return o;
 }
