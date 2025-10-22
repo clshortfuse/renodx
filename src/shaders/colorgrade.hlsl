@@ -36,7 +36,7 @@ float3 Contrast(float3 color, float contrast, float mid_gray = 0.18f, float3x3 c
   return signs * renodx::color::correct::Luminance(color, color_y, contrasted_y);
 }
 
-float Highlights(float x, float highlights = 1.f, float mid_gray = 0.18f, float highlights_version = HIGHLIGHTS_VERSION) {
+float Highlights(float x, float highlights, float mid_gray, float highlights_version) {
   float value;
   [branch]
   if (highlights_version == 2.f) {
@@ -70,7 +70,11 @@ float Highlights(float x, float highlights = 1.f, float mid_gray = 0.18f, float 
   return value;
 }
 
-float Shadows(float x, float shadows = 1.f, float mid_gray = 0.18f, float shadows_version = SHADOWS_VERSION) {
+float Highlights(float x, float highlights = 1.f, float mid_gray = 0.18f) {
+  return Highlights(x, highlights, mid_gray, RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION);
+}
+
+float Shadows(float x, float shadows, float mid_gray, float shadows_version) {
   float value;
   [branch]
   if (shadows_version == 1.f) {
@@ -97,6 +101,10 @@ float Shadows(float x, float shadows = 1.f, float mid_gray = 0.18f, float shadow
   }
 
   return value;
+}
+
+float Shadows(float x, float shadows = 1.f, float mid_gray = 0.18f) {
+  return Shadows(x, shadows, mid_gray, RENODX_COLOR_GRADE_SHADOWS_VERSION);
 }
 
 float3 Saturation(float3 bt709, float saturation = 1.f) {
