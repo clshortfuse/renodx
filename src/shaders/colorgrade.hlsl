@@ -91,7 +91,7 @@ float Shadows(float x, float shadows = 1.f, float mid_gray = 0.18f, float shadow
       // value = x* (1.f - x * mid_gray * (1.f / contrasted));
       value = min(x, x * (1.f - (x * mid_gray / pow(x / mid_gray, 2.f - shadows))));
     } else {
-      x = x;
+      value = x;
       // 0
     }
   }
