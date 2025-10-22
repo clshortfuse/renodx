@@ -648,8 +648,8 @@ float3 ToneMapPass(float3 color, Config draw_config) {
       renodrt_config.tone_map_method = 1u;
       renodrt_config.white_clip = 1.f;
       renodrt_config.hue_correction_strength = 0.f;
-      renodrt_config.working_color_space = 0u;
-      renodrt_config.clamp_color_space = 0u;
+      renodrt_config.working_color_space = 0.f;
+      renodrt_config.clamp_color_space = 0.f;
       hue_shifted_color = renodx::tonemap::renodrt::BT709(color, renodrt_config);
     } else if (draw_config.tone_map_hue_shift_method == HUE_SHIFT_METHOD_AP1_ROLL_OFF) {
       float3 incorrect_hue_ap1 = renodx::color::ap1::from::BT709(color * tone_map_config.mid_gray_value / 0.18f);
