@@ -63,6 +63,11 @@ float3 ApplySaturationBlowoutHighlightSaturation(float3 tonemapped, float y, ren
   return color;
 }
 
+float3 HDRBoost(float3 color, float power = 0.20f, float normalization_point = 0.10f) {
+  if (power == 0.f) return color;
+  return lerp(color, normalization_point * pow(color / normalization_point, 1.f + power), color);
+}
+
 float3 PreTonemapSliders(float3 untonemapped) {
   renodx::color::grade::Config config = renodx::color::grade::config::Create();
   config.exposure = RENODX_TONE_MAP_EXPOSURE;
@@ -72,7 +77,9 @@ float3 PreTonemapSliders(float3 untonemapped) {
   config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
 
   float y = renodx::color::y::from::BT709(untonemapped);
-  return ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, y, config);
+  float3 outputColor = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, y, config);
+  outputColor = HDRBoost(outputColor, CUSTOM_HDR_BOOST);
+  return outputColor;
 }
 
 float3 PostTonemapSliders(float3 hdr_color) {
@@ -84,35 +91,6 @@ float3 PostTonemapSliders(float3 hdr_color) {
 
   float y = renodx::color::y::from::BT709(hdr_color);
   return ApplySaturationBlowoutHighlightSaturation(hdr_color, y, config);
-}
-
-float3 FakeHDR(float3 Color, float NormalizationPoint = 0.02, float FakeHDRIntensity = 0.5, float SaturationExpansionIntensity = 0.0, uint Method = 0, uint ColorSpace = CS_DEFAULT)
-{
-  if (Method == 0)  // Per channel (and optionally restores the luminance of the per channel boosted, given that this naturally expands saturation)
-  {
-    float3 normalizedColor = Color / NormalizationPoint;
-    // Expand highlights with a power curve
-    //normalizedColor = select(normalizedColor > 1., pow(normalizedColor, 1. + FakeHDRIntensity), normalizedColor);
-    normalizedColor = normalizedColor > 1.0 ? pow(normalizedColor, 1.0 + FakeHDRIntensity) : normalizedColor;
-    Color = lerp(RestoreLuminance(Color, normalizedColor * NormalizationPoint, (bool)ColorSpace), normalizedColor * NormalizationPoint, SaturationExpansionIntensity);
-  }
-  else if (Method == 1 || Method == 2)
-  {
-    float colorValue = 0.0;
-    if (Method == 1)  // By rgb max (will not boost whites any more than pure colors, and results depend on the color space)
-      colorValue = max3(Color);
-    else if (Method == 2)  // By luminance (will mostly ignore blues)
-      colorValue = GetLuminance(Color, ColorSpace);
-    float normalizedColorValue = colorValue / NormalizationPoint;
-    normalizedColorValue = normalizedColorValue > 1.0 ? pow(normalizedColorValue, 1.0 + FakeHDRIntensity) : normalizedColorValue;
-    float expansionRatio = safeDivision(normalizedColorValue * NormalizationPoint, colorValue, 1);  // Fallback to 1
-    Color *= expansionRatio;
-
-    // Expand saturation as well, on highlights only
-    if (SaturationExpansionIntensity != 0.0)  // Optional optimization, given this would usually be hardcoded to 0
-      Color = Saturation(Color, lerp(1.0, expansionRatio, SaturationExpansionIntensity), ColorSpace);
-  }
-  return Color;
 }
 
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
@@ -165,7 +143,6 @@ float3 CustomUpgradeTonemap(float3 ungraded, float3 graded, float3 ungraded_sdr)
     outputColor = PreTonemapSliders(outputColor);
     outputColor = ReinhardPiecewise(outputColor);
     outputColor = PostTonemapSliders(outputColor);
-    outputColor = FakeHDR(outputColor, 0.1f, CUSTOM_HDR_BOOST, 1.f, 0);
   }
   //return renodx::color::gamma::EncodeSafe(outputColor, 2.0);
   return renodx::color::srgb::EncodeSafe(outputColor);
