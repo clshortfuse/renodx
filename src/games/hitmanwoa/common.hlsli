@@ -157,13 +157,9 @@ float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);
   [branch]
   if (lut_config.scaling != 0.f) {
+    float3 lutWhite = 1.f;  // float3 lutWhite = Sample2DPackedLUT(renodx::lut::ConvertInput(1.f, lut_config), lut_sampler, lut_texture).rgb;
     float3 lutBlack = Sample2DPackedLUT(renodx::lut::ConvertInput(0, lut_config), lut_sampler, lut_texture).rgb;
     float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.15f, lut_config), lut_sampler, lut_texture).rgb;  // adjust to not crush
-
-    // float3 lutWhite = Sample2DPackedLUT(renodx::lut::ConvertInput(1.f, lut_config), lut_sampler, lut_texture).rgb;
-    float3 lutWhite = 1.f;
-
-    lutBlack = lerp(lutBlack, renodx::color::srgb::Encode(renodx::color::gamma::Decode(lutBlack)), 0.07f);
 
     float3 unclamped_gamma = renodx::lut::Unclamp(
         renodx::lut::GammaOutput(lutOutputColor, lut_config),
@@ -201,13 +197,9 @@ float4 SampleLUTSRGBInLinearOut(Texture2D<float4> lut_texture, SamplerState lut_
   float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);
   [branch]
   if (lut_config.scaling != 0.f) {
+    float3 lutWhite = 1.f;  // float3 lutWhite = Sample2DPackedLUT(renodx::lut::ConvertInput(1.f, lut_config), lut_sampler, lut_texture).rgb;
     float3 lutBlack = Sample2DPackedLUT(renodx::lut::ConvertInput(0, lut_config), lut_sampler, lut_texture).rgb;
     float3 lutMid = Sample2DPackedLUT(renodx::lut::ConvertInput(0.15f, lut_config), lut_sampler, lut_texture).rgb;  // adjust to not crush
-
-    // float3 lutWhite = Sample2DPackedLUT(renodx::lut::ConvertInput(1.f, lut_config), lut_sampler, lut_texture).rgb;
-    float3 lutWhite = 1.f;
-
-    lutBlack = lerp(lutBlack, renodx::color::srgb::Encode(renodx::color::gamma::Decode(lutBlack)), 0.07f);
 
     float3 unclamped_gamma = renodx::lut::Unclamp(
         renodx::lut::GammaOutput(lutOutputColor, lut_config),
@@ -238,9 +230,10 @@ float3 ScaleBloom(float3 color_scene, float3 tex_bloom, float bloom_strength) {
     float scene_luminance = renodx::color::y::from::BT709(color_scene) * mid_gray_bloomed;
     float bloom_blend = saturate(smoothstep(0.f, 0.18f, scene_luminance));
     float3 bloom_scaled = lerp(0.f, bloom_color, bloom_blend);
-    bloom_color = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * BLOOM_SCALING_MAX);
-  }
+    bloom_scaled = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * BLOOM_SCALING_MAX);
 
+    bloom_color = lerp(bloom_scaled, bloom_color, saturate(renodx::color::y::from::BT709(bloom_scaled) / 0.18f));
+  }
   return CUSTOM_BLOOM * bloom_color + color_scene;
 }
 
