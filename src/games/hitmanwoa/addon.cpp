@@ -75,7 +75,6 @@ void Cleanup() {
 
 renodx::utils::settings::Setting* GetSetting() {
   return new renodx::utils::settings::Setting{
-      .key = "EnableMod",
       .binding = &g_use_shaders,
       .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
       .default_value = 1.f,
