@@ -60,7 +60,13 @@ struct ShaderInjectData {
   float custom_film_grain_toggle;
   float custom_hdr_boost;
   float gamma_correction;
-  float padding3;
+  float padding;
+  //float saturation_clip;
+
+  //float hdr_toggle;
+  // float padding1;
+  // float padding2;
+  // float padding3;
 };
 
 #ifndef __cplusplus
@@ -91,6 +97,9 @@ float4 shader_injection[8] : register(c50);
 #define CUSTOM_FILM_GRAIN_TOGGLE               shader_injection[4][0]
 #define CUSTOM_HDR_BOOST                       shader_injection[4][1]
 #define RENODX_GAMMA_CORRECTION                shader_injection[4][2]
+// #define CUSTOM_SATURATION_CLIP                 shader_injection[4][3]
+
+// #define CUSTOM_HDR_TOGGLE                      shader_injection[5][0]
 
 #define RENODX_RENO_DRT_TONE_MAP_METHOD renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
@@ -125,6 +134,8 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_FILM_GRAIN_TOGGLE               shader_injection.custom_film_grain_toggle
 #define CUSTOM_HDR_BOOST                       shader_injection.custom_hdr_boost
 #define RENODX_GAMMA_CORRECTION                shader_injection.gamma_correction
+//#define CUSTOM_SATURATION_CLIP                 shader_injection.saturation_clip
+//#define CUSTOM_HDR_TOGGLE                      shader_injection.hdr_toggle
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ

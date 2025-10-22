@@ -1,5 +1,4 @@
 #include "./shared.h"
-#include "./luma/Color.hlsl"
 
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
@@ -117,20 +116,50 @@ float3 NeutralSDRYLerp(float3 color) {
   return color;
 }
 
-float3 ReinhardPiecewise(float3 color) {
+float3 HermiteSplineRolloff(float3 color) {
+  return lerp(
+      renodx::tonemap::HermiteSplineLuminanceRolloff(color),   // Luminance
+      renodx::tonemap::HermiteSplinePerChannelRolloff(color),  // Per channel
+      0.5f);
+}
+
+// float3 ReinhardPiecewise(float3 color) {
+//   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
+
+//   float peak_nits = config.peak_white_nits / renodx::color::bt709::REFERENCE_WHITE;              // Normalizes peak
+//   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::bt709::REFERENCE_WHITE;  // Normalizes game brightness
+
+//   return renodx::tonemap::ReinhardPiecewise(color, peak_nits / diffuse_white_nits);  // Need to divide peak_nits by diffuse_white_nits to accurately determine tonemapping peak. This is because game brightness is a linear scale that occurs after tonemapping.
+// }
+
+float3 HDRDisplayMap(float3 color, float tonemapper) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
   float peak_nits = config.peak_white_nits / renodx::color::bt709::REFERENCE_WHITE;              // Normalizes peak
   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::bt709::REFERENCE_WHITE;  // Normalizes game brightness
 
-  return renodx::tonemap::ReinhardPiecewise(color, peak_nits / diffuse_white_nits);  // Need to divide peak_nits by diffuse_white_nits to accurately determine tonemapping peak. This is because game brightness is a linear scale that occurs after tonemapping.
+  float3 outputColor = color;
+  if (tonemapper == 2.f) {
+    outputColor = renodx::tonemap::ReinhardPiecewise(color, peak_nits / diffuse_white_nits);
+  }
+  if (tonemapper == 3.f) {
+    outputColor = renodx::tonemap::HermiteSplinePerChannelRolloff(color, peak_nits / diffuse_white_nits, 100.f);
+  }
+  if (tonemapper == 4.f) {
+    outputColor = renodx::tonemap::HermiteSplineLuminanceRolloff(color, peak_nits / diffuse_white_nits, 100.f);
+  }
+  return outputColor;
 }
 
 float3 CustomSDRTonemap(float3 color) {
   //return saturate(color);
   if (RENODX_TONE_MAP_TYPE == 0.f) return saturate(color);
-  return NeutralSDRYLerp(color);
-  //return ToneMapMaxCLL(color);
+  if (RENODX_TONE_MAP_TYPE == 1.f) return HermiteSplineRolloff(color);
+  // return NeutralSDRYLerp(color);
+  return ToneMapMaxCLL(color);
+  // return renodx::tonemap::HermiteSplinePerChannelRolloff(color, 1.f, 100.f);
+  // return renodx::tonemap::HermiteSplineLuminanceRolloff(color, 1.f, 100.f);
+  //return HermiteSplineRolloff(color);
 }
 
 float3 CustomUpgradeTonemap(float3 ungraded, float3 graded, float3 ungraded_sdr) {
@@ -141,7 +170,7 @@ float3 CustomUpgradeTonemap(float3 ungraded, float3 graded, float3 ungraded_sdr)
   else {
     outputColor = renodx::tonemap::UpgradeToneMap(ungraded, ungraded_sdr, graded, RENODX_COLOR_GRADE_STRENGTH);
     outputColor = PreTonemapSliders(outputColor);
-    outputColor = ReinhardPiecewise(outputColor);
+    outputColor = HDRDisplayMap(outputColor, RENODX_TONE_MAP_TYPE);
     outputColor = PostTonemapSliders(outputColor);
   }
   //return renodx::color::gamma::EncodeSafe(outputColor, 2.0);
