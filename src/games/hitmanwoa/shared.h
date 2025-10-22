@@ -28,7 +28,7 @@
 #define CUSTOM_DITHERING                     1.f
 
 #define RENODX_TONE_MAP_SHOULDER_START 0.5f
-#define LUT_SCALING_MAX                0.71f
+#define LUT_SCALING_MAX                ((RENODX_GAMMA_CORRECTION == 0.f) ? 1.f : 0.71f)
 #define BLOOM_SCALING_MAX              0.33f
 
 // Must be 32bit aligned
