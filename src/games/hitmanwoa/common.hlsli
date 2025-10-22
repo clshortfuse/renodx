@@ -228,7 +228,7 @@ float3 ScaleBloom(float3 color_scene, float3 tex_bloom, float bloom_strength) {
     float mid_gray_bloomed = (0.18 + renodx::color::y::from::BT709(bloom_color)) / 0.18;
 
     float scene_luminance = renodx::color::y::from::BT709(color_scene) * mid_gray_bloomed;
-    float bloom_blend = saturate(smoothstep(0.f, 0.18f, scene_luminance));
+    float bloom_blend = saturate(smoothstep(0.f, 0.05f, scene_luminance));
     float3 bloom_scaled = lerp(0.f, bloom_color, bloom_blend);
     bloom_scaled = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * BLOOM_SCALING_MAX);
 
