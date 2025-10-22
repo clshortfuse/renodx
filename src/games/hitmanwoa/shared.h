@@ -1,7 +1,8 @@
 #ifndef SRC_HITMANWOA_SHARED_H_
 #define SRC_HITMANWOA_SHARED_H_
 
-#define FORCE_HDR10 1  // fixes NVAPI washed out issue
+#define FORCE_HDR10          1  // fixes NVAPI washed out issue
+#define ENABLE_SHADER_TOGGLE 1
 
 #define RENODX_TONE_MAP_TYPE                 1.f
 #define RENODX_PEAK_WHITE_NITS               400.f
