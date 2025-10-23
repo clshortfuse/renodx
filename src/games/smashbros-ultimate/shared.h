@@ -39,11 +39,11 @@ struct ShaderInjectData {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION          shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT                       shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                         shader_injection.tone_map_flare
-#define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_TONE_MAP_CLAMP_PEAK                    -1.0f
+#define RENODX_RENO_DRT_WHITE_CLIP                    100.f
+#define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1.0f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.0f
-#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_SWAP_CHAIN_OUTPUT_PRESET               SWAP_CHAIN_OUTPUT_PRESET_SCRGB
 #define RENODX_GAMMA_CORRECTION                       shader_injection.gamma_correction
 #define CUSTOM_BLOOM                                  shader_injection.custom_bloom
