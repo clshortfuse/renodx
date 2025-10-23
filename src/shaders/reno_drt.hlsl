@@ -244,7 +244,7 @@ float3 BT709(float3 bt709, Config current_config) {
         color_output = HermiteSplinePerChannelRolloff(
             color_output,
             peak,
-            white_clip);
+            clamp(white_clip, peak, 500.f));
       }
 
       color_output *= signs;
@@ -270,7 +270,7 @@ float3 BT709(float3 bt709, Config current_config) {
         y_new = HermiteSplineLuminanceRolloff(
             y,
             peak,
-            white_clip);
+            clamp(white_clip, peak, 500.f));
       }
 
       color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
