@@ -1,6 +1,8 @@
 #ifndef SRC_GAMES_CRONOSTHENEWDAWN_SHARED_H_
 #define SRC_GAMES_CRONOSTHENEWDAWN_SHARED_H_
 
+#define ENABLE_CUSTOM_COLOR_CORRECTION 1
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
@@ -21,9 +23,13 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
-  float custom_sharpness;
+
   float shadow_color_offset_fix_type;
-  float shadow_color_offset_fix_contrast_offset;
+  float shadow_color_offset_brightness_bias;
+  float color_offset_midtones_highliqhts;
+  float shadow_color_offset_chrominance_restoration;
+
+  float custom_sharpness;
 };
 
 #ifndef __cplusplus
@@ -49,10 +55,12 @@ cbuffer cb13 : register(b13, space50) {
 #define RENODX_TONE_MAP_BLOWOUT                       shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                         shader_injection.tone_map_flare
 
-#define CUSTOM_SHARPNESS                              shader_injection.custom_sharpness
-
 #define SHADOW_COLOR_OFFSET_FIX_TYPE                  shader_injection.shadow_color_offset_fix_type
-#define SHADOW_COLOR_OFFSET_FIX_CONTRAST_OFFSET       shader_injection.shadow_color_offset_fix_contrast_offset
+#define COLOR_OFFSET_MIDTONES_HIGHLIGHTS              shader_injection.color_offset_midtones_highliqhts
+#define SHADOW_COLOR_OFFSET_BRIGHTNESS_BIAS           shader_injection.shadow_color_offset_brightness_bias
+#define SHADOW_COLOR_OFFSET_CHROMINANCE_RESTORATION   shader_injection.shadow_color_offset_chrominance_restoration
+
+#define CUSTOM_SHARPNESS                              shader_injection.custom_sharpness
 
 #define OVERRIDE_BLACK_CLIP shader_injection.override_black_clip  // 0 - Off, 1 - 0.0001 nits
 

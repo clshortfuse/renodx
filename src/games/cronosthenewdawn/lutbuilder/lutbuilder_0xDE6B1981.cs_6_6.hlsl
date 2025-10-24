@@ -18,8 +18,6 @@ void main(
   uint3 SV_GroupThreadID : SV_GroupThreadID,
   uint SV_GroupIndex : SV_GroupIndex
 ) {
-  bool bIsHDR = (OutputDevice >= 3u && OutputDevice <= 6u);
-
   float _20 = 0.5f / LUTSize;
   float _25 = LUTSize + -1.0f;
   float _49;
@@ -170,14 +168,7 @@ void main(
   float _384 = dot(float3(_381, _382, _383), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
 
   float3 WorkingColor = float3(_381, _382, _383);
-  float _517 = saturate(_384 / ColorCorrectionShadowsMax);
-  float _521 = (_517 * _517) * (3.0f - (_517 * 2.0f));
-  float CCWeightShadows = 1.0f - _521;
-  float _630 = saturate((_384 - ColorCorrectionHighlightsMin) / (ColorCorrectionHighlightsMax - ColorCorrectionHighlightsMin));
-  float CCWeightHighlights = (_630 * _630) * (3.0f - (_630 * 2.0f));
-  float CCWeightMidtones = _521 - CCWeightHighlights;
-
-  WorkingColor = ColorCorrectAll(WorkingColor,
+  WorkingColor = ApplyColorCorrection(WorkingColor,
     ColorSaturation,
     ColorContrast,
     ColorGamma,
@@ -198,9 +189,9 @@ void main(
     ColorGammaMidtones,
     ColorGainMidtones,
     ColorOffsetMidtones,
-    CCWeightShadows,
-    CCWeightHighlights,
-    CCWeightMidtones);
+    ColorCorrectionShadowsMax,
+    ColorCorrectionHighlightsMin,
+    ColorCorrectionHighlightsMax);
 
   float _767 = ((mad(0.061360642313957214f, WorkingColor.b, mad(-4.540197551250458e-09f, WorkingColor.g, (WorkingColor.r * 0.9386394023895264f))) - WorkingColor.r) * BlueCorrection) + WorkingColor.r;
   float _768 = ((mad(0.169205904006958f, WorkingColor.b, mad(0.8307942152023315f, WorkingColor.g, (WorkingColor.r * 6.775371730327606e-08f))) - WorkingColor.g) * BlueCorrection) + WorkingColor.g;
@@ -271,7 +262,7 @@ void main(
   float _943 = (FilmShoulder / FilmSlope) - _941;
 
   float _1089, _1090, _1091;
-  if (bIsHDR) {
+  if (is_hdr) {
     float3 lerpColor = lerp(_901, float3(_898, _899, _900), 0.9599999785423279f);
       ApplyFilmicToneMap(lerpColor.r, lerpColor.g, lerpColor.b,
                          _767, _768, _769,
@@ -315,7 +306,7 @@ void main(
   float _1113 = mad((WorkingColorSpace_192[0].z), _1091, mad((WorkingColorSpace_192[0].y), _1090, ((WorkingColorSpace_192[0].x) * _1089)));
   float _1114 = mad((WorkingColorSpace_192[1].z), _1091, mad((WorkingColorSpace_192[1].y), _1090, ((WorkingColorSpace_192[1].x) * _1089)));
   float _1115 = mad((WorkingColorSpace_192[2].z), _1091, mad((WorkingColorSpace_192[2].y), _1090, ((WorkingColorSpace_192[2].x) * _1089)));
-  if (!bIsHDR) {
+  if (!is_hdr) {
     _1113 = max(0.0f, _1113);
     _1114 = max(0.0f, _1114);
     _1115 = max(0.0f, _1115);
@@ -330,12 +321,8 @@ void main(
   float _y1 = ((OverlayColor.y - _1142) * OverlayColor.w) + _1142;
   float _z1 = ((OverlayColor.z - _1143) * OverlayColor.w) + _1143;
 
-  if (bIsHDR) {
-    float4 output;
-    if (GenerateOutput(_x1, _y1, _z1, output, OutputDevice)) {
-      u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = output;
-      return;
-    }
+  if (GenerateOutput(_x1, _y1, _z1, u0[SV_DispatchThreadID])) {
+    return;
   }
 
   float _x2 = ColorScale.x * mad((WorkingColorSpace_192[0].z), WorkingColor.b, mad((WorkingColorSpace_192[0].y), WorkingColor.g, (WorkingColor.r * (WorkingColorSpace_192[0].x))));

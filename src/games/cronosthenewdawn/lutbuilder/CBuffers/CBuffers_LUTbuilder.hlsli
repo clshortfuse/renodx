@@ -54,3 +54,5 @@ cbuffer _RootShaderParameters : register(b0) {
   float cb0_042x : packoffset(c042.x);
   float cb0_042y : packoffset(c042.y);
 };
+
+static bool is_hdr = (OutputDevice >= 3u) && (OutputGamut <= 6u);

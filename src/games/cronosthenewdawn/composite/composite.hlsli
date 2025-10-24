@@ -10,9 +10,12 @@ float4 OutputHDR10(float4 color, float scale) {
   return float4(pq_color, color.a);
 }
 
-float3 ApplyPostProcessing(float3 linear_color, Texture2D<float4> scene_color_texture, SamplerState scene_color_sampler, float2 texcoord){
-  linear_color = ApplyRCAS(linear_color, texcoord, scene_color_texture, scene_color_sampler);
-  return linear_color;
+float3 ApplyRCAS(float3 center_color, float2 texcoord, Texture2D<float4> scene_color_texture, SamplerState scene_color_sampler) {
+  if (CUSTOM_SHARPNESS == 0.f) return center_color;  // Skip sharpening if amount is zero
+
+  // scale input so diffuse white is at 1.0
+  center_color *= RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  return ApplyLiliumRCAS(center_color, texcoord, scene_color_texture, scene_color_sampler) * RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
 }
 
 bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout float4 output_color, Texture2D<float4> scene_color_texture, SamplerState scene_color_sampler, float2 texcoord, uint output_mode = 0u) {
@@ -29,14 +32,14 @@ bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout flo
 
   // linearize scene, normalize game brightness as a ratio of ui brightness
   float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color_pq.rgb, RENODX_GRAPHICS_WHITE_NITS);
-  scene_color_linear = renodx::color::bt709::from::BT2020(scene_color_linear);
 
-  // apply custom post processing
-  scene_color_linear = ApplyPostProcessing(scene_color_linear, scene_color_texture, scene_color_sampler, texcoord);
+  scene_color_linear = ApplyRCAS(scene_color_linear, texcoord, scene_color_texture, scene_color_sampler);
+
+  scene_color_linear = renodx::color::bt709::from::BT2020(scene_color_linear);
 
   ui_color_gamma.rgb = renodx::color::gamma::EncodeSafe(ui_color_linear.rgb);
 
-  // blend in gamma, choose between sRGB and gamma based on setting
+  // blend in gamma
   float3 scene_color_gamma = renodx::color::gamma::EncodeSafe(scene_color_linear);
 
   float3 composited_color_gamma = ui_color_gamma.rgb + scene_color_gamma * (1.0 - ui_alpha);
