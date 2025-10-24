@@ -49,13 +49,13 @@ const std::unordered_map<std::string, float> PURIST_VALUES = {
 };
 
 const std::unordered_map<std::string, float> FILMIC_VALUES = {
-    {"CustomInverseTonemap", 20.f},
+    {"CustomInverseTonemap", 30.f},
     {"ColorGradeExposure", 0.70f},
     {"ColorGradeHighlights", 58.f},
     {"ColorGradeShadows", 50.f},
     {"ColorGradeContrast", 39.f},
-    {"ColorGradeSaturation", 45.f},
-    {"ColorGradeHighlightSaturation", 56.f},
+    {"ColorGradeSaturation", 47.f},
+    {"ColorGradeHighlightSaturation", 54.f},
     {"ColorGradeBlowout", 50.f},
     {"ColorGradeFlare", 2.f},
    // {"SwapChainCustomColorSpace", 0.f},
@@ -110,7 +110,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "SDR in HDR", "Piecewise Reinhard"},
+        .labels = {"Vanilla", "SDR in HDR", "Hermite Spline Per Channel"},
         .parse = [](float value) { return value; },
         .is_visible = []() { return current_settings_mode >= 2.f && last_is_hdr; },
     },
@@ -153,7 +153,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "CustomInverseTonemap",
         .binding = &shader_injection.custom_inverse_tonemap,
-        .default_value = 16.f,
+        .default_value = 25.f,
         .label = "HDR Boost",
         .section = "Tone Mapping",
         .tooltip = "Artificial but pleasing boost to highlight strength",
@@ -855,11 +855,6 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "HDR RCAS by Lilium",
-        .section = "About",
-    },
-        new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Thanks to Pumbo for the HDR Boost function",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
