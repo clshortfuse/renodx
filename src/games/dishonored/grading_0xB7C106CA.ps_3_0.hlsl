@@ -44,8 +44,14 @@ float4 main(PS_IN i) : COLOR
 	float4 r3;
 	r0 = tex2D(gSceneColor, i.texcoord);
 
-    float3 ungraded = r0.xyz;
-    float3 ungraded_sdr = CustomSDRTonemap(ungraded);
+        float3 ungraded = r0.xyz;
+        
+        float3 ungraded_compressed = ungraded;
+        float compression_scale;
+        GamutCompression(ungraded_compressed, compression_scale);
+
+        float3 ungraded_sdr = CustomSDRTonemap(ungraded_compressed);
+
     r0.xyz = ungraded_sdr;
 
 	r0.x = rsqrt(r0.x);
@@ -71,6 +77,7 @@ float4 main(PS_IN i) : COLOR
 
 	r3 = Sample(gLinearToGammaRamp, r1.zwy, 16);
     float3 graded = renodx::color::srgb::DecodeSafe(r3.xyz);
+    GamutDecompression(graded, compression_scale);
 	r3.xyz = CustomUpgradeTonemap(ungraded, graded, ungraded_sdr);
 
     if (CUSTOM_FILM_GRAIN_TOGGLE == 1) {

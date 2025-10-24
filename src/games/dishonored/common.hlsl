@@ -1,5 +1,19 @@
 #include "./shared.h"
 
+void GamutCompression(inout float3 color, inout float compression_scale) {
+  float3 gamma_color = renodx::color::gamma::EncodeSafe(color);
+  float grayscale = renodx::color::y::from::BT709(gamma_color.rgb);
+  compression_scale = renodx::color::correct::ComputeGamutCompressionScale(gamma_color.rgb, grayscale);
+  gamma_color = renodx::color::correct::GamutCompress(gamma_color, grayscale, compression_scale);
+  color = renodx::color::gamma::DecodeSafe(gamma_color);
+}
+
+void GamutDecompression(inout float3 color, float compression_scale) {
+  float3 gamma_color = renodx::color::gamma::EncodeSafe(color);
+  gamma_color = renodx::color::correct::GamutDecompress(gamma_color, compression_scale);
+  color = renodx::color::gamma::DecodeSafe(gamma_color);
+}
+
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
     return untonemapped;
@@ -62,9 +76,29 @@ float3 ApplySaturationBlowoutHighlightSaturation(float3 tonemapped, float y, ren
   return color;
 }
 
-float3 HDRBoost(float3 color, float power = 0.20f, float normalization_point = 0.10f) {
+float3 HDRBoost(float3 color, float power = 0.20f, float normalization_point = 0.02f) {
   if (power == 0.f) return color;
-  return lerp(color, normalization_point * pow(color / normalization_point, 1.f + power), color);
+  //return lerp(color, normalization_point * renodx::math::SafePow(color / normalization_point, 1.f + power), color);
+
+  float compression_scale;
+  GamutCompression(color, compression_scale);
+
+  float smoothing = power * 2.f;
+  color = max(color, lerp(color, normalization_point * pow(color / normalization_point, 1.f + power), color / ((color / smoothing) + 1)));
+
+  GamutDecompression(color, compression_scale);
+  return color;
+}
+
+float3 PostTonemapSliders(float3 hdr_color) {
+  renodx::color::grade::Config config = renodx::color::grade::config::Create();
+  config.saturation = RENODX_TONE_MAP_SATURATION;
+  config.blowout = RENODX_TONE_MAP_HIGHLIGHT_SATURATION;
+  config.dechroma = RENODX_TONE_MAP_BLOWOUT;
+  config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+
+  float y = renodx::color::y::from::BT709(hdr_color);
+  return ApplySaturationBlowoutHighlightSaturation(hdr_color, y, config);
 }
 
 float3 PreTonemapSliders(float3 untonemapped) {
@@ -79,17 +113,6 @@ float3 PreTonemapSliders(float3 untonemapped) {
   float3 outputColor = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, y, config);
   outputColor = HDRBoost(outputColor, CUSTOM_HDR_BOOST);
   return outputColor;
-}
-
-float3 PostTonemapSliders(float3 hdr_color) {
-  renodx::color::grade::Config config = renodx::color::grade::config::Create();
-  config.saturation = RENODX_TONE_MAP_SATURATION;
-  config.blowout = RENODX_TONE_MAP_HIGHLIGHT_SATURATION;
-  config.dechroma = RENODX_TONE_MAP_BLOWOUT;
-  config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
-
-  float y = renodx::color::y::from::BT709(hdr_color);
-  return ApplySaturationBlowoutHighlightSaturation(hdr_color, y, config);
 }
 
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
@@ -138,16 +161,20 @@ float3 HDRDisplayMap(float3 color, float tonemapper) {
   float peak_nits = config.peak_white_nits / renodx::color::bt709::REFERENCE_WHITE;              // Normalizes peak
   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::bt709::REFERENCE_WHITE;  // Normalizes game brightness
 
+  float compression_scale;
+  GamutCompression(color, compression_scale);
+
+  //color = renodx::color::bt2020::from::BT709(color);
+
   float3 outputColor = color;
   if (tonemapper == 2.f) {
-    outputColor = renodx::tonemap::ReinhardPiecewise(color, peak_nits / diffuse_white_nits);
-  }
-  if (tonemapper == 3.f) {
     outputColor = renodx::tonemap::HermiteSplinePerChannelRolloff(color, peak_nits / diffuse_white_nits, 100.f);
   }
-  if (tonemapper == 4.f) {
-    outputColor = renodx::tonemap::HermiteSplineLuminanceRolloff(color, peak_nits / diffuse_white_nits, 100.f);
-  }
+
+  GamutDecompression(outputColor, compression_scale);
+
+  //outputColor = renodx::color::bt709::from::BT2020(color);
+
   return outputColor;
 }
 
