@@ -122,9 +122,9 @@ cbuffer cb0 : register(b0) {
         r2.xyzw = r3.xyzw * r2.xyzw + float4(1, 1, 1, 1);
         r0.xyzw = r2.xyzw * r0.xyzw;
       }
-    outputColor = renodx::color::srgb::Decode(r0.rgb);
 
-    // outputColor = RENODX_GAMMA_CORRECTION ? pow(r0.rgb, 2.2f) : renodx::color::srgb::Decode(r0.rgb);
+    r0.rgb = max(0, r0.rgb);
+    outputColor = renodx::color::srgb::Decode(r0.rgb);
   } else {
     outputColor = applyUserToneMap(untonemapped.rgb, t1, s0_s);
 #if DRAW_TONEMAPPER
