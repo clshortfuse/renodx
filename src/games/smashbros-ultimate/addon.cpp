@@ -21,7 +21,9 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
+renodx::mods::shader::CustomShaders custom_shaders = {
+  BypassShaderEntry(0x574C469C),
+  __ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
