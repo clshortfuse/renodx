@@ -2,6 +2,7 @@
 #define SRC_SHADERS_LUT_HLSL_
 
 #include "./color.hlsl"
+#include "./colorcorrect.hlsl"
 #include "./math.hlsl"
 
 namespace renodx {
@@ -10,40 +11,42 @@ struct Config {
   SamplerState lut_sampler;
   float strength;
   float scaling;
-  uint type_input;
-  uint type_output;
+  int type_input;
+  int type_output;
   uint size;
   float3 precompute;
   bool tetrahedral;
-  float recolor;
+  float recolor; // Deprecated
+  float max_channel;
+  float gamut_compress;
 };
 
 namespace config {
 namespace type {
-static const uint LINEAR = 0u;
-static const uint SRGB = 1u;
-static const uint GAMMA_2_4 = 2u;
-static const uint GAMMA_2_2 = 3u;
-static const uint GAMMA_2_0 = 4u;
-static const uint ARRI_C800 = 5u;
-static const uint ARRI_C1000 = 6u;
-static const uint ARRI_C800_NO_CUT = 7u;
-static const uint ARRI_C1000_NO_CUT = 8u;
-static const uint PQ = 9u;
+static const int LINEAR = 0u;
+static const int SRGB = 1u;
+static const int GAMMA_2_4 = 2;
+static const int GAMMA_2_2 = 3;
+static const int GAMMA_2_0 = 4;
+static const int ARRI_C800 = 5;
+static const int ARRI_C1000 = 6;
+static const int ARRI_C800_NO_CUT = 7;
+static const int ARRI_C1000_NO_CUT = 8;
+static const int PQ = 9;
 }  // namespace type
 
-Config Create(SamplerState lut_sampler, float strength, float scaling, uint type_input, uint type_output, uint size = 0) {
-  Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, size, float3(0, 0, 0), false, 1.f };
+Config Create(SamplerState lut_sampler, float strength, float scaling, int type_input, int type_output, uint size = 0) {
+  Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, size, float3(0, 0, 0), false, 0.f, 1.f, 1.f };
   return lut_config;
 }
 
-Config Create(SamplerState lut_sampler, float strength, float scaling, uint type_input, uint type_output, float size) {
-  Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, (uint)size, float3(0, 0, 0), false, 1.f };
+Config Create(SamplerState lut_sampler, float strength, float scaling, int type_input, int type_output, float size) {
+  Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, (uint)size, float3(0, 0, 0), false, 0.f, 1.f, 1.f };
   return lut_config;
 }
 
-Config Create(SamplerState lut_sampler, float strength, float scaling, uint type_input, uint type_output, float3 precompute) {
-  Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, 0, precompute, false, 1.f };
+Config Create(SamplerState lut_sampler, float strength, float scaling, int type_input, int type_output, float3 precompute) {
+  Config lut_config = { lut_sampler, strength, scaling, type_input, type_output, 0, precompute, false, 0.f, 1.f, 1.f };
   return lut_config;
 }
 
@@ -60,15 +63,17 @@ SamplerState NULL_SAMPLER_STATE;
 
 Config Create() {
   Config lut_config = {
-    NULL_SAMPLER_STATE,
-    1.f,
-    1.f,
-    config::type::SRGB,
-    config::type::SRGB,
-    0,
-    float3(0, 0, 0),
-    true,
-    1.f
+    NULL_SAMPLER_STATE,  // lut_sampler
+    1.f,                 // strength
+    1.f,                 // scaling
+    config::type::SRGB,  // type_input
+    config::type::SRGB,  // type_output
+    0,                   // size
+    float3(0, 0, 0),     // precompute
+    true,                // tetrahedral
+    0.f,                 // recolor
+    1.f,                 // max_channel
+    1.f                  // gamut_compress
   };
   return lut_config;
 }
@@ -243,13 +248,30 @@ float3 CenterTexel(float3 color, float size) {
     return Sample(lut, state, color, float3(texel_size, slice, max_index));          \
   }
 
-#define SAMPLE_COLOR_3D_FUNCTION_GENERATOR(TextureType)                               \
-  float3 SampleColor(float3 color, Config lut_config, TextureType lut_texture) {      \
-    if (lut_config.tetrahedral) {                                                     \
-      return SampleTetrahedral(lut_texture, color, lut_config.size);                  \
-    } else {                                                                          \
-      return Sample(lut_texture, lut_config.lut_sampler, color.rgb, lut_config.size); \
-    }                                                                                 \
+#define SAMPLE_COLOR_3D_FUNCTION_GENERATOR(TextureType)                                                     \
+  float3 SampleColor(float3 color, Config lut_config, TextureType lut_texture) {                            \
+    float3 sampled_color;                                                                                   \
+    float max_channel = 1.f;                                                                                \
+    float gamut_compression_scale = 1.f;                                                                    \
+    if (lut_config.max_channel > 0.f) {                                                                     \
+      max_channel = renodx::math::Max(color.r, color.g, color.b, 1.f);                                      \
+      color /= max_channel;                                                                                 \
+    }                                                                                                       \
+    if (lut_config.gamut_compress > 1.f) {                                                                  \
+      float grayscale = renodx::color::y::from::BT709(color.rgb);                                           \
+      gamut_compression_scale = renodx::color::correct::ComputeGamutCompressionScale(color.rgb, grayscale); \
+      color = renodx::color::correct::GamutCompress(color, grayscale, gamut_compression_scale);             \
+    }                                                                                                       \
+    [branch]                                                                                                \
+    if (lut_config.tetrahedral) {                                                                           \
+      sampled_color = SampleTetrahedral(lut_texture, color, lut_config.size);                               \
+    } else {                                                                                                \
+      sampled_color = Sample(lut_texture, lut_config.lut_sampler, color.rgb, lut_config.size);              \
+    }                                                                                                       \
+    if (lut_config.gamut_compress > 1.f) {                                                                  \
+      sampled_color = renodx::color::correct::GamutDecompress(sampled_color, gamut_compression_scale);      \
+    }                                                                                                       \
+    return sampled_color * max_channel;                                                                     \
   }
 
 #define SAMPLE_COLOR_2D_FUNCTION_GENERATOR(TextureType)                                           \
@@ -389,13 +411,13 @@ float3 RecolorUnclamped(float3 original_linear, float3 unclamped_linear, float s
 
 float3 ConvertInput(float3 color, Config lut_config) {
   if (lut_config.type_input == config::type::SRGB) {
-    color = renodx::color::srgb::Encode(saturate(color));
+    color = renodx::color::srgb::EncodeSafe(color);
   } else if (lut_config.type_input == config::type::GAMMA_2_4) {
-    color = renodx::color::gamma::Encode(saturate(color), 2.4f);
+    color = renodx::color::gamma::EncodeSafe(color, 2.4f);
   } else if (lut_config.type_input == config::type::GAMMA_2_2) {
-    color = renodx::color::gamma::Encode(saturate(color));
+    color = renodx::color::gamma::EncodeSafe(color);
   } else if (lut_config.type_input == config::type::GAMMA_2_0) {
-    color = sqrt(saturate(color));
+    color = renodx::math::SignSqrt(color);
   } else if (lut_config.type_input == config::type::ARRI_C800) {
     color = renodx::color::arri::logc::c800::Encode(max(0, color));
   } else if (lut_config.type_input == config::type::ARRI_C1000) {
