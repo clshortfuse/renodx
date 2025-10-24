@@ -157,7 +157,7 @@ renodx::utils::settings::Settings settings = {
         .label = "HDR Boost",
         .section = "Tone Mapping",
         .tooltip = "Artificial but pleasing boost to highlight strength",
-        .max = 100.f,
+        .max = 50.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 1 && last_is_hdr; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1 && last_is_hdr; },
