@@ -398,9 +398,9 @@ float4 main(
   float _1069 = ((mad(-0.20366770029067993f, _1052, mad(1.2036634683609009f, _1051, (_1050 * -2.57161445915699e-07f))) - _1051) * BlueCorrection) + _1051;
   float _1070 = ((mad(0.9999996423721313f, _1052, mad(2.0954757928848267e-08f, _1051, (_1050 * 1.862645149230957e-08f))) - _1052) * BlueCorrection) + _1052;
 #endif
-  float _1092 = max(0.0f, mad((WorkingColorSpace_FromAP1[0].z), _1070, mad((WorkingColorSpace_FromAP1[0].y), _1069, ((WorkingColorSpace_FromAP1[0].x) * _1068))));
-  float _1093 = max(0.0f, mad((WorkingColorSpace_FromAP1[1].z), _1070, mad((WorkingColorSpace_FromAP1[1].y), _1069, ((WorkingColorSpace_FromAP1[1].x) * _1068))));
-  float _1094 = max(0.0f, mad((WorkingColorSpace_FromAP1[2].z), _1070, mad((WorkingColorSpace_FromAP1[2].y), _1069, ((WorkingColorSpace_FromAP1[2].x) * _1068))));
+  float _1092 = (mad((WorkingColorSpace_FromAP1[0].z), _1070, mad((WorkingColorSpace_FromAP1[0].y), _1069, ((WorkingColorSpace_FromAP1[0].x) * _1068))));
+  float _1093 = (mad((WorkingColorSpace_FromAP1[1].z), _1070, mad((WorkingColorSpace_FromAP1[1].y), _1069, ((WorkingColorSpace_FromAP1[1].x) * _1068))));
+  float _1094 = (mad((WorkingColorSpace_FromAP1[2].z), _1070, mad((WorkingColorSpace_FromAP1[2].y), _1069, ((WorkingColorSpace_FromAP1[2].x) * _1068))));
   
   // They run the whole thing again but discard it??
   /* float _1108 = ((mad(0.061360642313957214f, _731, mad(-4.540197551250458e-09f, _729, (_727 * 0.9386394023895264f))) - _727) * BlueCorrection) + _727;
