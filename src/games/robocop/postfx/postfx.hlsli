@@ -26,7 +26,7 @@ float4 SampleAndConvertToSRGBWithToneMap(inout float3 unclamped_linear_sample, i
 
   if (RENODX_TONE_MAP_TYPE == 0.f || FIX_POST_PROCESS == 0.f) return pq_color;
 
-  return float4(renodx::color::srgb::EncodeSafe(linear_color), tex_alpha);
+  return float4(renodx::color::gamma::EncodeSafe(linear_color), tex_alpha);
 }
 
 float4 SampleAndConvertToSRGB(Texture2D<float4> scene_texture, SamplerState sampler, float2 location) {
@@ -39,12 +39,12 @@ float4 SampleAndConvertToSRGB(Texture2D<float4> scene_texture, SamplerState samp
   
   if (RENODX_TONE_MAP_TYPE == 0.f || FIX_POST_PROCESS == 0.f) return pq_color;
 
-  return float4(renodx::color::srgb::EncodeSafe(linear_color), tex_alpha);
+  return float4(renodx::color::gamma::EncodeSafe(linear_color), tex_alpha);
 }
 
 float3 ConvertSRGBtoPQAndUpgradeToneMap(float3 srgb_color, float3 unclamped_linear_sample, float3 tonemapped_linear_sample) {
   
-  float3 linear_color = renodx::color::srgb::DecodeSafe(srgb_color);
+  float3 linear_color = renodx::color::gamma::DecodeSafe(srgb_color);
   if (FIX_POST_PROCESS == 2.f) {  // all in BT.2020
     linear_color = renodx::color::bt709::from::BT2020(linear_color);
     unclamped_linear_sample = renodx::color::bt709::from::BT2020(unclamped_linear_sample);
@@ -59,7 +59,7 @@ float3 ConvertSRGBtoPQAndUpgradeToneMap(float3 srgb_color, float3 unclamped_line
 float3 ConvertSRGBtoPQ(float3 srgb_color) {
   if (RENODX_TONE_MAP_TYPE == 0.f || FIX_POST_PROCESS == 0.f) return max(0, srgb_color);
 
-  float3 linear_color = renodx::color::srgb::DecodeSafe(srgb_color);
+  float3 linear_color = renodx::color::gamma::DecodeSafe(srgb_color);
   if (FIX_POST_PROCESS == 2.f) linear_color = renodx::color::bt709::from::BT2020(linear_color);
   return renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(linear_color), RENODX_DIFFUSE_WHITE_NITS);
 }
@@ -67,9 +67,9 @@ float3 ConvertSRGBtoPQ(float3 srgb_color) {
 float3 ConditionalConvertSRGBToBT2020(float3 srgb_color) {
   if (RENODX_TONE_MAP_TYPE == 0.f || FIX_POST_PROCESS != 2.f) return srgb_color;
 
-  float3 linear_color = renodx::color::srgb::DecodeSafe(srgb_color);
+  float3 linear_color = renodx::color::gamma::DecodeSafe(srgb_color);
   linear_color = renodx::color::bt709::from::BT2020(linear_color);
-  return renodx::color::srgb::EncodeSafe(linear_color);
+  return renodx::color::gamma::EncodeSafe(linear_color);
 }
 
 float4 ConditionalConvertSRGBToBT2020(float4 srgb_color) {
