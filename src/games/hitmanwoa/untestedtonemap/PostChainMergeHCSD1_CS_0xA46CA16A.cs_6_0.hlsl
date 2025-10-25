@@ -1,7 +1,7 @@
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 cbuffer _26_28 : register(b5, space0) {
-  float4 _28_m0[12] : packoffset(c0);
+  float4 _28_m0[13] : packoffset(c0);
 };
 
 Texture2D<float4> _8 : register(t0, space0);
@@ -34,14 +34,16 @@ void comp_main() {
   float4 _116 = _9.SampleLevel(_31, float2(_91, _92), 0.0f);
   float _144 = asfloat(_19.Load(5u).x);
 
-  float3 bloomed_color = ScaleBloom(_110.rgb, _116.rgb, _28_m0[9u].x);
+  float3 color_bloomed = ScaleBloom(_110.rgb, _116.rgb, _28_m0[9u].x);
 
-  float _145 = (bloomed_color.r * _28_m0[7u].x) * _144;
-  float _146 = (bloomed_color.g * _28_m0[7u].y) * _144;
-  float _147 = (bloomed_color.b * _28_m0[7u].z) * _144;
+  // bloom
+  float _145 = (color_bloomed.r * _28_m0[7u].x) * _144;
+  float _146 = (color_bloomed.g * _28_m0[7u].y) * _144;
+  float _147 = (color_bloomed.b * _28_m0[7u].z) * _144;
+
+  float3 color_combined = float3(_145, _146, _147);
 
 #if 1
-  float3 color_combined = float3(_145, _146, _147);
   float3 tonemapped = ApplyCustomSimpleReinhardToneMap(color_combined) * _28_m0[10u].y;
   float _159 = tonemapped.r, _160 = tonemapped.g, _161 = tonemapped.b;
 #else
@@ -59,16 +61,16 @@ void comp_main() {
 
 #if 1
   float3 lut_input_preoffset = float3(
-      (((((((_28_m0[5u].x - 0.5f) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.x - _159)) + _159)) * (((_28_m0[2u].x - 1.0f) * _227) + 1.0f)) + (_28_m0[4u].x * _84),
-      (((((((_28_m0[5u].y - 0.5f) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.y - _160)) + _160)) * (((_28_m0[2u].y - 1.0f) * _227) + 1.0f)) + (_28_m0[4u].y * _84),
-      (((((((_28_m0[5u].z - 0.5f) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.z - _161)) + _161)) * (((_28_m0[2u].z - 1.0f) * _227) + 1.0f)) + (_28_m0[4u].z * _84));
+      ((((((((_28_m0[5u].x - 0.5f) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.x - _159)) + _159)) * (((_28_m0[2u].x - 1.0f) * _227) + 1.0f)) + (_28_m0[4u].x * _84)),
+      ((((((((_28_m0[5u].y - 0.5f) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.y - _160)) + _160)) * (((_28_m0[2u].y - 1.0f) * _227) + 1.0f)) + (_28_m0[4u].y * _84)),
+      ((((((((_28_m0[5u].z - 0.5f) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.z - _161)) + _161)) * (((_28_m0[2u].z - 1.0f) * _227) + 1.0f)) + (_28_m0[4u].z * _84)));
 
-  float3 final_color = ToneMapMaxCLLAndSampleGamma2LUT16AndFinalizeOutput(lut_input_preoffset, _12, _31, _28_m0[8u].y, _63, _64, _28_m0[11u].x);
-  _22[uint2(gl_GlobalInvocationID.xy)] = float4(final_color, 0.f);
+  float3 final_color = ToneMapMaxCLLAndSampleLinearLUT16AndFinalizeOutput(lut_input_preoffset, _12, _31, _28_m0[8u].y, _63, _64, _28_m0[11u].x);
+  _22[uint2(gl_GlobalInvocationID.xy)] = float4(final_color, 0.0f);
 #else
-  float4 _280 = _12.SampleLevel(_31, float3((sqrt(clamp((((((((_28_m0[5u].x + (-0.5f)) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.x - _159)) + _159)) * (((_28_m0[2u].x + (-1.0f)) * _227) + 1.0f)) + (_28_m0[4u].x * _84), 0.0f, 1.0f)) * 0.9375f) + 0.03125f, (sqrt(clamp((((((((_28_m0[5u].y + (-0.5f)) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.y - _160)) + _160)) * (((_28_m0[2u].y + (-1.0f)) * _227) + 1.0f)) + (_28_m0[4u].y * _84), 0.0f, 1.0f)) * 0.9375f) + 0.03125f, (sqrt(clamp((((((((_28_m0[5u].z + (-0.5f)) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.z - _161)) + _161)) * (((_28_m0[2u].z + (-1.0f)) * _227) + 1.0f)) + (_28_m0[4u].z * _84), 0.0f, 1.0f)) * 0.9375f) + 0.03125f), 0.0f);
-  float _296 = (frac(sin(dot(float2(_63, _64), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) * 0.0039215688593685626983642578125f) + (-0.00196078442968428134918212890625f);
-  _22[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = float4((_296 + _280.x) * _28_m0[11u].x, (_296 + _280.y) * _28_m0[11u].x, (_296 + _280.z) * _28_m0[11u].x, 0.0f);
+  float4 _277 = _12.SampleLevel(_31, float3((clamp((((((((_28_m0[5u].x + (-0.5f)) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.x - _159)) + _159)) * (((_28_m0[2u].x + (-1.0f)) * _227) + 1.0f)) + (_28_m0[4u].x * _84), 0.0f, 1.0f) * 0.9375f) + 0.03125f, (clamp((((((((_28_m0[5u].y + (-0.5f)) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.y - _160)) + _160)) * (((_28_m0[2u].y + (-1.0f)) * _227) + 1.0f)) + (_28_m0[4u].y * _84), 0.0f, 1.0f) * 0.9375f) + 0.03125f, (clamp((((((((_28_m0[5u].z + (-0.5f)) * _83) + 0.5f) * 2.0f) * _180) * ((_215 * (_208.z - _161)) + _161)) * (((_28_m0[2u].z + (-1.0f)) * _227) + 1.0f)) + (_28_m0[4u].z * _84), 0.0f, 1.0f) * 0.9375f) + 0.03125f), 0.0f);
+  float _293 = (frac(sin(dot(float2(_63, _64), float2(12.98980045318603515625f, 78.233001708984375f))) * 43758.546875f) * 0.0039215688593685626983642578125f) + (-0.00196078442968428134918212890625f);
+  _22[uint2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y)] = float4((_293 + _277.x) * _28_m0[11u].x, (_293 + _277.y) * _28_m0[11u].x, (_293 + _277.z) * _28_m0[11u].x, 0.0f);
 #endif
 }
 

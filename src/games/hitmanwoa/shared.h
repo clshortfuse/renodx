@@ -1,6 +1,9 @@
 #ifndef SRC_HITMANWOA_SHARED_H_
 #define SRC_HITMANWOA_SHARED_H_
 
+#define FORCE_HDR10          1  // fixes NVAPI washed out issue
+#define ENABLE_SHADER_TOGGLE 1
+
 #define RENODX_TONE_MAP_TYPE                 1.f
 #define RENODX_PEAK_WHITE_NITS               400.f
 #define RENODX_DIFFUSE_WHITE_NITS            100.f
@@ -23,6 +26,10 @@
 #define CUSTOM_LUT_TETRAHEDRAL               1.f
 #define CUSTOM_SHARPENING                    2.f
 #define CUSTOM_DITHERING                     1.f
+
+#define RENODX_TONE_MAP_SHOULDER_START 0.5f
+#define LUT_SCALING_MAX                ((RENODX_GAMMA_CORRECTION == 0.f) ? 1.f : 0.71f)
+#define BLOOM_SCALING_MAX              0.33f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -55,8 +62,6 @@ struct ShaderInjectData {
 // cbuffer shader_injection : register(b13, space50) {
 //   ShaderInjectData shader_injection : packoffset(c0);
 // }
-
-#define RENODX_TONE_MAP_SHOULDER_START 0.39f
 
 // #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 // #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
