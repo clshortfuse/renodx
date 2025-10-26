@@ -21,7 +21,7 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-__ALL_CUSTOM_SHADERS
+__ALL_CUSTOM_SHADERS,
 };
 
 ShaderInjectData shader_injection;
@@ -48,14 +48,13 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES(Doesn't Work)", "RenoDRT"},
+        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
         .is_visible = []() { return current_settings_mode == 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
         .default_value = 1000.f,
-        .can_reset = false,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
@@ -71,16 +70,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapUINits",
-        .binding = &shader_injection.graphics_white_nits,
-        .default_value = 203.f,
-        .label = "UI Brightness",
-        .section = "Tone Mapping",
-        .tooltip = "Changing the UI brightness slightly affects the gamma",
-        .min = 203.f,
-        .max = 203.f,
     },
     new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
@@ -102,17 +91,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .is_visible = []() { return current_settings_mode == 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapWorkingColorSpace",
-        .binding = &shader_injection.tone_map_working_color_space,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Working Color Space",
-        .section = "Tone Mapping",
-        .labels = {"BT709", "BT2020", "AP1"},
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .is_visible = []() { return current_settings_mode == 1; },
     },
@@ -345,6 +323,19 @@ void OnPresetOff() {
    renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
 }
 
+bool fired_on_init_swapchain = false;
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (fired_on_init_swapchain) return;
+
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  if (peak.has_value()) {
+    settings[2]->default_value = roundf(peak.value());
+  } else {
+    settings[2]->default_value = 1000.f;
+  }
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -354,43 +345,33 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-      renodx::mods::shader::force_pipeline_cloning = true;
-      renodx::mods::shader::expected_constant_buffer_space = 50;
-      renodx::mods::shader::expected_constant_buffer_index = 13;
-      renodx::mods::shader::allow_multiple_push_constants = true;
-      renodx::mods::shader::constant_buffer_offset = 50 * 4;
-
-      renodx::mods::swapchain::expected_constant_buffer_index = 13;
-      renodx::mods::swapchain::expected_constant_buffer_space = 50;
       renodx::mods::swapchain::force_borderless = false;
       renodx::mods::swapchain::prevent_full_screen = false;
-      renodx::mods::swapchain::force_screen_tearing = false;
       renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::force_screen_tearing = false;
       renodx::mods::swapchain::set_color_space = false;
       renodx::mods::swapchain::use_device_proxy = true;
+      renodx::mods::shader::constant_buffer_offset = 50 * 4;
+      renodx::mods::shader::expected_constant_buffer_space = 50;
+      renodx::mods::shader::expected_constant_buffer_index = 13;
+      renodx::mods::swapchain::expected_constant_buffer_index = 13;
+      renodx::mods::swapchain::expected_constant_buffer_space = 50;
       renodx::utils::random::binds.push_back(&shader_injection.custom_random);
-      renodx::mods::swapchain::ignored_window_class_names = {
-            "SplashScreenClass",
-        };
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader_dx11;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader_dx11;
 
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::b8g8r8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-      });
-            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r16g16b16a16_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .ignore_size = true,
           .use_resource_view_cloning = true,
       });
 
-
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;
   }
   renodx::utils::random::Use(fdw_reason);
