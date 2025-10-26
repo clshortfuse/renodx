@@ -36,7 +36,7 @@ void main(
   // r0.xyz = log2(r0.xyz);
   o0.w = r0.w;
   // r0.xyz = TypeConsts[1].xxx * r0.xyz;
-  //  o0.xyz = exp2(r0.xyz);
-  o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
+  // o0.xyz = exp2(r0.xyz);
+  o0.rgb = r0.rgb;
   return;
 }
