@@ -292,7 +292,7 @@ void main(
   float _837 = ((mad(-0.20366770029067993f, _820, mad(1.2036634683609009f, _819, (_818 * -2.57161445915699e-07f))) - _819) * BlueCorrection) + _819;
   float _838 = ((mad(0.9999996423721313f, _820, mad(2.0954757928848267e-08f, _819, (_818 * 1.862645149230957e-08f))) - _820) * BlueCorrection) + _820;
 
-  SetTonemappedAP1(_818, _819, _820);
+  SetTonemappedAP1(_836, _837, _838);
 
   float _860 = max(0.0f, mad((WorkingColorSpace.FromAP1[0].z), _838, mad((WorkingColorSpace.FromAP1[0].y), _837, ((WorkingColorSpace.FromAP1[0].x) * _836))));
   float _861 = max(0.0f, mad((WorkingColorSpace.FromAP1[1].z), _838, mad((WorkingColorSpace.FromAP1[1].y), _837, ((WorkingColorSpace.FromAP1[1].x) * _836))));
