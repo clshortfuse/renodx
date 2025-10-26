@@ -1,6 +1,4 @@
-#include "./shared.h"
-
-// Section
+#include "./common.hlsl"
 
 // ---- Created with 3Dmigoto v1.4.1 on Mon Apr 28 11:33:21 2025
 
@@ -54,7 +52,8 @@ void main(
   r0.xyz = r2.xyz * r0.xyz;
   r0.xyz = r0.xyz * Consts[2].xxx + r1.xyz;
 
-  float3 untonemapped = r0.rgb;
+  float3 hdr_color = r0.rgb;
+  float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
 
   r0.xyz = max(float3(1.00000001e-07,1.00000001e-07,1.00000001e-07), r0.xyz);
   r1.xyz = r0.xyz * float3(0.150000006,0.150000006,0.150000006) + float3(0.0500000007,0.0500000007,0.0500000007);
@@ -72,27 +71,16 @@ void main(
   r1.xyz = r1.xyz + -r0.xyz;
   r0.w = 1 + -Consts[1].w;
   r0.xyz = r0.www * r1.xyz + r0.xyz;
-  r1.xy = v1.xy * float2(16,8) + Consts[3].zw;
-  r0.w = FilmGrainTexture.Sample(FilmGrainTexture_s, r1.xy).x;
-  r0.w = -0.5 + r0.w;
-  r0.xyz = r0.www * float3(0.0179999992,0.0179999992,0.0179999992) + r0.xyz;
+  //r1.xy = v1.xy * float2(16,8) + Consts[3].zw;
+  //r0.w = FilmGrainTexture.Sample(FilmGrainTexture_s, r1.xy).x;
+  //r0.w = -0.5 + r0.w;
+  //r0.xyz = r0.www * float3(0.0179999992,0.0179999992,0.0179999992) + r0.xyz;
   r0.xyz = r0.xyz * r0.xyz;
   r0.w = dot(r0.xyz, float3(0.298999995,0.587000012,0.114));
   o0.xyz = r0.xyz;
   o0.w = sqrt(r0.w);
 
-  if (RENODX_TONE_MAP_TYPE == 0) {
-    o0.rgb = saturate(o0.rgb);
-  } else {
-    o0.rgb = renodx::draw::ToneMapPass(untonemapped, o0.rgb);
-  }
-  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
-    o0.rgb = renodx::effects::ApplyFilmGrain(
-        o0.rgb,
-        v1.xy,
-        CUSTOM_RANDOM,
-        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
-        1.f);
-  }
+  float3 sdr_color = o0.rgb;
+  o0.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, v1);
   return;
 }
