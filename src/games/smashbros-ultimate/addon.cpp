@@ -18,12 +18,11 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
-
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-  BypassShaderEntry(0x574C469C),
-  __ALL_CUSTOM_SHADERS};
+    // BypassShaderEntry(0x574C469C),
+    __ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
@@ -41,6 +40,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::Create
     {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
     {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
     {"ColorGradeFlare", &shader_injection.tone_map_flare},
+    {"FxBloom", &shader_injection.custom_bloom},
 });
 
 void OnPresetOff() {
