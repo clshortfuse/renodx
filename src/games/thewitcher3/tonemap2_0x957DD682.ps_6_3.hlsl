@@ -32,6 +32,7 @@ float4 main(
   float3 tonemapped_bt709_lum_1 = renodx::color::correct::Luminance(untonemapped_1, y_in_1, y_out_1);
 
   float out_mid_gray_1 = Uncharted2Tonemap1(0.18);
+  //float max_value_1 = Uncharted2Tonemap1(100.f);
 
   _107 = CustomPixelConsts_272.x * 11.199999809265137f;
   _116 = CustomPixelConsts_272.x / (exp2(log2(max(min(max(_8.x, CustomPixelConsts_144.y), CustomPixelConsts_144.z), 9.999999747378752e-05f) / _107) * CustomPixelConsts_272.z) * _107);
@@ -48,11 +49,13 @@ float4 main(
   float3 tonemapped_bt709_lum_2 = renodx::color::correct::Luminance(untonemapped_2, y_in_2, y_out_2);
 
   float out_mid_gray_2 = Uncharted2Tonemap2(0.18);
+  //float max_value_2 = Uncharted2Tonemap2(100.f);
 
   float3 untonemapped = lerp(untonemapped_1, untonemapped_2, CustomPixelConsts_208.x);
   float3 tonemapped_bt709_ch = lerp(tonemapped_bt709_ch_1, tonemapped_bt709_ch_2, CustomPixelConsts_208.x);
   float3 tonemapped_bt709_lum = lerp(tonemapped_bt709_lum_1, tonemapped_bt709_lum_2, CustomPixelConsts_208.x);
   float out_mid_gray = lerp(out_mid_gray_1, out_mid_gray_2, CustomPixelConsts_208.x);
+  //float max_value = lerp(max_value_1, max_value_2, CustomPixelConsts_208.x);
 
   SV_Target.rgb = CustomUpgradeToneMap(untonemapped, tonemapped_bt709_ch, tonemapped_bt709_lum, out_mid_gray);
   SV_Target.w = 1.0f;

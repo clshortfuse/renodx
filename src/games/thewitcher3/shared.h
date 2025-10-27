@@ -16,7 +16,6 @@
 #define RENODX_TONE_MAP_BLOWOUT                shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                  shader_injection.tone_map_flare
 // #define RENODX_TONE_MAP_HUE_CORRECTION         shader_injection.tone_map_hue_correction
-#define RENODX_TONE_MAP_HUE_SHIFT              0.f
 // #define RENODX_TONE_MAP_HUE_PROCESSOR          shader_injection.tone_map_hue_processor
 //#define RENODX_TONE_MAP_PER_CHANNEL            shader_injection.tone_map_per_channel
 //#define RENODX_COLOR_GRADE_STRENGTH            shader_injection.tone_map_color_grade_strength
@@ -81,7 +80,7 @@ struct ShaderInjectData {
   float tone_map_blowout;
   float tone_map_flare;
   // float tone_map_hue_correction;
-  // float tone_map_hue_shift;
+  //float tone_map_hue_shift;
   //float tone_map_hue_processor;
   float tone_map_per_channel;
   float tone_map_color_grade_strength;

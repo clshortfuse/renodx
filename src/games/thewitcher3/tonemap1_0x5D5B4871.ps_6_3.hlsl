@@ -27,6 +27,8 @@ float4 main(
 
   float out_mid_gray = Uncharted2Tonemap1(0.18f);
 
+  //float max_value = Uncharted2Tonemap1(100.f);
+
   float3 hdr_color = CustomUpgradeToneMap(untonemapped, tonemapped_bt709_ch, tonemapped_bt709_lum, out_mid_gray);
 
   SV_Target.rgb = hdr_color;
