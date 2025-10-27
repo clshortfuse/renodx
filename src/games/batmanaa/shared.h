@@ -27,7 +27,7 @@ struct ShaderInjectData {
   float custom_random;
   float custom_grain_strength;
   float custom_fog_scaling;
-  float padding2;
+  float tone_map_white_clip;
 };
 
 #ifndef __cplusplus
@@ -54,6 +54,7 @@ float4 shader_injection[5] : register(c50);
 #define CUSTOM_RANDOM                        shader_injection[4][0]
 #define CUSTOM_GRAIN_STRENGTH                shader_injection[4][1]
 #define CUSTOM_FOG_SCALING                   shader_injection[4][2]
+#define RENODX_TONE_MAP_WHITE_CLIP           shader_injection[4][3]
 
 #else
 #if ((__SHADER_TARGET_MAJOR == 5 && __SHADER_TARGET_MINOR >= 1) || __SHADER_TARGET_MAJOR >= 6)
@@ -84,6 +85,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_RANDOM                        shader_injection.custom_random
 #define CUSTOM_GRAIN_STRENGTH                shader_injection.custom_grain_strength
 #define CUSTOM_FOG_SCALING                   shader_injection.custom_fog_scaling
+#define RENODX_TONE_MAP_WHITE_CLIP           shader_injection.tone_map_white_clip
 
 #endif
 

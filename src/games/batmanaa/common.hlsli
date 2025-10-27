@@ -102,9 +102,8 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
 
   color *= config.exposure;
 
-  const float y_normalized = y / mid_gray;
-
   // contrast & flare
+  const float y_normalized = y / mid_gray;
   float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
   float exponent = config.contrast * flare;
   const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
@@ -122,28 +121,77 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   return color;
 }
 
+float3 RestoreHueAndChrominance(float3 incorrect_color, float3 reference_color, float hue_strength = 0.5, float chrominance_strength = 1.0) {
+  const float3 reference_oklab = renodx::color::oklab::from::BT709(reference_color);
+  float3 incorrect_oklab = renodx::color::oklab::from::BT709(incorrect_color);
+
+  float chrominance_current = length(incorrect_oklab.yz);
+  float chrominance_ratio = 1.0;
+
+  if (hue_strength != 0.0) {
+    const float chrominance_pre = chrominance_current;
+    incorrect_oklab.yz = lerp(incorrect_oklab.yz, reference_oklab.yz, hue_strength);
+    const float chrominancePost = length(incorrect_oklab.yz);
+    chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
+    chrominance_current = chrominancePost;
+  }
+
+  if (chrominance_strength != 0.0) {
+    const float reference_chrominance = length(reference_oklab.yz);
+    float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
+    chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_strength);
+  }
+  incorrect_oklab.yz *= chrominance_ratio;
+
+  return renodx::color::bt709::from::OkLab(incorrect_oklab);
+}
+
 float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, renodx::color::grade::Config config) {
   float3 color = tonemapped;
   if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_correction_strength != 0.f || config.blowout != 0.f) {
     float3 perceptual_new = renodx::color::oklab::from::BT709(color);
 
-    if (config.hue_correction_strength != 0.f) {
-      float3 perceptual_old = renodx::color::oklab::from::BT709(hue_reference_color);
+#if 0
+    // if (config.hue_correction_strength != 0.f) {
+    //   float3 perceptual_old = renodx::color::oklab::from::BT709(hue_reference_color);
 
-      // Save chrominance to apply black
-      float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
+    //   // Save chrominance to apply black
+    //   float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
 
-      perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, config.hue_correction_strength);
+    //   perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, config.hue_correction_strength);
 
-      float chrominance_post_adjust = distance(perceptual_new.yz, 0);
+    //   float chrominance_post_adjust = distance(perceptual_new.yz, 0);
 
-      // Apply back previous chrominance
-      perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
+    //   // Apply back previous chrominance
+    //   perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
+    // }
+
+    // if (config.dechroma != 0.f) {
+    //   perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - config.dechroma))));
+    // }
+#else
+    if (config.hue_correction_strength != 0.0 || config.dechroma != 0.0) {
+      const float3 reference_oklab = renodx::color::oklab::from::BT709(hue_reference_color);
+
+      float chrominance_current = length(perceptual_new.yz);
+      float chrominance_ratio = 1.0;
+
+      if (config.hue_correction_strength != 0.0) {
+        const float chrominance_pre = chrominance_current;
+        perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, config.hue_correction_strength);
+        const float chrominancePost = length(perceptual_new.yz);
+        chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
+        chrominance_current = chrominancePost;
+      }
+
+      if (config.dechroma != 0.0) {
+        const float reference_chrominance = length(reference_oklab.yz);
+        float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
+        chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, config.dechroma);
+      }
+      perceptual_new.yz *= chrominance_ratio;
     }
-
-    if (config.dechroma != 0.f) {
-      perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - config.dechroma))));
-    }
+#endif
 
     if (config.blowout != 0.f) {
       float percent_max = saturate(y * 100.f / 10000.f);
@@ -166,33 +214,21 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
-float3 ApplyHermiteSplinePerChannel(float3 input, float diffuse_nits, float peak_nits) {
-  float3 input_pq = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(input), diffuse_nits);
-  float target_white_pq = renodx::color::pq::Encode(peak_nits, 1.f);
-  float max_white_pq = renodx::color::pq::Encode(max(4000.f, peak_nits * 2.5f), 1.f);
-  float target_black_pq = renodx::color::pq::Encode(0.0001f, 1.f);
-  float min_black_pq = renodx::color::pq::Encode(0.f, 1.f);
-
-  float3 scaled = float3(
-      renodx::tonemap::HermiteSplineRolloff(input_pq.r, target_white_pq, max_white_pq, target_black_pq, min_black_pq),
-      renodx::tonemap::HermiteSplineRolloff(input_pq.g, target_white_pq, max_white_pq, target_black_pq, min_black_pq),
-      renodx::tonemap::HermiteSplineRolloff(input_pq.b, target_white_pq, max_white_pq, target_black_pq, min_black_pq));
-
-  float3 unpq_scaled = renodx::color::bt709::from::BT2020(renodx::color::pq::Decode(scaled, diffuse_nits));
-  return unpq_scaled;
-}
-
 float3 ApplyHermiteSplineByLuminance(float3 input, float diffuse_nits, float peak_nits) {
+  const float peak_ratio = peak_nits / diffuse_nits;
+  float white_clip = max(RENODX_TONE_MAP_WHITE_CLIP, peak_ratio * 1.5f);
+
   float y_in = renodx::color::y::from::BT709(input);
   float input_pq = renodx::color::pq::Encode(y_in, diffuse_nits);
   float target_white_pq = renodx::color::pq::Encode(peak_nits, 1.f);
-  float max_white_pq = renodx::color::pq::Encode(max(4000.f, peak_nits * 2.5f), 1.f);
+  float max_white_pq = renodx::color::pq::Encode(white_clip, diffuse_nits);
   float target_black_pq = renodx::color::pq::Encode(0.0001f, 1.f);
   float min_black_pq = renodx::color::pq::Encode(0.f, 1.f);
 
   float scaled = renodx::tonemap::HermiteSplineRolloff(input_pq, target_white_pq, max_white_pq, target_black_pq, min_black_pq);
 
   float y_out = (renodx::color::pq::Decode(scaled, diffuse_nits));
+  y_out = min(y_out, peak_ratio);
 
   float3 new_color = renodx::color::correct::Luminance(input, y_in, y_out);
 
@@ -227,6 +263,10 @@ float3 ApplyToneMap(float3 untonemapped, float2 position, bool use_grain = true)
     const float y = renodx::color::y::from::BT709(untonemapped);
 
     float3 untonemapped_graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, y, cg_config);
+    if (RENODX_TONE_MAP_HUE_SHIFT > 0.f || RENODX_TONE_MAP_BLOWOUT > 0.f) {
+      hue_correction_source = renodx::tonemap::ReinhardPiecewise(untonemapped, 4.f, 1.f);
+    }
+    untonemapped_graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(untonemapped_graded, hue_correction_source, y, cg_config);
 
     if (RENODX_TONE_MAP_TYPE == 1.f) {
       tonemapped = untonemapped_graded;
@@ -234,10 +274,6 @@ float3 ApplyToneMap(float3 untonemapped, float2 position, bool use_grain = true)
       tonemapped = ApplyHermiteSplineByLuminance(untonemapped_graded, RENODX_DIFFUSE_WHITE_NITS, RENODX_PEAK_WHITE_NITS);
     }
 
-    if (RENODX_TONE_MAP_HUE_SHIFT > 0.f) {
-      hue_correction_source = renodx::tonemap::ReinhardPiecewise(untonemapped, 4.f, 1.f);
-    }
-    tonemapped = ApplySaturationBlowoutHueCorrectionHighlightSaturation(tonemapped, hue_correction_source, y, cg_config);
   }
 
   if (use_grain) {
