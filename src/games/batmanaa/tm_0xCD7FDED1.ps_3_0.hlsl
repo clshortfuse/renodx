@@ -90,7 +90,7 @@ float4 main(PS_IN i)
 #if 0
   r0.xyz = graded + color_fog;
 #else  // scale foreground fog but not background
-  if (CUSTOM_FOG_SCALING > 0.f) {
+  if (CUSTOM_FOG_SCALING > 0.f && RENODX_TONE_MAP_TYPE != 0.f) {
     float3 original = graded + color_fog;
 
     float3 foreground = FixColorFade(graded, foregroundContribution, 1.f);
