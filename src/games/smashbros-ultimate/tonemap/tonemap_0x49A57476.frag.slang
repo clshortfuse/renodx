@@ -132,6 +132,7 @@ void main()
     float _197 = _191.z;
     float _199 = _191.w;
     vec4 _201 = texture(fp_t_tcb_8, vec2(_183, _185)).xyzw;
+    TonemapVanilla(_201);
     float _203 = _201.x;
     float _205 = _201.y;
     float _207 = _201.z;

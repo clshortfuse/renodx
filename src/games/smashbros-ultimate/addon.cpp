@@ -14,33 +14,114 @@
 
 #include "../../mods/shader.hpp"
 #include "../../templates/settings.hpp"
+#include "../../utils/date.hpp"
 #include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    // BypassShaderEntry(0x574C469C),
-    __ALL_CUSTOM_SHADERS};
+renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
-renodx::utils::settings::Settings settings = renodx::templates::settings::CreateDefaultSettings({
-    {"ToneMapType", &shader_injection.tone_map_type},
-    {"ToneMapPeakNits", &shader_injection.peak_white_nits},
-    {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-    {"ToneMapUINits", &shader_injection.graphics_white_nits},
-    {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
-    {"ColorGradeExposure", &shader_injection.tone_map_exposure},
-    {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
-    {"ColorGradeShadows", &shader_injection.tone_map_shadows},
-    {"ColorGradeContrast", &shader_injection.tone_map_contrast},
-    {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
-    {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
-    {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
-    {"ColorGradeFlare", &shader_injection.tone_map_flare},
-    {"FxBloom", &shader_injection.custom_bloom},
+renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
+    renodx::templates::settings::CreateDefaultSettings({
+        {"ToneMapType", &shader_injection.tone_map_type},
+        {"ToneMapPeakNits", &shader_injection.peak_white_nits},
+        {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
+        {"ToneMapUINits", &shader_injection.graphics_white_nits},
+        {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
+        {"ColorGradeExposure", &shader_injection.tone_map_exposure},
+        {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
+        {"ColorGradeShadows", &shader_injection.tone_map_shadows},
+        {"ColorGradeContrast", &shader_injection.tone_map_contrast},
+        {"ColorGradeSaturation", &shader_injection.tone_map_saturation},
+        {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
+        {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
+        {"ColorGradeFlare", &shader_injection.tone_map_flare},
+    }),
+    {
+        new renodx::utils::settings::Setting{
+            .key = "FxBloom",
+            .binding = &shader_injection.custom_bloom,
+            .default_value = 25.f,
+            .label = "Bloom Strength",
+            .section = "Color Grading",
+            .max = 100.f,
+            .parse = [](float value) { return value * 0.01f; },
+            .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "RenoDX Discord",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0x5865F2,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://discord.gg/kSTf", "EbcCpC");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "HDR Den Discord",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0x5865F2,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "Github",
+            .section = "Links",
+            .group = "button-line-1",
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "Ritsu's Ko-Fi",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0xFF5F5F,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "ShortFuse's Ko-Fi",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0xFF5F5F,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "HDR Den's Ko-Fi",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0xFF5F5F,
+            .on_change = []() {
+              renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
+            },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
+            .section = "About",
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::TEXT,
+            .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+            .section = "About",
+        },
+    },
 });
 
 void OnPresetOff() {

@@ -71,6 +71,7 @@ void main()
     float _101 = _95.z;
     float _103 = _95.w;
     vec4 _105 = texture(fp_t_tcb_8, vec2(_90, _92)).xyzw;
+    TonemapVanilla(_105);
     float _107 = _105.x;
     float _109 = _105.y;
     float _111 = _105.z;

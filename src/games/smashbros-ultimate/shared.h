@@ -48,7 +48,6 @@ struct ShaderInjectData {
 #define RENODX_GAMMA_CORRECTION                       shader_injection.gamma_correction
 #define CUSTOM_BLOOM                                  shader_injection.custom_bloom
 #define CUSTOM_DOF                                    shader_injection.custom_dof
-#define CUSTOM_BLOOM_MASK                             float4(0.f, 0.f, 0.f, 0.f)
 #define RENODX_INTERMEDIATE_ENCODING                  renodx::draw::ENCODING_NONE
 #define RENODX_SWAP_CHAIN_DECODING                    renodx::draw::ENCODING_NONE
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION            RENODX_GAMMA_CORRECTION
