@@ -9,7 +9,7 @@ struct ShaderInjectData {
   float diffuse_white_nits;
   float graphics_white_nits;
   float gamma_correction;
-  float tone_map_hue_correction;
+  float tone_map_hue_shift;
   float tone_map_white_clip;
 
   float tone_map_exposure;
@@ -32,13 +32,13 @@ cbuffer cb13 : register(b13) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
-#define RENODX_TONE_MAP_TYPE           shader_injection.tone_map_type
-#define RENODX_PEAK_WHITE_NITS         shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS      shader_injection.diffuse_white_nits
-#define RENODX_GRAPHICS_WHITE_NITS     shader_injection.graphics_white_nits
-#define RENODX_GAMMA_CORRECTION        shader_injection.gamma_correction
-#define RENODX_TONE_MAP_HUE_CORRECTION shader_injection.tone_map_hue_correction
-#define RENODX_TONE_MAP_WHITE_CLIP     shader_injection.tone_map_white_clip
+#define RENODX_TONE_MAP_TYPE       shader_injection.tone_map_type
+#define RENODX_PEAK_WHITE_NITS     shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS  shader_injection.diffuse_white_nits
+#define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
+#define RENODX_GAMMA_CORRECTION    shader_injection.gamma_correction
+#define RENODX_TONE_MAP_HUE_SHIFT  shader_injection.tone_map_hue_shift
+#define RENODX_TONE_MAP_WHITE_CLIP shader_injection.tone_map_white_clip
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
