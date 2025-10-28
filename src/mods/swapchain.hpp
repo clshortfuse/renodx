@@ -2318,7 +2318,7 @@ inline bool OnCreateResourceView(
   if (desc.type == reshade::api::resource_view_type::unknown) {
     resource_info = utils::resource::GetResourceInfo(resource);
     if (resource_info == nullptr) return false;
-    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, resource_info);
+    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, usage_type, resource_info);
   }
   switch (current_desc.type) {
     case reshade::api::resource_view_type::texture_1d:
@@ -2368,7 +2368,7 @@ inline bool OnCreateResourceView(
   }
 
   if (current_desc.format == reshade::api::format::unknown) {
-    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, resource_info);
+    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, usage_type, resource_info);
     if (current_desc.format == reshade::api::format::unknown) {
       std::stringstream s;
       s << "mods::swapchain::OnCreateResourceView(Unknown format for resource view: ";
