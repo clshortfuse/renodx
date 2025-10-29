@@ -1,14 +1,49 @@
 #include "./shared.h"
 
-// Reinhard piecewise shoulder driven by the channel max to compress into output_max.
-float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.375f, float output_max = 1.f, float channel_max = 100.f) {
-  float peak = renodx::math::Max(color.r, color.g, color.b);
-
+float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float channel_max = 100.f) {
+  float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
   float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, channel_max, output_max, rolloff_start);
   float scale = renodx::math::DivideSafe(mapped_peak, peak, 0.f);
-  float3 tonemapped = color * scale;
 
-  return tonemapped;
+  return scale;
+}
+
+float3 Sample(Texture3D<float4> lut_texture, renodx::lut::Config lut_config, float3 color_input) {
+  float3 lutInputColor = renodx::lut::ConvertInput(color_input, lut_config);
+  float3 lutOutputColor = renodx::lut::SampleColor(lutInputColor, lut_config, lut_texture);
+  float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);
+  [branch]
+  if (lut_config.scaling != 0.f) {
+    float3 lutBlack = renodx::lut::SampleColor(renodx::lut::ConvertInput(0, lut_config), lut_config, lut_texture);
+    float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(0.03f, lut_config), lut_config, lut_texture);  // manually chosen value
+    float3 lutWhite = 1.f;
+    float3 unclamped_gamma = renodx::lut::Unclamp(
+        renodx::lut::GammaOutput(lutOutputColor, lut_config),
+        renodx::lut::GammaOutput(lutBlack, lut_config),
+        renodx::lut::GammaOutput(lutMid, lut_config),
+        renodx::lut::GammaOutput(lutWhite, lut_config),
+        renodx::lut::GammaInput(color_input, lutInputColor, lut_config));
+    float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
+    float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
+    color_output = recolored;
+  } else {
+  }
+
+  return lerp(color_input, color_output, lut_config.strength);
+}
+
+renodx::lut::Config CreateLUTConfig(SamplerState lut_sampler) {
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.lut_sampler = lut_sampler;
+  lut_config.strength = RENODX_COLOR_GRADE_STRENGTH;
+  lut_config.scaling = RENODX_COLOR_GRADE_SCALING;
+  lut_config.type_input = renodx::lut::config::type::GAMMA_2_2;
+  lut_config.type_output = renodx::lut::config::type::GAMMA_2_2;
+  lut_config.size = 16u;
+  lut_config.tetrahedral = true;
+  lut_config.max_channel = 0.f;
+  lut_config.gamut_compress = 0.f;
+  return lut_config;
 }
 
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
@@ -106,34 +141,6 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
-// float3 ApplyToneMap(float3 color) {
-//   if (RENODX_TONE_MAP_TYPE == 0.f) return color;
-
-//   float3 color_ungraded = color;
-//   renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
-//   cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;
-//   cg_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
-//   cg_config.shadows = RENODX_TONE_MAP_SHADOWS;
-//   cg_config.contrast = RENODX_TONE_MAP_CONTRAST;
-//   cg_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
-//   cg_config.saturation = RENODX_TONE_MAP_SATURATION;
-//   cg_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
-//   cg_config.hue_correction_strength = RENODX_TONE_MAP_HUE_CORRECTION;
-//   cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
-
-//   float y = renodx::color::y::from::BT709(color);
-//   color = ApplyExposureContrastFlareHighlightsShadowsByLuminance(color, y, cg_config);
-
-//   if (RENODX_TONE_MAP_TYPE == 2.f) {
-//     float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-//     color = renodx::tonemap::ReinhardPiecewiseExtended(color, RENODX_TONE_MAP_WHITE_CLIP, peak_ratio, min(peak_ratio * 0.5f, 1.f));
-//   }
-
-//   color = ApplySaturationBlowoutHueCorrectionHighlightSaturation(color, color_ungraded, y, cg_config);
-
-//   return color;
-// }
-
 float3 ApplyHermiteSplineByLuminance(float3 input, float diffuse_nits, float peak_nits) {
   const float peak_ratio = peak_nits / diffuse_nits;
   float white_clip = max(RENODX_TONE_MAP_WHITE_CLIP, peak_ratio * 1.5f);
@@ -197,7 +204,7 @@ float3 ApplyToneMap(float3 untonemapped) {
 }
 
 float3 ApplyFilmGrain(float3 color, float2 position) {
-  if (CUSTOM_GRAIN_STRENGTH > 0.f) {
+  if (CUSTOM_GRAIN_STRENGTH > 0.f && CUSTOM_GRAIN_TYPE != 0.f) {
     color = renodx::effects::ApplyFilmGrain(
         color,
         position,
