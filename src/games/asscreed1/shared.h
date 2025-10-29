@@ -21,9 +21,11 @@ struct ShaderInjectData {
   float tone_map_blowout;
   float tone_map_flare;
   float scene_grade_strength;
+  float color_grade_scaling;
 
   float custom_bloom;
   float custom_random;
+  float custom_grain_type;
   float custom_grain_strength;
 };
 
@@ -49,9 +51,11 @@ cbuffer cb13 : register(b13) {
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.scene_grade_strength
+#define RENODX_COLOR_GRADE_SCALING           shader_injection.color_grade_scaling
 
 #define CUSTOM_BLOOM          shader_injection.custom_bloom
 #define CUSTOM_RANDOM         shader_injection.custom_random
+#define CUSTOM_GRAIN_TYPE     shader_injection.custom_grain_type
 #define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
 
 #include "../../shaders/renodx.hlsl"

@@ -15,11 +15,9 @@ void main(
   r0.xyzw = texture0.Sample(s0_s, v2.xy).xyzw;
   o0.xyzw = v1.xyzw * r0.xyzw;
 
-#if 0
-  o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb);
-  o0.rgb *= 20.f;
-  o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb);
-#endif
+  // clamp UI
+  o0.rgb = max(0, o0.rgb);
+  o0.w = saturate(o0.w);
 
   return;
 }
