@@ -1,8 +1,8 @@
 // taken from PostChainMerge2_CS_0x0B174697.cs_6_0
-#include "../common.hlsl"
+#include "../common.hlsli"
 
 cbuffer _24_26 : register(b5, space0) {
-  float4 _26_m0[12] : packoffset(c0);
+  float4 _26_m0[13] : packoffset(c0);
 };
 
 Texture2D<float4> _8 : register(t0, space0);
