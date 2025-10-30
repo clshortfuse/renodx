@@ -154,7 +154,7 @@ void main(
   o0.xyz = exp2(r0.xyz);
   o0.w = 1;
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);  // Decode here if necessary, idk how your LUT output is encoded
+    o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);  
     o0.xyz = renodx::draw::ToneMapPass(linear_untonemapped, o0.xyz);
     o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   } else {

@@ -43,7 +43,7 @@ Texture2D<float4> base_texture_1 : register(t2);
 // applies depth fade, and writes both colour and emissive targets.
 void main(
   float4 v0 : SV_POSITION0,
-  float4 v1 : POSITION0,
+  float4 v1 : TEXCOORD7,
   float3 v2 : POSITION1,
   float4 v3 : COLOR0,
   float4 v4 : TEXCOORD0,

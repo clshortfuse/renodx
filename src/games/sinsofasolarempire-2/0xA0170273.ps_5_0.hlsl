@@ -47,7 +47,7 @@ Texture2D<float4> noise_texture : register(t3);
 // applies curvature-based falloff, depth fade, and emits emissive contribution.
 void main(
   float4 v0 : SV_POSITION0,
-  float4 v1 : POSITION0,
+  float4 v1 : TEXCOORD7,
   float3 v2 : POSITION1,
   float4 v3 : COLOR0,
   float4 v4 : COLOR1,

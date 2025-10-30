@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <dxgiformat.h>
-#include <include/reshade_api_format.hpp>
+
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -19,6 +18,10 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 #include "../../utils/random.hpp"
+#include "../../utils/date.hpp"
+#include <dxgiformat.h>
+#include <include/reshade_api_format.hpp>
+
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -369,6 +372,41 @@ renodx::utils::settings::Settings settings = {
         .label = "Grain Strength",
         .section = "Effects",
         .parse = [](float value) { return value * 0.01f; },
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Discord",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "More Mods",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x2B3137,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://github.com/", "clshortfuse/renodx/wiki/Mods");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Mod maintained by Forge"),
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("Many thanks to ShortFuse for RenoDX"),
+        .section = "About",
     },
 };
 
