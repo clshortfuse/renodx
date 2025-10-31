@@ -22,6 +22,19 @@ void main(
 
   r0.xz = v1.xx;
   r1.xyzw = cb0[2].yyyy * float4(1.38461494, 3.23076892, -0.615384996, -2.76923108) + v1.yyyy;
+
+  if (CUSTOM_BLUR_FIX == 1.f) {
+    // Custom: Fix offset by averaging
+    r1.xyzw -= cb0[2].y * (1.38461494 + 3.23076892 + -0.615384996 + -2.76923108) / 4.0;
+  } else if (CUSTOM_BLUR_FIX == 2.f) {
+    // https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
+    // GaussianOffset(3, 4, 220, 066);  // 3.230769230769231
+    // GaussianOffset(1, 2, 792, 495);  // 1.3846153846153846
+    // GaussianOffset(2, 4, 792, 495);  // 2.769230769230769
+    // GaussianOffset(1, 0, 792, 495);  // 0.615384996
+    r1.xyzw = cb0[2].yyyy * float4(1.38461494, 3.23076892, -3.23076892, -1.38461494) + v1.yyyy;
+  }
+
   r0.yw = r1.xz;
   r2.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
   r0.xyzw = t0.Sample(s0_s, r0.zw).xyzw;
