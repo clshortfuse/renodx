@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "./composite.hlsl"
 
 Texture2D<float4> UITexture : register(t0);
 
@@ -27,8 +27,9 @@ float4 main(
   float _41 = (((bool)((_17 > 0.040449999272823334f))) ? (exp2(((log2(((_17 * 0.9478672742843628f) + 0.05213269963860512f))) * 2.4000000953674316f))) : (_17 * 0.07739938050508499f));
   float _42 = (((bool)((_18 > 0.040449999272823334f))) ? (exp2(((log2(((_18 * 0.9478672742843628f) + 0.05213269963860512f))) * 2.4000000953674316f))) : (_18 * 0.07739938050508499f));
   float4 _59 = SceneTexture.Sample(SceneSampler, float2((TEXCOORD.x), (TEXCOORD.y)));
-
-  return FinalizeUEOutput(_59, _11);
+  if (HandleUICompositing(_11, _59, SV_Target, TEXCOORD.xy, SceneTexture, SceneSampler)) {
+    return SV_Target;
+  }
 
   float _69 = exp2(((log2((_59.x))) * 0.012683313339948654f));
   float _70 = exp2(((log2((_59.y))) * 0.012683313339948654f));

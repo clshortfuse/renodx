@@ -1,11 +1,37 @@
-#include "./common.hlsl"
+#include "../shared.h"
 
 cbuffer UniformBufferConstants_ViewUBO : register(b0, space0)
 {
     float4 UniformBufferConstants_View_m0[339] : packoffset(c0);
 };
 
-cbuffer UniformBufferConstants_DeferredLightUniformsUBO : register(b1, space0)
+/*
+DeferredLightUniforms_ShadowMapChannelMask 0.00, 0.00, 0.00, 0.00 0 float4 
+DeferredLightUniforms_DistanceFadeMAD 0.00, 0.00 16 float2
+DeferredLightUniforms_ContactShadowLength 0.00 24 float
+DeferredLightUniforms_ContactShadowCastingIntensity 1.00 28 float
+DeferredLightUniforms_ContactShadowNonCastingIntensity 0.00 32 float
+DeferredLightUniforms_VolumetricScatteringIntensity 0.00 36 float
+DeferredLightUniforms_ShadowedBits 0 40 int
+DeferredLightUniforms_LightingChannelMask 2 44 int
+DeferredLightUniforms_TranslatedWorldPosition 640.25159, -518.99756, 159.70648 48 float3
+DeferredLightUniforms_InvRadius 0.00033 60 float
+DeferredLightUniforms_Color 5268.51563, 6912.37305, 8822.00293 64 float3
+DeferredLightUniforms_FalloffExponent 2.00 76 float
+DeferredLightUniforms_Direction 0.46985, -0.8138, 0.34202 80 float3
+DeferredLightUniforms_SpecularScale 1.00 92 float
+DeferredLightUniforms_Tangent - 0.17101, 0.2962, 0.93969 96 float3
+DeferredLightUniforms_SourceRadius 0.00 108 float
+DeferredLightUniforms_SpotAngles 0.17365, 3.06418 112 float2
+DeferredLightUniforms_SoftSourceRadius 0.00 120 float
+DeferredLightUniforms_SourceLength 0.00 124 float
+DeferredLightUniforms_RectLightBarnCosAngle 0.00 128 float
+DeferredLightUniforms_RectLightBarnLength - 2.00 132 float
+DeferredLightUniforms_RectLightAtlasUVOffset 0.00, 0.00 136 float2
+DeferredLightUniforms_RectLightAtlasUVScale 0.00, 0.00 144 float2
+DeferredLightUniforms_RectLightAtlasMaxLevel 32.00 152 float
+DeferredLightUniforms_IESAtlasIndex - 1.00 156 float
+*/                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    cbuffer UniformBufferConstants_DeferredLightUniformsUBO : register(b1, space0)
 {
     float4 UniformBufferConstants_DeferredLightUniforms_m0[10] : packoffset(c0);
 };
@@ -292,6 +318,10 @@ void frag_main()
                 _520 = UniformBufferConstants_View_m0[285u].x * UniformBufferConstants_DeferredLightUniforms_m0[4u].x;
                 _521 = UniformBufferConstants_View_m0[285u].y * UniformBufferConstants_DeferredLightUniforms_m0[4u].y;
                 _522 = UniformBufferConstants_View_m0[285u].z * UniformBufferConstants_DeferredLightUniforms_m0[4u].z;
+                float3 temp = float3(_520, _521, _522) * CUSTOM_HERO_LIGHT_STRENGTH;
+                _520 = temp.r;
+                _521 = temp.g;
+                _522 = temp.b;
             }
             else
             {
@@ -2162,17 +2192,12 @@ void frag_main()
         _368 = frontier_phi_12_13_ladder_1;
         _370 = frontier_phi_12_13_ladder_2;
     }
-    SV_Target.x = UniformBufferConstants_View_m0[136u].y * _364;
-    SV_Target.y = UniformBufferConstants_View_m0[136u].y * _366;
-    SV_Target.z = UniformBufferConstants_View_m0[136u].y * _368;
-    SV_Target.w = UniformBufferConstants_View_m0[136u].y * _370;
-    SV_Target *= injectedData.heroLightStrength;
-    /* SV_Target.x = _364;
-    SV_Target.y = _366;
-    SV_Target.z =  _368;
-    SV_Target.w = _370;
-
-    SV_Target = float4(UniformBufferConstants_View_m0[136u].y, UniformBufferConstants_View_m0[136u].y, UniformBufferConstants_View_m0[136u].y, UniformBufferConstants_View_m0[136u].y); */
+    float preExposure = UniformBufferConstants_View_m0[136u].y;
+    preExposure *= CUSTOM_LIGHTS_STRENGTH;
+    SV_Target.x = preExposure * _364;
+    SV_Target.y = preExposure * _366;
+    SV_Target.z = preExposure * _368;
+    SV_Target.w = preExposure * _370;
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
