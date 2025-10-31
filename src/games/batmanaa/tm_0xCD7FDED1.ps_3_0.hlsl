@@ -65,7 +65,7 @@ float4 main(PS_IN i)
   r0.yzw = r2.xyz * r0.w + GammaOverlayColor.xyz;
   r0.xyz = r0.x + r0.yzw;
 
-  r0.xyz = lerp(input, r0.xyz, RENODX_COLOR_GRADE_STRENGTH);
+  r0.xyz = lerp(max(0, input), r0.xyz, RENODX_COLOR_GRADE_STRENGTH);
   float3 graded = r0.rgb;
 
   r2.x = 1 / AtmosphericTransitionSettings.y;
