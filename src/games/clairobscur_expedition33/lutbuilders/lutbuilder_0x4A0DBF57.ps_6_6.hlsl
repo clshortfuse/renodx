@@ -313,9 +313,9 @@ float4 main(
 
   // SetTonemappedAP1(_898, _899, _900);
 
-  float _913 = (max(0.0f, mad((WorkingColorSpace.FromAP1[0].z), _900, mad((WorkingColorSpace.FromAP1[0].y), _899, ((WorkingColorSpace.FromAP1[0].x) * _898)))));
-  float _914 = (max(0.0f, mad((WorkingColorSpace.FromAP1[1].z), _900, mad((WorkingColorSpace.FromAP1[1].y), _899, ((WorkingColorSpace.FromAP1[1].x) * _898)))));
-  float _915 = (max(0.0f, mad((WorkingColorSpace.FromAP1[2].z), _900, mad((WorkingColorSpace.FromAP1[2].y), _899, ((WorkingColorSpace.FromAP1[2].x) * _898)))));
+  float _913 = mad((WorkingColorSpace.FromAP1[0].z), _900, mad((WorkingColorSpace.FromAP1[0].y), _899, ((WorkingColorSpace.FromAP1[0].x) * _898)));
+  float _914 = mad((WorkingColorSpace.FromAP1[1].z), _900, mad((WorkingColorSpace.FromAP1[1].y), _899, ((WorkingColorSpace.FromAP1[1].x) * _898)));
+  float _915 = mad((WorkingColorSpace.FromAP1[2].z), _900, mad((WorkingColorSpace.FromAP1[2].y), _899, ((WorkingColorSpace.FromAP1[2].x) * _898)));
 
   /* if (_913 < 0.0031306699384003878f) {
     _926 = (_913 * 12.920000076293945f);

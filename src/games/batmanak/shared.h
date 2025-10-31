@@ -30,6 +30,13 @@
 #define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain_strength
 #define CUSTOM_HAS_DRAWN_MENU                shader_injection.custom_has_drawn_menu
 
+#define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1.f
+#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.f
+#define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP        20.f
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {

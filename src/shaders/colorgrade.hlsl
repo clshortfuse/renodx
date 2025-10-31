@@ -6,7 +6,11 @@
 #include "./math.hlsl"
 
 #ifndef RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION
-#define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION 1
+#define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION 3
+#endif
+
+#ifndef RENODX_COLOR_GRADE_SHADOWS_VERSION
+#define RENODX_COLOR_GRADE_SHADOWS_VERSION 3
 #endif
 
 namespace renodx {
@@ -14,6 +18,7 @@ namespace color {
 namespace grade {
 
 static const float HIGHLIGHTS_VERSION = RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION;
+static const float SHADOWS_VERSION = RENODX_COLOR_GRADE_SHADOWS_VERSION;
 
 float Contrast(float x, float contrast, float mid_gray = 0.18f) {
   return pow(x / mid_gray, contrast) * mid_gray;
@@ -31,30 +36,75 @@ float3 Contrast(float3 color, float contrast, float mid_gray = 0.18f, float3x3 c
   return signs * renodx::color::correct::Luminance(color, color_y, contrasted_y);
 }
 
-float Highlights(float x, float highlights = 1.f, float mid_gray = 0.18f) {
+float Highlights(float x, float highlights, float mid_gray, float highlights_version) {
+  float value;
   [branch]
-  if (HIGHLIGHTS_VERSION == 2.f) {
-    if (highlights <= 1.f) {
-      return x;
+  if (highlights_version == 2.f) {
+    [branch]
+    if (highlights > 1.f) {
+      float bias = 0.10f;
+      float scaled = (highlights * highlights - highlights);
+      float extra = bias * scaled * scaled * x * x * x * (x - mid_gray);
+      value = ((mid_gray * x) + extra) / mid_gray;
+    } else {
+      value = x;
     }
-    float bias = 0.10f;
-    float scaled = (highlights * highlights - highlights);
-    float extra = bias * scaled * scaled * x * x * x * (x - mid_gray);
-    return ((mid_gray * x) + extra) / mid_gray;
+  } else if (highlights_version == 1.f) {
+    float scaled = x / mid_gray;
+    float highlighted = lerp(scaled, pow(scaled, highlights), saturate(scaled));
+    float rescaled = highlighted * mid_gray;
+    value = rescaled;
   } else {
-    x /= mid_gray;
-    x = lerp(x, pow(x, highlights), saturate(x));
-    x *= mid_gray;
-    return x;
+    // Version 3 (Default)
+    [branch]
+    if (highlights > 1.f) {
+      value = max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), x));
+    } else if (highlights < 1.f) {
+      // value = x * x / lerp(x, mid_gray * pow(x / mid_gray, 2.f - highlights), x);
+      value = min(x, x / (1.f + mid_gray * pow(x / mid_gray, 2.f - highlights) - x));
+    } else {
+      value = x;
+      // 0
+    }
   }
+  return value;
+}
+
+float Highlights(float x, float highlights = 1.f, float mid_gray = 0.18f) {
+  return Highlights(x, highlights, mid_gray, RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION);
+}
+
+float Shadows(float x, float shadows, float mid_gray, float shadows_version) {
+  float value;
+  [branch]
+  if (shadows_version == 1.f) {
+    float scaled = x / mid_gray;
+    float shadowed = pow(scaled, -1.f * (shadows - 2.f));
+    float lerped = lerp(shadowed, scaled, saturate(shadowed));
+    float rescaled = lerped * mid_gray;
+    value = rescaled;
+  } else {
+    // Version 2 Skipped
+    // Version 3 Default
+    if (shadows > 1.f) {
+      // float contrasted = mid_gray * pow(x / mid_gray, shadows);
+      // value = x * (1.f + x * mid_gray * (1.f / contrasted));
+      value = max(x, x * (1.f + (x * mid_gray / pow(x / mid_gray, shadows))));
+    } else if (shadows < 1.f) {
+      // float contrasted = mid_gray * pow(x / mid_gray, 2.f - shadows);
+      // value = x* (1.f - x * mid_gray * (1.f / contrasted));
+      value = min(x, x * (1.f - (x * mid_gray / pow(x / mid_gray, 2.f - shadows))));
+    } else {
+      value = x;
+      // 0
+    }
+  }
+
+  return value;
 }
 
 float Shadows(float x, float shadows = 1.f, float mid_gray = 0.18f) {
-  x /= mid_gray;
-  float shadowed = pow(x, -1.f * (shadows - 2.f));
-  x = lerp(shadowed, x, saturate(shadowed));
-  x *= mid_gray;
-  return x;
+  return Shadows(x, shadows, mid_gray, RENODX_COLOR_GRADE_SHADOWS_VERSION);
 }
 
 float3 Saturation(float3 bt709, float saturation = 1.f) {

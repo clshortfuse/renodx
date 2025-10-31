@@ -1,38 +1,35 @@
-#include "./shared.h"
+#include "shared.h"
 
-struct KingdomOptions {
-  float3 gamma;
-  float vignette;
-  float3 bloom;
-};
+const static float NIGHT_LUMINANCE = renodx::math::FLT32_MIN;
+const static float DAY_LUMINANCE = 2.5f;
+const static float NIGHT_EXPOSURE = 1.85f;  // Keep dark scenes well-lit
+const static float DAY_EXPOSURE = 0.35f;    // Reduce bright scenes more (adjust to taste)
 
-// Credits to Pumbo
-float3 RestoreLuminance(float3 targetColor, float sourceColorLuminance, bool safe = false) {
-  float targetColorLuminance = renodx::color::y::from::BT709(targetColor);
-  if (safe) {
-    return targetColor * renodx::math::SafeDivision(max(sourceColorLuminance, 0.0), max(targetColorLuminance, 0.0), 0);  // Return zero if dividing by zero
-  }
-  return targetColor * renodx::math::SafeDivision(sourceColorLuminance, targetColorLuminance, 1);  // Return one if dividing by zero
-}
+// Adaptive exposure based on scene luminance
+// Higher luminance (bright scenes) = more exposure reduction
+// Lower luminance (dark scenes) = less exposure reduction
+// Luminance range: Night=0.009, Day=2.0
 
-// Deprecated
-float3 Tonemap(float3 sdrColor, float3 untonemapped) {
-  float3 outputColor = sdrColor;
+/* float CalculateExposure(float luminance) {
+  if (!RENODX_TONE_MAP_TYPE) return 1.f;
+  // For bright scenes (high luminance), we want low exposure
+  // For dark scenes (low luminance), we want high exposure
 
-  if (RENODX_TONE_MAP_TYPE > 0.f) {
-    // This is the SDR color after LUT
-    outputColor = renodx::color::srgb::DecodeSafe(outputColor);
-    outputColor = renodx::draw::ToneMapPass(untonemapped, outputColor);
-    outputColor = renodx::draw::RenderIntermediatePass(outputColor);
-  }
+  // Create smooth curve based on luminance
+  float t = saturate((luminance - NIGHT_LUMINANCE) / (DAY_LUMINANCE - NIGHT_LUMINANCE));
 
-  return outputColor;
-}
+  // Use smoothstep for natural transition
+  float smoothT = smoothstep(0.0, 1.0, t);
 
-void ModifyOptions(inout KingdomOptions options) {
-  options.vignette = 1.f;
-  if (RENODX_TONE_MAP_TYPE > 0.f) {
-    options.gamma = float3(1, 1, 0);
-    options.bloom = options.bloom * CUSTOM_BLOOM;
-  }
+  // Interpolate between night and day exposure
+  return lerp(NIGHT_EXPOSURE, DAY_EXPOSURE, smoothT);
+} */
+float CalculateExposure(float luminance, float power = 1.f) {
+  if (!RENODX_TONE_MAP_TYPE) return 1.f;
+  // power controls how quickly exposure falls off:
+  // power = 0.5: gentle falloff
+  // power = 1.0: linear inverse
+  // power = 2.0: aggressive falloff
+
+  return renodx::math::PowSafe(1.0 / (1.0 + luminance), power);
 }

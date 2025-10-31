@@ -540,7 +540,11 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   }
 }
 
-inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(reshade::api::device* device, const reshade::api::resource_view_desc& desc, ResourceInfo* resource_info) {
+inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
+    reshade::api::device* device,
+    const reshade::api::resource_view_desc& desc,
+    reshade::api::resource_usage usage_type,
+    ResourceInfo* resource_info) {
   reshade::api::resource_view_desc new_desc = desc;
   switch (device->get_api()) {
     case reshade::api::device_api::d3d11:
@@ -575,7 +579,13 @@ inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(reshade:
           break;
         case reshade::api::resource_type::surface:
         case reshade::api::resource_type::texture_2d:
-          new_desc.texture.level_count = UINT32_MAX;
+          switch (usage_type) {
+            case reshade::api::resource_usage::unordered_access:
+              new_desc.texture.level_count = 1;
+              break;
+            default:
+              new_desc.texture.level_count = UINT32_MAX;
+          }
           new_desc.texture.layer_count = resource_info->desc.texture.depth_or_layers;
           if (resource_info->desc.texture.depth_or_layers > 1) {
             if (resource_info->desc.texture.samples > 1) {
@@ -652,8 +662,10 @@ inline void OnInitResourceView(
   }
 
   if (desc.type == reshade::api::resource_view_type::unknown
-      || (desc.type != reshade::api::resource_view_type::buffer && desc.format == reshade::api::format::unknown)) {
-    new_data.desc = PopulateUnknownResourceViewDesc(device, desc, new_data.resource_info);
+      || (desc.format == reshade::api::format::unknown
+          && desc.type != reshade::api::resource_view_type::buffer
+          && desc.type != reshade::api::resource_view_type::acceleration_structure)) {
+    new_data.desc = PopulateUnknownResourceViewDesc(device, desc, usage_type, new_data.resource_info);
   }
 
   auto [pair, inserted] = store->resource_view_infos.try_emplace_p(view.handle, new_data);
@@ -780,6 +792,7 @@ static bool IsCompressible(
     // 128 bit width / 16 bytes per 4x4 block
     case reshade::api::format::r32g32b32a32_uint:
     case reshade::api::format::r32g32b32a32_sint:
+    case reshade::api::format::r32g32b32a32_typeless:
       switch (compressed) {
         case reshade::api::format::bc2_unorm:
         case reshade::api::format::bc2_unorm_srgb:
@@ -956,6 +969,8 @@ static void Use(DWORD fdw_reason) {
       break;
 
     case DLL_PROCESS_DETACH:
+      if (!attached) return;
+      attached = false;
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);

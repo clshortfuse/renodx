@@ -38,87 +38,6 @@ void FixColorGradingLUTNegativeLuminance(inout float3 col, uint type = 1) {
   }
 }
 
-float3 ChrominanceOKLab(
-    float3 incorrect_color,
-    float3 reference_color,
-    float strength = 1.f,
-    float blowout_restoration = 0.f) {
-  if (strength == 0.f) return incorrect_color;
-
-  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 reference_lab = renodx::color::oklab::from::BT709(reference_color);
-
-  float2 incorrect_ab = incorrect_lab.yz;
-  float2 reference_ab = reference_lab.yz;
-
-  // Compute chrominance (magnitude of the a–b vector)
-  float incorrect_chrominance = length(incorrect_ab);
-  float correct_chrominance = length(reference_ab);
-
-  // Scale original chrominance vector toward target chrominance
-  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
-  float scale = lerp(1.f, chrominance_ratio, strength);
-
-  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
-  scale = lerp(scale, 1.0f, t * blowout_restoration);
-
-  incorrect_lab.yz = incorrect_ab * scale;
-
-  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
-  return result;
-}
-
-float3 ChrominanceICtCp(
-    float3 incorrect_color,
-    float3 reference_color,
-    float strength = 1.f,
-    float blowout_restoration = 0.f) {
-  if (strength == 0.f) return incorrect_color;
-
-  float3 incorrect_lab = renodx::color::ictcp::from::BT709(incorrect_color);
-  float3 reference_lab = renodx::color::ictcp::from::BT709(reference_color);
-
-  float2 incorrect_ab = incorrect_lab.yz;
-  float2 reference_ab = reference_lab.yz;
-
-  // Compute chrominance (magnitude of the Ct-Cp vector)
-  float incorrect_chrominance = length(incorrect_ab);
-  float correct_chrominance = length(reference_ab);
-
-  // Scale original chrominance vector toward target chrominance
-  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
-  float scale = lerp(1.f, chrominance_ratio, strength);
-
-  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
-  scale = lerp(scale, 1.0f, t * blowout_restoration);
-
-  incorrect_lab.yz = incorrect_ab * scale;
-
-  float3 result = renodx::color::bt709::from::ICtCp(incorrect_lab);
-  return result;
-}
-
-float3 ChrominanceAndHueOKLab(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
-  if (strength == 0.f) return incorrect_color;
-
-  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 correct_lab = renodx::color::oklab::from::BT709(correct_color);
-
-  incorrect_lab.yz = correct_lab.yz;
-
-  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
-  return result;
-}
-
-float3 HueCorrectAP1(float3 incorrect_color_ap1, float3 correct_color_ap1, float hue_correct_strength = 0.5f) {
-  float3 incorrect_color_bt709 = renodx::color::bt709::from::AP1(incorrect_color_ap1);
-  float3 correct_color_bt709 = renodx::color::bt709::from::AP1(correct_color_ap1);
-
-  float3 corrected_color_bt709 = renodx::color::correct::Hue(incorrect_color_bt709, correct_color_bt709, hue_correct_strength, 0u);
-  float3 corrected_color_ap1 = renodx::color::ap1::from::BT709(corrected_color_bt709);
-  return corrected_color_ap1;
-}
-
 /// Piecewise custom ARRI-style log/linear encoding
 #define CUSTOM_ARRILOG_ENCODE_GENERATOR(T)       \
   T CustomArriLogEncode(T x) {                   \
@@ -349,7 +268,7 @@ float3 RecolorUnclampedAP1(float3 original_linear, float3 unclamped_linear, floa
   const float3 original_perceptual = renodx::color::oklab::from::BT709(renodx::color::bt709::from::AP1(original_linear));
 
   // Hue correction
-  float3 retinted_perceptual = renodx::color::oklab::from::BT709(unclamped_linear);
+  float3 retinted_perceptual = renodx::color::oklab::from::BT709(renodx::color::bt709::from::AP1(unclamped_linear));
   retinted_perceptual[0] = max(0, retinted_perceptual[0]);
   retinted_perceptual[1] = original_perceptual[1];
   retinted_perceptual[2] = original_perceptual[2];
@@ -382,38 +301,6 @@ float3 UnclampARRILog(
   return unclamped_arri;
 }
 
-float3 CorrectBlackARRI(float3 lut_output_color_ap1, float3 lut_input_color_ap1, Texture2D<float4> t0, Texture2D<float4> t1, SamplerState s0) {
-  float3 black_arri = ApplyLUT(float3(0, 0, 0), t0, t1, s0, true);
-
-  // float black_level = CustomArriLogEncode(AP1_to_ARRI_Bradford(black_arri);
-
-  float3 original_arri = CustomArriLogEncode(AP1_to_ARRI_Bradford(lut_output_color_ap1));
-  float3 mid_gray_arri = ApplyLUT(float3(0.18, 0.18, 0.18), t0, t1, s0, true);
-  float3 neutral_arri = CustomArriLogEncode(AP1_to_ARRI_Bradford(lut_input_color_ap1));
-
-  float3 arri_unclamped = UnclampARRILog(
-      original_arri,
-      black_arri,
-      mid_gray_arri,
-      neutral_arri);
-
-  float3 ap1_unclamped = ARRI_Bradford_to_AP1_optimized_red(CustomArriLogDecode(arri_unclamped));
-
-  ap1_unclamped = RecolorUnclampedAP1(lut_output_color_ap1, ap1_unclamped);
-
-  return ap1_unclamped;
-}
-
-// float3 LUTCorrectBlack(float3 lut_output_color_ap1, float3 lut_input_color_ap1, Texture2D<float4> t0, Texture2D<float4> t1, SamplerState s0) {
-//   if (CUSTOM_LUT_SCALING) {
-//     float3 corrected_black = CorrectBlackARRI(lut_output_color_ap1, lut_input_color_ap1, t0, t1, s0);
-
-//     lut_output_color_ap1 = lerp(lut_output_color_ap1, corrected_black, CUSTOM_LUT_SCALING);
-//   }
-
-//   return lut_output_color_ap1;
-// }
-
 float3 CorrectBlack(float3 color_input, float3 lut_color, float lut_black_y, float strength) {
   const float input_y = renodx::color::y::from::AP1(max(0, color_input));
   const float color_y = renodx::color::y::from::AP1(max(0, lut_color));
@@ -444,28 +331,23 @@ float3 CorrectBlackPerChannel(float3 color_input, float3 lut_color, float3 lut_b
   return out_color;
 }
 
-float3 CorrectBlackChrominance(float3 lut_input_color_ap1, float3 lut_output_color_ap1, float3 min_black, float lut_min_y, float strength) {
-  float3 corrected_black_ch = CorrectBlackPerChannel(lut_input_color_ap1, lut_output_color_ap1, min_black, strength);
-  float3 corrected_black_lum = CorrectBlack(lut_input_color_ap1, lut_output_color_ap1, lut_min_y, strength);
-  float3 corrected_black = renodx::color::ap1::from::BT709(ChrominanceICtCp(renodx::color::bt709::from::AP1(corrected_black_lum), renodx::color::bt709::from::AP1(corrected_black_ch), 1.f, 1.f));
-
-  return corrected_black;
-}
-
 float3 LUTCorrectBlack(float3 lut_output_color_ap1, float3 lut_input_color_ap1, Texture2D<float4> t0, Texture2D<float4> t1, SamplerState s0) {
   if (CUSTOM_LUT_SCALING) {
     float3 min_black = max(0, ApplyLUT(float3(0, 0, 0), t0, t1, s0));
-    float lut_min_y = (renodx::color::y::from::AP1(min_black));
+    float lut_min_y = renodx::color::y::from::AP1(min_black);
     if (lut_min_y > 0) {
-      lut_input_color_ap1 *= max(0, ApplyLUT(float3(0.18, 0.18, 0.18), t0, t1, s0)) / 0.18f;  // align midgray of pre and post lut colors
+      lut_input_color_ap1 *= (renodx::color::y::from::AP1(max(0, ApplyLUT(lut_min_y.xxx, t0, t1, s0))) / lut_min_y);  // align midgray of pre and post lut colors
 
       // Strength at 80 is actually weaker, brings down shadows in such a way that it targets only the darkest shadows
       // This is needed as ACES and gamma correction afterwards bring down shadows even more
       // It's abusing the function but that will have to do for now
-      // float3 corrected_black = CorrectBlackChrominance(lut_input_color_ap1, lut_output_color_ap1, min_black, lut_min_y, 80.f);
-      float3 corrected_black = (CorrectBlack(lut_input_color_ap1, lut_output_color_ap1, lut_min_y, 80.f));
+      const float scaling_strength = CUSTOM_LUT_SCALING * 0.5f;
+      float3 corrected_black = (CorrectBlack(lut_input_color_ap1, lut_output_color_ap1, lut_min_y, 35.f));
 
-      lut_output_color_ap1 = lerp(lut_output_color_ap1, corrected_black, CUSTOM_LUT_SCALING);
+      // lut_output_color_ap1 = lerp(lut_output_color_ap1, corrected_black, scaling_strength);
+      lut_output_color_ap1 = RecolorUnclampedAP1(lut_output_color_ap1, corrected_black, scaling_strength);
+
+      FixColorGradingLUTNegativeLuminance(lut_output_color_ap1);
     }
   }
 
