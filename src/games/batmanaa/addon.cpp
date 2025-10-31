@@ -85,7 +85,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 0.f,
+        .default_value = 25.f,
         .label = "Blowout",
         .section = "Tone Mapping",
         .tooltip = "Controls highlight desaturation due to overexposure.",
@@ -96,7 +96,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapWhiteClip",
         .binding = &shader_injection.tone_map_white_clip,
-        .default_value = 40.f,
+        .default_value = 100.f,
         .label = "White Clip",
         .section = "Tone Mapping",
         .min = 0.f,
@@ -116,7 +116,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 50.f,
+        .default_value = 60.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -223,6 +223,15 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "AutoBrightnessLimit",
+        .binding = &shader_injection.auto_brightness_limit,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Auto Brightness Limiter",
+        .section = "Advanced",
+        .tooltip = "Dims very bright scenes such as the detective mode transitions",
+    },
 };
 
 void OnPresetOff() {
@@ -233,6 +242,7 @@ void OnPresetOff() {
       {"ToneMapUINits", 203.f},
       {"ToneMapHueShift", 0.f},
       {"ToneMapBlowout", 0.f},
+      {"ToneMapWhiteClip", 1.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -245,6 +255,7 @@ void OnPresetOff() {
       {"FxBloom", 100.f},
       {"FxLensFlareType", 0.f},
       {"FxGrainStrength", 0.f},
+      {"AutoBrightnessLimit", 0.f},
   });
 }
 
@@ -275,9 +286,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::set_color_space = false;
         renodx::mods::swapchain::use_device_proxy = true;
-        renodx::mods::swapchain::ignored_window_class_names = {
-            "SplashScreenClass",
-        };
         renodx::mods::swapchain::swap_chain_proxy_shaders = {
             {
                 reshade::api::device_api::d3d11,

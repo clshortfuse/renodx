@@ -1,4 +1,6 @@
+#include "./brightnesslimiter.hlsli"
 #include "./common.hlsli"
+
 
 float4 PackedParameters : register(c0);
 float4 MinZ_MaxZRatio : register(c2);
@@ -30,8 +32,6 @@ float4 main(PS_IN i)
   float4 r2;
   r0 = tex2D(SceneColorTexture, i.texcoord.zwzw);
 
-  float3 input = r0.rgb;
-
   r0.w = r0.w * MinZ_MaxZRatio.z + -MinZ_MaxZRatio.w;
   r0.w = 1 / r0.w;
   r1.x = r0.w + -PackedParameters.x;
@@ -54,7 +54,7 @@ float4 main(PS_IN i)
   r0.w = 1 / r1.x;
 
   r0.rgb = r0.rgb * r0.w;
-  input = r0.rgb;
+  float3 input = r0.rgb;
 
   r0.xyz = ConditionalSaturate(r0.rgb - SceneShadowsAndDesaturation.xyz);  // r0.xyz = saturate(r0.xyz * r0.w + -SceneShadowsAndDesaturation.xyz);  // mad_sat r0.xyz, r0.xyz, r0.w, -c5.xyz
   r0.xyz = r0.xyz * SceneInverseHighLights.xyz;
@@ -117,7 +117,7 @@ float4 main(PS_IN i)
   o.rgb = renodx::math::SignPow(linear_color.rgb, GammaColorScaleAndInverse.w);
   o.w = 0;
 
-  o.rgb = ApplyToneMap(o.rgb, i.texcoord.zw);
+  o.rgb = ApplyToneMap(o.rgb, i.texcoord.zw, SceneColorTexture);
 
   return o;
 }

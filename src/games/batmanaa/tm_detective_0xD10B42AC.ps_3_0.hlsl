@@ -16,17 +16,17 @@ float4 main(float2 texcoord: TEXCOORD)
 
   float3 input = r0.rgb;
 
-  r1.xyz = r0.xyz * ColorScale.xyz;
-  r2.xyz = ColorScale.xyz;
-  r0.xyz = r0.xyz * -r2.xyz + OverlayColor.xyz;
-  r0.xyz = ConditionalSaturate(OverlayColor.w * r0.xyz + r1.xyz);
+  r0.rgb = lerp(r0.xyz * ColorScale.xyz, OverlayColor.xyz, OverlayColor.w);
+
+  r0.xyz = ConditionalSaturate(r0.rgb);
   r1.xyz = ConditionalClipShadows(r0.xyz);  // max(r0.xyz, 0.0001);
 
-  o.rgb = renodx::math::SignPow(r1.rgb, InverseGamma.x);
+  float3 linear_color = r1.rgb;
+  o.rgb = renodx::math::SignPow(linear_color, InverseGamma.x);
   o.w = 1;
 
   o.rgb = saturate(o.rgb);  // clamp to prevent flashbang
-  o.rgb = ApplyToneMap(o.rgb, texcoord, false);
+  o.rgb = ApplyToneMap(o.rgb, texcoord, SceneColorTexture, false);
 
   return o;
 }
