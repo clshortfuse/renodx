@@ -85,7 +85,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 25.f,
+        .default_value = 30.f,
         .label = "Blowout",
         .section = "Tone Mapping",
         .tooltip = "Controls highlight desaturation due to overexposure.",
