@@ -35,9 +35,9 @@ float4 main(PS_IN i)
 
   if (CUSTOM_LENS_FLARE_TYPE != 0.f) {
     float y_in = renodx::color::y::from::BT709(o.rgb);
-    float y_out = renodx::color::grade::Highlights(y_in, 3.f, 0.18f, 3.f);
+    float y_out = renodx::color::grade::Highlights(y_in, 3.f, 0.18f);
     float3 boosted = renodx::color::correct::Luminance(o.rgb, y_in, y_out);
-    o.rgb = lerp(o.rgb, boosted, saturate(y_in));
+    o.rgb = lerp(o.rgb, boosted, saturate(y_in / 0.5f));
   }
 
   return o;

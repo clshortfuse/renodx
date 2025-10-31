@@ -28,12 +28,17 @@ struct ShaderInjectData {
   float custom_grain_strength;
   float custom_fog_scaling;
   float tone_map_white_clip;
+
+  float auto_brightness_limit;
+  float padding1;
+  float padding2;
+  float padding3;
 };
 
 #ifndef __cplusplus
 #if (__SHADER_TARGET_MAJOR == 3)
 
-float4 shader_injection[5] : register(c50);
+float4 shader_injection[6] : register(c50);
 
 #define RENODX_PEAK_WHITE_NITS               shader_injection[0][0]
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection[0][1]
@@ -55,6 +60,7 @@ float4 shader_injection[5] : register(c50);
 #define CUSTOM_GRAIN_STRENGTH                shader_injection[4][1]
 #define CUSTOM_FOG_SCALING                   shader_injection[4][2]
 #define RENODX_TONE_MAP_WHITE_CLIP           shader_injection[4][3]
+#define RENODX_AUTO_BRIGHTNESS_LIMIT         shader_injection[5][0]
 
 #else
 #if ((__SHADER_TARGET_MAJOR == 5 && __SHADER_TARGET_MINOR >= 1) || __SHADER_TARGET_MAJOR >= 6)
@@ -86,6 +92,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_GRAIN_STRENGTH                shader_injection.custom_grain_strength
 #define CUSTOM_FOG_SCALING                   shader_injection.custom_fog_scaling
 #define RENODX_TONE_MAP_WHITE_CLIP           shader_injection.tone_map_white_clip
+#define RENODX_AUTO_BRIGHTNESS_LIMIT         shader_injection.auto_brightness_limit
 
 #endif
 

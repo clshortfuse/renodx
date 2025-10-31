@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 float BloomScale : register(c5);
 float2 MinMaxBlurClamp : register(c4);

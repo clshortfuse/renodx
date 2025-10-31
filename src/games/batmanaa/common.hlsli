@@ -1,3 +1,4 @@
+#include "./brightnesslimiter.hlsli"
 #include "./shared.h"
 
 // Restores the source color hue (and optionally brightness) through Oklab (this works on colors beyond SDR in brightness and gamut too).
@@ -94,6 +95,22 @@ float3 ConditionalClipShadows(float3 color, bool clamp_negatives = true) {
   return color;
 }
 
+float Highlights(float x, float highlights, float mid_gray) {
+  float y = x;
+  if (highlights > 1.f) {
+    // value = max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), x));
+    y = max(x,
+            lerp(x, mid_gray * pow(x / mid_gray, highlights),
+                 renodx::tonemap::ExponentialRollOff(x, 1.f, 1.1f)));
+  } else if (highlights < 1.f) {
+    y /= mid_gray;
+    y = lerp(y, pow(y, highlights), step(1.f, y));
+    y *= mid_gray;
+  }
+
+  return y;
+}
+
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
     return untonemapped;
@@ -108,9 +125,13 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   float exponent = config.contrast * flare;
   const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
 
-  // highlights
-  float y_highlighted = renodx::color::grade::Highlights(y_contrasted, config.highlights, mid_gray);
-
+// highlights
+#if 0
+  // const float highlights = 1 + (sign(config.highlights - 1) * pow(abs(config.highlights - 1), 10.f));
+  // float y_highlighted = renodx::color::grade::Highlights(y_contrasted, config.highlights, mid_gray);
+#else
+  float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
+#endif
   // shadows
   float y_shadowed = renodx::color::grade::Shadows(y_highlighted, config.shadows, mid_gray);
 
@@ -250,7 +271,7 @@ renodx::color::grade::Config CreateColorGradeConfig() {
   return cg_config;
 }
 
-float3 ApplyToneMap(float3 untonemapped, float2 position, bool use_grain = true) {
+float3 ApplyToneMap(float3 untonemapped, float2 position, sampler2D SceneColorTexture, bool use_grain = true, bool use_abl = true) {
   float3 tonemapped;
   untonemapped = renodx::color::gamma::DecodeSafe(untonemapped);
 
@@ -273,7 +294,10 @@ float3 ApplyToneMap(float3 untonemapped, float2 position, bool use_grain = true)
     } else {
       tonemapped = ApplyHermiteSplineByLuminance(untonemapped_graded, RENODX_DIFFUSE_WHITE_NITS, RENODX_PEAK_WHITE_NITS);
     }
+  }
 
+  if (use_abl && RENODX_AUTO_BRIGHTNESS_LIMIT) {
+    tonemapped = ABL_ApplyLimit(SceneColorTexture, tonemapped);
   }
 
   if (use_grain) {
