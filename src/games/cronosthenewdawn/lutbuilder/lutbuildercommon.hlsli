@@ -1,5 +1,63 @@
 #include "../shared.h"
-#include "../LumaIncludes.hlsli"
+#include "./CBuffers/CBuffers_LUTbuilder.hlsli"
+#include "./colorcorrection.hlsli"
+
+// From Pumbo
+// This basically does gamut mapping, however it's not focused on gamut as primaries, but on peak white.
+// The color is expected to be in the specified color space and in linear.
+//
+// The sum of "DesaturationAmount" and "DarkeningAmount" needs to be <= 1, both within 0 and 1.
+// The closer the sum is to 1, the more each color channel will be contained within its peak range.
+float3 CorrectOutOfRangeColor(float3 Color, bool FixNegatives = true, bool FixPositives = true, float Peak = 1.0, float DesaturationAmount = 0.5, float DarkeningAmount = 0.5, bool use_bt2020 = true) {
+  if (FixNegatives && any(Color < 0.0))  // Optional "optimization" branch
+  {
+    float colorLuminance = use_bt2020 ? renodx::color::y::from::BT2020(Color) : renodx::color::y::from::BT709(Color);
+
+    float3 positiveColor = max(Color.xyz, 0.0);
+    float3 negativeColor = min(Color.xyz, 0.0);
+    float positiveLuminance = use_bt2020 ? renodx::color::y::from::BT2020(positiveColor) : renodx::color::y::from::BT709(positiveColor);
+    float negativeLuminance = use_bt2020 ? renodx::color::y::from::BT2020(negativeColor) : renodx::color::y::from::BT709(negativeColor);
+    // Desaturate until we are not out of gamut anymore
+    if (colorLuminance > renodx::math::FLT32_MIN) {
+#if 0
+	  float negativePositiveLuminanceRatio = -negativeLuminance / positiveLuminance;
+	  float3 positiveColorRestoredLuminance = RestoreLuminance(positiveColor, colorLuminance, true, ColorSpace);
+	  Color = lerp(lerp(Color, positiveColorRestoredLuminance, sqrt(DesaturationAmount)), colorLuminance, negativePositiveLuminanceRatio * sqrt(DesaturationAmount));
+#else  // This should look better and be faster
+      const float3 luminanceRatio = use_bt2020 ? renodx::color::BT2020_TO_XYZ_MAT[1].rgb : renodx::color::BT709_TO_XYZ_MAT[1].rgb;
+      float3 negativePositiveLuminanceRatio = -(negativeColor / luminanceRatio) / (positiveLuminance / luminanceRatio);
+      Color = lerp(Color, colorLuminance, negativePositiveLuminanceRatio * DesaturationAmount);
+#endif
+      // TODO: "DarkeningAmount" isn't normalized with "DesaturationAmount", so setting both to 50% won't perfectly stop gamut clip
+      positiveColor = max(Color.xyz, 0.0);
+      negativeColor = min(Color.xyz, 0.0);
+      Color = positiveColor + (negativeColor * (1.0 - DarkeningAmount));  // It's not darkening but brightening in this case
+    }
+    // Increase luminance until it's 0 if we were below 0 (it will clip out the negative gamut)
+    else if (colorLuminance < -renodx::math::FLT32_MIN) {
+      float negativePositiveLuminanceRatio = positiveLuminance / -negativeLuminance;
+      negativeColor.xyz *= negativePositiveLuminanceRatio;
+      Color.xyz = positiveColor + negativeColor;
+    }
+    // Snap to 0 if the overall luminance was zero, there's nothing to savage, no valid information on rgb ratio
+    else {
+      Color.xyz = 0.0;
+    }
+  }
+
+  if (FixPositives && any(Color > Peak))  // Optional "optimization" branch
+  {
+    float colorLuminance = renodx::color::y::from::BT2020(Color);
+    float colorLuminanceInExcess = colorLuminance - Peak;
+    float maxColorInExcess = renodx::math::Max(Color.r, Color.g, Color.b) - Peak;                                                  // This is guaranteed to be >= "colorLuminanceInExcess"
+    float brightnessReduction = saturate(renodx::math::SafeDivision(Peak, renodx::math::Max(Color.r, Color.g, Color.b), 1));       // Fall back to one in case of division by zero
+    float desaturateAlpha = saturate(renodx::math::SafeDivision(maxColorInExcess, maxColorInExcess - colorLuminanceInExcess, 0));  // Fall back to zero in case of division by zero
+    Color = lerp(Color, colorLuminance, desaturateAlpha * DesaturationAmount);
+    Color = lerp(Color, Color * brightnessReduction, DarkeningAmount);  // Also reduce the brightness to partially maintain the hue, at the cost of brightness
+  }
+
+  return Color;
+}
 
 float3 GammaCorrectHuePreserving(float3 incorrect_color) {
   float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
@@ -28,8 +86,8 @@ float3 ApplyGammaCorrection(float3 incorrect_color) {
   return corrected_color;
 }
 
-bool GenerateOutput(float r, float g, float b, inout float4 SV_Target, uint device) {
-  if (RENODX_TONE_MAP_TYPE == 0 || device == 8u) return false;
+bool GenerateOutput(float r, float g, float b, inout float4 SV_Target) {
+  if (RENODX_TONE_MAP_TYPE == 0 || !is_hdr) return false;  // skip if SDR or Vanilla tone mapper
 
   float3 final_color = (float3(r, g, b));
   if (RENODX_TONE_MAP_TYPE == 4.f) final_color = saturate(final_color);
@@ -37,118 +95,17 @@ bool GenerateOutput(float r, float g, float b, inout float4 SV_Target, uint devi
   final_color = ApplyGammaCorrection(final_color);
 
   float3 bt2020_color = renodx::color::bt2020::from::BT709(final_color);
+#if 0
+  // bt2020_color = CorrectOutOfRangeColor(bt2020_color, true, false, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 1.f, 0.f, true);
+#else
+  float grayscale = renodx::color::y::from::BT2020(bt2020_color);
+  grayscale = renodx::color::srgb::EncodeSafe(max(0, grayscale));
+  bt2020_color = renodx::color::srgb::EncodeSafe(bt2020_color);
+  bt2020_color = renodx::color::correct::GamutCompress(bt2020_color, renodx::color::y::from::BT2020(bt2020_color));
+  bt2020_color = renodx::color::srgb::DecodeSafe(bt2020_color);
+#endif
   float3 encoded_color = renodx::color::pq::EncodeSafe(bt2020_color, RENODX_DIFFUSE_WHITE_NITS);
 
   SV_Target = float4(encoded_color / 1.05f, 0.f);
   return true;
-}
-
-float3 ColorCorrect(float3 WorkingColor,
-  float4 ColorSaturation,
-  float4 ColorContrast,
-  float4 ColorGamma,
-  float4 ColorGain,
-  float4 ColorOffset)
-{
-    float Luma = renodx::color::y::from::AP1(WorkingColor);
-    WorkingColor = max(0, lerp(Luma.xxx, WorkingColor, ColorSaturation.xyz * ColorSaturation.w));
-    WorkingColor = pow(WorkingColor * (1.0 / 0.18), ColorContrast.xyz * ColorContrast.w) * 0.18;
-    WorkingColor = pow(WorkingColor, 1.0 / (ColorGamma.xyz * ColorGamma.w));
-    if (SHADOW_COLOR_OFFSET_FIX_TYPE == 1) {
-      WorkingColor = renodx::color::ap1::from::BT709(FixColorFade(renodx::color::bt709::from::AP1(WorkingColor * (ColorGain.xyz * ColorGain.w)), renodx::color::bt709::from::AP1(ColorOffset.xyz + ColorOffset.w)));  // pumbo haze fix
-    } else {
-      WorkingColor = WorkingColor * (ColorGain.xyz * ColorGain.w) + (ColorOffset.xyz + ColorOffset.w);  // original code
-    }
-    
-    return WorkingColor;
-}
-
-float3 ColorCorrectShadows(float3 WorkingColor,
-  float4 ColorSaturationTonal,
-  float4 ColorSaturation,
-  float4 ColorContrastTonal,
-  float4 ColorContrast,
-  float4 ColorGammaTonal,
-  float4 ColorGamma,
-  float4 ColorGainTonal,
-  float4 ColorGain,
-  float4 ColorOffsetTonal,
-  float4 ColorOffset)
-{
-    ColorOffset = ColorOffsetTonal + ColorOffset;
-    ColorSaturation = ColorSaturationTonal * ColorSaturation;
-    if (SHADOW_COLOR_OFFSET_FIX_TYPE == 0) {
-      ColorContrast = ColorContrastTonal * ColorContrast;
-    } else {
-      float4 ShadowContrastOffset = saturate(ColorOffset * SHADOW_COLOR_OFFSET_FIX_CONTRAST_OFFSET) * -1.f;
-      ColorContrast = (ColorContrastTonal + ShadowContrastOffset) * ColorContrast;
-    }
-    ColorGamma = ColorGammaTonal * ColorGamma;
-    ColorGain = ColorGainTonal * ColorGain;
-
-    float Luma = renodx::color::y::from::AP1(WorkingColor);
-    WorkingColor = max(0, lerp(Luma.xxx, WorkingColor, ColorSaturation.xyz * ColorSaturation.w));
-    WorkingColor = pow(WorkingColor * (1.0 / 0.18), ColorContrast.xyz * ColorContrast.w) * 0.18;
-    WorkingColor = pow(WorkingColor, 1.0 / (ColorGamma.xyz * ColorGamma.w));
-    if (SHADOW_COLOR_OFFSET_FIX_TYPE == 2) {
-      WorkingColor = renodx::color::ap1::from::BT709(FixColorFade(renodx::color::bt709::from::AP1(WorkingColor * (ColorGain.xyz * ColorGain.w)), renodx::color::bt709::from::AP1(ColorOffset.xyz + ColorOffset.w)));  // pumbo haze fix
-    } else {
-      if (SHADOW_COLOR_OFFSET_FIX_TYPE == 1) {
-        ColorOffset = 0;
-      }
-      WorkingColor = WorkingColor * (ColorGain.xyz * ColorGain.w) + (ColorOffset.xyz + ColorOffset.w);  // original code
-    }
-    
-    return WorkingColor;
-}
-
-float3 ColorCorrectAll(float3 WorkingColor,
-  float4 ColorSaturation,
-  float4 ColorContrast,
-  float4 ColorGamma,
-  float4 ColorGain,
-  float4 ColorOffset,
-  float4 ColorSaturationShadows,
-  float4 ColorContrastShadows,
-  float4 ColorGammaShadows,
-  float4 ColorGainShadows,
-  float4 ColorOffsetShadows,
-  float4 ColorSaturationHighlights,
-  float4 ColorContrastHighlights,
-  float4 ColorGammaHighlights,
-  float4 ColorGainHighlights,
-  float4 ColorOffsetHighlights,
-  float4 ColorSaturationMidtones,
-  float4 ColorContrastMidtones,
-  float4 ColorGammaMidtones,
-  float4 ColorGainMidtones,
-  float4 ColorOffsetMidtones,
-  float CCWeightShadows,
-  float CCWeightHighlights,
-  float CCWeightMidtones)
-{
-  float3 CCColorShadows = ColorCorrectShadows(WorkingColor,
-    ColorSaturationShadows, ColorSaturation,
-    ColorContrastShadows, ColorContrast,
-    ColorGammaShadows, ColorGamma,
-    ColorGainShadows, ColorGain,
-    ColorOffsetShadows, ColorOffset);
-  
-  float3 CCColorHighlights = ColorCorrect(WorkingColor,
-    ColorSaturationHighlights * ColorSaturation,
-    ColorContrastHighlights * ColorContrast,
-    ColorGammaHighlights * ColorGamma,
-    ColorGainHighlights * ColorGain,
-    ColorOffsetHighlights + ColorOffset);
-
-  float3 CCColorMidtones = ColorCorrect(WorkingColor,
-    ColorSaturationMidtones * ColorSaturation,
-    ColorContrastMidtones * ColorContrast,
-    ColorGammaMidtones * ColorGamma,
-    ColorGainMidtones * ColorGain,
-    ColorOffsetMidtones + ColorOffset);
-  
-  WorkingColor = CCColorShadows * CCWeightShadows + CCColorMidtones * CCWeightMidtones + CCColorHighlights * CCWeightHighlights;
-
-  return WorkingColor;
 }
