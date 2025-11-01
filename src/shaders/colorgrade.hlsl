@@ -93,7 +93,7 @@ float Shadows(float x, float shadows, float mid_gray, float shadows_version) {
     } else if (shadows < 1.f) {
       // float contrasted = mid_gray * pow(x / mid_gray, 2.f - shadows);
       // value = x* (1.f - x * mid_gray * (1.f / contrasted));
-      value = min(x, x * (1.f - (x * mid_gray / pow(x / mid_gray, 2.f - shadows))));
+      value = clamp(x * (1.f - (x * mid_gray / pow(x / mid_gray, 2.f - shadows))), 0.f , x);
     } else {
       value = x;
       // 0
