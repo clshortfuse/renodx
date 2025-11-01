@@ -406,7 +406,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::mods::swapchain::use_resource_cloning = true;
+      //renodx::mods::swapchain::use_resource_cloning = true;
       //renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       //renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
     //   renodx::mods::swapchain::force_borderless = false;
@@ -414,8 +414,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::shader::expected_constant_buffer_space = 0;
       renodx::mods::shader::expected_constant_buffer_index = 13;
-      renodx::mods::shader::allow_multiple_push_constants = true;
-      renodx::mods::shader::force_pipeline_cloning = true;
+      //renodx::mods::shader::allow_multiple_push_constants = true;
+      //renodx::mods::shader::force_pipeline_cloning = true;
       //renodx::mods::shader::use_pipeline_layout_cloning = true;
       
       renodx::mods::swapchain::SetUseHDR10();
@@ -424,7 +424,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r11g11b10_float,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .ignore_size = true,
-          .use_resource_view_cloning = true,
+          //.use_resource_view_cloning = true,
           //.dimensions = {.width=renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER, .height=renodx::utils::resource::ResourceUpgradeInfo::ANY},
           .aspect_ratio = -1,
       });
@@ -433,7 +433,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r11g11b10_float,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .ignore_size = true,
-          .use_resource_view_cloning = true,
+          //.use_resource_view_cloning = true,
           .aspect_ratio = 2.3701388, // Ultrawide limit
           .aspect_ratio_tolerance = 0.001,
       });
@@ -453,7 +453,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   //renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   
-  renodx::mods::swapchain::Use(fdw_reason);
+  //renodx::mods::swapchain::Use(fdw_reason);
 
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
