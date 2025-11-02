@@ -111,6 +111,24 @@ float Highlights(float x, float highlights, float mid_gray) {
   return y;
 }
 
+float Shadows(float x, float shadows, float mid_gray) {
+  if (shadows == 1.f) return x;
+
+  const float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
+  const float base_term = x * mid_gray;
+  const float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
+
+  if (shadows > 1.f) {
+    float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
+    float reference = x * (1.f + base_scale);
+    return max(x, x + (raised - reference));
+  } else {  // shadows < 1.f
+    float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
+    float reference = x * (1.f - base_scale);
+    return clamp(x + (lowered - reference), 0.f, x);
+  }
+}
+
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
     return untonemapped;
@@ -133,7 +151,7 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
 #endif
   // shadows
-  float y_shadowed = renodx::color::grade::Shadows(y_highlighted, config.shadows, mid_gray);
+  float y_shadowed = Shadows(y_highlighted, config.shadows, mid_gray);
 
   const float y_final = y_shadowed;
 
