@@ -107,6 +107,8 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   reshade::api::resource proxy_device_resource = {0};
 
   HWND primary_swapchain_window = nullptr;
+
+  bool proxy_device_needs_resize = false;
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -1733,6 +1735,12 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
   auto* device = swapchain->get_device();
 
+  if (use_device_proxy && device == proxy_device_reshade) {
+    // Don't modify proxy device swapchains
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnInitSwapchain(Abort for proxy device swapchain.)");
+    return;
+  }
+
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
 
@@ -1789,12 +1797,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
     if (use_device_proxy) {
       if (resize && proxy_device_reshade != nullptr && device != proxy_device_reshade && proxy_swap_chain != nullptr) {
-        proxy_swap_chain->ResizeBuffers(
-            2,
-            primary_swapchain_desc.texture.width,
-            primary_swapchain_desc.texture.height,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+        data->proxy_device_needs_resize = true;
       }
       return;
     }
@@ -1829,7 +1832,12 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   if (data == nullptr) return;
   const std::unique_lock lock(data->mutex);
   DestroySwapchainProxyItems(device, data);
-  reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnDestroySwapchain()");
+  std::stringstream s;
+  s << "mods::swapchain::OnDestroySwapchain(";
+  s << PRINT_PTR(reinterpret_cast<uintptr_t>(swapchain));
+  s << ", resize: " << (resize ? "true" : "false");
+  s << ")";
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
 }
 
 static bool IsUpgraded(reshade::api::swapchain* swapchain) {
@@ -3556,6 +3564,18 @@ inline void OnPresent(
       // cannot observe a partially-written handoff.
       last_device_proxy_shared_handle = resource_clone_info->shared_handle;
       last_device_proxy_shared_resource = resource_clone_info->proxy_resource;
+    }
+
+    if (data->proxy_device_needs_resize) {
+      data->proxy_device_needs_resize = false;
+      proxy_swap_chain->ResizeBuffers(
+          2,
+          data->primary_swapchain_desc.texture.width,
+          data->primary_swapchain_desc.texture.height,
+          (target_format == reshade::api::format::r10g10b10a2_unorm)
+              ? DXGI_FORMAT_R10G10B10A2_UNORM
+              : DXGI_FORMAT_R16G16B16A16_FLOAT,
+          DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
     }
 
     // Trigger a DX11 Present which will start the swapchain proxy steps on DX11
