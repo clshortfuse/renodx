@@ -96,19 +96,17 @@ float3 ConditionalClipShadows(float3 color, bool clamp_negatives = true) {
 }
 
 float Highlights(float x, float highlights, float mid_gray) {
-  float y = x;
+  if (highlights == 1.f) return x;
+
   if (highlights > 1.f) {
     // value = max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), x));
-    y = max(x,
-            lerp(x, mid_gray * pow(x / mid_gray, highlights),
-                 renodx::tonemap::ExponentialRollOff(x, 1.f, 1.1f)));
-  } else if (highlights < 1.f) {
-    y /= mid_gray;
-    y = lerp(y, pow(y, highlights), step(1.f, y));
-    y *= mid_gray;
+    return max(x,
+               lerp(x, mid_gray * pow(x / mid_gray, highlights),
+                    renodx::tonemap::ExponentialRollOff(x, 1.f, 1.1f)));
+  } else {  // highlights < 1.f
+    x /= mid_gray;
+    return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
   }
-
-  return y;
 }
 
 float Shadows(float x, float shadows, float mid_gray) {
