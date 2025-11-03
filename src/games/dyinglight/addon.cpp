@@ -68,19 +68,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
-const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
-    {"ColorGradeHighlights", 65.f},
-    {"ColorGradeShadows", 54.f},
-    {"ColorGradeSaturation", 55.f},
-    {"ColorGradeHighlightSaturation", 65.f},
-    {"ColorGradeBlowout", 60.f},
-    {"ColorGradeFlare", 32.f},
-    {"ColorGradeScene", 75.f},
-    {"FxLensFlare", 0.f},
-    {"FxLensFlare2", 50.f},
-    {"FxBloom", 50.f},
-};
-
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
@@ -129,26 +116,38 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 2.f,
-        .label = "Gamma Correction",
+        .label = "SDR EOTF Emulation",
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
         .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminance with Per Channel Chrominance)"},
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapHueCorrection",
-        .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 100.f,
-        .label = "Hue Correction",
+        .key = "ToneMapHueShift",
+        .binding = &shader_injection.tone_map_hue_shift,
+        .default_value = 0.f,
+        .label = "Hue Shift",
         .section = "Tone Mapping",
-        .tooltip = "Hue retention strength.",
+        .tooltip = "Hue-shift emulation strength.",
+        .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type == 2; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapBlowout",
+        .binding = &shader_injection.tone_map_blowout,
+        .default_value = 50.f,
+        .label = "Blowout",
+        .section = "Tone Mapping",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapWhiteClip",
         .binding = &shader_injection.tone_map_white_clip,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "White Clip",
         .section = "Tone Mapping",
         .min = 0.f,
@@ -168,7 +167,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 50.f,
+        .default_value = 55.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -217,17 +216,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
-        .default_value = 0.f,
-        .label = "Blowout",
-        .section = "Color Grading",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &shader_injection.tone_map_flare,
         .default_value = 0.f,
@@ -251,7 +239,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
         .binding = &shader_injection.custom_bloom,
-        .default_value = 100.f,
+        .default_value = 50.f,
         .label = "Bloom",
         .section = "Effects",
         .max = 100.f,
@@ -260,7 +248,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxLensFlare",
         .binding = &shader_injection.custom_lens_flare,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "Lens Flare 1",
         .section = "Effects",
         .max = 100.f,
@@ -278,11 +266,11 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
-        .default_value = 50.f,
-        .label = "FilmGrain",
+        .default_value = 100.f,
+        .label = "Film Grain",
         .section = "Effects",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "UnclampLighting",
@@ -327,7 +315,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Boost Sky Brightness",
         .section = "Advanced",
-        .tooltip = "Brightens sky",
+        .tooltip = "Brightens and boosts saturation of the sky",
     },
     new renodx::utils::settings::Setting{
         .key = "ClampLensFlare",
@@ -348,24 +336,6 @@ renodx::utils::settings::Settings settings = {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-          }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Recommended Settings",
-        .section = "Options",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-
-            if (RECOMMENDED_VALUES.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
           }
         },
     },
@@ -439,7 +409,7 @@ void OnPresetOff() {
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
       {"GammaCorrection", 0},
-      {"ToneMapHueCorrection", 0},
+      {"ToneMapHueShift", 100.f},
       {"ToneMapWhiteClip", 100.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
@@ -453,7 +423,7 @@ void OnPresetOff() {
       {"FxBloom", 100.f},
       {"FxLensFlare", 100.f},
       {"FxLensFlare2", 100.f},
-      {"FxGrainStrength", 50.f},
+      {"FxGrainStrength", 100.f},
       {"UnclampLighting", 0.f},
       {"ImprovedSun", 0.f},
       {"ClampAutoexposure", 0.f},
