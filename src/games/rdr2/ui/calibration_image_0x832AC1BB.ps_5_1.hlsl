@@ -50,14 +50,14 @@ void frag_main() {
     if (RENODX_GAMMA_CORRECTION) {
       peak_ratio = renodx::color::correct::Gamma(peak_ratio, true);
       if (RENODX_TONE_MAP_TYPE != 1.f) {
-        SV_Target.rgb = ReinhardPiecewiseExtended(SV_Target.rgb, 99.1f, peak_ratio, 0.4f);
+        SV_Target.rgb = renodx::tonemap::ReinhardPiecewiseExtended(SV_Target.rgb, 99.1f, peak_ratio, 0.4f);
       }
       SV_Target.rgb = renodx::color::correct::GammaSafe(SV_Target.rgb);
       SV_Target.rgb *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
       SV_Target.rgb = renodx::color::correct::GammaSafe(SV_Target.rgb, true);
     } else {
       if (RENODX_TONE_MAP_TYPE != 1.f) {
-        SV_Target.rgb = ReinhardPiecewiseExtended(SV_Target.rgb, 99.1f, peak_ratio, 0.4f);
+        SV_Target.rgb = renodx::tonemap::ReinhardPiecewiseExtended(SV_Target.rgb, 99.1f, peak_ratio, 0.4f);
       }
       SV_Target.rgb *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     }
