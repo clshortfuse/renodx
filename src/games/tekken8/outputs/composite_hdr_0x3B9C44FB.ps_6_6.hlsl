@@ -62,5 +62,5 @@ float4 main(
   SV_Target.y = (exp2(((log2(((1.0f / ((_142 * 18.6875f) + 1.0f)) * ((_142 * 18.8515625f) + 0.8359375f)))) * 78.84375f)));
   SV_Target.z = (exp2(((log2(((1.0f / ((_143 * 18.6875f) + 1.0f)) * ((_143 * 18.8515625f) + 0.8359375f)))) * 78.84375f)));
   SV_Target.w = 1.0f;
-  return SV_Target * 5;
+  return SV_Target;
 }
