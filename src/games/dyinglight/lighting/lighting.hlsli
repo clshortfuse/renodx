@@ -55,7 +55,7 @@ float ApplyCustomClampFire(float unclamped_value) {
 
 float3 ApplyCustomHueShiftFire(float3 color) {
   if (CUSTOM_HUE_SHIFT_FIRE) {
-    color = renodx::color::correct::Hue(color, renodx::tonemap::ReinhardPiecewise(color, 7.5f, 1.f), 0.75f);
+    color = renodx::color::correct::Hue(color, renodx::tonemap::ReinhardPiecewise(color, 5.f, 1.f), 0.9f);
     color = max(0, color);
   }
   return color;

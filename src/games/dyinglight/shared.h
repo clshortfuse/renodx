@@ -1,16 +1,6 @@
 #ifndef SRC_DYING_LIGHT_SHARED_H_
 #define SRC_DYING_LIGHT_SHARED_H_
 
-#define TONE_MAP_LIGHTING 1
-
-#define SUN_SOFTNESS         0.00025f
-#define ORIGINAL_THRESHOLD   0.999985337
-#define SUN_SIZE             1.f
-#define SUN_THRESHOLD        (cos(acos(ORIGINAL_THRESHOLD) * SUN_SIZE))
-#define SUN_SHIFT_X          0.0185
-#define SUN_SHIFT_Y          -0.0125
-#define SUN_BRIGHTNESS_BOOST 4.0  // 4x brighter sun
-
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
@@ -19,7 +9,7 @@ struct ShaderInjectData {
   float diffuse_white_nits;
   float graphics_white_nits;
   float gamma_correction;
-  float tone_map_hue_correction;
+  float tone_map_hue_shift;
   float tone_map_white_clip;
 
   float tone_map_exposure;
@@ -50,13 +40,13 @@ cbuffer cb13 : register(b13) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
-#define RENODX_TONE_MAP_TYPE           shader_injection.tone_map_type
-#define RENODX_PEAK_WHITE_NITS         shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS      shader_injection.diffuse_white_nits
-#define RENODX_GRAPHICS_WHITE_NITS     shader_injection.graphics_white_nits
-#define RENODX_GAMMA_CORRECTION        shader_injection.gamma_correction
-#define RENODX_TONE_MAP_HUE_CORRECTION shader_injection.tone_map_hue_correction
-#define RENODX_TONE_MAP_WHITE_CLIP     shader_injection.tone_map_white_clip
+#define RENODX_TONE_MAP_TYPE       shader_injection.tone_map_type
+#define RENODX_PEAK_WHITE_NITS     shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS  shader_injection.diffuse_white_nits
+#define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
+#define RENODX_GAMMA_CORRECTION    shader_injection.gamma_correction
+#define RENODX_TONE_MAP_HUE_SHIFT  shader_injection.tone_map_hue_shift
+#define RENODX_TONE_MAP_WHITE_CLIP shader_injection.tone_map_white_clip
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
@@ -78,6 +68,16 @@ cbuffer cb13 : register(b13) {
 #define CUSTOM_HUE_SHIFT_FIRE     shader_injection.hue_shift_fire
 #define CUSTOM_BOOST_SKY          shader_injection.boost_sky
 #define CUSTOM_CLAMP_LENS_FLARE   shader_injection.custom_clamp_lens_flare
+
+#define TONE_MAP_LIGHTING 1
+
+#define SUN_SOFTNESS         0.00025f
+#define ORIGINAL_THRESHOLD   0.999985337
+#define SUN_SIZE             1.f
+#define SUN_THRESHOLD        (cos(acos(ORIGINAL_THRESHOLD) * SUN_SIZE))
+#define SUN_SHIFT_X          0.0185
+#define SUN_SHIFT_Y          -0.0125
+#define SUN_BRIGHTNESS_BOOST CUSTOM_BOOST_SKY ? 1.0 : 4.0  // 4x brighter sun
 
 #include "../../shaders/renodx.hlsl"
 
