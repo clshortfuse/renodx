@@ -118,7 +118,7 @@ float3 ApplyGammaCorrectionToneMapAndScale(float3 untonemapped) {
   if (RENODX_GAMMA_CORRECTION == 2.f) {  // 2.2 luminance with per channel chrominance
     lum = ApplyGammaCorrectionByLuminance(untonemapped_graded);
     ch = renodx::color::correct::GammaSafe(untonemapped_graded);
-    final_untonemapped = renodx::color::correct::Chrominance(lum, ch);
+    final_untonemapped = renodx::color::correct::Chrominance(lum, ch, 1.f, 1.f);
   } else if (RENODX_GAMMA_CORRECTION) {
     final_untonemapped = renodx::color::correct::GammaSafe(untonemapped_graded);
   }

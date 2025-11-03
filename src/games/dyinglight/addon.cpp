@@ -246,7 +246,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Selects the strength of the game's custom scene grading.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 1; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -425,11 +424,6 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-3",
         .tint = 0xFF5A16,
         .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse"); },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
-        .section = "About",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
