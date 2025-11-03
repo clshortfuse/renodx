@@ -28,21 +28,9 @@ ShaderInjectData shader_injection;
 const std::unordered_map<std::string, float> MATCH_SDR_VALUES = {
     {"GammaCorrection", 1.f},
     {"ToneMapScaling", 1.f},
-    {"ToneMapHueCorrection", 0.f},
+    {"ColorGradeHighlights", 50.f},
+    {"ColorGradeShadows", 50.f},
     {"UnclampLighting", 0.f},
-    {"UseSRGBLUTEncoding", 0.f},
-};
-
-const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
-    {"ColorGradeShadows", 55.f},
-};
-
-const std::unordered_map<std::string, float> PRESERVE_SHADOW_DETAIL = {
-    {"GammaCorrection", 0.f},
-    {"ColorGradeShadows", 55.f},
-    {"ColorGradeContrast", 51.f},
-    {"ColorGradeHighlightSaturation", 55.f},
-    {"ColorGradeFlare2", 33.f},
     {"UseSRGBLUTEncoding", 0.f},
 };
 
@@ -115,7 +103,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
         .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 20.f,
+        .default_value = 0.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Hue retention strength.",
@@ -127,7 +115,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapBlowoutRestoration",
         .binding = &shader_injection.tone_map_blowout_restoration,
-        .default_value = 100.f,
+        .default_value = 70.f,
         .label = "Blowout Restoration",
         .section = "Tone Mapping",
         .tooltip = "Restores color blowout from per-channel grading.",
@@ -159,7 +147,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 50.f,
+        .default_value = 54.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -169,7 +157,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 50.f,
+        .default_value = 75.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
@@ -225,17 +213,6 @@ renodx::utils::settings::Settings settings = {
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeFlare2",
-        .binding = &shader_injection.tone_map_flare2,
-        .default_value = 0.f,
-        .label = "Flare 2",
-        .section = "Color Grading",
-        .tooltip = "Flare/Glare Compensation 2, operates by luminance with per channel chrominance, adds saturation in shadows",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
@@ -312,42 +289,6 @@ renodx::utils::settings::Settings settings = {
 
             if (MATCH_SDR_VALUES.contains(setting->key)) {
               renodx::utils::settings::UpdateSetting(setting->key, MATCH_SDR_VALUES.at(setting->key));
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
-          }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Recommended Settings",
-        .section = "Options",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-
-            if (RECOMMENDED_VALUES.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
-          }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preserve Shadow Detail",
-        .section = "Options",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-
-            if (PRESERVE_SHADOW_DETAIL.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, PRESERVE_SHADOW_DETAIL.at(setting->key));
             } else {
               renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
             }
