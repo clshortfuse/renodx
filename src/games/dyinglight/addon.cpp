@@ -77,7 +77,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Reinhard Piecewise"},
+        .labels = {"Vanilla", "None", "Hermite Spline"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
