@@ -31,9 +31,9 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             "ToneMapType",
             {
                 .binding = &shader_injection.tone_map_type,
-                .default_value = 2.f,
-                .labels = {"Vanilla (SDR)", "None", "ACES", "Vanilla+ (ACES + UE Filmic Blend)"},
-                .parse = [](float value) { return value == 0.f ? 4.f : value; },  // hacky way but better than rewriting code
+                .default_value = 3.f,
+                .labels = {"UE ACES (HDR)", "None", "ACES", "Vanilla+ (ACES + UE Filmic Blend)"},
+                .parse = [](float value) { return value; },
             },
         },
         {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits}},
@@ -44,7 +44,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         /* {"SceneGradeSaturationCorrection", &shader_injection.scene_grade_saturation_correction},
         {"SceneGradeHueCorrection", &shader_injection.scene_grade_hue_correction},
         {"SceneGradeBlowoutRestoration", &shader_injection.scene_grade_blowout_restoration}, */
-        {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure}},
+        {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure, .default_value = 0.75f}},
         {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights}},
         {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows}},
         {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast}},
@@ -55,23 +55,24 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
     }),
     {
         new renodx::utils::settings::Setting{
-            .key = "heroLightStrength",
-            .binding = &shader_injection.custom_hero_light_strength,
-            .default_value = 25.f,
-            .label = "Character Light Strength",
-            .section = "Tone Mapping",
-            .max = 100.f,
-            .parse = [](float value) { return value * 0.01f; },
-        },
-        new renodx::utils::settings::Setting{
             .key = "lightStrength",
             .binding = &shader_injection.custom_lights_strength,
             .default_value = 50.f,
             .label = "Lights Strength",
-            .section = "Tone Mapping",
+            .section = "Lighting",
             .max = 100.f,
             .parse = [](float value) { return value * 0.01f; },
         },
+        /* new renodx::utils::settings::Setting{
+            .key = "heroLightStrength",
+            .binding = &shader_injection.custom_hero_light_strength,
+            .default_value = 25.f,
+            .label = "Character Light Strength",
+            .section = "Lighting",
+            .tooltip = "ONLY AFFECTS CERTAIN STAGES",
+            .max = 100.f,
+            .parse = [](float value) { return value * 0.01f; },
+        }, */
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "Discord",
@@ -150,11 +151,10 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
-      {"ToneMapType", 4.f},
+      {"ToneMapType", 3.f},
       {"ToneMapPeakNits", 203.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
-      {"ToneMapGammaCorrection", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -196,9 +196,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       // while (IsDebuggerPresent() == 0) Sleep(100);
-      renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
-        return (params.size() < 20);
-      };
 
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
@@ -207,6 +204,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::swapchain::force_borderless = true;
         renodx::mods::swapchain::prevent_full_screen = true;
+
+        renodx::mods::swapchain::use_resize_buffer = true;
+        renodx::mods::swapchain::use_resize_buffer_on_demand = true;
+        renodx::mods::swapchain::set_color_space = false;
+        renodx::mods::swapchain::SetUseHDR10(true);
 
         initialized = true;
       }
@@ -220,7 +222,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  // renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
