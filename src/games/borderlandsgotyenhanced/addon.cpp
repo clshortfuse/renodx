@@ -256,13 +256,13 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() == 1; },
     },
     new renodx::utils::settings::Setting{
-      .key = "FxFlareOut",
-      .binding = &shader_injection.custom_flare_out,
-      .default_value = 50.f,
-      .label = "Flare Out",
-      .section = "Effects",
-      .max = 100.f,
-      .parse = [](float value) { return value * 0.02f; },
+        .key = "FxFlareOut",
+        .binding = &shader_injection.custom_flare_out,
+        .default_value = 50.f,
+        .label = "Flare Out",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
@@ -281,6 +281,15 @@ renodx::utils::settings::Settings settings = {
         .label = "Cell Shading",
         .section = "Effects",
         .labels = {"Off", "Vanilla"},
+    },
+        new renodx::utils::settings::Setting{
+        .key = "ShadowsDesaturation",
+        .binding = &shader_injection.shadows_desaturation,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Highlights & Shadows",
+        .section = "Effects",
+        .labels = {"Alternative", "Vanilla"},
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -344,6 +353,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   } else {
     settings[2]->default_value = 1000.f;
   }
+  
+  fired_on_init_swapchain = true;
 }
 
 }  // namespace
