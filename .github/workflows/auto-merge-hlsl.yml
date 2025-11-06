@@ -51,14 +51,18 @@ jobs:
             const owner = context.repo.owner;
             const repo  = context.repo.repo;
 
+            // Abort early if the PR is a draft.
+            if (pr.draft) {
+              core.setFailed('PR is a draft; skipping merge.');
+              return;
+            }
+
             // Fetch the list of files changed in this PR.
             const { data: files } = await github.rest.pulls.listFiles({
               owner,
               repo,
               pull_number: pr.number,
             });
-
-            let shouldMerge = false;
 
             let shouldMerge = false;
             let gameName = null;
