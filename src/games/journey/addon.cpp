@@ -344,6 +344,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   } else {
     settings[2]->default_value = 1000.f;
   }
+
+  fired_on_init_swapchain = true;
 }
 
 }  // namespace
