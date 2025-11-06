@@ -327,12 +327,15 @@ bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
+  if (!renodx::utils::swapchain::IsDXGI(swapchain)) return;
 
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
     settings[2]->default_value = roundf(peak.value());
   } else {
     settings[2]->default_value = 1000.f;
+
+    fired_on_init_swapchain = true;
   }
 }
 
