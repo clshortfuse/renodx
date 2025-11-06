@@ -49,7 +49,11 @@ void main(
   float3 hdr_color = r0.rgb;
   float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
 
-  r0.xyz = saturate(-SceneShadowsAndDesaturation.xyz + r0.xyz);
+  if (SHADOWS_DESATURATION == 0) {
+    r0.xyz = saturate(-SceneShadowsAndDesaturation.xyz) + r0.xyz;
+  } else {
+    r0.xyz = saturate(-SceneShadowsAndDesaturation.xyz + r0.xyz);
+  }
   r0.xyz = SceneInverseHighLights.xyz * r0.xyz;
   r0.xyz = max(float3(9.99999975e-05,9.99999975e-05,9.99999975e-05), abs(r0.xyz));
   r0.xyz = log2(r0.xyz);

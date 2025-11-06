@@ -27,6 +27,7 @@
 #define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                        shader_injection.custom_random
 #define CELL_SHADING                         shader_injection.cell_shading
+#define SHADOWS_DESATURATION                 shader_injection.shadows_desaturation
 #define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.f
@@ -58,6 +59,7 @@ struct ShaderInjectData {
   float custom_film_grain;
   float custom_random;
   float cell_shading;
+  float shadows_desaturation;
 };
 
 #ifndef __cplusplus
