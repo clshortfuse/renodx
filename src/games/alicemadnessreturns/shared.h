@@ -36,8 +36,8 @@ struct ShaderInjectData {
 
   float custom_5;
   float custom_6;
-  float custom_vignette;
-  float custom_bloom;
+  float custom_auto_exposure;
+  float shadows_desaturation;
 
   float custom_film_grain;
   float custom_random;
@@ -76,8 +76,8 @@ float4 shader_injection[8] : register(c50);
 #define CUSTOM_4                               shader_injection[5][3]
 #define CUSTOM_5                               shader_injection[6][0]
 #define CUSTOM_6                               shader_injection[6][1]
-#define CUSTOM_7                               shader_injection[6][2]
-#define CUSTOM_8                               shader_injection[6][3]
+#define CUSTOM_AUTO_EXPOSURE                   shader_injection[6][2]
+#define SHADOWS_DESATURATION                   shader_injection[6][3]
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection[7][0]
 #define CUSTOM_RANDOM                          shader_injection[7][1]
 
@@ -122,8 +122,8 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_4                               shader_injection.custom_4
 #define CUSTOM_5                               shader_injection.custom_5
 #define CUSTOM_6                               shader_injection.custom_6
-#define CUSTOM_7                               shader_injection.custom_7
-#define CUSTOM_8                               shader_injection.custom_8
+#define CUSTOM_AUTO_EXPOSURE                   shader_injection.custom_auto_exposure
+#define SHADOWS_DESATURATION                   shader_injection.shadows_desaturation
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
