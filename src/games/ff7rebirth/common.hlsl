@@ -3,6 +3,8 @@
 
 #include "./shared.h"
 
+static const float VANILLA_PAPERWHITE = 250.f;
+
 // AdvancedAutoHDR pass to generate some HDR brightess out of an SDR signal.
 // This is hue conserving and only really affects highlights.
 // "sdr_color" is meant to be in "SDR range", as in, a value of 1 matching SDR white (something between 80, 100, 203, 300 nits, or whatever else)
@@ -176,12 +178,13 @@ float3 applyReferenceACES(float3 untonemapped, float midGray = 0.1f) {
 
 float3 extractColorGradeAndApplyTonemap(float3 ungraded_bt709, float3 lutOutputColor_bt2020, float midGray, float2 position) {
   // normalize LUT output paper white and convert to BT.709
-  float3 graded_aces_bt709 = renodx::color::bt709::from::BT2020(lutOutputColor_bt2020 * (10000.f / 250.f));
+  // Same as renodx::color::pq::Decode(color, VANILLA_PAPERWHITE)
+  float3 graded_aces_bt709 = renodx::color::bt709::from::BT2020(lutOutputColor_bt2020 * (10000.f / VANILLA_PAPERWHITE));
 
   float3 tonemapped_bt709;
   if (RENODX_TONE_MAP_TYPE != 0) {
     // separate the display mapping from the color grading/tone mapping
-    float3 reference_tonemap_bt709 = renodx::tonemap::ReinhardScalable(ungraded_bt709, 1000.f / 250.f, 0.f, 0.18f, midGray);
+    float3 reference_tonemap_bt709 = renodx::tonemap::ReinhardScalable(ungraded_bt709, 1000.f / VANILLA_PAPERWHITE, 0.f, 0.18f, midGray);
     float3 graded_untonemapped_bt709 = UpgradeToneMapPerChannel(ungraded_bt709, reference_tonemap_bt709, graded_aces_bt709, 1.f);
 
     tonemapped_bt709 = ToneMap(graded_untonemapped_bt709, graded_aces_bt709, midGray);
@@ -215,7 +218,7 @@ float3 extractColorGradeAndApplyTonemap(float3 ungraded_bt709, float3 lutOutputC
 
   tonemapped_bt709 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
 
+  // Same as renodx::color::pq::Decode(color, VANILLA_PAPERWHITE) but without the PQ encoding
   return tonemapped_bt709 * (RENODX_DIFFUSE_WHITE_NITS / 10000.f);
 }
-
 #endif  // SRC_FF7REBIRTH_COMMON_HLSL_
