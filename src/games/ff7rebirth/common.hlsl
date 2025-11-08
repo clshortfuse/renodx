@@ -177,9 +177,8 @@ float3 applyReferenceACES(float3 untonemapped, float midGray = 0.1f) {
 }
 
 float3 extractColorGradeAndApplyTonemap(float3 ungraded_bt709, float3 lutOutputColor_bt2020, float midGray, float2 position) {
-  // normalize LUT output paper white and convert to BT.709
-  // Same as renodx::color::pq::Decode(color, VANILLA_PAPERWHITE)
-  float3 graded_aces_bt709 = renodx::color::bt709::from::BT2020(lutOutputColor_bt2020 * (10000.f / VANILLA_PAPERWHITE));
+  // Already unscaled by the PQ decoding with VANILLA_TONEMAP
+  float3 graded_aces_bt709 = renodx::color::bt709::from::BT2020(lutOutputColor_bt2020);
 
   float3 tonemapped_bt709;
   if (RENODX_TONE_MAP_TYPE != 0) {
@@ -217,8 +216,8 @@ float3 extractColorGradeAndApplyTonemap(float3 ungraded_bt709, float3 lutOutputC
   tonemapped_bt709 = convertColorSpace(tonemapped_bt709);
 
   tonemapped_bt709 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
-
-  // Same as renodx::color::pq::Decode(color, VANILLA_PAPERWHITE) but without the PQ encoding
-  return tonemapped_bt709 * (RENODX_DIFFUSE_WHITE_NITS / 10000.f);
+  
+  // Keep it linear
+  return tonemapped_bt709;
 }
 #endif  // SRC_FF7REBIRTH_COMMON_HLSL_

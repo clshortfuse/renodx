@@ -5,42 +5,62 @@
 
 SamplerState View_SharedBilinearClampedSampler : register(s0);
 
-void BlendOverlay(inout float4 background, float3 tonemapped_bt2020, float4 TEXCOORD_1) {
-  float3 normalizedTonemapped_bt2020 = tonemapped_bt2020 * (10000.f / RENODX_DIFFUSE_WHITE_NITS) * 10000.f;
+struct OutputSignature {
+  float4 SV_Target : SV_TARGET;     // Original picture
+  float4 SV_Target_1 : SV_Target1;  // picture without UI
+  float4 SV_Target_2 : SV_Target2;  // Only UI
+};
 
+#if defined(USE_OVERLAY)
+void BlendOverlay(inout float4 background, float3 tonemapped_bt2020, float4 TEXCOORD_1) {
+  float3 scaledTonemapped_bt2020 = tonemapped_bt2020 * RENODX_DIFFUSE_WHITE_NITS;
   // Clamp RGB to avoid division by zero
   float epsilon = 9.999999747378752e-05f;
   float3 overlayColor_bt2020 = max(HDRCompositionContextColor.xyz, epsilon);  // In bt2020
 
   // Luminance of HDR color and a reference white‐scale factor
-  float3 lumWeights = float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f);  // Vanilla used bt709 coefficients
+  float3 lumWeights = float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f);  // Vanilla uses bt709 coefficients
 
-  float invLuma = 1.0f / dot(overlayColor_bt2020, lumWeights);
-  float whiteScale = invLuma * (dot(normalizedTonemapped_bt2020, lumWeights) * epsilon);  // _296
-  overlayColor_bt2020 = saturate(overlayColor_bt2020 * whiteScale);
-  // float3 overlayColor_bt709 = renodx::color::bt709::from::BT2020(overlayColor_bt2020);
-  float3 overlayColor_bt709 = overlayColor_bt2020;
+  float overlayLuma = dot(overlayColor_bt2020, lumWeights);
+  float scaledSceneLuma = dot(scaledTonemapped_bt2020, lumWeights);
+  float invOverlayLuma = 1.0f / overlayLuma;
+  float whiteScale = invOverlayLuma * (scaledSceneLuma * epsilon);
+  float3 scaledOverlayColor_bt2020 = saturate(overlayColor_bt2020 * whiteScale);
+  float3 lutInput = renodx::color::pq::EncodeSafe(scaledOverlayColor_bt2020);
+
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.scaling = 0.f;
+  lut_config.type_input = renodx::lut::config::type::LINEAR;  // We manually PQ Encode
+  lut_config.type_output = renodx::lut::config::type::SRGB;
+  lut_config.recolor = 0.f;
+
+  // idk what they're doing within the lut, but they're scaling it with some value
+  float3 scaledOverlayColor_bt709 = renodx::lut::Sample(
+      BT2020PQTosRGBLUT,
+      lut_config,
+      lutInput);
 
   // Calculate vignette falloff from depth/position
-  float normalizedDepth = (1.0f / max(0.001f, HDRCompositionContext.z)) * TEXCOORD_1.w;
+  float normalizedDepth = (1.0f / max(0.0010000000474974513f, HDRCompositionContext.z)) * TEXCOORD_1.w;
   float depthSq = normalizedDepth * normalizedDepth;
   float distanceSq = dot(float3(TEXCOORD_1.xy, normalizedDepth),
                          float3(TEXCOORD_1.xy, normalizedDepth));
   float normalizedDistance = depthSq / max(1e-6f, distanceSq);
-  float vignetteFalloff = (saturate(normalizedDistance * normalizedDistance) - 1.0f) * HDRCompositionContext.y;
+  float normalizedDistanceSq = saturate(normalizedDistance * normalizedDistance);
+  float vignetteFalloffY = (normalizedDistanceSq - 1.0f);
+  vignetteFalloffY *= HDRCompositionContext.y;
+  float vignetteFalloffX = vignetteFalloffY * HDRCompositionContext.x;
+  vignetteFalloffX += 1.f;
 
-  // Calculate HDR overlay blend factor (negative = darkening effect)
-  float overlayBlendFactor = -((HDRCompositionContext.x * vignetteFalloff) * background.a);
+  float blendFactor = HDRCompositionContext.x * vignetteFalloffY;
+  blendFactor *= background.a;
+  blendFactor = -blendFactor;
+  scaledOverlayColor_bt709 = scaledOverlayColor_bt709 * blendFactor;
 
-  // Apply HDR overlay to background
-  float3 overlayedBackground;
-  overlayedBackground.rgb = ((overlayColor_bt709.rgb) * overlayBlendFactor) + background.rgb;
-
-  // Calculate background alpha with vignette
-  float overlayedBackgroundAlpha = background.a * ((vignetteFalloff * HDRCompositionContext.x) + 1.0f);
-
-  background = float4(overlayedBackground, overlayedBackgroundAlpha);
+  background.rgb = background.rgb + scaledOverlayColor_bt709;
+  background.a = background.a * vignetteFalloffX;
 }
+#endif
 
 float getMidGray() {
   float3 lutInputColor = saturate(renodx::color::pq::Encode(0.18f, 100.f));
@@ -53,10 +73,16 @@ float getMidGray() {
   return renodx::color::y::from::BT2020(lutOutputColor_bt2020);
 }
 
+#if defined(USE_FG)
+OutputSignature HDRComposite(noperspective float2 TEXCOORD: TEXCOORD,
+                             noperspective float4 TEXCOORD_1: TEXCOORD1,
+                             noperspective float4 SV_Position: SV_Position) {
+#else
 float4 HDRComposite(noperspective float2 TEXCOORD: TEXCOORD,
                     noperspective float4 TEXCOORD_1: TEXCOORD1,
                     noperspective float4 SV_Position: SV_Position)
     : SV_Target {
+#endif
   float4 SV_Target;
   bool _18 = !((DeviceCorrectorContext.z) == 0.0f);
   float _34 = (SV_Position.x) - (float((uint)(ViewportDestination_ViewportMin.x)));
@@ -124,7 +150,7 @@ float4 HDRComposite(noperspective float2 TEXCOORD: TEXCOORD,
   // LUT
   float3 lutInputColor = saturate(renodx::color::pq::EncodeSafe(ungraded_bt709, 100.f));
   float3 lutResult = renodx::lut::Sample(BT709PQToBT2020PQLUT, View_SharedBilinearClampedSampler, lutInputColor, 32u);
-  float3 lutOutputColor_bt2020 = renodx::color::pq::DecodeSafe(lutResult);
+  float3 lutOutputColor_bt2020 = renodx::color::pq::DecodeSafe(lutResult, VANILLA_PAPERWHITE);
   float3 tonemapped = lutOutputColor_bt2020;
 
 #if 1
@@ -146,7 +172,6 @@ float4 HDRComposite(noperspective float2 TEXCOORD: TEXCOORD,
       video = renodx::color::correct::GammaSafe(video.rgb);
       video = renodx::color::bt2020::from::BT709(video);
       if (CUSTOM_HDR_VIDEOS) video = PumboAutoHDR(video, 7.5f);
-      video *= RENODX_DIFFUSE_WHITE_NITS;
     }
     tonemapped.rgb = video.rgb;
   }
@@ -180,36 +205,50 @@ float4 HDRComposite(noperspective float2 TEXCOORD: TEXCOORD,
 #endif
 
   float3 gammaCorrectedUI = renodx::color::correct::Gamma(max(0, UI_Texture.xyz));
-  float _347 = gammaCorrectedUI.r;
-  float _348 = gammaCorrectedUI.g;
-  float _349 = gammaCorrectedUI.b;
 
   // UI Blending
-
+  /* 1. Reinhard tonemap values behind UI based on alpha (Reinhard applies after scaling with paper white)
+  2. Convert gamma to bt2020 and scale with graphics white
+  3. Lerp both in bt2020
+  4. Encode blend with 1.f scaling
+  5. Apply Noise */
   float uiAlpha = UI_Texture.w;
-  float uiAlphaSq = uiAlpha * uiAlpha;  // _316
+  float uiAlphaSq = uiAlpha * uiAlpha;
 
-  // Reinhard stuff behind UI?
-  float3 lumWeight = 1.0f / ((tonemapped.rgb) + 1.0f);
+  // SDR blends in bt709, but it doesn't matter
+  // Reinhard stuff behind UI
+  float3 darkeningScale = 1.f / ((tonemapped.rgb) + 1.f);  // Linear bt2020 (not scaled)
+  darkeningScale = lerp(darkeningScale.rgb, 1.f, uiAlphaSq);
+  float3 scaledTonemapped = tonemapped.rgb * RENODX_DIFFUSE_WHITE_NITS;  // Scale tonemapped image
+  float3 adjustedTonemapped = (uiAlpha * scaledTonemapped.rgb) * darkeningScale.rgb;
 
-  // Adaptive blend: more squared alpha in bright areas, linear alpha in dark areas
-  float3 adaptiveAlpha = lerp(lumWeight, 1.f, uiAlphaSq);
-
-  gammaCorrectedUI *= RENODX_GRAPHICS_WHITE_NITS;
   gammaCorrectedUI = renodx::color::bt2020::from::BT709(gammaCorrectedUI);
+  gammaCorrectedUI *= RENODX_GRAPHICS_WHITE_NITS;                     // Scale UI
+  float3 composited = gammaCorrectedUI.rgb + adjustedTonemapped.rgb;  // Blend
 
-  float3 outputColor = gammaCorrectedUI + ((tonemapped.rgb) * (uiAlpha * 10000.f) * adaptiveAlpha);
-  outputColor = renodx::color::pq::Encode(outputColor, 1.f);
+  OutputSignature output_signature;
+  output_signature.SV_Target.rgb = composited;
+  output_signature.SV_Target.rgb = renodx::color::pq::Encode(output_signature.SV_Target.rgb, 1.f);
+  output_signature.SV_Target.a = 0.0f;
 
-  if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
-    return float4(outputColor, 0);
+  output_signature.SV_Target_1.rgb = renodx::color::pq::Encode(scaledTonemapped.rgb, 1.f);
+  output_signature.SV_Target_1.a = 0.f;
+
+  [branch]
+  if (CUSTOM_FILM_GRAIN_STRENGTH == 0.f) {
+    float noise = View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4((int(SV_Position.x) & 127), (int(SV_Position.y) & 127), (View_StateFrameIndex & 63), 0)).x;
+    float _479 = (noise * 2.0f) + -1.0f;
+    float _496 = (float((int)(((int)(uint)((bool)(_479 > 0.0f))) - ((int)(uint)((bool)(_479 < 0.0f))))) * 0.0009775171056389809f) * (1.0f - sqrt(1.0f - abs(_479)));
+    output_signature.SV_Target.rgb = saturate(select(((abs((output_signature.SV_Target.rgb * 2.0f) + -1.0f) + -0.9980449676513672f) < 0.0f), (_496 + output_signature.SV_Target.rgb), output_signature.SV_Target.rgb));
+    output_signature.SV_Target_1.rgb = saturate(select(((abs((output_signature.SV_Target_1.rgb * 2.0f) + -1.0f) + -0.9980449676513672f) < 0.0f), (_496 + output_signature.SV_Target_1.rgb), output_signature.SV_Target_1.rgb));
   }
-  float _408 = View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4((int(SV_Position.x) & 127), (int(SV_Position.y) & 127), (View_StateFrameIndex & 63), 0)).x;
-  float _425 = ((1.0f - (sqrt((1.0f - (abs(_408)))))) * (float(((int(((bool)((_408 > 0.0f))))) - (int(((bool)((_408 < 0.0f))))))))) * 0.0009775171056389809f;
-  SV_Target.x = (saturate(((((bool)((((abs(((outputColor.r * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_425 + outputColor.r) : outputColor.r))));
-  SV_Target.y = (saturate(((((bool)((((abs(((outputColor.g * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_425 + outputColor.g) : outputColor.g))));
-  SV_Target.z = (saturate(((((bool)((((abs(((outputColor.b * 2.0f) + -1.0f))) + -0.9980449676513672f) < 0.0f))) ? (_425 + outputColor.b) : outputColor.b))));
-  SV_Target.w = 0.0f;
 
-  return SV_Target;
+  output_signature.SV_Target_2.rgb = renodx::color::pq::Encode(gammaCorrectedUI.rgb, 1.f);
+  output_signature.SV_Target_2.a = max(0.0f, (1.0f - uiAlpha));
+
+#if defined(USE_FG)
+  return output_signature;
+#else
+  return output_signature.SV_Target;
+#endif
 }
