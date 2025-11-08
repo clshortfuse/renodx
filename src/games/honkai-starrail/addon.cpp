@@ -42,7 +42,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Frostbite", "RenoDRT", "DICE"},
+        .labels = {"Vanilla", "None", "Frostbite", "RenoDRT", "DICE", "Vanilla+"},
         .tint = 0xB12419,
     },
     new renodx::utils::settings::Setting{
@@ -97,7 +97,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Exposure",
         .section = "Color Grading",
         .tint = 0x610512,
-        .max = 10.f,
+        .max = 2.f,
         .format = "%.2f",
     },
     new renodx::utils::settings::Setting{
