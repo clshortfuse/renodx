@@ -377,7 +377,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Background blur fix",
         .section = "Effects",
-        .labels = {"Vanilla", "Centered", "Symmetrical"},
+        .labels = {"Vanilla", "Offset texcoord"},
     },
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
