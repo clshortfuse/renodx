@@ -1,6 +1,6 @@
 #include "./common.hlsl"
-//used in character ults  (herta)
-// ---- Created with 3Dmigoto v1.4.1 on Tue Feb 25 23:51:57 2025
+// used in character ults  (herta)
+//  ---- Created with 3Dmigoto v1.4.1 on Tue Feb 25 23:51:57 2025
 Texture2D<float4> t4 : register(t4);
 
 Texture2D<float4> t3 : register(t3);
@@ -15,38 +15,32 @@ SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
-cbuffer cb0 : register(b0)
-{
+cbuffer cb0 : register(b0) {
   float4 cb0[404];
 }
-
-
-
 
 // 3Dmigoto declarations
 #define cmp -
 
-
 void main(
-  float4 v0 : SV_POSITION0,
-  float2 v1 : TEXCOORD0,
-  out float4 o0 : SV_Target0)
-{
-  float4 r0,r1,r2,r3;
+    float4 v0: SV_POSITION0,
+    float2 v1: TEXCOORD0,
+    out float4 o0: SV_Target0) {
+  float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = v1.xyxy * float4(2,2,2,2) + float4(-1,-1,-1,-1);
+  r0.xyzw = v1.xyxy * float4(2, 2, 2, 2) + float4(-1, -1, -1, -1);
   r1.x = dot(r0.zw, r0.zw);
   r0.xyzw = r1.xxxx * r0.xyzw;
   r0.xyzw = cb0[395].zzzz * r0.xyzw;
-  r0.xyzw = r0.xyzw * float4(-0.333333343,-0.333333343,-0.666666687,-0.666666687) + v1.xyxy;
+  r0.xyzw = r0.xyzw * float4(-0.333333343, -0.333333343, -0.666666687, -0.666666687) + v1.xyxy;
   r1.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
-  r1.xyz = max(float3(0,0,0), r1.xyz);
+  r1.xyz = max(float3(0, 0, 0), r1.xyz);
   r2.xyzw = t0.SampleLevel(s0_s, r0.xy, 0).xyzw;
-  r2.xyz = max(float3(0,0,0), r2.xyz);
+  r2.xyz = max(float3(0, 0, 0), r2.xyz);
   r0.xyzw = t0.SampleLevel(s0_s, r0.zw, 0).xyzw;
-  r0.xyz = max(float3(0,0,0), r0.xyz);
+  r0.xyz = max(float3(0, 0, 0), r0.xyz);
   r2.xyz = cb0[397].xyz * r2.xyz;
   r1.xyz = r1.xyz * cb0[396].xyz + r2.xyz;
   r0.xyz = r0.xyz * cb0[398].xyz + r1.xyz;
@@ -74,9 +68,9 @@ void main(
     r0.w = log2(r0.w);
     r0.w = cb0[403].w * r0.w;
     r0.w = exp2(r0.w);
-    r1.xyz = float3(1,1,1) + -cb0[402].xyz;
+    r1.xyz = float3(1, 1, 1) + -cb0[402].xyz;
     r1.xyz = r0.www * r1.xyz + cb0[402].xyz;
-    r0.w = dot(v0.xy, float2(0.0671105608,0.00583714992));
+    r0.w = dot(v0.xy, float2(0.0671105608, 0.00583714992));
     r0.w = frac(r0.w);
     r0.w = 52.9829178 * r0.w;
     r0.w = frac(r0.w);
@@ -84,8 +78,8 @@ void main(
     r0.w = floor(r0.w);
     r0.w = -2 + r0.w;
     r2.x = r0.w * 0.00392156886 + r1.x;
-    r3.xyzw = float4(2.08299994,4.8670001,4.16599989,9.73400021) + v0.xyxy;
-    r0.w = dot(r3.xy, float2(0.0671105608,0.00583714992));
+    r3.xyzw = float4(2.08299994, 4.8670001, 4.16599989, 9.73400021) + v0.xyxy;
+    r0.w = dot(r3.xy, float2(0.0671105608, 0.00583714992));
     r0.w = frac(r0.w);
     r0.w = 52.9829178 * r0.w;
     r0.w = frac(r0.w);
@@ -93,7 +87,7 @@ void main(
     r0.w = floor(r0.w);
     r0.w = -2 + r0.w;
     r2.y = r0.w * 0.00392156886 + r1.y;
-    r0.w = dot(r3.zw, float2(0.0671105608,0.00583714992));
+    r0.w = dot(r3.zw, float2(0.0671105608, 0.00583714992));
     r0.w = frac(r0.w);
     r0.w = 52.9829178 * r0.w;
     r0.w = frac(r0.w);
@@ -103,12 +97,12 @@ void main(
     r2.z = r0.w * 0.00392156886 + r1.z;
     r0.xyz = r2.xyz * r0.xyz;
   }
-  r0.xyz = r0.zxy * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
+  r0.xyz = r0.zxy * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
   r0.xyz = log2(r0.xyz);
-  r0.xyz = saturate(r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
+  r0.xyz = saturate(r0.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
   r0.yzw = cb0[39].zzz * r0.xyz;
   r0.y = floor(r0.y);
-  r1.xy = float2(0.5,0.5) * cb0[39].xy;
+  r1.xy = float2(0.5, 0.5) * cb0[39].xy;
   r1.yz = r0.zw * cb0[39].xy + r1.xy;
   r1.x = r0.y * cb0[39].y + r1.y;
   r2.xyzw = t3.SampleLevel(s0_s, r1.xz, 0).xyzw;
@@ -120,7 +114,7 @@ void main(
   r0.yzw = r1.xyz + -r2.xyz;
   r0.xyz = r0.xxx * r0.yzw + r2.xyz;
   r1.xyz = saturate(r0.xyz);
-  o0.w = dot(r1.xyz, float3(0.212672904,0.715152204,0.0721750036));
+  o0.w = dot(r1.xyz, float3(0.212672904, 0.715152204, 0.0721750036));
   // r1.xyz = cmp(float3(0,0,0) < r0.xyz);
   // r2.xyz = cmp(r0.xyz < float3(0,0,0));
   // r1.xyz = (int3)-r1.xyz + (int3)r2.xyz;

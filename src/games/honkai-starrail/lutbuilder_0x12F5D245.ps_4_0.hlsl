@@ -1,6 +1,6 @@
 #include "./tonemap.hlsli"
 
-// ---- Created with 3Dmigoto v1.4.1 on Thu Jun 19 08:11:22 2025
+// ---- Created with 3Dmigoto v1.4.1 on Sat Nov  8 01:13:21 2025
 
 // 3Dmigoto declarations
 
@@ -12,15 +12,15 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.yz = -cb0[20].yz + v1.xy;
-  r1.x = cb0[20].x * r0.y;
+  r0.yz = -cb0[25].yz + v1.xy;
+  r1.x = cb0[25].x * r0.y;
   r0.x = frac(r1.x);
-  r1.x = r0.x / cb0[20].x;
+  r1.x = r0.x / cb0[25].x;
   r0.w = -r1.x + r0.y;
 
   // ARRI_C1000_NO_CUT
-  r0.xyz = r0.xzw * cb0[20].www + float3(-0.413588405, -0.413588405, -0.413588405);
-  r0.xyz = r0.xyz * cb0[22].zzz + float3(0.0275523961, 0.0275523961, 0.0275523961);
+  r0.xyz = r0.xzw * cb0[25].www + float3(-0.413588405, -0.413588405, -0.413588405);
+  r0.xyz = r0.xyz * cb0[27].zzz + float3(0.0275523961, 0.0275523961, 0.0275523961);
   r0.xyz = float3(13.6054821, 13.6054821, 13.6054821) * r0.xyz;
   r0.xyz = exp2(r0.xyz);
   r0.xyz = float3(-0.0479959995, -0.0479959995, -0.0479959995) + r0.xyz;
@@ -101,7 +101,7 @@ void main(
   o0.xyz = applyUserTonemap(untonemapped_bt709, r0.xyz);
   o0.w = 1;
   return;
-  r0.w = cmp(0.800000012 < cb0[30].z);
+  r0.w = cmp(0.800000012 < cb0[35].z);
   if (r0.w != 0) {
     o0.xyz = r0.xyz;
     o0.w = 1;
