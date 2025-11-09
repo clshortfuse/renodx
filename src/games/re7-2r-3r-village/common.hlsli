@@ -117,7 +117,7 @@ float3 ApplyPreDisplayMap(float3 untonemapped) {
 }
 
 float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float channel_max = 100.f) {
-  float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
+  float peak = renodx::math::Max(untonemapped);
   float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, channel_max, output_max, rolloff_start);
   float scale = renodx::math::DivideSafe(mapped_peak, peak, 0.f);
 
@@ -211,15 +211,15 @@ float3 ApplyGammaCorrection(float3 color_input) {
 
 /// Piecewise linear + exponential compression to a target value starting from a specified number.
 /// https://www.ea.com/frostbite/news/high-dynamic-range-color-grading-and-display-in-frostbite
-#define EXPONENTIALROLLOFF_GENERATOR(T)                                              \
-  T ExponentialRollOff(T input, float rolloff_start, float output_max, float clip) { \
-    T rolloff_size = output_max - rolloff_start;                                     \
-    T overage = -max((T)0, input - rolloff_start);                                   \
-    T clip_size = rolloff_start - clip;                                              \
-    T rolloff_value = (T)1.0f - exp(overage / rolloff_size);                         \
-    T clip_value = (T)1.0f - exp(clip_size / rolloff_size);                          \
-    T new_overage = mad(rolloff_size, rolloff_value / clip_value, overage);          \
-    return input + new_overage;                                                      \
+#define EXPONENTIALROLLOFF_GENERATOR(T)                                                      \
+  T ExponentialRollOffExtended(T input, float rolloff_start, float output_max, float clip) { \
+    T rolloff_size = output_max - rolloff_start;                                             \
+    T overage = -max((T)0, input - rolloff_start);                                           \
+    T clip_size = rolloff_start - clip;                                                      \
+    T rolloff_value = (T)1.0f - exp(overage / rolloff_size);                                 \
+    T clip_value = (T)1.0f - exp(clip_size / rolloff_size);                                  \
+    T new_overage = mad(rolloff_size, rolloff_value / clip_value, overage);                  \
+    return input + new_overage;                                                              \
   }
 EXPONENTIALROLLOFF_GENERATOR(float)
 EXPONENTIALROLLOFF_GENERATOR(float3)
@@ -240,11 +240,10 @@ float3 GamutCompressToBT2020BT2020InBT2020Out(float3 color_bt2020) {
 
 float3 ApplyExponentialRolloffMaxChannel(float3 untonemapped, float diffuse_nits, float peak_nits, float rolloff_start, float clip = 100.f) {
   float peak_ratio = peak_nits / diffuse_nits;
-  rolloff_start *= peak_ratio;
 
-  float max_channel = renodx::math::Max(untonemapped.r, renodx::math::Max(untonemapped.g, untonemapped.b));
+  float max_channel = renodx::math::Max(untonemapped);
 
-  float mapped_max = exp2(ExponentialRollOff(
+  float mapped_max = exp2(ExponentialRollOffExtended(
       log2(max_channel),
       log2(rolloff_start),
       log2(peak_ratio),
@@ -256,17 +255,33 @@ float3 ApplyExponentialRolloffMaxChannel(float3 untonemapped, float diffuse_nits
 
 float3 ApplyDisplayMap(float3 untonemapped, float diffuse_nits, float peak_nits) {
   untonemapped = GamutCompressToBT2020BT2020InBT2020Out(untonemapped);
-  if (RENODX_TONE_MAP_MAX_CHANNEL != 0.f) {
-    return ApplyExponentialRolloffMaxChannel(untonemapped, diffuse_nits, peak_nits, (1.f / 3.f));
-  } else {
-    float peak_ratio = peak_nits / diffuse_nits;
-    float rolloff_start = (1.f / 3.f) * peak_ratio;
-    float clip = 100.f;
 
-    return exp2(ExponentialRollOff(
+  const float peak_ratio = peak_nits / diffuse_nits;
+  const float rolloff_start = 0.4f * peak_ratio;
+  const float clip = 100.f;
+
+  float3 tonemapped = untonemapped;
+  if (RENODX_TONE_MAP_MAX_CHANNEL != 0.f) {
+    tonemapped = ApplyExponentialRolloffMaxChannel(untonemapped, diffuse_nits, peak_nits, rolloff_start);
+  } else {
+    float y_in = renodx::color::y::from::BT2020(untonemapped);
+    float y_out = exp2(ExponentialRollOffExtended(
+        log2(y_in),
+        log2(rolloff_start),
+        log2(peak_ratio),
+        log2(clip)));
+    float3 lum = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
+
+    tonemapped = lum;
+#if 1
+    float3 ch = exp2(ExponentialRollOffExtended(
         log2(untonemapped),
         log2(rolloff_start),
         log2(peak_ratio),
         log2(clip)));
+    tonemapped = renodx::color::correct::Luminance(lum, ch, 1.f);
+    tonemapped = renodx::color::correct::Chrominance(tonemapped, min(lum, peak_ratio));
+#endif
   }
+  return tonemapped;
 }
