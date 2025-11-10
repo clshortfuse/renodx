@@ -1,3 +1,97 @@
+// Just here as a reference
+
+Texture3D<float4> View_SpatiotemporalBlueNoiseVolumeTexture : register(t0);
+
+Texture2D<float4> ColorTexture : register(t1);
+
+Texture2D<float4> GlareTexture : register(t2);
+
+Texture2D<float4> CompositeSDRTexture : register(t3);
+
+Texture3D<float4> BT709PQToBT2020PQLUT : register(t4);
+
+Texture3D<float4> BT2020PQTosRGBLUT : register(t5);
+
+cbuffer $Globals : register(b0) {
+  float4 PostprocessInput0Size : packoffset(c000.x);
+  float4 PostprocessInput1Size : packoffset(c001.x);
+  float4 PostprocessInput2Size : packoffset(c002.x);
+  float4 PostprocessInput3Size : packoffset(c003.x);
+  float4 PostprocessInput4Size : packoffset(c004.x);
+  float4 PostprocessInput5Size : packoffset(c005.x);
+  float4 PostprocessInput6Size : packoffset(c006.x);
+  float4 PostprocessInput7Size : packoffset(c007.x);
+  float4 PostprocessInput8Size : packoffset(c008.x);
+  float4 PostprocessInput9Size : packoffset(c009.x);
+  float4 PostprocessInput10Size : packoffset(c010.x);
+  float4 PostprocessInput0MinMax : packoffset(c011.x);
+  float4 PostprocessInput1MinMax : packoffset(c012.x);
+  float4 PostprocessInput2MinMax : packoffset(c013.x);
+  float4 PostprocessInput3MinMax : packoffset(c014.x);
+  float4 PostprocessInput4MinMax : packoffset(c015.x);
+  float4 PostprocessInput5MinMax : packoffset(c016.x);
+  float4 PostprocessInput6MinMax : packoffset(c017.x);
+  float4 PostprocessInput7MinMax : packoffset(c018.x);
+  float4 PostprocessInput8MinMax : packoffset(c019.x);
+  float4 PostprocessInput9MinMax : packoffset(c020.x);
+  float4 PostprocessInput10MinMax : packoffset(c021.x);
+  float4 ViewportSize : packoffset(c022.x);
+  uint4 ViewportRect : packoffset(c023.x);
+  float4 ScreenPosToPixel : packoffset(c024.x);
+  float4 SceneColorBufferUVViewport : packoffset(c025.x);
+  float3 MappingPolynomial : packoffset(c026.x);
+  float2 ViewportColor_Extent : packoffset(c027.x);
+  float2 ViewportColor_ExtentInverse : packoffset(c027.z);
+  float2 ViewportColor_ScreenPosToViewportScale : packoffset(c028.x);
+  float2 ViewportColor_ScreenPosToViewportBias : packoffset(c028.z);
+  uint2 ViewportColor_ViewportMin : packoffset(c029.x);
+  uint2 ViewportColor_ViewportMax : packoffset(c029.z);
+  float2 ViewportColor_ViewportSize : packoffset(c030.x);
+  float2 ViewportColor_ViewportSizeInverse : packoffset(c030.z);
+  float2 ViewportColor_UVViewportMin : packoffset(c031.x);
+  float2 ViewportColor_UVViewportMax : packoffset(c031.z);
+  float2 ViewportColor_UVViewportSize : packoffset(c032.x);
+  float2 ViewportColor_UVViewportSizeInverse : packoffset(c032.z);
+  float2 ViewportColor_UVViewportBilinearMin : packoffset(c033.x);
+  float2 ViewportColor_UVViewportBilinearMax : packoffset(c033.z);
+  float2 ViewportGlare_Extent : packoffset(c034.x);
+  float2 ViewportGlare_ExtentInverse : packoffset(c034.z);
+  float2 ViewportGlare_ScreenPosToViewportScale : packoffset(c035.x);
+  float2 ViewportGlare_ScreenPosToViewportBias : packoffset(c035.z);
+  uint2 ViewportGlare_ViewportMin : packoffset(c036.x);
+  uint2 ViewportGlare_ViewportMax : packoffset(c036.z);
+  float2 ViewportGlare_ViewportSize : packoffset(c037.x);
+  float2 ViewportGlare_ViewportSizeInverse : packoffset(c037.z);
+  float2 ViewportGlare_UVViewportMin : packoffset(c038.x);
+  float2 ViewportGlare_UVViewportMax : packoffset(c038.z);
+  float2 ViewportGlare_UVViewportSize : packoffset(c039.x);
+  float2 ViewportGlare_UVViewportSizeInverse : packoffset(c039.z);
+  float2 ViewportGlare_UVViewportBilinearMin : packoffset(c040.x);
+  float2 ViewportGlare_UVViewportBilinearMax : packoffset(c040.z);
+  float2 ViewportDestination_Extent : packoffset(c041.x);
+  float2 ViewportDestination_ExtentInverse : packoffset(c041.z);
+  float2 ViewportDestination_ScreenPosToViewportScale : packoffset(c042.x);
+  float2 ViewportDestination_ScreenPosToViewportBias : packoffset(c042.z);
+  uint2 ViewportDestination_ViewportMin : packoffset(c043.x);
+  uint2 ViewportDestination_ViewportMax : packoffset(c043.z);
+  float2 ViewportDestination_ViewportSize : packoffset(c044.x);
+  float2 ViewportDestination_ViewportSizeInverse : packoffset(c044.z);
+  float2 ViewportDestination_UVViewportMin : packoffset(c045.x);
+  float2 ViewportDestination_UVViewportMax : packoffset(c045.z);
+  float2 ViewportDestination_UVViewportSize : packoffset(c046.x);
+  float2 ViewportDestination_UVViewportSizeInverse : packoffset(c046.z);
+  float2 ViewportDestination_UVViewportBilinearMin : packoffset(c047.x);
+  float2 ViewportDestination_UVViewportBilinearMax : packoffset(c047.z);
+  float4 VignetteContext : packoffset(c048.x);
+  float4 GlareContext : packoffset(c049.x);
+  float4 NoiseContext : packoffset(c050.x);
+  float4 HDRCompositionContext : packoffset(c051.x);
+  float4 HDRCompositionContextColor : packoffset(c052.x);
+  float4 CompositeSurfaceContext : packoffset(c053.x);
+  float4 DeviceCorrectorContext : packoffset(c054.x);
+  float4 DevelopmentContext : packoffset(c055.x);
+};
+
 cbuffer View : register(b1) {
   row_major float4x4 View_TranslatedWorldToClip : packoffset(c000.x);
   row_major float4x4 View_WorldToOrthographicClip : packoffset(c004.x);
@@ -271,3 +365,104 @@ cbuffer View : register(b1) {
   uint View_DebugContext : packoffset(c298.w);
   uint View_DebugTweak : packoffset(c299.x);
 };
+
+SamplerState View_SharedBilinearClampedSampler : register(s0);
+
+struct OutputSignature {
+  float4 SV_Target : SV_Target;
+  float4 SV_Target_1 : SV_Target1;
+  float4 SV_Target_2 : SV_Target2;
+};
+
+OutputSignature main(
+  noperspective float2 TEXCOORD : TEXCOORD,
+  noperspective float4 TEXCOORD_1 : TEXCOORD1,
+  noperspective float4 SV_Position : SV_Position
+) {
+  float4 SV_Target;
+  float4 SV_Target_1;
+  float4 SV_Target_2;
+  bool _19 = !(DeviceCorrectorContext.z == 0.0f);
+  float4 _28 = View_SpatiotemporalBlueNoiseVolumeTexture.Load(int4((int(SV_Position.x) & 127), (int(SV_Position.y) & 127), (View_StateFrameIndex & 63), 0));
+  float _35 = SV_Position.x - float((uint)(int)(ViewportDestination_ViewportMin.x));
+  float _36 = SV_Position.y - float((uint)(int)(ViewportDestination_ViewportMin.y));
+  float _42 = saturate(_35 * ViewportDestination_ViewportSizeInverse.x);
+  float _43 = saturate(_36 * ViewportDestination_ViewportSizeInverse.y);
+  float _56 = select(_19, saturate(((floor(_35 * 0.5f) * 2.0f) + 1.0f) * ViewportDestination_ViewportSizeInverse.x), _42);
+  float _57 = select(_19, saturate(((floor(_36 * 0.5f) * 2.0f) + 1.0f) * ViewportDestination_ViewportSizeInverse.y), _43);
+  float4 _126 = ColorTexture.SampleLevel(View_SharedBilinearClampedSampler, float2(min(max((((ViewportColor_ViewportSize.x * _56) + float((uint)(int)(ViewportColor_ViewportMin.x))) * ViewportColor_ExtentInverse.x), ViewportColor_UVViewportBilinearMin.x), ViewportColor_UVViewportBilinearMax.x), min(max((((ViewportColor_ViewportSize.y * _57) + float((uint)(int)(ViewportColor_ViewportMin.y))) * ViewportColor_ExtentInverse.y), ViewportColor_UVViewportBilinearMin.y), ViewportColor_UVViewportBilinearMax.y)), 0.0f);
+  float _138 = (1.0f / max(0.0010000000474974513f, VignetteContext.y)) * TEXCOORD_1.z;
+  float _143 = (_138 * _138) * (1.0f / max(9.999999747378752e-06f, dot(float3(TEXCOORD_1.x, TEXCOORD_1.y, _138), float3(TEXCOORD_1.x, TEXCOORD_1.y, _138))));
+  float _147 = (((_143 * _143) + -1.0f) * VignetteContext.x) + 1.0f;
+  float _148 = _147 * min(_126.x, 64512.0f);
+  float _149 = _147 * min(_126.y, 64512.0f);
+  float _150 = _147 * min(_126.z, 64512.0f);
+  float4 _152 = GlareTexture.SampleLevel(View_SharedBilinearClampedSampler, float2(min(max((((ViewportGlare_ViewportSize.x * _56) + float((uint)(int)(ViewportGlare_ViewportMin.x))) * ViewportGlare_ExtentInverse.x), ViewportGlare_UVViewportBilinearMin.x), ViewportGlare_UVViewportBilinearMax.x), min(max((((ViewportGlare_ViewportSize.y * _57) + float((uint)(int)(ViewportGlare_ViewportMin.y))) * ViewportGlare_ExtentInverse.y), ViewportGlare_UVViewportBilinearMin.y), ViewportGlare_UVViewportBilinearMax.y)), 0.0f);
+  float _181 = exp2(log2(saturate(((((min(_152.x, 65504.0f) - _148) + (GlareContext.y * _148)) * GlareContext.x) + _148) * 0.009999999776482582f)) * 0.1593017578125f);
+  float _197 = exp2(log2(saturate(((((min(_152.y, 65504.0f) - _149) + (GlareContext.y * _149)) * GlareContext.x) + _149) * 0.009999999776482582f)) * 0.1593017578125f);
+  float _213 = exp2(log2(saturate(((((min(_152.z, 65504.0f) - _150) + (GlareContext.y * _150)) * GlareContext.x) + _150) * 0.009999999776482582f)) * 0.1593017578125f);
+  float4 _232 = BT709PQToBT2020PQLUT.SampleLevel(View_SharedBilinearClampedSampler, float3(((saturate(exp2(log2(max(0.0f, (((_181 * 18.8515625f) + 0.8359375f) * (1.0f / ((_181 * 18.6875f) + 1.0f))))) * 78.84375f)) * 0.96875f) + 0.015625f), ((saturate(exp2(log2(max(0.0f, (((_197 * 18.8515625f) + 0.8359375f) * (1.0f / ((_197 * 18.6875f) + 1.0f))))) * 78.84375f)) * 0.96875f) + 0.015625f), ((saturate(exp2(log2(max(0.0f, (((_213 * 18.8515625f) + 0.8359375f) * (1.0f / ((_213 * 18.6875f) + 1.0f))))) * 78.84375f)) * 0.96875f) + 0.015625f)), 0.0f);
+  float4 _243 = BT2020PQTosRGBLUT.SampleLevel(View_SharedBilinearClampedSampler, float3(((_232.x * 0.96875f) + 0.015625f), ((_232.y * 0.96875f) + 0.015625f), ((_232.z * 0.96875f) + 0.015625f)), 0.0f);
+  float4 _248 = CompositeSDRTexture.SampleLevel(View_SharedBilinearClampedSampler, float2(((min(((ViewportDestination_ViewportSize.x * 0.5625f) * ViewportDestination_ViewportSizeInverse.y), 1.0f) * (_42 + -0.5f)) + 0.5f), ((min(((ViewportDestination_ViewportSize.y * 1.7777777910232544f) * ViewportDestination_ViewportSizeInverse.x), 1.0f) * (_43 + -0.5f)) + 0.5f)), 0.0f);
+  float _263;
+  float _274;
+  float _285;
+  float _305;
+  float _316;
+  float _327;
+  if (_243.x < 0.040449999272823334f) {
+    _263 = (_243.x * 0.07739938050508499f);
+  } else {
+    _263 = exp2(log2((_243.x + 0.054999999701976776f) * 0.9478673338890076f) * 2.4000000953674316f);
+  }
+  if (_243.y < 0.040449999272823334f) {
+    _274 = (_243.y * 0.07739938050508499f);
+  } else {
+    _274 = exp2(log2((_243.y + 0.054999999701976776f) * 0.9478673338890076f) * 2.4000000953674316f);
+  }
+  if (_243.z < 0.040449999272823334f) {
+    _285 = (_243.z * 0.07739938050508499f);
+  } else {
+    _285 = exp2(log2((_243.z + 0.054999999701976776f) * 0.9478673338890076f) * 2.4000000953674316f);
+  }
+  float _292 = saturate((_263 * _248.w) + _248.x);
+  float _293 = saturate((_274 * _248.w) + _248.y);
+  float _294 = saturate((_285 * _248.w) + _248.z);
+  if (_292 < 0.0031308000907301903f) {
+    _305 = (_292 * 12.920000076293945f);
+  } else {
+    _305 = (((pow(_292, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
+  }
+  if (_293 < 0.0031308000907301903f) {
+    _316 = (_293 * 12.920000076293945f);
+  } else {
+    _316 = (((pow(_293, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
+  }
+  if (_294 < 0.0031308000907301903f) {
+    _327 = (_294 * 12.920000076293945f);
+  } else {
+    _327 = (((pow(_294, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
+  }
+  float _329 = (_28.x * 2.0f) + -1.0f;
+  float _346 = (float((int)(((int)(uint)((bool)(_329 > 0.0f))) - ((int)(uint)((bool)(_329 < 0.0f))))) * 0.003921568859368563f) * (1.0f - sqrt(1.0f - abs(_329)));
+  float _349 = saturate(select(((abs((_305 * 2.0f) + -1.0f) + -0.9921568632125854f) < 0.0f), (_346 + _305), _305));
+  float _357 = saturate(select(((abs((_316 * 2.0f) + -1.0f) + -0.9921568632125854f) < 0.0f), (_346 + _316), _316));
+  float _365 = saturate(select(((abs((_327 * 2.0f) + -1.0f) + -0.9921568632125854f) < 0.0f), (_346 + _327), _327));
+  float _373 = saturate(select(((abs((_243.x * 2.0f) + -1.0f) + -0.9921568632125854f) < 0.0f), (_346 + _243.x), _243.x));
+  float _381 = saturate(select(((abs((_243.y * 2.0f) + -1.0f) + -0.9921568632125854f) < 0.0f), (_346 + _243.y), _243.y));
+  float _389 = saturate(select(((abs((_243.z * 2.0f) + -1.0f) + -0.9921568632125854f) < 0.0f), (_346 + _243.z), _243.z));
+  SV_Target.x = _349;
+  SV_Target.y = _357;
+  SV_Target.z = _365;
+  SV_Target.w = 0.0f;
+  SV_Target_1.x = _373;
+  SV_Target_1.y = _381;
+  SV_Target_1.z = _389;
+  SV_Target_1.w = 0.0f;
+  SV_Target_2.x = max(0.0f, (_349 - (_373 * _248.w)));
+  SV_Target_2.y = max(0.0f, (_357 - (_381 * _248.w)));
+  SV_Target_2.z = max(0.0f, (_365 - (_389 * _248.w)));
+  SV_Target_2.w = max(0.0f, (1.0f - _248.w));
+  OutputSignature output_signature = { SV_Target, SV_Target_1, SV_Target_2 };
+  return output_signature;
+}
