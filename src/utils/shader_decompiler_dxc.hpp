@@ -282,6 +282,7 @@ class Decompiler {
     if (input == "float") return "float";
     if (input == "half") return "half";
     if (input == "i32") return "int";
+    if (input == "i64") return "int64_t";
     if (input == "f16") return "min16float";
     if (input == "i16") return "min16int";
     if (input == "i1") return "bool";
@@ -303,6 +304,7 @@ class Decompiler {
 
   static std::string ParseUnsignedType(std::string_view input) {
     if (input == "i32") return "uint";
+    if (input == "i64") return "uint64_t";
     if (input == "i16") return "min16uint";
     if (input == "i1") return "bool";
     throw std::invalid_argument("Could not parse unsigned");
@@ -440,6 +442,7 @@ class Decompiler {
 
     enum class Format {
       FLOAT,
+      INT,
       UINT,
       FP16
     } format;
@@ -461,6 +464,7 @@ class Decompiler {
     [[nodiscard]] std::string FormatString() const {
       switch (this->format) {
         case Format::FLOAT: return "float";
+        case Format::INT:   return "int";
         case Format::UINT:  return "uint";
         case Format::FP16:  return "half";
         default:            return "";
@@ -514,6 +518,7 @@ class Decompiler {
     static Format FormatFromString(std::string_view input) {
       if (input == "float") return Format::FLOAT;
       if (input == "uint") return Format::UINT;
+      if (input == "int") return Format::INT;
       if (input == "fp16") return Format::FP16;
       throw std::invalid_argument("Unknown Format");
     }
@@ -529,7 +534,7 @@ class Decompiler {
        */
       // ; SV_DepthLessEqual        0    N/A oDepthLE  DEPTHLE   float    YES
 
-      static auto regex = std::regex{R"(; (\S+)\s+(\S+)\s+((?:(?:x| )(?:y| )(?:z| )(?:w| ))|(?:N\/A))\s+(\S+)\s+(\S+)\s+(\S+)\s*(YES|(?:(?:x| )?(?:y| )?(?:z| )?(?:w| )?)))"};
+      static auto regex = std::regex{R"(; (\S+)\s+(\S+)\s+((?:(?:x| )(?:y| )(?:z| )(?:w| ))|(?:N\/A))\s+(\S+)\s+(\S+)\s+(\S+)\s*(YES|NO|(?:(?:x| )?(?:y| )?(?:z| )?(?:w| )?)))"};
       auto [name, index, mask, dxregister, sysValue, format, used] = StringViewMatch<7>(line, regex);
 
       this->name = name;
@@ -1591,6 +1596,13 @@ class Decompiler {
       return ParseIntString(input);
     }
 
+    std::string ParseInt64(std::string_view input) {
+      if (input.at(0) == '%') {
+        return ParseVariable(input, "int64_t");
+      }
+      return ParseIntString(input);
+    }
+
     std::string ParseUint(std::string_view input) {
       if (input.at(0) == '%') {
         return ParseVariable(input, "uint");
@@ -1839,7 +1851,6 @@ class Decompiler {
           auto& cbv_resource = preprocess_state.cbv_resources[range_index];
 
           if (regIndex.starts_with("%")) {
-            // Needs float4
             throw std::exception("Unexpected dynamic cbuffer offset.");
           }
           uint32_t cbv_variable_index;
@@ -2543,6 +2554,15 @@ class Decompiler {
           // %347 = call i32 @dx.op.waveGetLaneIndex(i32 111)  ; WaveGetLaneIndex()
           assignment_type = "int";
           assignment_value = "WaveGetLaneIndex()";
+        } else if (functionName == "@dx.op.waveGetLaneCount") {
+          // %15 = call i32 @dx.op.waveGetLaneCount(i32 112)  ; WaveGetLaneCount()
+          assignment_type = "uint";
+          assignment_value = "WaveGetLaneCount()";
+        } else if (functionName == "@dx.op.waveReadLaneAt.f32") {
+          //   %823 = call float @dx.op.waveReadLaneAt.f32(i32 117, float %682, i32 %821)  ; WaveReadLaneAt(value,lane)
+          auto [op, value, lane] = StringViewSplit<3>(functionParamsString, param_regex, 2);
+          assignment_type = "float";
+          assignment_value = std::format("WaveReadLaneAt({},{})", ParseFloat(value), ParseInt(lane));
         } else if (functionName == "@dx.op.waveReadLaneAt.i32") {
           //   %350 = call i32 @dx.op.waveReadLaneAt.i32(i32 117, i32 %346, i32 %349)  ; WaveReadLaneAt(value,lane)
           auto [op, value, lane] = StringViewSplit<3>(functionParamsString, param_regex, 2);
@@ -2600,13 +2620,53 @@ class Decompiler {
           }
           assignment_type = uav_resource.data_type;
           decompiled = std::format("{} _{}; {}({}[{}], {}, _{});", assignment_type, variable, atomic_func, uav_name, offset, ParseInt(newValue), variable);
+        } else if (functionName == "@dx.op.atomicBinOp.i64") {
+          // %2646 = call i64 @dx.op.atomicBinOp.i64(i32 78, %dx.types.Handle %2537, i32 7, i32 %2530, i32 %2489, i32 undef, i64 %2645)  ; AtomicBinOp(handle,atomicOp,offset0,offset1,offset2,newValue)
+          auto [op, handle, atomicOp, offset0, offset1, offset2, newValue] = StringViewSplit<7>(functionParamsString, param_regex, 2);
+          auto ref_resource = std::string{handle.substr(1)};
+          const bool has_offset_y = offset1 != "undef";
+          const bool has_offset_z = offset2 != "undef";
+          std::string offset;
+          if (has_offset_z) {
+            offset = std::format("int3({}, {}, {})", ParseInt(offset0), ParseInt(offset1), ParseInt(offset2));
+          } else if (has_offset_y) {
+            offset = std::format("int2({}, {})", ParseInt(offset0), ParseInt(offset1));
+          } else {
+            offset = std::format("{}", ParseInt(offset0));
+          }
+          auto [uav_name, uav_range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto uav_resource = preprocess_state.uav_resources[uav_range_index];
+          // assignment_type = "int64_t";
+          std::string atomic_func;
+
+          if (atomicOp == "0") {
+            atomic_func = "InterlockedAdd";
+          } else if (atomicOp == "1") {
+            atomic_func = "InterlockedAnd";
+          } else if (atomicOp == "2") {
+            atomic_func = "InterlockedOr";
+          } else if (atomicOp == "3") {
+            atomic_func = "InterlockedXor";
+          } else if (atomicOp == "4") {
+            atomic_func = "InterlockedMin";
+          } else if (atomicOp == "5") {
+            atomic_func = "InterlockedMax";
+          } else if (atomicOp == "6") {
+            atomic_func = "InterlockedMin";
+          } else if (atomicOp == "7") {
+            atomic_func = "InterlockedMax";
+          } else if (atomicOp == "8") {
+            atomic_func = "InterlockedExchange";
+          } else {
+            throw std::invalid_argument("Unknown atomicOp for AtomicBinOp");
+          }
+          assignment_type = uav_resource.data_type;
+          decompiled = std::format("{} _{}; {}({}[{}], {}, _{});", assignment_type, variable, atomic_func, uav_name, offset, ParseInt64(newValue), variable);
         } else {
           std::cerr << line << "\n";
           std::cerr << "Function name: " << functionName << "\n";
           throw std::invalid_argument("Unknown assign function name");
         }
-        // decompiled = std::format("// {} _{} = {}({})", type, variable, functionName, functionParams);
-        // decompiled = "// " + std::string{comment};
       } else if (instruction == "extractvalue") {
         // extractvalue %dx.types.ResRet.f32 %448, 0
         // extractvalue %dx.types.CBufRet.i32 %19, 0
@@ -3260,6 +3320,34 @@ class Decompiler {
         // assert(elementOffset == "undef");
         decompiled = std::format("{}[{} / {}] = {};",
                                  res_name, ParseInt(index), ParseInt(alignment), value);
+      } else if (functionName == "@dx.op.rawBufferStore.i32") {
+        // call void @dx.op.rawBufferStore.i32(i32 140, %dx.types.Handle %3114, i32 %3113, i32 0, i32 %2310, i32 undef, i32 undef, i32 undef, i8 1, i32 4)  ; RawBufferStore(uav,index,elementOffset,value0,value1,value2,value3,mask,alignment)
+
+        auto [opNumber, uav, index, elementOffset, value0, value1, value2, value3, mask, alignment] = StringViewSplit<10>(functionParamsString, param_regex, 2);
+        auto ref = std::string{uav.substr(1)};
+        auto [res_name, range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref);
+        bool is_raw_buffer = false;
+        if (resource_class == "0") {
+          is_raw_buffer = preprocess_state.srv_resources[range_index].shape == Resource::ResourceKind::RawBuffer;
+        } else if (resource_class == "1") {
+          is_raw_buffer = preprocess_state.uav_resources[range_index].shape == Resource::ResourceKind::RawBuffer;
+        } else {
+          throw std::invalid_argument("Unknown @dx.op.rawBufferStore.i32 resource");
+        }
+
+        const bool has_value_y = value1 != "undef";
+        const bool has_value_z = value2 != "undef";
+        const bool has_value_w = value3 != "undef";
+        std::string value;
+        if (has_value_w) {
+          value = std::format("int4({}, {}, {}, {})", ParseInt(value0), ParseInt(value1), ParseInt(value2), ParseInt(value3));
+        } else if (has_value_z) {
+          value = std::format("int3({}, {}, {})", ParseInt(value0), ParseInt(value1), ParseInt(value2));
+        } else if (has_value_y) {
+          value = std::format("int2({}, {})", ParseInt(value0), ParseInt(value1));
+        } else {
+          value = std::format("{}", ParseInt(value0));
+        }
       } else if (functionName == "@dx.op.storeOutput.f32") {
         // call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %2772)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
         auto [opNumber, outputSigId, rowIndex, colIndex, value] = StringViewSplit<5>(functionParamsString, param_regex, 2);
@@ -3399,7 +3487,6 @@ class Decompiler {
         }
 
         decompiled = std::format("{}[{}] = {};", uav_name, coords, value);
-
       } else {
         std::cerr << line << "\n";
         std::cerr << "Function name: " << functionName << "\n";
