@@ -2535,6 +2535,21 @@ class Decompiler {
           } else {
             throw std::invalid_argument("Unknown wave active op");
           }
+        } else if (functionName == "@dx.op.waveActiveOp.f32") {
+          // %58 = call float @dx.op.waveActiveOp.f32(i32 119, float %57, i8 3, i8 0)  ; WaveActiveOp(value,op,sop)
+          auto [op, value, op2, sop] = StringViewSplit<4>(functionParamsString, param_regex, 2);
+          assignment_type = "float";
+          if (op2 == "0") {
+            assignment_value = std::format("WaveActiveSum{}", ParseWrapped(ParseFloat(value)));
+          } else if (op2 == "1") {
+            assignment_value = std::format("WaveActiveProduct{}", ParseWrapped(ParseFloat(value)));
+          } else if (op2 == "2") {
+            assignment_value = std::format("WaveActiveMin{}", ParseWrapped(ParseFloat(value)));
+          } else if (op2 == "3") {
+            assignment_value = std::format("WaveActiveMax{}", ParseWrapped(ParseFloat(value)));
+          } else {
+            throw std::invalid_argument("Unknown wave active op");
+          }
         } else if (functionName == "@dx.op.waveAllTrue") {
           // call i1 @dx.op.waveAllTrue(i32 114, i1 %144)  ; WaveAllTrue(cond)
           auto [op, cond] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -2545,6 +2560,16 @@ class Decompiler {
           auto [op, cond] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           assignment_type = "bool";
           assignment_value = std::format("WaveActiveAllTrue{}", ParseWrapped(ParseBool(cond)));
+        } else if (functionName == "@dx.op.waveAllOp") {
+          // %25 = call i32 @dx.op.waveAllOp(i32 135, i1 true)  ; WaveAllBitCount(value)
+          auto [op, cond] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "int";
+          assignment_value = std::format("WaveAllBitCount{}", ParseWrapped(ParseBool(cond)));
+        } else if (functionName == "@dx.op.wavePrefixOp") {
+          // %26 = call i32 @dx.op.wavePrefixOp(i32 136, i1 true)  ; WavePrefixBitCount(value)
+          auto [op, cond] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "int";
+          assignment_value = std::format("WavePrefixBitCount{}", ParseWrapped(ParseBool(cond)));
         } else if (functionName == "@dx.op.waveAnyTrue") {
           // call i1 @dx.op.waveAnyTrue(i32 113, i1 %264)  ; WaveAnyTrue(cond)
           auto [op, cond] = StringViewSplit<2>(functionParamsString, param_regex, 2);
