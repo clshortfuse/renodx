@@ -39,7 +39,7 @@ jobs:
             for (const commit of commits) {
               const message = commit.commit.message.split('\n')[0];
               if (!conventionalRegex.test(message)) {
-                core.setFailed(`Commit "${message}" does not follow Conventional Commit format.`);
+                core.warning(`Commit "${message}" does not follow Conventional Commit format.`);
                 return;
               }
             }
@@ -53,7 +53,7 @@ jobs:
 
             // Abort early if the PR is a draft.
             if (pr.draft) {
-              core.setFailed('PR is a draft; skipping merge.');
+              core.info('PR is a draft; skipping merge.');
               return;
             }
 
@@ -73,14 +73,14 @@ jobs:
               // Ensure the file is under src/games/<game>/
               const parts = file.filename.split('/');
               if (parts.length < 4 || parts[0] !== 'src' || parts[1] !== 'games') {
-                core.setFailed(`HLSL file ${file.filename} is not under src/games/<game>/`);
+                core.notice(`HLSL file ${file.filename} is not under src/games/<game>/`);
                 return;
               }
 
               const currentGame = parts[2];
               if (!gameName) gameName = currentGame;
               else if (currentGame !== gameName) {
-                core.setFailed('Multi-game PR detected: HLSL files belong to different games.');
+                core.notice('Multi-game PR detected: HLSL files belong to different games.');
                 return;
               }
 
@@ -116,7 +116,7 @@ jobs:
               }
 
               if (!authorMatches) {
-                core.setFailed(`PR author ${pr.user.login} does not match last commit author for ${file.filename} or addon.cpp`);
+                core.notice(`PR author ${pr.user.login} does not match last commit author for ${file.filename} or addon.cpp`);
                 return;
               }
 
