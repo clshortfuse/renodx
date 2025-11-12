@@ -1,6 +1,16 @@
 #include "./brightnesslimiter.hlsli"
 #include "./shared.h"
 
+float3 ApplyCustomLensFlare(float3 flare) {
+  if (CUSTOM_LENS_FLARE_TYPE != 0.f) {
+    float y_in = renodx::color::y::from::BT709(flare);
+    float y_out = renodx::color::grade::Highlights(y_in, 3.f, 0.18f);
+    float3 boosted = renodx::color::correct::Luminance(flare, y_in, y_out);
+    flare = lerp(flare, boosted, saturate(y_in / 0.5f));
+  }
+  return flare;
+}
+
 // Restores the source color hue (and optionally brightness) through Oklab (this works on colors beyond SDR in brightness and gamut too).
 // The strength sweet spot for a strong hue restoration seems to be 0.75, while for chrominance, going up to 1 is ok.
 float3 RestoreHueAndChrominance(float3 targetColor, float3 sourceColor, float hueStrength = 0.75, float chrominanceStrength = 1.0, float minChrominanceChange = 0.0, float maxChrominanceChange = 3.40282346638528859812e+38, float lightnessStrength = 0.0, float clampChrominanceLoss = 0.0) {
