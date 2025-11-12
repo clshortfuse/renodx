@@ -51,7 +51,7 @@ cbuffer cb13 : register(b13, space50) {
 #define CUSTOM_LUT_SCALING                   shader_injection.custom_lut_scaling
 #define FIX_POST_PROCESS                     shader_injection.fix_post_process     // 0 - BT.2020 PQ, 1 - BT.709 piecewise sRGB, 2 - BT.2020 piecewise sRGB
 #define OVERRIDE_BLACK_CLIP                  shader_injection.override_black_clip  // 0 - Off, 1 - 0.0001 nits
-#define CUSTOM_LUT_GAMUT_RESTORATION         0.f
+#define CUSTOM_LUT_GAMUT_RESTORATION         1.f
 
 #include "../../shaders/renodx.hlsl"
 
