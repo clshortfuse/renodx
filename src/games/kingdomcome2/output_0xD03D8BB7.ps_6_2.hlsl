@@ -38,9 +38,6 @@ float4 main(
     linear float4 TEXCOORD: TEXCOORD,
     linear float4 TEXCOORD_1: TEXCOORD1) : SV_Target {
   float4 SV_Target;
-  float3 color_bt2020;
-  float3 color_bt709;
-
   float _20 = HDRFilmCurve.x * 0.2199999988079071f;
   float _22 = HDRFilmCurve.y * 0.30000001192092896f;
   float _24 = HDRFilmCurve.z * 0.009999999776482582f;
@@ -90,9 +87,9 @@ float4 main(
   float _217 = HDRFilmCurve.z * 0.0020000000949949026f;
   float _238 = HDRFilmCurve.z * 0.03333333134651184f;
   float _242 = ((((_207 + _208) * HDRFilmCurve.w) + _217) / (((_207 + _202) * HDRFilmCurve.w) + 0.06000000238418579f)) - _238;
-  float _249 = saturate((((((_204 + _208) * _196) + _217) / (((_204 + _202) * _196) + 0.06000000238418579f)) - _238) / _242);
-  float _250 = saturate((((((_205 + _208) * _197) + _217) / (((_205 + _202) * _197) + 0.06000000238418579f)) - _238) / _242);
-  float _251 = saturate((((((_206 + _208) * _198) + _217) / (((_206 + _202) * _198) + 0.06000000238418579f)) - _238) / _242);
+  float _249 = saturate(saturate((((((_204 + _208) * _196) + _217) / (((_204 + _202) * _196) + 0.06000000238418579f)) - _238) / _242));
+  float _250 = saturate(saturate((((((_205 + _208) * _197) + _217) / (((_205 + _202) * _197) + 0.06000000238418579f)) - _238) / _242));
+  float _251 = saturate(saturate((((((_206 + _208) * _198) + _217) / (((_206 + _202) * _198) + 0.06000000238418579f)) - _238) / _242));
   float _281 = (saturate(select((_250 < 0.0031308000907301903f), (_250 * 12.920000076293945f), (((pow(_250, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f))) * 0.9375f) + 0.03125f;
   float _282 = saturate(select((_251 < 0.0031308000907301903f), (_251 * 12.920000076293945f), (((pow(_251, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f))) * 15.0f;
   float _283 = frac(_282);
@@ -109,11 +106,9 @@ float4 main(
   float _345 = (_303 * 2.0f) * _324;
   float _347 = (_304 * 2.0f) * _324;
   float _349 = (_305 * 2.0f) * _324;
-
-  /* float _368 = saturate(exp2(log2((((1.0f - (((1.0f - _303) * 2.0f) * _337)) - _345) * select((_303 < 0.5f), 0.0f, 1.0f)) + _345) * 2.200000047683716f));
-  float _369 = saturate(exp2(log2((((1.0f - (((1.0f - _304) * 2.0f) * _337)) - _347) * select((_304 < 0.5f), 0.0f, 1.0f)) + _347) * 2.200000047683716f));
-  float _370 = saturate(exp2(log2((((1.0f - (((1.0f - _305) * 2.0f) * _337)) - _349) * select((_305 < 0.5f), 0.0f, 1.0f)) + _349) * 2.200000047683716f)); */
-  // Film grain
+  // float _368 = saturate(exp2(log2((((1.0f - (((1.0f - _303) * 2.0f) * _337)) - _345) * select((_303 < 0.5f), 0.0f, 1.0f)) + _345) * 2.200000047683716f));
+  // float _369 = saturate(exp2(log2((((1.0f - (((1.0f - _304) * 2.0f) * _337)) - _347) * select((_304 < 0.5f), 0.0f, 1.0f)) + _347) * 2.200000047683716f));
+  // float _370 = saturate(exp2(log2((((1.0f - (((1.0f - _305) * 2.0f) * _337)) - _349) * select((_305 < 0.5f), 0.0f, 1.0f)) + _349) * 2.200000047683716f));
   float _368 = ((((1.0f - (((1.0f - _303) * 2.0f) * _337)) - _345) * select((_303 < 0.5f), 0.0f, 1.0f)) + _345);
   float _369 = ((((1.0f - (((1.0f - _304) * 2.0f) * _337)) - _347) * select((_304 < 0.5f), 0.0f, 1.0f)) + _347);
   float _370 = ((((1.0f - (((1.0f - _305) * 2.0f) * _337)) - _349) * select((_305 < 0.5f), 0.0f, 1.0f)) + _349);
@@ -129,7 +124,6 @@ float4 main(
   _369 = color_linear.g;
   _370 = color_linear.b;
 
-  // Inverse Hable tonemapper
   float _374 = HDRFilmCurve.x * 0.2199999988079071f;
   float _376 = HDRFilmCurve.y * 0.30000001192092896f;
   float _378 = HDRFilmCurve.z * 0.009999999776482582f;
@@ -163,62 +157,40 @@ float4 main(
   float _501 = (sqrt((_459 * _459) - (((_368 * 4.0f) * _476) * _414)) - _459) / (_414 * 2.0f);
   float _502 = (sqrt((_463 * _463) - (((_369 * 4.0f) * _476) * _421)) - _463) / (_421 * 2.0f);
   float _503 = (sqrt((_467 * _467) - (((_370 * 4.0f) * _476) * _428)) - _467) / (_428 * 2.0f);
-
   float _504 = dot(float3(_191, _192, _193), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
   float _514 = ((max(1.0f, (_504 / max(1.0000000116860974e-07f, dot(float3(_501, _502, _503), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f))))) + -1.0f) * (1.0f - (saturate(_504) * 0.30000001192092896f))) + 1.0f;
   float _516 = (_501 * _102) * _514;
   float _518 = (_502 * _102) * _514;
   float _520 = (_503 * _102) * _514;
-  /* float _516 = _501 * _514;
-  float _518 = _502 * _514;
-  float _520 = _503 * _514; */
 
-  float _620 = _516;
-  float _621 = _518;
-  float _622 = _520;
   if (!RENODX_TONE_MAP_TYPE) {
-    // GT tonemapper
-    // Sky brightness I think
-    float brightness = HDRDisplayParams.x;  // 19.3 by day 10 by night
-    float contrast = HDRTonemappingParams.y;
-    float shadow = HDRTonemappingParams.w;
-
-    float _530 = ((brightness - contrast) * HDRTonemappingParams.z) / HDRTonemappingParams.x;
-    float _531 = _530 + contrast;
-    float _535 = brightness - ((_530 * HDRTonemappingParams.x) + contrast);
-    float _537 = _516 / contrast;
-    float _538 = _518 / contrast;
-    float _539 = _520 / contrast;
-    float _540 = saturate(_537);
-    float _541 = saturate(_538);
-    float _542 = saturate(_539);
-    float _550 = (_540 * _540) * (3.0f - (_540 * 2.0f));
-    float _552 = (_541 * _541) * (3.0f - (_541 * 2.0f));
-    float _554 = (_542 * _542) * (3.0f - (_542 * 2.0f));
-    float _561 = select((_516 < _531), 0.0f, 1.0f);
-    float _562 = select((_518 < _531), 0.0f, 1.0f);
-    float _563 = select((_520 < _531), 0.0f, 1.0f);
-    float _577 = (-0.0f - ((brightness * HDRTonemappingParams.x) / _535)) / brightness;
-    _620 = ((((1.0f - _550) * contrast) * (pow(_537, shadow))) + ((_550 - _561) * (lerp(contrast, _516, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_516 - _531) * 1.4426950216293335f) * _577) * _535)) * _561);
-    _621 = ((((1.0f - _552) * contrast) * (pow(_538, shadow))) + ((_552 - _562) * (lerp(contrast, _518, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_518 - _531) * 1.4426950216293335f) * _577) * _535)) * _562);
-    _622 = ((((1.0f - _554) * contrast) * (pow(_539, shadow))) + ((_554 - _563) * (lerp(contrast, _520, HDRTonemappingParams.x)))) + ((brightness - (exp2(((_520 - _531) * 1.4426950216293335f) * _577) * _535)) * _563);
-  }
-
-  if (RENODX_TONE_MAP_TYPE) {
-    SV_Target.rgb = float3(_620, _621, _622);
+    float _530 = mad(0.04330600053071976f, _520, mad(0.3292919993400574f, _518, (_516 * 0.6274020075798035f)));
+    float _533 = mad(0.011359999887645245f, _520, mad(0.919543981552124f, _518, (_516 * 0.06909500062465668f)));
+    float _536 = mad(0.8955780267715454f, _520, mad(0.08802799880504608f, _518, (_516 * 0.016394000500440598f)));
+    float _539 = ((HDRDisplayParams.x - HDRTonemappingParams.y) * HDRTonemappingParams.z) / HDRTonemappingParams.x;
+    float _540 = _539 + HDRTonemappingParams.y;
+    float _544 = HDRDisplayParams.x - ((_539 * HDRTonemappingParams.x) + HDRTonemappingParams.y);
+    float _546 = _530 / HDRTonemappingParams.y;
+    float _547 = _533 / HDRTonemappingParams.y;
+    float _548 = _536 / HDRTonemappingParams.y;
+    float _549 = saturate(_546);
+    float _550 = saturate(_547);
+    float _551 = saturate(_548);
+    float _559 = (_549 * _549) * (3.0f - (_549 * 2.0f));
+    float _561 = (_550 * _550) * (3.0f - (_550 * 2.0f));
+    float _563 = (_551 * _551) * (3.0f - (_551 * 2.0f));
+    float _570 = select((_530 < _540), 0.0f, 1.0f);
+    float _571 = select((_533 < _540), 0.0f, 1.0f);
+    float _572 = select((_536 < _540), 0.0f, 1.0f);
+    float _586 = (-0.0f - ((HDRDisplayParams.x * HDRTonemappingParams.x) / _544)) / HDRDisplayParams.x;
+    SV_Target.x = (((((1.0f - _559) * HDRTonemappingParams.y) * (pow(_546, HDRTonemappingParams.w))) + ((_559 - _570) * (lerp(HDRTonemappingParams.y, _530, HDRTonemappingParams.x)))) + ((HDRDisplayParams.x - (exp2(((_530 - _540) * 1.4426950216293335f) * _586) * _544)) * _570));
+    SV_Target.y = (((((1.0f - _561) * HDRTonemappingParams.y) * (pow(_547, HDRTonemappingParams.w))) + ((_561 - _571) * (lerp(HDRTonemappingParams.y, _533, HDRTonemappingParams.x)))) + ((HDRDisplayParams.x - (exp2(((_533 - _540) * 1.4426950216293335f) * _586) * _544)) * _571));
+    SV_Target.z = (((((1.0f - _563) * HDRTonemappingParams.y) * (pow(_548, HDRTonemappingParams.w))) + ((_563 - _572) * (lerp(HDRTonemappingParams.y, _536, HDRTonemappingParams.x)))) + ((HDRDisplayParams.x - (exp2(((_536 - _540) * 1.4426950216293335f) * _586) * _544)) * _572));
+  } else {
+    SV_Target.rgb = float3(_516, _518, _520);
     SV_Target.rgb = renodx::draw::ToneMapPass(SV_Target.rgb);
     SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
-  } else {
-    // GamutExpansion
-    float _634 = saturate((max(max(_620, _621), _622) + -1.5f) * 0.2222222238779068f);
-    float _635 = 1.0f - _634;
-    float _642 = (_635 * mad(0.17753799259662628f, _621, (_620 * 0.8224619626998901f))) + (_634 * _620);
-    float _643 = (_635 * mad(0.9668058156967163f, _621, (_620 * 0.033194199204444885f))) + (_634 * _621);
-    SV_Target.x = mad(-0.22494018077850342f, _643, (_642 * 1.2249401807785034f));
-    SV_Target.y = mad(1.042056918144226f, _643, (_642 * -0.04205695539712906f));
-    SV_Target.z = mad(1.0982736349105835f, ((_635 * mad(0.9105198979377747f, _622, mad(0.07239740341901779f, _621, (_620 * 0.017082631587982178f)))) + (_634 * _622)), mad(-0.0786360427737236f, _643, (_642 * -0.01963755488395691f)));
   }
-
   SV_Target.w = 1.0f;
   return SV_Target;
 }
