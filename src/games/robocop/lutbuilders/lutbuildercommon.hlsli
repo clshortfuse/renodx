@@ -1,15 +1,17 @@
 #include "../shared.h"
 
+float3 GammaCorrectByLuminance(float3 color, bool pow_to_srgb = false) {
+  float y_in = renodx::color::y::from::BT709(color);
+  float y_out = renodx::color::correct::Gamma(y_in, pow_to_srgb);
+
+  color = renodx::color::correct::Luminance(color, y_in, y_out);
+
+  return color;
+}
+
 float3 GammaCorrectHuePreserving(float3 incorrect_color) {
-  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
-
-  const float y_in = max(0, renodx::color::y::from::BT709(incorrect_color));
-  const float y_out = renodx::color::correct::Gamma(y_in);
-
-  float3 lum = renodx::color::correct::Luminance(incorrect_color, y_in, y_out);
-
-  // use chrominance from per channel gamma correction
-  float3 result = renodx::color::correct::ChrominanceOKLab(lum, ch, 1.f, 1.f);
+  float3 result = renodx::color::correct::GammaSafe(incorrect_color);
+  result = renodx::color::correct::Hue(result, incorrect_color);
 
   return result;
 }
