@@ -572,16 +572,26 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
     float3 lut_black_linear = renodx::lut::LinearOutput(lut_black, lut_config);
     float lut_black_y = max(0, renodx::color::y::from::BT709(lut_black_linear));
     if (lut_black_y > 0.f) {
-      float3 lut_black_pivot = SamplePacked1DLut(renodx::lut::ConvertInput(lut_black_y, lut_config), lut_config.lut_sampler, lut_texture);  // set midpoint based on black to avoid black crush
-      float lut_shift = (renodx::color::y::from::BT709(renodx::lut::LinearOutput(lut_black_pivot, lut_config)) + lut_black_y) / lut_black_y;
+      float3 lut_mid = SamplePacked1DLut(renodx::lut::ConvertInput(0.18f, lut_config), lut_config.lut_sampler, lut_texture);
+
+      if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
+        lut_output_color = renodx::lut::ConvertInput(GammaCorrectByLuminance(color_output), lut_config);
+        lut_black = renodx::lut::ConvertInput(GammaCorrectByLuminance(renodx::lut::LinearOutput(lut_black, lut_config)), lut_config);
+        lut_mid = renodx::lut::ConvertInput(GammaCorrectByLuminance(renodx::lut::LinearOutput(lut_mid, lut_config)), lut_config);
+      }
 
       float3 unclamped_gamma = Unclamp(
           renodx::lut::GammaOutput(lut_output_color, lut_config),
           renodx::lut::GammaOutput(lut_black, lut_config),
-          renodx::lut::GammaOutput(lut_black_pivot, lut_config),
-          renodx::lut::ConvertInput(color_input * lut_shift, lut_config));
+          renodx::lut::GammaOutput(lut_mid, lut_config),
+          renodx::lut::ConvertInput(color_input, lut_config));
 
       float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
+
+      if (RENODX_GAMMA_CORRECTION != 0.f) {  // inverse EOTF emulation
+        unclamped_linear = GammaCorrectByLuminance(unclamped_linear, true);
+      }
+
       float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
       color_output = recolored;
     }
