@@ -75,23 +75,28 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   return color;
 }
 
-float3 ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(float3 tonemapped, float3 hue_reference_color, float y, renodx::color::grade::Config config) {
+float3 ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(float3 tonemapped, float3 hue_reference_color, float y, renodx::color::grade::Config config, bool hue_correct_ignore_highlights = false) {
   float3 color = tonemapped;
   if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_correction_strength != 0.f || config.blowout != 0.f) {
     float3 perceptual_new = renodx::color::oklab::from::BT709(renodx::color::bt709::from::AP1(color));
 
-    if (config.hue_correction_strength != 0.f) {
+    float hue_correction_strength = config.hue_correction_strength;
+    if (hue_correction_strength != 0.f) {
       float3 perceptual_old = renodx::color::oklab::from::BT709(renodx::color::bt709::from::AP1(hue_reference_color));
 
-      // Save chrominance to apply black
-      float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
+      if (hue_correct_ignore_highlights) {
+        float highlight_rolloff = saturate((1.f - perceptual_old.x) / 0.1f);  // roll off strength from 0.9 - 1.0
+        highlight_rolloff *= highlight_rolloff;  // keep transition smooth
+        hue_correction_strength *= highlight_rolloff;
+      }
 
-      perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, config.hue_correction_strength);
+        // Save chrominance to apply black
+        float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
+        perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, hue_correction_strength);
+        float chrominance_post_adjust = distance(perceptual_new.yz, 0);
 
-      float chrominance_post_adjust = distance(perceptual_new.yz, 0);
-
-      // Apply back previous chrominance
-      perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
+        // Apply back previous chrominance
+        perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
     }
 
     if (config.dechroma != 0.f) {
