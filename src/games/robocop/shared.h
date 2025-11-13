@@ -13,6 +13,7 @@ struct ShaderInjectData {
   float tone_map_per_channel;
   float tone_map_hue_correction;
   float override_black_clip;
+
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;
@@ -23,6 +24,8 @@ struct ShaderInjectData {
   float tone_map_flare;
   float custom_lut_strength;
   float custom_lut_scaling;
+  float custom_lut_gamut_restoration;
+
   float fix_post_process;
 };
 
@@ -49,9 +52,9 @@ cbuffer cb13 : register(b13, space50) {
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define CUSTOM_LUT_STRENGTH                  shader_injection.custom_lut_strength
 #define CUSTOM_LUT_SCALING                   shader_injection.custom_lut_scaling
+#define CUSTOM_LUT_GAMUT_RESTORATION         shader_injection.custom_lut_gamut_restoration
 #define FIX_POST_PROCESS                     shader_injection.fix_post_process     // 0 - BT.2020 PQ, 1 - BT.709 piecewise sRGB, 2 - BT.2020 piecewise sRGB
 #define OVERRIDE_BLACK_CLIP                  shader_injection.override_black_clip  // 0 - Off, 1 - 0.0001 nits
-#define CUSTOM_LUT_GAMUT_RESTORATION         1.f
 
 #include "../../shaders/renodx.hlsl"
 
