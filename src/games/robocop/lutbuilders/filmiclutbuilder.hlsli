@@ -201,16 +201,11 @@ void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g,
     tonemapped_ap1 = ApplyBlueCorrectionPost(tonemapped_prebluecorrect_ap1);
     tonemapped_ap1 = max(0, tonemapped_ap1);
 
-    if (RENODX_TONE_MAP_PER_CHANNEL == 0.f && RENODX_TONE_MAP_TYPE != 4.f) {
-      float3 hue_corrected_ap1 = CorrectHueAP1(tonemapped_ap1, hue_reference_color);
-      const float hue_corrected_blend_factor = saturate(renodx::color::y::from::AP1(tonemapped_ap1) / 0.6f);
-      tonemapped_ap1 = lerp(hue_corrected_ap1, tonemapped_ap1, hue_corrected_blend_factor);
-    }
   }
 
   tonemapped_ap1 = max(0, tonemapped_ap1);
 
-  tonemapped_ap1 = ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(tonemapped_ap1, hue_reference_color, y, cg_config);
+  tonemapped_ap1 = ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(tonemapped_ap1, hue_reference_color, y, cg_config, RENODX_TONE_MAP_HUE_CORRECTION_TYPE);
 
   tonemapped_r = tonemapped_ap1.r, tonemapped_g = tonemapped_ap1.g, tonemapped_b = tonemapped_ap1.b;
 
