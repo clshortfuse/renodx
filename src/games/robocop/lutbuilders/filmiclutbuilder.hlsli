@@ -119,24 +119,6 @@ float3 ApplyBlueCorrectionPost(float3 tonemapped) {
   return float3(_1149, _1150, _1151);
 }
 
-float3 ApplyUnrealFilmicToneMapByLuminance(float3 untonemapped, float3 preRRT) {
-  float untonemapped_lum = renodx::color::y::from::AP1(untonemapped);
-  float4 tonemaps = ApplyUnrealFilmicToneMapCurve(float4(untonemapped, untonemapped_lum));
-  float3 channel_tonemapped = tonemaps.xyz;
-  float3 luminance_tonemapped = renodx::color::correct::Luminance(untonemapped, untonemapped_lum, tonemaps.a, 1.f);
-
-  // blue correction has a massive effect on the final result, so we include before chrominance correction
-  channel_tonemapped = ApplyPostToneMapDesaturation(channel_tonemapped);
-  channel_tonemapped = LerpToneMapStrength(channel_tonemapped, preRRT);
-  channel_tonemapped = ApplyBlueCorrectionPost(channel_tonemapped);
-
-  luminance_tonemapped = ApplyPostToneMapDesaturation(luminance_tonemapped);
-  luminance_tonemapped = LerpToneMapStrength(luminance_tonemapped, preRRT);
-
-  // added max(0, color) as negatives are clamped later but we need to clamp early for chrominance correction
-  return renodx::color::correct::ChrominanceOKLab(luminance_tonemapped, max(0, channel_tonemapped));
-}
-
 float3 CorrectChrominanceAP1(float3 original_color_ap1, float3 chrominance_reference_color_ap1, float strength = 1.f, float clamp_chrominance_loss = 0.f) {
   if (strength == 0.f) return original_color_ap1;
 
