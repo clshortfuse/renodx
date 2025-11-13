@@ -10,7 +10,7 @@
   T ApplyUnrealFilmicToneMapCurve(T untonemapped) {                                                                                                                                                                                                                                          \
     float film_black_clip = FilmBlackClip;                                                                                                                                                                                                                                                   \
     if (OVERRIDE_BLACK_CLIP && RENODX_TONE_MAP_TYPE == 3.f) {                                                                                                                                                                                                                                \
-      film_black_clip = 0.f;                                                                                                                                                                                                                                            \
+      film_black_clip = 0.f;                                                                                                                                                                                                                                                                 \
     }                                                                                                                                                                                                                                                                                        \
     float film_white_clip = FilmWhiteClip;                                                                                                                                                                                                                                                   \
                                                                                                                                                                                                                                                                                              \
@@ -200,7 +200,6 @@ void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g,
     tonemapped_prebluecorrect_ap1 = LerpToneMapStrength(tonemapped_prebluecorrect_ap1, untonemapped_ap1_graded);
     tonemapped_ap1 = ApplyBlueCorrectionPost(tonemapped_prebluecorrect_ap1);
     tonemapped_ap1 = max(0, tonemapped_ap1);
-
   }
 
   tonemapped_ap1 = max(0, tonemapped_ap1);
@@ -212,4 +211,4 @@ void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g,
   return;
 }
 
-#endif // FILMIC_LUTBUILDER_HLSLI
+#endif  // FILMIC_LUTBUILDER_HLSLI
