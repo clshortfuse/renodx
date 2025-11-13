@@ -35,10 +35,12 @@ float3 LUTToneMap(float3 untonemapped, float rolloff_start = 0.5f, float output_
 
 float3 ComputeGamutCompressionScaleAndCompress(float3 color_srgb, inout float gamut_compression_scale) {
   if (RENODX_TONE_MAP_TYPE != 4.f && CUSTOM_LUT_GAMUT_RESTORATION != 0.f) {
+    
     // taking luminance of gamma space color directly causes artifacting with dark blues
+    float3 color_linear = renodx::color::srgb::DecodeSafe(color_srgb);
     const float grayscale = renodx::color::srgb::Encode(
-        max(0, renodx::color::y::from::BT709(
-                   renodx::color::srgb::DecodeSafe(color_srgb))));
+        max(0, renodx::color::y::from::BT709(color_linear)));
+
     gamut_compression_scale = renodx::color::correct::ComputeGamutCompressionScale(color_srgb, grayscale);
     color_srgb = renodx::color::correct::GamutCompress(color_srgb, grayscale, gamut_compression_scale);
   }
@@ -134,7 +136,8 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
     float3 lut_black_linear = renodx::lut::LinearOutput(lut_black, lut_config);
     float lut_black_y = max(0, renodx::color::y::from::BT709(lut_black_linear));
     if (lut_black_y > 0.f) {
-      float3 lut_mid = SamplePacked1DLut(renodx::lut::ConvertInput(0.18f, lut_config), lut_config.lut_sampler, lut_texture);
+      // set lut_mid based on lut_black_y to target shadows more 
+      float3 lut_mid = SamplePacked1DLut(renodx::lut::ConvertInput(lut_black_y, lut_config), lut_config.lut_sampler, lut_texture);
 
       if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
         lut_output_color = renodx::lut::ConvertInput(renodx::color::correct::GammaSafe(color_output), lut_config);
