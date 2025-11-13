@@ -96,8 +96,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Scaling",
         .section = "Tone Mapping",
-        .tooltip = "Luminance scales colors consistently in midtones and shadows",
-        .labels = {"Luminance & Channel Blend", "Per Channel"},
+        .tooltip = "Per Channel (Hue Corrected) corrects hue shifts in midtones and shadows while keeping highlights hue shifted.",
+        .labels = {"Per Channel (Hue Corrected)", "Per Channel"},
         .is_enabled = []() { return shader_injection.tone_map_type == 3.f; },
     },
     new renodx::utils::settings::Setting{

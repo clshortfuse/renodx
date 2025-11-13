@@ -176,7 +176,7 @@ void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g,
 
   float3 tonemapped_ap1;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
-    tonemapped_ap1 = untonemapped_ap1;
+    tonemapped_ap1 = untonemapped_ap1_graded;
   } else if (RENODX_TONE_MAP_TYPE == 2.f) {  // ACES
     float3 RRT_AP1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1_graded));
     float3 ACES_AP1 = ACESMidGrayMatchedODT(RRT_AP1);
