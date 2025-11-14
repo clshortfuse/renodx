@@ -174,7 +174,10 @@ void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g,
   float y = renodx::color::y::from::AP1(untonemapped_ap1);
   float3 hue_reference_color = untonemapped_ap1;
 
-  float3 untonemapped_ap1_graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_ap1, y, cg_config, 0.18f);
+  float3 untonemapped_ap1_graded = untonemapped_ap1;
+  if (RENODX_TONE_MAP_TYPE != 4.f) {
+    untonemapped_ap1_graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_ap1, y, cg_config, 0.18f);
+  }
 
   float3 tonemapped_ap1;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
@@ -206,7 +209,11 @@ void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g,
 
   tonemapped_ap1 = max(0, tonemapped_ap1);
 
-  tonemapped_ap1 = ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(tonemapped_ap1, hue_reference_color, y, cg_config, RENODX_TONE_MAP_HUE_CORRECTION_TYPE);
+  // tonemapped_ap1 = renodx::color::ap1::from::BT2020(max(0, renodx::color::bt2020::from::AP1(tonemapped_ap1)));
+
+  if (RENODX_TONE_MAP_TYPE != 4.f) {
+    tonemapped_ap1 = ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(tonemapped_ap1, hue_reference_color, y, cg_config, RENODX_TONE_MAP_HUE_CORRECTION_TYPE);
+  }
 
   tonemapped_r = tonemapped_ap1.r, tonemapped_g = tonemapped_ap1.g, tonemapped_b = tonemapped_ap1.b;
 

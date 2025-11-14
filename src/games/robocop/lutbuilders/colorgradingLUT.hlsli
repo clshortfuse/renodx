@@ -21,41 +21,45 @@ EXPONENTIALROLLOFF_GENERATOR(float3)
 
 /// Applies Exponential Roll-Off Extended tonemapping by luminance.
 float3 LUTToneMap(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f) {
-  float clip = 100.f;
+  float white_clip = (RENODX_TONE_MAP_TYPE == 1.f) ? 100.f : RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+
   float y_in = renodx::color::y::from::BT709(untonemapped);
   float y_out = exp2(ExponentialRollOffExtended(
       log2(y_in),
       log2(rolloff_start),
       log2(output_max),
-      log2(clip)));
+      log2(white_clip)));
   float3 tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
 
   return tonemapped;
 }
 
-float3 ComputeGamutCompressionScaleAndCompress(float3 color_srgb, inout float gamut_compression_scale) {
-  if (RENODX_TONE_MAP_TYPE != 4.f && CUSTOM_LUT_GAMUT_RESTORATION != 0.f) {
-    
-    // taking luminance of gamma space color directly causes artifacting with dark blues
-    float3 color_linear = renodx::color::srgb::DecodeSafe(color_srgb);
-    const float grayscale = renodx::color::srgb::Encode(
-        max(0, renodx::color::y::from::BT709(color_linear)));
+float3 ComputeGamutCompressionScaleAndCompress(float3 color_linear, inout float gamut_compression_scale) {
+  if (RENODX_TONE_MAP_TYPE == 4 || CUSTOM_LUT_GAMUT_RESTORATION == 0.f) return color_linear;
 
-    gamut_compression_scale = renodx::color::correct::ComputeGamutCompressionScale(color_srgb, grayscale);
-    color_srgb = renodx::color::correct::GamutCompress(color_srgb, grayscale, gamut_compression_scale);
-  }
-  return color_srgb;
+  const float MID_GRAY_GAMMA = log(1 / (pow(10, 0.75))) / log(0.5f);  // ~2.49f
+
+  float3 encoded = renodx::color::gamma::EncodeSafe(color_linear, MID_GRAY_GAMMA);
+  float encoded_gray = renodx::color::gamma::Encode(renodx::color::y::from::BT709(color_linear), MID_GRAY_GAMMA);
+
+  gamut_compression_scale = renodx::color::correct::ComputeGamutCompressionScale(encoded, encoded_gray);
+
+  float3 compressed = renodx::color::correct::GamutCompress(encoded, encoded_gray, gamut_compression_scale);
+
+  return renodx::color::gamma::DecodeSafe(compressed, MID_GRAY_GAMMA);
 }
 
-float3 GamutDecompress(float3 color_srgb, float saturation_scale) {
-  if (RENODX_TONE_MAP_TYPE != 4.f && CUSTOM_LUT_GAMUT_RESTORATION != 0.f) {
-    // calculate grayscale same way as previous function
-    const float grayscale = renodx::color::srgb::Encode(
-        max(0, renodx::color::y::from::BT709(
-                   renodx::color::srgb::DecodeSafe(color_srgb))));
-    color_srgb = renodx::color::correct::GamutDecompress(color_srgb, grayscale, saturation_scale);
-  }
-  return color_srgb;
+float3 GamutDecompress(float3 color_linear, float gamut_compression_scale) {
+  if (RENODX_TONE_MAP_TYPE == 4 || CUSTOM_LUT_GAMUT_RESTORATION == 0.f || gamut_compression_scale == 1.f) return color_linear;
+
+  const float MID_GRAY_GAMMA = log(1 / (pow(10, 0.75))) / log(0.5f);  // ~2.49f
+
+  float3 encoded = renodx::color::gamma::EncodeSafe(color_linear, MID_GRAY_GAMMA);
+  float encoded_gray = renodx::color::gamma::Encode(renodx::color::y::from::BT709(color_linear), MID_GRAY_GAMMA);
+
+  float3 decompressed = renodx::color::correct::GamutDecompress(encoded, encoded_gray, gamut_compression_scale);
+
+  return renodx::color::gamma::DecodeSafe(decompressed, MID_GRAY_GAMMA);
 }
 
 float3 ComputeMaxChannelScaleAndCompress(float3 color_srgb, inout float channel_compression_scale) {
@@ -70,11 +74,6 @@ float3 SamplePacked1DLut(
     float3 color_srgb,
     SamplerState lut_sampler,
     Texture2D<float4> lut_texture) {
-  float gamut_compression_scale = 1.f;
-  {
-    color_srgb = ComputeGamutCompressionScaleAndCompress(color_srgb, gamut_compression_scale);
-  }
-
   float max_channel = 1.f;
   {
     color_srgb = ComputeMaxChannelScaleAndCompress(color_srgb, max_channel);
@@ -99,10 +98,6 @@ float3 SamplePacked1DLut(
     lutted_srgb *= max_channel;
   }
 
-  {
-    lutted_srgb = GamutDecompress(lutted_srgb, gamut_compression_scale);
-  }
-
   return lutted_srgb;
 }
 
@@ -125,23 +120,38 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   lut_config.scaling = CUSTOM_LUT_SCALING;
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.recolor = 0.f;
+
+  float gamut_compression_scale = 1.f;
+  {
+    color_input = ComputeGamutCompressionScaleAndCompress(color_input, gamut_compression_scale);
+  }
 
   float3 lut_input_color = renodx::lut::ConvertInput(color_input, lut_config);
   float3 lut_output_color = SamplePacked1DLut(lut_input_color, lut_config.lut_sampler, lut_texture);
   float3 color_output = renodx::lut::LinearOutput(lut_output_color, lut_config);
+
+  color_output = GamutDecompress(color_output, gamut_compression_scale);
+
   [branch]
   if (lut_config.scaling != 0.f) {
     float3 lut_black = SamplePacked1DLut(float3(0, 0, 0), lut_config.lut_sampler, lut_texture);
     float3 lut_black_linear = renodx::lut::LinearOutput(lut_black, lut_config);
     float lut_black_y = max(0, renodx::color::y::from::BT709(lut_black_linear));
     if (lut_black_y > 0.f) {
-      // set lut_mid based on lut_black_linear to target shadows more 
+#if 0
+      if (OVERRIDE_BLACK_CLIP) {
+        float target_black_nits = 0.0001f / RENODX_DIFFUSE_WHITE_NITS;
+        if (RENODX_GAMMA_CORRECTION) target_black_nits = renodx::color::correct::Gamma(target_black_nits, true);
+        lut_black_linear += target_black_nits;
+      }
+#endif
+
+      // set lut_mid based on lut_black_linear to target shadows more
       float3 lut_mid = SamplePacked1DLut(lut_black, lut_config.lut_sampler, lut_texture);
 
       if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
         lut_output_color = renodx::lut::ConvertInput(renodx::color::correct::GammaSafe(color_output), lut_config);
-        lut_black = renodx::lut::ConvertInput(renodx::color::correct::GammaSafe(renodx::lut::LinearOutput(lut_black, lut_config)), lut_config);
+        lut_black = renodx::lut::ConvertInput(renodx::color::correct::GammaSafe(lut_black_linear), lut_config);
         lut_mid = renodx::lut::ConvertInput(renodx::color::correct::GammaSafe(renodx::lut::LinearOutput(lut_mid, lut_config)), lut_config);
       }
 
@@ -181,4 +191,4 @@ void SampleLUTUpgradeToneMap(float3 color_lut_input, SamplerState lut_sampler, T
   output_r = color_output.r, output_g = color_output.g, output_b = color_output.b;
 }
 
-#endif // COLORGRADING_LUT_HLSLI
+#endif  // COLORGRADING_LUT_HLSLI

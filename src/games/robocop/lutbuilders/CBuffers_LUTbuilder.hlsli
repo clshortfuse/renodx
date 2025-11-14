@@ -1,7 +1,7 @@
 #ifndef CBUFFERS_LUTBUILDER_HLSLI
 #define CBUFFERS_LUTBUILDER_HLSLI
 
-#include "../shared.h"
+#include "../common.hlsli"
 
 cbuffer _RootShaderParameters : register(b0) {
   float4 LUTWeights[2] : packoffset(c005.x);
