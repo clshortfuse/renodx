@@ -355,8 +355,8 @@ renodx::utils::settings::Settings settings = {
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
-      {"ToneMapPeakNits", 0.f},
-      {"toneMapGameNits", 203.f},
+      {"ToneMapPeakNits", 203.f},
+      {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
       {"GammaCorrection", 0.f},
       {"UIGammaCorrection", 0.f},
