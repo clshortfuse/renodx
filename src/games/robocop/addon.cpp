@@ -267,7 +267,7 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-              {"ToneMapGammaCorrection", 1.f},
+              {"GammaCorrection", 1.f},
               {"ToneMapHueCorrection", 0.f},
               {"OverrideBlackClip", 0.f},
               {"ColorGradeLUTScaling", 0.f},
