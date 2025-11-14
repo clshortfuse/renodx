@@ -118,7 +118,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Override Black Clip",
         .section = "Tone Mapping",
-        .tooltip = "Outputs 0 nits for black, prevents crushing when the black clip parameter is used.",
+        .tooltip = "Outputs 0.0001 nits for black, prevents crushing.",
         .is_enabled = []() { return shader_injection.tone_map_type == 3; },
     },
     new renodx::utils::settings::Setting{
