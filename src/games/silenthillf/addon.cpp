@@ -70,7 +70,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapGammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .label = "SDR EOTF Emulation",
         .section = "Tone Mapping & Color Grading",
         .tooltip = "Emulates a 2.2 EOTF",
@@ -91,7 +91,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
         .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 0.f,
+        .default_value = 100.f,
         .label = "Hue Correction",
         .section = "Tone Mapping & Color Grading",
         .tooltip = "Hue retention strength.",
@@ -413,6 +413,7 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"ColorGradeLUTStrength", 0.f},
       {"ColorGradeLUTScaling", 0.f},
+      {"ColorGradeLUTGamutRestoration", 0.f},
       {"FxGrainType", 0.f},
       {"FxGrainStrength", 50.f},
   });
