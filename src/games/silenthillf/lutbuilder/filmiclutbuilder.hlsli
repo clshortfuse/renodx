@@ -117,42 +117,6 @@ float3 ApplyBlueCorrectionPost(float3 tonemapped) {
   return float3(_1149, _1150, _1151);
 }
 
-float3 CorrectChrominanceAP1(float3 original_color_ap1, float3 chrominance_reference_color_ap1, float strength = 1.f, float clamp_chrominance_loss = 0.f) {
-  if (strength == 0.f) return original_color_ap1;
-
-  float3 original_color_bt709 = renodx::color::bt709::from::AP1(original_color_ap1);
-  float3 chrominance_reference_color_bt709 = renodx::color::bt709::from::AP1(chrominance_reference_color_ap1);
-
-  float3 corrected_color_bt709 = renodx::color::correct::Chrominance(
-      original_color_bt709,
-      chrominance_reference_color_bt709,
-      strength,
-      clamp_chrominance_loss);
-
-  float3 corrected_color_ap1 = renodx::color::ap1::from::BT709(corrected_color_bt709);
-  corrected_color_ap1 = max(0, corrected_color_ap1);
-
-  return corrected_color_ap1;
-}
-
-float3 CorrectHueAP1(float3 original_color_ap1, float3 hue_reference_color_ap1, float strength = 1.f, float clamp_chrominance_loss = 0.f) {
-  if (strength == 0.f) return original_color_ap1;
-
-  float3 original_color_bt709 = renodx::color::bt709::from::AP1(original_color_ap1);
-  float3 hue_reference_color_bt709 = renodx::color::bt709::from::AP1(hue_reference_color_ap1);
-
-  float3 corrected_color_bt709 = renodx::color::correct::Hue(
-      original_color_bt709,
-      hue_reference_color_bt709,
-      strength,
-      0u);
-
-  float3 corrected_color_ap1 = renodx::color::ap1::from::BT709(corrected_color_bt709);
-  corrected_color_ap1 = max(0, corrected_color_ap1);
-
-  return corrected_color_ap1;
-}
-
 // ACES with
 // Mid-Gray Matching with Unreal Filmic
 // Output Display Transform
@@ -267,7 +231,7 @@ float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma,
 }
 
 float3 ComputeGamutCompressionScaleAndCompress(float3 color_linear, inout float gamut_compression_scale) {
-  if (RENODX_TONE_MAP_TYPE == 4 || CUSTOM_LUT_GAMUT_RESTORATION == 0.f) return color_linear;
+  if (RENODX_TONE_MAP_TYPE == 4.f || CUSTOM_LUT_GAMUT_RESTORATION == 0.f) return color_linear;
 
   const float MID_GRAY_GAMMA = log(1 / (pow(10, 0.75))) / log(0.5f);  // ~2.49f
 
@@ -282,7 +246,7 @@ float3 ComputeGamutCompressionScaleAndCompress(float3 color_linear, inout float 
 }
 
 float3 GamutDecompress(float3 color_linear, float gamut_compression_scale) {
-  if (RENODX_TONE_MAP_TYPE == 4 || CUSTOM_LUT_GAMUT_RESTORATION == 0.f || gamut_compression_scale == 1.f) return color_linear;
+  if (RENODX_TONE_MAP_TYPE == 4.f || CUSTOM_LUT_GAMUT_RESTORATION == 0.f || gamut_compression_scale == 1.f) return color_linear;
 
   const float MID_GRAY_GAMMA = log(1 / (pow(10, 0.75))) / log(0.5f);  // ~2.49f
 
@@ -400,6 +364,7 @@ void SampleLUTUpgradeToneMap(float3 color_lut_input, SamplerState lut_sampler, T
     float3 lutted = SampleLUTSRGBInSRGBOut(lut_texture, lut_sampler, color_lut_input_tonemapped);
     color_output = renodx::tonemap::UpgradeToneMap(color_lut_input, color_lut_input_tonemapped, lutted, CUSTOM_LUT_STRENGTH);
   } else {
+    color_lut_input = saturate(color_lut_input);
     color_output = renodx::color::srgb::DecodeSafe(SamplePacked1DLut(renodx::color::srgb::EncodeSafe(color_lut_input), lut_sampler, lut_texture));
     color_output = lerp(color_lut_input, color_output, CUSTOM_LUT_STRENGTH);
   }
@@ -512,6 +477,7 @@ void Sample2LUTsUpgradeToneMap(float3 color_lut_input, SamplerState lut_sampler1
     float3 lutted = Sample2LUTSRGBInSRGBOut(lut_texture1, lut_texture2, lut_sampler1, lut_sampler2, color_lut_input_tonemapped);
     color_output = renodx::tonemap::UpgradeToneMap(color_lut_input, color_lut_input_tonemapped, lutted, CUSTOM_LUT_STRENGTH);
   } else {
+    color_lut_input = saturate(color_lut_input);
     color_output = renodx::color::srgb::DecodeSafe(Sample2Packed1DLuts(renodx::color::srgb::EncodeSafe(color_lut_input), lut_sampler1, lut_sampler2, lut_texture1, lut_texture2));
     color_output = lerp(color_lut_input, color_output, CUSTOM_LUT_STRENGTH);
   }
