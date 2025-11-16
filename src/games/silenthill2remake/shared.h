@@ -14,7 +14,7 @@ struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
   float gamma_correction;
-  float tone_map_per_channel;
+  float tone_map_hue_correction_type;
   float tone_map_hue_correction;
   float override_black_clip;
   float tone_map_exposure;
@@ -27,6 +27,7 @@ struct ShaderInjectData {
   float tone_map_flare;
   float custom_lut_strength;
   float custom_lut_scaling;
+  float custom_lut_gamut_restoration;
 
   float shadow_color_offset_fix_type;
   float shadow_color_offset_brightness_bias;
@@ -53,23 +54,26 @@ cbuffer cb13 : register(b13, space50) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
-#define RENODX_TONE_MAP_TYPE                        shader_injection.tone_map_type  // 0 - Vanilla, 1 - None, 2 - ACES, 3 - Vanilla+ (ACES + UE Filmic Blend), 4 - UE Filmic (SDR)
-#define RENODX_PEAK_WHITE_NITS                      shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS                   shader_injection.diffuse_white_nits
-#define RENODX_GAMMA_CORRECTION                     shader_injection.gamma_correction
-#define OVERRIDE_BLACK_CLIP                         shader_injection.override_black_clip  // 0 - Off, 1 - 0.0001 nits
-#define RENODX_TONE_MAP_PER_CHANNEL                 shader_injection.tone_map_per_channel
-#define RENODX_TONE_MAP_HUE_CORRECTION              shader_injection.tone_map_hue_correction
-#define RENODX_TONE_MAP_EXPOSURE                    shader_injection.tone_map_exposure
-#define RENODX_TONE_MAP_HIGHLIGHTS                  shader_injection.tone_map_highlights
-#define RENODX_TONE_MAP_SHADOWS                     shader_injection.tone_map_shadows
-#define RENODX_TONE_MAP_CONTRAST                    shader_injection.tone_map_contrast
-#define RENODX_TONE_MAP_SATURATION                  shader_injection.tone_map_saturation
-#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION        shader_injection.tone_map_highlight_saturation
-#define RENODX_TONE_MAP_BLOWOUT                     shader_injection.tone_map_blowout
-#define RENODX_TONE_MAP_FLARE                       shader_injection.tone_map_flare
-#define CUSTOM_LUT_STRENGTH                         shader_injection.custom_lut_strength
-#define CUSTOM_LUT_SCALING                          shader_injection.custom_lut_scaling
+#define RENODX_TONE_MAP_TYPE                shader_injection.tone_map_type  // 0 - Vanilla, 1 - None, 2 - ACES, 3 - Vanilla+ (ACES + UE Filmic Blend), 4 - UE Filmic (SDR)
+#define RENODX_PEAK_WHITE_NITS              shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS           shader_injection.diffuse_white_nits
+#define RENODX_GAMMA_CORRECTION             shader_injection.gamma_correction
+#define OVERRIDE_BLACK_CLIP                 shader_injection.override_black_clip           // 0 - Off, 1 - 0.0001 nits
+#define RENODX_TONE_MAP_HUE_CORRECTION_TYPE shader_injection.tone_map_hue_correction_type  // 0 - Highlights, Midtones, & Shadows, 1 - Midtones & Shadows
+#define RENODX_TONE_MAP_HUE_CORRECTION      shader_injection.tone_map_hue_correction
+
+#define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
+#define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
+#define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
+#define RENODX_TONE_MAP_CONTRAST             shader_injection.tone_map_contrast
+#define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
+#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
+#define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
+#define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
+#define CUSTOM_LUT_STRENGTH                  shader_injection.custom_lut_strength
+#define CUSTOM_LUT_SCALING                   shader_injection.custom_lut_scaling
+#define CUSTOM_LUT_GAMUT_RESTORATION         shader_injection.custom_lut_gamut_restoration
+
 #define SHADOW_COLOR_OFFSET_FIX_TYPE                shader_injection.shadow_color_offset_fix_type
 #define COLOR_OFFSET_MIDTONES_HIGHLIGHTS            shader_injection.color_offset_midtones_highliqhts
 #define SHADOW_COLOR_OFFSET_BRIGHTNESS_BIAS         shader_injection.shadow_color_offset_brightness_bias
@@ -88,23 +92,26 @@ cbuffer cb13 : register(b13, space50) {
 
 #else
 
-#define RENODX_TONE_MAP_TYPE                        0.f  // 0 - Vanilla, 1 - None, 2 - ACES, 3 - Vanilla+, 4 - SDR
-#define RENODX_PEAK_WHITE_NITS                      1000.f
-#define RENODX_DIFFUSE_WHITE_NITS                   203.f
-#define RENODX_GAMMA_CORRECTION                     1.f
-#define OVERRIDE_BLACK_CLIP                         1.f  // 0 - Off, 1 - 0.0001 nits
-#define RENODX_TONE_MAP_PER_CHANNEL                 1.f
-#define RENODX_TONE_MAP_HUE_CORRECTION              0.f
-#define RENODX_TONE_MAP_EXPOSURE                    1.f
-#define RENODX_TONE_MAP_HIGHLIGHTS                  1.f
-#define RENODX_TONE_MAP_SHADOWS                     1.f
-#define RENODX_TONE_MAP_CONTRAST                    1.f
-#define RENODX_TONE_MAP_SATURATION                  1.f
-#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION        1.f
-#define RENODX_TONE_MAP_BLOWOUT                     0.f
-#define RENODX_TONE_MAP_FLARE                       0.f
-#define CUSTOM_LUT_STRENGTH                         1.f
-#define CUSTOM_LUT_SCALING                          1.f
+#define RENODX_TONE_MAP_TYPE      0.f  // 0 - Vanilla, 1 - None, 2 - ACES, 3 - Vanilla+, 4 - SDR
+#define RENODX_PEAK_WHITE_NITS    1000.f
+#define RENODX_DIFFUSE_WHITE_NITS 203.f
+#define RENODX_GAMMA_CORRECTION   1.f
+#define OVERRIDE_BLACK_CLIP       1.f  // 0 - Off, 1 - 0.0001 nits
+
+#define RENODX_TONE_MAP_HUE_CORRECTION_TYPE  1.f
+#define RENODX_TONE_MAP_HUE_CORRECTION       0.f
+#define RENODX_TONE_MAP_EXPOSURE             1.f
+#define RENODX_TONE_MAP_HIGHLIGHTS           1.f
+#define RENODX_TONE_MAP_SHADOWS              1.f
+#define RENODX_TONE_MAP_CONTRAST             1.f
+#define RENODX_TONE_MAP_SATURATION           1.f
+#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1.f
+#define RENODX_TONE_MAP_BLOWOUT              0.f
+#define RENODX_TONE_MAP_FLARE                0.f
+#define CUSTOM_LUT_STRENGTH                  1.f
+#define CUSTOM_LUT_SCALING                   1.f
+#define CUSTOM_LUT_GAMUT_RESTORATION         1.f
+
 #define SHADOW_COLOR_OFFSET_FIX_TYPE                1.f
 #define COLOR_OFFSET_MIDTONES_HIGHLIGHTS            1.f
 #define SHADOW_COLOR_OFFSET_BRIGHTNESS_BIAS         8.f
