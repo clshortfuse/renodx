@@ -337,6 +337,11 @@ void main(
   float _545 = ((_427 * (((cb0_019z + cb0_034z) + _324) + (((cb0_018z * cb0_033z) * _333) * exp2(log2(exp2(((cb0_016z * cb0_031z) * _351) * log2(max(0.0f, ((((cb0_015z * cb0_030z) * _360) * _252) + _176)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_032z) * _342)))))) + (_315 * (((cb0_019z + cb0_024z) + _190) + (((cb0_018z * cb0_023z) * _204) * exp2(log2(exp2(((cb0_016z * cb0_021z) * _232) * log2(max(0.0f, ((((cb0_015z * cb0_020z) * _246) * _252) + _176)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_022z) * _218))))))) + ((((cb0_019z + cb0_029z) + _436) + (((cb0_018z * cb0_028z) * _445) * exp2(log2(exp2(((cb0_016z * cb0_026z) * _463) * log2(max(0.0f, ((((cb0_015z * cb0_025z) * _472) * _252) + _176)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_027z) * _454))))) * _530);
 #endif
 
+#if 1  // begin FilmToneMap with BlueCorrect
+  float _903, _904, _905;
+  ApplyFilmToneMapWithBlueCorrect(_541, _543, _545,
+                                  _903, _904, _905);
+#else
   float _581 = ((mad(0.061360642313957214f, _545, mad(-4.540197551250458e-09f, _543, (_541 * 0.9386394023895264f))) - _541) * cb0_036y) + _541;
   float _582 = ((mad(0.169205904006958f, _545, mad(0.8307942152023315f, _543, (_541 * 6.775371730327606e-08f))) - _543) * cb0_036y) + _543;
   float _583 = (mad(-2.3283064365386963e-10f, _543, (_541 * -9.313225746154785e-10f)) * cb0_036y) + _545;
@@ -455,6 +460,8 @@ void main(
   float _904 = ((mad(-0.20366770029067993f, _887, mad(1.2036634683609009f, _886, (_885 * -2.57161445915699e-07f))) - _886) * cb0_036y) + _886;
   float _905 = ((mad(0.9999996423721313f, _887, mad(2.0954757928848267e-08f, _886, (_885 * 1.862645149230957e-08f))) - _887) * cb0_036y) + _887;
 #endif
+
+#endif  // end FilmToneMap with BlueCorrect
 
   float _918 = ((mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _905, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _904, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _903)))));
   float _919 = ((mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _905, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _904, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _903)))));

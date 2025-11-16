@@ -419,6 +419,12 @@ void main(
   float _803 = ((_687 * (((cb0_019y + cb0_034y) + _583) + (((cb0_018y * cb0_033y) * _592) * exp2(log2(exp2(((cb0_016y * cb0_031y) * _610) * log2(max(0.0f, ((((cb0_015y * cb0_030y) * _619) * _511) + _436)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_032y) * _601)))))) + (_574 * (((cb0_019y + cb0_024y) + _450) + (((cb0_018y * cb0_023y) * _464) * exp2(log2(exp2(((cb0_016y * cb0_021y) * _492) * log2(max(0.0f, ((((cb0_015y * cb0_020y) * _506) * _511) + _436)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_022y) * _478))))))) + ((((cb0_019y + cb0_029y) + _696) + (((cb0_018y * cb0_028y) * _705) * exp2(log2(exp2(((cb0_016y * cb0_026y) * _723) * log2(max(0.0f, ((((cb0_015y * cb0_025y) * _732) * _511) + _436)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_027y) * _714))))) * _790);
   float _805 = ((_687 * (((cb0_019z + cb0_034z) + _583) + (((cb0_018z * cb0_033z) * _592) * exp2(log2(exp2(((cb0_016z * cb0_031z) * _610) * log2(max(0.0f, ((((cb0_015z * cb0_030z) * _619) * _512) + _436)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_032z) * _601)))))) + (_574 * (((cb0_019z + cb0_024z) + _450) + (((cb0_018z * cb0_023z) * _464) * exp2(log2(exp2(((cb0_016z * cb0_021z) * _492) * log2(max(0.0f, ((((cb0_015z * cb0_020z) * _506) * _512) + _436)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_022z) * _478))))))) + ((((cb0_019z + cb0_029z) + _696) + (((cb0_018z * cb0_028z) * _705) * exp2(log2(exp2(((cb0_016z * cb0_026z) * _723) * log2(max(0.0f, ((((cb0_015z * cb0_025z) * _732) * _512) + _436)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_027z) * _714))))) * _790);
 #endif
+
+#if 1  // begin FilmToneMap with BlueCorrect
+  float _1163, _1164, _1165;
+  ApplyFilmToneMapWithBlueCorrect(_801, _803, _805,
+                                  _1163, _1164, _1165);
+#else
   float _841 = ((mad(0.061360642313957214f, _805, mad(-4.540197551250458e-09f, _803, (_801 * 0.9386394023895264f))) - _801) * cb0_036y) + _801;
   float _842 = ((mad(0.169205904006958f, _805, mad(0.8307942152023315f, _803, (_801 * 6.775371730327606e-08f))) - _803) * cb0_036y) + _803;
   float _843 = (mad(-2.3283064365386963e-10f, _803, (_801 * -9.313225746154785e-10f)) * cb0_036y) + _805;
@@ -538,17 +544,20 @@ void main(
   float _1165 = ((mad(0.9999996423721313f, _1147, mad(2.0954757928848267e-08f, _1146, (_1145 * 1.862645149230957e-08f))) - _1147) * cb0_036y) + _1147;
 #endif
 
+#endif  // end FilmToneMap with BlueCorrect
+
+  float _1178 = ((mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _1165, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _1164, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _1163)))));
+  float _1179 = ((mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _1165, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _1164, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _1163)))));
+  float _1180 = ((mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _1165, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _1164, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _1163)))));
+
 #if 1
   float _1358, _1359, _1360;
   Sample4LUTsUpgradeToneMap(
-      float3(_1163, _1164, _1165),
+      float3(_1178, _1179, _1180),
       s0, s1, s2, s3,
       t0, t1, t2, t3,
       _1358, _1359, _1360);
 #else
-  float _1178 = ((mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _1165, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _1164, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _1163)))));
-  float _1179 = ((mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _1165, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _1164, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _1163)))));
-  float _1180 = ((mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _1165, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _1164, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _1163)))));
   if (_1178 < 0.0031306699384003878f) {
     _1191 = (_1178 * 12.920000076293945f);
   } else {

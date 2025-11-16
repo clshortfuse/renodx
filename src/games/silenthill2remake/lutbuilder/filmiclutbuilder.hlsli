@@ -1,5 +1,37 @@
 #include "./lutbuildercommon.hlsli"
 
+float Highlights(float x, float highlights, float mid_gray) {
+  if (highlights == 1.f) return x;
+
+  if (highlights > 1.f) {
+    // value = max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), x));
+    return max(x,
+               lerp(x, mid_gray * pow(x / mid_gray, highlights),
+                    renodx::tonemap::ExponentialRollOff(x, 1.f, 1.1f)));
+  } else {  // highlights < 1.f
+    x /= mid_gray;
+    return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
+  }
+}
+
+float Shadows(float x, float shadows, float mid_gray) {
+  if (shadows == 1.f) return x;
+
+  const float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
+  const float base_term = x * mid_gray;
+  const float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
+
+  if (shadows > 1.f) {
+    float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
+    float reference = x * (1.f + base_scale);
+    return max(x, x + (raised - reference));
+  } else {  // shadows < 1.f
+    float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
+    float reference = x * (1.f - base_scale);
+    return clamp(x + (lowered - reference), 0.f, x);
+  }
+}
+
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
     return untonemapped;
@@ -8,43 +40,47 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
 
   color *= config.exposure;
 
-  const float y_normalized = y / mid_gray;
-  const float highlight_mask = 1.f / mid_gray;
-  const float shadow_mask = mid_gray;
-
   // contrast & flare
+  const float y_normalized = y / mid_gray;
   float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
   float exponent = config.contrast * flare;
-  const float y_contrasted = pow(y_normalized, exponent);
+  const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
 
-  // highlights
-  float y_highlighted = pow(y_contrasted, config.highlights);
-  y_highlighted = lerp(y_contrasted, y_highlighted, saturate(y_contrasted / highlight_mask));
-
+// highlights
+#if 0
+  // const float highlights = 1 + (sign(config.highlights - 1) * pow(abs(config.highlights - 1), 10.f));
+  // float y_highlighted = renodx::color::grade::Highlights(y_contrasted, config.highlights, mid_gray);
+#else
+  float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
+#endif
   // shadows
-  float y_shadowed = pow(y_highlighted, -1.f * (config.shadows - 2.f));
-  y_shadowed = lerp(y_shadowed, y_highlighted, saturate(y_highlighted / shadow_mask));
+  float y_shadowed = Shadows(y_highlighted, config.shadows, mid_gray);
 
-  const float y_final = y_shadowed * mid_gray;
+  const float y_final = y_shadowed;
 
-  color *= (y > 0 ? (y_final / y) : 0);
+  color = renodx::color::correct::Luminance(color, y, y_final);
 
   return color;
 }
 
-float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, renodx::color::grade::Config config) {
+float3 ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(float3 tonemapped, float3 hue_reference_color, float y, renodx::color::grade::Config config, bool hue_correct_ignore_highlights = false) {
   float3 color = tonemapped;
   if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_correction_strength != 0.f || config.blowout != 0.f) {
-    float3 perceptual_new = renodx::color::oklab::from::BT709(color);
+    float3 perceptual_new = renodx::color::oklab::from::BT709(renodx::color::bt709::from::AP1(color));
 
-    if (config.hue_correction_strength != 0.f) {
-      float3 perceptual_old = renodx::color::oklab::from::BT709(hue_reference_color);
+    float hue_correction_strength = config.hue_correction_strength;
+    if (hue_correction_strength != 0.f) {
+      float3 perceptual_old = renodx::color::oklab::from::BT709(renodx::color::bt709::from::AP1(hue_reference_color));
+
+      if (hue_correct_ignore_highlights) {
+        float highlight_rolloff = saturate((1.f - perceptual_old.x) / 0.5f);  // full strength through midtones, fade over top 50%
+        highlight_rolloff *= highlight_rolloff;                               // keep transition smooth
+        hue_correction_strength *= highlight_rolloff;
+      }
 
       // Save chrominance to apply black
       float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
-
-      perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, config.hue_correction_strength);
-
+      perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, hue_correction_strength);
       float chrominance_post_adjust = distance(perceptual_new.yz, 0);
 
       // Apply back previous chrominance
@@ -71,15 +107,30 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
 
     color = renodx::color::bt709::from::OkLab(perceptual_new);
 
-    color = renodx::color::bt709::clamp::AP1(color);
+    color = renodx::color::ap1::from::BT709(color);
+    color = max(0, color);
   }
   return color;
 }
 
+renodx::color::grade::Config CreateColorGradingConfig() {
+  renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
+  cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;
+  cg_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+  cg_config.shadows = RENODX_TONE_MAP_SHADOWS;
+  cg_config.contrast = RENODX_TONE_MAP_CONTRAST;
+  cg_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
+  cg_config.saturation = RENODX_TONE_MAP_SATURATION;
+  cg_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
+  cg_config.hue_correction_strength = RENODX_TONE_MAP_HUE_CORRECTION;
+  cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+
+  return cg_config;
+}
+
 /// Unreal Engine Filmic ToneMap based on ACES approximation with customizable parameters
-/// Uses select() as it is from the SM6 version
 #define UNREALFILMIC_GENERATOR(T)                                                                                                                                                                                                                                                            \
-  T ApplyUnrealFilmicToneMap(T untonemapped) {                                                                                                                                                                                                                                               \
+  T ApplyUnrealFilmicToneMapCurve(T untonemapped) {                                                                                                                                                                                                                                          \
     float film_black_clip = FilmBlackClip;                                                                                                                                                                                                                                                   \
     if (OVERRIDE_BLACK_CLIP && RENODX_TONE_MAP_TYPE == 3.f && is_hdr) {                                                                                                                                                                                                                                \
       float target_black_nits = 0.0001f / RENODX_DIFFUSE_WHITE_NITS;                                                                                                                                                                                                                         \
@@ -134,7 +185,7 @@ float3 ApplyACES(float3 untonemapped_ap1) {
   }
 
   const float EXPOSURE_SCALE = (1.62f);  // UE Filmic with default params matches ACES with 1.62x exposure (found using Desmos)
-  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMap(0.18f / EXPOSURE_SCALE) / (ACES_MID);
+  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMapCurve(0.18f / EXPOSURE_SCALE) / (ACES_MID);
 
   aces_max /= MID_GRAY_SCALE;
   aces_min /= MID_GRAY_SCALE;
@@ -145,9 +196,9 @@ float3 ApplyACES(float3 untonemapped_ap1) {
 
   tonemapped_ap1 *= MID_GRAY_SCALE;
 
-#else  // use ReinhardPiecewiseExtended instead of ACES
-  const float EXPOSURE_SCALE = (0.8f);  // Narkowicz, which UE filmic is based on, adjusts exposure by 0.8x
-  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMap(0.18f / EXPOSURE_SCALE) / (0.18f);
+#else  // use HermiteSplinePerChannelRolloff instead of ACES
+  const float EXPOSURE_SCALE = (1.f);  // Narkowicz, which UE filmic is based on, adjusts exposure by 0.8x
+  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMapCurve(0.18f / EXPOSURE_SCALE) / (0.18f);
   float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
   if (RENODX_GAMMA_CORRECTION != 0.f) {
     peak_ratio = renodx::color::correct::Gamma(peak_ratio, true);
@@ -155,7 +206,7 @@ float3 ApplyACES(float3 untonemapped_ap1) {
   peak_ratio /= MID_GRAY_SCALE;
 
   untonemapped_ap1 *= EXPOSURE_SCALE;
-  float3 tonemapped_ap1 = renodx::tonemap::ReinhardPiecewiseExtended(untonemapped_ap1, 100.f, peak_ratio, 0.5f);
+  float3 tonemapped_ap1 = renodx::tonemap::HermiteSplinePerChannelRolloff(untonemapped_ap1, peak_ratio, 100.f);
   tonemapped_ap1 *= MID_GRAY_SCALE;
 #endif
 
@@ -168,11 +219,22 @@ float3 ApplyPostToneMapDesaturation(float3 tonemapped) {
 }
 
 float3 LerpToneMapStrength(float3 tonemapped, float3 preRRT) {
-  preRRT = min(100.f, preRRT);  // prevented artifacts during night vision in Robocop
+  preRRT = min(100.f, preRRT);  // prevents artifacts during night vision in Robocop
   return lerp(preRRT, tonemapped, ToneCurveAmount);
 }
 
-float3 ApplyBlueCorrection(float3 tonemapped) {
+// AP1 -> AP0 -> Blue Corrected AP0 -> AP1
+float3 ApplyBlueCorrectionPre(float3 untonemapped_ap1) {
+  float r = untonemapped_ap1.r, g = untonemapped_ap1.g, b = untonemapped_ap1.b;
+
+  float corrected_r = ((mad(0.061360642313957214f, b, mad(-4.540197551250458e-09f, g, (r * 0.9386394023895264f))) - r) * BlueCorrection) + r;
+  float corrected_g = ((mad(0.169205904006958f, b, mad(0.8307942152023315f, g, (r * 6.775371730327606e-08f))) - g) * BlueCorrection) + g;
+  float corrected_b = (mad(-2.3283064365386963e-10f, g, (r * -9.313225746154785e-10f)) * BlueCorrection) + b;
+
+  return float3(corrected_r, corrected_g, corrected_b);
+}
+
+float3 ApplyBlueCorrectionPost(float3 tonemapped) {
   float _1131 = tonemapped.r, _1132 = tonemapped.g, _1133 = tonemapped.b;
   // return tonemapped;
 
@@ -182,106 +244,87 @@ float3 ApplyBlueCorrection(float3 tonemapped) {
   return float3(_1149, _1150, _1151);
 }
 
-float3 ApplyUnrealFilmicToneMapByLuminance(float3 untonemapped, float3 preRRT) {
-  float untonemapped_lum = renodx::color::y::from::AP1(untonemapped);
-  float4 tonemaps = ApplyUnrealFilmicToneMap(float4(untonemapped, untonemapped_lum));
-  float3 channel_tonemapped = tonemaps.xyz;
-  float3 luminance_tonemapped = renodx::color::correct::Luminance(untonemapped, untonemapped_lum, tonemaps.a, 1.f);
-  luminance_tonemapped = ApplyPostToneMapDesaturation(luminance_tonemapped);
-  luminance_tonemapped = LerpToneMapStrength(luminance_tonemapped, preRRT);
+float3 ApplySDRToneMap(float3 untonemapped_ap1) {
+  float3 untonemapped_prebluecorrect_ap1 = ApplyBlueCorrectionPre(untonemapped_ap1);
 
-  // blue correction has a massive effect on the final result, so we include before chrominance correction
-  channel_tonemapped = ApplyPostToneMapDesaturation(channel_tonemapped);
-  channel_tonemapped = LerpToneMapStrength(channel_tonemapped, preRRT);
-  channel_tonemapped = ApplyBlueCorrection(channel_tonemapped);
+  float3 untonemapped_rrt_prebluecorrect_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_prebluecorrect_ap1));
 
-  channel_tonemapped = renodx::color::bt709::from::AP1(max(0, channel_tonemapped));
-  luminance_tonemapped = renodx::color::bt709::from::AP1(max(0, luminance_tonemapped));
+  float3 tonemapped_prebluecorrect_ap1 = ApplyUnrealFilmicToneMapCurve(untonemapped_rrt_prebluecorrect_ap1);
 
-  float3 final = renodx::color::correct::ChrominanceOKLab(luminance_tonemapped, channel_tonemapped);
+  tonemapped_prebluecorrect_ap1 = ApplyPostToneMapDesaturation(tonemapped_prebluecorrect_ap1);
+  tonemapped_prebluecorrect_ap1 = LerpToneMapStrength(tonemapped_prebluecorrect_ap1, untonemapped_ap1);
 
-  return renodx::color::ap1::from::BT709(final);
+  float3 tonemapped_ap1 = ApplyBlueCorrectionPost(tonemapped_prebluecorrect_ap1);
+
+  tonemapped_ap1 = saturate(tonemapped_ap1);
+
+  return tonemapped_ap1;
 }
 
-float3 ApplyVanillaToneMap(float3 untonemapped, float3 preRRT) {
-  float3 tonemapped;
-  if (RENODX_TONE_MAP_PER_CHANNEL || RENODX_TONE_MAP_TYPE == 4.f) {
-    tonemapped = ApplyUnrealFilmicToneMap(untonemapped);
-    tonemapped = ApplyPostToneMapDesaturation(tonemapped);
-    tonemapped = LerpToneMapStrength(tonemapped, preRRT);
-    tonemapped = ApplyBlueCorrection(tonemapped);
-  } else {
-    tonemapped = ApplyUnrealFilmicToneMapByLuminance(untonemapped, preRRT);
-  }
-  return tonemapped;
+// ACES with
+// Mid-Gray Matching with Unreal Filmic
+// Output Display Transform
+float3 ACESMidGrayMatchedODT(float3 untonemapped_ap1_rrt) {
+  // RRT + ODT with midgray match
+  float3 hdr_tonemapped_ap1 = ApplyACES(untonemapped_ap1_rrt);
+
+  return hdr_tonemapped_ap1;
 }
 
-float3 ApplyVanillaToneMapSDR(float3 untonemapped, float3 preRRT) {
-  float3 tonemapped = ApplyUnrealFilmicToneMap(untonemapped);
-  tonemapped = ApplyPostToneMapDesaturation(tonemapped);
-  tonemapped = LerpToneMapStrength(tonemapped, preRRT);
-  tonemapped = ApplyBlueCorrection(tonemapped);
+void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g, float untonemapped_b,
+                                     inout float tonemapped_r, inout float tonemapped_g, inout float tonemapped_b) {
+  float3 untonemapped_ap1 = float3(untonemapped_r, untonemapped_g, untonemapped_b);
+  float3 tonemapped_ap1;
 
-  return tonemapped;
-}
-
-void ApplyFilmicToneMap(
-    float input_r,
-    float input_g,
-    float input_b,
-    float preRRT_r,
-    float preRRT_g,
-    float preRRT_b,
-    inout float output_r,
-    inout float output_g,
-    inout float output_b) {
-  float _827 = preRRT_r, _828 = preRRT_g, _829 = preRRT_b;
-  float3 tonemapped;
-  float3 untonemapped_pre_grade = float3(input_r, input_g, input_b);
-
-  if (!is_hdr) {  // if SDR, just apply vanilla tone map with no grading
-    tonemapped = ApplyVanillaToneMapSDR(untonemapped_pre_grade, float3(preRRT_r, preRRT_g, preRRT_b));
-    output_r = tonemapped.r, output_g = tonemapped.g, output_b = tonemapped.b;
+  if (!is_hdr) {
+    tonemapped_ap1 = ApplySDRToneMap(untonemapped_ap1);
+    tonemapped_r = tonemapped_ap1.r, tonemapped_g = tonemapped_ap1.g, tonemapped_b = tonemapped_ap1.b;
     return;
   }
 
-  renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
-  cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;
-  cg_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
-  cg_config.shadows = RENODX_TONE_MAP_SHADOWS;
-  cg_config.contrast = RENODX_TONE_MAP_CONTRAST;
-  cg_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
-  cg_config.saturation = RENODX_TONE_MAP_SATURATION;
-  cg_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
-  cg_config.hue_correction_strength = RENODX_TONE_MAP_HUE_CORRECTION;
-  float untonemapped_lum = renodx::color::y::from::AP1(untonemapped_pre_grade);
-  cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+  renodx::color::grade::Config cg_config = CreateColorGradingConfig();
+  float y = renodx::color::y::from::AP1(untonemapped_ap1);
+  float3 hue_reference_color = untonemapped_ap1;
 
-  float3 untonemapped = untonemapped_pre_grade;
-  if (RENODX_TONE_MAP_TYPE != 4.f && RENODX_TONE_MAP_TYPE != 0.f) {
-    untonemapped = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_pre_grade, untonemapped_lum, cg_config);
+  float3 untonemapped_ap1_graded = untonemapped_ap1;
+  if (RENODX_TONE_MAP_TYPE != 4.f) {
+    untonemapped_ap1_graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_ap1, y, cg_config, 0.18f);
   }
 
-  if (RENODX_TONE_MAP_TYPE == 2.f) {  // ACES
-    tonemapped = ApplyACES(untonemapped);
-  } else if (RENODX_TONE_MAP_TYPE == 1.f) {  // None
-    tonemapped = LerpToneMapStrength(untonemapped, float3(preRRT_r, preRRT_g, preRRT_b));
-  } else {
-    tonemapped = ApplyVanillaToneMap(untonemapped, float3(preRRT_r, preRRT_g, preRRT_b));
-    if (RENODX_TONE_MAP_TYPE == 3.f) {  // run the same steps on ACES but without desaturation and blue correction
-      float3 hdr_tonemapped = ApplyACES(untonemapped);
-      hdr_tonemapped = LerpToneMapStrength(hdr_tonemapped, float3(preRRT_r, preRRT_g, preRRT_b));
-      const float blend_factor = renodx::color::y::from::AP1(tonemapped);
-      tonemapped = lerp(tonemapped, hdr_tonemapped, saturate(blend_factor));
+  if (RENODX_TONE_MAP_TYPE == 1.f) {
+    tonemapped_ap1 = untonemapped_ap1_graded;
+  } else if (RENODX_TONE_MAP_TYPE == 2.f) {  // ACES
+    float3 RRT_AP1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1_graded));
+    float3 ACES_AP1 = ACESMidGrayMatchedODT(RRT_AP1);
+    tonemapped_ap1 = ACES_AP1;
+
+  } else {  // Vanilla+ and UE Filmic
+
+    float3 untonemapped_prebluecorrect_ap1 = ApplyBlueCorrectionPre(untonemapped_ap1_graded);
+    float3 untonemapped_rrt_prebluecorrect_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_prebluecorrect_ap1));
+
+    float3 tonemapped_prebluecorrect_ap1 = ApplyUnrealFilmicToneMapCurve(untonemapped_rrt_prebluecorrect_ap1);
+
+    if (RENODX_TONE_MAP_TYPE != 4.f) {  // Vanilla+
+      float3 hdr_tonemapped_prebluecorrect_ap1 = ACESMidGrayMatchedODT(untonemapped_rrt_prebluecorrect_ap1);
+
+      const float hdr_blend_factor = saturate(renodx::color::y::from::AP1(tonemapped_prebluecorrect_ap1));
+      tonemapped_prebluecorrect_ap1 = lerp(tonemapped_prebluecorrect_ap1, hdr_tonemapped_prebluecorrect_ap1, hdr_blend_factor);
     }
+
+    tonemapped_prebluecorrect_ap1 = ApplyPostToneMapDesaturation(tonemapped_prebluecorrect_ap1);
+    tonemapped_prebluecorrect_ap1 = LerpToneMapStrength(tonemapped_prebluecorrect_ap1, untonemapped_ap1_graded);
+    tonemapped_ap1 = ApplyBlueCorrectionPost(tonemapped_prebluecorrect_ap1);
+    tonemapped_ap1 = max(0, tonemapped_ap1);
   }
 
-  tonemapped = max(0, tonemapped);
+  tonemapped_ap1 = max(0, tonemapped_ap1);
 
-  if (RENODX_TONE_MAP_TYPE != 4.f && RENODX_TONE_MAP_TYPE != 0.f) {
-    tonemapped = renodx::color::ap1::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::AP1(tonemapped), renodx::color::bt709::from::AP1(LerpToneMapStrength(untonemapped, float3(preRRT_r, preRRT_g, preRRT_b))), untonemapped_lum, cg_config));
+  if (RENODX_TONE_MAP_TYPE != 4.f) {
+    tonemapped_ap1 = ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(tonemapped_ap1, hue_reference_color, y, cg_config, RENODX_TONE_MAP_HUE_CORRECTION_TYPE);
   }
 
-  output_r = tonemapped.r, output_g = tonemapped.g, output_b = tonemapped.b;
+  tonemapped_r = tonemapped_ap1.r, tonemapped_g = tonemapped_ap1.g, tonemapped_b = tonemapped_ap1.b;
+
   return;
 }

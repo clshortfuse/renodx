@@ -398,6 +398,12 @@ void main(
   float _795 = ((_679 * (((cb0_019y + cb0_034y) + _575) + (((cb0_018y * cb0_033y) * _584) * exp2(log2(exp2(((cb0_016y * cb0_031y) * _602) * log2(max(0.0f, ((((cb0_015y * cb0_030y) * _611) * _503) + _428)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_032y) * _593)))))) + (_566 * (((cb0_019y + cb0_024y) + _442) + (((cb0_018y * cb0_023y) * _456) * exp2(log2(exp2(((cb0_016y * cb0_021y) * _484) * log2(max(0.0f, ((((cb0_015y * cb0_020y) * _498) * _503) + _428)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_022y) * _470))))))) + ((((cb0_019y + cb0_029y) + _688) + (((cb0_018y * cb0_028y) * _697) * exp2(log2(exp2(((cb0_016y * cb0_026y) * _715) * log2(max(0.0f, ((((cb0_015y * cb0_025y) * _724) * _503) + _428)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017y * cb0_027y) * _706))))) * _782);
   float _797 = ((_679 * (((cb0_019z + cb0_034z) + _575) + (((cb0_018z * cb0_033z) * _584) * exp2(log2(exp2(((cb0_016z * cb0_031z) * _602) * log2(max(0.0f, ((((cb0_015z * cb0_030z) * _611) * _504) + _428)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_032z) * _593)))))) + (_566 * (((cb0_019z + cb0_024z) + _442) + (((cb0_018z * cb0_023z) * _456) * exp2(log2(exp2(((cb0_016z * cb0_021z) * _484) * log2(max(0.0f, ((((cb0_015z * cb0_020z) * _498) * _504) + _428)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_022z) * _470))))))) + ((((cb0_019z + cb0_029z) + _688) + (((cb0_018z * cb0_028z) * _697) * exp2(log2(exp2(((cb0_016z * cb0_026z) * _715) * log2(max(0.0f, ((((cb0_015z * cb0_025z) * _724) * _504) + _428)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_017z * cb0_027z) * _706))))) * _782);
 #endif
+
+#if 1  // begin FilmToneMap with BlueCorrect
+  float _1155, _1156, _1157;
+  ApplyFilmToneMapWithBlueCorrect(_793, _795, _797,
+                                  _1155, _1156, _1157);
+#else
   float _833 = ((mad(0.061360642313957214f, _797, mad(-4.540197551250458e-09f, _795, (_793 * 0.9386394023895264f))) - _793) * cb0_036y) + _793;
   float _834 = ((mad(0.169205904006958f, _797, mad(0.8307942152023315f, _795, (_793 * 6.775371730327606e-08f))) - _795) * cb0_036y) + _795;
   float _835 = (mad(-2.3283064365386963e-10f, _795, (_793 * -9.313225746154785e-10f)) * cb0_036y) + _797;
@@ -516,6 +522,9 @@ void main(
   float _1156 = ((mad(-0.20366770029067993f, _1139, mad(1.2036634683609009f, _1138, (_1137 * -2.57161445915699e-07f))) - _1138) * cb0_036y) + _1138;
   float _1157 = ((mad(0.9999996423721313f, _1139, mad(2.0954757928848267e-08f, _1138, (_1137 * 1.862645149230957e-08f))) - _1139) * cb0_036y) + _1139;
 #endif
+
+#endif  // end FilmToneMap with BlueCorrect
+
   float _1167 = (mad((UniformBufferConstants_WorkingColorSpace_192[0].z), _1157, mad((UniformBufferConstants_WorkingColorSpace_192[0].y), _1156, ((UniformBufferConstants_WorkingColorSpace_192[0].x) * _1155))));
   float _1168 = (mad((UniformBufferConstants_WorkingColorSpace_192[1].z), _1157, mad((UniformBufferConstants_WorkingColorSpace_192[1].y), _1156, ((UniformBufferConstants_WorkingColorSpace_192[1].x) * _1155))));
   float _1169 = (mad((UniformBufferConstants_WorkingColorSpace_192[2].z), _1157, mad((UniformBufferConstants_WorkingColorSpace_192[2].y), _1156, ((UniformBufferConstants_WorkingColorSpace_192[2].x) * _1155))));
