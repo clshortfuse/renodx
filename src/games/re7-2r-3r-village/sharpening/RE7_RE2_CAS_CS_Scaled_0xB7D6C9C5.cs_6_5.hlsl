@@ -19,87 +19,33 @@ void main(
   int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
 
   if (CUSTOM_SHARPENING == 0.f) {
-    // First pixel (_15, _16)
-    float pass_24 = float((uint)_15);
-    float pass_25 = float((uint)_16);
-    float pass_32 = (asfloat(const0.x) * pass_24) + asfloat(const0.z);
-    float pass_33 = (asfloat(const0.y) * pass_25) + asfloat(const0.w);
-    float pass_34 = floor(pass_32);
-    float pass_35 = floor(pass_33);
-    int pass_38 = int(pass_34);
-    int pass_39 = int(pass_35);
-    OutputImage[int2(_15, _16)] = float4(SrcImage.Load(int3(pass_38, pass_39, 0)).rgb, 1.f);
+    uint tex_width, tex_height;
+    SrcImage.GetDimensions(tex_width, tex_height);
+    int2 tex_max = int2(tex_width - 1, tex_height - 1);
 
-    // Second pixel (_15|8, _16)
     int pass_350 = _15 | 8;
-    float pass_358 = float((uint)pass_350);
-    float pass_365 = (asfloat(const0.x) * pass_358) + asfloat(const0.z);
-    float pass_366 = (asfloat(const0.y) * pass_25) + asfloat(const0.w);
-    float pass_367 = floor(pass_365);
-    float pass_368 = floor(pass_366);
-    int pass_371 = int(pass_367);
-    int pass_372 = int(pass_368);
-    OutputImage[int2(pass_350, _16)] = float4(SrcImage.Load(int3(pass_371, pass_372, 0)).rgb, 1.f);
-
-    // Third pixel (_15, _16|8)
     int pass_683 = _16 | 8;
-    float pass_691 = float((uint)pass_683);
-    float pass_698 = (asfloat(const0.x) * pass_358) + asfloat(const0.z);
-    float pass_699 = (asfloat(const0.y) * pass_691) + asfloat(const0.w);
-    float pass_700 = floor(pass_698);
-    float pass_701 = floor(pass_699);
-    int pass_704 = int(pass_700);
-    int pass_705 = int(pass_701);
-    OutputImage[int2(pass_350, pass_683)] = float4(SrcImage.Load(int3(pass_704, pass_705, 0)).rgb, 1.f);
 
-    // Fourth pixel (_15, _16|8)
-    float pass_1029 = (asfloat(const0.x) * pass_24) + asfloat(const0.z);
-    float pass_1030 = (asfloat(const0.y) * pass_691) + asfloat(const0.w);
-    float pass_1031 = floor(pass_1029);
-    float pass_1032 = floor(pass_1030);
-    int pass_1035 = int(pass_1031);
-    int pass_1036 = int(pass_1032);
-    OutputImage[int2(_15, pass_683)] = float4(SrcImage.Load(int3(pass_1035, pass_1036, 0)).rgb, 1.f);
+    OutputImage[int2(_15, _16)] = float4(SampleScaledSource(SrcImage, int2(_15, _16), tex_max, const0), 1.f);
+    OutputImage[int2(pass_350, _16)] = float4(SampleScaledSource(SrcImage, int2(pass_350, _16), tex_max, const0), 1.f);
+    OutputImage[int2(pass_350, pass_683)] = float4(SampleScaledSource(SrcImage, int2(pass_350, pass_683), tex_max, const0), 1.f);
+    OutputImage[int2(_15, pass_683)] = float4(SampleScaledSource(SrcImage, int2(_15, pass_683), tex_max, const0), 1.f);
     return;
   } else if (CUSTOM_SHARPENING == 2.f) {  // Lilium RCAS
     // Custom RCAS Sharpening Implementation
     float sharpness_strength = 0.75f;  // asfloat(const1.x)
 
-    // Apply coordinate transformations for all four pixels
-    float _24 = float((uint)_15);
-    float _25 = float((uint)_16);
-
-    // Transform coordinates for each set of pixels
-    // first pixel (_15, _16)
-    float _32 = (asfloat(const0.x) * _24) + asfloat(const0.z);
-    float _33 = (asfloat(const0.y) * _25) + asfloat(const0.w);
-    int2 coord1 = int2(int(floor(_32)), int(floor(_33)));
-    // second pixel (_15|8, _16)
-    int _350 = _15 | 8;
-    float _358 = float((uint)_350);
-    float _365 = (asfloat(const0.x) * _358) + asfloat(const0.z);
-    float _366 = (asfloat(const0.y) * _25) + asfloat(const0.w);
-    int2 coord2 = int2(int(floor(_365)), int(floor(_366)));
-    // third pixel (_15|8, _16|8)
-    int _683 = _16 | 8;
-    float _691 = float((uint)_683);
-    float _698 = (asfloat(const0.x) * _358) + asfloat(const0.z);
-    float _699 = (asfloat(const0.y) * _691) + asfloat(const0.w);
-    int2 coord3 = int2(int(floor(_698)), int(floor(_699)));
-    // fourth pixel (_15, _16|8)
-    float _1029 = (asfloat(const0.x) * _24) + asfloat(const0.z);
-    float _1030 = (asfloat(const0.y) * _691) + asfloat(const0.w);
-    int2 coord4 = int2(int(floor(_1029)), int(floor(_1030)));
-
     // Calculate texture dimensions once for all 4 pixels (optimization)
     uint tex_width, tex_height;
     SrcImage.GetDimensions(tex_width, tex_height);
     int2 tex_max = int2(tex_width - 1, tex_height - 1);
-    // Apply RCAS to all four pixels using optimized function
-    OutputImage[int2(_15, _16)] = float4(ApplyLiliumRCAS(SrcImage, coord1, sharpness_strength, tex_max), 1.f);
-    OutputImage[int2(_350, _16)] = float4(ApplyLiliumRCAS(SrcImage, coord2, sharpness_strength, tex_max), 1.f);
-    OutputImage[int2(_350, _683)] = float4(ApplyLiliumRCAS(SrcImage, coord3, sharpness_strength, tex_max), 1.f);
-    OutputImage[int2(_15, _683)] = float4(ApplyLiliumRCAS(SrcImage, coord4, sharpness_strength, tex_max), 1.f);
+    // Apply RCAS to all four pixels using bilinear-scaled samples
+    int _350 = _15 | 8;
+    int _683 = _16 | 8;
+    OutputImage[int2(_15, _16)] = float4(ApplyLiliumRCASScaled(SrcImage, int2(_15, _16), sharpness_strength, tex_max, const0), 1.f);
+    OutputImage[int2(_350, _16)] = float4(ApplyLiliumRCASScaled(SrcImage, int2(_350, _16), sharpness_strength, tex_max, const0), 1.f);
+    OutputImage[int2(_350, _683)] = float4(ApplyLiliumRCASScaled(SrcImage, int2(_350, _683), sharpness_strength, tex_max, const0), 1.f);
+    OutputImage[int2(_15, _683)] = float4(ApplyLiliumRCASScaled(SrcImage, int2(_15, _683), sharpness_strength, tex_max, const0), 1.f);
     return;
   } else {
     // Original CAS Implementation (CUSTOM_SHARPENING == 1.f or other values)
