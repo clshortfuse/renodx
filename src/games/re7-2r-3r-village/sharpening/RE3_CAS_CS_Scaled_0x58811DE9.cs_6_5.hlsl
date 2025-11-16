@@ -17,6 +17,37 @@ void main(
     uint SV_GroupIndex: SV_GroupIndex) {
   int _15 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
   int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
+
+  if (CUSTOM_SHARPENING == 0.f) {
+    uint tex_width, tex_height;
+    SrcImage.GetDimensions(tex_width, tex_height);
+    int2 tex_max = int2(tex_width - 1, tex_height - 1);
+
+    int pass_759 = _15 | 8;
+    int pass_1501 = _16 | 8;
+
+    OutputImage[int2(_15, _16)] = float4(SampleScaledSource(SrcImage, int2(_15, _16), tex_max, const0), 1.0f);
+    OutputImage[int2(pass_759, _16)] = float4(SampleScaledSource(SrcImage, int2(pass_759, _16), tex_max, const0), 1.0f);
+    OutputImage[int2(pass_759, pass_1501)] = float4(SampleScaledSource(SrcImage, int2(pass_759, pass_1501), tex_max, const0), 1.0f);
+    OutputImage[int2(_15, pass_1501)] = float4(SampleScaledSource(SrcImage, int2(_15, pass_1501), tex_max, const0), 1.0f);
+    return;
+  } else if (CUSTOM_SHARPENING == 2.f) {  // Lilium RCAS
+    float sharpness_strength = 0.75f;     // asfloat(const1.x)
+
+    uint tex_width, tex_height;
+    SrcImage.GetDimensions(tex_width, tex_height);
+    int2 tex_max = int2(tex_width - 1, tex_height - 1);
+
+    int offset_x = _15 | 8;  // X offset
+    int offset_y = _16 | 8;  // Y offset
+
+    OutputImage[int2(_15, _16)] = float4(ApplyLiliumRCASScaled(SrcImage, int2(_15, _16), sharpness_strength, tex_max, const0), 1.0f);
+    OutputImage[int2(offset_x, _16)] = float4(ApplyLiliumRCASScaled(SrcImage, int2(offset_x, _16), sharpness_strength, tex_max, const0), 1.0f);
+    OutputImage[int2(offset_x, offset_y)] = float4(ApplyLiliumRCASScaled(SrcImage, int2(offset_x, offset_y), sharpness_strength, tex_max, const0), 1.0f);
+    OutputImage[int2(_15, offset_y)] = float4(ApplyLiliumRCASScaled(SrcImage, int2(_15, offset_y), sharpness_strength, tex_max, const0), 1.0f);
+    return;
+  }
+
   float _24 = float((uint)_15);
   float _25 = float((uint)_16);
   float _32 = (asfloat(const0.x) * _24) + asfloat(const0.z);
@@ -27,46 +58,6 @@ void main(
   float _37 = _33 - _35;
   int _38 = int(_34);
   int _39 = int(_35);
-
-  if (CUSTOM_SHARPENING == 0.f) {
-    OutputImage[int2(_15, _16)] = float4(SrcImage.Load(int3(_38, _39, 0)).rgb, 1.0f);  // First pixel (_15, _16)
-
-    int pass_759 = _15 | 8;
-    float pass_767 = float((uint)pass_759);
-    float pass_774 = (asfloat(const0.x) * pass_767) + asfloat(const0.z);
-    float pass_775 = (asfloat(const0.y) * _25) + asfloat(const0.w);
-    int pass_778 = int(floor(pass_774));
-    int pass_779 = int(floor(pass_775));
-    OutputImage[int2(pass_759, _16)] = float4(SrcImage.Load(int3(pass_778, pass_779, 0)).rgb, 1.0f);  // Second pixel (_15|8, _16)
-
-    int pass_1501 = _16 | 8;
-    float pass_1509 = float((uint)pass_1501);
-    float pass_1516 = (asfloat(const0.x) * pass_767) + asfloat(const0.z);
-    float pass_1517 = (asfloat(const0.y) * pass_1509) + asfloat(const0.w);
-    int pass_1520 = int(floor(pass_1516));
-    int pass_1521 = int(floor(pass_1517));
-    OutputImage[int2(pass_759, pass_1501)] = float4(SrcImage.Load(int3(pass_1520, pass_1521, 0)).rgb, 1.0f);  // Third pixel (_15|8, _16|8)
-
-    float pass_2247 = (asfloat(const0.x) * _24) + asfloat(const0.z);
-    float pass_2248 = (asfloat(const0.y) * pass_1509) + asfloat(const0.w);
-    int pass_2251 = int(floor(pass_2247));
-    int pass_2252 = int(floor(pass_2248));
-    OutputImage[int2(_15, pass_1501)] = float4(SrcImage.Load(int3(pass_2251, pass_2252, 0)).rgb, 1.0f);  // Fourth pixel (_15, _16|8)
-    return;
-  } else if (CUSTOM_SHARPENING == 2.f) {  // Lilium RCAS
-    float sharpness_strength = 0.75f;     // asfloat(const1.x)
-
-    int offset_x = _15 | 8;  // X offset
-    int offset_y = _16 | 8;  // Y offset
-    ApplyLiliumRCAS_RE3_Pattern(
-        SrcImage,
-        OutputImage,
-        int2(_15, _16),            // base coordinates
-        int2(offset_x, offset_y),  // offset coordinates
-        sharpness_strength);
-    return;
-  }
-
   uint _40 = _39 + -1u;
   float4 _41 = SrcImage.Load(int3(_38, _40, 0));
   float _45 = max(0.0f, _41.x);
