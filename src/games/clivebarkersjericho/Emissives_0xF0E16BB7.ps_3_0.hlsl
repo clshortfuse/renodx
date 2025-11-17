@@ -10,7 +10,7 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
 
 	float4 r0;
 	r0 = tex2D(GlowMapSampler, texcoord);
-	o = r0 * LightColor.w * Custom_Emissives_Intensity;
+	o = r0 * LightColor.w * pow(Custom_Emissives_Intensity, 2.3);
 
 	return o;
 }

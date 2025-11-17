@@ -1,73 +1,60 @@
 #include "./shared.h"
 
-// Motion Blur
+// Motion Blur - Reworked, it's different from vanilla
 // It's here mostly to increase the sampling count and increase HDR highlights.
-sampler2D FillSampler : register( s0 );
-sampler2D SceneSampler : register( s1 );
-float gBlurPower : register( c0 );
+sampler2D FillSampler : register(s0);
+sampler2D SceneSampler : register(s1);
+float gBlurPower : register(c0);
 
-float4 main(float2 texcoord : TEXCOORD) : COLOR
+#define SAMPLE_COUNT 24
+
+float luminance(float3 rgb)
 {
-	float4 o;
+  return dot(rgb, float3(0.2126, 0.7152, 0.0722));
+}
 
-	float4 r2;
-	float4 r0;
-	float4 r1;
-	float2 r5;
-	float4 r3;
-	float4 r4;
-	r2 = tex2D(SceneSampler, texcoord);
-	r0 = tex2D(FillSampler, texcoord);
-	r1.xy = -r0.yw + r0.xz;
-	r1.xy = r1.xy * gBlurPower.x;
-	r0.w = dot(r0, r0);
-	r5.xy = r1.xy * float2(0.25, -0.25);
-	r1.w = (-r0.w >= 0) ? 0 : 1;
-	r1.xyz = r2.xyz;
-	r0.z = 1;
-	r0.w = -6;
-	for (int i0 = 0; i0 < 24; i0++) {
-		r0.xy = r0.w * r5.xy + texcoord.xy;
-		r3 = tex2D(FillSampler, r0);
-		r3.xz = -r3.y + r3.xy;
-		r3.y = -r3.z;
-		r2.w = dot(r5.x, r3.x) + 0;
-		r2.w = (-r2.w >= 0) ? 0 : 1;
-		r3 = tex2D(SceneSampler, r0);
-		if (r2.w != -r2.w) {
-			r1.xyz = r1.xyz + r3.xyz;
-			r0.z = r0.z + 1;
-		}
-		r0.w = r0.w + 1;
-	}
-	r4.xyz = r1.xyz;
-	r4.w = r0.z;
-	r1.xyz = r4.xyz;
-	r0.z = r4.w;
-	r0.w = 1;
-	for (int i0 = 0; i0 < 24; i0++) {
-		r0.xy = r0.w * r5.xy + texcoord.xy;
-		r3 = tex2D(FillSampler, r0);
-		r3.xz = -r3.y + r3.xy;
-		r3.y = -r3.z;
-		r2.w = dot(r5.x, r3.x) + 0;
-		r2.w = (-r2.w >= 0) ? 0 : 1;
-		r3 = tex2D(SceneSampler, r0);
-		if (r2.w != -r2.w) {
-			r1.xyz = r1.xyz + r3.xyz;
-			r0.z = r0.z + 1;
-		}
-		r0.w = r0.w + 1;
-	}
-	r0.w = r0.z;
-	if (r1.w != -r1.w) {
-		r0.w = 1 / r0.w;
-		r0.xyz = r1.xyz * r0.w;
-	} else {
-		r0.xyz = r2.xyz;
-	}
-	r0.w = 1;
-	o = r0;
+float4 main(float2 uv: TEXCOORD) : COLOR
+{
+  float4 centerColor = tex2D(SceneSampler, uv);
+  float4 fillSample = tex2D(FillSampler, uv);
 
-	return o;
+  // Correct 2D blur vector from ASM
+  float2 dir;
+  dir.x = -fillSample.y + fillSample.x;
+  dir.y = -fillSample.w + fillSample.z;
+  dir *= (gBlurPower * 6) * Custom_MotionBlur_Amount;
+
+  float4 colorAccum = float4(0, 0, 0, 0);
+  float weightAccum = 0.0;
+
+  // Include center pixel
+  float lumCenter = luminance(centerColor.rgb);
+  float boost = pow(lumCenter + 0.01, Custom_MotionBlur_HDRBoost * 0.5);  // HDR boost factor
+  colorAccum.rgb += centerColor.rgb * boost;
+  weightAccum += boost;
+
+  for (int i = 1; i <= SAMPLE_COUNT; ++i)
+    {
+    float t = (float)i / (SAMPLE_COUNT + 1);
+    float2 offset = dir * t * float2(0.25, -0.25);
+
+    // Negative sample
+    float4 sNeg = tex2D(SceneSampler, uv - offset);
+    float lumNeg = luminance(sNeg.rgb);
+    float boostNeg = pow(lumNeg + 0.01, Custom_MotionBlur_HDRBoost * 0.5);
+    colorAccum.rgb += sNeg.rgb * boostNeg;
+    weightAccum += boostNeg;
+
+    // Positive sample
+    float4 sPos = tex2D(SceneSampler, uv + offset);
+    float lumPos = luminance(sPos.rgb);
+    float boostPos = pow(lumPos + 0.01, Custom_MotionBlur_HDRBoost * 0.5);
+    colorAccum.rgb += sPos.rgb * boostPos;
+    weightAccum += boostPos;
+  }
+
+  float4 finalColor;
+  finalColor.rgb = colorAccum.rgb / weightAccum;
+  finalColor.a = 1.0;
+  return finalColor;
 }

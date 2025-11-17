@@ -1,13 +1,13 @@
 #include "./shared.h"
 
-// Some weird sharpening
+// Sharpening
 float4 CopySharpenValues : register( c0 );
 sampler2D s0 : register( s0 );
 
 float4 main(float2 texcoord : TEXCOORD) : COLOR
 {
     float4 r0, r1;
-	CopySharpenValues.xy *= Custom_Sharpening_Amount;
+	CopySharpenValues.xy *= pow(Custom_Sharpening_Amount, 2.3);
     // Sample left
     r0 = tex2D(s0, texcoord + float2(-CopySharpenValues.x, 0));
     r1 = r0 * CopySharpenValues.w;
@@ -28,5 +28,5 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
     r0 = tex2D(s0, texcoord + float2(0, CopySharpenValues.y));
     r1 = r1 - r0 * CopySharpenValues.w;
 
-    return r1; // final sharpened color
+    return r1;
 }

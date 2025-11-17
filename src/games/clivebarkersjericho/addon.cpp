@@ -366,22 +366,22 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxEmissivesIntensity",
         .binding = &shader_injection.Custom_Emissives_Intensity,
-        .default_value = 20.f,
+        .default_value = 50.f,
         .label = "Emissives Intensity",
         .section = "Effects",
         .tooltip = "All in game emissive materials intensity multiplier.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.05f; },
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxSkyboxIntensity",
         .binding = &shader_injection.Custom_Skybox_Intensity,
-        .default_value = 8.f,
+        .default_value = 50.f,
         .label = "Skybox Intensity",
         .section = "Effects",
-        .tooltip = "HDR skybox intensity multiplier. Scales pretty nicely, until you go very high, then you'll start noticing compression artifacts.",
-        .max = 10.f,
-        .parse = [](float value) { return value; },
+        .tooltip = "HDR skybox intensity multiplier. Scales pretty nicely, until you go very high, then you'll start noticing compression artifacts. Set to 6.25 for vanilla look.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.16f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxParticlesIntensity",
@@ -389,19 +389,19 @@ renodx::utils::settings::Settings settings = {
         .default_value = 50.f,
         .label = "Particles Intensity",
         .section = "Effects",
-        .tooltip = "All in game particle effects intensity multiplier, that go above 0.7 luminance.",
+        .tooltip = "All in game particle effects HDR Boost multiplier.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxSharpeningAmount",
         .binding = &shader_injection.Custom_Sharpening_Amount,
-        .default_value = 20.f,
+        .default_value = 50.f,
         .label = "Sharpening Amount",
         .section = "Effects",
-        .tooltip = "Image sharpening amount. 20 is default vanilla amount.",
+        .tooltip = "Image sharpening amount. 50 is default vanilla amount.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.05f; },
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxUIDisable",
@@ -426,12 +426,22 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
         new renodx::utils::settings::Setting{
-        .key = "FxColotTintIntensity",
+        .key = "FxColorTintIntensity",
         .binding = &shader_injection.Custom_Color_Tint_Intensity,
         .default_value = 50.f,
         .label = "Color Tint Intensity",
         .section = "Effects",
-        .tooltip = "There is not LUT color grading in this game, just this funny float3 color shift.",
+        .tooltip = "There is not LUT color grading in this game, just some funky math.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxColorTint2Intensity",
+        .binding = &shader_injection.Custom_Color_Tint2_Intensity,
+        .default_value = 50.f,
+        .label = "Color Tint 2 Intensity",
+        .section = "Effects",
+        .tooltip = "There is not LUT color grading in this game, just some funky math.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
@@ -441,9 +451,99 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Contrast Intensity",
         .section = "Effects",
-        .tooltip = "Vanilla game does some cursed contrast adjustment in post processing. It's better to just disable it by default. Set to 50 for vanilla amount.",
+        .tooltip = "Vanilla game does contrast so strong, that it actually clips. It's disabled by default here to avoid that. Set to 50 for vanilla look.", 
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxMotionBlurAmount",
+        .binding = &shader_injection.Custom_MotionBlur_Amount,
+        .default_value = 50.f,
+        .label = "Motion Blur Amount",
+        .section = "Effects",
+        .tooltip = "Amount of motion blur applied.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxMotionBlurHDRBoost",
+        .binding = &shader_injection.Custom_MotionBlur_HDRBoost,
+        .default_value = 50.f,
+        .label = "Motion Blur Intensity",
+        .section = "Effects",
+        .tooltip = "Boosts motion blur sampling brightness. Set to 0 to disable for vanilla look.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+    .key = "FxBrightPassThresholding",
+    .binding = &shader_injection.Custom_BrightPass_Thresholding,
+    .default_value = 20.f,
+    .label = "Bright Pass Thresholding",
+    .section = "Effects",
+    .tooltip = "Controls the threshold for bright pass filtering used in bloom and star dispersion effects. Set to 0 for vanilla look.",
+    .max = 100.f,
+    .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "Reset",
+    .section = "Color Grading Templates",
+    .group = "button-line-1",
+    .tint = 0xE50067,
+    .on_change = []() {
+        renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
+        renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1);
+        renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+        renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+        renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+        renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
+        renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+        renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+        renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
+        renodx::utils::settings::UpdateSetting("FxStarDispersion", 50.f);
+        renodx::utils::settings::UpdateSetting("FxEmissivesIntensity", 50.f);
+        renodx::utils::settings::UpdateSetting("FxSkyboxIntensity", 6.25f);
+        renodx::utils::settings::UpdateSetting("FxParticlesIntensity", 50.f);
+        renodx::utils::settings::UpdateSetting("FxSharpeningAmount", 50.f);
+        renodx::utils::settings::UpdateSetting("FxUIDisable", 0);
+        renodx::utils::settings::UpdateSetting("FxUIMenuBlurIntensity", 50.f);
+        renodx::utils::settings::UpdateSetting("FxColorTintIntensity", 50.f);
+        renodx::utils::settings::UpdateSetting("FxColorTint2Intensity", 50.f);
+        renodx::utils::settings::UpdateSetting("FxContrastIntensity", 50.f);
+        renodx::utils::settings::UpdateSetting("FxMotionBlurAmount", 50.f);
+        renodx::utils::settings::UpdateSetting("FxMotionBlurHDRBoost", 0.f);
+        renodx::utils::settings::UpdateSetting("FxBrightPassThresholding", 0.f); },
+    },
+    new renodx::utils::settings::Setting{
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "HDR Look",
+    .section = "Color Grading Templates",
+    .group = "button-line-1",
+    .tint = 0x3FD9B9,
+    .on_change = []() {
+        renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
+        renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1);
+        renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
+        renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
+        renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
+        renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
+        renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+        renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+        renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
+        renodx::utils::settings::UpdateSetting("FxStarDispersion", 50.f);
+        renodx::utils::settings::UpdateSetting("FxEmissivesIntensity", 100.f);
+        renodx::utils::settings::UpdateSetting("FxSkyboxIntensity", 50.f);
+        renodx::utils::settings::UpdateSetting("FxParticlesIntensity", 100.f);
+        renodx::utils::settings::UpdateSetting("FxSharpeningAmount", 25.f);
+        renodx::utils::settings::UpdateSetting("FxUIDisable", 0);
+        renodx::utils::settings::UpdateSetting("FxUIMenuBlurIntensity", 0.f);
+        renodx::utils::settings::UpdateSetting("FxColorTintIntensity", 0.f);
+        renodx::utils::settings::UpdateSetting("FxColorTint2Intensity", 0.f);
+        renodx::utils::settings::UpdateSetting("FxContrastIntensity", 0.f);
+        renodx::utils::settings::UpdateSetting("FxMotionBlurAmount", 50.f);
+        renodx::utils::settings::UpdateSetting("FxMotionBlurHDRBoost", 100.f);
+        renodx::utils::settings::UpdateSetting("FxBrightPassThresholding", 20.f); },
     },
 };
 
@@ -474,6 +574,20 @@ void OnPresetOff() {
      renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
      renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
      renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+     renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
+     renodx::utils::settings::UpdateSetting("FxStarDispersion", 50.f);
+     renodx::utils::settings::UpdateSetting("FxEmissivesIntensity", 50.f);
+     renodx::utils::settings::UpdateSetting("FxSkyboxIntensity", 6.25f);
+     renodx::utils::settings::UpdateSetting("FxParticlesIntensity", 50.f);
+     renodx::utils::settings::UpdateSetting("FxSharpeningAmount", 50.f);
+     renodx::utils::settings::UpdateSetting("FxUIDisable", 0);
+     renodx::utils::settings::UpdateSetting("FxUIMenuBlurIntensity", 50.f);
+     renodx::utils::settings::UpdateSetting("FxColorTintIntensity", 50.f);
+     renodx::utils::settings::UpdateSetting("FxColorTint2Intensity", 50.f);
+     renodx::utils::settings::UpdateSetting("FxContrastIntensity", 50.f);
+     renodx::utils::settings::UpdateSetting("FxMotionBlurAmount", 50.f);
+     renodx::utils::settings::UpdateSetting("FxMotionBlurHDRBoost", 0.f);
+     renodx::utils::settings::UpdateSetting("FxBrightPassThresholding", 0.f);     
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;

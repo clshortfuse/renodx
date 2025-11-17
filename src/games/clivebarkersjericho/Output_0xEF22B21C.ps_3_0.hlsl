@@ -1,6 +1,6 @@
 #include "./shared.h"
 
-// Outside tonemapper
+// Mostly Outside tonemapper
 float4 g_LevelsInMax : register(c5);
 float4 g_LevelsInMin : register(c4);
 float4 g_LevelsOutMax : register(c7);
@@ -13,12 +13,12 @@ float g_fStarScale : register(c1);
 
 sampler2D s0 : register(s0);  // main scene color
 sampler2D s1 : register(s1);  // bloom buffer
-sampler2D s2 : register(s2);  // star/streak buffer
+sampler2D s2 : register(s2);  // star streak buffer
 sampler2D s3 : register(s3);  // auto-exposure 1×1 buffer
 
 float4 main(float2 texcoord: TEXCOORD) : COLOR
 {
-  float4 o;   // output color
+  float4 o;   // final output
   float4 r0;  // temp
   float4 r1;  // temp
 
@@ -38,7 +38,7 @@ float4 main(float2 texcoord: TEXCOORD) : COLOR
   // =======================================================
   // Exposure-dependent color shift
   // =======================================================
-  r0.xyz = r0.z * float3(1.05, 0.97, 1.27) + -r1.xyz;
+  r0.xyz = lerp(r1.xyz, r0.z * float3(1.05, 0.97, 1.27) + -r1.xyz, Custom_Color_Tint_Intensity);
   r1.xyz = r0.w * r0.xyz + r1.xyz;
   // =======================================================
   // Add star/streak buffer
@@ -56,26 +56,25 @@ float4 main(float2 texcoord: TEXCOORD) : COLOR
   r1 = g_LevelsInMin;
   r1 = -r1 + g_LevelsInMax;  // r1 = (InMax - InMin)
   r0 = r0 + -g_LevelsInMin;  // subtract InMin
-  r1.x = 1 / r1.x;  		// invert (InMax - InMin)
+  r1.x = 1 / r1.x;  		     // invert (InMax - InMin)
   r1.y = 1 / r1.y;
   r1.z = 1 / r1.z;
   r1.w = 1 / r1.w;
-  r0 = r0 * r1;  			// scale into [0..1] range
+  r0 = r0 * r1;  			       // scale into [0..1] range
   // =======================================================
   // Levels: Output remapping
   // =======================================================
   r1 = g_LevelsOutMin;
-  r1 = -r1 + g_LevelsOutMax;  		// r1 = (OutMax - OutMin)
-  r0 = r0 * r1 + g_LevelsOutMin;  	// apply output range
+  r1 = -r1 + g_LevelsOutMax;  		                                          // r1 = (OutMax - OutMin)
+  r0 = lerp(r0, r0 * r1 + g_LevelsOutMin, Custom_Color_Tint2_Intensity);  	// apply output range
   // =======================================================
   // Brightness & contrast
   // =======================================================
-  r0 = r0 + g_fBrightness.x;  		// apply brightness
-
-  r0 = r0 + (-0.5 * Custom_Contrast_Intensity );                  // shift around 0.5 before contrast
-  r1.w = 0.5;                                                     // 0.5 constant
-  float4 unclamped = g_fContrast.x * r0 + (r1.w * Custom_Contrast_Intensity);
-  r0 = saturate(g_fContrast.x * r0 + (r1.w * Custom_Contrast_Intensity));  // apply contrast and shift back
+  r0 = lerp(r0, r0 + g_fBrightness.x, saturate(Custom_Contrast_Intensity));
+  r0 = r0 + (-0.5 * Custom_Contrast_Intensity);  // shift around 0.5 before contrast
+  r1.w = (0.5 * Custom_Contrast_Intensity);      // 0.5 constant
+  float4 unclamped = g_fContrast.x * r0 + r1.w;
+  r0 = saturate(g_fContrast.x * r0 + r1.w);     // apply contrast and shift back
 
   r0.x = log2(r0.x);
   r0.y = log2(r0.y);

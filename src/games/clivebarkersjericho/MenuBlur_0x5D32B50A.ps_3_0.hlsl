@@ -2,9 +2,9 @@
 
 // Menu Blur Shader
 sampler2D ActualFrameSampler : register(s0);
-float g_Value : register(c15);        // Blend factor
-float g_Scale : register(c16);        // Scale for sample offsets
-float2 g_avSampleOffsets[15] : register(c0); // Predefined blur offsets, exactly 15
+float g_Value : register(c15);                  // Blend factor
+float g_Scale : register(c16);                  // Scale for sample offsets
+float2 g_avSampleOffsets[15] : register(c0);    // Predefined blur offsets
 
 float4 main(float2 texcoord : TEXCOORD) : COLOR
 {
@@ -21,7 +21,7 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
         accumulated += tex2D(ActualFrameSampler, sampleUV);
     }
 
-    // Add the 16th sample (original) manually to match ASM
+    // Add the 16th sample
     float4 lastSample = tex2D(ActualFrameSampler, texcoord);
     accumulated += lastSample;
 
@@ -32,6 +32,5 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
     // Blend with original
     float4 outputColor = (g_Value.x * Custom_UI_Menu_Blur_Intensity) * blur + lastSample;
 
-    // return outputColor;
     return outputColor;
 }

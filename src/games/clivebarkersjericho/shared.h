@@ -85,14 +85,18 @@ struct ShaderInjectData {
   float Custom_UI_Disable;
   float Custom_UI_Menu_Blur_Intensity;
   float Custom_Color_Tint_Intensity;
-  float Custom_Contrast_Intensity;
+  float Custom_Color_Tint2_Intensity;
 
+  float Custom_Contrast_Intensity;
+  float Custom_MotionBlur_Amount;
+  float Custom_MotionBlur_HDRBoost;
+  float Custom_BrightPass_Thresholding;
 };
 
 #ifndef __cplusplus
 #if (__SHADER_TARGET_MAJOR == 3)
 
-float4 shader_injection[10] : register(c50);
+float4 shader_injection[11] : register(c50);
 
 #define RENODX_PEAK_WHITE_NITS               shader_injection[0][0]
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection[0][1]
@@ -133,8 +137,11 @@ float4 shader_injection[10] : register(c50);
 #define Custom_UI_Disable                      shader_injection[9][0]
 #define Custom_UI_Menu_Blur_Intensity          shader_injection[9][1]
 #define Custom_Color_Tint_Intensity            shader_injection[9][2]
-#define Custom_Contrast_Intensity              shader_injection[9][3]
-
+#define Custom_Color_Tint2_Intensity           shader_injection[9][3]
+#define Custom_Contrast_Intensity              shader_injection[10][0]
+#define Custom_MotionBlur_Amount               shader_injection[10][1]
+#define Custom_MotionBlur_HDRBoost             shader_injection[10][2]
+#define Custom_BrightPass_Thresholding         shader_injection[10][3]
 
 
 #define RENODX_RENO_DRT_TONE_MAP_METHOD renodx::tonemap::renodrt::config::tone_map_method::REINHARD
@@ -186,7 +193,11 @@ cbuffer shader_injection : register(b13) {
 #define Custom_UI_Disable                      shader_injection.Custom_UI_Disable
 #define Custom_UI_Menu_Blur_Intensity          shader_injection.Custom_UI_Menu_Blur_Intensity
 #define Custom_Color_Tint_Intensity            shader_injection.Custom_Color_Tint_Intensity
+#define Custom_Color_Tint2_Intensity           shader_injection.Custom_Color_Tint_Intensity
 #define Custom_Contrast_Intensity              shader_injection.Custom_Contrast_Intensity
+#define Custom_MotionBlur_Amount               shader_injection.Custom_MotionBlur_Amount
+#define Custom_MotionBlur_HDRBoost             shader_injection.Custom_MotionBlur_HDRBoost
+#define Custom_BrightPass_Thresholding         shader_injection.Custom_BrightPass_Thresholding
 
 #endif
 

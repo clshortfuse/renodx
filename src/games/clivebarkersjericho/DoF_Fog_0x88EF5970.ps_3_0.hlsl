@@ -1,6 +1,6 @@
 #include "./shared.h"
 
-// DoF and Fog
+// DoF, Water and Fog
 float DOFFogDesaturate : register(c15);
 float DOFFogDist : register(c10);
 float DOFFogFactorBlur : register(c14);

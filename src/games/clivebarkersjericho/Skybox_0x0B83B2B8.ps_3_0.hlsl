@@ -16,9 +16,9 @@ float4 main(PS_IN input) : COLOR
     float4 skySample = tex2D(DiffuseMapSampler, input.texcoord1);
 
     // --- Compute level adjustments ---
-    float4 levelFactor = input.texcoord * Levels.z;  // Scale by Levels.z
+    float4 levelFactor = input.texcoord * Levels.z;      // Scale by Levels.z
     levelFactor.w = levelFactor.w * Levels.x - Levels.x; // Apply offset
-    levelFactor.w = levelFactor.w + 1;                // Final adjustment for alpha
+    levelFactor.w = levelFactor.w + 1;                   // Final adjustment for alpha
 
     // --- Apply the level scaling to RGB and alpha ---
     float3 finalRGB = skySample.rgb * levelFactor.xyz * Custom_Skybox_Intensity;
