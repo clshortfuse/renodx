@@ -711,6 +711,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           renodx::mods::swapchain::use_resize_buffer = setting->GetValue() < 4;
           renodx::mods::swapchain::use_resize_buffer_on_demand = renodx::mods::swapchain::use_resize_buffer;
           renodx::mods::swapchain::set_color_space = !renodx::mods::swapchain::use_resize_buffer;
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::b8g8r8a8_unorm,
+            .new_format = reshade::api::format::r16g16b16a16_typeless,
+            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+          });
           shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
           settings.push_back(setting);
         }
@@ -719,7 +724,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "Upgrade_" + key,
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 0.f,
+              .default_value = 1.f,
               .label = key,
               .section = "Resource Upgrades",
               .labels = {
