@@ -107,8 +107,8 @@ void frag_main() {
       TonemapParam_m0[0u].w = RENODX_TONE_MAP_SHADOW_TOE;  // toe
     }
     TonemapParam_m0[0u].x *= RENODX_TONE_MAP_HIGHLIGHT_CONTRAST;  // contrast
-    TonemapParam_m0[1u].x = 125;                                  // maxNit
-    TonemapParam_m0[1u].y = 125;                                  // linearStart
+    TonemapParam_m0[1u].x = 100.f;                                // maxNit
+    TonemapParam_m0[1u].y = 100.f;                                  // linearStart
   }
   // declare lut config for use with lut black correction
   renodx::lut::Config lut_config = renodx::lut::config::Create(
@@ -1037,9 +1037,9 @@ void frag_main() {
     untonemapped = float3(_1511, _1513, _1515);
     hdrColor = untonemapped;
 
-    sdrColor = LUTToneMap(untonemapped);
+    sdrColor = LUTToneMap(hdrColor);
 #endif
-    if (COLOR_GRADE_LUT_SAMPLING_METHOD == 0) {
+    if (TONE_MAP_TYPE == 0.f) {
       if (_1828) {
         _2148 = _1511 / _1827;
         _2149 = _1513 / _1827;
@@ -1210,7 +1210,7 @@ void frag_main() {
     float frontier_phi_43_91_ladder;
     float frontier_phi_43_91_ladder_1;
     float frontier_phi_43_91_ladder_2;
-    if (COLOR_GRADE_LUT_SAMPLING_METHOD == 0) {
+    if (TONE_MAP_TYPE == 0.f) {
       if (_1828) {
         frontier_phi_43_91_ladder = _1798 * _1827;
         frontier_phi_43_91_ladder_1 = _1795 * _1827;
@@ -1225,8 +1225,7 @@ void frag_main() {
       _1796 = frontier_phi_43_91_ladder;
     } else {
       float3 postprocessColor = float3(_1792, _1795, _1798);
-      float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, (sdrColor), (postprocessColor), 1.f);
-      // float3 upgradedColor = RestorePostProcess(hdrColor, (sdrColor), postprocessColor, 1.f);
+      float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, postprocessColor, 1.f);
       _1790 = upgradedColor.r;
       _1793 = upgradedColor.g;
       _1796 = upgradedColor.b;
@@ -1269,8 +1268,7 @@ void frag_main() {
   SV_Target.w = 0.0f;
 
   if (TONE_MAP_TYPE != 0) {
-    SV_Target.rgb = ApplyCustomGrading(SV_Target.rgb);
-    SV_Target.rgb = AdjustGammaByChannel(SV_Target.rgb, RENODX_GAMMA_ADJUST);
+    SV_Target.rgb = ApplyToneMap(SV_Target.rgb);
   }
 }
 

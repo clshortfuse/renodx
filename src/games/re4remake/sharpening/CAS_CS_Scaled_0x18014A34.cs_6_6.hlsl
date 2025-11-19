@@ -9,6 +9,31 @@ cbuffer cbCAS : register(b0) {
   uint4 const1 : packoffset(c001.x);
 };
 
+// Bilinear sample of the scaled source position for a given output pixel.
+float3 SampleScaledSource(Texture2D<float4> src_image, int2 output_coord, int2 tex_max, uint4 uv_scale_offset) {
+  float2 scale = float2(asfloat(uv_scale_offset.xy));
+  float2 offset = float2(asfloat(uv_scale_offset.zw));
+
+  float2 src = scale * float2(output_coord) + offset;
+  float2 base = floor(src);
+  float2 frac = src - base;
+  int2 base_int = int2(base);
+
+  int2 p00 = clamp(base_int, int2(0, 0), tex_max);
+  int2 p10 = clamp(base_int + int2(1, 0), int2(0, 0), tex_max);
+  int2 p01 = clamp(base_int + int2(0, 1), int2(0, 0), tex_max);
+  int2 p11 = clamp(base_int + int2(1, 1), int2(0, 0), tex_max);
+
+  float3 c00 = src_image.Load(int3(p00, 0)).rgb;
+  float3 c10 = src_image.Load(int3(p10, 0)).rgb;
+  float3 c01 = src_image.Load(int3(p01, 0)).rgb;
+  float3 c11 = src_image.Load(int3(p11, 0)).rgb;
+
+  float3 top = lerp(c00, c10, frac.x);
+  float3 bottom = lerp(c01, c11, frac.x);
+  return lerp(top, bottom, frac.y);
+}
+
 [numthreads(64, 1, 1)]
 void main(
     uint3 SV_DispatchThreadID: SV_DispatchThreadID,
@@ -20,14 +45,48 @@ void main(
 
   if (CUSTOM_SHARPENING == 1.f) {  // Lilium RCAS
     const float sharpness_strength = CUSTOM_SHARPENING_STRENGTH;
-    uint2 tex_max;
-    SrcImage.GetDimensions(tex_max.x, tex_max.y);
+    uint2 tex_dim;
+    SrcImage.GetDimensions(tex_dim.x, tex_dim.y);
+    int2 tex_max = int2(tex_dim) - 1;
+    uint4 uv_scale_offset = const0;  // packed scale/offset
 
-    // Process 4 pixels per thread with RCAS
-    OutputImage[int2(_16, _17)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16, _17), sharpness_strength, tex_max), 1.f);
-    OutputImage[int2(_16 | 8, _17)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16 | 8, _17), sharpness_strength, tex_max), 1.f);
-    OutputImage[int2(_16 | 8, _17 | 8)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16 | 8, _17 | 8), sharpness_strength, tex_max), 1.f);
-    OutputImage[int2(_16, _17 | 8)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16, _17 | 8), sharpness_strength, tex_max), 1.f);
+    // Process 4 pixels per thread with RCAS using scaled/bilinear UVs
+    OutputImage[int2(_16, _17)] =
+        float4(ApplyLiliumRCASFromSamples(
+                   SampleScaledSource(SrcImage, int2(_16, _17) + int2(0, -1), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16, _17) + int2(-1, 0), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16, _17), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16, _17) + int2(1, 0), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16, _17) + int2(0, 1), tex_max, uv_scale_offset),
+                   sharpness_strength),
+               1.f);
+    OutputImage[int2(_16 | 8, _17)] =
+        float4(ApplyLiliumRCASFromSamples(
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17) + int2(0, -1), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17) + int2(-1, 0), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17) + int2(1, 0), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17) + int2(0, 1), tex_max, uv_scale_offset),
+                   sharpness_strength),
+               1.f);
+    OutputImage[int2(_16 | 8, _17 | 8)] =
+        float4(ApplyLiliumRCASFromSamples(
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17 | 8) + int2(0, -1), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17 | 8) + int2(-1, 0), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17 | 8), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17 | 8) + int2(1, 0), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16 | 8, _17 | 8) + int2(0, 1), tex_max, uv_scale_offset),
+                   sharpness_strength),
+               1.f);
+    OutputImage[int2(_16, _17 | 8)] =
+        float4(ApplyLiliumRCASFromSamples(
+                   SampleScaledSource(SrcImage, int2(_16, _17 | 8) + int2(0, -1), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16, _17 | 8) + int2(-1, 0), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16, _17 | 8), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16, _17 | 8) + int2(1, 0), tex_max, uv_scale_offset),
+                   SampleScaledSource(SrcImage, int2(_16, _17 | 8) + int2(0, 1), tex_max, uv_scale_offset),
+                   sharpness_strength),
+               1.f);
     return;
   } else {
     float _25 = float((uint)_16);
