@@ -25,14 +25,6 @@ ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
-const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
-    {"GammaCorrection", 0.f},
-    {"ColorGradeShadows", 45.f},
-    {"ColorGradeSaturation", 55.f},
-    {"ColorGradeBlowout", 30.f},
-    {"ColorGradeFlare", 22.f},
-};
-
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
@@ -45,14 +37,49 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "Vanilla+ (Vanilla + Reinhard Piecewise)"},
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapPeakNits",
+        .binding = &shader_injection.peak_white_nits,
+        .default_value = 1000.f,
+        .can_reset = false,
+        .label = "Peak Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the value of peak white in nits",
+        .min = 48.f,
+        .max = 4000.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapGameNits",
+        .binding = &shader_injection.diffuse_white_nits,
+        .default_value = 203.f,
+        .label = "Game Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the value of 100% white in nits",
+        .min = 48.f,
+        .max = 500.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.graphics_white_nits,
+        .default_value = 203.f,
+        .label = "UI Brightness",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits",
+        .min = 48.f,
+        .max = 500.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 2.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
-        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminance with Per Channel Chrominance)"},
+        .tooltip = "Emulates a 2.2 EOTF",
+        .labels = {"Off", "2.2 (Per Channel)", "2.2 (Per Channel, Hue Preserving)"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "GammaAdjust",
@@ -65,6 +92,30 @@ renodx::utils::settings::Settings settings = {
         .max = 1.25f,
         .format = "%.2f",
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeBlowoutRestoration",
+        .binding = &shader_injection.tone_map_per_channel_blowout_restoration,
+        .default_value = 50.f,
+        .label = "Per Channel Blowout Restoration",
+        .section = "Tone Mapping",
+        .tooltip = "Restores color from blowout from per-channel grading.",
+        .min = 0.f,
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapHueShift",
+        .binding = &shader_injection.tone_map_hue_shift,
+        .default_value = 75.f,
+        .label = "Hue Shift",
+        .section = "Tone Mapping",
+        .tooltip = "Hue-shift emulation strength.",
+        .min = 0.f,
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightContrast",
@@ -201,16 +252,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "LUTSamplingMethod",
-        .binding = &shader_injection.color_grade_lut_sampling_method,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "LUT Sampling Method",
-        .section = "Color Grading",
-        .tooltip = "Selects whether to use the broken vanilla sampling or enhanced for the game's LUTs.",
-        .labels = {"Vanilla", "Enhanced"},
-    },
-    new renodx::utils::settings::Setting{
         .key = "FxSharpeningType",
         .binding = &shader_injection.custom_sharpening,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -250,16 +291,13 @@ renodx::utils::settings::Settings settings = {
         .section = "Options",
         .group = "button-line-0",
         .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-
-            if (RECOMMENDED_VALUES.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES.at(setting->key));
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
-          }
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"GammaCorrection", 0.f},
+              {"ColorGradeHighlightSaturation", 45.f},
+              {"ColorGradeContrast", 55.f},
+              {"ColorGradeSaturation", 55.f},
+          });
         },
     },
     new renodx::utils::settings::Setting{
@@ -317,11 +355,18 @@ renodx::utils::settings::Settings settings = {
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
     },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Requires HDR on in game\n"),
+        .section = "About",
+    },
 };
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
+      {"ColorGradeBlowoutRestoration", 0.f},
+      {"ToneMapHueShift", 20.f},
       {"GammaCorrection", 0.f},
       {"GammaAdjust", 1.f},
       {"ColorGradeToeAdjustmentType", 0.f},
@@ -337,7 +382,6 @@ void OnPresetOff() {
       {"ColorGradeHighlightContrast", 50.f},
       {"ColorGradeLUTStrength", 100.f},
       {"ColorGradeLUTScaling", 0.f},
-      {"LUTSamplingMethod", 0.f},
       {"FxSharpeningType", 0.f},
       {"FxSharpeningStrength", 100.f},
   });

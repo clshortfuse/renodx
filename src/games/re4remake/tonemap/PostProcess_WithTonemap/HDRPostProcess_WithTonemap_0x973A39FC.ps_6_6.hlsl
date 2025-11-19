@@ -129,8 +129,8 @@ void frag_main() {
       TonemapParam_m0[0u].w = RENODX_TONE_MAP_SHADOW_TOE;  // toe
     }
     TonemapParam_m0[0u].x *= RENODX_TONE_MAP_HIGHLIGHT_CONTRAST;  // contrast
-    TonemapParam_m0[1u].x = 125;                                  // maxNit
-    TonemapParam_m0[1u].y = 125;                                  // linearStart
+    TonemapParam_m0[1u].x = 100.f;                                // maxNit
+    TonemapParam_m0[1u].y = 100.f;                                // linearStart
   }
   // declare lut config for use with lut black correction
   renodx::lut::Config lut_config = renodx::lut::config::Create(
@@ -282,7 +282,6 @@ void frag_main() {
       float frontier_phi_16_1_ladder_7_ladder_7;
       float frontier_phi_16_1_ladder_7_ladder_8;
       if (!(isnan(_275) || isinf(_275))) {
-        
         float _415 = TonemapParam_m0[2u].y * _271;
         float _421 = TonemapParam_m0[2u].y * _272;
         float _427 = TonemapParam_m0[2u].y * _273;
@@ -1068,9 +1067,9 @@ void frag_main() {
     untonemapped = float3(_1547, _1549, _1551);
     hdrColor = untonemapped;
 
-    sdrColor = LUTToneMap(untonemapped);
+    sdrColor = LUTToneMap(hdrColor);
 #endif
-    if (COLOR_GRADE_LUT_SAMPLING_METHOD == 0) {
+    if (TONE_MAP_TYPE == 0.f) {
       if (_1865) {
         _2185 = _1547 / _1864;
         _2186 = _1549 / _1864;
@@ -1242,7 +1241,7 @@ void frag_main() {
     float frontier_phi_43_91_ladder_1;
     float frontier_phi_43_91_ladder_2;
 
-    if (COLOR_GRADE_LUT_SAMPLING_METHOD == 0) {
+    if (TONE_MAP_TYPE == 0.f) {
       if (_1865) {
         frontier_phi_43_91_ladder = _1835 * _1864;
         frontier_phi_43_91_ladder_1 = _1832 * _1864;
@@ -1257,8 +1256,7 @@ void frag_main() {
       _1833 = frontier_phi_43_91_ladder;
     } else {
       float3 postprocessColor = float3(_1829, _1832, _1835);
-      float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, (sdrColor), (postprocessColor), 1.f);
-      // float3 upgradedColor = RestorePostProcess(hdrColor, (sdrColor), postprocessColor, 1.f);
+      float3 upgradedColor = renodx::tonemap::UpgradeToneMap(hdrColor, sdrColor, postprocessColor, 1.f);
       _1827 = upgradedColor.r;
       _1830 = upgradedColor.g;
       _1833 = upgradedColor.b;
@@ -1301,8 +1299,7 @@ void frag_main() {
   SV_Target.w = 0.0f;
 
   if (TONE_MAP_TYPE != 0) {
-    SV_Target.rgb = ApplyCustomGrading(SV_Target.rgb);
-    SV_Target.rgb = AdjustGammaByChannel(SV_Target.rgb, RENODX_GAMMA_ADJUST);
+    SV_Target.rgb = ApplyToneMap(SV_Target.rgb);
   }
 }
 
