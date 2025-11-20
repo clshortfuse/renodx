@@ -70,12 +70,10 @@ void main(
   }
 
   if (RENODX_TONE_MAP_TYPE ) {
-    outputColor = renodx::draw::UpscaleVideoPass(outputColor);
-    outputColor = renodx::draw::ToneMapPass(outputColor);
-    
+    // outputColor = renodx::draw::ToneMapPass(outputColor); // Sadly this shader is used in game as well and not just the title screen
   }
 
-  outputColor = renodx::draw::RenderIntermediatePass(outputColor);
+  // outputColor = renodx::draw::RenderIntermediatePass(outputColor); // Sadly this shader is used in game as well and not just the title screen
   o0.rgb = outputColor;
   o0.w = float(1.0);
 }
