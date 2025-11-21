@@ -17,11 +17,11 @@
 #define RENODX_TONE_MAP_HUE_SHIFT            0
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE  0
 #define RENODX_TONE_MAP_HUE_PROCESSOR        0
-#define RENODX_TONE_MAP_PER_CHANNEL          0
+#define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define CUSTOM_TONE_MAP_STRATEGY             shader_injection.custom_tone_map_strategy
 #define CUSTOM_LUT_STRENGTH                  shader_injection.custom_lut_strength
-#define CUSTOM_LUT_SCALING                   0
+#define CUSTOM_LUT_SCALING                   shader_injection.custom_lut_scaling
 #define CUSTOM_LUT_TETRAHEDRAL               shader_injection.custom_lut_tetrahedral
 #define CUSTOM_LENS_FLARE                    shader_injection.custom_lens_flare
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
@@ -30,12 +30,7 @@
 #define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain_strength
 #define CUSTOM_HAS_DRAWN_MENU                shader_injection.custom_has_drawn_menu
 
-#define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
-#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
-#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
-#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1.f
-#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.f
-#define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP        20.f
+#define RENODX_RENO_DRT_TONE_MAP_METHOD renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -52,9 +47,11 @@ struct ShaderInjectData {
   float tone_map_blowout;
   float tone_map_flare;
   float tone_map_hue_correction;
+  float tone_map_per_channel;
   float gamma_correction;
   float custom_tone_map_strategy;
   float custom_lut_strength;
+  float custom_lut_scaling;
   float custom_lut_tetrahedral;
   float custom_lens_flare;
   float custom_bloom;
