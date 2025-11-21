@@ -21,17 +21,11 @@
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define RENODX_TONE_MAP_HUE_SHIFT_METHOD     HUE_SHIFT_METHOD_SDR_MODIFIED
 #define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER   0.f
+#define RENODX_SWAP_CHAIN_OUTPUT_PRESET      renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_SCRGB
 #define RENODX_SWAP_CHAIN_CLAMP_NITS         10000.f
 #define CUSTOM_SAT_STRENGTH                  shader_injection.custom_sat_strength
+#define CUSTOM_SAT_BRIGHTNESS                shader_injection.custom_sat_brightness
 #define CUSTOM_FLARE_EFFECT                  shader_injection.custom_flare_effect
-//#define RENODX_INTERMEDIATE_ENCODING         0.f
-//#define RENODX_SWAP_CHAIN_DECODING           0.f
-//#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   RENODX_GAMMA_CORRECTION
-#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  renodx::color::convert::COLOR_SPACE_BT2020
-#define RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION shader_injection.scene_grade_saturation_correction
-#define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION    shader_injection.scene_grade_blowout_restoration
-#define RENODX_PER_CHANNEL_HUE_CORRECTION         shader_injection.scene_grade_hue_correction
-#define RENODX_COLOR_GRADE_STRENGTH               shader_injection.scene_grade_strength
 
 #define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
@@ -63,11 +57,8 @@ struct ShaderInjectData {
   float tone_map_hue_processor;
   float tone_map_per_channel;
   float gamma_correction;
-  float scene_grade_saturation_correction;
-  float scene_grade_blowout_restoration;
-  float scene_grade_hue_correction;
-  float scene_grade_strength;
   float custom_sat_strength;
+  float custom_sat_brightness;
   float custom_flare_effect;
 };
 
