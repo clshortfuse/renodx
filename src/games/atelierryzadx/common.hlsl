@@ -76,5 +76,5 @@ void OutColorAdjustments(inout float4 o0, float saturationScale)
     o0.rgb = renodx::color::correct::Chrominance(o0.rgb, sdr_color, RENODX_TONE_MAP_HUE_SHIFT);
   }
 
-  o0 = renodx::draw::RenderIntermediatePass(o0);
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
 }
