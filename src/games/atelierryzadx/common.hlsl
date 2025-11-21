@@ -48,6 +48,13 @@ void OutColorAdjustments(inout float4 o0, float saturationScale)
   }
 
   o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
+
+  [branch]
+  if (CUSTOM_SAT_BRIGHTNESS && CUSTOM_SAT_STRENGTH != 0.f) {
+    g_pre_sat = renodx::color::srgb::DecodeSafe(g_pre_sat);
+    o0.rgb = renodx::color::correct::Chrominance(g_pre_sat, o0.rgb, 1.f);
+  }
+
   o0.rgb = saturate(o0.rgb);
 
   [branch]

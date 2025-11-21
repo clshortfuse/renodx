@@ -36,7 +36,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
   {"ToneMapHueCorrection", {.binding =  &shader_injection.tone_map_hue_correction, .default_value = 90.f, .tooltip = "Emulates vanilla SDR hue shifts."}},
   {"ToneMapHueShift", {.binding =  &shader_injection.tone_map_hue_shift, .label = "Chrominance Correction", .tooltip = "Emulates vanilla SDR chrominance/blowout."}},
   {"ToneMapScaling", {.binding =  &shader_injection.tone_map_per_channel}},
-  {"SceneGradeStrength", {.binding =  &shader_injection.scene_grade_strength}},
   {"ColorGradeExposure",  {.binding = &shader_injection.tone_map_exposure}},
   {"ColorGradeHighlights",  {.binding = &shader_injection.tone_map_highlights}},
   {"ColorGradeShadows",  {.binding = &shader_injection.tone_map_shadows}},
@@ -57,6 +56,17 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+      .key = "CustomSatBrightness",
+      .binding = &CUSTOM_SAT_BRIGHTNESS,
+      .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+      .default_value = 0.f,
+      .label = "DX Saturation Brightness Limit",
+      .section = "Effects",
+      .tooltip = "Prevents DX Saturation from brightening the image.",
+      .labels = {"Vanilla / Off", "On"},
+      .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "CustomFlareEffect",
@@ -104,11 +114,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         }
       },
   },
-  //new renodx::utils::settings::Setting{
-  //    .value_type = renodx::utils::settings::SettingValueType::TEXT,
-  //    .label = "Use DX11! Motion blur has to be disabled!",
-  //    .section = "Instructions",
-  //},
   new renodx::utils::settings::Setting{
       .value_type = renodx::utils::settings::SettingValueType::TEXT,
       .label = "Game mod by akuru, RenoDX Framework by ShortFuse",
@@ -194,9 +199,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
       //renodx::mods::swapchain::swapchain_proxy_revert_state = true;
-
-      //renodx::mods::shader::expected_constant_buffer_index = 9;
-      //renodx::mods::swapchain::expected_constant_buffer_index = 9;
 
       // BGRA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
