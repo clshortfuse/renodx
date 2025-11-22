@@ -40,7 +40,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
       color_output = renodx::color::correct::Hue(color_output, untonemapped, RENODX_TONE_MAP_HUE_CORRECTION);
 
       if (CUSTOM_LUT_STRENGTH != 0.f) {
-        float scale = ComputeReinhardSmoothClampScale(color_output);
+        float scale = ComputeReinhardSmoothClampScale(color_output, 0.4f);
 
         color_output *= scale;
         color_output = renodx::lut::Sample(lut_texture, CreateLUTConfig(lut_sampler), color_output);
@@ -69,7 +69,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
 
       // chrominance correction after lut doesn't artifact
       // see purple lights on hanging rail cars
-      color_output = renodx::color::correct::Chrominance(lum, ch, 1.f);
+      color_output = renodx::color::correct::Chrominance(lum, ch);
       color_output = renodx::color::bt709::clamp::AP1(color_output);
     }
   } else {  // ACES/None
