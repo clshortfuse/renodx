@@ -644,6 +644,8 @@ SamplerState s5 : register(s5);
 
 SamplerState s6 : register(s6);
 
+
+
 float4 main(
   noperspective float2 TEXCOORD : TEXCOORD,
   noperspective float4 TEXCOORD_1 : TEXCOORD1,
@@ -908,7 +910,7 @@ float4 main(
   float _631 = (saturate((log2(_608 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
   float4 _632 = t5.Sample(s5, float3(_629, _630, _631));
 
-  HANDLE_LUT_OUTPUT(_632);
+  HANDLE_LUT_OUTPUT_FADE(_632, t5, s5);
 
   [branch]
   if (false) {
