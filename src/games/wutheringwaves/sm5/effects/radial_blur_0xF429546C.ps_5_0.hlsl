@@ -1,4 +1,6 @@
-// ---- Created with 3Dmigoto v1.4.1 on Thu Jul  3 00:46:36 2025
+#include "../../common.hlsl"
+
+// ---- Created with 3Dmigoto v1.4.1 on Sun Oct 12 07:05:26 2025
 Texture2D<float4> t0 : register(t0);
 
 SamplerState s0_s : register(s0);

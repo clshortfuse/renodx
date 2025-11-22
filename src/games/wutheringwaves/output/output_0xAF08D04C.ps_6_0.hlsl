@@ -885,7 +885,7 @@ float4 main(
   float _812 = ((_717.y + ((_693 * TEXCOORD_1.x) * cb0_069y)) * _376) * min(((_759 * (1.0f - cb0_072y)) + cb0_072y), ((_796 * (1.0f - cb0_075y)) + cb0_075y));
   float _814 = ((_717.z + ((_694 * TEXCOORD_1.x) * cb0_069z)) * _376) * min(((_759 * (1.0f - cb0_072z)) + cb0_072z), ((_796 * (1.0f - cb0_075z)) + cb0_075z));
 
-  CAPTURE_UNTONEMAPPED(untonemapped, float3(_810, _812, _814));
+  CAPTURE_UNTONEMAPPED(float3(_810, _812, _814));
 
   [branch]
   if (((uint)(RENODX_WUWA_TM) == 1)) {
@@ -938,7 +938,7 @@ float4 main(
   }
 
   CLAMP_IF_SDR(_930); CLAMP_IF_SDR(_931); CLAMP_IF_SDR(_932);
-  CAPTURE_TONEMAPPED(tonemapped, float3(_930, _931, _932));
+  CAPTURE_TONEMAPPED(float3(_930, _931, _932));
 
   float4 _954 = t4.Sample(s4, float3(((saturate((log2(_930 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f), ((saturate((log2(_931 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f), ((saturate((log2(_932 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f)));
   _954.rgb = HandleLUTOutput(_954.rgb, untonemapped, tonemapped);

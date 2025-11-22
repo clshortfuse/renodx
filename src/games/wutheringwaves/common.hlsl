@@ -1,8 +1,18 @@
 #include "./shared.h"
 
-#define CAPTURE_UNTONEMAPPED(dst, c) const float3 dst = (c).xyz
+#define APPLY_BLOOM(c) (c).rgb *= RENODX_WUWA_BLOOM
 
-#define CAPTURE_TONEMAPPED(dst, c) const float3 dst = (c).xyz
+#define WUWA_TM_IS(N) ((uint)(RENODX_WUWA_TM) == (N))
+
+#define CLAMP_IF_SDR(c) ((c) = ((RENODX_TONE_MAP_TYPE == 0.f) ? saturate((c)) : (c)))
+
+#define CLAMP_IF_SDR3(r, g, b) { if (RENODX_TONE_MAP_TYPE == 0.f) { (r) = saturate((r)); (g) = saturate((g)); (b) = saturate((b)); } }
+
+#define CAPTURE_UNTONEMAPPED(c) const float3 untonemapped = (c).rgb
+
+#define CAPTURE_TONEMAPPED(c) const float3 tonemapped = (c).rgb
+
+#define HANDLE_LUT_OUTPUT(c) (c).rgb = HandleLUTOutput((c).rgb, untonemapped, tonemapped)
 
 
 namespace wuwa {
@@ -15,7 +25,9 @@ static const float3x3 DCIP3_to_BT2020_MAT = float3x3(
 
 }
 
-float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, float3 tonemapped) {
+static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, float3 tonemapped) {
+  CLAMP_IF_SDR(lut_output);
+
   lut_output = renodx::draw::InvertIntermediatePass(lut_output);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
@@ -57,10 +69,10 @@ float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, float3 tonemapped
   return lut_output;
 }
 
-#define GENERATE_LUT_OUTPUT(T)                                               \
-  T GenerateLUTOutput(T graded_bt709) {                                     \
-    graded_bt709 = renodx::draw::RenderIntermediatePass(graded_bt709); \
-    return graded_bt709;                                                 \
+#define GENERATE_LUT_OUTPUT(T)                                          \
+  static inline T GenerateLUTOutput(T graded_bt709) {                   \
+    graded_bt709 = renodx::draw::RenderIntermediatePass(graded_bt709);  \
+    return graded_bt709;                                                \
   }
 
 GENERATE_LUT_OUTPUT(float3)
