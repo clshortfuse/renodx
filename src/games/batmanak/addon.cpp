@@ -139,7 +139,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates hue shifting from the vanilla tonemapper",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1.f; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{

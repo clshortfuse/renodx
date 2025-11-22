@@ -40,6 +40,101 @@ float3 InverseUncharted2(
 
 namespace Uncharted2 {
 
+// namespace extended {
+// float3 BT709(float3 x, float linear_white = 11.2, float A, float B, float C, float D, float E, float F) {
+//   float3 numerator = mad(x, mad(A, x, C * B), D * E);  // x * (a * x + c * b) + d * e
+//   float3 denominator = mad(x, mad(A, x, B), D * F);    // x * (a * x + b) + d * f
+
+//   float numerator_white = mad(linear_white, mad(A, linear_white, C * B), D * E);
+//   float denominator_white = mad(linear_white, mad(A, linear_white, B), D * F);
+
+//   float e_over_f = E / F;
+
+//   float3 curve_x = (numerator / denominator) - e_over_f;
+//   float curve_white = (numerator_white / denominator_white) - e_over_f;
+//   float curve_white_inverse = 1.f / curve_white;
+
+//   float3 value = curve_x * curve_white_inverse;
+
+//   // Use Cardono's Method to solve for point of peak velocity (2nd derivative = 0)
+//   // 2B^{2}D(E-CF)+2AD(E-F)(-DF+3Ax^{2})+2ABx(3D(E-CF)+A(-1+C)x^{2}) = 0
+//   float a_0 = 2 * B * B * D * (E - C * F) - 2 * A * D * D * F * (E - F);
+//   float a_1 = 6 * A * B * D * (E - C * F);
+//   float a_2 = 6 * A * A * D * (E - F);
+//   float a_3 = 2 * A * A * B * (C - 1);
+
+//   float a_3_rcp = 1.f / a_3;  // Helper
+
+//   // float p = (3 * a_1 * a_3 - a_2 * a_2) / (3 * a_3 * a_3);
+//   float p = (3 * a_1 * a_3 - a_2 * a_2) * (1.f / 3.f) * (a_3_rcp * a_3_rcp);
+
+//   // float q = (27 * a_0 * a_3 * a_3 - 9 * a_1 * a_2 * a_3 + 2 * a_2 * a_2 * a_2) / (27 * a_3 * a_3 * a_3);
+//   float q = (27 * a_0 * a_3 * a_3 - 9 * a_1 * a_2 * a_3 + 2 * a_2 * a_2 * a_2) * (1.f / 27.f) * (a_3_rcp * a_3_rcp * a_3_rcp);
+
+//   // float delta = pow((q / 2), 2) + pow((p / 3), 3);
+//   float delta = (q * q) / 4.f + (p * p * p) / 27.f;
+
+//   float z;
+//   [branch]
+//   if (delta >= 0.0f) {
+//     // float z = pow(sqrt(delta) - q / 2.f, 1.f / 3.f) - pow(sqrt(delta) + q / 2.f, 1.f / 3.f);
+//     // Δ ≥ 0 → one real root, cube‑root form
+//     float sqrt_delta = sqrt(delta);
+//     z = pow(-q / 2.f + sqrt_delta, 1.f / 3.f) + pow(-q / 2.f - sqrt_delta, 1.f / 3.f);
+//   } else {
+//     // Δ < 0 → three real roots, use cosine form
+//     // usually ta k e k=0 root
+//     // float theta = acos((-q / 2.0f) / sqrt(-pow(p / 3.0f, 3)));
+//     // float r = 2.0f * sqrt(-p / 3.0f);
+
+//     // p is always negative here
+//     float positive_p_over_3 = -p / 3.f;
+
+//     float theta = acos((-q / 2.0f) * rsqrt(positive_p_over_3 * positive_p_over_3 * positive_p_over_3));
+//     float r = 2.0f * sqrt(positive_p_over_3);
+
+//     z = r * cos(theta / 3.0f);
+//   }
+
+//   // float peak_velocity = z - a_2 / (3 * a_3);
+//   float peak_velocity_point = (z - a_2) * (1.f / 3.f) * a_3_rcp;
+
+//   // If no toe, use initial velocity
+//   peak_velocity_point = max(0, peak_velocity_point);
+
+//   float peak_velocity_value_numerator = mad(peak_velocity_point, mad(A, peak_velocity_point, C * B), D * E);
+//   float peak_velocity_value_denominator = mad(peak_velocity_point, mad(A, peak_velocity_point, B), D * F);
+//   float peak_velocity_value_denominator_inverse = 1.f / peak_velocity_value_denominator;
+
+//   float peak_velocity_value_base = peak_velocity_value_numerator * peak_velocity_value_denominator_inverse;
+
+//   // Evaluate first deriviate to get velocity (skip [E/F, W] normalization)
+//   // R\left(x\right)=\frac{(2Ax+CB)D_{r}\left(x\right)-(2Ax+B)N_{r}\left(x\right)}{D_{r}\left(x\right)^{2}}
+//   // R\left(x\right)=\frac{(2Ax+CB)-(2Ax+B)F\left(x\right)}{D_{r}\left(x\right)}
+//   float peak_velocity_unscaled = ((2 * A * peak_velocity_point + C * B)
+//                                   - ((2 * A * peak_velocity_point + B) * peak_velocity_value_base))
+//                                  * peak_velocity_value_denominator_inverse;
+
+//   float peak_velocity = peak_velocity_unscaled * curve_white_inverse;
+
+//   float curve_peak = peak_velocity_value_base - e_over_f;
+//   float value_peak = curve_peak * curve_white_inverse;
+
+//   // Use point slope form (y = y1 + m(x - x1)) to extend curve linearly beyond peak velocity
+
+//   float m = peak_velocity;
+//   float3 x = value;
+//   float x1 = peak_velocity_point;
+//   float y1 = value_peak;
+//   float3 extended_value = y1 + m * (x - x1);
+
+//   return float3(
+//       value.x > peak_velocity_point ? extended_value.x : value.x,
+//       value.y > peak_velocity_point ? extended_value.y : value.y,
+//       value.z > peak_velocity_point ? extended_value.z : value.z);
+// }
+// }
+
 float Derivative(
     float x,
     float a, float b, float c,
@@ -102,52 +197,56 @@ float SecondDerivative(
   return num / den;
 }
 
-float FindSecondDerivativeRoot(
-    float a, float b, float c,
-    float d, float e, float f) {
-  float D0 = (a * a * b * c - a * a * b);
+float FindSecondDerivativeRoot(float a, float b, float c, float d, float e, float f) {
+  // Coefficients of the numerator of f''(x):
+  // num(x) = A3 x^3 + A2 x^2 + A1 x + A0
 
-  float term1 = -(a * a * d * e - a * a * d * f) / D0;
+  float A3 = a * a * b * (c - 1.0f);
+  float A2 = 3.0f * a * a * d * (e - f);
+  float A1 = 3.0f * a * b * d * (e - c * f);
+  float A0 = a * d * d * (f * f - e * f) + b * b * d * (e - c * f);
 
-  float X = (-54.f * d * d * d * e * e * e * a * a * a * a * a * a
-             + 54.f * d * d * d * f * f * f * a * a * a * a * a * a
-             - 162.f * d * d * d * e * f * f * a * a * a * a * a * a
-             + 162.f * d * d * d * e * e * f * a * a * a * a * a * a
-             - 81.f * b * b * d * d * e * e * a * a * a * a * a
-             + 81.f * b * b * c * d * d * e * e * a * a * a * a * a
-             - 27.f * b * b * d * d * f * f * a * a * a * a * a
-             + 54.f * b * b * c * c * d * d * f * f * a * a * a * a * a
-             - 27.f * b * b * c * d * d * f * f * a * a * a * a * a
-             + 108.f * b * b * d * d * e * f * a * a * a * a * a
-             - 54.f * b * b * c * c * d * d * e * f * a * a * a * a * a
-             - 54.f * b * b * c * d * d * e * f * a * a * a * a * a
-             - 27.f * b * b * b * b * d * e * a * a * a * a
-             - 27.f * b * b * b * b * c * c * d * e * a * a * a * a
-             + 54.f * b * b * b * b * c * d * e * a * a * a * a
-             + 27.f * b * b * b * b * c * c * c * d * f * a * a * a * a
-             - 54.f * b * b * b * b * c * c * d * f * a * a * a * a
-             + 27.f * b * b * b * b * c * d * f * a * a * a * a);
+  // If A3 = 0, curve is degenerate → no inflection
+  if (abs(A3) < 1e-12f)
+    return 0.f;
 
-  float innerA = 9.f * D0 * (a * b * d * e - a * b * c * d * f)
-                 - 9.f * (a * a * d * e - a * a * d * f) * (a * a * d * e - a * a * d * f);
+  // Normalize to monic cubic: x^3 + ax^2 + bx + c = 0
+  float invA3 = 1.0f / A3;
+  float an = A2 * invA3;
+  float bn = A1 * invA3;
+  float cn = A0 * invA3;
 
-  float innerB = 4.f * pow(innerA, 3.f)
-                 + (X * X);
+  // Depressed cubic t^3 + p t + q = 0  with x = t - a/3
+  float an_3 = an / 3.0f;
+  float p = bn - an * an_3;
+  float q = 2.0f * an * an * an / 27.0f - an * bn / 3.0f + cn;
 
-  float sqrt_innerB = sqrt(innerB);
+  float half_q = 0.5f * q;
+  float Delta = half_q * half_q + (p / 3.0f) * (p / 3.0f) * (p / 3.0f);
 
-  float numerator1 = (X + sqrt_innerB);
+  // Real root output
+  float t;
 
-  float denomA = 3.f * pow(2.f, 1.f / 3.f) * D0;
+  if (Delta >= 0.f) {
+    float sqrtD = sqrt(Delta);
+    float u = (-half_q + sqrtD);
+    float v = (-half_q - sqrtD);
 
-  float C = renodx::math::SignPow(numerator1, 1.f / 3.f);
+    // Use signed cube root
+    float u_c = renodx::math::SignPow(u, 1.0f / 3.0f);
+    float v_c = renodx::math::SignPow(v, 1.0f / 3.0f);
+    t = u_c + v_c;
+  } else {
+    // 3 real roots → trig branch
+    float m = 2.0f * sqrt(-p / 3.0f);
+    float angle = acos((-half_q) / sqrt(-(p * p * p) / 27.0f));
+    t = m * cos(angle / 3.0f);
+  }
 
-  float term2 = C / denomA;
+  float x = t - an_3;
 
-  float term3 = (pow(2.f, 1.f / 3.f) * innerA) / (3.f * D0 * C);
-
-  float root = term1 + term2 - term3;
-  return root;
+  // Only meaningful inflection is positive
+  return max(x, 0.f);
 }
 
 float ThirdDerivative(
@@ -256,6 +355,7 @@ float FindThirdDerivativeRoot(float a, float b, float c, float d, float e, float
   float r3 = -0.5f * sPos + shift2;  // -1/2 * sqrt( centerPos) + shift2
   float r4 = 0.5f * sPos + shift2;   //  1/2 * sqrt( centerPos) + shift2
 
+  // Max root seems to be always be the right one
   float root = saturate(renodx::math::Max(r1, r2, r3, r4));
 
   return root;
@@ -280,11 +380,11 @@ Uncharted2ExtendedConfig CreateUncharted2ExtendedConfig(
   return cfg;
 }
 
-Uncharted2ExtendedConfig CreateUncharted2ExtendedConfig(
-    float coeffs[6], float white_precompute) {
-  return CreateUncharted2ExtendedConfig(
-      FindSecondDerivativeRoot(coeffs[0], coeffs[1], coeffs[2], coeffs[3], coeffs[4], coeffs[5]),  // 0.1621583f with default params
-      coeffs, white_precompute);
+Uncharted2ExtendedConfig CreateUncharted2ExtendedConfig(float coeffs[6], float white_precompute) {
+  float pivot_point = FindThirdDerivativeRoot(coeffs[0], coeffs[1], coeffs[2], coeffs[3], coeffs[4], coeffs[5]);
+  // pivot_point = (pivot_point + FindSecondDerivativeRoot(coeffs[0], coeffs[1], coeffs[2], coeffs[3], coeffs[4], coeffs[5])) / 2.f;
+
+  return CreateUncharted2ExtendedConfig(pivot_point, coeffs, white_precompute);
 }
 
 }  // Config
