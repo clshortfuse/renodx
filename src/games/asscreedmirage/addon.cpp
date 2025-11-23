@@ -43,14 +43,45 @@ void OnOptimizableUISettingChange() {
   ui_lut_invalidated = 1;
 };
 
+// Track preset changes and flag only when relevant values actually change.
+void OnPresetChangedInvalidateIfChanged() {
+  static bool initialized = false;
+  static float previous_tone_map_type = 0.f;
+  static float previous_ui_nits = 0.f;
+
+  float current_tone_map_type = shader_injection.tone_map_type;
+  float current_ui_nits = shader_injection.graphics_white_nits;
+
+  if (!initialized) {
+    previous_tone_map_type = current_tone_map_type;
+    previous_ui_nits = current_ui_nits;
+    initialized = true;
+    return;
+  }
+
+  if (current_tone_map_type != previous_tone_map_type) {
+    OnOptimizableToneMapSettingChange();
+  }
+  if (current_ui_nits != previous_ui_nits) {
+    OnOptimizableUISettingChange();
+  }
+
+  previous_tone_map_type = current_tone_map_type;
+  previous_ui_nits = current_ui_nits;
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x5EEEC729),                                       // Sample LUT + Bloom
-    CustomShaderEntry(0xAA7F0DB7),                                       // Color Grade + ToneMap LutBuilder
-    CustomShaderEntryCallback(0xFE07E3F3, &OnToneMapLutBuilderReplace),  // ACES ToneMap LutBuilder
+    // Sample LUT + Bloom
+    CustomShaderEntry(0x49E19C67),
+    CustomShaderEntry(0x550169DC),
+
+    // Color Grade + ToneMap LutBuilder
+    CustomShaderEntry(0xBA5F7436),
+
+    // ACES ToneMap LutBuilder
+    CustomShaderEntryCallback(0x77C715FE, &OnToneMapLutBuilderReplace),
 
     CustomShaderEntryCallback(0x0E048C6D, &OnUILutBuilderReplace),  // UI - sRGB to HDR
-                                                                    // CustomShaderEntry(0xAF8A7EAB),  // UI - Video sRGB to HDR
-
 };
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
@@ -331,6 +362,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::expected_constant_buffer_space = 50;
       renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::force_pipeline_cloning = true;
+      renodx::utils::settings::on_preset_changed_callbacks.emplace_back(&OnPresetChangedInvalidateIfChanged);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_addon(h_module);
