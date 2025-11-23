@@ -91,6 +91,8 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
         renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
         renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
+        renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 90.f);
+        renodx::utils::settings::UpdateSetting("ToneMapHueShift", 50.f);
         renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
         renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 55.f);
         renodx::utils::settings::UpdateSetting("ColorGradeShadows", 57.f);
@@ -99,8 +101,38 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
         renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
         renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+        renodx::utils::settings::UpdateSetting("CustomSatStrength", 100.f);
+        renodx::utils::settings::UpdateSetting("CustomSatBrightness", 1.f);
+        renodx::utils::settings::UpdateSetting("CustomFlareEffect", 25.f);
       }
   },
+  new renodx::utils::settings::Setting{
+    .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    .label = "Contrasty",
+    .section = "Presets",
+    .group = "button-line-1",
+    .tint = 0xb5b2b1,
+    .on_change = []() {
+        renodx::utils::settings::UpdateSetting("ToneMapType", 1.f);
+        renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
+        renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
+        renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
+        renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
+        renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 90.f);
+        renodx::utils::settings::UpdateSetting("ToneMapHueShift", 60.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeExposure", 0.75f);
+        renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 55.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeShadows", 52.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeContrast", 55.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 65.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
+        renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
+        renodx::utils::settings::UpdateSetting("CustomSatStrength", 50.f);
+        renodx::utils::settings::UpdateSetting("CustomSatBrightness", 1.f);
+        renodx::utils::settings::UpdateSetting("CustomFlareEffect", 25.f);
+    }
+},
   new renodx::utils::settings::Setting{
       .value_type = renodx::utils::settings::SettingValueType::BUTTON,
       .label = "Reset All",
@@ -160,6 +192,9 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
+      {"CustomSatStrength", 100.f},
+      {"CustomSatBrightness", 0.f},
+      {"CustomFlareEffect", 100.f},
   });
 }
 
