@@ -22,7 +22,6 @@
 #define RENODX_TONE_MAP_HUE_SHIFT_METHOD     HUE_SHIFT_METHOD_SDR_MODIFIED
 #define RENODX_TONE_MAP_HUE_SHIFT_MODIFIER   0.f
 #define RENODX_SWAP_CHAIN_OUTPUT_PRESET      renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_SCRGB
-#define RENODX_SWAP_CHAIN_CLAMP_NITS         10000.f
 #define CUSTOM_SAT_STRENGTH                  shader_injection.custom_sat_strength
 #define CUSTOM_SAT_BRIGHTNESS                shader_injection.custom_sat_brightness
 #define CUSTOM_FLARE_EFFECT                  shader_injection.custom_flare_effect
