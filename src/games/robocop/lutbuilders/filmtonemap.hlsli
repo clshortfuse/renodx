@@ -154,8 +154,12 @@ float3 ApplyToneCurveExtendedWithHermite(
   float3 tonemapped_prebluecorrect_ap1 =
       unrealengine::filmtonemap::extended::ApplyToneCurveExtended(untonemapped_rrt_prebluecorrect_ap1, vanilla, film_params);
 
-#if 0
-  tonemapped_prebluecorrect_ap1 = lerp(vanilla, tonemapped_prebluecorrect_ap1, vanilla);
+#if 1
+  float lum_vanilla = renodx::color::y::from::AP1(vanilla);
+  float lum_hdr = renodx::color::y::from::AP1(tonemapped_prebluecorrect_ap1);
+  float blended_lum = lerp(lum_hdr, lum_vanilla, 0.2f);
+  blended_lum = lerp(lum_vanilla, blended_lum, saturate(lum_vanilla / 0.75f));
+  tonemapped_prebluecorrect_ap1 = renodx::color::correct::Luminance(tonemapped_prebluecorrect_ap1, lum_hdr, blended_lum);
 #endif
 
   float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
