@@ -129,7 +129,7 @@ void main(
   r2.xyz = min(r3.xyz, r2.xyz);
   r0.xyz = r2.xyz * r0.xyz;
 
-  CAPTURE_UNTONEMAPPED(untonemapped, r0.xyz);
+  CAPTURE_UNTONEMAPPED(r0.xyz);
 
   [branch]
   // if (cb0[89].y != 0) {
@@ -169,7 +169,7 @@ void main(
   }
 
   CLAMP_IF_SDR(r0.xyz);
-  CAPTURE_TONEMAPPED(tonemapped, r0.xyz);
+  CAPTURE_TONEMAPPED(r0.xyz);
 
   r0.xyz = float3(0.00266771927,0.00266771927,0.00266771927) + r0.xyz;
   r0.xyz = log2(r0.xyz);

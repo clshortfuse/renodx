@@ -1,6 +1,6 @@
 #include "../../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.4.1 on Tue Jun 24 12:22:54 2025
+// ---- Created with 3Dmigoto v1.4.1 on Sun Oct 12 07:05:26 2025
 Texture2D<float4> t1 : register(t1);
 
 Texture2D<float4> t0 : register(t0);
@@ -333,44 +333,30 @@ void main(
   r0.z = exp2(r0.z);
   r0.z = r2.x ? 0 : r0.z;
   r0.y = r0.y * r0.z + -r1.w;
-
-  // r0.z = 1 / cb2[3].y;
-  // r0.y = saturate(r0.y * r0.z);
-  // r0.z = r0.y * -2 + 3;
-  // r0.y = r0.y * r0.y;
-  // r0.y = r0.z * r0.y;
-  r0.y = smoothstep(0, cb2[3].y, r0.y);
-
-  // r0.z = cb2[3].w + -r0.x;
-  // r0.x = r0.y * r0.z + r0.x;
-  r0.x = lerp(r0.x, cb2[3].w, r0.y);
-
-  // r0.y = cb2[3].x + -cb2[2].w;
-  // r0.x = -cb2[2].w + r0.x;
-  // r0.y = 1 / r0.y;
-  // r0.x = saturate(r0.x * r0.y);
-  // r0.y = r0.x * -2 + 3;
-  // r0.x = r0.x * r0.x;
-  // r0.x = r0.y * r0.x;
-  r0.x = smoothstep(cb2[2].w, cb2[3].x, r0.x);
-
+  r0.z = 1 / cb2[3].y;
+  r0.y = saturate(r0.y * r0.z);
+  r0.z = r0.y * -2 + 3;
+  r0.y = r0.y * r0.y;
+  r0.y = r0.z * r0.y;
+  r0.z = cb2[3].w + -r0.x;
+  r0.x = r0.y * r0.z + r0.x;
+  r0.y = cb2[3].x + -cb2[2].w;
+  r0.x = -cb2[2].w + r0.x;
+  r0.y = 1 / r0.y;
+  r0.x = saturate(r0.x * r0.y);
+  r0.y = r0.x * -2 + 3;
+  r0.x = r0.x * r0.x;
+  r0.x = r0.y * r0.x;
   r0.y = r0.x * -2 + 1;
   r0.x = cb2[2].z * r0.y + r0.x;
 
-  // r0.yzw = cb2[9].xyz + -cb2[8].xyz;
-  // r0.xyz = r0.xxx * r0.yzw + cb2[8].xyz;
-  r0.xyz = lerp(cb2[8].xyz,
-                cb2[9].xyz * (RENODX_PEAK_NITS / RENODX_GAME_NITS),
-                r0.x);
+  r0.yzw = (RENODX_PEAK_NITS / RENODX_GAME_NITS) * cb2[9].xyz + -cb2[8].xyz;
 
-  // r0.xyz = r0.xyz + -r1.xyz;
-  // r0.xyz = cb2[4].xxx * r0.xyz + r1.xyz;
-  r0.xyz = lerp(r1.xyz, r0.xyz, cb2[4].x);
-
-  // r1.xyz = cb3[1].xyz + -r0.xyz;
-  // r0.xyz = cb3[2].xxx * r1.xyz + r0.xyz;
-  r0.xyz = lerp(r0.xyz, cb3[1].xyz, cb3[2].x);
-
+  r0.xyz = r0.xxx * r0.yzw + cb2[8].xyz;
+  r0.xyz = r0.xyz + -r1.xyz;
+  r0.xyz = cb2[4].xxx * r0.xyz + r1.xyz;
+  r1.xyz = cb3[1].xyz + -r0.xyz;
+  r0.xyz = cb3[2].xxx * r1.xyz + r0.xyz;
   o0.xyz = max(float3(0,0,0), r0.xyz);
   o0.w = 1;
 
