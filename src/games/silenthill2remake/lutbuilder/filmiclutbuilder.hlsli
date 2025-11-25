@@ -1,3 +1,4 @@
+#include "./filmtonemap.hlsli"
 #include "./lutbuildercommon.hlsli"
 
 float Highlights(float x, float highlights, float mid_gray) {
@@ -132,7 +133,7 @@ renodx::color::grade::Config CreateColorGradingConfig() {
 #define UNREALFILMIC_GENERATOR(T)                                                                                                                                                                                                                                                            \
   T ApplyUnrealFilmicToneMapCurve(T untonemapped) {                                                                                                                                                                                                                                          \
     float film_black_clip = FilmBlackClip;                                                                                                                                                                                                                                                   \
-    if (OVERRIDE_BLACK_CLIP && RENODX_TONE_MAP_TYPE == 3.f && is_hdr) {                                                                                                                                                                                                                                \
+    if (OVERRIDE_BLACK_CLIP && RENODX_TONE_MAP_TYPE == 3.f && is_hdr) {                                                                                                                                                                                                                      \
       float target_black_nits = 0.0001f / RENODX_DIFFUSE_WHITE_NITS;                                                                                                                                                                                                                         \
       if (RENODX_GAMMA_CORRECTION) target_black_nits = renodx::color::correct::Gamma(target_black_nits, true);                                                                                                                                                                               \
       film_black_clip = target_black_nits * -1.f;                                                                                                                                                                                                                                            \
@@ -171,47 +172,6 @@ UNREALFILMIC_GENERATOR(float)
 UNREALFILMIC_GENERATOR(float3)
 UNREALFILMIC_GENERATOR(float4)
 #undef UNREALFILMIC_GENERATOR
-
-float3 ApplyACES(float3 untonemapped_ap1) {
-#if 1
-  const float ACES_MID = 0.1f;
-  const float ACES_MIN = 0.0001f;
-  float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
-  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-
-  if (RENODX_GAMMA_CORRECTION != 0.f) {
-    aces_max = renodx::color::correct::Gamma(aces_max, true);
-    aces_min = renodx::color::correct::Gamma(aces_min, true);
-  }
-
-  const float EXPOSURE_SCALE = (1.62f);  // UE Filmic with default params matches ACES with 1.62x exposure (found using Desmos)
-  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMapCurve(0.18f / EXPOSURE_SCALE) / (ACES_MID);
-
-  aces_max /= MID_GRAY_SCALE;
-  aces_min /= MID_GRAY_SCALE;
-
-  untonemapped_ap1 *= EXPOSURE_SCALE;  // adjust exposure to match UE defaults, then allow midgray matching to adjust further based on parameters
-
-  float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
-
-  tonemapped_ap1 *= MID_GRAY_SCALE;
-
-#else  // use HermiteSplinePerChannelRolloff instead of ACES
-  const float EXPOSURE_SCALE = (1.f);  // Narkowicz, which UE filmic is based on, adjusts exposure by 0.8x
-  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMapCurve(0.18f / EXPOSURE_SCALE) / (0.18f);
-  float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-  if (RENODX_GAMMA_CORRECTION != 0.f) {
-    peak_ratio = renodx::color::correct::Gamma(peak_ratio, true);
-  }
-  peak_ratio /= MID_GRAY_SCALE;
-
-  untonemapped_ap1 *= EXPOSURE_SCALE;
-  float3 tonemapped_ap1 = renodx::tonemap::HermiteSplinePerChannelRolloff(untonemapped_ap1, peak_ratio, 100.f);
-  tonemapped_ap1 *= MID_GRAY_SCALE;
-#endif
-
-  return tonemapped_ap1;
-}
 
 float3 ApplyPostToneMapDesaturation(float3 tonemapped) {
   float grayscale = renodx::color::y::from::AP1(tonemapped);
@@ -261,14 +221,23 @@ float3 ApplySDRToneMap(float3 untonemapped_ap1) {
   return tonemapped_ap1;
 }
 
-// ACES with
-// Mid-Gray Matching with Unreal Filmic
-// Output Display Transform
-float3 ACESMidGrayMatchedODT(float3 untonemapped_ap1_rrt) {
-  // RRT + ODT with midgray match
-  float3 hdr_tonemapped_ap1 = ApplyACES(untonemapped_ap1_rrt);
+float3 ApplyACESRRTAndODT(float3 untonemapped_ap1) {
+  untonemapped_ap1 *= 1.5f;
+  untonemapped_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
 
-  return hdr_tonemapped_ap1;
+  const float ACES_MID = 0.1f;
+  const float ACES_MIN = 0.0001f;
+  float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
+  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+
+  if (RENODX_GAMMA_CORRECTION != 0.f) {
+    aces_max = renodx::color::correct::Gamma(aces_max, true);
+    aces_min = renodx::color::correct::Gamma(aces_min, true);
+  }
+
+  float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
+
+  return tonemapped_ap1;
 }
 
 void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g, float untonemapped_b,
@@ -294,30 +263,24 @@ void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g,
   if (RENODX_TONE_MAP_TYPE == 1.f) {
     tonemapped_ap1 = untonemapped_ap1_graded;
   } else if (RENODX_TONE_MAP_TYPE == 2.f) {  // ACES
-    float3 RRT_AP1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1_graded));
-    float3 ACES_AP1 = ACESMidGrayMatchedODT(RRT_AP1);
-    tonemapped_ap1 = ACES_AP1;
-
+    tonemapped_ap1 = ApplyACESRRTAndODT(untonemapped_ap1_graded);
   } else {  // Vanilla+ and UE Filmic
-
     float3 untonemapped_prebluecorrect_ap1 = ApplyBlueCorrectionPre(untonemapped_ap1_graded);
     float3 untonemapped_rrt_prebluecorrect_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_prebluecorrect_ap1));
 
-    float3 tonemapped_prebluecorrect_ap1 = ApplyUnrealFilmicToneMapCurve(untonemapped_rrt_prebluecorrect_ap1);
-
-    if (RENODX_TONE_MAP_TYPE != 4.f) {  // Vanilla+
-      float3 hdr_tonemapped_prebluecorrect_ap1 = ACESMidGrayMatchedODT(untonemapped_rrt_prebluecorrect_ap1);
-
-      const float hdr_blend_factor = saturate(renodx::color::y::from::AP1(tonemapped_prebluecorrect_ap1));
-      tonemapped_prebluecorrect_ap1 = lerp(tonemapped_prebluecorrect_ap1, hdr_tonemapped_prebluecorrect_ap1, hdr_blend_factor);
+    float3 tonemapped_prebluecorrect_ap1;
+    if (RENODX_TONE_MAP_TYPE == 4.f) {  // Vanilla
+      tonemapped_prebluecorrect_ap1 =
+          unrealengine::filmtonemap::ApplyToneCurve(untonemapped_rrt_prebluecorrect_ap1, FilmSlope, FilmToe, FilmShoulder, FilmBlackClip, FilmWhiteClip);
+    } else {
+      tonemapped_prebluecorrect_ap1 =
+          ApplyToneCurveExtendedWithHermite(untonemapped_rrt_prebluecorrect_ap1, FilmSlope, FilmToe, FilmShoulder, FilmBlackClip, FilmWhiteClip);
     }
 
     tonemapped_prebluecorrect_ap1 = ApplyPostToneMapDesaturation(tonemapped_prebluecorrect_ap1);
     tonemapped_prebluecorrect_ap1 = LerpToneMapStrength(tonemapped_prebluecorrect_ap1, untonemapped_ap1_graded);
     tonemapped_ap1 = ApplyBlueCorrectionPost(tonemapped_prebluecorrect_ap1);
-    tonemapped_ap1 = max(0, tonemapped_ap1);
   }
-
   tonemapped_ap1 = max(0, tonemapped_ap1);
 
   if (RENODX_TONE_MAP_TYPE != 4.f) {
