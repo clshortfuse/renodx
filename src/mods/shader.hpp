@@ -765,10 +765,12 @@ inline DrawResponse HandleStatesAndBypass(
     const int& index,
     float resource_tag = -1) {
   auto& state = shader_state->stage_states[index];
-  if (state.pipeline == 0u) return {.bypass_draw = false};
+  DrawResponse response = {.bypass_draw = false};
+
+  if (state.pipeline == 0u) return response;
 
   const auto& shader_hash = renodx::utils::shader::GetCurrentShaderHash(&state, index);
-  if (shader_hash == 0u) return {.bypass_draw = false};
+  if (shader_hash == 0u) return response;
   auto custom_shader_info_pair = custom_shaders.find(shader_hash);
   bool is_custom_shader = custom_shader_info_pair != custom_shaders.end();
   if (!is_custom_shader) {
@@ -788,7 +790,7 @@ inline DrawResponse HandleStatesAndBypass(
       }
     }
 
-    return {.bypass_draw = false};  // move to next shader
+    return response;  // move to next shader
   }
 
   auto& custom_shader_info = custom_shader_info_pair->second;
@@ -810,9 +812,12 @@ inline DrawResponse HandleStatesAndBypass(
       s << ")";
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-      return {.bypass_draw = true};  // bypass draw
+      response.bypass_draw = true;
+      return response;
     }
   }
+
+  response.on_drawn = custom_shader_info.on_drawn;
 
   if (custom_shader_info.on_replace != nullptr) {
     bool should_replace = custom_shader_info.on_replace(cmd_list);
@@ -826,19 +831,13 @@ inline DrawResponse HandleStatesAndBypass(
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
       // state.replacement_pipeline = {0u};
-      return {.bypass_draw = false};
+      return response;
     }
   }
 
   bool should_inject = true;
   if (custom_shader_info.on_inject != nullptr) {
     should_inject = custom_shader_info.on_inject(cmd_list);
-  }
-
-  DrawResponse response = {.bypass_draw = false};
-
-  if (custom_shader_info.on_drawn != nullptr) {
-    response.on_drawn = custom_shader_info.on_drawn;
   }
 
   utils::shader::BuildReplacementPipeline(state.pipeline_details);
@@ -856,7 +855,7 @@ inline DrawResponse HandleStatesAndBypass(
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
       }
 #endif
-      return {.bypass_draw = false};
+      return response;
     }
 
     renodx::utils::constants::PushShaderInjections(
