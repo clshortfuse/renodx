@@ -1,52 +1,11 @@
 #include "./Cbuffers/Cbuffers_LUTBuilder.hlsli"
+#include "./filmtonemap.hlsli"
 #include "./lutbuildercommon.hlsli"
 
-/// Unreal Engine Filmic ToneMap based on ACES approximation with customizable parameters
-#define UNREALFILMIC_GENERATOR(T)                                                                                                                                                                                                                                                            \
-  T ApplyUnrealFilmicToneMapCurve(T untonemapped) {                                                                                                                                                                                                                                          \
-    float film_black_clip = FilmBlackClip;                                                                                                                                                                                                                                                   \
-    if (OVERRIDE_BLACK_CLIP && RENODX_TONE_MAP_TYPE == 3.f) {                                                                                                                                                                                                                                \
-      float target_black_nits = 0.0001f / RENODX_DIFFUSE_WHITE_NITS;                                                                                                                                                                                                                         \
-      if (RENODX_GAMMA_CORRECTION) target_black_nits = renodx::color::correct::Gamma(target_black_nits, true);                                                                                                                                                                               \
-      film_black_clip = target_black_nits * -1.f;                                                                                                                                                                                                                                            \
-    }                                                                                                                                                                                                                                                                                        \
-    float film_white_clip = FilmWhiteClip;                                                                                                                                                                                                                                                   \
-                                                                                                                                                                                                                                                                                             \
-    T _1007_1008_1009 = log2(untonemapped) * 0.3010300099849701f;                                                                                                                                                                                                                            \
-    float _976 = (film_black_clip + 1.0f) - FilmToe;                                                                                                                                                                                                                                         \
-    float _978 = film_white_clip + 1.0f;                                                                                                                                                                                                                                                     \
-    float _980 = _978 - FilmShoulder;                                                                                                                                                                                                                                                        \
-    float _998;                                                                                                                                                                                                                                                                              \
-    if (FilmToe > 0.800000011920929f) {                                                                                                                                                                                                                                                      \
-      _998 = (((0.8199999928474426f - FilmToe) / FilmSlope) + -0.7447274923324585f);                                                                                                                                                                                                         \
-    } else {                                                                                                                                                                                                                                                                                 \
-      float _989 = (film_black_clip + 0.18000000715255737f) / _976;                                                                                                                                                                                                                          \
-      _998 = (-0.7447274923324585f - ((log2(_989 / (2.0f - _989)) * 0.3465735912322998f) * (_976 / FilmSlope)));                                                                                                                                                                             \
-    }                                                                                                                                                                                                                                                                                        \
-    float _1001 = ((1.0f - FilmToe) / FilmSlope) - _998;                                                                                                                                                                                                                                     \
-    float _1003 = (FilmShoulder / FilmSlope) - _1001;                                                                                                                                                                                                                                        \
-    T _1013_1014_1015 = FilmSlope * (_1007_1008_1009 + _1001);                                                                                                                                                                                                                               \
-    float _1016 = _976 * 2.0f;                                                                                                                                                                                                                                                               \
-    float _1018 = (FilmSlope * -2.0f) / _976;                                                                                                                                                                                                                                                \
-    T _1019_1020_1021 = _1007_1008_1009 - _998;                                                                                                                                                                                                                                              \
-    float _1040 = _980 * 2.0f;                                                                                                                                                                                                                                                               \
-    float _1042 = (FilmSlope * 2.0f) / _980;                                                                                                                                                                                                                                                 \
-    T _1067_1068_1069 = select((_1007_1008_1009 < _998), ((_1016 / (exp2((_1019_1020_1021 * 1.4426950216293335f) * _1018) + 1.0f)) - film_black_clip), _1013_1014_1015);                                                                                                                     \
-    float _1076 = _1003 - _998;                                                                                                                                                                                                                                                              \
-    T _1080_1081_1082 = saturate(_1019_1020_1021 / _1076);                                                                                                                                                                                                                                   \
-    bool _1083 = (_1003 < _998);                                                                                                                                                                                                                                                             \
-    T _1087_1088_1089 = select(_1083, (1.0f - _1080_1081_1082), _1080_1081_1082);                                                                                                                                                                                                            \
-    T _1108_1109_1110 = (((_1087_1088_1089 * _1087_1088_1089) * (select((_1007_1008_1009 > _1003), (_978 - (_1040 / (exp2(((_1007_1008_1009 - _1003) * 1.4426950216293335f) * _1042) + 1.0f))), _1013_1014_1015) - _1067_1068_1069)) * (3.0f - (_1087_1088_1089 * 2.0f))) + _1067_1068_1069; \
-                                                                                                                                                                                                                                                                                             \
-    return _1108_1109_1110;                                                                                                                                                                                                                                                                  \
-  }
-UNREALFILMIC_GENERATOR(float)
-UNREALFILMIC_GENERATOR(float3)
-UNREALFILMIC_GENERATOR(float4)
-#undef UNREALFILMIC_GENERATOR
+float3 ApplyACESRRTAndODT(float3 untonemapped_ap1) {
+  untonemapped_ap1 *= 1.5f;
+  untonemapped_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
 
-float3 ApplyACES(float3 untonemapped_ap1) {
-#if 1
   const float ACES_MID = 0.1f;
   const float ACES_MIN = 0.0001f;
   float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
@@ -57,31 +16,7 @@ float3 ApplyACES(float3 untonemapped_ap1) {
     aces_min = renodx::color::correct::Gamma(aces_min, true);
   }
 
-  const float EXPOSURE_SCALE = (1.62f);  // UE Filmic with default params matches ACES with 1.62x exposure (found using Desmos)
-  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMapCurve(0.18f / EXPOSURE_SCALE) / (ACES_MID);
-
-  aces_max /= MID_GRAY_SCALE;
-  aces_min /= MID_GRAY_SCALE;
-
-  untonemapped_ap1 *= EXPOSURE_SCALE;  // adjust exposure to match UE defaults, then allow midgray matching to adjust further based on parameters
-
   float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
-
-  tonemapped_ap1 *= MID_GRAY_SCALE;
-
-#else  // use ReinhardPiecewiseExtended instead of ACES
-  const float EXPOSURE_SCALE = (1.f);  // Narkowicz, which UE filmic is based on, adjusts exposure by 0.8x
-  const float MID_GRAY_SCALE = ApplyUnrealFilmicToneMapCurve(0.18f / EXPOSURE_SCALE) / (0.18f);
-  float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-  if (RENODX_GAMMA_CORRECTION != 0.f) {
-    peak_ratio = renodx::color::correct::Gamma(peak_ratio, true);
-  }
-  peak_ratio /= MID_GRAY_SCALE;
-
-  untonemapped_ap1 *= EXPOSURE_SCALE;
-  float3 tonemapped_ap1 = renodx::tonemap::HermiteSplinePerChannelRolloff(untonemapped_ap1, peak_ratio, 100.f);
-  tonemapped_ap1 *= MID_GRAY_SCALE;
-#endif
 
   return tonemapped_ap1;
 }
@@ -92,7 +27,7 @@ float3 ApplyPostToneMapDesaturation(float3 tonemapped) {
 }
 
 float3 LerpToneMapStrength(float3 tonemapped, float3 preRRT) {
-  preRRT = min(100.f, preRRT);  // prevents artifacts during night vision
+  preRRT = min(100.f, preRRT);  // prevents artifacts during night vision in Robocop
   return lerp(preRRT, tonemapped, ToneCurveAmount);
 }
 
@@ -117,16 +52,6 @@ float3 ApplyBlueCorrectionPost(float3 tonemapped) {
   return float3(_1149, _1150, _1151);
 }
 
-// ACES with
-// Mid-Gray Matching with Unreal Filmic
-// Output Display Transform
-float3 ACESMidGrayMatchedODT(float3 untonemapped_ap1_rrt) {
-  // RRT + ODT with midgray match
-  float3 hdr_tonemapped_ap1 = ApplyACES(untonemapped_ap1_rrt);
-
-  return hdr_tonemapped_ap1;
-}
-
 void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g, float untonemapped_b,
                                      inout float tonemapped_r, inout float tonemapped_g, inout float tonemapped_b) {
   float3 untonemapped_ap1 = float3(untonemapped_r, untonemapped_g, untonemapped_b);
@@ -143,35 +68,30 @@ void ApplyFilmToneMapWithBlueCorrect(float untonemapped_r, float untonemapped_g,
   if (RENODX_TONE_MAP_TYPE == 1.f) {
     tonemapped_ap1 = untonemapped_ap1_graded;
   } else if (RENODX_TONE_MAP_TYPE == 2.f) {  // ACES
-    float3 RRT_AP1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1_graded));
-    float3 ACES_AP1 = ACESMidGrayMatchedODT(RRT_AP1);
-    tonemapped_ap1 = ACES_AP1;
-
+    tonemapped_ap1 = ApplyACESRRTAndODT(untonemapped_ap1_graded);
   } else {  // Vanilla+ and UE Filmic
-
     float3 untonemapped_prebluecorrect_ap1 = ApplyBlueCorrectionPre(untonemapped_ap1_graded);
     float3 untonemapped_rrt_prebluecorrect_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_prebluecorrect_ap1));
 
-    float3 tonemapped_prebluecorrect_ap1 = ApplyUnrealFilmicToneMapCurve(untonemapped_rrt_prebluecorrect_ap1);
-
-    if (RENODX_TONE_MAP_TYPE != 4.f) {  // Vanilla+
-      float3 hdr_tonemapped_prebluecorrect_ap1 = ACESMidGrayMatchedODT(untonemapped_rrt_prebluecorrect_ap1);
-
-      const float hdr_blend_factor = saturate(renodx::color::y::from::AP1(tonemapped_prebluecorrect_ap1));
-      tonemapped_prebluecorrect_ap1 = lerp(tonemapped_prebluecorrect_ap1, hdr_tonemapped_prebluecorrect_ap1, hdr_blend_factor);
+    float3 tonemapped_prebluecorrect_ap1;
+    if (RENODX_TONE_MAP_TYPE == 4.f) {  // Vanilla
+      tonemapped_prebluecorrect_ap1 =
+          unrealengine::filmtonemap::ApplyToneCurve(untonemapped_rrt_prebluecorrect_ap1, FilmSlope, FilmToe, FilmShoulder, FilmBlackClip, FilmWhiteClip);
+    } else {
+      tonemapped_prebluecorrect_ap1 =
+          ApplyToneCurveExtendedWithHermite(untonemapped_rrt_prebluecorrect_ap1, FilmSlope, FilmToe, FilmShoulder, FilmBlackClip, FilmWhiteClip);
     }
 
     tonemapped_prebluecorrect_ap1 = ApplyPostToneMapDesaturation(tonemapped_prebluecorrect_ap1);
     tonemapped_prebluecorrect_ap1 = LerpToneMapStrength(tonemapped_prebluecorrect_ap1, untonemapped_ap1_graded);
     tonemapped_ap1 = ApplyBlueCorrectionPost(tonemapped_prebluecorrect_ap1);
-    tonemapped_ap1 = max(0, tonemapped_ap1);
   }
-
   tonemapped_ap1 = max(0, tonemapped_ap1);
 
   if (RENODX_TONE_MAP_TYPE != 4.f) {
     tonemapped_ap1 = ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(tonemapped_ap1, hue_reference_color, y, cg_config, RENODX_TONE_MAP_HUE_CORRECTION_TYPE);
   }
+
   tonemapped_r = tonemapped_ap1.r, tonemapped_g = tonemapped_ap1.g, tonemapped_b = tonemapped_ap1.b;
 
   return;
@@ -197,7 +117,7 @@ EXPONENTIALROLLOFF_GENERATOR(float3)
 #undef EXPONENTIALROLLOFF_GENERATOR
 
 /// Applies Exponential Roll-Off Extended tonemapping by luminance.
-float3 LUTToneMap(float3 untonemapped, float rolloff_start = 0.25f, float output_max = 1.f) {
+float3 LUTToneMap(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f) {
   float white_clip = (RENODX_TONE_MAP_TYPE == 1.f) ? 100.f : RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
 
   float y_in = renodx::color::y::from::BT709(untonemapped);
@@ -314,8 +234,6 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   float3 lut_output_color = SamplePacked1DLut(lut_input_color, lut_config.lut_sampler, lut_texture);
   float3 color_output = renodx::lut::LinearOutput(lut_output_color, lut_config);
 
-  color_output = GamutDecompress(color_output, gamut_compression_scale);
-
   [branch]
   if (lut_config.scaling != 0.f) {
     float3 lut_black = SamplePacked1DLut(float3(0, 0, 0), lut_config.lut_sampler, lut_texture);
@@ -330,7 +248,7 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
       }
 #endif
 
-      // set lut_mid based on lut_black_linear to target shadows more
+      // set lut_mid based on lut_black to target shadows more
       float3 lut_mid = SamplePacked1DLut(lut_black, lut_config.lut_sampler, lut_texture);
 
       if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
@@ -356,6 +274,8 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
     }
   } else {
   }
+
+  color_output = GamutDecompress(color_output, gamut_compression_scale);
 
   return color_output;
 }
@@ -427,8 +347,6 @@ float3 Sample2LUTSRGBInSRGBOut(Texture2D<float4> lut_texture1, Texture2D<float4>
   float3 lut_output_color = Sample2Packed1DLuts(lut_input_color, lut_sampler1, lut_sampler2, lut_texture1, lut_texture2);
   float3 color_output = renodx::lut::LinearOutput(lut_output_color, lut_config);
 
-  color_output = GamutDecompress(color_output, gamut_compression_scale);
-
   [branch]
   if (lut_config.scaling != 0.f) {
     float3 lut_black = Sample2Packed1DLuts(float3(0, 0, 0), lut_sampler1, lut_sampler2, lut_texture1, lut_texture2);
@@ -443,7 +361,7 @@ float3 Sample2LUTSRGBInSRGBOut(Texture2D<float4> lut_texture1, Texture2D<float4>
       }
 #endif
 
-      // set lut_mid based on lut_black_linear to target shadows more
+      // set lut_mid based on lut_black to target shadows more
       float3 lut_mid = Sample2Packed1DLuts(lut_black, lut_sampler1, lut_sampler2, lut_texture1, lut_texture2);
 
       if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
@@ -469,6 +387,8 @@ float3 Sample2LUTSRGBInSRGBOut(Texture2D<float4> lut_texture1, Texture2D<float4>
     }
   } else {
   }
+
+  color_output = GamutDecompress(color_output, gamut_compression_scale);
 
   return color_output;
 }
