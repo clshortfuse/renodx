@@ -923,7 +923,12 @@ inline DrawResponse HandlePreDraw(reshade::api::command_list* cmd_list, bool is_
   return response;
 }
 
-inline bool OnDraw(reshade::api::command_list* cmd_list, uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex, uint32_t first_instance) {
+inline bool OnDraw(
+    reshade::api::command_list* cmd_list,
+    uint32_t vertex_count,
+    uint32_t instance_count,
+    uint32_t first_vertex,
+    uint32_t first_instance) {
   auto response = HandlePreDraw(cmd_list, false);
   if (response.bypass_draw) return true;
   if (response.on_drawn == nullptr && response.injection_register_index == -1) return false;
