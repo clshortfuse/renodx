@@ -3631,12 +3631,12 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
       reshade::register_event<reshade::addon_event::resolve_texture_region>(OnResolveTextureRegion);
 
       reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
-      reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
 
       if (use_resource_cloning) {
         reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
         reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
 
+        reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
         reshade::register_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
         reshade::register_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
         reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
