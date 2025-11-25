@@ -84,10 +84,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntryCallback(0x0E048C6D, &OnUILutBuilderReplace),  // UI - sRGB to HDR
 };
 
-const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-    {"FxBloomScaling", 100.f},
-};
-
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
@@ -97,7 +93,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "ACES (Customized)", "ACES (Matches SDR)"},
+        .labels = {"Vanilla", "ACES (Customized)", "ACES"},
         .on_change = &OnOptimizableToneMapSettingChange,
     },
     new renodx::utils::settings::Setting{
@@ -245,29 +241,6 @@ renodx::utils::settings::Settings settings = {
               if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
             }
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-          }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "HDR Look",
-        .section = "Options",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-
-            if (HDR_LOOK_VALUES.contains(setting->key)) {
-              if (setting->key == "ToneMapUINits") {
-                if (setting->value != setting->default_value) OnOptimizableUISettingChange();
-              } else if (setting->key == "ToneMapType") {
-                if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
-              }
-              renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
           }
         },
     },
