@@ -12,6 +12,7 @@
 #include <dxgi1_6.h>
 #include <windef.h>
 
+#include <frozen/unordered_map.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -22,6 +23,7 @@
 #include <shared_mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -32,6 +34,7 @@
 #include "../utils/bitwise.hpp"
 #include "../utils/data.hpp"
 #include "../utils/descriptor.hpp"
+#include "../utils/directx.hpp"
 #include "../utils/format.hpp"
 #include "../utils/mutex.hpp"
 #include "../utils/pipeline.hpp"
@@ -40,10 +43,6 @@
 #include "../utils/swapchain.hpp"
 
 namespace renodx::mods::swapchain {
-
-static decltype(&D3D11CreateDevice) pD3D11CreateDevice = nullptr;
-static decltype(&D3D12CreateDevice) pD3D12CreateDevice = nullptr;
-static decltype(&CreateDXGIFactory1) pCreateDXGIFactory1 = nullptr;
 
 using SwapChainUpgradeTarget = utils::resource::ResourceUpgradeInfo;
 
@@ -108,6 +107,8 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   reshade::api::resource proxy_device_resource = {0};
 
   HWND primary_swapchain_window = nullptr;
+
+  bool proxy_device_needs_resize = false;
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -129,6 +130,8 @@ static bool use_resize_buffer = false;
 static bool use_resize_buffer_on_set_full_screen = false;
 static bool use_resize_buffer_on_demand = false;
 static bool use_resize_buffer_on_present = false;
+static bool device_proxy_wait_idle_source = false;
+static bool device_proxy_wait_idle_destination = false;
 static bool upgrade_resource_views = true;
 static bool prevent_full_screen = true;
 static bool force_borderless = true;
@@ -136,8 +139,17 @@ static bool force_screen_tearing = true;
 static bool swapchain_proxy_compatibility_mode = true;
 static bool swapchain_proxy_revert_state = false;
 static bool use_device_proxy = false;
-static thread_local void* last_device_proxy_shared_handle = nullptr;
-static thread_local reshade::api::resource last_device_proxy_shared_resource = {0u};
+static void* last_device_proxy_shared_handle = nullptr;
+static reshade::api::resource last_device_proxy_shared_resource = {0u};
+static SwapChainUpgradeTarget proxy_upgrade_target = {
+    .new_format = reshade::api::format::r16g16b16a16_float,
+    .use_shared_handle = true,
+    .usage_set =
+        static_cast<uint32_t>(reshade::api::resource_usage::copy_source
+                              | reshade::api::resource_usage::copy_dest),
+    .use_resource_view_cloning_and_upgrade = true,
+};
+static std::shared_mutex g_last_device_proxy_mutex;
 static void* swap_chain_proxy_handle = nullptr;
 
 static thread_local bool is_creating_proxy_device = false;
@@ -173,6 +185,12 @@ static SwapChainUpgradeTarget auto_upgrade_target = {
     .use_resource_view_cloning_and_upgrade = true,
 };
 
+static HANDLE device_proxy_sync_event;
+static std::atomic<bool> device_proxy_exit_thread = false;
+static std::atomic<bool> device_proxy_thread_running = false;
+static bool use_device_proxy_thread = false;
+static bool device_proxy_creation_failed = false;
+
 static thread_local SwapChainUpgradeTarget* local_applied_target = nullptr;
 static thread_local std::optional<reshade::api::swapchain_desc> upgraded_swapchain_desc;
 static thread_local std::optional<reshade::api::resource> local_original_resource;
@@ -181,52 +199,15 @@ static thread_local std::optional<reshade::api::resource_view_desc> local_origin
 
 // Methods
 
-bool LoadDirectXLibraries() {
-#ifndef RENODX_PROXY_DEVICE_D3D12
-  if (pD3D11CreateDevice == nullptr) {
-    HMODULE d3d11_module = LoadLibraryW(L"d3d11.dll");
-    if (d3d11_module == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(d3d11.dll) failed)");
-      return false;
-    }
-    pD3D11CreateDevice = reinterpret_cast<decltype(&D3D11CreateDevice)>(GetProcAddress(d3d11_module, "D3D11CreateDevice"));
-    if (pD3D11CreateDevice == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d11.dll, D3D11CreateDevice) failed)");
-      return false;
-    }
-  }
+static void DeviceProxyThread() {
+  device_proxy_thread_running = true;
+  do {
+    WaitForSingleObject(device_proxy_sync_event, INFINITE);
 
-#else
-  if (pD3D12CreateDevice == nullptr) {
-    HMODULE d3d12_module = LoadLibraryW(L"d3d12.dll");
-    if (d3d12_module == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(d3d12.dll) failed)");
-      return false;
-    }
-    pD3D12CreateDevice = reinterpret_cast<decltype(&D3D12CreateDevice)>(GetProcAddress(d3d12_module, "D3D12CreateDevice"));
-    if (pD3D12CreateDevice == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d12.dll, D3D12CreateDevice) failed)");
-      return false;
-    }
-  }
-#endif
-
-  if (pCreateDXGIFactory1 == nullptr) {
-    HMODULE dxgi_module = LoadLibraryW(L"dxgi.dll");
-    if (dxgi_module == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(dxgi.dll) failed)");
-      return false;
-    }
-
-    pCreateDXGIFactory1 = reinterpret_cast<decltype(&CreateDXGIFactory1)>(
-        GetProcAddress(dxgi_module, "CreateDXGIFactory1"));
-    if (pCreateDXGIFactory1 == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(dxgi.dll, CreateDXGIFactory1) failed)");
-      return false;
-    }
-  }
-
-  return true;
+    if (device_proxy_exit_thread) break;
+    proxy_swap_chain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+  } while (true);
+  device_proxy_thread_running = false;
 }
 
 static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_resource_info, HWND hwnd = nullptr) {
@@ -234,11 +215,12 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
     return proxy_device;
   }
 
-  if (!LoadDirectXLibraries()) return nullptr;
+  if (!renodx::utils::directx::Initialize()) return nullptr;
+  if (device_proxy_creation_failed) return nullptr;
 
   IDXGIFactory2* dxgi_factory = nullptr;
 
-  if (FAILED(pCreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory)))) {
+  if (FAILED(renodx::utils::directx::pCreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory)))) {
     reshade::log::message(reshade::log::level::error, "mods::swapchain::GetDeviceProxy(CreateDXGIFactory1 failed)");
     return nullptr;
   }
@@ -248,7 +230,11 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   sc_desc.BufferCount = 2;
   sc_desc.Width = host_resource_info->desc.texture.width;
   sc_desc.Height = host_resource_info->desc.texture.height;
-  sc_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  if (target_format == reshade::api::format::r10g10b10a2_unorm) {
+    sc_desc.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
+  } else {
+    sc_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  }
   fullscreen_desc.RefreshRate.Numerator = 0;
   fullscreen_desc.RefreshRate.Denominator = 0;
   sc_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -272,7 +258,7 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   assert(is_creating_proxy_device == false);
   assert(proxy_device_reshade == nullptr);
   is_creating_proxy_device = true;
-  if (FAILED(pD3D11CreateDevice(
+  if (FAILED(renodx::utils::directx::pD3D11CreateDevice(
           nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, create_flags,
           nullptr, 0, D3D11_SDK_VERSION, &proxy_device, &feature_level, &proxy_device_context))) {
     is_creating_proxy_device = false;
@@ -284,7 +270,20 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
     return nullptr;
   }
   is_creating_proxy_device = false;
-  assert(proxy_device_reshade != nullptr);
+  if (proxy_device_reshade == nullptr) {
+    reshade::log::message(reshade::log::level::error, "mods::swapchain::GetDeviceProxy(D3D11CreateDevice succeeded but Reshade device is null)");
+    // Reshade is not hooked to DX11
+    assert(proxy_device_reshade != nullptr);
+    if (dxgi_factory != nullptr) {
+      dxgi_factory->Release();
+    }
+    if (proxy_device != nullptr) {
+      proxy_device->Release();
+      proxy_device = nullptr;
+    }
+    device_proxy_creation_failed = true;
+    return nullptr;
+  }
 
   swapchain_creator = proxy_device;
 #else
@@ -295,7 +294,7 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   assert(proxy_device_reshade == nullptr);
   is_creating_proxy_device = true;
 
-  if (FAILED(pD3D12CreateDevice(
+  if (FAILED(renodx::utils::directx::pD3D12CreateDevice(
           nullptr, feature_level, IID_PPV_ARGS(&proxy_device)))) {
     is_creating_proxy_device = false;
     if (dxgi_factory != nullptr) {
@@ -366,15 +365,22 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
 
   IDXGISwapChain3* swapChain3 = nullptr;
   if (SUCCEEDED(proxy_swap_chain->QueryInterface(IID_PPV_ARGS(&swapChain3)))) {
-    swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
+    if (target_color_space == reshade::api::color_space::hdr10_st2084) {
+      swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+    } else {
+      swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
+    }
     swapChain3->Release();
   }
 
-  return proxy_device;
-}
+  if (use_device_proxy_thread) {
+    assert(device_proxy_thread_running == false);
+    device_proxy_exit_thread = false;
+    static std::thread device_proxy_render_thread(DeviceProxyThread);
+    device_proxy_render_thread.detach();
+  }
 
-static bool UsingSwapchainProxy() {
-  return !swap_chain_proxy_pixel_shader.empty() || !swap_chain_proxy_shaders.empty();
+  return proxy_device;
 }
 
 static bool UsingSwapchainCompatibilityMode() {
@@ -644,35 +650,35 @@ inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
     shared_handle = &resource_info->shared_handle;
 
     if (resource_info->device->get_api() == reshade::api::device_api::opengl) {
-      new_desc.usage |= reshade::api::resource_usage::shader_resource;
-      new_desc.usage |= reshade::api::resource_usage::render_target;
       new_desc.flags |= reshade::api::resource_flags::shared_nt_handle;
-      if (use_device_proxy && resource_info->device != proxy_device_reshade) {
-        if (proxy_device == nullptr) {
-          // no present yet, ignore
-          return {0u};
-        }
-        auto* data = renodx::utils::data::Get<DeviceData>(resource_info->device);
-        assert(data != nullptr);
-        auto* hwnd = data->primary_swapchain_window;
-
-        auto* new_device = GetDeviceProxy(resource_info, hwnd);
-        assert(new_device != nullptr);
-        assert(proxy_device_reshade != nullptr);
-        assert(resource_info->proxy_resource.handle == 0u);
-
-        proxy_device_reshade->create_resource(new_desc, nullptr, initial_state, &resource_info->proxy_resource, shared_handle);
-
-        assert(resource_info->proxy_resource.handle != 0u);
-
-        renodx::utils::resource::store->resource_infos[resource_info->proxy_resource.handle] = {
-            .device = proxy_device_reshade,
-            .desc = new_desc,
-            .resource = resource_info->resource,
-        };
-
-        // shared handle can now be used in opengl
+    }
+    new_desc.usage |= reshade::api::resource_usage::copy_source;
+    new_desc.usage |= reshade::api::resource_usage::copy_dest;
+    if (use_device_proxy && resource_info->device != proxy_device_reshade) {
+      if (proxy_device == nullptr) {
+        // no present yet, ignore
+        return {0u};
       }
+      auto* data = renodx::utils::data::Get<DeviceData>(resource_info->device);
+      assert(data != nullptr);
+      auto* hwnd = data->primary_swapchain_window;
+
+      auto* new_device = GetDeviceProxy(resource_info, hwnd);
+      assert(new_device != nullptr);
+      assert(proxy_device_reshade != nullptr);
+      assert(resource_info->proxy_resource.handle == 0u);
+
+      proxy_device_reshade->create_resource(new_desc, nullptr, initial_state, &resource_info->proxy_resource, shared_handle);
+
+      assert(resource_info->proxy_resource.handle != 0u);
+
+      renodx::utils::resource::store->resource_infos[resource_info->proxy_resource.handle] = {
+          .device = proxy_device_reshade,
+          .desc = new_desc,
+          .resource = resource_info->resource,
+      };
+
+      // shared handle can now be used in opengl
     }
 
   } else {
@@ -1095,7 +1101,9 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
   reshade::api::resource swapchain_clone;
 
   if (use_device_proxy) {
+    const std::lock_guard<std::shared_mutex> lock(g_last_device_proxy_mutex);
     assert(last_device_proxy_shared_handle != nullptr);
+    if (last_device_proxy_shared_handle == nullptr) return;
 #ifndef RENODX_PROXY_DEVICE_D3D12
     ID3D11Texture2D* shared_texture = nullptr;
     reshade::api::resource proxy_temp_resource = last_device_proxy_shared_resource;
@@ -1131,6 +1139,9 @@ inline void DrawSwapChainProxy(reshade::api::swapchain* swapchain, reshade::api:
     }
     cmd_list->copy_resource(proxy_temp_resource, data->proxy_device_resource);
     queue->flush_immediate_command_list();
+    if (device_proxy_wait_idle_destination) {
+      queue->wait_idle();
+    }
     if (shared_texture != nullptr) {
       shared_texture->Release();
       shared_texture = nullptr;
@@ -1454,8 +1465,17 @@ static void OnDestroyDevice(reshade::api::device* device) {
       proxy_device_12->Release();
       proxy_device_12 = nullptr;
     }
+    if (device_proxy_thread_running) {
+      device_proxy_exit_thread = true;
+      SetEvent(device_proxy_sync_event);
+      while (device_proxy_thread_running) {
+        YieldProcessor();
+        Sleep(0);
+      }
+    }
   } else if (device == proxy_device_reshade) {
     proxy_device_reshade = nullptr;
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnDestroyDevice(Proxy device destroyed.)");
   }
 }
 
@@ -1571,16 +1591,16 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   auto old_present_flags = desc.present_flags;
   auto old_buffer_count = desc.back_buffer_count;
 
-  if (!use_resize_buffer && is_dxgi && !use_device_proxy) {
-    desc.back_buffer.texture.format = target_format;
-
-    if (desc.back_buffer_count == 1) {
-      // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
-      desc.back_buffer_count = 2;
-    }
-  }
-
   if (is_dxgi) {
+    if (!use_resize_buffer && !use_device_proxy) {
+      desc.back_buffer.texture.format = target_format;
+
+      if (desc.back_buffer_count == 1) {
+        // 0 is only for resize, so if game uses more than 2 buffers, that will be retained
+        desc.back_buffer_count = 2;
+      }
+    }
+
     if (!use_device_proxy) {
       switch (desc.present_mode) {
         case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
@@ -1636,12 +1656,49 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   s << "0x" << std::hex << desc.present_mode << std::dec;
   s << ", present flag:";
   s << "0x" << std::hex << old_present_flags << std::dec;
+
+  static constexpr auto DXGI_SWAP_CHAIN_FLAG_NAMES = frozen::make_unordered_map<uint32_t, const char*>({
+      {DXGI_SWAP_CHAIN_FLAG_NONPREROTATED, "NONPREROTATED"},
+      {DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH, "ALLOW_MODE_SWITCH"},
+      {DXGI_SWAP_CHAIN_FLAG_GDI_COMPATIBLE, "GDI_COMPATIBLE"},
+      {DXGI_SWAP_CHAIN_FLAG_RESTRICTED_CONTENT, "RESTRICTED_CONTENT"},
+      {DXGI_SWAP_CHAIN_FLAG_RESTRICT_SHARED_RESOURCE_DRIVER, "RESTRICT_SHARED_RESOURCE_DRIVER"},
+      {DXGI_SWAP_CHAIN_FLAG_DISPLAY_ONLY, "DISPLAY_ONLY"},
+      {DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT, "FRAME_LATENCY_WAITABLE_OBJECT"},
+      {DXGI_SWAP_CHAIN_FLAG_FOREGROUND_LAYER, "FOREGROUND_LAYER"},
+      {DXGI_SWAP_CHAIN_FLAG_FULLSCREEN_VIDEO, "FULLSCREEN_VIDEO"},
+      {DXGI_SWAP_CHAIN_FLAG_YUV_VIDEO, "YUV_VIDEO"},
+      {DXGI_SWAP_CHAIN_FLAG_HW_PROTECTED, "HW_PROTECTED"},
+      {DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING, "ALLOW_TEARING"},
+      {DXGI_SWAP_CHAIN_FLAG_RESTRICTED_TO_ALL_HOLOGRAPHIC_DISPLAYS, "RESTRICTED_TO_ALL_HOLOGRAPHIC_DISPLAYS"},
+  });
+  {
+    bool has_flag = false;
+    for (const auto& [flag_value, flag_string] : DXGI_SWAP_CHAIN_FLAG_NAMES) {
+      if (renodx::utils::bitwise::HasFlag(old_present_flags, flag_value)) {
+        s << (has_flag ? " | " : " (") << flag_string;
+        has_flag = true;
+      }
+    }
+    if (has_flag) s << ")";
+  }
+
   s << " => ";
   s << "0x" << std::hex << desc.present_flags << std::dec;
-  s << ", buffers:";
-  s << old_buffer_count;
-  s << " => ";
-  s << desc.back_buffer_count;
+
+  if (old_present_flags != desc.present_flags) {
+    bool has_flag = false;
+    for (const auto& [flag_value, flag_string] : DXGI_SWAP_CHAIN_FLAG_NAMES) {
+      if (renodx::utils::bitwise::HasFlag(desc.present_flags, flag_value)) {
+        s << (has_flag ? " | " : " (") << flag_string;
+        has_flag = true;
+      }
+    }
+    if (has_flag) s << ")";
+  }
+
+  s << ", buffers:" << old_buffer_count << " => " << desc.back_buffer_count;
+  s << ", fullscreen:" << old_fullscreen_state << " => " << desc.fullscreen_state;
   s << ", width: " << desc.back_buffer.texture.width;
   s << ", height: " << desc.back_buffer.texture.height;
   s << ")";
@@ -1673,6 +1730,12 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
   auto* device = swapchain->get_device();
+
+  if (use_device_proxy && device == proxy_device_reshade) {
+    // Don't modify proxy device swapchains
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnInitSwapchain(Abort for proxy device swapchain.)");
+    return;
+  }
 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
@@ -1730,17 +1793,12 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
     if (use_device_proxy) {
       if (resize && proxy_device_reshade != nullptr && device != proxy_device_reshade && proxy_swap_chain != nullptr) {
-        proxy_swap_chain->ResizeBuffers(
-            2,
-            primary_swapchain_desc.texture.width,
-            primary_swapchain_desc.texture.height,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+        data->proxy_device_needs_resize = true;
       }
       return;
     }
 
-    if (UsingSwapchainProxy()) {
+    if (!data->swap_chain_proxy_pixel_shader.empty()) {
       data->swap_chain_proxy_upgrade_target.new_format = swap_chain_proxy_format;
       if (swap_chain_proxy_format == reshade::api::format::r10g10b10a2_unorm) {
         data->swap_chain_proxy_upgrade_target.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
@@ -1770,7 +1828,12 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   if (data == nullptr) return;
   const std::unique_lock lock(data->mutex);
   DestroySwapchainProxyItems(device, data);
-  reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnDestroySwapchain()");
+  std::stringstream s;
+  s << "mods::swapchain::OnDestroySwapchain(";
+  s << PRINT_PTR(reinterpret_cast<uintptr_t>(swapchain));
+  s << ", resize: " << (resize ? "true" : "false");
+  s << ")";
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
 }
 
 static bool IsUpgraded(reshade::api::swapchain* swapchain) {
@@ -1988,10 +2051,13 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
 
   } else if (use_resource_cloning) {
     auto* private_data = renodx::utils::data::Get<DeviceData>(device);
-    if (private_data == nullptr) return;
+    if (private_data == nullptr) {
+      assert(private_data != nullptr);
+      return;
+    }
 
     if (resource_info->is_swap_chain) {
-      if (UsingSwapchainProxy()) {
+      if (!private_data->swap_chain_proxy_pixel_shader.empty()) {
         if (use_device_proxy || !UsingSwapchainCompatibilityMode()) {
           {
             std::stringstream s;
@@ -2004,8 +2070,8 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
         }
         if (use_device_proxy) {
           resource_info->clone_enabled = true;
-          private_data->swap_chain_proxy_upgrade_target.use_shared_handle = true;
-          private_data->swap_chain_proxy_upgrade_target.usage_set = static_cast<uint32_t>(reshade::api::resource_usage::render_target);
+          // private_data->swap_chain_proxy_upgrade_target.use_shared_handle = true;
+          // private_data->swap_chain_proxy_upgrade_target.usage_set = static_cast<uint32_t>(reshade::api::resource_usage::render_target);
         }
         resource_info->clone_target = &private_data->swap_chain_proxy_upgrade_target;
       }
@@ -2256,7 +2322,7 @@ inline bool OnCreateResourceView(
   if (desc.type == reshade::api::resource_view_type::unknown) {
     resource_info = utils::resource::GetResourceInfo(resource);
     if (resource_info == nullptr) return false;
-    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, resource_info);
+    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, usage_type, resource_info);
   }
   switch (current_desc.type) {
     case reshade::api::resource_view_type::texture_1d:
@@ -2306,7 +2372,7 @@ inline bool OnCreateResourceView(
   }
 
   if (current_desc.format == reshade::api::format::unknown) {
-    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, resource_info);
+    current_desc = utils::resource::PopulateUnknownResourceViewDesc(device, desc, usage_type, resource_info);
     if (current_desc.format == reshade::api::format::unknown) {
       std::stringstream s;
       s << "mods::swapchain::OnCreateResourceView(Unknown format for resource view: ";
@@ -2362,7 +2428,9 @@ inline bool OnCreateResourceView(
             found_upgrade = true;
             break;
           default:
-            // Maybe be decompressible
+            if (renodx::utils::resource::IsCompressible(current_desc.format, resource_desc.texture.format)) {
+              break;
+            }
             std::stringstream s;
             s << "mods::swapchain::OnCreateResourceView(";
             s << "unexpected case(" << current_desc.format << ")";
@@ -2398,8 +2466,13 @@ inline bool OnCreateResourceView(
 
   if (!changed) {
     if (!is_back_buffer) return false;
-    if (!UsingSwapchainProxy()) return false;
     if (swap_chain_proxy_format == target_format) return false;
+    auto* data = renodx::utils::data::Get<DeviceData>(device);
+    if (data == nullptr) return false;
+    {
+      const std::shared_lock lock(data->mutex);
+      if (data->swap_chain_proxy_pixel_shader.empty()) return false;
+    }
     // Continue to creating a resource clone
   }
 
@@ -2433,9 +2506,11 @@ inline void OnInitResourceViewInfo(utils::resource::ResourceViewInfo* resource_v
 }
 
 inline void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
+#ifdef DEBUG_LEVEL_2
   if (resource_view_info->resource_info != nullptr && resource_view_info->resource_info->is_swap_chain) {
     reshade::log::message(reshade::log::level::warning, "Destroyed swapchain RTV");
   }
+#endif
   if (resource_view_info->clone.handle != 0u) {
     assert(resource_view_info->device != nullptr);
     resource_view_info->device->destroy_resource_view(resource_view_info->clone);
@@ -3036,6 +3111,7 @@ static void OnBeginRenderPass(
   if (new_rts == nullptr) return;
   cmd_list->end_render_pass();
   cmd_list->begin_render_pass(count, new_rts, ds);
+  free(new_rts);
 }
 
 static void OnEndRenderPass(reshade::api::command_list* cmd_list) {
@@ -3050,6 +3126,7 @@ inline bool OnClearRenderTargetView(
     const float color[4],
     uint32_t rect_count,
     const reshade::api::rect* rects) {
+  if (rtv.handle == 0) return false;
   auto clone = GetResourceViewClone(rtv);
   if (clone.handle != 0) {
     cmd_list->clear_render_target_view(clone, color, rect_count, rects);
@@ -3455,19 +3532,62 @@ inline void OnPresent(
     if (resource_clone.handle == 0u) return;
     swapchain_clone = resource_clone;
 
-    if (resource_info->shared_handle == nullptr) return;
+    // Get ResourceCloneInfo
+    auto* resource_clone_info = utils::resource::GetResourceInfo(resource_clone);
+    if (resource_clone_info == nullptr) return;
+    if (resource_clone_info->clone.handle == 0u) {
+      resource_clone_info->clone_target = &proxy_upgrade_target;
+      CloneResource(resource_clone_info);
+    }
+    if (resource_clone.handle == 0u) return;
+
+    if (resource_clone_info->shared_handle == nullptr) return;
 
     // Ready to copy
-    queue->flush_immediate_command_list();
-    assert(last_device_proxy_shared_handle == nullptr);
-    last_device_proxy_shared_handle = resource_info->shared_handle;
-    last_device_proxy_shared_resource = resource_info->proxy_resource;
+    // Copy to shared resource
+
+    // Serialize the copy + publish step to avoid races with the DX11 consumer
+    // claiming the shared handle. When keyed mutex is available this is not
+    // needed, but for the DX9 fallback we rely on a CPU-side handoff.
+
+    {
+      const std::lock_guard<std::shared_mutex> lock(g_last_device_proxy_mutex);
+
+      // Should DXGIKeyedMutex acquire
+      queue->get_immediate_command_list()->copy_resource(swapchain_clone, resource_clone_info->clone);
+      queue->flush_immediate_command_list();
+      if (device_proxy_wait_idle_source) {
+        // Should DXGIKeyedMutex release
+        queue->wait_idle();
+      }
+
+      // Publish the shared handle and resource under the lock so the consumer
+      // cannot observe a partially-written handoff.
+      last_device_proxy_shared_handle = resource_clone_info->shared_handle;
+      last_device_proxy_shared_resource = resource_clone_info->proxy_resource;
+    }
+
+    if (data->proxy_device_needs_resize) {
+      data->proxy_device_needs_resize = false;
+      proxy_swap_chain->ResizeBuffers(
+          2,
+          data->primary_swapchain_desc.texture.width,
+          data->primary_swapchain_desc.texture.height,
+          (target_format == reshade::api::format::r10g10b10a2_unorm)
+              ? DXGI_FORMAT_R10G10B10A2_UNORM
+              : DXGI_FORMAT_R16G16B16A16_FLOAT,
+          DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+    }
 
     // Trigger a DX11 Present which will start the swapchain proxy steps on DX11
-    proxy_swap_chain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+    if (use_device_proxy_thread) {
+      SetEvent(device_proxy_sync_event);  // Signal the DX11 render thread
+    } else {
+      proxy_swap_chain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+    }
 
-    last_device_proxy_shared_handle = nullptr;
-    last_device_proxy_shared_resource = {0u};
+    // last_device_proxy_shared_handle = nullptr;
+    // last_device_proxy_shared_resource = {0u};
   } else {
     DrawSwapChainProxy(swapchain, queue);
   }
@@ -3512,12 +3632,12 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
       reshade::register_event<reshade::addon_event::resolve_texture_region>(OnResolveTextureRegion);
 
       reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
-      reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
 
       if (use_resource_cloning) {
         reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
         reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
 
+        reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
         reshade::register_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
         reshade::register_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
         reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
@@ -3531,13 +3651,14 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
         reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
         reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
 
-        if (UsingSwapchainProxy()) {
+        if (!swap_chain_proxy_pixel_shader.empty() || !swap_chain_proxy_shaders.empty()) {
           // Create swapchain proxy
           reshade::register_event<reshade::addon_event::present>(OnPresent);
           if (new_injections != nullptr) {
             shader_injection_size = sizeof(T) / sizeof(uint32_t);
             shader_injection = reinterpret_cast<float*>(new_injections);
           }
+          device_proxy_sync_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
         }
       }
 
@@ -3545,6 +3666,12 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
 
       break;
     case DLL_PROCESS_DETACH:
+      if (!attached) return;
+      attached = false;
+      if (device_proxy_sync_event != nullptr) {
+        CloseHandle(device_proxy_sync_event);
+        device_proxy_sync_event = nullptr;
+      }
 #if RESHADE_API_VERSION >= 17
       reshade::unregister_event<reshade::addon_event::create_device>(OnCreateDevice);
 #endif

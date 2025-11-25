@@ -21,7 +21,7 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-__ALL_CUSTOM_SHADERS
+__ALL_CUSTOM_SHADERS,
 };
 
 ShaderInjectData shader_injection;
@@ -55,7 +55,6 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
         .default_value = 1000.f,
-        .can_reset = false,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
@@ -106,17 +105,6 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode == 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapWorkingColorSpace",
-        .binding = &shader_injection.tone_map_working_color_space,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Working Color Space",
-        .section = "Tone Mapping",
-        .labels = {"BT709", "BT2020", "AP1"},
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .is_visible = []() { return current_settings_mode == 1; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ToneMapHueProcessor",
         .binding = &shader_injection.tone_map_hue_processor,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -153,16 +141,6 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode == 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapWhiteClip",
-        .binding = &shader_injection.tone_map_white_clip,
-        .default_value = 100.f,
-        .label = "White Clip",
-        .section = "Tone Mapping",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -278,13 +256,13 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() == 1; },
     },
     new renodx::utils::settings::Setting{
-      .key = "FxFlareOut",
-      .binding = &shader_injection.custom_flare_out,
-      .default_value = 50.f,
-      .label = "Flare Out",
-      .section = "Effects",
-      .max = 100.f,
-      .parse = [](float value) { return value * 0.02f; },
+        .key = "FxFlareOut",
+        .binding = &shader_injection.custom_flare_out,
+        .default_value = 50.f,
+        .label = "Flare Out",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
@@ -303,6 +281,15 @@ renodx::utils::settings::Settings settings = {
         .label = "Cell Shading",
         .section = "Effects",
         .labels = {"Off", "Vanilla"},
+    },
+        new renodx::utils::settings::Setting{
+        .key = "ShadowsDesaturation",
+        .binding = &shader_injection.shadows_desaturation,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Highlights & Shadows",
+        .section = "Effects",
+        .labels = {"Alternative", "Vanilla"},
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -324,7 +311,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "F6AUTeWJHM");
         },
     },
     new renodx::utils::settings::Setting{
@@ -355,6 +342,21 @@ void OnPresetOff() {
    renodx::utils::settings::UpdateSetting("CellShading", 1.f);
 }
 
+bool fired_on_init_swapchain = false;
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (fired_on_init_swapchain) return;
+
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  if (peak.has_value()) {
+    settings[2]->default_value = roundf(peak.value());
+  } else {
+    settings[2]->default_value = 1000.f;
+  }
+  
+  fired_on_init_swapchain = true;
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -377,15 +379,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .ignore_size = true,
           .use_resource_view_cloning = true,
       });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-      });
 
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;
     case DLL_PROCESS_DETACH:  
       reshade::unregister_addon(h_module);
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;
   }
   renodx::utils::random::Use(fdw_reason);

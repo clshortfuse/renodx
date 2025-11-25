@@ -346,7 +346,19 @@ std::optional<std::vector<ResourceBind>> GetResourceBindsForShaderDetails(
   if (shader_details->program_version.has_value()) {
     shader_details->resource_binds = std::vector<ResourceBind>();
 
-    if (shader_details->program_version->GetMajor() <= 5) {
+    if (shader_details->program_version->GetMajor() <= 3) {
+      auto disassembly = std::get<std::string>(shader_details->disassembly);
+      auto source_lines = StringViewSplitAll(disassembly, '\n');
+
+      for (auto line : source_lines) {
+        static const auto REGEX = std::regex(R"(^.*texldl?\s+[^,]+,\s*[^,]+,\s*s(\d+)$)");
+        auto [slot] = StringViewMatch<1>(line, REGEX);
+        if (slot.empty()) continue;
+        ResourceBind resource_bind = {};
+        FromStringView(slot, resource_bind.slot);
+        shader_details->resource_binds->push_back(resource_bind);
+      }
+    } else if (shader_details->program_version->GetMajor() <= 5) {
       auto disassembly = std::get<std::string>(shader_details->disassembly);
       auto source_lines = StringViewSplitAll(disassembly, '\n');
 

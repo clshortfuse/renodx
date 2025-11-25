@@ -148,7 +148,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Exposure",
         .section = "Color Grading",
-        .max = 10.f,
+        .max = 2.f,
         .format = "%.2f",
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0.f; },
     },

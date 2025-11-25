@@ -79,12 +79,12 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapShoulderStart",
         .binding = &shader_injection.tone_map_shoulder_start,
-        .default_value = 0.375f,
+        .default_value = 0.5f,
         .label = "Shoulder Start",
         .section = "Tone Mapping",
         .tooltip = "Sets the starting point for highlight rolloff.",
-        .min = 0.25f,
-        .max = 0.5f,
+        .min = 0.5f,
+        .max = 1.f,
         .format = "%.3f",
     },
     new renodx::utils::settings::Setting{

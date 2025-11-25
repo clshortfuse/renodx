@@ -71,6 +71,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapGameNits",
         .binding = &shader_injection.tone_map_game_nits,
         .default_value = 203.f,
+        .can_reset = false,
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
@@ -78,34 +79,13 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapUINits",
-        .binding = &shader_injection.tone_map_ui_nits,
-        .default_value = 203.f,
-        .label = "UI Brightness",
-        .section = "Tone Mapping",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits",
-        .min = 48.f,
-        .max = 500.f,
-    },
-    new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
-        .tooltip = "Simulates the effect of decoding sRGB as pure power gamma that would be seen in SDR.",
-        .labels = {"Off", "2.2", "2.4"},
-        .is_visible = []() { return current_settings_mode >= 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "SwapChainGammaCorrection",
-        .binding = &shader_injection.swap_chain_gamma_correction,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
-        .label = "UI Gamma Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Controls the gamma correction applied to the UI and HUD elements.\nEncoding 2-D assets for HDR that were originally intended for sRGB creates a \"washed out\" look without correction.",
+        .tooltip = "Simulates the effect of decoding sRGB as pure gamma that would be seen in SDR.",
         .labels = {"Off", "2.2", "2.4"},
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -132,6 +112,53 @@ renodx::utils::settings::Settings settings = {
         .labels = {"OKLab", "ICtCp", "darkTable UCS"},
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .is_visible = []() { return current_settings_mode >= 2; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.tone_map_ui_nits,
+        .default_value = 203.f,
+        .can_reset = false,
+        .label = "UI Brightness",
+        .section = "UI",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits",
+        .min = 48.f,
+        .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SwapChainGammaCorrection",
+        .binding = &shader_injection.swap_chain_gamma_correction,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Gamma Correction",
+        .section = "UI",
+        .tooltip = "Controls the gamma correction applied to the UI and HUD elements.\nEncoding 2-D assets for HDR that were originally intended for sRGB creates a \"washed out\" look without correction.",
+        .labels = {"Off", "2.2", "2.4"},
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting {
+        .key = "TextOpacity",
+        .binding = &shader_injection.text_opacity,
+        .default_value = 100.f,
+        .label = "Text Opacity",
+        .section = "UI",
+        .parse = [](float value) { return value * 0.01f; }
+    },
+    new renodx::utils::settings::Setting {
+        .key = "StatusTextOpacity",
+        .binding = &shader_injection.status_text_opacity,
+        .default_value = 0.f,
+        .label = "Status Text Opacity",
+        .section = "UI",
+        .tooltip = "Opacity for texts such as location, UUID, and ping",
+        .parse = [](float value) { return value * 0.01f; }
+    },
+    new renodx::utils::settings::Setting {
+        .key = "HUDOpacity",
+        .binding = &shader_injection.hud_opacity,
+        .default_value = 100.f,
+        .label = "HUD Opacity",
+        .section = "UI",
+        .parse = [](float value) { return value * 0.01f; }
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeStrength",
@@ -244,6 +271,7 @@ renodx::utils::settings::Settings settings = {
         .labels = {
             "v1",
             "v2",
+            "v3",
         },
         .parse = [](float value) { return value + 1; },
         .is_visible = []() { return current_settings_mode >= 2; },
@@ -257,6 +285,21 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeShadowsVersion",
+        .binding = &shader_injection.color_grade_shadows_version,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Shadows Version",
+        .section = "Custom Color Grading",
+        .tooltip = "The lack of \"v2\" is intentional.",
+        .labels = {
+            "v1",
+            "v3",
+        },
+        .parse = [](float value) { return value >= 1.f ? 3.f : 1.f;},
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
@@ -290,11 +333,11 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
-        .binding = &shader_injection.color_grade_blowout,
+        .binding = &shader_injection.wuwa_blowout,
         .default_value = 0.f,
         .label = "Blowout",
         .section = "Custom Color Grading",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .tooltip = "Simulates the game's original effect of bright colors being clipped to white.\n100 retains original behavior, 0 disables it completely.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -331,79 +374,101 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Reduces bloom intensity when applied by the game.\n100 retains original behavior, 0 disables it completely.",
         .parse = [](float value) { return value * 0.01f; }
     },
-    new renodx::utils::settings::Setting {
-        .key = "TextOpacity",
-        .binding = &shader_injection.text_opacity,
-        .default_value = 100.f,
-        .label = "Text Opacity",
-        .section = "UI",
-        .parse = [](float value) { return value * 0.01f; }
-    },
-    new renodx::utils::settings::Setting {
-        .key = "HUDOpacity",
-        .binding = &shader_injection.hud_opacity,
-        .default_value = 100.f,
-        .label = "HUD Opacity",
-        .section = "UI",
-        .parse = [](float value) { return value * 0.01f; }
-    },
 };
 
-const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
-    {"R8G8B8A8_TYPELESS", reshade::api::format::r8g8b8a8_typeless},
-    {"B8G8R8A8_TYPELESS", reshade::api::format::b8g8r8a8_typeless},
-    {"R8G8B8A8_UNORM", reshade::api::format::r8g8b8a8_unorm},
-    {"B8G8R8A8_UNORM", reshade::api::format::b8g8r8a8_unorm},
-    {"R8G8B8A8_SNORM", reshade::api::format::r8g8b8a8_snorm},
-    {"R8G8B8A8_UNORM_SRGB", reshade::api::format::r8g8b8a8_unorm_srgb},
-    {"B8G8R8A8_UNORM_SRGB", reshade::api::format::b8g8r8a8_unorm_srgb},
-    {"R10G10B10A2_TYPELESS", reshade::api::format::r10g10b10a2_typeless},
-    {"R10G10B10A2_UNORM", reshade::api::format::r10g10b10a2_unorm},
-    {"B10G10R10A2_UNORM", reshade::api::format::b10g10r10a2_unorm},
-    {"R11G11B10_FLOAT", reshade::api::format::r11g11b10_float},
-    {"R16G16B16A16_TYPELESS", reshade::api::format::r16g16b16a16_typeless},
+enum Preset : uint8_t {
+  OFF,
+  VANILLA_PLUS,
+  HDR_LOOK
 };
+
+const std::map<Preset, std::map<std::string, float>> PRESET_VALUES = {
+  { OFF,
+    { {"ToneMapType", 0.f},
+      {"WuWaTonemapper", 3.f},
+      {"ToneMapPeakNits", 203.f},
+      {"ToneMapGameNits", 203.f},
+      {"ToneMapUINits", 203.f},
+      {"SwapChainGammaCorrection", 0.f},
+      {"OutputColorSpace", 0.f},
+      {"ColorGradeExposure", 1.f},
+      {"ColorGradeHighlights", 50.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeContrast", 50.f},
+      {"ColorGradeSaturation", 50.f},
+      {"ColorGradeBlowout", 0.f},
+      {"WuWaBloom", 100.f},
+      {"WuWaGrain", 100.f}
+    }
+  },
+  { VANILLA_PLUS,
+    { {"GammaCorrection", 1.f},
+      {"SwapChainGammaCorrection", 2.f},
+      {"OutputColorSpace", 0.f},
+      {"ColorGradeStrength", 95.f},
+      {"WuWaTonemapper", 3.f},
+      {"ColorGradeHueCorrection", 50.f},
+      {"ColorGradeSaturationCorrection", 100.f},
+      {"ColorGradeBlowoutRestoration", 0.f},
+      {"ColorGradeHueShift", 100.f},
+      {"ColorGradeExposure", 1.1f},
+      {"ColorGradeHighlights", 62.f},
+      {"ColorGradeHighlightsVersion", 0.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeContrast", 53.f},
+      {"ColorGradeSaturation", 58.f},
+      {"ColorGradeHighlightSaturation", 50.f},
+      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeFlare", 0.f},
+      {"ColorGradeClip", 65.f},
+      {"WuWaChromaticAberration", 100.f},
+      {"WuWaBloom", 60.f}
+    }
+  },
+  { HDR_LOOK,
+    { {"GammaCorrection", 1.f},
+      {"SwapChainGammaCorrection", 2.f},
+      {"OutputColorSpace", 0.f},
+      {"ToneMapHueProcessor", 0.f},
+      {"ColorGradeStrength", 50.f},
+      {"WuWaTonemapper", 3.f},
+      {"ColorGradeHueCorrection", 100.f},
+      {"ColorGradeSaturationCorrection", 100.f},
+      {"ColorGradeBlowoutRestoration", 0.f},
+      {"ColorGradeHueShift", 100.f},
+      {"ColorGradeExposure", 1.f},
+      {"ColorGradeHighlights", 60.f},
+      {"ColorGradeHighlightsVersion", 2.f},
+      {"ColorGradeShadows", 80.f},
+      {"ColorGradeShadowsVersion", 1.f},
+      {"ColorGradeContrast", 60.f},
+      {"ColorGradeSaturation", 60.f},
+      {"ColorGradeHighlightSaturation", 50.f},
+      {"ColorGradeBlowout", 50.f},
+      {"ColorGradeFlare", 0.f},
+      {"ColorGradeClip", 65.f},
+      {"WuWaChromaticAberration", 100.f},
+      {"WuWaBloom", 75.f}
+    }
+  }
+};
+
+void ApplyPreset(const Preset& preset) {
+  if (!PRESET_VALUES.contains(preset)) {
+    return;
+  }
+
+  for (const auto& [key, value] : PRESET_VALUES.at(preset)) {
+    renodx::utils::settings::UpdateSetting(key, value);
+  }
+}
 
 void OnPresetVanillaPlus() {
-  renodx::utils::settings::UpdateSetting("ColorGradeStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("WuWaTonemapper", 3.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHueCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturationCorrection", 100.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowoutRestoration", 28.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHueShift", 75.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 70.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlightsVersion", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 60.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeClip", 65.f);
-  renodx::utils::settings::UpdateSetting("WuWaChromaticAberration", 100.f);
-  renodx::utils::settings::UpdateSetting("WuWaBloom", 50.f);
+  ApplyPreset(VANILLA_PLUS);
 }
 
 void OnPresetHdrLook() {
-  renodx::utils::settings::UpdateSetting("ColorGradeStrength", 50.f);
-  renodx::utils::settings::UpdateSetting("WuWaTonemapper", 3.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHueCorrection", 100.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturationCorrection", 100.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowoutRestoration", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHueShift", 100.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 75.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlightsVersion", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 45.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 55.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 65.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeClip", 65.f);
-  renodx::utils::settings::UpdateSetting("WuWaChromaticAberration", 100.f);
-  renodx::utils::settings::UpdateSetting("WuWaBloom", 100.f);
+  ApplyPreset(HDR_LOOK);
 }
 
 renodx::utils::settings::Settings info_settings = {
@@ -437,7 +502,7 @@ renodx::utils::settings::Settings info_settings = {
         .group = "button-line-2",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "WAXEkFVz");
         },
     },
     new renodx::utils::settings::Setting{
@@ -478,21 +543,7 @@ renodx::utils::settings::Settings info_settings = {
 };
 
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("WuWaTonemapper", 3.f);
-  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
-  renodx::utils::settings::UpdateSetting("SwapChainGammaCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("OutputColorSpace", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
-  renodx::utils::settings::UpdateSetting("WuWaBloom", 100.f);
-  renodx::utils::settings::UpdateSetting("WuWaGrain", 100.f);
+  ApplyPreset(OFF);
 }
 
 bool fired_on_init_swapchain = false;
@@ -503,30 +554,19 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (peak.has_value()) {
     settings[2]->default_value = peak.value();
     settings[2]->can_reset = true;
+
+    const auto game = renodx::utils::swapchain::ComputeReferenceWhite(peak.value());
+    settings[3]->default_value = game;
+    settings[3]->can_reset = true;
+
+    settings[7]->default_value = game;
+    settings[7]->can_reset = true;
+
     fired_on_init_swapchain = true;
   }
 }
 
-const auto UPGRADE_TYPE_NONE = 0.f;
-const auto UPGRADE_TYPE_OUTPUT_SIZE = 1.f;
-const auto UPGRADE_TYPE_OUTPUT_RATIO = 2.f;
-const auto UPGRADE_TYPE_ANY = 3.f;
-
-const std::unordered_map<
-    std::string,                             // Filename or ProductName
-    std::unordered_map<std::string, float>>  // {Key, Value}
-    GAME_DEFAULT_SETTINGS = {
-        {
-            "Wuthering Waves",
-            {
-                {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
-                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
-            },
-        },
-};
-
 float g_dump_shaders = 0;
-float g_upgrade_copy_destinations = 0.f;
 
 std::unordered_set<uint32_t> g_dumped_shaders = {};
 
@@ -558,8 +598,6 @@ bool OnDrawForLUTDump(
   }
   if (!found_lut_render_target) return false;
 
-  if (custom_shaders.contains(pixel_shader_hash)) return false;
-
   if (g_dumped_shaders.contains(pixel_shader_hash)) return false;
 
   reshade::log::message(
@@ -588,11 +626,13 @@ bool OnDrawForLUTDump(
       return false;
     }
 
+    const std::string& prefix = custom_shaders.contains(pixel_shader_hash) ? "patched_lutbuilder_" : "lutbuilder_";
+
     renodx::utils::shader::dump::DumpShader(
         pixel_shader_hash,
         shader_data.value(),
         reshade::api::pipeline_subobject_type::pixel_shader,
-        "lutbuilder_");
+        prefix);
 
   } catch (...) {
     std::stringstream s;
@@ -606,108 +646,23 @@ bool OnDrawForLUTDump(
 }
 
 void AddAdvancedSettings() {
-  auto process_path = renodx::utils::platform::GetCurrentProcessPath();
-  auto filename = process_path.filename().string();
-  auto default_settings = GAME_DEFAULT_SETTINGS.find(filename);
-
-  {
-    std::stringstream s;
-    if (default_settings == GAME_DEFAULT_SETTINGS.end()) {
-      auto product_name = renodx::utils::platform::GetProductName(process_path);
-
-      default_settings = GAME_DEFAULT_SETTINGS.find(product_name);
-
-      if (default_settings == GAME_DEFAULT_SETTINGS.end()) {
-        s << "No default settings for ";
-      } else {
-        s << "Marked default values for ";
-      }
-      s << filename;
-      s << " (" << product_name << ")";
-    } else {
-      s << "Marked default values for ";
-      s << filename;
-    }
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-  }
-
   auto add_setting = [&](auto* setting) {
-    if (default_settings != GAME_DEFAULT_SETTINGS.end()) {
-      auto values = default_settings->second;
-      if (auto values_pair = values.find(setting->key);
-          values_pair != values.end()) {
-        setting->default_value = static_cast<float>(values_pair->second);
-        std::stringstream s;
-        s << "Default value for ";
-        s << setting->key;
-        s << ": ";
-        s << setting->default_value;
-        reshade::log::message(reshade::log::level::info, s.str().c_str());
-      }
-    }
     renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
     settings.push_back(setting);
   };
 
-  {
-    auto* setting = new renodx::utils::settings::Setting{
-        .key = "Upgrade_CopyDestinations",
-        .binding = &g_upgrade_copy_destinations,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Upgrade Copy Destinations",
-        .section = "Resource Upgrades",
-        .tooltip = "Includes upgrading texture copy destinations.",
-        .labels = {
-            "Off",
-            "On",
-        },
-        .is_global = true,
-        .is_visible = []() { return settings[0]->GetValue() >= 2; },
-    };
-    add_setting(setting);
+  const std::vector<reshade::api::format> upgrade_formats = {
+    reshade::api::format::r8g8b8a8_typeless,
+    reshade::api::format::r10g10b10a2_unorm
+  };
 
-    g_upgrade_copy_destinations = setting->GetValue();
-  }
-
-  for (const auto& [key, format] : UPGRADE_TARGETS) {
-    auto* new_setting = new renodx::utils::settings::Setting{
-        .key = "Upgrade_" + key,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = key,
-        .section = "Resource Upgrades",
-        .labels = {
-            "Off",
-            "Output size",
-            "Output ratio",
-            "Any size",
-        },
-        .is_global = true,
-        .is_visible = []() { return settings[0]->GetValue() >= 2; },
-    };
-    add_setting(new_setting);
-
-    auto value = new_setting->GetValue();
-    if (value > 0) {
+  for (const auto& upgrade_format : upgrade_formats) {
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = format,
+          .old_format = upgrade_format,
           .new_format = reshade::api::format::r16g16b16a16_float,
-          .ignore_size = (value == UPGRADE_TYPE_ANY),
           .use_resource_view_cloning = true,
-          .aspect_ratio = static_cast<float>((value == UPGRADE_TYPE_OUTPUT_RATIO)
-                                                 ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
-                                                 : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
           .usage_include = reshade::api::resource_usage::render_target
-                           | (g_upgrade_copy_destinations == 0.f
-                                  ? reshade::api::resource_usage::undefined
-                                  : reshade::api::resource_usage::copy_dest),
       });
-      std::stringstream s;
-      s << "Applying user resource upgrade for ";
-      s << format << ": " << value;
-      reshade::log::message(reshade::log::level::info, s.str().c_str());
-    }
   }
 
   const std::vector<float> letterbox_aspect_ratios = {3840.f / 1620.f, 2880.f / 1216.f};

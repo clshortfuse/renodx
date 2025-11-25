@@ -246,10 +246,6 @@ float4 main(
 
   // SetTonemappedAP1(_826, _827, _828);
 
-  if (GenerateOutput(_826, _827, _828, SV_Target, is_hdr)) {
-    return SV_Target;
-  }
-
   float _850 = max(0.0f, (mad((WorkingColorSpace_012z), _828, (mad((WorkingColorSpace_012y), _827, ((WorkingColorSpace_012x)*_826))))));
   float _851 = max(0.0f, (mad((WorkingColorSpace_013z), _828, (mad((WorkingColorSpace_013y), _827, ((WorkingColorSpace_013x)*_826))))));
   float _852 = max(0.0f, (mad((WorkingColorSpace_014z), _828, (mad((WorkingColorSpace_014y), _827, ((WorkingColorSpace_014x)*_826))))));
@@ -259,6 +255,20 @@ float4 main(
   float _901 = exp2(((log2((max(0.0f, ((((OverlayColor.x) - _878) * (OverlayColor.w)) + _878))))) * (InverseGamma.y)));
   float _902 = exp2(((log2((max(0.0f, ((((OverlayColor.y) - _879) * (OverlayColor.w)) + _879))))) * (InverseGamma.y)));
   float _903 = exp2(((log2((max(0.0f, ((((OverlayColor.z) - _880) * (OverlayColor.w)) + _880))))) * (InverseGamma.y)));
+
+  // Compute intermediate overlay terms
+  float _overlayXTerm = ((OverlayColor.x) - _878) * (OverlayColor.w);
+  float _overlayYTerm = ((OverlayColor.y) - _879) * (OverlayColor.w);
+  float _overlayZTerm = ((OverlayColor.z) - _880) * (OverlayColor.w);
+
+  // Final overlay values after adding base color
+  float _overlayXFinal = _overlayXTerm + _878;
+  float _overlayYFinal = _overlayYTerm + _879;
+  float _overlayZFinal = _overlayZTerm + _880;
+
+  if (GenerateOutput(_overlayXFinal, _overlayYFinal, _overlayZFinal, SV_Target, is_hdr)) {
+    return SV_Target;
+  }
 
   _927 = _901;
   _928 = _902;

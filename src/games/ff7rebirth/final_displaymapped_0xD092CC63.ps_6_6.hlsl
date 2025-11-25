@@ -1,4 +1,5 @@
-#define SHADER_HASH_0XD092CC63
+#define USE_DEFAULT
+#define USE_DISPLAY_MAP
 
 #include "./hdrcomposite.hlsl"
 

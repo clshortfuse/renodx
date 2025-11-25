@@ -364,17 +364,20 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
 
   for (uint32_t index = 0; index < back_buffer_count; ++index) {
-    auto buffer = swapchain->get_back_buffer(index);
+    auto resource = swapchain->get_back_buffer(index);
+    auto desc = device->get_resource_desc(resource);
     ResourceInfo new_info = {
         .device = device,
-        .desc = device->get_resource_desc(buffer),
-        .resource = buffer,
+        .desc = desc,
+        .resource = resource,
         .is_swap_chain = true,
         .initial_state = reshade::api::resource_usage::general,
     };
-    auto [pair, inserted] = store->resource_infos.try_emplace_p(buffer.handle, new_info);
+    bool was_destroyed = false;
+    auto [pair, inserted] = store->resource_infos.try_emplace_p(resource.handle, new_info);
     if (!inserted) {
-      assert(pair->second.resource.handle == buffer.handle);
+      assert(pair->second.resource.handle == resource.handle);
+      was_destroyed = pair->second.destroyed;
       if (!pair->second.destroyed) {
         for (auto& callback : store->on_destroy_resource_info_callbacks) {
           callback(&pair->second);
@@ -382,6 +385,38 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
       }
       pair->second = new_info;
     }
+
+#ifdef DEBUG_LEVEL_2
+    {
+      std::stringstream s;
+      s << "utils::resource::OnInitSwapchain(";
+      s << PRINT_PTR(resource.handle);
+      if (device->get_api() == reshade::api::device_api::opengl) {
+        const int opengl_target = resource.handle >> 40;
+        const int opengl_object = resource.handle & 0xFFFFFFFF;
+        s << ", opengl target: " << opengl_target;
+        s << ", opengl object: " << opengl_object;
+      }
+      s << ", type: " << desc.type;
+
+      if (desc.type == reshade::api::resource_type::unknown) {
+        assert(false);
+      } else if (desc.type == reshade::api::resource_type::buffer) {
+        s << ", size: " << desc.buffer.size;
+      } else {
+        s << ", format: " << desc.texture.format;
+        s << ", width: " << desc.texture.width;
+        s << ", height: " << desc.texture.height;
+        s << ", depth_or_layers: " << desc.texture.depth_or_layers;
+        s << ", levels: " << desc.texture.levels;
+      }
+      s << ", usage: " << std::hex << static_cast<uint32_t>(desc.usage) << std::dec;
+      s << ", inserted: " << (inserted ? "true" : "false");
+      s << ", was_destroyed: " << (was_destroyed ? "true" : "false");
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+#endif
     for (auto& callback : store->on_init_resource_info_callbacks) {
       callback(&pair->second);
     }
@@ -540,7 +575,11 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   }
 }
 
-inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(reshade::api::device* device, const reshade::api::resource_view_desc& desc, ResourceInfo* resource_info) {
+inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
+    reshade::api::device* device,
+    const reshade::api::resource_view_desc& desc,
+    reshade::api::resource_usage usage_type,
+    ResourceInfo* resource_info) {
   reshade::api::resource_view_desc new_desc = desc;
   switch (device->get_api()) {
     case reshade::api::device_api::d3d11:
@@ -575,7 +614,13 @@ inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(reshade:
           break;
         case reshade::api::resource_type::surface:
         case reshade::api::resource_type::texture_2d:
-          new_desc.texture.level_count = UINT32_MAX;
+          switch (usage_type) {
+            case reshade::api::resource_usage::unordered_access:
+              new_desc.texture.level_count = 1;
+              break;
+            default:
+              new_desc.texture.level_count = UINT32_MAX;
+          }
           new_desc.texture.layer_count = resource_info->desc.texture.depth_or_layers;
           if (resource_info->desc.texture.depth_or_layers > 1) {
             if (resource_info->desc.texture.samples > 1) {
@@ -652,8 +697,10 @@ inline void OnInitResourceView(
   }
 
   if (desc.type == reshade::api::resource_view_type::unknown
-      || (desc.type != reshade::api::resource_view_type::buffer && desc.format == reshade::api::format::unknown)) {
-    new_data.desc = PopulateUnknownResourceViewDesc(device, desc, new_data.resource_info);
+      || (desc.format == reshade::api::format::unknown
+          && desc.type != reshade::api::resource_view_type::buffer
+          && desc.type != reshade::api::resource_view_type::acceleration_structure)) {
+    new_data.desc = PopulateUnknownResourceViewDesc(device, desc, usage_type, new_data.resource_info);
   }
 
   auto [pair, inserted] = store->resource_view_infos.try_emplace_p(view.handle, new_data);
@@ -780,6 +827,7 @@ static bool IsCompressible(
     // 128 bit width / 16 bytes per 4x4 block
     case reshade::api::format::r32g32b32a32_uint:
     case reshade::api::format::r32g32b32a32_sint:
+    case reshade::api::format::r32g32b32a32_typeless:
       switch (compressed) {
         case reshade::api::format::bc2_unorm:
         case reshade::api::format::bc2_unorm_srgb:
@@ -956,6 +1004,8 @@ static void Use(DWORD fdw_reason) {
       break;
 
     case DLL_PROCESS_DETACH:
+      if (!attached) return;
+      attached = false;
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);

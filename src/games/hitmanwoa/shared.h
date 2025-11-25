@@ -1,28 +1,34 @@
 #ifndef SRC_HITMANWOA_SHARED_H_
 #define SRC_HITMANWOA_SHARED_H_
 
-#define RENODX_TONE_MAP_TYPE                 1.f
-#define RENODX_PEAK_WHITE_NITS               400.f
-#define RENODX_DIFFUSE_WHITE_NITS            100.f
-#define RENODX_GRAPHICS_WHITE_NITS           100.f
-#define RENODX_TONE_MAP_HUE_CORRECTION       1.f
-#define RENODX_GAMMA_CORRECTION              3.f
-#define RENODX_TONE_MAP_EXPOSURE             1.f
-#define RENODX_TONE_MAP_HIGHLIGHTS           1.f
-#define RENODX_TONE_MAP_SHADOWS              1.f
-#define RENODX_TONE_MAP_CONTRAST             1.f
-#define RENODX_TONE_MAP_SATURATION           1.f
-#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1.f
-#define RENODX_TONE_MAP_BLOWOUT              0.f
-#define RENODX_TONE_MAP_FLARE                0.f
-#define RENODX_COLOR_GRADE_STRENGTH          1.f
-#define RENODX_COLOR_GRADE_SCALING           1.f
-#define RENODX_LUT_SAMPLING_TYPE             1.f  // 0 = default, 1 = replace linear/gamma2 input with srgb input and add lut offsets
-#define CUSTOM_BLOOM                         0.75f
-#define CUSTOM_BLOOM_SCALING                 1.f
-#define CUSTOM_LUT_TETRAHEDRAL               1.f
-#define CUSTOM_SHARPENING                    2.f
-#define CUSTOM_DITHERING                     1.f
+#define FORCE_HDR10          1  // fixes NVAPI washed out issue
+#define ENABLE_SHADER_TOGGLE 1
+
+#define RENODX_TONE_MAP_TYPE                   1.f
+#define RENODX_PEAK_WHITE_NITS                 400.f
+#define RENODX_DIFFUSE_WHITE_NITS              100.f
+#define RENODX_GRAPHICS_WHITE_NITS             100.f
+#define RENODX_TONE_MAP_HUE_SHIFT              0.f
+#define RENODX_GAMMA_CORRECTION                2.f
+#define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION 0.35f
+#define RENODX_TONE_MAP_EXPOSURE               1.f
+#define RENODX_TONE_MAP_HIGHLIGHTS             1.16f
+#define RENODX_TONE_MAP_SHADOWS                1.f
+#define RENODX_TONE_MAP_CONTRAST               1.f
+#define RENODX_TONE_MAP_SATURATION             1.f
+#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION   1.f
+#define RENODX_TONE_MAP_BLOWOUT                0.f
+#define RENODX_TONE_MAP_FLARE                  0.f
+#define RENODX_COLOR_GRADE_STRENGTH            1.f
+#define RENODX_COLOR_GRADE_SCALING             1.f
+#define RENODX_LUT_SAMPLING_TYPE               1.f  // 0 = default, 1 = replace linear/gamma2 input with srgb input and add lut offsets
+#define CUSTOM_BLOOM                           0.75f
+#define CUSTOM_BLOOM_SCALING                   1.f
+#define CUSTOM_LUT_TETRAHEDRAL                 1.f
+#define CUSTOM_SHARPENING                      2.f
+#define CUSTOM_DITHERING                       0.f
+
+#define BLOOM_SCALING_MAX 0.33f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -55,8 +61,6 @@ struct ShaderInjectData {
 // cbuffer shader_injection : register(b13, space50) {
 //   ShaderInjectData shader_injection : packoffset(c0);
 // }
-
-#define RENODX_TONE_MAP_SHOULDER_START 0.39f
 
 // #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 // #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits

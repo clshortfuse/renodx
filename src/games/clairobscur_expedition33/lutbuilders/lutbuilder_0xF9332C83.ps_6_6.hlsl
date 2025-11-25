@@ -107,7 +107,7 @@ float4 main(
     output_device = 0u;
     expand_gamut = 0.f;
   }
-  
+
   float _79 = mad((WorkingColorSpace.ToAP1[0].z), _64, mad((WorkingColorSpace.ToAP1[0].y), _63, ((WorkingColorSpace.ToAP1[0].x) * _62)));
   float _82 = mad((WorkingColorSpace.ToAP1[1].z), _64, mad((WorkingColorSpace.ToAP1[1].y), _63, ((WorkingColorSpace.ToAP1[1].x) * _62)));
   float _85 = mad((WorkingColorSpace.ToAP1[2].z), _64, mad((WorkingColorSpace.ToAP1[2].y), _63, ((WorkingColorSpace.ToAP1[2].x) * _62)));
@@ -264,9 +264,10 @@ float4 main(
 
   // SetTonemappedAP1(_828, _829, _830);
 
-  float _855 = (max(0.0f, mad((WorkingColorSpace.FromAP1[0].z), _830, mad((WorkingColorSpace.FromAP1[0].y), _829, ((WorkingColorSpace.FromAP1[0].x) * _828)))));
-  float _856 = (max(0.0f, mad((WorkingColorSpace.FromAP1[1].z), _830, mad((WorkingColorSpace.FromAP1[1].y), _829, ((WorkingColorSpace.FromAP1[1].x) * _828)))));
-  float _857 = (max(0.0f, mad((WorkingColorSpace.FromAP1[2].z), _830, mad((WorkingColorSpace.FromAP1[2].y), _829, ((WorkingColorSpace.FromAP1[2].x) * _828)))));
+  // Remove max(0)
+  float _855 = mad((WorkingColorSpace.FromAP1[0].z), _830, mad((WorkingColorSpace.FromAP1[0].y), _829, ((WorkingColorSpace.FromAP1[0].x) * _828)));
+  float _856 = mad((WorkingColorSpace.FromAP1[1].z), _830, mad((WorkingColorSpace.FromAP1[1].y), _829, ((WorkingColorSpace.FromAP1[1].x) * _828)));
+  float _857 = mad((WorkingColorSpace.FromAP1[2].z), _830, mad((WorkingColorSpace.FromAP1[2].y), _829, ((WorkingColorSpace.FromAP1[2].x) * _828)));
   /* if (_855 < 0.0031306699384003878f) {
     _868 = (_855 * 12.920000076293945f);
   } else {
@@ -301,19 +302,27 @@ float4 main(
   float _959;
   float _960;
   SampleLUTUpgradeToneMap(untonemapped, Samplers_1, Textures_1, _958, _959, _960);
-  
+
   float _986 = ColorScale.x * (((MappingPolynomial.y + (MappingPolynomial.x * _958)) * _958) + MappingPolynomial.z);
   float _987 = ColorScale.y * (((MappingPolynomial.y + (MappingPolynomial.x * _959)) * _959) + MappingPolynomial.z);
   float _988 = ColorScale.z * (((MappingPolynomial.y + (MappingPolynomial.x * _960)) * _960) + MappingPolynomial.z);
 
-  if (GenerateOutput(_986, _987, _988, SV_Target, is_hdr)) {
+
+  // Separate the lerp into their own temporaries, keeping the max in the final expressions.
+  float _lerpR = lerp(_986, OverlayColor.x, OverlayColor.w);
+  float _lerpG = lerp(_987, OverlayColor.y, OverlayColor.w);
+  float _lerpB = lerp(_988, OverlayColor.z, OverlayColor.w);
+
+  if (GenerateOutput(_lerpR, _lerpG, _lerpB, SV_Target, is_hdr)) {
     return SV_Target;
   }
-  
-  float _1009 = exp2(log2(max(0.0f, (lerp(_986, OverlayColor.x, OverlayColor.w)))) * InverseGamma.y);
-  float _1010 = exp2(log2(max(0.0f, (lerp(_987, OverlayColor.y, OverlayColor.w)))) * InverseGamma.y);
-  float _1011 = exp2(log2(max(0.0f, (lerp(_988, OverlayColor.z, OverlayColor.w)))) * InverseGamma.y);
 
+  float _1009 = exp2(log2(max(0.0f, _lerpR)) * InverseGamma.y);
+  float _1010 = exp2(log2(max(0.0f, _lerpG)) * InverseGamma.y);
+  float _1011 = exp2(log2(max(0.0f, _lerpB)) * InverseGamma.y);
+
+
+  
   if ((uint)(WorkingColorSpace.bIsSRGB) == 0) {
     float _1030 = mad((WorkingColorSpace.ToAP1[0].z), _1011, mad((WorkingColorSpace.ToAP1[0].y), _1010, ((WorkingColorSpace.ToAP1[0].x) * _1009)));
     float _1033 = mad((WorkingColorSpace.ToAP1[1].z), _1011, mad((WorkingColorSpace.ToAP1[1].y), _1010, ((WorkingColorSpace.ToAP1[1].x) * _1009)));

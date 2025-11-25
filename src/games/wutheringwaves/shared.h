@@ -20,6 +20,7 @@ struct ShaderInjectData {
   float color_grade_highlights;
   float color_grade_highlights_version;
   float color_grade_shadows;
+  float color_grade_shadows_version;
   float color_grade_contrast;
   float color_grade_saturation;
   float color_grade_highlight_saturation;
@@ -39,8 +40,10 @@ struct ShaderInjectData {
   float wuwa_ktm_sharpening;
   float wuwa_chromatic_aberration;
   float wuwa_bloom;
+  float wuwa_blowout;
 
   float text_opacity;
+  float status_text_opacity;
   float hud_opacity;
 };
 
@@ -74,10 +77,10 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHTS               shader_injection.color_grade_highlights
 #define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION    shader_injection.color_grade_highlights_version
 #define RENODX_TONE_MAP_SHADOWS                  shader_injection.color_grade_shadows
+#define RENODX_COLOR_GRADE_SHADOWS_VERSION       shader_injection.color_grade_shadows_version
 #define RENODX_TONE_MAP_CONTRAST                 shader_injection.color_grade_contrast
 #define RENODX_TONE_MAP_SATURATION               shader_injection.color_grade_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION     shader_injection.color_grade_highlight_saturation
-#define RENODX_TONE_MAP_BLOWOUT                  shader_injection.color_grade_blowout
 #define RENODX_TONE_MAP_FLARE                    shader_injection.color_grade_flare
 
 // #define RENODX_TONE_MAP_HUE_CORRECTION           1.f
@@ -135,11 +138,11 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_WUWA_CA                           1.f
 #define RENODX_WUWA_BLOOM                        shader_injection.wuwa_bloom
 #define RENODX_WUWA_GRAIN                        1.f
+#define RENODX_WUWA_BLOWOUT                      shader_injection.wuwa_blowout
 
 #define TEXT_OPACITY                             shader_injection.text_opacity
+#define STATUS_TEXT_OPACITY                      shader_injection.status_text_opacity
 #define HUD_OPACITY                              shader_injection.hud_opacity
-
-#define CLAMP_IF_SDR(v) (v = ((RENODX_TONE_MAP_TYPE == 0.f) ? saturate(v) : (v)))
 
 #include "../../shaders/renodx.hlsl"
 #endif

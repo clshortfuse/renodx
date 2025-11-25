@@ -118,7 +118,7 @@ static uint32_t constant_buffer_offset = 0;
 
 static std::shared_mutex unmodified_shaders_mutex;
 static std::unordered_set<uint32_t> unmodified_shaders;
-static std::unordered_map<uint32_t, CustomShader> custom_shaders;
+static renodx::utils::data::ParallelNodeHashMap<uint32_t, CustomShader> custom_shaders;
 
 static std::unordered_map<uint32_t, uint32_t> counted_shaders;
 
@@ -145,9 +145,17 @@ static void OnInitDevice(reshade::api::device* device) {
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
   auto* data = renodx::utils::data::Create<DeviceData>(device);
-  data->use_pipeline_layout_cloning = use_pipeline_layout_cloning;
   data->expected_constant_buffer_index = expected_constant_buffer_index;
-  data->expected_constant_buffer_space = expected_constant_buffer_space;
+  switch (device->get_api()) {
+    case reshade::api::device_api::vulkan:
+    case reshade::api::device_api::d3d12:
+      data->use_pipeline_layout_cloning = use_pipeline_layout_cloning;
+      data->expected_constant_buffer_space = expected_constant_buffer_space;
+      break;
+    default:
+      // Guard against unsupported APIs
+      break;
+  }
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
@@ -757,10 +765,12 @@ inline DrawResponse HandleStatesAndBypass(
     const int& index,
     float resource_tag = -1) {
   auto& state = shader_state->stage_states[index];
-  if (state.pipeline == 0u) return {.bypass_draw = false};
+  DrawResponse response = {.bypass_draw = false};
+
+  if (state.pipeline == 0u) return response;
 
   const auto& shader_hash = renodx::utils::shader::GetCurrentShaderHash(&state, index);
-  if (shader_hash == 0u) return {.bypass_draw = false};
+  if (shader_hash == 0u) return response;
   auto custom_shader_info_pair = custom_shaders.find(shader_hash);
   bool is_custom_shader = custom_shader_info_pair != custom_shaders.end();
   if (!is_custom_shader) {
@@ -780,7 +790,7 @@ inline DrawResponse HandleStatesAndBypass(
       }
     }
 
-    return {.bypass_draw = false};  // move to next shader
+    return response;  // move to next shader
   }
 
   auto& custom_shader_info = custom_shader_info_pair->second;
@@ -802,9 +812,12 @@ inline DrawResponse HandleStatesAndBypass(
       s << ")";
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-      return {.bypass_draw = true};  // bypass draw
+      response.bypass_draw = true;
+      return response;
     }
   }
+
+  response.on_drawn = custom_shader_info.on_drawn;
 
   if (custom_shader_info.on_replace != nullptr) {
     bool should_replace = custom_shader_info.on_replace(cmd_list);
@@ -818,19 +831,13 @@ inline DrawResponse HandleStatesAndBypass(
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
       // state.replacement_pipeline = {0u};
-      return {.bypass_draw = false};
+      return response;
     }
   }
 
   bool should_inject = true;
   if (custom_shader_info.on_inject != nullptr) {
     should_inject = custom_shader_info.on_inject(cmd_list);
-  }
-
-  DrawResponse response = {.bypass_draw = false};
-
-  if (custom_shader_info.on_drawn != nullptr) {
-    response.on_drawn = custom_shader_info.on_drawn;
   }
 
   utils::shader::BuildReplacementPipeline(state.pipeline_details);
@@ -848,7 +855,7 @@ inline DrawResponse HandleStatesAndBypass(
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
       }
 #endif
-      return {.bypass_draw = false};
+      return response;
     }
 
     renodx::utils::constants::PushShaderInjections(
@@ -916,7 +923,12 @@ inline DrawResponse HandlePreDraw(reshade::api::command_list* cmd_list, bool is_
   return response;
 }
 
-inline bool OnDraw(reshade::api::command_list* cmd_list, uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex, uint32_t first_instance) {
+inline bool OnDraw(
+    reshade::api::command_list* cmd_list,
+    uint32_t vertex_count,
+    uint32_t instance_count,
+    uint32_t first_vertex,
+    uint32_t first_instance) {
   auto response = HandlePreDraw(cmd_list, false);
   if (response.bypass_draw) return true;
   if (response.on_drawn == nullptr && response.injection_register_index == -1) return false;
@@ -1067,7 +1079,7 @@ inline void OnPresent(
 static bool attached = false;
 
 template <typename T = float*, std::ranges::range CustomShaderList>
-  requires std::convertible_to<std::ranges::range_value_t<CustomShaderList>, std::pair<uint32_t, CustomShader>>
+  requires std::convertible_to<std::ranges::range_value_t<CustomShaderList>, CustomShader>
 static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T* new_injections = nullptr) {
   renodx::utils::shader::Use(fdw_reason);
   if (resource_tag_float != nullptr) {
@@ -1094,10 +1106,10 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
       // Copy from wrapper's native map into runtime mutable map
       custom_shaders.clear();
       custom_shaders.reserve(new_custom_shaders.size());
-      for (const auto& kv : new_custom_shaders) {
-        custom_shaders.emplace(kv.first, kv.second);
-        if (kv.second.on_replace != nullptr) using_custom_replace = true;
-        if (kv.second.index != -1) using_counted_shaders = true;
+      for (const auto& custom_shader : new_custom_shaders) {
+        custom_shaders.emplace(custom_shader.crc32, custom_shader);
+        if (custom_shader.on_replace != nullptr) using_custom_replace = true;
+        if (custom_shader.index != -1) using_counted_shaders = true;
       }
 
       custom_shaders.rehash(custom_shaders.size());
@@ -1112,7 +1124,7 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
 
       if (!manual_shader_scheduling) {
         if (force_pipeline_cloning || use_pipeline_layout_cloning) {
-          for (const auto& [hash, shader] : (new_custom_shaders)) {
+          for (const auto& [hash, shader] : (custom_shaders)) {
             for (const auto& [device, code] : shader.code_by_device) {
               renodx::utils::shader::UpdateReplacements({{hash, code}}, false, true, {device});
             }
@@ -1121,7 +1133,7 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
             }
           }
         } else {
-          for (const auto& [hash, shader] : (new_custom_shaders)) {
+          for (const auto& [hash, shader] : (custom_shaders)) {
             bool compile_supported = shader.on_replace == nullptr && shader.index == -1;
             for (const auto& [device, code] : shader.code_by_device) {
               renodx::utils::shader::UpdateReplacements({{hash, code}}, compile_supported, true, {device});
@@ -1180,7 +1192,8 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
 
       break;
     case DLL_PROCESS_DETACH:
-
+      if (!attached) return;
+      attached = false;
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
 
@@ -1202,6 +1215,17 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
 
       break;
   }
+}
+
+template <typename T = float*, std::ranges::range CustomShaderPairs>
+  requires std::convertible_to<std::ranges::range_value_t<CustomShaderPairs>, std::pair<uint32_t, CustomShader>>
+static void Use(DWORD fdw_reason, const CustomShaderPairs& new_custom_shaders, T* new_injections = nullptr) {
+  std::vector<CustomShader> shaders;
+  shaders.reserve(new_custom_shaders.size());
+  for (const auto& pair : new_custom_shaders) {
+    shaders.push_back(pair.second);
+  }
+  Use<T>(fdw_reason, shaders, new_injections);
 }
 
 }  // namespace renodx::mods::shader

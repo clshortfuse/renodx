@@ -1,55 +1,23 @@
 #ifndef SRC_KINGDOM_COME2_SHARED_H_
 #define SRC_KINGDOM_COME2_SHARED_H_
 
-#define RENODX_TONE_MAP_TYPE                 shader_injection.toneMapType
-#define RENODX_PEAK_NITS                     shader_injection.toneMapPeakNits
-#define RENODX_GAME_NITS                     shader_injection.toneMapGameNits
-#define RENODX_UI_NITS                       shader_injection.toneMapUINits
-#define RENODX_TONE_MAP_EXPOSURE             shader_injection.colorGradeExposure
-#define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.colorGradeHighlights
-#define RENODX_TONE_MAP_SHADOWS              shader_injection.colorGradeShadows
-#define RENODX_TONE_MAP_CONTRAST             shader_injection.colorGradeContrast
-#define RENODX_TONE_MAP_SATURATION           shader_injection.colorGradeSaturation
-#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.colorGradeHighlightSaturation
-#define RENODX_TONE_MAP_BLOWOUT              shader_injection.colorGradeBlowout
-#define RENODX_TONE_MAP_FLARE                shader_injection.colorGradeFlare
-#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  2.f
-#define CUSTOM_BLOOM                         shader_injection.fxBloom
-#define LIGHT_UNIT_SCALE                     10000.0f
-#define LILIUMS_HABLE_INVERSE                0.f
-#define CUSTOM_FAKE_HDR                      0.f
-/* #define RENODX_TONE_MAP_PER_CHANNEL          1.f
-#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_RENO_DRT_WHITE_CLIP           3.f */
-// Test PQ
-/* #define RENODX_INTERMEDIATE_ENCODING           4.f
-#define RENODX_SWAP_CHAIN_DECODING             2.f */
-#define RENODX_SWAP_CHAIN_ENCODING             4.f
-#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE 1.f
-
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
-  float toneMapType;
-  float toneMapPeakNits;
-  float toneMapGameNits;
-  float toneMapUINits;
-
-  float toneMapGammaCorrection;
-  float toneMapHueShift;
-  float toneMapHueCorrection;
-  float toneMapHueProcessor;
-
-  float colorGradeFlare;
-  float colorGradeExposure;
-  float colorGradeHighlights;
-  float colorGradeShadows;
-
-  float colorGradeContrast;
-  float colorGradeSaturation;
-  float colorGradeHighlightSaturation;
-  float colorGradeBlowout;
-
+  float peak_white_nits;
+  float diffuse_white_nits;
+  float graphics_white_nits;
+  float tone_map_type;
+  float tone_map_exposure;
+  float tone_map_highlights;
+  float tone_map_shadows;
+  float tone_map_contrast;
+  float tone_map_saturation;
+  float tone_map_highlight_saturation;
+  float tone_map_blowout;
+  float tone_map_flare;
+  float tone_map_hue_correction;
+  float tone_map_hue_shift;
   float fxBloom;
 };
 
@@ -61,6 +29,23 @@ cbuffer shader_injection : register(b13) {
 #endif
   ShaderInjectData shader_injection : packoffset(c0);
 }
+
+#define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
+#define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
+#define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
+#define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
+#define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
+#define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
+#define RENODX_TONE_MAP_CONTRAST             shader_injection.tone_map_contrast
+#define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
+#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
+#define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
+#define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
+#define CUSTOM_BLOOM                         shader_injection.fxBloom
+#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+#define RENODX_SWAP_CHAIN_OUTPUT_PRESET      renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_SCRGB
+#define RENODX_INTERMEDIATE_ENCODING         renodx::draw::GAMMA_CORRECTION_NONE
 
 #if (__SHADER_TARGET_MAJOR >= 6)
 #pragma dxc diagnostic ignored "-Wparentheses-equality"
