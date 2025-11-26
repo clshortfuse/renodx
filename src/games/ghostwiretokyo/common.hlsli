@@ -3,15 +3,6 @@
 
 #include "./shared.h"
 
-float3 GammaCorrectByLuminance(float3 color, bool pow_to_srgb = false) {
-  float y_in = renodx::color::y::from::BT709(color);
-  float y_out = renodx::color::correct::Gamma(y_in, pow_to_srgb);
-
-  color = renodx::color::correct::Luminance(color, y_in, y_out);
-
-  return color;
-}
-
 float Highlights(float x, float highlights, float mid_gray) {
   if (highlights == 1.f) return x;
 
