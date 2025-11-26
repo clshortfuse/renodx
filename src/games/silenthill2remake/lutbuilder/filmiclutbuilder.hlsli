@@ -74,8 +74,8 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(float3 tonemapp
       float3 perceptual_old = renodx::color::oklab::from::BT709(renodx::color::bt709::from::AP1(hue_reference_color));
 
       if (hue_correct_ignore_highlights) {
-        float highlight_rolloff = saturate((1.f - perceptual_old.x) / 0.5f);  // full strength through midtones, fade over top 50%
-        highlight_rolloff *= highlight_rolloff;                               // keep transition smooth
+        float highlight_rolloff = saturate((1.f - perceptual_old.x) / 0.18f);  // roll off from 0.18 - 1.0
+        highlight_rolloff *= highlight_rolloff;                                // keep transition smooth
         hue_correction_strength *= highlight_rolloff;
       }
 
