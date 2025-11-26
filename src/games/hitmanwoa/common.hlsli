@@ -200,7 +200,7 @@ float ToneMapHitman(float x) {
   float result = numerator / denominator;
   result -= F;
 
-  // ((0.6x + 0.1) * 0.6 + 0.004)/((0.6x + 1) * 0.6 + 0.06) - 0.004 / 0.06
+  // f(x) = (0.6x^2 + 0.1x + 0.004) / (0.6x^2 + x + 0.06) - 0.004/0.06
 
   return max(0, result);
 }
