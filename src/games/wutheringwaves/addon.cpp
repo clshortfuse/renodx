@@ -90,17 +90,6 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "SwapChainGammaCorrection",
-        .binding = &shader_injection.swap_chain_gamma_correction,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "UI Gamma Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Controls the gamma correction applied to the UI and HUD elements.\nEncoding 2-D assets for HDR that were originally intended for sRGB creates a \"washed out\" look without correction.",
-        .labels = {"Off", "2.2", "2.4"},
-        .is_visible = []() { return current_settings_mode >= 1; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "OutputColorSpace",
         .binding = &shader_injection.output_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -135,12 +124,32 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 500.f,
     },
+    new renodx::utils::settings::Setting{
+        .key = "SwapChainGammaCorrection",
+        .binding = &shader_injection.swap_chain_gamma_correction,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Gamma Correction",
+        .section = "UI",
+        .tooltip = "Controls the gamma correction applied to the UI and HUD elements.\nEncoding 2-D assets for HDR that were originally intended for sRGB creates a \"washed out\" look without correction.",
+        .labels = {"Off", "2.2", "2.4"},
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
     new renodx::utils::settings::Setting {
         .key = "TextOpacity",
         .binding = &shader_injection.text_opacity,
         .default_value = 100.f,
         .label = "Text Opacity",
         .section = "UI",
+        .parse = [](float value) { return value * 0.01f; }
+    },
+    new renodx::utils::settings::Setting {
+        .key = "StatusTextOpacity",
+        .binding = &shader_injection.status_text_opacity,
+        .default_value = 0.f,
+        .label = "Status Text Opacity",
+        .section = "UI",
+        .tooltip = "Opacity for texts such as location, UUID, and ping",
         .parse = [](float value) { return value * 0.01f; }
     },
     new renodx::utils::settings::Setting {
@@ -262,6 +271,7 @@ renodx::utils::settings::Settings settings = {
         .labels = {
             "v1",
             "v2",
+            "v3",
         },
         .parse = [](float value) { return value + 1; },
         .is_visible = []() { return current_settings_mode >= 2; },
@@ -275,6 +285,21 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeShadowsVersion",
+        .binding = &shader_injection.color_grade_shadows_version,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Shadows Version",
+        .section = "Custom Color Grading",
+        .tooltip = "The lack of \"v2\" is intentional.",
+        .labels = {
+            "v1",
+            "v3",
+        },
+        .parse = [](float value) { return value >= 1.f ? 3.f : 1.f;},
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
@@ -377,29 +402,34 @@ const std::map<Preset, std::map<std::string, float>> PRESET_VALUES = {
     }
   },
   { VANILLA_PLUS,
-    { {"GammaCorrection", 0.f},
-      {"ColorGradeStrength", 100.f},
+    { {"GammaCorrection", 1.f},
+      {"SwapChainGammaCorrection", 2.f},
+      {"OutputColorSpace", 0.f},
+      {"ColorGradeStrength", 95.f},
       {"WuWaTonemapper", 3.f},
-      {"ColorGradeHueCorrection", 0.f},
+      {"ColorGradeHueCorrection", 50.f},
       {"ColorGradeSaturationCorrection", 100.f},
-      {"ColorGradeBlowoutRestoration", 28.f},
-      {"ColorGradeHueShift", 75.f},
-      {"ColorGradeExposure", 1.f},
-      {"ColorGradeHighlights", 66.f},
+      {"ColorGradeBlowoutRestoration", 0.f},
+      {"ColorGradeHueShift", 100.f},
+      {"ColorGradeExposure", 1.1f},
+      {"ColorGradeHighlights", 62.f},
       {"ColorGradeHighlightsVersion", 0.f},
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 53.f},
-      {"ColorGradeSaturation", 62.f},
+      {"ColorGradeSaturation", 58.f},
       {"ColorGradeHighlightSaturation", 50.f},
-      {"ColorGradeBlowout", 40.f},
+      {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeClip", 65.f},
       {"WuWaChromaticAberration", 100.f},
-      {"WuWaBloom", 50.f}
+      {"WuWaBloom", 60.f}
     }
   },
   { HDR_LOOK,
-    { {"GammaCorrection", 0.f},
+    { {"GammaCorrection", 1.f},
+      {"SwapChainGammaCorrection", 2.f},
+      {"OutputColorSpace", 0.f},
+      {"ToneMapHueProcessor", 0.f},
       {"ColorGradeStrength", 50.f},
       {"WuWaTonemapper", 3.f},
       {"ColorGradeHueCorrection", 100.f},
@@ -407,11 +437,12 @@ const std::map<Preset, std::map<std::string, float>> PRESET_VALUES = {
       {"ColorGradeBlowoutRestoration", 0.f},
       {"ColorGradeHueShift", 100.f},
       {"ColorGradeExposure", 1.f},
-      {"ColorGradeHighlights", 75.f},
-      {"ColorGradeHighlightsVersion", 0.f},
-      {"ColorGradeShadows", 45.f},
-      {"ColorGradeContrast", 55.f},
-      {"ColorGradeSaturation", 65.f},
+      {"ColorGradeHighlights", 60.f},
+      {"ColorGradeHighlightsVersion", 2.f},
+      {"ColorGradeShadows", 80.f},
+      {"ColorGradeShadowsVersion", 1.f},
+      {"ColorGradeContrast", 60.f},
+      {"ColorGradeSaturation", 60.f},
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 50.f},
       {"ColorGradeFlare", 0.f},
@@ -528,8 +559,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     settings[3]->default_value = game;
     settings[3]->can_reset = true;
 
-    settings[8]->default_value = game;
-    settings[8]->can_reset = true;
+    settings[7]->default_value = game;
+    settings[7]->can_reset = true;
 
     fired_on_init_swapchain = true;
   }
@@ -567,8 +598,6 @@ bool OnDrawForLUTDump(
   }
   if (!found_lut_render_target) return false;
 
-  if (custom_shaders.contains(pixel_shader_hash)) return false;
-
   if (g_dumped_shaders.contains(pixel_shader_hash)) return false;
 
   reshade::log::message(
@@ -597,11 +626,13 @@ bool OnDrawForLUTDump(
       return false;
     }
 
+    const std::string& prefix = custom_shaders.contains(pixel_shader_hash) ? "patched_lutbuilder_" : "lutbuilder_";
+
     renodx::utils::shader::dump::DumpShader(
         pixel_shader_hash,
         shader_data.value(),
         reshade::api::pipeline_subobject_type::pixel_shader,
-        "lutbuilder_");
+        prefix);
 
   } catch (...) {
     std::stringstream s;

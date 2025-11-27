@@ -359,7 +359,7 @@ void main(
   r0.w = 1 + r1.z;
   r0.xyz = r0.xyz * r0.www;
 
-  CAPTURE_UNTONEMAPPED(untonemapped, r0);
+  CAPTURE_UNTONEMAPPED(r0);
 
   [branch]
   // if (cb0[86].y != 0) {
@@ -404,7 +404,7 @@ void main(
     CLAMP_IF_SDR(r0.xyz);
   }
 
-  CAPTURE_TONEMAPPED(tonemapped, r0);
+  CAPTURE_TONEMAPPED(r0);
 
   r0.xyz = float3(0.00266771927, 0.00266771927, 0.00266771927) + r0.xyz;
   r0.xyz = log2(r0.xyz);

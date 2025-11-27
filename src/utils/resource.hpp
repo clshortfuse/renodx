@@ -364,17 +364,20 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
 
   for (uint32_t index = 0; index < back_buffer_count; ++index) {
-    auto buffer = swapchain->get_back_buffer(index);
+    auto resource = swapchain->get_back_buffer(index);
+    auto desc = device->get_resource_desc(resource);
     ResourceInfo new_info = {
         .device = device,
-        .desc = device->get_resource_desc(buffer),
-        .resource = buffer,
+        .desc = desc,
+        .resource = resource,
         .is_swap_chain = true,
         .initial_state = reshade::api::resource_usage::general,
     };
-    auto [pair, inserted] = store->resource_infos.try_emplace_p(buffer.handle, new_info);
+    bool was_destroyed = false;
+    auto [pair, inserted] = store->resource_infos.try_emplace_p(resource.handle, new_info);
     if (!inserted) {
-      assert(pair->second.resource.handle == buffer.handle);
+      assert(pair->second.resource.handle == resource.handle);
+      was_destroyed = pair->second.destroyed;
       if (!pair->second.destroyed) {
         for (auto& callback : store->on_destroy_resource_info_callbacks) {
           callback(&pair->second);
@@ -382,6 +385,38 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
       }
       pair->second = new_info;
     }
+
+#ifdef DEBUG_LEVEL_2
+    {
+      std::stringstream s;
+      s << "utils::resource::OnInitSwapchain(";
+      s << PRINT_PTR(resource.handle);
+      if (device->get_api() == reshade::api::device_api::opengl) {
+        const int opengl_target = resource.handle >> 40;
+        const int opengl_object = resource.handle & 0xFFFFFFFF;
+        s << ", opengl target: " << opengl_target;
+        s << ", opengl object: " << opengl_object;
+      }
+      s << ", type: " << desc.type;
+
+      if (desc.type == reshade::api::resource_type::unknown) {
+        assert(false);
+      } else if (desc.type == reshade::api::resource_type::buffer) {
+        s << ", size: " << desc.buffer.size;
+      } else {
+        s << ", format: " << desc.texture.format;
+        s << ", width: " << desc.texture.width;
+        s << ", height: " << desc.texture.height;
+        s << ", depth_or_layers: " << desc.texture.depth_or_layers;
+        s << ", levels: " << desc.texture.levels;
+      }
+      s << ", usage: " << std::hex << static_cast<uint32_t>(desc.usage) << std::dec;
+      s << ", inserted: " << (inserted ? "true" : "false");
+      s << ", was_destroyed: " << (was_destroyed ? "true" : "false");
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+#endif
     for (auto& callback : store->on_init_resource_info_callbacks) {
       callback(&pair->second);
     }

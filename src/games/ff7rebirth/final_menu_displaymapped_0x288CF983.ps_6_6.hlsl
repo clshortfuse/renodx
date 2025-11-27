@@ -1,4 +1,5 @@
-#define SHADER_HASH_0x288CF983
+#define USE_MENU
+#define USE_DISPLAY_MAP
 
 #include "./hdrcomposite.hlsl"
 
@@ -9,7 +10,6 @@ float4 main(
     : SV_Target {
   return HDRComposite(TEXCOORD, TEXCOORD_1, SV_Position);
 }
-// #define SHADER_HASH_0x288CF983
 
 // #include "./common.hlsl"
 

@@ -1,4 +1,4 @@
-#define SHADER_HASH_0xD31CF869
+#define USE_MENU
 
 #include "./hdrcomposite.hlsl"
 

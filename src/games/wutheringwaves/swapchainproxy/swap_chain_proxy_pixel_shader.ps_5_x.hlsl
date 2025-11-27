@@ -4,9 +4,10 @@ Texture2D t0 : register(t0);
 SamplerState s0 : register(s0);
 float4 main(float4 vpos: SV_POSITION, float2 uv: TEXCOORD0)
     : SV_TARGET {
-  const float4 sample = t0.Sample(s0, uv);
+  float3 color = t0.Sample(s0, uv).rgb;
 
-  float3 color = sample.xyz;
+  CLAMP_IF_SDR(color);
+
   color = renodx::color::srgb::DecodeSafe(color);
 
   [branch]
@@ -31,14 +32,14 @@ float4 main(float4 vpos: SV_POSITION, float2 uv: TEXCOORD0)
       }
     }
 
-    color = max(0, color);
+    color = saturate(renodx::draw::EncodeColor(color, RENODX_SWAP_CHAIN_ENCODING));
   } else {  // scRGB
     color = renodx::color::convert::ColorSpaces(color, RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE, RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE);
     color = max(0, color);
     color = renodx::color::convert::ColorSpaces(color, RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE, RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE);
-  }
 
-  color = renodx::draw::EncodeColor(color, RENODX_SWAP_CHAIN_ENCODING);
+    color = renodx::draw::EncodeColor(color, RENODX_SWAP_CHAIN_ENCODING);
+  }
 
   return float4(color, 1.f);
 }

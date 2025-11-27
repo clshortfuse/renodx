@@ -383,10 +383,6 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   return proxy_device;
 }
 
-static bool UsingSwapchainProxy() {
-  return !swap_chain_proxy_pixel_shader.empty() || !swap_chain_proxy_shaders.empty();
-}
-
 static bool UsingSwapchainCompatibilityMode() {
   return swapchain_proxy_compatibility_mode && (target_format == swap_chain_proxy_format);
 }
@@ -1802,7 +1798,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
       return;
     }
 
-    if (UsingSwapchainProxy()) {
+    if (!data->swap_chain_proxy_pixel_shader.empty()) {
       data->swap_chain_proxy_upgrade_target.new_format = swap_chain_proxy_format;
       if (swap_chain_proxy_format == reshade::api::format::r10g10b10a2_unorm) {
         data->swap_chain_proxy_upgrade_target.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
@@ -2061,7 +2057,7 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
     }
 
     if (resource_info->is_swap_chain) {
-      if (UsingSwapchainProxy()) {
+      if (!private_data->swap_chain_proxy_pixel_shader.empty()) {
         if (use_device_proxy || !UsingSwapchainCompatibilityMode()) {
           {
             std::stringstream s;
@@ -2470,8 +2466,13 @@ inline bool OnCreateResourceView(
 
   if (!changed) {
     if (!is_back_buffer) return false;
-    if (!UsingSwapchainProxy()) return false;
     if (swap_chain_proxy_format == target_format) return false;
+    auto* data = renodx::utils::data::Get<DeviceData>(device);
+    if (data == nullptr) return false;
+    {
+      const std::shared_lock lock(data->mutex);
+      if (data->swap_chain_proxy_pixel_shader.empty()) return false;
+    }
     // Continue to creating a resource clone
   }
 
@@ -3631,12 +3632,12 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
       reshade::register_event<reshade::addon_event::resolve_texture_region>(OnResolveTextureRegion);
 
       reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
-      reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
 
       if (use_resource_cloning) {
         reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
         reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
 
+        reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
         reshade::register_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
         reshade::register_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
         reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
@@ -3650,7 +3651,7 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
         reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
         reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
 
-        if (UsingSwapchainProxy()) {
+        if (!swap_chain_proxy_pixel_shader.empty() || !swap_chain_proxy_shaders.empty()) {
           // Create swapchain proxy
           reshade::register_event<reshade::addon_event::present>(OnPresent);
           if (new_injections != nullptr) {
