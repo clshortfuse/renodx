@@ -87,15 +87,13 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
     float vanilla_mid_gray = renodx::tonemap::uncharted2::BT709(0.18f, 2.2f);
     float3 tonemapped = renodx::tonemap::uncharted2::BT709(untonemapped, 2.2f);
 
-    tonemapped = renodx::color::correct::Hue(tonemapped, untonemapped, RENODX_TONE_MAP_HUE_CORRECTION);
-
     float3 tonemapped_graded = renodx::lut::Sample(lut_texture, CreateLUTConfig(lut_sampler), tonemapped);
 
     // Vanilla goes to 2.2 for LUT sampling and output
     tonemapped = renodx::color::correct::GammaSafe(tonemapped, true);
     tonemapped_graded = renodx::color::correct::GammaSafe(tonemapped_graded, true);
+
     untonemapped *= vanilla_mid_gray / 0.18f;  // match midgray
-    untonemapped = renodx::color::correct::GammaSafe(untonemapped, true);
 
     return renodx::draw::ToneMapPass(untonemapped, tonemapped_graded);
   }
