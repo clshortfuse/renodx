@@ -6,7 +6,8 @@ static float3 g_pre_sat;
 static float3 g_post_tonemap;
 
 static float3 g_posttmfx_hdr;
-static float3 g_posttmfx_sdr;
+static float3 g_posttmfx_sdr; 
+static float g_posttmfx_sample_count = 0.f;
 
 // Tonemap Shaders
 float3 VanillaHableTonemap(float3 color, float w = 1.f) {
@@ -104,19 +105,21 @@ void OutColorAdjustments(inout float4 o0, float saturationScale)
 
 // Post Tonemap Effects Shaders
 void PostTmFxSampleScene(inout float3 color, bool tonemap = false) {
+  g_posttmfx_sample_count += 1.f;
+
   color.rgb = renodx::draw::InvertIntermediatePass(color.rgb);
 
   [branch]
   if (tonemap) {
-    g_posttmfx_hdr = color.rgb;
+    [branch] if (g_posttmfx_sample_count == 1.f) g_posttmfx_hdr = color.rgb;
     color.rgb = renodx::tonemap::renodrt::NeutralSDR(color.rgb);
-    g_posttmfx_sdr = color.rgb;
+    [branch] if (g_posttmfx_sample_count == 1.f) g_posttmfx_sdr = color.rgb;
   }
 
   color.rgb = renodx::color::srgb::EncodeSafe(color.rgb);
 }
 
-void PostTmFxOutput(inout float3 color, bool tonemap = false) {
+void PostTmFxOutput(inout float4 color, bool tonemap = false) {
   color.rgb = renodx::color::srgb::DecodeSafe(color.rgb);
 
   [branch]

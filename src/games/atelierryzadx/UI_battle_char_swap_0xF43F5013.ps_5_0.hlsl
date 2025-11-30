@@ -59,9 +59,9 @@ void main(
     r1.xyz = -r1.xyz * abs(r3.xyz) + r2.xyz;
     //o0.xyz = saturate(r0.xxx * abs(r1.xyz) + r0.yzw);
     o0.xyz = (r0.xxx * abs(r1.xyz) + r0.yzw);
-
-    PostTmFxOutput(o0.rgb, true);
-
     o0.w = 1;
+
+    PostTmFxOutput(o0, true);
+
     return;
 }
