@@ -9,6 +9,7 @@ cbuffer _Globals : register(b0)
   float2 EllipseUVAxisLength : packoffset(c1.z);
   float2 ColorGradationWidth : packoffset(c2);
   int IsInside : packoffset(c2.z);
+  float LumiThreshold : packoffset(c2.w);
 }
 
 SamplerState smplScene_s : register(s0);
@@ -55,7 +56,12 @@ void main(
 
   PostTmFxSampleScene(r0.xyz, true);
 
-  r1.xyz = ColorRate.xyz + -r0.xyz;
+  r1.x = r0.x + r0.y;
+  r1.x = r1.x + r0.z;
+  r1.x = 0.333333343 * r1.x;
+  r1.x = saturate(r1.x / LumiThreshold);
+  r1.x = trunc(r1.x);
+  r1.xyz = r1.xxx + -r0.xyz;
 
   //o0.xyz = saturate(r0.www * r1.xyz + r0.xyz);
   o0.xyz = r0.www * r1.xyz + r0.xyz;

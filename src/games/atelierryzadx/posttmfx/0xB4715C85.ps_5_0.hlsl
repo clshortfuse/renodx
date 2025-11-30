@@ -1,6 +1,6 @@
 #include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:16 2025
+// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 27 12:47:48 2025
 
 cbuffer _Globals : register(b0)
 {
@@ -9,6 +9,7 @@ cbuffer _Globals : register(b0)
   float2 EllipseUVAxisLength : packoffset(c1.z);
   float2 ColorGradationWidth : packoffset(c2);
   int IsInside : packoffset(c2.z);
+  float LumiThreshold : packoffset(c2.w);
 }
 
 SamplerState smplScene_s : register(s0);
@@ -24,7 +25,7 @@ void main(
   float2 v1 : TEXCOORD0,
   out float4 o0 : SV_Target0)
 {
-  float4 r0,r1;
+  float4 r0,r1,r2,r3;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -55,10 +56,29 @@ void main(
 
   PostTmFxSampleScene(r0.xyz, true);
 
-  r1.xyz = ColorRate.xyz + -r0.xyz;
+  r1.xyz = saturate(r0.xyz / LumiThreshold);
+  r1.xyz = trunc(r1.xyz);
+  r2.xyz = r1.xyz + -r0.xyz;
+  r3.xyz = -ColorRate.xyz + r1.xyz;
+  r1.w = dot(abs(r3.xx), abs(r2.xx));
+  r1.x = r1.x + -r1.w;
+  r1.w = 1 + -r0.w;
+  r0.xyz = r1.www * r0.xyz;
+  
+  //o0.x = saturate(r0.w * abs(r1.x) + r0.x);
+  o0.x = (r0.w * abs(r1.x) + r0.x);
+  
+  r0.x = dot(abs(r3.yy), abs(r2.yy));
+  r0.x = r1.y + -r0.x;
+  
+  //o0.y = saturate(r0.w * abs(r0.x) + r0.y);
+  o0.y = (r0.w * abs(r0.x) + r0.y);
+  
+  r0.x = dot(abs(r3.zz), abs(r2.zz));
+  r0.x = r1.z + -r0.x;
 
-  //o0.xyz = saturate(r0.www * r1.xyz + r0.xyz);
-  o0.xyz = r0.www * r1.xyz + r0.xyz;
+  //o0.z = saturate(r0.w * abs(r0.x) + r0.z);
+  o0.z = (r0.w * abs(r0.x) + r0.z);
 
   PostTmFxOutput(o0.xyz, true);
 

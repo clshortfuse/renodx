@@ -1,6 +1,6 @@
 #include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:11 2025
+// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 27 12:47:36 2025
 
 cbuffer _Globals : register(b0)
 {
@@ -44,14 +44,16 @@ void main(
   r0.y = 1 + -r0.x;
   r0.xy = ColorRate.ww * r0.xy;
   r0.x = IsInside ? r0.y : r0.x;
-  r0.yzw = smplScene_Tex.Sample(smplScene_s, v1.xy).xyz;
+  r0.y = 1 + -r0.x;
+  r1.xyz = smplScene_Tex.Sample(smplScene_s, v1.xy).xyz;
 
-  PostTmFxSampleScene(r0.yzw, true);
+  PostTmFxSampleScene(r1.xyz, true);
 
-  r1.xyz = ColorRate.xyz + -r0.yzw;
+  r0.yzw = r1.xyz * r0.yyy;
+  r1.xyz = ColorRate.xyz * r1.xyz;
 
-  //o0.xyz = saturate(r0.xxx * r1.xyz + r0.yzw);
-  o0.xyz = r0.xxx * r1.xyz + r0.yzw;
+  //o0.xyz = saturate(r1.xyz * r0.xxx + r0.yzw);
+  o0.xyz = r1.xyz * r0.xxx + r0.yzw;
 
   PostTmFxOutput(o0.xyz, true);
 

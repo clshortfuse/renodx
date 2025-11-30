@@ -64,11 +64,12 @@ void main(
   r1.xyz = -r2.xyz * abs(r3.xyz) + r1.xyz;
   r1.w = 1 + -r0.w;
   r0.xyz = r1.www * r0.xyz;
-  // o0.xyz = saturate(r0.www * abs(r1.xyz) + r0.xyz);
-  o0.xyz = (r0.www * abs(r1.xyz) + r0.xyz);
+
+  //o0.xyz = saturate(r0.www * abs(r1.xyz) + r0.xyz);
+  o0.xyz = r0.www * abs(r1.xyz) + r0.xyz;
+
+  PostTmFxOutput(o0.xyz, true);
+
   o0.w = 1;
-
-  PostTmFxOutput(o0, true);
-
   return;
 }

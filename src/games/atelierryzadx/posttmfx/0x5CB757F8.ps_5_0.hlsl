@@ -1,3 +1,5 @@
+#include "../common.hlsl"
+
 // ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:13 2025
 
 cbuffer _Globals : register(b0)
@@ -43,10 +45,17 @@ void main(
   r0.xy = ColorRate.ww * r0.xy;
   r0.x = IsInside ? r0.y : r0.x;
   r0.yzw = smplScene_Tex.Sample(smplScene_s, v1.xy).xyz;
+
+  PostTmFxSampleScene(r0.yzw, true);
+
   r1.x = dot(r0.yzw, float3(0.298999995,0.587000012,0.114));
   r1.xyz = r1.xxx + -r0.yzw;
+
   //o0.xyz = saturate(r0.xxx * r1.xyz + r0.yzw);
-  o0.xyz = (r0.xxx * r1.xyz + r0.yzw);
+  o0.xyz = r0.xxx * r1.xyz + r0.yzw;
+
+  PostTmFxOutput(o0.xyz, true);
+
   o0.w = 1;
   return;
 }

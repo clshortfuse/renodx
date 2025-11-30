@@ -119,6 +119,17 @@ void PostTmFxSampleScene(inout float3 color, bool tonemap = false) {
   color.rgb = renodx::color::srgb::EncodeSafe(color.rgb);
 }
 
+void PostTmFxOutput(inout float3 color, bool tonemap = false) {
+  color.rgb = renodx::color::srgb::DecodeSafe(color.rgb);
+
+  [branch]
+  if (tonemap) {
+    color.rgb = renodx::tonemap::UpgradeToneMap(g_posttmfx_hdr, g_posttmfx_sdr, color.rgb, 1.f);
+  }
+
+  color.rgb = renodx::draw::RenderIntermediatePass(color.rgb);
+}
+
 void PostTmFxOutput(inout float4 color, bool tonemap = false) {
   color.rgb = renodx::color::srgb::DecodeSafe(color.rgb);
 

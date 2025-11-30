@@ -1,6 +1,6 @@
 #include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:11 2025
+// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:19 2025
 
 cbuffer _Globals : register(b0)
 {
@@ -10,6 +10,7 @@ cbuffer _Globals : register(b0)
   float2 DistRectCenterToEdgeUV : packoffset(c2.z);
   float2 ColorGradationWidth : packoffset(c3);
   int IsInside : packoffset(c3.z);
+  float LumiThreshold : packoffset(c3.w);
 }
 
 SamplerState smplScene_s : register(s0);
@@ -25,7 +26,7 @@ void main(
   float2 v1 : TEXCOORD0,
   out float4 o0 : SV_Target0)
 {
-  float4 r0,r1;
+  float4 r0,r1,r2,r3;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -44,14 +45,21 @@ void main(
   r0.y = 1 + -r0.x;
   r0.xy = ColorRate.ww * r0.xy;
   r0.x = IsInside ? r0.y : r0.x;
-  r0.yzw = smplScene_Tex.Sample(smplScene_s, v1.xy).xyz;
+  r0.y = 1 + -r0.x;
+  r1.xyz = smplScene_Tex.Sample(smplScene_s, v1.xy).xyz;
 
-  PostTmFxSampleScene(r0.yzw, true);
+  PostTmFxSampleScene(r1.xyz, true);
 
-  r1.xyz = ColorRate.xyz + -r0.yzw;
+  r0.yzw = r1.xyz * r0.yyy;
+  r2.xyz = saturate(r1.xyz / LumiThreshold);
+  r2.xyz = trunc(r2.xyz);
+  r1.xyz = r2.xyz + -r1.xyz;
+  r1.xyz = abs(r1.xyz) + abs(r1.xyz);
+  r3.xyz = -ColorRate.xyz + r2.xyz;
+  r1.xyz = -r1.xyz * abs(r3.xyz) + r2.xyz;
 
-  //o0.xyz = saturate(r0.xxx * r1.xyz + r0.yzw);
-  o0.xyz = r0.xxx * r1.xyz + r0.yzw;
+  //o0.xyz = saturate(r0.xxx * abs(r1.xyz) + r0.yzw);
+  o0.xyz = r0.xxx * abs(r1.xyz) + r0.yzw;
 
   PostTmFxOutput(o0.xyz, true);
 
