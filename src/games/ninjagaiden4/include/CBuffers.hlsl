@@ -1,0 +1,81 @@
+cbuffer RootConstants : register(b0) {
+  uint hdrEnabled : packoffset(c000.x);
+  uint nits : packoffset(c000.y);
+  float sdrGamma : packoffset(c000.z);
+};
+
+cbuffer ToneMapParameter : register(b1) {
+  float g_CAAspectRatio : packoffset(c000.x);
+  float g_CAReciprocalAspectRatio : packoffset(c000.y);
+  float g_CAIntensity : packoffset(c000.z);
+  float g_CAStartOffset : packoffset(c000.w);
+  float g_CAGreenChannelShiftingFactor : packoffset(c001.x);
+  float g_CABlueChannelShiftingFactor : packoffset(c001.y);
+  float g_vignetteReciprocalAspectRatio : packoffset(c001.z);
+  float g_vignetteOffset : packoffset(c001.w);
+  float4 g_vignetteColor : packoffset(c002.x);
+  float g_vignetteSmoothness : packoffset(c003.x);
+  float g_vignetteRoundness : packoffset(c003.y);
+  float g_useTonemap_ACES : packoffset(c003.z);
+  float g_FilmSlope_ACES : packoffset(c003.w);
+  float g_FilmToe_ACES : packoffset(c004.x);
+  float g_FilmShoulder_ACES : packoffset(c004.y);
+  float g_FilmBlackClip_ACES : packoffset(c004.z);
+  float g_FilmWhiteClip_ACES : packoffset(c004.w);
+  float g_useTonemap_LF : packoffset(c005.x);
+  float g_FilmContrast_LF : packoffset(c005.y);
+  float g_FilmHdrMax_LF : packoffset(c005.z);
+  float g_FilmMidIn_LF : packoffset(c005.w);
+  float g_FilmMidOut_LF : packoffset(c006.x);
+  float g_FilmShoulder_LF : packoffset(c006.y);
+  float g_useTonemap_LUT : packoffset(c006.z);
+  float g_lutResolution : packoffset(c006.w);
+  float g_cancelTonemap : packoffset(c007.x);
+  float g_useHDRTonemap : packoffset(c007.y);
+  float g_hdrMaxLuma : packoffset(c007.z);
+  float g_hdrMinLuma : packoffset(c007.w);
+  float g_hdrSectionStart : packoffset(c008.x);
+  float g_hdrLinearSectionRatio : packoffset(c008.y);
+  float g_hdrSlopeFactor : packoffset(c008.z);
+  float g_hdrChromaShift : packoffset(c008.w);
+};
+
+cbuffer ColorGradingParameter : register(b2) {
+  float g_WhiteBalanceTemp : packoffset(c000.x);
+  float g_WhiteBalanceTint : packoffset(c000.y);
+  float4 g_GlobalColorSaturation : packoffset(c001.x);
+  float4 g_GlobalColorContrast : packoffset(c002.x);
+  float4 g_GlobalColorGamma : packoffset(c003.x);
+  float4 g_GlobalColorGain : packoffset(c004.x);
+  float4 g_GlobalColorOffset : packoffset(c005.x);
+  float4 g_ShadwosColorSaturation : packoffset(c006.x);
+  float4 g_ShadwosColorContrast : packoffset(c007.x);
+  float4 g_ShadwosColorGamma : packoffset(c008.x);
+  float4 g_ShadwosColorGain : packoffset(c009.x);
+  float4 g_ShadwosColorOffset : packoffset(c010.x);
+  float4 g_MidtonesColorSaturation : packoffset(c011.x);
+  float4 g_MidtonesColorContrast : packoffset(c012.x);
+  float4 g_MidtonesColorGamma : packoffset(c013.x);
+  float4 g_MidtonesColorGain : packoffset(c014.x);
+  float4 g_MidtonesColorOffset : packoffset(c015.x);
+  float4 g_HighlightsColorSaturation : packoffset(c016.x);
+  float4 g_HighlightsColorContrast : packoffset(c017.x);
+  float4 g_HighlightsColorGamma : packoffset(c018.x);
+  float4 g_HighlightsColorGain : packoffset(c019.x);
+  float4 g_HighlightsColorOffset : packoffset(c020.x);
+  float g_ShadowsMax : packoffset(c021.x);
+  float g_HighlightsMin : packoffset(c021.y);
+  float g_BlueCorrection : packoffset(c021.z);
+  float g_ExpandGamut : packoffset(c021.w);
+};
+
+cbuffer FilmGrainParameter : register(b3) {
+  float g_useFilmGrain : packoffset(c000.x);
+  float g_FilmGrainRandomUVOffset_U : packoffset(c000.y);
+  float g_FilmGrainRandomUVOffset_V : packoffset(c000.z);
+  float g_FilmGrainIntensity : packoffset(c000.w);
+  float g_FilmGrainJitter : packoffset(c001.x);
+  float g_FilmGrainScale : packoffset(c001.y);
+  float pad1 : packoffset(c001.z);
+  float pad2 : packoffset(c001.w);
+};
