@@ -48,11 +48,7 @@ void main(
     r0.y = 1 + -r0.x;
     r1.xyz = smplScene_Tex.Sample(smplScene_s, v1.xy).xyz;
 
-    r1.rgb = renodx::draw::InvertIntermediatePass(r1.rgb);
-    float3 hdr = r1.rgb;
-    r1.rgb = renodx::tonemap::renodrt::NeutralSDR(r1.rgb);
-    float3 sdr = r1.rgb;
-    r1.rgb = renodx::color::srgb::EncodeSafe(r1.rgb);
+    PostTmFxSampleScene(r1.xyz, true);
 
     r0.yzw = r1.xyz * r0.yyy;
     r2.xyz = saturate(r1.xyz / LumiThreshold);
@@ -64,9 +60,7 @@ void main(
     //o0.xyz = saturate(r0.xxx * abs(r1.xyz) + r0.yzw);
     o0.xyz = (r0.xxx * abs(r1.xyz) + r0.yzw);
 
-    o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
-    o0.rgb = renodx::tonemap::UpgradeToneMap(hdr, sdr, o0.rgb, 1.f);
-    o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+    PostTmFxOutput(o0.rgb, true);
 
     o0.w = 1;
     return;
