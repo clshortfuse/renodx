@@ -1,6 +1,6 @@
 #include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:16 2025
+// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:17 2025
 
 cbuffer _Globals : register(b0)
 {
@@ -24,7 +24,7 @@ void main(
   float2 v1 : TEXCOORD0,
   out float4 o0 : SV_Target0)
 {
-  float4 r0,r1;
+  float4 r0,r1,r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -55,10 +55,13 @@ void main(
 
   PostTmFxSampleScene(r0.xyz, true);
 
-  r1.xyz = ColorRate.xyz + -r0.xyz;
+  r1.xyzw = float4(1,1,1,1) + -r0.xyzw;
+  r2.xyz = float3(1,1,1) + -ColorRate.xyz;
+  r1.xyz = -r1.xyz * r2.xyz + float3(1,1,1);
+  r0.xyz = r1.www * r0.xyz;
 
-  //o0.xyz = saturate(r0.www * r1.xyz + r0.xyz);
-  o0.xyz = r0.www * r1.xyz + r0.xyz;
+  //o0.xyz = saturate(r1.xyz * r0.www + r0.xyz);
+  o0.xyz = r1.xyz * r0.www + r0.xyz;
 
   PostTmFxOutput(o0.xyz, true);
 

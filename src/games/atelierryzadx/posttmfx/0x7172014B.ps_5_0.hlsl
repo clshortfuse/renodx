@@ -1,6 +1,6 @@
 #include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:11 2025
+// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:13 2025
 
 cbuffer _Globals : register(b0)
 {
@@ -48,7 +48,7 @@ void main(
 
   PostTmFxSampleScene(r0.yzw, true);
 
-  r1.xyz = ColorRate.xyz + -r0.yzw;
+  r1.xyz = r0.yzw * float3(-2,-2,-2) + float3(1,1,1);
 
   //o0.xyz = saturate(r0.xxx * r1.xyz + r0.yzw);
   o0.xyz = r0.xxx * r1.xyz + r0.yzw;
