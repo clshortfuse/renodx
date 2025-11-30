@@ -1,3 +1,5 @@
+#include "./common.hlsl"
+
 // ---- Created with 3Dmigoto v1.3.16 on Mon Jul  8 23:38:26 2024
 
 cbuffer _Globals : register(b0)
@@ -29,8 +31,12 @@ void main(
   //skips effect early, new
   o0.xyz = r0.xyz;
   o0.w = 1;
+
+  if (RENODX_TONE_MAP_FLARE) {
+    o0.rgb = renodx::math::SignPow(o0.rgb, fGamma);
+  }
+
   return;
-  
   
   r0.xyz = log2(abs(r0.xyz));
   r0.xyz = fGamma * r0.xyz;

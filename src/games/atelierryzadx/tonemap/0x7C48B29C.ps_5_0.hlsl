@@ -136,7 +136,23 @@ void main(
       r2.yzw = r2.xxx * r0.xyz + r1.yzw;
     }
   }
-  r1.xyzw = smplEffectScene_Tex.Sample(smplEffectScene_s, v1.xy).xyzw;
+  r1.xyzw = smplEffectScene_Tex.Sample(smplEffectScene_s, v1.xy).xyzw; // fx
+
+  if (RENODX_TONE_MAP_FLARE) {
+    //r1.rgb = lerp(r1.rgb, renodx::tonemap::ExponentialRollOff(r1.rgb, 0.f, 1.f), saturate(renodx::color::y::from::BT709(r1.rgb * 2)));
+
+    float3 chr = renodx::tonemap::ExponentialRollOff(r1.rgb, 0.f, 1.f);
+    float3 lum = renodx::tonemap::dice::BT709(r1.rgb, 1.f, 0.f);
+    float3 col = 0;
+    if (CUSTOM_SAT_BRIGHTNESS == 0.f) {
+      col = renodx::color::correct::Chrominance(chr, lum, CUSTOM_SAT_STRENGTH);
+    } else {
+      col = renodx::color::correct::Chrominance(chr, r1.rgb, CUSTOM_SAT_STRENGTH); // r1.rgb, 0.25 seems solid
+    }
+
+    r1.rgb = lerp(r1.rgb, col, saturate(renodx::color::y::from::BT709(r1.rgb * 2)));
+  }
+
   r0.xyz = max(float3(0,0,0), r1.xyz);
   r1.xyz = r1.xyz + -r0.xyz;
   r3.xyz = r0.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.0299999993,0.0299999993,0.0299999993);
@@ -159,7 +175,13 @@ void main(
   r3.xyz = r3.xyz + r3.xyz;
   r0.xyz = r0.xyz / r3.xyz;
   r0.xyz = r0.xyz + r1.xyz;
-  r0.xyz = r2.yzw * r1.www + r0.xyz;
+
+  if (RENODX_TONE_MAP_BLOWOUT && RENODX_TONE_MAP_FLARE) {
+    float lum = renodx::color::y::from::BT709(r0.rgb);
+    r0.rgb = lerp(r0.rgb, (1.f + ((RENODX_TONE_MAP_BLOWOUT * 100.f) * 0.1)) * r0.rgb, saturate(lum));
+  }
+
+  r0.xyz = r2.yzw * r1.www + r0.xyz;  // adds fx on top of game scene, r0 = fx, r2 = game scene
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r1.xyz = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
   r0.xyz = r1.xyz * fBloomWeight + r0.xyz;
