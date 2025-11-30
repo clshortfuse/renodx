@@ -49,9 +49,7 @@ void main(
   // orig
   o0.w = 1;
 
-  if (RENODX_TONE_MAP_FLARE) {
-    o0.rgb = renodx::math::SignPow(o0.rgb, 0.454545468);
-  }
+  o0.rgb = renodx::math::SignPow(o0.rgb, 0.454545468);
 
   return; 
   

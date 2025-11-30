@@ -32,9 +32,7 @@ void main(
   o0.xyz = r0.xyz;
   o0.w = 1;
 
-  if (RENODX_TONE_MAP_FLARE) {
-    o0.rgb = renodx::math::SignPow(o0.rgb, fGamma);
-  }
+  o0.rgb = renodx::math::SignPow(o0.rgb, fGamma);
 
   return;
   

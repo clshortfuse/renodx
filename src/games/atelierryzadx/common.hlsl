@@ -5,6 +5,10 @@ static float g_gamma;
 static float3 g_pre_sat;
 static float3 g_post_tonemap;
 
+static float3 g_posttmfx_hdr;
+static float3 g_posttmfx_sdr;
+
+// Tonemap Shaders
 float3 VanillaHableTonemap(float3 color, float w = 1.f) {
   float3 temp1 = color * 0.22 + 0.023;
   temp1 = color * temp1 + 0.002;
@@ -16,26 +20,21 @@ float3 VanillaHableTonemap(float3 color, float w = 1.f) {
 }
 
 void PostEffectsSample(inout float4 color, float2 hdrParams, float gamma) {
-  if (RENODX_TONE_MAP_FLARE) {
-    // r1.rgb = lerp(r1.rgb, renodx::tonemap::ExponentialRollOff(r1.rgb, 0.f, 1.f), saturate(renodx::color::y::from::BT709(r1.rgb * 2)));
+  [branch]
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
 
     float3 chr = renodx::tonemap::ExponentialRollOff(color.rgb, 0.f, 1.f);
-    float3 lum = renodx::tonemap::dice::BT709(color.rgb, 1.f, 0.f);
-    float3 col = 0;
-    if (CUSTOM_SAT_BRIGHTNESS == 0.f) {
-      col = renodx::color::correct::Chrominance(chr, lum, CUSTOM_SAT_STRENGTH);
-    } else {
-      col = renodx::color::correct::Chrominance(chr, color.rgb, CUSTOM_SAT_STRENGTH);  // r1.rgb, 0.25 seems solid
-    }
+    float3 col = renodx::color::correct::Chrominance(chr, color.rgb, 0.25f);
 
     color.rgb = lerp(color.rgb, col, saturate(renodx::color::y::from::BT709(color.rgb * 2)));
   }
 }
 
 void PreEffectsBlend(inout float3 color) {
-  if (RENODX_TONE_MAP_BLOWOUT && RENODX_TONE_MAP_FLARE) {
+  [branch]
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     float lum = renodx::color::y::from::BT709(color.rgb);
-    color.rgb = lerp(color.rgb, (1.f + ((RENODX_TONE_MAP_BLOWOUT * 100.f) * 0.1)) * color.rgb, saturate(lum));
+    color.rgb = lerp(color.rgb, 2.f * color.rgb, saturate(lum));
   }
 }
 
@@ -68,15 +67,15 @@ void OutColorAdjustments(inout float4 o0, float saturationScale)
 {
   [branch]
   if (CUSTOM_SAT_STRENGTH != 1.f) {
-    //o0.rgb = lerp(g_pre_sat, o0.rgb, CUSTOM_SAT_STRENGTH);
+    o0.rgb = lerp(g_pre_sat, o0.rgb, CUSTOM_SAT_STRENGTH);
   }
 
   o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
 
   [branch]
   if (CUSTOM_SAT_BRIGHTNESS && CUSTOM_SAT_STRENGTH != 0.f) {
-    //g_pre_sat = renodx::color::srgb::DecodeSafe(g_pre_sat);
-    //o0.rgb = renodx::color::correct::Luminance(o0.rgb, g_pre_sat, 1.f);
+    g_pre_sat = renodx::color::srgb::DecodeSafe(g_pre_sat);
+    o0.rgb = renodx::color::correct::Luminance(o0.rgb, g_pre_sat, 1.f);
   }
 
   o0.rgb = saturate(o0.rgb);
@@ -101,4 +100,29 @@ void OutColorAdjustments(inout float4 o0, float saturationScale)
   }
 
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+}
+
+// Post Tonemap Effects Shaders
+void PostTmFxSampleScene(inout float3 color, bool tonemap = false) {
+  color.rgb = renodx::draw::InvertIntermediatePass(color.rgb);
+
+  [branch]
+  if (tonemap) {
+    g_posttmfx_hdr = color.rgb;
+    color.rgb = renodx::tonemap::renodrt::NeutralSDR(color.rgb);
+    g_posttmfx_sdr = color.rgb;
+  }
+
+  color.rgb = renodx::color::srgb::EncodeSafe(color.rgb);
+}
+
+void PostTmFxOutput(inout float3 color, bool tonemap = false) {
+  color.rgb = renodx::color::srgb::DecodeSafe(color.rgb);
+
+  [branch]
+  if (tonemap) {
+    color.rgb = renodx::tonemap::UpgradeToneMap(g_posttmfx_hdr, g_posttmfx_sdr, color.rgb, 1.f);
+  }
+
+  color.rgb = renodx::draw::RenderIntermediatePass(color.rgb);
 }
