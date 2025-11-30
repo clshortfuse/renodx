@@ -36,6 +36,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
   {"ToneMapHueCorrection", {.binding =  &shader_injection.tone_map_hue_correction, .default_value = 90.f, .tooltip = "Emulates vanilla SDR hue shifts."}},
   {"ToneMapHueShift", {.binding =  &shader_injection.tone_map_hue_shift, .label = "Chrominance Correction", .tooltip = "Emulates vanilla SDR chrominance/blowout."}},
   {"ToneMapScaling", {.binding =  &shader_injection.tone_map_per_channel}},
+  {"ToneMapHueProcessor", {.binding =  &shader_injection.tone_map_hue_processor}},
   {"ColorGradeExposure",  {.binding = &shader_injection.tone_map_exposure}},
   {"ColorGradeHighlights",  {.binding = &shader_injection.tone_map_highlights}},
   {"ColorGradeShadows",  {.binding = &shader_injection.tone_map_shadows}},
@@ -234,6 +235,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
       //renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+
+      //renodx::mods::swapchain::SetUseHDR10();
 
       // BGRA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({

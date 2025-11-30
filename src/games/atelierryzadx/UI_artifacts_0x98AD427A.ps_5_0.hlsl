@@ -1,3 +1,5 @@
+#include "./common.hlsl"
+
 // ---- Created with 3Dmigoto v1.3.16 on Mon Jul  8 23:38:25 2024
 
 Texture2D<float4> sScene : register(t0);
@@ -46,6 +48,10 @@ void main(
   
   // orig
   o0.w = 1;
+
+  if (RENODX_TONE_MAP_FLARE) {
+    o0.rgb = renodx::math::SignPow(o0.rgb, 0.454545468);
+  }
 
   return; 
   

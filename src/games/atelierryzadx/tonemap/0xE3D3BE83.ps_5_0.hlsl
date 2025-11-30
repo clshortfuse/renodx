@@ -72,9 +72,6 @@ void main(
   r1.xyz = r2.xyz * r1.xxx;
   o0.w = r2.w;
   r0.xyz = r1.xyz * r0.www + r0.xyz;
-
-  PreTonemap(r0.xyz, SimulateHDRParams.x);
-
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r1.xyz = smplStar_Tex.Sample(smplStar_s, v1.xy).xyz;
   r0.xyz = r1.xyz * fStarWeight + r0.xyz;
