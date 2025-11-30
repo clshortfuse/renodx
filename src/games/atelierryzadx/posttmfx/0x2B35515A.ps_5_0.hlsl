@@ -58,7 +58,7 @@ void main(
   r0.x = min(BlurRate, r0.x);
   r1.xyz = smplScene_Tex.Sample(smplScene_s, v1.xy).xyz;
 
-  PostTmFxSampleScene(r1.xyz, true);
+  PostTmFxSampleScene(r1.xyz, false); // doesn't clamp, doesn't need anything
 
   r0.y = SampleNum;
   r1.w = BlurWidth / r0.y;
@@ -73,7 +73,7 @@ void main(
     r3.yz = r0.zw * r3.yy + BlurRectCenter.xy;
     r3.yzw = smplScene_Tex.Sample(smplScene_s, r3.yz).xyz;
 
-    PostTmFxSampleScene(r3.yzw, true);
+    PostTmFxSampleScene(r3.yzw, false);
 
     r3.yzw = r3.yzw + r2.xyz;
     r4.x = cmp((int)r3.x >= (int)r2.w);
@@ -89,7 +89,7 @@ void main(
   o0.xyz = r0.xxx * r0.yzw + r1.xyz;
   o0.w = 1;
 
-  PostTmFxOutput(o0, true);
+  PostTmFxOutput(o0, false);
 
   return;
 }
