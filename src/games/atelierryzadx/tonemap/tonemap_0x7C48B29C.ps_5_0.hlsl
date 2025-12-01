@@ -1,6 +1,6 @@
 #include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:18 2025
+// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:14 2025
 
 cbuffer _Globals : register(b0)
 {
@@ -14,13 +14,14 @@ cbuffer _Globals : register(b0)
   float fStarWeight : packoffset(c3) = {0.800000012};
   float fLensFlareWeight : packoffset(c3.y) = {0.300000012};
   float fSaturationScaleEx : packoffset(c3.z) = {1};
-  float3 vColorScale : packoffset(c4) = {1,1,1};
-  float3 vSaturationScale : packoffset(c5) = {1,1,1};
-  float2 vScreenSize : packoffset(c6) = {1280,720};
-  float4 vSpotParams : packoffset(c7) = {640,360,300,400};
-  float fLimbDarkening : packoffset(c8) = {755364.125};
-  float fLimbDarkeningWeight : packoffset(c8.y) = {0};
-  float fGamma : packoffset(c8.z) = {1};
+  float4 vLightShaftPower : packoffset(c4);
+  float3 vColorScale : packoffset(c5) = {1,1,1};
+  float3 vSaturationScale : packoffset(c6) = {1,1,1};
+  float2 vScreenSize : packoffset(c7) = {1280,720};
+  float4 vSpotParams : packoffset(c8) = {640,360,300,400};
+  float fLimbDarkening : packoffset(c9) = {755364.125};
+  float fLimbDarkeningWeight : packoffset(c9.y) = {0};
+  float fGamma : packoffset(c9.z) = {1};
 }
 
 SamplerState smplScene_s : register(s0);
@@ -35,6 +36,7 @@ SamplerState smplEffectScene_s : register(s8);
 SamplerState smplBloom_s : register(s9);
 SamplerState smplStar_s : register(s10);
 SamplerState smplFlare_s : register(s11);
+SamplerState smplLightShaftLinWork2_s : register(s12);
 Texture2D<float4> smplScene_Tex : register(t0);
 Texture2D<float4> smplAdaptedLumCur_Tex : register(t1);
 Texture2D<float4> smplZ_Tex : register(t2);
@@ -47,6 +49,7 @@ Texture2D<float4> smplEffectScene_Tex : register(t8);
 Texture2D<float4> smplBloom_Tex : register(t9);
 Texture2D<float4> smplStar_Tex : register(t10);
 Texture2D<float4> smplFlare_Tex : register(t11);
+Texture2D<float4> smplLightShaftLinWork2_Tex : register(t12);
 
 
 // 3Dmigoto declarations
@@ -170,6 +173,8 @@ void main(
   r0.xyz = r1.xyz * fStarWeight + r0.xyz;
   r1.xyz = smplFlare_Tex.Sample(smplFlare_s, v1.xy).xyz;
   r0.xyz = r1.xyz * fLensFlareWeight + r0.xyz;
+  r1.xyz = smplLightShaftLinWork2_Tex.Sample(smplLightShaftLinWork2_s, v1.xy).xyz;
+  r0.xyz = r1.xyz * vLightShaftPower.xyz + r0.xyz;
   r1.xyz = vColorScale.xyz * r0.xyz;
   r1.x = dot(r1.xyz, float3(0.298909992,0.586610019,0.114480004));
   r0.xyz = r0.xyz * vColorScale.xyz + -r1.xxx;

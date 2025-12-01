@@ -120,7 +120,7 @@ void main(
   r1.yzw = r1.yyy * r2.xyz + r1.zzz;
   o0.xyz = r1.xxx ? r0.xyz : r1.yzw;
   o0.w = r0.w;
-
+  
   OutColorAdjustments(o0, fSaturationScaleEx);
 
   return;

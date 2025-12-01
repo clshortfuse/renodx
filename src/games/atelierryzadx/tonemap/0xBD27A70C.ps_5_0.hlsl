@@ -48,6 +48,9 @@ void main(
   float4 fDest;
 
   r0.xyzw = smplEffectScene_Tex.Sample(smplEffectScene_s, v1.xy).xyzw;
+  
+  PostEffectsSample(r0.xyzw, SimulateHDRParams, fGamma);
+
   r1.xyz = max(float3(0,0,0), r0.xyz);
   r2.xyz = r1.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.0299999993,0.0299999993,0.0299999993);
   r2.xyz = r1.xyz * r2.xyz + float3(0.00200000009,0.00200000009,0.00200000009);
@@ -74,6 +77,9 @@ void main(
   r2.xyzw = smplScene_Tex.Sample(smplScene_s, v1.xy).xyzw;
   r1.xyz = r2.xyz * r1.xxx;
   o0.w = r2.w;
+
+  PreEffectsBlend(r0.xyz);
+
   r0.xyz = r1.xyz * r0.www + r0.xyz;
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r1.xyz = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
@@ -101,7 +107,7 @@ void main(
   r1.xyz = fLimbDarkeningWeight * r1.xyz;
   r0.w = 1 + -fLimbDarkeningWeight;
   r0.xyz = r0.xyz * r0.www + r1.xyz;
-
+  
   PreTonemap(r0.xyz, SimulateHDRParams.x);
 
   r1.xyz = r0.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.0299999993,0.0299999993,0.0299999993);
@@ -117,9 +123,6 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = fGamma * r0.xyz;
   r0.xyz = exp2(r0.xyz);
-
-  PreSaturationScaleEx(r0.xyz, fGamma, fSaturationScaleEx);
-
   r0.w = min(r0.y, r0.z);
   r0.w = min(r0.x, r0.w);
   r1.x = max(r0.y, r0.z);
@@ -135,7 +138,7 @@ void main(
   r1.xyz = r0.www * r1.yzw + r1.xxx;
   r0.w = cmp(fSaturationScaleEx == 1.000000);
   o0.xyz = r0.www ? r0.xyz : r1.xyz;
-
+  
   OutColorAdjustments(o0, fSaturationScaleEx);
 
   return;

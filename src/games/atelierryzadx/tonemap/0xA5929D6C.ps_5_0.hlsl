@@ -1,6 +1,6 @@
 #include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 13 18:40:13 2025
+// ---- Created with 3Dmigoto v1.3.16 on Thu Nov 27 11:58:28 2025
 
 cbuffer _Globals : register(b0)
 {
@@ -9,32 +9,33 @@ cbuffer _Globals : register(b0)
   float fFXAAEdgeSharpness : packoffset(c0.z) = {8};
   float fFXAAPixelRange : packoffset(c0.w) = {2};
   float4 vRecipScreenSize : packoffset(c1) = {0.000781250012,0.00138888892,0.000390625006,0.000694444461};
-  float2 SimulateHDRParams : packoffset(c2);
-  float fBloomWeight : packoffset(c2.z) = {0.5};
-  float fStarWeight : packoffset(c2.w) = {0.800000012};
-  float fLensFlareWeight : packoffset(c3) = {0.300000012};
-  float fSaturationScaleEx : packoffset(c3.y) = {1};
-  float3 vColorScale : packoffset(c4) = {1,1,1};
-  float3 vSaturationScale : packoffset(c5) = {1,1,1};
-  float2 vScreenSize : packoffset(c6) = {1280,720};
-  float4 vSpotParams : packoffset(c7) = {640,360,300,400};
-  float fLimbDarkening : packoffset(c8) = {755364.125};
-  float fLimbDarkeningWeight : packoffset(c8.y) = {0};
-  float fGamma : packoffset(c8.z) = {1};
+  float fBloomWeight : packoffset(c2) = {0.5};
+  float fStarWeight : packoffset(c2.y) = {0.800000012};
+  float fLensFlareWeight : packoffset(c2.z) = {0.300000012};
+  float2 SimulateHDRParams : packoffset(c3);
+  float fSaturationScaleEx : packoffset(c3.z) = {1};
+  float4 vLightShaftPower : packoffset(c4);
+  float3 vColorScale : packoffset(c5) = {1,1,1};
+  float3 vSaturationScale : packoffset(c6) = {1,1,1};
+  float2 vScreenSize : packoffset(c7) = {1280,720};
+  float4 vSpotParams : packoffset(c8) = {640,360,300,400};
+  float fLimbDarkening : packoffset(c9) = {755364.125};
+  float fLimbDarkeningWeight : packoffset(c9.y) = {0};
+  float fGamma : packoffset(c9.z) = {1};
 }
 
 SamplerState smplScene_s : register(s0);
 SamplerState smplAdaptedLumCur_s : register(s1);
-SamplerState smplEffectScene_s : register(s2);
-SamplerState smplBloom_s : register(s3);
-SamplerState smplStar_s : register(s4);
-SamplerState smplFlare_s : register(s5);
+SamplerState smplBloom_s : register(s2);
+SamplerState smplStar_s : register(s3);
+SamplerState smplFlare_s : register(s4);
+SamplerState smplLightShaftLinWork2_s : register(s5);
 Texture2D<float4> smplScene_Tex : register(t0);
 Texture2D<float4> smplAdaptedLumCur_Tex : register(t1);
-Texture2D<float4> smplEffectScene_Tex : register(t2);
-Texture2D<float4> smplBloom_Tex : register(t3);
-Texture2D<float4> smplStar_Tex : register(t4);
-Texture2D<float4> smplFlare_Tex : register(t5);
+Texture2D<float4> smplBloom_Tex : register(t2);
+Texture2D<float4> smplStar_Tex : register(t3);
+Texture2D<float4> smplFlare_Tex : register(t4);
+Texture2D<float4> smplLightShaftLinWork2_Tex : register(t5);
 
 
 // 3Dmigoto declarations
@@ -105,44 +106,15 @@ void main(
     r0.xyz = r1.xxx ? r5.xyz : r2.xyz;
   }
   r1.x = smplAdaptedLumCur_Tex.Sample(smplAdaptedLumCur_s, float2(0.25,0.5)).x;
-  r0.xyz = r1.xxx * r0.xyz;
-  r1.xyzw = smplEffectScene_Tex.Sample(smplEffectScene_s, v1.xy).xyzw;
-
-  PostEffectsSample(r1.xyzw, SimulateHDRParams, fGamma);
-
-  r2.xyz = max(float3(0,0,0), r1.xyz);
-  r1.xyz = -r2.xyz + r1.xyz;
-  r3.xyz = r2.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.0299999993,0.0299999993,0.0299999993);
-  r3.xyz = r2.xyz * r3.xyz + float3(0.00200000009,0.00200000009,0.00200000009);
-  r4.xyz = r2.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(0.300000012,0.300000012,0.300000012);
-  r2.xyz = r2.xyz * r4.xyz + float3(0.0599999987,0.0599999987,0.0599999987);
-  r2.xyz = r3.xyz / r2.xyz;
-  r2.xyz = float3(-0.0333000012,-0.0333000012,-0.0333000012) + r2.xyz;
-  r2.xyz = float3(2.49262953,2.49262953,2.49262953) * r2.xyz;
-  r2.xyz = min(float3(1,1,1), r2.xyz);
-  r2.xyz = r2.xyz * SimulateHDRParams.yyy + float3(0.0333000012,0.0333000012,0.0333000012);
-  r3.xyz = r2.xyz * float3(0.219999999,0.219999999,0.219999999) + float3(-0.219999999,-0.219999999,-0.219999999);
-  r4.xyz = r2.xyz * float3(0.300000012,0.300000012,0.300000012) + float3(-0.0299999993,-0.0299999993,-0.0299999993);
-  r2.xyz = r2.xyz * float3(0.0599999987,0.0599999987,0.0599999987) + float3(-0.00200000009,-0.00200000009,-0.00200000009);
-  r2.xyz = r2.xyz * r3.xyz;
-  r2.xyz = float3(4,4,4) * r2.xyz;
-  r2.xyz = r4.xyz * r4.xyz + -r2.xyz;
-  r2.xyz = sqrt(r2.xyz);
-  r2.xyz = -r4.xyz + -r2.xyz;
-  r3.xyz = r3.xyz + r3.xyz;
-  r2.xyz = r2.xyz / r3.xyz;
-  r1.xyz = r2.xyz + r1.xyz;
-
-  PreEffectsBlend(r1.xyz);
-
-  r0.xyz = r0.xyz * r1.www + r1.xyz;
-  r0.xyz = max(float3(0,0,0), r0.xyz);
-  r1.xyz = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
-  r0.xyz = r1.xyz * fBloomWeight + r0.xyz;
+  r1.yzw = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
+  r1.yzw = fBloomWeight * r1.yzw;
+  r0.xyz = r0.xyz * r1.xxx + r1.yzw;
   r1.xyz = smplStar_Tex.Sample(smplStar_s, v1.xy).xyz;
   r0.xyz = r1.xyz * fStarWeight + r0.xyz;
   r1.xyz = smplFlare_Tex.Sample(smplFlare_s, v1.xy).xyz;
   r0.xyz = r1.xyz * fLensFlareWeight + r0.xyz;
+  r1.xyz = smplLightShaftLinWork2_Tex.Sample(smplLightShaftLinWork2_s, v1.xy).xyz;
+  r0.xyz = r1.xyz * vLightShaftPower.xyz + r0.xyz;
   r1.xyz = vColorScale.xyz * r0.xyz;
   r1.x = dot(r1.xyz, float3(0.298909992,0.586610019,0.114480004));
   r0.xyz = r0.xyz * vColorScale.xyz + -r1.xxx;
