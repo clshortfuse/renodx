@@ -48,7 +48,6 @@ void main(
 
   PostTmFxSampleScene(r0.yzw, true);
 
-
   //o0.xyz = saturate(ColorRate.xyz * r0.xxx + r0.yzw);
   o0.xyz = ColorRate.xyz * r0.xxx + r0.yzw;
 

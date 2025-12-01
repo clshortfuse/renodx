@@ -84,7 +84,7 @@ void OutColorAdjustments(inout float4 o0, float saturationScale)
   [branch]
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     float3 sdr_color = o0.rgb;
-
+    
     g_untonemapped = renodx::math::SignPow(g_untonemapped, g_gamma);
     g_untonemapped = renodx::color::srgb::DecodeSafe(g_untonemapped);
 
