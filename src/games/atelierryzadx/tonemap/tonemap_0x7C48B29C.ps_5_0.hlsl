@@ -136,7 +136,7 @@ void main(
       r2.yzw = r2.xxx * r0.xyz + r1.yzw;
     }
   }
-  r1.xyzw = smplEffectScene_Tex.Sample(smplEffectScene_s, v1.xy).xyzw;
+  r1.xyzw = smplEffectScene_Tex.Sample(smplEffectScene_s, v1.xy).xyzw; // fx sample
 
   PostEffectsSample(r1.xyzw, SimulateHDRParams, fGamma);
 
@@ -165,7 +165,7 @@ void main(
 
   PreEffectsBlend(r0.xyz);
 
-  r0.xyz = r2.yzw * r1.www + r0.xyz;
+  r0.xyz = r2.yzw * r1.www + r0.xyz; // adds fx on top of game scene, r0 = fx, r2 = game scene
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r1.xyz = smplBloom_Tex.Sample(smplBloom_s, v1.xy).xyz;
   r0.xyz = r1.xyz * fBloomWeight + r0.xyz;
