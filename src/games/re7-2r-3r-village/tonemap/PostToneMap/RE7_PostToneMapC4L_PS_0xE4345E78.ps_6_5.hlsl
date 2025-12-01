@@ -21,17 +21,15 @@ cbuffer CameraKerare : register(b1) {
 };
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float4 Kerare : Kerare,
-  linear float Exposure : Exposure
-) : SV_Target {
-
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 Kerare: Kerare,
+    linear float Exposure: Exposure)
+    : SV_Target {
   float tonemap_range = tonemapRange;
 
 #if 1
   tonemap_range = 0.f;  // no highlight compression
 #endif
-
 
   float4 SV_Target;
   float4 _13 = HDRImage.Load(int3((uint)(uint(SV_Position.x)), (uint)(uint(SV_Position.y)), 0));
@@ -62,5 +60,9 @@ float4 main(
   SV_Target.y = _56;
   SV_Target.z = _57;
   SV_Target.w = 1.0f;
+
+#if 1
+  SV_Target.rgb = ApplyPreDisplayMap(SV_Target.rgb);
+#endif
   return SV_Target;
 }

@@ -202,7 +202,7 @@ float4 main(
   float _310 = (((_257 * (_258 - cb0_073y)) + cb0_073y) * (_214.y + ((_189 * TEXCOORD_1.x) * cb0_070y))) * ((_296 * (_297 - cb0_076y)) + cb0_076y);
   float _312 = (((_257 * (_258 - cb0_073z)) + cb0_073z) * (_214.z + ((_154.z * TEXCOORD_1.x) * cb0_070z))) * ((_296 * (_297 - cb0_076z)) + cb0_076z);
 
-  CAPTURE_UNTONEMAPPED(untonemapped, float3(_308, _310, _312));
+  CAPTURE_UNTONEMAPPED(float3(_308, _310, _312));
 
   [branch]
   // if (!((uint)(cb0_091z) == 0)) {
@@ -432,7 +432,7 @@ float4 main(
   }
 
   CLAMP_IF_SDR(_573); CLAMP_IF_SDR(_574); CLAMP_IF_SDR(_575);
-  CAPTURE_TONEMAPPED(tonemapped, float3(_573, _574, _575));
+  CAPTURE_TONEMAPPED(float3(_573, _574, _575));
 
   float4 _597 = t2.Sample(s2, float3(((saturate((log2(_573 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f), ((saturate((log2(_574 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f), ((saturate((log2(_575 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f)));
   _597.rgb = HandleLUTOutput(_597.rgb, untonemapped, tonemapped);

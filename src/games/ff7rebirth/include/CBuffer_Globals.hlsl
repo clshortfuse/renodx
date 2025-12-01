@@ -1,113 +1,80 @@
-/*
-struct Globals
-{
-    float4 PostprocessInput0Size;                 ; Offset:    0
-    float4 PostprocessInput1Size;                 ; Offset:   16
-    float4 PostprocessInput2Size;                 ; Offset:   32
-    float4 PostprocessInput3Size;                 ; Offset:   48
-    float4 PostprocessInput4Size;                 ; Offset:   64
-    float4 PostprocessInput5Size;                 ; Offset:   80
-    float4 PostprocessInput6Size;                 ; Offset:   96
-    float4 PostprocessInput7Size;                 ; Offset:  112
-    float4 PostprocessInput8Size;                 ; Offset:  128
-    float4 PostprocessInput9Size;                 ; Offset:  144
-    float4 PostprocessInput10Size;                ; Offset:  160
-    float4 PostprocessInput0MinMax;               ; Offset:  176
-    float4 PostprocessInput1MinMax;               ; Offset:  192
-    float4 PostprocessInput2MinMax;               ; Offset:  208
-    float4 PostprocessInput3MinMax;               ; Offset:  224
-    float4 PostprocessInput4MinMax;               ; Offset:  240
-    float4 PostprocessInput5MinMax;               ; Offset:  256
-    float4 PostprocessInput6MinMax;               ; Offset:  272
-    float4 PostprocessInput7MinMax;               ; Offset:  288
-    float4 PostprocessInput8MinMax;               ; Offset:  304
-    float4 PostprocessInput9MinMax;               ; Offset:  320
-    float4 PostprocessInput10MinMax;              ; Offset:  336
-    float4 ViewportSize;                          ; Offset:  352
-    uint4 ViewportRect;                           ; Offset:  368
-    float4 ScreenPosToPixel;                      ; Offset:  384
-    float4 SceneColorBufferUVViewport;            ; Offset:  400
-    float3 MappingPolynomial;                     ; Offset:  416
-    float2 ViewportColor_Extent;                  ; Offset:  432
-    float2 ViewportColor_ExtentInverse;           ; Offset:  440
-    float2 ViewportColor_ScreenPosToViewportScale;; Offset:  448
-    float2 ViewportColor_ScreenPosToViewportBias; ; Offset:  456
-    uint2 ViewportColor_ViewportMin;              ; Offset:  464
-    uint2 ViewportColor_ViewportMax;              ; Offset:  472
-    float2 ViewportColor_ViewportSize;            ; Offset:  480
-    float2 ViewportColor_ViewportSizeInverse;     ; Offset:  488
-    float2 ViewportColor_UVViewportMin;           ; Offset:  496
-    float2 ViewportColor_UVViewportMax;           ; Offset:  504
-    float2 ViewportColor_UVViewportSize;          ; Offset:  512
-    float2 ViewportColor_UVViewportSizeInverse;   ; Offset:  520
-    float2 ViewportColor_UVViewportBilinearMin;   ; Offset:  528
-    float2 ViewportColor_UVViewportBilinearMax;   ; Offset:  536
-    float2 ViewportGlare_Extent;                  ; Offset:  544
-    float2 ViewportGlare_ExtentInverse;           ; Offset:  552
-    float2 ViewportGlare_ScreenPosToViewportScale;; Offset:  560
-    float2 ViewportGlare_ScreenPosToViewportBias; ; Offset:  568
-    uint2 ViewportGlare_ViewportMin;              ; Offset:  576
-    uint2 ViewportGlare_ViewportMax;              ; Offset:  584
-    float2 ViewportGlare_ViewportSize;            ; Offset:  592
-    float2 ViewportGlare_ViewportSizeInverse;     ; Offset:  600
-    float2 ViewportGlare_UVViewportMin;           ; Offset:  608
-    float2 ViewportGlare_UVViewportMax;           ; Offset:  616
-    float2 ViewportGlare_UVViewportSize;          ; Offset:  624
-    float2 ViewportGlare_UVViewportSizeInverse;   ; Offset:  632
-    float2 ViewportGlare_UVViewportBilinearMin;   ; Offset:  640
-    float2 ViewportGlare_UVViewportBilinearMax;   ; Offset:  648
-    float2 ViewportDestination_Extent;            ; Offset:  656
-    float2 ViewportDestination_ExtentInverse;     ; Offset:  664
-    float2 ViewportDestination_ScreenPosToViewportScale;; Offset:  672
-    float2 ViewportDestination_ScreenPosToViewportBias;; Offset:  680
-    uint2 ViewportDestination_ViewportMin;        ; Offset:  688
-    uint2 ViewportDestination_ViewportMax;        ; Offset:  696
-    float2 ViewportDestination_ViewportSize;      ; Offset:  704
-    float2 ViewportDestination_ViewportSizeInverse;; Offset:  712
-    float2 ViewportDestination_UVViewportMin;     ; Offset:  720
-    float2 ViewportDestination_UVViewportMax;     ; Offset:  728
-    float2 ViewportDestination_UVViewportSize;    ; Offset:  736
-    float2 ViewportDestination_UVViewportSizeInverse;; Offset:  744
-    float2 ViewportDestination_UVViewportBilinearMin;; Offset:  752
-    float2 ViewportDestination_UVViewportBilinearMax;; Offset:  760
-    float4 VignetteContext;                       ; Offset:  768
-    float4 GlareContext;                          ; Offset:  784
-    float4 NoiseContext;                          ; Offset:  800
-    float4 HDRCompositionContext;                 ; Offset:  816
-    float4 HDRCompositionContextColor;            ; Offset:  832
-    float4 CompositeSurfaceContext;               ; Offset:  848
-    float4 DeviceCorrectorContext;                ; Offset:  864
-} Globals;                                       ; Offset:    0 Size:   880
-*/
-cbuffer Globals : register(b0) {
-  float Globals_027z : packoffset(c027.z);
-  float Globals_027w : packoffset(c027.w);
-  uint Globals_029x : packoffset(c029.x);
-  uint Globals_029y : packoffset(c029.y);
-  float Globals_030x : packoffset(c030.x);
-  float Globals_030y : packoffset(c030.y);
-  float Globals_033x : packoffset(c033.x);
-  float Globals_033y : packoffset(c033.y);
-  float Globals_033z : packoffset(c033.z);
-  float Globals_033w : packoffset(c033.w);
-  float Globals_034z : packoffset(c034.z);
-  float Globals_034w : packoffset(c034.w);
-  uint Globals_036x : packoffset(c036.x);
-  uint Globals_036y : packoffset(c036.y);
-  float Globals_037x : packoffset(c037.x);
-  float Globals_037y : packoffset(c037.y);
-  float Globals_040x : packoffset(c040.x);
-  float Globals_040y : packoffset(c040.y);
-  float Globals_040z : packoffset(c040.z);
-  float Globals_040w : packoffset(c040.w);
-  uint Globals_043x : packoffset(c043.x);
-  uint Globals_043y : packoffset(c043.y);
-  float Globals_044x : packoffset(c044.x);
-  float Globals_044y : packoffset(c044.y);
-  float Globals_044z : packoffset(c044.z);
-  float Globals_044w : packoffset(c044.w);
-  float Globals_048x : packoffset(c048.x);
-  float Globals_048y : packoffset(c048.y);
-  float Globals_049x : packoffset(c049.x);
-  float Globals_054z : packoffset(c054.z);
+
+cbuffer $Globals : register(b0) {
+  float4 PostprocessInput0Size : packoffset(c000.x);
+  float4 PostprocessInput1Size : packoffset(c001.x);
+  float4 PostprocessInput2Size : packoffset(c002.x);
+  float4 PostprocessInput3Size : packoffset(c003.x);
+  float4 PostprocessInput4Size : packoffset(c004.x);
+  float4 PostprocessInput5Size : packoffset(c005.x);
+  float4 PostprocessInput6Size : packoffset(c006.x);
+  float4 PostprocessInput7Size : packoffset(c007.x);
+  float4 PostprocessInput8Size : packoffset(c008.x);
+  float4 PostprocessInput9Size : packoffset(c009.x);
+  float4 PostprocessInput10Size : packoffset(c010.x);
+  float4 PostprocessInput0MinMax : packoffset(c011.x);
+  float4 PostprocessInput1MinMax : packoffset(c012.x);
+  float4 PostprocessInput2MinMax : packoffset(c013.x);
+  float4 PostprocessInput3MinMax : packoffset(c014.x);
+  float4 PostprocessInput4MinMax : packoffset(c015.x);
+  float4 PostprocessInput5MinMax : packoffset(c016.x);
+  float4 PostprocessInput6MinMax : packoffset(c017.x);
+  float4 PostprocessInput7MinMax : packoffset(c018.x);
+  float4 PostprocessInput8MinMax : packoffset(c019.x);
+  float4 PostprocessInput9MinMax : packoffset(c020.x);
+  float4 PostprocessInput10MinMax : packoffset(c021.x);
+  float4 ViewportSize : packoffset(c022.x);
+  uint4 ViewportRect : packoffset(c023.x);
+  float4 ScreenPosToPixel : packoffset(c024.x);
+  float4 SceneColorBufferUVViewport : packoffset(c025.x);
+  float3 MappingPolynomial : packoffset(c026.x);
+  float2 ViewportColor_Extent : packoffset(c027.x);
+  float2 ViewportColor_ExtentInverse : packoffset(c027.z);
+  float2 ViewportColor_ScreenPosToViewportScale : packoffset(c028.x);
+  float2 ViewportColor_ScreenPosToViewportBias : packoffset(c028.z);
+  uint2 ViewportColor_ViewportMin : packoffset(c029.x);
+  uint2 ViewportColor_ViewportMax : packoffset(c029.z);
+  float2 ViewportColor_ViewportSize : packoffset(c030.x);
+  float2 ViewportColor_ViewportSizeInverse : packoffset(c030.z);
+  float2 ViewportColor_UVViewportMin : packoffset(c031.x);
+  float2 ViewportColor_UVViewportMax : packoffset(c031.z);
+  float2 ViewportColor_UVViewportSize : packoffset(c032.x);
+  float2 ViewportColor_UVViewportSizeInverse : packoffset(c032.z);
+  float2 ViewportColor_UVViewportBilinearMin : packoffset(c033.x);
+  float2 ViewportColor_UVViewportBilinearMax : packoffset(c033.z);
+  float2 ViewportGlare_Extent : packoffset(c034.x);
+  float2 ViewportGlare_ExtentInverse : packoffset(c034.z);
+  float2 ViewportGlare_ScreenPosToViewportScale : packoffset(c035.x);
+  float2 ViewportGlare_ScreenPosToViewportBias : packoffset(c035.z);
+  uint2 ViewportGlare_ViewportMin : packoffset(c036.x);
+  uint2 ViewportGlare_ViewportMax : packoffset(c036.z);
+  float2 ViewportGlare_ViewportSize : packoffset(c037.x);
+  float2 ViewportGlare_ViewportSizeInverse : packoffset(c037.z);
+  float2 ViewportGlare_UVViewportMin : packoffset(c038.x);
+  float2 ViewportGlare_UVViewportMax : packoffset(c038.z);
+  float2 ViewportGlare_UVViewportSize : packoffset(c039.x);
+  float2 ViewportGlare_UVViewportSizeInverse : packoffset(c039.z);
+  float2 ViewportGlare_UVViewportBilinearMin : packoffset(c040.x);
+  float2 ViewportGlare_UVViewportBilinearMax : packoffset(c040.z);
+  float2 ViewportDestination_Extent : packoffset(c041.x);
+  float2 ViewportDestination_ExtentInverse : packoffset(c041.z);
+  float2 ViewportDestination_ScreenPosToViewportScale : packoffset(c042.x);
+  float2 ViewportDestination_ScreenPosToViewportBias : packoffset(c042.z);
+  uint2 ViewportDestination_ViewportMin : packoffset(c043.x);
+  uint2 ViewportDestination_ViewportMax : packoffset(c043.z);
+  float2 ViewportDestination_ViewportSize : packoffset(c044.x);
+  float2 ViewportDestination_ViewportSizeInverse : packoffset(c044.z);
+  float2 ViewportDestination_UVViewportMin : packoffset(c045.x);
+  float2 ViewportDestination_UVViewportMax : packoffset(c045.z);
+  float2 ViewportDestination_UVViewportSize : packoffset(c046.x);
+  float2 ViewportDestination_UVViewportSizeInverse : packoffset(c046.z);
+  float2 ViewportDestination_UVViewportBilinearMin : packoffset(c047.x);
+  float2 ViewportDestination_UVViewportBilinearMax : packoffset(c047.z);
+  float4 VignetteContext : packoffset(c048.x);
+  float4 GlareContext : packoffset(c049.x);
+  float4 NoiseContext : packoffset(c050.x);
+  float4 HDRCompositionContext : packoffset(c051.x);
+  float4 HDRCompositionContextColor : packoffset(c052.x);
+  float4 CompositeSurfaceContext : packoffset(c053.x);
+  float4 DeviceCorrectorContext : packoffset(c054.x);
+  float4 DevelopmentContext : packoffset(c055.x);
 };
