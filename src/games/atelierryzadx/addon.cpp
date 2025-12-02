@@ -34,7 +34,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
   {"ToneMapUINits", {.binding =  &shader_injection.graphics_white_nits}},
   {"ToneMapGammaCorrection", {.binding =  &shader_injection.gamma_correction}},
   {"ToneMapHueCorrection", {.binding =  &shader_injection.tone_map_hue_correction, .default_value = 90.f, .tooltip = "Emulates vanilla SDR hue shifts."}},
-  {"ToneMapHueShift", {.binding =  &shader_injection.tone_map_hue_shift, .label = "Chrominance Correction", .tooltip = "Emulates vanilla SDR chrominance/blowout."}},
+  {"ToneMapHueShift", {.binding =  &shader_injection.tone_map_hue_shift, .default_value = 75.f, .label = "Chrominance Correction", .tooltip = "Emulates vanilla SDR chrominance/blowout."}},
   {"ToneMapScaling", {.binding =  &shader_injection.tone_map_per_channel}},
   {"ColorGradeExposure",  {.binding = &shader_injection.tone_map_exposure}},
   {"ColorGradeHighlights",  {.binding = &shader_injection.tone_map_highlights}},
