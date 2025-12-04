@@ -1,6 +1,4 @@
-#include "./shared.h"
-
-// ---- Created with 3Dmigoto v1.3.16 on Tue Jun 04 23:18:22 2024
+#include "../shared.h"
 
 cbuffer _Globals : register(b0) {
   float4 DL_FREG_007 : packoffset(c7);
@@ -73,45 +71,56 @@ cbuffer _Globals : register(b0) {
 }
 
 SamplerState gSMP_0Sampler_s : register(s0);
+SamplerState gSMP_1Sampler_s : register(s1);
 SamplerState gSMP_2Sampler_s : register(s2);
+SamplerState gSMP_3Sampler_s : register(s3);
+SamplerState gSMP_4Sampler_s : register(s4);
+SamplerState gSMP_5Sampler_s : register(s5);
 Texture2D<float4> gSMP_0 : register(t0);
+Texture2D<float4> gSMP_1 : register(t1);
 Texture2D<float4> gSMP_2 : register(t2);
+Texture2D<float4> gSMP_3 : register(t3);
+Texture2D<float4> gSMP_4 : register(t4);
+Texture2D<float4> gSMP_5 : register(t5);
 
-// 3Dmigoto declarations
-#define cmp -
-
-void main(float4 v0
-          : SV_Position0, float2 v1
-          : TEXCOORD0, out float4 o0
-          : SV_Target0) {
-  float4 r0;
+void main(float4 v0: SV_Position0, float4 v1: TEXCOORD0, float4 v2: TEXCOORD1, out float4 o0: SV_Target0) {
+  float4 r0, r1, r2;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.x = gSMP_2.Sample(gSMP_2Sampler_s, v1.xy).x;
+  r0.x = gSMP_5.Sample(gSMP_5Sampler_s, v1.xy).x;
   r0.y = DL_FREG_008.x + -DL_FREG_008.y;
   r0.x = r0.x * r0.y + DL_FREG_008.y;
   r0.x = DL_FREG_008.x / r0.x;
-  r0.yz = DL_FREG_071.zw / DL_FREG_008.yy;
+  r0.yz = DL_FREG_009.xy / DL_FREG_008.yy;
   r0.x = r0.x + -r0.y;
   r0.y = r0.z + -r0.y;
-  r0.x = saturate(r0.x / r0.y);
-  r0.y = DL_FREG_071.x + -DL_FREG_011.x;
-  r0.y = r0.x * r0.y + DL_FREG_011.x;
-  o0.w = r0.x;
-  r0.xzw = gSMP_0.Sample(gSMP_0Sampler_s, v1.xy).xyz;
-  r0.xzw = r0.xzw + -r0.yyy;
-  r0.y = 1 + -r0.y;
-  r0.xzw = max(float3(0, 0, 0), r0.xzw);
 
-  // o0.xyz = saturate(r0.xzw / r0.yyy);
+  // r0.x = saturate(r0.x / r0.y);
+  // r0.x = saturate(DL_FREG_009.z * r0.x) * injectedData.fxDoF;
 
-  if (injectedData.fxBloom <= 1) { // Vanilla bloom
-    o0.xyz = saturate(r0.xzw / r0.yyy) * injectedData.fxBloom;
-  } else { // Increases bloom strength based on distance
-    o0.xyz = clamp(r0.xzw / r0.yyy, 0, 1.f / injectedData.fxBloom) *
-             pow(injectedData.fxBloom, injectedData.fxBloom);
-  }
+  // Increases DoF strength based on distance
+  r0.x = clamp(r0.x / r0.y, 0, CUSTOM_DOF);
+  r0.x = clamp(DL_FREG_009.z * r0.x, 0, CUSTOM_DOF);
 
+  r0.yz = float2(-0.5, -0.5) + v1.xy;
+  r0.yz = DL_FREG_012.xy * r0.yz;
+  r0.y = dot(r0.yz, r0.yz);
+  r0.y = sqrt(r0.y);
+  r0.y = -DL_FREG_007.x + r0.y;
+  r0.y = saturate(DL_FREG_007.y * r0.y);
+  r0.x = r0.y * DL_FREG_007.z + r0.x;
+  r0.y = gSMP_4.Sample(gSMP_4Sampler_s, v1.xy).w;
+  r0.x = max(r0.x, r0.y);
+  r0.xyzw = saturate(r0.xxxx * DL_FREG_066.xyzw + DL_FREG_067.xyzw);
+  r0.yzw = r0.yzw + -r0.xyz;
+  r1.xyzw = gSMP_1.Sample(gSMP_1Sampler_s, v1.xy).xyzw;
+  r1.xyzw = r1.xyzw * r0.yyyy;
+  r2.xyzw = gSMP_0.Sample(gSMP_0Sampler_s, v1.xy).xyzw;
+  r1.xyzw = r2.xyzw * r0.xxxx + r1.xyzw;
+  r2.xyzw = gSMP_2.Sample(gSMP_2Sampler_s, v1.xy).xyzw;
+  r1.xyzw = r2.xyzw * r0.zzzz + r1.xyzw;
+  r2.xyzw = gSMP_3.Sample(gSMP_3Sampler_s, v1.xy).xyzw;
+  o0.xyzw = r2.xyzw * r0.wwww + r1.xyzw;
   return;
 }
