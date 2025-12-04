@@ -177,6 +177,13 @@ void main(
     r1.y = dot(r0.xyzw, DL_FREG_062._m01_m11_m21_m31);
     r1.z = dot(r0.xyzw, DL_FREG_062._m02_m12_m22_m32);
     working_color = lerp(r0.rgb, r1.rgb, RENODX_COLOR_GRADE_STRENGTH);
+
+#if 0
+    if (RENODX_TONE_MAP_TYPE != 0.f) {
+      working_color = lerp(r0.rgb, working_color, saturate(r0.rgb / 0.18f));
+      working_color = renodx::color::gamma::EncodeSafe(renodx::lut::RecolorUnclamped(renodx::color::bt709::clamp::BT2020(renodx::color::gamma::DecodeSafe(r1.rgb)), renodx::color::bt709::clamp::BT2020(renodx::color::gamma::DecodeSafe(working_color)), 1.f));
+    }
+#endif
   }
 
   if (CUSTOM_GRAIN_TYPE == 0.f) {  // noise
@@ -216,7 +223,7 @@ void main(
   working_color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
   working_color = renodx::color::gamma::EncodeSafe(working_color, 2.2f);
 
-  o0.w = renodx::color::luma::from::BT601(working_color);
+  o0.w = renodx::color::luma::from::BT601(max(0, working_color));
   o0.xyz = working_color;
   return;
 }

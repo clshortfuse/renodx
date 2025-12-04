@@ -1,6 +1,8 @@
 #ifndef SRC_DARKSOULS_SHARED_H_
 #define SRC_DARKSOULS_SHARED_H_
 
+#define USE_SHADER_BASED_UPGRADES 0
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
