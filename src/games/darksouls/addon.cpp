@@ -44,7 +44,9 @@ namespace {
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+#if USE_SHADER_BASED_UPGRADES
     UpgradeRTVReplaceShader(0xF87B3349),  // tonemap
+#endif
     __ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
@@ -361,6 +363,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::SetUseHDR10(true);
         renodx::mods::shader::force_pipeline_cloning = true;
 
+#if USE_SHADER_BASED_UPGRADES
         renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::b8g8r8a8_unorm,
@@ -369,6 +372,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .use_resource_view_cloning = true,
             .use_resource_view_hot_swap = true,
         });
+#else
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::b8g8r8a8_unorm,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+        });
+#endif
 
         renodx::utils::random::binds.push_back(&shader_injection.custom_random);
 

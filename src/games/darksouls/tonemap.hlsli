@@ -741,7 +741,8 @@ float3 ApplyUserGrading(float3 ungraded) {
   cg_config.hue_correction_strength = RENODX_TONE_MAP_HUE_SHIFT;
   cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
 
-  float3 hue_shift_source = renodx::tonemap::ReinhardPiecewise(ungraded, 4.f, 1.f);
+  // float3 hue_shift_source = renodx::tonemap::ReinhardPiecewise(ungraded, 4.f, 0.5f);
+  float3 hue_shift_source = renodx::tonemap::ExponentialRollOff(ungraded, 0.5f, 4.f);
 
   float y = renodx::color::y::from::BT709(ungraded);
   float3 graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, y, cg_config);
