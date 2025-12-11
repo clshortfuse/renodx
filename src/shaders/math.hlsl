@@ -74,16 +74,99 @@ float Average(float3 color) {
   return (color.x + color.y + color.z) / 3.f;
 }
 
+#if __SHADER_TARGET_MAJOR >= 6 || defined(VULKAN)
+#define SELECT_FUNCTION_GENERATOR_SCALAR(TYPE)                   \
+  TYPE Select(bool condition, TYPE trueValue, TYPE falseValue) { \
+    return select(condition, trueValue, falseValue);             \
+  }
+
+#define SELECT_FUNCTION_GENERATOR_VECTOR(TYPE, SIZE)                                     \
+  TYPE##SIZE Select(bool condition, TYPE##SIZE trueValue, TYPE##SIZE falseValue) {       \
+    return select(condition, trueValue, falseValue);                                     \
+  }                                                                                      \
+  TYPE##SIZE Select(bool condition, TYPE##SIZE trueValue, TYPE falseValue) {             \
+    return select(condition, trueValue, falseValue);                                     \
+  }                                                                                      \
+  TYPE##SIZE Select(bool condition, TYPE trueValue, TYPE##SIZE falseValue) {             \
+    return select(condition, trueValue, falseValue);                                     \
+  }                                                                                      \
+  TYPE##SIZE Select(bool##SIZE condition, TYPE##SIZE trueValue, TYPE##SIZE falseValue) { \
+    return select(condition, trueValue, falseValue);                                     \
+  }
+
+#else
+// Backport of select(t,a,b)
+#define SELECT_FUNCTION_GENERATOR_SCALAR(TYPE)                   \
+  TYPE Select(bool condition, TYPE trueValue, TYPE falseValue) { \
+    [flatten]                                                    \
+    if (condition) {                                             \
+      return trueValue;                                          \
+    } else {                                                     \
+      return falseValue;                                         \
+    }                                                            \
+  }
+
+#define SELECT_FUNCTION_GENERATOR_VECTOR(TYPE, SIZE)                                     \
+  TYPE##SIZE Select(bool condition, TYPE##SIZE trueValue, TYPE##SIZE falseValue) {       \
+    [flatten]                                                                            \
+    if (condition) {                                                                     \
+      return trueValue;                                                                  \
+    } else {                                                                             \
+      return falseValue;                                                                 \
+    }                                                                                    \
+  }                                                                                      \
+  TYPE##SIZE Select(bool condition, TYPE##SIZE trueValue, TYPE falseValue) {             \
+    [flatten]                                                                            \
+    if (condition) {                                                                     \
+      return trueValue;                                                                  \
+    } else {                                                                             \
+      return falseValue;                                                                 \
+    }                                                                                    \
+  }                                                                                      \
+  TYPE##SIZE Select(bool condition, TYPE trueValue, TYPE##SIZE falseValue) {             \
+    [flatten]                                                                            \
+    if (condition) {                                                                     \
+      return trueValue;                                                                  \
+    } else {                                                                             \
+      return falseValue;                                                                 \
+    }                                                                                    \
+  }                                                                                      \
+  TYPE##SIZE Select(bool##SIZE condition, TYPE##SIZE trueValue, TYPE##SIZE falseValue) { \
+    TYPE##SIZE result;                                                                   \
+    [unroll]                                                                             \
+    for (int i = 0; i < SIZE; ++i) {                                                     \
+      [flatten]                                                                          \
+      if (condition[i]) {                                                                \
+        result[i] = trueValue[i];                                                        \
+      } else {                                                                           \
+        result[i] = falseValue[i];                                                       \
+      }                                                                                  \
+    }                                                                                    \
+    return result;                                                                       \
+  }
+
+#endif
+
+#define SELECT_FUNCTION_GENERATOR(TYPE)     \
+  SELECT_FUNCTION_GENERATOR_SCALAR(TYPE)    \
+  SELECT_FUNCTION_GENERATOR_VECTOR(TYPE, 2) \
+  SELECT_FUNCTION_GENERATOR_VECTOR(TYPE, 3) \
+  SELECT_FUNCTION_GENERATOR_VECTOR(TYPE, 4)
+
+SELECT_FUNCTION_GENERATOR(float)
+SELECT_FUNCTION_GENERATOR(uint)
+SELECT_FUNCTION_GENERATOR(int)
+
+#undef SELECT_FUNCTION_GENERATOR_SCALAR
+#undef SELECT_FUNCTION_GENERATOR_VECTOR
+#undef SELECT_FUNCTION_GENERATOR
+
 float DivideSafe(float dividend, float divisor) {
-  return (divisor == 0.f)
-             ? FLT_MAX * Sign(dividend)
-             : (dividend / divisor);
+  return Select(divisor == 0.f, FLT_MAX * Sign(dividend), dividend / divisor);
 }
 
 float DivideSafe(float dividend, float divisor, float fallback) {
-  return (divisor == 0.f)
-             ? fallback
-             : (dividend / divisor);
+  return Select(divisor == 0.f, fallback, dividend / divisor);
 }
 
 float2 DivideSafe(float2 dividend, float2 divisor) {

@@ -442,19 +442,13 @@ float3 BT709(float3 bt709_color, float scaling = 100.f) {
 namespace srgb {
 static const float REFERENCE_WHITE = 80.f;
 
-#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
-#define ENCODE(T)                                        \
-  T Encode(T c) {                                        \
-    return (c <= 0.0031308f)                             \
-               ? (c * 12.92f)                            \
-               : (1.055f * pow(c, 1.f / 2.4f) - 0.055f); \
+#define ENCODE(T)                              \
+  T Encode(T c) {                              \
+    return renodx::math::Select(               \
+        c <= 0.0031308f,                       \
+        c * 12.92f,                            \
+        1.055f * pow(c, 1.f / 2.4f) - 0.055f); \
   }
-#else
-#define ENCODE(T)                                                                     \
-  T Encode(T c) {                                                                     \
-    return select(c <= 0.0031308f, c * 12.92f, 1.055f * pow(c, 1.f / 2.4f) - 0.055f); \
-  }
-#endif
 
 ENCODE(float)
 ENCODE(float2)
@@ -477,19 +471,13 @@ float4 EncodeSafe(float4 color) {
   return float4(EncodeSafe(color.rgb), color.a);
 }
 
-#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
-#define DECODE(T)                                    \
-  T Decode(T c) {                                    \
-    return (c <= 0.04045f)                           \
-               ? (c / 12.92f)                        \
-               : (pow((c + 0.055f) / 1.055f, 2.4f)); \
+#define DECODE(T)                          \
+  T Decode(T c) {                          \
+    return renodx::math::Select(           \
+        c <= 0.04045f,                     \
+        c / 12.92f,                        \
+        pow((c + 0.055f) / 1.055f, 2.4f)); \
   }
-#else
-#define DECODE(T)                                                               \
-  T Decode(T c) {                                                               \
-    return select(c <= 0.04045f, c / 12.92f, pow((c + 0.055f) / 1.055f, 2.4f)); \
-  }
-#endif
 
 DECODE(float)
 DECODE(float2)
@@ -522,13 +510,10 @@ float4 DecodeSafe(float4 color) {
 namespace srgba {
 
 float4 Encode(float4 color) {
-#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
-  return (color <= 0.0031308f)
-             ? (color * 12.92f)
-             : (1.055f * pow(color, 1.f / 2.4f) - 0.055f);
-#else
-  return select(color <= 0.0031308f, color * 12.92f, 1.055f * pow(color, 1.f / 2.4f) - 0.055f);
-#endif
+  return renodx::math::Select(
+      color <= 0.0031308f,
+      color * 12.92f,
+      1.055f * pow(color, 1.f / 2.4f) - 0.055f);
 }
 
 float4 EncodeSafe(float4 color) {
@@ -536,13 +521,10 @@ float4 EncodeSafe(float4 color) {
 }
 
 float4 Decode(float4 color) {
-#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
-  return (color <= 0.04045f)
-             ? (color / 12.92f)
-             : pow((color + 0.055f) / 1.055f, 2.4f);
-#else
-  return select(color <= 0.04045f, color / 12.92f, pow((color + 0.055f) / 1.055f, 2.4f));
-#endif
+  return renodx::math::Select(
+      color <= 0.04045f,
+      color / 12.92f,
+      pow((color + 0.055f) / 1.055f, 2.4f));
 }
 
 float4 DecodeSafe(float4 color) {
@@ -609,75 +591,35 @@ struct EncodingParams {
   float cut;
 };
 
-#define ENCODE_CONDS      (c > params.cut)
-#define ENCODE_COND_TRUE  (params.c * log10((params.a * c) + params.b) + params.d)
-#define ENCODE_COND_FALSE (params.e * c + params.f)
-
-#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
-#define ENCODE(T)                                             \
-  T Encode(T c, EncodingParams params, bool use_cut = true) { \
-    if (!use_cut) {                                           \
-      return ENCODE_COND_TRUE;                                \
-    } else {                                                  \
-      return ENCODE_CONDS                                     \
-                 ? ENCODE_COND_TRUE                           \
-                 : ENCODE_COND_FALSE;                         \
-    }                                                         \
+#define ARRI_ENCODE_GENERATOR(T)                                       \
+  T Encode(T c, EncodingParams params, bool use_cut = true) {          \
+    if (!use_cut) {                                                    \
+      return (params.c * log10((params.a * c) + params.b) + params.d); \
+    }                                                                  \
+    return renodx::math::Select(                                       \
+        (c > params.cut),                                              \
+        (params.c * log10((params.a * c) + params.b) + params.d),      \
+        (params.e * c + params.f));                                    \
   }
-#else
-#define ENCODE(T)                                                     \
-  T Encode(T c, EncodingParams params, bool use_cut = true) {         \
-    if (!use_cut) {                                                   \
-      return ENCODE_COND_TRUE;                                        \
-    }                                                                 \
-    return select(ENCODE_CONDS, ENCODE_COND_TRUE, ENCODE_COND_FALSE); \
+
+ARRI_ENCODE_GENERATOR(float)
+ARRI_ENCODE_GENERATOR(float2)
+ARRI_ENCODE_GENERATOR(float3)
+
+#define ARRI_DECODE_GENERATOR(T)                                        \
+  T Decode(T c, EncodingParams params, bool use_cut = true) {           \
+    return renodx::math::Select(                                        \
+        (c > (params.e * params.cut * (use_cut ? 1 : 0) + params.f)),   \
+        ((pow(10.f, (c - params.d) / params.c) - params.b) / params.a), \
+        ((c - params.f) / params.e));                                   \
   }
-#endif
 
-ENCODE(float)
-ENCODE(float2)
-ENCODE(float3)
+ARRI_DECODE_GENERATOR(float)
+ARRI_DECODE_GENERATOR(float2)
+ARRI_DECODE_GENERATOR(float3)
 
-#define DECODE_CONDS_CUT    (c > (params.e * params.cut + params.f))
-#define DECODE_CONDS_NO_CUT (c > params.f)
-#define DECODE_COND_TRUE    ((pow(10.f, (c - params.d) / params.c) - params.b) / params.a)
-#define DECODE_COND_FALSE   ((c - params.f) / params.e)
-
-#if (!defined(__SHADER_TARGET_MAJOR) || __SHADER_TARGET_MAJOR <= 5)
-#define DECODE(T)                                             \
-  T Decode(T c, EncodingParams params, bool use_cut = true) { \
-    if (use_cut) {                                            \
-      return DECODE_CONDS_CUT                                 \
-                 ? DECODE_COND_TRUE                           \
-                 : DECODE_COND_FALSE;                         \
-    }                                                         \
-    return DECODE_CONDS_NO_CUT                                \
-               ? DECODE_COND_TRUE                             \
-               : DECODE_COND_FALSE;                           \
-  }
-#else
-#define DECODE(T)                                                            \
-  T Decode(T c, EncodingParams params, bool use_cut = true) {                \
-    if (use_cut) {                                                           \
-      return select(DECODE_CONDS_CUT, DECODE_COND_TRUE, DECODE_COND_FALSE);  \
-    }                                                                        \
-    return select(DECODE_CONDS_NO_CUT, DECODE_COND_TRUE, DECODE_COND_FALSE); \
-  }
-#endif
-
-DECODE(float)
-DECODE(float2)
-DECODE(float3)
-
-#undef ENCODE
-#undef ENCODE_CONDS
-#undef ENCODE_COND_TRUE
-#undef ENCODE_COND_FALSE
-#undef DECODE
-#undef DECODE_CONDS_CUT
-#undef DECODE_CONDS_NO_CUT
-#undef DECODE_COND_TRUE
-#undef DECODE_COND_FALSE
+#undef ARRI_ENCODE_GENERATOR
+#undef ARRI_DECODE_GENERATOR
 
 #define GENERATE_ARRI_LOGC_FUNCTIONS(T)      \
   T Encode(T c, bool use_cut = true) {       \
