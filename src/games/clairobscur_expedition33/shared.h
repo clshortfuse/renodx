@@ -52,7 +52,8 @@ struct ShaderInjectData {
   float tone_map_per_channel;
   float scene_grade_saturation_correction;
   float scene_grade_blowout_restoration;
-  float scene_grade_hue_correction;
+  float tone_map_hue_correction_type;
+  float tone_map_hue_correction;
   float custom_grain_type;
   float custom_grain_strength;
   float custom_random;
@@ -107,7 +108,9 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_LUT_STRENGTH                      1.f
 #define CUSTOM_LUT_SCALING                       0.f
 #define CUSTOM_IS_ENGINE_HDR                     shader_injection.custom_is_engine_hdr
-#define OVERRIDE_BLACK_CLIP                      1.f  // 0 - Off, 1 - 0.0001 nits
+#define OVERRIDE_BLACK_CLIP                      1.f  // 0 - Off, 1 - 0 nits
+#define RENODX_TONE_MAP_HUE_CORRECTION_TYPE      1.f  // 0 - Highlights, Midtones, & Shadows; 1 - Midtones, & Shadows
+#define RENODX_TONE_MAP_HUE_CORRECTION           shader_injection.tone_map_hue_correction
 
 #include "../../shaders/renodx.hlsl"
 
