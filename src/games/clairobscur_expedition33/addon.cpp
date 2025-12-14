@@ -217,11 +217,12 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
      },
      {hdr_upgrade_setting},
      renodx::templates::settings::CreateDefaultSettings({
-         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .default_value = 3.f, .labels = {"Vanilla", "None", "ACES", "Vanilla+ (ACES + UE Filmic Blend)", "UE Filmic (SDR)"}, .parse = [](float value) { return value; }, .on_change = &OnLUTSettingChange}},
+         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .default_value = 3.f, .labels = {"Vanilla (UE ACES if using Unreal HDR and UE Filmic if using SDR)", "None", "ACES", "UE Filmic Extended (HDR)", "UE Filmic (SDR)"}, .parse = [](float value) { return value; }, .on_change = &OnLUTSettingChange}},
          {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnLUTSettingChange}},
          {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnLUTSettingChange}},
          {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .on_change = &OnLUTSettingChange}},
-         {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .on_change = &OnLUTSettingChange}},
+         {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .default_value = 1.f, .labels = {"Luminance and Per Channel Blend", "Per Channel"}, .on_change = &OnLUTSettingChange}},
+         {"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 0.f, .label = "Hue Correction (Midtones and Shadows)", .tooltip = "Hue retention strength. Only applies to midtones and shadows.", .on_change = &OnLUTSettingChange}},
          /* {"SceneGradeSaturationCorrection", &shader_injection.scene_grade_saturation_correction},
          {"SceneGradeHueCorrection", &shader_injection.scene_grade_hue_correction},
          {"SceneGradeBlowoutRestoration", &shader_injection.scene_grade_blowout_restoration}, */
@@ -350,6 +351,7 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 203.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
+      {"ToneMapHueCorrection", 0.f},
       {"ToneMapGammaCorrection", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},

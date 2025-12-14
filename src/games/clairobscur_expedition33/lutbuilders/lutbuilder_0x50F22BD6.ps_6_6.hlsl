@@ -26,7 +26,8 @@ cbuffer WorkingColorSpace : register(b1) {
 float4 main(
     noperspective float2 TEXCOORD: TEXCOORD,
     noperspective float4 SV_Position: SV_Position,
-    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex) : SV_Target {
+    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex)
+    : SV_Target {
   uint output_gamut = OutputGamut;
   float expand_gamut = ExpandGamut;
   bool is_hdr = false;
@@ -139,7 +140,11 @@ float4 main(
 
   // Will cause issues with grayscale scenes if moved above
   // SetUntonemappedAP1(_485, _487, _489);
-
+#if 1  // begin FilmToneMap with BlueCorrect
+  float _826, _827, _828;
+  ApplyFilmToneMapWithBlueCorrect(_485, _487, _489,
+                                  _826, _827, _828);
+#else
   float _504 = (((mad(0.061360642313957214f, _489, (mad(-4.540197551250458e-09f, _487, (_485 * 0.9386394023895264f))))) - _485) * (BlueCorrection)) + _485;
   float _505 = (((mad(0.169205904006958f, _489, (mad(0.8307942152023315f, _487, (_485 * 6.775371730327606e-08f))))) - _487) * (BlueCorrection)) + _487;
   float _506 = ((mad(-2.3283064365386963e-10f, _487, (_485 * -9.313225746154785e-10f))) * (BlueCorrection)) + _489;
@@ -244,6 +249,7 @@ float4 main(
   float _828 = (((mad(0.9999996423721313f, _810, (mad(2.0954757928848267e-08f, _809, (_808 * 1.862645149230957e-08f))))) - _810) * (BlueCorrection)) + _810;
 #endif
 
+#endif
   // SetTonemappedAP1(_826, _827, _828);
 
   float _850 = max(0.0f, (mad((WorkingColorSpace_012z), _828, (mad((WorkingColorSpace_012y), _827, ((WorkingColorSpace_012x)*_826))))));
