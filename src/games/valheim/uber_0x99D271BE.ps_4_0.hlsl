@@ -128,26 +128,25 @@ void main(
   // r0.xyz = saturate(r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
   // arri encode end
 
-  float3 tonemapped_bt709;
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    renodx::lut::Config lut_config = renodx::lut::config::Create();
+    lut_config.lut_sampler = s5_s;
+    lut_config.strength = CUSTOM_LUT_STRENGTH;
+    lut_config.scaling = CUSTOM_LUT_SCALING;
+    lut_config.precompute = cb0[12].xyz;
+    lut_config.tetrahedral = CUSTOM_LUT_TETRAHEDRAL == 1.f;
+    lut_config.type_input = renodx::lut::config::type::PQ;
+    lut_config.type_output = renodx::lut::config::type::LINEAR;
+    lut_config.recolor = 0.0f;
 
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.lut_sampler = s5_s;
-  lut_config.strength = CUSTOM_LUT_STRENGTH;
-  lut_config.scaling = CUSTOM_LUT_SCALING;
-  lut_config.precompute = cb0[12].xyz;
-  lut_config.tetrahedral = CUSTOM_LUT_TETRAHEDRAL == 1.f;
-  lut_config.type_input = renodx::lut::config::type::PQ;
-  lut_config.type_output = renodx::lut::config::type::LINEAR;
-  lut_config.recolor = 0.0f;
-
-  if (CUSTOM_TONE_MAP_CONFIGURATION == 1.f && RENODX_TONE_MAP_TYPE != 0.f) {
     float3 neutral_sdr = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
-    //neutral_sdr = renodx::color::bt2020::from::BT709(neutral_sdr);
-
-    tonemapped_bt709 = renodx::lut::Sample(
-        neutral_sdr,
+    float3 lut_sampling_color = lerp(untonemapped, neutral_sdr, CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION);
+    float3 tonemapped_bt709 = renodx::lut::Sample(
+        lut_sampling_color,
         lut_config,
         t5);
+
+    o0.rgb = CustomUpgradeToneMap(untonemapped, tonemapped_bt709, neutral_sdr);
   } else {
     // LUT sampling
     r0.yzw = cb0[12].zzz * r0.xyz;
@@ -162,40 +161,10 @@ void main(
     r0.x = r0.x * cb0[12].z + -r0.y;
     r0.yzw = r1.xyz + -r3.xyz;
 
-    // o0.xyz = saturate(r0.xxx * r0.yzw + r3.xyz);
-    o0.xyz = r0.xxx * r0.yzw + r3.xyz;
-
-    tonemapped_bt709 = o0.rgb;
+    o0.xyz = saturate(r0.xxx * r0.yzw + r3.xyz);
+    //o0.xyz = r0.xxx * r0.yzw + r3.xyz;
   }
 
-
-  o0.rgb = CustomUpgradeToneMap(untonemapped, tonemapped_bt709);
   o0.w = 1;
-
-  //float3 tonemapped_bt709 = o0.rgb;
-
-  // float3 outputColor;
-  // if (RENODX_TONE_MAP_TYPE == 0.f) {
-  //   outputColor = tonemapped_bt709;
-  // } else {
-  //   if (RENODX_TONE_MAP_TYPE == 3.f && CUSTOM_TONE_MAP_CONFIGURATION == 1.f) {
-  //     outputColor = renodx::draw::ToneMapPass(
-  //         untonemapped,
-  //         renodx::lut::Sample(
-  //             renodx::tonemap::renodrt::NeutralSDR(untonemapped),
-  //             lut_config,
-  //             t5));
-  //   }
-  //   else {
-  //     outputColor = renodx::draw::ToneMapPass(untonemapped, tonemapped_bt709);
-  //   }
-  // }
-
-  // // o0.rgb = renodx::draw::RenderIntermediatePass(outputColor);
-  // o0.rgb = outputColor;
-  // o0.rgb = renodx::lut::Sample(
-  //     untonemapped,
-  //     lut_config,
-  //     t5); // for comparison
   return;
 }
