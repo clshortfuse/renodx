@@ -56,7 +56,7 @@ float4 main(
   float3 linear_game_color = renodx::color::gamma::Decode(gamma_game_color);
 
   linear_game_color.xyz = ApplyRCAS(linear_game_color.xyz, TEXCOORD, t0, s1);
-  linear_game_color.xyz = CustomTonemap(linear_game_color.xyz);
+  // linear_game_color.xyz = CustomTonemapSDR(linear_game_color.xyz);
   linear_game_color.xyz = renodx::effects::ApplyFilmGrain(
       linear_game_color.xyz,
       float2(TEXCOORD.x, TEXCOORD.y),

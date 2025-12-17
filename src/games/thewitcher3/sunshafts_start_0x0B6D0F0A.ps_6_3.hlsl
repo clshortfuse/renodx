@@ -1,4 +1,3 @@
-#include "./common.hlsl"
 #include "./uncharted2.hlsl"
 
 Texture2D<float4> t0 : register(t0);

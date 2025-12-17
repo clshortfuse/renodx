@@ -97,6 +97,10 @@ float4 main(
   float _79 = max(0.0f, _76);
   float _80 = max(0.0f, _77);
   float _81 = max(0.0f, _78);
+  // float _79 = _76;
+  // float _80 = _77;
+  // float _81 = _78;
+
   float _82 = log2(_79);
   float _83 = log2(_80);
   float _84 = log2(_81);
@@ -129,8 +133,6 @@ float4 main(
   float _112 = renodx::color::gamma::DecodeSafe(_88);
   float _113 = renodx::color::gamma::DecodeSafe(_89);
   float _114 = renodx::color::gamma::DecodeSafe(_90);
-
-  float3 untonemapped = float3(_112, _113, _114);
 
   float _115 = dot(float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f), float3(_112, _113, _114));
   float _126 = (CustomPixelConsts_176.x) - CustomPixelConsts_192.x;
@@ -170,7 +172,7 @@ float4 main(
   float _165 = _162 * _152;
   float _166 = _163 * _153;
 
-  float3 clearNans = renodx::color::bt709::clamp::BT709(float3(_164, _165, _166));
+  //float3 clearNans = renodx::color::bt709::clamp::BT709(float3(_164, _165, _166));
 
   // float _167 = max(0.0f, _164);
   // float _168 = max(0.0f, _165);
@@ -184,9 +186,17 @@ float4 main(
   // float _176 = exp2(_173);
   // float _177 = exp2(_174);
   // float _178 = exp2(_175);
-  float _176 = renodx::color::gamma::EncodeSafe(clearNans.x);
-  float _177 = renodx::color::gamma::EncodeSafe(clearNans.y);
-  float _178 = renodx::color::gamma::EncodeSafe(clearNans.z);
+  // float _176 = renodx::color::gamma::EncodeSafe(clearNans.x);
+  // float _177 = renodx::color::gamma::EncodeSafe(clearNans.y);
+  // float _178 = renodx::color::gamma::EncodeSafe(clearNans.z);
+
+  float _176 = renodx::color::gamma::EncodeSafe(_164);
+  float _177 = renodx::color::gamma::EncodeSafe(_165);
+  float _178 = renodx::color::gamma::EncodeSafe(_166);
+
+  // SV_Target.xyz = float3(_176, _177, _178);
+  // SV_Target.w = 1.0f;
+  // return SV_Target;
 
   float _183 = CustomPixelConsts_144.x * _176;
   float _184 = CustomPixelConsts_144.y * _177;
@@ -203,6 +213,8 @@ float4 main(
   SV_Target.z = _195;
   SV_Target.w = 1.0f;
 
+  SV_Target.xyz = renodx::color::gamma::DecodeSafe(SV_Target.xyz);
+  SV_Target.xyz = renodx::color::gamma::EncodeSafe(CustomTonemap(SV_Target.xyz));
   // SV_Target.rgb = renodx::draw::RenderIntermediatePass(renodx::color::gamma::DecodeSafe(SV_Target.rgb));
   //SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
   return SV_Target;

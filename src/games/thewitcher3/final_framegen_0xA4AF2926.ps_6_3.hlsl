@@ -64,7 +64,7 @@ OutputSignature main(
   float3 gammaGameColor = _29.rgb;
   float3 linearGameColor = renodx::color::gamma::DecodeSafe(gammaGameColor, gamma);
   linearGameColor.xyz = ApplyRCAS(linearGameColor.xyz, TEXCOORD, t0, s1);
-  linearGameColor.xyz = CustomTonemap(linearGameColor.xyz);
+  //linearGameColor.xyz = CustomTonemap(linearGameColor.xyz);
   linearGameColor.xyz = renodx::effects::ApplyFilmGrain(
       linearGameColor.xyz,
       float2(TEXCOORD.x, TEXCOORD.y),

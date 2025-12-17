@@ -1,4 +1,5 @@
 #include "./uncharted2extended.hlsli"
+#include "./common.hlsl"
 
 cbuffer cb3 : register(b3) {
   float4 CustomPixelConsts_000 : packoffset(c000.x);
@@ -111,12 +112,14 @@ float3 Uncharted2Extended2(float3 untonemapped) {
 
 float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, float3 tonemapped_bt709_lum, float mid_gray, float max_value) {
   float3 outputColor;
-  if (RENODX_TONE_MAP_TYPE < 2.f) return tonemapped_bt709_ch;
+  if (RENODX_TONE_MAP_TYPE == 1.f) return tonemapped_bt709_ch;
   // else if (RENODX_TONE_MAP_TYPE > 1) outputColor.w = max_value;
   // else outputColor.w = 1.f;
 
   float mid_gray_scale = mid_gray / 0.18f;
   float3 untonemapped_midgray = untonemapped * mid_gray_scale;
+
+  if (RENODX_TONE_MAP_TYPE == 0.f) return lerp(untonemapped_midgray, tonemapped_bt709_ch, RENODX_COLOR_GRADE_STRENGTH);
 
   float3 tonemapped_bt709 = lerp(tonemapped_bt709_ch, tonemapped_bt709_lum, CUSTOM_SCENE_GRADE_SATURATION_CORRECTION);
   tonemapped_bt709 = lerp(untonemapped_midgray, tonemapped_bt709, RENODX_COLOR_GRADE_STRENGTH);
@@ -130,6 +133,8 @@ float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, flo
   outputColor.xyz = tonemapped_bt709;
   float3 hdr_reference_color = outputColor.xyz;
   outputColor.xyz = renodx::color::correct::Chrominance(outputColor.xyz, lerp(tonemapped_bt709, tonemapped_bt709_ch, saturate(tonemapped_bt709_ch_y / mid_gray)), 1.f, 1.f, 1);
+  
+  outputColor.xyz = ApplyPerChannelBlowoutHueShift(outputColor.xyz, mid_gray, max_value);
 
   return outputColor;
 }
