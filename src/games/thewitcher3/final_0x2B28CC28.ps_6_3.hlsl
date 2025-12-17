@@ -1,4 +1,3 @@
-#include "./common.hlsl"
 #include "./lilium_rcas.hlsl"
 #include "./uncharted2.hlsl"
 
@@ -63,7 +62,7 @@ OutputSignature main(
   float3 linearGameColor = renodx::color::gamma::DecodeSafe(gammaGameColor, gamma);
 
   linearGameColor.xyz = ApplyRCAS(linearGameColor.xyz, TEXCOORD, t0, s0);
-  linearGameColor.xyz = CustomTonemap(linearGameColor.xyz);
+  //linearGameColor.xyz = CustomTonemap(linearGameColor.xyz);
   linearGameColor.xyz = renodx::effects::ApplyFilmGrain(
       linearGameColor.xyz,
       float2(TEXCOORD.x, TEXCOORD.y),

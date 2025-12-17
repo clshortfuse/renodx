@@ -65,6 +65,8 @@
 //#define UTILITY_COMPARISON                    shader_injection.utility_comparison
 //#define UTILITY_HUD                            shader_injection.utility_hud
 
+#define LAST_IS_HDR                          shader_injection.last_is_hdr
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
@@ -118,6 +120,7 @@ struct ShaderInjectData {
 
   //float utility_comparison;
   //float utility_hud;
+  bool last_is_hdr;
 };
 
 #ifndef __cplusplus

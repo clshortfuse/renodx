@@ -28,6 +28,7 @@ void GamutCompression(inout float3 color, inout float compression_scale) {
   compression_scale = renodx::color::correct::ComputeGamutCompressionScale(gamma_color.rgb, grayscale);
   gamma_color = renodx::color::correct::GamutCompress(gamma_color, grayscale, compression_scale);
   color = renodx::color::gamma::DecodeSafe(gamma_color);
+  color = renodx::color::bt709::clamp::BT709(color);
 }
 
 void GamutDecompression(inout float3 color, float compression_scale) {
@@ -117,15 +118,19 @@ float3 ApplySaturationBlowoutHighlightSaturation(float3 tonemapped, float y, ren
   return color;
 }
 
-float3 ApplyPerChannelBlowoutHueShift(float3 untonemapped) {
+float3 ApplyPerChannelBlowoutHueShift(float3 untonemapped, float mid_gray = 0.18f, float max_value = 1.f) {
   if (RENODX_TONE_MAP_PER_CHANNEL == 0 && CUSTOM_SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f) {
-    float calculated_peak = (0.01f * pow(100.f - CUSTOM_SCENE_GRADE_PER_CHANNEL_BLOWOUT, 2.f));
+    float calculated_peak = (0.01f * pow(100.f - CUSTOM_SCENE_GRADE_PER_CHANNEL_BLOWOUT, 2.f)) + (max_value - 1.f);
 
     float compression_scale;
     GamutCompression(untonemapped, compression_scale);
 
     // float3 graded_color = renodx::tonemap::HermiteSplinePerChannelRolloff(untonemapped, calculated_peak, 100.f);
-    float3 graded_color = renodx::tonemap::ReinhardPiecewise(untonemapped, calculated_peak, 0.18f);
+    // float3 graded_color = renodx::tonemap::ReinhardPiecewise(untonemapped, calculated_peak, 0.5f + ((mid_gray / 0.18f) - 1.f));
+    float3 graded_color = renodx::tonemap::ReinhardPiecewise(untonemapped, calculated_peak, mid_gray);
+    //float3 graded_color = renodx::tonemap::ReinhardScalableExtended(untonemapped, 11.2f, calculated_peak, 0.f, mid_gray, mid_gray);
+    // float3 graded_color = renodx::tonemap::dice::BT709(untonemapped, calculated_peak);
+    //float3 graded_color = renodx::tonemap::HermiteSplinePerChannelRolloff(untonemapped, calculated_peak, 11.2f);
     float3 color = renodx::color::correct::Chrominance(untonemapped, graded_color, 1.f, 0.f, CUSTOM_SCENE_HUE_METHOD);
     color = renodx::color::correct::Hue(color, graded_color, CUSTOM_SCENE_GRADE_HUE_SHIFT, CUSTOM_SCENE_HUE_METHOD);
 
@@ -180,7 +185,7 @@ float3 PreTonemapSliders(float3 untonemapped) {
   float3 outputColor = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, y, config);
   outputColor = HDRBoost(outputColor, CUSTOM_INVERSE_TONEMAP, 1);
   if (RENODX_TONE_MAP_TYPE < 2.f) return outputColor;
-  outputColor = ApplyPerChannelBlowoutHueShift(outputColor);
+  //outputColor = ApplyPerChannelBlowoutHueShift(outputColor);
   return outputColor;
 }
 
@@ -276,24 +281,22 @@ float3 HDRDisplayMap(float3 color, float tonemapper) {
   float compression_scale;
   GamutCompression(color, compression_scale);
 
-  // color = renodx::color::bt2020::from::BT709(color);
-
   float3 outputColor = color;
   float tonemap_peak = peak_nits / diffuse_white_nits;
   if (tonemapper == 2.f) {
     if (RENODX_TONE_MAP_PER_CHANNEL == 0) {
-      //outputColor = renodx::tonemap::HermiteSplineLuminanceRolloff(color, tonemap_peak, 100.f);
+      // outputColor = renodx::tonemap::HermiteSplineLuminanceRolloff(color, tonemap_peak, 100.f);
+      // outputColor = renodx::color::correct::Chrominance(outputColor, min(outputColor, tonemap_peak), 1.f, 0.f, 1);
 
       float rgb_max = renodx::math::Max(color);
-      //rgb_max = lerp(rgb_max, renodx::color::y::from::BT709(color), 0.f); // adjust hue clip
-      //rgb_max = min(rgb_max, 100.f);
       float rgb_max_log = log2(rgb_max);
       float tonemap_peak_log = log2(tonemap_peak);
 
       float tonemapped_log = renodx::tonemap::HermiteSplineRolloff(rgb_max_log, tonemap_peak_log, log2(100.f));
-      //float scale = max(0, exp2(tonemapped_log - rgb_max_log));
-      //outputColor = color * scale;
-      outputColor = renodx::color::correct::Luminance(color, rgb_max, exp2(tonemapped_log));
+      float tonemapped = exp2(tonemapped_log);
+
+      float scale = renodx::math::DivideSafe(tonemapped, rgb_max, 1.f);
+      outputColor = color * scale;
     }
     else {
       outputColor = renodx::tonemap::HermiteSplinePerChannelRolloff(color, tonemap_peak, 100.f);
@@ -307,6 +310,35 @@ float3 HDRDisplayMap(float3 color, float tonemapper) {
   return outputColor;
 }
 
+float3 SDRDisplayMap(float3 color, float tonemapper) {
+  // float compression_scale;
+  // GamutCompression(color, compression_scale);
+  color = renodx::color::bt709::clamp::BT709(color);
+
+  float3 outputColor = color;
+  if (RENODX_TONE_MAP_TYPE == 2.f) {
+    if (RENODX_TONE_MAP_PER_CHANNEL == 0) {
+      // outputColor = renodx::tonemap::HermiteSplineLuminanceRolloff(color, tonemap_peak, 100.f);
+
+      float rgb_max = renodx::math::Max(color);
+      // rgb_max = lerp(rgb_max, renodx::color::y::from::BT709(color), 0.f); // adjust hue clip
+      // rgb_max = min(rgb_max, 100.f);
+      float rgb_max_log = log2(rgb_max);
+      float tonemap_peak_log = log2(1.f);
+
+      float tonemapped_log = renodx::tonemap::HermiteSplineRolloff(rgb_max_log, tonemap_peak_log, log2(20.f));
+      // float scale = max(0, exp2(tonemapped_log - rgb_max_log));
+      // outputColor = color * scale;
+      outputColor = renodx::color::correct::Luminance(color, rgb_max, exp2(tonemapped_log));
+    }
+    else {
+      outputColor = renodx::tonemap::HermiteSplinePerChannelRolloff(color, 1.f, 20.f);
+    }
+  }
+  //GamutDecompression(outputColor, compression_scale);
+  return outputColor;
+}
+
 float3 CustomTonemap(float3 color) {
 
   if (RENODX_TONE_MAP_TYPE == 1.f) {
@@ -315,6 +347,13 @@ float3 CustomTonemap(float3 color) {
 
   float3 outputColor = color;
   outputColor = PreTonemapSliders(outputColor);
+
+  if (LAST_IS_HDR) {
+    outputColor = HDRDisplayMap(outputColor, RENODX_TONE_MAP_TYPE);
+  }
+  else {
+    outputColor = SDRDisplayMap(outputColor, RENODX_TONE_MAP_TYPE);
+  }
   outputColor = HDRDisplayMap(outputColor, RENODX_TONE_MAP_TYPE);
   outputColor = PostTonemapSliders(outputColor);
   return outputColor;
