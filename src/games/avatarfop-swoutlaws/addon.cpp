@@ -318,7 +318,6 @@ void OnPresetOff() {
       {"UISDREOTFEmulation", 0.f},
       {"ToneMapHueCorrectionType", 0.f},
       {"ToneMapHueCorrection", 0.f},
-      {"OverrideBlackClip", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -349,7 +348,7 @@ bool initialized = false;
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Avatar: Frontiers of Pandora™";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Avatar: Frontiers of Pandora™ and Star Wars Outlaws";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
