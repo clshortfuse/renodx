@@ -71,13 +71,13 @@ float4 main(
   // _69.rgb = CustomBloomTonemap(_69.rgb);
   // _80.rgb = CustomBloomTonemap(_80.rgb);
   // _87.rgb = CustomBloomTonemap(_87.rgb);
-  // if (RENODX_TONE_MAP_TYPE > 1.f && BLOOM_EMULATION == 0) {
+  // if (RENODX_TONE_MAP_TYPE > 1.f) {
   //   // float clamp_value = Uncharted2Tonemap1(1.f);
-  //   float clamp_value = 1.f;
-  //    _61.rgb = ClampPostProcessing(_61.rgb, clamp_value);
-  //    _69.rgb = ClampPostProcessing(_69.rgb, clamp_value);
-  //    _80.rgb = ClampPostProcessing(_80.rgb, clamp_value);
-  //    _87.rgb = ClampPostProcessing(_87.rgb, clamp_value);
+  //   float clamp_value = _61.w;
+  //    _61 = ClampPostProcessing(_61, clamp_value);
+  //    _69 = ClampPostProcessing(_69, clamp_value);
+  //    _80 = ClampPostProcessing(_80, clamp_value);
+  //    _87 = ClampPostProcessing(_87, clamp_value);
   // }
 
 

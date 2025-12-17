@@ -1,3 +1,5 @@
+#include "./uncharted2extended.hlsli"
+
 cbuffer cb3 : register(b3) {
   float4 CustomPixelConsts_000 : packoffset(c000.x);
   float4 CustomPixelConsts_016 : packoffset(c001.x);
@@ -70,5 +72,64 @@ float3 Uncharted2Tonemap2(float3 color) {
   outputColor.x = Uncharted2Tonemap2(color.x);
   outputColor.y = Uncharted2Tonemap2(color.y);
   outputColor.z = Uncharted2Tonemap2(color.z);
+  return outputColor;
+}
+
+float3 Uncharted2Extended1(float3 untonemapped) {
+  if (RENODX_TONE_MAP_TYPE < 2) {
+    return Uncharted2Tonemap1(untonemapped);
+  }
+
+  float A = CustomPixelConsts_112.x, B = CustomPixelConsts_112.y, C = CustomPixelConsts_112.z, D = CustomPixelConsts_128.x, E = CustomPixelConsts_128.y, F = CustomPixelConsts_128.z;
+  const float W = 11.199999809265137f;
+
+  float coeffs[6] = { A, B, C, D, E, F };
+  float white_precompute = CustomPixelConsts_256.y / renodx::tonemap::ApplyCurve(W, A, B, C, D, E, F);
+  Uncharted2::Config::Uncharted2ExtendedConfig uc2_config = Uncharted2::Config::CreateUncharted2ExtendedConfig(coeffs, white_precompute);
+
+  float3 outputColor = Uncharted2::ApplyExtended(untonemapped, uc2_config);
+
+  return outputColor;
+}
+
+float3 Uncharted2Extended2(float3 untonemapped) {
+  if (RENODX_TONE_MAP_TYPE < 2) {
+    return Uncharted2Tonemap2(untonemapped);
+  }
+
+  float A = CustomPixelConsts_176.x, B = CustomPixelConsts_176.y, C = CustomPixelConsts_176.z, D = CustomPixelConsts_192.x, E = CustomPixelConsts_192.y, F = CustomPixelConsts_192.z;
+  const float W = 11.199999809265137f;
+
+  float coeffs[6] = { A, B, C, D, E, F };
+  float white_precompute = CustomPixelConsts_272.y / renodx::tonemap::ApplyCurve(W, A, B, C, D, E, F);
+  Uncharted2::Config::Uncharted2ExtendedConfig uc2_config = Uncharted2::Config::CreateUncharted2ExtendedConfig(coeffs, white_precompute);
+
+  float3 outputColor = Uncharted2::ApplyExtended(untonemapped, uc2_config);
+
+  return outputColor;
+}
+
+float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, float3 tonemapped_bt709_lum, float mid_gray, float max_value) {
+  float3 outputColor;
+  if (RENODX_TONE_MAP_TYPE < 2.f) return tonemapped_bt709_ch;
+  // else if (RENODX_TONE_MAP_TYPE > 1) outputColor.w = max_value;
+  // else outputColor.w = 1.f;
+
+  float mid_gray_scale = mid_gray / 0.18f;
+  float3 untonemapped_midgray = untonemapped * mid_gray_scale;
+
+  float3 tonemapped_bt709 = lerp(tonemapped_bt709_ch, tonemapped_bt709_lum, CUSTOM_SCENE_GRADE_SATURATION_CORRECTION);
+  tonemapped_bt709 = lerp(untonemapped_midgray, tonemapped_bt709, RENODX_COLOR_GRADE_STRENGTH);
+
+  float untonemapped_midgray_y = renodx::color::y::from::BT709(untonemapped_midgray);
+  float untonemapped_y = renodx::color::y::from::BT709(untonemapped);
+  float tonemapped_bt709_ch_y = renodx::color::y::from::BT709(tonemapped_bt709_ch);
+  float tonemapped_bt709_lum_y = renodx::color::y::from::BT709(tonemapped_bt709_lum);
+  float tonemapped_bt709_y = renodx::color::y::from::BT709(tonemapped_bt709);
+
+  outputColor.xyz = tonemapped_bt709;
+  float3 hdr_reference_color = outputColor.xyz;
+  outputColor.xyz = renodx::color::correct::Chrominance(outputColor.xyz, lerp(tonemapped_bt709, tonemapped_bt709_ch, saturate(tonemapped_bt709_ch_y / mid_gray)), 1.f, 1.f, 1);
+
   return outputColor;
 }

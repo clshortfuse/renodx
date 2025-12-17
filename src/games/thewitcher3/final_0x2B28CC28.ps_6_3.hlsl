@@ -1,5 +1,6 @@
 #include "./common.hlsl"
 #include "./lilium_rcas.hlsl"
+#include "./uncharted2.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 
@@ -7,30 +8,30 @@ Texture2D<float4> t1 : register(t1);
 
 Texture2D<float4> t2 : register(t2);
 
-cbuffer cb0 : register(b3) {
-  float4 CustomPixelConsts_000 : packoffset(c000.x);
-  float4 CustomPixelConsts_016 : packoffset(c001.x);
-  float4 CustomPixelConsts_032 : packoffset(c002.x);
-  float4 CustomPixelConsts_048 : packoffset(c003.x);
-  float4 CustomPixelConsts_064 : packoffset(c004.x);
-  float4 CustomPixelConsts_080 : packoffset(c005.x);
-  float4 CustomPixelConsts_096 : packoffset(c006.x);
-  float4 CustomPixelConsts_112 : packoffset(c007.x);
-  float4 CustomPixelConsts_128 : packoffset(c008.x);
-  float4 CustomPixelConsts_144 : packoffset(c009.x);
-  float4 CustomPixelConsts_160 : packoffset(c010.x);
-  float4 CustomPixelConsts_176 : packoffset(c011.x);
-  float4 CustomPixelConsts_192 : packoffset(c012.x);
-  float4 CustomPixelConsts_208 : packoffset(c013.x);
-  float4 CustomPixelConsts_224 : packoffset(c014.x);
-  float4 CustomPixelConsts_240 : packoffset(c015.x);
-  float4 CustomPixelConsts_256 : packoffset(c016.x);
-  float4 CustomPixelConsts_272 : packoffset(c017.x);
-  float4 CustomPixelConsts_288 : packoffset(c018.x);
-  float4 CustomPixelConsts_304 : packoffset(c019.x);
-  float4 CustomPixelConsts_320 : packoffset(c020.x);
-  float4 CustomPixelConsts_336[4] : packoffset(c021.x);
-};
+// cbuffer cb0 : register(b3) {
+//   float4 CustomPixelConsts_000 : packoffset(c000.x);
+//   float4 CustomPixelConsts_016 : packoffset(c001.x);
+//   float4 CustomPixelConsts_032 : packoffset(c002.x);
+//   float4 CustomPixelConsts_048 : packoffset(c003.x);
+//   float4 CustomPixelConsts_064 : packoffset(c004.x);
+//   float4 CustomPixelConsts_080 : packoffset(c005.x);
+//   float4 CustomPixelConsts_096 : packoffset(c006.x);
+//   float4 CustomPixelConsts_112 : packoffset(c007.x);
+//   float4 CustomPixelConsts_128 : packoffset(c008.x);
+//   float4 CustomPixelConsts_144 : packoffset(c009.x);
+//   float4 CustomPixelConsts_160 : packoffset(c010.x);
+//   float4 CustomPixelConsts_176 : packoffset(c011.x);
+//   float4 CustomPixelConsts_192 : packoffset(c012.x);
+//   float4 CustomPixelConsts_208 : packoffset(c013.x);
+//   float4 CustomPixelConsts_224 : packoffset(c014.x);
+//   float4 CustomPixelConsts_240 : packoffset(c015.x);
+//   float4 CustomPixelConsts_256 : packoffset(c016.x);
+//   float4 CustomPixelConsts_272 : packoffset(c017.x);
+//   float4 CustomPixelConsts_288 : packoffset(c018.x);
+//   float4 CustomPixelConsts_304 : packoffset(c019.x);
+//   float4 CustomPixelConsts_320 : packoffset(c020.x);
+//   float4 CustomPixelConsts_336[4] : packoffset(c021.x);
+// };
 
 SamplerState s0 : register(s1);
 
@@ -60,6 +61,7 @@ OutputSignature main(
 
   float3 gammaGameColor = _29.rgb;
   float3 linearGameColor = renodx::color::gamma::DecodeSafe(gammaGameColor, gamma);
+
   linearGameColor.xyz = ApplyRCAS(linearGameColor.xyz, TEXCOORD, t0, s0);
   linearGameColor.xyz = CustomTonemap(linearGameColor.xyz);
   linearGameColor.xyz = renodx::effects::ApplyFilmGrain(
@@ -72,13 +74,15 @@ OutputSignature main(
   // float _50 = linearGameColor.x;
   // float _51 = linearGameColor.y;
   // float _52 = linearGameColor.z;
-  // linearGameColor = renodx::draw::RenderIntermediatePass(linearGameColor);
+  //linearGameColor = renodx::draw::RenderIntermediatePass(linearGameColor);
 
   float3 gammaUiColor = _24.rgb;
   float3 linearUiColor = renodx::color::gamma::DecodeSafe(gammaUiColor, gamma);
   // float _41 = linearUiColor.x;
   // float _42 = linearUiColor.y;
   // float _43 = linearUiColor.z;
+  //linearUiColor *= (RENODX_GRAPHICS_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE);
+  //linearGameColor *= (RENODX_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE);
 
   float4 outputColor1;
   outputColor1.rgb = ((linearUiColor - linearGameColor) * _24.w) + linearGameColor;
@@ -208,7 +212,7 @@ OutputSignature main(
     //     CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
     // intermediateColor.rgb = renodx::draw::RenderIntermediatePass(intermediateColor.rgb);
 
-    // //blend game + ui
+    //blend game + ui
     // intermediateColor.xyz *= -0.6699999570846558f;
     // intermediateColor.xyz *= intermediateColor.w;
     // intermediateColor.xyz += linearGameColor;
@@ -251,9 +255,10 @@ OutputSignature main(
   }
 
   // outputColor.rgb = renodx::color::bt2020::from::BT709(outputColor.rgb);
-  // outputColor.rgb = renodx::color::pq::EncodeSafe(outputColor.rgb, RENODX_GRAPHICS_WHITE_NITS);
-  // SV_Target = outputColor;
+  // outputColor.rgb = renodx::color::pq::EncodeSafe(outputColor.rgb, 80.f);
+  // SV_Target.rgb = outputColor.rgb;
   SV_Target.rgb = renodx::draw::SwapChainPass(outputColor.rgb);
+  //SV_Target.rgb = renodx::draw::SwapChainPass(linearGameColor.rgb);
   SV_Target.w = outputColor.w;
 
   // //BT2020

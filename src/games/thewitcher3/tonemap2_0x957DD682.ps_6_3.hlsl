@@ -26,13 +26,13 @@ float4 main(
   float3 untonemapped_1 = float3(_39, _40, _41);
   //untonemapped_1 = PreTonemapSliders(untonemapped_1);
 
-  float3 tonemapped_bt709_ch_1 = Uncharted2Tonemap1(untonemapped_1);
+  float3 tonemapped_bt709_ch_1 = Uncharted2Extended1(untonemapped_1);
   float y_in_1 = renodx::color::y::from::BT709(untonemapped_1);
-  float y_out_1 = Uncharted2Tonemap1(y_in_1);
+  float y_out_1 = Uncharted2Extended1(y_in_1).x;
   float3 tonemapped_bt709_lum_1 = renodx::color::correct::Luminance(untonemapped_1, y_in_1, y_out_1);
 
-  float out_mid_gray_1 = Uncharted2Tonemap1(0.18);
-  //float max_value_1 = Uncharted2Tonemap1(100.f);
+  float out_mid_gray_1 = Uncharted2Extended1(0.18).x;
+  float max_value_1 = Uncharted2Tonemap1(100.f).x;
 
   _107 = CustomPixelConsts_272.x * 11.199999809265137f;
   _116 = CustomPixelConsts_272.x / (exp2(log2(max(min(max(_8.x, CustomPixelConsts_144.y), CustomPixelConsts_144.z), 9.999999747378752e-05f) / _107) * CustomPixelConsts_272.z) * _107);
@@ -43,21 +43,33 @@ float4 main(
   float3 untonemapped_2 = float3(_117, _118, _119);
   //untonemapped_2 = PreTonemapSliders(untonemapped_2);
 
-  float3 tonemapped_bt709_ch_2 = Uncharted2Tonemap2(untonemapped_2);
+  float3 tonemapped_bt709_ch_2 = Uncharted2Extended2(untonemapped_2);
   float y_in_2 = renodx::color::y::from::BT709(untonemapped_2);
-  float y_out_2 = Uncharted2Tonemap2(y_in_2);
+  float y_out_2 = Uncharted2Extended2(y_in_2).x;
   float3 tonemapped_bt709_lum_2 = renodx::color::correct::Luminance(untonemapped_2, y_in_2, y_out_2);
 
-  float out_mid_gray_2 = Uncharted2Tonemap2(0.18);
-  //float max_value_2 = Uncharted2Tonemap2(100.f);
+  float out_mid_gray_2 = Uncharted2Extended2(0.18).x;
+  float max_value_2 = Uncharted2Tonemap2(100.f).x;
 
   float3 untonemapped = lerp(untonemapped_1, untonemapped_2, CustomPixelConsts_208.x);
   float3 tonemapped_bt709_ch = lerp(tonemapped_bt709_ch_1, tonemapped_bt709_ch_2, CustomPixelConsts_208.x);
   float3 tonemapped_bt709_lum = lerp(tonemapped_bt709_lum_1, tonemapped_bt709_lum_2, CustomPixelConsts_208.x);
   float out_mid_gray = lerp(out_mid_gray_1, out_mid_gray_2, CustomPixelConsts_208.x);
-  //float max_value = lerp(max_value_1, max_value_2, CustomPixelConsts_208.x);
+  float max_value = lerp(max_value_1, max_value_2, CustomPixelConsts_208.x);
 
-  SV_Target.rgb = CustomUpgradeToneMap(untonemapped, tonemapped_bt709_ch, tonemapped_bt709_lum, out_mid_gray);
+  SV_Target.rgb = CustomUpgradeToneMap(untonemapped, tonemapped_bt709_ch, tonemapped_bt709_lum, out_mid_gray, max_value);
+  if (CUSTOM_SCENE_GRADE_HUE_CORRECTION > 0.f && RENODX_TONE_MAP_TYPE > 1) {
+    float3 tonemapped_bt709_sdr_1 = Uncharted2Tonemap1(untonemapped_1);
+    float3 tonemapped_bt709_sdr_2 = Uncharted2Tonemap2(untonemapped_2);
+    float3 tonemapped_bt709_sdr = lerp(tonemapped_bt709_sdr_1, tonemapped_bt709_sdr_2, CustomPixelConsts_208.x);
+    //if (CUSTOM_SCENE_GRADE_HUE_CORRECTION_BIAS == 1.f) {
+      // SV_Target.rgb = renodx::color::correct::Hue(SV_Target.rgb, lerp(tonemapped_bt709_sdr, SV_Target.rgb, saturate(exp2(1.f - renodx::math::Max(tonemapped_bt709_sdr)))), CUSTOM_SCENE_GRADE_HUE_CORRECTION, CUSTOM_SCENE_HUE_METHOD);
+      SV_Target.rgb = renodx::color::correct::Hue(SV_Target.rgb, lerp(SV_Target.rgb, tonemapped_bt709_sdr, saturate(renodx::math::Max(tonemapped_bt709_ch))), CUSTOM_SCENE_GRADE_HUE_CORRECTION, CUSTOM_SCENE_HUE_METHOD);
+    // }
+    // else {
+    //   SV_Target.rgb = renodx::color::correct::Hue(SV_Target.rgb, tonemapped_bt709_sdr, CUSTOM_SCENE_GRADE_HUE_CORRECTION, CUSTOM_SCENE_HUE_METHOD);
+    // }
+  }
   SV_Target.w = 1.0f;
   
   // _39 = untonemapped_1.x;

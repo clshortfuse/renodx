@@ -48,6 +48,22 @@ float4 main(
   float3 ungraded = _17.rgb;
   // float3 ungraded_sdr = CustomGradingSDR(ungraded);
   float4 ungraded_sdr = ColorGradingSDR(ungraded);
+
+  // renodx::lut::Config lut_config = renodx::lut::config::Create();
+  // lut_config.lut_sampler = s1;
+  // //lut_config.strength = CUSTOM_LUT_STRENGTH;
+  // // lut_config.scaling = 1.f;
+  // lut_config.size = 64;
+  // lut_config.tetrahedral = true;
+  // lut_config.type_input = renodx::lut::config::type::GAMMA_2_2;
+  // lut_config.type_output = renodx::lut::config::type::GAMMA_2_2;
+  // lut_config.recolor = 1.0f;
+
+  // float3 graded_sdr = renodx::lut::(ungraded_sdr.rgb, lut_config, t1);
+  // float3 graded_hdr = lerp(ungraded, ColorGradeHDR(float4(graded_sdr, ungraded_sdr.w)), CUSTOM_LUT_STRENGTH);
+  // SV_Target.rgb = graded_hdr.rgb;
+  // SV_Target.w = _17.w;  
+
   _17.rgb = ungraded_sdr.rgb;
   //  float _22 = abs(_17.x);
   //  float _23 = abs(_17.y);
