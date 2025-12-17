@@ -29,8 +29,8 @@ float4 main(
   float4 _34 = t0.Load(int3(_10, _11, 0));
 
   // if (RENODX_TONE_MAP_TYPE > 1) {
-  //   float clamp_value = 0.5f;
-  //   _34.rgb = ClampPostProcessing(_34.rgb, clamp_value);
+  //   float clamp_value = _34.w;
+  //   _34 = ClampPostProcessing(_34, clamp_value);
   // }
 
   float _41 = ((_14 * CustomPixelConsts_032.x) * cb12_073x) - _19;
