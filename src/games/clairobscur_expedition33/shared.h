@@ -52,8 +52,7 @@ struct ShaderInjectData {
   float tone_map_per_channel;
   float scene_grade_saturation_correction;
   float scene_grade_blowout_restoration;
-  float tone_map_hue_correction_type;
-  float tone_map_hue_correction;
+  float scene_grade_hue_correction;
   float custom_grain_type;
   float custom_grain_strength;
   float custom_random;
@@ -92,8 +91,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HUE_SHIFT                0.f
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION      1.f
 #define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   0.75f
-#define CUSTOM_COLOR_GRADE_HUE_CORRECTION        1.f
-#define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 1.f
+#define CUSTOM_COLOR_GRADE_HUE_CORRECTION        shader_injection.scene_grade_hue_correction
+#define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION shader_injection.scene_grade_saturation_correction
 #define CUSTOM_COLOR_GRADE_HUE_SHIFT             0.f
 #define CUSTOM_GRAIN_TYPE                        0.f
 #define CUSTOM_GRAIN_STRENGTH                    shader_injection.custom_grain_strength
@@ -110,7 +109,6 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_IS_ENGINE_HDR                     shader_injection.custom_is_engine_hdr
 #define OVERRIDE_BLACK_CLIP                      1.f  // 0 - Off, 1 - 0 nits
 #define RENODX_TONE_MAP_HUE_CORRECTION_TYPE      1.f  // 0 - Highlights, Midtones, & Shadows; 1 - Midtones, & Shadows
-#define RENODX_TONE_MAP_HUE_CORRECTION           shader_injection.tone_map_hue_correction
 
 #include "../../shaders/renodx.hlsl"
 

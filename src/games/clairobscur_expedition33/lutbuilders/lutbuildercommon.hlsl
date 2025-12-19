@@ -123,7 +123,7 @@ renodx::color::grade::Config CreateColorGradingConfig() {
   cg_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
   cg_config.saturation = RENODX_TONE_MAP_SATURATION;
   cg_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
-  cg_config.hue_correction_strength = RENODX_TONE_MAP_HUE_CORRECTION;
+  cg_config.hue_correction_strength = CUSTOM_COLOR_GRADE_HUE_CORRECTION;
   cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
 
   return cg_config;
