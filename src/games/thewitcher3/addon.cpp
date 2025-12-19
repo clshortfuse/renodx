@@ -43,7 +43,7 @@ const std::unordered_map<std::string, float> PURIST_VALUES = {
     {"CustomInverseTonemap", 0.f},
     {"SceneGradeSaturationCorrection", 0.f},
     {"SceneGradePerChannelBlowout", 85.f},
-    {"SceneGradeHueCorrection", 75.f},
+    //{"SceneGradeHueCorrection", 75.f},
     //{"ColorGradeHighlights", 50.f},
     //{"BloomEmulation", 0.f},
 };
@@ -69,12 +69,40 @@ const std::unordered_map<std::string, float> FILMIC_VALUES = {
     //{"FxSunShaftStrength", 60.f},
 };
 
-const std::unordered_map<std::string, float> SDR_DEFAULT_VALUES = {
-  {"ToneMapType", 0.f},
-  {"CustomInverseTonemap", 0.f},
-  {"SceneGradeSaturationCorrection", 0.f},
-  {"SceneGradeBlowoutRestoration", 0.f},
-  {"ColorGradeHighlights", 50.f},
+const std::unordered_map<std::string, float> RECOMMENDED_VALUES_SDR = {
+  {"ToneMapPerChannel", 1.f},
+};
+
+const std::unordered_map<std::string, float> PURIST_VALUES_SDR = {
+  {"ToneMapPerChannel", 1.f},
+    {"CustomInverseTonemap", 0.f},
+    {"SceneGradeSaturationCorrection", 0.f},
+    {"SceneGradePerChannelBlowout", 85.f},
+    //{"SceneGradeHueCorrection", 75.f},
+    //{"ColorGradeHighlights", 50.f},
+    //{"BloomEmulation", 0.f},
+};
+
+const std::unordered_map<std::string, float> FILMIC_VALUES_SDR = {
+  {"ToneMapPerChannel", 1.f},
+    {"CustomInverseTonemap", 30.f},
+    {"ColorGradeExposure", 0.70f},
+    {"ColorGradeHighlights", 58.f},
+    {"ColorGradeShadows", 50.f},
+    {"ColorGradeContrast", 39.f},
+    {"ColorGradeSaturation", 47.f},
+    {"ColorGradeHighlightSaturation", 54.f},
+    {"ColorGradeBlowout", 50.f},
+    {"ColorGradeFlare", 2.f},
+   // {"SwapChainCustomColorSpace", 0.f},
+    //{"LutGradeStrength", 100.f},
+   // {"TonemapGradeStrength", 100.f},
+    {"FxFilmGrain", 30.f},
+    //{"FxPostProcessingMaxCLL", 40.f},
+    //{"FxBloom", 15.f},
+    //{"FxDepthBlur", 100.f},
+    //{"FxLensDirt", 50.f},
+    //{"FxSunShaftStrength", 60.f},
 };
 
 const std::unordered_map<std::string, float> CANNOT_PRESET_VALUES = {
@@ -195,7 +223,7 @@ renodx::utils::settings::Settings settings = {
             }
           }
         },
-        //.is_visible = []() { return shader_injection.last_is_hdr; }
+        .is_visible = []() { return shader_injection.last_is_hdr; }
     },
         new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -216,7 +244,7 @@ renodx::utils::settings::Settings settings = {
             }
           }
         },
-        //.is_visible = []() { return shader_injection.last_is_hdr; }
+        .is_visible = []() { return shader_injection.last_is_hdr; }
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -237,29 +265,73 @@ renodx::utils::settings::Settings settings = {
             }
           }
         },
-        //.is_visible = []() { return shader_injection.last_is_hdr; }
+        .is_visible = []() { return shader_injection.last_is_hdr; }
     },
-    //     new renodx::utils::settings::Setting{
-    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    //     .label = "SDR Vanilla",
-    //     .section = "Presets",
-    //     .group = "button-line-1",
-    //     .is_enabled = []() { return !shader_injection.last_is_hdr; },
-    //     .on_change = []() {
-    //       for (auto* setting : settings) {
-    //         if (setting->key.empty()) continue;
-    //         if (!setting->can_reset) continue;
-    //         if (setting->is_global) continue;
-    //         if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
-    //         if (SDR_DEFAULT_VALUES.contains(setting->key)) {
-    //           renodx::utils::settings::UpdateSetting(setting->key, SDR_DEFAULT_VALUES.at(setting->key));
-    //         } else {
-    //           renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-    //         }
-    //       }
-    //     },
-    //     .is_visible = []() { return !shader_injection.last_is_hdr; }
-    // },
+
+    // SDR PRESETS
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended",
+        .section = "Presets",
+        .group = "button-line-1",
+        //.is_enabled = []() { return shader_injection.last_is_hdr; },
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            if (RECOMMENDED_VALUES_SDR.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, RECOMMENDED_VALUES_SDR.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+        .is_visible = []() { return !shader_injection.last_is_hdr; }
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Purist",
+        .section = "Presets",
+        .group = "button-line-1",
+        //.is_enabled = []() { return shader_injection.last_is_hdr; },
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            if (PURIST_VALUES_SDR.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, PURIST_VALUES_SDR.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+        .is_visible = []() { return !shader_injection.last_is_hdr; }
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Filmic",
+        .section = "Presets",
+        .group = "button-line-1",
+        //.is_enabled = []() { return shader_injection.last_is_hdr; },
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (CANNOT_PRESET_VALUES.contains(setting->key)) continue;
+            if (FILMIC_VALUES_SDR.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, FILMIC_VALUES_SDR.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+        .is_visible = []() { return !shader_injection.last_is_hdr; }
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " NOTICE: You do not need to adjust below this point unless you have a specific goal in mind.",
