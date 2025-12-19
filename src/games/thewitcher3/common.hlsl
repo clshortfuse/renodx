@@ -121,6 +121,7 @@ float3 ApplySaturationBlowoutHighlightSaturation(float3 tonemapped, float y, ren
 float3 ApplyPerChannelBlowoutHueShift(float3 untonemapped, float mid_gray = 0.18f, float max_value = 1.f) {
   if (RENODX_TONE_MAP_PER_CHANNEL == 0 && CUSTOM_SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f) {
     float calculated_peak = (0.01f * pow(100.f - CUSTOM_SCENE_GRADE_PER_CHANNEL_BLOWOUT, 2.f)) + (max_value - 1.f);
+    calculated_peak = max(calculated_peak, 1.f);
 
     float compression_scale;
     GamutCompression(untonemapped, compression_scale);
@@ -340,21 +341,18 @@ float3 SDRDisplayMap(float3 color, float tonemapper) {
 }
 
 float3 CustomTonemap(float3 color) {
-
   if (RENODX_TONE_MAP_TYPE == 1.f) {
       return saturate(color);
   }
-
   float3 outputColor = color;
+  outputColor = renodx::color::bt709::clamp::AP1(color);
   outputColor = PreTonemapSliders(outputColor);
-
   if (LAST_IS_HDR) {
     outputColor = HDRDisplayMap(outputColor, RENODX_TONE_MAP_TYPE);
   }
   else {
     outputColor = SDRDisplayMap(outputColor, RENODX_TONE_MAP_TYPE);
   }
-  outputColor = HDRDisplayMap(outputColor, RENODX_TONE_MAP_TYPE);
   outputColor = PostTonemapSliders(outputColor);
   return outputColor;
 }
