@@ -160,9 +160,12 @@ float3 ApplyToneCurveExtendedWithHermite(
     float3 vanilla_lum = renodx::color::correct::Luminance(untonemapped_rrt_prebluecorrect_ap1, y_in, y_out);
 
     vanilla_lum = lerp(vanilla_lum, vanilla, saturate(vanilla_lum / 0.18f));
-    vanilla_lum = renodx::color::ap1::from::BT709(renodx::color::correct::Chrominance(
-        renodx::color::bt709::from::AP1(vanilla_lum),
-        renodx::color::bt709::from::AP1(vanilla)));
+
+    if (CUSTOM_COLOR_GRADE_SATURATION_CORRECTION != 1.f) {
+      vanilla_lum = renodx::color::ap1::from::BT709(renodx::color::correct::Chrominance(
+          renodx::color::bt709::from::AP1(vanilla_lum),
+          renodx::color::bt709::from::AP1(vanilla), 1.f - CUSTOM_COLOR_GRADE_SATURATION_CORRECTION));
+    }
     vanilla = vanilla_lum;
   }
 
