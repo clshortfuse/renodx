@@ -286,6 +286,9 @@ void main(
   r0.xyz = r0.xyz * r0.www;
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   r0.xyz = r5.xyz * r4.www + r0.xyz;
+
+  SetUntonemappedAP1(r0.xyz);
+
   r1.x = dot(float3(0.938639402,1.02359565e-10,0.0613606237), r0.xyz);
   r1.y = dot(float3(8.36008554e-11,0.830794156,0.169205874), r0.xyz);
   r1.z = dot(float3(2.13187367e-12,-5.63307213e-12,1), r0.xyz);
@@ -450,9 +453,6 @@ void main(
   r5.xyz = r5.xyz + -r0.www;
   r5.xyz = r5.xyz * float3(0.930000007,0.930000007,0.930000007) + r0.www;
   r5.xyz = max(float3(0,0,0), r5.xyz);
-
-  SetUntonemappedAP1(r0.xyz);
-
   r5.xyz = r5.xyz + -r1.xyz;
   r1.xyz = cb0[36].www * r5.xyz + r1.xyz;
   r5.x = dot(float3(1.06537485,1.44678506e-06,-0.0653710067), r1.xyz);
