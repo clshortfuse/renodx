@@ -1,19 +1,6 @@
 #ifndef SRC_ASSCREEDSHADOWS_SHARED_H_
 #define SRC_ASSCREEDSHADOWS_SHARED_H_
 
-// #define CUSTOM_COLOR_FILTER_STRENGTH  1.f
-// #define CUSTOM_LOCAL_TONEMAP_STRENGTH 1.f
-// #define CUSTOM_LOCAL_TONEMAP_SHOULDER 1.f
-// #define CUSTOM_LOCAL_TONEMAP_TOE      1.f
-// #define RENODX_TONE_MAP_EXPOSURE      1.f
-// #define RENODX_TONE_MAP_HIGHLIGHTS    1.f
-// #define RENODX_TONE_MAP_SHADOWS       0.84f
-// #define RENODX_TONE_MAP_CONTRAST      1.f
-// #define RENODX_TONE_MAP_SATURATION    1.f
-// #define RENODX_TONE_MAP_BLOWOUT       0.f
-// #define CUSTOM_BLOOM                  0.5f
-// #define RENODX_GRAPHICS_WHITE_NITS    203
-
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
