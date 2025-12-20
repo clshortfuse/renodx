@@ -72,9 +72,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TypicalExposureShaderEntry(0x89476799),
     TypicalExposureShaderEntry(0xF06499FE),
     TypicalExposureShaderEntry(0x8CAFE864),
+    TypicalExposureShaderEntry(0x441E59B3),
+    TypicalExposureShaderEntry(0x61F644A4),
+    TypicalExposureShaderEntry(0x2B137341),
+    TypicalExposureShaderEntry(0x53166004),
 
     // Exposure
     RareExposureShaderEntry(0x4905680A),
+    RareExposureShaderEntry(0xE40162EC),
 
     // Sharpness
     CustomShaderEntry(0xC8169712),

@@ -30,7 +30,7 @@ float3 VanillaSDRTonemapper(float3 color, bool is_sdr = false) {
 
   if (RENODX_TONE_MAP_TYPE > 0.f) {
     if (is_sdr) {
-      contrast = 0.3f;
+      contrast = 0.35f;
       madLinearStartContrastFactor = 0.f;
       toe = 1.2f;
     } else {
