@@ -1,39 +1,48 @@
 #include "./shared.h"
 
-// from Pumbo
-// 0 None
-// 1 Reduce saturation and increase brightness until luminance is >= 0
-// 2 Clip negative colors (makes luminance >= 0)
-// 3 Snap to black
-void FixColorGradingLUTNegativeLuminance(inout float3 col, uint type = 1) {
-  if (type <= 0) {
-    return;
-  }
+float3 HueAndChrominanceOKLab(
+    float3 incorrect_color, float3 reference_color,
+    float hue_correct_strength = 0.f,
+    float chrominance_correct_strength = 0.f,
+    float clamp_chrominance_loss = 0.f,
+    float clamp_chrominance_gain = 0.f,
+    float saturation = 1.f) {
+  if (hue_correct_strength != 0.f || chrominance_correct_strength != 0.f) {
+    float3 perceptual_new = renodx::color::oklab::from::BT709(incorrect_color);
+    const float3 reference_oklab = renodx::color::oklab::from::BT709(reference_color);
 
-  float luminance = renodx::color::y::from::BT709(col.xyz);
-  if (luminance < -renodx::math::FLT_MIN)  // -asfloat(0x00800000): -1.175494351e-38f
-  {
-    if (type == 1) {
-      // Make the color more "SDR" (less saturated, and thus less beyond Rec.709) until the luminance is not negative anymore (negative luminance means the color was beyond Rec.709 to begin with, unless all components were negative).
-      // This is preferrable to simply clipping all negative colors or snapping to black, because it keeps some HDR colors, even if overall it's still "black", luminance wise.
-      // This should work even in case "positiveLuminance" was <= 0, as it will simply make the color black.
-      float3 positiveColor = max(col.xyz, 0.0);
-      float3 negativeColor = min(col.xyz, 0.0);
-      float positiveLuminance = renodx::color::y::from::BT709(positiveColor);
-      float negativeLuminance = renodx::color::y::from::BT709(negativeColor);
-#pragma warning(disable: 4008)
-      float negativePositiveLuminanceRatio = positiveLuminance / -negativeLuminance;
-#pragma warning(default: 4008)
-      negativeColor.xyz *= negativePositiveLuminanceRatio;
-      col.xyz = positiveColor + negativeColor;
-    } else if (type == 2) {
-      // This can break gradients as it snaps colors to brighter ones (it depends on how the displays clips HDR10 or scRGB invalid colors)
-      col.xyz = max(col.xyz, 0.0);
-    } else  // if (type >= 3)
-    {
-      col.xyz = 0.0;
+    float chrominance_current = length(perceptual_new.yz);
+    float chrominance_ratio_hue = 1.f;
+    float chrominance_ratio = 1.f;
+
+    if (hue_correct_strength != 0.f) {
+      const float chrominance_pre = chrominance_current;
+      perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, hue_correct_strength);
+      const float chrominancePost = length(perceptual_new.yz);
+      chrominance_ratio_hue = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
+      chrominance_current = chrominancePost;
     }
+
+    if (chrominance_correct_strength != 0.f) {
+      const float reference_chrominance = length(reference_oklab.yz);
+      float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
+      chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_correct_strength);
+    }
+
+    // Combine hue-preservation scaling and chroma correction, then clamp gain/loss.
+    float chroma_scale = chrominance_ratio_hue * chrominance_ratio;
+    const float chroma_gain_mask = step(1.f, chroma_scale);        // 1 when scaling up
+    const float chroma_loss_mask = 1.f - step(1.f, chroma_scale);  // 1 when scaling down
+    chroma_scale = lerp(chroma_scale, 1.f, chroma_gain_mask * clamp_chrominance_gain);
+    chroma_scale = lerp(chroma_scale, 1.f, chroma_loss_mask * clamp_chrominance_loss);
+
+    perceptual_new.yz *= chroma_scale;
+    perceptual_new.yz *= saturation;
+
+    incorrect_color = renodx::color::bt709::from::OkLab(perceptual_new);
+    incorrect_color = renodx::color::bt709::clamp::AP1(incorrect_color);
   }
+  return incorrect_color;
 }
 
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
@@ -134,49 +143,21 @@ float3 ApplyUserColorGradingAP1(float3 ungraded_ap1) {
   return graded_ap1;
 }
 
-float3 ChrominanceOKLab(
-    float3 incorrect_color,
-    float3 reference_color,
-    float strength = 1.f,
-    float clamp_chrominance_loss = 0.f) {
-  if (strength == 0.f) return incorrect_color;
-
-  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 reference_lab = renodx::color::oklab::from::BT709(reference_color);
-
-  float2 incorrect_ab = incorrect_lab.yz;
-  float2 reference_ab = reference_lab.yz;
-
-  // Compute chrominance (magnitude of the a–b vector)
-  float incorrect_chrominance = length(incorrect_ab);
-  float correct_chrominance = length(reference_ab);
-
-  // Scale original chrominance vector toward target chrominance
-  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
-  float scale = lerp(1.f, chrominance_ratio, strength);
-
-  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
-  scale = lerp(scale, 1.0f, t * clamp_chrominance_loss);
-
-  incorrect_lab.yz = incorrect_ab * scale;
-
-  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
-  FixColorGradingLUTNegativeLuminance(result);
-  return result;
-}
-
 float3 GammaCorrectHuePreserving(float3 incorrect_color) {
+#if USE_LUM_GAMMA_CORRECTION_WITH_CHROMINANCE_CORRECTION
   float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
 
   const float y_in = max(0, renodx::color::y::from::BT709(incorrect_color));
   const float y_out = renodx::color::correct::Gamma(y_in);
 
-  float3 lum = incorrect_color * (y_in > 0 ? y_out / y_in : 0.f);
+  float3 lum = renodx::color::correct::Luminance(incorrect_color, y_in, y_out);
 
   // use chrominance from per channel gamma correction
-  // clamp chrominance loss as using OKLab causes some highlight desaturation
-  float3 result = ChrominanceOKLab(lum, ch, 1.f, 1.f);
-
+  float3 result = renodx::color::correct::ChrominanceOKLab(lum, ch, 1.f, 1.f);
+#else
+  float3 corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
+  float3 result = renodx::color::correct::Hue(corrected_color, incorrect_color);
+#endif
   return result;
 }
 
@@ -256,6 +237,7 @@ float3 ApplyVanillaPlusToneMapByLuminanceBlended(float3 untonemapped_ap1, float 
   min_ratio = renodx::color::correct::GammaSafe(min_ratio, true);
 #endif
 
+#if USE_LUM_TM_WITH_CHROMINANCE_CORRECTION
   float y_in = renodx::color::y::from::AP1(untonemapped_ap1);
   float y_out = ApplyACShadowsToneMap(y_in, peak_ratio * 100.f, min_ratio * 100.f);
 
@@ -263,9 +245,17 @@ float3 ApplyVanillaPlusToneMapByLuminanceBlended(float3 untonemapped_ap1, float 
   float3 tonemapped_perch_bt709 = renodx::color::bt709::from::AP1(ApplyACShadowsToneMap(untonemapped_ap1, peak_ratio * 100.f, min_ratio * 100.f));
 
   tonemapped_lum_bt709 = renodx::color::correct::Chrominance(tonemapped_lum_bt709, tonemapped_perch_bt709, 1.f);  // take chrominance from per channel
+  tonemapped_lum_bt709 = renodx::color::bt709::clamp::AP1(tonemapped_lum_bt709);
 
   const float blending_ratio = renodx::color::y::from::BT709(tonemapped_lum_bt709);
   float3 tonemapped_bt709 = lerp(tonemapped_lum_bt709, tonemapped_perch_bt709, saturate(blending_ratio));  // take highlights from per channel
+#else
+  float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(ApplyACShadowsToneMap(untonemapped_ap1, peak_ratio * 100.f, min_ratio * 100.f));
+  float3 tonemapped_bt709_hue_corrected = renodx::color::correct::Hue(tonemapped_bt709, renodx::color::bt709::from::AP1(untonemapped_ap1));
+
+  const float blending_ratio = renodx::color::y::from::BT709(tonemapped_bt709_hue_corrected);
+  tonemapped_bt709 = lerp(tonemapped_bt709_hue_corrected, tonemapped_bt709, saturate(blending_ratio));  // take highlights from per channel
+#endif
 
 #if RENODX_GAME_GAMMA_CORRECTION  // apply hue preserving sRGB -> 2.2 gamma correction
   tonemapped_bt709 = GammaCorrectHuePreserving(tonemapped_bt709);
@@ -290,6 +280,7 @@ float3 ApplyACESByLuminanceBlended(float3 untonemapped_ap1, float peak_white = 1
   float3 tonemapped_perch_bt709 = renodx::color::bt709::from::AP1(renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / 48.f);
 
   tonemapped_lum_bt709 = renodx::color::correct::Chrominance(tonemapped_lum_bt709, tonemapped_perch_bt709, 1.f);  // take chrominance from per channel
+  tonemapped_lum_bt709 = renodx::color::bt709::clamp::AP1(tonemapped_lum_bt709);
 
   const float blending_ratio = renodx::color::y::from::BT709(tonemapped_lum_bt709);
   float3 tonemapped_bt709 = lerp(tonemapped_lum_bt709, tonemapped_perch_bt709, saturate(blending_ratio));  // take highlights from per channel
