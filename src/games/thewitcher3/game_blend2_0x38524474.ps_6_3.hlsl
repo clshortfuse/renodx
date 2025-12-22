@@ -48,9 +48,11 @@ float4 main(
   // float _67 = exp2(log2(max(0.0f, _43)) * 2.200000047683716f);
   // float _68 = exp2(log2(max(0.0f, _44)) * 2.200000047683716f);
   // float _69 = exp2(log2(max(0.0f, _45)) * 2.200000047683716f);
-  float _67 = renodx::color::gamma::DecodeSafe(_43);
-  float _68 = renodx::color::gamma::DecodeSafe(_44);
-  float _69 = renodx::color::gamma::DecodeSafe(_45);
+  float _67 = CustomGammaDecode(_43);
+  float _68 = CustomGammaDecode(_44);
+  float _69 = CustomGammaDecode(_45);
+  float3 ungraded = float3(_67, _68, _69);
+
   float _70 = dot(float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f), float3(_67, _68, _69));
   float _89 = ((CustomPixelConsts_176.x - CustomPixelConsts_192.x) * _52) + CustomPixelConsts_192.x;
   float _90 = ((CustomPixelConsts_176.y - CustomPixelConsts_192.y) * _52) + CustomPixelConsts_192.y;
@@ -61,12 +63,14 @@ float4 main(
   // SV_Target.x = (((CustomPixelConsts_144.x * exp2(log2(max(0.0f, (((_109 * (_67 - _70)) + _70) * (lerp(_89, CustomPixelConsts_208.x, _57))))) * 0.4545454680919647f)) * _144) + CustomPixelConsts_240.x);
   // SV_Target.y = (((CustomPixelConsts_144.y * exp2(log2(max(0.0f, (((_109 * (_68 - _70)) + _70) * (lerp(_90, CustomPixelConsts_208.y, _57))))) * 0.4545454680919647f)) * _144) + CustomPixelConsts_240.x);
   // SV_Target.z = (((CustomPixelConsts_144.z * exp2(log2(max(0.0f, (((_109 * (_69 - _70)) + _70) * (lerp(_91, CustomPixelConsts_208.z, _57))))) * 0.4545454680919647f)) * _144) + CustomPixelConsts_240.x);
-  SV_Target.x = (((CustomPixelConsts_144.x * renodx::color::gamma::EncodeSafe((((_109 * (_67 - _70)) + _70) * (lerp(_89, CustomPixelConsts_208.x, _57))))) * _144) + CustomPixelConsts_240.x);
-  SV_Target.y = (((CustomPixelConsts_144.y * renodx::color::gamma::EncodeSafe((((_109 * (_68 - _70)) + _70) * (lerp(_90, CustomPixelConsts_208.y, _57))))) * _144) + CustomPixelConsts_240.x);
-  SV_Target.z = (((CustomPixelConsts_144.z * renodx::color::gamma::EncodeSafe((((_109 * (_69 - _70)) + _70) * (lerp(_91, CustomPixelConsts_208.z, _57))))) * _144) + CustomPixelConsts_240.x);
+  SV_Target.x = (((CustomPixelConsts_144.x * CustomGammaEncode((((_109 * (_67 - _70)) + _70) * (lerp(_89, CustomPixelConsts_208.x, _57))))) * _144) + CustomPixelConsts_240.x);
+  SV_Target.y = (((CustomPixelConsts_144.y * CustomGammaEncode((((_109 * (_68 - _70)) + _70) * (lerp(_90, CustomPixelConsts_208.y, _57))))) * _144) + CustomPixelConsts_240.x);
+  SV_Target.z = (((CustomPixelConsts_144.z * CustomGammaEncode((((_109 * (_69 - _70)) + _70) * (lerp(_91, CustomPixelConsts_208.z, _57))))) * _144) + CustomPixelConsts_240.x);
   SV_Target.w = 1.0f;
 
-  SV_Target.xyz = renodx::color::gamma::EncodeSafe(CustomTonemap(renodx::color::gamma::DecodeSafe(SV_Target.xyz)));
+  SV_Target.xyz = renodx::color::gamma::DecodeSafe(SV_Target.xyz);
+  SV_Target.xyz = CustomColorGrading(ungraded, SV_Target.xyz);
+  SV_Target.xyz = renodx::color::gamma::EncodeSafe(CustomTonemap(SV_Target.xyz));
 
   return SV_Target;
 }

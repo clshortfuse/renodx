@@ -42,6 +42,8 @@
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_LUT_STRENGTH                    shader_injection.custom_lut_strength
+#define CUSTOM_GAMUT_UNCLAMP                   shader_injection.custom_gamut_unclamp
+#define CUSTOM_COLOR_GRADING                   shader_injection.custom_color_grading
 //#define CUSTOM_POST_MAXCLL                     shader_injection.custom_post_maxcll
 #define CUSTOM_LENS_DIRT                       shader_injection.custom_lens_dirt
 #define CUSTOM_SUNSHAFTS_STRENGTH              shader_injection.custom_sunshafts_strength
@@ -98,6 +100,8 @@ struct ShaderInjectData {
   float custom_film_grain;
   float custom_random;
   float custom_lut_strength;
+  float custom_color_grading;
+  float custom_gamut_unclamp;
   //float custom_post_maxcll;
   float custom_lens_dirt;
   float custom_sunshafts_strength;

@@ -431,12 +431,36 @@ renodx::utils::settings::Settings settings = {
         .key = "LutGradeStrength",
         .binding = &shader_injection.custom_lut_strength,
         .default_value = 100.f,
-        .label = "Color Grading Strength",
+        .label = "LUT Grading Strength",
         .section = "Scene Grading",
-        .tooltip = "Strength of the original color grading LUTs. Applied after tonemapping.",
+        .tooltip = "Strength of the original color grading LUTs.",
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 1; },
         .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 2.f; },
+    },
+          new renodx::utils::settings::Setting{
+        .key = "ColorGradeStrength",
+        .binding = &shader_injection.custom_color_grading,
+        .default_value = 100.f,
+        .label = "Color Grading Strength",
+        .section = "Scene Grading",
+        .tooltip = "Strength of the original color grading, applied after LUTs.",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 1; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 2.f; },
+    },
+            new renodx::utils::settings::Setting{
+        .key = "GamutUnclamp",
+        .binding = &shader_injection.custom_gamut_unclamp,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Color Gamut",
+        .section = "Scene Grading",
+        .tooltip = "Maintains the original gamut clamp (BT709), or allows the vanilla grading to show richer colors (BT2020).",
+        .labels = {"Vanilla", "Wide Color Gamut"},
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 1; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
     },
     new renodx::utils::settings::Setting{
@@ -881,8 +905,13 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
 
   renodx::utils::settings::UpdateSetting("SceneGradeSaturationCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("SceneGradeBlowoutRestoration", 0.f);
+  renodx::utils::settings::UpdateSetting("SceneGradeHueCorrection", 0.f);
+  renodx::utils::settings::UpdateSetting("SceneGradePerChannelBlowout", 0.f);
+  renodx::utils::settings::UpdateSetting("SceneGradeHueShift", 0.f);
   renodx::utils::settings::UpdateSetting("SceneGradeStrength", 100.f);
+    renodx::utils::settings::UpdateSetting("LutGradeStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("GamutUnclamp", 0.f);
 
   renodx::utils::settings::UpdateSetting("CustomInverseTonemap", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
@@ -894,10 +923,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
 
-  //renodx::utils::settings::UpdateSetting("SwapChainCustomColorSpace", 0.f);
-  renodx::utils::settings::UpdateSetting("LutGradeStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("TonemapGradeStrength", 100.f);
-
+  renodx::utils::settings::UpdateSetting("SwapChainCustomColorSpace", 0.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
   renodx::utils::settings::UpdateSetting("FxPostProcessingMaxCLL", 50.f);
   renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
