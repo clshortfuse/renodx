@@ -130,9 +130,16 @@ float4 main(
   // float _112 = exp2(_109);
   // float _113 = exp2(_110);
   // float _114 = exp2(_111);
-  float _112 = renodx::color::gamma::DecodeSafe(_88);
-  float _113 = renodx::color::gamma::DecodeSafe(_89);
-  float _114 = renodx::color::gamma::DecodeSafe(_90);
+  float _112 = CustomGammaDecode(_88);
+  float _113 = CustomGammaDecode(_89);
+  float _114 = CustomGammaDecode(_90);
+
+  float3 ungraded = float3(_112, _113, _114);
+  //ungraded = renodx::color::bt709::clamp::BT709(ungraded);
+  //ungraded = renodx::color::ap1::from::BT709(ungraded);
+  _112 = ungraded.x;
+  _113 = ungraded.y;
+  _114 = ungraded.z;
 
   float _115 = dot(float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f), float3(_112, _113, _114));
   float _126 = (CustomPixelConsts_176.x) - CustomPixelConsts_192.x;
@@ -172,6 +179,12 @@ float4 main(
   float _165 = _162 * _152;
   float _166 = _163 * _153;
 
+  float3 graded = float3(_164, _165, _166);
+  //graded = renodx::color::bt709::from::AP1(graded);
+  _164 = graded.x;
+  _165 = graded.y;
+  _166 = graded.z;
+
   //float3 clearNans = renodx::color::bt709::clamp::BT709(float3(_164, _165, _166));
 
   // float _167 = max(0.0f, _164);
@@ -186,13 +199,13 @@ float4 main(
   // float _176 = exp2(_173);
   // float _177 = exp2(_174);
   // float _178 = exp2(_175);
-  // float _176 = renodx::color::gamma::EncodeSafe(clearNans.x);
-  // float _177 = renodx::color::gamma::EncodeSafe(clearNans.y);
-  // float _178 = renodx::color::gamma::EncodeSafe(clearNans.z);
+  // float _176 = CustomGammaEncode(clearNans.x);
+  // float _177 = CustomGammaEncode(clearNans.y);
+  // float _178 = CustomGammaEncode(clearNans.z);
 
-  float _176 = renodx::color::gamma::EncodeSafe(_164);
-  float _177 = renodx::color::gamma::EncodeSafe(_165);
-  float _178 = renodx::color::gamma::EncodeSafe(_166);
+  float _176 = CustomGammaEncode(_164);
+  float _177 = CustomGammaEncode(_165);
+  float _178 = CustomGammaEncode(_166);
 
   // SV_Target.xyz = float3(_176, _177, _178);
   // SV_Target.w = 1.0f;
@@ -214,8 +227,9 @@ float4 main(
   SV_Target.w = 1.0f;
 
   SV_Target.xyz = renodx::color::gamma::DecodeSafe(SV_Target.xyz);
+  SV_Target.xyz = CustomColorGrading(ungraded, SV_Target.xyz);
   SV_Target.xyz = renodx::color::gamma::EncodeSafe(CustomTonemap(SV_Target.xyz));
-  // SV_Target.rgb = renodx::draw::RenderIntermediatePass(renodx::color::gamma::DecodeSafe(SV_Target.rgb));
+  // SV_Target.rgb = renodx::draw::RenderIntermediatePass(CustomGammaDecode(SV_Target.rgb));
   //SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
   return SV_Target;
 }
