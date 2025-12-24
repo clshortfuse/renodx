@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./tonemap.hlsli"
 
 float3 GammaCorrectByLuminance(float3 color, bool pow_to_srgb = false) {
   float y_in = renodx::color::y::from::BT709(color);
@@ -7,69 +8,6 @@ float3 GammaCorrectByLuminance(float3 color, bool pow_to_srgb = false) {
   color = renodx::color::correct::Luminance(color, y_in, y_out);
 
   return color;
-}
-
-// take hue from one color and chrominance from another in OKLab space
-float3 HueAndChrominanceOKLab(
-    float3 incorrect_color,
-    float3 hue_reference_color,
-    float3 chrominance_reference_color,
-    float hue_correct_strength = 1.f,
-    float chrominance_correct_strength = 1.f,
-    float clamp_chrominance_loss = 0.f) {
-  if (hue_correct_strength == 0.f && chrominance_correct_strength == 0.f) {
-    return incorrect_color;
-  } else if (hue_correct_strength == 0.f) {
-    return renodx::color::correct::ChrominanceOKLab(incorrect_color, chrominance_reference_color, chrominance_correct_strength, clamp_chrominance_loss);
-  } else if (chrominance_correct_strength == 0.f) {
-    return renodx::color::correct::Hue(incorrect_color, hue_reference_color, hue_correct_strength);
-  }
-
-  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 hue_lab = renodx::color::oklab::from::BT709(hue_reference_color);
-  float3 chrominance_lab = renodx::color::oklab::from::BT709(chrominance_reference_color);
-
-  float2 incorrect_ab = incorrect_lab.yz;
-  float2 hue_ab = hue_lab.yz;
-
-  // Compute chrominance (magnitude of the a–b vector)
-  float incorrect_chrominance = length(incorrect_ab);
-  float target_chrominance = length(chrominance_lab.yz);
-
-  // Scale original chrominance vector toward target chrominance
-  float desired_chrominance = lerp(incorrect_chrominance, target_chrominance, chrominance_correct_strength);
-  float scale = renodx::math::DivideSafe(desired_chrominance, incorrect_chrominance, 1.f);
-
-  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
-  scale = lerp(scale, 1.0f, t * clamp_chrominance_loss);
-
-  float adjusted_chrominance = (incorrect_chrominance > 0.f)
-                                   ? incorrect_chrominance * scale
-                                   : desired_chrominance;
-
-  // Blend hue direction between incorrect and reference colors
-  float2 incorrect_dir = renodx::math::DivideSafe(
-      incorrect_ab,
-      float2(incorrect_chrominance, incorrect_chrominance),
-      float2(0.f, 0.f));
-  float hue_chrominance = length(hue_ab);
-  float2 hue_dir = renodx::math::DivideSafe(
-      hue_ab,
-      float2(hue_chrominance, hue_chrominance),
-      incorrect_dir);
-  float2 blended_dir = lerp(incorrect_dir, hue_dir, hue_correct_strength);
-  float blended_len = length(blended_dir);
-  float2 final_dir = renodx::math::DivideSafe(
-      blended_dir,
-      float2(blended_len, blended_len),
-      hue_dir);
-
-  // Apply final hue direction and chroma magnitude
-  float2 final_ab = final_dir * adjusted_chrominance;
-  incorrect_lab.yz = final_ab;
-
-  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
-  return renodx::color::bt709::clamp::AP1(result);
 }
 
 float4 Sample2DPackedLUT(float3 srgb_color, SamplerState lut_sampler, Texture2D<float4> lut_tex) {
@@ -167,127 +105,12 @@ float3 ScaleBloom(float3 color_scene, float3 tex_bloom, float bloom_strength) {
   return CUSTOM_BLOOM * bloom_color + color_scene;
 }
 
-float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float channel_max = 100.f) {
+float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.18f, float output_max = 1.f, float channel_max = 100.f) {
   float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
   float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, channel_max, output_max, rolloff_start);
-  float scale = renodx::math::DivideSafe(mapped_peak, peak, 0.f);
+  float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
 
   return scale;
-}
-
-float InverseToneMapHitman(float y) {
-  // Coefficients derived from inverse of Hitman 2's tonemap curve
-  const float numerator1 = -(5.f / 6.f) * (y - (1.0f / 30.f));
-  const float sqrt_term = (1.f / 180.f) * sqrt(19260.f * y * y + 1524.f * y + 25.f);
-  const float denominator = y - (14.f / 15.f);
-
-  // Use the positive root for physically plausible inverse
-  float x = (numerator1 / denominator) - (sqrt_term / denominator);
-  return x;
-}
-
-float ToneMapHitman(float x) {
-  float A = 0.6f;
-  float B = 0.1f;
-  float C = 1.f;
-  float D = 0.004f;
-  float E = 0.06f;
-  float F = D / E;
-
-  float scaled = x * A;
-  float numerator = (scaled + B) * x + D;
-  float denominator = (scaled + C) * x + E;
-  float result = numerator / denominator;
-  result -= F;
-
-  // f(x) = (0.6x^2 + 0.1x + 0.004) / (0.6x^2 + x + 0.06) - 0.004/0.06
-
-  return max(0, result);
-}
-
-float3 ToneMapHitman(float3 x, bool by_luminance = false) {
-  x *= RENODX_TONE_MAP_EXPOSURE;
-
-  float3 result;
-  if (!by_luminance) {
-    result = float3(
-        ToneMapHitman(x.r),
-        ToneMapHitman(x.g),
-        ToneMapHitman(x.b));
-  } else {
-    float y_in = renodx::color::y::from::BT709(x);
-    float y_out = ToneMapHitman(y_in);
-    result = renodx::color::correct::Luminance(x, y_in, y_out);
-  }
-
-  return result;
-}
-
-float InverseReinhard(float y) {
-  return y / (1.0f - y);
-}
-
-float3 Reinhard(float3 x, bool by_luminance = false) {
-  x *= RENODX_TONE_MAP_EXPOSURE;
-
-  float3 result = x;
-  if (!by_luminance) {
-    result = renodx::tonemap::Reinhard(x);
-  } else {
-    float y_in = renodx::color::y::from::BT709(x);
-    float y_out = renodx::tonemap::Reinhard(y_in);
-    result = renodx::color::correct::Luminance(x, y_in, y_out);
-  }
-
-  return result;
-}
-
-float3 ApplyCustomHitmanToneMap(float3 untonemapped) {
-  // tonemap by luminance
-  float3 lum_tm = ToneMapHitman(untonemapped, true);
-  float3 ch_tm = ToneMapHitman(untonemapped);
-  float3 untonemapped_midgray_corrected = untonemapped * (0.18f / InverseToneMapHitman(0.18f));
-
-  // create blended hdr version
-  float y = renodx::color::y::from::BT709(lum_tm);
-  // lum_tm = lerp(lum_tm, ch_tm, saturate(y / 0.5f));
-  float3 blended_tonemap = lerp(lum_tm, untonemapped_midgray_corrected, saturate(y));
-
-  // take channel chrominance and untonemapped hue
-  blended_tonemap = HueAndChrominanceOKLab(
-      blended_tonemap,
-      untonemapped,                           // hue reference color
-      ch_tm,                                  // chrominance reference color
-      1.f,                                    // hue correct strength
-      1.f,                                    // chrominance correct strength
-      RENODX_PER_CHANNEL_BLOWOUT_RESTORATION  // clamp chrominance loss
-  );
-
-  return blended_tonemap;
-}
-
-float3 ApplyCustomSimpleReinhardToneMap(float3 untonemapped) {
-  // tonemap by luminance
-  float3 lum_tm = Reinhard(untonemapped, true);
-  float3 ch_tm = Reinhard(untonemapped);
-  float3 untonemapped_midgray_corrected = untonemapped * (0.18f / InverseReinhard(0.18f));
-
-  // create blended hdr version
-  float y = renodx::color::y::from::BT709(lum_tm);
-  // lum_tm = lerp(lum_tm, ch_tm, saturate(y / 0.5f));
-  float3 blended_tonemap = lerp(lum_tm, untonemapped_midgray_corrected, saturate(y));
-
-  // take channel chrominance and untonemapped hue
-  blended_tonemap = HueAndChrominanceOKLab(
-      blended_tonemap,
-      untonemapped,                           // hue reference color
-      ch_tm,                                  // chrominance reference color
-      1.f,                                    // hue correct strength
-      1.f,                                    // chrominance correct strength
-      RENODX_PER_CHANNEL_BLOWOUT_RESTORATION  // clamp chrominance loss
-  );
-
-  return blended_tonemap;
 }
 
 renodx::lut::Config CreateLUTConfig(SamplerState lut_sampler) {
@@ -471,11 +294,11 @@ float3 GamutCompressToBT2020BT2020InBT2020Out(float3 color_bt2020) {
   return color_bt2020;
 }
 
-float3 ApplyHermiteSplineByMaxChannel(float3 input, float peak_white, float white_clip) {
+float3 ApplyHermiteSplineByMaxChannel(float3 input, float peak_white, float white_clip = 100.f) {
   float max_channel = renodx::math::Max(input.r, input.g, input.b);
 
   float mapped_peak = exp2(renodx::tonemap::HermiteSplineRolloff(log2(max_channel), log2(peak_white), log2(white_clip)));
-  float scale = renodx::math::DivideSafe(mapped_peak, max_channel, 0.f);
+  float scale = renodx::math::DivideSafe(mapped_peak, max_channel, 1.f);
   float3 tonemapped = input * scale;
   return tonemapped;
 }
@@ -509,7 +332,7 @@ float3 ApplyDisplayMap(float3 color_input, float peak_ratio) {
 
     float3 color_input_bt2020 = renodx::color::bt2020::from::BT709(color_input);
     color_input_bt2020 = GamutCompressToBT2020BT2020InBT2020Out(color_input_bt2020);
-    float3 display_mapped = ApplyHermiteSplineByMaxChannel(color_input_bt2020, peak_ratio, 100.f);
+    float3 display_mapped = ApplyHermiteSplineByMaxChannel(color_input_bt2020, peak_ratio, 60.f);
     display_mapped = renodx::color::bt709::from::BT2020(display_mapped);
 
     color_output = display_mapped;
