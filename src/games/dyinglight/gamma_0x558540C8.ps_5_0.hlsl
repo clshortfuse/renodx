@@ -10,17 +10,8 @@ cbuffer cb0 : register(b0) {
 }
 
 float3 GammaCorrectHuePreserving(float3 incorrect_color) {
-  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
-
-  const float y_in = max(0, renodx::color::y::from::BT709(incorrect_color));
-  const float y_out = renodx::color::correct::Gamma(y_in);
-
-  float3 lum = renodx::color::correct::Luminance(incorrect_color, y_in, y_out);
-
-  // use chrominance from per channel gamma correction
-  float3 result = renodx::color::correct::ChrominanceOKLab(lum, ch, 1.f, 1.f);
-
-  result = renodx::color::bt709::clamp::AP1(result);
+  float3 corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
+  float3 result = renodx::color::correct::Hue(corrected_color, incorrect_color);
   return result;
 }
 
@@ -54,8 +45,13 @@ float3 ApplyHermiteSplineByMaxChannel(float3 input, float diffuse_nits, float pe
   float mapped_max = renodx::color::pq::Decode(scaled_pq, diffuse_nits);
   mapped_max = min(mapped_max, peak_ratio);
 
-  float scale = renodx::math::DivideSafe(mapped_max, max_channel, 0.f);
-  return input * scale;
+  float scale = renodx::math::DivideSafe(mapped_max, max_channel, 1.f);
+  float3 output = input * scale;
+
+  // max_channel = max(renodx::math::Max(output), peak_ratio);
+  // output *= peak_ratio / max_channel;
+
+  return output;
 }
 
 float3 ApplyHermiteSplineByLuminance(float3 input, float diffuse_nits, float peak_nits) {
@@ -112,7 +108,7 @@ float3 ApplyGammaCorrectionToneMapAndScale(float3 untonemapped) {
 
     if (RENODX_TONE_MAP_TYPE == 2.f) {
       tonemapped = renodx::color::bt709::from::BT2020(
-          ApplyHermiteSplineByMaxChannel(renodx::color::bt2020::from::BT709(untonemapped_graded),
+          ApplyHermiteSplineByMaxChannel(max(0, renodx::color::bt2020::from::BT709(untonemapped_graded)),
                                          RENODX_DIFFUSE_WHITE_NITS,
                                          RENODX_PEAK_WHITE_NITS));
     } else {
@@ -122,10 +118,12 @@ float3 ApplyGammaCorrectionToneMapAndScale(float3 untonemapped) {
     tonemapped = untonemapped;
   }
 
+  tonemapped *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+
   if (RENODX_GAMMA_CORRECTION != 0.f) {
     tonemapped = renodx::color::correct::GammaSafe(tonemapped, true);
   }
-  tonemapped *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+
   return tonemapped;
 }
 
