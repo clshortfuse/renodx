@@ -87,13 +87,17 @@ void main(
   }
   r0.rgb = lut_input * scale;
 
-  // LUT
+// LUT
+#if 0
   r0.xyz = renodx::color::gamma::Encode(saturate(r0.rgb), 2.2f);
   r0.xyz = r0.xyz * float3(0.99609375, 0.99609375, 0.99609375) + float3(0.001953125, 0.001953125, 0.001953125);
   r1.x = t4.Sample(s4_s, r0.xx).x;
   r1.y = t4.Sample(s4_s, r0.yy).y;
   r1.z = t4.Sample(s4_s, r0.zz).z;
   r0.xyz = renodx::color::gamma::Decode(r1.rgb, 2.2f);
+#else
+  r0.rgb = SampleLUT1D(t4, s4_s, r0.rgb);
+#endif
 
   float3 lut_output = r0.rgb / scale;
 
