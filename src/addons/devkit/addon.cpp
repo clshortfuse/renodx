@@ -3226,9 +3226,17 @@ void RenderResourceViewHistory(reshade::api::device* device, DeviceData* data, r
         }
       }
       if (space == 0) {
-        ImGui::Text("Snapshot %03d: T%d", current_snapshot_index, slot);
+        CreateDrawIndexLink(
+            std::format("Snapshot {:03d}", current_snapshot_index),
+            current_snapshot_index);
+        ImGui::SameLine();
+        ImGui::Text(": T%d", slot);
       } else {
-        ImGui::Text("Snapshot %03d: T%d,space%d", current_snapshot_index, slot, space);
+        CreateDrawIndexLink(
+            std::format("Snapshot {:03d}", current_snapshot_index),
+            current_snapshot_index);
+        ImGui::SameLine();
+        ImGui::Text(": T%d,space%d", slot, space);
       }
     }
     for (const auto& [slot_space, resource_view_details] : draw_details.uav_binds) {
