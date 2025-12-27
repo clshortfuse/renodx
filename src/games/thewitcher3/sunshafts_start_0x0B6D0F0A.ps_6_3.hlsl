@@ -27,10 +27,10 @@ float4 main(
   float4 _32 = t1.Load(int3((uint)(uint(((cb12_270x * _14) + _19) * cb12_271x)), (uint)(uint((_20 - (cb12_270y * _14)) * cb12_271x)), 0));
   float4 _34 = t0.Load(int3(_10, _11, 0));
 
-  // if (RENODX_TONE_MAP_TYPE > 1) {
-  //   float clamp_value = _34.w;
-  //   _34 = ClampPostProcessing(_34, clamp_value);
-  // }
+  if (RENODX_TONE_MAP_TYPE > 1) {
+    float clamp_value = 4.f * CUSTOM_SUNSHAFT_PEAK;
+    _34 = ClampPostProcessing(_34, clamp_value);
+  }
 
   float _41 = ((_14 * CustomPixelConsts_032.x) * cb12_073x) - _19;
   float _42 = (_18 * CustomPixelConsts_032.y) - _20;
@@ -46,7 +46,7 @@ float4 main(
   // SV_Target.rgb = CustomBloomTonemap(SV_Target.rgb, 0.8f);
   //SV_Target.rgb *= CUSTOM_SUNSHAFTS_STRENGTH;
 
-  if (RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = ToneMapMaxCLL(SV_Target.rgb, CUSTOM_SUNSHAFT_ROLLOFF_START, 100.f * CUSTOM_SUNSHAFT_PEAK);
+  //if (RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = ToneMapMaxCLL(SV_Target.rgb, CUSTOM_SUNSHAFT_ROLLOFF_START, 100.f * CUSTOM_SUNSHAFT_PEAK);
   //SV_Target.rgb = min(2.0f, SV_Target.rgb);
   SV_Target.rgb *= CUSTOM_SUNSHAFTS_STRENGTH;
 

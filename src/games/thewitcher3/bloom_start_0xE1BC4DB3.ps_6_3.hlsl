@@ -1,32 +1,32 @@
-#include "./common.hlsl"
-//#include "./uncharted2.hlsl"
+//#include "./common.hlsl"
+#include "./uncharted2.hlsl"
 
 Texture2D<float4> t0 : register(t0);
 
-cbuffer cb3 : register(b3) {
-  float4 CustomPixelConsts_000 : packoffset(c000.x);
-  float4 CustomPixelConsts_016 : packoffset(c001.x);
-  float4 CustomPixelConsts_032 : packoffset(c002.x);
-  float4 CustomPixelConsts_048 : packoffset(c003.x);
-  float4 CustomPixelConsts_064 : packoffset(c004.x);
-  float4 CustomPixelConsts_080 : packoffset(c005.x);
-  float4 CustomPixelConsts_096 : packoffset(c006.x);
-  float4 CustomPixelConsts_112 : packoffset(c007.x);
-  float4 CustomPixelConsts_128 : packoffset(c008.x);
-  float4 CustomPixelConsts_144 : packoffset(c009.x);
-  float4 CustomPixelConsts_160 : packoffset(c010.x);
-  float4 CustomPixelConsts_176 : packoffset(c011.x);
-  float4 CustomPixelConsts_192 : packoffset(c012.x);
-  float4 CustomPixelConsts_208 : packoffset(c013.x);
-  float4 CustomPixelConsts_224 : packoffset(c014.x);
-  float4 CustomPixelConsts_240 : packoffset(c015.x);
-  float4 CustomPixelConsts_256 : packoffset(c016.x);
-  float4 CustomPixelConsts_272 : packoffset(c017.x);
-  float4 CustomPixelConsts_288 : packoffset(c018.x);
-  float4 CustomPixelConsts_304 : packoffset(c019.x);
-  float4 CustomPixelConsts_320 : packoffset(c020.x);
-  float4 CustomPixelConsts_336[4] : packoffset(c021.x);
-};
+// cbuffer cb3 : register(b3) {
+//   float4 CustomPixelConsts_000 : packoffset(c000.x);
+//   float4 CustomPixelConsts_016 : packoffset(c001.x);
+//   float4 CustomPixelConsts_032 : packoffset(c002.x);
+//   float4 CustomPixelConsts_048 : packoffset(c003.x);
+//   float4 CustomPixelConsts_064 : packoffset(c004.x);
+//   float4 CustomPixelConsts_080 : packoffset(c005.x);
+//   float4 CustomPixelConsts_096 : packoffset(c006.x);
+//   float4 CustomPixelConsts_112 : packoffset(c007.x);
+//   float4 CustomPixelConsts_128 : packoffset(c008.x);
+//   float4 CustomPixelConsts_144 : packoffset(c009.x);
+//   float4 CustomPixelConsts_160 : packoffset(c010.x);
+//   float4 CustomPixelConsts_176 : packoffset(c011.x);
+//   float4 CustomPixelConsts_192 : packoffset(c012.x);
+//   float4 CustomPixelConsts_208 : packoffset(c013.x);
+//   float4 CustomPixelConsts_224 : packoffset(c014.x);
+//   float4 CustomPixelConsts_240 : packoffset(c015.x);
+//   float4 CustomPixelConsts_256 : packoffset(c016.x);
+//   float4 CustomPixelConsts_272 : packoffset(c017.x);
+//   float4 CustomPixelConsts_288 : packoffset(c018.x);
+//   float4 CustomPixelConsts_304 : packoffset(c019.x);
+//   float4 CustomPixelConsts_320 : packoffset(c020.x);
+//   float4 CustomPixelConsts_336[4] : packoffset(c021.x);
+// };
 
 SamplerState s0 : register(s0);
 
@@ -71,14 +71,19 @@ float4 main(
   // _69.rgb = CustomBloomTonemap(_69.rgb);
   // _80.rgb = CustomBloomTonemap(_80.rgb);
   // _87.rgb = CustomBloomTonemap(_87.rgb);
-  // if (RENODX_TONE_MAP_TYPE > 1.f) {
-  //   // float clamp_value = Uncharted2Tonemap1(1.f);
-  //   float clamp_value = _61.w;
-  //    _61 = ClampPostProcessing(_61, clamp_value);
-  //    _69 = ClampPostProcessing(_69, clamp_value);
-  //    _80 = ClampPostProcessing(_80, clamp_value);
-  //    _87 = ClampPostProcessing(_87, clamp_value);
-  // }
+  if (RENODX_TONE_MAP_TYPE > 1.f) {
+    // float clamp_value = Uncharted2Tonemap1(100.f);
+    float clamp_value = 2.f * CUSTOM_BLOOM_PEAK;
+     _61 = ClampPostProcessing(_61, clamp_value);
+     _69 = ClampPostProcessing(_69, clamp_value);
+     _80 = ClampPostProcessing(_80, clamp_value);
+     _87 = ClampPostProcessing(_87, clamp_value);
+
+    // _61.rgb = Uncharted2Tonemap1(_61.rgb);
+    // _69.rgb = Uncharted2Tonemap1(_69.rgb);
+    // _80.rgb = Uncharted2Tonemap1(_80.rgb);
+    // _87.rgb = Uncharted2Tonemap1(_87.rgb);
+  }
 
 
   float _91 = ((_69.x + _61.x) + _80.x) + _87.x;
@@ -170,10 +175,10 @@ float4 main(
 
   //SV_Target.rgb = CustomBloomTonemap(SV_Target.rgb, 0.375f);
 
-  if (RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = ToneMapMaxCLL(SV_Target.rgb, CUSTOM_BLOOM_ROLLOFF_START, 100.f * CUSTOM_BLOOM_PEAK);
-  //  if (BLOOM_EMULATION == 1.f && RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = ToneMapMaxCLL(SV_Target.rgb, 0.375f, 100.f * CUSTOM_BLOOM_INTENSITY);
-  // if (BLOOM_EMULATION == 1.f && RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = max(log2(1.f + SV_Target.rgb), 0.f);
-
+  // if (RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = ToneMapMaxCLL(SV_Target.rgb, CUSTOM_BLOOM_ROLLOFF_START, 100.f * CUSTOM_BLOOM_PEAK);
+  //   if (BLOOM_EMULATION == 1.f && RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = ToneMapMaxCLL(SV_Target.rgb, 0.375f, 100.f * CUSTOM_BLOOM_INTENSITY);
+  //  if (BLOOM_EMULATION == 1.f && RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = max(log2(1.f + SV_Target.rgb), 0.f);
+  //if (RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = renodx::tonemap::HermiteSplineLuminanceRolloff(SV_Target.rgb, 80.f, 100.f);
   SV_Target.w = 0.0f;
   return SV_Target;
 }
