@@ -56,8 +56,8 @@
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
 #define CUSTOM_BLOOM_PEAK                 shader_injection.custom_bloom_peak
 #define CUSTOM_SUNSHAFT_PEAK              shader_injection.custom_sunshaft_peak
-#define CUSTOM_BLOOM_ROLLOFF_START                 shader_injection.custom_bloom_rolloff_start
-#define CUSTOM_SUNSHAFT_ROLLOFF_START             shader_injection.custom_sunshaft_rolloff_start
+// #define CUSTOM_BLOOM_ROLLOFF_START                 shader_injection.custom_bloom_rolloff_start
+// #define CUSTOM_SUNSHAFT_ROLLOFF_START             shader_injection.custom_sunshaft_rolloff_start
 // #define CUSTOM_BLOOM_THRESHOLD                 shader_injection.custom_bloom_threshold
 // #define CUSTOM_BLOOM_CURVE                     shader_injection.custom_bloom_curve
 //#define CUSTOM_BLOOM_RADIUS                    shader_injection.custom_bloom_radius
@@ -116,8 +116,8 @@ struct ShaderInjectData {
   //float bloom_emulation;
   float custom_bloom_peak;
   float custom_sunshaft_peak;
-  float custom_bloom_rolloff_start;
-  float custom_sunshaft_rolloff_start;
+  // float custom_bloom_rolloff_start;
+  // float custom_sunshaft_rolloff_start;
   // float custom_bloom_threshold;
   // float custom_bloom_curve;
   //float custom_bloom_radius;

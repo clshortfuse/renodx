@@ -59,6 +59,8 @@ float4 main(
   SV_Target.z = ((((((_107.z + _82.z) * 0.1790439933538437f) + (_92.z * 0.20236000418663025f)) + ((_121.z + _70.z) * 0.12400899827480316f)) + ((_135.z + _56.z) * 0.06723400205373764f)) + ((_149.z + _42.z) * 0.02853200025856495f));
   SV_Target.w = 0.0f;
 
+  // if (RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = ToneMapMaxCLL(SV_Target.rgb, CUSTOM_BLOOM_ROLLOFF_START, 100.f * CUSTOM_BLOOM_PEAK);
+  //if (RENODX_TONE_MAP_TYPE > 1.f) SV_Target.rgb = renodx::tonemap::HermiteSplineLuminanceRolloff(SV_Target.rgb, 10.f, 100.f);
   SV_Target.rgb *= CUSTOM_BLOOM;
   return SV_Target;
 }
