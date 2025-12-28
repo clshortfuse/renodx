@@ -61,6 +61,9 @@ void main(
     r0.xyz = r1.xyz / r0.xyz;
     r0.xyz = pow(r0.xyz, 78.84375f);
   } else {
+    if (RENODX_TONE_MAP_TYPE == 3.f) {
+      r0.rgb = max(0, r0.rgb);
+    }
     r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);
     r0.rgb *= RENODX_DIFFUSE_WHITE_NITS;
     if (RENODX_TONE_MAP_TYPE == 2.f) {
