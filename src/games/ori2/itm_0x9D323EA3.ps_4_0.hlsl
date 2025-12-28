@@ -28,7 +28,7 @@ void main(
 
   r1.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
   o0.w = r1.w;
-  if (injectedData.toneMapType != 0) {
+  if (RENODX_TONE_MAP_TYPE != 0) {
     o0.xyz = r1.xyz * cb0[5].xxx + cb0[5].yyy;  // fade to black
   } else {  // inverse tonemapping garbage, also applies to UI
     r0.x = cb0[7].z / cb0[7].x;
