@@ -1,5 +1,3 @@
-#include "./DICE.hlsl"
-#include "./hueHelper.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Thu Aug 15 21:16:03 2024
@@ -32,7 +30,7 @@ void main(
 
   r0.xyz = sign(r0.xyz) * pow(abs(r0.xyz), 2.2f);  // linearize
 
-  if (injectedData.toneMapType == 0) {
+  if (RENODX_TONE_MAP_TYPE == 0) {
     // bt2020 conversion + gamut expansion
     r0.w = max(r0.x, r0.y);
     r0.w = max(r0.w, r0.z);
@@ -63,20 +61,12 @@ void main(
     r0.xyz = r1.xyz / r0.xyz;
     r0.xyz = pow(r0.xyz, 78.84375f);
   } else {
-    if (injectedData.toneMapType >= 2.f) {
-      r0.xyz = Hue(r0.xyz, injectedData.toneMapHueCorrection);
-      // Declare DICE parameters
-      DICESettings config = DefaultDICESettings();
-      config.Type = 3;
-      config.ShoulderStart = 0.5f;
-      const float dicePaperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
-      const float dicePeakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
-
-      // multiply paper white in for tonemapping and out for output
-      r0.xyz = DICETonemap(r0.xyz * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
-    }
     r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);
-    r0.xyz = renodx::color::pq::Encode(r0.xyz, injectedData.toneMapGameNits);
+    r0.rgb *= RENODX_DIFFUSE_WHITE_NITS;
+    if (RENODX_TONE_MAP_TYPE == 2.f) {
+      r0.rgb = min(r0.rgb, RENODX_PEAK_WHITE_NITS);
+    }
+    r0.xyz = renodx::color::pq::EncodeSafe(r0.xyz, 1.f);
   }
   o0.xyz = r0.xyz;
   return;
