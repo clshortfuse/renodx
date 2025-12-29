@@ -26,6 +26,58 @@ find_program(SLANGC_BIN slangc.exe
   ${CMAKE_CURRENT_SOURCE_DIR}/bin/
   REQUIRED)
 message("SLANGC_BIN: " ${SLANGC_BIN})
+set(SLANGC_FLAGS_LIST -O3 -g0 -entry main -Wno-30056 -Wno-15205)
+list(JOIN SLANGC_FLAGS_LIST " " SLANGC_FLAGS_STR)
+file(TO_CMAKE_PATH "${SLANGC_BIN}" SLANGC_BIN_CMAKE_PATH)
+
+if(DEFINED ENV{VULKAN_SDK})
+  set(VULKAN_SDK_PATH "$ENV{VULKAN_SDK}")
+endif()
+
+set(SPIRV_VAL_FLAGS_LIST --target-env vulkan1.3)
+list(JOIN SPIRV_VAL_FLAGS_LIST " " SPIRV_VAL_FLAGS_STR)
+
+set(SPIRV_CROSS_FLAGS_LIST --version 450 --vulkan-semantics --no-es)
+list(JOIN SPIRV_CROSS_FLAGS_LIST " " SPIRV_CROSS_FLAGS_STR)
+
+find_program(SPIRV_VAL_BIN spirv-val.exe
+  HINTS
+  ${VULKAN_SDK_PATH}/Bin
+  ${CMAKE_CURRENT_SOURCE_DIR}/bin/)
+message("SPIRV_VAL_BIN: " ${SPIRV_VAL_BIN})
+
+find_program(SPIRV_DIS_BIN spirv-dis.exe
+  HINTS
+  ${VULKAN_SDK_PATH}/Bin
+  ${CMAKE_CURRENT_SOURCE_DIR}/bin/)
+message("SPIRV_DIS_BIN: " ${SPIRV_DIS_BIN})
+
+find_program(SPIRV_CROSS_BIN spirv-cross.exe
+  HINTS
+  ${VULKAN_SDK_PATH}/Bin
+  ${CMAKE_CURRENT_SOURCE_DIR}/bin/)
+message("SPIRV_CROSS_BIN: " ${SPIRV_CROSS_BIN})
+
+file(TO_CMAKE_PATH "${SPIRV_CROSS_BIN}" SPIRV_CROSS_BIN_CMAKE_PATH)
+
+set(SPIRV_VAL_SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/spirv_val.cmake)
+set(SPIRV_VAL_SCRIPT_CONTENT [==[
+if(NOT DEFINED VALIDATOR OR "${VALIDATOR}" STREQUAL "")
+  message(FATAL_ERROR "spirv-val validator path missing")
+endif()
+if(NOT DEFINED FILE OR "${FILE}" STREQUAL "")
+  message(FATAL_ERROR "spirv-val file missing")
+endif()
+set(VAL_FLAGS "${FLAGS}")
+if(NOT VAL_FLAGS STREQUAL "")
+  separate_arguments(VAL_FLAGS NATIVE_COMMAND "${VAL_FLAGS}")
+endif()
+execute_process(COMMAND "${VALIDATOR}" ${VAL_FLAGS} "${FILE}" RESULT_VARIABLE RESULT OUTPUT_VARIABLE OUT ERROR_VARIABLE ERR)
+if(NOT RESULT EQUAL 0)
+  message(STATUS "spirv-val: ${FILE}\n${OUT}\n${ERR}")
+endif()
+]==])
+file(WRITE ${SPIRV_VAL_SCRIPT} "${SPIRV_VAL_SCRIPT_CONTENT}")
 
 project(renodx VERSION 0.1.0 LANGUAGES CXX)
 
@@ -150,6 +202,7 @@ endfunction()
 function(build_shader_target ADDON ADDON_PATH)
   set(EMBED_FOLDER ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/embed)
   unset(SHADER_BINARIES)
+  unset(SHADER_AUX_OUTPUTS)
 
   file(GLOB_RECURSE SHADER_HLSL_SOURCES CONFIGURE_DEPENDS ${ADDON_PATH}/*.hlsl)
   foreach(FILE ${SHADER_HLSL_SOURCES})
@@ -291,11 +344,7 @@ function(build_shader_target ADDON ADDON_PATH)
 
     set(SHADER_COMPILER ${SLANGC_BIN})
     unset(SHADER_FLAGS)
-    set(SHADER_FLAGS ${SHADER_FLAGS} -O3)
-    set(SHADER_FLAGS ${SHADER_FLAGS} -g0)
-    set(SHADER_FLAGS ${SHADER_FLAGS} -entry main)
-    set(SHADER_FLAGS ${SHADER_FLAGS} -Wno-30056)
-    set(SHADER_FLAGS ${SHADER_FLAGS} -Wno-15205)
+    set(SHADER_FLAGS ${SLANGC_FLAGS_LIST})
 
     if(SHADER_TARGET AND (SHADER_HASH OR SHADER_NAME))
       if(SHADER_TARGET STREQUAL "frag" OR SHADER_TARGET STREQUAL "vert" OR SHADER_TARGET STREQUAL "comp")
@@ -316,19 +365,53 @@ function(build_shader_target ADDON ADDON_PATH)
         endif()
 
         if(SHADER_HASH)
-          add_custom_command(
-            OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.spv
-            COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_HASH}.spv
-            DEPENDS ${HLSL_DEPENDENCIES}
-          )
+          if(SPIRV_VAL_BIN)
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.spv
+              COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_HASH}.spv
+              COMMAND ${CMAKE_COMMAND} -DVALIDATOR="${SPIRV_VAL_BIN}" -DFILE="${EMBED_FOLDER}/${SHADER_HASH}.spv" -DFLAGS="${SPIRV_VAL_FLAGS_STR}" -P ${SPIRV_VAL_SCRIPT}
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+          else()
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.spv
+              COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_HASH}.spv
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+          endif()
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.spv)
+          if(SPIRV_DIS_BIN)
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.spvasm
+              COMMAND "${SPIRV_DIS_BIN}" "${EMBED_FOLDER}/${SHADER_HASH}.spv" -o "${EMBED_FOLDER}/${SHADER_HASH}.spvasm"
+              DEPENDS ${EMBED_FOLDER}/${SHADER_HASH}.spv
+            )
+            list(APPEND SHADER_AUX_OUTPUTS ${EMBED_FOLDER}/${SHADER_HASH}.spvasm)
+          endif()
         else()
-          add_custom_command(
-            OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.spv
-            COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_NAME}.spv
-            DEPENDS ${HLSL_DEPENDENCIES}
-          )
+          if(SPIRV_VAL_BIN)
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.spv
+              COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_NAME}.spv
+              COMMAND ${CMAKE_COMMAND} -DVALIDATOR="${SPIRV_VAL_BIN}" -DFILE="${EMBED_FOLDER}/${SHADER_NAME}.spv" -DFLAGS="${SPIRV_VAL_FLAGS_STR}" -P ${SPIRV_VAL_SCRIPT}
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+          else()
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.spv
+              COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_NAME}.spv
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+          endif()
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.spv)
+          if(SPIRV_DIS_BIN)
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.spvasm
+              COMMAND "${SPIRV_DIS_BIN}" "${EMBED_FOLDER}/${SHADER_NAME}.spv" -o "${EMBED_FOLDER}/${SHADER_NAME}.spvasm"
+              DEPENDS ${EMBED_FOLDER}/${SHADER_NAME}.spv
+            )
+            list(APPEND SHADER_AUX_OUTPUTS ${EMBED_FOLDER}/${SHADER_NAME}.spvasm)
+          endif()
         endif()
       else()
         string(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
@@ -441,11 +524,53 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
 
     if(SHADER_HASH)
-      configure_file(${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.spv COPYONLY)
+      if(SPIRV_VAL_BIN)
+        add_custom_command(
+          OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.spv
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.spv
+          COMMAND ${CMAKE_COMMAND} -DVALIDATOR="${SPIRV_VAL_BIN}" -DFILE="${EMBED_FOLDER}/${SHADER_HASH}.spv" -DFLAGS="${SPIRV_VAL_FLAGS_STR}" -P ${SPIRV_VAL_SCRIPT}
+          DEPENDS ${FILE}
+        )
+      else()
+        add_custom_command(
+          OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.spv
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.spv
+          DEPENDS ${FILE}
+        )
+      endif()
       list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.spv)
+      if(SPIRV_DIS_BIN)
+        add_custom_command(
+          OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.spvasm
+          COMMAND "${SPIRV_DIS_BIN}" "${EMBED_FOLDER}/${SHADER_HASH}.spv" -o "${EMBED_FOLDER}/${SHADER_HASH}.spvasm"
+          DEPENDS ${FILE}
+        )
+        list(APPEND SHADER_AUX_OUTPUTS ${EMBED_FOLDER}/${SHADER_HASH}.spvasm)
+      endif()
     elseif(SHADER_NAME)
-      configure_file(${FILE} ${EMBED_FOLDER}/${SHADER_NAME}.spv COPYONLY)
+      if(SPIRV_VAL_BIN)
+        add_custom_command(
+          OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.spv
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}.spv
+          COMMAND ${CMAKE_COMMAND} -DVALIDATOR="${SPIRV_VAL_BIN}" -DFILE="${EMBED_FOLDER}/${SHADER_NAME}.spv" -DFLAGS="${SPIRV_VAL_FLAGS_STR}" -P ${SPIRV_VAL_SCRIPT}
+          DEPENDS ${FILE}
+        )
+      else()
+        add_custom_command(
+          OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.spv
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}.spv
+          DEPENDS ${FILE}
+        )
+      endif()
       list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.spv)
+      if(SPIRV_DIS_BIN)
+        add_custom_command(
+          OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.spvasm
+          COMMAND "${SPIRV_DIS_BIN}" "${EMBED_FOLDER}/${SHADER_NAME}.spv" -o "${EMBED_FOLDER}/${SHADER_NAME}.spvasm"
+          DEPENDS ${FILE}
+        )
+        list(APPEND SHADER_AUX_OUTPUTS ${EMBED_FOLDER}/${SHADER_NAME}.spvasm)
+      endif()
     endif()
   endforeach()
 
@@ -530,7 +655,7 @@ function(build_shader_target ADDON ADDON_PATH)
   endif()
 
   list(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
-  add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
+  add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES} ${SHADER_AUX_OUTPUTS})
 
   if(SHADERS_H_OUTPUT)
     file(GENERATE OUTPUT ${EMBED_FOLDER}/shaders.h CONTENT "${SHADERS_H_OUTPUT}")
@@ -593,6 +718,7 @@ foreach(FILE ${ADDON_FILES})
   generate_resource_rc(${ADDON})
   add_dependencies(${ADDON} ${ADDON}-shaders)
   add_dependencies(${ADDON} detours)
+  target_compile_definitions(${ADDON} PRIVATE RENODX_SLANGC_BIN_PATH="${SLANGC_BIN_CMAKE_PATH}" RENODX_SLANGC_FLAGS="${SLANGC_FLAGS_STR}" RENODX_SPIRV_CROSS_BIN_PATH="${SPIRV_CROSS_BIN_CMAKE_PATH}" RENODX_SPIRV_CROSS_FLAGS="${SPIRV_CROSS_FLAGS_STR}")
   target_link_libraries(${ADDON} PRIVATE detours)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/include)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/frozen/include)
