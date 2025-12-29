@@ -20,6 +20,7 @@
 #include <shared_mutex>
 #include <span>
 #include <string>
+#include <cassert>
 #include <vector>
 
 #include "./path.hpp"
@@ -117,10 +118,22 @@ class FxcD3DInclude : public ID3DInclude {
   }
 };
 
+inline HMODULE LoadDXCompiler(const std::wstring& path = L"dxcompiler.dll") {
+  if (dxc_compiler_library == nullptr) {
+    dxc_compiler_library = LoadLibraryW(path.c_str());
+  }
+  return dxc_compiler_library;
+}
+
+// Narrow-string overloads for convenience
+inline HMODULE LoadDXCompiler(const std::string& path) {
+  return LoadDXCompiler(std::wstring(path.begin(), path.end()));
+}
+
 inline HRESULT CreateLibrary(IDxcLibrary** dxc_library) {
   // HMODULE dxil_loader = LoadLibraryW(L"dxil.dll");
   if (dxc_compiler_library == nullptr) {
-    dxc_compiler_library = LoadLibraryW(L"dxcompiler.dll");
+    dxc_compiler_library = LoadDXCompiler();
   }
   if (dxc_compiler_library == nullptr) {
     return -1;
