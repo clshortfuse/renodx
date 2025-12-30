@@ -55,6 +55,7 @@
 #define BLOOM_EMULATION                        shader_injection.bloom_emulation
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
 #define CUSTOM_VIGNETTE                        shader_injection.custom_vignette
+#define CUSTOM_VIGNETTE_BLACK_LEVEL            shader_injection.custom_vignette_black_level
 #define CUSTOM_BLOOM_PEAK                 shader_injection.custom_bloom_peak
 #define CUSTOM_SUNSHAFT_PEAK              shader_injection.custom_sunshaft_peak
 // #define CUSTOM_BLOOM_ROLLOFF_START                 shader_injection.custom_bloom_rolloff_start
@@ -115,6 +116,7 @@ struct ShaderInjectData {
 
   float custom_bloom;
   float custom_vignette;
+  float custom_vignette_black_level;
   //float bloom_emulation;
   float custom_bloom_peak;
   float custom_sunshaft_peak;

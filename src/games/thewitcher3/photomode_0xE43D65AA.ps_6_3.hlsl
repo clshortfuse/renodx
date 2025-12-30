@@ -212,44 +212,76 @@ SamplerState s1 : register(s1);
 
 float4 main(
     noperspective float4 SV_Position: SV_Position,
-    linear float2 TEXCOORD: TEXCOORD
+    linear float2 TEXCOORD: TEXCOORD,
+    linear float2 TEXCOORD_2: TEXCOORD2
 ) : SV_Target {
   float4 SV_Target;
-  float4 _6 = t0.SampleLevel(s1, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-  float _43 = exp2(log2(max(0.0f, ((CustomPixelConsts_224.x * exp2(log2(abs(_6.x)) * CustomPixelConsts_128.x)) + CustomPixelConsts_224.y))) * CustomPixelConsts_224.z);
-  float _44 = exp2(log2(max(0.0f, ((CustomPixelConsts_224.x * exp2(log2(abs(_6.y)) * CustomPixelConsts_128.x)) + CustomPixelConsts_224.y))) * CustomPixelConsts_224.z);
-  float _45 = exp2(log2(max(0.0f, ((CustomPixelConsts_224.x * exp2(log2(abs(_6.z)) * CustomPixelConsts_128.x)) + CustomPixelConsts_224.y))) * CustomPixelConsts_224.z);
-  // float _43 = exp2(log2(((CustomPixelConsts_224.x * exp2(log2(abs(_6.x)) * CustomPixelConsts_128.x)) + CustomPixelConsts_224.y)) * CustomPixelConsts_224.z);
-  // float _44 = exp2(log2(((CustomPixelConsts_224.x * exp2(log2(abs(_6.y)) * CustomPixelConsts_128.x)) + CustomPixelConsts_224.y)) * CustomPixelConsts_224.z);
-  // float _45 = exp2(log2(((CustomPixelConsts_224.x * exp2(log2(abs(_6.z)) * CustomPixelConsts_128.x)) + CustomPixelConsts_224.y)) * CustomPixelConsts_224.z);
-  float _46 = dot(float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f), float3(_43, _44, _45));
-  float _52 = saturate((_46 - CustomPixelConsts_160.x) * CustomPixelConsts_160.y);
-  float _57 = saturate((_46 - CustomPixelConsts_160.z) * CustomPixelConsts_160.w);
-  // float _67 = exp2(log2(max(0.0f, _43)) * 2.200000047683716f);
-  // float _68 = exp2(log2(max(0.0f, _44)) * 2.200000047683716f);
-  // float _69 = exp2(log2(max(0.0f, _45)) * 2.200000047683716f);
-  float _67 = CustomGammaDecode(_43);
-  float _68 = CustomGammaDecode(_44);
-  float _69 = CustomGammaDecode(_45);
-  float3 ungraded = float3(_67, _68, _69);
+  float _16 = (TEXCOORD.x - CustomPixelConsts_272.x) / CustomPixelConsts_272.x;
+  float _17 = (TEXCOORD.y - CustomPixelConsts_272.y) / CustomPixelConsts_272.y;
+  float _21 = sqrt((_17 * _17) + (_16 * _16));
+  float _24 = saturate((_21 - CustomPixelConsts_256.y) * CustomPixelConsts_256.z);
+  float4 _25 = t0.SampleLevel(s1, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+  float _55;
+  float _56;
+  [branch]
+  if (_24 > 0.0f) {
+    float _39 = ((_24 * _24) * CustomPixelConsts_256.x) * min(max((1.0f / _21), -3.4028234663852886e+38f), 3.4028234663852886e+38f);
+    float _41 = (_16 * CustomPixelConsts_272.z) * _39;
+    float _43 = (_17 * CustomPixelConsts_272.w) * _39;
+    float4 _48 = t0.SampleLevel(s1, float2((TEXCOORD.x - (_41 * 2.0f)), (TEXCOORD.y - (_43 * 2.0f))), 0.0f);
+    float4 _52 = t0.SampleLevel(s1, float2((TEXCOORD.x - _41), (TEXCOORD.y - _43)), 0.0f);
+    _55 = _48.x;
+    _56 = _52.y;
+  } else {
+    _55 = _25.x;
+    _56 = _25.y;
+  }
+  float _90 = exp2(log2(max(0.0f, ((CustomPixelConsts_224.x * exp2(log2(abs(_55)) * CustomPixelConsts_128.x)) + CustomPixelConsts_224.y))) * CustomPixelConsts_224.z);
+  float _91 = exp2(log2(max(0.0f, ((CustomPixelConsts_224.x * exp2(log2(abs(_56)) * CustomPixelConsts_128.x)) + CustomPixelConsts_224.y))) * CustomPixelConsts_224.z);
+  float _92 = exp2(log2(max(0.0f, ((CustomPixelConsts_224.x * exp2(log2(abs(_25.z)) * CustomPixelConsts_128.x)) + CustomPixelConsts_224.y))) * CustomPixelConsts_224.z);
+  float _93 = dot(float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f), float3(_90, _91, _92));
+  float _99 = saturate((_93 - CustomPixelConsts_160.x) * CustomPixelConsts_160.y);
+  float _104 = saturate((_93 - CustomPixelConsts_160.z) * CustomPixelConsts_160.w);
 
-  float _70 = dot(float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f), float3(_67, _68, _69));
-  float _89 = ((CustomPixelConsts_176.x - CustomPixelConsts_192.x) * _52) + CustomPixelConsts_192.x;
-  float _90 = ((CustomPixelConsts_176.y - CustomPixelConsts_192.y) * _52) + CustomPixelConsts_192.y;
-  float _91 = ((CustomPixelConsts_176.z - CustomPixelConsts_192.z) * _52) + CustomPixelConsts_192.z;
-  float _92 = ((CustomPixelConsts_176.w - CustomPixelConsts_192.w) * _52) + CustomPixelConsts_192.w;
-  float _109 = ((CustomPixelConsts_208.w - _92) * _57) + _92;
-  float _144 = CustomPixelConsts_240.y - CustomPixelConsts_240.x;
-  // SV_Target.x = (((CustomPixelConsts_144.x * exp2(log2(max(0.0f, (((_109 * (_67 - _70)) + _70) * (lerp(_89, CustomPixelConsts_208.x, _57))))) * 0.4545454680919647f)) * _144) + CustomPixelConsts_240.x);
-  // SV_Target.y = (((CustomPixelConsts_144.y * exp2(log2(max(0.0f, (((_109 * (_68 - _70)) + _70) * (lerp(_90, CustomPixelConsts_208.y, _57))))) * 0.4545454680919647f)) * _144) + CustomPixelConsts_240.x);
-  // SV_Target.z = (((CustomPixelConsts_144.z * exp2(log2(max(0.0f, (((_109 * (_69 - _70)) + _70) * (lerp(_91, CustomPixelConsts_208.z, _57))))) * 0.4545454680919647f)) * _144) + CustomPixelConsts_240.x);
-  SV_Target.x = (((CustomPixelConsts_144.x * CustomGammaEncode((((_109 * (_67 - _70)) + _70) * (lerp(_89, CustomPixelConsts_208.x, _57))))) * _144) + CustomPixelConsts_240.x);
-  SV_Target.y = (((CustomPixelConsts_144.y * CustomGammaEncode((((_109 * (_68 - _70)) + _70) * (lerp(_90, CustomPixelConsts_208.y, _57))))) * _144) + CustomPixelConsts_240.x);
-  SV_Target.z = (((CustomPixelConsts_144.z * CustomGammaEncode((((_109 * (_69 - _70)) + _70) * (lerp(_91, CustomPixelConsts_208.z, _57))))) * _144) + CustomPixelConsts_240.x);
-  SV_Target.w = 1.0f;
+  // float _114 = exp2(log2(max(0.0f, _90)) * 2.200000047683716f);
+  // float _115 = exp2(log2(max(0.0f, _91)) * 2.200000047683716f);
+  // float _116 = exp2(log2(max(0.0f, _92)) * 2.200000047683716f);
+  float _114 = CustomGammaDecode(_90);
+  float _115 = CustomGammaDecode(_91);
+  float _116 = CustomGammaDecode(_92);
+  float3 ungraded = float3(_114, _115, _116);
+
+  float _117 = dot(float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f), float3(_114, _115, _116));
+  float _136 = ((CustomPixelConsts_176.x - CustomPixelConsts_192.x) * _99) + CustomPixelConsts_192.x;
+  float _137 = ((CustomPixelConsts_176.y - CustomPixelConsts_192.y) * _99) + CustomPixelConsts_192.y;
+  float _138 = ((CustomPixelConsts_176.z - CustomPixelConsts_192.z) * _99) + CustomPixelConsts_192.z;
+  float _139 = ((CustomPixelConsts_176.w - CustomPixelConsts_192.w) * _99) + CustomPixelConsts_192.w;
+  float _156 = ((CustomPixelConsts_208.w - _139) * _104) + _139;
+
+  // float _185 = CustomPixelConsts_144.x * exp2(log2(max(0.0f, (((_156 * (_114 - _117)) + _117) * (lerp(_136, CustomPixelConsts_208.x, _104))))) * 0.4545454680919647f);
+  // float _186 = CustomPixelConsts_144.y * exp2(log2(max(0.0f, (((_156 * (_115 - _117)) + _117) * (lerp(_137, CustomPixelConsts_208.y, _104))))) * 0.4545454680919647f);
+  // float _187 = CustomPixelConsts_144.z * exp2(log2(max(0.0f, (((_156 * (_116 - _117)) + _117) * (lerp(_138, CustomPixelConsts_208.z, _104))))) * 0.4545454680919647f);
+  float _185 = CustomPixelConsts_144.x * CustomGammaEncode((((((_156 * (_114 - _117)) + _117) * (lerp(_136, CustomPixelConsts_208.x, _104))))));
+  float _186 = CustomPixelConsts_144.y * CustomGammaEncode((((((_156 * (_115 - _117)) + _117) * (lerp(_137, CustomPixelConsts_208.y, _104))))));
+  float _187 = CustomPixelConsts_144.z * CustomGammaEncode((((((_156 * (_116 - _117)) + _117) * (lerp(_138, CustomPixelConsts_208.z, _104))))));
+  float3 graded = renodx::color::gamma::DecodeSafe(float3(_185, _186, _187));
+  graded = CustomColorGrading(ungraded, graded);
+  float _617 = renodx::color::gamma::EncodeSafe(graded.x);
+  float _618 = renodx::color::gamma::EncodeSafe(graded.y);
+  float _619 = renodx::color::gamma::EncodeSafe(graded.z);
+
+    float _620 = TEXCOORD_2.x + -0.5f;
+    float _621 = TEXCOORD_2.y + -0.5f;
+    float _632 = saturate((((sqrt((_621 * _621) + (_620 * _620)) * 2.0f) + -0.550000011920929f) + CustomPixelConsts_112.w) * 1.2195122241973877f);
+    float _633 = _632 * _632;
+    float _657 = saturate((CustomPixelConsts_096.w * min(dot(float4(-0.10000000149011612f, -0.10499999672174454f, 1.1200000047683716f, 0.09000000357627869f), float4((_633 * _633), (_633 * _632), _633, _632)), 0.9399999976158142f)) * saturate(1.0f - dot(float3((renodx::math::SafePow(_617, 2.200000047683716f)), (renodx::math::SafePow(_618, 2.200000047683716f)), (renodx::math::SafePow(_619, 2.200000047683716f))), float3(CustomPixelConsts_096.x, CustomPixelConsts_096.y, CustomPixelConsts_096.z))));
+    float _673 = CustomPixelConsts_240.y - CustomPixelConsts_240.x;
+    SV_Target.x = (((lerp(_617, CustomPixelConsts_112.x, saturate(_657))) * _673) + CustomPixelConsts_240.x);
+    SV_Target.y = (((lerp(_618, CustomPixelConsts_112.y, saturate(_657))) * _673) + CustomPixelConsts_240.x);
+    SV_Target.z = (((lerp(_619, CustomPixelConsts_112.z, saturate(_657))) * _673) + CustomPixelConsts_240.x);
+    SV_Target.w = 1.0f;
 
   SV_Target.xyz = renodx::color::gamma::DecodeSafe(SV_Target.xyz);
-  SV_Target.xyz = CustomColorGrading(ungraded, SV_Target.xyz);
   SV_Target.xyz = renodx::color::gamma::EncodeSafe(CustomTonemap(SV_Target.xyz));
 
   return SV_Target;

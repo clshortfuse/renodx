@@ -76,9 +76,9 @@ float4 main(
   float _152 = _151 * _151;
   float _176 = saturate((CustomPixelConsts_096.w * min(dot(float4(-0.10000000149011612f, -0.10499999672174454f, 1.1200000047683716f, 0.09000000357627869f), float4((_152 * _152), (_152 * _151), _152, _151)), 0.9399999976158142f)) * saturate(1.0f - dot(float3((renodx::math::SafePow(_140, 2.200000047683716f)), (renodx::math::SafePow(_141, 2.200000047683716f)), (renodx::math::SafePow(_142, 2.200000047683716f))), float3(CustomPixelConsts_096.x, CustomPixelConsts_096.y, CustomPixelConsts_096.z))));
   float _193 = CustomPixelConsts_240.y - CustomPixelConsts_240.x;
-  SV_Target.x = (((lerp(_140, CustomPixelConsts_112.x, saturate(_176 * CUSTOM_VIGNETTE))) * _193) + CustomPixelConsts_240.x);
-  SV_Target.y = (((lerp(_141, CustomPixelConsts_112.y, saturate(_176 * CUSTOM_VIGNETTE))) * _193) + CustomPixelConsts_240.x);
-  SV_Target.z = (((lerp(_142, CustomPixelConsts_112.z, saturate(_176 * CUSTOM_VIGNETTE))) * _193) + CustomPixelConsts_240.x);
+  SV_Target.x = (((lerp(_140, CustomPixelConsts_112.x * CUSTOM_VIGNETTE_BLACK_LEVEL, saturate(_176 * CUSTOM_VIGNETTE))) * _193) + CustomPixelConsts_240.x);
+  SV_Target.y = (((lerp(_141, CustomPixelConsts_112.y * CUSTOM_VIGNETTE_BLACK_LEVEL, saturate(_176 * CUSTOM_VIGNETTE))) * _193) + CustomPixelConsts_240.x);
+  SV_Target.z = (((lerp(_142, CustomPixelConsts_112.z * CUSTOM_VIGNETTE_BLACK_LEVEL, saturate(_176 * CUSTOM_VIGNETTE))) * _193) + CustomPixelConsts_240.x);
   SV_Target.w = 1.0f;
 
   SV_Target.xyz = renodx::color::gamma::DecodeSafe(SV_Target.xyz);

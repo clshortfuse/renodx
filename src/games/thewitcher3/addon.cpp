@@ -43,6 +43,8 @@ const std::unordered_map<std::string, float> PURIST_VALUES = {
     {"CustomInverseTonemap", 0.f},
     {"SceneGradeSaturationCorrection", 0.f},
     {"SceneGradePerChannelBlowout", 85.f},
+    {"FxVignetteBlackLevel", 0.f},
+    {"FxVignette", 100.f},
     //{"SceneGradeHueCorrection", 75.f},
     //{"ColorGradeHighlights", 50.f},
     //{"BloomEmulation", 0.f},
@@ -89,6 +91,7 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES_SDR = {
 //     //{"ColorGradeHighlights", 50.f},
 //     //{"BloomEmulation", 0.f},
 //     {"GamutUnclamp", 0.f},
+//{"FxVignetteBlackLevel", 0.f},
 // };
 
 const std::unordered_map<std::string, float> FILMIC_VALUES_SDR = {
@@ -658,13 +661,28 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
         //.is_visible = []() { return current_settings_mode >= 1.f; },
     },
+      new renodx::utils::settings::Setting{
+        .key = "FxVignetteBlackLevel",
+        .binding = &shader_injection.custom_vignette_black_level,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Vignette Black Level",
+        .section = "Effects",
+        .tooltip = "Controls whether the vignette uses the game's dynamic black level adjustment or a value fixed at perfect black.",
+        .labels = {"Vanilla", "Perfect Black"},
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1 && RENODX_TONE_MAP_PER_CHANNEL == 0; },
+        .parse = [](float value) { if (value == 0) return 1.f;
+        return 0.f;
+       },
+        //.is_visible = []() { return current_settings_mode >= 2.f && shader_injection.last_is_hdr; },
+    },
             new renodx::utils::settings::Setting{
         .key = "FxVignette",
         .binding = &shader_injection.custom_vignette,
-        .default_value = 100.f,
+        .default_value = 66.f,
         .label = "Vignette",
         .section = "Effects",
-        .tooltip = "Adjusts the strength of vignette effect.",
+        .tooltip = "Adjusts the strength of vignette effect. 100 = Vanilla strength.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
@@ -948,6 +966,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("FxLensDirt", 50.f);
   renodx::utils::settings::UpdateSetting("FxSunShaftStrength", 50.f);
+  renodx::utils::settings::UpdateSetting("FxVignetteBlackLevel", 0.f);
   renodx::utils::settings::UpdateSetting("FxVignette", 100.f);
   renodx::utils::settings::UpdateSetting("FxDepthBlur", 50.f);
   renodx::utils::settings::UpdateSetting("FxSharpeningType", 0.f);
