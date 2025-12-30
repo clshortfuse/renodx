@@ -658,6 +658,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
         //.is_visible = []() { return current_settings_mode >= 1.f; },
     },
+            new renodx::utils::settings::Setting{
+        .key = "FxVignette",
+        .binding = &shader_injection.custom_vignette,
+        .default_value = 50.f,
+        .label = "Vignette",
+        .section = "Effects",
+        .tooltip = "Adjusts the strength of vignette effect.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
         new renodx::utils::settings::Setting{
         .key = "FxDepthBlur",
         .binding = &shader_injection.custom_depth_blur,
@@ -938,6 +948,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
   renodx::utils::settings::UpdateSetting("FxLensDirt", 50.f);
   renodx::utils::settings::UpdateSetting("FxSunShaftStrength", 50.f);
+  renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("FxDepthBlur", 50.f);
   renodx::utils::settings::UpdateSetting("FxSharpeningType", 0.f);
   renodx::utils::settings::UpdateSetting("FxSharpness", 50.f);
