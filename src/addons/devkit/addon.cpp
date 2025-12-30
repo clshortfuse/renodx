@@ -1430,6 +1430,7 @@ void ActivateShader(reshade::api::device* device, uint32_t shader_hash, std::spa
 }
 
 void LoadDiskShaders(reshade::api::device* device, DeviceData* data, bool activate = true) {
+  renodx::utils::shader::compiler::watcher::SetDeviceApi(device->get_api());
   if (setting_live_reload) {
     if (!renodx::utils::shader::compiler::watcher::HasChanged()) return;
   } else {

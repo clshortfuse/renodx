@@ -46,6 +46,10 @@ struct CustomShader {
     return std::get<std::vector<uint8_t>>(compilation);
   }
 
+  [[nodiscard]] const std::vector<uint8_t>& GetCompilationData() const {
+    return std::get<std::vector<uint8_t>>(compilation);
+  }
+
   [[nodiscard]] std::exception& GetCompilationException() {
     return std::get<std::exception>(compilation);
   }
@@ -86,8 +90,12 @@ static std::optional<std::thread> worker_thread;
 
 constexpr uint32_t MAX_SHADER_DEFINES = 4;
 const bool PRECOMPILE_CUSTOM_SHADERS = true;
+constexpr bool ENABLE_AB_TOGGLE = false; // For debugging
 
 static std::shared_mutex mutex;
+static std::mutex compile_mutex;
+static std::atomic_int shared_device_api = static_cast<int>(reshade::api::device_api::d3d11);
+static std::atomic_int shared_ab_toggle = 0;
 static std::unordered_map<uint32_t, CustomShader> custom_shaders_cache;
 static std::vector<std::pair<std::string, std::string>> shared_shader_defines;
 static std::string live_path;
@@ -97,10 +105,45 @@ static HANDLE m_target_dir_handle = INVALID_HANDLE_VALUE;
 static std::aligned_storage_t<1U << 18, std::max<size_t>(alignof(FILE_NOTIFY_EXTENDED_INFORMATION), alignof(FILE_NOTIFY_INFORMATION))> watch_buffer;
 
 static bool CompileCustomShaders() {
-  const std::unique_lock lock(mutex);
+  const std::unique_lock compile_lock(compile_mutex);
+  struct WorkItem {
+    std::filesystem::path entry_path;
+    bool is_hlsl = false;
+    bool is_glsl = false;
+    bool is_slang = false;
+    bool is_cso = false;
+    bool is_spv = false;
+    std::string shader_target;
+    uint32_t shader_hash = 0;
+  };
+
+  struct CompileResult {
+    uint32_t shader_hash = 0;
+    CustomShader custom_shader = {};
+    bool processed = false;
+    bool failed = false;
+  };
+
+  auto ResolveShaderTargetForApi = [&](const std::string& target) {
+    if (target.size() < 4 || !target.ends_with("_x")) return target;
+    if (target.find("_5_") == std::string::npos) return target;
+    const auto device_api = static_cast<reshade::api::device_api>(shared_device_api.load());
+    std::string resolved = target;
+    resolved[resolved.size() - 1] =
+        (device_api == reshade::api::device_api::d3d12) ? '1' : '0';
+    return resolved;
+  };
+
+  std::vector<std::pair<std::string, std::string>> local_shader_defines;
+  std::string local_live_path;
+  {
+    const std::shared_lock lock(mutex);
+    local_shader_defines = shared_shader_defines;
+    local_live_path = live_path;
+  }
 
   std::filesystem::path directory;
-  if (live_path.empty()) {
+  if (local_live_path.empty()) {
     directory = renodx::utils::path::GetOutputPath();
     if (!std::filesystem::exists(directory)) {
       std::filesystem::create_directory(directory);
@@ -108,11 +151,12 @@ static bool CompileCustomShaders() {
     }
     directory /= "live";
   } else {
-    directory = live_path;
+    directory = local_live_path;
   }
   std::unordered_set<uint32_t> shader_hashes_processed = {};
   std::unordered_set<uint32_t> shader_hashes_failed = {};
   std::unordered_set<uint32_t> shader_hashes_updated = {};
+  std::vector<WorkItem> work_items;
   try {
     if (!std::filesystem::exists(directory)) {
       std::filesystem::create_directory(directory);
@@ -144,6 +188,7 @@ static bool CompileCustomShaders() {
         shader_target = basename.substr(length - strlen("xx_x_x"), strlen("xx_x_x"));
         if (shader_target[2] != '_') continue;
         if (shader_target[4] != '_') continue;
+        shader_target = ResolveShaderTargetForApi(shader_target);
         // uint32_t versionMajor = shader_target[3] - '0';
         hash_string = basename.substr(length - strlen("12345678.xx_x_x"), 8);
       } else if (is_slang) {
@@ -183,93 +228,240 @@ static bool CompileCustomShaders() {
         continue;
       }
 
+      work_items.push_back({
+          .entry_path = entry_path,
+          .is_hlsl = is_hlsl,
+          .is_glsl = is_glsl,
+          .is_slang = is_slang,
+          .is_cso = is_cso,
+          .is_spv = is_spv,
+          .shader_target = shader_target,
+          .shader_hash = shader_hash,
+      });
+    }
+  } catch (std::exception& ex) {
+    reshade::log::message(reshade::log::level::error, ex.what());
+    return false;
+  }
+
+  std::vector<CompileResult> results(work_items.size());
+  long long compile_ms = -1;
+  if (!work_items.empty()) {
+    const auto compile_start = std::chrono::steady_clock::now();
+    const size_t max_threads = (std::max)(static_cast<size_t>(1),
+        static_cast<size_t>((std::max)(1u, std::thread::hardware_concurrency() / 2)));
+    const size_t thread_count = (std::min)(max_threads, work_items.size());
+    const bool use_parallel = ENABLE_AB_TOGGLE
+        ? (shared_ab_toggle.fetch_add(1) % 2) == 1
+        : true;
+    {
+      std::stringstream s;
+      s << "CompileCustomShaders(start: items=" << work_items.size()
+        << ", threads=" << thread_count
+        << ", mode=" << (use_parallel ? "parallel" : "single")
+        << ", fxc=" << (renodx::utils::shader::compiler::directx::internal::USE_FXC_MUTEX ? "single" : "parallel")
+        << ", dxc=" << (renodx::utils::shader::compiler::directx::internal::USE_DXC_MUTEX ? "single" : "parallel")
+        << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+
+    constexpr int kCompileRetryCount = 3;
+    constexpr int kCompileRetryDelayMs = 25;
+
+    // In case of file locks
+    auto RetryCompile = [&](auto&& compile_fn, const std::filesystem::path& path, std::variant<std::exception, std::vector<uint8_t>>& out) -> bool {
+      for (int attempt = 0; attempt < kCompileRetryCount; ++attempt) {
+        try {
+          out = compile_fn();
+          if (attempt > 0) {
+            std::stringstream s;
+            s << "CompileCustomShaders(RetryCompile: " << path.string()
+              << ", attempts=" << (attempt + 1) << ")";
+            reshade::log::message(reshade::log::level::debug, s.str().c_str());
+          }
+          return true;
+        } catch (std::exception& e) {
+          out = e;
+          if (attempt + 1 < kCompileRetryCount) {
+            {
+              std::stringstream s;
+              s << "CompileCustomShaders(RetryCompile: " << path.string()
+                << ", attempt=" << (attempt + 1) << "/" << kCompileRetryCount
+                << ", error=" << e.what() << ")";
+              reshade::log::message(reshade::log::level::debug, s.str().c_str());
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(kCompileRetryDelayMs));
+            continue;
+          }
+          {
+            std::stringstream s;
+            s << "CompileCustomShaders(RetryCompile: " << path.string()
+              << ", attempt=" << (attempt + 1) << "/" << kCompileRetryCount
+              << ", error=" << e.what() << ")";
+            reshade::log::message(reshade::log::level::debug, s.str().c_str());
+          }
+          return false;
+        }
+      }
+      return false;
+    };
+
+    auto process_index = [&](size_t index) {
+      const auto& item = work_items[index];
+      CompileResult result = {
+          .shader_hash = item.shader_hash,
+          .custom_shader = {
+              .is_hlsl = item.is_hlsl,
+              .is_glsl = item.is_glsl,
+              .is_slang = item.is_slang,
+              .file_path = item.entry_path,
+          },
+      };
+
+      if (item.is_hlsl) {
+        try {
+          result.processed = RetryCompile(
+              [&]() {
+                return renodx::utils::shader::compiler::directx::CompileShaderFromFile(
+                    item.entry_path.c_str(),
+                    item.shader_target.c_str(),
+                    local_shader_defines);
+              },
+              item.entry_path,
+              result.custom_shader.compilation);
+          if (!result.processed) {
+            result.failed = true;
+            std::stringstream s;
+            s << "loadCustomShaders(Compilation failed: ";
+            s << item.entry_path.string();
+            s << ", " << result.custom_shader.GetCompilationException().what();
+            s << ")";
+            reshade::log::message(reshade::log::level::warning, s.str().c_str());
+          }
+        } catch (std::exception& e) {
+          result.failed = true;
+          result.custom_shader.compilation = e;
+          std::stringstream s;
+          s << "loadCustomShaders(Compilation failed: ";
+          s << item.entry_path.string();
+          s << ", " << result.custom_shader.GetCompilationException().what();
+          s << ")";
+          reshade::log::message(reshade::log::level::warning, s.str().c_str());
+        }
+
+      } else if (item.is_slang) {
+        try {
+          result.processed = RetryCompile(
+              [&]() {
+                return renodx::utils::shader::compiler::slang::CompileShaderFromFile(
+                    item.entry_path.c_str(),
+                    item.shader_target.c_str(),
+                    local_shader_defines);
+              },
+              item.entry_path,
+              result.custom_shader.compilation);
+          if (!result.processed) {
+            result.failed = true;
+            std::stringstream s;
+            s << "loadCustomShaders(Compilation failed: ";
+            s << item.entry_path.string();
+            s << ", " << result.custom_shader.GetCompilationException().what();
+            s << ")";
+            reshade::log::message(reshade::log::level::warning, s.str().c_str());
+          }
+        } catch (std::exception& e) {
+          result.failed = true;
+          result.custom_shader.compilation = e;
+          std::stringstream s;
+          s << "loadCustomShaders(Compilation failed: ";
+          s << item.entry_path.string();
+          s << ", " << result.custom_shader.GetCompilationException().what();
+          s << ")";
+          reshade::log::message(reshade::log::level::warning, s.str().c_str());
+        }
+
+      } else if (item.is_cso || item.is_spv || item.is_glsl) {
+        try {
+          result.processed = RetryCompile(
+              [&]() {
+                return utils::path::ReadBinaryFile(item.entry_path);
+              },
+              item.entry_path,
+              result.custom_shader.compilation);
+          if (!result.processed) {
+            result.failed = true;
+          }
+        } catch (std::exception& e) {
+          result.custom_shader.compilation = e;
+          result.failed = true;
+        }
+      }
+
+      results[index] = std::move(result);
+    };
+
+    if (use_parallel && thread_count > 1) {
+      std::atomic_size_t next_index = 0;
+      auto worker = [&]() {
+        while (true) {
+          const size_t index = next_index.fetch_add(1);
+          if (index >= work_items.size()) {
+            return;
+          }
+          process_index(index);
+        }
+      };
+
+      std::vector<std::thread> threads;
+      threads.reserve(thread_count);
+      for (size_t i = 0; i < thread_count; ++i) {
+        threads.emplace_back(worker);
+      }
+      for (auto& thread : threads) {
+        thread.join();
+      }
+    } else {
+      for (size_t i = 0; i < work_items.size(); ++i) {
+        process_index(i);
+      }
+    }
+    const auto compile_end = std::chrono::steady_clock::now();
+    compile_ms = std::chrono::duration_cast<std::chrono::milliseconds>(compile_end - compile_start).count();
+  } else {
+    compile_ms = 0;
+  }
+
+  size_t processed_count = 0;
+  size_t failed_count = 0;
+  for (const auto& result : results) {
+    if (result.processed) ++processed_count;
+    if (result.failed) ++failed_count;
+  }
+
+  {
+    const std::unique_lock lock(mutex);
+    for (size_t index = 0; index < results.size(); ++index) {
+      const auto& item = work_items[index];
+      const auto& result = results[index];
+      const auto& custom_shader = result.custom_shader;
+      const uint32_t shader_hash = result.shader_hash;
+
       if (shader_hashes_processed.contains(shader_hash)) {
         std::stringstream s;
         s << "CompileCustomShaders(Ignoring duplicate shader: ";
         s << PRINT_CRC32(shader_hash);
-        s << ", at " << entry_path;
+        s << ", at " << item.entry_path;
         s << ")";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
         continue;
       }
 
-      // Prepare new custom shader entry but hold off unless it actually compiles ()
-
-      CustomShader custom_shader = {
-          .is_hlsl = is_hlsl,
-          .is_glsl = is_glsl,
-          .is_slang = is_slang,
-          .file_path = entry_path,
-      };
-
-      if (is_hlsl) {
-        {
-          std::stringstream s;
-          s << "loadCustomShaders(Compiling file: ";
-          s << entry_path.string();
-          s << ", hash: " << PRINT_CRC32(shader_hash);
-          s << ", target: " << shader_target;
-          s << ")";
-          reshade::log::message(reshade::log::level::debug, s.str().c_str());
-        }
-
-        try {
-          custom_shader.compilation = renodx::utils::shader::compiler::directx::CompileShaderFromFile(
-              entry_path.c_str(),
-              shader_target.c_str(),
-              shared_shader_defines);
-          shader_hashes_processed.emplace(shader_hash);
-          shader_hashes_failed.erase(shader_hash);
-        } catch (std::exception& e) {
-          shader_hashes_failed.emplace(shader_hash);
-          custom_shader.compilation = e;
-          std::stringstream s;
-          s << "loadCustomShaders(Compilation failed: ";
-          s << entry_path.string();
-          s << ", " << custom_shader.GetCompilationException().what();
-          s << ")";
-          reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        }
-
-      } else if (is_slang) {
-        {
-          std::stringstream s;
-          s << "loadCustomShaders(Compiling slang file: ";
-          s << entry_path.string();
-          s << ", hash: " << PRINT_CRC32(shader_hash);
-          s << ", target: " << shader_target;
-          s << ")";
-          reshade::log::message(reshade::log::level::debug, s.str().c_str());
-        }
-
-        try {
-          custom_shader.compilation = renodx::utils::shader::compiler::slang::CompileShaderFromFile(
-              entry_path.c_str(),
-              shader_target.c_str(),
-              shared_shader_defines);
-          shader_hashes_processed.emplace(shader_hash);
-          shader_hashes_failed.erase(shader_hash);
-        } catch (std::exception& e) {
-          shader_hashes_failed.emplace(shader_hash);
-          custom_shader.compilation = e;
-          std::stringstream s;
-          s << "loadCustomShaders(Compilation failed: ";
-          s << entry_path.string();
-          s << ", " << custom_shader.GetCompilationException().what();
-          s << ")";
-          reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        }
-
-      } else if (is_cso || is_spv || is_glsl) {
-        try {
-          custom_shader.compilation = utils::path::ReadBinaryFile(entry_path);
-          shader_hashes_processed.emplace(shader_hash);
-          shader_hashes_failed.erase(shader_hash);
-        } catch (std::exception& e) {
-          custom_shader.compilation = e;
-          shader_hashes_failed.emplace(shader_hash);
-          continue;
-        }
+      if (result.processed) {
+        shader_hashes_processed.emplace(shader_hash);
+        shader_hashes_failed.erase(shader_hash);
+      }
+      if (result.failed) {
+        shader_hashes_failed.emplace(shader_hash);
       }
 
       // Find previous entry
@@ -281,10 +473,10 @@ static bool CompileCustomShaders() {
             && previous_custom_shader.IsCompilationOK()
             && custom_shader.GetCompilationData() == previous_custom_shader.GetCompilationData()) {
           // Same data, update source
-          previous_custom_shader.is_hlsl = is_hlsl;
-          previous_custom_shader.is_glsl = is_glsl;
-          previous_custom_shader.is_slang = is_slang;
-          previous_custom_shader.file_path = entry_path;
+          previous_custom_shader.is_hlsl = custom_shader.is_hlsl;
+          previous_custom_shader.is_glsl = custom_shader.is_glsl;
+          previous_custom_shader.is_slang = custom_shader.is_slang;
+          previous_custom_shader.file_path = custom_shader.file_path;
           insert_or_replace = false;
         }
       }
@@ -294,24 +486,44 @@ static bool CompileCustomShaders() {
         shader_hashes_updated.emplace(shader_hash);
       }
     }
-  } catch (std::exception& ex) {
-    reshade::log::message(reshade::log::level::error, ex.what());
-    return false;
-  }
 
-  for (auto& [shader_hash, custom_shader] : custom_shaders_cache) {
-    if (!shader_hashes_processed.contains(shader_hash)) {
-      if (!custom_shader.removed) {
-        custom_shader.removed = true;
-        shader_hashes_updated.insert(shader_hash);
+    for (auto& [shader_hash, custom_shader] : custom_shaders_cache) {
+      if (!shader_hashes_processed.contains(shader_hash)) {
+        if (!custom_shader.removed) {
+          custom_shader.removed = true;
+          shader_hashes_updated.insert(shader_hash);
+        }
       }
     }
-  }
 
-  if (shader_hashes_updated.size() != 0) {
-    custom_shaders_count = custom_shaders_cache.size();
-    shared_shaders_changed = true;
-    return true;
+    if (shader_hashes_updated.size() != 0) {
+      custom_shaders_count = custom_shaders_cache.size();
+      shared_shaders_changed = true;
+      {
+        std::stringstream s;
+        s << "CompileCustomShaders(done: processed=" << processed_count
+          << ", failed=" << failed_count
+          << ", updated=" << shader_hashes_updated.size()
+          << ", cache=" << custom_shaders_cache.size();
+        if (compile_ms >= 0) {
+          s << ", time=" << compile_ms << "ms";
+        }
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+      }
+      return true;
+    }
+  }
+  {
+    std::stringstream s;
+    s << "CompileCustomShaders(done: processed=" << processed_count
+      << ", failed=" << failed_count
+      << ", updated=0";
+    if (compile_ms >= 0) {
+      s << ", time=" << compile_ms << "ms";
+    }
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
   }
   return false;
 }
@@ -476,6 +688,10 @@ static void SetShaderDefines(std::vector<std::pair<std::string, std::string>>& d
 static std::string GetLivePath() {
   const std::shared_lock lock(internal::mutex);
   return internal::live_path;
+}
+
+static void SetDeviceApi(reshade::api::device_api device_api) {
+  internal::shared_device_api.store(static_cast<int>(device_api));
 }
 
 static void SetLivePath(const std::string& live_path) {
