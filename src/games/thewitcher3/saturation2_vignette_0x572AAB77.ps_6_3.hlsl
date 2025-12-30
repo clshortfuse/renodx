@@ -93,7 +93,7 @@ float4 main(
   float _189 = TEXCOORD_2.y + -0.5f;
   float _196 = saturate((sqrt((_189 * _189) + (_188 * _188)) * 2.4390244483947754f) + -0.6707317233085632f);
   float _197 = _196 * _196;
-  float _221 = saturate((CustomPixelConsts_096.w * min(dot(float4(-0.10000000149011612f, -0.10499999672174454f, 1.1200000047683716f, 0.09000000357627869f), float4((_197 * _197), (_197 * _196), _197, _196)), 0.9399999976158142f)) * saturate(1.0f - dot(float3((pow(_185, 2.200000047683716f)), (pow(_186, 2.200000047683716f)), (pow(_187, 2.200000047683716f))), float3(CustomPixelConsts_096.x, CustomPixelConsts_096.y, CustomPixelConsts_096.z))));
+  float _221 = saturate((CustomPixelConsts_096.w * min(dot(float4(-0.10000000149011612f, -0.10499999672174454f, 1.1200000047683716f, 0.09000000357627869f), float4((_197 * _197), (_197 * _196), _197, _196)), 0.9399999976158142f)) * saturate(1.0f - dot(float3((renodx::math::SafePow(_185, 2.200000047683716f)), (renodx::math::SafePow(_186, 2.200000047683716f)), (renodx::math::SafePow(_187, 2.200000047683716f))), float3(CustomPixelConsts_096.x, CustomPixelConsts_096.y, CustomPixelConsts_096.z))));
   float _238 = CustomPixelConsts_240.y - CustomPixelConsts_240.x;
   SV_Target.x = (((lerp(_185, CustomPixelConsts_112.x, saturate(_221 * CUSTOM_VIGNETTE))) * _238) + CustomPixelConsts_240.x);
   SV_Target.y = (((lerp(_186, CustomPixelConsts_112.y, saturate(_221 * CUSTOM_VIGNETTE))) * _238) + CustomPixelConsts_240.x);
