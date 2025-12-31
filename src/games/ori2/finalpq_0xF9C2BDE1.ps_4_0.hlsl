@@ -33,7 +33,7 @@ void main(
   if (RENODX_TONE_MAP_TYPE == 0) {
     float3 bt709 = r0.xyz;
 
-    // Highlight‑driven weight: 0 at 2.0, 1 at 10.0
+    // highlight‑driven weight: 0 at 2.0, 1 at 10.0
     float max_rgb = renodx::math::Max(bt709);
     float highlight_weight = saturate((max_rgb - 2.0f) / 8.f);
 
@@ -58,10 +58,9 @@ void main(
 
     float3 bt2020 = renodx::color::bt2020::from::BT709(bt709);
 
-    // Slider blends expanded result with standard BT.2020
+    // slider blends expanded result with standard BT.2020
     bt2020 = lerp(bt2020, expanded, _ColorGamutExpansion);
 
-    // paper white + pq encoding
     r0.rgb = renodx::color::pq::Encode(abs(bt2020), _NitsForPaperWhite);
   } else {
     if (RENODX_TONE_MAP_TYPE == 3.f) {
