@@ -118,13 +118,18 @@ float3 CustomUpgradeToneMap(float3 untonemapped, float3 tonemapped_bt709_ch, flo
 
   float mid_gray_scale = mid_gray / 0.18f;
   float3 untonemapped_midgray = untonemapped * mid_gray_scale;
+  float untonemapped_midgray_y = renodx::color::y::from::BT709(untonemapped_midgray);
+  float tonemap_strength;
 
-  if (RENODX_TONE_MAP_TYPE == 0.f) return lerp(untonemapped_midgray, tonemapped_bt709_ch, RENODX_COLOR_GRADE_STRENGTH);
+  if (untonemapped_midgray_y < mid_gray) tonemap_strength = CUSTOM_SCENE_GRADE_TOE_STRENGTH; 
+  else tonemap_strength = CUSTOM_SCENE_GRADE_SHOULDER_STRENGTH;
+
+  if (RENODX_TONE_MAP_TYPE == 0.f) return lerp(untonemapped_midgray, tonemapped_bt709_ch, tonemap_strength);
 
   float3 tonemapped_bt709 = lerp(tonemapped_bt709_ch, tonemapped_bt709_lum, CUSTOM_SCENE_GRADE_SATURATION_CORRECTION);
-  tonemapped_bt709 = lerp(untonemapped_midgray, tonemapped_bt709, RENODX_COLOR_GRADE_STRENGTH);
+  
+  tonemapped_bt709 = lerp(untonemapped_midgray, tonemapped_bt709, tonemap_strength);
 
-  float untonemapped_midgray_y = renodx::color::y::from::BT709(untonemapped_midgray);
   float untonemapped_y = renodx::color::y::from::BT709(untonemapped);
   float tonemapped_bt709_ch_y = renodx::color::y::from::BT709(tonemapped_bt709_ch);
   float tonemapped_bt709_lum_y = renodx::color::y::from::BT709(tonemapped_bt709_lum);

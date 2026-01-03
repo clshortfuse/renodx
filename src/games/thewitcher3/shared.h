@@ -19,7 +19,6 @@
 // #define RENODX_TONE_MAP_HUE_PROCESSOR          shader_injection.tone_map_hue_processor
 //#define RENODX_TONE_MAP_PER_CHANNEL            shader_injection.tone_map_per_channel
 //#define RENODX_COLOR_GRADE_STRENGTH            shader_injection.tone_map_color_grade_strength
-#define RENODX_COLOR_GRADE_STRENGTH            shader_injection.scene_grade_strength
 #define RENODX_INTERMEDIATE_ENCODING           renodx::draw::ENCODING_NONE
 #define RENODX_SWAP_CHAIN_DECODING             renodx::draw::ENCODING_NONE
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     renodx::draw::GAMMA_CORRECTION_NONE
@@ -39,9 +38,12 @@
 #define CUSTOM_SCENE_GRADE_SATURATION_CORRECTION shader_injection.scene_grade_saturation_correction
 #define CUSTOM_SCENE_GRADE_PER_CHANNEL_BLOWOUT shader_injection.scene_grade_per_channel_blowout
 #define CUSTOM_SCENE_GRADE_HUE_SHIFT           shader_injection.scene_grade_hue_shift
+#define CUSTOM_SCENE_GRADE_SHOULDER_STRENGTH   shader_injection.scene_grade_shoulder_strength
+#define CUSTOM_SCENE_GRADE_TOE_STRENGTH        shader_injection.scene_grade_toe_strength
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_LUT_STRENGTH                    shader_injection.custom_lut_strength
+#define CUSTOM_LUT_SCALING                     shader_injection.custom_lut_scaling
 #define CUSTOM_GAMUT_UNCLAMP                   shader_injection.custom_gamut_unclamp
 #define CUSTOM_COLOR_GRADING                   shader_injection.custom_color_grading
 //#define CUSTOM_POST_MAXCLL                     shader_injection.custom_post_maxcll
@@ -89,19 +91,20 @@ struct ShaderInjectData {
   //float tone_map_hue_shift;
   //float tone_map_hue_processor;
   float tone_map_per_channel;
-  float tone_map_color_grade_strength;
   float swap_chain_custom_color_space;
   //float scene_grade_method;
   //float scene_hue_method;
   //float scene_grade_hue_correction_bias;
   float scene_grade_hue_correction;
-  float scene_grade_strength;
+  float scene_grade_shoulder_strength;
+  float scene_grade_toe_strength;
   float scene_grade_saturation_correction;
   float scene_grade_per_channel_blowout;
   float scene_grade_hue_shift;
   float custom_film_grain;
   float custom_random;
   float custom_lut_strength;
+  float custom_lut_scaling;
   float custom_color_grading;
   float custom_gamut_unclamp;
   //float custom_post_maxcll;

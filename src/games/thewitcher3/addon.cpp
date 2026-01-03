@@ -45,6 +45,7 @@ const std::unordered_map<std::string, float> PURIST_VALUES = {
     {"SceneGradePerChannelBlowout", 85.f},
     {"FxVignetteBlackLevel", 0.f},
     {"FxVignette", 100.f},
+    {"LutScaling", 0.f},
     //{"SceneGradeHueCorrection", 75.f},
     //{"ColorGradeHighlights", 50.f},
     //{"BloomEmulation", 0.f},
@@ -60,10 +61,11 @@ const std::unordered_map<std::string, float> FILMIC_VALUES = {
     {"ColorGradeHighlightSaturation", 54.f},
     {"ColorGradeBlowout", 50.f},
     {"ColorGradeFlare", 2.f},
+    {"LutScaling", 0.f},
    // {"SwapChainCustomColorSpace", 0.f},
     //{"LutGradeStrength", 100.f},
    // {"TonemapGradeStrength", 100.f},
-    {"FxFilmGrain", 30.f},
+    {"FxFilmGrain", 50.f},
     //{"FxPostProcessingMaxCLL", 40.f},
     //{"FxBloom", 15.f},
     //{"FxDepthBlur", 100.f},
@@ -105,10 +107,11 @@ const std::unordered_map<std::string, float> FILMIC_VALUES_SDR = {
     {"ColorGradeHighlightSaturation", 54.f},
     {"ColorGradeBlowout", 50.f},
     {"ColorGradeFlare", 2.f},
+    {"LutScaling", 0.f},
    // {"SwapChainCustomColorSpace", 0.f},
     //{"LutGradeStrength", 100.f},
    // {"TonemapGradeStrength", 100.f},
-    {"FxFilmGrain", 30.f},
+    {"FxFilmGrain", 50.f},
     //{"FxPostProcessingMaxCLL", 40.f},
     //{"FxBloom", 15.f},
     //{"FxDepthBlur", 100.f},
@@ -140,6 +143,22 @@ renodx::utils::settings::Settings settings = {
         .label = "Settings Mode",
         .labels = {"Simple", "Intermediate", "Advanced"},
         .is_global = true,
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Theses options are purely to adjust to taste.",
+        .section = "NOTICE",
+        .group = "button-line-2",
+        .tint = 0xFF0000,
+        .is_visible = []() { return current_settings_mode == 1.f;}
+    },
+            new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "These options are for the sick freaks that want to adjust anything and everything.",
+        .section = "NOTICE",
+        .group = "button-line-2",
+        .tint = 0xFF0000,
+        .is_visible = []() { return current_settings_mode == 2.f;}
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
@@ -345,14 +364,6 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return !shader_injection.last_is_hdr; }
     },
     new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " NOTICE: You do not need to adjust below this point unless you have a specific goal in mind.",
-        .section = "Presets",
-        .group = "button-line-2",
-        .tint = 0xFF0000,
-        .is_visible = []() { return current_settings_mode >= 1.f;}
-    },
-    new renodx::utils::settings::Setting{
         .key = "SceneGradeSaturationCorrection",
         .binding = &shader_injection.scene_grade_saturation_correction,
         .default_value = 100.f,
@@ -412,7 +423,7 @@ renodx::utils::settings::Settings settings = {
         .max = 90.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 1 && RENODX_TONE_MAP_PER_CHANNEL == 0; },
         .parse = [](float value) { return value; },
-        .is_visible = []() { return current_settings_mode >= 2.f && shader_injection.last_is_hdr; },
+        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.last_is_hdr; },
     },
         new renodx::utils::settings::Setting{
         .key = "SceneGradeHueShift",
@@ -427,17 +438,30 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 2.f && shader_injection.last_is_hdr; },
     },
             new renodx::utils::settings::Setting{
-        .key = "SceneGradeStrength",
-        .binding = &shader_injection.scene_grade_strength,
+        .key = "SceneGradeShoulderStrength",
+        .binding = &shader_injection.scene_grade_shoulder_strength,
         .default_value = 100.f,
-        .label = "Tonemapper Strength",
+        .label = "Tonemapper Highlight Strength",
         .section = "Scene Grading",
-        .tooltip = "Adjusts the strength of the original tonemapper's filmic curves.",
+        .tooltip = "Adjusts the strength of the original tonemapper's shoulder (highlight curve).",
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 1; },
         //.is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
+    },
+      new renodx::utils::settings::Setting{
+        .key = "SceneGradeToeStrength",
+        .binding = &shader_injection.scene_grade_toe_strength,
+        .default_value = 100.f,
+        .label = "Tonemapper Shadow Strength",
+        .section = "Scene Grading",
+        .tooltip = "Adjusts the strength of the original tonemapper's toe (shadow curve).",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 1; },
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1.f; },
     },
       new renodx::utils::settings::Setting{
         .key = "LutGradeStrength",
@@ -446,6 +470,18 @@ renodx::utils::settings::Settings settings = {
         .label = "LUT Grading Strength",
         .section = "Scene Grading",
         .tooltip = "Strength of the original color grading LUTs.",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 1; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 2.f; },
+    },
+          new renodx::utils::settings::Setting{
+        .key = "LutScaling",
+        .binding = &shader_injection.custom_lut_scaling,
+        .default_value = 100.f,
+        .label = "LUT Scaling",
+        .section = "Scene Grading",
+        .tooltip = "Scales the LUTs so they're full range (i.e. fixes raised blacks in some scenes). 0 = Vanilla",
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 1; },
         .parse = [](float value) { return value * 0.01f; },
@@ -945,8 +981,10 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("SceneGradeHueCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("SceneGradePerChannelBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("SceneGradeHueShift", 0.f);
-  renodx::utils::settings::UpdateSetting("SceneGradeStrength", 100.f);
-    renodx::utils::settings::UpdateSetting("LutGradeStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("SceneGradeShoulderStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("SceneGradeToeStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("LutGradeStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("LutScaling", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeStrength", 100.f);
   renodx::utils::settings::UpdateSetting("GamutUnclamp", 0.f);
 
@@ -980,9 +1018,9 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[3]->default_value = roundf(peak.value());
+    settings[5]->default_value = roundf(peak.value());
   } else {
-    settings[3]->default_value = 1000.f;
+    settings[5]->default_value = 1000.f;
   }
 
   //settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);

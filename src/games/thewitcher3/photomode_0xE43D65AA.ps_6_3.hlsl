@@ -270,6 +270,7 @@ float4 main(
   float _618 = renodx::color::gamma::EncodeSafe(graded.y);
   float _619 = renodx::color::gamma::EncodeSafe(graded.z);
 
+  // Vignette
     float _620 = TEXCOORD_2.x + -0.5f;
     float _621 = TEXCOORD_2.y + -0.5f;
     float _632 = saturate((((sqrt((_621 * _621) + (_620 * _620)) * 2.0f) + -0.550000011920929f) + CustomPixelConsts_112.w) * 1.2195122241973877f);
