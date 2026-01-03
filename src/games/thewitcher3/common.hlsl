@@ -429,7 +429,7 @@ float4 HandleUICompositingHDR(float4 ui_color_linear, float4 scene_color_linear)
 
 float CustomGammaEncode(float color) {
   if (CUSTOM_GAMUT_UNCLAMP == 1 && LAST_IS_HDR) {
-    return renodx::color::gamma::EncodeSafe(color);
+     return renodx::color::gamma::EncodeSafe(color);
   }
   color = max(0, color);
   return renodx::color::gamma::Encode(color);
@@ -444,7 +444,7 @@ float3 CustomGammaEncode(float3 color) {
 
 float CustomGammaDecode(float color) {
   if (CUSTOM_GAMUT_UNCLAMP == 1 && LAST_IS_HDR) {
-    return renodx::color::gamma::DecodeSafe(color);
+     return renodx::color::gamma::DecodeSafe(color);
   }
   color = max(0, color);
   return renodx::color::gamma::Decode(color);
@@ -459,5 +459,6 @@ float3 CustomGammaDecode(float3 color) {
 
 float3 CustomColorGrading(float3 ungraded, float3 graded) {
   if (RENODX_TONE_MAP_TYPE == 1.f) return graded;
+  // graded = renodx::color::correct::Hue(graded, ungraded);
   return lerp(ungraded, graded, CUSTOM_COLOR_GRADING);
 }
