@@ -21,13 +21,9 @@
 
 namespace {
 
-std::unordered_set<std::uint32_t> drawn_shaders;
-
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
-
-float current_settings_mode = 0;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{

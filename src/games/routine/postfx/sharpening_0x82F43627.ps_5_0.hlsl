@@ -52,6 +52,7 @@ void main(
   r0.xy = min(cb0[1].zw, r0.xy);
 
   r0.xyz = t0.Sample(s0_s, r0.xy).xyz;
+  // float3 center = r0.rgb;
 #if 1
   r0.rgb = ScaleSceneInverse(r0.rgb);
 #endif
@@ -76,22 +77,7 @@ void main(
   r1.xyz = cb1[1].xyz + -r0.xyz;
   r0.xyz = cb1[0].yyy * r1.xyz + r0.xyz;
   o0.xyz = r0.xyz;
-  // o0.rgb = max(0, o0.rgb);
 
-  // if (RENODX_TONE_MAP_TYPE != 0.f) {
-  //   o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb);
-  //   o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
-  //   o0.rgb = max(0, o0.rgb);
-
-  //   float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-  //   float max_channel = max(max(max(o0.r, o0.g), o0.b), peak_ratio);
-  //   o0.rgb *= peak_ratio / max_channel;  // Clamp ringing
-  //   o0.rgb = renodx::color::bt709::from::BT2020(o0.rgb);
-
-  //   o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb);
-  // } else {
-  //   o0.rgb = max(0, o0.rgb);
-  // }
   o0.rgb = LinearizeAndClampMaxChannel(o0.rgb);
 
   o0.rgb = ScaleScene(o0.rgb);

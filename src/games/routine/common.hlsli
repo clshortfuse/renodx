@@ -12,6 +12,12 @@ float3 ScaleScene(float3 color) {
   return color;
 }
 
+void ScaleScene(inout float r, inout float g, inout float b) {
+  float3 color = ScaleScene(float3(r, g, b));
+  r = color.r, g = color.g, b = color.b;
+  return;
+}
+
 float3 ScaleSceneInverse(float3 color) {
   if (RENODX_DIFFUSE_WHITE_NITS != RENODX_GRAPHICS_WHITE_NITS) {
     color = renodx::color::gamma::DecodeSafe(color);

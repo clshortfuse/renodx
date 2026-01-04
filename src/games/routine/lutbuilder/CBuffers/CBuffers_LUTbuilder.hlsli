@@ -12,8 +12,8 @@ static const float FilmWhiteClip = asfloat(cb0[38].y);
 static const float ToneCurveAmount = asfloat(cb0[37].x);
 static const float BlueCorrection = asfloat(cb0[36].z);
 
-static uint output_device = asuint(cb0[41].x);
-static uint output_gamut = asuint(cb0[41].y);
+static uint output_device = asuint(cb0[40].w);
+static uint output_gamut = asuint(cb0[41].x);
 static float expand_gamut = asfloat(cb0[36].w);
 static bool is_hdr = (output_device >= 3u) && (output_gamut <= 6u);
 

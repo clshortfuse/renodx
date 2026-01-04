@@ -383,7 +383,7 @@ void main(
   // r0.rgb = renodx::math::SignPow(r0.rgb, cb0[40].y);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    GenerateOutput(r0.r, r0.g, r0.b, o0, asuint(cb0[41].x));
+    GenerateOutput(r0.r, r0.g, r0.b, o0, output_device);
     return;
   }
 

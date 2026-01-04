@@ -377,13 +377,11 @@ void main(
   r1.xyz = cb0[14].xyz * r0.xyz;
   r0.xyz = -r0.xyz * cb0[14].xyz + cb0[13].xyz;
   r0.xyz = cb0[13].www * r0.xyz + r1.xyz;
-  r0.xyz = max(float3(0, 0, 0), r0.xyz);
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = cb0[40].yyy * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
+
+  // r0.rgb = renodx::math::SignPow(r0.rgb, cb0[40].y);
 
   if (RENODX_TONE_MAP_TYPE != 0) {
-    GenerateOutput(r0.r, r0.g, r0.b, o0, asuint(cb0[41].x));
+    GenerateOutput(r0.r, r0.g, r0.b, o0, output_device);
     return;
   }
 
