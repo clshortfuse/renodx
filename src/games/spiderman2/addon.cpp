@@ -90,8 +90,8 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Adding sliders was causing the game to crash so I hardcoded the fixes."
-                             "\nCheck the mod page for details about the fixes."),
+        .label = std::string("Adding sliders was causing the game to crash so I hardcoded the fix."
+                             "\nMod is just a simple fix for the gamma, I don't own the game and don't intend to make a fully featured mod."),
         .section = "About",
     },
 };
