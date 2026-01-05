@@ -133,8 +133,12 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(78.84375, 78.84375, 78.84375) * r0.xyz;
   r0.xyz = exp2(r0.xyz);
+#if 0
+  r0.rgb = renodx::lut::SampleTetrahedral(t3, r0.rgb, 32u);
+#else
   r0.xyz = r0.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
   r0.xyz = t3.Sample(s3_s, r0.xyz).xyz;
+#endif
   r1.xyz = float3(1.04999995, 1.04999995, 1.04999995) * r0.xyz;
   r0.w = saturate(dot(r1.xyz, float3(0.298999995, 0.587000012, 0.114)));
   r1.x = cmp(0 < cb0[70].w);
