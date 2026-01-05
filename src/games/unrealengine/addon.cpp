@@ -470,14 +470,14 @@ void AddLostSoulAsideUpgrades() {
       .old_format = reshade::api::format::b8g8r8a8_typeless,
       .new_format = reshade::api::format::r16g16b16a16_float,
       .use_resource_view_cloning = true,
-      .aspect_ratio = 5040.f / 2160.f, // Ultrawide support
+      .aspect_ratio = 5040.f / 2160.f,  // Ultrawide support
       .aspect_ratio_tolerance = 0.1f,
   });
-    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
       .old_format = reshade::api::format::r10g10b10a2_unorm,
       .new_format = reshade::api::format::r16g16b16a16_float,
       .use_resource_view_cloning = true,
-      .aspect_ratio = 5040.f / 2160.f, // Ultrawide support
+      .aspect_ratio = 5040.f / 2160.f,  // Ultrawide support
       .aspect_ratio_tolerance = 0.1f,
   });
 }
@@ -625,10 +625,10 @@ const std::unordered_map<
         {
             "Borderlands3.exe",
             {
-              {"Upgrade_CopyDestinations", 1.f},  
-              {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_RATIO},
-              {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_RATIO},
-              {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_RATIO},
+                {"Upgrade_CopyDestinations", 1.f},
+                {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_RATIO},
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_RATIO},
+                {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_RATIO},
             },
         },
         {
@@ -637,14 +637,14 @@ const std::unordered_map<
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_RATIO},
             },
         },
-		{
+        {
             "EM-Win64-Shipping.exe",
             {
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
-		{
+        {
             "Ace7Game.exe",
             {
                 {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
@@ -1244,10 +1244,12 @@ void AddAdvancedSettings() {
   }
 
   for (const auto& [key, format] : UPGRADE_TARGETS) {
+    const auto default_upgrade =
+        (key == "B8G8R8A8_TYPELESS") ? UPGRADE_TYPE_OUTPUT_SIZE : 0.f;
     auto* new_setting = new renodx::utils::settings::Setting{
         .key = "Upgrade_" + key,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = default_upgrade,
         .label = key,
         .section = "Resource Upgrades",
         .labels = {
