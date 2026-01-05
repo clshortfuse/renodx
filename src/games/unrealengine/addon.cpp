@@ -520,14 +520,7 @@ const std::unordered_map<
             "Psychonauts2-WinGDK-Shipping.exe",
             {
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_RATIO},
-                {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"ForceBorderless", 0.f},
-            },
-        },
-        {
-            "CRISIS CORE -FINAL FANTASY VII- REUNION",
-            {
-                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
         {
@@ -539,14 +532,12 @@ const std::unordered_map<
         {
             "Wuthering Waves",
             {
-                {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
         {
             "Expedition 33",
             {
-                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_B8G8R8A8_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
@@ -568,7 +559,6 @@ const std::unordered_map<
             "Stellar Blade",
             {
                 {"Upgrade_CopyDestinations", 1.f},
-                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
@@ -576,21 +566,18 @@ const std::unordered_map<
             "Stellar Blade (Demo)",
             {
                 {"Upgrade_CopyDestinations", 1.f},
-                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
         {
             "Lies of P",
             {
-                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
         {
             "Like a Dragon: Ishin!",
             {
-                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
@@ -618,7 +605,6 @@ const std::unordered_map<
         {
             "Lost Soul Aside",
             {
-                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
@@ -641,13 +627,18 @@ const std::unordered_map<
             "EM-Win64-Shipping.exe",
             {
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
-                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
         {
-            "Ace7Game.exe",
+            "HogwartsLegacy.exe",
             {
-                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_NONE},
+            },
+        },
+        {
+            "Tales of Arise.exe",
+            {
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_NONE},
             },
         },
 
