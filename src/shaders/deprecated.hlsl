@@ -167,4 +167,58 @@ float3 ApplyACES(float3 color, Config tm_config, bool is_sdr) {
 }  // namespace tonemap
 }  // namespace renodx
 
+// Invalid namespace
+namespace acescc {
+float Encode(float ap1_channel) {
+  return renodx::color::acescc::Encode(ap1_channel);
+}
+
+float Decode(float aces_cc_data) {
+  return renodx::color::acescc::Decode(aces_cc_data);
+}
+
+float3 Encode(float3 ap1_color) {
+  return renodx::color::acescc::Encode(ap1_color);
+}
+
+float3 Decode(float3 aces_cc_data) {
+  return renodx::color::acescc::Decode(aces_cc_data);
+}
+
+float3 EncodeSafe(float3 color) {
+  return renodx::color::acescc::EncodeSafe(color);
+}
+
+float3 DecodeSafe(float3 aces_cc_data) {
+  return renodx::color::acescc::DecodeSafe(aces_cc_data);
+}
+}  // namespace acescc
+
+// Invalid namespace
+namespace acescct {
+float Encode(float ap1_channel) {
+  return renodx::color::acescct::Encode(ap1_channel);
+}
+
+float Decode(float aces_cc_data) {
+  return renodx::color::acescct::Decode(aces_cc_data);
+}
+
+float3 Encode(float3 ap1_color) {
+  return renodx::color::acescct::Encode(ap1_color);
+}
+
+float3 Decode(float3 aces_cc_data) {
+  return renodx::color::acescct::Decode(aces_cc_data);
+}
+
+float3 EncodeSafe(float3 color) {
+  return renodx::color::acescct::EncodeSafe(color);
+}
+
+float3 DecodeSafe(float3 aces_cc_data) {
+  return renodx::color::acescct::DecodeSafe(aces_cc_data);
+}
+}  // namespace acescct
+
 #endif  // SRC_SHADERS_DEPRECATED_HLSL_

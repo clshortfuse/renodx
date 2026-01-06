@@ -288,7 +288,7 @@ float3x3 Invert3x3(float3x3 m) {
   float I = (a * e - b * d);
 
   float det = a * A + b * B + c * C;
-  float invDet = 1.0 / det;
+  float invDet = DivideSafe(1.0, det, 0.0);
 
   return float3x3(
              A, D, G,

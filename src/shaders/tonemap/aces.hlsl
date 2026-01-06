@@ -1,8 +1,8 @@
 #ifndef SRC_SHADERS_ACES_HLSL_
 #define SRC_SHADERS_ACES_HLSL_
 
-#include "./color.hlsl"
-#include "./math.hlsl"
+#include "../color.hlsl"
+#include "../math.hlsl"
 
 namespace renodx {
 namespace tonemap {

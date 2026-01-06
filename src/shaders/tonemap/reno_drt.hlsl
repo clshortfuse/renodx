@@ -1,13 +1,29 @@
 #ifndef SRC_SHADERS_RENO_DRT_HLSL_
 #define SRC_SHADERS_RENO_DRT_HLSL_
 
-#include "./color.hlsl"
-#include "./color_convert.hlsl"
-#include "./colorgrade.hlsl"
-#include "./math.hlsl"
+#include "../color.hlsl"
+#include "../color_convert.hlsl"
+#include "../colorgrade.hlsl"
+#include "../math.hlsl"
+#include "./daniele.hlsl"
+#include "./hermite_spline.hlsl"
 #include "./reinhard.hlsl"
-#include "./tonemap/daniele.hlsl"
-#include "./tonemap/hermite_spline.hlsl"
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK
+#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK 0.f
+#endif
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE
+#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE 0.f
+#endif
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD
+#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD 0.f
+#endif
+
+#ifndef RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP
+#define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP 100.f
+#endif
 
 #ifndef RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK 0.f

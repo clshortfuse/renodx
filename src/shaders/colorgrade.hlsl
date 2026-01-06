@@ -20,6 +20,7 @@ namespace grade {
 static const float HIGHLIGHTS_VERSION = RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION;
 static const float SHADOWS_VERSION = RENODX_COLOR_GRADE_SHADOWS_VERSION;
 
+// https://en.wikipedia.org/wiki/Weber%E2%80%93Fechner_law
 float Contrast(float x, float contrast, float mid_gray = 0.18f) {
   return pow(x / mid_gray, contrast) * mid_gray;
 }
