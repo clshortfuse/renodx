@@ -74,11 +74,11 @@ struct ShaderInjectData {
 };
 
 #ifndef __cplusplus
-#include "../../shaders/renodx.hlsl"
-
 cbuffer shader_injection : register(b0, space50) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
+
+#include "../../shaders/renodx.hlsl"
 #endif
 
 #endif  // SRC_FF7REBIRTH_SHARED_H_
