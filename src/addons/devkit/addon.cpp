@@ -41,6 +41,7 @@
 #include "../../utils/pipeline_layout.hpp"
 #include "../../utils/shader.hpp"
 #include "../../utils/shader_compiler_directx.hpp"
+#include "../../utils/shader_compiler_slang.hpp"
 #include "../../utils/shader_compiler_watcher.hpp"
 #include "../../utils/shader_decompiler_dxc.hpp"
 #include "../../utils/shader_dump.hpp"
@@ -322,6 +323,8 @@ bool ComputeDisassemblyForShaderDetails(reshade::api::device* device, DeviceData
         shader_details->disassembly = std::string(
             shader_details->shader_data.data(),
             shader_details->shader_data.data() + shader_details->shader_data.size());
+      } else if (device->get_api() == reshade::api::device_api::vulkan) {
+        shader_details->disassembly = renodx::utils::shader::compiler::slang::DisassembleSpirv(shader_details->shader_data, shader_details->shader_hash);
       } else {
         throw std::exception("Unsupported device API.");
       }
@@ -1427,6 +1430,7 @@ void ActivateShader(reshade::api::device* device, uint32_t shader_hash, std::spa
 }
 
 void LoadDiskShaders(reshade::api::device* device, DeviceData* data, bool activate = true) {
+  renodx::utils::shader::compiler::watcher::SetDeviceApi(device->get_api());
   if (setting_live_reload) {
     if (!renodx::utils::shader::compiler::watcher::HasChanged()) return;
   } else {
@@ -2535,11 +2539,13 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
 }
 
 // Creates a selectable with the given label that jumps to the specified snapshot index
-inline void CreateDrawIndexLink(const std::string& label, int draw_index) {
+inline bool CreateDrawIndexLink(const std::string& label, int draw_index) {
   if (ImGui::TextLink(label.c_str())) {
     setting_nav_item = 0;  // Snapshot is the first nav item
     pending_draw_index_focus = draw_index;
+    return true;
   }
+  return false;
 }
 
 enum ShaderPaneColumns : uint8_t {
@@ -2714,8 +2720,9 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
       if (ImGui::TableSetColumnIndex(SHADER_PANE_COLUMN_SNAPSHOT)) {  // Snapshot
         ImGui::PushID(cell_index_id++);
         if (snapshot_index != -1) {
-          MakeSelectionCurrent(selection);
-          CreateDrawIndexLink(std::format("{:03}", snapshot_index), snapshot_index);
+          if (CreateDrawIndexLink(std::format("{:03}", snapshot_index), snapshot_index)) {
+            MakeSelectionCurrent(selection);
+          }
         }
         ImGui::PopID();
       }
@@ -3074,7 +3081,9 @@ void RenderShaderViewLive(reshade::api::device* device, DeviceData* data, Shader
   if (shader_details->disk_shader.has_value()) {
     if (!shader_details->disk_shader->IsCompilationOK()) {
       live_string = shader_details->disk_shader->GetCompilationException().what();
-    } else if (shader_details->disk_shader->is_hlsl || shader_details->disk_shader->is_glsl) {
+    } else if (shader_details->disk_shader->is_hlsl
+               || shader_details->disk_shader->is_glsl
+               || shader_details->disk_shader->is_slang) {
       try {
         live_string = renodx::utils::path::ReadTextFile(shader_details->disk_shader->file_path);
       } catch (std::exception& e) {
@@ -3133,6 +3142,10 @@ void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData* dat
             {
                 .flatten = true,
             });
+      } else if (device->get_api() == reshade::api::device_api::vulkan) {
+        shader_details->decompilation = renodx::utils::shader::compiler::slang::DecompileSpirvToGlsl(
+            shader_details->shader_data,
+            shader_details->shader_hash);
       } else if (device->get_api() == reshade::api::device_api::opengl) {
         shader_details->disassembly = std::string(
             shader_details->shader_data.data(),
