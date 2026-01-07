@@ -28,53 +28,6 @@ static const float FLT32_EPSILON = CROSS_COMPILE(asfloat(0x34000000), 1.19209289
 static const float FLT_EPSILON = CROSS_COMPILE(asfloat(0x34000000), 1.1920928955078125e-7);    // 2^-23
 
 #if __SHADER_TARGET_MAJOR >= 6 || defined(VULKAN)
-#define SIGN_FUNCTION_GENERATOR(T) \
-  T Sign(T x) {                    \
-    return sign(x);                \
-  }
-#else
-#define SIGN_FUNCTION_GENERATOR(T)                          \
-  T Sign(T x) {                                             \
-    return mad(saturate(mad(x, FLT_MAX, 0.5f)), 2.f, -1.f); \
-  }
-#endif
-
-#define SIGNPOW_FUNCTION_GENERATOR(struct)   \
-  struct SignPow(struct x, float exponent) { \
-    return Sign(x) * pow(abs(x), exponent);  \
-  }
-
-#define SIGNSQRT_FUNCTION_GENERATOR(struct) \
-  struct SignSqrt(struct x) {               \
-    return Sign(x) * sqrt(abs(x));          \
-  }
-
-#define CBRT_FUNCTION_GENERATOR(struct) \
-  struct Cbrt(struct x) {               \
-    return SignPow(x, 1.f / 3.f);       \
-  }
-
-#define ALL_FLOATS_FUNCTION_GENERATOR(generator) \
-  generator(float)                               \
-      generator(float2)                          \
-          generator(float3)                      \
-              generator(float4)
-
-ALL_FLOATS_FUNCTION_GENERATOR(SIGN_FUNCTION_GENERATOR)
-ALL_FLOATS_FUNCTION_GENERATOR(SIGNPOW_FUNCTION_GENERATOR)
-ALL_FLOATS_FUNCTION_GENERATOR(SIGNSQRT_FUNCTION_GENERATOR)
-ALL_FLOATS_FUNCTION_GENERATOR(CBRT_FUNCTION_GENERATOR)
-#undef SIGN_FUNCTION_GENERATOR
-#undef SIGNPOW_FUNCTION_GENERATOR
-#undef SIGNSQRT_FUNCTION_GENERATOR
-#undef CBRT_FUNCTION_GENERATOR
-#undef ALL_FLOATS_FUNCTION_GENERATOR
-
-float Average(float3 color) {
-  return (color.x + color.y + color.z) / 3.f;
-}
-
-#if __SHADER_TARGET_MAJOR >= 6 || defined(VULKAN)
 #define SELECT_FUNCTION_GENERATOR_SCALAR(TYPE)                   \
   TYPE Select(bool condition, TYPE trueValue, TYPE falseValue) { \
     return select(condition, trueValue, falseValue);             \
@@ -161,8 +114,70 @@ SELECT_FUNCTION_GENERATOR(int)
 #undef SELECT_FUNCTION_GENERATOR_VECTOR
 #undef SELECT_FUNCTION_GENERATOR
 
+#if __SHADER_TARGET_MAJOR >= 6 || defined(VULKAN)
+#define SIGN_FUNCTION_GENERATOR(T) \
+  T Sign(T x) {                   \
+    return sign(x);                \
+  }
+#else
+#define SIGN_FUNCTION_GENERATOR(T)                          \
+  T Sign(T x) {                                            \
+    return mad(saturate(mad(x, FLT_MAX, 0.5f)), 2.f, -1.f); \
+  }
+#endif
+
+// -1 or 1 (Doesn't follow IEEE standard for zero or NaN)
+#if __SHADER_TARGET_MAJOR <= 3
+#define COPYSIGN_FUNCTION_GENERATOR(T) \
+  T CopySign(T x) {                    \
+    return Select(x < 0, -1.f, 1.f);   \
+  }
+#else
+// https://github.com/Unity-Technologies/Graphics/blob/master/Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl#L819
+#define COPYSIGN_FUNCTION_GENERATOR(T)                       \
+  T CopySign(T x) {                                          \
+    return asfloat((asuint(x) & 0x80000000u) | 0x3F800000u); \
+  }
+#endif
+
+#define SIGNPOW_FUNCTION_GENERATOR(struct)      \
+  struct SignPow(struct x, float exponent) {    \
+    return CopySign(x) * pow(abs(x), exponent); \
+  }
+
+#define SIGNSQRT_FUNCTION_GENERATOR(struct) \
+  struct SignSqrt(struct x) {               \
+    return CopySign(x) * sqrt(abs(x));      \
+  }
+
+#define CBRT_FUNCTION_GENERATOR(struct) \
+  struct Cbrt(struct x) {               \
+    return SignPow(x, 1.f / 3.f);       \
+  }
+
+#define ALL_FLOATS_FUNCTION_GENERATOR(generator) \
+  generator(float)                               \
+      generator(float2)                          \
+          generator(float3)                      \
+              generator(float4)
+
+ALL_FLOATS_FUNCTION_GENERATOR(SIGN_FUNCTION_GENERATOR)
+ALL_FLOATS_FUNCTION_GENERATOR(COPYSIGN_FUNCTION_GENERATOR)
+ALL_FLOATS_FUNCTION_GENERATOR(SIGNPOW_FUNCTION_GENERATOR)
+ALL_FLOATS_FUNCTION_GENERATOR(SIGNSQRT_FUNCTION_GENERATOR)
+ALL_FLOATS_FUNCTION_GENERATOR(CBRT_FUNCTION_GENERATOR)
+#undef SIGN_FUNCTION_GENERATOR
+#undef SIGNPOW_FUNCTION_GENERATOR
+#undef SIGNSQRT_FUNCTION_GENERATOR
+#undef CBRT_FUNCTION_GENERATOR
+#undef ALL_FLOATS_FUNCTION_GENERATOR
+
+float Average(float3 color) {
+  return (color.x + color.y + color.z) / 3.f;
+}
+
 float DivideSafe(float dividend, float divisor) {
-  return Select(divisor == 0.f, FLT_MAX * Sign(dividend), dividend / divisor);
+  return Select(divisor == 0.f, FLT_MAX * CopySign(dividend), dividend / divisor);
 }
 
 float DivideSafe(float dividend, float divisor, float fallback) {
@@ -170,8 +185,8 @@ float DivideSafe(float dividend, float divisor, float fallback) {
 }
 
 float2 DivideSafe(float2 dividend, float2 divisor) {
-  return float2(DivideSafe(dividend.x, divisor.x, FLT_MAX * Sign(dividend.x)),
-                DivideSafe(dividend.y, divisor.y, FLT_MAX * Sign(dividend.y)));
+  return float2(DivideSafe(dividend.x, divisor.x, FLT_MAX * CopySign(dividend.x)),
+                DivideSafe(dividend.y, divisor.y, FLT_MAX * CopySign(dividend.y)));
 }
 
 float2 DivideSafe(float2 dividend, float2 divisor, float2 fallback) {
@@ -180,9 +195,9 @@ float2 DivideSafe(float2 dividend, float2 divisor, float2 fallback) {
 }
 
 float3 DivideSafe(float3 dividend, float3 divisor) {
-  return float3(DivideSafe(dividend.x, divisor.x, FLT_MAX * Sign(dividend.x)),
-                DivideSafe(dividend.y, divisor.y, FLT_MAX * Sign(dividend.y)),
-                DivideSafe(dividend.z, divisor.z, FLT_MAX * Sign(dividend.z)));
+  return float3(DivideSafe(dividend.x, divisor.x, FLT_MAX * CopySign(dividend.x)),
+                DivideSafe(dividend.y, divisor.y, FLT_MAX * CopySign(dividend.y)),
+                DivideSafe(dividend.z, divisor.z, FLT_MAX * CopySign(dividend.z)));
 }
 
 float3 DivideSafe(float3 dividend, float3 divisor, float3 fallback) {

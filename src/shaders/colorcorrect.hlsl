@@ -28,9 +28,9 @@ float4 Gamma(float4 color, bool pow_to_srgb = false, float gamma = 2.2f) {
 #define GAMMA_SAFE(T)                                                                   \
   T GammaSafe(T c, bool pow_to_srgb = false, float gamma = 2.2f) {                      \
     if (pow_to_srgb) {                                                                  \
-      return renodx::math::Sign(c) * srgb::Decode(color::gamma::Encode(abs(c), gamma)); \
+      return renodx::math::CopySign(c) * srgb::Decode(color::gamma::Encode(abs(c), gamma)); \
     } else {                                                                            \
-      return renodx::math::Sign(c) * color::gamma::Decode(srgb::Encode(abs(c)), gamma); \
+      return renodx::math::CopySign(c) * color::gamma::Decode(srgb::Encode(abs(c)), gamma); \
     }                                                                                   \
   }
 

@@ -30,7 +30,7 @@ float ContrastSafe(float x, float contrast, float mid_gray = 0.18f) {
 }
 
 float3 Contrast(float3 color, float contrast, float mid_gray = 0.18f, float3x3 color_space = renodx::color::BT709_TO_XYZ_MAT) {
-  float3 signs = renodx::math::Sign(color);
+  float3 signs = renodx::math::CopySign(color);
   color = abs(color);
   float color_y = dot(color, color_space[1].rgb);
   float contrasted_y = Contrast(color_y, contrast, mid_gray);
