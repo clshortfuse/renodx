@@ -340,7 +340,9 @@ float FindThirdDerivativeRoot(float a, float b, float c, float d, float e, float
   float centerPos = Tfrac + Tmid2 + T3 + T4;   // used with sqrt( centerPos)
 
   // Branch square roots: use SignSqrt for robustness and correct branch behaviour
-  float sNeg = renodx::math::SignSqrt(-centerNeg);
+  // float sNeg = renodx::math::SignSqrt(-centerNeg);
+  // Compiler computes centerNeg is always negative, making CopySign impossible
+  float sNeg = sign(-centerNeg);
   float sPos = renodx::math::SignSqrt(centerPos);
 
   // Shifts:
