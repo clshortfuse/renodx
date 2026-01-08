@@ -24,9 +24,9 @@ float4 Encode(float4 color) {
   return float4(Encode(color.rgb), color.a);
 }
 
-#define ENCODE_SAFE(T)                                 \
-  T EncodeSafe(T c) {                                  \
-    return renodx::math::CopySign(c) * Encode(abs(c)); \
+#define ENCODE_SAFE(T)                                \
+  T EncodeSafe(T c) {                                 \
+    return renodx::math::CopySign(Encode(abs(c)), c); \
   }
 
 ENCODE_SAFE(float)
@@ -53,9 +53,9 @@ float4 Decode(float4 color) {
   return float4(Decode(color.rgb), color.a);
 }
 
-#define DECODE_SAFE(T)                                 \
-  T DecodeSafe(T c) {                                  \
-    return renodx::math::CopySign(c) * Decode(abs(c)); \
+#define DECODE_SAFE(T)                                \
+  T DecodeSafe(T c) {                                 \
+    return renodx::math::CopySign(Decode(abs(c)), c); \
   }
 
 DECODE_SAFE(float)
@@ -90,11 +90,11 @@ float4 Decode(float4 color) {
 }
 
 float4 EncodeSafe(float4 color) {
-  return renodx::math::CopySign(color) * Encode(abs(color));
+  return renodx::math::CopySign(Encode(abs(color)), color);
 }
 
 float4 DecodeSafe(float4 color) {
-  return renodx::math::CopySign(color) * Decode(abs(color));
+  return renodx::math::CopySign(Decode(abs(color)), color);
 }
 
 }  // namespace srgba

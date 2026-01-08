@@ -116,38 +116,43 @@ SELECT_FUNCTION_GENERATOR(int)
 
 #if __SHADER_TARGET_MAJOR >= 6 || defined(VULKAN)
 #define SIGN_FUNCTION_GENERATOR(T) \
-  T Sign(T x) {                   \
+  T Sign(T x) {                    \
     return sign(x);                \
   }
 #else
 #define SIGN_FUNCTION_GENERATOR(T)                          \
-  T Sign(T x) {                                            \
+  T Sign(T x) {                                             \
     return mad(saturate(mad(x, FLT_MAX, 0.5f)), 2.f, -1.f); \
   }
 #endif
 
 // -1 or 1 (Doesn't follow IEEE standard for zero or NaN)
+// https://en.cppreference.com/w/cpp/numeric/math/copysign.html
 #if __SHADER_TARGET_MAJOR <= 3
-#define COPYSIGN_FUNCTION_GENERATOR(T) \
-  T CopySign(T x) {                    \
-    return Select(x < 0, -1.f, 1.f);   \
+#define COPYSIGN_FUNCTION_GENERATOR(T)           \
+  T CopySign(T mag, T sgn) {                     \
+    return Select(sgn < 0, -abs(mag), abs(mag)); \
   }
 #else
 // https://github.com/Unity-Technologies/Graphics/blob/master/Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl#L819
-#define COPYSIGN_FUNCTION_GENERATOR(T)                       \
-  T CopySign(T x) {                                          \
-    return asfloat((asuint(x) & 0x80000000u) | 0x3F800000u); \
+#define COPYSIGN_FUNCTION_GENERATOR(T)                   \
+  T CopySign(T mag, T sgn) {                             \
+    /* 0x80000000u = 10000000000000000000000000000000 */ \
+    /* 0x7FFFFFFFu = 01111111111111111111111111111111 */ \
+    uint signOf = asuint(sgn) & 0x80000000u;             \
+    uint magnitude = asuint(mag) & 0x7FFFFFFFu;          \
+    return asfloat(signOf | magnitude);                  \
   }
 #endif
 
-#define SIGNPOW_FUNCTION_GENERATOR(struct)      \
-  struct SignPow(struct x, float exponent) {    \
-    return CopySign(x) * pow(abs(x), exponent); \
+#define SIGNPOW_FUNCTION_GENERATOR(struct)     \
+  struct SignPow(struct x, float exponent) {   \
+    return CopySign(pow(abs(x), exponent), x); \
   }
 
 #define SIGNSQRT_FUNCTION_GENERATOR(struct) \
   struct SignSqrt(struct x) {               \
-    return CopySign(x) * sqrt(abs(x));      \
+    return CopySign(sqrt(abs(x)), x);       \
   }
 
 #define CBRT_FUNCTION_GENERATOR(struct) \
@@ -177,7 +182,7 @@ float Average(float3 color) {
 }
 
 float DivideSafe(float dividend, float divisor) {
-  return Select(divisor == 0.f, FLT_MAX * CopySign(dividend), dividend / divisor);
+  return Select(divisor == 0.f, CopySign(FLT_MAX, dividend), dividend / divisor);
 }
 
 float DivideSafe(float dividend, float divisor, float fallback) {
@@ -185,8 +190,8 @@ float DivideSafe(float dividend, float divisor, float fallback) {
 }
 
 float2 DivideSafe(float2 dividend, float2 divisor) {
-  return float2(DivideSafe(dividend.x, divisor.x, FLT_MAX * CopySign(dividend.x)),
-                DivideSafe(dividend.y, divisor.y, FLT_MAX * CopySign(dividend.y)));
+  return float2(DivideSafe(dividend.x, divisor.x, CopySign(FLT_MAX, dividend.x)),
+                DivideSafe(dividend.y, divisor.y, CopySign(FLT_MAX, dividend.y)));
 }
 
 float2 DivideSafe(float2 dividend, float2 divisor, float2 fallback) {
@@ -195,9 +200,9 @@ float2 DivideSafe(float2 dividend, float2 divisor, float2 fallback) {
 }
 
 float3 DivideSafe(float3 dividend, float3 divisor) {
-  return float3(DivideSafe(dividend.x, divisor.x, FLT_MAX * CopySign(dividend.x)),
-                DivideSafe(dividend.y, divisor.y, FLT_MAX * CopySign(dividend.y)),
-                DivideSafe(dividend.z, divisor.z, FLT_MAX * CopySign(dividend.z)));
+  return float3(DivideSafe(dividend.x, divisor.x, CopySign(FLT_MAX, dividend.x)),
+                DivideSafe(dividend.y, divisor.y, CopySign(FLT_MAX, dividend.y)),
+                DivideSafe(dividend.z, divisor.z, CopySign(FLT_MAX, dividend.z)));
 }
 
 float3 DivideSafe(float3 dividend, float3 divisor, float3 fallback) {

@@ -115,7 +115,7 @@ float SafePow(float color, float exponent) {
 /// @deprecated - DivideSafe
 float SafeDivision(float quotient, float dividend) {
   return (dividend == 0.f)
-             ? FLT_MAX * CopySign(quotient)
+             ? CopySign(quotient, FLT_MAX)
              : (quotient / dividend);
 }
 
@@ -128,9 +128,9 @@ float SafeDivision(float quotient, float dividend, float fallback) {
 
 /// @deprecated - Use DivideSafe
 float3 SafeDivision(float3 quotient, float3 dividend) {
-  return float3(SafeDivision(quotient.x, dividend.x, FLT_MAX * CopySign(quotient.x)),
-                SafeDivision(quotient.y, dividend.y, FLT_MAX * CopySign(quotient.y)),
-                SafeDivision(quotient.z, dividend.z, FLT_MAX * CopySign(quotient.z)));
+  return float3(SafeDivision(quotient.x, dividend.x, CopySign(FLT_MAX, quotient.x)),
+                SafeDivision(quotient.y, dividend.y, CopySign(FLT_MAX, quotient.y)),
+                SafeDivision(quotient.z, dividend.z, CopySign(FLT_MAX, quotient.z)));
 }
 
 /// @deprecated - Use DivideSafe
