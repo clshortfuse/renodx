@@ -135,11 +135,11 @@ SELECT_FUNCTION_GENERATOR(int)
   }
 #else
 // https://github.com/Unity-Technologies/Graphics/blob/master/Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl#L819
-#define COPYSIGN_FUNCTION_GENERATOR(T)                                     \
-  T CopySign(T mag, T sgn) {                                               \
-    /* 0x80000000u = 10000000000000000000000000000000 */                   \
-    /* 0x7FFFFFFFu = 01111111111111111111111111111111 */                   \
-    return asfloat(asuint(sgn) & 0x80000000u | asuint(mag) & 0x7FFFFFFFu); \
+#define COPYSIGN_FUNCTION_GENERATOR(T)                                         \
+  T CopySign(T mag, T sgn) {                                                   \
+    /* 0x80000000u = 10000000000000000000000000000000 */                       \
+    /* 0x7FFFFFFFu = 01111111111111111111111111111111 */                       \
+    return asfloat((asuint(sgn) & 0x80000000u) | (asuint(mag) & 0x7FFFFFFFu)); \
   }
 #endif
 
