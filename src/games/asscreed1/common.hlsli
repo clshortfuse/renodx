@@ -3,7 +3,7 @@
 float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float channel_max = 100.f) {
   float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
   float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, channel_max, output_max, rolloff_start);
-  float scale = renodx::math::DivideSafe(mapped_peak, peak, 0.f);
+  float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
 
   return scale;
 }
