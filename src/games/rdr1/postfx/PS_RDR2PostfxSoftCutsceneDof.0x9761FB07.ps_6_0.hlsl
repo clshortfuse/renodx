@@ -236,7 +236,7 @@ float4 main(float4 SV_Position: SV_POSITION,
   float midGrayScale = RDR1ReinhardMidgrayScale(White);
   float3 untonemapped_scaled = color_scaled * midGrayScale;
 
-  float3 blendedColor = injectedData.toneMapType ? lerp(vanillaColor, untonemapped_scaled, saturate(vanillaColor)) : vanillaColor;
+  float3 blendedColor = (RENODX_TONE_MAP_TYPE != 0.f) ? lerp(vanillaColor, untonemapped_scaled, saturate(vanillaColor / 0.18f)) : vanillaColor;
 
   _140 = blendedColor.r;
   _141 = blendedColor.g;
@@ -282,23 +282,22 @@ float4 main(float4 SV_Position: SV_POSITION,
   // Apply Contrast
   // done in SDR, causes broken colors on highlights otherwise
   float3 desaturatedColorSDR;
-  if (injectedData.toneMapType == 0) {
+  if (RENODX_TONE_MAP_TYPE == 0) {
     desaturatedColorSDR = saturate(desaturatedColorHDR);
   } else {
-    desaturatedColorSDR = renoDRTSmoothClamp(desaturatedColorHDR);
+    desaturatedColorSDR = ApplyExponentialRolloffMaxChannel(max(0.f, desaturatedColorHDR));
   }
   float3 contrastedColor = desaturatedColorSDR - (((desaturatedColorSDR * Contrast) * (desaturatedColorSDR - 1.0)) * (desaturatedColorSDR - 0.5));
 
   float3 outputColor = contrastedColor;
 
-  if (injectedData.toneMapType) {
-    float3 upgradedColor = renodx::tonemap::UpgradeToneMap(desaturatedColorHDR, desaturatedColorSDR, outputColor, 1.f);
-
-    // blend vanillaColor back in to fix differences in contrast
-    float3 vanillaDesaturatedColor = saturate(desaturatedColorHDR);
-    float3 vanillaContrastedColor = vanillaDesaturatedColor - (((vanillaDesaturatedColor * Contrast) * (vanillaDesaturatedColor - 1.0)) * (vanillaDesaturatedColor - 0.5));
-    outputColor = lerp((vanillaContrastedColor), upgradedColor, saturate(vanillaContrastedColor));
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    outputColor = renodx::tonemap::UpgradeToneMap(desaturatedColorHDR, desaturatedColorSDR, outputColor, 1.f);
+    outputColor = lerp(blendedColor, outputColor, RENODX_COLOR_GRADE_STRENGTH);
   }
+
+  outputColor = ApplyUserGrading(outputColor);
+
   float3 gammaEncodedColor = renodx::color::gamma::Encode(max(0, outputColor), 2.2f);
 
   return float4(gammaEncodedColor, 1.0);

@@ -44,118 +44,215 @@ float RDR1ReinhardMidgrayScale(float whitePoint) {
   return 0.18 / RDR1ReinhardMidgray(whitePoint);
 }
 
-/// Applies a customized version of RenoDRT tonemapper that tonemaps down to 1.0.
-/// This function is used to compress HDR color to SDR range for use alongside `UpgradeToneMap`.
-///
-/// @param untonemapped The color input that needs to be tonemapped.
-/// @return The tonemapped color compressed to the SDR range, ensuring that it can be applied to SDR color grading with `UpgradeToneMap`.
-float3 renoDRTSmoothClamp(float3 untonemapped) {
-  renodx::tonemap::renodrt::Config renodrt_config = renodx::tonemap::renodrt::config::Create();
-  renodrt_config.nits_peak = 100.f;
-  renodrt_config.mid_gray_value = 0.18f;
-  renodrt_config.mid_gray_nits = 18.f;
-  renodrt_config.exposure = 1.f;
-  renodrt_config.highlights = 1.f;
-  renodrt_config.shadows = 1.f;
-  renodrt_config.contrast = 1.05f;
-  renodrt_config.saturation = 1.03f;
-  renodrt_config.dechroma = 0.f;
-  renodrt_config.flare = 0.f;
-  renodrt_config.blowout = -1.f;
-  renodrt_config.hue_correction_strength = 0.f;
-  renodrt_config.hue_correction_method = renodx::tonemap::renodrt::config::hue_correction_method::ICTCP;
-  renodrt_config.tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::DANIELE;
-  renodrt_config.hue_correction_type = renodx::tonemap::renodrt::config::hue_correction_type::INPUT;
-  renodrt_config.working_color_space = 0u;
-  renodrt_config.per_channel = true;
+/// Piecewise linear + exponential compression to a target value starting from a specified number.
+/// https://www.ea.com/frostbite/news/high-dynamic-range-color-grading-and-display-in-frostbite
+#define EXPONENTIALROLLOFF_GENERATOR(T)                                                      \
+  T ExponentialRollOffExtended(T input, float rolloff_start, float output_max, float clip) { \
+    T rolloff_size = output_max - rolloff_start;                                             \
+    T overage = -max((T)0, input - rolloff_start);                                           \
+    T clip_size = rolloff_start - clip;                                                      \
+    T rolloff_value = (T)1.0f - exp(overage / rolloff_size);                                 \
+    T clip_value = (T)1.0f - exp(clip_size / rolloff_size);                                  \
+    T new_overage = mad(rolloff_size, rolloff_value / clip_value, overage);                  \
+    return input + new_overage;                                                              \
+  }
+EXPONENTIALROLLOFF_GENERATOR(float)
+EXPONENTIALROLLOFF_GENERATOR(float3)
+#undef EXPONENTIALROLLOFF_GENERATOR
 
-  float3 renoDRTColor = renodx::tonemap::renodrt::BT709(untonemapped, renodrt_config);
-  renoDRTColor = lerp(untonemapped, renoDRTColor, saturate(renodx::color::y::from::BT709(untonemapped)));
+float3 ApplyExponentialRolloffMaxChannel(float3 untonemapped, float peak_ratio = 1.f, float rolloff_start_ratio = 0.5f, float clip = 100.f) {
+  float max_channel = renodx::math::Max(untonemapped);
 
-  return saturate(renoDRTColor);
+  float mapped_max = exp2(ExponentialRollOffExtended(
+      log2(max_channel),
+      log2(rolloff_start_ratio * peak_ratio),
+      log2(peak_ratio),
+      log2(clip)));
+
+  float scale = renodx::math::DivideSafe(mapped_max, max_channel, 1.f);
+  return untonemapped * scale;
 }
 
-// Applies the hue shifts from clamping input_color while minimizing broken gradients
-float3 clampedHueOKLab(float3 input_color, float correct_amount = 1.f) {
-  // If no correction is needed, return the original color
-  if (correct_amount == 0) {
-    return input_color;
-  } else {
-    // Calculate average channel values of the original (unclamped) input_color
-    float avg_unclamped = renodx::math::Average(input_color);
+struct UserGradingConfig {
+  float exposure;
+  float highlights;
+  float shadows;
+  float contrast;
+  float flare;
+  float saturation;
+  float dechroma;
+  float hue_emulation_strength;
+  float highlight_saturation;
+  float blowout;
+};
 
-    // calculate average channel values for the clamped input_color
-    float3 clamped_color = saturate(input_color);
-    float avg_clamped = renodx::math::Average(clamped_color);
+UserGradingConfig CreateColorGradeConfig() {
+  const UserGradingConfig cg_config = {
+    RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
+    RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
+    RENODX_TONE_MAP_SHADOWS,                              // float shadows;
+    RENODX_TONE_MAP_CONTRAST,                             // float contrast;
+    0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
+    RENODX_TONE_MAP_SATURATION,                           // float saturation;
+    RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
+    0.f,                                                  // float hue_emulation_strength;
+    -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
+    0.f                                                   // float blowout;
+  };
+  return cg_config;
+}
 
-    // Compute the hue clipping percentage based on the difference in averages
-    float hue_clip_percentage = saturate((avg_unclamped - avg_clamped) / max(avg_unclamped, renodx::math::FLT_MIN));  // Prevent division by zero
+float Highlights(float x, float highlights, float mid_gray) {
+  if (highlights == 1.f) return x;
 
-    // Interpolate hue components (a, b in OkLab) based on correct_amount using clamped_color
-    float3 correct_lab = renodx::color::oklab::from::BT709(clamped_color);
-    float3 incorrect_lab = renodx::color::oklab::from::BT709(input_color);
-    float3 new_lab = incorrect_lab;
-
-    // Apply hue correction based on clipping percentage and interpolate based on correct_amount
-    new_lab.yz = lerp(incorrect_lab.yz, correct_lab.yz, hue_clip_percentage);
-    new_lab.yz = lerp(incorrect_lab.yz, new_lab.yz, abs(correct_amount));
-
-    // Restore original chrominance from input_color in OkLCh space
-    float3 incorrect_lch = renodx::color::oklch::from::OkLab(incorrect_lab);
-    float3 new_lch = renodx::color::oklch::from::OkLab(new_lab);
-    new_lch[1] = incorrect_lch[1];
-
-    // Convert back to linear BT.709 space
-    float3 color = renodx::color::bt709::from::OkLCh(new_lch);
-    return color;
+  if (highlights > 1.f) {
+    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 10.f)));
+  } else {  // highlights < 1.f
+    x /= mid_gray;
+    return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
   }
 }
 
-// Emulates hue shifts caused by clamping to SDR while minimizing artifacts.
-// This function dynamically adjusts the hue of the HDR input color to align
-// with the hue shifts observed in clamped SDR colors, while preserving luminance
-// and chrominance balance to avoid broken gradients or oversaturation.
-float3 clampedHueICtCp(float3 input_color, float correct_amount = 1.f) {
-  // Return the original color if no correction is needed.
-  if (correct_amount == 0.f) return input_color;
+float Shadows(float x, float shadows, float mid_gray) {
+  if (shadows == 1.f) return x;
 
-  // Calculate the average luminance of the unclamped (HDR) input color.
-  float avg_unclamped = renodx::color::y::from::BT709(input_color);
+  const float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
+  const float base_term = x * mid_gray;
+  const float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
 
-  // Clamp the input color to SDR range [0, 1] and calculate its average luminance.
-  float3 clamped_color = saturate(input_color);
-  float avg_clamped = renodx::color::y::from::BT709(clamped_color);
+  if (shadows > 1.f) {
+    float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
+    float reference = x * (1.f + base_scale);
+    return max(x, x + (raised - reference));
+  } else {  // shadows < 1.f
+    float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
+    float reference = x * (1.f - base_scale);
+    return clamp(x + (lowered - reference), 0.f, x);
+  }
+}
 
-  // Compute the hue clipping percentage by comparing the luminance difference
-  // between the unclamped and clamped colors. Use safe division to avoid divide-by-zero.
-  float hue_clip_percentage = saturate(renodx::math::DivideSafe(avg_unclamped - avg_clamped, avg_unclamped, 0.f));
+float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, UserGradingConfig config, float mid_gray = 0.18f) {
+  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
+    return untonemapped;
+  }
+  float3 color = untonemapped;
 
-  // Convert the clamped and input colors to the ICTCP color space for hue manipulation.
-  float3 correct_perceptual = renodx::color::ictcp::from::BT709(clamped_color);
-  float3 incorrect_perceptual = renodx::color::ictcp::from::BT709(input_color);
+  color *= config.exposure;
 
-  // Measure the initial chrominance magnitude of the input color (distance from neutral).
-  float chrominance_pre_adjust = distance(incorrect_perceptual.yz, 0);
+  // contrast & flare
+  const float y_normalized = y / mid_gray;
+  float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
+  float exponent = config.contrast * flare;
+  const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
 
-  // Interpolate the chroma components (CT, CP) of the input color towards the clamped color's chroma.
-  // This creates a smooth hue transition proportional to the clipping percentage.
-  incorrect_perceptual.yz = lerp(incorrect_perceptual.yz, correct_perceptual.yz, hue_clip_percentage);
+  // highlights
+  float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
 
-  // Further interpolate based on the correction strength to control the intensity of the hue shift.
-  incorrect_perceptual.yz = lerp(incorrect_perceptual.yz, correct_perceptual.yz, abs(correct_amount));
+  // shadows
+  float y_shadowed = Shadows(y_highlighted, config.shadows, mid_gray);
 
-  // Recalculate the chrominance magnitude after adjustment to ensure it remains balanced.
-  float chrominance_post_adjust = distance(incorrect_perceptual.yz, 0);
+  const float y_final = y_shadowed;
 
-  // Scale the chroma components to preserve the original chrominance magnitude, preventing oversaturation.
-  incorrect_perceptual.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
-
-  // Convert the adjusted ICTCP color back to the linear BT.709 color space.
-  float3 color = renodx::color::bt709::from::ICtCp(incorrect_perceptual);
-
-  // Clamp the final output to ensure it remains within the valid gamut of BT.709/AP1.
-  color = renodx::color::bt709::clamp::AP1(color);
+  color = renodx::color::correct::Luminance(color, y, y_final);
 
   return color;
 }
 
+float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, UserGradingConfig config) {
+  float3 color = tonemapped;
+  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_emulation_strength != 0.f || config.blowout != 0.f || config.highlight_saturation != 0.f) {
+    float3 perceptual_new = renodx::color::oklab::from::BT709(color);
+
+    // hue emulation and blowout
+    if (config.hue_emulation_strength != 0.0 || config.blowout != 0.0) {
+      const float3 reference_oklab = renodx::color::oklab::from::BT709(hue_reference_color);
+
+      float chrominance_current = length(perceptual_new.yz);
+      float chrominance_ratio = 1.0;
+
+      if (config.hue_emulation_strength != 0.0) {
+        const float chrominance_pre = chrominance_current;
+        perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, config.hue_emulation_strength);
+        const float chrominancePost = length(perceptual_new.yz);
+        chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
+        chrominance_current = chrominancePost;
+      }
+
+      if (config.blowout != 0.0) {
+        const float reference_chrominance = length(reference_oklab.yz);
+        float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
+        chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, config.blowout);
+      }
+      perceptual_new.yz *= chrominance_ratio;
+    }
+
+    // dechroma
+    if (config.dechroma != 0.f) {
+      perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - config.dechroma))));
+    }
+
+    // highlight saturation
+    if (config.highlight_saturation != 0.f) {
+      float percent_max = saturate(y * 100.f / 10000.f);
+      // positive = 1 to 0, negative = 1 to 2
+      float blowout_strength = 100.f;
+      float blowout_change = pow(1.f - percent_max, blowout_strength * abs(config.highlight_saturation));
+      if (config.highlight_saturation < 0) {
+        blowout_change = (2.f - blowout_change);
+      }
+
+      perceptual_new.yz *= blowout_change;
+    }
+
+    // saturation
+    perceptual_new.yz *= config.saturation;
+
+    color = renodx::color::bt709::from::OkLab(perceptual_new);
+
+    color = renodx::color::bt709::clamp::AP1(color);
+  }
+  return color;
+}
+
+float3 ApplyUserGrading(float3 ungraded) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) return ungraded;
+
+  UserGradingConfig cg_config = CreateColorGradeConfig();
+  float y = renodx::color::y::from::BT709(ungraded);
+  float3 graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, y, cg_config);
+  graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, ungraded, y, cg_config);
+
+  return graded;
+}
+
+float3 HueAndChrominance1ReferenceColorOKLab(
+    float3 incorrect_color, float3 hue_reference_color,
+    float hue_correct_strength = 0.f,
+    float chrominance_correct_strength = 0.f) {
+  if (hue_correct_strength != 0.0 || chrominance_correct_strength != 0.0) {
+    float3 perceptual_new = renodx::color::oklab::from::BT709(incorrect_color);
+    const float3 reference_oklab = renodx::color::oklab::from::BT709(hue_reference_color);
+
+    float chrominance_current = length(perceptual_new.yz);
+    float chrominance_ratio = 1.0;
+
+    if (hue_correct_strength != 0.0) {
+      const float chrominance_pre = chrominance_current;
+      perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, hue_correct_strength);
+      const float chrominancePost = length(perceptual_new.yz);
+      chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
+      chrominance_current = chrominancePost;
+    }
+
+    if (chrominance_correct_strength != 0.0) {
+      const float reference_chrominance = length(reference_oklab.yz);
+      float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
+      chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_correct_strength);
+    }
+    perceptual_new.yz *= chrominance_ratio;
+
+    incorrect_color = renodx::color::bt709::from::OkLab(perceptual_new);
+    incorrect_color = renodx::color::bt709::clamp::AP1(incorrect_color);
+  }
+  return incorrect_color;
+}
