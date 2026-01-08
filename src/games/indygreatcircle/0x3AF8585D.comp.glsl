@@ -3,6 +3,7 @@
 
 #extension GL_GOOGLE_include_directive : require
 #include "./include/common.glsl"
+#include "./shared.h"
 
 #extension GL_EXT_buffer_reference2 : require
 #if defined(GL_EXT_control_flow_attributes)
@@ -1007,7 +1008,7 @@ vec3 _97(vec3 _94, float _95, float _96) {
   return vec3(_92(_591, _594, _596), _92(_599, _602, _604), _92(_607, _610, _612));
 }
 
-vec3 _217(vec3 _214, bool _215, _211 _216, float paper_white) {
+vec3 _217(vec3 _214, bool _215, _211 _216, float diffuse_white) {
   vec3 _2682 = _214;  // untonemapped
   vec3 _2681 = _207(_2682);
   vec3 _2685 = vec3(0.0);
@@ -1139,7 +1140,7 @@ void main() {
   _2939._m1 = _2887._m45;     // max nits
   _2939._m2 = _2932._m0._m3;  // mid point slider
 
-  float paper_white = _2932._m0._m3 * 10.0;
+  float diffuse_white = _2932._m0._m3 * 10.0;
 
   bool _2955 = (_2927 & 1u) != 0u;
   bool useHDR = _2955;  // true = HDR, false = SDR
@@ -1149,33 +1150,30 @@ void main() {
   _211 _2964 = _2939;
   // vec3 _2959 = _217(_2960, _2962, _2964);
 
-  // CUSTOM
-  uint GAMMA_CORRECTION_TYPE = 1u;  // 0 - sRGB -> 2.2 Correction, 1 - ACES minimum nits
-  bool USE_SHORTFUSE_ACES = true;
-  bool USE_PER_CHANNEL_CORRECTION = true;
-
   vec3 _2959;
-  if (!USE_SHORTFUSE_ACES || !useHDR) {
-    _2959 = _217(_2960, useHDR, _2964, paper_white);
+  if (RENODX_TONE_MAP_TYPE == 0.f || !useHDR) {
+    _2959 = _217(_2960, useHDR, _2964, diffuse_white);
+  } else if (RENODX_TONE_MAP_TYPE == 1.f) {
+    _2959 = BT709_TO_BT2020_MAT * _2960 * diffuse_white;
   } else {
     const float ACES_MIN = 0.0001f;
     const float ACES_EXPOSURE = 48.f;
-    float aces_min = ACES_MIN / paper_white;
-    float aces_max = (_2939._m1 / paper_white);
+    float aces_min = ACES_MIN / diffuse_white;
+    float aces_max = (_2939._m1 / diffuse_white);
 
-    if (GAMMA_CORRECTION_TYPE == 0u) {
+    if (RENODX_SDR_EOTF_EMULATION == 1.f) {
       aces_max = CorrectGammaMismatch(aces_max, true);
       aces_min = CorrectGammaMismatch(aces_min, true);
-    } else {
+    } else if (RENODX_SDR_EOTF_EMULATION == 2.f) {
       aces_min /= 5.f;
     }
 
     // Apply ACES ToneMap
     vec3 untonemapped_ap0 = BT709_TO_AP0_MAT * _2960;
-    vec3 untonemapped_graded_ap1 = max(vec3(0.0), RRT(untonemapped_ap0));  // do max(0, ) just in case for the by luminance tonemap
+    vec3 untonemapped_graded_ap1 = RRT(untonemapped_ap0);
 
     vec3 tonemapped_ap1;
-    if (USE_PER_CHANNEL_CORRECTION) {
+    if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
       float y_in = dot(untonemapped_graded_ap1, vec3(0.2722287168, 0.6740817658, 0.0536895174));
       vec4 tonemapped_ap1_combined = max(vec4(0.0), ODT(vec4(untonemapped_graded_ap1, y_in), aces_min * ACES_EXPOSURE, aces_max * ACES_EXPOSURE, mat3(1.0)) / ACES_EXPOSURE);
       tonemapped_ap1 = tonemapped_ap1_combined.rgb;
@@ -1184,28 +1182,28 @@ void main() {
       // ODT by luminance
       vec3 luminance_tonemapped_ap1 = untonemapped_graded_ap1 * (y_out / y_in);
 
-      // luminance_tonemapped_ap1 = SaturationBlowoutAP1(luminance_tonemapped_ap1, y_in, 9.0, 0.975f);
-      luminance_tonemapped_ap1 = SaturationBlowoutAP1ICtCp(luminance_tonemapped_ap1, y_in, 9.25, 0.975f);
-      //   luminance_tonemapped_ap1 = ChrominanceICtCp(luminance_tonemapped_ap1, tonemapped_ap1, 1.f);
-      //   luminance_tonemapped_ap1 = ChrominanceOKLab(luminance_tonemapped_ap1, tonemapped_ap1, 1.f);
+      luminance_tonemapped_ap1 = CorrectHueAndChrominanceOKLabAP1(
+          luminance_tonemapped_ap1, tonemapped_ap1,
+          1.f,   // hue emulation strength
+          0.6f,  // chrominance emulation strength
+          0.5f,  // hue emulation ramp start
+          1.f    // hue emulation ramp end
+      );
 
-      // blend it in only on shadows / mid-tones
-      float tonemapped_lum = dot(luminance_tonemapped_ap1, vec3(0.2722287168, 0.6740817658, 0.0536895174));
-      tonemapped_ap1 = mix(luminance_tonemapped_ap1, tonemapped_ap1, clamp(tonemapped_lum / 0.6, 0.0, 1.0));
+      tonemapped_ap1 = luminance_tonemapped_ap1;
 
-      //   tonemapped_ap1 = luminance_tonemapped_ap1;
     } else {
       tonemapped_ap1 = max(vec3(0.0), ODT(untonemapped_graded_ap1, aces_min * ACES_EXPOSURE, aces_max * ACES_EXPOSURE, mat3(1.0)) / ACES_EXPOSURE);
     }
 
     vec3 tonemapped_bt709 = AP1_TO_BT709_MAT * tonemapped_ap1;
 
-    if (GAMMA_CORRECTION_TYPE == 0u) {
+    if (RENODX_SDR_EOTF_EMULATION == 1.f) {
       tonemapped_bt709 = CorrectGammaMismatch(tonemapped_bt709, false);
     }
 
     vec3 tonemapped_bt2020 = BT709_TO_BT2020_MAT * tonemapped_bt709;
-    tonemapped_bt2020 *= paper_white;
+    tonemapped_bt2020 *= diffuse_white;
     _2959 = tonemapped_bt2020;
   }
   // END CUSTOM

@@ -17,10 +17,10 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // CustomShaderEntry(0x9E8B52A6),  // ACEScc color grade
-    CustomShaderEntry(0x8EF24715),  // ACES tonemap
-    CustomShaderEntry(0x3AF8585D),  // ACES tonemap for Order of the Giants
-    CustomShaderEntry(0x808B7411),  // Final
+    CustomShaderEntry(0x94CF25A1),  // color grade with ACEScc LUT
+    CustomShaderEntry(0x0FB3C8A5),  // color grade
+    CustomShaderEntry(0x3AF8585D),  // ACES tonemap LUTbuilder
+    CustomShaderEntry(0xF40407A5),  // Final
 };
 
 }  // namespace
