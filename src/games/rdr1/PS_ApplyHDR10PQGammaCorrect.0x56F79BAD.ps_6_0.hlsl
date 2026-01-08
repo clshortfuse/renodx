@@ -1,4 +1,4 @@
-#include "./hueHelper.hlsl"
+#include "./common.hlsli"
 #include "./shared.h"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);

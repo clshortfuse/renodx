@@ -1,5 +1,4 @@
-#include "./shared.h"
-#include "./tonemaphelper.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 
@@ -119,163 +118,179 @@ float4 main(
   float _5 = TEXCOORD0.x;
   float _6 = TEXCOORD0.y;
 
-  float3 fullResMap = g_textures2D[FullResMapSampler].Sample(g_samplers[FullResMapSamplerSS], TEXCOORD0.xy).rgb;
-  float _15 = fullResMap.r;
-  float _16 = fullResMap.g;
-  float _17 = fullResMap.b;
+  float _16 = g_textures2D[DepthMapSampler].Sample(g_samplers[DepthMapSamplerSS], TEXCOORD0.xy).x;  // fix
 
-  int _22 = RenderMapAnisoSampler;
-  int _24 = RenderMapAnisoSamplerSS;
-  float4 _26 = g_textures2D[RenderMapAnisoSampler].Sample(g_samplers[RenderMapAnisoSamplerSS], TEXCOORD0.xy);
-  float _27 = _26.x;
-  float _28 = _26.y;
-  float _29 = _26.z;
-  float _30 = _26.w;
-  float _31 = _27 * _27;
-  float _32 = _28 * _28;
-  float _33 = _29 * _29;
+  float _18 = NearFarClipPlaneQ.x;
+  float _19 = NearFarClipPlaneQ.z;
+  float _20 = _18 * _19;
+  float _21 = -_20;
+  float _22 = _16 - _19;
+  float _23 = _21 / _22;
 
-  float _35 = IntensityBloom;
-  float _36 = _31 * _35;
-  float _37 = _32 * _35;
-  float _38 = _33 * _35;
-  float _39 = saturate(_30);
+  float4 fullResMap = g_textures2D[FullResMapSampler].Sample(g_samplers[FullResMapSamplerSS], TEXCOORD0.xy);  // fix
 
-  float3 _48 = g_textures2D[RenderMapBilinearSampler].Sample(g_samplers[RenderMapBilinearSamplerSS], TEXCOORD0.xy).rgb;
-  float _49 = _48.r;
-  float _50 = _48.g;
-  float _51 = _48.b;
+  float _32 = fullResMap.x;
+  float _33 = fullResMap.y;
+  float _34 = fullResMap.z;
 
-  float _61 = g_textures2D[AdaptedLuminanceMapSampler].Sample(g_samplers[AdaptedLuminanceMapSamplerSS], float2(0, 0)).x;
-  float _63 = HigherLimitAdaption;
-  float _64 = LowerLimitAdaption;
-  float _65 = max(_61, _64);
-  float _66 = min(_65, _63);
-  float clampedAdaptedLuminance = _66;
-  float _67 = _49 - _15;
-  float _68 = _50 - _16;
-  float _69 = _51 - _17;
-  float _70 = _67 * _39;
-  float _71 = _68 * _39;
-  float _72 = _69 * _39;
-  float _73 = _70 + _15;
-  float _74 = _71 + _16;
-  float _75 = _72 + _17;
+  float4 _42 = g_textures2D[RenderMapAnisoSampler].Sample(g_samplers[RenderMapAnisoSamplerSS], TEXCOORD0.xy);  // fix
+  float _43 = _42.x;
+  float _44 = _42.y;
+  float _45 = _42.z;
+  float _46 = _42.w;
 
-  float4 _83 = g_textures2D[GlowSampler].Sample(g_samplers[GlowSamplerSS], TEXCOORD2.xy);
-  float _84 = _83.x;
-  float _85 = _83.y;
-  float _86 = _83.z;
-  float _87 = _83.w;
+  float _47 = _43 * _43;
+  float _48 = _44 * _44;
+  float _49 = _45 * _45;
+  float _51 = IntensityBloom;
+  float _52 = _47 * _51;
+  float _53 = _48 * _51;
+  float _54 = _49 * _51;
+  float _55 = saturate(_46);
 
-  float4 _95 = g_textures2D[GlowSampler2].Sample(g_samplers[GlowSampler2SS], TEXCOORD2.zw);
-  float _96 = _95.x;
-  float _97 = _95.y;
-  float _98 = _95.z;
-  float _99 = _95.w;
-  float _101 = GlowColor2.x;
-  float _102 = GlowColor2.y;
-  float _103 = GlowColor2.z;
-  float _105 = GlowColor.x;
-  float _106 = GlowColor.y;
-  float _107 = GlowColor.z;
-  float _108 = renodx::color::luma::from::BT601(float3(_73, _74, _75));  // float _108 = dot( { _73, _74, _75 }, { 0.299000, 0.587000, 0.114000 });
-  float _109 = 1.00000 - _108;
+  float4 _64 = g_textures2D[RenderMapBilinearSampler].Sample(g_samplers[RenderMapBilinearSamplerSS], TEXCOORD0.xy);  // fix
+  float _65 = _64.x;
+  float _66 = _64.y;
+  float _67 = _64.z;
 
-  float _111 = AdditiveReducer;
-  float _112 = AdditiveReducer2;
-  float _113 = abs(_109);
-  float _114 = log2(_113);
-  float _115 = _114 * _111;
-  float _116 = _114 * _112;
-  float _117 = exp2(_115);
-  float _118 = exp2(_116);
-  float _119 = _87 * _84;
-  float _120 = _119 * _105;
-  float _121 = _120 * _117;
-  float _122 = _87 * _85;
-  float _123 = _122 * _106;
-  float _124 = _123 * _117;
-  float _125 = _87 * _86;
-  float _126 = _125 * _107;
-  float _127 = _126 * _117;
-  float _128 = _121 + _73;
-  float _129 = _124 + _74;
-  float _130 = _127 + _75;
-  float _131 = _99 * _96;
-  float _132 = _131 * _101;
-  float _133 = _132 * _118;
-  float _134 = _99 * _97;
-  float _135 = _134 * _102;
-  float _136 = _135 * _118;
-  float _137 = _99 * _98;
-  float _138 = _137 * _103;
-  float _139 = _138 * _118;
-  float _140 = _128 + _133;
-  float _141 = _129 + _136;
-  float _142 = _130 + _139;
+  float _69 = DofParams.x;
+  float _70 = DofParams.y;
+  float _71 = _23 - _70;
+  float _72 = _71 * _69;
+  float _73 = saturate(_72);
+  bool _75 = (_23 < DofParams.z);
+  float _76 = _75 ? 1.0 : 0.0;
+  float _77 = max(_76 * _73, _55);
 
-  // float _144 = BrightPassValues.z;
-  // float _145 = _66 + 0.001;
-  // float _146 = _144 / _145;
+  float _78 = max(_77, _55);
+
+  float AdaptedLuminance = g_textures2D[AdaptedLuminanceMapSampler].Sample(g_samplers[AdaptedLuminanceMapSamplerSS], float2(0, 0)).x;
+  float clampedAdaptedLuminance = clamp(AdaptedLuminance, LowerLimitAdaption, HigherLimitAdaption);
+
+  float _94 = _65 - _32;
+  float _95 = _66 - _33;
+  float _96 = _67 - _34;
+
+  float _97 = _78 * _94;
+  float _98 = _78 * _95;
+  float _99 = _78 * _96;
+  float _100 = _97 + _32;
+  float _101 = _98 + _33;
+  float _102 = _99 + _34;
+
+  float4 _110 = g_textures2D[GlowSampler].Sample(g_samplers[GlowSamplerSS], TEXCOORD2.xy);  // fix
+  float _111 = _110.x;
+  float _112 = _110.y;
+  float _113 = _110.z;
+  float _114 = _110.w;
+
+  float4 _122 = g_textures2D[GlowSampler2].Sample(g_samplers[GlowSampler2SS], TEXCOORD2.zw);  // fix
+  float _123 = _122.x;
+  float _124 = _122.y;
+  float _125 = _122.z;
+  float _126 = _122.w;
+  float _136 = 1.010 - renodx::color::luma::from::BT601(float3(_100, _101, _102));
+  float _141 = log2(abs(_136));
+  float _142 = _141 * AdditiveReducer;
+  float _143 = _141 * AdditiveReducer2;
+  float _144 = exp2(_142);
+  float _145 = exp2(_143);
+
+  float _146 = _114 * _111;
+  float _147 = _146 * GlowColor.x;
+  float _148 = _147 * _144;
+  float _149 = _114 * _112;
+  float _150 = _149 * GlowColor.y;
+  float _151 = _150 * _144;
+  float _152 = _114 * _113;
+  float _153 = _152 * GlowColor.z;
+  float _154 = _153 * _144;
+
+  float _155 = _148 + _100;
+  float _156 = _151 + _101;
+  float _157 = _154 + _102;
+
+  float _158 = _126 * _123;
+  float _159 = _158 * GlowColor2.x;
+  float _160 = _159 * _145;
+  float _161 = _126 * _124;
+  float _162 = _161 * GlowColor2.y;
+  float _163 = _162 * _145;
+  float _164 = _126 * _125;
+  float _165 = _164 * GlowColor2.z;
+  float _166 = _165 * _145;
+
+  float _167 = _155 + _160;
+  float _168 = _156 + _163;
+  float _169 = _157 + _166;
+
+  // float _171 = BrightPassValues.z;
+  // float _172 = clampedAdaptedLuminance + 0.001;
+  // float _173 = _171 / _172;
   float scale = BrightPassValues.z / (clampedAdaptedLuminance + 0.001);
-  float _147 = _140 * scale;
-  float _148 = scale * _141;
-  float _149 = scale * _142;
-  float3 color_scaled = float3(_147, _148, _149);
 
-  float _151 = White;
-  float _152 = _147 / _151;
-  float _153 = _148 / _151;
-  float _154 = _149 / _151;
-  float _155 = _152 + 1.00000;
-  float _156 = _153 + 1.00000;
-  float _157 = _154 + 1.00000;
-  float _158 = _155 * _147;
-  float _159 = _156 * _148;
-  float _160 = _157 * _149;
-  float _161 = _147 + 1.00000;
-  float _162 = _148 + 1.00000;
-  float _163 = _149 + 1.00000;
-  float _164 = _158 / _161;
-  float _165 = _159 / _162;
-  float _166 = _160 / _163;
+  float _174 = _167 * scale;
+  float _175 = _168 * scale;
+  float _176 = _169 * scale;
+
+  float3 color_scaled = float3(_174, _175, _176);
+
+  float _178 = White;
+  float _179 = _174 / _178;
+  float _180 = _175 / _178;
+  float _181 = _176 / _178;
+
+  float _182 = _179 + 1.000;
+  float _183 = _180 + 1.000;
+  float _184 = _181 + 1.000;
+
+  float _185 = _182 * _174;
+  float _186 = _183 * _175;
+  float _187 = _184 * _176;
+
+  float _188 = _174 + 1.000;
+  float _189 = _175 + 1.000;
+  float _190 = _176 + 1.000;
+
+  float _191 = _185 / _188;
+  float _192 = _186 / _189;
+  float _193 = _187 / _190;
 
 #if 1  // blended reinhard with untonemapped
-  float3 vanillaColor = float3(_164, _165, _166);
+  float3 vanillaColor = float3(_191, _192, _193);
 
   float midGrayScale = RDR1ReinhardMidgrayScale(White);
   float3 untonemapped_scaled = color_scaled * midGrayScale;
 
   float3 blendedColor = injectedData.toneMapType ? lerp(vanillaColor, untonemapped_scaled, saturate(vanillaColor)) : vanillaColor;
 
-  _164 = blendedColor.r;
-  _165 = blendedColor.g;
-  _166 = blendedColor.b;
+  _191 = blendedColor.r;
+  _192 = blendedColor.g;
+  _193 = blendedColor.b;
 #endif
 
-  // Apply Bloom
-  float _167 = _164 + _36;
-  float _168 = _165 + _37;
-  float _169 = _166 + _38;
+  // apply bloom
+  float _194 = _191 + _52;
+  float _195 = _192 + _53;
+  float _196 = _193 + _54;
 
-  // Apply Color Correction
-  float _171 = ConstAdd.x;
-  float _172 = ConstAdd.y;
-  float _173 = ConstAdd.z;
-  float _174 = _167 + _171;
-  float _175 = _168 + _172;
-  float _176 = _169 + _173;
-  float _178 = ColorCorrect.x;
-  float _179 = ColorCorrect.y;
-  float _180 = ColorCorrect.z;
-  float _181 = _178 * 2.00000;
-  float _182 = _181 * _174;
-  float _183 = _179 * 2.00000;
-  float _184 = _183 * _175;
-  float _185 = _180 * 2.00000;
-  float _186 = _185 * _176;
-  float3 colorCorrected = float3(_182, _184, _186);
+  float _198 = ConstAdd.x;
+  float _199 = ConstAdd.y;
+  float _200 = ConstAdd.z;
+
+  float _201 = _194 + _198;
+  float _202 = _195 + _199;
+  float _203 = _196 + _200;
+
+  float _205 = ColorCorrect.x * 2.000;
+  float _206 = ColorCorrect.y * 2.000;
+  float _207 = ColorCorrect.z * 2.000;
+
+  float _209 = _205 * _201;
+  float _210 = _206 * _202;
+  float _211 = _207 * _203;
+
+  float3 colorCorrected = float3(_209, _210, _211);
 
   // Apply Desaturation - lerp to luminance
   float blackAndWhite = dot(colorCorrected, LUMINANCE.xyz);
@@ -302,5 +317,6 @@ float4 main(
     outputColor = lerp((vanillaContrastedColor), upgradedColor, saturate(vanillaContrastedColor));
   }
   float3 gammaEncodedColor = renodx::color::gamma::Encode(max(0, outputColor), 2.2f);
+
   return float4(gammaEncodedColor, 1.0);
 }

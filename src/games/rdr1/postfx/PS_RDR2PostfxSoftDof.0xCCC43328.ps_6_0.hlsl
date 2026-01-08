@@ -1,5 +1,4 @@
-#include "./shared.h"
-#include "./tonemaphelper.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 

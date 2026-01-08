@@ -1,5 +1,4 @@
-#include "./shared.h"
-#include "./tonemaphelper.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 
@@ -106,54 +105,79 @@ cbuffer Globals : register(b0, space0) {
 
 SamplerState g_samplers[] : register(s0, space1);
 
-// PSRDR2Postfx()
-float4 main(float4 SV_Position: SV_POSITION,
-            float4 TEXCOORD0: TEXCOORD0,
-            float4 TEXCOORD1: TEXCOORD1,
-            float4 TEXCOORD2: TEXCOORD2)
+float4 main(
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 TEXCOORD0: TEXCOORD,
+    linear float4 TEXCOORD1: TEXCOORD1,
+    linear float4 TEXCOORD2: TEXCOORD2)
     : SV_Target {
-  // Anisotropic Sampler - DoF & Bloom
-  float4 anisotropicSampler = g_textures2D[RenderMapAnisoSampler].Sample(g_samplers[RenderMapAnisoSamplerSS], TEXCOORD0.xy);
+  float3 _12 = g_textures2D[RenderMapBilinearSampler].Sample(g_samplers[RenderMapBilinearSamplerSS], TEXCOORD0.xy).rgb;
+  float _13 = _12.r;
+  float _14 = _12.g;
+  float _15 = _12.b;
 
-  // Full Res Map Sampler - Scene Texture
-  float3 fullResMap = g_textures2D[FullResMapSampler].Sample(g_samplers[FullResMapSamplerSS], TEXCOORD0.xy).rgb;
+  float clampedAdaptedLuminance = TEXCOORD1.x;
 
-  // Depth of Field (DoF) - Combines DoFMap and fullResMap
-  float3 DoFMap = g_textures2D[RenderMapBilinearSampler].Sample(g_samplers[RenderMapBilinearSamplerSS], TEXCOORD0.xy).rgb;
-  float depthMap = g_textures2D[DepthMapSampler].Sample(g_samplers[DepthMapSamplerSS], TEXCOORD0.xy).x;
-  float nearFarClipPlane = (-(NearFarClipPlaneQ.x * NearFarClipPlaneQ.z)) / (depthMap - NearFarClipPlaneQ.z);
-  float dofDepthDiff = nearFarClipPlane - DofParams.y;
-  float dofFocusFactor = saturate(dofDepthDiff * DofParams.x);
-  bool isBlurred = (nearFarClipPlane < DofParams.z);
-  float blurBlendFactor = max(isBlurred * dofFocusFactor, saturate(anisotropicSampler.w));
-  float3 sceneColor = lerp(fullResMap, DoFMap, blurBlendFactor);
+  // float _17 = BrightPassValues.z;
+  // float _18 = clampedAdaptedLuminance + 0.001;
+  // float _19 = _17 / _18;
 
-  // Eye Adaptation + Tonemap - Reinhard Extended
-  float adaptedLuminance = g_textures2D[AdaptedLuminanceMapSampler].Sample(g_samplers[AdaptedLuminanceMapSamplerSS], float2(0.0, 0.0)).x;
-  float clampedAdaptedLuminance = clamp(adaptedLuminance, LowerLimitAdaption, HigherLimitAdaption);
-  float scale = (BrightPassValues.z / (clampedAdaptedLuminance + 0.001));
-  float3 color_scaled = sceneColor * scale;
-  float3 color_scaled_over_white_plus_one = (color_scaled / White) + 1;
-  float3 tonemappedColor = (color_scaled_over_white_plus_one * color_scaled) / (color_scaled + 1);
+  float scale = BrightPassValues.z / (clampedAdaptedLuminance + 0.001);
+
+  float _20 = scale * _13;
+  float _21 = scale * _14;
+  float _22 = scale * _15;
+
+  float3 color_scaled = float3(_20, _21, _22);
+
+  float _24 = White;
+  float _25 = _20 / _24;
+  float _26 = _21 / _24;
+  float _27 = _22 / _24;
+  float _28 = _25 + 1.00000;
+  float _29 = _26 + 1.00000;
+  float _30 = _27 + 1.00000;
+  float _31 = _28 * _20;
+  float _32 = _29 * _21;
+  float _33 = _30 * _22;
+  float _34 = _20 + 1.00000;
+  float _35 = _21 + 1.00000;
+  float _36 = _22 + 1.00000;
+  float _37 = _31 / _34;
+  float _38 = _32 / _35;
+  float _39 = _33 / _36;
 
 #if 1  // blended reinhard with untonemapped
-  float3 vanillaColor = tonemappedColor;
+  float3 vanillaColor = float3(_37, _38, _39);
 
   float midGrayScale = RDR1ReinhardMidgrayScale(White);
   float3 untonemapped_scaled = color_scaled * midGrayScale;
 
   float3 blendedColor = injectedData.toneMapType ? lerp(vanillaColor, untonemapped_scaled, saturate(vanillaColor)) : vanillaColor;
 
-  tonemappedColor = blendedColor;
+  _37 = blendedColor.r;
+  _38 = blendedColor.g;
+  _39 = blendedColor.b;
 #endif
 
-  // Apply Bloom
-  float3 bloom = anisotropicSampler.rgb * anisotropicSampler.rgb;
-  float3 scaledBloom = IntensityBloom * bloom;
-  float3 bloomedColor = tonemappedColor + scaledBloom;
-
   // Apply Color Correction
-  float3 colorCorrected = (ColorCorrect.rgb * 2.0) * (bloomedColor + ConstAdd.xyz);
+  float _41 = ConstAdd.x;
+  float _42 = ConstAdd.y;
+  float _43 = ConstAdd.z;
+  float _44 = _41 + _37;
+  float _45 = _42 + _38;
+  float _46 = _43 + _39;
+  float _48 = ColorCorrect.x;
+  float _49 = ColorCorrect.y;
+  float _50 = ColorCorrect.z;
+  float _51 = _48 * 2.00000;
+  float _52 = _51 * _44;
+  float _53 = _49 * 2.00000;
+  float _54 = _53 * _45;
+  float _55 = _50 * 2.00000;
+  float _56 = _55 * _46;
+
+  float3 colorCorrected = float3(_52, _54, _56);
 
   // Apply Desaturation - lerp to luminance
   float blackAndWhite = dot(colorCorrected, LUMINANCE.xyz);
@@ -173,15 +197,12 @@ float4 main(float4 SV_Position: SV_POSITION,
 
   if (injectedData.toneMapType) {
     float3 upgradedColor = renodx::tonemap::UpgradeToneMap(desaturatedColorHDR, desaturatedColorSDR, outputColor, 1.f);
-    
+
     // blend vanillaColor back in to fix differences in contrast
     float3 vanillaDesaturatedColor = saturate(desaturatedColorHDR);
     float3 vanillaContrastedColor = vanillaDesaturatedColor - (((vanillaDesaturatedColor * Contrast) * (vanillaDesaturatedColor - 1.0)) * (vanillaDesaturatedColor - 0.5));
     outputColor = lerp((vanillaContrastedColor), upgradedColor, saturate(vanillaContrastedColor));
   }
-
-  // allowing negatives adds no wcg while causing artifacts in pause menu
   float3 gammaEncodedColor = renodx::color::gamma::Encode(max(0, outputColor), 2.2f);
-
-  return float4(gammaEncodedColor, 1.0);
+  return float4(gammaEncodedColor, IntensityBloom);
 }

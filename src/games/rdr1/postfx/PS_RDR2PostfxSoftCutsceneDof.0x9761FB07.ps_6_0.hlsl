@@ -1,7 +1,6 @@
 // shader hash : e7d616a26f49bfe3b3f320ee074c357e
 
-#include "./shared.h"
-#include "./tonemaphelper.hlsl"
+#include "../common.hlsli"
 
 Texture2D<float4> g_textures2D[] : register(t0, space2);
 
