@@ -2714,7 +2714,6 @@ void RenderShadersPane(reshade::api::device* device, DeviceData* data) {
       if (ImGui::TableSetColumnIndex(SHADER_PANE_COLUMN_SNAPSHOT)) {  // Snapshot
         ImGui::PushID(cell_index_id++);
         if (snapshot_index != -1) {
-          MakeSelectionCurrent(selection);
           CreateDrawIndexLink(std::format("{:03}", snapshot_index), snapshot_index);
         }
         ImGui::PopID();
