@@ -24,29 +24,7 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x4ED55EA9),    // output_0x4ED55EA9.ps_4_1.hlsl
-    CustomShaderEntry(0x2FA73B71),    // output3_0x2FA73B71.ps_4_1.hlsl
-    CustomShaderEntry(0x5B5BA0D8),    // output4_0x5B5BA0D8.ps_4_1.hlsl
-    CustomShaderEntry(0x8924923D),    // outputfinalfxaa_0x8924923D.ps_4_1.hlsl
-    CustomShaderEntry(0x138D020C),    // outputfinalnoaa_0x138D020C.ps_4_1.hlsl
-    CustomShaderEntry(0x5A97F921),    // uiglobalgamma_0x5A97F921.ps_4_1.hlsl
-    CustomShaderEntry(0x1E57E26A),    // cinematiccameraoutput_0x1E57E26A.ps_4_1.hlsl
-    CustomShaderEntry(0x86E553EE),    // bokeh_0x86E553EE.ps_4_1.hlsl
-    CustomShaderEntry(0x639DE86C),    // fog_0x639DE86C.ps_4_1.hlsl
-    CustomShaderEntry(0x47B35E8E),    // godray_0x47B35E8E.ps_4_1.hlsl
-    CustomShaderEntry(0xE2469599),    // mapscanoverlay_0xE2469599.ps_4_1.hlsl
-    CustomShaderEntry(0x92703183),    // armourygrading2_0x92703183.ps_4_1.hlsl
-    CustomShaderEntry(0x8556A130),    // armourygrading_0x8556A130.ps_4_1.hlsl
-    CustomShaderEntry(0xF2AB0B3B),    // avengergrading_0xF2AB0B3B.ps_4_1.hlsl
-    CustomShaderEntry(0x761090DA),    // armourybokeh_0x761090DA.ps_4_1.hlsl
-    CustomShaderEntry(0x06BD4849),    // bloom_0x06BD4849.ps_4_1.hlsl
-    CustomShaderEntry(0x6FD45890),    // uihack_0x6FD45890.ps_4_1.hlsl
-    
-    // CustomShaderEntry(0x00000000),
-    // CustomSwapchainShader(0x00000000),
-    // BypassShaderEntry(0x00000000)
-};
+renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 

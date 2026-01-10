@@ -53,7 +53,8 @@ TextureCube<float4> s_sky1 : register(t1);
 // 3Dmigoto declarations
 #define cmp -
 
-
+// Skybox composite pass: blends two cubemaps, drives optional animated highlights,
+// and outputs both full-resolution HDR color (o0) and a downsampled copy (o1).
 void main(
   float4 v0 : COLOR0,
   float4 v1 : TEXCOORD0,
@@ -66,18 +67,21 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  // Sample both sky cubemaps and interpolate using the weights encoded in v0.
   r0.xyz = s_sky0.Sample(smp_rtlinear_s, v1.xyz).xyz;
   r1.xyz = s_sky1.Sample(smp_rtlinear_s, v2.xyz).xyz;
   r1.xyz = r1.xyz + -r0.xyz;
   r0.xyz = v0.www * r1.xyz + r0.xyz;
   r0.xyz = v0.xyz * r0.xyz;
   r0.xyz = max(float3(0,0,0), r0.xyz);
+  // Convert through log/exp to reproduce the original shader's LUT domain.
   r0.xyz = log2(r0.xyz);
   r1.xyz = float3(1,1,1) * r0.xyz;
   r1.xyz = exp2(r1.xyz);
   // Always use HDR path: keep linear HDR sky colors and a downsample for o1
   r2.xyz = float3(0.111111112,0.111111112,0.111111112) * r1.xyz;
   r3.xyz = r1.xyz;
+  // Derive normalized screen-space coordinates and per-tile parameters.
   r0.xy = v3.xy / screen_res.xy;
   r0.z = floor(shader_param_8.x);
   r0.w = frac(shader_param_8.x);
@@ -92,6 +96,7 @@ void main(
   r0.yz = cmp(float2(0.0989999995,0) < r0.wz);
   r1.z = cmp(r0.w < 0.100999996);
   r0.y = r0.y ? r1.z : 0;
+  // Determine whether the current pixel falls inside any animated highlight mask.
   if (r0.y != 0) {
     r4.y = r0.x * 0.00999999978 + -0.5;
     r4.x = 0.5;
@@ -263,6 +268,7 @@ void main(
   r1.zw = cmp(r1.zw == float2(1,1));
   r1.z = (int)r1.w | (int)r1.z;
   r0.z = r0.z ? r1.z : 0;
+  // Highlight active: compute falloff weights and mix boosted HDR outputs.
   if (r0.z != 0) {
     r1.zw = floor(shader_param_8.yz);
     r4.xyz = float3(5,5,5) * r3.xyz;
@@ -540,6 +546,7 @@ void main(
     o0.xyzw = r4.xyzw * r0.xxxx;
     o1.xyzw = r5.xyzw * r0.xxxx;
   } else {
+    // No highlight mask: pass the original HDR sky and downsampled copy through.
     o0.xyz = r3.xyz;
     o0.w = 0;
     o1.xyz = r2.xyz;

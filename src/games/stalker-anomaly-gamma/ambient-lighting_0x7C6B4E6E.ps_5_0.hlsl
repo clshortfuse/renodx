@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.4.1 on Sat Oct 18 18:49:16 2025
+// ---- Created with 3Dmigoto v1.4.1 on Wed Nov  5 00:17:48 2025
 
 cbuffer _Globals : register(b0)
 {
@@ -80,8 +80,10 @@ Texture2D<float4> s_motion_vectors : register(t7);
 
 
 // 3Dmigoto declarations
-#define cmp -
-
+inline float cmp(bool v) { return v ? -1.0f : 0.0f; }
+inline float2 cmp(bool2 v) { return float2(cmp(v.x), cmp(v.y)); }
+inline float3 cmp(bool3 v) { return float3(cmp(v.x), cmp(v.y), cmp(v.z)); }
+inline float4 cmp(bool4 v) { return float4(cmp(v.x), cmp(v.y), cmp(v.z), cmp(v.w)); }
 
 void main(
   float4 v0 : TEXCOORD0,
@@ -94,19 +96,23 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  // Sample G-buffer data: position/depth (r0) and diffuse/albedo color (r1).
   r0.xyzw = s_position.Sample(smp_nofilter_s, v0.xy).xyzw;
   r1.xyzw = s_diffuse.Sample(smp_nofilter_s, v0.xy).xyzw;
+  // Reconstruct the view-space position using jittered screen coordinates.
   r2.xy = float2(1,-1) * screen_res.xy;
   r2.xy = ssfx_jitter.xy * r2.xy;
   r2.xy = -r2.xy * float2(0.5,0.5) + v2.xy;
   r2.xy = r2.xy * pos_decompression_params.zw + -pos_decompression_params.xy;
   r2.xy = r2.xy * r0.zz;
+  // Decode the packed normal from s_position.xy via polar encoding.
   r0.x = 3.14159012 * r0.x;
   sincos(r0.x, r0.x, r3.x);
   r3.y = -r0.y * r0.y + 1;
   r3.y = sqrt(r3.y);
   r4.x = r3.x * r3.y;
   r4.y = r3.y * r0.x;
+  // Extract material classification bits from s_position.w.
   if (4 == 0) r3.x = 0; else if (4+21 < 32) {   r3.x = (uint)r0.w << (32-(4 + 21)); r3.x = (uint)r3.x >> (32-4);  } else r3.x = (uint)r0.w >> 21;
   if (8 == 0) r3.y = 0; else if (8+13 < 32) {   r3.y = (uint)r0.w << (32-(8 + 13)); r3.y = (uint)r3.y >> (32-8);  } else r3.y = (uint)r0.w >> 13;
   r0.x = (int)r0.w & 0x80000000;
@@ -115,18 +121,21 @@ void main(
   r0.x = (uint)r0.x;
   r0.w = 0.0430107526 * r0.x;
   r3.x = (uint)r3.y;
+  // Fetch light accumulation buffer and linearize diffuse color.
   r5.xyzw = s_accumulator.Sample(smp_nofilter_s, v0.xy).xyzw;
   r3.yzw = max(float3(0,0,0), r1.xyz);
   r3.yzw = log2(r3.yzw);
   r3.yzw = float3(2.20000005,2.20000005,2.20000005) * r3.yzw;
   r3.yzw = exp2(r3.yzw);
   r3.yzw = r5.www * r3.yzw + r5.xyz;
+  // HUD mask from motion vectors.z and env intensity factors.
   r4.w = s_motion_vectors.Sample(smp_linear_s, v0.xy).z;
   r5.x = saturate(dot(env_color.xyz, float3(0.150000006,0.150000006,0.150000006)));
   r5.x = 1 + -r5.x;
   r5.x = ssfx_hud_hemi.x * r5.x;
   r5.x = r5.x * r4.w;
   r3.x = r3.x * 0.00392464688 + r5.x;
+  // Identify HUD pixels / materials and derive weights for later blending.
   r5.xy = r0.xx * float2(0.0430107526,0.0430107526) + float2(-0.949999988,-0.150000006);
   r5.xy = cmp(float2(0.0399999991,0.0399999991) >= abs(r5.xy));
   r0.x = r5.x ? 0 : r0.w;
@@ -138,6 +147,7 @@ void main(
   r0.x = max(0, r0.x);
   r0.x = cmp(0 < r0.x);
   r0.x = r0.x ? 1.000000 : 0;
+  // Compute material-dependent highlights and color correction terms.
   r5.x = exp2(r5.x);
   r5.x = -3 * r5.x;
   r5.x = exp2(r5.x);
@@ -174,7 +184,7 @@ void main(
   r6.xyz = exp2(r6.xyz);
   r6.xyz = r6.xyz + -r5.xzw;
   r6.xyz = r0.xxx * r6.xyz + r5.xzw;
-  r6.xyz = max(float3(0,0,0), float3(1.25,1.25,1.25) * r6.xyz);
+  r6.xyz = saturate(float3(1.25,1.25,1.25) * r6.xyz);
   r0.w = min(1, r0.w);
   r0.w = r0.w * 2 + -1;
   r0.w = r7.w * 2 + r0.w;
@@ -183,7 +193,7 @@ void main(
   r0.w = exp2(r0.w);
   r6.w = 0.0399999991 * r0.w;
   r5.xzw = -r0.www * float3(0.0399999991,0.0399999991,0.0399999991) + r5.xzw;
-  r5.xzw = max(float3(0,0,0), r0.xxx * r5.xzw + r6.www);
+  r5.xzw = saturate(r0.xxx * r5.xzw + r6.www);
   r0.x = -r0.x * 0.25 + 1;
   r0.w = log2(r1.w);
   r0.x = r0.x * r0.w;
@@ -198,6 +208,7 @@ void main(
   r0.w = r0.x * r0.x;
   r1.w = -r0.x * r0.x + 1;
   r6.w = -r1.w * 6 + 6;
+  // Prepare normalized normal vectors for lighting calculations.
   r4.z = r0.y;
   r0.y = dot(r4.xyz, r4.xyz);
   r0.y = rsqrt(r0.y);
@@ -212,6 +223,7 @@ void main(
   r8.x = dot(m_inv_V._m00_m01_m02, r4.xyz);
   r8.y = dot(m_inv_V._m10_m11_m12, r4.xyz);
   r8.z = dot(m_inv_V._m20_m21_m22, r4.xyz);
+  // Build reflection vectors for environment map sampling.
   r0.z = max(abs(r7.y), abs(r7.z));
   r0.z = max(abs(r7.x), r0.z);
   r9.xyz = r7.xyz / r0.zzz;
@@ -237,6 +249,7 @@ void main(
   r0.x = r1.w * r0.x;
   r10.xyz = r10.xwz * r0.zzz + -r9.xyz;
   r10.xyz = r0.xxx * r10.xyz + r9.xyz;
+  // Weighted environment map lookup (specular + diffuse) blending two cubemaps.
   r11.xyz = r7.xyz * r7.xyz;
   r9.w = 0.00100000005;
   r12.xyz = env_s0.SampleLevel(smp_base_s, r9.xww, 6).xyz;
@@ -269,8 +282,10 @@ void main(
   r10.xyz = log2(r10.xyz);
   r10.xyz = float3(2.20000005,2.20000005,2.20000005) * r10.xyz;
   r10.xyz = exp2(r10.xyz);
+  // Apply HUD exposure scaling to environment result.
   r0.x = r5.y ? 0.25 : 1;
   r10.xyz = r10.xyz * r0.xxx;
+  // Compute Fresnel and BRDF terms for ambient contribution.
   r0.x = dot(r7.xyz, -r8.xyz);
   r0.z = max(9.99999975e-06, r0.x);
   r1.w = 1 + -r0.z;
@@ -284,6 +299,7 @@ void main(
   r0.z = r5.y * r0.z + 1.55754006;
   r0.z = r0.z + -r1.w;
   r0.z = r0.w * r0.z + r1.w;
+  // Combine environment diffuse/specular with material color response.
   r6.xyz = r9.xyz * r6.xyz;
   r7.xyz = float3(50,50,50) * r5.xzw;
   r7.xyz = min(float3(1,1,1), r7.xyz);
@@ -300,6 +316,7 @@ void main(
   r0.x = r0.x * r0.x;
   r5.xyz = r5.xyz * r0.xxx;
   r0.xzw = r0.zzz * r6.xyz + r5.xyz;
+  // Sample screen-space indirect lighting and apply tuning parameters.
   r5.xy = v0.xy / ssfx_il_setup.xx;
   r5.xyz = ssfx_il.Sample(smp_linear_s, r5.xy).xyz;
   r6.xyz = float3(1,1,1) + r5.xyz;
@@ -315,18 +332,22 @@ void main(
   r6.xyz = r5.xyz * r1.www + float3(-1,-1,-1);
   r5.xyz = r5.xyz * r6.xyz + float3(1,1,1);
   r0.xzw = r5.xyz * r0.xzw;
+  // Multiply by ambient occlusion and add diffuse base color.
   r1.w = ssfx_ao.Sample(smp_linear_s, v0.xy).w;
-  r0.xzw = max(float3(0,0,0), r1.www * r0.xzw);
+  r0.xzw = r1.www * r0.xzw;
   r0.xzw = r3.yzw + r0.xzw;
+  // Apply final gamma compression before post fog/grade.
   r0.xzw = max(float3(0,0,0), r0.xzw);
   r0.xzw = log2(r0.xzw);
   r0.xzw = float3(0.454545438,0.454545438,0.454545438) * r0.xzw;
   r0.xzw = exp2(r0.xzw);
+  // Prepare world position for fog calculations.
   r2.w = 1;
   r1.w = dot(m_inv_V._m10_m11_m12_m13, r2.xyzw);
   r2.x = dot(Ldynamic_dir.xyzw, Ldynamic_dir.xyzw);
   r2.x = rsqrt(r2.x);
   r2.xyz = Ldynamic_dir.xyz * r2.xxx;
+  // Dynamic light influence and fog application.
   r2.x = saturate(dot(r2.xyz, -r4.xyz));
   r2.yzw = Ldynamic_color.xyz + -fog_color.xyz;
   r2.xyz = r2.xxx * r2.yzw;
@@ -347,8 +368,10 @@ void main(
   r0.xzw = r2.www * r2.xyz + r0.xzw;
   r1.w = r0.y * r0.y;
   r2.w = r1.w * r0.y;
+  // The following UI debug path is disabled (r0.y is forced to 0).
   r0.y = 0;
   if (r0.y != 0) {
+    // UI overlay / HDR debug output (unreachable with r0.y == 0).
     r0.y = frac(shader_param_8.x);
     r1.w = -0.5 + v0.x;
     r3.x = screen_res.x / screen_res.y;
@@ -374,9 +397,8 @@ void main(
     r6.xyz = log2(r6.xyz);
     r7.xyz = float3(0.454545438,0.454545438,0.454545438) * r6.xyz;
     r7.xyz = exp2(r7.xyz);
-  // Force HDR path
-  r4.z = 1;
-  if (r4.z != 0) {
+    r4.z = cmp(hdr10_parameters1.z != 0.000000);
+    if (r4.z != 0) {
       r8.xyz = float3(0.111111112,0.111111112,0.111111112) * r7.xyz;
       r9.xyz = r7.xyz;
     } else {
@@ -398,14 +420,15 @@ void main(
     r6.z = 1.29999995 * r3.y;
     r6.w = dot(r1.xyz, float3(0.298999995,0.587000012,0.114));
     r5.w = 4;
-  r1.xyz = max(float3(0,0,0), r6.yzw * r5.wxx);
+    r1.xyz = saturate(r6.yzw * r5.wxx);
     r2.xyz = r6.xzw * r5.wxx;
     r3.y = r5.y * 0.00999999978 + 0.0199999996;
     if (r3.x != 0) {
       r3.x = frac(shader_param_7.y);
       r5.y = r1.w * 0.00999999978 + -0.5;
-      r5.x = 0.5;
+      o1.xyzw = r3.xyzw;
       r3.zw = -r5.xy + r4.xy;
+      // Standard HDR output path: convert composite color back to HDR buffers.
       r3.z = dot(r3.zw, r3.zw);
       r3.z = sqrt(r3.z);
       r3.x = r3.z + -r3.x;
@@ -419,9 +442,11 @@ void main(
       r3.x = 1 + -r3.x;
     } else {
       r3.z = cmp(0.109000005 < r0.y);
+        // Output for HDR10 tone curve path.
       r3.w = cmp(r0.y < 0.111000001);
       r3.z = r3.w ? r3.z : 0;
       if (r3.z != 0) {
+        // Output for SDR tone curve path.
         r3.z = frac(shader_param_7.y);
         r5.y = r1.w * 0.00999999978 + -0.5;
         r5.x = 0.25;
@@ -542,40 +567,27 @@ void main(
         }
       }
     }
-  r4.xyzw = max(float4(0,0,0,0), r2.xyzw);
+    r4.xyzw = saturate(r2.xyzw);
     r2.w = saturate(r2.w);
     o1.xyz = r4.xyz * r3.xxx;
     o0.xyz = r3.xxx * r1.xyz;
     o0.w = r2.w;
     o1.w = r4.w;
   } else {
-    r0.xyz = max(float3(0,0,0), r0.xzw);
-    r0.xyz = log2(r0.xyz);
+    float3 color_linear = max(float3(0,0,0), r0.xzw);
+    r0.xyz = log2(color_linear);
     r0.xyz = float3(2.20000005,2.20000005,2.20000005) * r0.xyz;
     r0.xyz = exp2(r0.xyz);
     r0.w = log2(v0.w);
     r0.w = 2.20000005 * r0.w;
     r0.w = exp2(r0.w);
-    r0.xyz = r0.xyz * r0.www;
-    r0.xyz = log2(r0.xyz);
+    float3 color_hdr = r0.xyz * r0.www;
+    r0.xyz = log2(color_hdr);
     r1.xyz = float3(0.454545438,0.454545438,0.454545438) * r0.xyz;
     r1.xyz = exp2(r1.xyz);
-  // Force HDR path
-  r0.w = 1;
-  if (r0.w != 0) {
-      r3.xyz = float3(0.111111112,0.111111112,0.111111112) * r1.xyz;
-      r2.xyz = r1.xyz;
-    } else {
-      r0.xyz = exp2(r0.xyz);
-      r4.xyz = float3(1,1,1) + r0.xyz;
-      r0.xyz = r0.xyz / r4.xyz;
-      r0.xyz = float3(1.08928573,1.08928573,1.08928573) * r0.xyz;
-      r0.xyz = log2(r0.xyz);
-      r0.xyz = float3(0.454545438,0.454545438,0.454545438) * r0.xyz;
-      r0.xyz = exp2(r0.xyz);
-      r2.xyz = min(float3(1,1,1), r0.xyz);
-      r3.xyz = float3(0.111111112,0.111111112,0.111111112) * r1.xyz;
-    }
+    float3 color_sdr = saturate(r1.xyz);
+    r3.xyz = float3(0.111111112,0.111111112,0.111111112) * color_sdr;
+    r2.xyz = color_hdr;
     o0.xyzw = r2.xyzw;
     r3.w = r2.w;
     o1.xyzw = r3.xyzw;

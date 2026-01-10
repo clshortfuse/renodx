@@ -1,0 +1,183 @@
+/**
+ * @ Version: SCREEN SPACE SHADERS - UPDATE 21
+ * @ Description: IL implementation
+ * @ Modified time: 2025-02-07 19:18
+ * @ Author: https://www.moddb.com/members/ascii1457
+ * @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+ */
+
+#ifndef SSFX_READY
+	#include "screenspace_common.h"
+#endif
+
+#include "settings_screenspace_IL.h"
+
+// Internal values
+uniform float4 ao_setup; // Res, Global Int, Vibrance, Blur
+uniform float4 ssfx_il_setup2; // Distance, HUD, Flora, -
+
+float4x4 m_current; // Current projection matrix
+float4x4 m_previous; // Previous projection matrix
+
+// Textures
+Texture2D ssfx_ao;
+Texture2D s_motion_vectors;
+Texture2D s_prev_pos;
+Texture2D jitter0;
+
+sampler smp_jitter;
+
+float4 main(p_screen I) : SV_Target
+{
+	// Scale TexCoor
+	float2 tc = I.tc0.xy * ao_setup.x;
+	float2 Pos2D = I.hpos.xy * ao_setup.x;
+
+	// Sample buffers
+#ifndef USE_MSAA
+	float4 Pos = s_position.Sample( smp_nofilter, tc );
+#else
+	float4 Pos = s_position.Load( int3( Pos2D, 0 ), 0 );
+#endif
+
+	// Reconstruct Position, Normal and Material
+	float3 P 	= float3( Pos.z * ( Pos2D * pos_decompression_params.zw - pos_decompression_params.xy ), Pos.z );
+	float3 N 	= gbuf_unpack_normal( Pos.xy );
+	float mtl	= gbuf_unpack_mtl( Pos.w );
+
+	// Rendering AO till G_SSDO_RENDER_DIST
+	if (P.z >= ssfx_il_setup2.x || P.z <= SKY_EPS)
+		return float4(0,0,0,1);
+
+	// Ao Noise
+	float3 ao_noise = jitter0.Sample(smp_jitter, (tc + timers.xx) * 100).xyz;
+
+	// MAT_FLORA from current pixel?
+	bool mat_flora = abs(mtl - MAT_FLORA) <= 0.04f;
+
+	// If MAT_FLORA we use a fake normal to align the hemisphere
+	N.xyz = mat_flora ? mul(m_V, float3(0.0f, 0.25f, 0.0f)) : N.xyz;
+
+	// [ xy = MV | z = HUD Mask ] The s_motion_vectors is declared on "screenspace_shadows.h"
+	float3 Motion_Vectors = s_motion_vectors.Sample(smp_nofilter, tc);
+	
+	// Var to accumulate the IL
+	float3 il = 0;
+	float4 gain = 1.0f;
+	float Seed = 0.04f;
+
+	// Sample radius
+	float radius = 3.0f;
+
+	[unroll (SSFX_IL_QUALITY)]
+	for (int i = 0; i < SSFX_IL_QUALITY; i++)
+	{
+		ao_noise.xyz = hash33(float3(tc.x + Seed, ao_noise.x + Seed, ao_noise.z - Seed));
+		ao_noise.xyz = ao_noise.xyz * 2 - 1;
+		Seed += 0.1031f;
+
+		// Use surface normal and add the hemisphere distribution
+		float3 sample_rays = reflect(ssfx_hemisphere[i], ao_noise * 1.5f) + N.xyz;
+
+		// Sample position
+		float3 occ_pos = P.xyz + sample_rays * radius;
+		
+		// Sample position to UV
+		float2 occ_pos_uv = SSFX_view_to_uv(occ_pos);
+
+		// Process valid UV coor
+		if (SSFX_is_valid_uv(occ_pos_uv))
+		{
+			// Sample depth buffer
+			float4 sample_pos = SSFX_get_position(occ_pos_uv, 0);
+			
+			// Difference
+			float3 diff = float3( sample_pos.z * ( Pos2D * pos_decompression_params.zw - pos_decompression_params.xy ), sample_pos.z ) - occ_pos;
+
+			// Distance
+			float Dist = length(diff);
+
+			// Intensity. Distance Falloff
+			float il_intensity = 1.0f - saturate(Dist * 0.066f);
+
+			// Use normal to adjust Intensity.
+			il_intensity *= max(0.0, dot(gbuf_unpack_normal( sample_pos.xy ), normalize(diff)) + 0.25f);
+
+			// Adjust intensity of Flora
+			bool IsFlora = (abs(sample_pos.w - MAT_FLORA) <= 0.04f) || mat_flora;
+			il_intensity *= 1.0f - saturate(IsFlora - ssfx_il_setup2.z);
+
+			// Sample light accumulator
+	#ifndef USE_MSAA
+			float3 L = saturate(s_accumulator.Sample( smp_nofilter, occ_pos_uv ) * 10);
+	#else
+			float3 L = saturate(s_accumulator.Load( int3( occ_pos_uv * screen_res.xy, 0 ), 0 ) * 10);
+	#endif
+
+			// Accumulate IL
+			il += L.rgb * gain.rgb * il_intensity * 300;
+			gain.rgb *= 1.0f / (1.0 + il.rgb);
+		}
+	}
+
+	// Normalize IL
+	il /= SSFX_IL_QUALITY;
+	
+	// Fadeout using ssfx_il_setup2.x
+	float Fadeoff = smoothstep(ssfx_il_setup2.x * 0.7f, ssfx_il_setup2.x, P.z);
+
+	il *= 1.0f - Fadeoff;
+
+// -------------
+/*
+	// Position
+	float4 P4 = float4(P.xyz, 1.0);
+
+	// Get current
+	float4 p_current = mul(m_current, P4);
+	float2 current = p_current.xy / p_current.w;
+	
+	// Get previous
+	float4 p_previous = mul(m_previous, P4);
+	float2 previous = p_previous.xy / p_previous.w;
+
+	// Reprojection UV
+	float2 uv_rp = current.xy - previous.xy;
+	uv_rp = float2(uv_rp.x, -uv_rp.y) * 0.5f;
+*/
+	// Velocity
+	float vel = length(Motion_Vectors.xy);
+
+	// HUD Mask
+	if (Motion_Vectors.z > 0)
+	{
+		// Use HUD motion vectors for reprojection
+		//uv_rp = float2(HudMask.y, -HudMask.z) * 0.5f;
+		vel = 0;
+	}
+
+	// Sample previous frame + Reprojection UV
+	float4 prev = ssfx_ao.Sample(smp_linear, (tc - Motion_Vectors.xy) / ao_setup.x);
+
+	// Prev Position + Reprojection UV
+	float4 prev_P = s_prev_pos.Sample( smp_nofilter, (tc - Motion_Vectors.xy) );
+
+	// Offscreen?
+	int outoffsrc = any((tc - Motion_Vectors.xy) < 0) + any((tc - Motion_Vectors.xy) > 1);
+
+	// Disocclusion
+	float docc = abs(1.0f - P.z / prev_P.z);
+
+	// 0 Current frame ~ 1 Prev frame
+	float weight = saturate( 0.97f - vel - outoffsrc );
+
+	// Small IL decay
+	il = saturate(il - 0.01f);
+
+	// Mix previous frames
+	il = lerp(il, prev.rgb, saturate(weight - docc * 0.5f));
+	
+// -------------
+
+	return float4(il.rgb, 1.0f);
+}

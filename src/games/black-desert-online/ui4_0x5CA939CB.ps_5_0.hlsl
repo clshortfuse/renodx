@@ -175,6 +175,13 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(0.454545468,0.454545468,0.454545468) * r0.xyz;
   r0.xyz = exp2(r0.xyz);
+  
+  // Reduce saturation by 20% when using RenoDRT
+  if (RENODX_TONE_MAP_TYPE != 0) {
+    float luma = dot(r0.xyz, float3(0.299, 0.587, 0.114));
+    r0.xyz = lerp(luma.xxx, r0.xyz, 0.80);
+  }
+  
   if (isDepthCheck != 0) {
     r1.xy = v0.xy * invScreenSize.xy + invScreenSize.zw;
     r1.xy = fDynamicResolution * r1.xy;

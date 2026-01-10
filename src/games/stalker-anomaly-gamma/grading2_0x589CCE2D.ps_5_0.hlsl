@@ -130,6 +130,7 @@ void main(
   r0.z = -r0.w * 289 + r0.z;
   r0.w = r0.z * r0.x;
   r0.w = 0.020166669 * r0.w;
+  r0.w = 0;  // Disable jitter offset for film grain
   r3.y = r2.x;
   r2.xy = r0.ww * r3.xy + v0.xy;
   r2.xyz = s_image.Sample(smp_linear_s, r2.xy).xyz;
@@ -164,6 +165,7 @@ void main(
   r0.z = -r0.w * 289 + r0.z;
   r0.w = r0.z * r0.x;
   r0.w = 0.0806666762 * r0.w;
+  r0.w = 0;  // Disable jitter offset for film grain
   r3.zw = r0.ww * r3.xy + v0.xy;
   r4.xyz = s_image.Sample(smp_linear_s, r3.zw).xyz;
   r6.xyz = -r4.xyz + r2.xyz;
@@ -196,6 +198,7 @@ void main(
   r0.z = -r0.w * 289 + r0.z;
   r0.x = r0.z * r0.x;
   r0.x = 0.181500003 * r0.x;
+  r0.x = 0;  // Disable jitter offset for film grain
   r0.zw = r0.xx * r3.xy + v0.xy;
   r4.xyz = s_image.Sample(smp_linear_s, r0.zw).xyz;
   r6.xyz = -r4.xyz + r2.xyz;

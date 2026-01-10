@@ -32,7 +32,8 @@
 // #define RENODX_SWAP_CHAIN_CLAMP_NITS           RENODX_PEAK_WHITE_NITS
 // #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_UNKNOWN
 // #define RENODX_SWAP_CHAIN_ENCODING             ENCODING_SCRGB
-// #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
+#define RENODX_SWAP_CHAIN_CLAMP_NITS              10000.f
+#define RENODX_RENO_DRT_TONE_MAP_METHOD           renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -109,11 +110,10 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
 // #define RENODX_SWAP_CHAIN_SCALING_NITS         shader_injection.swap_chain_scaling_nits
 // #define RENODX_SWAP_CHAIN_CLAMP_NITS           shader_injection.swap_chain_clamp_nits
-#define RENODX_SWAP_CHAIN_CLAMP_NITS         10000.f
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    shader_injection.swap_chain_clamp_color_space
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
-#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+//#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
 #include "../../shaders/renodx.hlsl"
 
