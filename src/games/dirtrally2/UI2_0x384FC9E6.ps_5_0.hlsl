@@ -53,7 +53,7 @@ void main(
   // r0.xyz = colorParams.xxx * r0.xyz;
   // r0.xyz = float3(0.454545468,0.454545468,0.454545468) * r0.xyz;
   // o0.xyz = exp2(r0.xyz);
-  r0.rgb = renodx::color::gamma::EncodeSafe(r0.rgb, 1.f);
+  // r0.rgb = renodx::color::gamma::EncodeSafe(r0.rgb, 1.f);
   o0.rgb = max(0, r0.rgb);
   return;
 }

@@ -19,9 +19,13 @@ struct ShaderInjectData {
   float colorGradeContrast;
   float colorGradeSaturation;
   float colorGradeBlowout;
+  float colorGradeDechroma;
   float colorGradeFlare;
   float colorGradeStrength;
 };
+
+#define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION 1
+#define RENODX_COLOR_GRADE_SHADOWS_VERSION    1
 
 #ifndef __cplusplus
 cbuffer injectedBuffer : register(b0, space50) {

@@ -441,15 +441,15 @@ float3 LinearOutput(float3 color, Config lut_config) {
   } else if (lut_config.type_output == config::type::GAMMA_2_2) {
     color = renodx::color::gamma::DecodeSafe(color);
   } else if (lut_config.type_output == config::type::GAMMA_2_0) {
-    color = renodx::math::Sign(color) * color * color;
+    color = renodx::math::CopySign(color * color, color);
   } else if (lut_config.type_output == config::type::ARRI_C800) {
-    color = renodx::math::Sign(color) * renodx::color::arri::logc::c800::Decode(abs(color));
+    color = renodx::math::CopySign(renodx::color::arri::logc::c800::Decode(abs(color)), color);
   } else if (lut_config.type_output == config::type::ARRI_C1000) {
-    color = renodx::math::Sign(color) * renodx::color::arri::logc::c1000::Decode(abs(color));
+    color = renodx::math::CopySign(renodx::color::arri::logc::c1000::Decode(abs(color)), color);
   } else if (lut_config.type_output == config::type::ARRI_C800_NO_CUT) {
-    color = renodx::math::Sign(color) * renodx::color::arri::logc::c800::Decode(abs(color), false);
+    color = renodx::math::CopySign(renodx::color::arri::logc::c800::Decode(abs(color), false), color);
   } else if (lut_config.type_output == config::type::ARRI_C1000_NO_CUT) {
-    color = renodx::math::Sign(color) * renodx::color::arri::logc::c1000::Decode(abs(color), false);
+    color = renodx::math::CopySign(renodx::color::arri::logc::c1000::Decode(abs(color), false), color);
   }
   return color;
 }

@@ -1,5 +1,34 @@
 #include "./shared.h"
 
+float Highlights(float x, float highlights, float mid_gray) {
+  if (highlights == 1.f) return x;
+
+  if (highlights > 1.f) {
+    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 5.f)));
+  } else {  // highlights < 1.f
+    x /= mid_gray;
+    return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
+  }
+}
+
+float Shadows(float x, float shadows, float mid_gray) {
+  if (shadows == 1.f) return x;
+
+  const float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
+  const float base_term = x * mid_gray;
+  const float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
+
+  if (shadows > 1.f) {
+    float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
+    float reference = x * (1.f + base_scale);
+    return max(x, x + (raised - reference));
+  } else {  // shadows < 1.f
+    float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
+    float reference = x * (1.f - base_scale);
+    return clamp(x + (lowered - reference), 0.f, x);
+  }
+}
+
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
     return untonemapped;
@@ -8,25 +37,19 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
 
   color *= config.exposure;
 
-  const float y_normalized = y / mid_gray;
-  const float highlight_mask = 1.f / mid_gray;
-  float shadow_mask = 1.f;
-  if (config.shadows < 1.f) shadow_mask = mid_gray;
-
   // contrast & flare
+  const float y_normalized = y / mid_gray;
   float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
   float exponent = config.contrast * flare;
-  const float y_contrasted = pow(y_normalized, exponent);
+  const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
 
   // highlights
-  float y_highlighted = pow(y_contrasted, config.highlights);
-  y_highlighted = lerp(y_contrasted, y_highlighted, saturate(y_contrasted / highlight_mask));
+  float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
 
   // shadows
-  float y_shadowed = pow(y_highlighted, -1.f * (config.shadows - 2.f));
-  y_shadowed = lerp(y_shadowed, y_highlighted, saturate(y_highlighted / shadow_mask));
+  float y_shadowed = Shadows(y_highlighted, config.shadows, mid_gray);
 
-  const float y_final = y_shadowed * mid_gray;
+  const float y_final = y_shadowed;
 
   color = renodx::color::correct::Luminance(color, y, y_final);
 
@@ -78,15 +101,8 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
 }
 
 float3 GammaCorrectHuePreserving(float3 incorrect_color) {
-  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
-
-  const float y_in = renodx::color::y::from::BT709(incorrect_color);
-  const float y_out = max(0, renodx::color::correct::Gamma(y_in));
-
-  float3 lum = incorrect_color * (y_in > 0 ? y_out / y_in : 0.f);
-
-  // use chrominance from per channel gamma correction
-  float3 result = renodx::color::correct::ChrominanceOKLab(lum, ch, 1.f, 1.f);
+  float3 corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
+  float3 result = renodx::color::correct::Hue(corrected_color, incorrect_color);
 
   return result;
 }
@@ -161,9 +177,7 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
         renodx::color::correct::Chrominance(
             renodx::color::bt709::from::AP1(luminance_tonemapped_ap1),
             renodx::color::bt709::from::AP1(channel_tonemapped_ap1),
-            1.f,   // strength
-            0.f,   // clamp chrominance loss
-            0u));  // hue processor
+            1.f));
 
     // blend luminance and channel
     float lum = renodx::color::y::from::AP1(luminance_tonemapped_ap1);
@@ -204,24 +218,41 @@ float4 GenerateOutput(float3 untonemapped_ap1) {
 bool HandleUICompositing(float4 ui_color, float3 scene_color, inout float4 output_color) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
 
+  ui_color.rgb = max(0, ui_color.rgb);
+  const float ui_alpha = saturate(ui_color.a);
+  const float one_minus_ui_alpha = 1.0 - ui_alpha;
+
   // linearize and normalize brightness
   float3 ui_color_linear;
   if (RENODX_GAMMA_CORRECTION != 0.f) {  // 2.2
-    ui_color_linear = renodx::color::gamma::Decode(max(0, ui_color.rgb));
+    ui_color_linear = renodx::color::gamma::Decode(ui_color.rgb);
   } else {  // sRGB
-    ui_color_linear = renodx::color::srgb::Decode(max(0, ui_color.rgb));
+    ui_color_linear = renodx::color::srgb::Decode(ui_color.rgb);
   }
-  ui_color_linear = renodx::color::bt2020::from::BT709(ui_color_linear) * RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-  float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color, RENODX_DIFFUSE_WHITE_NITS);
+  ui_color_linear = renodx::color::bt2020::from::BT709(ui_color_linear);
+  float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color, RENODX_GRAPHICS_WHITE_NITS);
+
+#if 1  // apply Reinhard under UI
+  if (TONEMAP_UNDER_UI != 0.f) {
+    float y_in = renodx::color::y::from::BT2020(scene_color_linear);
+
+    const float peak = 1.f;  // UI white
+    float y_tonemapped = lerp(y_in, renodx::tonemap::Reinhard(y_in, peak), saturate(y_in));
+
+    float y_out = lerp(y_in, y_tonemapped, ui_alpha);
+
+    scene_color_linear = renodx::color::correct::Luminance(scene_color_linear, y_in, y_out);
+  }
+#endif
 
   // blend in gamma
   float3 ui_color_gamma = renodx::color::gamma::EncodeSafe(ui_color_linear);
   float3 scene_color_gamma = renodx::color::gamma::EncodeSafe(scene_color_linear);
-  float3 composited_color_gamma = lerp(scene_color_gamma, ui_color_gamma, ui_color.a);
+  float3 composited_color_gamma = ui_color_gamma.rgb + (scene_color_gamma * one_minus_ui_alpha);
 
   // linearize and scale up brightness
   float3 composited_color_linear = renodx::color::gamma::DecodeSafe(composited_color_gamma);
-  float3 pq_color = renodx::color::pq::EncodeSafe(composited_color_linear, RENODX_DIFFUSE_WHITE_NITS);
+  float3 pq_color = renodx::color::pq::EncodeSafe(composited_color_linear, RENODX_GRAPHICS_WHITE_NITS);
   output_color = float4(pq_color, 1.f);
 
   return true;

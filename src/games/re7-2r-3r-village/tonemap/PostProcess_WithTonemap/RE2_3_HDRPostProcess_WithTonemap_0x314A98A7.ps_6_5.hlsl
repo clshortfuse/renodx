@@ -110,10 +110,10 @@ void frag_main() {
   TonemapParam_m0[1u] = float4(maxNit, linearStart, displayMaxNitSubContrastFactor, contrastFactor);
   TonemapParam_m0[2u] = float4(mulLinearStartContrastFactor, invLinearBegin, madLinearStartContrastFactor, 0.0);
 #if 1
-  TonemapParam_m0[0u].w = 1.f;  // toe
+  TonemapParam_m0[0u].w = GetToneMapToe(toe);  // toe
 #endif
-  TonemapParam_m0[1u].x = 125;  // maxNit
-  TonemapParam_m0[1u].y = 125;  // linearStart
+  TonemapParam_m0[1u].x = GetToneMapMaxNitAndLinearStart();  // maxNit
+  TonemapParam_m0[1u].y = GetToneMapMaxNitAndLinearStart();  // linearStart
 
   // declare lut config for use with lut black correction
   renodx::lut::Config lut_config = renodx::lut::config::Create(
@@ -843,6 +843,10 @@ void frag_main() {
   SV_Target.y = _1820;
   SV_Target.z = _1822;
   SV_Target.w = 0.0f;
+
+#if 1
+  SV_Target.rgb = ApplyPreDisplayMap(SV_Target.rgb);
+#endif
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {

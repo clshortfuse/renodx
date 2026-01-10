@@ -28,7 +28,7 @@ void main(
   r1.xyzw = t0.Sample(s0_s, v1.xy).xyzw;
 
   if (CUSTOM_CLAMP_LENS_FLARE) {
-    r1.rgb = saturate(r1.rgb);
+    r1.rgb = renodx::tonemap::ExponentialRollOff(r1.rgb, 1.f, 4.f);
   }
 
   r0.xyz = r1.xyz * r0.xxx;

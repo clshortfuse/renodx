@@ -58,6 +58,9 @@ struct ShaderInjectData {
 #define CUSTOM_SCENE_GRADING_SATURATION 1.f
 #define CUSTOM_SCENE_GRADING_STRENGTH   injectedData.sceneGradingStrength
 
+#define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION 1
+#define RENODX_COLOR_GRADE_SHADOWS_VERSION    1
+
 #ifndef __cplusplus
 cbuffer injectedBuffer : register(b14, space0) {
   ShaderInjectData injectedData : packoffset(c0);

@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "title": "RenoDX Mod Metadata",
+  "description": "Schema for per-game metadata used by RenoDX tooling and the index page.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for validation."
+    },
+    "id": {
+      "type": "string",
+      "description": "Machine-safe ID for the game/mod (folder name)."
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-friendly game title."
+    },
+    "summary": {
+      "type": "string",
+      "description": "One-sentence description of what the mod does (HDR, tone mapping, fixes)."
+    },
+    "tags": {
+      "type": "array",
+      "description": "Short labels for surfacing in the index (e.g., HDR, DLSS).",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "stable",
+        "beta",
+        "experimental"
+      ],
+      "description": "Release channel indicator for the mod."
+    },
+    "urls": {
+      "type": "array",
+      "description": "List of relevant URLs with a descriptive tag (free-form kind, e.g., homepage/support/discord/donate/etc).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "kind"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Free-form label for this URL"
+          }
+        }
+      },
+      "uniqueItems": true
+    },
+    "images": {
+      "type": "array",
+      "description": "Screenshots or hero images (URLs/paths) for the index page.",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "notes": {
+      "type": "array",
+      "description": "Collection or notes/requirements/known issues.",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "version": {
+      "type": "string",
+      "description": "Semver-style version of the mod metadata.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9.-]+)?$"
+    },
+    "deploy": {
+      "type": "object",
+      "description": "Machine-readable deployment and installer metadata.",
+      "additionalProperties": false,
+      "properties": {
+        "reshade_version_range": {
+          "type": "string",
+          "description": "Semver-style range (npm-style) for supported ReShade versions (e.g., >=5.9.0 <6.0.0).",
+          "pattern": "^[\\^~><=|*0-9A-Za-z.+-].*$"
+        },
+        "reshade_preferred_name": {
+          "type": "string",
+          "description": "Preferred ReShade loader DLL name to deploy (e.g., dxgi.dll default; some games require d3d12.dll)."
+        },
+        "reshade_ini_options": {
+          "type": "object",
+          "description": "Optional overrides for reshade ini sections/keys.",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "game_exe": {
+          "type": "string",
+          "description": "Primary game executable filename."
+        },
+        "process_name": {
+          "type": "string",
+          "description": "Process name to attach/hook."
+        },
+        "api": {
+          "type": "string",
+          "description": "Graphics API used by the mod (e.g., d3d11, d3d12, vulkan)."
+        },
+        "hook": {
+          "type": "array",
+          "description": "DLLs the mod injects/replaces for hooking.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "steam_appid": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Steam appid if applicable."
+        },
+        "gog_product_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "GOG product id if applicable."
+        },
+        "nexus_mods_game_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "NexusMods game id if applicable."
+        },
+        "nexus_mods": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "game_id": {
+              "type": "integer",
+              "description": "NexusMods game id."
+            },
+            "mod_id": {
+              "type": "integer",
+              "description": "NexusMods mod id."
+            }
+          },
+          "description": "NexusMods game and mod identifiers."
+        },
+        "xbox_game": {
+          "type": "boolean",
+          "description": "Whether this is an Xbox Game Pass game."
+        },
+        "microsoft_store_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Microsoft Store product ID if applicable."
+        },
+        "architecture": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "x86",
+              "x64",
+              "arm64"
+            ]
+          },
+          "uniqueItems": true,
+          "default": ["x86", "x64"],
+          "description": "Target architectures for compilation (x86=32bit, x64=64bit, arm64=ARM 64-bit)."
+        },
+        "platform": {
+          "type": "string",
+          "description": "Platform hint (e.g., steam, gog)."
+        },
+        "detection": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "default_install_paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Common install paths to probe for the game."
+            },
+            "probe_process_by_name": {
+              "type": "boolean",
+              "description": "Whether to probe running processes by name."
+            }
+          }
+        },
+        "installer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requires_admin": {
+              "type": "boolean",
+              "description": "Whether installation requires elevation."
+            },
+            "backup": {
+              "type": "boolean",
+              "description": "Whether to back up existing targets before overwrite."
+            },
+            "targets": {
+              "type": "array",
+              "description": "Files to deploy for this mod.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "source",
+                  "destination",
+                  "mode"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "description": "Relative filename to deploy (built artifact)."
+                  },
+                  "destination": {
+                    "type": "string",
+                    "description": "Relative path inside the game folder to place the file."
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "copy",
+                      "symlink",
+                      "hardlink"
+                    ],
+                    "description": "Deployment mode."
+                  },
+                  "hash": {
+                    "type": "string",
+                    "description": "Optional integrity hash (e.g., sha256)."
+                  }
+                }
+              }
+            },
+            "conflicts": {
+              "type": "array",
+              "description": "Filenames/patterns that conflict and should be removed or warned about.",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            },
+            "optional_components": {
+              "type": "array",
+              "description": "Installer-selectable optional components.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "label",
+                  "files"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Stable identifier for the optional component."
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Display name for the option."
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "source",
+                        "destination",
+                        "mode"
+                      ],
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "destination": {
+                          "type": "string"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "copy",
+                            "symlink",
+                            "hardlink"
+                          ]
+                        },
+                        "hash": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

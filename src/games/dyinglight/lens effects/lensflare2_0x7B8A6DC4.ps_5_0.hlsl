@@ -27,6 +27,10 @@ void main(
   r0.x = t0.Sample(s0_s, v1.xy).y;  // multiplying this increases the strength of lens dirt
   r0.y = t1.Sample(s1_s, v1.zw).y;  // multplying this increases the strength of radial lens flare
 
+  if (CUSTOM_CLAMP_LENS_FLARE) {
+    r0.xy = renodx::tonemap::ExponentialRollOff(r0.y, 0.f, 1.0f);
+  }
+
   o0.w = saturate(r0.y + r0.x);
   r0.xyz = t2.Sample(s2_s, v2.xy).xyz;
   o0.xyz = r0.xyz;

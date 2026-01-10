@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 akuru
+ * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
 
@@ -15,6 +15,10 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/date.hpp"
+#include "../../utils/ini_file.hpp"
+#include "../../utils/path.hpp"
+#include "../../utils/settings.hpp"
 #include "./shared.h"
 
 namespace {
@@ -25,16 +29,98 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xE1970A14), // lutbuilder 3
     CustomShaderEntry(0x22FF7D28), // lutbuilder 4
     CustomShaderEntry(0x2136F151), // lutbuilder 5
-    CustomShaderEntry(0xA6EBE600), // final UI shader
+    CustomShaderEntry(0xA6EBE600), // final shader
 };
 
 ShaderInjectData shader_injection;
 
-const std::string build_date = __DATE__;
-const std::string build_time = __TIME__;
+bool current_hdr_ini_enabled = false;
+
+bool hdr_ini_failed = false;
+
+std::string GetIniFolderPath() {
+  auto process_name = renodx::utils::platform::GetCurrentProcessPath();
+
+  auto envirables_variables = renodx::utils::platform::GetEnvironmentVariables();
+  auto user_profile_pair = envirables_variables.find("LOCALAPPDATA");
+  if (user_profile_pair == envirables_variables.end()) return "";
+  auto user_profile = user_profile_pair->second;
+  if (user_profile.empty()) return "";
+
+  static const std::string ENGINE_INI_PATH = "/b1/Saved/Config/Windows/";
+  auto ini_path = ENGINE_INI_PATH;
+  return user_profile + ini_path;
+}
+
+bool CheckHDREnabled() {
+  const auto ini_folder_path = GetIniFolderPath();
+  auto engine_ini_path = ini_folder_path + "Engine.ini";
+  if (renodx::utils::path::CheckExistsFile(engine_ini_path)) {
+    auto ini_contents = renodx::utils::path::ReadTextFile(engine_ini_path);
+    auto ini_map = renodx::utils::ini_file::ParseIniContents(ini_contents);
+    const auto* entry = renodx::utils::ini_file::FindLastEntry(ini_map, "ConsoleVariables", "r.HDR.EnableHDROutput");
+    if (entry != nullptr) {
+      auto value = std::get<2>(*entry);
+      if (value == "1") {
+        reshade::log::message(reshade::log::level::info, "CheckHDREnabled: Enabled");
+        return true;
+      }
+    }
+    reshade::log::message(reshade::log::level::info, "CheckHDREnabled: Not Enabled");
+  }
+
+  return false;
+}
+
+bool EnableHDR() {
+  const auto ini_folder_path = GetIniFolderPath();
+  if (ini_folder_path.empty()) {
+    reshade::log::message(reshade::log::level::warning, "EnableHDR: Path not found");
+    return false;
+  }
+
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
+  
+  if (renodx::utils::ini_file::UpdateIniFile(
+          ini_folder_path + "Engine.ini",
+          {{"ConsoleVariables", "r.HDR.EnableHDROutput", "1"}},
+          true,
+          true)) {
+    reshade::log::message(reshade::log::level::info, "EnableHDR: Updated");
+  } else {
+    reshade::log::message(reshade::log::level::warning, "EnableHDR: Failed");
+    return false;
+  }
+  
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", true);
+
+  return true;
+}
+
+bool DisableHDR() {
+  const auto ini_folder_path = GetIniFolderPath();
+  if (ini_folder_path.empty()) {
+    reshade::log::message(reshade::log::level::warning, "DisableHDR: Path not found");
+    return false;
+  }
+
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", false);
+  if (renodx::utils::ini_file::UpdateIniFile(
+          ini_folder_path + "Engine.ini",
+          {{"ConsoleVariables", "r.HDR.EnableHDROutput", ""}},
+          false,
+          false)) {
+    reshade::log::message(reshade::log::level::info, "DisableHDR: Updated");
+  } else {
+    reshade::log::message(reshade::log::level::info, "DisableHDR: Not Updated");
+  }
+  renodx::utils::platform::UpdateReadOnlyAttribute(ini_folder_path + "Engine.ini", true);
+
+  return true;
+}
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-    {"toneMapType", 2.f},
+    {"toneMapType", 1.f},
     {"toneMapGammaCorrection", 1.f},
     {"colorGradeExposure", 1.f},
     {"colorGradeHighlights", 50.f},
@@ -51,14 +137,13 @@ renodx::utils::settings::Settings settings = {
         .key = "toneMapType",
         .binding = &shader_injection.toneMapType,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 1.f,
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "RenoDRT"},
-        .parse = [](float value) { return value == 2.f ? 3.f : value; },  // Override ACES
-
+        .labels = {"Vanilla", "RenoDRT"},
+        .parse = [](float value) { return value * 3.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapPeakNits",
@@ -171,6 +256,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return (value * -0.02f) + 1.f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeBlowout",
+        .binding = &shader_injection.colorGradeDechroma,
+        .default_value = 0.f,
+        .label = "Blowout",
+        .section = "Color Grading",
+        .tooltip = "Adds highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .parse = [](float value) { return (value * 0.01f); },
+    },
+    new renodx::utils::settings::Setting{
         .key = "colorGradeFlare",
         .binding = &shader_injection.colorGradeFlare,
         .default_value = 0.f,
@@ -194,7 +289,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
-        .section = "Options",
+        .section = "Presets",
         .group = "button-line-1",
         .on_change = []() {
           for (auto* setting : settings) {
@@ -207,7 +302,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "HDR Look",
-        .section = "Options",
+        .section = "Presets",
         .group = "button-line-1",
         .tint = 0xFF5F5F,
         .on_change = []() {
@@ -223,29 +318,55 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
-    new renodx::utils::settings::Setting{
+    /*new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = " - IMPORTANT: Follow the installation instructions closely! The mod needs UE HDR cvars \r\n - Use default in-game gamma and brightness! \r\n - (Optional) Disable the default add-ons (Generic depth & Effect runtime sync) to gain performance",
+        .label = "The mod requires UE HDR cvars and will automatically write those to the Engine.ini on first boot, if not present.",
         .section = "Instructions",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Special thanks to ShortFuse & the folks at HDR Den for their support! Join the HDR Den Discord for help!",
+        .label = "Status: Engine.ini updated. Restart the game!",
+        .section = "Instructions",
+        .tint = 0xFF0000,
+        .is_visible = []() { return (!current_hdr_ini_enabled && !hdr_ini_failed); }
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Status: Updating Engine.ini failed. Try the manual installation instructions.",
+        .section = "Instructions",
+        .tint = 0xFF0000,
+        .is_visible = []() { return (!current_hdr_ini_enabled && hdr_ini_failed); }
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Status: Mod should work correctly.",
+        .section = "Instructions",
+        .tint = 0x00FF00,
+        .is_visible = []() { return current_hdr_ini_enabled; }
+    },*/
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "IMPORTANT: After booting the game, RenoDX will write the necessary lines to your game's Engine.ini file. Restart the game for RenoDX to take effect. \r\n\r\n- Use default in-game gamma and brightness \r\n- Disable the default add-ons (Generic depth & Effect runtime sync) to gain performance",
+        .section = "Instructions",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Game mod by akuru, RenoDX framework by ShortFuse",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "HDR Den Discord",
+        .label = "Discord",
         .section = "About",
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/5WZX", "DpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
         },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Get more RenoDX mods!",
+        .label = "More mods",
         .section = "About",
         .group = "button-line-1",
         .tint = 0x5865F2,
@@ -275,8 +396,24 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "This build was compiled on " + build_date + " at " + build_time + ".",
+        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
+    },
+    /*new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "If you want to uninstall the mod, here's an easy button to remove the Engine.ini changes. You'll need to manually remove ReShade and the addon.",
+        .section = "Uninstall",
+        //.is_visible = []() { return current_hdr_ini_enabled; }
+    },*/
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Removes the RenoDX Engine.ini changes",
+        .section = "Uninstall",
+        .group = "button-line-1",
+        .on_change = []() {
+          DisableHDR();
+        },
+        //.is_visible = []() { return current_hdr_ini_enabled; }
     },
 };
 
@@ -292,8 +429,10 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("colorGradeBlowout", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("colorGradeDechroma", 0.f);
+  renodx::utils::settings::UpdateSetting("colorGradeFlare", 0.f);
+  //renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
+  //renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
 
 bool fired_on_init_swapchain = false;
@@ -308,24 +447,37 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
+bool initialized = false;
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX - Black Myth: Wukong";
 
-bool g_should_replace = true;
-
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
-      //renodx::mods::shader::on_create_pipeline_layout = [](auto, auto) {
-      //  renodx::mods::shader::on_create_pipeline_layout = nullptr;
-      //  return true;
-      //};
+
+      if (!initialized) {
+        if (!CheckHDREnabled()) {
+          // UE HDR cvars not present
+          if (!EnableHDR()) {
+            // something failed while updating
+            hdr_ini_failed = true;
+          }
+        } else {
+          // UE HDR cvars present
+          current_hdr_ini_enabled = true;
+        }
+
+        initialized = true;
+      }
+
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;
       };
+
       renodx::mods::shader::expected_constant_buffer_space = 50;
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);

@@ -70,6 +70,7 @@ struct ShaderInjectData {
   float swap_chain_clamp_color_space;
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
+  float custom_flip_uv_y;
 };
 
 #ifndef __cplusplus

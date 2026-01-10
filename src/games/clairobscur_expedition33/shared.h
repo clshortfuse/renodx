@@ -91,8 +91,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HUE_SHIFT                0.f
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION      1.f
 #define CUSTOM_COLOR_GRADE_BLOWOUT_RESTORATION   0.75f
-#define CUSTOM_COLOR_GRADE_HUE_CORRECTION        1.f
-#define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION 1.f
+#define CUSTOM_COLOR_GRADE_HUE_CORRECTION        shader_injection.scene_grade_hue_correction
+#define CUSTOM_COLOR_GRADE_SATURATION_CORRECTION shader_injection.scene_grade_saturation_correction
 #define CUSTOM_COLOR_GRADE_HUE_SHIFT             0.f
 #define CUSTOM_GRAIN_TYPE                        0.f
 #define CUSTOM_GRAIN_STRENGTH                    shader_injection.custom_grain_strength
@@ -107,7 +107,8 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_LUT_STRENGTH                      1.f
 #define CUSTOM_LUT_SCALING                       0.f
 #define CUSTOM_IS_ENGINE_HDR                     shader_injection.custom_is_engine_hdr
-#define OVERRIDE_BLACK_CLIP                      1.f  // 0 - Off, 1 - 0.0001 nits
+#define OVERRIDE_BLACK_CLIP                      1.f  // 0 - Off, 1 - 0 nits
+#define RENODX_TONE_MAP_HUE_CORRECTION_TYPE      1.f  // 0 - Highlights, Midtones, & Shadows; 1 - Midtones, & Shadows
 
 #include "../../shaders/renodx.hlsl"
 

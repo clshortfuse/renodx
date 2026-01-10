@@ -1,28 +1,6 @@
 #ifndef SRC_FF7REBIRTH_SHARED_H_
 #define SRC_FF7REBIRTH_SHARED_H_
 
-#ifndef __cplusplus
-// #include "../../shaders/renodx.hlsl"
-
-#pragma warning(disable : 3571)  // pow(f,e)
-
-#include "../../shaders/aces.hlsl"
-#include "../../shaders/color.hlsl"
-#include "../../shaders/color_convert.hlsl"
-#include "../../shaders/colorcorrect.hlsl"
-#include "../../shaders/colorgrade.hlsl"
-#include "../../shaders/debug.hlsl"
-#include "../../shaders/DICE.hlsl"
-#include "../../shaders/effects.hlsl"
-#include "../../shaders/frostbite.hlsl"
-#include "../../shaders/inverse_tonemap.hlsl"
-#include "../../shaders/math.hlsl"
-#include "../../shaders/random.hlsl"
-#include "../../shaders/tonemap.hlsl"
-
-#include "../../shaders/deprecated.hlsl"
-#endif
-
 // #define RENODX_PEAK_WHITE_NITS               1000.f
 // #define RENODX_DIFFUSE_WHITE_NITS            250.f
 // #define RENODX_GRAPHICS_WHITE_NITS           250.f
@@ -99,6 +77,8 @@ struct ShaderInjectData {
 cbuffer shader_injection : register(b0, space50) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
+
+#include "../../shaders/renodx.hlsl"
 #endif
 
 #endif  // SRC_FF7REBIRTH_SHARED_H_

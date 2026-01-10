@@ -82,6 +82,7 @@ float4 main(PS_IN i) : COLOR
     o.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, i.texcoord1.xy);
     o.rgb = renodx::draw::RenderIntermediatePass(o.rgb);
     o.rgb = renodx::color::srgb::DecodeSafe(o.rgb);
+	
     o.w = 0;                                                              // mov oC0.w, c1.z
 	return o;
 }

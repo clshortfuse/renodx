@@ -22,7 +22,8 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x00000000),
     // CustomSwapchainShader(0x00000000),
-    // BypassShaderEntry(0x00000000)
+    // BypassShaderEntry(0x00000000),
+    // __ALL_CUSTOM_SHADERS
 };
 
 ShaderInjectData shader_injection;
@@ -382,6 +383,18 @@ const auto UPGRADE_TYPE_OUTPUT_SIZE = 1.f;
 const auto UPGRADE_TYPE_OUTPUT_RATIO = 2.f;
 const auto UPGRADE_TYPE_ANY = 3.f;
 
+void OnPresent(reshade::api::command_queue* queue,
+               reshade::api::swapchain* swapchain,
+               const reshade::api::rect* source_rect,
+               const reshade::api::rect* dest_rect,
+               uint32_t dirty_rect_count,
+               const reshade::api::rect* dirty_rects) {
+  auto* device = queue->get_device();
+  if (device->get_api() == reshade::api::device_api::opengl) {
+    shader_injection.custom_flip_uv_y = 1.f;
+  }
+}
+
 bool initialized = false;
 
 }  // namespace
@@ -488,6 +501,63 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           settings.push_back(setting);
         }
 
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "SwapChainDeviceProxy",
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "Use Display Proxy",
+              .section = "Display Proxy",
+              .labels = {"Off", "On"},
+              .is_global = true,
+              .is_visible = []() { return current_settings_mode >= 2; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          bool use_device_proxy = setting->GetValue() == 1.f;
+          renodx::mods::swapchain::use_device_proxy = use_device_proxy;
+          renodx::mods::swapchain::set_color_space = !use_device_proxy;
+          if (use_device_proxy) {
+            reshade::register_event<reshade::addon_event::present>(OnPresent);
+          } else {
+            shader_injection.custom_flip_uv_y = 0.f;
+          }
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "SwapChainDeviceProxyBaseWaitIdle",
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "Base Wait Idle",
+              .section = "Display Proxy",
+              .labels = {"Off", "On"},
+              .is_global = true,
+              .is_visible = []() { return current_settings_mode >= 2; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          bool use_device_proxy =
+              renodx::mods::swapchain::device_proxy_wait_idle_source = (setting->GetValue() == 1.f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "SwapChainDeviceProxyProxyWaitIdle",
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 0.f,
+              .label = "Proxy Wait Idle",
+              .section = "Display Proxy",
+              .labels = {"Off", "On"},
+              .is_global = true,
+              .is_visible = []() { return current_settings_mode >= 2; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          bool use_device_proxy =
+              renodx::mods::swapchain::device_proxy_wait_idle_destination = (setting->GetValue() == 1.f);
+          settings.push_back(setting);
+        }
+
         for (const auto& [key, format] : UPGRADE_TARGETS) {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "Upgrade_" + key,
@@ -531,6 +601,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }

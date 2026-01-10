@@ -25,13 +25,13 @@ float4 Gamma(float4 color, bool pow_to_srgb = false, float gamma = 2.2f) {
   return float4(Gamma(color.rgb, pow_to_srgb, gamma), color.a);
 }
 
-#define GAMMA_SAFE(T)                                                                   \
-  T GammaSafe(T c, bool pow_to_srgb = false, float gamma = 2.2f) {                      \
-    if (pow_to_srgb) {                                                                  \
-      return renodx::math::Sign(c) * srgb::Decode(color::gamma::Encode(abs(c), gamma)); \
-    } else {                                                                            \
-      return renodx::math::Sign(c) * color::gamma::Decode(srgb::Encode(abs(c)), gamma); \
-    }                                                                                   \
+#define GAMMA_SAFE(T)                                                                      \
+  T GammaSafe(T c, bool pow_to_srgb = false, float gamma = 2.2f) {                         \
+    if (pow_to_srgb) {                                                                     \
+      return renodx::math::CopySign(srgb::Decode(color::gamma::Encode(abs(c), gamma)), c); \
+    } else {                                                                               \
+      return renodx::math::CopySign(color::gamma::Decode(srgb::Encode(abs(c)), gamma), c); \
+    }                                                                                      \
   }
 
 GAMMA_SAFE(float)

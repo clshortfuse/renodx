@@ -31,7 +31,7 @@ float4 main(
 
   float4 _57 = t1.Sample(s1, float2((TEXCOORD.x), (TEXCOORD.y)));
 
-  return FinalizeUEOutput(_57, _11, true, true);
+  return FinalizeUEOutput(_57, _11);
 
   float _67 = exp2(((log2((_57.x))) * 0.012683313339948654f));
   float _68 = exp2(((log2((_57.y))) * 0.012683313339948654f));

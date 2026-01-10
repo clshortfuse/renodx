@@ -374,6 +374,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   } else {
     settings[2]->default_value = 1000.f;
   }
+
+  fired_on_init_swapchain = true;
 }
 
 }  // namespace
@@ -407,12 +409,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r10g10b10a2_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
       });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);

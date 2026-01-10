@@ -63,7 +63,6 @@ float4 main(
   float4 _103 = vignettingTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
   float3 _105 = bloomTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
   float4 _109 = luminanceTex.Load(int3(0, 0, 0));
-
   float3 _113 = hdrTex.Load(int3(int(SV_Position.x), int(SV_Position.y), 0));
   _113.rgb *= CalculateExposure(_109.y);  // New Luminance
   float4 _117 = sunShaftsTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
@@ -164,13 +163,6 @@ float4 main(
   float _501 = (sqrt((_459 * _459) - (((_368 * 4.0f) * _476) * _414)) - _459) / (_414 * 2.0f);
   float _502 = (sqrt((_463 * _463) - (((_369 * 4.0f) * _476) * _421)) - _463) / (_421 * 2.0f);
   float _503 = (sqrt((_467 * _467) - (((_370 * 4.0f) * _476) * _428)) - _467) / (_428 * 2.0f);
-
-  // WH[DH]: Restore original luminance after clipping by Hable tonemapper
-  /* color_bt709 = float3(_501, _502, _503);
-  color_bt709 *= _102;
-  _501 = color_bt709.r;
-  _502 = color_bt709.g;
-  _503 = color_bt709.b; */
 
   float _504 = dot(float3(_191, _192, _193), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
   float _514 = ((max(1.0f, (_504 / max(1.0000000116860974e-07f, dot(float3(_501, _502, _503), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f))))) + -1.0f) * (1.0f - (saturate(_504) * 0.30000001192092896f))) + 1.0f;

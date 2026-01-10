@@ -107,6 +107,8 @@ struct __declspec(uuid("809df2f6-e1c7-4d93-9c6e-fa88dd960b7c")) DeviceData {
   reshade::api::resource proxy_device_resource = {0};
 
   HWND primary_swapchain_window = nullptr;
+
+  bool proxy_device_needs_resize = false;
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -379,10 +381,6 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   }
 
   return proxy_device;
-}
-
-static bool UsingSwapchainProxy() {
-  return !swap_chain_proxy_pixel_shader.empty() || !swap_chain_proxy_shaders.empty();
 }
 
 static bool UsingSwapchainCompatibilityMode() {
@@ -1733,6 +1731,12 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
   auto* device = swapchain->get_device();
 
+  if (use_device_proxy && device == proxy_device_reshade) {
+    // Don't modify proxy device swapchains
+    reshade::log::message(reshade::log::level::info, "mods::swapchain::OnInitSwapchain(Abort for proxy device swapchain.)");
+    return;
+  }
+
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
 
@@ -1789,17 +1793,12 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
     if (use_device_proxy) {
       if (resize && proxy_device_reshade != nullptr && device != proxy_device_reshade && proxy_swap_chain != nullptr) {
-        proxy_swap_chain->ResizeBuffers(
-            2,
-            primary_swapchain_desc.texture.width,
-            primary_swapchain_desc.texture.height,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+        data->proxy_device_needs_resize = true;
       }
       return;
     }
 
-    if (UsingSwapchainProxy()) {
+    if (!data->swap_chain_proxy_pixel_shader.empty()) {
       data->swap_chain_proxy_upgrade_target.new_format = swap_chain_proxy_format;
       if (swap_chain_proxy_format == reshade::api::format::r10g10b10a2_unorm) {
         data->swap_chain_proxy_upgrade_target.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
@@ -1829,7 +1828,12 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   if (data == nullptr) return;
   const std::unique_lock lock(data->mutex);
   DestroySwapchainProxyItems(device, data);
-  reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnDestroySwapchain()");
+  std::stringstream s;
+  s << "mods::swapchain::OnDestroySwapchain(";
+  s << PRINT_PTR(reinterpret_cast<uintptr_t>(swapchain));
+  s << ", resize: " << (resize ? "true" : "false");
+  s << ")";
+  reshade::log::message(reshade::log::level::debug, s.str().c_str());
 }
 
 static bool IsUpgraded(reshade::api::swapchain* swapchain) {
@@ -2053,7 +2057,7 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
     }
 
     if (resource_info->is_swap_chain) {
-      if (UsingSwapchainProxy()) {
+      if (!private_data->swap_chain_proxy_pixel_shader.empty()) {
         if (use_device_proxy || !UsingSwapchainCompatibilityMode()) {
           {
             std::stringstream s;
@@ -2462,8 +2466,13 @@ inline bool OnCreateResourceView(
 
   if (!changed) {
     if (!is_back_buffer) return false;
-    if (!UsingSwapchainProxy()) return false;
     if (swap_chain_proxy_format == target_format) return false;
+    auto* data = renodx::utils::data::Get<DeviceData>(device);
+    if (data == nullptr) return false;
+    {
+      const std::shared_lock lock(data->mutex);
+      if (data->swap_chain_proxy_pixel_shader.empty()) return false;
+    }
     // Continue to creating a resource clone
   }
 
@@ -3558,6 +3567,18 @@ inline void OnPresent(
       last_device_proxy_shared_resource = resource_clone_info->proxy_resource;
     }
 
+    if (data->proxy_device_needs_resize) {
+      data->proxy_device_needs_resize = false;
+      proxy_swap_chain->ResizeBuffers(
+          2,
+          data->primary_swapchain_desc.texture.width,
+          data->primary_swapchain_desc.texture.height,
+          (target_format == reshade::api::format::r10g10b10a2_unorm)
+              ? DXGI_FORMAT_R10G10B10A2_UNORM
+              : DXGI_FORMAT_R16G16B16A16_FLOAT,
+          DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+    }
+
     // Trigger a DX11 Present which will start the swapchain proxy steps on DX11
     if (use_device_proxy_thread) {
       SetEvent(device_proxy_sync_event);  // Signal the DX11 render thread
@@ -3611,12 +3632,12 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
       reshade::register_event<reshade::addon_event::resolve_texture_region>(OnResolveTextureRegion);
 
       reshade::register_event<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
-      reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
 
       if (use_resource_cloning) {
         reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
         reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
 
+        reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
         reshade::register_event<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
         reshade::register_event<reshade::addon_event::end_render_pass>(OnEndRenderPass);
         reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
@@ -3630,7 +3651,7 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
         reshade::register_event<reshade::addon_event::barrier>(OnBarrier);
         reshade::register_event<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
 
-        if (UsingSwapchainProxy()) {
+        if (!swap_chain_proxy_pixel_shader.empty() || !swap_chain_proxy_shaders.empty()) {
           // Create swapchain proxy
           reshade::register_event<reshade::addon_event::present>(OnPresent);
           if (new_injections != nullptr) {

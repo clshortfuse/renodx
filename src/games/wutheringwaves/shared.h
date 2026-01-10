@@ -7,6 +7,7 @@ struct ShaderInjectData {
   float tone_map_peak_nits;
   float tone_map_game_nits;
   float tone_map_ui_nits;
+  float tone_map_video_nits;
 
   float color_grade_strength;
   float color_grade_blowout_restoration;
@@ -15,11 +16,13 @@ struct ShaderInjectData {
   float color_grade_hue_shift;
 
   float tone_map_type;
+  float tone_map_hdr_video;
 
   float color_grade_exposure;
   float color_grade_highlights;
   float color_grade_highlights_version;
   float color_grade_shadows;
+  float color_grade_shadows_version;
   float color_grade_contrast;
   float color_grade_saturation;
   float color_grade_highlight_saturation;
@@ -42,6 +45,7 @@ struct ShaderInjectData {
   float wuwa_blowout;
 
   float text_opacity;
+  float status_text_opacity;
   float hud_opacity;
 };
 
@@ -61,6 +65,7 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_PEAK_NITS                         shader_injection.tone_map_peak_nits
 #define RENODX_GAME_NITS                         shader_injection.tone_map_game_nits
 #define RENODX_UI_NITS                           shader_injection.tone_map_ui_nits
+#define RENODX_VIDEO_NITS                        shader_injection.tone_map_video_nits
 
 #define RENODX_COLOR_GRADE_STRENGTH              shader_injection.color_grade_strength
 #define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION   shader_injection.color_grade_blowout_restoration
@@ -70,11 +75,13 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_PER_CHANNEL_HUE_SHIFT             shader_injection.color_grade_hue_shift
 
 #define RENODX_TONE_MAP_TYPE                     shader_injection.tone_map_type
+#define RENODX_TONE_MAP_HDR_VIDEO                shader_injection.tone_map_hdr_video
 
 #define RENODX_TONE_MAP_EXPOSURE                 shader_injection.color_grade_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS               shader_injection.color_grade_highlights
 #define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION    shader_injection.color_grade_highlights_version
 #define RENODX_TONE_MAP_SHADOWS                  shader_injection.color_grade_shadows
+#define RENODX_COLOR_GRADE_SHADOWS_VERSION       shader_injection.color_grade_shadows_version
 #define RENODX_TONE_MAP_CONTRAST                 shader_injection.color_grade_contrast
 #define RENODX_TONE_MAP_SATURATION               shader_injection.color_grade_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION     shader_injection.color_grade_highlight_saturation
@@ -138,9 +145,8 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_WUWA_BLOWOUT                      shader_injection.wuwa_blowout
 
 #define TEXT_OPACITY                             shader_injection.text_opacity
+#define STATUS_TEXT_OPACITY                      shader_injection.status_text_opacity
 #define HUD_OPACITY                              shader_injection.hud_opacity
-
-#define CLAMP_IF_SDR(v) (v = ((RENODX_TONE_MAP_TYPE == 0.f) ? saturate(v) : (v)))
 
 #include "../../shaders/renodx.hlsl"
 #endif

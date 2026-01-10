@@ -1,5 +1,3 @@
-#include "./DICE.hlsl"
-#include "./hueHelper.hlsl"
 #include "./shared.h"
 
 // ---- Created with 3Dmigoto v1.3.16 on Thu Aug 15 21:16:03 2024
@@ -32,51 +30,48 @@ void main(
 
   r0.xyz = sign(r0.xyz) * pow(abs(r0.xyz), 2.2f);  // linearize
 
-  if (injectedData.toneMapType == 0) {
-    // bt2020 conversion + gamut expansion
-    r0.w = max(r0.x, r0.y);
-    r0.w = max(r0.w, r0.z);
-    r0.w = -2 + r0.w;
-    r0.w = saturate(0.125 * r0.w);
-    r1.x = dot(float3(0.710796118, 0.247670293, 0.0415336005), r0.xyz);
-    r1.y = dot(float3(0.0434204005, 0.943510771, 0.0130687999), r0.xyz);
-    r1.z = dot(float3(-0.00108149997, 0.0272474997, 0.973834097), r0.xyz);
-    r1.xyz = r1.xyz * r0.www;
-    r0.w = 1 + -r0.w;
-    r2.x = dot(float3(0.627403975, 0.329281986, 0.0433136001), r0.xyz);
-    r2.y = dot(float3(0.0457456, 0.941776991, 0.0124771995), r0.xyz);
-    r2.z = dot(float3(-0.00121054996, 0.0176040996, 0.983606994), r0.xyz);
-    r1.xyz = r0.www * r2.xyz + r1.xyz;
-    r1.xyz = _ColorGamutExpansion * r1.xyz;
-    r0.w = 1 + -_ColorGamutExpansion;
-    r2.x = dot(float3(0.627403975, 0.329281986, 0.0433136001), r0.xyz);
-    r2.y = dot(float3(0.0690969974, 0.919539988, 0.0113612004), r0.xyz);
-    r2.z = dot(float3(0.0163915996, 0.088013202, 0.895595014), r0.xyz);
-    r0.xyz = r0.www * r2.xyz + r1.xyz;
+  if (RENODX_TONE_MAP_TYPE == 0) {
+    float3 bt709 = r0.xyz;
 
-    // paper white + pq encoding
-    r0.w = 9.99999975e-005 * _NitsForPaperWhite;
-    r0.xyz = r0.xyz * r0.www;
-    r0.xyz = pow(abs(r0.xyz), 0.1593017578125f);
-    r1.xyz = r0.xyz * float3(18.8515625, 18.8515625, 18.8515625) + float3(0.8359375, 0.8359375, 0.8359375);
-    r0.xyz = r0.xyz * float3(18.6875, 18.6875, 18.6875) + float3(1, 1, 1);
-    r0.xyz = r1.xyz / r0.xyz;
-    r0.xyz = pow(r0.xyz, 78.84375f);
+    // highlight‑driven weight: 0 at 2.0, 1 at 10.0
+    float max_rgb = renodx::math::Max(bt709);
+    float highlight_weight = saturate((max_rgb - 2.0f) / 8.f);
+
+    // BT.709 -> expanded gamut (stronger)
+    const float3x3 expanded_high_mat = {
+      { 0.710796118f, 0.247670293f, 0.0415336005f },
+      { 0.0434204005f, 0.943510771f, 0.0130687999f },
+      { -0.00108149997f, 0.0272474997f, 0.973834097f }
+    };
+
+    // BT.709 -> expanded gamut (weaker)
+    const float3x3 expanded_low_mat = {
+      { 0.627403975f, 0.329281986f, 0.0433136001f },
+      { 0.0457456f, 0.941776991f, 0.0124771995f },
+      { -0.00121054996f, 0.0176040996f, 0.983606994f }
+    };
+
+    float3 expanded_high = mul(expanded_high_mat, bt709);
+    float3 expanded_low = mul(expanded_low_mat, bt709);
+    // apply stronger gamut expansion to highlights
+    float3 expanded = lerp(expanded_low, expanded_high, highlight_weight);
+
+    float3 bt2020 = renodx::color::bt2020::from::BT709(bt709);
+
+    // slider blends expanded result with standard BT.2020
+    bt2020 = lerp(bt2020, expanded, _ColorGamutExpansion);
+
+    r0.rgb = renodx::color::pq::Encode(abs(bt2020), _NitsForPaperWhite);
   } else {
-    if (injectedData.toneMapType >= 2.f) {
-      r0.xyz = Hue(r0.xyz, injectedData.toneMapHueCorrection);
-      // Declare DICE parameters
-      DICESettings config = DefaultDICESettings();
-      config.Type = 3;
-      config.ShoulderStart = 0.5f;
-      const float dicePaperWhite = injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
-      const float dicePeakWhite = injectedData.toneMapPeakNits / renodx::color::srgb::REFERENCE_WHITE;
-
-      // multiply paper white in for tonemapping and out for output
-      r0.xyz = DICETonemap(r0.xyz * dicePaperWhite, dicePeakWhite, config) / dicePaperWhite;
+    if (RENODX_TONE_MAP_TYPE == 3.f) {
+      r0.rgb = max(0, r0.rgb);
     }
     r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);
-    r0.xyz = renodx::color::pq::Encode(r0.xyz, injectedData.toneMapGameNits);
+    r0.rgb *= RENODX_DIFFUSE_WHITE_NITS;
+    if (RENODX_TONE_MAP_TYPE == 2.f) {
+      r0.rgb = min(r0.rgb, RENODX_PEAK_WHITE_NITS);
+    }
+    r0.xyz = renodx::color::pq::EncodeSafe(r0.xyz, 1.f);
   }
   o0.xyz = r0.xyz;
   return;

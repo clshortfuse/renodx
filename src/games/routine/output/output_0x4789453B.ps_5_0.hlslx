@@ -1,0 +1,172 @@
+#include "./output.hlsli"
+
+// ---- Created with 3Dmigoto v1.4.1 on Sat Dec 20 02:31:43 2025
+Texture3D<float4> t5 : register(t5);
+
+Texture2D<float4> t4 : register(t4);
+
+struct t3_t {
+  float val[4];
+};
+StructuredBuffer<t3_t> t3 : register(t3);
+
+Texture2D<float4> t2 : register(t2);
+
+Texture2D<float4> t1 : register(t1);
+
+struct t0_t {
+  float val[4];
+};
+StructuredBuffer<t0_t> t0 : register(t0);
+
+SamplerState s3_s : register(s3);
+
+SamplerState s2_s : register(s2);
+
+SamplerState s1_s : register(s1);
+
+SamplerState s0_s : register(s0);
+
+cbuffer cb1 : register(b1) {
+  float4 cb1[156];
+}
+
+cbuffer cb0 : register(b0) {
+  float4 cb0[62];
+}
+
+// 3Dmigoto declarations
+#define cmp -
+
+void main(
+    linear noperspective float2 v0: TEXCOORD0,
+    linear noperspective float2 w0: TEXCOORD1,
+    linear noperspective float4 v1: TEXCOORD2,
+    linear noperspective float2 v2: TEXCOORD3,
+    linear noperspective float2 w2: TEXCOORD4,
+    float4 v3: SV_POSITION0,
+    out float4 o0: SV_Target0) {
+  float4 r0, r1, r2, r3, r4, r5, r6, r7, r8;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  r0.x = t0[0].val[0 / 4];
+  r0.yz = v2.xy * cb0[58].zw + cb0[58].xy;
+  r1.xyzw = cmp(float4(0, 0, 0, 0) < r0.yzyz);
+  r2.xyzw = cmp(r0.yzyz < float4(0, 0, 0, 0));
+  r1.xyzw = (int4)-r1.xyzw + (int4)r2.xyzw;
+  r1.xyzw = (int4)r1.xyzw;
+  r2.xyzw = saturate(-cb0[56].zzzz + abs(r0.yzyz));
+  r1.xyzw = r2.xyzw * r1.xyzw;
+  r1.xyzw = -r1.xyzw * cb0[56].xxyy + r0.yzyz;
+  r1.xyzw = r1.xyzw * cb0[59].zwzw + cb0[59].xyxy;
+  r1.xyzw = r1.xyzw * cb0[11].xyxy + cb0[11].zwzw;
+  r1.xyzw = cb0[10].zwzw * r1.xyzw;
+  r1.xyzw = max(cb0[16].xyxy, r1.xyzw);
+  r1.xyzw = min(cb0[16].zwzw, r1.xyzw);
+  r2.x = t1.Sample(s0_s, r1.xy).x;
+  r2.y = t1.Sample(s0_s, r1.zw).y;
+  r1.xy = max(cb0[16].xy, v0.xy);
+  r1.xy = min(cb0[16].zw, r1.xy);
+  r2.z = t1.Sample(s0_s, r1.xy).z;
+
+  // o0.rgb = renodx::color::srgb::EncodeSafe(r2.rgb);
+  // return;
+
+  r1.xy = v0.xy * cb0[37].xy + cb0[37].zw;
+  r1.xy = max(cb0[38].xy, r1.xy);
+  r1.xy = min(cb0[38].zw, r1.xy);
+  r1.xyz = t2.Sample(s1_s, r1.xy).xyz;
+  r0.yz = r0.yz * float2(0.5, -0.5) + float2(0.5, 0.5);
+  r0.yzw = t4.Sample(s2_s, r0.yz).xyz;
+  r0.yzw = r0.yzw * cb0[55].xyz + float3(1, 1, 1);
+  r0.yzw = r1.xyz * r0.yzw;
+  r1.x = t3[0].val[0 / 4];
+  r1.y = t3[0].val[0 / 4 + 1];
+  r1.z = t3[0].val[0 / 4 + 2];
+  r1.xyz = cb0[54].xyz * r1.xyz;
+  r1.w = dot(r2.xyz, float3(0.212639004, 0.715168655, 0.0721923187));
+  r3.xy = cb0[10].xy * v0.xy;
+  r3.xy = floor(r3.xy);
+  r3.xy = (uint2)r3.xy;
+  r3.xy = (int2)r3.xy & int2(1, 1);
+  r3.xy = (uint2)r3.xy;
+  r3.xy = r3.xy * float2(2, 2) + float2(-1, -1);
+  r4.x = cb0[10].z * r3.x;
+  r4.y = 0;
+  r4.xy = v0.xy + r4.xy;
+  r4.xy = max(cb0[16].xy, r4.xy);
+  r4.xy = min(cb0[16].zw, r4.xy);
+  r4.xyz = t1.Sample(s0_s, r4.xy).xyz;
+
+  r3.z = 0;
+  r3.zw = r3.zy * cb0[10].zw + v0.xy;
+  r3.zw = max(cb0[16].xy, r3.zw);
+  r3.zw = min(cb0[16].zw, r3.zw);
+  r5.xyz = t1.Sample(s0_s, r3.zw).xyz;
+  r6.x = dot(r4.xyz, float3(0.212639004, 0.715168655, 0.0721923187));
+  r6.y = dot(r5.xyz, float3(0.212639004, 0.715168655, 0.0721923187));
+  r2.w = ddx_fine(r2.x);
+  r7.x = -r2.w * r3.x + r2.x;
+  r2.w = ddx_fine(r2.y);
+  r7.y = -r2.w * r3.x + r2.y;
+  r2.w = ddx_fine(r2.z);
+  r7.z = -r2.w * r3.x + r2.z;
+  r2.w = ddy_fine(r2.x);
+  r8.x = -r2.w * r3.y + r2.x;
+  r2.w = ddy_fine(r2.y);
+  r8.y = -r2.w * r3.y + r2.y;
+  r2.w = ddy_fine(r2.z);
+  r8.z = -r2.w * r3.y + r2.z;
+  r2.w = ddx_fine(r1.w);
+  r6.z = -r2.w * r3.x + r1.w;
+  r2.w = ddy_fine(r1.w);
+  r6.w = -r2.w * r3.y + r1.w;
+  r0.x = cb1[155].w * r0.x;
+  r3.xyzw = -r6.xyzw + r1.wwww;
+  r3.xy = max(abs(r3.xz), abs(r3.yw));
+  r1.w = max(r3.x, r3.y);
+  r1.w = saturate(-r0.x * r1.w + 1);
+  r1.w = cb0[57].y * -r1.w;
+  r3.xyz = r7.xyz + r4.xyz;
+  r3.xyz = r3.xyz + r5.xyz;
+  r3.xyz = r3.xyz + r8.xyz;
+  r3.xyz = -r2.xyz * float3(4, 4, 4) + r3.xyz;
+  r2.xyz = r3.xyz * r1.www + r2.xyz;
+  r1.w = cmp(0 < cb0[57].x);
+  if (r1.w != 0) {
+    r3.xy = cb0[57].xx * w0.xy;
+    r1.w = dot(r3.xy, r3.xy);
+    r1.w = 1 + r1.w;
+    r1.w = rcp(r1.w);
+    r1.w = r1.w * r1.w;
+  } else {
+    r1.w = 1;
+  }
+  r1.xyz = r2.xyz * r1.xyz;
+  r0.x = r1.w * r0.x;
+  r0.yzw = r0.yzw * r0.xxx;
+  r0.xyz = r1.xyz * r0.xxx + r0.yzw;
+  r0.xyz = float3(0.00266771927, 0.00266771927, 0.00266771927) + r0.xyz;
+  r0.xyz = log2(r0.xyz);
+  r0.xyz = saturate(r0.xyz * float3(0.0714285746, 0.0714285746, 0.0714285746) + float3(0.610726953, 0.610726953, 0.610726953));
+  r0.xyz = r0.xyz * cb0[60].zzz + cb0[60].www;
+  r0.xyz = t5.Sample(s3_s, r0.xyz).xyz;
+  r0.w = v1.w * 543.309998 + v1.z;
+  r0.w = sin(r0.w);
+  r0.w = 493013 * r0.w;
+  r0.w = frac(r0.w);
+  r0.w = r0.w * 2 + -1;
+  // clang-format off
+  r1.x = +1.#INF * r0.w;
+  // clang-format on
+  r1.x = max(-1, r1.x);
+  r1.x = min(1, r1.x);
+  r0.w = 1 + -abs(r0.w);
+  r0.w = sqrt(r0.w);
+  r0.w = -r1.x * r0.w + r1.x;
+  r0.w = cb0[61].y * r0.w;
+  o0.xyz = r0.xyz * float3(1.04999995, 1.04999995, 1.04999995) + r0.www;
+  o0.w = 0;
+  return;
+}
