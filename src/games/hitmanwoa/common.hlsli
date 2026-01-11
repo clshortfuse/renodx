@@ -12,35 +12,115 @@ float3 GammaCorrectByLuminance(float3 color, bool pow_to_srgb = false) {
 
 float4 Sample2DPackedLUT(float3 srgb_color, SamplerState lut_sampler, Texture2D<float4> lut_tex) {
   if (RENODX_LUT_SAMPLING_TYPE) {
-    srgb_color = srgb_color * 0.984375f + 0.0078125;  // add missing offsets
+    srgb_color = srgb_color * 0.984375f + 0.0078125f;  // add missing offsets
   }
-  // Convert sRGB color to 3D LUT index space (0–15)
-  float3 lut_coord = srgb_color * 15.f;
 
-  // Blue channel determines which 2D tile slice (Z axis)
-  float lut_b = lut_coord.b;
-  uint b_index = (uint)lut_b;
-  uint b_index_next = b_index + 1u;
-  float b_frac = lut_b - float(b_index);  // interpolation weight between slices
+  if (CUSTOM_LUT_TETRAHEDRAL) {
+    const uint size = 16u;
+    const uint tile_size = 16u;
+    const float max_index = (float)(size - 1u);
+  
+    float3 coordinates = saturate(srgb_color) * max_index;
+    int3 point0 = (int3)floor(coordinates);
+    point0 = min(point0, int3((int)size - 2, (int)size - 2, (int)size - 2));
+  
+    float3 fraction = coordinates - (float3)point0;
+  
+    int3 offset0 = int3(0, 0, 0);
+    int3 offset1 = int3(0, 0, 0);
+    int3 offset2 = int3(1, 1, 1);
+    int3 offset3 = int3(1, 1, 1);
+  
+    float3 sorted;
+    if (fraction.r > fraction.g) {
+      if (fraction.g > fraction.b) {
+        offset1.r = 1;
+        offset2.b = 0;
+        sorted = fraction.rgb;
+      } else if (fraction.r > fraction.b) {
+        offset1.r = 1;
+        offset2.g = 0;
+        sorted = fraction.rbg;
+      } else {
+        offset1.b = 1;
+        offset2.g = 0;
+        sorted = fraction.brg;
+      }
+    } else {
+      if (fraction.g <= fraction.b) {
+        offset1.b = 1;
+        offset2.r = 0;
+        sorted = fraction.bgr;
+      } else if (fraction.r >= fraction.b) {
+        offset1.g = 1;
+        offset2.b = 0;
+        sorted = fraction.grb;
+      } else {
+        offset1.g = 1;
+        offset2.r = 0;
+        sorted = fraction.gbr;
+      }
+    }
+  
+    int3 point1 = point0 + offset1;
+    int3 point2 = point0 + offset2;
+    int3 point3 = point0 + offset3;
+  
+    uint2 tile0 = uint2((uint)point0.z & 3u, (uint)point0.z >> 2);
+    uint2 tile1 = uint2((uint)point1.z & 3u, (uint)point1.z >> 2);
+    uint2 tile2 = uint2((uint)point2.z & 3u, (uint)point2.z >> 2);
+    uint2 tile3 = uint2((uint)point3.z & 3u, (uint)point3.z >> 2);
+  
+    uint2 uv0 = uint2(tile0 * tile_size) + uint2((uint)point0.x, (uint)point0.y);
+    uint2 uv1 = uint2(tile1 * tile_size) + uint2((uint)point1.x, (uint)point1.y);
+    uint2 uv2 = uint2(tile2 * tile_size) + uint2((uint)point2.x, (uint)point2.y);
+    uint2 uv3 = uint2(tile3 * tile_size) + uint2((uint)point3.x, (uint)point3.y);
+  
+    float4 texel0 = lut_tex.Load(int3(uv0, 0));
+    float4 texel1 = lut_tex.Load(int3(uv1, 0));
+    float4 texel2 = lut_tex.Load(int3(uv2, 0));
+    float4 texel3 = lut_tex.Load(int3(uv3, 0));
+  
+    float weight0 = 1.f - sorted[0];
+    float weight1 = sorted[0] - sorted[1];
+    float weight2 = sorted[1] - sorted[2];
+    float weight3 = sorted[2];
+  
+    float4 value0 = texel0 * weight0;
+    float4 value1 = texel1 * weight1;
+    float4 value2 = texel2 * weight2;
+    float4 value3 = texel3 * weight3;
 
-  // Red and green determine position within each 2D tile (X and Y axes)
-  float lut_r = lut_coord.r + 0.5f;
-  float lut_g = lut_coord.g + 0.5f;
+    return value0 + value1 + value2 + value3;
+  } else {
+    // Convert sRGB color to 3D LUT index space (0–15)
+    float3 lut_coord = srgb_color * 15.f;
 
-  // Compute 4×4 tile grid index for blue slices (tiles of size 16x16)
-  int2 tile_a = int2(b_index & 3, b_index >> 2);
-  int2 tile_b = int2(b_index_next & 3, b_index_next >> 2);
+    // Blue channel determines which 2D tile slice (Z axis)
+    float lut_b = lut_coord.b;
+    uint b_index = (uint)lut_b;
+    uint b_index_next = b_index + 1u;
+    float b_frac = lut_b - float(b_index);  // interpolation weight between slices
 
-  // Get UVs inside the 64×64 packed LUT texture
-  float2 uv_a = (float2(tile_a * 16) + float2(lut_r, lut_g)) / 64.f;
-  float2 uv_b = (float2(tile_b * 16) + float2(lut_r, lut_g)) / 64.f;
+    // Red and green determine position within each 2D tile (X and Y axes)
+    float lut_r = lut_coord.r + 0.5f;
+    float lut_g = lut_coord.g + 0.5f;
 
-  // Trilinear interpolation between adjacent blue slices
-  float4 lut_slice_low = lut_tex.SampleLevel(lut_sampler, uv_a, 0.f);
-  float4 lut_slice_high = lut_tex.SampleLevel(lut_sampler, uv_b, 0.f);
-  float4 lut_sample = lerp(lut_slice_low, lut_slice_high, b_frac);
+    // Compute 4×4 tile grid index for blue slices (tiles of size 16x16)
+    int2 tile_a = int2(b_index & 3, b_index >> 2);
+    int2 tile_b = int2(b_index_next & 3, b_index_next >> 2);
 
-  return lut_sample;
+    // Get UVs inside the 64×64 packed LUT texture
+    float2 uv_a = (float2(tile_a * 16) + float2(lut_r, lut_g)) / 64.f;
+    float2 uv_b = (float2(tile_b * 16) + float2(lut_r, lut_g)) / 64.f;
+
+    // Trilinear interpolation between adjacent blue slices
+    float4 lut_slice_low = lut_tex.SampleLevel(lut_sampler, uv_a, 0.f);
+    float4 lut_slice_high = lut_tex.SampleLevel(lut_sampler, uv_b, 0.f);
+    float4 lut_sample = lerp(lut_slice_low, lut_slice_high, b_frac);
+
+    return lut_sample;
+  }
 }
 
 float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sampler, float3 srgb_input) {
