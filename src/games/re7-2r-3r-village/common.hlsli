@@ -1,71 +1,5 @@
 #include "./shared.h"
 
-// CorrectPerChannelTonemapHighlightsMax Helpers
-#define FLT_EPSILON 1.192092896e-07  // Smallest positive number, such that 1.0 + FLT_EPSILON != 1.0
-
-float max3(float3 v) {
-  return max(v.x, max(v.y, v.z));
-}
-float min3(float3 v) {
-  return min(v.x, min(v.y, v.z));
-}
-float GetMidValue(float3 v) {
-  return 0.5f * (max3(v) + min3(v));
-}
-
-float InverseLerp(float a, float b, float value) {
-  return (a == b) ? 0.0f : ((value - a) / (b - a));
-}
-
-float3 SetChrominance(float3 color, float chrominance) {
-  float maxVal = max3(color);
-  float minVal = min3(color);
-  float midVal = lerp(minVal, maxVal, 0.5f);
-  return lerp(float3(midVal, midVal, midVal), color, chrominance);
-}
-
-float GetChrominance(float3 color) {
-  // same as original: distance from mid toward extremes
-  return max3(abs(color - GetMidValue(color)));
-}
-
-float3 RestoreLuminance(float3 targetColor, float sourceLuminance) {
-  float targetLuminance = renodx::color::y::from::BT709(targetColor);
-  targetLuminance = max(targetLuminance, 0.0f);
-  sourceLuminance = max(sourceLuminance, 0.0f);
-  return (targetLuminance <= (FLT_EPSILON * 10.0f))
-             ? float3(0.0f, 0.0f, 0.0f)
-             : targetColor * (sourceLuminance / targetLuminance);
-}
-
-// Emulates the highlights desaturation from a per channel tonemapper (a generic one, the math here isn't specific), up to a certain peak brightness (it doesn't need to match your display, it can be picked for consistent results independently of the user calibration).
-// This doesn't perfectly match the hue shifts from games that purely lacked tonemapping and simply clipped to 0-1, but it might help with them too.
-// This can also be used to increase highlights saturation ("desaturationExponent" < 1), in a way that would have matched a per channel tonemaper desaturation, in an "AutoHDR" inverse tonemapping fashion.
-// Note: the result of this depends on the color space, and that is intentional as it wants to keep within the target gamut.
-float3 CorrectPerChannelTonemapHighlightsMax(float3 color,
-                                             float peakBrightness,
-                                             float desaturationExponent = 2.0f) {
-  float sourceChrominance = GetChrominance(color);
-
-  float maxBrightness = max3(color);
-  float midBrightness = GetMidValue(color);
-  float minBrightness = min3(color);
-  float brightnessRatio = saturate(maxBrightness / peakBrightness);
-  brightnessRatio = lerp(brightnessRatio,
-                         sqrt(brightnessRatio),
-                         sqrt(InverseLerp(minBrightness, maxBrightness, midBrightness)));
-
-  float chrominancePow = lerp(1.0f, 1.0f / desaturationExponent, brightnessRatio);
-  float targetChrominance = (sourceChrominance > 1.0f)
-                                ? pow(sourceChrominance, chrominancePow)
-                                : (1.0f - pow(1.0f - sourceChrominance, chrominancePow));
-  float chrominanceRatio = renodx::math::DivideSafe(targetChrominance, sourceChrominance, 1.0f);
-
-  float3 adjusted = SetChrominance(color, chrominanceRatio);
-  return RestoreLuminance(adjusted, renodx::color::y::from::BT709(color));
-}
-// end CorrectPerChannelTonemapHighlightsMax
-
 float GetToneMapToe(float toe) {
   return 1.f;
 }
@@ -119,21 +53,12 @@ float3 ApplyPreDisplayMap(float3 untonemapped) {
 float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float channel_max = 100.f) {
   float peak = renodx::math::Max(untonemapped);
   float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, channel_max, output_max, rolloff_start);
-  float scale = renodx::math::DivideSafe(mapped_peak, peak, 0.f);
+  float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
 
   return scale;
 }
 
 float3 LUTToneMap(float3 untonemapped) {
-  if (RENODX_TONE_MAP_MAX_CHANNEL != 0.f) {
-    float reference_peak = 8.f;
-    float reference_shoulder = 0.5f;
-    float3 reference_color = renodx::tonemap::ExponentialRollOff(untonemapped, reference_shoulder, reference_peak);
-    untonemapped = HueAndChrominance1ReferenceColorOKLab(
-        untonemapped, reference_color, RENODX_TONE_MAP_HUE_SHIFT, (1.f - RENODX_PER_CHANNEL_BLOWOUT_RESTORATION));
-    untonemapped = max(0, untonemapped);
-  }
-
   return untonemapped * ComputeReinhardSmoothClampScale(untonemapped);
 }
 
@@ -209,76 +134,49 @@ float3 ApplyGammaCorrection(float3 color_input) {
   return color_corrected;
 }
 
-/// Piecewise linear + exponential compression to a target value starting from a specified number.
-/// https://www.ea.com/frostbite/news/high-dynamic-range-color-grading-and-display-in-frostbite
-#define EXPONENTIALROLLOFF_GENERATOR(T)                                                      \
-  T ExponentialRollOffExtended(T input, float rolloff_start, float output_max, float clip) { \
-    T rolloff_size = output_max - rolloff_start;                                             \
-    T overage = -max((T)0, input - rolloff_start);                                           \
-    T clip_size = rolloff_start - clip;                                                      \
-    T rolloff_value = (T)1.0f - exp(overage / rolloff_size);                                 \
-    T clip_value = (T)1.0f - exp(clip_size / rolloff_size);                                  \
-    T new_overage = mad(rolloff_size, rolloff_value / clip_value, overage);                  \
-    return input + new_overage;                                                              \
-  }
-EXPONENTIALROLLOFF_GENERATOR(float)
-EXPONENTIALROLLOFF_GENERATOR(float3)
-#undef EXPONENTIALROLLOFF_GENERATOR
-
-float3 GamutCompressToBT2020BT2020InBT2020Out(float3 color_bt2020) {
-  // compress to BT.2020 in gamma space
-  float3 gamma_color = renodx::color::gamma::EncodeSafe(color_bt2020);
-  float grayscale = renodx::color::y::from::BT2020(gamma_color.rgb);
-  float compression_scale = renodx::color::correct::ComputeGamutCompressionScale(gamma_color.rgb, grayscale);
-  gamma_color = renodx::color::correct::GamutCompress(gamma_color, grayscale, compression_scale);
-
-  // back to BT.709 linear
-  color_bt2020 = renodx::color::gamma::DecodeSafe(gamma_color);
-
-  return color_bt2020;
-}
-
 float3 ApplyExponentialRolloffMaxChannel(float3 untonemapped, float diffuse_nits, float peak_nits, float rolloff_start, float clip = 100.f) {
   float peak_ratio = peak_nits / diffuse_nits;
 
   float max_channel = renodx::math::Max(untonemapped);
 
-  float mapped_max = exp2(ExponentialRollOffExtended(
+  float mapped_max = exp2(renodx::tonemap::ExponentialRollOff(
       log2(max_channel),
       log2(rolloff_start),
       log2(peak_ratio),
       log2(clip)));
 
-  float scale = renodx::math::DivideSafe(mapped_max, max_channel, 0.f);
+  float scale = renodx::math::DivideSafe(mapped_max, max_channel, 1.f);
   return untonemapped * scale;
 }
 
 float3 ApplyDisplayMap(float3 untonemapped, float diffuse_nits, float peak_nits) {
-  untonemapped = GamutCompressToBT2020BT2020InBT2020Out(untonemapped);
-
   const float peak_ratio = peak_nits / diffuse_nits;
   const float rolloff_start = 0.4f * peak_ratio;
   const float clip = 100.f;
 
   float3 tonemapped = untonemapped;
   if (RENODX_TONE_MAP_MAX_CHANNEL != 0.f) {
+    if (RENODX_TONE_MAP_HUE_SHIFT > 0.f || RENODX_PER_CHANNEL_BLOWOUT_RESTORATION < 1.f) {
+      float3 reference_color = renodx::tonemap::ReinhardPiecewise(untonemapped, 10.f, 1.f);
+      untonemapped = renodx::color::bt2020::from::BT709(HueAndChrominance1ReferenceColorOKLab(
+          renodx::color::bt709::from::BT2020(untonemapped),
+          renodx::color::bt709::from::BT2020(reference_color),
+          RENODX_TONE_MAP_HUE_SHIFT,
+          (1.f - RENODX_PER_CHANNEL_BLOWOUT_RESTORATION)));
+      untonemapped = max(0, untonemapped);
+    }
+
     tonemapped = ApplyExponentialRolloffMaxChannel(untonemapped, diffuse_nits, peak_nits, rolloff_start);
   } else {
     float y_in = renodx::color::y::from::BT2020(untonemapped);
-    float y_out = exp2(ExponentialRollOffExtended(
-        log2(y_in),
-        log2(rolloff_start),
-        log2(peak_ratio),
-        log2(clip)));
+    float y_out = exp2(renodx::tonemap::ExponentialRollOff(
+        log2(y_in), log2(rolloff_start), log2(peak_ratio), log2(clip)));
     float3 lum = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
 
     tonemapped = lum;
 #if 1
-    float3 ch = exp2(ExponentialRollOffExtended(
-        log2(untonemapped),
-        log2(rolloff_start),
-        log2(peak_ratio),
-        log2(clip)));
+    float3 ch = exp2(renodx::tonemap::ExponentialRollOff(
+        log2(untonemapped), log2(rolloff_start), log2(peak_ratio), log2(clip)));
     tonemapped = renodx::color::correct::Luminance(lum, ch, 1.f);
     tonemapped = renodx::color::correct::Chrominance(tonemapped, min(lum, peak_ratio));
 #endif
