@@ -1,7 +1,7 @@
 #ifndef SRC_GAMES_AVATARFOP_SHARED_H_
 #define SRC_GAMES_AVATARFOP_SHARED_H_
 
-#define RENODX_TONE_MAP_MID_GRAY         0.26
+#define RENODX_TONE_MAP_MID_GRAY_AFOP    0.24
 #define RENODX_TONE_MAP_MID_GRAY_OUTLAWS 0.25
 // Must be 32bit aligned
 // Should be 4x32
