@@ -193,6 +193,15 @@ float3 ApplySDREOTFEmulation(float3 color) {
   return color;
 }
 
+float3 SplitContrast(float3 color, float contrast_shadows = 1.f, float contrast_highlights = 1.f, float mid_gray = 0.18f, float3x3 color_space = renodx::color::BT709_TO_XYZ_MAT) {
+  float color_y = dot(color, color_space[1].rgb);
+
+  float contrast = renodx::math::Select(color_y < mid_gray, contrast_shadows, contrast_highlights);
+  float contrasted_y = pow(color_y / mid_gray, contrast) * mid_gray;
+
+  return renodx::color::correct::Luminance(color, color_y, contrasted_y);
+}
+
 float3 GenerateOutputAvatar(float3 ungraded_bt709) {
   renodx::color::grade::Config cg_config = CreateColorGradingConfig();
   float3 graded_bt709;
@@ -200,10 +209,10 @@ float3 GenerateOutputAvatar(float3 ungraded_bt709) {
     graded_bt709 = ungraded_bt709;
   } else {
     // add contrast to match vanilla tonemapper, done by luminance to keep hues and chrominance intact, and scale lightness evenly
-    float3 contrasted_bt709 = renodx::color::grade::Contrast(ungraded_bt709, 1.225f) * RENODX_TONE_MAP_MID_GRAY / 0.18f;
+    float3 contrasted_bt709 = SplitContrast(ungraded_bt709, 1.16f, 0.9f, 0.18f) * RENODX_TONE_MAP_MID_GRAY_AFOP / 0.18f;
 
     // use reinhard to blow out and hue shift, peak of 12.5 found to look good in testing
-    float3 hue_and_chrominance_source = renodx::tonemap::ReinhardPiecewise(contrasted_bt709, 12.5f, 1.f);
+    float3 hue_and_chrominance_source = renodx::tonemap::ReinhardPiecewise(contrasted_bt709, 10.f, 1.f);
 
     // apply chrominance and hue of tonemapped color onto untonemapped, add saturation boost
     graded_bt709 = HueAndChrominanceOKLab(contrasted_bt709, hue_and_chrominance_source, RENODX_TONE_MAP_HUE_SHIFT, 1.f, 1.1f);
@@ -225,7 +234,7 @@ float3 GenerateOutputAvatar(float3 ungraded_bt709) {
   if (RENODX_TONE_MAP_TYPE == 2.f) {
     // display map by max channel
     color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
-    color_pq = ApplyHermiteSplineByMaxChannelPQInput(color_pq, RENODX_DIFFUSE_WHITE_NITS, RENODX_PEAK_WHITE_NITS, 300.f);
+    color_pq = ApplyHermiteSplineByMaxChannelPQInput(color_pq, RENODX_DIFFUSE_WHITE_NITS, RENODX_PEAK_WHITE_NITS, 100.f);
   } else {
     color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
   }

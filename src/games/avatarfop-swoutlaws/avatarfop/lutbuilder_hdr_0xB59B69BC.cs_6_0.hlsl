@@ -314,12 +314,14 @@ void comp_main() {
       asfloat(CB1_m[0u].w).xxx);
   float3 _1363 = float3(mad(_1348, 0.180000007152557373046875f, _1359), mad(_1349, 0.180000007152557373046875f, _1359), mad(_1350, 0.180000007152557373046875f, _1359));
 
+#if 1
   // tonemapping seems to be static for the entire game, lutbuilder also often isn't running per frame, so we nuke everything
   float3 ungraded_bt709 = _1363;
   if (RENODX_TONE_MAP_TYPE != 0 && RENODX_TONE_MAP_TYPE != 3.f) {
     U0[CB2_m11.y][gl_GlobalInvocationID] = float4(GenerateOutputAvatar(ungraded_bt709), 1.f);
     return;
   }
+#endif
 
   // BT.709 -> AP1
   float3 _1367 = float3(dp3_f32(float3(0.61319148540496826171875f, 0.3395120799541473388671875f, 0.0473663322627544403076171875f), _1363), dp3_f32(float3(0.070206902921199798583984375f, 0.9163358211517333984375f, 0.01345001161098480224609375f), _1363), dp3_f32(float3(0.02061887085437774658203125f, 0.109567292034626007080078125f, 0.8696067333221435546875f), _1363));
