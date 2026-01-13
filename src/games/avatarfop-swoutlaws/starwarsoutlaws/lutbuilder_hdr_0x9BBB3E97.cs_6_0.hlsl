@@ -308,12 +308,14 @@ void comp_main() {
   float _1359 = dp3_f32(float3(_1348 * 0.180000007152557373046875f, _1349 * 0.180000007152557373046875f, _1350 * 0.180000007152557373046875f), asfloat(CB1_m[0u].w).xxx);
   float3 _1363 = float3(mad(_1348, 0.180000007152557373046875f, _1359), mad(_1349, 0.180000007152557373046875f, _1359), mad(_1350, 0.180000007152557373046875f, _1359));
 
-  // tonemapping seems to be static for the entire game, lutbuilder also often isn't running per frame, so we nuke everything
+#if 1  // custom tonemapper
   float3 ungraded_bt709 = _1363;
   if (RENODX_TONE_MAP_TYPE != 0 && RENODX_TONE_MAP_TYPE != 3.f) {
-    U0[CB2_m11.y][gl_GlobalInvocationID] = float4(GenerateOutputStarWarsOutlaws(ungraded_bt709), 1.f);
+    float contrast = asfloat(CB1_m[4u].x);
+    U0[CB2_m11.y][gl_GlobalInvocationID] = float4(GenerateOutputStarWarsOutlaws(ungraded_bt709, contrast), 1.f);
     return;
   }
+#endif
 
   float3 _1367 = float3(dp3_f32(float3(0.61319148540496826171875f, 0.3395121395587921142578125f, 0.0473663508892059326171875f), _1363), dp3_f32(float3(0.070206940174102783203125f, 0.9163358211517333984375f, 0.013450019061565399169921875f), _1363), dp3_f32(float3(0.02061887271702289581298828125f, 0.10956729948520660400390625f, 0.869606792926788330078125f), _1363));
   float _1371 = max(dp3_f32(float3(0.4508648812770843505859375f, 0.528371751308441162109375f, 0.02073896862566471099853515625f), _1367), 0.0f);

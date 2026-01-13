@@ -304,20 +304,25 @@ float3 GenerateOutputAvatar(float3 ungraded_bt709, float contrast) {
   return color_pq;
 }
 
-float3 GenerateOutputStarWarsOutlaws(float3 ungraded_bt709) {
+float3 GenerateOutputStarWarsOutlaws(float3 ungraded_bt709, float contrast) {
   UserGradingConfig cg_config = CreateColorGradeConfig();
   float3 graded_bt709;
   if (RENODX_TONE_MAP_TYPE == 1.f) {  // None
     graded_bt709 = ungraded_bt709;
-  } else {
-    // add contrast to match vanilla tonemapper, done by luminance to keep hues and chrominance intact, and scale lightness evenly
-    float3 contrasted_bt709 = renodx::color::grade::Contrast(ungraded_bt709, 1.16f) * RENODX_TONE_MAP_MID_GRAY_OUTLAWS / 0.18f;
+  } else {  // Vanilla+
+    // `pow(c, contrast) * 2.f` per channel will essentially give uncapped version of vanilla
+    // emulate by luminance to keep hues and chrominance intact and scale lightness evenly
+    float shadow_contrast = contrast;
+    // lower highlight contrast so image isn't overly harsh, but make sure sun still reaches 100.f
+    float highlight_contrast = contrast * 0.69275f;
+    float3 contrasted_bt709 = (SplitContrast(ungraded_bt709, shadow_contrast, highlight_contrast, 1.f)) * 1.7f;
 
-    // use reinhard to blow out and hue shift, peak of 12.5 found to look good in testing
-    float3 hue_and_chrominance_source = renodx::tonemap::ReinhardPiecewise(contrasted_bt709, 12.5f, 1.f);
+    // use reinhard to blow out and hue shift, peak of 10.f found to look good in testing
+    float3 hue_and_chrominance_source = renodx::tonemap::ReinhardPiecewise(contrasted_bt709, 10.f, 1.f);
 
     // apply chrominance and hue of tonemapped color onto untonemapped, add saturation boost
-    graded_bt709 = HueAndChrominanceOKLab(contrasted_bt709, hue_and_chrominance_source, RENODX_TONE_MAP_HUE_SHIFT, 1.f, 1.1f);
+    // this gives us our graded color which will be compressed by max channel to monitor peak later
+    graded_bt709 = HueAndChrominanceOKLab(contrasted_bt709, hue_and_chrominance_source, RENODX_TONE_MAP_HUE_SHIFT, RENODX_TONE_MAP_BLOWOUT, 1.1f);
   }
 
   float3 final_bt709 = graded_bt709;
@@ -331,14 +336,10 @@ float3 GenerateOutputStarWarsOutlaws(float3 ungraded_bt709) {
 
   float3 color_bt2020 = renodx::color::bt2020::from::BT709(final_bt709);
 
-  float3 color_pq;
+  float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
 
-  if (RENODX_TONE_MAP_TYPE == 2.f) {
-    // display map by max channel
-    color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
-    color_pq = ApplyHermiteSplineByMaxChannelPQInput(color_pq, RENODX_DIFFUSE_WHITE_NITS, RENODX_PEAK_WHITE_NITS, 300.f);
-  } else {
-    color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
+  if (RENODX_TONE_MAP_TYPE == 2.f) {  // display map by max channel
+    color_pq = ApplyHermiteSplineByMaxChannelPQInput(color_pq, RENODX_DIFFUSE_WHITE_NITS, RENODX_PEAK_WHITE_NITS, 100.f);
   }
 
   return color_pq;
