@@ -370,6 +370,17 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
+        new renodx::utils::settings::Setting{
+        .key = "FxSharpening",
+        .binding = &shader_injection.custom_sharpening,
+        .default_value = 100.f,
+        .label = "Sharpening",
+        .section = "Effects",
+        .tooltip = "Controls the strength of the vanilla sharpening filter.",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
         .binding = &shader_injection.custom_film_grain,
@@ -381,17 +392,6 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "FxSharpness",
-    //     .binding = &shader_injection.custom_sharpness,
-    //     .default_value = 0.f,
-    //     .label = "Sharpness",
-    //     .section = "Effects",
-    //     .tooltip = "Controls RCAS Sharpening strength.",
-    //     .max = 100.f,
-    //     .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0; },
-    //     .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
-    // },
     //     new renodx::utils::settings::Setting{
     //     .key = "ColorGradeLutScaling",
     //     .binding = &CUSTOM_LUT_SCALING,
@@ -454,7 +454,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapWhiteClip", 100.f);
-    renodx::utils::settings::UpdateSetting("ToneMapHDRBoost", 0.f);
+  renodx::utils::settings::UpdateSetting("ToneMapHDRBoost", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
@@ -463,7 +463,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-  renodx::utils::settings::UpdateSetting("FxChromaticAberration", 50.f);
+  renodx::utils::settings::UpdateSetting("FxChromaticAberration", 100.f);
+  renodx::utils::settings::UpdateSetting("FxVignette", 100.f);
+  renodx::utils::settings::UpdateSetting("FxSharpening", 100.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
 }
 
