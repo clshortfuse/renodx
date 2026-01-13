@@ -149,8 +149,8 @@ float3 HermiteSplineRolloff(float3 color) {
 // float3 ReinhardPiecewise(float3 color) {
 //   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
-//   float peak_nits = config.peak_white_nits / renodx::color::bt709::REFERENCE_WHITE;              // Normalizes peak
-//   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::bt709::REFERENCE_WHITE;  // Normalizes game brightness
+//   float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;              // Normalizes peak
+//   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness
 
 //   return renodx::tonemap::ReinhardPiecewise(color, peak_nits / diffuse_white_nits);  // Need to divide peak_nits by diffuse_white_nits to accurately determine tonemapping peak. This is because game brightness is a linear scale that occurs after tonemapping.
 // }
@@ -158,8 +158,8 @@ float3 HermiteSplineRolloff(float3 color) {
 float3 HDRDisplayMap(float3 color, float tonemapper) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
-  float peak_nits = config.peak_white_nits / renodx::color::bt709::REFERENCE_WHITE;              // Normalizes peak
-  float diffuse_white_nits = config.diffuse_white_nits / renodx::color::bt709::REFERENCE_WHITE;  // Normalizes game brightness
+  float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;              // Normalizes peak
+  float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness
 
   float compression_scale;
   GamutCompression(color, compression_scale);
