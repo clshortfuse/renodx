@@ -1,0 +1,798 @@
+#include "./common.hlsl"
+
+Texture2D<float4> pActDepth : register(t0);
+
+Texture2D<float4> pActVelocity : register(t1);
+
+Texture2D<float4> pActColor : register(t2);
+
+Texture2D<float4> pPrevColor : register(t3);
+
+cbuffer $Globals : register(b0) {
+  float4 pActParams : packoffset(c000.x);
+  float4 pPrevParams : packoffset(c001.x);
+  float4 pParams : packoffset(c002.x);
+};
+
+SamplerState pActDepthS : register(s0);
+
+SamplerState pActVelocityS : register(s1);
+
+SamplerState pActColorS : register(s2);
+
+SamplerState pPrevColorS : register(s3);
+
+float4 main(
+  noperspective float4 SV_Position : SV_Position,
+  linear float2 TEXCOORD : TEXCOORD
+) : SV_Target {
+  float4 SV_Target;
+  float _12[9];
+  float _13[9];
+  float _17 = TEXCOORD.x - pActParams.z;
+  float _18 = TEXCOORD.y - pActParams.w;
+  _12[0] = _17;
+  _13[0] = _18;
+  _12[1] = TEXCOORD.x;
+  _13[1] = _18;
+  float _23 = pActParams.z + TEXCOORD.x;
+  _12[2] = _23;
+  _13[2] = _18;
+  _12[3] = _17;
+  _13[3] = TEXCOORD.y;
+  _12[4] = TEXCOORD.x;
+  _13[4] = TEXCOORD.y;
+  _12[5] = _23;
+  _13[5] = TEXCOORD.y;
+  float _32 = pActParams.w + TEXCOORD.y;
+  _12[6] = _17;
+  _13[6] = _32;
+  _12[7] = TEXCOORD.x;
+  _13[7] = _32;
+  _12[8] = _23;
+  _13[8] = _32;
+  float4 _39 = pActDepth.Sample(pActDepthS, float2(_17, _18));
+  float _42;
+  float _43;
+  float _44;
+  float _45;
+  float _46;
+  int _47;
+  float _345;
+  float _346;
+  float _347;
+  float _348;
+  float _364;
+  float _365;
+  float _366;
+  float _367;
+  _42 = _18;
+  _43 = TEXCOORD.x;
+  _44 = _17;
+  _45 = _18;
+  _46 = _39.x;
+  _47 = 1;
+  while(true) {
+    float4 _48 = pActDepth.Sample(pActDepthS, float2(_43, _42));
+    bool _50 = (_46 < _48.x);
+    float _51 = select(_50, _43, _44);
+    float _52 = select(_50, _42, _45);
+    int _53 = _47 + 1;
+    if (!(_53 == 9)) {
+      _42 = (_13[_53]);
+      _43 = (_12[_53]);
+      _44 = _51;
+      _45 = _52;
+      _46 = select(_50, _48.x, _46);
+      _47 = _53;
+      continue;
+    }
+    float4 _62 = pActVelocity.Sample(pActVelocityS, float2(_51, _52));
+    float4 _67 = pActColor.Sample(pActColorS, float2(TEXCOORD.x, TEXCOORD.y));
+
+    //_67.rgb = renodx::draw::InvertIntermediatePass(_67.rgb);
+
+    float _72 = TEXCOORD.x - (_62.x * 0.5f);
+    float _73 = TEXCOORD.y + (_62.y * 0.5f);
+    // Simplified bounds check (original had excessive boolean casts):
+    // if (!((bool)(_73 > 1.0f) || ((bool)(((bool)((bool)(_72 < 0.0f) || (bool)(_72 > 1.0f))) || (bool)(_73 < 0.0f))))) {
+    if (!(_72 < 0.0f || _72 > 1.0f || _73 < 0.0f || _73 > 1.0f)) {
+      float4 _82 = pActColor.Sample(pActColorS, float2(TEXCOORD.x, _18));
+      float4 _86 = pActColor.Sample(pActColorS, float2(_17, TEXCOORD.y));
+      float4 _90 = pActColor.Sample(pActColorS, float2(_23, TEXCOORD.y));
+      float4 _94 = pActColor.Sample(pActColorS, float2(TEXCOORD.x, _32));
+
+      // _82.rgb = renodx::draw::InvertIntermediatePass(_82.rgb);
+      // _86.rgb = renodx::draw::InvertIntermediatePass(_86.rgb);
+      // _90.rgb = renodx::draw::InvertIntermediatePass(_90.rgb);
+      // _94.rgb = renodx::draw::InvertIntermediatePass(_94.rgb);
+      // _82.rgb = renodx::color::gamma::EncodeSafe(_82.rgb);
+      // _86.rgb = renodx::color::gamma::EncodeSafe(_86.rgb);
+      // _90.rgb = renodx::color::gamma::EncodeSafe(_90.rgb);
+      // _94.rgb = renodx::color::gamma::EncodeSafe(_94.rgb);
+
+
+      float _107 = min(min(min(min(_67.x, _82.x), _86.x), _90.x), _94.x);
+      float _108 = min(min(min(min(_67.y, _82.y), _86.y), _90.y), _94.y);
+      float _109 = min(min(min(min(_67.z, _82.z), _86.z), _90.z), _94.z);
+      float _119 = max(max(max(max(_67.x, _82.x), _86.x), _90.x), _94.x);
+      float _120 = max(max(max(max(_67.y, _82.y), _86.y), _90.y), _94.y);
+      float _121 = max(max(max(max(_67.z, _82.z), _86.z), _90.z), _94.z);
+      float _127 = pPrevParams.x * _72;
+      float _128 = pPrevParams.y * _73;
+      float _131 = floor(_127 + -0.5f);
+      float _132 = floor(_128 + -0.5f);
+      float _133 = _131 + 0.5f;
+      float _134 = _132 + 0.5f;
+      float _135 = _127 - _133;
+      float _136 = _128 - _134;
+      float _137 = _135 * 0.5f;
+      float _138 = _136 * 0.5f;
+      float _145 = (((1.0f - _137) * _135) + -0.5f) * _135;
+      float _146 = (((1.0f - _138) * _136) + -0.5f) * _136;
+      float _147 = _135 * _135;
+      float _148 = _136 * _136;
+      float _149 = _135 * 1.5f;
+      float _150 = _136 * 1.5f;
+      // Assembly: ((2.0 - _149) * _135 + 0.5) * _135, not lerp!
+      float _163 = (((2.0f - _149) * _135) + 0.5f) * _135;
+      float _164 = (((2.0f - _150) * _136) + 0.5f) * _136;
+      float _167 = _147 * (_137 + -0.5f);
+      float _168 = _148 * (_138 + -0.5f);
+      float _169 = _163 + ((_147 * (_149 + -2.5f)) + 1.0f);
+      float _170 = _164 + ((_148 * (_150 + -2.5f)) + 1.0f);
+      float _179 = (_131 + -0.5f) * pPrevParams.z;
+      float _180 = (_132 + -0.5f) * pPrevParams.w;
+      float _181 = (_131 + 2.5f) * pPrevParams.z;
+      float _182 = (_132 + 2.5f) * pPrevParams.w;
+      float _183 = ((_163 / _169) + _133) * pPrevParams.z;
+      float _184 = ((_164 / _170) + _134) * pPrevParams.w;
+      float4 _185 = pPrevColor.Sample(pPrevColorS, float2(_179, _180));
+      float4 _194 = pPrevColor.Sample(pPrevColorS, float2(_183, _180));
+      float4 _207 = pPrevColor.Sample(pPrevColorS, float2(_181, _180));
+      float4 _224 = pPrevColor.Sample(pPrevColorS, float2(_179, _184));
+      float4 _233 = pPrevColor.Sample(pPrevColorS, float2(_183, _184));
+      float4 _242 = pPrevColor.Sample(pPrevColorS, float2(_181, _184));
+      float4 _251 = pPrevColor.Sample(pPrevColorS, float2(_179, _182));
+      float4 _260 = pPrevColor.Sample(pPrevColorS, float2(_183, _182));
+      float4 _269 = pPrevColor.Sample(pPrevColorS, float2(_181, _182));
+
+      // _185.rgb = renodx::draw::InvertIntermediatePass(_185.rgb);
+      // _194.rgb = renodx::draw::InvertIntermediatePass(_194.rgb);
+      // _207.rgb = renodx::draw::InvertIntermediatePass(_207.rgb);
+      // _224.rgb = renodx::draw::InvertIntermediatePass(_224.rgb);
+      // _233.rgb = renodx::draw::InvertIntermediatePass(_233.rgb);
+      // _242.rgb = renodx::draw::InvertIntermediatePass(_242.rgb);
+      // _251.rgb = renodx::draw::InvertIntermediatePass(_251.rgb);
+      // _260.rgb = renodx::draw::InvertIntermediatePass(_260.rgb);
+      // _269.rgb = renodx::draw::InvertIntermediatePass(_269.rgb);
+      // _185.rgb = renodx::color::gamma::EncodeSafe(_185.rgb);
+      // _194.rgb = renodx::color::gamma::EncodeSafe(_194.rgb);
+      // _207.rgb = renodx::color::gamma::EncodeSafe(_207.rgb);
+      // _224.rgb = renodx::color::gamma::EncodeSafe(_224.rgb);
+      // _233.rgb = renodx::color::gamma::EncodeSafe(_233.rgb);
+      // _242.rgb = renodx::color::gamma::EncodeSafe(_242.rgb);
+      // _251.rgb = renodx::color::gamma::EncodeSafe(_251.rgb);
+      // _260.rgb = renodx::color::gamma::EncodeSafe(_260.rgb);
+      // _269.rgb = renodx::color::gamma::EncodeSafe(_269.rgb);
+
+      float _285 = (((((_260.x * _169) + (_251.x * _145)) + (_269.x * _167)) * _168) + ((((_194.x * _169) + (_185.x * _145)) + (_207.x * _167)) * _146)) + ((((_233.x * _169) + (_224.x * _145)) + (_242.x * _167)) * _170);
+      float _293 = (((((_260.y * _169) + (_251.y * _145)) + (_269.y * _167)) * _168) + ((((_194.y * _169) + (_185.y * _145)) + (_207.y * _167)) * _146)) + ((((_233.y * _169) + (_224.y * _145)) + (_242.y * _167)) * _170);
+      float _301 = (((((_260.z * _169) + (_251.z * _145)) + (_269.z * _167)) * _168) + ((((_194.z * _169) + (_185.z * _145)) + (_207.z * _167)) * _146)) + ((((_233.z * _169) + (_224.z * _145)) + (_242.z * _167)) * _170);
+      float _309 = (((((_260.w * _169) + (_251.w * _145)) + (_269.w * _167)) * _168) + ((((_194.w * _169) + (_185.w * _145)) + (_207.w * _167)) * _146)) + ((((_233.w * _169) + (_224.w * _145)) + (_242.w * _167)) * _170);
+      float _313 = (_119 + _107) * 0.5f;
+      float _314 = (_120 + _108) * 0.5f;
+      float _315 = (_121 + _109) * 0.5f;
+      float _322 = _285 - _313;
+      float _323 = _293 - _314;
+      float _324 = _301 - _315;
+      float _332 = max(abs(_322 / ((_119 - _107) * 0.5f)), max(abs(_323 / ((_120 - _108) * 0.5f)), abs(_324 / ((_121 - _109) * 0.5f))));
+      do {
+        if (_332 > 1.0f) {
+          _345 = ((_322 / _332) + _313);
+          _346 = ((_323 / _332) + _314);
+          _347 = ((_324 / _332) + _315);
+          _348 = (((_309 - _67.w) / _332) + _67.w);
+        } else {
+          _345 = _285;
+          _346 = _293;
+          _347 = _301;
+          _348 = _309;
+        }
+        _364 = ((pParams.x * (_67.x - _345)) + _345);
+        _365 = ((pParams.x * (_67.y - _346)) + _346);
+        _366 = ((pParams.x * (_67.z - _347)) + _347);
+        _367 = ((pParams.x * (_67.w - _348)) + _348);
+      } while (false);
+    } else {
+      _364 = _67.x;
+      _365 = _67.y;
+      _366 = _67.z;
+      _367 = _67.w;
+    }
+    SV_Target.x = _364;
+    SV_Target.y = _365;
+    SV_Target.z = _366;
+    SV_Target.w = _367;
+    break;
+  }
+  // SV_Target.rgb = renodx::draw::InvertIntermediatePass(SV_Target.rgb);
+  // SV_Target.rgb = ApplyRenoDXPostProcessing(SV_Target.rgb, TEXCOORD, pActColor, pActColorS);
+  // SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
+  //SV_Target.rgb = CustomDisplayMap(SV_Target.rgb, TEXCOORD, pActColor, pActColorS);
+  //SV_Target.rgb = renodx::draw::RenderIntermediatePass(renodx::color::gamma::DecodeSafe(SV_Target.rgb));
+  return SV_Target;
+}
+
+// ;
+// ; Input signature :
+// ;
+// ; Name Index Mask Register SysValue Format Used
+// ; -- -- -- -- -- -- -- -- -- -- -- -- - -- -- -- -- -- -- -- -- -- -- -- -- -- -- - -- -- --
+// ; SV_Position 0 xyzw 0 POS float       
+// ; TEXCOORD 0 xy 1 NONE float xy  
+// ;
+// ;
+// ; Output signature :
+// ;
+// ; Name Index Mask Register SysValue Format Used
+// ; -- -- -- -- -- -- -- -- -- -- -- -- - -- -- -- -- -- -- -- -- -- -- -- -- -- -- - -- -- --
+// ; SV_Target 0 xyzw 0 TARGET float xyzw
+// ;
+// ; shader debug name : 642e123ea1468c5c5cd082d05b59ddc9.pdb
+// ; shader hash : 642e123ea1468c5c5cd082d05b59ddc9
+// ;
+// ; Pipeline Runtime Information : 
+// ;
+// ; PSVRuntimeInfo :
+// ; Pixel Shader
+// ; DepthOutput = 0
+// ; SampleFrequency = 0
+// ; MinimumExpectedWaveLaneCount : 0
+// ; MaximumExpectedWaveLaneCount : 4294967295
+// ; UsesViewID : false
+// ; SigInputElements : 2
+// ; SigOutputElements : 1
+// ; SigPatchConstOrPrimElements : 0
+// ; SigInputVectors : 2
+// ; SigOutputVectors[0] : 1
+// ; SigOutputVectors[1] : 0
+// ; SigOutputVectors[2] : 0
+// ; SigOutputVectors[3] : 0
+// ;
+// ;
+// ; Input signature :
+// ;
+// ; Name Index InterpMode DynIdx
+// ; -- -- -- -- -- -- -- -- -- -- -- -- - -- -- -- -- -- -- -- -- -- -- -- -- -- --
+// ; SV_Position 0 noperspective       
+// ; TEXCOORD 0 linear       
+// ;
+// ; Output signature :
+// ;
+// ; Name Index InterpMode DynIdx
+// ; -- -- -- -- -- -- -- -- -- -- -- -- - -- -- -- -- -- -- -- -- -- -- -- -- -- --
+// ; SV_Target 0                              
+// ;
+// ; Buffer Definitions :
+// ;
+// ; cbuffer $Globals
+// ; {
+//   ;
+//   ; struct $Globals
+// ; {
+//     ;
+//     ; float4 pActParams; ; Offset: 0
+// ; float4 pPrevParams; ; Offset: 16
+// ; float4 pParams; ; Offset: 32
+// ;
+//     ; } $Globals; ; Offset: 0 Size : 48
+// ;
+//   ; }
+// ;
+// ;
+// ; Resource Bindings :
+// ;
+// ; Name Type Format Dim ID HLSL Bind Count
+// ; -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- - -- -- -- -- -- - -- -- -- - -- -- -- -- -- -- -- -- -- --
+// ; $Globals cbuffer NA NA CB0 cb0 1
+// ; pActDepthS sampler NA NA S0 s0 1
+// ; pActVelocityS sampler NA NA S1 s1 1
+// ; pActColorS sampler NA NA S2 s2 1
+// ; pPrevColorS sampler NA NA S3 s3 1
+// ; pActDepth texture f32 2d T0 t0 1
+// ; pActVelocity texture f32 2d T1 t1 1
+// ; pActColor texture f32 2d T2 t2 1
+// ; pPrevColor texture f32 2d T3 t3 1
+// ;
+// ;
+// ; ViewId state :
+// ;
+// ; Number of inputs : 6, outputs : 4
+// ; Outputs dependent on ViewId : {}
+// ; Inputs contributing to computation of Outputs :
+// ; output 0 depends on inputs : { 4, 5 }
+// ; output 1 depends on inputs : { 4, 5 }
+// ; output 2 depends on inputs : { 4, 5 }
+// ; output 3 depends on inputs : { 4, 5 }
+// ;
+// target datalayout = "e-m:e-p:32:32-i1:32-i8:32-i16:32-i32:32-i64:64-f16:32-f32:32-f64:64-n8:16:32:64"
+// target triple = "dxil-ms-dx"
+
+//                                                                                                                       % dx.types.Handle = type { i8* }
+//                                                                                                                                           % dx.types.CBufRet.f32 = type { float, float, float, float }
+//                                                                                                                                                                    % dx.types.ResRet.f32 = type { float, float, float, float, i32 }
+//                                                                                                                                                                                            % "class.Texture2D<vector<float, 4> >" = type { <4 x float>, % "class.Texture2D<vector<float, 4> >::mips_type" }
+//                                                                                                                                                                                                                                     % "class.Texture2D<vector<float, 4> >::mips_type" = type { i32 }
+//                                                                                                                                                                                                                                                                                         % "$Globals" = type { <4 x float>, <4 x float>, <4 x float> }
+//                                                                                                                                                                                                                                                                                                        % struct .SamplerState = type { i32 }
+
+// define void @main() {
+//   % 1 = call % dx.types.Handle @dx.op.createHandle(i32 57, i8 0, i32 3, i32 3, i1 false); CreateHandle(resourceClass, rangeId, index, nonUniformIndex)
+//       % 2 = call % dx.types.Handle @dx.op.createHandle(i32 57, i8 0, i32 2, i32 2, i1 false); CreateHandle(resourceClass, rangeId, index, nonUniformIndex)
+//       % 3 = call % dx.types.Handle @dx.op.createHandle(i32 57, i8 0, i32 1, i32 1, i1 false); CreateHandle(resourceClass, rangeId, index, nonUniformIndex)
+//       % 4 = call % dx.types.Handle @dx.op.createHandle(i32 57, i8 0, i32 0, i32 0, i1 false); CreateHandle(resourceClass, rangeId, index, nonUniformIndex)
+//       % 5 = call % dx.types.Handle @dx.op.createHandle(i32 57, i8 3, i32 3, i32 3, i1 false); CreateHandle(resourceClass, rangeId, index, nonUniformIndex)
+//       % 6 = call % dx.types.Handle @dx.op.createHandle(i32 57, i8 3, i32 2, i32 2, i1 false); CreateHandle(resourceClass, rangeId, index, nonUniformIndex)
+//       % 7 = call % dx.types.Handle @dx.op.createHandle(i32 57, i8 3, i32 1, i32 1, i1 false); CreateHandle(resourceClass, rangeId, index, nonUniformIndex)
+//       % 8 = call % dx.types.Handle @dx.op.createHandle(i32 57, i8 3, i32 0, i32 0, i1 false); CreateHandle(resourceClass, rangeId, index, nonUniformIndex)
+//       % 9 = call % dx.types.Handle @dx.op.createHandle(i32 57, i8 2, i32 0, i32 0, i1 false); CreateHandle(resourceClass, rangeId, index, nonUniformIndex)
+//       % 10 = call float @dx.op.loadInput.f32(i32 4, i32 1, i32 0, i8 0, i32 undef); LoadInput(inputSigId, rowIndex, colIndex, gsVertexAxis)
+//       % 11 = call float @dx.op.loadInput.f32(i32 4, i32 1, i32 0, i8 1, i32 undef); LoadInput(inputSigId, rowIndex, colIndex, gsVertexAxis)
+//       % 12 = alloca[9 x float], align 4
+//             % 13 = alloca[9 x float], align 4
+//             % 14 = call % dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32 59, % dx.types.Handle % 9, i32 0); CBufferLoadLegacy(handle, regIndex)
+//       % 15 = extractvalue % dx.types.CBufRet.f32 % 14, 2
+//             % 16 = extractvalue % dx.types.CBufRet.f32 % 14, 3
+//             % 17 = fsub fast float % 10, % 15
+//             % 18 = fsub fast float % 11, % 16
+//             % 19 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 0
+//   % 20 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 0
+//   store float % 17, float * % 19, align 4
+//   store float % 18, float * % 20, align 4
+//   % 21 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 1
+//   % 22 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 1
+//   store float % 10, float * % 21, align 4
+//   store float % 18, float * % 22, align 4
+//   % 23 = fadd fast float % 15, % 10
+//                                                                                                                                                                                                                                                                                                                                                                                                                                                 % 24 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 2
+//   % 25 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 2
+//   store float % 23, float * % 24, align 4
+//   store float % 18, float * % 25, align 4
+//   % 26 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 3
+//   % 27 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 3
+//   store float % 17, float * % 26, align 4
+//   store float % 11, float * % 27, align 4
+//   % 28 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 4
+//   % 29 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 4
+//   store float % 10, float * % 28, align 4
+//   store float % 11, float * % 29, align 4
+//   % 30 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 5
+//   % 31 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 5
+//   store float % 23, float * % 30, align 4
+//   store float % 11, float * % 31, align 4
+//   % 32 = fadd fast float % 16, % 11
+//                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         % 33 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 6
+//   % 34 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 6
+//   store float % 17, float * % 33, align 4
+//   store float % 32, float * % 34, align 4
+//   % 35 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 7
+//   % 36 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 7
+//   store float % 10, float * % 35, align 4
+//   store float % 32, float * % 36, align 4
+//   % 37 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 8
+//   % 38 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 8
+//   store float % 23, float * % 37, align 4
+//   store float % 32, float * % 38, align 4
+//   % 39 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 4, % dx.types.Handle % 8, float % 17, float % 18, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 40 = extractvalue % dx.types.ResRet.f32 % 39, 0
+//   br label % 41
+
+//       ; <label> : 41; preds = % 55, % 0
+//                     % 42 = phi float[% 18, % 0], [% 60, % 55]
+//       % 43 = phi float[% 10, % 0], [% 58, % 55]
+//       % 44 = phi float[% 17, % 0], [% 51, % 55]
+//       % 45 = phi float[% 18, % 0], [% 52, % 55]
+//       % 46 = phi float[% 40, % 0], [% 56, % 55]
+//       % 47 = phi i32[1, % 0], [% 53, % 55]
+//       % 48 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 4, % dx.types.Handle % 8, float % 43, float % 42, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 49 = extractvalue % dx.types.ResRet.f32 % 48, 0
+//             % 50 = fcmp fast olt float % 46, % 49
+//             % 51 = select i1 % 50, float % 43, float % 44
+//   % 52 = select i1 % 50, float % 42, float % 45
+//   % 53 = add nuw nsw i32 % 47, 1
+//   % 54 = icmp eq i32 % 53, 9
+//   br i1 % 54, label % 61, label % 55
+
+//       ; <label> : 55; preds = % 41
+//           % 56 = select i1 % 50, float % 49, float % 46
+//   % 57 = getelementptr[9 x float], [9 x float] * % 12, i32 0, i32 % 53
+//   % 58 = load float, float * % 57, align 4
+//   % 59 = getelementptr[9 x float], [9 x float] * % 13, i32 0, i32 % 53
+//   % 60 = load float, float * % 59, align 4
+//   br label % 41
+
+//       ; <label> : 61; preds = % 41
+//           % 62 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 3, % dx.types.Handle % 7, float % 51, float % 52, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 63 = extractvalue % dx.types.ResRet.f32 % 62, 0
+//             % 64 = extractvalue % dx.types.ResRet.f32 % 62, 1
+//             % 65 = fmul fast float % 63, 5.000000e-01
+//             % 66 = fmul fast float % 64, 5.000000e-01
+//             % 67 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 2, % dx.types.Handle % 6, float % 10, float % 11, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 68 = extractvalue % dx.types.ResRet.f32 % 67, 0
+//             % 69 = extractvalue % dx.types.ResRet.f32 % 67, 1
+//             % 70 = extractvalue % dx.types.ResRet.f32 % 67, 2
+//             % 71 = extractvalue % dx.types.ResRet.f32 % 67, 3
+//             % 72 = fsub fast float % 10, % 65
+//             % 73 = fadd fast float % 11, % 66
+//             % 74 = fcmp fast olt float % 72, 0.000000e+00
+//             % 75 = fcmp fast ogt float % 72, 1.000000e+00
+//             % 76 = or i1 % 74, % 75
+//             % 77 = fcmp fast olt float % 73, 0.000000e+00
+//             % 78 = or i1 % 76, % 77
+//             % 79 = fcmp fast ogt float % 73, 1.000000e+00
+//             % 80 = or i1 % 79, % 78
+//   br i1 % 80, label % 363, label % 81
+
+//       ; <label> : 81; preds = % 61
+//           % 82 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 2, % dx.types.Handle % 6, float % 10, float % 18, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 83 = extractvalue % dx.types.ResRet.f32 % 82, 0
+//             % 84 = extractvalue % dx.types.ResRet.f32 % 82, 1
+//             % 85 = extractvalue % dx.types.ResRet.f32 % 82, 2
+//             % 86 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 2, % dx.types.Handle % 6, float % 17, float % 11, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 87 = extractvalue % dx.types.ResRet.f32 % 86, 0
+//             % 88 = extractvalue % dx.types.ResRet.f32 % 86, 1
+//             % 89 = extractvalue % dx.types.ResRet.f32 % 86, 2
+//             % 90 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 2, % dx.types.Handle % 6, float % 23, float % 11, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 91 = extractvalue % dx.types.ResRet.f32 % 90, 0
+//             % 92 = extractvalue % dx.types.ResRet.f32 % 90, 1
+//             % 93 = extractvalue % dx.types.ResRet.f32 % 90, 2
+//             % 94 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 2, % dx.types.Handle % 6, float % 10, float % 32, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 95 = extractvalue % dx.types.ResRet.f32 % 94, 0
+//             % 96 = extractvalue % dx.types.ResRet.f32 % 94, 1
+//             % 97 = extractvalue % dx.types.ResRet.f32 % 94, 2
+//             % 98 = call float @dx.op.binary.f32(i32 36, float % 68, float % 83); FMin(a, b)
+//       % 99 = call float @dx.op.binary.f32(i32 36, float % 69, float % 84); FMin(a, b)
+//       % 100 = call float @dx.op.binary.f32(i32 36, float % 70, float % 85); FMin(a, b)
+//       % 101 = call float @dx.op.binary.f32(i32 36, float % 98, float % 87); FMin(a, b)
+//       % 102 = call float @dx.op.binary.f32(i32 36, float % 99, float % 88); FMin(a, b)
+//       % 103 = call float @dx.op.binary.f32(i32 36, float % 100, float % 89); FMin(a, b)
+//       % 104 = call float @dx.op.binary.f32(i32 36, float % 101, float % 91); FMin(a, b)
+//       % 105 = call float @dx.op.binary.f32(i32 36, float % 102, float % 92); FMin(a, b)
+//       % 106 = call float @dx.op.binary.f32(i32 36, float % 103, float % 93); FMin(a, b)
+//       % 107 = call float @dx.op.binary.f32(i32 36, float % 104, float % 95); FMin(a, b)
+//       % 108 = call float @dx.op.binary.f32(i32 36, float % 105, float % 96); FMin(a, b)
+//       % 109 = call float @dx.op.binary.f32(i32 36, float % 106, float % 97); FMin(a, b)
+//       % 110 = call float @dx.op.binary.f32(i32 35, float % 68, float % 83); FMax(a, b)
+//       % 111 = call float @dx.op.binary.f32(i32 35, float % 69, float % 84); FMax(a, b)
+//       % 112 = call float @dx.op.binary.f32(i32 35, float % 70, float % 85); FMax(a, b)
+//       % 113 = call float @dx.op.binary.f32(i32 35, float % 110, float % 87); FMax(a, b)
+//       % 114 = call float @dx.op.binary.f32(i32 35, float % 111, float % 88); FMax(a, b)
+//       % 115 = call float @dx.op.binary.f32(i32 35, float % 112, float % 89); FMax(a, b)
+//       % 116 = call float @dx.op.binary.f32(i32 35, float % 113, float % 91); FMax(a, b)
+//       % 117 = call float @dx.op.binary.f32(i32 35, float % 114, float % 92); FMax(a, b)
+//       % 118 = call float @dx.op.binary.f32(i32 35, float % 115, float % 93); FMax(a, b)
+//       % 119 = call float @dx.op.binary.f32(i32 35, float % 116, float % 95); FMax(a, b)
+//       % 120 = call float @dx.op.binary.f32(i32 35, float % 117, float % 96); FMax(a, b)
+//       % 121 = call float @dx.op.binary.f32(i32 35, float % 118, float % 97); FMax(a, b)
+//       % 122 = call % dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32 59, % dx.types.Handle % 9, i32 1); CBufferLoadLegacy(handle, regIndex)
+//       % 123 = extractvalue % dx.types.CBufRet.f32 % 122, 0
+//             % 124 = extractvalue % dx.types.CBufRet.f32 % 122, 1
+//             % 125 = extractvalue % dx.types.CBufRet.f32 % 122, 2
+//             % 126 = extractvalue % dx.types.CBufRet.f32 % 122, 3
+//             % 127 = fmul fast float % 123, % 72
+//             % 128 = fmul fast float % 124, % 73
+//             % 129 = fadd fast float % 127, -5.000000e-01
+//             % 130 = fadd fast float % 128, -5.000000e-01
+//             % 131 = call float @dx.op.unary.f32(i32 27, float % 129); Round_ni(value)
+//       % 132 = call float @dx.op.unary.f32(i32 27, float % 130); Round_ni(value)
+//       % 133 = fadd fast float % 131, 5.000000e-01
+//             % 134 = fadd fast float % 132, 5.000000e-01
+//             % 135 = fsub fast float % 127, % 133
+//             % 136 = fsub fast float % 128, % 134
+//             % 137 = fmul fast float % 135, 5.000000e-01
+//             % 138 = fmul fast float % 136, 5.000000e-01
+//             % 139 = fsub fast float 1.000000e+00, % 137
+//             % 140 = fsub fast float 1.000000e+00, % 138
+//             % 141 = fmul fast float % 139, % 135
+//             % 142 = fmul fast float % 140, % 136
+//             % 143 = fadd fast float % 141, -5.000000e-01
+//             % 144 = fadd fast float % 142, -5.000000e-01
+//             % 145 = fmul fast float % 143, % 135
+//             % 146 = fmul fast float % 144, % 136
+//             % 147 = fmul fast float % 135, % 135
+//             % 148 = fmul fast float % 136, % 136
+//             % 149 = fmul fast float % 135, 1.500000e+00
+//             % 150 = fmul fast float % 136, 1.500000e+00
+//             % 151 = fadd fast float % 149, -2.500000e+00
+//             % 152 = fadd fast float % 150, -2.500000e+00
+//             % 153 = fmul fast float % 147, % 151
+//             % 154 = fmul fast float % 148, % 152
+//             % 155 = fadd fast float % 153, 1.000000e+00
+//             % 156 = fadd fast float % 154, 1.000000e+00
+//             % 157 = fsub fast float 2.000000e+00, % 149
+//             % 158 = fsub fast float 2.000000e+00, % 150
+//             % 159 = fmul fast float % 157, % 135
+//             % 160 = fmul fast float % 158, % 136
+//             % 161 = fadd fast float % 159, 5.000000e-01
+//             % 162 = fadd fast float % 160, 5.000000e-01
+//             % 163 = fmul fast float % 161, % 135
+//             % 164 = fmul fast float % 162, % 136
+//             % 165 = fadd fast float % 137, -5.000000e-01
+//             % 166 = fadd fast float % 138, -5.000000e-01
+//             % 167 = fmul fast float % 147, % 165
+//             % 168 = fmul fast float % 148, % 166
+//             % 169 = fadd fast float % 163, % 155
+//             % 170 = fadd fast float % 164, % 156
+//             % 171 = fdiv fast float % 163, % 169
+//             % 172 = fdiv fast float % 164, % 170
+//             % 173 = fadd fast float % 131, -5.000000e-01
+//             % 174 = fadd fast float % 132, -5.000000e-01
+//             % 175 = fadd fast float % 131, 2.500000e+00
+//             % 176 = fadd fast float % 132, 2.500000e+00
+//             % 177 = fadd fast float % 171, % 133
+//             % 178 = fadd fast float % 172, % 134
+//             % 179 = fmul fast float % 173, % 125
+//             % 180 = fmul fast float % 174, % 126
+//             % 181 = fmul fast float % 175, % 125
+//             % 182 = fmul fast float % 176, % 126
+//             % 183 = fmul fast float % 177, % 125
+//             % 184 = fmul fast float % 178, % 126
+//             % 185 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 1, % dx.types.Handle % 5, float % 179, float % 180, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 186 = extractvalue % dx.types.ResRet.f32 % 185, 0
+//             % 187 = extractvalue % dx.types.ResRet.f32 % 185, 1
+//             % 188 = extractvalue % dx.types.ResRet.f32 % 185, 2
+//             % 189 = extractvalue % dx.types.ResRet.f32 % 185, 3
+//             % 190 = fmul fast float % 186, % 145
+//             % 191 = fmul fast float % 187, % 145
+//             % 192 = fmul fast float % 188, % 145
+//             % 193 = fmul fast float % 189, % 145
+//             % 194 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 1, % dx.types.Handle % 5, float % 183, float % 180, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 195 = extractvalue % dx.types.ResRet.f32 % 194, 0
+//             % 196 = extractvalue % dx.types.ResRet.f32 % 194, 1
+//             % 197 = extractvalue % dx.types.ResRet.f32 % 194, 2
+//             % 198 = extractvalue % dx.types.ResRet.f32 % 194, 3
+//             % 199 = fmul fast float % 195, % 169
+//             % 200 = fmul fast float % 196, % 169
+//             % 201 = fmul fast float % 197, % 169
+//             % 202 = fmul fast float % 198, % 169
+//             % 203 = fadd fast float % 199, % 190
+//             % 204 = fadd fast float % 200, % 191
+//             % 205 = fadd fast float % 201, % 192
+//             % 206 = fadd fast float % 202, % 193
+//             % 207 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 1, % dx.types.Handle % 5, float % 181, float % 180, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 208 = extractvalue % dx.types.ResRet.f32 % 207, 0
+//             % 209 = extractvalue % dx.types.ResRet.f32 % 207, 1
+//             % 210 = extractvalue % dx.types.ResRet.f32 % 207, 2
+//             % 211 = extractvalue % dx.types.ResRet.f32 % 207, 3
+//             % 212 = fmul fast float % 208, % 167
+//             % 213 = fmul fast float % 209, % 167
+//             % 214 = fmul fast float % 210, % 167
+//             % 215 = fmul fast float % 211, % 167
+//             % 216 = fadd fast float % 203, % 212
+//             % 217 = fmul fast float % 216, % 146
+//             % 218 = fadd fast float % 204, % 213
+//             % 219 = fmul fast float % 218, % 146
+//             % 220 = fadd fast float % 205, % 214
+//             % 221 = fmul fast float % 220, % 146
+//             % 222 = fadd fast float % 206, % 215
+//             % 223 = fmul fast float % 222, % 146
+//             % 224 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 1, % dx.types.Handle % 5, float % 179, float % 184, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 225 = extractvalue % dx.types.ResRet.f32 % 224, 0
+//             % 226 = extractvalue % dx.types.ResRet.f32 % 224, 1
+//             % 227 = extractvalue % dx.types.ResRet.f32 % 224, 2
+//             % 228 = extractvalue % dx.types.ResRet.f32 % 224, 3
+//             % 229 = fmul fast float % 225, % 145
+//             % 230 = fmul fast float % 226, % 145
+//             % 231 = fmul fast float % 227, % 145
+//             % 232 = fmul fast float % 228, % 145
+//             % 233 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 1, % dx.types.Handle % 5, float % 183, float % 184, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 234 = extractvalue % dx.types.ResRet.f32 % 233, 0
+//             % 235 = extractvalue % dx.types.ResRet.f32 % 233, 1
+//             % 236 = extractvalue % dx.types.ResRet.f32 % 233, 2
+//             % 237 = extractvalue % dx.types.ResRet.f32 % 233, 3
+//             % 238 = fmul fast float % 234, % 169
+//             % 239 = fmul fast float % 235, % 169
+//             % 240 = fmul fast float % 236, % 169
+//             % 241 = fmul fast float % 237, % 169
+//             % 242 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 1, % dx.types.Handle % 5, float % 181, float % 184, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 243 = extractvalue % dx.types.ResRet.f32 % 242, 0
+//             % 244 = extractvalue % dx.types.ResRet.f32 % 242, 1
+//             % 245 = extractvalue % dx.types.ResRet.f32 % 242, 2
+//             % 246 = extractvalue % dx.types.ResRet.f32 % 242, 3
+//             % 247 = fmul fast float % 243, % 167
+//             % 248 = fmul fast float % 244, % 167
+//             % 249 = fmul fast float % 245, % 167
+//             % 250 = fmul fast float % 246, % 167
+//             % 251 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 1, % dx.types.Handle % 5, float % 179, float % 182, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 252 = extractvalue % dx.types.ResRet.f32 % 251, 0
+//             % 253 = extractvalue % dx.types.ResRet.f32 % 251, 1
+//             % 254 = extractvalue % dx.types.ResRet.f32 % 251, 2
+//             % 255 = extractvalue % dx.types.ResRet.f32 % 251, 3
+//             % 256 = fmul fast float % 252, % 145
+//             % 257 = fmul fast float % 253, % 145
+//             % 258 = fmul fast float % 254, % 145
+//             % 259 = fmul fast float % 255, % 145
+//             % 260 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 1, % dx.types.Handle % 5, float % 183, float % 182, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 261 = extractvalue % dx.types.ResRet.f32 % 260, 0
+//             % 262 = extractvalue % dx.types.ResRet.f32 % 260, 1
+//             % 263 = extractvalue % dx.types.ResRet.f32 % 260, 2
+//             % 264 = extractvalue % dx.types.ResRet.f32 % 260, 3
+//             % 265 = fmul fast float % 261, % 169
+//             % 266 = fmul fast float % 262, % 169
+//             % 267 = fmul fast float % 263, % 169
+//             % 268 = fmul fast float % 264, % 169
+//             % 269 = call % dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, % dx.types.Handle % 1, % dx.types.Handle % 5, float % 181, float % 182, float undef, float undef, i32 0, i32 0, i32 undef, float undef); Sample(srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, offset2, clamp)
+//       % 270 = extractvalue % dx.types.ResRet.f32 % 269, 0
+//             % 271 = extractvalue % dx.types.ResRet.f32 % 269, 1
+//             % 272 = extractvalue % dx.types.ResRet.f32 % 269, 2
+//             % 273 = extractvalue % dx.types.ResRet.f32 % 269, 3
+//             % 274 = fmul fast float % 270, % 167
+//             % 275 = fmul fast float % 271, % 167
+//             % 276 = fmul fast float % 272, % 167
+//             % 277 = fmul fast float % 273, % 167
+//             % 278 = fadd fast float % 265, % 256
+//             % 279 = fadd fast float % 278, % 274
+//             % 280 = fmul fast float % 279, % 168
+//             % 281 = fadd fast float % 238, % 229
+//             % 282 = fadd fast float % 281, % 247
+//             % 283 = fmul fast float % 282, % 170
+//             % 284 = fadd fast float % 280, % 217
+//             % 285 = fadd fast float % 284, % 283
+//             % 286 = fadd fast float % 266, % 257
+//             % 287 = fadd fast float % 286, % 275
+//             % 288 = fmul fast float % 287, % 168
+//             % 289 = fadd fast float % 239, % 230
+//             % 290 = fadd fast float % 289, % 248
+//             % 291 = fmul fast float % 290, % 170
+//             % 292 = fadd fast float % 288, % 219
+//             % 293 = fadd fast float % 292, % 291
+//             % 294 = fadd fast float % 267, % 258
+//             % 295 = fadd fast float % 294, % 276
+//             % 296 = fmul fast float % 295, % 168
+//             % 297 = fadd fast float % 240, % 231
+//             % 298 = fadd fast float % 297, % 249
+//             % 299 = fmul fast float % 298, % 170
+//             % 300 = fadd fast float % 296, % 221
+//             % 301 = fadd fast float % 300, % 299
+//             % 302 = fadd fast float % 268, % 259
+//             % 303 = fadd fast float % 302, % 277
+//             % 304 = fmul fast float % 303, % 168
+//             % 305 = fadd fast float % 241, % 232
+//             % 306 = fadd fast float % 305, % 250
+//             % 307 = fmul fast float % 306, % 170
+//             % 308 = fadd fast float % 304, % 223
+//             % 309 = fadd fast float % 308, % 307
+//             % 310 = fadd fast float % 119, % 107
+//             % 311 = fadd fast float % 120, % 108
+//             % 312 = fadd fast float % 121, % 109
+//             % 313 = fmul fast float % 310, 5.000000e-01
+//             % 314 = fmul fast float % 311, 5.000000e-01
+//             % 315 = fmul fast float % 312, 5.000000e-01
+//             % 316 = fsub fast float % 119, % 107
+//             % 317 = fsub fast float % 120, % 108
+//             % 318 = fsub fast float % 121, % 109
+//             % 319 = fmul fast float % 316, 5.000000e-01
+//             % 320 = fmul fast float % 317, 5.000000e-01
+//             % 321 = fmul fast float % 318, 5.000000e-01
+//             % 322 = fsub fast float % 285, % 313
+//             % 323 = fsub fast float % 293, % 314
+//             % 324 = fsub fast float % 301, % 315
+//             % 325 = fdiv fast float % 322, % 319
+//             % 326 = fdiv fast float % 323, % 320
+//             % 327 = fdiv fast float % 324, % 321
+//             % 328 = call float @dx.op.unary.f32(i32 6, float % 325); FAbs(value)
+//       % 329 = call float @dx.op.unary.f32(i32 6, float % 326); FAbs(value)
+//       % 330 = call float @dx.op.unary.f32(i32 6, float % 327); FAbs(value)
+//       % 331 = call float @dx.op.binary.f32(i32 35, float % 329, float % 330); FMax(a, b)
+//       % 332 = call float @dx.op.binary.f32(i32 35, float % 328, float % 331); FMax(a, b)
+//       % 333 = fcmp fast ogt float % 332, 1.000000e+00
+//   br i1 % 333, label % 334, label % 344
+
+//       ; <label> : 334; preds = % 81
+//           % 335 = fsub fast float % 309, % 71
+//       % 336 = fdiv fast float % 322, % 332
+//       % 337 = fdiv fast float % 323, % 332
+//       % 338 = fdiv fast float % 324, % 332
+//       % 339 = fdiv fast float % 335, % 332
+//       % 340 = fadd fast float % 336, % 313
+//       % 341 = fadd fast float % 337, % 314
+//       % 342 = fadd fast float % 338, % 315
+//       % 343 = fadd fast float % 339, % 71
+//   br label % 344
+
+//       ; <label> : 344; preds = % 334, % 81
+//                      % 345 = phi float[% 340, % 334], [% 285, % 81]
+//       % 346 = phi float[% 341, % 334], [% 293, % 81]
+//       % 347 = phi float[% 342, % 334], [% 301, % 81]
+//       % 348 = phi float[% 343, % 334], [% 309, % 81]
+//       % 349 = call % dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32 59, % dx.types.Handle % 9, i32 2); CBufferLoadLegacy(handle, regIndex)
+//       % 350 = extractvalue % dx.types.CBufRet.f32 % 349, 0
+//             % 351 = fsub fast float % 68, % 345
+//             % 352 = fsub fast float % 69, % 346
+//             % 353 = fsub fast float % 70, % 347
+//             % 354 = fsub fast float % 71, % 348
+//             % 355 = fmul fast float % 350, % 351
+//             % 356 = fmul fast float % 350, % 352
+//             % 357 = fmul fast float % 350, % 353
+//             % 358 = fmul fast float % 350, % 354
+//             % 359 = fadd fast float % 355, % 345
+//             % 360 = fadd fast float % 356, % 346
+//             % 361 = fadd fast float % 357, % 347
+//             % 362 = fadd fast float % 358, % 348
+//   br label % 363
+
+//       ; <label> : 363; preds = % 344, % 61
+//                      % 364 = phi float[% 359, % 344], [% 68, % 61]
+//       % 365 = phi float[% 360, % 344], [% 69, % 61]
+//       % 366 = phi float[% 361, % 344], [% 70, % 61]
+//       % 367 = phi float[% 362, % 344], [% 71, % 61]
+//   call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float % 364); StoreOutput(outputSigId, rowIndex, colIndex, value)
+//       call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 1, float % 365); StoreOutput(outputSigId, rowIndex, colIndex, value)
+//       call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 2, float % 366); StoreOutput(outputSigId, rowIndex, colIndex, value)
+//       call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 3, float % 367); StoreOutput(outputSigId, rowIndex, colIndex, value)
+//       ret void
+// }
+
+// ; Function Attrs : nounwind readnone
+//                      declare float @dx.op.loadInput.f32(i32, i32, i32, i8, i32) #0
+
+//     ; Function Attrs : nounwind
+//                      declare void @dx.op.storeOutput.f32(i32, i32, i32, i8, float) #1
+
+//     ; Function Attrs : nounwind readonly
+//                      declare % dx.types.ResRet.f32 @dx.op.sample.f32(i32, % dx.types.Handle, % dx.types.Handle, float, float, float, float, i32, i32, i32, float) #2
+
+//     ; Function Attrs : nounwind readnone
+//                      declare float @dx.op.binary.f32(i32, float, float) #0
+
+//     ; Function Attrs : nounwind readnone
+//                      declare float @dx.op.unary.f32(i32, float) #0
+
+//     ; Function Attrs : nounwind readonly
+//                      declare % dx.types.CBufRet.f32 @dx.op.cbufferLoadLegacy.f32(i32, % dx.types.Handle, i32) #2
+
+//     ; Function Attrs : nounwind readonly
+//                      declare % dx.types.Handle @dx.op.createHandle(i32, i8, i32, i32, i1) #2
+
+//                    attributes #0 = { nounwind readnone }
+// attributes #1 = { nounwind }
+// attributes #2 = { nounwind readonly }
+
+//                                                                                                       !llvm.ident = ! { !0}
+// !dx.version = ! { !1}
+// !dx.valver = ! { !2}
+// !dx.shaderModel = ! { !3}
+// !dx.resources = ! { !4}
+// !dx.viewIdState = ! { !18}
+// !dx.entryPoints = ! { !19}
+
+// !0 = ! { !"clang version 3.7 (tags/RELEASE_370/final)"}
+// !1 = ! { i32 1, i32 0}
+// !2 = ! { i32 1, i32 6}
+// !3 = ! { !"ps", i32 6, i32 0}
+// !4 = ! { !5, null, !11, !13}
+// !5 = ! { !6, !8, !9, !10}
+// !6 = ! { i32 0, % "class.Texture2D<vector<float, 4> >" * undef, !"", i32 0, i32 0, i32 1, i32 2, i32 0, !7}
+// !7 = ! { i32 0, i32 9}
+// !8 = ! { i32 1, % "class.Texture2D<vector<float, 4> >" * undef, !"", i32 0, i32 1, i32 1, i32 2, i32 0, !7}
+// !9 = ! { i32 2, % "class.Texture2D<vector<float, 4> >" * undef, !"", i32 0, i32 2, i32 1, i32 2, i32 0, !7}
+// !10 = ! { i32 3, % "class.Texture2D<vector<float, 4> >" * undef, !"", i32 0, i32 3, i32 1, i32 2, i32 0, !7}
+// !11 = ! { !12}
+// !12 = ! { i32 0, % "$Globals" * undef, !"", i32 0, i32 0, i32 1, i32 48, null}
+// !13 = ! { !14, !15, !16, !17}
+// !14 = ! { i32 0, % struct .SamplerState *undef, !"", i32 0, i32 0, i32 1, i32 0, null}
+// !15 = ! { i32 1, % struct .SamplerState *undef, !"", i32 0, i32 1, i32 1, i32 0, null}
+// !16 = ! { i32 2, % struct .SamplerState *undef, !"", i32 0, i32 2, i32 1, i32 0, null}
+// !17 = ! { i32 3, % struct .SamplerState *undef, !"", i32 0, i32 3, i32 1, i32 0, null}
+// !18 = ! { [8 x i32] [i32 6, i32 4, i32 0, i32 0, i32 0, i32 0, i32 15, i32 15]}
+// !19 = ! { void() * @main, !"main", !20, !4, null}
+// !20 = ! { !21, !26, null}
+// !21 = ! { !22, !24}
+// !22 = ! { i32 0, !"SV_Position", i8 9, i8 3, !23, i8 4, i32 1, i8 4, i32 0, i8 0, null}
+// !23 = ! { i32 0}
+// !24 = ! { i32 1, !"TEXCOORD", i8 9, i8 0, !23, i8 2, i32 1, i8 2, i32 1, i8 0, !25}
+// !25 = ! { i32 3, i32 3}
+// !26 = ! { !27}
+// !27 = ! { i32 0, !"SV_Target", i8 9, i8 16, !23, i8 0, i32 1, i8 4, i32 0, i8 0, !28}
+// !28 = ! { i32 3, i32 15}
