@@ -75,6 +75,17 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapBlowout",
+        .binding = &shader_injection.tone_map_blowout,
+        .default_value = 100.f,
+        .label = "Blowout",
+        .section = "Tone Mapping & Color Grading",
+        .tooltip = "Emulates blowout from per channel tonemapping",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
         .default_value = 100.f,
@@ -83,7 +94,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Hue-shift emulation strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -148,10 +159,10 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
         .default_value = 0.f,
-        .label = "Blowout",
+        .label = "Dechroma",
         .section = "Tone Mapping & Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
@@ -235,7 +246,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSettings({
               {"SDREOTFEmulation", 0.f},
               {"ColorGradeShadows", 80.f},
-              {"ColorGradeFlare", 35.f},
+              {"ColorGradeFlare", 33.f},
           });
         },
     },
@@ -324,7 +335,7 @@ void OnPresetOff() {
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
-      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeLUTStrength", 0.f},
       {"ColorGradeLUTScaling", 0.f},

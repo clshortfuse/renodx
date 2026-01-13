@@ -312,27 +312,31 @@ void comp_main() {
              _1349 * 0.180000007152557373046875f,
              _1350 * 0.180000007152557373046875f),
       asfloat(CB1_m[0u].w).xxx);
-  float3 _1363 = float3(mad(_1348, 0.180000007152557373046875f, _1359), mad(_1349, 0.180000007152557373046875f, _1359), mad(_1350, 0.180000007152557373046875f, _1359));
+  float3 _1363 = float3(mad(_1348, 0.180000007152557373046875f, _1359),
+                        mad(_1349, 0.180000007152557373046875f, _1359),
+                        mad(_1350, 0.180000007152557373046875f, _1359));
 
-#if 1
-  // tonemapping seems to be static for the entire game, lutbuilder also often isn't running per frame, so we nuke everything
+#if 1  // custom tonemapper
   float3 ungraded_bt709 = _1363;
   if (RENODX_TONE_MAP_TYPE != 0 && RENODX_TONE_MAP_TYPE != 3.f) {
-    U0[CB2_m11.y][gl_GlobalInvocationID] = float4(GenerateOutputAvatar(ungraded_bt709), 1.f);
+    float contrast = asfloat(CB1_m[4u].x);
+    U0[CB2_m11.y][gl_GlobalInvocationID] = float4(GenerateOutputAvatar(ungraded_bt709, contrast), 1.f);
     return;
   }
 #endif
 
   // BT.709 -> AP1
-  float3 _1367 = float3(dp3_f32(float3(0.61319148540496826171875f, 0.3395120799541473388671875f, 0.0473663322627544403076171875f), _1363), dp3_f32(float3(0.070206902921199798583984375f, 0.9163358211517333984375f, 0.01345001161098480224609375f), _1363), dp3_f32(float3(0.02061887085437774658203125f, 0.109567292034626007080078125f, 0.8696067333221435546875f), _1363));
+  float3 _1367 = float3(dp3_f32(float3(0.61319148540496826171875f, 0.3395120799541473388671875f, 0.0473663322627544403076171875f), _1363),
+                        dp3_f32(float3(0.070206902921199798583984375f, 0.9163358211517333984375f, 0.01345001161098480224609375f), _1363),
+                        dp3_f32(float3(0.02061887085437774658203125f, 0.109567292034626007080078125f, 0.8696067333221435546875f), _1363));
+
+  // AP1 -> ICtCp LMS
   float _1371 = max(dp3_f32(float3(0.450864851474761962890625f, 0.528371751308441162109375f, 0.02073897421360015869140625f), _1367), 0.0f);
   float _1372 = max(dp3_f32(float3(0.1640706360340118408203125f, 0.756849944591522216796875f, 0.079059422016143798828125f), _1367), 0.0f);
   float _1373 = max(dp3_f32(float3(-0.004941581748425960540771484375f, 0.001257075113244354724884033203125f, 1.00365674495697021484375f), _1367), 0.0f);
 
-  // ICtCp diffuse white
-  float _1376 = asfloat(CB1_m[1u].y);  // defaults to 250.f / 10000.f
-
   // Linear -> PQ
+  float _1376 = asfloat(CB1_m[1u].y);  // ICtCp diffuse white, defaults to 250.f / 10000.f
   float _1389 = exp2(log2(max(_1371 * _1376, 0.0f)) * 0.1593017578125f);
   float _1390 = exp2(log2(max(_1372 * _1376, 0.0f)) * 0.1593017578125f);
   float _1391 = exp2(log2(max(_1373 * _1376, 0.0f)) * 0.1593017578125f);
@@ -368,7 +372,7 @@ void comp_main() {
   float _1500 = log2(min(mad(1.0f - _1442, _1485, _1442) * _1416, _1419)) * _1424;
 
   float _1549, _1550, _1551;
-  if (RENODX_TONE_MAP_TYPE == 3.f) {
+  if (RENODX_TONE_MAP_TYPE == 3.f) {  // custom tonemapper
     // just exiting log2 space and doubling exposure seemingly gives an uncapped version of SDR
     _1549 = exp2(_1498) * 2.f;
     _1550 = exp2(_1499) * 2.f;
@@ -382,7 +386,7 @@ void comp_main() {
     _1549 = tonemapped.r, _1550 = tonemapped.g, _1551 = tonemapped.b;
   } else {
     // sdr tonemapping thats stretched to work in hdr
-    // custom parameters would work differently in hdr due to the scaling, so maybe it's intended to not mess with contrast?
+    // custom parameters would work differently in hdr due to the scaling, so it seems to basically just be neutral?
     float _1521 = asfloat(CB1_m[7u].x);
     float _1524 = clamp(mad(_1445, asfloat(CB1_m[6u].y) - _1521, _1521), 0.0f, 1.0f);
     _1549 = ((mad(-_1474, _1439, exp2(_1498) / mad(exp2(_1498 * _1429), _1434, _1437)) * _1524) + (_1474 * _1439));
@@ -422,13 +426,15 @@ void comp_main() {
   float3 _1627 = float3((exp2(log2(max(_1593 - 0.8359375f, 0.0f) / mad(_1593, -18.6875f, 18.8515625f)) * 6.277394771575927734375f) * _1617) * _1623, (exp2(log2(max(_1594 - 0.8359375f, 0.0f) / mad(_1594, -18.6875f, 18.8515625f)) * 6.277394771575927734375f) * _1617) * _1623, (exp2(log2(max(_1595 - 0.8359375f, 0.0f) / mad(_1595, -18.6875f, 18.8515625f)) * 6.277394771575927734375f) * _1617) * _1623);
 
   // ICtCp LMS -> AP1
-  float3 _1631 = float3(dp3_f32(float3(2.974892139434814453125f, -2.0770013332366943359375f, 0.10213525593280792236328125f), _1627), dp3_f32(float3(-0.646511554718017578125f, 1.77281856536865234375f, -0.12628759443759918212890625f), _1627), dp3_f32(float3(0.015456843189895153045654296875f, -0.01244670711457729339599609375f, 0.99701797962188720703125f), _1627));
+  float3 _1631 = float3(dp3_f32(float3(2.974892139434814453125f, -2.0770013332366943359375f, 0.10213525593280792236328125f), _1627),
+                        dp3_f32(float3(-0.646511554718017578125f, 1.77281856536865234375f, -0.12628759443759918212890625f), _1627),
+                        dp3_f32(float3(0.015456843189895153045654296875f, -0.01244670711457729339599609375f, 0.99701797962188720703125f), _1627));
 
   float3 final_ap1 = _1631;
   float3 final_bt2020 = renodx::color::bt2020::from::AP1(final_ap1);
 
   float paper_white = asfloat(CB1_m[1u].x);  // actually the peak brightness cbuffer
-  if (RENODX_TONE_MAP_TYPE == 3.f) {
+  if (RENODX_TONE_MAP_TYPE == 3.f) {         // custom tonemapper
     paper_white = RENODX_DIFFUSE_WHITE_NITS / 10000.f;
     if (RENODX_SDR_EOTF_EMULATION || RENODX_TONE_MAP_HUE_SHIFT != 1.f) {
       float3 final_bt709 = renodx::color::bt709::from::BT2020(final_bt2020);
