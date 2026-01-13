@@ -642,6 +642,6 @@ bool HandleUICompositing(float4 ui_color, float4 scene_color, inout float4 outpu
 
   float3 pq_color = renodx::color::pq::EncodeSafe(bt2020_color, RENODX_DIFFUSE_WHITE_NITS);
 
-  output_color = float4(pq_color, 1.f);
+  output_color = float4(pq_color, ui_color.a);
   return true;
 }
