@@ -22,6 +22,8 @@
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
+#define RENODX_SWAP_CHAIN_OUTPUT_DITHER_SEED   shader_injection.swap_chain_output_dither_seed
+#define RENODX_SWAP_CHAIN_OUTPUT_DITHER_BITS   shader_injection.swap_chain_output_dither_bits
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_RENO_DRT_WHITE_CLIP             100.f
@@ -65,6 +67,8 @@ struct ShaderInjectData {
   float custom_exposure_shader_draw;
   float custom_sharpness;
   float custom_lut_scaling;
+  float swap_chain_output_dither_seed;
+  float swap_chain_output_dither_bits;
 };
 
 #ifndef __cplusplus

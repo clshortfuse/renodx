@@ -7,9 +7,6 @@
 
 #define DEBUG_LEVEL_0
 
-#include <chrono>
-#include <random>
-
 #include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
@@ -20,6 +17,7 @@
 #include "../../utils/platform.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
+#include "../../utils/random.hpp"
 #include "./shared.h"
 
 namespace {
@@ -65,6 +63,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     // UI
     CustomShaderEntry(0x8286B55C),
+    CustomShaderEntry(0x04039750),
 
     // Post Process
     TypicalExposureShaderEntry(0xEE56E73B),
@@ -383,6 +382,21 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Post Grade", "Pre Grade"},
         .is_visible = []() { return current_settings_mode >= 2; },
     },
+        new renodx::utils::settings::Setting{
+        .key = "FxDebanding",
+        .binding = &shader_injection.swap_chain_output_dither_bits,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Debanding",
+        .section = "Effects",
+        .labels = {"None", "8+2 Dither", "10+2 Dither"},
+        .parse = [](float value) {
+          if (value == 0.f) return 0.f;
+          if (value == 1.f) return 8.f;
+          if (value == 2.f) return 10.f;
+          return 0.f;
+        },
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Vanilla+",
@@ -529,17 +543,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
 }
 
-void OnPresent(
-    reshade::api::command_queue* queue,
-    reshade::api::swapchain* swapchain,
-    const reshade::api::rect* source_rect,
-    const reshade::api::rect* dest_rect,
-    uint32_t dirty_rect_count,
-    const reshade::api::rect* dirty_rects) {
-  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-  CUSTOM_RANDOM = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
-}
+bool initialized = false;
 
 }  // namespace
 
@@ -551,6 +555,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
       // while (IsDebuggerPresent() == 0) Sleep(100);
+
+      if (!initialized) {
+        renodx::mods::swapchain::SetUseHDR10(true);
+        renodx::utils::random::binds.push_back(&shader_injection.custom_random);
+        renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
+      
+        initialized = true;
+      }
       renodx::mods::shader::on_create_pipeline_layout = [](reshade::api::device* device, auto params) {
         int vendor_id;
         auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
@@ -595,17 +607,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }); */
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
+      //reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      //reshade::unregister_event<reshade::addon_event::present>(OnPresent);
 
       reshade::unregister_addon(h_module);
       break;
   }
 
+  renodx::utils::random::Use(fdw_reason);
+  //renodx::utils::swapchain::Use(fdw_reason);
+  //renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 

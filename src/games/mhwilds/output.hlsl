@@ -170,8 +170,7 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
           CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
           1.f);  // if 1.f = SDR range
     }
-
-    output_color = renodx::draw::SwapChainPass(output_color, swapchainConfig);
+    output_color = renodx::draw::SwapChainPass(output_color, TEXCOORD, swapchainConfig);
   }
 
   return float4(output_color, 1.f);
