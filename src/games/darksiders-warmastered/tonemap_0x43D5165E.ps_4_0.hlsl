@@ -57,5 +57,6 @@ void main(
   o0.w = saturate(r0.w);
 
   if (RENODX_TONE_MAP_TYPE == 0) o0.xyz = saturate(o0.xyz);
+  //o0.xyz = saturate(o0.xyz);
   return;
 }

@@ -25,7 +25,7 @@ void main(
 
   if (RENODX_TONE_MAP_TYPE != 0) {
     o0.xyz = renodx::color::bt709::from::YCbCrLimited(float3(y, cb, cr));
-    if (CUSTOM_VIDEO_ITM > 0) {
+    if (RENODX_SWAP_CHAIN_OUTPUT_PRESET != 0 && CUSTOM_VIDEO_ITM > 0) {
       renodx::draw::Config config = renodx::draw::BuildConfig();
       if (CUSTOM_VIDEO_ITM == 1) config.peak_white_nits = min(config.diffuse_white_nits * 2, config.peak_white_nits);
       o0.xyz = renodx::draw::UpscaleVideoPass(saturate(o0.xyz), config);
