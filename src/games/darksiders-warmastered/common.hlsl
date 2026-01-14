@@ -196,7 +196,7 @@ float3 PreTonemapSliders(float3 untonemapped) {
 
   float y = renodx::color::y::from::BT709(untonemapped);
   float3 outputColor = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, y, config);
-  outputColor = HDRBoost(outputColor, CUSTOM_HDR_BOOST, 1);
+  outputColor = HDRBoost(outputColor, CUSTOM_HDR_BOOST, 1, 0.04f);
   //outputColor = ApplyPerChannelBlowoutHueShift(outputColor);
   return outputColor;
 }
