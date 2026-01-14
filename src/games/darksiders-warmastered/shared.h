@@ -47,6 +47,7 @@
 #define CUSTOM_CHROMATIC_ABERRATION          shader_injection.custom_chromatic_aberration
 #define CUSTOM_VIGNETTE                      shader_injection.custom_vignette
 #define CUSTOM_SHARPENING                     shader_injection.custom_sharpening
+#define CUSTOM_VIDEO_ITM                     shader_injection.custom_video_itm
 // #define CUSTOM_BLOOM                         shader_injection.custom_bloom
 // #define CUSTOM_SUN_SHAFTS                    shader_injection.custom_sun_shafts
 // #define CUSTOM_LENS_DIRT                     shader_injection.custom_lens_dirt
@@ -90,7 +91,7 @@ struct ShaderInjectData {
   float custom_chromatic_aberration;
   float custom_vignette;
   float custom_sharpening;
-  // float custom_sharpness;
+  float custom_video_itm;
 };
 
 #ifndef __cplusplus

@@ -123,7 +123,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHDRBoost",
         .binding = &shader_injection.hdr_boost,
-        .default_value = 25.f,
+        .default_value = 35.f,
         .label = "HDR Boost",
         .section = "Tone Mapping",
         .max = 50.f,
@@ -188,7 +188,7 @@ renodx::utils::settings::Settings settings = {
         new renodx::utils::settings::Setting{
         .key = "SceneGradePerChannelBlowout",
         .binding = &shader_injection.scene_grade_per_channel_blowout,
-        .default_value = 55.f,
+        .default_value = 65.f,
         .label = "Per Channel Blowout",
         .section = "Scene Grading",
         .tooltip = "Simulates the highlight desaturation of per-channel tonemapping.",
@@ -391,6 +391,18 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0; },
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxVideoITM",
+        .binding = &shader_injection.custom_video_itm,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1,
+        .label = "Video AutoHDR",
+        .section = "Effects",
+        .tooltip = "Inverse tone maps prerendered video. Subtle = 2x game brightness, Strong = peak brightness.",
+        .labels = {"Off", "Subtle", "Strong"},
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0; },
+        .parse = [](float value) { return value; },
     },
     //     new renodx::utils::settings::Setting{
     //     .key = "ColorGradeLutScaling",

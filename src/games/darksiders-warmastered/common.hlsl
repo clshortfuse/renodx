@@ -82,10 +82,6 @@ float tonemap_peakMinClipScaleDelay(
 
 float3 HDRBoost(float3 color, float power = 0.20f, int mode = 0, float normalization_point = 0.02f) {
   if (power == 0.f) return color;
-  // return lerp(color, normalization_point * renodx::math::SafePow(color / normalization_point, 1.f + power), color);
-
-  //float compression_scale;
-  //GamutCompression(color, compression_scale);
 
   color = max(0, renodx::color::bt2020::from::BT709(color));
 
@@ -100,7 +96,6 @@ float3 HDRBoost(float3 color, float power = 0.20f, int mode = 0, float normaliza
     color = renodx::color::correct::Luminance(color, y_in, y_out);
   }
 
-  //GamutDecompression(color, compression_scale);
   color = renodx::color::bt709::from::BT2020(color);
   return color;
 }
