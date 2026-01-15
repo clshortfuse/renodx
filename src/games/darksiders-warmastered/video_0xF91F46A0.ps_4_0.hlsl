@@ -34,6 +34,8 @@ void main(
   else {
     o0.xyz = renodx::color::bt601::from::YCbCrLimited(float3(y, cb, cr));
   }
+  o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
+  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   o0.w = 1;
   return;
 }
