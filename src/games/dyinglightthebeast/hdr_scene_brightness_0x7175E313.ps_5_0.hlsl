@@ -31,14 +31,9 @@ void main(
 
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     r0.rgb *= scene_brightness;
+  } else {
+    r0.rgb *= RENODX_PRE_EXPOSURE;
   }
-#if 1  // brings down midtones to match SDR when their exposure is the same (only interiors)
-  else {
-    float3 tonemapped = renodx::tonemap::dice::BT709(r0.rgb, 1.f, 0.025f);
-    float mid_gray_ratio = renodx::color::y::from::BT709(renodx::tonemap::dice::BT709(0.18f.xxx, 1.f, 0.025f)) / 0.18f;
-    r0.rgb = lerp(tonemapped, r0.rgb * mid_gray_ratio, saturate(renodx::color::y::from::BT709(tonemapped)));
-  }
-#endif
 
   o0.xyz = r0.xyz;
 
