@@ -38,10 +38,10 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   float max_nits = cb0[0].x;
   float min_nits = cb0[0].z;
 
-  // if (RENODX_TONE_MAP_TYPE != 0.f) {
-  //   u0[vThreadID] = float4(GenerateOutput(untonemapped_bt709, min_nits, max_nits, shadows), 0.f);
-  //   return;
-  // }
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    u0[vThreadID] = float4(GenerateOutput(untonemapped_bt709, min_nits, max_nits, shadows), 0.f);
+    return;
+  }
 
   r0.w = dot(r0.xyz, float3(0.212500006, 0.715399981, 0.0720999986));
   r1.xy = r0.ww * float2(1.06858003, 0.421909988) + float2(0.0638085008, 1.26671004);
@@ -54,6 +54,8 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r1.xyz = r1.yzw * r1.xxx;
   r0.w = cmp(r0.w < 0.180000007);
   r0.xyz = r0.www ? r1.xyz : r0.xyz;
+
+  // BT.709 -> AP0
   r1.z = dot(r0.xyz, float3(0.439633012, 0.382988989, 0.177377999));
   r1.y = dot(r0.xyz, float3(0.0897760019, 0.813439012, 0.0967840031));
   r1.x = dot(r0.xyz, float3(0.0175410006, 0.111547001, 0.870912015));
@@ -311,6 +313,8 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r3.y = min(65504, r0.w);
   r0.w = max(0, r1.x);
   r3.z = min(65504, r0.w);
+
+  // RRT_SAT_MAT
   r0.w = dot(r3.xyz, float3(0.970889151, 0.0269632824, 0.00214758189));
   r1.x = dot(r3.xyz, float3(0.0108891567, 0.986963272, 0.00214758189));
   r1.y = dot(r3.xyz, float3(0.0108891567, 0.0269632824, 0.962147534));
@@ -645,8 +649,6 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r2.y = saturate(dot(r1.xyz, float3(-0.969243765, 1.87596786, 0.0415550806)));
   r2.z = saturate(dot(r1.xyz, float3(0.0556300357, -0.203976855, 1.05697155)));
 
-  // r2.rgb *= 2.f;
-
   // BT.709 -> XYZ
   r1.x = dot(r2.xyz, float3(0.412390769, 0.357584298, 0.180480793));
   r1.y = dot(r2.xyz, float3(0.212639004, 0.715168595, 0.0721923113));
@@ -665,33 +667,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.x = r0.x * r0.z + min_nits;
   r0.y = r0.y * r0.z + min_nits;
   r0.z = r0.w * r0.z + min_nits;
-  // r0.x = 9.99999975e-05 * r0.x;
-  // r0.x = log2(abs(r0.x));
-  // r0.x = 0.159301758 * r0.x;
-  // r0.x = exp2(r0.x);
-  // r0.xw = r0.xx * float2(18.8515625, 18.6875) + float2(0.8359375, 1);
-  // r0.x = r0.x / r0.w;
-  // r0.x = log2(r0.x);
-  // r0.x = 78.84375 * r0.x;
-  // r1.x = exp2(r0.x);
-  // r0.x = 9.99999975e-05 * r0.y;
-  // r0.x = log2(abs(r0.x));
-  // r0.x = 0.159301758 * r0.x;
-  // r0.x = exp2(r0.x);
-  // r0.xy = r0.xx * float2(18.8515625, 18.6875) + float2(0.8359375, 1);
-  // r0.x = r0.x / r0.y;
-  // r0.x = log2(r0.x);
-  // r0.x = 78.84375 * r0.x;
-  // r1.y = exp2(r0.x);
-  // r0.x = 9.99999975e-05 * r0.z;
-  // r0.x = log2(abs(r0.x));
-  // r0.x = 0.159301758 * r0.x;
-  // r0.x = exp2(r0.x);
-  // r0.xy = r0.xx * float2(18.8515625, 18.6875) + float2(0.8359375, 1);
-  // r0.x = r0.x / r0.y;
-  // r0.x = log2(r0.x);
-  // r0.x = 78.84375 * r0.x;
-  // r1.z = exp2(r0.x);
+
   r1.rgb = renodx::color::pq::EncodeSafe(r0.rgb, 1.f);
   r1.w = 0;
   u0[vThreadID] = r1;  // store_uav_typed u0.xyzw, vThreadID.xyzz, r1.xyzw

@@ -57,6 +57,7 @@ float3 SampleLUT(float3 color_input, renodx::lut::Config lut_config, Texture3D l
 
       float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
       float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling * scaling_strength);
+      recolored = GamutCompressBT709(recolored);
       color_output = recolored;
     }
   } else {
@@ -81,35 +82,25 @@ float3 SampleLUTSRGBInSRGBOut(float3 input, Texture3D<float4> lut_texture, Sampl
 
   float3 output = SampleLUT(input, lut_config, lut_texture);
 
-  output = renodx::color::bt709::from::BT2020(max(0.f, CorrectOutOfRangeColor(renodx::color::bt2020::from::BT709(output), true, false)));
-
   return output;
 }
 
-float3 ToneMapForLUT(float3 untonemapped) {
-  float y_in = renodx::color::y::from::BT709(untonemapped);
-  float y_out = ReinhardPiecewiseExtended(y_in, 100.f, 1.f, 0.3f);
-  float3 tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
+float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float white_clip = 100.f) {
+  float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
+  float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, white_clip, output_max, rolloff_start);
+  float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
 
-  tonemapped = saturate(CorrectOutOfRangeColor(tonemapped, false, true, 1.f, 0.f, 1.f, false));
-
-  return tonemapped;
+  return scale;
 }
 
 float3 SampleLUTWithHDRUpgrade(float3 input, Texture3D<float4> lut_texture, SamplerState lut_sampler) {
   float3 output = input;
-  if (LUT_SAMPLING_METHOD) {
-    float3 color_hdr = input;
-    float3 color_sdr = ToneMapForLUT(input);
-    float3 color_graded = SampleLUTSRGBInSRGBOut(color_sdr, lut_texture, lut_sampler);
-    output = renodx::tonemap::UpgradeToneMap(color_hdr, color_sdr, color_graded);
-  } else {
-    float3 color = input;
-    float max_channel = renodx::math::Max(color.r, color.g, color.b);
-    max_channel = max(1e-6, max_channel);
+  float3 color = input;
 
-    // Soft-knee highlight compression
-    float scale;
+  // Soft-knee highlight compression
+  float scale;
+  if (LUT_SAMPLING_METHOD == 0.f) {
+    float max_channel = max(1e-6, renodx::math::Max(color));
     const float KNEE = 0.525f;
     const float A = 1.0f / KNEE;     // 1.90476203f
     const float B = 122.0f / 21.0f;  // 5.80952358f
@@ -119,12 +110,14 @@ float3 SampleLUTWithHDRUpgrade(float3 input, Texture3D<float4> lut_texture, Samp
     } else {
       scale = min(1.0f, max_channel) / max_channel;
     }
-
-    color *= scale;
-    color = SampleLUTSRGBInSRGBOut(color, lut_texture, lut_sampler);
-    color /= scale;
-    output = color;
+  } else {
+    scale = ComputeReinhardSmoothClampScale(input, 0.375f);
   }
+
+  color *= scale;
+  color = SampleLUTSRGBInSRGBOut(color, lut_texture, lut_sampler);
+  color /= scale;
+  output = color;
 
   return output;
 }

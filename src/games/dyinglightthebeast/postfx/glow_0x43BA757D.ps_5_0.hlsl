@@ -36,7 +36,11 @@ void main(
   r0.xyz = r0.yzw * r0.xxx;
   r0.xyz = r0.xyz * r0.xyz;
   r0.xyz = cb0[0].yyy * r0.xyz;
+
+  float3 lens_flare = r0.rgb * CUSTOM_LENS_FLARE;
+
   r1.xyz = t1.Sample(s0_s, v1.xy).xyz;
-  o0.xyz = CUSTOM_BLOOM * r1.xyz * cb0[0].xxx + r0.xyz;
+  float3 bloom = r1.rgb * cb0[0].x * CUSTOM_BLOOM;
+  o0.xyz = bloom + lens_flare;
   return;
 }
