@@ -416,7 +416,7 @@ renodx::utils::settings::Settings settings = {
         new renodx::utils::settings::Setting{
         .key = "SceneGradePerChannelBlowout",
         .binding = &shader_injection.scene_grade_per_channel_blowout,
-        .default_value = 80.f,
+        .default_value = 83.f,
         .label = "Per Channel Blowout",
         .section = "Scene Grading",
         .tooltip = "Simulates the highlight desaturation of per-channel tonemapping.",
