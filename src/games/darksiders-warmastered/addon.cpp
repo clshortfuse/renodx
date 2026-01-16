@@ -6,7 +6,6 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
-#define NOMINMAX
 
 // #include <chrono>
 // #include <random>
@@ -282,7 +281,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Scene Grading",
         .tooltip = "Simulates the color of highlight clipping in SDR games with no tonemapper.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0 && SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0 && SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f && IsHDREnabled(); },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
@@ -638,14 +637,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
           //.dimensions = {.width=renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER, .height=renodx::utils::resource::ResourceUpgradeInfo::ANY},
-          //.aspect_ratio = -1,
+          .aspect_ratio = -1,
+          .aspect_ratio_tolerance = 0.01f,
       });
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r11g11b10_float,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
           //.dimensions = {.width=renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER, .height=renodx::utils::resource::ResourceUpgradeInfo::ANY},
-          //.aspect_ratio = -1,
+          .aspect_ratio = -1,
+          .aspect_ratio_tolerance = 0.01f,
       });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);

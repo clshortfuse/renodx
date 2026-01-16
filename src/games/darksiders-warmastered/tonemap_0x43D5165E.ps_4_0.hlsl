@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 // ---- Created with 3Dmigoto v1.4.1 on Tue Jan 13 18:57:51 2026
 
@@ -40,7 +40,8 @@ void main(
 
   r1.xyzw = s1_texture.Sample(s1_sampler_s, float2(0.5,0.5)).xyzw;
   r1.x = 0.00100000005 + r1.x;
-  r1.x = g_data.middleGray / r1.x;
+  //r1.x = g_data.middleGray / r1.x;
+  r1.x = renodx::math::SafeDivision(g_data.middleGray, r1.x);
   r1.x = max(g_data.minToneMapMult, r1.x);
   r1.x = min(g_data.maxToneMapMult, r1.x);
   r1.xyz = r1.xxx * r0.xyz;
@@ -56,7 +57,10 @@ void main(
   o0.xyz = r1.xyz * r0.xxx;
   o0.w = saturate(r0.w);
 
-  if (RENODX_TONE_MAP_TYPE == 0) o0.xyz = saturate(o0.xyz);
+  //if (RENODX_TONE_MAP_TYPE == 0) o0.xyz = saturate(o0.xyz);
   //o0.xyz = saturate(o0.xyz);
+  o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
+  o0.xyz = ToneMapMaxCLL(o0.xyz);
+  o0.xyz = renodx::color::srgb::EncodeSafe(o0.xyz);
   return;
 }
