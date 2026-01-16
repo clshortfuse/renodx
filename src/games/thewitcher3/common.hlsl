@@ -174,6 +174,19 @@ float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.375f, float output_ma
   return min(output_max, color * scale);
 }
 
+float3 ReinhardPiecewiseExtendedMaxCLL(float3 color, float rolloff_start, float tonemap_peak, float white_clip) {
+  float rgb_max = renodx::math::Max(color);
+  // float rgb_max = renodx::color::y::from::BT709(color); // by luminance for testing
+  float rgb_max_log = log2(rgb_max);
+  float tonemap_peak_log = log2(tonemap_peak);
+
+  float tonemapped_log = renodx::tonemap::ReinhardPiecewiseExtended(rgb_max_log, log2(white_clip), tonemap_peak_log, log2(rolloff_start));
+  float tonemapped = exp2(tonemapped_log);
+
+  float scale = renodx::math::DivideSafe(tonemapped, rgb_max, 1.f);
+  return color * scale;
+}
+
 float3 NeutralSDRYLerp(float3 color) {
   float color_y = renodx::color::y::from::BT709(color);
   color = lerp(color, renodx::tonemap::renodrt::NeutralSDR(color), saturate(color_y));
@@ -191,8 +204,8 @@ float3 PreTonemapSliders(float3 untonemapped) {
 
   float y = renodx::color::y::from::BT709(untonemapped);
   float3 outputColor = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, y, config);
-  outputColor = HDRBoost(outputColor, CUSTOM_INVERSE_TONEMAP, 1);
-  if (RENODX_TONE_MAP_TYPE < 2.f) return outputColor;
+  outputColor = HDRBoost(outputColor, CUSTOM_INVERSE_TONEMAP, 1, 0.04f);
+  //if (RENODX_TONE_MAP_TYPE < 2.f) return outputColor;
   //outputColor = ApplyPerChannelBlowoutHueShift(outputColor);
   return outputColor;
 }
@@ -357,6 +370,12 @@ float3 CustomTonemap(float3 color) {
   float3 outputColor = color;
   outputColor = renodx::color::bt709::clamp::BT2020(color);
   outputColor = PreTonemapSliders(outputColor);
+
+  // Find new white clip from peak after slider code and tonemap back down to 10k
+  float white_clip = 100.f;
+  white_clip = PreTonemapSliders(white_clip).x;
+  if (white_clip > 100.f) outputColor = ReinhardPiecewiseExtendedMaxCLL(outputColor, 4.f, 100.f, white_clip);
+
   if (LAST_IS_HDR) {
     outputColor = HDRDisplayMap(outputColor, RENODX_TONE_MAP_TYPE);
   }
