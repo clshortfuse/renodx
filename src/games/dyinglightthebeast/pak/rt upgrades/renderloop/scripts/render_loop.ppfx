@@ -1,0 +1,308 @@
+import "EngineDefs.mth"
+import "common.ppfx"
+import "gbuffer_fill.ppfx"
+import "heightmap.ppfx"
+import "sky.ppfx"
+import "lighting.ppfx"
+import "taa.ppfx"
+import "blur.ppfx"
+import "exposure.ppfx"
+import "tonemapping.ppfx"
+import "glow.ppfx"
+import "map3dpp.ppfx"
+import "postprocess.ppfx"
+import "fade.ppfx"
+import "barrel.ppfx"
+import "indirect_specular_outdoor.ppfx"
+import "clustering.ppfx"
+import "gui.ppfx"
+import "debug.ppfx"
+import "wind_compute.ppfx"
+import "screen_drops.ppfx"
+import "envprobe.ppfx"
+import "dxrt.ppfx"
+import "soft_glow.ppfx" 
+import "voxels.ppfx"
+import "game_pp.ppfx"
+import "ssr.ppfx"
+import "sun_shadows.ppfx"
+import "ambient_global.ppfx"
+import "waterbox.ppfx"
+import "zbuffer.ppfx"
+import "reflection_probes.ppfx"
+import "depth_of_field.ppfx"
+import "scene_forward.ppfx"
+import "hsm.ppfx"
+import "upscaling.ppfx"
+import "backbuffer.ppfx"
+import "update.ppfx"
+import "buffers_common.ppfx"
+import "stencil.ppfx"
+import "volumetric_fog.ppfx"
+import "hdr_graphs.ppfx"
+import "hdr_calibration.ppfx"
+import "alt_scene.ppfx"
+
+extern int HW_PLATFORM;
+extern bool DUALSCREEN_ON;
+extern bool DEBUG_ON;
+extern bool RT_ON;
+extern int UPSCALER;
+extern bool HDR_ON;
+extern bool GEN_REFLECTIONS_ON;
+extern bool GEN_ENVPROBES_ON;
+
+string S_ZBUFFER_EMPTY_STENCIL_PP = S_ZBUFFER + "EMPTY_STENCIL_PP";
+
+string S_HDR_LINEAR = "1_RG11B10F_LINEAR";
+
+string S_SDR_UI_A = "1_RGBA8_UI_A";
+string S_SDR_UI_B = "1_RGBA8_UI_B";
+
+string S_HDR_3D_A = "1_RG11B10F_3D_A";
+string S_HDR_3D_B = "1_RG11B10F_3D_B";
+
+string S_HDR_3D_OPQ = "1_RG11B10F_3D_OPQ";
+
+string S_REACTIVE_MASK_3D = "1_R8_REACTIVE_MASK";
+
+string S_HDR_UI_A = "_RGBA16F_UI_A";
+string S_HDR_UI_B = "_RGBA16F_UI_B";
+
+string S_HDR_UI_C = "1_RGBA16F_UI_C";
+
+sub on_frame_end()
+{
+	PushMarker("On Frame End");
+		use copy_zbuffer_2_prv_join();
+		
+		if (DEBUG_ON)
+		{
+			use debug_on_frame_end();
+		}
+
+		use copy_ui_to_window();
+
+		if(DEBUG_ON)
+		{
+			use gbuffer_all_release();//Release gbuffer in debug mode later so debug viewpresets can still acces it
+		}
+	
+		use dpt_4_release();
+	PopMarker();
+}
+
+
+sub full_ppfx()
+{
+	PushMarker("Frame", MARKER_PROFILING);
+
+		PushMarker("On 3D Scene Begin");
+			use on_frame_start();
+			use update();
+		PopMarker();
+
+		PushMarker("AltScene Deferred & Lighting", MARKER_PROFILING);
+			use alt_scene_update();
+		PopMarker();
+		
+		PushMarker("Scene Deferred", MARKER_PROFILING);
+			use scene_deffered();
+		PopMarker();
+
+		PushMarker("Lighting", MARKER_PROFILING);
+			use lighting_part1();
+			BufferScreenFormat(S_HDR_3D_A, 1, "R16G16B16A16_FLOAT", "ua esram");
+        	use clear_rtv_color(s_buf = S_HDR_3D_A);
+			use lighting_part2(s_dst = S_HDR_3D_A, s_hdr_prv = S_HDR_PRV, s_hdr_prv_opq = RT_ON ? S_HDR_PRV_OPQ : "");
+		PopMarker();
+
+		if (USE_REACTIVE_MASK || RT_ON)
+		{
+			use copy_buffer(s_src = S_HDR_3D_A, s_dst = S_HDR_PRV_OPQ);
+		}
+
+		PushMarker("Scene Forward", MARKER_PROFILING);
+			BufferScreenFormat(S_HDR_3D_B, 1, "R16G16B16A16_FLOAT", "ua esram");
+			SetBuffer(USERMAP_HDR_B, S_HDR_3D_B);
+				use scene_forward_hdr(s_dst = S_HDR_3D_A, s_tmp = S_HDR_3D_B, s_hdr_prv = S_HDR_PRV);
+		PopMarker();
+
+		if (USE_REACTIVE_MASK)
+		{
+			BufferScreenFormat(S_REACTIVE_MASK_3D, 1, "R8_UNORM", "ua esram");
+			use generate_reactive_mask(opaque = S_HDR_PRV_OPQ, full_scene = S_HDR_3D_B, dst_reactive_mask = S_REACTIVE_MASK_3D);
+		}
+
+		PushMarker("On 3D Scene End");
+			if(!DEBUG_ON) {	use gbuffer_all_release(); } //Release gbuffer as fast as possible when game is in release mode, dont release if it's debug so viewpresets can still acces it
+			
+			use fog_release();
+			use copy_zbuffer_2_prv();
+			use debug_render_hdr(s_out_rt = S_HDR_3D_A);
+
+			if (GEN_ENVPROBES_ON) 	{ use envprobe_store_hdr(s_src = S_HDR_3D_A); }
+			if (GEN_REFLECTIONS_ON)	{ use reflection_probes_save(s_src = S_HDR_3D_A); }
+		PopMarker();
+
+		use game_pp_first(s_dst = S_HDR_3D_A);
+
+		// after TAAU/upscalers, we always are in UI res (for native rendering 3D===UI)
+		// releasing 					S_HDR_3D
+		// allocating and switching to	S_HDR_UI, S_ZBUFFER_EMPTY_STENCIL_PP
+		Release(S_HDR_3D_B);
+		BufferScreenFormat(S_ZBUFFER_EMPTY_STENCIL_PP, 1, "D32_FLOAT_S8X24_UINT", "postprocess"); // kmarecki: we teoretically no need stencil for game post process, but good luck adding support for depth without stencil
+																						 // not worth it for single R32 memory savings
+		use upscale_zbuffer_without_stencil(s_src = S_ZBUFFER, s_dst = S_ZBUFFER_EMPTY_STENCIL_PP);
+		BufferScreenFormat(S_HDR_UI_A, 1, "R16G16B16A16_FLOAT", "postprocess ua");
+		use hdr_upscaling(dst = S_HDR_UI_A, src = S_HDR_3D_A, src_prv = S_HDR_PRV, reactive_mask = USE_REACTIVE_MASK ? S_REACTIVE_MASK_3D : "");
+		Release(S_HDR_3D_A);
+
+		if (USE_REACTIVE_MASK)
+		{
+			Release(S_REACTIVE_MASK_3D);
+		}
+		
+		string PP_HDR_A = S_HDR_UI_A;
+
+		Release("ALPHA_2_TRN_CA"); // needed by TAA
+		use jitter_disable();
+
+		// all HDR content is in PP_HDR_A now.
+		use blurs(s_inout_buf = PP_HDR_A, s_prv = S_HDR_PRV);
+
+		use dpt_2_min_esram_release();
+
+		BufferScreenFormat(S_SDR_UI_A, 1, "R8G8B8A8_UNORM", "ua esram postprocess");
+		
+		if (HDR_ON)
+		{
+			BufferScreenFormat(S_HDR_UI_B, 1, "R16G16B16A16_FLOAT", "ua postprocess");
+		}
+		else
+		{
+			BufferScreenFormat(S_SDR_UI_B, 1, "R8G8B8A8_UNORM", "ua esram postprocess");
+		}
+
+		if (DEBUG_ON)
+		{
+			use dxrt_hdr_debug(s_dst = PP_HDR_A);
+		}
+
+		// temp buffer for postprocess calculations
+		string PP_B = HDR_ON ? S_HDR_UI_B : S_SDR_UI_B;
+
+		PushMarker("Tonemapping & Postprocess", MARKER_PROFILING);	
+			if (HDR_ON) { use hdr_calibration_background(s_inout_buf = PP_HDR_A); }
+
+			use exposure(s_src = PP_HDR_A);	
+
+			PushMarker("Pre-Tonemapping HDR Postprocess");
+				use postprocess_pre_tonemapping(s_inout_buf = PP_HDR_A);
+			PopMarker();
+			
+			use tonemapping(s_src = PP_HDR_A, s_dst = PP_B);
+			// HDR content is in PP_B now.
+
+			PushMarker("Postprocess");
+				use draw_pp_first(s_zbuffer_empty_stencil = S_ZBUFFER_EMPTY_STENCIL_PP, s_dst = PP_B);
+				use highlight(s_dst = PP_B);
+				use game_pp_last(s_dst = PP_B);
+
+				use glow(s_in_buf = PP_HDR_A, s_out_rt = PP_B);
+				PP_HDR_A = "invalid";
+
+				if (HDR_ON) 
+				{ 
+					BufferScreenFormat(S_HDR_UI_C, 1, "R16G16B16A16_FLOAT", "esram ua postprocess");
+						use postprocess(s_src = PP_B, s_dst = S_HDR_UI_C, s_zbuffer_empty_stencil = S_ZBUFFER_EMPTY_STENCIL_PP);
+						BufferScreenFormat(S_HDR_LINEAR, 1, "R16G16B16A16_FLOAT", "postprocess ua esram");
+						use hdr_tonemapping(exposed_hdr_scene = S_HDR_UI_C, linear_hdr_scene = S_HDR_LINEAR);
+						use hdr_calibration(s_dst = S_HDR_LINEAR);
+					Release(S_HDR_UI_C);
+				}
+				else
+				{
+					use postprocess(s_src = PP_B, s_dst = S_SDR_UI_A, s_zbuffer_empty_stencil = S_ZBUFFER_EMPTY_STENCIL_PP);
+				}
+
+			PopMarker(); // Postprocess
+			
+			use sky_visibility_mask_release();
+		PopMarker(); // Tonemapping & Postprocess
+
+		if (HDR_ON)
+		{
+			Release(S_HDR_UI_B);
+		}
+		else
+		{
+			Release(S_SDR_UI_B);
+		}
+		PP_B = "invalid";
+
+		// out is in S_SDR_UI_A or S_HDR_LINEAR
+
+		if (DEBUG_ON)
+		{
+			PushMarker("Debug features", MARKER_PROFILING);
+				if (HDR_ON) { use debug_hdr_graphs(s_buf = S_HDR_LINEAR); }
+
+				// For creatig RTV we cannot combine 3D and UI buffers, as latter doens't have DRS subviews.
+				// We don't upscale stencil, because it's painfull without SV_STENCIL_REF. If we would, then we would just use upscaled ZBUFFER and that's it.
+				// We don't, so we have to use 3D zbuffer with 3D stencil.
+				// Since we cannot combine 3D zbuffer with UI color buffer, we render debug geometry to offscreen 3D texture and then copy from this texture to upscaled texture
+				// (note that this can result in not pixel-perfect depth tests)
+				
+				string S_SDR_3D_A = "1_RGBA8_3D_A";
+				BufferScreenFormat(S_SDR_3D_A, 1, "R8G8B8A8_UNORM", "ua");
+
+				string S_SDR_PP_A = "1_RGBA8_PP_A";
+				BufferScreenFormat(S_SDR_PP_A, 1, "R8G8B8A8_UNORM", "ua postprocess");
+
+				SetClearColor(0.0, 0.0, 0.0, 0.0);
+				SetRenderTargets(S_SDR_3D_A, "color");
+				use debug_render_sdr_3d_pre_debug_geo(s_in_scenecolor = S_SDR_UI_A, s_dst = S_SDR_3D_A, s_dst_zbuffer = S_ZBUFFER);
+
+				SetClearColor(0.0, 0.0, 0.0, 0.0);
+				SetRenderTargets(S_SDR_PP_A, "color");
+				use debug_render_sdr_pp(s_in_scenecolor = S_SDR_UI_A, s_dst = S_SDR_PP_A, s_dst_zbuffer = S_ZBUFFER_EMPTY_STENCIL_PP);
+
+				SetRenderTargets(S_SDR_UI_A + " f:srgb", "");
+					SetBuffer(USERMAP_TMP_0, S_SDR_3D_A);
+						Mesh("tri_screen.msh", "blend2$trn_srgb.mat", "std");
+					SetBuffer(USERMAP_TMP_0, S_SDR_PP_A);
+						Mesh("tri_screen.msh", "blend2$trn_srgb.mat", "std");
+
+				SetClearColor(0.0, 0.0, 0.0, 0.0);
+				SetRenderTargets(S_SDR_3D_A, "color");
+				use debug_render_sdr_3d_post_debug_geo(s_in_scenecolor = S_SDR_UI_A, s_dst = S_SDR_3D_A, s_dst_zbuffer = S_ZBUFFER);
+
+				SetRenderTargets(S_SDR_UI_A + " f:srgb", "");
+					SetBuffer(USERMAP_TMP_0, S_SDR_3D_A);
+						Mesh("tri_screen.msh", "blend2$trn_srgb.mat", "std");
+
+				Release(S_SDR_PP_A);
+				Release(S_SDR_3D_A);
+
+				use draw_editor_colors(s_dst = S_SDR_UI_A);
+			PopMarker();
+		}
+
+		PushMarker("GUI", MARKER_PROFILING);
+				use gui(s_in = HDR_ON ? S_HDR_LINEAR : S_SDR_UI_A);
+	    PopMarker();   
+
+		use glow_release();
+		use on_frame_end();
+
+		// only releases below this point. no dispatches & drawcalls
+		Release(S_HDR_UI_A);
+		Release(S_ZBUFFER_EMPTY_STENCIL_PP);
+		if (HDR_ON) { Release(S_HDR_LINEAR); }
+		Release(S_SDR_UI_A);
+
+		use backbuffer_restore();
+
+	PopMarker(); // Frame
+}
