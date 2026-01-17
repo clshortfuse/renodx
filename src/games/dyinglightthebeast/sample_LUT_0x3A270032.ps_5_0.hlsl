@@ -14,13 +14,23 @@ void main(
 
   float3 lut_input_color = untonemapped;
   if (RENODX_LUT_SHAPER != 0.f) {
-    lut_input_color = renodx::color::pq::EncodeSafe(untonemapped, 100.f);
+    lut_input_color = renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(untonemapped), 100.f);
   } else {
     lut_input_color = (log2(untonemapped) + 13) * 0.05f;
   }
 
-  float3 tonemapped = texture_LUT.SampleLevel(sampler_LUT, lut_input_color * 0.96875f + 0.015625f, 0).xyz;
+  float3 tonemapped;
+  if (CUSTOM_LUT_TETRAHEDRAL == 0.f) {
+    tonemapped = texture_LUT.SampleLevel(sampler_LUT, lut_input_color * 0.96875f + 0.015625f, 0).xyz;
+  } else {
+    tonemapped = renodx::lut::SampleTetrahedral(texture_LUT, lut_input_color, 32u);
+  }
+
   o0.rgb = renodx::color::pq::DecodeSafe(tonemapped, 1.f);
+
+  if (RENODX_LUT_OUTPUT_BT2020 == 1.f) {
+    o0.rgb = renodx::color::bt709::from::BT2020(o0.rgb);
+  }
 
   o0.w = 0;
   return;
