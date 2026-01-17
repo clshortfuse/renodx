@@ -1,0 +1,391 @@
+import "EngineDefs.mth"
+import "common.ppfx"
+import "backbuffer.ppfx"
+import "upscaling.ppfx"
+import "framegen.ppfx"
+
+extern int HW_PLATFORM;
+extern bool DUALSCREEN_ON;
+extern int RES_UI2_WIDTH;
+extern int RES_UI2_HEIGHT;
+extern bool DEBUG_ON;
+extern bool HDR_ON;
+extern bool DRS_ON;
+
+extern int RES_PP_WIDTH;
+extern int RES_PP_HEIGHT;
+extern int RES_UI_WIDTH;
+extern int RES_UI_HEIGHT;
+bool DOES_REQUIRE_UPSCALING = RES_PP_WIDTH != RES_UI_WIDTH || RES_PP_HEIGHT != RES_UI_HEIGHT;
+
+
+sub render_gui_outpost(string tech = "std", string var = "i_gui_outpost_on", string s_in = "", string s_unique_postfix = "", string s_out = "")
+{
+    If(var)
+    {
+        string s_gui_launcher_0 = "GUI_LAUNCHER0" + s_unique_postfix;
+        BufferScreenFormat(s_gui_launcher_0, 4, "R8G8B8A8_UNORM", "esram");
+
+        SetRenderTargets(s_out, "");
+            SetBuffer(USERMAP_TMP_6, s_gui_launcher_0);
+                Scene(tech);
+        Release(s_gui_launcher_0);
+    }
+}
+
+sub render_gui_blur_layer(string tech = "std", string var = "f_gui_items_l1", string s_in = "", string s_unique_postfix = "", string s_out = "")
+{
+    PushMarker("render_gui_blur_layer" + s_unique_postfix);
+
+    If(var)
+    {
+        string s_gui_blur_0 = "GUI_BLUR0" + s_unique_postfix;
+
+        BufferScreenFormat(s_gui_blur_0, 4, "R8G8B8A8_UNORM", "esram");
+        SetRenderTargets(s_gui_blur_0, "");
+            SetBuffer(USERMAP_TMP_0, s_in);
+        Mesh("tri_screen.msh", "copy_4.mat", "std");
+
+        string s_gui_blur_1 = "GUI_BLUR1" + s_unique_postfix;
+        BufferScreenFormat(s_gui_blur_1, 4, "R8G8B8A8_UNORM", "esram");
+
+        SetRenderTargets(s_gui_blur_1, "");
+            SetBuffer(USERMAP_TMP_0, s_gui_blur_0);
+                Mesh("tri_screen.msh", "blur_gauss_17$v.mat", "std");
+
+        SetRenderTargets(s_gui_blur_0, "");
+            SetBuffer(USERMAP_TMP_0, s_gui_blur_1);
+                Mesh("tri_screen.msh", "blur_gauss_17$h.mat", "std");
+
+        SetRenderTargets(s_out, "");
+            SetBuffer(USERMAP_TMP_6, s_gui_blur_0);
+                Scene(tech); //blur + items above blur
+
+        Release(s_gui_blur_0);
+        Release(s_gui_blur_1);
+    }
+
+    PopMarker();
+}
+
+// VTS-GSL (azahidi) : This function performs a basic reinhard blend of s_out on background. 
+// No gamut reinterpretation is performed in this case. This process is used when blending a non-final UI layer on top of the HDR buffer.
+sub blend_ui_reinhard(string background = "", string offscreen_ui = "", string s_out = "")
+{
+    SetRenderTargets(s_out, "");
+        SetBuffer(USERMAP_TMP_0, background);
+        SetBuffer(USERMAP_TMP_1, offscreen_ui);
+            Mesh("tri_screen.msh", "copy$reinhard_ui.mat", "std");
+}
+
+sub gui_m3d_map_begin(string s_postfix = "")
+{
+    If("f_m3d_map_ppfx")
+    {
+        // TODO: move it to better place when cleaning stuff related to new ppfx  map
+        PushMarker("M3D GUI FOW BLUR" + s_postfix);
+			// blur h
+			BufferFormat("R8_M3D_FOG_A_256" + s_postfix, 256, 256, "R8_UNORM", "esram");
+			SetRenderTargets("R8_M3D_FOG_A_256" + s_postfix, "read_only_ds");
+				SetBuffer(USERMAP_TMP_0,  "s_fog_of_war_texture");
+					Mesh("tri_screen.msh", "blur_gauss_17$h.mat", "std"); 
+			
+			// blur v
+			BufferFormat("R8_M3D_FOG_B_256" + s_postfix, 256, 256, "R8_UNORM", "esram");
+			SetRenderTargets("R8_M3D_FOG_B_256" + s_postfix, "read_only_ds");
+				SetBuffer(USERMAP_TMP_0, "R8_M3D_FOG_A_256" + s_postfix);
+					Mesh("tri_screen.msh", "blur_gauss_17$v.mat", "std");
+			Release("R8_M3D_FOG_A_256" + s_postfix);
+			
+			//256 -> 128
+			BufferFormat("R8_M3D_FOG_A_128" + s_postfix, 128, 128, "R8_UNORM", "esram");
+			SetRenderTargets("R8_M3D_FOG_A_128" + s_postfix, "read_only_ds");
+				SetBuffer(USERMAP_TMP_0, "R8_M3D_FOG_B_256" + s_postfix);
+					Mesh("tri_screen.msh", "copy$blinn.mat", "std");
+			//blur v
+			BufferFormat("R8_M3D_FOG_B_128" + s_postfix, 128, 128, "R8_UNORM", "esram");
+			SetRenderTargets("R8_M3D_FOG_B_128" + s_postfix, "read_only_ds");
+				SetBuffer(USERMAP_TMP_0, "R8_M3D_FOG_A_128" + s_postfix);
+					Mesh("tri_screen.msh", "blur_gauss_17$v.mat", "std");
+			//blur h 
+			SetRenderTargets("R8_M3D_FOG_A_128" + s_postfix, "read_only_ds");
+				SetBuffer(USERMAP_TMP_0, "R8_M3D_FOG_B_128" + s_postfix);
+					Mesh("tri_screen.msh", "blur_gauss_17$h.mat", "std");
+			Release("R8_M3D_FOG_B_128" + s_postfix);
+			
+			//128 -> 256
+			SetRenderTargets("R8_M3D_FOG_B_256" + s_postfix, "read_only_ds");
+				SetBuffer(USERMAP_TMP_0, "R8_M3D_FOG_A_128" + s_postfix);
+					Mesh("tri_screen.msh", "copy$blinn.mat", "std");
+			Release("R8_M3D_FOG_A_128" + s_postfix);
+					
+			//256 -> 512
+			BufferFormat("R8_M3D_FOG_C_512" + s_postfix, 512, 512, "R8_UNORM", "esram");
+			SetRenderTargets("R8_M3D_FOG_C_512" + s_postfix, "read_only_ds");
+				SetBuffer(USERMAP_TMP_0, "R8_M3D_FOG_B_256" + s_postfix);
+					Mesh("tri_screen.msh", "copy$blinn.mat", "std");
+					SetBuffer(USERMAP_FOW, "R8_M3D_FOG_C_512" + s_postfix);
+			Release("R8_M3D_FOG_B_256" + s_postfix);
+		PopMarker();
+
+        BufferScreenFormat("GUI_MAP_PPFX_RT_0" + s_postfix, 1, "R8G8B8A8_UNORM", "ui");
+            SetClearColor(0.0, 0.0, 0.0, 0.0);
+            SetRenderTargets("GUI_MAP_PPFX_RT_0" + s_postfix, "color");
+                Scene("opq_0");
+
+        BufferScreenFormat("GUI_MAP_PPFX_RT_0_NRM" + s_postfix, 1, "R8G8_SNORM", "ui");
+            SetClearColor(0.0, 0.0, 0.0, 0.0);
+            SetRenderTargets("GUI_MAP_PPFX_RT_0_NRM" + s_postfix, "color");
+                Scene("opq_2");
+
+        BufferScreenFormat("GUI_MAP_PPFX_RT_1" + s_postfix, 1, "R8G8B8A8_UNORM", "ui");
+            SetClearColor(0.0, 0.0, 0.0, 0.0);
+            SetRenderTargets("GUI_MAP_PPFX_RT_1" + s_postfix, "color");
+                Scene("opq_1");
+    }
+}
+sub gui_m3d_map_draw(string s_postfix = "")
+{
+    If("f_m3d_map_ppfx")
+    {
+        SetRenderView("SCENE"); // need to have access to proper camera projection matrix in shader
+            SetBuffer(USERMAP_TMP_0, "GUI_MAP_PPFX_RT_0" + s_postfix);
+            SetBuffer(USERMAP_TMP_1, "GUI_MAP_PPFX_RT_0_NRM" + s_postfix);
+            SetBuffer(USERMAP_TMP_2, "GUI_MAP_PPFX_RT_1" + s_postfix);
+            Mesh("map_ppfx.msh", "map_ppfx$thickness_layer.mat", "std");
+            Mesh("map_ppfx.msh", "map_ppfx.mat", "std");
+        SetRenderView("GUI");
+    }
+}
+sub gui_m3d_map_end(string s_postfix = "")
+{
+    If("f_m3d_map_ppfx")
+    {
+        Release("GUI_MAP_PPFX_RT_0" + s_postfix);
+        Release("GUI_MAP_PPFX_RT_0_NRM" + s_postfix);
+        Release("GUI_MAP_PPFX_RT_1" + s_postfix);
+        Release("R8_M3D_FOG_C_512" + s_postfix);
+    }
+}
+
+sub render_gui(string background = "", string s_out_offscreen_ui = "", string s_postfix = "")
+{
+    PushMarker("render_gui" + s_postfix);
+    SetRenderView("GUI");
+
+    use gui_m3d_map_begin(s_postfix = s_postfix);
+
+    if ((HW_PLATFORM & PLATFORM_ORBIS) > 0)
+    {
+        string s_rgba8_ui = "1_RGBA8_UI";
+        BufferScreenFormat(s_rgba8_ui, 1, "R8G8B8A8_UNORM", "ui ua esram");
+        
+        SetRenderTargets(s_rgba8_ui, "");
+            SetBuffer(USERMAP_TMP_0, background);
+                Mesh("tri_screen.msh", "copy$filla_blinn.mat", "std");
+        
+        use gui_m3d_map_draw(s_postfix = s_postfix);
+        Scene("std"); //GUI elements (before all blur layers)
+
+        use render_gui_blur_layer(tech = "std2", var = "f_gui_items_l1", s_in = s_rgba8_ui, s_unique_postfix = s_postfix + "_1_TEMPOR", s_out = s_rgba8_ui);
+        use render_gui_blur_layer(tech = "trn0", var = "f_gui_items_l2", s_in = background, s_unique_postfix = s_postfix + "_5_TEMPOR", s_out = HDR_ON ? s_out_offscreen_ui : background);
+        use render_gui_blur_layer(tech = "trn",  var = "f_gui_items_l3", s_in = background, s_unique_postfix = s_postfix + "_6_TEMPOR", s_out = HDR_ON ? s_out_offscreen_ui : background);
+        use render_gui_outpost(tech = "trn2", var = "i_gui_outpost_on", s_in = background, s_unique_postfix = s_postfix + "_4_TEMPOR", s_out = HDR_ON ? s_out_offscreen_ui : background);
+
+        SetRenderTargets("backbuffer_ui", "");
+        SetBuffer(USERMAP_TMP_0, s_rgba8_ui);
+            use copy2backbuffer_gamma();
+        Release(s_rgba8_ui);
+    }
+    else
+    {
+        // Render GUI to  offscreen UI. If any layer is active, we want to also add 3d scene to it in order to blur whole background 
+        // (current assumption is that it won't be active in gameplay, so frame gens will get probes offscreen ui without 3d scene during gameplay)
+        // If layers are active, we have to cover 2 cases:
+        // LDR: We just copy 3d scene to offscreen UI and then use alpha blending when rendering gui 
+        // HDR: We cannot rely on alpha blending, so we render gui to offscreen and then execute composition shader that will blend it with 3d scene
+        // After that, layers composion should happen entirely in LDR
+
+        If("f_gui_overlay_items")
+        {
+            if(background != s_out_offscreen_ui)
+            {
+                if(!HDR_ON)
+                {
+                    SetRenderTargets(s_out_offscreen_ui, "");
+                        SetBuffer(USERMAP_TMP_0, background);
+                        Mesh("tri_screen.msh", "copy$filla.mat", "std");
+                }
+            }
+        }
+
+        PushMarker("GUI" + s_postfix);
+            SetRenderTargets(s_out_offscreen_ui, "");
+                use gui_m3d_map_draw(s_postfix = s_postfix);
+                Scene("std"); //GUI elements (before all blur layers)
+        PopMarker();
+
+        string blended_buffer     = "HDR_BLENDED_BACKGROUND_UI" + s_postfix;
+        string blended_buffer_ldr = "LDR_BLENDED_BACKGROUND_UI" + s_postfix;
+
+        // VTS-GSL (azahidi) : As multiple layers  of UI can be present, we need to blend each one of them on the HDR buffer using the reinhard compositing.
+        if(HDR_ON)
+        {
+            BufferScreenFormat(blended_buffer, 1, "R16G16B16A16_FLOAT", "ui");
+            BufferScreenFormat(blended_buffer_ldr, 1, "R8G8B8A8_UNORM", "ui");
+
+            if(background != s_out_offscreen_ui)
+            {
+                PushMarker("GUI HDR Blending" + s_postfix);
+
+                If("f_gui_overlay_items")
+                {
+                    use blend_ui_reinhard(background = background, offscreen_ui = s_out_offscreen_ui, s_out = blended_buffer);
+
+                    SetRenderTargets(blended_buffer_ldr, "");
+                        SetBuffer(USERMAP_TMP_0, blended_buffer);
+                            Mesh("tri_screen.msh", "copy_4$hdr_input.mat", "std");
+
+                    SetRenderTargets(background, "");
+                        SetBuffer(USERMAP_TMP_0, blended_buffer);
+                            Mesh("tri_screen.msh", "copy.mat", "std");
+
+                    SetClearColor(0.0, 0.0, 0.0, 0.0);
+                    SetRenderTargets(s_out_offscreen_ui, "color");
+                }
+
+                PopMarker();
+            }
+        }
+
+        PushMarker("LAYERS BLENDING" + s_postfix);
+            use render_gui_blur_layer(tech = "std2", var = "f_gui_items_l1", s_in = HDR_ON ? blended_buffer_ldr : s_out_offscreen_ui, s_unique_postfix = s_postfix + "_4_TEMPOR", s_out = s_out_offscreen_ui);
+            use render_gui_blur_layer(tech = "trn0", var = "f_gui_items_l2", s_in = s_out_offscreen_ui, s_unique_postfix = s_postfix + "_5_TEMPOR", s_out = s_out_offscreen_ui);
+            use render_gui_blur_layer(tech = "trn",  var = "f_gui_items_l3", s_in = s_out_offscreen_ui, s_unique_postfix = s_postfix + "_6_TEMPOR", s_out = s_out_offscreen_ui);
+            use render_gui_outpost(tech = "trn2", var = "i_gui_outpost_on", s_in = s_out_offscreen_ui, s_unique_postfix = s_postfix + "_4_TEMPOR", s_out = s_out_offscreen_ui);
+        PopMarker();
+
+        if (HDR_ON)
+        {
+            Release(blended_buffer);
+            Release(blended_buffer_ldr);
+        }
+    }
+
+    use gui_m3d_map_end(s_postfix = s_postfix);
+
+    PopMarker();
+}
+
+sub gui(string s_in = "", bool s_allow_framegen = true)
+{   
+    // todo as arguments
+    string s_HUDLESS = s_in; // rendered game
+    string s_OFFSCREEN = "GUI_OFFSCREEN"; // place for UI
+
+    string s_MV = "1_R16G16_MV"; // motion vectors
+    string s_ZBUFFER = "ZBUFFER"; // zbuffer of the game
+    
+    if (DEBUG_ON)
+    {
+        //this clears the screen for Gui editor
+        SetRenderTargets(s_HUDLESS, "");  
+        GuiEditorClear();
+    }
+
+    string s_HUDLESS_UPSCALED = "HUDLESS_UPSCALED";
+    if (DOES_REQUIRE_UPSCALING)
+    {
+        BufferScreenFormat(s_HUDLESS_UPSCALED, 1, HDR_ON ? "R16G16B16A16_FLOAT" : "R8G8B8A8_UNORM", "ui");
+
+        PushMarker("HUDLESS_UPSCALING");
+
+            SetRenderTargets(s_HUDLESS_UPSCALED, "");
+                SetBuffer(USERMAP_TMP_0, s_HUDLESS);
+                Mesh("tri_screen.msh", "spatial_upsampling.mat", "std");
+
+        PopMarker();
+    }
+
+    string s_HUDLESS_UI_RES = DOES_REQUIRE_UPSCALING ? s_HUDLESS_UPSCALED : s_HUDLESS;
+
+    // render GUI to s_OFFSCREEN
+    BufferScreenFormat(s_OFFSCREEN, 1, "R8G8B8A8_UNORM", "ui esram ua");
+    SetClearColor(0.0, 0.0, 0.0, 0.0);
+    SetRenderTargets(s_OFFSCREEN, "color");
+        use render_gui(background = s_HUDLESS_UI_RES, s_out_offscreen_ui = s_OFFSCREEN, s_postfix = "_A");
+
+    // render debug stuff to s_OFFSCREEN
+    if (DEBUG_ON)
+    {
+        PushMarker("DEBUG_RENDERING_GUI");
+            SetRenderView("DEBUG_RENDERING");
+            SetRenderTargets(s_OFFSCREEN + S_SRGB_NOHDR, "");
+                If("f_pp_show_helpers_on")
+                {
+                    Scene("std2");
+                }
+        PopMarker();
+    }
+    
+    use engine_overlay(s_dst = s_OFFSCREEN + S_SRGB_NOHDR);
+
+    if (s_allow_framegen)
+    {
+    	// copies hudless/offscreen/mv/zbuffer for the future 
+    	use framegen_setup(s_hudless = s_HUDLESS_UI_RES, s_offscreen = s_OFFSCREEN, s_mv = s_MV, s_zbuffer = s_ZBUFFER);
+    }
+
+    // preparing output data
+    string S_OUT = "FINAL_SCENE";
+    BufferScreenFormat(S_OUT, 1, HDR_ON ? "R16G16B16A16_FLOAT" : "R8G8B8A8_UNORM", "ui esram ua");
+        SetRenderTargets(S_OUT, "");
+
+    PushMarker("UI Composition");
+    if (HDR_ON)
+    {
+        SetBuffer(USERMAP_TMP_0, s_HUDLESS_UI_RES);
+        SetBuffer(USERMAP_TMP_1, s_OFFSCREEN);
+            Mesh("tri_screen.msh", "copy$reinhard_gamut.mat", "std");
+    }
+    else
+    {
+        SetBuffer(USERMAP_TMP_0, s_HUDLESS_UI_RES);
+            Mesh("tri_screen.msh", "copy.mat", "std");
+            
+        SetBuffer(USERMAP_TMP_0, s_OFFSCREEN);
+            Mesh("tri_screen.msh", "blend2$trn.mat", "std");
+    }	
+    PopMarker();
+
+    use copy2backbufferui_gamma_platform(buffer = S_OUT);
+
+    if (s_allow_framegen)
+    {
+    	use framegen_apply(s_offscreen = s_OFFSCREEN);
+    }
+
+    Release(S_OUT);
+    Release(s_OFFSCREEN);
+
+    if (DOES_REQUIRE_UPSCALING)
+    {
+        Release(s_HUDLESS_UPSCALED);
+    }
+
+    if (DUALSCREEN_ON)
+    {
+        string second_ui = "DUO_RGBA8_UI";
+        BufferFormat(second_ui, RES_UI2_WIDTH, RES_UI2_HEIGHT, "R8G8B8A8_UNORM", "");
+            SetRenderView("UI");        
+            SetRenderTargets(second_ui, "color");
+                Scene("std");
+                Scene("std2");
+                Scene("trn0");
+                Scene("trn");		
+            SetRenderTargets("backbuffer_ui_secondary", "");
+            SetBuffer(USERMAP_TMP_0, second_ui);	
+                use copy2backbuffer_gamma();
+        Release(second_ui);
+    }
+}

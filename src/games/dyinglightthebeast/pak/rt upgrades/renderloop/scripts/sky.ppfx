@@ -1,0 +1,234 @@
+import "EngineDefs.mth"
+import "sky_game.ppfx"
+import "taa.ppfx"
+
+extern bool DEBUG_ON;
+extern bool HQ_SKYBOX_ON;
+extern int FOG_VERSION;
+
+sub sky_buffers()
+{
+	BufferFormat("SUN_FLARE_MASK", 1, 1, "R8_UNORM", ""); //averaged mask of the sun flare's current position
+	BufferFormat("CLD_TEX_SKY", 512, 256, "R16G16B16A16_FLOAT", "ua esram");
+
+	if (DEBUG_ON)
+	{
+		BufferScreenFormat("SKY_VISIBILITY_MASK_DEBUG", 1, "R8_UNORM", "");
+	}
+}
+
+sub sky_buffers_init()
+{
+	use clear_rtv_color(s_buf = "SUN_FLARE_MASK", value = 0.0); //have to clear the buffer regardless if case sky sampling is used anywhere else
+	use clear_rtv_color(s_buf = "CLD_TEX_SKY", value = 0.0); //have to clear the buffer regardless if case sky sampling is used anywhere else
+}
+
+sub sky_clouds_update()
+{
+	PushMarker("Sky: Clouds Update");
+		use clear_rtv_color(s_buf = "CLD_TEX_SKY", value = 0.0); //have to clear the buffer regardless if case sky sampling is used anywhere else
+
+		If("f_pp_clouds_particles_on")
+		{
+			BufferFormat("CLD_TEX_SKY_TMP", 512, 256, "R16G16B16A16_FLOAT", "ua esram");
+			use clear_rtv_color(s_buf = "CLD_TEX_SKY_TMP", value = 0.0);
+
+			SetBuffer(UAV_0, "CLOUDS_INDIRECT_ARGS");
+				Dispatch("clouds_particles_context.mat", "std", 1, 1, 1);
+				FreeUAVs();
+
+			SetRenderTargets("CLD_TEX_SKY_TMP", "");
+				DrawInstancedIndirect("clouds_particles_hemisphere_draw.mat", "std", "CLOUDS_INDIRECT_ARGS", "TriangleList");
+			FreeUAVs();
+			
+			SetRenderTargets("backbuffer_3d", "");
+			SetBuffer(UAV_0, "CLD_TEX_SKY");
+			SetBuffer(UAV_1, "CLD_TEX_SKY_TMP");
+				Dispatch("clouds_particles_hemisphere_copy.mat", "std", 32, 16, 1); //32 * 16, 16 * 16, 1 * 1
+				FreeUAVs();
+
+			Release("CLD_TEX_SKY_TMP");
+		}
+
+		SetRenderTargets("CLD_TEX_SKY", "");
+			SetBuffer(USERMAP_TMP_0, "s_horizon_clouds_mask");
+			SetBuffer(USERMAP_TMP_1, "s_horizon_clouds_1_mask");
+			SetBuffer(USERMAP_TMP_2, "s_horizon_clouds_2_mask");
+			SetBuffer(USERMAP_TMP_3, "s_horizon_clouds_3_mask");
+			Mesh("tri_screen.msh", "horizon_clouds_hemisphere_draw.mat", "std");
+	PopMarker();
+}
+
+sub sky_procedural(string s_hdr_dst = "")
+{
+	If("f_pp_sky_proc_on")
+	{
+		PushMarker("Sky: Procedural");
+
+		SetRenderTargets("z:" + S_ZBUFFER + " " + s_hdr_dst, "read_only_ds");
+		If("f_pp_lightning", "&&", "f_lightning_intensity_skybox")
+		{
+			Mesh("tri_screen.msh", "sky_procedural$lightning.mat", "std");
+		}
+		Else()
+		{
+			Mesh("tri_screen.msh", "sky_procedural.mat", "std");
+		}
+		PopMarker();
+	}
+}
+
+sub sky_clouds(string s_hdr_dst = "")
+{
+	SetRenderTargets("z:" + S_ZBUFFER + " " + s_hdr_dst + " SKY_VISIBILITY_MASK", "read_only_ds");
+	If("f_pp_clouds_cone_on")
+	{
+			Mesh("clouds_cone.msh", "clouds_cone.mat", "std");
+	}
+}
+
+sub sky_clouds_low(string s_hdr_dst = "")
+{
+	SetRenderTargets("z:" + S_ZBUFFER + " " + s_hdr_dst + " SKY_VISIBILITY_MASK", "read_only_ds");
+	If("f_low_clouds_cone_on")
+	{
+		If("f_pp_lightning", "&&", "f_lightning_intensity_clouds")
+		{
+			Mesh("clouds_cone.msh", "clouds_cone_low$lightning.mat", "trn");
+		}
+		Else()
+		{
+			Mesh("clouds_cone.msh", "clouds_cone_low.mat", "trn");
+		}
+	}
+}
+
+sub horizon_clouds(string s_hdr_dst = "")
+{
+	SetRenderTargets("z:" + S_ZBUFFER + " " + s_hdr_dst + " SKY_VISIBILITY_MASK", "read_only_ds");
+	If("f_pp_horizon_clouds_on")
+	{
+		SetBuffer(USERMAP_TMP_0, "s_horizon_clouds_mask");
+		SetBuffer(USERMAP_TMP_1, "s_horizon_clouds_nrm");
+			Mesh("horizon_clouds.msh", "horizon_clouds.mat", "trn");
+	}
+	If("f_pp_horizon_clouds_1_on")
+	{
+		SetBuffer(USERMAP_TMP_0, "s_horizon_clouds_1_mask");
+		SetBuffer(USERMAP_TMP_1, "s_horizon_clouds_1_nrm");
+			Mesh("horizon_clouds.msh", "horizon_clouds$_1.mat", "trn");
+	}
+	If("f_pp_horizon_clouds_2_on")
+	{
+		SetBuffer(USERMAP_TMP_0, "s_horizon_clouds_2_mask");
+		SetBuffer(USERMAP_TMP_1, "s_horizon_clouds_2_nrm");
+			Mesh("horizon_clouds.msh", "horizon_clouds$_2.mat", "trn");
+	}
+	If("f_pp_horizon_clouds_3_on")
+	{
+		SetBuffer(USERMAP_TMP_0, "s_horizon_clouds_3_mask");
+		SetBuffer(USERMAP_TMP_1, "s_horizon_clouds_3_nrm");
+			Mesh("horizon_clouds.msh", "horizon_clouds$_3.mat", "trn");
+	}
+}
+
+sub sun_moon_discs(string s_dst = "", string s_tmp_suffix = "")
+{    
+	If("f_pp_sun_disc_on")
+	{
+		SetRenderTargets(s_dst, "read_only_ds");
+			SetBuffer(USERMAP_TMP_0, "SKY_VISIBILITY_MASK");
+				Mesh("sun_disc.msh", "sun_disc.mat", "trn");
+	}
+
+	If("f_pp_moon_disc_on")
+	{
+		SetRenderTargets(s_dst, "read_only_ds");
+			SetBuffer(USERMAP_TMP_0, "SKY_VISIBILITY_MASK");
+			SetBuffer(USERMAP_TMP_1, "s_moon_disc_tex");
+				Mesh("sun_disc.msh", "sun_disc$moon.mat", "trn");
+	}
+
+
+	string tmp0 = "SKY_VISIBILITY_TMP_0" + s_tmp_suffix;
+	string tmp1 = "SKY_VISIBILITY_TMP_1" + s_tmp_suffix;
+
+	BufferScreenFormat(tmp0, 2, "R8_UNORM", "");
+	BufferScreenFormat(tmp1, 2, "R8_UNORM", "");
+	
+	//After rendering the disc, further blur the mask for flare masking
+	SetRenderTargets(tmp0, "");
+    SetBuffer(USERMAP_TMP_0, "SKY_VISIBILITY_MASK");
+        Mesh("tri_screen.msh", "copy_4.mat", "std");
+
+	use blur_gauss_vh(s_temp = tmp1, s_dst = tmp0);
+	use copy_buffer(s_src = tmp0, s_dst = "SKY_VISIBILITY_MASK");
+
+	Release(tmp0);
+	Release(tmp1);
+}
+
+sub sky_visibility_mask_allocate()
+{
+	BufferScreenFormat("SKY_VISIBILITY_MASK", 1, "R8_UNORM", "");
+	use clear_rtv_color(s_buf = "SKY_VISIBILITY_MASK", value = 1.0);
+}
+
+sub sky_visibility_mask_release()
+{
+	Release("SKY_VISIBILITY_MASK");
+}
+
+sub sky_visibility_mask_update_flare()
+{
+	PushMarker("Sky: Flare Mask");
+	use jitter_disable();
+		SetRenderTargets("SUN_FLARE_MASK", "");
+			SetBuffer(USERMAP_TMP_0, "SKY_VISIBILITY_MASK");
+    	        Mesh("tri_screen.msh", "sky_flare_msk_update.mat", "std");
+	use jitter_enable();
+	PopMarker();
+
+	if (DEBUG_ON)
+	{
+		If("f_sky_visibility_debug")
+		{
+			SetRenderTargets("SKY_VISIBILITY_MASK_DEBUG", "");
+				SetBuffer(USERMAP_TMP_0, "SKY_VISIBILITY_MASK");
+				Mesh("tri_screen.msh", "copy.mat", "std");
+		}
+	}
+}
+
+sub sky_visibility_opq()
+{
+	SetRenderTargets("z:" + S_ZBUFFER + " SKY_VISIBILITY_MASK", "");
+		Mesh("tri_screen.msh", "sky_visibility_opq.mat", "std");
+}
+
+sub sky_visibility_visualize(string s_dst = "")
+{
+	if (DEBUG_ON)
+	{
+		If("f_sky_visibility_debug")
+		{
+			SetRenderTargets(s_dst, "");
+				SetBuffer(USERMAP_TMP_0, "SKY_VISIBILITY_MASK_DEBUG");
+					Mesh("tri_screen.msh", "sky_visibility_debug.mat", "std");
+		}
+
+		If("f_sky_flare_msk_debug")
+		{
+			SetRenderTargets(s_dst, "");
+				Mesh("tri_screen.msh", "sky_visibility_debug$flare.mat", "std");
+		}
+	}
+}
+
+sub sky_usermaps()
+{
+	SetBuffer(USERMAP_SUN_FLARE_MASK, "SUN_FLARE_MASK");
+	SetBuffer(USERMAP_CLOUDS_SKY, "CLD_TEX_SKY");
+
+	use sky_game_usermaps();
+}

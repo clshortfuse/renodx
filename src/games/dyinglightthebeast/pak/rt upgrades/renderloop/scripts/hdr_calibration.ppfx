@@ -1,0 +1,49 @@
+import "common.ppfx"
+
+extern bool HDR_ON;
+
+sub hdr_calibration(string s_dst = "")
+{
+	if (HDR_ON)
+	{
+		If("i_hdr_calibration")
+		{
+			string s_hdrlinear_tmp = "HDR_LINEAR_TEMP";
+
+			PushMarker("HDR Calibration");
+				BufferScreenFormat(s_hdrlinear_tmp, 1, "R16G16B16A16_FLOAT", "ui");
+					SetRenderTargets(s_hdrlinear_tmp, "");
+						SetBuffer(USERMAP_TMP_0, s_dst);
+						Mesh("tri_screen.msh", "copy.mat", "std");
+
+					SetRenderTargets(s_dst, "");
+						SetBuffer(USERMAP_TMP_0, s_hdrlinear_tmp);
+						Mesh("tri_screen.msh", "hdr_calibration_tools.mat", "std");			
+				Release(s_hdrlinear_tmp);
+			PopMarker();
+		}
+	}
+}
+
+sub hdr_calibration_background(string s_inout_buf = "")
+{
+	if (HDR_ON)
+	{
+		If("i_hdr_calibration")
+		{
+			PushMarker("HDR Calibration background");
+				SetRenderTargets(s_inout_buf, "");
+				
+				If("i_hdr_calibration_background_loading")
+				{
+					Mesh("tri_screen.msh", "hdr_calibration_tools$background_loading.mat", "std");
+				}
+				Else()
+				{
+					SetBuffer(USERMAP_TMP_0, "s_hdr_calibration_background");
+					Mesh("tri_screen.msh", "hdr_calibration_tools$background.mat", "std");
+				}	
+			PopMarker();
+		}
+	}
+}
