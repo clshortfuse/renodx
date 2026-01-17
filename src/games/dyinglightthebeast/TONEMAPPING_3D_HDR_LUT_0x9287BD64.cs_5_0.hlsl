@@ -22,6 +22,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.xyz = (uint3)vThreadID.xyz;
   if (RENODX_LUT_SHAPER != 0.f) {
     r0.rgb = renodx::color::pq::DecodeSafe((r0.rgb / 31.f), 100.f);
+    r0.rgb = renodx::color::bt709::from::BT2020(r0.rgb);
   } else {  // incorrect
     r0.xyz = exp2(r0.xyz * (0.625 / 0.96875) - 13.f);
     r0.xyz -= 0.0005;  // clips blacks
