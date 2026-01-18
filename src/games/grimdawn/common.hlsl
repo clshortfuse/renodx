@@ -262,7 +262,7 @@ float3 DisplayMap(float3 color, float white_clip) {
    float3 outputColor = color;
    if (RENODX_TONE_MAP_TYPE == 1.f) {
      if (RENODX_SWAP_CHAIN_OUTPUT_PRESET == 0.f) {
-      outputColor = renodx::tonemap::HermiteSplinePerChannelRolloff(color, tonemap_peak, 20.f);
+       outputColor = renodx::tonemap::HermiteSplinePerChannelRolloff(color, tonemap_peak, lerp(2.f, 20.f, saturate(white_clip * 0.01f)));
      }
      else {
        outputColor = HermiteSplineMaxCLL(color, tonemap_peak, white_clip);
@@ -295,7 +295,6 @@ float3 CustomTonemap(float3 untonemapped, float2 TEXCOORD) {
 
   float white_clip = RENODX_TONE_MAP_WHITE_CLIP;
   white_clip = PreTonemapSliders(white_clip).x;
-  // if (white_clip > 100.f) untonemapped = ReinhardPiecewiseExtendedMaxCLL(untonemapped, 4.f, 100.f, white_clip);
   white_clip = min(500.f, max(white_clip, RENODX_TONE_MAP_WHITE_CLIP));
 
   untonemapped = ApplyPerChannelBlowoutHueShiftHueClip(untonemapped, 0.75f);

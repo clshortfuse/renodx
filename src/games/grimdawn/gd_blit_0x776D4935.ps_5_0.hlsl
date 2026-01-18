@@ -20,10 +20,8 @@ void main(
   float4 fDest;
 
   r0.xyzw = textureSampler.Sample(textureSampler_s, v2.xy).xyzw;
-  r0 = saturate(r0);
+  //r0 = saturate(r0);
   o0.xyzw = v1.xyzw * r0.xyzw;
-  o0 = saturate(o0);
-  o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
-  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
+  //o0 = saturate(o0);
   return;
 }
