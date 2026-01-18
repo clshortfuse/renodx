@@ -22,11 +22,6 @@ void main(
   r0.xy = (int2)r0.xy;
   r0.zw = float2(0,0);
   
-  // v0 are screen coords
-  //r0.y = 2.f*v0.y; 
-  //r0.x = 2.f*v0.x;
-  
-  // problematic Load!
   r1.xyz = sScene.Load(r0.xyw).xyz;
   r0.xyzw = sEffect.Load(r0.xyz).xyzw;
   //r0.xyz = r1.xyz * r0.www + r0.xyz;
