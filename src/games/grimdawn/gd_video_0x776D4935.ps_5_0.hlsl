@@ -1,6 +1,5 @@
 #include "./shared.h"
-
-// ---- Created with 3Dmigoto v1.3.16 on Thu Jul 03 03:28:36 2025
+// ---- Created with 3Dmigoto v1.4.1 on Sat Jan 17 01:55:27 2026
 
 SamplerState textureSampler_s : register(s0);
 Texture2D<float4> textureSampler : register(t0);
@@ -21,6 +20,10 @@ void main(
   float4 fDest;
 
   r0.xyzw = textureSampler.Sample(textureSampler_s, v2.xy).xyzw;
+  r0 = saturate(r0);
   o0.xyzw = v1.xyzw * r0.xyzw;
+  o0 = saturate(o0);
+  o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
+  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   return;
 }

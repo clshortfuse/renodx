@@ -25,17 +25,17 @@ void main(
   r1.xyz = screenSamplerTex.SampleLevel(screenSampler_s, v1.xy, 0).xzy;
 
   float3 untonemapped = renodx::color::srgb::DecodeSafe(r1.xzy);
-  float3 sdr_color = saturate(untonemapped);
 
-  r0.x = r1.y;
-  r0.x = gammaSamplerTex.SampleLevel(gammaSampler_s, r0.xy, 0).x;
-  o0.z = r0.x;
+  // r0.x = r1.y;
+  // r0.x = gammaSamplerTex.SampleLevel(gammaSampler_s, r0.xy, 0).x;
+  // o0.z = r0.x;
+  // o0.w = 1;
+  // r1.yw = float2(0.5,0.5);
+  // r0.x = gammaSamplerTex.SampleLevel(gammaSampler_s, r1.xy, 0).x;
+  // r0.y = gammaSamplerTex.SampleLevel(gammaSampler_s, r1.zw, 0).x;
+  // o0.xy = r0.xy;
+
+  o0.rgb = CustomTonemap(untonemapped, v1.xy);
   o0.w = 1;
-  r1.yw = float2(0.5,0.5);
-  r0.x = gammaSamplerTex.SampleLevel(gammaSampler_s, r1.xy, 0).x;
-  r0.y = gammaSamplerTex.SampleLevel(gammaSampler_s, r1.zw, 0).x;
-  o0.xy = r0.xy;
-
-  o0.rgb = CustomTonemapIntermediate(untonemapped, sdr_color);
   return;
 }
