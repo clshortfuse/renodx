@@ -95,6 +95,9 @@ void main(
   r0.xyz = log2(r0.xyz);
   r0.xyz = fGamma * r0.xyz;
   r0.xyz = exp2(r0.xyz);
+
+  PreSaturationScaleEx(r0.xyz, fGamma, fSaturationScaleEx);
+
   r0.w = min(r0.y, r0.z);
   r0.w = min(r0.x, r0.w);
   r1.x = max(r0.y, r0.z);
