@@ -128,7 +128,10 @@ void main(
 
   r0.xyzw = baseSampler.Sample(baseSampler_s, v2.xy).xyzw;
 
-  float3 ungraded = r0.xyz;
+  float3 ungraded_linear = renodx::color::srgb::DecodeSafe(r0.xyz);
+  float scale = ComputeReinhardSmoothClampScale(ungraded_linear);
+  float3 ungraded_linear_sdr = ungraded_linear * scale;
+  r0.xyz = renodx::color::srgb::EncodeSafe(ungraded_linear_sdr);
 
   r1.x = dot(r0.xyz, float3(0.300000012, 0.589999974, 0.109999999));
   r1.xyz = r1.xxx + -r0.xyz;
@@ -141,16 +144,16 @@ void main(
   // o0.xyzw = v1.xyzw * r0.xyzw;
 
   r0.xyz = brightnessAdjustment + r1.xyz;
-  float3 sdr_color = saturate(r0.xyz) * v1.xyz;
+  //loat3 sdr_color = saturate(r0.xyz) * v1.xyz;
 
   float3 graded = r0.rgb * v1.rgb;
+  float3 graded_linear = renodx::color::srgb::DecodeSafe(graded);
+  float3 graded_linear_hdr = graded_linear / scale;
+  graded_linear_hdr = lerp(ungraded_linear, graded_linear_hdr, SCENE_GRADE_GRADING_STRENGTH);
 
-  graded = renodx::color::srgb::DecodeSafe(graded);
-  ungraded = renodx::color::srgb::DecodeSafe(ungraded);
-  sdr_color = renodx::color::srgb::DecodeSafe(sdr_color);
-  float3 untonemapped = lerp(ungraded, graded, CUSTOM_COLOR_GRADING);
+  //float3 untonemapped = lerp(ungraded, graded, CUSTOM_COLOR_GRADING);
 
-  o0.rgb = CustomTonemapIntermediate(untonemapped, sdr_color);
+  o0.rgb = CustomTonemap(graded_linear_hdr, v2.xy);
   o0.w = v1.w * r0.w;
   return;
 }
