@@ -153,7 +153,8 @@ void main(
 
   //float3 untonemapped = lerp(ungraded, graded, CUSTOM_COLOR_GRADING);
 
-  o0.rgb = CustomTonemap(graded_linear_hdr, v2.xy);
+  //o0.rgb = CustomTonemap(graded_linear_hdr, v2.xy);
+  o0.rgb = renodx::color::srgb::EncodeSafe(graded_linear_hdr);
   o0.w = v1.w * r0.w;
   return;
 }

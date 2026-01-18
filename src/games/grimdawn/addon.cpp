@@ -423,6 +423,18 @@ new renodx::utils::settings::Setting{
         //.is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
+            new renodx::utils::settings::Setting{
+        .key = "FxAntiAliasing",
+        .binding = &shader_injection.custom_anti_aliasing,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "FXAA",
+        .section = "Effects",
+        .tooltip = "Toggles FXAA anti-aliasing.",
+        .labels = {"Off", "On"},
+        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0; },
+        .parse = [](float value) { return value; },
+    },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
         .binding = &shader_injection.custom_film_grain,

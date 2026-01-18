@@ -34,6 +34,7 @@
 #define RENODX_SWAP_CHAIN_OUTPUT_DITHER_SEED          shader_injection.swap_chain_output_dither_seed
 
 #define CUSTOM_BLOOM                        shader_injection.custom_bloom
+#define CUSTOM_ANTI_ALIASING                shader_injection.custom_anti_aliasing
 
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  color::convert::COLOR_SPACE_BT2020
 //#define RENODX_SWAP_CHAIN_DECODING           1.f // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
@@ -71,6 +72,7 @@ struct ShaderInjectData {
   float custom_random;
   
   float custom_bloom;
+  float custom_anti_aliasing;
   float swap_chain_output_dither_bits;
   float swap_chain_output_dither_seed;
   float custom_video_itm;
