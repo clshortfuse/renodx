@@ -234,6 +234,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
       //renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+      
+      renodx::mods::swapchain::SetUseHDR10();
 
       // BGRA8_typeless
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
