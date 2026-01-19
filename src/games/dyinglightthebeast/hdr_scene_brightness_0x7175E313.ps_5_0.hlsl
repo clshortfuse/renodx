@@ -25,17 +25,32 @@ void main(
   r0.xy = (uint2)v0.xy;
   r0.zw = float2(0, 0);
   r0.xyzw = t0.Load(r0.xyz).xyzw;
-  r1.x = t1.Load(float4(0, 0, 0, 0)).x;
-  r0.xyz = r1.xxx * r0.xyz;
+
+  float autoexposure = t1.Load(int3(0, 0, 0)).x;
+
+  float3 scene_original = r0.rgb;
+
+#if 1  // slightly reduce autoexposure strength for higher values
+  if (USE_CUSTOM_AUTOEXPOSURE != 0.f) {
+    float y = renodx::color::y::from::BT709(r0.rgb * autoexposure);
+    float t = saturate((y - 0.18f) / (1.f - 0.18f));  // ramp down from 0.18 - 1.0
+    float strength = lerp(1.f, 0.99f, t * t * t);     // lower from 100% -> 99%
+    autoexposure = lerp(1.f, autoexposure, strength);
+  }
+#endif
+
+  float3 scene_exposed = autoexposure * scene_original;
+
   o0.w = r0.w;
 
   if (RENODX_TONE_MAP_TYPE == 0.f) {
-    r0.rgb *= scene_brightness;
+    scene_exposed *= scene_brightness;
   } else {
-    r0.rgb *= RENODX_PRE_EXPOSURE;
+    scene_exposed *= RENODX_PRE_EXPOSURE;
   }
 
-  o0.xyz = r0.xyz;
+  o0.xyz = scene_exposed;
+
 
   return;
 }
