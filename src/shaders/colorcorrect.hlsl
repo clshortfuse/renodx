@@ -154,9 +154,40 @@ float3 ChrominancedtUCS(
   return result;
 }
 
-float3 Chrominance(float3 incorrect_color, float3 correct_color, float strength = 1.f, float clamp_chrominance_loss = 0.f, uint method = 0u) {
-  if (method == 1u) return ChrominanceICtCp(incorrect_color, correct_color, strength, clamp_chrominance_loss);
-  if (method == 2u) return ChrominancedtUCS(incorrect_color, correct_color, strength, clamp_chrominance_loss);
+float3 ChrominanceIPT(
+    float3 incorrect_color,
+    float3 reference_color,
+    float strength = 1.f,
+    float clamp_chrominance_loss = 0.f) {
+  if (strength == 0.f) return incorrect_color;
+
+  float3 incorrect_ipt = renodx::color::ipt::from::BT709(incorrect_color);
+  float3 reference_ipt = renodx::color::ipt::from::BT709(reference_color);
+
+  float2 incorrect_pt = incorrect_ipt.yz;
+  float2 reference_pt = reference_ipt.yz;
+
+  // Compute chrominance (magnitude of the P–T vector)
+  float incorrect_chrominance = length(incorrect_pt);
+  float correct_chrominance = length(reference_pt);
+
+  // Scale original chrominance vector toward target chrominance
+  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
+  float scale = lerp(1.f, chrominance_ratio, strength);
+
+  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
+  scale = lerp(scale, 1.0f, t * clamp_chrominance_loss);
+
+  incorrect_ipt.yz = incorrect_pt * scale;
+
+  float3 result = renodx::color::bt709::from::IPT(incorrect_ipt);
+  return result;
+}
+
+float3 Chrominance(float3 incorrect_color, float3 correct_color, float strength = 1.f, float clamp_chrominance_loss = 0.f, int method = 0) {
+  if (method == 1) return ChrominanceICtCp(incorrect_color, correct_color, strength, clamp_chrominance_loss);
+  if (method == 2) return ChrominancedtUCS(incorrect_color, correct_color, strength, clamp_chrominance_loss);
+  if (method == 3) return ChrominanceIPT(incorrect_color, correct_color, strength, clamp_chrominance_loss);
   return ChrominanceOKLab(incorrect_color, correct_color, strength, clamp_chrominance_loss);
 }
 
@@ -258,9 +289,35 @@ float3 HuedtUCS(float3 incorrect_color, float3 correct_color, float strength = 1
   return renodx::color::bt709::clamp::AP1(result);
 }
 
+float3 HueIPT(float3 incorrect_color, float3 correct_color, float strength = 1.f) {
+  if (strength == 0.f) return incorrect_color;
+
+  float3 incorrect_ipt = renodx::color::ipt::from::BT709(incorrect_color);
+  float3 correct_ipt = renodx::color::ipt::from::BT709(correct_color);
+
+  float2 incorrect_pt = incorrect_ipt.yz;
+  float2 correct_pt = correct_ipt.yz;
+
+  // Preserve original chrominance (magnitude of the P–T vector)
+  float chrominance_pre_adjust = length(incorrect_pt);
+
+  // Blend chrominance and hue by interpolating (P, T) components
+  float2 blended_pt = lerp(incorrect_pt, correct_pt, strength);
+
+  // Rescale to original chrominance to avoid saturation shift
+  float chrominance_post_adjust = length(blended_pt);
+  blended_pt *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
+
+  incorrect_ipt.yz = blended_pt;
+
+  float3 result = renodx::color::bt709::from::IPT(incorrect_ipt);
+  return renodx::color::bt709::clamp::AP1(result);
+}
+
 float3 Hue(float3 incorrect_color, float3 correct_color, float strength = 1.f, int method = 0) {
   if (method == 1) return HueICtCp(incorrect_color, correct_color, strength);
   if (method == 2) return HuedtUCS(incorrect_color, correct_color, strength);
+  if (method == 3) return HueIPT(incorrect_color, correct_color, strength);
   return HueOKLab(incorrect_color, correct_color, strength);
 }
 
