@@ -131,6 +131,8 @@ float4 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::SRGB;
   lut_config.recolor = 0.f;
+  lut_config.gamut_compress = LUT_GAMUT_RESTORATION;
+  lut_config.max_channel = 0.f;
 
   float3 lutInputColor = srgb_input;
   float3 lutOutputColor = lut_sample.rgb;
@@ -155,6 +157,8 @@ float4 SampleLUTSRGBInLinearOut(Texture2D<float4> lut_texture, SamplerState lut_
   lut_config.type_input = renodx::lut::config::type::SRGB;
   lut_config.type_output = renodx::lut::config::type::LINEAR;
   lut_config.recolor = 0.f;
+  lut_config.gamut_compress = LUT_GAMUT_RESTORATION;
+  lut_config.max_channel = 0.f;
 
   float3 lutInputColor = srgb_input;
   float3 lutOutputColor = lut_sample.rgb;
@@ -264,7 +268,7 @@ float Highlights(float x, float highlights, float mid_gray) {
 
   if (highlights > 1.f) {
     // value = max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), x));
-    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), saturate(x)));
+    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(10.f, x)));
   } else {  // highlights < 1.f
     x /= mid_gray;
     return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
@@ -357,23 +361,6 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
-float3 GamutCompressToBT2020BT2020InBT2020Out(float3 color_bt2020) {
-  // clamp to AP1
-  color_bt2020 = renodx::color::bt2020::from::AP1(
-      max(0, renodx::color::ap1::from::BT2020(color_bt2020)));
-
-  // compress to BT.2020 in gamma space
-  float3 gamma_color = renodx::color::gamma::EncodeSafe(color_bt2020);
-  float grayscale = renodx::color::y::from::BT2020(gamma_color.rgb);
-  float compression_scale = renodx::color::correct::ComputeGamutCompressionScale(gamma_color.rgb, grayscale);
-  gamma_color = renodx::color::correct::GamutCompress(gamma_color, grayscale, compression_scale);
-
-  // back to BT.709 linear
-  color_bt2020 = renodx::color::gamma::DecodeSafe(gamma_color);
-
-  return color_bt2020;
-}
-
 float3 ApplyHermiteSplineByMaxChannel(float3 input, float peak_white, float white_clip = 100.f) {
   float max_channel = renodx::math::Max(input.r, input.g, input.b);
 
@@ -381,6 +368,23 @@ float3 ApplyHermiteSplineByMaxChannel(float3 input, float peak_white, float whit
   float scale = renodx::math::DivideSafe(mapped_peak, max_channel, 1.f);
   float3 tonemapped = input * scale;
   return tonemapped;
+}
+
+float3 GamutCompress(float3 color_bt709, float3x3 color_space_matrix = renodx::color::BT709_TO_XYZ_MAT) {
+  float grayscale = dot(color_bt709, color_space_matrix[1].rgb);
+
+  const float MID_GRAY_LINEAR = 1 / (pow(10, 0.75));                          // ~0.18f
+  const float MID_GRAY_PERCENT = 0.5f;                                        // 50%
+  const float MID_GRAY_GAMMA = log(MID_GRAY_LINEAR) / log(MID_GRAY_PERCENT);  // ~2.49f
+  float encode_gamma = MID_GRAY_GAMMA;
+
+  float3 encoded = renodx::color::gamma::EncodeSafe(color_bt709, encode_gamma);
+  float encoded_gray = renodx::color::gamma::Encode(grayscale, encode_gamma);
+
+  float3 compressed = renodx::color::correct::GamutCompress(encoded, encoded_gray);
+  float3 color_bt709_compressed = renodx::color::gamma::DecodeSafe(compressed, encode_gamma);
+
+  return color_bt709_compressed;
 }
 
 float3 ApplyDisplayMap(float3 color_input, float peak_ratio) {
@@ -411,8 +415,7 @@ float3 ApplyDisplayMap(float3 color_input, float peak_ratio) {
     }
 
     float3 color_input_bt2020 = renodx::color::bt2020::from::BT709(color_input);
-    color_input_bt2020 = GamutCompressToBT2020BT2020InBT2020Out(color_input_bt2020);
-    float3 display_mapped = ApplyHermiteSplineByMaxChannel(color_input_bt2020, peak_ratio, 60.f);
+    float3 display_mapped = ApplyHermiteSplineByMaxChannel(max(0, color_input_bt2020), peak_ratio, 60.f);
     display_mapped = renodx::color::bt709::from::BT2020(display_mapped);
 
     color_output = display_mapped;
@@ -456,6 +459,10 @@ float3 ApplyFade(float3 color_input, float fade) {
 }
 
 float3 FinalizeOutput(float3 color_input) {
+  if (COMPRESS_TO_BT709 != 0.f) {
+    color_input = GamutCompress(color_input);
+  }
+
   color_input = renodx::color::correct::GammaSafe(color_input);
   color_input *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
   color_input = renodx::color::correct::GammaSafe(color_input, true);
@@ -464,6 +471,9 @@ float3 FinalizeOutput(float3 color_input) {
 }
 
 float3 ApplySDRLUTInHDR(float3 color_hdr, Texture3D<float4> lut_texture, SamplerState lut_sampler, uint lut_type) {
+  if (LUT_GAMUT_RESTORATION == 0.f) {
+    color_hdr = GamutCompress(color_hdr);
+  }
   const float scale = ComputeReinhardSmoothClampScale(color_hdr);
   float3 color_sdr = color_hdr * scale;
 
@@ -515,13 +525,9 @@ float3 GammaCorrectHuePreserving(float3 incorrect_color) {
   float3 lum = GammaCorrectByLuminance(incorrect_color);
 
   // use chrominance from channel gamma correction and apply hue shifting from per channel tonemap
-  float3 result = renodx::color::correct::ChrominanceOKLab(lum, ch, 1.f, 1.f);
+  float3 result = renodx::color::correct::Chrominance(lum, ch, 1.f, 1.f, 3);
 
-  // compress to BT.2020
   result = renodx::color::bt709::clamp::AP1(result);
-  float3 result_bt2020 = renodx::color::bt2020::from::BT709(result);
-  result_bt2020 = GamutCompressToBT2020BT2020InBT2020Out(result_bt2020);
-  result = renodx::color::bt709::from::BT2020(result_bt2020);
 
   return result;
 }
@@ -532,7 +538,7 @@ float3 ApplyGammaCorrection(float3 incorrect_color) {
     corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
   } else if (RENODX_GAMMA_CORRECTION == 2.f) {
     corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
-    corrected_color = renodx::color::correct::Hue(corrected_color, incorrect_color, 1.f);
+    corrected_color = renodx::color::correct::Hue(corrected_color, incorrect_color, 1.f, 3);
   } else if (RENODX_GAMMA_CORRECTION == 3.f) {
     corrected_color = GammaCorrectHuePreserving(incorrect_color);
   } else {
