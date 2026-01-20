@@ -1,7 +1,7 @@
 #include "./shared.h"
 
-// take hue from one color and chrominance from another in OKLab space
-float3 HueAndChrominanceOKLab(
+// take hue from one color and chrominance from another in IPT space
+float3 HueAndChrominanceIPT(
     float3 incorrect_color,
     float3 hue_reference_color,
     float3 chrominance_reference_color,
@@ -11,21 +11,21 @@ float3 HueAndChrominanceOKLab(
   if (hue_correct_strength == 0.f && chrominance_correct_strength == 0.f) {
     return incorrect_color;
   } else if (hue_correct_strength == 0.f) {
-    return renodx::color::correct::ChrominanceOKLab(incorrect_color, chrominance_reference_color, chrominance_correct_strength, clamp_chrominance_loss);
+    return renodx::color::correct::ChrominanceIPT(incorrect_color, chrominance_reference_color, chrominance_correct_strength, clamp_chrominance_loss);
   } else if (chrominance_correct_strength == 0.f) {
-    return renodx::color::correct::Hue(incorrect_color, hue_reference_color, hue_correct_strength);
+    return renodx::color::correct::HueIPT(incorrect_color, hue_reference_color, hue_correct_strength);
   }
 
-  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 hue_lab = renodx::color::oklab::from::BT709(hue_reference_color);
-  float3 chrominance_lab = renodx::color::oklab::from::BT709(chrominance_reference_color);
+  float3 incorrect_ipt = renodx::color::ipt::from::BT709(incorrect_color);
+  float3 hue_ipt = renodx::color::ipt::from::BT709(hue_reference_color);
+  float3 chrominance_ipt = renodx::color::ipt::from::BT709(chrominance_reference_color);
 
-  float2 incorrect_ab = incorrect_lab.yz;
-  float2 hue_ab = hue_lab.yz;
+  float2 incorrect_pt = incorrect_ipt.yz;
+  float2 hue_pt = hue_ipt.yz;
 
-  // Compute chrominance (magnitude of the a–b vector)
-  float incorrect_chrominance = length(incorrect_ab);
-  float target_chrominance = length(chrominance_lab.yz);
+  // Compute chrominance (magnitude of the P-T vector)
+  float incorrect_chrominance = length(incorrect_pt);
+  float target_chrominance = length(chrominance_ipt.yz);
 
   // Scale original chrominance vector toward target chrominance
   float desired_chrominance = lerp(incorrect_chrominance, target_chrominance, chrominance_correct_strength);
@@ -40,12 +40,12 @@ float3 HueAndChrominanceOKLab(
 
   // Blend hue direction between incorrect and reference colors
   float2 incorrect_dir = renodx::math::DivideSafe(
-      incorrect_ab,
+      incorrect_pt,
       float2(incorrect_chrominance, incorrect_chrominance),
       float2(0.f, 0.f));
-  float hue_chrominance = length(hue_ab);
+  float hue_chrominance = length(hue_pt);
   float2 hue_dir = renodx::math::DivideSafe(
-      hue_ab,
+      hue_pt,
       float2(hue_chrominance, hue_chrominance),
       incorrect_dir);
   float2 blended_dir = lerp(incorrect_dir, hue_dir, hue_correct_strength);
@@ -56,10 +56,10 @@ float3 HueAndChrominanceOKLab(
       hue_dir);
 
   // Apply final hue direction and chroma magnitude
-  float2 final_ab = final_dir * adjusted_chrominance;
-  incorrect_lab.yz = final_ab;
+  float2 final_pt = final_dir * adjusted_chrominance;
+  incorrect_ipt.yz = final_pt;
 
-  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
+  float3 result = renodx::color::bt709::from::IPT(incorrect_ipt);
   return renodx::color::bt709::clamp::AP1(result);
 }
 
@@ -111,9 +111,9 @@ float3 ApplyCustomHitmanToneMap(float3 untonemapped) {
   float3 hdr_tonemap = ToneMapHitmanExtended(untonemapped, ToneMapHitman(untonemapped));
 #endif
 
-  float3 chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 4.f, 0.0932816);
+  float3 chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 6.f, 0.0932816);
 
-  hdr_tonemap = HueAndChrominanceOKLab(
+  hdr_tonemap = HueAndChrominanceIPT(
       hdr_tonemap,
       untonemapped,                             // hue reference color
       chrominance_reference_color,              // chrominance reference color
@@ -154,9 +154,9 @@ float3 ApplyCustomSimpleReinhardToneMap(float3 untonemapped) {
   float3 hdr_tonemap = ToneMapHitmanExtended(untonemapped, renodx::tonemap::Reinhard(untonemapped));
 #endif
 
-  float3 chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 4.f, 0.465571);
+  float3 chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 6.f, 0.465571);
 
-  hdr_tonemap = HueAndChrominanceOKLab(
+  hdr_tonemap = HueAndChrominanceIPT(
       hdr_tonemap,
       untonemapped,                             // hue reference color
       chrominance_reference_color,              // chrominance reference color
