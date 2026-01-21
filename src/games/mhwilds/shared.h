@@ -37,8 +37,10 @@
 #define CUSTOM_FLAT_EXPOSURE_DEFAULT           1.f
 #define CUSTOM_LUT_EXPOSURE_REVERSE            shader_injection.custom_lut_exposure_reverse
 #define CUSTOM_EXPOSURE_SHADER_DRAW            shader_injection.custom_exposure_shader_draw
+#define CUSTOM_TONE_MAP_PARAMETERS             shader_injection.custom_tone_map_parameters
 #define CUSTOM_SHARPNESS                       shader_injection.custom_sharpness
 #define CUSTOM_LUT_SCALING                     shader_injection.custom_lut_scaling
+#define CUSTOM_SATURATION_CORRECTION           shader_injection.custom_saturation_correction
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -65,8 +67,10 @@ struct ShaderInjectData {
   float custom_exposure_strength;
   float custom_lut_exposure_reverse;
   float custom_exposure_shader_draw;
+  float custom_tone_map_parameters;
   float custom_sharpness;
   float custom_lut_scaling;
+  float custom_saturation_correction;
   float swap_chain_output_dither_seed;
   float swap_chain_output_dither_bits;
 };
