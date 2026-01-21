@@ -27,7 +27,7 @@ float3 SampleLUT(Texture3D lut_texture, renodx::lut::Config lut_config, float3 c
     float lutBlackY = max(0, renodx::color::y::from::BT709(lutBlackLinear));
 
     if (lutBlackY > 0.f) {
-      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput((lutBlackY + 0.18f) / 2.f, lut_config), lut_config, lut_texture);
+      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture);
 #if 1
       lutBlack = renodx::lut::ConvertInput(renodx::color::correct::Gamma(lutBlackLinear), lut_config);
       lutMid = renodx::lut::ConvertInput(renodx::color::gamma::Decode(lutMid), lut_config);
@@ -47,7 +47,7 @@ float3 SampleLUT(Texture3D lut_texture, renodx::lut::Config lut_config, float3 c
 #endif
 
       float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
-      recolored = GamutCompressBT709(recolored);
+      recolored = GamutCompress(recolored);
       recolored = max(0, recolored);
       color_output = recolored;
     }
@@ -73,14 +73,6 @@ float3 SampleLUTSRGBInSRGBOut(float3 input, Texture3D<float4> lut_texture, Sampl
   float3 output = SampleLUT(lut_texture, lut_config, input);
 
   return output;
-}
-
-float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float white_clip = 100.f) {
-  float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
-  float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, white_clip, output_max, rolloff_start);
-  float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
-
-  return scale;
 }
 
 float3 SampleLUTWithHDRUpgrade(float3 input, Texture3D<float4> lut_texture, SamplerState lut_sampler) {

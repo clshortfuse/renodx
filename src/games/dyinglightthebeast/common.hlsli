@@ -1,5 +1,13 @@
 #include "./shared.h"
 
+float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float white_clip = 100.f) {
+  float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
+  float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, white_clip, output_max, rolloff_start);
+  float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
+
+  return scale;
+}
+
 struct UserGradingConfig {
   float exposure;
   float highlights;
@@ -92,21 +100,21 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
 
     // hue and chrominance emulation
     if (config.hue_emulation_strength != 0.0 || config.chrominance_emulation_strength != 0.0) {
-      const float3 reference_oklab = renodx::color::oklab::from::BT709(hue_reference_color);
+      const float3 perceptual_reference = renodx::color::oklab::from::BT709(hue_reference_color);
 
       float chrominance_current = length(perceptual_new.yz);
       float chrominance_ratio = 1.0;
 
       if (config.hue_emulation_strength != 0.0) {
         const float chrominance_pre = chrominance_current;
-        perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, config.hue_emulation_strength);
+        perceptual_new.yz = lerp(perceptual_new.yz, perceptual_reference.yz, config.hue_emulation_strength);
         const float chrominancePost = length(perceptual_new.yz);
         chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
         chrominance_current = chrominancePost;
       }
 
       if (config.chrominance_emulation_strength != 0.0) {
-        const float reference_chrominance = length(reference_oklab.yz);
+        const float reference_chrominance = length(perceptual_reference.yz);
         float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
         chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, config.chrominance_emulation_strength);
       }
@@ -153,8 +161,8 @@ float RemapNits(float nits) {
   return lerp(out_min, out_max, pow(t, gamma));
 }
 
-float3 GamutCompressBT709(float3 color_bt709) {
-  float grayscale = renodx::color::y::from::BT709(color_bt709);
+float3 GamutCompress(float3 color_bt709, float3x3 color_space_matrix = renodx::color::BT709_TO_XYZ_MAT) {
+  float grayscale = dot(color_bt709, color_space_matrix[1].rgb);
 
   const float MID_GRAY_LINEAR = 1 / (pow(10, 0.75));                          // ~0.18f
   const float MID_GRAY_PERCENT = 0.5f;                                        // 50%
@@ -197,15 +205,6 @@ float3 GenerateOutput(float3 untonemapped_bt709, float min_nits, float peak_whit
   }
 
   UserGradingConfig cg_config = CreateColorGradeConfig();
-  if (RENODX_USE_NEUTRAL_GRADING_PARAMS == 0.f) {
-    cg_config.exposure *= RENODX_CUSTOM_GRADING_EXPOSURE;
-    cg_config.contrast *= RENODX_CUSTOM_GRADING_CONTRAST;
-    cg_config.saturation *= RENODX_CUSTOM_GRADING_SATURATION;
-    cg_config.flare += (0.01f * (1.f - shadows));  // tie shadows slider to flare
-  } else {
-    cg_config.highlights *= 1.05f;
-  }
-
   float y = renodx::color::y::from::BT709(untonemapped_bt709);
   float3 hue_chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 12.5f, 1.f);
   float3 graded_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_bt709, y, cg_config);
@@ -213,9 +212,10 @@ float3 GenerateOutput(float3 untonemapped_bt709, float min_nits, float peak_whit
 
   float3 graded_final = graded_bt709;
   if (RENODX_LUT_OUTPUT_BT2020 == 0.f) {
-    graded_final = GamutCompressBT709(graded_final);  // lutbuilder is rgb10a2 and render is fp11 so wcg gets clipped
+    graded_final = GamutCompress(graded_final);  // lutbuilder is rgb10a2 and render is fp11 so wcg gets clipped
   } else {
     graded_final = renodx::color::bt2020::from::BT709(graded_final);
+    graded_final = GamutCompress(graded_final, renodx::color::BT2020_TO_XYZ_MAT);
   }
 
   float3 color_pq = renodx::color::pq::EncodeSafe(graded_final, diffuse_white);
