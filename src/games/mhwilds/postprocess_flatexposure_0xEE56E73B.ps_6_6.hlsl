@@ -1,4 +1,9 @@
+#define USE_CBUFFER_SLOT_B2
+
 #include "./postprocess.hlsl"
+#include "./tonemapper.hlsl"
+
+
 
 Texture2D<float> ReadonlyDepth : register(t0);
 
@@ -59,32 +64,6 @@ cbuffer CameraKerare : register(b1) {
   float kerare_offset : packoffset(c000.y);
   float kerare_brightness : packoffset(c000.z);
   float film_aspect : packoffset(c000.w);
-};
-
-cbuffer TonemapParam : register(b2) {
-  float contrast : packoffset(c000.x);
-  float linearBegin : packoffset(c000.y);
-  float linearLength : packoffset(c000.z);
-  float toe : packoffset(c000.w);
-  float maxNit : packoffset(c001.x);
-  float linearStart : packoffset(c001.y);
-  float displayMaxNitSubContrastFactor : packoffset(c001.z);
-  float contrastFactor : packoffset(c001.w);
-  float mulLinearStartContrastFactor : packoffset(c002.x);
-  float invLinearBegin : packoffset(c002.y);
-  float madLinearStartContrastFactor : packoffset(c002.z);
-  float tonemapParam_isHDRMode : packoffset(c002.w);
-  float useDynamicRangeConversion : packoffset(c003.x);
-  float useHuePreserve : packoffset(c003.y);
-  float exposureScale : packoffset(c003.z);
-  float kneeStartNit : packoffset(c003.w);
-  float knee : packoffset(c004.x);
-  float curve_HDRip : packoffset(c004.y);
-  float curve_k2 : packoffset(c004.z);
-  float curve_k4 : packoffset(c004.w);
-  row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
-  row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
-  float tonemapGraphScale : packoffset(c013.x);
 };
 
 cbuffer LDRPostProcessParam : register(b3) {
@@ -1283,40 +1262,43 @@ float4 main(
     _2665 = _2582;
   }
 
-  // Original SDR tonemapper
-  if (tonemapParam_isHDRMode == 0.0f && ProcessSDRVanilla()) {
-    float _2673 = invLinearBegin * _2663;
-    if (!(_2663 >= linearBegin)) {
-      _2681 = ((_2673 * _2673) * (3.0f - (_2673 * 2.0f)));
-    } else {
-      _2681 = 1.0f;
-    }
-    float _2682 = invLinearBegin * _2664;
-    if (!(_2664 >= linearBegin)) {
-      _2690 = ((_2682 * _2682) * (3.0f - (_2682 * 2.0f)));
-    } else {
-      _2690 = 1.0f;
-    }
-    float _2691 = invLinearBegin * _2665;
-    if (!(_2665 >= linearBegin)) {
-      _2699 = ((_2691 * _2691) * (3.0f - (_2691 * 2.0f)));
-    } else {
-      _2699 = 1.0f;
-    }
-    float _2708 = select((_2663 < linearStart), 0.0f, 1.0f);
-    float _2709 = select((_2664 < linearStart), 0.0f, 1.0f);
-    float _2710 = select((_2665 < linearStart), 0.0f, 1.0f);
-    _2770 = (((((contrast * _2663) + madLinearStartContrastFactor) * (_2681 - _2708)) + (((pow(_2673, toe)) * (1.0f - _2681)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _2663) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _2708));
-    _2771 = (((((contrast * _2664) + madLinearStartContrastFactor) * (_2690 - _2709)) + (((pow(_2682, toe)) * (1.0f - _2690)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _2664) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _2709));
-    _2772 = (((((contrast * _2665) + madLinearStartContrastFactor) * (_2699 - _2710)) + (((pow(_2691, toe)) * (1.0f - _2699)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _2665) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _2710));
-  } else {
-    _2770 = _2663;
-    _2771 = _2664;
-    _2772 = _2665;
-  }
-  SV_Target.x = _2770;
-  SV_Target.y = _2771;
-  SV_Target.z = _2772;
+  // // Original SDR tonemapper
+  // if (tonemapParam_isHDRMode == 0.0f && ProcessSDRVanilla()) {
+  //   float _2673 = invLinearBegin * _2663;
+  //   if (!(_2663 >= linearBegin)) {
+  //     _2681 = ((_2673 * _2673) * (3.0f - (_2673 * 2.0f)));
+  //   } else {
+  //     _2681 = 1.0f;
+  //   }
+  //   float _2682 = invLinearBegin * _2664;
+  //   if (!(_2664 >= linearBegin)) {
+  //     _2690 = ((_2682 * _2682) * (3.0f - (_2682 * 2.0f)));
+  //   } else {
+  //     _2690 = 1.0f;
+  //   }
+  //   float _2691 = invLinearBegin * _2665;
+  //   if (!(_2665 >= linearBegin)) {
+  //     _2699 = ((_2691 * _2691) * (3.0f - (_2691 * 2.0f)));
+  //   } else {
+  //     _2699 = 1.0f;
+  //   }
+  //   float _2708 = select((_2663 < linearStart), 0.0f, 1.0f);
+  //   float _2709 = select((_2664 < linearStart), 0.0f, 1.0f);
+  //   float _2710 = select((_2665 < linearStart), 0.0f, 1.0f);
+  //   _2770 = (((((contrast * _2663) + madLinearStartContrastFactor) * (_2681 - _2708)) + (((pow(_2673, toe)) * (1.0f - _2681)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _2663) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _2708));
+  //   _2771 = (((((contrast * _2664) + madLinearStartContrastFactor) * (_2690 - _2709)) + (((pow(_2682, toe)) * (1.0f - _2690)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _2664) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _2709));
+  //   _2772 = (((((contrast * _2665) + madLinearStartContrastFactor) * (_2699 - _2710)) + (((pow(_2691, toe)) * (1.0f - _2699)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _2665) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _2710));
+  // } else {
+  //   _2770 = _2663;
+  //   _2771 = _2664;
+  //   _2772 = _2665;
+  // }
+  // SV_Target.x = _2770;
+  // SV_Target.y = _2771;
+  // SV_Target.z = _2772;
+
+  SV_Target.xyz = CustomTonemap(float3(_2663, _2664, _2665));
+
   SV_Target.w = 0.0f;
   return SV_Target;
 }

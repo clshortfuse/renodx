@@ -1,4 +1,9 @@
+#define USE_CBUFFER_SLOT_B2
+
 #include "./postprocess.hlsl"
+#include "./tonemapper.hlsl"
+
+
 
 Texture2D<float4> RE_POSTPROCESS_Color : register(t0);
 
@@ -41,32 +46,6 @@ cbuffer CameraKerare : register(b1) {
   float kerare_offset : packoffset(c000.y);
   float kerare_brightness : packoffset(c000.z);
   float film_aspect : packoffset(c000.w);
-};
-
-cbuffer TonemapParam : register(b2) {
-  float contrast : packoffset(c000.x);
-  float linearBegin : packoffset(c000.y);
-  float linearLength : packoffset(c000.z);
-  float toe : packoffset(c000.w);
-  float maxNit : packoffset(c001.x);
-  float linearStart : packoffset(c001.y);
-  float displayMaxNitSubContrastFactor : packoffset(c001.z);
-  float contrastFactor : packoffset(c001.w);
-  float mulLinearStartContrastFactor : packoffset(c002.x);
-  float invLinearBegin : packoffset(c002.y);
-  float madLinearStartContrastFactor : packoffset(c002.z);
-  float tonemapParam_isHDRMode : packoffset(c002.w);
-  float useDynamicRangeConversion : packoffset(c003.x);
-  float useHuePreserve : packoffset(c003.y);
-  float exposureScale : packoffset(c003.z);
-  float kneeStartNit : packoffset(c003.w);
-  float knee : packoffset(c004.x);
-  float curve_HDRip : packoffset(c004.y);
-  float curve_k2 : packoffset(c004.z);
-  float curve_k4 : packoffset(c004.w);
-  row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
-  row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
-  float tonemapGraphScale : packoffset(c013.x);
 };
 
 cbuffer LDRPostProcessParam : register(b3) {
@@ -479,39 +458,42 @@ float4 main(
   float _602 = select(_601, _590, 1.0f);
   float _603 = select(_601, _594, 1.0f);
   float _604 = select(_601, _598, 1.0f);
-  if ((tonemapParam_isHDRMode == 0.0f) && ProcessSDRVanilla()) {
-    float _612 = invLinearBegin * _602;
-    if (!(_602 >= linearBegin)) {
-      _620 = ((_612 * _612) * (3.0f - (_612 * 2.0f)));
-    } else {
-      _620 = 1.0f;
-    }
-    float _621 = invLinearBegin * _603;
-    if (!(_603 >= linearBegin)) {
-      _629 = ((_621 * _621) * (3.0f - (_621 * 2.0f)));
-    } else {
-      _629 = 1.0f;
-    }
-    float _630 = invLinearBegin * _604;
-    if (!(_604 >= linearBegin)) {
-      _638 = ((_630 * _630) * (3.0f - (_630 * 2.0f)));
-    } else {
-      _638 = 1.0f;
-    }
-    float _647 = select((_602 < linearStart), 0.0f, 1.0f);
-    float _648 = select((_603 < linearStart), 0.0f, 1.0f);
-    float _649 = select((_604 < linearStart), 0.0f, 1.0f);
-    _709 = (((((contrast * _602) + madLinearStartContrastFactor) * (_620 - _647)) + (((pow(_612, toe)) * (1.0f - _620)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _602) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _647));
-    _710 = (((((contrast * _603) + madLinearStartContrastFactor) * (_629 - _648)) + (((pow(_621, toe)) * (1.0f - _629)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _603) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _648));
-    _711 = (((((contrast * _604) + madLinearStartContrastFactor) * (_638 - _649)) + (((pow(_630, toe)) * (1.0f - _638)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _604) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _649));
-  } else {
-    _709 = _602;
-    _710 = _603;
-    _711 = _604;
-  }
-  SV_Target.x = _709;
-  SV_Target.y = _710;
-  SV_Target.z = _711;
+  // if ((tonemapParam_isHDRMode == 0.0f) && ProcessSDRVanilla()) {
+  //   float _612 = invLinearBegin * _602;
+  //   if (!(_602 >= linearBegin)) {
+  //     _620 = ((_612 * _612) * (3.0f - (_612 * 2.0f)));
+  //   } else {
+  //     _620 = 1.0f;
+  //   }
+  //   float _621 = invLinearBegin * _603;
+  //   if (!(_603 >= linearBegin)) {
+  //     _629 = ((_621 * _621) * (3.0f - (_621 * 2.0f)));
+  //   } else {
+  //     _629 = 1.0f;
+  //   }
+  //   float _630 = invLinearBegin * _604;
+  //   if (!(_604 >= linearBegin)) {
+  //     _638 = ((_630 * _630) * (3.0f - (_630 * 2.0f)));
+  //   } else {
+  //     _638 = 1.0f;
+  //   }
+  //   float _647 = select((_602 < linearStart), 0.0f, 1.0f);
+  //   float _648 = select((_603 < linearStart), 0.0f, 1.0f);
+  //   float _649 = select((_604 < linearStart), 0.0f, 1.0f);
+  //   _709 = (((((contrast * _602) + madLinearStartContrastFactor) * (_620 - _647)) + (((pow(_612, toe)) * (1.0f - _620)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _602) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _647));
+  //   _710 = (((((contrast * _603) + madLinearStartContrastFactor) * (_629 - _648)) + (((pow(_621, toe)) * (1.0f - _629)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _603) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _648));
+  //   _711 = (((((contrast * _604) + madLinearStartContrastFactor) * (_638 - _649)) + (((pow(_630, toe)) * (1.0f - _638)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _604) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _649));
+  // } else {
+  //   _709 = _602;
+  //   _710 = _603;
+  //   _711 = _604;
+  // }
+  // SV_Target.x = _709;
+  // SV_Target.y = _710;
+  // SV_Target.z = _711;
+
+  SV_Target.xyz = CustomTonemap(float3(_602, _603, _604));
+
   SV_Target.w = 0.0f;
   return SV_Target;
 }

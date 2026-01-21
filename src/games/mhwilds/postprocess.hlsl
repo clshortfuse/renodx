@@ -1,6 +1,5 @@
 #ifndef SRC_MHWILDS_POSTPROCESS_HLSL_
 #define SRC_MHWILDS_POSTPROCESS_HLSL_
-#include "./common.hlsl"
 #include "./shared.h"
 
 float NormalizeExposure() {
@@ -67,5 +66,6 @@ float3 UpgradeWithSDR(float3 untonemapped_bt709, float3 tonemapped_bt709) {
   output = renodx::color::ap1::from::BT709(output);
   return output;
 }
+
 
 #endif  // SRC_MHWILDS_POSTPROCESS_HLSL_
