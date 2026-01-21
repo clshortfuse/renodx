@@ -109,7 +109,7 @@ sub exposure_linear_luminance(string s_src = "")
 		if(HDR_ON)
 		{
 			// DispatchUsingBuffer("reduce_avg$first_pass_hdr.mat", "std",  s_src, 2, 2, 16, 16);
-			DispatchUsingBuffer("reduce_avg$first_pass.mat", "std",  s_src, 2, 2, 16, 16); // CUSTOM_EDIT
+			DispatchUsingBuffer("reduce_avg$first_pass.mat", "std",  s_src, 2, 2, 16, 16); // CUSTOM EDIT
 		}
 		else
 		{
