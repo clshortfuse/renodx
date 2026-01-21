@@ -103,7 +103,7 @@ renodx::utils::settings::Settings settings = {
         .label = std::string("- HDR Max. Luminance slider still controls peak brightness\n"
                              "- Scene Brightness slider is now disabled\n"
                              "- HDR Min. Luminance slider now controls game brightness. 0 = 100 nits, 0.5 = 200, 1.0 = 400. 0.5 is recommended for a moderately lit room.\n"
-                             "- Shadows slider controls shadows. 0.45 is recommended"
+                             "- Shadows slider is now disabled"
                              "- UI brightness slider still controls UI brightness"),
         .section = "About",
     },
