@@ -36,11 +36,6 @@ void main(
   r1.xyz = t1.Sample(s0_s, v1.xy).xyz;
   float3 bloom = r1.rgb * cb0[0].x * CUSTOM_BLOOM;
 
-  if (RENODX_USE_NEUTRAL_GRADING_PARAMS == 0.f) {
-    lens_flare *= RENODX_CUSTOM_GRADING_LENS_FLARE;
-    bloom *= RENODX_CUSTOM_GRADING_BLOOM;
-  }
-
   o0.xyz = bloom + lens_flare;
   return;
 }
