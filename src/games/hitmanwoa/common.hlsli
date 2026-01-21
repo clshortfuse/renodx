@@ -525,7 +525,7 @@ float3 GammaCorrectHuePreserving(float3 incorrect_color) {
   float3 lum = GammaCorrectByLuminance(incorrect_color);
 
   // use chrominance from channel gamma correction and apply hue shifting from per channel tonemap
-  float3 result = renodx::color::correct::Chrominance(lum, ch, 1.f, 1.f, 3);
+  float3 result = renodx::color::correct::Chrominance(lum, ch, 1.f, 1.f, 0);
 
   result = renodx::color::bt709::clamp::AP1(result);
 
@@ -538,7 +538,7 @@ float3 ApplyGammaCorrection(float3 incorrect_color) {
     corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
   } else if (RENODX_GAMMA_CORRECTION == 2.f) {
     corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
-    corrected_color = renodx::color::correct::Hue(corrected_color, incorrect_color, 1.f, 3);
+    corrected_color = renodx::color::correct::Hue(corrected_color, incorrect_color, 1.f, 0);
   } else if (RENODX_GAMMA_CORRECTION == 3.f) {
     corrected_color = GammaCorrectHuePreserving(incorrect_color);
   } else {
