@@ -71,6 +71,10 @@ struct ShaderInjectData {
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
   float custom_flip_uv_y;
+  float fx_rcas_sharpening;
+  float fx_rcas_amount;
+  float tone_map_hdr_video;
+  float tone_map_video_nits;
 };
 
 #ifndef __cplusplus
@@ -113,6 +117,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    shader_injection.swap_chain_clamp_color_space
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
+#define RENODX_TONE_MAP_HDR_VIDEO              shader_injection.tone_map_hdr_video
+#define RENODX_VIDEO_NITS                      shader_injection.tone_map_video_nits
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
 #include "../../shaders/renodx.hlsl"
