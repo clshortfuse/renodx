@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.3.16 on Wed Jan 21 18:05:04 2026
+// ---- Created with 3Dmigoto v1.3.16 on Wed Jan 21 21:30:43 2026
 #include "../shared.h"
 Texture2D<float4> t2 : register(t2);
 
@@ -30,84 +30,54 @@ void main(
   float2 v1 : TEXCOORD0,
   out float4 o0 : SV_Target0)
 {
+  const float4 icb[] = { { 0.500000, 0, 0, 0},
+                              { 1.000000, 0, 0, 0},
+                              { 1.500000, 0, 0, 0},
+                              { 2.000000, 0, 0, 0},
+                              { 2.500000, 0, 0, 0} };
   float4 r0,r1,r2,r3,r4,r5,r6;
   uint4 bitmask, uiDest;
   float4 fDest;
 
   r0.xy = -cb1[0].xy + v1.xy;
   r0.z = dot(r0.xy, r0.xy);
-  r0.w = sqrt(r0.z);
-  r0.w = max(0.00999999978, r0.w);
-  r0.w = 1 / r0.w;
-  r1.x = cb1[0].w * 0.5;
-  r0.z = log2(r0.z);
-  r0.z = r1.x * r0.z;
-  r0.z = exp2(r0.z);
+  r0.z = sqrt(r0.z);
+  r0.w = log2(r0.z);
+  r0.w = cb1[0].w * r0.w;
+  r0.w = exp2(r0.w);
+  r0.xy = r0.xy * r0.ww;
+  r0.z = max(0.00999999978, r0.z);
+  r0.z = 1 / r0.z;
+  r0.z = -1 + r0.z;
+  r0.z = cb1[25].z * r0.z + 1;
   r0.xy = r0.xy * r0.zz;
   r1.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
-  r1.xyz = float3(1,0,0) * r1.xyz;
-  r0.z = cmp(3 < cb1[25].x);
-  if (r0.z != 0) {
-    r2.xy = cmp(float2(0,0) != cb1[25].wz);
-    r0.z = (int)r2.y | (int)r2.x;
-    r2.xy = r0.xy * r0.ww;
-    r2.xy = r0.zz ? r2.xy : r0.xy;
-    r0.z = cb1[25].y + cb1[0].z;
-    r2.z = cb1[25].y + cb1[25].y;
-    r3.xyzw = cb1[25].yyyy * float4(3,3,4,4);
-    r4.xy = -r2.xy * r0.zz + v1.xy;
-    r4.xyz = t0.SampleLevel(s0_s, r4.xy, 0).xyz;
-    r4.xyz = r4.xyz * float3(1,0,0) + r1.xyz;
-    r0.z = r0.z + r0.z;
-    r5.xy = -r2.xy * r0.zz + v1.xy;
-    r5.xyz = t0.SampleLevel(s0_s, r5.xy, 0).xyz;
-    r4.xyz = r5.xyz * float3(1,0,0) + r4.xyz;
-    r5.xy = -r2.xy * cb1[25].yy + v1.xy;
-    r5.xyz = t0.SampleLevel(s0_s, r5.xy, 0).xyz;
-    r4.xyz = r5.xyz * float3(0,1,0) + r4.xyz;
-    r0.z = cb1[25].y * 2 + cb1[0].z;
-    r5.xy = -r2.xy * r0.zz + v1.xy;
-    r5.xyz = t0.SampleLevel(s0_s, r5.xy, 0).xyz;
-    r4.xyz = r5.xyz * float3(0,1,0) + r4.xyz;
-    r3.xyzw = cb1[0].zzzz * float4(2,2,2,2) + r3.xyzw;
-    r3.xyzw = -r2.xyxy * r3.xyzw + v1.xyxy;
-    r5.xyz = t0.SampleLevel(s0_s, r3.xy, 0).xyz;
-    r4.xyz = r5.xyz * float3(0,1,0) + r4.xyz;
-    r2.zw = -r2.xy * r2.zz + v1.xy;
-    r5.xyz = t0.SampleLevel(s0_s, r2.zw, 0).xyz;
-    r4.xyz = r5.xyz * float3(0,0,1) + r4.xyz;
-    r0.z = cb1[25].y * 3 + cb1[0].z;
-    r2.xy = -r2.xy * r0.zz + v1.xy;
-    r2.xyz = t0.SampleLevel(s0_s, r2.xy, 0).xyz;
-    r2.xyz = r2.xyz * float3(0,0,1) + r4.xyz;
-    r3.xyz = t0.SampleLevel(s0_s, r3.zw, 0).xyz;
-    r2.xyz = r3.xyz * float3(0,0,1) + r2.xyz;
-    r2.xyz = float3(0.333333403,0.333333403,0.333333403) * r2.xyz;
-  } else {
-    r0.z = cmp(0.000000 != cb1[25].w);
-    r3.xy = r0.xy * r0.ww;
-    r0.xy = r0.zz ? r3.xy : r0.xy;
-    r0.z = cb1[25].y * 2 + cb1[0].z;
-    r0.zw = -r0.xy * r0.zz + v1.xy;
-    r3.xyz = t0.SampleLevel(s0_s, r0.zw, 0).xyz;
-    r1.xyz = r3.xyz * float3(0,1,0) + r1.xyz;
-    r0.z = cb1[0].z + cb1[0].z;
-    r0.z = cb1[25].y * 3 + r0.z;
-    r0.xy = -r0.xy * r0.zz + v1.xy;
-    r0.xyz = t0.SampleLevel(s0_s, r0.xy, 0).xyz;
-    r2.xyz = r0.xyz * float3(0,0,1) + r1.xyz;
+  r2.xyz = r1.zxy;
+  r0.z = 0;
+  while (true) {
+    r0.w = cmp((int)r0.z >= 5);
+    if (r0.w != 0) break;
+    r0.w = icb[r0.z+0].x * cb1[0].z;
+    r3.xy = -r0.xy * r0.ww + v1.xy;
+    r3.xyz = t0.SampleLevel(s0_s, r3.xy, 0).xyz;
+    r3.xyz = r3.xyz + r2.yzx;
+    r0.w = (int)r0.z + 1;
+    r2.xyz = r3.zxy;
+    r0.z = r0.w;
+    continue;
   }
-  r0.xyz = cb0[109].xxx * r2.zxy;
-  r1.xyz = t1.SampleLevel(s0_s, v1.xy, 0).xyz;
+  r0.xyz = cb0[109].xxx * r2.xyz;
+  r1.xyz = float3(0.166666672,0.166666672,0.166666672) * r0.xyz;
+  r2.xyz = t1.SampleLevel(s0_s, v1.xy, 0).xyz;
   r0.w = -cb1[9].z + 1;
-  r3.xyz = r1.zxy * r0.www;
+  r3.xyz = r2.zxy * r0.www;
   r3.xyz = cmp(float3(0.300000012,0.300000012,0.300000012) < r3.xyz);
-  r4.xyz = log2(r1.zxy);
+  r4.xyz = log2(r2.zxy);
   r4.xyz = float3(0.330000013,0.330000013,0.330000013) * r4.xyz;
   r4.xyz = exp2(r4.xyz);
   r4.xyz = r4.xyz * float3(1.49380004,1.49380004,1.49380004) + float3(-0.699999988,-0.699999988,-0.699999988);
-  r0.w = max(r0.y, r0.z);
-  r0.w = max(r0.w, r0.x);
+  r0.w = max(r1.y, r1.z);
+  r0.w = max(r0.w, r1.x);
   r5.xy = -cb1[10].yx + r0.ww;
   r2.w = max(0, r5.x);
   r2.w = min(cb1[10].z, r2.w);
@@ -138,12 +108,12 @@ void main(
   r2.w = max(r2.w, r5.y);
   r0.w = max(9.99999975e-005, r0.w);
   r0.w = r2.w / r0.w;
-  r6.xyz = r0.xyz * r0.www;
-  r6.xyz = -r6.xyz * cb1[9].zzz + r0.xyz;
-  r1.xyz = r3.xyz ? r4.xyz : r1.zxy;
-  r1.xyz = r1.xyz * cb1[11].zxy + r6.xyz;
-  r1.xyz = -r2.zxy * cb0[109].xxx + r1.xyz;
-  r0.xyz = cb1[9].xxx * r1.xyz + r0.xyz;
+  r6.xyz = r1.xyz * r0.www;
+  r6.xyz = -r6.xyz * cb1[9].zzz + r1.xyz;
+  r2.xyz = r3.xyz ? r4.xyz : r2.zxy;
+  r2.xyz = r2.xyz * cb1[11].zxy + r6.xyz;
+  r0.xyz = -r0.xyz * float3(0.166666672,0.166666672,0.166666672) + r2.xyz;
+  r0.xyz = cb1[9].xxx * r0.xyz + r1.xyz;
   r0.w = dot(r5.xz, r5.xz);
   r0.w = 1 + -r0.w;
   r0.w = max(0, r0.w);
@@ -156,7 +126,6 @@ void main(
   r0.xyz = cb1[7].www * r0.xyz;
   [branch]
   if (shader_injection.tone_map_type == 0.f) {
-
   r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = log2(r0.xyz);
@@ -187,21 +156,21 @@ void main(
   r1.xyz = frac(r1.xyz);
   r1.xyz = float3(-0.5,-0.5,-0.5) + r1.xyz;
   o0.xyz = r1.xyz * float3(0.0013725491, 0.0013725491, 0.0013725491) + r0.xyz;
-  o0.xyz = renodx::color::srgb::DecodeSafe(o0.xyz);
-  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   } else {
     renodx::lut::Config lut_config = renodx::lut::config::Create(
         s0_s,
-        1.0f,
+        shader_injection.color_grade_strength,
         0.f,
         renodx::lut::config::type::ARRI_C1000_NO_CUT,
         renodx::lut::config::type::LINEAR
     );
 
     float3 graded = renodx::lut::Sample(t2, lut_config, r0.yzx);
-    o0.xyz = renodx::draw::ToneMapPass(r0.yzx,graded.xyz);
+    o0.xyz = renodx::draw::ToneMapPass(r0.yzx, graded);
     o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   }
+
   o0.w = min(1, r1.w);
+
   return;
 }

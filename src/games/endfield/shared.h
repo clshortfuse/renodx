@@ -1,5 +1,5 @@
-#ifndef SRC_TEMPLATE_SHARED_H_
-#define SRC_TEMPLATE_SHARED_H_
+#ifndef SRC_ENDFIELD_SHARED_H_
+#define SRC_ENDFIELD_SHARED_H_
 
 // #define RENODX_PEAK_WHITE_NITS                 1000.f
 // #define RENODX_DIFFUSE_WHITE_NITS              renodx::color::bt2408::REFERENCE_WHITE
@@ -75,6 +75,8 @@ struct ShaderInjectData {
   float fx_rcas_amount;
   float tone_map_hdr_video;
   float tone_map_video_nits;
+  float reno_drt_tone_map_method;
+  float status_text_opacity;
 };
 
 #ifndef __cplusplus
@@ -119,7 +121,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
 #define RENODX_TONE_MAP_HDR_VIDEO              shader_injection.tone_map_hdr_video
 #define RENODX_VIDEO_NITS                      shader_injection.tone_map_video_nits
-#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_RENO_DRT_TONE_MAP_METHOD        shader_injection.reno_drt_tone_map_method
+#define STATUS_TEXT_OPACITY                    shader_injection.status_text_opacity
 
 #include "../../shaders/renodx.hlsl"
 
