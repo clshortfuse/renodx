@@ -1,6 +1,6 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Nov 27 22:02:47 2025
 
-// TAA shader
+// TAA shader - nothing done
 
 Texture2D<float4> t4 : register(t4);
 

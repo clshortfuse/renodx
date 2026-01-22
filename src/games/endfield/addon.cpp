@@ -22,6 +22,8 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
+const std::string build_date = __DATE__;
+const std::string build_time = __TIME__;
 
 float current_settings_mode = 0;
 
@@ -270,6 +272,28 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "fxRCASSharpening",
+        .binding = &shader_injection.fx_rcas_sharpening,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "FSR RCAS Sharpening",
+        .section = "Effects",
+        .tooltip = "Enable Robust Contrast Adaptive Sharpening."
+                   "\nProvides better image clarity.",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "fxRCASAmount",
+        .binding = &shader_injection.fx_rcas_amount,
+        .default_value = 50.f,
+        .label = "RCAS Sharpening Amount",
+        .section = "Effects",
+        .tooltip = "Adjusts RCAS sharpening strength.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.fx_rcas_sharpening >= 1.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
         .binding = &shader_injection.swap_chain_custom_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -322,7 +346,7 @@ renodx::utils::settings::Settings settings = {
         .key = "SwapChainGammaCorrection",
         .binding = &shader_injection.swap_chain_gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "UI Gamma Correction",
         .section = "Display Output",
         .labels = {"None", "2.2", "2.4"},
@@ -340,6 +364,41 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value - 1.f; },
         .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "VideoAutoHDR",
+        .binding = &shader_injection.tone_map_hdr_video,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Video AutoHDR",
+        .section = "Video",
+        .tooltip = "Upgrades SDR videos to HDR.",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapVideoNits",
+        .binding = &shader_injection.tone_map_video_nits,
+        .default_value = 500.f,
+        .can_reset = false,
+        .label = "Video Brightness",
+        .section = "Video",
+        .tooltip = "Sets the peak brightness for video content in nits",
+        .min = 48.f,
+        .max = 4000.f,
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "RenoDX by ShortFuse, game mod by spiwar.",
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Made for Arknights: Endfield 1.0",
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "This build was compiled on " + build_date + " at " + build_time + ".",
+        .section = "About",
     },
 };
 
@@ -442,7 +501,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               },
               .on_change_value = [](float previous, float current) { renodx::mods::swapchain::force_borderless = (current == 1.f); },
               .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 2; },
+              .is_visible = []() { return false; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
@@ -463,7 +522,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               },
               .on_change_value = [](float previous, float current) { renodx::mods::swapchain::prevent_full_screen = (current == 1.f); },
               .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 2; },
+              .is_visible = []() { return false; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           renodx::mods::swapchain::prevent_full_screen = (setting->GetValue() == 1.f);
