@@ -282,7 +282,7 @@ float4 main(
     _43 = false;
   }
   if (!_37) {
-    _49 = (distortionType == 1);
+    _49 = ((distortionType == 1) && (CUSTOM_LENS_DISTORTION == 1));
   } else {
     _49 = false;
   }

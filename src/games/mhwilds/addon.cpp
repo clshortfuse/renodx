@@ -111,22 +111,20 @@ const std::string build_time = __TIME__;
 float current_settings_mode = 0;
 auto last_is_hdr = false;
 
-const std::unordered_map<std::string, float> FILMIC_LOOK_VALUES = {
+const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
     {"ToneMapType", 1.f},
     {"ColorGradeExposure", 1.f},
-    {"ColorGradeHighlights", 50.f},
-    {"ColorGradeShadows", 48.f},
-    {"ColorGradeContrast", 59.f},
-    {"ColorGradeSaturation", 56.f},
-    {"ColorGradeHighlightSaturation", 40.f},
+    {"ColorGradeHighlights", 53.f},
+    {"ColorGradeShadows", 50.f},
+    {"ColorGradeContrast", 75.f},
+    {"ColorGradeSaturation", 53.f},
+    {"ColorGradeHighlightSaturation", 60.f},
     {"ColorGradeBlowout", 50.f},
-    {"ColorGradeFlare", 50.f},
-    {"SwapChainCustomColorSpace", 0.f},
-    {"ColorGradeSDRTonemapper", 0.f},
+    //{"ColorGradeFlare", 50.f},
+    //{"SwapChainCustomColorSpace", 0.f},
     {"ColorGradeLUTColorStrength", 60.f},
-    {"FxLUTScaling", 0.f},
-    {"FxExposureType", 1.f},
-    {"FxExposureStrength", 75.f},
+    //{"FxExposureType", 1.f},
+    {"FxExposureStrength", 40.f},
     {"FxLUTExposureReverse", 1.f},
 };
 
@@ -202,6 +200,38 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Adjusts the game's tonemapping parameters to be faithful to SDR or to custom values we prefer.",
         .labels = {"Vanilla", "Custom"},
         .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Vanilla+",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Look",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (HDR_LOOK_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
     },
     new renodx::utils::settings::Setting{
         .key = "FxExposureType",
@@ -383,6 +413,20 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
+        new renodx::utils::settings::Setting{
+        .key = "FxLensDistortion",
+        .binding = &shader_injection.custom_lens_distortion,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Lens Distortion",
+        .section = "Effects",
+        .tooltip = "Controls Panini Projection, which reduces the fish eye effect from wide FOVs.",
+        .labels = {
+            "Off",
+            "On",
+        },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
     new renodx::utils::settings::Setting{
         .key = "FxSharpness",
         .binding = &shader_injection.custom_sharpness,
@@ -419,39 +463,8 @@ renodx::utils::settings::Settings settings = {
           if (value == 2.f) return 10.f;
           return 0.f;
         },
+        .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
     },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Reset All",
-        .section = "Presets",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (!setting->can_reset) continue;
-            if (setting->is_global) continue;
-            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-          }
-        },
-    },
-    // new renodx::utils::settings::Setting{
-    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    //     .label = "Filmic",
-    //     .section = "Presets",
-    //     .group = "button-line-1",
-    //     .on_change = []() {
-    //       for (auto* setting : settings) {
-    //         if (setting->key.empty()) continue;
-    //         if (!setting->can_reset) continue;
-    //         if (setting->is_global) continue;
-    //         if (FILMIC_LOOK_VALUES.contains(setting->key)) {
-    //           renodx::utils::settings::UpdateSetting(setting->key, FILMIC_LOOK_VALUES.at(setting->key));
-    //         } else {
-    //           renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-    //         }
-    //       }
-    //     },
-    // },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " - In-Game HDR must be turned ON!\n"
@@ -560,6 +573,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("FxExposureType", 0.f);
   renodx::utils::settings::UpdateSetting("FxExposureStrength", 50.f);
   renodx::utils::settings::UpdateSetting("FxLUTExposureReverse", 0.f);
+  renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
+  renodx::utils::settings::UpdateSetting("FxLensDistortion", 1.f);
 }
 
 bool fired_on_init_swapchain = false;
