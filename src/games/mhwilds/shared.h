@@ -30,6 +30,7 @@
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_VIGNETTE                        shader_injection.custom_vignette
+#define CUSTOM_LENS_DISTORTION                 shader_injection.custom_lens_distortion
 #define CUSTOM_LUT_COLOR_STRENGTH              shader_injection.custom_lut_color_strength
 #define CUSTOM_ABERRATION                      1.f
 #define CUSTOM_EXPOSURE_TYPE                   shader_injection.custom_exposure_type
@@ -62,6 +63,7 @@ struct ShaderInjectData {
   float custom_lut_color_strength;
   float custom_film_grain;
   float custom_vignette;
+  float custom_lens_distortion;
   float custom_random;
   float custom_exposure_type;
   float custom_exposure_strength;

@@ -282,7 +282,7 @@ float3 CustomTonemap(float3 untonemapped) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped);
   untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709);
 
-  // Roll off tonemap sliders to not clip
+  // Roll off grading sliders to not clip
   float white_clip = 100.f;
   white_clip = max(100.f, PreTonemapSliders(white_clip).x);
   if (white_clip != 100.f) untonemapped_bt709 = ReinhardPiecewiseExtendedMaxCLL(untonemapped_bt709, 4.f, 100.f, white_clip);
@@ -310,6 +310,7 @@ float3 CustomTonemap(float3 untonemapped) {
 
   float3 hdr_color_bt709 = renodx::color::correct::Chrominance(tonemapped_bt709_lum, tonemapped_bt709_ch, 1.f, 0.f, 1);
   hdr_color_bt709 = renodx::color::correct::Hue(hdr_color_bt709, tonemapped_bt709_ch, 1, 1);
+
   hdr_color_bt709 = PostTonemapSliders(hdr_color_bt709);
 
   return renodx::color::ap1::from::BT709(hdr_color_bt709);
