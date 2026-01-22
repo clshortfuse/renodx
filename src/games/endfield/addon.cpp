@@ -22,6 +22,7 @@ namespace {
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
+
 const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
 
@@ -42,13 +43,26 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 2.f,
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
         .labels = {"Vanilla", "RenoDRT"},
+        .parse = [](float value) { return value * 3.f; },
         .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapMethod",
+        .binding = &shader_injection.reno_drt_tone_map_method,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Tone Map Method",
+        .section = "Tone Mapping",
+        .tooltip = "Selects the RenoDRT curve",
+        .labels = {"Reinhard", "Hermite Spline"},
+        .parse = [](float value) { return value + 1.f; },
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -102,7 +116,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_visible = []() { return false; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapWorkingColorSpace",
@@ -293,6 +307,16 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.fx_rcas_sharpening >= 1.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
+        new renodx::utils::settings::Setting{
+        .key = "UIOpacityStatusText",
+        .binding = &shader_injection.status_text_opacity,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "UID Text",
+        .section = "Effects",
+        .tooltip = "Toggle UID text visibility",
+        .labels = {"Hidden", "Visible"},
+    },
     new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
         .binding = &shader_injection.swap_chain_custom_color_space,
@@ -447,6 +471,7 @@ void OnPresent(reshade::api::command_queue* queue,
   if (device->get_api() == reshade::api::device_api::opengl) {
     shader_injection.custom_flip_uv_y = 1.f;
   }
+
 }
 
 bool initialized = false;
