@@ -123,7 +123,7 @@ void frag_main() {
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       TrilinearClamp,
       CUSTOM_LUT_STRENGTH,  // strength
-      CUSTOM_LUT_SCALING,  // scaling
+      CUSTOM_LUT_SCALING,   // scaling
       renodx::lut::config::type::SRGB,
       renodx::lut::config::type::LINEAR,
       ColorCorrectTexture_m0[0u].x);
@@ -970,8 +970,9 @@ void frag_main() {
   SV_Target.y = _1325;
   SV_Target.z = _1327;
   SV_Target.w = 0.0f;
-#if 0
-      SV_Target.rgb = AdjustGammaOnLuminance(SV_Target.rgb, 1.1f);
+
+#if 1
+  SV_Target.rgb = ApplyPreDisplayMap(SV_Target.rgb);
 #endif
 }
 

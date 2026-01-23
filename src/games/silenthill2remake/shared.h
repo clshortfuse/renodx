@@ -114,7 +114,7 @@ cbuffer cb13 : register(b13, space50) {
 
 #define SHADOW_COLOR_OFFSET_FIX_TYPE                1.f
 #define COLOR_OFFSET_MIDTONES_HIGHLIGHTS            1.f
-#define SHADOW_COLOR_OFFSET_BRIGHTNESS_BIAS         8.f
+#define SHADOW_COLOR_OFFSET_BRIGHTNESS_BIAS         7.5f
 #define SHADOW_COLOR_OFFSET_CHROMINANCE_RESTORATION 0.3f
 
 #define CUSTOM_RANDOM         0.f

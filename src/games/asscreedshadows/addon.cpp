@@ -56,7 +56,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
     {"ToneMapType", 1.f},
-    {"ColorGradeShadows", 40.f},
+    {"LocalToneMapType", 1.f},
+    {"ColorGradeFlare", 36.f},
     {"FxBloom", 50.f},
     {"FxBloomScaling", 100.f},
 };
@@ -69,7 +70,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
-        .tooltip = "Sets the tone mapper type",
+        .tooltip = "Sets the tone mapper type. Toggle in-game HDR setting or restart game to take effect.",
         .labels = {"Vanilla", "Vanilla+", "ACES"},
         .on_change = &OnOptimizableToneMapSettingChange,
     },
@@ -80,6 +81,16 @@ renodx::utils::settings::Settings settings = {
         .tint = 0xFF0000,
         .is_visible = []() { return tone_map_lut_invalidated != 0.f; },
         .is_sticky = true,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "LocalToneMapType",
+        .binding = &shader_injection.custom_local_tone_map_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Local Tone Map Type",
+        .section = "Local Tone Mapping",
+        .tooltip = "Sets the local tone mapper type. Enhanced preserves hues and prevents shadows smearing.",
+        .labels = {"Vanilla", "Enhanced"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapLocalToneMapShoulder",
@@ -246,9 +257,8 @@ renodx::utils::settings::Settings settings = {
                 if (setting->value != setting->default_value) OnOptimizableUISettingChange();
               } else if (setting->key == "ToneMapType") {
                 if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
-              } else if (setting->key == "ToneMapUINits") {
-                if (setting->value != setting->default_value) OnOptimizableToneMapSettingChange();
               }
+
               renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
             } else {
               renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
@@ -258,14 +268,22 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Discord",
+        .label = "RenoDX Discord",
         .section = "Links",
         .group = "button-line-2",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::Launch(
-              "https://discord.gg/"
-              "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "Ce9bQHQrSV");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den Discord",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
         },
     },
     new renodx::utils::settings::Setting{
@@ -275,7 +293,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0x2B3137,
         .on_change = []() {
-          renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx/wiki/Mods");
+          renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
         },
     },
     new renodx::utils::settings::Setting{
@@ -285,7 +303,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0x2B3137,
         .on_change = []() {
-          renodx::utils::platform::Launch("https://github.com/clshortfuse/renodx");
+          renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
         },
     },
     new renodx::utils::settings::Setting{
@@ -294,11 +312,24 @@ renodx::utils::settings::Settings settings = {
         .section = "Links",
         .group = "button-line-3",
         .tint = 0xFF5A16,
-        .on_change = []() { renodx::utils::platform::Launch("https://ko-fi.com/musaqh"); },
+        .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/musaqh"); },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-3",
+        .tint = 0xFF5A16,
+        .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse"); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Requires HDR on in game"),
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -321,6 +352,7 @@ void OnPresetOff() {
 
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
+      {"LocalToneMapType", 0.f},
       {"ToneMapLocalToneMapToe", 100.f},
       {"ToneMapLocalToneMapShoulder", 100.f},
       {"Exposure", 1.f},

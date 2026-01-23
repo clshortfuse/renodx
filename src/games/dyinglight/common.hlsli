@@ -8,14 +8,80 @@ float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start =
   return scale;
 }
 
+// 1D per-channel curve LUT (Nx1) with gamma-domain smoothing.
+// linear -> gamma 2.2 -> center texel -> filtered sample -> gamma 2.2 -> linear
+#define SampleLUT1DWithSmoothing(LUT, CHANNEL, max_index, point0, point1, fraction, OUT) \
+  if (((point0) == 0) || ((point1) >= (max_index))) {                                    \
+    /* Edge: preserve endpoints */                                                       \
+    float sample_0 = (LUT).Load(int3((point0), 0, 0)).CHANNEL;                           \
+    float sample_1 = (LUT).Load(int3((point1), 0, 0)).CHANNEL;                           \
+    (OUT) = lerp(sample_0, sample_1, (fraction));                                        \
+  } else {                                                                               \
+    int point_prev = (point0) - 1;                                                       \
+    int point_next = (point1) + 1;                                                       \
+                                                                                         \
+    /* 4-tap neighborhood: i-1, i, i+1, i+2 */                                           \
+    float texel_prev = (LUT).Load(int3(point_prev, 0, 0)).CHANNEL;                       \
+    float texel_0 = (LUT).Load(int3((point0), 0, 0)).CHANNEL;                            \
+    float texel_1 = (LUT).Load(int3((point1), 0, 0)).CHANNEL;                            \
+    float texel_next = (LUT).Load(int3(point_next, 0, 0)).CHANNEL;                       \
+                                                                                         \
+    /* Endpoint smoothing: [1,2,1] / 4 */                                                \
+    float filtered_0 = (texel_prev + 2.0 * texel_0 + texel_1) * 0.25;                    \
+    float filtered_1 = (texel_0 + 2.0 * texel_1 + texel_next) * 0.25;                    \
+                                                                                         \
+    /* Clamp to neighborhood to prevent overshoot */                                     \
+    filtered_0 = clamp(filtered_0,                                                       \
+                       min(texel_prev, min(texel_0, texel_1)),                           \
+                       max(texel_prev, max(texel_0, texel_1)));                          \
+    filtered_1 = clamp(filtered_1,                                                       \
+                       min(texel_0, min(texel_1, texel_next)),                           \
+                       max(texel_0, max(texel_1, texel_next)));                          \
+                                                                                         \
+    (OUT) = lerp(filtered_0, filtered_1, (fraction));                                    \
+  }
+
+float3 SampleLUT1D(Texture2D<float4> lut, SamplerState state, float3 linear_color) {
+  const int LUT_SIZE = 256;
+  const int MAX_INDEX = LUT_SIZE - 1;
+  const float LUT_SIZE_F = 256.0;
+  const float MAX_INDEX_F = 255.0;
+  const float INV_LUT_SIZE = 1.0 / 256.0;
+
+  float3 gamma_color = renodx::color::gamma::Encode(saturate(linear_color), 2.2f);
+
+  float3 uv = mad(gamma_color, MAX_INDEX_F * INV_LUT_SIZE, 0.5 * INV_LUT_SIZE);
+
+  if (CUSTOM_LUT_SMOOTHING) {
+    float3 position = mad(uv, LUT_SIZE_F, -0.5);
+    int3 point_0 = (int3)floor(position);
+    float3 fraction = frac(position);
+
+    int3 point_a = clamp(point_0, 0, MAX_INDEX);
+    int3 point_b = min(point_a + 1, MAX_INDEX);
+
+    SampleLUT1DWithSmoothing(lut, x, MAX_INDEX, point_a.x, point_b.x, fraction.x, gamma_color.r);
+    SampleLUT1DWithSmoothing(lut, y, MAX_INDEX, point_a.y, point_b.y, fraction.y, gamma_color.g);
+    SampleLUT1DWithSmoothing(lut, z, MAX_INDEX, point_a.z, point_b.z, fraction.z, gamma_color.b);
+  } else {  // vanilla LUT sampling
+    gamma_color.r = lut.Sample(state, (uv.rr)).x;
+    gamma_color.g = lut.Sample(state, (uv.gg)).y;
+    gamma_color.b = lut.Sample(state, (uv.bb)).z;
+  }
+
+  linear_color = renodx::color::gamma::Decode(gamma_color, 2.2f);
+
+  return linear_color;
+}
+
+#undef SampleLUT1DWithSmoothing
+
 float Highlights(float x, float highlights, float mid_gray) {
   if (highlights == 1.f) return x;
 
   if (highlights > 1.f) {
     // value = max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), x));
-    return max(x,
-               lerp(x, mid_gray * pow(x / mid_gray, highlights),
-                    renodx::tonemap::ExponentialRollOff(x, 1.f, 2.75f)));
+    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 10.f)));
   } else {  // highlights < 1.f
     x /= mid_gray;
     return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;

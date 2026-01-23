@@ -22,6 +22,11 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Download Slang binaries
         run: |
           curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2025.10.3/slang-2025.10.3-windows-x86_64.zip
@@ -68,6 +73,9 @@ jobs:
       - name: Prepare Release folder
         run: md githubrelease
 
+      - name: Copy Schema
+        run: copy renodx-metadata-schema.json githubrelease\
+
       - name: Copy Binaries (x64)
         run: copy build\release\*.addon64 githubrelease\
 
@@ -79,6 +87,10 @@ jobs:
       
       - name: Copy Binaries (PDBs)
         run: copy build\release\*.pdb githubrelease\
+      
+      - name: Generate metadata manifest
+        run: node scripts/generate-release-manifest.mjs
+
 
       - name: Put current date into a variable
         run: |

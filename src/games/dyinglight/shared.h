@@ -33,6 +33,7 @@ struct ShaderInjectData {
   float hue_shift_fire;
   float boost_sky;
   float custom_clamp_lens_flare;
+  float custom_lut_smoothing;
 };
 
 #ifndef __cplusplus
@@ -68,6 +69,7 @@ cbuffer cb13 : register(b13) {
 #define CUSTOM_HUE_SHIFT_FIRE     shader_injection.hue_shift_fire
 #define CUSTOM_BOOST_SKY          shader_injection.boost_sky
 #define CUSTOM_CLAMP_LENS_FLARE   shader_injection.custom_clamp_lens_flare
+#define CUSTOM_LUT_SMOOTHING      shader_injection.custom_lut_smoothing
 
 #define TONE_MAP_LIGHTING 1
 

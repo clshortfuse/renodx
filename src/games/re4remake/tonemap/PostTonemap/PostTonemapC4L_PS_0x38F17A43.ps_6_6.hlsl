@@ -38,8 +38,8 @@ float4 main(
       new_toe = RENODX_TONE_MAP_SHADOW_TOE;  // toe
     }
     new_contrast *= RENODX_TONE_MAP_HIGHLIGHT_CONTRAST;  // contrast
-    new_max_nit = 125;                                   // maxNit
-    new_linear_start = 125;                              // linearStart
+    new_max_nit = 100.f;                                 // maxNit
+    new_linear_start = 100.f;                            // linearStart
   }
 
   float4 SV_Target;
@@ -56,6 +56,11 @@ float4 main(
   float _148;
   float _149;
   float _150;
+
+#if 1
+  BlowoutAndHueShift(_41, _43, _45);
+#endif
+
   if (isfinite(max(max(_41, _43), _45))) {
     float _54 = invLinearBegin * _41;
     float _60 = invLinearBegin * _43;
@@ -80,8 +85,7 @@ float4 main(
   SV_Target.w = 1.0f;
 
   if (TONE_MAP_TYPE != 0) {
-    SV_Target.rgb = ApplyCustomGrading(SV_Target.rgb);
-    SV_Target.rgb = AdjustGammaByChannel(SV_Target.rgb, RENODX_GAMMA_ADJUST);
+    SV_Target.rgb = ApplyToneMap(SV_Target.rgb);
   }
 
   return SV_Target;

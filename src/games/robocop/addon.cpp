@@ -32,7 +32,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"UE ACES (HDR)", "None", "ACES", "Vanilla+ (ACES + UE Filmic Blend)", "UE Filmic (SDR)"},
+        .labels = {"UE ACES (HDR)", "None", "ACES", "UE Filmic Extended (HDR)", "UE Filmic (SDR)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -118,7 +118,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Override Black Clip",
         .section = "Tone Mapping",
-        .tooltip = "Outputs 0.0001 nits for black, prevents crushing.",
+        .tooltip = "Disables black clip in the tonemapper. Prevents crushing when the black clip parameter is used",
         .is_enabled = []() { return shader_injection.tone_map_type == 3; },
     },
     new renodx::utils::settings::Setting{

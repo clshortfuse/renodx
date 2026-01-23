@@ -217,14 +217,15 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
      },
      {hdr_upgrade_setting},
      renodx::templates::settings::CreateDefaultSettings({
-         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .default_value = 3.f, .labels = {"Vanilla", "None", "ACES", "Vanilla+ (ACES + UE Filmic Blend)", "UE Filmic (SDR)"}, .parse = [](float value) { return value; }, .on_change = &OnLUTSettingChange}},
+         {"ToneMapType", {.binding = &shader_injection.tone_map_type, .default_value = 3.f, .labels = {"Vanilla (UE ACES if using Unreal HDR and UE Filmic if using SDR)", "None", "ACES", "UE Filmic Extended (HDR)", "UE Filmic (SDR)"}, .parse = [](float value) { return value; }, .on_change = &OnLUTSettingChange}},
          {"ToneMapPeakNits", {.binding = &shader_injection.peak_white_nits, .on_change = &OnLUTSettingChange}},
          {"ToneMapGameNits", {.binding = &shader_injection.diffuse_white_nits, .on_change = &OnLUTSettingChange}},
          {"ToneMapUINits", {.binding = &shader_injection.graphics_white_nits, .on_change = &OnLUTSettingChange}},
-         {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .on_change = &OnLUTSettingChange}},
-         /* {"SceneGradeSaturationCorrection", &shader_injection.scene_grade_saturation_correction},
-         {"SceneGradeHueCorrection", &shader_injection.scene_grade_hue_correction},
-         {"SceneGradeBlowoutRestoration", &shader_injection.scene_grade_blowout_restoration}, */
+         {"ToneMapScaling", {.binding = &shader_injection.tone_map_per_channel, .default_value = 1.f, .labels = {"Luminance and Per Channel Blend", "Per Channel"}, .on_change = &OnLUTSettingChange}},
+         //  {"ToneMapHueCorrection", {.binding = &shader_injection.tone_map_hue_correction, .default_value = 0.f, .label = "Hue Correction (Midtones and Shadows)", .tooltip = "Hue retention strength. Only applies to midtones and shadows.", .on_change = &OnLUTSettingChange}},
+         {"SceneGradeSaturationCorrection", {.binding = &shader_injection.scene_grade_saturation_correction, .default_value = 0.f, .is_enabled = []() { return shader_injection.tone_map_per_channel == 0.f; }}},
+         {"SceneGradeHueCorrection", {.binding = &shader_injection.scene_grade_hue_correction, .default_value = 0.f, .label = "Hue Correction (Midtones and Shadows)", .tooltip = "Hue retention strength. Only applies to midtones and shadows.", .on_change = &OnLUTSettingChange}},
+         //  {"SceneGradeBlowoutRestoration", &shader_injection.scene_grade_blowout_restoration},
          {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure, .on_change = &OnLUTSettingChange}},
          {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights, .on_change = &OnLUTSettingChange}},
          {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows, .on_change = &OnLUTSettingChange}},
@@ -280,19 +281,67 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
          },
          new renodx::utils::settings::Setting{
              .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-             .label = "HDR Den Discord",
-             .section = "Links",
+             .label = "Reset All",
+             .section = "Options",
              .group = "button-line-1",
+             .on_change = []() {
+               for (auto* setting : settings) {
+                 if (setting->key.empty()) continue;
+                 if (!setting->can_reset) continue;
+                 renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+               }
+             },
+         },
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+             .label = "Musa's Recommended Settings",
+             .section = "Options",
+             .group = "button-line-1",
+             .on_change = []() {
+               renodx::utils::settings::ResetSettings();
+               renodx::utils::settings::UpdateSettings({
+                   {"ToneMapScaling", 0.f},
+                   {"SceneGradeSaturationCorrection", 50.f},
+                   {"SceneGradeHueCorrection", 100.f},
+               });
+             },
+         },
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+             .label = "RenoDX Discord",
+             .section = "Links",
+             .group = "button-line-2",
              .tint = 0x5865F2,
              .on_change = []() {
-               renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
+               renodx::utils::platform::LaunchURL("https://discord.gg/", "Ce9bQHQrSV");
+             },
+         },
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+             .label = "HDR Den Discord",
+             .section = "Links",
+             .group = "button-line-2",
+             .tint = 0x5865F2,
+             .on_change = []() {
+               renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+             },
+         },
+         new renodx::utils::settings::Setting{
+             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+             .label = "More Mods",
+             .section = "Links",
+             .group = "button-line-2",
+             .tint = 0x2B3137,
+             .on_change = []() {
+               renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
              },
          },
          new renodx::utils::settings::Setting{
              .value_type = renodx::utils::settings::SettingValueType::BUTTON,
              .label = "Github",
              .section = "Links",
-             .group = "button-line-1",
+             .group = "button-line-2",
+             .tint = 0x2B3137,
              .on_change = []() {
                renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
              },
@@ -301,7 +350,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
              .value_type = renodx::utils::settings::SettingValueType::BUTTON,
              .label = "Ritsu's Ko-Fi",
              .section = "Links",
-             .group = "button-line-1",
+             .group = "button-line-3",
              .tint = 0xFF5F5F,
              .on_change = []() {
                renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil");
@@ -311,7 +360,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
              .value_type = renodx::utils::settings::SettingValueType::BUTTON,
              .label = "ShortFuse's Ko-Fi",
              .section = "Links",
-             .group = "button-line-1",
+             .group = "button-line-3",
              .tint = 0xFF5F5F,
              .on_change = []() {
                renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
@@ -321,7 +370,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
              .value_type = renodx::utils::settings::SettingValueType::BUTTON,
              .label = "HDR Den's Ko-Fi",
              .section = "Links",
-             .group = "button-line-1",
+             .group = "button-line-3",
              .tint = 0xFF5F5F,
              .on_change = []() {
                renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
@@ -329,7 +378,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
          },
          new renodx::utils::settings::Setting{
              .value_type = renodx::utils::settings::SettingValueType::TEXT,
-             .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
+             .label = "Game mod by Ritsu, updated by Musa, RenoDX Framework by ShortFuse.",
              .section = "About",
          },
          new renodx::utils::settings::Setting{
@@ -350,6 +399,7 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 203.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
+      {"ToneMapHueCorrection", 0.f},
       {"ToneMapGammaCorrection", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
@@ -402,11 +452,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
-        auto param_count = params.size();
-
-        if (params.size() >= 20) return false;
-
-        return true;
+        return static_cast<bool>(params.size() < 20);
       };
 
       if (!initialized) {

@@ -46,8 +46,9 @@ float4 main(
   float4 _17 = t0.Sample(s0, float2(_15, _16));
 
   float3 ungraded = _17.rgb;
-  float3 ungraded_sdr = ToneMapMaxCLL(ungraded);
-  _17.rgb = ColorPicker(ungraded, ungraded_sdr);
+  // float3 ungraded_sdr = CustomGradingSDR(ungraded);
+  float4 ungraded_sdr = ColorGradingSDR(ungraded);
+  _17.rgb = ungraded_sdr.rgb;
   //  float _22 = abs(_17.x);
   //  float _23 = abs(_17.y);
   //  float _24 = abs(_17.z);
@@ -149,10 +150,7 @@ float4 main(
   SV_Target.w = _17.w;
 
   float3 graded_sdr = SV_Target.rgb;
-  //SV_Target.rgb = CustomUpgradeGrading(ungraded, ungraded_sdr, graded_sdr);
-  float3 hdr_grade = lerp(graded_sdr, ungraded, saturate(graded_sdr));
-  SV_Target.rgb = lerp(ungraded, hdr_grade, CUSTOM_LUT_STRENGTH);
-  //SV_Target.rgb = lerp(ungraded, graded_sdr, CUSTOM_LUT_STRENGTH);
-  //SV_Target.rgb = ungraded;
+  // SV_Target.rgb = CustomUpgradeGrading(ungraded, ungraded_sdr, graded_sdr);
+  SV_Target.rgb = lerp(ungraded, ColorGradeHDR(float4(SV_Target.rgb, ungraded_sdr.w)), CUSTOM_LUT_STRENGTH);
   return SV_Target;
 }

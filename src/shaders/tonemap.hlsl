@@ -1,14 +1,16 @@
 #ifndef SRC_SHADERS_TONEMAP_HLSL_
 #define SRC_SHADERS_TONEMAP_HLSL_
 
-#include "./aces.hlsl"
 #include "./colorcorrect.hlsl"
 #include "./colorgrade.hlsl"
 #include "./lut.hlsl"
-#include "./reinhard.hlsl"
-#include "./reno_drt.hlsl"
+#include "./tonemap/aces.hlsl"
 #include "./tonemap/daniele.hlsl"
+#include "./tonemap/dice.hlsl"
+#include "./tonemap/frostbite.hlsl"
 #include "./tonemap/hermite_spline.hlsl"
+#include "./tonemap/reinhard.hlsl"
+#include "./tonemap/reno_drt.hlsl"
 
 namespace renodx {
 namespace tonemap {
@@ -43,9 +45,25 @@ float SmoothClamp(float x) {
     return input + new_overage;                                                         \
   }
 
+/// Piecewise linear + exponential compression to a target value starting from a specified number.
+/// https://www.ea.com/frostbite/news/high-dynamic-range-color-grading-and-display-in-frostbite
+#define EXPONENTIALROLLOFF_CLIP_GENERATOR(T)                                         \
+  T ExponentialRollOff(T input, float rolloff_start, float output_max, float clip) { \
+    T rolloff_size = output_max - rolloff_start;                                     \
+    T overage = -max((T)0, input - rolloff_start);                                   \
+    T clip_size = rolloff_start - clip;                                              \
+    T rolloff_value = (T)1.0f - exp(overage / rolloff_size);                         \
+    T clip_value = (T)1.0f - exp(clip_size / rolloff_size);                          \
+    T new_overage = mad(rolloff_size, rolloff_value / clip_value, overage);          \
+    return input + new_overage;                                                      \
+  }
+
 EXPONENTIALROLLOFF_GENERATOR(float)
 EXPONENTIALROLLOFF_GENERATOR(float3)
+EXPONENTIALROLLOFF_CLIP_GENERATOR(float)
+EXPONENTIALROLLOFF_CLIP_GENERATOR(float3)
 #undef EXPONENTIALROLLOFF_GENERATOR
+#undef EXPONENTIALROLLOFF_CLIP_GENERATOR
 
 // Narkowicz
 float3 ACESFittedBT709(float3 color) {

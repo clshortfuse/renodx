@@ -23,11 +23,11 @@ float4 main(noperspective float4 SV_Position: SV_Position,
 
     float3 bt2020Color = renodx::color::bt2020::from::BT709(bt709Color.rgb);
 
-#if 1
+#if 0
     bt2020Color = ApplyDisplayMap(bt2020Color, whitePaperNits, displayMaxNits);
 #endif
 
-    float3 pqColor = renodx::color::pq::Encode(bt2020Color, whitePaperNits);
+    float3 pqColor = renodx::color::pq::Encode(bt2020Color, RENODX_GRAPHICS_WHITE_NITS);
 
     return float4(pqColor, 1.0);
   } else {

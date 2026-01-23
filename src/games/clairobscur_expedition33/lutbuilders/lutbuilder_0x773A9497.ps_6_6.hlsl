@@ -17,7 +17,8 @@ cbuffer WorkingColorSpace : register(b1) {
 float4 main(
     noperspective float2 TEXCOORD: TEXCOORD,
     noperspective float4 SV_Position: SV_Position,
-    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex) : SV_Target {
+    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex)
+    : SV_Target {
   uint output_gamut = OutputGamut;
   uint output_device = OutputDevice;
   float expand_gamut = ExpandGamut;
@@ -199,6 +200,11 @@ float4 main(
 
   // Will cause issues with grayscale scenes if moved above
   // SetUntonemappedAP1(_534, _536, _538);
+#if 1  // begin FilmToneMap with BlueCorrect
+  float _896, _897, _898;
+  ApplyFilmToneMapWithBlueCorrect(_534, _536, _538,
+                                  _896, _897, _898);
+#else
 
   float _574 = ((mad(0.061360642313957214f, _538, mad(-4.540197551250458e-09f, _536, (_534 * 0.9386394023895264f))) - _534) * BlueCorrection) + _534;
   float _575 = ((mad(0.169205904006958f, _538, mad(0.8307942152023315f, _536, (_534 * 6.775371730327606e-08f))) - _536) * BlueCorrection) + _536;
@@ -308,6 +314,8 @@ float4 main(
   float _898 = ((mad(0.9999996423721313f, _880, mad(2.0954757928848267e-08f, _879, (_878 * 1.862645149230957e-08f))) - _880) * BlueCorrection) + _880;
 #endif
 
+#endif
+
   // SetTonemappedAP1(_896, _897, _898);
 
   float _908 = max(0.0f, mad((WorkingColorSpace.FromAP1[0].z), _898, mad((WorkingColorSpace.FromAP1[0].y), _897, ((WorkingColorSpace.FromAP1[0].x) * _896))));
@@ -323,7 +331,7 @@ float4 main(
   if (GenerateOutput(_945, _946, _947, SV_Target, is_hdr)) {
     return SV_Target;
   }
-  
+
   float _948 = ColorScale.x * mad((WorkingColorSpace.FromAP1[0].z), _538, mad((WorkingColorSpace.FromAP1[0].y), _536, (_534 * (WorkingColorSpace.FromAP1[0].x))));
   float _949 = ColorScale.y * mad((WorkingColorSpace.FromAP1[1].z), _538, mad((WorkingColorSpace.FromAP1[1].y), _536, ((WorkingColorSpace.FromAP1[1].x) * _534)));
   float _950 = ColorScale.z * mad((WorkingColorSpace.FromAP1[2].z), _538, mad((WorkingColorSpace.FromAP1[2].y), _536, ((WorkingColorSpace.FromAP1[2].x) * _534)));

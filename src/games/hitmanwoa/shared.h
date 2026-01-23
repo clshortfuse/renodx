@@ -10,9 +10,9 @@
 #define RENODX_GRAPHICS_WHITE_NITS             100.f
 #define RENODX_TONE_MAP_HUE_SHIFT              0.f
 #define RENODX_GAMMA_CORRECTION                2.f
-#define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION 0.35f
+#define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION 0.f
 #define RENODX_TONE_MAP_EXPOSURE               1.f
-#define RENODX_TONE_MAP_HIGHLIGHTS             1.16f
+#define RENODX_TONE_MAP_HIGHLIGHTS             1.f
 #define RENODX_TONE_MAP_SHADOWS                1.f
 #define RENODX_TONE_MAP_CONTRAST               1.f
 #define RENODX_TONE_MAP_SATURATION             1.f

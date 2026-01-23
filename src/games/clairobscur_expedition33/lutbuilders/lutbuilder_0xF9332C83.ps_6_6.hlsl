@@ -22,7 +22,8 @@ SamplerState Samplers_1 : register(s0);
 float4 main(
     noperspective float2 TEXCOORD: TEXCOORD,
     noperspective float4 SV_Position: SV_Position,
-    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex) : SV_Target {
+    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex)
+    : SV_Target {
   uint output_gamut = OutputGamut;
   uint output_device = OutputDevice;
   float expand_gamut = ExpandGamut;
@@ -153,6 +154,12 @@ float4 main(
 
   // Will cause issues with grayscale scenes if moved above
   // SetUntonemappedAP1(_487, _489, _491);
+#if 1  // begin FilmToneMap with BlueCorrect
+  float _828, _829, _830;
+  ApplyFilmToneMapWithBlueCorrect(_487, _489, _491,
+                                  _828, _829, _830);
+
+#else
 
   float _506 = ((mad(0.061360642313957214f, _491, mad(-4.540197551250458e-09f, _489, (_487 * 0.9386394023895264f))) - _487) * BlueCorrection) + _487;
   float _507 = ((mad(0.169205904006958f, _491, mad(0.8307942152023315f, _489, (_487 * 6.775371730327606e-08f))) - _489) * BlueCorrection) + _489;
@@ -262,6 +269,7 @@ float4 main(
   float _830 = ((mad(0.9999996423721313f, _812, mad(2.0954757928848267e-08f, _811, (_810 * 1.862645149230957e-08f))) - _812) * BlueCorrection) + _812;
 #endif
 
+#endif
   // SetTonemappedAP1(_828, _829, _830);
 
   // Remove max(0)
@@ -307,7 +315,6 @@ float4 main(
   float _987 = ColorScale.y * (((MappingPolynomial.y + (MappingPolynomial.x * _959)) * _959) + MappingPolynomial.z);
   float _988 = ColorScale.z * (((MappingPolynomial.y + (MappingPolynomial.x * _960)) * _960) + MappingPolynomial.z);
 
-
   // Separate the lerp into their own temporaries, keeping the max in the final expressions.
   float _lerpR = lerp(_986, OverlayColor.x, OverlayColor.w);
   float _lerpG = lerp(_987, OverlayColor.y, OverlayColor.w);
@@ -321,8 +328,6 @@ float4 main(
   float _1010 = exp2(log2(max(0.0f, _lerpG)) * InverseGamma.y);
   float _1011 = exp2(log2(max(0.0f, _lerpB)) * InverseGamma.y);
 
-
-  
   if ((uint)(WorkingColorSpace.bIsSRGB) == 0) {
     float _1030 = mad((WorkingColorSpace.ToAP1[0].z), _1011, mad((WorkingColorSpace.ToAP1[0].y), _1010, ((WorkingColorSpace.ToAP1[0].x) * _1009)));
     float _1033 = mad((WorkingColorSpace.ToAP1[1].z), _1011, mad((WorkingColorSpace.ToAP1[1].y), _1010, ((WorkingColorSpace.ToAP1[1].x) * _1009)));

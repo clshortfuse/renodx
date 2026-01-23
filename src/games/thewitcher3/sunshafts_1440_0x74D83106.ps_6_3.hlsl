@@ -264,6 +264,28 @@ float4 main(
 
     if (!(int(CustomPixelConsts_064.z) == 0)) {
       float _895 = exp2(log2(1.0f - _127) * CustomPixelConsts_080.y) / (((_127 * _127) * CustomPixelConsts_080.z) + 1.0f);
+
+      // // --- START OF CHANGE ---
+
+      // // Original falloff calculation
+      // // float _1191 = exp2(log2(1.0f - _127) * CustomPixelConsts_080.y) / (((_127 * _127) * CustomPixelConsts_080.z) + 1.0f);
+
+      // // New falloff logic:
+      // // 1. Define a boost to make the sun center brighter. Higher values = brighter center.
+      // float brightness_boost = 2.0f;
+
+      // // 2. Define a falloff exponent. Higher values = sharper, more rapid falloff.
+      // float falloff_exponent = 30.0f;
+
+      // // 3. Calculate the new falloff factor using a strong power curve.
+      // // pow(1.0 - distance, exponent) creates a sharp curve that is 1.0 at the center and drops off quickly.
+      // float falloff_factor = pow(1.0f - _127, falloff_exponent);
+
+      // // 4. Apply the boost to the falloff factor.
+      // float _895 = falloff_factor * brightness_boost;
+
+      // // --- END OF CHANGE ---
+
       _900 = (_895 * _877);
       _901 = (_895 * _878);
       _902 = (_895 * _879);

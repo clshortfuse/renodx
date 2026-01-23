@@ -33,9 +33,13 @@ include(CTest)
 enable_testing()
 
 # Use executable to convert resources to .h files for embedding
-add_executable(embedfile embedfile.cpp)
+add_executable(embed_file src/embed_file.cpp)
+# Helper executable that analyzes HLSL #include dependencies and outputs .d files
+add_executable(analyze_hlsl_deps src/analyze_hlsl_deps.cpp)
 add_executable(decomp ./src/decompiler/cli.cpp)
 
+# DEPRECATED: inspect_hlsl_imports is no longer used - dependencies are tracked at build time via DEPFILE
+# Keeping for reference during transition
 function(inspect_hlsl_imports FILE VARIABLE REQUESTING_FILE)
   unset(CACHE_ENTRY)
   set(HLSL_CACHE_VAR HLSL_CACHE_${FILE})
@@ -58,6 +62,11 @@ function(inspect_hlsl_imports FILE VARIABLE REQUESTING_FILE)
         cmake_path(ABSOLUTE_PATH CMAKE_MATCH_1 BASE_DIRECTORY ${FILE_DIRECTORY} OUTPUT_VARIABLE HLSL_PATH)
         cmake_path(NORMAL_PATH HLSL_PATH)
         # message(${FILE} " - Direct dependency: " ${HLSL_PATH})
+        list(FIND CACHE_ENTRY "${HLSL_PATH}" _found_idx)
+        if(NOT _found_idx EQUAL -1)
+          # message(${FILE} " - Already in list: " ${HLSL_PATH})
+          continue()
+        endif()
         list(APPEND CACHE_ENTRY ${HLSL_PATH})
         #message(${FILE} " - Added: " ${HLSL_PATH})
         # message(${FILE} " - List: " ${CACHE_ENTRY})
@@ -193,17 +202,23 @@ function(build_shader_target ADDON ADDON_PATH)
         set(SHADER_FLAGS ${SHADER_FLAGS} /Gec)
 
         if(SHADER_HASH)
+          set(DEPFILE_DX11 ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_HASH}_dx11.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
+            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso ${DEPFILE_DX11}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
-            DEPENDS ${HLSL_DEPENDENCIES}
+            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPFILE ${DEPFILE_DX11}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso)
         else()
+          set(DEPFILE_DX11 ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_NAME}_dx11.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
+            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso ${DEPFILE_DX11}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
-            DEPENDS ${HLSL_DEPENDENCIES}
+            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPFILE ${DEPFILE_DX11}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso)
         endif()
@@ -214,17 +229,23 @@ function(build_shader_target ADDON ADDON_PATH)
         set(SHADER_FLAGS ${SHADER_FLAGS} /D __SHADER_TARGET_MINOR=1)
 
         if(SHADER_HASH)
+          set(DEPFILE_DX12 ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_HASH}_dx12.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
+            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso ${DEPFILE_DX12}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
-            DEPENDS ${HLSL_DEPENDENCIES}
+            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPFILE ${DEPFILE_DX12}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso)
         else()
+          set(DEPFILE_DX12 ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_NAME}_dx12.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
+            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso ${DEPFILE_DX12}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
-            DEPENDS ${HLSL_DEPENDENCIES}
+            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPFILE ${DEPFILE_DX12}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso)
         endif()
@@ -250,25 +271,25 @@ function(build_shader_target ADDON ADDON_PATH)
           endif()
         endif()
 
-        unset(HLSL_DEPENDENCIES)
-        unset(HLSL_CHILD_DEPENDENCIES)
-        list(APPEND HLSL_DEPENDENCIES ${FILE})
-        # message("Building HLSL dependencies for " ${FILE})
-        inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
-        list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
         if(SHADER_HASH)
           # message("Registering: " ${FILE} " => " ${EMBED_FOLDER}/${SHADER_HASH}.cso)
+          set(DEPFILE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_HASH}.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
+            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.cso ${DEPFILE}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
-            DEPENDS ${HLSL_DEPENDENCIES}
+            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPFILE ${DEPFILE}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.cso)
         else()
+          set(DEPFILE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_NAME}.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.cso
+            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}.cso ${DEPFILE}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}.cso
-            DEPENDS ${HLSL_DEPENDENCIES}
+            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPFILE ${DEPFILE}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.cso)
         endif()
@@ -449,11 +470,10 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
   endforeach()
 
-  unset(SHADERS_H_OUTPUT)
+  set(SHADERS_H_OUTPUT "#pragma once\n")
   list(LENGTH SHADER_BINARIES SHADER_BINARIES_LENGTH)
   if(SHADER_BINARIES_LENGTH GREATER 0)
 
-    string(APPEND SHADERS_H_OUTPUT "#pragma once\n")
 
     set(ANY_VERSION_SHADERS)
     set(DX11_SHADERS)
@@ -463,7 +483,7 @@ function(build_shader_target ADDON ADDON_PATH)
       cmake_path(GET FILE STEM LAST_ONLY FILENAME)
       add_custom_command(
         OUTPUT ${EMBED_FOLDER}/${FILENAME}.h
-        COMMAND embedfile ${FILE} ${EMBED_FOLDER}/${FILENAME}.h
+        COMMAND $<TARGET_FILE:embed_file> ${FILE} ${EMBED_FOLDER}/${FILENAME}.h
         DEPENDS ${FILE}
       )
       list(APPEND SHADER_HEADER_FILES ${EMBED_FOLDER}/${FILENAME}.h)
@@ -529,12 +549,12 @@ function(build_shader_target ADDON ADDON_PATH)
 
   endif()
 
-  list(JOIN SHADER_HEADER_FILES " " SHADER_HEADER_FILE_ITEMS)
+
+  set(SHADERS_H_FILE ${EMBED_FOLDER}/shaders.h)
+  file(GENERATE OUTPUT ${SHADERS_H_FILE} CONTENT "${SHADERS_H_OUTPUT}")
+
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
 
-  if(SHADERS_H_OUTPUT)
-    file(GENERATE OUTPUT ${EMBED_FOLDER}/shaders.h CONTENT "${SHADERS_H_OUTPUT}")
-  endif()
 endfunction()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)

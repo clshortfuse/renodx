@@ -84,7 +84,8 @@ void main(
   // r0.xyz = log2(r0.yzw);
   // r0.xyz = colorParams.xxx * r0.xyz;
   // o0.xyz = exp2(r0.xyz);
-  o0.rgb = renodx::color::gamma::DecodeSafe(r0.yzw, 1.f);
+  // o0.rgb = renodx::color::gamma::DecodeSafe(r0.yzw, 1.f);
+  o0.rgb = r0.yzw;
   o0.w = v3.w;
   return;
 }

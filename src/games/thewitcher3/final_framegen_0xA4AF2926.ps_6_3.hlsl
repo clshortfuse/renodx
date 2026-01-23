@@ -58,6 +58,9 @@ OutputSignature main(
   // float gamma = CustomPixelConsts_032.y * CustomPixelConsts_032.x;
   float gamma = 2.2f;
 
+  float game_alpha = _29.w;
+  float ui_alpha = _24.w;
+
   float3 gammaGameColor = _29.rgb;
   float3 linearGameColor = renodx::color::gamma::DecodeSafe(gammaGameColor, gamma);
   linearGameColor.xyz = ApplyRCAS(linearGameColor.xyz, TEXCOORD, t0, s1);
@@ -80,13 +83,12 @@ OutputSignature main(
   // float _42 = linearUiColor.y;
   // float _43 = linearUiColor.z;
 
-  float4 outputColor1;
-  outputColor1.rgb = ((linearUiColor - linearGameColor) * _24.w) + linearGameColor;
+  float4 outputColor1 = HandleUICompositing(float4(linearUiColor, ui_alpha), float4(linearGameColor, game_alpha));
 
   // outputColor.rgb = renodx::draw::SwapChainPass(outputColor.rgb);
   // outputColor.w = ((_24.w - _29.w) * _24.w) + _29.w;
-  outputColor1.w = lerp(_29.w, _24.w, _24.w);
-  outputColor1.w = renodx::math::SafePow(outputColor1.w, gamma);
+  //outputColor1.w = lerp(_29.w, _24.w, _24.w);
+  outputColor1.w = renodx::math::SafePow(outputColor1.w, 1.f / gamma);
 
   // SV_Target = outputColor;
   SV_Target_1.rgb = renodx::color::gamma::EncodeSafe(outputColor1.rgb, gamma);
@@ -197,12 +199,14 @@ OutputSignature main(
 
     outputColor = float4(_140, _141, _142, _143);
   } else {
-    intermediateColor.w = saturate(_24.w * 2.0f);
-    intermediateColor.xyz = linearGameColor.xyz;
+    outputColor = HandleUICompositing(float4(linearUiColor, ui_alpha), float4(linearGameColor, game_alpha));
 
-    intermediateColor.xyz *= -0.6699999570846558f;
-    intermediateColor.xyz *= intermediateColor.w;
-    intermediateColor.xyz += linearGameColor;
+    // intermediateColor.w = saturate(_24.w * 2.0f);
+    // intermediateColor.xyz = linearGameColor.xyz;
+
+    // intermediateColor.xyz *= -0.6699999570846558f;
+    // intermediateColor.xyz *= intermediateColor.w;
+    // intermediateColor.xyz += linearGameColor;
 
     // intermediateColor.xyz = CustomTonemap(intermediateColor.xyz);
     // intermediateColor.xyz = renodx::effects::ApplyFilmGrain(
@@ -214,11 +218,11 @@ OutputSignature main(
 
     //blend game + ui
 
-    outputColor.xyz = linearUiColor - intermediateColor.xyz;
-    outputColor.w = _24.w + -1.0f;
-    outputColor *= _24.w;
-    outputColor.xyz += intermediateColor.xyz;
-    outputColor.w += 1.0f;
+    // outputColor.xyz = linearUiColor - intermediateColor.xyz;
+    // outputColor.w = _24.w + -1.0f;
+    // outputColor *= _24.w;
+    // outputColor.xyz += intermediateColor.xyz;
+    // outputColor.w += 1.0f;
 
     // float _116 = _24.w * 2.0f;
     // float _117 = saturate(_116);

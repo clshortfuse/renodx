@@ -85,18 +85,18 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(float3 tonemapp
       float3 perceptual_old = renodx::color::oklab::from::BT709(renodx::color::bt709::from::AP1(hue_reference_color));
 
       if (hue_correct_ignore_highlights) {
-        float highlight_rolloff = saturate((1.f - perceptual_old.x) / 0.1f);  // roll off strength from 0.9 - 1.0
-        highlight_rolloff *= highlight_rolloff;  // keep transition smooth
+        float highlight_rolloff = saturate((1.f - perceptual_old.x) / 0.18f);  // roll off from 0.18 - 1.0
+        highlight_rolloff *= highlight_rolloff;                                // keep transition smooth
         hue_correction_strength *= highlight_rolloff;
       }
 
-        // Save chrominance to apply black
-        float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
-        perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, hue_correction_strength);
-        float chrominance_post_adjust = distance(perceptual_new.yz, 0);
+      // Save chrominance to apply black
+      float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
+      perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, hue_correction_strength);
+      float chrominance_post_adjust = distance(perceptual_new.yz, 0);
 
-        // Apply back previous chrominance
-        perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
+      // Apply back previous chrominance
+      perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
     }
 
     if (config.dechroma != 0.f) {

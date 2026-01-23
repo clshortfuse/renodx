@@ -23,9 +23,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
+<<<<<<< HEAD
 const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
 
+=======
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
 float current_settings_mode = 0;
 
 renodx::utils::settings::Settings settings = {
@@ -43,12 +46,17 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+<<<<<<< HEAD
         .default_value = 2.f,
+=======
+        .default_value = 3.f,
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
         .labels = {"Vanilla", "RenoDRT"},
+<<<<<<< HEAD
         .parse = [](float value) { return value * 3.f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -65,6 +73,11 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
+=======
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
         .default_value = 1000.f,
@@ -116,7 +129,11 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
+<<<<<<< HEAD
         .is_visible = []() { return false; },
+=======
+        .is_visible = []() { return current_settings_mode >= 2; },
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapWorkingColorSpace",
@@ -286,6 +303,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+<<<<<<< HEAD
         .key = "fxRCASSharpening",
         .binding = &shader_injection.fx_rcas_sharpening,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -318,6 +336,8 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Hidden", "Visible"},
     },
     new renodx::utils::settings::Setting{
+=======
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
         .key = "SwapChainCustomColorSpace",
         .binding = &shader_injection.swap_chain_custom_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -370,7 +390,11 @@ renodx::utils::settings::Settings settings = {
         .key = "SwapChainGammaCorrection",
         .binding = &shader_injection.swap_chain_gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+<<<<<<< HEAD
         .default_value = 1.f,
+=======
+        .default_value = 0.f,
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
         .label = "UI Gamma Correction",
         .section = "Display Output",
         .labels = {"None", "2.2", "2.4"},
@@ -389,6 +413,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value - 1.f; },
         .is_visible = []() { return false; },
     },
+<<<<<<< HEAD
     new renodx::utils::settings::Setting{
         .key = "VideoAutoHDR",
         .binding = &shader_injection.tone_map_hdr_video,
@@ -424,6 +449,8 @@ renodx::utils::settings::Settings settings = {
         .label = "This build was compiled on " + build_date + " at " + build_time + ".",
         .section = "About",
     },
+=======
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
 };
 
 const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
@@ -471,7 +498,10 @@ void OnPresent(reshade::api::command_queue* queue,
   if (device->get_api() == reshade::api::device_api::opengl) {
     shader_injection.custom_flip_uv_y = 1.f;
   }
+<<<<<<< HEAD
 
+=======
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
 }
 
 bool initialized = false;
@@ -526,7 +556,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               },
               .on_change_value = [](float previous, float current) { renodx::mods::swapchain::force_borderless = (current == 1.f); },
               .is_global = true,
+<<<<<<< HEAD
               .is_visible = []() { return false; },
+=======
+              .is_visible = []() { return current_settings_mode >= 2; },
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
@@ -547,7 +581,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               },
               .on_change_value = [](float previous, float current) { renodx::mods::swapchain::prevent_full_screen = (current == 1.f); },
               .is_global = true,
+<<<<<<< HEAD
               .is_visible = []() { return false; },
+=======
+              .is_visible = []() { return current_settings_mode >= 2; },
+>>>>>>> f3a07e08b66183473369bb4bb2b60924ccbc1fd4
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           renodx::mods::swapchain::prevent_full_screen = (setting->GetValue() == 1.f);

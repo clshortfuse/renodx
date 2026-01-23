@@ -19,11 +19,11 @@ float4 main(
 #if 1
   const float diffuse_white = whitePaperNits;
   float3 bt709Color = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f).rgb;
-#if GAMMA_CORRECTION
-  bt709Color = GammaCorrectHuePreserving(bt709Color);
+#if 1
+  bt709Color = ApplyGammaCorrection(bt709Color);
 #endif
 
-  float3 bt2020Color = max(0.f, renodx::color::bt2020::from::BT709(bt709Color.rgb));
+  float3 bt2020Color = renodx::color::bt2020::from::BT709(bt709Color.rgb);
 
 #if 1
   bt2020Color = ApplyDisplayMap(bt2020Color, diffuse_white, displayMaxNits);

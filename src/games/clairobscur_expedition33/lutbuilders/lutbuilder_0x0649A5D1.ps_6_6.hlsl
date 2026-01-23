@@ -22,7 +22,8 @@ SamplerState Samplers_1 : register(s0);
 float4 main(
     noperspective float2 TEXCOORD: TEXCOORD,
     noperspective float4 SV_Position: SV_Position,
-    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex) : SV_Target {
+    nointerpolation uint SV_RenderTargetArrayIndex: SV_RenderTargetArrayIndex)
+    : SV_Target {
   uint output_gamut = OutputGamut;
   uint output_device = OutputDevice;
   float expand_gamut = ExpandGamut;
@@ -220,6 +221,11 @@ float4 main(
 
   // Will cause issues with grayscale scenes if moved above
   // SetUntonemappedAP1(_740, _742, _744);
+#if 1  // begin FilmToneMap with BlueCorrect
+  float _1081, _1082, _1083;
+  ApplyFilmToneMapWithBlueCorrect(_740, _742, _744,
+                                  _1081, _1082, _1083);
+#else
 
   float _759 = ((mad(0.061360642313957214f, _744, mad(-4.540197551250458e-09f, _742, (_740 * 0.9386394023895264f))) - _740) * BlueCorrection) + _740;
   float _760 = ((mad(0.169205904006958f, _744, mad(0.8307942152023315f, _742, (_740 * 6.775371730327606e-08f))) - _742) * BlueCorrection) + _742;
@@ -330,6 +336,7 @@ float4 main(
   float _1083 = ((mad(0.9999996423721313f, _1065, mad(2.0954757928848267e-08f, _1064, (_1063 * 1.862645149230957e-08f))) - _1065) * BlueCorrection) + _1065;
 #endif
 
+#endif
   // SetTonemappedAP1(_1081, _1082, _1083);
 
   /* float _1108 = saturate(max(0.0f, mad((WorkingColorSpace.FromAP1[0].z), _1083, mad((WorkingColorSpace.FromAP1[0].y), _1082, ((WorkingColorSpace.FromAP1[0].x) * _1081)))));
@@ -381,7 +388,7 @@ float4 main(
   if (GenerateOutput(_1265, _1266, _1267, SV_Target, is_hdr)) {
     return SV_Target;
   }
-  
+
   // Apply gamma correction to each component
   float _1262 = exp2(log2(max(0.0f, _1265)) * InverseGamma.y);
   float _1263 = exp2(log2(max(0.0f, _1266)) * InverseGamma.y);

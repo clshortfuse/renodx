@@ -130,8 +130,6 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
   float3 lut_output_color = SamplePacked1DLut(lut_input_color, lut_config.lut_sampler, lut_texture);
   float3 color_output = renodx::lut::LinearOutput(lut_output_color, lut_config);
 
-  color_output = GamutDecompress(color_output, gamut_compression_scale);
-
   [branch]
   if (lut_config.scaling != 0.f) {
     float3 lut_black = SamplePacked1DLut(float3(0, 0, 0), lut_config.lut_sampler, lut_texture);
@@ -146,7 +144,7 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
       }
 #endif
 
-      // set lut_mid based on lut_black_linear to target shadows more
+      // set lut_mid based on lut_black to target shadows more
       float3 lut_mid = SamplePacked1DLut(lut_black, lut_config.lut_sampler, lut_texture);
 
       if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
@@ -172,6 +170,8 @@ float3 SampleLUTSRGBInSRGBOut(Texture2D<float4> lut_texture, SamplerState lut_sa
     }
   } else {
   }
+
+  color_output = GamutDecompress(color_output, gamut_compression_scale);
 
   return color_output;
 }

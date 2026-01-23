@@ -119,7 +119,7 @@ renodx::utils::settings::Settings settings = {
         .label = "SDR EOTF Emulation",
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF (use with HDR or sRGB)",
-        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminance with Per Channel Chrominance)"},
+        .labels = {"Off", "2.2 (Per Channel)", "2.2 (Per Channel, Hue Preserving)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
@@ -327,6 +327,15 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Clamp the strength of lens flares",
     },
     new renodx::utils::settings::Setting{
+        .key = "LUTSmoothing",
+        .binding = &shader_injection.custom_lut_smoothing,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "LUT Smoothing",
+        .section = "Advanced",
+        .tooltip = "Reduces banding in the LUT by averaging neighboring samples",
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -430,6 +439,7 @@ void OnPresetOff() {
       {"HueShiftFire", 0.f},
       {"BoostSky", 0.f},
       {"ClampLensFlare", 0.f},
+      {"LUTSmoothing", 0.f},
   });
 }
 
