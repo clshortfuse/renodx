@@ -1,6 +1,6 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Jan 22 01:56:42 2026
 
-// main uberpost 
+// lutbuilder isnt clamping, nothing needed to be done 
 
 Texture2D<float4> t7 : register(t7);
 

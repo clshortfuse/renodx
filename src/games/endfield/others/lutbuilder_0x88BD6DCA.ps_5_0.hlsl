@@ -1,8 +1,4 @@
-// ---- Created with 3Dmigoto v1.3.16 on Wed Nov 26 20:49:47 2025
-
-// Lutbuilder - not being used right now but included for completeness
-#include "../shared.h"
-
+// ---- Created with 3Dmigoto v1.3.16 on Thu Jan 22 21:41:37 2026
 Texture2D<float4> t7 : register(t7);
 
 Texture2D<float4> t6 : register(t6);
@@ -33,6 +29,8 @@ cbuffer cb0 : register(b0)
 #define cmp -
 
 
+#include "../shared.h"
+
 void main(
   float4 v0 : SV_Position0,
   float2 v1 : TEXCOORD0,
@@ -41,6 +39,8 @@ void main(
   float4 r0,r1,r2,r3,r4,r5;
   uint4 bitmask, uiDest;
   float4 fDest;
+  
+
   r0.yz = -cb0[2].yz + v1.xy;
   r1.x = cb0[2].x * r0.y;
   r0.x = frac(r1.x);
@@ -58,16 +58,36 @@ void main(
   r1.x = dot(float3(2.85846996,-1.62879002,-0.0248910002), r0.xyz);
   r1.y = dot(float3(-0.210181996,1.15820003,0.000324280991), r0.xyz);
   r1.z = dot(float3(-0.0418119989,-0.118169002,1.06867003), r0.xyz);
-  r0.xyz = r1.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
+  r0.x = dot(float3(0.439700991,0.382977992,0.177334994), r1.xyz);
+  r0.y = dot(float3(0.0897922963,0.813422978,0.0967615992), r1.xyz);
+  r0.z = dot(float3(0.0175439995,0.111543998,0.870703995), r1.xyz);
   r0.xyz = max(float3(0,0,0), r0.xyz);
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(-0.0275523961,-0.0275523961,-0.0275523961);
-  r0.xyz = r0.xyz * cb0[8].zzz + float3(0.0275523961,0.0275523961,0.0275523961);
-  r0.xyz = float3(13.6054821,13.6054821,13.6054821) * r0.xyz;
-  r0.xyz = exp2(r0.xyz);
-  r0.xyz = float3(-0.0479959995,-0.0479959995,-0.0479959995) + r0.xyz;
+  r0.xyz = min(float3(65504,65504,65504), r0.xyz);
+  r1.xyz = r0.xyz * float3(0.5,0.5,0.5) + float3(1.525878e-005,1.525878e-005,1.525878e-005);
+  r1.xyz = log2(r1.xyz);
+  r1.xyz = float3(9.72000027,9.72000027,9.72000027) + r1.xyz;
+  r1.xyz = float3(0.0570776239,0.0570776239,0.0570776239) * r1.xyz;
+  r2.xyz = log2(r0.xyz);
+  r0.xyz = cmp(r0.xyz < float3(3.05175708e-005,3.05175708e-005,3.05175708e-005));
+  r2.xyz = float3(9.72000027,9.72000027,9.72000027) + r2.xyz;
+  r2.xyz = float3(0.0570776239,0.0570776239,0.0570776239) * r2.xyz;
+  r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
+  r0.xyz = float3(-0.413588405,-0.413588405,-0.413588405) + r0.xyz;
+  r0.xyz = r0.xyz * cb0[8].zzz + float3(0.413588405,0.413588405,0.413588405);
+  r1.xyzw = cmp(r0.xxyy < float4(-0.301369876,1.46799648,-0.301369876,1.46799648));
+  r0.xyw = r0.xyz * float3(17.5200005,17.5200005,17.5200005) + float3(-9.72000027,-9.72000027,-9.72000027);
+  r2.xy = cmp(r0.zz < float2(-0.301369876,1.46799648));
+  r0.xyz = exp2(r0.xyw);
+  r1.yw = r1.yw ? r0.xy : float2(65504,65504);
+  r0.xyw = float3(-1.52587891e-005,-1.52587891e-005,-1.52587891e-005) + r0.xyz;
+  r0.z = r2.y ? r0.z : 65504;
+  r0.xyw = r0.xyw + r0.xyw;
+  r1.xy = r1.xz ? r0.xy : r1.yw;
+  r1.z = r2.x ? r0.w : r0.z;
+  r0.x = dot(float3(1.45143926,-0.236510754,-0.214928567), r1.xyz);
+  r0.y = dot(float3(-0.0765537769,1.17622972,-0.0996759236), r1.xyz);
+  r0.z = dot(float3(0.00831614807,-0.00603244966,0.997716308), r1.xyz);
   r0.xyz = cb0[4].xyz * r0.xyz;
-  r0.xyz = float3(0.179999992,0.179999992,0.179999992) * r0.xyz;
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = log2(r0.xyz);
   r0.xyz = float3(0.454545468,0.454545468,0.454545468) * r0.xyz;
@@ -76,7 +96,7 @@ void main(
   r2.xyz = r0.xyz * r0.xyz;
   r3.xyz = min(float3(1,1,1), r0.xyz);
   r0.xyz = sqrt(r0.xyz);
-  r0.w = dot(r3.xyz, float3(0.212672904,0.715152204,0.0721750036));
+  r0.w = dot(r3.xyz, float3(0.272228986,0.674081981,0.0536894985));
   r0.w = saturate(cb0[16].w + r0.w);
   r1.w = 1 + -r0.w;
   r3.xyz = cb0[16].xyz + float3(-0.5,-0.5,-0.5);
@@ -117,7 +137,7 @@ void main(
   r1.y = dot(r0.xyz, cb0[6].xyz);
   r1.z = dot(r0.xyz, cb0[7].xyz);
   r0.xyz = cb0[13].xyz * r1.xyz;
-  r0.w = dot(r1.xyz, float3(0.212672904,0.715152204,0.0721750036));
+  r0.w = dot(r1.xyz, float3(0.272228986,0.674081981,0.0536894985));
   r2.xy = -cb0[15].xz + r0.ww;
   r2.zw = cb0[15].yw + -cb0[15].xz;
   r2.zw = float2(1,1) / r2.zw;
@@ -184,7 +204,7 @@ void main(
   r2.x = r1.x / r0.y;
   r1.xyz = r2.xxx * r1.yzw + float3(1,1,1);
   r3.xyz = r1.xyz * r0.xxx;
-  r0.y = dot(r3.xyz, float3(0.212672904,0.715152204,0.0721750036));
+  r0.y = dot(r3.xyz, float3(0.272228986,0.674081981,0.0536894985));
   r1.xyz = r1.xyz * r0.xxx + -r0.yyy;
   r2.yw = float2(0,0);
   r0.x = t6.SampleLevel(s0_s, r2.xy, 0).x;
@@ -216,10 +236,51 @@ void main(
   r0.x = max(r0.x, r1.z);
   r0.x = 1 + -r0.x;
   r0.x = 1 / r0.x;
-  o0.xyz = r1.xyz * r0.xxx;
+  r0.xyz = r1.xyz * r0.xxx;
+ /*
+  r1.xyz = r0.xyz * float3(2.93604493,2.93604493,2.93604493) + float3(0.887121975,0.887121975,0.887121975);
+  r1.xyz = r0.xyz * r1.xyz + float3(0.806888998,0.806888998,0.806888998);
+  r1.xyz = float3(1,1,1) / r1.xyz;
+  r1.xyz = max(float3(9.99999975e-005,9.99999975e-005,9.99999975e-005), r1.xyz);
+  r2.xyz = r0.xyz * float3(2.78508496,2.78508496,2.78508496) + float3(0.107772,0.107772,0.107772);
+  r2.xyz = r2.xyz * r0.xyz;
+  r0.yzw = r2.xyz * r1.xyz;
+  r0.yzw = min(float3(1, 1, 1), r0.yzw);
+*/
+  float3 untonemapped = r0.xyz;
+  const float a = 2.785085;
+  const float b = 0.107772;
+  const float c = 2.936045;
+  const float d = 0.887122;
+  const float e = 0.806889;
 
-  // Add ToneMapPass and output
-  // o0.xyz = renodx::draw::ToneMapPass(o0.xyz);
+  float3 tonemapped = (untonemapped * (a * untonemapped + b)) / (untonemapped * (c * untonemapped + d) + e);
+
+  const float divergence_point = 0.267010625;
+  float3 linear_extension = 0.9174704430474515 * untonemapped - 0.06355161968502177;
+
+  tonemapped = renodx::math::Select(untonemapped < divergence_point, tonemapped, linear_extension);
+
+  r0.yzw = tonemapped;
+  r0.x = dot(r0.xyz, float3(0.272228986,0.674081981,0.0536894985));
+  r0.x = -0.5 + r0.x;
+  r0.x = saturate(0.666666687 * r0.x);
+  r1.x = dot(r0.yzw, float3(0.272228986,0.674081981,0.0536894985));
+  r0.yzw = -r1.xxx + r0.yzw;
+  r0.yzw = r0.yzw * float3(0.930000007,0.930000007,0.930000007) + r1.xxx;
+
+  r1.x = dot(float3(1.70505154,-0.621790707,-0.083258681), r0.yzw);
+  r1.y = dot(float3(-0.130257145,1.14080286,-0.0105481902), r0.yzw);
+  r1.z = dot(float3(-0.0240032692,-0.128968775,1.15297163), r0.yzw);
+  /*
+  r0.y = max(r1.x, r1.y);
+  r0.y = max(r0.y, r1.z);
+  r0.y = max(9.99999975e-006, r0.y);
+  r0.yzw = r1.xyz / r0.yyy;
+  */
+  r0.yzw = r0.yzw + -r1.xyz;
+  o0.xyz = r0.xxx * r0.yzw + r1.xyz;
+  
   o0.w = 1;
   return;
 }
