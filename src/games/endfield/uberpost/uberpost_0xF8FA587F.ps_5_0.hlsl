@@ -110,8 +110,13 @@ void main(
     o0.xyz = renodx::tonemap::ExponentialRollOff(max(0, graded), 0.18f, 1.f);
   } else {
     o0.xyz = renodx::draw::ToneMapPass(graded);
-  }
-  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
+  }  if (CUSTOM_GRAIN_STRENGTH > 0) {
+    o0.xyz = renodx::effects::ApplyFilmGrain(
+        o0.xyz,
+        v1.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_GRAIN_STRENGTH * 0.03f);
+  }  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   o0.w = min(1, r0.w);
   return;
 }
