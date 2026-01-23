@@ -179,6 +179,13 @@ void main(
   } else {
     o0.xyz = renodx::draw::ToneMapPass(graded);
   }
+  if (CUSTOM_GRAIN_STRENGTH > 0) {
+    o0.xyz = renodx::effects::ApplyFilmGrain(
+        o0.xyz,
+        v1.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_GRAIN_STRENGTH * 0.03f);
+  }
   o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   o0.w = min(1, r1.w);
   return;
