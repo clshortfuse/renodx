@@ -2,8 +2,8 @@
 #define SRC_SHADERS_MATH_HLSL_
 
 #include "./math/constants.hlsl"
-#include "./math/select.hlsl"
 #include "./math/cross.hlsl"
+#include "./math/select.hlsl"
 #include "./math/sign.hlsl"
 
 START_NAMESPACE(renodx)
@@ -148,6 +148,34 @@ float3x3 Invert3x3(float3x3 m) {
              C, F, I)
          * invDet;
 }
+
+#if __SHADER_TARGET_MAJOR >= 4 || defined(VULKAN)
+float ZeroNaN(float x) {
+  return Select(isnan(x), 0.f, x);
+}
+float2 ZeroNaN(float2 x) {
+  return Select(isnan(x), 0.f, x);
+}
+float3 ZeroNaN(float3 x) {
+  return Select(isnan(x), 0.f, x);
+}
+float4 ZeroNaN(float4 x) {
+  return Select(isnan(x), 0.f, x);
+}
+#else
+float ZeroNaN(float x) {
+  return Select(x != x, 0.f, x);
+}
+float2 ZeroNaN(float2 value) {
+  return float2(ZeroNaN(value.x), ZeroNaN(value.y));
+}
+float3 ZeroNaN(float3 value) {
+  return float3(ZeroNaN(value.x), ZeroNaN(value.y), ZeroNaN(value.z));
+}
+float4 ZeroNaN(float4 value) {
+  return float4(ZeroNaN(value.x), ZeroNaN(value.y), ZeroNaN(value.z), ZeroNaN(value.w));
+}
+#endif
 
 END_NAMESPACE(math)
 END_NAMESPACE(renodx)
