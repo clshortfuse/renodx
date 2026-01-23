@@ -123,6 +123,7 @@ void main(
   r1.xyz = -r2.zxy * cb0[109].xxx + r1.xyz;
   r0.xyz = cb1[9].xxx * r1.xyz + r0.xyz;
   r0.xyz = cb1[7].www * r0.xyz;
+  /* Original Code
   // Define untonemapped
   float3 untonemapped = r0.yzx;
   r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
@@ -158,6 +159,26 @@ void main(
   // sRGB Decode and output
   o0.xyz = renodx::color::srgb::Decode(o0.xyz);
   o0.xyz = renodx::draw::ToneMapPass(untonemapped, o0.xyz);
+  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
+  o0.w = min(1, r1.w);
+  return;
+  */
+  renodx::lut::Config lut_config = renodx::lut::config::Create(
+      s0_s,
+      shader_injection.color_grade_strength,
+      0.f,
+      renodx::lut::config::type::ARRI_C1000_NO_CUT,
+      renodx::lut::config::type::LINEAR,
+      cb1[7].xyz
+    );
+  float3 graded = renodx::lut::Sample(t2, lut_config, r0.yzx);
+  
+  [branch]
+  if (shader_injection.tone_map_type == 0.f) {
+    o0.xyz = renodx::tonemap::ExponentialRollOff(max(0, graded), 0.18f, 1.f);
+  } else {
+    o0.xyz = renodx::draw::ToneMapPass(graded);
+  }
   o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   o0.w = min(1, r1.w);
   return;

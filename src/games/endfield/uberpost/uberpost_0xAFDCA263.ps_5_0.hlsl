@@ -154,53 +154,23 @@ void main(
   r0.xyz = -r0.xyz * cb0[109].xxx + r2.xyz;
   r0.xyz = cb1[9].xxx * r0.xyz + r1.xyz;
   r0.xyz = cb1[7].www * r0.xyz;  
+  renodx::lut::Config lut_config = renodx::lut::config::Create(
+      s0_s,
+      shader_injection.color_grade_strength,
+      0.f,
+      renodx::lut::config::type::ARRI_C1000_NO_CUT,
+      renodx::lut::config::type::LINEAR,
+      cb1[7].xyz
+    );
+  float3 graded = renodx::lut::Sample(t2, lut_config, r0.yzx);
+  
   [branch]
   if (shader_injection.tone_map_type == 0.f) {
-    r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
-  r0.xyz = max(float3(0,0,0), r0.xyz);
-  r0.xyz = log2(r0.xyz);
-  r0.xyz = saturate(r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
-  r0.yzw = cb1[7].zzz * r0.xyz;
-  r0.y = floor(r0.y);
-  r1.xy = cb1[7].xy * float2(0.5,0.5);
-  r1.yz = r0.zw * cb1[7].xy + r1.xy;
-  r1.x = r0.y * cb1[7].y + r1.y;
-  r2.xyz = t2.SampleLevel(s0_s, r1.xz, 0).xyz;
-  r3.x = cb1[7].y;
-  r3.y = 0;
-  r0.zw = r3.xy + r1.xz;
-  r1.xyz = t2.SampleLevel(s0_s, r0.zw, 0).xyz;
-  r0.x = r0.x * cb1[7].z + -r0.y;
-  r0.yzw = r1.xyz + -r2.xyz;
-  r0.xyz = r0.xxx * r0.yzw + r2.xyz;
-  r1.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
-  r2.xyz = log2(abs(r0.xyz));
-  r2.xyz = float3(0.416666657,0.416666657,0.416666657) * r2.xyz;
-  r2.xyz = exp2(r2.xyz);
-  r2.xyz = r2.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
-  r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
-  r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
-  r1.xy = cb0[82].xy * v1.xy;
-  r0.w = dot(float2(171,231), r1.xy);
-  r1.xyz = float3(0.00970873795,0.0140845068,0.010309278) * r0.www;
-  r1.xyz = frac(r1.xyz);
-  r1.xyz = float3(-0.5,-0.5,-0.5) + r1.xyz;
-  o0.xyz = r1.xyz * float3(0.0013725491,0.0013725491,0.0013725491) + r0.xyz;
-
-  
+    o0.xyz = renodx::tonemap::ExponentialRollOff(max(0, graded), 0.18f, 1.f);
   } else {
-    renodx::lut::Config lut_config = renodx::lut::config::Create(
-        s0_s,
-        shader_injection.color_grade_strength,
-        0.f,
-        renodx::lut::config::type::ARRI_C1000_NO_CUT,
-        renodx::lut::config::type::LINEAR
-    );
-
-    float3 graded = renodx::lut::Sample(t2, lut_config, r0.yzx);
-    o0.xyz = renodx::draw::ToneMapPass(r0.yzx, graded);
-    o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
+    o0.xyz = renodx::draw::ToneMapPass(graded);
   }
+  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   o0.w = min(1, r1.w);
   return;
 }
