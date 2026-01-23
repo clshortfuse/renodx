@@ -226,6 +226,8 @@ void main(
   r0.w = log2(r0.w);
   r0.w = cb1[2].y * r0.w;
   r0.w = exp2(r0.w);
+  float vignette_value = lerp(1.0, r0.w, VIGNETTE_STRENGTH);
+  r0.w = 1.0; // Disable original vignette, apply after tonemapping
   r1.xyz = -cb1[4].zxy + float3(1,1,1);
   r1.xyz = r0.www * r1.xyz + cb1[4].zxy;
   r0.xyz = r1.xyz * r0.xyz;
@@ -245,6 +247,15 @@ void main(
     o0.xyz = renodx::tonemap::ExponentialRollOff(max(0, graded), 0.18f, 1.f);
   } else {
     o0.xyz = renodx::draw::ToneMapPass(graded);
+  }
+  // Apply vignette after tonemapping
+  o0.xyz *= vignette_value;
+  if (CUSTOM_GRAIN_STRENGTH > 0) {
+    o0.xyz = renodx::effects::ApplyFilmGrain(
+        o0.xyz,
+        v1.xy,
+        CUSTOM_RANDOM,
+        CUSTOM_GRAIN_STRENGTH * 0.03f);
   }
   o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   o0.w = min(1, r1.w);

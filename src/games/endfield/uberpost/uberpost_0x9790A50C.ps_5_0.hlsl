@@ -1,11 +1,16 @@
-// ---- Created with 3Dmigoto v1.3.16 on Wed Jan 21 21:30:43 2026
+// ---- Created with 3Dmigoto v1.3.16 on Fri Jan 23 01:44:52 2026
+
 #include "../shared.h"
+
+Texture2D<float4> t3 : register(t3);
 
 Texture2D<float4> t2 : register(t2);
 
 Texture2D<float4> t1 : register(t1);
 
 Texture2D<float4> t0 : register(t0);
+
+SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
@@ -67,7 +72,7 @@ void main(
   r0.x = 1.0; // Disable original vignette, apply after tonemapping
   r0.yzw = -cb1[4].zxy + float3(1,1,1);
   r0.xyz = r0.xxx * r0.yzw + cb1[4].zxy;
-  r1.xyz = t1.SampleLevel(s0_s, v1.xy, 0).xyz;
+  r1.xyz = t1.SampleLevel(s1_s, v1.xy, 0).xyz;
   r2.xyz = log2(r1.zxy);
   r2.xyz = float3(0.330000013,0.330000013,0.330000013) * r2.xyz;
   r2.xyz = exp2(r2.xyz);
@@ -76,7 +81,7 @@ void main(
   r3.xyz = r1.zxy * r0.www;
   r3.xyz = cmp(float3(0.300000012,0.300000012,0.300000012) < r3.xyz);
   r1.xyz = r3.xyz ? r2.xyz : r1.zxy;
-  r2.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
+  r2.xyzw = t0.SampleLevel(s1_s, v1.xy, 0).xyzw;
   r3.xyz = cb0[109].xxx * r2.zxy;
   r0.w = max(r3.y, r3.z);
   r0.w = max(r0.w, r3.x);
@@ -94,11 +99,54 @@ void main(
   r1.xyz = -r2.zxy * cb0[109].xxx + r1.xyz;
   o0.w = min(1, r2.w);
   r1.xyz = cb1[9].xxx * r1.xyz + r3.xyz;
+  r2.xyz = t3.SampleLevel(s0_s, v1.xy, 0).xyz;
+  r0.w = min(r2.x, r2.y);
+  r0.w = min(r0.w, r2.z);
+  r2.xyz = float3(-1,-1,-1) + r2.zxy;
+  r0.w = -0.200000003 + r0.w;
+  r0.w = cmp(r0.w >= 0);
+  r0.w = r0.w ? 1.000000 : 0;
+  r1.w = saturate(cb1[3].x * 3 + -2);
+  r1.w = -cb1[3].x + r1.w;
+  r0.w = r0.w * r1.w + cb1[3].x;
+  r2.xyz = r0.www * r2.xyz + float3(1,1,1);
+  r1.xyz = r2.xyz * r1.xyz;
   r0.xyz = r1.xyz * r0.xyz;
+  /*
   r0.xyz = cb1[7].www * r0.xyz;
-
+  r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
+  r0.xyz = max(float3(0,0,0), r0.xyz);
+  r0.xyz = log2(r0.xyz);
+  r0.xyz = saturate(r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
+  r0.yzw = cb1[7].zzz * r0.xyz;
+  r0.y = floor(r0.y);
+  r0.x = r0.x * cb1[7].z + -r0.y;
+  r1.xy = cb1[7].xy * float2(0.5,0.5);
+  r1.yz = r0.zw * cb1[7].xy + r1.xy;
+  r1.x = r0.y * cb1[7].y + r1.y;
+  r2.x = cb1[7].y;
+  r2.y = 0;
+  r0.yz = r2.xy + r1.xz;
+  r1.xyz = t2.SampleLevel(s1_s, r1.xz, 0).xyz;
+  r0.yzw = t2.SampleLevel(s1_s, r0.yz, 0).xyz;
+  r0.yzw = r0.yzw + -r1.xyz;
+  r0.xyz = r0.xxx * r0.yzw + r1.xyz;
+  r1.xyz = log2(abs(r0.xyz));
+  r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
+  r1.xyz = exp2(r1.xyz);
+  r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
+  r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
+  r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
+  r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
+  r1.xy = cb0[82].xy * v1.xy;
+  r0.w = dot(float2(171,231), r1.xy);
+  r1.xyz = float3(0.00970873795,0.0140845068,0.010309278) * r0.www;
+  r1.xyz = frac(r1.xyz);
+  r1.xyz = float3(-0.5,-0.5,-0.5) + r1.xyz;
+  o0.xyz = r1.xyz * float3(0.0013725491,0.0013725491,0.0013725491) + r0.xyz;
+  */
   renodx::lut::Config lut_config = renodx::lut::config::Create(
-      s0_s,
+      s1_s,
       shader_injection.color_grade_strength,
       0.f,
       renodx::lut::config::type::ARRI_C1000_NO_CUT,
@@ -106,7 +154,7 @@ void main(
       cb1[7].xyz
     );
   float3 graded = renodx::lut::Sample(t2, lut_config, r0.yzx);
-  
+
   [branch]
   if (shader_injection.tone_map_type == 0.f) {
     o0.xyz = renodx::tonemap::ExponentialRollOff(max(0, graded), 0.18f, 1.f);

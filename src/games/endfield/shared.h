@@ -77,6 +77,13 @@ struct ShaderInjectData {
   float tone_map_video_nits;
   float reno_drt_tone_map_method;
   float status_text_opacity;
+  float custom_random;
+  float custom_grain_strength;
+  float vignette_strength;
+  float ui_visibility;
+  float sun_intensity;
+  float bloom_strength;
+  float godrays_intensity;
 };
 
 #ifndef __cplusplus
@@ -123,6 +130,13 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_VIDEO_NITS                      shader_injection.tone_map_video_nits
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        shader_injection.reno_drt_tone_map_method
 #define STATUS_TEXT_OPACITY                    shader_injection.status_text_opacity
+#define CUSTOM_RANDOM                          shader_injection.custom_random
+#define CUSTOM_GRAIN_STRENGTH                  shader_injection.custom_grain_strength
+#define VIGNETTE_STRENGTH                      shader_injection.vignette_strength
+#define UI_VISIBILITY                          shader_injection.ui_visibility
+#define SUN_INTENSITY                          shader_injection.sun_intensity
+#define BLOOM_STRENGTH                         shader_injection.bloom_strength
+#define GODRAYS_INTENSITY                      shader_injection.godrays_intensity
 
 #include "../../shaders/renodx.hlsl"
 
