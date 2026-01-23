@@ -1,7 +1,6 @@
-#define USE_CBUFFER_SLOT_B2
+#define USE_FLATEXPOSURE_HDR
 
 #include "./postprocess.hlsl"
-#include "./tonemapper.hlsl"
 
 
 
@@ -64,6 +63,34 @@ cbuffer CameraKerare : register(b1) {
   float kerare_offset : packoffset(c000.y);
   float kerare_brightness : packoffset(c000.z);
   float film_aspect : packoffset(c000.w);
+};
+
+cbuffer TonemapParam : register(b2) {
+  float contrast : packoffset(c000.x);
+  float linearBegin : packoffset(c000.y);
+  float linearLength : packoffset(c000.z);
+  float toe : packoffset(c000.w);
+  float maxNit : packoffset(c001.x);
+  float linearStart : packoffset(c001.y);
+  float displayMaxNitSubContrastFactor : packoffset(c001.z);
+  float contrastFactor : packoffset(c001.w);
+  float mulLinearStartContrastFactor : packoffset(c002.x);
+  float invLinearBegin : packoffset(c002.y);
+  float madLinearStartContrastFactor : packoffset(c002.z);
+  float tonemapParam_isHDRMode : packoffset(c002.w);
+  float useDynamicRangeConversion : packoffset(c003.x);
+  float useHuePreserve : packoffset(c003.y);
+  float exposureScale : packoffset(c003.z);
+  float kneeStartNit : packoffset(c003.w);
+  float knee : packoffset(c004.x);
+  float curve_HDRip : packoffset(c004.y);
+  float curve_k2 : packoffset(c004.z);
+  float curve_k4 : packoffset(c004.w);
+  row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
+  row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
+  float tonemapGraphScale : packoffset(c013.x);
+  float offsetEVCurveStart : packoffset(c013.y);
+  float offsetEVCurveRange : packoffset(c013.z);
 };
 
 cbuffer LDRPostProcessParam : register(b3) {
@@ -308,17 +335,17 @@ float4 main(
 
   float _101 = _100 * Exposure;
 
-  // This should be 1 if 0x4905680A is loaded, since that one handles exposure
-  float custom_flat_exposure = 1.f;
+  // // This should be 1 if 0x4905680A is loaded, since that one handles exposure
+  // float custom_flat_exposure = 1.f;
 
-  // We check if 0x4905680A has loaded
-  if (CUSTOM_EXPOSURE_SHADER_DRAW == 0.f) {
-    // In case of vanilla
-    custom_flat_exposure = 1.f * NormalizeExposure();
-    if (CUSTOM_EXPOSURE_TYPE >= 1.f) {
-      custom_flat_exposure = FlatExposure();
-    }
-  }
+  // // We check if 0x4905680A has loaded
+  // if (CUSTOM_EXPOSURE_SHADER_DRAW == 0.f) {
+  //   // In case of vanilla
+  //   custom_flat_exposure = 1.f * NormalizeExposure();
+  //   if (CUSTOM_EXPOSURE_TYPE >= 1.f) {
+  //     custom_flat_exposure = FlatExposure();
+  //   }
+  // }
 
   // Lens distortion
   if (_43) {
@@ -425,7 +452,7 @@ float4 main(
 
         float4 _399 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2(_395, _396));
 
-        _399.xyz *= custom_flat_exposure;
+        //_399.xyz *= custom_flat_exposure;
 
         _1181 = (_399.x * _101);
         _1182 = (_399.y * _101);
@@ -597,7 +624,7 @@ float4 main(
         // RE_POSTPROCESS_Color is adjusted by 0x4905680A
         float4 _883 = RE_POSTPROCESS_Color.Sample(BilinearBorder, float2(_879, _880));
 
-        _883.xyz *= custom_flat_exposure;
+        //_883.xyz *= custom_flat_exposure;
         // This section in flat FOR SURE
         _1181 = (_883.x * _101);
         _1182 = (_883.y * _101);
@@ -616,7 +643,7 @@ float4 main(
         if (!_51) {
           float4 _896 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2(_891, _892));
 
-          _896.xyz *= custom_flat_exposure;
+          //_896.xyz *= custom_flat_exposure;
 
           _1174 = _896.x;
           _1175 = _896.y;
@@ -707,7 +734,7 @@ float4 main(
             }
             float4 _1169 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2((_1163 + _891), (_1164 + _892)));
 
-            _1169.xyz *= custom_flat_exposure;
+            //_1169.xyz *= custom_flat_exposure;
 
             _1174 = _1169.x;
             _1175 = _1169.y;
@@ -1387,8 +1414,20 @@ float4 main(
   // SV_Target.y = _2774;
   // SV_Target.z = _2775;
 
-  SV_Target.xyz = CustomTonemap(float3(_2666, _2667, _2668));
+  CustomTonemapParam params;
+  params.invLinearBegin = invLinearBegin;
+  params.linearBegin = linearBegin;
+  params.linearStart = linearStart;
+  params.contrast = contrast;
+  params.linearLength = linearLength;
+  params.toe = toe;
+  params.maxNit = maxNit;
+  params.displayMaxNitSubContrastFactor = displayMaxNitSubContrastFactor;
+  params.contrastFactor = contrastFactor;
+  params.mulLinearStartContrastFactor = mulLinearStartContrastFactor;
+  params.madLinearStartContrastFactor = madLinearStartContrastFactor;
 
+  SV_Target.xyz = CustomTonemap(float3(_2666, _2667, _2668), params, tonemapParam_isHDRMode == 0.0f);
   SV_Target.w = 0.0f;
   return SV_Target;
 }

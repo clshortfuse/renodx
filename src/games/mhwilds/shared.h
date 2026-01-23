@@ -33,13 +33,20 @@
 #define CUSTOM_LENS_DISTORTION                 shader_injection.custom_lens_distortion
 #define CUSTOM_LUT_COLOR_STRENGTH              shader_injection.custom_lut_color_strength
 #define CUSTOM_ABERRATION                      1.f
-#define CUSTOM_EXPOSURE_TYPE                   shader_injection.custom_exposure_type
+//#define CUSTOM_EXPOSURE_TYPE                   shader_injection.custom_exposure_type
+
+#define CUSTOM_LOCAL_EXPOSURE_HIGHLIGHTS       shader_injection.custom_local_exposure_highlights
+#define CUSTOM_LOCAL_EXPOSURE_SHADOWS          shader_injection.custom_local_exposure_shadows
+#define CUSTOM_LOCAL_EXPOSURE_DETAIL           shader_injection.custom_local_exposure_detail
+#define CUSTOM_LOCAL_EXPOSURE_MID_GREY         shader_injection.custom_local_exposure_mid_grey
+
 #define CUSTOM_EXPOSURE_STRENGTH               shader_injection.custom_exposure_strength
 #define CUSTOM_FLAT_EXPOSURE_DEFAULT           1.f
 #define CUSTOM_LUT_EXPOSURE_REVERSE            shader_injection.custom_lut_exposure_reverse
 #define CUSTOM_EXPOSURE_SHADER_DRAW            shader_injection.custom_exposure_shader_draw
 #define CUSTOM_TONE_MAP_PARAMETERS             shader_injection.custom_tone_map_parameters
 #define CUSTOM_SHARPNESS                       shader_injection.custom_sharpness
+#define CUSTOM_FOG_AMOUNT                      shader_injection.custom_fog_amount
 #define CUSTOM_LUT_SCALING                     shader_injection.custom_lut_scaling
 #define CUSTOM_SATURATION_CORRECTION           shader_injection.custom_saturation_correction
 
@@ -65,12 +72,17 @@ struct ShaderInjectData {
   float custom_vignette;
   float custom_lens_distortion;
   float custom_random;
-  float custom_exposure_type;
+  //float custom_exposure_type;
+  float custom_local_exposure_highlights;
+  float custom_local_exposure_shadows;
+  float custom_local_exposure_detail;
+  float custom_local_exposure_mid_grey;
   float custom_exposure_strength;
   float custom_lut_exposure_reverse;
   float custom_exposure_shader_draw;
   float custom_tone_map_parameters;
   float custom_sharpness;
+  float custom_fog_amount;
   float custom_lut_scaling;
   float custom_saturation_correction;
   float swap_chain_output_dither_seed;

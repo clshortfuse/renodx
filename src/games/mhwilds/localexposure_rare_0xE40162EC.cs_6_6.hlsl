@@ -1,5 +1,6 @@
+#define USE_LOCALEXPOSURE_RARE
+
 #include "./postprocess.hlsl"
-#include "./shared.h"
 
 Buffer<uint4> WhitePtSrv : register(t0);
 
@@ -80,11 +81,29 @@ SamplerState BilinearClamp : register(s5, space32);
 
 [numthreads(8, 8, 1)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex
 ) {
+  LocalExposureInputs inputs;
+  inputs.BilateralLuminanceSRV = BilateralLuminanceSRV;
+  inputs.BlurredLogLumSRV = BlurredLogLumSRV;
+  inputs.BilinearClamp = BilinearClamp;
+  inputs.screenSize = screenSize;
+  inputs.screenInverseSize = screenInverseSize;
+  inputs.useAutoExposure = useAutoExposure;
+  inputs.exposureAdjustment = exposureAdjustment;
+  inputs.LEPreExposureLog = LEPreExposureLog;
+  inputs.LEMiddleGreyLog = LEMiddleGreyLog;
+  inputs.LEBilateralGridScale = LEBilateralGridScale;
+  inputs.LEBilateralGridBias = LEBilateralGridBias;
+  inputs.LEHighlightContrast = LEHighlightContrast;
+  inputs.LEShadowContrast = LEShadowContrast;
+  inputs.LEDetailStrength = LEDetailStrength;
+  inputs.WhitePtSrv = WhitePtSrv;
+  inputs.rangeDecompress = rangeDecompress;
+
   float _14 = float((uint)SV_DispatchThreadID.x);
   float _15 = float((uint)SV_DispatchThreadID.y);
   float _45;
@@ -94,25 +113,27 @@ void main(
     float _32 = rangeDecompress * _25.y;
     float _33 = rangeDecompress * _25.z;
     do {
-      if (!(useAutoExposure == 0)) {
-        int4 _41 = asint(WhitePtSrv[16 / 4]);
-        _45 = asfloat(_41.x);
-      } else {
-        _45 = 1.0f;
-      }
-      float _46 = _45 * exposureAdjustment;
-      float _52 = log2(dot(float3((_46 * _31), (_46 * _32), (_46 * _33)), float3(0.25f, 0.5f, 0.25f)) + 9.999999747378752e-06f);
-      float _58 = screenInverseSize.x * (_14 + 0.5f);
-      float _59 = screenInverseSize.y * (_15 + 0.5f);
-      float2 _69 = BilateralLuminanceSRV.SampleLevel(BilinearClamp, float3(_58, _59, ((((LEBilateralGridScale * _52) + LEBilateralGridBias) * 0.984375f) + 0.0078125f)), 0.0f);
-      float _74 = BlurredLogLumSRV.SampleLevel(BilinearClamp, float2(_58, _59), 0.0f);
-      float _77 = select((_69.y < 0.0010000000474974513f), _74.x, (_69.x / _69.y));
-      float _83 = (LEPreExposureLog + _77) + ((_74.x - _77) * 0.6000000238418579f);
-      float _84 = LEPreExposureLog + _52;
-      float _87 = _83 - LEMiddleGreyLog;
-      float _99 = exp2((((select((_87 > 0.0f), LEHighlightContrast, LEShadowContrast) * _87) - _84) + LEMiddleGreyLog) + (LEDetailStrength * (_84 - _83)));
+    //   if (!(useAutoExposure == 0)) {
+    //     int4 _41 = asint(WhitePtSrv[16 / 4]);
+    //     _45 = asfloat(_41.x);
+    //   } else {
+    //     _45 = 1.0f;
+    //   }
+    //   float _46 = _45 * exposureAdjustment;
+    //   float _52 = log2(dot(float3((_46 * _31), (_46 * _32), (_46 * _33)), float3(0.25f, 0.5f, 0.25f)) + 9.999999747378752e-06f);
+    //   float _58 = screenInverseSize.x * (_14 + 0.5f);
+    //   float _59 = screenInverseSize.y * (_15 + 0.5f);
+    //   float2 _69 = BilateralLuminanceSRV.SampleLevel(BilinearClamp, float3(_58, _59, ((((LEBilateralGridScale * _52) + LEBilateralGridBias) * 0.984375f) + 0.0078125f)), 0.0f);
+    //   float _74 = BlurredLogLumSRV.SampleLevel(BilinearClamp, float2(_58, _59), 0.0f);
+    //   float _77 = select((_69.y < 0.0010000000474974513f), _74.x, (_69.x / _69.y));
+    //   float _83 = (LEPreExposureLog + _77) + ((_74.x - _77) * 0.6000000238418579f);
+    //   float _84 = LEPreExposureLog + _52;
+    //   float _87 = _83 - LEMiddleGreyLog;
+    //   float _99 = exp2((((select((_87 > 0.0f), LEHighlightContrast, LEShadowContrast) * _87) - _84) + LEMiddleGreyLog) + (LEDetailStrength * (_84 - _83)));
 
-      _99 = PickExposure(_99);
+      inputs.texcoord = float2(_14, _15);
+      float _99 = LocalExposure(_25, inputs, true);
+      //_99 = PickExposure(_99);
       
       OutputTex[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float3(((_99 * _31) * rangeCompress), ((_99 * _32) * rangeCompress), ((_99 * _33) * rangeCompress));
     } while (false);

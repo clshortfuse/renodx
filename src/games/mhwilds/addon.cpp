@@ -66,43 +66,46 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0x04039750),
 
     // Post Process
-    TypicalExposureShaderEntry(0xEE56E73B),
-    TypicalExposureShaderEntry(0xE188DA93),
+    //TypicalExposureShaderEntry(0xEE56E73B),
+    //TypicalExposureShaderEntry(0xE188DA93),
     TypicalExposureShaderEntry(0x89476799),
-    TypicalExposureShaderEntry(0xF06499FE),
-    TypicalExposureShaderEntry(0x8CAFE864),
+    //TypicalExposureShaderEntry(0xF06499FE),
+    //TypicalExposureShaderEntry(0x8CAFE864),
     TypicalExposureShaderEntry(0x441E59B3),
     TypicalExposureShaderEntry(0x61F644A4),
     TypicalExposureShaderEntry(0x2B137341),
     TypicalExposureShaderEntry(0x53166004),
 
     // Exposure
-    RareExposureShaderEntry(0x4905680A),
+    //RareExposureShaderEntry(0x4905680A),
     RareExposureShaderEntry(0xE40162EC),
 
     // Sharpness
     CustomShaderEntry(0xC8169712),
     // CustomShaderEntry(0x243CA65C),
 
-    // Sharpening (Bypass)
-    {
-        0x243CA65C,
-        {
-            .crc32 = 0x243CA65C,
-            .on_draw = [](auto* cmd_list) {
-              return false;
-            },
-        },
-    },
-    {
-        0x87077D36,
-        {
-            .crc32 = 0x87077D36,
-            .on_draw = [](auto* cmd_list) {
-              return false;
-            },
-        },
-    },
+    // Fog
+    CustomShaderEntry(0xCCB318BD),
+
+    // // Sharpening (Bypass)
+    // {
+    //     0x243CA65C,
+    //     {
+    //         .crc32 = 0x243CA65C,
+    //         .on_draw = [](auto* cmd_list) {
+    //           return false;
+    //         },
+    //     },
+    // },
+    // {
+    //     0x87077D36,
+    //     {
+    //         .crc32 = 0x87077D36,
+    //         .on_draw = [](auto* cmd_list) {
+    //           return false;
+    //         },
+    //     },
+    // },
 };
 
 const std::string build_date = __DATE__;
@@ -111,21 +114,23 @@ const std::string build_time = __TIME__;
 float current_settings_mode = 0;
 auto last_is_hdr = false;
 
-const std::unordered_map<std::string, float> HDR_LOOK_VALUES = {
-    {"ToneMapType", 1.f},
-    {"ColorGradeExposure", 1.f},
+const std::unordered_map<std::string, float> REGRADE_VALUES = {
+    //{"ToneMapType", 1.f},
+    {"ColorGradeExposure", 0.85f},
     {"ColorGradeHighlights", 53.f},
     {"ColorGradeShadows", 50.f},
-    {"ColorGradeContrast", 75.f},
-    {"ColorGradeSaturation", 67.f},
-    //{"ColorGradeHighlightSaturation", 49.f},
-    {"ColorGradeBlowout", 70.f},
+    {"ColorGradeContrast", 65.f},
+    {"ColorGradeSaturation", 56.f},
+    {"ColorGradeHighlightSaturation", 52.f},
+    {"ColorGradeBlowout", 58.f},
     //{"ColorGradeFlare", 50.f},
     //{"SwapChainCustomColorSpace", 0.f},
     {"ColorGradeLUTColorStrength", 80.f},
-    //{"FxExposureType", 1.f},
-    {"FxExposureStrength", 40.f},
     {"FxLUTExposureReverse", 1.f},
+    {"FxLocalExposureHighlights", 25.f},
+    {"FxLocalExposureShadows", 33.f},
+    {"FxLocalExposureDetail", 0.f},
+    {"FxLocalExposureMidGrey", 0.f},
 };
 
 renodx::utils::settings::Settings settings = {
@@ -209,6 +214,7 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
+            if (setting->section == "Effects") continue;
             if (!setting->can_reset) continue;
             if (setting->is_global) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
@@ -217,16 +223,17 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "HDR Look",
+        .label = "Regrade",
         .section = "Presets",
         .group = "button-line-1",
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
+            if (setting->section == "Effects") continue;
             if (!setting->can_reset) continue;
             if (setting->is_global) continue;
-            if (HDR_LOOK_VALUES.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, HDR_LOOK_VALUES.at(setting->key));
+            if (REGRADE_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, REGRADE_VALUES.at(setting->key));
             } else {
               renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
             }
@@ -234,38 +241,55 @@ renodx::utils::settings::Settings settings = {
         },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxExposureType",
-        .binding = &shader_injection.custom_exposure_type,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .key = "FxLocalExposureHighlights",
+        .binding = &shader_injection.custom_local_exposure_highlights,
+        //.value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 100.f,
         .can_reset = true,
-        .label = "Exposure Type",
+        .label = "Local Exposure Highlights",
         .section = "Scene Grading",
-        .tooltip = "Which color to output",
-        .labels = {"Vanilla", "Fixed"},
-        .is_visible = []() { return current_settings_mode >= 2; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "FxExposureStrength",
-        .binding = &shader_injection.custom_exposure_strength,
-        .default_value = 50.f,
-        .can_reset = true,
-        .label = "Exposure Strength",
-        .section = "Scene Grading",
+        .tooltip = "Interpolates between neutral highlight exposure and vanilla highlight exposure. 100 = Vanilla",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "FxLUTExposureReverse",
-        .binding = &shader_injection.custom_lut_exposure_reverse,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        new renodx::utils::settings::Setting{
+        .key = "FxLocalExposureShadows",
+        .binding = &shader_injection.custom_local_exposure_shadows,
+        //.value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 100.f,
+        .can_reset = true,
+        .label = "Local Exposure Shadows",
+        .section = "Scene Grading",
+        .tooltip = "Interpolates between neutral shadow exposure and vanilla shadow exposure. 100 = Vanilla",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+      new renodx::utils::settings::Setting{
+        .key = "FxLocalExposureDetail",
+        .binding = &shader_injection.custom_local_exposure_detail,
+        //.value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .can_reset = true,
-        .label = "LUT Exposure Reverse",
+        .label = "Local Exposure Detail",
         .section = "Scene Grading",
-        .tooltip = "Use precolor grade exposure or after",
-        .labels = {"Vanilla", "Pre Grade"},
+        .tooltip = "Interpolates between no local contrast enhancement and vanilla local contrast enhancement. 100 = Vanilla",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+          new renodx::utils::settings::Setting{
+        .key = "FxLocalExposureMidGrey",
+        .binding = &shader_injection.custom_local_exposure_mid_grey,
+        //.value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 100.f,
+        .can_reset = true,
+        .label = "Local Exposure Mid Grey",
+        .section = "Scene Grading",
+        .tooltip = "Interpolates between a typical mid grey value and vanilla mid grey. 100 = Vanilla",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
         new renodx::utils::settings::Setting{
@@ -278,6 +302,18 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
+    },
+        new renodx::utils::settings::Setting{
+        .key = "FxLUTExposureReverse",
+        .binding = &shader_injection.custom_lut_exposure_reverse,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .can_reset = true,
+        .label = "LUT Exposure Reverse",
+        .section = "Scene Grading",
+        .tooltip = "Use precolor grade exposure or after",
+        .labels = {"Vanilla", "Pre Grade"},
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     // new renodx::utils::settings::Setting{
     //     .key = "CustomSaturationCorrection",
@@ -408,7 +444,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 50.f,
         .label = "Vignette",
         .section = "Effects",
-        .tooltip = "Controls Vignette",
+        .tooltip = "Controls Vignette. Vanilla = 50",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
@@ -438,17 +474,28 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "FxLUTScaling",
-        .binding = &shader_injection.custom_lut_scaling,
+      new renodx::utils::settings::Setting{
+        .key = "FxFogAmount",
+        .binding = &shader_injection.custom_fog_amount,
         .default_value = 50.f,
-        .label = "LUT Scaling",
+        .label = "Fog Amount",
         .section = "Effects",
-        .tooltip = "Controls lut scaling",
+        .tooltip = "Linear scale of the final fog color. Vanilla = 50",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return false; },
+        .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
+    // new renodx::utils::settings::Setting{
+    //     .key = "FxLUTScaling",
+    //     .binding = &shader_injection.custom_lut_scaling,
+    //     .default_value = 50.f,
+    //     .label = "LUT Scaling",
+    //     .section = "Effects",
+    //     .tooltip = "Controls lut scaling",
+    //     .max = 100.f,
+    //     .parse = [](float value) { return value * 0.01f; },
+    //     .is_visible = []() { return false; },
+    // },
         new renodx::utils::settings::Setting{
         .key = "FxDebanding",
         .binding = &shader_injection.swap_chain_output_dither_bits,
@@ -570,11 +617,15 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeLUTColorStrength", 100.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTOutputStrength", 100.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
-  renodx::utils::settings::UpdateSetting("FxExposureType", 0.f);
-  renodx::utils::settings::UpdateSetting("FxExposureStrength", 50.f);
   renodx::utils::settings::UpdateSetting("FxLUTExposureReverse", 0.f);
   renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("FxLensDistortion", 1.f);
+  renodx::utils::settings::UpdateSetting("FxSharpness", 0.f);
+  renodx::utils::settings::UpdateSetting("FxLocalExposureHighlights", 100.f);
+  renodx::utils::settings::UpdateSetting("FxLocalExposureShadows", 100.f);
+  renodx::utils::settings::UpdateSetting("FxLocalExposureDetail", 100.f);
+  renodx::utils::settings::UpdateSetting("FxLocalExposureMidGrey", 100.f);
+  renodx::utils::settings::UpdateSetting("FxFogAmount", 50.f);
 }
 
 bool fired_on_init_swapchain = false;

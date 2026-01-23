@@ -1,7 +1,6 @@
 
-#define USE_CBUFFER_SLOT_B4
+#define USE_DISABLEDEXPOSURE
 #include "./postprocess.hlsl"
-#include "./tonemapper.hlsl"
 
 
 
@@ -61,6 +60,34 @@ cbuffer CameraKerare : register(b3) {
   float kerare_offset : packoffset(c000.y);
   float kerare_brightness : packoffset(c000.z);
   float film_aspect : packoffset(c000.w);
+};
+
+cbuffer TonemapParam : register(b4) {
+  float contrast : packoffset(c000.x);
+  float linearBegin : packoffset(c000.y);
+  float linearLength : packoffset(c000.z);
+  float toe : packoffset(c000.w);
+  float maxNit : packoffset(c001.x);
+  float linearStart : packoffset(c001.y);
+  float displayMaxNitSubContrastFactor : packoffset(c001.z);
+  float contrastFactor : packoffset(c001.w);
+  float mulLinearStartContrastFactor : packoffset(c002.x);
+  float invLinearBegin : packoffset(c002.y);
+  float madLinearStartContrastFactor : packoffset(c002.z);
+  float tonemapParam_isHDRMode : packoffset(c002.w);
+  float useDynamicRangeConversion : packoffset(c003.x);
+  float useHuePreserve : packoffset(c003.y);
+  float exposureScale : packoffset(c003.z);
+  float kneeStartNit : packoffset(c003.w);
+  float knee : packoffset(c004.x);
+  float curve_HDRip : packoffset(c004.y);
+  float curve_k2 : packoffset(c004.z);
+  float curve_k4 : packoffset(c004.w);
+  row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
+  row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
+  float tonemapGraphScale : packoffset(c013.x);
+  float offsetEVCurveStart : packoffset(c013.y);
+  float offsetEVCurveRange : packoffset(c013.z);
 };
 
 float4 main(
@@ -184,7 +211,20 @@ float4 main(
   // SV_Target.y = _301;
   // SV_Target.z = _302;
 
-  SV_Target.xyz = CustomTonemap(float3(_193, _194, _195));
+  CustomTonemapParam params;
+  params.invLinearBegin = invLinearBegin;
+  params.linearBegin = linearBegin;
+  params.linearStart = linearStart;
+  params.contrast = contrast;
+  params.linearLength = linearLength;
+  params.toe = toe;
+  params.maxNit = maxNit;
+  params.displayMaxNitSubContrastFactor = displayMaxNitSubContrastFactor;
+  params.contrastFactor = contrastFactor;
+  params.mulLinearStartContrastFactor = mulLinearStartContrastFactor;
+  params.madLinearStartContrastFactor = madLinearStartContrastFactor;
+
+  SV_Target.xyz = CustomTonemap(float3(_193, _194, _195), params, tonemapParam_isHDRMode == 0.0f);
 
   SV_Target.w = 1.0f;
   return SV_Target;

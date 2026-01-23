@@ -1,8 +1,6 @@
-#define USE_CBUFFER_SLOT_B4
+#define USE_LOCALEXPOSURE_SDR
 
 #include "./postprocess.hlsl"
-#include "./tonemapper.hlsl"
-
 
 
 Texture2D<float4> RE_POSTPROCESS_Color : register(t0);
@@ -89,6 +87,34 @@ cbuffer CameraKerare : register(b3) {
   float kerare_offset : packoffset(c000.y);
   float kerare_brightness : packoffset(c000.z);
   float film_aspect : packoffset(c000.w);
+};
+
+cbuffer TonemapParam : register(b4) {
+  float contrast : packoffset(c000.x);
+  float linearBegin : packoffset(c000.y);
+  float linearLength : packoffset(c000.z);
+  float toe : packoffset(c000.w);
+  float maxNit : packoffset(c001.x);
+  float linearStart : packoffset(c001.y);
+  float displayMaxNitSubContrastFactor : packoffset(c001.z);
+  float contrastFactor : packoffset(c001.w);
+  float mulLinearStartContrastFactor : packoffset(c002.x);
+  float invLinearBegin : packoffset(c002.y);
+  float madLinearStartContrastFactor : packoffset(c002.z);
+  float tonemapParam_isHDRMode : packoffset(c002.w);
+  float useDynamicRangeConversion : packoffset(c003.x);
+  float useHuePreserve : packoffset(c003.y);
+  float exposureScale : packoffset(c003.z);
+  float kneeStartNit : packoffset(c003.w);
+  float knee : packoffset(c004.x);
+  float curve_HDRip : packoffset(c004.y);
+  float curve_k2 : packoffset(c004.z);
+  float curve_k4 : packoffset(c004.w);
+  row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
+  row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
+  float tonemapGraphScale : packoffset(c013.x);
+  float offsetEVCurveStart : packoffset(c013.y);
+  float offsetEVCurveRange : packoffset(c013.z);
 };
 
 cbuffer LDRPostProcessParam : register(b5) {
@@ -181,6 +207,25 @@ float4 main(
   linear float4 Kerare : Kerare,
   linear float Exposure : Exposure
 ) : SV_Target {
+
+  LocalExposureInputs inputs;
+  inputs.BilateralLuminanceSRV = BilateralLuminanceSRV;
+  inputs.BlurredLogLumSRV = BlurredLogLumSRV;
+  inputs.BilinearClamp = BilinearClamp;
+  inputs.screenSize = screenSize;
+  inputs.screenInverseSize = screenInverseSize;
+  inputs.useAutoExposure = useAutoExposure;
+  inputs.exposureAdjustment = exposureAdjustment;
+  inputs.LEPreExposureLog = LEPreExposureLog;
+  inputs.LEMiddleGreyLog = LEMiddleGreyLog;
+  inputs.LEBilateralGridScale = LEBilateralGridScale;
+  inputs.LEBilateralGridBias = LEBilateralGridBias;
+  inputs.LEHighlightContrast = LEHighlightContrast;
+  inputs.LEShadowContrast = LEShadowContrast;
+  inputs.LEDetailStrength = LEDetailStrength;
+  inputs.WhitePtSrv = WhitePtSrv;
+  inputs.rangeDecompress = rangeDecompress;
+
   float4 SV_Target;
   float _77;
   float _103;
@@ -246,23 +291,25 @@ float4 main(
   float _84 = screenInverseSize.x * SV_Position.x;
   float _85 = screenInverseSize.y * SV_Position.y;
   float4 _88 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2(_84, _85));
-  if (!(useAutoExposure == 0)) {
-    int4 _99 = asint(WhitePtSrv[16 / 4]);
-    _103 = asfloat(_99.x);
-  } else {
-    _103 = 1.0f;
-  }
-  float _104 = _103 * exposureAdjustment;
-  float _115 = log2(dot(float3(((_104 * _88.x) * rangeDecompress), ((_104 * _88.y) * rangeDecompress), ((_104 * _88.z) * rangeDecompress)), float3(0.25f, 0.5f, 0.25f)) + 9.999999747378752e-06f);
-  float2 _124 = BilateralLuminanceSRV.SampleLevel(BilinearClamp, float3(_84, _85, ((((LEBilateralGridScale * _115) + LEBilateralGridBias) * 0.984375f) + 0.0078125f)), 0.0f);
-  float _129 = BlurredLogLumSRV.SampleLevel(BilinearClamp, float2(_84, _85), 0.0f);
-  float _132 = select((_124.y < 0.0010000000474974513f), _129.x, (_124.x / _124.y));
-  float _138 = (LEPreExposureLog + _132) + ((_129.x - _132) * 0.6000000238418579f);
-  float _139 = LEPreExposureLog + _115;
-  float _142 = _138 - LEMiddleGreyLog;
-  float _154 = exp2((((select((_142 > 0.0f), LEHighlightContrast, LEShadowContrast) * _142) - _139) + LEMiddleGreyLog) + (LEDetailStrength * (_139 - _138)));
+  // if (!(useAutoExposure == 0)) {
+  //   int4 _99 = asint(WhitePtSrv[16 / 4]);
+  //   _103 = asfloat(_99.x);
+  // } else {
+  //   _103 = 1.0f;
+  // }
+  // float _104 = _103 * exposureAdjustment;
+  // float _115 = log2(dot(float3(((_104 * _88.x) * rangeDecompress), ((_104 * _88.y) * rangeDecompress), ((_104 * _88.z) * rangeDecompress)), float3(0.25f, 0.5f, 0.25f)) + 9.999999747378752e-06f);
+  // float2 _124 = BilateralLuminanceSRV.SampleLevel(BilinearClamp, float3(_84, _85, ((((LEBilateralGridScale * _115) + LEBilateralGridBias) * 0.984375f) + 0.0078125f)), 0.0f);
+  // float _129 = BlurredLogLumSRV.SampleLevel(BilinearClamp, float2(_84, _85), 0.0f);
+  // float _132 = select((_124.y < 0.0010000000474974513f), _129.x, (_124.x / _124.y));
+  // float _138 = (LEPreExposureLog + _132) + ((_129.x - _132) * 0.6000000238418579f);
+  // float _139 = LEPreExposureLog + _115;
+  // float _142 = _138 - LEMiddleGreyLog;
+  // float _154 = exp2((((select((_142 > 0.0f), LEHighlightContrast, LEShadowContrast) * _142) - _139) + LEMiddleGreyLog) + (LEDetailStrength * (_139 - _138)));
 
-  _154 = PickExposure(_154);
+  inputs.texcoord = float2(_84, _85);
+  float _154 = LocalExposure(_88, inputs);
+  //_154 = PickExposure(_154);
   
   float _156 = (_88.x * _80) * _154;
   float _158 = (_88.y * _80) * _154;
@@ -603,7 +650,20 @@ float4 main(
   // SV_Target.y = _786;
   // SV_Target.z = _787;
 
-  SV_Target.xyz = CustomTonemap(float3(_678, _679, _680));
+  CustomTonemapParam params;
+  params.invLinearBegin = invLinearBegin;
+  params.linearBegin = linearBegin;
+  params.linearStart = linearStart;
+  params.contrast = contrast;
+  params.linearLength = linearLength;
+  params.toe = toe;
+  params.maxNit = maxNit;
+  params.displayMaxNitSubContrastFactor = displayMaxNitSubContrastFactor;
+  params.contrastFactor = contrastFactor;
+  params.mulLinearStartContrastFactor = mulLinearStartContrastFactor;
+  params.madLinearStartContrastFactor = madLinearStartContrastFactor;
+
+  SV_Target.xyz = CustomTonemap(float3(_678, _679, _680), params, tonemapParam_isHDRMode == 0.0f);
 
   SV_Target.w = 0.0f;
   return SV_Target;
