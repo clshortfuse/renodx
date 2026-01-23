@@ -1,4 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Thu Jan 22 21:41:37 2026
+
 Texture2D<float4> t7 : register(t7);
 
 Texture2D<float4> t6 : register(t6);
@@ -248,20 +249,70 @@ void main(
   r0.yzw = min(float3(1, 1, 1), r0.yzw);
 */
   float3 untonemapped = r0.xyz;
+  
+  // ============================================================================
+  // VANILLA TONEMAPPING (for hue/chrominance reference)
+  // ============================================================================
   const float a = 2.785085;
   const float b = 0.107772;
   const float c = 2.936045;
   const float d = 0.887122;
   const float e = 0.806889;
 
-  float3 tonemapped = (untonemapped * (a * untonemapped + b)) / (untonemapped * (c * untonemapped + d) + e);
+  float3 vanilla_tonemapped = (untonemapped * (a * untonemapped + b)) / (untonemapped * (c * untonemapped + d) + e);
+  vanilla_tonemapped = min(float3(1, 1, 1), vanilla_tonemapped);
 
-  const float divergence_point = 0.267010625;
-  float3 linear_extension = 0.9174704430474515 * untonemapped - 0.06355161968502177;
+  // ============================================================================
+  // HDR TONEMAPPING (Use vanilla tonemap for colors, then scale by luminance ratio to restore HDR)
+  // ============================================================================
+  float3 tonemapped = vanilla_tonemapped;
+  
+  // Calculate input and output luminance
+  float input_y = max(0.001, renodx::color::y::from::BT709(untonemapped));
+  float output_y = max(0.001, renodx::color::y::from::BT709(vanilla_tonemapped));
+  
+  if (input_y > 0.5) {
+    // Blend between vanilla and scaled version based on brightness
+    float hdr_blend = saturate((input_y - 0.5) * 2.0); 
+    float scale = input_y / output_y;  
+    float hdr_scale = lerp(1.0, scale, hdr_blend * 0.5); 
+    tonemapped = vanilla_tonemapped * hdr_scale;
+  }
 
-  tonemapped = renodx::math::Select(untonemapped < divergence_point, tonemapped, linear_extension);
+  // ============================================================================
+  // RESTORE HUE AND CHROMINANCE
+  // ============================================================================
+  {
+    const float hue_restore_strength = 0.75; 
+    const float chroma_restore_strength = 0.5; 
+    
+    if (renodx::color::y::from::BT709(tonemapped) > 0.001) {
+      float3 target_oklab = renodx::color::oklab::from::BT709(tonemapped);
+      float3 source_oklab = renodx::color::oklab::from::BT709(vanilla_tonemapped);
+      
+      float original_chroma = length(target_oklab.yz);
+      
+      target_oklab.yz = lerp(target_oklab.yz, source_oklab.yz, hue_restore_strength);
+      
+      float new_chroma = length(target_oklab.yz);
+      if (new_chroma > 0.0001) {
+        float chroma_ratio = original_chroma / new_chroma;
+        target_oklab.yz *= chroma_ratio;
+      }
+      
+      if (chroma_restore_strength > 0.0) {
+        float source_chroma = length(source_oklab.yz);
+        float target_chroma_ratio = (original_chroma > 0.0001) ? (source_chroma / original_chroma) : 1.0;
+        float chroma_scale = lerp(1.0, target_chroma_ratio, chroma_restore_strength);
+        target_oklab.yz *= chroma_scale;
+      }
+      
+      tonemapped = renodx::color::bt709::from::OkLab(target_oklab);
+    }
+  }
 
   r0.yzw = tonemapped;
+
   r0.x = dot(r0.xyz, float3(0.272228986,0.674081981,0.0536894985));
   r0.x = -0.5 + r0.x;
   r0.x = saturate(0.666666687 * r0.x);
