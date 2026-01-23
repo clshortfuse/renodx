@@ -303,6 +303,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
     },
+      new renodx::utils::settings::Setting{
+        .key = "FxLUTScaling",
+        .binding = &shader_injection.custom_lut_scaling,
+        .default_value = 50.f,
+        .label = "LUT Scaling",
+        .section = "Scene Grading",
+        .tooltip = "Adjusts LUTs to use the full range of luminance. 0 = Vanilla",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
+    },
         new renodx::utils::settings::Setting{
         .key = "FxLUTExposureReverse",
         .binding = &shader_injection.custom_lut_exposure_reverse,
@@ -485,17 +496,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "FxLUTScaling",
-    //     .binding = &shader_injection.custom_lut_scaling,
-    //     .default_value = 50.f,
-    //     .label = "LUT Scaling",
-    //     .section = "Effects",
-    //     .tooltip = "Controls lut scaling",
-    //     .max = 100.f,
-    //     .parse = [](float value) { return value * 0.01f; },
-    //     .is_visible = []() { return false; },
-    // },
         new renodx::utils::settings::Setting{
         .key = "FxDebanding",
         .binding = &shader_injection.swap_chain_output_dither_bits,
@@ -615,7 +615,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
   renodx::utils::settings::UpdateSetting("SwapChainCustomColorSpace", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTColorStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeLUTOutputStrength", 100.f);
+  renodx::utils::settings::UpdateSetting("FxLutScaling", 0.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
   renodx::utils::settings::UpdateSetting("FxLUTExposureReverse", 0.f);
   renodx::utils::settings::UpdateSetting("FxVignette", 50.f);

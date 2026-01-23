@@ -1117,6 +1117,28 @@ float4 main(
 
 
   if (!((cPassEnabled & 4) == 0)) {
+    // Use RenoDX LUT sampling with tetrahedral interpolation
+    float3 lut_output = SampleColorLUTs(
+        float3(_2400, _2401, _2402),  // Input AP1 color
+        tTextureMap0,                  // Primary LUT
+        tTextureMap1,                  // Secondary LUT
+        tTextureMap2,                  // Tertiary LUT
+        TrilinearClamp,                // Sampler
+        fTextureBlendRate,             // Blend between LUT0 and LUT1
+        fTextureBlendRate2,            // Blend with LUT2           
+        fColorMatrix                   // Color transform matrix
+    );
+    
+    float3 new_color = CustomLUTColor(float3(_2400, _2401, _2402), lut_output);
+    _2809 = new_color.r;
+    _2810 = new_color.g;
+    _2811 = new_color.b;
+    // _2809 = lut_output.r;
+    // _2810 = lut_output.g;
+    // _2811 = lut_output.b;
+
+    // ORIGINAL MANUAL LUT SAMPLING CODE (REPLACED BY RENODX IMPLEMENTATION ABOVE)
+    /*
     bool _2428 = !(_2400 <= 0.0078125f);
     if (!_2428) {
       _2437 = ((_2400 * 10.540237426757812f) + 0.072905533015728f);
@@ -1325,6 +1347,7 @@ float4 main(
     _2809 = new_color.r;
     _2810 = new_color.g;
     _2811 = new_color.b;
+    */
 
   } else {
     _2809 = _2400;

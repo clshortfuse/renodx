@@ -104,6 +104,103 @@ float3 CustomLUTColor(float3 ap1_input, float3 ap1_output) {
   return new_color;
 }
 
+// Encode linear AP1 to log space (matching the LUT encoding)
+float EncodeLogAces(float linear_value) {
+  if (linear_value <= 0.0078125f) {
+    return (linear_value * 10.540237426757812f) + 0.072905533015728f;
+  } else {
+    return ((log2(linear_value) + 9.720000267028809f) * 0.05707762390375137f);
+  }
+}
+
+// Decode log space back to linear AP1 (matching the LUT decoding)
+float DecodeLogAces(float log_value) {
+  if (log_value < 0.155251145362854f) {
+    return (log_value + -0.072905533015728f) * 0.09487452358007431f;
+  } else if (log_value < 1.4679962396621704f) {
+    return exp2((log_value * 17.520000457763672f) + -9.720000267028809f);
+  } else {
+    return 65504.0f;  // Max representable value
+  }
+}
+
+// Vector versions for convenience
+float3 EncodeLogAcesVec(float3 linear_color) {
+  return float3(EncodeLogAces(linear_color.r), EncodeLogAces(linear_color.g), EncodeLogAces(linear_color.b));
+}
+
+float3 DecodeLogAcesVec(float3 log_color) {
+  return float3(DecodeLogAces(log_color.r), DecodeLogAces(log_color.g), DecodeLogAces(log_color.b));
+}
+
+// Sample multiple LUTs with blending and color matrix transform
+// Uses RenoDX Sample() which includes strength/scaling support
+// tTextureMap0: Primary LUT
+// tTextureMap1: Secondary LUT (optional, blended with fTextureBlendRate)
+// tTextureMap2: Tertiary LUT (optional, blended with fTextureBlendRate2)
+// fColorMatrix: 4x4 matrix to transform LUT output (AP1 to AP1)
+float3 SampleColorLUTs(
+    float3 ap1_color,
+    Texture3D<float4> lut0,
+    Texture3D<float4> lut1,
+    Texture3D<float4> lut2,
+    SamplerState lut_sampler,
+    float lut_blend_rate,
+    float lut_blend_rate2,
+    row_major float4x4 color_matrix) {
+  
+  // Create RenoDX LUT config for log-encoded AP1 space
+  // type_input/output = LINEAR means ConvertInput/LinearOutput are no-ops
+  // We handle log encoding/decoding manually before/after Sample()
+  renodx::lut::Config lut_config = renodx::lut::config::Create();
+  lut_config.lut_sampler = lut_sampler;
+  lut_config.strength = 1.f;
+  lut_config.scaling = CUSTOM_LUT_SCALING;
+  lut_config.type_input = renodx::lut::config::type::LINEAR;   // We handle log manually
+  lut_config.type_output = renodx::lut::config::type::LINEAR;  // We handle log manually
+  lut_config.tetrahedral = true;  // Better interpolation quality
+  
+  // Encode input to log space for LUT lookup
+  float3 log_input = EncodeLogAcesVec(ap1_color);
+  
+  // Sample primary LUT using RenoDX Sample() (includes strength/scaling)
+  // Since type_input=LINEAR, log_input passes through unchanged to SampleColor
+  // Since type_output=LINEAR, result comes back in log space, which we decode
+  float3 lut0_log = renodx::lut::Sample(lut0, lut_config, log_input);
+  float3 lut_result = DecodeLogAcesVec(lut0_log);
+  
+  // Optional: Blend with secondary LUT
+  if (lut_blend_rate > 0.0f) {
+    float3 lut1_log = renodx::lut::Sample(lut1, lut_config, log_input);
+    float3 lut1_linear = DecodeLogAcesVec(lut1_log);
+    lut_result = lerp(lut_result, lut1_linear, lut_blend_rate);
+    
+    // Optional: Blend with tertiary LUT
+    if (lut_blend_rate2 > 0.0f) {
+      // Re-encode the blended result for second LUT sampling
+      float3 blended_log = EncodeLogAcesVec(lut_result);
+      float3 lut2_log = renodx::lut::Sample(lut2, lut_config, blended_log);
+      float3 lut2_linear = DecodeLogAcesVec(lut2_log);
+      lut_result = lerp(lut_result, lut2_linear, lut_blend_rate2);
+    }
+  } else if (lut_blend_rate2 > 0.0f) {
+    // Blend primary with tertiary
+    float3 blended_log = EncodeLogAcesVec(lut_result);
+    float3 lut2_log = renodx::lut::Sample(lut2, lut_config, blended_log);
+    float3 lut2_linear = DecodeLogAcesVec(lut2_log);
+    lut_result = lerp(lut_result, lut2_linear, lut_blend_rate2);
+  }
+  
+  // Apply color matrix transform (AP1 to AP1)
+  float3 matrix_output = float3(
+    mad(lut_result.z, color_matrix[2].x, mad(lut_result.y, color_matrix[1].x, lut_result.x * color_matrix[0].x)) + color_matrix[3].x,
+    mad(lut_result.z, color_matrix[2].y, mad(lut_result.y, color_matrix[1].y, lut_result.x * color_matrix[0].y)) + color_matrix[3].y,
+    mad(lut_result.z, color_matrix[2].z, mad(lut_result.y, color_matrix[1].z, lut_result.x * color_matrix[0].z)) + color_matrix[3].z
+  );
+  
+  return matrix_output;
+}
+
 void CustomVignette(inout float vignette) {
   vignette = lerp(1.f, vignette, CUSTOM_VIGNETTE);
 }
