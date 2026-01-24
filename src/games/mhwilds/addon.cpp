@@ -116,21 +116,21 @@ auto last_is_hdr = false;
 
 const std::unordered_map<std::string, float> REGRADE_VALUES = {
     //{"ToneMapType", 1.f},
-    {"ColorGradeExposure", 0.85f},
-    {"ColorGradeHighlights", 53.f},
+    {"ColorGradeExposure", 0.70f},
+    {"ColorGradeHighlights", 51.f},
     {"ColorGradeShadows", 50.f},
     {"ColorGradeContrast", 65.f},
     {"ColorGradeSaturation", 56.f},
     {"ColorGradeHighlightSaturation", 52.f},
-    {"ColorGradeBlowout", 58.f},
+    {"ColorGradeBlowout", 62.f},
     //{"ColorGradeFlare", 50.f},
     //{"SwapChainCustomColorSpace", 0.f},
-    {"ColorGradeLUTColorStrength", 80.f},
+    {"ColorGradeLUTColorStrength", 60.f},
     {"FxLUTExposureReverse", 1.f},
     {"FxLocalExposureHighlights", 25.f},
-    {"FxLocalExposureShadows", 33.f},
-    {"FxLocalExposureDetail", 0.f},
-    {"FxLocalExposureMidGrey", 0.f},
+    {"FxLocalExposureShadows", 65.f},
+    //{"FxLocalExposureDetail", 0.f},
+    {"FxLocalExposureMidGrey", 50.f},
 };
 
 renodx::utils::settings::Settings settings = {
