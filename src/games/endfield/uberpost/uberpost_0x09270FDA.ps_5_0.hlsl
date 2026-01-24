@@ -1,5 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Tue Jan 20 19:03:59 2026
-#include "../shared.h"
+#include "../common.hlsl"
 
 Texture2D<float4> t2 : register(t2);
 
@@ -245,7 +245,16 @@ void main(
   if (shader_injection.tone_map_type == 0.f) {
     o0.xyz = renodx::tonemap::ExponentialRollOff(max(0, graded), 0.18f, 1.f);
   } else {
+    float hue_chrominance_reference_peak = 6.f;  // lower this as needed in order to get the right amount of hue shifting/blowout
+    float hue_shift_amount = shader_injection.tone_map_hue_shift;
+    float blowout_amount = shader_injection.perchannelblowout;
+    float3 hue_chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(graded, hue_chrominance_reference_peak, 1.f);
+
+    graded = HueAndChrominanceOKLab(graded, hue_chrominance_reference_color, hue_shift_amount, blowout_amount);
     o0.xyz = renodx::draw::ToneMapPass(graded);
+    o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
+    o0.xyz = ApplyHermiteSplineByMaxChannel(o0.xyz, shader_injection.peak_white_nits / shader_injection.diffuse_white_nits);
+    o0.xyz = renodx::color::bt709::from::BT2020(o0.xyz);
   }
   if (CUSTOM_GRAIN_STRENGTH > 0) {
     o0.xyz = renodx::effects::ApplyFilmGrain(
