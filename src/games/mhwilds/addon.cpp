@@ -615,7 +615,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
   renodx::utils::settings::UpdateSetting("SwapChainCustomColorSpace", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTColorStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("FxLutScaling", 0.f);
+  renodx::utils::settings::UpdateSetting("FxLUTScaling", 0.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
   renodx::utils::settings::UpdateSetting("FxLUTExposureReverse", 0.f);
   renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
