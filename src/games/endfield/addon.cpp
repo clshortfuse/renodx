@@ -422,6 +422,17 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "Vanilla", "2x", "3x"},
     },
     new renodx::utils::settings::Setting{
+        .key = "AO_INTENSITY",
+        .binding = &shader_injection.ao_intensity,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Improved Shadows",
+        .section = "Rendering Improvements",
+        .tooltip = "Toggle improved shadow occlusion for objects and foliage",
+        .labels = {"Off", "On"},
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
         .binding = &shader_injection.swap_chain_custom_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
