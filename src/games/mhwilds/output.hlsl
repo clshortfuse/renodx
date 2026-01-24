@@ -129,11 +129,9 @@ lut_config.scaling = 0.f;
       lut_color_graded = DecodeLutOutput(lut_color_graded);
       output_color = renodx::tonemap::UpgradeToneMap(output_color_midgray_adjusted, lut_color, lut_color_graded);
 
-      output_color *= 2.f; // LUTs cut brightness in half???
-
+      output_color *= 2.f;  // LUTs cut brightness in half???
       output_color = DisplayMap(output_color, 100.f);
     }
-
     output_color = renodx::draw::SwapChainPass(output_color, TEXCOORD, swapchainConfig);
   
 

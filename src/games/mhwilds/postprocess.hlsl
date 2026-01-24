@@ -308,10 +308,11 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
 
   bool custom_params = CUSTOM_TONE_MAP_PARAMETERS == 1.f;
   if (custom_params && RENODX_TONE_MAP_TYPE != 0.f) {
-    params.contrast *= 1.3f;
-    // params.toe *= 2.0f;
+    //params.contrast *= 1.2f;
+    //params.contrast = 0.18f;
+    //params.toe = 3.f;
     params.madLinearStartContrastFactor = renodx::math::FLT_EPSILON;
-    // params.linearBegin *= 1.2f;
+    params.linearBegin = renodx::math::FLT_EPSILON;
     // params.invLinearBegin *= 1.5f;
     // params.displayMaxNitSubContrastFactor *= 2.f;
     // params.madLinearStartContrastFactor *= 0.20f;
@@ -367,6 +368,7 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
 float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped);
   float mid_gray_out = VanillaSDRTonemapper(0.18f, params).x;
+  //return mid_gray_out;
   untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709, mid_gray_out);
 
   // Roll off grading sliders to not clip

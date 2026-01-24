@@ -144,16 +144,16 @@ float3 PostTonemapSliders(float3 hdr_color) {
 float3 DisplayMap(float3 color, float white_clip) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
-  float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;              // Normalizes peak
-  float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness
+  float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes peak
+  float diffuse_white_nits = config.swap_chain_scaling_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness | swap chain scaling nits because of use in shared.h
 
   color = max(0, renodx::color::bt2020::from::BT709(color));
   float tonemap_peak = peak_nits / diffuse_white_nits;
 
   float3 outputColor = color;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
-    white_clip = min(500.f, max(100.f, white_clip));
-    outputColor = HermiteSplineMaxCLL(color, peak_nits, white_clip);
+    //white_clip = min(500.f, max(100.f, white_clip));
+    outputColor = HermiteSplineMaxCLL(color, tonemap_peak, white_clip);
   }
 
   outputColor = renodx::color::bt709::from::BT2020(outputColor);
