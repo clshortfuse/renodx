@@ -366,7 +366,8 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
 
 float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped);
-  untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709);
+  float mid_gray_out = VanillaSDRTonemapper(0.18f, params).x;
+  untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709, mid_gray_out);
 
   // Roll off grading sliders to not clip
   float white_clip = 100.f;
