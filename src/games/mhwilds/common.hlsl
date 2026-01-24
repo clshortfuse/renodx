@@ -145,7 +145,10 @@ float3 DisplayMap(float3 color, float white_clip) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
   float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes peak
-  float diffuse_white_nits = config.swap_chain_scaling_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness | swap chain scaling nits because of use in shared.h
+  float diffuse_white_nits = renodx::color::correct::GammaSafe(config.swap_chain_scaling_nits) / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness | swap chain scaling nits because of use in shared.h
+
+  //peak_nits = renodx::color::correct::GammaSafe(peak_nits);
+  //diffuse_white_nits = renodx::color::correct::GammaSafe(diffuse_white_nits);
 
   color = max(0, renodx::color::bt2020::from::BT709(color));
   float tonemap_peak = peak_nits / diffuse_white_nits;
