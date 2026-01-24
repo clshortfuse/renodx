@@ -89,7 +89,7 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   return color;
 }
 
-float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, UserGradingConfig config) {
+float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, UserGradingConfig config, bool clamp_to_ap1 = true) {
   float3 color = tonemapped;
   if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_emulation_strength != 0.f || config.blowout != 0.f || config.highlight_saturation != 0.f) {
     float3 perceptual_new = renodx::color::oklab::from::BT709(color);
@@ -140,7 +140,9 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
 
     color = renodx::color::bt709::from::OkLab(perceptual_new);
 
-    color = renodx::color::bt709::clamp::AP1(color);
+    if (clamp_to_ap1) {
+      color = renodx::color::bt709::clamp::AP1(color);
+    }
   }
   return color;
 }
@@ -263,6 +265,23 @@ float3 SplitContrastPerCh(float3 color, float contrast_shadows = 1.f, float cont
   return contrasted;
 }
 
+float3 GamutCompress(float3 color_bt709, float3x3 color_space_matrix = renodx::color::BT709_TO_XYZ_MAT) {
+  float grayscale = dot(color_bt709, color_space_matrix[1].rgb);
+
+  const float MID_GRAY_LINEAR = 1 / (pow(10, 0.75));                          // ~0.18f
+  const float MID_GRAY_PERCENT = 0.5f;                                        // 50%
+  const float MID_GRAY_GAMMA = log(MID_GRAY_LINEAR) / log(MID_GRAY_PERCENT);  // ~2.49f
+  float encode_gamma = MID_GRAY_GAMMA;
+
+  float3 encoded = renodx::color::gamma::EncodeSafe(color_bt709, encode_gamma);
+  float encoded_gray = renodx::color::gamma::Encode(grayscale, encode_gamma);
+
+  float3 compressed = renodx::color::correct::GamutCompress(encoded, encoded_gray);
+  float3 color_bt709_compressed = renodx::color::gamma::DecodeSafe(compressed, encode_gamma);
+
+  return color_bt709_compressed;
+}
+
 float3 GenerateOutputAvatar(float3 ungraded_bt709, float contrast) {
   UserGradingConfig cg_config = CreateColorGradeConfig();
   float3 graded_bt709;
@@ -270,7 +289,7 @@ float3 GenerateOutputAvatar(float3 ungraded_bt709, float contrast) {
     graded_bt709 = ungraded_bt709;
   } else {  // Vanilla+
     // `pow(c, contrast) * 2.f` per channel will essentially give uncapped version of vanilla
-    // emulate by luminance to keep hues and chrominance intact and scale lightness evenly
+    // apply by luminance to keep hues and chrominance intact and scale lightness evenly
     float shadow_contrast = contrast;
     // lower highlight contrast so image isn't overly harsh, but make sure sun still reaches 100.f
     float highlight_contrast = contrast * 0.63207f;
@@ -291,9 +310,12 @@ float3 GenerateOutputAvatar(float3 ungraded_bt709, float contrast) {
 
   float y = renodx::color::y::from::BT709(graded_bt709);
   final_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(final_bt709, y, cg_config);
-  final_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(final_bt709, graded_bt709, y, cg_config);
+  final_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(final_bt709, graded_bt709, y, cg_config, false);
 
   float3 color_bt2020 = renodx::color::bt2020::from::BT709(final_bt709);
+
+  color_bt2020 = renodx::color::bt2020::clamp::AP1(color_bt2020);
+  color_bt2020 = GamutCompress(color_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
 
   float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
 
@@ -310,8 +332,8 @@ float3 GenerateOutputStarWarsOutlaws(float3 ungraded_bt709, float contrast) {
   if (RENODX_TONE_MAP_TYPE == 1.f) {  // None
     graded_bt709 = ungraded_bt709;
   } else {  // Vanilla+
-    // `pow(c, contrast) * 2.f` per channel will essentially give uncapped version of vanilla
-    // emulate by luminance to keep hues and chrominance intact and scale lightness evenly
+    // `pow(c, contrast) * 1.7f` per channel will essentially give uncapped version of vanilla
+    // apply by luminance to keep hues and chrominance intact and scale lightness evenly
     float shadow_contrast = contrast;
     // lower highlight contrast so image isn't overly harsh, but make sure sun still reaches 100.f
     float highlight_contrast = contrast * 0.69275f;
@@ -332,9 +354,12 @@ float3 GenerateOutputStarWarsOutlaws(float3 ungraded_bt709, float contrast) {
 
   float y = renodx::color::y::from::BT709(graded_bt709);
   final_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(final_bt709, y, cg_config);
-  final_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(final_bt709, graded_bt709, y, cg_config);
+  final_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(final_bt709, graded_bt709, y, cg_config, false);
 
   float3 color_bt2020 = renodx::color::bt2020::from::BT709(final_bt709);
+  
+  color_bt2020 = renodx::color::bt2020::clamp::AP1(color_bt2020);
+  color_bt2020 = GamutCompress(color_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
 
   float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
 
