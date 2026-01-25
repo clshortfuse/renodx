@@ -49,6 +49,7 @@ struct ShaderInjectData {
   float tone_map_saturation;
   float tone_map_highlight_saturation;
   float tone_map_blowout;
+  float tone_map_dechroma;
   float tone_map_flare;
   float tone_map_hue_correction;
   float tone_map_hue_shift;
@@ -77,6 +78,7 @@ struct ShaderInjectData {
   float tone_map_video_nits;
   float reno_drt_tone_map_method;
   float status_text_opacity;
+  float ping_text_opacity;
   float custom_random;
   float custom_grain_strength;
   float vignette_strength;
@@ -116,6 +118,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
+#define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
 #define RENODX_INTERMEDIATE_ENCODING         shader_injection.intermediate_encoding
@@ -131,6 +134,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HDR_VIDEO              shader_injection.tone_map_hdr_video
 #define RENODX_VIDEO_NITS                      shader_injection.tone_map_video_nits
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        shader_injection.reno_drt_tone_map_method
+#define PING_TEXT_OPACITY                      shader_injection.ping_text_opacity
 #define STATUS_TEXT_OPACITY                    shader_injection.status_text_opacity
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_GRAIN_STRENGTH                  shader_injection.custom_grain_strength

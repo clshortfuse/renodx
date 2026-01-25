@@ -168,7 +168,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Hue Shift",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -180,8 +180,8 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPerChannelBlowout",
-        .binding = &shader_injection.perchannelblowout,
-        .default_value = 100.f,
+        .binding = &shader_injection.tone_map_blowout,
+        .default_value = 50.f,
         .label = "Per Channel Blowout",
         .section = "Tone Mapping",
         .tooltip = "Per Channel Blowout strength.",
@@ -279,7 +279,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
+        .binding = &shader_injection.tone_map_dechroma,
         .default_value = 0.f,
         .label = "Blowout",
         .section = "Color Grading",
@@ -295,7 +295,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return false; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -317,6 +316,16 @@ renodx::utils::settings::Settings settings = {
         .label = "UID Text",
         .section = "User Interface & Video",
         .tooltip = "Toggle UID text visibility",
+        .labels = {"Hidden", "Visible"},
+    },
+        new renodx::utils::settings::Setting{
+        .key = "UIOpacityPingText",
+        .binding = &shader_injection.ping_text_opacity,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Ping Text",
+        .section = "User Interface & Video",
+        .tooltip = "Toggle ping text visibility",
         .labels = {"Hidden", "Visible"},
     },
     new renodx::utils::settings::Setting{
