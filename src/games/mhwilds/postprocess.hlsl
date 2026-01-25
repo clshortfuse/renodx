@@ -51,7 +51,7 @@ struct LocalExposureInputs {
 
 float NormalizeExposure() {
   return CUSTOM_EXPOSURE_STRENGTH * ((CUSTOM_LUT_EXPOSURE_REVERSE * 5.f) + 1);
-  //return 1.f + CUSTOM_EXPOSURE_STRENGTH;
+  // return 1.f + CUSTOM_EXPOSURE_STRENGTH;
 }
 
 // float PickExposure(float vanilla, float autoexposure = 1.f) {
@@ -88,7 +88,7 @@ float3 CustomLUTColor(float3 ap1_input, float3 ap1_output) {
   float ap1_input_y = renodx::color::y::from::AP1(ap1_input);
   float ap1_output_y = renodx::color::y::from::AP1(ap1_output);
   float3 new_color;
-  //float vanilla_exposure = renodx::math::DivideSafe(ap1_output_y, ap1_input_y, 0);
+  // float vanilla_exposure = renodx::math::DivideSafe(ap1_output_y, ap1_input_y, 0);
   new_color = lerp(
       ap1_input * (renodx::math::DivideSafe(ap1_output_y, ap1_input_y, 0)),
       ap1_output,
@@ -98,11 +98,12 @@ float3 CustomLUTColor(float3 ap1_input, float3 ap1_output) {
     new_color = lerp(
                     ap1_input,
                     ap1_output * (renodx::math::DivideSafe(ap1_input_y, ap1_output_y, 0)),
-                    CUSTOM_LUT_COLOR_STRENGTH) * 8.f;
+                    CUSTOM_LUT_COLOR_STRENGTH)
+                * 8.f;
     new_color = renodx::color::bt709::from::AP1(new_color);
     new_color = renodx::color::grade::Contrast(new_color, 1.8f, 0.5f);
     new_color = renodx::color::ap1::from::BT709(new_color);
-    //new_color = renodx::color::ap1::clamp::b(new_color);
+    // new_color = renodx::color::ap1::clamp::b(new_color);
   }
   return new_color;
 }
@@ -151,7 +152,6 @@ float3 SampleColorLUTs(
     float lut_blend_rate,
     float lut_blend_rate2,
     row_major float4x4 color_matrix) {
-  
   // Create RenoDX LUT config for log-encoded AP1 space
   // type_input/output = LINEAR means ConvertInput/LinearOutput are no-ops
   // We handle log encoding/decoding manually before/after Sample()
@@ -159,48 +159,53 @@ float3 SampleColorLUTs(
   lut_config.lut_sampler = lut_sampler;
   lut_config.strength = 1.f;
   lut_config.scaling = CUSTOM_LUT_SCALING;
-  lut_config.type_input = renodx::lut::config::type::LINEAR;   // We handle log manually
-  lut_config.type_output = renodx::lut::config::type::LINEAR;  // We handle log manually
-  lut_config.tetrahedral = true;  // Better interpolation quality
-  
+  lut_config.type_input = renodx::lut::config::type::ACES_CCT;   // We handle log manually
+  lut_config.type_output = renodx::lut::config::type::ACES_CCT;  // We handle log manually
+  lut_config.tetrahedral = true;                                 // Better interpolation quality
+
+  float3 bt709_color = renodx::color::bt709::from::AP1(ap1_color);
   // Encode input to log space for LUT lookup
-  float3 log_input = EncodeLogAcesVec(ap1_color);
-  
-  // Sample primary LUT using RenoDX Sample() (includes strength/scaling)
-  // Since type_input=LINEAR, log_input passes through unchanged to SampleColor
-  // Since type_output=LINEAR, result comes back in log space, which we decode
-  float3 lut0_log = renodx::lut::Sample(lut0, lut_config, log_input);
-  float3 lut_result = DecodeLogAcesVec(lut0_log);
-  
+  // float3 log_input = EncodeLogAcesVec(ap1_color);
+
+  // Ritsu: We're encoding manually so lut scaling wouldn't work as expected
+  // // Sample primary LUT using RenoDX Sample() (includes strength/scaling)
+  // // Since type_input=LINEAR, log_input passes through unchanged to SampleColor
+  // // Since type_output=LINEAR, result comes back in log space, which we decode
+  // float3 lut0_log = renodx::lut::Sample(lut0, lut_config, log_input);
+  // float3 lut_result = DecodeLogAcesVec(lut0_log);
+
+  float3 lut_result = renodx::lut::Sample(lut0, lut_config, bt709_color);
   // Optional: Blend with secondary LUT
   if (lut_blend_rate > 0.0f) {
-    float3 lut1_log = renodx::lut::Sample(lut1, lut_config, log_input);
-    float3 lut1_linear = DecodeLogAcesVec(lut1_log);
-    lut_result = lerp(lut_result, lut1_linear, lut_blend_rate);
-    
-    // Optional: Blend with tertiary LUT
-    if (lut_blend_rate2 > 0.0f) {
-      // Re-encode the blended result for second LUT sampling
-      float3 blended_log = EncodeLogAcesVec(lut_result);
-      float3 lut2_log = renodx::lut::Sample(lut2, lut_config, blended_log);
-      float3 lut2_linear = DecodeLogAcesVec(lut2_log);
-      lut_result = lerp(lut_result, lut2_linear, lut_blend_rate2);
-    }
-  } else if (lut_blend_rate2 > 0.0f) {
-    // Blend primary with tertiary
-    float3 blended_log = EncodeLogAcesVec(lut_result);
-    float3 lut2_log = renodx::lut::Sample(lut2, lut_config, blended_log);
-    float3 lut2_linear = DecodeLogAcesVec(lut2_log);
-    lut_result = lerp(lut_result, lut2_linear, lut_blend_rate2);
+    // float3 lut1_log = renodx::lut::Sample(lut1, lut_config, log_input);
+    // float3 lut1_linear = DecodeLogAcesVec(lut1_log);
+    // lut_result = lerp(lut_result, lut1_linear, lut_blend_rate);
+
+    float3 lut1_bt709 = renodx::lut::Sample(lut1, lut_config, bt709_color);
+    // We're blending in bt709, vanilla blends in AP1 (both linear)
+    // I don't notice any colors difference so I kept it bt709
+    lut_result = lerp(lut_result, lut1_bt709, lut_blend_rate);
   }
-  
+
+  // Optional: Blend with tertiary LUT
+  if (lut_blend_rate2 > 0.0f) {
+    // Re-encode the blended result for second LUT sampling
+    // float3 blended_log = EncodeLogAcesVec(lut_result);
+    // float3 lut2_log = renodx::lut::Sample(lut2, lut_config, blended_log);
+    // float3 lut2_linear = DecodeLogAcesVec(lut2_log);
+    // lut_result = lerp(lut_result, lut2_linear, lut_blend_rate2);
+
+    float3 lut2_bt709 = renodx::lut::Sample(lut2, lut_config, lut_result);
+    lut_result = lerp(lut_result, lut2_bt709, lut_blend_rate2);
+  }
+
+  lut_result = renodx::color::ap1::from::BT709(lut_result);
   // Apply color matrix transform (AP1 to AP1)
   float3 matrix_output = float3(
-    mad(lut_result.z, color_matrix[2].x, mad(lut_result.y, color_matrix[1].x, lut_result.x * color_matrix[0].x)) + color_matrix[3].x,
-    mad(lut_result.z, color_matrix[2].y, mad(lut_result.y, color_matrix[1].y, lut_result.x * color_matrix[0].y)) + color_matrix[3].y,
-    mad(lut_result.z, color_matrix[2].z, mad(lut_result.y, color_matrix[1].z, lut_result.x * color_matrix[0].z)) + color_matrix[3].z
-  );
-  
+      mad(lut_result.z, color_matrix[2].x, mad(lut_result.y, color_matrix[1].x, lut_result.x * color_matrix[0].x)) + color_matrix[3].x,
+      mad(lut_result.z, color_matrix[2].y, mad(lut_result.y, color_matrix[1].y, lut_result.x * color_matrix[0].y)) + color_matrix[3].y,
+      mad(lut_result.z, color_matrix[2].z, mad(lut_result.y, color_matrix[1].z, lut_result.x * color_matrix[0].z)) + color_matrix[3].z);
+
   return matrix_output;
 }
 
@@ -215,8 +220,6 @@ float3 UpgradeWithSDR(float3 untonemapped_bt709, float3 tonemapped_bt709) {
   output = renodx::color::ap1::from::BT709(output);
   return output;
 }
-
-
 
 float LocalExposureCalc(float4 color, LocalExposureInputs inputs) {
   float _971;
@@ -266,7 +269,6 @@ float LocalExposureCalcRare(float4 color, LocalExposureInputs inputs) {
 }
 
 float LocalExposure(float4 color, LocalExposureInputs inputs, bool rare = false) {
-
   inputs.LEHighlightContrast = lerp(1.0f, inputs.LEHighlightContrast, CUSTOM_LOCAL_EXPOSURE_HIGHLIGHTS);
   inputs.LEShadowContrast = lerp(1.0f, inputs.LEShadowContrast, CUSTOM_LOCAL_EXPOSURE_SHADOWS);
   inputs.LEMiddleGreyLog = lerp(log2(0.18f), inputs.LEMiddleGreyLog, CUSTOM_LOCAL_EXPOSURE_MID_GREY);
@@ -297,8 +299,7 @@ float CalculateMulLinearStartContrastFactor(
     float linearStart_val,
     float maxNit_val,
     float contrastFactor_val,
-    float displayMaxNitSubContrastFactor_val
-) {
+    float displayMaxNitSubContrastFactor_val) {
   float contrast_output = (contrast_val * linearStart_val) + madLinearStartContrastFactor_adjusted;
   float highlight_numerator = maxNit_val - contrast_output;
   return log2(highlight_numerator / displayMaxNitSubContrastFactor_val) - (contrastFactor_val * linearStart_val);
@@ -316,12 +317,12 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
     // params.toe = 3.f;
     params.madLinearStartContrastFactor = renodx::math::FLT_EPSILON;
     params.linearBegin = renodx::math::FLT_EPSILON;
-    //params.madLinearStartContrastFactor = 0.001f;
-    //params.linearBegin = 0.001f;
-    // params.invLinearBegin *= 1.5f;
-    // params.displayMaxNitSubContrastFactor *= 2.f;
-    // params.madLinearStartContrastFactor *= 0.20f;
-    // params.toe *= 1.2f;
+    // params.madLinearStartContrastFactor = 0.001f;
+    // params.linearBegin = 0.001f;
+    //  params.invLinearBegin *= 1.5f;
+    //  params.displayMaxNitSubContrastFactor *= 2.f;
+    //  params.madLinearStartContrastFactor *= 0.20f;
+    //  params.toe *= 1.2f;
   }
   if (custom_params || (peak != vanillaParams.maxNit)) {
     params.maxNit = peak;
@@ -332,8 +333,7 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
         params.linearStart,
         params.maxNit,
         params.contrastFactor,
-        params.displayMaxNitSubContrastFactor
-    );
+        params.displayMaxNitSubContrastFactor);
   }
 
   float _2956;
@@ -385,8 +385,7 @@ float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr
     float3 output_color = renodx::color::bt709::from::AP1(VanillaSDRTonemapper(renodx::color::ap1::from::BT709(untonemapped_bt709), params));
     output_color = PostTonemapSliders(output_color);
     return renodx::color::ap1::from::BT709(output_color);
-  }
-  else if (RENODX_TONE_MAP_TYPE == 0.f) {
+  } else if (RENODX_TONE_MAP_TYPE == 0.f) {
     return untonemapped;
   }
 
@@ -405,7 +404,7 @@ float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr
   float3 hdr_color_bt709 = renodx::color::correct::Chrominance(tonemapped_bt709_lum, tonemapped_bt709_ch, 1.f, 0.f, 1);
   hdr_color_bt709 = renodx::color::correct::Hue(hdr_color_bt709, tonemapped_bt709_ch, 1, 1);
 
-  //hdr_color_bt709 = PostTonemapSliders(hdr_color_bt709);
+  // hdr_color_bt709 = PostTonemapSliders(hdr_color_bt709);
 
   return renodx::color::ap1::from::BT709(hdr_color_bt709);
 }
