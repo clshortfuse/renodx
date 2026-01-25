@@ -88,7 +88,7 @@ float3 CustomLUTColor(float3 ap1_input, float3 ap1_output) {
   float ap1_input_y = renodx::color::y::from::AP1(ap1_input);
   float ap1_output_y = renodx::color::y::from::AP1(ap1_output);
   float3 new_color;
-  float vanilla_exposure = renodx::math::DivideSafe(ap1_output_y, ap1_input_y, 0);
+  //float vanilla_exposure = renodx::math::DivideSafe(ap1_output_y, ap1_input_y, 0);
   new_color = lerp(
       ap1_input * (renodx::math::DivideSafe(ap1_output_y, ap1_input_y, 0)),
       ap1_output,
@@ -96,11 +96,14 @@ float3 CustomLUTColor(float3 ap1_input, float3 ap1_output) {
 
   if (CUSTOM_LUT_EXPOSURE_REVERSE > 0.f) {
     new_color = lerp(
-        ap1_input,
-        ap1_output * (renodx::math::DivideSafe(ap1_input_y, ap1_output_y, 0)),
-        CUSTOM_LUT_COLOR_STRENGTH) * 5.f;
+                    ap1_input,
+                    ap1_output * (renodx::math::DivideSafe(ap1_input_y, ap1_output_y, 0)),
+                    CUSTOM_LUT_COLOR_STRENGTH) * 8.f;
+    new_color = renodx::color::bt709::from::AP1(new_color);
+    new_color = renodx::color::grade::Contrast(new_color, 1.8f, 0.5f);
+    new_color = renodx::color::ap1::from::BT709(new_color);
+    //new_color = renodx::color::ap1::clamp::b(new_color);
   }
-
   return new_color;
 }
 
@@ -308,11 +311,13 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
 
   bool custom_params = CUSTOM_TONE_MAP_PARAMETERS == 1.f;
   if (custom_params && RENODX_TONE_MAP_TYPE != 0.f) {
-    //params.contrast *= 1.2f;
-    //params.contrast = 0.18f;
-    //params.toe = 3.f;
+    // params.contrast *= 1.2f;
+    // params.contrast = 0.18f;
+    // params.toe = 3.f;
     params.madLinearStartContrastFactor = renodx::math::FLT_EPSILON;
     params.linearBegin = renodx::math::FLT_EPSILON;
+    //params.madLinearStartContrastFactor = 0.001f;
+    //params.linearBegin = 0.001f;
     // params.invLinearBegin *= 1.5f;
     // params.displayMaxNitSubContrastFactor *= 2.f;
     // params.madLinearStartContrastFactor *= 0.20f;
@@ -367,24 +372,25 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
 
 float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped);
-  float mid_gray_out = VanillaSDRTonemapper(0.18f, params).x;
-  //return mid_gray_out;
-  untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709, mid_gray_out);
-
-  // Roll off grading sliders to not clip
-  float white_clip = 100.f;
-  white_clip = max(100.f, PreTonemapSliders(white_clip).x);
-  if (white_clip != 100.f) untonemapped_bt709 = ReinhardPiecewiseExtendedMaxCLL(untonemapped_bt709, 4.f, 100.f, white_clip);
 
   if (is_sdr) {
+    float mid_gray_out = VanillaSDRTonemapper(0.18f, params).x;
+    untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709, mid_gray_out);
+
+    // Roll off grading sliders to not clip
+    float white_clip = 100.f;
+    white_clip = max(100.f, PreTonemapSliders(white_clip).x);
+    if (white_clip != 100.f) untonemapped_bt709 = ReinhardPiecewiseExtendedMaxCLL(untonemapped_bt709, 4.f, 100.f, white_clip);
+
     float3 output_color = renodx::color::bt709::from::AP1(VanillaSDRTonemapper(renodx::color::ap1::from::BT709(untonemapped_bt709), params));
+    output_color = PostTonemapSliders(output_color);
     return renodx::color::ap1::from::BT709(output_color);
   }
   else if (RENODX_TONE_MAP_TYPE == 0.f) {
     return untonemapped;
   }
 
-  float per_channel_peak = 20.f;
+  float per_channel_peak = 12.f;
   float by_luminance_peak = 100.f;
 
   float y_in = renodx::color::y::from::BT709(untonemapped_bt709);
@@ -399,7 +405,7 @@ float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr
   float3 hdr_color_bt709 = renodx::color::correct::Chrominance(tonemapped_bt709_lum, tonemapped_bt709_ch, 1.f, 0.f, 1);
   hdr_color_bt709 = renodx::color::correct::Hue(hdr_color_bt709, tonemapped_bt709_ch, 1, 1);
 
-  hdr_color_bt709 = PostTonemapSliders(hdr_color_bt709);
+  //hdr_color_bt709 = PostTonemapSliders(hdr_color_bt709);
 
   return renodx::color::ap1::from::BT709(hdr_color_bt709);
 }
