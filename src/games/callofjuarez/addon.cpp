@@ -577,19 +577,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       addon_registered = true;
 
       if (!initialized) {
-        renodx::mods::shader::force_pipeline_cloning = false;
+        renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::allow_multiple_push_constants = true;
 
         renodx::mods::swapchain::SetUseHDR10(false);
-        renodx::mods::swapchain::prevent_full_screen = false;
+        //renodx::mods::swapchain::prevent_full_screen = false;
         renodx::mods::swapchain::force_borderless = true;
-        renodx::mods::swapchain::use_auto_upgrade = true;
+        renodx::mods::swapchain::use_auto_upgrade = false;
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
-        renodx::mods::swapchain::use_resource_cloning = false;
-        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+        renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::force_screen_tearing = false;
+        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
         // renodx::mods::swapchain::swap_chain_proxy_shaders = {
         //     {
         //         reshade::api::device_api::d3d10,
@@ -618,9 +619,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            //.use_resource_view_cloning = true,
-            //.usage_include = reshade::api::resource_usage::render_target,
-            .usage_include = reshade::api::resource_usage::resolve_dest,
+            .use_resource_view_cloning = true,
+            .usage_include = reshade::api::resource_usage::render_target,
+            //.usage_include = reshade::api::resource_usage::resolve_dest,
         });
 
         {
@@ -648,7 +649,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainPreventFullscreen",
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 1.f,
+              .default_value = 0.f,
               .label = "Prevent Fullscreen",
               .section = "Display Output",
               .tooltip = "Prevent exclusive fullscreen for proper HDR",
@@ -773,12 +774,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
                 .old_format = format,
                 .new_format = reshade::api::format::r16g16b16a16_float,
                 .ignore_size = (value == UPGRADE_TYPE_ANY),
-                //.use_resource_view_cloning = true,
+                .use_resource_view_cloning = true,
                 .aspect_ratio = static_cast<float>((value == UPGRADE_TYPE_OUTPUT_RATIO)
                                                        ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
                                                        : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
-                //.usage_include = reshade::api::resource_usage::render_target,
-                .usage_include = reshade::api::resource_usage::resolve_dest,
+                .usage_include = reshade::api::resource_usage::render_target,
+                //.usage_include = reshade::api::resource_usage::resolve_dest,
             });
             std::stringstream s;
             s << "Applying user resource upgrade for ";
@@ -798,8 +799,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  //renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
-  //renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }

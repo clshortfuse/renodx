@@ -363,6 +363,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::force_screen_tearing = false;
       renodx::mods::swapchain::set_color_space = false;
       renodx::mods::swapchain::use_device_proxy = true;
+      renodx::mods::swapchain::force_screen_tearing = false;
       renodx::mods::shader::constant_buffer_offset = 50 * 4;
       renodx::mods::shader::expected_constant_buffer_space = 50;
       renodx::mods::shader::expected_constant_buffer_index = 13;
