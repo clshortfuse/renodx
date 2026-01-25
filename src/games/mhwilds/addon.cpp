@@ -116,7 +116,7 @@ auto last_is_hdr = false;
 
 const std::unordered_map<std::string, float> REGRADE_VALUES = {
     //{"ToneMapType", 1.f},
-    {"ColorGradeExposure", 0.70f},
+    {"ColorGradeExposure", 0.80f},
     {"ColorGradeHighlights", 51.f},
     {"ColorGradeShadows", 50.f},
     {"ColorGradeContrast", 65.f},
@@ -194,6 +194,18 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
         .is_visible = []() { return last_is_hdr; },
     },
+    //     new renodx::utils::settings::Setting{
+    //     .key = "SDREOTFEmulation",
+    //     .binding = &shader_injection.custom_gamma_correction,
+    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //     .default_value = 1.f,
+    //     .label = "SDR EOTF Emulation",
+    //     .section = "Tone Mapping",
+    //     .tooltip = "Gamma Correction emulating the gamma mismatch on SDR displays",
+    //     .labels = {"Off", "2.2", "2.4"},
+    //     .is_enabled = []() { return shader_injection.tone_map_type != 0 && last_is_hdr; },
+    //     .is_visible = []() { return last_is_hdr; },
+    // },
         new renodx::utils::settings::Setting{
         .key = "CustomToneMapParameters",
         .binding = &shader_injection.custom_tone_map_parameters,
@@ -221,25 +233,25 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Regrade",
-        .section = "Presets",
-        .group = "button-line-1",
-        .on_change = []() {
-          for (auto* setting : settings) {
-            if (setting->key.empty()) continue;
-            if (setting->section == "Effects") continue;
-            if (!setting->can_reset) continue;
-            if (setting->is_global) continue;
-            if (REGRADE_VALUES.contains(setting->key)) {
-              renodx::utils::settings::UpdateSetting(setting->key, REGRADE_VALUES.at(setting->key));
-            } else {
-              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-            }
-          }
-        },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+    //     .label = "Regrade",
+    //     .section = "Presets",
+    //     .group = "button-line-1",
+    //     .on_change = []() {
+    //       for (auto* setting : settings) {
+    //         if (setting->key.empty()) continue;
+    //         if (setting->section == "Effects") continue;
+    //         if (!setting->can_reset) continue;
+    //         if (setting->is_global) continue;
+    //         if (REGRADE_VALUES.contains(setting->key)) {
+    //           renodx::utils::settings::UpdateSetting(setting->key, REGRADE_VALUES.at(setting->key));
+    //         } else {
+    //           renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+    //         }
+    //       }
+    //     },
+    // },
     new renodx::utils::settings::Setting{
         .key = "FxLocalExposureHighlights",
         .binding = &shader_injection.custom_local_exposure_highlights,
@@ -306,7 +318,7 @@ renodx::utils::settings::Settings settings = {
       new renodx::utils::settings::Setting{
         .key = "FxLUTScaling",
         .binding = &shader_injection.custom_lut_scaling,
-        .default_value = 50.f,
+        .default_value = 70.f,
         .label = "LUT Scaling",
         .section = "Scene Grading",
         .tooltip = "Adjusts LUTs to use the full range of luminance. 0 = Vanilla",

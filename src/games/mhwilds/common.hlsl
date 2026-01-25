@@ -144,8 +144,12 @@ float3 PostTonemapSliders(float3 hdr_color) {
 float3 DisplayMap(float3 color, float white_clip) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
+  if (CUSTOM_TONE_MAP_PARAMETERS == 0) {
+    config.swap_chain_scaling_nits = renodx::color::correct::GammaSafe(config.swap_chain_scaling_nits);
+  }
+
   float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes peak
-  float diffuse_white_nits = renodx::color::correct::GammaSafe(config.swap_chain_scaling_nits) / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness | swap chain scaling nits because of use in shared.h
+  float diffuse_white_nits = config.swap_chain_scaling_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness | swap chain scaling nits because of use in shared.h
 
   //peak_nits = renodx::color::correct::GammaSafe(peak_nits);
   //diffuse_white_nits = renodx::color::correct::GammaSafe(diffuse_white_nits);
@@ -155,11 +159,15 @@ float3 DisplayMap(float3 color, float white_clip) {
 
   float3 outputColor = color;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
-    //white_clip = min(500.f, max(100.f, white_clip));
+    white_clip = min(500.f, max(100.f, white_clip));
     outputColor = HermiteSplineMaxCLL(color, tonemap_peak, white_clip);
   }
 
   outputColor = renodx::color::bt709::from::BT2020(outputColor);
+
+  if (CUSTOM_TONE_MAP_PARAMETERS == 0) {
+    outputColor = renodx::color::correct::GammaSafe(outputColor);
+  }
 
   return outputColor;
 }

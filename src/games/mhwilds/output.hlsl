@@ -103,6 +103,11 @@ lut_config.scaling = 0.f;
       output_color = PrepareLutInput(output_color);
       output_color = renodx::lut::Sample(SrcLUT, lut_config, output_color);
       output_color = DecodeLutOutput(output_color, is_sdr);
+
+      // Custom tonemap parameters correct the math to work well with sRGB encode/decode, so apply fix for gamma mismatch in SDR
+      if (CUSTOM_TONE_MAP_PARAMETERS == 1) {
+        output_color = renodx::color::correct::GammaSafe(output_color, true);
+      }
     }
     else if (RENODX_TONE_MAP_TYPE == 0.f) {
       output_color = PrepareLutInput(output_color);
@@ -117,8 +122,6 @@ lut_config.scaling = 0.f;
       mid_gray_adjusted = renodx::lut::Sample(SrcLUT, lut_config, mid_gray_adjusted).x;
       mid_gray_adjusted = DecodeLutOutput(mid_gray_adjusted).x;
 
-      //output_color *= 2.f;
-
       float mid_gray_scale = mid_gray_adjusted / mid_gray;
       float3 output_color_midgray_adjusted = output_color * mid_gray_scale;
 
@@ -129,10 +132,10 @@ lut_config.scaling = 0.f;
       lut_color_graded = DecodeLutOutput(lut_color_graded);
       output_color = renodx::tonemap::UpgradeToneMap(output_color_midgray_adjusted, lut_color, lut_color_graded);
 
-      output_color *= 2.f;  // LUTs cut brightness in half???
-
-      output_color = DisplayMap(output_color, 100.f);
-      output_color = renodx::color::correct::GammaSafe(output_color);
+      output_color = PreTonemapSliders(output_color);
+      float white_clip_adjusted = PreTonemapSliders(100.f).x;
+      output_color = PostTonemapSliders(output_color); // Needs to go before display map to prevent hue clip
+      output_color = DisplayMap(output_color, white_clip_adjusted);
     }
     output_color = renodx::draw::SwapChainPass(output_color, TEXCOORD, swapchainConfig);
   
