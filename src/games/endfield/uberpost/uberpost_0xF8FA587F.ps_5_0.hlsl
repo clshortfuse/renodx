@@ -103,7 +103,7 @@ void main(
       renodx::lut::config::type::LINEAR,
       cb1[7].xyz
     );
-  float3 graded = renodx::lut::Sample(t1, lut_config, r0.xyz);
+  float3 graded = renodx::lut::Sample(t1, lut_config, r0.yzx);
   
   [branch]
   if (shader_injection.tone_map_type == 0.f) {
