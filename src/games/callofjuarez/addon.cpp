@@ -590,6 +590,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
         renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::force_screen_tearing = false;
+        renodx::mods::swapchain::device_proxy_wait_idle_source = true;
+        renodx::mods::swapchain::device_proxy_wait_idle_destination = true;
         renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
         // renodx::mods::swapchain::swap_chain_proxy_shaders = {
         //     {

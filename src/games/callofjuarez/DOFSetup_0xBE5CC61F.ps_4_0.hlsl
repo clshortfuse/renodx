@@ -209,25 +209,20 @@ void main(
   r0.w = dot(float3(0.333299994,0.333299994,0.333299994), r0.xyz);
   r1.x = saturate(r0.w * vColorParams.y + -vColorParams.x);
   r1.xyz = saturate(r0.www * r1.xxx + r0.xyz);
-  //r1.xyz = r0.www * r1.xxx + r0.xyz;
   r1.xyz = r1.xyz + -r0.xyz;
   r0.w = fBulletTime + vColorParams.w;
   r0.xyz = r0.www * r1.xyz + r0.xyz;
   r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;
-  //o0.xyz = saturate(r1.xyz + r0.xyz);
-  o0.xyz = r1.xyz + r0.xyz;
+  if (RENODX_TONE_MAP_TYPE <= 0.f) {
+    o0.xyz = saturate(r1.xyz + r0.xyz);
+  } else {
+    o0.xyz = r1.xyz + r0.xyz;
+  }
   r0.xyzw = sDepth.Sample(samDepth_s, v1.xy).xyzw;
-
   r0.x = saturate(r0.w * CONST_254.x + CONST_254.y);
   r0.y = saturate(r0.w * CONST_253.x + CONST_253.y);
   r0.x = saturate(CONST_254.z * r0.x + CONST_254.w);
   r0.y = saturate(CONST_253.w * r0.y);
-/*
-  r0.x = r0.w * CONST_254.x + CONST_254.y;
-  r0.y = r0.w * CONST_253.x + CONST_253.y;
-  r0.x = CONST_254.z * r0.x + CONST_254.w;
-  r0.y = CONST_253.w * r0.y;
-*/
   r0.x = r0.y + -r0.x;
   o0.w = r0.x * 0.5 + 0.5;
   return;
