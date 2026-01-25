@@ -83,14 +83,18 @@ void main(
     o0 = 0;
     return;
   }
+  float2 invViewportSize = float2(3840.0f, 2160.0f);
+  float2 uv = v0.xy / invViewportSize;
 
   if (STATUS_TEXT_OPACITY < 0.5f) {
-    float2 invViewportSize = float2(3840.0f, 2160.0f);
-    float2 uv = v0.xy / invViewportSize;
-
     bool isUuid = (uv.x >= 0.05f && uv.x <= 0.13f) && (uv.y >= 0.97f);
-
     if (isUuid) {
+      o0.xyzw = 0.0f;
+    }
+  }
+  if (PING_TEXT_OPACITY < 0.5f) {
+    bool isPing = (uv.x >= 0.02f && uv.x <= 0.05f) && (uv.y >= 0.97f);
+    if (isPing) {
       o0.xyzw = 0.0f;
     }
   }
