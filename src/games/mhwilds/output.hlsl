@@ -100,7 +100,26 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
     swapchainConfig.graphics_white_nits = 80.f;
     swapchainConfig.diffuse_white_nits = 80.f;
 
-    output_color = renodx::lut::Sample(SrcLUT, lut_config, output_color);
+    lut_config.type_output = renodx::lut::config::type::SRGB;
+
+    if (RENODX_TONE_MAP_TYPE != 0.f) {
+      float mid_gray = 0.18f;
+      float mid_gray_adjusted = renodx::lut::Sample(SrcLUT, lut_config, mid_gray).x;
+
+      float mid_gray_scale = mid_gray_adjusted / mid_gray;
+      float3 output_color_midgray_adjusted = output_color * mid_gray_scale;
+      float3 lut_color = ToneMapMaxCLL(output_color, 0.375f, 20.f);
+      float3 lut_color_graded = renodx::lut::Sample(SrcLUT, lut_config, lut_color);
+      output_color = renodx::tonemap::UpgradeToneMap(output_color, lut_color, lut_color_graded);
+
+      output_color = PreTonemapSliders(output_color);
+      float white_clip_adjusted = PreTonemapSliders(20.f).x;
+      output_color = PostTonemapSliders(output_color);  // Needs to go before display map to prevent hue clip
+      output_color = SDRDisplayMap(output_color, white_clip_adjusted);
+    }
+    else {
+      output_color = renodx::lut::Sample(SrcLUT, lut_config, output_color);
+    }
 
     // Custom tonemap parameters correct the math to work well with sRGB encode/decode, so apply fix for gamma mismatch in SDR
     if (CUSTOM_TONE_MAP_PARAMETERS == 1) {
@@ -110,10 +129,7 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
     output_color = renodx::lut::Sample(SrcLUT, lut_config, output_color);
   } else {
     float mid_gray = 0.18f;
-
-    float mid_gray_adjusted = PrepareLutInput(mid_gray).x;
-    mid_gray_adjusted = renodx::lut::Sample(SrcLUT, lut_config, mid_gray_adjusted).x;
-    mid_gray_adjusted = DecodeLutOutput(mid_gray_adjusted).x;
+    float mid_gray_adjusted = renodx::lut::Sample(SrcLUT, lut_config, mid_gray).x;
 
     float mid_gray_scale = mid_gray_adjusted / mid_gray;
     float3 output_color_midgray_adjusted = output_color * mid_gray_scale;
