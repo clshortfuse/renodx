@@ -17,16 +17,16 @@ void main(
 {
   float4 r0, r1, r2, r3;
   r0.xy = (int2)v0.xy;  // ftoi r0.xy, v0.xyxx
-  r0.zw = float2(0,0);
+  r0.zw = float2(0, 0);
   r0.xyzw = sColorHDR.Load(r0.xyz);  // r0 is now HDR Color
+  r1.xyzw = sColorAVG.Sample(samColorAVG_s, float2(0.5, 0.5)).xyzw; // Exposure
+  r2.xyz = r0.xyz * r1.xyz; // Apply Exposure
+  r3.xyz = r2.xyz * CONST_4.www + 1; // Brightness
+  r2.xyz = r3.xyz * r2.xyz;                              // Contrast
+  r3.xyz = r0.xyz * r1.xyz + 1; // For Glow Threshold
+  r0.xyz = -r1.xyz * fhdrglowthreshold + r0.xyz;  // Subtract Glow Threshold
   float3 untonemapped = max(r0.xyz, 0.0);
   float3 untonemapped_sRGB = renodx::color::srgb::Decode(untonemapped);
-  r1.xyzw = sColorAVG.Sample(samColorAVG_s, float2(0.5, 0.5)); // Exposure
-  r2.xyz = r0.xyz * r1.xyz; // Apply Exposure
-  r3.xyz = r2.xyz * CONST_4.w + 1.0; // Brightness
-  r2.xyz = r2.xyz * r3.xyz; // Contrast
-  r3.xyz = (r0.xyz * r1.xyz) + 1.0; // For Glow Threshold
-  r0.xyz = (-r1.xyz * fhdrglowthreshold) + r0.xyz; // Subtract Glow Threshold
   o0.xyz = saturate(r2.xyz / r3.xyz); // Reinhard, my beloved
   //o0.xyz = (r2.xyz / r3.xyz);
   r0.xyz = max(r0.xyz, 0.0);
@@ -40,7 +40,7 @@ void main(
   } else {
     o0 = vanilla;
   }
-  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+  //o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
 
   return;
 }

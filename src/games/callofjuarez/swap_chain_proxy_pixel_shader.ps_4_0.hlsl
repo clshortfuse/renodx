@@ -5,7 +5,7 @@ SamplerState s0 : register(s0);
 float4 main(float4 vpos: SV_POSITION, float2 uv: TEXCOORD0)
     : SV_TARGET {
   // Used for OpenGL support
-  uv.y = lerp(uv.y, 1.0 - uv.y, shader_injection.custom_flip_uv_y);
+  //uv.y = lerp(uv.y, 1.0 - uv.y, shader_injection.custom_flip_uv_y);
   float4 output = t0.Sample(s0, uv);
   output = renodx::color::srgb::Decode(output);
   return renodx::draw::SwapChainPass(output);

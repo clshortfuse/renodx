@@ -299,6 +299,39 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "BloomAmount",
+        .binding = &shader_injection.Custom_Bloom_Amount,
+        .default_value = 50.f,
+        .label = "Bloom Amount",
+        .section = "Game FX",
+        .tooltip = "Bloom effect amount.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "VolumetricAmount",
+        .binding = &shader_injection.Custom_Volumetrics_Amount,
+        .default_value = 50.f,
+        .label = "Volumetric Amount",
+        .section = "Game FX",
+        .tooltip = "Volumetric lighting effect amount.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SkySunSpriteIntensity",
+        .binding = &shader_injection.Custom_Sky_SunSpriteIntensity,
+        .default_value = 50.f,
+        .label = "Sky Sun Sprite Intensity",
+        .section = "Game FX - Sky",
+        .tooltip = "Sun sprite intensity.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
         .binding = &shader_injection.swap_chain_custom_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -447,6 +480,8 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
     renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
     renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+    renodx::utils::settings::UpdateSetting("BloomAmount", 50.f);
+    renodx::utils::settings::UpdateSetting("VolumetricAmount", 50.f);
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;
@@ -461,9 +496,9 @@ void OnPresent(reshade::api::command_queue* queue,
                uint32_t dirty_rect_count,
                const reshade::api::rect* dirty_rects) {
   auto* device = queue->get_device();
-  if (device->get_api() == reshade::api::device_api::opengl) {
-    shader_injection.custom_flip_uv_y = 1.f;
-  }
+  //if (device->get_api() == reshade::api::device_api::opengl) {
+  //  shader_injection.custom_flip_uv_y = 1.f;
+  //}
 }
 
 decltype(&TerminateProcess) real_TerminateProcess = nullptr;
@@ -583,15 +618,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::allow_multiple_push_constants = true;
 
         renodx::mods::swapchain::SetUseHDR10(false);
-        //renodx::mods::swapchain::prevent_full_screen = false;
+        renodx::mods::swapchain::prevent_full_screen = false;
         renodx::mods::swapchain::force_borderless = true;
+        renodx::mods::swapchain::swapchain_proxy_revert_state = true;
         renodx::mods::swapchain::use_auto_upgrade = false;
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
         renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::force_screen_tearing = false;
-        renodx::mods::swapchain::device_proxy_wait_idle_source = true;
-        renodx::mods::swapchain::device_proxy_wait_idle_destination = true;
+        //renodx::mods::swapchain::device_proxy_wait_idle_source = true;
+        //renodx::mods::swapchain::device_proxy_wait_idle_destination = true;
         renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
         // renodx::mods::swapchain::swap_chain_proxy_shaders = {
         //     {
@@ -711,9 +747,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           renodx::mods::swapchain::set_color_space = !use_device_proxy;
           if (use_device_proxy) {
             reshade::register_event<reshade::addon_event::present>(OnPresent);
-          } else {
-            shader_injection.custom_flip_uv_y = 0.f;
-          }
+          } 
+          //else {
+          //  shader_injection.custom_flip_uv_y = 0.f;
+          //}
           settings.push_back(setting);
         }
 
@@ -801,8 +838,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
-  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  //renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  //renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }

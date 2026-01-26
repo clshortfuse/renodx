@@ -1,6 +1,6 @@
 #include "./shared.h"
 
-// ---- Created with 3Dmigoto v1.2.45 on Sat Jan 24 00:40:21 2026
+// ---- Created with 3Dmigoto v1.2.45 on Sun Jan 25 22:10:16 2026
 
 cbuffer _Globals : register(b0)
 {
@@ -178,16 +178,10 @@ cbuffer _Globals : register(b0)
   float4 vHorizonColor : packoffset(c242);
   float3 vSunDir : packoffset(c243);
   float4 vSunColor : packoffset(c244);
-  float4 CONST_253 : packoffset(c245);
-  float4 CONST_254 : packoffset(c246);
 }
 
-SamplerState samColor0_s : register(s0);
-SamplerState samColor1_s : register(s1);
-SamplerState samDepth_s : register(s2);
+SamplerState sSam0_s : register(s0);
 Texture2D<float4> sColor0 : register(t0);
-Texture2D<float4> sColor1 : register(t1);
-Texture2D<float4> sDepth : register(t2);
 
 
 // 3Dmigoto declarations
@@ -198,32 +192,19 @@ Texture2D<float4> StereoParams : register(t125);
 
 void main( 
   float4 v0 : SV_POSITION0,
-  float4 v1 : TEXCOORD0,
+  float2 v1 : TEXCOORD0,
+  float2 w1 : TEXCOORD1,
   out float4 o0 : SV_TARGET0)
 {
   float4 r0,r1;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = sColor0.Sample(samColor0_s, v1.xy).xyzw;
-  r0.w = dot(float3(0.333299994,0.333299994,0.333299994), r0.xyz);
-  r1.x = saturate(r0.w * vColorParams.y + -vColorParams.x);
-  r1.xyz = saturate(r0.www * r1.xxx + r0.xyz);
-  r1.xyz = r1.xyz + -r0.xyz;
-  r0.w = fBulletTime + vColorParams.w;
-  r0.xyz = r0.www * r1.xyz + r0.xyz;
-  r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;
-  if (RENODX_TONE_MAP_TYPE <= 0.f) {
-    o0.xyz = saturate(r1.xyz + r0.xyz);
-  } else {
-    o0.xyz = r1.xyz + r0.xyz;
-  }
-  r0.xyzw = sDepth.Sample(samDepth_s, v1.xy).xyzw;
-  r0.x = saturate(r0.w * CONST_254.x + CONST_254.y);
-  r0.y = saturate(r0.w * CONST_253.x + CONST_253.y);
-  r0.x = saturate(CONST_254.z * r0.x + CONST_254.w);
-  r0.y = saturate(CONST_253.w * r0.y);
-  r0.x = r0.y + -r0.x;
-  o0.w = r0.x * 0.5 + 0.5;
+  r0.xyzw = sColor0.Sample(sSam0_s, v1.xy).xyzw;
+  r1.xyzw = sColor0.Sample(sSam0_s, w1.xy).xyzw;
+  r0.xyz = r1.xyz * r0.xyz;
+  r0.xyz = CONST_0.www * r0.xyz * CUSTOM_SKY_SUNSPRITEINTENSITY;
+  o0.w = dot(float3(0.333299994,0.333299994,0.333299994), r0.xyz);
+  o0.xyz = r0.xyz;
   return;
 }
