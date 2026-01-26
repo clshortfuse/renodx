@@ -364,17 +364,38 @@ void comp_main() {
 
   float _1491 = asfloat(CB1_m[6u].x);  // desaturation
 
-  float _1504 = _1430 * log2(min(_1425, _1422 * mad(1.0f - _1446, _1491, _1446)));
+  float _1504 = log2(min(mad(1.0f - _1446, _1491, _1446) * _1422, _1425)) * _1430;
   float _1505 = log2(min(mad(1.0f - _1447, _1491, _1447) * _1422, _1425)) * _1430;
   float _1506 = log2(min(mad(1.0f - _1448, _1491, _1448) * _1422, _1425)) * _1430;
 
+#if 1
   // sdr tonemapping thats stretched to work in hdr
   // custom parameters would work differently in hdr due to the scaling, so it seems to basically just be neutral?
   float _1527 = asfloat(CB1_m[7u].x);
   float _1530 = clamp(mad(_1451, asfloat(CB1_m[6u].y) - _1527, _1527), 0.0f, 1.0f);
-  float _1555 = exp2(log2(max(_1382 * ((_1445 * _1480) + (_1530 * mad(-_1445, _1480, exp2(_1504) / mad(_1440, exp2(_1435 * _1504), _1443)))), 0.0f)) * 0.1593017578125f);
-  float _1556 = exp2(log2(max(((mad(-_1481, _1445, exp2(_1505) / mad(exp2(_1505 * _1435), _1440, _1443)) * _1530) + (_1481 * _1445)) * _1382, 0.0f)) * 0.1593017578125f);
-  float _1557 = exp2(log2(max(((mad(-_1482, _1445, exp2(_1506) / mad(exp2(_1506 * _1435), _1440, _1443)) * _1530) + (_1482 * _1445)) * _1382, 0.0f)) * 0.1593017578125f);
+  float _1555 = (mad(-_1480, _1445, exp2(_1504) / mad(exp2(_1504 * _1435), _1440, _1443)) * _1530) + (_1480 * _1445);
+  float _1556 = (mad(-_1481, _1445, exp2(_1505) / mad(exp2(_1505 * _1435), _1440, _1443)) * _1530) + (_1481 * _1445);
+  float _1557 = (mad(-_1482, _1445, exp2(_1506) / mad(exp2(_1506 * _1435), _1440, _1443)) * _1530) + (_1482 * _1445);
+#else
+
+  float _1555 = exp2(_1504) * 2.f;
+  float _1556 = exp2(_1505) * 2.f;
+  float _1557 = exp2(_1506) * 2.f;
+
+  float peak_scaling_ratio = asfloat(CB1_m[1u].x) * (1.f / _1382);
+  _1555 /= (peak_scaling_ratio);
+  _1556 /= (peak_scaling_ratio);
+  _1557 /= (peak_scaling_ratio);
+
+#endif
+
+  _1555 *= _1382;
+  _1556 *= _1382;
+  _1557 *= _1382;
+
+  _1555 = pow(max(0, _1555), 0.1593017578125f);
+  _1556 = pow(max(0, _1556), 0.1593017578125f);
+  _1557 = pow(max(0, _1557), 0.1593017578125f);
   float _1573 = exp2(log2(mad(_1555, 18.8515625f, 0.8359375f) / mad(_1555, 18.6875f, 1.0f)) * 78.84375f);
   float _1574 = exp2(log2(mad(_1556, 18.8515625f, 0.8359375f) / mad(_1556, 18.6875f, 1.0f)) * 78.84375f);
   float3 _1578 = float3(_1573, _1574, exp2(log2(mad(_1557, 18.8515625f, 0.8359375f) / mad(_1557, 18.6875f, 1.0f)) * 78.84375f));
