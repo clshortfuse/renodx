@@ -51,7 +51,10 @@
 #define CUSTOM_SHARPNESS                       shader_injection.custom_sharpness
 #define CUSTOM_FOG_AMOUNT                      shader_injection.custom_fog_amount
 #define CUSTOM_LUT_SCALING                     shader_injection.custom_lut_scaling
-#define CUSTOM_SATURATION_CORRECTION           shader_injection.custom_saturation_correction
+//#define CUSTOM_SATURATION_CORRECTION           shader_injection.custom_saturation_correction
+
+//#define CUSTOM_SDR_TONEMAP                     shader_injection.custom_sdr_tonemap
+
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -87,9 +90,10 @@ struct ShaderInjectData {
   float custom_sharpness;
   float custom_fog_amount;
   float custom_lut_scaling;
-  float custom_saturation_correction;
+  //float custom_saturation_correction;
   float swap_chain_output_dither_seed;
   float swap_chain_output_dither_bits;
+  //float custom_sdr_tonemap;
 };
 
 #ifndef __cplusplus

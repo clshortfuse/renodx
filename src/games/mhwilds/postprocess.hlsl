@@ -99,7 +99,7 @@ float3 CustomLUTColor(float3 ap1_input, float3 ap1_output) {
                     ap1_input,
                     ap1_output * (renodx::math::DivideSafe(ap1_input_y, ap1_output_y, 0)),
                     CUSTOM_LUT_COLOR_STRENGTH)
-                * 8.f;
+                * 7.f;
     new_color = renodx::color::bt709::from::AP1(new_color);
     new_color = renodx::color::grade::Contrast(new_color, 1.8f, 0.5f);
     new_color = renodx::color::ap1::from::BT709(new_color);
@@ -311,7 +311,7 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
   CustomTonemapParam vanillaParams = params;
 
   bool custom_params = CUSTOM_TONE_MAP_PARAMETERS == 1.f;
-  if (custom_params && RENODX_TONE_MAP_TYPE != 0.f) {
+  if (custom_params) {
     // params.contrast *= 1.2f;
     // params.contrast = 0.18f;
     // params.toe = 3.f;
@@ -373,17 +373,17 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
 float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr) {
   float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped);
 
-  if (is_sdr) {
-    float mid_gray_out = VanillaSDRTonemapper(0.18f, params).x;
-    untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709, mid_gray_out);
+  if (is_sdr && RENODX_TONE_MAP_TYPE == 0) {
+    // float mid_gray_out = VanillaSDRTonemapper(0.18f, params).x;
+    // untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709, mid_gray_out);
 
-    // Roll off grading sliders to not clip
-    float white_clip = 100.f;
-    white_clip = max(100.f, PreTonemapSliders(white_clip).x);
-    if (white_clip != 100.f) untonemapped_bt709 = ReinhardPiecewiseExtendedMaxCLL(untonemapped_bt709, 4.f, 100.f, white_clip);
+    // // Roll off grading sliders to not clip
+    // float white_clip = 100.f;
+    // white_clip = max(100.f, PreTonemapSliders(white_clip).x);
+    // if (white_clip != 100.f) untonemapped_bt709 = ReinhardPiecewiseExtendedMaxCLL(untonemapped_bt709, 4.f, 100.f, white_clip);
 
     float3 output_color = renodx::color::bt709::from::AP1(VanillaSDRTonemapper(renodx::color::ap1::from::BT709(untonemapped_bt709), params));
-    output_color = PostTonemapSliders(output_color);
+    //output_color = PostTonemapSliders(output_color);
     return renodx::color::ap1::from::BT709(output_color);
   } else if (RENODX_TONE_MAP_TYPE == 0.f) {
     return untonemapped;

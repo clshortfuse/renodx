@@ -56,6 +56,54 @@ float3 ReinhardPiecewiseExtendedMaxCLL(float3 color, float rolloff_start, float 
   return color * scale;
 }
 
+// float HDRBoost(float color, float power = 0.20f, float normalization_point = 0.02f) {
+//   const float smoothing = abs(power) * 2.f;
+
+//   float target = normalization_point * pow(color / normalization_point, 1.f + power);
+//   float blended = lerp(color, target, renodx::tonemap::Reinhard(color, smoothing));
+//   return (power >= 0.f) ? max(color, blended) : min(color, blended);
+//   // float highlight_compression_scale = saturate(pow(saturate((color - highlight_compression_start) / (highlight_compression_peak - highlight_compression_start)), highlight_compression_curve));
+//   // float smoothed = lerp(blended, color, highlight_compression_scale);
+//   // return smoothed;
+// }
+
+// float3 HDRBoost(float3 color, float power = 0.20f, float normalization_point = 0.02f) {
+//   return float3(
+//       HDRBoost(color.r, power, normalization_point),
+//       HDRBoost(color.g, power, normalization_point),
+//       HDRBoost(color.b, power, normalization_point)
+//   );
+// }
+
+// float3 ApplyHDRBoost(float3 color, float power = 0.20f, int mode = 0, float normalization_point = 0.02f) {
+//   if (power == 0.f) return color;
+
+//   color = max(0, renodx::color::bt2020::from::BT709(color));
+
+//   if (mode == 0) {  // Per Channel
+//     color = HDRBoost(color, power, normalization_point);
+//   } 
+//   else if (mode == 1) {  // By Luminance
+//     float y_in = renodx::color::y::from::BT709(color);
+//     float y_out = HDRBoost(y_in, power, normalization_point);
+//     color = renodx::color::correct::Luminance(color, y_in, y_out);
+//   }
+
+//   color = renodx::color::bt709::from::BT2020(color);
+//   return color;
+// }
+
+float Highlights(float x, float highlights, float mid_gray) {
+  if (highlights == 1.f) return x;
+
+  if (highlights > 1.f) {
+    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.f)));
+  } else {  // highlights < 1.f
+    x /= mid_gray;
+    return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
+  }
+}
+
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
     return untonemapped;
@@ -71,7 +119,9 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
 
   // highlights
-  float y_highlighted = renodx::color::grade::Highlights(y_contrasted, config.highlights, mid_gray);
+  float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
+  //float y_highlighted = HDRBoost(y_contrasted, config.highlights - 1.f, mid_gray);
+  //float y_highlighted = renodx::color::grade::Highlights(y_contrasted, config.highlights, mid_gray);
 
   // shadows
   float y_shadowed = renodx::color::grade::Shadows(y_highlighted, config.shadows, mid_gray);
@@ -169,5 +219,26 @@ float3 DisplayMap(float3 color, float white_clip) {
     outputColor = renodx::color::correct::GammaSafe(outputColor);
   }
 
+  return outputColor;
+}
+
+float3 SDRDisplayMap(float3 color, float white_clip) {
+  renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
+
+  float peak = 1.f;
+
+  if (CUSTOM_TONE_MAP_PARAMETERS == 0) {
+    peak = renodx::color::correct::GammaSafe(peak, true);
+  }
+
+  color = max(0, renodx::color::bt2020::from::BT709(color));
+
+  float3 outputColor = color;
+  if (RENODX_TONE_MAP_TYPE == 1.f) {
+    white_clip = min(500.f, max(20.f, white_clip));
+    outputColor = HermiteSplineMaxCLL(color, peak, white_clip);
+  }
+
+  outputColor = renodx::color::bt709::from::BT2020(outputColor);
   return outputColor;
 }
