@@ -7,6 +7,8 @@
 
 #define DEBUG_LEVEL_0
 
+#include <shared_mutex>
+
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
@@ -14,9 +16,12 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../utils/settings.hpp"
-#include "./shared.h"
+#include "../../utils/data.hpp"
 #include "../../utils/random.hpp"
+#include "../../utils/resource.hpp"
+#include "../../utils/settings.hpp"
+#include "../../utils/swapchain.hpp"
+#include "./shared.h"
 
 namespace {
 
@@ -28,6 +33,43 @@ const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
 
 float current_settings_mode = 0;
+float current_render_reshade_before_ui = 0;
+
+bool UsingSwapchainUpgrade() {
+  return true;
+}
+
+bool UsingSwapchainUtil() {
+  return (current_render_reshade_before_ui != 0.f
+          || UsingSwapchainUpgrade());
+}
+
+bool ExecuteReshadeEffects(reshade::api::command_list* cmd_list) {
+  if (current_render_reshade_before_ui == 0.f) return true;
+  if (!UsingSwapchainUtil()) return true;
+
+  auto* cmd_list_data = renodx::utils::data::Get<renodx::utils::swapchain::CommandListData>(cmd_list);
+  if (cmd_list_data == nullptr) return true;
+  if (cmd_list_data->current_render_targets.empty()) return true;
+
+  auto rtv0 = cmd_list_data->current_render_targets[0];
+  if (rtv0.handle == 0) return true;
+  if (UsingSwapchainUpgrade()) {
+    auto* info = renodx::utils::resource::GetResourceViewInfo(rtv0);
+    if (info->clone.handle != 0u) {
+      rtv0 = info->clone;
+    }
+  }
+
+  auto* data = renodx::utils::data::Get<renodx::utils::swapchain::DeviceData>(cmd_list->get_device());
+  if (data == nullptr) return true;
+  const std::shared_lock lock(data->mutex);
+  for (auto* runtime : data->effect_runtimes) {
+    runtime->render_effects(cmd_list, rtv0, rtv0);
+  }
+
+  return true;
+}
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -410,6 +452,16 @@ renodx::utils::settings::Settings settings = {
         .min = 0.f,
         .max = 100.f,
     },
+        new renodx::utils::settings::Setting{
+        .key = "RenderReshadeBeforeUI",
+        .binding = &current_render_reshade_before_ui,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "ReShade Before UI",
+        .section = "Effects",
+        .tooltip = "Executes ReShade effects before UI is drawn.",
+        .labels = {"Off", "On"},
+    },
     new renodx::utils::settings::Setting{
         .key = "HDRSun",
         .binding = &shader_injection.sun_intensity,
@@ -760,6 +812,43 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
             .usage_include = reshade::api::resource_usage::render_target,
         });
+
+        const uint32_t target_crcs[] = {
+            0x00C16AFBu,
+            0x039C28DAu,
+            0x086097D2u,
+            0x09270FDAu,
+            0x0E520F06u,
+            0x10076711u,
+            0x21241B7Au,
+            0x51359B4Du,
+            0x53875523u,
+            0x53D50BD5u,
+            0x57737D9Fu,
+            0x5FC0BD3Cu,
+            0x6166487Au,
+            0x61908D50u,
+            0x64CEB255u,
+            0x6A76C719u,
+            0x86420EBCu,
+            0x9790A50Cu,
+            0x9AA3FC1Fu,
+            0xA6501734u,
+            0xA6E6ABE6u,
+            0xA8213A68u,
+            0xAFDCA263u,
+            0xAFECA8F4u,
+            0xBCD91195u,
+            0xD5BC74ACu,
+            0xE0058043u,
+            0xF8FA587Fu,
+        };
+
+        for (uint32_t crc : target_crcs) {
+          if (custom_shaders.find(crc) != custom_shaders.end()) {
+            custom_shaders[crc].on_drawn = ExecuteReshadeEffects;
+          }
+        }
 
         initialized = true;
       }
