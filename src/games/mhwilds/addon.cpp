@@ -23,6 +23,9 @@
 namespace {
 
 ShaderInjectData shader_injection;
+bool any_postprocess_shader_drawn = true;
+bool draw_warning_no_postprocess_shader = false;
+int draw_counter = 0; // Count draws to only run the check after a number of frames, preventing framegen issues.
 
 #define RareExposureShaderEntry(value)                            \
   {                                                               \
@@ -32,6 +35,7 @@ ShaderInjectData shader_injection;
             .code = __##value,                                    \
             .on_draw = [](auto cmd_list) {                        \
               shader_injection.custom_exposure_shader_draw = 1.f; \
+              any_postprocess_shader_drawn = true; \
               return true;                                        \
             },                                                    \
         },                                                        \
@@ -45,6 +49,7 @@ ShaderInjectData shader_injection;
             .code = __##value,                                    \
             .on_drawn = [](auto cmd_list) {                       \
               shader_injection.custom_exposure_shader_draw = 0.f; \
+              any_postprocess_shader_drawn = true; \
               return true;                                        \
             },                                                    \
         },                                                        \
@@ -218,6 +223,12 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "Custom"},
         .is_visible = []() { return current_settings_mode >= 1; },
     },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "WARNING: No Post Processing shader found! There is either a mod conflict or a game update has broken the mod.\nPlease check the troubleshooting section of the nexus page.",
+        .tint = 0xFF0000,
+        .is_visible = []() { return draw_warning_no_postprocess_shader; },
+      },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Vanilla+",
@@ -651,6 +662,22 @@ void OnPresetOff() {
 
 bool fired_on_init_swapchain = false;
 
+void OnPresent(
+    reshade::api::command_queue* queue,
+    reshade::api::swapchain* swapchain,
+    const reshade::api::rect* source_rect,
+    const reshade::api::rect* dest_rect,
+    uint32_t dirty_rect_count,
+    const reshade::api::rect* dirty_rects) {
+
+  draw_counter++;
+  if (draw_counter > 100) {
+    draw_warning_no_postprocess_shader = !any_postprocess_shader_drawn;
+    any_postprocess_shader_drawn = false;
+    draw_counter = 0;
+  }
+}
+
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   last_is_hdr = renodx::utils::swapchain::IsHDRColorSpace(swapchain);
 
@@ -728,12 +755,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }); */
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      //reshade::register_event<reshade::addon_event::present>(OnPresent);
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      //reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
 
       reshade::unregister_addon(h_module);
       break;
