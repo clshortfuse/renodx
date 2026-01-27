@@ -35,9 +35,11 @@ void main(
   float3 tonemapped = renodx::tonemap::renodrt::NeutralSDR(untonemapped_sRGB);
   tonemapped = renodx::color::gamma::Encode(tonemapped, 2.2);
   if (RENODX_TONE_MAP_TYPE > 0.f) {
-    o0.rgb = renodx::draw::ToneMapPass(untonemapped, vanilla.xyz, tonemapped);
+    o0.xyz = renodx::draw::ToneMapPass(untonemapped, vanilla.xyz, tonemapped);
+  }
+  else {
     o0 = vanilla;
   }
-
+  o0.xyz = renodx::color::srgb::Decode(o0.xyz);
   return;
 }

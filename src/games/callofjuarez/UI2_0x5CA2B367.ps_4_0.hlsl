@@ -28,6 +28,7 @@ void main(
 
   r0.xyzw = sTex0.Sample(samTex0_s, v1.xy).xyzw;
   o0.xyz = saturate(r0.xyz * CONST.www + CONST.xyz);
+  o0.xyz = renodx::color::srgb::Decode(o0.xyz);
   o0.w = r0.w;
   return;
 }

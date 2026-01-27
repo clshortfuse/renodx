@@ -46,6 +46,10 @@ struct ShaderInjectData {
 
   float Custom_Sky_SunSpriteIntensity;
   float Custom_Exposure_Adaptation;
+  float Custom_Emissives_Glow;
+  float Custom_Emissives_Glow_Contrast;
+
+  float Custom_Emissives_Glow_Saturation;
 };
 
 #ifndef __cplusplus
@@ -85,11 +89,14 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    shader_injection.swap_chain_clamp_color_space
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
-#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define CUSTOM_BLOOM_AMOUNT                    shader_injection.Custom_Bloom_Amount
 #define CUSTOM_VOLUMETRICS_AMOUNT              shader_injection.Custom_Volumetrics_Amount
 #define CUSTOM_SKY_SUNSPRITEINTENSITY          shader_injection.Custom_Sky_SunSpriteIntensity
 #define CUSTOM_EXPOSURE_ADAPTATION             shader_injection.Custom_Exposure_Adaptation
+#define CUSTOM_EMISSIVES_GLOW                  shader_injection.Custom_Emissives_Glow
+#define CUSTOM_EMISSIVES_GLOW_CONTRAST         shader_injection.Custom_Emissives_Glow_Contrast
+#define CUSTOM_EMISSIVES_GLOW_SATURATION       shader_injection.Custom_Emissives_Glow_Saturation
 
 #include "../../shaders/renodx.hlsl"
 

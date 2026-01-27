@@ -146,7 +146,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapHueProcessor",
         .binding = &shader_injection.tone_map_hue_processor,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 2.f,
         .label = "Hue Processor",
         .section = "Tone Mapping",
         .tooltip = "Selects hue processor",
@@ -170,7 +170,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 50.f,
+        .default_value = 75.f,
         .label = "Hue Shift",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -321,6 +321,36 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "EmissivesGlow",
+        .binding = &shader_injection.Custom_Emissives_Glow,
+        .default_value = 50.f,
+        .label = "Emissives Glow Intensity",
+        .section = "Game FX",
+        .tooltip = "Emissives glow intensity. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "EmissivesGlowContrast",
+        .binding = &shader_injection.Custom_Emissives_Glow_Contrast,
+        .default_value = 50.f,
+        .label = "Emissives Glow Contrast",
+        .section = "Game FX",
+        .tooltip = "Emissives glow contrast. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "EmissivesGlowSaturation",
+        .binding = &shader_injection.Custom_Emissives_Glow_Saturation,
+        .default_value = 50.f,
+        .label = "Emissives Glow Saturation",
+        .section = "Game FX",
+        .tooltip = "Emissives glow saturation. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "VolumetricAmount",
         .binding = &shader_injection.Custom_Volumetrics_Amount,
         .default_value = 50.f,
@@ -431,18 +461,18 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-            {"toneMapType", 1.f},
             {"colorGradeExposure", 1.f},
             {"colorGradeHighlights", 50.f},
             {"colorGradeShadows", 50.f},
             {"colorGradeContrast", 50.f},
             {"colorGradeSaturation", 50.f},
-            {"colorGradeLUTStrength", 100.f},
-            {"colorGradeLUTScaling", 0.f},
             {"BloomAmount", 20.f},
             {"ExposureAdaptation", 50.f},
+            {"EmissivesGlow", 50.f},
+            {"EmissivesGlowContrast", 50.f},
+            {"EmissivesGlowSaturation", 50.f},
             {"VolumetricAmount", 25.f},
-            {"SkySunSpriteIntensity", 30.f},
+            {"SkySunSpriteIntensity", 50.f},
           });
         },
     },
@@ -475,18 +505,19 @@ bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullscreen, v
 }
 
 const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
-    {"R8G8B8A8_TYPELESS", reshade::api::format::r8g8b8a8_typeless},
-    {"B8G8R8A8_TYPELESS", reshade::api::format::b8g8r8a8_typeless},
+    // {"BC3_UNORM", reshade::api::format::bc3_unorm},
+    // {"R8G8B8A8_TYPELESS", reshade::api::format::r8g8b8a8_typeless},
+    // {"B8G8R8A8_TYPELESS", reshade::api::format::b8g8r8a8_typeless},
     {"R8G8B8A8_UNORM", reshade::api::format::r8g8b8a8_unorm},
-    {"B8G8R8A8_UNORM", reshade::api::format::b8g8r8a8_unorm},
-    {"R8G8B8A8_SNORM", reshade::api::format::r8g8b8a8_snorm},
-    {"R8G8B8A8_UNORM_SRGB", reshade::api::format::r8g8b8a8_unorm_srgb},
-    {"B8G8R8A8_UNORM_SRGB", reshade::api::format::b8g8r8a8_unorm_srgb},
-    {"R10G10B10A2_TYPELESS", reshade::api::format::r10g10b10a2_typeless},
-    {"R10G10B10A2_UNORM", reshade::api::format::r10g10b10a2_unorm},
-    {"B10G10R10A2_UNORM", reshade::api::format::b10g10r10a2_unorm},
-    {"R11G11B10_FLOAT", reshade::api::format::r11g11b10_float},
-    {"R16G16B16A16_TYPELESS", reshade::api::format::r16g16b16a16_typeless},
+    // {"B8G8R8A8_UNORM", reshade::api::format::b8g8r8a8_unorm},
+    // {"R8G8B8A8_SNORM", reshade::api::format::r8g8b8a8_snorm},
+    // {"R8G8B8A8_UNORM_SRGB", reshade::api::format::r8g8b8a8_unorm_srgb},
+    // {"B8G8R8A8_UNORM_SRGB", reshade::api::format::b8g8r8a8_unorm_srgb},
+    // {"R10G10B10A2_TYPELESS", reshade::api::format::r10g10b10a2_typeless},
+    // {"R10G10B10A2_UNORM", reshade::api::format::r10g10b10a2_unorm},
+    // {"B10G10R10A2_UNORM", reshade::api::format::b10g10r10a2_unorm},
+    // {"R11G11B10_FLOAT", reshade::api::format::r11g11b10_float},
+    // {"R16G16B16A16_TYPELESS", reshade::api::format::r16g16b16a16_typeless},
 };
 
 void OnPresetOff() {
@@ -500,10 +531,11 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
     renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
     renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-    renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-    renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
     renodx::utils::settings::UpdateSetting("BloomAmount", 50.f);
     renodx::utils::settings::UpdateSetting("ExposureAdaptation", 50.f);
+    renodx::utils::settings::UpdateSetting("EmissivesGlow", 50.f);
+    renodx::utils::settings::UpdateSetting("EmissivesGlowContrast", 50.f);
+    renodx::utils::settings::UpdateSetting("EmissivesGlowSaturation", 50.f);
     renodx::utils::settings::UpdateSetting("VolumetricAmount", 50.f);
     renodx::utils::settings::UpdateSetting("SkySunSpriteIntensity", 50.f);
 }
