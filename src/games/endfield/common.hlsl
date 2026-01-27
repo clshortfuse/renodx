@@ -55,6 +55,14 @@ float3 ApplyHermiteSplineByMaxChannel(float3 input, float peak_ratio, float whit
   float3 tonemapped = input * scale;
   return tonemapped;
 }
+float3 ApplyNeutwoByMaxChannel(float3 input, float peak_ratio, float white_clip = 100.f) {
+  float max_channel = renodx::math::Max(input);
+  
+  float mapped_peak = renodx::tonemap::Neutwo(max_channel, peak_ratio, white_clip);
+  float scale = renodx::math::DivideSafe(mapped_peak, max_channel, 1.f);
+  float3 tonemapped = input * scale;
+  return tonemapped;
+}
 
 struct UserGradingConfig {
   float exposure;

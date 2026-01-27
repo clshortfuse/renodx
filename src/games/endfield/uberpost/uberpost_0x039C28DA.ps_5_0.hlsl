@@ -242,7 +242,7 @@ void main(
     float3 graded_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(graded, y, cg_config);
     o0.xyz = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded_bt709, hue_chrominance_reference_color, y, cg_config);
     o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
-    o0.xyz = ApplyHermiteSplineByMaxChannel(o0.xyz, shader_injection.peak_white_nits / shader_injection.diffuse_white_nits);
+    o0.xyz = ApplyNeutwoByMaxChannel(o0.xyz, shader_injection.peak_white_nits / shader_injection.diffuse_white_nits);
     o0.xyz = renodx::color::bt709::from::BT2020(o0.xyz);
   }
   if (CUSTOM_GRAIN_STRENGTH > 0) {
