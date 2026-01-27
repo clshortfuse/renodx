@@ -23,8 +23,21 @@
 namespace {
 
 ShaderInjectData shader_injection;
-bool any_postprocess_shader_drawn = true;
+bool any_postprocess_shader_drawn = false;
+bool any_output_shader_drawn = false;
+bool any_lutbuilder_shader_drawn = false;
+bool any_ui_shader_drawn = false;
+bool any_fog_shader_drawn = false;
+
 bool draw_warning_no_postprocess_shader = false;
+bool draw_warning_no_output_shader = false;
+bool draw_warning_no_lutbuilder_shader = false;
+bool draw_warning_no_ui_shader = false;
+bool draw_warning_no_fog_shader = false;
+
+renodx::utils::settings::Setting* status_setting = nullptr;
+std::string status_message = "GOOD";
+int status_tint = 0x00FF00;
 int draw_counter = 0; // Count draws to only run the check after a number of frames, preventing framegen issues.
 
 #define RareExposureShaderEntry(value)                            \
@@ -54,21 +67,69 @@ int draw_counter = 0; // Count draws to only run the check after a number of fra
             },                                                    \
         },                                                        \
   }
+  #define OutputShaderEntry(value)                         \
+  {                                                               \
+    value,                                                        \
+        {                                                         \
+            .crc32 = value,                                       \
+            .code = __##value,                                    \
+            .on_drawn = [](auto cmd_list) {                       \
+              any_output_shader_drawn = true;                     \
+              return true;                                        \
+            },                                                    \
+        },                                                        \
+  }
+    #define LutbuilderShaderEntry(value)                         \
+  {                                                               \
+    value,                                                        \
+        {                                                         \
+            .crc32 = value,                                       \
+            .code = __##value,                                    \
+            .on_drawn = [](auto cmd_list) {                       \
+              any_lutbuilder_shader_drawn = true;                 \
+              return true;                                        \
+            },                                                    \
+        },                                                        \
+  }
+    #define UIShaderEntry(value)                         \
+  {                                                               \
+    value,                                                        \
+        {                                                         \
+            .crc32 = value,                                       \
+            .code = __##value,                                    \
+            .on_drawn = [](auto cmd_list) {                       \
+              any_ui_shader_drawn = true;                         \
+              return true;                                        \
+            },                                                    \
+        },                                                        \
+  }
+    #define FogShaderEntry(value)                         \
+  {                                                               \
+    value,                                                        \
+        {                                                         \
+            .crc32 = value,                                       \
+            .code = __##value,                                    \
+            .on_drawn = [](auto cmd_list) {                       \
+              any_fog_shader_drawn = true;                         \
+              return true;                                        \
+            },                                                    \
+        },                                                        \
+  }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Outputs
-    CustomShaderEntry(0xE73DF341),
-    CustomShaderEntry(0xBC05143A),
-    CustomShaderEntry(0xC584376B),
-    CustomShaderEntry(0x8F04163E),
+    OutputShaderEntry(0xE73DF341),
+    OutputShaderEntry(0xBC05143A),
+    OutputShaderEntry(0xC584376B),
+    OutputShaderEntry(0x8F04163E),
 
     // lutbuilder
-    CustomShaderEntry(0x7B84049A),
-    CustomShaderEntry(0xC38C23F4),
+    LutbuilderShaderEntry(0x7B84049A),
+    LutbuilderShaderEntry(0xC38C23F4),
 
     // UI
-    CustomShaderEntry(0x8286B55C),
-    CustomShaderEntry(0x04039750),
+    UIShaderEntry(0x8286B55C),
+    UIShaderEntry(0x04039750),
 
     // Post Process
     //TypicalExposureShaderEntry(0xEE56E73B),
@@ -90,7 +151,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x243CA65C),
 
     // Fog
-    CustomShaderEntry(0xCCB318BD),
+    FogShaderEntry(0xCCB318BD),
 
     // // Sharpening (Bypass)
     // {
@@ -223,12 +284,6 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "Custom"},
         .is_visible = []() { return current_settings_mode >= 1; },
     },
-        new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "WARNING: No Post Processing shader found! There is either a mod conflict or a game update has broken the mod.\nPlease check the troubleshooting section of the nexus page.",
-        .tint = 0xFF0000,
-        .is_visible = []() { return draw_warning_no_postprocess_shader; },
-      },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Vanilla+",
@@ -481,31 +536,31 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "FxVignette",
-        .binding = &shader_injection.custom_vignette,
-        .default_value = 50.f,
-        .label = "Vignette",
-        .section = "Effects",
-        .tooltip = "Controls Vignette. Vanilla = 50",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
-    },
-        new renodx::utils::settings::Setting{
-        .key = "FxLensDistortion",
-        .binding = &shader_injection.custom_lens_distortion,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "Lens Distortion",
-        .section = "Effects",
-        .tooltip = "Controls Panini Projection, which reduces the fish eye effect from wide FOVs.",
-        .labels = {
-            "Off",
-            "On",
-        },
-        .is_visible = []() { return settings[0]->GetValue() >= 1; },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "FxVignette",
+    //     .binding = &shader_injection.custom_vignette,
+    //     .default_value = 50.f,
+    //     .label = "Vignette",
+    //     .section = "Effects",
+    //     .tooltip = "Controls Vignette. Vanilla = 50",
+    //     .max = 100.f,
+    //     .parse = [](float value) { return value * 0.02f; },
+    //     .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
+    // },
+    //     new renodx::utils::settings::Setting{
+    //     .key = "FxLensDistortion",
+    //     .binding = &shader_injection.custom_lens_distortion,
+    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //     .default_value = 1.f,
+    //     .label = "Lens Distortion",
+    //     .section = "Effects",
+    //     .tooltip = "Controls Panini Projection, which reduces the fish eye effect from wide FOVs.",
+    //     .labels = {
+    //         "Off",
+    //         "On",
+    //     },
+    //     .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    // },
     new renodx::utils::settings::Setting{
         .key = "FxSharpness",
         .binding = &shader_injection.custom_sharpness,
@@ -544,6 +599,47 @@ renodx::utils::settings::Settings settings = {
         },
         .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
     },
+    status_setting = new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .section = "Mod Compatibility Check",
+      },
+    status_setting = new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = status_message,
+        .section = "Mod Compatibility Check",
+        .tint = status_tint,
+        //.is_visible = []() { return draw_warning_no_postprocess_shader; },
+      },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Missing Post Processing shaders. This is likely caused by a game update or a mod conflict.",
+        .section = "Mod Compatibility Check",
+        .is_visible = []() { return draw_warning_no_postprocess_shader; },
+      },
+      new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Missing Lutbuilder shaders. This is likely caused by a game update.",
+        .section = "Mod Compatibility Check",
+        .is_visible = []() { return draw_warning_no_lutbuilder_shader; },
+      },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Missing Output shaders. This is likely caused by a game update.",
+        .section = "Mod Compatibility Check",
+        .is_visible = []() { return draw_warning_no_output_shader; },
+      },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Missing UI shaders. This is likely caused by a game update.",
+        .section = "Mod Compatibility Check",
+        .is_visible = []() { return draw_warning_no_ui_shader; },
+      },
+      new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Missing Fog shaders. This is likely caused by a game update or a mod conflict. Core functionality may still work, but the fog slider will not.",
+        .section = "Mod Compatibility Check",
+        .is_visible = []() { return draw_warning_no_fog_shader; },
+      },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " - In-Game HDR must be turned ON!\n"
@@ -673,7 +769,36 @@ void OnPresent(
   draw_counter++;
   if (draw_counter > 100) {
     draw_warning_no_postprocess_shader = !any_postprocess_shader_drawn;
+    draw_warning_no_lutbuilder_shader = !any_lutbuilder_shader_drawn;
+    draw_warning_no_output_shader = !any_output_shader_drawn;
+    draw_warning_no_ui_shader = !any_ui_shader_drawn;
+    draw_warning_no_fog_shader = !any_fog_shader_drawn;
+
+    bool warning_test = draw_warning_no_ui_shader || draw_warning_no_fog_shader;
+    bool error_test = draw_warning_no_postprocess_shader || draw_warning_no_output_shader || draw_warning_no_lutbuilder_shader;
+
+    if (warning_test){
+      status_message = "WARNING";
+      status_tint = 0xFFFF00;
+    }
+    if (error_test){
+      status_message = "ERROR";
+      status_tint = 0xFF0000;
+    }
+    if (!warning_test && !error_test){
+      status_message = "GOOD";
+      status_tint = 0x00FF00;
+    }
+
+    status_setting->label = status_message;
+    status_setting->tint = status_tint;
+    status_setting->Write();
+
     any_postprocess_shader_drawn = false;
+    //any_lutbuilder_shader_drawn = false; // Since lutbuilders only run every once in a while, only check that it shows up once ever.
+    any_output_shader_drawn = false;
+    any_ui_shader_drawn = false;
+    any_fog_shader_drawn = false;
     draw_counter = 0;
   }
 }
