@@ -50,6 +50,8 @@ struct ShaderInjectData {
   float Custom_Emissives_Glow_Contrast;
 
   float Custom_Emissives_Glow_Saturation;
+  float Custom_Emissives_Fire_Glow;
+  float Custom_HDR_Videos;
 };
 
 #ifndef __cplusplus
@@ -97,6 +99,8 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_EMISSIVES_GLOW                  shader_injection.Custom_Emissives_Glow
 #define CUSTOM_EMISSIVES_GLOW_CONTRAST         shader_injection.Custom_Emissives_Glow_Contrast
 #define CUSTOM_EMISSIVES_GLOW_SATURATION       shader_injection.Custom_Emissives_Glow_Saturation
+#define CUSTOM_EMISSIVES_FIRE_GLOW             shader_injection.Custom_Emissives_Fire_Glow
+#define CUSTOM_HDR_VIDEOS                      shader_injection.Custom_HDR_Videos
 
 #include "../../shaders/renodx.hlsl"
 

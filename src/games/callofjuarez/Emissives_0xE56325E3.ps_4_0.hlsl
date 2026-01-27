@@ -258,7 +258,7 @@ void main(
   if (RENODX_TONE_MAP_TYPE > 0.f) {
     r2.xyz *= 0.1;  // It clips too much in vanilla, we need to bring it back
   }
-  r2.xyz = ApplyFakeHDRGain(r2.xyz, pow(CUSTOM_EMISSIVES_GLOW, 5), pow(CUSTOM_EMISSIVES_GLOW_CONTRAST, 5), CUSTOM_EMISSIVES_GLOW_SATURATION);
+  r2.xyz = ApplyFakeHDRGain(r2.xyz, pow(CUSTOM_EMISSIVES_GLOW, 10), pow(CUSTOM_EMISSIVES_GLOW_CONTRAST, 10), CUSTOM_EMISSIVES_GLOW_SATURATION * 3);
   r0.xyz = r1.xyz * r0.xyz + r2.xyz;
   o0.xyz = r0.xyz * v1.xyz + v4.xyz;
   o0.w = w2.x;

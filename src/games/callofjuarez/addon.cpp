@@ -108,6 +108,16 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 500.f,
     },
+    // new renodx::utils::settings::Setting{
+    //     .key = "HDRVideos",
+    //     .binding = &shader_injection.Custom_HDR_Videos,
+    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //     .default_value = 1.f,
+    //     .label = "HDR Videos",
+    //     .section = "Tone Mapping",
+    //     .tooltip = "Enables HDR inverse tone mapping for in-game videos.",
+    //     .labels = {"Off", "On"},
+    // },
     new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
@@ -135,7 +145,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapWorkingColorSpace",
         .binding = &shader_injection.tone_map_working_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Working Color Space",
         .section = "Tone Mapping",
         .labels = {"BT709", "BT2020", "AP1"},
@@ -170,7 +180,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 75.f,
+        .default_value = 50.f,
         .label = "Hue Shift",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -184,7 +194,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapClampColorSpace",
         .binding = &shader_injection.tone_map_clamp_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 2.f,
         .label = "Clamp Color Space",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -197,7 +207,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapClampPeak",
         .binding = &shader_injection.tone_map_clamp_peak,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 2.f,
         .label = "Clamp Peak",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -284,7 +294,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type == 3; },
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -350,6 +360,16 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
+        new renodx::utils::settings::Setting{
+        .key = "EmissivesFireGlow",
+        .binding = &shader_injection.Custom_Emissives_Fire_Glow,
+        .default_value = 50.f,
+        .label = "Emissives Fire Glow",
+        .section = "Game FX",
+        .tooltip = "Emissives fire glow amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
     new renodx::utils::settings::Setting{
         .key = "VolumetricAmount",
         .binding = &shader_injection.Custom_Volumetrics_Amount,
@@ -389,7 +409,7 @@ renodx::utils::settings::Settings settings = {
             "US CRT",
             "JPN CRT",
         },
-        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+        .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "IntermediateDecoding",
@@ -461,18 +481,20 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
+            {"tonemapGameNits", 300.f},
             {"colorGradeExposure", 1.f},
             {"colorGradeHighlights", 50.f},
             {"colorGradeShadows", 50.f},
             {"colorGradeContrast", 50.f},
             {"colorGradeSaturation", 50.f},
-            {"BloomAmount", 20.f},
+            {"BloomAmount", 10.f},
             {"ExposureAdaptation", 50.f},
-            {"EmissivesGlow", 50.f},
-            {"EmissivesGlowContrast", 50.f},
-            {"EmissivesGlowSaturation", 50.f},
-            {"VolumetricAmount", 25.f},
-            {"SkySunSpriteIntensity", 50.f},
+            {"EmissivesGlow", 100.f},
+            {"EmissivesGlowContrast", 80.f},
+            {"EmissivesGlowSaturation", 80.f},
+            {"EmissivesFireGlow", 50.f},
+            {"VolumetricAmount", 10.f},
+            {"SkySunSpriteIntensity", 40.f},
           });
         },
     },
@@ -525,6 +547,7 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
     renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
     renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
+    renodx::utils::settings::UpdateSetting("HDRVideos", 0.f);
     renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
     renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
     renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
@@ -536,6 +559,7 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("EmissivesGlow", 50.f);
     renodx::utils::settings::UpdateSetting("EmissivesGlowContrast", 50.f);
     renodx::utils::settings::UpdateSetting("EmissivesGlowSaturation", 50.f);
+    renodx::utils::settings::UpdateSetting("EmissivesFireGlow", 50.f);
     renodx::utils::settings::UpdateSetting("VolumetricAmount", 50.f);
     renodx::utils::settings::UpdateSetting("SkySunSpriteIntensity", 50.f);
 }
@@ -804,7 +828,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
                   "Any size",
               },
               .is_global = true,
-              .is_visible = []() { return settings[0]->GetValue() >= 2; },
+              .is_visible = []() { return current_settings_mode >= 2; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           settings.push_back(setting);
@@ -857,7 +881,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainDeviceProxyBaseWaitIdle",
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 1.f,
+              .default_value = 0.f,
               .label = "Base Wait Idle",
               .section = "Display Proxy",
               .labels = {"Off", "On"},
@@ -874,7 +898,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainDeviceProxyProxyWaitIdle",
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 1.f,
+              .default_value = 0.f,
               .label = "Proxy Wait Idle",
               .section = "Display Proxy",
               .labels = {"Off", "On"},
