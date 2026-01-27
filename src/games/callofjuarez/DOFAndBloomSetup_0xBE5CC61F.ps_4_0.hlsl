@@ -208,7 +208,11 @@ void main(
   r0.xyzw = sColor0.Sample(samColor0_s, v1.xy).xyzw;
   r0.w = dot(float3(0.333299994,0.333299994,0.333299994), r0.xyz);
   r1.x = saturate(r0.w * vColorParams.y + -vColorParams.x);
-  r1.xyz = saturate(r0.www * r1.xxx + r0.xyz);
+  if (RENODX_TONE_MAP_TYPE <= 0.f) {
+    r1.xyz = saturate(r0.www * r1.xxx + r0.xyz);
+  } else {
+    r1.xyz = saturate(r0.www * r1.xxx) + r0.xyz;
+  }
   r1.xyz = r1.xyz + -r0.xyz;
   r0.w = fBulletTime + vColorParams.w;
   r0.xyz = r0.www * r1.xyz + r0.xyz;

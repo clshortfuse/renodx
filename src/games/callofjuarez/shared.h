@@ -45,6 +45,7 @@ struct ShaderInjectData {
   float Custom_Volumetrics_Amount;
 
   float Custom_Sky_SunSpriteIntensity;
+  float Custom_Exposure_Adaptation;
 };
 
 #ifndef __cplusplus
@@ -88,6 +89,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_BLOOM_AMOUNT                    shader_injection.Custom_Bloom_Amount
 #define CUSTOM_VOLUMETRICS_AMOUNT              shader_injection.Custom_Volumetrics_Amount
 #define CUSTOM_SKY_SUNSPRITEINTENSITY          shader_injection.Custom_Sky_SunSpriteIntensity
+#define CUSTOM_EXPOSURE_ADAPTATION             shader_injection.Custom_Exposure_Adaptation
 
 #include "../../shaders/renodx.hlsl"
 

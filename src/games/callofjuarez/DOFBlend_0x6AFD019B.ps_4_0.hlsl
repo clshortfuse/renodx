@@ -32,7 +32,6 @@ void main(
   }
   r1.xyzw = max(0, r1.xyzw);
   r0.xyz = max(0, -r1.xyz + r0.xyz);
-  //r0.w = max(0, r0.w);
   r0.w = r1.w * 2 + -1;
   r0.w = max(0, r0.w);
 

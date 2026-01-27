@@ -290,13 +290,14 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeScene",
         .binding = &shader_injection.color_grade_strength,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "Scene Grading",
         .section = "Color Grading",
         .tooltip = "Scene grading as applied by the game",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return false; },
     },
     new renodx::utils::settings::Setting{
         .key = "BloomAmount",
@@ -306,18 +307,26 @@ renodx::utils::settings::Settings settings = {
         .section = "Game FX",
         .tooltip = "Bloom effect amount.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .parse = [](float value) { return value * 0.02f; },
+    },
+      new renodx::utils::settings::Setting{
+        .key = "ExposureAdaptation",
+        .binding = &shader_injection.Custom_Exposure_Adaptation,
+        .default_value = 100.f,
+        .label = "Exposure Adaptation",
+        .section = "Game FX",
+        .tooltip = "Eye adaptation is incredibly aggressive, to the point where simple act of reloading the guns makes the screen brightness flicker. 0 - disabled completely, 100 - Vanilla",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "VolumetricAmount",
         .binding = &shader_injection.Custom_Volumetrics_Amount,
         .default_value = 50.f,
         .label = "Volumetric Amount",
-        .section = "Game FX",
+        .section = "Game FX - Sky",
         .tooltip = "Volumetric lighting effect amount.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -328,7 +337,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Game FX - Sky",
         .tooltip = "Sun sprite intensity.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -356,7 +364,7 @@ renodx::utils::settings::Settings settings = {
         .key = "IntermediateDecoding",
         .binding = &shader_injection.intermediate_encoding,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Intermediate Encoding",
         .section = "Display Output",
         .labels = {"Auto", "None", "SRGB", "2.2", "2.4"},
@@ -370,7 +378,7 @@ renodx::utils::settings::Settings settings = {
         .key = "SwapChainDecoding",
         .binding = &shader_injection.swap_chain_decoding,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Swapchain Decoding",
         .section = "Display Output",
         .labels = {"Auto", "None", "SRGB", "2.2", "2.4"},
@@ -408,6 +416,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Reset All",
         .section = "Options",
         .group = "button-line-1",
+        .tint = 0xE50067,
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
         },
@@ -417,10 +426,22 @@ renodx::utils::settings::Settings settings = {
         .label = "HDR Look",
         .section = "Options",
         .group = "button-line-1",
+        .tint = 0x3FD9B9,
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-            {"ToneMapType", 1.f},
+            {"toneMapType", 1.f},
+            {"colorGradeExposure", 1.f},
+            {"colorGradeHighlights", 50.f},
+            {"colorGradeShadows", 50.f},
+            {"colorGradeContrast", 50.f},
+            {"colorGradeSaturation", 50.f},
+            {"colorGradeLUTStrength", 100.f},
+            {"colorGradeLUTScaling", 0.f},
+            {"BloomAmount", 20.f},
+            {"ExposureAdaptation", 50.f},
+            {"VolumetricAmount", 25.f},
+            {"SkySunSpriteIntensity", 30.f},
           });
         },
     },
@@ -453,18 +474,18 @@ bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullscreen, v
 }
 
 const std::unordered_map<std::string, reshade::api::format> UPGRADE_TARGETS = {
-    // {"R8G8B8A8_TYPELESS", reshade::api::format::r8g8b8a8_typeless},
-    // {"B8G8R8A8_TYPELESS", reshade::api::format::b8g8r8a8_typeless},
+    {"R8G8B8A8_TYPELESS", reshade::api::format::r8g8b8a8_typeless},
+    {"B8G8R8A8_TYPELESS", reshade::api::format::b8g8r8a8_typeless},
     {"R8G8B8A8_UNORM", reshade::api::format::r8g8b8a8_unorm},
-    // {"B8G8R8A8_UNORM", reshade::api::format::b8g8r8a8_unorm},
-    // {"R8G8B8A8_SNORM", reshade::api::format::r8g8b8a8_snorm},
-    // {"R8G8B8A8_UNORM_SRGB", reshade::api::format::r8g8b8a8_unorm_srgb},
-    // {"B8G8R8A8_UNORM_SRGB", reshade::api::format::b8g8r8a8_unorm_srgb},
-    // {"R10G10B10A2_TYPELESS", reshade::api::format::r10g10b10a2_typeless},
-    // {"R10G10B10A2_UNORM", reshade::api::format::r10g10b10a2_unorm},
-    // {"B10G10R10A2_UNORM", reshade::api::format::b10g10r10a2_unorm},
-    // {"R11G11B10_FLOAT", reshade::api::format::r11g11b10_float},
-    // {"R16G16B16A16_TYPELESS", reshade::api::format::r16g16b16a16_typeless},
+    {"B8G8R8A8_UNORM", reshade::api::format::b8g8r8a8_unorm},
+    {"R8G8B8A8_SNORM", reshade::api::format::r8g8b8a8_snorm},
+    {"R8G8B8A8_UNORM_SRGB", reshade::api::format::r8g8b8a8_unorm_srgb},
+    {"B8G8R8A8_UNORM_SRGB", reshade::api::format::b8g8r8a8_unorm_srgb},
+    {"R10G10B10A2_TYPELESS", reshade::api::format::r10g10b10a2_typeless},
+    {"R10G10B10A2_UNORM", reshade::api::format::r10g10b10a2_unorm},
+    {"B10G10R10A2_UNORM", reshade::api::format::b10g10r10a2_unorm},
+    {"R11G11B10_FLOAT", reshade::api::format::r11g11b10_float},
+    {"R16G16B16A16_TYPELESS", reshade::api::format::r16g16b16a16_typeless},
 };
 
 void OnPresetOff() {
@@ -481,7 +502,9 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
     renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
     renodx::utils::settings::UpdateSetting("BloomAmount", 50.f);
+    renodx::utils::settings::UpdateSetting("ExposureAdaptation", 50.f);
     renodx::utils::settings::UpdateSetting("VolumetricAmount", 50.f);
+    renodx::utils::settings::UpdateSetting("SkySunSpriteIntensity", 50.f);
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;
@@ -612,6 +635,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       addon_registered = true;
 
       if (!initialized) {
+        renodx::mods::swapchain::ignored_window_class_names = {
+            "SplashScreenClass",
+        };
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
@@ -626,6 +652,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
         renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::force_screen_tearing = false;
+        
         //renodx::mods::swapchain::device_proxy_wait_idle_source = true;
         //renodx::mods::swapchain::device_proxy_wait_idle_destination = true;
         renodx::mods::swapchain::swapchain_proxy_compatibility_mode = true;
@@ -654,13 +681,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // };
         renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
         renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r8g8b8a8_unorm,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .use_resource_view_cloning = true,
-            .usage_include = reshade::api::resource_usage::render_target,
-            //.usage_include = reshade::api::resource_usage::resolve_dest,
-        });
 
         {
           auto* setting = new renodx::utils::settings::Setting{
@@ -726,8 +746,54 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           bool is_hdr10 = setting->GetValue() == 4;
           renodx::mods::swapchain::SetUseHDR10(is_hdr10);
           renodx::mods::swapchain::use_resize_buffer = setting->GetValue() < 4;
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_unorm,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .use_resource_view_cloning = true,
+            .usage_include = reshade::api::resource_usage::render_target,
+            //.usage_include = reshade::api::resource_usage::resolve_dest,
+          });
           shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
           settings.push_back(setting);
+        }
+
+        for (const auto& [key, format] : UPGRADE_TARGETS) {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "Upgrade_" + key,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 3.f,
+              .label = key,
+              .section = "Resource Upgrades",
+              .labels = {
+                  "Off",
+                  "Output size",
+                  "Output ratio",
+                  "Any size",
+              },
+              .is_global = true,
+              .is_visible = []() { return settings[0]->GetValue() >= 2; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          settings.push_back(setting);
+
+          auto value = setting->GetValue();
+          if (value > 0) {
+            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+                .old_format = format,
+                .new_format = reshade::api::format::r16g16b16a16_float,
+                .ignore_size = (value == UPGRADE_TYPE_ANY),
+                .use_resource_view_cloning = true,
+                .aspect_ratio = static_cast<float>((value == UPGRADE_TYPE_OUTPUT_RATIO)
+                                                       ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
+                                                       : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
+                .usage_include = reshade::api::resource_usage::render_target,
+                //.usage_include = reshade::api::resource_usage::resolve_dest,
+            });
+            std::stringstream s;
+            s << "Applying user resource upgrade for ";
+            s << format << ": " << value;
+            reshade::log::message(reshade::log::level::info, s.str().c_str());
+          }
         }
 
         {
@@ -788,45 +854,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           settings.push_back(setting);
         }
 
-        for (const auto& [key, format] : UPGRADE_TARGETS) {
-          auto* setting = new renodx::utils::settings::Setting{
-              .key = "Upgrade_" + key,
-              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 3.f,
-              .label = key,
-              .section = "Resource Upgrades",
-              .labels = {
-                  "Off",
-                  "Output size",
-                  "Output ratio",
-                  "Any size",
-              },
-              .is_global = true,
-              .is_visible = []() { return settings[0]->GetValue() >= 2; },
-          };
-          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-          settings.push_back(setting);
-
-          auto value = setting->GetValue();
-          if (value > 0) {
-            renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-                .old_format = format,
-                .new_format = reshade::api::format::r16g16b16a16_float,
-                .ignore_size = (value == UPGRADE_TYPE_ANY),
-                .use_resource_view_cloning = true,
-                .aspect_ratio = static_cast<float>((value == UPGRADE_TYPE_OUTPUT_RATIO)
-                                                       ? renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER
-                                                       : renodx::mods::swapchain::SwapChainUpgradeTarget::ANY),
-                .usage_include = reshade::api::resource_usage::render_target,
-                //.usage_include = reshade::api::resource_usage::resolve_dest,
-            });
-            std::stringstream s;
-            s << "Applying user resource upgrade for ";
-            s << format << ": " << value;
-            reshade::log::message(reshade::log::level::info, s.str().c_str());
-          }
-        }
-
         initialized = true;
       }
 
@@ -838,8 +865,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  //renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
-  //renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }
