@@ -388,7 +388,7 @@ void main(uint3 vThreadIDInGroup : SV_GroupThreadID, uint3 vThreadGroupID : SV_G
   r1.w = max(0, r1.w);
   r0.y = r1.w * r0.y;
 
-  if (AO_INTENSITY>= 1.f) {
+  if (SHADOW_HARDENING>= 1.f) {
     r0.y = r0.y * 4.0;
   }
   

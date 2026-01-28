@@ -336,11 +336,13 @@ void main(
       r0.w = -1 + r0.w;
       r0.w = cb0[175].z * r0.w + 1;
       
-      if (AO_INTENSITY >= 1.f) {
-        // Boost AO intensity (hardcoded 4x)
+      /*
+      if (SHADOW_HARDENING>= 1.f) {
+
         r0.w = 1.0 + (r0.w - 1.0) * 4.0;
       }
-      
+      */
+
       r0.z = r0.z * r0.w;
     }
     r0.w = cb2[35].z + -r0.z;
