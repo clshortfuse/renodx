@@ -452,6 +452,18 @@ renodx::utils::settings::Settings settings = {
         .min = 0.f,
         .max = 100.f,
     },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
+        .label = std::string("Reshade shader bypass, applies on_drawn after game's deferred lighting pass. Only properly works with DLAA/TAAU 100 scaling atm"),
+        .on_draw = []() {
+          ImGui::SetWindowFontScale(2.0f);
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+          ImGui::TextWrapped("Reshade shader bypass, applies on_drawn after game's deferred lighting pass. Only properly works with DLAA/TAAU 100 scaling atm");
+          ImGui::PopStyleColor();
+          ImGui::SetWindowFontScale(1.0f);
+          return false;
+        },
+    },
         new renodx::utils::settings::Setting{
         .key = "RenderReshadeBeforeUI",
         .binding = &current_render_reshade_before_ui,
@@ -483,8 +495,8 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "Vanilla", "2x", "3x"},
     },
     new renodx::utils::settings::Setting{
-        .key = "AO_INTENSITY",
-        .binding = &shader_injection.ao_intensity,
+        .key = "SHADOW_HARDENING",
+        .binding = &shader_injection.shadow_hardening,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
         .label = "Improved Shadows",
@@ -582,6 +594,11 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "- Made for Arknights: Endfield 1.0",
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Special thanks to both Musa & Miru for helping with the addon"),
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -791,62 +808,77 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            .ignore_size = false,
-            .use_resource_view_cloning = true,
-            .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
-            .usage_include = reshade::api::resource_usage::render_target,
+            //.ignore_size = false,
+            //.use_resource_view_cloning = true,
+            //.aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
+            //.usage_include = reshade::api::resource_usage::render_target,
         });
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            .ignore_size = false,
-            .use_resource_view_cloning = true,
-            .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
-            .usage_include = reshade::api::resource_usage::render_target,
+            //.ignore_size = false,
+            //.use_resource_view_cloning = true,
+            //.aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
+            //.usage_include = reshade::api::resource_usage::render_target,
         });
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r10g10b10a2_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            .ignore_size = false,
-            .use_resource_view_cloning = true,
-            .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
-            .usage_include = reshade::api::resource_usage::render_target,
+            //.ignore_size = false,
+            //.use_resource_view_cloning = true,
+            //.aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
+            //.usage_include = reshade::api::resource_usage::render_target,
         });
 
         const uint32_t target_crcs[] = {
-            0x00C16AFBu,
-            0x039C28DAu,
-            0x086097D2u,
-            0x09270FDAu,
-            0x0E520F06u,
-            0x10076711u,
-            0x21241B7Au,
-            0x51359B4Du,
-            0x53875523u,
-            0x53D50BD5u,
-            0x57737D9Fu,
-            0x5FC0BD3Cu,
-            0x6166487Au,
-            0x61908D50u,
-            0x64CEB255u,
-            0x6A76C719u,
-            0x86420EBCu,
-            0x9790A50Cu,
-            0x9AA3FC1Fu,
-            0xA6501734u,
-            0xA6E6ABE6u,
-            0xA8213A68u,
-            0xAFDCA263u,
-            0xAFECA8F4u,
-            0xBCD91195u,
-            0xD5BC74ACu,
-            0xE0058043u,
-            0xF8FA587Fu,
+        
+        0x37837806u,
+        0xD3FA93FCu,
+        
+        /*  
+        0x00C16AFBu,
+        0x039C28DAu,
+        0x086097D2u,
+        0x09270FDAu,
+        0x0E520F06u,
+        0x10076711u,
+        0x21241B7Au,
+        0x51359B4Du,
+        0x53875523u,
+        0x53D50BD5u,
+        0x57737D9Fu,
+        0x5FC0BD3Cu,
+        0x6166487Au,
+        0x61908D50u,
+        0x64CEB255u,
+        0x6A76C719u,
+        0x86420EBCu,
+        0x9790A50Cu,
+        0x9AA3FC1Fu,
+        0xA6501734u,
+        0xA6E6ABE6u,
+        0xA8213A68u,
+        0xAFDCA263u,
+        0xAFECA8F4u,
+        0xBCD91195u,
+        0xD5BC74ACu,
+        0xE0058043u,
+        0xF8FA587Fu,
+        */
+        
         };
 
         for (uint32_t crc : target_crcs) {
-          if (custom_shaders.find(crc) != custom_shaders.end()) {
-            custom_shaders[crc].on_drawn = ExecuteReshadeEffects;
+
+          // Ensure an entry exists for the shader hash even if we don't have compiled HLSL
+          auto it = custom_shaders.find(crc);
+          if (it == custom_shaders.end()) {
+            renodx::mods::shader::CustomShader cs{};
+            cs.crc32 = crc;
+            cs.on_drawn = ExecuteReshadeEffects;
+            custom_shaders.emplace(crc, std::move(cs));
+          } else {
+            it->second.on_drawn = ExecuteReshadeEffects;
           }
         }
 
