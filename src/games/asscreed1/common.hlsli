@@ -33,7 +33,8 @@ float3 Sample(Texture3D<float4> lut_texture, renodx::lut::Config lut_config, flo
     float lutBlackY = renodx::color::y::from::BT709(renodx::lut::LinearOutput(lutBlack, lut_config));
 
     if (lutBlackY > 0.f) {
-      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlackY, lut_config), lut_config, lut_texture);
+      float lutMidInput = (lutBlackY + 0.04f) / 2.f;  // hand-tuned to target shadows more
+      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutMidInput, lut_config), lut_config, lut_texture);
       float3 lutWhite = 1.f;
       float3 unclamped_gamma = Unclamp(
           renodx::lut::GammaOutput(lutOutputColor, lut_config),
