@@ -238,13 +238,13 @@ void main(
     float3 hue_chrominance_reference_color = renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 1.0f));
     UserGradingConfig cg_config;
     cg_config.saturation = 1.f;
-    cg_config.dechroma = 0.f;
+    cg_config.dechroma = .1f;
     cg_config.hue_emulation_strength = 1.f;
-    cg_config.chrominance_emulation_strength = 0.7f;
+    cg_config.chrominance_emulation_strength = .7f;
     cg_config.highlight_saturation = 0.f;
     o0.xyz = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, hue_chrominance_reference_color, y, cg_config);
     o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
-    o0.xyz = ApplyNeutwoByMaxChannel(o0.xyz, 1.0f);
+    o0.xyz = renodx::tonemap::neutwo::MaxChannel(o0.xyz, 1.0f, 2.0f);
     o0.xyz = renodx::color::bt709::from::BT2020(o0.xyz);
   } else {
     float3 hue_chrominance_reference_color = renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 0.5f));
@@ -252,7 +252,7 @@ void main(
     float3 graded_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(graded, y, cg_config);
     o0.xyz = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded_bt709, hue_chrominance_reference_color, y, cg_config);
     o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
-    o0.xyz = ApplyNeutwoByMaxChannel(o0.xyz, shader_injection.peak_white_nits / shader_injection.diffuse_white_nits);
+    o0.xyz = renodx::tonemap::neutwo::MaxChannel(o0.xyz, shader_injection.peak_white_nits / shader_injection.diffuse_white_nits, 50.f);
     o0.xyz = renodx::color::bt709::from::BT2020(o0.xyz);
   }
   if (CUSTOM_GRAIN_STRENGTH > 0) {
