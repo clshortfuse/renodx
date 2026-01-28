@@ -340,42 +340,40 @@ void OnPresetOff() {
   });
 }
 
+namespace final_pass {
+
+#define USE_REVERT_STATE 1
+
 namespace revert_state {
 
+// D3D10 block is created once per device and reused each frame
+// to restore full D3D10 pipeline state after our custom draw
 struct D3D10StateBlock {
   ID3D10StateBlock* block = nullptr;
 
-  void Capture(reshade::api::device* device) {
-    if (device->get_api() != reshade::api::device_api::d3d10) return;
-    auto* native_device = reinterpret_cast<ID3D10Device*>(device->get_native());
-    D3D10_STATE_BLOCK_MASK state_block_mask = {};
-    D3D10StateBlockMaskEnableAll(&state_block_mask);
-    if (SUCCEEDED(D3D10CreateStateBlock(native_device, &state_block_mask, &block)) && block != nullptr) {
-      block->Capture();
-      return;
-    }
-    if (block != nullptr) {
-      block->Release();
-      block = nullptr;
-    }
+  // Capture current device state into the cached block
+  void Capture() {
+    if (block == nullptr) return;
+    block->Capture();
   }
 
+  // Restore the captured state back to the device
   void Revert() {
     if (block == nullptr) return;
     block->Apply();
-    block->Release();
-    block = nullptr;
   }
 };
 
 }  // namespace revert_state
 
-namespace final_pass {
-
 struct __declspec(uuid("4c3b1f24-7d1f-4f32-9b31-7efecf0e8701")) FinalPassDeviceData {
   reshade::api::pipeline pipeline = {};
   reshade::api::pipeline_layout layout = {};
   reshade::api::format pipeline_format = reshade::api::format::unknown;
+
+#if USE_REVERT_STATE
+  ID3D10StateBlock* state_block = nullptr;
+#endif
 };
 
 struct __declspec(uuid("8a2a2a44-36c9-4c38-9bdf-4a38e3c0c3aa")) FinalPassSwapchainData {
@@ -505,11 +503,31 @@ void EnsureFinalPassPipeline(reshade::api::device* device, FinalPassDeviceData* 
 void OnInitDevice(reshade::api::device* device) {
   auto* data = device->create_private_data<FinalPassDeviceData>();
   CreateFinalPassLayout(device, data);
+
+#if USE_REVERT_STATE
+  // Cache a D3D10 state block once per device to avoid per-frame allocations.
+  if (device->get_api() == reshade::api::device_api::d3d10) {
+    auto* native_device = reinterpret_cast<ID3D10Device*>(device->get_native());
+    D3D10_STATE_BLOCK_MASK state_block_mask = {};
+    D3D10StateBlockMaskEnableAll(&state_block_mask);
+    if (FAILED(D3D10CreateStateBlock(native_device, &state_block_mask, &data->state_block))) {
+      data->state_block = nullptr;
+    }
+  }
+#endif
 }
 
 void OnDestroyDevice(reshade::api::device* device) {
   auto* data = device->get_private_data<FinalPassDeviceData>();
   if (data == nullptr) return;
+
+#if USE_REVERT_STATE
+  // Release cached state block on device teardown.
+  if (data->state_block != nullptr) {
+    data->state_block->Release();
+    data->state_block = nullptr;
+  }
+#endif
   if (data->pipeline.handle != 0u) device->destroy_pipeline(data->pipeline);
   if (data->layout.handle != 0u) device->destroy_pipeline_layout(data->layout);
   device->destroy_private_data<FinalPassDeviceData>();
@@ -540,10 +558,10 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   auto* swapchain_data = swapchain->get_private_data<FinalPassSwapchainData>();
   if (data == nullptr || swapchain_data == nullptr) return;
 
-#if 1
+#if USE_REVERT_STATE
   // Capture full D3D10 device state before our draw (ReShade tracking is partial).
-  revert_state::D3D10StateBlock state_block;
-  state_block.Capture(device);
+  revert_state::D3D10StateBlock state_block{data->state_block};
+  state_block.Capture();
 #endif
 
   auto back_buffer_resource = swapchain->get_current_back_buffer();
@@ -589,7 +607,7 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
 
   cmd_list->barrier(back_buffer_resource, reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource);
 
-#if 1
+#if USE_REVERT_STATE
   // Restore state to exactly what the game had before our draw.
   state_block.Revert();
 #endif
