@@ -35,7 +35,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Hermite Spline"},
+        .labels = {"Vanilla", "None", "Neutwo"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -93,23 +93,13 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 0.f,
+        .default_value = 50.f,
         .label = "Blowout",
         .section = "Tone Mapping",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .tooltip = "Emulates blowout from per channel tonemapping",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapWhiteClip",
-        .binding = &shader_injection.tone_map_white_clip,
-        .default_value = 30.f,
-        .label = "White Clip",
-        .section = "Tone Mapping",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -124,7 +114,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 50.f,
+        .default_value = 55.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -171,6 +161,17 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
+        .default_value = 0.f,
+        .label = "Dechroma",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 3; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
@@ -325,6 +326,7 @@ void OnPresetOff() {
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
+      {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeScene", 100.f},
       {"ColorGradeSceneScaling", 0.f},
@@ -334,21 +336,68 @@ void OnPresetOff() {
   });
 }
 
+// fractional bloom resolutions that need upgrading
+constexpr std::pair<const char*, int> kBloomDivs[] = {
+    {"BloomDiv4", 4},
+    {"BloomDiv8", 8},
+    {"BloomDiv16", 16},
+    {"BloomDiv32", 32},
+    {"BloomDiv64", 64},
+};
+
+void UpdateBloomTargets(reshade::api::swapchain* swapchain) {
+  auto* device = swapchain->get_device();
+  auto* data = renodx::utils::data::Get<renodx::mods::swapchain::DeviceData>(device);
+  if (!data) return;
+
+  auto bb = device->get_resource_desc(swapchain->get_current_back_buffer());
+  if (bb.type == reshade::api::resource_type::unknown) return;
+
+  // apply per-divisor upgrades to matching bloom targets
+  for (const auto& [name, div] : kBloomDivs) {
+    for (auto& target : data->swap_chain_upgrade_targets) {
+      if (target.name == name) {
+        target.dimensions = {
+            static_cast<int16_t>(bb.texture.width / div),
+            static_cast<int16_t>(bb.texture.height / div),
+            renodx::utils::resource::ResourceUpgradeInfo::ANY};
+        break;
+      }
+    }
+  }
+}
+
+void AddBloomTargets() {
+  for (const auto& [name, _] : kBloomDivs) {
+    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        .old_format = reshade::api::format::r8g8b8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .usage_include = reshade::api::resource_usage::render_target,
+        .name = name,
+    });
+  }
+}
+
 bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (fired_on_init_swapchain) return;
-  fired_on_init_swapchain = true;
-  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
-  if (peak.has_value()) {
-    settings[1]->default_value = peak.value();
-    settings[1]->can_reset = true;
+  if (!fired_on_init_swapchain) {
+    fired_on_init_swapchain = true;
+    auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+    if (peak.has_value()) {
+      settings[1]->default_value = peak.value();
+      settings[1]->can_reset = true;
+    }
+    bool was_upgraded = renodx::mods::swapchain::IsUpgraded(swapchain);
+    if (was_upgraded) {
+      settings[1]->default_value = 100.f;
+    }
   }
-  bool was_upgraded = renodx::mods::swapchain::IsUpgraded(swapchain);
-  if (was_upgraded) {
-    settings[1]->default_value = 100.f;
-  }
+
+  UpdateBloomTargets(swapchain);  // Bloom targets are dependent on swapchain resolution
 }
+
+bool initialized = false;
 
 }  // namespace
 
@@ -360,23 +409,32 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::mods::shader::force_pipeline_cloning = true;
+      if (!initialized) {
+        renodx::mods::shader::force_pipeline_cloning = true;
 
-      renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-      renodx::mods::swapchain::swapchain_proxy_revert_state = true;
-
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak and paper white
+        renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+        renodx::mods::swapchain::swapchain_proxy_revert_state = true;
 
 #if 1
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-          .usage_include = reshade::api::resource_usage::render_target,
-      });
+        // Main Render
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_unorm,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
+                           .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
+            .usage_include = reshade::api::resource_usage::render_target,
+        });
+
+        // Bloom
+        AddBloomTargets();
 #endif
+
+        initialized = true;
+      }
+
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak and paper white
 
       renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
 
