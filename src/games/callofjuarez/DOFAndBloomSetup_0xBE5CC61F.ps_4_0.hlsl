@@ -195,6 +195,9 @@ Texture2D<float4> sDepth : register(t2);
 Texture1D<float4> IniParams : register(t120);
 Texture2D<float4> StereoParams : register(t125);
 
+float pseudoRandom(float2 p) {
+  return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+}
 
 void main( 
   float4 v0 : SV_POSITION0,
@@ -216,7 +219,54 @@ void main(
   r1.xyz = r1.xyz + -r0.xyz;
   r0.w = fBulletTime + vColorParams.w;
   r0.xyz = r0.www * r1.xyz + r0.xyz;
-  r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw; // Bloom
+  r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;  // Bloom
+
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    // --- 13-TAP MULTI-AXIS GAUSSIAN ---
+    float2 texelSize = float2(1.0 / 3840.0, 1.0 / 2160.0);
+    float spread = 30.0 * CUSTOM_BLOOM_RADIUS;  // Adjust for width
+
+    // Gaussian weights (13-tap)
+    float weights[7] = { 0.114725, 0.106288, 0.084458, 0.060173, 0.03844, 0.021973, 0.011245 };
+
+    float3 combinedBloom = sColor1.Sample(samColor1_s, v1.xy).xyz * weights[0];
+    float totalWeight = weights[0];
+
+    // The 4 primary axes (resulting in 8 directions)
+    float2 axes[4] = {
+      float2(1.0, 0.0),      // Horizontal
+      float2(0.0, 1.0),      // Vertical
+      float2(0.707, 0.707),  // 45 Degrees
+      float2(0.707, -0.707)  // 135 Degrees
+    };
+
+    [unroll]
+    for (int i = 1; i < 7; i++)
+  {
+      float offset = float(i) * spread;
+      float w = weights[i];
+
+      [unroll]
+      for (int j = 0; j < 4; j++)
+      {
+        float2 step = axes[j] * texelSize * offset;
+        combinedBloom += sColor1.Sample(samColor1_s, v1.xy + step).xyz * w;
+        combinedBloom += sColor1.Sample(samColor1_s, v1.xy - step).xyz * w;
+        totalWeight += w * 2.0;
+      }
+    }
+
+    r1.xyz = combinedBloom / totalWeight;
+    // --- END MULTI-AXIS PASS ---
+
+    // Final Blend
+    if (RENODX_TONE_MAP_TYPE <= 0.f) {
+      o0.xyz = saturate((r1.xyz * CUSTOM_BLOOM_AMOUNT) + r0.xyz);
+    } else {
+      o0.xyz = (r1.xyz * CUSTOM_BLOOM_AMOUNT) + r0.xyz;
+    }
+  }
+
   if (RENODX_TONE_MAP_TYPE <= 0.f) {
     o0.xyz = saturate((r1.xyz * CUSTOM_BLOOM_AMOUNT) + r0.xyz);
   } else {
