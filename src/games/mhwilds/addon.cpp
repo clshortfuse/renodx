@@ -219,7 +219,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "Hermite Spline"},
+        .labels = {"Vanilla", "Neutwo"},
         //.is_enabled = []() { return last_is_hdr; },
         .parse = [](float value) { return value; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
@@ -536,17 +536,17 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "FxVignette",
-    //     .binding = &shader_injection.custom_vignette,
-    //     .default_value = 50.f,
-    //     .label = "Vignette",
-    //     .section = "Effects",
-    //     .tooltip = "Controls Vignette. Vanilla = 50",
-    //     .max = 100.f,
-    //     .parse = [](float value) { return value * 0.02f; },
-    //     .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
-    // },
+    new renodx::utils::settings::Setting{
+        .key = "FxVignette",
+        .binding = &shader_injection.custom_vignette,
+        .default_value = 50.f,
+        .label = "Vignette",
+        .section = "Effects",
+        .tooltip = "Controls Vignette. Vanilla = 50",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
+    },
     //     new renodx::utils::settings::Setting{
     //     .key = "FxLensDistortion",
     //     .binding = &shader_injection.custom_lens_distortion,
@@ -599,14 +599,28 @@ renodx::utils::settings::Settings settings = {
         },
         .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
     },
-    status_setting = new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .section = "Mod Compatibility Check",
+      },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Checks for the shaders the mod needs to function. Not definitive on compatibility.",
+        .section = "Mod Compatibility Check",
+        //.is_visible = []() { return draw_warning_no_postprocess_shader; },
+      },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Status: ",
+        .section = "Mod Compatibility Check",
+        //.is_visible = []() { return draw_warning_no_postprocess_shader; },
+        .group = "status-group",
       },
     status_setting = new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = status_message,
         .section = "Mod Compatibility Check",
+        .group = "status-group",
         .tint = status_tint,
         //.is_visible = []() { return draw_warning_no_postprocess_shader; },
       },
@@ -639,6 +653,11 @@ renodx::utils::settings::Settings settings = {
         .label = "Missing Fog shaders. This is likely caused by a game update or a mod conflict. Core functionality may still work, but the fog slider will not.",
         .section = "Mod Compatibility Check",
         .is_visible = []() { return draw_warning_no_fog_shader; },
+      },
+      new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "",
+        .section = "Mod Compatibility Check",
       },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -771,7 +790,7 @@ void OnPresent(
     draw_warning_no_postprocess_shader = !any_postprocess_shader_drawn;
     draw_warning_no_lutbuilder_shader = !any_lutbuilder_shader_drawn;
     draw_warning_no_output_shader = !any_output_shader_drawn;
-    draw_warning_no_ui_shader = !any_ui_shader_drawn;
+    draw_warning_no_ui_shader = !any_ui_shader_drawn && last_is_hdr;
     draw_warning_no_fog_shader = !any_fog_shader_drawn;
 
     bool warning_test = draw_warning_no_ui_shader || draw_warning_no_fog_shader;
