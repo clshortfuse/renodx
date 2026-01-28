@@ -33,9 +33,9 @@
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 
-// #define CUSTOM_VIGNETTE                        shader_injection.custom_vignette
+#define CUSTOM_VIGNETTE                        shader_injection.custom_vignette
 // #define CUSTOM_LENS_DISTORTION                 shader_injection.custom_lens_distortion
-#define CUSTOM_VIGNETTE                        1.f // Disabled for now since it breaks photo mode
+//#define CUSTOM_VIGNETTE                        1.f // Disabled for now since it breaks photo mode
 #define CUSTOM_LENS_DISTORTION                 1.f // Disabled for now since it breaks motion vectors
 
 #define CUSTOM_LUT_COLOR_STRENGTH              shader_injection.custom_lut_color_strength

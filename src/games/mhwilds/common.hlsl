@@ -43,6 +43,18 @@ float3 HermiteSplineMaxCLL(float3 color, float tonemap_peak, float white_clip) {
   return color * scale;
 }
 
+// float3 NeutwoMaxCLL(float3 color, float tonemap_peak, float white_clip) {
+//   float rgb_max = renodx::math::Max(color);
+//   float rgb_max_log = log2(rgb_max);
+//   float tonemap_peak_log = log2(tonemap_peak);
+
+//   float tonemapped_log = renodx::tonemap::Neutwo(rgb_max_log, tonemap_peak_log, log2(white_clip));
+//   float tonemapped = exp2(tonemapped_log);
+
+//   float scale = renodx::math::DivideSafe(tonemapped, rgb_max, 1.f);
+//   return color * scale;
+// }
+
 float3 ReinhardPiecewiseExtendedMaxCLL(float3 color, float rolloff_start, float tonemap_peak, float white_clip) {
   float rgb_max = renodx::math::Max(color);
   // float rgb_max = renodx::color::y::from::BT709(color); // by luminance for testing
@@ -209,8 +221,8 @@ float3 DisplayMap(float3 color, float white_clip) {
 
   float3 outputColor = color;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
-    white_clip = min(500.f, max(100.f, white_clip));
-    outputColor = HermiteSplineMaxCLL(color, tonemap_peak, white_clip);
+    white_clip = max(100.f, white_clip);
+    outputColor = renodx::tonemap::neutwo::MaxChannel(color, tonemap_peak, white_clip);
   }
 
   outputColor = renodx::color::bt709::from::BT2020(outputColor);
@@ -235,8 +247,8 @@ float3 SDRDisplayMap(float3 color, float white_clip) {
 
   float3 outputColor = color;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
-    white_clip = min(500.f, max(20.f, white_clip));
-    outputColor = HermiteSplineMaxCLL(color, peak, white_clip);
+    white_clip = max(20.f, white_clip);
+    outputColor = renodx::tonemap::neutwo::MaxChannel(color, peak, white_clip);
   }
 
   outputColor = renodx::color::bt709::from::BT2020(outputColor);
