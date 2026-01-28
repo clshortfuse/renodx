@@ -87,7 +87,7 @@ struct ShaderInjectData {
   float bloom_strength;
   float godrays_intensity;
   float perchannelblowout;
-  float ao_intensity;
+  float shadow_hardening;
 };
 
 #ifndef __cplusplus
@@ -144,7 +144,7 @@ cbuffer shader_injection : register(b13) {
 #define BLOOM_STRENGTH                         shader_injection.bloom_strength
 #define GODRAYS_INTENSITY                      shader_injection.godrays_intensity
 #define PER_CHANNEL_BLOWOUT                    shader_injection.perchannelblowout
-#define AO_INTENSITY                           shader_injection.ao_intensity
+#define SHADOW_HARDENING                       shader_injection.shadow_hardening
 
 #include "../../shaders/renodx.hlsl"
 
