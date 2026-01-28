@@ -793,7 +793,7 @@ bool initialized = false;
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Assassin's Creed™: Director's Cut Edition";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Assassin's Creed: Director's Cut Edition";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
@@ -807,7 +807,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // renodx::mods::swapchain::swapchain_proxy_revert_state = true;
 
         renodx::mods::shader::expected_constant_buffer_index = 13;
-        renodx::mods::shader::revert_constant_buffer_ranges = true;
 
 #if 1  // Render Target Upgrades
 
