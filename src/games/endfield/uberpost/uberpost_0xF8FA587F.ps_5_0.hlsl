@@ -105,14 +105,24 @@ void main(
     );
   float3 graded = renodx::lut::Sample(t1, lut_config, r0.yzx);
   
+    float y = renodx::color::y::from::BT709(graded);
+  float3 graded_ap1 = renodx::color::ap1::from::BT709(graded);
   [branch]
   if (shader_injection.tone_map_type == 0.f) {
-    o0.xyz = renodx::tonemap::ExponentialRollOff(max(0, graded), 0.18f, 1.f);
+    float3 hue_chrominance_reference_color = renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 1.0f));
+    UserGradingConfig cg_config;
+    cg_config.saturation = 1.f;
+    cg_config.dechroma = 0.f;
+    cg_config.hue_emulation_strength = 1.f;
+    cg_config.chrominance_emulation_strength = 0.7f;
+    cg_config.highlight_saturation = 0.f;
+    o0.xyz = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, hue_chrominance_reference_color, y, cg_config);
+    o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
+    o0.xyz = ApplyNeutwoByMaxChannel(o0.xyz, 1.0f);
+    o0.xyz = renodx::color::bt709::from::BT2020(o0.xyz);
   } else {
+    float3 hue_chrominance_reference_color = renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 0.5f));
     UserGradingConfig cg_config = CreateColorGradeConfig();
-    float y = renodx::color::y::from::BT709(graded);
-    float3 graded_ap1 = renodx::color::ap1::from::BT709(graded);
-    float3 hue_chrominance_reference_color = renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 0.18f));
     float3 graded_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(graded, y, cg_config);
     o0.xyz = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded_bt709, hue_chrominance_reference_color, y, cg_config);
     o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
