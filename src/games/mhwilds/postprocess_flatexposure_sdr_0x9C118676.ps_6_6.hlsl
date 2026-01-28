@@ -198,12 +198,12 @@ float4 main(
   float _584;
   float _585;
   float _586;
-  float _623;
-  float _632;
-  float _641;
-  float _712;
-  float _713;
-  float _714;
+  float _626;
+  float _635;
+  float _644;
+  float _715;
+  float _716;
+  float _717;
   [branch]
   if (film_aspect == 0.0f) {
     float _31 = Kerare.x / Kerare.w;
@@ -224,22 +224,7 @@ float4 main(
   CustomVignette(_73);
   _73 *= Exposure;
 
-  // // This should be 1 if 0x4905680A is loaded, since that one handles exposure
-  // float custom_flat_exposure = 1.f;
-
-  // // We check if 0x4905680A has loaded
-  // if (CUSTOM_EXPOSURE_SHADER_DRAW == 0.f) {
-  //   // In case of vanilla
-  //   custom_flat_exposure = 1.f * NormalizeExposure();
-  //   if (CUSTOM_EXPOSURE_TYPE >= 1.f) {
-  //     custom_flat_exposure = FlatExposure();
-  //   }
-  // }
-  
   float4 _81 = RE_POSTPROCESS_Color.Sample(BilinearClamp, float2((screenInverseSize.x * SV_Position.x), (screenInverseSize.y * SV_Position.y)));
-
-  //_81 *= custom_flat_exposure;
-
   float _85 = _81.x * _73;
   float _86 = _81.y * _73;
   float _87 = _81.z * _73;
@@ -290,7 +275,7 @@ float4 main(
     _195 = _105;
     _196 = _108;
   }
-  // Use RenoDX LUT sampling helper with log-encoded AP1 space
+
   float3 lut_output = SampleColorLUTs(
       float3(_194, _195, _196),
       tTextureMap0,
@@ -300,57 +285,55 @@ float4 main(
       fTextureBlendRate,
       fTextureBlendRate2,
       fColorMatrix);
-  
-  // Apply CustomLUTColor blending
-  float3 new_color = CustomLUTColor(float3(_194, _195, _196), lut_output);
-  float _599 = min(new_color.r, 65000.0f);
-  float _600 = min(new_color.g, 65000.0f);
-  float _601 = min(new_color.b, 65000.0f);
-  //_601 = new_color.b;
 
-  bool _604 = isfinite(max(max(_599, _600), _601));
-  float _605 = select(_604, _599, 1.0f);
-  float _606 = select(_604, _600, 1.0f);
-  float _607 = select(_604, _601, 1.0f);
-  // if (tonemapParam_isHDRMode == 0.0f && ProcessSDRVanilla()) {
-  //   float _615 = invLinearBegin * _605;
+  float3 new_color = CustomLUTColor(float3(_194, _195, _196), lut_output);
+  float _602 = new_color.r;
+  float _603 = new_color.g;
+  float _604 = new_color.b;
+
+  bool _607 = isfinite(max(max(_602, _603), _604));
+  float _608 = select(_607, _602, 1.0f);
+  float _609 = select(_607, _603, 1.0f);
+  float _610 = select(_607, _604, 1.0f);
+  // if (tonemapParam_isHDRMode == 0.0f) {
+  //   float _618 = invLinearBegin * _608;
   //   do {
-  //     if (!(_605 >= linearBegin)) {
-  //       _623 = ((_615 * _615) * (3.0f - (_615 * 2.0f)));
+  //     if (!(_608 >= linearBegin)) {
+  //       _626 = ((_618 * _618) * (3.0f - (_618 * 2.0f)));
   //     } else {
-  //       _623 = 1.0f;
+  //       _626 = 1.0f;
   //     }
-  //     float _624 = invLinearBegin * _606;
+  //     float _627 = invLinearBegin * _609;
   //     do {
-  //       if (!(_606 >= linearBegin)) {
-  //         _632 = ((_624 * _624) * (3.0f - (_624 * 2.0f)));
+  //       if (!(_609 >= linearBegin)) {
+  //         _635 = ((_627 * _627) * (3.0f - (_627 * 2.0f)));
   //       } else {
-  //         _632 = 1.0f;
+  //         _635 = 1.0f;
   //       }
-  //       float _633 = invLinearBegin * _607;
+  //       float _636 = invLinearBegin * _610;
   //       do {
-  //         if (!(_607 >= linearBegin)) {
-  //           _641 = ((_633 * _633) * (3.0f - (_633 * 2.0f)));
+  //         if (!(_610 >= linearBegin)) {
+  //           _644 = ((_636 * _636) * (3.0f - (_636 * 2.0f)));
   //         } else {
-  //           _641 = 1.0f;
+  //           _644 = 1.0f;
   //         }
-  //         float _650 = select((_605 < linearStart), 0.0f, 1.0f);
-  //         float _651 = select((_606 < linearStart), 0.0f, 1.0f);
-  //         float _652 = select((_607 < linearStart), 0.0f, 1.0f);
-  //         _712 = (((((contrast * _605) + madLinearStartContrastFactor) * (_623 - _650)) + (((pow(_615, toe)) * (1.0f - _623)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _605) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _650));
-  //         _713 = (((((contrast * _606) + madLinearStartContrastFactor) * (_632 - _651)) + (((pow(_624, toe)) * (1.0f - _632)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _606) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _651));
-  //         _714 = (((((contrast * _607) + madLinearStartContrastFactor) * (_641 - _652)) + (((pow(_633, toe)) * (1.0f - _641)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _607) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _652));
+  //         float _653 = select((_608 < linearStart), 0.0f, 1.0f);
+  //         float _654 = select((_609 < linearStart), 0.0f, 1.0f);
+  //         float _655 = select((_610 < linearStart), 0.0f, 1.0f);
+  //         _715 = (((((contrast * _608) + madLinearStartContrastFactor) * (_626 - _653)) + (((pow(_618, toe)) * (1.0f - _626)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _608) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _653));
+  //         _716 = (((((contrast * _609) + madLinearStartContrastFactor) * (_635 - _654)) + (((pow(_627, toe)) * (1.0f - _635)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _609) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _654));
+  //         _717 = (((((contrast * _610) + madLinearStartContrastFactor) * (_644 - _655)) + (((pow(_636, toe)) * (1.0f - _644)) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _610) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _655));
   //       } while (false);
   //     } while (false);
   //   } while (false);
   // } else {
-  //   _712 = _605;
-  //   _713 = _606;
-  //   _714 = _607;
+  //   _715 = _608;
+  //   _716 = _609;
+  //   _717 = _610;
   // }
-  // SV_Target.x = _712;
-  // SV_Target.y = _713;
-  // SV_Target.z = _714;
+  // SV_Target.x = _715;
+  // SV_Target.y = _716;
+  // SV_Target.z = _717;
 
   CustomTonemapParam params;
   params.invLinearBegin = invLinearBegin;
@@ -365,7 +348,7 @@ float4 main(
   params.mulLinearStartContrastFactor = mulLinearStartContrastFactor;
   params.madLinearStartContrastFactor = madLinearStartContrastFactor;
 
-  SV_Target.xyz = CustomTonemap(float3(_605, _606, _607), params, tonemapParam_isHDRMode == 0.0f);
+  SV_Target.xyz = CustomTonemap(float3(_608, _609, _610), params, tonemapParam_isHDRMode == 0.0f);
 
   SV_Target.w = 0.0f;
   return SV_Target;
