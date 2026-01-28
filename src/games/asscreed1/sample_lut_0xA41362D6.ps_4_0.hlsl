@@ -36,7 +36,7 @@ void main(
     o0.rgb = renodx::color::gamma::Encode(max(0, o0.rgb));
   } else {
     renodx::lut::Config lut_config = CreateLUTConfig(s1_s);
-    const float scale = ComputeMaxChCompressionScale(untonemapped, 0.7f, 1.f, 40.f);
+    const float scale = ComputeMaxChCompressionScale(untonemapped);
 
     const float3 color_hdr = untonemapped;
     const float3 color_sdr = color_hdr * scale;
