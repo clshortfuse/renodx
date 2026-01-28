@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2024 Musa Haji
- * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
 
@@ -9,6 +8,10 @@
 #define DEBUG_LEVEL_0
 
 #include <embed/shaders.h>
+
+#include <array>
+#include <d3d10_1.h>
+#pragma comment(lib, "d3d10.lib")
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -336,6 +339,241 @@ void OnPresetOff() {
   });
 }
 
+struct __declspec(uuid("4c3b1f24-7d1f-4f32-9b31-7efecf0e8701")) FinalPassDeviceData {
+  reshade::api::pipeline pipeline = {};
+  reshade::api::pipeline_layout layout = {};
+  reshade::api::format pipeline_format = reshade::api::format::unknown;
+};
+
+struct __declspec(uuid("8a2a2a44-36c9-4c38-9bdf-4a38e3c0c3aa")) FinalPassSwapchainData {
+  std::vector<reshade::api::resource_view> swapchain_rtvs;
+  reshade::api::resource final_texture = {};
+  reshade::api::resource_view final_texture_view = {};
+  reshade::api::sampler final_texture_sampler = {};
+  reshade::api::descriptor_table sampler_table = {};
+  reshade::api::descriptor_table srv_table = {};
+};
+
+void CreateFinalPassLayout(reshade::api::device* device, FinalPassDeviceData* data) {
+  if (data->layout.handle != 0u) return;
+
+  reshade::api::descriptor_range sampler_range = {};
+  sampler_range.binding = 0;
+  sampler_range.dx_register_index = 0;
+  sampler_range.dx_register_space = 0;
+  sampler_range.count = 1;
+  sampler_range.visibility = reshade::api::shader_stage::all_graphics;
+  sampler_range.type = reshade::api::descriptor_type::sampler;
+
+  reshade::api::descriptor_range srv_range = {};
+  srv_range.binding = 0;
+  srv_range.dx_register_index = 0;
+  srv_range.dx_register_space = 0;
+  srv_range.count = 1;
+  srv_range.visibility = reshade::api::shader_stage::all_graphics;
+  srv_range.type = reshade::api::descriptor_type::texture_shader_resource_view;
+
+  reshade::api::pipeline_layout_param param_sampler;
+  param_sampler.type = reshade::api::pipeline_layout_param_type::descriptor_table;
+  param_sampler.descriptor_table.count = 1;
+  param_sampler.descriptor_table.ranges = &sampler_range;
+
+  reshade::api::pipeline_layout_param param_srv;
+  param_srv.type = reshade::api::pipeline_layout_param_type::descriptor_table;
+  param_srv.descriptor_table.count = 1;
+  param_srv.descriptor_table.ranges = &srv_range;
+
+  reshade::api::pipeline_layout_param param_constants;
+  param_constants.type = reshade::api::pipeline_layout_param_type::push_constants;
+  if (device->get_api() == reshade::api::device_api::d3d12 || device->get_api() == reshade::api::device_api::vulkan) {
+    param_constants.push_constants.count = sizeof(shader_injection) / sizeof(uint32_t);
+  } else {
+    param_constants.push_constants.count = 1;
+  }
+
+  int cb_index = renodx::mods::shader::expected_constant_buffer_index;
+  if (cb_index == -1) cb_index = 13;
+  param_constants.push_constants.dx_register_index = cb_index;
+  param_constants.push_constants.dx_register_space = renodx::mods::shader::expected_constant_buffer_space;
+
+  std::array<reshade::api::pipeline_layout_param, 3> params = {
+      param_sampler,
+      param_srv,
+      param_constants,
+  };
+  device->create_pipeline_layout(static_cast<uint32_t>(params.size()), params.data(), &data->layout);
+}
+
+void EnsureFinalPassPipeline(reshade::api::device* device, FinalPassDeviceData* data, reshade::api::format format) {
+  if (data->pipeline.handle != 0u && data->pipeline_format == format) return;
+
+  if (data->pipeline.handle != 0u) {
+    device->destroy_pipeline(data->pipeline);
+    data->pipeline = {};
+  }
+
+  std::vector<reshade::api::pipeline_subobject> subobjects;
+
+  reshade::api::shader_desc vs_desc = {};
+  vs_desc.code = __swap_chain_proxy_vertex_shader.data();
+  vs_desc.code_size = __swap_chain_proxy_vertex_shader.size();
+  subobjects.push_back({reshade::api::pipeline_subobject_type::vertex_shader, 1, &vs_desc});
+
+  reshade::api::shader_desc ps_desc = {};
+  ps_desc.code = __swap_chain_proxy_pixel_shader.data();
+  ps_desc.code_size = __swap_chain_proxy_pixel_shader.size();
+  subobjects.push_back({reshade::api::pipeline_subobject_type::pixel_shader, 1, &ps_desc});
+
+  auto pipeline_format = format;
+  subobjects.push_back({reshade::api::pipeline_subobject_type::render_target_formats, 1, &pipeline_format});
+
+  uint32_t num_vertices = 3;
+  subobjects.push_back({reshade::api::pipeline_subobject_type::max_vertex_count, 1, &num_vertices});
+
+  auto topology = reshade::api::primitive_topology::triangle_list;
+  subobjects.push_back({reshade::api::pipeline_subobject_type::primitive_topology, 1, &topology});
+
+  reshade::api::blend_desc blend_state = {};
+  subobjects.push_back({reshade::api::pipeline_subobject_type::blend_state, 1, &blend_state});
+
+  reshade::api::rasterizer_desc rasterizer_state = {};
+  rasterizer_state.cull_mode = reshade::api::cull_mode::none;
+  subobjects.push_back({reshade::api::pipeline_subobject_type::rasterizer_state, 1, &rasterizer_state});
+
+  reshade::api::depth_stencil_desc depth_stencil_state = {};
+  depth_stencil_state.depth_enable = false;
+  depth_stencil_state.depth_write_mask = false;
+  depth_stencil_state.depth_func = reshade::api::compare_op::always;
+  depth_stencil_state.stencil_enable = false;
+  depth_stencil_state.front_stencil_read_mask = 0xFF;
+  depth_stencil_state.front_stencil_write_mask = 0xFF;
+  depth_stencil_state.front_stencil_func = depth_stencil_state.back_stencil_func;
+  depth_stencil_state.front_stencil_fail_op = depth_stencil_state.back_stencil_fail_op;
+  depth_stencil_state.front_stencil_depth_fail_op = depth_stencil_state.back_stencil_depth_fail_op;
+  depth_stencil_state.front_stencil_pass_op = depth_stencil_state.back_stencil_pass_op;
+  depth_stencil_state.back_stencil_read_mask = 0xFF;
+  depth_stencil_state.back_stencil_write_mask = 0xFF;
+  depth_stencil_state.back_stencil_func = reshade::api::compare_op::always;
+  depth_stencil_state.back_stencil_fail_op = reshade::api::stencil_op::keep;
+  depth_stencil_state.back_stencil_depth_fail_op = reshade::api::stencil_op::keep;
+  depth_stencil_state.back_stencil_pass_op = reshade::api::stencil_op::keep;
+  subobjects.push_back({reshade::api::pipeline_subobject_type::depth_stencil_state, 1, &depth_stencil_state});
+
+  reshade::api::pipeline pipeline = {};
+  if (device->create_pipeline(data->layout, static_cast<uint32_t>(subobjects.size()), subobjects.data(), &pipeline)) {
+    data->pipeline = pipeline;
+    data->pipeline_format = format;
+  } else {
+    data->pipeline = {};
+    data->pipeline_format = reshade::api::format::unknown;
+  }
+}
+
+void OnInitDevice(reshade::api::device* device) {
+  auto* data = device->create_private_data<FinalPassDeviceData>();
+  CreateFinalPassLayout(device, data);
+}
+
+void OnDestroyDevice(reshade::api::device* device) {
+  auto* data = device->get_private_data<FinalPassDeviceData>();
+  if (data == nullptr) return;
+  if (data->pipeline.handle != 0u) device->destroy_pipeline(data->pipeline);
+  if (data->layout.handle != 0u) device->destroy_pipeline_layout(data->layout);
+  device->destroy_private_data<FinalPassDeviceData>();
+}
+
+void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  auto* device = swapchain->get_device();
+  auto* data = swapchain->get_private_data<FinalPassSwapchainData>();
+  if (data == nullptr) return;
+
+  for (const auto& rtv : data->swapchain_rtvs) {
+    device->destroy_resource_view(rtv);
+  }
+  if (data->final_texture_sampler.handle != 0u) device->destroy_sampler(data->final_texture_sampler);
+  if (data->final_texture_view.handle != 0u) device->destroy_resource_view(data->final_texture_view);
+  if (data->final_texture.handle != 0u) device->destroy_resource(data->final_texture);
+  if (data->sampler_table.handle != 0u) device->free_descriptor_table(data->sampler_table);
+  if (data->srv_table.handle != 0u) device->free_descriptor_table(data->srv_table);
+
+  swapchain->destroy_private_data<FinalPassSwapchainData>();
+}
+
+void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain, const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect, uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
+  auto* device = queue->get_device();
+  auto* cmd_list = queue->get_immediate_command_list();
+
+  auto* data = device->get_private_data<FinalPassDeviceData>();
+  auto* swapchain_data = swapchain->get_private_data<FinalPassSwapchainData>();
+  if (data == nullptr || swapchain_data == nullptr) return;
+
+  // Capture full D3D10 device state before our draw (ReShade tracking is partial).
+  ID3D10StateBlock* state_block = nullptr;
+  if (device->get_api() == reshade::api::device_api::d3d10) {
+    auto* native_device = reinterpret_cast<ID3D10Device*>(device->get_native());
+    D3D10_STATE_BLOCK_MASK state_block_mask = {};
+    D3D10StateBlockMaskEnableAll(&state_block_mask);
+    if (SUCCEEDED(D3D10CreateStateBlock(native_device, &state_block_mask, &state_block)) && state_block != nullptr) {
+      state_block->Capture();
+    } else {
+      if (state_block != nullptr) {
+        state_block->Release();
+        state_block = nullptr;
+      }
+    }
+  }
+
+  auto back_buffer_resource = swapchain->get_current_back_buffer();
+  auto back_buffer_desc = device->get_resource_desc(back_buffer_resource);
+
+  EnsureFinalPassPipeline(device, data, back_buffer_desc.texture.format);
+  if (data->pipeline.handle == 0u || data->layout.handle == 0u) return;
+
+  // copy backbuffer
+  {
+    const reshade::api::resource resources[2] = {back_buffer_resource, swapchain_data->final_texture};
+    const reshade::api::resource_usage state_old[2] = {reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource};
+    const reshade::api::resource_usage state_new[2] = {reshade::api::resource_usage::copy_source, reshade::api::resource_usage::copy_dest};
+
+    cmd_list->barrier(2, resources, state_old, state_new);
+    cmd_list->copy_texture_region(back_buffer_resource, 0, nullptr, swapchain_data->final_texture, 0, nullptr);
+    cmd_list->barrier(2, resources, state_new, state_old);
+  }
+
+  // Bind our final pass pipeline and target the current backbuffer.
+  cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, data->pipeline);
+  cmd_list->barrier(back_buffer_resource, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::render_target);
+
+  reshade::api::render_pass_render_target_desc render_target = {
+      .view = swapchain_data->swapchain_rtvs.at(swapchain->get_current_back_buffer_index()),
+  };
+  cmd_list->begin_render_pass(1, &render_target, nullptr);
+
+  // Bind sampler/SRV used by the final pass shader.
+  const reshade::api::descriptor_table tables[] = {
+      swapchain_data->sampler_table,
+      swapchain_data->srv_table,
+  };
+  cmd_list->bind_descriptor_tables(
+      reshade::api::shader_stage::all_graphics,
+      data->layout,
+      0,
+      static_cast<uint32_t>(std::size(tables)),
+      tables);
+
+  cmd_list->draw(3, 1, 0, 0);
+  cmd_list->end_render_pass();
+
+  cmd_list->barrier(back_buffer_resource, reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource);
+
+  // Restore state to exactly what the game had before our draw.
+  if (state_block != nullptr) {
+    state_block->Apply();
+    state_block->Release();
+    state_block = nullptr;
+  }
+}
+
 // fractional bloom resolutions that need upgrading
 constexpr std::pair<const char*, int> kBloomDivs[] = {
     {"BloomDiv4", 4},
@@ -395,6 +633,82 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 
   UpdateBloomTargets(swapchain);  // Bloom targets are dependent on swapchain resolution
+
+  auto* device = swapchain->get_device();
+  auto* device_data = device->get_private_data<FinalPassDeviceData>();
+  if (device_data == nullptr || device_data->layout.handle == 0u) return;
+  auto* swapchain_data = swapchain->create_private_data<FinalPassSwapchainData>();
+  if (swapchain_data == nullptr) return;
+
+  for (uint32_t i = 0; i < swapchain->get_back_buffer_count(); ++i) {
+    auto back_buffer_resource = swapchain->get_back_buffer(i);
+    auto back_buffer_desc = device->get_resource_desc(back_buffer_resource);
+    auto desc = reshade::api::resource_view_desc(
+        reshade::api::resource_view_type::texture_2d,
+        reshade::api::format_to_default_typed(back_buffer_desc.texture.format),
+        0,
+        1,
+        0,
+        1);
+    device->create_resource_view(
+        back_buffer_resource,
+        reshade::api::resource_usage::render_target,
+        desc,
+        &swapchain_data->swapchain_rtvs.emplace_back());
+  }
+
+  {
+    auto back_buffer_resource = swapchain->get_back_buffer(0);
+    auto back_buffer_desc = device->get_resource_desc(back_buffer_resource);
+    reshade::api::resource_desc desc = {};
+    desc.type = reshade::api::resource_type::texture_2d;
+    desc.texture = {
+        .width = back_buffer_desc.texture.width,
+        .height = back_buffer_desc.texture.height,
+        .depth_or_layers = 1,
+        .levels = 1,
+        .format = reshade::api::format_to_typeless(back_buffer_desc.texture.format),
+        .samples = 1,
+    };
+    desc.heap = reshade::api::memory_heap::gpu_only;
+    desc.usage = reshade::api::resource_usage::copy_dest | reshade::api::resource_usage::shader_resource;
+    desc.flags = reshade::api::resource_flags::none;
+
+    device->create_resource(desc, nullptr, reshade::api::resource_usage::shader_resource, &swapchain_data->final_texture);
+    device->create_resource_view(
+        swapchain_data->final_texture,
+        reshade::api::resource_usage::shader_resource,
+        reshade::api::resource_view_desc(reshade::api::format_to_default_typed(desc.texture.format)),
+        &swapchain_data->final_texture_view);
+    device->create_sampler({}, &swapchain_data->final_texture_sampler);
+  }
+
+  if (swapchain_data->sampler_table.handle == 0u) {
+    device->allocate_descriptor_table(device_data->layout, 0, &swapchain_data->sampler_table);
+  }
+  if (swapchain_data->srv_table.handle == 0u) {
+    device->allocate_descriptor_table(device_data->layout, 1, &swapchain_data->srv_table);
+  }
+
+  reshade::api::descriptor_table_update updates[2] = {
+      {
+          .table = swapchain_data->sampler_table,
+          .binding = 0,
+          .array_offset = 0,
+          .count = 1,
+          .type = reshade::api::descriptor_type::sampler,
+          .descriptors = &swapchain_data->final_texture_sampler,
+      },
+      {
+          .table = swapchain_data->srv_table,
+          .binding = 0,
+          .array_offset = 0,
+          .count = 1,
+          .type = reshade::api::descriptor_type::texture_shader_resource_view,
+          .descriptors = &swapchain_data->final_texture_view,
+      },
+  };
+  device->update_descriptor_tables(static_cast<uint32_t>(std::size(updates)), updates);
 }
 
 bool initialized = false;
@@ -412,12 +726,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
 
-        renodx::mods::swapchain::use_resource_cloning = true;
-        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-        renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+        // renodx::mods::swapchain::use_resource_cloning = false;
+        // renodx::mods::swapchain::swapchain_proxy_revert_state = true;
 
-#if 1
+        renodx::mods::shader::expected_constant_buffer_index = 13;
+        renodx::mods::shader::revert_constant_buffer_ranges = true;
+
+#if 1  // Render Target Upgrades
+
         // Main Render
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_unorm,
@@ -429,25 +745,34 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
         // Bloom
         AddBloomTargets();
+
 #endif
 
         initialized = true;
       }
 
+      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
+      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak and paper white
+      reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak and paper white
+      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }
 
   renodx::utils::random::Use(fdw_reason);  // film grain
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  renodx::mods::swapchain::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
