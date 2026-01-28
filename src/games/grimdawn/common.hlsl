@@ -253,6 +253,13 @@ float3 PostTonemapSliders(float3 hdr_color) {
 float3 DisplayMap(float3 color, float white_clip) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    config.diffuse_white_nits = renodx::color::correct::GammaSafe(config.diffuse_white_nits);
+  }
+  else if (RENODX_GAMMA_CORRECTION == 2.f) {
+    config.diffuse_white_nits = renodx::color::correct::GammaSafe(config.diffuse_white_nits, false, 2.4f);
+  }
+
    float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;              // Normalizes peak
    float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness
 
