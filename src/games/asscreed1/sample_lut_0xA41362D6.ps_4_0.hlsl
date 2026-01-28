@@ -31,13 +31,12 @@ void main(
 
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0.rgb = texture1.Sample(s1_s, untonemapped_gamma * 0.9375 + 0.03125).rgb;
-    o0.rgb = renodx::color::gamma::DecodeSafe(max(0, o0.rgb));
+    o0.rgb = renodx::color::gamma::Decode(max(0, o0.rgb));
     o0.rgb = lerp(saturate(untonemapped), o0.rgb, RENODX_COLOR_GRADE_STRENGTH);
-    o0.rgb = renodx::color::gamma::EncodeSafe(max(0, o0.rgb));
+    o0.rgb = renodx::color::gamma::Encode(max(0, o0.rgb));
   } else {
-    
     renodx::lut::Config lut_config = CreateLUTConfig(s1_s);
-    const float scale = ComputeReinhardSmoothClampScale(untonemapped, 0.7f, 1.f, 40.f);
+    const float scale = ComputeMaxChCompressionScale(untonemapped, 0.7f, 1.f, 40.f);
 
     const float3 color_hdr = untonemapped;
     const float3 color_sdr = color_hdr * scale;
