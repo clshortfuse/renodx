@@ -9,8 +9,9 @@
 
 #include <embed/shaders.h>
 
-#include <array>
 #include <d3d10_1.h>
+#include <array>
+
 #pragma comment(lib, "d3d10.lib")
 
 #include <deps/imgui/imgui.h>
@@ -339,6 +340,36 @@ void OnPresetOff() {
   });
 }
 
+namespace revert_state {
+
+struct D3D10StateBlock {
+  ID3D10StateBlock* block = nullptr;
+
+  void Capture(reshade::api::device* device) {
+    if (device->get_api() != reshade::api::device_api::d3d10) return;
+    auto* native_device = reinterpret_cast<ID3D10Device*>(device->get_native());
+    D3D10_STATE_BLOCK_MASK state_block_mask = {};
+    D3D10StateBlockMaskEnableAll(&state_block_mask);
+    if (SUCCEEDED(D3D10CreateStateBlock(native_device, &state_block_mask, &block)) && block != nullptr) {
+      block->Capture();
+      return;
+    }
+    if (block != nullptr) {
+      block->Release();
+      block = nullptr;
+    }
+  }
+
+  void Revert() {
+    if (block == nullptr) return;
+    block->Apply();
+    block->Release();
+    block = nullptr;
+  }
+};
+
+}  // namespace revert_state
+
 struct __declspec(uuid("4c3b1f24-7d1f-4f32-9b31-7efecf0e8701")) FinalPassDeviceData {
   reshade::api::pipeline pipeline = {};
   reshade::api::pipeline_layout layout = {};
@@ -507,21 +538,11 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   auto* swapchain_data = swapchain->get_private_data<FinalPassSwapchainData>();
   if (data == nullptr || swapchain_data == nullptr) return;
 
+#if 1
   // Capture full D3D10 device state before our draw (ReShade tracking is partial).
-  ID3D10StateBlock* state_block = nullptr;
-  if (device->get_api() == reshade::api::device_api::d3d10) {
-    auto* native_device = reinterpret_cast<ID3D10Device*>(device->get_native());
-    D3D10_STATE_BLOCK_MASK state_block_mask = {};
-    D3D10StateBlockMaskEnableAll(&state_block_mask);
-    if (SUCCEEDED(D3D10CreateStateBlock(native_device, &state_block_mask, &state_block)) && state_block != nullptr) {
-      state_block->Capture();
-    } else {
-      if (state_block != nullptr) {
-        state_block->Release();
-        state_block = nullptr;
-      }
-    }
-  }
+  revert_state::D3D10StateBlock state_block;
+  state_block.Capture(device);
+#endif
 
   auto back_buffer_resource = swapchain->get_current_back_buffer();
   auto back_buffer_desc = device->get_resource_desc(back_buffer_resource);
@@ -566,12 +587,10 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
 
   cmd_list->barrier(back_buffer_resource, reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource);
 
+#if 1
   // Restore state to exactly what the game had before our draw.
-  if (state_block != nullptr) {
-    state_block->Apply();
-    state_block->Release();
-    state_block = nullptr;
-  }
+  state_block.Revert();
+#endif
 }
 
 // fractional bloom resolutions that need upgrading
