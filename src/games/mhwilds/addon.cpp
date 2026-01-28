@@ -142,6 +142,12 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     TypicalExposureShaderEntry(0x2B137341),
     TypicalExposureShaderEntry(0x53166004),
 
+    // Post Process Latest
+    TypicalExposureShaderEntry(0x767D0361),
+    TypicalExposureShaderEntry(0x0D6C8B3D),
+    TypicalExposureShaderEntry(0x9C118676),
+    TypicalExposureShaderEntry(0x29DD5BC9),
+
     // Exposure
     //RareExposureShaderEntry(0x4905680A),
     RareExposureShaderEntry(0xE40162EC),
