@@ -1,6 +1,6 @@
 #include "./shared.h"
 
-float ComputeMaxChCompressionScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float channel_max = 100.f) {
+float ComputeMaxChCompressionScale(float3 untonemapped) {
   float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
   float mapped_peak = renodx::tonemap::Neutwo(peak);
   float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
