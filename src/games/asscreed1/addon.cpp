@@ -370,6 +370,8 @@ struct D3D10StateBlock {
 
 }  // namespace revert_state
 
+namespace final_pass {
+
 struct __declspec(uuid("4c3b1f24-7d1f-4f32-9b31-7efecf0e8701")) FinalPassDeviceData {
   reshade::api::pipeline pipeline = {};
   reshade::api::pipeline_layout layout = {};
@@ -593,66 +595,7 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
 #endif
 }
 
-// fractional bloom resolutions that need upgrading
-constexpr std::pair<const char*, int> kBloomDivs[] = {
-    {"BloomDiv4", 4},
-    {"BloomDiv8", 8},
-    {"BloomDiv16", 16},
-    {"BloomDiv32", 32},
-    {"BloomDiv64", 64},
-};
-
-void UpdateBloomTargets(reshade::api::swapchain* swapchain) {
-  auto* device = swapchain->get_device();
-  auto* data = renodx::utils::data::Get<renodx::mods::swapchain::DeviceData>(device);
-  if (!data) return;
-
-  auto bb = device->get_resource_desc(swapchain->get_current_back_buffer());
-  if (bb.type == reshade::api::resource_type::unknown) return;
-
-  // apply per-divisor upgrades to matching bloom targets
-  for (const auto& [name, div] : kBloomDivs) {
-    for (auto& target : data->swap_chain_upgrade_targets) {
-      if (target.name == name) {
-        target.dimensions = {
-            static_cast<int16_t>(bb.texture.width / div),
-            static_cast<int16_t>(bb.texture.height / div),
-            renodx::utils::resource::ResourceUpgradeInfo::ANY};
-        break;
-      }
-    }
-  }
-}
-
-void AddBloomTargets() {
-  for (const auto& [name, _] : kBloomDivs) {
-    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-        .old_format = reshade::api::format::r8g8b8a8_unorm,
-        .new_format = reshade::api::format::r16g16b16a16_float,
-        .usage_include = reshade::api::resource_usage::render_target,
-        .name = name,
-    });
-  }
-}
-
-bool fired_on_init_swapchain = false;
-
-void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (!fired_on_init_swapchain) {
-    fired_on_init_swapchain = true;
-    auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
-    if (peak.has_value()) {
-      settings[1]->default_value = peak.value();
-      settings[1]->can_reset = true;
-    }
-    bool was_upgraded = renodx::mods::swapchain::IsUpgraded(swapchain);
-    if (was_upgraded) {
-      settings[1]->default_value = 100.f;
-    }
-  }
-
-  UpdateBloomTargets(swapchain);  // Bloom targets are dependent on swapchain resolution
-
+void InitSwapchainResources(reshade::api::swapchain* swapchain) {
   auto* device = swapchain->get_device();
   auto* device_data = device->get_private_data<FinalPassDeviceData>();
   if (device_data == nullptr || device_data->layout.handle == 0u) return;
@@ -730,6 +673,103 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   device->update_descriptor_tables(static_cast<uint32_t>(std::size(updates)), updates);
 }
 
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  InitSwapchainResources(swapchain);
+}
+
+void RegisterEvents() {
+  reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
+  reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+  reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+  reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+  reshade::register_event<reshade::addon_event::present>(OnPresent);
+}
+
+void UnregisterEvents() {
+  reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
+  reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+  reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+  reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+  reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+}
+
+}  // namespace final_pass
+
+namespace bloom_upgrades {
+
+// fractional bloom resolutions that need upgrading
+constexpr std::pair<const char*, int> kBloomDivs[] = {
+    {"BloomDiv4", 4},
+    {"BloomDiv8", 8},
+    {"BloomDiv16", 16},
+    {"BloomDiv32", 32},
+    {"BloomDiv64", 64},
+};
+
+void UpdateBloomTargets(reshade::api::swapchain* swapchain) {
+  auto* device = swapchain->get_device();
+  auto* data = renodx::utils::data::Get<renodx::mods::swapchain::DeviceData>(device);
+  if (!data) return;
+
+  auto bb = device->get_resource_desc(swapchain->get_current_back_buffer());
+  if (bb.type == reshade::api::resource_type::unknown) return;
+
+  // apply per-divisor upgrades to matching bloom targets
+  for (const auto& [name, div] : kBloomDivs) {
+    for (auto& target : data->swap_chain_upgrade_targets) {
+      if (target.name == name) {
+        target.dimensions = {
+            static_cast<int16_t>(bb.texture.width / div),
+            static_cast<int16_t>(bb.texture.height / div),
+            renodx::utils::resource::ResourceUpgradeInfo::ANY};
+        break;
+      }
+    }
+  }
+}
+
+void AddBloomTargets() {
+  for (const auto& [name, _] : kBloomDivs) {
+    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        .old_format = reshade::api::format::r8g8b8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .usage_include = reshade::api::resource_usage::render_target,
+        .name = name,
+    });
+  }
+}
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  UpdateBloomTargets(swapchain);
+}
+
+void RegisterEvents() {
+  reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+}
+
+void UnregisterEvents() {
+  reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+}
+
+}  // namespace bloom_upgrades
+
+bool fired_on_init_swapchain = false;
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (!fired_on_init_swapchain) {
+    fired_on_init_swapchain = true;
+    auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+    if (peak.has_value()) {
+      settings[1]->default_value = peak.value();
+      settings[1]->can_reset = true;
+    }
+    bool was_upgraded = renodx::mods::swapchain::IsUpgraded(swapchain);
+    if (was_upgraded) {
+      settings[1]->default_value = 100.f;
+    }
+  }
+}
+
 bool initialized = false;
 
 }  // namespace
@@ -763,28 +803,26 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         });
 
         // Bloom
-        AddBloomTargets();
+        bloom_upgrades::AddBloomTargets();
 
 #endif
 
         initialized = true;
       }
 
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak and paper white
-      reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
+      final_pass::RegisterEvents();
+      bloom_upgrades::RegisterEvents();
+
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak
 
       renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
 
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak and paper white
-      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      final_pass::UnregisterEvents();
+      bloom_upgrades::UnregisterEvents();
+
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak
       reshade::unregister_addon(h_module);
       break;
   }
