@@ -71,6 +71,7 @@ float4 OutputTonemap(noperspective float4 SV_Position: SV_Position,
   float3 output_color = renodx::color::bt709::from::AP1(_11.rgb);
   // output_color = renodx::color::srgb::DecodeSafe(output_color);
   renodx::draw::Config swapchainConfig = renodx::draw::BuildConfig();
+  swapchainConfig.swap_chain_clamp_nits = 10000.f;
 
   output_color = ApplyRCAS(output_color, TEXCOORD, SrcTexture, PointBorder);
 
