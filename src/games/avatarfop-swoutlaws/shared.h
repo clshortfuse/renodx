@@ -12,6 +12,7 @@ struct ShaderInjectData {
   float sdr_eotf_emulation_ui;
   float tone_map_blowout;
   float tone_map_hue_shift;
+  float tone_map_white_clip;
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;
@@ -38,6 +39,7 @@ cbuffer cb13 : register(b13, space50) {
 #define RENODX_SDR_EOTF_EMULATION_UI         shader_injection.sdr_eotf_emulation_ui
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
+#define RENODX_TONE_MAP_WHITE_CLIP           shader_injection.tone_map_white_clip
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
