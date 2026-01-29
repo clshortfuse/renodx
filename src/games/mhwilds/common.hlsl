@@ -206,9 +206,9 @@ float3 PostTonemapSliders(float3 hdr_color) {
 float3 DisplayMap(float3 color, float white_clip) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
-  if (CUSTOM_TONE_MAP_PARAMETERS == 0) {
-    config.swap_chain_scaling_nits = renodx::color::correct::GammaSafe(config.swap_chain_scaling_nits);
-  }
+  // if (CUSTOM_TONE_MAP_PARAMETERS == 0) {
+  //   config.swap_chain_scaling_nits = renodx::color::correct::GammaSafe(config.swap_chain_scaling_nits);
+  // }
 
   float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes peak
   float diffuse_white_nits = config.swap_chain_scaling_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness | swap chain scaling nits because of use in shared.h
@@ -218,6 +218,10 @@ float3 DisplayMap(float3 color, float white_clip) {
 
   color = max(0, renodx::color::bt2020::from::BT709(color));
   float tonemap_peak = peak_nits / diffuse_white_nits;
+
+  if (CUSTOM_TONE_MAP_PARAMETERS == 0) {
+    tonemap_peak = renodx::color::correct::GammaSafe(tonemap_peak, true);
+  }
 
   float3 outputColor = color;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
@@ -239,8 +243,8 @@ float3 SDRDisplayMap(float3 color, float white_clip) {
 
   float peak = 1.f;
 
-  if (CUSTOM_TONE_MAP_PARAMETERS == 0) {
-    peak = renodx::color::correct::GammaSafe(peak, true);
+  if (CUSTOM_TONE_MAP_PARAMETERS == 1) {
+    peak = renodx::color::correct::GammaSafe(peak, false);
   }
 
   color = max(0, renodx::color::bt2020::from::BT709(color));
