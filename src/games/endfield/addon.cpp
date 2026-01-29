@@ -441,6 +441,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ChromaticAberrationStrength",
+        .binding = &shader_injection.chromatic_aberration_strength,
+        .default_value = 50.f,
+        .label = "Chromatic Aberration",
+        .section = "Effects",
+        .tooltip = "Controls the intensity of chromatic aberration effect.",
+        .min = 0.f,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "BloomStrength",
         .binding = &shader_injection.bloom_strength,
         .value_type = renodx::utils::settings::SettingValueType::FLOAT,
@@ -504,6 +515,16 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Toggle improved shadow occlusion for objects and foliage",
         .labels = {"Off", "On"},
         .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FogModification",
+        .binding = &shader_injection.fog_modification,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Hue-Preserving Fog",
+        .section = "Rendering Improvements",
+        .tooltip = "Toggles alternative hue-preserving fog",
+        .labels = {"Original", "Alt"},
     },
     new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
@@ -806,12 +827,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
 
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r8g8b8a8_typeless,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            //.ignore_size = false,
-            //.use_resource_view_cloning = true,
-            //.aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
-            //.usage_include = reshade::api::resource_usage::render_target,
+        .old_format = reshade::api::format::r8g8b8a8_typeless,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .ignore_size = false,
+        //.use_resource_view_cloning = true,
+        .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
+        .aspect_ratio_tolerance = 0.02f,
+        .usage_include = reshade::api::resource_usage::render_target,
         });
         // Need aspect ratio upgrade or grass will be broken
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
@@ -823,21 +845,22 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .aspect_ratio_tolerance = 0.02f,
             .usage_include = reshade::api::resource_usage::render_target,
         });
-        /* not sure if even needed so skipped
+        /*
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r10g10b10a2_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            //.ignore_size = false,
+            .ignore_size = false,
             //.use_resource_view_cloning = true,
-            //.aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
-            //.usage_include = reshade::api::resource_usage::render_target,
+            .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
+            .aspect_ratio_tolerance = 0.02f,
+            .usage_include = reshade::api::resource_usage::render_target,
         });
         */
         const uint32_t target_crcs[] = {
-        
         0x37837806u,
         0xD3FA93FCu,
-        
+        };
+
         /*  
         0x00C16AFBu,
         0x039C28DAu,
@@ -868,11 +891,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         0xE0058043u,
         0xF8FA587Fu,
         */
-        
-        };
 
         for (uint32_t crc : target_crcs) {
-
           // Ensure an entry exists for the shader hash even if we don't have compiled HLSL
           auto it = custom_shaders.find(crc);
           if (it == custom_shaders.end()) {
