@@ -158,15 +158,13 @@ float3 HermiteSplineRolloff(float3 color) {
 float3 HDRDisplayMap(float3 color, float tonemapper) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
-  if (RENODX_GAMMA_CORRECTION == 1.f) {
-    config.diffuse_white_nits = renodx::color::correct::GammaSafe(config.diffuse_white_nits);
-  }
-  else if (RENODX_GAMMA_CORRECTION == 2.f) {
-    config.diffuse_white_nits = renodx::color::correct::GammaSafe(config.diffuse_white_nits, false, 2.4f);
-  }
-
   float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;              // Normalizes peak
   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness
+
+  float tonemap_peak = peak_nits / diffuse_white_nits;
+  if (config.gamma_correction > 0.f) {
+    tonemap_peak = renodx::color::correct::GammaSafe(tonemap_peak, config.gamma_correction > 0.f, abs(RENODX_GAMMA_CORRECTION) == 1.f ? 2.2f : 2.4f);
+  }
 
   float compression_scale;
   GamutCompression(color, compression_scale);
@@ -175,7 +173,7 @@ float3 HDRDisplayMap(float3 color, float tonemapper) {
 
   float3 outputColor = color;
   if (tonemapper == 2.f) {
-    outputColor = renodx::tonemap::HermiteSplinePerChannelRolloff(color, peak_nits / diffuse_white_nits, 100.f);
+    outputColor = renodx::tonemap::HermiteSplinePerChannelRolloff(color, tonemap_peak, 100.f);
   }
 
   GamutDecompression(outputColor, compression_scale);
