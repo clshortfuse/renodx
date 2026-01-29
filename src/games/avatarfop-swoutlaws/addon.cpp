@@ -38,7 +38,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping & Color Grading",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Hermite Spline"},
+        .labels = {"Vanilla", "None", "Neutwo"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -96,6 +96,16 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapWhiteClip",
+        .binding = &shader_injection.tone_map_white_clip,
+        .default_value = 100.f,
+        .label = "White Clip",
+        .section = "Tone Mapping & Color Grading",
+        .min = 0.f,
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -238,15 +248,18 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Recommended Settings",
+        .label = "Avatar Recommended Settings",
         .section = "Options",
         .group = "button-line-1",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"SDREOTFEmulation", 0.f},
+              {"ToneMapWhiteClip", 41.f},
+              {"ColorGradeHighlights", 42.f},
               {"ColorGradeShadows", 80.f},
-              {"ColorGradeFlare", 33.f},
+              {"ColorGradeSaturation", 52.f},
+              {"ColorGradeFlare", 35.f},
           });
         },
     },

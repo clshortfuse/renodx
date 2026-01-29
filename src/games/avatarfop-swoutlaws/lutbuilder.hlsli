@@ -10,7 +10,7 @@ struct UserGradingConfig {
   float dechroma;
   float hue_emulation_strength;
   float highlight_saturation;
-  float blowout;
+  float chrominance_emulation;
 };
 
 UserGradingConfig CreateColorGradeConfig() {
@@ -24,7 +24,7 @@ UserGradingConfig CreateColorGradeConfig() {
     RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
     RENODX_SDR_EOTF_EMULATION == 2.f ? 1.f : 0.f,         // float hue_emulation_strength;
     -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
-    0.f                                                   // float blowout;
+    0.f                                                   // float chrominance_emulation;
   };
   return cg_config;
 }
@@ -33,7 +33,7 @@ float Highlights(float x, float highlights, float mid_gray) {
   if (highlights == 1.f) return x;
 
   if (highlights > 1.f) {
-    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 10.f)));
+    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.f)));
   } else {  // highlights < 1.f
     x /= mid_gray;
     return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
@@ -72,13 +72,9 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   float exponent = config.contrast * flare;
   const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
 
-// highlights
-#if 0
-  // const float highlights = 1 + (sign(config.highlights - 1) * pow(abs(config.highlights - 1), 10.f));
-  // float y_highlighted = renodx::color::grade::Highlights(y_contrasted, config.highlights, mid_gray);
-#else
+  // highlights
   float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
-#endif
+
   // shadows
   float y_shadowed = Shadows(y_highlighted, config.shadows, mid_gray);
 
@@ -91,11 +87,11 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
 
 float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, UserGradingConfig config, bool clamp_to_ap1 = true) {
   float3 color = tonemapped;
-  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_emulation_strength != 0.f || config.blowout != 0.f || config.highlight_saturation != 0.f) {
+  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_emulation_strength != 0.f || config.chrominance_emulation != 0.f || config.highlight_saturation != 0.f) {
     float3 perceptual_new = renodx::color::oklab::from::BT709(color);
 
     // hue emulation and blowout
-    if (config.hue_emulation_strength != 0.0 || config.blowout != 0.0) {
+    if (config.hue_emulation_strength != 0.0 || config.chrominance_emulation != 0.0) {
       const float3 reference_oklab = renodx::color::oklab::from::BT709(hue_reference_color);
 
       float chrominance_current = length(perceptual_new.yz);
@@ -109,10 +105,10 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
         chrominance_current = chrominancePost;
       }
 
-      if (config.blowout != 0.0) {
+      if (config.chrominance_emulation != 0.0) {
         const float reference_chrominance = length(reference_oklab.yz);
         float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
-        chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, config.blowout);
+        chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, config.chrominance_emulation);
       }
       perceptual_new.yz *= chrominance_ratio;
     }
@@ -145,23 +141,6 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
     }
   }
   return color;
-}
-
-float3 ApplyHermiteSplineByMaxChannelPQInput(float3 input_pq, float diffuse_nits, float peak_nits, float white_clip = 100.f) {
-  white_clip = max(white_clip * diffuse_nits, peak_nits * 1.5f);  // safeguard to prevent artifacts
-
-  float max_channel_pq = renodx::math::Max(input_pq);
-
-  float target_white_pq = renodx::color::pq::Encode(peak_nits, 1.f);
-  float max_white_pq = renodx::color::pq::Encode(white_clip, 1.f);
-  float target_black_pq = renodx::color::pq::Encode(0.0001f, 1.f);
-  float min_black_pq = renodx::color::pq::Encode(0.f, 1.f);
-
-  float scaled_pq = renodx::tonemap::HermiteSplineRolloff(max_channel_pq, target_white_pq, max_white_pq, target_black_pq, min_black_pq);
-  float mapped_max_pq = min(scaled_pq, target_white_pq);
-
-  float scale = renodx::math::DivideSafe(mapped_max_pq, max_channel_pq, 1.f);
-  return input_pq * scale;
 }
 
 float3 HueAndChrominanceOKLab(
@@ -317,11 +296,11 @@ float3 GenerateOutputAvatar(float3 ungraded_bt709, float contrast) {
   color_bt2020 = renodx::color::bt2020::clamp::AP1(color_bt2020);
   color_bt2020 = GamutCompress(color_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
 
-  float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
-
   if (RENODX_TONE_MAP_TYPE == 2.f) {  // display map by max channel
-    color_pq = ApplyHermiteSplineByMaxChannelPQInput(color_pq, RENODX_DIFFUSE_WHITE_NITS, RENODX_PEAK_WHITE_NITS, 100.f);
+    color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_WHITE_CLIP);
   }
+
+  float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
 
   return color_pq;
 }
@@ -357,15 +336,15 @@ float3 GenerateOutputStarWarsOutlaws(float3 ungraded_bt709, float contrast) {
   final_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(final_bt709, graded_bt709, y, cg_config, false);
 
   float3 color_bt2020 = renodx::color::bt2020::from::BT709(final_bt709);
-  
+
   color_bt2020 = renodx::color::bt2020::clamp::AP1(color_bt2020);
   color_bt2020 = GamutCompress(color_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
 
-  float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
-
   if (RENODX_TONE_MAP_TYPE == 2.f) {  // display map by max channel
-    color_pq = ApplyHermiteSplineByMaxChannelPQInput(color_pq, RENODX_DIFFUSE_WHITE_NITS, RENODX_PEAK_WHITE_NITS, 100.f);
+    color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_WHITE_CLIP);
   }
+
+  float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_DIFFUSE_WHITE_NITS);
 
   return color_pq;
 }
