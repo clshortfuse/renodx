@@ -102,17 +102,15 @@ float3 ACESFittedBT709(float3 color) {
 float3 ReinhardPiecewise(float3 color) {
   renodx::draw::Config config = renodx::draw::BuildConfig(); // Pulls config values
 
-  if (RENODX_GAMMA_CORRECTION == 1.f) {
-    config.diffuse_white_nits = renodx::color::correct::GammaSafe(config.diffuse_white_nits);
-  }
-  else if (RENODX_GAMMA_CORRECTION == 2.f) {
-    config.diffuse_white_nits = renodx::color::correct::GammaSafe(config.diffuse_white_nits, false, 2.4f);
-  }
-
   float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;              // Normalizes peak
   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE; // Normalizes game brightness
 
-  return renodx::tonemap::ReinhardPiecewise(color, peak_nits / diffuse_white_nits); // Need to divide peak_nits by diffuse_white_nits to accurately determine tonemapping peak. This is because game brightness is a linear scale that occurs after tonemapping.
+  float tonemap_peak = peak_nits / diffuse_white_nits;
+  if (config.gamma_correction > 0.f) {
+    tonemap_peak = renodx::color::correct::GammaSafe(tonemap_peak, config.gamma_correction > 0.f, abs(RENODX_GAMMA_CORRECTION) == 1.f ? 2.2f : 2.4f);
+  }
+
+  return renodx::tonemap::ReinhardPiecewise(color, tonemap_peak); // Need to divide peak_nits by diffuse_white_nits to accurately determine tonemapping peak. This is because game brightness is a linear scale that occurs after tonemapping.
 }
 
 /// Applies Exponential Roll-Off tonemapping using the maximum channel.
