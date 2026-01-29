@@ -504,8 +504,8 @@ renodx::utils::settings::Settings settings = {
             {"EmissivesGlowContrast", 80.f},
             {"EmissivesGlowSaturation", 80.f},
             {"EmissivesFireGlow", 25.f},
-            {"VolumetricAmount", 10.f},
-            {"SkySunSpriteIntensity", 25.f},
+            {"VolumetricAmount", 25.f},
+            {"SkySunSpriteIntensity", 65.f},
           });
         },
     },
