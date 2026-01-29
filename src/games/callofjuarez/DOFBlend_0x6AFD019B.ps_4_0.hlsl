@@ -24,14 +24,12 @@ void main(
   float4 fDest;
 
   r0.xyzw = sScreen_Blurred.Sample(samScreen_Blurred_s, v1.xy).xyzw;
-
   r1.xyzw = sScreen.Sample(samScreen_s, v1.xy).xyzw;
   if (RENODX_TONE_MAP_TYPE <= 0.f) {
     r0.xyzw = saturate(r0.xyzw);
     r1.xyzw = saturate(r1.xyzw);
   }
-  r1.xyzw = max(0, r1.xyzw);
-  r0.xyz = max(0, -r1.xyz + r0.xyz);
+  r0.xyz = -r1.xyz + r0.xyz;
   r0.w = r1.w * 2 + -1;
   r0.w = max(0, r0.w);
 
@@ -39,7 +37,7 @@ void main(
     o0.xyz = saturate(r0.www * r0.xyz + r1.xyz);
   }
   else {
-    o0.xyz = max(0, r0.www * r0.xyz + r1.xyz);
+    o0.xyz = r0.www * r0.xyz + r1.xyz;
   }
   r0.x = r1.w * -2 + 1;
   o0.w = max(0, r0.x); // Alpha clamp
