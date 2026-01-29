@@ -88,6 +88,8 @@ struct ShaderInjectData {
   float godrays_intensity;
   float perchannelblowout;
   float shadow_hardening;
+  float chromatic_aberration_strength;
+  float fog_modification;
 };
 
 #ifndef __cplusplus
@@ -145,6 +147,8 @@ cbuffer shader_injection : register(b13) {
 #define GODRAYS_INTENSITY                      shader_injection.godrays_intensity
 #define PER_CHANNEL_BLOWOUT                    shader_injection.perchannelblowout
 #define SHADOW_HARDENING                       shader_injection.shadow_hardening
+#define CHROMATIC_ABERRATION_STRENGTH          shader_injection.chromatic_aberration_strength
+#define FOG_MODIFICATION                       shader_injection.fog_modification
 
 #include "../../shaders/renodx.hlsl"
 
