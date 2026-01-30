@@ -507,7 +507,7 @@ renodx::utils::settings::Settings settings = {
             {"colorGradeShadows", 50.f},
             {"colorGradeContrast", 50.f},
             {"colorGradeSaturation", 50.f},
-            {"BloomAmount", 15.f},
+            {"BloomAmount", 10.f},
             {"BloomThreshold", 35.f},
             {"BloomRadius", 70.f},
             {"ExposureAdaptation", 70.f},

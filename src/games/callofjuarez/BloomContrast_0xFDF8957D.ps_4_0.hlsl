@@ -19,10 +19,13 @@ void main(
 {
   float midgray = 0.18 * RENODX_DIFFUSE_WHITE_NITS;
   float4 output = midgray * pow(sColor0.Sample(sSam0_s, v1.xy).xyzw / midgray, 1.0 + CUSTOM_BLOOM_THRESHOLD * 0.1);
+  /*
   if (RENODX_TONE_MAP_TYPE <= 0.f) {
     o0.xyzw = sColor0.Sample(sSam0_s, v1.xy).xyzw;
   } else {
     o0.xyzw = output;
   }
+  */
+  o0.xyzw = output;
   return;
 }
