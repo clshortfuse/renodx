@@ -37,20 +37,10 @@ void main(uint3 vThreadID: SV_DispatchThreadID)  // unknown dcl_: dcl_thread_gro
 
   float3 untonemapped_ap1 = r0.rgb;
 
-#if RENODX_TONE_MAP_TYPE
-
-  float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
-  r0.rgb = ApplyUserToneMap(untonemapped_bt709, 0.18);
-  r0.rgb = ApplyGammaCorrection(r0.rgb);
-  r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
-
-  r0.rgb = renodx::color::pq::EncodeSafe(r0.rgb, 100.f);
-
-  u0[vThreadID] = r0;  // store_uav_typed u0.xyzw, vThreadID.xyzz, r1.xyzw
-  return;
-#endif
-
-
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    u0[vThreadID] = GenerateLUTbuilderOutput(untonemapped_ap1);
+    return;
+  }
 
   // AP1 -> AP0
   r1.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r0.xyz);
