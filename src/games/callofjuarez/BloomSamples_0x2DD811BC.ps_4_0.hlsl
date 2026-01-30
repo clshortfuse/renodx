@@ -51,6 +51,7 @@ void main(
   return;
 }
 */
+
 {
     // Symmetric, normalized Gaussian weights (σ ≈ 2.5)
     const float weights[8] =
@@ -76,9 +77,8 @@ void main(
     bloom += sTex.Sample(sSam0_s, v7.xy).rgb * weights[6];
     bloom += sTex.Sample(sSam0_s, v8.xy).rgb * weights[7];
 
-    // Optional rolloff
-    //bloom = bloom / (1.0 + max(bloom.r, max(bloom.g, bloom.b)));
-
     o0.rgb = bloom;
-    o0.a   = 1.0;
+    o0.a = 1.0;
+    
+    return;
 }

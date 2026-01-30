@@ -223,7 +223,9 @@ void main(
 
   if (RENODX_TONE_MAP_TYPE > 0.f) {
     // --- 13-TAP MULTI-AXIS GAUSSIAN ---
-    float2 texelSize = float2(1.0 / 3840.0, 1.0 / 2160.0);
+    uint tex_width, tex_height;
+    sColor0.GetDimensions(tex_width, tex_height);
+    float2 texelSize = float2(1.0 / tex_width, 1.0 / tex_height);
     float spread = 30.0 * CUSTOM_BLOOM_RADIUS;  // Adjust for width
 
     // Gaussian weights (13-tap)

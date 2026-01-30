@@ -128,7 +128,9 @@ void main(
   } else {
 
     float4 totalLight = float4(0, 0, 0, 0);
-    float dither = InterleavedGradientNoise(v0.xy);
+    float ign = InterleavedGradientNoise(v0.xy);
+    float microDither = SmoothHash(v0.xy);
+    float dither = (ign * microDither) * 1.0;
 
     [unroll]
     for (int i = 0; i < 14; ++i)
@@ -150,30 +152,28 @@ void main(
     totalLight += sBackbuffer.Sample(samBackbuffer_s, posLast1 + dirLast * dither);
     totalLight += sBackbuffer.Sample(samBackbuffer_s, posLast2 + dirLast * dither);
 
-    // We only do 6 extra samples.
-    // We sample along the line from the Cloud Start (v1) to the Current Pixel (v0).
+    // We only do 12 extra samples.
     // This creates a "Zoom Blur" effect that fills the noise gaps.
     float4 blurLight = float4(0, 0, 0, 0);
     // Direction from the start of the cloud ray to the current pixel
     float2 blurOrigin = v1.xy;
     float2 blurVec = (v0.xy - blurOrigin);
-    // We take 3 pairs (6 samples) spread along this vector
+    // We take 6 pairs (12 samples) spread along this vector
     [unroll]
     for (int j = 1; j <= 3; ++j) 
     {
       // Jitter the blur distance so it doesn't look like bands
-      float scale = (float(j) / 3.0) + (dither * 0.1);
+      float scale = (float(j) / 3.0); + (dither * 0.05);
 
-      // Sample closer to the cloud origin to grab "neighbor" colors
+      // Sample closer to the origin to grab "neighbor" colors
       blurLight += sBackbuffer.Sample(samBackbuffer_s, blurOrigin + blurVec * (0.6 + scale * 0.4));
       blurLight += sBackbuffer.Sample(samBackbuffer_s, blurOrigin + blurVec * (0.6 + scale * 0.35));
     }
     // We average the sharp volume (totalLight) with the blurred volume (blurLight).
     // This reduces noise by ~50% without changing brightness or color logic.
-    // The (30.0 / 6.0) factor normalizes the blur loop to match the main loop's magnitude.
+    // The (30.0 / 12.0) factor normalizes the blur loop to match the main loop's magnitude.
     float4 finalBlur = blurLight * (30.0 / 6.0);
-    // Mix: 70% Sharp Original + 30% Smooth Blur
-    o0 = lerp(totalLight, finalBlur, 0.3) * CONST_4.w;
+    o0 = lerp(totalLight, finalBlur, 0.5) * 2 * CONST_4.w;
   }
   return;
 }

@@ -42,16 +42,18 @@ struct ShaderInjectData {
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
   float Custom_Bloom_Amount;
+  float Custom_Bloom_Threshold;
+
   float Custom_Bloom_Radius;
   float Custom_Volumetrics_Amount;
-
   float Custom_Sky_SunSpriteIntensity;
   float Custom_Exposure_Adaptation;
+
   float Custom_Emissives_Glow;
   float Custom_Emissives_Glow_Contrast;
-
   float Custom_Emissives_Glow_Saturation;
   float Custom_Emissives_Fire_Glow;
+
   float Custom_HDR_Videos;
 };
 
@@ -94,6 +96,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define CUSTOM_BLOOM_AMOUNT                    shader_injection.Custom_Bloom_Amount
+#define CUSTOM_BLOOM_THRESHOLD                 shader_injection.Custom_Bloom_Threshold
 #define CUSTOM_BLOOM_RADIUS                    shader_injection.Custom_Bloom_Radius
 #define CUSTOM_VOLUMETRICS_AMOUNT              shader_injection.Custom_Volumetrics_Amount
 #define CUSTOM_SKY_SUNSPRITEINTENSITY          shader_injection.Custom_Sky_SunSpriteIntensity

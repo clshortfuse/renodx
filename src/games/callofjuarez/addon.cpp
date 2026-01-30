@@ -321,6 +321,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "BloomThreshold",
+        .binding = &shader_injection.Custom_Bloom_Threshold,
+        .default_value = 0.f,
+        .label = "Bloom Threshold",
+        .section = "Game FX",
+        .tooltip = "Bloom contrast on the input texture. 0 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "BloomRadius",
         .binding = &shader_injection.Custom_Bloom_Radius,
         .default_value = 50.f,
@@ -497,14 +507,15 @@ renodx::utils::settings::Settings settings = {
             {"colorGradeShadows", 50.f},
             {"colorGradeContrast", 50.f},
             {"colorGradeSaturation", 50.f},
-            {"BloomAmount", 10.f},
+            {"BloomAmount", 15.f},
+            {"BloomThreshold", 35.f},
             {"BloomRadius", 70.f},
-            {"ExposureAdaptation", 50.f},
+            {"ExposureAdaptation", 70.f},
             {"EmissivesGlow", 100.f},
             {"EmissivesGlowContrast", 80.f},
             {"EmissivesGlowSaturation", 80.f},
-            {"EmissivesFireGlow", 25.f},
-            {"VolumetricAmount", 25.f},
+            {"EmissivesFireGlow", 30.f},
+            {"VolumetricAmount", 40.f},
             {"SkySunSpriteIntensity", 65.f},
           });
         },
@@ -566,6 +577,8 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
     renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
     renodx::utils::settings::UpdateSetting("BloomAmount", 50.f);
+    renodx::utils::settings::UpdateSetting("BloomThreshold", 0.f);
+    renodx::utils::settings::UpdateSetting("BloomRadius", 50.f);
     renodx::utils::settings::UpdateSetting("ExposureAdaptation", 50.f);
     renodx::utils::settings::UpdateSetting("EmissivesGlow", 50.f);
     renodx::utils::settings::UpdateSetting("EmissivesGlowContrast", 50.f);
