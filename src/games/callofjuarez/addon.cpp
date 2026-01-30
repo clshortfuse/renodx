@@ -511,7 +511,7 @@ renodx::utils::settings::Settings settings = {
             {"BloomAmount", 15.f},
             {"BloomThreshold", 15.f},
             {"BloomRadius", 60.f},
-            {"ExposureAdaptation", 60.f},
+            {"ExposureAdaptation", 35.f},
             {"EmissivesGlow", 100.f},
             {"EmissivesGlowContrast", 80.f},
             {"EmissivesGlowSaturation", 80.f},
