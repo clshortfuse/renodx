@@ -19,13 +19,6 @@ float InterleavedGradientNoise(float2 position_screen)
     return frac(magic.z * frac(dot(position_screen, magic.xy)));
 }
 
-// Spatial hash for static scenes
-float SpatialHash(float2 p) {
-  p = frac(p * float2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return frac(p.x * p.y);
-}
-
 // A more stable hash for spatial smoothing
 float SmoothHash(float2 p) {
   return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
@@ -126,54 +119,49 @@ void main(
     o0.xyzw = CONST_4.wwww * r0.xyzw;
 
   } else {
-
+    // STOCHASTIC MARCH (30 Samples) ---
     float4 totalLight = float4(0, 0, 0, 0);
     float ign = InterleavedGradientNoise(v0.xy);
     float microDither = SmoothHash(v0.xy);
-    float dither = (ign * microDither) * 1.0;
+    float dither = (ign + (microDither * 0.5));
+
+    float4 v_coords[15] = { v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15 };
 
     [unroll]
     for (int i = 0; i < 14; ++i)
     {
-      float2 posA = v[i].xy;
-      float2 nextPosA = v[i].zw;
-      float2 dirA = nextPosA - posA;
-      totalLight += sBackbuffer.Sample(samBackbuffer_s, posA + dirA * dither);
-
-      float2 posB = v[i].zw;
-      float2 nextPosB = v[i + 1].xy;
-      float2 dirB = nextPosB - posB;
-      totalLight += sBackbuffer.Sample(samBackbuffer_s, posB + dirB * dither);
+      totalLight += sBackbuffer.Sample(samBackbuffer_s, lerp(v_coords[i].xy, v_coords[i].zw, dither));
+      totalLight += sBackbuffer.Sample(samBackbuffer_s, lerp(v_coords[i].zw, v_coords[i + 1].xy, dither));
     }
-    // Last samples
-    float2 posLast1 = v[14].xy;
-    float2 posLast2 = v[14].zw;
-    float2 dirLast = posLast2 - posLast1;
-    totalLight += sBackbuffer.Sample(samBackbuffer_s, posLast1 + dirLast * dither);
-    totalLight += sBackbuffer.Sample(samBackbuffer_s, posLast2 + dirLast * dither);
+    // Final samples to reach 30
+    totalLight += sBackbuffer.Sample(samBackbuffer_s, lerp(v_coords[14].xy, v_coords[14].zw, dither));
+    totalLight += sBackbuffer.Sample(samBackbuffer_s, lerp(v_coords[14].zw, v_coords[14].xy, dither));
 
-    // We only do 12 extra samples.
-    // This creates a "Zoom Blur" effect that fills the noise gaps.
-    float4 blurLight = float4(0, 0, 0, 0);
-    // Direction from the start of the cloud ray to the current pixel
-    float2 blurOrigin = v1.xy;
-    float2 blurVec = (v0.xy - blurOrigin);
-    // We take 6 pairs (12 samples) spread along this vector
-    [unroll]
-    for (int j = 1; j <= 3; ++j) 
-    {
-      // Jitter the blur distance so it doesn't look like bands
-      float scale = (float(j) / 3.0); + (dither * 0.05);
+    // --- STAGE 2: SPATIAL BINOMIAL FILTER (5 Taps) ---
+    // We get the texel size to sample the actual screen neighbors
+    uint tex_width, tex_height;
+    sBackbuffer.GetDimensions(tex_width, tex_height);
+    float2 texelSize = float2(1.0 / tex_width, 1.0 / tex_height);
 
-      // Sample closer to the origin to grab "neighbor" colors
-      blurLight += sBackbuffer.Sample(samBackbuffer_s, blurOrigin + blurVec * (0.6 + scale * 0.4));
-      blurLight += sBackbuffer.Sample(samBackbuffer_s, blurOrigin + blurVec * (0.6 + scale * 0.35));
-    }
-    // We average the sharp volume (totalLight) with the blurred volume (blurLight).
-    // This reduces noise by ~50% without changing brightness or color logic.
-    // The (30.0 / 12.0) factor normalizes the blur loop to match the main loop's magnitude.
-    float4 finalBlur = blurLight * (30.0 / 6.0);
-    o0 = lerp(totalLight, finalBlur, 0.5) * 2 * CONST_4.w;
+    // We take the current pixel's light and its 4 neighbors
+    float4 blurSum = totalLight * 2.0;  // Weight the center
+
+    // We use a slight offset multiplier (2.0) to bridge the stochastic "sand"
+    float2 offset = texelSize * 2.0;
+
+    // Add 4 neighbors with a lower weight
+    blurSum += sBackbuffer.Sample(samBackbuffer_s, v0.xy + float2(offset.x, 0)) * 0.5;
+    blurSum += sBackbuffer.Sample(samBackbuffer_s, v0.xy + float2(-offset.x, 0)) * 0.5;
+    blurSum += sBackbuffer.Sample(samBackbuffer_s, v0.xy + float2(0, offset.y)) * 0.5;
+    blurSum += sBackbuffer.Sample(samBackbuffer_s, v0.xy + float2(0, -offset.y)) * 0.5;
+
+    // --- TOTAL ENERGY BALANCE ---
+    // Total weights added: 2.0 (center) + 4 * 0.5 (neighbors) = 4.0
+    // Dividing by 4.0 returns the energy to the baseline of 1.0 (vanilla)
+    float4 finalLight = blurSum / 4.0;
+
+    // Final output with vanilla intensity logic
+    o0 = finalLight * CONST_4.w;
   }
   return;
 }

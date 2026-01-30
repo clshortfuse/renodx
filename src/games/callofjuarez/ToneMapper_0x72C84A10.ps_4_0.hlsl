@@ -1,5 +1,4 @@
 #include "./shared.h"
-#include "./HueShiftRestoration.h"
 
 cbuffer _Globals : register(b0)
 {
@@ -29,9 +28,11 @@ void main(
   r0.xyz = max(r0.xyz, 0.0);
   float3 untonemapped = r2.xyz / r3.xyz;                                    // Reinhard,
   float3 untonemapped_sRGB = renodx::color::srgb::Decode(untonemapped);
-  o0.xyz = untonemapped;                                        
+  o0.xyz = untonemapped;
   o0.w = renodx::color::y::from::BT709(o0.rgb);                             // r0.x = dot(float3(0.2125, 0.7154, 0.0721), r0.xyz);
-  // o0.w = min(r0.x, 1.0);                                                 // Alpha channel clamp
+  if (RENODX_TONE_MAP_TYPE <= 0.f) {
+    o0.w = min(r0.x, 1.0);                                                  // Alpha channel clamp
+  }
   float4 vanilla = saturate(o0.xyzw);
   untonemapped_sRGB = renodx::draw::ComputeUntonemappedGraded(untonemapped_sRGB, vanilla.xyz);
   float3 tonemapped = renodx::tonemap::renodrt::NeutralSDR(untonemapped_sRGB);
@@ -43,5 +44,6 @@ void main(
     o0 = saturate(vanilla);
   }
   o0.xyz = renodx::color::srgb::Decode(o0.xyz);
+  o0.xyz = max(0.0, o0.xyz);
   return;
 }

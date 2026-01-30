@@ -216,7 +216,6 @@ void main(
   r0.yzw = v1.xyz * r0.yzw;
   r0.xyz = r0.yzw * r0.xxx;
   o0.w = saturate(dot(float3(0.333299994,0.333299994,0.333299994), r0.xyz));
-  o0.xyz = r0.xyz * 0.3;
   if (RENODX_TONE_MAP_TYPE > 0.f) {
     o0.xyz = (r0.xyz * 0.3) * CUSTOM_EMISSIVES_FIRE_GLOW;  // It clips too much in vanilla, we need to bring it back
   } else {

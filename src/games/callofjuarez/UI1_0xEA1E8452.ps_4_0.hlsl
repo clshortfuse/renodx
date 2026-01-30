@@ -29,6 +29,6 @@ void main(
 
   r0.xyzw = sTex0.Sample(sSam0_s, v1.xy).xyzw;
   o0.xyzw = r0.xyzw * CONST_254.xyzw + CONST_255.xyzw;
-  o0.xyz = renodx::color::srgb::Decode(o0.xyz);
+  o0.xyzw = renodx::color::srgb::Decode(o0.xyzw);
   return;
 }

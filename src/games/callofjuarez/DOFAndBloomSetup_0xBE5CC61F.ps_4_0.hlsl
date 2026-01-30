@@ -195,10 +195,6 @@ Texture2D<float4> sDepth : register(t2);
 Texture1D<float4> IniParams : register(t120);
 Texture2D<float4> StereoParams : register(t125);
 
-float pseudoRandom(float2 p) {
-  return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
-}
-
 void main( 
   float4 v0 : SV_POSITION0,
   float4 v1 : TEXCOORD0,
@@ -220,60 +216,54 @@ void main(
   r0.w = fBulletTime + vColorParams.w;
   r0.xyz = r0.www * r1.xyz + r0.xyz;
   r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;  // Bloom
-
   if (RENODX_TONE_MAP_TYPE > 0.f) {
-    // --- 13-TAP MULTI-AXIS GAUSSIAN ---
     uint tex_width, tex_height;
-    sColor0.GetDimensions(tex_width, tex_height);
+    sColor1.GetDimensions(tex_width, tex_height);
     float2 texelSize = float2(1.0 / tex_width, 1.0 / tex_height);
-    float spread = 30.0 * CUSTOM_BLOOM_RADIUS;  // Adjust for width
+    
+    float spread = 10.0 * CUSTOM_BLOOM_RADIUS;
+    float3 combinedBloom = 0;
+    float totalWeight = 0;
 
-    // Gaussian weights (13-tap)
-    float weights[7] = { 0.114725, 0.106288, 0.084458, 0.060173, 0.03844, 0.021973, 0.011245 };
-
-    float3 combinedBloom = sColor1.Sample(samColor1_s, v1.xy).xyz * weights[0];
-    float totalWeight = weights[0];
-
-    // The 4 primary axes (resulting in 8 directions)
-    float2 axes[4] = {
-      float2(1.0, 0.0),      // Horizontal
-      float2(0.0, 1.0),      // Vertical
-      float2(0.707, 0.707),  // 45 Degrees
-      float2(0.707, -0.707)  // 135 Degrees
-    };
+    static const float smallKernel[5] =
+        {
+          0.0613595978134402f,
+          0.24477019552960988f,
+          0.38774041331389975f,
+          0.24477019552960988f,
+          0.0613595978134402f
+        };
 
     [unroll]
-    for (int i = 1; i < 7; i++)
-  {
-      float offset = float(i) * spread;
-      float w = weights[i];
-
-      [unroll]
-      for (int j = 0; j < 4; j++)
-      {
-        float2 step = axes[j] * texelSize * offset;
-        combinedBloom += sColor1.Sample(samColor1_s, v1.xy + step).xyz * w;
-        combinedBloom += sColor1.Sample(samColor1_s, v1.xy - step).xyz * w;
-        totalWeight += w * 2.0;
-      }
+    for (int i = 0; i < 32; i++) {
+        float r = sqrt(float(i) + 0.5) / sqrt(32.0);
+        float theta = float(i) * 2.3999632;     
+        float2 spiralOffset = float2(cos(theta), sin(theta)) * r * spread * texelSize;
+        float w = exp(-(r * r) * 2.0); 
+        float sampleLod = min(1.0, r * 4.0); 
+        float3 tapBlur = 0;
+        [unroll]
+        for(int k = 0; k < 4; k++) {
+            float2 subOffset = smallKernel[k] * texelSize; 
+            tapBlur += sColor1.SampleLevel(samColor1_s, v1.xy + spiralOffset + subOffset, sampleLod).xyz;
+        }
+        combinedBloom += (tapBlur * 0.2) * w;
+        totalWeight += w;
     }
 
     r1.xyz = combinedBloom / totalWeight;
-    // --- END MULTI-AXIS PASS ---
-
-    // Final Blend
-    if (RENODX_TONE_MAP_TYPE <= 0.f) {
-      o0.xyz = saturate((r1.xyz * CUSTOM_BLOOM_AMOUNT) + r0.xyz);
-    } else {
-      o0.xyz = (r1.xyz * CUSTOM_BLOOM_AMOUNT) + r0.xyz;
-    }
+    //r1.xyz = r1.xyz / (1.0 + max(r1.x, max(r1.y, r1.z)));
+    r1.xyz *= CUSTOM_BLOOM_AMOUNT;
   }
+  // Bloom contrast
+  float midgray = 0.18 * RENODX_DIFFUSE_WHITE_NITS;
+  r1.xyzw = midgray * pow(r1.xyzw / midgray, 1.0 + CUSTOM_BLOOM_THRESHOLD * 0.1);
 
   if (RENODX_TONE_MAP_TYPE <= 0.f) {
-    o0.xyz = saturate((r1.xyz * CUSTOM_BLOOM_AMOUNT) + r0.xyz);
-  } else {
-    o0.xyz = (r1.xyz * CUSTOM_BLOOM_AMOUNT) + r0.xyz;
+    r1.xyz = saturate(r1.xyz * CUSTOM_BLOOM_AMOUNT);
   }
+  o0.xyz = r1.xyz + r0.xyz;                                            // Vanilla additive bloom
+  //o0.xyz = lerp(r0.xyz, r1.xyz, log10(CUSTOM_BLOOM_AMOUNT + 1.0f));  // Modern bloom through lerp
   r0.xyzw = sDepth.Sample(samDepth_s, v1.xy).xyzw;
   r0.x = saturate(r0.w * CONST_254.x + CONST_254.y);
   r0.y = saturate(r0.w * CONST_253.x + CONST_253.y);

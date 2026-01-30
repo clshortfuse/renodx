@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.2.45 on Sun Jan 25 22:10:20 2026
 
 SamplerState samClr0_s : register(s0);
@@ -34,7 +36,11 @@ void main(
   r1.w = saturate(r1.w * 2 + -1);
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   r0.w = r1.w + r0.w;
-  o0.xyz = (r0.xyz / max(r0.www, 1e-7));
+  if (RENODX_TONE_MAP_TYPE <= 0.f) {
+    o0.xyz = saturate(r0.xyz / r0.www);
+  } else {
+    o0.xyz = r0.xyz / max(r0.www, 1e-7);
+  }
   o0.w = r0.w;
   return;
 }

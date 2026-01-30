@@ -27,6 +27,13 @@ void main(
   r1.xyzw = sTex1.Sample(sSam1_s, v1.xy).xyzw;
   // o0.xyzw = r1.xyzw * float4(0.800000012,0.800000012,0.800000012,0.800000012) + r0.xyzw;
   o0.xyzw = r1.xyzw * (0.8 * CUSTOM_VOLUMETRICS_AMOUNT) + r0.xyzw;
+
+  // Normally SDR would be saturated up to this point,
+  // but since we got a lot of stuff unclamped,
+  // we have to put an explicit one here.
+  if (RENODX_TONE_MAP_TYPE <= 0.f) {
+    o0.xyzw = saturate(o0.xyzw);
+  }
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }

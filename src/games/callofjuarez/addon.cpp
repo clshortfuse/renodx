@@ -91,7 +91,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
         .binding = &shader_injection.diffuse_white_nits,
-        .default_value = 300.f,
+        .default_value = 203.f,
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
@@ -267,7 +267,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.tone_map_highlight_saturation,
-        .default_value = 50.f,
+        .default_value = 45.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -501,21 +501,22 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-            {"tonemapGameNits", 300.f},
+            {"tonemapGameNits", 203.f},
             {"colorGradeExposure", 1.f},
             {"colorGradeHighlights", 50.f},
             {"colorGradeShadows", 50.f},
             {"colorGradeContrast", 50.f},
             {"colorGradeSaturation", 50.f},
-            {"BloomAmount", 10.f},
-            {"BloomThreshold", 35.f},
-            {"BloomRadius", 70.f},
-            {"ExposureAdaptation", 70.f},
+            {"ColorGradeHighlightSaturation", 45.f},
+            {"BloomAmount", 15.f},
+            {"BloomThreshold", 15.f},
+            {"BloomRadius", 60.f},
+            {"ExposureAdaptation", 60.f},
             {"EmissivesGlow", 100.f},
             {"EmissivesGlowContrast", 80.f},
             {"EmissivesGlowSaturation", 80.f},
-            {"EmissivesFireGlow", 30.f},
-            {"VolumetricAmount", 40.f},
+            {"EmissivesFireGlow", 45.f},
+            {"VolumetricAmount", 25.f},
             {"SkySunSpriteIntensity", 65.f},
           });
         },
@@ -576,10 +577,11 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
     renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
     renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 45.f),
     renodx::utils::settings::UpdateSetting("BloomAmount", 50.f);
     renodx::utils::settings::UpdateSetting("BloomThreshold", 0.f);
     renodx::utils::settings::UpdateSetting("BloomRadius", 50.f);
-    renodx::utils::settings::UpdateSetting("ExposureAdaptation", 50.f);
+    renodx::utils::settings::UpdateSetting("ExposureAdaptation", 100.f);
     renodx::utils::settings::UpdateSetting("EmissivesGlow", 50.f);
     renodx::utils::settings::UpdateSetting("EmissivesGlowContrast", 50.f);
     renodx::utils::settings::UpdateSetting("EmissivesGlowSaturation", 50.f);
@@ -946,8 +948,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
-  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  //renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  //renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }
