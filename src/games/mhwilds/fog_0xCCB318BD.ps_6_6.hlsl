@@ -284,7 +284,8 @@ float4 main(
   // fog.fogDensity *= 20.f;
   //  fog.fogMaxOpacity *= 10.f;
   // fog.fogMaxOpacity = 0.f;
-  //fog.fogStartDistance *= 0.1f;
+  // fog.fogStartDistance *= 0.1f;
+  // fog.fogStartDistance = 1 * CUSTOM_FOG_AMOUNT;
 
   uint _18 = uint(SV_Position.x);
   uint _19 = uint(SV_Position.y);
@@ -560,6 +561,7 @@ float4 main(
   SV_Target.y = (rangeCompress * _758);
   SV_Target.z = (rangeCompress * _759);
   SV_Target.w = _760;
+
   SV_Target.xyz *= CUSTOM_FOG_AMOUNT;
   return SV_Target;
 }

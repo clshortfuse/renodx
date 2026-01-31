@@ -28,6 +28,7 @@ bool any_output_shader_drawn = false;
 bool any_lutbuilder_shader_drawn = false;
 bool any_ui_shader_drawn = false;
 bool any_fog_shader_drawn = false;
+bool fog_shader_ever_drawn = false;
 
 bool draw_warning_no_postprocess_shader = false;
 bool draw_warning_no_output_shader = false;
@@ -111,6 +112,7 @@ int draw_counter = 0; // Count draws to only run the check after a number of fra
             .code = __##value,                                    \
             .on_drawn = [](auto cmd_list) {                       \
               any_fog_shader_drawn = true;                         \
+              fog_shader_ever_drawn = true;                         \
               return true;                                        \
             },                                                    \
         },                                                        \
@@ -158,6 +160,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     // Fog
     FogShaderEntry(0xCCB318BD),
+    FogShaderEntry(0x7271B316),
 
     // // Sharpening (Bypass)
     // {
@@ -188,21 +191,21 @@ auto last_is_hdr = false;
 
 const std::unordered_map<std::string, float> REGRADE_VALUES = {
     //{"ToneMapType", 1.f},
-    {"ColorGradeExposure", 0.80f},
-    {"ColorGradeHighlights", 51.f},
-    {"ColorGradeShadows", 50.f},
-    {"ColorGradeContrast", 65.f},
-    {"ColorGradeSaturation", 56.f},
-    {"ColorGradeHighlightSaturation", 52.f},
-    {"ColorGradeBlowout", 62.f},
+    {"ColorGradeExposure", 1.20f},
+    //{"ColorGradeHighlights", 50.f},
+    //{"ColorGradeShadows", 50.f},
+    {"ColorGradeContrast", 55.f},
+    {"ColorGradeSaturation", 58.f},
+    //{"ColorGradeHighlightSaturation", 50.f},
+    {"ColorGradeBlowout", 60.f},
     //{"ColorGradeFlare", 50.f},
     //{"SwapChainCustomColorSpace", 0.f},
     {"ColorGradeLUTColorStrength", 60.f},
     {"FxLUTExposureReverse", 1.f},
     {"FxLocalExposureHighlights", 25.f},
-    {"FxLocalExposureShadows", 65.f},
+    {"FxLocalExposureShadows", 15.f},
     //{"FxLocalExposureDetail", 0.f},
-    {"FxLocalExposureMidGrey", 50.f},
+    {"FxLocalExposureMidGrey", 0.f},
 };
 
 renodx::utils::settings::Settings settings = {
@@ -305,25 +308,25 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
-    // new renodx::utils::settings::Setting{
-    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    //     .label = "Regrade",
-    //     .section = "Presets",
-    //     .group = "button-line-1",
-    //     .on_change = []() {
-    //       for (auto* setting : settings) {
-    //         if (setting->key.empty()) continue;
-    //         if (setting->section == "Effects") continue;
-    //         if (!setting->can_reset) continue;
-    //         if (setting->is_global) continue;
-    //         if (REGRADE_VALUES.contains(setting->key)) {
-    //           renodx::utils::settings::UpdateSetting(setting->key, REGRADE_VALUES.at(setting->key));
-    //         } else {
-    //           renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
-    //         }
-    //       }
-    //     },
-    // },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Regrade",
+        .section = "Presets",
+        .group = "button-line-1",
+        .on_change = []() {
+          for (auto* setting : settings) {
+            if (setting->key.empty()) continue;
+            if (setting->section == "Effects") continue;
+            if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
+            if (REGRADE_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, REGRADE_VALUES.at(setting->key));
+            } else {
+              renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+            }
+          }
+        },
+    },
     new renodx::utils::settings::Setting{
         .key = "FxLocalExposureHighlights",
         .binding = &shader_injection.custom_local_exposure_highlights,
@@ -656,7 +659,7 @@ renodx::utils::settings::Settings settings = {
       },
       new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Missing Fog shaders. This is likely caused by a game update or a mod conflict. Core functionality may still work, but the fog slider will not.",
+        .label = "Missing Fog shaders. This could be caused by a mod conflict or game update, but it could also be absent from this scene.\nIf status says GOOD, then the fog shader has been detected previously.",
         .section = "Mod Compatibility Check",
         .is_visible = []() { return draw_warning_no_fog_shader; },
       },
@@ -799,7 +802,7 @@ void OnPresent(
     draw_warning_no_ui_shader = !any_ui_shader_drawn && last_is_hdr;
     draw_warning_no_fog_shader = !any_fog_shader_drawn;
 
-    bool warning_test = draw_warning_no_ui_shader || draw_warning_no_fog_shader;
+    bool warning_test = draw_warning_no_ui_shader || (draw_warning_no_fog_shader && !fog_shader_ever_drawn);
     bool error_test = draw_warning_no_postprocess_shader || draw_warning_no_output_shader || draw_warning_no_lutbuilder_shader;
 
     if (warning_test){

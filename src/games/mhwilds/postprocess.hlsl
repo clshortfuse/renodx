@@ -101,7 +101,7 @@ float3 CustomLUTColor(float3 ap1_input, float3 ap1_output) {
                     CUSTOM_LUT_COLOR_STRENGTH)
                 * 7.f;
     new_color = renodx::color::bt709::from::AP1(new_color);
-    new_color = renodx::color::grade::Contrast(new_color, 1.8f, 0.5f);
+    new_color = renodx::color::grade::Contrast(new_color, 1.3f, 0.5f);
     new_color = renodx::color::ap1::from::BT709(new_color);
     // new_color = renodx::color::ap1::clamp::b(new_color);
   }
