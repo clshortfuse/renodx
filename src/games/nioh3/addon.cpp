@@ -6,7 +6,9 @@
 #include <include/reshade_api_resource.hpp>
 #define ImTextureID ImU64
 
-// #define DEBUG_LEVEL_0 // Reduce log spam
+// #define DEBUG_LEVEL_0  // Reduce log spam
+// #define DEBUG_LEVEL_1
+// #define DEBUG_LEVEL_2
 
 #include <embed/shaders.h>
 
@@ -376,16 +378,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;  // So overlays dont kill the game
       };
-
       renodx::mods::swapchain::SetUseHDR10(true);
       renodx::mods::shader::expected_constant_buffer_space = 50;
       renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::allow_multiple_push_constants = true;
+      // renodx::mods::shader::force_pipeline_cloning = true;   // So the mod works with the toolkit
+      // renodx::mods::shader::use_pipeline_layout_cloning = true;
 
       renodx::mods::swapchain::expected_constant_buffer_space = 50;
       renodx::mods::swapchain::expected_constant_buffer_index = 13;
 
-      renodx::mods::shader::force_pipeline_cloning = true;   // So the mod works with the toolkit
       renodx::mods::swapchain::force_borderless = false;     // needed for stability
       renodx::mods::swapchain::prevent_full_screen = false;  // needed for stability
 
