@@ -311,6 +311,16 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return false; },
     },
     new renodx::utils::settings::Setting{
+        .key = "BloomImproved",
+        .binding = &shader_injection.Custom_Bloom_Improved,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Improved Bloom toggle",
+        .section = "Game FX",
+        .tooltip = "Vanilla bloom is low quality single pass blur. This enables additional blur to improve quality.",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "BloomAmount",
         .binding = &shader_injection.Custom_Bloom_Amount,
         .default_value = 50.f,
@@ -407,6 +417,86 @@ renodx::utils::settings::Settings settings = {
         .label = "Sky Sun Sprite Intensity",
         .section = "Game FX - Sky",
         .tooltip = "Sun sprite intensity. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SkyLuminariesGlow",
+        .binding = &shader_injection.Custom_Sky_Luminaries_Glow,
+        .default_value = 50.f,
+        .label = "Sky Luminaries Glow",
+        .section = "Game FX - Sky",
+        .tooltip = "Sky luminaries (Sun, Moon) glow amount. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SkyLuminariesGlowContrast",
+        .binding = &shader_injection.Custom_Sky_Luminaries_Glow_Contrast,
+        .default_value = 50.f,
+        .label = "Sky Luminaries Glow Contrast",
+        .section = "Game FX - Sky",
+        .tooltip = "Sky luminaries (Sun, Moon) glow amount contrast. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SkyLuminariesGlowSaturation",
+        .binding = &shader_injection.Custom_Sky_Luminaries_Glow_Saturation,
+        .default_value = 50.f,
+        .label = "Sky Luminaries Glow Saturation",
+        .section = "Game FX - Sky",
+        .tooltip = "Sky luminaries (Sun, Moon) glow saturation. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SkySkyboxGlow",
+        .binding = &shader_injection.Custom_Sky_Skybox_Glow,
+        .default_value = 50.f,
+        .label = "Sky Skybox Glow",
+        .section = "Game FX - Sky",
+        .tooltip = "Sky skybox glow amount. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SkySkyboxGlowContrast",
+        .binding = &shader_injection.Custom_Sky_Skybox_Glow_Contrast,
+        .default_value = 50.f,
+        .label = "Sky Skybox Glow Contrast",
+        .section = "Game FX - Sky",
+        .tooltip = "Sky skybox glow amount contrast. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SkySkyboxGlowSaturation",
+        .binding = &shader_injection.Custom_Sky_Skybox_Glow_Saturation,
+        .default_value = 50.f,
+        .label = "Sky Skybox Glow Saturation",
+        .section = "Game FX - Sky",
+        .tooltip = "Sky skybox glow saturation. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+        new renodx::utils::settings::Setting{
+        .key = "SkyCloudsGlow",
+        .binding = &shader_injection.Custom_Sky_Clouds_Glow,
+        .default_value = 50.f,
+        .label = "Sky Clouds Glow",
+        .section = "Game FX - Sky",
+        .tooltip = "Sky clouds glow amount. 50 is vanilla amount.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SkyCloudsGlowContrast",
+        .binding = &shader_injection.Custom_Sky_Clouds_Glow_Contrast,
+        .default_value = 50.f,
+        .label = "Sky Clouds Glow Contrast",
+        .section = "Game FX - Sky",
+        .tooltip = "Sky clouds glow amount contrast. 50 is vanilla amount.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
@@ -508,16 +598,25 @@ renodx::utils::settings::Settings settings = {
             {"colorGradeContrast", 50.f},
             {"colorGradeSaturation", 50.f},
             {"ColorGradeHighlightSaturation", 45.f},
+            {"BloomImproved", 1.f},
             {"BloomAmount", 15.f},
             {"BloomThreshold", 15.f},
             {"BloomRadius", 60.f},
             {"ExposureAdaptation", 35.f},
             {"EmissivesGlow", 100.f},
-            {"EmissivesGlowContrast", 80.f},
-            {"EmissivesGlowSaturation", 80.f},
+            {"EmissivesGlowContrast", 75.f},
+            {"EmissivesGlowSaturation", 75.f},
             {"EmissivesFireGlow", 45.f},
-            {"VolumetricAmount", 25.f},
+            {"VolumetricAmount", 15.f},
             {"SkySunSpriteIntensity", 65.f},
+            {"SkyLuminariesGlow", 100.f},
+            {"SkyLuminariesGlowContrast", 75.f},
+            {"SkyLuminariesGlowSaturation", 75.f},
+            {"SkySkyboxGlow", 100.f},
+            {"SkySkyboxGlowContrast", 75.f},
+            {"SkySkyboxGlowSaturation", 75.f},
+            {"SkyCloudsGlow", 100.f},
+            {"SkyCloudsGlowContrast", 75.f},
           });
         },
     },
@@ -578,6 +677,7 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
     renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
     renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 45.f),
+    renodx::utils::settings::UpdateSetting("BloomImproved", 0.f);
     renodx::utils::settings::UpdateSetting("BloomAmount", 50.f);
     renodx::utils::settings::UpdateSetting("BloomThreshold", 0.f);
     renodx::utils::settings::UpdateSetting("BloomRadius", 50.f);
@@ -588,6 +688,14 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("EmissivesFireGlow", 50.f);
     renodx::utils::settings::UpdateSetting("VolumetricAmount", 50.f);
     renodx::utils::settings::UpdateSetting("SkySunSpriteIntensity", 50.f);
+    renodx::utils::settings::UpdateSetting("SkyLuminariesGlow", 50.f);
+    renodx::utils::settings::UpdateSetting("SkyLuminariesGlowContrast", 50.f);
+    renodx::utils::settings::UpdateSetting("SkyLuminariesGlowSaturation", 50.f);
+    renodx::utils::settings::UpdateSetting("SkySkyboxGlow", 50.f);
+    renodx::utils::settings::UpdateSetting("SkySkyboxGlowContrast", 50.f);
+    renodx::utils::settings::UpdateSetting("SkySkyboxGlowSaturation", 50.f);
+    renodx::utils::settings::UpdateSetting("SkyCloudsGlow", 50.f);
+    renodx::utils::settings::UpdateSetting("SkyCloudsGlowContrast", 50.f);
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;

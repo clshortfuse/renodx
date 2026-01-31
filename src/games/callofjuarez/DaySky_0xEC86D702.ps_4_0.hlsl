@@ -1,6 +1,7 @@
 #include "./shared.h"
+#include "./FakeHDRGain.hlsl"
 
-// ---- Created with 3Dmigoto v1.2.45 on Sat Jan 24 00:40:21 2026
+// ---- Created with 3Dmigoto v1.2.45 on Fri Jan 30 22:52:25 2026
 
 cbuffer _Globals : register(b0)
 {
@@ -178,16 +179,14 @@ cbuffer _Globals : register(b0)
   float4 vHorizonColor : packoffset(c242);
   float3 vSunDir : packoffset(c243);
   float4 vSunColor : packoffset(c244);
-  float4 CONST_253 : packoffset(c245);
-  float4 CONST_254 : packoffset(c246);
 }
 
-SamplerState samColor0_s : register(s0);
-SamplerState samColor1_s : register(s1);
-SamplerState samDepth_s : register(s2);
-Texture2D<float4> sColor0 : register(t0);
-Texture2D<float4> sColor1 : register(t1);
-Texture2D<float4> sDepth : register(t2);
+SamplerState samColor1_s : register(s0);
+SamplerState samColor2_s : register(s1);
+SamplerState samColor3_s : register(s2);
+Texture2D<float4> sColor1 : register(t0);
+Texture2D<float4> sColor2 : register(t1);
+Texture2D<float4> sColor3 : register(t2);
 
 
 // 3Dmigoto declarations
@@ -195,81 +194,48 @@ Texture2D<float4> sDepth : register(t2);
 Texture1D<float4> IniParams : register(t120);
 Texture2D<float4> StereoParams : register(t125);
 
+
 void main( 
   float4 v0 : SV_POSITION0,
-  float4 v1 : TEXCOORD0,
+  linear centroid float4 v1 : TEXCOORD0,
+  linear centroid float2 v2 : TEXCOORD2,
+  linear centroid float2 w2 : TEXCOORD3,
+  linear centroid float4 v3 : TEXCOORD4,
+  linear centroid float3 v4 : TEXCOORD6,
   out float4 o0 : SV_TARGET0)
 {
   float4 r0,r1;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = sColor0.Sample(samColor0_s, v1.xy).xyzw;
-  r0.w = dot(float3(0.333299994,0.333299994,0.333299994), r0.xyz);
-  r1.x = saturate(r0.w * vColorParams.y + -vColorParams.x);
-  if (RENODX_TONE_MAP_TYPE <= 0.f) {
-    r1.xyz = saturate(r0.www * r1.xxx + r0.xyz);
-  } else {
-    r1.xyz = saturate(r0.www * r1.xxx) + r0.xyz;
-  }
-  r1.xyz = r1.xyz + -r0.xyz;
-  r0.w = fBulletTime + vColorParams.w;
-  r0.xyz = r0.www * r1.xyz + r0.xyz;
-  r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;  // Bloom
-  if (CUSTOM_BLOOM_IMPROVED > 0.f) {
-    uint tex_width, tex_height;
-    sColor1.GetDimensions(tex_width, tex_height);
-    float2 texelSize = float2(1.0 / tex_width, 1.0 / tex_height);
-    
-    float spread = 10.0 * CUSTOM_BLOOM_RADIUS;
-    float3 combinedBloom = 0;
-    float totalWeight = 0;
-
-    static const float smallKernel[5] =
-        {
-          0.0613595978134402f,
-          0.24477019552960988f,
-          0.38774041331389975f,
-          0.24477019552960988f,
-          0.0613595978134402f
-        };
-
-    [unroll]
-    for (int i = 0; i < 32; i++) {
-        float r = sqrt(float(i) + 0.5) / sqrt(32.0);
-        float theta = float(i) * 2.3999632;     
-        float2 spiralOffset = float2(cos(theta), sin(theta)) * r * spread * texelSize;
-        float w = exp(-(r * r) * 2.0); 
-        float sampleLod = min(1.0, r * 4.0); 
-        float3 tapBlur = 0;
-        [unroll]
-        for(int k = 0; k < 4; k++) {
-            float2 subOffset = smallKernel[k] * texelSize; 
-            tapBlur += sColor1.SampleLevel(samColor1_s, v1.xy + spiralOffset + subOffset, sampleLod).xyz;
-        }
-        combinedBloom += (tapBlur * 0.2) * w;
-        totalWeight += w;
-    }
-
-    r1.xyz = combinedBloom / totalWeight;
-    //r1.xyz = r1.xyz / (1.0 + max(r1.x, max(r1.y, r1.z)));
-    r1.xyz *= CUSTOM_BLOOM_AMOUNT;
-  }
-  // Bloom contrast
-  float midgray = 0.18 * RENODX_DIFFUSE_WHITE_NITS;
-  r1.xyzw = midgray * pow(r1.xyzw / midgray, 1.0 + CUSTOM_BLOOM_THRESHOLD * 0.1);
-
-  if (RENODX_TONE_MAP_TYPE <= 0.f || CUSTOM_BLOOM_IMPROVED <= 0.f) {
-    r1.xyz = saturate(r1.xyz * CUSTOM_BLOOM_AMOUNT);
-  }
-  o0.xyz = r1.xyz + r0.xyz;                                            // Vanilla additive bloom
-  //o0.xyz = lerp(r0.xyz, r1.xyz, log10(CUSTOM_BLOOM_AMOUNT + 1.0f));  // Modern bloom through lerp
-  r0.xyzw = sDepth.Sample(samDepth_s, v1.xy).xyzw;
-  r0.x = saturate(r0.w * CONST_254.x + CONST_254.y);
-  r0.y = saturate(r0.w * CONST_253.x + CONST_253.y);
-  r0.x = saturate(CONST_254.z * r0.x + CONST_254.w);
-  r0.y = saturate(CONST_253.w * r0.y);
-  r0.x = r0.y + -r0.x;
-  o0.w = r0.x * 0.5 + 0.5;
+  r0.xyzw = sColor1.Sample(samColor1_s, v2.xy).xyzw;
+  r1.xyzw = sColor2.Sample(samColor2_s, w2.xy).xyzw;
+  r0.x = r1.w + -r0.w;
+  r0.x = r1.w * r0.x + r0.w;
+  r1.xyzw = sColor3.Sample(samColor3_s, v3.xy).xyzw;
+  r0.y = r1.w + -r0.x;
+  r0.x = r1.w * r0.y + r0.x;
+  r0.yzw = CAMERA_POS_WS.xyz + -v1.xyz;
+  r1.x = dot(r0.yzw, r0.yzw);
+  r1.x = rsqrt(r1.x);
+  r0.yzw = r1.xxx * r0.yzw;
+  r1.x = saturate(-r0.z);
+  r0.y = saturate(dot(-r0.yzw, vSunDir.xyz));
+  r0.x = saturate(r1.x * r0.x);
+  r0.x = FakeHDRGain::Apply(r0.x, CUSTOM_SKY_CLOUDS_GLOW, CUSTOM_SKY_CLOUDS_GLOW_CONTRAST, 1.0);  // Clouds, * 2
+  r0.z = SCATTERING[1].y * r0.y + SCATTERING[1].x;
+  r0.y = r0.y * r0.y + 1;
+  r0.z = max(9.99999975e-05, r0.z);
+  r0.w = 1 / r0.z;
+  r0.z = rsqrt(r0.z);
+  r1.xyz = SCATTERING[3].xyz * r0.www;
+  r1.xyz = r1.xyz * r0.zzz;
+  r0.yzw = SCATTERING[2].xyz * r0.yyy + r1.xyz;
+  r0.yzw = FakeHDRGain::Apply(r0.yzw, pow(CUSTOM_SKY_SKYBOX_GLOW, 2), CUSTOM_SKY_SKYBOX_GLOW_CONTRAST, CUSTOM_SKY_SKYBOX_GLOW_SATURATION);  // Sky, * 3
+  r1.xyz = float3(1,1,1) + -v4.xyz;
+  r0.yzw = r1.xyz * r0.yzw;
+  r1.xyz = max(0.0, vSunColor.xyz * fHDRSkyIntensity + -r0.yzw);
+  o0.xyz = max(0.0, r0.xxx * r1.xyz + r0.yzw);
+  o0.w = 1000000;
   return;
 }

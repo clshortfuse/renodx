@@ -41,20 +41,31 @@ struct ShaderInjectData {
 
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
+  float Custom_Bloom_Improved;
   float Custom_Bloom_Amount;
-  float Custom_Bloom_Threshold;
 
+  float Custom_Bloom_Threshold;
   float Custom_Bloom_Radius;
   float Custom_Volumetrics_Amount;
   float Custom_Sky_SunSpriteIntensity;
-  float Custom_Exposure_Adaptation;
 
+  float Custom_Exposure_Adaptation;
   float Custom_Emissives_Glow;
   float Custom_Emissives_Glow_Contrast;
   float Custom_Emissives_Glow_Saturation;
-  float Custom_Emissives_Fire_Glow;
 
+  float Custom_Emissives_Fire_Glow;
   float Custom_HDR_Videos;
+  float Custom_Sky_Luminaries_Glow;
+  float Custom_Sky_Luminaries_Glow_Contrast;
+
+  float Custom_Sky_Luminaries_Glow_Saturation;
+  float Custom_Sky_Clouds_Glow;
+  float Custom_Sky_Clouds_Glow_Contrast;
+  float Custom_Sky_Skybox_Glow;
+
+  float Custom_Sky_Skybox_Glow_Contrast;
+  float Custom_Sky_Skybox_Glow_Saturation;
 };
 
 #ifndef __cplusplus
@@ -95,6 +106,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+#define CUSTOM_BLOOM_IMPROVED                  shader_injection.Custom_Bloom_Improved
 #define CUSTOM_BLOOM_AMOUNT                    shader_injection.Custom_Bloom_Amount
 #define CUSTOM_BLOOM_THRESHOLD                 shader_injection.Custom_Bloom_Threshold
 #define CUSTOM_BLOOM_RADIUS                    shader_injection.Custom_Bloom_Radius
@@ -106,6 +118,14 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_EMISSIVES_GLOW_SATURATION       shader_injection.Custom_Emissives_Glow_Saturation
 #define CUSTOM_EMISSIVES_FIRE_GLOW             shader_injection.Custom_Emissives_Fire_Glow
 #define CUSTOM_HDR_VIDEOS                      shader_injection.Custom_HDR_Videos
+#define CUSTOM_SKY_LUMINARIES_GLOW             shader_injection.Custom_Sky_Luminaries_Glow
+#define CUSTOM_SKY_LUMINARIES_GLOW_CONTRAST    shader_injection.Custom_Sky_Luminaries_Glow_Contrast
+#define CUSTOM_SKY_LUMINARIES_GLOW_SATURATION  shader_injection.Custom_Sky_Luminaries_Glow_Saturation
+#define CUSTOM_SKY_CLOUDS_GLOW                 shader_injection.Custom_Sky_Clouds_Glow
+#define CUSTOM_SKY_CLOUDS_GLOW_CONTRAST        shader_injection.Custom_Sky_Clouds_Glow_Contrast
+#define CUSTOM_SKY_SKYBOX_GLOW                 shader_injection.Custom_Sky_Skybox_Glow
+#define CUSTOM_SKY_SKYBOX_GLOW_CONTRAST        shader_injection.Custom_Sky_Skybox_Glow_Contrast
+#define CUSTOM_SKY_SKYBOX_GLOW_SATURATION      shader_injection.Custom_Sky_Skybox_Glow_Saturation
 
 #include "../../shaders/renodx.hlsl"
 
