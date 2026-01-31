@@ -255,13 +255,19 @@ void main(
     //r1.xyz = r1.xyz / (1.0 + max(r1.x, max(r1.y, r1.z)));
     r1.xyz *= CUSTOM_BLOOM_AMOUNT;
   }
+  
   // Bloom contrast
   float midgray = 0.18 * RENODX_DIFFUSE_WHITE_NITS;
   r1.xyzw = midgray * pow(r1.xyzw / midgray, 1.0 + CUSTOM_BLOOM_THRESHOLD * 0.1);
 
   if (RENODX_TONE_MAP_TYPE <= 0.f || CUSTOM_BLOOM_IMPROVED <= 0.f) {
-    r1.xyz = saturate(r1.xyz * CUSTOM_BLOOM_AMOUNT);
+    r1.xyz = r1.xyz * CUSTOM_BLOOM_AMOUNT;
   }
+
+  if (RENODX_TONE_MAP_TYPE <= 0.f) {
+    r1.xyz = saturate(r1.xyz);
+  }
+
   o0.xyz = r1.xyz + r0.xyz;                                            // Vanilla additive bloom
   //o0.xyz = lerp(r0.xyz, r1.xyz, log10(CUSTOM_BLOOM_AMOUNT + 1.0f));  // Modern bloom through lerp
   r0.xyzw = sDepth.Sample(samDepth_s, v1.xy).xyzw;
