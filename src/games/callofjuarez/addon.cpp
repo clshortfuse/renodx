@@ -610,7 +610,7 @@ renodx::utils::settings::Settings settings = {
             {"VolumetricAmount", 15.f},
             {"SkySunSpriteIntensity", 65.f},
             {"SkyLuminariesGlow", 100.f},
-            {"SkyLuminariesGlowContrast", 70.f},
+            {"SkyLuminariesGlowContrast", 50.f},
             {"SkyLuminariesGlowSaturation", 70.f},
             {"SkySkyboxGlow", 100.f},
             {"SkySkyboxGlowContrast", 50.f},
