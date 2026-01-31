@@ -605,7 +605,7 @@ renodx::utils::settings::Settings settings = {
             {"ExposureAdaptation", 35.f},
             {"EmissivesGlow", 100.f},
             {"EmissivesGlowContrast", 75.f},
-            {"EmissivesGlowSaturation", 75.f},
+            {"EmissivesGlowSaturation", 100.f},
             {"EmissivesFireGlow", 45.f},
             {"VolumetricAmount", 15.f},
             {"SkySunSpriteIntensity", 65.f},
