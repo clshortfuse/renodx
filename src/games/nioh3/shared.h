@@ -18,10 +18,10 @@
 #define RENODX_RENO_DRT_WHITE_CLIP           65.f  // Cause they're using arri
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.colorGradeColorSpace
 #define RENODX_SWAP_CHAIN_OUTPUT_PRESET      renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_HDR10
-// Game's UI and render are linear, so we gamma correct everything at the end
-#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION renodx::draw::GAMMA_CORRECTION_GAMMA_2_2
-#define RENODX_INTERMEDIATE_ENCODING       renodx::draw::ENCODING_NONE
-#define RENODX_GAMMA_CORRECTION            renodx::draw::GAMMA_CORRECTION_NONE
+//  Game's UI and render are linear, so we gamma correct everything at the end
+#define RENODX_GAMMA_CORRECTION            GAMMA_CORRECTION_GAMMA_2_2
+#define RENODX_INTERMEDIATE_ENCODING       GAMMA_CORRECTION_NONE
+#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION GAMMA_CORRECTION_GAMMA_2_2
 #define CUSTOM_FILM_GRAIN_TYPE             shader_injection.custom_film_grain_type
 #define CUSTOM_FILM_GRAIN_STRENGTH         shader_injection.custom_film_grain
 #define CUSTOM_LUT_STRENGTH                1.f
