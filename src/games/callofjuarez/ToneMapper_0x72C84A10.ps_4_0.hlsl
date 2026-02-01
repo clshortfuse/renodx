@@ -25,7 +25,7 @@ void main(
   r2.xyz = r3.xyz * r2.xyz;                                                 // Contrast
   r3.xyz = r0.xyz * r1.xyz + 1;                                             // For Glow Threshold
   r0.xyz = -r1.xyz * fhdrglowthreshold + r0.xyz;                            // Subtract Glow Threshold
-  r0.xyz = max(r0.xyz, 0.0);
+  r0.xyz = max(0.0, r0.xyz);
   float3 untonemapped = r2.xyz / r3.xyz;                                    // Reinhard,
   float3 untonemapped_sRGB = renodx::color::srgb::Decode(untonemapped);
   o0.xyz = untonemapped;
@@ -33,7 +33,7 @@ void main(
   if (RENODX_TONE_MAP_TYPE <= 0.f) {
     o0.w = min(r0.x, 1.0);                                                  // Alpha channel clamp
   }
-  float4 vanilla = o0.xyzw;
+  float4 vanilla = saturate(o0.xyzw);
   untonemapped_sRGB = renodx::draw::ComputeUntonemappedGraded(untonemapped_sRGB, vanilla.xyz);
   float3 tonemapped = renodx::tonemap::renodrt::NeutralSDR(untonemapped_sRGB);
   tonemapped = renodx::color::srgb::Encode(tonemapped);

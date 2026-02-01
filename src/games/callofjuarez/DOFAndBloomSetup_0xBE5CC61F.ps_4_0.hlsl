@@ -237,83 +237,74 @@ void main(
   r0.xyz = r0.www * r1.xyz + r0.xyz;
   // Custom Ambient Occlusion
   float aoFactor = 1.0;
-if (CUSTOM_AO_ENABLE > 0.f) {
+  if (CUSTOM_AO_ENABLE > 0.f) {
     uint tw, th;
     sDepth.GetDimensions(tw, th);
     float2 tex = float2(1.0 / tw, 1.0 / th);
-    
+
     float rawDepthC = sDepth.Sample(samDepth_s, v1.xy).w;
     float normDepthC = rawDepthC / 1000.0;
-    float2 slope = float2(ddx(normDepthC), ddy(normDepthC));
+    float distanceBlend = smoothstep(0.1, 1.0, rawDepthC);
 
-    // Noise Setup
+    // Sky Mask to prevent horizon overshadowing
+    float skyMask = saturate((0.998 - normDepthC) * 500.0);
+
+    // Noise & Bayer
     float bayer[16] = { 0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5 };
     uint2 pixelPos = uint2(v1.xy * float2(tw, th));
     float bayerValue = bayer[(pixelPos.x % 4) * 4 + (pixelPos.y % 4)] / 16.0;
     float noise = frac(52.9829189 * frac(dot(v1.xy * float2(tw, th), float2(0.06711056, 0.00583715))));
 
-    // Field Transition
-    float distanceBlend = smoothstep(0.25, 4.0, rawDepthC);
-    float radiusNear = 24.0 * CUSTOM_AO_RADIUS_NEAR;
-    float radiusFar = 30.0 * CUSTOM_AO_RADIUS_FAR;
-    float baseRadius = lerp(radiusNear, radiusFar, distanceBlend);
+    float baseRadius = lerp(24.0 * CUSTOM_AO_RADIUS_NEAR, 30.0 * CUSTOM_AO_RADIUS_FAR, distanceBlend);
+    float2 slope = float2(ddx(normDepthC), ddy(normDepthC));
 
-    float occNear = 0.0;
-    float occFar = 0.0;
-    float2 spiral[12] = {
-      float2(-0.32, 0.94), float2(-0.19, 0.24), float2(0.91, 0.35), float2(0.35, 0.02),
-      float2(0.15, -0.49), float2(-0.52, -0.11), float2(-0.82, -0.54), float2(-0.13, -0.98),
-      float2(0.39, -0.22), float2(0.12, 0.84), float2(-0.61, 0.19), float2(0.22, 0.33)
+    // --- OPTIMIZED 5-TAP ROTATED SPLAT ---
+    float totalOcclusion = 0.0;
+    float blurScale = (5.0 * CUSTOM_AO_BLUR);
+
+    // Rotation for the blur taps to prevent "box" artifacts
+    float bs, bc;
+    sincos(noise * 6.28, bs, bc);
+    float2x2 blurRot = float2x2(bc, -bs, bs, bc);
+
+    float2 offsets[5] = {
+      float2(0, 0),
+      mul(float2(1, 0), blurRot), mul(float2(-1, 0), blurRot),
+      mul(float2(0, 1), blurRot), mul(float2(0, -1), blurRot)
     };
 
     [unroll]
-    for (int i = 0; i < 12; i++) {
-      // BLUR TRICK 1: Variable Radius Jitter per sample
-      // This spreads the 'reach' of the samples differently for every pixel
-      float sampleJitter = frac(noise + (float(i) * 0.618)); // Golden ratio distribution
-      float radiusJitter = (0.8 + sampleJitter * 0.4); 
-      float2 uvRadius = (baseRadius * radiusJitter) * tex;
+    for (int j = 0; j < 5; j++) {
+      float2 currentUV = v1.xy + (offsets[j] * tex * blurScale);
+      float dC = sDepth.Sample(samDepth_s, currentUV).w;
+      float nC = dC / 1000.0;
 
-      // BLUR TRICK 2: Rotation Offset per sample index
-      float angle = (noise * 6.28) + (float(i) * 0.523); // 0.523 is ~30 degrees
-      float s = sin(angle), c = cos(angle);
-      
-      float2 rotOffset = float2(
-          spiral[i].x * c - spiral[i].y * s,
-          spiral[i].x * s + spiral[i].y * c
-      ) * uvRadius;
+      float localOcc = 0.0;
+      for (int i = 0; i < 6; i++) {
+        float angle = (noise * 6.28) + (float(i) * 1.047);
+        float2 rotOffset = float2(cos(angle), sin(angle)) * (baseRadius * (0.8 + frac(noise + i * 0.618) * 0.4)) * tex;
 
-      float rawDepthS = sDepth.Sample(samDepth_s, v1.xy + rotOffset).w;
-      float normDepthS = rawDepthS / 1000.0;
+        float dS = sDepth.Sample(samDepth_s, currentUV + rotOffset).w;
+        float nS = dS / 1000.0;
 
-      // BLUR TRICK 3: Exponential Falloff (Gaussian Approximation)
-      // This makes the center of the shadow darker and the edges much softer
-      
-      // Near Field
-      float diffNear = rawDepthC - rawDepthS;
-      if (diffNear > CUSTOM_AO_BIAS_NEAR && diffNear < CUSTOM_AO_THICKNESS_NEAR) {
-        float fNear = saturate(diffNear / CUSTOM_AO_THICKNESS_NEAR);
-        occNear += exp(-2.0 * fNear * fNear); // Gaussian-like falloff
+        // Unified Seam-Free Logic
+        float dN = dC - dS;
+        float oN = (dN > CUSTOM_AO_BIAS_NEAR && dN < CUSTOM_AO_THICKNESS_NEAR) ? exp(-2.5 * pow(saturate(dN / CUSTOM_AO_THICKNESS_NEAR), 2.0)) : 0.0;
+
+        float dF = (nC + dot(rotOffset * float2(tw, th), slope)) - nS;
+        float oF = (dF > (CUSTOM_AO_BIAS_FAR + nC * 0.002) && dF < CUSTOM_AO_THICKNESS_FAR) ? exp(-2.5 * pow(saturate(dF / CUSTOM_AO_THICKNESS_FAR), 2.0)) : 0.0;
+
+        localOcc += lerp(oN, oF, distanceBlend);
       }
-
-      // Far Field
-      float expectedNormS = normDepthC + dot(rotOffset * float2(tw, th), slope);
-      float diffFar = expectedNormS - normDepthS;
-      float farBias = (CUSTOM_AO_BIAS_FAR) + (normDepthC * 0.002);
-      if (diffFar > farBias && diffFar < CUSTOM_AO_THICKNESS_FAR) {
-        float fFar = saturate(diffFar / CUSTOM_AO_THICKNESS_FAR);
-        occFar += exp(-2.0 * fFar * fFar);
-      }
+      // Weight: Center is 1.0, cardinal neighbors are 0.8
+      totalOcclusion += (localOcc / 6.0) * ((j == 0) ? 1.0 : 0.8);
     }
 
-    float hits = lerp(occNear, occFar, distanceBlend);
-    float finalIntensity = (hits / 12.0) * CUSTOM_AO_INTENSITY;
+    // Average the 5 taps (1.0 + 4 * 0.8 = 4.2 total weight)
+    float finalIntensity = (totalOcclusion / 4.2) * CUSTOM_AO_INTENSITY * skyMask;
 
-    // The Final "Blur" Finish
-    // By using a very wide smoothstep and subtracting less dither, 
-    // we let the 'raw' jittered samples blend together visually.
-    float ditheredShadow = finalIntensity - (bayerValue * 0.15);
-    aoFactor = 1.0 - smoothstep(0.0, 0.8, ditheredShadow);
+    float ditheredShadow = finalIntensity - (bayerValue * 0.1);
+    aoFactor = 1.0 - smoothstep(0.0, 0.85, ditheredShadow);
   }
 
   r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;  // Bloom
@@ -345,7 +336,7 @@ if (CUSTOM_AO_ENABLE > 0.f) {
         float3 tapBlur = 0;
         [unroll]
         for(int k = 0; k < 4; k++) {
-            float2 subOffset = smallKernel[k] * texelSize; 
+            float2 subOffset = smallKernel[k] * texelSize * 0.5; 
             tapBlur += sColor1.SampleLevel(samColor1_s, v1.xy + spiralOffset + subOffset, sampleLod).xyz;
         }
         combinedBloom += (tapBlur * 0.2) * w;
@@ -390,5 +381,6 @@ if (CUSTOM_AO_ENABLE > 0.f) {
       // Debug depth
       o0.xyz = (sDepth.Sample(samDepth_s, v1.xy).w).xxx / 1000;
     }
+
   return;
 }

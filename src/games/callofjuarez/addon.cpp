@@ -74,7 +74,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
         .labels = {"Vanilla", "RenoDRT"},
-        .parse = [](float value) { return value * 1.f; },
+        .parse = [](float value) { return value * 3.f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
@@ -551,7 +551,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Ambient Occlusion far radius",
         .min = 0.f,
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "AOBiasNear",
@@ -562,7 +562,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Ambient Occlusion near bias",
         .min = 0.f,
         .max = 100.f,
-        .parse = [](float value) { return value * 0.0005f; },
+        .parse = [](float value) { return value * 0.00025f; },
     },
     new renodx::utils::settings::Setting{
         .key = "AOBiasFar",
@@ -584,7 +584,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Ambient Occlusion far thickness. Used to reduce halos on thin objects.",
         .min = 0.f,
         .max = 100.f,
-        .parse = [](float value) { return value * 0.00004f; },
+        .parse = [](float value) { return value * 0.00002f; },
     },
     new renodx::utils::settings::Setting{
         .key = "AOThicknessNear",
@@ -596,6 +596,17 @@ renodx::utils::settings::Settings settings = {
         .min = 0.f,
         .max = 100.f,
         .parse = [](float value) { return value * 0.005f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AOBlur",
+        .binding = &shader_injection.Custom_AO_Blur,
+        .default_value = 50.f,
+        .label = "AO Blur Amount",
+        .section = "Game FX - AO",
+        .tooltip = "Ambient Occlusion blur amount",
+        .min = 0.f,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
@@ -714,6 +725,7 @@ renodx::utils::settings::Settings settings = {
             {"SkySkyboxGlowSaturation", 70.f},
             {"SkyCloudsGlow", 100.f},
             {"SkyCloudsGlowContrast", 70.f},
+            {"AOEnable", 1.f},
           });
         },
     },
@@ -773,7 +785,7 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
     renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
     renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-    renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 45.f),
+    renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f),
     renodx::utils::settings::UpdateSetting("BloomImproved", 0.f);
     renodx::utils::settings::UpdateSetting("BloomAmount", 50.f);
     renodx::utils::settings::UpdateSetting("BloomThreshold", 0.f);
@@ -793,6 +805,8 @@ void OnPresetOff() {
     renodx::utils::settings::UpdateSetting("SkySkyboxGlowSaturation", 50.f);
     renodx::utils::settings::UpdateSetting("SkyCloudsGlow", 50.f);
     renodx::utils::settings::UpdateSetting("SkyCloudsGlowContrast", 50.f);
+    renodx::utils::settings::UpdateSetting("AOEnable", 0.f);
+    renodx::utils::settings::UpdateSetting("AODebug", 0.f);
 }
 
 const auto UPGRADE_TYPE_NONE = 0.f;
@@ -1153,8 +1167,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  //renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
-  //renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
 }

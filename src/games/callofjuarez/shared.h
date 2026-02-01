@@ -77,6 +77,7 @@ struct ShaderInjectData {
   float Custom_AO_Bias_Far;
   float Custom_AO_Thickness_Near;
   float Custom_AO_Thickness_Far;
+  float Custom_AO_Blur;
 };
 
 #ifndef __cplusplus
@@ -146,6 +147,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_AO_BIAS_FAR                     shader_injection.Custom_AO_Bias_Far
 #define CUSTOM_AO_THICKNESS_NEAR               shader_injection.Custom_AO_Thickness_Near
 #define CUSTOM_AO_THICKNESS_FAR                shader_injection.Custom_AO_Thickness_Far
+#define CUSTOM_AO_BLUR                         shader_injection.Custom_AO_Blur
 
 #include "../../shaders/renodx.hlsl"
 
