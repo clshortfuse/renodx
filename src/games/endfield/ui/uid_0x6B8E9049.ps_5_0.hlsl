@@ -78,8 +78,7 @@ void main(
   r0.x = 1 + -r0.x;
   r0.xyzw = r2.xyzw * r0.xxxx;
   o0.xyzw = v1.wwww * r0.xyzw;
-
-  // UI visibility toggle (heuristic-based ping/UID hiding is handled by on_draw callbacks)
+  
   if (UI_VISIBILITY < 0.5f) {
     o0 = 0;
   }
