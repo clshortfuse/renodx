@@ -888,59 +888,22 @@ if_z cb13[12].y
   ret
 endif
 
-// === Custom Hue-Preserving Fog Blend ===
-// FOG_INTENSITY = 0.7, HUE_PRESERVATION = 0.6
+// === Simplified Fog Modification (Anti-Banding) ===
 // r1.xyz = scene color (0-255), r4.xyz = transmittance, r0.xyz = fog inscatter (0-255)
 
 // Normalize colors to 0-1 range
 mul r5.xyz, r1.xyzx, l(0.003921569, 0.003921569, 0.003921569, 0.000000)  // sceneColor = r1/255
 mul r6.xyz, r0.xyzx, l(0.003921569, 0.003921569, 0.003921569, 0.000000)  // fogColor = r0/255
 
-// Reduce fog intensity: transmittance = lerp(transmittance, 1, 0.3)
+// Boost transmittance: transmittance = lerp(transmittance, 1, 0.35) to reduce fog density
 add r7.xyz, -r4.xyzx, l(1.000000, 1.000000, 1.000000, 0.000000)
-mad r7.xyz, r7.xyzx, l(0.300000, 0.300000, 0.300000, 0.000000), r4.xyzx  // adjusted transmittance
+mad r7.xyz, r7.xyzx, l(0.350000, 0.350000, 0.350000, 0.000000), r4.xyzx
 
-// fogColor *= FOG_INTENSITY (0.7)
-mul r6.xyz, r6.xyzx, l(0.700000, 0.700000, 0.700000, 0.000000)
+// Reduce fog inscatter intensity
+mul r6.xyz, r6.xyzx, l(0.650000, 0.650000, 0.650000, 0.000000)
 
-// Standard fog blend: foggedScene = sceneColor * transmittance + fogColor
+// Standard fog blend with reduced intensity
 mad r8.xyz, r5.xyzx, r7.xyzx, r6.xyzx
-
-// Calculate fog amount: fogAmount = 1 - avg(transmittance)
-dp3 r3.w, r7.xyzx, l(0.333333, 0.333333, 0.333333, 0.000000)
-add r3.w, -r3.w, l(1.000000)
-
-// Scene luminance (BT.709)
-dp3 r5.w, r5.xyzx, l(0.2126, 0.7152, 0.0722, 0.000000)
-
-// Fogged luminance
-dp3 r6.w, r8.xyzx, l(0.2126, 0.7152, 0.0722, 0.000000)
-
-// lumaWeight = saturate(sceneLuma * 100) for smooth falloff
-mul_sat r7.w, r5.w, l(100.000000)
-
-// Safe luma for division
-max r5.w, r5.w, l(0.0001)
-
-// sceneRatios = sceneColor / safeLuma
-div r9.xyz, r5.xyzx, r5.wwww
-
-// Clamp ratios to prevent artifacts
-max r9.xyz, r9.xyzx, l(0.000000, 0.000000, 0.000000, 0.000000)
-min r9.xyz, r9.xyzx, l(4.000000, 4.000000, 4.000000, 0.000000)
-
-// huePreserved = sceneRatios * foggedLuma
-mul r9.xyz, r9.xyzx, r6.wwww
-
-// preserveAmount = HUE_PRESERVATION * saturate(1 - fogAmount*0.5) * lumaWeight
-mul r5.w, r3.w, l(0.500000)
-add_sat r5.w, -r5.w, l(1.000000)
-mul r5.w, r5.w, l(0.600000)  // HUE_PRESERVATION
-mul r5.w, r5.w, r7.w
-
-// foggedScene = lerp(foggedScene, huePreserved, preserveAmount)
-add r9.xyz, r9.xyzx, -r8.xyzx
-mad r8.xyz, r5.wwww, r9.xyzx, r8.xyzx
 
 // Output: scale back to 0-255 range
 mul o0.xyz, r8.xyzx, l(255.000000, 255.000000, 255.000000, 0.000000)
