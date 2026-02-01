@@ -66,6 +66,17 @@ struct ShaderInjectData {
 
   float Custom_Sky_Skybox_Glow_Contrast;
   float Custom_Sky_Skybox_Glow_Saturation;
+  float Custom_AO_Enable;
+  float Custom_AO_Debug;
+
+  float Custom_AO_Intensity;
+  float Custom_AO_Radius_Near;
+  float Custom_AO_Radius_Far;
+  float Custom_AO_Bias_Near;
+
+  float Custom_AO_Bias_Far;
+  float Custom_AO_Thickness_Near;
+  float Custom_AO_Thickness_Far;
 };
 
 #ifndef __cplusplus
@@ -126,6 +137,15 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_SKY_SKYBOX_GLOW                 shader_injection.Custom_Sky_Skybox_Glow
 #define CUSTOM_SKY_SKYBOX_GLOW_CONTRAST        shader_injection.Custom_Sky_Skybox_Glow_Contrast
 #define CUSTOM_SKY_SKYBOX_GLOW_SATURATION      shader_injection.Custom_Sky_Skybox_Glow_Saturation
+#define CUSTOM_AO_ENABLE                       shader_injection.Custom_AO_Enable
+#define CUSTOM_AO_DEBUG                        shader_injection.Custom_AO_Debug
+#define CUSTOM_AO_INTENSITY                    shader_injection.Custom_AO_Intensity
+#define CUSTOM_AO_RADIUS_NEAR                  shader_injection.Custom_AO_Radius_Near
+#define CUSTOM_AO_RADIUS_FAR                   shader_injection.Custom_AO_Radius_Far
+#define CUSTOM_AO_BIAS_NEAR                    shader_injection.Custom_AO_Bias_Near
+#define CUSTOM_AO_BIAS_FAR                     shader_injection.Custom_AO_Bias_Far
+#define CUSTOM_AO_THICKNESS_NEAR               shader_injection.Custom_AO_Thickness_Near
+#define CUSTOM_AO_THICKNESS_FAR                shader_injection.Custom_AO_Thickness_Far
 
 #include "../../shaders/renodx.hlsl"
 

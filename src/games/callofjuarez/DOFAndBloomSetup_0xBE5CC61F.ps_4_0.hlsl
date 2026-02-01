@@ -195,6 +195,26 @@ Texture2D<float4> sDepth : register(t2);
 Texture1D<float4> IniParams : register(t120);
 Texture2D<float4> StereoParams : register(t125);
 
+//
+// Game's depth buffer is already linearized
+//
+// float LinearizeDepth(float depth)
+// {
+//   depth = min(0.99, depth);
+//   //depth = 1 - depth;
+//   const float N = 0.001;
+//   const float fFarPlane = 1000;
+//   depth = (2.0 * N * fFarPlane) / (fFarPlane + N - depth * (fFarPlane - N) + 0.00001);
+//   return depth;
+// }
+
+float NormalizeDepth(float depth)
+{
+  const float fFarPlane = 1000;
+  depth = depth / fFarPlane;
+  return depth;
+}
+
 void main( 
   float4 v0 : SV_POSITION0,
   float4 v1 : TEXCOORD0,
@@ -215,6 +235,88 @@ void main(
   r1.xyz = r1.xyz + -r0.xyz;
   r0.w = fBulletTime + vColorParams.w;
   r0.xyz = r0.www * r1.xyz + r0.xyz;
+  // Custom Ambient Occlusion
+  float aoFactor = 1.0;
+  if (CUSTOM_AO_ENABLE > 0.f) {
+    uint tw, th;
+    sDepth.GetDimensions(tw, th);
+    float2 tex = float2(1.0 / tw, 1.0 / th);
+
+    float rawDepthC = sDepth.Sample(samDepth_s, v1.xy).w;
+    float normDepthC = rawDepthC / 1000.0;
+    float2 slope = float2(ddx(normDepthC), ddy(normDepthC));
+
+    // 1. THE NOISE (State-of-the-Art Bayer Jitter)
+    // We use a 4x4 Bayer matrix to jitter the radius.
+    // This "scatters" the samples per pixel, creating a perceived blur.
+    float bayer[16] = { 0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5 };
+    uint2 pixelPos = uint2(v1.xy * float2(tw, th));
+    float bayerValue = bayer[(pixelPos.x % 4) * 4 + (pixelPos.y % 4)] / 16.0;
+
+    // We also keep IGN for the rotation
+    float noise = frac(52.9829189 * frac(dot(v1.xy * float2(tw, th), float2(0.06711056, 0.00583715))));
+
+    float distanceBlend = smoothstep(0.5, 4.0, rawDepthC);
+
+    // 2. JITTERED RADIUS (This is the "Blur")
+    // By multiplying the radius by the bayer value, neighboring pixels
+    // look at different distances, which "smears" the shadow edge.
+    float radiusNear = 24.0 * CUSTOM_AO_RADIUS_NEAR;
+    float radiusFar = 30.0 * CUSTOM_AO_RADIUS_FAR;
+    float baseRadius = lerp(radiusNear, radiusFar, distanceBlend);
+
+    // The Scatter: Mix the base radius with a jittered version
+    float finalRadius = baseRadius * (0.7 + bayerValue * 0.6);
+    float2 uvRadius = finalRadius * tex;
+
+    float occNear = 0.0;
+    float occFar = 0.0;
+    float2 spiral[12] = {
+      float2(-0.32, 0.94), float2(-0.19, 0.24), float2(0.91, 0.35), float2(0.35, 0.02),
+      float2(0.15, -0.49), float2(-0.52, -0.11), float2(-0.82, -0.54), float2(-0.13, -0.98),
+      float2(0.39, -0.22), float2(0.12, 0.84), float2(-0.61, 0.19), float2(0.22, 0.33)
+    };
+
+    [unroll]
+    for (int i = 0; i < 12; i++) {
+      float angle = noise * 6.28;
+      float s = sin(angle), c = cos(angle);
+      float2 rotOffset = float2(
+                             spiral[i].x * c - spiral[i].y * s,
+                             spiral[i].x * s + spiral[i].y * c
+        ) * uvRadius;
+
+      float rawDepthS = sDepth.Sample(samDepth_s, v1.xy + rotOffset).w;
+      float normDepthS = rawDepthS / 1000.0;
+
+      // PATH A: NEAR FIELD (Guns)
+      float diffNear = rawDepthC - rawDepthS;
+      if (diffNear > CUSTOM_AO_BIAS_NEAR && diffNear < CUSTOM_AO_THICKNESS_NEAR) {
+        occNear += 1.0;
+      }
+
+      // PATH B: FAR FIELD (World)
+      float expectedNormS = normDepthC + dot(rotOffset * float2(tw, th), slope);
+      float diffFar = expectedNormS - normDepthS;
+      float farBias = (CUSTOM_AO_BIAS_FAR) + (normDepthC * 0.002);
+
+      if (diffFar > farBias && diffFar < CUSTOM_AO_THICKNESS_FAR) {
+        occFar += 1.0;
+      }
+    }
+
+    float hits = lerp(occNear, occFar, distanceBlend);
+    float shadowIntensity = hits / 12.0;
+
+    // 3. THE "INK STIPPLE" (The final look)
+    // To make it look "blurred" but "inked," we dither the threshold.
+    float inkDensity = 1.0 * CUSTOM_AO_INTENSITY;
+    float ditheredShadow = (shadowIntensity * inkDensity) - (bayerValue * 0.5);
+
+    // We use a slightly softer step for the "strong blur" feel
+    aoFactor = 1.0 - smoothstep(0.0, 0.2, ditheredShadow);
+  }
+
   r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;  // Bloom
   if (CUSTOM_BLOOM_IMPROVED > 0.f) {
     uint tex_width, tex_height;
@@ -268,8 +370,11 @@ void main(
     r1.xyz = saturate(r1.xyz);
   }
 
+  if (CUSTOM_AO_ENABLE > 0.f) {
+    r0.xyz *= aoFactor;  // Apply AO to output
+  }
   o0.xyz = r1.xyz + r0.xyz;                                            // Vanilla additive bloom
-  //o0.xyz = lerp(r0.xyz, r1.xyz, log10(CUSTOM_BLOOM_AMOUNT + 1.0f));  // Modern bloom through lerp
+  // o0.xyz = lerp(r0.xyz, r1.xyz, log10(CUSTOM_BLOOM_AMOUNT + 1.0f));  // Modern bloom through lerp
   r0.xyzw = sDepth.Sample(samDepth_s, v1.xy).xyzw;
   r0.x = saturate(r0.w * CONST_254.x + CONST_254.y);
   r0.y = saturate(r0.w * CONST_253.x + CONST_253.y);
@@ -277,5 +382,14 @@ void main(
   r0.y = saturate(CONST_253.w * r0.y);
   r0.x = r0.y + -r0.x;
   o0.w = r0.x * 0.5 + 0.5;
+  // Debug
+  if (CUSTOM_AO_DEBUG == 1.f && CUSTOM_AO_ENABLE > 0.f) {
+      // Debug AO
+      o0.xyz = aoFactor.xxx;
+    }
+  if (CUSTOM_AO_DEBUG == 2.f) {
+      // Debug depth
+      o0.xyz = (sDepth.Sample(samDepth_s, v1.xy).w).xxx / 1000;
+    }
   return;
 }
