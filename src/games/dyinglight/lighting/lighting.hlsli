@@ -1,13 +1,5 @@
 #include "../shared.h"
 
-float3 ApplyReinhardPiecewiseByLuminance(float3 color, float peak_white = 1.f, float shoulder = 0.0001f) {
-  float y_in = renodx::color::y::from::BT709(color);
-  float y_out = renodx::tonemap::ReinhardPiecewise(y_in, peak_white, shoulder);
-  color = renodx::color::correct::Luminance(color, y_in, y_out);
-
-  return color;
-}
-
 float3 ApplyCustomClampSpecular(float3 unclamped_color) {
   if (CUSTOM_UNCLAMP_LIGHTING == 0) return saturate(unclamped_color);
 
@@ -15,7 +7,7 @@ float3 ApplyCustomClampSpecular(float3 unclamped_color) {
 
   float3 clamped_color = unclamped_color;
 #if TONE_MAP_LIGHTING
-  clamped_color = ApplyReinhardPiecewiseByLuminance(unclamped_color, 10.f, 1.f);
+  clamped_color = renodx::tonemap::neutwo::MaxChannel(unclamped_color, 10.f);
 #else
   clamped_color = min(clamped_color, 100.f);
 #endif
@@ -30,7 +22,7 @@ float ApplyCustomClampWaterSpecular(float unclamped_value) {
 
   float clamped_value = unclamped_value;
 #if TONE_MAP_LIGHTING
-  clamped_value = renodx::tonemap::ReinhardPiecewise(unclamped_value, 10.f, 1.f);
+  clamped_value = renodx::tonemap::Neutwo(unclamped_value, 10.f);
 #else
   clamped_value = min(clamped_value, 100.f);
 #endif
@@ -45,7 +37,7 @@ float ApplyCustomClampFire(float unclamped_value) {
 
   float clamped_value = unclamped_value;
 #if TONE_MAP_LIGHTING
-  clamped_value = renodx::tonemap::ReinhardPiecewise(unclamped_value, 10.f, 1.f);
+  clamped_value = renodx::tonemap::Neutwo(unclamped_value, 10.f);
 #else
   clamped_value = min(clamped_value, 100.f);
 #endif
@@ -65,7 +57,7 @@ float ApplyCustomAutoExposureClamp(float unclamped_value) {
   float clamped_value = unclamped_value;
 
   if (CUSTOM_CLAMP_AUTOEXPOSURE != 0.f) {
-    clamped_value = renodx::tonemap::ReinhardPiecewise(clamped_value, 10.f, 4.f);
+    clamped_value = renodx::tonemap::Neutwo(clamped_value, 10.f);
   }
 
   return clamped_value;
@@ -73,7 +65,7 @@ float ApplyCustomAutoExposureClamp(float unclamped_value) {
 
 float3 ToneMapBrightPass(float3 color) {
   if (CUSTOM_UNCLAMP_LIGHTING) {
-    color = ApplyReinhardPiecewiseByLuminance(color, 8.f, 1.f);
+    color = renodx::tonemap::neutwo::BT709(color, 4.f);
   }
   return color;
 }
