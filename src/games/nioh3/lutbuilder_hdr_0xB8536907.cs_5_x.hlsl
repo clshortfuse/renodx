@@ -228,6 +228,25 @@ float4 vanillaTonemapper(float3 color) {
   float _543 = _512 / _540;
 
   float3 _562;
+  float _544 = mad(_541, 30.9882221221923828125f, 1.19912135601043701171875f);
+  float _545 = mad(_542, 30.9882221221923828125f, 1.19912135601043701171875f);
+  float _546 = mad(_543, 30.9882221221923828125f, 1.19912135601043701171875f);
+  float _547 = _541 * _544;
+  float _548 = _545 * _542;
+  float _549 = _546 * _543;
+  float _550 = mad(_541, 32.667881011962890625f, 9.87056255340576171875f);
+  float _551 = mad(_542, 32.667881011962890625f, 9.87056255340576171875f);
+  float _552 = mad(_543, 32.667881011962890625f, 9.87056255340576171875f);
+  float _553 = mad(_541, _550, 8.977848052978515625f);
+  float _554 = mad(_551, _542, 8.977848052978515625f);
+  float _555 = mad(_552, _543, 8.977848052978515625f);
+  float _556 = _547 / _553;
+  float _557 = _548 / _554;
+  float _558 = _549 / _555;
+  float _559 = _556 * _538;
+  float _560 = _557 * _539;
+  float _561 = _558 * _540;
+  _562 = float3(_559, _560, _561);
   // Filmic curve
   if (RENODX_TONE_MAP_TYPE) {
     // float3 x = r1.rgb;
@@ -268,33 +287,13 @@ float4 vanillaTonemapper(float3 color) {
 
     float3 base = ApplyNiohCurve(x, A, B, C, D, E);
     float3 extended = ApplyNiohExtended(x, base, A, B, C, D, E);
+    extended = extended * W;
+    extended = renodx::color::bt709::from::AP1(extended);
+    extended = CastleDechroma_CVVDPStyle_NakaRushton(extended, 50.f);
     extended = renodx::color::ap1::from::BT709(
         ApplySaturationBlowoutHueCorrectionHighlightSaturation(
-            renodx::color::bt709::from::AP1(extended), untonemapped_lum,
-            cg_config));
-
-    _562 = extended * W;
-
-  } else {
-    float _544 = mad(_541, 30.9882221221923828125f, 1.19912135601043701171875f);
-    float _545 = mad(_542, 30.9882221221923828125f, 1.19912135601043701171875f);
-    float _546 = mad(_543, 30.9882221221923828125f, 1.19912135601043701171875f);
-    float _547 = _541 * _544;
-    float _548 = _545 * _542;
-    float _549 = _546 * _543;
-    float _550 = mad(_541, 32.667881011962890625f, 9.87056255340576171875f);
-    float _551 = mad(_542, 32.667881011962890625f, 9.87056255340576171875f);
-    float _552 = mad(_543, 32.667881011962890625f, 9.87056255340576171875f);
-    float _553 = mad(_541, _550, 8.977848052978515625f);
-    float _554 = mad(_551, _542, 8.977848052978515625f);
-    float _555 = mad(_552, _543, 8.977848052978515625f);
-    float _556 = _547 / _553;
-    float _557 = _548 / _554;
-    float _558 = _549 / _555;
-    float _559 = _556 * _538;
-    float _560 = _557 * _539;
-    float _561 = _558 * _540;
-    _562 = float3(_559, _560, _561);
+            extended, untonemapped_lum, cg_config));
+    _562 = extended;
   }
   float _563 =
       dp3_f32(float3(0.662454187870025634765625f, 0.1340042054653167724609375f,
