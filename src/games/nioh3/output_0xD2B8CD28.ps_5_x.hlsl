@@ -1,6 +1,6 @@
 #include "./common.hlsl"
 
-// ---- Created with 3Dmigoto v1.4.1 on Fri Jan 30 01:59:39 2026
+// ---- Created with 3Dmigoto v1.4.1 on Sun Feb  1 20:19:22 2026
 
 cbuffer cbComposite : register(b2) {
   float4 g_vSceneTexSize : packoffset(c0);
@@ -26,13 +26,6 @@ cbuffer cbComposite : register(b2) {
   float4 g_vVerticalLimbDarkenningTopInfo : packoffset(c25);
   float4 g_vVerticalLimbDarkenningBottomInfo : packoffset(c26);
 }
-
-static const float3 BlurWeights[12] = {
-  float3(0, 0, 1), float3(0, 1, 0), float3(1, 0, 0),
-  float3(1, 0, 0), float3(0, 1, 0), float3(0, 0, 1),
-  float3(0, 1, 0), float3(1, 0, 0), float3(1, 0, 1),
-  float3(1, 0, 1), float3(1, 0, 0), float3(0, 1, 0)
-};
 
 SamplerState sampleLinear_s : register(s7);
 SamplerState samplePoint_s : register(s8);
@@ -179,7 +172,6 @@ void main(
     r0.x = r0.x * r0.y;
     r0.y = 1 + -g_vLimbDarkenningInfo.w;
     r0.x = r0.x * g_vLimbDarkenningInfo.w + r0.y;
-    r0.x = lerp(1.f, r0.x, CUSTOM_VIGNETTE);
     r3.xyz = r3.xyz * r0.xxx;
   }
   if (r1.x != 0) {
@@ -219,13 +211,14 @@ void main(
       r0.x = r0.x * r0.x;
       r1.x = 1 + -g_vVerticalLimbDarkenningBottomInfo.x;
       r0.x = r0.x * g_vVerticalLimbDarkenningBottomInfo.x + r1.x;
+      r0.x = lerp(1.f, r0.x, CUSTOM_VIGNETTE);
       r0.y = r0.z ? r0.x : 1;
     }
     r3.xyz = r3.xyz * r0.yyy;
   }
   float3 untonemapped = r3.rgb;
 
-#if 0  
+#if 0
   r0.xyz = r3.xyz * float3(1.00006652, 1.00006652, 1.00006652) + float3(-0.00391646381, -0.00391646381, -0.00391646381);
   r0.xyz = r0.www ? r0.xyz : r3.xyz;
   r0.xyz = r0.xyz * float3(5.55555582, 5.55555582, 5.55555582) + float3(0.0479959995, 0.0479959995, 0.0479959995);
@@ -233,9 +226,8 @@ void main(
   r0.xyz = saturate(r0.xyz * float3(0.0734997839, 0.0734997839, 0.0734997839) + float3(0.386036009, 0.386036009, 0.386036009));
   r1.xyz = g_tHdrLut.SampleLevel(sampleLinear_s, r0.xyz, 0).xyz;
 #else
-  r0.rgb = SampleHDRLUT(untonemapped, sampleLinear_s, g_tHdrLut);
+  r1.rgb = SampleHDRLUT(untonemapped, sampleLinear_s, g_tHdrLut);
 #endif
-
   if (g_vDramaticHdrLutInfo0[0].w != 0) {
     r0.w = g_tSceneDepth.SampleLevel(samplePoint_s, r2.xz, 0).x;
     r0.w = g_vP2V.x + r0.w;
@@ -321,9 +313,12 @@ void main(
     } else {
       r2.w = g_vDramaticHdrLutInfo0[0].x;
     }
-    r3.xyz = g_tDramaticHdrLut0.SampleLevel(sampleLinear_s, r0.xyz, 0).xyz;
-    r3.xyz = r3.xyz + -r1.xyz;
-    r1.xyz = r2.www * r3.xyz + r1.xyz;
+    // r3.xyz = g_tDramaticHdrLut0.SampleLevel(sampleLinear_s, r0.xyz, 0).xyz;
+    r3.xyz = SampleHDRLUT(untonemapped, sampleLinear_s, g_tDramaticHdrLut0);
+    r1.rgb = lerp(r1.rgb, r3.rgb, r2.www);
+
+    // r3.xyz = r3.xyz + -r1.xyz;
+    // r1.xyz = r2.www * r3.xyz + r1.xyz;
   }
   r2.w = cmp(0 < g_vDramaticHdrLutInfo1[0].x);
   if (r2.w != 0) {
@@ -393,10 +388,14 @@ void main(
     } else {
       r0.w = g_vDramaticHdrLutInfo1[0].x;
     }
-    r0.xyz = g_tDramaticHdrLut1.SampleLevel(sampleLinear_s, r0.xyz, 0).xyz;
-    r0.xyz = r0.xyz + -r1.xyz;
-    r1.xyz = r0.www * r0.xyz + r1.xyz;
+    // r0.xyz = g_tDramaticHdrLut1.SampleLevel(sampleLinear_s, r0.xyz, 0).xyz;
+    // r0.xyz = r0.xyz + -r1.xyz;
+    // r1.xyz = r0.www * r0.xyz + r1.xyz;
+
+    r0.xyz = SampleHDRLUT(untonemapped, sampleLinear_s, g_tDramaticHdrLut1);
+    r1.rgb = lerp(r1.rgb, r0.rgb, r0.www);
   }
+
   if (r2.y != 0) {
     // r0.xyz = saturate(r1.xyz);
     // r0.xyz = log2(r0.xyz);
@@ -405,19 +404,17 @@ void main(
     // r0.xyz = g_tLdrLut.SampleLevel(sampleLinear_s, r0.xyz, 0).xyz;
     // r0.xyz = r0.xyz + -r1.xyz;
     // r1.xyz = g_vCompositeInfo.yyy * r0.xyz + r1.xyz;
-
-    float3 lutOutput = SampleSDRLUT(r0.rgb, sampleLinear_s, g_tLdrLut);
-    r0.rgb = lerp(r0.rgb, lutOutput, g_vCompositeInfo.yyy);
+    float3 sdrLutOutput = SampleSDRLUT(r1.rgb, sampleLinear_s, g_tLdrLut);
+    r1.rgb = lerp(r1.rgb, sdrLutOutput, g_vCompositeInfo.yyy);
   }
   // r0.x = cmp(g_vGammaCorrection.x != 1.000000);
   // r0.yzw = log2(abs(r1.xyz));
   // r0.yzw = g_vGammaCorrection.xxx * r0.yzw;
   // r0.yzw = exp2(r0.yzw);
   // r0.xyz = r0.xxx ? r0.yzw : r1.xyz;
-  o0.xyz = g_vRadialBlurCenter.zzz * r0.xyz;
+  o0.xyz = g_vRadialBlurCenter.zzz * r1.xyz;
   o0.w = 1;
 
   o0 = ProcessColor(o0);
-
   return;
 }

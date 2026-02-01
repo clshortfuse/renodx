@@ -127,7 +127,7 @@ float3 SampleScaledLUT(Texture3D<float4> lut, renodx::lut::Config lut_config, fl
   return color;
 }
 
-float3 SampleHDRLUT(inout float3 untonemapped, SamplerState sampleLinear_s, Texture3D<float4> g_tHdrLut) {
+float3 SampleHDRLUT(float3 untonemapped, SamplerState sampleLinear_s, Texture3D<float4> g_tHdrLut) {
   float3 color = untonemapped;
 
   renodx::lut::Config lut_config = renodx::lut::config::Create();
