@@ -1,7 +1,5 @@
 #include "./shared.h"
 
-// ---- Created with 3Dmigoto v1.2.45 on Sat Jan 24 00:40:21 2026
-
 cbuffer _Globals : register(b0)
 {
   float4x4 SHADOW_XFORM_BIAS_WS_0 : packoffset(c0);
@@ -189,8 +187,6 @@ Texture2D<float4> sColor0 : register(t0);
 Texture2D<float4> sColor1 : register(t1);
 Texture2D<float4> sDepth : register(t2);
 
-
-// 3Dmigoto declarations
 #define cmp -
 Texture1D<float4> IniParams : register(t120);
 Texture2D<float4> StereoParams : register(t125);
@@ -244,70 +240,80 @@ void main(
 
     float rawDepthC = sDepth.Sample(samDepth_s, v1.xy).w;
     float normDepthC = rawDepthC / 1000.0;
-    float distanceBlend = smoothstep(0.1, 1.0, rawDepthC);
 
-    // Sky Mask to prevent horizon overshadowing
-    float skyMask = saturate((0.998 - normDepthC) * 500.0);
+    // RECONSTRUCT NORMAL
+    float3 pC = float3(v1.xy, normDepthC);
+    float3 pR = float3(v1.xy + float2(tex.x * 2, 0), sDepth.Sample(samDepth_s, v1.xy + float2(tex.x * 2, 0)).w / 1000.0);
+    float3 pD = float3(v1.xy + float2(0, tex.y * 2), sDepth.Sample(samDepth_s, v1.xy + float2(0, tex.y * 2)).w / 1000.0);
+    float3 viewNorm = normalize(cross(pR - pC, pD - pC));
 
-    // Noise & Bayer
+    // Masks & Fades
+    float distFade = 1.0 - smoothstep(CUSTOM_AO_FADE_START - 50.f, CUSTOM_AO_FADE_END, rawDepthC);
+    float skyMask = saturate((0.999 - normDepthC) * 2000.0);
+    float4 hdrInput = sColor1.Sample(samColor1_s, v1.xy);
+    float luminance = renodx::color::y::from::BT709(hdrInput.xyz);
+    float lightMask = saturate(1.0 - (luminance / max(0.001, CUSTOM_AO_BRIGHTNESS_FADE_THRESHOLD)));
+
+    float distanceBlend = smoothstep(0.1, 1.5, rawDepthC);
+
+    // NOISE
     float bayer[16] = { 0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5 };
     uint2 pixelPos = uint2(v1.xy * float2(tw, th));
     float bayerValue = bayer[(pixelPos.x % 4) * 4 + (pixelPos.y % 4)] / 16.0;
     float noise = frac(52.9829189 * frac(dot(v1.xy * float2(tw, th), float2(0.06711056, 0.00583715))));
 
     float baseRadius = lerp(24.0 * CUSTOM_AO_RADIUS_NEAR, 30.0 * CUSTOM_AO_RADIUS_FAR, distanceBlend);
-    float2 slope = float2(ddx(normDepthC), ddy(normDepthC));
 
-    // --- OPTIMIZED 5-TAP ROTATED SPLAT ---
+    // THE SPLAT GATHER
     float totalOcclusion = 0.0;
     float blurScale = (5.0 * CUSTOM_AO_BLUR);
-
-    // Rotation for the blur taps to prevent "box" artifacts
     float bs, bc;
     sincos(noise * 6.28, bs, bc);
     float2x2 blurRot = float2x2(bc, -bs, bs, bc);
-
-    float2 offsets[5] = {
-      float2(0, 0),
-      mul(float2(1, 0), blurRot), mul(float2(-1, 0), blurRot),
-      mul(float2(0, 1), blurRot), mul(float2(0, -1), blurRot)
-    };
+    float2 offsets[5] = { float2(0, 0), mul(float2(1, 0), blurRot), mul(float2(-1, 0), blurRot), mul(float2(0, 1), blurRot), mul(float2(0, -1), blurRot) };
 
     [unroll]
     for (int j = 0; j < 5; j++) {
       float2 currentUV = v1.xy + (offsets[j] * tex * blurScale);
       float dC = sDepth.Sample(samDepth_s, currentUV).w;
       float nC = dC / 1000.0;
-
       float localOcc = 0.0;
       for (int i = 0; i < 6; i++) {
         float angle = (noise * 6.28) + (float(i) * 1.047);
         float2 rotOffset = float2(cos(angle), sin(angle)) * (baseRadius * (0.8 + frac(noise + i * 0.618) * 0.4)) * tex;
-
         float dS = sDepth.Sample(samDepth_s, currentUV + rotOffset).w;
         float nS = dS / 1000.0;
+        // NEAR FIELD
+        float diffNear = dC - dS;
+        float oN = (diffNear > CUSTOM_AO_BIAS_NEAR && diffNear < CUSTOM_AO_THICKNESS_NEAR)
+                       ? exp(-3.0 * pow(saturate(diffNear / CUSTOM_AO_THICKNESS_NEAR), 2.0)) : 0.0;
+        // FAR FIELD
+        float3 viewVec = float3(rotOffset, nS - nC);
+        float planeDiff = -dot(viewVec, viewNorm);
 
-        // Unified Seam-Free Logic
-        float dN = dC - dS;
-        float oN = (dN > CUSTOM_AO_BIAS_NEAR && dN < CUSTOM_AO_THICKNESS_NEAR) ? exp(-2.5 * pow(saturate(dN / CUSTOM_AO_THICKNESS_NEAR), 2.0)) : 0.0;
+        // Dynamic Bias: We scale the bias by the angle of the surface.
+        float slopeBias = (1.0 - abs(viewNorm.z)) * 0.003;
+        float farBias = CUSTOM_AO_BIAS_FAR + slopeBias + (nC * 0.001);
 
-        float dF = (nC + dot(rotOffset * float2(tw, th), slope)) - nS;
-        float oF = (dF > (CUSTOM_AO_BIAS_FAR + nC * 0.002) && dF < CUSTOM_AO_THICKNESS_FAR) ? exp(-2.5 * pow(saturate(dF / CUSTOM_AO_THICKNESS_FAR), 2.0)) : 0.0;
+        float oF = (planeDiff > farBias && planeDiff < CUSTOM_AO_THICKNESS_FAR)
+                       ? exp(-2.5 * pow(saturate(planeDiff / CUSTOM_AO_THICKNESS_FAR), 2.0)) : 0.0;
 
         localOcc += lerp(oN, oF, distanceBlend);
       }
-      // Weight: Center is 1.0, cardinal neighbors are 0.8
       totalOcclusion += (localOcc / 6.0) * ((j == 0) ? 1.0 : 0.8);
     }
+    float finalIntensity = (totalOcclusion / 4.2) * CUSTOM_AO_INTENSITY;
+    finalIntensity *= (distFade * lightMask * skyMask);
 
-    // Average the 5 taps (1.0 + 4 * 0.8 = 4.2 total weight)
-    float finalIntensity = (totalOcclusion / 4.2) * CUSTOM_AO_INTENSITY * skyMask;
+    // Increase dither strength with distance to hide banding
+    float distanceDither = lerp(0.1, 0.25, normDepthC);
+    float ditheredShadow = finalIntensity - (bayerValue * distanceDither);
 
-    float ditheredShadow = finalIntensity - (bayerValue * 0.1);
-    aoFactor = 1.0 - smoothstep(0.0, 0.85, ditheredShadow);
+    aoFactor = 1.0 - smoothstep(0.0, 1.0, ditheredShadow);
   }
 
-  r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;  // Bloom
+  // Bloom
+  r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;
   if (CUSTOM_BLOOM_IMPROVED > 0.f) {
     uint tex_width, tex_height;
     sColor1.GetDimensions(tex_width, tex_height);
@@ -378,7 +384,7 @@ void main(
       o0.xyz = aoFactor.xxx;
     }
   if (CUSTOM_AO_DEBUG == 2.f) {
-      // Debug depth
+      // Debug Depth
       o0.xyz = (sDepth.Sample(samDepth_s, v1.xy).w).xxx / 1000;
     }
 

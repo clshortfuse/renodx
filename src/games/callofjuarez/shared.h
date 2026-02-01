@@ -78,6 +78,10 @@ struct ShaderInjectData {
   float Custom_AO_Thickness_Near;
   float Custom_AO_Thickness_Far;
   float Custom_AO_Blur;
+
+  float Custom_AO_Fade_Start;
+  float Custom_AO_Fade_End;
+  float Custom_AO_Brightness_Fade_Threshold;
 };
 
 #ifndef __cplusplus
@@ -148,6 +152,9 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_AO_THICKNESS_NEAR               shader_injection.Custom_AO_Thickness_Near
 #define CUSTOM_AO_THICKNESS_FAR                shader_injection.Custom_AO_Thickness_Far
 #define CUSTOM_AO_BLUR                         shader_injection.Custom_AO_Blur
+#define CUSTOM_AO_FADE_START                   shader_injection.Custom_AO_Fade_Start
+#define CUSTOM_AO_FADE_END                     shader_injection.Custom_AO_Fade_End
+#define CUSTOM_AO_BRIGHTNESS_FADE_THRESHOLD    shader_injection.Custom_AO_Brightness_Fade_Threshold
 
 #include "../../shaders/renodx.hlsl"
 
