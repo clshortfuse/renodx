@@ -33,7 +33,7 @@ void main(
   if (RENODX_TONE_MAP_TYPE <= 0.f) {
     o0.w = min(r0.x, 1.0);                                                  // Alpha channel clamp
   }
-  float4 vanilla = saturate(o0.xyzw);
+  float4 vanilla = o0.xyzw;
   untonemapped_sRGB = renodx::draw::ComputeUntonemappedGraded(untonemapped_sRGB, vanilla.xyz);
   float3 tonemapped = renodx::tonemap::renodrt::NeutralSDR(untonemapped_sRGB);
   tonemapped = renodx::color::srgb::Encode(tonemapped);

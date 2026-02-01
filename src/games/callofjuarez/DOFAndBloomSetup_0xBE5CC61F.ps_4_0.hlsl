@@ -237,37 +237,26 @@ void main(
   r0.xyz = r0.www * r1.xyz + r0.xyz;
   // Custom Ambient Occlusion
   float aoFactor = 1.0;
-  if (CUSTOM_AO_ENABLE > 0.f) {
+if (CUSTOM_AO_ENABLE > 0.f) {
     uint tw, th;
     sDepth.GetDimensions(tw, th);
     float2 tex = float2(1.0 / tw, 1.0 / th);
-
+    
     float rawDepthC = sDepth.Sample(samDepth_s, v1.xy).w;
     float normDepthC = rawDepthC / 1000.0;
     float2 slope = float2(ddx(normDepthC), ddy(normDepthC));
 
-    // 1. THE NOISE (State-of-the-Art Bayer Jitter)
-    // We use a 4x4 Bayer matrix to jitter the radius.
-    // This "scatters" the samples per pixel, creating a perceived blur.
+    // Noise Setup
     float bayer[16] = { 0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5 };
     uint2 pixelPos = uint2(v1.xy * float2(tw, th));
     float bayerValue = bayer[(pixelPos.x % 4) * 4 + (pixelPos.y % 4)] / 16.0;
-
-    // We also keep IGN for the rotation
     float noise = frac(52.9829189 * frac(dot(v1.xy * float2(tw, th), float2(0.06711056, 0.00583715))));
 
-    float distanceBlend = smoothstep(0.5, 4.0, rawDepthC);
-
-    // 2. JITTERED RADIUS (This is the "Blur")
-    // By multiplying the radius by the bayer value, neighboring pixels
-    // look at different distances, which "smears" the shadow edge.
+    // Field Transition
+    float distanceBlend = smoothstep(0.25, 4.0, rawDepthC);
     float radiusNear = 24.0 * CUSTOM_AO_RADIUS_NEAR;
     float radiusFar = 30.0 * CUSTOM_AO_RADIUS_FAR;
     float baseRadius = lerp(radiusNear, radiusFar, distanceBlend);
-
-    // The Scatter: Mix the base radius with a jittered version
-    float finalRadius = baseRadius * (0.7 + bayerValue * 0.6);
-    float2 uvRadius = finalRadius * tex;
 
     float occNear = 0.0;
     float occFar = 0.0;
@@ -279,42 +268,52 @@ void main(
 
     [unroll]
     for (int i = 0; i < 12; i++) {
-      float angle = noise * 6.28;
+      // BLUR TRICK 1: Variable Radius Jitter per sample
+      // This spreads the 'reach' of the samples differently for every pixel
+      float sampleJitter = frac(noise + (float(i) * 0.618)); // Golden ratio distribution
+      float radiusJitter = (0.8 + sampleJitter * 0.4); 
+      float2 uvRadius = (baseRadius * radiusJitter) * tex;
+
+      // BLUR TRICK 2: Rotation Offset per sample index
+      float angle = (noise * 6.28) + (float(i) * 0.523); // 0.523 is ~30 degrees
       float s = sin(angle), c = cos(angle);
+      
       float2 rotOffset = float2(
-                             spiral[i].x * c - spiral[i].y * s,
-                             spiral[i].x * s + spiral[i].y * c
-        ) * uvRadius;
+          spiral[i].x * c - spiral[i].y * s,
+          spiral[i].x * s + spiral[i].y * c
+      ) * uvRadius;
 
       float rawDepthS = sDepth.Sample(samDepth_s, v1.xy + rotOffset).w;
       float normDepthS = rawDepthS / 1000.0;
 
-      // PATH A: NEAR FIELD (Guns)
+      // BLUR TRICK 3: Exponential Falloff (Gaussian Approximation)
+      // This makes the center of the shadow darker and the edges much softer
+      
+      // Near Field
       float diffNear = rawDepthC - rawDepthS;
       if (diffNear > CUSTOM_AO_BIAS_NEAR && diffNear < CUSTOM_AO_THICKNESS_NEAR) {
-        occNear += 1.0;
+        float fNear = saturate(diffNear / CUSTOM_AO_THICKNESS_NEAR);
+        occNear += exp(-2.0 * fNear * fNear); // Gaussian-like falloff
       }
 
-      // PATH B: FAR FIELD (World)
+      // Far Field
       float expectedNormS = normDepthC + dot(rotOffset * float2(tw, th), slope);
       float diffFar = expectedNormS - normDepthS;
       float farBias = (CUSTOM_AO_BIAS_FAR) + (normDepthC * 0.002);
-
       if (diffFar > farBias && diffFar < CUSTOM_AO_THICKNESS_FAR) {
-        occFar += 1.0;
+        float fFar = saturate(diffFar / CUSTOM_AO_THICKNESS_FAR);
+        occFar += exp(-2.0 * fFar * fFar);
       }
     }
 
     float hits = lerp(occNear, occFar, distanceBlend);
-    float shadowIntensity = hits / 12.0;
+    float finalIntensity = (hits / 12.0) * CUSTOM_AO_INTENSITY;
 
-    // 3. THE "INK STIPPLE" (The final look)
-    // To make it look "blurred" but "inked," we dither the threshold.
-    float inkDensity = 1.0 * CUSTOM_AO_INTENSITY;
-    float ditheredShadow = (shadowIntensity * inkDensity) - (bayerValue * 0.5);
-
-    // We use a slightly softer step for the "strong blur" feel
-    aoFactor = 1.0 - smoothstep(0.0, 0.2, ditheredShadow);
+    // The Final "Blur" Finish
+    // By using a very wide smoothstep and subtracting less dither, 
+    // we let the 'raw' jittered samples blend together visually.
+    float ditheredShadow = finalIntensity - (bayerValue * 0.15);
+    aoFactor = 1.0 - smoothstep(0.0, 0.8, ditheredShadow);
   }
 
   r1.xyzw = sColor1.Sample(samColor1_s, v1.xy).xyzw;  // Bloom
@@ -363,7 +362,7 @@ void main(
   r1.xyzw = midgray * pow(r1.xyzw / midgray, 1.0 + CUSTOM_BLOOM_THRESHOLD * 0.1);
 
   if (RENODX_TONE_MAP_TYPE <= 0.f || CUSTOM_BLOOM_IMPROVED <= 0.f) {
-    r1.xyz = r1.xyz * CUSTOM_BLOOM_AMOUNT;
+    r1.xyz *= CUSTOM_BLOOM_AMOUNT;
   }
 
   if (RENODX_TONE_MAP_TYPE <= 0.f) {
