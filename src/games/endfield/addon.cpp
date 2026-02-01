@@ -71,6 +71,114 @@ bool ExecuteReshadeEffects(reshade::api::command_list* cmd_list) {
   return true;
 }
 
+// Hotkey state tracking (defined before settings array for use in on_draw lambdas)
+bool ui_toggle_key_was_pressed = false;
+int ui_toggle_hotkey = 0;
+bool hotkey_input_active = false;
+
+// Heuristic tracking for ping/UID UI
+bool is_ping_input_candidate = false;
+bool is_ping_drawn = false;
+bool is_uid_input_candidate = false;
+
+// on_draw callback for ping/latency bar shader (0xEF07F89A)
+bool OnPingDraw(reshade::api::command_list* cmd_list) {
+  if (is_ping_input_candidate) {
+    is_ping_drawn = true;
+    return shader_injection.ping_text_opacity >= 0.5f;
+  }
+  is_ping_drawn = false;
+  return true;
+}
+
+// on_draw callback for UID text shader (0x6B8E9049)
+bool OnUIDDraw(reshade::api::command_list* cmd_list) {
+  if (is_uid_input_candidate) {
+    if (shader_injection.status_text_opacity < 0.5f) {
+      return false; 
+    }
+  }
+  return true;
+}
+
+// Helper function to get key name from virtual key code
+std::string GetKeyName(int keycode) {
+  if (keycode == 0 || keycode >= 256) return "";
+  
+  static const char* keyboard_keys[256] = {
+    "", "Left Mouse", "Right Mouse", "Cancel", "Middle Mouse", "X1 Mouse", "X2 Mouse", "", "Backspace", "Tab", "", "", "Clear", "Enter", "", "",
+    "Shift", "Control", "Alt", "Pause", "Caps Lock", "", "", "", "", "", "", "Escape", "", "", "", "",
+    "Space", "Page Up", "Page Down", "End", "Home", "Left Arrow", "Up Arrow", "Right Arrow", "Down Arrow", "Select", "", "", "Print Screen", "Insert", "Delete", "Help",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "", "", "", "", "", "",
+    "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Left Windows", "Right Windows", "Apps", "", "Sleep",
+    "Numpad 0", "Numpad 1", "Numpad 2", "Numpad 3", "Numpad 4", "Numpad 5", "Numpad 6", "Numpad 7", "Numpad 8", "Numpad 9", "Numpad *", "Numpad +", "", "Numpad -", "Numpad Decimal", "Numpad /",
+    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16",
+    "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24", "", "", "", "", "", "", "", "",
+    "Num Lock", "Scroll Lock", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "Left Shift", "Right Shift", "Left Control", "Right Control", "Left Menu", "Right Menu", "Browser Back", "Browser Forward", "Browser Refresh", "Browser Stop", "Browser Search", "Browser Favorites", "Browser Home", "Volume Mute", "Volume Down", "Volume Up",
+    "Next Track", "Previous Track", "Media Stop", "Media Play/Pause", "Mail", "Media Select", "Launch App 1", "Launch App 2", "", "", "OEM ;", "OEM +", "OEM ,", "OEM -", "OEM .", "OEM /",
+    "OEM ~", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "", "", "", "OEM [", "OEM \\", "OEM ]", "OEM '", "OEM 8",
+    "", "", "OEM <", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "Attn", "CrSel", "ExSel", "Erase EOF", "Play", "Zoom", "", "PA1", "OEM Clear", ""
+  };
+  
+  return keyboard_keys[keycode];
+}
+
+int GetLastKeyPressedImGui() {
+
+  struct KeyMapping {
+    ImGuiKey imgui_key;
+    int vk_code;
+  };
+  
+  static const KeyMapping kKeyMappings[] = {
+    // Function keys
+    {ImGuiKey_F1, VK_F1}, {ImGuiKey_F2, VK_F2}, {ImGuiKey_F3, VK_F3}, {ImGuiKey_F4, VK_F4},
+    {ImGuiKey_F5, VK_F5}, {ImGuiKey_F6, VK_F6}, {ImGuiKey_F7, VK_F7}, {ImGuiKey_F8, VK_F8},
+    {ImGuiKey_F9, VK_F9}, {ImGuiKey_F10, VK_F10}, {ImGuiKey_F11, VK_F11}, {ImGuiKey_F12, VK_F12},
+    // Navigation keys
+    {ImGuiKey_Insert, VK_INSERT}, {ImGuiKey_Delete, VK_DELETE}, {ImGuiKey_Home, VK_HOME}, {ImGuiKey_End, VK_END},
+    {ImGuiKey_PageUp, VK_PRIOR}, {ImGuiKey_PageDown, VK_NEXT},
+    // Arrow keys
+    {ImGuiKey_LeftArrow, VK_LEFT}, {ImGuiKey_RightArrow, VK_RIGHT}, {ImGuiKey_UpArrow, VK_UP}, {ImGuiKey_DownArrow, VK_DOWN},
+    // Special keys
+    {ImGuiKey_Backspace, VK_BACK}, {ImGuiKey_Space, VK_SPACE}, {ImGuiKey_Enter, VK_RETURN},
+    {ImGuiKey_Escape, VK_ESCAPE}, {ImGuiKey_Tab, VK_TAB},
+    {ImGuiKey_Pause, VK_PAUSE}, {ImGuiKey_ScrollLock, VK_SCROLL}, {ImGuiKey_PrintScreen, VK_SNAPSHOT},
+    // Numpad
+    {ImGuiKey_Keypad0, VK_NUMPAD0}, {ImGuiKey_Keypad1, VK_NUMPAD1}, {ImGuiKey_Keypad2, VK_NUMPAD2},
+    {ImGuiKey_Keypad3, VK_NUMPAD3}, {ImGuiKey_Keypad4, VK_NUMPAD4}, {ImGuiKey_Keypad5, VK_NUMPAD5},
+    {ImGuiKey_Keypad6, VK_NUMPAD6}, {ImGuiKey_Keypad7, VK_NUMPAD7}, {ImGuiKey_Keypad8, VK_NUMPAD8},
+    {ImGuiKey_Keypad9, VK_NUMPAD9}, {ImGuiKey_KeypadDecimal, VK_DECIMAL},
+    {ImGuiKey_KeypadDivide, VK_DIVIDE}, {ImGuiKey_KeypadMultiply, VK_MULTIPLY},
+    {ImGuiKey_KeypadSubtract, VK_SUBTRACT}, {ImGuiKey_KeypadAdd, VK_ADD}, {ImGuiKey_KeypadEnter, VK_RETURN},
+    // Letters
+    {ImGuiKey_A, 'A'}, {ImGuiKey_B, 'B'}, {ImGuiKey_C, 'C'}, {ImGuiKey_D, 'D'}, {ImGuiKey_E, 'E'},
+    {ImGuiKey_F, 'F'}, {ImGuiKey_G, 'G'}, {ImGuiKey_H, 'H'}, {ImGuiKey_I, 'I'}, {ImGuiKey_J, 'J'},
+    {ImGuiKey_K, 'K'}, {ImGuiKey_L, 'L'}, {ImGuiKey_M, 'M'}, {ImGuiKey_N, 'N'}, {ImGuiKey_O, 'O'},
+    {ImGuiKey_P, 'P'}, {ImGuiKey_Q, 'Q'}, {ImGuiKey_R, 'R'}, {ImGuiKey_S, 'S'}, {ImGuiKey_T, 'T'},
+    {ImGuiKey_U, 'U'}, {ImGuiKey_V, 'V'}, {ImGuiKey_W, 'W'}, {ImGuiKey_X, 'X'}, {ImGuiKey_Y, 'Y'}, {ImGuiKey_Z, 'Z'},
+    // Numbers
+    {ImGuiKey_0, '0'}, {ImGuiKey_1, '1'}, {ImGuiKey_2, '2'}, {ImGuiKey_3, '3'}, {ImGuiKey_4, '4'},
+    {ImGuiKey_5, '5'}, {ImGuiKey_6, '6'}, {ImGuiKey_7, '7'}, {ImGuiKey_8, '8'}, {ImGuiKey_9, '9'},
+    // Punctuation
+    {ImGuiKey_GraveAccent, VK_OEM_3}, {ImGuiKey_Minus, VK_OEM_MINUS}, {ImGuiKey_Equal, VK_OEM_PLUS},
+    {ImGuiKey_LeftBracket, VK_OEM_4}, {ImGuiKey_RightBracket, VK_OEM_6}, {ImGuiKey_Backslash, VK_OEM_5},
+    {ImGuiKey_Semicolon, VK_OEM_1}, {ImGuiKey_Apostrophe, VK_OEM_7},
+    {ImGuiKey_Comma, VK_OEM_COMMA}, {ImGuiKey_Period, VK_OEM_PERIOD}, {ImGuiKey_Slash, VK_OEM_2},
+  };
+  
+  for (const auto& mapping : kKeyMappings) {
+    if (ImGui::IsKeyPressed(mapping.imgui_key, false)) {
+      return mapping.vk_code;
+    }
+  }
+  return 0;
+}
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "SettingsMode",
@@ -355,7 +463,7 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.status_text_opacity,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
-        .label = "UID Text",
+        .label = "UID / Latency Text",
         .section = "User Interface & Video",
         .tooltip = "Toggle UID text visibility",
         .labels = {"Hidden", "Visible"},
@@ -365,7 +473,7 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.ping_text_opacity,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
-        .label = "Ping Text",
+        .label = "Latency Bar",
         .section = "User Interface & Video",
         .tooltip = "Toggle ping text visibility",
         .labels = {"Hidden", "Visible"},
@@ -377,8 +485,70 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "UI Visibility",
         .section = "User Interface & Video",
-        .tooltip = "Toggle UI visibility for screenshots",
+        .tooltip = "Toggle UI visibility for screenshots (use hotkey for quick toggle)",
         .labels = {"Hidden", "Visible"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "UIVisibilityHotkey",
+        .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
+        .default_value = 0.f,
+        .label = "UI Toggle Hotkey",
+        .section = "User Interface & Video",
+        .tooltip = "Click in the field and press any key to set the hotkey, or press Backspace/Delete to clear",
+        .on_draw = []() {
+          static bool key_was_pressed = false;
+          bool changed = false;
+          
+          // Get current key name for display
+          std::string key_name = ui_toggle_hotkey != 0 ? GetKeyName(ui_toggle_hotkey) : "";
+          char buf[64] = {0};
+          if (!key_name.empty()) {
+            size_t copy_len = (key_name.size() < sizeof(buf) - 1) ? key_name.size() : sizeof(buf) - 1;
+            memcpy(buf, key_name.c_str(), copy_len);
+          }
+          
+          // Create the input text widget
+          ImGui::InputTextWithHint(
+              "UI Toggle Hotkey",
+              "Click to set keyboard shortcut",
+              buf,
+              sizeof(buf),
+              ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_NoUndoRedo | ImGuiInputTextFlags_NoHorizontalScroll
+          );
+          
+          // Check if widget is active and capture key presses
+          if (ImGui::IsItemActive()) {
+            hotkey_input_active = true;
+            int key_pressed = GetLastKeyPressedImGui();
+            
+            if (key_pressed != 0 && !key_was_pressed) {
+              if (key_pressed == VK_BACK || key_pressed == VK_DELETE) {
+                ui_toggle_hotkey = 0;
+                changed = true;
+              } else if (key_pressed != VK_ESCAPE) {
+                ui_toggle_hotkey = key_pressed;
+                changed = true;
+              }
+              
+              if (changed) {
+                reshade::set_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "UIVisibilityHotkey", ui_toggle_hotkey);
+              }
+              key_was_pressed = true;
+            } else if (key_pressed == 0) {
+              key_was_pressed = false;
+            }
+          } else {
+            hotkey_input_active = false;
+            key_was_pressed = false;
+          }
+          
+          if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip)) {
+            ImGui::SetTooltip("Click and press any key to set hotkey.\nPress Backspace or Delete to clear.");
+          }
+          
+          return changed;
+        },
+        .is_global = true,
     },
     new renodx::utils::settings::Setting{
         .key = "VideoAutoHDR",
@@ -548,6 +718,22 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
+        .key = "SwapChainEncoding",
+        .binding = &shader_injection.swap_chain_encoding,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 4.f,
+        .label = "Encoding",
+        .section = "Display Output",
+        .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
+        .on_change_value = [](float previous, float current) {
+          bool is_hdr10 = current == 4;
+          shader_injection.swap_chain_encoding_color_space = (is_hdr10 ? 1.f : 0.f);
+        },
+        .is_global = true,
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "IntermediateDecoding",
         .binding = &shader_injection.intermediate_encoding,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -649,6 +835,23 @@ void OnPresetOff() {
   //   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
 
+// OnDrawIndexed event handler for heuristic-based ping/UID detection
+bool OnDrawIndexed(
+    reshade::api::command_list* cmd_list,
+    uint32_t index_count,
+    uint32_t instance_count,
+    uint32_t first_index,
+    int32_t vertex_offset,
+    uint32_t first_instance) {
+  // Detect ping/latency bar: drawn with index_count=18, first_index=0, vertex_offset=0
+  is_ping_input_candidate = ((index_count == 18) && (first_index == 0) && (vertex_offset == 0));
+
+  // Detect UID text: drawn right after ping (first_index=18) when ping was drawn
+  is_uid_input_candidate = ((first_index == 18) && is_ping_drawn);
+
+  return false;  // Don't skip the draw call
+}
+
 void OnPresent(reshade::api::command_queue* queue,
                reshade::api::swapchain* swapchain,
                const reshade::api::rect* source_rect,
@@ -660,6 +863,22 @@ void OnPresent(reshade::api::command_queue* queue,
     shader_injection.custom_flip_uv_y = 1.f;
   }
 
+  // Reset heuristic tracking flags for ping/UID detection
+  is_ping_input_candidate = false;
+  is_uid_input_candidate = false;
+  is_ping_drawn = false;
+
+  // Check UI visibility hotkey (skip if user is currently setting a new hotkey)
+  if (ui_toggle_hotkey != 0 && !hotkey_input_active) {
+    bool key_down = (GetAsyncKeyState(ui_toggle_hotkey) & 0x8000) != 0;
+    if (key_down && !ui_toggle_key_was_pressed) {
+      // Toggle UI visibility
+      shader_injection.ui_visibility = (shader_injection.ui_visibility == 0.f) ? 1.f : 0.f;
+      // Update the setting value to keep UI in sync
+      renodx::utils::settings::UpdateSetting("UIVisibility", shader_injection.ui_visibility);
+    }
+    ui_toggle_key_was_pressed = key_down;
+  }
 }
 
 bool initialized = false;
@@ -742,30 +961,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           settings.push_back(setting);
         }
 
+        // Initialize SwapChainEncoding-related settings
         {
-          auto* setting = new renodx::utils::settings::Setting{
-              .key = "SwapChainEncoding",
-              .binding = &shader_injection.swap_chain_encoding,
-              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 4.f,
-              .label = "Encoding",
-              .section = "Display Output",
-              .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
-              .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-              .on_change_value = [](float previous, float current) {
-                bool is_hdr10 = current == 4;
-                shader_injection.swap_chain_encoding_color_space = (is_hdr10 ? 1.f : 0.f);
-                // return void
-              },
-              .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 1; },
-          };
-          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-          bool is_hdr10 = setting->GetValue() == 4;
+          float encoding_value = 4.f;  // default
+          reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "SwapChainEncoding", encoding_value);
+          bool is_hdr10 = encoding_value == 4;
           renodx::mods::swapchain::SetUseHDR10(is_hdr10);
-          renodx::mods::swapchain::use_resize_buffer = setting->GetValue() < 4;
+          renodx::mods::swapchain::use_resize_buffer = encoding_value < 4;
           shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
-          settings.push_back(setting);
         }
 
         {
@@ -783,12 +986,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           bool use_device_proxy = setting->GetValue() == 1.f;
           renodx::mods::swapchain::use_device_proxy = use_device_proxy;
           renodx::mods::swapchain::set_color_space = !use_device_proxy;
-          if (use_device_proxy) {
-            reshade::register_event<reshade::addon_event::present>(OnPresent);
-          } else {
+          if (!use_device_proxy) {
             shader_injection.custom_flip_uv_y = 0.f;
           }
+          reshade::register_event<reshade::addon_event::present>(OnPresent);
           settings.push_back(setting);
+        }
+
+        // Load UI visibility hotkey from saved config
+        {
+          int saved_hotkey = 0;
+          if (reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "UIVisibilityHotkey", saved_hotkey)) {
+            ui_toggle_hotkey = saved_hotkey;
+          }
         }
 
         {
@@ -859,6 +1069,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         const uint32_t target_crcs[] = {
         0x37837806u,
         0xD3FA93FCu,
+        0x620A40FDu,
+        0xE322C21Du,
+        0xB094C87Eu,
+        0xF901F0ECu,
+        0x518D3855u,
         };
 
         /*  
@@ -905,11 +1120,31 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           }
         }
 
+        // Add on_draw callbacks for ping/UID shaders (heuristic-based detection)
+        // Ping/latency bar shader: 0xEF07F89A
+        {
+          auto it = custom_shaders.find(0xEF07F89Au);
+          if (it != custom_shaders.end()) {
+            it->second.on_draw = OnPingDraw;
+          }
+        }
+        // UID text shader: 0x6B8E9049
+        {
+          auto it = custom_shaders.find(0x6B8E9049u);
+          if (it != custom_shaders.end()) {
+            it->second.on_draw = OnUIDDraw;
+          }
+        }
+
+        // Register draw_indexed event for heuristic ping/UID detection
+        reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
+
         initialized = true;
       }
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
