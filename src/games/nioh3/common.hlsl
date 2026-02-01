@@ -139,7 +139,6 @@ float3 SampleHDRLUT(inout float3 untonemapped, SamplerState sampleLinear_s, Text
   lut_config.type_input = renodx::lut::config::type::ARRI_C1000;
   lut_config.type_output = renodx::lut::config::type::LINEAR;
   lut_config.recolor = 0.f;
-
   // if (RENODX_TONE_MAP_TYPE) {
   //   color = renodx::tonemap::neutwo::MaxChannel(color);
   // }
