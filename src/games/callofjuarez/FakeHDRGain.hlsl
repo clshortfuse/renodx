@@ -19,23 +19,29 @@ namespace FakeHDRGain {
           float finalMask = (intensity >= 0.0) ? gainMask : (1.0 - gainMask);
           // Gain Application
           float effectFactor = abs(intensity) * finalMask;
-          float3 output = (intensity >= 0.0) ? (color * (1.0 + effectFactor)) : (color * (1.0 - effectFactor));
-          // Extract the luminance of the newly gained color
-          float lumaGained = GetLuminance(output);
-          // Calculate saturation: move the color away from its own luminance
-          float3 saturated = lumaGained + (output - lumaGained) * saturationMultiplier;
-          // Saturation boosts often shift luminance. We force it back to 'lumaGained'.
-          float lumaAfterSat = GetLuminance(saturated);
-          float lumaCoeff = lumaGained / max(lumaAfterSat, EPSILON);
-          output = saturated * lumaCoeff;
+          float3 gainMasked = (intensity >= 0.0) ? (color * (1.0 + effectFactor)) : (color * (1.0 - effectFactor));
+          // Procedural Saturation (Restoring your original logic)
+          float luminanceGain = GetLuminance(gainMasked);
+          float3 chromaOriginal = color - luminanceInput;
+          float3 chromaGained = gainMasked - luminanceGain;
+          float chromaOriginalMag = length(chromaOriginal);
+          float chromaGainedMag = max(length(chromaGained), EPSILON);
+          // Boost the chroma
+          float3 chromaBoosted = chromaGained * saturationMultiplier;
+          // Ratio of original vs new chroma magnitude determines how much "stretch" happened
+          float saturationRatio = saturate(chromaOriginalMag / chromaGainedMag);
+          // As gain intensity increases, we bleed back to the unboosted chroma
+          // to prevent the "clipping/neon" look
+          float gainInfluence = saturate(intensity);
+          float saturationBleed = gainInfluence * (1.0 - saturationRatio);
+          float3 chromaFinal = lerp(chromaBoosted, chromaGained, saturationBleed);
+          float3 output = luminanceGain + chromaFinal;
           // Anchor-Based Soft HDR Compression
           float maxRGB = GetMax(output);
           if (maxRGB > 1.0 && intensity > 0.0) {
-            float gainInfluence = saturate(intensity);
-            // Only compress highlights above SDR (1.0)
+            // Only compress the delta above 1.0 to prevent midtone dimming
             float ratio = (maxRGB - 1.0) / max(maxRGB, EPSILON);
             float compression = 1.0 / (1.0 + (ratio * gainInfluence));
-
             output = lerp(output, output * compression, saturate(maxRGB - 1.0));
           }
 

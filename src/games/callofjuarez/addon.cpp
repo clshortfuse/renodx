@@ -167,7 +167,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
         .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 75.f,
+        .default_value = 60.f,
         .label = "Hue Correction",
         .section = "Tone Mapping",
         .tooltip = "Hue retention strength.",
@@ -180,7 +180,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 100.f,
+        .default_value = 75.f,
         .label = "Hue Shift",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -754,8 +754,8 @@ renodx::utils::settings::Settings settings = {
             {"SkyLuminariesGlowContrast", 50.f},
             {"SkyLuminariesGlowSaturation", 70.f},
             {"SkySkyboxGlow", 100.f},
-            {"SkySkyboxGlowContrast", 50.f},
-            {"SkySkyboxGlowSaturation", 70.f},
+            {"SkySkyboxGlowContrast", 100.f},
+            {"SkySkyboxGlowSaturation", 50.f},
             {"SkyCloudsGlow", 100.f},
             {"SkyCloudsGlowContrast", 70.f},
             {"AOEnable", 1.f},
