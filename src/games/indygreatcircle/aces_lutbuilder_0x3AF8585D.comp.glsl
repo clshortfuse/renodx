@@ -1233,7 +1233,7 @@ void main() {
     _2959 = BT709_TO_BT2020_MAT * _2960 * diffuse_white;
   } else {
     const float ACES_MIN = 0.0001f;
-    const float ACES_EXPOSURE = 48.f;
+    const float ACES_DIFFUSE_WHITE = 48.f;
     float aces_min = ACES_MIN / diffuse_white;
     float aces_max = (_2939._m1 / diffuse_white);
 
@@ -1251,7 +1251,7 @@ void main() {
     vec3 tonemapped_ap1;
     if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
       float y_in = dot(untonemapped_graded_ap1, vec3(0.2722287168, 0.6740817658, 0.0536895174));
-      vec4 tonemapped_ap1_combined = max(vec4(0.0), ODT(vec4(untonemapped_graded_ap1, y_in), aces_min * ACES_EXPOSURE, aces_max * ACES_EXPOSURE, mat3(1.0)) / ACES_EXPOSURE);
+      vec4 tonemapped_ap1_combined = max(vec4(0.0), ODT(vec4(untonemapped_graded_ap1, y_in), aces_min * ACES_DIFFUSE_WHITE, aces_max * ACES_DIFFUSE_WHITE, mat3(1.0)) / ACES_DIFFUSE_WHITE);
       tonemapped_ap1 = tonemapped_ap1_combined.rgb;
       float y_out = tonemapped_ap1_combined.a;
 
@@ -1269,7 +1269,7 @@ void main() {
       tonemapped_ap1 = luminance_tonemapped_ap1;
 
     } else {
-      tonemapped_ap1 = max(vec3(0.0), ODT(untonemapped_graded_ap1, aces_min * ACES_EXPOSURE, aces_max * ACES_EXPOSURE, mat3(1.0)) / ACES_EXPOSURE);
+      tonemapped_ap1 = max(vec3(0.0), ODT(untonemapped_graded_ap1, aces_min * ACES_DIFFUSE_WHITE, aces_max * ACES_DIFFUSE_WHITE, mat3(1.0)) / ACES_DIFFUSE_WHITE);
     }
 
     vec3 tonemapped_bt709 = AP1_TO_BT709_MAT * tonemapped_ap1;
