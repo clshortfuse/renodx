@@ -1,6 +1,6 @@
 // UI Back layer (With alpha)
 
-#include "./shared.h"
+#include "../shared.h"
 
 Texture2D<float4> t0 : register(t0);
 

@@ -1,6 +1,5 @@
 // motion blur + effect
 
-#include "./shared.h"
 #include "./tonemapper.hlsl"
 
 Texture2D<float4> t0 : register(t0);

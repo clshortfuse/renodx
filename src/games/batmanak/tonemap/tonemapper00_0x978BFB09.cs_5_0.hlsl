@@ -1,6 +1,5 @@
 // Used for motion blur
 
-#include "./shared.h"
 #include "./tonemapper.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Mon Mar  4 16:16:30 2024
