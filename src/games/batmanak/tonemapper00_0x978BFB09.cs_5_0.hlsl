@@ -209,14 +209,14 @@ void main(uint3 vThreadGroupID: SV_GroupID, uint3 vThreadID: SV_DispatchThreadID
       if (CUSTOM_FILM_GRAIN_STRENGTH != 0) {
         float3 grainedColor;
         if (CUSTOM_FILM_GRAIN_TYPE == 0) {
-          float3 grainInputColor = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);
+          float3 grainInputColor = renodx::color::srgb::EncodeSafe(outputColor);
           float3 invertedColor = 1.f - saturate(grainInputColor);
           float3 clampedColor = min(1.f, invertedColor * invertedColor);
           float3 modulatedStrength = clampedColor * cb0[11].zzz * CUSTOM_FILM_GRAIN_STRENGTH;
           float3 grainEffect = mad(modulatedStrength, (randomnessFactor - 0.334f), 1.f);
 
           grainedColor = grainEffect * grainInputColor;
-          grainedColor = renodx::color::gamma::DecodeSafe(grainedColor, 2.2f);
+          grainedColor = renodx::color::srgb::DecodeSafe(grainedColor);
         } else {
           grainedColor = renodx::effects::ApplyFilmGrain(
               outputColor,
