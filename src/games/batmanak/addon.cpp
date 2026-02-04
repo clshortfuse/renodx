@@ -35,6 +35,38 @@ bool OnToneMapDraw(reshade::api::command_list* cmd_list) {
   return true;
 }
 
+#define UpgradeRTVReplaceShader(value)                                                   \
+  {                                                                                      \
+      value,                                                                             \
+      {                                                                                  \
+          .crc32 = value,                                                                \
+          .code = __##value,                                                             \
+          .on_draw = [](auto* cmd_list) {                                                \
+            auto& rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);           \
+            auto& dsv = renodx::utils::swapchain::GetDepthStencil(cmd_list);             \
+            bool changed = false;                                                        \
+                                                                                         \
+            for (auto rtv : rtvs) {                                                      \
+              if (rtv.handle == 0u) continue;                                            \
+              auto* view_info = renodx::utils::resource::GetResourceViewInfo(rtv);       \
+              if (view_info == nullptr || view_info->resource_info == nullptr) continue; \
+              const auto& desc = view_info->resource_info->desc;                         \
+              if (desc.texture.format != reshade::api::format::r8g8b8a8_unorm) continue; \
+              if (desc.texture.width != 256 || desc.texture.height != 16) continue;      \
+                                                                                         \
+              changed |= renodx::mods::swapchain::ActivateCloneHotSwap(                  \
+                  cmd_list->get_device(), rtv);                                          \
+            }                                                                            \
+                                                                                         \
+            if (changed) {                                                               \
+              renodx::mods::swapchain::RewriteRenderTargets(                             \
+                  cmd_list, static_cast<uint32_t>(rtvs.size()), rtvs.data(), dsv);       \
+            }                                                                            \
+            return true;                                                                 \
+          },                                                                             \
+      },                                                                                 \
+  }
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntryCallback(0x2C2D0899, [](reshade::api::command_list* cmd_list) {
       shader_injection.custom_has_drawn_menu = 1.f;
@@ -67,6 +99,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntryCallback(0xF01CCC7E, &OnToneMapDraw),  // tonemap + fx
     CustomShaderEntryCallback(0x3A4E0B90, &OnToneMapDraw),  // tonemap + fx + motionblur
     CustomShaderEntry(0xB42A7F40),                          // lens flare
+
+    // LUTbuilders
+    UpgradeRTVReplaceShader(0x232847C5),  // 0 LUTs
+    UpgradeRTVReplaceShader(0xDBD2D46F),  // 1 LUT
+    UpgradeRTVReplaceShader(0x530CF312),  // 2 LUTs
+    UpgradeRTVReplaceShader(0xF841E639),  // 3 LUTs
+    UpgradeRTVReplaceShader(0xF02EB01C),  // 4 LUTs
+
 };
 
 renodx::utils::settings::Settings settings = {
@@ -235,17 +275,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeLUTScaling",
-        .binding = &shader_injection.custom_lut_scaling,
-        .default_value = 100.f,
-        .label = "LUT Scaling",
-        .section = "Color Grading",
-        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTSampling",
         .binding = &shader_injection.custom_lut_tetrahedral,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -326,7 +355,6 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSettings({
               {"ToneMapScaling", 1.f},
               {"ToneMapHueCorrection", 0.f},
-              {"ColorGradeLUTScaling", 0.f},
               {"ColorGradeLUTSampling", 0.f},
               {"FxFilmGrainType", 0.f},
           });
@@ -380,28 +408,29 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
-  renodx::utils::settings::UpdateSetting("ToneMapScaling", 1.f);
-  renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 0);
-  renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeLUTSampling", 0.f);
-  renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
-  renodx::utils::settings::UpdateSetting("FxLensFlare", 50.f);
-  renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
-  renodx::utils::settings::UpdateSetting("FxFilmGrainType", 0.f);
-  renodx::utils::settings::UpdateSetting("FxFilmGrain", 50.f);
+  renodx::utils::settings::UpdateSettings({
+      {"ToneMapType", 0.f},
+      {"ToneMapPeakNits", 203.f},
+      {"ToneMapGameNits", 203.f},
+      {"ToneMapUINits", 203.f},
+      {"ToneMapScaling", 1.f},
+      {"ToneMapGammaCorrection", 0},
+      {"ToneMapHueCorrection", 0.f},
+      {"colorGradeExposure", 1.f},
+      {"ColorGradeHighlights", 50.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeContrast", 50.f},
+      {"ColorGradeSaturation", 50.f},
+      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeFlare", 0.f},
+      {"ColorGradeLUTStrength", 100.f},
+      {"ColorGradeLUTSampling", 0.f},
+      {"FxBloom", 50.f},
+      {"FxLensFlare", 50.f},
+      {"FxVignette", 50.f},
+      {"FxFilmGrainType", 0.f},
+      {"FxFilmGrain", 50.f},
+  });
 }
 
 bool fired_on_init_swapchain = false;
@@ -455,6 +484,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .use_resource_view_cloning = true,
           .use_resource_view_hot_swap = true,
           .usage_include = reshade::api::resource_usage::unordered_access,
+      });
+
+      // upgrade LUTbuilders
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = true,
+          .dimensions = {.width = 256, .height = 16},
+          .usage_include = reshade::api::resource_usage::render_target,
       });
 
       renodx::mods::swapchain::use_resource_cloning = true;
