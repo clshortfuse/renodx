@@ -25,7 +25,7 @@ dcl_constantbuffer CB1[259], dynamicIndexed
 dcl_constantbuffer CB2[5], immediateIndexed
 dcl_constantbuffer CB3[5], immediateIndexed
 dcl_constantbuffer CB4[4], immediateIndexed
-dcl_constantbuffer CB13[13], immediateIndexed
+dcl_constantbuffer CB13[14], immediateIndexed
 dcl_sampler s0, mode_default
 dcl_sampler s1, mode_default
 dcl_sampler s2, mode_default
@@ -958,6 +958,7 @@ and r2.w, r2.w, r3.y
 and r1.y, r1.y, r2.w
 mul r15.xyz, r17.xyzx, cb0[111].xxxx
 dp3 r2.w, r15.xyzx, l(0.212672904, 0.715152204, 0.072175, 0.000000)
+mov r23.w, r2.w  // Store ambient luminance for cubemap modulation
 mov r5.w, l(1.000000)
 mov r12.w, l(1.000000)
 mov r15.xyz, l(0,0,0,0)
@@ -1090,6 +1091,12 @@ if_nz r4.w
 endif
 mul r2.xyz, r15.xyzx, cb0[112].zzzz
 mul r2.xyz, r2.xyzx, cb0[111].yyyy
+// Cubemap ambient link modulation (cb13[13].w)
+if_nz cb13[13].w
+  max r23.w, r23.w, l(0.000000)  // saturate step 1
+  min r23.w, r23.w, l(1.000000)  // saturate step 2
+  mul r2.xyz, r2.xyzx, r23.wwww  // cubemap *= saturate(ambient_luminance)
+endif
 if_nz r3.z
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t3.yzxw, s1, cb0[108].x
   sample_b_indexable(texture2d)(float,float,float,float) r12.xyz, v1.xyxx, t2.xyzw, s1, cb0[108].x
