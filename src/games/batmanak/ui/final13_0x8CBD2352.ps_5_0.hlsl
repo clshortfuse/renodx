@@ -1,6 +1,8 @@
-#include "./shared.h"
+#include "../shared.h"
 
-cbuffer cb0 : register(b0) { float4 cb0[43]; }
+cbuffer cb0 : register(b0) {
+  float4 cb0[47];
+}
 
 // 3Dmigoto declarations
 #define cmp -
@@ -13,17 +15,17 @@ void main(float4 v0 : TEXCOORD10, float4 v1 : TEXCOORD11, float2 v2 : TEXCOORD0,
   r0.x = dot(v6.xyz, v6.xyz);
   r0.x = sqrt(r0.x);
   r0.x = cmp(0 < r0.x);
-  r0.yzw = cb0[40].xyz + -v5.xyz;
+  r0.yzw = cb0[44].xyz + -v5.xyz;
   r1.x = dot(r0.yzw, r0.yzw);
-  r0.yzw = r0.yzw / cb0[41].www;
+  r0.yzw = r0.yzw / cb0[45].www;
   r0.y = dot(r0.yzw, r0.yzw);
   r0.y = min(1, r0.y);
   r0.y = 1 + -r0.y;
   r0.z = sqrt(r1.x);
-  r0.z = cmp(r0.z < cb0[42].x);
+  r0.z = cmp(r0.z < cb0[46].x);
   r0.x = r0.x ? r0.z : 0;
   r0.x = r0.x ? r0.y : 0;
-  o0.xyz = cb0[42].yzw * r0.xxx;
+  o0.xyz = cb0[46].yzw * r0.xxx;
   o0.w = r0.x;
 
   o0.rgb = saturate(o0.rgb);

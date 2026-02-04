@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 
 Texture2D<float4> t1 : register(t1);
 

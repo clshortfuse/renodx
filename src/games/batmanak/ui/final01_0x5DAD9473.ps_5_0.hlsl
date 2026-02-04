@@ -1,6 +1,6 @@
 // Some UI effects
 
-#include "./shared.h"
+#include "../shared.h"
 
 cbuffer cb0 : register(b0) {
   float4 cb0[6];
