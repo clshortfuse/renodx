@@ -8,6 +8,7 @@
 #define DEBUG_LEVEL_0
 
 #include <shared_mutex>
+#include <sstream>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -44,6 +45,85 @@ bool UsingSwapchainUtil() {
           || UsingSwapchainUpgrade());
 }
 
+// Helper to update resolution-based uniform variables in ReShade effects
+void UpdateReshadeResolutionUniforms(reshade::api::effect_runtime* runtime, uint32_t width, uint32_t height) {
+  float fwidth = static_cast<float>(width);
+  float fheight = static_cast<float>(height);
+  
+  // Enumerate all uniform variables and update those with resolution-related source annotations
+  runtime->enumerate_uniform_variables(nullptr, [fwidth, fheight](reshade::api::effect_runtime* rt, reshade::api::effect_uniform_variable variable) {
+    char source[64] = {};
+    if (rt->get_annotation_string_from_uniform_variable(variable, "source", source)) {
+      // Update BUFFER_WIDTH uniform
+      if (std::strcmp(source, "bufwidth") == 0) {
+        rt->set_uniform_value_float(variable, fwidth);
+      }
+      // Update BUFFER_HEIGHT uniform
+      else if (std::strcmp(source, "bufheight") == 0) {
+        rt->set_uniform_value_float(variable, fheight);
+      }
+      // Update reciprocal width (1.0 / BUFFER_WIDTH)
+      else if (std::strcmp(source, "rcpwidth") == 0 || std::strcmp(source, "bufwidth_rcp") == 0) {
+        rt->set_uniform_value_float(variable, 1.0f / fwidth);
+      }
+      // Update reciprocal height (1.0 / BUFFER_HEIGHT) 
+      else if (std::strcmp(source, "rcpheight") == 0 || std::strcmp(source, "bufheight_rcp") == 0) {
+        rt->set_uniform_value_float(variable, 1.0f / fheight);
+      }
+      // Update BUFFER_RCP_WIDTH (alternative naming convention)
+      else if (std::strcmp(source, "buffer_rcp_width") == 0) {
+        rt->set_uniform_value_float(variable, 1.0f / fwidth);
+      }
+      // Update BUFFER_RCP_HEIGHT (alternative naming convention)
+      else if (std::strcmp(source, "buffer_rcp_height") == 0) {
+        rt->set_uniform_value_float(variable, 1.0f / fheight);
+      }
+      // Update pixel size (float2 with 1/width, 1/height)
+      else if (std::strcmp(source, "pixelsize") == 0) {
+        float pixel_size[2] = { 1.0f / fwidth, 1.0f / fheight };
+        rt->set_uniform_value_float(variable, pixel_size, 2);
+      }
+      // Update screen size (float2 with width, height)
+      else if (std::strcmp(source, "screensize") == 0) {
+        float screen_size[2] = { fwidth, fheight };
+        rt->set_uniform_value_float(variable, screen_size, 2);
+      }
+    }
+  });
+}
+
+// Track the last known RTV resolution to detect resolution changes
+static uint32_t last_rtv_width = 0;
+static uint32_t last_rtv_height = 0;
+
+// Flag to track if we're currently executing our bypass render
+// This prevents ReShade from rendering during normal present while allowing our bypass to work
+static bool bypass_render_active = false;
+
+// Callback to disable effects during normal present when bypass is enabled
+// This prevents double-rendering (once via bypass, once via normal present)
+void OnReshadeBeginEffects(reshade::api::effect_runtime* runtime, 
+                           reshade::api::command_list* cmd_list,
+                           reshade::api::resource_view rtv, 
+                           reshade::api::resource_view rtv_srgb) {
+  // Only intercept if bypass is enabled AND we're not currently in bypass render
+  // When bypass is disabled (current_render_reshade_before_ui == 0), let ReShade render normally
+  if (current_render_reshade_before_ui != 0.f && !bypass_render_active) {
+    runtime->set_effects_state(false);
+  }
+}
+
+// Callback to re-enable effects after present (keeps effects available for bypass)
+void OnReshadeFinishEffects(reshade::api::effect_runtime* runtime,
+                            reshade::api::command_list* cmd_list,
+                            reshade::api::resource_view rtv,
+                            reshade::api::resource_view rtv_srgb) {
+  // Only re-enable if bypass is enabled AND we disabled them
+  if (current_render_reshade_before_ui != 0.f && !bypass_render_active) {
+    runtime->set_effects_state(true);
+  }
+}
+
 bool ExecuteReshadeEffects(reshade::api::command_list* cmd_list) {
   if (current_render_reshade_before_ui == 0.f) return true;
   if (!UsingSwapchainUtil()) return true;
@@ -52,42 +132,65 @@ bool ExecuteReshadeEffects(reshade::api::command_list* cmd_list) {
   if (cmd_list_data == nullptr) return true;
   if (cmd_list_data->current_render_targets.empty()) return true;
 
+  // Get the ORIGINAL RTV from deferred lighting - do NOT use the clone here
+  // The clone is at swapchain resolution (e.g., 3840x2160) but we want to render
+  // ReShade effects at the pre-upscale resolution
   auto rtv0 = cmd_list_data->current_render_targets[0];
   if (rtv0.handle == 0) return true;
-  if (UsingSwapchainUpgrade()) {
-    auto* info = renodx::utils::resource::GetResourceViewInfo(rtv0);
-    if (info->clone.handle != 0u) {
-      rtv0 = info->clone;
-    }
-  }
-
-  auto* data = renodx::utils::data::Get<renodx::utils::swapchain::DeviceData>(cmd_list->get_device());
+  auto* device = cmd_list->get_device();
+  auto* data = renodx::utils::data::Get<renodx::utils::swapchain::DeviceData>(device);
   if (data == nullptr) return true;
+
+  // Get the render target resolution
+  auto resource = device->get_resource_from_view(rtv0);
+  auto resource_desc = device->get_resource_desc(resource);
+  uint32_t rtv_width = resource_desc.texture.width;
+  uint32_t rtv_height = resource_desc.texture.height;
+
   const std::shared_lock lock(data->mutex);
   for (auto* runtime : data->effect_runtimes) {
+    if (rtv_width != last_rtv_width || rtv_height != last_rtv_height) {
+      uint32_t swapchain_width = 0, swapchain_height = 0;
+      runtime->get_screenshot_width_and_height(&swapchain_width, &swapchain_height);
+      
+      std::stringstream ss;
+      ss << "[Endfield] ExecuteReshadeEffects: Rendering at RTV=" << rtv_width << "x" << rtv_height 
+         << " (Swapchain=" << swapchain_width << "x" << swapchain_height << ")";
+      reshade::log::message(reshade::log::level::info, ss.str().c_str());
+      
+      last_rtv_width = rtv_width;
+      last_rtv_height = rtv_height;
+    }
+    
+    UpdateReshadeResolutionUniforms(runtime, rtv_width, rtv_height);
+    bypass_render_active = true;
+    runtime->set_effects_state(true);
     runtime->render_effects(cmd_list, rtv0, rtv0);
+    bypass_render_active = false;
   }
 
   return true;
 }
 
-// Hotkey state tracking (defined before settings array for use in on_draw lambdas)
+// Hotkey state tracking
 bool ui_toggle_key_was_pressed = false;
 int ui_toggle_hotkey = 0;
 bool hotkey_input_active = false;
 
-// Heuristic tracking for ping/UID UI
+// Heuristic tracking for UID UI
 bool is_ping_input_candidate = false;
 bool is_ping_drawn = false;
 bool is_uid_input_candidate = false;
+uint32_t draw_call_vertex_count = 0;  // Track vertex count from draw calls (not draw_indexed)
 
 // on_draw callback for ping/latency bar shader (0xEF07F89A)
+// Only used to set is_ping_drawn flag for UID detection - latency bar icon hiding is done in vertex shader
 bool OnPingDraw(reshade::api::command_list* cmd_list) {
   if (is_ping_input_candidate) {
     is_ping_drawn = true;
-    return shader_injection.ping_text_opacity >= 0.5f;
+  } else {
+    is_ping_drawn = false;
   }
-  is_ping_drawn = false;
   return true;
 }
 
@@ -656,6 +759,16 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "On"},
     },
     new renodx::utils::settings::Setting{
+        .key = "DisableGameAO",
+        .binding = &shader_injection.disable_game_ao,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Disable Game GTAO",
+        .section = "Effects",
+        .tooltip = "Disables the game's built-in GTAO (Ground Truth Ambient Occlusion).\nUseful when using ReShade-based AO instead.",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "HDRSun",
         .binding = &shader_injection.sun_intensity,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -695,6 +808,37 @@ renodx::utils::settings::Settings settings = {
         .section = "Rendering Improvements",
         .tooltip = "Toggles alternative hue-preserving fog",
         .labels = {"Original", "Alt"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "MetallicIBLIntensity",
+        .binding = &shader_injection.metallic_ibl_intensity,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Metallic IBL Intensity",
+        .section = "Rendering Improvements",
+        .tooltip = "Controls image-based lighting intensity on metallic surfaces",
+        .labels = {"Vanilla", "Alt"},
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CubemapAmbientLink",
+        .binding = &shader_injection.cubemap_ambient_link,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Cubemap Ambient Link",
+        .section = "Rendering Improvements",
+        .tooltip = "Modulates cubemap reflections by ambient luminance",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "GlassTransparency",
+        .binding = &shader_injection.glass_transparency,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Glass Transparency",
+        .section = "Rendering Improvements",
+        .tooltip = "Improves glass rendering to look more transparent and less cloudy/glowing",
+        .labels = {"Vanilla", "Improved"},
     },
     new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
@@ -835,6 +979,17 @@ void OnPresetOff() {
   //   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
 }
 
+// OnDraw handler to track vertex count from draw calls
+bool OnDraw(
+    reshade::api::command_list* cmd_list,
+    uint32_t vertex_count,
+    uint32_t instance_count,
+    uint32_t first_vertex,
+    uint32_t first_instance) {
+  draw_call_vertex_count = vertex_count;
+  return false; 
+}
+
 // OnDrawIndexed event handler for heuristic-based ping/UID detection
 bool OnDrawIndexed(
     reshade::api::command_list* cmd_list,
@@ -843,13 +998,34 @@ bool OnDrawIndexed(
     uint32_t first_index,
     int32_t vertex_offset,
     uint32_t first_instance) {
-  // Detect ping/latency bar: drawn with index_count=18, first_index=0, vertex_offset=0
-  is_ping_input_candidate = ((index_count == 18) && (first_index == 0) && (vertex_offset == 0));
+  // Constants for ping/latency bar detection
+  constexpr uint32_t PING_INDEX_COUNT = 18;
+  constexpr uint32_t PING_FIRST_INDEX = 0;
+  constexpr int32_t PING_VERTEX_OFFSET = 0;
 
-  // Detect UID text: drawn right after ping (first_index=18) when ping was drawn
-  is_uid_input_candidate = ((first_index == 18) && is_ping_drawn);
+  // Detect ping/latency bar
+  // This distinguishes it from menu backgrounds that also have 18 indices but have a preceding draw
+  is_ping_input_candidate = (index_count == PING_INDEX_COUNT) &&
+                            (first_index == PING_FIRST_INDEX) &&
+                            (vertex_offset == PING_VERTEX_OFFSET) &&
+                            (draw_call_vertex_count == 0);
 
-  return false;  // Don't skip the draw call
+  // Constants for UID text detection
+  constexpr uint32_t UID_FIRST_INDEX = 18;
+  constexpr uint32_t UID_MIN_INDEX_COUNT = 100;
+  constexpr int32_t UID_VERTEX_OFFSET = 12;
+
+  // Detect UID text: drawn right after ping with specific parameters
+  // Use is_ping_drawn (set by OnPingDraw) since ping shader draws before UID shader
+  is_uid_input_candidate = (first_index == UID_FIRST_INDEX) &&
+                           (index_count > UID_MIN_INDEX_COUNT) &&
+                           (vertex_offset == UID_VERTEX_OFFSET) &&
+                           is_ping_drawn;
+
+  // Reset vertex count after processing
+  draw_call_vertex_count = 0;
+
+  return false; 
 }
 
 void OnPresent(reshade::api::command_queue* queue,
@@ -867,6 +1043,7 @@ void OnPresent(reshade::api::command_queue* queue,
   is_ping_input_candidate = false;
   is_uid_input_candidate = false;
   is_ping_drawn = false;
+  draw_call_vertex_count = 0;
 
   // Check UI visibility hotkey (skip if user is currently setting a new hotkey)
   if (ui_toggle_hotkey != 0 && !hotkey_input_active) {
@@ -990,6 +1167,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             shader_injection.custom_flip_uv_y = 0.f;
           }
           reshade::register_event<reshade::addon_event::present>(OnPresent);
+          // Register callbacks to ALWAYS disable ReShade during normal present
+          // This ensures ReShade only ever renders at internal resolution via bypass
+          reshade::register_event<reshade::addon_event::reshade_begin_effects>(OnReshadeBeginEffects);
+          reshade::register_event<reshade::addon_event::reshade_finish_effects>(OnReshadeFinishEffects);
           settings.push_back(setting);
         }
 
@@ -1067,6 +1248,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         });
         */
         const uint32_t target_crcs[] = {
+        // Enviroment deferred (doesnt apply to grass/foliage)
+        /* 
+          0xD88CD7C9u,
+          0x1E8A471Eu,
+          0x8BA3C806u,
+          0x7010AF4Bu,
+          0x0E84DFD1u,
+          0x99725481u,
+          0xA4113DE8u,
+        };
+        */    
+ 
+      // grass/foliage deferred (grass, plants, trees will be included in AO)
+        
         0x37837806u,
         0xD3FA93FCu,
         0x620A40FDu,
@@ -1074,8 +1269,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         0xB094C87Eu,
         0xF901F0ECu,
         0x518D3855u,
-        };
+        0xBD99F0C4u,
+        };  
 
+      // Uberpost
         /*  
         0x00C16AFBu,
         0x039C28DAu,
@@ -1107,6 +1304,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         0xF8FA587Fu,
         */
 
+
         for (uint32_t crc : target_crcs) {
           // Ensure an entry exists for the shader hash even if we don't have compiled HLSL
           auto it = custom_shaders.find(crc);
@@ -1136,7 +1334,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           }
         }
 
-        // Register draw_indexed event for heuristic ping/UID detection
+        // Register draw and draw_indexed events for heuristic ping/UID detection
+        reshade::register_event<reshade::addon_event::draw>(OnDraw);
         reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
 
         initialized = true;
@@ -1144,8 +1343,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::draw>(OnDraw);
       reshade::unregister_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      reshade::unregister_event<reshade::addon_event::reshade_begin_effects>(OnReshadeBeginEffects);
+      reshade::unregister_event<reshade::addon_event::reshade_finish_effects>(OnReshadeFinishEffects);
       reshade::unregister_addon(h_module);
       break;
   }
