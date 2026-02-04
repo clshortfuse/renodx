@@ -372,13 +372,13 @@ void main(
       r0.y = -1 + r0.y;
       r0.y = cb0[175].z * r0.y + 1;
 
-      if (SHADOW_HARDENING >= 1.f) {  
-        r0.y = 1.0 + (r0.y - 1.0) * 2.0;
-        
-        // Soften cloud shadow transitions for diffused look
-        //r0.y = smoothstep(0.0, 1.0, r0.y);
-        //r0.y = lerp(r0.y, 1.0, 0.25);
-      }
+      //if (SHADOW_HARDENING >= 1.f) {  
+      //  r0.y = 1.0 + (r0.y - 1.0) * 2.0;
+      //  
+      //  // Soften cloud shadow transitions for diffused look
+      //  //r0.y = smoothstep(0.0, 1.0, r0.y);
+      //  //r0.y = lerp(r0.y, 1.0, 0.25);
+      //}
       
       r0.x = r0.x * r0.y;
     }
