@@ -6,6 +6,7 @@
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP        20.f
+#define RENODX_RENO_DRT_WHITE_CLIP                    100.f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -61,7 +62,7 @@ cbuffer cb13 : register(b13) {
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define CUSTOM_TONE_MAP_STRATEGY             shader_injection.custom_tone_map_strategy
 #define CUSTOM_LUT_STRENGTH                  shader_injection.custom_lut_strength
-#define CUSTOM_LUT_SCALING                   shader_injection.custom_lut_scaling
+#define CUSTOM_LUT_SCALING                   0.f
 #define CUSTOM_LUT_TETRAHEDRAL               shader_injection.custom_lut_tetrahedral
 #define CUSTOM_LENS_FLARE                    shader_injection.custom_lens_flare
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
