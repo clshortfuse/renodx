@@ -45,7 +45,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
         color_output = renodx::color::correct::Hue(color_output, untonemapped, RENODX_TONE_MAP_HUE_CORRECTION);
 
         if (CUSTOM_LUT_STRENGTH != 0.f) {
-          float scale = ComputeReinhardSmoothClampScale(color_output, 0.4f);
+          float scale = ComputeReinhardSmoothClampScale(color_output);
 
           color_output *= scale;
           color_output = renodx::lut::Sample(lut_texture, CreateLUTConfig(lut_sampler), color_output);
