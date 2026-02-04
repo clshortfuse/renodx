@@ -79,6 +79,8 @@ struct ShaderInjectData {
   float reno_drt_tone_map_method;
   float status_text_opacity;
   float ping_text_opacity;
+  float ui_disable_ping;
+  float ui_disable_uid;
   float custom_random;
   float custom_grain_strength;
   float vignette_strength;
@@ -87,9 +89,14 @@ struct ShaderInjectData {
   float bloom_strength;
   float godrays_intensity;
   float perchannelblowout;
+  float fog_modification;        
   float shadow_hardening;
   float chromatic_aberration_strength;
-  float fog_modification;
+  float disable_game_ao;
+  float ssr_gi_intensity; 
+  float metallic_ibl_intensity;
+  float cubemap_ambient_link;
+  float glass_transparency;  
 };
 
 #ifndef __cplusplus
@@ -149,6 +156,7 @@ cbuffer shader_injection : register(b13) {
 #define SHADOW_HARDENING                       shader_injection.shadow_hardening
 #define CHROMATIC_ABERRATION_STRENGTH          shader_injection.chromatic_aberration_strength
 #define FOG_MODIFICATION                       shader_injection.fog_modification
+#define GLASS_TRANSPARENCY                     shader_injection.glass_transparency
 
 #include "../../shaders/renodx.hlsl"
 

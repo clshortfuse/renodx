@@ -380,13 +380,15 @@ void main(uint3 vThreadIDInGroup : SV_GroupThreadID, uint3 vThreadGroupID : SV_G
   r0.y = saturate(r1.w * cb1[0].z + r0.y);
   r0.y = min(r0.y, r2.y);
   r0.y = -1 + r0.y;
-  r5.yw = r1.xy * cb1[3].zw + float2(-0.5,-0.5);
-  r5.yw = abs(r5.yw) * float2(12,12) + float2(-4.80000019,-4.80000019);
-  r5.yw = max(float2(0,0), r5.yw);
-  r1.w = dot(r5.yw, r5.yw);
-  r1.w = 1 + -r1.w;
-  r1.w = max(0, r1.w);
-  r0.y = r1.w * r0.y;
+
+  // Removed screen edge fade for contact shadows
+  // r5.yw = r1.xy * cb1[3].zw + float2(-0.5,-0.5);
+  // r5.yw = abs(r5.yw) * float2(12,12) + float2(-4.80000019,-4.80000019);
+  // r5.yw = max(float2(0,0), r5.yw);
+  // r1.w = dot(r5.yw, r5.yw);
+  // r1.w = 1 + -r1.w;
+  // r1.w = max(0, r1.w);
+  // r0.y = r1.w * r0.y;
 
   if (SHADOW_HARDENING>= 1.f) {
     r0.y = r0.y * 4.0;
