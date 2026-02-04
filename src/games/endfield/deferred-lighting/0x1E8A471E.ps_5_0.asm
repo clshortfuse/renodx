@@ -1347,7 +1347,8 @@ mul r3.xyz, r3.xyzx, cb0[111].yyyy
 if_nz cb13[13].w
   max r35.w, r35.w, l(0.000000)  // saturate step 1
   min r35.w, r35.w, l(1.000000)  // saturate step 2
-  mul r3.xyz, r3.xyzx, r35.wwww  // cubemap *= saturate(ambient_luminance)
+  mad r35.w, r35.w, l(0.850000), l(0.150000)  // lerp(0.15, 1.0, ambient) = 0.15 + 0.85*ambient
+  mul r3.xyz, r3.xyzx, r35.wwww  // cubemap *= lerp(0.15, 1.0, saturate(ambient_luminance))
 endif
 if_nz r4.w
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t3.yzxw, s1, cb0[108].x
