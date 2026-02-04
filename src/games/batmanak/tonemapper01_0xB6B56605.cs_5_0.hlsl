@@ -19,7 +19,8 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-[numthreads(16, 16, 1)] void main(uint3 vThreadGroupID : SV_GroupID, uint3 vThreadID : SV_DispatchThreadID) {
+[numthreads(16, 16, 1)]
+void main(uint3 vThreadGroupID: SV_GroupID, uint3 vThreadID: SV_DispatchThreadID) {
   // Needs manual fix for instruction:
   // unknown dcl_: dcl_uav_typed_texture2d (float,float,float,float) u0
   float4 r0, r1, r2, r3, r4;
@@ -140,7 +141,7 @@ cbuffer cb0 : register(b0) {
         r2.xyz = r1.zzz * r2.xyz;
         float3 randomnessFactor = frac(r2.xyz);
         if (CUSTOM_FILM_GRAIN_TYPE == 0) {
-          float3 grainInputColor = renodx::color::gamma::EncodeSafe(outputColor, 2.2f);
+          float3 grainInputColor = renodx::color::srgb::EncodeSafe(outputColor);
           float3 invertedColor = 1.f - saturate(grainInputColor);
           float3 clampedColor = min(1.f, invertedColor * invertedColor);
           float3 modulatedStrength = clampedColor * cb0[11].zzz * CUSTOM_FILM_GRAIN_STRENGTH;
@@ -156,7 +157,7 @@ cbuffer cb0 : register(b0) {
           float3 grainEffect = mad(modulatedStrength, (randomnessFactor - 0.334f), 1.f);
 
           grainedColor = grainEffect * grainInputColor;
-          grainedColor = renodx::color::gamma::DecodeSafe(grainedColor, 2.2f);
+          grainedColor = renodx::color::srgb::DecodeSafe(grainedColor);
         } else {
           grainedColor = renodx::effects::ApplyFilmGrain(
               outputColor,
