@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 #include "./uncharted2extended.hlsli"
 
 renodx::lut::Config CreateLUTConfig(SamplerState lut_sampler) {
