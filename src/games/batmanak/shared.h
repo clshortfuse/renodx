@@ -7,6 +7,8 @@
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP        20.f
 #define RENODX_RENO_DRT_WHITE_CLIP                    100.f
+#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE             renodx::color::convert::COLOR_SPACE_AP1
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE           renodx::color::convert::COLOR_SPACE_BT2020
 
 // Must be 32bit aligned
 // Should be 4x32
