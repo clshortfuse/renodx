@@ -101,7 +101,7 @@ float3 applyUserToneMap(float3 untonemapped, Texture2D lut_texture, SamplerState
 
     untonemapped *= vanilla_mid_gray / 0.18f;  // match midgray
 
-    return renodx::draw::ToneMapPass(untonemapped, tonemapped_graded);
+    color_output = renodx::draw::ToneMapPass(untonemapped, tonemapped_graded);
   }
 
   return color_output;
