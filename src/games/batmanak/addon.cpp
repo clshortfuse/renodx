@@ -362,6 +362,21 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Look",
+        .section = "Color Grading Templates",
+        .group = "Templates",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ColorGradeExposure", 1.35f},
+              {"ColorGradeContrast", 55.f},
+              {"ColorGradeSaturation", 60.f},
+              {"ColorGradeBlowout", 50.f},
+          });
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
         .group = "button-line-1",
@@ -416,7 +431,7 @@ void OnPresetOff() {
       {"ToneMapScaling", 1.f},
       {"ToneMapGammaCorrection", 0},
       {"ToneMapHueCorrection", 0.f},
-      {"colorGradeExposure", 1.f},
+      {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 50.f},
