@@ -1,5 +1,7 @@
 #include "./shared.h"
 
+#define WUWA_PEAK_SCALING (RENODX_PEAK_NITS / RENODX_GAME_NITS)
+
 #define APPLY_BLOOM(c) (c).rgb *= RENODX_WUWA_BLOOM
 
 #define WUWA_TM_IS(N) ((uint)(RENODX_WUWA_TM) == (N))
@@ -13,8 +15,17 @@
 #define CAPTURE_TONEMAPPED(c) const float3 tonemapped = (c).rgb
 
 #define HANDLE_LUT_OUTPUT(c) (c).rgb = HandleLUTOutput((c).rgb, untonemapped, tonemapped)
+#define HANDLE_LUT_OUTPUT3(c1, c2, c3) { \
+    float3 lut_output = float3(c1, c2, c3); \
+    lut_output = HandleLUTOutput(lut_output, untonemapped, tonemapped); \
+    c1 = lut_output.r; c2 = lut_output.g; c3 = lut_output.b; \
+}
+
 #define HANDLE_LUT_OUTPUT_FADE(c, tex, samp) (c).rgb = HandleLUTOutput((c).rgb, untonemapped, tonemapped, tex, samp)
 
+#define GENERATE_INVERSION(c1, c2, c3) \
+    const float3 inverted = renodx::draw::InvertIntermediatePass(float3(c1, c2, c3)); \
+    c1 = inverted.r; c2 = inverted.g; c3 = inverted.b;
 
 namespace wuwa {
 
@@ -27,6 +38,9 @@ static const float3x3 DCIP3_to_BT2020_MAT = float3x3(
 }
 
 static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, float3 tonemapped) {
+  // Reverse the output shader's post-LUT scaling.
+  lut_output /= 1.0499999523162842f;
+
   CLAMP_IF_SDR(lut_output);
 
   lut_output = renodx::draw::InvertIntermediatePass(lut_output);
@@ -93,11 +107,11 @@ static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, flo
     float min_c = min(c.r, min(c.g, c.b));
     max_chroma = max(max_chroma, max_c - min_c);
   }
-  
+
   float fade_amount = 1.0f - smoothstep(0.0f, 0.05f, max_chroma);
   float3 graded_output = HandleLUTOutput(lut_output, untonemapped, tonemapped);
   float3 original_output = renodx::draw::RenderIntermediatePass(lut_output);
-  
+
   return lerp(graded_output, original_output, fade_amount);
 }
 
@@ -116,7 +130,7 @@ static inline float3 AutoHDRVideo(float3 sdr_video) {
   }
   renodx::draw::Config config = renodx::draw::BuildConfig();
   config.peak_white_nits = RENODX_VIDEO_NITS;
-  
+
   float3 hdr_video = renodx::draw::UpscaleVideoPass(saturate(sdr_video), config);
   hdr_video = renodx::color::srgb::DecodeSafe(hdr_video);
   return renodx::draw::RenderIntermediatePass(hdr_video);
