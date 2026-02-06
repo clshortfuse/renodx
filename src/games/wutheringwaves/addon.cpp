@@ -32,6 +32,90 @@ ShaderInjectData shader_injection;
 
 float current_settings_mode = 0;
 
+// Hotkey state tracking
+// Credit: https://github.com/spiwar/renodx/commit/bb4aa4a32f6addaddf3b8ee2d4ee9a9910104da8
+bool ui_toggle_key_was_pressed = false;
+int ui_toggle_hotkey = 0;
+bool hotkey_input_active = false;
+
+std::string GetKeyName(int keycode) {
+  if (keycode == 0 || keycode >= 256) return "";
+
+  static const char* keyboard_keys[256] = {
+    "", "Left Mouse", "Right Mouse", "Cancel", "Middle Mouse", "X1 Mouse", "X2 Mouse", "", "Backspace", "Tab", "", "", "Clear", "Enter", "", "",
+    "Shift", "Control", "Alt", "Pause", "Caps Lock", "", "", "", "", "", "", "Escape", "", "", "", "",
+    "Space", "Page Up", "Page Down", "End", "Home", "Left Arrow", "Up Arrow", "Right Arrow", "Down Arrow", "Select", "", "", "Print Screen", "Insert", "Delete", "Help",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "", "", "", "", "", "",
+    "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Left Windows", "Right Windows", "Apps", "", "Sleep",
+    "Numpad 0", "Numpad 1", "Numpad 2", "Numpad 3", "Numpad 4", "Numpad 5", "Numpad 6", "Numpad 7", "Numpad 8", "Numpad 9", "Numpad *", "Numpad +", "", "Numpad -", "Numpad Decimal", "Numpad /",
+    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16",
+    "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24", "", "", "", "", "", "", "", "",
+    "Num Lock", "Scroll Lock", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "Left Shift", "Right Shift", "Left Control", "Right Control", "Left Menu", "Right Menu", "Browser Back", "Browser Forward", "Browser Refresh", "Browser Stop", "Browser Search", "Browser Favorites", "Browser Home", "Volume Mute", "Volume Down", "Volume Up",
+    "Next Track", "Previous Track", "Media Stop", "Media Play/Pause", "Mail", "Media Select", "Launch App 1", "Launch App 2", "", "", "OEM ;", "OEM +", "OEM ,", "OEM -", "OEM .", "OEM /",
+    "OEM ~", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "", "", "", "OEM [", "OEM \\", "OEM ]", "OEM '", "OEM 8",
+    "", "", "OEM <", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "Attn", "CrSel", "ExSel", "Erase EOF", "Play", "Zoom", "", "PA1", "OEM Clear", ""
+  };
+
+  return keyboard_keys[keycode];
+}
+
+int GetLastKeyPressedImGui() {
+  struct KeyMapping {
+    ImGuiKey imgui_key;
+    int vk_code;
+
+    constexpr KeyMapping(ImGuiKey key, int code) : imgui_key(key), vk_code(code) {}
+  };
+
+  static constexpr auto KEY_MAPPINGS = std::to_array<KeyMapping>({
+    // Function keys
+    {ImGuiKey_F1, VK_F1}, {ImGuiKey_F2, VK_F2}, {ImGuiKey_F3, VK_F3}, {ImGuiKey_F4, VK_F4},
+    {ImGuiKey_F5, VK_F5}, {ImGuiKey_F6, VK_F6}, {ImGuiKey_F7, VK_F7}, {ImGuiKey_F8, VK_F8},
+    {ImGuiKey_F9, VK_F9}, {ImGuiKey_F10, VK_F10}, {ImGuiKey_F11, VK_F11}, {ImGuiKey_F12, VK_F12},
+    // Navigation keys
+    {ImGuiKey_Insert, VK_INSERT}, {ImGuiKey_Delete, VK_DELETE}, {ImGuiKey_Home, VK_HOME}, {ImGuiKey_End, VK_END},
+    {ImGuiKey_PageUp, VK_PRIOR}, {ImGuiKey_PageDown, VK_NEXT},
+    // Arrow keys
+    {ImGuiKey_LeftArrow, VK_LEFT}, {ImGuiKey_RightArrow, VK_RIGHT}, {ImGuiKey_UpArrow, VK_UP}, {ImGuiKey_DownArrow, VK_DOWN},
+    // Special keys
+    {ImGuiKey_Backspace, VK_BACK}, {ImGuiKey_Space, VK_SPACE}, {ImGuiKey_Enter, VK_RETURN},
+    {ImGuiKey_Escape, VK_ESCAPE}, {ImGuiKey_Tab, VK_TAB},
+    {ImGuiKey_Pause, VK_PAUSE}, {ImGuiKey_ScrollLock, VK_SCROLL}, {ImGuiKey_PrintScreen, VK_SNAPSHOT},
+    // Numpad
+    {ImGuiKey_Keypad0, VK_NUMPAD0}, {ImGuiKey_Keypad1, VK_NUMPAD1}, {ImGuiKey_Keypad2, VK_NUMPAD2},
+    {ImGuiKey_Keypad3, VK_NUMPAD3}, {ImGuiKey_Keypad4, VK_NUMPAD4}, {ImGuiKey_Keypad5, VK_NUMPAD5},
+    {ImGuiKey_Keypad6, VK_NUMPAD6}, {ImGuiKey_Keypad7, VK_NUMPAD7}, {ImGuiKey_Keypad8, VK_NUMPAD8},
+    {ImGuiKey_Keypad9, VK_NUMPAD9}, {ImGuiKey_KeypadDecimal, VK_DECIMAL},
+    {ImGuiKey_KeypadDivide, VK_DIVIDE}, {ImGuiKey_KeypadMultiply, VK_MULTIPLY},
+    {ImGuiKey_KeypadSubtract, VK_SUBTRACT}, {ImGuiKey_KeypadAdd, VK_ADD}, {ImGuiKey_KeypadEnter, VK_RETURN},
+    // Letters
+    {ImGuiKey_A, 'A'}, {ImGuiKey_B, 'B'}, {ImGuiKey_C, 'C'}, {ImGuiKey_D, 'D'}, {ImGuiKey_E, 'E'},
+    {ImGuiKey_F, 'F'}, {ImGuiKey_G, 'G'}, {ImGuiKey_H, 'H'}, {ImGuiKey_I, 'I'}, {ImGuiKey_J, 'J'},
+    {ImGuiKey_K, 'K'}, {ImGuiKey_L, 'L'}, {ImGuiKey_M, 'M'}, {ImGuiKey_N, 'N'}, {ImGuiKey_O, 'O'},
+    {ImGuiKey_P, 'P'}, {ImGuiKey_Q, 'Q'}, {ImGuiKey_R, 'R'}, {ImGuiKey_S, 'S'}, {ImGuiKey_T, 'T'},
+    {ImGuiKey_U, 'U'}, {ImGuiKey_V, 'V'}, {ImGuiKey_W, 'W'}, {ImGuiKey_X, 'X'}, {ImGuiKey_Y, 'Y'}, {ImGuiKey_Z, 'Z'},
+    // Numbers
+    {ImGuiKey_0, '0'}, {ImGuiKey_1, '1'}, {ImGuiKey_2, '2'}, {ImGuiKey_3, '3'}, {ImGuiKey_4, '4'},
+    {ImGuiKey_5, '5'}, {ImGuiKey_6, '6'}, {ImGuiKey_7, '7'}, {ImGuiKey_8, '8'}, {ImGuiKey_9, '9'},
+    // Punctuation
+    {ImGuiKey_GraveAccent, VK_OEM_3}, {ImGuiKey_Minus, VK_OEM_MINUS}, {ImGuiKey_Equal, VK_OEM_PLUS},
+    {ImGuiKey_LeftBracket, VK_OEM_4}, {ImGuiKey_RightBracket, VK_OEM_6}, {ImGuiKey_Backslash, VK_OEM_5},
+    {ImGuiKey_Semicolon, VK_OEM_1}, {ImGuiKey_Apostrophe, VK_OEM_7},
+    {ImGuiKey_Comma, VK_OEM_COMMA}, {ImGuiKey_Period, VK_OEM_PERIOD}, {ImGuiKey_Slash, VK_OEM_2},
+  });
+
+  for (const auto& mapping : KEY_MAPPINGS) {
+    if (ImGui::IsKeyPressed(mapping.imgui_key, false)) {
+      return mapping.vk_code;
+    }
+  }
+  return 0;
+}
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "SettingsMode",
@@ -132,6 +216,77 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the peak brightness for video content in nits",
         .min = 48.f,
         .max = 4000.f,
+    },
+    new renodx::utils::settings::Setting {
+        .key = "UIVisibility",
+        .binding = &shader_injection.ui_visibility,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Visibility",
+        .section = "UI",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "UIToggleHotkey",
+        .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
+        .default_value = 0.f,
+        .label = "Toggle Hotkey",
+        .section = "UI",
+        .tooltip = "Click in the field and press any key to set the hotkey, or press Backspace/Delete to clear",
+        .on_draw = []() {
+          static bool key_was_pressed = false;
+          bool changed = false;
+
+          // Get current key name for display
+          std::string key_name = ui_toggle_hotkey != 0 ? GetKeyName(ui_toggle_hotkey) : "";
+          char buf[64] = {0};
+          if (!key_name.empty()) {
+            size_t copy_len = (key_name.size() < sizeof(buf) - 1) ? key_name.size() : sizeof(buf) - 1;
+            memcpy(buf, key_name.c_str(), copy_len);
+          }
+
+          // Create the input text widget
+          ImGui::InputTextWithHint(
+              "Toggle Hotkey",
+              "Click to set keyboard shortcut",
+              buf,
+              sizeof(buf),
+              ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_NoUndoRedo | ImGuiInputTextFlags_NoHorizontalScroll
+          );
+
+          // Check if widget is active and capture key presses
+          if (ImGui::IsItemActive()) {
+            hotkey_input_active = true;
+            int key_pressed = GetLastKeyPressedImGui();
+
+            if (key_pressed != 0 && !key_was_pressed) {
+              if (key_pressed == VK_BACK || key_pressed == VK_DELETE) {
+                ui_toggle_hotkey = 0;
+                changed = true;
+              } else if (key_pressed != VK_ESCAPE) {
+                ui_toggle_hotkey = key_pressed;
+                changed = true;
+              }
+
+              if (changed) {
+                reshade::set_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "UIToggleHotkey", ui_toggle_hotkey);
+              }
+
+              key_was_pressed = true;
+            } else if (key_pressed == 0) {
+              key_was_pressed = false;
+            }
+          } else {
+            hotkey_input_active = false;
+            key_was_pressed = false;
+          }
+
+          if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip)) {
+            ImGui::SetTooltip("Click and press any key to set hotkey.\nPress Backspace or Delete to clear.");
+          }
+
+          return changed;
+        },
+        .is_global = true,
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
@@ -425,17 +580,18 @@ const std::map<Preset, std::map<std::string, float>> PRESET_VALUES = {
     { {"GammaCorrection", 1.f},
       {"SwapChainGammaCorrection", 2.f},
       {"OutputColorSpace", 0.f},
-      {"ColorGradeStrength", 95.f},
+      {"ColorGradeStrength", 100.f},
       {"WuWaTonemapper", 3.f},
-      {"ColorGradeHueCorrection", 50.f},
+      {"ColorGradeHueCorrection", 0.f},
       {"ColorGradeSaturationCorrection", 100.f},
       {"ColorGradeBlowoutRestoration", 0.f},
       {"ColorGradeHueShift", 100.f},
-      {"ColorGradeExposure", 1.1f},
-      {"ColorGradeHighlights", 62.f},
+      {"ColorGradeExposure", 1.f},
+      {"ColorGradeHighlights", 63.f},
       {"ColorGradeHighlightsVersion", 0.f},
       {"ColorGradeShadows", 50.f},
-      {"ColorGradeContrast", 53.f},
+      {"ColorGradeShadowsVersion", 0.f},
+      {"ColorGradeContrast", 51.f},
       {"ColorGradeSaturation", 58.f},
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
@@ -459,16 +615,16 @@ const std::map<Preset, std::map<std::string, float>> PRESET_VALUES = {
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 60.f},
       {"ColorGradeHighlightsVersion", 2.f},
-      {"ColorGradeShadows", 80.f},
+      {"ColorGradeShadows", 75.f},
       {"ColorGradeShadowsVersion", 1.f},
       {"ColorGradeContrast", 60.f},
       {"ColorGradeSaturation", 60.f},
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 50.f},
       {"ColorGradeFlare", 0.f},
-      {"ColorGradeClip", 65.f},
+      {"ColorGradeClip", 60.f},
       {"WuWaChromaticAberration", 100.f},
-      {"WuWaBloom", 75.f}
+      {"WuWaBloom", 60.f}
     }
   }
 };
@@ -810,6 +966,28 @@ void AddAdvancedSettings() {
   }});
 }
 
+void OnPresent(reshade::api::command_queue* /*unused*/,
+               reshade::api::swapchain* /*unused*/,
+               const reshade::api::rect* /*unused*/,
+               const reshade::api::rect* /*unused*/,
+               uint32_t /*unused*/,
+               const reshade::api::rect* /*unused*/) {
+  // Check UI toggle hotkey (skip if user is currently setting a new hotkey)
+  if (ui_toggle_hotkey != 0 && !hotkey_input_active) {
+    bool key_down = (GetAsyncKeyState(ui_toggle_hotkey) & 0x8000) != 0;
+
+    if (key_down && !ui_toggle_key_was_pressed) {
+      // Toggle UI
+      shader_injection.ui_visibility = (shader_injection.ui_visibility == 0.f) ? 1.f : 0.f;
+
+      // Update the setting value to keep UI in sync
+      renodx::utils::settings::UpdateSetting("UIVisibility", shader_injection.ui_visibility);
+    }
+
+    ui_toggle_key_was_pressed = key_down;
+  }
+}
+
 bool initialized = false;
 
 }  // namespace
@@ -833,6 +1011,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
         for (auto* new_setting : info_settings) {
           settings.push_back(new_setting);
+        }
+
+        // Load UI toggle hotkey from saved config
+        {
+          int saved_hotkey = 0;
+          if (reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "UIToggleHotkey", saved_hotkey)) {
+            ui_toggle_hotkey = saved_hotkey;
+          }
         }
 
         renodx::mods::shader::expected_constant_buffer_index = 13;
@@ -880,6 +1066,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         reshade::log::message(reshade::log::level::info, "DumpLUTShaders enabled.");
       }
 
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
+
       break;
     case DLL_PROCESS_DETACH:
       renodx::utils::shader::Use(fdw_reason);
@@ -887,6 +1075,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::resource::Use(fdw_reason);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::draw>(OnDrawForLUTDump);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+
       reshade::unregister_addon(h_module);
       break;
   }

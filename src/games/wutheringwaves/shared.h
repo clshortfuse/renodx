@@ -44,6 +44,7 @@ struct ShaderInjectData {
   float wuwa_bloom;
   float wuwa_blowout;
 
+  float ui_visibility;
   float text_opacity;
   float status_text_opacity;
   float hud_opacity;
@@ -144,9 +145,9 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_WUWA_GRAIN                        1.f
 #define RENODX_WUWA_BLOWOUT                      shader_injection.wuwa_blowout
 
-#define TEXT_OPACITY                             shader_injection.text_opacity
-#define STATUS_TEXT_OPACITY                      shader_injection.status_text_opacity
-#define HUD_OPACITY                              shader_injection.hud_opacity
+#define TEXT_OPACITY                             shader_injection.text_opacity * shader_injection.ui_visibility
+#define STATUS_TEXT_OPACITY                      shader_injection.status_text_opacity * shader_injection.ui_visibility
+#define HUD_OPACITY                              shader_injection.hud_opacity * shader_injection.ui_visibility
 
 #include "../../shaders/renodx.hlsl"
 #endif
