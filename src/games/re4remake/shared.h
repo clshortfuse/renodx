@@ -1,7 +1,7 @@
 #ifndef SRC_RE4REMAKE_SHARED_H_
 #define SRC_RE4REMAKE_SHARED_H_
 
-#define GAMUT_COMPRESS 1
+#define GAMUT_COMPRESS 2  // 0 - off, 1 - BT.709, 2 - BT.2020
 
 // Must be 32bit aligned
 // Should be 4x32
