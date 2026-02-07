@@ -289,7 +289,7 @@ float4 vanillaTonemapper(float3 color) {
     float3 extended = ApplyNiohExtended(x, base, A, B, C, D, E);
     extended = extended * W;
     extended = renodx::color::bt709::from::AP1(extended);
-    extended = CastleDechroma_CVVDPStyle_NakaRushton(extended, 50.f);
+    extended = CastleDechroma_CVVDPStyle_NakaRushton(extended);
     extended = renodx::color::ap1::from::BT709(
         ApplySaturationBlowoutHueCorrectionHighlightSaturation(
             extended, untonemapped_lum, cg_config));

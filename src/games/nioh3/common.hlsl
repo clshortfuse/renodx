@@ -220,7 +220,7 @@ float3 SampleHDRLUT(float3 untonemapped, SamplerState sampleLinear_s, Texture3D<
   lut_config.scaling = 0.f;
   lut_config.precompute = 32.f;
   lut_config.tetrahedral = true;
-  lut_config.type_input = renodx::lut::config::type::ARRI_C1000;
+  lut_config.type_input = renodx::lut::config::type::ARRI_C800_NO_CUT;
   lut_config.type_output = renodx::lut::config::type::LINEAR;
   lut_config.recolor = 0.f;
   // if (RENODX_TONE_MAP_TYPE) {
