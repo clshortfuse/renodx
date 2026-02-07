@@ -77,7 +77,6 @@ float3 ApplyLiliumRCAS(
   float pix_lum = ((b_lum + d_lum + h_lum + f_lum) * lobe + e_lum) * rcp_l;
   float3 sharpened = clamp(pix_lum / e_lum, 0.f, 4.f) * e;
 
-  if (TONE_MAP_TYPE != 0.f) sharpened = min(1, sharpened);
   sharpened *= normalization_point;
 
   return sharpened;
@@ -195,7 +194,6 @@ float3 ApplyLiliumRCASFromSamples(
   float pix_lum = ((b_lum + d_lum + h_lum + f_lum) * lobe + e_lum) * rcp_l;
   float3 sharpened = clamp(pix_lum / e_lum, 0.f, 4.f) * e;
 
-  if (TONE_MAP_TYPE != 0.f) sharpened = min(1, sharpened);
   sharpened *= normalization_point;
 
   return sharpened;

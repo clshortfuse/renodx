@@ -34,7 +34,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "Vanilla+ (Vanilla + Hermite Spline)"},
+        .labels = {"Vanilla", "Vanilla+ (Vanilla + Neutwo)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -74,11 +74,11 @@ renodx::utils::settings::Settings settings = {
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 1.f,
         .label = "Gamma Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF",
-        .labels = {"Off", "2.2 (Per Channel)", "2.2 (Per Channel, Hue Preserving)"},
+        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminance)"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
@@ -94,10 +94,10 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowoutRestoration",
-        .binding = &shader_injection.tone_map_per_channel_blowout_restoration,
-        .default_value = 50.f,
-        .label = "Per Channel Blowout Restoration",
+        .key = "ToneMapBlowout",
+        .binding = &shader_injection.tone_map_blowout,
+        .default_value = 100.f,
+        .label = "Blowout",
         .section = "Tone Mapping",
         .tooltip = "Restores color from blowout from per-channel grading.",
         .min = 0.f,
@@ -108,7 +108,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 75.f,
+        .default_value = 100.f,
         .label = "Hue Shift",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -211,10 +211,10 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
         .default_value = 0.f,
-        .label = "Blowout",
+        .label = "Dechroma",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
@@ -293,10 +293,10 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-              {"GammaCorrection", 0.f},
-              {"ColorGradeHighlightSaturation", 45.f},
-              {"ColorGradeContrast", 55.f},
-              {"ColorGradeSaturation", 55.f},
+              {"GammaCorrection", 2.f},
+              {"ColorGradeHighlights", 55.f},
+              {"ColorGradeShadows", 80.f},
+              {"ColorGradeFlare", 23.f},
           });
         },
     },
@@ -365,7 +365,7 @@ renodx::utils::settings::Settings settings = {
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
-      {"ColorGradeBlowoutRestoration", 0.f},
+      {"ToneMapBlowout", 100.f},
       {"ToneMapHueShift", 20.f},
       {"GammaCorrection", 0.f},
       {"GammaAdjust", 1.f},
@@ -377,7 +377,7 @@ void OnPresetOff() {
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
-      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeHighlightContrast", 50.f},
       {"ColorGradeLUTStrength", 100.f},
@@ -386,6 +386,21 @@ void OnPresetOff() {
       {"FxSharpeningStrength", 100.f},
   });
 }
+
+bool fired_on_init_swapchain = false;
+
+void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (fired_on_init_swapchain) return;
+  fired_on_init_swapchain = true;
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  if (peak.has_value()) {
+    settings[1]->default_value = peak.value();
+    settings[1]->can_reset = true;
+  }
+}
+
+bool initialized = false;
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -394,14 +409,23 @@ extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-
-      renodx::mods::shader::force_pipeline_cloning = true;
-      renodx::mods::shader::allow_multiple_push_constants = true;
-      renodx::mods::shader::expected_constant_buffer_space = 50;
-
       if (!reshade::register_addon(h_module)) return FALSE;
+
+      if (!initialized) {
+        renodx::mods::shader::force_pipeline_cloning = true;
+        renodx::mods::shader::allow_multiple_push_constants = true;
+        renodx::mods::shader::expected_constant_buffer_space = 50;
+
+        initialized = true;
+      }
+
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+
       break;
     case DLL_PROCESS_DETACH:
+
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+
       reshade::unregister_addon(h_module);
       break;
   }

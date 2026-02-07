@@ -20,14 +20,23 @@ void main(
 
   if (CUSTOM_SHARPENING == 1.f) {  // Lilium RCAS
     const float sharpness_strength = CUSTOM_SHARPENING_STRENGTH;
-    uint2 tex_max;
-    SrcImage.GetDimensions(tex_max.x, tex_max.y);
 
-    // Process 4 pixels per thread with RCAS
-    OutputImage[int2(_16, _17)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16, _17), sharpness_strength, tex_max), 1.f);
-    OutputImage[int2(_16 | 8, _17)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16 | 8, _17), sharpness_strength, tex_max), 1.f);
-    OutputImage[int2(_16 | 8, _17 | 8)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16 | 8, _17 | 8), sharpness_strength, tex_max), 1.f);
-    OutputImage[int2(_16, _17 | 8)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16, _17 | 8), sharpness_strength, tex_max), 1.f);
+    if (sharpness_strength == 0.f) {
+      OutputImage[int2(_16, _17)] = float4(SrcImage.Load(int3(_16, _17, 0)).rgb, 1.f);
+      OutputImage[int2(_16 | 8, _17)] = float4(SrcImage.Load(int3(_16 | 8, _17, 0)).rgb, 1.f);
+      OutputImage[int2(_16 | 8, _17 | 8)] = float4(SrcImage.Load(int3(_16 | 8, _17 | 8, 0)).rgb, 1.f);
+      OutputImage[int2(_16, _17 | 8)] = float4(SrcImage.Load(int3(_16, _17 | 8, 0)).rgb, 1.f);
+    } else {
+      uint2 tex_max;
+      SrcImage.GetDimensions(tex_max.x, tex_max.y);
+
+      // Process 4 pixels per thread with RCAS
+      OutputImage[int2(_16, _17)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16, _17), sharpness_strength, tex_max), 1.f);
+      OutputImage[int2(_16 | 8, _17)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16 | 8, _17), sharpness_strength, tex_max), 1.f);
+      OutputImage[int2(_16 | 8, _17 | 8)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16 | 8, _17 | 8), sharpness_strength, tex_max), 1.f);
+      OutputImage[int2(_16, _17 | 8)] = float4(ApplyLiliumRCAS(SrcImage, int2(_16, _17 | 8), sharpness_strength, tex_max), 1.f);
+    }
+
     return;
   } else {
     uint _20 = _17 + -1u;

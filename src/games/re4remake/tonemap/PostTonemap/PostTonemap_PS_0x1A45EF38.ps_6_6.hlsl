@@ -45,10 +45,6 @@ float4 main(
   float _120;
   float _121;
 
-#if 1
-  BlowoutAndHueShift(_14, _15, _16);
-#endif
-
   if (isfinite(max(max(_14, _15), _16))) {
     float _25 = invLinearBegin * _14;
     float _31 = invLinearBegin * _15;
