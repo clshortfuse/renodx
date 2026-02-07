@@ -57,7 +57,7 @@ float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut
       float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
 
       float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
-#if GAMUT_COMPRESS
+#if GAMUT_COMPRESS == 1
       recolored = GamutCompress(recolored);
 #endif
       color_output = recolored;
@@ -235,7 +235,7 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
     color = renodx::color::bt709::from::OkLab(perceptual_new);
 
     color = renodx::color::bt709::clamp::AP1(color);
-#if GAMUT_COMPRESS
+#if GAMUT_COMPRESS == 1
     color = GamutCompress(color);
 #endif
   }
@@ -277,7 +277,8 @@ float3 GammaCorrectHuePreserving(float3 incorrect_color) {
   float y_in = renodx::color::y::from::BT709(incorrect_color);
   float y_out = renodx::color::correct::GammaSafe(y_in);
   float3 corrected_color = renodx::color::correct::Luminance(incorrect_color, y_in, y_out);
-  corrected_color = renodx::color::correct::Chrominance(corrected_color, incorrect_color, 1.f, 1.f, 0);
+  // half strength chrominance correction to prevent dark blues from looking ugly
+  corrected_color = renodx::color::correct::Chrominance(corrected_color, incorrect_color, 0.5f, 1.f);
 
   corrected_color = renodx::color::bt709::clamp::AP1(corrected_color);
 
@@ -287,9 +288,16 @@ float3 GammaCorrectHuePreserving(float3 incorrect_color) {
 float3 ApplyDisplayMap(float3 untonemapped) {
   const float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
 
-  float3 tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(max(0, renodx::color::bt2020::from::BT709(untonemapped)),
-                                                                 RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
-  tonemapped_bt2020 = min(peak_ratio, tonemapped_bt2020);
+  float3 untonemapped_bt2020 = renodx::color::bt2020::from::BT709(untonemapped);
+
+#if GAMUT_COMPRESS == 2
+  untonemapped_bt2020 = GamutCompress(untonemapped_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
+#endif
+
+  float3 tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(
+      max(0, untonemapped_bt2020),
+      RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
+  // tonemapped_bt2020 = min(peak_ratio, tonemapped_bt2020);
 
   float3 tonemapped_bt709 = renodx::color::bt709::from::BT2020(tonemapped_bt2020);
 
@@ -297,15 +305,13 @@ float3 ApplyDisplayMap(float3 untonemapped) {
 }
 
 float3 ApplyToneMap(float3 untonemapped) {
-  untonemapped = max(0, untonemapped);
-
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     untonemapped = renodx::color::correct::GammaSafe(untonemapped);
   } else if (RENODX_GAMMA_CORRECTION == 2.f) {
     untonemapped = GammaCorrectHuePreserving(untonemapped);
   }
 
-#if GAMUT_COMPRESS
+#if GAMUT_COMPRESS == 1
   untonemapped = GamutCompress(untonemapped);
   untonemapped = max(0, untonemapped);
 #endif
