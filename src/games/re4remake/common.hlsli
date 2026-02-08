@@ -17,113 +17,17 @@ float3 GamutCompress(float3 color_bt709, float3x3 color_space_matrix = renodx::c
   return color_bt709_compressed;
 }
 
-float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
-  const float3 added_gamma = black_gamma;
-
-  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
-
-  // Remove from 0 to mid-gray
-  const float shadow_length = mid_gray_average;
-  const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
-  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
-
-  const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
-  return unclamped_gamma;
-}
-
-float3 LUTBlackCorrection(float3 color_input, Texture3D lut_texture, renodx::lut::Config lut_config) {
-  lut_config.gamut_compress = 0.f;
-  lut_config.max_channel = 0.f;
-  lut_config.tetrahedral = false;
-
-  float3 lutInputColor = renodx::lut::ConvertInput(color_input, lut_config);
-  float3 lutOutputColor = renodx::lut::SampleColor(lutInputColor, lut_config, lut_texture);
-  float3 color_output = renodx::lut::LinearOutput(lutOutputColor, lut_config);
-
-  [branch]
-  if (lut_config.scaling != 0.f) {
-    float3 lutBlack = (renodx::lut::SampleColor(renodx::lut::ConvertInput(0, lut_config), lut_config, lut_texture));
-
-    float lutBlackY = renodx::color::y::from::BT709(lutBlack);
-    if (lutBlackY > 0.f) {
-      float3 lutMid = renodx::lut::SampleColor(renodx::lut::ConvertInput(lutBlack, lut_config), lut_config, lut_texture);
-
-      float3 unclamped_gamma = Unclamp(
-          renodx::lut::GammaOutput(lutOutputColor, lut_config),
-          renodx::lut::GammaOutput(lutBlack, lut_config),
-          renodx::lut::GammaOutput(lutMid, lut_config),
-          renodx::lut::GammaInput(color_input, lutInputColor, lut_config));
-
-      float3 unclamped_linear = renodx::lut::LinearUnclampedOutput(unclamped_gamma, lut_config);
-
-      float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
-#if GAMUT_COMPRESS == 1
-      recolored = GamutCompress(recolored);
-#endif
-      color_output = recolored;
-    }
-  } else {
-  }
-
-  return lerp(color_input, color_output, lut_config.strength);
-
-  return color_output;
-}
-
-float3 HueAndChrominance1ReferenceColorOKLab(
-    float3 incorrect_color, float3 hue_reference_color,
-    float hue_correct_strength = 0.f,
-    float chrominance_correct_strength = 0.f) {
-  if (hue_correct_strength != 0.0 || chrominance_correct_strength != 0.0) {
-    float3 perceptual_new = renodx::color::oklab::from::BT709(incorrect_color);
-    const float3 reference_oklab = renodx::color::oklab::from::BT709(hue_reference_color);
-
-    float chrominance_current = length(perceptual_new.yz);
-    float chrominance_ratio = 1.0;
-
-    if (hue_correct_strength != 0.0) {
-      const float chrominance_pre = chrominance_current;
-      perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, hue_correct_strength);
-      const float chrominancePost = length(perceptual_new.yz);
-      chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
-      chrominance_current = chrominancePost;
-    }
-
-    if (chrominance_correct_strength != 0.0) {
-      const float reference_chrominance = length(reference_oklab.yz);
-      float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
-      chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_correct_strength);
-    }
-    perceptual_new.yz *= chrominance_ratio;
-
-    incorrect_color = renodx::color::bt709::from::OkLab(perceptual_new);
-    incorrect_color = renodx::color::bt709::clamp::AP1(incorrect_color);
-  }
-  return incorrect_color;
-}
-
-float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.18f, float output_max = 1.f, float channel_max = 100.f) {
-  float peak = renodx::math::Max(untonemapped);
-  float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, channel_max, output_max, rolloff_start);
-  float scale = renodx::math::DivideSafe(mapped_peak, peak, 0.f);
-
-  return scale;
-}
-
-float3 LUTToneMap(inout float3 untonemapped) {
-  return untonemapped * ComputeReinhardSmoothClampScale(untonemapped);
-}
-
 struct UserGradingConfig {
   float exposure;
   float highlights;
   float shadows;
   float contrast;
   float flare;
+  float gamma;
   float saturation;
   float dechroma;
-  float hue_emulation_strength;
   float highlight_saturation;
+  float hue_emulation_strength;
   float chrominance_emulation_strength;
 };
 
@@ -156,11 +60,11 @@ float Shadows(float x, float shadows, float mid_gray) {
   }
 }
 
-float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, UserGradingConfig config, float mid_gray = 0.18f) {
-  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
-    return untonemapped;
+float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 ungraded, float y, UserGradingConfig config, float mid_gray = 0.18f) {
+  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f && config.gamma == 1.f) {
+    return ungraded;
   }
-  float3 color = untonemapped;
+  float3 color = ungraded;
 
   color *= config.exposure;
 
@@ -176,11 +80,13 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   // shadows
   float y_shadowed = Shadows(y_highlighted, config.shadows, mid_gray);
 
-  const float y_final = y_shadowed;
+  float y_gamma_adjusted = renodx::math::Select(y_shadowed < 1.f, pow(y_shadowed, config.gamma), y_shadowed);
 
-  color = renodx::color::correct::Luminance(color, y, y_final);
+  const float y_final = y_gamma_adjusted;
 
-  return color;
+  float3 output = renodx::color::correct::Luminance(color, y, y_final);
+
+  return output;
 }
 
 float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, UserGradingConfig config) {
@@ -240,94 +146,6 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
 #endif
   }
   return color;
-}
-
-float3 ApplyCustomGrading(float3 ungraded) {
-  const UserGradingConfig cg_config = {
-    RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
-    RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
-    RENODX_TONE_MAP_SHADOWS,                              // float shadows;
-    RENODX_TONE_MAP_CONTRAST,                             // float contrast;
-    0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
-    RENODX_TONE_MAP_SATURATION,                           // float saturation;
-    RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
-    RENODX_TONE_MAP_HUE_SHIFT,                            // float hue_emulation_strength;
-    -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
-    RENODX_TONE_MAP_BLOWOUT                               // float chrominance_emulation_strength;
-  };
-  float ungraded_y = renodx::color::y::from::BT709(ungraded);
-
-  float3 graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, ungraded_y, cg_config, 0.18f);
-  float3 chrominance_hue_reference_color = renodx::tonemap::ReinhardPiecewise(graded, 12.5f, 1.f);
-  graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, chrominance_hue_reference_color, ungraded_y, cg_config);
-
-  return graded;
-}
-
-float3 AdjustGammaByChannel(float3 linearColor, float gammaAdjustmentFactor) {
-  if (gammaAdjustmentFactor == 1.f) return linearColor;  // No adjustment if factor is 1
-
-  // Create a mask to identify components less than 1
-  float3 mask = step(linearColor, float3(1.0f, 1.0f, 1.0f));  // 1 where linearColor < 1, 0 otherwise
-  // Adjust gamma only for components where the value is less than 1
-  return mask * renodx::color::gamma::EncodeSafe(linearColor, 1.f / gammaAdjustmentFactor) + (1.f - mask) * linearColor;
-}
-
-float3 GammaCorrectHuePreserving(float3 incorrect_color) {
-  float y_in = renodx::color::y::from::BT709(incorrect_color);
-  float y_out = renodx::color::correct::GammaSafe(y_in);
-  float3 corrected_color = renodx::color::correct::Luminance(incorrect_color, y_in, y_out);
-  // half strength chrominance correction to prevent dark blues from looking ugly
-  corrected_color = renodx::color::correct::Chrominance(corrected_color, incorrect_color, 0.5f, 1.f);
-
-  corrected_color = renodx::color::bt709::clamp::AP1(corrected_color);
-
-  return corrected_color;
-}
-
-float3 ApplyDisplayMap(float3 untonemapped) {
-  const float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-
-  float3 untonemapped_bt2020 = renodx::color::bt2020::from::BT709(untonemapped);
-
-#if GAMUT_COMPRESS == 2
-  untonemapped_bt2020 = GamutCompress(untonemapped_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
-#endif
-
-  float3 tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(
-      max(0, untonemapped_bt2020),
-      RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
-  // tonemapped_bt2020 = min(peak_ratio, tonemapped_bt2020);
-
-  float3 tonemapped_bt709 = renodx::color::bt709::from::BT2020(tonemapped_bt2020);
-
-  return tonemapped_bt709;
-}
-
-float3 ApplyToneMap(float3 untonemapped) {
-  if (RENODX_GAMMA_CORRECTION == 1.f) {
-    untonemapped = renodx::color::correct::GammaSafe(untonemapped);
-  } else if (RENODX_GAMMA_CORRECTION == 2.f) {
-    untonemapped = GammaCorrectHuePreserving(untonemapped);
-  }
-
-#if GAMUT_COMPRESS == 1
-  untonemapped = GamutCompress(untonemapped);
-  untonemapped = max(0, untonemapped);
-#endif
-
-  untonemapped = ApplyCustomGrading(untonemapped);
-
-  untonemapped = AdjustGammaByChannel(untonemapped, RENODX_GAMMA_ADJUST);
-
-  float3 tonemapped = ApplyDisplayMap(untonemapped);
-
-  tonemapped *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
-  if (RENODX_GAMMA_CORRECTION != 0.f) {
-    tonemapped = renodx::color::correct::GammaSafe(tonemapped, true);
-  }
-
-  return tonemapped;
 }
 
 float3 ApplyGammaCorrection(float3 incorrect_color) {
