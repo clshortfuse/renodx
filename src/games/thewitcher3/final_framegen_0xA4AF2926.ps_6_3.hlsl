@@ -70,6 +70,7 @@ OutputSignature main(
       float2(TEXCOORD.x, TEXCOORD.y),
       CUSTOM_RANDOM,
       CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
+  //linearGameColor.rgb = CustomGammaCorrection(linearGameColor.rgb);
   linearGameColor.rgb = renodx::draw::RenderIntermediatePass(linearGameColor.rgb);
 
   // float _50 = linearGameColor.x;

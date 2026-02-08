@@ -67,6 +67,8 @@
 //#define CUSTOM_BLOOM_RADIUS                    shader_injection.custom_bloom_radius
 
 #define CUSTOM_INVERSE_TONEMAP                 shader_injection.custom_inverse_tonemap
+// #define CUSTOM_GAMMA_TYPE                      shader_injection.custom_gamma_type
+// #define CUSTOM_GAMMA_VALUE                     shader_injection.custom_gamma_value
 
 //#define UTILITY_COMPARISON                    shader_injection.utility_comparison
 //#define UTILITY_HUD                            shader_injection.utility_hud
@@ -128,6 +130,8 @@ struct ShaderInjectData {
   // float custom_bloom_threshold;
   // float custom_bloom_curve;
   //float custom_bloom_radius;
+  float custom_gamma_type;
+  float custom_gamma_value;
 
   //float utility_comparison;
   //float utility_hud;
