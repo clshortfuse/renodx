@@ -27,8 +27,12 @@ struct UserGradingConfig {
   float saturation;
   float dechroma;
   float highlight_saturation;
-  float hue_emulation_strength;
-  float chrominance_emulation_strength;
+  float hue_emulation_strength_high;
+  float chrominance_emulation_strength_high;
+  float hue_emulation_strength_low;
+  float chrominance_emulation_strength_low;
+  float hue_chrominance_ramp_start;
+  float hue_chrominance_ramp_end;
 };
 
 float Highlights(float x, float highlights, float mid_gray) {
@@ -91,28 +95,43 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 ungraded, f
 
 float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, UserGradingConfig config) {
   float3 color = tonemapped;
-  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_emulation_strength != 0.f || config.chrominance_emulation_strength != 0.f || config.highlight_saturation != 0.f) {
+  if (config.saturation != 1.f || config.dechroma != 0.f || config.highlight_saturation != 0.f
+      || config.hue_emulation_strength_high != 0.f || config.chrominance_emulation_strength_high != 0.f
+      || config.hue_emulation_strength_low != 0.f || config.chrominance_emulation_strength_low != 0.f) {
     float3 perceptual_new = renodx::color::oklab::from::BT709(color);
 
     // hue and chrominance emulation
-    if (config.hue_emulation_strength != 0.0 || config.chrominance_emulation_strength != 0.0) {
+    if (config.hue_emulation_strength_high != 0.f || config.chrominance_emulation_strength_high != 0.f
+        || config.hue_emulation_strength_low != 0.f || config.chrominance_emulation_strength_low != 0.f) {
       const float3 perceptual_reference = renodx::color::oklab::from::BT709(hue_reference_color);
+
+#if 1
+      float hue_emulation_strength = config.hue_emulation_strength_high;
+      float chrominance_emulation_strength = config.chrominance_emulation_strength_high;
+
+      if (!(config.hue_chrominance_ramp_start == 0.f && config.hue_chrominance_ramp_end == 0.f)) {
+        float ramp_denom = config.hue_chrominance_ramp_end - config.hue_chrominance_ramp_start;
+        float ramp_t = saturate(renodx::math::DivideSafe(y - config.hue_chrominance_ramp_start, ramp_denom, 0.f));
+        hue_emulation_strength = lerp(config.hue_emulation_strength_low, config.hue_emulation_strength_high, ramp_t);
+        chrominance_emulation_strength = lerp(config.chrominance_emulation_strength_low, config.chrominance_emulation_strength_high, ramp_t);
+      }
+#endif
 
       float chrominance_current = length(perceptual_new.yz);
       float chrominance_ratio = 1.0;
 
-      if (config.hue_emulation_strength != 0.0) {
+      if (config.hue_emulation_strength_high != 0.f || config.hue_emulation_strength_low != 0.f) {
         const float chrominance_pre = chrominance_current;
-        perceptual_new.yz = lerp(perceptual_new.yz, perceptual_reference.yz, config.hue_emulation_strength);
+        perceptual_new.yz = lerp(perceptual_new.yz, perceptual_reference.yz, hue_emulation_strength);
         const float chrominancePost = length(perceptual_new.yz);
         chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
         chrominance_current = chrominancePost;
       }
 
-      if (config.chrominance_emulation_strength != 0.0) {
+      if (config.chrominance_emulation_strength_high != 0.f || config.chrominance_emulation_strength_low != 0.f) {
         const float reference_chrominance = length(perceptual_reference.yz);
         float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
-        chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, config.chrominance_emulation_strength);
+        chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_emulation_strength);
       }
       perceptual_new.yz *= chrominance_ratio;
     }
@@ -146,6 +165,22 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
 #endif
   }
   return color;
+}
+
+float3 ApplyGammaCorrectionByLuminance(float3 incorrect_color) {
+  float y_incorrect = renodx::color::y::from::BT709(incorrect_color);
+  float y_corrected = renodx::color::correct::Gamma(max(0, y_incorrect));
+  float3 lum_corrected = renodx::color::correct::Luminance(incorrect_color, y_incorrect, y_corrected);
+
+  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
+
+  lum_corrected = renodx::color::correct::Chrominance(lum_corrected, ch);
+
+#if 1  // prevents clean up dark saturated blues and purples
+  lum_corrected = lerp(lum_corrected, GamutCompress(lum_corrected), 0.5f);
+#endif
+
+  return lum_corrected;
 }
 
 float3 ApplyGammaCorrection(float3 incorrect_color) {

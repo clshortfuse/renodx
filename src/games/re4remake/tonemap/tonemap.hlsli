@@ -211,19 +211,22 @@ void ApplyColorGrading(float r_in, float g_in, float b_in,
 #endif
 
 float3 ApplyCustomGrading(float3 ungraded) {
-  // exclude chrominance and hue correction from shadows, poor handling of blues and purples
   const UserGradingConfig cg_config = {
     RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
     RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
     RENODX_TONE_MAP_SHADOWS,                              // float shadows;
     RENODX_TONE_MAP_CONTRAST,                             // float contrast;
     0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
-    RENODX_GAMMA_ADJUST,                                  // gamma
+    RENODX_TONE_MAP_GAMMA,                                // float gamma;
     RENODX_TONE_MAP_SATURATION,                           // float saturation;
     RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
     -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
-    RENODX_TONE_MAP_HUE_SHIFT,                            // float hue_emulation_strength;
-    RENODX_TONE_MAP_BLOWOUT,                              // float chrominance_emulation_strength;
+    RENODX_TONE_MAP_HUE_SHIFT,                            // float hue_emulation_strength_high;
+    RENODX_TONE_MAP_BLOWOUT,                              // float chrominance_emulation_strength_high;
+    1.f,                                                  // float hue_emulation_strength_low;
+    1.f,                                                  // float chrominance_emulation_strength_low;
+    0.18f,                                                // float hue_chrominance_ramp_start;
+    1.f                                                   // float hue_chrominance_ramp_end;
   };
 
   float y = renodx::color::y::from::BT709(ungraded);
@@ -255,8 +258,10 @@ float3 ApplyDisplayMap(float3 untonemapped) {
 }
 
 float3 ApplyToneMap(float3 untonemapped, float2 texcoord) {
-  if (RENODX_GAMMA_CORRECTION != 0.f) {
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
     untonemapped = renodx::color::correct::GammaSafe(untonemapped);
+  } else if (RENODX_GAMMA_CORRECTION == 2.f) {
+    untonemapped = ApplyGammaCorrectionByLuminance(untonemapped);
   }
 
 #if GAMUT_COMPRESS == 1
