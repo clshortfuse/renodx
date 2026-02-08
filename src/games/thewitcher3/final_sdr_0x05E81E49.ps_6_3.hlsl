@@ -63,6 +63,8 @@ float4 main(
       CUSTOM_RANDOM,
       CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
 
+  //linear_game_color.rgb = CustomGammaCorrection(linear_game_color.rgb);
+
   float3 linear_ui_color = renodx::color::gamma::Decode(gamma_ui_color);
 
   float4 outputColor = HandleUICompositing(float4(linear_ui_color, ui_alpha), float4(linear_game_color, game_alpha));
