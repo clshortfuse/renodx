@@ -17,6 +17,7 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "shared.h"
 
@@ -76,10 +77,10 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
-        .label = "Gamma Correction",
+        .label = "SDR EOTF Emulation",
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF",
-        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminance)"},
+        .labels = {"Off", "2.2"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
@@ -100,10 +101,9 @@ renodx::utils::settings::Settings settings = {
         .default_value = 100.f,
         .label = "Blowout",
         .section = "Tone Mapping",
-        .tooltip = "Restores color from blowout from per-channel grading.",
-        .min = 0.f,
+        .tooltip = "Emulates blowout from per channel tonemapping",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -253,6 +253,26 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxNoise",
+        .binding = &shader_injection.custom_noise,
+        .default_value = 100.f,
+        .label = "Noise",
+        .section = "Effects",
+        .tooltip = "Noise pattern added to game in some areas.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxGrainStrength",
+        .binding = &shader_injection.custom_grain_strength,
+        .default_value = 0.f,
+        .label = "FilmGrain",
+        .section = "Effects",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxSharpeningType",
         .binding = &shader_injection.custom_sharpening,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -294,10 +314,11 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-              {"GammaCorrection", 2.f},
               {"ColorGradeHighlights", 55.f},
               {"ColorGradeShadows", 80.f},
               {"ColorGradeFlare", 23.f},
+              {"FxNoise", 0.f},
+              {"FxGrainStrength", 35.f},
           });
         },
     },
@@ -438,6 +459,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);        // fp11 upgrades for NVIDIA
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
+
       break;
     case DLL_PROCESS_DETACH:
 
@@ -448,6 +471,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
+  renodx::utils::random::Use(fdw_reason);  // film grain
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
