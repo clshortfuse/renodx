@@ -12,7 +12,7 @@
 #define RENODX_TONE_MAP_CONTRAST             shader_injection.colorGradeContrast
 #define RENODX_TONE_MAP_SATURATION           shader_injection.colorGradeSaturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.colorGradeHighlightSaturation
-#define RENODX_TONE_MAP_BLOWOUT              shader_injection.colorGradeBlowout
+// #define RENODX_TONE_MAP_BLOWOUT              shader_injection.colorGradeBlowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.colorGradeFlare
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_RENO_DRT_WHITE_CLIP           65.f  // Cause they're using arri
@@ -29,6 +29,7 @@
 #define CUSTOM_RANDOM                      shader_injection.custom_random
 #define CUSTOM_SHARPNESS                   shader_injection.custom_sharpness
 #define CUSTOM_VIGNETTE                    shader_injection.custom_vignette
+#define CUSTOM_DECHROMA                    shader_injection.colorGradeBlowout
 
 // Must be 32bit aligned
 // Should be 4x32
