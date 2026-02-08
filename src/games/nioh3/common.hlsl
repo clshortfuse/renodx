@@ -293,7 +293,8 @@ float NiohDerivative(float x, float A, float B, float C, float D, float E) {
   return num / (denom * denom);
 }
 
-static const float kInflectionPoint = 0.267011;
+// static const float kInflectionPoint = 0.267011;
+static const float kInflectionPoint = 0.28160194f; // To accomodate B * 0.3f
 
 #define APPLYNIOHEXTENDED_GENERATOR(T)                                   \
   T ApplyNiohExtended(                                                   \
