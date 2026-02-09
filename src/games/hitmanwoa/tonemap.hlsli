@@ -13,7 +13,7 @@ float3 HueAndChrominanceOKLab(
   } else if (hue_correct_strength == 0.f) {
     return renodx::color::correct::ChrominanceOKLab(incorrect_color, chrominance_reference_color, chrominance_correct_strength, clamp_chrominance_loss);
   } else if (chrominance_correct_strength == 0.f) {
-    return renodx::color::correct::Hue(incorrect_color, hue_reference_color, hue_correct_strength);
+    return renodx::color::correct::HueOKLab(incorrect_color, hue_reference_color, hue_correct_strength);
   }
 
   float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
@@ -111,7 +111,7 @@ float3 ApplyCustomHitmanToneMap(float3 untonemapped) {
   float3 hdr_tonemap = ToneMapHitmanExtended(untonemapped, ToneMapHitman(untonemapped));
 #endif
 
-  float3 chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 4.f, 0.0932816);
+  float3 chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 6.f, 0.0932816);
 
   hdr_tonemap = HueAndChrominanceOKLab(
       hdr_tonemap,
@@ -154,7 +154,7 @@ float3 ApplyCustomSimpleReinhardToneMap(float3 untonemapped) {
   float3 hdr_tonemap = ToneMapHitmanExtended(untonemapped, renodx::tonemap::Reinhard(untonemapped));
 #endif
 
-  float3 chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 4.f, 0.465571);
+  float3 chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 6.f, 0.465571);
 
   hdr_tonemap = HueAndChrominanceOKLab(
       hdr_tonemap,

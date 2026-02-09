@@ -33,7 +33,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Vanilla+"},
+        .labels = {"Vanilla", "Vanilla+ (No Display Mapping)", "Vanilla+ (Hermite Spline)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -78,6 +78,17 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Emulates a 2.2 EOTF",
         .labels = {"Off", "2.2 (Per Channel)", "2.2 (Per Channel, Hue Preserving)"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapBlowout",
+        .binding = &shader_injection.tone_map_blowout,
+        .default_value = 100.f,
+        .label = "Blowout",
+        .section = "Tone Mapping",
+        .tooltip = "Emulates blowout from per channel tonemapping",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
@@ -153,10 +164,10 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
         .default_value = 0.f,
-        .label = "Blowout",
+        .label = "Dechroma",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
@@ -263,26 +274,32 @@ void OnPresetOff() {
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
       {"ToneMapScaling", 1.f},
-      {"ToneMapHueShift", 0.f},
+      {"ToneMapBlowout", 100.f},
+      {"ToneMapHueShift", 100.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
-      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
   });
 }
 
+bool fired_on_init_swapchain = false;
+
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (fired_on_init_swapchain) return;
+  fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
     settings[1]->default_value = peak.value();
-  } else {
-    settings[1]->default_value = 1000.f;
+    settings[1]->can_reset = true;
   }
 }
+
+bool initialized = false;
 
 }  // namespace
 
@@ -294,10 +311,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::mods::shader::force_pipeline_cloning = true;
-      renodx::mods::shader::expected_constant_buffer_space = 50;
-      renodx::mods::shader::expected_constant_buffer_index = 0;
+      if (!initialized) {
+        renodx::mods::shader::force_pipeline_cloning = true;
+        renodx::mods::shader::expected_constant_buffer_space = 50;
+        renodx::mods::shader::expected_constant_buffer_index = 0;
 
+        initialized = true;
+      }
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // peak nits
 
       break;

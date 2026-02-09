@@ -10,24 +10,18 @@ SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
-cbuffer cb0 : register(b0)
-{
+cbuffer cb0 : register(b0) {
   float4 cb0[1];
 }
-
-
-
 
 // 3Dmigoto declarations
 #define cmp -
 
-
 void main(
-  float4 v0 : SV_POSITION0,
-  linear noperspective float4 v1 : TEXCOORD0,
-  out float3 o0 : SV_TARGET0)
-{
-  float4 r0,r1;
+    float4 v0: SV_POSITION0,
+    linear noperspective float4 v1: TEXCOORD0,
+    out float3 o0: SV_TARGET0) {
+  float4 r0, r1;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -41,6 +35,7 @@ void main(
 
   r1.xyz = t1.Sample(s0_s, v1.xy).xyz;
   float3 bloom = r1.rgb * cb0[0].x * CUSTOM_BLOOM;
+
   o0.xyz = bloom + lens_flare;
   return;
 }

@@ -1,5 +1,5 @@
-#ifndef SRC_TEMPLATE_SHARED_H_
-#define SRC_TEMPLATE_SHARED_H_
+#ifndef SRC_ENDFIELD_SHARED_H_
+#define SRC_ENDFIELD_SHARED_H_
 
 // #define RENODX_PEAK_WHITE_NITS                 1000.f
 // #define RENODX_DIFFUSE_WHITE_NITS              renodx::color::bt2408::REFERENCE_WHITE
@@ -49,6 +49,7 @@ struct ShaderInjectData {
   float tone_map_saturation;
   float tone_map_highlight_saturation;
   float tone_map_blowout;
+  float tone_map_dechroma;
   float tone_map_flare;
   float tone_map_hue_correction;
   float tone_map_hue_shift;
@@ -71,6 +72,22 @@ struct ShaderInjectData {
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
   float custom_flip_uv_y;
+  float fx_rcas_sharpening;
+  float fx_rcas_amount;
+  float tone_map_hdr_video;
+  float tone_map_video_nits;
+  float reno_drt_tone_map_method;
+  float status_text_opacity;
+  float ping_text_opacity;
+  float custom_random;
+  float custom_grain_strength;
+  float vignette_strength;
+  float ui_visibility;
+  float sun_intensity;
+  float bloom_strength;
+  float godrays_intensity;
+  float perchannelblowout;
+  float ao_intensity;
 };
 
 #ifndef __cplusplus
@@ -101,6 +118,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
+#define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
 #define RENODX_INTERMEDIATE_ENCODING         shader_injection.intermediate_encoding
@@ -113,7 +131,20 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    shader_injection.swap_chain_clamp_color_space
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
-#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_TONE_MAP_HDR_VIDEO              shader_injection.tone_map_hdr_video
+#define RENODX_VIDEO_NITS                      shader_injection.tone_map_video_nits
+#define RENODX_RENO_DRT_TONE_MAP_METHOD        shader_injection.reno_drt_tone_map_method
+#define PING_TEXT_OPACITY                      shader_injection.ping_text_opacity
+#define STATUS_TEXT_OPACITY                    shader_injection.status_text_opacity
+#define CUSTOM_RANDOM                          shader_injection.custom_random
+#define CUSTOM_GRAIN_STRENGTH                  shader_injection.custom_grain_strength
+#define VIGNETTE_STRENGTH                      shader_injection.vignette_strength
+#define UI_VISIBILITY                          shader_injection.ui_visibility
+#define SUN_INTENSITY                          shader_injection.sun_intensity
+#define BLOOM_STRENGTH                         shader_injection.bloom_strength
+#define GODRAYS_INTENSITY                      shader_injection.godrays_intensity
+#define PER_CHANNEL_BLOWOUT                    shader_injection.perchannelblowout
+#define AO_INTENSITY                           shader_injection.ao_intensity
 
 #include "../../shaders/renodx.hlsl"
 

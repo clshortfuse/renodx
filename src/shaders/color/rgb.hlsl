@@ -327,18 +327,23 @@ float3 BT2020(float3 bt2020) {
 
 namespace y {
 namespace from {
+
+float XYZMatrix(float3 color, float3x3 toXYZMatrix) {
+  return dot(color, toXYZMatrix[1].rgb);
+}
+
 float NTSC1953(float3 ntsc) {
-  return dot(ntsc, NTSC_U_1953_TO_XYZ_MAT[1].rgb);
+  return XYZMatrix(ntsc, NTSC_U_1953_TO_XYZ_MAT);
 }
 
 float BT709(float3 bt709) {
-  return dot(bt709, BT709_TO_XYZ_MAT[1].rgb);
+  return XYZMatrix(bt709, BT709_TO_XYZ_MAT);
 }
 float BT2020(float3 bt2020) {
-  return dot(bt2020, BT2020_TO_XYZ_MAT[1].rgb);
+  return XYZMatrix(bt2020, BT2020_TO_XYZ_MAT);
 }
 float AP1(float3 ap1) {
-  return dot(ap1, AP1_TO_XYZ_MAT[1].rgb);
+  return XYZMatrix(ap1, AP1_TO_XYZ_MAT);
 }
 }  // namespace from
 }  // namespace y

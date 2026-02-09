@@ -1,3 +1,5 @@
+#include "./common.hlsli"
+
 cbuffer cb0_buf : register(b0) {
   float cb0_m0 : packoffset(c0);
   uint3 cb0_m1 : packoffset(c0.y);
@@ -5,8 +7,8 @@ cbuffer cb0_buf : register(b0) {
 
 SamplerState s0 : register(s0);
 SamplerState s1 : register(s1);
-Texture2D<float4> t0 : register(t0);
-Texture2D<float4> t1 : register(t1);
+Texture2D<float4> scene_texture : register(t0);
+Texture2D<float4> ui_texture : register(t1);
 
 static float4 SV_POSITON;
 static float2 TEXCOORD;
@@ -29,7 +31,7 @@ float dp3_f32(float3 a, float3 b) {
 void frag_main() {
   bool _80 = cb0_m1.x == 1u;
   float2 _89 = float2(TEXCOORD.x, TEXCOORD.y);
-  float4 _92 = t0.SampleLevel(s0, _89, 0.0f);
+  float4 _92 = scene_texture.SampleLevel(s0, _89, 0.0f);
   float _93 = _92.x;
   float3 _97 = float3(_93, _92.yz);
   bool _107 = cb0_m1.x != 0u;
@@ -39,12 +41,17 @@ void frag_main() {
   float _114 = _108 / cb0_m0;
   float _115 = _109 / cb0_m0;
   float _116 = _110 / cb0_m0;
-  float4 _132 = t1.SampleLevel(s1, _89, 0.0f);
+
+  float4 _132 = ui_texture.SampleLevel(s1, _89, 0.0f);
+
   float _136 = _132.w;
-  float _149 = exp2(log2(abs(mad(mad(cb0_m0, _114 / (_114 + 1.0f), -_108), _136, _108))) * (1.f / 2.2f));
-  float _150 = exp2(log2(abs(mad(_136, mad(cb0_m0, _115 / (_115 + 1.0f), -_109), _109))) * (1.f / 2.2f));
-  float _151 = exp2(log2(abs(mad(_136, mad(cb0_m0, _116 / (_116 + 1.0f), -_110), _110))) * (1.f / 2.2f));
+  float _149 = pow((abs(mad(mad(cb0_m0, _114 / (_114 + 1.0f), -_108), _136, _108))), (1.f / 2.2f));
+  float _150 = pow((abs(mad(_136, mad(cb0_m0, _115 / (_115 + 1.0f), -_109), _109))), (1.f / 2.2f));
+  float _151 = pow((abs(mad(_136, mad(cb0_m0, _116 / (_116 + 1.0f), -_110), _110))), (1.f / 2.2f));
+
   float3 _152 = float3(_132.xyz);
+  // _152 = renodx::color::correct::GammaSafe(_152);
+
   SV_TARGET.x = exp2(log2(abs(mad(_136, exp2(log2(abs(cb0_m0 * dp3_f32(_152, float3(0.62740409374237060546875f, 0.329282104969024658203125f, 0.0433137975633144378662109375f)))) * (1.f / 2.2f)) - _149, _149))) * 2.2f);
   SV_TARGET.y = exp2(log2(abs(mad(_136, exp2(log2(abs(cb0_m0 * dp3_f32(_152, float3(0.0690972506999969482421875f, 0.919541180133819580078125f, 0.011362140066921710968017578125f)))) * (1.f / 2.2f)) - _150, _150))) * 2.2f);
   SV_TARGET.z = exp2(log2(abs(mad(_136, exp2(log2(abs(cb0_m0 * dp3_f32(_152, float3(0.01639158837497234344482421875f, 0.088013254106044769287109375f, 0.895595014095306396484375f)))) * (1.f / 2.2f)) - _151, _151))) * 2.2f);

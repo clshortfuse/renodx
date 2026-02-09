@@ -78,6 +78,28 @@ const std::unordered_map<
         ViewUpgradeAll(b8g8r8a8_unorm_srgb, r11g11b10_float),
 };
 
+const std::unordered_map<
+    std::pair<reshade::api::resource_usage, reshade::api::format>,
+    reshade::api::format, utils::hash::HashPair>
+    VIEW_UPGRADES_R9G9B9E5 = {
+        ViewUpgradeAll(r16g16b16a16_typeless, r9g9b9e5),
+        ViewUpgradeAll(r10g10b10a2_typeless, r9g9b9e5),
+        ViewUpgradeAll(r8g8b8a8_typeless, r9g9b9e5),
+        ViewUpgradeAll(r16g16b16a16_float, r9g9b9e5),
+        ViewUpgradeAll(r16g16b16a16_unorm, r9g9b9e5),
+        ViewUpgradeAll(r16g16b16a16_snorm, r9g9b9e5),
+        ViewUpgradeAll(r10g10b10a2_unorm, r9g9b9e5),
+        ViewUpgradeAll(b10g10r10a2_unorm, r9g9b9e5),
+        ViewUpgradeAll(r8g8b8a8_unorm, r9g9b9e5),
+        ViewUpgradeAll(b8g8r8a8_unorm, r9g9b9e5),
+        ViewUpgradeAll(r8g8b8a8_snorm, r9g9b9e5),
+        ViewUpgradeAll(r8g8b8a8_unorm_srgb, r9g9b9e5),
+        ViewUpgradeAll(b8g8r8a8_unorm_srgb, r9g9b9e5),
+        ViewUpgradeAll(r11g11b10_float, r9g9b9e5),
+        ViewUpgradeAll(r9g9b9e5, r9g9b9e5),
+};
+
+
 #undef ViewUpgrade
 #undef ViewUpgradeAll
 

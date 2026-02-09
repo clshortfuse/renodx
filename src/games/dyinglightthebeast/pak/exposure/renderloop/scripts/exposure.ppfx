@@ -1,0 +1,188 @@
+import "EngineDefs.mth"
+import "common.ppfx"
+
+extern bool HDR_ON;
+extern int RES_PP_WIDTH;
+extern int RES_PP_HEIGHT;
+
+bool bigger_than_4k = max(RES_PP_WIDTH, RES_PP_HEIGHT) > 4096;
+
+
+sub exposure_buffers()
+{
+	BufferFormat("EXPOSURE", 2, 1, "R32_FLOAT", "ua");
+	DataBuffer("EXPOSURE_HISTOGRAM", 4, 256, "struct");
+}
+
+sub exposure_init()
+{
+	SetClearColor(0.0, 0.0, 0.0, 0.0);
+	SetRenderTargets("EXPOSURE", "color");
+		Mesh("tri_screen.msh", "avg_init.mat", "std");
+}
+
+sub exposure_usermaps()
+{
+	SetBuffer(USERMAP_EXPOSURE, "EXPOSURE");
+}
+
+sub exposure_construct_histogram(string s_src = "")
+{
+	PushMarker("Exposure Histogram Construct");
+
+	SetRenderTargets("WRONG", "");
+	SetBuffer(USERMAP_TMP_0, s_src);
+	SetBuffer(UAV_0, "EXPOSURE_HISTOGRAM");
+		Dispatch("exposure_calc_histogram$clear.mat", "std", 1, 1, 1);
+	FreeUAVs();
+
+	SetBuffer(UAV_0, "EXPOSURE_HISTOGRAM");
+		DispatchUsingBuffer("exposure_calc_histogram.mat", "std", s_src, 16, 16, 1, 4);
+	FreeUAVs();
+
+	PopMarker();
+}
+
+sub exposure_histogram()
+{
+	PushMarker("Exposure Histogram Adaptation");
+
+	SetBuffer(UAV_0, "EXPOSURE");
+	SetBuffer(USERMAP_TMP_1, "EXPOSURE_HISTOGRAM");
+		Dispatch("exposure_calc_histogram$perform_adaptation.mat", "std", 1, 1, 1);
+	FreeUAVs();
+
+	PopMarker();
+}
+
+sub exposure_manual()
+{
+	PushMarker("Exposure Manual");
+
+	SetRenderTargets("WRONG", "");
+	SetBuffer(UAV_0, "EXPOSURE");
+		Dispatch("exposure_calc_manual.mat", "std", 1, 1, 1);
+	FreeUAVs();
+
+	PopMarker();
+}
+
+sub exposure_log_luminance(string s_src = "")
+{
+	PushMarker("Exposure Logarithmic");
+
+	SetRenderTargets("WRONG", "");
+
+	BufferScreenFormat("16_LOG_EXPOSURE", 16, "R32G32_FLOAT", "ua");
+	SetBuffer(UAV_0, "16_LOG_EXPOSURE");
+	SetBuffer(USERMAP_TMP_0, s_src);
+	SetBuffer(USERMAP_TMP_1, "s_exposure_msk");
+		DispatchUsingBuffer("exposure_calc_logluminance$first_pass.mat", "std", s_src, 16, 16, 2, 2);
+	FreeUAVs();
+
+	BufferScreenFormat("256_LOG_EXPOSRE", 256, "R32G32_FLOAT", "ua");
+	SetBuffer(UAV_0, "256_LOG_EXPOSRE");
+	SetBuffer(USERMAP_TMP_0, "16_LOG_EXPOSURE");
+		DispatchUsingBuffer("exposure_calc_logluminance.mat", "std", "16_LOG_EXPOSURE", 16, 16, 2, 2);
+	FreeUAVs();
+	Release("16_LOG_EXPOSURE");
+
+	SetBuffer(UAV_0, "EXPOSURE");
+	SetBuffer(USERMAP_TMP_0, "256_LOG_EXPOSRE");
+		DispatchUsingBuffer("exposure_calc_logluminance$final_pass.mat", "std", "256_LOG_EXPOSRE", 16, 16, 2, 2);
+	FreeUAVs();
+	Release("256_LOG_EXPOSRE");
+
+	PopMarker();
+}
+
+sub exposure_linear_luminance(string s_src = "")
+{
+	PushMarker("Exposure");
+		SetRenderTargets("WRONG", "");
+
+		//First downsampling pass
+		BufferScreenFormat("16_LUM_WGT", 16, "R16G16_FLOAT", S_BUFFER_FLAGS);
+		SetBuffer(UAV_0, "16_LUM_WGT");
+		SetBuffer(USERMAP_TMP_0, s_src);
+		SetBuffer(USERMAP_TMP_1, "s_exposure_msk");
+		if(HDR_ON)
+		{
+			// DispatchUsingBuffer("reduce_avg$first_pass_hdr.mat", "std",  s_src, 2, 2, 16, 16);
+			DispatchUsingBuffer("reduce_avg$first_pass.mat", "std",  s_src, 2, 2, 16, 16); // CUSTOM EDIT
+		}
+		else
+		{
+			DispatchUsingBuffer("reduce_avg$first_pass.mat", "std",  s_src, 2, 2, 16, 16);
+		}
+		FreeUAVs();
+
+		//Second downsampling pass
+		BufferScreenFormat("256_LUM_WGT", 256, "R16G16_FLOAT", S_BUFFER_FLAGS);
+		SetBuffer(UAV_0, "256_LUM_WGT");
+		SetBuffer(USERMAP_TMP_0, "16_LUM_WGT");
+			DispatchUsingBuffer("reduce_avg.mat", "std", "16_LUM_WGT", 2, 2, 16, 16);
+		FreeUAVs();
+		Release("16_LUM_WGT");
+
+		if (bigger_than_4k)
+		{
+			BufferScreenFormat("512_LUM_WGT", 512, "R16G16_FLOAT", S_BUFFER_FLAGS);
+			SetBuffer(UAV_0, "512_LUM_WGT");
+			SetBuffer(USERMAP_TMP_0, "256_LUM_WGT");
+				DispatchUsingBuffer("reduce_avg_2.mat", "std", "256_LUM_WGT", 2, 2, 16, 16);
+			FreeUAVs();
+		}
+
+		//Third downsampling pass & exposure calculation
+		SetBuffer(UAV_0, "EXPOSURE");
+		string buffer_for_last_pass = bigger_than_4k ? "512_LUM_WGT" : "256_LUM_WGT";
+		SetBuffer(USERMAP_TMP_0, buffer_for_last_pass);
+		if(HDR_ON)
+		{
+			// DispatchUsingBuffer("reduce_avg_16$hdr.mat", "std", buffer_for_last_pass, 2, 2, 8, 8);
+			DispatchUsingBuffer("reduce_avg_16.mat", "std", buffer_for_last_pass, 2, 2, 8, 8); // CUSTOM EDIT
+		}
+		else
+		{
+			DispatchUsingBuffer("reduce_avg_16.mat", "std", buffer_for_last_pass, 2, 2, 8, 8);
+		}
+		FreeUAVs();
+		Release("256_LUM_WGT");
+		if (bigger_than_4k)
+		{
+			Release("512_LUM_WGT");
+		}
+	PopMarker();
+}
+
+sub exposure(string s_src = "")
+{
+	If("i_pp_exposure_construct_histogram")
+	{
+		use exposure_construct_histogram(s_src = s_src);
+	}
+
+	If("i_manual_exposure_enabled")
+	{
+		use exposure_manual();
+	}
+	Else()
+	{
+		Switch("i_auto_exposure_metering_mode")
+		{
+			Case(0)
+			{
+				use exposure_linear_luminance(s_src = s_src);
+			}
+			Case(1)
+			{
+				use exposure_log_luminance(s_src = s_src);
+			}
+			Case(2)
+			{
+				use exposure_histogram();
+			}
+		}
+	}
+}

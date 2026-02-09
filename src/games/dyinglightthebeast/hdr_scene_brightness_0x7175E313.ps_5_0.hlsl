@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 // ---- Created with 3Dmigoto v1.4.1 on Mon Sep 22 01:48:40 2025
 Texture2D<float4> t1 : register(t1);
@@ -25,17 +25,30 @@ void main(
   r0.xy = (uint2)v0.xy;
   r0.zw = float2(0, 0);
   r0.xyzw = t0.Load(r0.xyz).xyzw;
-  r1.x = t1.Load(float4(0, 0, 0, 0)).x;
-  r0.xyz = r1.xxx * r0.xyz;
+
+  float autoexposure = t1.Load(int3(0, 0, 0)).x;
+
+  float3 scene_original = r0.rgb;
+
+#if 1  // slightly reduce autoexposure strength for higher values
+  if (USE_CUSTOM_AUTOEXPOSURE != 0.f) {
+    float y = renodx::color::y::from::BT709(r0.rgb * autoexposure);
+    // from 0.18 - 1.18 luminance, ramp down autoexposure strength
+    float t = saturate(y - 0.18f);
+    float strength = lerp(1.f, 0.95f, t * t * t);  // lower from 100% -> 95%
+    autoexposure = lerp(1.f, autoexposure, strength);
+  }
+#endif
+
+  float3 scene_exposed = autoexposure * scene_original;
+
   o0.w = r0.w;
 
   if (RENODX_TONE_MAP_TYPE == 0.f) {
-    r0.rgb *= scene_brightness;
-  } else {
-    r0.rgb *= RENODX_PRE_EXPOSURE;
+    scene_exposed *= scene_brightness;
   }
 
-  o0.xyz = r0.xyz;
+  o0.xyz = scene_exposed;
 
   return;
 }

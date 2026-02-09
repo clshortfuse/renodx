@@ -28,6 +28,7 @@ float4 main(
 
   // linear_color = renodx::math::SignPow(linear_color, _cbHDRResolve_000.S_cbHDRResolve_000.x);
   float3 bt2020_color = renodx::color::bt2020::from::BT709(linear_color);
+  bt2020_color = GamutCompress(bt2020_color, renodx::color::BT2020_TO_XYZ_MAT);
   float3 pq_color = renodx::color::pq::EncodeSafe(bt2020_color, 200.f / pow(_cbHDRResolve_000.S_cbHDRResolve_000.x, 3.80178));  // gamma slider at 0.8 (actually 1.2) = 100
   // float3 pq_color = renodx::color::pq::EncodeSafe(bt2020_color, paper_white);
   return float4(pq_color, 1.f);

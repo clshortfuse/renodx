@@ -93,13 +93,9 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   float exponent = config.contrast * flare;
   const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
 
-// highlights
-#if 0
-  // const float highlights = 1 + (sign(config.highlights - 1) * pow(abs(config.highlights - 1), 10.f));
-  // float y_highlighted = renodx::color::grade::Highlights(y_contrasted, config.highlights, mid_gray);
-#else
+  // highlights
   float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
-#endif
+
   // shadows
   float y_shadowed = Shadows(y_highlighted, config.shadows, mid_gray);
 
@@ -110,23 +106,32 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   return color;
 }
 
-float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 untonemapped, float y, renodx::color::grade::Config config) {
+float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 untonemapped, float y, renodx::color::grade::Config config, float chrominance_emulation = 0.f) {
   float3 color = tonemapped;
-  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_correction_strength != 0.f || config.blowout != 0.f) {
+  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_correction_strength != 0.f || config.blowout != 0.f || chrominance_emulation != 0.f) {
     float3 perceptual_new = renodx::color::oklab::from::BT709(color);
 
-    if (config.hue_correction_strength != 0.f) {
-      float3 perceptual_old = renodx::color::oklab::from::BT709(untonemapped);
+    // hue and chrominance emulation
+    if (config.hue_correction_strength != 0.0 || chrominance_emulation != 0.0) {
+      const float3 reference_oklab = renodx::color::oklab::from::BT709(untonemapped);
 
-      // Save chrominance to apply black
-      float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
+      float chrominance_current = length(perceptual_new.yz);
+      float chrominance_ratio = 1.0;
 
-      perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, config.hue_correction_strength);
+      if (config.hue_correction_strength != 0.0) {
+        const float chrominance_pre = chrominance_current;
+        perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, config.hue_correction_strength);
+        const float chrominancePost = length(perceptual_new.yz);
+        chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
+        chrominance_current = chrominancePost;
+      }
 
-      float chrominance_post_adjust = distance(perceptual_new.yz, 0);
-
-      // Apply back previous chrominance
-      perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
+      if (chrominance_emulation != 0.0) {
+        const float reference_chrominance = length(reference_oklab.yz);
+        float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
+        chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_emulation);
+      }
+      perceptual_new.yz *= chrominance_ratio;
     }
 
     if (config.dechroma != 0.f) {
@@ -188,15 +193,16 @@ float3 ApplyDisplayMap(float3 undisplaymapped) {
   cg_config.contrast = RENODX_TONE_MAP_CONTRAST;
   cg_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
   cg_config.saturation = RENODX_TONE_MAP_SATURATION;
-  cg_config.dechroma = max(0.00001f, RENODX_TONE_MAP_BLOWOUT);
-  cg_config.hue_correction_strength = 1.f;
+  cg_config.dechroma = RENODX_TONE_MAP_DECHROMA;
+  cg_config.hue_correction_strength = RENODX_TONE_MAP_HUE_SHIFT;
   cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+  float chrominance_emulation = RENODX_TONE_MAP_BLOWOUT;
   float y = renodx::color::y::from::BT709(undisplaymapped);
-
-  float3 hue_shift_source = lerp(undisplaymapped, renodx::tonemap::ReinhardPiecewise(undisplaymapped, 12.5f, 1.f), RENODX_TONE_MAP_HUE_SHIFT);
+  // blow out and hue shift before max channel tonemap
+  float3 hue_chrominance_source = renodx::tonemap::ReinhardPiecewise(undisplaymapped, 12.5f, 1.f);
 
   undisplaymapped = ApplyExposureContrastFlareHighlightsShadowsByLuminance(undisplaymapped, y, cg_config, 0.18f);
-  undisplaymapped = ApplySaturationBlowoutHueCorrectionHighlightSaturation(undisplaymapped, hue_shift_source, y, cg_config);
+  undisplaymapped = ApplySaturationBlowoutHueCorrectionHighlightSaturation(undisplaymapped, hue_chrominance_source, y, cg_config, chrominance_emulation);
 
   float3 displaymapped;
   if (RENODX_TONE_MAP_TYPE == 2.f) {
