@@ -1,7 +1,9 @@
 #ifndef SRC_RE4REMAKE_SHARED_H_
 #define SRC_RE4REMAKE_SHARED_H_
 
-#define GAMUT_COMPRESS 2  // 0 - off, 1 - BT.709, 2 - BT.2020
+#define GAMUT_COMPRESS          2  // 0 - off, 1 - BT.709, 2 - BT.2020
+#define LUMINANCE_CORRECT_TYPE  1  // 0 - multiplicative, 1 - additive
+#define CHROMA_CALCULATION_TYPE 1  // 0 - multiplicative, 1 - additive
 
 // Must be 32bit aligned
 // Should be 4x32
