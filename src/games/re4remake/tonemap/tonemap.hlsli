@@ -230,12 +230,25 @@ float3 ApplyCustomGrading(float3 ungraded) {
   };
 
   float y = renodx::color::y::from::BT709(ungraded);
-  float3 chrominance_hue_reference_color = renodx::color::bt709::from::BT2020(renodx::tonemap::ReinhardPiecewise(renodx::color::bt2020::from::BT709(ungraded), 12.5f, 1.f));
+  // float3 chrominance_hue_reference_color = renodx::color::bt709::from::BT2020(renodx::tonemap::neutwo::PerChannel(renodx::color::bt2020::from::BT709(ungraded) / 3.f) * 3.f);
+  float3 chrominance_hue_reference_color = renodx::color::bt709::from::BT2020(renodx::tonemap::ReinhardPiecewise(renodx::color::bt2020::from::BT709(ungraded), 5.f, 1.5f));
 
   float3 graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, y, cg_config, 0.18f);
   graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, chrominance_hue_reference_color, y, cg_config);
 
   return graded;
+}
+
+float3 ApplyNeutwoByMaxChannel(float3 input, float peak_white, float diffuse_white, float white_clip = 100.f,
+                               float gray_in = 0.18f, float gray_out = 0.18f, float min = 0.f) {
+  float max_channel = renodx::math::Max(input);
+
+  float peak_ratio = peak_white / diffuse_white;
+  float min_ratio = min / diffuse_white;
+  float mapped_peak = renodx::tonemap::Neutwo(max_channel, peak_ratio, white_clip, gray_in, gray_out, min_ratio);
+  float scale = renodx::math::DivideSafe(mapped_peak, max_channel, 1.f);
+  float3 tonemapped = input * scale;
+  return tonemapped;
 }
 
 float3 ApplyDisplayMap(float3 untonemapped) {
@@ -247,10 +260,13 @@ float3 ApplyDisplayMap(float3 untonemapped) {
   untonemapped_bt2020 = GamutCompress(untonemapped_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
 #endif
 
-  float3 tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(
+  // float3 tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(
+  //     max(0, untonemapped_bt2020),
+  //     RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
+  float3 tonemapped_bt2020 = ApplyNeutwoByMaxChannel(
       max(0, untonemapped_bt2020),
-      RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
-  // tonemapped_bt2020 = min(peak_ratio, tonemapped_bt2020);
+      RENODX_PEAK_WHITE_NITS, RENODX_DIFFUSE_WHITE_NITS, 100.f, 0.18f, 0.18f, 0.0001f);
+  tonemapped_bt2020 = min(peak_ratio, tonemapped_bt2020);
 
   float3 tonemapped_bt709 = renodx::color::bt709::from::BT2020(tonemapped_bt2020);
 

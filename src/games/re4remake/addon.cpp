@@ -314,8 +314,8 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 2.f},
-              {"ColorGradeHighlights", 55.f},
-              {"ColorGradeShadows", 80.f},
+              {"ColorGradeShadows", 70.f},
+              {"ColorGradeHighlightSaturation", 55.f},
               {"FxNoise", 0.f},
               {"FxGrainStrength", 35.f},
           });
@@ -386,9 +386,13 @@ renodx::utils::settings::Settings settings = {
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
+      {"ToneMapPeakNits", 1000.f},
+      {"ToneMapGameNits", 203.f},
+      {"ToneMapUINits", 203.f},
+      {"GammaCorrection", 0.f},
       {"ToneMapBlowout", 100.f},
       {"ToneMapHueShift", 20.f},
-      {"GammaCorrection", 0.f},
+      {"ColorGradeHighlightContrast", 50.f},
       {"ColorGradeToeAdjustmentType", 0.f},
       {"ColorGradeShadowToe", 1.f},
       {"ColorGradeExposure", 1.f},
@@ -400,7 +404,6 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
-      {"ColorGradeHighlightContrast", 50.f},
       {"ColorGradeLUTStrength", 100.f},
       {"ColorGradeLUTScaling", 0.f},
       {"FxSharpeningType", 0.f},
