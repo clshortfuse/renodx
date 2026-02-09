@@ -945,6 +945,9 @@ float4 main(
     _2465 = _1387;
   }
   if (!((cPassEnabled & 2) == 0) && (CUSTOM_NOISE == 1.f)) {
+#if 1
+    float3 noise_input = float3(_2463, _2464, _2465);
+#endif
     float _2487 = floor(((screenSize.x * fNoiseUVOffset.x) + SV_Position.x) * fReverseNoiseSize);
     float _2489 = floor(((screenSize.y * fNoiseUVOffset.y) + SV_Position.y) * fReverseNoiseSize);
     float _2493 = frac(frac(dot(float2(_2487, _2489), float2(0.0671105608344078f, 0.005837149918079376f))) * 52.98291778564453f);
@@ -984,6 +987,11 @@ float4 main(
         } while (false);
       } while (false);
     } while (false);
+#if 1
+    _2567 = lerp(noise_input.r, _2567, CUSTOM_NOISE);
+    _2568 = lerp(noise_input.g, _2568, CUSTOM_NOISE);
+    _2569 = lerp(noise_input.b, _2569, CUSTOM_NOISE);
+#endif
   } else {
     _2567 = _2463;
     _2568 = _2464;
