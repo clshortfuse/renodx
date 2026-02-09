@@ -25,6 +25,7 @@ float4 main(noperspective float4 SV_Position: SV_Position,
     float _6 = TEXCOORD.y;
 
     float4 _9 = tLinearImage.SampleLevel(PointBorder, TEXCOORD.xy, 0.0f);
+    _9.rgb = max(0, _9.rgb);  // since we upgraded to fp16
     float _10 = _9.x;
     float _11 = _9.y;
     float _12 = _9.z;
