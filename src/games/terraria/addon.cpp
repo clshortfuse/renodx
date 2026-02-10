@@ -130,23 +130,23 @@ renodx::utils::settings::Settings settings = {
     //     .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
     //     .is_visible = []() { return current_settings_mode >= 2; },
     // },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapHueCorrection",
-        .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 100.f,
-        .label = "Hue Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Hue retention strength.",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ToneMapHueCorrection",
+    //     .binding = &shader_injection.tone_map_hue_correction,
+    //     .default_value = 100.f,
+    //     .label = "Hue Correction",
+    //     .section = "Tone Mapping",
+    //     .tooltip = "Hue retention strength.",
+    //     .min = 0.f,
+    //     .max = 100.f,
+    //     .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
+    //     .parse = [](float value) { return value * 0.01f; },
+    //     .is_visible = []() { return current_settings_mode >= 1; },
+    // },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 85.f,
+        .default_value = 95.f,
         .label = "Hue Shift",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
@@ -154,7 +154,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 2; },
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
     // new renodx::utils::settings::Setting{
     //     .key = "ToneMapClampColorSpace",
@@ -351,13 +351,33 @@ renodx::utils::settings::Settings settings = {
     //     .is_visible = []() { return current_settings_mode >= 2; },
     // },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "RenoDX Discord",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "F6AUTeWJHM");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den Discord",
+        .section = "Links",
+        .group = "button-line-1",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "R2Bt3uptw6");
+        },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("RenoDX for Terraria by Scrungus"),
         .section = "About",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Build: 2/9/2026 V1.0.0"),
+        .label = std::string("Build: 2/9/2026 V1.0.1"),
         .section = "About",
     },
 };
