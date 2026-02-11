@@ -274,6 +274,8 @@ float3 ApplyDisplayMap(float3 untonemapped) {
 }
 
 float3 ApplyToneMap(float3 untonemapped, float2 texcoord) {
+  if (TONE_MAP_TYPE == 0.f) return max(0, untonemapped);
+
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     untonemapped = renodx::color::correct::GammaSafe(untonemapped);
   } else if (RENODX_GAMMA_CORRECTION == 2.f) {
