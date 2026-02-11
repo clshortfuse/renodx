@@ -1,6 +1,6 @@
 #define SHADER_HASH 0x1A45EF38
 
-#include "../tonemap.hlsli"
+#include "../../tonemap.hlsli"
 
 Texture2D<float4> HDRImage : register(t0);
 
