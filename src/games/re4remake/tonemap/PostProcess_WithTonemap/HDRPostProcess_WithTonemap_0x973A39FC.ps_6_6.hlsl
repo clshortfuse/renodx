@@ -1134,10 +1134,8 @@ float4 main(
   SV_Target.w = 0.0f;
 
 #if 1
-  if (TONE_MAP_TYPE != 0) {
-    float2 grain_uv = SV_Position.xy * screenInverseSize;
-    SV_Target.rgb = ApplyToneMap(SV_Target.rgb, grain_uv);
-  }
+  float2 grain_uv = SV_Position.xy * screenInverseSize;
+  SV_Target.rgb = ApplyToneMap(SV_Target.rgb, grain_uv);
 #endif
 
   return SV_Target;
