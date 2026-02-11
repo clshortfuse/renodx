@@ -1,4 +1,4 @@
-#include "./output.hlsli"
+#include "../output.hlsli"
 
 Texture2D<float4> tLinearImage : register(t0);
 

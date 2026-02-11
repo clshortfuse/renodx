@@ -1,6 +1,6 @@
 #define SHADER_HASH 0x38F17A43
 
-#include "../tonemap.hlsli"
+#include "../../tonemap.hlsli"
 
 Texture2D<float4> HDRImage : register(t0);
 
@@ -25,10 +25,10 @@ cbuffer CameraKerare : register(b0) {
 // };
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float4 Kerare : Kerare,
-  linear float Exposure : Exposure
-) : SV_Target {
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 Kerare: Kerare,
+    linear float Exposure: Exposure)
+    : SV_Target {
   float4 SV_Target;
   float4 _16 = HDRImage.Load(int3((uint)(uint(SV_Position.x)), (uint)(uint(SV_Position.y)), 0));
   float _22 = Kerare.x / Kerare.w;
@@ -53,9 +53,9 @@ float4 main(
     float _83 = select((_41 < linearStart), 0.0f, 1.0f);
     float _84 = select((_43 < linearStart), 0.0f, 1.0f);
     float _85 = select((_45 < linearStart), 0.0f, 1.0f);
-    _148 = (((((contrast * _41) + madLinearStartContrastFactor) * ((1.0f - _83) - _73)) + (((pow(_54, toe)) * _73) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _41) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _83));
-    _149 = (((((contrast * _43) + madLinearStartContrastFactor) * ((1.0f - _84) - _75)) + (((pow(_60, toe)) * _75) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _43) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _84));
-    _150 = (((((contrast * _45) + madLinearStartContrastFactor) * ((1.0f - _85) - _77)) + (((pow(_66, toe)) * _77) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _45) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _85));
+    _148 = (((((contrast * _41) + madLinearStartContrastFactor) * ((1.0f - _83) - _73)) + (((pow(_54, toe))*_73) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _41) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _83));
+    _149 = (((((contrast * _43) + madLinearStartContrastFactor) * ((1.0f - _84) - _75)) + (((pow(_60, toe))*_75) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _43) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _84));
+    _150 = (((((contrast * _45) + madLinearStartContrastFactor) * ((1.0f - _85) - _77)) + (((pow(_66, toe))*_77) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _45) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _85));
   } else {
     _148 = 1.0f;
     _149 = 1.0f;

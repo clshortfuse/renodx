@@ -1,4 +1,4 @@
-#include "./sharpening.hlsli"
+#include "../sharpening.hlsli"
 
 Texture2D<float4> SrcImage : register(t0);
 

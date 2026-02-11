@@ -4,19 +4,19 @@
 #define SHADER_HASH 0
 #endif
 
-#if SHADER_HASH == 0x973A39FC  // HDRPostProcess_WithTonemap_0x973A39FC
+#if SHADER_HASH == 0x973A39FC || SHADER_HASH == 0x7FE82B7A  // With Vignette
 #define TONE_MAP_PARAM_REGISTER        b2
 #define COLOR_CORRECT_TEXTURE_REGISTER b8
 #define CB_CONTROL_REGISTER            b11
 #define USES_LUTS                      1
-#elif SHADER_HASH == 0x1F9104F3  // NoVignette_HDRPostProcess_WithTonemap_0x1F9104F3
+#elif SHADER_HASH == 0x1F9104F3 || SHADER_HASH == 0xDADFEAEF  // No Vignette
 #define TONE_MAP_PARAM_REGISTER        b1
 #define COLOR_CORRECT_TEXTURE_REGISTER b7
 #define CB_CONTROL_REGISTER            b10
 #define USES_LUTS                      1
-#elif SHADER_HASH == 0x1A45EF38  // PostTonemap_PS_0x1A45EF38
+#elif SHADER_HASH == 0x1A45EF38 || SHADER_HASH == 0xF37A126A  // PostTonemap_PS
 #define TONE_MAP_PARAM_REGISTER b0
-#elif SHADER_HASH == 0x38F17A43  // PostTonemapC4L_PS_0x38F17A43
+#elif SHADER_HASH == 0x38F17A43 || SHADER_HASH == 0x38F17A43  // PostTonemapC4L
 #define TONE_MAP_PARAM_REGISTER b1
 #else  // unknown hash
 #define TONE_MAP_PARAM_REGISTER b0
