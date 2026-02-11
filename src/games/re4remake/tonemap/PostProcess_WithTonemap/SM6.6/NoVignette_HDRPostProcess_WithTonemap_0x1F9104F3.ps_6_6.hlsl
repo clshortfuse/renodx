@@ -1,6 +1,6 @@
 #define SHADER_HASH 0x1F9104F3
 
-#include "../tonemap.hlsli"
+#include "../../tonemap.hlsli"
 
 Texture2D<float> ReadonlyDepth : register(t0);
 
@@ -944,7 +944,7 @@ float4 main(
     _2464 = _1386;
     _2465 = _1387;
   }
-  if (!((cPassEnabled & 2) == 0) && (CUSTOM_NOISE == 1.f)) {
+  if (!((cPassEnabled & 2) == 0) && (CUSTOM_NOISE != 0.f)) {
 #if 1
     float3 noise_input = float3(_2463, _2464, _2465);
 #endif
