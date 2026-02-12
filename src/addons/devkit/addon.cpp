@@ -1475,7 +1475,7 @@ void RenderMenuBar(reshade::api::device* device, DeviceData* data) {
     ImGui::BeginDisabled(snapshot_device != nullptr);
     if (ImGui::MenuItem("Snapshot")) {
       snapshot_queued_device = device;
-      renodx::utils::trace::trace_scheduled = true;
+      renodx::utils::trace::trace_scheduled_device = device;
     }
     ImGui::EndDisabled();
     ImGui::PopID();
@@ -1511,7 +1511,7 @@ void RenderMenuBar(reshade::api::device* device, DeviceData* data) {
 
     ImGui::PushID("##TraceButton");
     if (ImGui::MenuItem("Trace")) {
-      renodx::utils::trace::trace_scheduled = true;
+      renodx::utils::trace::trace_scheduled_device = device;
     }
     ImGui::PopID();
 
