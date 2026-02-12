@@ -27,6 +27,7 @@ float3 ApplyRCAS(
 #define ENABLE_NORMALIZATION           1u
 //#define SHARPENING_NORMALIZATION_POINT RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS
 #define SHARPENING_NORMALIZATION_POINT 125
+#define PQ_SCALING                     RENODX_GRAPHICS_WHITE_NITS
 
   uint width, height;
   SamplerFrameBuffer_TEX.GetDimensions(width, height);
@@ -37,15 +38,15 @@ float3 ApplyRCAS(
   //  d e f
   //    h
   float3 b =
-      renodx::color::pq::DecodeSafe(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, -1) * texel_size, 0).rgb, 1.f);
+      renodx::color::pq::DecodeSafe(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, -1) * texel_size, 0).rgb, PQ_SCALING);
   float3 d =
-  renodx::color::pq::DecodeSafe(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(-1, 0) * texel_size, 0).rgb, 1.f);
+  renodx::color::pq::DecodeSafe(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(-1, 0) * texel_size, 0).rgb, PQ_SCALING);
   float3 e =
       center_color;
   float3 f =
-  renodx::color::pq::DecodeSafe(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(1, 0) * texel_size, 0).rgb, 1.f);
+  renodx::color::pq::DecodeSafe(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(1, 0) * texel_size, 0).rgb, PQ_SCALING);
   float3 h =
-  renodx::color::pq::DecodeSafe(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, 1) * texel_size, 0).rgb, 1.f);
+  renodx::color::pq::DecodeSafe(SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, 1) * texel_size, 0).rgb, PQ_SCALING);
 
 #if ENABLE_NORMALIZATION
   b /= SHARPENING_NORMALIZATION_POINT;
