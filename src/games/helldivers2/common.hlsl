@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./lilium_rcas.hlsl"
 
 float Highlights(float x, float highlights, float mid_gray) {
   if (highlights == 1.f) return x;
@@ -97,7 +98,8 @@ float3 PostTonemapSliders(float3 hdr_color) {
   return ApplySaturationBlowoutHighlightSaturation(hdr_color, y, config);
 }
 
-float3 CustomPostProcessing(float3 color, float2 uv) {
+float3 CustomPostProcessing(float3 color, float2 uv, Texture2D<float4> t1, SamplerState s1) {
+  color = ApplyRCAS(color, uv, t1, s1);
   color = renodx::effects::ApplyFilmGrain(color, uv, CUSTOM_RANDOM, CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
   return color;
 }
@@ -105,8 +107,8 @@ float3 CustomPostProcessing(float3 color, float2 uv) {
 float3 DisplayMap(float3 color) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
-  float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;                   // Normalizes peak
-  float diffuse_white_nits = config.swap_chain_scaling_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness | swap chain scaling nits because of use in shared.h
+  float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;
+  float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;
 
   color = max(0, renodx::color::bt2020::from::BT709(color));
   float tonemap_peak = peak_nits / diffuse_white_nits;
@@ -169,13 +171,13 @@ float3 CustomACES(float3 untonemapped_ap1) {
 
     float3 tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
 
-    float3 output = renodx::color::pq::EncodeSafe(tonemapped_bt2020, RENODX_DIFFUSE_WHITE_NITS);
+    float3 output = renodx::color::pq::EncodeSafe(tonemapped_bt2020, 1.f);
     return output;
   }
   return untonemapped_ap1;
 }
 
-bool HandleUICompositing(float4 ui_color, float3 scene_color, inout float4 output_color, float2 uv) {
+bool HandleUICompositing(float4 ui_color, float3 scene_color, inout float4 output_color, float2 uv, Texture2D<float4> t1, SamplerState s1) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
 
   ui_color.rgb = max(0, ui_color.rgb);
@@ -190,8 +192,9 @@ bool HandleUICompositing(float4 ui_color, float3 scene_color, inout float4 outpu
     ui_color_linear = renodx::color::srgb::Decode(ui_color.rgb);
   }
   ui_color_linear = renodx::color::bt2020::from::BT709(ui_color_linear);
-  float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color, RENODX_GRAPHICS_WHITE_NITS);
-  scene_color_linear = CustomPostProcessing(scene_color_linear, uv);
+  float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color, 1.f);
+  scene_color_linear = CustomPostProcessing(scene_color_linear, uv, t1, s1);
+  scene_color_linear *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
 
 #if 1  // apply Neutwo under UI
   if (TONEMAP_UNDER_UI != 0.f) {
@@ -214,7 +217,12 @@ bool HandleUICompositing(float4 ui_color, float3 scene_color, inout float4 outpu
 
   // linearize and scale up brightness
   float3 composited_color_linear = renodx::color::gamma::DecodeSafe(composited_color_gamma);
-  float3 pq_color = renodx::color::pq::EncodeSafe(composited_color_linear, RENODX_GRAPHICS_WHITE_NITS);
+
+  composited_color_linear *= RENODX_GRAPHICS_WHITE_NITS;
+  float max_channel = max(max(max(composited_color_linear.r, composited_color_linear.g), composited_color_linear.b), RENODX_PEAK_WHITE_NITS);
+  composited_color_linear *= RENODX_PEAK_WHITE_NITS / max_channel;  // Clamp UI or Videos
+
+  float3 pq_color = renodx::color::pq::EncodeSafe(composited_color_linear, 1.f);
   output_color = float4(pq_color, 1.f);
 
   return true;

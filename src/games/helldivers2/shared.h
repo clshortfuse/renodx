@@ -18,6 +18,7 @@
 #define SCENE_GRADE_PER_CHANNEL_HUE_SHIFT       shader_injection.scene_grade_per_channel_hue_shift
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
+#define CUSTOM_RCAS                           shader_injection.custom_rcas
 #define TONEMAP_UNDER_UI                      shader_injection.tonemap_under_ui
 
 // Must be 32bit aligned
@@ -41,6 +42,7 @@ struct ShaderInjectData {
   float custom_film_grain;
   float custom_random;
   float tonemap_under_ui;
+  float custom_rcas;
 };
 
 #ifndef __cplusplus

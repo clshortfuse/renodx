@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 // ---- Created with 3Dmigoto v1.4.1 on Wed Sep  3 05:58:14 2025
 Texture2DMS<float4> t1 : register(t1);
@@ -42,7 +42,7 @@ void main(
   r0.y = v1.y;
   r1.xyz = t0.Sample(s1_s, r0.xy, int2(0, 0)).xyz;
 
-  float3 game_color = r1.xyz;
+  //float3 game_color = r1.xyz;
 
   r0.z = max(cb1[4].x, cb1[4].y);
   r0.w = cmp(0 < r0.z);
@@ -83,6 +83,9 @@ void main(
   } else {
     r1.w = 1;
   }
+
+  //float3 game_color = r1.xyz;
+
   r0.w = cmp(0 < r0.z);
   r2.x = -cb1[6].z + cb1[5].z;
   r2.x = cb1[4].x * r2.x + cb1[6].z;
@@ -147,6 +150,7 @@ void main(
     r3.xyzw = r4.xyzw + r3.xyzw;
     r0.w = (int)r0.w + 1;
   }
+
   // missing instruction
   // sampleinfo r0.z, t1.x
   t1.GetDimensions(fDest.x, fDest.y, fDest.z);
@@ -159,9 +163,10 @@ void main(
 #if 1
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     float4 ui_color = r2;
+    float3 game_color = r1.xyz;
     ui_color = renodx::color::srgb::Encode(ui_color);
-    
-    HandleUICompositing(ui_color, game_color, o0, v1);
+
+    HandleUICompositing(ui_color, game_color, o0, v1, t0, s1_s);
     return;
   }
 #endif
