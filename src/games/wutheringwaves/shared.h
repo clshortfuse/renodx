@@ -43,11 +43,18 @@ struct ShaderInjectData {
   float wuwa_chromatic_aberration;
   float wuwa_bloom;
   float wuwa_blowout;
+  float wuwa_hdr_sun;
 
   float ui_visibility;
   float text_opacity;
   float status_text_opacity;
   float hud_opacity;
+
+  // Per-frame random seed (temporal dither/grain).
+  float custom_random;
+  float custom_random_pad0;
+  float custom_random_pad1;
+  float custom_random_pad2;
 };
 
 #ifndef __cplusplus
@@ -144,10 +151,13 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_WUWA_BLOOM                        shader_injection.wuwa_bloom
 #define RENODX_WUWA_GRAIN                        1.f
 #define RENODX_WUWA_BLOWOUT                      shader_injection.wuwa_blowout
+#define RENODX_WUWA_HDR_SUN                      shader_injection.wuwa_hdr_sun
 
 #define TEXT_OPACITY                             shader_injection.text_opacity * shader_injection.ui_visibility
 #define STATUS_TEXT_OPACITY                      shader_injection.status_text_opacity * shader_injection.ui_visibility
 #define HUD_OPACITY                              shader_injection.hud_opacity * shader_injection.ui_visibility
+
+#define CUSTOM_RANDOM                            shader_injection.custom_random
 
 #include "../../shaders/renodx.hlsl"
 #endif
