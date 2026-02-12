@@ -30,7 +30,6 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include <crc32_hash.hpp>
 #include "../../mods/swapchain.hpp"
 #include "../../utils/bitwise.hpp"
 #include "../../utils/constants.hpp"

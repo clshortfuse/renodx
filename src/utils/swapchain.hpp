@@ -6,6 +6,7 @@
 #pragma once
 
 #include <dxgi1_6.h>
+#include <windows.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -18,7 +19,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
 #include "./data.hpp"

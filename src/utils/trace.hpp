@@ -5,8 +5,6 @@
 
 #pragma once
 
-#define NOMINMAX
-
 #include <initguid.h>
 
 #include <algorithm>
@@ -19,6 +17,7 @@
 #include "./data.hpp"
 #include "./descriptor.hpp"
 #include "./format.hpp"
+#include "./hash.hpp"
 #include "./pipeline_layout.hpp"
 #include "./resource.hpp"
 #include "./shader.hpp"

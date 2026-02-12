@@ -6,7 +6,6 @@
 #include <filesystem>
 #include <include/reshade.hpp>
 
-#define NOMINMAX
 #include <Windows.h>
 
 #include <atomic>
