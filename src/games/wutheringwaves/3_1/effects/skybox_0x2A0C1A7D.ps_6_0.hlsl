@@ -1,6 +1,8 @@
-#include "../common.hlsl"
+#include "../../shared.h"
 
 Texture2D<float4> t0 : register(t0);
+
+Texture2D<float4> t1 : register(t1);
 
 cbuffer cb0 : register(b0) {
   float4 View_000[4] : packoffset(c000.x);
@@ -297,52 +299,49 @@ cbuffer cb0 : register(b0) {
   float View_4468 : packoffset(c279.y);
   float View_4472 : packoffset(c279.z);
   float View_4476 : packoffset(c279.w);
-  float View_4480 : packoffset(c280.x);
-  float View_4484 : packoffset(c280.y);
-  float View_4488 : packoffset(c280.z);
-  float View_4492 : packoffset(c280.w);
-  float4 View_4496 : packoffset(c281.x);
-  int View_4512 : packoffset(c282.x);
-  int View_4516 : packoffset(c282.y);
-  int View_4520 : packoffset(c282.z);
+  float4 View_4480 : packoffset(c280.x);
+  float View_4496 : packoffset(c281.x);
+  float View_4500 : packoffset(c281.y);
+  float View_4504 : packoffset(c281.z);
+  float View_4508 : packoffset(c281.w);
+  float View_4512 : packoffset(c282.x);
+  float View_4516 : packoffset(c282.y);
+  float View_4520 : packoffset(c282.z);
   float View_4524 : packoffset(c282.w);
-  float View_4528 : packoffset(c283.x);
-  float View_4532 : packoffset(c283.y);
-  float View_4536 : packoffset(c283.z);
-  float View_4540 : packoffset(c283.w);
-  float4 View_4544 : packoffset(c284.x);
-  float4 View_4560 : packoffset(c285.x);
+  float4 View_4528 : packoffset(c283.x);
+  int View_4544 : packoffset(c284.x);
+  int View_4548 : packoffset(c284.y);
+  int View_4552 : packoffset(c284.z);
+  float View_4556 : packoffset(c284.w);
+  float View_4560 : packoffset(c285.x);
+  float View_4564 : packoffset(c285.y);
+  float View_4568 : packoffset(c285.z);
+  float View_4572 : packoffset(c285.w);
   float4 View_4576 : packoffset(c286.x);
   float4 View_4592 : packoffset(c287.x);
-  float View_4608 : packoffset(c288.x);
-  float View_4612 : packoffset(c288.y);
-  float View_4616 : packoffset(c288.z);
-  float View_4620 : packoffset(c288.w);
+  float4 View_4608 : packoffset(c288.x);
   float4 View_4624 : packoffset(c289.x);
-  float4 View_4640 : packoffset(c290.x);
+  float View_4640 : packoffset(c290.x);
+  float View_4644 : packoffset(c290.y);
+  float View_4648 : packoffset(c290.z);
+  float View_4652 : packoffset(c290.w);
   float4 View_4656 : packoffset(c291.x);
   float4 View_4672 : packoffset(c292.x);
   float4 View_4688 : packoffset(c293.x);
-  float View_4704 : packoffset(c294.x);
-  float View_4708 : packoffset(c294.y);
-  float View_4712 : packoffset(c294.z);
-  float View_4716 : packoffset(c294.w);
+  float4 View_4704 : packoffset(c294.x);
   float4 View_4720 : packoffset(c295.x);
-  float4 View_4736 : packoffset(c296.x);
-  float View_4752 : packoffset(c297.x);
-  float View_4756 : packoffset(c297.y);
-  float View_4760 : packoffset(c297.z);
-  float View_4764 : packoffset(c297.w);
+  float View_4736 : packoffset(c296.x);
+  float View_4740 : packoffset(c296.y);
+  float View_4744 : packoffset(c296.z);
+  float View_4748 : packoffset(c296.w);
+  float4 View_4752 : packoffset(c297.x);
   float4 View_4768 : packoffset(c298.x);
-  float4 View_4784 : packoffset(c299.x);
-  float View_4800 : packoffset(c300.x);
-  float View_4804 : packoffset(c300.y);
-  float View_4808 : packoffset(c300.z);
-  float View_4812 : packoffset(c300.w);
-  float View_4816 : packoffset(c301.x);
-  float View_4820 : packoffset(c301.y);
-  float View_4824 : packoffset(c301.z);
-  float View_4828 : packoffset(c301.w);
+  float View_4784 : packoffset(c299.x);
+  float View_4788 : packoffset(c299.y);
+  float View_4792 : packoffset(c299.z);
+  float View_4796 : packoffset(c299.w);
+  float4 View_4800 : packoffset(c300.x);
+  float4 View_4816 : packoffset(c301.x);
   float View_4832 : packoffset(c302.x);
   float View_4836 : packoffset(c302.y);
   float View_4840 : packoffset(c302.z);
@@ -503,7 +502,10 @@ cbuffer cb0 : register(b0) {
   float View_5460 : packoffset(c341.y);
   float View_5464 : packoffset(c341.z);
   float View_5468 : packoffset(c341.w);
-  float4 View_5472 : packoffset(c342.x);
+  float View_5472 : packoffset(c342.x);
+  float View_5476 : packoffset(c342.y);
+  float View_5480 : packoffset(c342.z);
+  float View_5484 : packoffset(c342.w);
   float View_5488 : packoffset(c343.x);
   float View_5492 : packoffset(c343.y);
   float View_5496 : packoffset(c343.z);
@@ -513,35 +515,40 @@ cbuffer cb0 : register(b0) {
   float View_5524 : packoffset(c345.y);
   float View_5528 : packoffset(c345.z);
   float View_5532 : packoffset(c345.w);
-  float View_5536 : packoffset(c346.x);
-  float View_5540 : packoffset(c346.y);
-  float View_5544 : packoffset(c346.z);
-  float View_5548 : packoffset(c346.w);
+  float4 View_5536 : packoffset(c346.x);
   float View_5552 : packoffset(c347.x);
   float View_5556 : packoffset(c347.y);
   float View_5560 : packoffset(c347.z);
   float View_5564 : packoffset(c347.w);
-  float2 View_5568 : packoffset(c348.x);
+  float View_5568 : packoffset(c348.x);
+  float View_5572 : packoffset(c348.y);
   float View_5576 : packoffset(c348.z);
   float View_5580 : packoffset(c348.w);
-  float3 View_5584 : packoffset(c349.x);
+  float View_5584 : packoffset(c349.x);
+  float View_5588 : packoffset(c349.y);
+  float View_5592 : packoffset(c349.z);
   float View_5596 : packoffset(c349.w);
-  float3 View_5600 : packoffset(c350.x);
+  float2 View_5600 : packoffset(c350.x);
+  float View_5608 : packoffset(c350.z);
   float View_5612 : packoffset(c350.w);
   float3 View_5616 : packoffset(c351.x);
   float View_5628 : packoffset(c351.w);
-  float View_5632 : packoffset(c352.x);
-  float View_5636 : packoffset(c352.y);
-  float View_5640 : packoffset(c352.z);
+  float3 View_5632 : packoffset(c352.x);
   float View_5644 : packoffset(c352.w);
-  float View_5648 : packoffset(c353.x);
-  float View_5652 : packoffset(c353.y);
-  float View_5656 : packoffset(c353.z);
+  float3 View_5648 : packoffset(c353.x);
   float View_5660 : packoffset(c353.w);
-  float4 View_5664 : packoffset(c354.x);
-  float3 View_5680 : packoffset(c355.x);
+  float View_5664 : packoffset(c354.x);
+  float View_5668 : packoffset(c354.y);
+  float View_5672 : packoffset(c354.z);
+  float View_5676 : packoffset(c354.w);
+  float View_5680 : packoffset(c355.x);
+  float View_5684 : packoffset(c355.y);
+  float View_5688 : packoffset(c355.z);
   float View_5692 : packoffset(c355.w);
-  float View_5696 : packoffset(c356.x);
+  float4 View_5696 : packoffset(c356.x);
+  float3 View_5712 : packoffset(c357.x);
+  float View_5724 : packoffset(c357.w);
+  float View_5728 : packoffset(c358.x);
 };
 
 cbuffer cb1 : register(b1) {
@@ -583,91 +590,249 @@ cbuffer cb1 : register(b1) {
   float3 Primitive_640 : packoffset(c040.x);
   int Primitive_652 : packoffset(c040.w);
   float4 Primitive_656 : packoffset(c041.x);
+  float3 Primitive_672 : packoffset(c042.x);
+  int Primitive_684 : packoffset(c042.w);
 };
 
 cbuffer cb2 : register(b2) {
-  float4 Material_000[4] : packoffset(c000.x);
-  float4 Material_064[1] : packoffset(c004.x);
+  float4 MaterialCollection0_000[25] : packoffset(c000.x);
+};
+
+cbuffer cb3 : register(b3) {
+  float4 Material_000[30] : packoffset(c000.x);
+  float4 Material_480[4] : packoffset(c030.x);
 };
 
 SamplerState s0 : register(s0);
 
-float4 main(
+SamplerState s1 : register(s1);
+
+struct OutputSignature {
+  float4 SV_Target : SV_Target;
+  float4 SV_Target_1 : SV_Target1;
+  float4 SV_Target_2 : SV_Target2;
+  float4 SV_Target_3 : SV_Target3;
+  float4 SV_Target_4 : SV_Target4;
+  float4 SV_Target_5 : SV_Target5;
+  float4 SV_Target_6 : SV_Target6;
+};
+
+OutputSignature main(
   linear float4 TEXCOORD10_centroid : TEXCOORD10_centroid,
   linear float4 TEXCOORD11_centroid : TEXCOORD11_centroid,
-  linear float4 COLOR : COLOR,
-  linear float4 TEXCOORD : TEXCOORD,
-  linear float4 TEXCOORD_7 : TEXCOORD7,
+  linear float4 VELOCITY_PREV_POS : VELOCITY_PREV_POS,
   noperspective float4 SV_Position : SV_Position,
   nointerpolation uint SV_IsFrontFace : SV_IsFrontFace
-) : SV_Target {
+) {
+  // ======== SUN & MOON BOOST ========
+  static const float SUNMOON_BOOST = 2.0f;   // Boost multiplier for sun/moon
+  static const float MOON_BOOST = 1.0f;  // Additional Boost multiplier for the moon texture
+  static const float GLOW_BOOST = 2.0f;  // Boost multiplier for glow effects
+  // ==================================
+  
   float4 SV_Target;
-  float _54 = mad(SV_Position.z, (View_704[2].w), mad(SV_Position.y, (View_704[1].w), ((View_704[0].w) * SV_Position.x))) + (View_704[3].w);
-  float _58 = ((mad(SV_Position.z, (View_704[2].x), mad(SV_Position.y, (View_704[1].x), ((View_704[0].x) * SV_Position.x))) + (View_704[3].x)) / _54) - View_1120.x;
-  float _59 = ((mad(SV_Position.z, (View_704[2].y), mad(SV_Position.y, (View_704[1].y), ((View_704[0].y) * SV_Position.x))) + (View_704[3].y)) / _54) - View_1120.y;
-  float _60 = ((mad(SV_Position.z, (View_704[2].z), mad(SV_Position.y, (View_704[1].z), ((View_704[0].z) * SV_Position.x))) + (View_704[3].z)) / _54) - View_1120.z;
-  float _69;
-  float _70;
-  float _71;
-  float _115;
-  float _116;
-  float _117;
-  float _174;
-  float _175;
-  float _176;
-  float _177;
-  if ((Material_064[0].x) < 0.5f) {
-    _69 = (COLOR.x * COLOR.x);
-    _70 = (COLOR.y * COLOR.y);
-    _71 = (COLOR.z * COLOR.z);
-  } else {
-    _69 = COLOR.x;
-    _70 = COLOR.y;
-    _71 = COLOR.z;
+  float4 SV_Target_1;
+  float4 SV_Target_2;
+  float4 SV_Target_3;
+  float4 SV_Target_4;
+  float4 SV_Target_5;
+  float4 SV_Target_6;
+  float _103 = mad(SV_Position.z, (View_704[2].w), mad(SV_Position.y, (View_704[1].w), ((View_704[0].w) * SV_Position.x))) + (View_704[3].w);
+  float _104 = (mad(SV_Position.z, (View_704[2].x), mad(SV_Position.y, (View_704[1].x), ((View_704[0].x) * SV_Position.x))) + (View_704[3].x)) / _103;
+  float _105 = (mad(SV_Position.z, (View_704[2].y), mad(SV_Position.y, (View_704[1].y), ((View_704[0].y) * SV_Position.x))) + (View_704[3].y)) / _103;
+  float _106 = (mad(SV_Position.z, (View_704[2].z), mad(SV_Position.y, (View_704[1].z), ((View_704[0].z) * SV_Position.x))) + (View_704[3].z)) / _103;
+  float _107 = _104 - View_1120.x;
+  float _108 = _105 - View_1120.y;
+  float _109 = _106 - View_1120.z;
+  float _110 = -0.0f - _104;
+  float _111 = -0.0f - _105;
+  float _112 = -0.0f - _106;
+  float _114 = rsqrt(dot(float3(_110, _111, _112), float3(_110, _111, _112)));
+  float _115 = _114 * _110;
+  float _116 = _114 * _111;
+  float _117 = _114 * _112;
+  float _134 = (((Material_000[3].x) - (Material_000[2].x)) * (Material_480[0].x)) + (Material_000[2].x);
+  float _135 = (((Material_000[3].y) - (Material_000[2].y)) * (Material_480[0].x)) + (Material_000[2].y);
+  float _136 = (((Material_000[3].z) - (Material_000[2].z)) * (Material_480[0].x)) + (Material_000[2].z);
+  float _138 = sqrt(dot(float3(_134, _135, _136), float3(_134, _135, _136)));
+  float _159 = saturate(((_109 * 2.0f) * (0.5f - (MaterialCollection0_000[6].x))) / Primitive_080.w);
+  float _160 = 1.0f - _159;
+  float _163 = saturate(_160 * 100.0f) * min(max((1.0f - ((Material_480[1].x) * abs(dot(float3(_115, _116, _117), float3((_134 / _138), (_135 / _138), (_136 / _138))) + -1.0f))), 0.0f), 1.0f);
+  float _172 = sqrt(dot(float3(_107, _108, _109), float3(_107, _108, _109)));
+  float _173 = _107 / _172;
+  float _174 = _108 / _172;
+  float _175 = _109 / _172;
+  float _176 = dot(float3((Material_000[3].x), (Material_000[3].y), (Material_000[3].z)), float3(_173, _174, _175));
+  float _177 = saturate(_176);
+  float _185 = select((_177 <= 2.980232949312267e-08f), 0.0f, exp2(log2(_177) * (120.0f - ((Material_480[1].y) * 119.0f))));
+  if (RENODX_WUWA_HDR_SUN > 0.5f) {
+    _185 *= GLOW_BOOST;  // Boost glow brightness
   }
-  float4 _84 = t0.Sample(s0, float2((dot(float2(TEXCOORD.x, TEXCOORD.y), float2((Material_000[2].x), (Material_000[2].y))) + (Material_000[1].x)), (dot(float2(TEXCOORD.x, TEXCOORD.y), float2((Material_000[2].z), (Material_000[2].w))) + (Material_000[1].y))));
-  if ((Material_064[0].x) > 0.5f) {
-    _115 = max(((exp2(log2(max(_84.x, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-    _116 = max(((exp2(log2(max(_84.y, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-    _117 = max(((exp2(log2(max(_84.z, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-  } else {
-    _115 = _84.x;
-    _116 = _84.y;
-    _117 = _84.z;
+  float _230 = dot(float3(_173, _174, _175), float3(((((Material_000[10].x) - (Material_000[9].x)) * (Material_480[0].x)) + (Material_000[9].x)), ((((Material_000[10].y) - (Material_000[9].y)) * (Material_480[0].x)) + (Material_000[9].y)), ((((Material_000[10].z) - (Material_000[9].z)) * (Material_480[0].x)) + (Material_000[9].z)))) / (Material_480[1].z);
+  float _231 = dot(float3(_173, _174, _175), float3(((((Material_000[14].x) - (Material_000[13].x)) * (Material_480[0].x)) + (Material_000[13].x)), ((((Material_000[14].y) - (Material_000[13].y)) * (Material_480[0].x)) + (Material_000[13].y)), ((((Material_000[14].z) - (Material_000[13].z)) * (Material_480[0].x)) + (Material_000[13].z)))) / (Material_480[1].z);
+  float4 _236 = t1.SampleBias(s1, float2((_230 + 0.5f), (_231 + 0.5f)), View_2388, int2(0, 0));
+  if (RENODX_WUWA_HDR_SUN > 0.5f) {
+    _236.xyz *= MOON_BOOST;  // Boost moon brightness
   }
-  float _118 = _115 * _69;
-  float _119 = _116 * _70;
-  float _120 = _117 * _71;
-  float _136 = saturate(_84.w * COLOR.w);
-  float _137 = max(((((Material_000[3].x) - _118) * (Material_064[0].y)) + _118), 0.0f);
-  float _138 = max(((((Material_000[3].y) - _119) * (Material_064[0].y)) + _119), 0.0f);
-  float _139 = max(((((Material_000[3].z) - _120) * (Material_064[0].y)) + _120), 0.0f);
+  float _249 = (Material_480[1].w) * 0.5f;
+  float _251 = sin(_249) * 2.0f;
+  float _253 = cos(_249) * 2.0f;
+  float _255 = rsqrt(dot(float3(_251, 0.0f, _253), float3(_251, 0.0f, _253)));
+  float _302 = saturate(_160 * 10.0f) * ((ceil(dot(float3(((((Material_000[15].x) - (Material_000[16].x)) * (Material_480[0].x)) + (Material_000[16].x)), ((((Material_000[15].y) - (Material_000[16].y)) * (Material_480[0].x)) + (Material_000[16].y)), ((((Material_000[15].z) - (Material_000[16].z)) * (Material_480[0].x)) + (Material_000[16].z))), float3(_173, _174, _175))) * min(max((dot(float3(_230, _231, sqrt(saturate(-0.0f - (((_230 * _230) + (_231 * _231)) + -0.25f)))), float3((_255 * _251), 0.0f, (_255 * _253))) * 8.899999618530273f), 0.0f), 1.0f)) * min((1.0f - saturate(floor(abs(_230) * 2.0f))), (1.0f - saturate(floor(abs(_231) * 2.0f)))));
+  float _314 = saturate(dot(float3(_173, _174, _175), float3((Material_000[2].x), (Material_000[2].y), (Material_000[2].z))));
+  float _323 = select((_314 <= 2.980232949312267e-08f), 0.0f, exp2((120.0f - ((Material_480[2].x) * 119.0f)) * log2(_314)));
+  float _324 = _323 * _323;
+  float _332 = ((_302 * _236.x) * (Material_000[18].x)) + ((Material_000[5].x) * _163);
+  float _335 = ((_302 * _236.y) * (Material_000[18].y)) + ((Material_000[5].y) * _163);
+  float _338 = ((_302 * _236.z) * (Material_000[18].z)) + ((Material_000[5].z) * _163);
+  // Boost sun & moon disc brightness
+  if (RENODX_WUWA_HDR_SUN > 0.5f) {
+    _332 *= SUNMOON_BOOST;
+    _335 *= SUNMOON_BOOST;
+    _338 *= SUNMOON_BOOST;
+  }
+  float _346 = (_176 + 1.0f) * 0.5f;
+  float _354 = select((_346 <= 2.980232949312267e-08f), 0.0f, exp2(log2(_346) * (12.0f - ((Material_480[2].z) * 11.0f))));
+  float _369 = (((Material_000[23].x) - (Material_000[24].x)) * _354) + (Material_000[24].x);
+  float _370 = (((Material_000[23].y) - (Material_000[24].y)) * _354) + (Material_000[24].y);
+  float _371 = (((Material_000[23].z) - (Material_000[24].z)) * _354) + (Material_000[24].z);
+  float _383 = select((_160 <= 2.980232949312267e-08f), 0.0f, exp2(log2(_160) * (Material_480[2].w))) * dot(float3((Material_000[26].x), (Material_000[26].y), (Material_000[26].z)), float3(0.30000001192092896f, 0.5899999737739563f, 0.10999999940395355f));
+  float _390 = (_383 * ((Material_000[26].x) - _369)) + _369;
+  float _391 = (_383 * ((Material_000[26].y) - _370)) + _370;
+  float _392 = (_383 * ((Material_000[26].z) - _371)) + _371;
+  float _401 = select((_159 <= 2.980232949312267e-08f), 0.0f, exp2(log2(_159) * (Material_480[3].x))) * (Material_480[3].y);
+  float _413 = (_390 + (((_332 + ((Material_000[7].x) * _185)) + (_324 * (Material_000[20].x))) * (Material_480[2].y))) + (((Material_000[28].x) - _390) * _401);
+  float _415 = (_391 + (((_335 + ((Material_000[7].y) * _185)) + (_324 * (Material_000[20].y))) * (Material_480[2].y))) + (((Material_000[28].y) - _391) * _401);
+  float _417 = (_392 + (((_338 + ((Material_000[7].z) * _185)) + (_324 * (Material_000[20].z))) * (Material_480[2].y))) + (((Material_000[28].z) - _392) * _401);
+  float _418 = View_2864.w * 9.999999747378752e-06f;
+  float _419 = -0.0f - _115;
+  float _420 = -0.0f - _116;
+  float _421 = -0.0f - _117;
+  float _424 = mad(_421, (View_2880[2].x), mad(_420, (View_2880[1].x), ((View_2880[0].x) * _419)));
+  float _427 = mad(_421, (View_2880[2].y), mad(_420, (View_2880[1].y), ((View_2880[0].y) * _419)));
+  float _430 = mad(_421, (View_2880[2].z), mad(_420, (View_2880[1].z), ((View_2880[0].z) * _419)));
+  float _431 = dot(float3(_424, _427, _430), float3(0.0f, 0.0f, 1.0f));
+  float _433 = dot(float3(_424, _427, _430), float3(_424, _427, _430));
+  float _435 = dot(float3(_424, _427, _430), float3(0.0f, 0.0f, _418)) * 2.0f;
+  float _436 = View_2968 * View_2968;
+  float _441 = (_435 * _435) - ((_433 * 4.0f) * (dot(float3(0.0f, 0.0f, _418), float3(0.0f, 0.0f, _418)) - _436));
+  bool _454;
+  bool _455;
+  float _505;
+  float _620;
+  float _621;
+  float _622;
+  float _623;
+  float _661;
+  float _662;
+  float _663;
+  [branch]
+  if (!(!(_441 >= 0.0f))) {
+    float _444 = sqrt(_441);
+    float _448 = _433 * 2.0f;
+    _454 = ((((-0.0f - _435) - _444) / _448) > 0.0f);
+    _455 = (((_444 - _435) / _448) > 0.0f);
+  } else {
+    _454 = false;
+    _455 = false;
+  }
+  float _460 = sqrt((_418 * _418) - _436) / _418;
+  float _461 = abs(_460);
+  float _462 = _461 * _461;
+  float _472 = (((1.5707287788391113f - (_461 * 0.2121143937110901f)) + (_462 * 0.07426100224256516f)) - ((_461 * 0.018729299306869507f) * _462)) * sqrt(1.0f - _461);
+  float _475 = select((_460 >= 0.0f), _472, (3.1415927410125732f - _472));
+  float _476 = 3.1415927410125732f - _475;
+  float _477 = abs(_431);
+  float _478 = _477 * _477;
+  float _488 = (((1.5707287788391113f - (_477 * 0.2121143937110901f)) + (_478 * 0.07426100224256516f)) - ((_477 * 0.018729299306869507f) * _478)) * sqrt(1.0f - _477);
+  float _491 = select((_431 >= 0.0f), _488, (3.1415927410125732f - _488));
+  if (!(_454 || _455)) {
+    _505 = ((1.0f - sqrt(1.0f - (_491 / _476))) * 0.5f);
+  } else {
+    _505 = ((sqrt((_491 - _476) / _475) * 0.5f) + 0.5f);
+  }
+  float _508 = abs(-0.0f - _427);
+  float _509 = abs(-0.0f - _424);
+  float _512 = min(_509, _508) / max(_509, _508);
+  float _513 = _512 * _512;
+  float _518 = ((((_513 * 0.08729290217161179f) + -0.30189499258995056f) * _513) + 1.0f) * _512;
+  float _521 = select((_508 > _509), (1.5707963705062866f - _518), _518);
+  float _524 = select((_424 > -0.0f), (3.1415927410125732f - _521), _521);
+  float4 _540 = t0.SampleLevel(s0, float2(((((select((_427 > -0.0f), (-0.0f - _524), _524) + 3.1415927410125732f) * 0.15915493667125702f) + (View_2832.z * 0.5f)) * (View_2832.x / (View_2832.x + 1.0f))), ((View_2832.y / (View_2832.y + 1.0f)) * (_505 + (View_2832.w * 0.5f)))), 0.0f);
+  float _557 = (((_332 - _413) + (_540.x * View_2944.x)) * (Material_480[3].z)) + _413;
+  float _558 = (((_335 - _415) + (_540.y * View_2944.y)) * (Material_480[3].z)) + _415;
+  float _559 = (((_338 - _417) + (_540.z * View_2944.z)) * (Material_480[3].z)) + _417;
+  [branch]
+  if (!(((Primitive_428 & 1) | View_2560) == 0)) {
+    int _599 = asint((((SV_Position.w * SV_Position.z) / SV_Position.w) - (VELOCITY_PREV_POS.z / VELOCITY_PREV_POS.w)));
+    bool _614 = (bool)(View_2560 == 0) && (bool)(Primitive_332 == 0.0f);
+    _620 = select(_614, 0.0f, (((((View_2096.z - View_2096.x) + (((SV_Position.w * 2.0f) * (((SV_Position.x - View_2144.x) * View_2160.z) + -0.5f)) / SV_Position.w)) - (VELOCITY_PREV_POS.x / VELOCITY_PREV_POS.w)) * 0.24950000643730164f) + 0.49999237060546875f));
+    _621 = select(_614, 0.0f, (((((View_2096.w - View_2096.y) + (((SV_Position.w * -2.0f) * (((SV_Position.y - View_2144.y) * View_2160.w) + -0.5f)) / SV_Position.w)) - (VELOCITY_PREV_POS.y / VELOCITY_PREV_POS.w)) * 0.24950000643730164f) + 0.49999237060546875f));
+    _622 = select(_614, 0.0f, saturate((float((uint)((int)((uint)(_599) >> 16))) * 1.5259021893143654e-05f) + 1.5259022347891005e-06f));
+    _623 = select(_614, 0.0f, saturate((float((uint)((int)(_599 & 65535))) * 1.5259021893143654e-05f) + 1.5259022347891005e-06f));
+  } else {
+    _620 = 0.0f;
+    _621 = 0.0f;
+    _622 = 0.0f;
+    _623 = 0.0f;
+  }
+  float _624 = max(((((Material_000[29].x) - _557) * (Material_480[3].w)) + _557), 0.0f);
+  float _625 = max(((((Material_000[29].y) - _558) * (Material_480[3].w)) + _558), 0.0f);
+  float _626 = max(((((Material_000[29].z) - _559) * (Material_480[3].w)) + _559), 0.0f);
   [branch]
   if (View_2336 > 0.0f) {
-    if ((bool)(abs(_60 - Primitive_080.z) > (Primitive_304.z + 1.0f)) || ((bool)((bool)(abs(_58 - Primitive_080.x) > (Primitive_304.x + 1.0f)) || (bool)(abs(_59 - Primitive_080.y) > (Primitive_304.y + 1.0f))))) {
-      float _171 = float((bool)(bool)(frac(dot(float3(_58, _59, _60), float3(0.5770000219345093f, 0.5770000219345093f, 0.5770000219345093f)) * 0.0020000000949949026f) > 0.5f));
-      _174 = 1.0f;
-      _175 = (1.0f - _171);
-      _176 = 1.0f;
-      _177 = _171;
+    if ((bool)(abs(_109 - Primitive_080.z) > (Primitive_304.z + 1.0f)) || ((bool)((bool)(abs(_107 - Primitive_080.x) > (Primitive_304.x + 1.0f)) || (bool)(abs(_108 - Primitive_080.y) > (Primitive_304.y + 1.0f))))) {
+      float _658 = float((bool)(bool)(frac(dot(float3(_107, _108, _109), float3(0.5770000219345093f, 0.5770000219345093f, 0.5770000219345093f)) * 0.0020000000949949026f) > 0.5f));
+      _661 = (1.0f - _658);
+      _662 = 1.0f;
+      _663 = _658;
     } else {
-      _174 = _136;
-      _175 = _137;
-      _176 = _138;
-      _177 = _139;
+      _661 = _624;
+      _662 = _625;
+      _663 = _626;
     }
   } else {
-    _174 = _136;
-    _175 = _137;
-    _176 = _138;
-    _177 = _139;
+    _661 = _624;
+    _662 = _625;
+    _663 = _626;
   }
-  /*
-  SV_Target.x = (-0.0f - min((-0.0f - _175), 0.0f));
-  SV_Target.y = (-0.0f - min((-0.0f - _176), 0.0f));
-  SV_Target.z = (-0.0f - min((-0.0f - _177), 0.0f));
-  */
-  SV_Target.xyz = AutoHDRVideo(float3(_175, _176, _177));
-  SV_Target.w = _174;
-  return SV_Target;
+  bool _666 = (View_4400 == 1);
+  float _671 = min(_661, 32256.0f);
+  float _672 = min(_662, 32256.0f);
+  float _673 = min(_663, 32256.0f);
+  float _676 = dot(float3(_671, _672, _673), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
+  float _683 = ((_676 - _671) * View_4456) + _671;
+  float _684 = ((_676 - _672) * View_4456) + _672;
+  float _685 = ((_676 - _673) * View_4456) + _673;
+  float _688 = dot(float3(_683, _684, _685), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
+  SV_Target.x = (-0.0f - min((-0.0f - (View_4416.x * (lerp(_683, _688, View_4500)))), 0.0f));
+  SV_Target.y = (-0.0f - min((-0.0f - (View_4416.y * (lerp(_684, _688, View_4500)))), 0.0f));
+  SV_Target.z = (-0.0f - min((-0.0f - (View_4416.z * (lerp(_685, _688, View_4500)))), 0.0f));
+  SV_Target.w = 0.0f;
+  SV_Target_1.x = 0.0f;
+  SV_Target_1.y = 0.0f;
+  SV_Target_1.z = 0.0f;
+  SV_Target_1.w = 0.0f;
+  SV_Target_2.x = 0.0f;
+  SV_Target_2.y = 0.0f;
+  SV_Target_2.z = 0.0f;
+  SV_Target_2.w = 0.0f;
+  SV_Target_3.x = 0.0f;
+  SV_Target_3.y = 0.0f;
+  SV_Target_3.z = 0.0f;
+  SV_Target_3.w = 0.0f;
+  SV_Target_4.x = select(_666, 0.0f, _620);
+  SV_Target_4.y = select(_666, 0.0f, _621);
+  SV_Target_4.z = select(_666, 0.0f, _622);
+  SV_Target_4.w = select(_666, 0.0f, _623);
+  SV_Target_5.x = 0.0f;
+  SV_Target_5.y = 0.0f;
+  SV_Target_5.z = 0.0f;
+  SV_Target_5.w = 0.0f;
+  SV_Target_6.x = 0.0f;
+  SV_Target_6.y = 0.0f;
+  SV_Target_6.z = 0.0f;
+  SV_Target_6.w = 0.0f;
+  OutputSignature output_signature = { SV_Target, SV_Target_1, SV_Target_2, SV_Target_3, SV_Target_4, SV_Target_5, SV_Target_6 };
+  return output_signature;
 }
