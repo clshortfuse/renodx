@@ -94,7 +94,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 80.f,
         .max = 4000.f,
-        .is_visible = []() { return current_settings_mode >= 0; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -106,7 +106,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 80.f,
         .max = 500.f,
-        
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
@@ -117,7 +117,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 80.f,
         .max = 500.f,
-        
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
     },
     //     new renodx::utils::settings::Setting{
     //     .key = "GammaCorrection",
@@ -139,6 +139,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Applies tonemapping to SDR under the UI, to improve readability.",
         .labels = {"Off", "On"},
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     //     new renodx::utils::settings::Setting{
@@ -327,6 +328,17 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
+        new renodx::utils::settings::Setting{
+        .key = "FxRCAS",
+        .binding = &shader_injection.custom_rcas,
+        .default_value = 0.f,
+        .label = "RCAS Sharpening",
+        .section = "Effects",
+        .tooltip = "Applies Lilium's HDR RCAS. Disabling in-game sharpening recommended!",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
     // new renodx::utils::settings::Setting{
     //     .key = "UtilHUD",
     //     .binding = &shader_injection.utility_hud,
@@ -450,6 +462,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 1000.f);
   renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
+  renodx::utils::settings::UpdateSetting("SceneGradePerChannelBlowout", 0.f);
+  renodx::utils::settings::UpdateSetting("SceneGradePerChannelHueShift", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
@@ -460,6 +474,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
   //renodx::utils::settings::UpdateSetting("SwapChainCustomColorSpace", 0.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
+  renodx::utils::settings::UpdateSetting("FxRCAS", 0.f);
 }
 
 bool fired_on_init_swapchain = false;
