@@ -1107,6 +1107,10 @@ static void OnPresent(
         resource_info->clone_target = &proxy_clone_target;
       }
       renodx::utils::resource::upgrade::CloneResource(resource_info);
+      auto* cmd_list = queue->get_immediate_command_list();
+      auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
+      auto dsv = renodx::utils::swapchain::GetDepthStencil(cmd_list);
+      renodx::utils::resource::upgrade::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), dsv);
     }
     if (resource_clone.handle == 0u) return;
     swapchain_clone = resource_clone;
