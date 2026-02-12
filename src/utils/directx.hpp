@@ -15,13 +15,17 @@
 namespace renodx::utils::directx {
 
 namespace internal {
-static bool initialized = false;
+inline bool initialized = false;
 }
 
-static decltype(&CreateDXGIFactory1) pCreateDXGIFactory1 = nullptr;
-static decltype(&CreateDXGIFactory2) pCreateDXGIFactory2 = nullptr;
-static decltype(&D3D12CreateDevice) pD3D12CreateDevice = nullptr;
-static decltype(&D3D11CreateDevice) pD3D11CreateDevice = nullptr;
+inline decltype(&CreateDXGIFactory1) pCreateDXGIFactory1 = nullptr;
+inline decltype(&CreateDXGIFactory2) pCreateDXGIFactory2 = nullptr;
+inline decltype(&D3D12CreateDevice) pD3D12CreateDevice = nullptr;
+inline decltype(&D3D11CreateDevice) pD3D11CreateDevice = nullptr;
+inline decltype(&D3D12GetDebugInterface) pD3D12GetDebugInterface = nullptr;
+inline decltype(&D3D12SerializeRootSignature) pD3D12SerializeRootSignature = nullptr;
+using PFN_D3D_COMPILE = HRESULT(WINAPI*)(LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
+inline PFN_D3D_COMPILE pD3DCompile = nullptr;
 
 struct DECLSPEC_UUID("7F2C9A11-3B4E-4D6A-812F-5E9CD37A1B42") ReShadeRetrieveBaseInterface : IUnknown {};
 template <typename T>
@@ -98,6 +102,37 @@ static bool Initialize() {
     if (pD3D12CreateDevice == nullptr) {
       // reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d12.dll, D3D12CreateDevice) failed)");
       return false;
+    }
+  }
+
+  // Try to resolve D3D12GetDebugInterface from d3d12.dll so callers can obtain
+  // the debug interface via the runtime-resolved symbol (useful when a proxy
+  // or injector provides an alternate d3d12.dll).
+  if (pD3D12GetDebugInterface == nullptr) {
+    HMODULE d3d12_module = LoadLibraryW(L"d3d12.dll");
+    if (d3d12_module != nullptr) {
+      pD3D12GetDebugInterface = reinterpret_cast<decltype(&D3D12GetDebugInterface)>(
+          GetProcAddress(d3d12_module, "D3D12GetDebugInterface"));
+    }
+  }
+
+  // Try to resolve D3D12SerializeRootSignature from d3d12.dll
+  if (pD3D12SerializeRootSignature == nullptr) {
+    HMODULE d3d12_module = LoadLibraryW(L"d3d12.dll");
+    if (d3d12_module != nullptr) {
+      pD3D12SerializeRootSignature = reinterpret_cast<PFN_D3D12_SERIALIZE_ROOT_SIGNATURE>(GetProcAddress(d3d12_module, "D3D12SerializeRootSignature"));
+    }
+  }
+
+  // Load D3DCompile from d3dcompiler DLL (try common versions)
+  if (pD3DCompile == nullptr) {
+    const wchar_t* compilers[] = {L"d3dcompiler_47.dll", L"d3dcompiler_46.dll", L"d3dcompiler_43.dll", L"d3dcompiler.dll"};
+    for (auto c : compilers) {
+      HMODULE d3dcompiler = LoadLibraryW(c);
+      if (d3dcompiler != nullptr) {
+        pD3DCompile = reinterpret_cast<PFN_D3D_COMPILE>(GetProcAddress(d3dcompiler, "D3DCompile"));
+        if (pD3DCompile != nullptr) break;
+      }
     }
   }
 

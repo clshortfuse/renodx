@@ -76,6 +76,49 @@ static reshade::api::resource_view GetResourceViewFromDescriptorUpdate(
   return reshade::api::resource_view{0};
 }
 
+static reshade::api::descriptor_table_update CloneDescriptorUpdateWithResourceView(
+    const reshade::api::descriptor_table_update& update,
+    const reshade::api::resource_view& view,
+    const uint32_t& index = 0) {
+  switch (update.type) {
+    case reshade::api::descriptor_type::sampler_with_resource_view: {
+      auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[index];
+      return reshade::api::descriptor_table_update{
+          .table = update.table,
+          .binding = update.binding + index,
+          .count = 1,
+          .type = update.type,
+          .descriptors = new reshade::api::sampler_with_resource_view{
+              .sampler = item.sampler,
+              .view = view,
+          },
+      };
+    }
+    case reshade::api::descriptor_type::texture_shader_resource_view:
+    case reshade::api::descriptor_type::texture_unordered_access_view:
+    case reshade::api::descriptor_type::buffer_shader_resource_view:
+    case reshade::api::descriptor_type::buffer_unordered_access_view:
+    case reshade::api::descriptor_type::acceleration_structure:        {
+      return reshade::api::descriptor_table_update{
+          .table = update.table,
+          .binding = update.binding + index,
+          .count = 1,
+          .type = update.type,
+          .descriptors = new reshade::api::resource_view{view.handle},
+      };
+    }
+    default:
+      break;
+  }
+  return {};
+}
+
+static bool FlushResourceViewInDescriptorTable(
+    reshade::api::device* device,
+    const reshade::api::resource& resource) {
+  return true;
+}
+
 static void OnInitDevice(reshade::api::device* device) {
   DeviceData* data;
   bool created = renodx::utils::data::CreateOrGet(device, data);

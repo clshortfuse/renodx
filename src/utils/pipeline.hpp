@@ -6,10 +6,16 @@
 #pragma once
 
 #include <include/reshade.hpp>
+#include <include/reshade_api_device.hpp>
+#include <include/reshade_api_pipeline.hpp>
+#include <optional>
 #include <span>
 #include <unordered_map>
 #include <vector>
+
+#include "./bitwise.hpp"
 #include "./format.hpp"
+#include "./hash.hpp"
 
 namespace renodx::utils::pipeline {
 
@@ -54,8 +60,8 @@ static reshade::api::pipeline_subobject* ClonePipelineSubObjects(const reshade::
         std::stringstream s;
         s << "utils::pipeline::ClonePipelineSubObjects(cloning ";
         s << subobject.type;
-        s << " with " << PRINT_CRC32(compute_crc32(static_cast<const uint8_t*>(old_desc->code), old_desc->code_size));
-        s << " => " << PRINT_CRC32(compute_crc32(static_cast<const uint8_t*>(new_desc->code), new_desc->code_size));
+        s << " with " << PRINT_CRC32(renodx::utils::hash::ComputeCRC32(static_cast<const uint8_t*>(old_desc->code), old_desc->code_size));
+        s << " => " << PRINT_CRC32(renodx::utils::hash::ComputeCRC32(static_cast<const uint8_t*>(new_desc->code), new_desc->code_size));
         s << " (" << old_desc->code_size << " bytes)";
         s << " from " << old_desc->code;
         s << " to " << new_desc->code;
@@ -193,6 +199,109 @@ static bool HasSDRAlphaBlend(std::span<const reshade::api::pipeline_subobject> s
     }
   }
   return false;
+}
+
+struct PipelineSubobjects {
+  std::span<const uint8_t> vertex_shader;
+  std::span<const uint8_t> pixel_shader;
+  std::span<const uint8_t> compute_shader;
+  std::vector<reshade::api::blend_desc> blend_states = {reshade::api::blend_desc{}};
+  std::vector<reshade::api::input_element> input_layout;
+  std::vector<reshade::api::depth_stencil_desc> depth_stencil_states = {reshade::api::depth_stencil_desc{.depth_enable = false}};
+  std::vector<uint32_t> max_vertex_counts = {3};
+  std::vector<reshade::api::primitive_topology> primitive_topologies = {reshade::api::primitive_topology::triangle_list};
+  std::vector<reshade::api::rasterizer_desc> rasterizer_states = {reshade::api::rasterizer_desc{.cull_mode = reshade::api::cull_mode::none}};
+  std::vector<reshade::api::format> render_target_formats = {reshade::api::format::r16g16b16a16_float};
+};
+
+static reshade::api::pipeline CreateRenderPipeline(
+    reshade::api::device* device,
+    const reshade::api::pipeline_layout layout,
+    PipelineSubobjects& options) {
+  std::vector<reshade::api::pipeline_subobject> subobjects = {
+      {
+          .type = reshade::api::pipeline_subobject_type::blend_state,
+          .count = static_cast<uint32_t>(options.blend_states.size()),
+          .data = options.blend_states.data(),
+      },
+      {
+          .type = reshade::api::pipeline_subobject_type::depth_stencil_state,
+          .count = static_cast<uint32_t>(options.depth_stencil_states.size()),
+          .data = options.depth_stencil_states.data(),
+      },
+      {
+          .type = reshade::api::pipeline_subobject_type::input_layout,
+          .count = static_cast<uint32_t>(options.input_layout.size()),
+          .data = options.input_layout.data(),
+      },
+      {
+          .type = reshade::api::pipeline_subobject_type::max_vertex_count,
+          .count = static_cast<uint32_t>(options.max_vertex_counts.size()),
+          .data = options.max_vertex_counts.data(),
+      },
+      {
+          .type = reshade::api::pipeline_subobject_type::primitive_topology,
+          .count = static_cast<uint32_t>(options.primitive_topologies.size()),
+          .data = options.primitive_topologies.data(),
+      },
+      {
+          .type = reshade::api::pipeline_subobject_type::rasterizer_state,
+          .count = static_cast<uint32_t>(options.rasterizer_states.size()),
+          .data = options.rasterizer_states.data(),
+      },
+
+      {
+          .type = reshade::api::pipeline_subobject_type::render_target_formats,
+          .count = static_cast<uint32_t>(options.render_target_formats.size()),
+          .data = options.render_target_formats.data(),
+      },
+  };
+
+  std::vector<reshade::api::shader_desc> shader_descriptions = {};
+  shader_descriptions.reserve(
+      (options.vertex_shader.empty() ? 0 : 1)
+      + (options.pixel_shader.empty() ? 0 : 1)
+      + (options.compute_shader.empty() ? 0 : 1));
+
+  if (!options.vertex_shader.empty()) {
+    shader_descriptions.push_back({
+        .code = options.vertex_shader.data(),
+        .code_size = options.vertex_shader.size(),
+    });
+    subobjects.push_back({
+        .type = reshade::api::pipeline_subobject_type::vertex_shader,
+        .count = 1,
+        .data = &shader_descriptions.back(),
+    });
+  }
+  if (!options.pixel_shader.empty()) {
+    shader_descriptions.push_back({
+        .code = options.pixel_shader.data(),
+        .code_size = options.pixel_shader.size(),
+    });
+    subobjects.push_back({
+        .type = reshade::api::pipeline_subobject_type::pixel_shader,
+        .count = 1,
+        .data = &shader_descriptions.back(),
+    });
+  }
+  if (!options.compute_shader.empty()) {
+    shader_descriptions.push_back({
+        .code = options.compute_shader.data(),
+        .code_size = options.compute_shader.size(),
+    });
+    subobjects.push_back({
+        .type = reshade::api::pipeline_subobject_type::compute_shader,
+        .count = 1,
+        .data = &shader_descriptions.back(),
+    });
+  }
+
+  reshade::api::pipeline pipeline;
+  if (device->create_pipeline(layout, static_cast<uint32_t>(subobjects.size()), subobjects.data(), &pipeline)) {
+    return pipeline;
+  }
+  return {0};
 }
 
 static reshade::api::pipeline CreateRenderPipeline(
