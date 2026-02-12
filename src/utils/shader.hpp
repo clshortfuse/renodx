@@ -28,6 +28,7 @@
 #include "./bitwise.hpp"
 #include "./data.hpp"
 #include "./format.hpp"
+#include "./hash.hpp"
 #include "./log.hpp"
 #include "./pipeline.hpp"
 #include "./pipeline_layout.hpp"
@@ -177,7 +178,7 @@ struct PipelineShaderDetails {
 
       // Pipeline has a shader with code. Hash code and check
 
-      uint32_t shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
+      uint32_t shader_hash = renodx::utils::hash::ComputeCRC32(static_cast<const uint8_t*>(desc.code), desc.code_size);
       if (this->layout_data != nullptr && this->layout_data->params.empty()) {
         s << ", Layout: " << PRINT_PTR(this->layout_data->layout.handle);
         s << ", Layout Params: " << this->layout_data->params.size();
@@ -829,7 +830,7 @@ static bool OnCreatePipeline(
       auto* desc = static_cast<reshade::api::shader_desc*>(subobjects[i].data);
       if (desc->code_size == 0) continue;
 
-      const uint32_t shader_hash = compute_crc32(
+      const uint32_t shader_hash = renodx::utils::hash::ComputeCRC32(
           static_cast<const uint8_t*>(desc->code),
           desc->code_size);
 
@@ -847,7 +848,7 @@ static bool OnCreatePipeline(
             } else {
               desc->code = malloc(new_size);
               memcpy(const_cast<void*>(desc->code), replacement.data(), new_size);
-              const uint32_t new_hash = compute_crc32(
+              const uint32_t new_hash = renodx::utils::hash::ComputeCRC32(
                   replacement.data(),
                   new_size);
               hash_changes.emplace_back(shader_hash, new_hash);

@@ -561,7 +561,7 @@ static bool OnCreatePipeline(
           if (desc.code_size == 0) {
             s << "(empty)";
           } else {
-            auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
+            auto shader_hash = renodx::utils::hash::ComputeCRC32(static_cast<const uint8_t*>(desc.code), desc.code_size);
             s << PRINT_CRC32(shader_hash);
           }
           break;
@@ -635,7 +635,7 @@ static void OnInitPipeline(
           if (desc.code_size == 0) {
             s << "(empty)";
           } else {
-            auto shader_hash = compute_crc32(static_cast<const uint8_t*>(desc.code), desc.code_size);
+            auto shader_hash = renodx::utils::hash::ComputeCRC32(static_cast<const uint8_t*>(desc.code), desc.code_size);
             s << PRINT_CRC32(shader_hash);
           }
           break;
