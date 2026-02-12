@@ -280,4 +280,18 @@ static void OpenExplorerToFile(const std::filesystem::path& file_path) {
 #endif
 }
 
+static HMODULE FindModule(const std::string& module_name) {
+  const auto* module_char_array = module_name.c_str();
+
+  HMODULE module = GetModuleHandleA(module_char_array);
+  if (module != nullptr) return module;
+
+  module = LoadLibraryA(module_char_array);
+  if (module != nullptr) return module;
+
+  module = LoadLibraryExA(module_char_array, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+
+  return module;
+}
+
 }  // namespace renodx::utils::platform
