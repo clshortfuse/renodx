@@ -208,6 +208,10 @@ static bool OnUpdateBufferRegion(
   if (!capture_constant_buffers) return false;
 
   store->buffer_range_data.modify_if(resource.handle, [&](std::pair<const uint64_t, BufferRangeData>& pair) {
+    if (size == UINT64_MAX) {
+      pair.second.cache.resize(0);
+      return;
+    }
     if (pair.second.cache.size() < offset + size) {
       pair.second.cache.resize(offset + size, 0);
     }
