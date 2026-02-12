@@ -272,6 +272,11 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("The sharpening sliders have no effect when FSR2 is enabled.\n"),
+        .section = "Effects",
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxSharpeningType",
         .binding = &shader_injection.custom_sharpening,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -314,8 +319,9 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 2.f},
-              {"ColorGradeShadows", 70.f},
+              {"ColorGradeShadows", 73.f},
               {"ColorGradeHighlightSaturation", 55.f},
+              {"ColorGradeFlare", 23.f},
               {"FxNoise", 0.f},
               {"FxGrainStrength", 35.f},
           });
