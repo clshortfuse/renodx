@@ -24,7 +24,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
 #include "../utils/constants.hpp"

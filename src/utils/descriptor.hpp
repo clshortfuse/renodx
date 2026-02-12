@@ -19,7 +19,6 @@
 #include <utility>
 #include <variant>
 
-#include <crc32_hash.hpp>
 #include <include/reshade.hpp>
 
 #include "./data.hpp"
