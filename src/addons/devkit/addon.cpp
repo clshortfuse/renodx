@@ -1127,11 +1127,20 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
       }
 
       if (stage_state.pipeline.handle == 0u) {
-        // sometimes opengl can call glEnd without having drawn anything
-        // Vertex shaders don't need pixel shaders
-        assert(stage_state.pipeline.handle != 0u
-               || device->get_api() == reshade::api::device_api::opengl
-               || stage_state.stage == reshade::api::pipeline_stage::pixel_shader);
+#ifndef NDEBUG
+        switch (device->get_api()) {
+          case reshade::api::device_api::opengl:
+            // sometimes opengl can call glEnd without having drawn anything
+            break;
+          case reshade::api::device_api::d3d9:
+            // Pixel shaders on DX9 don't need Vertex shaders because of FVF
+            if (stage_state.stage == reshade::api::pipeline_stage::vertex_shader) continue;
+          default:
+            // Must have pixel shader
+            assert(stage_state.stage == reshade::api::pipeline_stage::pixel_shader);
+            break;
+        }
+#endif
         continue;
       }
 
