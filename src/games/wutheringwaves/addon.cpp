@@ -20,6 +20,7 @@
 #include "../../utils/shader.hpp"
 #include "../../utils/shader_dump.hpp"
 #include "../../utils/swapchain.hpp"
+#include "../../utils/random.hpp"
 #include "./shared.h"
 
 namespace {
@@ -549,6 +550,15 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Reduces bloom intensity when applied by the game.\n100 retains original behavior, 0 disables it completely.",
         .parse = [](float value) { return value * 0.01f; }
     },
+    new renodx::utils::settings::Setting{
+      .key = "HDRSun",
+      .binding = &shader_injection.wuwa_hdr_sun,
+      .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+      .default_value = 1.f,
+      .label = "HDR Sun",
+      .section = "Post-Processing",
+      .tooltip = "Boosts sun, moon, and glow brightness in the skybox.",
+    },
 };
 
 enum Preset : uint8_t {
@@ -1000,6 +1010,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      // Temporal random seed (per-frame) for temporal dither/grain
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);
+      renodx::utils::random::Use(fdw_reason);
+
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
@@ -1070,6 +1084,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
+      renodx::utils::random::Use(fdw_reason);
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
       renodx::utils::resource::Use(fdw_reason);
