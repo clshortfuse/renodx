@@ -1,5 +1,19 @@
 #include "../common.hlsl"
 
+float3 ScaleGameColorUI(float3 game_color) {
+
+  game_color /= RENODX_DIFFUSE_WHITE_NITS;
+
+  if (TONEMAP_UNDER_UI != 0.f) {
+    float y_in = renodx::color::y::from::BT2020(game_color);
+    const float peak = 1.f;
+    float y_tonemapped = lerp(y_in, renodx::tonemap::Neutwo(y_in, peak), saturate(y_in));
+    game_color = renodx::color::correct::Luminance(game_color, y_in, y_tonemapped);
+  }
+  game_color = renodx::color::srgb::EncodeSafe(game_color);
+  return game_color;
+}
+
 
 bool HandleUICompositing(float4 ui_color, float3 scene_color, inout float4 output_color, float2 uv, Texture2D<float4> t1, SamplerState s1) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
@@ -11,9 +25,9 @@ bool HandleUICompositing(float4 ui_color, float3 scene_color, inout float4 outpu
   // linearize and normalize brightness
   float3 ui_color_linear;
   if (RENODX_GAMMA_CORRECTION != 0.f) {  // 2.2
-    ui_color_linear = renodx::color::gamma::Decode(ui_color.rgb);
-  } else {  // sRGB
-    ui_color_linear = renodx::color::srgb::Decode(ui_color.rgb);
+    ui_color_linear = renodx::color::correct::GammaSafe(ui_color.rgb);
+  } else {
+    ui_color_linear = ui_color.rgb;
   }
   ui_color_linear = renodx::color::bt2020::from::BT709(ui_color_linear);
   float3 scene_color_linear = renodx::color::pq::DecodeSafe(scene_color, RENODX_GRAPHICS_WHITE_NITS);

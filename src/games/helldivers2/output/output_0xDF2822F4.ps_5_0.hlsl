@@ -135,6 +135,7 @@ void main(
   r2.zw = float2(0,0);
   r3.xyzw = float4(0,0,0,0);
   r0.w = 0;
+
   while (true) {
     r1.w = cmp((uint)r0.w >= (uint)r0.z);
     if (r1.w != 0) break;
@@ -151,24 +152,21 @@ void main(
     r0.w = (int)r0.w + 1;
   }
 
-  // missing instruction
-  // sampleinfo r0.z, t1.x
-  t1.GetDimensions(fDest.x, fDest.y, fDest.z);
-  r0.z = fDest.z;
-
-  r0.z = 1 / r0.z;
-
-  r2.xyzw = r3.xyzw * r0.zzzz;
-
 #if 1
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    float4 ui_color = r2;
-    ui_color = renodx::color::srgb::Encode(ui_color);
+    float4 ui_color = r3 * 0.25f;
 
     HandleUICompositing(ui_color, game_color, o0, v1, t0, s1_s);
     return;
   }
 #endif
+
+  // missing instruction
+  // sampleinfo r0.z, t1.x
+  t1.GetDimensions(fDest.x, fDest.y, fDest.z);
+  r0.z = fDest.z;
+  r0.z = 1 / r0.z;
+  r2.xyzw = r3.xyzw * r0.zzzz;
 
   r1.xyz = log2(abs(r1.xyz));
   r1.xyz = float3(0.0126830004,0.0126830004,0.0126830004) * r1.xyz;
