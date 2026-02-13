@@ -11,7 +11,7 @@
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 
 #define CUSTOM_HDR_BOOST                     shader_injection.hdr_boost
-#define RENODX_TONE_MAP_WHITE_CLIP           shader_injection.tone_map_white_clip
+//#define RENODX_TONE_MAP_WHITE_CLIP           shader_injection.tone_map_white_clip
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
@@ -51,7 +51,7 @@ struct ShaderInjectData {
   float diffuse_white_nits;
   float graphics_white_nits;
   float tone_map_type;
-  float tone_map_white_clip;
+  //float tone_map_white_clip;
   float gamma_correction;
 
   float tone_map_exposure;
