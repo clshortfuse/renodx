@@ -1,4 +1,6 @@
 #include "./shared.h"
+#include "./uncharted2extended.hlsli"
+
 // ---- Created with 3Dmigoto v1.3.16 on Tue Feb  4 22:33:20 2025
 
 SamplerState g_TextureAdaptLumminanceSampler_s : register(s2);
@@ -12,7 +14,7 @@ Texture2D<float4> g_TextureSceneColorHDR : register(t4);
 // 3Dmigoto declarations
 #define cmp -
 
-float applyVanillaToneMap(float untonemapped) {
+float ApplyVanillaToneMap(float untonemapped) {
   float r0, r1, r2;
   r0 = untonemapped;
 
@@ -27,7 +29,7 @@ float applyVanillaToneMap(float untonemapped) {
   return r0;
 }
 
-float3 applyVanillaToneMap(float3 untonemapped) {
+float3 ApplyVanillaToneMap(float3 untonemapped) {
   float3 r0, r1, r2;
   r0.rgb = untonemapped;
 
@@ -40,6 +42,20 @@ float3 applyVanillaToneMap(float3 untonemapped) {
   r0.rgb *= 1.37906432;
 
   return r0;
+}
+
+float3 Uncharted2Extended(float3 color) {
+  float A = 0.15, B = 0.5, C = 0.1, D = 1.0, E = 0.004, F = 0.06;
+  float W = 1.37906432;
+
+  float coeffs[6] = { A, B, C, D, E, F };
+  float white_precompute = W;
+
+  Uncharted2::Config::Uncharted2ExtendedConfig uc2_config = Uncharted2::Config::CreateUncharted2ExtendedConfig(coeffs, white_precompute);
+
+  float3 outputColor = Uncharted2::ApplyExtended(color, uc2_config);
+
+  return outputColor;
 }
 
 void main(
@@ -78,17 +94,8 @@ void main(
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     o0.rgb = r0.rgb;
 
-    // custom, eyeballed bloom blend + exposure
-    o0.rgb = o0.rgb + r1.rgb * 2.f * CUSTOM_BLOOM;
-    o0.rgb = o0.rgb / 203.f * 80.f;
-
-    /* should be better, but is overbright
-    float3 mid_gray = applyVanillaToneMap(float3(0.18f, 0.18f, 0.18f));
-    o0.rgb *= mid_gray / 0.18f;
-
-    // bloom
-    o0.rgb = (o0.rgb * 1.37906432) + (r1.rgb * CUSTOM_BLOOM);
-    */
+    o0.rgb = Uncharted2Extended(o0.rgb);
+    o0.rgb += r1.rgb * CUSTOM_BLOOM; // bloom
 
     o0.rgb = min(100.f, o0.rgb);
 
@@ -96,7 +103,9 @@ void main(
     draw_config.tone_map_hue_shift = 0.f;
     draw_config.tone_map_hue_correction = 0.f;
 
-    o0.rgb = renodx::color::correct::Hue(o0.rgb, saturate(applyVanillaToneMap(r0.rgb) + r1.rgb), RENODX_TONE_MAP_HUE_CORRECTION);
+    float3 vanilla = saturate(ApplyVanillaToneMap(r0.rgb) + r1.rgb);
+
+    o0.rgb = renodx::color::correct::Hue(o0.rgb, vanilla, RENODX_TONE_MAP_HUE_CORRECTION);
 
     o0.rgb = renodx::draw::ToneMapPass(o0.rgb);
     o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
