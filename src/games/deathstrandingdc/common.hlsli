@@ -165,23 +165,11 @@ float3 ToneMapForLUT(inout float r, inout float g, inout float b, inout float3 u
     return untonemapped;
   }
 
-  // some clipping is required for cufflink light to remain blue, so we do luminance tonemap then clip
-  float y_in = renodx::color::y::from::BT709(untonemapped);
-  float y_out = renodx::tonemap::ReinhardPiecewise(y_in, 1.f, 0.18f);
-  float3 tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
-  tonemapped = min(tonemapped, 1.f);
+  float3 tonemapped = renodx::tonemap::neutwo::BT709(untonemapped);
+  tonemapped = min(1, tonemapped);
 
   r = tonemapped.r, g = tonemapped.g, b = tonemapped.b;
 
-  return tonemapped;
-}
-
-float3 ApplyHermiteSplineByMaxChannel(float3 input, float peak_white, float white_clip = 100.f) {
-  float max_channel = renodx::math::Max(input.r, input.g, input.b);
-
-  float mapped_peak = exp2(renodx::tonemap::HermiteSplineRolloff(log2(max_channel), log2(peak_white), log2(white_clip)));
-  float scale = renodx::math::DivideSafe(mapped_peak, max_channel, 1.f);
-  float3 tonemapped = input * scale;
   return tonemapped;
 }
 
@@ -210,7 +198,7 @@ float3 ApplyDisplayMap(float3 undisplaymapped) {
     if (RENODX_GAMMA_CORRECTION) peak_white = renodx::color::correct::GammaSafe(peak_white, true);
 
     displaymapped = renodx::color::bt709::from::BT2020(
-        ApplyHermiteSplineByMaxChannel(renodx::color::bt2020::from::BT709(undisplaymapped), peak_white, 100.f));
+        renodx::tonemap::neutwo::MaxChannel(renodx::color::bt2020::from::BT709(undisplaymapped), peak_white, 100.f));
   } else {
     displaymapped = undisplaymapped;
   }
