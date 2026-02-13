@@ -15,9 +15,9 @@
 #include <embed/shaders.h>
 
 #include "../../mods/shader.hpp"
-#include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/random.hpp"
+#include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "shared.h"
 
@@ -430,17 +430,21 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 }
 
 void OnInitDevice(reshade::api::device* device) {
+  std::vector<renodx::utils::resource::ResourceUpgradeInfo> upgrade_infos = {};
+
   int vendor_id;
   auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
   if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
                                            // Bugs out AMD GPUs
-    renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+    upgrade_infos.push_back({
         .old_format = reshade::api::format::r11g11b10_float,
         .new_format = reshade::api::format::r16g16b16a16_float,
         .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
                        .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
     });
   }
+
+  renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
 }
 
 bool initialized = false;
@@ -455,12 +459,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
+
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
-
-        renodx::mods::swapchain::SetUseHDR10();
 
         initialized = true;
       }
@@ -471,6 +475,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
+      renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
 
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);        // fp11 upgrades for NVIDIA
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
@@ -481,7 +486,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::random::Use(fdw_reason);  // film grain
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  renodx::mods::swapchain::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
