@@ -38,7 +38,7 @@ dcl_constantbuffer CB4[401], dynamicIndexed
 dcl_constantbuffer CB5[5], immediateIndexed
 dcl_constantbuffer CB6[160], dynamicIndexed
 dcl_constantbuffer CB7[4], immediateIndexed
-dcl_constantbuffer CB13[13], immediateIndexed
+dcl_constantbuffer CB13[19], immediateIndexed
 dcl_sampler s0, mode_default
 dcl_sampler s1, mode_default
 dcl_sampler s2, mode_default
@@ -1054,6 +1054,7 @@ loop
 endloop
 mad r1.xyz, r22.xyzx, r13.zzzz, r14.xyzx
 ne r11.xy, l(0.000000, 0.000000, 0.000000, 0.000000), cb0[112].xyxx
+movc r11.x, cb13[18].w, l(0xFFFFFFFF), r11.x
 if_nz r11.x
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t4.yzxw, s0, cb0[108].x
   mad r0.z, r0.z, l(0.750000), l(0.250000)
@@ -1080,6 +1081,8 @@ else
   mov r11.xzw, r3.wwww
   mov r14.xyz, r3.wwww
 endif
+movc r11.xzw, cb13[18].wwww, r11.xyzw, l(1.0, 0, 1.0, 1.0)
+mul r1.xyz, r1.xyzx, r11.xzwx
 mad r17.xyz, cb0[6].xzyx, -cb0[212].wwww, cb0[210].xzyx
 add r17.xyz, r8.xzyx, -r17.xyzx
 max r0.z, |r17.y|, |r17.x|

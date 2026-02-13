@@ -1,0 +1,14 @@
+// Why AO dont apply to grass / enviroment under spotlights / direct lights
+
+The issue was that r1.xyz (the accumulated direct light from spotlights, point lights, etc. computed in the light loop) was never multiplied by the AO value. The original shader only applies AO to r3.xyz (the indirect/specular/SSR contribution), not to the direct light accumulator.
+
+In the original shader flow:
+
+r8.xzw / r13.xyz = AO values (single-bounce / multiscatter)
+r3.xyz is modulated by AO at line ~1401-1402: mul r6.xyw, r8.xzxw, r6.xyxw and mad r3.xyz, r3.xyzx, r13.xyzx, r6.xywx
+r1.xyz goes straight to the final output un-attenuated: add r1.xyz, r1.xyzx, r3.xyzx
+So the cb0[112].x gate was a red herring — it was already 1 for the main directional light pass. The real problem was that the light loop output bypassed AO entirely. Grass, being mainly lit by direct lights (spotlights included), showed zero AO effect because its dominant lighting term was never occluded.
+
+The fix: mul r1.xyz, r1.xyzx, r8.xzwx right after the AO block — applying the same single-bounce AO to the direct light contribution.
+
+// Screenspaced shadows are RIP becasue sun angle is used... Doesnt match spotlight angles

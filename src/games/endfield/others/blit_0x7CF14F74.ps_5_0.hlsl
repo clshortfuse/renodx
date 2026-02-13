@@ -122,6 +122,43 @@ float3 ApplyRCAS(
   return pix;
 }
 
+// Color Calibration: Temperature 6500K → 6750K + magenta offset 0.03
+
+float3 ApplyColorCalibration(float3 color)
+{
+    float3 adapted;
+    adapted.r = dot(color, float3( 1.00113f, -0.00212f, -0.01555f));
+    adapted.g = dot(color, float3(-0.00031f,  1.00047f,  0.00113f));
+    adapted.b = dot(color, float3(-0.00018f,  0.00445f,  1.03436f));
+
+    float3 lms;
+    lms.x = dot(adapted, float3(0.4122214708f, 0.5363325363f, 0.0514459929f));
+    lms.y = dot(adapted, float3(0.2119034982f, 0.6806995451f, 0.1073969566f));
+    lms.z = dot(adapted, float3(0.0883024619f, 0.2817188376f, 0.6299787005f));
+
+    lms = sign(lms) * pow(abs(lms), 1.0f / 3.0f);
+
+    float3 lab;
+    lab.x = dot(lms, float3( 0.2104542553f,  0.7936177850f, -0.0040720468f));
+    lab.y = dot(lms, float3( 1.9779984951f, -2.4285922050f,  0.4505937099f));
+    lab.z = dot(lms, float3( 0.0259040371f,  0.7827717662f, -0.8086757660f));
+
+    lab.y += 0.0015f;
+
+    lms.x = lab.x + 0.3963377774f * lab.y + 0.2158037573f * lab.z;
+    lms.y = lab.x - 0.1055613458f * lab.y - 0.0638541728f * lab.z;
+    lms.z = lab.x - 0.0894841775f * lab.y - 1.2914855480f * lab.z;
+
+    lms = lms * lms * lms;
+
+    float3 result;
+    result.r = dot(lms, float3( 4.0767416621f, -3.3077115913f,  0.2309699292f));
+    result.g = dot(lms, float3(-1.2684380046f,  2.6097574011f, -0.3413193965f));
+    result.b = dot(lms, float3(-0.0041960863f, -0.7034186147f,  1.7076147010f));
+
+    return result;
+}
+
 void main(
   float4 v0 : SV_Position0,
   float2 v1 : TEXCOORD0,
@@ -136,6 +173,11 @@ void main(
   // Apply RCAS sharpening if enabled
   if (shader_injection.fx_rcas_sharpening >= 1.0f) {
     r0.xyz = ApplyRCAS(r0.xyz, v1.xy, t0, s0_s);
+  }
+
+  // Apply color calibration (temp 6750K + magenta 0.03) — Tech Test Look
+  if (TECH_TEST_LOOK > 0.5f) {
+    r0.xyz = ApplyColorCalibration(r0.xyz);
   }
   
   o0.xyz = r0.xyz;
