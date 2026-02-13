@@ -106,7 +106,7 @@ float3 HDRBoost(float3 color, float power = 0.20f, float normalization_point = 0
 }
 
 float3 ApplyHDRBoost(float3 color, float power = 0.20f, int mode = 0, float normalization_point = 0.02f) {
-  if (power == 0.f || RENODX_SWAP_CHAIN_OUTPUT_PRESET == 0) return color;
+  if (power == 0.f) return color;
 
   color = max(0, renodx::color::bt2020::from::BT709(color));
 
@@ -192,13 +192,18 @@ float3 ApplySaturationBlowoutHighlightSaturation(float3 tonemapped, float y, ren
 
 float3 ApplyPerChannelBlowoutHueShiftHueClip(float3 untonemapped, float mid_gray = 0.18f, float sdr_max = 1.f) {
   if (RENODX_SWAP_CHAIN_OUTPUT_PRESET == 0.f) return untonemapped;
-  
+
   float max_clip = 100.f;
   float3 color = untonemapped;
 
-  color = max(0, renodx::color::bt2020::from::BT709(color));
+  //color = max(0, renodx::color::bt2020::from::BT709(color));
 
-  if (SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f && RENODX_SWAP_CHAIN_OUTPUT_PRESET != 0.f) {
+  if (SCENE_GRADE_HUE_CLIP > 0.f) {
+    float3 hue_clipped_color = renodx::tonemap::ExponentialRollOff(color, 1.75f, 2.f);
+    color = renodx::color::correct::Hue(color, hue_clipped_color, SCENE_GRADE_HUE_CLIP, 0);
+  }
+
+  if (SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f) {
     max_clip = SCENE_GRADE_PER_CHANNEL_BLOWOUT;
     float calculated_peak = max_clip + (sdr_max - 1.f);
     calculated_peak = max(calculated_peak, 1.f);
@@ -214,11 +219,7 @@ float3 ApplyPerChannelBlowoutHueShiftHueClip(float3 untonemapped, float mid_gray
     color = renodx::color::correct::Chrominance(color, graded_color, 1.f, 0.f, 1);
     color = renodx::color::correct::Hue(color, graded_color, SCENE_GRADE_PER_CHANNEL_HUE_SHIFT, 1);
   }
-  if (SCENE_GRADE_HUE_CLIP > 0.f) {
-    float3 hue_clipped_color = renodx::tonemap::ExponentialRollOff(color, 1.75f, 2.f);
-    color = renodx::color::correct::Hue(color, hue_clipped_color, SCENE_GRADE_HUE_CLIP, 0);
-  }
-  color = renodx::color::bt709::from::BT2020(color);
+  //color = renodx::color::bt709::from::BT2020(color);
   return color;
 }
 
@@ -250,28 +251,27 @@ float3 PostTonemapSliders(float3 hdr_color) {
   return ApplySaturationBlowoutHighlightSaturation(hdr_color, y, config);
 }
 
-float3 DisplayMap(float3 color, float white_clip) {
+float3 DisplayMap(float3 color) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
-
-   float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;              // Normalizes peak
-   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness
+  float tonemap_peak = 1.f;
+  if (RENODX_SWAP_CHAIN_OUTPUT_PRESET != 0.f) {
+    float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;              // Normalizes peak
+    float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;  // Normalizes game brightness
+    tonemap_peak = peak_nits / diffuse_white_nits;
+  }
 
    color = max(0, renodx::color::bt2020::from::BT709(color));
-   float tonemap_peak = peak_nits / diffuse_white_nits;
+
    if (config.gamma_correction > 0.f) {
      tonemap_peak = renodx::color::correct::GammaSafe(tonemap_peak, config.gamma_correction > 0.f, abs(RENODX_GAMMA_CORRECTION) == 1.f ? 2.2f : 2.4f);
    }
 
    float3 outputColor = color;
    if (RENODX_TONE_MAP_TYPE == 1.f) {
-     if (RENODX_SWAP_CHAIN_OUTPUT_PRESET == 0.f) {
-       outputColor = renodx::tonemap::HermiteSplinePerChannelRolloff(color, tonemap_peak, lerp(2.f, 20.f, saturate(white_clip * 0.01f)));
-     }
-     else {
-       outputColor = HermiteSplineMaxCLL(color, tonemap_peak, white_clip);
-       //outputColor = HermiteSplineMaxCLL(color, tonemap_peak, 100.f);
-      //outputColor = ReinhardPiecewiseExtendedMaxCLL(color, 0.5f, tonemap_peak, white_clip);
-      //outputColor = renodx::tonemap::renodrt::BT709()
+     if (RENODX_SWAP_CHAIN_OUTPUT_PRESET != 0.f) {
+       outputColor = renodx::tonemap::neutwo::MaxChannel(color, tonemap_peak);
+     } else {
+       outputColor = renodx::tonemap::neutwo::PerChannel(color, tonemap_peak);
      }
   }
 
@@ -296,12 +296,12 @@ float3 CustomTonemap(float3 untonemapped, float2 TEXCOORD) {
   }
   untonemapped = PreTonemapSliders(untonemapped);
 
-  float white_clip = RENODX_TONE_MAP_WHITE_CLIP;
-  white_clip = PreTonemapSliders(white_clip).x;
-  white_clip = min(500.f, max(white_clip, RENODX_TONE_MAP_WHITE_CLIP));
+  // float white_clip = RENODX_TONE_MAP_WHITE_CLIP;
+  // white_clip = PreTonemapSliders(white_clip).x;
+  // white_clip = min(500.f, max(white_clip, RENODX_TONE_MAP_WHITE_CLIP));
 
   untonemapped = ApplyPerChannelBlowoutHueShiftHueClip(untonemapped, 0.75f);
-  float3 tonemapped = DisplayMap(untonemapped, white_clip);
+  float3 tonemapped = DisplayMap(untonemapped);
   tonemapped = PostTonemapSliders(tonemapped);
   tonemapped = ApplyRenoDXPostProcessing(tonemapped, TEXCOORD);
   return renodx::draw::RenderIntermediatePass(tonemapped);

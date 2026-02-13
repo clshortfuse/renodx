@@ -7,6 +7,8 @@
 
 #define DEBUG_LEVEL_0
 
+#define RENODX_MODS_SWAPCHAIN_VERSION 2
+
 // #include <chrono>
 // #include <random>
 
@@ -113,7 +115,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "Hermite Spline"},
+        .labels = {"Vanilla", "RenoDX"},
         .parse = [](float value) { return value; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
@@ -165,7 +167,7 @@ renodx::utils::settings::Settings settings = {
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "SDR EOTF Emulation",
         .section = "Tone Mapping",
         .tooltip = "Emulates output decoding used on SDR displays.",
@@ -173,26 +175,27 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = &IsHDREnabled,
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapWhiteClip",
-        .binding = &RENODX_TONE_MAP_WHITE_CLIP,
-        .default_value = 100.f,
-        .label = "White Clip",
-        .section = "Tone Mapping",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits",
-        .min = 2.f,
-        .max = 100.f,
-        .is_visible = []() { return settings[0]->GetValue() >= 1; },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ToneMapWhiteClip",
+    //     .binding = &RENODX_TONE_MAP_WHITE_CLIP,
+    //     .default_value = 100.f,
+    //     .label = "White Clip",
+    //     .section = "Tone Mapping",
+    //     .tooltip = "Sets the brightness of UI and HUD elements in nits",
+    //     .min = 2.f,
+    //     .max = 100.f,
+    //     .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    // },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHDRBoost",
         .binding = &shader_injection.hdr_boost,
-        .default_value = 35.f,
+        .default_value = 25.f,
         .label = "HDR Boost",
         .section = "Tone Mapping",
         .max = 50.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0 && IsHDREnabled(); },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0; },
         .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -257,19 +260,19 @@ renodx::utils::settings::Settings settings = {
         .section = "Scene Grading",
         .tooltip = "Simulates the highlight desaturation of per-channel tonemapping.",
         .max = 90.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0 && IsHDREnabled(); },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0 && RENODX_SWAP_CHAIN_OUTPUT_PRESET != 0; },
         .parse = [](float value) { return (0.01f * pow(100.f - value, 2.f)); },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
         new renodx::utils::settings::Setting{
         .key = "SceneGradeHueShift",
         .binding = &shader_injection.scene_grade_per_channel_hue_shift,
-        .default_value = 100.f,
+        .default_value = 50.f,
         .label = "Per Channel Hue Shift",
         .section = "Scene Grading",
         .tooltip = "Simulates the hue shifting of per-channel tonemapping. Effect is tied to Per Channel Blowout.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0 && SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f && IsHDREnabled(); },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0 && SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f && RENODX_SWAP_CHAIN_OUTPUT_PRESET != 0; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
@@ -281,7 +284,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Scene Grading",
         .tooltip = "Simulates the color of highlight clipping in SDR games with no tonemapper.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0 && SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f && IsHDREnabled(); },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE > 0 && RENODX_SWAP_CHAIN_OUTPUT_PRESET != 0; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
@@ -590,8 +593,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      // renodx::mods::swapchain::use_resource_cloning = true;
+      // renodx::mods::swapchain::swapchain_proxy_revert_state = true;
       renodx::mods::swapchain::use_resource_cloning = true;
-      //renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+      renodx::mods::swapchain::swapchain_proxy_revert_state = true;
       //renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
 
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
@@ -611,24 +616,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
       renodx::utils::settings::on_preset_changed_callbacks.emplace_back(&HandleOutputModeChange); // SDR presets
 
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::b8g8r8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
           
           //.dimensions = {.width=renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER, .height=renodx::utils::resource::ResourceUpgradeInfo::ANY},
-          .aspect_ratio = -1,
+          //.aspect_ratio = -1,
           .aspect_ratio_tolerance = 0.05f,
           
           //.use_resource_view_cloning_and_upgrade = true,
       });
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
           
           //.dimensions = {.width=renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER, .height=renodx::utils::resource::ResourceUpgradeInfo::ANY},
-          .aspect_ratio = -1,
+          //.aspect_ratio = -1,
           .aspect_ratio_tolerance = 0.05f,
           
           //.use_resource_view_cloning_and_upgrade = true,
