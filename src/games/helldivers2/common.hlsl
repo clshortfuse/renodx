@@ -135,7 +135,7 @@ float3 CustomACES(float3 untonemapped_ap1) {
     untonemapped_ap1 = renodx::color::ap1::from::BT709(untonemapped_bt709);
 
     const float ACES_MIN = 0.0001f;
-    float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
+    float aces_min = ACES_MIN / (RENODX_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE);
     // float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
     //const float aces_min = 0.0001f;
     const float aces_max = 100.f;
