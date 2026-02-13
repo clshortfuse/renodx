@@ -24,7 +24,7 @@ dcl_constantbuffer CB0[235], immediateIndexed
 dcl_constantbuffer CB1[259], dynamicIndexed
 dcl_constantbuffer CB2[5], immediateIndexed
 dcl_constantbuffer CB3[4], immediateIndexed
-dcl_constantbuffer CB13[13], immediateIndexed
+dcl_constantbuffer CB13[19], immediateIndexed
 dcl_sampler s0, mode_default
 dcl_sampler s1, mode_default
 dcl_sampler s2, mode_default
@@ -269,6 +269,7 @@ else
   mov r1.xyw, l(0,0,0,0)
 endif
 ne r6.zw, l(0.000000, 0.000000, 0.000000, 0.000000), cb0[112].xxxy
+movc r6.z, cb13[18].w, l(0xFFFFFFFF), r6.z
 if_nz r6.z
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t4.yzxw, s0, cb0[108].x
   mad r0.z, r0.z, l(0.750000), l(0.250000)
@@ -295,6 +296,8 @@ else
   mov r8.xyz, r3.wwww
   mov r11.xyw, r3.wwww
 endif
+movc r8.xyz, cb13[18].wwww, r8.xyzx, l(1.0, 1.0, 1.0, 0)
+mul r1.xyw, r1.xyzw, r8.xyxz
 mad r13.xyz, cb0[6].xzyx, -cb0[212].wwww, cb0[210].xzyx
 add r13.xyz, r7.xzyx, -r13.xyzx
 max r0.z, |r13.y|, |r13.x|
@@ -881,32 +884,21 @@ mul r0.yzw, r0.yyzw, r2.xxyz
 mad r0.xyz, r0.yzwy, r0.xxxx, r3.xyzx
 
 // Check fog modification toggle (cb13[12].y)
-// If 0 (Original), skip fog modification and output original
 if_z cb13[12].y
   mad o0.xyz, r1.xyzx, r4.xyzx, r0.xyzx
   dp3 o0.w, r4.xyzx, l(0.333333343, 0.333333343, 0.333333343, 0.000000)
   ret
+else
+  // === Fog Modification (Anti-Banding) ===
+  mul r5.xyz, r1.xyzx, l(0.003921569, 0.003921569, 0.003921569, 0.000000)
+  mul r6.xyz, r0.xyzx, l(0.003921569, 0.003921569, 0.003921569, 0.000000)
+  add r7.xyz, -r4.xyzx, l(1.000000, 1.000000, 1.000000, 0.000000)
+  mad r7.xyz, r7.xyzx, l(0.350000, 0.350000, 0.350000, 0.000000), r4.xyzx
+  mul r6.xyz, r6.xyzx, l(0.650000, 0.650000, 0.650000, 0.000000)
+  mad r8.xyz, r5.xyzx, r7.xyzx, r6.xyzx
+  mul o0.xyz, r8.xyzx, l(255.000000, 255.000000, 255.000000, 0.000000)
+  dp3 o0.w, r4.xyzx, l(0.333333343, 0.333333343, 0.333333343, 0.000000)
+  ret
 endif
-
-// === Simplified Fog Modification (Anti-Banding) ===
-// r1.xyz = scene color (0-255), r4.xyz = transmittance, r0.xyz = fog inscatter (0-255)
-
-// Normalize colors to 0-1 range
-mul r5.xyz, r1.xyzx, l(0.003921569, 0.003921569, 0.003921569, 0.000000)  // sceneColor = r1/255
-mul r6.xyz, r0.xyzx, l(0.003921569, 0.003921569, 0.003921569, 0.000000)  // fogColor = r0/255
-
-// Boost transmittance: transmittance = lerp(transmittance, 1, 0.35) to reduce fog density
-add r7.xyz, -r4.xyzx, l(1.000000, 1.000000, 1.000000, 0.000000)
-mad r7.xyz, r7.xyzx, l(0.350000, 0.350000, 0.350000, 0.000000), r4.xyzx
-
-// Reduce fog inscatter intensity
-mul r6.xyz, r6.xyzx, l(0.650000, 0.650000, 0.650000, 0.000000)
-
-// Standard fog blend with reduced intensity
-mad r8.xyz, r5.xyzx, r7.xyzx, r6.xyzx
-
-// Output: scale back to 0-255 range
-mul o0.xyz, r8.xyzx, l(255.000000, 255.000000, 255.000000, 0.000000)
-dp3 o0.w, r4.xyzx, l(0.333333343, 0.333333343, 0.333333343, 0.000000)
 ret
 // Approximately 0 instruction slots used

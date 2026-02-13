@@ -1,5 +1,4 @@
-// ---- Created with 3Dmigoto v1.4.1 on Sat Jan 24 06:14:41 2026
-// Fixed for compilation
+
 #include "../shared.h"
 
 groupshared struct { float val[1]; } g0[128];
@@ -26,14 +25,9 @@ cbuffer cb0 : register(b0)
 [numthreads(64, 1, 1)]
 void main(uint3 vThreadIDInGroup : SV_GroupThreadID, uint3 vThreadGroupID : SV_GroupID)
 {
-// Needs manual fix for instruction:
-// unknown dcl_: dcl_uav_typed_texture2d (unorm,unorm,unorm,unorm) u0
   float4 r0,r1,r2,r3,r4,r5,r6,r7,r8;
   uint4 bitmask, uiDest;
   float4 fDest;
-
-// Needs manual fix for instruction:
-// unknown dcl_: dcl_thread_group 64, 1, 1
   r0.x = cmp(0 < cb1[2].w);
   r0.x = r0.x ? 0 : 63;
   r0.x = (int)r0.x ^ (int)vThreadIDInGroup.x;

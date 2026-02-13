@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.4.1 on Sat Jan 24 04:33:32 2026
+
 #include "../shared.h"
 
 Texture2D<float4> t5 : register(t5);

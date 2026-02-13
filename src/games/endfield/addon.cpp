@@ -5,7 +5,7 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
 
 #include <shared_mutex>
 #include <sstream>
@@ -100,6 +100,10 @@ static uint32_t last_rtv_height = 0;
 // This prevents ReShade from rendering during normal present while allowing our bypass to work
 static bool bypass_render_active = false;
 
+// Deferred Tech Test preset application (avoids crash from UpdateSetting inside on_change_value)
+static int pending_tech_test_preset = -1;  // -1 = none, 0 = restore defaults, 1 = apply tech test
+static float prev_tech_test_look = -1.f;   // impossible initial value forces first-frame detection
+
 // Callback to disable effects during normal present when bypass is enabled
 // This prevents double-rendering (once via bypass, once via normal present)
 void OnReshadeBeginEffects(reshade::api::effect_runtime* runtime, 
@@ -150,6 +154,7 @@ bool ExecuteReshadeEffects(reshade::api::command_list* cmd_list) {
   const std::shared_lock lock(data->mutex);
   for (auto* runtime : data->effect_runtimes) {
     if (rtv_width != last_rtv_width || rtv_height != last_rtv_height) {
+#ifdef DEBUG_LEVEL_0
       uint32_t swapchain_width = 0, swapchain_height = 0;
       runtime->get_screenshot_width_and_height(&swapchain_width, &swapchain_height);
       
@@ -157,6 +162,7 @@ bool ExecuteReshadeEffects(reshade::api::command_list* cmd_list) {
       ss << "[Endfield] ExecuteReshadeEffects: Rendering at RTV=" << rtv_width << "x" << rtv_height 
          << " (Swapchain=" << swapchain_width << "x" << swapchain_height << ")";
       reshade::log::message(reshade::log::level::info, ss.str().c_str());
+#endif
       
       last_rtv_width = rtv_width;
       last_rtv_height = rtv_height;
@@ -769,6 +775,195 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "On"},
     },
     new renodx::utils::settings::Setting{
+        .key = "AORadius",
+        .binding = &shader_injection.ao_radius,
+        .default_value = 4.f,
+        .label = "AO Radius",
+        .section = "Ambient Occlusion",
+        .tooltip = "World-space sampling radius. Larger values detect occlusion from more distant geometry.",
+        .max = 16.f,
+        .format = "%.1f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AORadiusScale",
+        .binding = &shader_injection.ao_radius_scale,
+        .default_value = 1.f,
+        .label = "AO Radius Scale",
+        .section = "Ambient Occlusion",
+        .tooltip = "Multiplier on the effective radius. Fine-tune the reach of the AO sampling.",
+        .max = 5.f,
+        .format = "%.2f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AOFalloffRange",
+        .binding = &shader_injection.ao_falloff_range,
+        .default_value = 1.f,
+        .label = "AO Falloff Range",
+        .section = "Ambient Occlusion",
+        .tooltip = "Fraction of radius used for distance falloff (0-1). Lower = sharper falloff.",
+        .max = 1.f,
+        .format = "%.2f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AODistributionPower",
+        .binding = &shader_injection.ao_distribution_power,
+        .default_value = 2.f,
+        .label = "AO Distribution Power",
+        .section = "Ambient Occlusion",
+        .tooltip = "Controls how sample distances are distributed. Higher = samples pushed further out.",
+        .max = 5.f,
+        .format = "%.2f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AOThinOccluder",
+        .binding = &shader_injection.ao_thin_occluder,
+        .default_value = 2.f,
+        .label = "AO Thin Occluder",
+        .section = "Ambient Occlusion",
+        .tooltip = "Thin occluder compensation factor. Higher = more AO contribution from thin objects.",
+        .max = 8.f,
+        .format = "%.1f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AOGamma",
+        .binding = &shader_injection.ao_gamma,
+        .default_value = 2.2f,
+        .label = "AO Intensity (Gamma)",
+        .section = "Ambient Occlusion",
+        .tooltip = "Power curve applied to the final AO. Higher = darker/stronger occlusion.",
+        .max = 5.f,
+        .format = "%.2f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AOTemporalFrame",
+        .binding = &shader_injection.ao_temporal_frame,
+        .default_value = 64.f,
+        .label = "AO Temporal Frame",
+        .section = "Ambient Occlusion",
+        .tooltip = "Temporal frame count for jitter rotation cycling. Higher = more noise variation frames.",
+        .max = 128.f,
+        .format = "%.0f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AOMipBias",
+        .binding = &shader_injection.ao_mip_bias,
+        .default_value = 4.f,
+        .label = "AO Mip Bias",
+        .section = "Ambient Occlusion",
+        .tooltip = "Mip level bias for depth sampling. Higher = coarser/smoother depth reads.",
+        .max = 8.f,
+        .format = "%.1f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AODirectionCount",
+        .binding = &shader_injection.ao_direction_count,
+        .default_value = 6.f,
+        .label = "AO Direction Count",
+        .section = "Ambient Occlusion",
+        .tooltip = "Number of directional slices for horizon search. More = higher quality, higher cost.",
+        .min = 1.f,
+        .max = 12.f,
+        .format = "%.0f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AOStepCount",
+        .binding = &shader_injection.ao_step_count,
+        .default_value = 6.f,
+        .label = "AO Step Count",
+        .section = "Ambient Occlusion",
+        .tooltip = "Number of sample steps per direction. More = better horizon accuracy, higher cost.",
+        .min = 1.f,
+        .max = 12.f,
+        .format = "%.0f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AONormalAttenuation",
+        .binding = &shader_injection.ao_normal_attenuation,
+        .default_value = 0.05f,
+        .label = "AO Normal Attenuation",
+        .section = "Ambient Occlusion",
+        .tooltip = "Blends between surface normal and view direction for the visibility integral.",
+        .max = 1.f,
+        .format = "%.3f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AOThickness",
+        .binding = &shader_injection.ao_thickness,
+        .default_value = 0.5f,
+        .label = "AO Thickness",
+        .section = "Ambient Occlusion",
+        .tooltip = "Assumed thickness of occluders. Controls min-sample distance and bitmask backface offset.",
+        .max = 5.f,
+        .format = "%.2f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AODenoiserBlurBeta",
+        .binding = &shader_injection.ao_denoiser_blur_beta,
+        .default_value = 0.f,
+        .label = "AO Denoiser Blur",
+        .section = "Ambient Occlusion",
+        .tooltip = "Bilateral blur edge sensitivity. Higher = more blur, less edge preservation.",
+        .max = 3.f,
+        .format = "%.2f",
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AODebugView",
+        .binding = &shader_injection.ao_debug_view,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "AO Debug View",
+        .section = "Ambient Occlusion",
+        .tooltip = "Switches between normal scene rendering and AO-only debug visualization.",
+        .labels = {"Off", "AO Only"},
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AOBitmask",
+        .binding = &shader_injection.ao_bitmask,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "AO Visibility Bitmask",
+        .section = "Ambient Occlusion",
+        .tooltip = "Enables XeGTAO visibility bitmask method. Replaces the default horizon-based integration with a bitmask-based approach for improved multi-layer occlusion.",
+        .labels = {"Off", "On"},
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Reset AO Settings to Defaults",
+        .section = "Ambient Occlusion",
+        .on_change = []() {
+          renodx::utils::settings::UpdateSetting("AORadius", 4.f);
+          renodx::utils::settings::UpdateSetting("AORadiusScale", 1.f);
+          renodx::utils::settings::UpdateSetting("AOFalloffRange", 1.f);
+          renodx::utils::settings::UpdateSetting("AODistributionPower", 2.f);
+          renodx::utils::settings::UpdateSetting("AOThinOccluder", 2.f);
+          renodx::utils::settings::UpdateSetting("AOGamma", 2.2f);
+          renodx::utils::settings::UpdateSetting("AOTemporalFrame", 64.f);
+          renodx::utils::settings::UpdateSetting("AOMipBias", 4.f);
+          renodx::utils::settings::UpdateSetting("AODirectionCount", 6.f);
+          renodx::utils::settings::UpdateSetting("AOStepCount", 6.f);
+          renodx::utils::settings::UpdateSetting("AONormalAttenuation", 0.05f);
+          renodx::utils::settings::UpdateSetting("AOThickness", 0.5f);
+          renodx::utils::settings::UpdateSetting("AODenoiserBlurBeta", 0.f);
+          renodx::utils::settings::UpdateSetting("AODebugView", 0.f);
+          renodx::utils::settings::UpdateSetting("AOBitmask", 1.f);
+        },
+    },
+    new renodx::utils::settings::Setting{
         .key = "HDRSun",
         .binding = &shader_injection.sun_intensity,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -803,7 +998,7 @@ renodx::utils::settings::Settings settings = {
         .key = "FogModification",
         .binding = &shader_injection.fog_modification,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 0.f,
         .label = "Hue-Preserving Fog",
         .section = "Rendering Improvements",
         .tooltip = "Toggles alternative hue-preserving fog",
@@ -839,6 +1034,30 @@ renodx::utils::settings::Settings settings = {
         .section = "Rendering Improvements",
         .tooltip = "Improves glass rendering to look more transparent and less cloudy/glowing",
         .labels = {"Vanilla", "Improved"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ImprovedSSR",
+        .binding = &shader_injection.improved_ssr,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "SSR Quality",
+        .section = "Rendering Improvements",
+        .tooltip = "Controls the game's SSR denoiser behavior.\n"
+                   "Vanilla: Original denoiser.\n"
+                   "Improved: Sharper reflections on smooth surfaces (metals, glass)\n"
+                   "  while retaining proper diffusion on rough surfaces (wood, stone).\n"
+                   "  Temporal smoothing is preserved to minimize firefly artifacts.",
+        .labels = {"Vanilla", "Improved"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ImprovedGTAO",
+        .binding = &shader_injection.improved_gtao,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "GTAO + Visibility Bitmask + Deferred AO Modulation",
+        .section = "Rendering Improvements",
+        .tooltip = "Improves vanilla GTAO with visibility bitmask and AO modulation on direct lights (spotlights, point lights).",
+        .labels = {"Original", "Improved"},
     },
     new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
@@ -918,6 +1137,19 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return false; },
     },
     new renodx::utils::settings::Setting{
+        .key = "TechTestLook",
+        .binding = &shader_injection.tech_test_look,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Tech Test Look",
+        .section = "Alternative Grading",
+        .tooltip = "Activates visual adjustments to match the 2024 tech test aesthetic",
+        .labels = {"Off", "On"},
+        .on_change_value = [](float previous, float current) {
+          if (current >= 1.f) pending_tech_test_preset = 1;
+        },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
@@ -965,11 +1197,22 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-  //   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
+     renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
+     renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
+     renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
+     renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
+     renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 1.f);
+     renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
+     renodx::utils::settings::UpdateSetting("SwapChainGammaCorrection", 1.f);
+     renodx::utils::settings::UpdateSetting("HDRSun", 0.f);
+     renodx::utils::settings::UpdateSetting("Godrays", 1.f);
+     renodx::utils::settings::UpdateSetting("SHADOW_HARDENING", 0.f);
+     renodx::utils::settings::UpdateSetting("FogModification", 0.f);
+     renodx::utils::settings::UpdateSetting("CubemapAmbientLink", 0.f);
+     renodx::utils::settings::UpdateSetting("GlassTransparency", 0.f);
+     renodx::utils::settings::UpdateSetting("ImprovedSSR", 0.f);
+     renodx::utils::settings::UpdateSetting("ImprovedGTAO", 0.f);
+     renodx::utils::settings::UpdateSetting("TechTestLook", 0.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
@@ -1039,11 +1282,39 @@ void OnPresent(reshade::api::command_queue* queue,
     shader_injection.custom_flip_uv_y = 1.f;
   }
 
+  // Compute UI aspect ratio from swapchain for dynamic latency bar detection
+  auto bb = device->get_resource_desc(swapchain->get_current_back_buffer());
+  if (bb.type != reshade::api::resource_type::unknown) {
+    shader_injection.ui_aspect_ratio = static_cast<float>(bb.texture.height) / static_cast<float>(bb.texture.width);
+  }
+
   // Reset heuristic tracking flags for ping/UID detection
   is_ping_input_candidate = false;
   is_uid_input_candidate = false;
   is_ping_drawn = false;
   draw_call_vertex_count = 0;
+
+  // Detect Tech Test state changes from preset loads, game startup, or manual toggle
+  float current_tech_test = shader_injection.tech_test_look;
+  if (current_tech_test != prev_tech_test_look) {
+    if (current_tech_test >= 1.f) pending_tech_test_preset = 1;
+    prev_tech_test_look = current_tech_test;
+  }
+
+  // Apply deferred Tech Test preset (safe context, outside settings callback)
+  if (pending_tech_test_preset == 1) {
+    renodx::utils::settings::UpdateSetting("GammaCorrection", 2.f);
+    renodx::utils::settings::UpdateSetting("SwapChainGammaCorrection", 2.f);
+    renodx::utils::settings::UpdateSetting("ToneMapPerChannelBlowout", 75.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeExposure", 0.65f);
+    renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 51.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeShadows", 80.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeContrast", 55.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 35.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 100.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 30.f);
+    pending_tech_test_preset = -1;
+  }
 
   // Check UI visibility hotkey (skip if user is currently setting a new hotkey)
   if (ui_toggle_hotkey != 0 && !hotkey_input_active) {
@@ -1257,6 +1528,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           0x0E84DFD1u,
           0x99725481u,
           0xA4113DE8u,
+          0xD5B102A4u,
         };
         */    
  
