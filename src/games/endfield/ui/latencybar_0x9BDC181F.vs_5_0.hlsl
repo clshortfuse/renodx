@@ -1,5 +1,3 @@
-// Latency bar icon vertex shader - selective hiding based on vertex positions
-// Original shader: 0x9BDC181F
 
 #include "../shared.h"
 
@@ -34,21 +32,33 @@ cbuffer cb0 : register(b0)
 }
 
 // Latency bar icon vertex positions (12 vertices = 3 bars)
-// These are the same coordinates from Vulkan implementation
-static const float2 latency_bar_verts[12] = {
-  float2(-1167.0001220703, -653.4990234375),
-  float2(-1167.0001220703, -644.4990234375),
-  float2(-1162.0001220703, -644.4990234375),
-  float2(-1162.0001220703, -653.4990234375),
-  float2(-1160.5, -653.4990234375),
-  float2(-1160.5, -640.4990234375),
-  float2(-1155.5, -640.4990234375),
-  float2(-1155.5, -653.4990234375),
-  float2(-1154.0, -653.4990234375),
-  float2(-1154.0, -636.4990234375),
-  float2(-1149.0, -636.4990234375),
-  float2(-1149.0, -653.4990234375)
-};
+// Y coordinates are computed dynamically based on aspect ratio
+// Formula: Y = offset - 1200.0 * (height/width)
+// This ensures correct detection on both 16:9 and 21:9 (ultrawide) displays
+float2 GetLatencyBarVert(int index)
+{
+  float aspect = UI_ASPECT_RATIO;
+  float base_y = 21.5 - 1200.0 * aspect;
+  
+  // X positions and Y offsets for each vertex
+  // Vertices form 3 bars: short (9px), medium (13px), tall (17px)
+  switch (index)
+  {
+    case 0:  return float2(-1167.0, base_y);                      // bar1 bottom-left
+    case 1:  return float2(-1167.0, 30.5 - 1200.0 * aspect);     // bar1 top-left
+    case 2:  return float2(-1162.0, 30.5 - 1200.0 * aspect);     // bar1 top-right
+    case 3:  return float2(-1162.0, base_y);                      // bar1 bottom-right
+    case 4:  return float2(-1160.5, base_y);                      // bar2 bottom-left
+    case 5:  return float2(-1160.5, 34.5 - 1200.0 * aspect);     // bar2 top-left
+    case 6:  return float2(-1155.5, 34.5 - 1200.0 * aspect);     // bar2 top-right
+    case 7:  return float2(-1155.5, base_y);                      // bar2 bottom-right
+    case 8:  return float2(-1154.0, base_y);                      // bar3 bottom-left
+    case 9:  return float2(-1154.0, 38.5 - 1200.0 * aspect);     // bar3 top-left
+    case 10: return float2(-1149.0, 38.5 - 1200.0 * aspect);     // bar3 top-right
+    case 11: return float2(-1149.0, base_y);                      // bar3 bottom-right
+    default: return float2(0, 0);
+  }
+}
 
 // Check if this vertex is part of the latency bar icon
 bool IsLatencyBarVertex(float2 pos)
@@ -56,8 +66,8 @@ bool IsLatencyBarVertex(float2 pos)
   [unroll]
   for (int i = 0; i < 12; i++)
   {
-    float2 diff = abs(latency_bar_verts[i] - pos);
-    if (dot(diff, diff) < 0.001)
+    float2 diff = abs(GetLatencyBarVert(i) - pos);
+    if (dot(diff, diff) < 1.0)
     {
       return true;
     }

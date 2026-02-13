@@ -902,6 +902,15 @@ void main(
   r2.xyz = r4.xyz * r2.xyz;
   r2.xyz = r2.xyz * r1.yyy + r3.yzw;
   o0.xyz = r0.xyz * r1.xzw + r2.xyz;
+  
+  // ==========================================================================
+  // SKYBOX DESATURATION (50%) — Tech Test Look
+  // ==========================================================================
+  if (TECH_TEST_LOOK > 0.5f) {
+    float skyboxLuma = dot(o0.xyz, float3(0.2126f, 0.7152f, 0.0722f));
+    o0.xyz = lerp(o0.xyz, float3(skyboxLuma, skyboxLuma, skyboxLuma), 0.5f);
+  }
+  
   r0.x = max(9.99999994e-09, v3.z);
   r0.xy = v3.xy / r0.xx;
   r0.z = max(9.99999994e-09, v4.z);

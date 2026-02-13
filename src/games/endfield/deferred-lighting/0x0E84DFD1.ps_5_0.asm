@@ -38,7 +38,7 @@ dcl_constantbuffer CB4[401], dynamicIndexed
 dcl_constantbuffer CB5[5], immediateIndexed
 dcl_constantbuffer CB6[160], dynamicIndexed
 dcl_constantbuffer CB7[4], immediateIndexed
-dcl_constantbuffer CB13[14], immediateIndexed
+dcl_constantbuffer CB13[19], immediateIndexed
 dcl_sampler s0, mode_default
 dcl_sampler s1, mode_default
 dcl_sampler s2, mode_default
@@ -1332,6 +1332,7 @@ loop
 endloop
 mad r6.xyz, r20.xyzx, r11.yyyy, r12.xyzx
 ne r3.yz, l(0.000000, 0.000000, 0.000000, 0.000000), cb0[112].xxyx
+movc r3.y, cb13[18].w, l(0xFFFFFFFF), r3.y
 if_nz r3.y
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t4.yzxw, s0, cb0[108].x
   min r0.z, r1.y, r0.z
@@ -1359,6 +1360,8 @@ else
   mov r11.xyz, r1.yyyy
   mov r12.xyz, r1.yyyy
 endif
+movc r11.xyz, cb13[18].wwww, r11.xyzx, l(1.0, 1.0, 1.0, 0)
+mul r6.xyz, r6.xyzx, r11.xyzx
 mad r15.xyz, r2.xywx, l(0.250000, 0.250000, 0.250000, 0.000000), r5.xyzx
 round_z r0.z, cb0[212].x
 mad r16.xy, r0.zzzz, l(2.083000, 4.867000, 0.000000, 0.000000), r4.xyxx
@@ -1771,10 +1774,10 @@ mul r2.xyz, r2.yzwy, cb0[112].zzzz
 mul r2.xyz, r2.xyzx, cb0[111].yyyy
 // Cubemap ambient link modulation (cb13[13].w)
 if_nz cb13[13].w
-  max r37.w, r37.w, l(0.000000)  // saturate step 1
-  min r37.w, r37.w, l(1.000000)  // saturate step 2
-  mad r37.w, r37.w, l(0.850000), l(0.150000)  // lerp(0.15, 1.0, ambient) = 0.15 + 0.85*ambient
-  mul r2.xyz, r2.xyzx, r37.wwww  // cubemap *= lerp(0.15, 1.0, saturate(ambient_luminance))
+  max r37.w, r37.w, l(0.000000)
+  min r37.w, r37.w, l(1.000000)
+  mad r37.w, r37.w, l(0.750000), l(0.250000)
+  mul r2.xyz, r2.xyzx, r37.wwww
 endif
 if_nz r3.z
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t3.yzxw, s1, cb0[108].x
