@@ -218,11 +218,11 @@ float3 GenerateOutput(float3 untonemapped_bt709, float min_nits, float peak_whit
     graded_final = GamutCompress(graded_final, renodx::color::BT2020_TO_XYZ_MAT);
   }
 
-  float3 color_pq = renodx::color::pq::EncodeSafe(graded_final, diffuse_white);
-
   if (RENODX_TONE_MAP_TYPE == 2.f) {
-    color_pq = ApplyHermiteSplineByMaxChannelPQInput(color_pq, diffuse_white, peak_white, 100.f);
+    graded_final = renodx::tonemap::neutwo::MaxChannel(graded_final, peak_white / diffuse_white, 100.f);
   }
+
+  float3 color_pq = renodx::color::pq::EncodeSafe(graded_final, diffuse_white);
 
   return color_pq;
 }

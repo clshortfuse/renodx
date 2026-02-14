@@ -6,6 +6,9 @@
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP        20.f
+#define RENODX_RENO_DRT_WHITE_CLIP                    100.f
+#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE             renodx::color::convert::COLOR_SPACE_AP1
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE           renodx::color::convert::COLOR_SPACE_BT2020
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -19,6 +22,7 @@ struct ShaderInjectData {
   float tone_map_shadows;
   float tone_map_contrast;
   float tone_map_saturation;
+  float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
   float tone_map_hue_correction;
@@ -50,7 +54,7 @@ cbuffer cb13 : register(b13) {
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
 #define RENODX_TONE_MAP_CONTRAST             shader_injection.tone_map_contrast
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
-#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION 1.f
+#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
@@ -61,7 +65,7 @@ cbuffer cb13 : register(b13) {
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define CUSTOM_TONE_MAP_STRATEGY             shader_injection.custom_tone_map_strategy
 #define CUSTOM_LUT_STRENGTH                  shader_injection.custom_lut_strength
-#define CUSTOM_LUT_SCALING                   shader_injection.custom_lut_scaling
+#define CUSTOM_LUT_SCALING                   0.f
 #define CUSTOM_LUT_TETRAHEDRAL               shader_injection.custom_lut_tetrahedral
 #define CUSTOM_LENS_FLARE                    shader_injection.custom_lens_flare
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
