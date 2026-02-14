@@ -54,7 +54,7 @@ struct __declspec(uuid("d8712fa7-66e5-45e2-9e07-80fe6354f507")) DeviceData {
 
   std::unordered_map<reshade::api::swapchain*, reshade::api::swapchain_desc> upgraded_swapchains;
 
-  reshade::api::resource_desc primary_swapchain_desc;
+  reshade::api::resource_desc primary_swapchain_resource_desc;
 
   bool prevent_full_screen = false;
   bool fake_fullscreen_pending = false;
@@ -93,6 +93,7 @@ struct __declspec(uuid("d8712fa7-66e5-45e2-9e07-80fe6354f507")) DeviceData {
 
   // <swap_chain_back_buffer_handle, SwapchainProxyPass*>
   std::unordered_map<uint64_t, renodx::utils::draw::SwapchainProxyPass*> swapchain_proxy_passes;
+  reshade::api::swapchain_desc swapchain_desc;
 };
 
 // Variables
@@ -146,6 +147,7 @@ static thread_local std::optional<reshade::api::swapchain_desc> upgraded_swapcha
 static thread_local std::optional<reshade::api::resource> local_original_resource;
 static thread_local std::optional<reshade::api::resource_desc> local_original_resource_desc;
 static thread_local std::optional<reshade::api::resource_view_desc> local_original_resource_view_desc;
+static thread_local bool local_swapchain_resize = false;
 static utils::data::ParallelNodeHashMap<HWND, std::unordered_set<reshade::api::swapchain*>, std::shared_mutex> flip_swapchains_by_window;
 
 // Methods
@@ -558,6 +560,10 @@ static bool OnCreateSwapchain(reshade::api::device_api device_api, reshade::api:
 static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   reshade::api::device_api device_api = reshade::api::device_api::d3d11;
 #endif
+  bool resize = local_swapchain_resize;
+  if (resize) {
+    local_swapchain_resize = false;
+  }
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnCreateSwapchain()");
   original_swapchain_desc = desc;
   upgraded_swapchain_desc.reset();
@@ -652,7 +658,8 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
                  || (old_fullscreen_state != desc.fullscreen_state)
                  || (old_fullscreen_refresh_rate != desc.fullscreen_refresh_rate);
 
-  if (prevent_multiple_flip_swapchains_per_window
+  if (!resize
+      && prevent_multiple_flip_swapchains_per_window
       && is_dxgi
       && (desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)
           || desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD))
@@ -745,6 +752,8 @@ static void OnPresentForResizeBuffer(
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  local_swapchain_resize = false;
+
   std::stringstream s;
   s << "mods::swapchain::OnInitSwapchain(";
   s << PRINT_PTR(reinterpret_cast<uintptr_t>(swapchain));
@@ -756,15 +765,11 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
   HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
 
-  if (!resize && utils::swapchain::IsDXGI(swapchain)) {
-    if (hwnd != nullptr) {
-      const auto& desc = upgraded_swapchain_desc.has_value() ? upgraded_swapchain_desc.value() : original_swapchain_desc.value();
-
-      if (desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)
-          || desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD)) {
-        flip_swapchains_by_window[hwnd].insert(swapchain);
-      }
-    }
+  const auto& swapchain_desc = upgraded_swapchain_desc.has_value() ? upgraded_swapchain_desc.value() : original_swapchain_desc.value();
+  if (!resize && hwnd != nullptr && utils::swapchain::IsDXGI(swapchain)
+      && (swapchain_desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)
+          || swapchain_desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD))) {
+    flip_swapchains_by_window[hwnd].insert(swapchain);
   }
 
   if (use_device_proxy && device == utils::device_proxy::proxy_device_reshade) {
@@ -794,12 +799,13 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     return;
   }
 
-  auto primary_swapchain_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
+  auto primary_swapchain_resource_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
 
   bool upgraded_resource_format = false;
 
   {
     const std::unique_lock lock(data->mutex);
+    data->swapchain_desc = swapchain_desc;
     if (upgraded_swapchain_desc.has_value()) {
       data->upgraded_swapchains[swapchain] = upgraded_swapchain_desc.value();
       data->swap_chain_upgrade_info.new_format = upgraded_swapchain_desc.value().back_buffer.texture.format;
@@ -823,15 +829,15 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
       }
       upgraded_swapchain_desc.reset();
     } else {
-      data->swap_chain_upgrade_info.new_format = primary_swapchain_desc.texture.format;
+      data->swap_chain_upgrade_info.new_format = primary_swapchain_resource_desc.texture.format;
     }
-    data->primary_swapchain_desc = primary_swapchain_desc;
+    data->primary_swapchain_resource_desc = primary_swapchain_resource_desc;
     data->primary_swapchain_window = hwnd;
     {
       std::stringstream s;
       s << "mods::swapchain::OnInitSwapchain(Primary swapchain desc: ";
-      s << primary_swapchain_desc.texture.width << "x" << primary_swapchain_desc.texture.height;
-      s << ", format: " << primary_swapchain_desc.texture.format;
+      s << primary_swapchain_resource_desc.texture.width << "x" << primary_swapchain_resource_desc.texture.height;
+      s << ", format: " << primary_swapchain_resource_desc.texture.format;
       s << ", hwnd: " << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
       s << ", device: " << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
       s << ")";
@@ -852,8 +858,8 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
             info = &pair.second;
           });
       if (info == nullptr || !info->is_swap_chain) continue;
-      if (info->desc.texture.width != primary_swapchain_desc.texture.width
-          || info->desc.texture.height != primary_swapchain_desc.texture.height) {
+      if (info->desc.texture.width != primary_swapchain_resource_desc.texture.width
+          || info->desc.texture.height != primary_swapchain_resource_desc.texture.height) {
         continue;
       }
       if (upgraded_resource_format) {
@@ -871,9 +877,9 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     }
   }
 
-  CheckSwapchainSize(swapchain, primary_swapchain_desc);
+  CheckSwapchainSize(swapchain, primary_swapchain_resource_desc);
 
-  if (use_resize_buffer && primary_swapchain_desc.texture.format != target_format) {
+  if (use_resize_buffer && primary_swapchain_resource_desc.texture.format != target_format) {
     if (use_resize_buffer_on_demand || use_resize_buffer_on_present) {
       reshade::register_event<reshade::addon_event::present>(OnPresentForResizeBuffer);
     } else if (!use_resize_buffer_on_set_full_screen) {
@@ -888,26 +894,29 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  if (resize) {
+    // Next CreateSwapchain/InitSwapchain will be from resize (not new swapchain)
+    local_swapchain_resize = true;
+  }
+
   auto* device = swapchain->get_device();
   HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
 
-  if (!resize && hwnd != nullptr && utils::swapchain::IsDXGI(swapchain)) {
-    const auto& desc = upgraded_swapchain_desc.has_value() ? upgraded_swapchain_desc.value() : original_swapchain_desc.value();
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return;
 
-    if (desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)
-        || desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD)) {
-      if (auto pair = flip_swapchains_by_window.find(hwnd);
-          pair != flip_swapchains_by_window.end()) {
-        pair->second.erase(swapchain);
-        if (pair->second.empty()) {
-          flip_swapchains_by_window.erase(pair);
-        }
+  const auto& desc = data->swapchain_desc;
+  if (hwnd != nullptr && !resize && utils::swapchain::IsDXGI(swapchain)
+      && (desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)
+          || desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD))) {
+    if (auto pair = flip_swapchains_by_window.find(hwnd);
+        pair != flip_swapchains_by_window.end()) {
+      pair->second.erase(swapchain);
+      if (pair->second.empty()) {
+        flip_swapchains_by_window.erase(pair);
       }
     }
   }
-
-  auto* data = renodx::utils::data::Get<DeviceData>(device);
-  if (data == nullptr) return;
 
   bool should_unhook_wndproc = false;
 
@@ -1162,7 +1171,7 @@ inline void OnPresent(
   if (data->fake_fullscreen_pending) {
     auto* const hwnd = static_cast<HWND>(swapchain->get_hwnd());
     const bool can_apply = utils::windowing::CanApplyFakeFullscreen(hwnd);
-    if (can_apply && utils::windowing::ApplyFakeFullscreen(swapchain, data->primary_swapchain_desc)) {
+    if (can_apply && utils::windowing::ApplyFakeFullscreen(swapchain, data->primary_swapchain_resource_desc)) {
       data->fake_fullscreen_pending = false;
       std::stringstream s;
       s << "mods::swapchain::OnPresent(fake_fullscreen_pending=0, hwnd="
