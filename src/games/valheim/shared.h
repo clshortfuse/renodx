@@ -1,15 +1,15 @@
 #ifndef SRC_VALHEIM_SHARED_H_
 #define SRC_VALHEIM_SHARED_H_
 
-#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
-#define RENODX_RENO_DRT_HIIGHLIGHT
+#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 
 #define RENODX_RENDER_MODE                   shader_injection.render_mode_setting
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
 #define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
-#define CUSTOM_TONE_MAP_CONFIGURATION        shader_injection.custom_tone_map_configuration
+//#define CUSTOM_TONE_MAP_CONFIGURATION        shader_injection.custom_tone_map_configuration
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
@@ -21,7 +21,7 @@
 //#define RENODX_TONE_MAP_WORKING_COLOR_SPACE  shader_injection.tone_map_working_color_space
 #define RENODX_TONE_MAP_HUE_PROCESSOR        0.f
 #define RENODX_TONE_MAP_HUE_SHIFT            0.f
-#define RENODX_TONE_MAP_HUE_CORRECTION       100.f * 0.01f
+#define RENODX_TONE_MAP_HUE_CORRECTION       1.f
 #define RENODX_TONE_MAP_PER_CHANNEL          0.f
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  color::convert::COLOR_SPACE_BT2020
@@ -33,10 +33,10 @@
 // #define CUSTOM_SCENE_GRADE_METHOD              shader_injection.scene_grade_method
 // #define CUSTOM_SCENE_GRADE_HUE_CORRECTION      shader_injection.scene_grade_hue_correction
 // #define CUSTOM_SCENE_GRADE_SATURATION_CORRECTION shader_injection.scene_grade_saturation_correction
-// #define CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION shader_injection.scene_grade_blowout_restoration
+#define CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION shader_injection.scene_grade_blowout_restoration
 // #define CUSTOM_SCENE_GRADE_HUE_SHIFT           shader_injection.scene_grade_hue_shift
-#define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
-#define CUSTOM_RANDOM                   shader_injection.custom_random
+#define CUSTOM_FILM_GRAIN_STRENGTH           shader_injection.custom_film_grain
+#define CUSTOM_RANDOM                        shader_injection.custom_random
 #define CUSTOM_CHROMATIC_ABERRATION          shader_injection.custom_chromatic_aberration
 #define CUSTOM_BLOOM                         shader_injection.custom_bloom
 #define CUSTOM_SUN_SHAFTS                    shader_injection.custom_sun_shafts
@@ -50,12 +50,12 @@ struct ShaderInjectData {
   float diffuse_white_nits;
   float graphics_white_nits;
   float tone_map_type;
-  float custom_tone_map_configuration;
+  //float custom_tone_map_configuration;
   float gamma_correction;
   // float scene_grade_method;
   // float scene_grade_hue_correction;
   // float scene_grade_saturation_correction;
-  // float scene_grade_blowout_restoration;
+  float scene_grade_blowout_restoration;
   // float scene_grade_hue_shift;
   float tone_map_exposure;
   float tone_map_highlights;

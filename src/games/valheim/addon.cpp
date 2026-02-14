@@ -60,7 +60,7 @@ const std::unordered_map<std::string, float> FANTASY_HDR_VALUES = {
         {"ColorGradeHighlightSaturation", 50.f},
         {"ColorGradeBlowout", 58.f},
         {"ColorGradeFlare", 72.f},
-        {"ColorGradeLutStrength", 95.f},
+        {"SceneGradeLutStrength", 95.f},
         {"FxChromaticAberration", 0.f},
         {"FxLensDirt", 0.f},
         {"FxSunShafts", 52.f},
@@ -144,19 +144,19 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 3.f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapConfiguration",
-        .binding = &CUSTOM_TONE_MAP_CONFIGURATION,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .can_reset = true,
-        .label = "Tonemapping Behavior",
-        .section = "Tone Mapping",
-        .tooltip = "Set whether the RenoDRT Tonemapper behaves like an upgraded Vanilla tonemapper or uses Custom properties.",
-        .labels = {"Vanilla", "Custom"},
-        //.is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
-        .is_visible = []() { return (settings[0]->GetValue() >= 1); },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ToneMapConfiguration",
+    //     .binding = &CUSTOM_TONE_MAP_CONFIGURATION,
+    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //     .default_value = 0.f,
+    //     .can_reset = true,
+    //     .label = "Tonemapping Behavior",
+    //     .section = "Tone Mapping",
+    //     .tooltip = "Set whether the RenoDRT Tonemapper behaves like an upgraded Vanilla tonemapper or uses Custom properties.",
+    //     .labels = {"Vanilla", "Custom"},
+    //     //.is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
+    //     .is_visible = []() { return (settings[0]->GetValue() >= 1); },
+    // },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &RENODX_PEAK_WHITE_NITS,
@@ -247,28 +247,41 @@ renodx::utils::settings::Settings settings = {
 //         .parse = [](float value) { return value * 0.01f; },
 //         .is_visible = []() { return settings[0]->GetValue() >= 2; },
 //     },
-//     new renodx::utils::settings::Setting{
-//         .key = "SceneGradeBlowoutRestoration",
-//         .binding = &shader_injection.scene_grade_blowout_restoration,
-//         .default_value = 50.f,
-//         .label = "Blowout Restoration",
-//         .section = "Scene Grading",
-//         .max = 100.f,
-//         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
-//         .parse = [](float value) { return value * 0.01f; },
-//         .is_visible = []() { return settings[0]->GetValue() >= 1; },
-//     },
-//             new renodx::utils::settings::Setting{
-//         .key = "SceneGradeStrength",
-//         .binding = &shader_injection.custom_tone_map_strength,
-//         .default_value = 100.f,
-//         .label = "Tonemapper Strength",
-//         .section = "Scene Grading",
-//         .max = 100.f,
-//         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
-//         .parse = [](float value) { return value * 0.01f; },
-//         .is_visible = []() { return settings[0]->GetValue() >= 2; },
-//     },
+    new renodx::utils::settings::Setting{
+        .key = "SceneGradeBlowoutRestoration",
+        .binding = &shader_injection.scene_grade_blowout_restoration,
+        .default_value = 100.f,
+        .label = "Blowout Restoration",
+        .section = "Scene Grading",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
+            new renodx::utils::settings::Setting{
+        .key = "SceneGradeLutStrength",
+        .binding = &CUSTOM_LUT_STRENGTH,
+        .default_value = 100.f,
+        .label = "Grading Strength",
+        .section = "Scene Grading",
+        .tooltip = "Adjusts how much the original grading affects the image.",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
+        new renodx::utils::settings::Setting{
+        .key = "SceneGradeLutScaling",
+        .binding = &CUSTOM_LUT_SCALING,
+        .default_value = 100.f,
+        .label = "LUT Scaling",
+        .section = "Scene Grading",
+        .tooltip = "Scales the black/white point of the grading to use the full range.",
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &RENODX_TONE_MAP_EXPOSURE,
@@ -360,30 +373,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
-        new renodx::utils::settings::Setting{
-        .key = "ColorGradeLutStrength",
-        .binding = &CUSTOM_LUT_STRENGTH,
-        .default_value = 100.f,
-        .label = "Grading Strength",
-        .section = "Color Grading",
-        .tooltip = "Adjusts how much the original grading affects the image.",
-        .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return settings[0]->GetValue() >= 1; },
-    },
-        new renodx::utils::settings::Setting{
-        .key = "ColorGradeLutScaling",
-        .binding = &CUSTOM_LUT_SCALING,
-        .default_value = 100.f,
-        .label = "LUT Scaling",
-        .section = "Color Grading",
-        .tooltip = "Scales the black/white point of the grading to use the full range.",
-        .max = 100.f,
-        .is_enabled = []() { return CUSTOM_TONE_MAP_CONFIGURATION == 1 && RENODX_TONE_MAP_TYPE != 0; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return settings[0]->GetValue() >= 1; },
-    },
     new renodx::utils::settings::Setting{
         .key = "FxChromaticAberration",
         .binding = &CUSTOM_CHROMATIC_ABERRATION,
@@ -422,19 +411,6 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "DisplayMapConfiguration",
-    //     .binding = &RENODX_DISPLAY_MAP,
-    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-    //     .default_value = 0.f,
-    //     .can_reset = true,
-    //     .label = "Display Map Sunshafts",
-    //     .section = "Effects",
-    //     .tooltip = "Sunshafts are run after tonemapping, and can exhibit clipping issues. This applies an Exponential Roll Off to the sunshafts.",
-    //     .labels = {"Off", "On"},
-    //     //.is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3; },
-    //     .is_visible = []() { return (settings[1]->GetValue() > 0); },
-    // },
 
     new renodx::utils::settings::Setting{
         .key = "DrawSSAOFilter",
@@ -459,128 +435,6 @@ renodx::utils::settings::Settings settings = {
     //     .max = 100.f,
     //     .parse = [](float value) { return value * 0.01f; },
     // },
-
-
-
-    // const std::unordered_map<std::string, float> FILMIC_VALUES = {
-
-    // };
-
-    // const std::unordered_map<std::string, float> CANNOT_PRESET_VALUES = {
-    
-    // };
-
-    // new renodx::utils::settings::Setting{
-    // .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    // .label = "Fantasy HDR",
-    // .section = "Presets",
-    // .group = "button-line-1",
-    // .tint = 0xeb141e,
-    // .on_change = []() {
-    //   renodx::utils::settings::UpdateSetting("ToneMapType", 3.f);
-    //   renodx::utils::settings::UpdateSetting("ToneMapConfiguration", 1.f);
-    //   renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
-    //   renodx::utils::settings::UpdateSetting("ToneMapHueShift", 20.f);
-    //   renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 2.f);
-    //   renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 100.f);
-    //   renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
-    //   renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 0.70);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 74.f);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 53.f);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 62.f);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 58.f);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 72.f);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 95.f);
-    //   // renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 100.f);
-    //   renodx::utils::settings::UpdateSetting("ColorGradeLUTSampling", 1.f);
-    //   renodx::utils::settings::UpdateSetting("FxChromaticAberration", 50.f);
-    //   renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
-    //   renodx::utils::settings::UpdateSetting("FxSunShafts", 14.f);
-    // }},
-
-    // new renodx::utils::settings::Setting{.value_type = renodx::utils::settings::SettingValueType::BUTTON, .label = "Filmic HDR", .section = "Presets", .group = "button-line-1", .tint = 0x2f4858, .on_change = []() {
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapType", 3.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapConfiguration", 1.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 1.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapHueShift", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 100.f);
-    //                                        renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.15);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 66.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeShadows", 55.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 55.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 75.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeFlare", 86.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
-    //                                        // renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 100.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeLUTSampling", 1.f);
-    //                                        renodx::utils::settings::UpdateSetting("FxChromaticAberration", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("FxBloom", 60.f);
-    //                                        renodx::utils::settings::UpdateSetting("FxSunShafts", 11.f);
-    //                                      }},
-
-    // new renodx::utils::settings::Setting{.value_type = renodx::utils::settings::SettingValueType::BUTTON, .label = "Vanilla SDR", .section = "Presets", .group = "button-line-1", .tint = 0xb5b2b1, .on_change = []() {
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapConfiguration", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 80.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapGameNits", 80.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapUINits", 80.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapHueShift", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 100.f);
-    //                                        renodx::utils::settings::UpdateSetting("GammaCorrection", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 60.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
-    //                                        // renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 100.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeLUTSampling", 1.f);
-    //                                        renodx::utils::settings::UpdateSetting("FxChromaticAberration", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("FxSunShafts", 13.f);
-    //                                      }},
-
-    // new renodx::utils::settings::Setting{.value_type = renodx::utils::settings::SettingValueType::BUTTON, .label = "Vanilla+ SDR", .section = "Presets", .group = "button-line-1", .tint = 0xb5b2b1, .on_change = []() {
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapType", 3.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapConfiguration", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 80.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapGameNits", 80.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapUINits", 80.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapHueProcessor", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapHueShift", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapWorkingColorSpace", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 100.f);
-    //                                        renodx::utils::settings::UpdateSetting("GammaCorrection", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeContrast", 58.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 51.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 60.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
-    //                                        // renodx::utils::settings::UpdateSetting("ColorGradeLUTScaling", 100.f);
-    //                                        renodx::utils::settings::UpdateSetting("ColorGradeLUTSampling", 1.f);
-    //                                        renodx::utils::settings::UpdateSetting("FxChromaticAberration", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
-    //                                        renodx::utils::settings::UpdateSetting("FxSunShafts", 13.f);
-    //                                      }},
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -748,8 +602,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[3]->default_value = peak.value();
-    settings[3]->can_reset = true;
+    settings[2]->default_value = peak.value();
+    settings[2]->can_reset = true;
   }
 }
 

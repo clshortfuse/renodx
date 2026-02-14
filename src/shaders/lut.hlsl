@@ -33,6 +33,7 @@ static const int ARRI_C1000 = 6;
 static const int ARRI_C800_NO_CUT = 7;
 static const int ARRI_C1000_NO_CUT = 8;
 static const int PQ = 9;
+static const int ACES_CCT = 10;
 }  // namespace type
 
 Config Create(SamplerState lut_sampler, float strength, float scaling, int type_input, int type_output, uint size = 0) {
@@ -428,7 +429,10 @@ float3 ConvertInput(float3 color, Config lut_config) {
     color = renodx::color::arri::logc::c1000::Encode(max(0, color), false);
   } else if (lut_config.type_input == config::type::PQ) {
     float3 bt2020 = renodx::color::bt2020::from::BT709(color);
-    color = renodx::color::pq::Encode((bt2020 * 100.f) / 10000.f);
+    color = renodx::color::pq::Encode(bt2020, 100.f);
+  } else if (lut_config.type_input == config::type::ACES_CCT) {
+    float3 ap1 = renodx::color::ap1::from::BT709(color);
+    color = renodx::color::acescct::Encode(ap1);
   }
   return color;
 }
@@ -450,6 +454,12 @@ float3 LinearOutput(float3 color, Config lut_config) {
     color = renodx::math::CopySign(renodx::color::arri::logc::c800::Decode(abs(color), false), color);
   } else if (lut_config.type_output == config::type::ARRI_C1000_NO_CUT) {
     color = renodx::math::CopySign(renodx::color::arri::logc::c1000::Decode(abs(color), false), color);
+  } else if (lut_config.type_output == config::type::PQ) {
+    color = renodx::color::pq::Decode(color, 100.f);
+    color = renodx::color::bt709::from::BT2020(color);
+  } else if (lut_config.type_output == config::type::ACES_CCT) {
+    color = renodx::color::acescct::Decode(color);
+    color = renodx::color::bt709::from::AP1(color);
   }
   return color;
 }
@@ -510,6 +520,8 @@ float3 RestoreSaturationLoss(float3 color_input, float3 color_output, Config lut
     clamped = max(0, clamped);
   } else if (lut_config.type_input == config::type::PQ) {
     clamped = max(0, renodx::color::bt709::from::BT2020(clamped));
+  } else if (lut_config.type_input == config::type::ACES_CCT) {
+    clamped = max(0, renodx::color::bt709::from::AP1(clamped));
   }
 
   float3 perceptual_in = renodx::color::oklab::from::BT709(color_input);

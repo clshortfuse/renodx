@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 // ---- Created with 3Dmigoto v1.4.1 on Mon Feb 10 01:29:41 2025
 
@@ -48,18 +48,15 @@ void main(
   r0.xyzw = g_source_texture.Sample(g_source_sampler_s, v1.xy).xyzw;
   r1.y = r0.y;
   r1.xyz = r1.xyz + -r0.xyz;
+  float3 preaberreation_color = r0.xyz;
   r0.xyz = g_data.blend * r1.xyz + r0.xyz;
+  float3 prevignette_color = r0.xyz;
   r0.xyz = v2.xyz * r0.xyz;
+  r0.xyz = lerp(prevignette_color, r0.xyz, CUSTOM_VIGNETTE);
   o0.w = dot(r0.xyz, float3(0.298999995, 0.587000012, 0.114));
   o0.xyz = r0.xyz;
 
-  // game isn't tonemapped, resources unclamp so just use o0.rgb
-  float4 outputColor = renodx::color::srgb::DecodeSafe(o0.xyzw);
-  if (RENODX_TONE_MAP_TYPE > 1.f) {
-    outputColor = renodx::draw::ToneMapPass(outputColor);
-  }
-  outputColor = renodx::draw::RenderIntermediatePass(outputColor);
-  o0.xyzw = outputColor;
+  o0.rgb = CustomTonemap(o0.rgb, v1.xy);
 
   return;
 }
