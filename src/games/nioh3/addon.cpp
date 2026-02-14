@@ -237,7 +237,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxSharpness",
         .binding = &shader_injection.custom_sharpness,
-        .default_value = 0.f,
+        .default_value = 50.f,
         .label = "RCAS Sharpness",
         .section = "Effects",
         .tooltip = "Controls Lilium's RCAS Sharpness",
@@ -352,19 +352,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
   fired_on_init_swapchain = true;
 }
-
-void OnPresent(
-    reshade::api::command_queue* queue,
-    reshade::api::swapchain* swapchain,
-    const reshade::api::rect* source_rect,
-    const reshade::api::rect* dest_rect,
-    uint32_t dirty_rect_count,
-    const reshade::api::rect* dirty_rects) {
-  static std::mt19937 random_generator(std::chrono::system_clock::now().time_since_epoch().count());
-  static auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-  CUSTOM_RANDOM = static_cast<float>(random_generator() + std::mt19937::min()) / random_range;
-}
-
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX for Nioh 3";
@@ -456,8 +443,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .use_resource_view_cloning = true,
       });
 
-      renodx::utils::random::binds.push_back(&shader_injection.custom_random);
-
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       break;
@@ -471,6 +456,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   // renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-
+  renodx::utils::random::binds.push_back(&shader_injection.custom_random);
+  renodx::utils::random::Use(fdw_reason);
   return TRUE;
 }

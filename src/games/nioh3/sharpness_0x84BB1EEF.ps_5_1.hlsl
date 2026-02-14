@@ -23,10 +23,10 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
   o0 = g_tTargetHPass.SampleLevel(samplePoint_s, v1.xy, 0);
+
+  // We skip this shader
   if (CUSTOM_SHARPNESS > 0.f) {
-    o0.rgb = renodx::draw::InvertIntermediatePass(o0.rgb);
     o0.rgb = ApplyRCAS(o0.rgb, v1.xy, g_tTargetHPass, samplePoint_s);
-    o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   }
   return;
 

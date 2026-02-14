@@ -1,4 +1,5 @@
 #include "./common.hlsl"
+#include "./lilium_rcas.hlsl"
 
 // ---- Created with 3Dmigoto v1.4.1 on Fri Jan 30 01:59:38 2026
 
@@ -150,77 +151,84 @@ void main(
                          { 61, 0, 0, 0 } };
   float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
-  float4 fDest;
+  float4 fDest, output;
+  output = g_tFilterInput.SampleLevel(samplePoint_s, v1.xy, 0).xyzw;
 
-  if (CUSTOM_FILM_GRAIN_TYPE != 0 && CUSTOM_FILM_GRAIN_STRENGTH != 0) {
-    o0 = g_tFilterInput.SampleLevel(samplePoint_s, v1.xy, 0).xyzw;
-    o0.xyz = renodx::effects::ApplyFilmGrain(
-        o0.rgb,
-        v1.xy,
-        CUSTOM_RANDOM,
-        CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
-        1.f);  // if 1.f = SDR range
+  output.rgb = ApplyRCAS(output.rgb, v1.xy, g_tFilterInput, samplePoint_s);
+  output.rgb = renodx::draw::InvertIntermediatePass(output.rgb);
+  o0 = output;
 
-    return;
+  if (CUSTOM_FILM_GRAIN_TYPE != 0) {
+    if (CUSTOM_FILM_GRAIN_STRENGTH > 0.f) {
+
+      o0.xyz = renodx::effects::ApplyFilmGrain(
+          o0.rgb,
+          v1.xy,
+          CUSTOM_RANDOM,
+          CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+          1.f);  // if 1.f = SDR range
+    }
+  } else {
+    r0.xy = g_cbNoiseInfo.xy * v1.xy;
+    r0.xy = floor(r0.xy);
+    r0.xy = (uint2)r0.xy;
+    r0.z = (int)r0.x & 1;
+    r0.z = r0.z ? r0.x : r0.y;
+    r0.x = (int)r0.y + (int)r0.x;
+    r0.x = (int)r0.x & 127;
+    r0.x = 1 + (int)icb[r0.x + 0].x;
+    r0.x = (int)r0.z + (int)r0.x;
+    r0.y = (uint)g_cbNoiseInfo.w;
+    r0.x = (int)r0.y + (int)r0.x;
+    r0.x = (int)r0.x & 127;
+    r0.x = 0x010dcd00 * (int)icb[r0.x + 0].x;
+    r0.x = (uint)r0.x >> 16;
+    r0.x = (uint)r0.x;
+    r1.x = r0.x * 1.52590219e-05 + 0.25;
+    r2.xyzw = v1.xyxy * g_cbNoiseInfo.xyxy + float4(1.33000004, 1.33000004, -1.66999996, -1.66999996);
+    r2.xyzw = floor(r2.xyzw);
+    r2.xyzw = (uint4)r2.xyzw;
+    r0.xz = (int2)r2.xz & int2(1, 1);
+    r0.xz = r0.xz ? r2.xz : r2.yw;
+    r2.xy = (int2)r2.yw + (int2)r2.xz;
+    r2.xy = (int2)r2.xy & int2(127, 127);
+    r0.w = 1 + (int)icb[r2.x + 0].x;
+    r1.w = 1 + (int)icb[r2.y + 0].x;
+    r0.z = (int)r0.z + (int)r1.w;
+    r0.x = (int)r0.x + (int)r0.w;
+    r0.x = (int)r0.y + (int)r0.x;
+    r0.y = (int)r0.y + (int)r0.z;
+    r0.xy = (int2)r0.xy & int2(127, 127);
+    r0.y = 0x010dcd00 * (int)icb[r0.y + 0].x;
+    r0.y = (uint)r0.y >> 16;
+    r0.y = (uint)r0.y;
+    r1.z = r0.y * 1.52590219e-05 + 0.25;
+    r0.x = 0x010dcd00 * (int)icb[r0.x + 0].x;
+    r0.x = (uint)r0.x >> 16;
+    r0.x = (uint)r0.x;
+    r1.y = r0.x * 1.52590219e-05 + 0.25;
+    r0.xyz = float3(1, 1, 1) + -r1.xyz;
+    // r2.xyzw = g_tFilterInput.SampleLevel(samplePoint_s, v1.xy, 0).xyzw;
+    r2 = output;
+    r3.xyz = float3(1, 1, 1) + -r2.xyz;
+    r0.xyz = r3.xyz * r0.xyz;
+    r0.xyz = -r0.xyz * float3(2, 2, 2) + float3(1, 1, 1);
+    r1.xyz = r2.xyz * r1.xyz;
+    r1.xyz = r1.xyz + r1.xyz;
+    r3.xyz = cmp(r2.xyz < float3(0.5, 0.5, 0.5));
+    r0.xyz = r3.xyz ? r1.xyz : r0.xyz;
+    r0.xyz = r0.xyz + -r2.xyz;
+    r0.xyz = g_cbNoiseInfo.zzz * r0.xyz + r2.xyz;
+    o0.w = r2.w;
+    r1.xyz = log2(abs(r0.xyz));
+    r1.xyz = g_cbColorInfo.yyy * r1.xyz;
+    r1.xyz = exp2(r1.xyz);
+    r1.xyz = g_cbColorInfo.zzz * r1.xyz;
+    r0.w = floor(g_cbColorInfo.x);
+    r0.w = (int)r0.w;
+    r0.w = cmp((int)r0.w == 1);
+    o0.xyz = r0.www ? r1.xyz : r0.xyz;
   }
-
-  r0.xy = g_cbNoiseInfo.xy * v1.xy;
-  r0.xy = floor(r0.xy);
-  r0.xy = (uint2)r0.xy;
-  r0.z = (int)r0.x & 1;
-  r0.z = r0.z ? r0.x : r0.y;
-  r0.x = (int)r0.y + (int)r0.x;
-  r0.x = (int)r0.x & 127;
-  r0.x = 1 + (int)icb[r0.x + 0].x;
-  r0.x = (int)r0.z + (int)r0.x;
-  r0.y = (uint)g_cbNoiseInfo.w;
-  r0.x = (int)r0.y + (int)r0.x;
-  r0.x = (int)r0.x & 127;
-  r0.x = 0x010dcd00 * (int)icb[r0.x + 0].x;
-  r0.x = (uint)r0.x >> 16;
-  r0.x = (uint)r0.x;
-  r1.x = r0.x * 1.52590219e-05 + 0.25;
-  r2.xyzw = v1.xyxy * g_cbNoiseInfo.xyxy + float4(1.33000004, 1.33000004, -1.66999996, -1.66999996);
-  r2.xyzw = floor(r2.xyzw);
-  r2.xyzw = (uint4)r2.xyzw;
-  r0.xz = (int2)r2.xz & int2(1, 1);
-  r0.xz = r0.xz ? r2.xz : r2.yw;
-  r2.xy = (int2)r2.yw + (int2)r2.xz;
-  r2.xy = (int2)r2.xy & int2(127, 127);
-  r0.w = 1 + (int)icb[r2.x + 0].x;
-  r1.w = 1 + (int)icb[r2.y + 0].x;
-  r0.z = (int)r0.z + (int)r1.w;
-  r0.x = (int)r0.x + (int)r0.w;
-  r0.x = (int)r0.y + (int)r0.x;
-  r0.y = (int)r0.y + (int)r0.z;
-  r0.xy = (int2)r0.xy & int2(127, 127);
-  r0.y = 0x010dcd00 * (int)icb[r0.y + 0].x;
-  r0.y = (uint)r0.y >> 16;
-  r0.y = (uint)r0.y;
-  r1.z = r0.y * 1.52590219e-05 + 0.25;
-  r0.x = 0x010dcd00 * (int)icb[r0.x + 0].x;
-  r0.x = (uint)r0.x >> 16;
-  r0.x = (uint)r0.x;
-  r1.y = r0.x * 1.52590219e-05 + 0.25;
-  r0.xyz = float3(1, 1, 1) + -r1.xyz;
-  r2.xyzw = g_tFilterInput.SampleLevel(samplePoint_s, v1.xy, 0).xyzw;
-  r3.xyz = float3(1, 1, 1) + -r2.xyz;
-  r0.xyz = r3.xyz * r0.xyz;
-  r0.xyz = -r0.xyz * float3(2, 2, 2) + float3(1, 1, 1);
-  r1.xyz = r2.xyz * r1.xyz;
-  r1.xyz = r1.xyz + r1.xyz;
-  r3.xyz = cmp(r2.xyz < float3(0.5, 0.5, 0.5));
-  r0.xyz = r3.xyz ? r1.xyz : r0.xyz;
-  r0.xyz = r0.xyz + -r2.xyz;
-  r0.xyz = g_cbNoiseInfo.zzz * r0.xyz + r2.xyz;
-  o0.w = r2.w;
-  r1.xyz = log2(abs(r0.xyz));
-  r1.xyz = g_cbColorInfo.yyy * r1.xyz;
-  r1.xyz = exp2(r1.xyz);
-  r1.xyz = g_cbColorInfo.zzz * r1.xyz;
-  r0.w = floor(g_cbColorInfo.x);
-  r0.w = (int)r0.w;
-  r0.w = cmp((int)r0.w == 1);
-  o0.xyz = r0.www ? r1.xyz : r0.xyz;
+  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }

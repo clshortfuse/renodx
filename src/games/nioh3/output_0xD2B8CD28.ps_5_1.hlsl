@@ -69,7 +69,7 @@ void main(
   r1.x = cmp(0 < g_vVerticalLimbDarkenningTopInfo.x);
   r1.y = cmp(0 < g_vVerticalLimbDarkenningBottomInfo.x);
   r1.z = cmp(g_vCompositeInfo.z < 0);
-  r1.w = g_tExposureScaleInfo.Load(float4(0, 0, 0, 0)).x;
+  r1.w = g_tExposureScaleInfo.Load(int3(0, 0, 0)).x;
   r2.xy = cmp(float2(0, 0) < g_vCompositeInfo.zy);
   r2.x = r2.x ? g_vCompositeInfo.z : 1;
   r1.z = r1.z ? r1.w : r2.x;

@@ -220,7 +220,7 @@ float3 SampleHDRLUT(float3 untonemapped, SamplerState sampleLinear_s, Texture3D<
   lut_config.scaling = 0.f;
   lut_config.precompute = 32.f;
   lut_config.tetrahedral = true;
-  lut_config.type_input = renodx::lut::config::type::ARRI_C1000;
+  lut_config.type_input = renodx::lut::config::type::ARRI_C800_NO_CUT;
   lut_config.type_output = renodx::lut::config::type::LINEAR;
   lut_config.recolor = 0.f;
   // if (RENODX_TONE_MAP_TYPE) {
@@ -293,7 +293,8 @@ float NiohDerivative(float x, float A, float B, float C, float D, float E) {
   return num / (denom * denom);
 }
 
-static const float kInflectionPoint = 0.267011;
+// static const float kInflectionPoint = 0.267011;
+static const float kInflectionPoint = 0.28160194f; // To accomodate B * 0.3f
 
 #define APPLYNIOHEXTENDED_GENERATOR(T)                                   \
   T ApplyNiohExtended(                                                   \
