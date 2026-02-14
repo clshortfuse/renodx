@@ -34,7 +34,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "Vanilla+"},
+        .labels = {"Vanilla", "None", "Vanilla+ (Neutwo)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapOverridePeakBrightness",
@@ -43,7 +43,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Override Peak Brightness",
         .section = "Tone Mapping",
-        .tooltip = "Overrides the peak brightness auto-detected by the game. Only applies if the tone mapper is set to 'Vanilla'",
+        .tooltip = "Overrides the peak brightness auto-detected by the game",
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -54,6 +54,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
         .max = 4000.f,
+        .is_visible = []() { return shader_injection.tone_map_override_peak_nits != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -73,6 +74,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 2.f,
         .format = "%.2f",
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
@@ -81,6 +83,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -90,6 +93,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -99,7 +103,19 @@ renodx::utils::settings::Settings settings = {
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeGamma",
+        .binding = &shader_injection.tone_map_gamma,
+        .default_value = 1.f,
+        .label = "Gamma",
+        .section = "Color Grading",
+        .min = 0.5f,
+        .max = 1.5f,
+        .format = "%.2f",
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
@@ -108,6 +124,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -118,26 +135,29 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
         .default_value = 0.f,
-        .label = "Blowout",
+        .label = "Dechroma",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &shader_injection.tone_map_flare,
-        .default_value = 25.f,
+        .default_value = 0.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -151,16 +171,13 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeColorSpace",
-        .binding = &shader_injection.custom_color_space,
+        .key = "DisplayWhitePoint",
+        .binding = &shader_injection.custom_white_point,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
-        .label = "Custom Color Space",
+        .label = "White Point",
         .section = "Display Output",
-        .tooltip = "Selects output color space"
-                   "\nUS Modern for D65 white point."
-                   "\nJPN Modern for D93 white point.",
-        .labels = {"US Modern", "JPN Modern"},
+        .labels = {"D65", "D93"},
     },
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
@@ -249,12 +266,13 @@ void OnPresetOff() {
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 50.f},
+      {"ColorGradeGamma", 1.f},
       {"ColorGradeSaturation", 50.f},
-      {"ColorGradeHighlightSaturation", 0.f},
-      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeHighlightSaturation", 50.f},
+      {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeScene", 100.f},
-      {"ColorGradeColorSpace", 0.f},
+      {"DisplayWhitePoint", 0.f},
       {"FxBloom", 100.f},
       {"FxBloomScaling", 0.f},
   });
@@ -272,12 +290,14 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
+bool initialized = false;
+
 }  // namespace
 
 // NOLINTBEGIN(readability-identifier-naming)
 
-extern "C" __declspec(dllexport) const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "RenoDX for Final Fantasy XVI";
+extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Final Fantasy XVI";
 
 // NOLINTEND(readability-identifier-naming)
 
@@ -286,16 +306,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;  // So overlays dont kill the game
       };
+      if (!initialized) {
+        renodx::mods::shader::force_pipeline_cloning = true;
+        renodx::mods::shader::expected_constant_buffer_index = 13;
+        renodx::mods::shader::expected_constant_buffer_space = 50;
 
-      renodx::mods::shader::force_pipeline_cloning = true;
-      renodx::mods::shader::expected_constant_buffer_index = 13;
-      renodx::mods::shader::expected_constant_buffer_space = 50;
+        initialized = true;
+      }
 
       break;
     case DLL_PROCESS_DETACH:
+
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+
       reshade::unregister_addon(h_module);
       break;
   }

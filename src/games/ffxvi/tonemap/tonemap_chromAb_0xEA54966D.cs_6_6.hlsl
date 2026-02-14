@@ -79,7 +79,6 @@ struct cCommon_Struct {
 };
 // clang-format on
 
-
 Texture2D<float4> t0 : register(t0);
 
 Texture3D<float4> t1 : register(t1);
@@ -94,11 +93,10 @@ SamplerState s0 : register(s0);
 
 [numthreads(8, 8, 1)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   float peak_ratio = cConstant0_000.cConstant0_Struct_768.ToneMappingParameter_000.TripleSectionToneMappingParams_000;
   AdjustPeak(peak_ratio);
 
@@ -150,7 +148,7 @@ void main(
       _67 = 0.0f;
       _68 = 0.0f;
       _69 = 0;
-      while(true) {
+      while (true) {
         uint _70 = _69 + 1u;
         float _71 = float((uint)_70);
         float _72 = _61 * 0.3333333432674408f;
@@ -401,60 +399,70 @@ void main(
     float _458 = _449 * 0.016391439363360405f;
     float _459 = mad(0.08801330626010895f, _450, _458);
     float _460 = mad(0.8955952525138855f, _451, _459);
-    float _461 = _454 * 0.009999999776482582f;
-    float _462 = _457 * 0.009999999776482582f;
-    float _463 = _460 * 0.009999999776482582f;
-    float _464 = abs(_461);
-    float _465 = abs(_462);
-    float _466 = abs(_463);
-    float _467 = log2(_464);
-    float _468 = log2(_465);
-    float _469 = log2(_466);
-    float _470 = _467 * 0.1593017578125f;
-    float _471 = _468 * 0.1593017578125f;
-    float _472 = _469 * 0.1593017578125f;
-    float _473 = exp2(_470);
-    float _474 = exp2(_471);
-    float _475 = exp2(_472);
-    float _476 = _473 * 2.05784010887146f;
-    float _477 = _474 * 2.05784010887146f;
-    float _478 = _475 * 2.05784010887146f;
-    float _479 = _476 + -0.10128399729728699f;
-    float _480 = _477 + -0.10128399729728699f;
-    float _481 = _478 + -0.10128399729728699f;
-    float _482 = _479 * _473;
-    float _483 = _480 * _474;
-    float _484 = _481 * _475;
-    float _485 = _482 + 0.001028590020723641f;
-    float _486 = _483 + 0.001028590020723641f;
-    float _487 = _484 + 0.001028590020723641f;
-    float _488 = _485 * _473;
-    float _489 = _486 * _474;
-    float _490 = _487 * _475;
-    float _491 = _488 + 3.6197199904108857e-08f;
-    float _492 = _489 + 3.6197199904108857e-08f;
-    float _493 = _490 + 3.6197199904108857e-08f;
-    float _494 = _473 + 0.7726690173149109f;
-    float _495 = _474 + 0.7726690173149109f;
-    float _496 = _475 + 0.7726690173149109f;
-    float _497 = _494 * _473;
-    float _498 = _495 * _474;
-    float _499 = _496 * _475;
-    float _500 = _497 + 0.13521400094032288f;
-    float _501 = _498 + 0.13521400094032288f;
-    float _502 = _499 + 0.13521400094032288f;
-    float _503 = _500 * _473;
-    float _504 = _501 * _474;
-    float _505 = _502 * _475;
-    float _506 = _503 + 0.04952450096607208f;
-    float _507 = _504 + 0.04952450096607208f;
-    float _508 = _505 + 0.04952450096607208f;
-    float _509 = _491 / _506;
-    float _510 = _492 / _507;
-    float _511 = _493 / _508;
-    float _512 = saturate(_509);
-    float _513 = saturate(_510);
-    float _514 = saturate(_511);
-    u0[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float4(_512, _513, _514, _168);
+
+    float3 pq_color;
+    if (RENODX_TONE_MAP_TYPE == 0.f) {
+      float _461 = _454 * 0.009999999776482582f;
+      float _462 = _457 * 0.009999999776482582f;
+      float _463 = _460 * 0.009999999776482582f;
+      float _464 = abs(_461);
+      float _465 = abs(_462);
+      float _466 = abs(_463);
+      float _467 = log2(_464);
+      float _468 = log2(_465);
+      float _469 = log2(_466);
+      float _470 = _467 * 0.1593017578125f;
+      float _471 = _468 * 0.1593017578125f;
+      float _472 = _469 * 0.1593017578125f;
+      float _473 = exp2(_470);
+      float _474 = exp2(_471);
+      float _475 = exp2(_472);
+      float _476 = _473 * 2.05784010887146f;
+      float _477 = _474 * 2.05784010887146f;
+      float _478 = _475 * 2.05784010887146f;
+      float _479 = _476 + -0.10128399729728699f;
+      float _480 = _477 + -0.10128399729728699f;
+      float _481 = _478 + -0.10128399729728699f;
+      float _482 = _479 * _473;
+      float _483 = _480 * _474;
+      float _484 = _481 * _475;
+      float _485 = _482 + 0.001028590020723641f;
+      float _486 = _483 + 0.001028590020723641f;
+      float _487 = _484 + 0.001028590020723641f;
+      float _488 = _485 * _473;
+      float _489 = _486 * _474;
+      float _490 = _487 * _475;
+      float _491 = _488 + 3.6197199904108857e-08f;
+      float _492 = _489 + 3.6197199904108857e-08f;
+      float _493 = _490 + 3.6197199904108857e-08f;
+      float _494 = _473 + 0.7726690173149109f;
+      float _495 = _474 + 0.7726690173149109f;
+      float _496 = _475 + 0.7726690173149109f;
+      float _497 = _494 * _473;
+      float _498 = _495 * _474;
+      float _499 = _496 * _475;
+      float _500 = _497 + 0.13521400094032288f;
+      float _501 = _498 + 0.13521400094032288f;
+      float _502 = _499 + 0.13521400094032288f;
+      float _503 = _500 * _473;
+      float _504 = _501 * _474;
+      float _505 = _502 * _475;
+      float _506 = _503 + 0.04952450096607208f;
+      float _507 = _504 + 0.04952450096607208f;
+      float _508 = _505 + 0.04952450096607208f;
+      float _509 = _491 / _506;
+      float _510 = _492 / _507;
+      float _511 = _493 / _508;
+      float _512 = saturate(_509);
+      float _513 = saturate(_510);
+      float _514 = saturate(_511);
+
+      pq_color = float3(_512, _513, _514);
+    } else {
+      float3 output_color = float3(_454, _457, _460);
+      pq_color = renodx::color::pq::EncodeSafe(output_color, 100.f);
+    }
+
+    u0[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float4(pq_color, _168);
   }
 }
