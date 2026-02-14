@@ -49,6 +49,13 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
     {
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "Reset All",
+            .section = "Options",
+            .group = "options-button-line-1",
+            .on_change = []() { renodx::utils::settings::ResetSettings(); },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "HDR Den Discord",
             .section = "Links",
             .group = "button-line-1",
@@ -98,7 +105,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse. Shout-out to Pumbo & Lilium for the support!",
+            .label = "Game mod by Ritsu, Tweaks by Opto, RenoDX Framework by ShortFuse. Shout-out to Pumbo & Lilium for the support!",
             .section = "About",
         },
         new renodx::utils::settings::Setting{
@@ -197,3 +204,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   return TRUE;
 }
+
+
+
