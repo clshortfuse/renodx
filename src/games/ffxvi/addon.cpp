@@ -213,7 +213,17 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Discord",
+        .label = "RenoDX Discord",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "Ce9bQHQrSV");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den Discord",
         .section = "Links",
         .group = "button-line-2",
         .tint = 0x5865F2,
@@ -248,6 +258,14 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-3",
         .tint = 0xFF5A16,
         .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/musaqh"); },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-3",
+        .tint = 0xFF5A16,
+        .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse"); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
