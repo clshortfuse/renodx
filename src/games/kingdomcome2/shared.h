@@ -19,6 +19,7 @@ struct ShaderInjectData {
   float tone_map_hue_correction;
   float tone_map_hue_shift;
   float fxBloom;
+  float fxVignette;
 };
 
 #ifndef __cplusplus
@@ -43,6 +44,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define CUSTOM_BLOOM                         shader_injection.fxBloom
+#define CUSTOM_VIGNETTE                      shader_injection.fxVignette
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_SWAP_CHAIN_OUTPUT_PRESET      renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_SCRGB
 #define RENODX_INTERMEDIATE_ENCODING         renodx::draw::GAMMA_CORRECTION_NONE

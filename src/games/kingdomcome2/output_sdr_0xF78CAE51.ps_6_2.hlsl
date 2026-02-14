@@ -41,14 +41,14 @@ float4 main(
   float3 color_bt709;
   
   float4 _17 = vignettingTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
-  float3 _19 = bloomTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
+  float3 _19 = bloomTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y)) * CUSTOM_BLOOM;
   float4 _23 = luminanceTex.Load(int3(0, 0, 0));
   float3 _27 = hdrTex.Load(int3(int(SV_Position.x), int(SV_Position.y), 0));
   float4 _31 = sunShaftsTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
   float _45 = ((_31.x * 0.1599999964237213f) * SunShafts_SunCol.x) + _27.x;
   float _46 = ((_31.y * 0.1599999964237213f) * SunShafts_SunCol.y) + _27.y;
   float _47 = ((_31.z * 0.1599999964237213f) * SunShafts_SunCol.z) + _27.z;
-  float _70 = (8333.3330078125f / exp2(min(max((log2(_23.y * 3030.30322265625f) - ((HDREyeAdaptation.z * 0.5f) * (min(max((log2((_23.y * 10000.0f) + 1.0f) * 0.3010300099849701f), 0.10000000149011612f), 5.199999809265137f) + -3.0f))), HDREyeAdaptation.x), HDREyeAdaptation.y) - HDREyeAdaptation.w)) * _17.x;
+  float _70 = (8333.3330078125f / exp2(min(max((log2(_23.y * 3030.30322265625f) - ((HDREyeAdaptation.z * 0.5f) * (min(max((log2((_23.y * 10000.0f) + 1.0f) * 0.3010300099849701f), 0.10000000149011612f), 5.199999809265137f) + -3.0f))), HDREyeAdaptation.x), HDREyeAdaptation.y) - HDREyeAdaptation.w)) * lerp(1.0f, _17.x, CUSTOM_VIGNETTE);
   float _87 = ((saturate(HDRBloomColor.x) * (_19.x - _45)) + _45) * _70;
   float _88 = ((saturate(HDRBloomColor.y) * (_19.y - _46)) + _46) * _70;
   float _89 = ((saturate(HDRBloomColor.z) * (_19.z - _47)) + _47) * _70;

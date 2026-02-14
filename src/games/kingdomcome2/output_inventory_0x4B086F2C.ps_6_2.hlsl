@@ -56,7 +56,7 @@ float4 main(
   float _99 = (sqrt((_82 * _82) - (((((((HDRFilmCurve.w * 0.018000001087784767f) * HDRFilmCurve.y) * _23) - ((HDRFilmCurve.w * 0.0005400000954978168f) * HDRFilmCurve.y)) + ((_43 - _44) * _26)) * 0.7200000286102295f) * _55)) - _82) / (_55 * 2.0f);
   float _101 = 0.18000000715255737f / dot(float3(_99, _99, _99), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
   float4 _102 = vignettingTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
-  float3 _104 = bloomTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y));
+  float3 _104 = bloomTex.Sample(linearClampSS, float2(TEXCOORD_1.x, TEXCOORD_1.y)) * CUSTOM_BLOOM;
   float4 _108 = luminanceTex.Load(int3(0, 0, 0));
   float3 _112 = hdrTex.Load(int3(int(SV_Position.x), int(SV_Position.y), 0));
   _112.rgb *= CalculateExposure(_108.y);  // New Luminance
@@ -68,7 +68,7 @@ float4 main(
   float _130 = ((_116.x * 0.1599999964237213f) * SunShafts_SunCol.x) + _112.x;
   float _131 = ((_116.y * 0.1599999964237213f) * SunShafts_SunCol.y) + _112.y;
   float _132 = ((_116.z * 0.1599999964237213f) * SunShafts_SunCol.z) + _112.z;
-  float _155 = (8333.3330078125f / exp2(min(max((log2(_108.y * 3030.30322265625f) - ((HDREyeAdaptation.z * 0.5f) * (min(max((log2((_108.y * 10000.0f) + 1.0f) * 0.3010300099849701f), 0.10000000149011612f), 5.199999809265137f) + -3.0f))), HDREyeAdaptation.x), HDREyeAdaptation.y) - HDREyeAdaptation.w)) * _102.x;
+  float _155 = (8333.3330078125f / exp2(min(max((log2(_108.y * 3030.30322265625f) - ((HDREyeAdaptation.z * 0.5f) * (min(max((log2((_108.y * 10000.0f) + 1.0f) * 0.3010300099849701f), 0.10000000149011612f), 5.199999809265137f) + -3.0f))), HDREyeAdaptation.x), HDREyeAdaptation.y) - HDREyeAdaptation.w)) * lerp(1.0f, _102.x, CUSTOM_VIGNETTE);
   float _172 = ((saturate(HDRBloomColor.x) * (_104.x - _130)) + _130) * _155;
   float _173 = ((saturate(HDRBloomColor.y) * (_104.y - _131)) + _131) * _155;
   float _174 = ((saturate(HDRBloomColor.z) * (_104.z - _132)) + _132) * _155;

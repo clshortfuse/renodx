@@ -43,7 +43,8 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         {"ColorGradeHighlightSaturation", &shader_injection.tone_map_highlight_saturation},
         {"ColorGradeBlowout", &shader_injection.tone_map_blowout},
         {"ColorGradeFlare", &shader_injection.tone_map_flare},
-        // {"FxBloom", &shader_injection.fxBloom},
+        {"FxBloom", &shader_injection.fxBloom},
+        {"FxVignette", &shader_injection.fxVignette},
     }),
     {
         new renodx::utils::settings::Setting{
@@ -121,6 +122,8 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
+      {"FxBloom", 50.f},
+      {"FxVignette", 50.f},
   });
 }
 
