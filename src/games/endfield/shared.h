@@ -16,6 +16,7 @@
 // #define RENODX_TONE_MAP_FLARE                  0
 // #define RENODX_TONE_MAP_HUE_CORRECTION         1.f
 // #define RENODX_TONE_MAP_HUE_SHIFT              0
+// #define RENODX_TONE_MAP_HUE_METHOD             0
 // #define RENODX_TONE_MAP_WORKING_COLOR_SPACE    color::convert::COLOR_SPACE_BT709
 // #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_NONE
 // #define RENODX_TONE_MAP_CLAMP_PEAK             color::convert::COLOR_SPACE_BT709
