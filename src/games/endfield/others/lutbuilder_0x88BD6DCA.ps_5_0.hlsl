@@ -25,7 +25,20 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-#include "../shared.h"
+#include "../common.hlsl"
+
+static float ACESLikeScalar(float value) {
+  static const float a = 278.5085;
+  static const float b = 10.7772;
+  static const float c = 293.6045;
+  static const float d = 88.7122;
+  static const float e = 80.6889;
+  const float divergence_point = 0.267010625;
+
+  float tonemapped = (value * (a * value + b)) / (value * (c * value + d) + e);
+  float linear_extension = 0.9174704430474515 * value - 0.06355161968502177;
+  return (value < divergence_point) ? tonemapped : linear_extension;
+}
 
 void main(
     float4 v0: SV_Position0,
@@ -244,20 +257,22 @@ void main(
   r0.yzw = min(float3(1, 1, 1), r0.yzw);
 #else
   float3 untonemapped = r0.rgb;
-  static const float a = 278.5085;
-  static const float b = 10.7772;
-  static const float c = 293.6045;
-  static const float d = 88.7122;
-  static const float e = 80.6889;
+  float3 per_channel_tonemapped = float3(
+      ACESLikeScalar(untonemapped.x),
+      ACESLikeScalar(untonemapped.y),
+      ACESLikeScalar(untonemapped.z));
 
-  float3 tonemapped = (untonemapped * (a * untonemapped + b)) / (untonemapped * (c * untonemapped + d) + e);
+  float luminance_in = renodx::color::y::from::BT709(untonemapped);
+  float luminance_tonemapped = ACESLikeScalar(luminance_in);
+  float3 luminance_tonemapped_color = renodx::color::correct::Luminance(
+      untonemapped,
+      luminance_in,
+      luminance_tonemapped);
 
-  const float divergence_point = 0.267010625;
-  float3 linear_extension = 0.9174704430474515 * untonemapped - 0.06355161968502177;
-
-  tonemapped = renodx::math::Select(untonemapped < divergence_point, tonemapped, linear_extension);
-
-  r0.yzw = tonemapped;
+    r0.yzw = ApplyMBLowHueThenHighHueAndPurity(
+      luminance_tonemapped_color,
+      untonemapped,
+      per_channel_tonemapped);
 #endif
 
   r0.x = dot(r0.xyz, float3(0.272228986, 0.674081981, 0.0536894985));

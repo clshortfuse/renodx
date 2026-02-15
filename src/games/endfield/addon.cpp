@@ -435,12 +435,12 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
+      .is_visible = []() { return false; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPerChannelBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 50.f,
+        .default_value = 25.f,
         .label = "Per Channel Blowout",
         .section = "Tone Mapping",
         .tooltip = "Per Channel Blowout strength.",
@@ -448,7 +448,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1; },
+        .is_visible = []() { return false; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapClampColorSpace",
