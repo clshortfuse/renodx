@@ -167,36 +167,6 @@ float3 CorrectHueAndChrominanceOKLab(
   return corrected_color_bt709;
 }
 
-float3 CorrectHueAndChrominance2ReferenceColorsOKLab(
-    float3 incorrect_color,
-    float3 chrominance_reference_color,
-    float3 hue_reference_color,
-    float hue_correct_strength = 1.f) {
-  if (hue_correct_strength == 0.f)
-    return renodx::color::correct::ChrominanceOKLab(incorrect_color, chrominance_reference_color);
-
-  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 hue_lab = renodx::color::oklab::from::BT709(hue_reference_color);
-  float3 chrominance_lab = renodx::color::oklab::from::BT709(chrominance_reference_color);
-
-  float2 incorrect_ab = incorrect_lab.yz;
-  float2 hue_ab = hue_lab.yz;
-
-  // Always use chrominance magnitude from chroma reference
-  float target_chrominance = length(chrominance_lab.yz);
-
-  // Compute blended hue direction
-  float2 blended_ab_dir = normalize(lerp(normalize(incorrect_ab), normalize(hue_ab), hue_correct_strength));
-
-  // Apply chrominance magnitude from chroma_reference_color
-  float2 final_ab = blended_ab_dir * target_chrominance;
-
-  incorrect_lab.yz = final_ab;
-
-  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
-  return renodx::color::bt709::clamp::AP1(result);
-}
-
 struct UserGradingConfig {
   float exposure;
   float highlights;
@@ -214,6 +184,12 @@ struct UserGradingConfig {
   float hue_chrominance_ramp_start;
   float hue_chrominance_ramp_end;
 };
+
+float LuminosityFromBT709(float3 bt709_linear) {
+  float3 xyz = mul(renodx::color::BT709_TO_XYZ_MAT, bt709_linear);
+  float3 lms = mul(renodx_custom::color::macleod_boynton::XYZ_TO_LMS_2006, xyz);
+  return 1.55f * lms.x + lms.y;
+}
 
 float Highlights(float x, float highlights, float mid_gray) {
   if (highlights == 1.f) return x;
@@ -350,11 +326,11 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
 }
 
 float3 ApplyUserGrading(float3 ungraded) {
-  float hue_and_chrominance = 0.f;
+  float hue_strength = 0.f;
   // only apply hue and chrominance correction if luminance is changed
   if (!(RENODX_TONE_MAP_SHADOWS == 1.f && RENODX_TONE_MAP_HIGHLIGHTS == 1.f && RENODX_TONE_MAP_CONTRAST == 1.f
         && RENODX_TONE_MAP_FLARE == 0.f && RENODX_TONE_MAP_GAMMA == 1.f)) {
-    hue_and_chrominance = 1.f;
+    hue_strength = 1.f;
   }
   const UserGradingConfig cg_config = {
     RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
@@ -366,18 +342,18 @@ float3 ApplyUserGrading(float3 ungraded) {
     RENODX_TONE_MAP_SATURATION,                           // float saturation;
     RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
     -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
-    hue_and_chrominance,                                  // float hue_emulation_strength_high;
-    hue_and_chrominance,                                  // float chrominance_emulation_strength_high;
-    hue_and_chrominance,                                  // float hue_emulation_strength_low;
-    hue_and_chrominance,                                  // float chrominance_emulation_strength_low;
+    hue_strength,                                         // float hue_emulation_strength_high;
+    0.f,                                                  // float chrominance_emulation_strength_high;
+    hue_strength,                                         // float hue_emulation_strength_low;
+    0.f,                                                  // float chrominance_emulation_strength_low;
     0.f,                                                  // float hue_chrominance_ramp_start;
     0.f                                                   // float hue_chrominance_ramp_end;
   };
 
-  float y = renodx::color::y::from::BT709(ungraded);
+  float luminosity = LuminosityFromBT709(ungraded) / LuminosityFromBT709(1.f);
 
-  float3 graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, y, cg_config, 0.18f);
-  graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, ungraded, y, cg_config);
+  float3 graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, luminosity, cg_config, 0.18f);
+  graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, ungraded, luminosity, cg_config);
 
   return graded;
 }
@@ -387,15 +363,18 @@ float3 ApplyToneMap(float3 untonemapped, float peak_ratio) {
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     tonemapped = TripleSectionTonemap(untonemapped, peak_ratio);
   } else if (RENODX_TONE_MAP_TYPE == 2.f) {
-    float y_in = renodx::color::y::from::BT709(untonemapped);
-    float3 lum_tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, TripleSectionTonemap(y_in, 1000.f));
-
     // 5.f empirically found to hue shift and blowout enough
-    float3 ch_tonemapped = renodx::color::bt709::from::BT2020(TripleSectionTonemap(renodx::color::bt2020::from::BT709(untonemapped), 5.f));
+    float3 ch_tonemapped = TripleSectionTonemap(untonemapped, 5.f);
+
+    const float kReferenceLuminosity = LuminosityFromBT709(1.f);
+    float luminosity_in = LuminosityFromBT709(untonemapped) / kReferenceLuminosity;
+    float luminosity_out = TripleSectionTonemap(luminosity_in, 1000.f);
+    float luminosity_scale = renodx::math::DivideSafe(luminosity_out, luminosity_in, 1.f);
+
+    tonemapped = untonemapped * luminosity_scale;
 
     // use perch purity and use perch hues only on highlights
-    tonemapped = CorrectLowHueThenHighHueAndPurityMB(lum_tonemapped, untonemapped, ch_tonemapped, 1.f, 1.f, 2.f);
-    // tonemapped = CorrectHueAndChrominanceOKLab(lum_tonemapped, ch_tonemapped, 1.f, 1.f, 1.f, 2.f);
+    tonemapped = CorrectHueLuminosityGatedAndPurityMB(tonemapped, ch_tonemapped, 1.f, 2.f, 1.025f);
   } else {
     tonemapped = untonemapped;
   }
@@ -405,7 +384,7 @@ float3 ApplyToneMap(float3 untonemapped, float peak_ratio) {
 
     if (RENODX_TONE_MAP_TYPE == 2.f) {
       tonemapped = renodx::color::bt2020::from::BT709(tonemapped);
-      tonemapped = renodx::tonemap::neutwo::MaxChannel(max(0, tonemapped), peak_ratio, 100.f);
+      tonemapped = renodx::tonemap::neutwo::MaxChannel(max(0, tonemapped), peak_ratio);
       tonemapped = renodx::color::bt709::from::BT2020(tonemapped);
     }
   }
