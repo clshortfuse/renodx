@@ -123,67 +123,103 @@ float Neutwo(float x, float peak, float clip, float gray_in, float gray_out, flo
 
 namespace neutwo {
 
-float3 BT709(float3 color) {
+float ComputeBT709Scale(float3 color) {
   float y = renodx::color::y::from::BT709(color);
   float new_y = renodx::tonemap::Neutwo(y);
-  float scale = y != 0 ? (new_y / y) : 0.f;
-  return color * scale;
+  float scale = y != 0 ? (new_y / y) : 1.f;
+  return scale;
+}
+
+float ComputeBT709Scale(float3 color, float peak) {
+  float y = renodx::color::y::from::BT709(color);
+  float new_y = renodx::tonemap::Neutwo(y, peak);
+  float scale = y != 0 ? (new_y / y) : 1.f;
+  return scale;
+}
+
+float ComputeBT709Scale(float3 color, float peak, float clip) {
+  float y = renodx::color::y::from::BT709(color);
+  float new_y = renodx::tonemap::Neutwo(y, peak, clip);
+  float scale = y != 0 ? (new_y / y) : 1.f;
+  return scale;
+}
+
+float ComputeBT2020Scale(float3 color) {
+  float y = renodx::color::y::from::BT2020(color);
+  float new_y = renodx::tonemap::Neutwo(y);
+  float scale = y != 0 ? (new_y / y) : 1.f;
+  return scale;
+}
+
+float ComputeBT2020Scale(float3 color, float peak) {
+  float y = renodx::color::y::from::BT2020(color);
+  float new_y = renodx::tonemap::Neutwo(y, peak);
+  float scale = y != 0 ? (new_y / y) : 1.f;
+  return scale;
+}
+
+float ComputeBT2020Scale(float3 color, float peak, float clip) {
+  float y = renodx::color::y::from::BT2020(color);
+  float new_y = renodx::tonemap::Neutwo(y, peak, clip);
+  float scale = y != 0 ? (new_y / y) : 1.f;
+  return scale;
+}
+
+float ComputeMaxChannelScale(float3 color) {
+  float max_channel = renodx::math::Max(abs(color.rgb));
+  float new_max = renodx::tonemap::Neutwo(max_channel);
+  float scale = max_channel != 0 ? (new_max / max_channel) : 1.f;
+  return scale;
+}
+
+float ComputeMaxChannelScale(float3 color, float peak) {
+  float max_channel = renodx::math::Max(abs(color.rgb));
+  float new_max = renodx::tonemap::Neutwo(max_channel, peak);
+  float scale = max_channel != 0 ? (new_max / max_channel) : 1.f;
+  return scale;
+}
+
+float ComputeMaxChannelScale(float3 color, float peak, float clip) {
+  float max_channel = renodx::math::Max(abs(color.rgb));
+  float new_max = renodx::tonemap::Neutwo(max_channel, peak, clip);
+  float scale = max_channel != 0 ? (new_max / max_channel) : 1.f;
+  return scale;
+}
+
+float3 BT709(float3 color) {
+  return color * ComputeBT709Scale(color);
 }
 
 float3 BT709(float3 color, float peak) {
-  float y = renodx::color::y::from::BT709(color);
-  float new_y = renodx::tonemap::Neutwo(y, peak);
-  float scale = y != 0 ? (new_y / y) : 0.f;
-  return color * scale;
+  return color * ComputeBT709Scale(color, peak);
 }
 
 float3 BT709(float3 color, float peak, float clip) {
-  float y = renodx::color::y::from::BT709(color);
-  float new_y = renodx::tonemap::Neutwo(y, peak, clip);
-  float scale = y != 0 ? (new_y / y) : 0.f;
-  return color * scale;
+  return color * ComputeBT709Scale(color, peak, clip);
 }
 
 float3 BT2020(float3 color) {
-  float y = renodx::color::y::from::BT2020(color);
-  float new_y = renodx::tonemap::Neutwo(y);
-  float scale = y != 0 ? (new_y / y) : 0.f;
-  return color * scale;
+  return color * ComputeBT2020Scale(color);
 }
 
 float3 BT2020(float3 color, float peak) {
-  float y = renodx::color::y::from::BT2020(color);
-  float new_y = renodx::tonemap::Neutwo(y, peak);
-  float scale = y != 0 ? (new_y / y) : 0.f;
-  return color * scale;
+  return color * ComputeBT2020Scale(color, peak);
 }
 
 float3 BT2020(float3 color, float peak, float clip) {
-  float y = renodx::color::y::from::BT2020(color);
-  float new_y = renodx::tonemap::Neutwo(y, peak, clip);
-  float scale = y != 0 ? (new_y / y) : 0.f;
-  return color * scale;
+  return color * ComputeBT2020Scale(color, peak, clip);
 }
 
 float3 MaxChannel(float3 color) {
-  float max_channel = max(max(abs(color.r), abs(color.g)), abs(color.b));
-  float new_max = renodx::tonemap::Neutwo(max_channel);
-  float scale = max_channel != 0 ? (new_max / max_channel) : 0.f;
-  return color * scale;
+  return color * ComputeMaxChannelScale(color);
 }
 
 float3 MaxChannel(float3 color, float peak) {
-  float max_channel = max(max(abs(color.r), abs(color.g)), abs(color.b));
-  float new_max = renodx::tonemap::Neutwo(max_channel, peak);
-  float scale = max_channel != 0 ? (new_max / max_channel) : 0.f;
-  return color * scale;
+  return color * ComputeMaxChannelScale(color, peak);
 }
 
 float3 MaxChannel(float3 color, float peak, float clip) {
-  float max_channel = max(max(abs(color.r), abs(color.g)), abs(color.b));
-  float new_max = renodx::tonemap::Neutwo(max_channel, peak, clip);
-  float scale = max_channel != 0 ? (new_max / max_channel) : 0.f;
-  return color * scale;
+  return color * ComputeMaxChannelScale(color, peak, clip);
 }
 
 float3 PerChannel(float3 color) {
