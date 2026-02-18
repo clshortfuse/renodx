@@ -319,9 +319,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 2.f},
-              {"ColorGradeShadows", 73.f},
-              {"ColorGradeHighlightSaturation", 55.f},
-              {"ColorGradeFlare", 23.f},
+              {"ColorGradeShadows", 80.f},
               {"FxNoise", 0.f},
               {"FxGrainStrength", 35.f},
           });

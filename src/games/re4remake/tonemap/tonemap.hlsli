@@ -221,20 +221,26 @@ float3 ApplyCustomGrading(float3 ungraded) {
     RENODX_TONE_MAP_SATURATION,                           // float saturation;
     RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
     -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
-    RENODX_TONE_MAP_HUE_SHIFT,                            // float hue_emulation_strength_high;
-    RENODX_TONE_MAP_BLOWOUT,                              // float chrominance_emulation_strength_high;
+    0.f,                                                  // float hue_emulation_strength_high;
+    0.f,                                                  // float chrominance_emulation_strength_high;
     1.f,                                                  // float hue_emulation_strength_low;
     1.f,                                                  // float chrominance_emulation_strength_low;
     0.18f,                                                // float hue_chrominance_ramp_start;
     1.f                                                   // float hue_chrominance_ramp_end;
   };
 
-  float y = renodx::color::y::from::BT709(ungraded);
-  // float3 chrominance_hue_reference_color = renodx::color::bt709::from::BT2020(renodx::tonemap::neutwo::PerChannel(renodx::color::bt2020::from::BT709(ungraded) / 3.f) * 3.f);
+  float luminosity = LuminosityFromBT709LuminanceNormalized(ungraded);
+
   float3 chrominance_hue_reference_color = renodx::color::bt709::from::BT2020(renodx::tonemap::ReinhardPiecewise(renodx::color::bt2020::from::BT709(ungraded), 5.f, 1.5f));
 
-  float3 graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, y, cg_config, 0.18f);
-  graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, chrominance_hue_reference_color, y, cg_config);
+  float3 graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, luminosity, cg_config, 0.1f);
+
+  graded = CorrectHueAndPurityMBSplitStrength(
+      graded, chrominance_hue_reference_color,
+      1.f, RENODX_TONE_MAP_HUE_SHIFT,
+      1.f, RENODX_TONE_MAP_BLOWOUT, 0.5f, 1.f);
+
+  graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, chrominance_hue_reference_color, luminosity, cg_config);
 
   return graded;
 }
