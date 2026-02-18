@@ -1,5 +1,4 @@
-// ---- Created with 3Dmigoto v1.4.1 on Sat Jan 24 06:14:41 2026
-// Fixed for compilation
+
 #include "../shared.h"
 
 groupshared struct { float val[1]; } g0[128];
@@ -26,14 +25,9 @@ cbuffer cb0 : register(b0)
 [numthreads(64, 1, 1)]
 void main(uint3 vThreadIDInGroup : SV_GroupThreadID, uint3 vThreadGroupID : SV_GroupID)
 {
-// Needs manual fix for instruction:
-// unknown dcl_: dcl_uav_typed_texture2d (unorm,unorm,unorm,unorm) u0
   float4 r0,r1,r2,r3,r4,r5,r6,r7,r8;
   uint4 bitmask, uiDest;
   float4 fDest;
-
-// Needs manual fix for instruction:
-// unknown dcl_: dcl_thread_group 64, 1, 1
   r0.x = cmp(0 < cb1[2].w);
   r0.x = r0.x ? 0 : 63;
   r0.x = (int)r0.x ^ (int)vThreadIDInGroup.x;
@@ -380,15 +374,17 @@ void main(uint3 vThreadIDInGroup : SV_GroupThreadID, uint3 vThreadGroupID : SV_G
   r0.y = saturate(r1.w * cb1[0].z + r0.y);
   r0.y = min(r0.y, r2.y);
   r0.y = -1 + r0.y;
-  r5.yw = r1.xy * cb1[3].zw + float2(-0.5,-0.5);
-  r5.yw = abs(r5.yw) * float2(12,12) + float2(-4.80000019,-4.80000019);
-  r5.yw = max(float2(0,0), r5.yw);
-  r1.w = dot(r5.yw, r5.yw);
-  r1.w = 1 + -r1.w;
-  r1.w = max(0, r1.w);
-  r0.y = r1.w * r0.y;
 
-  if (AO_INTENSITY>= 1.f) {
+  // Removed screen edge fade for contact shadows
+  // r5.yw = r1.xy * cb1[3].zw + float2(-0.5,-0.5);
+  // r5.yw = abs(r5.yw) * float2(12,12) + float2(-4.80000019,-4.80000019);
+  // r5.yw = max(float2(0,0), r5.yw);
+  // r1.w = dot(r5.yw, r5.yw);
+  // r1.w = 1 + -r1.w;
+  // r1.w = max(0, r1.w);
+  // r0.y = r1.w * r0.y;
+
+  if (SHADOW_HARDENING>= 1.f) {
     r0.y = r0.y * 4.0;
   }
   
