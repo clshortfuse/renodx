@@ -15,10 +15,11 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/platform.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
-#include "../../utils/random.hpp"
 #include "./shared.h"
+
 
 namespace {
 
@@ -39,83 +40,83 @@ bool draw_warning_no_fog_shader = false;
 renodx::utils::settings::Setting* status_setting = nullptr;
 std::string status_message = "GOOD";
 int status_tint = 0x00FF00;
-int draw_counter = 0; // Count draws to only run the check after a number of frames, preventing framegen issues.
+int draw_counter = 0;  // Count draws to only run the check after a number of frames, preventing framegen issues.
 
-#define RareExposureShaderEntry(value)                            \
-  {                                                               \
-    value,                                                        \
-        {                                                         \
-            .crc32 = value,                                       \
-            .code = __##value,                                    \
-            .on_draw = [](auto cmd_list) {                        \
-              shader_injection.custom_exposure_shader_draw = 1.f; \
-              any_postprocess_shader_drawn = true; \
-              return true;                                        \
-            },                                                    \
-        },                                                        \
+#define RareExposureShaderEntry(value)                          \
+  {                                                             \
+      value,                                                    \
+      {                                                         \
+          .crc32 = value,                                       \
+          .code = __##value,                                    \
+          .on_draw = [](auto cmd_list) {                        \
+            shader_injection.custom_exposure_shader_draw = 1.f; \
+            any_postprocess_shader_drawn = true;                \
+            return true;                                        \
+          },                                                    \
+      },                                                        \
   }
 
-#define TypicalExposureShaderEntry(value)                         \
-  {                                                               \
-    value,                                                        \
-        {                                                         \
-            .crc32 = value,                                       \
-            .code = __##value,                                    \
-            .on_drawn = [](auto cmd_list) {                       \
-              shader_injection.custom_exposure_shader_draw = 0.f; \
-              any_postprocess_shader_drawn = true; \
-              return true;                                        \
-            },                                                    \
-        },                                                        \
+#define TypicalExposureShaderEntry(value)                       \
+  {                                                             \
+      value,                                                    \
+      {                                                         \
+          .crc32 = value,                                       \
+          .code = __##value,                                    \
+          .on_drawn = [](auto cmd_list) {                       \
+            shader_injection.custom_exposure_shader_draw = 0.f; \
+            any_postprocess_shader_drawn = true;                \
+            return true;                                        \
+          },                                                    \
+      },                                                        \
   }
-  #define OutputShaderEntry(value)                         \
-  {                                                               \
-    value,                                                        \
-        {                                                         \
-            .crc32 = value,                                       \
-            .code = __##value,                                    \
-            .on_drawn = [](auto cmd_list) {                       \
-              any_output_shader_drawn = true;                     \
-              return true;                                        \
-            },                                                    \
-        },                                                        \
+#define OutputShaderEntry(value)            \
+  {                                         \
+      value,                                \
+      {                                     \
+          .crc32 = value,                   \
+          .code = __##value,                \
+          .on_drawn = [](auto cmd_list) {   \
+            any_output_shader_drawn = true; \
+            return true;                    \
+          },                                \
+      },                                    \
   }
-    #define LutbuilderShaderEntry(value)                         \
-  {                                                               \
-    value,                                                        \
-        {                                                         \
-            .crc32 = value,                                       \
-            .code = __##value,                                    \
-            .on_drawn = [](auto cmd_list) {                       \
-              any_lutbuilder_shader_drawn = true;                 \
-              return true;                                        \
-            },                                                    \
-        },                                                        \
+#define LutbuilderShaderEntry(value)            \
+  {                                             \
+      value,                                    \
+      {                                         \
+          .crc32 = value,                       \
+          .code = __##value,                    \
+          .on_drawn = [](auto cmd_list) {       \
+            any_lutbuilder_shader_drawn = true; \
+            return true;                        \
+          },                                    \
+      },                                        \
   }
-    #define UIShaderEntry(value)                         \
-  {                                                               \
-    value,                                                        \
-        {                                                         \
-            .crc32 = value,                                       \
-            .code = __##value,                                    \
-            .on_drawn = [](auto cmd_list) {                       \
-              any_ui_shader_drawn = true;                         \
-              return true;                                        \
-            },                                                    \
-        },                                                        \
+#define UIShaderEntry(value)              \
+  {                                       \
+      value,                              \
+      {                                   \
+          .crc32 = value,                 \
+          .code = __##value,              \
+          .on_drawn = [](auto cmd_list) { \
+            any_ui_shader_drawn = true;   \
+            return true;                  \
+          },                              \
+      },                                  \
   }
-    #define FogShaderEntry(value)                         \
-  {                                                               \
-    value,                                                        \
-        {                                                         \
-            .crc32 = value,                                       \
-            .code = __##value,                                    \
-            .on_drawn = [](auto cmd_list) {                       \
-              any_fog_shader_drawn = true;                         \
-              fog_shader_ever_drawn = true;                         \
-              return true;                                        \
-            },                                                    \
-        },                                                        \
+#define FogShaderEntry(value)             \
+  {                                       \
+      value,                              \
+      {                                   \
+          .crc32 = value,                 \
+          .code = __##value,              \
+          .on_drawn = [](auto cmd_list) { \
+            any_fog_shader_drawn = true;  \
+            fog_shader_ever_drawn = true; \
+            return true;                  \
+          },                              \
+      },                                  \
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -132,35 +133,40 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // UI
     UIShaderEntry(0x8286B55C),
     UIShaderEntry(0x04039750),
+    UIShaderEntry(0x5ABF256F),
 
     // Post Process
-    //TypicalExposureShaderEntry(0xEE56E73B),
-    //TypicalExposureShaderEntry(0xE188DA93),
+    // TypicalExposureShaderEntry(0xEE56E73B),
+    // TypicalExposureShaderEntry(0xE188DA93),
     TypicalExposureShaderEntry(0x89476799),
-    //TypicalExposureShaderEntry(0xF06499FE),
-    //TypicalExposureShaderEntry(0x8CAFE864),
+    // TypicalExposureShaderEntry(0xF06499FE),
+    // TypicalExposureShaderEntry(0x8CAFE864),
     TypicalExposureShaderEntry(0x441E59B3),
     TypicalExposureShaderEntry(0x61F644A4),
     TypicalExposureShaderEntry(0x2B137341),
     TypicalExposureShaderEntry(0x53166004),
 
     // Post Process Latest
+    TypicalExposureShaderEntry(0xAEEBE9F6),
+    TypicalExposureShaderEntry(0x2FAA3FEA),
     TypicalExposureShaderEntry(0x767D0361),
     TypicalExposureShaderEntry(0x0D6C8B3D),
     TypicalExposureShaderEntry(0x9C118676),
     TypicalExposureShaderEntry(0x29DD5BC9),
 
     // Exposure
-    //RareExposureShaderEntry(0x4905680A),
+    // RareExposureShaderEntry(0x4905680A),
     RareExposureShaderEntry(0xE40162EC),
 
     // Sharpness
+    CustomShaderEntry(0x7C1469E8),
     CustomShaderEntry(0xC8169712),
     // CustomShaderEntry(0x243CA65C),
 
     // Fog
     FogShaderEntry(0xCCB318BD),
     FogShaderEntry(0x7271B316),
+    FogShaderEntry(0xA109191F),
 
     // // Sharpening (Bypass)
     // {
@@ -281,7 +287,7 @@ renodx::utils::settings::Settings settings = {
     //     .is_enabled = []() { return shader_injection.tone_map_type != 0 && last_is_hdr; },
     //     .is_visible = []() { return last_is_hdr; },
     // },
-        new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "CustomToneMapParameters",
         .binding = &shader_injection.custom_tone_map_parameters,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -340,7 +346,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
-        new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "FxLocalExposureShadows",
         .binding = &shader_injection.custom_local_exposure_shadows,
         //.value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -353,7 +359,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
-      new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "FxLocalExposureDetail",
         .binding = &shader_injection.custom_local_exposure_detail,
         //.value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -366,7 +372,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
-          new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "FxLocalExposureMidGrey",
         .binding = &shader_injection.custom_local_exposure_mid_grey,
         //.value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -379,7 +385,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
-        new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTColorStrength",
         .binding = &shader_injection.custom_lut_color_strength,
         .default_value = 100.f,
@@ -390,7 +396,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
     },
-      new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "FxLUTExposureReverse",
         .binding = &shader_injection.custom_lut_exposure_reverse,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -402,7 +408,7 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Vanilla", "Pre Grade"},
         .is_visible = []() { return current_settings_mode >= 2; },
     },
-      new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "FxLUTScaling",
         .binding = &shader_injection.custom_lut_scaling,
         .default_value = 70.f,
@@ -581,7 +587,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
-      new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "FxFogAmount",
         .binding = &shader_injection.custom_fog_amount,
         .default_value = 50.f,
@@ -592,7 +598,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
-        new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "FxDebanding",
         .binding = &shader_injection.swap_chain_output_dither_bits,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -604,27 +610,26 @@ renodx::utils::settings::Settings settings = {
           if (value == 0.f) return 0.f;
           if (value == 1.f) return 8.f;
           if (value == 2.f) return 10.f;
-          return 0.f;
-        },
+          return 0.f; },
         .is_visible = []() { return settings[0]->GetValue() >= 2.f; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .section = "Mod Compatibility Check",
-      },
-        new renodx::utils::settings::Setting{
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Checks for the shaders the mod needs to function. Not definitive on compatibility.",
         .section = "Mod Compatibility Check",
         //.is_visible = []() { return draw_warning_no_postprocess_shader; },
-      },
-        new renodx::utils::settings::Setting{
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Status: ",
         .section = "Mod Compatibility Check",
         //.is_visible = []() { return draw_warning_no_postprocess_shader; },
         .group = "status-group",
-      },
+    },
     status_setting = new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = status_message,
@@ -632,42 +637,42 @@ renodx::utils::settings::Settings settings = {
         .group = "status-group",
         .tint = status_tint,
         //.is_visible = []() { return draw_warning_no_postprocess_shader; },
-      },
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Missing Post Processing shaders. This is likely caused by a game update or a mod conflict.",
         .section = "Mod Compatibility Check",
         .is_visible = []() { return draw_warning_no_postprocess_shader; },
-      },
-      new renodx::utils::settings::Setting{
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Missing Lutbuilder shaders. This is likely caused by a game update.",
         .section = "Mod Compatibility Check",
         .is_visible = []() { return draw_warning_no_lutbuilder_shader; },
-      },
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Missing Output shaders. This is likely caused by a game update.",
         .section = "Mod Compatibility Check",
         .is_visible = []() { return draw_warning_no_output_shader; },
-      },
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Missing UI shaders. This is likely caused by a game update.",
         .section = "Mod Compatibility Check",
         .is_visible = []() { return draw_warning_no_ui_shader; },
-      },
-      new renodx::utils::settings::Setting{
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Missing Fog shaders. This could be caused by a mod conflict or game update, but it could also be absent from this scene.\nIf status says GOOD, then the fog shader has been detected previously.",
         .section = "Mod Compatibility Check",
         .is_visible = []() { return draw_warning_no_fog_shader; },
-      },
-      new renodx::utils::settings::Setting{
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "",
         .section = "Mod Compatibility Check",
-      },
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " - In-Game HDR must be turned ON!\n"
@@ -703,7 +708,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil");
         },
     },
-        new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Jon's Ko-Fi",
         .section = "Links",
@@ -793,7 +798,6 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-
   draw_counter++;
   if (draw_counter > 100) {
     draw_warning_no_postprocess_shader = !any_postprocess_shader_drawn;
@@ -805,15 +809,15 @@ void OnPresent(
     bool warning_test = draw_warning_no_ui_shader || (draw_warning_no_fog_shader && !fog_shader_ever_drawn);
     bool error_test = draw_warning_no_postprocess_shader || draw_warning_no_output_shader || draw_warning_no_lutbuilder_shader;
 
-    if (warning_test){
+    if (warning_test) {
       status_message = "WARNING";
       status_tint = 0xFFFF00;
     }
-    if (error_test){
+    if (error_test) {
       status_message = "ERROR";
       status_tint = 0xFF0000;
     }
-    if (!warning_test && !error_test){
+    if (!warning_test && !error_test) {
       status_message = "GOOD";
       status_tint = 0x00FF00;
     }
@@ -823,7 +827,7 @@ void OnPresent(
     status_setting->Write();
 
     any_postprocess_shader_drawn = false;
-    //any_lutbuilder_shader_drawn = false; // Since lutbuilders only run every once in a while, only check that it shows up once ever.
+    // any_lutbuilder_shader_drawn = false; // Since lutbuilders only run every once in a while, only check that it shows up once ever.
     any_output_shader_drawn = false;
     any_ui_shader_drawn = false;
     any_fog_shader_drawn = false;
@@ -861,7 +865,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::SetUseHDR10(true);
         renodx::utils::random::binds.push_back(&shader_injection.custom_random);
         renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
-      
+
         initialized = true;
       }
       renodx::mods::shader::on_create_pipeline_layout = [](reshade::api::device* device, auto params) {
@@ -920,8 +924,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::random::Use(fdw_reason);
-  //renodx::utils::swapchain::Use(fdw_reason);
-  //renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  // renodx::utils::swapchain::Use(fdw_reason);
+  // renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
