@@ -1,5 +1,7 @@
 #include "./shared.h"
 
+#define WUWA_PEAK_SCALING (RENODX_PEAK_NITS / RENODX_GAME_NITS)
+
 #define APPLY_BLOOM(c) (c).rgb *= RENODX_WUWA_BLOOM
 
 #define WUWA_TM_IS(N) ((uint)(RENODX_WUWA_TM) == (N))
@@ -13,8 +15,23 @@
 #define CAPTURE_TONEMAPPED(c) const float3 tonemapped = (c).rgb
 
 #define HANDLE_LUT_OUTPUT(c) (c).rgb = HandleLUTOutput((c).rgb, untonemapped, tonemapped)
+#define HANDLE_LUT_OUTPUT3(c1, c2, c3) { \
+    float3 lut_output = float3(c1, c2, c3); \
+    lut_output = HandleLUTOutput(lut_output, untonemapped, tonemapped); \
+    c1 = lut_output.r; c2 = lut_output.g; c3 = lut_output.b; \
+}
+
+#define HANDLE_LUT_OUTPUT3_FADE(c1, c2, c3, tex, samp) { \
+  float3 lut_output = float3(c1, c2, c3); \
+  lut_output = HandleLUTOutput(lut_output, untonemapped, tonemapped, tex, samp); \
+  c1 = lut_output.r; c2 = lut_output.g; c3 = lut_output.b; \
+}
+
 #define HANDLE_LUT_OUTPUT_FADE(c, tex, samp) (c).rgb = HandleLUTOutput((c).rgb, untonemapped, tonemapped, tex, samp)
 
+#define GENERATE_INVERSION(c1, c2, c3) \
+    const float3 inverted = renodx::draw::InvertIntermediatePass(float3(c1, c2, c3)); \
+    c1 = inverted.r; c2 = inverted.g; c3 = inverted.b;
 
 namespace wuwa {
 
@@ -27,6 +44,9 @@ static const float3x3 DCIP3_to_BT2020_MAT = float3x3(
 }
 
 static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, float3 tonemapped) {
+  // Reverse the output shader's post-LUT scaling.
+  lut_output /= 1.0499999523162842f;
+
   CLAMP_IF_SDR(lut_output);
 
   lut_output = renodx::draw::InvertIntermediatePass(lut_output);
@@ -73,31 +93,23 @@ static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, flo
 static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, float3 tonemapped, Texture3D<float4> lut_texture, SamplerState lut_sampler) {
   float min_uv = 0.015625f;
   float max_uv = 0.984375f;
-  float center_uv = 0.5f;
+  float3 a = lut_texture.SampleLevel(lut_sampler, float3(min_uv, min_uv, min_uv), 0).rgb;
+  float3 b = lut_texture.SampleLevel(lut_sampler, float3(max_uv, max_uv, max_uv), 0).rgb;
+  float3 c = lut_texture.SampleLevel(lut_sampler, float3(0.5f, 0.5f, 0.5f), 0).rgb;
 
-  float3 samples[9];
-  samples[0] = lut_texture.SampleLevel(lut_sampler, float3(min_uv, min_uv, min_uv), 0).rgb; // Black
-  samples[1] = lut_texture.SampleLevel(lut_sampler, float3(max_uv, min_uv, min_uv), 0).rgb; // Red
-  samples[2] = lut_texture.SampleLevel(lut_sampler, float3(min_uv, max_uv, min_uv), 0).rgb; // Green
-  samples[3] = lut_texture.SampleLevel(lut_sampler, float3(min_uv, min_uv, max_uv), 0).rgb; // Blue
-  samples[4] = lut_texture.SampleLevel(lut_sampler, float3(max_uv, max_uv, min_uv), 0).rgb; // Yellow
-  samples[5] = lut_texture.SampleLevel(lut_sampler, float3(max_uv, min_uv, max_uv), 0).rgb; // Magenta
-  samples[6] = lut_texture.SampleLevel(lut_sampler, float3(min_uv, max_uv, max_uv), 0).rgb; // Cyan
-  samples[7] = lut_texture.SampleLevel(lut_sampler, float3(max_uv, max_uv, max_uv), 0).rgb; // White
-  samples[8] = lut_texture.SampleLevel(lut_sampler, float3(center_uv, center_uv, center_uv), 0).rgb; // Center
+  float3 d = abs(a - b);
+  float max_delta = max(d.r, max(d.g, d.b));
+  float uniform_fade = 1.0f - smoothstep(0.0f, 0.01f, max_delta);
 
-  float max_chroma = 0.0f;
-  for(int i=0; i<9; i++) {
-    float3 c = samples[i];
-    float max_c = max(c.r, max(c.g, c.b));
-    float min_c = min(c.r, min(c.g, c.b));
-    max_chroma = max(max_chroma, max_c - min_c);
-  }
-  
-  float fade_amount = 1.0f - smoothstep(0.0f, 0.05f, max_chroma);
+  float3 max_v = max(a, max(b, c));
+  float3 min_v = min(a, min(b, c));
+  float max_chroma = max(max_v.r - min_v.r, max(max_v.g - min_v.g, max_v.b - min_v.b));
+  float chroma_fade = 1.0f - smoothstep(0.0f, 0.05f, max_chroma);
+
+  float fade_amount = max(uniform_fade, chroma_fade);
   float3 graded_output = HandleLUTOutput(lut_output, untonemapped, tonemapped);
   float3 original_output = renodx::draw::RenderIntermediatePass(lut_output);
-  
+
   return lerp(graded_output, original_output, fade_amount);
 }
 
@@ -110,14 +122,39 @@ static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, flo
 GENERATE_LUT_OUTPUT(float3)
 GENERATE_LUT_OUTPUT(float4)
 
-static inline float3 AutoHDRVideo(float3 sdr_video) {
+static inline float3 AutoHDRVideo(float3 sdr_video, float2 position) {
   if (RENODX_TONE_MAP_TYPE == 0.f || RENODX_TONE_MAP_HDR_VIDEO == 0.f) {
     return sdr_video;
   }
   renodx::draw::Config config = renodx::draw::BuildConfig();
   config.peak_white_nits = RENODX_VIDEO_NITS;
-  
+
   float3 hdr_video = renodx::draw::UpscaleVideoPass(saturate(sdr_video), config);
+  {
+    // dithering
+    const float dither_bits = 10.0f;
+    const float max_value = exp2(dither_bits) - 1.0f; 
+    const float dither_lsbs_10bit = 6.0f; 
+    const float2 p = position + CUSTOM_RANDOM;
+    const float r1 = renodx::random::Generate(p + 0.07f);
+    const float r2 = renodx::random::Generate(p + 13.07f);
+    const float tpdf = (r1 - r2); 
+    const float y = renodx::color::y::from::BT709(max(0, hdr_video));
+    const float highlight_fade = smoothstep(0.35f, 1.0f, y); 
+    const float strength = lerp(1.0f, 0.45f, highlight_fade);
+    const float noise = tpdf * ((dither_lsbs_10bit * strength) / max_value);
+
+    // clamp negatives
+    hdr_video = max(0, hdr_video + noise);
+  }
+
   hdr_video = renodx::color::srgb::DecodeSafe(hdr_video);
+
+  {
+    // minor amounts of grain
+    const float grain_strength = 0.00010f;
+    hdr_video = renodx::effects::ApplyFilmGrain(hdr_video, position, CUSTOM_RANDOM, grain_strength, 1.f);
+  }
+
   return renodx::draw::RenderIntermediatePass(hdr_video);
 }
