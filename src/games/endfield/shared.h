@@ -94,29 +94,13 @@ struct ShaderInjectData {
   float shadow_hardening;
   float chromatic_aberration_strength;
   float disable_game_ao;
-  float ssr_gi_intensity; 
-  float metallic_ibl_intensity;
   float cubemap_ambient_link;
   float glass_transparency;
   float improved_ssr;
   float tech_test_look;
   float ui_aspect_ratio;
-  float ao_radius;
-  float ao_radius_scale;
-  float ao_falloff_range;
-  float ao_distribution_power;
-  float ao_thin_occluder;
-  float ao_gamma;
-  float ao_temporal_frame;
-  float ao_mip_bias;
-  float ao_direction_count;
-  float ao_step_count;
-  float ao_normal_attenuation;
-  float ao_thickness;
-  float ao_denoiser_blur_beta;
-  float ao_debug_view;
-  float ao_bitmask;
   float improved_gtao;
+  float fake_cloud_shadows;
 };
 
 #ifndef __cplusplus
@@ -179,22 +163,22 @@ cbuffer shader_injection : register(b13) {
 #define GLASS_TRANSPARENCY                     shader_injection.glass_transparency
 #define TECH_TEST_LOOK                         shader_injection.tech_test_look
 #define UI_ASPECT_RATIO                        shader_injection.ui_aspect_ratio
-#define AO_RADIUS                              shader_injection.ao_radius
-#define AO_RADIUS_SCALE                        shader_injection.ao_radius_scale
-#define AO_FALLOFF_RANGE                       shader_injection.ao_falloff_range
-#define AO_DISTRIBUTION_POWER                  shader_injection.ao_distribution_power
-#define AO_THIN_OCCLUDER                       shader_injection.ao_thin_occluder
-#define AO_GAMMA                               shader_injection.ao_gamma
-#define AO_TEMPORAL_FRAME                      shader_injection.ao_temporal_frame
-#define AO_MIP_BIAS                            shader_injection.ao_mip_bias
-#define AO_DIRECTION_COUNT                     shader_injection.ao_direction_count
-#define AO_STEP_COUNT                          shader_injection.ao_step_count
-#define AO_NORMAL_ATTENUATION                  shader_injection.ao_normal_attenuation
-#define AO_THICKNESS                           shader_injection.ao_thickness
-#define AO_DENOISER_BLUR_BETA                  shader_injection.ao_denoiser_blur_beta
-#define AO_DEBUG_VIEW                          shader_injection.ao_debug_view
-#define AO_BITMASK                             shader_injection.ao_bitmask
+#define AO_RADIUS                              4.0
+#define AO_RADIUS_SCALE                        1.0
+#define AO_FALLOFF_RANGE                       1.0
+#define AO_DISTRIBUTION_POWER                  2.0
+#define AO_THIN_OCCLUDER                       2.0
+#define AO_GAMMA                               2.2
+#define AO_TEMPORAL_FRAME                      64.0
+#define AO_MIP_BIAS                            4.0
+#define AO_DIRECTION_COUNT                     6.0
+#define AO_STEP_COUNT                          6.0
+#define AO_NORMAL_ATTENUATION                  0.05
+#define AO_THICKNESS                           0.5
+#define AO_DENOISER_BLUR_BETA                  0.0
+#define AO_BITMASK                             1.0
 #define IMPROVED_GTAO                          shader_injection.improved_gtao
+#define FAKE_CLOUD_SHADOWS                     shader_injection.fake_cloud_shadows
 
 #include "../../shaders/renodx.hlsl"
 

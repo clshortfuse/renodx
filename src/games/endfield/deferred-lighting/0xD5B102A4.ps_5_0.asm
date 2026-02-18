@@ -25,7 +25,7 @@ dcl_constantbuffer CB1[259], dynamicIndexed
 dcl_constantbuffer CB2[5], immediateIndexed
 dcl_constantbuffer CB3[5], immediateIndexed
 dcl_constantbuffer CB4[4], immediateIndexed
-dcl_constantbuffer CB13[19], immediateIndexed
+dcl_constantbuffer CB13[15], immediateIndexed
 dcl_sampler s0, mode_default
 dcl_sampler s1, mode_default
 dcl_sampler s2, mode_default
@@ -61,7 +61,7 @@ dcl_resource_texture2d (float,float,float,float) t26
 dcl_input_ps_siv linear noperspective v0.xy, position
 dcl_input_ps linear v1.xy
 dcl_output o0.xyzw
-dcl_temps 23
+dcl_temps 24
 ftou r0.xy, v0.xyxx
 mov r0.z, l(0)
 ld_indexable(texture2d)(float,float,float,float) r1.xyz, r0.xyzz, t24.xyzw
@@ -642,13 +642,20 @@ if_nz r0.z
   mad r11.xyw, r6.xyxz, r11.xyxw, -r6.xyxz
   mad r6.xyz, r0.zzzz, r11.xywx, r6.xyzx
   sample_l_indexable(texture2d)(float,float,float,float) r0.z, r4.zwzz, t13.yzxw, s1, l(0.000000)
+  ge r23.x, cb13[12].z, l(1.000000)
+  mad_sat r23.y, r0.z, l(2.000000), l(-1.000000)
+  mad_sat r23.z, r0.z, l(4.000000), l(-3.000000)
+  mad_sat r23.w, r6.w, l(0.050000), l(-1.500000)
+  add r23.z, r23.z, -r23.y
+  mad r23.y, r23.w, r23.z, r23.y
+  movc r0.z, r23.x, r23.y, r0.z
   min r0.z, r0.z, l(1.000000)
   mul r6.xyz, r0.zzzz, r6.xyzx
 else
   mov r6.xyz, l(0,0,0,0)
 endif
 ne r3.yz, l(0.000000, 0.000000, 0.000000, 0.000000), cb0[112].xxyx
-movc r3.y, cb13[18].w, l(0xFFFFFFFF), r3.y
+movc r3.y, cb13[14].z, l(0xFFFFFFFF), r3.y
 if_nz r3.y
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t4.yzxw, s0, cb0[108].x
   min r0.z, r1.y, r0.z
@@ -676,7 +683,7 @@ else
   mov r11.xyw, r1.yyyy
   mov r12.xyz, r1.yyyy
 endif
-movc r11.xyw, cb13[18].wwww, r11.xyzw, l(1.0, 1.0, 0, 1.0)
+movc r11.xyw, cb13[14].zzzz, r11.xyzw, l(1.0, 1.0, 0, 1.0)
 mul r6.xyz, r6.xyzx, r11.xywx
 mad r14.xyz, r2.xywx, l(0.250000, 0.250000, 0.250000, 0.000000), r5.xyzx
 round_z r0.z, cb0[212].x
@@ -1093,8 +1100,8 @@ if_nz r4.w
 endif
 mul r2.xyz, r14.xyzx, cb0[112].zzzz
 mul r2.xyz, r2.xyzx, cb0[111].yyyy
-// Cubemap ambient link modulation (cb13[13].w)
-if_nz cb13[13].w
+// Cubemap ambient link modulation (cb13[13].y)
+if_nz cb13[13].y
   max r22.w, r22.w, l(0.000000)
   min r22.w, r22.w, l(1.000000)
   mad r22.w, r22.w, l(0.750000), l(0.250000)

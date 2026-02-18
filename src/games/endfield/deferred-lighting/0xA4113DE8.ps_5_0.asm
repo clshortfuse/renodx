@@ -25,7 +25,7 @@ dcl_constantbuffer CB1[259], dynamicIndexed
 dcl_constantbuffer CB2[5], immediateIndexed
 dcl_constantbuffer CB3[5], immediateIndexed
 dcl_constantbuffer CB4[4], immediateIndexed
-dcl_constantbuffer CB13[19], immediateIndexed
+dcl_constantbuffer CB13[15], immediateIndexed
 dcl_sampler s0, mode_default
 dcl_sampler s1, mode_default
 dcl_sampler s2, mode_default
@@ -649,7 +649,7 @@ else
   mov r8.xyz, l(0,0,0,0)
 endif
 ne r3.yz, l(0.000000, 0.000000, 0.000000, 0.000000), cb0[112].xxyx
-movc r3.y, cb13[18].w, l(0xFFFFFFFF), r3.y
+movc r3.y, cb13[14].z, l(0xFFFFFFFF), r3.y
 if_nz r3.y
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t4.yzxw, s0, cb0[108].x
   min r0.z, r1.y, r0.z
@@ -677,7 +677,7 @@ else
   mov r13.xyw, r1.yyyy
   mov r14.xyz, r1.yyyy
 endif
-movc r13.xyw, cb13[18].wwww, r13.xyzw, l(1.0, 1.0, 0, 1.0)
+movc r13.xyw, cb13[14].zzzz, r13.xyzw, l(1.0, 1.0, 0, 1.0)
 mul r8.xyz, r8.xyzx, r13.xywx
 mad r15.xyz, r2.xywx, l(0.250000, 0.250000, 0.250000, 0.000000), r5.xyzx
 round_z r0.z, cb0[212].x
@@ -1094,8 +1094,8 @@ if_nz r4.w
 endif
 mul r2.xyz, r15.xyzx, cb0[112].zzzz
 mul r2.xyz, r2.xyzx, cb0[111].yyyy
-// Cubemap ambient link modulation (cb13[13].w)
-if_nz cb13[13].w
+// Cubemap ambient link modulation (cb13[13].y)
+if_nz cb13[13].y
   max r23.w, r23.w, l(0.000000)
   min r23.w, r23.w, l(1.000000)
   mad r23.w, r23.w, l(0.750000), l(0.250000)

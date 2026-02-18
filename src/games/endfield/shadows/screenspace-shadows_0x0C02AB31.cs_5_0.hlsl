@@ -375,7 +375,7 @@ void main(uint3 vThreadIDInGroup : SV_GroupThreadID, uint3 vThreadGroupID : SV_G
   r0.y = min(r0.y, r2.y);
   r0.y = -1 + r0.y;
 
-  // Removed screen edge fade for contact shadows
+  // Removed screen edge fade for contact shadows (original)
   // r5.yw = r1.xy * cb1[3].zw + float2(-0.5,-0.5);
   // r5.yw = abs(r5.yw) * float2(12,12) + float2(-4.80000019,-4.80000019);
   // r5.yw = max(float2(0,0), r5.yw);
@@ -384,9 +384,9 @@ void main(uint3 vThreadIDInGroup : SV_GroupThreadID, uint3 vThreadGroupID : SV_G
   // r1.w = max(0, r1.w);
   // r0.y = r1.w * r0.y;
 
-  if (SHADOW_HARDENING>= 1.f) {
-    r0.y = r0.y * 4.0;
-  }
+  // Shadow hardening moved to deferred lighting shaders per-material:
+  //   0x1E8A471E (environment) = crude 4x
+  //   0xD3FA93FC (grass/foliage) = pow(x,4) power curve
   
   r6.xzw = cb1[0].www * r0.yyy + float3(1,1,1);
   r0.y = -cb1[2].w + r1.z;

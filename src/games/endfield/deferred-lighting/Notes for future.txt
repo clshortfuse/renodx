@@ -12,3 +12,80 @@ So the cb0[112].x gate was a red herring — it was already 1 for the main direc
 The fix: mul r1.xyz, r1.xyzx, r8.xzwx right after the AO block — applying the same single-bounce AO to the direct light contribution.
 
 // Screenspaced shadows are RIP becasue sun angle is used... Doesnt match spotlight angles
+
+
+
+Environment deferred (0x1E8A471E.ps_5_0.asm:257-260) — After T10 sample, applies 4x (saturate(x*4 - 3)) when SHADOW_HARDENING >= 1.0. Uses new temp r36 (dcl_temps bumped 36→37).
+
+Grass/foliage deferred (0xD3FA93FC.ps_5_0.asm:165-169) — After T10 sample, applies pow(x, 4) power curve when SHADOW_HARDENING >= 1.0. Uses new temp r37 (dcl_temps bumped 37→38).
+
+Both ASM patches use movc for branchless conditional selection — if the toggle is off, the original shadow value passes through unchanged. The crude 4x gives environment the strong contrast you liked, while pow(4) preserves grass/foliage shadow boundaries (0→0, 1→1 fixed points).
+
+
+
+// BRDF //
+
+The BRDF is Unity's standard Cook-Torrance with GGX distribution + Smith height-correlated visibility + Schlick Fresnel + multiscattering energy compensation term
+
+1. Material Setup - metallic workflow: F0 = albedo⋅m+0.04⋅(1−m)
+
+
+r1.z = -r1.x * 0.0399999991 + 0.0399999991;  // dielectricF0 = 0.04 * (1 - metallic)
+r9.xyz = r9.xyz * r1.xxx + r1.zzz;             // F0 = albedo * metallic + dielectricF0
+
+
+2. GGX NDF (D term)
+
+r2.z = r0.z * r1.x + -r0.z;    // NdotH² * (α² - 1) = NdotH * α² - NdotH
+r0.z = r2.z * r0.z + 1;         // denom = NdotH² * (α² - 1) + 1
+// ...
+r0.z = r0.z * r0.z;             // denom²
+r0.z = r1.x / r0.z;             // D = α² / denom²
+
+3. Schlick Fresnel (F term)
+
+r2.z = saturate(dot(r8.xyz, r15.xyz));  // VdotH
+r2.z = 1 + -r2.z;                       // (1 - VdotH)
+r4.w = r2.z * r2.z;                     // (1 - VdotH)²
+r4.w = r4.w * r4.w;                     // (1 - VdotH)⁴
+r6.w = r4.w * r2.z;                     // (1 - VdotH)⁵
+r2.z = -r4.w * r2.z + 1;               // 1 - (1-VdotH)⁵
+r15.xyz = r9.xyz * r2.zzz + r6.www;     // F0*(1-(1-VdotH)⁵) + (1-VdotH)⁵
+
+4. Smith Height-Correlated Visibility (V term)
+
+r16.xy = -r10.zy * r1.xx + r10.zy;  // NdotV/L * (1 - α²)
+r16.xy = r16.xy * r10.zy + r1.xx;   // NdotV/L² * (1-α²) + α²
+r16.xy = sqrt(r16.xy);               // √(...)
+r16.xy = r16.xy * r10.yz;            // NdotL/V * √(...)
+r1.x = r16.x + r16.y;                // sum of both terms
+r1.x = 9.99999975e-05 + r1.x;        // ε
+r1.x = 0.5 / r1.x;                   // V = 0.5 / sum
+r0.z = r1.x * r0.z;                  // D * V
+r15.xyz = r15.xyz * r0.zzz;          // specular = D * V * F
+
+5. Multiscattering Energy Compensation
+
+// Multiscattering: from lines ~283-300
+r14.xyz = float3(1,1,1) + -r9.xyz;
+r14.xyz = r14.xyz * float3(0.0476190485,...) + r9.xyz;  // 1/21 blend
+// ... sample BRDF LUT from t9 ...
+r16.xyz = r14.xyz * r14.xyz;
+r16.xyz = r16.xyz * r0.zzz;              // Fms squared * LUT
+r14.xyz = -r14.xyz * r8.www + float3(1,1,1);
+r14.xyz = r16.xyz / r14.xyz;             // Ems / (1 - Fms*Eavg)
+r14.xyz = r15.xyz + r14.xyz;             // specular + multiscatter
+
+6. BRDF LUT Texture
+
+r16.xyzw = r10.zwyw * float4(0.96875,...) + float4(0.015625,...);  // UV with half-texel offset
+r0.z = t9.SampleLevel(s1_s, r16.xy, 0).x;  // sample(NdotL_or_V, roughness)
+r1.x = t9.SampleLevel(s1_s, r16.zw, 0).x;  // sample(NdotV, roughness)
+ 
+​D: GGX / Trowbridge-Reitz
+F: Schlick
+G/V: Smith height-correlated (exact sqrt form, not the fast approximation)
+Energy conservation: Kulla-Conty multiscattering via rational polynomial + 1D BRDF LUT (t9)
+IBL: Cubemap probes with DDGI-style cascaded 3D irradiance probes (t15–t20)
+Dielectric F0: 0.04 (standard)
+

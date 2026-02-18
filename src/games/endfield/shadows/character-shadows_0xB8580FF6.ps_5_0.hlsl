@@ -1,4 +1,3 @@
-// ---- Created with 3Dmigoto v1.4.1 on Sat Jan 24 04:33:32 2026
 #include "../shared.h"
 
 Texture2D<float4> t6 : register(t6);
@@ -226,7 +225,7 @@ void main(
         r0.z = (uint)r0.z;
         r0.z = min(127, (uint)r0.z);
         r2.w = 0x0000ffff & asint(cb2[r0.z+587].x);
-        r6.x = f16tof32(r2.w);
+        r6.x = f16tof32((uint)r2.w);
         r2.w = cmp(r6.x >= 0);
         if (r2.w != 0) {
           r7.x = cb2[576].x;
@@ -256,7 +255,7 @@ void main(
           r3.w = r3.w ? r4.x : 0;
           if (r3.w != 0) {
             r0.z = asuint(cb2[r0.z+587].x) >> 16;
-            r6.y = f16tof32(r0.z);
+            r6.y = f16tof32((uint)r0.z);
             r4.xy = r7.xy * cb2[584].zw + r6.xy;
             r4.zw = r4.xy * cb2[586].zw + float2(0.5,0.5);
             r4.zw = floor(r4.zw);
@@ -312,38 +311,33 @@ void main(
     }
     r0.z = r5.x + -r5.y;
     r0.z = r0.w * r0.z + r5.y;
-    r0.w = cmp(0.00100000005 < r0.z);
-    if (r0.w != 0) {
-      r4.xyz = -cb0[173].xyz + r2.xyz;
-      r4.yw = cb0[176].xz * r4.yy + r4.xz;
-      r5.xy = cb0[174].zz * r4.yw;
-      r5.zw = cb0[183].ww * cb0[175].xy;
-      r4.yw = r4.yw * cb0[174].zz + r5.zw;
-      r0.w = t3.SampleLevel(s2_s, r4.yw, 0).x;
-      r4.yw = r5.xy * cb0[175].ww + r5.zw;
-      r2.w = t3.SampleLevel(s2_s, r4.yw, 0).x;
-      r3.w = dot(r4.xz, r4.xz);
-      r3.w = sqrt(r3.w);
-      r4.x = cb0[174].y + -cb0[174].x;
-      r3.w = -cb0[174].x + r3.w;
-      r4.x = 1 / r4.x;
-      r3.w = saturate(r4.x * r3.w);
-      r4.x = r3.w * -2 + 3;
-      r3.w = r3.w * r3.w;
-      r3.w = r4.x * r3.w;
-      r2.w = r2.w + -r0.w;
-      r0.w = r3.w * r2.w + r0.w;
-      r0.w = -1 + r0.w;
-      r0.w = cb0[175].z * r0.w + 1;
-      
-      /*
-      if (SHADOW_HARDENING>= 1.f) {
-
-        r0.w = 1.0 + (r0.w - 1.0) * 4.0;
+    // Cloud shadow (t3) — toggle via FAKE_CLOUD_SHADOWS
+    if (FAKE_CLOUD_SHADOWS >= 1.f) {
+      r0.w = cmp(0.00100000005 < r0.z);
+      if (r0.w != 0) {
+        r4.xyz = -cb0[173].xyz + r2.xyz;
+        r4.yw = cb0[176].xz * r4.yy + r4.xz;
+        r5.xy = cb0[174].zz * r4.yw;
+        r5.zw = cb0[183].ww * cb0[175].xy;
+        r4.yw = r4.yw * cb0[174].zz + r5.zw;
+        r0.w = t3.SampleLevel(s2_s, r4.yw, 0).x;
+        r4.yw = r5.xy * cb0[175].ww + r5.zw;
+        r2.w = t3.SampleLevel(s2_s, r4.yw, 0).x;
+        r3.w = dot(r4.xz, r4.xz);
+        r3.w = sqrt(r3.w);
+        r4.x = cb0[174].y + -cb0[174].x;
+        r3.w = -cb0[174].x + r3.w;
+        r4.x = 1 / r4.x;
+        r3.w = saturate(r4.x * r3.w);
+        r4.x = r3.w * -2 + 3;
+        r3.w = r3.w * r3.w;
+        r3.w = r4.x * r3.w;
+        r2.w = r2.w + -r0.w;
+        r0.w = r3.w * r2.w + r0.w;
+        r0.w = -1 + r0.w;
+        r0.w = cb0[175].z * r0.w + 1;
+        r0.z = r0.z * r0.w;
       }
-      */
-
-      r0.z = r0.z * r0.w;
     }
     r0.w = cb2[35].z + -r0.z;
     r0.z = cb2[35].w * r0.w + r0.z;
@@ -433,6 +427,12 @@ void main(
   }
   o0.y = r1.w ? r0.y : r0.x;
   r0.x = min(1, r0.z);
+  
+  // Shadow compositing contrast curve: S-curve deepens shadow cores
+  if (SHADOW_HARDENING >= 1.f) {
+    r0.x = r0.x * r0.x * (3.0 - 2.0 * r0.x);  // smoothstep(0, 1, r0.x)
+  }
+  
   r0.x = -1 + r0.x;
   o0.x = cb2[34].x * r0.x + 1;
   o0.z = 0;

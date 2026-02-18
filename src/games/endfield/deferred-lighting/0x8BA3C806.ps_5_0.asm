@@ -37,7 +37,7 @@ dcl_constantbuffer CB3[2054], dynamicIndexed
 dcl_constantbuffer CB4[401], dynamicIndexed
 dcl_constantbuffer CB5[160], dynamicIndexed
 dcl_constantbuffer CB6[4], immediateIndexed
-dcl_constantbuffer CB13[19], immediateIndexed
+dcl_constantbuffer CB13[15], immediateIndexed
 dcl_sampler s0, mode_default
 dcl_sampler s1, mode_default
 dcl_sampler s2, mode_default
@@ -72,7 +72,7 @@ dcl_resource_texture3d (float,float,float,float) t25
 dcl_input_ps_siv linear noperspective v0.xy, position
 dcl_input_ps linear v1.xy
 dcl_output o0.xyzw
-dcl_temps 37
+dcl_temps 38
 ftou r0.xy, v0.xyxx
 mov r0.z, l(0)
 ld_indexable(texture2d)(float,float,float,float) r1.xyz, r0.xyzz, t22.xyzw
@@ -255,6 +255,13 @@ if_nz r0.z
   mad r14.xzw, r15.xxyz, r16.xxyz, -r15.xxyz
   mad r14.xzw, r0.zzzz, r14.xxzw, r15.xxyz
   sample_l_indexable(texture2d)(float,float,float,float) r0.z, r4.xyxx, t10.yzxw, s1, l(0.000000)
+  ge r37.x, cb13[12].z, l(1.000000)
+  mad_sat r37.y, r0.z, l(2.000000), l(-1.000000)
+  mad_sat r37.z, r0.z, l(4.000000), l(-3.000000)
+  mad_sat r37.w, r2.w, l(0.050000), l(-1.500000)
+  add r37.z, r37.z, -r37.y
+  mad r37.y, r37.w, r37.z, r37.y
+  movc r0.z, r37.x, r37.y, r0.z
   min r0.z, r0.z, l(1.000000)
   mul r14.xzw, r0.zzzz, r14.xxzw
 else
@@ -911,7 +918,7 @@ loop
 endloop
 mad r8.xyz, r21.xyzx, r8.wwww, r14.xzwx
 ne r4.zw, l(0.000000, 0.000000, 0.000000, 0.000000), cb0[112].xxxy
-movc r4.z, cb13[18].w, l(0xFFFFFFFF), r4.z
+movc r4.z, cb13[14].z, l(0xFFFFFFFF), r4.z
 if_nz r4.z
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t4.yzxw, s0, cb0[108].x
   min r0.z, r1.y, r0.z
@@ -937,7 +944,7 @@ else
   mov r11.xyz, r1.yyyy
   mov r14.xyz, r1.yyyy
 endif
-movc r11.xyz, cb13[18].wwww, r11.xyzx, l(1.0, 1.0, 1.0, 0)
+movc r11.xyz, cb13[14].zzzz, r11.xyzx, l(1.0, 1.0, 1.0, 0)
 mul r8.xyz, r8.xyzx, r11.xyzx
 mad r16.xyz, r3.xyzx, l(0.250000, 0.250000, 0.250000, 0.000000), r5.xyzx
 round_z r0.z, cb0[212].x
@@ -1347,8 +1354,8 @@ if_nz r7.w
 endif
 mul r3.xyz, r16.xyzx, cb0[112].zzzz
 mul r3.xyz, r3.xyzx, cb0[111].yyyy
-// Cubemap ambient link modulation (cb13[13].w)
-if_nz cb13[13].w
+// Cubemap ambient link modulation (cb13[13].y)
+if_nz cb13[13].y
   max r36.w, r36.w, l(0.000000)
   min r36.w, r36.w, l(1.000000)
   mad r36.w, r36.w, l(0.750000), l(0.250000)

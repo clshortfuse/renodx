@@ -24,7 +24,7 @@ dcl_constantbuffer CB0[235], immediateIndexed
 dcl_constantbuffer CB1[259], dynamicIndexed
 dcl_constantbuffer CB2[5], immediateIndexed
 dcl_constantbuffer CB3[4], immediateIndexed
-dcl_constantbuffer CB13[19], immediateIndexed
+dcl_constantbuffer CB13[15], immediateIndexed
 dcl_sampler s0, mode_default
 dcl_sampler s1, mode_default
 dcl_sampler s2, mode_default
@@ -56,7 +56,7 @@ dcl_resource_texture3d (float,float,float,float) t23
 dcl_input_ps_siv linear noperspective v0.xy, position
 dcl_input_ps linear v1.xy
 dcl_output o0.xyzw
-dcl_temps 26
+dcl_temps 27
 ftou r0.xy, v0.xyxx
 mov r0.z, l(0)
 ld_indexable(texture2d)(float,float,float,float) r1.xyzw, r0.xyzz, t20.xyzw
@@ -149,6 +149,10 @@ if_nz r0.z
   utof r1.y, r1.y
   mul r1.y, r1.y, l(0.00787401572)
   sample_l_indexable(texture2d)(float,float,float,float) r1.w, r6.xyxx, t9.yzwx, s1, l(0.000000)
+  ge r26.x, cb13[12].z, l(1.000000)
+  mul r26.y, r1.w, r1.w
+  mul r26.y, r26.y, r26.y
+  movc r1.w, r26.x, r26.y, r1.w
   dp3 r9.w, -r11.xyzx, r5.xyzx
   add r9.w, r9.w, r9.w
   mad r14.xyz, r5.xyzx, -r9.wwww, -r11.xyzx
@@ -270,7 +274,7 @@ else
   mov r1.xyw, l(0,0,0,0)
 endif
 ne r6.zw, l(0.000000, 0.000000, 0.000000, 0.000000), cb0[112].xxxy
-movc r6.z, cb13[18].w, l(0xFFFFFFFF), r6.z
+movc r6.z, cb13[14].z, l(0xFFFFFFFF), r6.z
 if_nz r6.z
   sample_b_indexable(texture2d)(float,float,float,float) r0.z, v1.xyxx, t4.yzxw, s0, cb0[108].x
   mad r0.z, r0.z, l(0.750000), l(0.250000)
@@ -297,7 +301,7 @@ else
   mov r10.xyz, r3.wwww
   mov r12.xyw, r3.wwww
 endif
-movc r10.xyz, cb13[18].wwww, r10.xyzx, l(1.0, 1.0, 1.0, 0)
+movc r10.xyz, cb13[14].zzzz, r10.xyzx, l(1.0, 1.0, 1.0, 0)
 mul r1.xyw, r1.xyzw, r10.xyxz
 mad r14.xyz, cb0[6].xzyx, -cb0[212].wwww, cb0[210].xzyx
 add r14.xyz, r7.xzyx, -r14.xyzx

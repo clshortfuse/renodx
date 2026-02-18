@@ -138,6 +138,13 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r0.z = dot(-r4.xzw, -r4.xzw);
   r0.z = rsqrt(r0.z);
   r2.xyz = -r4.xwz * r0.zzz;
+
+  // Distance-based thickness scaling: increase thickness linearly with depth
+  // to prevent over-attenuation of AO on distant objects.
+  // No scaling within 100 units (near-field), then ramps at 0.02 per unit beyond.
+  float viewDist = length(float3(r4.x, r4.w, r4.z));
+  float scaledThickness = _ao_thickness * (1.0 + max(0.0, viewDist - 100.0) * 0.02);
+
   r0.z = _ao_radius * _ao_radius_scale;
   r0.w = _ao_falloff_range * r0.z;
   r2.w = -1 / r0.w;
@@ -153,7 +160,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r4.y = cb0[15].x + r4.y;
   r4.y = r4.y * r4.z + -r4.x;
   r0.z = r0.z / r4.y;
-  r4.y = _ao_thickness / r0.z;
+  r4.y = scaledThickness / r0.z;
   r5.x = 10 + -r0.z;
   r5.x = saturate(0.00999999978 * r5.x);
   r5.x = 0.5 * r5.x;
@@ -237,8 +244,8 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r10.xyz = r10.xzw + -r4.xwz;
     // Bitmask: process step 0 samples
     if (_ao_bitmask) {
-      BM_ProcessSample(r11.xyz, r2.xyz, -1.0, r6.y, _ao_thickness, bitmask);
-      BM_ProcessSample(r10.xyz, r2.xyz,  1.0, r6.y, _ao_thickness, bitmask);
+      BM_ProcessSample(r11.xyz, r2.xyz, -1.0, r6.y, scaledThickness, bitmask);
+      BM_ProcessSample(r10.xyz, r2.xyz,  1.0, r6.y, scaledThickness, bitmask);
     }
     r6.w = dot(r11.xyz, r11.xyz);
     r6.w = sqrt(r6.w);
@@ -302,8 +309,8 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r14.xyz = r14.xzw + -r4.xwz;
     // Bitmask: process step 1 samples
     if (_ao_bitmask) {
-      BM_ProcessSample(r12.xyz, r2.xyz, -1.0, r6.y, _ao_thickness, bitmask);
-      BM_ProcessSample(r14.xyz, r2.xyz,  1.0, r6.y, _ao_thickness, bitmask);
+      BM_ProcessSample(r12.xyz, r2.xyz, -1.0, r6.y, scaledThickness, bitmask);
+      BM_ProcessSample(r14.xyz, r2.xyz,  1.0, r6.y, scaledThickness, bitmask);
     }
     r7.z = dot(r12.xyz, r12.xyz);
     r7.z = sqrt(r7.z);
@@ -343,8 +350,8 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r10.xyz = r10.xzw + -r4.xwz;
     // Bitmask: process step 2 samples
     if (_ao_bitmask) {
-      BM_ProcessSample(r8.xyz, r2.xyz, -1.0, r6.y, _ao_thickness, bitmask);
-      BM_ProcessSample(r10.xyz, r2.xyz,  1.0, r6.y, _ao_thickness, bitmask);
+      BM_ProcessSample(r8.xyz, r2.xyz, -1.0, r6.y, scaledThickness, bitmask);
+      BM_ProcessSample(r10.xyz, r2.xyz,  1.0, r6.y, scaledThickness, bitmask);
     }
     r7.w = dot(r8.xyz, r8.xyz);
     r7.w = sqrt(r7.w);

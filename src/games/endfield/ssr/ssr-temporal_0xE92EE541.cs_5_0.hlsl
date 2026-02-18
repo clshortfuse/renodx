@@ -464,11 +464,5 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     u1[vThreadID.xy] = r3.xyzw;
   }
 
-  // Metallic IBL intensity control
-  float ssr_blend = r0.x;
-  if (shader_injection.metallic_ibl_intensity == 1.f) {
-    ssr_blend = max(ssr_blend, 0.75);
-  }
-
-  u2[vThreadID.xy] = ssr_blend.xxxx;
+  u2[vThreadID.xy] = r0.xxxx;
 }

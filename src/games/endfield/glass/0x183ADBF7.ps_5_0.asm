@@ -575,7 +575,7 @@ if_nz r15.w
 endif
 mul r16.xyz, r16.xyzx, cb0[112].zzzz
 // === Glass Fix: Reduce reflection probe intensity ===
-lt r37.x, l(0.500000), cb13[14].x
+lt r37.x, l(0.500000), cb13[13].z
 if_nz r37.x
   mul r16.xyz, r16.xyzx, l(0.400000, 0.400000, 0.400000, 0.000000)
 endif
@@ -936,7 +936,7 @@ if_nz r0.x
   add r16.xyz, r16.xyzx, r17.xyzx
   mul r16.xyz, r16.xyzx, cb5[4].xxxx
   // === Glass Fix: Reduce sun specular intensity ===
-  lt r37.x, l(0.500000), cb13[14].x
+  lt r37.x, l(0.500000), cb13[13].z
   if_nz r37.x
     mul r16.xyz, r16.xyzx, l(0.500000, 0.500000, 0.500000, 0.000000)
   endif
@@ -1603,7 +1603,7 @@ loop
   iadd r8.w, r8.w, l(1)
 endloop
 // === Glass Fix: Reduce clustered lights and overall brightness ===
-lt r37.x, l(0.500000), cb13[14].x
+lt r37.x, l(0.500000), cb13[13].z
 if_nz r37.x
   mul r21.xyz, r21.xyzx, l(0.500000, 0.500000, 0.500000, 0.000000)
   mul r2.xyz, r2.xyzx, l(0.650000, 0.650000, 0.650000, 0.000000)
@@ -1770,7 +1770,7 @@ add r1.xyz, -r1.xzwx, l(1.000000, 1.000000, 1.000000, 0.000000)
 mul r1.xyz, r1.xyzx, r2.xywx
 mad r1.xyz, r1.xyzx, r2.zzzz, r3.xyzx
 // === Glass Transparency Fix ===
-lt r37.x, l(0.500000), cb13[14].x
+lt r37.x, l(0.500000), cb13[13].z
 if_nz r37.x
   // Boost transmittance: lerp(r4, 1, 0.5)
   add r37.xyz, -r4.xyzx, l(1.000000, 1.000000, 1.000000, 0.000000)
@@ -1809,7 +1809,7 @@ mul_sat r0.x, r0.x, l(10.000000)
 lt r0.x, l(0.500000), r0.x
 and o1.z, r0.x, l(0x3f800000)
 // === Glass Highlight Compression ===
-lt r37.x, l(0.500000), cb13[14].x
+lt r37.x, l(0.500000), cb13[13].z
 if_nz r37.x
   // Compute luminance
   dp3 r37.y, r10.xyzx, l(0.212600, 0.715200, 0.072200, 0.000000)
