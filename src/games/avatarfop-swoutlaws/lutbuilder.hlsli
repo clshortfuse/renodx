@@ -1,4 +1,14 @@
+#include "./macleod_boynton.hlsli"
 #include "./shared.h"
+
+float3 ApplySDREOTFEmulation(float3 color) {
+  if (RENODX_SDR_EOTF_EMULATION == 2.f) {
+    color = renodx::color::correct::Hue(renodx::color::correct::GammaSafe(color), color);
+  } else if (RENODX_SDR_EOTF_EMULATION == 1.f) {
+    color = renodx::color::correct::GammaSafe(color);
+  }
+  return color;
+}
 
 struct UserGradingConfig {
   float exposure;
@@ -22,7 +32,7 @@ UserGradingConfig CreateColorGradeConfig() {
     0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
     RENODX_TONE_MAP_SATURATION,                           // float saturation;
     RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
-    RENODX_SDR_EOTF_EMULATION == 2.f ? 1.f : 0.f,         // float hue_emulation_strength;
+    0.f,                                                  // float hue_emulation_strength;
     -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
     0.f                                                   // float chrominance_emulation;
   };
@@ -58,7 +68,7 @@ float Shadows(float x, float shadows, float mid_gray) {
   }
 }
 
-float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, UserGradingConfig config, float mid_gray = 0.18f) {
+float3 ApplyLuminosityGrading(float3 untonemapped, float y, UserGradingConfig config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
     return untonemapped;
   }
@@ -85,216 +95,215 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   return color;
 }
 
-float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, UserGradingConfig config, bool clamp_to_ap1 = true) {
+float3 ApplyHueAndPurityGrading(
+    float3 tonemapped,
+    float3 hue_reference_color,
+    float lum,
+    UserGradingConfig config,
+    bool clamp_to_ap1 = true,
+    float curve_gamma = 1.f,
+    float2 mb_white_override = float2(-1.f, -1.f),
+    float t_min = 1e-6f) {
   float3 color = tonemapped;
-  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_emulation_strength != 0.f || config.chrominance_emulation != 0.f || config.highlight_saturation != 0.f) {
-    float3 perceptual_new = renodx::color::oklab::from::BT709(color);
-
-    // hue emulation and blowout
-    if (config.hue_emulation_strength != 0.0 || config.chrominance_emulation != 0.0) {
-      const float3 reference_oklab = renodx::color::oklab::from::BT709(hue_reference_color);
-
-      float chrominance_current = length(perceptual_new.yz);
-      float chrominance_ratio = 1.0;
-
-      if (config.hue_emulation_strength != 0.0) {
-        const float chrominance_pre = chrominance_current;
-        perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, config.hue_emulation_strength);
-        const float chrominancePost = length(perceptual_new.yz);
-        chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
-        chrominance_current = chrominancePost;
-      }
-
-      if (config.chrominance_emulation != 0.0) {
-        const float reference_chrominance = length(reference_oklab.yz);
-        float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
-        chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, config.chrominance_emulation);
-      }
-      perceptual_new.yz *= chrominance_ratio;
-    }
-
-    // dechroma
-    if (config.dechroma != 0.f) {
-      perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - config.dechroma))));
-    }
-
-    // highlight saturation
-    if (config.highlight_saturation != 0.f) {
-      float percent_max = saturate(y * 100.f / 10000.f);
-      // positive = 1 to 0, negative = 1 to 2
-      float blowout_strength = 100.f;
-      float blowout_change = pow(1.f - percent_max, blowout_strength * abs(config.highlight_saturation));
-      if (config.highlight_saturation < 0) {
-        blowout_change = (2.f - blowout_change);
-      }
-
-      perceptual_new.yz *= blowout_change;
-    }
-
-    // saturation
-    perceptual_new.yz *= config.saturation;
-
-    color = renodx::color::bt709::from::OkLab(perceptual_new);
-
-    if (clamp_to_ap1) {
-      color = renodx::color::bt709::clamp::AP1(color);
-    }
+  if (config.saturation == 1.f && config.dechroma == 0.f && config.hue_emulation_strength == 0.f && config.chrominance_emulation == 0.f && config.highlight_saturation == 0.f) {
+    return color;
   }
+
+  const float kNearWhiteEpsilon = renodx_custom::color::macleod_boynton::MB_NEAR_WHITE_EPSILON;
+  const float2 white = (mb_white_override.x >= 0.f && mb_white_override.y >= 0.f)
+                           ? mb_white_override
+                           : renodx_custom::color::macleod_boynton::MB_White_D65();
+
+  float3 color_bt2020 = renodx::color::bt2020::from::BT709(color);
+  float color_purity01 = renodx_custom::color::macleod_boynton::ApplyBT2020(
+                             color_bt2020, 1.f, 1.f, mb_white_override, t_min)
+                             .purityCur01;
+
+  // MB hue + purity emulation (analog of OkLab hue/chrominance section).
+  if (config.hue_emulation_strength != 0.f || config.chrominance_emulation != 0.f) {
+    float3 reference_bt2020 = renodx::color::bt2020::from::BT709(hue_reference_color);
+    float reference_purity01 = renodx_custom::color::macleod_boynton::ApplyBT2020(
+                                   reference_bt2020, 1.f, 1.f, mb_white_override, t_min)
+                                   .purityCur01;
+
+    float purity_current = color_purity01;
+    float purity_ratio = 1.f;
+    float3 hue_seed_bt2020 = color_bt2020;
+
+    if (config.hue_emulation_strength != 0.f) {
+      float3 target_lms = mul(renodx_custom::color::macleod_boynton::XYZ_TO_LMS_2006,
+                              mul(renodx::color::BT2020_TO_XYZ_MAT, color_bt2020));
+      float3 reference_lms = mul(renodx_custom::color::macleod_boynton::XYZ_TO_LMS_2006,
+                                 mul(renodx::color::BT2020_TO_XYZ_MAT, reference_bt2020));
+
+      float target_t = target_lms.x + target_lms.y;
+      if (target_t > t_min) {
+        float2 target_direction = renodx_custom::color::macleod_boynton::MB_From_LMS(target_lms) - white;
+        float2 reference_direction = renodx_custom::color::macleod_boynton::MB_From_LMS(reference_lms) - white;
+
+        float target_len_sq = dot(target_direction, target_direction);
+        float reference_len_sq = dot(reference_direction, reference_direction);
+
+        if (target_len_sq > kNearWhiteEpsilon || reference_len_sq > kNearWhiteEpsilon) {
+          float2 target_unit = (target_len_sq > kNearWhiteEpsilon)
+                                   ? target_direction * rsqrt(target_len_sq)
+                                   : float2(0.f, 0.f);
+          float2 reference_unit = (reference_len_sq > kNearWhiteEpsilon)
+                                      ? reference_direction * rsqrt(reference_len_sq)
+                                      : target_unit;
+
+          if (target_len_sq <= kNearWhiteEpsilon) {
+            target_unit = reference_unit;
+          }
+
+          float2 blended_unit = lerp(target_unit, reference_unit, config.hue_emulation_strength);
+          float blended_len_sq = dot(blended_unit, blended_unit);
+          if (blended_len_sq <= kNearWhiteEpsilon) {
+            blended_unit = (config.hue_emulation_strength >= 0.5f) ? reference_unit : target_unit;
+            blended_len_sq = dot(blended_unit, blended_unit);
+          }
+          blended_unit *= rsqrt(max(blended_len_sq, 1e-20f));
+
+          float seed_len = sqrt(max(target_len_sq, 0.f));
+          if (seed_len <= 1e-6f) {
+            seed_len = sqrt(max(reference_len_sq, 0.f));
+          }
+          seed_len = max(seed_len, 1e-6f);
+
+          hue_seed_bt2020 = mul(
+              renodx::color::XYZ_TO_BT2020_MAT,
+              mul(renodx_custom::color::macleod_boynton::LMS_TO_XYZ_2006,
+                  renodx_custom::color::macleod_boynton::LMS_From_MB_T(white + blended_unit * seed_len, target_t)));
+
+          float purity_post = renodx_custom::color::macleod_boynton::ApplyBT2020(
+                                  hue_seed_bt2020, 1.f, 1.f, mb_white_override, t_min)
+                                  .purityCur01;
+          purity_ratio = renodx::math::SafeDivision(purity_current, purity_post, 1.f);
+          purity_current = purity_post;
+        }
+      }
+    }
+
+    if (config.chrominance_emulation != 0.f) {
+      float target_purity_ratio = renodx::math::SafeDivision(reference_purity01, purity_current, 1.f);
+      purity_ratio = lerp(purity_ratio, target_purity_ratio, config.chrominance_emulation);
+    }
+
+    float applied_purity01 = saturate(purity_current * max(purity_ratio, 0.f));
+    color_bt2020 = renodx_custom::color::macleod_boynton::ApplyBT2020(
+                       hue_seed_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
+                       .rgbOut;
+    color_purity01 = applied_purity01;
+  }
+
+  float purity_scale = 1.f;
+
+  // dechroma
+  if (config.dechroma != 0.f) {
+    purity_scale *= lerp(1.f, 0.f, saturate(pow(lum / (10000.f / 100.f), (1.f - config.dechroma))));
+  }
+
+  // highlight saturation
+  if (config.highlight_saturation != 0.f) {
+    float percent_max = saturate(lum * 100.f / 10000.f);
+    // positive = 1 to 0, negative = 1 to 2
+    float blowout_strength = 100.f;
+    float blowout_change = pow(1.f - percent_max, blowout_strength * abs(config.highlight_saturation));
+    if (config.highlight_saturation < 0) {
+      blowout_change = (2.f - blowout_change);
+    }
+
+    purity_scale *= blowout_change;
+  }
+
+  // saturation
+  purity_scale *= config.saturation;
+
+  if (purity_scale != 1.f) {
+    float scaled_purity01 = saturate(color_purity01 * max(purity_scale, 0.f));
+    color_bt2020 = renodx_custom::color::macleod_boynton::ApplyBT2020(
+                       color_bt2020, scaled_purity01, curve_gamma, mb_white_override, t_min)
+                       .rgbOut;
+  }
+
+  color = renodx::color::bt709::from::BT2020(color_bt2020);
+
+  if (clamp_to_ap1) {
+    color = renodx::color::bt709::clamp::AP1(color);
+  }
+
   return color;
 }
 
-float3 HueAndChrominanceOKLab(
-    float3 incorrect_color, float3 reference_color,
-    float hue_correct_strength = 0.f,
-    float chrominance_correct_strength = 0.f,
-    float saturation = 1.f) {
-  if (hue_correct_strength != 0.0 || chrominance_correct_strength != 0.0 || saturation != 0.0) {
-    float3 perceptual_new = renodx::color::oklab::from::BT709(incorrect_color);
-    const float3 reference_oklab = renodx::color::oklab::from::BT709(reference_color);
-
-    float chrominance_current = length(perceptual_new.yz);
-    float chrominance_ratio = 1.0;
-
-    if (hue_correct_strength != 0.0) {
-      const float chrominance_pre = chrominance_current;
-      perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, hue_correct_strength);
-      const float chrominancePost = length(perceptual_new.yz);
-      chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
-      chrominance_current = chrominancePost;
-    }
-
-    if (chrominance_correct_strength != 0.0) {
-      const float reference_chrominance = length(reference_oklab.yz);
-      float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
-      chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_correct_strength);
-    }
-    perceptual_new.yz *= chrominance_ratio;
-    perceptual_new.yz *= saturation;
-
-    incorrect_color = renodx::color::bt709::from::OkLab(perceptual_new);
-    incorrect_color = renodx::color::bt709::clamp::AP1(incorrect_color);
-  }
-  return incorrect_color;
-}
-
-float3 CorrectHueAndChrominanceOKLab(
-    float3 incorrect_color_bt709,
-    float3 reference_color_bt709,
-    float hue_emulation_strength = 0.f,
-    float chrominance_emulation_strength = 0.f,
-    float hue_emulation_ramp_start = 0.18f,
-    float hue_emulation_ramp_end = 1.f) {
-  if (hue_emulation_strength == 0.0 && chrominance_emulation_strength == 0.0) {
-    return incorrect_color_bt709;
+#define SPLIT_CONTRAST_FUNCTION_GENERATOR(T)                                                       \
+  T SplitContrast(T input, float contrast_shadows = 1.f, float contrast_highlights = 1.f,          \
+                  float split_point = 0.18f) {                                                     \
+    T contrast = renodx::math::Select(input < split_point, contrast_shadows, contrast_highlights); \
+    T contrasted = pow(input / split_point, contrast) * split_point;                               \
+    return contrasted;                                                                             \
   }
 
-  float3 perceptual_new = renodx::color::oklab::from::BT709(incorrect_color_bt709);
-  float3 perceptual_reference = renodx::color::oklab::from::BT709(reference_color_bt709);
+SPLIT_CONTRAST_FUNCTION_GENERATOR(float)
+SPLIT_CONTRAST_FUNCTION_GENERATOR(float3)
 
-  float chrominance_current = length(perceptual_new.yz);
-  float chrominance_ratio = 1.0;
+#undef SPLIT_CONTRAST_FUNCTION_GENERATOR
 
-  if (hue_emulation_strength != 0.0) {
-    float ramp_denom = hue_emulation_ramp_end - hue_emulation_ramp_start;
-    float ramp_t = clamp(renodx::math::DivideSafe(perceptual_new.x - hue_emulation_ramp_start, ramp_denom, 0.0), 0.0, 1.0);
-    hue_emulation_strength *= ramp_t;
+float3 ApplyUserGrading(float3 ungraded) {
+  UserGradingConfig cg_config = CreateColorGradeConfig();
+  float y = renodx::color::y::from::BT709(ungraded);
+  float3 graded = ApplyLuminosityGrading(ungraded, y, cg_config);
+  graded = ApplyHueAndPurityGrading(graded, ungraded, y, cg_config, false);
 
-    float chrominance_pre = chrominance_current;
-    perceptual_new.yz = lerp(perceptual_new.yz, perceptual_reference.yz, hue_emulation_strength);
-    float chrominance_post = length(perceptual_new.yz);
-    chrominance_ratio = renodx::math::DivideSafe(chrominance_pre, chrominance_post, 1.0);
-    chrominance_current = chrominance_post;
-  }
-
-  if (chrominance_emulation_strength != 0.0) {
-    float reference_chrominance = length(perceptual_reference.yz);
-    float target_chrominance_ratio = renodx::math::DivideSafe(reference_chrominance, chrominance_current, 1.0);
-    chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_emulation_strength);
-  }
-
-  perceptual_new.yz *= chrominance_ratio;
-
-  float3 corrected_color_bt709 = renodx::color::bt709::from::OkLab(perceptual_new);
-  return corrected_color_bt709;
-}
-
-float3 ApplySDREOTFEmulation(float3 color) {
-  if (RENODX_SDR_EOTF_EMULATION == 2.f) {
-    color = renodx::color::correct::Hue(renodx::color::correct::GammaSafe(color), color);
-  } else if (RENODX_SDR_EOTF_EMULATION == 1.f) {
-    color = renodx::color::correct::GammaSafe(color);
-  }
-  return color;
-}
-
-float3 SplitContrast(float3 color, float contrast_shadows = 1.f, float contrast_highlights = 1.f, float mid_gray = 0.18f,
-                     float3x3 color_space = renodx::color::BT709_TO_XYZ_MAT) {
-  float color_y = dot(color, color_space[1].rgb);
-
-  float contrast = renodx::math::Select(color_y < mid_gray, contrast_shadows, contrast_highlights);
-  float contrasted_y = pow(color_y / mid_gray, contrast) * mid_gray;
-
-  return renodx::color::correct::Luminance(color, color_y, contrasted_y);
-}
-
-float3 SplitContrastPerCh(float3 color, float contrast_shadows = 1.f, float contrast_highlights = 1.f, float mid_gray = 0.18f) {
-  float3 contrast = renodx::math::Select(color < mid_gray, contrast_shadows, contrast_highlights);
-  float3 contrasted = pow(color / mid_gray, contrast) * mid_gray;
-
-  return contrasted;
-}
-
-float3 GamutCompress(float3 color_bt709, float3x3 color_space_matrix = renodx::color::BT709_TO_XYZ_MAT) {
-  float grayscale = dot(color_bt709, color_space_matrix[1].rgb);
-
-  const float MID_GRAY_LINEAR = 1 / (pow(10, 0.75));                          // ~0.18f
-  const float MID_GRAY_PERCENT = 0.5f;                                        // 50%
-  const float MID_GRAY_GAMMA = log(MID_GRAY_LINEAR) / log(MID_GRAY_PERCENT);  // ~2.49f
-  float encode_gamma = MID_GRAY_GAMMA;
-
-  float3 encoded = renodx::color::gamma::EncodeSafe(color_bt709, encode_gamma);
-  float encoded_gray = renodx::color::gamma::Encode(grayscale, encode_gamma);
-
-  float3 compressed = renodx::color::correct::GamutCompress(encoded, encoded_gray);
-  float3 color_bt709_compressed = renodx::color::gamma::DecodeSafe(compressed, encode_gamma);
-
-  return color_bt709_compressed;
+  return graded;
 }
 
 float3 GenerateOutputAvatar(float3 ungraded_bt709, float contrast) {
-  UserGradingConfig cg_config = CreateColorGradeConfig();
   float3 graded_bt709;
   if (RENODX_TONE_MAP_TYPE == 1.f) {  // None
     graded_bt709 = ungraded_bt709;
+    if (RENODX_SDR_EOTF_EMULATION == 2.f) {
+      float lum_in = LuminosityFromBT709LuminanceNormalized(ungraded_bt709);
+      float lum_out = renodx::color::correct::GammaSafe(lum_in);
+      float3 corrected_lum = renodx::color::correct::Luminance(ungraded_bt709, lum_in, lum_out);
+
+      float3 corrected_ch = renodx::color::correct::GammaSafe(ungraded_bt709);
+      graded_bt709 = CorrectPurityMB(corrected_lum, corrected_ch);
+    }
   } else {  // Vanilla+
     // `pow(c, contrast) * 2.f` per channel will essentially give uncapped version of vanilla
-    // apply by luminance to keep hues and chrominance intact and scale lightness evenly
     float shadow_contrast = contrast;
-    // lower highlight contrast so image isn't overly harsh, but make sure sun still reaches 100.f
-    float highlight_contrast = contrast * 0.63207f;
-    float3 contrasted_bt709 = (SplitContrast(ungraded_bt709, shadow_contrast, highlight_contrast, 1.f)) * 2.f;
+    // lower highlight contrast so image isn't overly harsh, but make sure sun still reaches 100.f (10k nits with 100 game brightness)
+    float highlight_contrast = contrast * 0.681f;
+    float exposure_adjustment = 2.f;
 
+    // apply by luminosity to keep hues intact and scale lightness evenly
+    float lum_in = LuminosityFromBT709LuminanceNormalized(ungraded_bt709);
+    float lum_out = SplitContrast(lum_in, shadow_contrast, highlight_contrast, 1.f) * exposure_adjustment;
+    if (RENODX_SDR_EOTF_EMULATION == 2.f) {
+      lum_out = renodx::color::correct::GammaSafe(lum_out);
+    }
+    float3 contrasted_lum = renodx::color::correct::Luminance(ungraded_bt709, lum_in, lum_out);
+
+    // apply grading per channel as reference color to take purity from
+    float3 contrasted_ch = renodx::color::bt709::from::BT2020(SplitContrast(renodx::color::bt2020::from::BT709(ungraded_bt709), shadow_contrast, highlight_contrast, 1.f) * exposure_adjustment);
+    if (RENODX_SDR_EOTF_EMULATION == 2.f) {
+      contrasted_ch = renodx::color::correct::GammaSafe(contrasted_ch);
+    }
     // use reinhard to blow out and hue shift, peak of 10.f found to look good in testing
-    float3 hue_and_chrominance_source = renodx::tonemap::ReinhardPiecewise(contrasted_bt709, 10.f, 1.f);
+    float3 hue_and_chrominance_source = renodx::tonemap::ReinhardPiecewise(contrasted_ch, 10.f, 1.f);
 
-    // apply chrominance and hue of tonemapped color onto untonemapped, add saturation boost
+    // apply purity and hue (only on highlights) of per channel contrasted to luminosity contrasted
     // this gives us our graded color which will be compressed by max channel to monitor peak later
-    graded_bt709 = HueAndChrominanceOKLab(contrasted_bt709, hue_and_chrominance_source, RENODX_TONE_MAP_HUE_SHIFT, RENODX_TONE_MAP_BLOWOUT, 1.1f);
+    graded_bt709 = CorrectHueAndPurityMBGated(contrasted_lum, hue_and_chrominance_source, 1.f, 1.f, 2.f);
   }
 
-  float3 final_bt709 = graded_bt709;
-  if (RENODX_SDR_EOTF_EMULATION) {
-    final_bt709 = renodx::color::correct::GammaSafe(final_bt709);
+  if (RENODX_SDR_EOTF_EMULATION == 1.f) {
+    graded_bt709 = renodx::color::correct::GammaSafe(graded_bt709);
   }
 
-  float y = renodx::color::y::from::BT709(graded_bt709);
-  final_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(final_bt709, y, cg_config);
-  final_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(final_bt709, graded_bt709, y, cg_config, false);
+  float3 final_bt709 = ApplyUserGrading(graded_bt709);
 
   float3 color_bt2020 = renodx::color::bt2020::from::BT709(final_bt709);
-
-  color_bt2020 = renodx::color::bt2020::clamp::AP1(color_bt2020);
-  color_bt2020 = GamutCompress(color_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
 
   if (RENODX_TONE_MAP_TYPE == 2.f) {  // display map by max channel
     color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_WHITE_CLIP);
@@ -306,39 +315,52 @@ float3 GenerateOutputAvatar(float3 ungraded_bt709, float contrast) {
 }
 
 float3 GenerateOutputStarWarsOutlaws(float3 ungraded_bt709, float contrast) {
-  UserGradingConfig cg_config = CreateColorGradeConfig();
   float3 graded_bt709;
   if (RENODX_TONE_MAP_TYPE == 1.f) {  // None
     graded_bt709 = ungraded_bt709;
+    if (RENODX_SDR_EOTF_EMULATION == 2.f) {
+      float lum_in = LuminosityFromBT709LuminanceNormalized(ungraded_bt709);
+      float lum_out = renodx::color::correct::GammaSafe(lum_in);
+      float3 corrected_lum = renodx::color::correct::Luminance(ungraded_bt709, lum_in, lum_out);
+
+      float3 corrected_ch = renodx::color::correct::GammaSafe(ungraded_bt709);
+      graded_bt709 = CorrectPurityMB(corrected_lum, corrected_ch);
+    }
   } else {  // Vanilla+
-    // `pow(c, contrast) * 1.7f` per channel will essentially give uncapped version of vanilla
-    // apply by luminance to keep hues and chrominance intact and scale lightness evenly
+    // `pow(c, contrast) * 2.f` per channel will essentially give uncapped version of vanilla
     float shadow_contrast = contrast;
-    // lower highlight contrast so image isn't overly harsh, but make sure sun still reaches 100.f
-    float highlight_contrast = contrast * 0.69275f;
-    float3 contrasted_bt709 = (SplitContrast(ungraded_bt709, shadow_contrast, highlight_contrast, 1.f)) * 1.7f;
+    // lower highlight contrast so image isn't overly harsh, but make sure sun still reaches 100.f (10k nits with 100 game brightness)
+    float highlight_contrast = contrast * 0.7375f;
+    float exposure_adjustment = 1.7f;
 
+    // apply by luminosity to keep hues intact and scale lightness evenly
+    float lum_in = LuminosityFromBT709LuminanceNormalized(ungraded_bt709);
+    float lum_out = SplitContrast(lum_in, shadow_contrast, highlight_contrast, 1.f) * exposure_adjustment;
+    if (RENODX_SDR_EOTF_EMULATION == 2.f) {
+      lum_out = renodx::color::correct::GammaSafe(lum_out);
+    }
+    float3 contrasted_lum = renodx::color::correct::Luminance(ungraded_bt709, lum_in, lum_out);
+
+    // apply grading per channel as reference color to take purity from
+    float3 contrasted_ch = renodx::color::bt709::from::BT2020(SplitContrast(renodx::color::bt2020::from::BT709(ungraded_bt709), shadow_contrast, highlight_contrast, 1.f) * exposure_adjustment);
+    if (RENODX_SDR_EOTF_EMULATION == 2.f) {
+      contrasted_ch = renodx::color::correct::GammaSafe(contrasted_ch);
+    }
     // use reinhard to blow out and hue shift, peak of 10.f found to look good in testing
-    float3 hue_and_chrominance_source = renodx::tonemap::ReinhardPiecewise(contrasted_bt709, 10.f, 1.f);
+    float3 hue_and_chrominance_source = renodx::tonemap::ReinhardPiecewise(contrasted_ch, 10.f, 1.f);
 
-    // apply chrominance and hue of tonemapped color onto untonemapped, add saturation boost
+    // apply purity and hue (only on highlights) of per channel contrasted to luminosity contrasted
     // this gives us our graded color which will be compressed by max channel to monitor peak later
-    graded_bt709 = HueAndChrominanceOKLab(contrasted_bt709, hue_and_chrominance_source, RENODX_TONE_MAP_HUE_SHIFT, RENODX_TONE_MAP_BLOWOUT, 1.1f);
+    graded_bt709 = CorrectHueAndPurityMBGated(contrasted_lum, hue_and_chrominance_source, 1.f, 1.f, 2.f);
   }
 
-  float3 final_bt709 = graded_bt709;
-  if (RENODX_SDR_EOTF_EMULATION) {
-    final_bt709 = renodx::color::correct::GammaSafe(final_bt709);
+  if (RENODX_SDR_EOTF_EMULATION == 1.f) {
+    graded_bt709 = renodx::color::correct::GammaSafe(graded_bt709);
   }
 
-  float y = renodx::color::y::from::BT709(graded_bt709);
-  final_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(final_bt709, y, cg_config);
-  final_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(final_bt709, graded_bt709, y, cg_config, false);
+  float3 final_bt709 = ApplyUserGrading(graded_bt709);
 
   float3 color_bt2020 = renodx::color::bt2020::from::BT709(final_bt709);
-
-  color_bt2020 = renodx::color::bt2020::clamp::AP1(color_bt2020);
-  color_bt2020 = GamutCompress(color_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
 
   if (RENODX_TONE_MAP_TYPE == 2.f) {  // display map by max channel
     color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_WHITE_CLIP);
