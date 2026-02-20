@@ -1138,6 +1138,18 @@ float LuminosityFromBT709(float3 bt709_linear) {
 
 float LuminosityFromBT709LuminanceNormalized(float3 bt709_linear) {
   float luminosity = LuminosityFromBT709(bt709_linear);
+  
+  return luminosity / LuminosityFromBT709(1.f);
+}
+
+float LuminosityFromBT2020(float3 bt2020_linear) {
+  float3 xyz = mul(renodx::color::BT2020_TO_XYZ_MAT, bt2020_linear);
+  float3 lms = mul(renodx_custom::color::macleod_boynton::XYZ_TO_LMS_2006, xyz);
+  return 1.55f * lms.x + lms.y;
+}
+
+float LuminosityFromBT2020LuminanceNormalized(float3 bt2020_linear) {
+  float luminosity = LuminosityFromBT2020(bt2020_linear);
 
   return luminosity / LuminosityFromBT709(1.f);
 }

@@ -165,7 +165,8 @@ float3 ApplyColorGradingLUTs(float3 color_input) {
 
       float3 unclamped_linear = renodx::color::srgb::DecodeSafe(unclamped_gamma);
 
-      color_output = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, COLOR_GRADE_LUT_SCALING);
+      // color_output = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, COLOR_GRADE_LUT_SCALING);
+      color_output *= lerp(1.f, renodx::math::DivideSafe(LuminosityFromBT709(unclamped_linear), LuminosityFromBT709(color_output), 1.f), COLOR_GRADE_LUT_SCALING);
     }
   }
 
@@ -210,7 +211,9 @@ void ApplyColorGrading(float r_in, float g_in, float b_in,
 }
 #endif
 
-float3 ApplyCustomGrading(float3 ungraded) {
+float3 ApplyCustomGrading(float3 ungraded_bt709) {
+  float3 ungraded_bt2020 = renodx::color::bt2020::from::BT709(ungraded_bt709);
+
   const UserGradingConfig cg_config = {
     RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
     RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
@@ -221,28 +224,21 @@ float3 ApplyCustomGrading(float3 ungraded) {
     RENODX_TONE_MAP_SATURATION,                           // float saturation;
     RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
     -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
-    0.f,                                                  // float hue_emulation_strength_high;
-    0.f,                                                  // float chrominance_emulation_strength_high;
-    1.f,                                                  // float hue_emulation_strength_low;
-    1.f,                                                  // float chrominance_emulation_strength_low;
-    0.18f,                                                // float hue_chrominance_ramp_start;
-    1.f                                                   // float hue_chrominance_ramp_end;
+    RENODX_TONE_MAP_HUE_SHIFT,                            // float hue_emulation;
+    RENODX_TONE_MAP_BLOWOUT                               // float chrominance_emulation
   };
 
-  float luminosity = LuminosityFromBT709LuminanceNormalized(ungraded);
+  float luminosity = LuminosityFromBT2020LuminanceNormalized(ungraded_bt2020);
 
-  float3 chrominance_hue_reference_color = renodx::color::bt709::from::BT2020(renodx::tonemap::ReinhardPiecewise(renodx::color::bt2020::from::BT709(ungraded), 5.f, 1.5f));
+  float3 chrominance_hue_reference_bt2020 = renodx::tonemap::ReinhardPiecewise(ungraded_bt2020, 5.f, 1.5f);
 
-  float3 graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, luminosity, cg_config, 0.1f);
+  float3 graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, luminosity, cg_config, 0.1f);
 
-  graded = CorrectHueAndPurityMBSplitStrength(
-      graded, chrominance_hue_reference_color,
-      1.f, RENODX_TONE_MAP_HUE_SHIFT,
-      1.f, RENODX_TONE_MAP_BLOWOUT, 0.5f, 1.f);
+  graded_bt2020 = ApplyHueAndPurityGrading(graded_bt2020, chrominance_hue_reference_bt2020, luminosity, cg_config);
 
-  graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded, chrominance_hue_reference_color, luminosity, cg_config);
+  float3 graded_bt709 = renodx::color::bt709::from::BT2020(graded_bt2020);
 
-  return graded;
+  return graded_bt709;
 }
 
 float3 ApplyNeutwoByMaxChannel(float3 input, float peak_white, float diffuse_white, float white_clip = 100.f,
@@ -262,13 +258,6 @@ float3 ApplyDisplayMap(float3 untonemapped) {
 
   float3 untonemapped_bt2020 = renodx::color::bt2020::from::BT709(untonemapped);
 
-#if GAMUT_COMPRESS == 2
-  untonemapped_bt2020 = GamutCompress(untonemapped_bt2020, renodx::color::BT2020_TO_XYZ_MAT);
-#endif
-
-  // float3 tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(
-  //     max(0, untonemapped_bt2020),
-  //     RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
   float3 tonemapped_bt2020 = ApplyNeutwoByMaxChannel(
       max(0, untonemapped_bt2020),
       RENODX_PEAK_WHITE_NITS, RENODX_DIFFUSE_WHITE_NITS, 100.f, 0.18f, 0.18f, 0.0001f);
@@ -287,11 +276,6 @@ float3 ApplyToneMap(float3 untonemapped, float2 texcoord) {
   } else if (RENODX_GAMMA_CORRECTION == 2.f) {
     untonemapped = ApplyGammaCorrectionByLuminance(untonemapped);
   }
-
-#if GAMUT_COMPRESS == 1
-  untonemapped = GamutCompress(untonemapped);
-  untonemapped = max(0, untonemapped);
-#endif
 
   untonemapped = ApplyCustomGrading(untonemapped);
 
