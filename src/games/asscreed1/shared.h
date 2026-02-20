@@ -19,6 +19,7 @@ struct ShaderInjectData {
   float tone_map_saturation;
   float tone_map_highlight_saturation;
   float tone_map_blowout;
+  float tone_map_dechroma;
   float tone_map_flare;
   float scene_grade_strength;
   float color_grade_scaling;
@@ -40,7 +41,7 @@ cbuffer cb13 : register(b13) {
 #define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
 #define RENODX_GAMMA_CORRECTION    shader_injection.gamma_correction
 #define RENODX_TONE_MAP_HUE_SHIFT  shader_injection.tone_map_hue_shift
-#define RENODX_TONE_MAP_WHITE_CLIP shader_injection.tone_map_white_clip
+#define RENODX_TONE_MAP_BLOWOUT    shader_injection.tone_map_blowout
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
@@ -48,8 +49,8 @@ cbuffer cb13 : register(b13) {
 #define RENODX_TONE_MAP_CONTRAST             shader_injection.tone_map_contrast
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
-#define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
+#define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.scene_grade_strength
 #define RENODX_COLOR_GRADE_SCALING           shader_injection.color_grade_scaling
 

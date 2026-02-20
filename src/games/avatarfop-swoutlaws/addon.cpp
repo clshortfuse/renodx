@@ -38,7 +38,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping & Color Grading",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Hermite Spline"},
+        .labels = {"Vanilla", "None", "Neutwo"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -71,31 +71,18 @@ renodx::utils::settings::Settings settings = {
         .label = "SDR EOTF Emulation",
         .section = "Tone Mapping & Color Grading",
         .tooltip = "Emulates a 2.2 EOTF",
-        .labels = {"Off", "2.2 (Per Channel)", "2.2 (Per Channel, Hue Preserving)"},
+        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminosity)"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapBlowout",
-        .binding = &shader_injection.tone_map_blowout,
+        .key = "ToneMapWhiteClip",
+        .binding = &shader_injection.tone_map_white_clip,
         .default_value = 100.f,
-        .label = "Blowout",
+        .label = "White Clip",
         .section = "Tone Mapping & Color Grading",
-        .tooltip = "Emulates blowout from per channel tonemapping",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapHueShift",
-        .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 100.f,
-        .label = "Hue Shift",
-        .section = "Tone Mapping & Color Grading",
-        .tooltip = "Hue-shift emulation strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
-        .parse = [](float value) { return value * 0.01f; },
+        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -238,15 +225,18 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Recommended Settings",
+        .label = "Avatar Recommended Settings",
         .section = "Options",
         .group = "button-line-1",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"SDREOTFEmulation", 0.f},
+              {"ToneMapWhiteClip", 41.f},
+              {"ColorGradeHighlights", 42.f},
               {"ColorGradeShadows", 80.f},
-              {"ColorGradeFlare", 33.f},
+              {"ColorGradeSaturation", 52.f},
+              {"ColorGradeFlare", 36.f},
           });
         },
     },
@@ -327,8 +317,6 @@ void OnPresetOff() {
       {"ToneMapUINits", 203.f},
       {"SDREOTFEmulation", 0.f},
       {"UISDREOTFEmulation", 0.f},
-      {"ToneMapHueCorrectionType", 0.f},
-      {"ToneMapHueCorrection", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -359,7 +347,7 @@ bool initialized = false;
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Avatar: Frontiers of Pandora™ and Star Wars Outlaws";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Avatar: Frontiers of Pandora and Star Wars Outlaws";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {

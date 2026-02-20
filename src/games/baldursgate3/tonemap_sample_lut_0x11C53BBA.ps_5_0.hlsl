@@ -66,33 +66,24 @@ void main(
   }
   r0.xyz = t1.SampleLevel(s0_s, r1.xyz, 0).xyz;  // tonemapping
 
-#if RENODX_TONE_MAP_TYPE
-  r0.rgb = renodx::color::pq::DecodeSafe(r0.rgb, 100.f);
+#if 1
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    r0.rgb = renodx::color::pq::DecodeSafe(r0.rgb, 100.f);
 
-  r0.rgb = renodx::color::bt709::from::BT2020(r0.rgb);
-  if (!RENODX_GAMMA_CORRECTION) {
-    r0.rgb = renodx::color::correct::GammaSafe(r0.rgb, true, 2.2f);
-  }
-  r0.rgb = renodx::color::grade::UserColorGrading(
-      r0.rgb,
-      RENODX_TONE_MAP_EXPOSURE,
-      RENODX_TONE_MAP_HIGHLIGHTS,
-      RENODX_TONE_MAP_SHADOWS,
-      RENODX_TONE_MAP_CONTRAST,
-      RENODX_TONE_MAP_SATURATION,
-      RENODX_TONE_MAP_BLOWOUT,
-      0.f);
-  r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
-
-  float shoulder_start = 0.5f;
-  float3 untonemapped = max(0, r0.rgb);
-  r0.rgb = renodx::tonemap::ReinhardPiecewiseExtended(untonemapped, 100.f, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_SHOULDER_START);
-  if (RENODX_TONE_MAP_HUE_CORRECTION != 0.f) {
     r0.rgb = renodx::color::bt709::from::BT2020(r0.rgb);
-    r0.rgb = renodx::color::correct::Hue(r0.rgb, renodx::color::bt709::from::BT2020(untonemapped), RENODX_TONE_MAP_HUE_CORRECTION);
+    if (RENODX_GAMMA_CORRECTION == 0.f) {
+      r0.rgb = GammaCorrectHuePreserving(r0.rgb, true);
+    }
+
+    r0.rgb = ApplyUserGrading(r0.rgb);
+
     r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
+
+    if (RENODX_TONE_MAP_TYPE == 2.f) {
+      r0.rgb = renodx::tonemap::neutwo::MaxChannel(max(0, r0.rgb), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
+    }
+    r0.rgb = renodx::color::pq::EncodeSafe(r0.rgb, RENODX_DIFFUSE_WHITE_NITS);
   }
-  r0.rgb = renodx::color::pq::EncodeSafe(r0.rgb, RENODX_DIFFUSE_WHITE_NITS);
 #endif
 
   r0.w = 1;
