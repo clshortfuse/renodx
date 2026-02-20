@@ -65,6 +65,7 @@ void HandleOutputModeChange() {
       shader_injection.graphics_white_nits = 1.f;
       shader_injection.gamma_correction = 0.f;
     } else {
+      next_color_space = reshade::api::color_space::extended_srgb_linear;
       shader_injection.swap_chain_output_preset = 2.f;
       shader_injection.peak_white_nits = 80.f;
       shader_injection.diffuse_white_nits = 80.f;
@@ -74,8 +75,12 @@ void HandleOutputModeChange() {
   } else {
     if (is_10bit) {
       next_color_space = reshade::api::color_space::hdr10_st2084;
+      shader_injection.swap_chain_output_preset = 1.f;
     }
-    shader_injection.swap_chain_output_preset = 1.f;
+    else {
+      next_color_space = reshade::api::color_space::extended_srgb_linear;
+      shader_injection.swap_chain_output_preset = 2.f;
+    }
     shader_injection.peak_white_nits = tone_map_peak_nits_setting->GetValue();
     shader_injection.diffuse_white_nits = tone_map_game_nits_setting->GetValue();
     shader_injection.graphics_white_nits = tone_map_ui_nits_setting->GetValue();
@@ -83,7 +88,7 @@ void HandleOutputModeChange() {
   }
 }
 
-bool IsHDREnabled() { return shader_injection.swap_chain_output_preset == 1.f; }
+bool IsHDREnabled() { return shader_injection.swap_chain_output_preset > 0.f; }
 
 renodx::utils::settings::Settings settings = {
 
@@ -104,6 +109,7 @@ renodx::utils::settings::Settings settings = {
         .can_reset = false,
         .label = "Output Mode",
         .labels = {"SDR", "HDR"},
+        .parse = [](float value) { return value; },
         .on_change_value = [](float previous, float current) { HandleOutputModeChange(); },
     },
     new renodx::utils::settings::Setting{
@@ -593,10 +599,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      // renodx::mods::swapchain::use_resource_cloning = true;
-      // renodx::mods::swapchain::swapchain_proxy_revert_state = true;
       renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+      //renodx::mods::swapchain::swapchain_proxy_revert_state = true;
       //renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
 
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
