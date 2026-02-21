@@ -1,0 +1,19 @@
+
+cbuffer $Globals : register(b0) {
+  float4 gUniforms[6] : packoffset(c000.x);
+};
+
+float4 main(
+  int4 POSITION : POSITION
+) : SV_Position {
+  float4 SV_Position;
+  float _6 = float((int)(POSITION.x));
+  float _7 = float((int)(POSITION.y));
+  float _8 = float((int)(POSITION.z));
+  float _9 = float((int)(POSITION.w));
+  SV_Position.x = dot(float4(_6, _7, _8, _9), float4((gUniforms[0].x), (gUniforms[0].y), (gUniforms[0].z), (gUniforms[0].w)));
+  SV_Position.y = dot(float4(_6, _7, _8, _9), float4((gUniforms[1].x), (gUniforms[1].y), (gUniforms[1].z), (gUniforms[1].w)));
+  SV_Position.z = dot(float4(_6, _7, _8, _9), float4((gUniforms[2].x), (gUniforms[2].y), (gUniforms[2].z), (gUniforms[2].w)));
+  SV_Position.w = dot(float4(_6, _7, _8, _9), float4((gUniforms[3].x), (gUniforms[3].y), (gUniforms[3].z), (gUniforms[3].w)));
+  return SV_Position;
+}
