@@ -157,6 +157,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // Exposure
     // RareExposureShaderEntry(0x4905680A),
     RareExposureShaderEntry(0xE40162EC),
+    RareExposureShaderEntry(0xCA92B46C),
 
     // Sharpness
     CustomShaderEntry(0x7C1469E8),
@@ -167,6 +168,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     FogShaderEntry(0xCCB318BD),
     FogShaderEntry(0x7271B316),
     FogShaderEntry(0xA109191F),
+    FogShaderEntry(0x1DDF8C9F),
 
     // // Sharpening (Bypass)
     // {
