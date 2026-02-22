@@ -145,8 +145,6 @@ void main(
   r1.w = r1.w;
   o0.xyzw = r1.xyzw;
   o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
-  // o0.rgb = renodx::draw::ToneMapPass(o0.rgb);
-  // o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   if (RENODX_TONE_MAP_TYPE != 0) {
     o0.rgb = renodx::draw::ToneMapPass(o0.rgb);
     o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);

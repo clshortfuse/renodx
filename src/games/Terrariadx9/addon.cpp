@@ -5,6 +5,8 @@
 
 #define ImTextureID ImU64
 
+#define RENODX_MODS_SWAPCHAIN_VERSION 2
+
 #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
@@ -49,9 +51,10 @@ renodx::utils::settings::Settings settings = {
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
-        .tooltip = "Enables Or Disables the HDR Tonemapper",
+        .tooltip = "Sets the tone mapper type",
         .labels = {"SDR", "HDR"},
         .parse = [](float value) { return value * 3.f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -141,7 +144,7 @@ renodx::utils::settings::Settings settings = {
     //     .max = 100.f,
     //     .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
     //     .parse = [](float value) { return value * 0.01f; },
-    //     .is_visible = []() { return current_settings_mode >= 1; },
+    //     .is_visible = []() { return current_settings_mode >= 2; },
     // },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
@@ -327,7 +330,7 @@ renodx::utils::settings::Settings settings = {
     //         return value - 1.f; },
     //     .is_visible = []() { return current_settings_mode >= 2; },
     // },
-    // new renodx::utils::settings::Setting{
+    //  new renodx::utils::settings::Setting{
     //     .key = "SwapChainGammaCorrection",
     //     .binding = &shader_injection.swap_chain_gamma_correction,
     //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -342,7 +345,7 @@ renodx::utils::settings::Settings settings = {
     //     .key = "SwapChainClampColorSpace",
     //     .binding = &shader_injection.swap_chain_clamp_color_space,
     //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-    //     .default_value = 0.f,
+    //     .default_value = 2.f,
     //     .label = "Clamp Color Space",
     //     .section = "Display Output",
     //     .labels = {"None", "BT709", "BT2020", "AP1"},
@@ -377,7 +380,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Build: 2/9/2026 V1.0.1"),
+        .label = std::string("Build: 2/21/2026 V1.1.1"),
         .section = "About",
     },
 };
@@ -417,26 +420,24 @@ const auto UPGRADE_TYPE_OUTPUT_SIZE = 1.f;
 const auto UPGRADE_TYPE_OUTPUT_RATIO = 2.f;
 const auto UPGRADE_TYPE_ANY = 3.f;
 
-void OnPresent(reshade::api::command_queue* queue,
-               reshade::api::swapchain* swapchain,
-               const reshade::api::rect* source_rect,
-               const reshade::api::rect* dest_rect,
-               uint32_t dirty_rect_count,
-               const reshade::api::rect* dirty_rects) {
-  auto* device = queue->get_device();
-  if (device->get_api() == reshade::api::device_api::opengl) {
-    shader_injection.custom_flip_uv_y = 1.f;
-  }
-}
+// void OnPresent(reshade::api::command_queue* queue,
+//                reshade::api::swapchain* swapchain,
+//                const reshade::api::rect* source_rect,
+//                const reshade::api::rect* dest_rect,
+//                uint32_t dirty_rect_count,
+//                const reshade::api::rect* dirty_rects) {
+//   auto* device = queue->get_device();
+//   if (device->get_api() == reshade::api::device_api::opengl) {
+//     shader_injection.custom_flip_uv_y = 1.f;
+//   }
+// }
 
 bool initialized = false;
 
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Terraria";
-
-
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX (Generic)";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
@@ -452,8 +453,184 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
         renodx::mods::swapchain::use_resource_cloning = true;
-        
+        renodx::mods::swapchain::set_color_space = false;
+        renodx::mods::shader::constant_buffer_offset = 50 * 4;
+
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::b8g8r8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
+        //3840 x 2160 = 2304 x 1584
+        //2560 x 1440 = 2304 x 1584
+        //1920 x 1080 = 2304 x 1464
+        //1152 x 864 =  1536 x 1248
+        //1280 x 720 = 1664 x 1104
+        //1280 x 768 = 1664 x 1152
+        //1280 x 800 = 1664 x 1184
+        //1280 x 960 = 1664 x 1344
+        //1176 x 664 = 1560 x 1048
+        //1360 x 768 = 1744 x 1152
+        //1366 x 768 = 1750 x 1152
+        //1440 x 1080 = 1824 x 1464
+        //1600 x 1024 = 1984 x 1408
+        //1600 x 1200 = 1984 x 1584
+        //1680 x 1050 = 2064 x 1434
+        //1920 x 1200 = 2304 x 1584
+        //1920 x 1440 = 2304 x 1584
+        //1440 x 900 = 1824 x 1284
+        //2560 x 720 = 2304 x 1104
+        //800 x 600 = 1184 x 984
+        //1024 x 768 = 1408 x 1152
+        //1280 x 720 = 1664 x 1104
+        //1280 x 1024 = 1664 x 1408
+        //1600 x 900 = 1984 x 1284
+    
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::b8g8r8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+          .aspect_ratio = 2304.f / 1584.f,
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 2304.f / 1464.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1536.f / 1248.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1664.f / 1104.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1664.f / 1152.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1664.f / 1184.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1664.f / 1344.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1560.f / 1048.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1744.f / 1152.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1750.f / 1152.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1824.f / 1464.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1984.f / 1408.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1984.f / 1584.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 2064.f / 1434.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1824.f / 1284.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 2304.f / 1104.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1184.f / 984.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1408.f / 1152.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1664.f / 1408.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::b8g8r8a8_unorm,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .use_resource_view_cloning = true,
+        .aspect_ratio = 1984.f / 1284.f,
+        .usage_include = reshade::api::resource_usage::render_target,
+    });
+
         renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+
+        renodx::mods::swapchain::use_device_proxy = true;
 
         renodx::mods::swapchain::swap_chain_proxy_shaders = {
             {
@@ -486,7 +663,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               },
               .on_change_value = [](float previous, float current) { renodx::mods::swapchain::force_borderless = (current == 1.f); },
               .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 3; },
+              .is_visible = []() { return current_settings_mode >= 4; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
@@ -507,7 +684,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               },
               .on_change_value = [](float previous, float current) { renodx::mods::swapchain::prevent_full_screen = (current == 1.f); },
               .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 3; },
+              .is_visible = []() { return current_settings_mode >= 4; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           renodx::mods::swapchain::prevent_full_screen = (setting->GetValue() == 1.f);
@@ -515,11 +692,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         }
 
         // {
-        //    auto* setting = new renodx::utils::settings::Setting{
+        //   auto* setting = new renodx::utils::settings::Setting{
         //       .key = "SwapChainEncoding",
         //       .binding = &shader_injection.swap_chain_encoding,
         //       .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        //       .default_value = 5.f,
+        //       .default_value = 4.f,
         //       .label = "Encoding",
         //       .section = "Display Output",
         //       .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
@@ -540,28 +717,28 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         //   settings.push_back(setting);
         // }
 
-        {
-          auto* setting = new renodx::utils::settings::Setting{
-              .key = "SwapChainDeviceProxy",
-              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 0.f,
-              .label = "Use Display Proxy",
-              .section = "Display Proxy",
-              .labels = {"Off", "On"},
-              .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 3; },
-          };
-          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-          bool use_device_proxy = setting->GetValue() == 1.f;
-          renodx::mods::swapchain::use_device_proxy = use_device_proxy;
-          renodx::mods::swapchain::set_color_space = !use_device_proxy;
-          if (use_device_proxy) {
-            reshade::register_event<reshade::addon_event::present>(OnPresent);
-          } else {
-            shader_injection.custom_flip_uv_y = 0.f;
-          }
-          settings.push_back(setting);
-        }
+        // {
+        //   auto* setting = new renodx::utils::settings::Setting{
+        //       .key = "SwapChainDeviceProxy",
+        //       .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        //       .default_value = 0.f,
+        //       .label = "Use Display Proxy",
+        //       .section = "Display Proxy",
+        //       .labels = {"Off", "On"},
+        //       .is_global = true,
+        //       .is_visible = []() { return current_settings_mode >= 2; },
+        //   };
+        //   renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+        //   bool use_device_proxy = setting->GetValue() == 1.f;
+        //   renodx::mods::swapchain::use_device_proxy = use_device_proxy;
+        //   renodx::mods::swapchain::set_color_space = !use_device_proxy;
+        //   if (use_device_proxy) {
+        //     reshade::register_event<reshade::addon_event::present>(OnPresent);
+        //   } else {
+        //     shader_injection.custom_flip_uv_y = 0.f;
+        //   }
+        //   settings.push_back(setting);
+        // }
 
         {
           auto* setting = new renodx::utils::settings::Setting{
@@ -572,7 +749,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .section = "Display Proxy",
               .labels = {"Off", "On"},
               .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 3; },
+              .is_visible = []() { return current_settings_mode >= 4; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           bool use_device_proxy =
@@ -589,7 +766,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .section = "Display Proxy",
               .labels = {"Off", "On"},
               .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 3; },
+              .is_visible = []() { return current_settings_mode >= 4; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           bool use_device_proxy =
@@ -611,28 +788,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
                   "Any size",
               },
               .is_global = true,
-              .is_visible = []() { return settings[0]->GetValue() >= 3; },
+              .is_visible = []() { return current_settings_mode >= 4; },
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           settings.push_back(setting);
-
-
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-          .usage_include = reshade::api::resource_usage::render_target,
-      });
-
-
-         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-          .aspect_ratio = 4224.f / 2544.f,
-          .usage_include = reshade::api::resource_usage::render_target,
-      });
-
 
           auto value = setting->GetValue();
           if (value > 0) {
@@ -658,7 +817,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      //reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }
