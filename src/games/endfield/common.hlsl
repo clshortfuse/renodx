@@ -461,6 +461,14 @@ LUTSampleResult LUTSAMPLE(
     float3 lut_size,
     Texture2D<float4> lut_texture,
     float3 sample_input) {
+  [branch]
+  if (shader_injection.tone_map_type != 0.f) {
+    UserGradingConfig cg_config = CreateColorGradeConfig();
+    float sample_input_y = renodx::color::y::from::BT709(sample_input);
+    sample_input = ApplyExposureContrastFlareHighlightsShadowsByLuminance(
+        sample_input, sample_input_y, cg_config);
+  }
+
   renodx::lut::Config lut_config = renodx::lut::config::Create(
       lut_sampler,
       shader_injection.color_grade_strength,
@@ -508,10 +516,9 @@ float3 HDRGRADE(LUTSampleResult lut_sample) {
       renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 0.5f));
 
   UserGradingConfig cg_config = CreateColorGradeConfig();
-  float3 graded_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(graded, y, cg_config);
 
   float3 output = ApplySaturationBlowoutHueCorrectionHighlightSaturation(
-      graded_bt709, hue_chrominance_reference_color, y, cg_config);
+      graded, hue_chrominance_reference_color, y, cg_config);
   output = renodx::color::bt2020::from::BT709(output);
   output = renodx::tonemap::neutwo::MaxChannel(
       output, shader_injection.peak_white_nits / shader_injection.diffuse_white_nits, 65.f);
