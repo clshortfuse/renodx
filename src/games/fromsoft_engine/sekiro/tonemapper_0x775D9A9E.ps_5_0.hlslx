@@ -1,6 +1,6 @@
-#include "../commonv2.hlsli"
+#include "../common.hlsl"
 
-// ---- Created with 3Dmigoto v1.4.1 on Sat Jan  4 19:22:12 2025
+// ---- Created with 3Dmigoto v1.4.1 on Tue Jun  3 17:23:07 2025
 
 cbuffer cbToneMap : register(b1) {
   float3 g_ToneMapInvSceneLumScale : packoffset(c0);
@@ -50,28 +50,36 @@ void main(
   r0.xyz = g_GlareLuminance.xxx * r0.xyz;
   r1.xyz = g_SourceTexture.SampleLevel(SS_ClampLinear_s, v1.xy, 0).xyz;
   r1.xyz = g_ToneMapSceneLumScale.xyz * r1.xyz;
-  r1.rgb = r1.rgb * v1.zzz;
-  float3 glare = r0.rgb;
 
-  r0.rgb = r1.rgb + glare;
+  r0.xyz = r1.xyz * v1.zzz + r0.xyz;
 
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
+  float3 untonemapped = r0.rgb;
+
+  if (CUSTOM_MATCH_MIDGRAY) {
+    float y_in = renodx::color::y::from::BT709(untonemapped);
+    float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+    const float midgray = 0.18f;
+    float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
+
+    float3 luminance_tonemapped = untonemapped * (y_out / y_in);
+    untonemapped = untonemapped * (midgray_lum / midgray);
+    untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
+  }
+
+  if (!ApplyLuminanceSaturationAdjustments(untonemapped, r1.rgb)) {
     r1.xyz = float3(0.200000003, 0.200000003, 0.200000003) + r0.xyz;
     r0.xyz = r0.xyz / r1.xyz;
     r0.w = 0;
     r1.x = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, r0.xw, 0).x;
     r1.y = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, r0.yw, 0).x;
     r1.z = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear_s, r0.zw, 0).x;
-  } else {
-    r1.rgb = ApplyFromSoftToneMapExtended(r0.rgb, g_ReinhardParam, g_ToneMapParam);
+    r1.w = 1;
   }
 
-  r1.w = 1;
   r0.x = dot(r1.xyzw, g_mtxColorMultiplyer._m00_m10_m20_m30);
   r0.y = dot(r1.xyzw, g_mtxColorMultiplyer._m01_m11_m21_m31);
   r0.z = dot(r1.xyzw, g_mtxColorMultiplyer._m02_m12_m22_m32);
-
-  // r0.xyz = max(float3(0, 0, 0), r0.xyz);
+  r0.xyz = max(float3(0, 0, 0), r0.xyz);
   r1.xy = v1.xy * float2(2, 2) + float2(-1, -1);
   r1.xy = g_vVignettingParam.xy * r1.xy;
   r0.w = dot(r1.xy, r1.xy);
@@ -85,53 +93,56 @@ void main(
   r0.w = r0.w * r0.w;
   r0.xyz = r0.xyz * r0.www;
   if (g_bEnableFlags.z != 0) {
-    if (ApplyLUTAndToneMapAndRenderIntermediatePass(r0.rgb, g_ColorGradingLUTTexture, SS_ClampLinear_s, o0, v1)) {
-      return;
-    }
+    if (RENODX_TONE_MAP_TYPE) {
+      r1.rgb = SampleLUT(r0.xyz, g_ColorGradingLUTTexture, SS_ClampLinear_s);
 
-    r1.xyz = log2(r0.xyz);
-    r1.xyz = g_ToneMapParam.zzz * r1.xyz;
-    r1.xyz = exp2(r1.xyz);
-    r1.xyz = r1.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
-    r1.xyz = g_ColorGradingLUTTexture.Sample(SS_ClampLinear_s, r1.xyz).xyz;
-    r1.xyz = max(float3(0, 0, 0), r1.xyz);
-    r0.w = 1 / g_ToneMapParam.z;
-    r1.xyz = log2(r1.xyz);
-    r1.xyz = r1.xyz * r0.www;
-    r1.xyz = exp2(r1.xyz);
-    r2.xyz = float3(1, 1, 1) + -r1.xyz;
-    r2.xyz = max(float3(0.00999999978, 0.00999999978, 0.00999999978), r2.xyz);
-    r2.xyz = r1.xyz / r2.xyz;
-    r0.w = 1 / g_ReinhardParam.x;
-    r2.xyz = log2(r2.xyz);
-    r2.xyz = r2.xyz * r0.www;
-    r2.xyz = exp2(r2.xyz);
-    r0.w = dot(r2.xyz, float3(0.298909992, 0.586610019, 0.114480004));
-    r1.w = log2(r0.w);
-    r1.w = g_ReinhardParam.x * r1.w;
-    r1.w = exp2(r1.w);
-    r2.x = 1 + r1.w;
-    r1.w = r1.w / r2.x;
-    r2.x = -1 + r0.w;
-    r2.x = r2.x * 0.0526315793 + 1;
-    r2.x = log2(r2.x);
-    r2.x = g_ReinhardParam.x * r2.x;
-    r2.x = exp2(r2.x);
-    r2.y = 1 + r2.x;
-    r2.x = r2.x / r2.y;
-    r2.x = -0.5 + r2.x;
-    r2.x = r2.x * 19 + 0.5;
-    r0.w = cmp(1 < r0.w);
-    r0.w = r0.w ? r2.x : r1.w;
-    r2.xyz = r1.xyz * r0.www;
-    r0.w = dot(r1.xyz, float3(0.298909992, 0.586610019, 0.114480004));
-    r0.w = 9.99999975e-05 + r0.w;
-    r1.xyz = r2.xyz / r0.www;
-    r1.xyz = g_vHDRDisplayParam.yyy * r1.xyz;
-    r1.xyz = log2(r1.xyz);
-    r1.xyz = float3(0.303030312, 0.303030312, 0.303030312) * r1.xyz;
-    r1.xyz = exp2(r1.xyz);
-    r1.xyz = float3(0.49770236, 0.49770236, 0.49770236) * r1.xyz;
+      Tonemap(untonemapped, r1, o0, v1);
+      return;
+    } else {
+      r1.xyz = log2(r0.xyz);
+      r1.xyz = g_ToneMapParam.zzz * r1.xyz;
+      r1.xyz = exp2(r1.xyz);
+      r1.xyz = r1.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
+      r1.xyz = g_ColorGradingLUTTexture.Sample(SS_ClampLinear_s, r1.xyz).xyz;
+      r1.xyz = max(float3(0, 0, 0), r1.xyz);
+      r0.w = 1 / g_ToneMapParam.z;
+      r1.xyz = log2(r1.xyz);
+      r1.xyz = r1.xyz * r0.www;
+      r1.xyz = exp2(r1.xyz);
+      r2.xyz = float3(1, 1, 1) + -r1.xyz;
+      r2.xyz = max(float3(0.00999999978, 0.00999999978, 0.00999999978), r2.xyz);
+      r2.xyz = r1.xyz / r2.xyz;
+      r0.w = 1 / g_ReinhardParam.x;
+      r2.xyz = log2(r2.xyz);
+      r2.xyz = r2.xyz * r0.www;
+      r2.xyz = exp2(r2.xyz);
+      r0.w = dot(r2.xyz, float3(0.298909992, 0.586610019, 0.114480004));
+      r1.w = log2(r0.w);
+      r1.w = g_ReinhardParam.x * r1.w;
+      r1.w = exp2(r1.w);
+      r2.x = 1 + r1.w;
+      r1.w = r1.w / r2.x;
+      r2.x = -1 + r0.w;
+      r2.x = r2.x * 0.0526315793 + 1;
+      r2.x = log2(r2.x);
+      r2.x = g_ReinhardParam.x * r2.x;
+      r2.x = exp2(r2.x);
+      r2.y = 1 + r2.x;
+      r2.x = r2.x / r2.y;
+      r2.x = -0.5 + r2.x;
+      r2.x = r2.x * 19 + 0.5;
+      r0.w = cmp(1 < r0.w);
+      r0.w = r0.w ? r2.x : r1.w;
+      r2.xyz = r1.xyz * r0.www;
+      r0.w = dot(r1.xyz, float3(0.298909992, 0.586610019, 0.114480004));
+      r0.w = 9.99999975e-05 + r0.w;
+      r1.xyz = r2.xyz / r0.www;
+      r1.xyz = g_vHDRDisplayParam.yyy * r1.xyz;
+      r1.xyz = log2(r1.xyz);
+      r1.xyz = float3(0.303030312, 0.303030312, 0.303030312) * r1.xyz;
+      r1.xyz = exp2(r1.xyz);
+      r1.xyz = float3(0.49770236, 0.49770236, 0.49770236) * r1.xyz;
+    }
   } else {
     r0.xyz = log2(r0.xyz);
     r0.xyz = g_ToneMapParam.zzz * r0.xyz;
