@@ -207,7 +207,7 @@ const std::unordered_map<std::string, float> REGRADE_VALUES = {
     {"ColorGradeContrast", 55.f},
     {"ColorGradeSaturation", 58.f},
     //{"ColorGradeHighlightSaturation", 50.f},
-    {"ColorGradeBlowout", 60.f},
+    {"ColorGradeBlowout", 40.f},
     //{"ColorGradeFlare", 50.f},
     //{"SwapChainCustomColorSpace", 0.f},
     {"ColorGradeLUTColorStrength", 60.f},
@@ -503,7 +503,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 0.f,
+        .default_value = 20.f,
         .label = "Blowout",
         .section = "Color Grading",
         .tooltip = "Adds highlight desaturation due to overexposure.",

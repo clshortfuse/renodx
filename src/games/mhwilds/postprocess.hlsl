@@ -310,13 +310,16 @@ float3 VanillaSDRTonemapper(float3 color, CustomTonemapParam params, float peak 
   if (peak == -1) peak = params.maxNit;
   CustomTonemapParam vanillaParams = params;
 
+  float min = 0.001f;
+  if (!is_sdr) min *= (RENODX_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE);
+
   bool custom_params = CUSTOM_TONE_MAP_PARAMETERS == 1.f;
   if (custom_params) {
     // params.contrast *= 1.2f;
     // params.contrast = 0.18f;
     // params.toe = 3.f;
-    params.madLinearStartContrastFactor = renodx::math::FLT_EPSILON;
-    params.linearBegin = renodx::math::FLT_EPSILON;
+    params.madLinearStartContrastFactor = 0.001f;
+    params.linearBegin = 0.001f;
     // params.madLinearStartContrastFactor = 0.001f;
     // params.linearBegin = 0.001f;
     //  params.invLinearBegin *= 1.5f;
@@ -382,7 +385,7 @@ float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr
     // white_clip = max(100.f, PreTonemapSliders(white_clip).x);
     // if (white_clip != 100.f) untonemapped_bt709 = ReinhardPiecewiseExtendedMaxCLL(untonemapped_bt709, 4.f, 100.f, white_clip);
 
-    float3 output_color = renodx::color::bt709::from::AP1(VanillaSDRTonemapper(renodx::color::ap1::from::BT709(untonemapped_bt709), params));
+    float3 output_color = renodx::color::bt709::from::AP1(VanillaSDRTonemapper(renodx::color::ap1::from::BT709(untonemapped_bt709), params, -1, is_sdr));
     //output_color = PostTonemapSliders(output_color);
     return renodx::color::ap1::from::BT709(output_color);
   } else if (RENODX_TONE_MAP_TYPE == 0.f) {
@@ -393,10 +396,10 @@ float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr
   float by_luminance_peak = 100.f;
 
   float y_in = renodx::color::y::from::BT709(untonemapped_bt709);
-  float y_out = VanillaSDRTonemapper(y_in, params, by_luminance_peak).x;
+  float y_out = VanillaSDRTonemapper(y_in, params, by_luminance_peak, is_sdr).x;
   float3 tonemapped_bt709_lum = renodx::color::correct::Luminance(untonemapped_bt709, y_in, y_out);
 
-  float3 tonemapped_bt2020_ch = VanillaSDRTonemapper(renodx::color::bt2020::from::BT709(untonemapped_bt709), params, per_channel_peak);
+  float3 tonemapped_bt2020_ch = VanillaSDRTonemapper(renodx::color::bt2020::from::BT709(untonemapped_bt709), params, per_channel_peak, is_sdr);
   float3 tonemapped_bt709_ch = renodx::color::bt709::from::BT2020(tonemapped_bt2020_ch);
 
   // tonemapped_bt709_ch = lerp(tonemapped_bt709_ch, tonemapped_bt709_lum, CUSTOM_SATURATION_CORRECTION);
