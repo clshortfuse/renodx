@@ -40,7 +40,8 @@ float3 SampleLUT(float3 color_linear, Texture3D<float4> lut, SamplerState lut_sa
   lut_config.tetrahedral = true;
   lut_config.type_input = renodx::lut::config::type::GAMMA_2_2;
   lut_config.type_output = renodx::lut::config::type::GAMMA_2_2;
-  lut_config.scaling = 1.f;
+  lut_config.scaling = CUSTOM_LUT_SCALING;
+  lut_config.strength = CUSTOM_LUT_STRENGTH;
 
   color_linear = renodx::lut::Sample(
       lut,
