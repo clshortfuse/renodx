@@ -29,7 +29,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "WARNING: Adjusting sliders in this section does not work in real time.\n"
-                 "Toggle HDR off and on again after making changes to apply them.",
+                 "Toggle HDR off and on again after making changes to apply them in full.",
         .section = "Tone Mapping",
         .tint = 0xFFBF33,
     },
