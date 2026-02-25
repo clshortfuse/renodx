@@ -404,8 +404,11 @@ float3 CustomTonemap(float3 untonemapped, CustomTonemapParam params, bool is_sdr
 
   // tonemapped_bt709_ch = lerp(tonemapped_bt709_ch, tonemapped_bt709_lum, CUSTOM_SATURATION_CORRECTION);
 
-  float3 hdr_color_bt709 = renodx::color::correct::Chrominance(tonemapped_bt709_lum, tonemapped_bt709_ch, 1.f, 0.f, 1);
-  hdr_color_bt709 = renodx::color::correct::Hue(hdr_color_bt709, tonemapped_bt709_ch, 1, 1);
+  float strength = RENODX_TONE_MAP_TYPE == 1.f ? 1.f : 0.f;
+  //float strength = 1.f;
+
+  float3 hdr_color_bt709 = renodx::color::correct::Chrominance(tonemapped_bt709_lum, tonemapped_bt709_ch, strength, 0.f, 1);
+  hdr_color_bt709 = renodx::color::correct::Hue(hdr_color_bt709, tonemapped_bt709_ch, strength, 1);
 
   // hdr_color_bt709 = PostTonemapSliders(hdr_color_bt709);
 

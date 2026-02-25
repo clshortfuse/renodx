@@ -238,7 +238,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "Neutwo"},
+        .labels = {"Vanilla", "Neutwo", "PsychoTM (Experimental)"},
         //.is_enabled = []() { return last_is_hdr; },
         .parse = [](float value) { return value; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
