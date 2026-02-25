@@ -289,6 +289,105 @@ float3 PostTonemapSliders(float3 hdr_color) {
   return ApplySaturationBlowoutHighlightSaturation(hdr_color, y, config);
 }
 
+// PsychoTM Beta4 (With N2 Per-Channel -- Neutral) [displaymap only]
+// Basically N2 "By Luminosity"
+float3 psychotm_test4_onlymap(
+    float3 bt709_linear_input,
+    float peak_value = 1000.f / 203.f,
+    float hue_restore = 0.f) {
+  const float kEps = 1e-6f;
+  float3 bt2020 = renodx::color::bt2020::from::BT709(bt709_linear_input * 1.f);  // Used to be exposure, hardcoded to 1.f
+  static const float3x3 XYZ_TO_LMS_2006 = renodx::color::XYZ_TO_STOCKMAN_SHARP_LMS_MAT;
+  static const float3x3 XYZ_FROM_LMS_2006 = renodx::math::Invert3x3(XYZ_TO_LMS_2006);
+
+  // Match BT709WithBT2020 slider behavior for brightness-domain controls.
+  float3 midgray_xyz = renodx::color::xyz::from::BT2020(0.18f);
+  float3 midgray_lms = mul(XYZ_TO_LMS_2006, midgray_xyz);
+  float mid_gray_luminosity = 1.55f * midgray_lms.x + midgray_lms.y;
+
+  float3 color_xyz = renodx::color::xyz::from::BT2020(bt2020);
+  float3 color_lms = mul(XYZ_TO_LMS_2006, color_xyz);
+  float current_luminosity = 1.55f * color_lms.x + color_lms.y;
+  float luminosity = current_luminosity;
+
+  float luminosity_scale = renodx::math::DivideSafe(luminosity, current_luminosity, 1.f);
+  bt2020 *= luminosity_scale;
+
+  // Fixed white basis: D65.
+  float3 lms_raw = mul(XYZ_TO_LMS_2006, renodx::color::xyz::from::BT2020(bt2020));
+  float3 lms_white = mul(XYZ_TO_LMS_2006, renodx::color::xyz::from::BT2020(1.f));
+  float vstar_white = 1.55f * lms_white.x + lms_white.y;
+  float3 midgray_lms_anchor = lms_white * 0.18f;
+
+  float3 lms_raw_source = lms_raw;
+
+  float3 lms = lms_raw;
+
+  // // Fixed white curve: Naka-Rushton to peak, per LMS channel (inline equation).
+  // float3 lms_peak = lms_white * peak_value;
+  // float exponent_tone = max(cone_response_exponent, kEps);
+  // float3 p = max(lms_peak, kEps.xxx);
+  // float3 g = clamp(midgray_lms_anchor, kEps.xxx, p - kEps.xxx);
+  // float3 n = exponent_tone * p / max(p - g, kEps.xxx);
+  // float3 sign_lms = float3(
+  //     lms.x < 0.f ? -1.f : 1.f,
+  //     lms.y < 0.f ? -1.f : 1.f,
+  //     lms.z < 0.f ? -1.f : 1.f);
+  // float3 ax_lms = abs(lms);
+  // float3 sigma_n = pow(g, n - 1.f) * (p - g);
+  // float3 x_n = pow(ax_lms, n);
+  // float3 y = p * (x_n / max(x_n + sigma_n, kEps.xxx));
+  // float3 lms_toned = sign_lms * y;
+
+  // Trying out Per-Channel N2 in LMS
+  float3 lms_peak = lms_white * peak_value;
+  float3 peak = max(lms_peak, kEps.xxx);
+  float3 sign_lms = float3(
+      lms.x < 0.f ? -1.f : 1.f,
+      lms.y < 0.f ? -1.f : 1.f,
+      lms.z < 0.f ? -1.f : 1.f);
+  float3 abs_lms = abs(lms);
+  float3 n2_lms = renodx::tonemap::neutwo::PerChannel(abs_lms, peak);
+  float3 lms_toned = sign_lms * n2_lms;
+
+  // Inline hue-preserve after tonemap.
+  if (hue_restore > 0.f) {
+    float vstar_source = 1.55f * lms.x + lms.y;
+    float vstar_target = 1.55f * lms_toned.x + lms_toned.y;
+    float3 lms_white_source = lms_white * renodx::math::DivideSafe(vstar_source, vstar_white, 0.f);
+    float3 lms_white_target = lms_white * renodx::math::DivideSafe(vstar_target, vstar_white, 0.f);
+    float3 dir_source = lms - lms_white_source;
+    float3 dir_target = lms_toned - lms_white_target;
+    float len_source = length(dir_source);
+    float len_target = length(dir_target);
+    if (len_source > 0.f && len_target > 0.f) {
+      float chroma_scale = renodx::math::DivideSafe(len_target, len_source, 0.f);
+      float3 lms_hue_preserved = lms_white_target + dir_source * chroma_scale;
+      lms_toned = lerp(lms_toned, lms_hue_preserved, hue_restore);
+    }
+  }
+
+  float3 bt2020_toned = renodx::color::bt2020::from::XYZ(mul(XYZ_FROM_LMS_2006, lms_toned));
+  // bt2020_toned = BT2020MapAnyToBoundsLMS(bt2020_toned, 0.f);
+  return renodx::color::bt709::from::BT2020(bt2020_toned);
+}
+
+float3 ProcessDisplayMap(float3 color, float white_clip, float peak) {
+  float3 outputColor = color;
+  if (RENODX_TONE_MAP_TYPE == 1.f) {
+    color = max(0, renodx::color::bt2020::from::BT709(color));
+    white_clip = max(100.f, white_clip);
+    outputColor = renodx::tonemap::neutwo::MaxChannel(color, peak, white_clip);
+    outputColor = renodx::color::bt709::from::BT2020(outputColor);
+    // outputColor = psychotm_test4_onlymap(color, tonemap_peak);
+  } else if (RENODX_TONE_MAP_TYPE == 2.f) {
+    // outputColor = renodx::tonemap::neutwo::MaxChannel(color, tonemap_peak, white_clip);
+    outputColor = psychotm_test4_onlymap(color, peak);
+  }
+
+  return outputColor;
+}
+
 float3 DisplayMap(float3 color, float white_clip) {
   renodx::draw::Config config = renodx::draw::BuildConfig();  // Pulls config values
 
@@ -302,20 +401,14 @@ float3 DisplayMap(float3 color, float white_clip) {
   //peak_nits = renodx::color::correct::GammaSafe(peak_nits);
   //diffuse_white_nits = renodx::color::correct::GammaSafe(diffuse_white_nits);
 
-  color = max(0, renodx::color::bt2020::from::BT709(color));
+  
   float tonemap_peak = peak_nits / diffuse_white_nits;
 
   if (CUSTOM_TONE_MAP_PARAMETERS == 0) {
     tonemap_peak = renodx::color::correct::GammaSafe(tonemap_peak, true);
   }
 
-  float3 outputColor = color;
-  if (RENODX_TONE_MAP_TYPE == 1.f) {
-    white_clip = max(100.f, white_clip);
-    outputColor = renodx::tonemap::neutwo::MaxChannel(color, tonemap_peak, white_clip);
-  }
-
-  outputColor = renodx::color::bt709::from::BT2020(outputColor);
+  float3 outputColor = ProcessDisplayMap(color, white_clip, tonemap_peak);
 
   if (CUSTOM_TONE_MAP_PARAMETERS == 0) {
     outputColor = renodx::color::correct::GammaSafe(outputColor);
@@ -333,14 +426,7 @@ float3 SDRDisplayMap(float3 color, float white_clip) {
     peak = renodx::color::correct::GammaSafe(peak, false);
   }
 
-  color = max(0, renodx::color::bt2020::from::BT709(color));
+  float3 outputColor = ProcessDisplayMap(color, white_clip, peak);
 
-  float3 outputColor = color;
-  if (RENODX_TONE_MAP_TYPE == 1.f) {
-    white_clip = max(20.f, white_clip);
-    outputColor = renodx::tonemap::neutwo::MaxChannel(color, peak, white_clip);
-  }
-
-  outputColor = renodx::color::bt709::from::BT2020(outputColor);
   return outputColor;
 }
