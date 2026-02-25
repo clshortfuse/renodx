@@ -6,6 +6,10 @@
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
+//#define DEBUG_LEVEL_1
+//#define DEBUG_LEVEL_2
+
+#define RENODX_MODS_SWAPCHAIN_VERSION 2
 
 #include <embed/shaders.h>
 
@@ -119,6 +123,8 @@ int draw_counter = 0;  // Count draws to only run the check after a number of fr
       },                                  \
   }
 
+  float blurred_luminance = 1;
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Outputs
     OutputShaderEntry(0xE73DF341),
@@ -172,25 +178,25 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     FogShaderEntry(0xA109191F),
     FogShaderEntry(0x1DDF8C9F),
 
-    // // Sharpening (Bypass)
-    // {
-    //     0x243CA65C,
-    //     {
-    //         .crc32 = 0x243CA65C,
-    //         .on_draw = [](auto* cmd_list) {
-    //           return false;
-    //         },
-    //     },
-    // },
-    // {
-    //     0x87077D36,
-    //     {
-    //         .crc32 = 0x87077D36,
-    //         .on_draw = [](auto* cmd_list) {
-    //           return false;
-    //         },
-    //     },
-    // },
+    // Sharpening (Bypass)
+    {
+        0x243CA65C,
+        {
+            .crc32 = 0x243CA65C,
+            .on_draw = [](auto* cmd_list) {
+              return blurred_luminance == 1.f;
+            },
+        },
+    },
+    {
+        0x87077D36,
+        {
+            .crc32 = 0x87077D36,
+            .on_draw = [](auto* cmd_list) {
+              return blurred_luminance == 1.f;
+            },
+        },
+    },
 };
 
 const std::string build_date = __DATE__;
@@ -337,6 +343,18 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
+      new renodx::utils::settings::Setting{
+        .key = "FxBlurredLuminance",
+        .binding = &blurred_luminance,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .can_reset = true,
+        .label = "Local Exposure Blurred Luminance",
+        .section = "Scene Grading",
+        .tooltip = "Component of local exposure that presents like a sharpening filter. On = Vanilla.",
+        .labels = {"Off", "On"},
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
     new renodx::utils::settings::Setting{
         .key = "FxLocalExposureHighlights",
         .binding = &shader_injection.custom_local_exposure_highlights,
@@ -371,7 +389,7 @@ renodx::utils::settings::Settings settings = {
         .can_reset = true,
         .label = "Local Exposure Detail",
         .section = "Scene Grading",
-        .tooltip = "Interpolates between no local contrast enhancement and vanilla local contrast enhancement. Causes severe ringing artifacts, especially in HDR.\n100 = Vanilla",
+        .tooltip = "Interpolates between no local contrast enhancement and vanilla local contrast enhancement. Causes severe ringing artifacts with blurred luminance, especially in HDR.\n100 = Vanilla",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
@@ -668,7 +686,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Missing Fog shaders. This could be caused by a mod conflict or game update, but it could also be absent from this scene.\nIf status says GOOD, then the fog shader has been detected previously.",
+        .label = "Missing Fog shaders. If RT is off, this is expected (for now). This could be caused by a mod conflict or game update, but it could also be absent from this scene.\nIf status says GOOD, then the fog shader has been detected previously.",
         .section = "Mod Compatibility Check",
         .is_visible = []() { return draw_warning_no_fog_shader; },
     },
@@ -866,7 +884,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       // while (IsDebuggerPresent() == 0) Sleep(100);
 
       if (!initialized) {
-        renodx::mods::swapchain::SetUseHDR10(true);
+        //renodx::mods::swapchain::SetUseHDR10(true);
         renodx::utils::random::binds.push_back(&shader_injection.custom_random);
         renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
 
@@ -910,10 +928,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::shader::force_pipeline_cloning = true;
 
-      /* renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      renodx::mods::swapchain::use_resize_buffer = true;
+      renodx::mods::swapchain::use_resize_buffer_on_demand = true;
+
+       renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r11g11b10_float,
           .new_format = reshade::api::format::r16g16b16a16_float,
-      }); */
+          .aspect_ratio = -1.f,
+          //.aspect_ratio_tolerance = 0.01f,
+      });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
@@ -928,7 +951,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::random::Use(fdw_reason);
-  // renodx::utils::swapchain::Use(fdw_reason);
+  //renodx::utils::swapchain::Use(fdw_reason);
   // renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
