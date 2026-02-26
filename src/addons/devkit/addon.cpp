@@ -2382,6 +2382,27 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
                   details += " | Logic Op";
                 }
                 ImGui::TextUnformatted(details.c_str());
+                if (ImGui::IsItemHovered()) {
+                  std::stringstream tooltip;
+                  tooltip << "Matched Label: " << details << "\n";
+                  tooltip << "BlendEnable: " << (blend_enable ? "true" : "false") << "\n";
+                  tooltip << "ColorOp: " << color_blend_op << "\n";
+                  tooltip << "SrcColor: " << source_color_blend_factor << "\n";
+                  tooltip << "DstColor: " << dest_color_blend_factor << "\n";
+                  tooltip << "AlphaOp: " << alpha_blend_op << "\n";
+                  tooltip << "SrcAlpha: " << source_alpha_blend_factor << "\n";
+                  tooltip << "DstAlpha: " << dest_alpha_blend_factor << "\n";
+                  tooltip << "WriteMask: 0x" << std::hex << static_cast<uint32_t>(render_target_write_mask) << std::dec << "\n";
+                  tooltip << "AlphaToCoverage: " << (alpha_to_coverage_enable ? "true" : "false") << "\n";
+                  tooltip << "LogicOpEnable: " << (logic_op_enable ? "true" : "false") << "\n";
+                  tooltip << "LogicOp: " << logic_op << "\n";
+                  tooltip << "BlendConst: ("
+                          << blend_constant[0] << ", "
+                          << blend_constant[1] << ", "
+                          << blend_constant[2] << ", "
+                          << blend_constant[3] << ")";
+                  ImGui::SetItemTooltip("%s", tooltip.str().c_str());
+                }
               }
             }
           }
