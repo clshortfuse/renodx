@@ -15,6 +15,7 @@
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "./shared.h"
 
 namespace {
 
@@ -51,6 +52,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 };
 
+#if USE_SHADER_TOGGLE
 namespace shader_toggle {
 namespace runtime {
 float g_use_shaders = 1.f;          // Controlled by slider
@@ -115,9 +117,12 @@ renodx::utils::settings::Setting* GetSetting() {
 }
 }  // namespace runtime
 }  // namespace shader_toggle
+#endif
 
 renodx::utils::settings::Settings settings = {
+#if USE_SHADER_TOGGLE
     shader_toggle::runtime::GetSetting(),
+#endif
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "RenoDX Discord",
@@ -198,10 +203,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::settings::use_presets = false;
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::utils::shader::use_replace_async = true;
+#if USE_SHADER_TOGGLE
       shader_toggle::runtime::RegisterEvents();
+#endif
       break;
     case DLL_PROCESS_DETACH:
+#if USE_SHADER_TOGGLE
       shader_toggle::runtime::UnregisterEvents();
+#endif
       reshade::unregister_addon(h_module);
       break;
   }
