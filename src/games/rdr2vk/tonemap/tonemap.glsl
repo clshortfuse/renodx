@@ -117,6 +117,18 @@ vec3 ReinhardPiecewise(vec3 x, float x_max, float shoulder) {
   return mix(x, tonemapped, step(vec3(shoulder), x));
 }
 
+vec3 InverseReinhardScalablePiecewise(vec3 color, float channel_max, float shoulder) {
+  float channel_min = 0.0;
+  float exposure = (channel_max * (channel_min * shoulder + channel_min - shoulder))
+                   / (shoulder * (shoulder - channel_max));
+
+  vec3 numerator = -channel_max * (channel_min * color + channel_min - color);
+  vec3 denominator = exposure * (vec3(channel_max) - color);
+  vec3 inversed = DivideSafe(numerator, denominator, vec3(65504.0));
+
+  return mix(color, inversed, step(vec3(shoulder), color));
+}
+
 // f_p(x) = (p * x) / sqrt(x*x + p*p)
 float Neutwo(float x, float peak) {
   float p = peak;
@@ -129,6 +141,20 @@ float Neutwo(float x, float peak) {
 float Neutwo(float x) {
   float numerator = x;
   float denominator_squared = fma(x, x, 1.0);
+  return numerator * inversesqrt(denominator_squared);
+}
+
+// f_ci(x) = (c * p * x) / sqrt(-x*x*(c*c - p*p) + (c*c * p*p))
+vec3 Neutwo_Inverse(vec3 x, float peak, float clip) {
+  float p = peak;
+  float c = clip;
+  float cc = c * c;
+  float pp = p * p;
+  vec3 xx = x * x;
+
+  vec3 numerator = (c * p) * x;
+  vec3 denominator_squared = fma(-xx, vec3(cc - pp), vec3(cc * pp));
+
   return numerator * inversesqrt(denominator_squared);
 }
 

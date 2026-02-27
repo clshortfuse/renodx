@@ -42,7 +42,7 @@ void frag_main() {
 
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     SV_Target.rgb = _71.rgb;
-    const float sdr_peak = 0.9525f;
+    const float sdr_peak = 0.95f;
     SV_Target.rgb = InverseReinhardScalablePiecewise(SV_Target.rgb, sdr_peak, 0.4f);
 
     float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;

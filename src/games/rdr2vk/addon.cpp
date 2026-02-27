@@ -54,6 +54,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xA383C448),
     CustomShaderEntry(0xBCF843ED),
     CustomShaderEntry(0xFCD82342),
+
+    // calibration
+    CustomShaderEntry(0x129329C7),
+    CustomShaderEntry(0xB17FDFCC),
 };
 
 void OnPresent(
