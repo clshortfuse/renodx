@@ -128,8 +128,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Scaling",
         .section = "Tone Mapping",
-        .tooltip = "Luminance scales colors consistently while per-channel blows out and hue shifts",
-        .labels = {"Luminance", "Per Channel"},
+        .tooltip = "Luminosity scales colors consistently while per-channel blows out and hue shifts",
+        .labels = {"Luminosity", "Per Channel"},
         .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
     },
     new renodx::utils::settings::Setting{
@@ -384,7 +384,8 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Requires HDR on in game"),
+        .label = std::string("- Requires Vulkan, Exclusive Fullscreen, and HDR on in game.\n"
+                             "- Make sure to closely read installation instructions."),
         .section = "About",
     },
 };
@@ -392,7 +393,7 @@ renodx::utils::settings::Settings settings = {
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
-      {"ToneMapPeakNits", 203.f},
+      {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
       {"GammaCorrection", 0.f},
@@ -415,8 +416,6 @@ void OnPresetOff() {
       {"CustomLUTEncoding", 0.f},
   });
 }
-
-bool fired_on_init_swapchain = false;
 
 bool initialized = false;
 
