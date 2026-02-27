@@ -61,6 +61,8 @@ void main() {
     _123 = _110;
     _124 = _102;
   }
-  _5 = vec4(mix(_124, _123, vec3(_77)), 1.0);
+  _5 = vec4(mix(_124, _123, vec3(_77)), 1.0);
+
+  _5.rgb = ApplyGradingAndDisplayMap(_5.rgb, _4.xy);
 }
 
