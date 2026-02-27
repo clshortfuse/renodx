@@ -1,7 +1,6 @@
 #include "./macleod_boynton.glsl"
 #include "./shared.h"
 
-
 // START INCLUDES
 
 // --- sRGB ENCODING ---
@@ -130,6 +129,9 @@ vec2 DivideSafe(vec2 a, vec2 b, vec2 fallback) {
 }
 vec2 DivideSafe(vec2 a, vec2 b) {
   return DivideSafe(a, b, vec2(3.4028235e38));
+}
+vec3 DivideSafe(vec3 a, vec3 b, vec3 fallback) {
+  return vec3(DivideSafe(a.x, b.x, fallback.x), DivideSafe(a.y, b.y, fallback.y), DivideSafe(a.z, b.z, fallback.z));
 }
 
 // END INCLUDES
