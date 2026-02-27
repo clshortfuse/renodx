@@ -534,10 +534,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
 
   renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
-  renodx::utils::settings::UpdateSetting("FxChromaticAberration", 100.f);
-  renodx::utils::settings::UpdateSetting("FxVignette", 100.f);
-  renodx::utils::settings::UpdateSetting("FxSharpening", 100.f);
-  renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
+  renodx::utils::settings::UpdateSetting("FxFilmGrainType", 0.f);
+  renodx::utils::settings::UpdateSetting("FxFilmGrain", 100.f);
   renodx::utils::settings::UpdateSetting("FxVideoITM", 0.f);
   renodx::utils::settings::UpdateSetting("FxDebanding", 0.f);
 }
@@ -627,6 +625,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .aspect_ratio = 16.f/9.f,
           .aspect_ratio_tolerance = 0.001f,
       });
+      //           renodx::mods::swapchain::resource_upgrade_infos.push_back({
+      //     .old_format = reshade::api::format::r8g8b8a8_unorm,
+      //     .new_format = reshade::api::format::r16g16b16a16_float,
+      //     .ignore_size = true,
+      //     .use_resource_view_cloning = true,
+      //     //.dimensions = {.width=renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER, .height=renodx::utils::resource::ResourceUpgradeInfo::ANY},
+      // });
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
