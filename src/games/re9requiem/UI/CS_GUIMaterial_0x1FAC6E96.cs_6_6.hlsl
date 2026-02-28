@@ -344,5 +344,14 @@ void main(
     }
   }
   float4 _188 = GUIImage.SampleLevel(PointClamp, float2(_46, _47), 0.0f);
+
+#if 1
+  if (TONE_MAP_TYPE != 0.f) {
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      _188.rgb = renodx::color::correct::GammaSafe(_188.rgb);
+    }
+  }
+#endif
+
   RWResult[int2(((int)(min16uint)(_33)), ((int)(min16uint)(_38)))] = float3(_188.x, _188.y, _188.z);
 }
