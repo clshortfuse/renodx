@@ -50,14 +50,15 @@ void main(
   r0.xy = r0.xy * r0.zz;
   r1.xyzw = t0.SampleLevel(s1_s, v1.xy, 0).xyzw;
   r1.xyz = float3(1,0,0) * r1.xyz;
+  float ca_strength = CHROMATIC_ABERRATION_STRENGTH;
   r0.z = cmp(3 < cb1[25].x);
   if (r0.z != 0) {
     r2.xy = cmp(float2(0,0) != cb1[25].wz);
     r0.z = (int)r2.y | (int)r2.x;
     r2.xy = r0.xy * r0.ww;
     r2.xy = r0.zz ? r2.xy : r0.xy;
-    r0.z = cb1[25].y + cb1[0].z;
-    r2.z = cb1[25].y + cb1[25].y;
+    r0.z = cb1[25].y * ca_strength + cb1[0].z;
+    r2.z = cb1[25].y * ca_strength + cb1[25].y * ca_strength;
     r3.xyzw = cb1[25].yyyy * float4(3,3,4,4);
     r4.xy = -r2.xy * r0.zz + v1.xy;
     r4.xyz = t0.SampleLevel(s1_s, r4.xy, 0).xyz;
@@ -66,10 +67,10 @@ void main(
     r5.xy = -r2.xy * r0.zz + v1.xy;
     r5.xyz = t0.SampleLevel(s1_s, r5.xy, 0).xyz;
     r4.xyz = r5.xyz * float3(1,0,0) + r4.xyz;
-    r5.xy = -r2.xy * cb1[25].yy + v1.xy;
+    r5.xy = -r2.xy * cb1[25].yy * ca_strength + v1.xy;
     r5.xyz = t0.SampleLevel(s1_s, r5.xy, 0).xyz;
     r4.xyz = r5.xyz * float3(0,1,0) + r4.xyz;
-    r0.z = cb1[25].y * 2 + cb1[0].z;
+    r0.z = cb1[25].y * ca_strength * 2 + cb1[0].z;
     r5.xy = -r2.xy * r0.zz + v1.xy;
     r5.xyz = t0.SampleLevel(s1_s, r5.xy, 0).xyz;
     r4.xyz = r5.xyz * float3(0,1,0) + r4.xyz;
@@ -80,7 +81,7 @@ void main(
     r2.zw = -r2.xy * r2.zz + v1.xy;
     r5.xyz = t0.SampleLevel(s1_s, r2.zw, 0).xyz;
     r4.xyz = r5.xyz * float3(0,0,1) + r4.xyz;
-    r0.z = cb1[25].y * 3 + cb1[0].z;
+    r0.z = cb1[25].y * ca_strength * 3 + cb1[0].z;
     r2.xy = -r2.xy * r0.zz + v1.xy;
     r2.xyz = t0.SampleLevel(s1_s, r2.xy, 0).xyz;
     r2.xyz = r2.xyz * float3(0,0,1) + r4.xyz;
@@ -91,12 +92,12 @@ void main(
     r0.z = cmp(0.000000 != cb1[25].w);
     r3.xy = r0.xy * r0.ww;
     r0.xy = r0.zz ? r3.xy : r0.xy;
-    r0.z = cb1[25].y * 2 + cb1[0].z;
+    r0.z = cb1[25].y * ca_strength * 2 + cb1[0].z;
     r0.zw = -r0.xy * r0.zz + v1.xy;
     r3.xyz = t0.SampleLevel(s1_s, r0.zw, 0).xyz;
     r1.xyz = r3.xyz * float3(0,1,0) + r1.xyz;
     r0.z = cb1[0].z + cb1[0].z;
-    r0.z = cb1[25].y * 3 + r0.z;
+    r0.z = cb1[25].y * ca_strength * 3 + r0.z;
     r0.xy = -r0.xy * r0.zz + v1.xy;
     r0.xyz = t0.SampleLevel(s1_s, r0.xy, 0).xyz;
     r2.xyz = r0.xyz * float3(0,0,1) + r1.xyz;
@@ -286,29 +287,12 @@ void main(
     o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   }
   */
-  renodx::lut::Config lut_config = renodx::lut::config::Create(
-      s1_s,
-      shader_injection.color_grade_strength,
-      0.f,
-      renodx::lut::config::type::ARRI_C1000_NO_CUT,
-      renodx::lut::config::type::LINEAR,
-      cb1[7].xyz
-    );
-  float3 graded = renodx::lut::Sample(t2, lut_config, r0.yzx);
-  
+  LUTSampleResult lut_sample = LUTSAMPLE(s1_s, cb1[7].xyz, t2, r0.yzx);
   [branch]
   if (shader_injection.tone_map_type == 0.f) {
-    o0.xyz = renodx::tonemap::ExponentialRollOff(max(0, graded), 0.18f, 1.f);
+    o0.xyz = SDRGRADE(lut_sample);
   } else {
-    UserGradingConfig cg_config = CreateColorGradeConfig();
-    float y = renodx::color::y::from::BT709(graded);
-    float3 graded_ap1 = renodx::color::ap1::from::BT709(graded);
-    float3 hue_chrominance_reference_color = renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 0.18f));
-    float3 graded_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(graded, y, cg_config);
-    o0.xyz = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded_bt709, hue_chrominance_reference_color, y, cg_config);
-    o0.xyz = renodx::color::bt2020::from::BT709(o0.xyz);
-    o0.xyz = ApplyHermiteSplineByMaxChannel(o0.xyz, shader_injection.peak_white_nits / shader_injection.diffuse_white_nits);
-    o0.xyz = renodx::color::bt709::from::BT2020(o0.xyz);
+    o0.xyz = HDRGRADE(lut_sample);
   }
   // Apply vignette after tonemapping
   o0.xyz *= vignette_value;

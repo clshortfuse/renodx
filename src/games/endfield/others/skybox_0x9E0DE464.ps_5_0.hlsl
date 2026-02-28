@@ -567,6 +567,14 @@ void main(
   r2.xyz = r4.xyz * r2.xyz;
   r2.xyz = r2.xyz * r1.yyy + r3.yzw; 
   o0.xyz = r0.xyz * r1.xzw + r2.xyz;
+  
+  // ==========================================================================
+  // SKYBOX DESATURATION (50%) — Tech Test Look
+  // ==========================================================================
+  if (TECH_TEST_LOOK > 0.5f) {
+    float skyboxLuma = dot(o0.xyz, float3(0.2126f, 0.7152f, 0.0722f));
+    o0.xyz = lerp(o0.xyz, float3(skyboxLuma, skyboxLuma, skyboxLuma), 0.5f);
+  }
 
   // ==========================================================================
   // VELOCITY BUFFER OUTPUT (for motion blur / TAA)
