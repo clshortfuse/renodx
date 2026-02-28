@@ -89,6 +89,15 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
+        .key = "UIVisibility",
+        .binding = &shader_injection.custom_ui_visibility,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "UI Visibility",
+        .section = "UI",
+        .labels = {"Hide", "Show"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,
         .default_value = 1.f,
@@ -119,7 +128,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 75.f,
+        .default_value = 85.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
@@ -300,6 +309,7 @@ void OnPresetOff() {
       {"ToneMapGameNits", 203.f},
       {"GammaCorrection", 0.f},
       {"ToneMapUINits", 203.f},
+      {"UIVisibility", 1.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeGamma", 1.f},
       {"ColorGradeHighlights", 50.f},
