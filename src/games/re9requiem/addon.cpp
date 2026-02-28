@@ -89,6 +89,17 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
+        .key = "UIGammaCorrection",
+        .binding = &shader_injection.gamma_correction_ui,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "UI SDR EOTF Emulation",
+        .section = "UI",
+        .tooltip = "Emulates a 2.2 EOTF for the UI",
+        .labels = {"Off", "2.2"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "UIVisibility",
         .binding = &shader_injection.custom_ui_visibility,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -227,7 +238,7 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Match SDR",
         .section = "Options",
-        .group = "button-line-1",
+        .group = "button-line-0",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
@@ -309,6 +320,7 @@ void OnPresetOff() {
       {"ToneMapGameNits", 203.f},
       {"GammaCorrection", 0.f},
       {"ToneMapUINits", 203.f},
+      {"UIGammaCorrection", 0.f},
       {"UIVisibility", 1.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeGamma", 1.f},

@@ -53,7 +53,7 @@ float4 main(
   float4 _9 = inputTexture.Load(int3((uint)(uint(SV_Position.x)), (uint)(uint(SV_Position.y)), 0));
 
   if (TONE_MAP_TYPE != 0.f) {
-    if (RENODX_GAMMA_CORRECTION != 0.f) {
+    if (RENODX_GAMMA_CORRECTION_UI != 0.f) {
       _9.rgb = renodx::color::correct::GammaSafe(_9.rgb);
     }
   }

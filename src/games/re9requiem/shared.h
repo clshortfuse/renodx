@@ -1,14 +1,16 @@
 #ifndef SRC_RE9REQUIEM_SHARED_H_
 #define SRC_RE9REQUIEM_SHARED_H_
 
-#define UPGRADE_FP11                     0
-#define SKIP_LUTS                        0
-#define SKIP_TONEMAP                     0
-#define SKIP_OCIO_LUT                    0
-#define RENODX_LUT_SHAPER                0
-#define APPLY_HIGHLIGHT_BOOST            1
-#define RENODX_CUSTOM_EXPOSURE           0.76
-#define RENODX_CUSTOM_HIGHLIGHT_CONTRAST 1.1f
+#define UPGRADE_FP11                        0
+#define SKIP_LUTS                           0
+#define SKIP_TONEMAP                        0
+#define SKIP_OCIO_LUT                       0
+#define RENODX_LUT_SHAPER                   0.f
+#define APPLY_HIGHLIGHT_BOOST               2
+#define RENODX_CUSTOM_EXPOSURE              0.76
+#define RENODX_CUSTOM_HIGHLIGHT_CONTRAST    1.1f
+#define RENODX_TONE_MAP_PEAK_SCALING        1.f
+#define RENODX_TONE_MAP_BLACK_FLOOR_SCALING 1.f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -19,6 +21,7 @@ struct ShaderInjectData {
   float gamma_correction;
 
   float graphics_white_nits;
+  float gamma_correction_ui;
   float custom_ui_visibility;
 
   float tone_map_exposure;
@@ -50,6 +53,7 @@ cbuffer cb13 : register(b0, space50) {
 #define RENODX_GAMMA_CORRECTION   shader_injection.gamma_correction
 
 #define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
+#define RENODX_GAMMA_CORRECTION_UI shader_injection.gamma_correction_ui
 #define CUSTOM_SHOW_UI             shader_injection.custom_ui_visibility
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure

@@ -78,6 +78,7 @@ void main(
   float _312;
   float _313;
   float _500;
+#if 0
   if (!(!(_14 <= -0.3013699948787689f))) {
     _30 = (exp2((_11 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
   } else {
@@ -105,6 +106,17 @@ void main(
       _58 = 65504.0f;
     }
   }
+#else
+  if (RENODX_LUT_SHAPER == 0.f) {
+    _30 = renodx::color::acescc::Decode(_14);
+    _44 = renodx::color::acescc::Decode(_15);
+    _58 = renodx::color::acescc::Decode(_16);
+  } else {
+    _30 = renodx::color::pq::Decode(_14, 100.f);
+    _44 = renodx::color::pq::Decode(_15, 100.f);
+    _58 = renodx::color::pq::Decode(_16, 100.f);
+  }
+#endif
 
 #if 1
   SetExposureAndContrastForOCIOLUT(_30, _44, _58);
@@ -244,8 +256,7 @@ void main(
 
   if (TONE_MAP_TYPE != 0.f) {
     lut_output = renodx::color::pq::Decode(lut_output, 100.f);
-
-    if (true) {  // scale peak when lut is clamped
+    if (RENODX_TONE_MAP_PEAK_SCALING != 0.f) {  // scale peak when lut is clamped
       float3 lut_peak_output = renodx::color::pq::Decode(
           min(1.f, SampleOCIO(renodx::math::FLT16_MAX, renodx::math::FLT16_MAX, renodx::math::FLT16_MAX,
                               OCIO_lut1d_0, BilinearClamp, OCIO_lut3d_1, TrilinearClamp)),
@@ -259,6 +270,26 @@ void main(
       lut_output = lut_output_scaled;
     }
 
+    if (RENODX_TONE_MAP_BLACK_FLOOR_SCALING != 0.f) {
+      float3 lut_min = renodx::color::pq::Decode(
+          min(1.f, SampleOCIO(0.f, 0.f, 0.f,
+                              OCIO_lut1d_0, BilinearClamp, OCIO_lut3d_1, TrilinearClamp)),
+          100.f);
+
+      float3 lut_mid = renodx::color::pq::Decode(
+          min(1.f, SampleOCIO(lut_min.r, lut_min.g, lut_min.b,
+                              OCIO_lut1d_0, BilinearClamp, OCIO_lut3d_1, TrilinearClamp)),
+          100.f);
+
+      float3 unclamped_gamma = Unclamp(
+          renodx::color::gamma::EncodeSafe(lut_output),
+          renodx::color::gamma::EncodeSafe(lut_min),
+          renodx::color::gamma::EncodeSafe(lut_mid),
+          renodx::color::gamma::EncodeSafe(renodx::color::bt2020::from::AP1(float3(_30, _44, _58))));
+
+      lut_output = renodx::color::gamma::DecodeSafe(unclamped_gamma);
+    }
+
     if (RENODX_GAMMA_CORRECTION != 0.f) {
       lut_output = renodx::color::bt709::from::BT2020(lut_output);
       if (RENODX_GAMMA_CORRECTION == 2.f) {
@@ -268,7 +299,6 @@ void main(
       }
       lut_output = renodx::color::bt2020::from::BT709(lut_output);
     }
-    // lut_output = renodx::tonemap::neutwo::MaxChannel(lut_output, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
     lut_output = ApplyNeutwoByMaxChannel(
         max(0, lut_output), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS,
         100.f, 0.18f, 0.18f, 0.0001f / RENODX_DIFFUSE_WHITE_NITS);

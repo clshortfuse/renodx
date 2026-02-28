@@ -194,11 +194,9 @@ void main(
   float _324 = ((_312 * _166.z) + _309) + (_311 * _173.z);
 
   float3 output = float3(_322, _323, _324);
-  if (TONE_MAP_TYPE == 0.f || RENODX_GAMMA_CORRECTION == 0.f) {
-    output = renodx::color::srgb::DecodeSafe(output);
-  } else {
-    output = renodx::color::gamma::DecodeSafe(output);
-  }
+
+  output = renodx::color::srgb::DecodeSafe(output);
+
   if (CUSTOM_SHOW_UI != 0.f) {
     OutLUT[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = float4(output, 1.0f);
   }
