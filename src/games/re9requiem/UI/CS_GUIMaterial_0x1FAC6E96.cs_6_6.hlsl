@@ -116,6 +116,15 @@ void main(
   float _46 = (float((min16uint)_33) + 0.5f) * screenInverseSize.x;
   float _47 = (float((min16uint)_38) + 0.5f) * screenInverseSize.y;
   float4 _50 = GUIImage.SampleLevel(PointClamp, float2(_46, _47), 0.0f);
+
+#if 1
+  if (TONE_MAP_TYPE != 0.f) {
+    if (RENODX_GAMMA_CORRECTION_UI != 0.f) {
+      _50.rgb = renodx::color::correct::GammaSafe(_50.rgb);
+    }
+  }
+#endif
+
   float _71;
   float _72;
   float _73;
@@ -321,16 +330,6 @@ void main(
                   }
                   float _461 = 10000.0f / whitePaperNitsForOverlay;
 
-#if 1
-                  if (TONE_MAP_TYPE != 0.f) {
-                    if (RENODX_GAMMA_CORRECTION != 0.f) {
-                      _447 = renodx::color::correct::GammaSafe(_447);
-                      _448 = renodx::color::correct::GammaSafe(_448);
-                      _449 = renodx::color::correct::GammaSafe(_449);
-                    }
-                  }
-#endif
-
                   float _470 = exp2(log2(saturate(mad(0.04331360012292862f, _449, mad(0.3292819857597351f, _448, (_447 * 0.627403974533081f))) / _461)) * 0.1593017578125f);
                   float _482 = exp2(log2(saturate(mad(0.011361200362443924f, _449, mad(0.9195399880409241f, _448, (_447 * 0.06909699738025665f))) / _461)) * 0.1593017578125f);
                   float _494 = exp2(log2(saturate(mad(0.8955950140953064f, _449, mad(0.08801320195198059f, _448, (_447 * 0.01639159955084324f))) / _461)) * 0.1593017578125f);
@@ -350,7 +349,7 @@ void main(
 
 #if 1
   if (TONE_MAP_TYPE != 0.f) {
-    if (RENODX_GAMMA_CORRECTION != 0.f) {
+    if (RENODX_GAMMA_CORRECTION_UI != 0.f) {
       _188.rgb = renodx::color::correct::GammaSafe(_188.rgb);
     }
   }

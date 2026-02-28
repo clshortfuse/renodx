@@ -79,6 +79,7 @@ OutputSignature main(
   float _35;
   float _50;
   float _65;
+#if 0
   if (!(_18 <= 0.0f)) {
     if (_18 < 3.0517578125e-05f) {
       _35 = ((log2((_18 * 0.5f) + 1.52587890625e-05f) * 0.05707760155200958f) + 0.5547950267791748f);
@@ -106,7 +107,20 @@ OutputSignature main(
   } else {
     _65 = -0.35844698548316956f;
   }
+#else
+  if (RENODX_LUT_SHAPER == 0.f) {
+    _35 = renodx::color::acescc::Encode(_18);
+    _50 = renodx::color::acescc::Encode(_19);
+    _65 = renodx::color::acescc::Encode(_20);
+  } else {
+    _35 = renodx::color::pq::Encode(_18, 100.f);
+    _50 = renodx::color::pq::Encode(_19, 100.f);
+    _65 = renodx::color::pq::Encode(_20, 100.f);
+  }
+#endif
+
   float4 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f);
+  // float3 _74 = renodx::lut::SampleTetrahedral(SrcLUT, float3(_35, _50, _65), 64u);
 
 #if 1
   _74.rgb = ApplyFilmGrainPQInput(_74.rgb, TEXCOORD, whitePaperNits);
