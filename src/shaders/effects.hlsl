@@ -43,7 +43,7 @@ float3 ComputeFilmGraininess(float3 density) {
 
 }  // namespace internal
 
-float3 ApplyFilmGrain(float3 color, float2 xy, float seed, float strength, float reference_white = 1.f, bool debug = false) {
+float ComputeGrainedChange(float y, float2 xy, float seed, float strength, float reference_white = 1.f) {
   const float random_number = renodx::random::Generate(xy + seed);
 
   // Film grain is based on film density
@@ -53,9 +53,7 @@ float3 ApplyFilmGrain(float3 color, float2 xy, float seed, float strength, float
 
   // Scaling is not not linear
 
-  const float3 signs = renodx::math::Sign(color);
-  color = abs(color);
-  float color_y = renodx::color::y::from::BT709(color);
+  float color_y = y;
 
   const float adjusted_color_y = color_y * (1.f / reference_white);
 
@@ -71,22 +69,22 @@ float3 ApplyFilmGrain(float3 color, float2 xy, float seed, float strength, float
   const float boost = 1.667f;  // Boost max to 0.05
 
   const float y_change = random_factor * graininess * strength * boost;
-  float3 output_color = signs * color * (1.f + y_change);
+  return y_change;
+}
 
-  if (debug) {
-    // Output Visualization
-    output_color = abs(y_change);
-  }
-
-  return output_color;
+float3 ApplyFilmGrain(float3 color, float2 xy, float seed, float strength, float reference_white = 1.f, bool debug = false,
+                      float3x3 xyz_matrix = renodx::color::BT709_TO_XYZ_MAT) {
+  float y = dot(color, xyz_matrix[1].rgb);
+  float y_change = ComputeGrainedChange(y, xy, seed, strength, reference_white);
+  float y_new = debug ? abs(y_change) : y * (1.f + y_change);
+  return color * renodx::math::DivideSafe(y_new, y, 1.f);
 }
 
 float3 ApplyFilmGrainColored(float3 color, float2 xy, float3 seed, float strength, float reference_white = 1.f, bool debug = false) {
   const float3 random_numbers = float3(
-    renodx::random::Generate(xy + seed.r),
-    renodx::random::Generate(xy + seed.g),
-    renodx::random::Generate(xy + seed.b)
-  );
+      renodx::random::Generate(xy + seed.r),
+      renodx::random::Generate(xy + seed.g),
+      renodx::random::Generate(xy + seed.b));
 
   // Film grain is based on film density
   // Film works in negative, meaning black has no density
@@ -97,7 +95,7 @@ float3 ApplyFilmGrainColored(float3 color, float2 xy, float3 seed, float strengt
 
   float3 ap1_color = renodx::color::ap1::from::BT709(color);
   ap1_color = max(0, ap1_color);
-  
+
   // float color_y = renodx::color::y::from::AP1(color);
 
   const float3 adjusted_color = ap1_color * (1.f / reference_white);
@@ -108,7 +106,6 @@ float3 ApplyFilmGrainColored(float3 color, float2 xy, float3 seed, float strengt
   // Ideal film density matches 0-3. Skip emulating film stock
   // https://www.mr-alvandi.com/technique/measuring-film-speed.html
   const float3 density = adjusted_color * 3.f;
-
 
   float3 graininess = internal::ComputeFilmGraininess(density);
   // Graininess of all 3 layers (CMY)
