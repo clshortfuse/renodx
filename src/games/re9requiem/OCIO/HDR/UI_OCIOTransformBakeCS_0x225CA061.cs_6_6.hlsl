@@ -199,6 +199,7 @@ void main(
   } else {
     output = renodx::color::gamma::DecodeSafe(output);
   }
-
-  OutLUT[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = float4(output, 1.0f);
+  if (CUSTOM_SHOW_UI != 0.f) {
+    OutLUT[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = float4(output, 1.0f);
+  }
 }
