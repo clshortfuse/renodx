@@ -111,7 +111,7 @@ float3 ApplyColorGradingLUTs(
     float lut_black_y = renodx::color::y::from::AP1(lut_black);
     if (lut_black_y > 0.f) {
       float3 lut_mid = SampleAndBlendLUTs(
-          lut_black,
+          LUT_SCALING_1_MID,
           fTextureBlendRate,
           fTextureBlendRate2,
           fOneMinusTextureInverseSize,
@@ -158,8 +158,9 @@ void ApplyColorCorrectTexturePass(
     inout float _1803,
     inout float _1804) {
   if (_365 && (bool)((cPassEnabled & 4) != 0)) {
+    float3 input = float3(_1573, _1574, _1575);
     float3 correctedColor = ApplyColorGradingLUTs(
-        float3(_1573, _1574, _1575),
+        input,
         fTextureBlendRate,
         fTextureBlendRate2,
         fOneMinusTextureInverseSize,
@@ -168,6 +169,7 @@ void ApplyColorCorrectTexturePass(
         tTextureMap1,
         tTextureMap2,
         TrilinearClamp);
+    correctedColor = lerp(input, correctedColor, COLOR_GRADE_LUT_STRENGTH);
 
     _1802 = mad(correctedColor.z, (fColorMatrix[2].x), mad(correctedColor.y, (fColorMatrix[1].x), (correctedColor.x * (fColorMatrix[0].x)))) + (fColorMatrix[3].x);
     _1803 = mad(correctedColor.z, (fColorMatrix[2].y), mad(correctedColor.y, (fColorMatrix[1].y), (correctedColor.x * (fColorMatrix[0].y)))) + (fColorMatrix[3].y);

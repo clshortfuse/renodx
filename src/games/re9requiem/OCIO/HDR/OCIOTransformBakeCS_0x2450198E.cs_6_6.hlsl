@@ -270,26 +270,6 @@ void main(
       lut_output = lut_output_scaled;
     }
 
-    if (RENODX_TONE_MAP_BLACK_FLOOR_SCALING != 0.f) {
-      float3 lut_min = renodx::color::pq::Decode(
-          min(1.f, SampleOCIO(0.f, 0.f, 0.f,
-                              OCIO_lut1d_0, BilinearClamp, OCIO_lut3d_1, TrilinearClamp)),
-          100.f);
-
-      float3 lut_mid = renodx::color::pq::Decode(
-          min(1.f, SampleOCIO(lut_min.r, lut_min.g, lut_min.b,
-                              OCIO_lut1d_0, BilinearClamp, OCIO_lut3d_1, TrilinearClamp)),
-          100.f);
-
-      float3 unclamped_gamma = Unclamp(
-          renodx::color::gamma::EncodeSafe(lut_output),
-          renodx::color::gamma::EncodeSafe(lut_min),
-          renodx::color::gamma::EncodeSafe(lut_mid),
-          renodx::color::gamma::EncodeSafe(renodx::color::bt2020::from::AP1(float3(_30, _44, _58))));
-
-      lut_output = renodx::color::gamma::DecodeSafe(unclamped_gamma);
-    }
-
     if (RENODX_GAMMA_CORRECTION != 0.f) {
       lut_output = renodx::color::bt709::from::BT2020(lut_output);
       if (RENODX_GAMMA_CORRECTION == 2.f) {
@@ -299,9 +279,10 @@ void main(
       }
       lut_output = renodx::color::bt2020::from::BT709(lut_output);
     }
-    lut_output = ApplyNeutwoByMaxChannel(
-        max(0, lut_output), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS,
-        100.f, 0.18f, 0.18f, 0.0001f / RENODX_DIFFUSE_WHITE_NITS);
+    // lut_output = ApplyNeutwoByMaxChannel(
+    //     max(0, lut_output), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS,
+    //     100.f, 0.18f, 0.18f, 0.0001f / RENODX_DIFFUSE_WHITE_NITS);
+    lut_output = renodx::tonemap::neutwo::MaxChannel(lut_output, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
     lut_output = renodx::color::pq::Encode(lut_output, RENODX_DIFFUSE_WHITE_NITS);
     OutLUT[SV_DispatchThreadID] = float4(lut_output, 1.f);
     return;
