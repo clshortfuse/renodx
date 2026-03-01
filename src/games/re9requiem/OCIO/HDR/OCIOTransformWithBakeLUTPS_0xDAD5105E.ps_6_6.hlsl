@@ -122,8 +122,29 @@ OutputSignature main(
   float4 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f);
   // float3 _74 = renodx::lut::SampleTetrahedral(SrcLUT, float3(_35, _50, _65), 64u);
 
+  // if (COLOR_GRADE_LUT_SCALING_2 != 0.f) {
+  //   float3 lut_output = renodx::color::pq::DecodeSafe(_74.rgb, RENODX_DIFFUSE_WHITE_NITS);
+  //   float3 lut_min = renodx::color::pq::DecodeSafe(SrcLUT.SampleLevel(TrilinearClamp, renodx::color::acescc::Encode(0.xxx) * 0.984375f + 0.0078125f, 0.0f).rgb, RENODX_DIFFUSE_WHITE_NITS);
+  //   float3 lut_mid = renodx::color::pq::DecodeSafe(SrcLUT.SampleLevel(TrilinearClamp, renodx::color::acescc::Encode(0.1f.xxx) * 0.984375f + 0.0078125f, 0.0f).rgb, RENODX_DIFFUSE_WHITE_NITS);
+
+  //   float3 unclamped_gamma = Unclamp(
+  //       renodx::color::gamma::EncodeSafe(lut_output),
+  //       renodx::color::gamma::EncodeSafe(lut_min),
+  //       renodx::color::gamma::EncodeSafe(lut_mid),
+  //       renodx::color::gamma::EncodeSafe(renodx::color::bt2020::from::AP1(_11.rgb)));
+
+  //   float3 unclamped_linear = renodx::color::gamma::DecodeSafe(unclamped_gamma);
+
+  //   lut_output *= lerp(
+  //       1.f,
+  //       renodx::math::DivideSafe(LuminosityFromBT2020(unclamped_linear), LuminosityFromBT2020(lut_output), 1.f),
+  //       COLOR_GRADE_LUT_SCALING_2);
+
+  //   _74.rgb = renodx::color::pq::EncodeSafe(lut_output, RENODX_DIFFUSE_WHITE_NITS);
+  // }
+
 #if 1
-  _74.rgb = ApplyFilmGrainPQInput(_74.rgb, TEXCOORD, whitePaperNits);
+  _74.rgb = ApplyPostToneMapProcessingPQInput(_74.rgb, TEXCOORD, _11.rgb, SrcLUT, TrilinearClamp);
 #endif
 
   SV_Target.x = _74.x;

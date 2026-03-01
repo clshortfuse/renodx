@@ -1,16 +1,18 @@
 #ifndef SRC_RE9REQUIEM_SHARED_H_
 #define SRC_RE9REQUIEM_SHARED_H_
 
-#define UPGRADE_FP11                        0
-#define SKIP_LUTS                           0
-#define SKIP_TONEMAP                        0
-#define SKIP_OCIO_LUT                       0
-#define RENODX_LUT_SHAPER                   0.f
-#define APPLY_HIGHLIGHT_BOOST               2
-#define RENODX_CUSTOM_EXPOSURE              0.76
-#define RENODX_CUSTOM_HIGHLIGHT_CONTRAST    1.1f
-#define RENODX_TONE_MAP_PEAK_SCALING        1.f
-#define RENODX_TONE_MAP_BLACK_FLOOR_SCALING 1.f
+#define UPGRADE_FP11                     0
+#define SKIP_LUTS                        0
+#define SKIP_TONEMAP                     0
+#define SKIP_OCIO_LUT                    0
+#define RENODX_LUT_SHAPER                0.f
+#define APPLY_HIGHLIGHT_BOOST            2
+#define RENODX_CUSTOM_EXPOSURE           0.76
+#define RENODX_CUSTOM_HIGHLIGHT_CONTRAST 1.1f
+#define RENODX_TONE_MAP_PEAK_SCALING     1.f
+
+#define LUT_SCALING_1_MID 0.18f
+#define LUT_SCALING_2_MID 0.1f
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -27,14 +29,17 @@ struct ShaderInjectData {
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;
+  float post_tone_map_shadows;
   float tone_map_contrast;
   float tone_map_saturation;
   float tone_map_highlight_saturation;
   float tone_map_dechroma;
   float tone_map_flare;
+  float post_tone_map_flare;
   float tone_map_gamma;
   float color_grade_lut_strength;
   float color_grade_lut_scaling;
+  float color_grade_lut_scaling_2;
 
   float custom_noise;
   float custom_random;
@@ -59,14 +64,17 @@ cbuffer cb13 : register(b0, space50) {
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
+#define RENODX_POST_TONE_MAP_SHADOWS         shader_injection.post_tone_map_shadows
 #define RENODX_TONE_MAP_CONTRAST             shader_injection.tone_map_contrast
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
+#define RENODX_POST_TONE_MAP_FLARE           shader_injection.post_tone_map_flare
 #define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma
 #define COLOR_GRADE_LUT_STRENGTH             shader_injection.color_grade_lut_strength
-#define COLOR_GRADE_LUT_SCALING              0.f  // shader_injection.color_grade_lut_scaling
+#define COLOR_GRADE_LUT_SCALING              shader_injection.color_grade_lut_scaling
+#define COLOR_GRADE_LUT_SCALING_2            shader_injection.color_grade_lut_scaling_2
 
 #define CUSTOM_NOISE                  shader_injection.custom_noise
 #define CUSTOM_RANDOM                 shader_injection.custom_random

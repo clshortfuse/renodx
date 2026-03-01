@@ -103,6 +103,15 @@ float Shadows(float x, float shadows, float mid_gray) {
   }
 }
 
+float ContrastAndFlare(float x, float contrast, float flare, float mid_gray = 0.18f) {
+  if (contrast == 0.f && flare == 0.f) return x;
+
+  const float x_normalized = x / mid_gray;
+  float flare_ratio = renodx::math::DivideSafe(x_normalized + flare, x_normalized, 1.f);
+  float exponent = contrast * flare_ratio;
+  return pow(x_normalized, exponent) * mid_gray;
+}
+
 float3 ApplyLuminosityGrading(float3 untonemapped, float lum, UserGradingConfig config, float mid_gray = 0.18f) {
   if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f && config.gamma == 1.f) {
     return untonemapped;
@@ -115,10 +124,7 @@ float3 ApplyLuminosityGrading(float3 untonemapped, float lum, UserGradingConfig 
   float lum_gamma_adjusted = renodx::math::Select(lum < 1.f, pow(lum, config.gamma), lum);
 
   // contrast & flare
-  const float lum_normalized = lum_gamma_adjusted / mid_gray;
-  float flare = renodx::math::DivideSafe(lum_normalized + config.flare, lum_normalized, 1.f);
-  float exponent = config.contrast * flare;
-  const float lum_contrasted = pow(lum_normalized, exponent) * mid_gray;
+  const float lum_contrasted = ContrastAndFlare(lum_gamma_adjusted, config.contrast, config.flare, mid_gray);
 
   // highlights
   float lum_highlighted = Highlights(lum_contrasted, config.highlights, mid_gray);

@@ -151,14 +151,45 @@ float3 SampleOCIO(
   return lut_output;
 }
 
-float3 ApplyFilmGrainPQInput(float3 color_pq, float2 grain_uv, float whitePaperNits) {
-  if (CUSTOM_GRAIN_STRENGTH > 0.f) {
-    float reference_white = TONE_MAP_TYPE == 0.f ? whitePaperNits : RENODX_DIFFUSE_WHITE_NITS;
-    float3 color_linear = renodx::color::pq::DecodeSafe(color_pq, reference_white);
-    color_linear = renodx::effects::ApplyFilmGrain(
-        color_linear, grain_uv, CUSTOM_RANDOM, CUSTOM_GRAIN_STRENGTH * 0.06f,
-        1.f, false, renodx::color::BT2020_TO_XYZ_MAT);
-    color_pq = renodx::color::pq::EncodeSafe(color_linear, reference_white);
+float3 ApplyPostToneMapProcessingPQInput(float3 color_pq, float2 grain_uv, float3 color_ungraded_ap1, Texture3D<float4> SrcLUT, SamplerState TrilinearClamp) {
+  if ((COLOR_GRADE_LUT_SCALING_2 > 0.f || CUSTOM_GRAIN_STRENGTH > 0.f || RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f) && TONE_MAP_TYPE != 0.f) {
+    float3 lut_output = renodx::color::pq::DecodeSafe(color_pq.rgb, RENODX_DIFFUSE_WHITE_NITS);
+    if (COLOR_GRADE_LUT_SCALING_2 > 0.f) {
+      float3 lut_min = renodx::color::pq::DecodeSafe(
+          SrcLUT.SampleLevel(TrilinearClamp, renodx::color::acescc::Encode(0.xxx) * 0.984375f + 0.0078125f, 0.0f).rgb,
+          RENODX_DIFFUSE_WHITE_NITS);
+      float3 lut_mid = renodx::color::pq::DecodeSafe(
+          SrcLUT.SampleLevel(TrilinearClamp, renodx::color::acescc::Encode(LUT_SCALING_2_MID) * 0.984375f + 0.0078125f, 0.0f).rgb,
+          RENODX_DIFFUSE_WHITE_NITS);
+
+      float3 unclamped_gamma = Unclamp(
+          renodx::color::gamma::EncodeSafe(lut_output),
+          renodx::color::gamma::EncodeSafe(lut_min),
+          renodx::color::gamma::EncodeSafe(lut_mid),
+          renodx::color::gamma::EncodeSafe(renodx::color::bt2020::from::AP1(color_ungraded_ap1)));
+
+      float3 unclamped_linear = renodx::color::gamma::DecodeSafe(unclamped_gamma);
+
+      lut_output *= lerp(
+          1.f,
+          renodx::math::DivideSafe(LuminosityFromBT2020(unclamped_linear), LuminosityFromBT2020(lut_output), 1.f),
+          COLOR_GRADE_LUT_SCALING_2);
+    }
+
+    if (RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f) {
+      float lum_in = LuminosityFromBT2020(lut_output);
+      float lum_out = ContrastAndFlare(lum_in, 1.f, 0.10f * pow(RENODX_POST_TONE_MAP_FLARE, 10.f), 0.1f);
+      lum_out = Shadows(lum_out, RENODX_POST_TONE_MAP_SHADOWS, 0.1f);
+      lut_output *= renodx::math::DivideSafe(lum_out, lum_in, 1.f);
+    }
+
+    if (CUSTOM_GRAIN_STRENGTH > 0.f) {
+      lut_output = renodx::effects::ApplyFilmGrain(
+          lut_output, grain_uv, CUSTOM_RANDOM, CUSTOM_GRAIN_STRENGTH * 0.06f,
+          1.f, false, renodx::color::BT2020_TO_XYZ_MAT);
+    }
+
+    color_pq = renodx::color::pq::EncodeSafe(lut_output, RENODX_DIFFUSE_WHITE_NITS);
   }
   return color_pq;
 }

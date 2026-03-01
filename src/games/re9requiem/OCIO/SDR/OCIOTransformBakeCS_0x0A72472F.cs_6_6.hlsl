@@ -203,5 +203,8 @@ void main(
     }
   }
   float _314 = 1.0f - _312;
+
+  _314 = 0.f;
+
   OutLUT[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = float4(((exp2(log2(((_314 * _168.x) + _309) + (_313 * _175.x)) * fGamma) * fConvertToLimit) + fLowerLimit), ((exp2(log2(((_314 * _168.y) + _310) + (_313 * _175.y)) * fGamma) * fConvertToLimit) + fLowerLimit), ((exp2(log2(((_314 * _168.z) + _311) + (_313 * _175.z)) * fGamma) * fConvertToLimit) + fLowerLimit), 1.0f);
 }

@@ -127,7 +127,7 @@ float4 main(
   float4 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f);
 
 #if 1
-  _74.rgb = ApplyFilmGrainPQInput(_74.rgb, TEXCOORD, whitePaperNits);
+  _74.rgb = ApplyPostToneMapProcessingPQInput(_74.rgb, TEXCOORD, _11.rgb, SrcLUT, TrilinearClamp);
 #endif
 
   SV_Target.x = _74.x;

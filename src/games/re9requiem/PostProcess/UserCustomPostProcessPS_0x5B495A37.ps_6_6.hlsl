@@ -642,6 +642,26 @@ float4 main(
     _1354 = _1264;
     _1355 = _1267;
   }
+  #if 1
+    ApplyColorCorrectTexturePass(
+        _145,
+        cPassEnabled,
+        _1353,
+        _1354,
+        _1355,
+        fTextureBlendRate,
+        fTextureBlendRate2,
+        fOneMinusTextureInverseSize,
+        fHalfTextureInverseSize,
+        fColorMatrix,
+        tTextureMap0,
+        tTextureMap1,
+        tTextureMap2,
+        TrilinearClamp,
+        _1582,
+        _1583,
+        _1584);
+  #else
   if (_145 && (bool)((cPassEnabled & 4) != 0)) {
     float _1406 = (((log2(select((_1353 < 3.0517578125e-05f), ((_1353 * 0.5f) + 1.52587890625e-05f), _1353)) * 0.05707760155200958f) + 0.5547950267791748f) * fOneMinusTextureInverseSize) + fHalfTextureInverseSize;
     float _1407 = (((log2(select((_1354 < 3.0517578125e-05f), ((_1354 * 0.5f) + 1.52587890625e-05f), _1354)) * 0.05707760155200958f) + 0.5547950267791748f) * fOneMinusTextureInverseSize) + fHalfTextureInverseSize;
@@ -689,6 +709,7 @@ float4 main(
     _1583 = _1354;
     _1584 = _1355;
   }
+  #endif
   if (_145 && (bool)((cPassEnabled & 8) != 0)) {
     _1617 = (((cvdR.x * _1582) + (cvdR.y * _1583)) + (cvdR.z * _1584));
     _1618 = (((cvdG.x * _1582) + (cvdG.y * _1583)) + (cvdG.z * _1584));

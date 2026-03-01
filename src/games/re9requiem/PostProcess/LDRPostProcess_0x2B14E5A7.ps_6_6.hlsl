@@ -933,6 +933,26 @@ float4 main(
     _2002 = _1912;
     _2003 = _1915;
   }
+  #if 1
+    ApplyColorCorrectTexturePass(
+        true,
+        cPassEnabled,
+        _2001,
+        _2002,
+        _2003,
+        fTextureBlendRate,
+        fTextureBlendRate2,
+        fOneMinusTextureInverseSize,
+        fHalfTextureInverseSize,
+        fColorMatrix,
+        tTextureMap0,
+        tTextureMap1,
+        tTextureMap2,
+        TrilinearClamp,
+        _2229,
+        _2230,
+        _2231);
+  #else
   if (!((cPassEnabled & 4) == 0)) {
     float _2053 = (((log2(select((_2001 < 3.0517578125e-05f), ((_2001 * 0.5f) + 1.52587890625e-05f), _2001)) * 0.05707760155200958f) + 0.5547950267791748f) * fOneMinusTextureInverseSize) + fHalfTextureInverseSize;
     float _2054 = (((log2(select((_2002 < 3.0517578125e-05f), ((_2002 * 0.5f) + 1.52587890625e-05f), _2002)) * 0.05707760155200958f) + 0.5547950267791748f) * fOneMinusTextureInverseSize) + fHalfTextureInverseSize;
@@ -980,6 +1000,7 @@ float4 main(
     _2230 = _2002;
     _2231 = _2003;
   }
+  #endif
   if (!((cPassEnabled & 8) == 0)) {
     _2263 = (((cvdR.x * _2229) + (cvdR.y * _2230)) + (cvdR.z * _2231));
     _2264 = (((cvdG.x * _2229) + (cvdG.y * _2230)) + (cvdG.z * _2231));
