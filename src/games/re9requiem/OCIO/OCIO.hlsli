@@ -159,7 +159,7 @@ float3 ApplyPostToneMapProcessingPQInput(float3 color_pq, float2 grain_uv, float
           SrcLUT.SampleLevel(TrilinearClamp, renodx::color::acescc::Encode(0.xxx) * 0.984375f + 0.0078125f, 0.0f).rgb,
           RENODX_DIFFUSE_WHITE_NITS);
       float3 lut_mid = renodx::color::pq::DecodeSafe(
-          SrcLUT.SampleLevel(TrilinearClamp, renodx::color::acescc::Encode(LUT_SCALING_2_MID) * 0.984375f + 0.0078125f, 0.0f).rgb,
+          SrcLUT.SampleLevel(TrilinearClamp, renodx::color::acescc::Encode((lut_min + max(lut_min, LUT_SCALING_2_MID)) / 2.f) * 0.984375f + 0.0078125f, 0.0f).rgb,
           RENODX_DIFFUSE_WHITE_NITS);
 
       float3 unclamped_gamma = Unclamp(
