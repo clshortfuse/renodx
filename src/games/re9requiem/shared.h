@@ -1,7 +1,6 @@
 #ifndef SRC_RE9REQUIEM_SHARED_H_
 #define SRC_RE9REQUIEM_SHARED_H_
 
-#define UPGRADE_FP11                     0
 #define SKIP_LUTS                        0
 #define SKIP_TONEMAP                     0
 #define SKIP_OCIO_LUT                    0
