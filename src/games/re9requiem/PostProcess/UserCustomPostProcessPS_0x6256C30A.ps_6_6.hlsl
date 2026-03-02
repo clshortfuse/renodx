@@ -732,6 +732,7 @@ float4 main(
       _1575,
       fTextureBlendRate,
       fTextureBlendRate2,
+      fTextureSize,
       fOneMinusTextureInverseSize,
       fHalfTextureInverseSize,
       fColorMatrix,

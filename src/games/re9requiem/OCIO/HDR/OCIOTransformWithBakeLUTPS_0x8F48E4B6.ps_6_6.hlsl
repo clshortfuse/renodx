@@ -124,7 +124,13 @@ float4 main(
     _65 = renodx::color::pq::Encode(_20, 100.f);
   }
 #endif
-  float4 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f);
+
+  float3 _74;
+  if (TONE_MAP_TYPE == 0.f) {
+    _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f).rgb;
+  } else {
+    _74 = renodx::lut::SampleTetrahedral(SrcLUT, float3(_35, _50, _65), 64u).rgb;
+  }
 
 #if 1
   _74.rgb = ApplyPostToneMapProcessingPQInput(_74.rgb, TEXCOORD, _11.rgb, SrcLUT, TrilinearClamp);
