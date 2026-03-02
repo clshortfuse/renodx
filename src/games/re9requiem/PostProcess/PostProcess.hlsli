@@ -111,7 +111,7 @@ float3 ApplyColorGradingLUTs(
     float lut_black_y = renodx::color::y::from::AP1(lut_black);
     if (lut_black_y > 0.f) {
       float3 lut_mid = SampleAndBlendLUTs(
-          LUT_SCALING_1_MID,
+          max(lut_black, LUT_SCALING_1_MID),
           fTextureBlendRate,
           fTextureBlendRate2,
           fOneMinusTextureInverseSize,
