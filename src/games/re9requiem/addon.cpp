@@ -25,16 +25,18 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-static void MarkToneMappingLutInvalidated();
-static void MarkToneMappingLutRefreshed();
-static void EnsureToneMappingLutBuilderTracking();
+void MarkToneMappingLutInvalidated();
+void MarkToneMappingLutRefreshed();
+void OnUpgradeRenderingSettingChanged(float previous, float current);
 
-static constexpr uint32_t kToneMappingLutBuilderCrc32 = 0x2450198E;
-static std::atomic_bool tone_mapping_lut_invalidated = false;
+constexpr uint32_t TONE_MAPPING_LUT_BUILDER_CRC32 = 0x2450198E;
+std::atomic_bool tone_mapping_lut_invalidated = false;
+std::atomic_bool upgrade_rendering_restart_required = false;
+renodx::utils::settings::Setting* upgrade_rendering_setting = nullptr;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    {kToneMappingLutBuilderCrc32, {
-                                      .crc32 = kToneMappingLutBuilderCrc32,
+    {TONE_MAPPING_LUT_BUILDER_CRC32, {
+                                      .crc32 = TONE_MAPPING_LUT_BUILDER_CRC32,
                                       .code = __0x2450198E,  // OCIOTransformBakeCS_0x2450198E (Tone Mapping LUT builder)
                                       .on_drawn = [](reshade::api::command_list* /*cmd_list*/) {
                                         MarkToneMappingLutRefreshed();
@@ -42,18 +44,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                                   }},
     __ALL_CUSTOM_SHADERS};
 
-static void EnsureToneMappingLutBuilderTracking() {
-  auto shader = custom_shaders.find(kToneMappingLutBuilderCrc32);
-  if (shader == custom_shaders.end()) return;
-
-  // Keep callback tracking even if duplicate hash resolution picks another entry.
-  shader->second.on_drawn = [](reshade::api::command_list* /*cmd_list*/) {
-    MarkToneMappingLutRefreshed();
-  };
+void OnToneMappingLutSettingChanged(float previous, float current) {
+  if (previous != current) MarkToneMappingLutInvalidated();
 }
 
-static void OnToneMappingLutSettingChanged(float previous, float current) {
-  if (previous != current) MarkToneMappingLutInvalidated();
+void OnUpgradeRenderingSettingChanged(float previous, float current) {
+  if (previous != current) {
+    upgrade_rendering_restart_required.store(true, std::memory_order_relaxed);
+  }
 }
 
 renodx::utils::settings::Settings settings = {
@@ -318,6 +316,25 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "WARNING: Rendering Format changes require a restart to apply.",
+        .section = "Advanced",
+        .tint = 0xFF3B30,
+        .is_visible = []() { return upgrade_rendering_restart_required.load(std::memory_order_relaxed); },
+        .is_sticky = true,
+    },
+    upgrade_rendering_setting = new renodx::utils::settings::Setting{
+        .key = "FxUpgradeRender",
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Rendering Format",
+        .section = "Advanced",
+        .tooltip = "Upgrades the post process format to reduce banding (requires restart). NVIDIA only.",
+        .labels = {"R11G11B10F", "R16G16B16A16F"},
+        .on_change_value = &OnUpgradeRenderingSettingChanged,
+        .is_global = true,
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -326,6 +343,7 @@ renodx::utils::settings::Settings settings = {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
           MarkToneMappingLutInvalidated();
@@ -429,11 +447,11 @@ renodx::utils::settings::Settings settings = {
     },
 };
 
-static void MarkToneMappingLutInvalidated() {
+void MarkToneMappingLutInvalidated() {
   tone_mapping_lut_invalidated.store(true, std::memory_order_relaxed);
 }
 
-static void MarkToneMappingLutRefreshed() {
+void MarkToneMappingLutRefreshed() {
   tone_mapping_lut_invalidated.store(false, std::memory_order_relaxed);
 }
 
@@ -480,23 +498,23 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 }
 
 void OnInitDevice(reshade::api::device* device) {
-#if UPGRADE_FP11
   std::vector<renodx::utils::resource::ResourceUpgradeInfo> upgrade_infos = {};
 
-  int vendor_id;
-  auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
-  if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
-                                           // Bugs out AMD GPUs
-    upgrade_infos.push_back({
-        .old_format = reshade::api::format::r11g11b10_float,
-        .new_format = reshade::api::format::r16g16b16a16_float,
-        .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
-                       .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
-    });
+  if (upgrade_rendering_setting != nullptr && upgrade_rendering_setting->GetValue() == 1.f) {
+    int vendor_id;
+    auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
+    if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
+                                             // Bugs out AMD GPUs
+      upgrade_infos.push_back({
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
+                         .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
+      });
+    }
   }
 
   renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
-#endif
 }
 
 bool initialized = false;
@@ -512,7 +530,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
 
       renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
-      EnsureToneMappingLutBuilderTracking();
 
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
