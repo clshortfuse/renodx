@@ -12,16 +12,21 @@ float3 SampleColorCorrectLut(
     Texture3D<float4> textureMap,
     SamplerState trilinearClamp,
     float3 lutEncoded,
+    float fTextureSize,
     float lutScale,
     float lutOffset) {
-  float4 sampleValue = textureMap.SampleLevel(trilinearClamp, lutEncoded * lutScale + lutOffset, 0.0f);
-  return sampleValue.rgb;
+  if (TONE_MAP_TYPE == 0.f) {
+    return textureMap.SampleLevel(trilinearClamp, lutEncoded * lutScale + lutOffset, 0.0f).rgb;
+  } else {
+    return renodx::lut::SampleTetrahedral(textureMap, saturate(lutEncoded), (uint)fTextureSize);
+  }
 }
 
 float3 SampleAndBlendLUTs(
     float3 color_input,
     float fTextureBlendRate,
     float fTextureBlendRate2,
+    float fTextureSize,
     float fOneMinusTextureInverseSize,
     float fHalfTextureInverseSize,
     Texture3D<float4> tTextureMap0,
@@ -36,6 +41,7 @@ float3 SampleAndBlendLUTs(
           tTextureMap0,
           TrilinearClamp,
           lutEncoded,
+          fTextureSize,
           lutScale,
           lutOffset));
 
@@ -45,6 +51,7 @@ float3 SampleAndBlendLUTs(
             tTextureMap1,
             TrilinearClamp,
             lutEncoded,
+            fTextureSize,
             lutScale,
             lutOffset));
     correctedColor = lerp(correctedColor, blendColor, fTextureBlendRate);
@@ -56,6 +63,7 @@ float3 SampleAndBlendLUTs(
               tTextureMap2,
               TrilinearClamp,
               lutEncoded2,
+              fTextureSize,
               lutScale,
               lutOffset));
       correctedColor = lerp(correctedColor, blendColor2, fTextureBlendRate2);
@@ -67,6 +75,7 @@ float3 SampleAndBlendLUTs(
             tTextureMap2,
             TrilinearClamp,
             lutEncoded2,
+            fTextureSize,
             lutScale,
             lutOffset));
     correctedColor = lerp(correctedColor, blendColor2, fTextureBlendRate2);
@@ -79,6 +88,7 @@ float3 ApplyColorGradingLUTs(
     float3 color_input,
     float fTextureBlendRate,
     float fTextureBlendRate2,
+    float fTextureSize,
     float fOneMinusTextureInverseSize,
     float fHalfTextureInverseSize,
     Texture3D<float4> tTextureMap0,
@@ -89,6 +99,7 @@ float3 ApplyColorGradingLUTs(
       color_input,
       fTextureBlendRate,
       fTextureBlendRate2,
+      fTextureSize,
       fOneMinusTextureInverseSize,
       fHalfTextureInverseSize,
       tTextureMap0,
@@ -101,6 +112,7 @@ float3 ApplyColorGradingLUTs(
         0.f,
         fTextureBlendRate,
         fTextureBlendRate2,
+        fTextureSize,
         fOneMinusTextureInverseSize,
         fHalfTextureInverseSize,
         tTextureMap0,
@@ -114,6 +126,7 @@ float3 ApplyColorGradingLUTs(
           max(lut_black, LUT_SCALING_1_MID),
           fTextureBlendRate,
           fTextureBlendRate2,
+          fTextureSize,
           fOneMinusTextureInverseSize,
           fHalfTextureInverseSize,
           tTextureMap0,
@@ -147,6 +160,7 @@ void ApplyColorCorrectTexturePass(
     float _1575,
     float fTextureBlendRate,
     float fTextureBlendRate2,
+    float fTextureSize,
     float fOneMinusTextureInverseSize,
     float fHalfTextureInverseSize,
     row_major float4x4 fColorMatrix,
@@ -163,6 +177,7 @@ void ApplyColorCorrectTexturePass(
         input,
         fTextureBlendRate,
         fTextureBlendRate2,
+        fTextureSize,
         fOneMinusTextureInverseSize,
         fHalfTextureInverseSize,
         tTextureMap0,
