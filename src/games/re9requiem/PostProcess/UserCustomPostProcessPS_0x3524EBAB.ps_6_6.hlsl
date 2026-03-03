@@ -290,7 +290,7 @@ float4 main(
     float _236 = (frac(_43 * 0.44094499945640564f) + _78) / max(0.0010000000474974513f, (VAR_FilmDamage_UVScale.x * VAR_FilmDamage_Size));
     float _237 = (frac(_43 * 0.5511810183525085f) + _76) / max(0.0010000000474974513f, (VAR_FilmDamage_UVScale.y * VAR_FilmDamage_Size));
     float4 _247 = FilmDamage_Texture.SampleGrad(BilinearWrap, float2(_236, _237), float2((ddx_coarse(_236) * cbr.x), (ddx_coarse(_237) * cbr.x)), float2((ddy_coarse(_236) * cbr.y), (ddy_coarse(_237) * cbr.y)), int2(0, 0));
-    _251 = (_247.x * VAR_FilmDamage_Opacity);
+    _251 = (_247.x * VAR_FilmDamage_Opacity * CUSTOM_FILM_DAMAGE_STRENGTH);
   } else {
     _251 = 0.0f;
   }
