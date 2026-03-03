@@ -44,6 +44,7 @@ struct ShaderInjectData {
   float custom_random;
   float vanilla_grain_strength;
   float custom_grain_strength;
+  float film_damage_strength;
 };
 
 #ifndef __cplusplus
@@ -79,6 +80,7 @@ cbuffer cb13 : register(b0, space50) {
 #define CUSTOM_RANDOM                 shader_injection.custom_random
 #define CUSTOM_VANILLA_GRAIN_STRENGTH shader_injection.vanilla_grain_strength
 #define CUSTOM_GRAIN_STRENGTH         shader_injection.custom_grain_strength
+#define CUSTOM_FILM_DAMAGE_STRENGTH   shader_injection.film_damage_strength
 
 #include "../../shaders/renodx.hlsl"
 

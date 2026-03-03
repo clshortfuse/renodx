@@ -36,12 +36,12 @@ renodx::utils::settings::Setting* upgrade_rendering_setting = nullptr;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     {TONE_MAPPING_LUT_BUILDER_CRC32, {
-                                      .crc32 = TONE_MAPPING_LUT_BUILDER_CRC32,
-                                      .code = __0x2450198E,  // OCIOTransformBakeCS_0x2450198E (Tone Mapping LUT builder)
-                                      .on_drawn = [](reshade::api::command_list* /*cmd_list*/) {
-                                        MarkToneMappingLutRefreshed();
-                                      },
-                                  }},
+                                         .crc32 = TONE_MAPPING_LUT_BUILDER_CRC32,
+                                         .code = __0x2450198E,  // OCIOTransformBakeCS_0x2450198E (Tone Mapping LUT builder)
+                                         .on_drawn = [](reshade::api::command_list* /*cmd_list*/) {
+                                           MarkToneMappingLutRefreshed();
+                                         },
+                                     }},
     __ALL_CUSTOM_SHADERS};
 
 void OnToneMappingLutSettingChanged(float previous, float current) {
@@ -57,7 +57,7 @@ void OnUpgradeRenderingSettingChanged(float previous, float current) {
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "WARNING: Some changes are not applied yet. Toggle HDR Off/On in-game to apply them.",
+        .label = "WARNING: Some changes have not been applied yet. Toggle HDR Off/On in-game to apply them.",
         .section = "Tone Mapping",
         .tint = 0xFF3B30,
         .is_visible = []() { return tone_mapping_lut_invalidated.load(std::memory_order_relaxed); },
@@ -285,6 +285,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Scales the scene grading to full range when size is clamped for the secondary scene grading.",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -311,6 +312,15 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.custom_grain_strength,
         .default_value = 50.f,
         .label = "Custom Film Grain",
+        .section = "Effects",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxFilmDamageStrength",
+        .binding = &shader_injection.film_damage_strength,
+        .default_value = 100.f,
+        .label = "Film Damage",
         .section = "Effects",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
@@ -480,6 +490,7 @@ void OnPresetOff() {
       {"ColorGradeSceneScaling2", 0.f},
       {"FxNoise", 100.f},
       {"FxVanillaGrainStrength", 100.f},
+      {"FxFilmDamageStrength", 100.f},
       {"FxGrainStrength", 0.f},
   });
   MarkToneMappingLutInvalidated();
