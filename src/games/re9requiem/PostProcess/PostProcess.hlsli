@@ -1,11 +1,13 @@
 #include "../common.hlsli"
 
+// very slightly different from actual acescc encode
 float3 EncodeColorCorrectLutValue(float3 value) {
   return ((log2(select((value < 3.0517578125e-05f), ((value * 0.5f) + 1.52587890625e-05f), value)) * 0.05707760155200958f) + 0.5547950267791748f);
+  // return renodx::color::acescc::Encode(value);
 }
 
 float3 DecodeColorCorrectLutValue(float3 value) {
-  return max(exp2((value * 17.520000457763672f) + -9.720000267028809f), 0.0f);
+  return renodx::color::acescc::Decode(value);  // return max(exp2((value * 17.520000457763672f) + -9.720000267028809f), 0.0f);
 }
 
 float3 SampleColorCorrectLut(
