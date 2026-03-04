@@ -1,9 +1,9 @@
 #include "../CBuffers/HDRMapping.hlsli"
 #include "../OCIO.hlsli"
 
-Texture2D<float4> OCIO_lut1d_0 : register(t0);
+Texture2D<float4> OCIO_lut1d_0 : register(t0);  // r16_float - 4096x17x1
 
-Texture3D<float4> OCIO_lut3d_1 : register(t1);
+Texture3D<float4> OCIO_lut3d_1 : register(t1);  // r16g16b16a16_float - 65x65x65
 
 RWTexture3D<float4> OutLUT : register(u0);
 
