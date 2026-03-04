@@ -10,12 +10,7 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
-#include <algorithm>
-#include <array>
 #include <atomic>
-#include <cmath>
-#include <limits>
-#include <set>
 
 #include <embed/shaders.h>
 
@@ -462,155 +457,6 @@ renodx::utils::settings::Settings settings = {
     },
 };
 
-namespace rendering_upgrades {
-
-constexpr float SCALE_NATIVE = 1.f;
-constexpr float SCALE_QUALITY = (2.f / 3.f);
-constexpr float SCALE_BALANCED = 0.58f;
-constexpr float SCALE_PERFORMANCE = 0.5f;
-constexpr float SCALE_ULTRA_PERFORMANCE = (1.f / 3.f);
-
-constexpr std::array<float, 5> INTERNAL_RENDER_SCALE_RATIOS = {
-    SCALE_NATIVE,
-    SCALE_QUALITY,
-    SCALE_BALANCED,
-    SCALE_PERFORMANCE,
-    SCALE_ULTRA_PERFORMANCE,
-};
-
-bool IsNvidiaDevice(reshade::api::device* device) {
-  int vendor_id;
-  auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
-  return retrieved && vendor_id == 0x10de;
-}
-
-bool IsUpgradeEnabled(reshade::api::device* device) {
-  return upgrade_rendering_setting != nullptr
-         && upgrade_rendering_setting->GetValue() == 1.f
-         && IsNvidiaDevice(device);
-}
-
-void AddRenderTargetUpgrade(
-    std::vector<renodx::utils::resource::ResourceUpgradeInfo>& upgrade_infos,
-    int16_t width,
-    int16_t height) {
-  upgrade_infos.push_back({
-      .old_format = reshade::api::format::r11g11b10_float,
-      .new_format = reshade::api::format::r16g16b16a16_float,
-      .dimensions = {.width = width, .height = height},
-      .usage_include = reshade::api::resource_usage::render_target,
-  });
-}
-
-int16_t ComputeScaledDimension(float dimension, float ratio) {
-  const auto rounded = static_cast<int32_t>(std::lround(dimension * ratio));
-  const auto clamped = std::clamp(
-      rounded,
-      int32_t{1},
-      static_cast<int32_t>(std::numeric_limits<int16_t>::max()));
-  return static_cast<int16_t>(clamped);
-}
-
-int32_t AlignDown(int32_t value, int32_t alignment) {
-  return value - (value % alignment);
-}
-
-int32_t AlignUp(int32_t value, int32_t alignment) {
-  return ((value + alignment - 1) / alignment) * alignment;
-}
-
-void TryAddRenderTargetUpgrade(
-    std::vector<renodx::utils::resource::ResourceUpgradeInfo>& upgrade_infos,
-    std::set<std::pair<int16_t, int16_t>>& unique_dimensions,
-    int32_t width,
-    int32_t height) {
-  const auto max_dimension = static_cast<int32_t>(std::numeric_limits<int16_t>::max());
-  if (width < 1 || width > max_dimension || height < 1 || height > max_dimension) return;
-
-  const auto width16 = static_cast<int16_t>(width);
-  const auto height16 = static_cast<int16_t>(height);
-  const auto [_, inserted] = unique_dimensions.emplace(width16, height16);
-  if (!inserted) return;
-
-  AddRenderTargetUpgrade(upgrade_infos, width16, height16);
-}
-
-void AddRatioDerivedUpgrades(
-    std::vector<renodx::utils::resource::ResourceUpgradeInfo>& upgrade_infos,
-    float back_buffer_width,
-    float back_buffer_height) {
-  std::set<std::pair<int16_t, int16_t>> unique_dimensions;
-
-  for (const auto ratio : INTERNAL_RENDER_SCALE_RATIOS) {
-    const auto base_width = ComputeScaledDimension(back_buffer_width, ratio);
-    const auto base_height = ComputeScaledDimension(back_buffer_height, ratio);
-
-    // Add a neighborhood and common aligned variants to absorb runtime snapping.
-    for (int32_t width_delta = -2; width_delta <= 2; ++width_delta) {
-      for (int32_t height_delta = -2; height_delta <= 2; ++height_delta) {
-        TryAddRenderTargetUpgrade(
-            upgrade_infos,
-            unique_dimensions,
-            static_cast<int32_t>(base_width) + width_delta,
-            static_cast<int32_t>(base_height) + height_delta);
-      }
-    }
-
-    for (const int32_t alignment : {2, 4}) {
-      const auto width_candidates = {
-          AlignDown(static_cast<int32_t>(base_width), alignment),
-          AlignUp(static_cast<int32_t>(base_width), alignment),
-      };
-      const auto height_candidates = {
-          AlignDown(static_cast<int32_t>(base_height), alignment),
-          AlignUp(static_cast<int32_t>(base_height), alignment),
-      };
-      for (const auto width : width_candidates) {
-        for (const auto height : height_candidates) {
-          TryAddRenderTargetUpgrade(upgrade_infos, unique_dimensions, width, height);
-        }
-      }
-    }
-  }
-}
-
-bool HasBackBufferDesc(const reshade::api::resource_desc* back_buffer_desc) {
-  return back_buffer_desc != nullptr
-         && back_buffer_desc->type != reshade::api::resource_type::unknown;
-}
-
-void ApplyResourceUpgrades(
-    reshade::api::device* device,
-    const reshade::api::resource_desc* back_buffer_desc = nullptr) {
-  std::vector<renodx::utils::resource::ResourceUpgradeInfo> upgrade_infos = {};
-  const bool upgrade_enabled = IsUpgradeEnabled(device);
-
-  if (upgrade_enabled) {
-    // Internal pre-upscale render sizes derived from output resolution.
-    if (HasBackBufferDesc(back_buffer_desc)) {
-      const auto back_buffer_width = static_cast<float>(back_buffer_desc->texture.width);
-      const auto back_buffer_height = static_cast<float>(back_buffer_desc->texture.height);
-      AddRatioDerivedUpgrades(upgrade_infos, back_buffer_width, back_buffer_height);
-    } else {
-      // Fallback when back-buffer dimensions are unavailable (e.g. init_device).
-      AddRenderTargetUpgrade(
-          upgrade_infos,
-          renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
-          renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER);
-    }
-  }
-
-  const bool applied = renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
-
-  if (!applied) {
-    reshade::log::message(
-        reshade::log::level::warning,
-        "re9requiem::rendering_upgrades::ApplyResourceUpgrades(Failed to apply upgrade infos)");
-  }
-}
-
-}  // namespace rendering_upgrades
-
 void MarkToneMappingLutInvalidated() {
   tone_mapping_lut_invalidated.store(true, std::memory_order_relaxed);
 }
@@ -653,22 +499,33 @@ void OnPresetOff() {
 bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (!fired_on_init_swapchain) {
-    fired_on_init_swapchain = true;
-    auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
-    if (peak.has_value()) {
-      settings[2]->default_value = peak.value();
-      settings[2]->can_reset = true;
-    }
+  if (fired_on_init_swapchain) return;
+  fired_on_init_swapchain = true;
+  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+  if (peak.has_value()) {
+    settings[2]->default_value = peak.value();
+    settings[2]->can_reset = true;
   }
-
-  auto* device = swapchain->get_device();
-  auto back_buffer_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
-  rendering_upgrades::ApplyResourceUpgrades(device, &back_buffer_desc);
 }
 
 void OnInitDevice(reshade::api::device* device) {
-  rendering_upgrades::ApplyResourceUpgrades(device);
+  std::vector<renodx::utils::resource::ResourceUpgradeInfo> upgrade_infos = {};
+
+  if (upgrade_rendering_setting != nullptr && upgrade_rendering_setting->GetValue() == 1.f) {
+    int vendor_id;
+    auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
+    if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
+                                             // Bugs out AMD GPUs
+      upgrade_infos.push_back({
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
+                         .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
+      });
+    }
+  }
+
+  renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
 }
 
 bool initialized = false;
