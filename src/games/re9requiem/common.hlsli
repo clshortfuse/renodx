@@ -291,7 +291,7 @@ float3 ApplyCustomGrading(float3 ungraded) {
     RENODX_TONE_MAP_SHADOWS,                              // float shadows;
     RENODX_TONE_MAP_CONTRAST,                             // float contrast;
     0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
-    RENODX_TONE_MAP_GAMMA,                                // float gamma;
+    1.f,                                                  // float gamma;
     RENODX_TONE_MAP_SATURATION,                           // float saturation;
     RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
     -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
