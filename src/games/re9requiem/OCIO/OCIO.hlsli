@@ -153,7 +153,7 @@ float3 SampleOCIO(
 
 float3 ApplyPostToneMapProcessingPQInput(float3 color_pq, float2 grain_uv, float3 color_ungraded_ap1, Texture3D<float4> SrcLUT, SamplerState TrilinearClamp) {
   if ((COLOR_GRADE_LUT_SCALING_2 > 0.f || CUSTOM_GRAIN_STRENGTH > 0.f || RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f)
-    && TONE_MAP_TYPE != 0.f) {
+      && TONE_MAP_TYPE != 0.f) {
     float3 lut_output = renodx::color::pq::DecodeSafe(color_pq.rgb, RENODX_DIFFUSE_WHITE_NITS);
     if (COLOR_GRADE_LUT_SCALING_2 > 0.f) {
       float3 lut_min = renodx::color::pq::DecodeSafe(
@@ -194,4 +194,35 @@ float3 ApplyPostToneMapProcessingPQInput(float3 color_pq, float2 grain_uv, float
     color_pq = renodx::color::pq::EncodeSafe(lut_output, RENODX_DIFFUSE_WHITE_NITS);
   }
   return color_pq;
+}
+
+float SampleOCIOLUT1D(float x, Texture2D<float4> lut1d, SamplerState bilinearClamp) {
+  float ax = abs(x);
+  float halfIndex;
+
+  // Approx float -> half domain index mapping used by the game shader
+  if (ax > 6.103515625e-05f) {
+    float clamped = min(ax, 65504.0f);
+    float e = floor(log2(clamped));
+    float p = exp2(e);
+    halfIndex = (e + ((clamped - p) / p) + 15.0f) * 1024.0f;
+  } else {
+    halfIndex = ax * 16777216.0f;
+  }
+
+  if (x < 0.0f) halfIndex += 32768.0f;
+
+  // 1D LUT is packed into a 4096x17 2D texture
+  float row = floor(halfIndex * 0.00024420025874860585f);            // ~1/4095
+  float u = ((halfIndex + 0.5f) - row * 4095.0f) * 0.000244140625f;  // 1/4096
+  float v = (row + 0.5f) * 0.05882352963089943f;                     // 1/17
+
+  return lut1d.SampleLevel(bilinearClamp, float2(u, v), 0.0f).x;
+}
+
+float3 SampleOCIOLUT1D(float3 x, Texture2D<float4> lut1d, SamplerState bilinearClamp) {
+  return float3(
+      SampleOCIOLUT1D(x.r, lut1d, bilinearClamp),
+      SampleOCIOLUT1D(x.g, lut1d, bilinearClamp),
+      SampleOCIOLUT1D(x.b, lut1d, bilinearClamp));
 }
