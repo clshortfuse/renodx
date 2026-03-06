@@ -325,6 +325,7 @@ inline reshade::api::resource_view GetResourceViewClone(
   auto* target = resource_view_info->clone_target;
   if (target == nullptr) {
     if (resource_view_info == nullptr
+        || resource_view_info->resource_info == nullptr
         || resource_view_info->resource_info->clone_target == nullptr) {
       return {0u};
     }
