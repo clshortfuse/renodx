@@ -70,7 +70,7 @@ void main(
 
   // Bloom strength
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    r0.xyz = r0.xyz * (r0.w * saturate(FX_BLOOM_STREMGTH));  // Bloom Strength
+    r0.xyz = r0.xyz * (r0.w * saturate(FX_BLOOM_STRENGTH));  // Bloom Strength
   } else {
     r0.xyz = r0.xyz * r0.www;
   }

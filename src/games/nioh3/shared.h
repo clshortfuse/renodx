@@ -32,7 +32,7 @@
 #define CUSTOM_SHARPNESS           shader_injection.custom_sharpness
 #define CUSTOM_VIGNETTE            shader_injection.custom_vignette
 #define CUSTOM_DECHROMA            shader_injection.colorGradeBlowout
-#define FX_BLOOM_STREMGTH          shader_injection.fx_bloom_strength
+#define FX_BLOOM_STRENGTH          shader_injection.fx_bloom_strength
 
 // Must be 32bit aligned
 // Should be 4x32
