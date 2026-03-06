@@ -233,7 +233,7 @@ renodx::utils::settings::Settings settings = {
 
     new renodx::utils::settings::Setting{
         .key = "FxBloomStrength",
-        .binding =  &shader_injection.fx_bloom_strength,
+        .binding = &shader_injection.fx_bloom_strength,
         .default_value = 100.f,
         .label = "Bloom Strength",
         .section = "Effects",

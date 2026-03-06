@@ -271,7 +271,10 @@ float4 ProcessColor(float3 untonemapped, float3 graded) {
 }
 
 float4 ProcessColor(float4 color) {
-  color.rgb = renodx::tonemap::neutwo::BT709(color.rgb, RENODX_PEAK_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_RENO_DRT_WHITE_CLIP);
+  float peak_ratio = RENODX_PEAK_NITS / RENODX_GAME_NITS;
+  if (RENODX_GAMMA_CORRECTION) peak_ratio = renodx::color::correct::Gamma(peak_ratio, true);
+
+  color.rgb = renodx::tonemap::neutwo::BT709(color.rgb, peak_ratio, RENODX_RENO_DRT_WHITE_CLIP);
   color.rgb = renodx::draw::RenderIntermediatePass(color.rgb);
   color.a = 1.f;
 
@@ -297,7 +300,7 @@ float NiohDerivative(float x, float A, float B, float C, float D, float E) {
 }
 
 static const float kInflectionPoint = 0.267011;
-// static const float kInflectionPoint = 0.28160194f;  // To accomodate B * 0.3f
+// static const float kInflectionPoint = 0.28160194f;  // To accommodate B * 0.3f
 
 #define APPLYNIOHEXTENDED_GENERATOR(T)                                   \
   T ApplyNiohExtended(                                                   \
