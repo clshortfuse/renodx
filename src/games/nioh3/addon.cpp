@@ -85,6 +85,19 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 500.f,
     },
+
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapGammaCorrection",
+        .binding = &shader_injection.gamma_correction,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "SDR EOTF Emulation",
+        .section = "Tone Mapping",
+        .tooltip = "Emulates a 2.2 EOTF",
+        .labels = {"Off", "2.2"},
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
+
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.colorGradeExposure,
@@ -96,6 +109,20 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.toneMapType == 3; },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
     },
+
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeGamma",
+        .binding = &shader_injection.tone_map_gamma,
+        .default_value = 1.03f,
+        .label = "Gamma",
+        .section = "Color Grading",
+        .min = 0.75f,
+        .max = 1.25f,
+        .format = "%.2f",
+        .is_enabled = []() { return shader_injection.toneMapType == 3; },
+        .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
+
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.colorGradeHighlights,
@@ -203,6 +230,18 @@ renodx::utils::settings::Settings settings = {
         },
         .is_visible = []() { return settings[0]->GetValue() >= 2; },
     },
+
+    new renodx::utils::settings::Setting{
+        .key = "FxBloomStrength",
+        .binding =  &shader_injection.fx_bloom_strength,
+        .default_value = 100.f,
+        .label = "Bloom Strength",
+        .section = "Effects",
+        .tooltip = "Adjust bloom strength.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+
     new renodx::utils::settings::Setting{
         .key = "fxFilmGrainType",
         .binding = &shader_injection.custom_film_grain_type,
@@ -311,7 +350,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Game mod by Ritsu, RenoDX Framework by ShortFuse.",
+        .label = "Game mod by Ritsu, Maintained by Marat, RenoDX Framework by ShortFuse.",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -326,7 +365,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
+  renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
+  renodx::utils::settings::UpdateSetting("ColorGradeGamma", 1.f);
   renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
