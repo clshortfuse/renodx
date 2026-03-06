@@ -7,7 +7,8 @@ float3 EncodeColorCorrectLutValue(float3 value) {
 }
 
 float3 DecodeColorCorrectLutValue(float3 value) {
-  return renodx::color::acescc::Decode(value);  // return max(exp2((value * 17.520000457763672f) + -9.720000267028809f), 0.0f);
+  // return renodx::color::acescc::Decode(value);
+  return max(exp2((value * 17.520000457763672f) + -9.720000267028809f), 0.0f);
 }
 
 float3 SampleColorCorrectLut(
@@ -17,11 +18,7 @@ float3 SampleColorCorrectLut(
     float fTextureSize,
     float lutScale,
     float lutOffset) {
-  if (TONE_MAP_TYPE == 0.f) {
-    return textureMap.SampleLevel(trilinearClamp, lutEncoded * lutScale + lutOffset, 0.0f).rgb;
-  } else {
-    return renodx::lut::SampleTetrahedral(textureMap, saturate(lutEncoded), (uint)fTextureSize);
-  }
+  return textureMap.SampleLevel(trilinearClamp, lutEncoded * lutScale + lutOffset, 0.0f).rgb;
 }
 
 float3 SampleAndBlendLUTs(
