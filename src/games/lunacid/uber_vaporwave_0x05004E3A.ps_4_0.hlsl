@@ -62,6 +62,8 @@ void main(
 
   r1.rgb = renodx::color::srgb::DecodeSafe(r0.rgb);
 
+  //float3 test = r1.rgb;
+
   // Vaporwave
   r2.xyzw = t2.Sample(s2_s, v1.xy).xyzw;
   r0.xyz = r2.xxx * r1.xyz;
@@ -89,7 +91,7 @@ void main(
   r1.xyzw = cb0[34].yyyy * r1.xyzw;
   r2.xyzw = float4(0.25,0.25,0.25,1) * r1.xyzw;
   r1.xyzw = float4(0.25,0.25,0.25,0.25) * r1.xyzw;
-  r3.xyz = cb0[35].xyz * r2.xyz;
+  r3.xyz = cb0[35].xyz * CUSTOM_BLOOM * r2.xyz;
   r3.w = 0.25 * r2.w;
   r0.xyzw = r3.xyzw + r0.xyzw;
   r2.xy = v1.xy * cb0[33].xy + cb0[33].zw;
@@ -101,7 +103,10 @@ void main(
   // r0.xyzw = saturate(r2.xyzw * r1.xyzw + r0.xyzw);
   r0.xyzw = r2.xyzw * r1.xyzw + r0.xyzw;
   float3 untonemapped = r0.rgb;
-  r0.xyzw = saturate(r0.xyzw);
+  float sdr_scale = ComputeReinhardSmoothClampScale(untonemapped);
+  r0.xyz = untonemapped * sdr_scale;
+  r0.xyz = renodx::color::srgb::Encode(r0.zxy);
+  r0.xyz = saturate(r0.xyz);
 
   // // Linear to sRGB
   // r1.xyz = max(float3(1.1920929e-07,1.1920929e-07,1.1920929e-07), r0.zxy);
@@ -114,7 +119,7 @@ void main(
   // o0.w = r0.w;
   // r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
 
-  r0.rgb = renodx::color::srgb::EncodeSafe(r0.zxy);
+
 
   // LUT Sampling
   r0.yzw = cb0[36].zzz * r0.xyz;
@@ -131,7 +136,12 @@ void main(
   r0.yzw = r2.xyz + -r1.xyz;
   r0.xyz = r0.xxx * r0.yzw + r1.xyz;
 
-  float3 tonemapped_bt709 = renodx::color::srgb::DecodeSafe(r1.xyz);
+  float3 tonemapped_bt709 = renodx::color::srgb::DecodeSafe(r0.rgb);
+  float3 hdr_color = tonemapped_bt709 / sdr_scale;
+  hdr_color = lerp(untonemapped, hdr_color, SCENE_GRADE_GRADING_STRENGTH);
+
+  hdr_color = CustomTonemap(hdr_color, w1.xy);
+  r0.xyz = hdr_color;
 
   // // sRGB to Linear
   // r1.xyz = float3(0.0549999997, 0.0549999997, 0.0549999997) + r0.xyz;
@@ -164,10 +174,7 @@ void main(
   r1.x = sqrt(r1.x);
   r1.x = 1 + -r1.x;
   r0.w = r1.x * r0.w;
-  o0.xyz = r0.www * float3(0.00392156886,0.00392156886,0.00392156886) + r0.xyz;
+  o0.xyz = r0.www * float3(0.00392156886, 0.00392156886, 0.00392156886) + r0.xyz;
 
-  float3 sdr_color = renodx::color::srgb::DecodeSafe(o0.rgb);
-
-  o0.rgb = CustomTonemap(untonemapped, tonemapped_bt709, sdr_color);
   return;
 }
