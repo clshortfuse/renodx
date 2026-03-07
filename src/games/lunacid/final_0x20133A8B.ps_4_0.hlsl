@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 // ---- Created with 3Dmigoto v1.4.1 on Sat Apr 12 17:03:43 2025
 
 SamplerState BlitSampler_s : register(s0);
@@ -14,6 +16,8 @@ void main(
   out float4 o0 : SV_Target0)
 {
   o0.xyzw = BlitTexture.Sample(BlitSampler_s, v0.xy).xyzw;
+  o0.w = saturate(o0.w);
+  o0.xyz = renodx::draw::SwapChainPass(o0.xyz, v0.xy);
   
   return;
 }

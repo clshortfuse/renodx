@@ -43,15 +43,10 @@ void main(
   r0.xz = frac(r0.xz);
   r1.x = r0.y ? r0.z : r0.x;
   r0.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
-
-  float3 untonemapped = renodx::color::srgb::DecodeSafe(r0.xyz);
-  float3 sdr_color = renodx::tonemap::renodrt::NeutralSDR(untonemapped);
-  float4 sdr_color_srgb = saturate(r0);
-  if (RENODX_TONE_MAP_TYPE >= 1) {
-    sdr_color_srgb.xyz = renodx::color::srgb::EncodeSafe(sdr_color.xyz);
-    sdr_color_srgb.w = r0.w;
-  }
-  r0 = sdr_color_srgb;
+  r0 = saturate(r0);
+  // float3 untonemapped = renodx::color::srgb::DecodeSafe(r0.xyz);
+  // float sdr_scale = ComputeReinhardSmoothClampScale(untonemapped);
+  // r0.xyz = untonemapped * sdr_scale;
   
   r0.xz = float2(-0.5,-0.5) + r1.xy;
   r0.x = dot(r0.xz, r0.xz);
@@ -59,13 +54,13 @@ void main(
   r0.x = dot(cb0[4].zz, r0.xx);
   r1.zw = r0.xx * cb0[5].yx + r1.xy;
 
-  //r2.xyzw = t0.Sample(s0_s, r1.zw).xyzw;
-  r2 = sdr_color_srgb;
+  r2.xyzw = t0.Sample(s0_s, r1.zw).xyzw;
+  r2 = saturate(r2);
 
   r1.xy = -r0.xx * cb0[5].yx + r1.xy;
 
-  //r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
-  r1 = sdr_color_srgb;
+  r1.xyzw = t0.Sample(s0_s, r1.xy).xyzw;
+
 
   //VHS Noise
   r0.x = cmp(0 != cb0[6].z);
@@ -99,6 +94,13 @@ void main(
   } else {
     r3.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
   }
+
+  // float3 untonemapped = renodx::color::srgb::DecodeSafe(r3.xyz);
+  // float sdr_scale = ComputeReinhardSmoothClampScale(untonemapped);
+  // r3.xyz = untonemapped * sdr_scale;
+  // r3.xyz = renodx::color::srgb::Encode(r3.xyz);
+  // r3.xyz = saturate(r3.xyz);
+
   r4.xyzw = cmp(r3.xyzw >= float4(0.5,0.5,0.5,0.5));
   r5.xyzw = r4.xyzw ? float4(1,1,1,1) : 0;
   r1.x = r2.x;
@@ -125,11 +127,9 @@ void main(
   r0.x = 1 + -r0.x;
   o0.xyzw = r1.xyzw * r0.xxxx;
 
-  float3 processed_sdr = renodx::color::srgb::DecodeSafe(o0.rgb);
-
-  if (RENODX_TONE_MAP_TYPE >= 1) {
-    o0.rgb = renodx::tonemap::UpgradeToneMap(untonemapped, sdr_color, processed_sdr, 1.f);
-    o0.rgb = renodx::color::srgb::EncodeSafe(o0.rgb);
-  }
+  // float3 sdr_color = renodx::color::srgb::DecodeSafe(o0.rgb);
+  // float3 hdr_color = sdr_color / sdr_scale;
+  // o0.xyz = renodx::color::srgb::EncodeSafe(hdr_color);
+  //o0.w = saturate(o0.w);
   return;
 }
