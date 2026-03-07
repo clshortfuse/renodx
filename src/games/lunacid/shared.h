@@ -6,7 +6,7 @@
 #define RENODX_GRAPHICS_WHITE_NITS           shader_injection.diffuse_white_nits // UI slider doesn't work due to UI ordering issues, match game brightness
 #define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
 #define CUSTOM_TONE_MAP_CONFIGURATION        shader_injection.custom_tone_map_configuration
-#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_RENO_DRT_WHITE_CLIP           shader_injection.tone_map_white_clip
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
