@@ -326,6 +326,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxFogDithering",
+        .binding = &shader_injection.custom_fog_dithering,
+        .default_value = 100.f,
+        .label = "Custom Fog Dithering",
+        .section = "Effects",
+        .tooltip = "Hides banding in fog",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "WARNING: Rendering Format changes require a restart to apply.",
         .section = "Advanced",
@@ -492,6 +502,7 @@ void OnPresetOff() {
       {"FxVanillaGrainStrength", 100.f},
       {"FxFilmDamageStrength", 100.f},
       {"FxGrainStrength", 0.f},
+      {"FxFogDithering", 0.f},
   });
   MarkToneMappingLutInvalidated();
 }
@@ -556,7 +567,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);        // fp11 upgrades for NVIDIA
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
-      renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);      // film grain
+      renodx::utils::random::binds.push_back(&shader_injection.custom_fog_random);  // fog dithering
 
       break;
     case DLL_PROCESS_DETACH:
@@ -569,7 +581,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
-  renodx::utils::random::Use(fdw_reason);  // film grain
+  renodx::utils::random::Use(fdw_reason);  // film grain & fog dithering
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
