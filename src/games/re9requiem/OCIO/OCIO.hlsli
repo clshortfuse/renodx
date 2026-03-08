@@ -196,6 +196,49 @@ float3 ApplyPostToneMapProcessingPQInput(float3 color_pq, float2 grain_uv, float
   return color_pq;
 }
 
+float3 ApplyPostToneMapProcessingGammaInput(float3 color_gamma, float2 grain_uv, float3 color_ungraded_ap1, Texture3D<float4> SrcLUT, SamplerState TrilinearClamp) {
+  if ((COLOR_GRADE_LUT_SCALING_2 > 0.f || CUSTOM_GRAIN_STRENGTH > 0.f || RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f)
+      && TONE_MAP_TYPE != 0.f) {
+    float3 lut_output = renodx::color::gamma::DecodeSafe(color_gamma.rgb);
+    if (COLOR_GRADE_LUT_SCALING_2 > 0.f) {
+      float3 lut_min = renodx::color::gamma::DecodeSafe(
+          SrcLUT.SampleLevel(TrilinearClamp, renodx::color::acescc::Encode(0.xxx) * 0.984375f + 0.0078125f, 0.0f).rgb);
+      float3 lut_mid = renodx::color::gamma::DecodeSafe(
+          SrcLUT.SampleLevel(TrilinearClamp, renodx::color::acescc::Encode((lut_min + max(lut_min, LUT_SCALING_2_MID)) / 2.f) * 0.984375f + 0.0078125f, 0.0f).rgb);
+
+      float3 unclamped_gamma = Unclamp(
+          renodx::color::gamma::EncodeSafe(lut_output),
+          renodx::color::gamma::EncodeSafe(lut_min),
+          renodx::color::gamma::EncodeSafe(lut_mid),
+          renodx::color::gamma::EncodeSafe(renodx::color::bt709::from::AP1(color_ungraded_ap1)));
+
+      float3 unclamped_linear = renodx::color::gamma::DecodeSafe(unclamped_gamma);
+
+      lut_output *= lerp(
+          1.f,
+          renodx::math::DivideSafe(LuminosityFromBT709(unclamped_linear), LuminosityFromBT709(lut_output), 1.f),
+          COLOR_GRADE_LUT_SCALING_2);
+    }
+
+    if (RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f) {
+      float lum_in = LuminosityFromBT2020(lut_output);
+      float lum_out = renodx::math::Select(lum_in < 1.f, pow(lum_in, RENODX_TONE_MAP_GAMMA), lum_in);
+      lum_out = ContrastAndFlare(lum_out, 1.f, 0.10f * pow(RENODX_POST_TONE_MAP_FLARE, 10.f), 0.1f);
+      lum_out = Shadows(lum_out, RENODX_POST_TONE_MAP_SHADOWS, 0.1f);
+      lut_output *= renodx::math::DivideSafe(lum_out, lum_in, 1.f);
+    }
+
+    if (CUSTOM_GRAIN_STRENGTH > 0.f) {
+      lut_output = renodx::effects::ApplyFilmGrain(
+          lut_output, grain_uv, CUSTOM_RANDOM, CUSTOM_GRAIN_STRENGTH * 0.06f,
+          1.f, false, renodx::color::BT709_TO_XYZ_MAT);
+    }
+
+    color_gamma = renodx::color::gamma::EncodeSafe(lut_output);
+  }
+  return color_gamma;
+}
+
 float SampleOCIOLUT1D(float x, Texture2D<float4> lut1d, SamplerState bilinearClamp) {
   float ax = abs(x);
   float halfIndex;

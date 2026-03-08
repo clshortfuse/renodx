@@ -35,6 +35,12 @@ OutputSignature main(
   return output_sig;
 #endif
 
+#if 1
+  if (TONE_MAP_TYPE != 0.f) {
+    _9.rgb = ApplyCustomGrading(_9.rgb);
+  }
+#endif
+
   float _27;
   float _42;
   float _57;
@@ -66,6 +72,11 @@ OutputSignature main(
     _57 = -0.35844698548316956f;
   }
   float4 _66 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_27 * 0.984375f) + 0.0078125f), ((_42 * 0.984375f) + 0.0078125f), ((_57 * 0.984375f) + 0.0078125f)), 0.0f);
+
+#if 1
+  _66.rgb = ApplyPostToneMapProcessingPQInput(_66.rgb, TEXCOORD, _9.rgb, SrcLUT, TrilinearClamp);
+#endif
+
   SV_Target.x = _66.x;
   SV_Target.y = _66.y;
   SV_Target.z = _66.z;
