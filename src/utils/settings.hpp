@@ -159,6 +159,8 @@ static Settings* settings = nullptr;
     .format = "%.2f",                                     \
   }
 
+bool useRenoDXHelper = false;
+
 static Setting* FindSetting(const std::string& key) {
   for (auto* setting : *settings) {
     if (setting->key == key) {
@@ -338,6 +340,40 @@ static void WriteGlobalString(const std::string& key, const std::string& value) 
   reshade::set_config_value(nullptr, global_name.c_str(), key.c_str(), value.c_str());
 }
 
+static void updateRenoDXHelper(reshade::api::effect_runtime* runtime, float ToneMapUINits = 0) {
+  auto technique = runtime->find_technique("RenoDXHelper.addonfx", "RenoDXHelper");
+
+  if (!technique.handle) return;
+
+  if (!useRenoDXHelper) {
+    runtime->set_technique_state(technique, false);
+    return;
+  }
+  auto variable = runtime->find_uniform_variable("RenoDXHelper.addonfx", "RENODX_UI_NITS");
+  if (!variable.handle) return;
+  runtime->set_technique_state(technique, true);
+  if (ToneMapUINits <= 0.f) {
+    auto setting = FindSetting("ToneMapUINits");
+    if (setting) {
+      ToneMapUINits = setting->value;
+    } else {
+      return;
+    }
+  }
+  runtime->set_uniform_value_float(variable, ToneMapUINits);
+}
+
+static void OnReshadeBeginEffects(
+  reshade::api::effect_runtime* runtime,
+  reshade::api::command_list* cmd_list,
+  reshade::api::resource_view rtv,
+  reshade::api::resource_view rtv_srgb
+) {
+  // run once
+  updateRenoDXHelper(runtime);
+  reshade::unregister_event<reshade::addon_event::reshade_begin_effects>(OnReshadeBeginEffects);
+}
+
 // Runs first
 // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
@@ -375,6 +411,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       for (auto& callback : on_preset_changed_callbacks) {
         callback();
       }
+      updateRenoDXHelper(runtime);
     }
     has_drawn_presets = true;
   };
@@ -580,6 +617,9 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       if (changed) {
         const std::unique_lock lock(renodx::utils::mutex::global_mutex);
         setting->Write();
+        if (useRenoDXHelper && setting->key == "ToneMapUINits") {
+          updateRenoDXHelper(runtime, setting->value);
+        }
         any_change = true;
         setting->on_change_value(previous_value, setting->GetValue());
       }
@@ -628,6 +668,7 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
       LoadGlobalSettings();
       LoadSettings(global_name + "-preset1");
       reshade::register_overlay(overlay_title.c_str(), OnRegisterOverlay);
+      reshade::register_event<reshade::addon_event::reshade_begin_effects>(OnReshadeBeginEffects);
 
       break;
     case DLL_PROCESS_DETACH:
