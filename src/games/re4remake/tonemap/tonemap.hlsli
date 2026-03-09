@@ -155,7 +155,7 @@ float3 ApplyColorGradingLUTs(float3 color_input) {
 
     float lut_black_y = renodx::color::y::from::BT709(lut_black);
     if (lut_black_y > 0.f) {
-      float3 lut_mid = BlendLUTs(lut_black_y);
+      float3 lut_mid = BlendLUTs(lut_black);
 
       float3 unclamped_gamma = Unclamp(
           renodx::color::srgb::EncodeSafe(color_output),
@@ -285,7 +285,7 @@ float3 ApplyToneMap(float3 untonemapped, float2 texcoord) {
       tonemapped,
       texcoord,
       CUSTOM_RANDOM,
-      CUSTOM_GRAIN_STRENGTH * 0.03f);
+      CUSTOM_GRAIN_STRENGTH * 0.06f);
 
   tonemapped *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
   if (RENODX_GAMMA_CORRECTION != 0.f) {
