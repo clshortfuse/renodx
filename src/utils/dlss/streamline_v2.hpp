@@ -28,7 +28,7 @@
 
 #include <include/reshade.hpp>
 
-#include "C:\Users\clsho\Documents\GitHub\reshade\source\dxgi\dxgi_factory.hpp"
+#include <source/dxgi/dxgi_factory.hpp>
 
 #include "../directx.hpp"
 #include "../resource.hpp"
