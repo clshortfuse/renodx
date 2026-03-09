@@ -17,10 +17,8 @@
 #include <cassert>
 #include <cstdint>
 #include <include/reshade_api_device.hpp>
+#include <include/reshade_api_format.hpp>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
-#include <thread>
 #include <unordered_map>
 
 #include <include/reshade.hpp>
@@ -39,14 +37,14 @@ static bool attached = false;
 
 // Variables
 static bool use_device_proxy = false;
+static bool remove_device_proxy = false;
 static bool bypass_dx9_ex_upgrade = false;
 static bool device_proxy_wait_idle_source = false;
 static bool device_proxy_wait_idle_destination = false;
-static void* last_device_proxy_shared_handle = nullptr;
 static reshade::api::resource last_device_proxy_shared_resource = {0u};
-static std::shared_mutex g_last_device_proxy_mutex;
 
 static thread_local bool is_creating_proxy_device = false;
+static thread_local bool is_creating_proxy_swapchain = false;
 
 static IDXGISwapChain1* proxy_swap_chain = nullptr;
 static ID3D11Device* proxy_device = nullptr;
@@ -68,91 +66,198 @@ static std::atomic<uint32_t> proxy_swapchain_last_height = 0;
 static std::atomic<uintptr_t> proxy_swapchain_last_hwnd = 0;
 static std::atomic<bool> proxy_present_test_pending = true;
 static std::atomic<uint32_t> proxy_invalid_call_streak = 0;
+static std::atomic<uintptr_t> proxy_swapchain_hwnd_override = 0;
+static std::atomic<bool> proxy_settings_dirty = false;
+static std::atomic<uint32_t> proxy_teardown_deferred_presents = 0;
 
-static HANDLE device_proxy_sync_event;
-static std::atomic<bool> device_proxy_exit_thread = false;
-static std::atomic<bool> device_proxy_thread_running = false;
-static bool use_device_proxy_thread = false;
 static bool device_proxy_creation_failed = false;
 
 static reshade::api::format target_format = reshade::api::format::r16g16b16a16_float;
 static reshade::api::color_space target_color_space = reshade::api::color_space::extended_srgb_linear;
-static renodx::utils::resource::ResourceUpgradeInfo proxy_upgrade_target = {
-    .new_format = reshade::api::format::r16g16b16a16_float,
-    .use_shared_handle = true,
-    .usage_set =
-        static_cast<uint32_t>(reshade::api::resource_usage::copy_source
-                              | reshade::api::resource_usage::copy_dest),
-    .use_resource_view_cloning_and_upgrade = true,
-};
+static reshade::api::format target_intermediate_format = reshade::api::format::r16g16b16a16_float;
 static renodx::utils::resource::ResourceUpgradeInfo proxy_clone_target = {
     .new_format = reshade::api::format::r16g16b16a16_float,
+    .use_resource_view_hot_swap = true,
     .usage_set =
         static_cast<uint32_t>(reshade::api::resource_usage::shader_resource
                               | reshade::api::resource_usage::render_target),
+    .view_upgrades = utils::resource::VIEW_UPGRADES_RGBA16F,
     .use_resource_view_cloning_and_upgrade = true,
 };
 static renodx::utils::draw::SwapchainProxyPass proxy_swapchain_settings = {};
 static bool proxy_swapchain_settings_valid = false;
 static std::unordered_map<uint64_t, std::unique_ptr<renodx::utils::draw::SwapchainProxyPass>> proxy_swapchain_passes;
 
+struct ProxySharedResourcePair {
+  reshade::api::resource host_shared_resource = {0u};
+  reshade::api::resource proxy_shared_resource = {0u};
+};
+static std::unordered_map<uint64_t, ProxySharedResourcePair> proxy_shared_resources_by_clone;
+
 // Methods
+static void DestroyProxySharedResourcesForHandle(uint64_t handle);
+
+static void DeactivateProxyCloneForResource(const reshade::api::resource& resource) {
+  if (resource.handle == 0u) return;
+  renodx::utils::resource::store->resource_infos.if_contains(resource.handle, [&](auto& pair) {
+    auto& info = pair.second;
+    if (info.clone_target == &proxy_clone_target) {
+      info.clone_enabled = false;
+    }
+  });
+}
+
+static void ResetProxyCloneForResource(const reshade::api::resource& resource) {
+  if (resource.handle == 0u) return;
+
+  auto* info = renodx::utils::resource::GetResourceInfoUnsafe(resource, false);
+  if (info == nullptr) return;
+  if (info->clone_target != &proxy_clone_target) return;
+
+  std::vector<std::pair<uint64_t, uint64_t>> stale_clone_views;
+  renodx::utils::resource::store->resource_view_infos.for_each([&](const auto& pair) {
+    const auto& view_info = pair.second;
+    if (view_info.destroyed) return;
+    if (view_info.resource_info != info) return;
+    if (view_info.clone.handle == 0u) return;
+    stale_clone_views.emplace_back(view_info.view.handle, view_info.clone.handle);
+  });
+  for (const auto& [owner_view_handle, clone_view_handle] : stale_clone_views) {
+    if (info->device != nullptr) {
+      info->device->destroy_resource_view({clone_view_handle});
+    }
+    renodx::utils::resource::store->resource_view_infos.if_contains_unsafe(owner_view_handle, [&](auto& owner_pair) {
+      auto& owner_view_info = owner_pair.second;
+      if (owner_view_info.clone.handle == clone_view_handle) {
+        owner_view_info.clone = {0u};
+        owner_view_info.clone_resource = {0u};
+        owner_view_info.clone_desc = {};
+      }
+    });
+  }
+
+  DestroyProxySharedResourcesForHandle(info->clone.handle);
+  if (info->clone.handle != 0u && info->device != nullptr) {
+    info->device->destroy_resource(info->clone);
+  }
+  info->clone = {0u};
+  info->clone_desc = {};
+}
+
+static void DeactivateProxySwapchainClones(reshade::api::swapchain* swapchain) {
+  if (swapchain == nullptr) return;
+  const uint32_t back_buffer_count = swapchain->get_back_buffer_count();
+  for (uint32_t index = 0; index < back_buffer_count; ++index) {
+    DeactivateProxyCloneForResource(swapchain->get_back_buffer(index));
+  }
+}
+
+static void ResetProxySwapchainCloneResources(reshade::api::swapchain* swapchain) {
+  if (swapchain == nullptr) return;
+  const uint32_t back_buffer_count = swapchain->get_back_buffer_count();
+  for (uint32_t index = 0; index < back_buffer_count; ++index) {
+    ResetProxyCloneForResource(swapchain->get_back_buffer(index));
+  }
+}
+
+static void DestroyProxySharedResourcePair(ProxySharedResourcePair& pair) {
+  if (pair.host_shared_resource.handle != 0u && proxied_device_reshade != nullptr) {
+    proxied_device_reshade->destroy_resource(pair.host_shared_resource);
+    pair.host_shared_resource = {0u};
+  }
+
+  if (pair.proxy_shared_resource.handle != 0u) {
+    if (last_device_proxy_shared_resource.handle == pair.proxy_shared_resource.handle) {
+      last_device_proxy_shared_resource = {0u};
+    }
+    if (proxy_device_reshade != nullptr) {
+      proxy_device_reshade->destroy_resource(pair.proxy_shared_resource);
+    }
+    pair.proxy_shared_resource = {0u};
+  }
+}
+
+static void DestroyProxySharedResourcesForHandle(uint64_t handle) {
+  if (handle == 0u) return;
+
+  if (auto it = proxy_shared_resources_by_clone.find(handle);
+      it != proxy_shared_resources_by_clone.end()) {
+    auto pair = it->second;
+    proxy_shared_resources_by_clone.erase(it);
+    DestroyProxySharedResourcePair(pair);
+    return;
+  }
+
+  for (auto it_pair = proxy_shared_resources_by_clone.begin();
+       it_pair != proxy_shared_resources_by_clone.end(); ++it_pair) {
+    const auto& pair = it_pair->second;
+    if (pair.host_shared_resource.handle != handle
+        && pair.proxy_shared_resource.handle != handle) {
+      continue;
+    }
+
+    auto pair_copy = it_pair->second;
+    proxy_shared_resources_by_clone.erase(it_pair);
+    DestroyProxySharedResourcePair(pair_copy);
+    return;
+  }
+}
+
+static void OnDestroyTrackedResourceInfo(renodx::utils::resource::ResourceInfo* info) {
+  if (info == nullptr) return;
+  DestroyProxySharedResourcesForHandle(info->resource.handle);
+  DestroyProxySharedResourcesForHandle(info->clone.handle);
+}
 
 static void DestroyProxyDeviceResources(reshade::api::device* device) {
+  std::unordered_map<uint64_t, ProxySharedResourcePair> pairs;
+  pairs.swap(proxy_shared_resources_by_clone);
+  for (auto& [clone_handle, pair] : pairs) {
+    DestroyProxySharedResourcePair(pair);
+  }
+  last_device_proxy_shared_resource = {0u};
   if (device == nullptr) return;
   if (proxy_device_resource.handle != 0u) {
     device->destroy_resource(proxy_device_resource);
     if (auto* info = renodx::utils::resource::GetResourceInfoUnsafe(proxy_device_resource, false)) {
       info->destroyed = true;
     }
-    proxy_device_resource.handle = 0u;
+    proxy_device_resource = {0u};
   }
 }
 
 static void SetTargetFormat(reshade::api::format format) {
-  target_format = format;
+  if (target_format != format) {
+    proxy_settings_dirty = true;
+    target_format = format;
+  }
 }
 
 static void SetTargetColorSpace(reshade::api::color_space color_space) {
-  target_color_space = color_space;
+  if (target_color_space != color_space) {
+    proxy_settings_dirty = true;
+    target_color_space = color_space;
+  }
+}
+
+static void SetIntermediateFormat(reshade::api::format format) {
+  if (target_intermediate_format != format) {
+    proxy_settings_dirty = true;
+    target_intermediate_format = format;
+  }
 }
 
 static void SetProxySettings(const renodx::utils::draw::SwapchainProxyPass& settings) {
   proxy_swapchain_settings = settings;
   proxy_swapchain_settings_valid = true;
-  proxy_clone_target.new_format = proxy_swapchain_settings.proxy_format;
-  if (proxy_clone_target.new_format == reshade::api::format::r10g10b10a2_unorm) {
-    proxy_clone_target.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
-  } else {
-    proxy_clone_target.view_upgrades = utils::resource::VIEW_UPGRADES_RGBA16F;
-  }
 }
 
-static void DeviceProxyThread() {
-  device_proxy_thread_running = true;
-  do {
-    WaitForSingleObject(device_proxy_sync_event, INFINITE);
+static void SetSwapchainHwndOverride(HWND hwnd) {
+  proxy_swapchain_hwnd_override = reinterpret_cast<uintptr_t>(hwnd);
+}
 
-    if (device_proxy_exit_thread) break;
-    UINT present_flags =
-        (proxy_swap_chain == nullptr) ? 0u : proxy_present_flags.load(std::memory_order_relaxed);
-    if (proxy_swap_chain == nullptr) {
-      continue;
-    }
-    const HRESULT hr = proxy_swap_chain->Present(0, present_flags);
-    if (FAILED(hr) && hr == DXGI_ERROR_INVALID_CALL) {
-      const uint32_t streak = proxy_invalid_call_streak.fetch_add(1, std::memory_order_relaxed) + 1;
-      if (streak >= 2u) {
-        proxy_device_needs_resize.store(true, std::memory_order_relaxed);
-        proxy_present_test_pending.store(true, std::memory_order_relaxed);
-        reshade::log::message(reshade::log::level::warning,
-                              "utils::device_proxy::DeviceProxyThread(schedule resize recovery after invalid-call)");
-      }
-    } else if (SUCCEEDED(hr)) {
-      proxy_invalid_call_streak.store(0, std::memory_order_relaxed);
-    }
-  } while (true);
-  device_proxy_thread_running = false;
+static HWND GetSwapchainHwndOverride() {
+  return reinterpret_cast<HWND>(proxy_swapchain_hwnd_override.load());
 }
 
 static void DestroyProxySwapchainPasses(reshade::api::device* device) {
@@ -175,18 +280,34 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
 
   DXGI_SWAP_CHAIN_FULLSCREEN_DESC fullscreen_desc = {};
   DXGI_SWAP_CHAIN_DESC1 sc_desc = {};
-  sc_desc.BufferCount = 2;
+  sc_desc.BufferCount = 2u;
   sc_desc.Width = host_resource_info->desc.texture.width;
   sc_desc.Height = host_resource_info->desc.texture.height;
-  if (target_format == reshade::api::format::r10g10b10a2_unorm) {
-    sc_desc.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
-  } else {
-    sc_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  switch (target_format) {
+    default:
+      assert(false);
+    case reshade::api::format::r16g16b16a16_float:
+      sc_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+      break;
+    case reshade::api::format::r10g10b10a2_unorm:
+      sc_desc.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
+      break;
+    case reshade::api::format::r8g8b8a8_unorm:
+      sc_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+      break;
   }
   fullscreen_desc.RefreshRate.Numerator = 0;
   fullscreen_desc.RefreshRate.Denominator = 0;
   sc_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
   auto* output_window = hwnd != nullptr ? static_cast<HWND>(hwnd) : GetDesktopWindow();
+  auto* override_window = GetSwapchainHwndOverride();
+  if (override_window != nullptr) {
+    if (IsWindow(override_window) != FALSE) {
+      output_window = override_window;
+    } else {
+      SetSwapchainHwndOverride(nullptr);
+    }
+  }
   sc_desc.SampleDesc.Count = 1;
   fullscreen_desc.Windowed = TRUE;
   sc_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -331,10 +452,9 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
   }
   sc_desc.Flags = tearing_supported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
-  proxy_present_flags.store(
-      tearing_supported ? DXGI_PRESENT_ALLOW_TEARING : 0u,
-      std::memory_order_relaxed);
+  proxy_present_flags = tearing_supported ? DXGI_PRESENT_ALLOW_TEARING : 0u;
 
+  is_creating_proxy_swapchain = true;
   const auto hr = dxgi_factory->CreateSwapChainForHwnd(
       swapchain_creator,
       output_window,
@@ -342,6 +462,7 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
       &fullscreen_desc,
       nullptr,
       &proxy_swap_chain);
+  is_creating_proxy_swapchain = false;
   if (FAILED(hr)) {
     {
       RECT rect = {};
@@ -372,11 +493,11 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
     return nullptr;
   }
 
-  proxy_swapchain_last_width.store(sc_desc.Width);
-  proxy_swapchain_last_height.store(sc_desc.Height);
-  proxy_swapchain_last_hwnd.store(reinterpret_cast<uintptr_t>(output_window));
-  proxy_present_test_pending.store(true, std::memory_order_relaxed);
-  proxy_invalid_call_streak.store(0, std::memory_order_relaxed);
+  proxy_swapchain_last_width = sc_desc.Width;
+  proxy_swapchain_last_height = sc_desc.Height;
+  proxy_swapchain_last_hwnd = reinterpret_cast<uintptr_t>(output_window);
+  proxy_present_test_pending = true;
+  proxy_invalid_call_streak = 0;
   reshade::log::message(reshade::log::level::info, "utils::device_proxy::GetDeviceProxy(Swapchain created successfully)");
 
   // New (Mark window association to prevent full screen changes)
@@ -401,19 +522,30 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
 
   IDXGISwapChain3* swapChain3 = nullptr;
   if (SUCCEEDED(proxy_swap_chain->QueryInterface(IID_PPV_ARGS(&swapChain3)))) {
-    if (target_color_space == reshade::api::color_space::hdr10_st2084) {
-      swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
-    } else {
-      swapChain3->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709);
+    DXGI_COLOR_SPACE_TYPE dxgi_color_space;
+    switch (target_color_space) {
+      default:
+        assert(false && "Unsupported target color space");
+      case reshade::api::color_space::extended_srgb_linear:
+        dxgi_color_space = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
+        break;
+      case reshade::api::color_space::hdr10_st2084:
+        dxgi_color_space = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+        break;
+      case reshade::api::color_space::srgb_nonlinear:
+        dxgi_color_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+        break;
+    }
+
+    const HRESULT color_space_hr = swapChain3->SetColorSpace1(dxgi_color_space);
+    if (FAILED(color_space_hr)) {
+      std::stringstream s;
+      s << "utils::device_proxy::GetDeviceProxy(SetColorSpace1 failed: hr=0x";
+      s << std::hex << static_cast<uint32_t>(color_space_hr) << std::dec;
+      s << ", color_space=" << target_color_space << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
     }
     swapChain3->Release();
-  }
-
-  if (use_device_proxy_thread) {
-    assert(device_proxy_thread_running == false);
-    device_proxy_exit_thread = false;
-    static std::thread device_proxy_render_thread(DeviceProxyThread);
-    device_proxy_render_thread.detach();
   }
 
   return proxy_device;
@@ -513,59 +645,217 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
 
 // THIS SPACE INTENTIONALLY LEFT BLANK
 
-// clang-format off
+// clang-format on
+
+static ProxySharedResourcePair GetProxySharedResourcePair(
+    renodx::utils::resource::ResourceInfo* source_resource_info,
+    const reshade::api::resource& source_clone,
+    HWND hwnd) {
+  if (source_resource_info == nullptr) return {};
+  if (source_clone.handle == 0u) return {};
+
+  auto existing = proxy_shared_resources_by_clone.find(source_clone.handle);
+  if (existing != proxy_shared_resources_by_clone.end()) {
+    const bool valid = existing->second.host_shared_resource.handle != 0u
+                       && existing->second.proxy_shared_resource.handle != 0u;
+    if (valid) {
+      return existing->second;
+    }
+    auto stale_pair = existing->second;
+    proxy_shared_resources_by_clone.erase(existing);
+    DestroyProxySharedResourcePair(stale_pair);
+  }
+
+  if (GetDeviceProxy(source_resource_info, hwnd) == nullptr || proxy_device_reshade == nullptr) {
+    assert(false && "GetProxySharedResourcePair called but proxy device is not available");
+    return {};
+  }
+
+  auto new_desc = source_resource_info->clone_desc;
+  if (new_desc.type == reshade::api::resource_type::unknown) {
+    new_desc = source_resource_info->desc;
+  }
+  new_desc.texture.format = target_intermediate_format;
+  new_desc.usage = static_cast<reshade::api::resource_usage>(
+      static_cast<uint32_t>(new_desc.usage)
+      | static_cast<uint32_t>(reshade::api::resource_usage::copy_source
+                              | reshade::api::resource_usage::copy_dest));
+  if (new_desc.heap == reshade::api::memory_heap::custom) {
+    new_desc.heap = reshade::api::memory_heap::gpu_only;
+  }
+  if (new_desc.type == reshade::api::resource_type::surface) {
+    new_desc.type = reshade::api::resource_type::texture_2d;
+  }
+
+  // Override original flags
+  new_desc.flags = reshade::api::resource_flags::shared;
+  if (source_resource_info->device->get_api() == reshade::api::device_api::opengl) {
+    new_desc.flags |= reshade::api::resource_flags::shared_nt_handle;
+  }
+
+  reshade::api::resource new_proxy_resource = {0u};
+  reshade::api::resource new_host_shared_resource = {0u};
+  void* new_shared_handle = nullptr;
+  if (!proxy_device_reshade->create_resource(
+          new_desc,
+          nullptr,
+          source_resource_info->initial_state,
+          &new_proxy_resource,
+          &new_shared_handle)) {
+    std::stringstream s;
+    s << "utils::device_proxy::GetProxySharedResourcePair(create proxy resource failed: ";
+    s << "resource=" << PRINT_PTR(source_clone.handle);
+    s << ", proxy_api=" << proxy_device_reshade->get_api();
+    s << ", initial_state=0x" << std::hex << static_cast<uint32_t>(source_resource_info->initial_state) << std::dec;
+    s << ")";
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
+    return {};
+  }
+  if (new_proxy_resource.handle == 0u || new_shared_handle == nullptr) {
+    if (new_proxy_resource.handle != 0u) {
+      proxy_device_reshade->destroy_resource(new_proxy_resource);
+    }
+    reshade::log::message(
+        reshade::log::level::error,
+        "utils::device_proxy::GetProxySharedResourcePair(create proxy resource returned invalid shared resource/handle)");
+    return {};
+  }
+
+  void* host_shared_handle = new_shared_handle;
+  if (!source_resource_info->device->create_resource(
+          new_desc,
+          nullptr,
+          source_resource_info->initial_state,
+          &new_host_shared_resource,
+          &host_shared_handle)) {
+    proxy_device_reshade->destroy_resource(new_proxy_resource);
+    std::stringstream s;
+    s << "utils::device_proxy::GetProxySharedResourcePair(create host shared resource failed: ";
+    s << "resource=" << PRINT_PTR(source_clone.handle);
+    s << ", host_api=" << source_resource_info->device->get_api();
+    s << ", proxy_api=" << proxy_device_reshade->get_api();
+    s << ", initial_state=0x" << std::hex << static_cast<uint32_t>(source_resource_info->initial_state) << std::dec;
+    s << ", shared_handle_in=" << PRINT_PTR(reinterpret_cast<uintptr_t>(new_shared_handle));
+    s << ", shared_handle_out=" << PRINT_PTR(reinterpret_cast<uintptr_t>(host_shared_handle));
+    s << ")";
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
+    return {};
+  }
+  if (new_host_shared_resource.handle == 0u) {
+    proxy_device_reshade->destroy_resource(new_proxy_resource);
+    reshade::log::message(
+        reshade::log::level::error,
+        "utils::device_proxy::GetProxySharedResourcePair(create host shared resource returned invalid resource)");
+    return {};
+  }
+
+  renodx::utils::resource::store->resource_infos[new_proxy_resource.handle] = {
+      .device = proxy_device_reshade,
+      .desc = new_desc,
+      .resource = new_proxy_resource,
+      .destroyed = false,
+      .initial_state = source_resource_info->initial_state,
+  };
+
+  renodx::utils::resource::store->resource_infos[new_host_shared_resource.handle] = {
+      .device = source_resource_info->device,
+      .desc = new_desc,
+      .resource = new_host_shared_resource,
+      .destroyed = false,
+      .initial_state = source_resource_info->initial_state,
+  };
+
+  ProxySharedResourcePair pair = {
+      .host_shared_resource = new_host_shared_resource,
+      .proxy_shared_resource = new_proxy_resource,
+  };
+  proxy_shared_resources_by_clone[source_clone.handle] = pair;
+
+  return pair;
+}
 
 // Old DrawSwapChainProxy
 static void OnPresentForProxyDevice(reshade::api::device* device, reshade::api::command_queue* queue, reshade::api::swapchain* swapchain) {
   auto* cmd_list = queue->get_immediate_command_list();
-  auto current_back_buffer = swapchain->get_current_back_buffer();
-
   if (!proxy_swapchain_settings_valid) {
     return;
   }
-  if (last_device_proxy_shared_handle == nullptr && last_device_proxy_shared_resource.handle == 0u) {
+  if (last_device_proxy_shared_resource.handle == 0u) {
     return;
   }
 
-  auto* resource_info = renodx::utils::resource::GetResourceInfoUnsafe(current_back_buffer);
-  if (resource_info == nullptr) return;
-
-
   {
-    const std::lock_guard<std::shared_mutex> lock(g_last_device_proxy_mutex);
-    assert(last_device_proxy_shared_handle != nullptr);
-    if (last_device_proxy_shared_handle == nullptr) return;
-#ifndef RENODX_PROXY_DEVICE_D3D12
-    ID3D11Texture2D* shared_texture = nullptr;
     reshade::api::resource proxy_temp_resource = last_device_proxy_shared_resource;
-    if (proxy_temp_resource.handle == 0u) {
-      if (FAILED(proxy_device->OpenSharedResource(last_device_proxy_shared_handle, IID_PPV_ARGS(&shared_texture)))) {
-        reshade::log::message(reshade::log::level::error,
-                              "utils::device_proxy::OnPresent(OpenSharedResource failed.)");
-        return;
-      }
-      proxy_temp_resource = {reinterpret_cast<uintptr_t>(shared_texture)};
-    }
-#else
-    ID3D12Resource* shared_texture = nullptr;
-    if (FAILED(proxy_device->OpenSharedHandle(last_device_proxy_shared_handle, IID_PPV_ARGS(&shared_texture)))) {
-      reshade::log::message(reshade::log::level::error,
-                            "utils::device_proxy::OnPresent(OpenSharedHandle failed.)");
+    if (proxy_temp_resource.handle == 0u) return;
+
+    bool proxy_temp_resource_valid = false;
+    reshade::api::resource_desc proxy_temp_desc = {};
+    renodx::utils::resource::store->resource_infos.if_contains_unsafe(
+        proxy_temp_resource.handle,
+        [&](auto& pair) {
+          const auto& shared_info = pair.second;
+          proxy_temp_resource_valid = !shared_info.destroyed && shared_info.device == device;
+          if (proxy_temp_resource_valid) {
+            proxy_temp_desc = shared_info.desc;
+          }
+        });
+    if (!proxy_temp_resource_valid) {
+      last_device_proxy_shared_resource = {0u};
       return;
     }
-#endif
+
+    if (proxy_temp_desc.texture.format == reshade::api::format::unknown) {
+      reshade::log::message(reshade::log::level::error,
+                            "utils::device_proxy::OnPresentForProxyDevice(strict failure: proxy shared resource has unknown format)");
+      remove_device_proxy = true;
+      return;
+    }
+
+    if (proxy_device_resource.handle != 0u) {
+      auto* proxy_resource_info = renodx::utils::resource::GetResourceInfoUnsafe(proxy_device_resource, false);
+      if (proxy_resource_info == nullptr
+          || proxy_resource_info->destroyed
+          || proxy_resource_info->desc.texture.width != proxy_temp_desc.texture.width
+          || proxy_resource_info->desc.texture.height != proxy_temp_desc.texture.height
+          || proxy_resource_info->desc.texture.format != proxy_temp_desc.texture.format) {
+        if (proxy_device_resource.handle != 0u) {
+          device->destroy_resource(proxy_device_resource);
+          if (proxy_resource_info != nullptr) {
+            proxy_resource_info->destroyed = true;
+          }
+          proxy_device_resource = {0u};
+        }
+      }
+    }
+
     if (proxy_device_resource.handle == 0u) {
       // Create proxy device resource
 
       reshade::api::resource_desc new_desc;
       new_desc.type = reshade::api::resource_type::texture_2d;
       new_desc.texture = {
-          .width = resource_info->desc.texture.width,
-          .height = resource_info->desc.texture.height,
-          .format = reshade::api::format::r16g16b16a16_float};
+          .width = proxy_temp_desc.texture.width,
+          .height = proxy_temp_desc.texture.height,
+          .format = proxy_temp_desc.texture.format};
       new_desc.heap = reshade::api::memory_heap::gpu_only;
       new_desc.usage = reshade::api::resource_usage::copy_dest | reshade::api::resource_usage::shader_resource;
-      device->create_resource(new_desc, nullptr, reshade::api::resource_usage::general, &proxy_device_resource);
+      if (!device->create_resource(new_desc, nullptr, reshade::api::resource_usage::general, &proxy_device_resource)) {
+        std::stringstream s;
+        s << "utils::device_proxy::OnPresentForProxyDevice(strict failure: create proxy staging resource failed";
+        s << ", format=" << new_desc.texture.format;
+        s << ", size=" << new_desc.texture.width << "x" << new_desc.texture.height;
+        s << ")";
+        reshade::log::message(reshade::log::level::error, s.str().c_str());
+        remove_device_proxy = true;
+        return;
+      }
+      if (proxy_device_resource.handle == 0u) {
+        reshade::log::message(
+            reshade::log::level::error,
+            "utils::device_proxy::OnPresentForProxyDevice(strict failure: proxy staging resource handle is null)");
+        remove_device_proxy = true;
+        return;
+      }
 
       // (New) Log resource info for proxy device resource
       renodx::utils::resource::store->resource_infos[proxy_device_resource.handle] = {
@@ -580,10 +870,6 @@ static void OnPresentForProxyDevice(reshade::api::device* device, reshade::api::
     queue->flush_immediate_command_list();
     if (device_proxy_wait_idle_destination) {
       queue->wait_idle();
-    }
-    if (shared_texture != nullptr) {
-      shared_texture->Release();
-      shared_texture = nullptr;
     }
     // swapchain_clone = proxy_device_resource;
   }
@@ -608,13 +894,9 @@ static void OnPresentForProxyDevice(reshade::api::device* device, reshade::api::
     pass_data.reset(pass);
   }
   if (!pass_data->Render(swapchain, queue, &proxy_device_resource)) {
-#ifdef DEBUG_LEVEL_2
-    reshade::log::message(reshade::log::level::warning, "utils::device_proxy::OnPresentForProxyDevice(SwapchainProxyPass::Render failed)");
-#endif
     pass_data->pass.DestroyAll(device);
     proxy_swapchain_passes.erase(back_buffer_handle);
   }
-
 }
 
 static bool OnCreateDevice(reshade::api::device_api api, uint32_t& api_version) {
@@ -630,13 +912,17 @@ static bool OnCreateDevice(reshade::api::device_api api, uint32_t& api_version) 
 static void OnInitDevice(reshade::api::device* device) {
   if (!is_creating_proxy_device) return;
   proxy_device_reshade = device;
-  renodx::utils::resource::upgrade::SetSharedHandleCreatorDevice(device);
   renodx::utils::data::Delete<renodx::utils::resource::upgrade::DeviceData>(device);
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
   // Handle cleanup of the proxied device
   if (device == proxied_device_reshade) {
+    if (proxy_device_reshade != nullptr) {
+      DestroyProxySwapchainPasses(proxy_device_reshade);
+    }
+    DestroyProxyDeviceResources(proxy_device_reshade);
+
     // Tear down proxy device
     if (proxy_swap_chain != nullptr) {
       proxy_swap_chain->Release();
@@ -659,21 +945,14 @@ static void OnDestroyDevice(reshade::api::device* device) {
       proxy_device_12->Release();
       proxy_device_12 = nullptr;
     }
-    if (device_proxy_thread_running) {
-      device_proxy_exit_thread = true;
-      SetEvent(device_proxy_sync_event);
-      while (device_proxy_thread_running) {
-        YieldProcessor();
-        Sleep(0);
-      }
-    }
 
     proxy_swapchain_settings_valid = false;
+    last_device_proxy_shared_resource = {0u};
   } else if (device == proxy_device_reshade) {
     DestroyProxyDeviceResources(device);
     DestroyProxySwapchainPasses(device);
     proxy_swapchain_settings_valid = false;
-    renodx::utils::resource::upgrade::SetSharedHandleCreatorDevice(nullptr);
+    last_device_proxy_shared_resource = {0u};
     proxy_device_reshade = nullptr;
     reshade::log::message(reshade::log::level::info, "utils::device_proxy::OnDestroyDevice(Proxy device destroyed.)");
   }
@@ -728,7 +1007,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   proxy_device_needs_resize = true;
 }
 
-static void ReleaseProxySwapChain(const char* reason = nullptr) {
+static void ReleaseProxySwapChain() {
   if (proxy_swap_chain == nullptr) return;
 
   BOOL fullscreen = FALSE;
@@ -746,10 +1025,16 @@ static void ReleaseProxySwapChain(const char* reason = nullptr) {
   proxy_swap_chain->Release();
   proxy_swap_chain = nullptr;
   proxy_swapchain_reshade = nullptr;
+}
 
-  if (reason != nullptr) {
-    reshade::log::message(reshade::log::level::debug, reason);
-  }
+static void ResetProxyRuntimeStateAfterTeardown() {
+  last_device_proxy_shared_resource = {0u};
+  proxy_present_test_pending = true;
+  proxy_invalid_call_streak = 0;
+  proxy_device_needs_resize = false;
+  proxy_resize_width = 0;
+  proxy_resize_height = 0;
+  proxy_teardown_deferred_presents = 0;
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
@@ -759,33 +1044,18 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
   if (device == proxy_device_reshade) return;
   if (device != proxied_device_reshade) return;
 
-  // A proxied swapchain was destroyed (or resized). Ensure no stale proxy resources remain.
+  // Stop clone rewrites and clear host clone resources for this swapchain first.
+  DeactivateProxySwapchainClones(swapchain);
+  ResetProxySwapchainCloneResources(swapchain);
+
+  // Then clear proxy-side resources/passes.
   DestroyProxySwapchainPasses(proxy_device_reshade);
   DestroyProxyDeviceResources(proxy_device_reshade);
 
-  {
-    const std::lock_guard<std::shared_mutex> lock(g_last_device_proxy_mutex);
-    last_device_proxy_shared_handle = nullptr;
-    last_device_proxy_shared_resource = {0u};
-  }
-
-  if (resize) {
-    // A host DX9 reset is a hard invalidation boundary for proxy-side state.
-    // Recreate the DX11 swapchain on next present instead of relying on ResizeBuffers only.
-    ReleaseProxySwapChain("utils::device_proxy::OnDestroySwapchain(recreate proxy swapchain after host reset)");
-
-    proxy_present_test_pending.store(true, std::memory_order_relaxed);
-  }
-
-  if (!resize) {
-    ReleaseProxySwapChain();
-    proxy_present_flags.store(DXGI_PRESENT_ALLOW_TEARING, std::memory_order_relaxed);
-  }
-
-  proxy_device_needs_resize = false;
-  proxy_resize_width = 0;
-  proxy_resize_height = 0;
-  proxy_invalid_call_streak.store(0, std::memory_order_relaxed);
+  // Any host swapchain destroy is a hard invalidation boundary.
+  ReleaseProxySwapChain();
+  proxy_present_flags = DXGI_PRESENT_ALLOW_TEARING;
+  ResetProxyRuntimeStateAfterTeardown();
 }
 
 static bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
@@ -981,278 +1251,394 @@ static void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
+  auto* device = swapchain->get_device();
+  if (remove_device_proxy) {
+    // Prefer teardown on the host/proxied present path, but don't get stuck forever
+    // when only proxy/non-proxied presents keep arriving (e.g. New Window -> None).
+    const bool is_proxy_present = (device == proxy_device_reshade);
+    const bool is_non_proxied_present = (proxied_device_reshade != nullptr && device != proxied_device_reshade);
+    if (is_proxy_present || is_non_proxied_present) {
+      const bool abort_teardown = (++proxy_teardown_deferred_presents < 8);
+      if (abort_teardown) return;
+
+      std::stringstream s;
+      s << "utils::device_proxy::OnPresent(forcing teardown after deferred presents: ";
+      s << "reason=" << (is_proxy_present ? "proxy device present" : "non-proxied present");
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+
+      // No reliable host swapchain context in this path. Perform global clone cleanup.
+      std::vector<reshade::api::resource> resources;
+      renodx::utils::resource::store->resource_infos.for_each([&](const auto& pair) {
+        const auto& info = pair.second;
+        if (info.destroyed) return;
+        if (info.clone_target != &proxy_clone_target) return;
+        resources.push_back(info.resource);
+      });
+      for (const auto& resource : resources) {
+        DeactivateProxyCloneForResource(resource);
+        ResetProxyCloneForResource(resource);
+      }
+    } else {
+      proxy_teardown_deferred_presents = 0;
+    }
+
+    if (queue != nullptr) {
+      // Ensure all queued host work is complete before destroying cloned/shared resources.
+      queue->flush_immediate_command_list();
+      queue->wait_idle();
+    }
+    if (proxy_device_context != nullptr) {
+      // Drain any pending proxy-side D3D11 work before resource teardown.
+      proxy_device_context->Flush();
+    }
+    if (device != nullptr && device == proxied_device_reshade) {
+      // Stop clone rewrites, restore original RT binding, then destroy clone resources.
+      DeactivateProxySwapchainClones(swapchain);
+
+      if (queue != nullptr) {
+        auto* cmd_list = queue->get_immediate_command_list();
+        if (cmd_list != nullptr) {
+          auto& rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
+          if (!rtvs.empty()) {
+            std::vector<reshade::api::resource_view> original_rtvs = rtvs;
+            for (auto& rtv : original_rtvs) {
+              if (rtv.handle == 0u) continue;
+              auto* view_info = renodx::utils::resource::GetResourceViewInfo(rtv);
+              if (view_info == nullptr || !view_info->is_clone || view_info->fallback.handle == 0u) continue;
+              rtv = view_info->fallback;
+            }
+
+            auto dsv = renodx::utils::swapchain::GetDepthStencil(cmd_list);
+            if (dsv.handle != 0u) {
+              auto* dsv_info = renodx::utils::resource::GetResourceViewInfo(dsv);
+              if (dsv_info != nullptr && dsv_info->is_clone && dsv_info->fallback.handle != 0u) {
+                dsv = dsv_info->fallback;
+              }
+            }
+
+            if (cmd_list->get_device()->get_api() == reshade::api::device_api::opengl) {
+              cmd_list->bind_render_targets_and_depth_stencil(
+                  static_cast<uint32_t>(original_rtvs.size()),
+                  original_rtvs.data(),
+                  {0u});
+            } else {
+              cmd_list->bind_render_targets_and_depth_stencil(
+                  static_cast<uint32_t>(original_rtvs.size()),
+                  original_rtvs.data(),
+                  dsv);
+            }
+            queue->flush_immediate_command_list();
+          }
+        }
+      }
+
+      ResetProxySwapchainCloneResources(swapchain);
+    }
+    if (proxy_device_reshade != nullptr) {
+      DestroyProxySwapchainPasses(proxy_device_reshade);
+      DestroyProxyDeviceResources(proxy_device_reshade);
+    }
+    if (proxy_swap_chain != nullptr) {
+      ReleaseProxySwapChain();
+    }
+    ResetProxyRuntimeStateAfterTeardown();
+    remove_device_proxy = false;
+    use_device_proxy = false;
+    return;
+  }
+  proxy_teardown_deferred_presents = 0;
+
   if (!use_device_proxy) return;
-  {
-    auto* device = swapchain->get_device();
-    if (device == proxy_device_reshade) {
-      OnPresentForProxyDevice(device, queue, swapchain);
+
+  if (device == proxy_device_reshade) {
+    OnPresentForProxyDevice(device, queue, swapchain);
+    return;
+  }
+  if (device != proxied_device_reshade) {
+    if (proxied_device_reshade != nullptr) return;
+    // First present with a new device, mark as proxied device.
+    proxied_device_reshade = device;
+  }
+
+  if (proxy_settings_dirty.exchange(false, std::memory_order_relaxed)) {
+    std::stringstream s;
+    s << "utils::device_proxy::OnPresent(reconfiguring proxy runtime after settings change: ";
+    s << "target_format=" << target_format;
+    s << ", target_color_space=" << target_color_space;
+    s << ", target_intermediate_format=" << target_intermediate_format;
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+    if (proxy_device_reshade != nullptr) {
+      DestroyProxySwapchainPasses(proxy_device_reshade);
+      DestroyProxyDeviceResources(proxy_device_reshade);
+    }
+    ResetProxySwapchainCloneResources(swapchain);
+    if (proxy_swap_chain != nullptr) {
+      ReleaseProxySwapChain();
+    }
+    last_device_proxy_shared_resource = {0u};
+  }
+
+  auto current_back_buffer = swapchain->get_current_back_buffer();
+  auto* resource_info = renodx::utils::resource::GetResourceInfoUnsafe(current_back_buffer);
+  if (resource_info == nullptr) {
+    assert(resource_info != nullptr);
+    return;
+  }
+
+  HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
+  auto* new_device = GetDeviceProxy(resource_info, hwnd);
+  if (new_device == nullptr) {
+    return;
+  }
+  if (proxy_device_needs_resize.exchange(false)) {
+    if (proxy_swap_chain == nullptr) {
+      proxy_device_needs_resize.store(true, std::memory_order_relaxed);
+      proxy_present_test_pending.store(true, std::memory_order_relaxed);
       return;
     }
-    if (proxied_device_reshade == nullptr) {
-      // First present with a new device, mark as proxied device
-      proxied_device_reshade = device;
-    } else if (device != proxied_device_reshade) {
-      // Ignore if not proxied device
+    auto width = proxy_resize_width.load(std::memory_order_relaxed);
+    auto height = proxy_resize_height.load(std::memory_order_relaxed);
+
+    DXGI_SWAP_CHAIN_DESC1 sc_desc = {};
+    const HRESULT desc_hr = proxy_swap_chain->GetDesc1(&sc_desc);
+    if (FAILED(desc_hr)) {
+      std::stringstream s;
+      s << "utils::device_proxy::OnPresent(GetDesc1 before resize failed: hr=0x";
+      s << std::hex << static_cast<uint32_t>(desc_hr) << std::dec << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      proxy_device_needs_resize.store(true, std::memory_order_relaxed);
+      proxy_present_test_pending.store(true, std::memory_order_relaxed);
       return;
     }
 
-    auto current_back_buffer = swapchain->get_current_back_buffer();
-    auto* resource_info = renodx::utils::resource::GetResourceInfoUnsafe(current_back_buffer);
-    if (resource_info == nullptr) {
-      assert(resource_info != nullptr);
+    if (width == 0u) width = (sc_desc.Width != 0u) ? sc_desc.Width : proxy_swapchain_last_width.load();
+    if (height == 0u) height = (sc_desc.Height != 0u) ? sc_desc.Height : proxy_swapchain_last_height.load();
+    if (width == 0u || height == 0u) {
+      reshade::log::message(reshade::log::level::warning,
+                            "utils::device_proxy::OnPresent(skip resize: invalid target size)");
+      proxy_device_needs_resize.store(true, std::memory_order_relaxed);
+      proxy_present_test_pending.store(true, std::memory_order_relaxed);
       return;
     }
 
-    HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
-    // if (hwnd != nullptr) {
-    //   const BOOL is_visible = IsWindowVisible(hwnd);
-    //   const BOOL is_iconic = IsIconic(hwnd);
-    //   const bool window_active = (is_visible != FALSE) && (is_iconic == FALSE);
-    //   if (!window_active) {
-    //     return;
-    //   }
-    // }
+    if (proxy_device_reshade != nullptr) {
+      DestroyProxySwapchainPasses(proxy_device_reshade);
+      DestroyProxyDeviceResources(proxy_device_reshade);
+    }
+    last_device_proxy_shared_resource = {0u};
 
-    auto* new_device = GetDeviceProxy(resource_info, hwnd);
-    if (new_device == nullptr) {
-#ifdef DEBUG_LEVEL_2
-      {
-        std::stringstream s;
-        s << "utils::device_proxy::OnPresent(skip: GetDeviceProxy failed, hwnd=";
-        s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
-        s << ", backbuffer=" << PRINT_PTR(current_back_buffer.handle) << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      }
-#endif
+    const HRESULT resize_hr =
+        proxy_swap_chain->ResizeBuffers(sc_desc.BufferCount, width, height, sc_desc.Format, sc_desc.Flags);
+    if (FAILED(resize_hr)) {
+      std::stringstream s;
+      s << "utils::device_proxy::OnPresent(ResizeBuffers failed: hr=0x";
+      s << std::hex << static_cast<uint32_t>(resize_hr) << std::dec;
+      s << ", size=" << width << "x" << height;
+      s << ", format=" << sc_desc.Format;
+      s << ", flags=0x" << std::hex << sc_desc.Flags << std::dec << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      proxy_device_needs_resize.store(true, std::memory_order_relaxed);
+      proxy_present_test_pending.store(true, std::memory_order_relaxed);
       return;
     }
-    if (resource_info == nullptr) return;
-
-    reshade::api::resource swapchain_clone;
-
-    if (proxy_device_needs_resize.exchange(false)) {
-      if (proxy_swap_chain == nullptr) {
-        proxy_device_needs_resize.store(true, std::memory_order_relaxed);
-        proxy_present_test_pending.store(true, std::memory_order_relaxed);
-        return;
-      }
-      auto width = proxy_resize_width.load(std::memory_order_relaxed);
-      auto height = proxy_resize_height.load(std::memory_order_relaxed);
-
-      DXGI_SWAP_CHAIN_DESC1 sc_desc = {};
-      const HRESULT desc_hr = proxy_swap_chain->GetDesc1(&sc_desc);
-      if (FAILED(desc_hr)) {
-        std::stringstream s;
-        s << "utils::device_proxy::OnPresent(GetDesc1 before resize failed: hr=0x";
-        s << std::hex << static_cast<uint32_t>(desc_hr) << std::dec << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        proxy_device_needs_resize.store(true, std::memory_order_relaxed);
-        proxy_present_test_pending.store(true, std::memory_order_relaxed);
-        return;
-      }
-
-      if (width == 0u) width = (sc_desc.Width != 0u) ? sc_desc.Width : proxy_swapchain_last_width.load();
-      if (height == 0u) height = (sc_desc.Height != 0u) ? sc_desc.Height : proxy_swapchain_last_height.load();
-      if (width == 0u || height == 0u) {
-        reshade::log::message(reshade::log::level::warning,
-                              "utils::device_proxy::OnPresent(skip resize: invalid target size)");
-        proxy_device_needs_resize.store(true, std::memory_order_relaxed);
-        proxy_present_test_pending.store(true, std::memory_order_relaxed);
-        return;
-      }
-
-      if (proxy_device_reshade != nullptr) {
-        DestroyProxySwapchainPasses(proxy_device_reshade);
-        DestroyProxyDeviceResources(proxy_device_reshade);
-      }
-      {
-        const std::lock_guard<std::shared_mutex> lock(g_last_device_proxy_mutex);
-        last_device_proxy_shared_handle = nullptr;
-        last_device_proxy_shared_resource = {0u};
-      }
-
-      const HRESULT resize_hr =
-          proxy_swap_chain->ResizeBuffers(sc_desc.BufferCount, width, height, sc_desc.Format, sc_desc.Flags);
-      if (FAILED(resize_hr)) {
-        std::stringstream s;
-        s << "utils::device_proxy::OnPresent(ResizeBuffers failed: hr=0x";
-        s << std::hex << static_cast<uint32_t>(resize_hr) << std::dec;
-        s << ", size=" << width << "x" << height;
-        s << ", format=" << sc_desc.Format;
-        s << ", flags=0x" << std::hex << sc_desc.Flags << std::dec << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        proxy_device_needs_resize.store(true, std::memory_order_relaxed);
-        proxy_present_test_pending.store(true, std::memory_order_relaxed);
-        return;
-      }
 
 #ifdef DXGI_PRESENT_RESTART
-      BOOL fullscreen = FALSE;
-      if (SUCCEEDED(proxy_swap_chain->GetFullscreenState(&fullscreen, nullptr)) && (fullscreen != FALSE)) {
-        (void)proxy_swap_chain->Present(0, DXGI_PRESENT_RESTART);
-      }
+    BOOL fullscreen = FALSE;
+    if (SUCCEEDED(proxy_swap_chain->GetFullscreenState(&fullscreen, nullptr)) && (fullscreen != FALSE)) {
+      (void)proxy_swap_chain->Present(0, DXGI_PRESENT_RESTART);
+    }
 #endif
 
-      proxy_swapchain_last_width.store(width, std::memory_order_relaxed);
-      proxy_swapchain_last_height.store(height, std::memory_order_relaxed);
-      proxy_invalid_call_streak.store(0, std::memory_order_relaxed);
-      proxy_present_test_pending.store(true, std::memory_order_relaxed);
-    }
+    proxy_swapchain_last_width.store(width, std::memory_order_relaxed);
+    proxy_swapchain_last_height.store(height, std::memory_order_relaxed);
+    proxy_invalid_call_streak.store(0, std::memory_order_relaxed);
+    proxy_present_test_pending.store(true, std::memory_order_relaxed);
+  }
 
-    auto& resource_clone = resource_info->clone;
-    if (resource_clone.handle == 0u) {
-      // Original swapchain, mark for cloning
-      if (!resource_info->clone_enabled || resource_info->clone_target == nullptr) {
-        resource_info->clone_enabled = true;
-        resource_info->clone_target = &proxy_clone_target;
+  reshade::api::resource swapchain_clone = {0u};
+  ProxySharedResourcePair shared_pair = {};
+  auto& resource_clone = resource_info->clone;
+  proxy_clone_target.new_format = target_intermediate_format;
+  switch (target_intermediate_format) {
+    default:
+      assert(false && "Unsupported format for proxy clone target");
+      proxy_clone_target.new_format = reshade::api::format::r16g16b16a16_float;
+    case reshade::api::format::r16g16b16a16_float:
+      proxy_clone_target.view_upgrades = utils::resource::VIEW_UPGRADES_RGBA16F;
+      break;
+    case reshade::api::format::r8g8b8a8_unorm:
+      proxy_clone_target.view_upgrades = utils::resource::VIEW_UPGRADES_RGBA8_UNORM;
+      break;
+    case reshade::api::format::r10g10b10a2_unorm:
+      proxy_clone_target.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
+      break;
+  }
+
+  bool needs_rtv_rewrite = false;
+  if (!resource_info->clone_enabled) {
+    resource_info->clone_enabled = true;
+    needs_rtv_rewrite = true;
+  }
+  if (resource_info->clone_target == nullptr
+      || resource_info->clone_target != &proxy_clone_target) {
+    resource_info->clone_target = &proxy_clone_target;
+    needs_rtv_rewrite = true;
+  }
+  if (resource_clone.handle == 0u) {
+    // Original swapchain, mark for cloning.
+    renodx::utils::resource::upgrade::CloneResource(resource_info);
+    needs_rtv_rewrite = true;
+  }
+  if (resource_clone.handle == 0u) {
+    std::stringstream s;
+    s << "utils::device_proxy::OnPresent(clone creation failed";
+    s << ", format=" << target_intermediate_format;
+    s << ", backbuffer=" << PRINT_PTR(current_back_buffer.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
+    remove_device_proxy = true;
+    return;
+  }
+  if (needs_rtv_rewrite) {
+    auto* cmd_list = queue->get_immediate_command_list();
+    auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
+    auto dsv = renodx::utils::swapchain::GetDepthStencil(cmd_list);
+    renodx::utils::resource::upgrade::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), dsv);
+  }
+
+  swapchain_clone = resource_clone;
+  shared_pair = GetProxySharedResourcePair(resource_info, resource_clone, hwnd);
+  if (shared_pair.host_shared_resource.handle == 0u
+      || shared_pair.proxy_shared_resource.handle == 0u) {
+    reshade::log::message(
+        reshade::log::level::error,
+        "utils::device_proxy::OnPresent(shared intermediate creation failed)");
+    remove_device_proxy = true;
+    return;
+  }
+
+  // Ready to copy to the shared resource.
+  // Serialize the copy + publish step to avoid races with the DX11 consumer
+  // claiming the shared handle. When keyed mutex is available this is not
+  // needed, but for the DX9 fallback we rely on a CPU-side handoff.
+  // Should DXGIKeyedMutex acquire
+
+  // Backport fix for Reshade DX9 resource copying.
+  if (device->get_api() == reshade::api::device_api::d3d9) {
+    auto* native = reinterpret_cast<IDirect3DDevice9*>(device->get_native());
+    auto* src_res = reinterpret_cast<IDirect3DResource9*>(swapchain_clone.handle);
+    auto* dst_res = reinterpret_cast<IDirect3DResource9*>(shared_pair.host_shared_resource.handle);
+    IDirect3DSurface9* src_surface;
+    IDirect3DSurface9* dst_surface;
+
+    switch (src_res->GetType()) {
+      case D3DRTYPE_SURFACE:
+        src_surface = static_cast<IDirect3DSurface9*>(src_res);
+        break;
+      case D3DRTYPE_TEXTURE: {
+        auto* tex = static_cast<IDirect3DTexture9*>(src_res);
+        tex->GetSurfaceLevel(0, &src_surface);
+        break;
       }
-      renodx::utils::resource::upgrade::CloneResource(resource_info);
-      auto* cmd_list = queue->get_immediate_command_list();
-      auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
-      auto dsv = renodx::utils::swapchain::GetDepthStencil(cmd_list);
-      renodx::utils::resource::upgrade::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), dsv);
+      default:
+        assert(false);
     }
-    if (resource_clone.handle == 0u) return;
-    swapchain_clone = resource_clone;
 
-    // Get ResourceCloneInfo
-    auto* resource_clone_info = renodx::utils::resource::GetResourceInfo(resource_clone);
-    if (resource_clone_info == nullptr) return;
-    if (resource_clone_info->clone.handle == 0u) {
-      resource_clone_info->clone_target = &proxy_upgrade_target;
-      renodx::utils::resource::upgrade::CloneResource(resource_clone_info);
-    }
-    if (resource_clone_info->clone.handle == 0u) return;
-    if (resource_clone_info->shared_handle == nullptr) return;
-
-    // Ready to copy
-    // Copy to shared resource
-
-    // Serialize the copy + publish step to avoid races with the DX11 consumer
-    // claiming the shared handle. When keyed mutex is available this is not
-    // needed, but for the DX9 fallback we rely on a CPU-side handoff.
-
-    {
-      const std::lock_guard<std::shared_mutex> lock(g_last_device_proxy_mutex);
-
-      // Should DXGIKeyedMutex acquire
-
-      // Backport fix for Reshade DX9 resource copying
-      if (device->get_api() == reshade::api::device_api::d3d9) {
-        auto* native = reinterpret_cast<IDirect3DDevice9*>(device->get_native());
-        auto* src_res = reinterpret_cast<IDirect3DResource9*>(swapchain_clone.handle);
-        auto* dst_res = reinterpret_cast<IDirect3DResource9*>(resource_clone_info->clone.handle);
-        IDirect3DSurface9* src_surface;
-        IDirect3DSurface9* dst_surface;
-
-        switch (src_res->GetType()) {
-          case D3DRTYPE_SURFACE:
-            src_surface = static_cast<IDirect3DSurface9*>(src_res);
-
-            break;
-          case D3DRTYPE_TEXTURE: {
-            auto* tex = static_cast<IDirect3DTexture9*>(src_res);
-            tex->GetSurfaceLevel(0, &src_surface);
-            break;
-          }
-          default:
-            assert(false);
-        }
-
-        switch (dst_res->GetType()) {
-          case D3DRTYPE_SURFACE:
-            dst_surface = static_cast<IDirect3DSurface9*>(dst_res);
-
-            break;
-          case D3DRTYPE_TEXTURE: {
-            auto* tex = static_cast<IDirect3DTexture9*>(dst_res);
-            tex->GetSurfaceLevel(0, &dst_surface);
-            break;
-          }
-          default:
-            assert(false);
-        }
-
-        const HRESULT hr = native->StretchRect(src_surface, nullptr, dst_surface, nullptr, D3DTEXF_NONE);
-
-        assert(SUCCEEDED(hr));
-      } else {
-        queue->get_immediate_command_list()->copy_resource(swapchain_clone, resource_clone_info->clone);
+    switch (dst_res->GetType()) {
+      case D3DRTYPE_SURFACE:
+        dst_surface = static_cast<IDirect3DSurface9*>(dst_res);
+        break;
+      case D3DRTYPE_TEXTURE: {
+        auto* tex = static_cast<IDirect3DTexture9*>(dst_res);
+        tex->GetSurfaceLevel(0, &dst_surface);
+        break;
       }
-
-      // Should DXGIKeyedMutex acquire
-      queue->flush_immediate_command_list();
-      if (device_proxy_wait_idle_source) {
-        // Should DXGIKeyedMutex release
-        queue->wait_idle();
-      }
-
-      // Publish the shared handle and resource under the lock so the consumer
-      // cannot observe a partially-written handoff.
-      last_device_proxy_shared_handle = resource_clone_info->shared_handle;
-      last_device_proxy_shared_resource = resource_clone_info->proxy_resource;
+      default:
+        assert(false);
     }
 
-    // Trigger a DX11 Present which will start the swapchain proxy steps on DX11
-    UINT present_flags =
-        (proxy_swap_chain == nullptr) ? 0u : proxy_present_flags.load(std::memory_order_relaxed);
-    if (proxy_swap_chain != nullptr
-        && proxy_present_test_pending.load(std::memory_order_relaxed)
-        && present_flags != 0u) {
-      const HRESULT test_hr = proxy_swap_chain->Present(0, DXGI_PRESENT_TEST);
-      if (FAILED(test_hr)) {
-        const uint32_t streak = proxy_invalid_call_streak.fetch_add(1, std::memory_order_relaxed) + 1;
-        if (streak == 1u || streak == 4u) {
-          std::stringstream s;
-          s << "utils::device_proxy::OnPresent(Proxy Present TEST failed: hr=0x";
-          s << std::hex << static_cast<uint32_t>(test_hr) << std::dec;
-          s << ", flags=0x" << std::hex << present_flags << std::dec;
-          s << ", streak=" << streak << ")";
-          reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        }
-
-        // Avoid an endless TEST-fail loop after reset/transition; force normal
-        // recovery path once the transient state does not clear quickly.
-        if (streak >= 4u) {
-          proxy_device_needs_resize.store(true, std::memory_order_relaxed);
-          proxy_present_test_pending.store(false, std::memory_order_relaxed);
-          reshade::log::message(reshade::log::level::warning,
-                                "utils::device_proxy::OnPresent(promoting TEST failure to resize recovery)");
-        }
-        return;
-      }
-
-      proxy_invalid_call_streak.store(0, std::memory_order_relaxed);
-      proxy_present_test_pending.store(false, std::memory_order_relaxed);
+    const HRESULT copy_hr = native->StretchRect(src_surface, nullptr, dst_surface, nullptr, D3DTEXF_NONE);
+    if (FAILED(copy_hr)) {
+      std::stringstream s;
+      s << "utils::device_proxy::OnPresent(copy handoff->host_shared StretchRect failed: hr=0x";
+      s << std::hex << static_cast<uint32_t>(copy_hr) << std::dec;
+      s << ", src=" << PRINT_PTR(swapchain_clone.handle);
+      s << ", dst=" << PRINT_PTR(shared_pair.host_shared_resource.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::error, s.str().c_str());
     }
-    if (use_device_proxy_thread) {
-      SetEvent(device_proxy_sync_event);  // Signal the DX11 render thread
-    } else {
-      const HRESULT hr = proxy_swap_chain->Present(0, present_flags);
-      if (FAILED(hr)) {
-        if (hr == DXGI_ERROR_INVALID_CALL) {
-          const uint32_t streak = proxy_invalid_call_streak.fetch_add(1, std::memory_order_relaxed) + 1;
-          if (streak >= 2u) {
-            proxy_device_needs_resize.store(true, std::memory_order_relaxed);
-            proxy_present_test_pending.store(true, std::memory_order_relaxed);
-            reshade::log::message(reshade::log::level::warning,
-                                  "utils::device_proxy::OnPresent(schedule resize recovery after invalid-call)");
-          }
-        }
+    assert(SUCCEEDED(copy_hr));
+  } else {
+    queue->get_immediate_command_list()->copy_resource(swapchain_clone, shared_pair.host_shared_resource);
+  }
+
+  queue->flush_immediate_command_list();
+  if (device_proxy_wait_idle_source) {
+    // Should DXGIKeyedMutex release.
+    queue->wait_idle();
+  }
+
+  // Publish the shared resource handoff for proxy consumption.
+  last_device_proxy_shared_resource = shared_pair.proxy_shared_resource;
+
+  UINT present_flags =
+      (proxy_swap_chain == nullptr) ? 0u : proxy_present_flags.load(std::memory_order_relaxed);
+  if (proxy_swap_chain != nullptr
+      && proxy_present_test_pending.load(std::memory_order_relaxed)
+      && present_flags != 0u) {
+    const HRESULT test_hr = proxy_swap_chain->Present(0, DXGI_PRESENT_TEST);
+    if (FAILED(test_hr)) {
+      const uint32_t streak = proxy_invalid_call_streak.fetch_add(1, std::memory_order_relaxed) + 1;
+      if (streak == 1u || streak == 4u) {
         std::stringstream s;
-        s << "utils::device_proxy::OnPresent(Proxy Present failed: hr=0x";
-        s << std::hex << static_cast<uint32_t>(hr) << std::dec;
-        s << ", flags=0x" << std::hex << present_flags << std::dec << ")";
-        reshade::log::message(reshade::log::level::error, s.str().c_str());
-      } else {
-        proxy_invalid_call_streak.store(0, std::memory_order_relaxed);
+        s << "utils::device_proxy::OnPresent(Proxy Present TEST failed: hr=0x";
+        s << std::hex << static_cast<uint32_t>(test_hr) << std::dec;
+        s << ", flags=0x" << std::hex << present_flags << std::dec;
+        s << ", streak=" << streak << ")";
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      }
+
+      // Avoid an endless TEST-fail loop after reset/transition; force normal
+      // recovery path once the transient state does not clear quickly.
+      if (streak >= 4u) {
+        proxy_device_needs_resize.store(true, std::memory_order_relaxed);
+        proxy_present_test_pending.store(false, std::memory_order_relaxed);
+        reshade::log::message(reshade::log::level::warning,
+                              "utils::device_proxy::OnPresent(promoting TEST failure to resize recovery)");
+      }
+      return;
+    }
+
+    proxy_invalid_call_streak.store(0, std::memory_order_relaxed);
+    proxy_present_test_pending.store(false, std::memory_order_relaxed);
+  }
+
+  const HRESULT present_hr = proxy_swap_chain->Present(0, present_flags);
+  if (FAILED(present_hr)) {
+    if (present_hr == DXGI_ERROR_INVALID_CALL) {
+      const uint32_t streak = proxy_invalid_call_streak.fetch_add(1, std::memory_order_relaxed) + 1;
+      if (streak >= 2u) {
+        proxy_device_needs_resize.store(true, std::memory_order_relaxed);
+        proxy_present_test_pending.store(true, std::memory_order_relaxed);
+        reshade::log::message(reshade::log::level::warning,
+                              "utils::device_proxy::OnPresent(schedule resize recovery after invalid-call)");
       }
     }
+    std::stringstream s;
+    s << "utils::device_proxy::OnPresent(Proxy Present failed: hr=0x";
+    s << std::hex << static_cast<uint32_t>(present_hr) << std::dec;
+    s << ", flags=0x" << std::hex << present_flags << std::dec << ")";
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
+  } else {
+    proxy_invalid_call_streak.store(0, std::memory_order_relaxed);
   }
 }
-
 static void Use(DWORD fdw_reason) {
+  renodx::utils::resource::upgrade::use_resource_cloning = true;
+
   renodx::utils::resource::Use(fdw_reason);
+  renodx::utils::resource::upgrade::Use(fdw_reason);
 
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
@@ -1270,17 +1656,12 @@ static void Use(DWORD fdw_reason) {
       reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
-      // Create sync event for device proxy thread
-      device_proxy_sync_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+      renodx::utils::resource::store->on_destroy_resource_info_callbacks.emplace_back(&OnDestroyTrackedResourceInfo);
 
       break;
     case DLL_PROCESS_DETACH:
       if (!attached) return;
       attached = false;
-      if (device_proxy_sync_event != nullptr) {
-        CloseHandle(device_proxy_sync_event);
-        device_proxy_sync_event = nullptr;
-      }
 #if RESHADE_API_VERSION >= 17
       reshade::unregister_event<reshade::addon_event::create_device>(OnCreateDevice);
 #endif

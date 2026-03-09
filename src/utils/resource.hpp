@@ -48,6 +48,21 @@ const std::unordered_map<
         ViewUpgradeAll(r8g8b8a8_unorm_srgb, r16g16b16a16_float),
         ViewUpgradeAll(b8g8r8a8_unorm_srgb, r16g16b16a16_float),
         ViewUpgradeAll(r11g11b10_float, r16g16b16a16_float),
+        ViewUpgradeAll(b8g8r8x8_unorm, r16g16b16a16_float),
+        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r16g16b16a16_float),
+};
+
+const std::unordered_map<
+    std::pair<reshade::api::resource_usage, reshade::api::format>,
+    reshade::api::format, utils::hash::HashPair>
+    VIEW_UPGRADES_RGBA8_UNORM = {
+        ViewUpgradeAll(r8g8b8a8_typeless, r8g8b8a8_typeless),
+        ViewUpgradeAll(r8g8b8a8_unorm, r8g8b8a8_unorm),
+        ViewUpgradeAll(r8g8b8a8_unorm_srgb, r8g8b8a8_unorm),
+        ViewUpgradeAll(b8g8r8a8_unorm, r8g8b8a8_unorm),
+        ViewUpgradeAll(b8g8r8a8_unorm_srgb, r8g8b8a8_unorm),
+        ViewUpgradeAll(b8g8r8x8_unorm, r8g8b8a8_unorm),
+        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r8g8b8a8_unorm),
 };
 
 const std::unordered_map<
@@ -62,6 +77,8 @@ const std::unordered_map<
         ViewUpgradeAll(b8g8r8a8_unorm, r10g10b10a2_unorm),
         ViewUpgradeAll(r8g8b8a8_unorm_srgb, r10g10b10a2_unorm),
         ViewUpgradeAll(b8g8r8a8_unorm_srgb, r10g10b10a2_unorm),
+        ViewUpgradeAll(b8g8r8x8_unorm, r10g10b10a2_unorm),
+        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r10g10b10a2_unorm),
 };
 
 const std::unordered_map<
@@ -76,6 +93,8 @@ const std::unordered_map<
         ViewUpgradeAll(b8g8r8a8_unorm, r11g11b10_float),
         ViewUpgradeAll(r8g8b8a8_unorm_srgb, r11g11b10_float),
         ViewUpgradeAll(b8g8r8a8_unorm_srgb, r11g11b10_float),
+        ViewUpgradeAll(b8g8r8x8_unorm, r11g11b10_float),
+        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r11g11b10_float),
 };
 
 const std::unordered_map<
@@ -97,8 +116,9 @@ const std::unordered_map<
         ViewUpgradeAll(b8g8r8a8_unorm_srgb, r9g9b9e5),
         ViewUpgradeAll(r11g11b10_float, r9g9b9e5),
         ViewUpgradeAll(r9g9b9e5, r9g9b9e5),
+        ViewUpgradeAll(b8g8r8x8_unorm, r9g9b9e5),
+        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r9g9b9e5),
 };
-
 
 #undef ViewUpgrade
 #undef ViewUpgradeAll
