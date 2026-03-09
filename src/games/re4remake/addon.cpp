@@ -259,7 +259,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Noise pattern added to game in some areas.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
@@ -269,7 +269,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
