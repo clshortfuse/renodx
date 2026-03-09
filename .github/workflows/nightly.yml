@@ -15,6 +15,7 @@ jobs:
     env:
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_CACHE_SIZE: "5G"
+      SCCACHE_C_CUSTOM_CACHE_BUSTER: "${{ github.workflow }}"
 
     steps:
       - uses: actions/checkout@v4
