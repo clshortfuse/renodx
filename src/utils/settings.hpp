@@ -10,9 +10,9 @@
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
+#include "./bitwise.hpp"
+#include "./icons.hpp"
 #include "./mutex.hpp"
-
-#define ICON_FK_UNDO u8"\uf0e2"
 
 namespace renodx::utils::settings {
 
@@ -58,6 +58,7 @@ struct Setting {
   float* binding = nullptr;
   SettingValueType value_type = SettingValueType::FLOAT;
   float default_value = 0.f;
+  std::vector<uint32_t> packed_values;
   bool can_reset = true;
   std::string label = key;
   std::string section;
@@ -94,6 +95,8 @@ struct Setting {
   };
 
   bool is_sticky = false;
+
+  bool is_logarithmic = false;
 
   float value = default_value;
   int value_as_int = static_cast<int>(default_value);
@@ -137,7 +140,26 @@ struct Setting {
 
   Setting* Write() {
     if (this->binding != nullptr) {
-      *this->binding = this->parse(this->GetValue());
+      if (!this->packed_values.empty()) {
+        float packed_binding = *this->binding;
+        uint32_t clear_mask = 0u;
+        uint32_t selected_value = this->packed_values[this->default_value];
+        const int len = static_cast<int>(this->packed_values.size());
+
+        for (int i = 0; i < len; ++i) {
+          if (i == this->value_as_int) {
+            selected_value = this->packed_values[i];
+          } else {
+            clear_mask |= this->packed_values[i];
+          }
+        }
+
+        packed_binding = renodx::utils::bitwise::UnsetFlag(packed_binding, clear_mask);
+        packed_binding = renodx::utils::bitwise::SetFlag(packed_binding, selected_value);
+        *this->binding = packed_binding;
+      } else {
+        *this->binding = this->parse(this->GetValue());
+      }
     }
     return this;
   }
@@ -265,6 +287,7 @@ static void LoadGlobalSettings() {
       default:
         break;
     }
+    const std::unique_lock lock(renodx::utils::mutex::global_mutex);
     setting->Write();
   }
 }
@@ -476,7 +499,12 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       }
       bool changed = false;
       float previous_value = setting->GetValue();
-      ImGui::PushID(("##Key" + (setting->key.empty() ? setting->label : setting->key)).c_str());
+      const auto identifier = (setting->key.empty() ? setting->label : setting->key);
+      ImGui::PushID(("##Key" + identifier).c_str());
+      ImGuiSliderFlags slider_flags = ImGuiSliderFlags_None;
+      if (setting->is_logarithmic) {
+        slider_flags |= ImGuiSliderFlags_Logarithmic;
+      }
       switch (setting->value_type) {
         case SettingValueType::FLOAT:
           changed |= ImGui::SliderFloat(
@@ -484,7 +512,8 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               &setting->value,
               setting->min,
               setting->max,
-              setting->format.c_str());
+              setting->format.c_str(),
+              slider_flags);
           break;
         case SettingValueType::INTEGER:
           changed |= ImGui::SliderInt(
@@ -495,7 +524,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               setting->labels.empty()
                   ? setting->format.c_str()
                   : setting->labels.at(setting->value_as_int).c_str(),
-              ImGuiSliderFlags_NoInput);
+              slider_flags | ImGuiSliderFlags_NoInput);
           break;
         case SettingValueType::BOOLEAN:
           changed |= ImGui::SliderInt(
@@ -506,7 +535,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
               setting->labels.empty()
                   ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
                   : setting->labels.at(setting->value_as_int).c_str(),
-              ImGuiSliderFlags_NoInput);
+              slider_flags | ImGuiSliderFlags_NoInput);
           break;
         case SettingValueType::BUTTON:
           if (ImGui::Button(setting->label.c_str())) {
@@ -561,8 +590,8 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         cursor_pos.y += (previous_font_size / 2.f) - (current_font_size / 2.f);
         ImGui::SetCursorPos(cursor_pos);
 
-        ImGui::PushID(("##Reset" + setting->label).c_str());
-        if (ImGui::Button(reinterpret_cast<const char*>(ICON_FK_UNDO))) {
+        ImGui::PushID(("##Reset" + identifier).c_str());
+        if (ImGui::Button(renodx::utils::icons::View(renodx::utils::icons::UNDO))) {
           setting->Set(setting->default_value);
           changed = true;
         }
