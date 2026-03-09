@@ -9,8 +9,10 @@
 
 #include <d3d11_4.h>
 #include <d3d12.h>
+#include <d3d9.h>
 #include <dxgi1_6.h>
 #include <unknwnbase.h>
+
 
 namespace renodx::utils::directx {
 
@@ -137,6 +139,17 @@ static bool Initialize() {
   }
 
   internal::initialized = true;
+  return true;
+}
+
+[[nodiscard]] static bool IsD3D9ExDevice(IDirect3DDevice9* device) {
+  if (device == nullptr) return false;
+
+  IDirect3DDevice9Ex* native_device_ex = nullptr;
+  const HRESULT hr = device->QueryInterface(IID_PPV_ARGS(&native_device_ex));
+  if (FAILED(hr) || native_device_ex == nullptr) return false;
+
+  native_device_ex->Release();
   return true;
 }
 
