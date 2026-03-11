@@ -11,7 +11,6 @@
 
 #define CUSTOM_NOISE             0.f
 #define CUSTOM_LUT_STRENGTH      1.f
-#define CUSTOM_LUT_SCALING       1.f
 #define CUSTOM_SHARPENING        2.f  // 0 - off, 1 - vanilla, 2 - Lilium RCAS
 #define HUE_SHIFT_FIRE           0.f  // experimental, re7/8 shaders not collected yet
 #define RENODX_TONE_MAP_DECHROMA 0.f
