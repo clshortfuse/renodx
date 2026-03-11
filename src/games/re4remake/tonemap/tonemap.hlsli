@@ -148,14 +148,23 @@ float3 BlendLUTs(float3 color) {
 }
 
 float3 ApplyColorGradingLUTs(float3 color_input) {
-  float3 color_output = BlendLUTs(color_input);
+  float3 color_output_original = BlendLUTs(color_input);
+
+  float3 color_output = color_output_original;
 
   if (COLOR_GRADE_LUT_SCALING > 0.f) {
     float3 lut_black = BlendLUTs(0.f);
 
     float lut_black_y = renodx::color::y::from::BT709(lut_black);
     if (lut_black_y > 0.f) {
-      float3 lut_mid = BlendLUTs(lut_black);
+      float3 lut_mid = BlendLUTs(lut_black_y);
+
+      if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
+        color_output = renodx::color::correct::GammaSafe(color_output);
+        lut_black = renodx::color::correct::GammaSafe(lut_black);
+        lut_mid = renodx::color::correct::GammaSafe(lut_mid);
+        // color_input = renodx::color::correct::GammaSafe(color_input);
+      }
 
       float3 unclamped_gamma = Unclamp(
           renodx::color::srgb::EncodeSafe(color_output),
@@ -165,8 +174,11 @@ float3 ApplyColorGradingLUTs(float3 color_input) {
 
       float3 unclamped_linear = renodx::color::srgb::DecodeSafe(unclamped_gamma);
 
-      // color_output = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, COLOR_GRADE_LUT_SCALING);
-      color_output *= lerp(1.f, renodx::math::DivideSafe(LuminosityFromBT709(unclamped_linear), LuminosityFromBT709(color_output), 1.f), COLOR_GRADE_LUT_SCALING);
+      if (RENODX_GAMMA_CORRECTION != 0.f) {  // inverse EOTF emulation
+        unclamped_linear = renodx::color::correct::GammaSafe(unclamped_linear, true);
+      }
+
+      color_output = color_output_original * lerp(1.f, renodx::math::DivideSafe(LuminosityFromBT709(unclamped_linear), LuminosityFromBT709(color_output_original), 1.f), COLOR_GRADE_LUT_SCALING);
     }
   }
 
