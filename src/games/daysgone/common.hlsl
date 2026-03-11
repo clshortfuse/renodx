@@ -1,4 +1,5 @@
 #include "./shared.h"
+#include "./psycho_test11.hlsl"
 
 float Highlights(float x, float highlights, float mid_gray) {
   if (highlights == 1.f) return x;
@@ -189,6 +190,35 @@ float3 CustomTonemap(float3 untonemapped) {
   return outputColor;
 }
 
+float3 CustomPsychoTest(float3 untonemapped) {
+  renodx::draw::Config config = renodx::draw::BuildConfig();
+
+  float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;
+  float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;
+
+  float tonemap_peak = peak_nits / diffuse_white_nits;
+
+  if (RENODX_GAMMA_CORRECTION != 0.f) {
+    tonemap_peak = renodx::color::correct::GammaSafe(tonemap_peak, true);
+  }
+
+  float3 outputColor = psychotm_test11(
+    untonemapped, 
+    tonemap_peak, 
+    config.tone_map_exposure, 
+    config.tone_map_highlights, 
+    config.tone_map_shadows,
+    config.tone_map_contrast,
+    config.tone_map_saturation,
+    1.f - config.tone_map_blowout,
+    100.f,
+    config.tone_map_hue_correction,
+    config.tone_map_highlight_saturation
+  );
+
+  return outputColor;
+}
+
 bool HandleUICompositing(float4 ui_color_linear, float3 scene_color, inout float4 output_color, float2 uv){
   if (RENODX_TONE_MAP_TYPE < 2.f) return false;
 
@@ -207,7 +237,8 @@ bool HandleUICompositing(float4 ui_color_linear, float3 scene_color, inout float
   }
   ui_color_linear.rgb = renodx::color::bt2020::from::BT709(ui_color_linear.rgb);
   float3 scene_color_linear = scene_color;
-  scene_color_linear = CustomTonemap(renodx::color::bt709::from::BT2020(scene_color_linear));
+  // scene_color_linear = CustomTonemap(renodx::color::bt709::from::BT2020(scene_color_linear));
+  scene_color_linear = CustomPsychoTest(renodx::color::bt709::from::BT2020(scene_color_linear));
   scene_color_linear = renodx::color::bt2020::from::BT709(scene_color_linear);
   scene_color_linear *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
 
@@ -238,7 +269,7 @@ bool HandleUICompositing(float4 ui_color_linear, float3 scene_color, inout float
   composited_color_linear *= RENODX_PEAK_WHITE_NITS / max_channel;  // Clamp UI or Videos
 
   float3 pq_color = renodx::color::pq::EncodeSafe(composited_color_linear, 1.f);
-  output_color = float4(pq_color, 1.f);
+  output_color = float4(pq_color, pq_color.x);
 
   return true;
 }
