@@ -432,10 +432,25 @@ void comp_main()
 
     // u1 is written in compressed TAA space — consistent with t3 history reads next frame.
     u1[_278] = float4(_825, _826, _827, _846);
+
+    // float2 _887 = float2(mad(_253, cb0_m12.x, -0.5f), mad(_254, cb0_m12.y, -0.5f));
+    // float _898 = clamp(cb0_m5.y * exp2(-(cb0_m5.x * (0.5f - dp2_f32(_887, _887)))), 0.0f, 1.0f);
+    // float _908 = cb0_m8.x * mad(-cb0_m4, _898, cb0_m4);
+    // float _910 = cb0_m4 * (_898 * _898);
+
+    float game_scale = RENODX_TONE_MAP_TYPE > 0 ? 1.0f : cb0_m8.x;
     float2 _887 = float2(mad(_253, cb0_m12.x, -0.5f), mad(_254, cb0_m12.y, -0.5f));
     float _898 = clamp(cb0_m5.y * exp2(-(cb0_m5.x * (0.5f - dp2_f32(_887, _887)))), 0.0f, 1.0f);
-    float _908 = cb0_m8.x * mad(-cb0_m4, _898, cb0_m4);
+    float _908 = game_scale * mad(-cb0_m4, _898, cb0_m4);
     float _910 = cb0_m4 * (_898 * _898);
+
+#if 0 // SDR OUTPUT VALUES (cb0_m11.x instead of cb0_m12.x originally)
+    float2 _882 = float2(mad(_248, cb0_m12.x, -0.5f), mad(_254, cb0_m11.y, -0.5f));
+    float _893 = clamp(cb0_m5.y * exp2(-(cb0_m5.x * (0.5f - dp2_f32(_882, _882)))), 0.0f, 1.0f);
+    float _900 = mad(-cb0_m4, _893, cb0_m4);
+    float _902 = cb0_m4 * (_893 * _893);
+#endif
+
     float _934 = mad(frac(sin(mad(mad(_254, cb0_m12.y, cb0_m0.y), 543.30999755859375f, mad(_253, cb0_m12.x, cb0_m0.x))) * 493013.0f), cb0_m2.x, cb0_m2.y);
     //if (RENODX_TONE_MAP_TYPE != 0) _934 = 1.0f;
     float4 _939 = t0.Load(int3(_278, 0u));
@@ -454,7 +469,7 @@ void comp_main()
     //                               mad(cb0_m6.z, _910, mad(_878 * _878, _908, cb0_m3.z))
     // ) * _934;
     if (RENODX_TONE_MAP_TYPE > 1) {
-      float3 scene_pre_ui = mad(cb0_m6.xyz, _910, mad(float3(_876 * _876, _877 * _877, _878 * _878), 1.f, cb0_m3.xyz)) * _934;
+      float3 scene_pre_ui = mad(cb0_m6.xyz, _910, (mad(float3(_876 * _876, _877 * _877, _878 * _878), _908, cb0_m3.xyz)) * _934);
       float4 final_linear;
     //   final_linear = float4(scene_pre_ui, 1.f);
     //   final_linear.xyz = renodx::color::pq::EncodeSafe(final_linear.xyz, RENODX_DIFFUSE_WHITE_NITS);
@@ -466,18 +481,15 @@ void comp_main()
       //   float _953 = (_939.x) + ((mad(cb0_m6.x, _910, mad(_876 * _876, 1.f, cb0_m3.x)) * _934) * _949);
       //   float _954 = ((mad(cb0_m6.y, _910, mad(_877 * _877, 1.f, cb0_m3.y)) * _934) * _949) + (_939.y);
       //   float _955 = ((mad(_910, cb0_m6.z, mad(_878 * _878, 1.f, cb0_m3.z)) * _934) * _949) + (_939.z);
-          float3 scene_pre_ui = float3(
-                                    mad(cb0_m6.x, _910, mad(_876 * _876, 1.f, cb0_m3.x)),
-                                    mad(cb0_m6.y, _910, mad(_877 * _877, 1.f, cb0_m3.y)),
-                                    mad(cb0_m6.z, _910, mad(_878 * _878, 1.f, cb0_m3.z))
-      ) * _934;
+        float3 scene_pre_ui = mad(cb0_m6.xyz, _910, (mad(float3(_876 * _876, _877 * _877, _878 * _878), _908, cb0_m3.xyz)) * _934);
           //   float _983 = exp2(log2(abs((scene_pre_ui.x * 0.0199999995529651641845703125f) + ((exp2(scene_pre_ui.x * (-40.95999908447265625f)) - 1.0f) * 0.0004499999922700226306915283203125f))) * 0.1593017578125f);
           //   float _984 = exp2(log2(abs((scene_pre_ui.y * 0.0199999995529651641845703125f) + ((exp2(scene_pre_ui.y * (-40.95999908447265625f)) - 1.0f) * 0.0004499999922700226306915283203125f))) * 0.1593017578125f);
           //   float _985 = exp2(log2(abs((scene_pre_ui.z * 0.0199999995529651641845703125f) + ((exp2(scene_pre_ui.z * (-40.95999908447265625f)) - 1.0f) * 0.0004499999922700226306915283203125f))) * 0.1593017578125f);
-          float3 final_linear = _939.rgb + scene_pre_ui * (1 - _939.a);
-      //float _1001 = exp2(log2(mad(_983, 18.8515625f, 0.8359375f) / mad(_983, 18.6875f, 1.0f)) * 78.84375f);
-      // u0[_278] = float4(_1001, exp2(log2(mad(_984, 18.8515625f, 0.8359375f) / mad(_984, 18.6875f, 1.0f)) * 78.84375f), exp2(log2(mad(_985, 18.8515625f, 0.8359375f) / mad(_985, 18.6875f, 1.0f)) * 78.84375f), _1001);
-      u0[_278] = float4(renodx::color::pq::Encode(final_linear, RENODX_DIFFUSE_WHITE_NITS), 1.f);
+        float3 final_linear = _939.rgb + scene_pre_ui * (1 - _939.a);
+          // float _1001 = exp2(log2(mad(_983, 18.8515625f, 0.8359375f) / mad(_983, 18.6875f, 1.0f)) * 78.84375f);
+          //  u0[_278] = float4(_1001, exp2(log2(mad(_984, 18.8515625f, 0.8359375f) / mad(_984, 18.6875f, 1.0f)) * 78.84375f), exp2(log2(mad(_985, 18.8515625f, 0.8359375f) / mad(_985, 18.6875f, 1.0f)) * 78.84375f), _1001);
+          float3 pq_color = renodx::color::pq::Encode(final_linear, RENODX_DIFFUSE_WHITE_NITS);
+      u0[_278] = float4(pq_color, pq_color.x);
     } else {
       float _953 = (cb0_m8.y * _939.x) + ((mad(cb0_m6.x, _910, mad(_876 * _876, _908, cb0_m3.x)) * _934) * _949);
       float _954 = ((mad(cb0_m6.y, _910, mad(_877 * _877, _908, cb0_m3.y)) * _934) * _949) + (cb0_m8.y * _939.y);

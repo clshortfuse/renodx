@@ -5,6 +5,7 @@
 #define RENODX_PEAK_WHITE_NITS                 shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS              shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS             shader_injection.graphics_white_nits
+#define RENODX_TONE_MAP_HUE_CORRECTION        shader_injection.tone_map_hue_correction
 #define RENODX_GAMMA_CORRECTION                shader_injection.gamma_correction //0 // 0 = Off, 1 = 2.2, 2 = BT.1886
 #define RENODX_TONE_MAP_EXPOSURE               shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS             shader_injection.tone_map_highlights
@@ -32,6 +33,7 @@ struct ShaderInjectData {
   float diffuse_white_nits;
   float graphics_white_nits;
   float tone_map_type;
+  float tone_map_hue_correction;
   float gamma_correction;
   float tone_map_exposure;
   float tone_map_highlights;
