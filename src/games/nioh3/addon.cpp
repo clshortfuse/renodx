@@ -30,6 +30,8 @@ ShaderInjectData shader_injection;
 const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
 
+renodx::utils::settings::Setting* upgrade_rendering_setting = nullptr;
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "SettingsMode",
@@ -284,6 +286,20 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
+
+    upgrade_rendering_setting = new renodx::utils::settings::Setting{
+        .key = "FxUpgradeRender",
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Rendering Format",
+        .section = "Advanced",
+        .tooltip = "Upgrades the post process format to reduce banding (requires restart). NVIDIA only.",
+        .labels = {"R11G11B10F", "R16G16B16A16F"},
+        //.on_change_value = &OnUpgradeRenderingSettingChanged,
+        .is_global = true,
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    },
+
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " - In-Game HDR must be turned ON!\n"
@@ -358,6 +374,7 @@ renodx::utils::settings::Settings settings = {
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
     },
+
 };
 
 void OnPresetOff() {
@@ -393,6 +410,30 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   settings[3]->default_value = fmin(renodx::utils::swapchain::ComputeReferenceWhite(settings[2]->default_value), 203.f);
   fired_on_init_swapchain = true;
 }
+
+void OnInitDevice(reshade::api::device* device) {
+  // R11 upgrades for Nvidia
+  std::vector<renodx::utils::resource::ResourceUpgradeInfo> upgrade_infos = {};
+
+  if (upgrade_rendering_setting != nullptr && upgrade_rendering_setting->GetValue() == 1.f) {
+    int vendor_id;
+    auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
+    if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
+                                             // Bugs out AMD GPUs
+      upgrade_infos.push_back({
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
+                         .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
+          .usage_include = reshade::api::resource_usage::render_target,
+
+      });
+    }
+  }
+
+  renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX for Nioh 3";
@@ -403,6 +444,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
+
       renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
         return device->get_api() == reshade::api::device_api::d3d12;  // So overlays dont kill the game
       };
@@ -410,8 +453,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::expected_constant_buffer_space = 50;
       renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::allow_multiple_push_constants = true;
-      // renodx::mods::shader::force_pipeline_cloning = true;   // So the mod works with the toolkit
-      // renodx::mods::shader::use_pipeline_layout_cloning = true;
+      // renodx::mods::shader::force_pipeline_cloning = true;  // So the mod works with the toolkit
+      //  renodx::mods::shader::use_pipeline_layout_cloning = true;
 
       renodx::mods::swapchain::expected_constant_buffer_space = 50;
       renodx::mods::swapchain::expected_constant_buffer_index = 13;
@@ -484,11 +527,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .use_resource_view_cloning = true,
       });
 
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);        // fp11 upgrades for NVIDIA
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);        // fp11 upgrades for NVIDIA
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
       reshade::unregister_addon(h_module);
       break;
