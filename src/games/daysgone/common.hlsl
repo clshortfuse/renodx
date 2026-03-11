@@ -136,7 +136,7 @@ float3 DisplayMap(float3 color) {
   float peak_nits = config.peak_white_nits / renodx::color::srgb::REFERENCE_WHITE;
   float diffuse_white_nits = config.diffuse_white_nits / renodx::color::srgb::REFERENCE_WHITE;
 
-  //color = max(0, renodx::color::bt2020::from::BT709(color));
+  color = max(0, renodx::color::bt2020::from::BT709(color));
   float tonemap_peak = peak_nits / diffuse_white_nits;
 
   if (RENODX_GAMMA_CORRECTION != 0.f) {
@@ -148,7 +148,7 @@ float3 DisplayMap(float3 color) {
     outputColor = renodx::tonemap::neutwo::MaxChannel(color, tonemap_peak);
   }
 
-  //outputColor = renodx::color::bt709::from::BT2020(outputColor);
+  outputColor = renodx::color::bt709::from::BT2020(outputColor);
 
   return outputColor;
 }
