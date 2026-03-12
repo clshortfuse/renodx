@@ -266,7 +266,8 @@ float3 ApplyGammaCorrection(float3 color_input) {
 }
 
 float4 GenerateOutput(float3 color_bt709, float diffuse_nits, float peak_nits) {
-  // color_bt709 = ApplyGammaCorrection(color_bt709);
+  color_bt709 = renodx::color::bt709::clamp::AP1(color_bt709);
+
   if (RENODX_GAMMA_CORRECTION != 0.f) {
     color_bt709 = renodx::color::correct::GammaSafe(color_bt709);
   }
