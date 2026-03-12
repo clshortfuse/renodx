@@ -48,7 +48,7 @@ float4 main(
   float4 _8 = HDRImage.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
 
   // disable sharpening altogether, only enable if CAS is enabled in settings
-  if (CUSTOM_SHARPENING != 1.f) {
+  if (CUSTOM_SHARPENING != 0.f) {
     SV_Target = float4(_8.rgb, 0.f);
     return SV_Target;
   }
