@@ -56,7 +56,10 @@ float4 main(
   SV_Target.z = _57;
   SV_Target.w = 1.0f;
 
-  SV_Target.rgb = ApplyUserGrading(SV_Target.rgb);
+#if 1
+  float2 grain_uv = SV_Position.xy;
+  SV_Target.rgb = ApplyUserGradingAndToneMap(SV_Target.rgb, grain_uv);
+#endif
 
   return SV_Target;
 }

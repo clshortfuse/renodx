@@ -7,7 +7,9 @@
 struct UserGradingConfig {
   float exposure;
   float highlights;
+  float contrast_highlights;
   float shadows;
+  float contrast_shadows;
   float contrast;
   float flare;
   float gamma;
@@ -24,8 +26,9 @@ float Highlights(float x, float highlights, float mid_gray) {
   if (highlights > 1.f) {
     return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.f)));
   } else {  // highlights < 1.f
-    x /= mid_gray;
-    return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
+    float b = mid_gray * pow(x / mid_gray, 2.f - highlights);
+    float t = min(x, 1.f);  // clamp extreme influence
+    return min(x, renodx::math::DivideSafe(x * x, lerp(x, b, t), x));
   }
 }
 
@@ -47,17 +50,19 @@ float Shadows(float x, float shadows, float mid_gray) {
   }
 }
 
-float ContrastAndFlare(float x, float contrast, float flare, float mid_gray = 0.18f) {
-  if (contrast == 0.f && flare == 0.f) return x;
+float ContrastAndFlare(float x, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
+  if (contrast == 1.f && flare == 0.f && contrast_highlights == 1.f && contrast_shadows == 1.f) return x;
 
   const float x_normalized = x / mid_gray;
+  const float split_contrast = renodx::math::Select(x < mid_gray, contrast_shadows, contrast_highlights);
   float flare_ratio = renodx::math::DivideSafe(x_normalized + flare, x_normalized, 1.f);
-  float exponent = contrast * flare_ratio;
+  float exponent = contrast * split_contrast * flare_ratio;
   return pow(x_normalized, exponent) * mid_gray;
 }
 
 float3 ApplyLuminosityGrading(float3 untonemapped, float lum, UserGradingConfig config, float mid_gray = 0.18f) {
-  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f && config.gamma == 1.f) {
+  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f
+      && config.contrast_highlights == 1.f && config.contrast_shadows == 1.f && config.flare == 0.f && config.gamma == 1.f) {
     return untonemapped;
   }
   float3 color = untonemapped;
@@ -68,7 +73,7 @@ float3 ApplyLuminosityGrading(float3 untonemapped, float lum, UserGradingConfig 
   float lum_gamma_adjusted = renodx::math::Select(lum < 1.f, pow(lum, config.gamma), lum);
 
   // contrast & flare
-  const float lum_contrasted = ContrastAndFlare(lum_gamma_adjusted, config.contrast, config.flare, mid_gray);
+  const float lum_contrasted = ContrastAndFlare(lum_gamma_adjusted, config.contrast, config.contrast_highlights, config.contrast_shadows, config.flare, mid_gray);
 
   // highlights
   float lum_highlighted = Highlights(lum_contrasted, config.highlights, mid_gray);
@@ -220,10 +225,12 @@ float3 ApplyCustomGrading(float3 ungraded_bt2020) {
   const UserGradingConfig cg_config = {
     RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
     RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
+    RENODX_TONE_MAP_HIGHLIGHT_CONTRAST,                   // float highlight_contrast;
     RENODX_TONE_MAP_SHADOWS,                              // float shadows;
+    RENODX_TONE_MAP_SHADOW_CONTRAST,                      // float shadow_contrast;
     RENODX_TONE_MAP_CONTRAST,                             // float contrast;
     0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
-    1.f,                                                  // float gamma;
+    RENODX_TONE_MAP_GAMMA,                                // float gamma;
     RENODX_TONE_MAP_SATURATION,                           // float saturation;
     RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
     -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
@@ -232,7 +239,7 @@ float3 ApplyCustomGrading(float3 ungraded_bt2020) {
   };
 
   float luminosity = LuminosityFromBT2020LuminanceNormalized(ungraded_bt2020);
-  float3 graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, luminosity, cg_config, 0.18f);
+  float3 graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, luminosity, cg_config, 0.1f);
   graded_bt2020 = ApplyHueAndPurityGrading(graded_bt2020, ungraded_bt2020, luminosity, cg_config);
 
   graded_bt2020 = max(0, graded_bt2020);
@@ -259,13 +266,14 @@ float3 ApplyGammaCorrection(float3 color_input) {
 }
 
 float4 GenerateOutput(float3 color_bt709, float diffuse_nits, float peak_nits) {
-  color_bt709 = ApplyGammaCorrection(color_bt709);
+  // color_bt709 = ApplyGammaCorrection(color_bt709);
+  if (RENODX_GAMMA_CORRECTION != 0.f) {
+    color_bt709 = renodx::color::correct::GammaSafe(color_bt709);
+  }
 
   float3 color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709);
 
-  color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, peak_nits / diffuse_nits);
-
-  float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, diffuse_nits);
+  float3 color_pq = renodx::color::pq::EncodeSafe(color_bt2020, RENODX_GRAPHICS_WHITE_NITS);
 
   return float4(color_pq, 1.f);
 }
