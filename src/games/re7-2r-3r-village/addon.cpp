@@ -264,8 +264,9 @@ renodx::utils::settings::Settings settings = {
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
         .default_value = 35.f,
-        .label = "FilmGrain",
+        .label = "Film Grain",
         .section = "Effects",
+        .tooltip = "Adds a custom perceptual film grain effect.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
@@ -336,6 +337,7 @@ renodx::utils::settings::Settings settings = {
               {"ColorGradeShadowContrast", 50.f},
               {"ColorGradeLUTScaling", 0.f},
               {"FxNoise", 100.f},
+              {"FxGrainStrength", 0.f},
           });
         },
     },
@@ -513,9 +515,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         initialized = true;
       }
 
-      renodx::utils::random::binds.push_back(&shader_injection.custom_random);         // film grain
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);                      // film grain
       reshade::register_event<reshade::addon_event::init_device>(upgrade_rendering::OnInitDevice);  // fp11 upgrades for NVIDIA
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);               // detect peak nits
 
       break;
     case DLL_PROCESS_DETACH:
@@ -528,7 +530,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
 #endif
       reshade::unregister_event<reshade::addon_event::init_device>(upgrade_rendering::OnInitDevice);  // fp11 upgrades for NVIDIA
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);               // detect peak nits
       reshade::unregister_addon(h_module);
       break;
   }
