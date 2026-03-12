@@ -1,3 +1,4 @@
+#include "AA.hlsli"  // RENODX: import WHITE_SCALE/INV_WHITE_SCALE and scaled FXAA sampling helpers.
 Texture2D<float4> HDRImage : register(t0);
 
 cbuffer SceneInfo : register(b0) {
@@ -29,9 +30,11 @@ float4 main(
   float4 SV_Target;
   float _9 = screenInverseSize.x * SV_Position.x;
   float _10 = screenInverseSize.y * SV_Position.y;
-  float4 _11 = HDRImage.SampleLevel(BilinearClamp, float2(_9, _10), 0.0f);
-  float4 _16 = HDRImage.GatherGreen(BilinearClamp, float2(_9, _10));
-  float4 _20 = HDRImage.GatherGreen(BilinearClamp, float2(_9, _10));
+  float4 _11_raw = HDRImage.SampleLevel(BilinearClamp, float2(_9, _10), 0.0f);  // RENODX: keep raw center sample for alpha outputs.
+  float4 _11 = _11_raw;  // RENODX: run FXAA math on an unscaled copy.
+  _11.rgb *= INV_WHITE_SCALE;  // RENODX: undo tonemap white scaling for FXAA behavior parity.
+  float4 _16 = FxaaGatherGreenScaled(HDRImage, BilinearClamp, float2(_9, _10));  // RENODX: gather in unscaled space.
+  float4 _20 = FxaaGatherGreenScaled(HDRImage, BilinearClamp, float2(_9, _10));  // RENODX: gather in unscaled space.
   float _30 = max(max(_20.z, _20.x), max(_16.z, max(_16.x, _11.y)));
   float _33 = _30 - min(min(_20.z, _20.x), min(_16.z, min(_16.x, _11.y)));
   float _139;
@@ -51,8 +54,8 @@ float4 main(
   float _261;
   float _262;
   if (!(_33 < max(0.08330000191926956f, (_30 * 0.3330000042915344f)))) {
-    float4 _37 = HDRImage.SampleLevel(BilinearClamp, float2(_9, _10), 0.0f, int2(1, -1));
-    float4 _39 = HDRImage.SampleLevel(BilinearClamp, float2(_9, _10), 0.0f, int2(-1, 1));
+    float4 _37 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_9, _10), int2(1, -1));  // RENODX: offset sample in unscaled space.
+    float4 _39 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_9, _10), int2(-1, 1));  // RENODX: offset sample in unscaled space.
     float _41 = _20.z + _16.x;
     float _42 = _20.x + _16.z;
     float _45 = _11.y * 2.0f;
@@ -76,8 +79,8 @@ float4 main(
     float _100 = _98 - _93;
     float _101 = _96 + _92;
     float _102 = _98 + _93;
-    float4 _105 = HDRImage.SampleLevel(BilinearClamp, float2(_99, _100), 0.0f);
-    float4 _108 = HDRImage.SampleLevel(BilinearClamp, float2(_101, _102), 0.0f);
+    float4 _105 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_99, _100));  // RENODX: directional sample in unscaled space.
+    float4 _108 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_101, _102));  // RENODX: directional sample in unscaled space.
     float _112 = max(_83, _84) * 0.25f;
     float _113 = (_11.y + select(_85, _76, _77)) * 0.5f;
     float _115 = (_91 * _91) * (3.0f - (_91 * 2.0f));
@@ -95,14 +98,14 @@ float4 main(
       if (!(_120 && _122)) {
         do {
           if (!_120) {
-            float4 _136 = HDRImage.SampleLevel(BilinearClamp, float2(_125, _128), 0.0f);
+            float4 _136 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_125, _128));  // RENODX: edge search sample in unscaled space.
             _139 = _136.y;
           } else {
             _139 = _117;
           }
           do {
             if (!_122) {
-              float4 _141 = HDRImage.SampleLevel(BilinearClamp, float2(_131, _133), 0.0f);
+              float4 _141 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_131, _133));  // RENODX: edge search sample in unscaled space.
               _144 = _141.y;
             } else {
               _144 = _118;
@@ -120,14 +123,14 @@ float4 main(
             if (!(_150 && _152)) {
               do {
                 if (!_150) {
-                  float4 _166 = HDRImage.SampleLevel(BilinearClamp, float2(_155, _158), 0.0f);
+                  float4 _166 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_155, _158));  // RENODX: edge search sample in unscaled space.
                   _169 = _166.y;
                 } else {
                   _169 = _146;
                 }
                 do {
                   if (!_152) {
-                    float4 _171 = HDRImage.SampleLevel(BilinearClamp, float2(_161, _163), 0.0f);
+                    float4 _171 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_161, _163));  // RENODX: edge search sample in unscaled space.
                     _174 = _171.y;
                   } else {
                     _174 = _148;
@@ -145,14 +148,14 @@ float4 main(
                   if (!(_180 && _182)) {
                     do {
                       if (!_180) {
-                        float4 _196 = HDRImage.SampleLevel(BilinearClamp, float2(_185, _188), 0.0f);
+                        float4 _196 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_185, _188));  // RENODX: edge search sample in unscaled space.
                         _199 = _196.y;
                       } else {
                         _199 = _176;
                       }
                       do {
                         if (!_182) {
-                          float4 _201 = HDRImage.SampleLevel(BilinearClamp, float2(_191, _193), 0.0f);
+                          float4 _201 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(_191, _193));  // RENODX: edge search sample in unscaled space.
                           _204 = _201.y;
                         } else {
                           _204 = _178;
@@ -212,21 +215,22 @@ float4 main(
       float _232 = select(_72, (_9 - _223), (_10 - _224));
       float _234 = select(_72, (_225 - _9), (_226 - _10));
       float _249 = max(select((((_11.y - _113) < 0.0f) ^ select((_232 < _234), (_227 < 0.0f), (_228 < 0.0f))), (0.5f - (min(_232, _234) * (1.0f / (_234 + _232)))), 0.0f), ((_115 * _115) * 0.75f)) * _88;
-      float4 _254 = HDRImage.SampleLevel(BilinearClamp, float2(select(_72, _9, (_249 + _9)), select(_72, (_249 + _10), _10)), 0.0f);
+      float4 _254 = FxaaSampleScaled(HDRImage, BilinearClamp, float2(select(_72, _9, (_249 + _9)), select(_72, (_249 + _10), _10)));  // RENODX: final resolve sample in unscaled space.
       _259 = _254.x;
       _260 = _254.y;
       _261 = _254.z;
-      _262 = _11.y;
+      _262 = _11_raw.y;  // RENODX: preserve original alpha payload (green from raw center sample).
     } while (false);
   } else {
     _259 = _11.x;
     _260 = _11.y;
     _261 = _11.z;
-    _262 = _11.w;
+    _262 = _11_raw.w;  // RENODX: preserve original alpha payload when skipping FXAA.
   }
   SV_Target.x = _259;
   SV_Target.y = _260;
   SV_Target.z = _261;
   SV_Target.w = _262;
+  SV_Target.rgb *= WHITE_SCALE;  // RENODX: restore scene white scaling after FXAA math.
   return SV_Target;
 }
