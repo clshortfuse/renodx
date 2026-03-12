@@ -434,7 +434,7 @@ bool initialized = false;
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Terraria";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for TModLoader";
 
 
 
