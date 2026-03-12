@@ -32,7 +32,7 @@ void comp_main() {
   uint _45 = ((gl_LocalInvocationID.x >> 1u) & 7u) | (gl_WorkGroupID.x << 4u);
   uint _46 = (((gl_LocalInvocationID.x >> 3u) & 6u) | (gl_LocalInvocationID.x & 1u)) | (gl_WorkGroupID.y << 4u);
 
-  if (CUSTOM_SHARPENING == 0.f) {
+  if (CUSTOM_SHARPENING == 1.f && CUSTOM_SHARPENING_STRENGTH == 0.f) {
     int offset_x = int(_45 | 8u);
     int offset_y = int(_46 | 8u);
 
@@ -41,8 +41,8 @@ void comp_main() {
     OutputImage[int2(offset_x, offset_y)] = float4(SrcImage.Load(int3(offset_x, offset_y, 0)).rgb, 1.f);
     OutputImage[int2(int(_45), offset_y)] = float4(SrcImage.Load(int3(int(_45), offset_y, 0)).rgb, 1.f);
     return;
-  } else if (CUSTOM_SHARPENING == 2.f) {
-    float sharpness_strength = 0.75f;  // cbCAS_m0[0u].x
+  } else if (CUSTOM_SHARPENING == 1.f) {
+    float sharpness_strength = CUSTOM_SHARPENING_STRENGTH;  // cbCAS_m0[0u].x
 
     uint tex_width, tex_height;
     SrcImage.GetDimensions(tex_width, tex_height);

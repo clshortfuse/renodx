@@ -18,7 +18,7 @@ void main(
   int _15 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
   int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
 
-  if (CUSTOM_SHARPENING == 0.f) {
+  if (CUSTOM_SHARPENING == 1.f && CUSTOM_SHARPENING_STRENGTH == 0.f) {
     uint tex_width, tex_height;
     SrcImage.GetDimensions(tex_width, tex_height);
     int2 tex_max = int2(tex_width - 1, tex_height - 1);
@@ -31,9 +31,9 @@ void main(
     OutputImage[int2(pass_350, pass_683)] = float4(SampleScaledSource(SrcImage, int2(pass_350, pass_683), tex_max, const0), 1.f);
     OutputImage[int2(_15, pass_683)] = float4(SampleScaledSource(SrcImage, int2(_15, pass_683), tex_max, const0), 1.f);
     return;
-  } else if (CUSTOM_SHARPENING == 2.f) {  // Lilium RCAS
+  } else if (CUSTOM_SHARPENING == 1.f) {  // Lilium RCAS
     // Custom RCAS Sharpening Implementation
-    float sharpness_strength = 0.75f;  // asfloat(const1.x)
+    float sharpness_strength = CUSTOM_SHARPENING_STRENGTH;  // asfloat(const1.x)
 
     // Calculate texture dimensions once for all 4 pixels (optimization)
     uint tex_width, tex_height;
@@ -48,7 +48,7 @@ void main(
     OutputImage[int2(_15, _683)] = float4(ApplyLiliumRCASScaled(SrcImage, int2(_15, _683), sharpness_strength, tex_max, const0), 1.f);
     return;
   } else {
-    // Original CAS Implementation (CUSTOM_SHARPENING == 1.f or other values)
+    // Original CAS Implementation (CUSTOM_SHARPENING == 0.f)
     float _24 = float((uint)_15);
     float _25 = float((uint)_16);
     float _32 = (asfloat(const0.x) * _24) + asfloat(const0.z);

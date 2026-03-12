@@ -99,7 +99,15 @@ float3 ApplyLiliumRCASFromSamples(
 
 // RCAS using bilinear-scaled source samples (avoids truncating scaled coords to int).
 float3 ApplyLiliumRCASScaled(Texture2D<float4> src_image, int2 output_coord, float sharpness_strength, int2 tex_max, uint4 uv_scale_offset) {
-  static const float kNormalization = 100.0f;
+  float kDefaultNormalization;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    kDefaultNormalization = 100.f;
+  } else {
+    kDefaultNormalization = RENODX_PEAK_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      kDefaultNormalization = renodx::color::correct::Gamma(kDefaultNormalization, true);
+    }
+  }
 
   float3 b = SampleScaledSource(src_image, output_coord + int2(0, -1), tex_max, uv_scale_offset);
   float3 d = SampleScaledSource(src_image, output_coord + int2(-1, 0), tex_max, uv_scale_offset);
@@ -107,7 +115,7 @@ float3 ApplyLiliumRCASScaled(Texture2D<float4> src_image, int2 output_coord, flo
   float3 f = SampleScaledSource(src_image, output_coord + int2(1, 0), tex_max, uv_scale_offset);
   float3 h = SampleScaledSource(src_image, output_coord + int2(0, 1), tex_max, uv_scale_offset);
 
-  return ApplyLiliumRCASFromSamples(b, d, e, f, h, sharpness_strength, kNormalization);
+  return ApplyLiliumRCASFromSamples(b, d, e, f, h, sharpness_strength, kDefaultNormalization);
 }
 
 float3 ApplyLiliumRCAS(
@@ -148,7 +156,15 @@ float3 ApplyLiliumRCAS(
     Texture2D<float4> texture,
     int2 coord,
     float sharpness_strength) {
-  static const float kDefaultNormalization = 100.0f;
+  float kDefaultNormalization;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    kDefaultNormalization = 100.f;
+  } else {
+    kDefaultNormalization = RENODX_PEAK_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      kDefaultNormalization = renodx::color::correct::Gamma(kDefaultNormalization, true);
+    }
+  }
   return ApplyLiliumRCAS(texture, coord, sharpness_strength, kDefaultNormalization);
 }
 
@@ -158,7 +174,16 @@ float3 ApplyLiliumRCAS(
     int2 coord,
     float sharpness_strength,
     int2 tex_max) {
-  static const float kDefaultNormalization = 100.0f;
+  float kDefaultNormalization;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    kDefaultNormalization = 100.f;
+  } else {
+    kDefaultNormalization = RENODX_PEAK_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      kDefaultNormalization = renodx::color::correct::Gamma(kDefaultNormalization, true);
+    }
+  }
+
   return ApplyLiliumRCAS(texture, coord, sharpness_strength, kDefaultNormalization, tex_max);
 }
 
@@ -170,7 +195,15 @@ void ApplyLiliumRCAS_RE3_Pattern(
     int2 base_coord,
     int2 offset_coord,
     float sharpness_strength) {
-  static const float kDefaultNormalization = 100.0f;
+  float kDefaultNormalization;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    kDefaultNormalization = 100.f;
+  } else {
+    kDefaultNormalization = RENODX_PEAK_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      kDefaultNormalization = renodx::color::correct::Gamma(kDefaultNormalization, true);
+    }
+  }
 
   // Calculate texture dimensions once for all 4 pixels
   uint tex_width, tex_height;

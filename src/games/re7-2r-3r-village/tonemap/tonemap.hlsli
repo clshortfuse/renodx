@@ -110,6 +110,7 @@ float3 ApplyColorGradingLUTs(
         color_output = renodx::color::correct::GammaSafe(color_output);
         lut_black = renodx::color::correct::GammaSafe(lut_black);
         lut_mid = renodx::color::correct::GammaSafe(lut_mid);
+        // color_input = renodx::color::correct::GammaSafe(color_input);
       }
 
       float3 unclamped_gamma = Unclamp(
@@ -167,16 +168,20 @@ void ApplyColorGrading(
 
   float3 compressed_color = color_input * compression_scale;
 
-  float3 lut_output = ApplyColorGradingLUTs(
-      compressed_color,
-      fTextureSize,
-      fTextureBlendRate,
-      fTextureBlendRate2,
-      fTextureInverseSize,
-      tTextureMap0,
-      tTextureMap1,
-      tTextureMap2,
-      TrilinearClamp);
+  float3 lut_output = compressed_color;
+  if (COLOR_GRADE_LUT_STRENGTH > 0.f) {
+    lut_output = ApplyColorGradingLUTs(
+        compressed_color,
+        fTextureSize,
+        fTextureBlendRate,
+        fTextureBlendRate2,
+        fTextureInverseSize,
+        tTextureMap0,
+        tTextureMap1,
+        tTextureMap2,
+        TrilinearClamp);
+    lut_output = lerp(compressed_color, lut_output, COLOR_GRADE_LUT_STRENGTH);
+  }
 
   float3 matrix_color;
   matrix_color.r = mad(lut_output.b, fColorMatrix[2].x,
@@ -196,12 +201,30 @@ void ApplyColorGrading(
   b_out = color_output.b;
 }
 
-float3 ApplyUserGrading(float3 color_bt709) {
+float3 ApplyUserGradingAndToneMap(float3 color_bt709, float2 grain_uv) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return color_bt709;
+
+  color_bt709 = ApplyGammaCorrection(color_bt709);
 
   {  // blow out and hue shift
     float3 purity_and_hue_source = renodx::tonemap::ReinhardPiecewise(color_bt709, 5.f, 1.5f);
     color_bt709 = renodx::color::correct::Luminance(purity_and_hue_source, LuminosityFromBT709(purity_and_hue_source), LuminosityFromBT709(color_bt709));
+  }
+
+  float3 color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709);
+  color_bt2020 = ApplyCustomGrading(color_bt2020);
+  color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  color_bt709 = renodx::color::bt709::from::BT2020(color_bt2020);
+
+  color_bt709 = renodx::effects::ApplyFilmGrain(
+      color_bt709,
+      grain_uv,
+      CUSTOM_RANDOM,
+      CUSTOM_GRAIN_STRENGTH * 0.06f);
+
+  color_bt709 *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+  if (RENODX_GAMMA_CORRECTION != 0.f) {
+    color_bt709 = renodx::color::correct::GammaSafe(color_bt709, true);
   }
 
   return color_bt709;

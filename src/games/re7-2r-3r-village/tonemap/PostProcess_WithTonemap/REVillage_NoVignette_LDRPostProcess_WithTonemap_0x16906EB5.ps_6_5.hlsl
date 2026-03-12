@@ -865,9 +865,9 @@ float4 main(
           } else {
             _2373 = 0.0f;
           }
-          float _2374 = _2341 * fNoisePower.x;
-          float _2375 = _2373 * fNoisePower.y;
-          float _2376 = _2357 * fNoisePower.y;
+          float _2374 = _2341 * CUSTOM_NOISE * fNoisePower.x;
+          float _2375 = _2373 * CUSTOM_NOISE * fNoisePower.y;
+          float _2376 = _2357 * CUSTOM_NOISE * fNoisePower.y;
           float _2387 = exp2(log2(1.0f - saturate(dot(float3(_2295, _2296, _2297), float3(0.29899999499320984f, -0.16899999976158142f, 0.5f)))) * fNoiseContrast) * fBlendRate;
           _2398 = ((_2387 * (mad(_2376, 1.4019999504089355f, _2374) - _2295)) + _2295);
           _2399 = ((_2387 * (mad(_2376, -0.7139999866485596f, mad(_2375, -0.3440000116825104f, _2374)) - _2296)) + _2296);
@@ -1061,7 +1061,8 @@ float4 main(
   SV_Target.w = 0.0f;
 
 #if 1
-  SV_Target.rgb = ApplyUserGrading(SV_Target.rgb);
+  float2 grain_uv = SV_Position.xy * screenInverseSize;
+  SV_Target.rgb = ApplyUserGradingAndToneMap(SV_Target.rgb, grain_uv);
 #endif
 
   return SV_Target;
