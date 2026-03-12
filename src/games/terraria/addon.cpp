@@ -380,7 +380,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Build: 2/21/2026 V1.1.1"),
+        .label = std::string("Build: 3/11/2026 V1.1.2"),
         .section = "About",
     },
 };
@@ -486,7 +486,24 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         //1280 x 720 = 1664 x 1104
         //1280 x 1024 = 1664 x 1408
         //1600 x 900 = 1984 x 1284
-    
+
+        //new 3840 x 2160 = 2304 x 2304
+        //new 2560 x 1440 = 2304 x 1824
+
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::b8g8r8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+          .aspect_ratio = 2304.f / 2304.f,
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::b8g8r8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+          .aspect_ratio = 2304.f / 1824.f,
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
     renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::b8g8r8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
