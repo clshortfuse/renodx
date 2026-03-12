@@ -69,6 +69,8 @@ static std::atomic<uint32_t> proxy_invalid_call_streak = 0;
 static std::atomic<uintptr_t> proxy_swapchain_hwnd_override = 0;
 static std::atomic<bool> proxy_settings_dirty = false;
 static std::atomic<uint32_t> proxy_teardown_deferred_presents = 0;
+static std::atomic<bool> proxy_same_hwnd_non_flip_bootstrap = false;
+static std::atomic<bool> proxy_same_hwnd_flip_established = false;
 
 static bool device_proxy_creation_failed = false;
 
@@ -252,6 +254,14 @@ static void SetProxySettings(const renodx::utils::draw::SwapchainProxyPass& sett
   proxy_swapchain_settings_valid = true;
 }
 
+static void SetSameHwndNonFlipBootstrap(bool enabled) {
+  const bool changed =
+      proxy_same_hwnd_non_flip_bootstrap.exchange(enabled, std::memory_order_relaxed) != enabled;
+  if (changed) {
+    proxy_settings_dirty = true;
+  }
+}
+
 static void SetSwapchainHwndOverride(HWND hwnd) {
   proxy_swapchain_hwnd_override = reinterpret_cast<uintptr_t>(hwnd);
 }
@@ -316,7 +326,7 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
   sc_desc.Stereo = FALSE;
   sc_desc.SampleDesc.Quality = 0;
   sc_desc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-  sc_desc.Scaling = DXGI_SCALING_NONE;
+  sc_desc.Scaling = DXGI_SCALING_STRETCH;
   fullscreen_desc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
 #ifndef RENODX_PROXY_DEVICE_D3D12
@@ -451,6 +461,42 @@ static ID3D11Device* GetDeviceProxy(renodx::utils::resource::ResourceInfo* host_
     s << "utils::device_proxy::GetDeviceProxy(tearing_supported=" << (tearing_supported ? "true" : "false") << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
   }
+
+  // Some same-HWND flip only stabilize if the session performs a
+  // throwaway non-flip create first, then creates the real flip swapchain.
+  if ((hwnd != nullptr && output_window == hwnd)
+      && proxy_same_hwnd_non_flip_bootstrap.load(std::memory_order_relaxed)
+      && !proxy_same_hwnd_flip_established.load(std::memory_order_relaxed)) {
+    DXGI_SWAP_CHAIN_DESC1 bootstrap_desc = sc_desc;
+    bootstrap_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    bootstrap_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    bootstrap_desc.Flags = 0;
+
+    IDXGISwapChain1* bootstrap_swap_chain = nullptr;
+    is_creating_proxy_swapchain = true;
+    const auto bootstrap_hr = dxgi_factory->CreateSwapChainForHwnd(
+        swapchain_creator,
+        output_window,
+        &bootstrap_desc,
+        fullscreen_desc.Windowed == TRUE ? nullptr : &fullscreen_desc,
+        nullptr,
+        &bootstrap_swap_chain);
+    is_creating_proxy_swapchain = false;
+    if (FAILED(bootstrap_hr)) {
+      std::stringstream s;
+      s << "utils::device_proxy::GetDeviceProxy(non-flip bootstrap CreateSwapChainForHwnd failed: hr=0x";
+      s << std::hex << static_cast<uint32_t>(bootstrap_hr) << std::dec << ")";
+      reshade::log::message(reshade::log::level::error, s.str().c_str());
+    } else {
+      reshade::log::message(
+          reshade::log::level::info,
+          "utils::device_proxy::GetDeviceProxy(created one-off non-flip bootstrap swapchain)");
+
+      bootstrap_swap_chain->Release();
+      bootstrap_swap_chain = nullptr;
+    }
+  }
+
   sc_desc.Flags = tearing_supported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
   proxy_present_flags = tearing_supported ? DXGI_PRESENT_ALLOW_TEARING : 0u;
 

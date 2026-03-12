@@ -1274,6 +1274,7 @@ void PumpDeviceProxyOutputWindowMessages() {
 
 [[nodiscard]] bool PrepareDeviceProxyActivation(DeviceData* data) {
   const auto route = ResolveRequiredDeviceProxyHwndRoute(data);
+  renodx::utils::device_proxy::SetSameHwndNonFlipBootstrap(route == DeviceProxyHwndRoute::SAME_HWND);
 
   if (route == DeviceProxyHwndRoute::SEPARATE_HWND) {
     if (!EnsureDeviceProxyOutputWindow(data)) {
@@ -1306,6 +1307,7 @@ void PumpDeviceProxyOutputWindowMessages() {
   if (!g_device_proxy_active_hwnd_route.has_value()) {
     g_device_proxy_active_hwnd_route = route;
   }
+  renodx::utils::device_proxy::SetSameHwndNonFlipBootstrap(route == DeviceProxyHwndRoute::SAME_HWND);
   if (route == DeviceProxyHwndRoute::SAME_HWND) {
     DestroyDeviceProxyOutputWindow();
     renodx::utils::device_proxy::SetSwapchainHwndOverride(nullptr);
@@ -1409,6 +1411,10 @@ bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
     // Non-flip swapchains cannot use ALLOW_TEARING.
     if (!IsFlipSwapchainPresentMode(desc.present_mode)) {
       desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    }
+    // FRAME_LATENCY_WAITABLE_OBJECT is only valid with FLIP_SEQUENTIAL.
+    if (desc.present_mode != static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)) {
+      desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
     }
 
     if (old_present_mode != desc.present_mode || old_present_flags != desc.present_flags) {
