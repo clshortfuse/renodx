@@ -271,6 +271,11 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("To use Lilium RCAS in RE3 and RE Village, enable FidelityFX CAS in the settings menu.\n"),
+        .section = "Effects",
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxSharpeningType",
         .binding = &shader_injection.custom_sharpening,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
