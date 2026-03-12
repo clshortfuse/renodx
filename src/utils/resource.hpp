@@ -390,6 +390,12 @@ static void OnInitDevice(reshade::api::device* device) {
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
     store = data->store;
+
+    if (store == &local_store) {
+      log::e("utils::resource::OnInitDevice(Warning: Attaching to a hook but store is still the local store. This should not happen.)");
+      assert(store != &local_store);
+      return;
+    }
     for (auto& callback : local_store.on_init_resource_info_callbacks) {
       store->on_init_resource_info_callbacks.push_back(callback);
     }
