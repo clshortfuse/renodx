@@ -241,6 +241,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Adjust bloom strength.",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.toneMapType != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
 
