@@ -261,48 +261,6 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
-float3 ApplyHermiteSplineByLuminance(float3 input, float diffuse_nits, float peak_nits) {
-  const float peak_ratio = peak_nits / diffuse_nits;
-  float white_clip = max(RENODX_TONE_MAP_WHITE_CLIP, peak_ratio * 1.5f);
-
-  float y_in = renodx::color::y::from::BT709(input);
-  float input_pq = renodx::color::pq::Encode(y_in, diffuse_nits);
-  float target_white_pq = renodx::color::pq::Encode(peak_nits, 1.f);
-  float max_white_pq = renodx::color::pq::Encode(white_clip, diffuse_nits);
-  float target_black_pq = renodx::color::pq::Encode(0.0001f, 1.f);
-  float min_black_pq = renodx::color::pq::Encode(0.f, 1.f);
-
-  float scaled = renodx::tonemap::HermiteSplineRolloff(input_pq, target_white_pq, max_white_pq, target_black_pq, min_black_pq);
-
-  float y_out = (renodx::color::pq::Decode(scaled, diffuse_nits));
-  y_out = min(y_out, peak_ratio);
-
-  float3 new_color = renodx::color::correct::Luminance(input, y_in, y_out);
-
-  return new_color;
-}
-
-float3 ApplyHermiteSplineByMaxChannel(float3 input, float diffuse_nits, float peak_nits) {
-  const float peak_ratio = peak_nits / diffuse_nits;
-  float white_clip = max(RENODX_TONE_MAP_WHITE_CLIP, peak_ratio * 1.5f);  // safeguard to prevent artifacts
-
-  float max_channel = renodx::math::Max(input.r, input.g, input.b);
-
-  float max_pq = renodx::color::pq::Encode(max_channel, diffuse_nits);
-  float target_white_pq = renodx::color::pq::Encode(peak_nits, 1.f);
-  float max_white_pq = renodx::color::pq::Encode(white_clip, diffuse_nits);
-  float target_black_pq = renodx::color::pq::Encode(0.0001f, 1.f);
-  float min_black_pq = renodx::color::pq::Encode(0.f, 1.f);
-
-  float scaled_pq = renodx::tonemap::HermiteSplineRolloff(max_pq, target_white_pq, max_white_pq, target_black_pq, min_black_pq);
-
-  float mapped_max = renodx::color::pq::Decode(scaled_pq, diffuse_nits);
-  mapped_max = min(mapped_max, peak_ratio);
-
-  float scale = renodx::math::DivideSafe(mapped_max, max_channel, 0.f);
-  return input * scale;
-}
-
 renodx::color::grade::Config CreateColorGradeConfig() {
   renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
   cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;
@@ -339,7 +297,7 @@ float3 ApplyToneMap(float3 untonemapped, float2 position, sampler2D SceneColorTe
     if (RENODX_TONE_MAP_TYPE == 1.f) {
       tonemapped = untonemapped_graded;
     } else {
-      tonemapped = ApplyHermiteSplineByMaxChannel(untonemapped_graded, RENODX_DIFFUSE_WHITE_NITS, RENODX_PEAK_WHITE_NITS);
+      tonemapped = renodx::tonemap::neutwo::MaxChannel(untonemapped_graded, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_WHITE_CLIP);
     }
   }
 
