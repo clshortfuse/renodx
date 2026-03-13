@@ -113,18 +113,18 @@ float3 PreTonemapSliders(float3 untonemapped, float mid_gray = 0.18f) {
   return outputColor;
 }
 
-// float3 PostTonemapSliders(float3 hdr_color) {
-//   renodx::color::grade::Config config = renodx::color::grade::config::Create();
-//   config.saturation = RENODX_TONE_MAP_SATURATION;
-//   config.blowout = RENODX_TONE_MAP_HIGHLIGHT_SATURATION;
-//   config.dechroma = RENODX_TONE_MAP_BLOWOUT;
-//   config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+float3 PostTonemapSliders(float3 hdr_color) {
+  renodx::color::grade::Config config = renodx::color::grade::config::Create();
+  config.saturation = RENODX_TONE_MAP_SATURATION;
+  config.blowout = RENODX_TONE_MAP_HIGHLIGHT_SATURATION;
+  config.dechroma = RENODX_TONE_MAP_BLOWOUT;
+  config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
 
-//   float y = renodx::color::y::from::BT709(hdr_color);
-//   hdr_color = ApplySaturationBlowoutHighlightSaturation(hdr_color, y, config);
-//   hdr_color = ApplyPerChannelBlowoutHueShift(hdr_color, 0.5f);
-//   return hdr_color;
-// }
+  float y = renodx::color::y::from::BT709(hdr_color);
+  hdr_color = ApplySaturationBlowoutHighlightSaturation(hdr_color, y, config);
+  hdr_color = ApplyPerChannelBlowoutHueShift(hdr_color, 0.5f);
+  return hdr_color;
+}
 
 float3 CustomPostProcessing(float3 color, float2 uv) {
   //color = ApplyRCAS(color, uv, t1, s1);
@@ -142,21 +142,19 @@ float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start =
 }
 
 float3 CustomPsychoTest(float3 untonemapped, float peak) {
-  renodx::draw::Config config = renodx::draw::BuildConfig();
 
   float3 outputColor = psychotm_test11(
       untonemapped,
       peak,
-      config.tone_map_exposure,
-      config.tone_map_highlights,
-      config.tone_map_shadows,
-      config.tone_map_contrast,
-      config.tone_map_saturation,
-      1.f - config.tone_map_blowout,
+      PSYCHO_EXPOSURE,
+      PSYCHO_HIGHLIGHTS,
+      PSYCHO_SHADOWS,
+      PSYCHO_CONTRAST,
+      PSYCHO_PURITY,
+      1.f - PSYCHO_BLEACH,
       100.f,
-      config.tone_map_hue_correction,
-      //1.8f * RENODX_TONE_MAP_ADAPTIVE_CONTRAST
-      RENODX_TONE_MAP_ADAPTIVE_CONTRAST
+      PSYCHO_HUE_RESTORE,
+      PSYCHO_ADAPTATION_CONTRAST
   );
 
   return outputColor;
@@ -183,7 +181,11 @@ float3 CustomTonemap(float3 untonemapped_ap1, float2 uv) {
   float3 output_color = untonemapped_ap1;
   if (RENODX_TONE_MAP_TYPE == 1.f) {  // ACES
     float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
-    float3 untonemapped_ap0 = mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1);
+
+    untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709);
+    untonemapped_bt709 = PostTonemapSliders(untonemapped_bt709);
+
+    float3 untonemapped_ap0 = mul(renodx::color::BT709_TO_AP0_MAT, untonemapped_bt709);
     float3 rrt_out = renodx::tonemap::aces::RRT(untonemapped_ap0);
     float3 tonemapped_bt709_ch = renodx::tonemap::aces::ODT(rrt_out, (ACES_MIN) * 48.f, calculated_peak * 48.f) / 48.f;
 
