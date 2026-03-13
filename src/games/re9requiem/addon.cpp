@@ -17,7 +17,6 @@
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/random.hpp"
-#include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "shared.h"
 
@@ -27,12 +26,9 @@ ShaderInjectData shader_injection;
 
 void MarkToneMappingLutInvalidated();
 void MarkToneMappingLutRefreshed();
-void OnUpgradeRenderingSettingChanged(float previous, float current);
 
 constexpr uint32_t TONE_MAPPING_LUT_BUILDER_CRC32 = 0x2450198E;
 std::atomic_bool tone_mapping_lut_invalidated = false;
-std::atomic_bool upgrade_rendering_restart_required = false;
-renodx::utils::settings::Setting* upgrade_rendering_setting = nullptr;
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     {TONE_MAPPING_LUT_BUILDER_CRC32, {
@@ -46,12 +42,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
 void OnToneMappingLutSettingChanged(float previous, float current) {
   if (previous != current) MarkToneMappingLutInvalidated();
-}
-
-void OnUpgradeRenderingSettingChanged(float previous, float current) {
-  if (previous != current) {
-    upgrade_rendering_restart_required.store(true, std::memory_order_relaxed);
-  }
 }
 
 renodx::utils::settings::Settings settings = {
@@ -176,7 +166,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradePreToneMapShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 85.f,
+        .default_value = 50.f,
         .label = "Pre Tone Map Shadows",
         .section = "Color Grading",
         .max = 100.f,
@@ -186,8 +176,18 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradePostToneMapShadows",
         .binding = &shader_injection.post_tone_map_shadows,
-        .default_value = 65.f,
+        .default_value = 50.f,
         .label = "Post Tone Map Shadows",
+        .section = "Color Grading",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradePostToneMapShadowContrast",
+        .binding = &shader_injection.post_tone_map_shadow_contrast,
+        .default_value = 42.f,
+        .label = "Shadow Contrast",
         .section = "Color Grading",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
@@ -326,35 +326,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxFogDithering",
-        .binding = &shader_injection.custom_fog_dithering,
-        .default_value = 100.f,
-        .label = "Custom Fog Dithering",
-        .section = "Effects",
-        .tooltip = "Hides banding in fog",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "WARNING: Rendering Format changes require a restart to apply.",
-        .section = "Advanced",
-        .tint = 0xFF3B30,
-        .is_visible = []() { return upgrade_rendering_restart_required.load(std::memory_order_relaxed); },
-        .is_sticky = true,
-    },
-    upgrade_rendering_setting = new renodx::utils::settings::Setting{
-        .key = "FxUpgradeRender",
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Rendering Format",
-        .section = "Advanced",
-        .tooltip = "Upgrades the post process format to reduce banding (requires restart). NVIDIA only.",
-        .labels = {"R11G11B10F", "R16G16B16A16F"},
-        .on_change_value = &OnUpgradeRenderingSettingChanged,
-        .is_global = true,
-    },
-    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -363,7 +334,6 @@ renodx::utils::settings::Settings settings = {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
-            if (setting->is_global) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
           MarkToneMappingLutInvalidated();
@@ -378,8 +348,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 1.f},
-              {"ColorGradePreToneMapShadows", 50.f},
-              {"ColorGradePostToneMapShadows", 50.f},
+              {"ColorGradePostToneMapShadowContrast", 50.f},
               {"FxNoise", 100.f},
               {"FxVanillaGrainStrength", 100.f},
               {"FxGrainStrength", 0.f},
@@ -396,8 +365,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 0.f},
-              {"ColorGradePreToneMapShadows", 50.f},
-              {"ColorGradePostToneMapShadows", 50.f},
+              {"ColorGradePostToneMapShadowContrast", 50.f},
               {"ColorGradeSceneScaling", 100.f},
               {"ColorGradeSceneScaling2", 100.f},
           });
@@ -489,6 +457,7 @@ void OnPresetOff() {
       {"ColorGradeHighlights", 50.f},
       {"ColorGradePreToneMapShadows", 50.f},
       {"ColorGradePostToneMapShadows", 50.f},
+      {"ColorGradePostToneMapShadowContrast", 50.f},
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
@@ -502,7 +471,6 @@ void OnPresetOff() {
       {"FxVanillaGrainStrength", 100.f},
       {"FxFilmDamageStrength", 100.f},
       {"FxGrainStrength", 0.f},
-      {"FxFogDithering", 0.f},
   });
   MarkToneMappingLutInvalidated();
 }
@@ -519,27 +487,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
-void OnInitDevice(reshade::api::device* device) {
-  std::vector<renodx::utils::resource::ResourceUpgradeInfo> upgrade_infos = {};
-
-  if (upgrade_rendering_setting != nullptr && upgrade_rendering_setting->GetValue() == 1.f) {
-    int vendor_id;
-    auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
-    if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
-                                             // Bugs out AMD GPUs
-      upgrade_infos.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
-                         .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
-          .usage_include = reshade::api::resource_usage::render_target,
-      });
-    }
-  }
-
-  renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
-}
-
 bool initialized = false;
 
 }  // namespace
@@ -552,8 +499,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
-
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::allow_multiple_push_constants = true;
@@ -564,24 +509,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
         initialized = true;
       }
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);        // fp11 upgrades for NVIDIA
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
       renodx::utils::random::binds.push_back(&shader_injection.custom_random);      // film grain
-      renodx::utils::random::binds.push_back(&shader_injection.custom_fog_random);  // fog dithering
 
       break;
     case DLL_PROCESS_DETACH:
-      renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
-
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);        // fp11 upgrades for NVIDIA
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
       reshade::unregister_addon(h_module);
       break;
   }
 
-  renodx::utils::random::Use(fdw_reason);  // film grain & fog dithering
+  renodx::utils::random::Use(fdw_reason);  // film grain
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
