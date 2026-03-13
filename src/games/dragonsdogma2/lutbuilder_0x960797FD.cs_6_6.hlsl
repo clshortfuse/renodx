@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsl"
 
 Texture2D<float4> OCIO_lut1d_0 : register(t0);
 
@@ -56,40 +56,45 @@ void main(
   float _397;
   float _398;
   float _399;
-  if (!(!(_14 <= -0.3013699948787689f))) {
-    _30 = (exp2((_11 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
-  } else {
-    if (_14 < 1.468000054359436f) {
-      _30 = exp2((_11 * 0.2780952751636505f) + -9.720000267028809f);
-    } else {
-      _30 = 65504.0f;
-    }
-  }
-  if (!(!(_15 <= -0.3013699948787689f))) {
-    _44 = (exp2((_12 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
-  } else {
-    if (_15 < 1.468000054359436f) {
-      _44 = exp2((_12 * 0.2780952751636505f) + -9.720000267028809f);
-    } else {
-      _44 = 65504.0f;
-    }
-  }
-  if (!(!(_16 <= -0.3013699948787689f))) {
-    _58 = (exp2((_13 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
-  } else {
-    if (_16 < 1.468000054359436f) {
-      _58 = exp2((_13 * 0.2780952751636505f) + -9.720000267028809f);
-    } else {
-      _58 = 65504.0f;
-    }
-  }
+  // if (!(!(_14 <= -0.3013699948787689f))) {
+  //   _30 = (exp2((_11 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
+  // } else {
+  //   if (_14 < 1.468000054359436f) {
+  //     _30 = exp2((_11 * 0.2780952751636505f) + -9.720000267028809f);
+  //   } else {
+  //     _30 = 65504.0f;
+  //   }
+  // }
+  // if (!(!(_15 <= -0.3013699948787689f))) {
+  //   _44 = (exp2((_12 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
+  // } else {
+  //   if (_15 < 1.468000054359436f) {
+  //     _44 = exp2((_12 * 0.2780952751636505f) + -9.720000267028809f);
+  //   } else {
+  //     _44 = 65504.0f;
+  //   }
+  // }
+  // if (!(!(_16 <= -0.3013699948787689f))) {
+  //   _58 = (exp2((_13 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
+  // } else {
+  //   if (_16 < 1.468000054359436f) {
+  //     _58 = exp2((_13 * 0.2780952751636505f) + -9.720000267028809f);
+  //   } else {
+  //     _58 = 65504.0f;
+  //   }
+  // }
 
   // Replace ACEScct decode with PQ decode
 
-  // float3 pq_decode = renodx::color::pq::DecodeSafe(float3(_14, _15, _16), 100.f);
-  // _30 = pq_decode.x;
-  // _44 = pq_decode.y;
-  // _58 = pq_decode.z;
+  float3 pq_decode = renodx::color::pq::DecodeSafe(float3(_14, _15, _16), 100.f);
+  _30 = pq_decode.x;
+  _44 = pq_decode.y;
+  _58 = pq_decode.z;
+
+  // Linear input
+  // _30 = _14;
+  // _44 = _15;
+  // _58 = _16;
 
   //float _61 = whitePaperNits * 0.009999999776482582f;
   float _61 = 1.f; // neutralize pre-tonemapping scaling
@@ -97,6 +102,12 @@ void main(
   float _62 = _61 * _30;
   float _63 = _61 * _44;
   float _64 = _61 * _58;
+
+  float3 input_color = float3(_62, _63, _64);
+  float3 input_color_bt709 = renodx::color::bt709::from::AP1(input_color);
+  float3 input_color_bt709_scaled = input_color_bt709 * 0.5f; // match brightness change from first lut
+  float3 color_tonemapped = renodx::tonemap::neutwo::MaxChannel(input_color_bt709_scaled, 10.f);
+
   float _67 = mad(_64, 0.1638689935207367f, mad(_63, 0.1406790018081665f, (_62 * 0.6954519748687744f)));
   float _70 = mad(_64, 0.0955343022942543f, mad(_63, 0.8596709966659546f, (_62 * 0.04479460045695305f)));
   float _73 = mad(_64, 1.0015000104904175f, mad(_63, 0.004025210160762072f, (_62 * -0.00552588002756238f)));
@@ -140,7 +151,11 @@ void main(
   float _158 = _128.x * 64.0f;
   float _159 = _155.x * 64.0f;
 
-  float3 first_lut = float3(_101.x, _128.x, _155.x);
+  //float3 secondLUTInput = renodx::color::pq::EncodeSafe(mul(renodx::color::AP1_TO_AP0_MAT, ap1_color) / 2, 100.f);
+  // float _157 = input_color.x * 64.f;
+  // float _158 = input_color.y * 64.f;
+  // float _159 = input_color.z * 64.f;
+  
 
   float _160 = floor(_157);
   float _161 = floor(_158);
@@ -231,6 +246,12 @@ void main(
   float _332 = ((_320 * _174.z) + _317) + (_319 * _181.z);
 
   float3 second_lut = float3(_330, _331, _332);
+  float3 second_lut_linear = renodx::color::pq::DecodeSafe(second_lut, 100.f);
+  second_lut_linear = renodx::color::bt709::from::BT2020(second_lut_linear);
+
+  float3 upgraded_tone_map = UpgradeToneMapMaxChannel(input_color_bt709_scaled, color_tonemapped, second_lut_linear);
+
+  float calculated_peak = renodx::color::correct::GammaSafe(displayMaxNits / whitePaperNits, true);
 
   if (!((drawMode & 2) == 0)) {
     // float _343 = exp2(log2(saturate(displayMaxNits * 9.999999747378752e-05f)) * 0.1593017578125f);
@@ -244,7 +265,11 @@ void main(
     // _398 = min(((((2.0f - (_373 + _373)) * _368) + (_373 * _352)) * _373), _331);
     // _399 = min(((((2.0f - (_374 + _374)) * _368) + (_374 * _352)) * _374), _332);
     // float3 output_color = renodx::color::pq::EncodeSafe(first_lut, 100.f);
-    float3 output_color = second_lut;
+    // float3 output_color = renodx::color::pq::DecodeSafe(second_lut, 100.f);
+    float3 display_mapped = renodx::tonemap::neutwo::MaxChannel(upgraded_tone_map, calculated_peak);
+    display_mapped = renodx::color::correct::GammaSafe(display_mapped);
+    display_mapped = renodx::color::bt2020::from::BT709(display_mapped);
+    float3 output_color = renodx::color::pq::EncodeSafe(display_mapped, whitePaperNits);
     _397 = output_color.x;
     _398 = output_color.y;
     _399 = output_color.z;

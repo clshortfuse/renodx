@@ -164,10 +164,9 @@ float3 CustomPsychoTest(float3 untonemapped, float peak) {
 
 float3 CustomTonemap(float3 untonemapped_ap1, float2 uv) {
 
-  float peak = RENODX_PEAK_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
-  float diffuse_white = RENODX_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
 
-  float calculated_peak = peak / diffuse_white;
+  float calculated_peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     calculated_peak = renodx::color::correct::Gamma(calculated_peak, true);
   }
@@ -199,66 +198,46 @@ float3 CustomTonemap(float3 untonemapped_ap1, float2 uv) {
   return renodx::color::pq::EncodeSafe(output_color, RENODX_DIFFUSE_WHITE_NITS);
 }
 
-// bool HandleUICompositing(float4 ui_color_linear, float3 scene_color, inout float4 output_color, float2 uv){
-//   if (RENODX_TONE_MAP_TYPE < 2.f) return false;
-
-//   ui_color_linear.xyz = renodx::color::bt709::from::BT2020(ui_color_linear.xyz);
-//   float3 ui_color = renodx::color::srgb::Encode(ui_color_linear.xyz);
-
-//   ui_color.rgb = max(0, ui_color.rgb);
-//   const float ui_alpha = saturate(ui_color_linear.a);
-//   const float one_minus_ui_alpha = 1.0 - ui_alpha;
-
-//   // linearize and normalize brightness
-//   //float3 ui_color_linear = renodx::color::srgb::Decode(ui_color.rgb);
-//   if (RENODX_GAMMA_CORRECTION != 0.f) {  // 2.2
-//     ui_color_linear.rgb = renodx::color::correct::GammaSafe(ui_color_linear.rgb);
-//     scene_color = renodx::color::correct::GammaSafe(scene_color);
-//   }
-//   ui_color_linear.rgb = renodx::color::bt2020::from::BT709(ui_color_linear.rgb);
-//   float3 scene_color_linear = scene_color;
-//   // scene_color_linear = CustomTonemap(renodx::color::bt709::from::BT2020(scene_color_linear));
-//   scene_color_linear = CustomPsychoTest(renodx::color::bt709::from::BT2020(scene_color_linear));
-//   scene_color_linear = renodx::color::bt2020::from::BT709(scene_color_linear);
-//   scene_color_linear *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
-
-// #if 1  // apply Neutwo under UI
-//   if (TONEMAP_UNDER_UI != 0.f) {
-//     // if (true) {
-//     float y_in = renodx::color::y::from::BT2020(scene_color_linear);
-
-//     const float peak = 1.f;  // UI white
-//     float y_tonemapped = lerp(y_in, renodx::tonemap::Neutwo(y_in, peak), saturate(y_in));
-
-//     float y_out = lerp(y_in, y_tonemapped, ui_alpha);
-
-//     scene_color_linear = renodx::color::correct::Luminance(scene_color_linear, y_in, y_out);
-//   }
-// #endif
-
-//   // blend in gamma
-//   float3 ui_color_gamma = renodx::color::gamma::EncodeSafe(ui_color_linear.xyz);
-//   float3 scene_color_gamma = renodx::color::gamma::EncodeSafe(scene_color_linear);
-//   float3 composited_color_gamma = ui_color_gamma.rgb + (scene_color_gamma * one_minus_ui_alpha);
-
-//   // linearize and scale up brightness
-//   float3 composited_color_linear = renodx::color::gamma::DecodeSafe(composited_color_gamma);
-
-//   composited_color_linear *= RENODX_GRAPHICS_WHITE_NITS;
-//   float max_channel = max(max(max(composited_color_linear.r, composited_color_linear.g), composited_color_linear.b), RENODX_PEAK_WHITE_NITS);
-//   composited_color_linear *= RENODX_PEAK_WHITE_NITS / max_channel;  // Clamp UI or Videos
-
-//   float3 pq_color = renodx::color::pq::EncodeSafe(composited_color_linear, 1.f);
-//   output_color = float4(pq_color, pq_color.x);
-
-//   return true;
-// }
-
 void CustomVignette(inout float vignette) {
   vignette = lerp(1.f, vignette, CUSTOM_VIGNETTE);
 }
 
 float3 SampleSDRLUT(float3 color, SamplerState TrilinearClamp, Texture3D SrcLUT) {
+  //color = renodx::color::pq::EncodeSafe(mul(renodx::color::AP1_TO_AP0_MAT, color), 100.f);  // Mimic first LUT
+  color = renodx::color::pq::EncodeSafe(color, 100.f); // encode for lutbuilder input
   float4 _66 = SrcLUT.SampleLevel(TrilinearClamp, float3(((color.x * 0.984375f) + 0.0078125f), ((color.y * 0.984375f) + 0.0078125f), ((color.z * 0.984375f) + 0.0078125f)), 0.0f);
+  _66.xyz = renodx::color::pq::DecodeSafe(_66.xyz, 100.f); // decode so it's linear out
   return _66.xyz;
+}
+
+float3 UpgradeToneMapMaxChannel(
+    float3 color_untonemapped,
+    float3 color_tonemapped,
+    float3 color_tonemapped_graded,
+    float post_process_strength = 1.f,
+    float auto_correction = 1.f) {
+  float ratio = 1.f;
+
+  float max_untonemapped = renodx::math::Max(color_untonemapped);
+  float max_tonemapped = renodx::math::Max(color_tonemapped);
+  float max_tonemapped_graded = renodx::math::Max(color_tonemapped_graded);
+
+  if (max_untonemapped < max_tonemapped) {
+    // If substracting (user contrast or paperwhite) scale down instead
+    // Should only apply on mismatched HDR
+    ratio = max_untonemapped / max_tonemapped;
+  } else {
+    float max_delta = max_untonemapped - max_tonemapped;
+    max_delta = max(0, max_delta);  // Cleans up NaN
+    const float max_new = max_tonemapped_graded + max_delta;
+
+    const bool max_valid = (max_tonemapped_graded > 0);  // Cleans up NaN and ignore black
+    ratio = max_valid ? (max_new / max_tonemapped_graded) : 0;
+  }
+  float auto_correct_ratio = lerp(1.f, ratio, saturate(max_untonemapped));
+  ratio = lerp(ratio, auto_correct_ratio, auto_correction);
+
+  float3 color_scaled = color_tonemapped_graded * ratio;
+
+  return lerp(color_untonemapped, color_scaled, post_process_strength);
 }
