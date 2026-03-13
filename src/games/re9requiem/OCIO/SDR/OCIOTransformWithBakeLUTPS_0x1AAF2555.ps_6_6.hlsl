@@ -61,7 +61,7 @@ float4 main(
   float4 _66 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_27 * 0.984375f) + 0.0078125f), ((_42 * 0.984375f) + 0.0078125f), ((_57 * 0.984375f) + 0.0078125f)), 0.0f);
 
 #if 1
-  _66.rgb = ApplyPostToneMapProcessingPQInput(_66.rgb, TEXCOORD, _9.rgb, SrcLUT, TrilinearClamp);
+  _66.rgb = ApplyPostToneMapProcessingGammaInput(_66.rgb, TEXCOORD, _9.rgb, SrcLUT, TrilinearClamp);
 #endif
 
   SV_Target.x = _66.x;

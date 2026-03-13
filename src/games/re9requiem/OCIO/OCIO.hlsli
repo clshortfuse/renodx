@@ -152,7 +152,8 @@ float3 SampleOCIO(
 }
 
 float3 ApplyPostToneMapProcessingPQInput(float3 color_pq, float2 grain_uv, float3 color_ungraded_ap1, Texture3D<float4> SrcLUT, SamplerState TrilinearClamp) {
-  if ((COLOR_GRADE_LUT_SCALING_2 > 0.f || CUSTOM_GRAIN_STRENGTH > 0.f || RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f)
+  if ((COLOR_GRADE_LUT_SCALING_2 > 0.f || CUSTOM_GRAIN_STRENGTH > 0.f || RENODX_POST_TONE_MAP_SHADOWS != 1.f
+       || RENODX_POST_TONE_MAP_SHADOW_CONTRAST != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f)
       && TONE_MAP_TYPE != 0.f) {
     float3 lut_output = renodx::color::pq::DecodeSafe(color_pq.rgb, RENODX_DIFFUSE_WHITE_NITS);
     if (COLOR_GRADE_LUT_SCALING_2 > 0.f) {
@@ -177,10 +178,10 @@ float3 ApplyPostToneMapProcessingPQInput(float3 color_pq, float2 grain_uv, float
           COLOR_GRADE_LUT_SCALING_2);
     }
 
-    if (RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f) {
+    if (RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f || RENODX_POST_TONE_MAP_SHADOW_CONTRAST != 1.f) {
       float lum_in = LuminosityFromBT2020(lut_output);
       float lum_out = renodx::math::Select(lum_in < 1.f, pow(lum_in, RENODX_TONE_MAP_GAMMA), lum_in);
-      lum_out = ContrastAndFlare(lum_out, 1.f, 0.10f * pow(RENODX_POST_TONE_MAP_FLARE, 10.f), 0.1f);
+      lum_out = ContrastAndFlare(lum_out, 1.f, 1.f, RENODX_POST_TONE_MAP_SHADOW_CONTRAST, 0.10f * pow(RENODX_POST_TONE_MAP_FLARE, 10.f), 0.1f);
       lum_out = Shadows(lum_out, RENODX_POST_TONE_MAP_SHADOWS, 0.1f);
       lut_output *= renodx::math::DivideSafe(lum_out, lum_in, 1.f);
     }
@@ -197,7 +198,8 @@ float3 ApplyPostToneMapProcessingPQInput(float3 color_pq, float2 grain_uv, float
 }
 
 float3 ApplyPostToneMapProcessingGammaInput(float3 color_gamma, float2 grain_uv, float3 color_ungraded_ap1, Texture3D<float4> SrcLUT, SamplerState TrilinearClamp) {
-  if ((COLOR_GRADE_LUT_SCALING_2 > 0.f || CUSTOM_GRAIN_STRENGTH > 0.f || RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f)
+  if ((COLOR_GRADE_LUT_SCALING_2 > 0.f || CUSTOM_GRAIN_STRENGTH > 0.f || RENODX_POST_TONE_MAP_SHADOWS != 1.f
+       || RENODX_POST_TONE_MAP_SHADOW_CONTRAST != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f)
       && TONE_MAP_TYPE != 0.f) {
     float3 lut_output = renodx::color::gamma::DecodeSafe(color_gamma.rgb);
     if (COLOR_GRADE_LUT_SCALING_2 > 0.f) {
@@ -220,10 +222,10 @@ float3 ApplyPostToneMapProcessingGammaInput(float3 color_gamma, float2 grain_uv,
           COLOR_GRADE_LUT_SCALING_2);
     }
 
-    if (RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f) {
+    if (RENODX_POST_TONE_MAP_SHADOWS != 1.f || RENODX_POST_TONE_MAP_FLARE != 0.f || RENODX_TONE_MAP_GAMMA != 1.f || RENODX_POST_TONE_MAP_SHADOW_CONTRAST != 1.f) {
       float lum_in = LuminosityFromBT2020(lut_output);
       float lum_out = renodx::math::Select(lum_in < 1.f, pow(lum_in, RENODX_TONE_MAP_GAMMA), lum_in);
-      lum_out = ContrastAndFlare(lum_out, 1.f, 0.10f * pow(RENODX_POST_TONE_MAP_FLARE, 10.f), 0.1f);
+      lum_out = ContrastAndFlare(lum_out, 1.f, 1.f, RENODX_POST_TONE_MAP_SHADOW_CONTRAST, 0.10f * pow(RENODX_POST_TONE_MAP_FLARE, 10.f), 0.1f);
       lum_out = Shadows(lum_out, RENODX_POST_TONE_MAP_SHADOWS, 0.1f);
       lut_output *= renodx::math::DivideSafe(lum_out, lum_in, 1.f);
     }
