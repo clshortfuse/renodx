@@ -162,6 +162,13 @@ float3 CustomPsychoTest(float3 untonemapped, float peak) {
   return outputColor;
 }
 
+float3 GammaCorrectionByLuminosity(float3 color, float gamma = 2.2f) {
+  float lumin_in = LuminosityFromBT709(color);
+  float lumin_out = renodx::color::correct::GammaSafe(lumin_in, false, gamma);
+  float3 color_out = renodx::color::correct::Luminance(color, lumin_in, lumin_out);
+  return color_out;
+}
+
 float3 CustomTonemap(float3 untonemapped_ap1, float2 uv) {
 
 
@@ -193,7 +200,10 @@ float3 CustomTonemap(float3 untonemapped_ap1, float2 uv) {
   }
 
   output_color = CustomPostProcessing(output_color, uv);
-  output_color = RENODX_GAMMA_CORRECTION == 1.f ? renodx::color::correct::GammaSafe(output_color) : output_color;
+
+  if (RENODX_GAMMA_CORRECTION > 0.f) {
+    output_color = RENODX_GAMMA_CORRECTION == 1.f ? renodx::color::correct::GammaSafe(output_color) : GammaCorrectionByLuminosity(output_color);
+  }
   output_color = renodx::color::bt2020::from::BT709(output_color);
   return renodx::color::pq::EncodeSafe(output_color, RENODX_DIFFUSE_WHITE_NITS);
 }
