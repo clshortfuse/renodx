@@ -4,7 +4,9 @@
 struct UserGradingConfig {
   float exposure;
   float highlights;
+  float contrast_highlights;
   float shadows;
+  float contrast_shadows;
   float contrast;
   float flare;
   float gamma;
@@ -12,7 +14,7 @@ struct UserGradingConfig {
   float dechroma;
   float highlight_saturation;
   float hue_emulation;
-  float chrominance_emulation;
+  float purity_emulation;
 };
 
 float Highlights(float x, float highlights, float mid_gray) {
@@ -21,8 +23,9 @@ float Highlights(float x, float highlights, float mid_gray) {
   if (highlights > 1.f) {
     return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.f)));
   } else {  // highlights < 1.f
-    x /= mid_gray;
-    return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
+    float b = mid_gray * pow(x / mid_gray, 2.f - highlights);
+    float t = min(x, 1.f);
+    return min(x, renodx::math::DivideSafe(x * x, lerp(x, b, t), x));
   }
 }
 
@@ -44,8 +47,19 @@ float Shadows(float x, float shadows, float mid_gray) {
   }
 }
 
+float ContrastAndFlare(float x, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
+  if (contrast == 1.f && flare == 0.f && contrast_highlights == 1.f && contrast_shadows == 1.f) return x;
+
+  const float x_normalized = x / mid_gray;
+  const float split_contrast = renodx::math::Select(x < mid_gray, contrast_shadows, contrast_highlights);
+  float flare_ratio = renodx::math::DivideSafe(x_normalized + flare, x_normalized, 1.f);
+  float exponent = contrast * split_contrast * flare_ratio;
+  return pow(x_normalized, exponent) * mid_gray;
+}
+
 float3 ApplyLuminosityGrading(float3 untonemapped, float lum, UserGradingConfig config, float mid_gray = 0.18f) {
-  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f && config.gamma == 1.f) {
+  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f
+      && config.contrast_highlights == 1.f && config.contrast_shadows == 1.f && config.flare == 0.f && config.gamma == 1.f) {
     return untonemapped;
   }
   float3 color = untonemapped;
@@ -56,10 +70,7 @@ float3 ApplyLuminosityGrading(float3 untonemapped, float lum, UserGradingConfig 
   float lum_gamma_adjusted = renodx::math::Select(lum < 1.f, pow(lum, config.gamma), lum);
 
   // contrast & flare
-  const float lum_normalized = lum_gamma_adjusted / mid_gray;
-  float flare = renodx::math::DivideSafe(lum_normalized + config.flare, lum_normalized, 1.f);
-  float exponent = config.contrast * flare;
-  const float lum_contrasted = pow(lum_normalized, exponent) * mid_gray;
+  const float lum_contrasted = ContrastAndFlare(lum_gamma_adjusted, config.contrast, config.contrast_highlights, config.contrast_shadows, config.flare, mid_gray);
 
   // highlights
   float lum_highlighted = Highlights(lum_contrasted, config.highlights, mid_gray);
@@ -83,7 +94,7 @@ float3 ApplyHueAndPurityGrading(
     float2 mb_white_override = float2(-1.f, -1.f),
     float t_min = 1e-7f) {
   float3 color_bt2020 = ungraded_bt2020;
-  if (config.saturation == 1.f && config.dechroma == 0.f && config.hue_emulation == 0.f && config.chrominance_emulation == 0.f && config.highlight_saturation == 0.f) {
+  if (config.saturation == 1.f && config.dechroma == 0.f && config.hue_emulation == 0.f && config.purity_emulation == 0.f && config.highlight_saturation == 0.f) {
     return color_bt2020;
   }
 
@@ -97,7 +108,7 @@ float3 ApplyHueAndPurityGrading(
                              .purityCur01;
 
   // MB hue + purity emulation (analog of OkLab hue/chrominance section).
-  if (config.hue_emulation != 0.f || config.chrominance_emulation != 0.f) {
+  if (config.hue_emulation != 0.f || config.purity_emulation != 0.f) {
     float reference_purity01 = renodx_custom::color::macleod_boynton::ApplyBT2020(
                                    reference_bt2020, 1.f, 1.f, mb_white_override, t_min)
                                    .purityCur01;
@@ -160,9 +171,9 @@ float3 ApplyHueAndPurityGrading(
       }
     }
 
-    if (config.chrominance_emulation != 0.f) {
+    if (config.purity_emulation != 0.f) {
       float target_purity_ratio = renodx::math::SafeDivision(reference_purity01, purity_current, 1.f);
-      purity_ratio = lerp(purity_ratio, target_purity_ratio, config.chrominance_emulation);
+      purity_ratio = lerp(purity_ratio, target_purity_ratio, config.purity_emulation);
     }
 
     float applied_purity01 = saturate(purity_current * max(purity_ratio, 0.f));
