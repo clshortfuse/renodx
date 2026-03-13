@@ -23,7 +23,7 @@
 #endif
 
 cbuffer TonemapParam : register(TONE_MAP_PARAM_REGISTER) {
-  float original_contrast : packoffset(c000.x);
+  float contrast : packoffset(c000.x);
   float linearBegin : packoffset(c000.y);
   float linearLength : packoffset(c000.z);
   float original_toe : packoffset(c000.w);          // overridden
@@ -35,14 +35,6 @@ cbuffer TonemapParam : register(TONE_MAP_PARAM_REGISTER) {
   float invLinearBegin : packoffset(c002.y);
   float madLinearStartContrastFactor : packoffset(c002.z);
 };
-
-float GetHighlightContrast() {
-  float contrast = original_contrast;
-  if (TONE_MAP_TYPE != 0) {
-    contrast *= RENODX_TONE_MAP_HIGHLIGHT_CONTRAST;  // toe
-  }
-  return contrast;
-}
 
 float GetToe() {
   float toe = original_toe;
@@ -65,7 +57,6 @@ float GetLinearStart() {
 #define toe         GetToe()
 #define maxNit      GetMaxNit()
 #define linearStart GetLinearStart()
-#define contrast    GetHighlightContrast()
 
 #ifndef USES_LUTS
 #define USES_LUTS 0
@@ -229,7 +220,9 @@ float3 ApplyCustomGrading(float3 ungraded_bt709) {
   const UserGradingConfig cg_config = {
     RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
     RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
+    RENODX_TONE_MAP_HIGHLIGHT_CONTRAST,                   // float highlight_contrast;
     RENODX_TONE_MAP_SHADOWS,                              // float shadows;
+    RENODX_TONE_MAP_SHADOW_CONTRAST,                      // float shadow_contrast;
     RENODX_TONE_MAP_CONTRAST,                             // float contrast;
     0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
     RENODX_TONE_MAP_GAMMA,                                // float gamma;
@@ -237,7 +230,7 @@ float3 ApplyCustomGrading(float3 ungraded_bt709) {
     RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
     -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
     RENODX_TONE_MAP_HUE_SHIFT,                            // float hue_emulation;
-    RENODX_TONE_MAP_BLOWOUT                               // float chrominance_emulation
+    RENODX_TONE_MAP_BLOWOUT                               // float purity_emulation
   };
 
   float luminosity = LuminosityFromBT2020LuminanceNormalized(ungraded_bt2020);
