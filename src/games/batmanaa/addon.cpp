@@ -5,7 +5,9 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
+
+#define RENODX_MODS_SWAPCHAIN_VERSION 2
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -37,7 +39,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Hermite Spline"},
+        .labels = {"Vanilla", "None", "Neutwo"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
