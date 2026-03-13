@@ -151,7 +151,7 @@ float3 CustomPsychoTest(float3 untonemapped, float peak) {
       config.tone_map_highlights,
       config.tone_map_shadows,
       config.tone_map_contrast,
-      1.14f * config.tone_map_saturation,
+      config.tone_map_saturation,
       1.f - config.tone_map_blowout,
       100.f,
       config.tone_map_hue_correction,
