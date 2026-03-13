@@ -331,7 +331,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Match SDR",
+        .label = "Purist",
         .section = "Options",
         .group = "button-line-0",
         .on_change = []() {
