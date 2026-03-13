@@ -67,9 +67,9 @@ void main(
   min16int _35 = ((min16int)(((min16int)(((min16int)(((min16int)(_15 & 1)) | ((min16uint)((min16int)(min16int((uint)(SV_GroupID.y))) << 4)))) | ((min16int)(_18 & 2)))) | ((min16int)(_21 & 4)))) | ((min16int)(((min16int)((min16uint)(_13) >> 4)) & 8));
   float4 _47 = GUIImage.SampleLevel(PointClamp, float2(((float((min16uint)_30) + 0.5f) * screenInverseSize.x), ((float((min16uint)_35) + 0.5f) * screenInverseSize.y)), 0.0f);
 
-  if (RENODX_GAMMA_CORRECTION == 1.f && RENODX_TONE_MAP_TYPE != 0.f) {
+  //if (RENODX_GAMMA_CORRECTION == 1.f && RENODX_TONE_MAP_TYPE != 0.f) {
     _47.xyz = renodx::color::correct::GammaSafe(_47.xyz);
-  }
+ //}
   
   float _52 = 1.0f / _47.w;
   float _53 = _47.x * _52;
