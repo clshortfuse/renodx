@@ -27,6 +27,40 @@ ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
+namespace upgrade_rendering {
+
+std::atomic_bool restart_required = false;
+renodx::utils::settings::Setting* setting = nullptr;
+
+void OnSettingChanged(float previous, float current) {
+  if (previous != current) {
+    restart_required.store(true, std::memory_order_relaxed);
+  }
+}
+
+void OnInitDevice(reshade::api::device* device) {
+  std::vector<renodx::utils::resource::ResourceUpgradeInfo> upgrade_infos = {};
+
+  if (setting != nullptr && setting->GetValue() == 1.f) {
+    int vendor_id;
+    auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
+    if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
+                                             // Bugs out AMD GPUs
+      upgrade_infos.push_back({
+          .old_format = reshade::api::format::r11g11b10_float,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
+                         .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
+    }
+  }
+
+  renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
+}
+
+}  // namespace upgrade_rendering
+
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
@@ -36,7 +70,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "Vanilla+ (Vanilla + Neutwo)"},
+        .labels = {"Vanilla", "RenoDX (Vanilla + Neutwo)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -308,6 +342,25 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "WARNING: Rendering Format changes require a restart to apply.",
+        .section = "Advanced",
+        .tint = 0xFF3B30,
+        .is_visible = []() { return upgrade_rendering::restart_required.load(std::memory_order_relaxed); },
+        .is_sticky = true,
+    },
+    upgrade_rendering::setting = new renodx::utils::settings::Setting{
+        .key = "FxUpgradeRender",
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Rendering Format",
+        .section = "Advanced",
+        .tooltip = "Upgrades the post process format to reduce banding (requires restart). NVIDIA only.",
+        .labels = {"R11G11B10F", "R16G16B16A16F"},
+        .on_change_value = &upgrade_rendering::OnSettingChanged,
+        .is_global = true,
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -316,6 +369,7 @@ renodx::utils::settings::Settings settings = {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
+            if (setting->is_global) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
         },
@@ -458,24 +512,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
-void OnInitDevice(reshade::api::device* device) {
-  std::vector<renodx::utils::resource::ResourceUpgradeInfo> upgrade_infos = {};
-
-  int vendor_id;
-  auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
-  if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
-                                           // Bugs out AMD GPUs
-    upgrade_infos.push_back({
-        .old_format = reshade::api::format::r11g11b10_float,
-        .new_format = reshade::api::format::r16g16b16a16_float,
-        .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
-                       .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
-    });
-  }
-
-  renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
-}
-
 bool initialized = false;
 
 }  // namespace
@@ -497,8 +533,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
         initialized = true;
       }
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);        // fp11 upgrades for NVIDIA
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+      reshade::register_event<reshade::addon_event::init_device>(upgrade_rendering::OnInitDevice);  // fp11 upgrades for NVIDIA
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);               // detect peak nits
 
       renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
 
@@ -506,8 +542,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_DETACH:
       renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
 
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);        // fp11 upgrades for NVIDIA
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+      reshade::unregister_event<reshade::addon_event::init_device>(upgrade_rendering::OnInitDevice);  // fp11 upgrades for NVIDIA
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);               // detect peak nits
 
       reshade::unregister_addon(h_module);
       break;
