@@ -272,7 +272,14 @@ float4 ProcessColor(float3 untonemapped, float3 graded) {
 
 float4 ProcessColor(float4 color) {
   float peak_ratio = RENODX_PEAK_NITS / RENODX_GAME_NITS;
-  if (RENODX_GAMMA_CORRECTION) peak_ratio = renodx::color::correct::Gamma(peak_ratio, true);
+  [branch]
+  if (RENODX_GAMMA_CORRECTION != 0.f) {
+    peak_ratio = renodx::color::correct::Gamma(peak_ratio,
+                                               true,
+                                               renodx::math::Select((RENODX_GAMMA_CORRECTION == 1.f), 2.2f, 2.4f)
+
+    );
+  }
 
   color.rgb = renodx::tonemap::neutwo::BT709(color.rgb, peak_ratio, RENODX_RENO_DRT_WHITE_CLIP);
   color.rgb = renodx::draw::RenderIntermediatePass(color.rgb);
