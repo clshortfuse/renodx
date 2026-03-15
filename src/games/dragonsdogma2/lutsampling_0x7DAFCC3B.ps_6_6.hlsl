@@ -57,6 +57,11 @@ float4 main(
   //   _57 = -0.35844698548316956f;
   // }
 
+  _9.xyz *= 0.5f;  // Cut brightness in half like first LUT
+  _9.xyz = PreTonemapSliders(_9.xyz);
+  _9.xyz = PostTonemapSliders(_9.xyz);
+  _9.xyz *= 2.f; // Restore brightness
+
   // Replace ACEScct encode with PQ encode
   float3 pq_encode = renodx::color::pq::EncodeSafe(float3(_9.x, _9.y, _9.z), 100.f);
   _27 = pq_encode.x;
