@@ -1,3 +1,4 @@
+#include "./macleod_boynton.hlsli"
 #include "./shared.h"
 
 float Highlights(float x, float highlights, float mid_gray) {
@@ -114,7 +115,7 @@ float3 ApplyUserColorGradingAP1(float3 ungraded_ap1) {
   cg_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
   cg_config.hue_correction_strength = 0.f;  // no hue correction
   cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
-  float ungraded_y = renodx::color::y::from::AP1(ungraded_ap1);
+  float ungraded_y = LuminosityFromAP1LuminanceNormalized(ungraded_ap1);
 
   float3 graded_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded_ap1, ungraded_y, cg_config);
   graded_ap1 = ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(graded_ap1, ungraded_ap1, ungraded_y, cg_config);
@@ -122,12 +123,12 @@ float3 ApplyUserColorGradingAP1(float3 ungraded_ap1) {
   return graded_ap1;
 }
 
-float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float peak_nits, float diffuse_white_nits) {
+float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, float cbuffer_diffuse_white_nits) {
   untonemapped_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
 
   const float ACES_MIN = 0.0001f;
-  float aces_min = ACES_MIN / diffuse_white_nits;
-  float aces_max = (peak_nits / diffuse_white_nits);
+  float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
+  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
 
   float3 tonemapped_bt2020;
   if (RENODX_TONE_MAP_TYPE == 1.f) {  // ACES (Customized)
@@ -139,18 +140,16 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float peak_nits, float diff
 
     float3 tonemapped_perch_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / 48.f;
 
-    float y_in = renodx::color::y::from::AP1(untonemapped_ap1);
+    float y_in = LuminosityFromAP1LuminanceNormalized(untonemapped_ap1);
     float y_out = renodx::tonemap::aces::ODTToneMap(y_in, ODT_config) / 48.f;
     float3 tonemapped_lum_ap1 = (renodx::color::correct::Luminance(untonemapped_ap1, y_in, y_out));
 
-    const float blending_ratio = renodx::color::y::from::AP1(tonemapped_lum_ap1);
+    const float blending_ratio = LuminosityFromAP1LuminanceNormalized(tonemapped_lum_ap1);
     float3 tonemapped_ap1 = lerp(tonemapped_lum_ap1, tonemapped_perch_ap1, saturate(blending_ratio));  // take highlights from per channel
 
-    // take chrominance from perch
-    tonemapped_bt2020 = renodx::color::bt2020::from::BT709(
-        renodx::color::correct::Chrominance(
-            renodx::color::bt709::from::AP1(tonemapped_ap1),
-            renodx::color::bt709::from::AP1(tonemapped_perch_ap1)));
+    tonemapped_bt2020 = CorrectHueAndPurityMB_BT2020(renodx::color::bt2020::from::AP1(tonemapped_ap1),
+                                                     renodx::color::bt2020::from::AP1(tonemapped_perch_ap1));
+
   } else {  // ACES
 #if RENODX_GAME_GAMMA_CORRECTION
     aces_max = renodx::color::correct::Gamma(aces_max, true);
@@ -168,5 +167,5 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float peak_nits, float diff
     tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
   }
 
-  return renodx::color::pq::EncodeSafe(tonemapped_bt2020, diffuse_white_nits);
+  return renodx::color::pq::EncodeSafe(tonemapped_bt2020, RENODX_DIFFUSE_WHITE_NITS);
 }

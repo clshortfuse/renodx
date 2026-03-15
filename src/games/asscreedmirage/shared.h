@@ -5,6 +5,8 @@
 // Should be 4x32
 struct ShaderInjectData {
   float tone_map_type;
+  float peak_white_nits;
+  float diffuse_white_nits;
   float custom_color_filter_strength;
   float tone_map_exposure;
   float tone_map_highlights;
@@ -28,6 +30,8 @@ cbuffer shader_injection : register(b13, space50) {
 #define HUE_CORRECTION               1u
 
 #define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
+#define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
 #define CUSTOM_COLOR_FILTER_STRENGTH         shader_injection.custom_color_filter_strength
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
