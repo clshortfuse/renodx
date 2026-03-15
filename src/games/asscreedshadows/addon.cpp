@@ -229,7 +229,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
         .binding = &shader_injection.custom_bloom,
-        .default_value = 100.f,
+        .default_value = 50.f,
         .label = "Bloom",
         .section = "Effects",
         .max = 100.f,
