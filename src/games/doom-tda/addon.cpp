@@ -176,7 +176,10 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Requires HDR on in game"),
+        .label = std::string("- Requires HDR on in game\n"
+                             "- Set Game Brightness to 1.0\n"
+                             "- Set contrast to 50\n"
+                             "- Paper White = HDR Mid Point * 10. E.g. if you want 203 game brightness, then set HDR Mid Point to 20.3"),
         .section = "About",
     },
 };
