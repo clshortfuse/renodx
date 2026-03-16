@@ -56,7 +56,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xFCD82342),
 
     // calibration
-    CustomShaderEntry(0x129329C7),
     CustomShaderEntry(0xB17FDFCC),
 };
 
@@ -170,6 +169,17 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_type != 3.f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeGamma",
+        .binding = &shader_injection.tone_map_gamma,
+        .default_value = 1.f,
+        .label = "Gamma",
+        .section = "Color Grading",
+        .min = 0.75f,
+        .max = 1.25f,
+        .format = "%.2f",
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
         .default_value = 50.f,
@@ -180,10 +190,30 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeHighlightContrast",
+        .binding = &shader_injection.tone_map_highlight_contrast,
+        .default_value = 50.f,
+        .label = "Highlight Contrast",
+        .section = "Color Grading",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_type != 3.f; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 75.f,
+        .default_value = 50.f,
         .label = "Shadows",
+        .section = "Color Grading",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_type != 3.f; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeShadowContrast",
+        .binding = &shader_injection.tone_map_shadow_contrast,
+        .default_value = 42.f,
+        .label = "Shadow Contrast",
         .section = "Color Grading",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_type != 3.f; },
@@ -290,7 +320,7 @@ renodx::utils::settings::Settings settings = {
         .key = "CustomLUTEncoding",
         .binding = &shader_injection.custom_lut_encoding,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 1.f,
         .label = "LUT Encoding",
         .section = "Advanced",
         .tooltip = "Use Vanilla HDR's broken LUT encoding, SDR's sRGB-like encoding (controlled by the SDR brightness slider), or sRGB.",
@@ -311,7 +341,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Match SDR",
+        .label = "Purist",
         .section = "Options",
         .group = "button-line-1",
         .on_change = []() {
@@ -319,7 +349,8 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 1.f},
               {"ToneMapScaling", 1.f},
-              {"ColorGradeShadows", 50.f},
+              {"ColorGradeHighlights", 42.f},
+              {"ColorGradeShadowContrast", 50.f},
               {"UnclampLighting", 0.f},
               {"CustomLUTEncoding", 1.f},
           });
@@ -406,7 +437,9 @@ void OnPresetOff() {
       {"ToneMapBlowout", 100.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
+      {"ColorGradeHighlightContrast", 50.f},
       {"ColorGradeShadows", 50.f},
+      {"ColorGradeShadowContrast", 50.f},
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
