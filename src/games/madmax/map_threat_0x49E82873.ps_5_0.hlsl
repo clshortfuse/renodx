@@ -31,8 +31,10 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  if (shader_injection.map_threat == 0) {
-    discard;
+  if (MAP_THREAT == 0) {
+    clip(-1.0);
+    o0 = float4(0.0, 0.0, 0.0, 0.0);
+    return;
   } else {
     r0.xyzw = ThreatTints.Sample(ThreatTints_s, InstanceConsts[1].zz).xyzw;
     r0.xyzw = InstanceConsts[0].xyzw * r0.xyzw;
@@ -44,6 +46,6 @@ void main(
     o0.w = r0.w;
     r0.xyz = TypeConsts[1].xxx * r0.xyz;
     o0.xyz = exp2(r0.xyz);
+    return;
   }
-  return;
 }

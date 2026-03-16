@@ -153,7 +153,7 @@ void main(
   r0.xyz = r1.xyz * Consts[2].xxx + r0.xyz;
 
   float3 hdr_color = r0.rgb;
-  float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
+  float3 hdr_color_tm = renodx::tonemap::neutwo::MaxChannel(r0.rgb);
 
   r0.xyz = max(float3(1.00000001e-07,1.00000001e-07,1.00000001e-07), r0.xyz);
   r1.xyz = r0.xyz * float3(0.150000006,0.150000006,0.150000006) + float3(0.0500000007,0.0500000007,0.0500000007);
@@ -173,6 +173,6 @@ void main(
   o0.xyz = r0.xyz;
 
   float3 sdr_color = o0.rgb;
-  o0.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, v1);
+  o0.rgb = UpgradeToneMap(hdr_color, hdr_color_tm, sdr_color, v1.xy);
   return;
 }
