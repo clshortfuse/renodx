@@ -853,13 +853,12 @@ void main() {
     _846 = _798;
   }
   bool _867 = _735 && (!(_67._m2 != 0u));
-#if 1
+#if 0
   vec3 _869 = EncodeLUTInput(_846, _67._m11, _67._m12, _67._m13, _67._m14, _867);
 #else
   vec3 _869 = mix(mix((pow(_846, vec3(_67._m12)) * _67._m13) - vec3(_67._m14), _846 * _67._m11, lessThan(_846, vec3(0.003130800090730190277099609375))), _846, bvec3(_867));
 #endif
- 
- 
+
   vec3 _1025;
   if (_558 && (floatBitsToInt(_69._m19.x) != 0)) {
     vec2 _881 = _4.xy * _69._m17.w;
@@ -993,7 +992,7 @@ void main() {
     _1394 = _1083;
   }
 
-#if 1
+#if 0
   _1394 = DecodeLUTInput(_1394, _1083);
 #endif
 
@@ -1017,8 +1016,6 @@ void main() {
   }
   _6 = _1469;
 
-
   _6.rgb = ApplyGradingAndDisplayMap(_6.rgb, _4.xy);
 }
-
 

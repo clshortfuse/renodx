@@ -538,7 +538,9 @@ float renodx_color_macleod_boynton_LuminosityFromBT2020LuminanceNormalized(vec3 
 struct UserGradingConfig {
   float exposure;
   float highlights;
+  float contrast_highlights;
   float shadows;
+  float contrast_shadows;
   float contrast;
   float flare;
   float gamma;
@@ -572,8 +574,9 @@ float Highlights(float x, float highlights, float mid_gray) {
   if (highlights > 1.0) {
     return max(x, mix(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.0)));
   } else {
-    x /= mid_gray;
-    return mix(x, pow(x, highlights), step(1.0, x)) * mid_gray;
+    float b = mid_gray * pow(x / mid_gray, 2.0 - highlights);
+    float t = min(x, 1.0);  // clamp extreme influence
+    return min(x, renodx_usergrading_DivideSafe(x * x, mix(x, b, t), x));
   }
 }
 
@@ -595,8 +598,23 @@ float Shadows(float x, float shadows, float mid_gray) {
   }
 }
 
+float ContrastAndFlare(
+    float x, float contrast, float contrast_highlights, float contrast_shadows,
+    float flare, float mid_gray) {
+  if (contrast == 1.0 && flare == 0.0 && contrast_highlights == 1.0 && contrast_shadows == 1.0) {
+    return x;
+  }
+
+  float x_normalized = x / mid_gray;
+  float split_contrast = (x < mid_gray) ? contrast_shadows : contrast_highlights;
+  float flare_ratio = renodx_usergrading_DivideSafe(x_normalized + flare, x_normalized, 1.0);
+  float exponent = contrast * split_contrast * flare_ratio;
+  return pow(x_normalized, exponent) * mid_gray;
+}
+
 vec3 ApplyLuminosityGrading(vec3 untonemapped, float lum, UserGradingConfig config, float mid_gray) {
-  if (config.exposure == 1.0 && config.shadows == 1.0 && config.highlights == 1.0 && config.contrast == 1.0 && config.flare == 0.0 && config.gamma == 1.0) {
+  if (config.exposure == 1.0 && config.shadows == 1.0 && config.highlights == 1.0 && config.contrast == 1.0
+      && config.contrast_highlights == 1.0 && config.contrast_shadows == 1.0 && config.flare == 0.0 && config.gamma == 1.0) {
     return untonemapped;
   }
 
@@ -605,10 +623,13 @@ vec3 ApplyLuminosityGrading(vec3 untonemapped, float lum, UserGradingConfig conf
 
   float lum_gamma_adjusted = (lum < 1.0) ? pow(lum, config.gamma) : lum;
 
-  float lum_normalized = lum_gamma_adjusted / mid_gray;
-  float flare = renodx_usergrading_DivideSafe(lum_normalized + config.flare, lum_normalized, 1.0);
-  float exponent = config.contrast * flare;
-  float lum_contrasted = pow(lum_normalized, exponent) * mid_gray;
+  float lum_contrasted = ContrastAndFlare(
+      lum_gamma_adjusted,
+      config.contrast,
+      config.contrast_highlights,
+      config.contrast_shadows,
+      config.flare,
+      mid_gray);
 
   float lum_highlighted = Highlights(lum_contrasted, config.highlights, mid_gray);
   float lum_shadowed = Shadows(lum_highlighted, config.shadows, mid_gray);

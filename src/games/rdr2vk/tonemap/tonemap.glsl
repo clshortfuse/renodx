@@ -63,12 +63,12 @@ vec3 ApplyToneMap(vec3 _676, bool _679, float _638, float _m6, uint _m4, float _
 }
 
 vec3 EncodeLUTInput(vec3 x, float _m11, float _m12, float _m13, float _m14, bool skip_encoding) {
-  if (CUSTOM_LUT_ENCODING == 2.f) {  // sRGB
+  if (CUSTOM_LUT_ENCODING == 2.f && IS_TONEMAPPED == 0.f) {  // sRGB
     return mix(
         x * 12.92,
         1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055,
         step(vec3(0.0031308), x));
-  } else if (CUSTOM_LUT_ENCODING == 1.f) {  // sRGB-like encoding (defaults to 2.2, controlled by the SDR gamma slider)
+  } else if (CUSTOM_LUT_ENCODING == 1.f && IS_TONEMAPPED == 0.f) {  // sRGB-like encoding (defaults to 2.2, controlled by the SDR gamma slider)
     return mix(
         (pow(x, vec3(_m12)) * _m13) - vec3(_m14),
         x * _m11,
@@ -84,7 +84,7 @@ vec3 EncodeLUTInput(vec3 x, float _m11, float _m12, float _m13, float _m14, bool
 }
 
 vec3 DecodeLUTInput(vec3 lut_output, vec3 lut_input) {
-  if (CUSTOM_LUT_ENCODING != 0.f) {  // sRGB
+  if (CUSTOM_LUT_ENCODING != 0.f && IS_TONEMAPPED == 0.f) {  // sRGB
     lut_output = DecodeSRGB(lut_output);
     if (CUSTOM_LUT_STRENGTH != 1.f) {
       lut_output = mix(DecodeSRGB(lut_input), lut_output, CUSTOM_LUT_STRENGTH);
@@ -205,10 +205,14 @@ vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
     vec3 ungraded_bt2020 = BT2020FromBT709(ungraded_bt709);
     vec3 graded_bt2020;
     if (RENODX_TONE_MAP_TYPE != 0.f && RENODX_TONE_MAP_TYPE != 3.f) {
+      if (RENODX_SDR_EOTF_EMULATION != 0.f) ungraded_bt2020 = CorrectGammaMismatchByLuminosity(ungraded_bt2020, false);
+
       const UserGradingConfig cg_config = {
         RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
         RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
+        RENODX_TONE_MAP_HIGHLIGHT_CONTRAST,                   // float contrast_highlights;
         RENODX_TONE_MAP_SHADOWS,                              // float shadows;
+        RENODX_TONE_MAP_SHADOW_CONTRAST,                      // float contrast_shadows;
         RENODX_TONE_MAP_CONTRAST,                             // float contrast;
         0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
         1.f,                                                  // float gamma;
@@ -222,9 +226,11 @@ vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
       vec3 hue_purity_reference_bt2020 = ReinhardPiecewise(ungraded_bt2020, 6.f, 1.f);
 
       float lum = renodx_color_macleod_boynton_LuminosityFromBT2020LuminanceNormalized(ungraded_bt2020);
-      graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, lum, cg_config, 0.18f);
+      graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, lum, cg_config, 0.1f);
       graded_bt2020 = ApplyHueAndPurityGrading(graded_bt2020, hue_purity_reference_bt2020, lum, cg_config);
       graded_bt2020 = max(vec3(0.0), graded_bt2020);
+
+      if (RENODX_SDR_EOTF_EMULATION != 0.f) graded_bt2020 = CorrectGammaMismatchByLuminosity(graded_bt2020, true);
 
       if (RENODX_TONE_MAP_TYPE == 2.f) {
         float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;

@@ -69,6 +69,17 @@ vec3 CorrectGammaMismatch(vec3 x, bool inverse) {
   return s * result;
 }
 
+// Fix or undo gamma mismatch by converting between sRGB and gamma 2.2
+vec3 CorrectGammaMismatchByLuminosity(vec3 x, bool inverse) {
+  float lum_in = max(0.0, renodx_color_macleod_boynton_LuminosityFromBT709LuminanceNormalized(x));
+  float lum_out = inverse
+                      ? DecodeSRGB(EncodeGamma(lum_in, 2.2))   // undo fix
+                      : DecodeGamma(EncodeSRGB(lum_in), 2.2);  // apply fix
+
+  float lum_ratio = renodx_color_macleod_boynton_DivideSafe(lum_out, lum_in, 1.0);
+  return x * lum_ratio;
+}
+
 const mat3 BT709_TO_BT2020_MAT = mat3(
     vec3(0.6274039149284363, 0.06909728795289993, 0.0163914393633604),
     vec3(0.3292830288410187, 0.9195404052734375, 0.08801330626010895),
