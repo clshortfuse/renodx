@@ -15,10 +15,12 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
 
 	r0 = tex2D(SceneColorTexture, texcoord);
 
-	r0.rgb = max(r0.rgb, 0.000000999999997);
-    float3 hdr_color = r0.rgb;
-    float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
-	
+    float3 hdr_color = max(r0.rgb, 0.000000999999997);
+    float3 hdr_color_tm = renodx::tonemap::neutwo::MaxChannel(r0.rgb);
+    if (RENODX_TONE_MAP_TYPE > 0) {
+      r0.rgb = hdr_color_tm;
+    }
+		
 	r1.xyz = r0.xyz * ColorScale.xyz;
 	r2.xyz = ColorScale.xyz;
 	r0.xyz = r0.xyz * -r2.xyz + OverlayColor.xyz;
@@ -38,7 +40,7 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
 	o.z = exp2(r0.z);
 
     float3 sdr_color = renodx::color::srgb::DecodeSafe(o.rgb);
-    o.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, texcoord.xy);
+	o.rgb = UpgradeToneMap(hdr_color, hdr_color_tm, sdr_color, texcoord.xy);
     o.rgb = renodx::draw::RenderIntermediatePass(o.rgb);
 	return o;
 }
