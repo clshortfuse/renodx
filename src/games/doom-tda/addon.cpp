@@ -7,6 +7,8 @@
 
 #define DEBUG_LEVEL_0
 
+#include <atomic>
+
 #include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
@@ -15,20 +17,24 @@
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "./shared.h"
 
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // CustomShaderEntry(0x5786A75C),  // ACEScc color grade
     CustomShaderEntry(0xE3A05FA7),  // ACES tonemap
-
-    CustomShaderEntry(0x2D7BED0C),  // Output
 };
 
+#if USE_SHADER_TOGGLE
 namespace shader_toggle {
 namespace runtime {
 float g_use_shaders = 1.f;          // Controlled by slider
 float g_current_use_shaders = 1.f;  // Will be overridden on startup
+std::atomic_bool g_requires_hdr_refresh = false;
+
+void OnToneMapLutBuilderDrawn(reshade::api::command_list* /*cmd_list*/) {
+  g_requires_hdr_refresh.store(false, std::memory_order_relaxed);
+}
 
 void OnPresent(
     reshade::api::command_queue*,
@@ -67,6 +73,7 @@ void OnPresent(
 
 void RegisterEvents() {
   g_current_use_shaders = -1.0f;
+  g_requires_hdr_refresh.store(false, std::memory_order_relaxed);
   reshade::register_event<reshade::addon_event::present>(OnPresent);
 }
 
@@ -84,14 +91,28 @@ renodx::utils::settings::Setting* GetSetting() {
       .section = "Options",
       .on_change = []() {
         g_current_use_shaders = -1.f;
+        g_requires_hdr_refresh.store(true, std::memory_order_relaxed);
       },
   };
 }
 }  // namespace runtime
 }  // namespace shader_toggle
+#endif
 
 renodx::utils::settings::Settings settings = {
+#if USE_SHADER_TOGGLE
     shader_toggle::runtime::GetSetting(),
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Toggle HDR off and on again to apply shader toggle changes.",
+        .section = "Options",
+        .tint = 0xFF0000,
+        .is_visible = []() {
+          return shader_toggle::runtime::g_requires_hdr_refresh.load(std::memory_order_relaxed);
+        },
+        .is_sticky = true,
+    },
+#endif
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "RenoDX Discord",
@@ -170,12 +191,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
       renodx::utils::settings::use_presets = false;
+#if USE_SHADER_TOGGLE
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::utils::shader::use_replace_async = true;
+      if (auto shader = custom_shaders.find(0xE3A05FA7); shader != custom_shaders.end()) {
+        shader->second.on_drawn = &shader_toggle::runtime::OnToneMapLutBuilderDrawn;
+      }
       shader_toggle::runtime::RegisterEvents();
+#endif
       break;
     case DLL_PROCESS_DETACH:
+#if USE_SHADER_TOGGLE
       shader_toggle::runtime::UnregisterEvents();
+#endif
       reshade::unregister_addon(h_module);
       break;
   }
