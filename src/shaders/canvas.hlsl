@@ -274,7 +274,7 @@ bool TestGlyphPixel(CANVAS_GLYPH4 glyph, float2 glyph_uv) {
   float lane_index = floor(glyph_pixel.y / 3.0f);
   float row_in_lane = glyph_pixel.y - lane_index * 3.0f;
   float bit_shift = mad(row_in_lane, 8.0f, glyph_pixel.x);
-  CANVAS_GLYPH_SCALAR glyph_lane = lane_index == 0.0f  ? glyph[0]
+  CANVAS_GLYPH_SCALAR glyph_lane = lane_index == 0.0f   ? glyph[0]
                                    : lane_index == 1.0f ? glyph[1]
                                    : lane_index == 2.0f ? glyph[2]
                                                         : glyph[3];
@@ -632,9 +632,10 @@ float3 ColorFromRGB8(int rgb) {
 #if (defined(VULKAN) || __SHADER_TARGET_MAJOR >= 4)
   uint rgb8 = uint(rgb);
   float3 srgb = float3(
-      float((rgb8 >> 16u) & 255u),
-      float((rgb8 >> 8u) & 255u),
-      float(rgb8 & 255u)) * (1.0f / 255.0f);
+                    float((rgb8 >> 16u) & 255u),
+                    float((rgb8 >> 8u) & 255u),
+                    float(rgb8 & 255u))
+                * (1.0f / 255.0f);
 #else
   int red = rgb / 65536;
   int green = (rgb / 256) % 256;
@@ -864,27 +865,181 @@ void FillRect(inout Context context, float2 min_corner, float2 max_corner) {
   }
 }
 
-// Compiler will constant-fold count inference for literal character arguments.
+#define CANVAS_DRAW_TEXT_BODY(COUNT)                                               \
+  float2 origin = context.cursor;                                                  \
+  AdvanceCursor(context, float(COUNT));                                            \
+  float2 local = context.position - origin;                                        \
+  if (local.x < 0.0f || local.y < 0.0f || local.y >= context.glyph_size.y) return; \
+  float glyph_index = floor(local.x / context.glyph_size.x);                       \
+  if (glyph_index >= float(COUNT)) return;                                         \
+  CANVAS_GLYPH4 glyph = glyphs[(int)glyph_index];                                  \
+  float2 glyph_origin = origin + float2(glyph_index * context.glyph_size.x, 0.0f); \
+  DrawGlyph(context, glyph, glyph_origin);
+
+void DrawText(inout Context context, int a) {
+  const CANVAS_GLYPH4 glyphs[1] = { internal::GlyphFromAscii(a) };
+  CANVAS_DRAW_TEXT_BODY(1)
+}
+
+void DrawText(inout Context context, int a, int b) {
+  const CANVAS_GLYPH4 glyphs[2] = { internal::GlyphFromAscii(a), internal::GlyphFromAscii(b) };
+  CANVAS_DRAW_TEXT_BODY(2)
+}
+
+void DrawText(inout Context context, int a, int b, int c) {
+  const CANVAS_GLYPH4 glyphs[3] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c)
+  };
+  CANVAS_DRAW_TEXT_BODY(3)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d) {
+  const CANVAS_GLYPH4 glyphs[4] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d)
+  };
+  CANVAS_DRAW_TEXT_BODY(4)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d, int e) {
+  const CANVAS_GLYPH4 glyphs[5] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e)
+  };
+  CANVAS_DRAW_TEXT_BODY(5)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d, int e, int f) {
+  const CANVAS_GLYPH4 glyphs[6] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f)
+  };
+  CANVAS_DRAW_TEXT_BODY(6)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d, int e, int f, int g) {
+  const CANVAS_GLYPH4 glyphs[7] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g)
+  };
+  CANVAS_DRAW_TEXT_BODY(7)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d, int e, int f, int g, int h) {
+  const CANVAS_GLYPH4 glyphs[8] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g), internal::GlyphFromAscii(h)
+  };
+  CANVAS_DRAW_TEXT_BODY(8)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d, int e, int f, int g, int h, int i) {
+  const CANVAS_GLYPH4 glyphs[9] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g), internal::GlyphFromAscii(h),
+      internal::GlyphFromAscii(i)
+  };
+  CANVAS_DRAW_TEXT_BODY(9)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
+  const CANVAS_GLYPH4 glyphs[10] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g), internal::GlyphFromAscii(h),
+      internal::GlyphFromAscii(i), internal::GlyphFromAscii(j)
+  };
+  CANVAS_DRAW_TEXT_BODY(10)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j, int k) {
+  const CANVAS_GLYPH4 glyphs[11] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g), internal::GlyphFromAscii(h),
+      internal::GlyphFromAscii(i), internal::GlyphFromAscii(j), internal::GlyphFromAscii(k)
+  };
+  CANVAS_DRAW_TEXT_BODY(11)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j, int k, int l) {
+  const CANVAS_GLYPH4 glyphs[12] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g), internal::GlyphFromAscii(h),
+      internal::GlyphFromAscii(i), internal::GlyphFromAscii(j), internal::GlyphFromAscii(k), internal::GlyphFromAscii(l)
+  };
+  CANVAS_DRAW_TEXT_BODY(12)
+}
+
+void DrawText(inout Context context, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j, int k, int l, int m) {
+  const CANVAS_GLYPH4 glyphs[13] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g), internal::GlyphFromAscii(h),
+      internal::GlyphFromAscii(i), internal::GlyphFromAscii(j), internal::GlyphFromAscii(k), internal::GlyphFromAscii(l),
+      internal::GlyphFromAscii(m)
+  };
+  CANVAS_DRAW_TEXT_BODY(13)
+}
+
 void DrawText(
+    inout Context context,
+    int a, int b, int c, int d, int e, int f, int g,
+    int h, int i, int j, int k, int l, int m, int n) {
+  const CANVAS_GLYPH4 glyphs[14] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g), internal::GlyphFromAscii(h),
+      internal::GlyphFromAscii(i), internal::GlyphFromAscii(j), internal::GlyphFromAscii(k), internal::GlyphFromAscii(l),
+      internal::GlyphFromAscii(m), internal::GlyphFromAscii(n)
+  };
+  CANVAS_DRAW_TEXT_BODY(14)
+}
+
+void DrawText(
+    inout Context context,
+    int a, int b, int c, int d, int e, int f, int g, int h,
+    int i, int j, int k, int l, int m, int n, int o) {
+  const CANVAS_GLYPH4 glyphs[15] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g), internal::GlyphFromAscii(h),
+      internal::GlyphFromAscii(i), internal::GlyphFromAscii(j), internal::GlyphFromAscii(k), internal::GlyphFromAscii(l),
+      internal::GlyphFromAscii(m), internal::GlyphFromAscii(n), internal::GlyphFromAscii(o)
+  };
+  CANVAS_DRAW_TEXT_BODY(15)
+}
+
+void DrawText(
+    inout Context context,
+    int a, int b, int c, int d, int e, int f, int g, int h,
+    int i, int j, int k, int l, int m, int n, int o, int p) {
+  const CANVAS_GLYPH4 glyphs[16] = {
+      internal::GlyphFromAscii(a), internal::GlyphFromAscii(b), internal::GlyphFromAscii(c), internal::GlyphFromAscii(d),
+      internal::GlyphFromAscii(e), internal::GlyphFromAscii(f), internal::GlyphFromAscii(g), internal::GlyphFromAscii(h),
+      internal::GlyphFromAscii(i), internal::GlyphFromAscii(j), internal::GlyphFromAscii(k), internal::GlyphFromAscii(l),
+      internal::GlyphFromAscii(m), internal::GlyphFromAscii(n), internal::GlyphFromAscii(o), internal::GlyphFromAscii(p)
+  };
+  CANVAS_DRAW_TEXT_BODY(16)
+}
+
+#undef CANVAS_DRAW_TEXT_BODY
+
+void DrawDynamicText(
     inout Context context,
     int a, int b = 0, int c = 0, int d = 0,
     int e = 0, int f = 0, int g = 0, int h = 0,
     int i = 0, int j = 0, int k = 0, int l = 0,
     int m = 0, int n = 0, int o = 0, int p = 0) {
   float count = internal::TextLength(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p);
+  if (count <= 0.0f) return;
+
   float2 origin = context.cursor;
   AdvanceCursor(context, count);
 
   float2 local = context.position - origin;
+  if (local.x < 0.0f || local.y < 0.0f || local.y >= context.glyph_size.y) return;
 
-  if (local.x >= 0.0f && local.y >= 0.0f && local.y < context.glyph_size.y) {
-    float glyph_index = floor(local.x / context.glyph_size.x);
-    if (glyph_index < count) {
-      int ascii = internal::TextAsciiAt(glyph_index, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p);
-      float2 glyph_origin = origin + float2(glyph_index * context.glyph_size.x, 0.0f);
-      DrawGlyph(context, ascii, glyph_origin);
-    }
-  }
+  float glyph_index = floor(local.x / context.glyph_size.x);
+  if (glyph_index >= count) return;
+
+  int ascii = internal::TextAsciiAt(glyph_index, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p);
+  float2 glyph_origin = origin + float2(glyph_index * context.glyph_size.x, 0.0f);
+  DrawGlyph(context, ascii, glyph_origin);
 }
 
 void DrawInteger(inout Context context, int value, float max_digits = 0.0f, bool leading_zeros = false, bool reserve_sign = false) {
