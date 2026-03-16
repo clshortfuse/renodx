@@ -43,8 +43,10 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  if (shader_injection.cell_shading == 0) {
-    discard;
+  if (CELL_SHADING == 0) {
+	clip(-1.0);
+	o0 = float4(0.0, 0.0, 0.0, 0.0);
+  return;
   } else {
   r0.x = SceneDepthTexture.Sample(SceneDepthTextureSampler_s, v2.xy).x;
   r0.x = MinZ_MaxZRatio.z * r0.x;
@@ -113,6 +115,6 @@ void main(
   r0.w = cmp(0.956862748 < r0.z);
   o0.xyz = r0.xyz;
   o0.w = r0.w ? 0 : 1;
-  }
   return;
+  }
 }

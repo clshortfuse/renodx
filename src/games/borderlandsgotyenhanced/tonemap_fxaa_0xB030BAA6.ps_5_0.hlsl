@@ -43,18 +43,17 @@ void main(
 
   r0.xy = DynamicScale.xy * v0.zw;
   r0.xyz = SceneColorTexture.Sample(SceneColorTextureSampler_s, r0.xy).xyz;
+
+  float3 hdr_color = max(9.99999975e-05, r0.rgb);
+  float3 hdr_color_tm = renodx::tonemap::neutwo::MaxChannel(r0.rgb);
+  if (RENODX_TONE_MAP_TYPE > 0) {
+    r0.rgb = hdr_color_tm;
+  }
+
   r1.xyzw = BlurredImage.Sample(BlurredImageSampler_s, v1.xy).xyzw;
   r0.w = saturate(1 + -r1.w);
   r0.xyz = r0.xyz * r0.www + r1.xyz;
-
-  float3 hdr_color = r0.rgb;
-  float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
-
-  if (SHADOWS_DESATURATION == 0) {
-    r0.xyz = saturate(-SceneShadowsAndDesaturation.xyz) + r0.xyz;
-  } else {
-    r0.xyz = saturate(-SceneShadowsAndDesaturation.xyz + r0.xyz);
-  }
+  r0.xyz = saturate(-SceneShadowsAndDesaturation.xyz + r0.xyz);
   r0.xyz = SceneInverseHighLights.xyz * r0.xyz;
   r0.xyz = max(float3(9.99999975e-05,9.99999975e-05,9.99999975e-05), abs(r0.xyz));
   r0.xyz = log2(r0.xyz);
@@ -78,7 +77,7 @@ void main(
   o0.xyz = exp2(r0.xyz);
 
   float3 sdr_color = renodx::color::srgb::DecodeSafe(o0.rgb);
-  o0.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, v1);
+  o0.rgb = UpgradeToneMap(hdr_color, hdr_color_tm, sdr_color, v1.xy);
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   
   o0.w = 0;
