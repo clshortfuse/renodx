@@ -29,16 +29,19 @@ float4 main(PS_IN i) : COLOR
 	r1 = tex2D(SceneColorTexture, i.texcoord1);                           // texld_pp r1, v1, s0
 	r2 = tex2D(LowResSceneBuffer, i.texcoord1.zwzw);                      // texld_pp r2, v1.zwzw, s4
 	r1.xyz = r1.xyz * r2.w + r2.xyz;                                      // mad_pp r1.xyz, r1.xyz, r2.w, r2.xyz
+
+    float3 hdr_color = r1.rgb;
+    float3 hdr_color_tm = renodx::tonemap::neutwo::MaxChannel(r1.rgb);
+    if (RENODX_TONE_MAP_TYPE > 0) {
+      r1.rgb = hdr_color_tm;
+    }
+
 	r0.w = dot(r1.xyz, float3(0.300000012, 0.589999974, 0.109999999));    // dp3_pp r0.w, r1.xyz, c2.yzw
 	r0.w = r0.w * -3;                                                     // mul_pp r0.w, r0.w, c1.x
 	r0.w = exp2(r0.w);                                                    // exp_pp r0.w, r0.w
 	r0.w = saturate(r0.w * BloomTintAndScreenBlendThreshold.w);           // mul_sat_pp r0.w, r0.w, c0.w
 	r0.xyz = r0.xyz * r0.w + r1.xyz;                                      // mad_pp r0.xyz, r0.xyz, r0.w, r1.xyz
     r0.xyz = r0.xyz + 0.00400000019;                                      // add_pp r0.xyz, r0.xyz, c1.y
-
-    float3 hdr_color = r0.rgb;
-    float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
-
 	r1.xyz = max(r0.xyz, 0);                                              // max_pp r1.xyz, r0.xyz, c1.z
 	r0.xyz = min(r1.xyz, 16);                                             // min_pp r0.xyz, r1.xyz, c1.w
 	r1.xyz = r0.xyz * r0.xyz;                                             // mul_pp r1.xyz, r0.xyz, r0.xyz
@@ -79,9 +82,7 @@ float4 main(PS_IN i) : COLOR
 	o.xyz = r0.x * r0.yzw + r1.xyz;                                       // mad_pp oC0.xyz, r0.x, r0.yzw, r1.xyz
 
 	float3 sdr_color = o.rgb;
-    o.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, i.texcoord1.xy);
-    o.rgb = renodx::draw::RenderIntermediatePass(o.rgb);
-    o.rgb = renodx::color::srgb::DecodeSafe(o.rgb);
+	o.rgb = UpgradeToneMap(hdr_color, hdr_color_tm, sdr_color, i.texcoord.xy);
 	
     o.w = 0;                                                              // mov oC0.w, c1.z
 	return o;
