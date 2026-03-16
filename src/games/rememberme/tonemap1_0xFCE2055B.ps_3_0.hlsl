@@ -37,8 +37,11 @@ float4 main(PS_IN i) : COLOR
 	r1 = tex2D(LowResPostProcessBuffer, r2);
 
     float3 hdr_color = r0.rgb;
-    float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
-
+    float3 hdr_color_tm = renodx::tonemap::neutwo::MaxChannel(r0.rgb);
+    if (RENODX_TONE_MAP_TYPE > 0) {
+      r0.rgb = hdr_color_tm;
+    }
+	
 	r0 = r1.zzxy * -4 + r0.zzxy;
 	r2 = r1.zzxy * 4;
 	r0 = r1.w * r0 + r2;
@@ -65,10 +68,11 @@ float4 main(PS_IN i) : COLOR
 	r1 = tex2D(ColorGradingLUT, r1.zwzw);
 	r3 = lerp(r2, r1, r0.x);
 	r0 = tex2D(DNEVignetTexture, i.texcoord2.zwzw);
-	r0.x = saturate(dot(r0, DNEVignetMaskFactors)) * CUSTOM_VIGNETTE;
+	r0.x = saturate(dot(r0, DNEVignetMaskFactors));
 	r1.xz = float2(1, 0);
 	r0.yzw = (-r1.x + DNEVignetColor.xxyz).yzw;
 	r0.xyz = r0.x * r0.yzw + 1;
+	r0.xyz = lerp(1.0, r0.xyz, CUSTOM_VIGNETTE);
 	//r1.xy = i.texcoord2.zw * r1.z + DNEImageGrainParameter.xy;
 	//r1 = tex2D(DNEImageGrainTexture, r1);
 	//r0.w = r1.x * 2 + -1;
@@ -77,7 +81,7 @@ float4 main(PS_IN i) : COLOR
 	o.xyz = saturate(r3.xyz * r0.xyz);
 
 	float3 sdr_color = renodx::color::srgb::DecodeSafe(o.rgb);
-	o.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, i.texcoord.xy);
+	o.rgb = UpgradeToneMap(hdr_color, hdr_color_tm, sdr_color, i.texcoord.xy);
 	o.rgb = renodx::draw::RenderIntermediatePass(o.rgb);
 
 	o.w = r3.w;
