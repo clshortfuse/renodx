@@ -72,7 +72,8 @@ void main(
   r1.x = cmp(r1.x < 0.0235294122);
   o0.xyzw = r1.xxxx ? r0.xyzw : r2.xyzw;
 
-  o0.rgb = FilmGrain(o0.rgb, v1);
+  o0.rgb = renodx::color::srgb::DecodeSafe(o0.rgb);
+  o0.rgb = FilmGrain(o0.rgb, v1.xy);
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
   return;
 }

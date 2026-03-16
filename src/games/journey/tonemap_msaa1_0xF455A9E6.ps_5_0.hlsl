@@ -82,6 +82,7 @@ void main(
 
   float3 sdr_color = renodx::color::srgb::DecodeSafe(o0.rgb);
   o0.rgb = UpgradeToneMap(hdr_color, hdr_color_tm, sdr_color);
+  o0.rgb = renodx::color::srgb::EncodeSafe(o0.rgb);
   
   o0.w = 1;
   return;
