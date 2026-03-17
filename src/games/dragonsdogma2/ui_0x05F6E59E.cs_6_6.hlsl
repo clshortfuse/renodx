@@ -80,7 +80,8 @@ void main(
   float _396;
   [branch]
   if (!(_47.w == 0.0f)) {
-    float _61 = RENODX_TONE_MAP_TYPE == 0 ? 10000.0f / whitePaperNitsForOverlay : 10000.0f / RENODX_GRAPHICS_WHITE_NITS;
+    // float _61 = RENODX_TONE_MAP_TYPE == 0 ? 10000.0f / whitePaperNitsForOverlay : 10000.0f / RENODX_GRAPHICS_WHITE_NITS;
+    float _61 = 10000.0f / RENODX_GRAPHICS_WHITE_NITS;
     bool _68 = ((drawMode & 2) == 0);
     do {
       [branch]

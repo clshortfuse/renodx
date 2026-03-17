@@ -158,31 +158,6 @@ float3 ApplySaturationBlowoutHighlightSaturation(float3 tonemapped, float y, ren
   return color;
 }
 
-float3 ApplyPerChannelBlowoutHueShift(float3 untonemapped, float mid_gray = 0.18f, float max_value = 1.f) {
-  if (SCENE_GRADE_PER_CHANNEL_BLOWOUT > 0.f) {
-    float calculated_peak = SCENE_GRADE_PER_CHANNEL_BLOWOUT;
-    calculated_peak = max(calculated_peak, 1.f);
-
-    if (RENODX_GAMMA_CORRECTION != 0.f) {
-      calculated_peak = renodx::color::correct::GammaSafe(calculated_peak, true);
-    }
-
-    // float compression_scale;
-    // GamutCompression(untonemapped, compression_scale);
-    untonemapped = max(0, renodx::color::bt2020::from::BT709(untonemapped));
-
-    float3 graded_color = renodx::tonemap::ReinhardPiecewise(untonemapped, calculated_peak, mid_gray);
-
-    float3 color = renodx::color::correct::Chrominance(untonemapped, graded_color, 1.f, 0.f, 1);
-    color = renodx::color::correct::Hue(color, graded_color, SCENE_GRADE_PER_CHANNEL_HUE_SHIFT, 1);
-
-    // GamutDecompression(color, compression_scale);
-    color = renodx::color::bt709::from::BT2020(color);
-    return color;
-  }
-  return untonemapped;
-}
-
 float3 PreTonemapSliders(float3 untonemapped, float mid_gray = 0.18f) {
   // if (RENODX_TONE_MAP_TYPE == 0.f) return untonemapped;
 
@@ -207,7 +182,7 @@ float3 PostTonemapSliders(float3 hdr_color) {
 
   float y = renodx::color::y::from::BT709(hdr_color);
   hdr_color = ApplySaturationBlowoutHighlightSaturation(hdr_color, y, config);
-  hdr_color = ApplyPerChannelBlowoutHueShift(hdr_color, 0.5f);
+  //hdr_color = ApplyPerChannelBlowoutHueShift(hdr_color, 0.5f);
   return hdr_color;
 }
 
@@ -245,30 +220,35 @@ float3 CustomPsychoTest(float3 untonemapped, float peak) {
   return outputColor;
 }
 
-float3 GammaCorrectionByLuminosity(float3 color, float gamma = 2.2f) {
+float3 GammaCorrectionByLuminosity(float3 color, bool pow_to_srgb = false, float gamma = 2.2f) {
   float lumin_in = LuminosityFromBT709(color);
-  float lumin_out = renodx::color::correct::GammaSafe(lumin_in, false, gamma);
+  float lumin_out = renodx::color::correct::GammaSafe(lumin_in, pow_to_srgb, gamma);
   float3 color_out = renodx::color::correct::Luminance(color, lumin_in, lumin_out);
   return color_out;
 }
 
-float3 CustomTonemap(float3 untonemapped_ap1, float2 uv) {
-
+float3 CustomTonemap(float3 untonemapped_bt709, float3 graded_bt709, float mid_gray, float2 uv) {
 
   float calculated_peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
 
-  if (RENODX_GAMMA_CORRECTION == 1.f) {
-    calculated_peak = renodx::color::correct::Gamma(calculated_peak, true);
+  if (RENODX_GAMMA_CORRECTION > 0.f) {
+    calculated_peak = RENODX_GAMMA_CORRECTION == 1.f ? renodx::color::correct::GammaSafe(calculated_peak, true) : GammaCorrectionByLuminosity(calculated_peak, true).x;
   }
 
   const float ACES_MIN = 0.0001f;
- 
-  float3 output_color = untonemapped_ap1;
-  if (RENODX_TONE_MAP_TYPE == 1.f) {  // ACES
-    float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
 
-    untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709);
-    untonemapped_bt709 = PostTonemapSliders(untonemapped_bt709);
+  float3 output_color = untonemapped_bt709;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    // graded_bt709 = PreTonemapSliders(graded_bt709, mid_gray);
+    // graded_bt709 = PostTonemapSliders(graded_bt709);
+    // output_color = renodx::tonemap::neutwo::MaxChannel(graded_bt709, calculated_peak);
+    output_color = psychotm_test11(graded_bt709 * 0.5f, calculated_peak); // magic number, it's too bright :(
+  }
+  else if (RENODX_TONE_MAP_TYPE == 1.f) {  // ACES
+    
+
+    // untonemapped_bt709 = PreTonemapSliders(untonemapped_bt709, mid_gray);
+    // untonemapped_bt709 = PostTonemapSliders(untonemapped_bt709);
 
     float3 untonemapped_ap0 = mul(renodx::color::BT709_TO_AP0_MAT, untonemapped_bt709);
     float3 rrt_out = renodx::tonemap::aces::RRT(untonemapped_ap0);
@@ -277,13 +257,14 @@ float3 CustomTonemap(float3 untonemapped_ap1, float2 uv) {
     output_color = tonemapped_bt709_ch;
   }
   else if (RENODX_TONE_MAP_TYPE == 2.f) {  // PsychoV
-    float lumin_in = LuminosityFromAP1(untonemapped_ap1);
+    float lumin_in = LuminosityFromBT709(untonemapped_bt709);
     float lumin_out = renodx::tonemap::aces::ODT(lumin_in, (ACES_MIN) * 48.f, 100.f * 48.f).x / 48.f;
-    lumin_out = renodx::color::ap1::from::BT709(lumin_out).x;
-    float3 tonemapped_ap1_lumin = renodx::color::correct::Luminance(untonemapped_ap1, lumin_in, lumin_out);
-    float3 tonemapped_bt709_lumin = renodx::color::bt709::from::AP1(tonemapped_ap1_lumin);
+    // float lumin_out = renodx::color::grade::Contrast(lumin_in, 1.6f, 0.18f);
+    // untonemapped_bt709 = renodx::color::grade::Contrast(untonemapped_bt709, 1.3f, 0.18f);
+    //untonemapped_bt709 = renodx::tonemap::aces::ODT(untonemapped_bt709, (ACES_MIN) * 48.f, 100.f * 48.f) / 48.f;
+    untonemapped_bt709 = renodx::color::correct::Luminance(untonemapped_bt709, lumin_in, lumin_out);
 
-    output_color = CustomPsychoTest(tonemapped_bt709_lumin, calculated_peak);
+    output_color = CustomPsychoTest(untonemapped_bt709, calculated_peak);
   }
 
   output_color = CustomPostProcessing(output_color, uv);
