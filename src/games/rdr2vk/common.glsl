@@ -2,6 +2,18 @@
 #include "./shared.h"
 
 // START INCLUDES
+vec3 EncodeRDR2Gamma(vec3 color_linear) {
+  float curve_toe_threshold = 0.0031308;
+  float curve_toe_slope = 9.275;
+  float curve_power = 1.0 / 2.2;
+  float curve_scale = 1.0471;
+  float curve_offset = 0.0471;
+
+  return mix(
+      (pow(color_linear, vec3(curve_power)) * curve_scale) - vec3(curve_offset),
+      color_linear * curve_toe_slope,
+      lessThan(color_linear, vec3(curve_toe_threshold)));
+}
 
 // --- sRGB ENCODING ---
 float EncodeSRGB(float x) {
