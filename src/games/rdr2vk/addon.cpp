@@ -131,7 +131,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Scaling",
         .section = "Tone Mapping",
-        .tooltip = "Luminosity scales colors consistently while per-channel blows out and hue shifts",
+        .tooltip = "Luminosity scales colors consistently while per-channel saturates shadows and hue shifts",
         .labels = {"Luminosity", "Per Channel"},
         .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
     },
@@ -177,7 +177,7 @@ renodx::utils::settings::Settings settings = {
         .min = 0.75f,
         .max = 1.25f,
         .format = "%.2f",
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_type != 3.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
@@ -323,8 +323,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "LUT Encoding",
         .section = "Advanced",
-        .tooltip = "Use Vanilla HDR's broken LUT encoding, SDR's sRGB-like encoding (controlled by the SDR brightness slider), or sRGB.",
-        .labels = {"Vanilla HDR (Linear)", "Vanilla SDR (SDR brightness slider)", "sRGB"},
+        .tooltip = "Skip LUT encoding like Vanilla HDR or use SDR's sRGB-like encoding.",
+        .labels = {"Vanilla (Linear)", "Fixed (sRGB-like, Matches SDR)"},
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -352,7 +352,6 @@ renodx::utils::settings::Settings settings = {
               {"ColorGradeHighlights", 42.f},
               {"ColorGradeShadowContrast", 50.f},
               {"UnclampLighting", 0.f},
-              {"CustomLUTEncoding", 1.f},
           });
         },
     },
@@ -469,7 +468,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!initialized) {
         renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::shader::force_pipeline_cloning = true;
-        renodx::utils::shader::use_replace_async = true;
+        // renodx::utils::shader::use_replace_async = true;
 
         initialized = true;
       }
