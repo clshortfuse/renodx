@@ -6,7 +6,8 @@ RenoDX, short for "Renovation Engine for DirectX Games", is a toolset to mod gam
 
 # Contributing
 
-* See [CONTRIBUTING.md](https://github.com/clshortfuse/renodx/blob/main/docs/CONTRIBUTING.md)
+* See [CONTRIBUTING.md](./docs/CONTRIBUTING.md)
+* For the live devkit and MCP workflow, see [DEVKIT_MCP.md](./docs/DEVKIT_MCP.md)
 
 # Mods
 

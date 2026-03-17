@@ -37,6 +37,12 @@ add_executable(embed_file src/embed_file.cpp)
 # Helper executable that analyzes HLSL #include dependencies and outputs .d files
 add_executable(analyze_hlsl_deps src/analyze_hlsl_deps.cpp)
 add_executable(decomp ./src/decompiler/cli.cpp)
+add_executable(mcp_bridge src/apps/mcp_bridge/main.cpp)
+
+target_include_directories(mcp_bridge SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/json/include)
+target_include_directories(mcp_bridge SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
+target_compile_definitions(mcp_bridge PRIVATE NOMINMAX)
+set_target_properties(mcp_bridge PROPERTIES OUTPUT_NAME "renodx-mcp-bridge")
 
 # DEPRECATED: inspect_hlsl_imports is no longer used - dependencies are tracked at build time via DEPFILE
 # Keeping for reference during transition

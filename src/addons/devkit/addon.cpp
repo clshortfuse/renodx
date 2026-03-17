@@ -12,13 +12,20 @@
 #include <algorithm>
 #include <atomic>
 #include <cassert>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <deque>
 #include <exception>
 #include <filesystem>
 #include <format>
 #include <initializer_list>
+#include <limits>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
@@ -43,6 +50,7 @@
 #include "../../utils/device_proxy.hpp"
 #include "../../utils/format.hpp"
 #include "../../utils/icons.hpp"
+#include "../../utils/mcp/server.hpp"
 #include "../../utils/path.hpp"
 #include "../../utils/pipeline_layout.hpp"
 #include "../../utils/shader.hpp"
@@ -53,11 +61,58 @@
 #include "../../utils/string_view.hpp"
 #include "../../utils/swapchain.hpp"
 #include "../../utils/trace.hpp"
+#include "./formatting.hpp"
+#include "./mcp/device_selection.hpp"
+#include "./mcp/device_summary.hpp"
+#include "./mcp/draw_summary.hpp"
+#include "./mcp/live_shaders.hpp"
+#include "./mcp/resource_analysis.hpp"
+#include "./mcp/resource_clone.hpp"
+#include "./mcp/resource_view_summary.hpp"
+#include "./mcp/runtime.hpp"
+#include "./mcp/shader_inspection.hpp"
+#include "./mcp/shader_summary.hpp"
+#include "./mcp/snapshot_tools.hpp"
+#include "./tools_path.hpp"
 
 namespace {
 
-reshade::api::device* snapshot_device = nullptr;
-reshade::api::device* snapshot_queued_device = nullptr;
+using json = renodx::utils::mcp::json;
+using ToolResult = renodx::utils::mcp::ToolResult;
+
+namespace devkit_resource_analysis = renodx::addons::devkit::mcp::resource_analysis;
+namespace devkit_resource_clone = renodx::addons::devkit::mcp::resource_clone;
+namespace devkit_resource_view_summary = renodx::addons::devkit::mcp::resource_view_summary;
+namespace devkit_device_selection = renodx::addons::devkit::mcp::device_selection;
+namespace devkit_device_summary = renodx::addons::devkit::mcp::device_summary;
+namespace devkit_draw_summary = renodx::addons::devkit::mcp::draw_summary;
+namespace devkit_shader_inspection = renodx::addons::devkit::mcp::shader_inspection;
+namespace devkit_shader_summary = renodx::addons::devkit::mcp::shader_summary;
+namespace devkit_live_shaders = renodx::addons::devkit::mcp::live_shaders;
+namespace devkit_mcp_runtime = renodx::addons::devkit::mcp::runtime;
+namespace devkit_snapshot_tools = renodx::addons::devkit::mcp::snapshot_tools;
+namespace devkit_tools_path = renodx::addons::devkit::tools_path;
+
+using renodx::addons::devkit::formatting::FormatHandle;
+using renodx::addons::devkit::formatting::FormatPointer;
+using renodx::addons::devkit::formatting::FormatShaderHash;
+using renodx::addons::devkit::formatting::NarrowAscii;
+using renodx::addons::devkit::formatting::StreamToString;
+
+void RegisterDevkitMcpTools(renodx::utils::mcp::Server& server);
+
+inline constexpr std::wstring_view DEVKIT_MCP_PIPE_PREFIX = L"renodx-devkit-mcp";
+
+std::atomic<reshade::api::device*> snapshot_device = nullptr;
+std::atomic<reshade::api::device*> snapshot_queued_device = nullptr;
+std::mutex devkit_mcp_start_mutex;
+bool devkit_mcp_start_failed = false;
+renodx::utils::mcp::Server devkit_mcp_server({
+    .pipe_name = std::format(L"{}-{}", DEVKIT_MCP_PIPE_PREFIX, GetCurrentProcessId()),
+    .server_name = "renodx-devkit",
+    .server_title = "RenoDX DevKit",
+    .server_version = "0.1.0",
+});
 
 std::atomic_bool snapshot_pane_show_vertex_shaders = false;
 std::atomic_bool snapshot_pane_show_pixel_shaders = true;
@@ -109,11 +164,28 @@ struct ShaderDetails {
   };
 };
 
+struct PendingLiveShaderRequest {
+  enum class Operation : std::uint8_t {
+    LOAD = 0,
+    UNLOAD = 1,
+  } operation = Operation::LOAD;
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool started = false;
+  bool canceled = false;
+  bool completed = false;
+  std::optional<ToolResult> result = std::nullopt;
+};
+
 struct ResourceViewDetails {
   reshade::api::resource_view resource_view = {0};
   reshade::api::resource_view_desc resource_view_desc;
   reshade::api::resource resource = {0};
   reshade::api::resource_desc resource_desc;
+  reshade::api::resource_view clone_view = {0};
+  reshade::api::resource_view_desc clone_view_desc;
+  reshade::api::resource clone_resource = {0};
+  reshade::api::resource_desc clone_resource_desc;
   std::string resource_reflection;
   std::string resource_view_reflection;
   bool is_swapchain = false;
@@ -268,6 +340,8 @@ ResourceViewDetails GetResourceViewDetails(reshade::api::resource_view resource_
   if (resource_view_info == nullptr) return details;
 
   details.resource_view_desc = resource_view_info->desc;
+  details.clone_view = resource_view_info->clone;
+  details.clone_view_desc = resource_view_info->clone_desc;
   auto device_api = device->get_api();
 
   auto resource_view_reflection = renodx::utils::trace::GetDebugName(device_api, resource_view);
@@ -278,6 +352,8 @@ ResourceViewDetails GetResourceViewDetails(reshade::api::resource_view resource_
   if (resource_view_info->resource_info != nullptr) {
     details.resource = resource_view_info->resource_info->resource;
     details.resource_desc = resource_view_info->resource_info->desc;
+    details.clone_resource = resource_view_info->resource_info->clone;
+    details.clone_resource_desc = resource_view_info->resource_info->clone_desc;
 
     if (!resource_view_info->resource_info->destroyed) {
       auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
@@ -306,6 +382,8 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   std::unordered_map<uint64_t, reshade::api::blend_desc> pipeline_blends;
 
   reshade::api::effect_runtime* runtime = nullptr;
+  std::deque<std::shared_ptr<devkit_resource_analysis::PendingRequest>> pending_resource_analysis_requests;
+  std::deque<std::shared_ptr<PendingLiveShaderRequest>> pending_live_shader_requests;
 
   std::unordered_map<uint32_t, std::set<uint32_t>> shader_draw_indexes;
   std::unordered_map<uint64_t, SnapshotResourceUsage> resource_usage_by_handle;
@@ -332,30 +410,34 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   }
 };
 
+void EnsureShaderDataForShaderDetails(reshade::api::device* device, ShaderDetails* shader_details) {
+  if (!shader_details->shader_data.empty()) return;
+
+  reshade::api::pipeline pipeline = {0};
+
+  auto* store = renodx::utils::shader::GetStore();
+  store->shader_pipeline_handles.if_contains(
+      {device, shader_details->shader_hash},
+      [&pipeline](const std::pair<const std::pair<reshade::api::device*, uint32_t>, std::unordered_set<uint64_t>>& pair) {
+        if (pair.second.empty()) return;
+        auto handle = *pair.second.begin();
+        pipeline = {handle};
+      });
+  if (pipeline.handle == 0u) {
+    throw std::runtime_error("Shader data not found.");
+  }
+
+  auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_details->shader_hash);
+  if (!shader_data.has_value()) throw std::runtime_error("Invalid shader selection");
+  shader_details->shader_data = shader_data.value();
+}
+
 bool ComputeDisassemblyForShaderDetails(reshade::api::device* device, DeviceData* data, ShaderDetails* shader_details) {
+  (void)data;
   if (std::holds_alternative<std::nullopt_t>(shader_details->disassembly)) {
     // Never disassembled
     try {
-      if (shader_details->shader_data.empty()) {
-        reshade::api::pipeline pipeline = {0};
-
-        // Get pipeline handle
-        auto* store = renodx::utils::shader::GetStore();
-        store->shader_pipeline_handles.if_contains(
-            {device, shader_details->shader_hash},
-            [&pipeline](const std::pair<const std::pair<reshade::api::device*, uint32_t>, std::unordered_set<uint64_t>>& pair) {
-              if (pair.second.empty()) return;
-              auto handle = *pair.second.begin();
-              pipeline = {handle};
-            });
-        if (pipeline.handle == 0u) {
-          throw std::exception("Shader data not found.");
-        }
-
-        auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_details->shader_hash);
-        if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
-        shader_details->shader_data = shader_data.value();
-      }
+      EnsureShaderDataForShaderDetails(device, shader_details);
       if (renodx::utils::device::IsDirectX(device)) {
         shader_details->disassembly = renodx::utils::shader::compiler::directx::DisassembleShader(shader_details->shader_data);
       } else if (device->get_api() == reshade::api::device_api::opengl) {
@@ -363,14 +445,43 @@ bool ComputeDisassemblyForShaderDetails(reshade::api::device* device, DeviceData
             shader_details->shader_data.data(),
             shader_details->shader_data.data() + shader_details->shader_data.size());
       } else {
-        throw std::exception("Unsupported device API.");
+        throw std::runtime_error("Unsupported device API.");
       }
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
       shader_details->disassembly = e;
     }
   }
 
   return std::holds_alternative<std::string>(shader_details->disassembly);
+}
+
+bool ComputeDecompilationForShaderDetails(reshade::api::device* device, DeviceData* data, ShaderDetails* shader_details) {
+  (void)data;
+  if (std::holds_alternative<std::nullopt_t>(shader_details->decompilation)) {
+    try {
+      EnsureShaderDataForShaderDetails(device, shader_details);
+
+      if (renodx::utils::device::IsDirectX(device)) {
+        auto decompiler = renodx::utils::shader::decompiler::dxc::Decompiler();
+        auto disassembly_string = renodx::utils::shader::compiler::directx::DisassembleShader(shader_details->shader_data);
+        shader_details->decompilation = decompiler.Decompile(
+            disassembly_string,
+            {
+                .flatten = true,
+            });
+      } else if (device->get_api() == reshade::api::device_api::opengl) {
+        shader_details->decompilation = std::string(
+            shader_details->shader_data.data(),
+            shader_details->shader_data.data() + shader_details->shader_data.size());
+      } else {
+        throw std::runtime_error("Unsupported device API.");
+      }
+    } catch (const std::exception& e) {
+      shader_details->decompilation = e;
+    }
+  }
+
+  return std::holds_alternative<std::string>(shader_details->decompilation);
 }
 
 std::optional<std::vector<ResourceBind>> GetResourceBindsForShaderDetails(
@@ -1339,6 +1450,1159 @@ std::vector<DeviceData*> device_data_list;
   return device_data_list[index];
 }
 
+[[nodiscard]] devkit_device_summary::DeviceSummary BuildDeviceSummary(size_t index, DeviceData* device_data, bool is_selected) {
+  std::shared_lock device_lock(device_data->mutex);
+  auto* device = device_data->device;
+
+  auto summary = devkit_device_summary::DeviceSummary{
+      .index = index,
+      .is_selected = is_selected,
+      .device_handle = FormatPointer(device),
+      .api = StreamToString(device->get_api()),
+      .is_d3d9_ex = device_data->is_d3d9_ex,
+      .tracked_shaders = device_data->shader_details.size(),
+      .captured_draws = device_data->draw_details_list.size(),
+      .live_pipelines = device_data->live_pipelines.size(),
+      .swapchains = device_data->swapchain_descs.size(),
+      .snapshot_rows = device_data->snapshot_rows.size(),
+      .snapshot_rows_valid = device_data->snapshot_rows_valid,
+      .resource_usage_entries = device_data->resource_usage_by_handle.size(),
+      .snapshot_queued = snapshot_queued_device == device,
+      .snapshot_active = snapshot_device == device,
+  };
+
+  if (device_data->primary_swapchain_desc.has_value()) {
+    summary.primary_swapchain = devkit_device_summary::PrimarySwapchainSummary(
+        *device_data->primary_swapchain_desc,
+        device_data->primary_swapchain_is_flip,
+        device_data->primary_swapchain_hwnd);
+  }
+
+  return summary;
+}
+
+[[nodiscard]] std::string ResourceBindTypeToString(ResourceBind::BindType bind_type) {
+  switch (bind_type) {
+    case ResourceBind::BindType::SRV: return "srv";
+    case ResourceBind::BindType::UAV: return "uav";
+    case ResourceBind::BindType::CBV: return "cbv";
+    default:                          return "unknown";
+  }
+}
+
+[[nodiscard]] bool IsResourceBindUsedByShader(
+    const std::optional<std::vector<ResourceBind>>& resource_binds,
+    ResourceBind::BindType bind_type,
+    uint32_t slot,
+    uint32_t space) {
+  if (!resource_binds.has_value()) return false;
+  return std::ranges::any_of(*resource_binds, [bind_type, slot, space](const ResourceBind& bind) {
+    return bind.type == bind_type && bind.slot == slot && bind.space == space;
+  });
+}
+
+[[nodiscard]] devkit_shader_summary::TrackedShaderSummary BuildTrackedShaderSummary(
+    uint32_t shader_hash,
+    const ShaderDetails& shader_details,
+    bool include_resource_binds = false) {
+  auto summary = devkit_shader_summary::TrackedShaderSummary{
+      .hash = FormatShaderHash(shader_hash),
+      .hash_value = shader_hash,
+      .stage = StreamToString(shader_details.shader_type),
+      .source = ShaderDetails::SHADER_SOURCE_NAMES[static_cast<size_t>(shader_details.shader_source)],
+      .shader_data_size = shader_details.shader_data.size(),
+      .has_addon_shader = !shader_details.addon_shader.empty(),
+      .has_disk_shader = shader_details.disk_shader.has_value(),
+      .bypass_draw = shader_details.bypass_draw,
+      .entrypoint = shader_details.entrypoint,
+  };
+
+  if (shader_details.program_version.has_value()) {
+    summary.program_version = std::format(
+        "{}_{}_{}",
+        shader_details.program_version->GetKindAbbr(),
+        shader_details.program_version->GetMajor(),
+        shader_details.program_version->GetMinor());
+  }
+  if (shader_details.resource_binds.has_value()) {
+    summary.resource_bind_count = shader_details.resource_binds->size();
+    if (include_resource_binds) {
+      std::vector<devkit_draw_summary::ResourceBindSummary> resource_binds = {};
+      resource_binds.reserve(shader_details.resource_binds->size());
+      for (const auto& resource_bind : shader_details.resource_binds.value()) {
+        resource_binds.push_back(devkit_draw_summary::ResourceBindSummary{
+            .type = ResourceBindTypeToString(resource_bind.type),
+            .slot = resource_bind.slot,
+            .space = resource_bind.space,
+        });
+      }
+      summary.resource_binds = std::move(resource_binds);
+    }
+  }
+  if (shader_details.disk_shader.has_value()) {
+    summary.disk_shader = devkit_shader_summary::DiskShaderSummary{
+        .path = shader_details.disk_shader->file_path.string(),
+        .compilation_ok = shader_details.disk_shader->IsCompilationOK(),
+    };
+  }
+
+  return summary;
+}
+
+[[nodiscard]] devkit_resource_view_summary::ResourceViewSummary BuildResourceViewSummary(
+    const ResourceViewDetails& resource_view_details) {
+  auto summary = devkit_resource_view_summary::ResourceViewSummary{
+      .resource_view_handle = FormatHandle(resource_view_details.resource_view.handle),
+      .resource_view_reflection = resource_view_details.resource_view_reflection.empty()
+                                      ? std::nullopt
+                                      : std::optional<std::string>(resource_view_details.resource_view_reflection),
+      .view = devkit_resource_view_summary::ViewSummary(resource_view_details.resource_view_desc),
+      .resource_handle = resource_view_details.resource.handle == 0u
+                             ? std::nullopt
+                             : std::optional<std::string>(FormatHandle(resource_view_details.resource.handle)),
+      .resource_reflection = resource_view_details.resource_reflection.empty()
+                                 ? std::nullopt
+                                 : std::optional<std::string>(resource_view_details.resource_reflection),
+      .resource = devkit_resource_view_summary::ResourceSummary(resource_view_details.resource_desc),
+      .mod = {
+          .is_swapchain = resource_view_details.is_swapchain,
+          .is_render_target_upgraded = resource_view_details.is_rtv_upgraded,
+          .is_resource_upgraded = resource_view_details.is_res_upgraded,
+          .is_render_target_cloned = resource_view_details.is_rtv_cloned,
+          .is_resource_cloned = resource_view_details.is_res_cloned,
+      },
+  };
+
+  if (resource_view_details.clone_view.handle != 0u || resource_view_details.clone_resource.handle != 0u) {
+    summary.clone = devkit_resource_view_summary::CloneSummary{
+        .resource_view_handle = resource_view_details.clone_view.handle == 0u
+                                    ? std::nullopt
+                                    : std::optional<std::string>(FormatHandle(resource_view_details.clone_view.handle)),
+        .resource_handle = resource_view_details.clone_resource.handle == 0u
+                               ? std::nullopt
+                               : std::optional<std::string>(FormatHandle(resource_view_details.clone_resource.handle)),
+        .view = devkit_resource_view_summary::ViewSummary(resource_view_details.clone_view_desc),
+        .resource = devkit_resource_view_summary::ResourceSummary(resource_view_details.clone_resource_desc),
+    };
+  }
+
+  return summary;
+}
+
+[[nodiscard]] devkit_draw_summary::DrawSummary BuildDrawSummary(
+    size_t draw_index,
+    const DrawDetails& draw_details,
+    bool include_details) {
+  std::set<uint32_t> shader_hashes;
+  for (const auto& pipeline_bind : draw_details.pipeline_binds) {
+    shader_hashes.insert(pipeline_bind.shader_hashes.begin(), pipeline_bind.shader_hashes.end());
+  }
+
+  auto draw_summary = devkit_draw_summary::DrawSummary{
+      .index = draw_index,
+      .method = draw_details.DrawMethodString(),
+      .timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(draw_details.timestamp.time_since_epoch()).count(),
+      .srv_count = draw_details.srv_binds.size(),
+      .uav_count = draw_details.uav_binds.size(),
+      .constant_count = draw_details.constants.size(),
+      .render_target_count = draw_details.render_targets.size(),
+      .pipeline_count = draw_details.pipeline_binds.size(),
+  };
+  draw_summary.shader_hashes.reserve(shader_hashes.size());
+  for (auto shader_hash : shader_hashes) {
+    draw_summary.shader_hashes.push_back(FormatShaderHash(shader_hash));
+  }
+  if (draw_details.copy_source.handle != 0u) {
+    draw_summary.copy_source_handle = FormatHandle(draw_details.copy_source.handle);
+  }
+  if (draw_details.copy_destination.handle != 0u) {
+    draw_summary.copy_destination_handle = FormatHandle(draw_details.copy_destination.handle);
+  }
+
+  if (!include_details) {
+    return draw_summary;
+  }
+
+  if (draw_details.IsDispatch()) {
+    draw_summary.active_shader_stage = StreamToString(reshade::api::pipeline_stage::compute_shader);
+  } else if (draw_details.IsDraw()) {
+    draw_summary.active_shader_stage = StreamToString(reshade::api::pipeline_stage::pixel_shader);
+  }
+
+  std::vector<devkit_draw_summary::SlotResourceBindingSummary> srv_bindings = {};
+  srv_bindings.reserve(draw_details.srv_binds.size());
+  for (const auto& [slot_space, resource_view_details] : draw_details.srv_binds) {
+    const auto slot = slot_space.first;
+    const auto space = slot_space.second;
+    srv_bindings.push_back(devkit_draw_summary::SlotResourceBindingSummary{
+        .slot = slot,
+        .space = space,
+        .used_by_active_shader =
+            IsResourceBindUsedByShader(draw_details.resource_binds, ResourceBind::BindType::SRV, slot, space),
+        .resource_view = BuildResourceViewSummary(resource_view_details),
+    });
+  }
+
+  std::vector<devkit_draw_summary::SlotResourceBindingSummary> uav_bindings = {};
+  uav_bindings.reserve(draw_details.uav_binds.size());
+  for (const auto& [slot_space, resource_view_details] : draw_details.uav_binds) {
+    const auto slot = slot_space.first;
+    const auto space = slot_space.second;
+    uav_bindings.push_back(devkit_draw_summary::SlotResourceBindingSummary{
+        .slot = slot,
+        .space = space,
+        .used_by_active_shader =
+            IsResourceBindUsedByShader(draw_details.resource_binds, ResourceBind::BindType::UAV, slot, space),
+        .resource_view = BuildResourceViewSummary(resource_view_details),
+    });
+  }
+
+  std::vector<devkit_draw_summary::ConstantBufferSummary> constant_buffers = {};
+  constant_buffers.reserve(draw_details.constants.size());
+  for (const auto& [slot_space, buffer_range] : draw_details.constants) {
+    const auto slot = slot_space.first;
+    const auto space = slot_space.second;
+    if (buffer_range.buffer.handle == 0u) continue;
+    constant_buffers.push_back(devkit_draw_summary::ConstantBufferSummary{
+        .slot = slot,
+        .space = space,
+        .buffer_handle = FormatHandle(buffer_range.buffer.handle),
+        .offset = buffer_range.offset,
+        .size = buffer_range.size == UINT64_MAX ? std::nullopt : std::optional<std::uint64_t>(buffer_range.size),
+        .full_range = buffer_range.size == UINT64_MAX,
+        .used_by_active_shader =
+            IsResourceBindUsedByShader(draw_details.resource_binds, ResourceBind::BindType::CBV, slot, space),
+    });
+  }
+
+  std::vector<devkit_draw_summary::RenderTargetSummary> render_targets = {};
+  render_targets.reserve(draw_details.render_targets.size());
+  for (const auto& [rtv_index, resource_view_details] : draw_details.render_targets) {
+    render_targets.push_back(devkit_draw_summary::RenderTargetSummary{
+        .rtv_index = rtv_index,
+        .resource_view = BuildResourceViewSummary(resource_view_details),
+        .blend = draw_details.blend_desc.has_value()
+                     ? std::optional<devkit_draw_summary::BlendAttachmentSummary>(
+                           devkit_draw_summary::BlendAttachmentSummary{
+                               .rtv_index = rtv_index,
+                               .blend_enable = draw_details.blend_desc->blend_enable[rtv_index],
+                               .logic_op_enable = draw_details.blend_desc->logic_op_enable[rtv_index],
+                               .source_color_blend_factor =
+                                   StreamToString(draw_details.blend_desc->source_color_blend_factor[rtv_index]),
+                               .dest_color_blend_factor =
+                                   StreamToString(draw_details.blend_desc->dest_color_blend_factor[rtv_index]),
+                               .color_blend_op = StreamToString(draw_details.blend_desc->color_blend_op[rtv_index]),
+                               .source_alpha_blend_factor =
+                                   StreamToString(draw_details.blend_desc->source_alpha_blend_factor[rtv_index]),
+                               .dest_alpha_blend_factor =
+                                   StreamToString(draw_details.blend_desc->dest_alpha_blend_factor[rtv_index]),
+                               .alpha_blend_op = StreamToString(draw_details.blend_desc->alpha_blend_op[rtv_index]),
+                               .logic_op = StreamToString(draw_details.blend_desc->logic_op[rtv_index]),
+                               .render_target_write_mask =
+                                   static_cast<uint32_t>(draw_details.blend_desc->render_target_write_mask[rtv_index]),
+                               .render_target_write_mask_hex = std::format(
+                                   "0x{:X}",
+                                   static_cast<uint32_t>(draw_details.blend_desc->render_target_write_mask[rtv_index])),
+                           })
+                     : std::nullopt,
+    });
+  }
+
+  std::vector<devkit_draw_summary::PipelineBindSummary> pipelines = {};
+  pipelines.reserve(draw_details.pipeline_binds.size());
+  for (const auto& pipeline_bind : draw_details.pipeline_binds) {
+    std::vector<std::string> shader_hashes = {};
+    shader_hashes.reserve(pipeline_bind.shader_hashes.size());
+    for (auto shader_hash : pipeline_bind.shader_hashes) {
+      shader_hashes.push_back(FormatShaderHash(shader_hash));
+    }
+    pipelines.push_back(devkit_draw_summary::PipelineBindSummary{
+        .pipeline_handle = FormatHandle(pipeline_bind.pipeline.handle),
+        .stage = StreamToString(pipeline_bind.pipeline_stage),
+        .shader_hashes = std::move(shader_hashes),
+    });
+  }
+
+  draw_summary.srv_bindings = std::move(srv_bindings);
+  draw_summary.uav_bindings = std::move(uav_bindings);
+  draw_summary.constant_buffers = std::move(constant_buffers);
+  draw_summary.render_targets = std::move(render_targets);
+  draw_summary.pipelines = std::move(pipelines);
+
+  if (draw_details.resource_binds.has_value()) {
+    std::vector<devkit_draw_summary::ResourceBindSummary> shader_resource_binds = {};
+    shader_resource_binds.reserve(draw_details.resource_binds->size());
+    for (const auto& resource_bind : draw_details.resource_binds.value()) {
+      shader_resource_binds.push_back(devkit_draw_summary::ResourceBindSummary{
+          .type = ResourceBindTypeToString(resource_bind.type),
+          .slot = resource_bind.slot,
+          .space = resource_bind.space,
+      });
+    }
+    draw_summary.shader_resource_binds = std::move(shader_resource_binds);
+  }
+
+  if (draw_details.blend_desc.has_value()) {
+    std::vector<devkit_draw_summary::BlendAttachmentSummary> attachments = {};
+    attachments.reserve(draw_details.render_targets.size());
+    for (const auto& [rtv_index, render_target] : draw_details.render_targets) {
+      (void)render_target;
+      attachments.push_back(devkit_draw_summary::BlendAttachmentSummary{
+          .rtv_index = rtv_index,
+          .blend_enable = draw_details.blend_desc->blend_enable[rtv_index],
+          .logic_op_enable = draw_details.blend_desc->logic_op_enable[rtv_index],
+          .source_color_blend_factor =
+              StreamToString(draw_details.blend_desc->source_color_blend_factor[rtv_index]),
+          .dest_color_blend_factor = StreamToString(draw_details.blend_desc->dest_color_blend_factor[rtv_index]),
+          .color_blend_op = StreamToString(draw_details.blend_desc->color_blend_op[rtv_index]),
+          .source_alpha_blend_factor =
+              StreamToString(draw_details.blend_desc->source_alpha_blend_factor[rtv_index]),
+          .dest_alpha_blend_factor = StreamToString(draw_details.blend_desc->dest_alpha_blend_factor[rtv_index]),
+          .alpha_blend_op = StreamToString(draw_details.blend_desc->alpha_blend_op[rtv_index]),
+          .logic_op = StreamToString(draw_details.blend_desc->logic_op[rtv_index]),
+          .render_target_write_mask = static_cast<uint32_t>(draw_details.blend_desc->render_target_write_mask[rtv_index]),
+          .render_target_write_mask_hex = std::format(
+              "0x{:X}",
+              static_cast<uint32_t>(draw_details.blend_desc->render_target_write_mask[rtv_index])),
+      });
+    }
+
+    draw_summary.blend_state = devkit_draw_summary::BlendStateSummary{
+        .alpha_to_coverage_enable = draw_details.blend_desc->alpha_to_coverage_enable,
+        .blend_constant = {
+            draw_details.blend_desc->blend_constant[0],
+            draw_details.blend_desc->blend_constant[1],
+            draw_details.blend_desc->blend_constant[2],
+            draw_details.blend_desc->blend_constant[3],
+        },
+        .attachments = std::move(attachments),
+    };
+  }
+
+  return draw_summary;
+}
+
+[[nodiscard]] auto BuildResolveDeviceIndexCallback() {
+  return [](const json& arguments) -> uint32_t {
+    std::shared_lock list_lock(device_data_list_mutex);
+    const auto device_count = device_data_list.size();
+    const auto selected_index = device_count == 0u
+                                    ? 0u
+                                    : std::min<uint32_t>(
+                                          device_data_index.load(std::memory_order_relaxed),
+                                          static_cast<uint32_t>(device_count - 1u));
+    return devkit_device_selection::ResolveRequestedDeviceIndex(arguments, device_count, selected_index);
+  };
+}
+
+[[nodiscard]] bool EnqueuePendingResourceAnalysisRequest(
+    uint32_t device_index,
+    const std::shared_ptr<devkit_resource_analysis::PendingRequest>& request) {
+  std::shared_lock list_lock(device_data_list_mutex);
+  if (device_index >= device_data_list.size()) {
+    return false;
+  }
+  auto* device_data = device_data_list[device_index];
+
+  std::unique_lock device_lock(device_data->mutex);
+  device_data->pending_resource_analysis_requests.push_back(request);
+  return true;
+}
+
+void CancelPendingResourceAnalysisRequest(
+    uint32_t device_index,
+    const std::shared_ptr<devkit_resource_analysis::PendingRequest>& request) {
+  std::shared_lock list_lock(device_data_list_mutex);
+  if (device_index >= device_data_list.size()) {
+    return;
+  }
+  auto* device_data = device_data_list[device_index];
+
+  std::unique_lock device_lock(device_data->mutex);
+  std::erase(device_data->pending_resource_analysis_requests, request);
+}
+
+[[nodiscard]] bool EnqueuePendingLiveShaderRequest(
+    uint32_t device_index,
+    const std::shared_ptr<PendingLiveShaderRequest>& request) {
+  std::shared_lock list_lock(device_data_list_mutex);
+  if (device_index >= device_data_list.size()) {
+    return false;
+  }
+  auto* device_data = device_data_list[device_index];
+
+  std::unique_lock device_lock(device_data->mutex);
+  device_data->pending_live_shader_requests.push_back(request);
+  return true;
+}
+
+void CancelPendingLiveShaderRequest(
+    uint32_t device_index,
+    const std::shared_ptr<PendingLiveShaderRequest>& request) {
+  std::shared_lock list_lock(device_data_list_mutex);
+  if (device_index >= device_data_list.size()) {
+    return;
+  }
+  auto* device_data = device_data_list[device_index];
+
+  std::unique_lock device_lock(device_data->mutex);
+  std::erase(device_data->pending_live_shader_requests, request);
+}
+
+[[nodiscard]] devkit_shader_summary::TrackedShaderSummary BuildTrackedShaderSummaryForDevice(
+    uint32_t device_index,
+    uint32_t shader_hash) {
+  std::shared_lock list_lock(device_data_list_mutex);
+  if (device_index >= device_data_list.size()) {
+    throw std::runtime_error(std::format("Device #{} is not available.", device_index));
+  }
+  auto* device_data = device_data_list[device_index];
+
+  std::unique_lock device_lock(device_data->mutex);
+  auto iterator = device_data->shader_details.find(shader_hash);
+  if (iterator == device_data->shader_details.end()) {
+    throw std::runtime_error(std::format("Shader {} is not tracked on device #{}.", FormatShaderHash(shader_hash), device_index));
+  }
+
+  auto* shader_details = &iterator->second;
+  GetResourceBindsForShaderDetails(device_data->device, device_data, shader_details);
+  GetEntryPointForShaderDetails(device_data->device, device_data, shader_details);
+
+  return BuildTrackedShaderSummary(shader_hash, *shader_details, true);
+}
+
+[[nodiscard]] devkit_shader_inspection::TextSection BuildMcpShaderDisassemblySection(
+    uint32_t device_index,
+    uint32_t shader_hash) {
+  std::shared_lock list_lock(device_data_list_mutex);
+  if (device_index >= device_data_list.size()) {
+    return devkit_shader_inspection::TextSection{
+        .available = false,
+        .error = std::format("Device #{} is not available.", device_index),
+    };
+  }
+  auto* device_data = device_data_list[device_index];
+
+  std::unique_lock device_lock(device_data->mutex);
+  auto iterator = device_data->shader_details.find(shader_hash);
+  if (iterator == device_data->shader_details.end()) {
+    return devkit_shader_inspection::TextSection{
+        .available = false,
+        .error = std::format("Shader {} is not tracked on device #{}.", FormatShaderHash(shader_hash), device_index),
+    };
+  }
+
+  auto* shader_details = &iterator->second;
+  if (!ComputeDisassemblyForShaderDetails(device_data->device, device_data, shader_details)) {
+    if (std::holds_alternative<std::exception>(shader_details->disassembly)) {
+      return devkit_shader_inspection::TextSection{
+          .available = false,
+          .error = std::get<std::exception>(shader_details->disassembly).what(),
+      };
+    }
+    return devkit_shader_inspection::TextSection{
+        .available = false,
+        .error = "Disassembly is unavailable for this shader.",
+    };
+  }
+
+  return devkit_shader_inspection::TextSection{
+      .available = true,
+      .text = std::get<std::string>(shader_details->disassembly),
+  };
+}
+
+[[nodiscard]] devkit_shader_inspection::TextSection BuildMcpShaderDecompilationSection(
+    uint32_t device_index,
+    uint32_t shader_hash) {
+  std::shared_lock list_lock(device_data_list_mutex);
+  if (device_index >= device_data_list.size()) {
+    return devkit_shader_inspection::TextSection{
+        .available = false,
+        .error = std::format("Device #{} is not available.", device_index),
+    };
+  }
+  auto* device_data = device_data_list[device_index];
+
+  std::unique_lock device_lock(device_data->mutex);
+  auto iterator = device_data->shader_details.find(shader_hash);
+  if (iterator == device_data->shader_details.end()) {
+    return devkit_shader_inspection::TextSection{
+        .available = false,
+        .error = std::format("Shader {} is not tracked on device #{}.", FormatShaderHash(shader_hash), device_index),
+    };
+  }
+
+  auto* shader_details = &iterator->second;
+  if (!ComputeDecompilationForShaderDetails(device_data->device, device_data, shader_details)) {
+    if (std::holds_alternative<std::exception>(shader_details->decompilation)) {
+      return devkit_shader_inspection::TextSection{
+          .available = false,
+          .error = std::get<std::exception>(shader_details->decompilation).what(),
+      };
+    }
+    return devkit_shader_inspection::TextSection{
+        .available = false,
+        .error = "Decompilation is unavailable for this shader.",
+    };
+  }
+
+  return devkit_shader_inspection::TextSection{
+      .available = true,
+      .text = std::get<std::string>(shader_details->decompilation),
+  };
+}
+
+struct LoadedDiskShaderResult {
+  uint32_t shader_hash = 0u;
+  std::filesystem::path file_path;
+  bool removed = false;
+  bool compilation_ok = false;
+  bool activated = false;
+};
+
+std::vector<LoadedDiskShaderResult> LoadDiskShaders(reshade::api::device* device, DeviceData* data, bool activate);
+
+[[nodiscard]] ToolResult BuildLoadLiveShadersResult(
+    uint32_t device_index,
+    const std::vector<LoadedDiskShaderResult>& results) {
+  json shader_results = json::array();
+  size_t activated_count = 0u;
+  for (const auto& result : results) {
+    if (result.activated) {
+      activated_count += 1u;
+    }
+    shader_results.push_back(devkit_draw_summary::LoadedDiskShaderSummary{
+        .hash = FormatShaderHash(result.shader_hash),
+        .hash_value = result.shader_hash,
+        .path = result.file_path.string(),
+        .removed = result.removed,
+        .compilation_ok = result.compilation_ok,
+        .activated = result.activated,
+    });
+  }
+
+  const auto effective_directory = GetEffectiveLiveDirectory(renodx::utils::shader::compiler::watcher::GetLivePath());
+  auto text = results.empty()
+                  ? std::format("No live shaders were loaded from '{}'.", effective_directory.string())
+                  : std::format(
+                        "Loaded {} live shader file(s) from '{}' for device #{} ({} activated).",
+                        results.size(),
+                        effective_directory.string(),
+                        device_index,
+                        activated_count);
+
+  return ToolResult{
+      .text = std::move(text),
+      .structured_content = json{
+          {"deviceIndex", device_index},
+          {"effectiveDirectory", effective_directory.string()},
+          {"loadedCount", results.size()},
+          {"activatedCount", activated_count},
+          {"shaders", std::move(shader_results)},
+      },
+  };
+}
+
+[[nodiscard]] ToolResult BuildUnloadLiveShadersResult(uint32_t device_index, size_t reset_count) {
+  return ToolResult{
+      .text = std::format("Removed live shader replacements from device #{}.", device_index),
+      .structured_content = json{
+          {"deviceIndex", device_index},
+          {"resetSourceCount", reset_count},
+      },
+  };
+}
+
+[[nodiscard]] ToolResult DumpTrackedShaderForMcp(
+    uint32_t device_index,
+    uint32_t shader_hash,
+    const std::optional<std::string>& output_path) {
+  std::shared_lock list_lock(device_data_list_mutex);
+  if (device_index >= device_data_list.size()) {
+    const auto error = std::format("Device #{} is not available.", device_index);
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+  auto* device_data = device_data_list[device_index];
+
+  std::unique_lock device_lock(device_data->mutex);
+  auto iterator = device_data->shader_details.find(shader_hash);
+  if (iterator == device_data->shader_details.end()) {
+    const auto error =
+        std::format("Shader {} is not tracked on device #{}.", FormatShaderHash(shader_hash), device_index);
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+
+  auto* shader_details = &iterator->second;
+
+  std::filesystem::path dump_path = {};
+  try {
+    EnsureShaderDataForShaderDetails(device_data->device, shader_details);
+    if (output_path.has_value() && !output_path->empty()) {
+      dump_path = std::filesystem::path(*output_path).lexically_normal();
+      if (dump_path.has_parent_path()) {
+        std::filesystem::create_directories(dump_path.parent_path());
+      }
+      renodx::utils::path::WriteBinaryFile(dump_path, shader_details->shader_data);
+    } else {
+      dump_path = renodx::utils::shader::dump::GetShaderDumpPath(
+          shader_hash,
+          shader_details->shader_data,
+          shader_details->shader_type,
+          "",
+          device_data->device->get_api());
+      renodx::utils::shader::dump::DumpShader(
+          shader_hash,
+          shader_details->shader_data,
+          shader_details->shader_type,
+          "",
+          device_data->device->get_api());
+    }
+  } catch (const std::exception& exception) {
+    const auto error = std::string(exception.what());
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+
+  json shader_json = BuildTrackedShaderSummary(shader_hash, *shader_details, true);
+  shader_json["dumpPath"] = dump_path.string();
+
+  return ToolResult{
+      .text = std::format(
+          "Dumped shader {} from device #{} to '{}'.",
+          FormatShaderHash(shader_hash),
+          device_index,
+          dump_path.string()),
+      .structured_content = json{
+          {"deviceIndex", device_index},
+          {"shader", std::move(shader_json)},
+          {"outputPath", dump_path.string()},
+      },
+  };
+}
+
+[[nodiscard]] ToolResult SetLiveShaderPathForMcp(const std::optional<std::string>& live_path) {
+  if (live_path.has_value()) {
+    renodx::utils::shader::compiler::watcher::SetLivePath(*live_path);
+  }
+
+  const auto configured_path = renodx::utils::shader::compiler::watcher::GetLivePath();
+  const auto effective_directory = GetEffectiveLiveDirectory(configured_path);
+  std::filesystem::create_directories(effective_directory);
+
+  return ToolResult{
+      .text = live_path.has_value()
+                  ? std::format("Set the live shader directory to '{}'.", effective_directory.string())
+                  : std::format("The live shader directory is '{}'.", effective_directory.string()),
+      .structured_content = json{
+          {"configuredPath", configured_path},
+          {"effectiveDirectory", effective_directory.string()},
+      },
+  };
+}
+
+[[nodiscard]] ToolResult LoadLiveShadersForMcp(uint32_t device_index) {
+  {
+    std::shared_lock list_lock(device_data_list_mutex);
+    if (device_index >= device_data_list.size()) {
+      const auto error = std::format("Device #{} is not available.", device_index);
+      return ToolResult{
+          .text = error,
+          .structured_content = json{{"error", error}},
+          .is_error = true,
+      };
+    }
+  }
+
+  auto request = std::make_shared<PendingLiveShaderRequest>();
+  request->operation = PendingLiveShaderRequest::Operation::LOAD;
+  if (!EnqueuePendingLiveShaderRequest(device_index, request)) {
+    const auto error = std::format("Device #{} is not available.", device_index);
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+
+  {
+    std::unique_lock request_lock(request->mutex);
+    if (!request->cv.wait_for(request_lock, std::chrono::seconds(15), [&request]() { return request->completed || request->started; })) {
+      request->canceled = true;
+      request_lock.unlock();
+      CancelPendingLiveShaderRequest(device_index, request);
+      return ToolResult{
+          .text = "Timed out waiting for the next present to process the live shader load request.",
+          .structured_content = json{
+              {"error", "Timed out waiting for the next present to process the live shader load request."},
+          },
+          .is_error = true,
+      };
+    }
+
+    if (!request->completed) {
+      request->cv.wait(request_lock, [&request]() { return request->completed; });
+    }
+  }
+
+  if (!request->result.has_value()) {
+    return ToolResult{
+        .text = "The live shader load request completed without a result.",
+        .structured_content = json{
+            {"error", "The live shader load request completed without a result."},
+        },
+        .is_error = true,
+    };
+  }
+
+  return request->result.value();
+}
+
+[[nodiscard]] ToolResult UnloadLiveShadersForMcp(uint32_t device_index) {
+  {
+    std::shared_lock list_lock(device_data_list_mutex);
+    if (device_index >= device_data_list.size()) {
+      const auto error = std::format("Device #{} is not available.", device_index);
+      return ToolResult{
+          .text = error,
+          .structured_content = json{{"error", error}},
+          .is_error = true,
+      };
+    }
+  }
+
+  auto request = std::make_shared<PendingLiveShaderRequest>();
+  request->operation = PendingLiveShaderRequest::Operation::UNLOAD;
+  if (!EnqueuePendingLiveShaderRequest(device_index, request)) {
+    const auto error = std::format("Device #{} is not available.", device_index);
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+
+  {
+    std::unique_lock request_lock(request->mutex);
+    if (!request->cv.wait_for(request_lock, std::chrono::seconds(15), [&request]() { return request->completed || request->started; })) {
+      request->canceled = true;
+      request_lock.unlock();
+      CancelPendingLiveShaderRequest(device_index, request);
+      return ToolResult{
+          .text = "Timed out waiting for the next present to process the live shader unload request.",
+          .structured_content = json{
+              {"error", "Timed out waiting for the next present to process the live shader unload request."},
+          },
+          .is_error = true,
+      };
+    }
+
+    if (!request->completed) {
+      request->cv.wait(request_lock, [&request]() { return request->completed; });
+    }
+  }
+
+  if (!request->result.has_value()) {
+    return ToolResult{
+        .text = "The live shader unload request completed without a result.",
+        .structured_content = json{
+            {"error", "The live shader unload request completed without a result."},
+        },
+        .is_error = true,
+    };
+  }
+
+  return request->result.value();
+}
+
+[[nodiscard]] ToolResult SetResourceCloneForMcp(uint32_t device_index, std::uint64_t resource_handle, bool enabled) {
+  std::shared_lock list_lock(device_data_list_mutex);
+  if (device_index >= device_data_list.size()) {
+    const auto error = std::format("Device #{} is not available.", device_index);
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+  auto* device_data = device_data_list[device_index];
+
+  const auto resource = reshade::api::resource{resource_handle};
+  auto* info = TryGetTrackedResourceInfo(resource);
+  if (info == nullptr) {
+    const auto error = std::format("Resource {} is not tracked.", FormatHandle(resource_handle));
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+  if (info->device != device_data->device) {
+    const auto error = std::format("Resource {} belongs to a different device.", FormatHandle(resource_handle));
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+
+  auto before = devkit_resource_clone::TrackedResourceSummary(*info);
+  if (const auto* blocked_reason = GetResourceCloneToggleBlockedReason(device_data->device, info, enabled); blocked_reason != nullptr) {
+    return ToolResult{
+        .text = blocked_reason,
+        .structured_content = json{
+            {"deviceIndex", device_index},
+            {"requestedEnabled", enabled},
+            {"before", before},
+        },
+        .is_error = true,
+    };
+  }
+
+  const auto changed = SetResourceCloneHotSwapState(device_data->device, resource, enabled);
+  auto* updated_info = TryGetTrackedResourceInfo(resource);
+  if (updated_info == nullptr) {
+    const auto error = std::format("Resource {} is no longer tracked.", FormatHandle(resource_handle));
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+
+  auto after = devkit_resource_clone::TrackedResourceSummary(*updated_info);
+  const auto text = std::format(
+      "Clone hotswap for resource {} is {} on device #{}.",
+      FormatHandle(resource_handle),
+      enabled ? "enabled" : "disabled",
+      device_index);
+
+  return ToolResult{
+      .text = text,
+      .structured_content = json{
+          {"deviceIndex", device_index},
+          {"requestedEnabled", enabled},
+          {"changed", changed},
+          {"before", before},
+          {"after", after},
+      },
+  };
+}
+
+void ProcessPendingLiveShaderRequests(
+    const std::deque<std::shared_ptr<PendingLiveShaderRequest>>& requests,
+    uint32_t device_index,
+    DeviceData* device_data) {
+  for (const auto& request : requests) {
+    {
+      std::scoped_lock request_lock(request->mutex);
+      if (request->completed || request->canceled) {
+        request->completed = true;
+        request->cv.notify_all();
+        continue;
+      }
+      request->started = true;
+    }
+    request->cv.notify_all();
+
+    ToolResult result = {
+        .text = "Unknown live shader request.",
+        .structured_content = json{
+            {"error", "Unknown live shader request."},
+        },
+        .is_error = true,
+    };
+
+    try {
+      switch (request->operation) {
+        case PendingLiveShaderRequest::Operation::LOAD: {
+          setting_live_reload = false;
+          std::vector<LoadedDiskShaderResult> load_results = {};
+          {
+            std::unique_lock device_lock(device_data->mutex);
+            load_results = LoadDiskShaders(device_data->device, device_data, true);
+          }
+          result = BuildLoadLiveShadersResult(device_index, load_results);
+          break;
+        }
+        case PendingLiveShaderRequest::Operation::UNLOAD: {
+          size_t reset_count = 0u;
+          {
+            std::unique_lock device_lock(device_data->mutex);
+            for (auto& [shader_hash, shader_details] : device_data->shader_details) {
+              (void)shader_hash;
+              if (shader_details.shader_source == ShaderDetails::ShaderSource::DISK_SHADER) {
+                shader_details.shader_source = ShaderDetails::ShaderSource::ORIGINAL_SHADER;
+                reset_count += 1u;
+              }
+            }
+            renodx::utils::shader::RemoveRuntimeReplacements(device_data->device);
+          }
+          setting_live_reload = false;
+          (void)renodx::utils::shader::compiler::watcher::CompileSync();
+          result = BuildUnloadLiveShadersResult(device_index, reset_count);
+          break;
+        }
+        default:
+          break;
+      }
+    } catch (const std::exception& exception) {
+      result = ToolResult{
+          .text = exception.what(),
+          .structured_content = json{
+              {"error", exception.what()},
+          },
+          .is_error = true,
+      };
+    } catch (...) {
+      result = ToolResult{
+          .text = "Unhandled live shader request failure.",
+          .structured_content = json{
+              {"error", "Unhandled live shader request failure."},
+          },
+          .is_error = true,
+      };
+    }
+
+    {
+      std::scoped_lock request_lock(request->mutex);
+      request->result = std::move(result);
+      request->completed = true;
+    }
+    request->cv.notify_all();
+  }
+}
+
+[[nodiscard]] devkit_snapshot_tools::ToolContext BuildSnapshotToolsContext() {
+  return devkit_snapshot_tools::ToolContext{
+      .get_device_count = []() {
+        std::shared_lock list_lock(device_data_list_mutex);
+        return device_data_list.size(); },
+      .get_selected_device_index = []() { return device_data_index.load(std::memory_order_relaxed); },
+      .set_selected_device_index = [](uint32_t device_index) { device_data_index.store(device_index, std::memory_order_relaxed); },
+      .get_pipe_name = []() { return NarrowAscii(devkit_mcp_server.GetPipeName()); },
+      .is_connected = []() { return devkit_mcp_server.IsConnected(); },
+      .has_active_snapshot = []() { return snapshot_device != nullptr; },
+      .has_queued_snapshot = []() { return snapshot_queued_device != nullptr; },
+      .is_snapshot_active = [](uint32_t device_index) {
+        std::shared_lock list_lock(device_data_list_mutex);
+        if (device_index >= device_data_list.size()) return false;
+        return snapshot_device == device_data_list[device_index]->device; },
+      .is_snapshot_queued = [](uint32_t device_index) {
+        std::shared_lock list_lock(device_data_list_mutex);
+        if (device_index >= device_data_list.size()) return false;
+        return snapshot_queued_device == device_data_list[device_index]->device; },
+      .build_device_summary = [](uint32_t device_index, bool is_selected) {
+        std::shared_lock list_lock(device_data_list_mutex);
+        if (device_index >= device_data_list.size()) {
+          throw std::runtime_error(std::format("Device #{} is not available.", device_index));
+        }
+        return BuildDeviceSummary(device_index, device_data_list[device_index], is_selected); },
+      .list_shaders = [](uint32_t device_index, const std::optional<std::string>& stage_filter) {
+        std::shared_lock list_lock(device_data_list_mutex);
+        if (device_index >= device_data_list.size()) return std::vector<devkit_shader_summary::TrackedShaderSummary>{};
+        auto* device_data = device_data_list[device_index];
+
+        std::shared_lock device_lock(device_data->mutex);
+        struct ShaderSummaryEntry {
+          uint32_t shader_hash = 0u;
+          devkit_shader_summary::TrackedShaderSummary payload;
+        };
+
+        std::vector<ShaderSummaryEntry> entries = {};
+        entries.reserve(device_data->shader_details.size());
+        for (const auto& [shader_hash, shader_details] : device_data->shader_details) {
+          const auto stage_name = StreamToString(shader_details.shader_type);
+          if (stage_filter.has_value() && *stage_filter != stage_name) continue;
+
+          entries.push_back(ShaderSummaryEntry{
+              .shader_hash = shader_hash,
+              .payload = BuildTrackedShaderSummary(shader_hash, shader_details),
+          });
+        }
+
+        std::ranges::sort(entries, [](const ShaderSummaryEntry& lhs, const ShaderSummaryEntry& rhs) {
+          return lhs.shader_hash < rhs.shader_hash;
+        });
+
+        std::vector<devkit_shader_summary::TrackedShaderSummary> result;
+        result.reserve(entries.size());
+        for (auto& entry : entries) {
+          result.push_back(entry.payload);
+        }
+        return result; },
+      .list_draws = [](uint32_t device_index) {
+        std::shared_lock list_lock(device_data_list_mutex);
+        if (device_index >= device_data_list.size()) return std::vector<devkit_draw_summary::DrawSummary>{};
+        auto* device_data = device_data_list[device_index];
+
+        std::shared_lock device_lock(device_data->mutex);
+        std::vector<devkit_draw_summary::DrawSummary> draws;
+        draws.reserve(device_data->draw_details_list.size());
+        for (size_t index = 0; index < device_data->draw_details_list.size(); ++index) {
+          draws.push_back(BuildDrawSummary(index, device_data->draw_details_list[index], false));
+        }
+        return draws; },
+      .get_draw = [](uint32_t device_index, uint32_t draw_index) {
+        std::shared_lock list_lock(device_data_list_mutex);
+        if (device_index >= device_data_list.size()) {
+          throw std::runtime_error(std::format("Device #{} is not available.", device_index));
+        }
+        auto* device_data = device_data_list[device_index];
+
+        std::shared_lock device_lock(device_data->mutex);
+        if (draw_index >= device_data->draw_details_list.size()) {
+          throw std::runtime_error(std::format("drawIndex {} is out of range.", draw_index));
+        }
+
+        return BuildDrawSummary(draw_index, device_data->draw_details_list[draw_index], true); },
+      .build_snapshot_summary = [](uint32_t device_index) {
+        std::shared_lock list_lock(device_data_list_mutex);
+        if (device_index >= device_data_list.size()) {
+          throw std::runtime_error(std::format("Device #{} is not available.", device_index));
+        }
+        auto* device_data = device_data_list[device_index];
+
+        std::shared_lock device_lock(device_data->mutex);
+        auto* device = device_data->device;
+        return renodx::addons::devkit::mcp::snapshot_summary::SnapshotSummary{
+            .device_index = device_index,
+            .snapshot_queued = snapshot_queued_device == device,
+            .snapshot_active = snapshot_device == device,
+            .captured_draws = device_data->draw_details_list.size(),
+            .tracked_shaders = device_data->shader_details.size(),
+            .resource_usage_entries = device_data->resource_usage_by_handle.size(),
+            .shader_usage_entries = device_data->shader_draw_indexes.size(),
+            .snapshot_rows = device_data->snapshot_rows.size(),
+            .snapshot_rows_valid = device_data->snapshot_rows_valid,
+        }; },
+      .queue_snapshot = [](uint32_t device_index) {
+        std::shared_lock list_lock(device_data_list_mutex);
+        if (device_index >= device_data_list.size()) {
+          const auto error = std::format("Device #{} is not available.", device_index);
+          return ToolResult{
+              .text = error,
+              .structured_content = json{{"error", error}},
+              .is_error = true,
+          };
+        }
+        auto* device_data = device_data_list[device_index];
+
+        auto* device = device_data->device;
+        reshade::api::device* active_snapshot_device = snapshot_device;
+        if (active_snapshot_device != nullptr && active_snapshot_device != device) {
+          return ToolResult{
+              .text = "Another device is currently capturing a snapshot.",
+              .structured_content = json{
+                  {"error", "Another device is currently capturing a snapshot."},
+              },
+              .is_error = true,
+          };
+        }
+        if (active_snapshot_device == device) {
+          return ToolResult{
+              .text = std::format("A snapshot capture is already running for device #{}.", device_index),
+              .structured_content = json{
+                  {"deviceIndex", device_index},
+                  {"queued", false},
+                  {"active", true},
+              },
+          };
+        }
+
+        reshade::api::device* queued_snapshot_device = snapshot_queued_device;
+        if (queued_snapshot_device == device) {
+          return ToolResult{
+              .text = std::format("A snapshot capture is already queued for device #{}.", device_index),
+              .structured_content = json{
+                  {"deviceIndex", device_index},
+                  {"queued", true},
+                  {"active", false},
+              },
+          };
+        }
+        if (queued_snapshot_device != nullptr && queued_snapshot_device != device) {
+          return ToolResult{
+              .text = "Another device already has a queued snapshot request.",
+              .structured_content = json{
+                  {"error", "Another device already has a queued snapshot request."},
+              },
+              .is_error = true,
+          };
+        }
+
+        snapshot_queued_device = device;
+        return ToolResult{
+            .text = std::format("Queued a snapshot capture for device #{}.", device_index),
+            .structured_content = json{
+                {"deviceIndex", device_index},
+                {"queued", true},
+                {"active", false},
+            },
+        }; },
+  };
+}
+
+void RegisterDevkitMcpTools(renodx::utils::mcp::Server& server) {
+  const devkit_mcp_runtime::RegistrationContext context = {
+      .build_snapshot_tools_context = BuildSnapshotToolsContext,
+      .build_shader_inspection_tool_context = []() { return devkit_shader_inspection::ToolContext{
+                                                         .resolve_device_index = BuildResolveDeviceIndexCallback(),
+                                                         .get_shader_summary = BuildTrackedShaderSummaryForDevice,
+                                                         .get_disassembly = BuildMcpShaderDisassemblySection,
+                                                         .get_decompilation = BuildMcpShaderDecompilationSection,
+                                                     }; },
+      .build_live_shaders_tool_context = []() { return devkit_live_shaders::ToolContext{
+                                                    .resolve_device_index = BuildResolveDeviceIndexCallback(),
+                                                    .dump_shader = DumpTrackedShaderForMcp,
+                                                    .set_live_shader_path = SetLiveShaderPathForMcp,
+                                                    .load_live_shaders = LoadLiveShadersForMcp,
+                                                    .unload_live_shaders = UnloadLiveShadersForMcp,
+                                                }; },
+      .build_analyze_resource_tool_context = []() { return devkit_resource_analysis::ToolContext{
+                                                        .resolve_device_index = BuildResolveDeviceIndexCallback(),
+                                                        .enqueue_request = EnqueuePendingResourceAnalysisRequest,
+                                                        .cancel_request = CancelPendingResourceAnalysisRequest,
+                                                    }; },
+      .build_resource_clone_tool_context = []() { return devkit_resource_clone::ToolContext{
+                                                      .resolve_device_index = BuildResolveDeviceIndexCallback(),
+                                                      .set_resource_clone = SetResourceCloneForMcp,
+                                                  }; },
+      .set_tools_path = devkit_tools_path::SetToolsPath,
+  };
+  devkit_mcp_runtime::RegisterTools(server, context);
+}
+
+void EnsureDevkitMcpServerStarted() {
+  if (devkit_mcp_server.IsRunning()) return;
+
+  std::scoped_lock lock(devkit_mcp_start_mutex);
+  if (devkit_mcp_server.IsRunning() || devkit_mcp_start_failed) return;
+
+  RegisterDevkitMcpTools(devkit_mcp_server);
+  if (devkit_mcp_server.Start()) {
+    const auto pipe_name_string = NarrowAscii(devkit_mcp_server.GetPipeName());
+    reshade::log::message(
+        reshade::log::level::info,
+        std::format("devkit::mcp(Listening on {})", pipe_name_string).c_str());
+    return;
+  }
+
+  devkit_mcp_start_failed = true;
+  reshade::log::message(reshade::log::level::warning, "devkit::mcp(Failed to start MCP server)");
+}
+
 void OnInitDevice(reshade::api::device* device) {
   if (renodx::utils::device_proxy::is_creating_proxy_device) return;
 
@@ -1376,8 +2640,9 @@ void OnDestroyDevice(reshade::api::device* device) {
   if (GetSelectedDeviceData() == device_data) {
     DestroyDeviceProxyOutputWindow();
   }
-  std::unique_lock lock(device_data_list_mutex);
+  std::unique_lock list_lock(device_data_list_mutex);
   std::erase(device_data_list, device_data);
+  std::unique_lock device_lock(device_data->mutex);
   renodx::utils::data::Delete<DeviceData>(device);
 }
 
@@ -1634,7 +2899,7 @@ void OnBindPipeline(
 
           auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_hash);
           if (!shader_data.has_value()) {
-            throw std::exception("Failed to get shader data");
+            throw std::runtime_error("Failed to get shader data");
           }
           shader_details->shader_data = shader_data.value();
         } catch (const std::exception& e) {
@@ -1682,11 +2947,12 @@ bool OnCopyResource(
     reshade::api::command_list* cmd_list,
     reshade::api::resource source,
     reshade::api::resource dest) {
-  if (snapshot_device == nullptr) return false;
+  reshade::api::device* active_snapshot_device = snapshot_device;
+  if (active_snapshot_device == nullptr) return false;
 
   auto* device = cmd_list->get_device();
 
-  if (device == snapshot_device) {
+  if (device == active_snapshot_device) {
     DrawDetails draw_details = {
         .draw_method = DrawDetails::DrawMethods::COPY,
         .timestamp = std::chrono::system_clock::now(),
@@ -1716,11 +2982,12 @@ bool OnCopyTextureRegion(
     uint32_t dest_subresource,
     const reshade::api::subresource_box* dest_box,
     reshade::api::filter_mode filter) {
-  if (snapshot_device == nullptr) return false;
+  reshade::api::device* active_snapshot_device = snapshot_device;
+  if (active_snapshot_device == nullptr) return false;
 
   auto* device = cmd_list->get_device();
 
-  if (device == snapshot_device) {
+  if (device == active_snapshot_device) {
     DrawDetails draw_details = {
         .draw_method = DrawDetails::DrawMethods::COPY,
         .timestamp = std::chrono::system_clock::now(),
@@ -2273,17 +3540,27 @@ void ActivateShader(reshade::api::device* device, uint32_t shader_hash, std::spa
   renodx::utils::shader::AddRuntimeReplacement(device, shader_hash, shader_data);
 }
 
-void LoadDiskShaders(reshade::api::device* device, DeviceData* data, bool activate = true) {
+std::vector<LoadedDiskShaderResult> LoadDiskShaders(reshade::api::device* device, DeviceData* data, bool activate) {
+  std::vector<LoadedDiskShaderResult> results = {};
   if (setting_live_reload) {
-    if (!renodx::utils::shader::compiler::watcher::HasChanged()) return;
+    if (!renodx::utils::shader::compiler::watcher::HasChanged()) return results;
   } else {
     renodx::utils::shader::compiler::watcher::CompileSync();
   }
   const auto& custom_shaders = renodx::utils::shader::compiler::watcher::FlushCompiledShaders();
+  results.reserve(custom_shaders.size());
   for (const auto& [shader_hash, custom_shader] : custom_shaders) {
     reshade::log::message(reshade::log::level::debug, "new shaders");
     auto* details = data->GetShaderDetails(shader_hash);
     details->disk_shader = custom_shader;
+
+    auto result = LoadedDiskShaderResult{
+        .shader_hash = shader_hash,
+        .file_path = custom_shader.file_path,
+        .removed = custom_shader.removed,
+        .compilation_ok = custom_shader.IsCompilationOK(),
+        .activated = false,
+    };
 
     if (activate) {
       details->shader_source = ShaderDetails::ShaderSource::DISK_SHADER;
@@ -2292,9 +3569,14 @@ void LoadDiskShaders(reshade::api::device* device, DeviceData* data, bool activa
       if (!custom_shader.removed && custom_shader.IsCompilationOK()) {
         const auto& shader_data = details->disk_shader->GetCompilationData();
         ActivateShader(device, shader_hash, shader_data);
+        result.activated = true;
       }
     }
+
+    results.push_back(std::move(result));
   }
+
+  return results;
 }
 
 bool RenderFileAlias(std::optional<renodx::utils::shader::compiler::watcher::CustomShader>& disk_shader) {
@@ -2345,7 +3627,7 @@ void RenderMenuBar(reshade::api::device* device, DeviceData* data) {
     ImGui::PushID("##menu_shaders_load");
     if (ImGui::MenuItem(std::format("Load Shaders ({})", renodx::utils::shader::compiler::watcher::custom_shaders_count.load()).c_str())) {
       setting_live_reload = false;
-      LoadDiskShaders(device, data);
+      LoadDiskShaders(device, data, true);
     }
     ImGui::PopID();
 
@@ -4537,7 +5819,17 @@ void EndSettingsSection() {
   ImGui::TreePop();
 }
 
-void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
+struct SettingsDeviceOption {
+  uint32_t index = 0u;
+  DeviceData* device_data = nullptr;
+  std::string label;
+};
+
+[[nodiscard]] DeviceData* RenderSettingsPane(
+    reshade::api::device* device,
+    DeviceData* data,
+    const std::vector<SettingsDeviceOption>& device_options,
+    uint32_t selected_device_index) {
   DeviceData* pending_selected_device_data = nullptr;
   if (BeginSettingsSection("Snapshot")) {
     DrawSettingBoolCheckbox("Show Vertex Shaders", "SnapshotPaneShowVertexShaders", &snapshot_pane_show_vertex_shaders);
@@ -4546,33 +5838,26 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
     DrawSettingBoolCheckbox("Expand All Nodes", "SnapshotPaneExpandAllNodes", &snapshot_pane_expand_all_nodes);
     DrawSettingBoolCheckbox("Filter Resources by Shader Use", "SnapshotPaneFilterResourcesByShaderUse", &snapshot_pane_filter_resources_by_shader_use);
     DrawSettingBoolCheckbox("Show Blends", "SnapshotPaneShowBlends", &snapshot_pane_show_blends);
-    std::shared_lock lock(device_data_list_mutex);
     static std::string current_item;
-    auto size = device_data_list.size();
-    std::vector<std::string> items(size);
-    for (int i = 0; i < size; ++i) {
-      auto* device_data = device_data_list[i];
-      if (device_data->device == nullptr) {
-        assert(device_data->device != nullptr);
-        continue;
+    bool found_current_item = false;
+    for (const auto& option : device_options) {
+      if (selected_device_index == option.index) {
+        current_item = option.label;
+        found_current_item = true;
+        break;
       }
-      std::stringstream s;
-      s << PRINT_PTR(reinterpret_cast<uint64_t>(device_data->device));
-      s << " (" << device_data->device->get_api() << ")";
-      auto name = s.str();
-      items[i] = name;
-      if (device_data_index == i) {
-        current_item.assign(name);
-      }
+    }
+    if (!found_current_item) {
+      current_item.clear();
     }
 
     if (!current_item.empty() && ImGui::BeginCombo("Select Device", current_item.c_str())) {
-      for (int n = 0; n < items.size(); n++) {
-        bool is_selected = (current_item == items[n]);
-        if (ImGui::Selectable(items[n].c_str(), is_selected)) {
-          current_item = items[n];
-          device_data_index = n;
-          pending_selected_device_data = device_data_list[n];
+      for (const auto& option : device_options) {
+        bool is_selected = (current_item == option.label);
+        if (ImGui::Selectable(option.label.c_str(), is_selected)) {
+          current_item = option.label;
+          device_data_index = option.index;
+          pending_selected_device_data = option.device_data;
         }
         if (is_selected) {
           ImGui::SetItemDefaultFocus();
@@ -4584,24 +5869,23 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
     EndSettingsSection();
   }
 
-  if (pending_selected_device_data != nullptr
-      && renodx::utils::device_proxy::use_device_proxy
-      && !renodx::utils::device_proxy::remove_device_proxy) {
-    (void)UpdateDeviceProxyHwndOverride(pending_selected_device_data);
-    return;
-  }
-
   if (BeginSettingsSection("Shaders")) {
+    auto tools_path_status = devkit_tools_path::GetStatus();
+    char tools_temp[256] = "";
+    std::snprintf(tools_temp, sizeof(tools_temp), "%s", tools_path_status.configured_path.string().c_str());
+
+    if (ImGui::InputText("Tools Path", tools_temp, 256)) {
+      auto temp_string = devkit_tools_path::TrimTrailingWhitespace(tools_temp);
+      renodx::utils::shader::compiler::directx::SetToolsPath(temp_string);
+      reshade::set_config_value(nullptr, "renodx-dev", "ToolsPath", temp_string.c_str());
+      tools_path_status = devkit_tools_path::GetStatus();
+    }
+
     char temp[256] = "";
-    renodx::utils::shader::compiler::watcher::GetLivePath().copy(temp, 256);
+    std::snprintf(temp, sizeof(temp), "%s", renodx::utils::shader::compiler::watcher::GetLivePath().c_str());
 
     if (ImGui::InputText("Live Path", temp, 256)) {
-      std::string temp_string = temp;
-      auto pos = temp_string.find_last_not_of("\t\n\v\f\r ");
-      if (pos != std::string_view::npos) {
-        temp_string = {temp_string.data(), temp_string.data() + pos + 1};
-      }
-
+      auto temp_string = devkit_tools_path::TrimTrailingWhitespace(temp);
       renodx::utils::shader::compiler::watcher::SetLivePath(temp_string);
       reshade::set_config_value(nullptr, "renodx-dev", "LivePath", temp_string.c_str());
     }
@@ -4768,7 +6052,7 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
                 reshade::log::level::info,
                 "devkit::RenderDeviceProxySettings(queued proxy teardown: reason=mode changed to None)");
             end_proxy_section();
-            return;
+            return pending_selected_device_data;
           }
           changed = true;
         } else {
@@ -4784,7 +6068,7 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
                 static_cast<uint32_t>(setting_device_proxy_mode));
             changed = true;
             end_proxy_section();
-            return;
+            return pending_selected_device_data;
           }
 
           if (is_enabled) {
@@ -4797,7 +6081,7 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
             s << ", reenable_pending=true)";
             reshade::log::message(reshade::log::level::info, s.str().c_str());
             end_proxy_section();
-            return;
+            return pending_selected_device_data;
           }
 
           if (renodx::utils::device_proxy::remove_device_proxy) {
@@ -4807,7 +6091,7 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
                 "devkit::RenderDeviceProxySettings(enable requested while teardown pending; deferring re-enable)");
             changed = true;
             end_proxy_section();
-            return;
+            return pending_selected_device_data;
           }
 
           if (!PrepareDeviceProxyActivation(data)) {
@@ -4817,7 +6101,7 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
             g_device_proxy_active_hwnd_route.reset();
             changed = true;
             end_proxy_section();
-            return;
+            return pending_selected_device_data;
           }
 
           if (device != nullptr
@@ -4915,7 +6199,9 @@ void RenderSettingsPane(reshade::api::device* device, DeviceData* data) {
     end_proxy_section();
   }
 
-  if (g_device_proxy_overlay_abort_requested) return;
+  if (g_device_proxy_overlay_abort_requested) return pending_selected_device_data;
+
+  return pending_selected_device_data;
 }
 
 void RenderInfoPane(reshade::api::device* device, DeviceData* data) {
@@ -4936,6 +6222,30 @@ void RenderInfoPane(reshade::api::device* device, DeviceData* data) {
     }
 
     ImGui::Text("%s", (std::string("Build: ") + __DATE__ + " " + renodx::utils::date::ISO_DATE_TIME).c_str());
+    EndSettingsSection();
+  }
+
+  if (BeginSettingsSection("MCP")) {
+    const auto pipe_name = NarrowAscii(devkit_mcp_server.GetPipeName());
+    const reshade::api::device* active_snapshot_device = snapshot_device;
+    const reshade::api::device* queued_snapshot_device = snapshot_queued_device;
+
+    ImGui::Text("Server: %s", devkit_mcp_server.IsRunning() ? "Running" : "Stopped");
+    ImGui::Text("Client: %s", devkit_mcp_server.IsConnected() ? "Connected" : "Waiting");
+    ImGui::Text("Pipe: %s", pipe_name.empty() ? "<unset>" : pipe_name.c_str());
+    ImGui::Text("Registered Tools: %zu", devkit_mcp_server.GetToolCount());
+
+    if (device != nullptr) {
+      ImGui::Text("Selected Device: %p", device);
+    } else {
+      ImGui::TextUnformatted("Selected Device: not selected");
+    }
+
+    ImGui::Text(
+        "Snapshot State: %s%s",
+        active_snapshot_device == nullptr ? "Idle" : "Capturing",
+        queued_snapshot_device == nullptr ? "" : " (queued)");
+
     EndSettingsSection();
   }
 
@@ -5037,49 +6347,7 @@ void RenderShaderViewLive(reshade::api::device* device, DeviceData* data, Shader
 
 void RenderShaderViewDecompilation(reshade::api::device* device, DeviceData* data, ShaderDetails* shader_details) {
   std::string decompilation_string;
-  bool failed = false;
-  if (std::holds_alternative<std::nullopt_t>(shader_details->decompilation)) {
-    // Never disassembled
-    try {
-      if (shader_details->shader_data.empty()) {
-        reshade::api::pipeline pipeline = {0};
-        {
-          // Get pipeline handle
-          auto* store = renodx::utils::shader::GetStore();
-          store->shader_pipeline_handles.if_contains(
-              {device, shader_details->shader_hash},
-              [&pipeline](const std::pair<const std::pair<reshade::api::device*, uint32_t>, std::unordered_set<uint64_t>>& pair) {
-                if (pair.second.empty()) return;
-                auto handle = *pair.second.begin();
-                pipeline = {handle};
-              });
-
-          if (pipeline.handle == 0u) {
-            throw std::exception("Shader data not found.");
-          }
-        }
-
-        auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_details->shader_hash);
-        if (!shader_data.has_value()) throw std::exception("Invalid shader selection");
-        shader_details->shader_data = shader_data.value();
-      }
-      if (renodx::utils::device::IsDirectX(device)) {
-        auto decompiler = renodx::utils::shader::decompiler::dxc::Decompiler();
-        auto disassembly_string = renodx::utils::shader::compiler::directx::DisassembleShader(shader_details->shader_data);
-        shader_details->decompilation = decompiler.Decompile(
-            disassembly_string,
-            {
-                .flatten = true,
-            });
-      } else if (device->get_api() == reshade::api::device_api::opengl) {
-        shader_details->disassembly = std::string(
-            shader_details->shader_data.data(),
-            shader_details->shader_data.data() + shader_details->shader_data.size());
-      }
-    } catch (std::exception& e) {
-      shader_details->decompilation = e;
-    }
-  }
+  bool failed = !ComputeDecompilationForShaderDetails(device, data, shader_details);
 
   if (std::holds_alternative<std::exception>(shader_details->decompilation)) {
     decompilation_string.assign(std::get<std::exception>(shader_details->decompilation).what());
@@ -5539,12 +6807,15 @@ void InitializeUserSettings() {
   {
     char temp[256] = "";
     size_t size = 256;
+    if (reshade::get_config_value(nullptr, "renodx-dev", "ToolsPath", temp, &size)) {
+      renodx::utils::shader::compiler::directx::SetToolsPath(devkit_tools_path::TrimTrailingWhitespace(std::string(temp)));
+    }
+  }
+  {
+    char temp[256] = "";
+    size_t size = 256;
     if (reshade::get_config_value(nullptr, "renodx-dev", "LivePath", temp, &size)) {
-      std::string temp_string = std::string(temp);
-      auto pos = temp_string.find_last_not_of("\t\n\v\f\r ");
-      if (pos != std::string_view::npos) {
-        temp_string = {temp_string.data(), temp_string.data() + pos + 1};
-      }
+      auto temp_string = devkit_tools_path::TrimTrailingWhitespace(std::string(temp));
       renodx::utils::shader::compiler::watcher::SetLivePath(temp_string);
     }
   }
@@ -5649,18 +6920,40 @@ void InitializeUserSettings() {
 // @see https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   DeviceData* data = nullptr;
+  std::vector<SettingsDeviceOption> device_options = {};
+  std::unique_lock<std::shared_mutex> data_lock;
+  uint32_t selected_device_index = 0u;
   {
-    std::shared_lock lock(device_data_list_mutex);
-    uint32_t index = device_data_index;
-    auto size = device_data_list.size();
+    std::shared_lock list_lock(device_data_list_mutex);
+    const auto size = device_data_list.size();
+    selected_device_index = size == 0
+                                ? 0u
+                                : std::min<uint32_t>(
+                                      device_data_index.load(std::memory_order_relaxed),
+                                      static_cast<uint32_t>(size - 1u));
+    device_options.reserve(size);
 
     for (auto i = 0; i < size; ++i) {
-      data = device_data_list.at(i);
-      if (data->device == nullptr) {
-        assert(data->device != nullptr);
+      auto* device_data = device_data_list.at(i);
+      if (device_data->device == nullptr) {
+        assert(device_data->device != nullptr);
         continue;
       }
-      if (i == index) break;
+      std::stringstream s;
+      s << PRINT_PTR(reinterpret_cast<uint64_t>(device_data->device));
+      s << " (" << device_data->device->get_api() << ")";
+      device_options.push_back(SettingsDeviceOption{
+          .index = static_cast<uint32_t>(i),
+          .device_data = device_data,
+          .label = s.str(),
+      });
+      if (i == selected_device_index) {
+        data = device_data;
+      }
+    }
+
+    if (data != nullptr) {
+      data_lock = std::unique_lock(data->mutex);
     }
   }
 
@@ -5671,7 +6964,6 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
 
   auto* device = data->device;
 
-  std::unique_lock lock(data->mutex);  // Probably not needed
   if (data->runtime == nullptr) {
     data->runtime = runtime;
   }
@@ -5691,6 +6983,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
     RenderNavRail(device, data);
 
     ImGui::SameLine();
+    DeviceData* pending_proxy_device_data = nullptr;
 
     auto size_remaining = ImGui::GetContentRegionAvail().x;
 
@@ -5710,7 +7003,7 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           RenderShaderDefinesPane(device, data);
           break;
         case 4:
-          RenderSettingsPane(device, data);
+          pending_proxy_device_data = RenderSettingsPane(device, data, device_options, selected_device_index);
           break;
         case 5:
           RenderInfoPane(device, data);
@@ -5771,6 +7064,14 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
       setting_side_sheet_width = ImGui::CalcItemWidth();
     }
     ImGui::EndChild();
+
+    if (pending_proxy_device_data != nullptr
+        && renodx::utils::device_proxy::use_device_proxy
+        && !renodx::utils::device_proxy::remove_device_proxy) {
+      data_lock.unlock();
+      std::unique_lock pending_data_lock(pending_proxy_device_data->mutex);
+      (void)UpdateDeviceProxyHwndOverride(pending_proxy_device_data);
+    }
   }
   ImGui::EndChild();
 }
@@ -5791,7 +7092,44 @@ void OnPresent(
     return data;
   };
 
+  EnsureDevkitMcpServerStarted();
   PumpDeviceProxyOutputWindowMessages();
+
+  if (auto* device_data = get_data(); device_data != nullptr) {
+    uint32_t device_index = 0u;
+    {
+      std::shared_lock list_lock(device_data_list_mutex);
+      if (auto iterator = std::find(device_data_list.begin(), device_data_list.end(), device_data);
+          iterator != device_data_list.end()) {
+        device_index = static_cast<uint32_t>(std::distance(device_data_list.begin(), iterator));
+      }
+    }
+    std::deque<std::shared_ptr<devkit_resource_analysis::PendingRequest>> pending_requests;
+    {
+      std::unique_lock device_lock(device_data->mutex);
+      pending_requests.swap(device_data->pending_resource_analysis_requests);
+    }
+    devkit_resource_analysis::ProcessPendingRequests(
+        pending_requests,
+        device_index,
+        device_data->device,
+        queue,
+        devkit_resource_analysis::ProcessingContext{
+            .format_handle = [](uint64_t value) { return FormatHandle(value); },
+            .format_format = [](reshade::api::format format) { return StreamToString(format); },
+            .build_resource_view_summary = [](reshade::api::resource_view resource_view, reshade::api::device* device) { return BuildResourceViewSummary(GetResourceViewDetails(resource_view, device)); },
+        });
+
+    std::deque<std::shared_ptr<PendingLiveShaderRequest>> pending_live_shader_requests;
+    {
+      std::unique_lock device_lock(device_data->mutex);
+      pending_live_shader_requests.swap(device_data->pending_live_shader_requests);
+    }
+    ProcessPendingLiveShaderRequests(
+        pending_live_shader_requests,
+        device_index,
+        device_data);
+  }
 
   const bool has_stale_proxy_ui_state =
       g_device_proxy_active_hwnd_route.has_value()
@@ -5839,7 +7177,8 @@ void OnPresent(
     renodx::utils::shader::dump::DumpAllPending();
   }
 
-  if (snapshot_device == nullptr) {
+  reshade::api::device* active_snapshot_device = snapshot_device;
+  if (active_snapshot_device == nullptr) {
     if (snapshot_queued_device == device) {
       auto* device_data = get_data();
       std::unique_lock lock(device_data->mutex);
@@ -5851,7 +7190,7 @@ void OnPresent(
       snapshot_device = device;
       snapshot_queued_device = nullptr;
     }
-  } else if (device == snapshot_device) {
+  } else if (device == active_snapshot_device) {
     snapshot_device = nullptr;
     auto* device_data = get_data();
     std::unique_lock lock(device_data->mutex);
@@ -5952,6 +7291,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
+      devkit_mcp_start_failed = false;
+      devkit_mcp_server.Stop();
 
       renodx::utils::trace::Use(fdw_reason);
       renodx::utils::constants::Use(fdw_reason);

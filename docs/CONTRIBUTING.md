@@ -8,7 +8,7 @@ RenoDX is an engine for modifying DirectX games. Recommended configuration:
 * [llvm](https://github.com/llvm/llvm-project/releases/) - Used for compiling, linting and formatting
 * [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) - For faster building
 * [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) - Used to build addons and compile HLSL. Minimum supported version: `10.0.26100.0`
-* [DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler/releases/) - Provides `dxc.exe` and `dxcompiler.dll` for Shader Model 6.x compilation, decompilation, and devkit tooling. `dxil.dll` may also be present depending on the DXC release.
+* [DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler/releases/) - Provides `dxc.exe` and `dxcompiler.dll` for Shader Model 6.x compilation and devkit tooling. DXC-based decompilation is also used by devkit where supported. Some releases also include `dxil.dll`, but it is not required for the RenoDX MCP workflow.
 * [cmd_decompiler.exe](https://github.com/bo3b/3Dmigoto/releases/tag/1.3.16) - Decompiles upto Shader Model 5.0 to HLSL
 * [slangc.exe](https://github.com/shader-slang/slang/releases) - Compiles .slang files for DXBC, DXIL, and SPIR-V
 
@@ -36,7 +36,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-dev-env.ps1 -Bin .\bin 
 - Use `-Bin` when running the script outside the repo root. The default `bin` path is relative to the current working directory, not the script directory.
 - `-Update` re-runs the same version-aware checks and applies managed tool installs or updates without attempting Windows SDK installation. If the SDK is already installed, it can still copy `fxc.exe` into `.\bin`.
 - The script will not downgrade a newer local managed tool install. It updates only when the configured package is newer than the installed one. It does not currently force-refresh same-version cached tool archives.
-- When you use the in-game devkit overlay or MCP workflow, point `devkit_set_tools_path` at this same `.\bin` directory if the game ships conflicting `dxcompiler.dll` or `dxil.dll` files.
+- When you use the in-game devkit overlay or MCP workflow, point `devkit_set_tools_path` at this same `.\bin` directory if the game ships a conflicting `dxcompiler.dll` or other toolchain helpers.
 
 Manual tool setup is still supported if you prefer to manage `.\bin` yourself.
 
@@ -55,7 +55,7 @@ Install the Windows SDK if it is not already present. The setup script will atte
 
 * `winget install --id Microsoft.WindowsSDK -e --silent`
 
-Use Windows SDK `10.0.26100.0` or newer. `fxc.exe` comes from the Windows SDK. CMake can find it in the SDK install path, and the setup script will also copy it into `.\bin` when it can. The DXC package should provide `dxc.exe` together with `dxcompiler.dll`; some DXC releases also ship `dxil.dll`, which is fine to keep alongside them in `.\bin`, especially for devkit/MCP workflows. `slangc.exe` and `cmd_Decompiler.exe` are also expected there unless you have an equivalent toolchain arrangement of your own.
+Use Windows SDK `10.0.26100.0` or newer. `fxc.exe` comes from the Windows SDK. CMake can find it in the SDK install path, and the setup script will also copy it into `.\bin` when it can. The DXC package should provide `dxc.exe` together with `dxcompiler.dll`; some DXC releases also ship `dxil.dll`, which is fine to keep alongside them in `.\bin` but is not required by the current devkit MCP path. `slangc.exe` and `cmd_Decompiler.exe` are also expected there unless you have an equivalent toolchain arrangement of your own.
 
 Update the submodules
 
@@ -71,7 +71,7 @@ Build the project
 
 Build the live inspection tooling
 
-* `cmake --build --preset clang-x64-debug --target devkit`
+* `cmake --build --preset clang-x64-debug --target devkit mcp_bridge`
 
 ----------------
 
@@ -111,3 +111,26 @@ Every folder inside `src/games/` is considered a game mod. The `CMakeList.txt` f
 ### Building a mod
 
 To simplify creating a new mod, the `src/games/generic` exists to be copied to start work on a new mod.
+
+### Devkit and MCP bridge
+
+For live inspection, RenoDX also ships:
+
+- `devkit`
+  the game-side inspection addon
+- `mcp_bridge`
+  the MCP bridge process that exposes devkit to MCP clients
+
+Common debug build command:
+
+```powershell
+cmake --build --preset clang-x64-debug --target devkit mcp_bridge
+```
+
+The bridge binary is written to:
+
+- `build/Debug/renodx-mcp-bridge.exe`
+
+For the practical inspection workflow and live shader iteration rules, see:
+
+- `docs/DEVKIT_MCP.md`

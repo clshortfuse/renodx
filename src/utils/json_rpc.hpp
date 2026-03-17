@@ -18,7 +18,11 @@ using json = nlohmann::json;
 // https://www.jsonrpc.org/specification
 
 inline constexpr std::string_view VERSION = "2.0";
-static constexpr int INVALID_REQUEST = -32600;
+inline constexpr int PARSE_ERROR = -32700;
+inline constexpr int INVALID_REQUEST = -32600;
+inline constexpr int METHOD_NOT_FOUND = -32601;
+inline constexpr int INVALID_PARAMS = -32602;
+inline constexpr int INTERNAL_ERROR = -32603;
 
 struct Request {
   std::optional<json> id = std::nullopt;
@@ -50,56 +54,81 @@ struct ParseResponseResult {
   std::optional<std::string> error_message = std::nullopt;
 };
 
-inline json MakeSuccessResponse(const json& id, const json& result) {
-  return json{
-      {"jsonrpc", std::string(VERSION)},
-      {"id", id},
-      {"result", result},
-  };
-}
+struct ErrorObject {
+  int code = INTERNAL_ERROR;
+  std::string_view message;
+  std::optional<json> data = std::nullopt;
+};
 
-inline json MakeErrorResponse(
-    const json& id,
-    int code,
-    std::string_view message,
-    const json& data = nullptr) {
-  json error = {
-      {"code", code},
-      {"message", std::string(message)},
+struct SuccessResponseMessage {
+  json id = nullptr;
+  json result = nullptr;
+};
+
+struct ErrorResponseMessage {
+  json id = nullptr;
+  ErrorObject error = {};
+};
+
+struct RequestMessage {
+  json id = nullptr;
+  std::string_view method;
+  std::optional<json> params = std::nullopt;
+};
+
+struct NotificationMessage {
+  std::string_view method;
+  std::optional<json> params = std::nullopt;
+};
+
+// NOLINTBEGIN(readability-identifier-naming)
+inline void to_json(json& value, const ErrorObject& error) {
+  value = json{
+      {"code", error.code},
+      {"message", std::string(error.message)},
   };
-  if (!data.is_null()) {
-    error["data"] = data;
+  if (error.data.has_value()) {
+    value["data"] = *error.data;
   }
+}
 
-  return json{
+inline void to_json(json& value, const SuccessResponseMessage& response) {
+  value = json{
       {"jsonrpc", std::string(VERSION)},
-      {"id", id},
-      {"error", error},
+      {"id", response.id},
+      {"result", response.result},
   };
 }
 
-inline json MakeRequest(const json& id, std::string_view method, const json& params = nullptr) {
-  json request = {
+inline void to_json(json& value, const ErrorResponseMessage& response) {
+  value = json{
       {"jsonrpc", std::string(VERSION)},
-      {"id", id},
-      {"method", std::string(method)},
+      {"id", response.id},
+      {"error", response.error},
   };
-  if (!params.is_null()) {
-    request["params"] = params;
+}
+
+inline void to_json(json& value, const RequestMessage& request) {
+  value = json{
+      {"jsonrpc", std::string(VERSION)},
+      {"id", request.id},
+      {"method", std::string(request.method)},
+  };
+  if (request.params.has_value()) {
+    value["params"] = *request.params;
   }
-  return request;
 }
 
-inline json MakeNotification(std::string_view method, const json& params = nullptr) {
-  json notification = {
+inline void to_json(json& value, const NotificationMessage& notification) {
+  value = json{
       {"jsonrpc", std::string(VERSION)},
-      {"method", std::string(method)},
+      {"method", std::string(notification.method)},
   };
-  if (!params.is_null()) {
-    notification["params"] = params;
+  if (notification.params.has_value()) {
+    value["params"] = *notification.params;
   }
-  return notification;
 }
+// NOLINTEND(readability-identifier-naming)
 
 inline bool IsValidRequestId(const json& id) {
   return id.is_null() || id.is_string() || id.is_number();
@@ -120,7 +149,13 @@ inline ParseRequestResult ParseRequestObject(
     std::string_view invalid_request_message) {
   if (!request.is_object()) {
     return ParseRequestResult{
-        .error_response = MakeErrorResponse(nullptr, INVALID_REQUEST, invalid_object_message),
+        .error_response = json(ErrorResponseMessage{
+            .id = nullptr,
+            .error = ErrorObject{
+                .code = INVALID_REQUEST,
+                .message = invalid_object_message,
+            },
+        }),
     };
   }
 
@@ -128,10 +163,13 @@ inline ParseRequestResult ParseRequestObject(
   const json response_id = NormalizeResponseId(request);
   if (has_id && !IsValidRequestId(request["id"])) {
     return ParseRequestResult{
-        .error_response = MakeErrorResponse(
-            response_id,
-            INVALID_REQUEST,
-            "Request id must be a string, number, or null"),
+        .error_response = json(ErrorResponseMessage{
+            .id = response_id,
+            .error = ErrorObject{
+                .code = INVALID_REQUEST,
+                .message = "Request id must be a string, number, or null",
+            },
+        }),
     };
   }
 
@@ -140,10 +178,13 @@ inline ParseRequestResult ParseRequestObject(
       || request["jsonrpc"].get_ref<const std::string&>() != VERSION) {
     return ParseRequestResult{
         .error_response = has_id
-                              ? std::optional<json>(MakeErrorResponse(
-                                    response_id,
-                                    INVALID_REQUEST,
-                                    "Only JSON-RPC 2.0 messages are supported"))
+                              ? std::optional<json>(json(ErrorResponseMessage{
+                                    .id = response_id,
+                                    .error = ErrorObject{
+                                        .code = INVALID_REQUEST,
+                                        .message = "Only JSON-RPC 2.0 messages are supported",
+                                    },
+                                }))
                               : std::nullopt,
     };
   }
@@ -151,10 +192,13 @@ inline ParseRequestResult ParseRequestObject(
   if (!request.contains("method") || !request["method"].is_string()) {
     return ParseRequestResult{
         .error_response = has_id
-                              ? std::optional<json>(MakeErrorResponse(
-                                    response_id,
-                                    INVALID_REQUEST,
-                                    invalid_request_message))
+                              ? std::optional<json>(json(ErrorResponseMessage{
+                                    .id = response_id,
+                                    .error = ErrorObject{
+                                        .code = INVALID_REQUEST,
+                                        .message = invalid_request_message,
+                                    },
+                                }))
                               : std::nullopt,
     };
   }
@@ -164,10 +208,13 @@ inline ParseRequestResult ParseRequestObject(
       && !request["params"].is_array()) {
     return ParseRequestResult{
         .error_response = has_id
-                              ? std::optional<json>(MakeErrorResponse(
-                                    response_id,
-                                    INVALID_REQUEST,
-                                    "Request params must be an object or array"))
+                              ? std::optional<json>(json(ErrorResponseMessage{
+                                    .id = response_id,
+                                    .error = ErrorObject{
+                                        .code = INVALID_REQUEST,
+                                        .message = "Request params must be an object or array",
+                                    },
+                                }))
                               : std::nullopt,
     };
   }
