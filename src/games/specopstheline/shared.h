@@ -59,11 +59,6 @@ float4 shader_injection[8] : register(c50);
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection[4][1]
 #define CUSTOM_RANDOM                          shader_injection[4][2]
 
-#define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
-#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
-#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1.f
-#define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.f
-#define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP        20.f
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE           color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE        color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING                    renodx::draw::ENCODING_PQ

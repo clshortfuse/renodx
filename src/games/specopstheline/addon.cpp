@@ -72,17 +72,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapUINits",
-        .binding = &shader_injection.graphics_white_nits,
-        .default_value = 203.f,
-        .label = "UI Brightness",
-        .section = "Tone Mapping",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits",
-        .min = 48.f,
-        .max = 500.f,
-    },    
+    },  
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
@@ -285,7 +275,6 @@ void OnPresetOff() {
    renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
    renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
    renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
-   renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
    renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
    renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
    renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
