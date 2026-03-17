@@ -8,6 +8,9 @@
 #define RENODX_TONE_MAP_HUE_CORRECTION        shader_injection.tone_map_hue_correction
 #define RENODX_GAMMA_CORRECTION                shader_injection.gamma_correction
 
+#define SCENE_GRADE_SATURATION_CORRECTION      shader_injection.scene_grade_saturation_correction
+#define SCENE_GRADE_BLOWOUT_RESTORATION        shader_injection.scene_grade_blowout_restoration
+
 #define RENODX_TONE_MAP_EXPOSURE               shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS             shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS                shader_injection.tone_map_shadows
@@ -27,11 +30,6 @@
 #define PSYCHO_ADAPTATION_CONTRAST             shader_injection.psycho_adaptation_contrast
 //#define PSYCHO_CONE_RESPONSE                   shader_injection.psycho_cone_response
 
-
-#define SCENE_GRADE_PER_CHANNEL_BLOWOUT        shader_injection.scene_grade_per_channel_blowout
-#define SCENE_GRADE_PER_CHANNEL_HUE_SHIFT       shader_injection.scene_grade_per_channel_hue_shift
-#define SCENE_GRADE_COLOR_GRADE_STRENGTH          shader_injection.scene_grade_color_grade_strength
-
 #define CUSTOM_FILM_GRAIN_TYPE                shader_injection.custom_film_grain_type
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
@@ -48,6 +46,9 @@ struct ShaderInjectData {
   float tone_map_type;
   float tone_map_hue_correction;
   float gamma_correction;
+
+  float scene_grade_saturation_correction;
+  float scene_grade_blowout_restoration;
 
   float tone_map_exposure;
   float tone_map_highlights;
@@ -69,9 +70,6 @@ struct ShaderInjectData {
   float psycho_adaptation_contrast;
   //float psycho_cone_response;
 
-  float scene_grade_per_channel_blowout;
-  float scene_grade_per_channel_hue_shift;
-  float scene_grade_color_grade_strength;
   float custom_film_grain_type;
   float custom_film_grain;
   float custom_random;
