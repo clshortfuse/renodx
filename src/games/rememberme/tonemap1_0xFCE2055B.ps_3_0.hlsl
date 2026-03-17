@@ -82,7 +82,7 @@ float4 main(PS_IN i) : COLOR
 
 	float3 sdr_color = renodx::color::srgb::DecodeSafe(o.rgb);
 	o.rgb = UpgradeToneMap(hdr_color, hdr_color_tm, sdr_color, i.texcoord.xy);
-	o.rgb = renodx::draw::RenderIntermediatePass(o.rgb);
+	o.rgb = renodx::color::srgb::EncodeSafe(o.rgb);
 
 	o.w = r3.w;
 	return o;
