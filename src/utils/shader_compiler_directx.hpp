@@ -36,10 +36,11 @@ namespace renodx::utils::shader::compiler::directx {
 
 namespace internal {
 
-static HMODULE fxc_compiler_library = nullptr;
-static HMODULE dxc_compiler_library = nullptr;
-static std::shared_mutex mutex_fxc_compiler;
-static std::shared_mutex mutex_dxc_compiler;
+inline HMODULE fxc_compiler_library = nullptr;
+inline HMODULE dxc_compiler_library = nullptr;
+inline std::filesystem::path dxc_tools_path;
+inline std::shared_mutex mutex_fxc_compiler;
+inline std::shared_mutex mutex_dxc_compiler;
 
 class FxcD3DInclude : public ID3DInclude {
  public:
@@ -120,7 +121,24 @@ class FxcD3DInclude : public ID3DInclude {
 
 inline HMODULE LoadDXCompiler(const std::wstring& path = L"dxcompiler.dll") {
   if (dxc_compiler_library == nullptr) {
-    dxc_compiler_library = LoadLibraryW(path.c_str());
+    auto resolved_path = std::filesystem::path(path);
+    if (!resolved_path.empty()) {
+      resolved_path = resolved_path.lexically_normal();
+      if (!resolved_path.is_absolute() && !resolved_path.has_parent_path() && !dxc_tools_path.empty()) {
+        resolved_path = (dxc_tools_path / resolved_path).lexically_normal();
+      }
+    }
+
+    if (!resolved_path.empty() && (resolved_path.is_absolute() || resolved_path.has_parent_path())) {
+      dxc_compiler_library = LoadLibraryExW(
+          resolved_path.c_str(),
+          nullptr,
+          LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+    }
+
+    if (dxc_compiler_library == nullptr && !resolved_path.empty()) {
+      dxc_compiler_library = LoadLibraryW(resolved_path.c_str());
+    }
   }
   return dxc_compiler_library;
 }
@@ -147,7 +165,7 @@ inline HRESULT CreateLibrary(IDxcLibrary** dxc_library) {
 inline HRESULT CreateCompiler(IDxcCompiler** dxc_compiler) {
   // HMODULE dxil_loader = LoadLibraryW(L"dxil.dll");
   if (dxc_compiler_library == nullptr) {
-    dxc_compiler_library = LoadLibraryW(L"dxcompiler.dll");
+    dxc_compiler_library = LoadDXCompiler();
   }
   if (dxc_compiler_library == nullptr) {
     return -1;
@@ -481,6 +499,26 @@ inline std::string DisassembleShaderDXC(std::span<uint8_t> blob) {
 }
 
 }  // namespace internal
+
+inline void SetToolsPath(const std::filesystem::path& path) {
+  std::unique_lock lock(internal::mutex_dxc_compiler);
+  auto normalized_path = path.empty() ? std::filesystem::path() : path.lexically_normal();
+  if (internal::dxc_tools_path == normalized_path) {
+    return;
+  }
+
+  if (internal::dxc_compiler_library != nullptr) {
+    FreeLibrary(internal::dxc_compiler_library);
+    internal::dxc_compiler_library = nullptr;
+  }
+
+  internal::dxc_tools_path = normalized_path;
+}
+
+inline std::filesystem::path GetToolsPath() {
+  std::shared_lock lock(internal::mutex_dxc_compiler);
+  return internal::dxc_tools_path;
+}
 
 // Also compatible with DXBC
 struct DxilContainerHeader {
