@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <functional>
 #include <shared_mutex>
@@ -265,7 +266,7 @@ struct ResourceViewInfo {
   bool is_clone = false;
 };
 
-static bool is_primary_hook = false;
+static bool local_callbacks_migrated = false;
 
 static struct Store {
   data::ParallelNodeHashMap<uint64_t, ResourceInfo, std::shared_mutex> resource_infos;
@@ -275,9 +276,82 @@ static struct Store {
 
   std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_init_resource_view_info_callbacks;
   std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_destroy_resource_view_info_callbacks;
+
+  Store* primary_store = nullptr;
 } local_store;
 
 static Store* store = &local_store;
+
+static bool IsPrimaryHook() { return store->primary_store == &local_store; }
+
+template <typename T>
+inline void AddCallback(std::vector<std::function<void(T*)>>& callbacks, const std::function<void(T*)>& callback) {
+  const auto* callback_target = callback.template target<void (*)(T*)>();
+  assert(callback_target != nullptr);
+  if (!std::ranges::any_of(callbacks, [callback_target](const std::function<void(T*)>& fn) {
+        const auto* target = fn.template target<void (*)(T*)>();
+        return target != nullptr && *target == *callback_target;
+      })) {
+    callbacks.emplace_back(callback);
+  }
+}
+
+template <typename T>
+inline void RemoveCallback(std::vector<std::function<void(T*)>>& callbacks, void (*callback)(T*)) {
+  std::erase_if(callbacks, [callback](const std::function<void(T*)>& fn) {
+    const auto* target = fn.template target<void (*)(T*)>();
+    return target != nullptr && *target == callback;
+  });
+}
+
+inline void RegisterOnInitResourceInfoCallback(const std::function<void(ResourceInfo*)>& callback) {
+  AddCallback(store->on_init_resource_info_callbacks, callback);
+}
+inline void RegisterOnDestroyResourceInfoCallback(const std::function<void(ResourceInfo*)>& callback) {
+  AddCallback(store->on_destroy_resource_info_callbacks, callback);
+}
+inline void RegisterOnInitResourceViewInfoCallback(const std::function<void(ResourceViewInfo*)>& callback) {
+  AddCallback(store->on_init_resource_view_info_callbacks, callback);
+}
+inline void RegisterOnDestroyResourceViewInfoCallback(const std::function<void(ResourceViewInfo*)>& callback) {
+  AddCallback(store->on_destroy_resource_view_info_callbacks, callback);
+}
+
+inline void UnregisterOnInitResourceInfoCallback(void (*callback)(ResourceInfo*)) {
+  RemoveCallback(store->on_init_resource_info_callbacks, callback);
+}
+inline void UnregisterOnDestroyResourceInfoCallback(void (*callback)(ResourceInfo*)) {
+  RemoveCallback(store->on_destroy_resource_info_callbacks, callback);
+}
+inline void UnregisterOnInitResourceViewInfoCallback(void (*callback)(ResourceViewInfo*)) {
+  RemoveCallback(store->on_init_resource_view_info_callbacks, callback);
+}
+inline void UnregisterOnDestroyResourceViewInfoCallback(void (*callback)(ResourceViewInfo*)) {
+  RemoveCallback(store->on_destroy_resource_view_info_callbacks, callback);
+}
+
+static void MigrateLocalCallbacksToActiveStore() {
+  if (local_callbacks_migrated || store == &local_store) return;
+
+  for (const auto& callback : local_store.on_init_resource_info_callbacks) {
+    RegisterOnInitResourceInfoCallback(callback);
+  }
+  for (const auto& callback : local_store.on_destroy_resource_info_callbacks) {
+    RegisterOnDestroyResourceInfoCallback(callback);
+  }
+  for (const auto& callback : local_store.on_init_resource_view_info_callbacks) {
+    RegisterOnInitResourceViewInfoCallback(callback);
+  }
+  for (const auto& callback : local_store.on_destroy_resource_view_info_callbacks) {
+    RegisterOnDestroyResourceViewInfoCallback(callback);
+  }
+
+  local_store.on_init_resource_info_callbacks.clear();
+  local_store.on_destroy_resource_info_callbacks.clear();
+  local_store.on_init_resource_view_info_callbacks.clear();
+  local_store.on_destroy_resource_view_info_callbacks.clear();
+  local_callbacks_migrated = true;
+}
 
 inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource, const bool& create = false) {
   if (create) {
@@ -380,8 +454,10 @@ static void OnInitDevice(reshade::api::device* device) {
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 
-    is_primary_hook = true;
     data->store = store;
+    if (store->primary_store == nullptr) {
+      store->primary_store = &local_store;
+    }
   } else {
     std::stringstream s;
     s << "utils::resource::OnInitDevice(Attaching to hook: ";
@@ -396,23 +472,13 @@ static void OnInitDevice(reshade::api::device* device) {
       assert(store != &local_store);
       return;
     }
-    for (auto& callback : local_store.on_init_resource_info_callbacks) {
-      store->on_init_resource_info_callbacks.push_back(callback);
-    }
-    for (auto& callback : local_store.on_destroy_resource_info_callbacks) {
-      store->on_destroy_resource_info_callbacks.push_back(callback);
-    }
-    for (auto& callback : local_store.on_init_resource_view_info_callbacks) {
-      store->on_init_resource_view_info_callbacks.push_back(callback);
-    }
-    for (auto& callback : local_store.on_destroy_resource_view_info_callbacks) {
-      store->on_destroy_resource_view_info_callbacks.push_back(callback);
-    }
+    assert(store->primary_store != nullptr);
+    MigrateLocalCallbacksToActiveStore();
   }
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
-  if (!is_primary_hook) return;
+  if (!IsPrimaryHook()) return;
   std::stringstream s;
   s << "utils::resource::OnDestroyDevice(";
   s << reinterpret_cast<uintptr_t>(device);
@@ -422,7 +488,7 @@ static void OnDestroyDevice(reshade::api::device* device) {
 }
 
 static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (!is_primary_hook) return;
+  if (!IsPrimaryHook()) return;
   auto* device = swapchain->get_device();
 
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
@@ -488,7 +554,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 }
 
 static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (!is_primary_hook) return;
+  if (!IsPrimaryHook()) return;
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
 
   for (uint32_t index = 0; index < back_buffer_count; ++index) {
@@ -512,7 +578,7 @@ inline void OnInitResource(
     const reshade::api::subresource_data* initial_data,
     reshade::api::resource_usage initial_state,
     reshade::api::resource resource) {
-  if (!is_primary_hook) return;
+  if (!IsPrimaryHook()) return;
   if (resource.handle == 0) return;
 
   ResourceInfo new_data = {
@@ -589,8 +655,9 @@ inline void OnInitResource(
   }
 }
 
+// NOLINTNEXTLINE(misc-no-recursion)
 inline void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
-  if (!is_primary_hook) return;
+  if (!IsPrimaryHook()) return;
   if (resource.handle == 0) return;
 
   reshade::api::resource pending_fallback = {0u};
@@ -744,7 +811,7 @@ inline void OnInitResourceView(
     reshade::api::resource_usage usage_type,
     const reshade::api::resource_view_desc& desc,
     reshade::api::resource_view view) {
-  if (!is_primary_hook) return;
+  if (!IsPrimaryHook()) return;
   if (view.handle == 0u) return;
 
   ResourceViewInfo new_data = {
@@ -794,7 +861,7 @@ inline void OnInitResourceView(
 }
 
 inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
-  if (!is_primary_hook) return;
+  if (!IsPrimaryHook()) return;
   if (view.handle == 0u) return;
 
   auto* resource_view_info = GetResourceViewInfo(view);
@@ -1074,6 +1141,9 @@ static void Use(DWORD fdw_reason) {
     case DLL_PROCESS_DETACH:
       if (!attached) return;
       attached = false;
+      if (store->primary_store == &local_store) {
+        store->primary_store = nullptr;
+      }
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
