@@ -8,11 +8,9 @@ inline const char* View(const char* icon) {
   return icon;
 }
 
-#if defined(__cpp_char8_t)
 inline const char* View(const char8_t* icon) {
   return reinterpret_cast<const char*>(icon);
 }
-#endif
 
 inline constexpr auto CANCEL = ICON_FK_CANCEL;
 inline constexpr auto CANCEL_CIRCLE = ICON_FK_CANCEL_CIRCLE;
