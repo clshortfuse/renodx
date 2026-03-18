@@ -1702,7 +1702,7 @@ static void Use(DWORD fdw_reason) {
       reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
-      renodx::utils::resource::store->on_destroy_resource_info_callbacks.emplace_back(&OnDestroyTrackedResourceInfo);
+      renodx::utils::resource::RegisterOnDestroyResourceInfoCallback(&OnDestroyTrackedResourceInfo);
 
       break;
     case DLL_PROCESS_DETACH:
@@ -1718,6 +1718,7 @@ static void Use(DWORD fdw_reason) {
       reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
       reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      renodx::utils::resource::UnregisterOnDestroyResourceInfoCallback(&OnDestroyTrackedResourceInfo);
 
       break;
   }
