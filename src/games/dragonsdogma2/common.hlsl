@@ -242,7 +242,17 @@ float3 CustomTonemap(float3 untonemapped_bt709, float3 graded_bt709, float mid_g
     // graded_bt709 = PreTonemapSliders(graded_bt709, mid_gray);
     // graded_bt709 = PostTonemapSliders(graded_bt709);
     // output_color = renodx::tonemap::neutwo::MaxChannel(graded_bt709, calculated_peak);
-    output_color = psychotm_test11(graded_bt709 * 0.5f, calculated_peak); // magic number, it's too bright :(
+    output_color = psychotm_test11(
+      graded_bt709 * 0.5f,  // magic number, it's too bright, but the mid gray adjustment seems right :(
+      calculated_peak, 
+      1.f, 
+      1.f, 
+      1.f, 
+      1.f, 
+      1.f, 
+      1.f - PSYCHO_BLEACH,
+      100.f,
+      PSYCHO_HUE_RESTORE);
   }
   else if (RENODX_TONE_MAP_TYPE == 1.f) {  // ACES
     
