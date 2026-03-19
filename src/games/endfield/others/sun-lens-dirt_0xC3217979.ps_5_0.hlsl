@@ -32,6 +32,6 @@ void main(
 
   r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[108].x).xyzw;
   r0.xyzw = cb1[6].xyzw * r0.xyzw;
-  o0.xyzw = w1 * r0.xyzw;  
+  o0.xyzw = w1 * r0.xyzw * 0.25f;  
   return;
 }
