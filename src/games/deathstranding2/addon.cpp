@@ -242,7 +242,7 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Purist",
         .section = "Options",
-        .group = "button-line-0",
+        .group = "button-line-1",
         .tooltip = "Matches SDR on a 2.2 gamma display. Preserves original artistic intent.",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
