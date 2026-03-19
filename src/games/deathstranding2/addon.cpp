@@ -360,7 +360,7 @@ bool initialized = false;
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Death Stranding 2";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for DEATH STRANDING 2: ON THE BEACH";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
