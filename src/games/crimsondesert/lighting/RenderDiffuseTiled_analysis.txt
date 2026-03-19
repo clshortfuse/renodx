@@ -1,0 +1,308 @@
+RenderDiffuseTiled Shader Analysis
+===================================
+
+Both shaders are [numthreads(8,8,1)] CS 6.6 compute shaders that compose
+all lighting in the deferred tiled lighting pass. They read GBuffer data
+(base colour, normals, depth, stencil, roughness, metallic), compose
+temporal diffuse/specular reprojection, IBL, directional light BRDF,
+atmospheric scattering, and caustics, then write to UAVs
+
+
+====================================================================
+THE TWO VARIANTS
+====================================================================
+
+  0x09C3629B — Base/environment lighting variant
+  0x502F4699 — Extended variant with character materials
+
+The extended shader adds:
+  - g_hairDualScatteringLUT (Texture3D)
+  - g_hairBrdfLookup (Texture2D)
+  - g_bentCone (Texture2D)
+  - g_character (Texture2D)
+  - g_blueNoise (Texture2D)
+  - MaterialParameterPresetTableConstantBuffer
+      (clothLightingCategory, clothLightingParameter[8], colourPresetParameter)
+
+0x502F4699 has Hair BRDF, Cloth/Velvet, Dual-Lobe Specular, Crystal/Eye
+material paths that 0x09C3629B does not
+
+
+====================================================================
+BRDF #1: Disney/Burley Diffuse  (BOTH SHADERS)
+====================================================================
+
+Location:
+  0x09C3629B: ~line 2692
+  0x502F4699: ~line 4125
+
+Implementation:
+  // Fresnel weighting for NdotL and NdotV
+  FD_L = 1 - (1-NdotL)^5 * 0.75
+  FD_V = 1 - (1-NdotV)^5 * 0.75
+
+  // Retro-reflection (subsurface approximation)
+  retro = exp(-sqrt(VdotH) * k) * VdotH * k
+  // where k = ((1-roughness^4) * 73.2 - 21.2) clamped to min 8.9
+
+  // Fresnel-Schlick at half-angle
+  F_h = (1-VdotH)^5 + VdotH
+
+  diffuse = NdotL/pi * ((FD_L * FD_V - F_h) * saturate(roughness*2.2 - 0.5)
+                         + F_h + retro)
+
+For SSS materials (stencil 6/7, 11-20, 107), an additional wrapped diffuse:
+  wrap = max(0, 0.3 - NdotL) * 0.2319   // ~1/(pi * (1+0.3))
+
+
+====================================================================
+BRDF #2: Cook-Torrance GGX Specular  (BOTH SHADERS)
+====================================================================
+
+Location:
+  0x09C3629B: ~line 2798
+  0x502F4699: ~line 4156
+
+Implementation:
+  alpha  = roughness^2
+  alpha4 = alpha^4
+
+  // GGX NDF (Trowbridge-Reitz)
+  D = alpha4 / ((NdotH^2 * (alpha4 - 1) + 1)^2 * pi)
+
+  // Smith height-correlated visibility
+  k = 1 - alpha^2
+  V = 0.5 / (NdotL*(NdotV*k + alpha^2) + NdotV*(NdotL*k + alpha^2))
+
+  // Schlick Fresnel
+  F = F0 + (1-F0) * (1-VdotH)^5
+
+  specular = D * V * F * NdotL
+
+F0 computation (metallic workflow):
+  F0 = lerp(0.04, albedo * (0.7 / max(max(R,G,B), 0.01)), metallic)
+
+
+====================================================================
+BRDF #3: Multi-Bounce Specular (IBL)  (BOTH SHADERS)
+====================================================================
+
+Location:
+  0x09C3629B: ~line 2958
+  0x502F4699: ~line 4993
+
+  // IBL BRDF LUT: (scale, bias) = g_iblBrdfLookup.Sample(NdotV, 1-roughness)
+  Fss = F0 * scale + bias
+  Fms = (1 - scale - bias)
+  Favg = (0.96 - metallic_term) * (1/21) + F0
+  specular_multibounce = ((Fss * Favg) / (1 - Fms * Favg)) * Fms
+
+
+====================================================================
+BRDF #4: Marschner-Like Hair  (EXTENDED ONLY - 0x502F4699)
+====================================================================
+
+Location: ~line 547 (duplicated 3x for different code paths)
+Used for: stencil 54 (hair) and 66/67 (character hair variants)
+
+Inputs:
+  - g_bentCone texture -> hair strand tangent direction
+  - g_hairDualScatteringLUT (3D) -> forward/backward scattering per-channel
+  - Roughness from GBuffer, clamped to [0.098, 1.0]
+
+Scattering model:
+  theta_d = asin(L.T) + asin(V.T)       // longitudinal half-angle
+  phi_d   = azimuthal half-difference angle via projected vectors
+  cos_half = cos(|asin(L.T) - asin(V.T)| * 0.5)
+
+  R lobe (primary specular):
+    Gaussian: exp(-theta^2 / (2*sigma_R^2)) / (sigma_R * sqrt(2*pi))
+    sigma_R = roughness^2 * 0.5
+    Attenuation: exp(-5.74 - phi * 5.27)
+
+  TRT lobe (secondary specular):
+    Gaussian: exp(-theta^2 / (2*sigma_TRT^2)) / (sigma_TRT * sqrt(2*pi*2))
+    sigma_TRT = roughness^2 * 2.0
+    Attenuation: exp(phi * 24.53 - 24.21)
+
+  Dual Scattering (from LUT):
+    - (forward_scatter, backward_scatter) per channel
+    - A_f^3 (cubed absorption) for global energy
+    - Modified longitudinal width per channel
+    - Shift correction term
+
+  Final = (R + TRT + 2*pi*diffuse_ring) * normalization
+
+Hair isotropic diffuse:
+  non-covered: (1-coverage) * 2.1 * saturate(NdotL) / pi
+  covered: coverage * saturate(NdotL) / pi
+
+
+====================================================================
+BRDF #5: Cloth/Velvet Sheen  (EXTENDED ONLY - 0x502F4699)
+====================================================================
+
+Location: ~line 3920
+Used for: stencil 33/55 (cloth/velvet)
+
+  // Velvet modulates diffuse by _effectiveMetallicForVelvet
+  diffuse *= ((saturate(1 - metalForVelvet) - 1) * clothParam) + 1
+
+  // Charlie/Exponential NDF for sheen
+  D_charlie = (exp(-NdotH_sq / (alpha^2 * (1-NdotH_sq))) * 4
+              / (1-NdotH_sq)^2 + 1) / (alpha * 4*pi + pi)
+
+  // Cloth F0 uses sqrt(albedo)
+  F0_cloth = sqrt(albedo) * clothParam + baseF0
+
+  // Cloth visibility
+  V_cloth = 1 / ((NdotL + NdotV - NdotL*NdotV) * 4)
+
+  // Dual specular weighting
+  specular = GGX * clothParam_blend + Charlie * (1 - clothParam_blend)
+
+  // Edge-lit subsurface approximation
+  edgeLight = (1 - clothMetallic) * 0.477 * saturate(clothParam3)
+              * saturate(pow(NdotH, 4)) * exp(log(saturate(1-|NdotL|))^3)
+
+
+====================================================================
+BRDF #6: Dual-Lobe Specular for Skin  (EXTENDED ONLY - 0x502F4699)
+====================================================================
+
+Location: ~line 4181
+Used for: stencil 64 (skin/subsurface)
+
+  // Primary GGX at base roughness alpha_1
+  // Secondary GGX at wider roughness alpha_2
+  // Weighted 60/40 blend
+  specular = primary * 0.60009765625 + secondary * 0.39990234375
+
+IBL path for stencil 64: dual lookup at 1.33x and 0.48x GBuffer roughness, averaged.
+
+
+====================================================================
+BRDF #7: Crystal/Eye  (EXTENDED ONLY - 0x502F4699)
+====================================================================
+
+Location: ~line 4719
+Used for: stencil 97-98
+
+  // Blue noise perturbs reflection direction
+  noisedReflection = normalize(blueNoise_xyz + reflection)
+
+  // Extremely tight specular highlight (internal reflections)
+  highlight = pow(saturate(N.noisedR), 1024) * 50
+
+  // Standard GGX with noised direction + highlight
+  // Distance fade (< 1000 units) and screen-edge vignette
+
+
+====================================================================
+FULL PIPELINE FLOW
+====================================================================
+
+  GBuffer Unpack
+    |
+    v
+  Temporal Diffuse Reprojection
+    (velocity, depth comparison, bilinear weights, stencil-aware rejection,
+     history clamping with manyLightsMoments, exposure scaling)
+    |
+    v
+  Temporal Specular Reprojection
+    (ray-hit-distance reflection point reprojection,
+     normal-aware weighting, history accumulation)
+    |
+    v
+  IBL BRDF Lookup  (per-material variant)
+    - Hair (stencil 54/66/67): blended g_hairBrdfLookup + g_iblBrdfLookup
+    - Subsurface (stencil 64): dual IBL at 1.33x / 0.48x roughness
+    - Crystal/Eye (stencil 97-98): blue-noise reflection perturbation
+    - Cloth (stencil 33/55): modified F0 with sqrt(albedo)
+    - Default: standard single IBL
+    |
+    v
+  Atmospheric Scattering
+    (Rayleigh + Mie, optical depth LUT, cloud volume shadow)
+    |
+    v
+  Puddle Normal Blend  (puddle mask + normal flattening)
+    |
+    v
+  Directional Light BRDF Evaluation
+    +-- Standard:    Disney/Burley Diffuse + Cook-Torrance GGX
+    +-- Hair:        Marschner Dual-Scattering (extended only)
+    +-- Cloth:       Charlie Sheen + Exponential NDF (extended only)
+    +-- Skin:        Dual-Lobe GGX 60/40 (extended only)
+    +-- Crystal/Eye: Blue-Noise Perturbed Specular (extended only)
+    +-- SSS wrap:    Additional wrapped diffuse for stencil 6/7/11-20/107
+    |
+    v
+  Caustic Lighting  (caustic texture * 1/pi)
+    |
+    v
+  Multi-Bounce Specular Compensation (Karis approximation)
+    |
+    v
+  Cavity/AO Masking
+    |
+    v
+  Final Composition
+    |
+    v
+  UAV Outputs:
+    - g_sceneColourUAV         (final lit colour)
+    - g_sceneSpecularUAV      (separated specular for certain stencils)
+    - g_diffuseResultUAV      (temporal diffuse accumulation)
+    - g_specularResultUAV     (temporal specular accumulation)
+    - g_diffuseHalfPrevUAV    (half-res diffuse history, quad-averaged)
+    - g_sceneColourLightingOnlyForAwbUAV  (AWB lighting-only)
+
+
+====================================================================
+STENCIL MATERIAL ROUTING
+====================================================================
+
+  Stencil  | Material                | BRDF Path
+  ---------|-------------------------|------------------------------------------
+  6-7      | SSS/Foliage             | Disney Diffuse + wrap + GGX
+  11-20    | SSS range               | Disney Diffuse + wrap + GGX
+  24/29    | Transparent special     | Disney Diffuse (no specular for 29)
+  33/55    | Cloth/Velvet            | Charlie sheen + cloth GGX  (ext only)
+  53       | Generic character       | Disney Diffuse + GGX (lum normalization)
+  54       | Hair                    | Marschner dual-scattering  (ext only)
+  64       | Skin/Subsurface         | Disney Diffuse + Dual-Lobe GGX (ext only)
+  65       | Special (pow16 highl.)  | Disney Diffuse + exposure-scaled highlight
+  66-67    | Character hair variants | Marschner  (ext only)
+  96       | Decal                   | Standard + separated specular output
+  97-98    | Crystal/Eye             | Blue-noise specular  (ext only)
+  105-107  | Special flags           | Various overrides
+
+
+====================================================================
+COLOUR SPACE
+====================================================================
+
+Custom 3x3 colour space transform matrix used in GBuffer unpacking:
+  | 0.6131  0.3396  0.0474 |
+  | 0.0702  0.9164  0.0135 |
+  | 0.0206  0.1096  0.8698 |
+
+Same matrix used in atmospheric scattering for light/transmittance transform.
+Rec.709 luminance weights: (0.2127, 0.7152, 0.0722)
+
+
+====================================================================
+KEY CONSTANTS
+====================================================================
+
+  0.31831  = 1/pi
+  0.23191  = 1/(pi * 1.3)  (wrapped diffuse normalization)
+  3.14159  = pi
+  1.44270  = 1/ln(2)  (natural->binary log conversion)
+  1.25331  = sqrt(pi/2)
+  5.01326  = 2 * sqrt(pi/2)^2
+  4.39823  = hair scattering normalization
+  0.95348  = 1 - 1/(2*e)  (hair attenuation constant)
+  50.2655  = 16*pi  (cloth highlight normalization)
