@@ -1142,11 +1142,10 @@ inline bool OnCopyBufferToTexture(
     cmd_list->copy_texture_region(dest, dest_subresource, dest_box, dest_clone, dest_subresource, dest_box);
     return true;
   } else {
-    // Perform DirectX blit
-    return true;
+    // Can't blit on D3D12 with mismatched formats.
+    // Fall through to the original copy rather than silently dropping it.
+    return false;
   }
-
-  return true;
 }
 
 inline bool OnCreateResourceView(
@@ -2265,8 +2264,9 @@ inline bool OnCopyTextureRegion(
     cmd_list->copy_texture_region(source, source_subresource, source_box, dest, dest_subresource, dest_box);
     return true;
   } else {
-    // Perform DirectX blit
-    return true;
+    // Can't blit on D3D12 with mismatched formats.
+    // Fall through to the original copy rather than silently dropping it.
+    return false;
   }
 }
 

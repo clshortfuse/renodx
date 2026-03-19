@@ -934,6 +934,7 @@ static bool IsCompressible(
     reshade::api::format compressed) {
   switch (uncompressed) {
     // 32 bit width
+    case reshade::api::format::r32_typeless:
     case reshade::api::format::r32_uint:
     case reshade::api::format::r32_sint:
       switch (compressed) {
@@ -944,8 +945,10 @@ static bool IsCompressible(
           return false;
       }
     // 64 bit width / 8 bytes per 4x4 block
+    case reshade::api::format::r16g16b16a16_typeless:
     case reshade::api::format::r16g16b16a16_uint:
     case reshade::api::format::r16g16b16a16_sint:
+    case reshade::api::format::r32g32_typeless:
     case reshade::api::format::r32g32_uint:
     case reshade::api::format::r32g32_sint:
       switch (compressed) {
