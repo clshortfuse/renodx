@@ -1,0 +1,600 @@
+Texture2D<float4> t0_space6 : register(t0, space6);
+
+Texture2D<float4> t1_space6 : register(t1, space6);
+
+RWTexture2D<float4> u0_space6 : register(u0, space6);
+
+cbuffer cb0_space5 : register(b0, space5) {
+  struct Scratch_PerBatch_Constants {
+    struct AAResolverUpscaleParams {
+      float4 AAResolverUpscaleParams_000;
+      float4 AAResolverUpscaleParams_016;
+      float4 AAResolverUpscaleParams_032;
+      float4 AAResolverUpscaleParams_048;
+      float4 AAResolverUpscaleParams_064;
+      float4 AAResolverUpscaleParams_080;
+      float4 AAResolverUpscaleParams_096;
+      float4 AAResolverUpscaleParams_112;
+      float AAResolverUpscaleParams_128;
+      float2 AAResolverUpscaleParams_132;
+    } Scratch_PerBatch_Constants_000;
+  } Scratch_PerBatch_000:
+  packoffset(c000.x);
+};
+
+[numthreads(64, 1, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  int _30 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
+  int _31 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
+  uint _32 = _31 + -1u;
+  float4 _34 = t0_space6.Load(int3(_30, _32, 0));
+  uint _38 = _30 + -1u;
+  float4 _39 = t0_space6.Load(int3(_38, _31, 0));
+  float4 _43 = t0_space6.Load(int3(_30, _31, 0));
+  int _47 = _30 + 1;
+  float4 _48 = t0_space6.Load(int3(_47, _31, 0));
+  int _52 = _31 + 1;
+  float4 _53 = t0_space6.Load(int3(_30, _52, 0));
+  float _59 = min(min(_34.x, min(_39.x, _48.x)), _53.x);
+  float _62 = min(min(_34.y, min(_39.y, _48.y)), _53.y);
+  float _65 = min(min(_34.z, min(_39.z, _48.z)), _53.z);
+  float _68 = max(max(_34.x, max(_39.x, _48.x)), _53.x);
+  float _71 = max(max(_34.y, max(_39.y, _48.y)), _53.y);
+  float _74 = max(max(_34.z, max(_39.z, _48.z)), _53.z);
+  float _106 = max(-0.1875f, min(max(max((-0.0f - (_59 * (0.25f / _68))), ((1.0f / ((_59 * 4.0f) + -4.0f)) * (1.0f - _68))), max(max((-0.0f - (_62 * (0.25f / _71))), ((1.0f / ((_62 * 4.0f) + -4.0f)) * (1.0f - _71))), max((-0.0f - (_65 * (0.25f / _74))), ((1.0f / ((_65 * 4.0f) + -4.0f)) * (1.0f - _74))))), 0.0f)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_000.x;
+  float _108 = (_106 * 4.0f) + 1.0f;
+  float _111 = asfloat(((uint)(2129764351u - (int)(asint(_108)))));
+  float _114 = (2.0f - (_111 * _108)) * _111;
+  float _133 = min((_114 * ((_106 * (((_39.x + _34.x) + _48.x) + _53.x)) + _43.x)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  float _134 = min((_114 * ((_106 * (((_39.y + _34.y) + _48.y) + _53.y)) + _43.y)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  float _135 = min((_114 * ((_106 * (((_39.z + _34.z) + _48.z) + _53.z)) + _43.z)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  bool _137 = (int(Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_128) == 0);
+  float _164;
+  float _176;
+  float _188;
+  float _256;
+  float _257;
+  float _258;
+  float _292;
+  float _304;
+  float _370;
+  float _371;
+  float _372;
+  float _503;
+  float _515;
+  float _527;
+  float _595;
+  float _596;
+  float _597;
+  float _631;
+  float _643;
+  float _709;
+  float _710;
+  float _711;
+  float _842;
+  float _854;
+  float _866;
+  float _934;
+  float _935;
+  float _936;
+  float _970;
+  float _982;
+  float _1048;
+  float _1049;
+  float _1050;
+  float _1178;
+  float _1190;
+  float _1202;
+  float _1270;
+  float _1271;
+  float _1272;
+  float _1306;
+  float _1318;
+  float _1384;
+  float _1385;
+  float _1386;
+  if (!_137) {
+    float4 _140 = t1_space6.Load(int3(_30, _31, 0));
+    if ((max(_140.x, max(_140.y, _140.z)) + _140.w) > 0.0f) {
+      int _150 = int(Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.w);
+      do {
+        [branch]
+        if (_150 == 1) {
+          do {
+            if (_133 < 0.040449999272823334f) {
+              _164 = (_133 * 0.07739938050508499f);
+            } else {
+              _164 = exp2(log2(abs((_133 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+            }
+            do {
+              if (_134 < 0.040449999272823334f) {
+                _176 = (_134 * 0.07739938050508499f);
+              } else {
+                _176 = exp2(log2(abs((_134 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+              }
+              do {
+                if (_135 < 0.040449999272823334f) {
+                  _188 = (_135 * 0.07739938050508499f);
+                } else {
+                  _188 = exp2(log2(abs((_135 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+                }
+                float _189 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x;
+                _256 = exp2(log2(abs(_164)) * _189);
+                _257 = exp2(log2(abs(_176)) * _189);
+                _258 = exp2(log2(abs(_188)) * _189);
+              } while (false);
+            } while (false);
+          } while (false);
+        } else {
+          if (_150 == 2) {
+            float _214 = exp2(log2(abs(_133)) * 0.012683313339948654f);
+            float _215 = exp2(log2(abs(_134)) * 0.012683313339948654f);
+            float _216 = exp2(log2(abs(_135)) * 0.012683313339948654f);
+            float _229 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x;
+            float _242 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.y;
+            float _243 = _242 * exp2(log2(abs((_214 + -0.8359375f) / (18.8515625f - (_214 * 18.6875f)))) * _229);
+            float _244 = _242 * exp2(log2(abs((_215 + -0.8359375f) / (18.8515625f - (_215 * 18.6875f)))) * _229);
+            float _245 = _242 * exp2(log2(abs((_216 + -0.8359375f) / (18.8515625f - (_216 * 18.6875f)))) * _229);
+            _256 = mad(-0.07284989953041077f, _245, mad(-0.5876410007476807f, _244, (_243 * 1.6604900360107422f)));
+            _257 = mad(-0.008349419571459293f, _245, mad(1.1328999996185303f, _244, (_243 * -0.124549999833107f)));
+            _258 = mad(1.1187299489974976f, _245, mad(-0.10057900100946426f, _244, (_243 * -0.018150800839066505f)));
+          } else {
+            _256 = _133;
+            _257 = _134;
+            _258 = _135;
+          }
+        }
+        float _259 = 1.0f - _140.w;
+        float _263 = (_256 * _259) + _140.x;
+        float _264 = (_257 * _259) + _140.y;
+        float _265 = (_258 * _259) + _140.z;
+        int _266 = int(Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.w);
+        [branch]
+        if (_266 == 1) {
+          float _278 = exp2(log2(abs(_263)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          float _279 = exp2(log2(abs(_264)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          float _280 = exp2(log2(abs(_265)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          do {
+            if (_278 < 0.003100000089034438f) {
+              _292 = (_278 * 12.920000076293945f);
+            } else {
+              _292 = ((exp2(log2(abs(_278)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+            }
+            do {
+              if (_279 < 0.003100000089034438f) {
+                _304 = (_279 * 12.920000076293945f);
+              } else {
+                _304 = ((exp2(log2(abs(_279)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+              }
+              if (_280 < 0.003100000089034438f) {
+                _370 = _292;
+                _371 = _304;
+                _372 = (_280 * 12.920000076293945f);
+              } else {
+                _370 = _292;
+                _371 = _304;
+                _372 = ((exp2(log2(abs(_280)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+              }
+            } while (false);
+          } while (false);
+        } else {
+          if (_266 == 2) {
+            float _339 = exp2(log2(abs(mad(0.04331306740641594f, _265, mad(0.3292830288410187f, _264, (_263 * 0.6274039149284363f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            float _340 = exp2(log2(abs(mad(0.011362316086888313f, _265, mad(0.9195404052734375f, _264, (_263 * 0.06909728795289993f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            float _341 = exp2(log2(abs(mad(0.8955952525138855f, _265, mad(0.08801330626010895f, _264, (_263 * 0.016391439363360405f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            _370 = exp2(log2(abs(((_339 * 18.8515625f) + 0.8359375f) / ((_339 * 18.6875f) + 1.0f))) * 78.84375f);
+            _371 = exp2(log2(abs(((_340 * 18.8515625f) + 0.8359375f) / ((_340 * 18.6875f) + 1.0f))) * 78.84375f);
+            _372 = exp2(log2(abs(((_341 * 18.8515625f) + 0.8359375f) / ((_341 * 18.6875f) + 1.0f))) * 78.84375f);
+          } else {
+            _370 = _263;
+            _371 = _264;
+            _372 = _265;
+          }
+        }
+      } while (false);
+    } else {
+      _370 = _133;
+      _371 = _134;
+      _372 = _135;
+    }
+  } else {
+    _370 = _133;
+    _371 = _134;
+    _372 = _135;
+  }
+  u0_space6[int2(_30, _31)] = float4(_370, _371, _372, 1.0f);
+  int _374 = _30 | 8;
+  float4 _376 = t0_space6.Load(int3(_374, _32, 0));
+  uint _380 = _374 + -1u;
+  float4 _381 = t0_space6.Load(int3(_380, _31, 0));
+  float4 _385 = t0_space6.Load(int3(_374, _31, 0));
+  uint _389 = _374 + 1u;
+  float4 _390 = t0_space6.Load(int3(_389, _31, 0));
+  float4 _394 = t0_space6.Load(int3(_374, _52, 0));
+  float _400 = min(min(_376.x, min(_381.x, _390.x)), _394.x);
+  float _403 = min(min(_376.y, min(_381.y, _390.y)), _394.y);
+  float _406 = min(min(_376.z, min(_381.z, _390.z)), _394.z);
+  float _409 = max(max(_376.x, max(_381.x, _390.x)), _394.x);
+  float _412 = max(max(_376.y, max(_381.y, _390.y)), _394.y);
+  float _415 = max(max(_376.z, max(_381.z, _390.z)), _394.z);
+  float _447 = max(-0.1875f, min(max(max((-0.0f - (_400 * (0.25f / _409))), ((1.0f / ((_400 * 4.0f) + -4.0f)) * (1.0f - _409))), max(max((-0.0f - (_403 * (0.25f / _412))), ((1.0f / ((_403 * 4.0f) + -4.0f)) * (1.0f - _412))), max((-0.0f - (_406 * (0.25f / _415))), ((1.0f / ((_406 * 4.0f) + -4.0f)) * (1.0f - _415))))), 0.0f)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_000.x;
+  float _449 = (_447 * 4.0f) + 1.0f;
+  float _452 = asfloat(((uint)(2129764351u - (int)(asint(_449)))));
+  float _455 = (2.0f - (_452 * _449)) * _452;
+  float _474 = min((_455 * ((_447 * (((_381.x + _376.x) + _390.x) + _394.x)) + _385.x)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  float _475 = min((_455 * ((_447 * (((_381.y + _376.y) + _390.y) + _394.y)) + _385.y)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  float _476 = min((_455 * ((_447 * (((_381.z + _376.z) + _390.z) + _394.z)) + _385.z)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  if (!_137) {
+    float4 _479 = t1_space6.Load(int3(_374, _31, 0));
+    if ((max(_479.x, max(_479.y, _479.z)) + _479.w) > 0.0f) {
+      int _489 = int(Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.w);
+      do {
+        [branch]
+        if (_489 == 1) {
+          do {
+            if (_474 < 0.040449999272823334f) {
+              _503 = (_474 * 0.07739938050508499f);
+            } else {
+              _503 = exp2(log2(abs((_474 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+            }
+            do {
+              if (_475 < 0.040449999272823334f) {
+                _515 = (_475 * 0.07739938050508499f);
+              } else {
+                _515 = exp2(log2(abs((_475 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+              }
+              do {
+                if (_476 < 0.040449999272823334f) {
+                  _527 = (_476 * 0.07739938050508499f);
+                } else {
+                  _527 = exp2(log2(abs((_476 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+                }
+                float _528 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x;
+                _595 = exp2(log2(abs(_503)) * _528);
+                _596 = exp2(log2(abs(_515)) * _528);
+                _597 = exp2(log2(abs(_527)) * _528);
+              } while (false);
+            } while (false);
+          } while (false);
+        } else {
+          if (_489 == 2) {
+            float _553 = exp2(log2(abs(_474)) * 0.012683313339948654f);
+            float _554 = exp2(log2(abs(_475)) * 0.012683313339948654f);
+            float _555 = exp2(log2(abs(_476)) * 0.012683313339948654f);
+            float _568 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x;
+            float _581 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.y;
+            float _582 = _581 * exp2(log2(abs((_553 + -0.8359375f) / (18.8515625f - (_553 * 18.6875f)))) * _568);
+            float _583 = _581 * exp2(log2(abs((_554 + -0.8359375f) / (18.8515625f - (_554 * 18.6875f)))) * _568);
+            float _584 = _581 * exp2(log2(abs((_555 + -0.8359375f) / (18.8515625f - (_555 * 18.6875f)))) * _568);
+            _595 = mad(-0.07284989953041077f, _584, mad(-0.5876410007476807f, _583, (_582 * 1.6604900360107422f)));
+            _596 = mad(-0.008349419571459293f, _584, mad(1.1328999996185303f, _583, (_582 * -0.124549999833107f)));
+            _597 = mad(1.1187299489974976f, _584, mad(-0.10057900100946426f, _583, (_582 * -0.018150800839066505f)));
+          } else {
+            _595 = _474;
+            _596 = _475;
+            _597 = _476;
+          }
+        }
+        float _598 = 1.0f - _479.w;
+        float _602 = (_595 * _598) + _479.x;
+        float _603 = (_596 * _598) + _479.y;
+        float _604 = (_597 * _598) + _479.z;
+        int _605 = int(Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.w);
+        [branch]
+        if (_605 == 1) {
+          float _617 = exp2(log2(abs(_602)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          float _618 = exp2(log2(abs(_603)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          float _619 = exp2(log2(abs(_604)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          do {
+            if (_617 < 0.003100000089034438f) {
+              _631 = (_617 * 12.920000076293945f);
+            } else {
+              _631 = ((exp2(log2(abs(_617)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+            }
+            do {
+              if (_618 < 0.003100000089034438f) {
+                _643 = (_618 * 12.920000076293945f);
+              } else {
+                _643 = ((exp2(log2(abs(_618)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+              }
+              if (_619 < 0.003100000089034438f) {
+                _709 = _631;
+                _710 = _643;
+                _711 = (_619 * 12.920000076293945f);
+              } else {
+                _709 = _631;
+                _710 = _643;
+                _711 = ((exp2(log2(abs(_619)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+              }
+            } while (false);
+          } while (false);
+        } else {
+          if (_605 == 2) {
+            float _678 = exp2(log2(abs(mad(0.04331306740641594f, _604, mad(0.3292830288410187f, _603, (_602 * 0.6274039149284363f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            float _679 = exp2(log2(abs(mad(0.011362316086888313f, _604, mad(0.9195404052734375f, _603, (_602 * 0.06909728795289993f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            float _680 = exp2(log2(abs(mad(0.8955952525138855f, _604, mad(0.08801330626010895f, _603, (_602 * 0.016391439363360405f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            _709 = exp2(log2(abs(((_678 * 18.8515625f) + 0.8359375f) / ((_678 * 18.6875f) + 1.0f))) * 78.84375f);
+            _710 = exp2(log2(abs(((_679 * 18.8515625f) + 0.8359375f) / ((_679 * 18.6875f) + 1.0f))) * 78.84375f);
+            _711 = exp2(log2(abs(((_680 * 18.8515625f) + 0.8359375f) / ((_680 * 18.6875f) + 1.0f))) * 78.84375f);
+          } else {
+            _709 = _602;
+            _710 = _603;
+            _711 = _604;
+          }
+        }
+      } while (false);
+    } else {
+      _709 = _474;
+      _710 = _475;
+      _711 = _476;
+    }
+  } else {
+    _709 = _474;
+    _710 = _475;
+    _711 = _476;
+  }
+  u0_space6[int2(_374, _31)] = float4(_709, _710, _711, 1.0f);
+  int _713 = _31 | 8;
+  uint _714 = _713 + -1u;
+  float4 _716 = t0_space6.Load(int3(_374, _714, 0));
+  float4 _720 = t0_space6.Load(int3(_380, _713, 0));
+  float4 _724 = t0_space6.Load(int3(_374, _713, 0));
+  float4 _728 = t0_space6.Load(int3(_389, _713, 0));
+  uint _732 = _713 + 1u;
+  float4 _733 = t0_space6.Load(int3(_374, _732, 0));
+  float _739 = min(min(_716.x, min(_720.x, _728.x)), _733.x);
+  float _742 = min(min(_716.y, min(_720.y, _728.y)), _733.y);
+  float _745 = min(min(_716.z, min(_720.z, _728.z)), _733.z);
+  float _748 = max(max(_716.x, max(_720.x, _728.x)), _733.x);
+  float _751 = max(max(_716.y, max(_720.y, _728.y)), _733.y);
+  float _754 = max(max(_716.z, max(_720.z, _728.z)), _733.z);
+  float _786 = max(-0.1875f, min(max(max((-0.0f - (_739 * (0.25f / _748))), ((1.0f / ((_739 * 4.0f) + -4.0f)) * (1.0f - _748))), max(max((-0.0f - (_742 * (0.25f / _751))), ((1.0f / ((_742 * 4.0f) + -4.0f)) * (1.0f - _751))), max((-0.0f - (_745 * (0.25f / _754))), ((1.0f / ((_745 * 4.0f) + -4.0f)) * (1.0f - _754))))), 0.0f)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_000.x;
+  float _788 = (_786 * 4.0f) + 1.0f;
+  float _791 = asfloat(((uint)(2129764351u - (int)(asint(_788)))));
+  float _794 = (2.0f - (_791 * _788)) * _791;
+  float _813 = min((_794 * ((_786 * (((_720.x + _716.x) + _728.x) + _733.x)) + _724.x)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  float _814 = min((_794 * ((_786 * (((_720.y + _716.y) + _728.y) + _733.y)) + _724.y)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  float _815 = min((_794 * ((_786 * (((_720.z + _716.z) + _728.z) + _733.z)) + _724.z)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  if (!_137) {
+    float4 _818 = t1_space6.Load(int3(_374, _713, 0));
+    if ((max(_818.x, max(_818.y, _818.z)) + _818.w) > 0.0f) {
+      int _828 = int(Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.w);
+      do {
+        [branch]
+        if (_828 == 1) {
+          do {
+            if (_813 < 0.040449999272823334f) {
+              _842 = (_813 * 0.07739938050508499f);
+            } else {
+              _842 = exp2(log2(abs((_813 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+            }
+            do {
+              if (_814 < 0.040449999272823334f) {
+                _854 = (_814 * 0.07739938050508499f);
+              } else {
+                _854 = exp2(log2(abs((_814 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+              }
+              do {
+                if (_815 < 0.040449999272823334f) {
+                  _866 = (_815 * 0.07739938050508499f);
+                } else {
+                  _866 = exp2(log2(abs((_815 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+                }
+                float _867 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x;
+                _934 = exp2(log2(abs(_842)) * _867);
+                _935 = exp2(log2(abs(_854)) * _867);
+                _936 = exp2(log2(abs(_866)) * _867);
+              } while (false);
+            } while (false);
+          } while (false);
+        } else {
+          if (_828 == 2) {
+            float _892 = exp2(log2(abs(_813)) * 0.012683313339948654f);
+            float _893 = exp2(log2(abs(_814)) * 0.012683313339948654f);
+            float _894 = exp2(log2(abs(_815)) * 0.012683313339948654f);
+            float _907 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x;
+            float _920 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.y;
+            float _921 = _920 * exp2(log2(abs((_892 + -0.8359375f) / (18.8515625f - (_892 * 18.6875f)))) * _907);
+            float _922 = _920 * exp2(log2(abs((_893 + -0.8359375f) / (18.8515625f - (_893 * 18.6875f)))) * _907);
+            float _923 = _920 * exp2(log2(abs((_894 + -0.8359375f) / (18.8515625f - (_894 * 18.6875f)))) * _907);
+            _934 = mad(-0.07284989953041077f, _923, mad(-0.5876410007476807f, _922, (_921 * 1.6604900360107422f)));
+            _935 = mad(-0.008349419571459293f, _923, mad(1.1328999996185303f, _922, (_921 * -0.124549999833107f)));
+            _936 = mad(1.1187299489974976f, _923, mad(-0.10057900100946426f, _922, (_921 * -0.018150800839066505f)));
+          } else {
+            _934 = _813;
+            _935 = _814;
+            _936 = _815;
+          }
+        }
+        float _937 = 1.0f - _818.w;
+        float _941 = (_934 * _937) + _818.x;
+        float _942 = (_935 * _937) + _818.y;
+        float _943 = (_936 * _937) + _818.z;
+        int _944 = int(Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.w);
+        [branch]
+        if (_944 == 1) {
+          float _956 = exp2(log2(abs(_941)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          float _957 = exp2(log2(abs(_942)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          float _958 = exp2(log2(abs(_943)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          do {
+            if (_956 < 0.003100000089034438f) {
+              _970 = (_956 * 12.920000076293945f);
+            } else {
+              _970 = ((exp2(log2(abs(_956)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+            }
+            do {
+              if (_957 < 0.003100000089034438f) {
+                _982 = (_957 * 12.920000076293945f);
+              } else {
+                _982 = ((exp2(log2(abs(_957)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+              }
+              if (_958 < 0.003100000089034438f) {
+                _1048 = _970;
+                _1049 = _982;
+                _1050 = (_958 * 12.920000076293945f);
+              } else {
+                _1048 = _970;
+                _1049 = _982;
+                _1050 = ((exp2(log2(abs(_958)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+              }
+            } while (false);
+          } while (false);
+        } else {
+          if (_944 == 2) {
+            float _1017 = exp2(log2(abs(mad(0.04331306740641594f, _943, mad(0.3292830288410187f, _942, (_941 * 0.6274039149284363f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            float _1018 = exp2(log2(abs(mad(0.011362316086888313f, _943, mad(0.9195404052734375f, _942, (_941 * 0.06909728795289993f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            float _1019 = exp2(log2(abs(mad(0.8955952525138855f, _943, mad(0.08801330626010895f, _942, (_941 * 0.016391439363360405f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            _1048 = exp2(log2(abs(((_1017 * 18.8515625f) + 0.8359375f) / ((_1017 * 18.6875f) + 1.0f))) * 78.84375f);
+            _1049 = exp2(log2(abs(((_1018 * 18.8515625f) + 0.8359375f) / ((_1018 * 18.6875f) + 1.0f))) * 78.84375f);
+            _1050 = exp2(log2(abs(((_1019 * 18.8515625f) + 0.8359375f) / ((_1019 * 18.6875f) + 1.0f))) * 78.84375f);
+          } else {
+            _1048 = _941;
+            _1049 = _942;
+            _1050 = _943;
+          }
+        }
+      } while (false);
+    } else {
+      _1048 = _813;
+      _1049 = _814;
+      _1050 = _815;
+    }
+  } else {
+    _1048 = _813;
+    _1049 = _814;
+    _1050 = _815;
+  }
+  u0_space6[int2(_374, _713)] = float4(_1048, _1049, _1050, 1.0f);
+  float4 _1053 = t0_space6.Load(int3(_30, _714, 0));
+  float4 _1057 = t0_space6.Load(int3(_38, _713, 0));
+  float4 _1061 = t0_space6.Load(int3(_30, _713, 0));
+  float4 _1065 = t0_space6.Load(int3(_47, _713, 0));
+  float4 _1069 = t0_space6.Load(int3(_30, _732, 0));
+  float _1075 = min(min(_1053.x, min(_1057.x, _1065.x)), _1069.x);
+  float _1078 = min(min(_1053.y, min(_1057.y, _1065.y)), _1069.y);
+  float _1081 = min(min(_1053.z, min(_1057.z, _1065.z)), _1069.z);
+  float _1084 = max(max(_1053.x, max(_1057.x, _1065.x)), _1069.x);
+  float _1087 = max(max(_1053.y, max(_1057.y, _1065.y)), _1069.y);
+  float _1090 = max(max(_1053.z, max(_1057.z, _1065.z)), _1069.z);
+  float _1122 = max(-0.1875f, min(max(max((-0.0f - (_1075 * (0.25f / _1084))), ((1.0f / ((_1075 * 4.0f) + -4.0f)) * (1.0f - _1084))), max(max((-0.0f - (_1078 * (0.25f / _1087))), ((1.0f / ((_1078 * 4.0f) + -4.0f)) * (1.0f - _1087))), max((-0.0f - (_1081 * (0.25f / _1090))), ((1.0f / ((_1081 * 4.0f) + -4.0f)) * (1.0f - _1090))))), 0.0f)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_000.x;
+  float _1124 = (_1122 * 4.0f) + 1.0f;
+  float _1127 = asfloat(((uint)(2129764351u - (int)(asint(_1124)))));
+  float _1130 = (2.0f - (_1127 * _1124)) * _1127;
+  float _1149 = min((_1130 * ((_1122 * (((_1057.x + _1053.x) + _1065.x) + _1069.x)) + _1061.x)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  float _1150 = min((_1130 * ((_1122 * (((_1057.y + _1053.y) + _1065.y) + _1069.y)) + _1061.y)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  float _1151 = min((_1130 * ((_1122 * (((_1057.z + _1053.z) + _1065.z) + _1069.z)) + _1061.z)), Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.z);
+  if (!_137) {
+    float4 _1154 = t1_space6.Load(int3(_30, _713, 0));
+    if ((max(_1154.x, max(_1154.y, _1154.z)) + _1154.w) > 0.0f) {
+      int _1164 = int(Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.w);
+      do {
+        [branch]
+        if (_1164 == 1) {
+          do {
+            if (_1149 < 0.040449999272823334f) {
+              _1178 = (_1149 * 0.07739938050508499f);
+            } else {
+              _1178 = exp2(log2(abs((_1149 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+            }
+            do {
+              if (_1150 < 0.040449999272823334f) {
+                _1190 = (_1150 * 0.07739938050508499f);
+              } else {
+                _1190 = exp2(log2(abs((_1150 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+              }
+              do {
+                if (_1151 < 0.040449999272823334f) {
+                  _1202 = (_1151 * 0.07739938050508499f);
+                } else {
+                  _1202 = exp2(log2(abs((_1151 * 0.9478672742843628f) + 0.05213269963860512f)) * 2.4000000953674316f);
+                }
+                float _1203 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x;
+                _1270 = exp2(log2(abs(_1178)) * _1203);
+                _1271 = exp2(log2(abs(_1190)) * _1203);
+                _1272 = exp2(log2(abs(_1202)) * _1203);
+              } while (false);
+            } while (false);
+          } while (false);
+        } else {
+          if (_1164 == 2) {
+            float _1228 = exp2(log2(abs(_1149)) * 0.012683313339948654f);
+            float _1229 = exp2(log2(abs(_1150)) * 0.012683313339948654f);
+            float _1230 = exp2(log2(abs(_1151)) * 0.012683313339948654f);
+            float _1243 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x;
+            float _1256 = 1.0f / Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.y;
+            float _1257 = _1256 * exp2(log2(abs((_1228 + -0.8359375f) / (18.8515625f - (_1228 * 18.6875f)))) * _1243);
+            float _1258 = _1256 * exp2(log2(abs((_1229 + -0.8359375f) / (18.8515625f - (_1229 * 18.6875f)))) * _1243);
+            float _1259 = _1256 * exp2(log2(abs((_1230 + -0.8359375f) / (18.8515625f - (_1230 * 18.6875f)))) * _1243);
+            _1270 = mad(-0.07284989953041077f, _1259, mad(-0.5876410007476807f, _1258, (_1257 * 1.6604900360107422f)));
+            _1271 = mad(-0.008349419571459293f, _1259, mad(1.1328999996185303f, _1258, (_1257 * -0.124549999833107f)));
+            _1272 = mad(1.1187299489974976f, _1259, mad(-0.10057900100946426f, _1258, (_1257 * -0.018150800839066505f)));
+          } else {
+            _1270 = _1149;
+            _1271 = _1150;
+            _1272 = _1151;
+          }
+        }
+        float _1273 = 1.0f - _1154.w;
+        float _1277 = (_1270 * _1273) + _1154.x;
+        float _1278 = (_1271 * _1273) + _1154.y;
+        float _1279 = (_1272 * _1273) + _1154.z;
+        int _1280 = int(Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.w);
+        [branch]
+        if (_1280 == 1) {
+          float _1292 = exp2(log2(abs(_1277)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          float _1293 = exp2(log2(abs(_1278)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          float _1294 = exp2(log2(abs(_1279)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+          do {
+            if (_1292 < 0.003100000089034438f) {
+              _1306 = (_1292 * 12.920000076293945f);
+            } else {
+              _1306 = ((exp2(log2(abs(_1292)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+            }
+            do {
+              if (_1293 < 0.003100000089034438f) {
+                _1318 = (_1293 * 12.920000076293945f);
+              } else {
+                _1318 = ((exp2(log2(abs(_1293)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+              }
+              if (_1294 < 0.003100000089034438f) {
+                _1384 = _1306;
+                _1385 = _1318;
+                _1386 = (_1294 * 12.920000076293945f);
+              } else {
+                _1384 = _1306;
+                _1385 = _1318;
+                _1386 = ((exp2(log2(abs(_1294)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+              }
+            } while (false);
+          } while (false);
+        } else {
+          if (_1280 == 2) {
+            float _1353 = exp2(log2(abs(mad(0.04331306740641594f, _1279, mad(0.3292830288410187f, _1278, (_1277 * 0.6274039149284363f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            float _1354 = exp2(log2(abs(mad(0.011362316086888313f, _1279, mad(0.9195404052734375f, _1278, (_1277 * 0.06909728795289993f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            float _1355 = exp2(log2(abs(mad(0.8955952525138855f, _1279, mad(0.08801330626010895f, _1278, (_1277 * 0.016391439363360405f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
+            _1384 = exp2(log2(abs(((_1353 * 18.8515625f) + 0.8359375f) / ((_1353 * 18.6875f) + 1.0f))) * 78.84375f);
+            _1385 = exp2(log2(abs(((_1354 * 18.8515625f) + 0.8359375f) / ((_1354 * 18.6875f) + 1.0f))) * 78.84375f);
+            _1386 = exp2(log2(abs(((_1355 * 18.8515625f) + 0.8359375f) / ((_1355 * 18.6875f) + 1.0f))) * 78.84375f);
+          } else {
+            _1384 = _1277;
+            _1385 = _1278;
+            _1386 = _1279;
+          }
+        }
+      } while (false);
+    } else {
+      _1384 = _1149;
+      _1385 = _1150;
+      _1386 = _1151;
+    }
+  } else {
+    _1384 = _1149;
+    _1385 = _1150;
+    _1386 = _1151;
+  }
+  u0_space6[int2(_30, _713)] = float4(_1384, _1385, _1386, 1.0f);
+}

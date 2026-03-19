@@ -1,0 +1,70 @@
+Texture2D<float3> t0_space8 : register(t0, space8);
+
+RWTexture2D<float3> u0_space8 : register(u0, space8);
+
+cbuffer cb0_space8 : register(b0, space8) {
+  struct ShaderInstance_PerInstance_Constants {
+    struct InUniform_Constant {
+      float4 InUniform_Constant_000;
+      float4 InUniform_Constant_016;
+    } ShaderInstance_PerInstance_Constants_000;
+  } ShaderInstance_PerInstance_000: packoffset(c000.x);
+};
+
+[numthreads(8, 8, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  float3 _12 = t0_space8.Load(int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), 0));
+  int _16 = int(ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.w);
+  float _42;
+  float _54;
+  float _120;
+  float _121;
+  float _122;
+  [branch]
+  if (_16 == 1) {
+    float _28 = exp2(log2(abs(_12.x)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x);
+    float _29 = exp2(log2(abs(_12.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x);
+    float _30 = exp2(log2(abs(_12.z)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x);
+    do {
+      if (_28 < 0.003100000089034438f) {
+        _42 = (_28 * 12.920000076293945f);
+      } else {
+        _42 = ((exp2(log2(abs(_28)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+      }
+      do {
+        if (_29 < 0.003100000089034438f) {
+          _54 = (_29 * 12.920000076293945f);
+        } else {
+          _54 = ((exp2(log2(abs(_29)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+        }
+        if (_30 < 0.003100000089034438f) {
+          _120 = _42;
+          _121 = _54;
+          _122 = (_30 * 12.920000076293945f);
+        } else {
+          _120 = _42;
+          _121 = _54;
+          _122 = ((exp2(log2(abs(_30)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f);
+        }
+      } while (false);
+    } while (false);
+  } else {
+    if (_16 == 2) {
+      float _89 = exp2(log2(abs(mad(0.04331306740641594f, _12.z, mad(0.3292830288410187f, _12.y, (_12.x * 0.6274039149284363f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x);
+      float _90 = exp2(log2(abs(mad(0.011362316086888313f, _12.z, mad(0.9195404052734375f, _12.y, (_12.x * 0.06909728795289993f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x);
+      float _91 = exp2(log2(abs(mad(0.8955952525138855f, _12.z, mad(0.08801330626010895f, _12.y, (_12.x * 0.016391439363360405f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x);
+      _120 = exp2(log2(abs(((_89 * 18.8515625f) + 0.8359375f) / ((_89 * 18.6875f) + 1.0f))) * 78.84375f);
+      _121 = exp2(log2(abs(((_90 * 18.8515625f) + 0.8359375f) / ((_90 * 18.6875f) + 1.0f))) * 78.84375f);
+      _122 = exp2(log2(abs(((_91 * 18.8515625f) + 0.8359375f) / ((_91 * 18.6875f) + 1.0f))) * 78.84375f);
+    } else {
+      _120 = _12.x;
+      _121 = _12.y;
+      _122 = _12.z;
+    }
+  }
+  u0_space8[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float3(_120, _121, _122);
+}
