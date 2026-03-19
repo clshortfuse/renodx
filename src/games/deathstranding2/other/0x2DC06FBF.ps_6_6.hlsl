@@ -1,17 +1,21 @@
+#include "../common.hlsli"
+
 cbuffer _19_21 : register(b0, space5) {
   float4 _21_m0[3] : packoffset(c0);
 };
 
-SamplerState _8[] : register(s0, space0);
+// SamplerState _8[] : register(s0, space0);
 Texture2D<float4> _12 : register(t0, space5);
 Texture2D<float4> _13 : register(t1, space5);
 Texture2D<float4> _14 : register(t2, space5);
 
+static float4 gl_FragCoord;
 static float2 TEXCOORD;
 static float4 SV_Target;
 
 struct SPIRV_Cross_Input {
-  float2 TEXCOORD : TEXCOORD1;
+  noperspective float4 gl_FragCoord : SV_Position;
+  linear float2 TEXCOORD : TEXCOORD;
 };
 
 struct SPIRV_Cross_Output {
@@ -19,11 +23,11 @@ struct SPIRV_Cross_Output {
 };
 
 void frag_main() {
-  float4 _64 = _12.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(0, -1));
-  float4 _71 = _12.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(-1, 0));
-  float4 _77 = _12.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-  float4 _83 = _12.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(1, 0));
-  float4 _89 = _12.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(0, 1));
+  float4 _64 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(0, -1));
+  float4 _71 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(-1, 0));
+  float4 _77 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+  float4 _83 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(1, 0));
+  float4 _89 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(0, 1));
   float _96 = sqrt(_64.x);
   float _97 = sqrt(_64.y);
   float _98 = sqrt(_64.z);
@@ -49,7 +53,7 @@ void frag_main() {
   float _153 = max(_104, max(_114, max(_124, max(_139, _148))));
   float _185;
   if (_21_m0[2u].x > 0.0f) {
-    _185 = (_21_m0[2u].x * 1.10000002384185791015625f) * min(0.0625f, 0.5f - (((((_14.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(-1, 0)).x + _14.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(0, -1)).x) + _14.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f).x) + _14.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(1, 0)).x) + _14.SampleLevel(_8[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(0, 1)).x) * 0.20000000298023223876953125f));
+    _185 = (_21_m0[2u].x * 1.10000002384185791015625f) * min(0.0625f, 0.5f - (((((_14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(-1, 0)).x + _14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(0, -1)).x) + _14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f).x) + _14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(1, 0)).x) + _14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(TEXCOORD.x, TEXCOORD.y), 0.0f, int2(0, 1)).x) * 0.20000000298023223876953125f));
   } else {
     _185 = 0.0f;
   }
@@ -107,6 +111,14 @@ void frag_main() {
     float frontier_phi_8_4_ladder_1;
     float frontier_phi_8_4_ladder_2;
     if (_285 == 2u) {
+#if 1
+      BT709FromPQ(
+          _274, _275, _276,
+          _21_m0[1u].x, _21_m0[1u].y,
+          frontier_phi_8_4_ladder,
+          frontier_phi_8_4_ladder_1,
+          frontier_phi_8_4_ladder_2);
+#else
       float _311 = exp2(log2(abs(_274)) * 0.0126833133399486541748046875f);
       float _312 = exp2(log2(abs(_275)) * 0.0126833133399486541748046875f);
       float _313 = exp2(log2(abs(_276)) * 0.0126833133399486541748046875f);
@@ -118,6 +130,7 @@ void frag_main() {
       frontier_phi_8_4_ladder = mad(-0.0728498995304107666015625f, _345, mad(-0.5876410007476806640625f, _344, _343 * 1.6604900360107421875f));
       frontier_phi_8_4_ladder_1 = mad(-0.008349419571459293365478515625f, _345, mad(1.1328999996185302734375f, _344, _343 * (-0.12454999983310699462890625f)));
       frontier_phi_8_4_ladder_2 = mad(1.11872994899749755859375f, _345, mad(-0.100579001009464263916015625f, _344, _343 * (-0.01815080083906650543212890625f)));
+#endif
     } else {
       frontier_phi_8_4_ladder = _274;
       frontier_phi_8_4_ladder_1 = _275;
@@ -170,12 +183,21 @@ void frag_main() {
     float frontier_phi_17_11_ladder_1;
     float frontier_phi_17_11_ladder_2;
     if (_285 == 2u) {
+#if 1
+      PQFromBT709(
+          _374, _375, _376,
+          _21_m0[1u].x, _21_m0[1u].y,
+          frontier_phi_17_11_ladder,
+          frontier_phi_17_11_ladder_1,
+          frontier_phi_17_11_ladder_2);
+#else
       float _442 = exp2(log2(abs(mad(0.0433130674064159393310546875f, _376, mad(0.3292830288410186767578125f, _375, _374 * 0.627403914928436279296875f)) * _21_m0[1u].y)) * _21_m0[1u].x);
       float _443 = exp2(log2(abs(mad(0.01136231608688831329345703125f, _376, mad(0.9195404052734375f, _375, _374 * 0.069097287952899932861328125f)) * _21_m0[1u].y)) * _21_m0[1u].x);
       float _444 = exp2(log2(abs(mad(0.895595252513885498046875f, _376, mad(0.08801330626010894775390625f, _375, _374 * 0.01639143936336040496826171875f)) * _21_m0[1u].y)) * _21_m0[1u].x);
       frontier_phi_17_11_ladder = exp2(log2(abs(((_442 * 18.8515625f) + 0.8359375f) / ((_442 * 18.6875f) + 1.0f))) * 78.84375f);
       frontier_phi_17_11_ladder_1 = exp2(log2(abs(((_443 * 18.8515625f) + 0.8359375f) / ((_443 * 18.6875f) + 1.0f))) * 78.84375f);
       frontier_phi_17_11_ladder_2 = exp2(log2(abs(((_444 * 18.8515625f) + 0.8359375f) / ((_444 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
     } else {
       frontier_phi_17_11_ladder = _374;
       frontier_phi_17_11_ladder_1 = _375;
@@ -192,6 +214,8 @@ void frag_main() {
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
+  gl_FragCoord = stage_input.gl_FragCoord;
+  gl_FragCoord.w = 1.0 / gl_FragCoord.w;
   TEXCOORD = stage_input.TEXCOORD;
   frag_main();
   SPIRV_Cross_Output stage_output;

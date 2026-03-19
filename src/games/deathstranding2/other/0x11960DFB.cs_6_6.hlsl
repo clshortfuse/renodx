@@ -1,3 +1,5 @@
+#include "../common.hlsli"
+
 Texture2D<float4> t0_space8 : register(t0, space8);
 
 RWTexture2D<float4> u0_space8 : register(u0, space8);
@@ -135,12 +137,20 @@ void main(
     } while (false);
   } else {
     if (_297 == 2) {
+#if 1
+      PQFromBT709(
+          _254, _275, _296,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y,
+          _401, _402, _403);
+#else
       float _370 = exp2(log2(abs(mad(0.04331306740641594f, _296, mad(0.3292830288410187f, _275, (_254 * 0.6274039149284363f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       float _371 = exp2(log2(abs(mad(0.011362316086888313f, _296, mad(0.9195404052734375f, _275, (_254 * 0.06909728795289993f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       float _372 = exp2(log2(abs(mad(0.8955952525138855f, _296, mad(0.08801330626010895f, _275, (_254 * 0.016391439363360405f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       _401 = exp2(log2(abs(((_370 * 18.8515625f) + 0.8359375f) / ((_370 * 18.6875f) + 1.0f))) * 78.84375f);
       _402 = exp2(log2(abs(((_371 * 18.8515625f) + 0.8359375f) / ((_371 * 18.6875f) + 1.0f))) * 78.84375f);
       _403 = exp2(log2(abs(((_372 * 18.8515625f) + 0.8359375f) / ((_372 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
     } else {
       _401 = _254;
       _402 = _275;
@@ -227,12 +237,20 @@ void main(
     } while (false);
   } else {
     if (_297 == 2) {
+#if 1
+      PQFromBT709(
+          _616, _637, _658,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y,
+          _761, _762, _763);
+#else
       float _730 = exp2(log2(abs(mad(0.04331306740641594f, _658, mad(0.3292830288410187f, _637, (_616 * 0.6274039149284363f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       float _731 = exp2(log2(abs(mad(0.011362316086888313f, _658, mad(0.9195404052734375f, _637, (_616 * 0.06909728795289993f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       float _732 = exp2(log2(abs(mad(0.8955952525138855f, _658, mad(0.08801330626010895f, _637, (_616 * 0.016391439363360405f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       _761 = exp2(log2(abs(((_730 * 18.8515625f) + 0.8359375f) / ((_730 * 18.6875f) + 1.0f))) * 78.84375f);
       _762 = exp2(log2(abs(((_731 * 18.8515625f) + 0.8359375f) / ((_731 * 18.6875f) + 1.0f))) * 78.84375f);
       _763 = exp2(log2(abs(((_732 * 18.8515625f) + 0.8359375f) / ((_732 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
     } else {
       _761 = _616;
       _762 = _637;
@@ -319,12 +337,20 @@ void main(
     } while (false);
   } else {
     if (_297 == 2) {
+#if 1
+      PQFromBT709(
+          _976, _997, _1018,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y,
+          _1121, _1122, _1123);
+#else
       float _1090 = exp2(log2(abs(mad(0.04331306740641594f, _1018, mad(0.3292830288410187f, _997, (_976 * 0.6274039149284363f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       float _1091 = exp2(log2(abs(mad(0.011362316086888313f, _1018, mad(0.9195404052734375f, _997, (_976 * 0.06909728795289993f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       float _1092 = exp2(log2(abs(mad(0.8955952525138855f, _1018, mad(0.08801330626010895f, _997, (_976 * 0.016391439363360405f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       _1121 = exp2(log2(abs(((_1090 * 18.8515625f) + 0.8359375f) / ((_1090 * 18.6875f) + 1.0f))) * 78.84375f);
       _1122 = exp2(log2(abs(((_1091 * 18.8515625f) + 0.8359375f) / ((_1091 * 18.6875f) + 1.0f))) * 78.84375f);
       _1123 = exp2(log2(abs(((_1092 * 18.8515625f) + 0.8359375f) / ((_1092 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
     } else {
       _1121 = _976;
       _1122 = _997;
@@ -402,12 +428,20 @@ void main(
     } while (false);
   } else {
     if (_297 == 2) {
+#if 1
+      PQFromBT709(
+          _1325, _1346, _1367,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y,
+          _1470, _1471, _1472);
+#else
       float _1439 = exp2(log2(abs(mad(0.04331306740641594f, _1367, mad(0.3292830288410187f, _1346, (_1325 * 0.6274039149284363f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       float _1440 = exp2(log2(abs(mad(0.011362316086888313f, _1367, mad(0.9195404052734375f, _1346, (_1325 * 0.06909728795289993f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       float _1441 = exp2(log2(abs(mad(0.8955952525138855f, _1367, mad(0.08801330626010895f, _1346, (_1325 * 0.016391439363360405f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x);
       _1470 = exp2(log2(abs(((_1439 * 18.8515625f) + 0.8359375f) / ((_1439 * 18.6875f) + 1.0f))) * 78.84375f);
       _1471 = exp2(log2(abs(((_1440 * 18.8515625f) + 0.8359375f) / ((_1440 * 18.6875f) + 1.0f))) * 78.84375f);
       _1472 = exp2(log2(abs(((_1441 * 18.8515625f) + 0.8359375f) / ((_1441 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
     } else {
       _1470 = _1325;
       _1471 = _1346;

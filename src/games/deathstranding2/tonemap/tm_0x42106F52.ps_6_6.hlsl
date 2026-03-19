@@ -1,3 +1,5 @@
+#include "./tonemap.hlsli"
+
 cbuffer _33_35 : register(b0, space3) {
   float4 _35_m0[1] : packoffset(c0);
 };
@@ -6,7 +8,7 @@ cbuffer _38_40 : register(b0, space5) {
   float4 _40_m0[23] : packoffset(c0);
 };
 
-SamplerState _8[] : register(s0, space0);
+// SamplerState _8[] : register(s0, space0);
 Texture2D<uint4> _12 : register(t0, space3);
 Texture2D<float4> _16 : register(t1, space3);
 Texture2D<float4> _17 : register(t2, space3);
@@ -19,12 +21,14 @@ Texture2D<float4> _23 : register(t9, space3);
 Buffer<float4> _26 : register(t0, space5);
 Texture3D<float4> _29 : register(t1, space5);
 
+static float4 gl_FragCoord;
 static float2 TEXCOORD;
 static float4 SV_Target;
 static float SV_Target_1;
 
 struct SPIRV_Cross_Input {
-  float2 TEXCOORD : TEXCOORD1;
+  noperspective float4 gl_FragCoord : SV_Position;
+  linear float2 TEXCOORD : TEXCOORD;
 };
 
 struct SPIRV_Cross_Output {
@@ -66,7 +70,7 @@ void frag_main() {
   float _272 = _271 * _40_m0[21u].w;
   float _273 = _269 * _40_m0[22u].x;
   float _274 = _271 * _40_m0[22u].y;
-  float4 _284 = _18.Sample(_8[2u], float2(_270, _272));
+  float4 _284 = _18.Sample((SamplerState)ResourceDescriptorHeap[2u], float2(_270, _272));
   float _286 = _284.x;
   float _287 = _284.y;
   float _288 = _284.z;
@@ -92,15 +96,15 @@ void frag_main() {
       float frontier_phi_1_2_ladder_5_ladder_1;
       float frontier_phi_1_2_ladder_5_ladder_2;
       if ((_313 & 268435456u) == 0u) {
-        float4 _518 = _16.Sample(_8[0u], float2(_273, _274));
+        float4 _518 = _16.Sample((SamplerState)ResourceDescriptorHeap[0u], float2(_273, _274));
         float _520 = _518.x;
-        float4 _523 = _17.Sample(_8[2u], float2(_273, _274));
+        float4 _523 = _17.Sample((SamplerState)ResourceDescriptorHeap[2u], float2(_273, _274));
         float _529 = max(clamp(_520 * (-4.0f), 0.0f, 1.0f), _523.x);
         float _534 = clamp((_520 * 4.80000019073486328125f) + (-0.20000000298023223876953125f), 0.0f, 1.0f);
-        float4 _536 = _16.Sample(_8[0u], float2(_273, _274 - _35_m0[0u].y));
-        float4 _541 = _16.Sample(_8[0u], float2(_273 - _35_m0[0u].x, _274));
-        float4 _546 = _16.Sample(_8[0u], float2(_273 + _35_m0[0u].x, _274));
-        float4 _551 = _16.Sample(_8[0u], float2(_273, _274 + _35_m0[0u].y));
+        float4 _536 = _16.Sample((SamplerState)ResourceDescriptorHeap[0u], float2(_273, _274 - _35_m0[0u].y));
+        float4 _541 = _16.Sample((SamplerState)ResourceDescriptorHeap[0u], float2(_273 - _35_m0[0u].x, _274));
+        float4 _546 = _16.Sample((SamplerState)ResourceDescriptorHeap[0u], float2(_273 + _35_m0[0u].x, _274));
+        float4 _551 = _16.Sample((SamplerState)ResourceDescriptorHeap[0u], float2(_273, _274 + _35_m0[0u].y));
         float _554 = min(min(min(min(_520, _536.x), _541.x), _546.x), _551.x);
         float _774;
         if (_554 < 0.0f) {
@@ -116,20 +120,20 @@ void frag_main() {
           float _799 = min(_775 + (-0.25f), 4.0f);
           float _800 = _799 * _35_m0[0u].x;
           float _801 = _799 * _35_m0[0u].y;
-          float4 _811 = _18.SampleLevel(_8[2u], float2(_270, _801 + _272), 0.0f);
+          float4 _811 = _18.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_270, _801 + _272), 0.0f);
           float _825 = _800 * 0.707106769084930419921875f;
           float _827 = _801 * 0.707106769084930419921875f;
           float _828 = _825 + _270;
           float _829 = _827 + _272;
-          float4 _830 = _18.SampleLevel(_8[2u], float2(_828, _829), 0.0f);
-          float4 _845 = _18.SampleLevel(_8[2u], float2(_800 + _270, _272), 0.0f);
+          float4 _830 = _18.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_828, _829), 0.0f);
+          float4 _845 = _18.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_800 + _270, _272), 0.0f);
           float _859 = _272 - _827;
-          float4 _860 = _18.SampleLevel(_8[2u], float2(_828, _859), 0.0f);
-          float4 _875 = _18.SampleLevel(_8[2u], float2(_270, _272 - _801), 0.0f);
+          float4 _860 = _18.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_828, _859), 0.0f);
+          float4 _875 = _18.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_270, _272 - _801), 0.0f);
           float _889 = _270 - _825;
-          float4 _890 = _18.SampleLevel(_8[2u], float2(_889, _859), 0.0f);
-          float4 _905 = _18.SampleLevel(_8[2u], float2(_270 - _800, _272), 0.0f);
-          float4 _919 = _18.SampleLevel(_8[2u], float2(_889, _829), 0.0f);
+          float4 _890 = _18.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_889, _859), 0.0f);
+          float4 _905 = _18.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_270 - _800, _272), 0.0f);
+          float4 _919 = _18.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_889, _829), 0.0f);
           _940 = exp2(((((((((log2(max(_811.x, 1.0000000133514319600180897396058e-10f)) + log2(max(_286, 1.0000000133514319600180897396058e-10f))) + log2(max(_830.x, 1.0000000133514319600180897396058e-10f))) + log2(max(_845.x, 1.0000000133514319600180897396058e-10f))) + log2(max(_860.x, 1.0000000133514319600180897396058e-10f))) + log2(max(_875.x, 1.0000000133514319600180897396058e-10f))) + log2(max(_890.x, 1.0000000133514319600180897396058e-10f))) + log2(max(_905.x, 1.0000000133514319600180897396058e-10f))) + log2(max(_919.x, 1.0000000133514319600180897396058e-10f))) * 0.111111111938953399658203125f);
           _941 = exp2(((((((((log2(max(_811.y, 1.0000000133514319600180897396058e-10f)) + log2(max(_287, 1.0000000133514319600180897396058e-10f))) + log2(max(_830.y, 1.0000000133514319600180897396058e-10f))) + log2(max(_845.y, 1.0000000133514319600180897396058e-10f))) + log2(max(_860.y, 1.0000000133514319600180897396058e-10f))) + log2(max(_875.y, 1.0000000133514319600180897396058e-10f))) + log2(max(_890.y, 1.0000000133514319600180897396058e-10f))) + log2(max(_905.y, 1.0000000133514319600180897396058e-10f))) + log2(max(_919.y, 1.0000000133514319600180897396058e-10f))) * 0.111111111938953399658203125f);
           _942 = exp2(((((((((log2(max(_811.z, 1.0000000133514319600180897396058e-10f)) + log2(max(_288, 1.0000000133514319600180897396058e-10f))) + log2(max(_830.z, 1.0000000133514319600180897396058e-10f))) + log2(max(_845.z, 1.0000000133514319600180897396058e-10f))) + log2(max(_860.z, 1.0000000133514319600180897396058e-10f))) + log2(max(_875.z, 1.0000000133514319600180897396058e-10f))) + log2(max(_890.z, 1.0000000133514319600180897396058e-10f))) + log2(max(_905.z, 1.0000000133514319600180897396058e-10f))) + log2(max(_919.z, 1.0000000133514319600180897396058e-10f))) * 0.111111111938953399658203125f);
@@ -138,16 +142,16 @@ void frag_main() {
           _941 = _287;
           _942 = _288;
         }
-        float4 _945 = _20.Sample(_8[2u], float2(_273, _274));
+        float4 _945 = _20.Sample((SamplerState)ResourceDescriptorHeap[2u], float2(_273, _274));
         float _319 = ((_945.x - _940) * _534) + _940;
         float _324 = ((_945.y - _941) * _534) + _941;
         float _329 = ((_945.z - _942) * _534) + _942;
-        float4 _958 = _19.Sample(_8[0u], float2(_273, _274));
+        float4 _958 = _19.Sample((SamplerState)ResourceDescriptorHeap[0u], float2(_273, _274));
         float frontier_phi_1_2_ladder_5_ladder_23_ladder;
         float frontier_phi_1_2_ladder_5_ladder_23_ladder_1;
         float frontier_phi_1_2_ladder_5_ladder_23_ladder_2;
         if ((_958.z > 0.0f) || ((_958.x > 0.0f) || (_958.y > 0.0f))) {
-          float4 _1066 = _19.Sample(_8[2u], float2(_273, _274));
+          float4 _1066 = _19.Sample((SamplerState)ResourceDescriptorHeap[2u], float2(_273, _274));
           frontier_phi_1_2_ladder_5_ladder_23_ladder = ((_1066.z - _329) * _529) + _329;
           frontier_phi_1_2_ladder_5_ladder_23_ladder_1 = ((_1066.y - _324) * _529) + _324;
           frontier_phi_1_2_ladder_5_ladder_23_ladder_2 = ((_1066.x - _319) * _529) + _319;
@@ -160,7 +164,7 @@ void frag_main() {
         frontier_phi_1_2_ladder_5_ladder_1 = frontier_phi_1_2_ladder_5_ladder_23_ladder_1;
         frontier_phi_1_2_ladder_5_ladder_2 = frontier_phi_1_2_ladder_5_ladder_23_ladder_2;
       } else {
-        float4 _558 = _20.Sample(_8[2u], float2(_273, _274));
+        float4 _558 = _20.Sample((SamplerState)ResourceDescriptorHeap[2u], float2(_273, _274));
         frontier_phi_1_2_ladder_5_ladder = _558.z;
         frontier_phi_1_2_ladder_5_ladder_1 = _558.y;
         frontier_phi_1_2_ladder_5_ladder_2 = _558.x;
@@ -169,7 +173,7 @@ void frag_main() {
       frontier_phi_1_2_ladder_1 = frontier_phi_1_2_ladder_5_ladder_1;
       frontier_phi_1_2_ladder_2 = frontier_phi_1_2_ladder_5_ladder_2;
     } else {
-      float4 _481 = _19.Sample(_8[2u], float2(_273, _274));
+      float4 _481 = _19.Sample((SamplerState)ResourceDescriptorHeap[2u], float2(_273, _274));
       frontier_phi_1_2_ladder = _481.z;
       frontier_phi_1_2_ladder_1 = _481.y;
       frontier_phi_1_2_ladder_2 = _481.x;
@@ -182,11 +186,11 @@ void frag_main() {
   float _333 = (_259 - _40_m0[0u].w) / _40_m0[0u].y;
   float4 _335 = _26.Load(2u);
   float _336 = _335.x;
-  float4 _339 = _21.Sample(_8[2u], float2(_332, _333));
+  float4 _339 = _21.Sample((SamplerState)ResourceDescriptorHeap[2u], float2(_332, _333));
   float _341 = _339.x;
   float _342 = _339.y;
   float _343 = _339.z;
-  float4 _346 = _22.Sample(_8[2u], float2(_332, _333));
+  float4 _346 = _22.Sample((SamplerState)ResourceDescriptorHeap[2u], float2(_332, _333));
   float _354 = _40_m0[19u].y * 0.25f;
   float _356 = _315 * _354;
   float _357 = _320 * _354;
@@ -214,7 +218,7 @@ void frag_main() {
     _446 = _436;
   } else {
     uint _452 = asuint(_40_m0[11u].z);
-    float _472 = (_23.Sample(_8[17u], float2((_258 * _40_m0[11u].x) + (float(_452 & 65535u) * 1.52587890625e-05f), (_259 * _40_m0[11u].y) + (float(_452 >> 16u) * 1.52587890625e-05f))).y + (-0.5f)) * _339.w;
+    float _472 = (_23.Sample((SamplerState)ResourceDescriptorHeap[17u], float2((_258 * _40_m0[11u].x) + (float(_452 & 65535u) * 1.52587890625e-05f), (_259 * _40_m0[11u].y) + (float(_452 >> 16u) * 1.52587890625e-05f))).y + (-0.5f)) * _339.w;
     _442 = max(_472 + _432, 0.0f);
     _444 = max(_472 + _434, 0.0f);
     _446 = max(_472 + _436, 0.0f);
@@ -252,8 +256,20 @@ void frag_main() {
     float frontier_phi_11_12_ladder_1;
     float frontier_phi_11_12_ladder_2;
     if (asuint(_40_m0[12u]).w == 0u) {
+#if 1
+      ApplyTonemapGamma2LUTAndInverseTonemap(
+          _29,
+          _489, _490, _491,
+          _40_m0[2u].w,
+          _40_m0[2u].x, _40_m0[2u].y, _40_m0[2u].z,
+          _40_m0[3u].x, _40_m0[3u].y, _40_m0[3u].z, _40_m0[3u].w,
+          _40_m0[10u].z, _40_m0[10u].w,
+          frontier_phi_11_12_ladder,
+          frontier_phi_11_12_ladder_1,
+          frontier_phi_11_12_ladder_2);
+#else
       float _609 = (-0.0f) - _40_m0[2u].w;
-      float4 _642 = _29.SampleLevel(_8[2u], float3((clamp(sqrt(max((_489 < _40_m0[3u].z) ? ((_489 * _40_m0[2u].y) + _40_m0[2u].z) : ((_609 / (_489 + _40_m0[3u].x)) + _40_m0[3u].y), 0.0f)), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w, (clamp(sqrt(max((_490 < _40_m0[3u].z) ? ((_490 * _40_m0[2u].y) + _40_m0[2u].z) : ((_609 / (_490 + _40_m0[3u].x)) + _40_m0[3u].y), 0.0f)), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w, (clamp(sqrt(max((_491 < _40_m0[3u].z) ? ((_491 * _40_m0[2u].y) + _40_m0[2u].z) : ((_609 / (_491 + _40_m0[3u].x)) + _40_m0[3u].y), 0.0f)), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w), 0.0f);
+      float4 _642 = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float3((clamp(sqrt(max((_489 < _40_m0[3u].z) ? ((_489 * _40_m0[2u].y) + _40_m0[2u].z) : ((_609 / (_489 + _40_m0[3u].x)) + _40_m0[3u].y), 0.0f)), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w, (clamp(sqrt(max((_490 < _40_m0[3u].z) ? ((_490 * _40_m0[2u].y) + _40_m0[2u].z) : ((_609 / (_490 + _40_m0[3u].x)) + _40_m0[3u].y), 0.0f)), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w, (clamp(sqrt(max((_491 < _40_m0[3u].z) ? ((_491 * _40_m0[2u].y) + _40_m0[2u].z) : ((_609 / (_491 + _40_m0[3u].x)) + _40_m0[3u].y), 0.0f)), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w), 0.0f);
       float _644 = _642.x;
       float _645 = _642.y;
       float _646 = _642.z;
@@ -263,11 +279,12 @@ void frag_main() {
       frontier_phi_11_12_ladder = (_652 < _40_m0[3u].w) ? ((_652 - _40_m0[2u].z) / _40_m0[2u].y) : ((_609 / (_652 - _40_m0[3u].y)) - _40_m0[3u].x);
       frontier_phi_11_12_ladder_1 = (_651 < _40_m0[3u].w) ? ((_651 - _40_m0[2u].z) / _40_m0[2u].y) : ((_609 / (_651 - _40_m0[3u].y)) - _40_m0[3u].x);
       frontier_phi_11_12_ladder_2 = (_650 < _40_m0[3u].w) ? ((_650 - _40_m0[2u].z) / _40_m0[2u].y) : ((_609 / (_650 - _40_m0[3u].y)) - _40_m0[3u].x);
+#endif
     } else {
       float _685 = exp2(log2(abs(_489 * 0.00999999977648258209228515625f)) * 0.1470947265625f);
       float _686 = exp2(log2(abs(_490 * 0.00999999977648258209228515625f)) * 0.1470947265625f);
       float _687 = exp2(log2(abs(_491 * 0.00999999977648258209228515625f)) * 0.1470947265625f);
-      float4 _729 = _29.SampleLevel(_8[2u], float3((clamp(exp2(log2(abs(((_685 * 18.8515625f) + 0.8359375f) / ((_685 * 18.6875f) + 1.0f))) * 78.84375f), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w, (clamp(exp2(log2(abs(((_686 * 18.8515625f) + 0.8359375f) / ((_686 * 18.6875f) + 1.0f))) * 78.84375f), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w, (clamp(exp2(log2(abs(((_687 * 18.8515625f) + 0.8359375f) / ((_687 * 18.6875f) + 1.0f))) * 78.84375f), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w), 0.0f);
+      float4 _729 = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float3((clamp(exp2(log2(abs(((_685 * 18.8515625f) + 0.8359375f) / ((_685 * 18.6875f) + 1.0f))) * 78.84375f), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w, (clamp(exp2(log2(abs(((_686 * 18.8515625f) + 0.8359375f) / ((_686 * 18.6875f) + 1.0f))) * 78.84375f), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w, (clamp(exp2(log2(abs(((_687 * 18.8515625f) + 0.8359375f) / ((_687 * 18.6875f) + 1.0f))) * 78.84375f), 0.0f, 1.0f) * _40_m0[10u].z) + _40_m0[10u].w), 0.0f);
       float _744 = exp2(log2(abs(_729.x)) * 0.0126833133399486541748046875f);
       float _745 = exp2(log2(abs(_729.y)) * 0.0126833133399486541748046875f);
       float _746 = exp2(log2(abs(_729.z)) * 0.0126833133399486541748046875f);
@@ -287,10 +304,19 @@ void frag_main() {
     _578 = _563;
     _580 = _566;
   } else {
+#if 1
+    ApplyUserGradingAndToneMapAndScale(
+        _560, _563, _566,
+        _40_m0[2u].y, _40_m0[2u].z,
+        _40_m0[3u].z,
+        _40_m0[4u].x, _40_m0[4u].y, _40_m0[4u].z,
+        _576, _578, _580);
+#else
     float _590 = (-0.0f) - _40_m0[4u].x;
     _576 = (_560 < _40_m0[3u].z) ? ((_560 * _40_m0[2u].y) + _40_m0[2u].z) : ((_590 / (_560 + _40_m0[4u].y)) + _40_m0[4u].z);
     _578 = (_563 < _40_m0[3u].z) ? ((_563 * _40_m0[2u].y) + _40_m0[2u].z) : ((_590 / (_563 + _40_m0[4u].y)) + _40_m0[4u].z);
     _580 = (_566 < _40_m0[3u].z) ? ((_566 * _40_m0[2u].y) + _40_m0[2u].z) : ((_590 / (_566 + _40_m0[4u].y)) + _40_m0[4u].z);
+#endif
   }
   uint _582 = uint(int(_40_m0[18u].w));
   float _1039;
@@ -332,12 +358,24 @@ void frag_main() {
     float frontier_phi_27_21_ladder_1;
     float frontier_phi_27_21_ladder_2;
     if (_582 == 2u) {
+#if 1
+      float pq_r, pq_g, pq_b;
+      PQFromBT709(
+          _576, _578, _580,
+          _40_m0[18u].x, _40_m0[18u].y,
+          pq_r, pq_g, pq_b);
+
+      frontier_phi_27_21_ladder = pq_r;
+      frontier_phi_27_21_ladder_1 = pq_b;  // keep existing swapped local mapping
+      frontier_phi_27_21_ladder_2 = pq_g;
+#else
       float _1009 = exp2(log2(abs(mad(0.0433130674064159393310546875f, _580, mad(0.3292830288410186767578125f, _578, _576 * 0.627403914928436279296875f)) * _40_m0[18u].y)) * _40_m0[18u].x);
       float _1010 = exp2(log2(abs(mad(0.01136231608688831329345703125f, _580, mad(0.9195404052734375f, _578, _576 * 0.069097287952899932861328125f)) * _40_m0[18u].y)) * _40_m0[18u].x);
       float _1011 = exp2(log2(abs(mad(0.895595252513885498046875f, _580, mad(0.08801330626010894775390625f, _578, _576 * 0.01639143936336040496826171875f)) * _40_m0[18u].y)) * _40_m0[18u].x);
       frontier_phi_27_21_ladder = exp2(log2(abs(((_1009 * 18.8515625f) + 0.8359375f) / ((_1009 * 18.6875f) + 1.0f))) * 78.84375f);
       frontier_phi_27_21_ladder_1 = exp2(log2(abs(((_1011 * 18.8515625f) + 0.8359375f) / ((_1011 * 18.6875f) + 1.0f))) * 78.84375f);
       frontier_phi_27_21_ladder_2 = exp2(log2(abs(((_1010 * 18.8515625f) + 0.8359375f) / ((_1010 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
     } else {
       frontier_phi_27_21_ladder = _576;
       frontier_phi_27_21_ladder_1 = _580;
@@ -358,6 +396,8 @@ void frag_main() {
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
+  gl_FragCoord = stage_input.gl_FragCoord;
+  gl_FragCoord.w = 1.0 / gl_FragCoord.w;
   TEXCOORD = stage_input.TEXCOORD;
   frag_main();
   SPIRV_Cross_Output stage_output;
@@ -365,3 +405,4 @@ SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
   stage_output.SV_Target_1 = SV_Target_1;
   return stage_output;
 }
+

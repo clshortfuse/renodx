@@ -317,9 +317,15 @@ void frag_main() {
     float _889 = max(min(_881, _26_m0[2u].y), min(max(_881, _26_m0[2u].y), _26_m0[2u].w));
     uint _905 = asuint(_26_m0[0u].z);
     float _924 = (_14.SampleLevel((SamplerState)ResourceDescriptorHeap[17u], float2((float(_905 & 65535u) * 1.52587890625e-05f) + (_26_m0[0u].x * TEXCOORD.x), (float(_905 >> 16u) * 1.52587890625e-05f) + (_26_m0[0u].y * TEXCOORD.y)), 0.0f).y + (-0.5f)) * (((((_885 - _26_m0[2u].x) * (_885 - _26_m0[2u].z)) == 0.0f) || (((_889 - _26_m0[2u].y) * (_889 - _26_m0[2u].w)) == 0.0f)) ? 0.0f : _15.SampleLevel((SamplerState)ResourceDescriptorHeap[3u], float2(_885, _889), 0.0f).w);
+#if 1
+    _863 = (_924 + _536);
+    _865 = (_924 + _539);
+    _867 = (_924 + _542);
+#else
     _863 = max(_924 + _536, 0.0f);
     _865 = max(_924 + _539, 0.0f);
     _867 = max(_924 + _542, 0.0f);
+#endif
   }
   float _869 = 1.0f - _163.w;
   float _873 = (_863 * _869) + _163.x;
@@ -434,12 +440,25 @@ void frag_main() {
     float frontier_phi_33_27_ladder_1;
     float frontier_phi_33_27_ladder_2;
     if (_876 == 2u) {
+#if 1
+      float pq_r;
+      float pq_g;
+      float pq_b;
+      PQFromBT709(
+          _545, _548, _551,
+          _26_m0[8u].x, _26_m0[8u].y,
+          pq_r, pq_g, pq_b);
+      frontier_phi_33_27_ladder = pq_r;
+      frontier_phi_33_27_ladder_1 = pq_b;  // keep existing swapped local mapping
+      frontier_phi_33_27_ladder_2 = pq_g;
+#else
       float _1126 = exp2(log2(abs(mad(0.0433130674064159393310546875f, _551, mad(0.3292830288410186767578125f, _548, _545 * 0.627403914928436279296875f)) * _26_m0[8u].y)) * _26_m0[8u].x);
       float _1127 = exp2(log2(abs(mad(0.01136231608688831329345703125f, _551, mad(0.9195404052734375f, _548, _545 * 0.069097287952899932861328125f)) * _26_m0[8u].y)) * _26_m0[8u].x);
       float _1128 = exp2(log2(abs(mad(0.895595252513885498046875f, _551, mad(0.08801330626010894775390625f, _548, _545 * 0.01639143936336040496826171875f)) * _26_m0[8u].y)) * _26_m0[8u].x);
       frontier_phi_33_27_ladder = exp2(log2(abs(((_1126 * 18.8515625f) + 0.8359375f) / ((_1126 * 18.6875f) + 1.0f))) * 78.84375f);
       frontier_phi_33_27_ladder_1 = exp2(log2(abs(((_1128 * 18.8515625f) + 0.8359375f) / ((_1128 * 18.6875f) + 1.0f))) * 78.84375f);
       frontier_phi_33_27_ladder_2 = exp2(log2(abs(((_1127 * 18.8515625f) + 0.8359375f) / ((_1127 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
     } else {
       frontier_phi_33_27_ladder = _545;
       frontier_phi_33_27_ladder_1 = _551;

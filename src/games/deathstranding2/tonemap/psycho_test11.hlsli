@@ -206,6 +206,33 @@ float psycho11_Neutwo(float x, float peak, float clip) {
   return numerator * rsqrt(denominator_squared);
 }
 
+// f_{mi}\left(x\right)=\frac{qzx\left(cc-gg\right)}{\sqrt{\left(cc-gg\right)\cdot\left(-xx\cdot\left(cczz-qqgg\right)+ccgg\cdot\left(qq-zz\right)\right)}}-m
+float psycho11_NeutwoMin(float x, float peak, float clip, float gray_in, float gray_out, float minimum) {
+  float m = minimum;
+  float g = gray_in;
+  float z = gray_out - m;
+  float q = peak - m;
+  float c = clip;
+
+  float cc = c * c;
+  float gg = g * g;
+  float cc_minus_gg = cc - gg;
+
+  float numerator = q * z * x * cc_minus_gg;
+
+  float xx = x * x;
+  float zz = z * z;
+  float qq = q * q;
+
+  float cczz = cc * zz;
+  float qqgg = qq * gg;
+  float ccgg = cc * gg;
+
+  float denominator_squared = cc_minus_gg * mad(-xx, (cczz - qqgg), ccgg * (qq - zz));
+
+  return mad(numerator, rsqrt(denominator_squared), -m);
+}
+
 float3 psycho11_NeutwoPerChannel(float3 color, float3 peak) {
   return float3(
       psycho11_Neutwo(color.r, peak.r),
@@ -218,6 +245,13 @@ float3 psycho11_NeutwoPerChannel(float3 color, float3 peak, float3 clip) {
       psycho11_Neutwo(color.r, peak.r, clip.r),
       psycho11_Neutwo(color.g, peak.g, clip.g),
       psycho11_Neutwo(color.b, peak.b, clip.b));
+}
+
+float3 psycho11_NeutwoPerChannelMin(float3 color, float3 peak, float3 clip, float gray_in, float gray_out, float minimum) {
+  return float3(
+      psycho11_NeutwoMin(color.r, peak.r, clip.r, gray_in, gray_out, minimum),
+      psycho11_NeutwoMin(color.g, peak.g, clip.g, gray_in, gray_out, minimum),
+      psycho11_NeutwoMin(color.b, peak.b, clip.b, gray_in, gray_out, minimum));
 }
 
 float3 psycho11_NakaRushton(float3 x, float3 peak, float3 gray, float cone_response_exponent) {

@@ -72,7 +72,7 @@ renodx::utils::settings::Settings settings = {
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .label = "SDR EOTF Emulation",
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF",
@@ -135,7 +135,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 50.f,
+        .default_value = 75.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
@@ -182,28 +182,28 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeHighlightSaturation",
-        .binding = &shader_injection.tone_map_highlight_saturation,
-        .default_value = 50.f,
-        .label = "Highlight Saturation",
-        .section = "Color Grading",
-        .tooltip = "Adds or removes highlight color.",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeDechroma",
-        .binding = &shader_injection.tone_map_dechroma,
-        .default_value = 0.f,
-        .label = "Dechroma",
-        .section = "Color Grading",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ColorGradeHighlightSaturation",
+    //     .binding = &shader_injection.tone_map_highlight_saturation,
+    //     .default_value = 50.f,
+    //     .label = "Highlight Saturation",
+    //     .section = "Color Grading",
+    //     .tooltip = "Adds or removes highlight color.",
+    //     .max = 100.f,
+    //     .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+    //     .parse = [](float value) { return value * 0.02f; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ColorGradeDechroma",
+    //     .binding = &shader_injection.tone_map_dechroma,
+    //     .default_value = 0.f,
+    //     .label = "Dechroma",
+    //     .section = "Color Grading",
+    //     .tooltip = "Controls highlight desaturation due to overexposure.",
+    //     .max = 100.f,
+    //     .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+    //     .parse = [](float value) { return value * 0.01f; },
+    // },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &shader_injection.tone_map_flare,
@@ -222,6 +222,7 @@ renodx::utils::settings::Settings settings = {
         .label = "LUT Strength",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -237,19 +238,20 @@ renodx::utils::settings::Settings settings = {
           }
         },
     },
-    // new renodx::utils::settings::Setting{
-    //     .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-    //     .label = "Purist",
-    //     .section = "Options",
-    //     .group = "button-line-0",
-    //     .on_change = []() {
-    //       renodx::utils::settings::ResetSettings();
-    //       renodx::utils::settings::UpdateSettings({
-    //           {"GammaCorrection", 1.f},
-    //           {"ColorGradeShadowContrast", 50.f},
-    //       });
-    //     },
-    // },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Purist",
+        .section = "Options",
+        .group = "button-line-0",
+        .tooltip = "Matches SDR on a 2.2 gamma display. Preserves original artistic intent.",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"GammaCorrection", 1.f},
+              {"ColorGradeShadows", 50.f},
+          });
+        },
+    },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "RenoDX Discord",
@@ -321,17 +323,17 @@ renodx::utils::settings::Settings settings = {
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
-      {"ToneMapPeakNits", 203.f},
+      {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
-      {"GammaCorrection", 2.f},
+      {"GammaCorrection", 1.f},
       {"ToneMapHueShift", 100.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeGamma", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeHighlightContrast", 50.f},
       {"ColorGradeShadows", 50.f},
-      {"ColorGradeShadowContrast", 42.f},
+      {"ColorGradeShadowContrast", 50.f},
       {"ColorGradeContrast", 50.f},
       {"ColorGradeAdaptationContrast", 50.f},
       {"ColorGradeSaturation", 50.f},

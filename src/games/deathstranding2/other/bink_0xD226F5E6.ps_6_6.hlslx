@@ -1,3 +1,5 @@
+#include "../common.hlsli"
+
 Texture2D<float4> YPlane : register(t16, space8);
 
 Texture2D<float4> RPlane : register(t17, space8);

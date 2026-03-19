@@ -1,9 +1,12 @@
+#include "../common.hlsli"
+
 Texture2D<float4> t0_space6 : register(t0, space6);
 
 Texture2D<float4> t1_space6 : register(t1, space6);
 
 RWTexture2D<float4> u0_space6 : register(u0, space6);
 
+// clang-format off
 cbuffer cb0_space5 : register(b0, space5) {
   struct Scratch_PerBatch_Constants {
     struct AAResolverUpscaleParams {
@@ -18,9 +21,9 @@ cbuffer cb0_space5 : register(b0, space5) {
       float AAResolverUpscaleParams_128;
       float2 AAResolverUpscaleParams_132;
     } Scratch_PerBatch_Constants_000;
-  } Scratch_PerBatch_000:
-  packoffset(c000.x);
+  } Scratch_PerBatch_000: packoffset(c000.x);
 };
+// clang-format on
 
 [numthreads(64, 1, 1)]
 void main(
@@ -131,6 +134,13 @@ void main(
           } while (false);
         } else {
           if (_150 == 2) {
+#if 1
+            BT709FromPQ(
+                _133, _134, _135,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.y,
+                _256, _257, _258);
+#else
             float _214 = exp2(log2(abs(_133)) * 0.012683313339948654f);
             float _215 = exp2(log2(abs(_134)) * 0.012683313339948654f);
             float _216 = exp2(log2(abs(_135)) * 0.012683313339948654f);
@@ -142,6 +152,7 @@ void main(
             _256 = mad(-0.07284989953041077f, _245, mad(-0.5876410007476807f, _244, (_243 * 1.6604900360107422f)));
             _257 = mad(-0.008349419571459293f, _245, mad(1.1328999996185303f, _244, (_243 * -0.124549999833107f)));
             _258 = mad(1.1187299489974976f, _245, mad(-0.10057900100946426f, _244, (_243 * -0.018150800839066505f)));
+#endif
           } else {
             _256 = _133;
             _257 = _134;
@@ -183,12 +194,20 @@ void main(
           } while (false);
         } else {
           if (_266 == 2) {
+#if 1
+            PQFromBT709(
+                _263, _264, _265,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y,
+                _370, _371, _372);
+#else
             float _339 = exp2(log2(abs(mad(0.04331306740641594f, _265, mad(0.3292830288410187f, _264, (_263 * 0.6274039149284363f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             float _340 = exp2(log2(abs(mad(0.011362316086888313f, _265, mad(0.9195404052734375f, _264, (_263 * 0.06909728795289993f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             float _341 = exp2(log2(abs(mad(0.8955952525138855f, _265, mad(0.08801330626010895f, _264, (_263 * 0.016391439363360405f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             _370 = exp2(log2(abs(((_339 * 18.8515625f) + 0.8359375f) / ((_339 * 18.6875f) + 1.0f))) * 78.84375f);
             _371 = exp2(log2(abs(((_340 * 18.8515625f) + 0.8359375f) / ((_340 * 18.6875f) + 1.0f))) * 78.84375f);
             _372 = exp2(log2(abs(((_341 * 18.8515625f) + 0.8359375f) / ((_341 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
           } else {
             _370 = _263;
             _371 = _264;
@@ -262,6 +281,13 @@ void main(
           } while (false);
         } else {
           if (_489 == 2) {
+#if 1
+            BT709FromPQ(
+                _474, _475, _476,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.y,
+                _595, _596, _597);
+#else
             float _553 = exp2(log2(abs(_474)) * 0.012683313339948654f);
             float _554 = exp2(log2(abs(_475)) * 0.012683313339948654f);
             float _555 = exp2(log2(abs(_476)) * 0.012683313339948654f);
@@ -273,6 +299,7 @@ void main(
             _595 = mad(-0.07284989953041077f, _584, mad(-0.5876410007476807f, _583, (_582 * 1.6604900360107422f)));
             _596 = mad(-0.008349419571459293f, _584, mad(1.1328999996185303f, _583, (_582 * -0.124549999833107f)));
             _597 = mad(1.1187299489974976f, _584, mad(-0.10057900100946426f, _583, (_582 * -0.018150800839066505f)));
+#endif
           } else {
             _595 = _474;
             _596 = _475;
@@ -314,12 +341,20 @@ void main(
           } while (false);
         } else {
           if (_605 == 2) {
+#if 1
+            PQFromBT709(
+                _602, _603, _604,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y,
+                _709, _710, _711);
+#else
             float _678 = exp2(log2(abs(mad(0.04331306740641594f, _604, mad(0.3292830288410187f, _603, (_602 * 0.6274039149284363f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             float _679 = exp2(log2(abs(mad(0.011362316086888313f, _604, mad(0.9195404052734375f, _603, (_602 * 0.06909728795289993f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             float _680 = exp2(log2(abs(mad(0.8955952525138855f, _604, mad(0.08801330626010895f, _603, (_602 * 0.016391439363360405f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             _709 = exp2(log2(abs(((_678 * 18.8515625f) + 0.8359375f) / ((_678 * 18.6875f) + 1.0f))) * 78.84375f);
             _710 = exp2(log2(abs(((_679 * 18.8515625f) + 0.8359375f) / ((_679 * 18.6875f) + 1.0f))) * 78.84375f);
             _711 = exp2(log2(abs(((_680 * 18.8515625f) + 0.8359375f) / ((_680 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
           } else {
             _709 = _602;
             _710 = _603;
@@ -393,6 +428,13 @@ void main(
           } while (false);
         } else {
           if (_828 == 2) {
+#if 1
+            BT709FromPQ(
+                _813, _814, _815,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.y,
+                _934, _935, _936);
+#else
             float _892 = exp2(log2(abs(_813)) * 0.012683313339948654f);
             float _893 = exp2(log2(abs(_814)) * 0.012683313339948654f);
             float _894 = exp2(log2(abs(_815)) * 0.012683313339948654f);
@@ -404,6 +446,7 @@ void main(
             _934 = mad(-0.07284989953041077f, _923, mad(-0.5876410007476807f, _922, (_921 * 1.6604900360107422f)));
             _935 = mad(-0.008349419571459293f, _923, mad(1.1328999996185303f, _922, (_921 * -0.124549999833107f)));
             _936 = mad(1.1187299489974976f, _923, mad(-0.10057900100946426f, _922, (_921 * -0.018150800839066505f)));
+#endif
           } else {
             _934 = _813;
             _935 = _814;
@@ -445,12 +488,20 @@ void main(
           } while (false);
         } else {
           if (_944 == 2) {
+#if 1
+            PQFromBT709(
+                _941, _942, _943,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y,
+                _1048, _1049, _1050);
+#else
             float _1017 = exp2(log2(abs(mad(0.04331306740641594f, _943, mad(0.3292830288410187f, _942, (_941 * 0.6274039149284363f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             float _1018 = exp2(log2(abs(mad(0.011362316086888313f, _943, mad(0.9195404052734375f, _942, (_941 * 0.06909728795289993f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             float _1019 = exp2(log2(abs(mad(0.8955952525138855f, _943, mad(0.08801330626010895f, _942, (_941 * 0.016391439363360405f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             _1048 = exp2(log2(abs(((_1017 * 18.8515625f) + 0.8359375f) / ((_1017 * 18.6875f) + 1.0f))) * 78.84375f);
             _1049 = exp2(log2(abs(((_1018 * 18.8515625f) + 0.8359375f) / ((_1018 * 18.6875f) + 1.0f))) * 78.84375f);
             _1050 = exp2(log2(abs(((_1019 * 18.8515625f) + 0.8359375f) / ((_1019 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
           } else {
             _1048 = _941;
             _1049 = _942;
@@ -521,6 +572,13 @@ void main(
           } while (false);
         } else {
           if (_1164 == 2) {
+#if 1
+            BT709FromPQ(
+                _1149, _1150, _1151,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.x,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_112.y,
+                _1270, _1271, _1272);
+#else
             float _1228 = exp2(log2(abs(_1149)) * 0.012683313339948654f);
             float _1229 = exp2(log2(abs(_1150)) * 0.012683313339948654f);
             float _1230 = exp2(log2(abs(_1151)) * 0.012683313339948654f);
@@ -532,6 +590,7 @@ void main(
             _1270 = mad(-0.07284989953041077f, _1259, mad(-0.5876410007476807f, _1258, (_1257 * 1.6604900360107422f)));
             _1271 = mad(-0.008349419571459293f, _1259, mad(1.1328999996185303f, _1258, (_1257 * -0.124549999833107f)));
             _1272 = mad(1.1187299489974976f, _1259, mad(-0.10057900100946426f, _1258, (_1257 * -0.018150800839066505f)));
+#endif
           } else {
             _1270 = _1149;
             _1271 = _1150;
@@ -573,12 +632,20 @@ void main(
           } while (false);
         } else {
           if (_1280 == 2) {
+#if 1
+            PQFromBT709(
+                _1277, _1278, _1279,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x,
+                Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y,
+                _1384, _1385, _1386);
+#else
             float _1353 = exp2(log2(abs(mad(0.04331306740641594f, _1279, mad(0.3292830288410187f, _1278, (_1277 * 0.6274039149284363f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             float _1354 = exp2(log2(abs(mad(0.011362316086888313f, _1279, mad(0.9195404052734375f, _1278, (_1277 * 0.06909728795289993f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             float _1355 = exp2(log2(abs(mad(0.8955952525138855f, _1279, mad(0.08801330626010895f, _1278, (_1277 * 0.016391439363360405f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.AAResolverUpscaleParams_064.x);
             _1384 = exp2(log2(abs(((_1353 * 18.8515625f) + 0.8359375f) / ((_1353 * 18.6875f) + 1.0f))) * 78.84375f);
             _1385 = exp2(log2(abs(((_1354 * 18.8515625f) + 0.8359375f) / ((_1354 * 18.6875f) + 1.0f))) * 78.84375f);
             _1386 = exp2(log2(abs(((_1355 * 18.8515625f) + 0.8359375f) / ((_1355 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
           } else {
             _1384 = _1277;
             _1385 = _1278;
