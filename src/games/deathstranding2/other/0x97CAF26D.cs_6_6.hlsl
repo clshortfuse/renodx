@@ -1,7 +1,10 @@
+#include "../common.hlsli"
+
 Texture2D<float3> t0_space8 : register(t0, space8);
 
 RWTexture2D<float3> u0_space8 : register(u0, space8);
 
+// clang-format off
 cbuffer cb0_space8 : register(b0, space8) {
   struct ShaderInstance_PerInstance_Constants {
     struct InUniform_Constant {
@@ -10,6 +13,7 @@ cbuffer cb0_space8 : register(b0, space8) {
     } ShaderInstance_PerInstance_Constants_000;
   } ShaderInstance_PerInstance_000: packoffset(c000.x);
 };
+// clang-format on
 
 [numthreads(8, 8, 1)]
 void main(
@@ -54,12 +58,20 @@ void main(
     } while (false);
   } else {
     if (_16 == 2) {
+#if 1
+      PQFromBT709(
+          _12.x, _12.y, _12.z,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.y,
+          _120, _121, _122);
+#else
       float _89 = exp2(log2(abs(mad(0.04331306740641594f, _12.z, mad(0.3292830288410187f, _12.y, (_12.x * 0.6274039149284363f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x);
       float _90 = exp2(log2(abs(mad(0.011362316086888313f, _12.z, mad(0.9195404052734375f, _12.y, (_12.x * 0.06909728795289993f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x);
       float _91 = exp2(log2(abs(mad(0.8955952525138855f, _12.z, mad(0.08801330626010895f, _12.y, (_12.x * 0.016391439363360405f))) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.y)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x);
       _120 = exp2(log2(abs(((_89 * 18.8515625f) + 0.8359375f) / ((_89 * 18.6875f) + 1.0f))) * 78.84375f);
       _121 = exp2(log2(abs(((_90 * 18.8515625f) + 0.8359375f) / ((_90 * 18.6875f) + 1.0f))) * 78.84375f);
       _122 = exp2(log2(abs(((_91 * 18.8515625f) + 0.8359375f) / ((_91 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
     } else {
       _120 = _12.x;
       _121 = _12.y;

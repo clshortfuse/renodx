@@ -1,3 +1,5 @@
+#include "../common.hlsli"
+
 RWTexture2D<float4> u0_space8 : register(u0, space8);
 
 RWTexture2D<float4> u1_space8 : register(u1, space8);
@@ -57,6 +59,13 @@ void main(
     } while (false);
   } else {
     if (_23 == 2) {
+#if 1
+      BT709FromPQ(
+          _19.x, _19.y, _19.z,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_000.x,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_000.y,
+          _129, _130, _131);
+#else
       float _87 = exp2(log2(abs(_19.x)) * 0.012683313339948654f);
       float _88 = exp2(log2(abs(_19.y)) * 0.012683313339948654f);
       float _89 = exp2(log2(abs(_19.z)) * 0.012683313339948654f);
@@ -68,6 +77,7 @@ void main(
       _129 = mad(-0.07284989953041077f, _118, mad(-0.5876410007476807f, _117, (_116 * 1.6604900360107422f)));
       _130 = mad(-0.008349419571459293f, _118, mad(1.1328999996185303f, _117, (_116 * -0.124549999833107f)));
       _131 = mad(1.1187299489974976f, _118, mad(-0.10057900100946426f, _117, (_116 * -0.018150800839066505f)));
+#endif
     } else {
       _129 = _19.x;
       _130 = _19.y;

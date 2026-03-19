@@ -1,3 +1,5 @@
+#include "./output.hlsli"
+
 cbuffer _21_23 : register(b0, space5) {
   float4 _23_m0[9] : packoffset(c0);
 };

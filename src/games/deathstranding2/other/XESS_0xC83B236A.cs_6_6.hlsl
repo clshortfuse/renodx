@@ -1,3 +1,5 @@
+#include "../common.hlsli"
+
 struct IntelTAASRT_Constant {
   float4 IntelTAASRT_Constant_000[4];
   float4 IntelTAASRT_Constant_064;
@@ -91,6 +93,13 @@ void main(
       } while (false);
     } else {
       if (_20 == 2) {
+#if 1
+        BT709FromPQ(
+            _15.x, _15.y, _15.z,
+            Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.x,
+            Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.y,
+            _349, _350, _351);
+#else
         float _85 = exp2(log2(abs(_15.x)) * 0.012683313339948654f);
         float _86 = exp2(log2(abs(_15.y)) * 0.012683313339948654f);
         float _87 = exp2(log2(abs(_15.z)) * 0.012683313339948654f);
@@ -102,6 +111,7 @@ void main(
         _349 = mad(-0.07284989953041077f, _116, mad(-0.5876410007476807f, _115, (_114 * 1.6604900360107422f)));
         _350 = mad(-0.008349419571459293f, _116, mad(1.1328999996185303f, _115, (_114 * -0.124549999833107f)));
         _351 = mad(1.1187299489974976f, _116, mad(-0.10057900100946426f, _115, (_114 * -0.018150800839066505f)));
+#endif
       } else {
         _349 = _15.x;
         _350 = _15.y;
@@ -140,6 +150,13 @@ void main(
         } while (false);
       } else {
         if (_20 == 2) {
+#if 1
+          BT709FromPQ(
+              _15.x, _15.y, _15.z,
+              Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.x,
+              Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.y,
+              _237, _238, _239);
+#else
           float _195 = exp2(log2(abs(_15.x)) * 0.012683313339948654f);
           float _196 = exp2(log2(abs(_15.y)) * 0.012683313339948654f);
           float _197 = exp2(log2(abs(_15.z)) * 0.012683313339948654f);
@@ -151,6 +168,7 @@ void main(
           _237 = mad(-0.07284989953041077f, _226, mad(-0.5876410007476807f, _225, (_224 * 1.6604900360107422f)));
           _238 = mad(-0.008349419571459293f, _226, mad(1.1328999996185303f, _225, (_224 * -0.124549999833107f)));
           _239 = mad(1.1187299489974976f, _226, mad(-0.10057900100946426f, _225, (_224 * -0.018150800839066505f)));
+#endif
         } else {
           _237 = _15.x;
           _238 = _15.y;
@@ -191,12 +209,20 @@ void main(
         } while (false);
       } else {
         if (_20 == 2) {
+#if 1
+          PQFromBT709(
+              _244, _245, _246,
+              Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.x,
+              Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.y,
+              _349, _350, _351);
+#else
           float _318 = exp2(log2(abs(mad(0.04331306740641594f, _246, mad(0.3292830288410187f, _245, (_244 * 0.6274039149284363f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.x);
           float _319 = exp2(log2(abs(mad(0.011362316086888313f, _246, mad(0.9195404052734375f, _245, (_244 * 0.06909728795289993f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.x);
           float _320 = exp2(log2(abs(mad(0.8955952525138855f, _246, mad(0.08801330626010895f, _245, (_244 * 0.016391439363360405f))) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.y)) * Scratch_PerBatch_000.Scratch_PerBatch_Constants_000.IntelTAASRT_Constant_064.x);
           _349 = exp2(log2(abs(((_318 * 18.8515625f) + 0.8359375f) / ((_318 * 18.6875f) + 1.0f))) * 78.84375f);
           _350 = exp2(log2(abs(((_319 * 18.8515625f) + 0.8359375f) / ((_319 * 18.6875f) + 1.0f))) * 78.84375f);
           _351 = exp2(log2(abs(((_320 * 18.8515625f) + 0.8359375f) / ((_320 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
         } else {
           _349 = _244;
           _350 = _245;

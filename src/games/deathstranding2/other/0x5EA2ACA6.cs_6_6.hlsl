@@ -1,8 +1,10 @@
+#include "../common.hlsli"
+
 cbuffer _22_24 : register(b0, space5) {
   float4 _24_m0[3] : packoffset(c0);
 };
 
-SamplerState _8[] : register(s0, space0);
+// SamplerState _8[] : register(s0, space0);
 Texture2D<float4> _12 : register(t0, space5);
 Texture2D<float4> _13 : register(t1, space5);
 Texture2D<float4> _14 : register(t2, space5);
@@ -20,11 +22,11 @@ void comp_main() {
   uint _65 = ((gl_WorkGroupID.y << 6u) | (gl_WorkGroupID.x & 56u)) + gl_LocalInvocationID.y;
   float _71 = (float(_64) + 0.5f) * _24_m0[0u].z;
   float _72 = (float(_65) + 0.5f) * _24_m0[0u].w;
-  float4 _83 = _12.SampleLevel(_8[2u], float2(_71, _72), 0.0f, int2(0, -1));
-  float4 _91 = _12.SampleLevel(_8[2u], float2(_71, _72), 0.0f, int2(-1, 0));
-  float4 _97 = _12.SampleLevel(_8[2u], float2(_71, _72), 0.0f);
-  float4 _103 = _12.SampleLevel(_8[2u], float2(_71, _72), 0.0f, int2(1, 0));
-  float4 _109 = _12.SampleLevel(_8[2u], float2(_71, _72), 0.0f, int2(0, 1));
+  float4 _83 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f, int2(0, -1));
+  float4 _91 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f, int2(-1, 0));
+  float4 _97 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f);
+  float4 _103 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f, int2(1, 0));
+  float4 _109 = _12.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f, int2(0, 1));
   float _116 = sqrt(_83.x);
   float _117 = sqrt(_83.y);
   float _118 = sqrt(_83.z);
@@ -50,7 +52,7 @@ void comp_main() {
   float _172 = max(_123, max(_133, max(_143, max(_158, _167))));
   float _204;
   if (_24_m0[2u].x > 0.0f) {
-    _204 = (_24_m0[2u].x * 1.10000002384185791015625f) * min(0.0625f, 0.5f - (((((_14.SampleLevel(_8[2u], float2(_71, _72), 0.0f, int2(-1, 0)).x + _14.SampleLevel(_8[2u], float2(_71, _72), 0.0f, int2(0, -1)).x) + _14.SampleLevel(_8[2u], float2(_71, _72), 0.0f).x) + _14.SampleLevel(_8[2u], float2(_71, _72), 0.0f, int2(1, 0)).x) + _14.SampleLevel(_8[2u], float2(_71, _72), 0.0f, int2(0, 1)).x) * 0.20000000298023223876953125f));
+    _204 = (_24_m0[2u].x * 1.10000002384185791015625f) * min(0.0625f, 0.5f - (((((_14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f, int2(-1, 0)).x + _14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f, int2(0, -1)).x) + _14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f).x) + _14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f, int2(1, 0)).x) + _14.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], float2(_71, _72), 0.0f, int2(0, 1)).x) * 0.20000000298023223876953125f));
   } else {
     _204 = 0.0f;
   }
@@ -108,6 +110,14 @@ void comp_main() {
     float frontier_phi_8_4_ladder_1;
     float frontier_phi_8_4_ladder_2;
     if (_304 == 2u) {
+#if 1
+      BT709FromPQ(
+          _293, _294, _295,
+          _24_m0[1u].x, _24_m0[1u].y,
+          frontier_phi_8_4_ladder,
+          frontier_phi_8_4_ladder_1,
+          frontier_phi_8_4_ladder_2);
+#else
       float _330 = exp2(log2(abs(_293)) * 0.0126833133399486541748046875f);
       float _331 = exp2(log2(abs(_294)) * 0.0126833133399486541748046875f);
       float _332 = exp2(log2(abs(_295)) * 0.0126833133399486541748046875f);
@@ -119,6 +129,7 @@ void comp_main() {
       frontier_phi_8_4_ladder = mad(-0.0728498995304107666015625f, _364, mad(-0.5876410007476806640625f, _363, _362 * 1.6604900360107421875f));
       frontier_phi_8_4_ladder_1 = mad(-0.008349419571459293365478515625f, _364, mad(1.1328999996185302734375f, _363, _362 * (-0.12454999983310699462890625f)));
       frontier_phi_8_4_ladder_2 = mad(1.11872994899749755859375f, _364, mad(-0.100579001009464263916015625f, _363, _362 * (-0.01815080083906650543212890625f)));
+#endif
     } else {
       frontier_phi_8_4_ladder = _293;
       frontier_phi_8_4_ladder_1 = _294;
@@ -171,12 +182,21 @@ void comp_main() {
     float frontier_phi_17_11_ladder_1;
     float frontier_phi_17_11_ladder_2;
     if (_304 == 2u) {
+#if 1
+      PQFromBT709(
+          _393, _394, _395,
+          _24_m0[1u].x, _24_m0[1u].y,
+          frontier_phi_17_11_ladder,
+          frontier_phi_17_11_ladder_1,
+          frontier_phi_17_11_ladder_2);
+#else
       float _461 = exp2(log2(abs(mad(0.0433130674064159393310546875f, _395, mad(0.3292830288410186767578125f, _394, _393 * 0.627403914928436279296875f)) * _24_m0[1u].y)) * _24_m0[1u].x);
       float _462 = exp2(log2(abs(mad(0.01136231608688831329345703125f, _395, mad(0.9195404052734375f, _394, _393 * 0.069097287952899932861328125f)) * _24_m0[1u].y)) * _24_m0[1u].x);
       float _463 = exp2(log2(abs(mad(0.895595252513885498046875f, _395, mad(0.08801330626010894775390625f, _394, _393 * 0.01639143936336040496826171875f)) * _24_m0[1u].y)) * _24_m0[1u].x);
       frontier_phi_17_11_ladder = exp2(log2(abs(((_461 * 18.8515625f) + 0.8359375f) / ((_461 * 18.6875f) + 1.0f))) * 78.84375f);
       frontier_phi_17_11_ladder_1 = exp2(log2(abs(((_462 * 18.8515625f) + 0.8359375f) / ((_462 * 18.6875f) + 1.0f))) * 78.84375f);
       frontier_phi_17_11_ladder_2 = exp2(log2(abs(((_463 * 18.8515625f) + 0.8359375f) / ((_463 * 18.6875f) + 1.0f))) * 78.84375f);
+#endif
     } else {
       frontier_phi_17_11_ladder = _393;
       frontier_phi_17_11_ladder_1 = _394;

@@ -1,3 +1,5 @@
+#include "../common.hlsli"
+
 Texture2D<float3> t0_space8 : register(t0, space8);
 
 Texture2D<float> t1_space8 : register(t1, space8);
@@ -6,6 +8,7 @@ RWTexture2D<float3> u0_space8 : register(u0, space8);
 
 RWTexture2D<float> u1_space8 : register(u1, space8);
 
+// clang-format off
 cbuffer cb0_space8 : register(b0, space8) {
   struct ShaderInstance_PerInstance_Constants {
     struct InUniform_Constant {
@@ -13,16 +16,16 @@ cbuffer cb0_space8 : register(b0, space8) {
       float4 InUniform_Constant_016;
       float4 InUniform_Constant_032;
     } ShaderInstance_PerInstance_Constants_000;
-  } ShaderInstance_PerInstance_000 : packoffset(c000.x);
+  } ShaderInstance_PerInstance_000: packoffset(c000.x);
 };
+// clang-format on
 
 [numthreads(8, 8, 1)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   float3 _19 = t0_space8.Load(int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), 0));
   int _23 = int(ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.w);
   float _37;
@@ -60,6 +63,13 @@ void main(
     } while (false);
   } else {
     if (_23 == 2) {
+#if 1
+      BT709FromPQ(
+          _19.x, _19.y, _19.z,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.x,
+          ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_032.y,
+          _129, _130, _131);
+#else
       float _87 = exp2(log2(abs(_19.x)) * 0.012683313339948654f);
       float _88 = exp2(log2(abs(_19.y)) * 0.012683313339948654f);
       float _89 = exp2(log2(abs(_19.z)) * 0.012683313339948654f);
@@ -71,6 +81,7 @@ void main(
       _129 = mad(-0.07284989953041077f, _118, mad(-0.5876410007476807f, _117, (_116 * 1.6604900360107422f)));
       _130 = mad(-0.008349419571459293f, _118, mad(1.1328999996185303f, _117, (_116 * -0.124549999833107f)));
       _131 = mad(1.1187299489974976f, _118, mad(-0.10057900100946426f, _117, (_116 * -0.018150800839066505f)));
+#endif
     } else {
       _129 = _19.x;
       _130 = _19.y;
@@ -79,5 +90,5 @@ void main(
   }
   u0_space8[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float3(_129, _130, _131);
   float _134 = t1_space8.Load(int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), 0));
-  u1_space8[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = select((ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_000.w == 0.0f), 0.0f, ((pow(_134.x, ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x)) * ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.y));
+  u1_space8[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = select((ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_000.w == 0.0f), 0.0f, ((pow(_134.x, ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.x))*ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_016.y));
 }
