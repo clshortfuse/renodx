@@ -205,7 +205,8 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
                                           float InUniform_Constant_080_z,
                                           float InUniform_Constant_096_x,
                                           float InUniform_Constant_096_y,
-                                          float InUniform_Constant_096_z) {
+                                          float InUniform_Constant_096_z,
+                                          bool use_scaling = true) {
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     return ApplyVanillaToneMap(
         untonemapped_bt709,
@@ -260,7 +261,9 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
 
 #endif
 
-    tonemapped_bt2020 *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+    if (use_scaling) {
+      tonemapped_bt2020 *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
+    }
 
     float3 tonemapped_bt709 = renodx::color::bt709::from::BT2020(tonemapped_bt2020);
     if (RENODX_GAMMA_CORRECTION != 0.f) {
@@ -276,14 +279,15 @@ void ApplyUserGradingAndToneMapAndScale(
     float InUniform_Constant_064_y, float InUniform_Constant_064_z,
     float InUniform_Constant_080_z,
     float InUniform_Constant_096_x, float InUniform_Constant_096_y, float InUniform_Constant_096_z,
-    inout float tonemapped_bt709_r, inout float tonemapped_bt709_g, inout float tonemapped_bt709_b) {
+    inout float tonemapped_bt709_r, inout float tonemapped_bt709_g, inout float tonemapped_bt709_b, bool use_scaling = true) {
   float3 untonemapped_bt709 = float3(untonemapped_bt709_r, untonemapped_bt709_g, untonemapped_bt709_b);
 
   float3 tonemapped_bt709 = ApplyUserGradingAndToneMapAndScale(
       untonemapped_bt709,
       InUniform_Constant_064_y, InUniform_Constant_064_z,
       InUniform_Constant_080_z,
-      InUniform_Constant_096_x, InUniform_Constant_096_y, InUniform_Constant_096_z);
+      InUniform_Constant_096_x, InUniform_Constant_096_y, InUniform_Constant_096_z,
+      use_scaling);
 
   tonemapped_bt709_r = tonemapped_bt709.r, tonemapped_bt709_g = tonemapped_bt709.g, tonemapped_bt709_b = tonemapped_bt709.b;
   return;

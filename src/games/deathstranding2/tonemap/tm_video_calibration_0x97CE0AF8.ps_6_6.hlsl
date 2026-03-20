@@ -135,7 +135,9 @@ OutputSignature main(
                                        cbuffer_064_y, cbuffer_064_z,
                                        cbuffer_080_z,
                                        cbuffer_096_x, cbuffer_096_y, cbuffer_096_z,
-                                       _137, _139, _141);
+                                       _137, _139, _141,
+                                       false  // use_scaling
+    );
 #endif
     SV_Target_1.x = ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_048.z;
     SV_Target_1.y = ShaderInstance_PerInstance_000.ShaderInstance_PerInstance_Constants_000.InUniform_Constant_048.w;
