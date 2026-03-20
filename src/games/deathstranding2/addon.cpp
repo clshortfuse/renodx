@@ -92,6 +92,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapHueCorrection",
+        .binding = &shader_injection.tone_map_hue_correction,
+        .default_value = 100.f,
+        .label = "Hue Correction",
+        .section = "Tone Mapping",
+        .tooltip = "Hue retention strength.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,
         .default_value = 1.f,
@@ -328,6 +339,7 @@ void OnPresetOff() {
       {"ToneMapUINits", 203.f},
       {"GammaCorrection", 1.f},
       {"ToneMapHueShift", 100.f},
+      {"ToneMapHueCorrection", 100.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeGamma", 1.f},
       {"ColorGradeHighlights", 50.f},
@@ -366,6 +378,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+
+      renodx::mods::shader::on_init_pipeline_layout = [](reshade::api::device* device, auto, auto) {
+        return device->get_api() == reshade::api::device_api::d3d12;  // So overlays dont kill the game
+      };
 
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
