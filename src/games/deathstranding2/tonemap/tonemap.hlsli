@@ -21,20 +21,6 @@ float3 ApplyGammaCorrectionForToneMap(float3 color_input) {
   return color_corrected;
 }
 
-float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.18f, float output_max = 1.f, float white_clip = 0.f) {
-  float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
-
-  float mapped_peak;
-  if (white_clip == 0.f) {
-    mapped_peak = renodx::tonemap::ReinhardPiecewise(peak, output_max, rolloff_start);
-  } else {
-    mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, white_clip, output_max, rolloff_start);
-  }
-  float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
-
-  return scale;
-}
-
 float3 HermiteSplineMaxCLL(float3 color, float peak_ratio, float white_clip = 100.f) {
   float maxch = renodx::math::Max(color);
 
@@ -91,8 +77,7 @@ void ApplyTonemapGamma2LUTAndInverseTonemap(
     float3 color = float3(_643, _644, _645);
 
     {  // apply gamma 2 lut
-       //   float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(color);
-      float scale = ComputeReinhardSmoothClampScale(color);
+      float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(color);
 
       float3 lut_input = sqrt(max(0, color * scale));
       float3 lutted = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], lut_input * _40_m0_10u_z + _40_m0_10u_w, 0.f).rgb;
@@ -169,8 +154,7 @@ void ApplyTonemapGamma2LUTAndInverseTonemapDualOutputs(
     float3 color = float3(_643_lut, _644_lut, _645_lut);
 
     {  // apply gamma 2 lut
-       //   float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(color);
-      float scale = ComputeReinhardSmoothClampScale(color);
+      float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(color);
 
       float3 lut_input = sqrt(max(0, color * scale));
       float3 lutted = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], lut_input * _40_m0_10u_z + _40_m0_10u_w, 0.f).rgb;
