@@ -21,15 +21,6 @@ float3 ApplyGammaCorrectionForToneMap(float3 color_input) {
   return color_corrected;
 }
 
-float3 HermiteSplineMaxCLL(float3 color, float peak_ratio, float white_clip = 100.f) {
-  float maxch = renodx::math::Max(color);
-
-  float tonemapped = exp2(renodx::tonemap::HermiteSplineRolloff(log2(maxch), log2(peak_ratio), log2(white_clip)));
-
-  float scale = renodx::math::DivideSafe(tonemapped, maxch, 1.f);
-  return color * scale;
-}
-
 float ComputeVanillaToneMapMaxChannelScale(float3 untonemapped_bt709,
                                            float InUniform_Constant_064_y,
                                            float InUniform_Constant_064_z,
@@ -43,6 +34,69 @@ float ComputeVanillaToneMapMaxChannelScale(float3 untonemapped_bt709,
                              ? ((max_channel * InUniform_Constant_064_y) + InUniform_Constant_064_z)
                              : ((InUniform_Constant_096_x_neg / (max_channel + InUniform_Constant_096_y)) + InUniform_Constant_096_z);
   return renodx::math::DivideSafe(tonemapped_max, max_channel, 1.f);
+}
+
+float3 SampleGamma2LUT(float3 color_input, Texture3D<float4> _29,
+                       float _40_m0_10u_z, float _40_m0_10u_w) {
+  float3 lut_input = sqrt(color_input);
+  float3 lutted = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], lut_input * _40_m0_10u_z + _40_m0_10u_w, 0.f).rgb;
+  lutted = lutted * lutted;
+
+  return lutted;
+}
+
+float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
+  const float3 added_gamma = black_gamma;
+
+  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
+
+  // Remove from 0 to mid-gray
+  const float shadow_length = mid_gray_average;
+  const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
+  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
+
+  const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
+  return unclamped_gamma;
+}
+
+float3 SampleGamma2LUTWithScaling(
+    float3 color_input, Texture3D<float4> _29,
+    float _40_m0_10u_z, float _40_m0_10u_w) {
+  const float3 color_output_original = SampleGamma2LUT(color_input, _29, _40_m0_10u_z, _40_m0_10u_w);
+
+  float3 color_output = color_output_original;
+
+  if (RENODX_COLOR_GRADE_SCALING > 0.f) {
+    float3 lut_black = SampleGamma2LUT(0.f, _29, _40_m0_10u_z, _40_m0_10u_w);
+
+    float lut_black_y = renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT709(lut_black);
+    if (lut_black_y > 0.f) {
+      float3 lut_mid = SampleGamma2LUT(lut_black_y, _29, _40_m0_10u_z, _40_m0_10u_w);
+
+      if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
+        color_output = renodx::color::correct::GammaSafe(color_output);
+        lut_black = renodx::color::correct::GammaSafe(lut_black);
+        lut_mid = renodx::color::correct::GammaSafe(lut_mid);
+        // color_input = renodx::color::correct::GammaSafe(color_input);
+      }
+
+      float3 unclamped_gamma = Unclamp(
+          renodx::color::srgb::EncodeSafe(color_output),
+          renodx::color::srgb::EncodeSafe(lut_black),
+          renodx::color::srgb::EncodeSafe(lut_mid),
+          renodx::color::srgb::EncodeSafe(color_input));
+
+      float3 unclamped_linear = renodx::color::srgb::DecodeSafe(unclamped_gamma);
+
+      if (RENODX_GAMMA_CORRECTION != 0.f) {  // inverse EOTF emulation
+        unclamped_linear = renodx::color::correct::GammaSafe(unclamped_linear, true);
+      }
+
+      color_output = color_output_original * lerp(1.f, renodx::math::DivideSafe(renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT709(unclamped_linear), renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT709(color_output_original), 1.f), RENODX_COLOR_GRADE_SCALING);
+    }
+  }
+
+  return color_output;
 }
 
 void ApplyTonemapGamma2LUTAndInverseTonemap(
@@ -75,13 +129,11 @@ void ApplyTonemapGamma2LUTAndInverseTonemap(
     frontier_phi_14_15_ladder_2 = (_770 < _40_m0_3u_w) ? ((_770 - _40_m0_2u_z) / _40_m0_2u_y) : ((_729 / (_770 - _40_m0_3u_y)) - _40_m0_3u_x);
   } else {
     float3 color = float3(_643, _644, _645);
+    color = max(0, color);
 
     {  // apply gamma 2 lut
       float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(color);
-
-      float3 lut_input = sqrt(max(0, color * scale));
-      float3 lutted = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], lut_input * _40_m0_10u_z + _40_m0_10u_w, 0.f).rgb;
-      lutted = lutted * lutted;
+      float3 lutted = SampleGamma2LUTWithScaling(color * scale, _29, _40_m0_10u_z, _40_m0_10u_w);
       //   lutted = min(lutted, _40_m0_2u_x);
       lutted /= scale;
 
@@ -150,15 +202,12 @@ void ApplyTonemapGamma2LUTAndInverseTonemapDualOutputs(
     frontier_phi_14_15_ladder_4 = (_lut_g_clamped < _40_m0_3u_w) ? ((_lut_g_clamped - _40_m0_2u_z) / _40_m0_2u_y) : ((_729 / (_lut_g_clamped - _40_m0_3u_y)) - _40_m0_3u_x);
     frontier_phi_14_15_ladder_5 = (_lut_r_clamped < _40_m0_3u_w) ? ((_lut_r_clamped - _40_m0_2u_z) / _40_m0_2u_y) : ((_729 / (_lut_r_clamped - _40_m0_3u_y)) - _40_m0_3u_x);
   } else {
-    float3 no_lut_color = float3(_643_no_lut, _644_no_lut, _645_no_lut);
-    float3 color = float3(_643_lut, _644_lut, _645_lut);
+    float3 no_lut_color = max(0, float3(_643_no_lut, _644_no_lut, _645_no_lut));
+    float3 color = max(0, float3(_643_lut, _644_lut, _645_lut));
 
     {  // apply gamma 2 lut
       float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(color);
-
-      float3 lut_input = sqrt(max(0, color * scale));
-      float3 lutted = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], lut_input * _40_m0_10u_z + _40_m0_10u_w, 0.f).rgb;
-      lutted = lutted * lutted;
+      float3 lutted = SampleGamma2LUTWithScaling(color * scale, _29, _40_m0_10u_z, _40_m0_10u_w);
       //   lutted = min(lutted, _40_m0_2u_x);
       lutted /= scale;
 
