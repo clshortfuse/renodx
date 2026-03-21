@@ -255,6 +255,21 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Deep Fried",
+        .section = "Options",
+        .group = "button-line-1",
+        .tooltip = "Boosted contrast and saturation for a punchy look.",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ColorGradeShadows", 75.f},
+              {"ColorGradeAdaptationContrast", 60.f},
+              {"ColorGradeSaturation", 55.f},
+          });
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "RenoDX Discord",
         .section = "Links",
         .group = "button-line-2",
