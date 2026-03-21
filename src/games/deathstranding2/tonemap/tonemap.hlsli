@@ -254,7 +254,7 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
     float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
 
 #if 1
-    untonemapped_bt2020 = renodx_custom::tonemap::psycho::psycho11_RestoreHueBT2020(renodx::tonemap::ReinhardPiecewise(untonemapped_bt2020, 12.5f, 1.f), untonemapped_bt2020, RENODX_TONE_MAP_HUE_SHIFT);
+    untonemapped_bt2020 = renodx_custom::tonemap::psycho::psycho11_RestoreHueBT2020(renodx::color::bt2020::from::BT709(renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 12.5f, 1.f)), untonemapped_bt2020, RENODX_TONE_MAP_HUE_SHIFT);
 
     float3 tonemapped_bt2020;
     if (RENODX_TONE_MAP_TYPE == 2.f) {  // Psycho
