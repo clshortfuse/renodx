@@ -193,28 +193,6 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "ColorGradeHighlightSaturation",
-    //     .binding = &shader_injection.tone_map_highlight_saturation,
-    //     .default_value = 50.f,
-    //     .label = "Highlight Saturation",
-    //     .section = "Color Grading",
-    //     .tooltip = "Adds or removes highlight color.",
-    //     .max = 100.f,
-    //     .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
-    //     .parse = [](float value) { return value * 0.02f; },
-    // },
-    // new renodx::utils::settings::Setting{
-    //     .key = "ColorGradeDechroma",
-    //     .binding = &shader_injection.tone_map_dechroma,
-    //     .default_value = 0.f,
-    //     .label = "Dechroma",
-    //     .section = "Color Grading",
-    //     .tooltip = "Controls highlight desaturation due to overexposure.",
-    //     .max = 100.f,
-    //     .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
-    //     .parse = [](float value) { return value * 0.01f; },
-    // },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &shader_injection.tone_map_flare,
@@ -232,6 +210,17 @@ renodx::utils::settings::Settings settings = {
         .default_value = 100.f,
         .label = "LUT Strength",
         .section = "Color Grading",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeLUTScaling",
+        .binding = &shader_injection.color_grade_scaling,
+        .default_value = 100.f,
+        .label = "LUT Scaling",
+        .section = "Color Grading",
+        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
@@ -260,6 +249,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 1.f},
               {"ColorGradeShadows", 50.f},
+              {"ColorGradeLUTScaling", 0.f},
           });
         },
     },
@@ -339,7 +329,7 @@ void OnPresetOff() {
       {"ToneMapUINits", 203.f},
       {"GammaCorrection", 1.f},
       {"ToneMapHueShift", 100.f},
-      {"ToneMapHueCorrection", 100.f},
+      {"ToneMapHueCorrection", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeGamma", 1.f},
       {"ColorGradeHighlights", 50.f},
@@ -352,6 +342,8 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
+      {"ColorGradeLUTStrength", 100.f},
+      {"ColorGradeLUTScaling", 0.f},
   });
 }
 
