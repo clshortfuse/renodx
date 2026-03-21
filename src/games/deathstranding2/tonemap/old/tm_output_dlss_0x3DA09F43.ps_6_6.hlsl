@@ -1,4 +1,4 @@
-#include "./tonemap.hlsli"
+#include "../tonemap.hlsli"
 
 static float _971;
 static float _972;
