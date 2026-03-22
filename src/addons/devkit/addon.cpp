@@ -114,6 +114,7 @@ renodx::utils::mcp::Server devkit_mcp_server({
     .server_version = "0.1.0",
 });
 
+std::atomic_bool snapshot_trace_with_snapshot = false;
 std::atomic_bool snapshot_pane_show_vertex_shaders = false;
 std::atomic_bool snapshot_pane_show_pixel_shaders = true;
 std::atomic_bool snapshot_pane_show_compute_shaders = true;
@@ -125,6 +126,13 @@ std::atomic_bool shaders_pane_show_pixel_shaders = true;
 std::atomic_bool shaders_pane_show_compute_shaders = true;
 
 uint32_t skip_draw_count = 0;
+
+void QueueSnapshotCapture(reshade::api::device* device) {
+  snapshot_queued_device = device;
+  if (snapshot_trace_with_snapshot.load()) {
+    renodx::utils::trace::trace_scheduled_device = device;
+  }
+}
 std::atomic_uint32_t device_data_index = 0;
 
 struct ResourceBind {
@@ -2542,13 +2550,16 @@ void ProcessPendingLiveShaderRequests(
           };
         }
 
-        snapshot_queued_device = device;
+        QueueSnapshotCapture(device);
         return ToolResult{
-            .text = std::format("Queued a snapshot capture for device #{}.", device_index),
+            .text = snapshot_trace_with_snapshot.load()
+                        ? std::format("Queued a snapshot capture and trace for device #{}.", device_index)
+                        : std::format("Queued a snapshot capture for device #{}.", device_index),
             .structured_content = json{
                 {"deviceIndex", device_index},
                 {"queued", true},
                 {"active", false},
+                {"traceQueued", snapshot_trace_with_snapshot.load()},
             },
         }; },
   };
@@ -3604,8 +3615,7 @@ void RenderMenuBar(reshade::api::device* device, DeviceData* data) {
     ImGui::PushID("##SnapshotButton");
     ImGui::BeginDisabled(snapshot_device != nullptr);
     if (ImGui::MenuItem("Snapshot")) {
-      snapshot_queued_device = device;
-      renodx::utils::trace::trace_scheduled_device = device;
+      QueueSnapshotCapture(device);
     }
     ImGui::EndDisabled();
     ImGui::PopID();
@@ -5832,6 +5842,7 @@ struct SettingsDeviceOption {
     uint32_t selected_device_index) {
   DeviceData* pending_selected_device_data = nullptr;
   if (BeginSettingsSection("Snapshot")) {
+    DrawSettingBoolCheckbox("Trace With Snapshot", "SnapshotTraceWithSnapshot", &snapshot_trace_with_snapshot);
     DrawSettingBoolCheckbox("Show Vertex Shaders", "SnapshotPaneShowVertexShaders", &snapshot_pane_show_vertex_shaders);
     DrawSettingBoolCheckbox("Show Pixel Shaders", "SnapshotPaneShowPixelShaders", &snapshot_pane_show_pixel_shaders);
     DrawSettingBoolCheckbox("Show Compute Shaders", "SnapshotPaneShowComputeShaders", &snapshot_pane_show_compute_shaders);
@@ -6825,6 +6836,7 @@ void InitializeUserSettings() {
            {"TracePipelineCreation", &renodx::utils::trace::trace_pipeline_creation},
            {"TraceDescriptorTables", &renodx::utils::descriptor::trace_descriptor_tables},
            {"TraceConstantBuffers", &renodx::utils::constants::capture_constant_buffers},
+           {"SnapshotTraceWithSnapshot", &snapshot_trace_with_snapshot},
            {"SnapshotPaneShowVertexShaders", &snapshot_pane_show_vertex_shaders},
            {"SnapshotPaneShowPixelShaders", &snapshot_pane_show_pixel_shaders},
            {"SnapshotPaneShowComputeShaders", &snapshot_pane_show_compute_shaders},
