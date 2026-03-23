@@ -1,12 +1,11 @@
 /*
  * Copyright (C) 2024 Musa Haji
- * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -25,7 +24,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Discord",
+        .label = "RenoDX Discord",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "Ce9bQHQrSV");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den Discord",
         .section = "Links",
         .group = "button-line-2",
         .tint = 0x5865F2,
@@ -42,7 +51,6 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx/wiki/Mods");
         },
-
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -63,9 +71,21 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/musaqh"); },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-3",
+        .tint = 0xFF5A16,
+        .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse"); },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("Adding sliders was causing the game to crash so I hardcoded the fixes."
-                             "\nCheck the mod page for details about the fixes."),
+        .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Requires HDR on in game"),
         .section = "About",
     },
 };
