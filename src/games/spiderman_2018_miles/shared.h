@@ -3,6 +3,7 @@
 
 #define RENODX_GAMMA_ADJUST_TYPE  1u    // 0 - multiplier, 1 - fixed
 #define RENODX_GAMMA_ADJUST_VALUE 2.35f // UI paper white slider behavior fixed at 2.35
+#define ENABLE_SHADER_TOGGLE      1
 
 #ifndef __cplusplus
 
