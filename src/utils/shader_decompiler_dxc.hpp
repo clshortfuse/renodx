@@ -202,7 +202,7 @@ class Decompiler {
     if (input == "2") return "z";
     if (input == "3") return "w";
     assert(false);
-    throw std::invalid_argument("Could not parse index");
+    throw std::runtime_error("Could not parse index");
   }
 
   static uint32_t IndexFromChar(const char input) {
@@ -286,20 +286,20 @@ class Decompiler {
     if (input == "f16") return "min16float";
     if (input == "i16") return "min16int";
     if (input == "i1") return "bool";
-    throw std::invalid_argument("Could not parse code type");
+    throw std::runtime_error(std::format("Could not parse code type '{}'", input));
   }
 
   static std::string ParseBitcast(std::string_view input) {
     if (input == "float") return "asfloat";
     if (input == "i32") return "asint";
     if (input == "i1") return "bool";
-    throw std::invalid_argument("Could not parse bitcast");
+    throw std::runtime_error(std::format("Could not parse bitcast '{}'", input));
   }
 
   static std::string ParseTrunc(std::string_view input) {
     if (input == "i16") return "min16int";
     if (input == "half") return "half";
-    throw std::invalid_argument("Could not parse trunc");
+    throw std::runtime_error(std::format("Could not parse trunc '{}'", input));
   }
 
   static std::string ParseUnsignedType(std::string_view input) {
@@ -307,7 +307,7 @@ class Decompiler {
     if (input == "i64") return "uint64_t";
     if (input == "i16") return "min16uint";
     if (input == "i1") return "bool";
-    throw std::invalid_argument("Could not parse unsigned");
+    throw std::runtime_error(std::format("Could not parse unsigned '{}'", input));
   }
 
   static std::string ParseOperator(std::string_view input) {
@@ -334,7 +334,7 @@ class Decompiler {
     if (input == "une") return "!=";
 
     std::cerr << input << "\n";
-    throw std::invalid_argument("Could not parse code assignment operator");
+    throw std::runtime_error(std::format("Could not parse code assignment operator '{}'", input));
   }
 
   // https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/DXIL.rst
@@ -490,7 +490,7 @@ class Decompiler {
         case 0b0000:
           return "4";
         default:
-          throw std::invalid_argument("Unknown mask");
+          throw std::runtime_error(std::format("Unknown mask '{}'", mask));
       };
     }
 
@@ -509,7 +509,7 @@ class Decompiler {
           case 'w': flags += 0b0001; break;
           case ' ': break;
           default:
-            throw std::invalid_argument("Unknown coordinate");
+            throw std::runtime_error(std::format("Unknown coordinate '{}'", input.at(i)));
         }
       }
       return flags;
@@ -520,7 +520,7 @@ class Decompiler {
       if (input == "uint") return Format::UINT;
       if (input == "int") return Format::INT;
       if (input == "fp16") return Format::FP16;
-      throw std::invalid_argument("Unknown Format");
+      throw std::runtime_error(std::format("Unknown Format '{}'", input));
     }
 
     explicit SignaturePacked() = default;
@@ -579,7 +579,7 @@ class Decompiler {
       if (input == "noperspective sample") return InterpMode::NOPERSPECTIVE_SAMPLE;
       if (input == "linear") return InterpMode::LINEAR;
       if (input == "centroid") return InterpMode::CENTROID;
-      throw std::invalid_argument("Unknown InterpMode");
+      throw std::runtime_error(std::format("Unknown InterpMode '{}'", input));
     }
 
     static int32_t DynIndexFromString(std::string_view input) {
@@ -698,7 +698,7 @@ class Decompiler {
     static BufferType BufferTypeFromString(std::string_view input) {
       if (input == "cbuffer") return BufferType::CBUFFER;
       if (input == "Resource bind info for") return BufferType::RESOURCE;
-      throw std::invalid_argument("Unknown BufferType");
+      throw std::runtime_error(std::format("Unknown BufferType '{}'", input));
     }
 
     explicit BufferDefinition(std::string_view line) {
@@ -744,7 +744,7 @@ class Decompiler {
       if (this->type == ResourceType::SAMPLER) return "sampler";
       if (this->type == ResourceType::TEXTURE) return "texture";
       if (this->type == ResourceType::UAV) return "UAV";
-      throw std::invalid_argument("Unknown ResourceType");
+      throw std::runtime_error(std::format("Unknown ResourceType '{}'", static_cast<int>(this->type)));
     }
 
     [[nodiscard]] std::string NameString() const {
@@ -757,7 +757,7 @@ class Decompiler {
       if (input == "sampler") return ResourceType::SAMPLER;
       if (input == "texture") return ResourceType::TEXTURE;
       if (input == "UAV") return ResourceType::UAV;
-      throw std::invalid_argument("Unknown ResourceType");
+      throw std::runtime_error(std::format("Unknown ResourceType '{}'", input));
     }
 
     static ResourceFormat ResourceFormatFromString(std::string_view input) {
@@ -768,7 +768,7 @@ class Decompiler {
       if (input == "i32") return ResourceFormat::I32;
       if (input == "u32") return ResourceFormat::U32;
       if (input == "struct") return ResourceFormat::STRUCTURE;
-      throw std::invalid_argument("Unknown ResourceFormat");
+      throw std::runtime_error(std::format("Unknown ResourceFormat '{}'", input));
     }
 
     explicit ResourceDescription(std::string_view line) {
@@ -1652,7 +1652,7 @@ class Decompiler {
 
       auto [variable, assignment, comment] = StringViewMatch<3>(line, code_assign_regex);
       if (variable.empty()) {
-        throw std::invalid_argument("Could not parse code assignment");
+        throw std::runtime_error("Could not parse code assignment");
       }
 
       std::string decompiled;
@@ -1702,7 +1702,7 @@ class Decompiler {
             resource = &preprocess_state.sampler_resources[range_id_value];
             hint = "SamplerState";
           } else {
-            throw std::invalid_argument("Unknown resource type");
+            throw std::runtime_error("Unknown resource type");
           }
           std::string name = resource->name;
           if (resource->array_size.has_value()) {
@@ -1782,7 +1782,7 @@ class Decompiler {
             }
             hint = "SamplerState";
           } else {
-            throw std::invalid_argument("Unknown resource type");
+            throw std::runtime_error("Unknown resource type");
           }
 
           preprocess_state.resource_binding_variables[std::string(variable)] = {
@@ -1813,7 +1813,7 @@ class Decompiler {
           is_identity = true;
           if (signature.packed.MaskString() == "1") {
             if (ParseIndex(colIndex) != "x") {
-              throw std::exception("Unexpected index.");
+              throw std::runtime_error("Unexpected index.");
             }
             assignment_value = signature.VariableString();
             // decompiled = std::format("float _{} = {};", variable, value);
@@ -1833,7 +1833,7 @@ class Decompiler {
           is_identity = true;
           if (signature.packed.MaskString() == "1") {
             if (ParseIndex(colIndex) != "x") {
-              throw std::exception("Unexpected index.");
+              throw std::runtime_error("Unexpected index.");
             }
             assignment_value = signature.VariableString();
             // decompiled = std::format("uint _{} = {};", variable, value);
@@ -1885,7 +1885,7 @@ class Decompiler {
             assignment_value = std::format("{}{}", pair->second, ParseWrapped(ParseFloat(value)));
             // decompiled = std::format("{} _{} = {}({});", ParseType(type), variable, pair->second, ParseFloat(value));
           } else {
-            throw std::invalid_argument("Unknown @dx.op.unary.f32");
+            throw std::runtime_error("Unknown @dx.op.unary.f32");
           }
         } else if (functionName == "@dx.op.unary.f16") {
           auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -1895,7 +1895,7 @@ class Decompiler {
             assignment_value = std::format("{}{}", pair->second, ParseWrapped(ParseHalf(value)));
             // decompiled = std::format("{} _{} = {}({});", ParseType(type), variable, pair->second, ParseFloat(value));
           } else {
-            throw std::invalid_argument("Unknown @dx.op.unary.f32");
+            throw std::runtime_error("Unknown @dx.op.unary.f32");
           }
         } else if (functionName == "@dx.op.unary.i32") {
           auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -1905,7 +1905,7 @@ class Decompiler {
             assignment_value = std::format("{}{}", pair->second, ParseWrapped(ParseFloat(value)));
             // decompiled = std::format("{} _{} = {}({});", ParseType(type), variable, pair->second, ParseFloat(value));
           } else {
-            throw std::invalid_argument("Unknown @dx.op.unary.i32");
+            throw std::runtime_error("Unknown @dx.op.unary.i32");
           }
         } else if (functionName == "@dx.op.unaryBits.i32") {
           auto [opNumber, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -1920,7 +1920,7 @@ class Decompiler {
             }
             assignment_value = CastType(pair->second, ParseFloat(value));
           } else {
-            throw std::invalid_argument("Unknown @dx.op.unaryBits.i32");
+            throw std::runtime_error("Unknown @dx.op.unaryBits.i32");
           }
         } else if (functionName == "@dx.op.binary.f32") {
           auto [opNumber, a, b] = StringViewSplit<3>(functionParamsString, param_regex, 2);
@@ -1930,7 +1930,7 @@ class Decompiler {
             assignment_value = std::format("{}({}, {})", pair->second, ParseFloat(a), ParseFloat(b));
             // decompiled = std::format("{} _{} = {}({}, {});", ParseType(type), variable, pair->second, ParseFloat(a), ParseFloat(b));
           } else {
-            throw std::invalid_argument("Unknown @dx.op.binary.f32");
+            throw std::runtime_error("Unknown @dx.op.binary.f32");
           }
         } else if (functionName == "@dx.op.binary.f16") {
           // call half @dx.op.binary.f16(i32 35, half %696, half 0xH0000)
@@ -1941,7 +1941,7 @@ class Decompiler {
             assignment_value = std::format("{}({}, {})", pair->second, ParseHalf(a), ParseHalf(b));
             // decompiled = std::format("{} _{} = {}({}, {});", ParseType(type), variable, pair->second, ParseFloat(a), ParseFloat(b));
           } else {
-            throw std::invalid_argument("Unknown @dx.op.binary.f16");
+            throw std::runtime_error("Unknown @dx.op.binary.f16");
           }
         } else if (functionName == "@dx.op.binary.i32") {
           auto [opNumber, a, b] = StringViewSplit<3>(functionParamsString, param_regex, 2);
@@ -1951,7 +1951,7 @@ class Decompiler {
             assignment_value = std::format("{}({}, {})", pair->second, ParseInt(a), ParseInt(b));
             // decompiled = std::format("{} _{} = {}({}, {});", ParseType(type), variable, pair->second, ParseInt(a), ParseInt(b));
           } else {
-            throw std::invalid_argument("Unknown @dx.op.binary.i32");
+            throw std::runtime_error("Unknown @dx.op.binary.i32");
           }
         } else if (functionName == "@dx.op.textureLoad.f32" || functionName == "@dx.op.textureLoad.i32") {
           // %dx.types.ResRet.f32 @dx.op.textureLoad.f32(i32 66, %dx.types.Handle %40, i32 0, i32 %38, i32 %39, i32 undef, i32 undef, i32 undef, i32 undef)  ; TextureLoad(srv,mipLevelOrSampleCount,coord0,coord1,coord2,offset0,offset1,offset2)
@@ -1973,7 +1973,7 @@ class Decompiler {
             shape = preprocess_state.uav_resources[range_index].shape;
             assignment_type = preprocess_state.uav_resources[range_index].data_type;
           } else {
-            throw std::invalid_argument("Unknown @dx.op.textureLoad.f32 resource");
+            throw std::runtime_error(std::format("Unknown {} resource", functionName));
           }
 
           switch (shape) {
@@ -2003,7 +2003,7 @@ class Decompiler {
               }
               break;
             default:
-              throw std::exception("Unknown shape");
+              throw std::runtime_error("Unknown shape");
           }
 
           std::string offset;
@@ -2049,7 +2049,7 @@ class Decompiler {
             offset = std::format("{}", ParseInt(offset0));
           }
           if (has_clamp) {
-            throw std::invalid_argument("Unknown clamp");
+            throw std::runtime_error("Unknown clamp");
           }
 
           auto [srv_name, srv_range_index, srv_resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
@@ -2169,7 +2169,7 @@ class Decompiler {
           } else if (resource_class == "1") {
             is_raw_buffer = preprocess_state.uav_resources[range_index].shape == Resource::ResourceKind::RawBuffer;
           } else {
-            throw std::invalid_argument("Unknown @dx.op.rawBufferLoad.f32 resource");
+            throw std::runtime_error("Unknown @dx.op.rawBufferLoad.f32 resource");
           }
 
           if (is_raw_buffer) {
@@ -2236,7 +2236,7 @@ class Decompiler {
           } else if (resource_class == "1") {
             assignment_type = preprocess_state.uav_resources[range_index].data_type;
           } else {
-            throw std::invalid_argument("Unknown @dx.op.bufferLoad.i32 resource");
+            throw std::runtime_error("Unknown @dx.op.bufferLoad.i32 resource");
           }
           assignment_value = std::format("{}.Load{}", res_name, ParseWrapped(ParseInt(index)));
 
@@ -2250,7 +2250,7 @@ class Decompiler {
           } else if (resource_class == "1") {
             assignment_type = preprocess_state.uav_resources[range_index].data_type;
           } else {
-            throw std::invalid_argument("Unknown @dx.op.bufferLoad.f32 resource");
+            throw std::runtime_error("Unknown @dx.op.bufferLoad.f32 resource");
           }
           assignment_value = std::format("{}.Load{}", res_name, ParseWrapped(ParseInt(index)));
         } else if (functionName == "@dx.op.threadId.i32") {
@@ -2285,7 +2285,7 @@ class Decompiler {
             assignment_type = ParseType(type);
             assignment_value = std::format("{}{}", pair->second, ParseWrapped(ParseFloat(value)));
           } else {
-            throw std::invalid_argument("Unknown @dx.op.isSpecialFloat.f32");
+            throw std::runtime_error("Unknown @dx.op.isSpecialFloat.f32");
           }
         } else if (functionName == "@dx.op.getDimensions") {
           // call %dx.types.Dimensions @dx.op.getDimensions(i32 72, %dx.types.Handle %1, i32 0)  ; GetDimensions(handle,mipLevel)
@@ -2299,7 +2299,7 @@ class Decompiler {
           } else if (resource_class == "1") {
             shape = preprocess_state.uav_resources[range_index].shape;
           } else {
-            throw std::invalid_argument("Unknown @dx.op.textureLoad.f32 resource");
+            throw std::runtime_error("Unknown @dx.op.textureLoad.f32 resource");
           }
 
           std::string get_dimensions_arguments;
@@ -2319,7 +2319,7 @@ class Decompiler {
               break;
             default:
               std::cerr << "Unexpected shape: " << Resource::ResourceKindString(shape) << "\n";
-              throw std::invalid_argument("Unexpected shape");
+              throw std::runtime_error("Unexpected shape");
           }
 
           if (mip_level != "0") {
@@ -2501,7 +2501,7 @@ class Decompiler {
           } else if (channel == "3") {
             channel_string = "Alpha";
           } else {
-            throw std::exception("Unknown Gather channel.");
+            throw std::runtime_error("Unknown Gather channel.");
           }
           if (functionName == "@dx.op.textureGather.i32") {
             assignment_type = "int4";
@@ -2533,7 +2533,7 @@ class Decompiler {
           } else if (op2 == "3") {
             assignment_value = std::format("WaveActiveMax{}", ParseWrapped(ParseInt(value)));
           } else {
-            throw std::invalid_argument("Unknown wave active op");
+            throw std::runtime_error("Unknown wave active op");
           }
         } else if (functionName == "@dx.op.waveActiveOp.f32") {
           // %58 = call float @dx.op.waveActiveOp.f32(i32 119, float %57, i8 3, i8 0)  ; WaveActiveOp(value,op,sop)
@@ -2548,7 +2548,7 @@ class Decompiler {
           } else if (op2 == "3") {
             assignment_value = std::format("WaveActiveMax{}", ParseWrapped(ParseFloat(value)));
           } else {
-            throw std::invalid_argument("Unknown wave active op");
+            throw std::runtime_error("Unknown wave active op");
           }
         } else if (functionName == "@dx.op.waveAllTrue") {
           // call i1 @dx.op.waveAllTrue(i32 114, i1 %144)  ; WaveAllTrue(cond)
@@ -2641,7 +2641,7 @@ class Decompiler {
           } else if (atomicOp == "8") {
             atomic_func = "InterlockedExchange";
           } else {
-            throw std::invalid_argument("Unknown atomicOp for AtomicBinOp");
+            throw std::runtime_error("Unknown atomicOp for AtomicBinOp");
           }
           assignment_type = uav_resource.data_type;
           decompiled = std::format("{} _{}; {}({}[{}], {}, _{});", assignment_type, variable, atomic_func, uav_name, offset, ParseInt(newValue), variable);
@@ -2683,14 +2683,14 @@ class Decompiler {
           } else if (atomicOp == "8") {
             atomic_func = "InterlockedExchange";
           } else {
-            throw std::invalid_argument("Unknown atomicOp for AtomicBinOp");
+            throw std::runtime_error("Unknown atomicOp for AtomicBinOp");
           }
           assignment_type = uav_resource.data_type;
           decompiled = std::format("{} _{}; {}({}[{}], {}, _{});", assignment_type, variable, atomic_func, uav_name, offset, ParseInt64(newValue), variable);
         } else {
           std::cerr << line << "\n";
           std::cerr << "Function name: " << functionName << "\n";
-          throw std::invalid_argument("Unknown assign function name");
+          throw std::runtime_error("Unknown assign function name");
         }
       } else if (instruction == "extractvalue") {
         // extractvalue %dx.types.ResRet.f32 %448, 0
@@ -2839,7 +2839,7 @@ class Decompiler {
           // preprocess_state.variable_aliases.emplace(variable, value);
         } else {
           std::cerr << type << "\n";
-          throw std::invalid_argument("Unknown extractvalue type");
+          throw std::runtime_error("Unknown extractvalue type");
         }
       } else if (instruction == "shl") {
         auto [no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(shl (nuw )?(nsw )?(\S+) (\S+), (\S+))"});
@@ -2945,7 +2945,7 @@ class Decompiler {
           assignment_value = std::format("(isnan{} || isnan{})", ParseWrapped(a_parsed), ParseWrapped(b_parsed));
         } else {
           std::cerr << op << "\n";
-          throw std::invalid_argument("Could not parse code assignment operator");
+          throw std::runtime_error("Could not parse code assignment operator");
         }
 
       } else if (instruction == "icmp") {
@@ -2976,7 +2976,7 @@ class Decompiler {
           assignment_value = std::format("({}{} <= {}{})", cast, ParseByType(a, type), cast, ParseByType(b, type));
         } else {
           std::cerr << op << "\n";
-          throw std::invalid_argument("Could not parse code assignment operator");
+          throw std::runtime_error("Could not parse code assignment operator");
         }
       } else if (instruction == "add") {
         // add nsw i32 %1678, 1
@@ -3080,7 +3080,7 @@ class Decompiler {
           assignment_value = std::format("select({}, {}, {})", ParseBool(condition), ParseFloat(value_a), ParseFloat(value_b));
         } else {
           std::cerr << line << "\n";
-          throw std::invalid_argument("Unrecognized code assignment");
+          throw std::runtime_error("Unrecognized code assignment");
         }
       } else if (instruction == "phi") {
         // phi float [ 0x3FF61108E0000000, %0 ], [ 0x3FF069AC80000000, %21 ], [ 0x3FE6412500000000, %23 ], [ %27, %25 ]
@@ -3187,7 +3187,7 @@ class Decompiler {
         IncrementVariableCounter(variable);
       } else {
         std::cerr << line << "\n";
-        throw std::invalid_argument("Unrecognized code assignment");
+        throw std::runtime_error("Unrecognized code assignment");
       }
 
       if (decompiled.empty() && !assignment_value.empty()) {
@@ -3309,7 +3309,7 @@ class Decompiler {
         if (barrierMode == "9") {
           decompiled = "GroupMemoryBarrierWithGroupSync();";
         } else {
-          throw std::exception("Unknown barrier mode.");
+          throw std::runtime_error("Unknown barrier mode.");
         }
       } else if (functionName == "@dx.op.rawBufferStore.f32") {
         // call void @dx.op.rawBufferStore.f32(i32 140, %dx.types.Handle %1751, i32 0, i32 0, float %884, float %885, float %821, float %833, i8 15, i32 4)  ; RawBufferStore(uav,index,elementOffset,value0,value1,value2,value3,mask,alignment)
@@ -3323,7 +3323,7 @@ class Decompiler {
         } else if (resource_class == "1") {
           is_raw_buffer = preprocess_state.uav_resources[range_index].shape == Resource::ResourceKind::RawBuffer;
         } else {
-          throw std::invalid_argument("Unknown @dx.op.rawBufferStore.f32 resource");
+          throw std::runtime_error("Unknown @dx.op.rawBufferStore.f32 resource");
         }
 
         const bool has_value_y = value1 != "undef";
@@ -3357,7 +3357,7 @@ class Decompiler {
         } else if (resource_class == "1") {
           is_raw_buffer = preprocess_state.uav_resources[range_index].shape == Resource::ResourceKind::RawBuffer;
         } else {
-          throw std::invalid_argument("Unknown @dx.op.rawBufferStore.i32 resource");
+          throw std::runtime_error("Unknown @dx.op.rawBufferStore.i32 resource");
         }
 
         const bool has_value_y = value1 != "undef";
@@ -3380,11 +3380,11 @@ class Decompiler {
         FromStringView(outputSigId, output_signature_index);
         auto signature = preprocess_state.output_signature[output_signature_index];
         if (rowIndex != "0") {
-          throw std::exception("Row index not supported.");
+          throw std::runtime_error("Row index not supported.");
         }
         if (signature.packed.MaskString() == "1") {
           if (ParseIndex(colIndex) != "x") {
-            throw std::exception("Unexpected index.");
+            throw std::runtime_error("Unexpected index.");
           }
           decompiled = std::format("{} = {};", signature.VariableString(), ParseFloat(value));
         } else {
@@ -3515,7 +3515,7 @@ class Decompiler {
       } else {
         std::cerr << line << "\n";
         std::cerr << "Function name: " << functionName << "\n";
-        throw std::invalid_argument("Unknown call function name");
+        throw std::runtime_error("Unknown call function name");
       }
 
       if (!decompiled.empty()) {
@@ -3575,7 +3575,7 @@ class Decompiler {
           this->ParseBlockDefinition(line);
         } else {
           std::cerr << line << "\n";
-          throw std::invalid_argument("Unexpected code block");
+          throw std::runtime_error("Unexpected code block");
         }
       }
     }
@@ -3680,10 +3680,7 @@ class Decompiler {
       }
 
       if (!found) {
-        std::stringstream s;
-        s << "Could not find packed signature: ";
-        s << property.ToString();
-        throw std::exception(s.str().c_str());
+        throw std::runtime_error(std::format("Could not find packed signature: {}", property.ToString()));
       }
     }
   }
@@ -3739,7 +3736,7 @@ class Decompiler {
             } else if (line == "") {
               state = TokenizerState::WHITESPACE;
             } else {
-              throw std::invalid_argument("Unexpected start of file");
+              throw std::runtime_error("Unexpected start of file");
             }
             break;
           case TokenizerState::DESCRIPTION_WHITESPACE:
@@ -3776,7 +3773,7 @@ class Decompiler {
             } else if (line == "; Note: shader requires additional functionality:") {
               state = TokenizerState::DESCRIPTION_FUNCTIONALITY_NOTE;
             } else {
-              throw std::invalid_argument("Unexpected description entry");
+              throw std::runtime_error("Unexpected description entry");
             }
             break;
           case TokenizerState::DESCRIPTION_INPUT_SIG_TITLE:
@@ -3896,7 +3893,7 @@ class Decompiler {
             break;
           case TokenizerState::DESCRIPTION_BUFFER_DEFINITION_TYPE_BLOCK_START:
             if (line != "; {") {
-              throw std::invalid_argument("Unexpected buffer definition block start");
+              throw std::runtime_error("Unexpected buffer definition block start");
             }
             state++;
             line_number++;
@@ -3990,7 +3987,7 @@ class Decompiler {
             } else if (line.starts_with("!")) {
               state = TokenizerState::NAMED_METADATA;
             } else {
-              throw std::invalid_argument("Unexpected line");
+              throw std::runtime_error("Unexpected line");
             }
             break;
           case TokenizerState::TYPE_DEFINITION: {
@@ -4048,7 +4045,7 @@ class Decompiler {
             } else if (scope == "external" || scope == "") {
               decompiled << "groupshared ";
             } else {
-              throw std::exception("Unknown global variable scope.");
+              throw std::runtime_error("Unknown global variable scope.");
             }
             if (!array_type.empty()) {
               decompiled << array_type << " ";
@@ -4749,7 +4746,7 @@ class Decompiler {
           if (decompile_options.use_do_while) {
             string_stream << spacing << "break;\n";
           } else {
-            throw std::exception("Unexpected goto");
+            throw std::runtime_error("Unexpected goto");
           }
         } else {
           append_code_block(branch_number);
