@@ -528,14 +528,19 @@ class Decompiler {
       /**
        * @example
        * ; TEXCOORD                 0   xy          0     NONE   float   xy
+       * ; TEXCOORD                 0   xyzw        1     NONE   float   xy
        * ; SV_Position              0   xyzw        1      POS   float
        * ; SV_RenderTargetArrayIndex     0   x           2  RTINDEX    uint   x
        * ; SV_Position              0   xyzw        0      POS   float   xy
+       * ; SV_ShadingRate           0     z         4SHDINGRATE    uint     z
+       * ; SV_DepthLessEqual        0    N/A oDepthLE  DEPTHLE   float    YES
        */
-      // ; SV_DepthLessEqual        0    N/A oDepthLE  DEPTHLE   float    YES
 
-      static auto regex = std::regex{R"(; (\S+)\s+(\S+)\s+((?:(?:x| )(?:y| )(?:z| )(?:w| ))|(?:N\/A))\s+(\S+)\s+(\S+)\s+(\S+)\s*(YES|NO|(?:(?:x| )?(?:y| )?(?:z| )?(?:w| )?)))"};
+      static auto regex = std::regex{R"(; (\S+)\s+(\S+)\s+(N\/A|[xyzw ]*[xyzw][xyzw ]*)\s*(\d+|\S+)\s*(\S+)\s+(\S+)\s*(YES|NO|[xyzw ]*))"};
       auto [name, index, mask, dxregister, sysValue, format, used] = StringViewMatch<7>(line, regex);
+      if (name.empty()) {
+        throw std::runtime_error(std::format("Unknown packed signature row '{}'", line));
+      }
 
       this->name = name;
       FromStringView(index, this->index);
