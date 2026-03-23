@@ -3219,6 +3219,33 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     draw_details.blend_desc = command_list_data->blend_desc;
 
     std::unique_lock lock(device_data->mutex);
+    struct CachedResourceViewDetails {
+      ResourceViewDetails details = {};
+      bool is_empty = false;
+      bool has_empty = false;
+    };
+    std::unordered_map<uint64_t, CachedResourceViewDetails> resource_view_details_cache;
+    resource_view_details_cache.reserve(
+        draw_details.srv_binds.size()
+        + draw_details.uav_binds.size()
+        + command_list_data->render_targets.size()
+        + 32u);
+    const auto get_cached_resource_view_details = [&](reshade::api::resource_view resource_view)
+        -> CachedResourceViewDetails& {
+      auto [pair, inserted] = resource_view_details_cache.try_emplace(resource_view.handle);
+      if (inserted) {
+        pair->second.details = GetResourceViewDetails(resource_view, device);
+      }
+      return pair->second;
+    };
+    const auto is_cached_resource_view_empty = [&](CachedResourceViewDetails& cached,
+                                                   reshade::api::resource_view resource_view) {
+      if (!cached.has_empty) {
+        cached.is_empty = renodx::utils::resource::IsResourceViewEmpty(device, resource_view);
+        cached.has_empty = true;
+      }
+      return cached.is_empty;
+    };
 
     std::set<reshade::api::pipeline> added_pipelines;
     for (auto stage_state : state->stage_states) {
@@ -3304,6 +3331,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
                                                     ? command_list_state->compute_descriptor_tables
                                                     : command_list_state->graphics_descriptor_tables;
           if (bound_pipeline_layout == pipeline_shader_details->layout) {
+            const bool has_reflected_resource_binds = draw_details.resource_binds.has_value() && !draw_details.resource_binds->empty();
             const auto& info = *layout_data;
             auto param_count = info.params.size();
             auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
@@ -3346,6 +3374,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
                   case reshade::api::descriptor_type::sampler_with_resource_view:
                   case reshade::api::descriptor_type::buffer_shader_resource_view:
                   case reshade::api::descriptor_type::unordered_access_view:
+                  case reshade::api::descriptor_type::constant_buffer:
                     break;
                   default:
                     continue;
@@ -3376,50 +3405,92 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
                 const auto descriptor_count =
                     std::min<uint32_t>(range.count, static_cast<uint32_t>(heap_data.size() - base_offset));
                 if (descriptor_count == 0u) continue;
-                auto known_pair = descriptor_data->resource_view_heap_locations.find(heap.handle);
-                if (known_pair == descriptor_data->resource_view_heap_locations.end()) continue;
-                for (uint32_t k = 0; k < descriptor_count; ++k) {
-                  auto offset = base_offset + k;
-                  auto& known = known_pair->second;
-                  if (!known.contains(offset)) {
-                    // Unknown Resource View
+                ResourceBind::BindType range_bind_type;
+                switch (range.type) {
+                  case reshade::api::descriptor_type::unordered_access_view:
+                    range_bind_type = ResourceBind::BindType::UAV;
+                    break;
+                  case reshade::api::descriptor_type::constant_buffer:
+                    range_bind_type = ResourceBind::BindType::CBV;
+                    break;
+                  case reshade::api::descriptor_type::shader_resource_view:
+                  case reshade::api::descriptor_type::sampler_with_resource_view:
+                  case reshade::api::descriptor_type::buffer_shader_resource_view:
+                    range_bind_type = ResourceBind::BindType::SRV;
+                    break;
+                  default:
+                    continue;
+                }
+
+                struct CandidateDescriptorSlot {
+                  uint32_t slot = 0u;
+                  uint32_t space = 0u;
+                  uint32_t index = 0u;
+                };
+                std::vector<CandidateDescriptorSlot> candidate_slots;
+                if (has_reflected_resource_binds) {
+                  candidate_slots.reserve(draw_details.resource_binds->size());
+                  for (const auto& bind : *draw_details.resource_binds) {
+                    if (bind.type != range_bind_type) continue;
+                    if (bind.space != range.dx_register_space) continue;
+                    if (bind.slot < range.dx_register_index) continue;
+
+                    const auto k = bind.slot - range.dx_register_index;
+                    if (k >= descriptor_count) continue;
+
+                    candidate_slots.push_back({
+                        .slot = bind.slot,
+                        .space = bind.space,
+                        .index = k,
+                    });
+                  }
+                } else {
+                  static const uint32_t SNAPSHOT_DESCRIPTOR_RANGE_FALLBACK_MAX = 256u;
+                  const auto fallback_count = std::min<uint32_t>(descriptor_count, SNAPSHOT_DESCRIPTOR_RANGE_FALLBACK_MAX);
+                  candidate_slots.reserve(fallback_count);
+                  for (uint32_t k = 0; k < fallback_count; ++k) {
+                    candidate_slots.push_back({
+                        .slot = range.dx_register_index + k,
+                        .space = range.dx_register_space,
+                        .index = k,
+                    });
+                  }
+                }
+
+                const bool use_uav = range_bind_type == ResourceBind::BindType::UAV;
+
+                for (const auto& candidate : candidate_slots) {
+                  const auto offset = base_offset + candidate.index;
+                  const auto& descriptor = heap_data[offset];
+                  const auto slot = std::pair<uint32_t, uint32_t>(candidate.slot, candidate.space);
+
+                  if (range_bind_type == ResourceBind::BindType::CBV) {
+                    if (descriptor.type != reshade::api::descriptor_type::constant_buffer
+                        || descriptor.buffer_range.buffer.handle == 0u) {
+                      draw_details.constants.erase(slot);
+                    } else {
+                      draw_details.constants[slot] = descriptor.buffer_range;
+                    }
                     continue;
                   }
 
-                  const auto& [descriptor_type, descriptor_data] = heap_data[offset];
-                  reshade::api::resource_view resource_view = {0};
-                  bool is_uav = false;
-                  switch (descriptor_type) {
-                    case reshade::api::descriptor_type::sampler_with_resource_view:
-                      resource_view = std::get<reshade::api::sampler_with_resource_view>(descriptor_data).view;
-                      break;
-                    case reshade::api::descriptor_type::buffer_unordered_access_view:
-                    case reshade::api::descriptor_type::texture_unordered_access_view:
-                      is_uav = true;
-                      // fallthrough
-                    case reshade::api::descriptor_type::buffer_shader_resource_view:
-                    case reshade::api::descriptor_type::texture_shader_resource_view:
-                      resource_view = std::get<reshade::api::resource_view>(descriptor_data);
-                      break;
-                    case reshade::api::descriptor_type::constant_buffer:
-                    case reshade::api::descriptor_type::shader_storage_buffer:
-                    case reshade::api::descriptor_type::acceleration_structure:
-                      break;
-                    default:
-                      break;
+                  if (!descriptor.HasResourceView()) {
+                    if (use_uav) {
+                      draw_details.uav_binds.erase(slot);
+                    } else {
+                      draw_details.srv_binds.erase(slot);
+                    }
+                    continue;
                   }
 
-                  auto slot = std::pair<uint32_t, uint32_t>(range.dx_register_index + k, range.dx_register_space);
-
-                  bool use_uav = (is_uav || range.type == reshade::api::descriptor_type::unordered_access_view);
-
+                  const auto resource_view = descriptor.resource_view;
                   if (resource_view.handle != 0u) {
-                    auto detail_item = GetResourceViewDetails(resource_view, device);
-                    if (detail_item.resource.handle != 0u || !renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
+                    auto& cached = get_cached_resource_view_details(resource_view);
+                    if (cached.details.resource.handle != 0u || !is_cached_resource_view_empty(cached, resource_view)) {
                       if (use_uav) {
-                        draw_details.uav_binds[slot] = detail_item;
+                        draw_details.uav_binds[slot] = cached.details;
                       } else {
-                        draw_details.srv_binds[slot] = detail_item;
+                        draw_details.srv_binds[slot] = cached.details;
                       }
                       continue;
                     }
@@ -3444,7 +3515,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
       uint32_t rtv_index = 0u;
       for (auto render_target : renodx::utils::swapchain::GetRenderTargets(cmd_list)) {
         if (render_target.handle != 0u) {
-          draw_details.render_targets[rtv_index] = GetResourceViewDetails(render_target, device);
+          draw_details.render_targets[rtv_index] = get_cached_resource_view_details(render_target).details;
         }
         ++rtv_index;
       }
@@ -6215,6 +6286,25 @@ struct SettingsDeviceOption {
 
 void RenderInfoPane(reshade::api::device* device, DeviceData* data) {
   if (BeginSettingsSection("Overview")) {
+    std::size_t tracked_descriptor_heap_count = 0u;
+    std::size_t tracked_descriptor_slot_count = 0u;
+    std::size_t tracked_descriptor_capacity = 0u;
+    std::size_t tracked_descriptor_ram_bytes = 0u;
+    if (device != nullptr) {
+      if (auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
+          descriptor_data != nullptr) {
+        const std::shared_lock descriptor_lock(descriptor_data->mutex);
+        tracked_descriptor_heap_count = descriptor_data->heaps.size();
+        for (const auto& [heap_handle, heap_data] : descriptor_data->heaps) {
+          (void)heap_handle;
+          tracked_descriptor_slot_count += heap_data.size();
+          tracked_descriptor_capacity += heap_data.capacity();
+        }
+        tracked_descriptor_ram_bytes =
+            tracked_descriptor_capacity * sizeof(renodx::utils::descriptor::DescriptorHeapSlot);
+      }
+    }
+
     if (device != nullptr) {
       ImGui::Text(
           "Device: %p (%d)",
@@ -6229,6 +6319,11 @@ void RenderInfoPane(reshade::api::device* device, DeviceData* data) {
       ImGui::Text("Tracked Shaders: %zu", data->shader_details.size());
       ImGui::Text("Tracked Pipelines: %zu", data->live_pipelines.size());
     }
+    ImGui::Text(
+        "Tracked Descriptor Heaps: %zu heaps, %zu slots, ~%.2f MiB",
+        tracked_descriptor_heap_count,
+        tracked_descriptor_slot_count,
+        static_cast<double>(tracked_descriptor_ram_bytes) / (1024.0 * 1024.0));
 
     ImGui::Text("%s", (std::string("Build: ") + __DATE__ + " " + renodx::utils::date::ISO_DATE_TIME).c_str());
     EndSettingsSection();

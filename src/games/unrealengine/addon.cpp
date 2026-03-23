@@ -1003,8 +1003,8 @@ bool OnDispatch(
             for (uint32_t j = 0; j < descriptor_table_count; ++j) {
               const auto& range = descriptor_table_ranges[j];
 
-              // Skip unbounded ranges
-              if (range.count == UINT32_MAX) continue;
+              // Skip empty and unbounded ranges
+              if (range.count == 0u || range.count == UINT32_MAX) continue;
 
               switch (range.type) {
                 case reshade::api::descriptor_type::shader_resource_view:
@@ -1028,32 +1028,29 @@ bool OnDispatch(
               device->get_descriptor_heap_offset(table, range.binding, 0, &heap, &base_offset);
               const std::shared_lock descriptor_lock(descriptor_data->mutex);
 
-              for (uint32_t k = 0; k < range.count; ++k) {
-                auto heap_pair = descriptor_data->heaps.find(heap.handle);
-                if (heap_pair == descriptor_data->heaps.end()) {
-                  // Unknown heap?
-                  continue;
-                }
-                const auto& heap_data = heap_pair->second;
-                auto offset = base_offset + k;
-                if (offset >= heap_data.size()) {
-                  // Invalid location (may be oversized bind)
-                  continue;
-                }
-                auto known_pair = descriptor_data->resource_view_heap_locations.find(heap.handle);
-                if (known_pair == descriptor_data->resource_view_heap_locations.end()) continue;
-                auto& known = known_pair->second;
-                if (!known.contains(offset)) {
-                  // Unknown Resource View
-                  continue;
-                }
+              auto heap_pair = descriptor_data->heaps.find(heap.handle);
+              if (heap_pair == descriptor_data->heaps.end()) {
+                // Unknown heap?
+                continue;
+              }
+              const auto& heap_data = heap_pair->second;
+              if (base_offset >= heap_data.size()) {
+                // Invalid location (may be oversized bind)
+                continue;
+              }
+              const auto descriptor_count =
+                  std::min<uint32_t>(range.count, static_cast<uint32_t>(heap_data.size() - base_offset));
+              if (descriptor_count == 0u) continue;
 
-                const auto& [descriptor_type, descriptor_data] = heap_data[offset];
-                reshade::api::resource_view resource_view = {0};
+              for (uint32_t k = 0; k < descriptor_count; ++k) {
+                auto offset = base_offset + k;
+                const auto& descriptor = heap_data[offset];
+                if (!descriptor.HasResourceView()) continue;
+
+                auto resource_view = descriptor.resource_view;
                 bool is_uav = false;
-                switch (descriptor_type) {
+                switch (descriptor.type) {
                   case reshade::api::descriptor_type::sampler_with_resource_view:
-                    resource_view = std::get<reshade::api::sampler_with_resource_view>(descriptor_data).view;
                     break;
                   case reshade::api::descriptor_type::buffer_unordered_access_view:
                   case reshade::api::descriptor_type::texture_unordered_access_view:
@@ -1061,7 +1058,6 @@ bool OnDispatch(
                     // fallthrough
                   case reshade::api::descriptor_type::buffer_shader_resource_view:
                   case reshade::api::descriptor_type::texture_shader_resource_view:
-                    resource_view = std::get<reshade::api::resource_view>(descriptor_data);
                     break;
                   case reshade::api::descriptor_type::constant_buffer:
                   case reshade::api::descriptor_type::shader_storage_buffer:
@@ -1169,6 +1165,7 @@ void Use(DWORD fdw_reason) {
   renodx::utils::shader::use_shader_cache = true;
   renodx::utils::resource::Use(fdw_reason);
   renodx::utils::descriptor::Use(fdw_reason);
+  renodx::utils::state::Use(fdw_reason);
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
@@ -1480,7 +1477,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::swapchain::Use(fdw_reason);
       renodx::utils::resource::Use(fdw_reason);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_addon(h_module);
       break;
   }
 
@@ -1490,6 +1486,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+
+  if (fdw_reason == DLL_PROCESS_DETACH) {
+    reshade::unregister_addon(h_module);
+  }
 
   return TRUE;
 }

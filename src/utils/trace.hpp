@@ -116,6 +116,7 @@ const bool TRACE_NAMES = false;
 static uint32_t present_count = 0;
 
 static bool attached = false;
+static constexpr uint32_t TRACE_DESCRIPTOR_LOG_LIMIT = 256;
 
 static uint64_t GetResourceByViewHandle(DeviceData* data, uint64_t handle) {
   if (handle == 0) return 0;
@@ -1147,7 +1148,8 @@ static void OnPushDescriptors(
   auto* device = cmd_list->get_device();
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   const std::shared_lock lock(data->mutex);
-  for (uint32_t i = 0; i < update.count; i++) {
+  const uint32_t log_count = std::min(update.count, TRACE_DESCRIPTOR_LOG_LIMIT);
+  for (uint32_t i = 0; i < log_count; i++) {
     std::stringstream s;
     s << "push_descriptors(" << PRINT_PTR(layout.handle);
     s << "[" << layout_param << "]";
@@ -1226,6 +1228,15 @@ static void OnPushDescriptors(
     s << "[" << update.binding + i << " / " << update.count << "]";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
+  if (update.count > log_count) {
+    std::stringstream s;
+    s << "push_descriptors(" << PRINT_PTR(layout.handle);
+    s << "[" << layout_param << "]";
+    s << ", binding: " << update.binding;
+    s << ", type: " << update.type;
+    s << ") truncated " << (update.count - log_count) << " descriptor(s)";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+  }
 }
 
 static void OnBindDescriptorTables(
@@ -1301,18 +1312,20 @@ static void OnBindDescriptorTables(
       }
       const std::shared_lock descriptor_lock(descriptor_data->mutex);
 
-      for (uint32_t j = 0; j < range.count; ++j) {
-        auto heap_pair = descriptor_data->heaps.find(heap.handle);
-        if (heap_pair == descriptor_data->heaps.end()) continue;
-        const auto& heap_data = heap_pair->second;
+      const uint32_t log_count = std::min(range.count, TRACE_DESCRIPTOR_LOG_LIMIT);
+      auto heap_pair = descriptor_data->heaps.find(heap.handle);
+      if (heap_pair == descriptor_data->heaps.end()) continue;
+      const auto& heap_data = heap_pair->second;
+      for (uint32_t j = 0; j < log_count; ++j) {
         auto offset = base_offset + j;
         if (offset >= heap_data.size()) continue;
-        const auto& [descriptor_type, descriptor_data] = heap_data[offset];
-        reshade::api::resource_view resource_view = {0};
+        const auto& descriptor = heap_data[offset];
+        if (!descriptor.HasResourceView()) continue;
+
+        auto resource_view = descriptor.resource_view;
         bool is_uav = false;
-        switch (descriptor_type) {
+        switch (descriptor.type) {
           case reshade::api::descriptor_type::sampler_with_resource_view:
-            resource_view = std::get<reshade::api::sampler_with_resource_view>(descriptor_data).view;
             break;
           case reshade::api::descriptor_type::buffer_unordered_access_view:
           case reshade::api::descriptor_type::texture_unordered_access_view:
@@ -1320,7 +1333,6 @@ static void OnBindDescriptorTables(
             // fallthrough
           case reshade::api::descriptor_type::buffer_shader_resource_view:
           case reshade::api::descriptor_type::texture_shader_resource_view:
-            resource_view = std::get<reshade::api::resource_view>(descriptor_data);
             break;
           case reshade::api::descriptor_type::constant_buffer:
           case reshade::api::descriptor_type::shader_storage_buffer:
@@ -1350,6 +1362,17 @@ static void OnBindDescriptorTables(
           reshade::log::message(reshade::log::level::info, s.str().c_str());
         }
       }
+      if (range.count > log_count) {
+        std::stringstream s;
+        s << "bind_descriptor_table(" << PRINT_PTR(layout.handle);
+        s << "[" << layout_index << "]";
+        s << ", table: " << PRINT_PTR(tables[i].handle);
+        s << ", binding: " << range.binding;
+        s << ", dx_index: " << range.dx_register_index;
+        s << ", dx_space: " << range.dx_register_space;
+        s << ") truncated " << (range.count - log_count) << " descriptor(s)";
+        reshade::log::message(reshade::log::level::info, s.str().c_str());
+      }
     }
   }
 }
@@ -1375,7 +1398,8 @@ static bool OnCopyDescriptorTables(
     device->get_descriptor_heap_offset(
         copy.dest_table, copy.dest_binding, copy.dest_array_offset, &dest_heap, &dest_offset);
 
-    for (uint32_t j = 0; j < copy.count; j++) {
+    const uint32_t log_count = std::min(copy.count, TRACE_DESCRIPTOR_LOG_LIMIT);
+    for (uint32_t j = 0; j < log_count; j++) {
       std::stringstream s;
       s << "copy_descriptor_tables(";
       s << PRINT_PTR(copy.source_table.handle);
@@ -1409,6 +1433,19 @@ static bool OnCopyDescriptorTables(
       s << ")";
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
+    if (copy.count > log_count) {
+      std::stringstream s;
+      s << "copy_descriptor_tables(";
+      s << PRINT_PTR(copy.source_table.handle);
+      s << "[" << copy.source_binding << "]";
+      s << "[" << copy.source_array_offset << "]";
+      s << " => ";
+      s << PRINT_PTR(copy.dest_table.handle);
+      s << "[" << copy.dest_binding << "]";
+      s << "[" << copy.dest_array_offset << "]";
+      s << ") truncated " << (copy.count - log_count) << " descriptor(s)";
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
+    }
   }
 
   return false;
@@ -1425,7 +1462,8 @@ static bool OnUpdateDescriptorTables(
   for (uint32_t i = 0; i < count; i++) {
     const auto& update = updates[i];
 
-    for (uint32_t j = 0; j < update.count; j++) {
+    const uint32_t log_count = std::min(update.count, TRACE_DESCRIPTOR_LOG_LIMIT);
+    for (uint32_t j = 0; j < log_count; j++) {
       std::stringstream s;
       s << "update_descriptor_tables(";
       s << PRINT_PTR(update.table.handle);
@@ -1525,6 +1563,15 @@ static bool OnUpdateDescriptorTables(
           break;
       }
       s << ") [" << i << "]";
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
+    }
+    if (update.count > log_count) {
+      std::stringstream s;
+      s << "update_descriptor_tables(";
+      s << PRINT_PTR(update.table.handle);
+      s << "[" << update.binding << "]";
+      s << ", type: " << update.type;
+      s << ") truncated " << (update.count - log_count) << " descriptor(s)";
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
   }
