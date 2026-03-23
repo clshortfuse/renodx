@@ -23,7 +23,6 @@
 
 #include "./data.hpp"
 #include "./hash.hpp"
-#include "./pipeline_layout.hpp"
 #if defined(DEBUG_LEVEL_1) || defined(DEBUG_LEVEL_2)
 #include "./format.hpp"
 #endif
@@ -353,35 +352,6 @@ static bool OnCopyDescriptorTables(
   return false;
 }
 
-static void OnBindDescriptorTables(
-    reshade::api::command_list* cmd_list,
-    reshade::api::shader_stage stages,
-    reshade::api::pipeline_layout layout,
-    uint32_t first,
-    uint32_t count,
-    const reshade::api::descriptor_table* tables) {
-  if (!is_primary_hook) return;
-  if (!trace_descriptor_tables) return;
-  if (count == 0u) return;
-  if (layout.handle == 0u) return;
-  auto* device = cmd_list->get_device();
-  auto* layout_data = pipeline_layout::GetPipelineLayoutData(layout);
-
-  assert(layout_data != nullptr);
-
-  auto& info = *layout_data;
-  for (uint32_t i = 0; i < count; ++i) {
-    const auto layout_index = first + i;
-
-    assert(layout_index < info.params.size());
-    const auto& param = info.params.at(layout_index);
-    assert(param.type == reshade::api::pipeline_layout_param_type::descriptor_table
-           || param.type == reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers);
-
-    info.tables[layout_index] = tables[i];
-  }
-}
-
 static reshade::api::descriptor_table_update* CloneDescriptorTableUpdates(
     const reshade::api::descriptor_table_update* updates,
     uint32_t count) {
@@ -421,7 +391,6 @@ static reshade::api::descriptor_table_update* CloneDescriptorTableUpdates(
 static bool attached = false;
 
 static void Use(DWORD fdw_reason) {
-  utils::pipeline_layout::Use(fdw_reason);
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
@@ -432,7 +401,6 @@ static void Use(DWORD fdw_reason) {
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables);
       reshade::register_event<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables);
-      reshade::register_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
 
       break;
     case DLL_PROCESS_DETACH:
@@ -442,7 +410,6 @@ static void Use(DWORD fdw_reason) {
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables);
       reshade::unregister_event<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables);
-      reshade::unregister_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
 
       break;
   }

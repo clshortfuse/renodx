@@ -1243,7 +1243,7 @@ static void OnBindDescriptorTables(
     return;
   }
 
-  pipeline_layout::PipelineLayoutData* layout_data = nullptr;
+  const pipeline_layout::PipelineLayoutData* layout_data = nullptr;
   if (layout.handle != 0u) {
     layout_data = pipeline_layout::GetPipelineLayoutData(layout);
   }

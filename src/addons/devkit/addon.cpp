@@ -201,29 +201,6 @@ struct ResourceViewDetails {
   bool is_res_upgraded = false;
   bool is_rtv_cloned = false;
   bool is_res_cloned = false;
-
-  void CaptureModState() {
-    auto* resource_view_info_pointer = renodx::utils::resource::GetResourceViewInfo(resource_view);
-    if (resource_view_info_pointer == nullptr) {
-      this->is_rtv_upgraded = false;
-      this->is_res_upgraded = false;
-      this->is_rtv_cloned = false;
-      this->is_res_cloned = false;
-      return;
-    }
-    auto resource_view_info = *resource_view_info_pointer;
-
-    this->is_rtv_upgraded = resource_view_info.upgraded;
-    this->is_rtv_cloned = resource_view_info.clone.handle != 0u;
-
-    if (resource_view_info.resource_info != nullptr) {
-      this->is_res_upgraded = resource_view_info.resource_info->upgraded;
-      this->is_res_cloned = resource_view_info.resource_info->clone_enabled;
-    } else {
-      this->is_res_upgraded = false;
-      this->is_res_cloned = false;
-    }
-  }
 };
 
 struct PipelineBindDetails {
@@ -350,11 +327,15 @@ ResourceViewDetails GetResourceViewDetails(reshade::api::resource_view resource_
   details.resource_view_desc = resource_view_info->desc;
   details.clone_view = resource_view_info->clone;
   details.clone_view_desc = resource_view_info->clone_desc;
+  details.is_rtv_upgraded = resource_view_info->upgraded;
+  details.is_rtv_cloned = resource_view_info->clone.handle != 0u;
   auto device_api = device->get_api();
 
-  auto resource_view_reflection = renodx::utils::trace::GetDebugName(device_api, resource_view);
-  if (resource_view_reflection.has_value()) {
-    details.resource_view_reflection = resource_view_reflection.value();
+  if (!resource_view_info->destroyed) {
+    auto resource_view_reflection = renodx::utils::trace::GetDebugName(device_api, resource_view);
+    if (resource_view_reflection.has_value()) {
+      details.resource_view_reflection = resource_view_reflection.value();
+    }
   }
 
   if (resource_view_info->resource_info != nullptr) {
@@ -362,6 +343,8 @@ ResourceViewDetails GetResourceViewDetails(reshade::api::resource_view resource_
     details.resource_desc = resource_view_info->resource_info->desc;
     details.clone_resource = resource_view_info->resource_info->clone;
     details.clone_resource_desc = resource_view_info->resource_info->clone_desc;
+    details.is_res_upgraded = resource_view_info->resource_info->upgraded;
+    details.is_res_cloned = resource_view_info->resource_info->clone_enabled;
 
     if (!resource_view_info->resource_info->destroyed) {
       auto resource_reflection = renodx::utils::trace::GetDebugName(device_api, details.resource);
@@ -369,12 +352,12 @@ ResourceViewDetails GetResourceViewDetails(reshade::api::resource_view resource_
         details.resource_reflection = resource_reflection.value();
       }
     }
-    details.is_swapchain = renodx::utils::swapchain::IsBackBuffer(details.resource);
+    details.is_swapchain = resource_view_info->resource_info->is_swap_chain;
   } else {
     details.is_swapchain = false;
+    details.is_res_upgraded = false;
+    details.is_res_cloned = false;
   }
-
-  details.CaptureModState();
 
   return details;
 }
@@ -2974,7 +2957,9 @@ bool OnCopyResource(
     auto* device_data = renodx::utils::data::Get<DeviceData>(device);
     if (device_data == nullptr) return false;
     std::unique_lock lock(device_data->mutex);
-    reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
+    if (snapshot_trace_with_snapshot) {
+      reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
+    }
     device_data->draw_details_list.push_back(draw_details);
     device_data->snapshot_rows_valid = false;
   } else {
@@ -3009,7 +2994,9 @@ bool OnCopyTextureRegion(
     auto* device_data = renodx::utils::data::Get<DeviceData>(device);
     if (device_data == nullptr) return false;
     std::unique_lock lock(device_data->mutex);
-    reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
+    if (snapshot_trace_with_snapshot) {
+      reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
+    }
     device_data->draw_details_list.push_back(draw_details);
     device_data->snapshot_rows_valid = false;
   } else {
@@ -3046,10 +3033,10 @@ void OnPushDescriptors(
 
   auto* device = cmd_list->get_device();
 
-  renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
+  const renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
   auto populate_layout_data = [&]() {
     if (layout_data != nullptr) return true;
-    auto* local_layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout);
+    const auto* local_layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout);
     if (local_layout_data == nullptr) {
       reshade::log::message(reshade::log::level::error, "Could not find handle.");
       return false;
@@ -3229,7 +3216,6 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
       draw_details.srv_binds = command_list_data->pixel_srv_binds;
       draw_details.uav_binds = command_list_data->pixel_uav_binds;
     }
-    draw_details.render_targets = command_list_data->render_targets;
     draw_details.blend_desc = command_list_data->blend_desc;
 
     std::unique_lock lock(device_data->mutex);
@@ -3307,132 +3293,142 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     if (state->last_pipeline != 0u) {
       auto* pipeline_shader_details = renodx::utils::shader::GetPipelineShaderDetails(state->last_pipeline);
       if (pipeline_shader_details != nullptr) {
-        auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pipeline_shader_details->layout);
+        const auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pipeline_shader_details->layout);
         if (layout_data != nullptr) {
-          const auto& info = *layout_data;
-          auto param_count = info.params.size();
-          auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
-          if (descriptor_data == nullptr) return false;
-          for (auto param_index = 0; param_index < param_count; ++param_index) {
-            const auto& param = info.params.at(param_index);
-            const auto& table = info.tables[param_index];
+          const auto* command_list_state = renodx::utils::state::GetCurrentState(cmd_list);
+          if (command_list_state == nullptr) return false;
+          const auto& bound_pipeline_layout = draw_method == DrawDetails::DrawMethods::DISPATCH
+                                                  ? command_list_state->compute_pipeline_layout
+                                                  : command_list_state->graphics_pipeline_layout;
+          const auto& bound_descriptor_tables = draw_method == DrawDetails::DrawMethods::DISPATCH
+                                                    ? command_list_state->compute_descriptor_tables
+                                                    : command_list_state->graphics_descriptor_tables;
+          if (bound_pipeline_layout == pipeline_shader_details->layout) {
+            const auto& info = *layout_data;
+            auto param_count = info.params.size();
+            auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
+            if (descriptor_data == nullptr) return false;
 
-            uint32_t descriptor_table_count;
-            const reshade::api::descriptor_range* descriptor_table_ranges;
-            switch (param.type) {
-              case reshade::api::pipeline_layout_param_type::descriptor_table:
-                if (table.handle == 0u) continue;
-                descriptor_table_count = param.descriptor_table.count;
-                descriptor_table_ranges = param.descriptor_table.ranges;
-                break;
-              case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
-                if (table.handle == 0u) continue;
-                descriptor_table_count = param.descriptor_table_with_static_samplers.count;
-                descriptor_table_ranges = param.descriptor_table_with_static_samplers.ranges;
-                break;
+            for (auto param_index = 0; param_index < param_count; ++param_index) {
+              if (param_index >= bound_descriptor_tables.size()) continue;
 
-              case reshade::api::pipeline_layout_param_type::push_constants:
-              case reshade::api::pipeline_layout_param_type::push_descriptors:
-              case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
-              case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
-                continue;
-            }
+              const auto& param = info.params.at(param_index);
+              const auto& table = bound_descriptor_tables[param_index];
 
-            for (uint32_t j = 0; j < descriptor_table_count; ++j) {
-              const auto& range = descriptor_table_ranges[j];
-
-              // Skip unbounded ranges
-              if (range.count == UINT32_MAX) continue;
-
-              switch (range.type) {
-                case reshade::api::descriptor_type::shader_resource_view:
-                case reshade::api::descriptor_type::sampler_with_resource_view:
-                case reshade::api::descriptor_type::buffer_shader_resource_view:
-                case reshade::api::descriptor_type::unordered_access_view:
+              uint32_t descriptor_table_count;
+              const reshade::api::descriptor_range* descriptor_table_ranges;
+              switch (param.type) {
+                case reshade::api::pipeline_layout_param_type::descriptor_table:
+                  if (table.handle == 0u) continue;
+                  descriptor_table_count = param.descriptor_table.count;
+                  descriptor_table_ranges = param.descriptor_table.ranges;
                   break;
-                default:
+                case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
+                  if (table.handle == 0u) continue;
+                  descriptor_table_count = param.descriptor_table_with_static_samplers.count;
+                  descriptor_table_ranges = param.descriptor_table_with_static_samplers.ranges;
+                  break;
+                case reshade::api::pipeline_layout_param_type::push_constants:
+                case reshade::api::pipeline_layout_param_type::push_descriptors:
+                case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
+                case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
                   continue;
               }
 
-              if (draw_method == DrawDetails::DrawMethods::DISPATCH
-                  && !renodx::utils::bitwise::HasFlag(range.visibility, reshade::api::shader_stage::compute)) {
-                continue;
-              }
-              if (!renodx::utils::bitwise::HasFlag(range.visibility, reshade::api::shader_stage::pixel)) {
-                continue;
-              }
+              for (uint32_t j = 0; j < descriptor_table_count; ++j) {
+                const auto& range = descriptor_table_ranges[j];
 
-              uint32_t base_offset = 0;
-              reshade::api::descriptor_heap heap = {0};
-              device->get_descriptor_heap_offset(table, range.binding, 0, &heap, &base_offset);
-              const std::shared_lock descriptor_lock(descriptor_data->mutex);
+                // Skip empty and unbounded ranges
+                if (range.count == 0u || range.count == UINT32_MAX) continue;
 
-              for (uint32_t k = 0; k < range.count; ++k) {
+                switch (range.type) {
+                  case reshade::api::descriptor_type::shader_resource_view:
+                  case reshade::api::descriptor_type::sampler_with_resource_view:
+                  case reshade::api::descriptor_type::buffer_shader_resource_view:
+                  case reshade::api::descriptor_type::unordered_access_view:
+                    break;
+                  default:
+                    continue;
+                }
+
+                if (draw_method == DrawDetails::DrawMethods::DISPATCH
+                    && !renodx::utils::bitwise::HasFlag(range.visibility, reshade::api::shader_stage::compute)) {
+                  continue;
+                }
+                if (!renodx::utils::bitwise::HasFlag(range.visibility, reshade::api::shader_stage::pixel)) {
+                  continue;
+                }
+
+                uint32_t base_offset = 0;
+                reshade::api::descriptor_heap heap = {0};
+                device->get_descriptor_heap_offset(table, range.binding, 0, &heap, &base_offset);
+                const std::shared_lock descriptor_lock(descriptor_data->mutex);
                 auto heap_pair = descriptor_data->heaps.find(heap.handle);
                 if (heap_pair == descriptor_data->heaps.end()) {
                   // Unknown heap?
                   continue;
                 }
                 const auto& heap_data = heap_pair->second;
-                auto offset = base_offset + k;
-                if (offset >= heap_data.size()) {
+                if (base_offset >= heap_data.size()) {
                   // Invalid location (may be oversized bind)
                   continue;
                 }
+                const auto descriptor_count =
+                    std::min<uint32_t>(range.count, static_cast<uint32_t>(heap_data.size() - base_offset));
+                if (descriptor_count == 0u) continue;
                 auto known_pair = descriptor_data->resource_view_heap_locations.find(heap.handle);
                 if (known_pair == descriptor_data->resource_view_heap_locations.end()) continue;
-                auto& known = known_pair->second;
-                if (!known.contains(offset)) {
-                  // Unknown Resource View
-                  continue;
-                }
+                for (uint32_t k = 0; k < descriptor_count; ++k) {
+                  auto offset = base_offset + k;
+                  auto& known = known_pair->second;
+                  if (!known.contains(offset)) {
+                    // Unknown Resource View
+                    continue;
+                  }
 
-                const auto& [descriptor_type, descriptor_data] = heap_data[offset];
-                reshade::api::resource_view resource_view = {0};
-                bool is_uav = false;
-                switch (descriptor_type) {
-                  case reshade::api::descriptor_type::sampler_with_resource_view:
-                    resource_view = std::get<reshade::api::sampler_with_resource_view>(descriptor_data).view;
-                    break;
-                  case reshade::api::descriptor_type::buffer_unordered_access_view:
-                  case reshade::api::descriptor_type::texture_unordered_access_view:
-                    is_uav = true;
-                    // fallthrough
-                  case reshade::api::descriptor_type::buffer_shader_resource_view:
-                  case reshade::api::descriptor_type::texture_shader_resource_view:
-                    resource_view = std::get<reshade::api::resource_view>(descriptor_data);
-                    break;
-                  case reshade::api::descriptor_type::constant_buffer:
-                  case reshade::api::descriptor_type::shader_storage_buffer:
-                  case reshade::api::descriptor_type::acceleration_structure:
-                    break;
-                  default:
-                    break;
-                }
+                  const auto& [descriptor_type, descriptor_data] = heap_data[offset];
+                  reshade::api::resource_view resource_view = {0};
+                  bool is_uav = false;
+                  switch (descriptor_type) {
+                    case reshade::api::descriptor_type::sampler_with_resource_view:
+                      resource_view = std::get<reshade::api::sampler_with_resource_view>(descriptor_data).view;
+                      break;
+                    case reshade::api::descriptor_type::buffer_unordered_access_view:
+                    case reshade::api::descriptor_type::texture_unordered_access_view:
+                      is_uav = true;
+                      // fallthrough
+                    case reshade::api::descriptor_type::buffer_shader_resource_view:
+                    case reshade::api::descriptor_type::texture_shader_resource_view:
+                      resource_view = std::get<reshade::api::resource_view>(descriptor_data);
+                      break;
+                    case reshade::api::descriptor_type::constant_buffer:
+                    case reshade::api::descriptor_type::shader_storage_buffer:
+                    case reshade::api::descriptor_type::acceleration_structure:
+                      break;
+                    default:
+                      break;
+                  }
 
-                auto slot = std::pair<uint32_t, uint32_t>(range.dx_register_index + k, range.dx_register_space);
+                  auto slot = std::pair<uint32_t, uint32_t>(range.dx_register_index + k, range.dx_register_space);
 
-                if (is_uav || range.type == reshade::api::descriptor_type::unordered_access_view) {
-                  if (resource_view.handle == 0u) {
-                    draw_details.uav_binds.erase(slot);
-                  } else {
+                  bool use_uav = (is_uav || range.type == reshade::api::descriptor_type::unordered_access_view);
+
+                  if (resource_view.handle != 0u) {
                     auto detail_item = GetResourceViewDetails(resource_view, device);
-                    if (detail_item.resource.handle == 0u && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
-                      draw_details.uav_binds.erase(slot);
-                    } else {
-                      draw_details.uav_binds[slot] = detail_item;
+                    if (detail_item.resource.handle != 0u || !renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
+                      if (use_uav) {
+                        draw_details.uav_binds[slot] = detail_item;
+                      } else {
+                        draw_details.srv_binds[slot] = detail_item;
+                      }
+                      continue;
                     }
                   }
-                } else {
-                  if (resource_view.handle == 0u) {
-                    draw_details.srv_binds.erase(slot);
+
+                  if (use_uav) {
+                    draw_details.uav_binds.erase(slot);
                   } else {
-                    auto detail_item = GetResourceViewDetails(resource_view, device);
-                    if (detail_item.resource.handle == 0u && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
-                      draw_details.srv_binds.erase(slot);
-                    } else {
-                      draw_details.srv_binds[slot] = detail_item;
-                    }
+                    draw_details.srv_binds.erase(slot);
                   }
                 }
               }
@@ -3458,8 +3454,10 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     }
 
     // device_data->command_list_data.push_back(*command_list_data);
-    reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
-    device_data->draw_details_list.push_back(draw_details);
+    if (snapshot_trace_with_snapshot) {
+      reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
+    }
+    device_data->draw_details_list.push_back(std::move(draw_details));
     device_data->snapshot_rows_valid = false;
     // command_list_data->draw_details.clear();
   } else if (snapshot_device != nullptr) {
@@ -7269,6 +7267,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::trace::Use(fdw_reason);
       renodx::utils::constants::Use(fdw_reason);
       renodx::utils::descriptor::Use(fdw_reason);
+      renodx::utils::state::Use(fdw_reason);
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::shader::dump::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
@@ -7309,6 +7308,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::trace::Use(fdw_reason);
       renodx::utils::constants::Use(fdw_reason);
       renodx::utils::descriptor::Use(fdw_reason);
+      renodx::utils::state::Use(fdw_reason);
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::shader::dump::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
@@ -7335,7 +7335,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
 
       reshade::unregister_overlay("RenoDX DevKit", OnRegisterOverlay);
-      reshade::unregister_addon(h_module);
 
       break;
   }
@@ -7343,6 +7342,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::resource::Use(fdw_reason);
 
   // ResourceWatcher::Use(fdwReason);
+
+  if (fdw_reason == DLL_PROCESS_DETACH) {
+    reshade::unregister_addon(h_module);
+  }
 
   return TRUE;
 }

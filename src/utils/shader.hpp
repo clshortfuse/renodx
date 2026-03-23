@@ -117,7 +117,7 @@ struct PipelineShaderDetails {
   std::unordered_set<uint32_t> shader_hashes;
   reshade::api::pipeline replacement_pipeline = {0};
   reshade::api::pipeline_stage replacement_stages = static_cast<reshade::api::pipeline_stage>(0u);
-  renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
+  const renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
   bool initialized_replacement = false;
 
   std::optional<std::string> tag;
@@ -921,7 +921,7 @@ static void OnInitPipeline(
     assert(pair->second.pipeline.handle == pipeline.handle);
     was_destroyed = pair->second.destroyed;
     if (!pair->second.destroyed) {
-#ifdef DEBUG_LEVEL_1
+#ifdef DEBUG_LEVEL_3
       std::stringstream s;
       s << "utils::shader::OnInitPipeline(Reinserted pipeline: ";
       s << PRINT_PTR(pipeline.handle);
