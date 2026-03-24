@@ -250,6 +250,8 @@ renodx::utils::settings::Settings settings = {
               {"GammaCorrection", 1.f},
               {"ColorGradeShadows", 50.f},
               {"ColorGradeLUTScaling", 0.f},
+              {"ToneMapHueShift", 100.f},
+              {"ToneMapHueCorrection", 100.f},
           });
         },
     },
