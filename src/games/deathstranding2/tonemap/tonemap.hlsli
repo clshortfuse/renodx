@@ -13,7 +13,7 @@ float3 ApplyGammaCorrectionForToneMap(float3 color_input) {
     float3 color_corrected_ch = renodx::color::correct::GammaSafe(color_input);
 
     color_corrected = renodx::color::bt709::from::BT2020(renodx_custom::tonemap::psycho::psycho11_ApplyPurityFromBT2020(
-        renodx::color::bt2020::from::BT709(color_corrected_ch), renodx::color::bt2020::from::BT709(color_corrected_lum), 1.f));
+        renodx::color::bt2020::from::BT709(color_corrected_ch), renodx::color::bt2020::from::BT709(color_corrected_lum), 1.f, 1.f));
   } else {
     color_corrected = color_input;
   }
@@ -254,44 +254,26 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
     float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
 
 #if 1
-    untonemapped_bt2020 = renodx_custom::tonemap::psycho::psycho11_RestoreHueBT2020(renodx::color::bt2020::from::BT709(renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 4.f, 0.5f)), untonemapped_bt2020, RENODX_TONE_MAP_HUE_SHIFT);
-
     float3 tonemapped_bt2020;
-    if (RENODX_TONE_MAP_TYPE == 2.f) {  // Psycho
+    if (RENODX_TONE_MAP_SCALING == 1.f) {  // PsychoV
       tonemapped_bt2020 = renodx_custom::tonemap::psycho::psychotm_test11_bt2020(
           untonemapped_bt2020, peak_ratio,
           RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_GAMMA, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS, RENODX_TONE_MAP_CONTRAST,
           0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS, RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_ADAPTATION_CONTRAST,
-          RENODX_TONE_MAP_HUE_CORRECTION, 0.f, 100.f);
-    } else {  // None
-      untonemapped_bt2020 = renodx_custom::tonemap::psycho::psycho11_GradeBT2020(
-          untonemapped_bt2020, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_GAMMA, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS, RENODX_TONE_MAP_CONTRAST,
-          0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS, 0.18f, RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_ADAPTATION_CONTRAST, RENODX_TONE_MAP_HUE_CORRECTION, 0.f);
-
-      tonemapped_bt2020 = untonemapped_bt2020;
-    }
-
-    // tonemapped_bt2020 *= peak_ratio / (max(max(max(untonemapped_bt2020.r, untonemapped_bt2020.g), untonemapped_bt2020.b), peak_ratio));  // Clamp overshoot
-#else
-
-    {  // blow out and hue shift
-      float3 purity_and_hue_source = renodx::tonemap::ReinhardPiecewise(untonemapped_bt2020, 12.5f, 1.f);
-      //   float3 purity_and_hue_source = renodx::tonemap::neutwo::PerChannel(untonemapped_bt2020, 10.f);
+          0.f, 0.f, 100.f, 1);
+    } else {  // Max Channel
+      float3 purity_and_hue_source = renodx::color::bt2020::from::BT709(renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 5.f, 0.5f));
       untonemapped_bt2020 = renodx::color::correct::Luminance(
           purity_and_hue_source,
           renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(purity_and_hue_source),
           renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(untonemapped_bt2020));
-    }
 
-    {
       untonemapped_bt2020 = renodx_custom::tonemap::psycho::psycho11_GradeBT2020(
-          untonemapped_bt2020, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS, RENODX_TONE_MAP_CONTRAST,
-          RENODX_TONE_MAP_FLARE, RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS, 0.1f, RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_ADAPTATION_CONTRAST, 1.f, 0.f);
+          untonemapped_bt2020, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_GAMMA, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS, RENODX_TONE_MAP_CONTRAST,
+          0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS, 0.18f, RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_ADAPTATION_CONTRAST, RENODX_TONE_MAP_HUE_CORRECTION, 0.f);
+
+      tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(untonemapped_bt2020, peak_ratio);
     }
-
-    float3 tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(untonemapped_bt2020, peak_ratio);
-    // float3 tonemapped_bt2020 = HermiteSplineMaxCLL(untonemapped_bt2020, peak_ratio);
-
 #endif
 
     if (use_scaling) {
