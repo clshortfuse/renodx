@@ -1,6 +1,8 @@
 #ifndef RENODX_SHADERS_TONEMAP_PSYCHO_TEST11_HLSL_
 #define RENODX_SHADERS_TONEMAP_PSYCHO_TEST11_HLSL_
 
+#include "../shared.h"
+
 namespace renodx_custom {
 namespace tonemap {
 namespace psycho {
@@ -431,6 +433,7 @@ float3 psycho11_ApplyPurityFromLMS(
     float3 lms_source_raw_d65,
     float3 lms_target_raw_d65,
     float amount = 1.f,
+    float clamp_purity_loss = 0.f,
     float eps = 1e-7f) {
   float3 mb_source = psycho11_MB2FromLMS(lms_source_raw_d65);
   float3 mb_target = psycho11_MB2FromLMS(lms_target_raw_d65);
@@ -443,8 +446,10 @@ float3 psycho11_ApplyPurityFromLMS(
   if (tgt_radius <= eps) return lms_target_raw_d65;
 
   float transfer_scale = src_radius / max(tgt_radius, eps);
+  float no_purity_loss_scale = max(transfer_scale, 1.f);
+  transfer_scale = lerp(transfer_scale, no_purity_loss_scale, clamp_purity_loss);
   float scale = lerp(1.f, transfer_scale, amount);
-  float2 mb_scaled = mb_white + target_offset * max(scale, 0.f);
+  float2 mb_scaled = mb_white + target_offset * scale;
   return psycho11_LMSFromMB2(float3(mb_scaled, mb_target.z));
 }
 
@@ -452,6 +457,7 @@ float3 psycho11_ApplyPurityFromBT2020(
     float3 bt2020_source,
     float3 bt2020_target,
     float amount = 1.f,
+    float clamp_purity_loss = 0.f,
     float eps = 1e-7f) {
   float3 lms_target_raw_d65 = psycho11_LMSFromBT2020(bt2020_target);
   float blend = amount;
@@ -467,6 +473,7 @@ float3 psycho11_ApplyPurityFromBT2020(
       lms_source_raw_d65,
       lms_target_raw_d65,
       blend,
+      clamp_purity_loss,
       eps);
 
   // Keep final output inside a BT.2020-feasible region.
@@ -660,11 +667,14 @@ float3 psychotm_test11_bt2020(
   float3 lms_peak_unit = psycho11_LMSFromBT2020(peak_value.xxx);
   float3 lms_toned_unit;
   if (white_curve_mode == kWhiteCurveNakaRushton) {
-    lms_toned_unit = psycho11_NakaRushton(
-        lms_unit,
-        lms_peak_unit,
-        lms_midgray_unit,
-        cone_response_exponent);
+    // lms_toned_unit = psycho11_NakaRushton(
+    //     lms_unit,
+    //     lms_peak_unit,
+    //     lms_midgray_unit,
+    //     cone_response_exponent);
+    lms_toned_unit = float3(renodx::tonemap::ReinhardPiecewise(lms_unit.x, lms_peak_unit.x, lms_midgray_unit.x),
+                            renodx::tonemap::ReinhardPiecewise(lms_unit.y, lms_peak_unit.y, lms_midgray_unit.y),
+                            renodx::tonemap::ReinhardPiecewise(lms_unit.z, lms_peak_unit.z, lms_midgray_unit.z));
   } else if (white_curve_mode == kWhiteCurveNeutwo && clip_point > peak_value) {
     float3 lms_clip_unit = psycho11_LMSFromBT2020(clip_point.xxx);
     lms_toned_unit = psycho11_NeutwoPerChannel(lms_unit, lms_peak_unit, lms_clip_unit);
@@ -680,6 +690,15 @@ float3 psychotm_test11_bt2020(
 
   lms_toned_unit = psycho11_GamutCompressAddWhiteBT2020Bounded(lms_toned_unit);
   float3 bt2020_toned = psycho11_BT2020FromLMS(lms_toned_unit);
+
+#if 1
+  bt2020_toned = renodx::color::correct::Luminance(
+      bt2020_toned,
+      renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(bt2020_toned),
+      renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromLMS(lms_unit));
+  bt2020_toned = renodx::tonemap::neutwo::MaxChannel(bt2020_toned, peak_value, clip_point);
+#endif
+
   return bt2020_toned;
 }
 
