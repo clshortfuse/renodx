@@ -192,7 +192,8 @@ void frag_main() {
       float frontier_phi_10_11_ladder_5;
       if (_142 == 0u) {
 #if 1
-        ApplyTonemapGamma2LUTAndInverseTonemapDualOutputs(
+        ApplyTonemapGamma2LUTAndInverseTonemapDualOutputsOld(
+            (SamplerState)ResourceDescriptorHeap[17u],
             _19,
             _262, _266, _270,
             _394, _396, _398,
