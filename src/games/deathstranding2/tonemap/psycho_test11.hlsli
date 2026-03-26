@@ -1,8 +1,6 @@
 #ifndef RENODX_SHADERS_TONEMAP_PSYCHO_TEST11_HLSL_
 #define RENODX_SHADERS_TONEMAP_PSYCHO_TEST11_HLSL_
 
-#include "../shared.h"
-
 namespace renodx_custom {
 namespace tonemap {
 namespace psycho {
@@ -264,6 +262,23 @@ float3 psycho11_NakaRushton(float3 x, float3 peak, float3 gray, float cone_respo
   return num / den;
 }
 
+float3 psycho11_ComputeReinhardScale(float3 peak = 1.f, float minimum = 0.f, float3 gray_in = 0.18f, float3 gray_out = 0.18f) {
+  //  s = (p * y - p * m) / (x * p - x * y)
+
+  float3 num = peak * (gray_out - minimum);  // p * (y - m)
+  float3 den = gray_in * (peak - gray_out);  // x * (p - y)
+
+  return num / den;
+}
+
+float3 psycho11_ReinhardPiecewise(float3 x, float3 x_max = 1.f, float3 shoulder = 0.18f) {
+  const float x_min = 0.f;
+  float3 exposure = psycho11_ComputeReinhardScale(x_max, x_min, shoulder, shoulder);
+  float3 tonemapped = mad(x, exposure, x_min) / mad(x, exposure / x_max, 1.f - x_min);
+
+  return lerp(x, tonemapped, step(shoulder, x));
+}
+
 float psycho11_MBYFromLMS(float3 lms) {
   return PSYCHO11_CIE1702_MB_CIE_WEIGHTS.x * lms.x + PSYCHO11_CIE1702_MB_CIE_WEIGHTS.y * lms.y;
 }
@@ -419,13 +434,12 @@ float3 psycho11_RestoreHueBT2020(
 }
 
 float3 psycho11_ScalePurityMB2(float3 lms_raw_d65, float purity_scale, float eps = 1e-7f) {
-  float scale = max(purity_scale, 0.f);
-  if (abs(scale - 1.f) <= eps) return lms_raw_d65;
+  if (abs(purity_scale - 1.f) <= eps) return lms_raw_d65;
 
   float3 mb = psycho11_MB2FromLMS(lms_raw_d65);
   float2 mb_white = psycho11_WhiteD65Chromaticity();
   float2 mb_offset = mb.xy - mb_white;
-  float2 mb_scaled = mb_white + mb_offset * scale;
+  float2 mb_scaled = mb_white + mb_offset * purity_scale;
   return psycho11_LMSFromMB2(float3(mb_scaled, mb.z));
 }
 
@@ -481,98 +495,32 @@ float3 psycho11_ApplyPurityFromBT2020(
   return psycho11_BT2020FromLMS(lms_out_raw_d65);
 }
 
-float3 psycho11_GradeBT2020(
-    float3 bt2020_linear_input,
-    float exposure,
-    float gamma,
-    float highlights,
-    float shadows,
-    float contrast,
-    float flare = 0.f,
-    float contrast_highlights = 1.f,
-    float contrast_shadows = 1.f,
-    float mid_gray = 0.18f,
-    float purity_scale = 1.f,
-    float adaptation_contrast = 1.f,
-    float hue_restore = 1.f,
-    float bleaching_intensity = 0.f,
-    float eps = 1e-7f) {
-  const float kHalfBleachTrolands = 20000.f;
-  const float3 lms_midgray_raw = psycho11_LMSFromBT2020(mid_gray);
-  const float lum_midgray = psycho11_StockmanLuminanceFromLMS(lms_midgray_raw);
+namespace config {
 
-  float3 bt2020 = bt2020_linear_input * exposure;
-  float3 lms_color_raw = psycho11_LMSFromBT2020(bt2020);
-  lms_color_raw = psycho11_GamutCompressAddWhiteBT2020Bounded(lms_color_raw);
+struct Config {
+  bool apply_tonemap;
+  float peak_value;
+  float exposure;
+  float gamma;
+  float highlights;
+  float shadows;
+  float contrast;
+  float flare;
+  float contrast_highlights;
+  float contrast_shadows;
+  float purity_scale;
+  float purity_highlights;
+  float adaptation_contrast;
+  float hue_restore;
+  float bleaching_intensity;
+  float clip_point;
+  float mid_gray;
+  bool pre_gamut_compress;
+  bool post_gamut_compress;
+};
 
-  float lum_current = psycho11_StockmanLuminanceFromLMS(lms_color_raw);
-  float lum_target = lum_current;
-
-  lum_target = select(lum_target < 1.f, pow(lum_target, gamma), lum_target);
-  lum_target = psycho11_Highlights(lum_target, highlights, lum_midgray);
-  lum_target = psycho11_Shadows(lum_target, shadows, lum_midgray);
-  lum_target = psycho11_ContrastAndFlare(
-      lum_target,
-      contrast,
-      contrast_highlights,
-      contrast_shadows,
-      flare,
-      lum_midgray);
-
-  float lum_scale = psycho11_DivideSafe(lum_target, lum_current, 1.f);
-
-  float3 lms_scene_unit = lms_color_raw * lum_scale;
-  float3 lms_midgray_unit = lms_midgray_raw;
-
-  lms_scene_unit = psycho11_ScalePurityMB2(lms_scene_unit, purity_scale, eps);
-
-  float3 lms_scene_unit_source = lms_scene_unit;
-  if (adaptation_contrast != 1.f) {
-    float3 lms_sigma_unit = max(lms_midgray_unit, eps.xxx);
-    float exponent = max(adaptation_contrast, eps);
-
-    float3 ax = abs(lms_scene_unit);
-    float3 ax_n = pow(ax, exponent);
-    float3 s_n = pow(lms_sigma_unit, exponent);
-    float3 response_target = ax_n / max(ax_n + s_n, eps.xxx);
-    float3 response_baseline = ax / max(ax + lms_sigma_unit, eps.xxx);
-    float3 gain = response_target / max(response_baseline, eps.xxx);
-    float3 sign_raw = float3(
-        lms_scene_unit.x < 0.f ? -1.f : 1.f,
-        lms_scene_unit.y < 0.f ? -1.f : 1.f,
-        lms_scene_unit.z < 0.f ? -1.f : 1.f);
-    lms_scene_unit = sign_raw * (ax * gain);
-
-    lms_scene_unit = psycho11_RestoreHueMB2(
-        lms_scene_unit_source,
-        lms_scene_unit,
-        hue_restore,
-        eps);
-  }
-
-  float3 lms_unit = lms_scene_unit;
-  if (bleaching_intensity != 0.f) {
-    float blend_weight = saturate(bleaching_intensity);
-
-    float adapted_lum = max(
-        psycho11_StockmanLuminanceFromLMS(max(lms_unit, 0.f)),
-        0.18f);
-    float3 adapted_bt2020 = adapted_lum.xxx;
-    float3 lms_adapted_unit = psycho11_LMSFromBT2020(adapted_bt2020);
-    float3 lms_signal_unit = lms_unit;
-
-    float3 stimulus_nits = max(lms_adapted_unit, 0.f) * 100.f;
-    float3 stimulus_trolands = stimulus_nits * 4.f;
-    float3 availability_raw = 1.f / (1.f + stimulus_trolands / max(kHalfBleachTrolands, eps));
-    float3 availability = lerp(1.f, availability_raw, blend_weight);
-    lms_unit = lms_signal_unit * max(availability, 0.f);
-  }
-
-  return psycho11_BT2020FromLMS(lms_unit);
-}
-
-float3 psychotm_test11_bt2020(
-    float3 bt2020_linear_input,
+Config Create(
+    bool apply_tonemap = true,
     float peak_value = 1000.f / 203.f,
     float exposure = 1.f,
     float gamma = 1.f,
@@ -583,162 +531,186 @@ float3 psychotm_test11_bt2020(
     float contrast_highlights = 1.f,
     float contrast_shadows = 1.f,
     float purity_scale = 1.f,
+    float purity_highlights = 1.f,
     float adaptation_contrast = 1.f,
     float hue_restore = 1.f,
     float bleaching_intensity = 0.f,
     float clip_point = 100.f,
-    int white_curve_mode = 0,
-    float cone_response_exponent = 1.f) {
+    float mid_gray = 0.18f,
+    bool pre_gamut_compress = true,
+    bool post_gamut_compress = true) {
+  const Config cg_config = {
+    apply_tonemap,
+    peak_value,
+    exposure,
+    gamma,
+    highlights,
+    shadows,
+    contrast,
+    flare,
+    contrast_highlights,
+    contrast_shadows,
+    purity_scale,
+    purity_highlights,
+    adaptation_contrast,
+    hue_restore,
+    bleaching_intensity,
+    clip_point,
+    mid_gray,
+    pre_gamut_compress,
+    post_gamut_compress
+  };
+  return cg_config;
+}
+}  // namespace config
+
+float3 ApplyBT2020(float3 color_bt2020, config::Config psycho_config) {
   const float kEps = 1e-7f;
-  const float kHalfBleachTrolands = 20000.f;
-  const int kWhiteCurveNeutwo = 0;
-  const int kWhiteCurveNakaRushton = 1;
-  const float3 lms_midgray_raw = psycho11_LMSFromBT2020(0.18f.xxx);
-  const float lum_midgray = psycho11_StockmanLuminanceFromLMS(lms_midgray_raw);
 
-  float3 bt2020 = bt2020_linear_input * exposure;
-  float3 lms_color_raw = psycho11_LMSFromBT2020(bt2020);
-  lms_color_raw = psycho11_GamutCompressAddWhiteBT2020Bounded(lms_color_raw);
+  const float3 midgray_lms = psycho11_LMSFromBT2020(psycho_config.mid_gray);
 
-  float lum_current = psycho11_StockmanLuminanceFromLMS(lms_color_raw);
-  float lum_target = lum_current;
+  float3 color_lms_raw = psycho11_LMSFromBT2020(color_bt2020);
+  if (psycho_config.pre_gamut_compress) {
+    color_lms_raw = psycho11_GamutCompressAddWhiteBT2020Bounded(color_lms_raw);
+  }
 
-  lum_target = select(lum_target < 1.f, pow(lum_target, gamma), lum_target);
-  lum_target = psycho11_Highlights(lum_target, highlights, lum_midgray);
-  lum_target = psycho11_Shadows(lum_target, shadows, lum_midgray);
-  lum_target = psycho11_ContrastAndFlare(
-      lum_target,
-      contrast,
-      contrast_highlights,
-      contrast_shadows,
-      flare,
-      lum_midgray);
+  float3 color_lms = color_lms_raw;
+  float lum_original = renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromLMS(color_lms_raw);
 
-  float lum_scale = psycho11_DivideSafe(lum_target, lum_current, 1.f);
-  clip_point *= lum_scale;
+  if (psycho_config.bleaching_intensity != 0.f) {
+    const float kHalfBleachTrolands = 20000.f;
 
-  float3 lms_scene_unit = lms_color_raw * lum_scale;
-  float3 lms_midgray_unit = lms_midgray_raw;
+    float adapted_lum = max(
+        lum_original,
+        0.18f);
+    float3 adapted_bt2020 = adapted_lum.xxx;
+    float3 lms_adapted_unit = psycho11_LMSFromBT2020(adapted_bt2020);
+    float3 lms_signal_unit = color_lms;
 
-  lms_scene_unit = psycho11_ScalePurityMB2(lms_scene_unit, purity_scale, kEps);
+    float3 stimulus_nits = max(lms_adapted_unit, 0.f) * 100.f;
+    float3 stimulus_trolands = stimulus_nits * 4.f;
+    float3 availability_raw = 1.f / (1.f + stimulus_trolands / max(kHalfBleachTrolands, kEps));
+    float3 availability = lerp(1.f, availability_raw, psycho_config.bleaching_intensity);
+    color_lms = lms_signal_unit * max(availability, 0.f);
+  }
 
-  float3 lms_scene_unit_source = lms_scene_unit;
-  if (adaptation_contrast != 1.f) {
-    float3 lms_sigma_unit = max(lms_midgray_unit, kEps.xxx);
-    float exponent = max(adaptation_contrast, kEps);
+  if (psycho_config.apply_tonemap) {  // apply hue shift and blowout
+    // tonemap
+    float3 lms_peak_unit = psycho11_LMSFromBT2020(psycho_config.peak_value.xxx);
 
-    float3 ax = abs(lms_scene_unit);
+    color_lms = psycho11_ReinhardPiecewise(color_lms, lms_peak_unit, midgray_lms);
+
+    color_lms = psycho11_RestoreHueMB2(
+        color_lms_raw,
+        color_lms,
+        psycho_config.hue_restore,
+        kEps);
+
+    // restore original luminance
+    color_lms *= psycho11_DivideSafe(
+        lum_original,
+        renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromLMS(color_lms),
+        1.f);
+  }
+
+  if (psycho_config.adaptation_contrast != 1.f) {
+    float3 source_lms = color_lms;
+    float3 lms_sigma_unit = max(midgray_lms, kEps.xxx);
+    float exponent = max(psycho_config.adaptation_contrast, kEps);
+
+    float3 ax = abs(color_lms);
     float3 ax_n = pow(ax, exponent);
     float3 s_n = pow(lms_sigma_unit, exponent);
     float3 response_target = ax_n / max(ax_n + s_n, kEps.xxx);
     float3 response_baseline = ax / max(ax + lms_sigma_unit, kEps.xxx);
     float3 gain = response_target / max(response_baseline, kEps.xxx);
     float3 sign_raw = float3(
-        lms_scene_unit.x < 0.f ? -1.f : 1.f,
-        lms_scene_unit.y < 0.f ? -1.f : 1.f,
-        lms_scene_unit.z < 0.f ? -1.f : 1.f);
-    lms_scene_unit = sign_raw * (ax * gain);
+        color_lms.x < 0.f ? -1.f : 1.f,
+        color_lms.y < 0.f ? -1.f : 1.f,
+        color_lms.z < 0.f ? -1.f : 1.f);
+    color_lms = sign_raw * (ax * gain);
 
-    lms_scene_unit = psycho11_RestoreHueMB2(
-        lms_scene_unit_source,
-        lms_scene_unit,
-        hue_restore,
+    color_lms = psycho11_RestoreHueMB2(
+        source_lms,
+        color_lms,
+        1.f,
         kEps);
   }
 
-  float3 lms_unit = lms_scene_unit;
-  if (bleaching_intensity != 0.f) {
-    float blend_weight = saturate(bleaching_intensity);
+  if (psycho_config.exposure != 1.f
+      || psycho_config.gamma != 1.f
+      || psycho_config.highlights != 1.f
+      || psycho_config.shadows != 1.f
+      || psycho_config.contrast != 1.f
+      || psycho_config.contrast_highlights != 1.f
+      || psycho_config.contrast_shadows != 1.f
+      || psycho_config.flare != 0.f
+      || psycho_config.purity_scale != 1.f
+      || psycho_config.purity_highlights != 0.f) {
+    const float midgray_lum = psycho11_StockmanLuminanceFromLMS(midgray_lms);
+    float lum_target = lum_original;
 
-    float adapted_lum = max(
-        psycho11_StockmanLuminanceFromLMS(max(lms_unit, 0.f)),
-        0.18f);
-    float3 adapted_bt2020 = adapted_lum.xxx;
-    float3 lms_adapted_unit = psycho11_LMSFromBT2020(adapted_bt2020);
-    float3 lms_signal_unit = lms_unit;
+    lum_target *= psycho_config.exposure;
+    if (psycho_config.gamma != 1.f) {
+      lum_target = select(lum_target < 1.f, pow(lum_target, psycho_config.gamma), lum_target);
+    }
 
-    float3 stimulus_nits = max(lms_adapted_unit, 0.f) * 100.f;
-    float3 stimulus_trolands = stimulus_nits * 4.f;
-    float3 availability_raw = 1.f / (1.f + stimulus_trolands / max(kHalfBleachTrolands, kEps));
-    float3 availability = lerp(1.f, availability_raw, blend_weight);
-    lms_unit = lms_signal_unit * max(availability, 0.f);
+    if (psycho_config.highlights != 1.f) {
+      lum_target = psycho11_Highlights(lum_target, psycho_config.highlights, midgray_lum);
+    }
+
+    if (psycho_config.shadows != 1.f) {
+      lum_target = psycho11_Shadows(lum_target, psycho_config.shadows, midgray_lum);
+    }
+
+    if (psycho_config.contrast != 1.f
+        || psycho_config.contrast_highlights != 1.f
+        || psycho_config.contrast_shadows != 1.f
+        || psycho_config.flare != 0.f) {
+      lum_target = psycho11_ContrastAndFlare(
+          lum_target,
+          psycho_config.contrast,
+          psycho_config.contrast_highlights,
+          psycho_config.contrast_shadows,
+          psycho_config.flare,
+          midgray_lum);
+    }
+
+    float lum_scale = psycho11_DivideSafe(lum_target, lum_original, 1.f);
+    psycho_config.clip_point *= lum_scale;
+    color_lms *= lum_scale;
+
+    float purity_scale = psycho_config.purity_scale;
+
+    if (psycho_config.purity_highlights != 0.f) {
+      float percent_max = saturate(lum_target * 100.f / 10000.f);
+      float blowout_change = pow(1.f - percent_max, 100.f * abs(psycho_config.purity_highlights));
+      if (psycho_config.purity_highlights < 0.f) {
+        blowout_change = 2.f - blowout_change;
+      }
+
+      purity_scale *= blowout_change;
+    }
+
+    if (purity_scale != 1.f) {
+      color_lms = psycho11_ScalePurityMB2(color_lms, purity_scale, kEps);
+    }
   }
 
-  float3 lms_peak_unit = psycho11_LMSFromBT2020(peak_value.xxx);
-  float3 lms_toned_unit;
-  if (white_curve_mode == kWhiteCurveNakaRushton) {
-    // lms_toned_unit = psycho11_NakaRushton(
-    //     lms_unit,
-    //     lms_peak_unit,
-    //     lms_midgray_unit,
-    //     cone_response_exponent);
-    lms_toned_unit = float3(renodx::tonemap::ReinhardPiecewise(lms_unit.x, lms_peak_unit.x, lms_midgray_unit.x),
-                            renodx::tonemap::ReinhardPiecewise(lms_unit.y, lms_peak_unit.y, lms_midgray_unit.y),
-                            renodx::tonemap::ReinhardPiecewise(lms_unit.z, lms_peak_unit.z, lms_midgray_unit.z));
-  } else if (white_curve_mode == kWhiteCurveNeutwo && clip_point > peak_value) {
-    float3 lms_clip_unit = psycho11_LMSFromBT2020(clip_point.xxx);
-    lms_toned_unit = psycho11_NeutwoPerChannel(lms_unit, lms_peak_unit, lms_clip_unit);
-  } else {
-    lms_toned_unit = psycho11_NeutwoPerChannel(lms_unit, lms_peak_unit);
+  if (psycho_config.post_gamut_compress) {
+    color_lms = psycho11_GamutCompressAddWhiteBT2020Bounded(color_lms);
   }
 
-  lms_toned_unit = psycho11_RestoreHueMB2(
-      lms_unit,
-      lms_toned_unit,
-      hue_restore,
-      kEps);
+  color_bt2020 = psycho11_BT2020FromLMS(color_lms);
 
-  lms_toned_unit = psycho11_GamutCompressAddWhiteBT2020Bounded(lms_toned_unit);
-  float3 bt2020_toned = psycho11_BT2020FromLMS(lms_toned_unit);
+  if (psycho_config.apply_tonemap) {  // apply maxch tonemap
+    color_bt2020 = max(0, color_bt2020);
+    float max_channel = max(max(color_bt2020.r, color_bt2020.g), color_bt2020.b);
+    float new_max = psycho11_Neutwo(max_channel, psycho_config.peak_value, psycho_config.clip_point);
+    color_bt2020 *= psycho11_DivideSafe(new_max, max_channel, 1.f);
+  }
 
-#if 1
-  bt2020_toned = renodx::color::correct::Luminance(
-      bt2020_toned,
-      renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(bt2020_toned),
-      renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromLMS(lms_unit));
-  bt2020_toned = renodx::tonemap::neutwo::MaxChannel(bt2020_toned, peak_value, clip_point);
-#endif
-
-  return bt2020_toned;
-}
-
-float3 psychotm_test11(
-    float3 bt709_linear_input,
-    float peak_value = 1000.f / 203.f,
-    float exposure = 1.f,
-    float gamma = 1.f,
-    float highlights = 1.f,
-    float shadows = 1.f,
-    float contrast = 1.f,
-    float flare = 0.f,
-    float contrast_highlights = 1.f,
-    float contrast_shadows = 1.f,
-    float purity_scale = 1.f,
-    float adaptation_contrast = 1.f,
-    float hue_restore = 1.f,
-    float bleaching_intensity = 0.f,
-    float clip_point = 100.f,
-    int white_curve_mode = 0,
-    float cone_response_exponent = 1.f) {
-  float3 bt2020_toned = psychotm_test11_bt2020(
-      psycho11_BT2020FromBT709(bt709_linear_input),
-      peak_value,
-      exposure,
-      gamma,
-      highlights,
-      shadows,
-      contrast,
-      flare,
-      contrast_highlights,
-      contrast_shadows,
-      purity_scale,
-      adaptation_contrast,
-      hue_restore,
-      bleaching_intensity,
-      clip_point,
-      white_curve_mode,
-      cone_response_exponent);
-  return psycho11_BT709FromBT2020(bt2020_toned);
+  return color_bt2020;
 }
 
 }  // namespace psycho

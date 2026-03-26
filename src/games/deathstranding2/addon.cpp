@@ -110,7 +110,7 @@ renodx::utils::settings::Settings settings = {
         .min = 0.75f,
         .max = 1.25f,
         .format = "%.2f",
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
@@ -149,7 +149,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Shadow Contrast",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -180,6 +180,17 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeHighlightSaturation",
+        .binding = &shader_injection.tone_map_highlight_saturation,
+        .default_value = 51.f,
+        .label = "Highlight Saturation",
+        .section = "Color Grading",
+        .tooltip = "Adds or removes highlight color.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_scaling != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -344,7 +355,6 @@ void OnPresetOff() {
       {"ColorGradeAdaptationContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
-      {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeLUTStrength", 100.f},
       {"ColorGradeLUTScaling", 0.f},

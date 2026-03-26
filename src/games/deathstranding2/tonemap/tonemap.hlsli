@@ -37,9 +37,10 @@ float ComputeVanillaToneMapMaxChannelScale(float3 untonemapped_bt709,
 }
 
 float3 SampleGamma2LUT(float3 color_input, Texture3D<float4> _29,
+                       SamplerState lut_sampler,
                        float _40_m0_10u_z, float _40_m0_10u_w) {
   float3 lut_input = sqrt(color_input);
-  float3 lutted = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u], lut_input * _40_m0_10u_z + _40_m0_10u_w, 0.f).rgb;
+  float3 lutted = _29.SampleLevel(lut_sampler, lut_input * _40_m0_10u_z + _40_m0_10u_w, 0.f).rgb;
   lutted = lutted * lutted;
 
   return lutted;
@@ -61,17 +62,18 @@ float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma,
 
 float3 SampleGamma2LUTWithScaling(
     float3 color_input, Texture3D<float4> _29,
+    SamplerState lut_sampler,
     float _40_m0_10u_z, float _40_m0_10u_w) {
-  const float3 color_output_original = SampleGamma2LUT(color_input, _29, _40_m0_10u_z, _40_m0_10u_w);
+  const float3 color_output_original = SampleGamma2LUT(color_input, _29, lut_sampler, _40_m0_10u_z, _40_m0_10u_w);
 
   float3 color_output = color_output_original;
 
   if (RENODX_COLOR_GRADE_SCALING > 0.f) {
-    float3 lut_black = SampleGamma2LUT(0.f, _29, _40_m0_10u_z, _40_m0_10u_w);
+    float3 lut_black = SampleGamma2LUT(0.f, _29, lut_sampler, _40_m0_10u_z, _40_m0_10u_w);
 
     float lut_black_y = renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT709(lut_black);
     if (lut_black_y > 0.f) {
-      float3 lut_mid = SampleGamma2LUT(lut_black_y, _29, _40_m0_10u_z, _40_m0_10u_w);
+      float3 lut_mid = SampleGamma2LUT(lut_black_y, _29, lut_sampler, _40_m0_10u_z, _40_m0_10u_w);
 
       if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
         color_output = renodx::color::correct::GammaSafe(color_output);
@@ -100,6 +102,7 @@ float3 SampleGamma2LUTWithScaling(
 }
 
 void ApplyTonemapGamma2LUTAndInverseTonemap(
+    SamplerState lut_sampler,
     Texture3D<float4> _29,
     float _643, float _644, float _645,
     float _40_m0_2u_w,
@@ -112,7 +115,7 @@ void ApplyTonemapGamma2LUTAndInverseTonemap(
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     // tonemap + gamma 2 encode + sample LUT
     float _729 = (-0.0f) - _40_m0_2u_w;
-    float4 _762 = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u],
+    float4 _762 = _29.SampleLevel(lut_sampler,
                                   float3((clamp(sqrt(max((_643 < _40_m0_3u_z) ? ((_643 * _40_m0_2u_y) + _40_m0_2u_z) : ((_729 / (_643 + _40_m0_3u_x)) + _40_m0_3u_y), 0.0f)), 0.0f, 1.0f) * _40_m0_10u_z) + _40_m0_10u_w,
                                          (clamp(sqrt(max((_644 < _40_m0_3u_z) ? ((_644 * _40_m0_2u_y) + _40_m0_2u_z) : ((_729 / (_644 + _40_m0_3u_x)) + _40_m0_3u_y), 0.0f)), 0.0f, 1.0f) * _40_m0_10u_z) + _40_m0_10u_w,
                                          (clamp(sqrt(max((_645 < _40_m0_3u_z) ? ((_645 * _40_m0_2u_y) + _40_m0_2u_z) : ((_729 / (_645 + _40_m0_3u_x)) + _40_m0_3u_y), 0.0f)), 0.0f, 1.0f) * _40_m0_10u_z) + _40_m0_10u_w),
@@ -133,7 +136,7 @@ void ApplyTonemapGamma2LUTAndInverseTonemap(
 
     {  // apply gamma 2 lut
       float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(color);
-      float3 lutted = SampleGamma2LUTWithScaling(color * scale, _29, _40_m0_10u_z, _40_m0_10u_w);
+      float3 lutted = SampleGamma2LUTWithScaling(color * scale, _29, lut_sampler, _40_m0_10u_z, _40_m0_10u_w);
       //   lutted = min(lutted, _40_m0_2u_x);
       lutted /= scale;
 
@@ -147,7 +150,8 @@ void ApplyTonemapGamma2LUTAndInverseTonemap(
 // Dual-path variant used by DLSSFG-style pipelines:
 // - `frontier_phi_14_15_ladder{,_1,_2}`: inverse-tonemapped non-LUT path (B, G, R)
 // - `frontier_phi_14_15_ladder{_3,_4,_5}`: inverse-tonemapped LUT path (B, G, R)
-void ApplyTonemapGamma2LUTAndInverseTonemapDualOutputs(
+void ApplyTonemapGamma2LUTAndInverseTonemapDualOutputsOld(
+    SamplerState lut_sampler,
     Texture3D<float4> _29,
     float _643_no_lut, float _644_no_lut, float _645_no_lut,
     float _643_lut, float _644_lut, float _645_lut,
@@ -174,7 +178,7 @@ void ApplyTonemapGamma2LUTAndInverseTonemapDualOutputs(
     float _no_lut_b_linear = _no_lut_b_gamma * _no_lut_b_gamma;
 
     // LUT path: tonemap + gamma2 encode + sample LUT + gamma2 decode.
-    float4 _762 = _29.SampleLevel((SamplerState)ResourceDescriptorHeap[2u],
+    float4 _762 = _29.SampleLevel(lut_sampler,
                                   float3((clamp(sqrt(max((_643_lut < _40_m0_3u_z) ? ((_643_lut * _40_m0_2u_y) + _40_m0_2u_z) : ((_729 / (_643_lut + _40_m0_3u_x)) + _40_m0_3u_y), 0.0f)), 0.0f, 1.0f) * _40_m0_10u_z) + _40_m0_10u_w,
                                          (clamp(sqrt(max((_644_lut < _40_m0_3u_z) ? ((_644_lut * _40_m0_2u_y) + _40_m0_2u_z) : ((_729 / (_644_lut + _40_m0_3u_x)) + _40_m0_3u_y), 0.0f)), 0.0f, 1.0f) * _40_m0_10u_z) + _40_m0_10u_w,
                                          (clamp(sqrt(max((_645_lut < _40_m0_3u_z) ? ((_645_lut * _40_m0_2u_y) + _40_m0_2u_z) : ((_729 / (_645_lut + _40_m0_3u_x)) + _40_m0_3u_y), 0.0f)), 0.0f, 1.0f) * _40_m0_10u_z) + _40_m0_10u_w),
@@ -207,7 +211,7 @@ void ApplyTonemapGamma2LUTAndInverseTonemapDualOutputs(
 
     {  // apply gamma 2 lut
       float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(color);
-      float3 lutted = SampleGamma2LUTWithScaling(color * scale, _29, _40_m0_10u_z, _40_m0_10u_w);
+      float3 lutted = SampleGamma2LUTWithScaling(color * scale, _29, lut_sampler, _40_m0_10u_z, _40_m0_10u_w);
       //   lutted = min(lutted, _40_m0_2u_x);
       lutted /= scale;
 
@@ -217,6 +221,45 @@ void ApplyTonemapGamma2LUTAndInverseTonemapDualOutputs(
     frontier_phi_14_15_ladder = no_lut_color.b, frontier_phi_14_15_ladder_1 = no_lut_color.g, frontier_phi_14_15_ladder_2 = no_lut_color.r;
     frontier_phi_14_15_ladder_3 = color.b, frontier_phi_14_15_ladder_4 = color.g, frontier_phi_14_15_ladder_5 = color.r;
   }
+}
+
+void ApplyTonemapGamma2LUTAndInverseTonemapDualOutputs(
+    SamplerState lut_sampler,
+    Texture3D<float4> _19,
+    float _262, float _266, float _270,
+    float _394, float _396, float _398,
+    float _26_m0_14_x, float _26_m0_14_y, float _26_m0_14_z, float _26_m0_14_w,
+    float _26_m0_15_x, float _26_m0_15_y, float _26_m0_15_z, float _26_m0_15_w,
+    float _26_m0_18_x, float _26_m0_18_y,
+    inout float frontier_phi_10_11_ladder,
+    inout float frontier_phi_10_11_ladder_1,
+    inout float frontier_phi_10_11_ladder_2,
+    inout float frontier_phi_10_11_ladder_3,
+    inout float frontier_phi_10_11_ladder_4,
+    inout float frontier_phi_10_11_ladder_5) {
+  ApplyTonemapGamma2LUTAndInverseTonemap(
+      lut_sampler,
+      _19,
+      _262, _266, _270,
+      _26_m0_14_w,
+      _26_m0_14_x, _26_m0_14_y, _26_m0_14_z,
+      _26_m0_15_x, _26_m0_15_y, _26_m0_15_z, _26_m0_15_w,
+      _26_m0_18_x, _26_m0_18_y,
+      frontier_phi_10_11_ladder,
+      frontier_phi_10_11_ladder_1,
+      frontier_phi_10_11_ladder_2);
+
+  ApplyTonemapGamma2LUTAndInverseTonemap(
+      lut_sampler,
+      _19,
+      _394, _396, _398,
+      _26_m0_14_w,
+      _26_m0_14_x, _26_m0_14_y, _26_m0_14_z,
+      _26_m0_15_x, _26_m0_15_y, _26_m0_15_z, _26_m0_15_w,
+      _26_m0_18_x, _26_m0_18_y,
+      frontier_phi_10_11_ladder_3,
+      frontier_phi_10_11_ladder_4,
+      frontier_phi_10_11_ladder_5);
 }
 
 float3 ApplyVanillaToneMap(float3 untonemapped_bt709,
@@ -254,23 +297,37 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
     float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
 
 #if 1
+    renodx_custom::tonemap::psycho::config::Config psycho_config = renodx_custom::tonemap::psycho::config::Create();
+    psycho_config.peak_value = peak_ratio;
+    psycho_config.exposure = RENODX_TONE_MAP_EXPOSURE;
+    psycho_config.gamma = RENODX_TONE_MAP_GAMMA;
+    psycho_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+    psycho_config.shadows = RENODX_TONE_MAP_SHADOWS;
+    psycho_config.contrast = RENODX_TONE_MAP_CONTRAST;
+    psycho_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
+    psycho_config.contrast_highlights = RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS;
+    psycho_config.contrast_shadows = RENODX_TONE_MAP_CONTRAST_SHADOWS;
+    psycho_config.purity_scale = RENODX_TONE_MAP_SATURATION;
+    psycho_config.purity_highlights = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+    psycho_config.adaptation_contrast = RENODX_TONE_MAP_ADAPTATION_CONTRAST;
+    psycho_config.bleaching_intensity = 0.f;
+    psycho_config.hue_restore = 0.f;
+    psycho_config.pre_gamut_compress = false;
+    psycho_config.post_gamut_compress = true;
+
     float3 tonemapped_bt2020;
     if (RENODX_TONE_MAP_SCALING == 1.f) {  // PsychoV
-      tonemapped_bt2020 = renodx_custom::tonemap::psycho::psychotm_test11_bt2020(
-          untonemapped_bt2020, peak_ratio,
-          RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_GAMMA, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS, RENODX_TONE_MAP_CONTRAST,
-          0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS, RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_ADAPTATION_CONTRAST,
-          0.f, 0.f, 100.f, 1);
+      tonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyBT2020(untonemapped_bt2020, psycho_config);
     } else {  // Max Channel
-      float3 purity_and_hue_source = renodx::color::bt2020::from::BT709(renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 5.f, 0.5f));
+      float3 purity_and_hue_source = renodx::color::bt2020::from::BT709(renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 4.f, 0.5f));
       untonemapped_bt2020 = renodx::color::correct::Luminance(
           purity_and_hue_source,
           renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(purity_and_hue_source),
           renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(untonemapped_bt2020));
 
-      untonemapped_bt2020 = renodx_custom::tonemap::psycho::psycho11_GradeBT2020(
-          untonemapped_bt2020, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_GAMMA, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS, RENODX_TONE_MAP_CONTRAST,
-          0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS, 0.18f, RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_ADAPTATION_CONTRAST, RENODX_TONE_MAP_HUE_CORRECTION, 0.f);
+      psycho_config.apply_tonemap = false;
+      psycho_config.purity_highlights = 0.f;  // increasing highlight saturation looks bad with maxch
+      untonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyBT2020(untonemapped_bt2020, psycho_config);
 
       tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(untonemapped_bt2020, peak_ratio);
     }

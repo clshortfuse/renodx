@@ -283,6 +283,7 @@ void frag_main() {
     if (asuint(_40_m0[12u]).w == 0u) {
 #if 1
       ApplyTonemapGamma2LUTAndInverseTonemap(
+          (SamplerState)ResourceDescriptorHeap[2u],
           _29,
           _537, _538, _539,
           _40_m0[2u].w,

@@ -1,4 +1,4 @@
-#include "./tonemap.hlsli"
+#include "../tonemap.hlsli"
 
 cbuffer _24_26 : register(b0, space6) {
   float4 _26_m0[21] : packoffset(c0);
@@ -188,7 +188,8 @@ void frag_main() {
     float frontier_phi_10_11_ladder_5;
     if (asuint(_26_m0[19u]).w == 0u) {
 #if 1
-      ApplyTonemapGamma2LUTAndInverseTonemapDualOutputs(
+      ApplyTonemapGamma2LUTAndInverseTonemapDualOutputsOld(
+          (SamplerState)ResourceDescriptorHeap[17u],
           _19,
           _262, _266, _270,
           _394, _396, _398,
