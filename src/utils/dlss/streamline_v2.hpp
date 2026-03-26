@@ -35,7 +35,6 @@
 #include "./DXGIFactoryWrapper.hpp"
 #include "./DXGISwapChainWrapper.hpp"
 
-
 // https://github.com/NVIDIAGameWorks/Streamline/blob/main/docs/ProgrammingGuide.md
 // https://github.com/NVIDIAGameWorks/Streamline/blob/main/docs/ProgrammingGuideDLSS_G.md
 // https://github.com/NVIDIAGameWorks/Streamline/blob/main/docs/ProgrammingGuideManualHooking.md
@@ -439,25 +438,14 @@ static sl::Result Hooked_slSetD3DDevice(void* d3dDevice) {
   log::d(std::format("utils::streamline_v2::slSetD3DDevice({})", (void*)d3dDevice).c_str());
   // return Real_slSetD3DDevice(d3dDevice);
 
-  auto* unknown = static_cast<IUnknown*>(d3dDevice);
-
-  ID3D12Device14* dx12_device = nullptr;
-  if (SUCCEEDED(unknown->QueryInterface(&dx12_device))) {
-    log::d(std::format("utils::streamline_v2::slSetD3DDevice() - ID3D12Device found: {}", (void*)dx12_device).c_str());
-
-    auto* native_device = (ID3D12Device14*)d3dDevice;
-    if (!renodx::utils::directx::NativeFromReShadeProxy(&native_device)) {
-      assert(false);
-    }
-
-    auto result = Real_slSetD3DDevice(native_device);
-    return result;
+  auto* native_device = static_cast<IUnknown*>(d3dDevice);
+  if (renodx::utils::directx::NativeFromReShadeProxy(&native_device)) {
+    log::d(std::format("utils::streamline_v2::slSetD3DDevice() - Unwrapped ReShade proxy: {} => {}", d3dDevice, (void*)native_device).c_str());
+  } else {
+    log::d(std::format("utils::streamline_v2::slSetD3DDevice() - Using original device pointer: {}", d3dDevice).c_str());
   }
 
-  assert(false);
-  auto ret = Real_slSetD3DDevice(d3dDevice);
-  log::d("utils::streamline_v2::slSetD3DDevice() - Unknown device type");
-  return ret;
+  return Real_slSetD3DDevice(native_device);
 }
 
 static decltype(&slGetFeatureFunction) Real_slGetFeatureFunction = nullptr;
@@ -487,7 +475,8 @@ SL_API sl::Result Hooked_slGetFeatureFunction(sl::Feature feature, const char* f
 
 static gtl::parallel_node_hash_map<uint64_t, sl::Resource> resource_map;
 
-static decltype(&slSetTag) Real_slSetTag = nullptr;
+// Mirror the legacy signature without naming the deprecated API in a type expression.
+static sl::Result (*Real_slSetTag)(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags, uint32_t numTags, sl::CommandBuffer* cmdBuffer) = nullptr;
 static sl::Result Hooked_slSetTag(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags, uint32_t numTags, sl::CommandBuffer* cmdBuffer) {
 #if defined(DEBUG_LEVEL_2)
   for (auto i = 0u; i < numTags; ++i) {
