@@ -4,6 +4,8 @@
 #include "../math.hlsl"
 #include "./rgb.hlsl"
 
+// Deprecated (use renodx::color::lms::* directly)
+
 namespace renodx {
 namespace color {
 namespace bt709 {
