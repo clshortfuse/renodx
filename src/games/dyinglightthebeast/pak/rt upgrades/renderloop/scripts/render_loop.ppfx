@@ -112,7 +112,8 @@ sub full_ppfx()
 
 		PushMarker("Lighting", MARKER_PROFILING);
 			use lighting_part1();
-			BufferScreenFormat(S_HDR_3D_A, 1, "R16G16B16A16_FLOAT", "ua esram");
+			// BufferScreenFormat(S_HDR_3D_A, 1, "R11G11B10_FLOAT", "ua esram");
+			BufferScreenFormat(S_HDR_3D_A, 1, "R16G16B16A16_FLOAT", "ua esram"); // CUSTOM EDIT
         	use clear_rtv_color(s_buf = S_HDR_3D_A);
 			use lighting_part2(s_dst = S_HDR_3D_A, s_hdr_prv = S_HDR_PRV, s_hdr_prv_opq = RT_ON ? S_HDR_PRV_OPQ : "");
 		PopMarker();
@@ -123,7 +124,8 @@ sub full_ppfx()
 		}
 
 		PushMarker("Scene Forward", MARKER_PROFILING);
-			BufferScreenFormat(S_HDR_3D_B, 1, "R16G16B16A16_FLOAT", "ua esram");
+			// BufferScreenFormat(S_HDR_3D_B, 1, "R11G11B10_FLOAT", "ua esram");
+			BufferScreenFormat(S_HDR_3D_B, 1, "R16G16B16A16_FLOAT", "ua esram"); // CUSTOM EDIT
 			SetBuffer(USERMAP_HDR_B, S_HDR_3D_B);
 				use scene_forward_hdr(s_dst = S_HDR_3D_A, s_tmp = S_HDR_3D_B, s_hdr_prv = S_HDR_PRV);
 		PopMarker();
@@ -216,7 +218,8 @@ sub full_ppfx()
 				{ 
 					BufferScreenFormat(S_HDR_UI_C, 1, "R16G16B16A16_FLOAT", "esram ua postprocess");
 						use postprocess(s_src = PP_B, s_dst = S_HDR_UI_C, s_zbuffer_empty_stencil = S_ZBUFFER_EMPTY_STENCIL_PP);
-						BufferScreenFormat(S_HDR_LINEAR, 1, "R16G16B16A16_FLOAT", "postprocess ua esram");
+						// BufferScreenFormat(S_HDR_LINEAR, 1, "R11G11B10_FLOAT", "postprocess ua esram");
+						BufferScreenFormat(S_HDR_LINEAR, 1, "R16G16B16A16_FLOAT", "postprocess ua esram"); // CUSTOM EDIT
 						use hdr_tonemapping(exposed_hdr_scene = S_HDR_UI_C, linear_hdr_scene = S_HDR_LINEAR);
 						use hdr_calibration(s_dst = S_HDR_LINEAR);
 					Release(S_HDR_UI_C);
