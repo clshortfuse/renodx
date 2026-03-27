@@ -1,0 +1,96 @@
+import "EngineDefs.mth"
+import "common.ppfx"
+import "taa.ppfx"
+extern int UPSCALER;
+extern bool HDR_ON;
+
+
+sub upscaling_buffers()
+{
+	if(PSSR_ON)
+	{
+		BufferScreenFormat("ZBUFFER_PRV_NONLINEAR", 1, "R32_FLOAT", "esram");	
+		BufferScreenFormat("1_R16G16_MV_PRV",	    1, "R16G16_FLOAT", "ua manualdiscard");
+	}
+}
+
+sub generate_reactive_mask(string opaque = "", string full_scene = "", string dst_reactive_mask = "")
+{
+	PushMarker("Generate Reactive Mask");
+
+	string variant = FSR2_3_ON ? "fsr3" : "";
+	SetBuffer(UAV_0, dst_reactive_mask);
+	SetBuffer(USERMAP_TMP_0, opaque);
+	SetBuffer(USERMAP_TMP_1, full_scene);
+	DispatchUsingBuffer("reactive_mask$" + variant + ".mat", "std", dst_reactive_mask, 8, 8, 1, 1);
+	ClearUAVs();
+
+	PopMarker();
+}
+
+sub hdr_upscaling(string dst = "", string src = "", string src_prv = "", string reactive_mask = "")
+{
+	use jitter_enable();//DLSS STILL NEEDS TO BE AWARE OF JITTER VALUES
+	SetRenderTargets("backbuffer_3d", "");
+
+	if (TAAU_ON)
+	{
+		use taau(dst = dst, src = src, src_prv = src_prv);
+	}
+	else if(DLSS_ON)
+	{
+		PushMarker("Upscale DLSS");
+			// BufferScreenFormat("DLSS_PRE_NIS", 1, "R11G11B10_FLOAT", "postprocess ua");
+			BufferScreenFormat("DLSS_PRE_NIS", 1, "R16G16B16A16_FLOAT", "postprocess ua"); // CUSTOM EDIT
+			DLSS(src, "1_R16G16_MV", "ZBUFFER", dst, "DLSS_PRE_NIS");
+			Release("DLSS_PRE_NIS");
+		PopMarker();
+	}
+	else if(FSR2_3_ON)
+	{
+		PushMarker("Upscale FSR2/3");
+			FSR2_3_Upscale(src, "1_R16G16_MV", "ZBUFFER", dst, reactive_mask, "EXPOSURE");
+		PopMarker();
+	}
+	else if(XESS_ON)
+	{
+		PushMarker("Upscale XeSS");
+			// BufferScreenFormat("XESS_PRE_NIS", 1, "R11G11B10_FLOAT", "postprocess ua");
+			BufferScreenFormat("XESS_PRE_NIS", 1, "R16G16B16A16_FLOAT", "postprocess ua"); // CUSTOM EDIT
+			XESS(src, "1_R16G16_MV", "ZBUFFER", dst, "XESS_PRE_NIS", "EXPOSURE");
+			Release("XESS_PRE_NIS");
+		PopMarker();
+	}
+	else if(PSSR_ON)
+	{
+		PushMarker("Upscale PSSR");
+
+			BufferScreenFormat("PSSR_DEST", 1, "R11G11B10_FLOAT", "postprocess ua forcesmalltiling");
+
+			BufferFormat("PSSR_EXPOSURE", 1, 1, "R32_FLOAT", "ua");
+
+			SetBuffer(UAV_0, "PSSR_EXPOSURE");
+			SetBuffer(USERMAP_TMP_0, "EXPOSURE");
+				Dispatch("pssr_prepare.mat", "std", 1, 1, 1);
+			FreeUAVs();
+
+			PSSR(src, "1_R16G16_MV", "1_R16G16_MV_PRV", "ZBUFFER", "ZBUFFER_PRV_NONLINEAR", "PSSR_DEST", "PSSR_EXPOSURE");
+
+			SetRenderTargets(dst, "");
+			SetBuffer(USERMAP_TMP_0, "PSSR_DEST");
+				Mesh("tri_screen.msh", "copy.mat", "std");
+
+			SetRenderTargets("1_R16G16_MV_PRV", "");
+			SetBuffer(USERMAP_TMP_0, "1_R16G16_MV");
+				Mesh("tri_screen.msh", "copy.mat", "std");
+
+			SetRenderTargets("ZBUFFER_PRV_NONLINEAR", "");
+			SetBuffer(USERMAP_TMP_0, "ZBUFFER");
+				Mesh("tri_screen.msh", "copy$out32bit.mat", "std");
+
+			Release("PSSR_EXPOSURE");
+			Release("PSSR_DEST");
+
+		PopMarker();
+	}
+}
