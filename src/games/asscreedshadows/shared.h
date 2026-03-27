@@ -35,7 +35,7 @@ cbuffer shader_injection : register(b13, space50) {
 #define RENODX_UI_GAMMA_CORRECTION                           1
 #define RENODX_GAME_GAMMA_CORRECTION                         1
 #define USE_LUM_TM_WITH_CHROMINANCE_CORRECTION               1
-#define USE_LUM_GAMMA_CORRECTION_WITH_CHROMINANCE_CORRECTION 0
+#define USE_LUM_GAMMA_CORRECTION_WITH_CHROMINANCE_CORRECTION 1
 
 #define RENODX_TONE_MAP_TYPE shader_injection.tone_map_type
 
