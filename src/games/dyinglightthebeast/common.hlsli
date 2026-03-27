@@ -1,4 +1,25 @@
+#include "./psycho_test11.hlsli"
 #include "./shared.h"
+
+float3 ApplyGammaCorrectionForToneMap(float3 color_input) {
+  float3 color_corrected;
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    color_corrected = renodx::color::correct::GammaSafe(color_input);
+  } else if (RENODX_GAMMA_CORRECTION == 2.f) {
+    float y_in = renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT709(color_input);
+    float y_out = renodx::color::correct::Gamma(max(0, y_in));
+    float3 color_corrected_lum = renodx::color::correct::Luminance(color_input, y_in, y_out);
+
+    float3 color_corrected_ch = renodx::color::correct::GammaSafe(color_input);
+
+    color_corrected = renodx::color::bt709::from::BT2020(renodx_custom::tonemap::psycho::psycho11_ApplyPurityFromBT2020(
+        renodx::color::bt2020::from::BT709(color_corrected_ch), renodx::color::bt2020::from::BT709(color_corrected_lum), 1.f, 1.f));
+  } else {
+    color_corrected = color_input;
+  }
+
+  return color_corrected;
+}
 
 float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.5f, float output_max = 1.f, float white_clip = 100.f) {
   float peak = renodx::math::Max(untonemapped.r, untonemapped.g, untonemapped.b);
@@ -178,41 +199,20 @@ float3 GamutCompress(float3 color_bt709, float3x3 color_space_matrix = renodx::c
   return color_bt709_compressed;
 }
 
-float3 ApplyHermiteSplineByMaxChannelPQInput(float3 input_pq, float diffuse_nits, float peak_nits, float white_clip = 100.f) {
-  white_clip = max(white_clip * diffuse_nits, peak_nits * 1.5f);  // safeguard to prevent artifacts
-
-  float max_channel_pq = renodx::math::Max(input_pq);
-
-  float target_white_pq = renodx::color::pq::Encode(peak_nits, 1.f);
-  float max_white_pq = renodx::color::pq::Encode(white_clip, 1.f);
-  float target_black_pq = renodx::color::pq::Encode(0.0001f, 1.f);
-  float min_black_pq = renodx::color::pq::Encode(0.f, 1.f);
-
-  float scaled_pq = renodx::tonemap::HermiteSplineRolloff(max_channel_pq, target_white_pq, max_white_pq, target_black_pq, min_black_pq);
-  float mapped_max_pq = min(scaled_pq, target_white_pq);
-
-  float scale = renodx::math::DivideSafe(mapped_max_pq, max_channel_pq, 1.f);
-  return input_pq * scale;
-}
-
 float3 GenerateOutput(float3 untonemapped_bt709, float min_nits, float peak_white, float shadows) {
   float diffuse_white = RemapNits(min_nits);  // hijack min nits slider as scene brightness is in another shader
 
-  if (RENODX_GAMMA_CORRECTION == 2.f) {
-    untonemapped_bt709 = renodx::color::correct::Hue(renodx::color::correct::GammaSafe(untonemapped_bt709), untonemapped_bt709);
-  } else if (RENODX_GAMMA_CORRECTION == 1.f) {
-    untonemapped_bt709 = renodx::color::correct::GammaSafe(untonemapped_bt709);
-  }
+  untonemapped_bt709 = ApplyGammaCorrectionForToneMap(untonemapped_bt709);
 
   UserGradingConfig cg_config = CreateColorGradeConfig();
   float y = renodx::color::y::from::BT709(untonemapped_bt709);
-  float3 hue_chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 12.5f, 1.f);
+  float3 hue_chrominance_reference_color = renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 8.f, 1.f);
   float3 graded_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_bt709, y, cg_config);
   graded_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded_bt709, hue_chrominance_reference_color, y, cg_config);
 
   float3 graded_final = graded_bt709;
   if (RENODX_LUT_OUTPUT_BT2020 == 0.f) {
-    graded_final = GamutCompress(graded_final);  // lutbuilder is rgb10a2 and render is fp11 so wcg gets clipped
+    graded_final = GamutCompress(graded_final);  // lutbuilder is rgb10a2 and render is fp11 without RT upgrades so wcg gets clipped
   } else {
     graded_final = renodx::color::bt2020::from::BT709(graded_final);
     graded_final = GamutCompress(graded_final, renodx::color::BT2020_TO_XYZ_MAT);
