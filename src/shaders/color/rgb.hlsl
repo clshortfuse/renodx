@@ -275,10 +275,10 @@ float3 LMS(float3 lms) {
   return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, lms);
 }
 float3 BT709(float3 bt709) {
-  return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, mul(renodx::color::BT709_TO_XYZ_MAT, bt709));
+  return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(BT709_TO_XYZ_MAT, bt709)));
 }
 float3 BT2020(float3 bt2020) {
-  return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, mul(renodx::color::BT2020_TO_XYZ_MAT, bt2020));
+  return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(BT2020_TO_XYZ_MAT, bt2020)));
 }
 }  // namespace from
 }  // namespace xfyfzf
