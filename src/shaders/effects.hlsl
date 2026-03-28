@@ -74,10 +74,10 @@ float ComputeGrainedChange(float y, float2 xy, float seed, float strength, float
 
 float3 ApplyFilmGrain(float3 color, float2 xy, float seed, float strength, float reference_white = 1.f, bool debug = false,
                       float3x3 xyz_matrix = renodx::color::BT709_TO_XYZ_MAT) {
-  float y = dot(color, xyz_matrix[1].rgb);
+  float y = max(0, dot(color, xyz_matrix[1].rgb));
   float y_change = ComputeGrainedChange(y, xy, seed, strength, reference_white);
-  float y_new = debug ? abs(y_change) : y * (1.f + y_change);
-  return color * renodx::math::DivideSafe(y_new, y, 1.f);
+  if (debug) return abs(y_change);
+  return color * (1.f + y_change);
 }
 
 float3 ApplyFilmGrainColored(float3 color, float2 xy, float3 seed, float strength, float reference_white = 1.f, bool debug = false) {
