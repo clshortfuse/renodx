@@ -126,216 +126,6 @@ SamplerState s5 : register(s5);
 
 SamplerState s6 : register(s6);
 
-namespace WUWAUncharted2 {
-struct Config {
-  float pivot_point;
-  float coeffs[6];  // A,B,C,D,E,F
-};
-
-static inline float Derivative(float x, float a, float b, float c, float d, float e, float f) {
-  float num = -a * b * (c - 1.0f) * x * x + 2.0f * a * d * (f - e) * x + b * d * (c * f - e);
-  float den = x * (a * x + b) + d * f;
-  return num / (den * den);
-}
-
-// Analytic knee root from BatmanAK UC2 extension helper.
-static inline float FindThirdDerivativeRoot(float a, float b, float c, float d, float e, float f) {
-  float sqrt_ab = sqrt(a * b * b * c * c - 2.f * a * b * b * c + a * b * b);
-  float sqrt_df = sqrt(a * d * d * e * e - 2.f * a * d * d * e * f + a * d * d * f * f + b * b * c * c * d * f + b * b * (-c) * d * e - b * b * c * d * f + b * b * d * e);
-  float de_df = d * e - d * f;
-
-  float term_top = 32.f * (a * d * d * e * f - a * d * d * f * f + b * b * c * d * f - b * b * d * e) / (a * a * b * (c - 1.f));
-  float term_mid = 96.f * de_df * (c * d * f - d * e) / (a * b * (c - 1.f) * (c - 1.f));
-  float de_df2 = de_df * de_df;
-  float de_df3 = de_df2 * de_df;
-  float term_tail = 64.f * de_df3 / (b * b * b * (c - 1.f) * (c - 1.f) * (c - 1.f));
-
-  float Tfrac = sqrt_ab * (term_top - term_mid - term_tail) / (8.f * sqrt_df);
-  float Tmid2_num = 12.f * a * a * b * c * d * f - 12.f * a * a * b * d * e;
-  float Tmid2_den = 6.f * (a * a * a * b * c - a * a * a * b);
-  float Tmid2 = Tmid2_num / Tmid2_den;
-  float T3 = 6.f * (c * d * f - d * e) / (a * (c - 1.f));
-  float T4 = 8.f * de_df2 / (b * b * (c - 1.f) * (c - 1.f));
-
-  float centerNeg = -Tfrac + Tmid2 + T3 + T4;
-  float centerPos = Tfrac + Tmid2 + T3 + T4;
-
-  float sNeg = renodx::math::SignSqrt(-centerNeg);
-  float sPos = renodx::math::SignSqrt(centerPos);
-
-  float shift1 = sqrt_df / sqrt_ab + de_df / (b * (c - 1.f));
-  float shift2 = sqrt_df / sqrt_ab - de_df / (b * (c - 1.f));
-
-  float r1 = -0.5f * sNeg - shift1;
-  float r2 = 0.5f * sNeg - shift1;
-  float r3 = -0.5f * sPos + shift2;
-  float r4 = 0.5f * sPos + shift2;
-
-  return saturate(renodx::math::Max(r1, r2, r3, r4));
-}
-
-static inline Config CreateConfig(float coeffs[6]) {
-  Config cfg;
-  cfg.pivot_point = FindThirdDerivativeRoot(coeffs[0], coeffs[1], coeffs[2], coeffs[3], coeffs[4], coeffs[5]);
-  cfg.coeffs = coeffs;
-  return cfg;
-}
-
-static inline float3 ApplyExtended(float3 x, float3 base, Config cfg) {
-  float A = cfg.coeffs[0], B = cfg.coeffs[1], C = cfg.coeffs[2], D = cfg.coeffs[3], E = cfg.coeffs[4], F = cfg.coeffs[5];
-
-  float pivot_x = saturate(cfg.pivot_point * 0.82f);   // earlier onset
-  float pivot_y = renodx::tonemap::ApplyCurve(pivot_x, A, B, C, D, E, F);
-
-  float slope = Derivative(pivot_x, A, B, C, D, E, F);
-  slope *= 2.f;
-
-  float3 extended = slope * x + (pivot_y - slope * pivot_x);
-
-  float3 t = smoothstep(pivot_x - 0.05f, pivot_x + 0.05f, x);  // softer transition
-  return lerp(base, extended, t);
-}
-}
-
-float3 ApplyHermiteSplineByMaxChannel(float3 input, float peak_ratio, float white_clip = 100.f) {
-  float max_channel = renodx::math::Max(input);
-
-  float mapped_peak = exp2(renodx::tonemap::HermiteSplineRolloff(log2(max_channel), log2(peak_ratio), log2(white_clip)));
-  float scale = renodx::math::DivideSafe(mapped_peak, max_channel, 1.f);
-  float3 tonemapped = input * scale;
-  return tonemapped;
-}
-
-struct UserGradingConfig {
-  float exposure;
-  float highlights;
-  float shadows;
-  float contrast;
-  float flare;
-  float saturation;
-  float dechroma;
-  float hue_emulation_strength;
-  float highlight_saturation;
-  float chrominance_emulation_strength;
-};
-
-UserGradingConfig CreateColorGradeConfig() {
-  const UserGradingConfig cg_config = {
-    RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
-    RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
-    RENODX_TONE_MAP_SHADOWS,                              // float shadows;
-    RENODX_TONE_MAP_CONTRAST,                             // float contrast;
-    0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
-    RENODX_TONE_MAP_SATURATION,                           // float saturation;
-    shader_injection.color_grade_saturation_correction,    // float dechroma;
-    RENODX_TONE_MAP_HUE_SHIFT,                            // float hue_emulation_strength;
-    -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
-    shader_injection.color_grade_blowout                  // float chrominance_emulation_strength;
-  };
-  return cg_config;
-}
-
-float Highlights(float x, float highlights, float mid_gray) {
-  if (highlights == 1.f) return x;
-
-  if (highlights > 1.f) {
-    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 10.f)));
-  } else {
-    x /= mid_gray;
-    return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
-  }
-}
-
-float Shadows(float x, float shadows, float mid_gray) {
-  if (shadows == 1.f) return x;
-
-  const float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
-  const float base_term = x * mid_gray;
-  const float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
-
-  if (shadows > 1.f) {
-    float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
-    float reference = x * (1.f + base_scale);
-    return max(x, x + (raised - reference));
-  } else {
-    float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
-    float reference = x * (1.f - base_scale);
-    return clamp(x + (lowered - reference), 0.f, x);
-  }
-}
-
-float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, UserGradingConfig config, float mid_gray = 0.18f) {
-  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
-    return untonemapped;
-  }
-  float3 color = untonemapped;
-
-  color *= config.exposure;
-
-  const float y_normalized = y / mid_gray;
-  float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
-  float exponent = config.contrast * flare;
-  const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
-
-  float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
-  float y_shadowed = Shadows(y_highlighted, config.shadows, mid_gray);
-  const float y_final = y_shadowed;
-
-  color = renodx::color::correct::Luminance(color, y, y_final);
-
-  return color;
-}
-
-float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped, float3 hue_reference_color, float y, UserGradingConfig config) {
-  float3 color = tonemapped;
-  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_emulation_strength != 0.f || config.chrominance_emulation_strength != 0.f || config.highlight_saturation != 0.f) {
-    float3 perceptual_new = renodx::color::oklab::from::BT709(color);
-
-    if (config.hue_emulation_strength != 0.0 || config.chrominance_emulation_strength != 0.0) {
-      const float3 perceptual_reference = renodx::color::oklab::from::BT709(hue_reference_color);
-
-      float chrominance_current = length(perceptual_new.yz);
-      float chrominance_ratio = 1.0;
-
-      if (config.hue_emulation_strength != 0.0) {
-        const float chrominance_pre = chrominance_current;
-        perceptual_new.yz = lerp(perceptual_new.yz, perceptual_reference.yz, config.hue_emulation_strength);
-        const float chrominancePost = length(perceptual_new.yz);
-        chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
-        chrominance_current = chrominancePost;
-      }
-
-      if (config.chrominance_emulation_strength != 0.0) {
-        const float reference_chrominance = length(perceptual_reference.yz);
-        float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
-        chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, config.chrominance_emulation_strength);
-      }
-      perceptual_new.yz *= chrominance_ratio;
-    }
-
-    if (config.dechroma != 0.f) {
-      perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - config.dechroma))));
-    }
-
-    if (config.highlight_saturation != 0.f) {
-      float percent_max = saturate(y * 100.f / 10000.f);
-      float highlight_saturation_strength = 100.f;
-      float highlight_saturation_change = pow(1.f - percent_max, highlight_saturation_strength * abs(config.highlight_saturation));
-      if (config.highlight_saturation < 0) {
-        highlight_saturation_change = (2.f - highlight_saturation_change);
-      }
-
-      perceptual_new.yz *= highlight_saturation_change;
-    }
-
-    perceptual_new.yz *= config.saturation;
-
-    color = renodx::color::bt709::from::OkLab(perceptual_new);
-    color = renodx::color::bt709::clamp::AP1(color);
-  }
-  return color;
-}
-
 float4 main(
   noperspective float2 TEXCOORD : TEXCOORD,
   noperspective float2 TEXCOORD_3 : TEXCOORD3,
@@ -518,12 +308,12 @@ float4 main(
     _508 = _491;
   }
   float3 _renodx_tonemapped_capture = float3(_506, _507, _508);
-  
+
   float3 _renodx_extended_tm = float3(_506, _507, _508);
-  if (true) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     float coeffs[6] = { cb0_037y, cb0_037z, cb0_037w, cb0_038x, cb0_038y, cb0_038z };
-    WUWAUncharted2::Config uc2_config = WUWAUncharted2::CreateConfig(coeffs);
-    _renodx_extended_tm = WUWAUncharted2::ApplyExtended(max(0.f, float3(_369, _371, _373)), float3(_506, _507, _508), uc2_config);
+    wuwa::WUWAUncharted2::Config uc2_config = wuwa::WUWAUncharted2::CreateConfig(coeffs);
+    _renodx_extended_tm = wuwa::WUWAUncharted2::ApplyExtended(max(0.f, float3(_369, _371, _373)), float3(_506, _507, _508), uc2_config);
   }
 
   _506 = _renodx_extended_tm.x;
@@ -550,7 +340,9 @@ float4 main(
     _582 = _532.y;
     _583 = _532.z;
   }
-
+  SV_Target.xyz = float3(_581, _582, _583);
+  SV_Target.w = 1.0f;
+  return SV_Target;
 
   float _584 = _583 * 1.0499999523162842f;
   float _585 = _582 * 1.0499999523162842f;
@@ -579,18 +371,7 @@ float4 main(
   SV_Target.z = _673;
   SV_Target.xyz = renodx::draw::InvertIntermediatePass(SV_Target.xyz);
 
-  {
-    float3 graded = SV_Target.xyz;
-    UserGradingConfig cg_config = CreateColorGradeConfig();
-    float y = renodx::color::y::from::BT709(graded);
-    float3 graded_ap1 = renodx::color::ap1::from::BT709(graded);
-    float3 hue_chrominance_reference_color = renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 0.18f));
-    float3 graded_bt709 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(graded, y, cg_config);
-    SV_Target.xyz = ApplySaturationBlowoutHueCorrectionHighlightSaturation(graded_bt709, hue_chrominance_reference_color, y, cg_config);
-    SV_Target.xyz = renodx::color::bt2020::from::BT709(SV_Target.xyz);
-    SV_Target.xyz = ApplyHermiteSplineByMaxChannel(SV_Target.xyz, RENODX_PEAK_NITS / RENODX_GAME_NITS);
-    SV_Target.xyz = renodx::color::bt709::from::BT2020(SV_Target.xyz);
-  }
+  SV_Target.xyz = wuwa::ApplyDisplayMap(SV_Target.xyz);
 
 
   SV_Target.xyz = renodx::draw::RenderIntermediatePass(SV_Target.xyz);
