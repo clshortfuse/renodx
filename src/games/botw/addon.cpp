@@ -180,11 +180,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::use_resource_cloning = false;
       renodx::mods::swapchain::target_format = target_format;
 
-      /*
-        True means it'll attempt to expand current cbuffer definitions instead of adding a new push constant
-        entry. You'll have to experiment with this if cbuffer injection doesn't work
-      */
-      renodx::mods::shader::expand_existing_constant_buffer = true;
 
       /*
         If expand_existing_constant_buffer is set to false renoDX will add new cbuffer range (instead of reusing the game's).
