@@ -1,5 +1,5 @@
-#ifndef SRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
-#define SRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
+#ifndef ASSCREEDSHADOWS_MACLEOD_BOYNTON_HLSL_
+#define ASSCREEDSHADOWS_MACLEOD_BOYNTON_HLSL_
 
 #include "./shared.h"
 
@@ -1420,4 +1420,4 @@ float LuminosityFromAP1LuminanceNormalized(float3 ap1_linear) {
   return LuminosityFromAP1(ap1_linear) / LuminosityFromAP1(1.f);
 }
 
-#endif  // SRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
+#endif  // ASSCREEDSHADOWS_MACLEOD_BOYNTON_HLSL_
