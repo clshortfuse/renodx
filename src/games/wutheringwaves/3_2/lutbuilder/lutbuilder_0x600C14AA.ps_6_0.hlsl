@@ -854,13 +854,13 @@ float4 main(
     _1522 = max(0.0f, mad(-0.010548528283834457f, _1396, mad(1.1408027410507202f, _1395, (_1394 * -0.13025718927383423f))));
     _1523 = max(0.0f, mad(1.152971863746643f, _1396, mad(-0.1289687603712082f, _1395, (_1394 * -0.024003278464078903f))));
   }
-  float3 tonemapped_ap1 = float3(_1521, _1522, _1523);
-  float3 bt709_tonemapped = (tonemapped_ap1);
+  float3 bt709_tonemapped = float3(_1521, _1522, _1523);
 
   float lut_sampling_scale = 1.0f;
-  float3 lut_linear_input = bt709_tonemapped;
+  float3 lut_linear_input = max(0.f, bt709_tonemapped);
   if (RENODX_TONE_MAP_TYPE != 0.0f) {
-    lut_sampling_scale = renodx::math::Max(lut_linear_input.r, lut_linear_input.g, lut_linear_input.b, 1.0f);
+
+    lut_sampling_scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(lut_linear_input);
     lut_linear_input *= lut_sampling_scale;
   }
 
@@ -910,18 +910,14 @@ float4 main(
   float _1657 = max(6.103519990574569e-05f, ((_1649 * ((_1627.y - _1623) + ((_1631.y - _1627.y) * _1573))) + _1623));
   float _1658 = max(6.103519990574569e-05f, ((_1649 * ((_1627.z - _1624) + ((_1631.z - _1627.z) * _1573))) + _1624));
 
-  _1656 *= lut_sample_max_channel;
-  _1657 *= lut_sample_max_channel;
-  _1658 *= lut_sample_max_channel;
+  wuwa::lut::ApplySampleMaxChannel(_1656, _1657, _1658, lut_sample_max_channel);
 
   float3 linear_output;
   linear_output.r = select((_1656 > 0.040449999272823334f), exp2(log2((_1656 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1656 * 0.07739938050508499f));
   linear_output.g = select((_1657 > 0.040449999272823334f), exp2(log2((_1657 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1657 * 0.07739938050508499f));
   linear_output.b = select((_1658 > 0.040449999272823334f), exp2(log2((_1658 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1658 * 0.07739938050508499f));
 
-  if (RENODX_TONE_MAP_TYPE != 0.0f) {
-    linear_output /= lut_sampling_scale;
-  }
+  wuwa::lut::ApplyInverseSamplingScale(linear_output.r, linear_output.g, linear_output.b, lut_sampling_scale);
 
   float3 scaled = float3(cb0_044y, cb0_044z, cb0_044w) * (((cb0_026y + (cb0_026x * linear_output)) * linear_output) + cb0_026z);
   float3 output = ((float3(cb0_045x, cb0_045y, cb0_045z) - scaled) * cb0_045w) + scaled;

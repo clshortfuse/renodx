@@ -843,36 +843,26 @@ float4 main(
   float _1521 = (_1518);
   float _1522 = (_1519);
 
-  float3 bt709_tonemapped = float3(_1520, _1521, _1522);
-  float lut_sampling_scale = 1.0f;
-  float3 lut_linear_input = bt709_tonemapped;
-  if (RENODX_TONE_MAP_TYPE != 0.0f) {
-    lut_sampling_scale = renodx::math::Max(lut_linear_input.r, lut_linear_input.g, lut_linear_input.b, 1.0f);
-    lut_linear_input *= lut_sampling_scale;
-  }
+  float lut_sampling_scale = wuwa::lut::PrepareLinearInput(_1520, _1521, _1522);
 
   // Encode the scaled linear color to sRGB for LUT addressing.
-  if (lut_linear_input.x < 0.0031306699384003878f) {
-    _1533 = (lut_linear_input.x * 12.920000076293945f);
+  if (_1520 < 0.0031306699384003878f) {
+    _1533 = (_1520 * 12.920000076293945f);
   } else {
-    _1533 = (((pow(lut_linear_input.x, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
+    _1533 = (((pow(_1520, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
   }
-  if (lut_linear_input.y < 0.0031306699384003878f) {
-    _1544 = (lut_linear_input.y * 12.920000076293945f);
+  if (_1521 < 0.0031306699384003878f) {
+    _1544 = (_1521 * 12.920000076293945f);
   } else {
-    _1544 = (((pow(lut_linear_input.y, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
+    _1544 = (((pow(_1521, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
   }
-  if (lut_linear_input.z < 0.0031306699384003878f) {
-    _1555 = (lut_linear_input.z * 12.920000076293945f);
+  if (_1522 < 0.0031306699384003878f) {
+    _1555 = (_1522 * 12.920000076293945f);
   } else {
-    _1555 = (((pow(lut_linear_input.z, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
+    _1555 = (((pow(_1522, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f);
   }
 
-  float lut_sample_max_channel = renodx::math::Max(_1533, _1544, _1555, 1.0f);
-  float3 lut_input_srgb = saturate(float3(_1533, _1544, _1555) / lut_sample_max_channel);
-  _1533 = lut_input_srgb.r;
-  _1544 = lut_input_srgb.g;
-  _1555 = lut_input_srgb.b;
+  float lut_sample_max_channel = wuwa::lut::NormalizeEncodedInput(_1533, _1544, _1555);
 
   float _1559 = (_1544 * 0.9375f) + 0.03125f;
   float _1562 = cb0_040x * _1533;
@@ -890,19 +880,13 @@ float4 main(
   float _1604 = max(6.103519990574569e-05f, ((_1595 * ((_1572.z - _1564) + ((_1577.z - _1572.z) * _1569))) + _1564));
 
   // Restore compressed range before sRGB->linear decode.
-  _1602 *= lut_sample_max_channel;
-  _1603 *= lut_sample_max_channel;
-  _1604 *= lut_sample_max_channel;
+  wuwa::lut::ApplySampleMaxChannel(_1602, _1603, _1604, lut_sample_max_channel);
 
   float _1626 = select((_1602 > 0.040449999272823334f), exp2(log2((_1602 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1602 * 0.07739938050508499f));
   float _1627 = select((_1603 > 0.040449999272823334f), exp2(log2((_1603 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1603 * 0.07739938050508499f));
   float _1628 = select((_1604 > 0.040449999272823334f), exp2(log2((_1604 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1604 * 0.07739938050508499f));
 
-  if (RENODX_TONE_MAP_TYPE != 0.0f) {
-    _1626 /= lut_sampling_scale;
-    _1627 /= lut_sampling_scale;
-    _1628 /= lut_sampling_scale;
-  }
+  wuwa::lut::ApplyInverseSamplingScale(_1626, _1627, _1628, lut_sampling_scale);
   float _1654 = cb0_044y * (((cb0_026y + (cb0_026x * _1626)) * _1626) + cb0_026z);
   float _1655 = cb0_044z * (((cb0_026y + (cb0_026x * _1627)) * _1627) + cb0_026z);
   float _1656 = cb0_044w * (((cb0_026y + (cb0_026x * _1628)) * _1628) + cb0_026z);

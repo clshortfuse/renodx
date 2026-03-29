@@ -20,22 +20,23 @@ struct ShaderInjectData {
 
   float color_grade_exposure;
   float color_grade_highlights;
-  float color_grade_highlights_version;
   float color_grade_shadows;
-  float color_grade_shadows_version;
   float color_grade_contrast;
   float color_grade_saturation;
   float color_grade_highlight_saturation;
   float color_grade_blowout;
   float color_grade_flare;
+  float color_grade_gamma;
+  float color_grade_contrast_highlights;
+  float color_grade_contrast_shadows;
+  float color_grade_adaptation_contrast;
 
-  float tone_map_hue_processor;
+  float tone_map_scaling;
 
   float reno_drt_white_clip;
 
   float gamma_correction;
   float swap_chain_gamma_correction;
-  float output_color_space;
   float processing_use_scrgb;
 
   float wuwa_tonemapper;
@@ -82,18 +83,27 @@ cbuffer injected_buffer : register(b13) {
                                                  shader_injection.color_grade_saturation_correction
 #define RENODX_PER_CHANNEL_HUE_SHIFT             shader_injection.color_grade_hue_shift
 
+// PsychoV semantic aliases for legacy-bound controls.
+#define RENODX_PSYCHOV_BLEND                     shader_injection.color_grade_strength
+#define RENODX_PSYCHOV_HUE_RESTORE               shader_injection.color_grade_hue_correction
+#define RENODX_PSYCHOV_PURITY_SCALE              shader_injection.color_grade_saturation_correction
+#define RENODX_PSYCHOV_HIGHLIGHT_PURITY_BIAS     shader_injection.color_grade_hue_shift
+
 #define RENODX_TONE_MAP_TYPE                     shader_injection.tone_map_type
 #define RENODX_TONE_MAP_HDR_VIDEO                shader_injection.tone_map_hdr_video
 
 #define RENODX_TONE_MAP_EXPOSURE                 shader_injection.color_grade_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS               shader_injection.color_grade_highlights
-#define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION    shader_injection.color_grade_highlights_version
 #define RENODX_TONE_MAP_SHADOWS                  shader_injection.color_grade_shadows
-#define RENODX_COLOR_GRADE_SHADOWS_VERSION       shader_injection.color_grade_shadows_version
 #define RENODX_TONE_MAP_CONTRAST                 shader_injection.color_grade_contrast
 #define RENODX_TONE_MAP_SATURATION               shader_injection.color_grade_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION     shader_injection.color_grade_highlight_saturation
 #define RENODX_TONE_MAP_FLARE                    shader_injection.color_grade_flare
+#define RENODX_TONE_MAP_GAMMA                    shader_injection.color_grade_gamma
+#define RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS      shader_injection.color_grade_contrast_highlights
+#define RENODX_TONE_MAP_CONTRAST_SHADOWS         shader_injection.color_grade_contrast_shadows
+#define RENODX_TONE_MAP_ADAPTATION_CONTRAST      shader_injection.color_grade_adaptation_contrast
+#define RENODX_TONE_MAP_SCALING                  shader_injection.tone_map_scaling
 
 // #define RENODX_TONE_MAP_HUE_CORRECTION           1.f
 #define RENODX_TONE_MAP_HUE_SHIFT                0.f
@@ -102,7 +112,6 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE      renodx::color::convert::COLOR_SPACE_NONE
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE        renodx::color::convert::COLOR_SPACE_NONE
 #define RENODX_TONE_MAP_CLAMP_PEAK               renodx::color::convert::COLOR_SPACE_NONE
-#define RENODX_TONE_MAP_HUE_PROCESSOR            shader_injection.tone_map_hue_processor
 // #define RENODX_TONE_MAP_PER_CHANNEL              0.f
 #define RENODX_TONE_MAP_PASS_AUTOCORRECTION      1.f
 
@@ -137,8 +146,8 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_INTERMEDIATE_COLOR_SPACE          renodx::color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE      renodx::color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE   RENODX_INTERMEDIATE_COLOR_SPACE
-// Only used for HDR10
-#define RENODX_OUTPUT_COLOR_SPACE                shader_injection.output_color_space
+// Fixed to BT.709 -> BT.2020 conversion for HDR10 path.
+#define RENODX_OUTPUT_COLOR_SPACE                0.f
 // Only used for scRGB
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE   (renodx::color::convert::COLOR_SPACE_BT2020 - shader_injection.processing_use_scrgb)
 
