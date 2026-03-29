@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.4.1 on Sat Jan 24 04:33:32 2026
+
 #include "../shared.h"
 
 Texture2D<float4> t5 : register(t5);
@@ -189,6 +189,12 @@ void main(
           bitmask.x = ((~(-1 << 2)) << 2) & 0xffffffff;  r0.x = (((uint)r0.x << 2) & bitmask.x) | ((uint)0 & ~bitmask.x);
           bitmask.x = ((~(-1 << 2)) << 0) & 0xffffffff;  r0.x = (((uint)r0.y << 0) & bitmask.x) | ((uint)r0.x & ~bitmask.x);
           r0.y = dot(cb2[33].xyzw, icb[r0.z+0].xyzw);
+
+          // Per-cascade PCF kernel scaling: sharper near shadows, softer distant shadows
+          if (SHADOW_HARDENING >= 1.f) {
+            r0.y *= lerp(0.75, 1.5, saturate((float)r0.z / 3.0));
+          }
+          
           r0.zw = icb[r0.x+4].xy * float2(1,-1);
           r4.xy = float2(0,0);
           r1.z = 0;
@@ -262,7 +268,7 @@ void main(
         r1.x = (uint)r1.x;
         r1.x = min(127, (uint)r1.x);
         r1.y = 0x0000ffff & asint(cb2[r1.x+587].x);
-        r3.x = f16tof32(r1.y);
+        r3.x = f16tof32((uint)r1.y);
         r1.y = cmp(r3.x >= 0);
         if (r1.y != 0) {
           r4.x = cb2[576].x;
@@ -292,7 +298,7 @@ void main(
           r0.y = r0.z ? r0.y : 0;
           if (r0.y != 0) {
             r0.y = asuint(cb2[r1.x+587].x) >> 16;
-            r3.y = f16tof32(r0.y);
+            r3.y = f16tof32((uint)r0.y);
             r0.yz = r4.xy * cb2[584].zw + r3.xy;
             r1.xy = r0.yz * cb2[586].zw + float2(0.5,0.5);
             r1.xy = floor(r1.xy);
@@ -348,36 +354,34 @@ void main(
     }
     r0.x = r5.x + -r5.y;
     r0.x = r1.w * r0.x + r5.y;
-    r0.y = cmp(0.00100000005 < r0.x);
-    if (r0.y != 0) {
-      r0.yzw = -cb0[173].xyz + r2.xyz;
-      r1.xy = cb0[176].xz * r0.zz + r0.yw;
-      r1.zw = cb0[174].zz * r1.xy;
-      r2.xy = cb0[183].ww * cb0[175].xy;
-      r1.xy = r1.xy * cb0[174].zz + r2.xy;
-      r0.z = t2.SampleLevel(s2_s, r1.xy, 0).x;
-      r1.xy = r1.zw * cb0[175].ww + r2.xy;
-      r1.x = t2.SampleLevel(s2_s, r1.xy, 0).x;
-      r0.y = dot(r0.yw, r0.yw);
-      r0.y = sqrt(r0.y);
-      r0.w = cb0[174].y + -cb0[174].x;
-      r0.y = -cb0[174].x + r0.y;
-      r0.w = 1 / r0.w;
-      r0.y = saturate(r0.y * r0.w);
-      r0.w = r0.y * -2 + 3;
-      r0.y = r0.y * r0.y;
-      r0.y = r0.w * r0.y;
-      r0.w = r1.x + -r0.z;
-      r0.y = r0.y * r0.w + r0.z;
-      r0.y = -1 + r0.y;
-      r0.y = cb0[175].z * r0.y + 1;
 
-      if (AO_INTENSITY >= 1.f) {  
-      // Boost AO intensity (hardcoded 4x)
-      r0.y = 1.0 + (r0.y - 1.0) * 4.0;
+    // Cloud shadow (t2) — toggle via FAKE_CLOUD_SHADOWS
+    if (FAKE_CLOUD_SHADOWS >= 1.f) {
+      r0.y = cmp(0.00100000005 < r0.x);
+      if (r0.y != 0) {
+        r0.yzw = -cb0[173].xyz + r2.xyz;
+        r1.xy = cb0[176].xz * r0.zz + r0.yw;
+        r1.zw = cb0[174].zz * r1.xy;
+        r2.xy = cb0[183].ww * cb0[175].xy;
+        r1.xy = r1.xy * cb0[174].zz + r2.xy;
+        r0.z = t2.SampleLevel(s2_s, r1.xy, 0).x;
+        r1.xy = r1.zw * cb0[175].ww + r2.xy;
+        r1.x = t2.SampleLevel(s2_s, r1.xy, 0).x;
+        r0.y = dot(r0.yw, r0.yw);
+        r0.y = sqrt(r0.y);
+        r0.w = cb0[174].y + -cb0[174].x;
+        r0.y = -cb0[174].x + r0.y;
+        r0.w = 1 / r0.w;
+        r0.y = saturate(r0.y * r0.w);
+        r0.w = r0.y * -2 + 3;
+        r0.y = r0.y * r0.y;
+        r0.y = r0.w * r0.y;
+        r0.w = r1.x + -r0.z;
+        r0.y = r0.y * r0.w + r0.z;
+        r0.y = -1 + r0.y;
+        r0.y = cb0[175].z * r0.y + 1;
+        r0.x = r0.x * r0.y;
       }
-      
-      r0.x = r0.x * r0.y;
     }
     r0.y = cb2[35].z + -r0.x;
     r0.x = cb2[35].w * r0.y + r0.x;
@@ -385,6 +389,12 @@ void main(
     r0.x = cb2[35].z;
   }
   r0.x = min(1, r0.x);
+  
+  // Shadow compositing contrast curve: S-curve deepens shadow cores
+  if (SHADOW_HARDENING >= 1.f) {
+    r0.x = r0.x * r0.x * (3.0 - 2.0 * r0.x); 
+  }
+  
   r0.x = -1 + r0.x;
   o0.x = cb2[34].x * r0.x + 1;
   o0.yz = float2(1,0);
