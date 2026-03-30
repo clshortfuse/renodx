@@ -165,10 +165,24 @@ void main()
 
     float3 tonemapped = R0f.xyz;
     float3 untonemapped = float3(_64 + _80);
-    float3 output = saturate(tonemapped);
-    //renodx::draw::Config intermediateConfig = GetRenderIntermediatePassConfig();
-    if (RENODX_TONE_MAP_TYPE) {
-      output = renodx::draw::ToneMapPass(untonemapped, tonemapped);
+    float3 grading_input = max(untonemapped, 0.f);
+    float3 output = renodx::draw::ToneMapPass(saturate(tonemapped));
+    if (RENODX_TONE_MAP_TYPE != 0.f) {
+      float3 neutral_sdr = lerp(
+          renodx::tonemap::renodrt::NeutralSDR(grading_input),
+          renodx::tonemap::ExponentialRollOff(grading_input, 0.75f),
+          CUSTOM_SATURATION_CLIP);
+
+      if (RENODX_COLOR_GRADE_STRENGTH == 0.f) {
+        output = renodx::draw::ToneMapPass(untonemapped);
+      } else {
+        float3 graded_sdr = max(tonemapped, 0.f);
+
+        output = renodx::draw::ToneMapPass(
+            untonemapped,
+            graded_sdr,
+            neutral_sdr);
+      }
     }
     passPixelColor0 = float4(renodx::draw::RenderIntermediatePass(output), R0f.w);
     
