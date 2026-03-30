@@ -1,5 +1,5 @@
-#ifndef SRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
-#define SRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
+#ifndef XSRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
+#define XSRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
 
 #include "./shared.h"
 
@@ -1144,4 +1144,4 @@ float LuminosityFromBT709LuminanceNormalized(float3 bt709_linear) {
   return luminosity / LuminosityFromBT709(1.f);
 }
 
-#endif  // SRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
+#endif  // XSRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
