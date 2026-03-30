@@ -228,6 +228,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r10g10b10a2_typeless,
             .new_format = target_format,
+            .ignore_size = true, //risky...?
         });
 
       if (!initialized) {
