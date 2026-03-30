@@ -44,6 +44,39 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         {"ColorGradeFlare", &shader_injection.tone_map_flare},
     }),
     {
+        new renodx::utils::settings::Setting{
+          .key = "ColorGradeScene",
+          .binding = &shader_injection.scene_grade_strength,
+          .default_value = 100.f,
+          .label = "Scene Grading",
+          .section = "Color Grading",
+          .tooltip = "Scene grading as applied by the game",
+          .max = 100.f,
+          .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+          .is_visible = []() { return renodx::templates::settings::current_settings_mode  > 1.f; },
+          .parse = [](float value) { return value * 0.01f; },
+        },
+        new renodx::utils::settings::Setting{
+          .key = "FxHueClip",
+          .binding = &shader_injection.custom_hue_clip,
+          .default_value = 100.f,
+          .label = "Hue Clip",
+          .section = "Effects",
+          .tooltip = "Emulates vanilla hue clip effect",
+          .max = 100.f,
+          .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+          .parse = [](float value) { return value * 0.01f; },
+        },
+        new renodx::utils::settings::Setting{
+          .key = "FxSaturationClip",
+          .binding = &shader_injection.custom_saturation_clip,
+          .default_value = 0.f,
+          .label = "Saturation Clip",
+          .section = "Effects",
+          .max = 100.f,
+          .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+          .parse = [](float value) { return value * 0.01f; },
+        },
         // new renodx::utils::settings::Setting{
         //     .key = "FxBloom",
         //     .binding = &shader_injection.custom_bloom,
@@ -115,7 +148,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = "Game mod by souperman9, RenoDX Framework by ShortFuse, RenoVK fork by Ritsu.",
+            .label = "Game mod by souperman9, RenoDX Framework by ShortFuse, RenoVK fork by Ritsu. \nSpecial thanks to Izueh, Marat, and miru97",
             .section = "About",
         },
         new renodx::utils::settings::Setting{
@@ -158,6 +191,9 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
+      {"ColorGradeScene", 100.f},
+      {"FxHueClip", 100.f},
+      {"FxSaturationClip", 0.f},
   });
 }
 
