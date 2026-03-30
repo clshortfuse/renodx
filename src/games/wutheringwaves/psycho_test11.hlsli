@@ -1,5 +1,5 @@
-#ifndef RENODX_SHADERS_TONEMAP_PSYCHO_TEST11_HLSL_
-#define RENODX_SHADERS_TONEMAP_PSYCHO_TEST11_HLSL_
+#ifndef RENODX_WUTHERINGWAVES_PSYCHO_TEST11_HLSLI_
+#define RENODX_WUTHERINGWAVES_PSYCHO_TEST11_HLSLI_
 
 namespace renodx_custom {
 namespace tonemap {
@@ -719,4 +719,4 @@ float3 ApplyBT2020(float3 color_bt2020, config::Config psycho_config) {
 }  // namespace tonemap
 }  // namespace renodx
 
-#endif  // RENODX_SHADERS_TONEMAP_PSYCHO_TEST11_HLSL_
+#endif  // RENODX_WUTHERINGWAVES_PSYCHO_TEST11_HLSLI_

@@ -307,21 +307,9 @@ float4 main(
     _507 = _490;
     _508 = _491;
   }
-  float3 _renodx_tonemapped_capture = float3(_506, _507, _508);
 
-  float3 _renodx_extended_tm = float3(_506, _507, _508);
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
-    float coeffs[6] = { cb0_037y, cb0_037z, cb0_037w, cb0_038x, cb0_038y, cb0_038z };
-    wuwa::WUWAUncharted2::Config uc2_config = wuwa::WUWAUncharted2::CreateConfig(coeffs);
-    _renodx_extended_tm = wuwa::WUWAUncharted2::ApplyExtended(max(0.f, float3(_369, _371, _373)), float3(_506, _507, _508), uc2_config);
-  }
+  APPLY_EXTENDED_TONEMAP(_506, _507, _508);
 
-  _506 = _renodx_extended_tm.x;
-  _507 = _renodx_extended_tm.y;
-  _508 = _renodx_extended_tm.z;
-
-  CLAMP_IF_SDR3(_506, _507, _508);
-  CAPTURE_TONEMAPPED(_renodx_tonemapped_capture);
   float _529 = (saturate((log2(_506 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
   float _530 = (saturate((log2(_507 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
   float _531 = (saturate((log2(_508 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
@@ -340,9 +328,6 @@ float4 main(
     _582 = _532.y;
     _583 = _532.z;
   }
-  SV_Target.xyz = float3(_581, _582, _583);
-  SV_Target.w = 1.0f;
-  return SV_Target;
 
   float _584 = _583 * 1.0499999523162842f;
   float _585 = _582 * 1.0499999523162842f;
@@ -369,12 +354,7 @@ float4 main(
   SV_Target.x = _671;
   SV_Target.y = _672;
   SV_Target.z = _673;
-  SV_Target.xyz = renodx::draw::InvertIntermediatePass(SV_Target.xyz);
-
-  SV_Target.xyz = wuwa::ApplyDisplayMap(SV_Target.xyz);
-
-
-  SV_Target.xyz = renodx::draw::RenderIntermediatePass(SV_Target.xyz);
+  SV_Target.xyz = wuwa::InvertAndApplyDisplayMap(SV_Target.xyz);
   SV_Target.w = dot(float3(_586, _585, _584), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
   CLAMP_IF_SDR(SV_Target.w);
   return SV_Target;
