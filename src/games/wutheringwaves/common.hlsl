@@ -1,9 +1,19 @@
 #include "./shared.h"
 #include "./psycho_test11.hlsli"
+#include "./macleod_boynton.hlsl"
 
 #define WUWA_PEAK_SCALING (RENODX_PEAK_NITS / RENODX_GAME_NITS)
 
 #define APPLY_BLOOM(c) (c).rgb *= RENODX_WUWA_BLOOM
+
+#define APPLY_EXTENDED_TONEMAP(c1, c2, c3) \
+  wuwa::WUWAUncharted2::ApplyExtendedFromCoeffs((c1), (c2), (c3), untonemapped, cb0_037y, cb0_037z, cb0_037w, cb0_038x, cb0_038y, cb0_038z); \
+  const float3 tonemapped = float3(c1, c2, c3); \
+  if (RENODX_TONE_MAP_TYPE != 0.f) { \
+    c1 = lerp(untonemapped.r, tonemapped.r, RENODX_WUWA_TONEMAP_STRENGTH); \
+    c2 = lerp(untonemapped.g, tonemapped.g, RENODX_WUWA_TONEMAP_STRENGTH); \
+    c3 = lerp(untonemapped.b, tonemapped.b, RENODX_WUWA_TONEMAP_STRENGTH); \
+  }
 
 #define WUWA_TM_IS(N) ((uint)(RENODX_WUWA_TM) == (N))
 
@@ -14,6 +24,8 @@
 #define CAPTURE_UNTONEMAPPED(c) const float3 untonemapped = (c).rgb
 
 #define CAPTURE_TONEMAPPED(c) const float3 tonemapped = (c).rgb
+
+#define CAPTURE_UNGRADED(c1, c2, c3) const float3 ungraded = float3((c1), (c2), (c3))
 
 #define HANDLE_LUT_OUTPUT(c) (c).rgb = HandleLUTOutput((c).rgb, untonemapped, tonemapped)
 #define HANDLE_LUT_OUTPUT3(c1, c2, c3) { \
@@ -35,6 +47,119 @@
     c1 = inverted.r; c2 = inverted.g; c3 = inverted.b;
 
 namespace wuwa {
+
+float3 CorrectHueAndPurityMBGated(
+    float3 target_color_bt709,
+    float3 reference_color_bt709,
+    float hue_strength = 1.f,
+    float hue_t_ramp_start = 0.5f,
+    float hue_t_ramp_end = 1.f,
+    float purity_strength = 1.f,
+    float curve_gamma = 1.f,
+    float2 mb_white_override = float2(-1.f, -1.f),
+    float t_min = 1e-6f) {
+  if (purity_strength <= 0.f && hue_strength <= 0.f) {
+    return target_color_bt709;
+  }
+
+  float3 target_color_bt2020 = renodx::color::bt2020::from::BT709(target_color_bt709);
+  float3 reference_color_bt2020 = renodx::color::bt2020::from::BT709(reference_color_bt709);
+
+  if (hue_strength <= 0.f) {
+    float target_purity01 = renodx::color::macleod_boynton::ApplyBT2020(
+                                target_color_bt2020, 1.f, 1.f, mb_white_override, t_min)
+                                .purityCur01;
+    float reference_purity01 = renodx::color::macleod_boynton::ApplyBT2020(
+                                   reference_color_bt2020, 1.f, 1.f, mb_white_override, t_min)
+                                   .purityCur01;
+    float applied_purity01 = lerp(target_purity01, reference_purity01, saturate(purity_strength));
+    return renodx::color::bt709::from::BT2020(
+        renodx::color::macleod_boynton::ApplyBT2020(
+            target_color_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
+            .rgbOut);
+  }
+
+  float3 target_lms = mul(renodx::color::macleod_boynton::XYZ_TO_LMS_2006,
+                          mul(renodx::color::BT2020_TO_XYZ_MAT, target_color_bt2020));
+  float target_t = target_lms.x + target_lms.y;
+  if (target_t <= t_min) {
+    return target_color_bt709;
+  }
+
+  float hue_blend = saturate(hue_strength) *
+                    saturate(renodx::math::DivideSafe(target_t - hue_t_ramp_start,
+                                                      hue_t_ramp_end - hue_t_ramp_start, 0.f));
+
+  float target_purity01 = renodx::color::macleod_boynton::ApplyBT2020(
+                              target_color_bt2020, 1.f, 1.f, mb_white_override, t_min)
+                              .purityCur01;
+  float reference_purity01 = renodx::color::macleod_boynton::ApplyBT2020(
+                                 reference_color_bt2020, 1.f, 1.f, mb_white_override, t_min)
+                                 .purityCur01;
+  float applied_purity01 = lerp(target_purity01, reference_purity01, saturate(purity_strength));
+
+  if (hue_blend <= 0.f) {
+    return renodx::color::bt709::from::BT2020(
+        renodx::color::macleod_boynton::ApplyBT2020(
+            target_color_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
+            .rgbOut);
+  }
+
+  float3 reference_lms = mul(renodx::color::macleod_boynton::XYZ_TO_LMS_2006,
+                             mul(renodx::color::BT2020_TO_XYZ_MAT, reference_color_bt2020));
+
+  float2 white = (mb_white_override.x >= 0.f && mb_white_override.y >= 0.f)
+                     ? mb_white_override
+                     : renodx::color::macleod_boynton::MB_White_D65();
+
+  float2 target_direction = renodx::color::macleod_boynton::MB_From_LMS(target_lms) - white;
+  float2 reference_direction = renodx::color::macleod_boynton::MB_From_LMS(reference_lms) - white;
+
+  float target_len_sq = dot(target_direction, target_direction);
+  float reference_len_sq = dot(reference_direction, reference_direction);
+
+  if (target_len_sq < renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON &&
+      reference_len_sq < renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON) {
+    return renodx::color::bt709::from::BT2020(
+        renodx::color::macleod_boynton::ApplyBT2020(
+            target_color_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
+            .rgbOut);
+  }
+
+  float2 target_unit = (target_len_sq > renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON)
+                           ? target_direction * rsqrt(target_len_sq)
+                           : float2(0.f, 0.f);
+  float2 reference_unit = (reference_len_sq > renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON)
+                              ? reference_direction * rsqrt(reference_len_sq)
+                              : target_unit;
+  if (target_len_sq <= renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON) {
+    target_unit = reference_unit;
+  }
+
+  float2 blended_unit = lerp(target_unit, reference_unit, hue_blend);
+  float blended_len_sq = dot(blended_unit, blended_unit);
+  if (blended_len_sq <= renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON) {
+    blended_unit = (hue_blend >= 0.5f) ? reference_unit : target_unit;
+    blended_len_sq = dot(blended_unit, blended_unit);
+  }
+  blended_unit *= rsqrt(max(blended_len_sq, 1e-20f));
+
+  float seed_len = sqrt(max(target_len_sq, 0.f));
+  if (seed_len <= 1e-6f) {
+    seed_len = sqrt(max(reference_len_sq, 0.f));
+  }
+  seed_len = max(seed_len, 1e-6f);
+
+  float3 seed_bt2020 = mul(
+      renodx::color::XYZ_TO_BT2020_MAT,
+      mul(renodx::color::macleod_boynton::LMS_TO_XYZ_2006,
+          renodx::color::macleod_boynton::LMS_From_MB_T(white + blended_unit * seed_len, target_t)));
+
+  return renodx::color::bt709::from::BT2020(
+      renodx::color::macleod_boynton::ApplyBT2020(
+          seed_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
+          .rgbOut);
+}
 
 namespace lut {
 
@@ -75,6 +200,13 @@ static inline void ApplyInverseSamplingScale(inout float r, inout float g, inout
     g *= inv_lut_sampling_scale;
     b *= inv_lut_sampling_scale;
   }
+}
+
+static inline void ApplyLutStrength(inout float r, inout float g, inout float b, float3 ungraded) {
+  float3 ungraded_bt709 = renodx::color::bt709::from::AP1(ungraded);
+  r = lerp(ungraded_bt709.r, r, RENODX_WUWA_LUT_STRENGTH);
+  g = lerp(ungraded_bt709.g, g, RENODX_WUWA_LUT_STRENGTH);
+  b = lerp(ungraded_bt709.b, b, RENODX_WUWA_LUT_STRENGTH);
 }
 
 }
@@ -147,18 +279,39 @@ static inline float3 ApplyExtended(float3 x, float3 base, Config cfg) {
   float pivot_y = renodx::tonemap::ApplyCurve(pivot_x, A, B, C, D, E, F);
 
   float slope = Derivative(pivot_x, A, B, C, D, E, F);
-  slope *= 2.f;
 
   float3 extended = slope * x + (pivot_y - slope * pivot_x);
 
   float3 t = smoothstep(pivot_x - 0.05f, pivot_x + 0.05f, x);  // softer transition
   return lerp(base, extended, t);
 }
+
+static inline void ApplyExtendedFromCoeffs(
+    inout float r,
+    inout float g,
+    inout float b,
+    float3 untonemapped,
+    float c037y,
+    float c037z,
+    float c037w,
+    float c038x,
+    float c038y,
+    float c038z) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    float coeffs[6] = { c037y, c037z, c037w, c038x, c038y, c038z };
+    Config uc2_config = CreateConfig(coeffs);
+    float3 extended = ApplyExtended(max(0.f, untonemapped), float3(r, g, b), uc2_config);
+    r = extended.x;
+    g = extended.y;
+    b = extended.z;
+  }
+}
+
 }
 
 static inline float3 ApplyDisplayMap(float3 input_bt709) {
   if (RENODX_TONE_MAP_TYPE == 0.f) {
-    return input_bt709;
+    return renodx::draw::RenderIntermediatePass(input_bt709);
   }
 
   float3 untonemapped_bt709 = max(0.f, input_bt709);
@@ -175,12 +328,17 @@ static inline float3 ApplyDisplayMap(float3 input_bt709) {
   psycho_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
   psycho_config.contrast_highlights = RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS;
   psycho_config.contrast_shadows = RENODX_TONE_MAP_CONTRAST_SHADOWS;
-    psycho_config.purity_scale = RENODX_TONE_MAP_SATURATION * RENODX_PSYCHOV_PURITY_SCALE;
+  psycho_config.purity_scale = RENODX_TONE_MAP_SATURATION * RENODX_PSYCHOV_PURITY_SCALE;
+  if (RENODX_TONE_MAP_DECHROMA != 0.f) {
+    float dechroma_lum = renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(untonemapped_bt2020);
+    float dechroma_scale = lerp(1.f, 0.f, saturate(pow(dechroma_lum / (10000.f / 100.f), (1.f - RENODX_TONE_MAP_DECHROMA))));
+    psycho_config.purity_scale *= max(dechroma_scale, 0.f);
+  }
   psycho_config.purity_highlights =
       (-1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f)) + ((RENODX_PSYCHOV_HIGHLIGHT_PURITY_BIAS - 0.5f) * 2.f);
   psycho_config.adaptation_contrast = RENODX_TONE_MAP_ADAPTATION_CONTRAST;
   psycho_config.bleaching_intensity = 0.f;
-    psycho_config.hue_restore = RENODX_PSYCHOV_HUE_RESTORE;
+  psycho_config.hue_restore = RENODX_PSYCHOV_HUE_RESTORE;
   psycho_config.pre_gamut_compress = false;
   psycho_config.post_gamut_compress = true;
 
@@ -202,7 +360,28 @@ static inline float3 ApplyDisplayMap(float3 input_bt709) {
   }
 
   float3 mapped_bt709 = renodx::color::bt709::from::BT2020(tonemapped_bt2020);
-  return lerp(input_bt709, mapped_bt709, RENODX_PSYCHOV_BLEND);
+
+  float hue_emulation_strength = saturate(RENODX_PSYCHOV_HUE_EMULATION);
+  if (hue_emulation_strength > 0.f) {
+    float3 mapped_ap1 = renodx::color::ap1::from::BT709(mapped_bt709);
+    float3 hue_reference_bt709 = renodx::color::bt709::from::AP1(
+        renodx::tonemap::ReinhardPiecewise(mapped_ap1, 2.f, 1.f));
+    mapped_bt709 = CorrectHueAndPurityMBGated(
+        mapped_bt709,
+        hue_reference_bt709,
+      hue_emulation_strength,
+      0.5f,
+      1.f,
+      saturate(RENODX_PSYCHOV_CHROMA_EMULATION),
+      1.f);
+  }
+
+  float3 mapped_output = lerp(input_bt709, mapped_bt709, RENODX_PSYCHOV_BLEND);
+  return renodx::draw::RenderIntermediatePass(mapped_output);
+}
+
+static inline float3 InvertAndApplyDisplayMap(float3 input_bt709) {
+  return ApplyDisplayMap(renodx::draw::InvertIntermediatePass(input_bt709));
 }
 
 }
@@ -280,6 +459,7 @@ static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, flo
 #define GENERATE_LUT_OUTPUT(T)                                          \
   static inline T GenerateLUTOutput(T graded_bt709) {                   \
     graded_bt709 = renodx::draw::RenderIntermediatePass(graded_bt709);  \
+    graded_bt709 /= 1.0499999523162842f;                                \
     return graded_bt709;                                                \
   }
 

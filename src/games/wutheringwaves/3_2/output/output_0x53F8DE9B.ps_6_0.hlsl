@@ -307,8 +307,7 @@ float4 main(
     _562 = _545;
     _563 = _546;
   }
-  CLAMP_IF_SDR3(_561, _562, _563);
-  CAPTURE_TONEMAPPED(float3(_561, _562, _563));
+  APPLY_EXTENDED_TONEMAP(_561, _562, _563);
   float _584 = (saturate((log2(_561 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
   float _585 = (saturate((log2(_562 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
   float _586 = (saturate((log2(_563 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
@@ -326,7 +325,6 @@ float4 main(
     _637 = _587.y;
     _638 = _587.z;
   }
-  HANDLE_LUT_OUTPUT3_FADE(_636, _637, _638, t5, s5);
   float _639 = _638 * 1.0499999523162842f;
   float _640 = _637 * 1.0499999523162842f;
   float _641 = _636 * 1.0499999523162842f;
@@ -352,6 +350,7 @@ float4 main(
   SV_Target.x = _726;
   SV_Target.y = _727;
   SV_Target.z = _728;
+  SV_Target.xyz = wuwa::InvertAndApplyDisplayMap(SV_Target.xyz);
   SV_Target.w = dot(float3(_641, _640, _639), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
   CLAMP_IF_SDR(SV_Target.w);
   return SV_Target;
