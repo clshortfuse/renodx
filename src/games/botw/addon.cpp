@@ -6,7 +6,6 @@
 #define ImTextureID ImU64
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 
-
 #include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
