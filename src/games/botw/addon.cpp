@@ -57,13 +57,12 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         },
         new renodx::utils::settings::Setting{
           .key = "FxHueClip",
-          .binding = &shader_injection.custom_hue_clip,
+          .binding = &shader_injection.custom_bloom,
           .default_value = 100.f,
-          .label = "Hue Clip",
+          .label = "Bloom",
           .section = "Effects",
-          .tooltip = "Emulates vanilla hue clip effect",
+          .tooltip = "Controls vanilla bloom strength",
           .max = 100.f,
-          .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
           .parse = [](float value) { return value * 0.01f; },
         },
         new renodx::utils::settings::Setting{
@@ -212,7 +211,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       // Always set to true for Vulkan
       renodx::mods::shader::allow_multiple_push_constants = true;
-      renodx::mods::swapchain::use_resource_cloning = false;
       renodx::mods::swapchain::target_format = target_format;
 
 
