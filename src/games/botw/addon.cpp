@@ -72,7 +72,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
           .label = "Saturation Clip",
           .section = "Effects",
           .max = 100.f,
-          .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+          .is_enabled = []() { return shader_injection.tone_map_type > 0.f and shader_injection.scene_grade_strength != 0.f; },
           .parse = [](float value) { return value * 0.01f; },
         },
         // new renodx::utils::settings::Setting{
