@@ -51,7 +51,7 @@ struct ShaderInjectData {
   float gamma_correction;
 
   float custom_saturation_clip;
-  float custom_hue_clip;
+  float custom_bloom;
 };
 
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
@@ -76,7 +76,7 @@ struct ShaderInjectData {
 #define RENODX_RENO_DRT_TONE_MAP_METHOD           renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_GAMMA_CORRECTION                   shader_injection.gamma_correction
 #define CUSTOM_SATURATION_CLIP                    shader_injection.custom_saturation_clip
-#define CUSTOM_HUE_CLIP                           shader_injection.custom_hue_clip
+#define CUSTOM_BLOOM                          shader_injection.custom_bloom
 
 #define RENODX_INTERMEDIATE_SCALING            (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS)
 // #define RENODX_INTERMEDIATE_COLOR_SPACE        color::convert::COLOR_SPACE_BT709
