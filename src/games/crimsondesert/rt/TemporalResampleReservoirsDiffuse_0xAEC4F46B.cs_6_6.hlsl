@@ -1,20 +1,20 @@
 #include "../shared.h"
 
-Texture2D<uint> __3__36__0__0__g_sceneNormal : register(t50, space36);
+Texture2D<uint> __3__36__0__0__g_sceneNormal : register(t79, space36);
 
-Texture2D<uint> __3__36__0__0__g_sceneNormalPrev : register(t81, space36);
+Texture2D<uint> __3__36__0__0__g_sceneNormalPrev : register(t91, space36);
 
-Texture2D<float2> __3__36__0__0__g_velocity : register(t82, space36);
+Texture2D<float2> __3__36__0__0__g_velocity : register(t92, space36);
 
 Texture2D<uint> __3__36__0__0__g_depthOpaque : register(t49, space36);
 
-Texture2D<uint> __3__36__0__0__g_depthOpaquePrev : register(t84, space36);
+Texture2D<uint> __3__36__0__0__g_depthOpaquePrev : register(t94, space36);
 
-Texture2D<float4> __3__36__0__0__g_raytracingNormal : register(t125, space36);
+Texture2D<float4> __3__36__0__0__g_raytracingNormal : register(t104, space36);
 
-Texture2D<uint4> __3__36__0__0__g_diffuseGIReservoirHitGeometryPrev : register(t24, space36);
+Texture2D<uint4> __3__36__0__0__g_diffuseGIReservoirHitGeometryPrev : register(t33, space36);
 
-Texture2D<uint2> __3__36__0__0__g_diffuseGIReservoirRadiancePrev : register(t26, space36);
+Texture2D<uint2> __3__36__0__0__g_diffuseGIReservoirRadiancePrev : register(t45, space36);
 
 RWTexture2D<float4> __3__38__0__1__g_raytracingHitResultUAV : register(u43, space38);
 
@@ -339,8 +339,37 @@ void main(
       _331 = (((mad((float4(_projToPrevProj[0].z, _projToPrevProj[1].z, _projToPrevProj[2].z, _projToPrevProj[3].z).y), _186, mad((float4(_projToPrevProj[0].y, _projToPrevProj[1].y, _projToPrevProj[2].y, _projToPrevProj[3].y).y), _223, ((float4(_projToPrevProj[0].x, _projToPrevProj[1].x, _projToPrevProj[2].x, _projToPrevProj[3].x).y) * _221))) + (float4(_projToPrevProj[0].w, _projToPrevProj[1].w, _projToPrevProj[2].w, _projToPrevProj[3].w).y)) / _317) - _223);
     }
     bool _339 = (_renderParams.x > 0.0f);
-    int _344 = int(floor(((_330 * 0.5f) + _31) * _bufferSizeAndInvSize.x));
-    int _345 = int(floor((_32 - (_331 * 0.5f)) * _bufferSizeAndInvSize.y));
+
+    // ============================================================
+    // RenoDX: Area ReSTIR style subpixel tracking temporal reuse
+    //
+    // (testing)
+    //
+    // The vanilla reprojection maps pixel centers between frames but
+    // ignores that TAA jitter shifts the subpixel position each frame.
+    //
+    // This causes temporal samples to be treated as "same pixel" when 
+    // they're half a pixel apart, leading to boiling on foliage, 
+    // hair and so on. 
+    //
+    // Area ReSTIR (Zhang et al., SIGGRAPH 2024) solves this by tracking
+    // subpixel offsets per reservoir sample.
+    //
+    // _temporalAAJitter: (jitterX, jitterY, prevJitterX, prevJitterY)
+    // in NDC space ([-1,1] range, sub-pixel magnitude).
+    // The delta is converted to UV space (*0.5) for the pixel lookup.
+    // ============================================================
+    float _rndx_jitter_delta_u = 0.0f;
+    float _rndx_jitter_delta_v = 0.0f;
+    if (RT_QUALITY >= 0.5f) {
+      // NDC jitter delta: current minus previous frame's jitter
+      // Convert to UV space for the pixel coordinate offset
+      _rndx_jitter_delta_u = (_temporalAAJitter.x - _temporalAAJitter.z) * 0.5f;
+      _rndx_jitter_delta_v = (_temporalAAJitter.y - _temporalAAJitter.w) * 0.5f;
+    }
+
+    int _344 = int(floor(((_330 * 0.5f) + _31 + _rndx_jitter_delta_u) * _bufferSizeAndInvSize.x));
+    int _345 = int(floor((_32 - (_331 * 0.5f) + _rndx_jitter_delta_v) * _bufferSizeAndInvSize.y));
     half4 _347 = __3__38__0__1__g_diffuseResultUAV.Load(int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y)));
     float4 _355 = __3__38__0__1__g_raytracingHitResultUAV.Load(int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y)));
     float _361 = rsqrt(dot(float3(_355.x, _355.y, _355.z), float3(_355.x, _355.y, _355.z)));
@@ -365,6 +394,27 @@ void main(
     float _397 = _371 * _364;
     bool _401 = ((int)(_187 == 57)) | ((int)((uint)(_187 + -53) < (uint)15));
     float _404 = max(0.10000000149011612f, (_266 * select(_401, 0.019999999552965164f, 0.10000000149011612f)));
+
+    // ============================================================
+    // RenoDX: Subpixel-aware validation threshold relaxation
+    //
+    // When TAA jitter shifts between frames, the reprojected position
+    // is slightly off from the true surface correspondence. 
+    //
+    // The vanilla world space distance threshold (_404) can reject valid 
+    // temporal neighbors that are only displaced by the jitter delta. 
+    //
+    // We widen the threshold proportionally to the jitter magnitude
+    // ============================================================
+
+    float _rndx_validation_threshold = _404;
+    if (RT_QUALITY >= 0.5f) {
+      float _rndx_jitter_mag = sqrt(_rndx_jitter_delta_u * _rndx_jitter_delta_u
+                                  + _rndx_jitter_delta_v * _rndx_jitter_delta_v);
+      // Scale jitter from UV to approximate world space at this depth
+      // Factor of 2 accounts for NDC→UV halving and bilateral safety margin
+      _rndx_validation_threshold = _404 + _266 * _rndx_jitter_mag * 2.0f;
+    }
     uint _413 = ((uint)((((int)((_45 << 4) + -1383041155u)) ^ ((int)(_45 + -1640531527u))) ^ ((int)(((uint)((uint)(_45) >> 5)) + 2123724318u)))) + ((uint)(int4(_frameNumber).x));
     uint _421 = ((uint)((((int)((_413 << 4) + -1556008596u)) ^ ((int)(_413 + 1013904242u))) ^ (((uint)(_413) >> 5) + -939442524))) + _45;
     uint _429 = ((uint)((((int)((_421 << 4) + -1383041155u)) ^ ((int)(_421 + 1013904242u))) ^ ((int)(((uint)((uint)(_421) >> 5)) + 2123724318u)))) + _413;
@@ -491,7 +541,7 @@ void main(
         float _835 = _829 - _263;
         float _842 = dot(float3(_viewDir.x, _viewDir.y, _viewDir.z), float3(_827, _828, _829));
         bool __branch_chain_752;
-        if (dot(float3(_833, _834, _835), float3(_833, _834, _835)) > (_404 * _404)) {
+        if (dot(float3(_833, _834, _835), float3(_833, _834, _835)) > (_rndx_validation_threshold * _rndx_validation_threshold)) {
           _857 = _825;
           _858 = _823;
           _859 = _826;

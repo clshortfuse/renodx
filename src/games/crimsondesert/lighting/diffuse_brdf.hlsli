@@ -167,6 +167,10 @@ float CallistoSmoothTerminator(
 // This does more than just AA since the base game nuked specular details on
 // some meshes and decals like puddles during the night
 //
+// Roughness aware, the filter strength scales with material roughness.
+// Smooth surfaces are excluded to preserve specular. Rough surfaces
+// get minimal filtering since wide lobes don't shimmer
+//
 //   normalWS  — world space shading normal (normalised)
 //   roughness — linear roughness [0,1]
 //   strength  — user control [0,1]: 0=off, 1=full filtering
@@ -182,12 +186,14 @@ float NDFFilterRoughnessCS(
   float3 dndu = QuadReadAcrossX(normalWS) - normalWS;
   float3 dndv = QuadReadAcrossY(normalWS) - normalWS;
 
-  static const float SIGMA2 = 0.15915494f;  // 1/(2pi)
+  static const float SIGMA2 = 0.15915494f;
   float kernelRoughness2 = 2.0f * SIGMA2 * (dot(dndu, dndu) + dot(dndv, dndv));
 
-  // kappa = 0.18 clamping threshold 
-  static const float KAPPA = 0.18f;
-  float clampedKernel = min(kernelRoughness2, KAPPA) * strength;
+  // Roughness aware kappa
+  float kappa = lerp(0.18f, 0.04f, saturate(roughness * 2.5f));
+  float clampedKernel = min(kernelRoughness2, kappa);
+  float smoothFade = saturate((roughness - 0.05f) * 10.0f);
+  clampedKernel *= strength * smoothFade;
 
   float alpha  = roughness * roughness;
   float alpha2 = saturate(alpha * alpha + clampedKernel);

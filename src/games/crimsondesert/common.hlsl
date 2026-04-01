@@ -199,7 +199,6 @@ float3 CustomPostProcessing(float3 color, float2 uv, Texture2D<float4> texture, 
 }
 
 float ComputeReinhardSmoothClampScale(float3 untonemapped, float rolloff_start = 0.375f, float output_max = 1.f, float white_clip = 100.f) {
-  if (RENODX_TONE_MAP_TYPE < 2.f) return 1.f;
   float peak = renodx::math::Max(untonemapped);
   float mapped_peak = renodx::tonemap::ReinhardPiecewiseExtended(peak, white_clip, output_max, rolloff_start);
   float scale = renodx::math::DivideSafe(mapped_peak, peak, 1.f);
@@ -214,7 +213,7 @@ float3 GammaCorrectionByLuminosity(float3 color, bool pow_to_srgb = false, float
   return color_out;
 }
 
-float3 CustomTonemap(float3 untonemapped_bt709) {
+float3 CustomTonemap(float3 untonemapped_bt709, float mid_gray_scale = 1.f) {
   float calculated_peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
   const float white_clip = 100.f;
   int white_curve_mode = 1;
@@ -225,11 +224,12 @@ float3 CustomTonemap(float3 untonemapped_bt709) {
 
   float3 output_color = untonemapped_bt709;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
-    float contrast = RENODX_TONE_MAP_CONTRAST * 1.2f;
-    float saturation = RENODX_TONE_MAP_SATURATION * 1.2f;
+    float contrast = RENODX_TONE_MAP_CONTRAST;
+    float saturation = RENODX_TONE_MAP_SATURATION;
 
     output_color = psychotm_test11(
-        output_color * 1.1539f,  // mid-gray adjusted
+        //output_color * 1.1539f,  // mid-gray adjusted
+        output_color,
         calculated_peak,
         RENODX_TONE_MAP_EXPOSURE,
         RENODX_TONE_MAP_HIGHLIGHTS,
@@ -241,7 +241,8 @@ float3 CustomTonemap(float3 untonemapped_bt709) {
         RENODX_TONE_MAP_HUE_RESTORE,  // hue_restore
         RENODX_TONE_MAP_ADAPTATION_CONTRAST,   // adaptation_contrast
         white_curve_mode,
-        saturation  // cone_response_exponent
+        saturation,  // cone_response_exponent
+        mid_gray_scale
     );
   }
 
@@ -253,7 +254,7 @@ float3 CustomTonemap(float3 untonemapped_bt709) {
   return output_color;
 }
 
-float3 CustomTonemapSDR(float3 untonemapped_bt709) {
+float3 CustomTonemapSDR(float3 untonemapped_bt709, float mid_gray_scale) {
   //return renodx::tonemap::Reinhard(untonemapped_bt709);
   const float white_clip = 100.f;
   const int white_curve_mode = 1;
@@ -262,12 +263,13 @@ float3 CustomTonemapSDR(float3 untonemapped_bt709) {
   
   float3 output_color = untonemapped_bt709;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
-    float contrast = RENODX_TONE_MAP_CONTRAST * 1.2f;
-    float saturation = RENODX_TONE_MAP_SATURATION * 1.2f;
+    float contrast = RENODX_TONE_MAP_CONTRAST;
+    float saturation = RENODX_TONE_MAP_SATURATION;
 
     output_color = psychotm_test11(
-        output_color * 1.1539f,  // mid-gray adjusted
-        4.f,
+        // output_color * 1.1539f,  // mid-gray adjusted
+        output_color,
+        calculated_peak,
         RENODX_TONE_MAP_EXPOSURE,
         RENODX_TONE_MAP_HIGHLIGHTS,
         RENODX_TONE_MAP_SHADOWS,
@@ -278,11 +280,17 @@ float3 CustomTonemapSDR(float3 untonemapped_bt709) {
         RENODX_TONE_MAP_HUE_RESTORE,          // hue_restore
         RENODX_TONE_MAP_ADAPTATION_CONTRAST,  // adaptation_contrast
         white_curve_mode,
-        saturation  // cone_response_exponent
+        saturation,  // cone_response_exponent
+        mid_gray_scale
     );
-    float lumin_in = renodx::color::y::from::BT709(output_color);
-    float lumin_out = renodx::tonemap::ReinhardExtended(lumin_in, 4.f, calculated_peak);
-    output_color = renodx::color::correct::Luminance(output_color, lumin_in, lumin_out);
+    // float lumin_in = renodx::color::y::from::BT709(output_color);
+    // float lumin_out = renodx::tonemap::ReinhardExtended(lumin_in, 4.f, calculated_peak);
+    // output_color = renodx::color::correct::Luminance(output_color, lumin_in, lumin_out);
+
+    // float scale = ComputeReinhardSmoothClampScale(output_color, 0.18f, calculated_peak, 4.f);
+    // output_color *= scale;
+
+    //output_color = renodx::tonemap::ReinhardExtended(output_color, 4.f, calculated_peak);
 
     //output_color = renodx::tonemap::ReinhardExtended(output_color, 4.f, calculated_peak);
   }

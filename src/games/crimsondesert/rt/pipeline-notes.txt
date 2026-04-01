@@ -162,10 +162,14 @@ Purpose: ReSTIR temporal resampling — accumulate samples across frames.
 
   - Motion vectors: Dynamic objects (stencil 14-20, 53-67, 105, 98) use
     per-pixel g_velocity buffer. Static geometry uses _projToPrevProj matrix.
+  - RenoDX: Area ReSTIR subpixel tracking temporal reuse — compensates
+    reprojection coordinates by the inter frame TAA jitter delta
+    (_temporalAAJitter.xy - .zw) so temporal lookups account for where the
+    previous frame's sample was actually generated.
   - 5 candidate search: 4 motion-reprojected positions with +/-1 pixel
     offsets + 1 at current pixel position (iteration #4).
   - Validation:
-      * World-space distance < threshold (0.02-0.1x linearZ)
+      * World-space distance < threshold (0.02-0.1x linearZ, relaxed by jitter)
       * Depth consistency
       * Normal hemisphere check (dot > 0)
   - RIS reservoir merge: target PDF = luminance(radiance) * cos_theta / pi.
@@ -188,6 +192,10 @@ Purpose: ReSTIR spatial resampling — borrow samples from neighbors.
   - Validation:
       * Plane-distance test: |dot(N, neighborPos - pos)| > max(0.5, linearZ)
       * Normal consistency: dot(N_cur, N_neighbor) >= 0
+  - RenoDX SPMIS path (RT_QUALITY >= 0.5): Area ReSTIR reconnection shift
+    mapping replaces raw solid angle Jacobian. Reconnects at the hit point
+    using hit surface normal for both cosine terms, clamped to [0, 4] instead
+    of [0, 10]. Backface rejection at reconnection vertex (cos_hq < 1e-4).
   - Jacobian correction: solid-angle ratio between neighbor and current
     pixel. Backface test via hit normal.
   - RIS merge: weighted reservoir sampling combining current + neighbor.

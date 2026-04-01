@@ -1,3 +1,8 @@
+// Set to 1 to visualize UV + material type, 0 for normal rendering
+#define DEBUG_FOLIAGE_UV 0
+
+#include "../shared.h"
+
 struct IndirectDrawParameters {
   uint16_t _vertexBufferViewIndex;
   uint16_t _staticMeshDataViewIndex;
@@ -146,7 +151,7 @@ OutputSignature main(
   bool _7 = (SV_IsFrontFace != 0);
   uint _43 = uint(SV_Position.w * 65536.0f);
   float _46 = float((uint)((uint)(((int)(((uint)((((int)(_frameNumber.x * 73)) & 255) * 73)) + _43)) & 255)));
-  int _59 = WaveReadLaneFirst(TEXCOORD_2.x & 16777215);
+  uint _59 = (TEXCOORD_2.x & 16777215u);
   float _63 = SV_Position.x * 2.0f;
   float _65 = SV_Position.y * 2.0f;
   float _67 = (_bufferSizeAndInvSize.z * _63) + -1.0f;
@@ -161,7 +166,7 @@ OutputSignature main(
   float _295;
   int _296;
   float _480;
-  float _482;
+  float _482 = 0.0f;
   float _487;
   float _488;
   float _489;
@@ -175,14 +180,14 @@ OutputSignature main(
     }
   }
   int _134 = __3__37__0__0__g_indirectDrawParametersBuffer[_59]._bindlessMaterialParametersViewIndex;
+  float _154 = ddx_coarse(TEXCOORD.x);
+  float _155 = ddx_coarse(TEXCOORD.y);
+  float _158 = ddy_coarse(TEXCOORD.x);
+  float _159 = ddy_coarse(TEXCOORD.y);
   float _150 = max(((__0__7__0__0__g_bindlessTextures[((int)((uint)(select(((uint)(BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_134 < (uint)170000), _134, 0)) + 0u))]._baseColorTexture) < (uint)65000), (BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_134 < (uint)170000), _134, 0)) + 0u))]._baseColorTexture), 0)) + 0u))].CalculateLevelOfDetail(__0__95__0__0__g_samplerAnisotropicWrap, float2(TEXCOORD.x, TEXCOORD.y))) + -1.0f), 0.0f);
   float _152 = 1.0f - (float((uint)((uint)((uint)((uint)(TEXCOORD_2.x)) >> 24))) * 0.003921568859368563f);
   [branch]
   if (SV_ShadingRate == 5) {
-    float _154 = ddx_coarse(TEXCOORD.x);
-    float _155 = ddx_coarse(TEXCOORD.y);
-    float _158 = ddy_coarse(TEXCOORD.x);
-    float _159 = ddy_coarse(TEXCOORD.y);
     float4 _179 = __0__7__0__0__g_bindlessTextures[((int)((uint)(select(((uint)(BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_134 < (uint)170000), _134, 0)) + 0u))]._baseColorTexture) < (uint)65000), (BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_134 < (uint)170000), _134, 0)) + 0u))]._baseColorTexture), 0)) + 0u))].SampleLevel(__3__40__0__0__g_samplerWrap, float2(((TEXCOORD.x - (_154 * 0.25f)) - (_158 * 0.25f)), ((TEXCOORD.y - (_155 * 0.25f)) - (_159 * 0.25f))), _150);
     float4 _186 = __0__7__0__0__g_bindlessTextures[((int)((uint)(select(((uint)(BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_134 < (uint)170000), _134, 0)) + 0u))]._baseColorTexture) < (uint)65000), (BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_134 < (uint)170000), _134, 0)) + 0u))]._baseColorTexture), 0)) + 0u))].SampleLevel(__3__40__0__0__g_samplerWrap, float2((lerp(_158, _154, 0.25f)), (lerp(_159, _155, 0.25f))), _150);
     float4 _193 = __0__7__0__0__g_bindlessTextures[((int)((uint)(select(((uint)(BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_134 < (uint)170000), _134, 0)) + 0u))]._baseColorTexture) < (uint)65000), (BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_134 < (uint)170000), _134, 0)) + 0u))]._baseColorTexture), 0)) + 0u))].SampleLevel(__3__40__0__0__g_samplerWrap, float2((lerp(_154, _158, 0.25f)), (lerp(_155, _159, 0.25f))), _150);
@@ -269,76 +274,113 @@ OutputSignature main(
   float _455 = select(_451, 0.0f, (((((_363 * _357) / _368) - _295) * _375) + _295));
   float _459 = _nearFarProj.x / max(1.0000000116860974e-07f, SV_Position.z);
 
-  // --- Improved foliage shading (hardcoded on since cbooofers causes CTD or missing grass) ---
-  float _grassBladeHeight = 1.0f - saturate(TEXCOORD.y);
-  float _grassAOCurve     = pow(_grassBladeHeight, 0.45f);
-  float _grassAOScalar    = lerp(0.30f, 1.02f, _grassAOCurve);
-  float3 _grassAOTint     = lerp(float3(0.85f, 0.92f, 0.78f), float3(1.0f, 1.0f, 1.0f), _grassAOCurve);
+  if (CONTACT_SHADOW_QUALITY > 0.5f) {
+    // --- Grass/foliage AO ---
+    // TEXCOORD.y is inverted
+    float _grassBladeHeight = 1.0f - saturate(TEXCOORD.y);
+    float _grassAOCurve     = pow(_grassBladeHeight, 0.45f);
+    float _grassAOScalar    = lerp(0.30f, 1.02f, _grassAOCurve);
+    float3 _grassAOTint     = lerp(float3(0.85f, 0.92f, 0.78f), float3(1.0f, 1.0f, 1.0f), _grassAOCurve);
 
-  bool __defer_292_479 = false;
-  if (((BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_110 < (uint)170000), _110, 0)) + 0u))]._materialInfo) & 253) == 17) {
-    _480 = min(((_459 * 0.004999999888241291f) + 0.44999998807907104f), 0.9900000095367432f);
-    _453 *= _grassAOScalar * _grassAOTint.x;
-    _454 *= _grassAOScalar * _grassAOTint.y;
-    _455 *= _grassAOScalar * _grassAOTint.z;
-    __defer_292_479 = true;
-  } else if (_356 == 18) {
-    _480 = min(((_459 * 0.0010000000474974513f) + 0.550000011920929f), 0.9900000095367432f);
-    float _bushDarken = 0.92f;
-    if (!_7) {
-      _482 = _480;
-      _487 = _482;
-      _488 = (_453 * 1.03f * _bushDarken);
-      _489 = (_454 * 1.03f * _bushDarken);
-      _490 = (_455 * 1.03f * _bushDarken);
+    if (((BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_110 < (uint)170000), _110, 0)) + 0u))]._materialInfo) & 253) == 17) {
+      _480 = min(((_459 * 0.004999999888241291f) + 0.44999998807907104f), 0.9900000095367432f);
+      float _ao17r = _453 * _grassAOScalar * _grassAOTint.x;
+      float _ao17g = _454 * _grassAOScalar * _grassAOTint.y;
+      float _ao17b = _455 * _grassAOScalar * _grassAOTint.z;
+      if (!_7) {
+        _487 = _480;
+        _488 = (_ao17r * 1.100000023841858f);
+        _489 = (_ao17g * 1.100000023841858f);
+        _490 = (_ao17b * 1.100000023841858f);
+      } else {
+        _487 = _480;
+        _488 = _ao17r;
+        _489 = _ao17g;
+        _490 = _ao17b;
+      }
+    } else if (_356 == 18) {
+      _480 = min(((_459 * 0.0010000000474974513f) + 0.550000011920929f), 0.9900000095367432f);
+      float _bushAO = lerp(0.80f, 1.0f, _grassAOCurve);
+      float _ao18r = _453 * _bushAO * 0.92f;
+      float _ao18g = _454 * _bushAO * 0.92f;
+      float _ao18b = _455 * _bushAO * 0.92f;
+      if (!_7) {
+        _487 = _480;
+        _488 = (_ao18r * 1.03f);
+        _489 = (_ao18g * 1.03f);
+        _490 = (_ao18b * 1.03f);
+      } else {
+        _487 = _480;
+        _488 = _ao18r;
+        _489 = _ao18g;
+        _490 = _ao18b;
+      }
+    } else if (_356 == 12) {
+      _480 = 0.6000000238418579f;
+      float _leafAO = lerp(0.75f, 1.0f, pow(_grassBladeHeight, 0.6f));
+      if (!_7) {
+        _487 = _480;
+        _488 = (_453 * 1.100000023841858f * _leafAO);
+        _489 = (_454 * 1.100000023841858f * _leafAO);
+        _490 = (_455 * 1.100000023841858f * _leafAO);
+      } else {
+        _487 = _480;
+        _488 = _453 * _leafAO;
+        _489 = _454 * _leafAO;
+        _490 = _455 * _leafAO;
+      }
     } else {
-      _487 = _480;
-      _488 = _453 * _bushDarken;
-      _489 = _454 * _bushDarken;
-      _490 = _455 * _bushDarken;
-    }
-  } else if (_356 == 12) {
-    _480 = 0.6000000238418579f;
-    float _leafHeight = 1.0f - saturate(TEXCOORD.y);
-    float _leafAO = lerp(0.75f, 1.0f, pow(_leafHeight, 0.6f));
-    if (!_7) {
-      _482 = _480;
-      _487 = _482;
-      _488 = (_453 * 1.100000023841858f * _leafAO);
-      _489 = (_454 * 1.100000023841858f * _leafAO);
-      _490 = (_455 * 1.100000023841858f * _leafAO);
-    } else {
-      _487 = _480;
-      _488 = _453 * _leafAO;
-      _489 = _454 * _leafAO;
-      _490 = _455 * _leafAO;
+      if (!_7) {
+        _482 = min(((_459 * 0.004999999888241291f) + 0.6000000238418579f), 0.9900000095367432f);
+        _487 = _482;
+        _488 = (_453 * 1.100000023841858f);
+        _489 = (_454 * 1.100000023841858f);
+        _490 = (_455 * 1.100000023841858f);
+      } else {
+        _487 = 1.0f;
+        _488 = _453;
+        _489 = _454;
+        _490 = _455;
+      }
     }
   } else {
-    if (!_7) {
-      _482 = min(((_459 * 0.004999999888241291f) + 0.6000000238418579f), 0.9900000095367432f);
-      _487 = _482;
-      _488 = (_453 * 1.100000023841858f);
-      _489 = (_454 * 1.100000023841858f);
-      _490 = (_455 * 1.100000023841858f);
+    // Vanilla path — no AO
+    bool __defer_vanilla = false;
+    if (((BindlessParameters_MaterialOverrideParametersTree[((int)((uint)(select(((uint)_110 < (uint)170000), _110, 0)) + 0u))]._materialInfo) & 253) == 17) {
+      _480 = min(((_459 * 0.004999999888241291f) + 0.44999998807907104f), 0.9900000095367432f);
+      __defer_vanilla = true;
+    } else if (_356 == 18) {
+      _480 = min(((_459 * 0.0010000000474974513f) + 0.550000011920929f), 0.9900000095367432f);
+      __defer_vanilla = true;
+    } else if (_356 == 12) {
+      _480 = 0.6000000238418579f;
+      __defer_vanilla = true;
     } else {
-      _487 = 1.0f;
-      _488 = _453;
-      _489 = _454;
-      _490 = _455;
+      if (!_7) {
+        _482 = min(((_459 * 0.004999999888241291f) + 0.6000000238418579f), 0.9900000095367432f);
+        _487 = _482;
+        _488 = (_453 * 1.100000023841858f);
+        _489 = (_454 * 1.100000023841858f);
+        _490 = (_455 * 1.100000023841858f);
+      } else {
+        _487 = 1.0f;
+        _488 = _453;
+        _489 = _454;
+        _490 = _455;
+      }
     }
-  }
-  if (__defer_292_479) {
-    if (!_7) {
-      _482 = _480;
-      _487 = _482;
-      _488 = (_453 * 1.100000023841858f);
-      _489 = (_454 * 1.100000023841858f);
-      _490 = (_455 * 1.100000023841858f);
-    } else {
-      _487 = _480;
-      _488 = _453;
-      _489 = _454;
-      _490 = _455;
+    if (__defer_vanilla) {
+      if (!_7) {
+        _487 = _480;
+        _488 = (_453 * 1.100000023841858f);
+        _489 = (_454 * 1.100000023841858f);
+        _490 = (_455 * 1.100000023841858f);
+      } else {
+        _487 = _480;
+        _488 = _453;
+        _489 = _454;
+        _490 = _455;
+      }
     }
   }
   float _494 = rsqrt(dot(float3(_444, _447, _450), float3(_444, _447, _450)));
@@ -379,10 +421,18 @@ OutputSignature main(
     _618 = 1.0f;
   }
   float _626 = 0.5f / ((abs(_617) + abs(_616)) + saturate(_618));
-  SV_Target.x = (uint)(min(65535, (min(255, (int)(uint(round(saturate(sqrt(max(saturate(_debugMultiplier.x * _489), _507))) * 255.0f)))) | ((int)((uint)(min(255, (int)(uint(round(saturate(sqrt(max(saturate(_debugMultiplier.x * _488), _507))) * 255.0f))))) << 8)))));
-  SV_Target.y = (uint)(min(65535, (min(255, (int)(uint(round(saturate(float((uint)_356) * 0.003921568859368563f) * 255.0f)))) | ((int)((uint)(min(255, (int)(uint(round(saturate(sqrt(max(saturate(_debugMultiplier.x * _490), _507))) * 255.0f))))) << 8)))));
-  SV_Target.z = (uint)(min(65535, ((int)((uint)(min(255, (int)(uint(round(saturate(_487) * 255.0f))))) << 8))));
-  SV_Target.w = (uint)(min(65535, (min(255, (int)(uint(round(saturate((_626 * (_616 - _617)) + 0.5f) * 255.0f)))) | ((int)((uint)(min(255, (int)(uint(round(saturate((_626 * (_617 + _616)) + 0.5f) * 255.0f))))) << 8)))));
+
+#if DEBUG_FOLIAGE_UV
+  // Debug: R
+  float _dbgR = saturate(TEXCOORD.y);
+  _488 = _dbgR;
+  _489 = 0.0f;
+  _490 = 0.0f;
+#endif
+  SV_Target.x = min((uint)(65535), (uint)((int)(min((uint)(255), (uint)((int)(uint(round(saturate(sqrt(max(saturate(_debugMultiplier.x * _489), _507))) * 255.0f)))))) | ((int)(min((uint)(255), (uint)((int)(uint(round(saturate(sqrt(max(saturate(_debugMultiplier.x * _488), _507))) * 255.0f))))) << 8))));
+  SV_Target.y = min((uint)(65535), (uint)((int)(min((uint)(255), (uint)((int)(uint(round(saturate(float((uint)(uint)(_356)) * 0.003921568859368563f) * 255.0f)))))) | ((int)(min((uint)(255), (uint)((int)(uint(round(saturate(sqrt(max(saturate(_debugMultiplier.x * _490), _507))) * 255.0f))))) << 8))));
+  SV_Target.z = min((uint)(65535), (uint)((int)(min((uint)(255), (uint)((int)(uint(round(saturate(_487) * 255.0f))))) << 8)));
+  SV_Target.w = min((uint)(65535), (uint)((int)(min((uint)(255), (uint)((int)(uint(round(saturate((_626 * (_616 - _617)) + 0.5f) * 255.0f)))))) | ((int)(min((uint)(255), (uint)((int)(uint(round(saturate((_626 * (_617 + _616)) + 0.5f) * 255.0f))))) << 8))));
   SV_Target_1.x = (_564 * 0.0009775171056389809f);
   SV_Target_1.y = (_565 * 0.0009775171056389809f);
   SV_Target_1.z = (_566 * 0.0009775171056389809f);
@@ -395,7 +445,7 @@ OutputSignature main(
   SV_Target_3.y = ((((TEXCOORD_1.y / TEXCOORD_1.w) - _temporalAAJitterParams.w) + (_bufferSizeAndInvSize.w * _65)) * 0.5f);
   SV_Target_4.x = 0u;
   SV_Target_4.y = 0u;
-  SV_Coverage = _296;
+  SV_Coverage = (uint)(_296);
   OutputSignature output_signature = { SV_Target, SV_Target_1, SV_Target_2, SV_Target_3, SV_Target_4, SV_Coverage };
   return output_signature;
 }

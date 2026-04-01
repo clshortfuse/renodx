@@ -1,3 +1,5 @@
+#include "../shared.h"
+
 Texture3D<float4> __3__36__0__0__g_texFroxel : register(t133, space36);
 
 Texture2D<float4> __3__36__0__0__g_sceneColor : register(t29, space36);
@@ -492,12 +494,21 @@ float4 main(
     float4 _363 = __3__36__0__0__g_glareResult.SampleLevel(__0__4__0__0__g_staticPointClamp, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
     float _367 = _363.z + _358.z;
     float _368 = _367 / _exposure0.x;
-    float _369 = _368 * 0.047370001673698425f;
     float _370 = _363.y + _358.y;
     float _371 = _370 / _exposure0.x;
-    float _372 = _371 * 0.3395099937915802f;
     float _373 = _363.x + _358.x;
     float _374 = _373 / _exposure0.x;
+
+    // RenoDX: Bloom strength control
+    {
+      float _bloomScale = BLOOM_STRENGTH;
+      _368 *= _bloomScale;
+      _371 *= _bloomScale;
+      _374 *= _bloomScale;
+    }
+
+    float _369 = _368 * 0.047370001673698425f;
+    float _372 = _371 * 0.3395099937915802f;
     float _375 = _374 * 0.6131200194358826f;
     float _376 = _372 + _375;
     float _377 = _376 + _369;
@@ -797,6 +808,15 @@ float4 main(
     float _687 = _683.x / _exposure0.x;
     float _688 = _683.y / _exposure0.x;
     float _689 = _683.z / _exposure0.x;
+
+    // RenoDX: Bloom strength control
+    {
+      float _bloomScale2 = BLOOM_STRENGTH;
+      _687 *= _bloomScale2;
+      _688 *= _bloomScale2;
+      _689 *= _bloomScale2;
+    }
+
     float _690 = _687 * 0.6131200194358826f;
     float _691 = _687 * 0.07020000368356705f;
     float _692 = _687 * 0.02061999961733818f;

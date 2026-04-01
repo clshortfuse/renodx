@@ -1,12 +1,12 @@
 #include "../shared.h"
 
-Texture2D<uint> __3__36__0__0__g_sceneNormal : register(t50, space36);
+Texture2D<uint> __3__36__0__0__g_sceneNormal : register(t79, space36);
 
 Texture2D<uint> __3__36__0__0__g_depthOpaque : register(t49, space36);
 
-Texture2D<uint4> __3__36__0__0__g_diffuseGIReservoirHitGeometry : register(t107, space36);
+Texture2D<uint4> __3__36__0__0__g_diffuseGIReservoirHitGeometry : register(t31, space36);
 
-Texture2D<uint2> __3__36__0__0__g_diffuseGIReservoirRadiance : register(t25, space36);
+Texture2D<uint2> __3__36__0__0__g_diffuseGIReservoirRadiance : register(t34, space36);
 
 RWTexture2D<float4> __3__38__0__1__g_raytracingHitResultUAV : register(u43, space38);
 
@@ -351,14 +351,16 @@ void main(
       float  spmis_cos_s   = max(0.10000000149011612f, dot(spmis_Ns, spmis_dir_sq));
       float  spmis_phat_s  = spmis_lum_s * 0.31830987334251404f * spmis_cos_s;
 
-      // Jacobian for solid-angle domain change (q → s)
       float spmis_cos_hq = abs(dot(spmis_dir_cq, spmis_hitN));
       float spmis_cos_hs = abs(dot(spmis_dir_sq, spmis_hitN));
+
       float spmis_J_num   = spmis_cos_hq * spmis_dsq_sq;
       float spmis_J_denom = spmis_cos_hs * spmis_dsq_cq;
       float spmis_J = (spmis_J_denom > 1e-10f)
-                       ? min(spmis_J_num / spmis_J_denom, 10.0f)
+                       ? clamp(spmis_J_num / spmis_J_denom, 0.0f, 4.0f)
                        : 0.0f;
+
+      if (spmis_cos_hq < 1e-4f) continue;
 
       // Pairwise MIS weight: m_i = p_q(x_s) / (p_q(x_s) + (M_s/N)*p_s(x_s)*J)
       float spmis_denom = spmis_phat_q
@@ -483,75 +485,27 @@ void main(
               _609 = select(_596, _584, _363);
               _610 = _593;
             } else {
-              _603 = _357;
-              _604 = _358;
-              _605 = _359;
-              _606 = _360;
-              _607 = _361;
-              _608 = _371;
-              _609 = _363;
-              _610 = _364;
+              _603 = _357; _604 = _358; _605 = _359; _606 = _360; _607 = _361; _608 = _371; _609 = _363; _610 = _364;
             }
           } else {
-            _603 = _357;
-            _604 = _358;
-            _605 = _359;
-            _606 = _360;
-            _607 = _361;
-            _608 = _371;
-            _609 = _363;
-            _610 = _364;
+            _603 = _357; _604 = _358; _605 = _359; _606 = _360; _607 = _361; _608 = _371; _609 = _363; _610 = _364;
           }
         } else {
-          _603 = _357;
-          _604 = _358;
-          _605 = _359;
-          _606 = _360;
-          _607 = _361;
-          _608 = _371;
-          _609 = _363;
-          _610 = _364;
+          _603 = _357; _604 = _358; _605 = _359; _606 = _360; _607 = _361; _608 = _371; _609 = _363; _610 = _364;
         }
       } else {
-        _603 = _357;
-        _604 = _358;
-        _605 = _359;
-        _606 = _360;
-        _607 = _361;
-        _608 = _371;
-        _609 = _363;
-        _610 = _364;
+        _603 = _357; _604 = _358; _605 = _359; _606 = _360; _607 = _361; _608 = _371; _609 = _363; _610 = _364;
       }
       uint _611 = _365 + 1u;
       if (!(_611 == _316)) {
-        _357 = _603;
-        _358 = _604;
-        _359 = _605;
-        _360 = _606;
-        _361 = _607;
-        _362 = _608;
-        _363 = _609;
-        _364 = _610;
-        _365 = _611;
+        _357 = _603; _358 = _604; _359 = _605; _360 = _606; _361 = _607; _362 = _608; _363 = _609; _364 = _610; _365 = _611;
         continue;
       }
-      _322 = _603;
-      _323 = _604;
-      _324 = _605;
-      _325 = _606;
-      _326 = _607;
-      _327 = _609;
-      _328 = _610;
+      _322 = _603; _323 = _604; _324 = _605; _325 = _606; _326 = _607; _327 = _609; _328 = _610;
       break;
     }
   } else {
-    _322 = _289;
-    _323 = _288;
-    _324 = _284;
-    _325 = _285;
-    _326 = _286;
-    _327 = _302;
-    _328 = _305;
+    _322 = _289; _323 = _288; _324 = _284; _325 = _285; _326 = _286; _327 = _302; _328 = _305;
   }
   float _330 = _327 * float((uint)_322);
   float _334 = saturate(select((_330 == 0.0f), 0.0f, (_328 / _330)));

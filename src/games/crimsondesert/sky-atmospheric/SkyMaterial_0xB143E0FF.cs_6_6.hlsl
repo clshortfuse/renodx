@@ -515,20 +515,37 @@ void main(
 
       float _sunRadius = _340 * 2.5f;
 
+      // --- DEBUG TOGGLES: set to 0 to disable each feature for isolation testing ---
+      #define SUN_ENABLE_CHROMATIC_DISPERSION 1
+      #define SUN_ENABLE_LIMB_DARKENING       1
+      #define SUN_ENABLE_CORONA               1
+      #define SUN_ENABLE_MIE_HALO             1
+      #define SUN_ENABLE_LUM_REDUCTION        0
+
       // --- Chromatic edge dispersion -------------------------------------------
       // Blue channel is refracted ~2% wider than red at the limb for atmospheric dispersion.
+      #if SUN_ENABLE_CHROMATIC_DISPERSION
       float _sunRadiusR = _sunRadius;
       float _sunRadiusG = _sunRadius * 1.01f;
       float _sunRadiusB = _sunRadius * 1.02f;
+      #else
+      float _sunRadiusR = _sunRadius;
+      float _sunRadiusG = _sunRadius;
+      float _sunRadiusB = _sunRadius;
+      #endif
       float _pixelAngle = _sunRadius * 0.05f;
       float _sunEdgeR = 1.0f - smoothstep(_sunRadiusR - _pixelAngle, _sunRadiusR + _pixelAngle, _341);
       float _sunEdgeG = 1.0f - smoothstep(_sunRadiusG - _pixelAngle, _sunRadiusG + _pixelAngle, _341);
       float _sunEdgeB = 1.0f - smoothstep(_sunRadiusB - _pixelAngle, _sunRadiusB + _pixelAngle, _341);
 
       // --- Limb darkening via Hestroffer power law --------------------------------
+      #if SUN_ENABLE_LIMB_DARKENING
       float _r = saturate(_341 / max(_sunRadius, 1e-6f));
       float _mu = sqrt(1.0f - _r * _r);
       float _limbDark = pow(max(0.001f, _mu), 0.6f);
+      #else
+      float _limbDark = 1.0f;
+      #endif
 
       // Sun disk colour: warm center (5778K-ish) very slightly to the limb.
       float _sunMaskR = _sunEdgeR * _limbDark;
@@ -536,35 +553,59 @@ void main(
       float _sunMaskB = _sunEdgeB * (_limbDark * 0.92f + 0.08f);
 
       // Added 10x brightness reduction so that postprocess bloom doesnt blow out the sun
+      #if SUN_ENABLE_LUM_REDUCTION
       float _sunLum = min(100000.0f, _precomputedAmbient7.x) * 0.1f;
+      #else
+      float _sunLum = min(1e+06f, _precomputedAmbient7.x);
+      #endif
 
       // --- K corona: falloff past the disk rim ---------------
-      // Mimics electron scattering corona; independent of bloom 
+      // Mimics electron scattering corona: independent of bloom 
+      #if SUN_ENABLE_CORONA
       float _coronaR = max(0.0f, _341 - _sunRadiusR) / max(_sunRadius, 1e-6f);
       float _corona  = _sunLum * 0.006f / (1.0f + _coronaR * _coronaR * 10.0f);
+      // Gate corona by sun elevation so it vanishes below the horizon,
+      // matching the Mie halo behaviour. Without this a bright ass
+      // gradient is present in the night sky where the sun set.
+      float _coronaElev = saturate(_sunDirection.y * 5.0f);
+      _corona *= _coronaElev;
       // Corona is slightly warm and tints channels accordingly.
       float _coronaContribR = _corona * 1.10f;
       float _coronaContribG = _corona * 0.95f;
       float _coronaContribB = _corona * 0.75f;
+      #else
+      float _coronaContribR = 0.0f;
+      float _coronaContribG = 0.0f;
+      float _coronaContribB = 0.0f;
+      #endif
 
-      // ---- Mie near sun halo: Henyey Greenstein phase using scene aerosol data ----
+      // ---- Circumsolar aureole --------------------
       //
-      // (This might have some bugs we still need to solve)
+      // The atmospheric inscatter LUT already ray marches full Mie scattering with
+      // the HG phase function
       //
-      // _337 = cosθ (already computed), _miePhaseConst = g (eccentricity)
-      // Also gate by sun elevation, since otherwise the sun at the horizon nukes
-      // the HG forward scatter lobe, messing up lighting in the night time sky.
-      float _sunElevation = saturate(_sunDirection.y * 10.0f); // 0 at horizon, 1 when >0.1 above
-      float _g    = _miePhaseConst;
-      float _g2   = _g * _g;
-      float _HG   = (1.0f - _g2) / pow(max(1e-6f, 1.0f + _g2 - 2.0f * _g * _337), 1.5f);
-
-      // Suppress the forward lobe near the sun disk — the corona already handles
-      // near sun glow. If we dont, the HG peak at cosθ≈1 produces extreme
-      // values that cause artefacts, especially at high altitude.
-      float _angularDist = _341 / max(_sunRadius, 1e-6f);  // 0 at center, 1 at rim
-      float _hgSuppress = smoothstep(0.0f, 3.0f, _angularDist);  // fade in beyond 3× sun radius
-      float _mieHalo = _sunElevation * _mieAerosolDensity * _sunLum * 0.0003f * min(_HG, 8.0f) * _hgSuppress;
+      // We just add the missing mie halo for the sun, since the base game doesnt apply one
+      //
+      #if SUN_ENABLE_MIE_HALO
+      float _mieHalo;
+      {
+        float _g       = _miePhaseConst;
+        float _g2      = _g * _g;
+        float _denom   = max(1e-6f, 1.0f + _g2 - 2.0f * _g * _337);
+        float _HG      = (1.0f - _g2) / (_denom * sqrt(_denom)); 
+        float _HG_4pi  = _HG * 0.07957747f;                       
+        float _HG_iso  = 0.07957747f;
+        float _HG_residual = max(0.0f, _HG_4pi - _HG_iso);
+        float _sigma   = 0.087f;
+        float _gauss   = exp(-0.5f * (_341 * _341) / (_sigma * _sigma));
+        float _diskMask = smoothstep(_sunRadius * 0.8f, _sunRadius * 1.5f, _341);
+        float _sunElev = saturate(_sunDirection.y * 5.0f);
+        float _beta_sca = _mieAerosolDensity * 2e-5f;
+        _mieHalo = _sunLum * _beta_sca * _HG_residual * _gauss * _diskMask * _sunElev;
+      }
+      #else
+      float _mieHalo = 0.0f;
+      #endif
 
       _353 = _sunMaskR * (_sunLum - _330) + _330 + _coronaContribR + _mieHalo;
       _354 = _sunMaskG * (_sunLum - _331) + _331 + _coronaContribG + _mieHalo;
