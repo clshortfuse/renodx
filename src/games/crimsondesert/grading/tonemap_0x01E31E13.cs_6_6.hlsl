@@ -1,4 +1,5 @@
 #include "../common.hlsl"
+#include "./tonemap.hlsli"
 
 Texture3D<float4> __3__36__0__0__g_displayRenderingTransformLUT : register(t135, space36);
 
@@ -6,6 +7,7 @@ Texture2D<float4> __3__36__0__0__g_sceneColor : register(t29, space36);
 
 RWTexture2D<float4> __3__38__0__1__g_textureUAV : register(u13, space38);
 
+#if 0
 cbuffer __3__35__0__0__ExposureConstantBuffer : register(b31, space35) {
   float4 _exposure0 : packoffset(c000.x);
   float4 _exposure1 : packoffset(c001.x);
@@ -28,6 +30,7 @@ cbuffer __3__1__0__0__GlobalPushConstants : register(b0, space1) {
   float4 _offsetParams : packoffset(c010.x);
   float4 _powerParams : packoffset(c011.x);
 };
+#endif
 
 SamplerState __0__4__0__0__g_staticBilinearClamp : register(s3, space4);
 
@@ -105,8 +108,13 @@ void main(
     float3 ungraded_bt709 = renodx::color::bt709::from::AP1(ungraded_ap1);
     float3 graded_bt709 = ApplyDisplayCurvesAndSaturation(ungraded_bt709, true);
 
+    const float mid_gray = 0.18f;
+    float mid_gray_adjusted = SDRToneMap(mid_gray).x;
+    float mid_gray_scale = mid_gray_adjusted / mid_gray;
+    //graded_bt709 *= mid_gray_scale;
+
     float3 input_color = lerp(ungraded_bt709, graded_bt709, RENODX_COLOR_GRADE_STRENGTH);
-    float3 output_color = CustomTonemap(input_color);
+    float3 output_color = CustomTonemap(input_color, mid_gray_scale);
     output_color = renodx::color::bt2020::from::BT709(output_color);
     output_color = renodx::color::pq::EncodeSafe(output_color, RENODX_DIFFUSE_WHITE_NITS);
     // output_color = renodx::color::srgb::EncodeSafe(output_color);

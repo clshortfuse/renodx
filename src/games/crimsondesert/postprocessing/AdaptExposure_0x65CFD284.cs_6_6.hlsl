@@ -381,6 +381,29 @@ void main(
           float _196 = min(_195, _ae_max_lum);
           float _197 = sqrt(_192);
           float _198 = max(9.999999974752427e-07f, _196);
+
+          // === RenoDX: filter target luminance in log space ===
+          // The raw histogram mean (_198) jitters per frame temporally.
+          // Low pass it before it feeds into the exposure curve to reduce
+          // oscillation
+          //
+          // Doesnt fully remove bloom jitter but better than before especially 
+          // with alt auto exposure
+          float _198_filtered;
+          if (IMPROVED_AUTO_EXPOSURE >= 1) {
+            float _prevFilteredTarget = __3__39__0__1__g_exposureUAV[19];
+            if (_prevFilteredTarget > 0.0001f && !isnan(_prevFilteredTarget)) {
+              float _logPrev = log2(_prevFilteredTarget);
+              float _logCur  = log2(_198);
+              float _logSmooth = lerp(_logPrev, _logCur, 0.12f);
+              _198_filtered = exp2(_logSmooth);
+            } else {
+              _198_filtered = _198;
+            }
+          } else {
+            _198_filtered = _198;
+          }
+
           _200 = 1;
           while(true) {
             int _201 = _200 + 20;
@@ -459,7 +482,7 @@ void main(
               _286 = 1.0f;
             }
             float _287 = sqrt(_286);
-            float _288 = _198 * -144.26950073242188f;
+            float _288 = _198_filtered * -144.26950073242188f;
             float _289 = exp2(_288);
             float _290 = _289 + 1.0f;
             float _291 = 2.0f / _290;
@@ -469,7 +492,7 @@ void main(
             float _295 = _287 + 2.0f;
             float _296 = _293 * _295;
             float _297 = _296 + _294;
-            float _298 = saturate(_198);
+            float _298 = saturate(_198_filtered);
             float _299 = log2(_298);
             float _300 = _299 * 0.25f;
             float _301 = exp2(_300);
@@ -494,7 +517,7 @@ void main(
             float _322 = _321 * _param3.z;
             // Sky visibility exposure bias
             float _323 = (IMPROVED_AUTO_EXPOSURE == 2) ? 0.0f : (_322 + _param2.z);
-            float _324 = max(_198, 9.999999747378752e-05f);
+            float _324 = max(_198_filtered, 9.999999747378752e-05f);
             float _325 = min(_324, 7.0f);
             float _326 = _325 + -0.009999999776482582f;
             float _327 = _326 * 0.14306151866912842f;
@@ -515,7 +538,7 @@ void main(
             float _342 = sqrt(_341);
             float _343 = _339 - _340;
             float _344 = (IMPROVED_AUTO_EXPOSURE == 2) ? 0.0f : (_343 * _342);
-            float _345 = _198 * 8.0f;
+            float _345 = _198_filtered * 8.0f;
             float _346 = log2(_345);
             float _347 = _346 - _340;
             float _348 = _347 - _344;
@@ -647,7 +670,7 @@ void main(
               float _404 = _403 * 1e+05f;
               float _405 = saturate(_404);
               float _406 = _317 * _405;
-              float _407 = max(_403, _198);
+              float _407 = max(_403, _198_filtered);
               float _410 = __3__39__0__1__g_exposureUAV[11];
               float _411 = _407 - _410;
               float _412 = _411 * 0.125f;
@@ -664,7 +687,7 @@ void main(
                   _424 = 1.0f;
                 }
                 float _425 = _424 * _381;
-                // Apply EV bias for IMPROVED mode (compensates for zeroed _323 push-constant correction)
+                // Apply EV bias for IMPROVED mode (compensates for zeroed _323 push constant correction)
                 _427 = (IMPROVED_AUTO_EXPOSURE == 2) ? (_425 * exp2(AE_EV_BIAS)) : _425;
               } else {
                 _427 = _param3.y;
@@ -673,7 +696,7 @@ void main(
               // if (IMPROVED_AUTO_EXPOSURE == 1) _427 = min(_427, lerp(1.f, 11.f, AE_DARK_POWER_OUTDOOR));
               //if (IMPROVED_AUTO_EXPOSURE == 1) _427 = min(_427, 7.f);
               //if (IMPROVED_AUTO_EXPOSURE == 1) _427 = renodx::color::grade::Contrast(_427, 1.f * AE_DARK_POWER_OUTDOOR, 0.18f);
-              if (IMPROVED_AUTO_EXPOSURE == 1) _427 = NakaRushton(_427, lerp(1.f, 18.f, AE_DARK_POWER_OUTDOOR), 0.05f, 0.05f, AE_DYNAMISM).x;
+              if (IMPROVED_AUTO_EXPOSURE == 1) _427 = NakaRushton(_427, lerp(1.f, 100.f, AE_DARK_POWER_OUTDOOR), 0.05f, 0.05f, AE_DYNAMISM).x;
 
               __3__39__0__1__g_exposureUAV[0] = _427;
               float _428 = select(_414, _param3.y, _381);
@@ -707,6 +730,27 @@ void main(
               float _457 = max(9.999999717180685e-10f, _452);
               float _458 = _456 / _457;
               __3__39__0__1__g_exposureUAV[17] = _458;
+
+              // === RenoDX: Bloom/lens glare stabilisation ===
+              // Write a low passed exposure into slot 18 (_exposure4.z).
+              // Histogram-AWB and LensFlareComposite read this instead of the fast
+              // _exposure0.y when alt auto exposure is toggled.
+              // This stops vanilla exposure + glare feedback loop that causes bloom shimmer.
+              //
+              // Look into maybe doing a further filtering for distance objects?
+              if (IMPROVED_AUTO_EXPOSURE >= 1) {
+                float prevSlowExp = __3__39__0__1__g_exposureUAV[18];
+                float slowSeed = (prevSlowExp > 0.0001f && !isnan(prevSlowExp)) ? prevSlowExp : _427;
+                float slowTau = 0.05f;
+                float slowExp = lerp(slowSeed, _427, slowTau);
+                __3__39__0__1__g_exposureUAV[18] = slowExp;
+                // Slot 19: filtered target luminance for potential future use
+                float prevSlowTarget = __3__39__0__1__g_exposureUAV[19];
+                float targetSeed = (prevSlowTarget > 0.0001f && !isnan(prevSlowTarget)) ? prevSlowTarget : _198_filtered;
+                float slowTarget = lerp(targetSeed, _198_filtered, 0.08f);
+                __3__39__0__1__g_exposureUAV[19] = slowTarget;
+              }
+
               break;
             }
             if (__loop_jump_target == 199) {

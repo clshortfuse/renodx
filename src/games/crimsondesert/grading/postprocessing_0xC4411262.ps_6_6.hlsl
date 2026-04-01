@@ -1,5 +1,5 @@
 #include "../common.hlsl"
-
+#include "./tonemap.hlsli"
 
 Texture2D<float4> __0__7__0__0__g_bindlessTextures[] : register(t0, space7);
 
@@ -112,6 +112,7 @@ cbuffer __3__35__0__0__SceneConstantBuffer : register(b16, space35) {
   uint _isAllowBlood;
 };
 
+#if 0
 cbuffer __3__35__0__0__ExposureConstantBuffer : register(b31, space35) {
   float4 _exposure0 : packoffset(c000.x);
   float4 _exposure1 : packoffset(c001.x);
@@ -134,6 +135,7 @@ cbuffer __3__1__0__0__GlobalPushConstants : register(b0, space1) {
   float4 _offsetParams : packoffset(c010.x);
   float4 _powerParams : packoffset(c011.x);
 };
+#endif
 
 cbuffer __3__1__0__0__PostProcessSizeConstant : register(b1, space1) {
   float4 _srcTargetSizeAndInv : packoffset(c000.x);
@@ -300,19 +302,6 @@ float3 ApplyDisplayCurvesAndSaturation(float3 bt709, bool clamp = true) {
   float display_transform_luminance = dot(curved, float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
   return lerp(display_transform_luminance.xxx, curved, _powerParams.w);
 }
-
-// float3 ApplyHighlightBoost(float3 color) {
-//   float _3029 = -0.0f - color.x;
-//   float _3030 = -0.0f - color.y;
-//   float _3031 = -0.0f - color.z;
-//   float _3032 = dot(float3(_3029, _3030, _3031), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
-//   float _3038 = saturate((_exposure2.x + -3.0f) * 0.1428571492433548f) * 0.20000004768371582f;
-//   float _3039 = _3038 + 1.0f;
-//   float _3070 = ((exp2(log2((_3039 - (_3038 * saturate((color.x * color.x) * _3029))) * _3029)) - _3032) * 1.399999976158142f) + _3032;
-//   float _3071 = ((exp2(log2((_3039 - (saturate((color.y * color.y) * _3030) * _3038)) * _3030)) - _3032) * 1.399999976158142f) + _3032;
-//   float _3072 = ((exp2(log2((_3039 - (saturate((color.z * color.z) * _3031) * _3038)) * _3031)) - _3032) * 1.399999976158142f) + _3032;
-//   return float3(_3070, _3071, _3072);
-// }
 
 float4 main(
   noperspective float4 SV_Position : SV_Position,
@@ -1352,26 +1341,33 @@ float4 main(
 
     if (RENODX_TONE_MAP_TYPE != 0) {
       float3 untonemapped_bt709 = float3(_2951, _2952, _2953);
-      float3 tonemapped_bt709 = CustomTonemapSDR(untonemapped_bt709);
+      // float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(float3(_2866, _2867, _2868) * _2891); // test color
+
+      const float mid_gray = 0.18f;
+      float mid_gray_adjusted = SDRToneMap(mid_gray).x;
+      float mid_gray_scale = mid_gray_adjusted / mid_gray;
+      //untonemapped_bt709 *= mid_gray_scale;
+
+      float3 tonemapped_bt709 = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale);
       _3163 = tonemapped_bt709.r;
       _3164 = tonemapped_bt709.g;
       _3165 = tonemapped_bt709.b;
     }
     else {
-      float3 ungraded = float3(_2951, _2952, _2953);
-      float3 graded = psycho_grading_only(
-          ungraded,
-          RENODX_TONE_MAP_EXPOSURE,
-          RENODX_TONE_MAP_HIGHLIGHTS,
-          RENODX_TONE_MAP_SHADOWS,
-          RENODX_TONE_MAP_CONTRAST,
-          RENODX_TONE_MAP_SATURATION,
-          RENODX_TONE_MAP_ADAPTATION_CONTRAST,
-          1.f
-      );
-      _2951 = graded.r;
-      _2952 = graded.g;
-      _2953 = graded.b;
+      // float3 ungraded = float3(_2951, _2952, _2953);
+      // float3 graded = psycho_grading_only(
+      //     ungraded,
+      //     RENODX_TONE_MAP_EXPOSURE,
+      //     RENODX_TONE_MAP_HIGHLIGHTS,
+      //     RENODX_TONE_MAP_SHADOWS,
+      //     RENODX_TONE_MAP_CONTRAST,
+      //     RENODX_TONE_MAP_SATURATION,
+      //     RENODX_TONE_MAP_ADAPTATION_CONTRAST,
+      //     1.f
+      // );
+      // _2951 = graded.r;
+      // _2952 = graded.g;
+      // _2953 = graded.b;
 
     float _2972 = min(max(log2(mad(_2953, 0.07922374457120895f, mad(_2952, 0.07843360304832458f, (_2951 * 0.8424790501594543f)))), -12.473930358886719f), 4.026069164276123f) + 12.473930358886719f;
     float _2973 = min(max(log2(mad(_2953, 0.07916612923145294f, mad(_2952, 0.8784686326980591f, (_2951 * 0.04232824221253395f)))), -12.473930358886719f), 4.026069164276123f) + 12.473930358886719f;

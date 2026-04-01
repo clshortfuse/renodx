@@ -44,7 +44,11 @@ float3 main(
   float _49 = _33 + TEXCOORD.y;
   float3 _50 = __3__36__0__0__g_blade.SampleLevel(__0__4__0__0__g_staticBilinearClamp, float2(_34, _49), 0.0f);
   float3 _57 = __3__36__0__0__g_blade.SampleLevel(__0__4__0__0__g_staticBilinearClamp, float2(_41, _49), 0.0f);
-  float _65 = ((float4(_lensFlareColorScale, __3__1__0__0__GlobalPushConstants_006y, __3__1__0__0__GlobalPushConstants_006z, __3__1__0__0__GlobalPushConstants_006w).x) * 8.0f) * select(((float4(_lensFlareColorScale, __3__1__0__0__GlobalPushConstants_006y, __3__1__0__0__GlobalPushConstants_006z, __3__1__0__0__GlobalPushConstants_006w).x) < 1.000100016593933f), 1.0f, ((1.0f / min(max(0.5f, _exposure0.y), 10.0f)) + (max(0.009999999776482582f, min(1.0f, _exposure0.y)) * 3.0f)));
+
+  // RenoDX: Use the slow exposure (_exposure4.z) for lens flares
+  // intensity scaling to prevent exposure jitter.
+  float _lfExposure = (IMPROVED_AUTO_EXPOSURE >= 1) ? max(_exposure4.z, 0.001f) : _exposure0.y;
+  float _65 = ((float4(_lensFlareColorScale, __3__1__0__0__GlobalPushConstants_006y, __3__1__0__0__GlobalPushConstants_006z, __3__1__0__0__GlobalPushConstants_006w).x) * 8.0f) * select(((float4(_lensFlareColorScale, __3__1__0__0__GlobalPushConstants_006y, __3__1__0__0__GlobalPushConstants_006z, __3__1__0__0__GlobalPushConstants_006w).x) < 1.000100016593933f), 1.0f, ((1.0f / min(max(0.5f, _lfExposure), 10.0f)) + (max(0.009999999776482582f, min(1.0f, _lfExposure)) * 3.0f)));
   float _69 = (float4(_lensFlareColorScale, __3__1__0__0__GlobalPushConstants_006y, __3__1__0__0__GlobalPushConstants_006z, __3__1__0__0__GlobalPushConstants_006w).x) * 0.5f;
   float _lensStrength = LENS_FLARE_STRENGTH;
   SV_Target.x = exp2(log2((_69 * (((_42.x + _37.x) + _50.x) + _57.x)) + (_65 * _21.x))) * _lensStrength;

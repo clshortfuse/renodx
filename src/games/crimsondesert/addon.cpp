@@ -140,8 +140,6 @@ const std::unordered_map<std::string, float> VANILLA_VALUES = {
     {"AE_Speed", 0.f},
 
     {"DisableAWB", 0.f},
-    {"DisableHeroLights", 0.f},
-    {"AltBloom", 0.f},
 
     {"FxFilmGrainType", 0.f},
     {"FxFilmGrain", 0.f},
@@ -150,13 +148,16 @@ const std::unordered_map<std::string, float> VANILLA_VALUES = {
     {"FxSharpening", 100.f},
     {"FxLensFlareStrength", 100.f},
     {"BloomStrength", 100.f},
+    {"FxVignette", 100.f},
+
 
     {"SkyScattering", 0.f},
     {"SunMoonAdjustments", 0.f},
     {"MoonDiskSize", 1.f},
+    {"ContactShadowQuality", 0.f},
     {"MaterialImprovements", 0.f},
-};
-// const std::unordered_map<std::string, float> RECOMMENDED_SAFE_VALUES = {
+    {"RaytracingQuality", 0.f},
+};// const std::unordered_map<std::string, float> RECOMMENDED_SAFE_VALUES = {
 //     {"LocalLightHueCorrection", 25.f},
 //     {"LocalLightSaturation", 43.f},
 
@@ -183,13 +184,10 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
 
     {"ImprovedAutoExposure", 1.f},
     {"AE_DarkPowerOutdoor", 50.f},
-    {"AE_Dynamism", 40.f},
+    {"AE_Dynamism", 45.f},
     {"AE_Speed", 0.f},
-    {"AltBloom", 1.f},
-    {"GlareNormal", 10.f},
 
-    {"DisableAWB", 1.f},
-    {"DisableHeroLights", 1.f},
+    {"DisableAWB", 2.f},
 
     {"FxFilmGrainType", 1.f},
     {"FxFilmGrain", 10.f},
@@ -198,14 +196,26 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
     {"FxSharpening", 0.f},
     {"FxLensFlareStrength", 100.f},
     {"BloomStrength", 100.f},
+    {"FxVignette", 0.f},
 
     {"SkyScattering", 1.f},
     {"SunMoonAdjustments", 1.f},
     {"MoonDiskSize", 4.f},
-    {"MaterialImprovements", 1.f},
     {"ContactShadowQuality", 1.f},
+    {"MaterialImprovements", 1.f},
+    {"RaytracingQuality", 0.f},
 };
 
+// const std::unordered_map<std::string, float> MATCH_SDR_VALUES = {
+//     {"ToneMapType", 1.f},
+//     {"ColorGradeShadows", 12.f},
+//     {"ColorGradeSaturation", 70.f},
+// };
+
+const std::unordered_map<std::string, float> NEUTRAL_VALUES = {
+    {"ColorGradeShadows", 50.f},
+    {"ColorGradeSaturation", 50.f},
+};
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 //renodx::mods::shader::CustomShaders custom_shaders;
@@ -226,6 +236,7 @@ int local_lighting = crimson;
 int auto_exposure = gold;
 int effects = crimson;
 int rendering = gold;
+int wiprendering = crimson;
 
 renodx::utils::settings::Setting* tone_map_peak_nits_setting = nullptr;
 
@@ -256,10 +267,55 @@ renodx::utils::settings::Settings settings = {
         .is_global = true,
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Match SDR",
+        .section = "Grading Presets",
+        .group = "button-line-1",
+        .tooltip = "Emulates the look of the vanilla tonemapper's saturation and contrast.",
+        .on_change = []() {
+          for (auto setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (!setting->section.starts_with("Tone Mapping") && 
+            !setting->section.starts_with("Color Grading") && 
+            !setting->section.starts_with("Advanced Tone Mapping Properties")) continue;
+            // if (MATCH_SDR_VALUES.contains(setting->key)) {
+            //   renodx::utils::settings::UpdateSetting(setting->key, MATCH_SDR_VALUES.at(setting->key));
+            //   continue;
+            // }
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
+        //.is_visible = []() { return current_settings_mode >= 1.f; },
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Neutral",
+        .section = "Grading Presets",
+        .group = "button-line-1",
+        .tooltip = "Neutral color and contrast.",
+        .on_change = []() {
+          for (auto setting : settings) {
+            if (setting->key.empty()) continue;
+            if (!setting->can_reset) continue;
+            if (!setting->section.starts_with("Tone Mapping") && 
+            !setting->section.starts_with("Color Grading") && 
+            !setting->section.starts_with("Advanced Tone Mapping Properties")) continue;
+            if (NEUTRAL_VALUES.contains(setting->key)) {
+              renodx::utils::settings::UpdateSetting(setting->key, NEUTRAL_VALUES.at(setting->key));
+              continue;
+            }
+            renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
+          }
+        },
+        //.is_visible = []() { return current_settings_mode >= 1.f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ToneMapType",
-        .binding = &shader_injection.tone_map_type,
+      .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
+      .packed_values = {0u, CUSTOM_FLAGS__TONE_MAP_TYPE},
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
@@ -306,9 +362,10 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "SDRBlackCrushFix",
-        .binding = &shader_injection.sdr_black_crush_fix,
+      .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
+      .packed_values = {0u, CUSTOM_FLAGS__SDR_BLACK_CRUSH_FIX},
         .label = "Black Crush Fix",
         .section = "Tone Mapping",
         .tooltip = "Intended for gamma 2.2 displays, this fixes the gamma mismatch causing black levels to crush.",
@@ -329,7 +386,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1 && hdr_settings_toggle == 1; },
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
         new renodx::utils::settings::Setting{
         .key = "ToneMapBlowout",
@@ -342,7 +399,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1 && hdr_settings_toggle == 1; },
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
     //     new renodx::utils::settings::Setting{
     //     .key = "ColorGradeStrength",
@@ -365,7 +422,7 @@ renodx::utils::settings::Settings settings = {
         .tint = color_grading,
         .max = 2.f,
         .format = "%.2f",
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 || hdr_settings_toggle == 0; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -376,19 +433,19 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = color_grading,
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 || hdr_settings_toggle == 0; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 50.f,
+        .default_value = 12.f,
         .label = "Shadows",
         .section = "Color Grading",
         .tint = color_grading,
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 || hdr_settings_toggle == 0; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -400,19 +457,19 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tint = color_grading,
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 || hdr_settings_toggle == 0; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
         .binding = &shader_injection.tone_map_saturation,
-        .default_value = 50.f,
+        .default_value = 70.f,
         .label = "Saturation",
         .section = "Color Grading",
         .tint = color_grading,
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 || hdr_settings_toggle == 0; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -426,7 +483,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Adds contrast primarily to shadowed regions",
         .tint = color_grading,
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0 || hdr_settings_toggle == 0; },
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -521,9 +578,10 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "ImprovedAutoExposure",
-        .binding = &shader_injection.improved_auto_exposure,
+      .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
+      .packed_values = {0u, CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE},
         .can_reset = true,
         .label = "Auto Exposure",
         .section = "Auto Exposure",
@@ -550,7 +608,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "AE_Dynamism",
         .binding = &shader_injection.ae_dynamism,
-        .default_value = 40.f,
+        .default_value = 45.f,
         .can_reset = true,
         .label = "Dynamism",
         .section = "Auto Exposure",
@@ -686,167 +744,27 @@ renodx::utils::settings::Settings settings = {
     // },
     new renodx::utils::settings::Setting{
         .key = "DisableAWB",
-        .binding = &shader_injection.disable_awb,
+      .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
+      .packed_values = {0u, CUSTOM_FLAGS__DISABLE_AWB, CUSTOM_FLAGS__DISABLE_AWB | CUSTOM_FLAGS__DISABLE_HERO_LIGHTS},
         .can_reset = true,
-        .label = "Disable Auto White Balance",
+        .label = "Auto White Balance",
         .section = "Auto Exposure",
-        .tooltip = "Disables the game's per-channel auto white balance.\n"
-                   "Off = vanilla AWB (can cause hue shifts in HDR).\n"
-                   "On = AWB disabled (stable hue).",
-        .labels = {"Off", "On"},
+        .tooltip = "Controls the game's per channel auto white balance and hero lights.\n"
+                   "Vanilla = AWB enabled (can cause hue shifts in HDR).\n"
+                   "Disable AWB = AWB disabled, hero/fill lights remain.\n"
+                   "Disable AWB + Hero Lights = AWB and hero/fill lights disabled.",
+        .labels = {"Vanilla", "Disable AWB", "Disable AWB + Hero Lights"},
         .tint = auto_exposure,
         .is_visible = []() { return current_settings_mode >= 1.f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "DisableHeroLights",
-        .binding = &shader_injection.disable_hero_lights,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .can_reset = true,
-        .label = "Disable Hero Lights",
-        .section = "Auto Exposure",
-        .tooltip = "Disables hero lights and character fill lights.\n"
-                   "These are close-up lighting effects applied to characters.\n"
-                   "Only effective when Disable Auto White Balance is also On.",
-        .labels = {"Off", "On"},
-        .tint = auto_exposure,
-        .is_enabled = []() { return shader_injection.disable_awb > 0.5f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
-    },
-        new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Alt Bloom is recommended to be enabled if using Custom Auto Exposure above, Engine ties emissive properties of various meshes to bloom. Flickering in the vanilla game occurs on bloom due to temporal jitter usage\n",
-        .section = "Auto Exposure",
-        //.tint = auto_exposure,
-        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.improved_auto_exposure > 0.5f; },
-    },
-            new renodx::utils::settings::Setting{
-        .key = "AltBloom",
-        .binding = &shader_injection.alt_bloom,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .can_reset = true,
-        .label = "Alternative Bloom",
-        .section = "Auto Exposure",
-        .tooltip = "Replaces the game's bloom pipeline with a stabilised version.\n"
-                   "Off = vanilla bloom (may shimmer/flicker) especially with Alt Auto Exposure above.\n"
-                   "On = exposure decoupled bloom with per material controls.",
-        .labels = {"Off", "On"},
-        .tint = auto_exposure,
-        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.improved_auto_exposure > 0.5f; },
-    },
-        new renodx::utils::settings::Setting{
-        .key = "GlareNormal",
-        .binding = &shader_injection.glare_normal,
-        .value_type = renodx::utils::settings::SettingValueType::FLOAT,
-        .default_value = 10.f,
-        .can_reset = true,
-        .label = "Bloom: Scene Bloominess Amount",
-        .section = "Auto Exposure",
-        .tooltip = "Bloom intensity for scene bloom, increase for dreamy look.\n",
-        .tint = auto_exposure,
-        .min = 0.f,
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.improved_auto_exposure > 0.5f && shader_injection.alt_bloom > 0.5f; },
-    },
-        new renodx::utils::settings::Setting{
-        .key = "GlareSun",
-        .binding = &shader_injection.glare_sun,
-        .value_type = renodx::utils::settings::SettingValueType::FLOAT,
-        .default_value = 100.f,
-        .can_reset = true,
-        .label = "Bloom: Sun",
-        .section = "Auto Exposure",
-        .tooltip = "Bloom intensity for the sun disk.",
-        .tint = auto_exposure,
-        .min = 0.f,
-        .max = 200.f,
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.alt_bloom > 0.5f; },
-    },
-        new renodx::utils::settings::Setting{
-        .key = "GlareEmissive",
-        .binding = &shader_injection.glare_emissive,
-        .value_type = renodx::utils::settings::SettingValueType::FLOAT,
-        .default_value = 100.f,
-        .can_reset = true,
-        .label = "Bloom: Emissive (Stencil 28)",
-        .section = "Auto Exposure",
-        .tooltip = "Bloom intensity for emissive meshes.",
-        .tint = auto_exposure,
-        .min = 0.f,
-        .max = 200.f,
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.alt_bloom > 0.5f; },
-    },
-        new renodx::utils::settings::Setting{
-        .key = "GlareFog",
-        .binding = &shader_injection.glare_fog,
-        .value_type = renodx::utils::settings::SettingValueType::FLOAT,
-        .default_value = 100.f,
-        .can_reset = true,
-        .label = "Bloom: Fog/Smoke (Stencil 56)",
-        .section = "Auto Exposure",
-        .tooltip = "Bloom intensity for volumetric fog and smoke.",
-        .tint = auto_exposure,
-        .min = 0.f,
-        .max = 200.f,
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.alt_bloom > 0.5f; },
-    },
-        new renodx::utils::settings::Setting{
-        .key = "GlareParticle26",
-        .binding = &shader_injection.glare_particle26,
-        .value_type = renodx::utils::settings::SettingValueType::FLOAT,
-        .default_value = 30.f,
-        .can_reset = true,
-        .label = "Bloom: Smoke/Particles",
-        .section = "Auto Exposure",
-        .tooltip = "Bloom intensity for chimney smoke (stencil 26).",
-        .tint = auto_exposure,
-        .min = 0.f,
-        .max = 200.f,
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.alt_bloom > 0.5f; },
-    },
-        new renodx::utils::settings::Setting{
-        .key = "GlareParticle27",
-        .binding = &shader_injection.glare_particle27,
-        .value_type = renodx::utils::settings::SettingValueType::FLOAT,
-        .default_value = 100.f,
-        .can_reset = true,
-        .label = "Bloom: Local Lights",
-        .section = "Auto Exposure",
-        .tooltip = "Bloom intensity for local light sources (stencil 27).",
-        .tint = auto_exposure,
-        .min = 0.f,
-        .max = 200.f,
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.alt_bloom > 0.5f; },
-    },
-        new renodx::utils::settings::Setting{
-        .key = "GlareClamp",
-        .binding = &shader_injection.glare_clamp,
-        .value_type = renodx::utils::settings::SettingValueType::FLOAT,
-        .default_value = 20.f,
-        .can_reset = true,
-        .label = "Bloom: Output Clamp",
-        .section = "Auto Exposure",
-        .tooltip = "Soft ceiling for bloom source luminance.",
-        .tint = auto_exposure,
-        .min = 1.f,
-        .max = 200.f,
-        .parse = [](float value) { return value * 0.1f; },
-        .is_visible = []() { return current_settings_mode >= 1.f && shader_injection.alt_bloom > 0.5f; },
     },
         new renodx::utils::settings::Setting{
         .key = "FxFilmGrainType",
-        .binding = &shader_injection.custom_film_grain_type,
+          .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
+          .packed_values = {0u, CUSTOM_FLAGS__FILM_GRAIN_TYPE},
         .label = "Film Grain Type",
         .section = "Effects",
         .tooltip = "Selects between original or RenoDX film grain",
@@ -894,9 +812,10 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "FxSharpeningType",
-        .binding = &shader_injection.custom_sharpening_type,
+      .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
+      .packed_values = {0u, CUSTOM_FLAGS__SHARPENING_TYPE},
         .label = "Sharpening Type",
         .section = "Effects",
         .tooltip = "Selects between original or Lilium's RCAS sharpening",
@@ -950,9 +869,10 @@ renodx::utils::settings::Settings settings = {
 
         new renodx::utils::settings::Setting{
         .key = "SkyScattering",
-        .binding = &shader_injection.sky_scattering,
+          .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
+          .packed_values = {0u, CUSTOM_FLAGS__SKY_SCATTERING},
         .can_reset = true,
         .label = "Spectral Sky Scattering",
         .section = "Rendering",
@@ -965,9 +885,10 @@ renodx::utils::settings::Settings settings = {
     },
         new renodx::utils::settings::Setting{
         .key = "SunMoonAdjustments",
-        .binding = &shader_injection.sun_moon_adjustments,
+          .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
+          .packed_values = {0u, CUSTOM_FLAGS__SUN_MOON_ADJUSTMENTS},
         .can_reset = true,
         .label = "Sun Improvements + Moon Adjustments",
         .section = "Rendering",
@@ -981,7 +902,7 @@ renodx::utils::settings::Settings settings = {
         new renodx::utils::settings::Setting{
         .key = "MoonDiskSize",
         .binding = &shader_injection.moon_disk_size,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .can_reset = true,
         .label = "Moon Disk Size",
         .section = "Rendering",
@@ -1001,17 +922,11 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
         new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "AO for grass/foliage had to be baked into the shader, cbuffer toggles caused crashing. off will not be pure vanilla\n",
-        .section = "Rendering",
-        //.tint = rendering,
-        .is_visible = []() { return current_settings_mode >= 1.f; },
-    },
-        new renodx::utils::settings::Setting{
         .key = "ContactShadowQuality",
-        .binding = &shader_injection.contact_shadow_quality,
+          .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
+          .packed_values = {0u, CUSTOM_FLAGS__CONTACT_SHADOW_QUALITY},
         .can_reset = true,
         .label = "Grass/Foliage Improvements (WIP)",
         .section = "Rendering",
@@ -1025,27 +940,11 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
         new renodx::utils::settings::Setting{
-        .key = "RaytracingQuality",
-        .binding = &shader_injection.rt_quality,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .can_reset = true,
-        .label = "Raytracing Improvements",
-        .section = "Rendering",
-        .tooltip = "Toggles RenoDX raytracing noise improvements.\n"
-                   "Off = vanilla white noise (TEA+MCG) for all RT sampling.\n"
-                   "SPMIS = R2 blue noise + Stochastic Pairwise MIS spatial resampling.\n"
-                   "Debug Noise = visualizes the raw noise texture sample as colour output.",
-        .labels = {"Off", "SPMIS", "Debug Noise"},
-        .tint = rendering,
-        //.is_visible = []() { return current_settings_mode >= 1.f; },
-        .is_visible = []() { return debug; },
-    },
-        new renodx::utils::settings::Setting{
         .key = "MaterialImprovements",
-        .binding = &shader_injection.material_improvements,
+          .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
+          .packed_values = {0u, CUSTOM_FLAGS__MATERIAL_IMPROVEMENTS},
         .can_reset = true,
         .label = "Material Improvements",
         .section = "Rendering",
@@ -1057,6 +956,31 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "On"},
         .tint = rendering,
         .is_visible = []() { return current_settings_mode >= 1.f; },
+    },
+        new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "THIS SECTION IS EXTREMELY WIP, ATM IT IS JUST SOME RT TWEAKS WE HAVE BEEN EXPERIMENTING WITH. THERE IS A LOT OF NOISE SO ONLY USABLE FOR SCREENSHOTS\n",
+        .section = "WIP Rendering",
+        //.tint = rendering,
+        .is_visible = []() { return current_settings_mode >= 1.f; },
+    },
+        new renodx::utils::settings::Setting{
+        .key = "RaytracingQuality",
+          .binding = &shader_injection.custom_flags,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+          .packed_values = {0u, CUSTOM_FLAGS__RT_QUALITY_BIT0, CUSTOM_FLAGS__RT_QUALITY_BIT1},
+        .can_reset = true,
+        .label = "Raytracing Improvements",
+        .section = "WIP Rendering",
+        .tooltip = "Toggles RenoDX raytracing noise improvements.\n"
+                   "Off = vanilla white noise (TEA+MCG) for all RT sampling.\n"
+                   "SPMIS = R2 blue noise + Stochastic Pairwise MIS spatial resampling.\n"
+                   "Debug Noise = visualizes the raw noise texture sample as colour output.",
+        .labels = {"Off", "SPMIS", "Debug Noise"},
+        .tint = wiprendering,
+        .is_visible = []() { return current_settings_mode >= 1.f; },
+        //.is_visible = []() { return debug; },
     },
         new renodx::utils::settings::Setting{
         .key = "ShadowDebugMode",
@@ -1184,6 +1108,7 @@ void OnPresetOff() {
       {"FxLensFlareStrength", 100.f},
       {"FxSharpeningType", 0.f},
       {"FxSharpening", 100.f},
+      {"FxVignette", 100.f},
 
       {"BloomQuality", 0.f},
       {"BloomStrength", 100.f},
@@ -1198,13 +1123,10 @@ void OnPresetOff() {
       {"RaytracingQuality", 0.f},
       {"MaterialImprovements", 0.f},
       {"DisableAWB", 0.f},
-      {"DisableHeroLights", 0.f},
 
       {"ImprovedAutoExposure", 0.f},
       {"AE_Dynamism", 40.f},
       {"AE_Speed", 0.f},
-      {"AltBloom", 0.f},
-      {"GlareNormal", 0.f},
   });
 }
 
