@@ -11,6 +11,7 @@
 #include "./color/gamma.hlsl"
 #include "./color/ictcp.hlsl"
 #include "./color/ipt.hlsl"
+#include "./color/gamut.hlsl"
 #include "./color/oklab.hlsl"
 #include "./color/pq.hlsl"
 #include "./color/rgb.hlsl"
