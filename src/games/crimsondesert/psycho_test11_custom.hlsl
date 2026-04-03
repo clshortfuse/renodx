@@ -1,3 +1,5 @@
+#include "./shared.h"
+
 #ifndef RENODX_SHADERS_TONEMAP_PSYCHO_TEST11_HLSL_
 #define RENODX_SHADERS_TONEMAP_PSYCHO_TEST11_HLSL_
 
@@ -345,7 +347,8 @@ float3 psychotm_test11(
     float exposure = 1.f,
     float highlights = 1.f,
     float shadows = 1.f,
-    float contrast = 1.f,
+    float contrast_high = 1.f,
+    float contrast_low = 1.f,
     float purity_scale = 1.f,
     float bleaching_intensity = 0.f,
     float clip_point = 100.f,
@@ -374,8 +377,13 @@ float3 psychotm_test11(
   if (shadows != 1.f) {
     lum_target = psycho11_Shadows(lum_target, shadows, lum_midgray);
   }
-  if (contrast != 1.f) {
-    lum_target = psycho11_ContrastSafe(lum_target, contrast, lum_midgray);
+  if (contrast_high != 1.f || contrast_low != 1.f) {
+    if (lum_current < lum_midgray) {
+      lum_target = psycho11_ContrastSafe(lum_target, contrast_low, lum_midgray);
+    } else {
+      lum_target = psycho11_ContrastSafe(lum_target, contrast_high, lum_midgray);
+    }
+    
   }
 
   float lum_scale = psycho11_DivideSafe(lum_target, lum_current, 1.f);
@@ -414,9 +422,10 @@ float3 psychotm_test11(
     }
   }
 
-  float3 bt2020_scene_unit = psycho11_BT2020FromLMS(lms_scene_unit);
-  bt2020_scene_unit *= exposure2; // Apply the post-curve linear multiplier in BT.2020 space for more accurate SDR simulation
-  lms_scene_unit = psycho11_LMSFromBT2020(bt2020_scene_unit);
+  //float3 bt2020_scene_unit = psycho11_BT2020FromLMS(lms_scene_unit);
+  //bt2020_scene_unit *= exposure2; // Apply the post-curve linear multiplier in BT.2020 space for more accurate SDR simulation
+  //lms_scene_unit = psycho11_LMSFromBT2020(bt2020_scene_unit);
+  lms_scene_unit *= lerp(1.f, exposure2, CUSTOM_TONE_MAP_MIDGRAY_ADJUST);
 
   float3 lms_unit = lms_scene_unit;
   if (bleaching_intensity != 0.f) {

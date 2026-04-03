@@ -537,12 +537,15 @@ void main(
             float _341 = saturate(_287);
             float _342 = sqrt(_341);
             float _343 = _339 - _340;
+            // Vanilla path (IMPROVED_AUTO_EXPOSURE == 0): keep this sky/occlusion-dependent
+            // bias term active. Mode 2 zeros it and replaces it with explicit HDR shaping.
             float _344 = (IMPROVED_AUTO_EXPOSURE == 2) ? 0.0f : (_343 * _342);
             float _345 = _198_filtered * 8.0f;
             float _346 = log2(_345);
             float _347 = _346 - _340;
             float _348 = _347 - _344;
             float _349 = exp2(_348);
+            // Baseline game exposure target. In mode 0 this value is used directly.
             float _350_vanilla = 0.8333333134651184f / _349;
 
             float _350;
@@ -569,6 +572,7 @@ void main(
               }
               _350 = clamp(exp2(logTarget), 0.02f, 5.0f);
             } else {
+              // Mode 0/1: use the original target curve (no mode-2 log-power remap).
               _350 = _350_vanilla;
             }
 
@@ -600,6 +604,8 @@ void main(
                 _381 = exp2(logNew);
               } else {
                 // --- Vanilla asymmetric temporal adaptation ---
+                // Mode 0 stays here: brighten in reciprocal space, darken in linear
+                // space, matching the game's original adaptation behavior.
 
                 float time_scale = _timeNoScale.z;
                 if (IMPROVED_AUTO_EXPOSURE == 1.f) time_scale = lerp(time_scale, time_scale * 3.f, AE_SPEED);
@@ -687,6 +693,7 @@ void main(
                   _424 = 1.0f;
                 }
                 float _425 = _424 * _381;
+                // Mode 0/1: no extra EV bias; output remains the vanilla-scaled exposure.
                 // Apply EV bias for IMPROVED mode (compensates for zeroed _323 push constant correction)
                 _427 = (IMPROVED_AUTO_EXPOSURE == 2) ? (_425 * exp2(AE_EV_BIAS)) : _425;
               } else {
@@ -694,9 +701,17 @@ void main(
               }
 
               // if (IMPROVED_AUTO_EXPOSURE == 1) _427 = min(_427, lerp(1.f, 11.f, AE_DARK_POWER_OUTDOOR));
-              //if (IMPROVED_AUTO_EXPOSURE == 1) _427 = min(_427, 7.f);
-              //if (IMPROVED_AUTO_EXPOSURE == 1) _427 = renodx::color::grade::Contrast(_427, 1.f * AE_DARK_POWER_OUTDOOR, 0.18f);
-              if (IMPROVED_AUTO_EXPOSURE == 1) _427 = NakaRushton(_427, lerp(1.f, 100.f, AE_DARK_POWER_OUTDOOR), 0.05f, 0.05f, AE_DYNAMISM).x;
+              // if (IMPROVED_AUTO_EXPOSURE == 1) _427 = min(_427, 7.f);
+              // if (IMPROVED_AUTO_EXPOSURE == 1) _427 = renodx::color::grade::Contrast(_427, 1.f * AE_DARK_POWER_OUTDOOR, 0.18f);
+              if (IMPROVED_AUTO_EXPOSURE == 1) {
+                const float pivot = 0.1f;
+                if (_427 > pivot) {
+                  _427 = NakaRushton(_427, 10000.f, pivot, pivot, AE_DYNAMISM_HIGH).x;
+                } else {
+                  _427 = NakaRushton(_427, 10000.f, pivot, pivot, 2.f - AE_DYNAMISM_LOW).x;
+                }
+                
+              }
 
               __3__39__0__1__g_exposureUAV[0] = _427;
               float _428 = select(_414, _param3.y, _381);

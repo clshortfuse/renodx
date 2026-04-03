@@ -37,14 +37,16 @@
 
 #define RENODX_TONE_MAP_HUE_RESTORE            shader_injection.tone_map_hue_restore
 #define RENODX_TONE_MAP_BLOWOUT                shader_injection.tone_map_blowout
+#define CUSTOM_TONE_MAP_MIDGRAY_ADJUST         1.f // shader_injection.custom_tone_map_midgray_adjust
 #define RENODX_COLOR_GRADE_STRENGTH            1.f
 
 #define RENODX_TONE_MAP_EXPOSURE               shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS             shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS                shader_injection.tone_map_shadows
-#define RENODX_TONE_MAP_CONTRAST               shader_injection.tone_map_contrast
+#define RENODX_TONE_MAP_CONTRAST_HIGH          shader_injection.tone_map_contrast_high
+#define RENODX_TONE_MAP_CONTRAST_LOW           shader_injection.tone_map_contrast_low
 #define RENODX_TONE_MAP_SATURATION             shader_injection.tone_map_saturation
-#define RENODX_TONE_MAP_ADAPTATION_CONTRAST    shader_injection.tone_map_adaptation_contrast
+//#define RENODX_TONE_MAP_ADAPTATION_CONTRAST    shader_injection.tone_map_adaptation_contrast
 
 #define CUSTOM_FILM_GRAIN_TYPE                 ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__FILM_GRAIN_TYPE) != 0u ? 1.f : 0.f)
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
@@ -81,10 +83,12 @@
 #define SKY_SCATTERING                         ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__SKY_SCATTERING) != 0u ? 1.f : 0.f)
 
 // Auto exposure tuning
-#define AE_DARK_POWER_OUTDOOR                  shader_injection.ae_dark_power_outdoor
-#define AE_DYNAMISM                            shader_injection.ae_dynamism
+//#define AE_DARK_POWER_OUTDOOR                  shader_injection.ae_dark_power_outdoor
+#define AE_DYNAMISM_HIGH                       shader_injection.ae_dynamism_high
+#define AE_DYNAMISM_LOW                        shader_injection.ae_dynamism_low
 #define AE_SPEED                               shader_injection.ae_speed
 #define FOLIAGE_SHADOW_SENSITIVITY             0
+#define AE_DARK_POWER_OUTDOOR                  0.45f
 #define AE_DARK_POWER_INDOOR                   0.55f
 #define AE_BRIGHT_POWER_OUTDOOR                1.00f
 #define AE_BRIGHT_POWER_INDOOR                 1.00f
@@ -115,13 +119,15 @@ struct ShaderInjectData {
 
   float tone_map_hue_restore;
   float tone_map_blowout;
+  //float custom_tone_map_midgray_adjust;
 
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;
-  float tone_map_contrast;
+  float tone_map_contrast_low;
+  float tone_map_contrast_high;
   float tone_map_saturation;
-  float tone_map_adaptation_contrast;
+  //float tone_map_adaptation_contrast;
 
   float custom_film_grain;
   float custom_random;
@@ -133,8 +139,9 @@ struct ShaderInjectData {
   float local_light_hue_correction;
   float local_light_saturation;
 
-  float ae_dark_power_outdoor;
-  float ae_dynamism;
+  //float ae_dark_power_outdoor;
+  float ae_dynamism_high;
+  float ae_dynamism_low;
   float ae_speed;
 
   float moon_disk_size;
