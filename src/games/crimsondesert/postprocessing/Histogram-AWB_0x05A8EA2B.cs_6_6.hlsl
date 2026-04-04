@@ -377,8 +377,8 @@ void main(
   // RenoDX: When alt auto exposure is toggled, use the filtered exposure
   // from _exposure4.z (slot 18) instead of the fast _exposure0.y to decouple
   // glare intensity from jitter.
-  float _glareExposure = (IMPROVED_AUTO_EXPOSURE >= 1) ? max(_exposure4.z, 0.001f) : _exposure0.y;
-  float _glareExposure2 = (IMPROVED_AUTO_EXPOSURE >= 1) ? max(_exposure4.z, 0.001f) : _exposure2.x;
+  float _glareExposure = (IMPROVED_AUTO_EXPOSURE == 1) ? max(_exposure4.z, 0.001f) : _exposure0.y;
+  float _glareExposure2 = (IMPROVED_AUTO_EXPOSURE == 1) ? max(_exposure4.z, 0.001f) : _exposure2.x;
   if (_127) {
     float _236 = min(_glareExposure2, 2.0f);
     float _237 = max(_236, 0.5f);
@@ -533,34 +533,85 @@ void main(
   float _393 = _bufferSizeAndInvSize.y - _390;
   bool _394 = false;
   bool _395 = !((_391 <= _390) || (_391 >= _393));
-  float3 _396_398 = _395 ? _43.xyz : 0.0f.xxx;
-    float _396 = _396_398.x;
-    float _397 = _396_398.y;
-    float _398 = _396_398.z;
-    float _399 = dot(_396_398, float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
+  float _396;
+  float _397;
+  float _398;
+  float _399;
   float4 _402 = __3__36__0__0__g_sceneColorLightingOnlyForAwb.SampleLevel(__0__4__0__0__g_staticPointClamp, float2(_34, _35), 0.0f);
   bool _404 = (_402.w > 0.0f);
   float _406 = __3__36__0__0__g_depth.SampleLevel(__0__4__0__0__g_staticPointClamp, float2(_34, _35), 0.0f);
   bool _408 = (_406.x < 1.0000000116860974e-07f);
   bool _409 = (_406.x == 1.0f);
   bool _410 = (_408) || (_409);
-  int _411 = select(_410, 1, 4);
+  int _411_base = select(_410, 1, 4);
+  int _411;
   float4 _412 = _histogramParam;
   float _413 = _412.x;
   float _414 = _412.y;
-  float _415 = log2(_399);
-  float _416 = _415 * _413;
-  float _417 = _416 + _414;
-  float _418 = saturate(_417);
-  float _419 = _418 * 255.0f;
-  uint _420 = uint(_419);
+  uint _420;
+
+  [branch]
+  if (IMPROVED_AUTO_EXPOSURE == 2) {
+    // PsychoV17 / Perceptual AE histogram path:
+    // - meter the full frame instead of the vanilla center strip crop
+    // - use Yf rather than Rec.709 luminance for the scalar histogram value
+    // - center-weight samples with a gaussian so adaptation stays focused
+    float _psychov17_du = _34 - 0.5f;
+    float _psychov17_dv = _35 - 0.5f;
+    float _psychov17_sigma = 0.25f;
+    float _psychov17_radius2 = (_psychov17_du * _psychov17_du) + (_psychov17_dv * _psychov17_dv);
+    float _psychov17_gaussian = exp((-0.5f * _psychov17_radius2) / (_psychov17_sigma * _psychov17_sigma));
+    _396 = _43.x;
+    _397 = _43.y;
+    _398 = _43.z;
+    _399 = renodx::color::yf::from::BT709(float3(_396, _397, _398));
+    _411 = max(_411_base, int(round(float(_411_base) * _psychov17_gaussian * 4.0f)));
+
+    if (_399 <= 0.0f) {
+      _420 = 0u;
+    } else {
+      float _415 = log2(_399);
+      float _416 = _415 * _413;
+      float _417 = _416 + _414;
+      float _418 = saturate(_417);
+      float _419 = _418 * 255.0f;
+      _420 = uint(_419);
+    }
+  } else {
+    // Vanilla histogram path:
+    // - crop to the center strip only
+    // - use Rec.709 luminance
+    // - use the original sample weight
+    float3 _histogram_sample_bt709 = _395 ? _43.xyz : 0.0f.xxx;
+    _396 = _histogram_sample_bt709.x;
+    _397 = _histogram_sample_bt709.y;
+    _398 = _histogram_sample_bt709.z;
+    _399 = dot(_histogram_sample_bt709, float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
+    _411 = _411_base;
+
+    if (_399 <= 0.0f) {
+      _420 = 0u;
+    } else {
+      float _415 = log2(_399);
+      float _416 = _415 * _413;
+      float _417 = _416 + _414;
+      float _418 = saturate(_417);
+      float _419 = _418 * 255.0f;
+      _420 = uint(_419);
+    }
+  }
   float _421 = dot(float3(_228, _229, _230), float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
-  float _422 = log2(_421);
-  float _423 = _422 * _413;
-  float _424 = _423 + _414;
-  float _425 = saturate(_424);
-  float _426 = _425 * 255.0f;
-  uint _427 = uint(_426);
+  uint _427;
+  if (_421 <= 0.0f) {
+    _427 = 0u;
+  } else {
+    float _422 = log2(_421);
+    float _423 = _422 * _413;
+    float _424 = _423 + _414;
+    float _425 = saturate(_424);
+    float _426 = _425 * 255.0f;
+    _427 = uint(_426);
+  }
   int _429; InterlockedAdd(g_tempHistogram2[_427], _411, _429);
   int _431; InterlockedAdd(g_tempHistogram[_420], _411, _431);
   bool _432 = !(_406.x < 1.0000000116860974e-07f);
@@ -602,24 +653,73 @@ void main(
       float4 _447 = _histogramParam;
       float _448 = _447.x;
       float _449 = _447.y;
-      float _450 = log2(_446);
-      float _451 = _450 * _448;
-      float _452 = _451 + _449;
-      float _453 = saturate(_452);
-      float _454 = log2(_444);
-      float _455 = _454 * _448;
-      float _456 = _455 + _449;
-      float _457 = saturate(_456);
-      float _458 = log2(_442);
-      float _459 = _458 * _448;
-      float _460 = _459 + _449;
-      float _461 = saturate(_460);
-      float _462 = _453 * 255.0f;
-      float _463 = _457 * 255.0f;
-      float _464 = _461 * 255.0f;
-      uint _465 = uint(_462);
-      uint _466 = uint(_463);
-      uint _467 = uint(_464);
+      uint _465;
+      uint _466;
+      uint _467;
+      [branch]
+      if (IMPROVED_AUTO_EXPOSURE == 2) {
+        if (_446 <= 0.0f) {
+          _465 = 0u;
+        } else {
+          float _450 = log2(_446);
+          float _451 = _450 * _448;
+          float _452 = _451 + _449;
+          float _453 = saturate(_452);
+          float _462 = _453 * 255.0f;
+          _465 = uint(_462);
+        }
+        if (_444 <= 0.0f) {
+          _466 = 0u;
+        } else {
+          float _454 = log2(_444);
+          float _455 = _454 * _448;
+          float _456 = _455 + _449;
+          float _457 = saturate(_456);
+          float _463 = _457 * 255.0f;
+          _466 = uint(_463);
+        }
+        if (_442 <= 0.0f) {
+          _467 = 0u;
+        } else {
+          float _458 = log2(_442);
+          float _459 = _458 * _448;
+          float _460 = _459 + _449;
+          float _461 = saturate(_460);
+          float _464 = _461 * 255.0f;
+          _467 = uint(_464);
+        }
+      } else {
+        if (_446 <= 0.0f) {
+          _465 = 0u;
+        } else {
+          float _450 = log2(_446);
+          float _451 = _450 * _448;
+          float _452 = _451 + _449;
+          float _453 = saturate(_452);
+          float _462 = _453 * 255.0f;
+          _465 = uint(_462);
+        }
+        if (_444 <= 0.0f) {
+          _466 = 0u;
+        } else {
+          float _454 = log2(_444);
+          float _455 = _454 * _448;
+          float _456 = _455 + _449;
+          float _457 = saturate(_456);
+          float _463 = _457 * 255.0f;
+          _466 = uint(_463);
+        }
+        if (_442 <= 0.0f) {
+          _467 = 0u;
+        } else {
+          float _458 = log2(_442);
+          float _459 = _458 * _448;
+          float _460 = _459 + _449;
+          float _461 = saturate(_460);
+          float _464 = _461 * 255.0f;
+          _467 = uint(_464);
+        }
+      }
       int _469; InterlockedAdd(g_tempHistogramR[_465], _411, _469);
       int _471; InterlockedAdd(g_tempHistogramG[_466], _411, _471);
       int _473; InterlockedAdd(g_tempHistogramB[_467], _411, _473);
@@ -648,7 +748,7 @@ void main(
   float _500 = _499 + _398;
   // RenoDX: Use slow exposure for glare instance threshold to
   // stop shimmering due to jitter
-  float _glareThresholdExp = (IMPROVED_AUTO_EXPOSURE >= 1) ? max(_exposure4.z, 0.001f) : _exposure2.x;
+  float _glareThresholdExp = (IMPROVED_AUTO_EXPOSURE == 1) ? max(_exposure4.z, 0.001f) : _exposure2.x;
   float _503 = saturate(_glareThresholdExp);
   float _504 = _503 * 900.0f;
   float _505 = _504 + 100.0f;

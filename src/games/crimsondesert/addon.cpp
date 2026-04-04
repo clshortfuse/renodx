@@ -176,8 +176,9 @@ const std::unordered_map<std::string, float> VANILLA_VALUES = {
 //     {"DisableVRS", 1.f}
 // };
 const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
-    {"ImprovedAutoExposure", 1.f},
+    {"ImprovedAutoExposure", 2.f},
     //{"AE_DynamismHigh", 45.f},
+    {"AE_Speed", 50.f},
 
     {"DisableAWB", 2.f},
 
@@ -204,7 +205,7 @@ const std::unordered_map<std::string, float> MATCH_SDR_VALUES = {
 };
 
 const std::unordered_map<std::string, float> NEUTRAL_VALUES = {
-    {"ColorGradeShadows", 50.f},
+    {"ColorGradeContrastLow", 50.f},
     {"ColorGradeSaturation", 50.f},
 };
 
@@ -324,8 +325,8 @@ renodx::utils::settings::Settings settings = {
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
-        .tooltip = "Sets the tone mapper type.\nVanilla uses the unmodified ACESv2 tone mapper with in-game sliders.\nPsychoV uses our custom psychovisual tone mapping system.",
-        .labels = {"Vanilla (ACESv2)","PsychoV-11"},
+        .tooltip = "Sets the tone mapper type.\nVanilla uses the unmodified vanilla tone mapper with in-game sliders.\nPsychoV uses our custom psychovisual tone mapping system.",
+        .labels = {"Vanilla (ACESv2)","PsychoV-17"},
         .tint = tone_mapping,
         .parse = [](float value) { return value; },
         //.is_visible = []() { return hdr_settings_toggle == 1; },
@@ -494,7 +495,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
         .binding = &shader_injection.tone_map_saturation,
-        .default_value = 65.f,
+        .default_value = 70.f,
         .label = "Saturation",
         .section = "Color Grading",
         .tint = color_grading,
@@ -504,19 +505,19 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
 
-    // new renodx::utils::settings::Setting{
-    //     .key = "ColorGradeAdaptationContrast",
-    //     .binding = &shader_injection.tone_map_adaptation_contrast,
-    //     .default_value = 50.f,
-    //     .label = "Adaptation Contrast",
-    //     .section = "Color Grading",
-    //     .tooltip = "Adds contrast primarily to shadowed regions",
-    //     .tint = color_grading,
-    //     .max = 100.f,
-    //     .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
-    //     .parse = [](float value) { return value * 0.02f; },
-    //     .is_visible = []() { return current_settings_mode >= 1; },
-    // },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeConeContrast",
+        .binding = &shader_injection.tone_map_cone_contrast,
+        .default_value = 50.f,
+        .label = "Cone Contrast",
+        .section = "Color Grading",
+        .tooltip = "Adds contrast primarily to shadowed regions",
+        .tint = color_grading,
+        .max = 100.f,
+        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .parse = [](float value) { return value * 0.02f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
         new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Recommended",
@@ -623,12 +624,12 @@ renodx::utils::settings::Settings settings = {
       .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
-      .packed_values = {0u, CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE},
+      .packed_values = {0u, CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE, CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE_PERCEPTUAL},
         .can_reset = true,
         .label = "Auto Exposure",
         .section = "Auto Exposure",
-        .tooltip = "Enables control over the brightness of dark and bright scenes.",
-        .labels = {"Vanilla", "Custom"},
+        .tooltip = "Enables control over the brightness of dark and bright scenes.\nCustom provides control over dark and bright scene brightness, anchored in vanilla behavior.\nCustom Perceptual uses a more advanced system that attempts to emulate the human eye.",
+        .labels = {"Vanilla", "Custom", "Custom Perceptual"},
         .tint = auto_exposure,
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -647,6 +648,21 @@ renodx::utils::settings::Settings settings = {
     //     .is_visible = []() { return current_settings_mode >= 1.f; },
     //     //.is_visible = []() { return debug; },
     // },
+            new renodx::utils::settings::Setting{
+        .key = "AE_DarkExposureLimit",
+        .binding = &shader_injection.ae_dark_exposure_limit,
+        .default_value = 50.f,
+        .can_reset = true,
+        .label = "Low Light Exposure Limit",
+        .section = "Auto Exposure",
+        .tooltip = "Adjusts the max exposure value that can be applied, controlling how dark the game is allowed to get.",
+        .tint = auto_exposure,
+        .max = 100.f,
+        .is_enabled = []() { return IMPROVED_AUTO_EXPOSURE == 2; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1.f; },
+        //.is_visible = []() { return debug; },
+    },
     new renodx::utils::settings::Setting{
         .key = "AE_DynamismHigh",
         .binding = &shader_injection.ae_dynamism_high,
@@ -657,7 +673,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls brightness level of dark scenes. 50 = neutral",
         .tint = auto_exposure,
         .max = 100.f,
-        .is_enabled = []() { return IMPROVED_AUTO_EXPOSURE > 0; },
+        .is_enabled = []() { return IMPROVED_AUTO_EXPOSURE == 1; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
         //.is_visible = []() { return debug; },
@@ -672,7 +688,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Controls brightness level of bright scenes. 50 = neutral",
         .tint = auto_exposure,
         .max = 100.f,
-        .is_enabled = []() { return IMPROVED_AUTO_EXPOSURE > 0; },
+        .is_enabled = []() { return IMPROVED_AUTO_EXPOSURE == 1; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
         //.is_visible = []() { return debug; },
@@ -1120,12 +1136,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Game mod by Forge and Jon (OopyDoopy/Kickfister), RenoDX Framework by Shortfuse",
-        .section = "About",
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Extra special thanks to Shortfuse for all the extra work on the shader decompiler for this one!",
+        .label = "Game mod by Forge, Jon (OopyDoopy/Kickfister), and Shortfuse, RenoDX Framework by Shortfuse",
         .section = "About",
     },
         new renodx::utils::settings::Setting{
@@ -1155,8 +1166,11 @@ void OnPresetOff() {
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 50.f},
+      {"ColorGradeContrastLow", 50.f},
+      {"ColorGradeContrastHigh", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeAdaptationContrast", 50.f},
+      {"ColorGradeConeContrast", 50.f},
 
       {"FxFilmGrainType", 0.f},
       {"FxFilmGrain", 50.f},

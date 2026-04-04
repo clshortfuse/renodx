@@ -1,7 +1,9 @@
-#include "./shared.h"
-#include "./psycho_test11_custom.hlsl"
-#include "./macleod_boynton.hlsli"
 #include "./lilium_rcas.hlsl"
+#include "./macleod_boynton.hlsli"
+#include "./psycho_test11_custom.hlsl"
+#include "./psycho_test17_custom.hlsl"
+#include "./shared.h"
+
 
 float NR(float x, float sigma, float n) {
   float ax = abs(x);
@@ -213,7 +215,81 @@ float3 GammaCorrectionByLuminosity(float3 color, bool pow_to_srgb = false, float
   return color_out;
 }
 
-float3 ProcessTonemap(float3 untonemapped_bt709, float calculated_peak, float mid_gray_scale) {
+float3 CustomPsychoV17Peak(
+    float3 untonemapped_bt709,
+    float current_average,
+    float target_average,
+    float peak_value,
+    float mid_gray_scale = 1.f,
+    int gamut_compression_mode = 1) {
+  if (target_average <= 0.0f) {
+    return 0.0f.xxx;
+  }
+
+  float3 bt709_scene = untonemapped_bt709 * RENODX_TONE_MAP_EXPOSURE;
+  bool has_valid_anchor = (current_average > 0.0f) && (target_average > 0.0f);
+  float boosted = has_valid_anchor ? (target_average / current_average) : 1.0f;
+  if (has_valid_anchor) {
+    bt709_scene *= boosted;
+  }
+
+  float3 lms_in = renodx::color::lms::from::BT709(bt709_scene);
+  float yf_input = renodx::color::yf::from::LMS(lms_in);
+  float yf_midgray = renodx::color::yf::from::BT709(0.18f);
+  float yf_target = yf_input;
+
+  if (RENODX_TONE_MAP_HIGHLIGHTS != 1.f) {
+    yf_target = renodx::color::grade::Highlights(yf_target, RENODX_TONE_MAP_HIGHLIGHTS, yf_midgray);
+  }
+  if (RENODX_TONE_MAP_SHADOWS != 1.f) {
+    yf_target = renodx::color::grade::Shadows(yf_target, RENODX_TONE_MAP_SHADOWS, yf_midgray);
+  }
+  float contrast = yf_target > yf_midgray ? RENODX_TONE_MAP_CONTRAST_HIGH : RENODX_TONE_MAP_CONTRAST_LOW;
+  if (contrast != 1.f) {
+    yf_target = renodx::color::grade::ContrastSafe(yf_target, contrast, yf_midgray);
+  }
+  yf_target *= mid_gray_scale;
+
+  float yf_scale = renodx::math::DivideSafe(yf_target, yf_input, 1.f);
+  bt709_scene *= yf_scale;
+  if (has_valid_anchor) {
+    bt709_scene /= boosted;
+  }
+
+  float anchor_in = has_valid_anchor ? current_average : target_average;
+  float anchor_out = target_average;
+
+  return renodx::tonemap::psycho::psychotm_test17(
+      bt709_scene,
+      peak_value,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      RENODX_TONE_MAP_SATURATION,
+      RENODX_TONE_MAP_BLOWOUT,
+      100.f,
+      RENODX_TONE_MAP_HUE_RESTORE,
+      1.0,
+      1,
+      RENODX_TONE_MAP_CONE_CONTRAST,
+      anchor_in,
+      anchor_out,
+      1.f,
+      gamut_compression_mode);
+}
+
+float3 CustomPsychoV17AutoExposure(float3 untonemapped_bt709, float peak, float mid_gray_scale,float current_average, float target_average, bool is_sdr = false) {
+  return CustomPsychoV17Peak(
+      untonemapped_bt709,
+      current_average,
+      target_average,
+      peak,
+      mid_gray_scale,
+      (int)(!is_sdr));
+}
+
+float3 ProcessTonemap(float3 untonemapped_bt709, float calculated_peak, float mid_gray_scale, float current_average, float target_average, bool is_sdr = false) {
   const float white_clip = 100.f;
   const int white_curve_mode = 1;
 
@@ -222,6 +298,8 @@ float3 ProcessTonemap(float3 untonemapped_bt709, float calculated_peak, float mi
     float contrast_high = RENODX_TONE_MAP_CONTRAST_HIGH;
     float contrast_low = RENODX_TONE_MAP_CONTRAST_LOW;
     float saturation = RENODX_TONE_MAP_SATURATION;
+
+    #if 0
 
     output_color = psychotm_test11(
         // output_color * 1.1539f,  // mid-gray adjusted
@@ -241,18 +319,50 @@ float3 ProcessTonemap(float3 untonemapped_bt709, float calculated_peak, float mi
         saturation,  // cone_response_exponent
         mid_gray_scale
     );
+#else
+
+    output_color = CustomPsychoV17AutoExposure(
+        output_color,
+        calculated_peak,
+        mid_gray_scale,
+        current_average,
+        target_average,
+        is_sdr);
+    // output_color = renodx::tonemap::psycho::psychotm_test17_custom(
+    //     output_color,
+    //     calculated_peak,
+    //     lerp(1.f, mid_gray_scale, 1.f),
+    //     RENODX_TONE_MAP_EXPOSURE,
+    //     RENODX_TONE_MAP_HIGHLIGHTS,
+    //     RENODX_TONE_MAP_SHADOWS,
+    //     contrast_high / saturation,
+    //     contrast_low / saturation,
+    //     1.0,
+    //     RENODX_TONE_MAP_BLOWOUT,
+    //     white_clip,
+    //     RENODX_TONE_MAP_HUE_RESTORE,  // hue_restore
+    //     1.f, // adaptation_contrast
+    //     white_curve_mode,
+    //     saturation,  // cone_response_exponent
+    //     0.18f,
+    //     0.18f,
+    //     1.f,
+    //    (int)(!is_sdr)
+    //);
+
+    #endif
   }
   return output_color;
 }
 
-float3 CustomTonemap(float3 untonemapped_bt709, float mid_gray_scale = 1.f) {
+float3 CustomTonemap(float3 untonemapped_bt709, float mid_gray_scale = 1.f, float current_average = 0.18f, float target_average = 0.18f) {
   float calculated_peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
 
   if (RENODX_GAMMA_CORRECTION > 0.f) {
     calculated_peak = RENODX_GAMMA_CORRECTION == 1.f ? renodx::color::correct::GammaSafe(calculated_peak, true) : GammaCorrectionByLuminosity(calculated_peak, true).x;
   }
 
-  float3 output_color = ProcessTonemap(untonemapped_bt709, calculated_peak, mid_gray_scale);
+  float3 output_color = ProcessTonemap(untonemapped_bt709, calculated_peak, mid_gray_scale, current_average, target_average, false);
 
   if (RENODX_GAMMA_CORRECTION > 0.f) {
     output_color = RENODX_GAMMA_CORRECTION == 1.f ? renodx::color::correct::GammaSafe(output_color) : GammaCorrectionByLuminosity(output_color);
@@ -261,11 +371,11 @@ float3 CustomTonemap(float3 untonemapped_bt709, float mid_gray_scale = 1.f) {
   return output_color;
 }
 
-float3 CustomTonemapSDR(float3 untonemapped_bt709, float mid_gray_scale) {
+float3 CustomTonemapSDR(float3 untonemapped_bt709, float mid_gray_scale, float current_average, float target_average) {
   float calculated_peak = 1.f;
   calculated_peak = CUSTOM_SDR_BLACK_CRUSH_FIX == 1 ? renodx::color::correct::GammaSafe(calculated_peak) : calculated_peak;
 
-  float3 output_color = ProcessTonemap(untonemapped_bt709, calculated_peak, mid_gray_scale);
+  float3 output_color = ProcessTonemap(untonemapped_bt709, calculated_peak, mid_gray_scale, current_average, target_average, true);
 
   return output_color;
 }

@@ -6,19 +6,20 @@
 #include <cstdint>
 #endif
 
-#define CUSTOM_FLAGS__TONE_MAP_TYPE            0b0000000000001u
-#define CUSTOM_FLAGS__SDR_BLACK_CRUSH_FIX      0b0000000000010u
-#define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE   0b0000000000100u
-#define CUSTOM_FLAGS__DISABLE_AWB              0b0000000001000u
-#define CUSTOM_FLAGS__DISABLE_HERO_LIGHTS      0b0000000010000u
-#define CUSTOM_FLAGS__FILM_GRAIN_TYPE          0b0000000100000u
-#define CUSTOM_FLAGS__SHARPENING_TYPE          0b0000001000000u
-#define CUSTOM_FLAGS__SKY_SCATTERING           0b0000010000000u
-#define CUSTOM_FLAGS__SUN_MOON_ADJUSTMENTS     0b0000100000000u
-#define CUSTOM_FLAGS__CONTACT_SHADOW_QUALITY   0b0001000000000u
-#define CUSTOM_FLAGS__RT_QUALITY_BIT0          0b0010000000000u
-#define CUSTOM_FLAGS__RT_QUALITY_BIT1          0b0100000000000u
-#define CUSTOM_FLAGS__MATERIAL_IMPROVEMENTS    0b1000000000000u
+#define CUSTOM_FLAGS__TONE_MAP_TYPE                    0b0000000000001u
+#define CUSTOM_FLAGS__SDR_BLACK_CRUSH_FIX              0b0000000000010u
+#define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE           0b0000000000100u
+#define CUSTOM_FLAGS__DISABLE_AWB                      0b0000000001000u
+#define CUSTOM_FLAGS__DISABLE_HERO_LIGHTS              0b0000000010000u
+#define CUSTOM_FLAGS__FILM_GRAIN_TYPE                  0b0000000100000u
+#define CUSTOM_FLAGS__SHARPENING_TYPE                  0b0000001000000u
+#define CUSTOM_FLAGS__SKY_SCATTERING                   0b0000010000000u
+#define CUSTOM_FLAGS__SUN_MOON_ADJUSTMENTS             0b0000100000000u
+#define CUSTOM_FLAGS__CONTACT_SHADOW_QUALITY           0b0001000000000u
+#define CUSTOM_FLAGS__RT_QUALITY_BIT0                  0b0010000000000u
+#define CUSTOM_FLAGS__RT_QUALITY_BIT1                  0b0100000000000u
+#define CUSTOM_FLAGS__MATERIAL_IMPROVEMENTS            0b1000000000000u
+#define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE_PERCEPTUAL 0b10000000000000u
 
 #define CUSTOM_FLAGS                           shader_injection.custom_flags
 
@@ -46,7 +47,7 @@
 #define RENODX_TONE_MAP_CONTRAST_HIGH          shader_injection.tone_map_contrast_high
 #define RENODX_TONE_MAP_CONTRAST_LOW           shader_injection.tone_map_contrast_low
 #define RENODX_TONE_MAP_SATURATION             shader_injection.tone_map_saturation
-//#define RENODX_TONE_MAP_ADAPTATION_CONTRAST    shader_injection.tone_map_adaptation_contrast
+#define RENODX_TONE_MAP_CONE_CONTRAST          shader_injection.tone_map_cone_contrast
 
 #define CUSTOM_FILM_GRAIN_TYPE                 ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__FILM_GRAIN_TYPE) != 0u ? 1.f : 0.f)
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
@@ -76,7 +77,7 @@
 #define DISABLE_AWB                            ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__DISABLE_AWB) != 0u ? 1.f : 0.f)
 #define DISABLE_HERO_LIGHTS                    ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__DISABLE_HERO_LIGHTS) != 0u ? 1.f : 0.f)
 
-#define IMPROVED_AUTO_EXPOSURE                 ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE) != 0u ? 1.f : 0.f)
+#define IMPROVED_AUTO_EXPOSURE                 ((float)((((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE) != 0u) ? 1u : 0u) | (((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE_PERCEPTUAL) != 0u) ? 2u : 0u)))
 
 #define SUN_MOON_ADJUSTMENTS                   ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__SUN_MOON_ADJUSTMENTS) != 0u ? 1.f : 0.f)
 #define MOON_DISK_SIZE                         shader_injection.moon_disk_size
@@ -87,6 +88,7 @@
 #define AE_DYNAMISM_HIGH                       shader_injection.ae_dynamism_high
 #define AE_DYNAMISM_LOW                        shader_injection.ae_dynamism_low
 #define AE_SPEED                               shader_injection.ae_speed
+#define AE_DARK_EXPOSURE_LIMIT                 shader_injection.ae_dark_exposure_limit
 #define FOLIAGE_SHADOW_SENSITIVITY             0
 #define AE_DARK_POWER_OUTDOOR                  0.45f
 #define AE_DARK_POWER_INDOOR                   0.55f
@@ -127,7 +129,7 @@ struct ShaderInjectData {
   float tone_map_contrast_low;
   float tone_map_contrast_high;
   float tone_map_saturation;
-  //float tone_map_adaptation_contrast;
+  float tone_map_cone_contrast;
 
   float custom_film_grain;
   float custom_random;
@@ -143,6 +145,7 @@ struct ShaderInjectData {
   float ae_dynamism_high;
   float ae_dynamism_low;
   float ae_speed;
+  float ae_dark_exposure_limit;
 
   float moon_disk_size;
   float lens_flare_strength;

@@ -228,10 +228,29 @@ float4 main(
       float mid_gray_scale = mid_gray_adjusted / mid_gray;
       //untonemapped_bt709 *= (mid_gray_adjusted / mid_gray);
 
-      float3 tonemapped_bt709 = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale);
-      _396 = tonemapped_bt709.r;
-      _397 = tonemapped_bt709.g;
-      _398 = tonemapped_bt709.b;
+      float histogram_mean = 0.18f;
+      float histogram_target_mean = 0.18f;
+      float histogram_target = 0.18f;
+      if (IMPROVED_AUTO_EXPOSURE == 2) {
+        if (_exposure2.w > 0.0f) {
+          histogram_mean = _exposure2.w;
+        } else if (_exposure2.z > 0.0f) {
+          histogram_mean = _exposure2.z;
+        } else {
+          histogram_mean = _exposure2.x;
+        }
+
+        if (_exposure2.z > 0.0f) {
+          histogram_target_mean = _exposure2.z;
+        } else {
+          histogram_target_mean = histogram_mean;
+        }
+      }
+
+      float3 output_color = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale, histogram_mean * _124, histogram_target_mean * _124);
+      _396 = output_color.r;
+      _397 = output_color.g;
+      _398 = output_color.b;
     }
     else {
       // float3 ungraded = float3(_184, _185, _186);

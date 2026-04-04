@@ -67,10 +67,6 @@ void main(
   uint SV_GroupIndex : SV_GroupIndex
 ) {
   float4 _12 = __3__36__0__0__g_sceneColor.Load(int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), 0));
-  float new_exposure = _exposure0.x;
-  //if (IMPROVED_AUTO_EXPOSURE_V2 == 1) new_exposure = min(_exposure0.x, 2.0f * IMPROVED_AUTO_EXPOSURE_V2_FLOOR);
-  float _21 = _userImageAdjust.z * new_exposure;
-  _12.xyz *= _21;
 
   // --- HDR transition highlight dimming ---
   // When exposure hasn't fully adapted to a bright scene (e.g. stepping
@@ -104,6 +100,10 @@ void main(
   // }
 
   if (RENODX_TONE_MAP_TYPE != 0) {
+    float new_exposure = _exposure0.x;
+    float _21 = _userImageAdjust.z * new_exposure;
+    _12.xyz *= _21;
+
     float3 ungraded_ap1 = _12.xyz;
     float3 ungraded_bt709 = renodx::color::bt709::from::AP1(ungraded_ap1);
     float3 graded_bt709 = ApplyDisplayCurvesAndSaturation(ungraded_bt709, true);
@@ -114,12 +114,37 @@ void main(
     //graded_bt709 *= mid_gray_scale;
 
     float3 input_color = lerp(ungraded_bt709, graded_bt709, RENODX_COLOR_GRADE_STRENGTH);
-    float3 output_color = CustomTonemap(input_color, mid_gray_scale);
+
+    float histogram_mean = 0.18f;
+    float histogram_target_mean = 0.18f;
+    float histogram_target = 0.18f;
+    if (IMPROVED_AUTO_EXPOSURE == 2) {
+      if (_exposure2.w > 0.0f) {
+        histogram_mean = _exposure2.w;
+      } else if (_exposure2.z > 0.0f) {
+        histogram_mean = _exposure2.z;
+      } else {
+        histogram_mean = _exposure2.x;
+      }
+
+      if (_exposure2.z > 0.0f) {
+        histogram_target_mean = _exposure2.z;
+      } else {
+        histogram_target_mean = histogram_mean;
+      }
+     // histogram_target = histogram_target_mean * _21;
+    }
+
+    float3 output_color = CustomTonemap(input_color, mid_gray_scale, histogram_mean * _21, histogram_target_mean * _21);
     output_color = renodx::color::bt2020::from::BT709(output_color);
     output_color = renodx::color::pq::EncodeSafe(output_color, RENODX_DIFFUSE_WHITE_NITS);
     // output_color = renodx::color::srgb::EncodeSafe(output_color);
     __3__38__0__1__g_textureUAV[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float4(output_color, _12.w);
   } else {
+    float new_exposure = _exposure0.x;
+    float _21 = _userImageAdjust.z * new_exposure;
+    _12.xyz *= _21;
+
     float3 display_transform_bt709 = ConvertAP1ToBT709(_12.xyz);
     float3 display_saturated = ApplyDisplayCurvesAndSaturation(display_transform_bt709);
     float3 display_transform_lut_input = EncodeLutInputPQ(display_saturated);
