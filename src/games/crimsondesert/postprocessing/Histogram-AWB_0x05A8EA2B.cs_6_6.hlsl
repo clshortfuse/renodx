@@ -377,8 +377,8 @@ void main(
   // RenoDX: When alt auto exposure is toggled, use the filtered exposure
   // from _exposure4.z (slot 18) instead of the fast _exposure0.y to decouple
   // glare intensity from jitter.
-  float _glareExposure = (IMPROVED_AUTO_EXPOSURE == 1) ? max(_exposure4.z, 0.001f) : _exposure0.y;
-  float _glareExposure2 = (IMPROVED_AUTO_EXPOSURE == 1) ? max(_exposure4.z, 0.001f) : _exposure2.x;
+  float _glareExposure = (IMPROVED_AUTO_EXPOSURE >= 1) ? max(_exposure4.z, 0.001f) : _exposure0.y;
+  float _glareExposure2 = (IMPROVED_AUTO_EXPOSURE >= 1) ? max(_exposure4.z, 0.001f) : _exposure2.x;
   if (_127) {
     float _236 = min(_glareExposure2, 2.0f);
     float _237 = max(_236, 0.5f);
@@ -748,7 +748,7 @@ void main(
   float _500 = _499 + _398;
   // RenoDX: Use slow exposure for glare instance threshold to
   // stop shimmering due to jitter
-  float _glareThresholdExp = (IMPROVED_AUTO_EXPOSURE == 1) ? max(_exposure4.z, 0.001f) : _exposure2.x;
+  float _glareThresholdExp = (IMPROVED_AUTO_EXPOSURE >= 1) ? max(_exposure4.z, 0.001f) : _exposure2.x;
   float _503 = saturate(_glareThresholdExp);
   float _504 = _503 * 900.0f;
   float _505 = _504 + 100.0f;
