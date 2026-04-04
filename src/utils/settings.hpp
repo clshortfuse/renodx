@@ -364,6 +364,23 @@ static void WriteGlobalString(const std::string& key, const std::string& value) 
 // Runs first
 // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
+  // Load last selected profile from reshade.ini (section [renodx], key SelectedProfile).
+  // If the key is present, apply that preset on startup.
+  {
+    int stored_profile = preset_index;
+    if (reshade::get_config_value(nullptr, global_name.c_str(), "SelectedProfile", stored_profile)) {
+      if (stored_profile < 0) {
+        stored_profile = 0;
+      } else if (stored_profile >= static_cast<int>(preset_strings.size())) {
+        stored_profile = static_cast<int>(preset_strings.size() - 1);
+      }
+      preset_index = stored_profile;
+      if (preset_index != 0) {
+        LoadSettings(GetCurrentPresetName());
+      }
+    }
+  }
+
   bool changed_preset = false;
   bool has_drawn_presets = !use_presets;
 
@@ -395,6 +412,9 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           LoadSettings(global_name + "-preset3");
           break;
       }
+      // Persist the selected profile to reshade.ini so it will be restored next run.
+      reshade::set_config_value(nullptr, global_name.c_str(), "SelectedProfile", preset_index);
+
       for (auto& callback : on_preset_changed_callbacks) {
         callback();
       }
