@@ -1331,6 +1331,7 @@ float4 main(
     //if (IMPROVED_AUTO_EXPOSURE_V2 == 1) new_exposure = min(_exposure0.x, 2.0f * IMPROVED_AUTO_EXPOSURE_V2_FLOOR);
 
     float _2891 = _userImageAdjust.z * new_exposure;
+
     float _2940 = exp2(log2(max(0.0f, (((_2891 * max(0.0f, (((_2866 * 1.705049991607666f) - (_2867 * 0.6217899918556213f)) - (_2868 * 0.08325999975204468f)))) * _slopeParams.x) + _offsetParams.x))) * _powerParams.x);
     float _2941 = exp2(log2(max(0.0f, (((max(0.0f, (((_2867 * 1.1407999992370605f) - (_2866 * 0.13026000559329987f)) - (_2868 * 0.01054999977350235f))) * _2891) * _slopeParams.y) + _offsetParams.y))) * _powerParams.y);
     float _2942 = exp2(log2(max(0.0f, (((max(0.0f, (((_2866 * -0.024000000208616257f) - (_2867 * 0.12896999716758728f)) + (_2868 * 1.1529699563980103f))) * _2891) * _slopeParams.z) + _offsetParams.z))) * _powerParams.z);
@@ -1348,10 +1349,29 @@ float4 main(
       float mid_gray_scale = mid_gray_adjusted / mid_gray;
       //untonemapped_bt709 *= mid_gray_scale;
 
-      float3 tonemapped_bt709 = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale);
-      _3163 = tonemapped_bt709.r;
-      _3164 = tonemapped_bt709.g;
-      _3165 = tonemapped_bt709.b;
+      float histogram_mean = 0.18f;
+      float histogram_target_mean = 0.18f;
+      float histogram_target = 0.18f;
+      if (IMPROVED_AUTO_EXPOSURE == 2) {
+        if (_exposure2.w > 0.0f) {
+          histogram_mean = _exposure2.w;
+        } else if (_exposure2.z > 0.0f) {
+          histogram_mean = _exposure2.z;
+        } else {
+          histogram_mean = _exposure2.x;
+        }
+
+        if (_exposure2.z > 0.0f) {
+          histogram_target_mean = _exposure2.z;
+        } else {
+          histogram_target_mean = histogram_mean;
+        }
+      }
+
+      float3 output_color = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale, histogram_mean * _2891, histogram_target_mean * _2891);
+      _3163 = output_color.r;
+      _3164 = output_color.g;
+      _3165 = output_color.b;
     }
     else {
       // float3 ungraded = float3(_2951, _2952, _2953);

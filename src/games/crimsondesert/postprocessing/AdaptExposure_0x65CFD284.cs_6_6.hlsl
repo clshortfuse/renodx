@@ -17,6 +17,16 @@ RWStructuredBuffer<float> __3__39__0__1__g_exposureUAV : register(u8, space39);
 
 RWStructuredBuffer<float4> __3__39__0__1__g_autoWhiteBalanceColorUAV : register(u14, space39);
 
+float DecodeHistogramLog2Luminance(float histogram_bin, float histogram_scale, float histogram_bias) {
+  float normalized_bin = histogram_bin * 0.00390625f;
+  float shifted_bin = normalized_bin - histogram_bias;
+  return shifted_bin / histogram_scale;
+}
+
+float PerceptualSpeedMultiplier() {
+  return exp2(4.0f * AE_SPEED);
+}
+
 cbuffer __3__35__0__0__SceneConstantBuffer : register(b16, space35) {
   float4 _time;
   float4 _timeNoScale;
@@ -375,8 +385,8 @@ void main(
           float _194 = _180 / _193;
           // When IMPROVED is on, override the game's per region and ToD controls
           // min/max luminance clamps with fixed values, I hope this solves double darkening
-          float _ae_min_lum = (IMPROVED_AUTO_EXPOSURE == 2) ? AE_MIN_LUM : _param1.z;
-          float _ae_max_lum = (IMPROVED_AUTO_EXPOSURE == 2) ? AE_MAX_LUM : _param1.w;
+          float _ae_min_lum = (IMPROVED_AUTO_EXPOSURE == 100) ? AE_MIN_LUM : _param1.z;
+          float _ae_max_lum = (IMPROVED_AUTO_EXPOSURE == 100) ? AE_MAX_LUM : _param1.w;
           float _195 = max(_194, _ae_min_lum);
           float _196 = min(_195, _ae_max_lum);
           float _197 = sqrt(_192);
@@ -389,19 +399,57 @@ void main(
           //
           // Doesnt fully remove bloom jitter but better than before especially 
           // with alt auto exposure
-          float _198_filtered;
-          if (IMPROVED_AUTO_EXPOSURE >= 1) {
+          float _smoothed_target_yf = _198;
+          float _psychov17_field_yf = _198;
+          [branch]
+          if (IMPROVED_AUTO_EXPOSURE == 2) {
+            float _psychov17_band_lo = _149 * 0.20000000298023224f;
+            float _psychov17_band_hi = _149 * 0.800000011920929f;
+            int _psychov17_bin = 0;
+            float _psychov17_sum_log = 0.0f;
+            float _psychov17_sum_weight = 0.0f;
+            float _psychov17_remaining_lo = _psychov17_band_lo;
+            float _psychov17_remaining_hi = _psychov17_band_hi;
+            while (true) {
+              int _psychov17_count_i = __3__37__0__0__g_histogram[_psychov17_bin];
+              float _psychov17_count = float((uint)_psychov17_count_i) * _140;
+              float _psychov17_skip = min(_psychov17_remaining_lo, _psychov17_count);
+              float _psychov17_after_skip = _psychov17_count - _psychov17_skip;
+              float _psychov17_next_lo = _psychov17_remaining_lo - _psychov17_skip;
+              float _psychov17_window = max(0.0f, _psychov17_remaining_hi - _psychov17_skip);
+              float _psychov17_take = min(_psychov17_window, _psychov17_after_skip);
+              float _psychov17_next_hi = _psychov17_window - _psychov17_take;
+              if ((_psychov17_take > 0.0f) && (_psychov17_bin != 0)) {
+                float _psychov17_log_yf = DecodeHistogramLog2Luminance(float((uint)_psychov17_bin), _param0.x, _param0.y);
+                _psychov17_sum_log = (_psychov17_take * _psychov17_log_yf) + _psychov17_sum_log;
+                _psychov17_sum_weight = _psychov17_take + _psychov17_sum_weight;
+              }
+              int _psychov17_next_bin_index = _psychov17_bin + 1;
+              bool _psychov17_done = (_psychov17_next_bin_index == 256);
+              if (!_psychov17_done) {
+                _psychov17_bin = _psychov17_next_bin_index;
+                _psychov17_remaining_lo = _psychov17_next_lo;
+                _psychov17_remaining_hi = _psychov17_next_hi;
+                continue;
+              }
+              if (_psychov17_sum_weight <= 0.0f) {
+                _psychov17_field_yf = 0.0f;
+              } else {
+                float _psychov17_log_mean = _psychov17_sum_log / _psychov17_sum_weight;
+                _psychov17_field_yf = exp2(_psychov17_log_mean);
+              }
+              break;
+            }
+          } else if (IMPROVED_AUTO_EXPOSURE == 1) {
+            // Smoothed AE only: low-pass the raw histogram target before the
+            // legacy exposure shaping below.
             float _prevFilteredTarget = __3__39__0__1__g_exposureUAV[19];
             if (_prevFilteredTarget > 0.0001f && !isnan(_prevFilteredTarget)) {
               float _logPrev = log2(_prevFilteredTarget);
               float _logCur  = log2(_198);
               float _logSmooth = lerp(_logPrev, _logCur, 0.12f);
-              _198_filtered = exp2(_logSmooth);
-            } else {
-              _198_filtered = _198;
+              _smoothed_target_yf = exp2(_logSmooth);
             }
-          } else {
-            _198_filtered = _198;
           }
 
           _200 = 1;
@@ -482,7 +530,7 @@ void main(
               _286 = 1.0f;
             }
             float _287 = sqrt(_286);
-            float _288 = _198_filtered * -144.26950073242188f;
+            float _288 = _smoothed_target_yf * -144.26950073242188f;
             float _289 = exp2(_288);
             float _290 = _289 + 1.0f;
             float _291 = 2.0f / _290;
@@ -492,7 +540,7 @@ void main(
             float _295 = _287 + 2.0f;
             float _296 = _293 * _295;
             float _297 = _296 + _294;
-            float _298 = saturate(_198_filtered);
+            float _298 = saturate(_smoothed_target_yf);
             float _299 = log2(_298);
             float _300 = _299 * 0.25f;
             float _301 = exp2(_300);
@@ -516,8 +564,8 @@ void main(
             float _321 = saturate(_320);
             float _322 = _321 * _param3.z;
             // Sky visibility exposure bias
-            float _323 = (IMPROVED_AUTO_EXPOSURE == 2) ? 0.0f : (_322 + _param2.z);
-            float _324 = max(_198_filtered, 9.999999747378752e-05f);
+            float _323 = (IMPROVED_AUTO_EXPOSURE == 100) ? 0.0f : (_322 + _param2.z);
+            float _324 = max(_smoothed_target_yf, 9.999999747378752e-05f);
             float _325 = min(_324, 7.0f);
             float _326 = _325 + -0.009999999776482582f;
             float _327 = _326 * 0.14306151866912842f;
@@ -539,8 +587,8 @@ void main(
             float _343 = _339 - _340;
             // Vanilla path (IMPROVED_AUTO_EXPOSURE == 0): keep this sky/occlusion-dependent
             // bias term active. Mode 2 zeros it and replaces it with explicit HDR shaping.
-            float _344 = (IMPROVED_AUTO_EXPOSURE == 2) ? 0.0f : (_343 * _342);
-            float _345 = _198_filtered * 8.0f;
+            float _344 = (IMPROVED_AUTO_EXPOSURE == 100) ? 0.0f : (_343 * _342);
+            float _345 = _smoothed_target_yf * 8.0f;
             float _346 = log2(_345);
             float _347 = _346 - _340;
             float _348 = _347 - _344;
@@ -549,7 +597,8 @@ void main(
             float _350_vanilla = 0.8333333134651184f / _349;
 
             float _350;
-            if (IMPROVED_AUTO_EXPOSURE == 2) {
+            [branch]
+            if (IMPROVED_AUTO_EXPOSURE == 100) {
               // --- HDR asymmetric exposure adaptation ---
               // We reduce vanilla's adaptation strength via a power curve
               // in log space, modulated by sky visibility and scene brightness.
@@ -572,14 +621,15 @@ void main(
               }
               _350 = clamp(exp2(logTarget), 0.02f, 5.0f);
             } else {
-              // Mode 0/1: use the original target curve (no mode-2 log-power remap).
+              // Vanilla, Smoothed, and PsychoV17 all use the original target curve.
               _350 = _350_vanilla;
             }
 
             bool _353 = !(_temporalReprojectionParams.w > 0.5f);
             if (_353) {
               float _357 = __3__39__0__1__g_exposureUAV[1];
-              if (IMPROVED_AUTO_EXPOSURE == 2) {
+              [branch]
+              if (IMPROVED_AUTO_EXPOSURE == 100) {
                 // Unified log space temporal adaptation becasue Vanilla uses two separate interpolation spaces (1/exp vs linear) 
                 // Causes visible jitter when the target oscillates around the previous value due to histogram noise. 
                 // Log space lerp is symmetric and smooth in both directions.
@@ -602,6 +652,24 @@ void main(
                 float tau = 1.0f - exp2(-speed * _timeNoScale.z);
                 float logNew = lerp(logPrev, logTgt, tau);
                 _381 = exp2(logNew);
+              } else if (IMPROVED_AUTO_EXPOSURE == 2) {
+                bool _psychov17_prev_valid = (_357 > 0.0f) && !isnan(_357) && !isinf(_357);
+                bool _psychov17_target_valid = (_350 > 0.0f) && !isnan(_350) && !isinf(_350);
+                if (!_psychov17_prev_valid || !_psychov17_target_valid) {
+                  _381 = _psychov17_target_valid ? _350 : 1.0f;
+                } else {
+                  float _psychov17_log_prev_gain = log2(_357);
+                  float _psychov17_log_target_gain = log2(_350);
+                  float _psychov17_log_gap = _psychov17_log_prev_gain - _psychov17_log_target_gain;
+                  float _psychov17_speed = (_psychov17_log_target_gain > _psychov17_log_prev_gain)
+                      ? _param2.x
+                      : (_param2.y * (1.0f + (saturate(_psychov17_log_gap) * AE_ADAPT_SPEED_BOOST)));
+                  _psychov17_speed *= PerceptualSpeedMultiplier();
+                  float _psychov17_alpha_gain = 1.0f - exp2(-_psychov17_speed * _timeNoScale.z);
+                  float _psychov17_log_new_gain =
+                      lerp(_psychov17_log_prev_gain, _psychov17_log_target_gain, _psychov17_alpha_gain);
+                  _381 = exp2(_psychov17_log_new_gain);
+                }
               } else {
                 // --- Vanilla asymmetric temporal adaptation ---
                 // Mode 0 stays here: brighten in reciprocal space, darken in linear
@@ -636,12 +704,16 @@ void main(
               }
             } else {
               // Temporal reset (loading screens, menus)
-              if (IMPROVED_AUTO_EXPOSURE == 2) {
+              [branch]
+              if (IMPROVED_AUTO_EXPOSURE == 100) {
                 // Preserve previous exposure to prevent spikes from garbage
                 // histogram data during transitions. Temporal adaptation will
                 // smoothly converge once gameplay resumes.
                 float prevExposure = __3__39__0__1__g_exposureUAV[1];
-                _381 = (prevExposure > 0.001f) ? prevExposure : _350;
+                _381 = ((prevExposure > 0.001f) && !isnan(prevExposure) && !isinf(prevExposure)) ? prevExposure : _350;
+              } else if (IMPROVED_AUTO_EXPOSURE == 2) {
+                float prevExposure = __3__39__0__1__g_exposureUAV[1];
+                _381 = ((prevExposure > 0.001f) && !isnan(prevExposure) && !isinf(prevExposure)) ? prevExposure : _350;
               } else {
                 _381 = _350;
               }
@@ -676,26 +748,62 @@ void main(
               float _404 = _403 * 1e+05f;
               float _405 = saturate(_404);
               float _406 = _317 * _405;
-              float _407 = max(_403, _198_filtered);
+              float _407;
+              if (IMPROVED_AUTO_EXPOSURE == 2) {
+                _407 = _psychov17_field_yf;
+              } else {
+                _407 = max(_403, _smoothed_target_yf);
+              }
               float _410 = __3__39__0__1__g_exposureUAV[11];
-              float _411 = _407 - _410;
-              float _412 = _411 * 0.125f;
-              float _413 = _412 + _410;
+              float _413;
+              [branch]
+              if (IMPROVED_AUTO_EXPOSURE == 2) {
+                float _psychov17_prev_yf = _410;
+                float _psychov17_speed_mul = PerceptualSpeedMultiplier();
+                float _psychov17_tau_light = 1.5f / _psychov17_speed_mul;
+                float _psychov17_tau_dark = 8.0f / _psychov17_speed_mul;
+                if (!_353) {
+                  _413 = max(_psychov17_field_yf, 0.0f);
+                } else if ((_psychov17_prev_yf <= 0.0f) || isnan(_psychov17_prev_yf) || isinf(_psychov17_prev_yf)) {
+                  _413 = max(_psychov17_field_yf, 0.0f);
+                } else if ((_psychov17_field_yf <= 0.0f) || isnan(_psychov17_field_yf) || isinf(_psychov17_field_yf)) {
+                  float _psychov17_alpha_dark = 1.0f - exp(-_timeNoScale.z / _psychov17_tau_dark);
+                  _413 = lerp(_psychov17_prev_yf, 0.0f, _psychov17_alpha_dark);
+                } else {
+                  float _psychov17_tau = (_psychov17_field_yf > _psychov17_prev_yf) ? _psychov17_tau_light : _psychov17_tau_dark;
+                  float _psychov17_alpha = 1.0f - exp(-_timeNoScale.z / _psychov17_tau);
+                  float _psychov17_log_prev = log2(_psychov17_prev_yf);
+                  float _psychov17_log_field = log2(_psychov17_field_yf);
+                  float _psychov17_log_new = lerp(_psychov17_log_prev, _psychov17_log_field, _psychov17_alpha);
+                  _413 = exp2(_psychov17_log_new);
+                }
+              } else {
+                float _411 = _407 - _410;
+                float _412 = _411 * 0.125f;
+                _413 = _412 + _410;
+              }
               bool _414 = !(_param3.x == 1.0f);
               float _416 = __3__39__0__1__g_exposureUAV[0];
               if (!_414) {
-                float _419 = __3__39__0__1__g_exposureUAV[4];
-                bool _420 = (_419 > 0.0010000000474974513f);
-                if (_420) {
-                  float _422 = exp2(_323);
-                  _424 = _422;
+                [branch]
+                if (IMPROVED_AUTO_EXPOSURE == 2) {
+                  _427 = _381;
                 } else {
-                  _424 = 1.0f;
+                  float _419 = __3__39__0__1__g_exposureUAV[4];
+                  bool _420 = (_419 > 0.0010000000474974513f);
+                  if (_420) {
+                    float _422 = exp2(_323);
+                    _424 = _422;
+                  } else {
+                    _424 = 1.0f;
+                  }
+                  float _425 = _424 * _381;
+                  _427 = _425;
+                  // Apply EV bias for IMPROVED mode (compensates for zeroed _323 push constant correction)
+                  if (IMPROVED_AUTO_EXPOSURE == 100) {
+                    _427 *= exp2(AE_EV_BIAS);
+                  }
                 }
-                float _425 = _424 * _381;
-                // Mode 0/1: no extra EV bias; output remains the vanilla-scaled exposure.
-                // Apply EV bias for IMPROVED mode (compensates for zeroed _323 push constant correction)
-                _427 = (IMPROVED_AUTO_EXPOSURE == 2) ? (_425 * exp2(AE_EV_BIAS)) : _425;
               } else {
                 _427 = _param3.y;
               }
@@ -703,6 +811,7 @@ void main(
               // if (IMPROVED_AUTO_EXPOSURE == 1) _427 = min(_427, lerp(1.f, 11.f, AE_DARK_POWER_OUTDOOR));
               // if (IMPROVED_AUTO_EXPOSURE == 1) _427 = min(_427, 7.f);
               // if (IMPROVED_AUTO_EXPOSURE == 1) _427 = renodx::color::grade::Contrast(_427, 1.f * AE_DARK_POWER_OUTDOOR, 0.18f);
+              [branch]
               if (IMPROVED_AUTO_EXPOSURE == 1) {
                 const float pivot = 0.1f;
                 if (_427 > pivot) {
@@ -710,7 +819,8 @@ void main(
                 } else {
                   _427 = NakaRushton(_427, 10000.f, pivot, pivot, 2.f - AE_DYNAMISM_LOW).x;
                 }
-                
+              } else if (IMPROVED_AUTO_EXPOSURE == 2) {
+                _427 = renodx::tonemap::Neutwo(_427, 1.0f + AE_DARK_EXPOSURE_LIMIT * 100.f);
               }
 
               __3__39__0__1__g_exposureUAV[0] = _427;
@@ -753,7 +863,8 @@ void main(
               // This stops vanilla exposure + glare feedback loop that causes bloom shimmer.
               //
               // Look into maybe doing a further filtering for distance objects?
-              if (IMPROVED_AUTO_EXPOSURE >= 1) {
+              [branch]
+              if (IMPROVED_AUTO_EXPOSURE == 1) {
                 float prevSlowExp = __3__39__0__1__g_exposureUAV[18];
                 float slowSeed = (prevSlowExp > 0.0001f && !isnan(prevSlowExp)) ? prevSlowExp : _427;
                 float slowTau = 0.05f;
@@ -761,8 +872,9 @@ void main(
                 __3__39__0__1__g_exposureUAV[18] = slowExp;
                 // Slot 19: filtered target luminance for potential future use
                 float prevSlowTarget = __3__39__0__1__g_exposureUAV[19];
-                float targetSeed = (prevSlowTarget > 0.0001f && !isnan(prevSlowTarget)) ? prevSlowTarget : _198_filtered;
-                float slowTarget = lerp(targetSeed, _198_filtered, 0.08f);
+                float targetSeed =
+                    (prevSlowTarget > 0.0001f && !isnan(prevSlowTarget)) ? prevSlowTarget : _smoothed_target_yf;
+                float slowTarget = lerp(targetSeed, _smoothed_target_yf, 0.08f);
                 __3__39__0__1__g_exposureUAV[19] = slowTarget;
               }
 
