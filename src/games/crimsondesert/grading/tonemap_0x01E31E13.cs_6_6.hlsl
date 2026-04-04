@@ -133,9 +133,11 @@ void main(
         histogram_target_mean = histogram_mean;
       }
      // histogram_target = histogram_target_mean * _21;
+      histogram_target_mean *= _21;
+      histogram_mean *= _21;
     }
 
-    float3 output_color = CustomTonemap(input_color, mid_gray_scale, histogram_mean * _21, histogram_target_mean * _21);
+    float3 output_color = CustomTonemap(input_color, mid_gray_scale, histogram_mean, histogram_target_mean);
     output_color = renodx::color::bt2020::from::BT709(output_color);
     output_color = renodx::color::pq::EncodeSafe(output_color, RENODX_DIFFUSE_WHITE_NITS);
     // output_color = renodx::color::srgb::EncodeSafe(output_color);
