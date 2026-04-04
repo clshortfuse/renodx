@@ -245,9 +245,11 @@ float4 main(
         } else {
           histogram_target_mean = histogram_mean;
         }
+        histogram_target_mean *= _124;
+        histogram_mean *= _124;
       }
 
-      float3 output_color = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale, histogram_mean * _124, histogram_target_mean * _124);
+      float3 output_color = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale, histogram_mean, histogram_target_mean);
       _396 = output_color.r;
       _397 = output_color.g;
       _398 = output_color.b;
