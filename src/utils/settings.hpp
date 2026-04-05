@@ -12,6 +12,7 @@
 
 #include "./bitwise.hpp"
 #include "./icons.hpp"
+#include "./log.hpp"
 #include "./mutex.hpp"
 
 namespace renodx::utils::settings {
@@ -364,23 +365,6 @@ static void WriteGlobalString(const std::string& key, const std::string& value) 
 // Runs first
 // https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
-  // Load last selected profile from reshade.ini (section [renodx], key SelectedProfile).
-  // If the key is present, apply that preset on startup.
-  {
-    int stored_profile = preset_index;
-    if (reshade::get_config_value(nullptr, global_name.c_str(), "SelectedProfile", stored_profile)) {
-      if (stored_profile < 0) {
-        stored_profile = 0;
-      } else if (stored_profile >= static_cast<int>(preset_strings.size())) {
-        stored_profile = static_cast<int>(preset_strings.size() - 1);
-      }
-      preset_index = stored_profile;
-      if (preset_index != 0) {
-        LoadSettings(GetCurrentPresetName());
-      }
-    }
-  }
-
   bool changed_preset = false;
   bool has_drawn_presets = !use_presets;
 
@@ -675,7 +659,43 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
         on_preset_off_callbacks.emplace_back(new_on_preset_off);
       }
       LoadGlobalSettings();
-      LoadSettings(global_name + "-preset1");
+
+      if (use_presets) {
+        // Decide which preset to apply on startup
+        int stored_profile = preset_index;
+        const bool has_stored = reshade::get_config_value(nullptr, global_name.c_str(), "SelectedProfile", stored_profile);
+
+        if (!has_stored) {
+          // No stored profile -> default to preset 1
+          preset_index = 1;
+          renodx::utils::log::d("utils::settings::Use(No SelectedProfile -> Defaulting to ", GetCurrentPresetName(), ")");
+          LoadSettings(GetCurrentPresetName());
+        } else {
+          // Clamp stored value to valid range
+          if (stored_profile < 0) {
+            stored_profile = 0;
+          } else if (stored_profile >= static_cast<int>(preset_strings.size())) {
+            stored_profile = static_cast<int>(preset_strings.size() - 1);
+          }
+          preset_index = stored_profile;
+
+          if (preset_index == 0) {
+            renodx::utils::log::d("utils::settings::Use(SelectedProfile=", preset_index, " -> Applying Off)");
+            for (auto& callback : on_preset_off_callbacks) {
+              callback();
+            }
+          } else {
+            // Load the named preset section
+            renodx::utils::log::d("utils::settings::Use(SelectedProfile=", preset_index, " -> Loading ", GetCurrentPresetName(), ")");
+            LoadSettings(GetCurrentPresetName());
+          }
+        }
+      } else {
+        // Presets disabled — keep previous behavior (load preset1 by default)
+        preset_index = 1;
+        LoadSettings(global_name + "-preset1");
+      }
+
       reshade::register_overlay(overlay_title.c_str(), OnRegisterOverlay);
 
       break;
