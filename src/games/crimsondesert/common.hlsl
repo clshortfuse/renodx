@@ -1,6 +1,5 @@
 #include "./lilium_rcas.hlsl"
 #include "./macleod_boynton.hlsli"
-#include "./psycho_test11_custom.hlsl"
 #include "./psycho_test17_custom.hlsl"
 #include "./shared.h"
 
@@ -239,12 +238,12 @@ float3 CustomPsychoV17Peak(
   float yf_target = yf_input;
 
   if (RENODX_TONE_MAP_HIGHLIGHTS != 1.f) {
-    yf_target = renodx::color::grade::Highlights(yf_target, RENODX_TONE_MAP_HIGHLIGHTS, yf_midgray);
+    yf_target = renodx::color::grade::Highlights(yf_target, RENODX_TONE_MAP_HIGHLIGHTS, yf_midgray, 1.f);
   }
   if (RENODX_TONE_MAP_SHADOWS != 1.f) {
-    yf_target = renodx::color::grade::Shadows(yf_target, RENODX_TONE_MAP_SHADOWS, yf_midgray);
+    yf_target = renodx::color::grade::Shadows(yf_target, RENODX_TONE_MAP_SHADOWS, yf_midgray, 1.f);
   }
-  float contrast = yf_target > yf_midgray ? RENODX_TONE_MAP_CONTRAST_HIGH : RENODX_TONE_MAP_CONTRAST_LOW;
+  float contrast = RENODX_TONE_MAP_CONTRAST / RENODX_TONE_MAP_SATURATION;
   if (contrast != 1.f) {
     yf_target = renodx::color::grade::ContrastSafe(yf_target, contrast, yf_midgray);
   }
@@ -266,13 +265,13 @@ float3 CustomPsychoV17Peak(
       1.0,
       1.0,
       1.0,
-      RENODX_TONE_MAP_SATURATION,
+      1.0,
       RENODX_TONE_MAP_BLOWOUT,
       100.f,
       RENODX_TONE_MAP_HUE_RESTORE,
       1.0,
       1,
-      RENODX_TONE_MAP_CONE_CONTRAST,
+      RENODX_TONE_MAP_SATURATION,
       anchor_in,
       anchor_out,
       1.f,
@@ -293,33 +292,10 @@ float3 ProcessTonemap(float3 untonemapped_bt709, float calculated_peak, float mi
   const float white_clip = 100.f;
   const int white_curve_mode = 1;
 
+  mid_gray_scale = lerp(1.f, mid_gray_scale, CUSTOM_TONE_MAP_MIDGRAY_ADJUST);
+
   float3 output_color = untonemapped_bt709;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
-    float contrast_high = RENODX_TONE_MAP_CONTRAST_HIGH;
-    float contrast_low = RENODX_TONE_MAP_CONTRAST_LOW;
-    float saturation = RENODX_TONE_MAP_SATURATION;
-
-    #if 0
-
-    output_color = psychotm_test11(
-        // output_color * 1.1539f,  // mid-gray adjusted
-        output_color,
-        calculated_peak,
-        RENODX_TONE_MAP_EXPOSURE,
-        RENODX_TONE_MAP_HIGHLIGHTS,
-        RENODX_TONE_MAP_SHADOWS,
-        contrast_high / saturation,
-        contrast_low / saturation,
-        1.0,
-        RENODX_TONE_MAP_BLOWOUT,
-        white_clip,
-        RENODX_TONE_MAP_HUE_RESTORE,  // hue_restore
-        1.f,                          // adaptation_contrast
-        white_curve_mode,
-        saturation,  // cone_response_exponent
-        mid_gray_scale
-    );
-#else
 
     output_color = CustomPsychoV17AutoExposure(
         output_color,
@@ -328,29 +304,7 @@ float3 ProcessTonemap(float3 untonemapped_bt709, float calculated_peak, float mi
         current_average,
         target_average,
         is_sdr);
-    // output_color = renodx::tonemap::psycho::psychotm_test17_custom(
-    //     output_color,
-    //     calculated_peak,
-    //     lerp(1.f, mid_gray_scale, 1.f),
-    //     RENODX_TONE_MAP_EXPOSURE,
-    //     RENODX_TONE_MAP_HIGHLIGHTS,
-    //     RENODX_TONE_MAP_SHADOWS,
-    //     contrast_high / saturation,
-    //     contrast_low / saturation,
-    //     1.0,
-    //     RENODX_TONE_MAP_BLOWOUT,
-    //     white_clip,
-    //     RENODX_TONE_MAP_HUE_RESTORE,  // hue_restore
-    //     1.f, // adaptation_contrast
-    //     white_curve_mode,
-    //     saturation,  // cone_response_exponent
-    //     0.18f,
-    //     0.18f,
-    //     1.f,
-    //    (int)(!is_sdr)
-    //);
 
-    #endif
   }
   return output_color;
 }

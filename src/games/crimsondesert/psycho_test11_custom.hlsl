@@ -425,7 +425,7 @@ float3 psychotm_test11(
   //float3 bt2020_scene_unit = psycho11_BT2020FromLMS(lms_scene_unit);
   //bt2020_scene_unit *= exposure2; // Apply the post-curve linear multiplier in BT.2020 space for more accurate SDR simulation
   //lms_scene_unit = psycho11_LMSFromBT2020(bt2020_scene_unit);
-  lms_scene_unit *= lerp(1.f, exposure2, CUSTOM_TONE_MAP_MIDGRAY_ADJUST);
+  lms_scene_unit *= exposure2;
 
   float3 lms_unit = lms_scene_unit;
   if (bleaching_intensity != 0.f) {

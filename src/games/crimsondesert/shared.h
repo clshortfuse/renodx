@@ -38,16 +38,15 @@
 
 #define RENODX_TONE_MAP_HUE_RESTORE            shader_injection.tone_map_hue_restore
 #define RENODX_TONE_MAP_BLOWOUT                shader_injection.tone_map_blowout
-#define CUSTOM_TONE_MAP_MIDGRAY_ADJUST         1.f // shader_injection.custom_tone_map_midgray_adjust
+#define CUSTOM_TONE_MAP_MIDGRAY_ADJUST         shader_injection.custom_tone_map_midgray_adjust
 #define RENODX_COLOR_GRADE_STRENGTH            1.f
 
 #define RENODX_TONE_MAP_EXPOSURE               shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS             shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS                shader_injection.tone_map_shadows
-#define RENODX_TONE_MAP_CONTRAST_HIGH          shader_injection.tone_map_contrast_high
-#define RENODX_TONE_MAP_CONTRAST_LOW           shader_injection.tone_map_contrast_low
+#define RENODX_TONE_MAP_CONTRAST               shader_injection.tone_map_contrast
 #define RENODX_TONE_MAP_SATURATION             shader_injection.tone_map_saturation
-#define RENODX_TONE_MAP_CONE_CONTRAST          shader_injection.tone_map_cone_contrast
+//#define RENODX_TONE_MAP_CONE_CONTRAST          shader_injection.tone_map_cone_contrast
 
 #define CUSTOM_FILM_GRAIN_TYPE                 ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__FILM_GRAIN_TYPE) != 0u ? 1.f : 0.f)
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
@@ -121,13 +120,12 @@ struct ShaderInjectData {
 
   float tone_map_hue_restore;
   float tone_map_blowout;
-  //float custom_tone_map_midgray_adjust;
+  float custom_tone_map_midgray_adjust;
 
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;
-  float tone_map_contrast_low;
-  float tone_map_contrast_high;
+  float tone_map_contrast;
   float tone_map_saturation;
   float tone_map_cone_contrast;
 
