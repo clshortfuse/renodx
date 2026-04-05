@@ -108,16 +108,12 @@ void main(
     float3 ungraded_bt709 = renodx::color::bt709::from::AP1(ungraded_ap1);
     float3 graded_bt709 = ApplyDisplayCurvesAndSaturation(ungraded_bt709, true);
 
-    const float mid_gray = 0.18f;
-    float mid_gray_adjusted = SDRToneMap(mid_gray).x;
-    float mid_gray_scale = mid_gray_adjusted / mid_gray;
-    //graded_bt709 *= mid_gray_scale;
-
     float3 input_color = lerp(ungraded_bt709, graded_bt709, RENODX_COLOR_GRADE_STRENGTH);
 
     float histogram_mean = 0.18f;
     float histogram_target_mean = 0.18f;
     float histogram_target = 0.18f;
+    float mid_gray_scale = 1.f;
     if (IMPROVED_AUTO_EXPOSURE == 2) {
       if (_exposure2.w > 0.0f) {
         histogram_mean = _exposure2.w;
@@ -135,7 +131,12 @@ void main(
      // histogram_target = histogram_target_mean * _21;
       histogram_target_mean *= _21;
       histogram_mean *= _21;
-    }
+    } 
+      
+    const float mid_gray = 0.18f;
+    float mid_gray_adjusted = SDRToneMap(mid_gray).x;
+    mid_gray_scale = mid_gray_adjusted / mid_gray;
+    
 
     float3 output_color = CustomTonemap(input_color, mid_gray_scale, histogram_mean, histogram_target_mean);
     output_color = renodx::color::bt2020::from::BT709(output_color);

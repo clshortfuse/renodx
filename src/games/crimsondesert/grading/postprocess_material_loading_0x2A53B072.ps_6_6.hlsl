@@ -237,14 +237,10 @@ float4 main(
       if (RENODX_TONE_MAP_TYPE != 0) {
         float3 untonemapped_bt709 = float3(_266, _267, _268);
 
-        const float mid_gray = 0.18f;
-        float mid_gray_adjusted = SDRToneMap(mid_gray).x;
-        float mid_gray_scale = mid_gray_adjusted / mid_gray;
-        // untonemapped_bt709 *= (mid_gray_adjusted / mid_gray);
-
         float histogram_mean = 0.18f;
         float histogram_target_mean = 0.18f;
         float histogram_target = 0.18f;
+        float mid_gray_scale = 1.f;
         if (IMPROVED_AUTO_EXPOSURE == 2) {
           if (_exposure2.w > 0.0f) {
             histogram_mean = _exposure2.w;
@@ -262,6 +258,10 @@ float4 main(
           histogram_target_mean *= _206;
           histogram_mean *= _206;
         }
+
+        const float mid_gray = 0.18f;
+        float mid_gray_adjusted = SDRToneMap(mid_gray).x;
+        mid_gray_scale = mid_gray_adjusted / mid_gray;
 
         float3 output_color = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale, histogram_mean, histogram_target_mean);
         _478 = output_color.r;
