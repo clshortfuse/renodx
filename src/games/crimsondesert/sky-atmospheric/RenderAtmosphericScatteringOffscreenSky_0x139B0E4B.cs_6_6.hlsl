@@ -1695,6 +1695,16 @@ void main(
     }
   }
 
+  // [DAWN_DUSK_SKY_PROBE_ENERGY] Inscatter Energy Reduction
+  // scale down omnidirectional inscatter during dawn/dusk to prevent
+  // Probe from boosting GI with directionless energy
+  if (DAWN_DUSK_IMPROVEMENTS == 1.f && DAWN_DUSK_GI_ENERGY < 1.f) {
+    float _energyAtten = lerp(1.f, DAWN_DUSK_GI_ENERGY, _dawnDuskFactor);
+    _4273 *= _energyAtten;
+    _4274 *= _energyAtten;
+    _4275 *= _energyAtten;
+  }
+
   __3__38__0__1__g_texSkyInscatterUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(_4273, _4274, _4275, 0.0f);
   __3__38__0__1__g_texSkyExtinctionUAV[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(_4256, _4257, _4258, 1.0f);
 }

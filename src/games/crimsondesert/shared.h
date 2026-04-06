@@ -59,6 +59,7 @@
 #define CUSTOM_VIGNETTE                        shader_injection.custom_vignette
 #define LENS_FLARE_STRENGTH                    shader_injection.lens_flare_strength
 #define BLOOM_STRENGTH                         shader_injection.bloom_strength
+#define DAWN_DUSK_GI_ENERGY                    0.6f
 
 #define SHADOW_DEBUG_MODE                      0 // shader_injection.shadow_debug_mode
 #define SHADOW_DISABLE_LAYER                   0 // shader_injection.shadow_disable_layer
