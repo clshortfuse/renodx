@@ -2334,7 +2334,15 @@ void main(
     float _4099 = min((max(0.009999999776482582f, _exposure3.w) * 2048.0f), _4098);
     float _4103 = max(9.999999717180685e-10f, _4098);
     float _4111 = __3__36__0__0__g_raytracingDiffuseRayInversePDF.Load(int3(((int)((((uint)(((int)((uint)(_72) << 5)) & 2097120)) + SV_GroupThreadID.x) + ((uint)((_53 - (_54 << 1)) << 4)))), ((int)((((uint)(_54 << 4)) + SV_GroupThreadID.y) + ((uint)(((uint)((uint)(_72)) >> 16) << 5)))), 0));
-    float _4113 = _4111.x * 2.0f;
+    // [GI_ENERGY_CONSERVATION] Dawn/dusk inverse PDF energy correction
+    // vanilla is 2x for whatever reason dunno why. Lowering it slightly
+    // for dawn/dusk helps
+    float _energyCorrection = 1.0f;
+    if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+      float _ddFactor = DawnDuskFactor(_sunDirection.y);
+      _energyCorrection = lerp(1.0f, 0.5f, _ddFactor);
+    }
+    float _4113 = _4111.x * 2.0f * _energyCorrection;
     float _4114 = _4113 * (((_4099 * _4091) / _4103) + (_renderParams2.y * _4067));
     float _4115 = _4113 * (((_4099 * _4092) / _4103) + (_renderParams2.y * _4068));
     float _4116 = _4113 * (((_4099 * _4093) / _4103) + (_renderParams2.y * _4069));

@@ -1036,6 +1036,13 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
         new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "WARNING: PATCH 1.02.00 HAS REDUCED GI QUALITY TO HALF RES AND ALSO DID OTHER CHANGES, SPMIS LOOKS SIGNIFICANTLY WORSE IN EXTERIORS, ONLY USE FOR INTERIOR SCREENSHOTS WITH REDUCED AUTO EXPOSURE\n",
+        .section = "Rendering",
+        .tint = 0xaa0000,
+        .is_visible = []() { return current_settings_mode >= 1.f; },
+    },
+        new renodx::utils::settings::Setting{
         .key = "RaytracingQuality",
           .binding = &shader_injection.custom_flags,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
