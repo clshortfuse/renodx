@@ -511,7 +511,7 @@ void main(
     float _340 = _sunSizeAngle * 0.01745329238474369f;
     float _341 = acos(clamp(_337, -1.0f, 1.0f));
     float _353, _354, _355;
-    if (SUN_MOON_ADJUSTMENTS > 0.5f) {
+    if (SUN_MOON_ADJUSTMENTS == 1.f) {
 
       float _sunRadius = _340 * 2.5f;
 
@@ -690,9 +690,10 @@ void main(
       // Seems Pearl Abyss just ctrl c + ctrl V'd the sun luminance code and forgot to adjust the moon's
       // Goofy ahh moment
       float _moonRaw = _precomputedAmbient7.z;
-      float _moonLum = (SUN_MOON_ADJUSTMENTS > 0.5f)
-          ? (_moonRaw * 0.01f)
-          : _moonRaw;
+      float _moonLum = renodx::math::Select(
+        (SUN_MOON_ADJUSTMENTS == 1.f), 
+        (_moonRaw * 0.01f),              // 100x reduction
+        (_moonRaw));                     // vanilla
       float _429 = _413 * _moonLum;
       _431 = _429;
       _432 = 1.0f;

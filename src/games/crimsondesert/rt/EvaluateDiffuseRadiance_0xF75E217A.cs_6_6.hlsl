@@ -1,4 +1,5 @@
 #include "../shared.h"
+#include "../sky-atmospheric/sky_dawn_dusk_common.hlsli"
 
 struct SurfelData {
   uint _baseColor;
@@ -745,7 +746,7 @@ void main(
                   float _661 = ((select(_650, (((_504 * 0.9163600206375122f) + (_503 * 0.07020000368356705f)) + (_505 * 0.013450000435113907f)), _212.y) * _531) * _646) + _449;
                   float _662 = ((select(_650, (((_504 * 0.10958000272512436f) + (_503 * 0.02061999961733818f)) + (_505 * 0.8697999715805054f)), _212.z) * _532) * _646) + _450;
                   float _663 = _646 + _454;
-                  if ((uint)(_455 + 1) < (uint)(RT_QUALITY > 0.5f ? 8 : 4)) {
+                  if ((uint)(_455 + 1) < (uint)renodx::math::Select(RT_QUALITY >= 1.f, 8.f, 4.f)) {
                     _448 = _660;
                     _449 = _661;
                     _450 = _662;
@@ -1438,7 +1439,7 @@ void main(
                               float _1950 = (((((_1804 * 0.9163600206375122f) + (_1803 * 0.07020000368356705f)) + (_1805 * 0.013450000435113907f)) * _1831) * _1942) + _1752;
                               float _1951 = (((((_1804 * 0.10958000272512436f) + (_1803 * 0.02061999961733818f)) + (_1805 * 0.8697999715805054f)) * _1832) * _1942) + _1753;
                               float _1952 = _1942 + _1754;
-                              if ((uint)(_1755 + 1) < (uint)(RT_QUALITY > 0.5f ? 8 : 4)) {
+                              if ((uint)(_1755 + 1) < (uint)renodx::math::Select(RT_QUALITY >= 1.f, 8.f, 4.f)) {
                                 _1751 = _1949;
                                 _1752 = _1950;
                                 _1753 = _1951;
@@ -2281,6 +2282,19 @@ void main(
         _4064 = ((_4041 * select(_4042, 0.03125f, _742)) * _4050.x);
         _4065 = ((_4041 * select(_4042, 0.03125f, _743)) * _4050.y);
         _4066 = ((_4041 * select(_4042, 0.03125f, _744)) * _4050.z);
+        // [DAWN_DUSK_GI] Probe directional boost + energy floor
+        if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+          float _ddFactor = DawnDuskFactor(_sunDirection.y);
+          float3 _ddAmbient = DawnDuskAmbientBoost(
+            float3(_4064, _4065, _4066),
+            float3(_125, _126, _127),
+            _sunDirection.xyz,
+            _ddFactor,
+            _precomputedAmbient0.xyz);
+          _4064 = _ddAmbient.x;
+          _4065 = _ddAmbient.y;
+          _4066 = _ddAmbient.z;
+        }
         break;
       }
     } else {
@@ -2295,6 +2309,19 @@ void main(
     float _4088 = _4087 * _4081.x;
     float _4089 = _4087 * _4081.y;
     float _4090 = _4087 * _4081.z;
+    // [DAWN_DUSK_GI] Probe directional boost + energy floor
+    if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+      float _ddFactor = DawnDuskFactor(_sunDirection.y);
+      float3 _ddAmbient = DawnDuskAmbientBoost(
+        float3(_4088, _4089, _4090),
+        float3(_125, _126, _127),
+        _sunDirection.xyz,
+        _ddFactor,
+        _precomputedAmbient0.xyz);
+      _4088 = _ddAmbient.x;
+      _4089 = _ddAmbient.y;
+      _4090 = _ddAmbient.z;
+    }
     float _4095 = dot(float3(_4088, _4089, _4090), float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
     float _4096 = min((max(0.009999999776482582f, _exposure3.w) * 2048.0f), _4095);
     float _4100 = max(9.999999717180685e-10f, _4095);
@@ -2312,6 +2339,23 @@ void main(
       _4123 = _4111;
       _4124 = _4112;
       _4125 = _4113;
+    }
+    // RenoDX: Exterior GI energy compensation
+    // The improved ReSTIR convergence over accumulates diffuse bounces.
+    // Exteriors become way to bright so as a solution we do the following
+    //
+    // Apply a luminance based soft compression on the raw hit radiance before it
+    // enters the reservoir
+    if (RT_QUALITY >= 1.f && RT_GI_STRENGTH > 0.0f) {
+      float _rndx_gi_lum = renodx::color::y::from::BT709(float3(_4123, _4124, _4125));
+      if (_rndx_gi_lum > RT_GI_KNEE) {
+        float _rndx_gi_excess = _rndx_gi_lum - RT_GI_KNEE;
+        float _rndx_gi_compressed = RT_GI_KNEE + renodx::math::DivideSafe(_rndx_gi_excess, mad(_rndx_gi_excess, RT_GI_STRENGTH, 1.0f));
+        float _rndx_gi_scale = renodx::math::DivideSafe(_rndx_gi_compressed, _rndx_gi_lum, 1.f);
+        _4123 *= _rndx_gi_scale;
+        _4124 *= _rndx_gi_scale;
+        _4125 *= _rndx_gi_scale;
+      }
     }
     __3__38__0__1__g_diffuseResultUAV[int2(((int)(((uint)(((int)((uint)(_64) << 4)) & 1048560)) + SV_GroupThreadID.x)), ((int)(((uint)(((uint)((uint)(_64)) >> 16) << 4)) + SV_GroupThreadID.y)))] = half4((-0.0h - half(min(0.0f, (-0.0f - min(15000.0f, (_exposure4.x * _4123)))))), (-0.0h - half(min(0.0f, (-0.0f - min(15000.0f, (_exposure4.x * _4124)))))), (-0.0h - half(min(0.0f, (-0.0f - min(15000.0f, (_exposure4.x * _4125)))))), half(1.0f - _4077));
     break;

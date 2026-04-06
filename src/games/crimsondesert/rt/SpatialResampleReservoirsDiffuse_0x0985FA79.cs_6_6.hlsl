@@ -224,7 +224,7 @@ void main(
   //
   // Griefs the game because of only 1spp, causes a lot of boiling
   // ============================================================
-  if (RT_QUALITY >= 0.5f) {
+  if (RT_QUALITY >= 1.f) {
     static const int   SPMIS_N     = 24;
     static const float SPMIS_INV_N = 1.0f / 24.0f;
     static const float SPMIS_PI    = 3.14159265358979f;
@@ -386,7 +386,7 @@ void main(
       uint _371 = _362 * -1964877855;
       // RenoDX: R2+CP blue noise for spatial neighbor selection
       int _390, _391;
-      if (RT_QUALITY > 0.5f) {
+      if (RT_QUALITY >= 1.f) {
         float2 _rndx_nbr = _rndx_sample_noise(SV_DispatchThreadID.xy, _frameNumber.x, 3u + _365);
         _390 = int(min(max(float(int((_rndx_nbr.x * 2.0f - 1.0f) * _313) + (int)(SV_DispatchThreadID.x)), 0.0f), (_bufferSizeAndInvSize.x - 1.0f)));
         _391 = int(min(max(float(int((_rndx_nbr.y * 2.0f - 1.0f) * _313) + (int)(SV_DispatchThreadID.y)), 0.0f), (_bufferSizeAndInvSize.y - 1.0f)));

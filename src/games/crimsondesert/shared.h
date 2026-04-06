@@ -6,20 +6,22 @@
 #include <cstdint>
 #endif
 
-#define CUSTOM_FLAGS__TONE_MAP_TYPE                    0b0000000000001u
-#define CUSTOM_FLAGS__SDR_BLACK_CRUSH_FIX              0b0000000000010u
-#define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE           0b0000000000100u
-#define CUSTOM_FLAGS__DISABLE_AWB                      0b0000000001000u
-#define CUSTOM_FLAGS__DISABLE_HERO_LIGHTS              0b0000000010000u
-#define CUSTOM_FLAGS__FILM_GRAIN_TYPE                  0b0000000100000u
-#define CUSTOM_FLAGS__SHARPENING_TYPE                  0b0000001000000u
-#define CUSTOM_FLAGS__SKY_SCATTERING                   0b0000010000000u
-#define CUSTOM_FLAGS__SUN_MOON_ADJUSTMENTS             0b0000100000000u
-#define CUSTOM_FLAGS__CONTACT_SHADOW_QUALITY           0b0001000000000u
-#define CUSTOM_FLAGS__RT_QUALITY_BIT0                  0b0010000000000u
-#define CUSTOM_FLAGS__RT_QUALITY_BIT1                  0b0100000000000u
-#define CUSTOM_FLAGS__MATERIAL_IMPROVEMENTS            0b1000000000000u
+#define CUSTOM_FLAGS__TONE_MAP_TYPE                     0b0000000000001u
+#define CUSTOM_FLAGS__SDR_BLACK_CRUSH_FIX               0b0000000000010u
+#define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE            0b0000000000100u
+#define CUSTOM_FLAGS__DISABLE_AWB                       0b0000000001000u
+#define CUSTOM_FLAGS__DISABLE_HERO_LIGHTS               0b0000000010000u
+#define CUSTOM_FLAGS__FILM_GRAIN_TYPE                   0b0000000100000u
+#define CUSTOM_FLAGS__SHARPENING_TYPE                   0b0000001000000u
+#define CUSTOM_FLAGS__SKY_SCATTERING                    0b0000010000000u
+#define CUSTOM_FLAGS__SUN_MOON_ADJUSTMENTS              0b0000100000000u
+#define CUSTOM_FLAGS__CONTACT_SHADOW_QUALITY            0b0001000000000u
+#define CUSTOM_FLAGS__RT_QUALITY_BIT0                   0b0010000000000u
+#define CUSTOM_FLAGS__RT_QUALITY_BIT1                   0b0100000000000u
+#define CUSTOM_FLAGS__MATERIAL_IMPROVEMENTS             0b1000000000000u
 #define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE_PERCEPTUAL 0b10000000000000u
+#define CUSTOM_FLAGS__DAWN_DUSK_IMPROVEMENTS            0b100000000000000u
+#define CUSTOM_FLAGS__SNOW_FOG_FIX                      0b1000000000000000u
 
 #define CUSTOM_FLAGS                           shader_injection.custom_flags
 
@@ -61,16 +63,16 @@
 #define SHADOW_DEBUG_MODE                      0 // shader_injection.shadow_debug_mode
 #define SHADOW_DISABLE_LAYER                   0 // shader_injection.shadow_disable_layer
 #define CONTACT_SHADOW_QUALITY                 ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__CONTACT_SHADOW_QUALITY) != 0u ? 1.f : 0.f)
-#define FOLIAGE_TRANSMISSION                   (CONTACT_SHADOW_QUALITY > 0.5f ? 1.0f : 0.0f)
+#define FOLIAGE_TRANSMISSION                   (CONTACT_SHADOW_QUALITY == 1.f ? 1.0f : 0.0f)
 #define RT_QUALITY                             ((float)((CUSTOM_FLAGS_AS_UINT >> 10u) & 0x3u))
 #define RT_GI_KNEE                             2.0f
 #define RT_GI_STRENGTH                         0.07f
 #define MATERIAL_IMPROVEMENTS                  ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__MATERIAL_IMPROVEMENTS) != 0u ? 1.f : 0.f)
-#define DIFFUSE_BRDF_MODE                      (MATERIAL_IMPROVEMENTS > 0.5f ? 2.0f : 0.0f)
-#define SMOOTH_TERMINATOR                      (MATERIAL_IMPROVEMENTS > 0.5f ? 1.0f : 0.0f)
-#define SPECULAR_AA                            (MATERIAL_IMPROVEMENTS > 0.5f ? 1.0f : 0.0f)
-#define DIFFRACTION                            (MATERIAL_IMPROVEMENTS > 0.5f ? 1.0f : 0.0f)
-#define FOLIAGE_GREEN_DESAT                    (CONTACT_SHADOW_QUALITY > 0.5f ? 0.5f : 0.0f)
+#define DIFFUSE_BRDF_MODE                      (MATERIAL_IMPROVEMENTS == 1.f ? 2.0f : 0.0f)
+#define SMOOTH_TERMINATOR                      (MATERIAL_IMPROVEMENTS == 1.f ? 1.0f : 0.0f)
+#define SPECULAR_AA                            (MATERIAL_IMPROVEMENTS == 1.f ? 1.0f : 0.0f)
+#define DIFFRACTION                            (MATERIAL_IMPROVEMENTS == 1.f ? 1.0f : 0.0f)
+#define FOLIAGE_GREEN_DESAT                    (CONTACT_SHADOW_QUALITY == 1.f ? 0.5f : 0.0f)
 #define LOCAL_LIGHT_HUE_CORRECTION             shader_injection.local_light_hue_correction
 #define LOCAL_LIGHT_SATURATION                 shader_injection.local_light_saturation
 #define DISABLE_AWB                            ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__DISABLE_AWB) != 0u ? 1.f : 0.f)
@@ -81,6 +83,8 @@
 #define SUN_MOON_ADJUSTMENTS                   ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__SUN_MOON_ADJUSTMENTS) != 0u ? 1.f : 0.f)
 #define MOON_DISK_SIZE                         shader_injection.moon_disk_size
 #define SKY_SCATTERING                         ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__SKY_SCATTERING) != 0u ? 1.f : 0.f)
+#define DAWN_DUSK_IMPROVEMENTS                 ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__DAWN_DUSK_IMPROVEMENTS) != 0u ? 1.f : 0.f)
+#define SNOW_FOG_FIX                           ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__SNOW_FOG_FIX) != 0u ? 1.f : 0.f)
 
 // Auto exposure tuning
 //#define AE_DARK_POWER_OUTDOOR                  shader_injection.ae_dark_power_outdoor

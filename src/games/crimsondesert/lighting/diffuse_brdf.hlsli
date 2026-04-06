@@ -5,7 +5,6 @@
 #ifndef DIFFUSE_BRDF_HLSLI
 #define DIFFUSE_BRDF_HLSLI
 
-static const float RDXL_PI     = 3.14159265f;
 static const float RDXL_INV_PI = 0.31830987334251404f;
 
 // ============================================================================
@@ -58,13 +57,13 @@ float HammonDiffuseScalar(
 // ============================================================================
 
 // FON constants
-static const float EON_C1 = 0.5f - 2.0f / (3.0f * RDXL_PI); 
-static const float EON_C2 = 2.0f / 3.0f - 28.0f / (15.0f * RDXL_PI); 
+static const float EON_C1 = 0.5f - 2.0f / (3.0f * renodx::math::PI); 
+static const float EON_C2 = 2.0f / 3.0f - 28.0f / (15.0f * renodx::math::PI); 
 
 // FON Directional Albedo — Exact closed form
 float EON_E_FON_Exact_L(float mu, float r)
 {
-  float AF = 1.0f / (1.0f + EON_C1 * r);
+  float AF = rcp(1.0f + EON_C1 * r);
   float BF = r * AF;
   float Si = sqrt(max(1.0f - mu * mu, 0.0f));
   float G  = Si * (acos(clamp(mu, -1.0f, 1.0f)) - Si * mu)
@@ -91,10 +90,13 @@ float EON_DiffuseScalar(
   // The paper's formulation diverges when both mu_i and mu_o are small
   // (grazing foliage, complex geometry). Threshold 0.1 matches Hammon's approach
   // for NdotH and caps sovertF at s/0.1 ≈ 10 max
-  float sovertF = (s > 0.0f) ? (s / max(max(mu_i, mu_o), 0.1f)) : s;
+  float sovertF = renodx::math::Select(
+    (s > 0.0f),
+    (s / max(max(mu_i, mu_o), 0.1f)),
+    (s));
 
   // FON A coefficient
-  float AF = 1.0f / (1.0f + EON_C1 * roughness);
+  float AF = rcp(1.0f + EON_C1 * roughness);
 
   // Single scatter (rho = 1) — clamped to non negative.
   // Negative values occur when s is large negative (backlit geometry)
@@ -219,41 +221,41 @@ float NDFFilterRoughnessCS(
 // ============================================================================
 
 // 3D Simplex Noise (Gustavson) — for RGB speckle
-float4 _dfr_permute4(float4 x) { return fmod((x * 34.0 + 1.0) * x, 289.0); }
-float4 _dfr_taylorInvSqrt(float4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+float4 _dfr_permute4(float4 x) { return fmod(mad(x, 34.0f, 1.0f) * x, 289.0f); }
+float4 _dfr_taylorInvSqrt(float4 r) { return mad(-0.85373472095314f, r, 1.79284291400159f); }
 
 float _dfr_snoise3(float3 v)
 {
-  static const float2 C = float2(1.0 / 6.0, 1.0 / 3.0);
+  static const float2 C = float2(1.0f / 6.0f, 1.0f / 3.0f);
   float3 i  = floor(v + dot(v, C.yyy));
   float3 x0 = v - i + dot(i, C.xxx);
   float3 g  = step(x0.yzx, x0.xyz);
-  float3 l  = 1.0 - g;
+  float3 l  = 1.0f - g;
   float3 i1 = min(g, l.zxy);
   float3 i2 = max(g, l.zxy);
   float3 x1 = x0 - i1 + C.xxx;
   float3 x2 = x0 - i2 + C.yyy;
-  float3 x3 = x0 - 0.5;
-  i = fmod(i, 289.0);
+  float3 x3 = x0 - 0.5f;
+  i = fmod(i, 289.0f);
   float4 p = _dfr_permute4(
     _dfr_permute4(
       _dfr_permute4(
-        i.z + float4(0.0, i1.z, i2.z, 1.0))
-      + i.y + float4(0.0, i1.y, i2.y, 1.0))
-    + i.x + float4(0.0, i1.x, i2.x, 1.0));
-  float4 j  = p - 49.0 * floor(p / 49.0);
-  float4 x_ = floor(j / 7.0);
-  float4 y_ = floor(j - 7.0 * x_);
-  float4 gx = x_ / 7.0 + 1.0 / 14.0 - 0.5;
-  float4 gy = y_ / 7.0 + 1.0 / 14.0 - 0.5;
-  float4 gz = 1.0 - abs(gx) - abs(gy);
+        i.z + float4(0.0f, i1.z, i2.z, 1.0f))
+      + i.y + float4(0.0f, i1.y, i2.y, 1.0f))
+    + i.x + float4(0.0f, i1.x, i2.x, 1.0f));
+  float4 j  = p - 49.0f * floor(p / 49.0f);
+  float4 x_ = floor(j / 7.0f);
+  float4 y_ = floor(j - 7.0f * x_);
+  float4 gx = x_ / 7.0f + 1.0f / 14.0f - 0.5f;
+  float4 gy = y_ / 7.0f + 1.0f / 14.0f - 0.5f;
+  float4 gz = 1.0f - abs(gx) - abs(gy);
   float4 b0 = float4(gx.xy, gy.xy);
   float4 b1 = float4(gx.zw, gy.zw);
-  float4 s0 = floor(b0) * 2.0 + 1.0;
-  float4 s1 = floor(b1) * 2.0 + 1.0;
-  float4 sh = -step(gz, 0.0);
-  float4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
-  float4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+  float4 s0 = mad(floor(b0), 2.0f, 1.0f);
+  float4 s1 = mad(floor(b1), 2.0f, 1.0f);
+  float4 sh = -step(gz, 0.0f);
+  float4 a0 = mad(s0.xzyw, sh.xxyy, b0.xzyw);
+  float4 a1 = mad(s1.xzyw, sh.zzww, b1.xzyw);
   float3 g0 = float3(a0.xy, gz.x);
   float3 g1 = float3(a0.zw, gz.y);
   float3 g2 = float3(a1.xy, gz.z);
@@ -261,11 +263,11 @@ float _dfr_snoise3(float3 v)
   float4 norm = _dfr_taylorInvSqrt(float4(
       dot(g0, g0), dot(g1, g1), dot(g2, g2), dot(g3, g3)));
   g0 *= norm.x;  g1 *= norm.y;  g2 *= norm.z;  g3 *= norm.w;
-  float4 m = max(0.6 - float4(dot(x0, x0), dot(x1, x1),
-                               dot(x2, x2), dot(x3, x3)), 0.0);
+  float4 m = max(0.6f - float4(dot(x0, x0), dot(x1, x1),
+                                dot(x2, x2), dot(x3, x3)), 0.0f);
   m = m * m;
-  return 42.0 * dot(m * m, float4(dot(g0, x0), dot(g1, x1),
-                                   dot(g2, x2), dot(g3, x3)));
+  return 42.0f * dot(m * m, float4(dot(g0, x0), dot(g1, x1),
+                                    dot(g2, x2), dot(g3, x3)));
 }
 
 // spectral shift + speckle + F0 aware hue modulation.
@@ -281,76 +283,76 @@ float3 DiffractionShiftAndSpeckleCS(
     float3 F0)
 {
   // -- Roughness interpolated params (paper Table 1) --
-  float t = saturate((0.3922 - roughness) / (0.3922 - 0.14033));
-  float w = lerp(2.3394, 6.4455, t);
-  float h = lerp(0.001025, 0.00077, t);
-  static const float3 shiftScatter   = float3(1.0, 0.88, 0.76);
-  static const float3 shiftIntensity = float3(0.95, 1.0, 1.05);
+  float t = saturate((0.3922f - roughness) / (0.3922f - 0.14033f));
+  float w = lerp(2.3394f, 6.4455f, t);
+  float h = lerp(0.001025f, 0.00077f, t);
+  static const float3 shiftScatter   = float3(1.0f, 0.88f, 0.76f);
+  static const float3 shiftIntensity = float3(0.95f, 1.0f, 1.05f);
 
   // -- Spectral shift (paper Eq. 7) --
   float thetaM = acos(NdotH);
   float cosWT  = cos(w * thetaM);
-  float3 rawShift = shiftScatter * cosWT * h + shiftIntensity;
-  float3 shiftDev = rawShift - 1.0;
+  float3 rawShift = mad(shiftScatter, cosWT * h, shiftIntensity);
+  float3 shiftDev = rawShift - 1.0f;
 
   // -- F0-aware hue modulation --
-  float  F0avg  = max(dot(F0, float3(0.333, 0.333, 0.333)), 0.01);
-  float3 F0norm = F0 / F0avg;
+  float  F0avg  = max(dot(F0, float3(0.333f, 0.333f, 0.333f)), 0.01f);
+  float3 F0norm = renodx::math::DivideSafe(F0, F0avg, 1.f);
   float  chromaSpread = max(max(F0norm.x, F0norm.y), F0norm.z)
                       - min(min(F0norm.x, F0norm.y), F0norm.z);
-  float  coloredness  = saturate(chromaSpread * 1.5);
-  float3 coloredDev   = (F0norm - 1.0) * abs(shiftDev.x + shiftDev.z) * 0.5;
+  float  coloredness  = saturate(chromaSpread * 1.5f);
+  float3 coloredDev   = (F0norm - 1.0f) * abs(shiftDev.x + shiftDev.z) * 0.5f;
   float3 finalDev     = lerp(shiftDev, coloredDev, coloredness);
-  float3 shift        = 1.0 + finalDev * 4.0 * 0.7;
+  float3 shift        = mad(finalDev, 2.8f, 1.0f);
 
   // -- Speckle noise (paper Listing 2, compute-shader path) --
-  float uvScale = lerp(500.0, 800.0, t);
+  float uvScale = lerp(500.0f, 800.0f, t);
   float2 scaledUV = screenUV * uvScale;
 
   // Screen space derivatives via quad intrinsics
   float2 duvdx = QuadReadAcrossX(scaledUV) - scaledUV;
   float2 duvdy = QuadReadAcrossY(scaledUV) - scaledUV;
   float  delta_uv = max(length(duvdx), length(duvdy));
-  float  sqrtSPP  = delta_uv * 2.0;  // / UV_TO_SPECKLE_FACTOR(0.5)
+  float  sqrtSPP  = delta_uv * 2.0f;
 
   // Amplitude reduction (paper Eq. 14)
-  float ampMod = 1.0 - saturate(max(sqrtSPP - 1.0, 0.0));
+  float ampMod = 1.0f - saturate(max(sqrtSPP - 1.0f, 0.0f));
 
   // Polar encoded half vector for view/light dependent pattern (paper §5.2)
   float  hr = length(halfVec);
-  float  h_a = (atan2(halfVec.y, halfVec.x) - atan2(normal.y, normal.x)) * 7.0;
-  float  h_p = (asin(clamp(halfVec.z / max(hr, 1e-7), -1.0, 1.0))
-              - asin(clamp(normal.z / max(length(normal), 1e-7), -1.0, 1.0))) * 7.0;
+  float  h_a = (atan2(halfVec.y, halfVec.x) - atan2(normal.y, normal.x)) * 7.0f;
+  float  h_p = (asin(clamp(halfVec.z / max(hr, 1e-7f), -1.0f, 1.0f))
+              - asin(clamp(normal.z / max(length(normal), 1e-7f), -1.0f, 1.0f))) * 7.0f;
 
   // Sample noise — 3 decorrelated channels
-  float3 noise = float3(0.0, 0.0, 0.0);
-  if (sqrtSPP <= 1.0) {
+  float3 noise = 0.0f;
+  if (sqrtSPP <= 1.0f) {
     noise.r = _dfr_snoise3(float3(scaledUV, h_a));
-    noise.g = _dfr_snoise3(float3(scaledUV + 17.3, h_a + 7.1));
-    noise.b = _dfr_snoise3(float3(scaledUV + 31.7, h_p));
-  } else if (sqrtSPP <= 2.0) {
+    noise.g = _dfr_snoise3(float3(scaledUV + 17.3f, h_a + 7.1f));
+    noise.b = _dfr_snoise3(float3(scaledUV + 31.7f, h_p));
+  } else if (sqrtSPP <= 2.0f) {
     // Transition: 4-tap multisample
     static const float2 msOff[4] = {
-      float2(-0.25, -0.25), float2(0.25, -0.25),
-      float2(-0.25,  0.25), float2(0.25,  0.25)
+      float2(-0.25f, -0.25f), float2(0.25f, -0.25f),
+      float2(-0.25f,  0.25f), float2(0.25f,  0.25f)
     };
     [unroll] for (int s = 0; s < 4; s++) {
-      float2 uv = scaledUV + msOff[s] * delta_uv;
+      float2 uv = mad(msOff[s], delta_uv, scaledUV);
       noise.r += _dfr_snoise3(float3(uv, h_a));
-      noise.g += _dfr_snoise3(float3(uv + 17.3, h_a + 7.1));
-      noise.b += _dfr_snoise3(float3(uv + 31.7, h_p));
+      noise.g += _dfr_snoise3(float3(uv + 17.3f, h_a + 7.1f));
+      noise.b += _dfr_snoise3(float3(uv + 31.7f, h_p));
     }
-    noise *= 0.25;
+    noise *= 0.25f;
   }
 
   // Covariance scaling (paper Eq. 12) — floored so speckle is visible at highlight peak
   float covCos = cos(w * thetaM);
-  float covScale = sqrt(max(1.0 - covCos * covCos, 0.15)) * lerp(0.5, 0.3, t);
+  float covScale = sqrt(max(mad(-covCos, covCos, 1.0f), 0.15f)) * lerp(0.5f, 0.3f, t);
   noise *= covScale * ampMod;
 
   // F0 tinted speckle
-  float3 speckleTint = lerp(float3(1.0, 1.0, 1.0), F0norm, coloredness * 0.5);
-  float3 speckle = noise * 0.5 * speckleTint;
+  float3 speckleTint = lerp(1.0f, F0norm, coloredness * 0.5f);
+  float3 speckle = noise * 0.5f * speckleTint;
 
   return shift + speckle;
 }

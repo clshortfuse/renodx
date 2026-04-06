@@ -43,3 +43,4 @@ bin/**
 .cache/**
 .env
 .vscode/mcp.json
+.kiro/

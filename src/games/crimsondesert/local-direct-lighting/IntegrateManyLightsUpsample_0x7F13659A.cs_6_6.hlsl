@@ -874,7 +874,7 @@ void main(
             float3(_603, _604, _605),
             float3(_569, _570, _571)
           );
-          float3 _rndx_dMod = lerp(float3(1.0f, 1.0f, 1.0f), _rndx_dShift, DIFFRACTION * float(_532));
+          float3 _rndx_dMod = lerp(1.0f, _rndx_dShift, DIFFRACTION * float(_532));
           _1248 *= _rndx_dMod.x;
           _1249 *= _rndx_dMod.y;
           _1250 *= _rndx_dMod.z;

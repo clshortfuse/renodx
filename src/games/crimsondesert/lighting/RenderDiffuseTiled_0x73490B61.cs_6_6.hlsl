@@ -1,4 +1,5 @@
 #include "../shared.h"
+#include "../sky-atmospheric/sky_dawn_dusk_common.hlsli"
 #include "diffuse_brdf.hlsli"
 
 Texture2D<float4> __3__36__0__0__g_puddleMask : register(t87, space36);
@@ -618,7 +619,7 @@ void main(
       float _fdr = float(_424);
       float _fdg = float(_425);
       float _fdb = float(_426);
-      float _fdLum = dot(float3(_fdr, _fdg, _fdb), float3(0.2127f, 0.7152f, 0.0722f));
+      float _fdLum = renodx::color::y::from::BT709(float3(_fdr, _fdg, _fdb));
       float _fdGreenExcess = saturate((_fdg - max(_fdr, _fdb)) * 2.0f);
       float _fdAmount = FOLIAGE_GREEN_DESAT * _fdGreenExcess;
       _fdr = lerp(_fdr, _fdLum, _fdAmount);
@@ -1423,6 +1424,19 @@ void main(
     float _2547 = (((_2529 * 0.6131200194358826f) + (_2530 * 0.3395099937915802f)) + (_2531 * 0.047370001673698425f)) * _2340;
     float _2548 = (((_2529 * 0.07020000368356705f) + (_2530 * 0.9163600206375122f)) + (_2531 * 0.013450000435113907f)) * _2340;
     float _2549 = (((_2529 * 0.02061999961733818f) + (_2530 * 0.10958000272512436f)) + (_2531 * 0.8697999715805054f)) * _2340;
+    // [DAWN_DUSK_GI] SH ambient directional boost
+    if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+      float _ddFactor = DawnDuskFactor(_sunDirection.y);
+      float3 _ddAmbient = DawnDuskAmbientBoost(
+        float3(_2547, _2548, _2549),
+        float3(float(_2301), float(_2302), float(_2303)),
+        _sunDirection.xyz,
+        _ddFactor,
+        _precomputedAmbient0.xyz);
+      _2547 = _ddAmbient.x;
+      _2548 = _ddAmbient.y;
+      _2549 = _ddAmbient.z;
+    }
     float _2552 = float(_2267.x);
     float _2553 = float(_2267.y);
     float _2554 = float(_2267.z);
@@ -1617,7 +1631,7 @@ void main(
         float3(_2618, _2619, _2620),              // shading normal N
         float3(_2723, _2724, _2725)               // F0 (base reflectance)
       );
-      float3 _rndx_dMod = lerp(float3(1.0f, 1.0f, 1.0f), _rndx_dShift, DIFFRACTION * _2721);
+      float3 _rndx_dMod = lerp(1.0f, _rndx_dShift, DIFFRACTION * _2721);
       _2825 *= _rndx_dMod.x;
       _2826 *= _rndx_dMod.y;
       _2827 *= _rndx_dMod.z;
