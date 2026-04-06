@@ -1,4 +1,4 @@
-#include "sky_spectral_common.hlsl"
+#include "sky_spectral_common.hlsli"
 
 Texture3D<float4> __3__36__0__0__g_texPrecomputedLUTMultiGather : register(t63, space36);
 

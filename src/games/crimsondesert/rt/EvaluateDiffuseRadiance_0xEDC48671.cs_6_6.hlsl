@@ -1,4 +1,6 @@
 #include "../shared.h"
+#include "../sky-atmospheric/sky_dawn_dusk_common.hlsli"
+
 struct SurfelData {
   uint _baseColor;
   uint _normal;
@@ -871,7 +873,7 @@ void main(
                   float _673 = ((select(_662, (((_516 * 0.9163600206375122f) + (_515 * 0.07020000368356705f)) + (_517 * 0.013450000435113907f)), _224.y) * _543) * _658) + _461;
                   float _674 = ((select(_662, (((_516 * 0.10958000272512436f) + (_515 * 0.02061999961733818f)) + (_517 * 0.8697999715805054f)), _224.z) * _544) * _658) + _462;
                   float _675 = _658 + _466;
-                  if ((uint)(_467 + 1) < (uint)(RT_QUALITY > 0.5f ? 8 : 4)) {
+                  if ((uint)(_467 + 1) < (uint)4) {
                     _460 = _672;
                     _461 = _673;
                     _462 = _674;
@@ -1567,7 +1569,7 @@ void main(
                               float _1957 = (((((_1811 * 0.9163600206375122f) + (_1810 * 0.07020000368356705f)) + (_1812 * 0.013450000435113907f)) * _1838) * _1949) + _1759;
                               float _1958 = (((((_1811 * 0.10958000272512436f) + (_1810 * 0.02061999961733818f)) + (_1812 * 0.8697999715805054f)) * _1839) * _1949) + _1760;
                               float _1959 = _1949 + _1761;
-                              if ((uint)(_1762 + 1) < (uint)(RT_QUALITY > 0.5f ? 8 : 4)) {
+                              if ((uint)(_1762 + 1) < (uint)4) {
                                 _1758 = _1956;
                                 _1759 = _1957;
                                 _1760 = _1958;
@@ -2410,6 +2412,19 @@ void main(
         _4071 = ((_4048 * select(_4049, 0.03125f, _754)) * _4057.x);
         _4072 = ((_4048 * select(_4049, 0.03125f, _755)) * _4057.y);
         _4073 = ((_4048 * select(_4049, 0.03125f, _756)) * _4057.z);
+        // [DAWN_DUSK_GI] Probe directional boost + energy floor
+        if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+          float _ddFactor = DawnDuskFactor(_sunDirection.y);
+          float3 _ddAmbient = DawnDuskAmbientBoost(
+            float3(_4071, _4072, _4073),
+            float3(_133, _134, _135),
+            _sunDirection.xyz,
+            _ddFactor,
+            _precomputedAmbient0.xyz);
+          _4071 = _ddAmbient.x;
+          _4072 = _ddAmbient.y;
+          _4073 = _ddAmbient.z;
+        }
         break;
       }
     } else {
@@ -2424,6 +2439,19 @@ void main(
     float _4095 = _4094 * _4088.x;
     float _4096 = _4094 * _4088.y;
     float _4097 = _4094 * _4088.z;
+    // [DAWN_DUSK_GI] Probe directional boost + energy floor
+    if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+      float _ddFactor = DawnDuskFactor(_sunDirection.y);
+      float3 _ddAmbient = DawnDuskAmbientBoost(
+        float3(_4095, _4096, _4097),
+        float3(_133, _134, _135),
+        _sunDirection.xyz,
+        _ddFactor,
+        _precomputedAmbient0.xyz);
+      _4095 = _ddAmbient.x;
+      _4096 = _ddAmbient.y;
+      _4097 = _ddAmbient.z;
+    }
     float _4102 = dot(float3(_4095, _4096, _4097), float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
     float _4103 = min((max(0.009999999776482582f, _exposure3.w) * 2048.0f), _4102);
     float _4107 = max(9.999999717180685e-10f, _4102);
@@ -2732,7 +2760,7 @@ void main(
                                   float _4841 = (((((_4701 * 0.9163600206375122f) + (_4700 * 0.07020000368356705f)) + (_4702 * 0.013450000435113907f)) * _4728) * _4833) + _4649;
                                   float _4842 = (((((_4701 * 0.10958000272512436f) + (_4700 * 0.02061999961733818f)) + (_4702 * 0.8697999715805054f)) * _4729) * _4833) + _4650;
                                   float _4843 = _4833 + _4651;
-                                  if ((uint)(_4652 + 1) < (uint)(RT_QUALITY > 0.5f ? 8 : 4)) {
+                                  if ((uint)(_4652 + 1) < (uint)4) {
                                     _4648 = _4840;
                                     _4649 = _4841;
                                     _4650 = _4842;
@@ -3117,12 +3145,12 @@ void main(
     //
     // Apply a luminance based soft compression on the raw hit radiance before it
     // enters the reservoir
-    if (RT_QUALITY >= 0.5f && RT_GI_STRENGTH > 0.0f) {
-      float _rndx_gi_lum = dot(float3(_5732, _5733, _5734), float3(0.2127f, 0.7152f, 0.0722f));
+    if (RT_QUALITY >= 1.f && RT_GI_STRENGTH > 0.0f) {
+      float _rndx_gi_lum = renodx::color::y::from::BT709(float3(_5732, _5733, _5734));
       if (_rndx_gi_lum > RT_GI_KNEE) {
         float _rndx_gi_excess = _rndx_gi_lum - RT_GI_KNEE;
-        float _rndx_gi_compressed = RT_GI_KNEE + _rndx_gi_excess / (1.0f + _rndx_gi_excess * RT_GI_STRENGTH);
-        float _rndx_gi_scale = _rndx_gi_compressed / max(1e-7f, _rndx_gi_lum);
+        float _rndx_gi_compressed = RT_GI_KNEE + renodx::math::DivideSafe(_rndx_gi_excess, mad(_rndx_gi_excess, RT_GI_STRENGTH, 1.0f));
+        float _rndx_gi_scale = renodx::math::DivideSafe(_rndx_gi_compressed, _rndx_gi_lum, 1.f);
         _5732 *= _rndx_gi_scale;
         _5733 *= _rndx_gi_scale;
         _5734 *= _rndx_gi_scale;

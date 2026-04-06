@@ -334,7 +334,7 @@ void main(
     // ignores that TAA jitter shifts the subpixel position each frame.
     float _rndx_jitter_delta_u = 0.0f;
     float _rndx_jitter_delta_v = 0.0f;
-    if (RT_QUALITY >= 0.5f) {
+    if (RT_QUALITY >= 1.f) {
       _rndx_jitter_delta_u = (_temporalAAJitter.x - _temporalAAJitter.z) * 0.5f;
       _rndx_jitter_delta_v = (_temporalAAJitter.y - _temporalAAJitter.w) * 0.5f;
     }
@@ -368,7 +368,7 @@ void main(
     // RenoDX: Subpixel aware validation threshold relaxation
     // Widens world space distance threshold proportionally to jitter magnitude
     float _rndx_validation_threshold = _431;
-    if (RT_QUALITY >= 0.5f) {
+    if (RT_QUALITY >= 1.f) {
       float _rndx_jitter_mag = sqrt(_rndx_jitter_delta_u * _rndx_jitter_delta_u
                                   + _rndx_jitter_delta_v * _rndx_jitter_delta_v);
       _rndx_validation_threshold = _431 + _267 * _rndx_jitter_mag * 2.0f;
@@ -677,9 +677,9 @@ void main(
         float _1035 = _1034 * _634;
         // RenoDX: Smooth exposure M cap sigmoid replaces linear cliff
         float _1052;
-        if (RT_QUALITY > 0.5f) {
-          float _rndx_t = 1.0f / (1.0f + exp(-6.0f * (_exposure3.w - 0.5f)));
-          _1052 = select(((_428) || ((_renderParams.y > 0.0f))), 32.0f, lerp(256.0f, 64.0f, _rndx_t));
+        if (RT_QUALITY >= 1.f) {
+          float _rndx_t = rcp(1.0f + exp(-6.0f * (_exposure3.w - 0.5f)));
+          _1052 = renodx::math::Select(((_428) || ((_renderParams.y > 0.0f))), 32.0f, lerp(256.0f, 64.0f, _rndx_t));
         } else {
           _1052 = select(((_428) || ((_renderParams.y > 0.0f))), 32.0f, (256.0f - (saturate(_exposure3.w * 10.0f) * 192.0f)));
         }

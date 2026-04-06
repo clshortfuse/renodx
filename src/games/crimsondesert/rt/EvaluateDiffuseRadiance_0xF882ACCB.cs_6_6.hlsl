@@ -1,4 +1,6 @@
 #include "../shared.h"
+#include "../sky-atmospheric/sky_dawn_dusk_common.hlsli"
+
 struct SurfelData {
   uint _baseColor;
   uint _normal;
@@ -749,7 +751,7 @@ void main(
                   float _669 = ((select(_658, (((_512 * 0.9163600206375122f) + (_511 * 0.07020000368356705f)) + (_513 * 0.013450000435113907f)), _220.y) * _539) * _654) + _457;
                   float _670 = ((select(_658, (((_512 * 0.10958000272512436f) + (_511 * 0.02061999961733818f)) + (_513 * 0.8697999715805054f)), _220.z) * _540) * _654) + _458;
                   float _671 = _654 + _462;
-                  if ((uint)(_463 + 1) < (uint)(RT_QUALITY > 0.5f ? 8 : 4)) {
+                  if ((uint)(_463 + 1) < (uint)4) {
                     _456 = _668;
                     _457 = _669;
                     _458 = _670;
@@ -1445,7 +1447,7 @@ void main(
                               float _1953 = (((((_1807 * 0.9163600206375122f) + (_1806 * 0.07020000368356705f)) + (_1808 * 0.013450000435113907f)) * _1834) * _1945) + _1755;
                               float _1954 = (((((_1807 * 0.10958000272512436f) + (_1806 * 0.02061999961733818f)) + (_1808 * 0.8697999715805054f)) * _1835) * _1945) + _1756;
                               float _1955 = _1945 + _1757;
-                              if ((uint)(_1758 + 1) < (uint)(RT_QUALITY > 0.5f ? 8 : 4)) {
+                              if ((uint)(_1758 + 1) < (uint)4) {
                                 _1754 = _1952;
                                 _1755 = _1953;
                                 _1756 = _1954;
@@ -2288,6 +2290,19 @@ void main(
         _4067 = ((_4044 * select(_4045, 0.03125f, _750)) * _4053.x);
         _4068 = ((_4044 * select(_4045, 0.03125f, _751)) * _4053.y);
         _4069 = ((_4044 * select(_4045, 0.03125f, _752)) * _4053.z);
+        // [DAWN_DUSK_GI] Cubemap directional boost + energy floor
+        if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+          float _ddFactor = DawnDuskFactor(_sunDirection.y);
+          float3 _ddAmbient = DawnDuskAmbientBoost(
+            float3(_4067, _4068, _4069),
+            float3(_133, _134, _135),
+            _sunDirection.xyz,
+            _ddFactor,
+            _precomputedAmbient0.xyz);
+          _4067 = _ddAmbient.x;
+          _4068 = _ddAmbient.y;
+          _4069 = _ddAmbient.z;
+        }
         break;
       }
     } else {
@@ -2302,6 +2317,19 @@ void main(
     float _4091 = _4090 * _4084.x;
     float _4092 = _4090 * _4084.y;
     float _4093 = _4090 * _4084.z;
+    // [DAWN_DUSK_GI] Probe directional boost + energy floor
+    if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+      float _ddFactor = DawnDuskFactor(_sunDirection.y);
+      float3 _ddAmbient = DawnDuskAmbientBoost(
+        float3(_4091, _4092, _4093),
+        float3(_133, _134, _135),
+        _sunDirection.xyz,
+        _ddFactor,
+        _precomputedAmbient0.xyz);
+      _4091 = _ddAmbient.x;
+      _4092 = _ddAmbient.y;
+      _4093 = _ddAmbient.z;
+    }
     float _4098 = dot(float3(_4091, _4092, _4093), float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
     float _4099 = min((max(0.009999999776482582f, _exposure3.w) * 2048.0f), _4098);
     float _4103 = max(9.999999717180685e-10f, _4098);
@@ -2326,12 +2354,12 @@ void main(
     //
     // Apply a luminance based soft compression on the raw hit radiance before it
     // enters the reservoir
-    if (RT_QUALITY >= 0.5f && RT_GI_STRENGTH > 0.0f) {
-      float _rndx_gi_lum = dot(float3(_4126, _4127, _4128), float3(0.2127f, 0.7152f, 0.0722f));
+    if (RT_QUALITY >= 1.f && RT_GI_STRENGTH > 0.0f) {
+      float _rndx_gi_lum = renodx::color::y::from::BT709(float3(_4126, _4127, _4128));
       if (_rndx_gi_lum > RT_GI_KNEE) {
         float _rndx_gi_excess = _rndx_gi_lum - RT_GI_KNEE;
-        float _rndx_gi_compressed = RT_GI_KNEE + _rndx_gi_excess / (1.0f + _rndx_gi_excess * RT_GI_STRENGTH);
-        float _rndx_gi_scale = _rndx_gi_compressed / max(1e-7f, _rndx_gi_lum);
+        float _rndx_gi_compressed = RT_GI_KNEE + renodx::math::DivideSafe(_rndx_gi_excess, mad(_rndx_gi_excess, RT_GI_STRENGTH, 1.0f));
+        float _rndx_gi_scale = renodx::math::DivideSafe(_rndx_gi_compressed, _rndx_gi_lum, 1.f);
         _4126 *= _rndx_gi_scale;
         _4127 *= _rndx_gi_scale;
         _4128 *= _rndx_gi_scale;

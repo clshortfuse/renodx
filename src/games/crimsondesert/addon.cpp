@@ -153,6 +153,8 @@ const std::unordered_map<std::string, float> VANILLA_VALUES = {
     {"MoonDiskSize", 1.f},
     {"ContactShadowQuality", 0.f},
     {"MaterialImprovements", 0.f},
+    {"DawnDuskImprovements", 0.f},
+    {"SnowFogFix", 0.f},
     {"RaytracingQuality", 0.f},
 };
 
@@ -177,6 +179,8 @@ const std::unordered_map<std::string, float> RECOMMENDED_VALUES = {
     {"MoonDiskSize", 4.f},
     {"ContactShadowQuality", 1.f},
     {"MaterialImprovements", 1.f},
+    {"DawnDuskImprovements", 1.f},
+    {"SnowFogFix", 1.f},
     {"RaytracingQuality", 0.f},
 };
 
@@ -941,6 +945,32 @@ renodx::utils::settings::Settings settings = {
         .tint = rendering,
     },
         new renodx::utils::settings::Setting{
+        .key = "DawnDuskImprovements",
+          .binding = &shader_injection.custom_flags,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+          .packed_values = {0u, CUSTOM_FLAGS__DAWN_DUSK_IMPROVEMENTS},
+        .can_reset = true,
+        .label = "Dawn/Dusk Improvements (WIP)",
+        .section = "Rendering",
+        .tooltip = "Directionality additions to atmospheric lighting at dawn and dusk.\n",
+        .labels = {"Off", "On"},
+        .tint = rendering,
+    },
+        new renodx::utils::settings::Setting{
+        .key = "SnowFogFix",
+          .binding = &shader_injection.custom_flags,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+          .packed_values = {0u, CUSTOM_FLAGS__SNOW_FOG_FIX},
+        .can_reset = true,
+        .label = "Snow Fog Scattering Fix (WIP)",
+        .section = "Rendering",
+        .tooltip = "Fixes massive brightness swings for both the sky and GI in snowy regions with heavy fog especially.\n",
+        .labels = {"Off", "On"},
+        .tint = rendering,
+    },
+        new renodx::utils::settings::Setting{
         .key = "MoonDiskSize",
         .binding = &shader_injection.moon_disk_size,
         .default_value = 4.f,
@@ -990,10 +1020,10 @@ renodx::utils::settings::Settings settings = {
         .label = "Material Improvements",
         .section = "Rendering",
         .tooltip = "Enables all material/lighting improvements:\n"
-                   "• EON 2025 energy-preserving diffuse BRDF\n"
-                   "• Callisto smooth terminator (SIGGRAPH 2023)\n"
-                   "• Geometric specular anti-aliasing (Tokuyoshi 2021)\n"
-                   "• Spectral diffraction on metals (Werner et al. 2024)",
+                   "- EON 2025 energy-preserving diffuse BRDF\n"
+                   "- Callisto smooth terminator\n"
+                   "- Geometric specular anti aliasing\n"
+                   "- Spectral diffraction on metals",
         .labels = {"Off", "On"},
         .tint = rendering,
         .is_visible = []() { return current_settings_mode >= 1.f; },
@@ -1161,6 +1191,8 @@ void OnPresetOff() {
       {"ContactShadowQuality", 0.f},
       {"RaytracingQuality", 0.f},
       {"MaterialImprovements", 0.f},
+      {"DawnDuskImprovements", 0.f},
+      {"SnowFogFix", 0.f},
       {"DisableAWB", 0.f},
 
       {"ImprovedAutoExposure", 0.f},

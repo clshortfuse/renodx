@@ -1,3 +1,6 @@
+#include "../shared.h"
+#include "../sky-atmospheric/sky_dawn_dusk_common.hlsli"
+
 struct SurfelData {
   uint _baseColor;
   uint _normal;
@@ -3407,6 +3410,19 @@ void main(
       _6144 = ((_6121 * select(_6122, 0.03125f, _1001)) * _6130.x);
       _6145 = ((_6121 * select(_6122, 0.03125f, _1002)) * _6130.y);
       _6146 = ((_6121 * select(_6122, 0.03125f, _1003)) * _6130.z);
+      // [DAWN_DUSK_GI] Probe directional boost + energy floor
+      if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+        float _ddFactor = DawnDuskFactor(_sunDirection.y);
+        float3 _ddAmbient = DawnDuskAmbientBoost(
+          float3(_6144, _6145, _6146),
+          float3(_800, _801, _802),
+          _sunDirection.xyz,
+          _ddFactor,
+          _precomputedAmbient0.xyz);
+        _6144 = _ddAmbient.x;
+        _6145 = _ddAmbient.y;
+        _6146 = _ddAmbient.z;
+      }
       break;
     }
   } else {

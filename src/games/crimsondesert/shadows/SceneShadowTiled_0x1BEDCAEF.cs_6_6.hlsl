@@ -1023,14 +1023,14 @@ void main(
             // RenoDX: Weather adaptive grass occluder thickness
             if (_2472 == 17) {
               float _grassWeather = saturate(abs(_sunDirection.y) * FOLIAGE_SHADOW_SENSITIVITY);
-              _2546 = select(CONTACT_SHADOW_QUALITY > 0.5f, lerp(0.018f, 0.05f, _grassWeather), 0.09f);
+              _2546 = renodx::math::Select(CONTACT_SHADOW_QUALITY == 1.f, lerp(0.018f, 0.05f, _grassWeather), 0.09f);
             }
             float _2548 = saturate(_2478 * 0.015625f);
             float _2551 = (1.0f - _2548) + (_2548 * _2546);
             _2561 = _2472;
             _2562 = saturate((saturate(1.0f - ((_2551 * _2551) * _2546)) * (1.0f - _2457)) + _2457);
             // RenoDX: Weather adaptive grass shadow contribution
-            if (CONTACT_SHADOW_QUALITY > 0.5f && _2472 == 17) {
+            if (CONTACT_SHADOW_QUALITY == 1.f && _2472 == 17) {
               float _grassContrib = lerp(0.3f, 0.65f, saturate(abs(_sunDirection.y) * FOLIAGE_SHADOW_SENSITIVITY));
               _2562 = lerp(_2457, _2562, _grassContrib);
             }
@@ -1169,14 +1169,14 @@ void main(
             // RenoDX: Weather adaptive grass occluder thickness
             if (_2742 == 17) {
               float _grassWeather2 = saturate(abs(_sunDirection.y) * FOLIAGE_SHADOW_SENSITIVITY);
-              _2816 = select(CONTACT_SHADOW_QUALITY > 0.5f, lerp(0.018f, 0.05f, _grassWeather2), 0.09f);
+              _2816 = renodx::math::Select(CONTACT_SHADOW_QUALITY == 1.f, lerp(0.018f, 0.05f, _grassWeather2), 0.09f);
             }
             float _2818 = saturate(_2749 * 0.015625f);
             float _2821 = (1.0f - _2818) + (_2818 * _2816);
             _2831 = _2742;
             _2832 = saturate((saturate(1.0f - ((_2821 * _2821) * _2816)) * (1.0f - _2727)) + _2727);
             // RenoDX: Weather adaptive grass shadow contribution
-            if (CONTACT_SHADOW_QUALITY > 0.5f && _2742 == 17) {
+            if (CONTACT_SHADOW_QUALITY == 1.f && _2742 == 17) {
               float _grassContrib2 = lerp(0.3f, 0.65f, saturate(abs(_sunDirection.y) * FOLIAGE_SHADOW_SENSITIVITY));
               _2832 = lerp(_2727, _2832, _grassContrib2);
             }
@@ -1423,7 +1423,7 @@ void main(
     // ──────────────────────────────────────────────────────────────────
 
     // ────────────────── Screen edge contact shadow fade ───────────────
-    if (CONTACT_SHADOW_QUALITY > 0.5f && _3066 < 1.0f) {
+    if (CONTACT_SHADOW_QUALITY == 1.f && _3066 < 1.0f) {
       float2 _screenUV = float2((_57 + 0.5f) * _bufferSizeAndInvSize.z,
                                  (_58 + 0.5f) * _bufferSizeAndInvSize.w);
       float2 _edgeDist = min(_screenUV, 1.0f - _screenUV);

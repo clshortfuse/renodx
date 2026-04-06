@@ -1,4 +1,5 @@
 #include "../shared.h"
+#include "../sky-atmospheric/sky_dawn_dusk_common.hlsli"
 #include "diffuse_brdf.hlsli"
 
 Texture2D<float4> __3__36__0__0__g_puddleMask : register(t87, space36);
@@ -1404,7 +1405,7 @@ void main(
       float _fdr = float(_989);
       float _fdg = float(_990);
       float _fdb = float(_991);
-      float _fdLum = dot(float3(_fdr, _fdg, _fdb), float3(0.2127f, 0.7152f, 0.0722f));
+      float _fdLum = renodx::color::y::from::BT709(float3(_fdr, _fdg, _fdb));
       float _fdGreenExcess = saturate((_fdg - max(_fdr, _fdb)) * 2.0f);
       float _fdAmount = FOLIAGE_GREEN_DESAT * _fdGreenExcess;
       _fdr = lerp(_fdr, _fdLum, _fdAmount);
@@ -2623,6 +2624,19 @@ void main(
     float _3375 = (((_3357 * 0.6131200194358826f) + (_3358 * 0.3395099937915802f)) + (_3359 * 0.047370001673698425f)) * _3167;
     float _3376 = (((_3357 * 0.07020000368356705f) + (_3358 * 0.9163600206375122f)) + (_3359 * 0.013450000435113907f)) * _3167;
     float _3377 = (((_3357 * 0.02061999961733818f) + (_3358 * 0.10958000272512436f)) + (_3359 * 0.8697999715805054f)) * _3167;
+    // [DAWN_DUSK_GI] SH ambient directional boost
+    if (DAWN_DUSK_IMPROVEMENTS == 1.f) {
+      float _ddFactor = DawnDuskFactor(_sunDirection.y);
+      float3 _ddAmbient = DawnDuskAmbientBoost(
+        float3(_3375, _3376, _3377),
+        float3(float(_3128), float(_3129), float(_3130)),
+        _sunDirection.xyz,
+        _ddFactor,
+        _precomputedAmbient0.xyz);
+      _3375 = _ddAmbient.x;
+      _3376 = _ddAmbient.y;
+      _3377 = _ddAmbient.z;
+    }
     float _3383 = float(_930.x);
     float _3384 = float(_3093.x);
     float _3385 = float(_3093.y);
@@ -3098,7 +3112,7 @@ void main(
               float3(_3472, _3473, _3474),
               float3(_3387, _3388, _3389)
             );
-            float3 _rndx_dMod = lerp(float3(1.0f, 1.0f, 1.0f), _rndx_dShift, DIFFRACTION * _3405);
+            float3 _rndx_dMod = lerp(1.0f, _rndx_dShift, DIFFRACTION * _3405);
             _4180 *= _rndx_dMod.x;
             _4181 *= _rndx_dMod.y;
             _4182 *= _rndx_dMod.z;

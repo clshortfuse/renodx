@@ -1,4 +1,5 @@
-#include "sky_spectral_common.hlsl"
+#include "sky_spectral_common.hlsli"
+#include "sky_dawn_dusk_common.hlsli"
 
 Texture2D<float4> __3__36__0__0__g_climateTex2 : register(t3, space36);
 
@@ -10060,6 +10061,10 @@ void main(
       float _10141 = _10134 * 0.0078125f;
       float _10142 = _10135 * 0.0078125f;
       float _10143 = _10136 * 0.0078125f;
+      // [DAWN_DUSK] SH directional bias — see sky_dawn_dusk_common.hlsli
+      float _dawnDuskFactor = DawnDuskFactor(_sunDirection.y);
+      float3 _shBiasR, _shBiasG, _shBiasB;
+      SHDirectionalBias(float3(_sunDirection.x, _sunDirection.y, _sunDirection.z), _dawnDuskFactor, float3(_10137, _10138, _10139), _shBiasR, _shBiasG, _shBiasB);
       switch ((uint)(SV_DispatchThreadID.x)) {
         case 0: {
           _10510 = _10137;
@@ -10082,6 +10087,8 @@ void main(
           _10511 = _10150;
           _10512 = _10148;
           _10513 = _10146;
+          // [DAWN_DUSK] Add L1 directional bias for R channel
+          _10510 += _shBiasR.x; _10511 += _shBiasR.y; _10512 += _shBiasR.z;
           __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].x = _10510; __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].y = _10511; __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].z = _10512; __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].w = _10513;
           break;
         }
@@ -10098,6 +10105,8 @@ void main(
           _10511 = _10159;
           _10512 = _10157;
           _10513 = _10155;
+          // [DAWN_DUSK] Add L1 directional bias for G channel
+          _10510 += _shBiasG.x; _10511 += _shBiasG.y; _10512 += _shBiasG.z;
           __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].x = _10510; __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].y = _10511; __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].z = _10512; __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].w = _10513;
           break;
         }
@@ -10114,6 +10123,8 @@ void main(
           _10511 = _10168;
           _10512 = _10166;
           _10513 = _10164;
+          // [DAWN_DUSK] Add L1 directional bias for B channel
+          _10510 += _shBiasB.x; _10511 += _shBiasB.y; _10512 += _shBiasB.z;
           __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].x = _10510; __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].y = _10511; __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].z = _10512; __3__39__0__1__g_texPrecomputedAmbientUAV[(int)(SV_DispatchThreadID.x)].w = _10513;
           break;
         }
