@@ -27,6 +27,8 @@ find_program(SLANGC_BIN slangc.exe
   REQUIRED)
 message("SLANGC_BIN: " ${SLANGC_BIN})
 
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 project(renodx VERSION 0.1.0 LANGUAGES CXX)
 
 include(CTest)
