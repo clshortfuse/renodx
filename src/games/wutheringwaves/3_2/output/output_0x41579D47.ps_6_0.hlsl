@@ -391,14 +391,15 @@ float4 main(
     _746 = _669;
     _747 = _670;
   }
+  GENERATE_INVERSION(_745, _746, _747);
   float _756 = ((((_746 * 587.0f) + (_745 * 299.0f)) + (_747 * 114.0f)) * 0.0010000000474974513f) - cb0_109z;
   float _763 = saturate(float((int)(((int)(uint)((bool)(_756 > 0.0f))) - ((int)(uint)((bool)(_756 < 0.0f))))));
   float _770 = cb0_110x - _745;
   float _771 = cb0_110y - _746;
   float _772 = cb0_110z - _747;
-  float _777 = cb0_111x - _745;
-  float _778 = cb0_111y - _746;
-  float _779 = cb0_111z - _747;
+  float _777 = WUWA_PEAK_SCALING * cb0_111x - _745;
+  float _778 = WUWA_PEAK_SCALING * cb0_111y - _746;
+  float _779 = WUWA_PEAK_SCALING * cb0_111z - _747;
   [branch]
   if (cb0_109y > 0.0f) {
     _796 = (_770 * cb0_109y);
@@ -419,7 +420,7 @@ float4 main(
   SV_Target.x = ((cb0_109x * (lerp(_796, _799, _763))) + _745);
   SV_Target.y = ((cb0_109x * (lerp(_797, _800, _763))) + _746);
   SV_Target.z = (((lerp(_798, _801, _763)) * cb0_109x) + _747);
-  SV_Target.xyz = wuwa::InvertAndApplyDisplayMap(SV_Target.xyz);
+  SV_Target.xyz = wuwa::ApplyDisplayMap(SV_Target.xyz);
   SV_Target.w = dot(float3(_660, _659, _658), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
   CLAMP_IF_SDR(SV_Target.w);
   return SV_Target;

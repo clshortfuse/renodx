@@ -1120,14 +1120,15 @@ float4 main(
     _1129 = _1052;
     _1130 = _1053;
   }
+  GENERATE_INVERSION(_1128, _1129, _1130);
   float _1139 = ((((_1129 * 587.0f) + (_1128 * 299.0f)) + (_1130 * 114.0f)) * 0.0010000000474974513f) - cb0_109z;
   float _1146 = saturate(float((int)(((int)(uint)((bool)(_1139 > 0.0f))) - ((int)(uint)((bool)(_1139 < 0.0f))))));
   float _1153 = cb0_110x - _1128;
   float _1154 = cb0_110y - _1129;
   float _1155 = cb0_110z - _1130;
-  float _1160 = cb0_111x - _1128;
-  float _1161 = cb0_111y - _1129;
-  float _1162 = cb0_111z - _1130;
+  float _1160 = WUWA_PEAK_SCALING * cb0_111x - _1128;
+  float _1161 = WUWA_PEAK_SCALING * cb0_111y - _1129;
+  float _1162 = WUWA_PEAK_SCALING * cb0_111z - _1130;
   [branch]
   if (cb0_109y > 0.0f) {
     _1179 = (_1153 * cb0_109y);

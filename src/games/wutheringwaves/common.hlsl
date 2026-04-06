@@ -356,20 +356,36 @@ static inline float3 ApplyDisplayMap(float3 input_bt709) {
     psycho_config.purity_highlights = 0.f;
     untonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyBT2020(untonemapped_bt2020, psycho_config);
 
+    if (RENODX_PSYCHOV_HUE_EMULATION > 0.f || RENODX_PSYCHOV_CHROMA_EMULATION > 0.f) {
+      float3 pre_max_bt709 = renodx::color::bt709::from::BT2020(untonemapped_bt2020);
+      float3 pre_max_ap1 = renodx::color::ap1::from::BT709(pre_max_bt709);
+      float3 pre_max_reference_bt709 = renodx::color::bt709::from::AP1(
+          renodx::tonemap::ReinhardPiecewise(pre_max_ap1, 2.f, 1.f));
+      pre_max_bt709 = CorrectHueAndPurityMBGated(
+          pre_max_bt709,
+          pre_max_reference_bt709,
+          RENODX_PSYCHOV_HUE_EMULATION,
+          0.5f,
+          1.f,
+          saturate(RENODX_PSYCHOV_CHROMA_EMULATION),
+          1.f);
+      untonemapped_bt2020 = renodx::color::bt2020::from::BT709(pre_max_bt709);
+    }
+
     tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(untonemapped_bt2020, peak_ratio);
   }
 
   float3 mapped_bt709 = renodx::color::bt709::from::BT2020(tonemapped_bt2020);
 
-  float hue_emulation_strength = saturate(RENODX_PSYCHOV_HUE_EMULATION);
-  if (hue_emulation_strength > 0.f) {
+  if (RENODX_TONE_MAP_SCALING != 0.f &&
+      (RENODX_PSYCHOV_HUE_EMULATION > 0.f || RENODX_PSYCHOV_CHROMA_EMULATION > 0.f)) {
     float3 mapped_ap1 = renodx::color::ap1::from::BT709(mapped_bt709);
     float3 hue_reference_bt709 = renodx::color::bt709::from::AP1(
         renodx::tonemap::ReinhardPiecewise(mapped_ap1, 2.f, 1.f));
     mapped_bt709 = CorrectHueAndPurityMBGated(
         mapped_bt709,
         hue_reference_bt709,
-      hue_emulation_strength,
+      RENODX_PSYCHOV_HUE_EMULATION,
       0.5f,
       1.f,
       saturate(RENODX_PSYCHOV_CHROMA_EMULATION),
