@@ -689,6 +689,10 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
             renodx::utils::log::d("utils::settings::Use(SelectedProfile=", preset_index, " -> Loading ", GetCurrentPresetName(), ")");
             LoadSettings(GetCurrentPresetName());
           }
+
+          for (auto& callback : on_preset_changed_callbacks) {
+            callback();
+          }
         }
       } else {
         // Presets disabled — keep previous behavior (load preset1 by default)
