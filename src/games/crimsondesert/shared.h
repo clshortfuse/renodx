@@ -59,7 +59,6 @@
 #define CUSTOM_VIGNETTE                        shader_injection.custom_vignette
 #define LENS_FLARE_STRENGTH                    shader_injection.lens_flare_strength
 #define BLOOM_STRENGTH                         shader_injection.bloom_strength
-#define DAWN_DUSK_GI_ENERGY                    0.6f
 
 #define SHADOW_DEBUG_MODE                      0 // shader_injection.shadow_debug_mode
 #define SHADOW_DISABLE_LAYER                   0 // shader_injection.shadow_disable_layer
@@ -86,9 +85,10 @@
 #define SKY_SCATTERING                         ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__SKY_SCATTERING) != 0u ? 1.f : 0.f)
 #define DAWN_DUSK_IMPROVEMENTS                 ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__DAWN_DUSK_IMPROVEMENTS) != 0u ? 1.f : 0.f)
 #define SNOW_FOG_FIX                           ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__SNOW_FOG_FIX) != 0u ? 1.f : 0.f)
+#define DAWN_DUSK_GI_ENERGY                    0.7f
 
 // Auto exposure tuning
-//#define AE_DARK_POWER_OUTDOOR                  shader_injection.ae_dark_power_outdoor
+//#define AE_DARK_POWER_OUTDOOR                shader_injection.ae_dark_power_outdoor
 #define AE_DYNAMISM_HIGH                       shader_injection.ae_dynamism_high
 #define AE_DYNAMISM_LOW                        shader_injection.ae_dynamism_low
 #define AE_SPEED                               shader_injection.ae_speed
