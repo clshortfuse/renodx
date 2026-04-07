@@ -1,5 +1,6 @@
 #include "../common.hlsl"
 #include "./tonemap.hlsli"
+#include "./debug.hlsli"
 
 Texture3D<float4> __3__36__0__0__g_displayRenderingTransformLUT : register(t135, space36);
 
@@ -67,6 +68,13 @@ void main(
   uint SV_GroupIndex : SV_GroupIndex
 ) {
   float4 _12 = __3__36__0__0__g_sceneColor.Load(int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), 0));
+  float4 _12_unexposed = _12;
+  bool tonemap_debug_enabled = false;
+  bool tonemap_stats_enabled = false;
+#if CUSTOM_TONEMAP_DEBUG
+  tonemap_debug_enabled = TonemapDebugEnabled();
+  tonemap_stats_enabled = TonemapStatsEnabled() && IMPROVED_AUTO_EXPOSURE == 2;
+#endif
 
   // --- HDR transition highlight dimming ---
   // When exposure hasn't fully adapted to a bright scene (e.g. stepping
@@ -100,53 +108,101 @@ void main(
   // }
 
   if (RENODX_TONE_MAP_TYPE != 0) {
+    // `_exposure0.x` is the AE solve from AdaptExposure. `_userImageAdjust.z`
+    // is a separate grading exposure multiplier layered on top of that solve.
     float new_exposure = _exposure0.x;
-    float _21 = _userImageAdjust.z * new_exposure;
-    _12.xyz *= _21;
+    float user_exposure = _userImageAdjust.z;
+    float tonemap_exposure_mul = user_exposure * new_exposure;
+    _12.xyz *= tonemap_exposure_mul;
 
-    float3 ungraded_ap1 = _12.xyz;
+    float3 ungraded_ap1 = (IMPROVED_AUTO_EXPOSURE == 2) ? _12_unexposed.xyz : _12.xyz;
     float3 ungraded_bt709 = renodx::color::bt709::from::AP1(ungraded_ap1);
     float3 graded_bt709 = ApplyDisplayCurvesAndSaturation(ungraded_bt709, true);
-
     float3 input_color = lerp(ungraded_bt709, graded_bt709, RENODX_COLOR_GRADE_STRENGTH);
 
     float histogram_mean = 0.18f;
     float histogram_target_mean = 0.18f;
     float histogram_target = 0.18f;
     float mid_gray_scale = 1.f;
+    float3 output_color;
+#if CUSTOM_TONEMAP_DEBUG
+    renodx::debug::graph::Config tonemap_graph_config = {false, 0, 0.0f, input_color, RENODX_PEAK_WHITE_NITS, 100.0f};
+    if (tonemap_debug_enabled) {
+      tonemap_graph_config = renodx::debug::graph::DrawStart(
+          float2(SV_DispatchThreadID.xy) + 0.5f,
+          input_color,
+          __3__36__0__0__g_sceneColor,
+          RENODX_PEAK_WHITE_NITS,
+          100.0f);
+    }
+#endif
+    [branch]
     if (IMPROVED_AUTO_EXPOSURE == 2) {
-      if (_exposure2.w > 0.0f) {
-        histogram_mean = _exposure2.w;
-      } else if (_exposure2.z > 0.0f) {
-        histogram_mean = _exposure2.z;
-      } else {
-        histogram_mean = _exposure2.x;
-      }
+      // Current anchor = clean adapted field plus FastBg/SlowBg carryover.
+      histogram_mean = GetPerceptualAdaptedFieldYf();
 
-      if (_exposure2.z > 0.0f) {
-        histogram_target_mean = _exposure2.z;
-      } else {
-        histogram_target_mean = histogram_mean;
-      }
-     // histogram_target = histogram_target_mean * _21;
-      histogram_target_mean *= _21;
-      histogram_mean *= _21;
-    } 
-      
-    const float mid_gray = 0.18f;
-    float mid_gray_adjusted = SDRToneMap(mid_gray).x;
-    mid_gray_scale = mid_gray_adjusted / mid_gray;
-    
+      // AE2 exposure0.x is solved against the live current anchor, not just the
+      // clean field. Reconstruct the target from that same current anchor so the
+      // tonemap anchors and debug panel reflect the actual bounded target.
+      histogram_target_mean = histogram_mean;
 
-    float3 output_color = CustomTonemap(input_color, mid_gray_scale, histogram_mean, histogram_target_mean);
+      // Tonemap target anchor after applying both AE exposure and the user
+      // grading exposure multiplier.
+      histogram_target = histogram_target_mean * tonemap_exposure_mul;
+
+      float3 psycho_input_color = input_color;
+#if CUSTOM_TONEMAP_DEBUG
+      if (tonemap_debug_enabled) {
+        psycho_input_color = tonemap_graph_config.color;
+      }
+#endif
+      output_color = CustomTonemap(psycho_input_color, 1.f, histogram_mean, histogram_target);
+#if CUSTOM_TONEMAP_DEBUG
+      if (tonemap_debug_enabled) {
+        output_color = DrawTonemapGraph(output_color, tonemap_graph_config, RENODX_DIFFUSE_WHITE_NITS / 100.0f);
+      }
+      if (tonemap_stats_enabled) {
+        output_color = DrawPerceptualTonemapDebug(
+            output_color,
+            SV_DispatchThreadID.xy,
+            _exposure0.x,
+            user_exposure,
+            _exposure2.x,
+            _exposure2.y,
+            _exposure2.z,
+            _exposure2.w,
+            histogram_mean,
+            histogram_target,
+            tonemap_exposure_mul);
+      }
+#endif
+    } else {
+      const float mid_gray = 0.18f;
+      float mid_gray_adjusted = SDRToneMap(mid_gray).x;
+      mid_gray_scale = mid_gray_adjusted / mid_gray;
+      mid_gray_scale = lerp(1.f, mid_gray_scale, CUSTOM_TONE_MAP_MIDGRAY_ADJUST);
+      float3 tonemap_input_color = input_color;
+#if CUSTOM_TONEMAP_DEBUG
+      if (tonemap_debug_enabled) {
+        tonemap_input_color = tonemap_graph_config.color;
+      }
+#endif
+      output_color = CustomTonemap(tonemap_input_color, mid_gray_scale);
+#if CUSTOM_TONEMAP_DEBUG
+      if (tonemap_debug_enabled) {
+        output_color = DrawTonemapGraph(output_color, tonemap_graph_config, RENODX_DIFFUSE_WHITE_NITS / 100.0f);
+      }
+#endif
+    }
+
     output_color = renodx::color::bt2020::from::BT709(output_color);
     output_color = renodx::color::pq::EncodeSafe(output_color, RENODX_DIFFUSE_WHITE_NITS);
     // output_color = renodx::color::srgb::EncodeSafe(output_color);
     __3__38__0__1__g_textureUAV[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float4(output_color, _12.w);
   } else {
     float new_exposure = _exposure0.x;
-    float _21 = _userImageAdjust.z * new_exposure;
-    _12.xyz *= _21;
+    float tonemap_exposure_mul = _userImageAdjust.z * new_exposure;
+    _12.xyz *= tonemap_exposure_mul;
 
     float3 display_transform_bt709 = ConvertAP1ToBT709(_12.xyz);
     float3 display_saturated = ApplyDisplayCurvesAndSaturation(display_transform_bt709);
@@ -161,5 +217,4 @@ void main(
     __3__38__0__1__g_textureUAV[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float4(output_color, _12.w);
     //__3__38__0__1__g_textureUAV[int2((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y))] = float4(select((_125.x <= 0.0031308000907301903f), (_125.x * 12.920000076293945f), (((pow(_125.x, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f)), select((_125.y <= 0.0031308000907301903f), (_125.y * 12.920000076293945f), (((pow(_125.y, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f)), select((_125.z <= 0.0031308000907301903f), (_125.z * 12.920000076293945f), (((pow(_125.z, 0.4166666567325592f)) * 1.0549999475479126f) + -0.054999999701976776f)), _12.w);
   }
-  
 }

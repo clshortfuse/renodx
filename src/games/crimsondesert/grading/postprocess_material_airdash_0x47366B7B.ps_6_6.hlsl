@@ -1,5 +1,6 @@
 #include "../common.hlsl"
 #include "./tonemap.hlsli"
+#include "./debug.hlsli"
 
 Texture2D<float4> __3__36__0__0__g_sceneColor : register(t29, space36);
 
@@ -209,51 +210,100 @@ float4 main(
   } else {
     _115 = 1.0f;
   }
+  bool tonemap_debug_enabled = false;
+#if CUSTOM_TONEMAP_DEBUG
+  tonemap_debug_enabled = TonemapDebugEnabled();
+#endif
   bool _118 = (_localToneMappingParams.w > 0.0f);
   if (_118) {
     float _124 = _userImageAdjust.z * _exposure0.x;
-    float _173 = exp2(log2(max(0.0f, (((_124 * max(0.0f, (((_98.x * 1.705049991607666f) - (_98.y * 0.6217899918556213f)) - (_98.z * 0.08325999975204468f)))) * _slopeParams.x) + _offsetParams.x))) * _powerParams.x);
-    float _174 = exp2(log2(max(0.0f, (((max(0.0f, (((_98.y * 1.1407999992370605f) - (_98.x * 0.13026000559329987f)) - (_98.z * 0.01054999977350235f))) * _124) * _slopeParams.y) + _offsetParams.y))) * _powerParams.y);
-    float _175 = exp2(log2(max(0.0f, (((max(0.0f, (((_98.x * -0.024000000208616257f) - (_98.y * 0.12896999716758728f)) + (_98.z * 1.1529699563980103f))) * _124) * _slopeParams.z) + _offsetParams.z))) * _powerParams.z);
-    float _177 = dot(float3(_173, _174, _175), float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
-    float _184 = ((_173 - _177) * _powerParams.w) + _177;
-    float _185 = ((_174 - _177) * _powerParams.w) + _177;
-    float _186 = ((_175 - _177) * _powerParams.w) + _177;
-
-    if (RENODX_TONE_MAP_TYPE != 0) {
-      float3 untonemapped_bt709 = float3(_184, _185, _186);
-
+    [branch]
+    if ((RENODX_TONE_MAP_TYPE != 0) && (IMPROVED_AUTO_EXPOSURE == 2)) {
       float histogram_mean = 0.18f;
       float histogram_target_mean = 0.18f;
-      float histogram_target = 0.18f;
-      float mid_gray_scale = 1.f;
-      if (IMPROVED_AUTO_EXPOSURE == 2) {
-        if (_exposure2.w > 0.0f) {
-          histogram_mean = _exposure2.w;
-        } else if (_exposure2.z > 0.0f) {
-          histogram_mean = _exposure2.z;
-        } else {
-          histogram_mean = _exposure2.x;
-        }
+      histogram_mean = GetPerceptualAdaptedFieldYf();
 
-        if (_exposure2.z > 0.0f) {
-          histogram_target_mean = _exposure2.z;
-        } else {
-          histogram_target_mean = histogram_mean;
-        }
-        histogram_target_mean *= _124;
-        histogram_mean *= _124;
+      if (_exposure2.z > 0.0f) {
+        histogram_target_mean = _exposure2.z;
+      } else {
+        histogram_target_mean = histogram_mean;
       }
 
-      const float mid_gray = 0.18f;
-      float mid_gray_adjusted = SDRToneMap(mid_gray).x;
-      mid_gray_scale = mid_gray_adjusted / mid_gray;
+      histogram_target_mean = min(histogram_target_mean * _124, 1.0f);
+      histogram_target_mean = min(histogram_target_mean, 1.0f);
 
-      float3 output_color = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale, histogram_mean, histogram_target_mean);
-      _396 = output_color.r;
-      _397 = output_color.g;
-      _398 = output_color.b;
-    }
+      float3 ungraded_bt709 = float3(
+        max(0.0f, (((_98.x * 1.705049991607666f) - (_98.y * 0.6217899918556213f)) - (_98.z * 0.08325999975204468f))),
+        max(0.0f, (((_98.y * 1.1407999992370605f) - (_98.x * 0.13026000559329987f)) - (_98.z * 0.01054999977350235f))),
+        max(0.0f, (((_98.x * -0.024000000208616257f) - (_98.y * 0.12896999716758728f)) + (_98.z * 1.1529699563980103f))));
+      float3 graded_components = max(0.0f, (ungraded_bt709 * _slopeParams.xyz) + _offsetParams.xyz);
+      float3 curved_bt709 = exp2(log2(graded_components) * _powerParams.xyz);
+      float display_transform_luminance = dot(curved_bt709, float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
+      float3 graded_bt709 = lerp(display_transform_luminance.xxx, curved_bt709, _powerParams.w);
+      float3 perceptual_input_color = lerp(ungraded_bt709, graded_bt709, RENODX_COLOR_GRADE_STRENGTH);
+      float3 tonemap_input_color = perceptual_input_color;
+#if CUSTOM_TONEMAP_DEBUG
+      renodx::debug::graph::Config tonemap_graph_config = {false, 0, 0.0f, perceptual_input_color, RENODX_PEAK_WHITE_NITS, 100.0f};
+      if (tonemap_debug_enabled) {
+        tonemap_graph_config = renodx::debug::graph::DrawStart(
+            float2(SV_Position.xy) + 0.5f,
+            perceptual_input_color,
+            __3__36__0__0__g_sceneColor,
+            RENODX_PEAK_WHITE_NITS,
+            100.0f);
+        tonemap_input_color = tonemap_graph_config.color;
+      }
+#endif
+      float3 tonemapped_bt709 = CustomTonemapSDR(tonemap_input_color, 1.f, histogram_mean, histogram_target_mean);
+#if CUSTOM_TONEMAP_DEBUG
+      if (tonemap_debug_enabled) {
+        tonemapped_bt709 = DrawTonemapGraph(tonemapped_bt709, tonemap_graph_config);
+      }
+#endif
+      _396 = tonemapped_bt709.r;
+      _397 = tonemapped_bt709.g;
+      _398 = tonemapped_bt709.b;
+    } else {
+      float _173 = exp2(log2(max(0.0f, (((_124 * max(0.0f, (((_98.x * 1.705049991607666f) - (_98.y * 0.6217899918556213f)) - (_98.z * 0.08325999975204468f)))) * _slopeParams.x) + _offsetParams.x))) * _powerParams.x);
+      float _174 = exp2(log2(max(0.0f, (((max(0.0f, (((_98.y * 1.1407999992370605f) - (_98.x * 0.13026000559329987f)) - (_98.z * 0.01054999977350235f))) * _124) * _slopeParams.y) + _offsetParams.y))) * _powerParams.y);
+      float _175 = exp2(log2(max(0.0f, (((max(0.0f, (((_98.x * -0.024000000208616257f) - (_98.y * 0.12896999716758728f)) + (_98.z * 1.1529699563980103f))) * _124) * _slopeParams.z) + _offsetParams.z))) * _powerParams.z);
+      float _177 = dot(float3(_173, _174, _175), float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
+      float _184 = ((_173 - _177) * _powerParams.w) + _177;
+      float _185 = ((_174 - _177) * _powerParams.w) + _177;
+      float _186 = ((_175 - _177) * _powerParams.w) + _177;
+
+      if (RENODX_TONE_MAP_TYPE != 0) {
+        float3 untonemapped_bt709 = float3(_184, _185, _186);
+        float histogram_mean = 0.18f;
+        float histogram_target_mean = 0.18f;
+        const float mid_gray = 0.18f;
+        float mid_gray_adjusted = SDRToneMap(mid_gray).x;
+        float mid_gray_scale = mid_gray_adjusted / mid_gray;
+        mid_gray_scale = lerp(1.f, mid_gray_scale, CUSTOM_TONE_MAP_MIDGRAY_ADJUST);
+        float3 tonemap_input_color = untonemapped_bt709;
+#if CUSTOM_TONEMAP_DEBUG
+        renodx::debug::graph::Config tonemap_graph_config = {false, 0, 0.0f, untonemapped_bt709, RENODX_PEAK_WHITE_NITS, 100.0f};
+        if (tonemap_debug_enabled) {
+          tonemap_graph_config = renodx::debug::graph::DrawStart(
+              float2(SV_Position.xy) + 0.5f,
+              untonemapped_bt709,
+              __3__36__0__0__g_sceneColor,
+              RENODX_PEAK_WHITE_NITS,
+              100.0f);
+          tonemap_input_color = tonemap_graph_config.color;
+        }
+#endif
+        float3 tonemapped_bt709 = CustomTonemapSDR(tonemap_input_color, mid_gray_scale, histogram_mean, histogram_target_mean);
+#if CUSTOM_TONEMAP_DEBUG
+        if (tonemap_debug_enabled) {
+          tonemapped_bt709 = DrawTonemapGraph(tonemapped_bt709, tonemap_graph_config);
+        }
+#endif
+        _396 = tonemapped_bt709.r;
+        _397 = tonemapped_bt709.g;
+        _398 = tonemapped_bt709.b;
+      }
+
     else {
       // float3 ungraded = float3(_184, _185, _186);
       // float3 graded = psycho_grading_only(
@@ -321,7 +371,7 @@ float4 main(
       _397 = _325;
       _398 = _326;
     }
-    }
+      }}
   } else {
     _396 = _98.x;
     _397 = _98.y;

@@ -260,8 +260,13 @@ float4 main(
   SV_Target.z = select(_381, _348, 0.0f);
 
   SV_Target.xyz = renodx::color::bt2020::from::BT709(SV_Target.xyz);
-  float scaling = RENODX_TONE_MAP_TYPE == 0 ? 1.0f : RENODX_DIFFUSE_WHITE_NITS;
-  SV_Target.xyz = renodx::color::pq::EncodeSafe(SV_Target.xyz, scaling);
+  // 0x28F0B80A
+  if (RENODX_TONE_MAP_TYPE != 0) {
+    SV_Target.xyz *= RENODX_DIFFUSE_WHITE_NITS;
+    float max_channel = max(max(max(SV_Target.r, SV_Target.g), SV_Target.b), RENODX_PEAK_WHITE_NITS);
+    SV_Target.xyz *= RENODX_PEAK_WHITE_NITS / max_channel;  // Clamp UI or Videos
+  }
+  SV_Target.xyz = renodx::color::pq::EncodeSafe(SV_Target.xyz, 1.0f);
 #else
   float _252 = (pow(_243, 0.012683313339948654f));
   float _253 = (pow(_244, 0.012683313339948654f));

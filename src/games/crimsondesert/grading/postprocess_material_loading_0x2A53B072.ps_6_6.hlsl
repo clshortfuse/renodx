@@ -1,5 +1,6 @@
 #include "../common.hlsl"
 #include "./tonemap.hlsli"
+#include "./debug.hlsli"
 
 struct PostProcessChromaticRadialBlurStruct {
   float _ratio;
@@ -223,52 +224,98 @@ float4 main(
     } else {
       _197 = _postProcessParams.x;
     }
+    bool tonemap_debug_enabled = false;
+#if CUSTOM_TONEMAP_DEBUG
+    tonemap_debug_enabled = TonemapDebugEnabled();
+#endif
     bool _200 = (_localToneMappingParams.w > 0.0f);
     if (_200) {
       float _206 = _userImageAdjust.z * _exposure0.x;
-      float _255 = exp2(log2(max(0.0f, (((_206 * max(0.0f, (((_167 * 0.3410100042819977f) - (_170 * 0.12435799837112427f)) - (_173 * 0.016652001067996025f)))) * _slopeParams.x) + _offsetParams.x))) * _powerParams.x);
-      float _256 = exp2(log2(max(0.0f, (((max(0.0f, (((_170 * 0.22816000878810883f) - (_167 * 0.026052001863718033f)) - (_173 * 0.0021100000012665987f))) * _206) * _slopeParams.y) + _offsetParams.y))) * _powerParams.y);
-      float _257 = exp2(log2(max(0.0f, (((max(0.0f, (((_167 * -0.004800000227987766f) - (_170 * 0.025793999433517456f)) + (_173 * 0.2305939942598343f))) * _206) * _slopeParams.z) + _offsetParams.z))) * _powerParams.z);
-      float _259 = dot(float3(_255, _256, _257), float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
-      float _266 = ((_255 - _259) * _powerParams.w) + _259;
-      float _267 = ((_256 - _259) * _powerParams.w) + _259;
-      float _268 = ((_257 - _259) * _powerParams.w) + _259;
-
-      if (RENODX_TONE_MAP_TYPE != 0) {
-        float3 untonemapped_bt709 = float3(_266, _267, _268);
-
+      [branch]
+      if ((RENODX_TONE_MAP_TYPE != 0) && (IMPROVED_AUTO_EXPOSURE == 2)) {
         float histogram_mean = 0.18f;
         float histogram_target_mean = 0.18f;
-        float histogram_target = 0.18f;
-        float mid_gray_scale = 1.f;
-        if (IMPROVED_AUTO_EXPOSURE == 2) {
-          if (_exposure2.w > 0.0f) {
-            histogram_mean = _exposure2.w;
-          } else if (_exposure2.z > 0.0f) {
-            histogram_mean = _exposure2.z;
-          } else {
-            histogram_mean = _exposure2.x;
-          }
+        histogram_mean = GetPerceptualAdaptedFieldYf();
 
-          if (_exposure2.z > 0.0f) {
-            histogram_target_mean = _exposure2.z;
-          } else {
-            histogram_target_mean = histogram_mean;
-          }
-          histogram_target_mean *= _206;
-          histogram_mean *= _206;
+        if (_exposure2.z > 0.0f) {
+          histogram_target_mean = _exposure2.z;
+        } else {
+          histogram_target_mean = histogram_mean;
         }
+        histogram_target_mean = min(histogram_target_mean * _206, 1.0f);
+        histogram_target_mean = min(histogram_target_mean, 1.0f);
 
-        const float mid_gray = 0.18f;
-        float mid_gray_adjusted = SDRToneMap(mid_gray).x;
-        mid_gray_scale = mid_gray_adjusted / mid_gray;
-
-        float3 output_color = CustomTonemapSDR(untonemapped_bt709, mid_gray_scale, histogram_mean, histogram_target_mean);
+        float3 ungraded_bt709 = float3(
+          max(0.0f, (((_167 * 0.3410100042819977f) - (_170 * 0.12435799837112427f)) - (_173 * 0.016652001067996025f))),
+          max(0.0f, (((_170 * 0.22816000878810883f) - (_167 * 0.026052001863718033f)) - (_173 * 0.0021100000012665987f))),
+          max(0.0f, (((_167 * -0.004800000227987766f) - (_170 * 0.025793999433517456f)) + (_173 * 0.2305939942598343f))));
+        float3 graded_components = max(0.0f, (ungraded_bt709 * _slopeParams.xyz) + _offsetParams.xyz);
+        float3 curved_bt709 = exp2(log2(graded_components) * _powerParams.xyz);
+        float display_transform_luminance = dot(curved_bt709, float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
+        float3 graded_bt709 = lerp(display_transform_luminance.xxx, curved_bt709, _powerParams.w);
+        float3 perceptual_input_color = lerp(ungraded_bt709, graded_bt709, RENODX_COLOR_GRADE_STRENGTH);
+        float3 tonemap_input_color = perceptual_input_color;
+#if CUSTOM_TONEMAP_DEBUG
+        renodx::debug::graph::Config tonemap_graph_config = {false, 0, 0.0f, perceptual_input_color, RENODX_PEAK_WHITE_NITS, 100.0f};
+        if (tonemap_debug_enabled) {
+          tonemap_graph_config = renodx::debug::graph::DrawStart(
+              float2(SV_Position.xy) + 0.5f,
+              perceptual_input_color,
+              __3__36__0__0__g_sceneColor,
+              RENODX_PEAK_WHITE_NITS,
+              100.0f);
+          tonemap_input_color = tonemap_graph_config.color;
+        }
+#endif
+        float3 output_color = CustomTonemapSDR(tonemap_input_color, 1.f, histogram_mean, histogram_target_mean);
+#if CUSTOM_TONEMAP_DEBUG
+        if (tonemap_debug_enabled) {
+          output_color = DrawTonemapGraph(output_color, tonemap_graph_config);
+        }
+#endif
         _478 = output_color.r;
         _479 = output_color.g;
         _480 = output_color.b;
-      }
-    else {
+      } else {
+        float _255 = exp2(log2(max(0.0f, (((_206 * max(0.0f, (((_167 * 0.3410100042819977f) - (_170 * 0.12435799837112427f)) - (_173 * 0.016652001067996025f)))) * _slopeParams.x) + _offsetParams.x))) * _powerParams.x);
+        float _256 = exp2(log2(max(0.0f, (((max(0.0f, (((_170 * 0.22816000878810883f) - (_167 * 0.026052001863718033f)) - (_173 * 0.0021100000012665987f))) * _206) * _slopeParams.y) + _offsetParams.y))) * _powerParams.y);
+        float _257 = exp2(log2(max(0.0f, (((max(0.0f, (((_167 * -0.004800000227987766f) - (_170 * 0.025793999433517456f)) + (_173 * 0.2305939942598343f))) * _206) * _slopeParams.z) + _offsetParams.z))) * _powerParams.z);
+        float _259 = dot(float3(_255, _256, _257), float3(0.21267099678516388f, 0.7151600122451782f, 0.0721689984202385f));
+        float _266 = ((_255 - _259) * _powerParams.w) + _259;
+        float _267 = ((_256 - _259) * _powerParams.w) + _259;
+        float _268 = ((_257 - _259) * _powerParams.w) + _259;
+
+        if (RENODX_TONE_MAP_TYPE != 0) {
+          float3 untonemapped_bt709 = float3(_266, _267, _268);
+          float histogram_mean = 0.18f;
+          float histogram_target_mean = 0.18f;
+          const float mid_gray = 0.18f;
+          float mid_gray_adjusted = SDRToneMap(mid_gray).x;
+          float mid_gray_scale = mid_gray_adjusted / mid_gray;
+          mid_gray_scale = lerp(1.f, mid_gray_scale, CUSTOM_TONE_MAP_MIDGRAY_ADJUST);
+          float3 tonemap_input_color = untonemapped_bt709;
+#if CUSTOM_TONEMAP_DEBUG
+          renodx::debug::graph::Config tonemap_graph_config = {false, 0, 0.0f, untonemapped_bt709, RENODX_PEAK_WHITE_NITS, 100.0f};
+          if (tonemap_debug_enabled) {
+            tonemap_graph_config = renodx::debug::graph::DrawStart(
+                float2(SV_Position.xy) + 0.5f,
+                untonemapped_bt709,
+                __3__36__0__0__g_sceneColor,
+                RENODX_PEAK_WHITE_NITS,
+                100.0f);
+            tonemap_input_color = tonemap_graph_config.color;
+          }
+#endif
+          float3 output_color = CustomTonemapSDR(tonemap_input_color, mid_gray_scale, histogram_mean, histogram_target_mean);
+#if CUSTOM_TONEMAP_DEBUG
+          if (tonemap_debug_enabled) {
+            output_color = DrawTonemapGraph(output_color, tonemap_graph_config);
+          }
+#endif
+          _478 = output_color.r;
+          _479 = output_color.g;
+          _480 = output_color.b;
+        } else {
 
       float _287 = min(max(log2(mad(_268, 0.07922374457120895f, mad(_267, 0.07843360304832458f, (_266 * 0.8424790501594543f)))), -12.473930358886719f), 4.026069164276123f) + 12.473930358886719f;
       float _288 = min(max(log2(mad(_268, 0.07916612923145294f, mad(_267, 0.8784686326980591f, (_266 * 0.04232824221253395f)))), -12.473930358886719f), 4.026069164276123f) + 12.473930358886719f;
@@ -279,9 +326,12 @@ float4 main(
       float _293 = _290 * _290;
       float _294 = _291 * _291;
       float _295 = _292 * _292;
-      float _341 = min(0.0f, (-0.0f - (((_287 * 0.007218181621283293f) + ((_293 * 0.42980000376701355f) + (((_293 * _293) * ((31.959999084472656f - (_287 * 2.432727336883545f)) + (_293 * 15.5f))) - ((_287 * 0.41624245047569275f) * _293)))) + -0.002319999970495701f)));
-      float _342 = min(0.0f, (-0.0f - (((_288 * 0.007218181621283293f) + ((_294 * 0.42980000376701355f) + (((_294 * _294) * ((31.959999084472656f - (_288 * 2.432727336883545f)) + (_294 * 15.5f))) - ((_288 * 0.41624245047569275f) * _294)))) + -0.002319999970495701f)));
-      float _343 = min(0.0f, (-0.0f - (((_289 * 0.007218181621283293f) + ((_295 * 0.42980000376701355f) + (((_295 * _295) * ((31.959999084472656f - (_289 * 2.432727336883545f)) + (_295 * 15.5f))) - ((_289 * 0.41624245047569275f) * _295)))) + -0.002319999970495701f)));
+      float _3400 = (_293 * _293) * ((31.959999084472656f - (_287 * 2.432727336883545f)) + (_293 * 15.5f));
+      float _3401 = (_294 * _294) * ((31.959999084472656f - (_288 * 2.432727336883545f)) + (_294 * 15.5f));
+      float _3402 = (_295 * _295) * ((31.959999084472656f - (_289 * 2.432727336883545f)) + (_295 * 15.5f));
+      float _341 = min(0.0f, -((_287 * 0.007218181621283293f) + ((_293 * 0.42980000376701355f) + (_3400 - ((_287 * 0.41624245047569275f) * _293))) - 0.002319999970495701f));
+      float _342 = min(0.0f, -((_288 * 0.007218181621283293f) + ((_294 * 0.42980000376701355f) + (_3401 - ((_288 * 0.41624245047569275f) * _294))) - 0.002319999970495701f));
+      float _343 = min(0.0f, -((_289 * 0.007218181621283293f) + ((_295 * 0.42980000376701355f) + (_3402 - ((_289 * 0.41624245047569275f) * _295))) - 0.002319999970495701f));
       float _344 = -0.0f - _341;
       float _345 = -0.0f - _342;
       float _346 = -0.0f - _343;
@@ -321,7 +371,7 @@ float4 main(
         _479 = _407;
         _480 = _408;
       }
-      }
+        }}
     } else {
       _478 = (_167 * 0.20000000298023224f);
       _479 = (_170 * 0.20000000298023224f);
