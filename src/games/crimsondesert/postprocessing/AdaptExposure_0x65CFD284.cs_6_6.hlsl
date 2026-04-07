@@ -24,7 +24,7 @@ float DecodeHistogramLog2Luminance(float histogram_bin, float histogram_scale, f
 }
 
 float PerceptualSpeedMultiplier() {
-  return exp2(4.0f * AE_SPEED);
+  return exp2(2.0f * AE_SPEED);
 }
 
 cbuffer __3__35__0__0__SceneConstantBuffer : register(b16, space35) {
@@ -383,10 +383,17 @@ void main(
           float _192 = max(9.999999717180685e-10f, _191);
           float _193 = max(_181, 9.999999747378752e-05f);
           float _194 = _180 / _193;
-          // When IMPROVED is on, override the game's per region and ToD controls
-          // min/max luminance clamps with fixed values, I hope this solves double darkening
-          float _ae_min_lum = (IMPROVED_AUTO_EXPOSURE == 99) ? AE_MIN_LUM : _param1.z;
-          float _ae_max_lum = (IMPROVED_AUTO_EXPOSURE == 99) ? AE_MAX_LUM : _param1.w;
+          float _ae_min_lum = _param1.z;
+          float _ae_max_lum = _param1.w;
+          if (IMPROVED_AUTO_EXPOSURE == 2) {
+            // Environment Bias is the master blend for game-owned environment
+            // heuristics in perceptual AE. At 0, ignore the game's luminance
+            // floor/ceiling clamps and let the perceptual path use the visible
+            // scene statistics directly. At 1, keep the game's full clamp pair.
+            float _psychov17_environment_bias = saturate(AE_ENVIRONMENT_BIAS);
+            _ae_min_lum = lerp(0.0f, _ae_min_lum, _psychov17_environment_bias);
+            _ae_max_lum = lerp(65536.0f, _ae_max_lum, _psychov17_environment_bias);
+          }
           float _195 = max(_194, _ae_min_lum);
           float _196 = min(_195, _ae_max_lum);
           float _197 = sqrt(_192);
@@ -400,9 +407,28 @@ void main(
           // Doesnt fully remove bloom jitter but better than before especially 
           // with alt auto exposure
           float _smoothed_target_yf = _198;
+          float _ae_history_state_raw = __3__39__0__1__g_exposureUAV[13];
+          bool _ae_history_valid =
+              (_ae_history_state_raw > 0.5f) && !isnan(_ae_history_state_raw) && !isinf(_ae_history_state_raw);
+          // Slot 13 stores both the validity marker and the AE mode that seeded
+          // the current history state: 1 + IMPROVED_AUTO_EXPOSURE.
+          // Boot/reset can leave finite garbage in the UAV, so only reuse prior
+          // state when the slot is valid, temporal continuity is intact, and
+          // the current AE mode matches the mode that wrote the history.
+          float _ae_previous_mode = _ae_history_valid ? (floor(_ae_history_state_raw + 0.5f) - 1.0f) : -1.0f;
+          bool _ae_mode_matches_history = abs(_ae_previous_mode - IMPROVED_AUTO_EXPOSURE) < 0.5f;
+          bool _ae_temporal_continuity = !(_temporalReprojectionParams.w > 0.5f);
+          bool _ae_can_reuse_history = _ae_history_valid && _ae_temporal_continuity && _ae_mode_matches_history;
+          // Compact adapting-field proxy for the perceptual AE path.
+          // Kraft & Brainard (1999, PNAS 96:307-312) show that simple local
+          // surround / spatial-mean / max-flux rules are not sufficient under
+          // natural viewing. We still keep a single histogram-field proxy here
+          // as an engineering background estimate for PsychoV17.
           float _psychov17_field_yf = _198;
           [branch]
           if (IMPROVED_AUTO_EXPOSURE == 2) {
+            // Use a central 20-80% histogram band so the adapting field tracks
+            // sustained background rather than histogram extremes.
             float _psychov17_band_lo = _149 * 0.20000000298023224f;
             float _psychov17_band_hi = _149 * 0.800000011920929f;
             int _psychov17_bin = 0;
@@ -420,6 +446,8 @@ void main(
               float _psychov17_take = min(_psychov17_window, _psychov17_after_skip);
               float _psychov17_next_hi = _psychov17_window - _psychov17_take;
               if ((_psychov17_take > 0.0f) && (_psychov17_bin != 0)) {
+                // Average the adapting field in log luminance so ratios, not
+                // linear deltas, drive the sustained state.
                 float _psychov17_log_yf = DecodeHistogramLog2Luminance(float((uint)_psychov17_bin), _param0.x, _param0.y);
                 _psychov17_sum_log = (_psychov17_take * _psychov17_log_yf) + _psychov17_sum_log;
                 _psychov17_sum_weight = _psychov17_take + _psychov17_sum_weight;
@@ -435,20 +463,61 @@ void main(
               if (_psychov17_sum_weight <= 0.0f) {
                 _psychov17_field_yf = 0.0f;
               } else {
-                float _psychov17_log_mean = _psychov17_sum_log / _psychov17_sum_weight;
+                // Keep the sustained-field Yf positive, then convert the
+                // geometric-mean log estimate back to linear luminance.
+                float _psychov17_weight_safe = max(_psychov17_sum_weight, 9.999999747378752e-05f);
+                float _psychov17_log_mean = _psychov17_sum_log / _psychov17_weight_safe;
                 _psychov17_field_yf = exp2(_psychov17_log_mean);
               }
               break;
             }
-          } else if (IMPROVED_AUTO_EXPOSURE == 1) {
-            // Smoothed AE only: low-pass the raw histogram target before the
-            // legacy exposure shaping below.
+          } else if ((IMPROVED_AUTO_EXPOSURE == 1) || (IMPROVED_AUTO_EXPOSURE == 2)) {
             float _prevFilteredTarget = __3__39__0__1__g_exposureUAV[19];
-            if (_prevFilteredTarget > 0.0001f && !isnan(_prevFilteredTarget)) {
-              float _logPrev = log2(_prevFilteredTarget);
-              float _logCur  = log2(_198);
-              float _logSmooth = lerp(_logPrev, _logCur, 0.12f);
-              _smoothed_target_yf = exp2(_logSmooth);
+            bool _prevFilteredTargetValid =
+                _ae_can_reuse_history && (_prevFilteredTarget > 0.0001f) && !isnan(_prevFilteredTarget) &&
+                !isinf(_prevFilteredTarget);
+            float _targetSmoothAlpha = 1.0f;
+            if (AE_TARGET_SMOOTHING_TIME > 0.0f) {
+              float _targetSmoothTau = max(AE_TARGET_SMOOTHING_TIME, 9.999999747378752e-05f);
+              _targetSmoothAlpha = 1.0f - exp(-_timeNoScale.z / _targetSmoothTau);
+            }
+            if (IMPROVED_AUTO_EXPOSURE == 1) {
+              // Smoothed AE only: low-pass the raw histogram target before the
+              // legacy exposure shaping below.
+              if (_prevFilteredTargetValid) {
+                float _logPrev = log2(_prevFilteredTarget);
+                float _logCur  = log2(_198);
+                float _logSmooth = lerp(_logPrev, _logCur, _targetSmoothAlpha);
+                _smoothed_target_yf = exp2(_logSmooth);
+              }
+            } else {
+              // Perceptual AE keeps the scalar target dynamic, but filters the
+              // target field in log space so low outdoor gains do not twitch
+              // frame-to-frame from raw histogram noise.
+              _smoothed_target_yf = max(_psychov17_field_yf, 9.999999747378752e-05f);
+              if (_prevFilteredTargetValid) {
+                float _logPrev = log2(_prevFilteredTarget);
+                float _logCur = log2(_smoothed_target_yf);
+                float _logSmooth = lerp(_logPrev, _logCur, _targetSmoothAlpha);
+                _smoothed_target_yf = exp2(_logSmooth);
+              }
+            }
+          }
+          float _psychov17_min_target_yf = 0.0f;
+          float _psychov17_max_target_yf = 0.0f;
+          bool _psychov17_has_min_target = false;
+          bool _psychov17_has_max_target = false;
+          bool _psychov17_has_target_bounds = false;
+          if (IMPROVED_AUTO_EXPOSURE == 2) {
+            _psychov17_min_target_yf = AE_PERCEPTUAL_MIN_BRIGHTNESS;
+            _psychov17_max_target_yf = AE_PERCEPTUAL_MAX_BRIGHTNESS;
+            _psychov17_has_min_target = _psychov17_min_target_yf > 0.0f;
+            _psychov17_has_max_target = _psychov17_max_target_yf > 0.0f;
+            _psychov17_has_target_bounds = _psychov17_has_min_target || _psychov17_has_max_target;
+            if (_psychov17_has_target_bounds) {
+              if (_psychov17_has_min_target && _psychov17_has_max_target) {
+                _psychov17_max_target_yf = max(_psychov17_max_target_yf, _psychov17_min_target_yf);
+              }
             }
           }
 
@@ -563,8 +632,10 @@ void main(
             float _320 = __3__39__0__1__g_autoWhiteBalanceColorUAV[1].w;
             float _321 = saturate(_320);
             float _322 = _321 * _param3.z;
-            // Sky visibility exposure bias
-            float _323 = (IMPROVED_AUTO_EXPOSURE == 99) ? 0.0f : (_322 + _param2.z);
+            // Vanilla and smoothed AE use the game's placement curve directly.
+            // Perceptual AE also keeps that dynamic target by default; only the
+            // optional min/max brightness bounds below constrain it.
+            float _323 = _322 + _param2.z;
             float _324 = max(_smoothed_target_yf, 9.999999747378752e-05f);
             float _325 = min(_324, 7.0f);
             float _326 = _325 + -0.009999999776482582f;
@@ -585,87 +656,100 @@ void main(
             float _341 = saturate(_287);
             float _342 = sqrt(_341);
             float _343 = _339 - _340;
-            // Vanilla path (IMPROVED_AUTO_EXPOSURE == 0): keep this sky/occlusion-dependent
-            // bias term active. Mode 2 zeros it and replaces it with explicit HDR shaping.
-            float _344 = (IMPROVED_AUTO_EXPOSURE == 99) ? 0.0f : (_343 * _342);
+            float _344 = _343 * _342;
             float _345 = _smoothed_target_yf * 8.0f;
             float _346 = log2(_345);
             float _347 = _346 - _340;
             float _348 = _347 - _344;
             float _349 = exp2(_348);
-            // Baseline game exposure target. In mode 0 this value is used directly.
+            // Baseline game exposure target. Modes 0/1 use this directly.
             float _350_vanilla = 0.8333333134651184f / _349;
 
-            float _350;
-            [branch]
-            if (IMPROVED_AUTO_EXPOSURE == 99) {
-              // --- HDR asymmetric exposure adaptation ---
-              // We reduce vanilla's adaptation strength via a power curve
-              // in log space, modulated by sky visibility and scene brightness.
-              //
-              // _287 = sqrt(sky occlusion): 0 = outdoor, 1 = indoor
-              // logVanilla > 0 → dark scene (vanilla brightens)
-              // logVanilla < 0 → bright scene (vanilla dims)
-              float logVanilla = log2(max(_350_vanilla, 0.0001f));
-              float logTarget;
-              if (logVanilla >= 0.0f) {
-                // DARK SCENE: vanilla wants to brighten. For HDR, reduce the
-                // boost so nights stay actually dark and interiors aren't nuclear.
-                float power = lerp(AE_DARK_POWER_OUTDOOR, AE_DARK_POWER_INDOOR, _287);
-                logTarget = logVanilla * power;
+            float _psychov17_predicted_fast_eqbg = 0.0f;
+            float _psychov17_predicted_slow_eqbg = 0.0f;
+            float _psychov17_predicted_current_state_yf = max(_smoothed_target_yf, 9.999999747378752e-05f);
+            if (IMPROVED_AUTO_EXPOSURE == 2) {
+              float _psychov17_predicted_field_yf = max(_smoothed_target_yf, 9.999999974752427e-07f);
+              float _psychov17_prev_fast_eqbg = max(__3__39__0__1__g_exposureUAV[9], 0.0f);
+              float _psychov17_prev_field_yf = max(__3__39__0__1__g_exposureUAV[10], 9.999999974752427e-07f);
+              float _psychov17_prev_slow_eqbg = max(__3__39__0__1__g_exposureUAV[11], 0.0f);
+              float _psychov17_tau_fast = max(AE_DARK_TO_LIGHT_TIME, 0.10000000149011612f);
+              float _psychov17_tau_slow = max(AE_LIGHT_TO_DARK_TIME, 0.10000000149011612f);
+              if (!_ae_can_reuse_history) {
+                _psychov17_predicted_fast_eqbg = 0.0f;
+                _psychov17_predicted_slow_eqbg = 0.0f;
+              } else if ((_psychov17_prev_field_yf <= 0.0f) || isnan(_psychov17_prev_field_yf) || isinf(_psychov17_prev_field_yf)) {
+                _psychov17_predicted_fast_eqbg = 0.0f;
+                _psychov17_predicted_slow_eqbg = 0.0f;
+              } else if ((_psychov17_predicted_field_yf <= 0.0f) || isnan(_psychov17_predicted_field_yf) || isinf(_psychov17_predicted_field_yf)) {
+                _psychov17_predicted_fast_eqbg = _psychov17_prev_fast_eqbg;
+                _psychov17_predicted_slow_eqbg = _psychov17_prev_slow_eqbg;
               } else {
-                // BRIGHT SCENE: vanilla wants to dim. For HDR, preserve most of
-                // the dimming for outdoor/day to prevent blowout.
-                float power = lerp(AE_BRIGHT_POWER_OUTDOOR, AE_BRIGHT_POWER_INDOOR, _287);
-                logTarget = logVanilla * power;
+                float _psychov17_decay_fast = exp(-_timeNoScale.z / _psychov17_tau_fast);
+                float _psychov17_decay_slow = exp(-_timeNoScale.z / _psychov17_tau_slow);
+                _psychov17_predicted_fast_eqbg = _psychov17_prev_fast_eqbg * _psychov17_decay_fast;
+                _psychov17_predicted_slow_eqbg = _psychov17_prev_slow_eqbg * _psychov17_decay_slow;
+                if (_psychov17_predicted_field_yf < _psychov17_prev_field_yf) {
+                  float _psychov17_drop_ratio =
+                      max(_psychov17_prev_field_yf / _psychov17_predicted_field_yf, 1.0f);
+                  float _psychov17_equivalent_background_step =
+                      _psychov17_predicted_field_yf *
+                      (exp2(log2(_psychov17_drop_ratio) * 0.1111111119389534f) - 1.0f);
+                  float _psychov17_half_step = _psychov17_equivalent_background_step * 0.5f;
+                  _psychov17_predicted_fast_eqbg += _psychov17_half_step * _psychov17_decay_fast;
+                  _psychov17_predicted_slow_eqbg += _psychov17_half_step * _psychov17_decay_slow;
+                }
               }
-              _350 = clamp(exp2(logTarget), 0.02f, 5.0f);
-            } else {
-              // Vanilla, Smoothed, and PsychoV17 all use the original target curve.
-              _350 = _350_vanilla;
+              _psychov17_predicted_current_state_yf = max(
+                  _psychov17_predicted_field_yf + _psychov17_predicted_fast_eqbg + _psychov17_predicted_slow_eqbg,
+                  9.999999747378752e-05f);
             }
 
-            bool _353 = !(_temporalReprojectionParams.w > 0.5f);
+            float _350 = _350_vanilla;
+            if (IMPROVED_AUTO_EXPOSURE == 2) {
+              // AE2 is fully perceptual: its native target is the clean adapted
+              // field itself, not the game's exposure-placement curve. Min/max
+              // brightness bounds clamp that perceptual target directly.
+              //
+              // AE2 tonemap uses:
+              //   current_average = adapted field + residual carryover
+              //   target_average  = current_average * exposure_gain
+              // so the scalar gain needs to encode the ratio between the
+              // predicted live adaptation anchor and an optionally bounded
+              // perceptual target average.
+              float _psychov17_adapt_field_yf = max(_smoothed_target_yf, 9.999999747378752e-05f);
+              float _psychov17_target_average_yf = _psychov17_adapt_field_yf;
+              if (_psychov17_has_min_target) {
+                _psychov17_target_average_yf = max(_psychov17_target_average_yf, _psychov17_min_target_yf);
+              }
+              if (_psychov17_has_max_target) {
+                _psychov17_target_average_yf = min(_psychov17_target_average_yf, _psychov17_max_target_yf);
+              }
+              _350 = clamp(
+                  _psychov17_target_average_yf / _psychov17_predicted_current_state_yf,
+                  9.999999747378752e-05f,
+                  16.0f);
+            }
+
+            bool _353 = _ae_can_reuse_history;
             if (_353) {
               float _357 = __3__39__0__1__g_exposureUAV[1];
               [branch]
-              if (IMPROVED_AUTO_EXPOSURE == 99) {
-                // Unified log space temporal adaptation becasue Vanilla uses two separate interpolation spaces (1/exp vs linear) 
-                // Causes visible jitter when the target oscillates around the previous value due to histogram noise. 
-                // Log space lerp is symmetric and smooth in both directions.
-                float logPrev = log2(max(_357, 0.0001f));
-                float logTgt  = log2(max(_350, 0.0001f));
-
-                // Pick adaptation speed based on direction
-                float speed;
-                if (logTgt > logPrev) {
-                  // Scene darkening → exposure rising (use brightening speed)
-                  speed = _param2.x;
-                } else {
-                  // Scene brightening → exposure falling (use darkening speed)
-                  // Apply speed boost proportional to gap for fast transitions
-                  float logGap = logPrev - logTgt;
-                  float speedBoost = 1.0f + saturate(logGap) * AE_ADAPT_SPEED_BOOST;
-                  speed = _param2.y * speedBoost;
-                }
-
-                float tau = 1.0f - exp2(-speed * _timeNoScale.z);
-                float logNew = lerp(logPrev, logTgt, tau);
-                _381 = exp2(logNew);
-              } else if (IMPROVED_AUTO_EXPOSURE == 2) {
-                bool _psychov17_prev_valid = (_357 > 0.0f) && !isnan(_357) && !isinf(_357);
+              if (IMPROVED_AUTO_EXPOSURE == 2) {
+                bool _psychov17_prev_valid = _ae_can_reuse_history && (_357 > 0.0f) && !isnan(_357) && !isinf(_357);
                 bool _psychov17_target_valid = (_350 > 0.0f) && !isnan(_350) && !isinf(_350);
                 if (!_psychov17_prev_valid || !_psychov17_target_valid) {
                   _381 = _psychov17_target_valid ? _350 : 1.0f;
                 } else {
                   float _psychov17_log_prev_gain = log2(_357);
                   float _psychov17_log_target_gain = log2(_350);
-                  float _psychov17_log_gap = _psychov17_log_prev_gain - _psychov17_log_target_gain;
-                  float _psychov17_speed = (_psychov17_log_target_gain > _psychov17_log_prev_gain)
-                      ? _param2.x
-                      : (_param2.y * (1.0f + (saturate(_psychov17_log_gap) * AE_ADAPT_SPEED_BOOST)));
-                  _psychov17_speed *= PerceptualSpeedMultiplier();
-                  float _psychov17_alpha_gain = 1.0f - exp2(-_psychov17_speed * _timeNoScale.z);
+                  float _psychov17_tau_fast = max(AE_DARK_TO_LIGHT_TIME, 0.10000000149011612f);
+                  float _psychov17_alpha_fast_gain = 1.0f - exp(-_timeNoScale.z / _psychov17_tau_fast);
+                  // AE2 already models lingering light->dark memory through the
+                  // fast/slow equivalent-background residuals below. Reusing the
+                  // long-term tau here double-counts that memory and makes dark
+                  // adaptation feel far slower than the UI times imply.
+                  float _psychov17_alpha_gain = _psychov17_alpha_fast_gain;
                   float _psychov17_log_new_gain =
                       lerp(_psychov17_log_prev_gain, _psychov17_log_target_gain, _psychov17_alpha_gain);
                   _381 = exp2(_psychov17_log_new_gain);
@@ -705,15 +789,8 @@ void main(
             } else {
               // Temporal reset (loading screens, menus)
               [branch]
-              if (IMPROVED_AUTO_EXPOSURE == 99) {
-                // Preserve previous exposure to prevent spikes from garbage
-                // histogram data during transitions. Temporal adaptation will
-                // smoothly converge once gameplay resumes.
-                float prevExposure = __3__39__0__1__g_exposureUAV[1];
-                _381 = ((prevExposure > 0.001f) && !isnan(prevExposure) && !isinf(prevExposure)) ? prevExposure : _350;
-              } else if (IMPROVED_AUTO_EXPOSURE == 2) {
-                float prevExposure = __3__39__0__1__g_exposureUAV[1];
-                _381 = ((prevExposure > 0.001f) && !isnan(prevExposure) && !isinf(prevExposure)) ? prevExposure : _350;
+              if (IMPROVED_AUTO_EXPOSURE == 2) {
+                _381 = _350;
               } else {
                 _381 = _350;
               }
@@ -750,41 +827,35 @@ void main(
               float _406 = _317 * _405;
               float _407;
               if (IMPROVED_AUTO_EXPOSURE == 2) {
-                _407 = _psychov17_field_yf;
+                // In perceptual AE, use the smoothed field for the adaptation
+                // state too. The fast/slow residuals already model adaptation
+                // memory; feeding raw histogram jitter straight into the live
+                // field makes scripted flashes and intro cards pulse even when
+                // the adaptation times are very long.
+                _407 = max(_smoothed_target_yf, 9.999999747378752e-05f);
               } else {
                 _407 = max(_403, _smoothed_target_yf);
               }
-              float _410 = __3__39__0__1__g_exposureUAV[11];
+              float _409 = __3__39__0__1__g_exposureUAV[9];
+              float _410 = __3__39__0__1__g_exposureUAV[10];
+              float _411 = __3__39__0__1__g_exposureUAV[11];
               float _413;
               [branch]
               if (IMPROVED_AUTO_EXPOSURE == 2) {
-                float _psychov17_prev_yf = _410;
-                float _psychov17_speed_mul = PerceptualSpeedMultiplier();
-                float _psychov17_tau_light = 1.5f / _psychov17_speed_mul;
-                float _psychov17_tau_dark = 8.0f / _psychov17_speed_mul;
-                if (!_353) {
-                  _413 = max(_psychov17_field_yf, 0.0f);
-                } else if ((_psychov17_prev_yf <= 0.0f) || isnan(_psychov17_prev_yf) || isinf(_psychov17_prev_yf)) {
-                  _413 = max(_psychov17_field_yf, 0.0f);
-                } else if ((_psychov17_field_yf <= 0.0f) || isnan(_psychov17_field_yf) || isinf(_psychov17_field_yf)) {
-                  float _psychov17_alpha_dark = 1.0f - exp(-_timeNoScale.z / _psychov17_tau_dark);
-                  _413 = lerp(_psychov17_prev_yf, 0.0f, _psychov17_alpha_dark);
-                } else {
-                  float _psychov17_tau = (_psychov17_field_yf > _psychov17_prev_yf) ? _psychov17_tau_light : _psychov17_tau_dark;
-                  float _psychov17_alpha = 1.0f - exp(-_timeNoScale.z / _psychov17_tau);
-                  float _psychov17_log_prev = log2(_psychov17_prev_yf);
-                  float _psychov17_log_field = log2(_psychov17_field_yf);
-                  float _psychov17_log_new = lerp(_psychov17_log_prev, _psychov17_log_field, _psychov17_alpha);
-                  _413 = exp2(_psychov17_log_new);
-                }
+                float _psychov17_fast_eqbg = _psychov17_predicted_fast_eqbg;
+                float _psychov17_slow_eqbg = _psychov17_predicted_slow_eqbg;
+                __3__39__0__1__g_exposureUAV[9] = _psychov17_fast_eqbg;
+                _413 = _psychov17_slow_eqbg;
               } else {
-                float _411 = _407 - _410;
-                float _412 = _411 * 0.125f;
-                _413 = _412 + _410;
+                bool _ae_prev_slow_valid = _ae_can_reuse_history && (_411 > 0.0f) && !isnan(_411) && !isinf(_411);
+                float _ae_prev_slow = _ae_prev_slow_valid ? _411 : _407;
+                float _412 = _407 - _ae_prev_slow;
+                float _414 = _412 * 0.125f;
+                _413 = _414 + _ae_prev_slow;
               }
-              bool _414 = !(_param3.x == 1.0f);
+              bool _415 = !(_param3.x == 1.0f);
               float _416 = __3__39__0__1__g_exposureUAV[0];
-              if (!_414) {
+              if (!_415) {
                 [branch]
                 if (IMPROVED_AUTO_EXPOSURE == 2) {
                   _427 = _381;
@@ -799,10 +870,6 @@ void main(
                   }
                   float _425 = _424 * _381;
                   _427 = _425;
-                  // Apply EV bias for IMPROVED mode (compensates for zeroed _323 push constant correction)
-                  if (IMPROVED_AUTO_EXPOSURE == 99) {
-                    _427 *= exp2(AE_EV_BIAS);
-                  }
                 }
               } else {
                 _427 = _param3.y;
@@ -819,12 +886,10 @@ void main(
                 } else {
                   _427 = NakaRushton(_427, 10000.f, pivot, pivot, 2.f - AE_DYNAMISM_LOW).x;
                 }
-              } else if (IMPROVED_AUTO_EXPOSURE == 2) {
-                _427 = renodx::tonemap::Neutwo(_427, 1.0f + AE_DARK_EXPOSURE_LIMIT * 100.f);
               }
 
               __3__39__0__1__g_exposureUAV[0] = _427;
-              float _428 = select(_414, _param3.y, _381);
+              float _428 = select(_415, _param3.y, _381);
 
               __3__39__0__1__g_exposureUAV[1] = _428;
               __3__39__0__1__g_exposureUAV[2] = _param0.x;
@@ -832,7 +897,9 @@ void main(
               __3__39__0__1__g_exposureUAV[4] = _138;
               __3__39__0__1__g_exposureUAV[5] = _348;
               __3__39__0__1__g_exposureUAV[8] = _198;
-              __3__39__0__1__g_exposureUAV[9] = _416;
+              if (IMPROVED_AUTO_EXPOSURE != 2) {
+                __3__39__0__1__g_exposureUAV[9] = _416;
+              }
               __3__39__0__1__g_exposureUAV[10] = _407;
               __3__39__0__1__g_exposureUAV[11] = _413;
               float _440 = __3__39__0__1__g_exposureUAV[12];
@@ -840,7 +907,7 @@ void main(
               float _442 = _441 * 0.10000000149011612f;
               float _443 = _442 + _440;
               __3__39__0__1__g_exposureUAV[12] = _443;
-              __3__39__0__1__g_exposureUAV[13] = 1.0f;
+              __3__39__0__1__g_exposureUAV[13] = 1.0f + IMPROVED_AUTO_EXPOSURE;
               __3__39__0__1__g_exposureUAV[14] = _197;
               __3__39__0__1__g_exposureUAV[15] = _198;
               bool _449 = (_terrainNormalParams.w > 0.0f);
@@ -859,21 +926,27 @@ void main(
               // === RenoDX: Bloom/lens glare stabilisation ===
               // Write a low passed exposure into slot 18 (_exposure4.z).
               // Histogram-AWB and LensFlareComposite read this instead of the fast
-              // exposure state when smoothed AE or PsychoV17 is active.
+              // exposure state when either custom AE path is active.
               // This stops the exposure + glare feedback loop that causes shimmer
               // and makes foggy interiors flare unpredictably.
               [branch]
               if ((IMPROVED_AUTO_EXPOSURE == 1) || IMPROVED_AUTO_EXPOSURE == 2) {
                 float prevSlowExp = __3__39__0__1__g_exposureUAV[18];
-                float slowSeed = (prevSlowExp > 0.0001f && !isnan(prevSlowExp)) ? prevSlowExp : _427;
+                float slowSeed =
+                    (_ae_can_reuse_history && prevSlowExp > 0.0001f && !isnan(prevSlowExp) && !isinf(prevSlowExp))
+                        ? prevSlowExp
+                        : _427;
                 float slowTau = 0.05f;
                 float slowExp = lerp(slowSeed, _427, slowTau);
                 __3__39__0__1__g_exposureUAV[18] = slowExp;
                 // Slot 19: filtered target luminance for potential future use
-                float targetSource = IMPROVED_AUTO_EXPOSURE == 2 ? _psychov17_field_yf : _smoothed_target_yf;
+                float targetSource = _smoothed_target_yf;
                 float prevSlowTarget = __3__39__0__1__g_exposureUAV[19];
                 float targetSeed =
-                    (prevSlowTarget > 0.0001f && !isnan(prevSlowTarget)) ? prevSlowTarget : targetSource;
+                    (_ae_can_reuse_history && prevSlowTarget > 0.0001f && !isnan(prevSlowTarget) &&
+                     !isinf(prevSlowTarget))
+                        ? prevSlowTarget
+                        : targetSource;
                 float slowTarget = lerp(targetSeed, targetSource, 0.08f);
                 __3__39__0__1__g_exposureUAV[19] = slowTarget;
               }

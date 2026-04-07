@@ -6,6 +6,14 @@ cbuffer __3__35__0__0__ExposureConstantBuffer : register(b31, space35) {
   float4 _exposure4 : packoffset(c004.x);
 };
 
+// AE2 fields used by the grading path:
+//   _exposure0.x = final adapted exposure scalar written by AdaptExposure
+//   _exposure2.x = raw meter / histogram luminance
+//   _exposure2.y = fast equivalent-background carryover
+//   _exposure2.z = clean adapted field ("Adapt" in the debug panel)
+//   _exposure2.w = slow equivalent-background carryover
+//   _exposure4.z = filtered exposure history used by glare/lens effects
+
 cbuffer __3__1__0__0__GlobalPushConstants : register(b0, space1) {
   float4 _postProcessParams : packoffset(c000.x);
   float4 _postProcessParams1 : packoffset(c001.x);
@@ -20,6 +28,44 @@ cbuffer __3__1__0__0__GlobalPushConstants : register(b0, space1) {
   float4 _offsetParams : packoffset(c010.x);
   float4 _powerParams : packoffset(c011.x);
 };
+
+// _userImageAdjust.z is the grading exposure multiplier
+// ("ColorGradeExposure" in the addon UI). It sits on top of the AE solve.
+
+bool IsFinitePositiveYf(float value) {
+  return (value > 0.0f) && !isnan(value) && !isinf(value);
+}
+
+float SanitizePerceptualYf(float value) {
+  return clamp(value, 9.999999974752427e-07f, 65536.0f);
+}
+
+float GetPerceptualAdaptedFieldYf() {
+  // Prefer the clean adapted field, then fall back to the raw meter when
+  // history is invalid (first frame / load / reset).
+  float field_state = IsFinitePositiveYf(_exposure2.z) ? SanitizePerceptualYf(_exposure2.z) :
+      (IsFinitePositiveYf(_exposure2.x) ? SanitizePerceptualYf(_exposure2.x) : 0.18f);
+
+  // Carryover terms preserve short/long dark adaptation memory after bright
+  // scenes and are added back to the clean field to form the current anchor.
+  float fast_equivalent_background = _exposure2.y;
+  float slow_equivalent_background = _exposure2.w;
+  bool fast_valid = IsFinitePositiveYf(fast_equivalent_background);
+  bool slow_valid = IsFinitePositiveYf(slow_equivalent_background);
+
+  if (fast_valid) {
+    fast_equivalent_background = SanitizePerceptualYf(fast_equivalent_background);
+  } else {
+    fast_equivalent_background = 0.0f;
+  }
+  if (slow_valid) {
+    slow_equivalent_background = SanitizePerceptualYf(slow_equivalent_background);
+  } else {
+    slow_equivalent_background = 0.0f;
+  }
+
+  return SanitizePerceptualYf(field_state + fast_equivalent_background + slow_equivalent_background);
+}
 
 // // Core SDR curve stage only. Expects per-channel linear inputs and outputs in the same space.
 // float3 SDRCurveOnly(float3 color) {

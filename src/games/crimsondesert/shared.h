@@ -48,7 +48,7 @@
 #define RENODX_TONE_MAP_SHADOWS                shader_injection.tone_map_shadows
 #define RENODX_TONE_MAP_CONTRAST               shader_injection.tone_map_contrast
 #define RENODX_TONE_MAP_SATURATION             shader_injection.tone_map_saturation
-//#define RENODX_TONE_MAP_CONE_CONTRAST          shader_injection.tone_map_cone_contrast
+#define CUSTOM_CONE_RESPONSE                   shader_injection.tone_map_cone_response
 
 #define CUSTOM_FILM_GRAIN_TYPE                 ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__FILM_GRAIN_TYPE) != 0u ? 1.f : 0.f)
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
@@ -92,7 +92,12 @@
 #define AE_DYNAMISM_HIGH                       shader_injection.ae_dynamism_high
 #define AE_DYNAMISM_LOW                        shader_injection.ae_dynamism_low
 #define AE_SPEED                               shader_injection.ae_speed
-#define AE_DARK_EXPOSURE_LIMIT                 shader_injection.ae_dark_exposure_limit
+#define AE_DARK_TO_LIGHT_TIME                  shader_injection.ae_dark_to_light_time
+#define AE_LIGHT_TO_DARK_TIME                  shader_injection.ae_light_to_dark_time
+#define AE_ENVIRONMENT_BIAS                    shader_injection.ae_environment_bias
+#define AE_PERCEPTUAL_MIN_BRIGHTNESS           shader_injection.ae_perceptual_min_brightness
+#define AE_PERCEPTUAL_MAX_BRIGHTNESS           shader_injection.ae_perceptual_max_brightness
+#define AE_TARGET_SMOOTHING_TIME               shader_injection.ae_target_smoothing_time
 #define FOLIAGE_SHADOW_SENSITIVITY             0
 #define AE_DARK_POWER_OUTDOOR                  0.45f
 #define AE_DARK_POWER_INDOOR                   0.55f
@@ -132,7 +137,7 @@ struct ShaderInjectData {
   float tone_map_shadows;
   float tone_map_contrast;
   float tone_map_saturation;
-  float tone_map_cone_contrast;
+  float tone_map_cone_response;
 
   float custom_film_grain;
   float custom_random;
@@ -148,11 +153,17 @@ struct ShaderInjectData {
   float ae_dynamism_high;
   float ae_dynamism_low;
   float ae_speed;
-  float ae_dark_exposure_limit;
+  float ae_dark_to_light_time;
+  float ae_light_to_dark_time;
+  float ae_environment_bias;
+  float ae_perceptual_min_brightness;
 
   float moon_disk_size;
   float lens_flare_strength;
   float bloom_strength;
+  float ae_perceptual_reserved0;
+  float ae_perceptual_max_brightness;
+  float ae_target_smoothing_time;
 };
 
 #ifndef __cplusplus

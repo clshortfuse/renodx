@@ -221,12 +221,19 @@ float3 CustomPsychoV17Peak(
     float peak_value,
     float mid_gray_scale = 1.f,
     int gamut_compression_mode = 1) {
-  if (target_average <= 0.0f) {
+  bool valid_current_average = (current_average > 0.0f) && !isnan(current_average) && !isinf(current_average);
+  bool valid_target_average = (target_average > 0.0f) && !isnan(target_average) && !isinf(target_average);
+
+  if (!valid_target_average) {
     return 0.0f.xxx;
   }
 
+  if (!valid_current_average) {
+    current_average = target_average;
+  }
+
   float3 bt709_scene = untonemapped_bt709 * RENODX_TONE_MAP_EXPOSURE;
-  bool has_valid_anchor = (current_average > 0.0f) && (target_average > 0.0f);
+  bool has_valid_anchor = valid_current_average && valid_target_average;
   float boosted = has_valid_anchor ? (target_average / current_average) : 1.0f;
   if (has_valid_anchor) {
     bt709_scene *= boosted;
@@ -243,9 +250,8 @@ float3 CustomPsychoV17Peak(
   if (RENODX_TONE_MAP_SHADOWS != 1.f) {
     yf_target = renodx::color::grade::Shadows(yf_target, RENODX_TONE_MAP_SHADOWS, yf_midgray, 1.f);
   }
-  float contrast = RENODX_TONE_MAP_CONTRAST / RENODX_TONE_MAP_SATURATION;
-  if (contrast != 1.f) {
-    yf_target = renodx::color::grade::ContrastSafe(yf_target, contrast, yf_midgray);
+  if (RENODX_TONE_MAP_CONTRAST != 1.f) {
+    yf_target = renodx::color::grade::ContrastSafe(yf_target, RENODX_TONE_MAP_CONTRAST, yf_midgray);
   }
   yf_target *= mid_gray_scale;
 
@@ -253,6 +259,10 @@ float3 CustomPsychoV17Peak(
   bt709_scene *= yf_scale;
   if (has_valid_anchor) {
     bt709_scene /= boosted;
+  }
+
+  if (target_average >= peak_value) {
+    return min(bt709_scene, peak_value.xxx);
   }
 
   float anchor_in = has_valid_anchor ? current_average : target_average;
@@ -265,13 +275,13 @@ float3 CustomPsychoV17Peak(
       1.0,
       1.0,
       1.0,
-      1.0,
+      RENODX_TONE_MAP_SATURATION,
       RENODX_TONE_MAP_BLOWOUT,
       100.f,
       RENODX_TONE_MAP_HUE_RESTORE,
       1.0,
       1,
-      RENODX_TONE_MAP_SATURATION,
+      CUSTOM_CONE_RESPONSE,
       anchor_in,
       anchor_out,
       1.f,
