@@ -3,7 +3,6 @@
 #include "./psycho_test17_custom.hlsl"
 #include "./shared.h"
 
-
 float NR(float x, float sigma, float n) {
   float ax = abs(x);
   float xn = pow(max(ax, 0.0f), n);
@@ -221,23 +220,28 @@ float3 CustomPsychoV17Peak(
     float peak_value,
     float mid_gray_scale = 1.f,
     int gamut_compression_mode = 1) {
-  bool valid_current_average = (current_average > 0.0f) && !isnan(current_average) && !isinf(current_average);
-  bool valid_target_average = (target_average > 0.0f) && !isnan(target_average) && !isinf(target_average);
-
-  if (!valid_target_average) {
-    return 0.0f.xxx;
+  if (!(target_average > 0.0f)) {
+    return 0.0f;
   }
 
-  if (!valid_current_average) {
+  if (!(current_average > 0.0f)) {
     current_average = target_average;
   }
 
   float3 bt709_scene = untonemapped_bt709 * RENODX_TONE_MAP_EXPOSURE;
-  bool has_valid_anchor = valid_current_average && valid_target_average;
-  float boosted = has_valid_anchor ? (target_average / current_average) : 1.0f;
-  if (has_valid_anchor) {
-    bt709_scene *= boosted;
+
+  if (target_average >= peak_value) {
+    return min(bt709_scene, peak_value);
   }
+
+  float boost = 1.f;
+  if (!(current_average > 0.0f)) {
+    current_average = target_average;
+  } else {
+    boost = renodx::math::DivideSafe(target_average, current_average, 1.0f);
+  }
+
+  bt709_scene *= boost;
 
   float3 lms_in = renodx::color::lms::from::BT709(bt709_scene);
   float yf_input = renodx::color::yf::from::LMS(lms_in);
@@ -245,10 +249,10 @@ float3 CustomPsychoV17Peak(
   float yf_target = yf_input;
 
   if (RENODX_TONE_MAP_HIGHLIGHTS != 1.f) {
-    yf_target = renodx::color::grade::Highlights(yf_target, RENODX_TONE_MAP_HIGHLIGHTS, yf_midgray, 1.f);
+    yf_target = renodx::color::grade::Highlights(yf_target, RENODX_TONE_MAP_HIGHLIGHTS, yf_midgray);
   }
   if (RENODX_TONE_MAP_SHADOWS != 1.f) {
-    yf_target = renodx::color::grade::Shadows(yf_target, RENODX_TONE_MAP_SHADOWS, yf_midgray, 1.f);
+    yf_target = renodx::color::grade::Shadows(yf_target, RENODX_TONE_MAP_SHADOWS, yf_midgray);
   }
   if (RENODX_TONE_MAP_CONTRAST != 1.f) {
     yf_target = renodx::color::grade::ContrastSafe(yf_target, RENODX_TONE_MAP_CONTRAST, yf_midgray);
@@ -257,15 +261,10 @@ float3 CustomPsychoV17Peak(
 
   float yf_scale = renodx::math::DivideSafe(yf_target, yf_input, 1.f);
   bt709_scene *= yf_scale;
-  if (has_valid_anchor) {
-    bt709_scene /= boosted;
-  }
 
-  if (target_average >= peak_value) {
-    return min(bt709_scene, peak_value.xxx);
-  }
+  bt709_scene /= boost;
 
-  float anchor_in = has_valid_anchor ? current_average : target_average;
+  float anchor_in = current_average;
   float anchor_out = target_average;
 
   return renodx::tonemap::psycho::psychotm_test17(
@@ -288,7 +287,7 @@ float3 CustomPsychoV17Peak(
       gamut_compression_mode);
 }
 
-float3 CustomPsychoV17AutoExposure(float3 untonemapped_bt709, float peak, float mid_gray_scale,float current_average, float target_average, bool is_sdr = false) {
+float3 CustomPsychoV17AutoExposure(float3 untonemapped_bt709, float peak, float mid_gray_scale, float current_average, float target_average, bool is_sdr = false) {
   return CustomPsychoV17Peak(
       untonemapped_bt709,
       current_average,
@@ -299,24 +298,19 @@ float3 CustomPsychoV17AutoExposure(float3 untonemapped_bt709, float peak, float 
 }
 
 float3 ProcessTonemap(float3 untonemapped_bt709, float calculated_peak, float mid_gray_scale, float current_average, float target_average, bool is_sdr = false) {
-  const float white_clip = 100.f;
-  const int white_curve_mode = 1;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    return untonemapped_bt709;
+  }
 
   mid_gray_scale = lerp(1.f, mid_gray_scale, CUSTOM_TONE_MAP_MIDGRAY_ADJUST);
 
-  float3 output_color = untonemapped_bt709;
-  if (RENODX_TONE_MAP_TYPE == 1.f) {
-
-    output_color = CustomPsychoV17AutoExposure(
-        output_color,
-        calculated_peak,
-        mid_gray_scale,
-        current_average,
-        target_average,
-        is_sdr);
-
-  }
-  return output_color;
+  return CustomPsychoV17AutoExposure(
+      untonemapped_bt709,
+      calculated_peak,
+      mid_gray_scale,
+      current_average,
+      target_average,
+      is_sdr);
 }
 
 float3 CustomTonemap(float3 untonemapped_bt709, float mid_gray_scale = 1.f, float current_average = 0.18f, float target_average = 0.18f) {
@@ -335,7 +329,7 @@ float3 CustomTonemap(float3 untonemapped_bt709, float mid_gray_scale = 1.f, floa
   return output_color;
 }
 
-float3 CustomTonemapSDR(float3 untonemapped_bt709, float mid_gray_scale, float current_average, float target_average) {
+float3 CustomTonemapSDR(float3 untonemapped_bt709, float mid_gray_scale, float current_average = 0.18f, float target_average = 0.18f) {
   float calculated_peak = 1.f;
   calculated_peak = CUSTOM_SDR_BLACK_CRUSH_FIX == 1 ? renodx::color::correct::GammaSafe(calculated_peak) : calculated_peak;
 

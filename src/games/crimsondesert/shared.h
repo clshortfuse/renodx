@@ -6,24 +6,26 @@
 #include <cstdint>
 #endif
 
-#define CUSTOM_FLAGS__TONE_MAP_TYPE                     0b0000000000001u
-#define CUSTOM_FLAGS__SDR_BLACK_CRUSH_FIX               0b0000000000010u
-#define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE            0b0000000000100u
-#define CUSTOM_FLAGS__DISABLE_AWB                       0b0000000001000u
-#define CUSTOM_FLAGS__DISABLE_HERO_LIGHTS               0b0000000010000u
-#define CUSTOM_FLAGS__FILM_GRAIN_TYPE                   0b0000000100000u
-#define CUSTOM_FLAGS__SHARPENING_TYPE                   0b0000001000000u
-#define CUSTOM_FLAGS__SKY_SCATTERING                    0b0000010000000u
-#define CUSTOM_FLAGS__SUN_MOON_ADJUSTMENTS              0b0000100000000u
-#define CUSTOM_FLAGS__CONTACT_SHADOW_QUALITY            0b0001000000000u
-#define CUSTOM_FLAGS__RT_QUALITY_BIT0                   0b0010000000000u
-#define CUSTOM_FLAGS__RT_QUALITY_BIT1                   0b0100000000000u
-#define CUSTOM_FLAGS__MATERIAL_IMPROVEMENTS             0b1000000000000u
-#define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE_PERCEPTUAL 0b10000000000000u
-#define CUSTOM_FLAGS__DAWN_DUSK_IMPROVEMENTS            0b100000000000000u
-#define CUSTOM_FLAGS__SNOW_FOG_FIX                      0b1000000000000000u
+#define CUSTOM_FLAGS__TONE_MAP_TYPE                     0b0000000000000000001u
+#define CUSTOM_FLAGS__SDR_BLACK_CRUSH_FIX               0b0000000000000000010u
+#define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE            0b0000000000000000100u
+#define CUSTOM_FLAGS__DISABLE_AWB                       0b0000000000000001000u
+#define CUSTOM_FLAGS__DISABLE_HERO_LIGHTS               0b0000000000000010000u
+#define CUSTOM_FLAGS__FILM_GRAIN_TYPE                   0b0000000000000100000u
+#define CUSTOM_FLAGS__SHARPENING_TYPE                   0b0000000000001000000u
+#define CUSTOM_FLAGS__SKY_SCATTERING                    0b0000000000010000000u
+#define CUSTOM_FLAGS__SUN_MOON_ADJUSTMENTS              0b0000000000100000000u
+#define CUSTOM_FLAGS__CONTACT_SHADOW_QUALITY            0b0000000001000000000u
+#define CUSTOM_FLAGS__RT_QUALITY_BIT0                   0b0000000010000000000u
+#define CUSTOM_FLAGS__RT_QUALITY_BIT1                   0b0000000100000000000u
+#define CUSTOM_FLAGS__MATERIAL_IMPROVEMENTS             0b0000001000000000000u
+#define CUSTOM_FLAGS__IMPROVED_AUTO_EXPOSURE_PERCEPTUAL 0b0000010000000000000u
+#define CUSTOM_FLAGS__DAWN_DUSK_IMPROVEMENTS            0b0000100000000000000u
+#define CUSTOM_FLAGS__SNOW_FOG_FIX                      0b0001000000000000000u
+#define CUSTOM_FLAGS__TONEMAP_DEBUG_BIT0                0b0010000000000000000u
+#define CUSTOM_FLAGS__TONEMAP_DEBUG_BIT1                0b0100000000000000000u
 
-#define CUSTOM_FLAGS                           shader_injection.custom_flags
+#define CUSTOM_FLAGS                               shader_injection.custom_flags
 
 #ifdef __cplusplus
 #define CUSTOM_FLAGS_AS_UINT                   (std::bit_cast<uint32_t>(CUSTOM_FLAGS))
@@ -98,6 +100,9 @@
 #define AE_PERCEPTUAL_MIN_BRIGHTNESS           shader_injection.ae_perceptual_min_brightness
 #define AE_PERCEPTUAL_MAX_BRIGHTNESS           shader_injection.ae_perceptual_max_brightness
 #define AE_TARGET_SMOOTHING_TIME               shader_injection.ae_target_smoothing_time
+#define CUSTOM_TONEMAP_DEBUG                   0
+#define CUSTOM_TONEMAP_DEBUG_GRAPH             ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__TONEMAP_DEBUG_BIT0) != 0u ? 1.f : 0.f)
+#define CUSTOM_TONEMAP_DEBUG_STATS             ((CUSTOM_FLAGS_AS_UINT & CUSTOM_FLAGS__TONEMAP_DEBUG_BIT1) != 0u ? 1.f : 0.f)
 #define FOLIAGE_SHADOW_SENSITIVITY             0
 #define AE_DARK_POWER_OUTDOOR                  0.45f
 #define AE_DARK_POWER_INDOOR                   0.55f
@@ -157,13 +162,12 @@ struct ShaderInjectData {
   float ae_light_to_dark_time;
   float ae_environment_bias;
   float ae_perceptual_min_brightness;
+  float ae_perceptual_max_brightness;
+  float ae_target_smoothing_time;
 
   float moon_disk_size;
   float lens_flare_strength;
   float bloom_strength;
-  float ae_perceptual_reserved0;
-  float ae_perceptual_max_brightness;
-  float ae_target_smoothing_time;
 };
 
 #ifndef __cplusplus
