@@ -1913,9 +1913,9 @@ inline bool OnCopyResource(
       dest_desc_new = dest_clone_desc;
       dest_new = dest_clone;
     }
-    can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                    || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
-                    || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
+    can_be_copied = utils::resource::AreCopyFormatsCompatible(
+        source_desc_new.texture.format,
+        dest_desc_new.texture.format);
   }
 
   // {
@@ -2788,9 +2788,9 @@ inline bool OnResolveTextureRegion(
       dest_desc_new = dest_clone_desc;
       dest_new = dest_clone;
     }
-    can_be_resolved = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                      || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
-                      || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
+    can_be_resolved = utils::resource::AreCopyFormatsCompatible(
+        source_desc_new.texture.format,
+        dest_desc_new.texture.format);
   }
 
   if (can_be_resolved) {
@@ -2955,9 +2955,9 @@ inline bool OnCopyTextureRegion(
 
   bool source_clone_attempted = false;
   bool destination_clone_attempted = false;
-  bool can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                       || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
-                       || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
+  bool can_be_copied = utils::resource::AreCopyFormatsCompatible(
+      source_desc_new.texture.format,
+      dest_desc_new.texture.format);
 
   auto* shared_data = shared.data;
   if (!can_be_copied && shared_data->use_auto_cloning) {
