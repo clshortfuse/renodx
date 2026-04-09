@@ -1115,13 +1115,13 @@ inline bool OnCopyBufferToTexture(
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-    cmd_list->copy_buffer_to_texture(source, source_offset, row_length, slice_height, dest_clone, dest_subresource);
+    cmd_list->copy_buffer_to_texture(source, source_offset, row_length, slice_height, dest_clone, dest_subresource, dest_box);
 
     return true;
     // remap to other
   }
   // Mismatched, copy to original and blit?
-  cmd_list->copy_buffer_to_texture(source, source_offset, row_length, slice_height, dest, dest_subresource);
+  cmd_list->copy_buffer_to_texture(source, source_offset, row_length, slice_height, dest, dest_subresource, dest_box);
 
   std::stringstream s;
   s << "utils::resource::upgrade::OnCopyBufferToTexture(mismatched ";
@@ -1143,8 +1143,7 @@ inline bool OnCopyBufferToTexture(
     return true;
   } else {
     // Can't blit on D3D12 with mismatched formats.
-    // Fall through to the original copy rather than silently dropping it.
-    return false;
+    return true;
   }
 }
 
