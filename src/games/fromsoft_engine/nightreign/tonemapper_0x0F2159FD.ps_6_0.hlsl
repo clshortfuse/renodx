@@ -131,24 +131,15 @@ float4 main(
 
   float3 untonemapped = float3(_177, _178, _179);
 
-  if (CUSTOM_MATCH_MIDGRAY) {
-    float y_in = renodx::color::y::from::NTSC1953(untonemapped);
-    float y_out = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((y_in / (y_in + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
-    const float midgray = 0.18f;
-    float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r;
-
-    float3 luminance_tonemapped = untonemapped * (y_out / y_in);
-    untonemapped = untonemapped * (midgray_lum / midgray);
-    untonemapped = lerp(luminance_tonemapped, untonemapped, saturate(luminance_tonemapped));
-  }
-
-  float3 sdr_tonemapped;
-  if (!ApplyLuminanceSaturationAdjustments(untonemapped, sdr_tonemapped)) {
+  float3 tonemapped;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     float4 _192 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((_177 / (_177 + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f);
     float4 _194 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((_178 / (_178 + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f);
     float4 _196 = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((_179 / (_179 + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f);
 
-    sdr_tonemapped = float3(_192.x, _194.x, _196.x);
+    tonemapped = float3(_192.x, _194.x, _196.x);
+  } else {
+    tonemapped = ApplyFromSoftToneMapExtended(untonemapped, g_ReinhardParam, g_ToneMapParam);
   }
 
   float _207 = g_vVignettingParam.x * ((TEXCOORD.x * 2.0f) + -1.0f);
@@ -159,68 +150,52 @@ float4 main(
   float _221 = _220 * _220;
 
   const float vanilla_gamma = 1 / g_ToneMapParam.z;
-  sdr_tonemapped = ((_221 * (sdr_tonemapped - g_vVignettingColor.rgb)) + g_vVignettingColor.rgb);
+  tonemapped = ((_221 * (tonemapped - g_vVignettingColor.rgb)) + g_vVignettingColor.rgb);
 
-  // g_ToneMapParam.z is 0.4545 according to renderdoc, might be different for SDR (Doubt)
-  // Lut takes in gamma 2.2 (0.4545 = 1 / 2.2)
-  float4 _258 = g_ColorGradingLUTTexture.Sample(SS_ClampLinear, ((exp2(log2(max(sdr_tonemapped.rgb, 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f));
+  float3 lut_graded = g_ColorGradingLUTTexture.Sample(
+                          SS_ClampLinear,
+                          (exp2(log2(max(tonemapped, 0.0f)) * g_ToneMapParam.z) * 0.9375f) + 0.03125f)
+                          .xyz;
+
   bool isHDR = !(g_bEnableFlags.z == 0);
-  // Menus blend game and UI sometimes, so it has to be gamma encoded
-  // wanted to avoid avoid inner branching so we just return original lut sampling
-  if (RENODX_TONE_MAP_TYPE && isHDR) {
-    _258.rgb = SampleLUT(sdr_tonemapped, g_ColorGradingLUTTexture, SS_ClampLinear);
-  }
   [branch]
   if (isHDR) {
-    /* float midgray = 0.18f;
-    float midgray_lum = g_ToneMapTableTexture.SampleLevel(SS_ClampLinear, float2((((midgray / (midgray + 0.20000000298023224f)) * 0.9990234375f) + 0.00048828125f), 0.0f), 0.0f).r; */
-
-    // Only run in HDR, game launches in SDR
-    if (Tonemap(untonemapped, _258, SV_Target, TEXCOORD)) {
+    if (ApplyLUTAndToneMapAndRenderIntermediatePass(tonemapped, g_ColorGradingLUTTexture, SS_ClampLinear, SV_Target, float3(TEXCOORD.xy, 1.f))) {
       return SV_Target;
-    } else {
-      // HDR Inv tonemap
-
-      // Decode the lut output (gamma 2.2)
-      float _263 = 1.0f / g_ToneMapParam.z;
-      float _273 = exp2(log2(max(_258.x, 0.0f)) * _263);
-      float _274 = exp2(log2(max(_258.y, 0.0f)) * _263);
-      float _275 = exp2(log2(max(_258.z, 0.0f)) * _263);
-
-      float _287 = 1.0f / g_ReinhardParam.x;  // g_ReinhardParam.x = 1.9
-      float _297 = dot(float3(
-                           exp2(log2(_273 / max((1.0f - _273), 0.009999999776482582f)) * _287),
-                           exp2(log2(_274 / max((1.0f - _274), 0.009999999776482582f)) * _287),
-                           exp2(log2(_275 / max((1.0f - _275), 0.009999999776482582f)) * _287)),
-                       float3(0.298909991979599f, 0.5866100192070007f, 0.11448000371456146f));
-      float _300 = (pow(_297, g_ReinhardParam.x));
-      float _308 = exp2(log2(((_297 + -1.0f) * 0.05263157933950424f) + 1.0f) * g_ReinhardParam.x);
-      float _315 = select((_297 > 1.0f), ((((_308 / (_308 + 1.0f)) + -0.5f) * 19.0f) + 0.5f), (_300 / (_300 + 1.0f)));
-      float _320 = dot(float3(_273, _274, _275), float3(0.298909991979599f, 0.5866100192070007f, 0.11448000371456146f)) + 9.999999747378752e-05f;
-      _342 = (exp2(log2(g_vHDRDisplayParam.y * ((_315 * _273) / _320)) * 0.3030303120613098f) * 0.49770236015319824f);
-      _343 = (exp2(log2(g_vHDRDisplayParam.y * ((_315 * _274) / _320)) * 0.3030303120613098f) * 0.49770236015319824f);
-      _344 = (exp2(log2(g_vHDRDisplayParam.y * ((_315 * _275) / _320)) * 0.3030303120613098f) * 0.49770236015319824f);
-
-      // Rewritten
-      /* sceneColor = _258.rgb;                                                                        // lut output is in gamma
-      sceneColor = renodx::color::gamma::DecodeSafe(max(sceneColor, 0.f), 1.f / g_ToneMapParam.b);  // 2.2f
-      float reinhardGamma = g_ReinhardParam.x;
-      float3 tempScene = sceneColor.rgb / max(1.f - sceneColor.rgb, 0.00999);
-      float luminance_in_gamma = renodx::color::y::from::NTSC1953(renodx::color::gamma::EncodeSafe(tempScene, reinhardGamma));
-      float luminance_linear = renodx::color::gamma::DecodeSafe(luminance_in_gamma, reinhardGamma); */
     }
+    // HDR Inv tonemap
+
+    // Decode the lut output (gamma 2.2)
+    lut_graded = max(0.0f, lut_graded);
+    float _263 = 1.0f / g_ToneMapParam.z;
+    float _273 = exp2(log2(lut_graded.x) * _263);
+    float _274 = exp2(log2(lut_graded.y) * _263);
+    float _275 = exp2(log2(lut_graded.z) * _263);
+
+    float _287 = 1.0f / g_ReinhardParam.x;  // g_ReinhardParam.x = 1.9
+    float _297 = dot(float3(
+                         exp2(log2(_273 / max((1.0f - _273), 0.009999999776482582f)) * _287),
+                         exp2(log2(_274 / max((1.0f - _274), 0.009999999776482582f)) * _287),
+                         exp2(log2(_275 / max((1.0f - _275), 0.009999999776482582f)) * _287)),
+                     float3(0.298909991979599f, 0.5866100192070007f, 0.11448000371456146f));
+    float _300 = (pow(_297, g_ReinhardParam.x));
+    float _308 = exp2(log2(((_297 + -1.0f) * 0.05263157933950424f) + 1.0f) * g_ReinhardParam.x);
+    float _315 = select((_297 > 1.0f), ((((_308 / (_308 + 1.0f)) + -0.5f) * 19.0f) + 0.5f), (_300 / (_300 + 1.0f)));
+    float _320 = dot(float3(_273, _274, _275), float3(0.298909991979599f, 0.5866100192070007f, 0.11448000371456146f)) + 9.999999747378752e-05f;
+    _342 = (exp2(log2(g_vHDRDisplayParam.y * ((_315 * _273) / _320)) * 0.3030303120613098f) * 0.49770236015319824f);
+    _343 = (exp2(log2(g_vHDRDisplayParam.y * ((_315 * _274) / _320)) * 0.3030303120613098f) * 0.49770236015319824f);
+    _344 = (exp2(log2(g_vHDRDisplayParam.y * ((_315 * _275) / _320)) * 0.3030303120613098f) * 0.49770236015319824f);
 
   } else {
     // SDR
-    _342 = _258.x;
-    _343 = _258.y;
-    _344 = _258.z;
+    _342 = lut_graded.x;
+    _343 = lut_graded.y;
+    _344 = lut_graded.z;
   }
   SV_Target.x = _342;
   SV_Target.y = _343;
   SV_Target.z = _344;
 
   SV_Target.w = 1.0f;
-
   return SV_Target;
 }
