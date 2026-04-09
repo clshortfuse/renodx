@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #define ImTextureID ImU64
+#define RENODX_MODS_SWAPCHAIN_VERSION 2
 
 #define DEBUG_LEVEL_0
 
