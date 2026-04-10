@@ -312,7 +312,7 @@ void comp_main() {
   float3 ungraded_bt709 = _1363;
   if (RENODX_TONE_MAP_TYPE != 0 && RENODX_TONE_MAP_TYPE != 3.f) {
     float contrast = asfloat(CB1_m[4u].x);
-    U0[CB2_m11.y][gl_GlobalInvocationID] = float4(GenerateOutputStarWarsOutlaws(ungraded_bt709, contrast), 1.f);
+    U0[CB2_m11.y][gl_GlobalInvocationID] = float4(GenerateOutputOutlaws(ungraded_bt709, contrast), 1.f);
     return;
   }
 #endif
