@@ -190,6 +190,47 @@ static Setting* FindSetting(const std::string& key) {
   return nullptr;
 }
 
+static bool DrawResetButton(Setting* setting, const char* id = nullptr) {
+  bool changed = false;
+  const bool is_using_default = (setting->GetValue() == setting->default_value);
+  ImGui::BeginDisabled(is_using_default);
+  if (is_using_default) {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(ImColor::HSV(0, 0, 0.6f)));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(ImColor::HSV(0, 0, 0.7f)));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(ImColor::HSV(0, 0, 0.8f)));
+  }
+  auto* font = ImGui::GetFont();
+  auto old_scale = font->Scale;
+  auto previous_font_size = ImGui::GetFontSize();
+  font->Scale *= 0.75f;
+  ImGui::PushFont(font);
+  auto current_font_size = ImGui::GetFontSize();
+
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, current_font_size * 2);
+
+  ImVec2 cursor_pos = ImGui::GetCursorPos();
+  cursor_pos.y += (previous_font_size / 2.f) - (current_font_size / 2.f);
+  ImGui::SetCursorPos(cursor_pos);
+
+  const std::string btn_id = (id != nullptr) ? id : ("##Reset" + (setting->key.empty() ? setting->label : setting->key));
+  ImGui::PushID(btn_id.c_str());
+  if (ImGui::Button(renodx::utils::icons::View(renodx::utils::icons::UNDO))) {
+    setting->Set(setting->default_value);
+    changed = true;
+  }
+  ImGui::PopID();
+
+  if (is_using_default) {
+    ImGui::PopStyleColor(3);
+  }
+  font->Scale = old_scale;
+  ImGui::PopFont();
+  ImGui::PopStyleVar();
+  ImGui::EndDisabled();
+
+  return changed;
+}
+
 static bool UpdateSetting(const std::string& key, float value) {
   auto* setting = FindSetting(key);
   if (setting == nullptr) return false;
@@ -570,40 +611,7 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
           && setting->can_reset
           && setting->value_type < SettingValueType::BUTTON) {
         ImGui::SameLine();
-        const bool is_using_default = (setting->GetValue() == setting->default_value);
-        ImGui::BeginDisabled(is_using_default);
-        if (is_using_default) {
-          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(ImColor::HSV(0, 0, 0.6f)));
-          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(ImColor::HSV(0, 0, 0.7f)));
-          ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(ImColor::HSV(0, 0, 0.8f)));
-        }
-        auto* font = ImGui::GetFont();
-        auto old_scale = font->Scale;
-        auto previous_font_size = ImGui::GetFontSize();
-        font->Scale *= 0.75f;
-        ImGui::PushFont(font);
-        auto current_font_size = ImGui::GetFontSize();
-
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, current_font_size * 2);
-
-        ImVec2 cursor_pos = ImGui::GetCursorPos();
-        cursor_pos.y += (previous_font_size / 2.f) - (current_font_size / 2.f);
-        ImGui::SetCursorPos(cursor_pos);
-
-        ImGui::PushID(("##Reset" + identifier).c_str());
-        if (ImGui::Button(renodx::utils::icons::View(renodx::utils::icons::UNDO))) {
-          setting->Set(setting->default_value);
-          changed = true;
-        }
-        ImGui::PopID();
-
-        if (is_using_default) {
-          ImGui::PopStyleColor(3);
-        }
-        font->Scale = old_scale;
-        ImGui::PopFont();
-        ImGui::PopStyleVar();
-        ImGui::EndDisabled();
+        changed |= DrawResetButton(setting);
       }
 
       if (changed) {
