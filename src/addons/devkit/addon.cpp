@@ -3933,7 +3933,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
               ImGui::EndDisabled();
             };
 
-            ImGui::PushID(row.draw_index);
+            ImGui::PushID(row.id_seed);
             render_nav_button("##prev", !has_prev, has_prev ? *prev_it : -1);
             render_nav_button("##next", !has_next, has_next ? *next_it : -1);
             ImGui::PopID();
