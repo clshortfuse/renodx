@@ -3787,7 +3787,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
-    const float snapshot_row_height = ImGui::GetFrameHeight();
+    // Row height must include CellPadding.y on both sides. Using the wrong
+    // value causes the ImGuiListClipper to underreport total content height,
+    // clipping the bottom rows and miscalculating scroll-to-row offsets.
+    const float snapshot_row_height = ImGui::GetFrameHeight() + (ImGui::GetStyle().CellPadding.y * 2.0f);
     const uint32_t snapshot_row_layout_key =
         (snapshot_pane_show_vertex_shaders ? 1u << 0u : 0u)
         | (snapshot_pane_show_pixel_shaders ? 1u << 1u : 0u)
