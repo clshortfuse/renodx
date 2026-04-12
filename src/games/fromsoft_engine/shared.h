@@ -12,6 +12,7 @@ struct ShaderInjectData {
   float custom_ui_visibility;
   float tone_map_type;
   float tone_map_per_channel;
+  float tone_map_hue_emulation_method;
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;
@@ -44,6 +45,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_GRAPHICS_WHITE_NITS               shader_injection.graphics_white_nits
 #define CUSTOM_SHOW_UI                           shader_injection.custom_ui_visibility
 #define RENODX_TONE_MAP_PER_CHANNEL              shader_injection.tone_map_per_channel
+#define RENODX_TONE_MAP_HUE_EMULATION_METHOD     shader_injection.tone_map_hue_emulation_method
 #define RENODX_TONE_MAP_EXPOSURE                 shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS               shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS                  shader_injection.tone_map_shadows

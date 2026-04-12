@@ -162,16 +162,25 @@ bool ApplyLUTAndToneMapAndRenderIntermediatePass(float3 color_linear, Texture3D<
   psycho17_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
   psycho17_config.pre_gamut_compress = false;
   psycho17_config.post_gamut_compress = true;
-  psycho17_config.hue_emulation = 1.f;
+  psycho17_config.hue_emulation = (RENODX_TONE_MAP_HUE_EMULATION_METHOD == 0.f || RENODX_TONE_MAP_TYPE == 3.f) ? 0.f : 1.f;
 
-  float3 purity_hue_reference_bt2020 = renodx::tonemap::ReinhardPiecewise(color_linear, 5.f, psycho17_config.mid_gray);
+  float3 purity_hue_reference_bt2020;
   if (RENODX_TONE_MAP_TYPE == 3.f) {  // custom maxch hues and purity
+    purity_hue_reference_bt2020 = renodx::tonemap::ReinhardPiecewise(color_linear, 5.f, psycho17_config.mid_gray);
     psycho17_config.apply_lms_tonemap = false;
 
     color_linear = renodx::color::correct::Luminance(
         purity_hue_reference_bt2020,
         renodx::color::yf::from::BT2020(purity_hue_reference_bt2020),
         renodx::color::yf::from::BT2020(color_linear));
+  } else {
+    if (RENODX_TONE_MAP_HUE_EMULATION_METHOD == 1.f) {  // untonemapped
+      purity_hue_reference_bt2020 = color_linear;
+    } else if (RENODX_TONE_MAP_HUE_EMULATION_METHOD == 2.f) {  // BT.709
+      purity_hue_reference_bt2020 = renodx::color::bt2020::from::BT709(renodx::tonemap::ReinhardPiecewise(color_linear_bt709, 5.f, psycho17_config.mid_gray));
+    } else {  // BT.2020
+      purity_hue_reference_bt2020 = renodx::tonemap::ReinhardPiecewise(color_linear, 5.f, psycho17_config.mid_gray);
+    }
   }
   color_linear = renodx_custom::tonemap::psycho::ApplyTest17BT2020(color_linear, purity_hue_reference_bt2020, psycho17_config);
 
@@ -235,7 +244,6 @@ bool HandleFinal(float4 scene_pq, float4 ui_gamma, inout float4 SV_TARGET, float
   } else {
     blended_linear = scene_linear;
   }
-
 
   SV_TARGET.rgb = renodx::draw::SwapChainPass(blended_linear).rgb;
   if (!CUSTOM_GRAIN_TYPE) {
