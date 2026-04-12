@@ -69,6 +69,7 @@ struct Setting {
   float min = 0.f;
   float max = 100.f;
   std::string format = "%.0f";
+  std::function<std::string(float value)> value_format = nullptr;
 
   std::function<bool()> is_enabled = [] {
     return true;
@@ -506,37 +507,67 @@ static void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
         slider_flags |= ImGuiSliderFlags_Logarithmic;
       }
       switch (setting->value_type) {
-        case SettingValueType::FLOAT:
+        case SettingValueType::FLOAT: {
+          std::string custom_fmt;
+          const char* fmt = nullptr;
+          if (setting->value_format) {
+            custom_fmt = setting->value_format(setting->value);
+            fmt = custom_fmt.c_str();
+          } else {
+            fmt = setting->format.c_str();
+          }
+
           changed |= ImGui::SliderFloat(
               setting->label.c_str(),
               &setting->value,
               setting->min,
               setting->max,
-              setting->format.c_str(),
+              fmt,
               slider_flags);
           break;
-        case SettingValueType::INTEGER:
+        }
+        case SettingValueType::INTEGER: {
+          std::string custom_fmt;
+          const char* fmt = nullptr;
+          if (setting->value_format) {
+            custom_fmt = setting->value_format(static_cast<float>(setting->value_as_int));
+            fmt = custom_fmt.c_str();
+          } else if (!setting->labels.empty()) {
+            fmt = setting->labels.at(setting->value_as_int).c_str();
+          } else {
+            fmt = setting->format.c_str();
+          }
+
           changed |= ImGui::SliderInt(
               setting->label.c_str(),
               &setting->value_as_int,
               setting->min,
               setting->GetMax(),
-              setting->labels.empty()
-                  ? setting->format.c_str()
-                  : setting->labels.at(setting->value_as_int).c_str(),
+              fmt,
               slider_flags | ImGuiSliderFlags_NoInput);
           break;
-        case SettingValueType::BOOLEAN:
+        }
+        case SettingValueType::BOOLEAN: {
+          std::string custom_fmt;
+          const char* fmt = nullptr;
+          if (setting->value_format) {
+            custom_fmt = setting->value_format(static_cast<float>(setting->value_as_int));
+            fmt = custom_fmt.c_str();
+          } else if (!setting->labels.empty()) {
+            fmt = setting->labels.at(setting->value_as_int).c_str();
+          } else {
+            fmt = (setting->value_as_int == 0) ? "Off" : "On";
+          }
+
           changed |= ImGui::SliderInt(
               setting->label.c_str(),
               &setting->value_as_int,
               0,
               1,
-              setting->labels.empty()
-                  ? ((setting->value_as_int == 0) ? "Off" : "On")  // NOLINT(readability-avoid-nested-conditional-operator)
-                  : setting->labels.at(setting->value_as_int).c_str(),
+              fmt,
               slider_flags | ImGuiSliderFlags_NoInput);
           break;
+        }
         case SettingValueType::BUTTON:
           if (ImGui::Button(setting->label.c_str())) {
             changed = setting->on_click();
