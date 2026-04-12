@@ -140,6 +140,17 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapHueEmulationMethod",
+        .binding = &shader_injection.tone_map_hue_emulation_method,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 4.f,
+        .label = "Hue Emulation Method",
+        .section = "Tone Mapping",
+        .tooltip = "Applies hue emulation after tonemapping",
+        .labels = {"LMS (Off)", "Untonemapped", "BT.709", "BT.2020"},
+        .is_visible = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type == 6.f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,
         .default_value = 1.f,
@@ -472,9 +483,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
 
-  if (fdw_reason == DLL_PROCESS_ATTACH) { // ALways reset UI visibility to on
-  renodx::utils::settings::UpdateSetting("UIVisibility", 1.f);
-}
+  if (fdw_reason == DLL_PROCESS_ATTACH) {  // ALways reset UI visibility to on
+    renodx::utils::settings::UpdateSetting("UIVisibility", 1.f);
+  }
 
   renodx::mods::swapchain::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
