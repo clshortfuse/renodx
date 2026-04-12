@@ -1,7 +1,7 @@
 #ifndef SRC_GAMES_CRIMSONDESERT_MACLEOD_BOYNTON_HLSLI_
 #define SRC_GAMES_CRIMSONDESERT_MACLEOD_BOYNTON_HLSLI_
 
-#include "./shared.h"
+#include "../shared.h"
 
 namespace renodx_custom {
 namespace color {
