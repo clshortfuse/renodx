@@ -4,7 +4,7 @@
  */
 
 #include <cstddef>
-#define ImTextureID ImU64
+#define ImTextureID                   ImU64
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 
 #define DEBUG_LEVEL_0
@@ -116,6 +116,16 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "UIVisibility",
+        .binding = &shader_injection.custom_ui_visibility,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "UI Visibility",
+        .section = "Tone Mapping",
+        .labels = {"Hide", "Show"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapScaling",
@@ -349,6 +359,7 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 203.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
+      {"UIVisibility", 1.f},
       {"ToneMapGammaCorrection", 0.f},
       {"ToneMapScaling", 1.f},
       {"ColorGradeExposure", 1.f},
@@ -460,6 +471,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+
+  if (fdw_reason == DLL_PROCESS_ATTACH) { // ALways reset UI visibility to on
+  renodx::utils::settings::UpdateSetting("UIVisibility", 1.f);
+}
+
   renodx::mods::swapchain::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   renodx::utils::random::Use(fdw_reason);
