@@ -125,7 +125,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Scaling",
         .section = "Tone Mapping",
         .tooltip = "Luminosity scales colors consistently",
-        .labels = {"Luminosity", "Per Channel"},
+        .labels = {"Luminance", "Per Channel"},
         .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
