@@ -228,29 +228,14 @@ bool HandleFinal(float4 scene_pq, float4 ui_gamma, inout float4 SV_TARGET, float
   float3 scene_linear = renodx::draw::InvertIntermediatePass(scene_pq.rgb) / 100.f;
   scene_linear = renodx::color::bt709::from::BT2020(scene_linear);
 
-#if 1
-  HandleUIScale(ui_gamma);
-  float3 blended_linear = UIBlend(scene_linear, ui_gamma);
-#else
-  float ui_scale = RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-  float ui_alpha = ui_gamma.a;
-  {  // scale UI
-    float3 ui_color_linear = renodx::color::gamma::DecodeSafe(ui_gamma.rgb);
-    ui_color_linear *= RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-    ui_gamma.rgb = renodx::color::gamma::EncodeSafe(ui_color_linear.rgb);
+  float3 blended_linear;
+  if (CUSTOM_SHOW_UI) {
+    HandleUIScale(ui_gamma);
+    blended_linear = UIBlend(scene_linear, ui_gamma);
+  } else {
+    blended_linear = scene_linear;
   }
 
-  {  // tonemap under UI
-    float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(scene_linear, ui_scale * 0.1f);
-    scene_linear *= lerp(1.f, scale, 1.f - ui_alpha);
-  }
-
-  float3 scene_gamma = renodx::color::gamma::EncodeSafe(scene_linear);
-
-  float3 blended_gamma = scene_gamma * ui_alpha + ui_gamma.rgb;
-
-  float3 blended_linear = renodx::color::gamma::DecodeSafe(blended_gamma);
-#endif
 
   SV_TARGET.rgb = renodx::draw::SwapChainPass(blended_linear).rgb;
   if (!CUSTOM_GRAIN_TYPE) {
