@@ -80,15 +80,13 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapScaling",
-        .binding = &shader_injection.tone_map_scaling,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "Scaling",
+        .key = "ToneMapHueEmulation",
+        .binding = &shader_injection.tone_map_hue_emulation,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 0.f,
+        .label = "Vanilla Hue Emulation",
         .section = "Tone Mapping",
-        .tooltip = "Max Channel: Hand-tuned to match the original tonemapper's behavior.\n"
-                   "LMS (PsychoV): Based on emulating human vision.",
-        .labels = {"Max Channel", "LMS (PsychoV)"},
+        .tooltip = "Adjusts hues to match the original tonemapper's",
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
@@ -190,7 +188,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.tone_map_scaling != 0.f; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -248,7 +246,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 1.f},
-              {"ToneMapScaling", 0.f},
+              {"ToneMapHueEmulation", 1.f},
               {"ColorGradeShadows", 50.f},
               {"ColorGradeLUTScaling", 0.f},
           });
@@ -343,7 +341,7 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
-      {"ToneMapScaling", 0.f},
+      {"ToneMapHueEmulation", 1.f},
       {"GammaCorrection", 1.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeGamma", 1.f},
