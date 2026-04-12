@@ -1084,7 +1084,7 @@ float3 ApplyTest17BT2020(float3 color_bt2020, float3 color_hue_shift_source_bt20
     }
 
     float lum_scale = renodx::math::DivideSafe(lum_target, lum_original, 1.f);
-    clip_point *= lum_scale;
+    // clip_point *= lum_scale;
     color_lms *= lum_scale;
 
     float purity_scale = psycho_config.purity_scale;
