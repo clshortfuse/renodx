@@ -22,8 +22,6 @@ namespace renodx::utils::pipeline_layout {
 struct PipelineLayoutData {
   std::vector<reshade::api::pipeline_layout_param> params;
   std::vector<std::vector<reshade::api::descriptor_range>> ranges;
-  [[deprecated("Use renodx::utils::state descriptor-table tracking instead.")]]
-  std::vector<reshade::api::descriptor_table> tables;
   reshade::api::pipeline_layout layout = {0u};
   reshade::api::pipeline_layout replacement_layout = {0u};
   reshade::api::pipeline_layout injection_layout = {0u};

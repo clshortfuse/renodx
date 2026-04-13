@@ -32,8 +32,6 @@ struct CommandListState {
   std::vector<reshade::api::descriptor_table> graphics_descriptor_tables;
   reshade::api::pipeline_layout compute_pipeline_layout = {0};
   std::vector<reshade::api::descriptor_table> compute_descriptor_tables;
-  [[deprecated("Use graphics_pipeline_layout/graphics_descriptor_tables or compute_pipeline_layout/compute_descriptor_tables instead.")]]
-  std::unordered_map<reshade::api::shader_stage, std::pair<reshade::api::pipeline_layout, std::vector<reshade::api::descriptor_table>>> descriptor_tables;
 
   void Apply(reshade::api::command_list* cmd_list) const {
     if (!render_targets.empty() || depth_stencil != 0) {
