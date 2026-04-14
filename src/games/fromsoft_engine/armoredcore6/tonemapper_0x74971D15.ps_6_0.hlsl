@@ -97,7 +97,9 @@ float4 main(
   float _216;
   [branch]
   if (isHDR) {
-    if (ApplyLUTAndToneMapAndRenderIntermediatePass(tonemapped, g_ColorGradingLUTTexture, SS_ClampLinear, SV_Target, float3(TEXCOORD.xy, 1.f))) {
+    if (ApplyLUTAndToneMapAndRenderIntermediatePass(tonemapped, g_ColorGradingLUTTexture, SS_ClampLinear, SV_Target,
+                                                    float3(g_dynamicScreenPercentage * TEXCOORD.xy, 1.f), g_ToneMapInvSceneLumScale,
+                                                    g_ReinhardParam, g_ToneMapParam, g_vHDRDisplayParam)) {
       return SV_Target;
     }
     float _135 = 1.0f / g_ToneMapParam.z;

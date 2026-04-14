@@ -119,6 +119,18 @@ float3 psycho17_GamutCompressAdaptiveRelativeWeightedLMSBound(
       strength);
 }
 
+float3 psycho17_GamutCompressBT709ToBT2020BoundAdaptive(
+    float3 bt709_input,
+    float3 current_adaptive_state_bt709 = 0.18f.xxx,
+    float strength = 1.f) {
+  return renodx::color::bt709::from::LMS(
+      psycho17_GamutCompressLMSBoundAdaptive(
+          renodx::color::lms::from::BT709(bt709_input),
+          renodx::color::lms::from::BT709(current_adaptive_state_bt709),
+          renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
+          strength));
+}
+
 float psycho17_AdaptiveHueSensitivity(float2 mb_xy, float2 mb_anchor) {
   float2 direction = mb_xy - mb_anchor;
   if (dot(direction, direction) <= renodx::color::gamut::MB_NEAR_WHITE_EPSILON) {

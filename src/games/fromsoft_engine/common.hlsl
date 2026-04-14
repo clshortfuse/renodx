@@ -1,6 +1,186 @@
 #include "./psycho_test17_custom.hlsli"
 #include "./shared.h"
 
+float3 DrawTonemapParamsOverlay(
+    float3 color,
+    float2 pixel_position,  // pass SV_Position.xy from the pixel shader
+    float4 g_ReinhardParam,
+    float4 g_ToneMapParam,
+    float4 g_vHDRDisplayParam) {
+  // Accept either pixel coordinates (SV_Position.xy) or normalized UVs (TEXCOORD.xy).
+  // If UVs are passed, reconstruct pixel space from screen-space derivatives.
+  float2 overlay_position = pixel_position;
+  float ddx_x = abs(ddx(pixel_position.x));
+  float ddy_y = abs(ddy(pixel_position.y));
+  bool looks_like_uv = (ddx_x > 0.0f && ddx_x < 0.25f) && (ddy_y > 0.0f && ddy_y < 0.25f);
+  if (looks_like_uv) {
+    float2 inv_texel = float2(max(ddx_x, 1e-6f), max(ddy_y, 1e-6f));
+    overlay_position *= rcp(inv_texel);
+  }
+
+  float2 panel_min = float2(12.0f, 12.0f);
+  float2 panel_max = float2(456.0f, 360.0f);
+
+  renodx::canvas::Context context = renodx::canvas::CreateContext(
+      overlay_position + 0.5f,
+      panel_min + float2(8.0f, 8.0f),
+      float2(12.0f, 18.0f),
+      color,
+      1.0f,
+      1.0f.xxx,
+      1.0f,
+      1.0f,
+      renodx::canvas::MODE_NORMAL,
+      0.0f,
+      1.1f);
+
+  renodx::canvas::SetColor(context, 0x101418, 0.93f, 1.0f);
+  renodx::canvas::FillRect(context, panel_min, panel_max);
+
+  renodx::canvas::SetColor(context, 0x7fe6ff, 1.0f, 2.0f);
+  renodx::canvas::DrawText(context, 'T', 'o', 'n', 'e', 'M', 'a', 'p', ' ', 'D', 'e', 'b', 'u', 'g');
+  renodx::canvas::NewLine(context);
+
+  renodx::canvas::SetColor(context, 0xd8dde3, 1.0f, 2.0f);
+
+  renodx::canvas::DrawText(context, 'g', '_', 'R', 'e', 'i', 'n', 'h', 'a', 'r', 'd', 'P', 'a', 'r', 'a', 'm');
+  renodx::canvas::DrawText(context, '.', 'x', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_ReinhardParam.x, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+  renodx::canvas::DrawText(context, 'g', '_', 'R', 'e', 'i', 'n', 'h', 'a', 'r', 'd', 'P', 'a', 'r', 'a', 'm');
+  renodx::canvas::DrawText(context, '.', 'y', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_ReinhardParam.y, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+  renodx::canvas::DrawText(context, 'g', '_', 'R', 'e', 'i', 'n', 'h', 'a', 'r', 'd', 'P', 'a', 'r', 'a', 'm');
+  renodx::canvas::DrawText(context, '.', 'z', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_ReinhardParam.z, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+  renodx::canvas::DrawText(context, 'g', '_', 'R', 'e', 'i', 'n', 'h', 'a', 'r', 'd', 'P', 'a', 'r', 'a', 'm');
+  renodx::canvas::DrawText(context, '.', 'w', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_ReinhardParam.w, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+
+  renodx::canvas::DrawText(context, 'g', '_', 'T', 'o', 'n', 'e', 'M', 'a', 'p', 'P', 'a', 'r', 'a', 'm');
+  renodx::canvas::DrawText(context, '.', 'x', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_ToneMapParam.x, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+  renodx::canvas::DrawText(context, 'g', '_', 'T', 'o', 'n', 'e', 'M', 'a', 'p', 'P', 'a', 'r', 'a', 'm');
+  renodx::canvas::DrawText(context, '.', 'y', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_ToneMapParam.y, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+  renodx::canvas::DrawText(context, 'g', '_', 'T', 'o', 'n', 'e', 'M', 'a', 'p', 'P', 'a', 'r', 'a', 'm');
+  renodx::canvas::DrawText(context, '.', 'z', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_ToneMapParam.z, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+  renodx::canvas::DrawText(context, 'g', '_', 'T', 'o', 'n', 'e', 'M', 'a', 'p', 'P', 'a', 'r', 'a', 'm');
+  renodx::canvas::DrawText(context, '.', 'w', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_ToneMapParam.w, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+
+  renodx::canvas::DrawText(context, 'g', '_', 'v', 'H', 'D', 'R', 'D', 'i', 's', 'p', 'l', 'a', 'y');
+  renodx::canvas::DrawText(context, 'P', 'a', 'r', 'a', 'm', '.', 'x', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_vHDRDisplayParam.x, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+  renodx::canvas::DrawText(context, 'g', '_', 'v', 'H', 'D', 'R', 'D', 'i', 's', 'p', 'l', 'a', 'y');
+  renodx::canvas::DrawText(context, 'P', 'a', 'r', 'a', 'm', '.', 'y', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_vHDRDisplayParam.y, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+  renodx::canvas::DrawText(context, 'g', '_', 'v', 'H', 'D', 'R', 'D', 'i', 's', 'p', 'l', 'a', 'y');
+  renodx::canvas::DrawText(context, 'P', 'a', 'r', 'a', 'm', '.', 'z', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_vHDRDisplayParam.z, 0.0f, 6.0f);
+  renodx::canvas::NewLine(context);
+  renodx::canvas::DrawText(context, 'g', '_', 'v', 'H', 'D', 'R', 'D', 'i', 's', 'p', 'l', 'a', 'y');
+  renodx::canvas::DrawText(context, 'P', 'a', 'r', 'a', 'm', '.', 'w', ':', ' ');
+  renodx::canvas::DrawFloat(context, g_vHDRDisplayParam.w, 0.0f, 6.0f);
+
+  return renodx::canvas::GetOutput(context).rgb;
+}
+
+float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
+  const float3 added_gamma = black_gamma;
+
+  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
+
+  // Remove from 0 to mid-gray
+  const float shadow_length = mid_gray_average;
+  const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
+  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
+
+  const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
+  return unclamped_gamma;
+}
+
+float3 ComputeGamutCompressionScaleAndCompress(float3 color_linear, inout float gamut_compression_scale) {
+  const float MID_GRAY_GAMMA = log(1 / (pow(10, 0.75))) / log(0.5f);  // ~2.49f
+
+  float3 encoded = renodx::color::gamma::EncodeSafe(color_linear, MID_GRAY_GAMMA);
+  float encoded_gray = renodx::color::gamma::Encode(renodx::color::yf::from::BT709(color_linear), MID_GRAY_GAMMA);
+
+  gamut_compression_scale = renodx::color::correct::ComputeGamutCompressionScale(encoded, encoded_gray);
+
+  float3 compressed = renodx::color::correct::GamutCompress(encoded, encoded_gray, gamut_compression_scale);
+
+  return renodx::color::gamma::DecodeSafe(compressed, MID_GRAY_GAMMA);
+}
+
+float3 GamutDecompress(float3 color_linear, float gamut_compression_scale) {
+  const float MID_GRAY_GAMMA = log(1 / (pow(10, 0.75))) / log(0.5f);  // ~2.49f
+
+  float3 encoded = renodx::color::gamma::EncodeSafe(color_linear, MID_GRAY_GAMMA);
+  float encoded_gray = renodx::color::gamma::Encode(renodx::color::yf::from::BT709(color_linear), MID_GRAY_GAMMA);
+
+  float3 decompressed = renodx::color::correct::GamutDecompress(encoded, encoded_gray, gamut_compression_scale);
+
+  return renodx::color::gamma::DecodeSafe(decompressed, MID_GRAY_GAMMA);
+}
+
+float3 SampleGamma22LUTWithScaling(Texture3D<float4> lut, float3 color_input, SamplerState lut_sampler, uint size = 16u) {
+  float3 color_input_original = color_input;
+
+  float3 color_output = color_input;
+  if (CUSTOM_LUT_STRENGTH > 0.f) {
+    float gamut_compression_scale = 1.f;
+    if (CUSTOM_LUT_GAMUT_RESTORATION != 0.f) {
+      color_input = ComputeGamutCompressionScaleAndCompress(color_input, gamut_compression_scale);
+    }
+
+    float3 color_input_gamma = renodx::color::gamma::EncodeSafe(color_input);
+    float3 color_output_gamma = renodx::lut::SampleTetrahedral(lut, color_input_gamma, size);
+    color_output = renodx::color::gamma::DecodeSafe(color_output_gamma);
+
+    if (CUSTOM_LUT_SCALING > 0.f) {
+      float3 lut_black_gamma = renodx::lut::Sample(lut, lut_sampler, 0.f, size);
+
+      float lut_black_y = renodx::color::yf::from::BT709(renodx::color::gamma::DecodeSafe(lut_black_gamma));
+      if (lut_black_y > 0.f) {
+        float3 lut_mid_gamma = renodx::lut::Sample(lut, lut_sampler, lut_black_gamma, size);
+
+        float3 unclamped_gamma = Unclamp(
+            color_output_gamma,
+            lut_black_gamma,
+            lut_mid_gamma,
+            color_input_gamma);
+
+        float3 unclamped_linear = renodx::color::gamma::DecodeSafe(unclamped_gamma);
+
+        color_output = renodx::color::correct::Luminance(
+            color_output,
+            renodx::color::yf::from::BT709(color_output),
+            renodx::color::yf::from::BT709(unclamped_linear),
+            CUSTOM_LUT_SCALING * 0.5f); // empirical adjustment to prevent crushing
+      }
+    }
+
+    if (CUSTOM_LUT_GAMUT_RESTORATION != 0.f) {
+      color_output = GamutDecompress(color_output, gamut_compression_scale);
+    }
+    color_output = renodx_custom::tonemap::psycho::psycho17_GamutCompressBT709ToBT2020BoundAdaptive(color_output);
+    color_output = lerp(color_input_original, color_output, CUSTOM_LUT_STRENGTH);
+  }
+
+  return color_output;
+}
+
 float ReinhardDerivative(float x, float peak) {
   return (peak * peak) / ((x + peak) * (x + peak));
 }
@@ -65,19 +245,6 @@ float3 ApplyFromSoftReinhard(float3 untonemapped, float4 g_ReinhardParam, float4
   return tonemapped;
 }
 
-#if FORCE_SDR
-#define APPLY_FROM_SOFT_REINHARD_EXTENDED_GENERATOR(T)                    \
-  T ApplyFromSoftReinhardExtended(T untonemapped, float4 g_ReinhardParam, \
-                                  float4 g_ToneMapParam) {                \
-    untonemapped = g_ReinhardParam.y * untonemapped;                      \
-    untonemapped = pow(untonemapped, g_ReinhardParam.x);                  \
-                                                                          \
-    T tonemapped = renodx::tonemap::Reinhard(untonemapped);               \
-    tonemapped = renodx::math::SignPow(tonemapped, 1 / g_ToneMapParam.y); \
-                                                                          \
-    return tonemapped;                                                    \
-  }
-#else
 #define APPLY_FROM_SOFT_REINHARD_EXTENDED_GENERATOR(T)                    \
   T ApplyFromSoftReinhardExtended(T untonemapped, float4 g_ReinhardParam, \
                                   float4 g_ToneMapParam) {                \
@@ -91,8 +258,6 @@ float3 ApplyFromSoftReinhard(float3 untonemapped, float4 g_ReinhardParam, float4
                                                                           \
     return tonemapped;                                                    \
   }
-#endif
-
 APPLY_FROM_SOFT_REINHARD_EXTENDED_GENERATOR(float)
 APPLY_FROM_SOFT_REINHARD_EXTENDED_GENERATOR(float3)
 #undef APPLY_FROM_SOFT_REINHARD_EXTENDED_GENERATOR
@@ -100,7 +265,7 @@ APPLY_FROM_SOFT_REINHARD_EXTENDED_GENERATOR(float3)
 float3 ApplyFromSoftToneMapExtended(float3 untonemapped, float4 g_ReinhardParam, float4 g_ToneMapParam) {
   untonemapped = g_ReinhardParam.y * untonemapped;
 #if FORCE_SDR
-  return pow(renodx::tonemap::Reinhard(pow(untonemapped, g_ReinhardParam.x)), 1 / g_ToneMapParam.y);
+  return pow(renodx::tonemap::Reinhard(pow(max(0, untonemapped), g_ReinhardParam.x)), 1 / g_ToneMapParam.y);
 #endif
 
   float3 untonemapped_ch = pow(untonemapped, g_ReinhardParam.x);
@@ -122,7 +287,9 @@ float3 ApplyFromSoftToneMapExtended(float3 untonemapped, float4 g_ReinhardParam,
 }
 
 bool ApplyLUTAndToneMapAndRenderIntermediatePass(float3 color_linear, Texture3D<float4> lut, SamplerState lut_sampler,
-                                                 inout float4 SV_TARGET, float3 TEXCOORD) {
+                                                 inout float4 SV_TARGET, float3 TEXCOORD,
+                                                 float3 g_ToneMapInvSceneLumScale, float4 g_ReinhardParam,
+                                                 float4 g_ToneMapParam, float4 g_vHDRDisplayParam) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
 
   if (CUSTOM_LUT_STRENGTH > 0.f) {
@@ -141,7 +308,7 @@ bool ApplyLUTAndToneMapAndRenderIntermediatePass(float3 color_linear, Texture3D<
 #endif
 
     color_linear *= maxch_scale;
-    color_linear = renodx::lut::Sample(lut, lut_config, color_linear);
+    color_linear = SampleGamma22LUTWithScaling(lut, color_linear, lut_sampler);  // color_linear = renodx::lut::Sample(lut, lut_config, color_linear);
     color_linear /= maxch_scale;
   }
 
@@ -189,6 +356,10 @@ bool ApplyLUTAndToneMapAndRenderIntermediatePass(float3 color_linear, Texture3D<
         color_linear.rgb, TEXCOORD.xy, CUSTOM_RANDOM, CUSTOM_GRAIN_STRENGTH * 0.01f,
         1.f, false, renodx::color::BT2020_TO_XYZ_MAT));
   }
+#endif
+
+#if 0
+  color_linear = DrawTonemapParamsOverlay(color_linear, TEXCOORD.xy, g_ReinhardParam, g_ToneMapParam, g_vHDRDisplayParam);
 #endif
 
   float3 color_output = renodx::draw::RenderIntermediatePass(color_linear * 100.f);

@@ -245,6 +245,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeLUTGamutRestoration",
+        .binding = &shader_injection.custom_lut_gamut_restoration,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "LUT Gamut Restoration",
+        .section = "Color Grading",
+        .tooltip = "Restores wide gamut colors clipped by the LUT",
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
     renodx::templates::settings::CreateSetting({
         .key = "FxPostProcessCA",
         .binding = &shader_injection.custom_fx_chromatic_aberration,
@@ -383,7 +394,8 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"ColorGradeStrength", 100.f},
       {"ColorGradeLUTScaling", 0.f},
-      {"FxPostProcessCA", 0.f},
+      {"ColorGradeLUTGamutRestoration", 0.f},
+      {"FxPostProcessCA", 1.f},
       {"FxGrainType", 0.f},
       {"FxGrainStrength", 50.f},
       {"ColorGradeColorSpace", 0.f},  // US CRT

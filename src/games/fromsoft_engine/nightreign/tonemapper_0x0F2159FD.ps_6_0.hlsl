@@ -160,7 +160,9 @@ float4 main(
   bool isHDR = !(g_bEnableFlags.z == 0);
   [branch]
   if (isHDR) {
-    if (ApplyLUTAndToneMapAndRenderIntermediatePass(tonemapped, g_ColorGradingLUTTexture, SS_ClampLinear, SV_Target, float3(TEXCOORD.xy, 1.f))) {
+    if (ApplyLUTAndToneMapAndRenderIntermediatePass(tonemapped, g_ColorGradingLUTTexture, SS_ClampLinear, SV_Target,
+                                                    float3(TEXCOORD.xy, 1.f), g_ToneMapInvSceneLumScale,
+                                                    g_ReinhardParam, g_ToneMapParam, g_vHDRDisplayParam)) {
       return SV_Target;
     }
     // HDR Inv tonemap
