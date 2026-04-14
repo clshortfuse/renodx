@@ -10,6 +10,7 @@
 #include <Windows.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -134,6 +135,103 @@ void QueueSnapshotCapture(reshade::api::device* device) {
   }
 }
 std::atomic_uint32_t device_data_index = 0;
+
+std::atomic_uint32_t snapshot_hotkey = 0;
+std::atomic_bool snapshot_hotkey_input_active = false;
+
+struct KeyMapping {
+  ImGuiKey imgui_key;
+  int vk_code;
+};
+
+constexpr KeyMapping Key(ImGuiKey imgui_key, int vk_code) {
+  return {.imgui_key = imgui_key, .vk_code = vk_code};
+}
+
+// ImGuiKey <-> VK code mappings
+// https://learn.microsoft.com/windows/win32/inputdev/virtual-key-codes
+constexpr auto BuildKeyMappings() {
+  // Handle special keys
+  constexpr auto special = std::to_array<KeyMapping>({
+      Key(ImGuiKey_Tab, VK_TAB),
+      Key(ImGuiKey_Backspace, VK_BACK),
+      Key(ImGuiKey_Space, VK_SPACE),
+      Key(ImGuiKey_Enter, VK_RETURN),
+      Key(ImGuiKey_Escape, VK_ESCAPE),
+      Key(ImGuiKey_LeftArrow, VK_LEFT),
+      Key(ImGuiKey_RightArrow, VK_RIGHT),
+      Key(ImGuiKey_UpArrow, VK_UP),
+      Key(ImGuiKey_DownArrow, VK_DOWN),
+      Key(ImGuiKey_PageUp, VK_PRIOR),
+      Key(ImGuiKey_PageDown, VK_NEXT),
+      Key(ImGuiKey_Home, VK_HOME),
+      Key(ImGuiKey_End, VK_END),
+      Key(ImGuiKey_Insert, VK_INSERT),
+      Key(ImGuiKey_Delete, VK_DELETE),
+      Key(ImGuiKey_Pause, VK_PAUSE),
+      Key(ImGuiKey_ScrollLock, VK_SCROLL),
+      Key(ImGuiKey_PrintScreen, VK_SNAPSHOT),
+      Key(ImGuiKey_KeypadDecimal, VK_DECIMAL),
+      Key(ImGuiKey_KeypadDivide, VK_DIVIDE),
+      Key(ImGuiKey_KeypadMultiply, VK_MULTIPLY),
+      Key(ImGuiKey_KeypadSubtract, VK_SUBTRACT),
+      Key(ImGuiKey_KeypadAdd, VK_ADD),
+      Key(ImGuiKey_KeypadEnter, VK_RETURN),
+      Key(ImGuiKey_GraveAccent, VK_OEM_3),
+      Key(ImGuiKey_Minus, VK_OEM_MINUS),
+      Key(ImGuiKey_Equal, VK_OEM_PLUS),
+      Key(ImGuiKey_LeftBracket, VK_OEM_4),
+      Key(ImGuiKey_RightBracket, VK_OEM_6),
+      Key(ImGuiKey_Backslash, VK_OEM_5),
+      Key(ImGuiKey_Semicolon, VK_OEM_1),
+      Key(ImGuiKey_Apostrophe, VK_OEM_7),
+      Key(ImGuiKey_Comma, VK_OEM_COMMA),
+      Key(ImGuiKey_Period, VK_OEM_PERIOD),
+      Key(ImGuiKey_Slash, VK_OEM_2),
+  });
+
+  // Handle contiguous keys
+  std::array<KeyMapping, special.size() + 12 + 10 + 10 + 26> result{};
+  size_t i = 0;
+  for (const auto& k : special) result[i++] = k;
+  for (int c = 0; c < 12; ++c) result[i++] = Key(static_cast<ImGuiKey>(ImGuiKey_F1 + c), VK_F1 + c);
+  for (int c = 0; c < 10; ++c) result[i++] = Key(static_cast<ImGuiKey>(ImGuiKey_Keypad0 + c), VK_NUMPAD0 + c);
+  for (int c = 0; c < 10; ++c) result[i++] = Key(static_cast<ImGuiKey>(ImGuiKey_0 + c), '0' + c);
+  for (int c = 0; c < 26; ++c) result[i++] = Key(static_cast<ImGuiKey>(ImGuiKey_A + c), 'A' + c);
+
+  return result;
+}
+
+constexpr auto KEY_MAPPINGS = BuildKeyMappings();
+
+// Returns whether a VK code is present in KEY_MAPPINGS.
+constexpr bool IsKnownVirtualKey(uint32_t vk_code) {
+  return std::ranges::any_of(KEY_MAPPINGS, [vk_code](const KeyMapping& mapping) {
+    return mapping.vk_code == static_cast<int>(vk_code);
+  });
+}
+
+// Returns a display name for a VK code via ImGui.
+const char* GetVirtualKeyName(uint32_t vk_code) {
+  for (const auto& [imgui_key, vk] : KEY_MAPPINGS) {
+    if (vk == static_cast<int>(vk_code)) {
+      return ImGui::GetKeyName(imgui_key);
+    }
+  }
+
+  return "";
+}
+
+// Returns the VK code of the key pressed this frame, or 0 if none.
+int GetLastKeyPressedImGui() {
+  for (const auto& [imgui_key, vk_code] : KEY_MAPPINGS) {
+    if (ImGui::IsKeyPressed(imgui_key, false)) {
+      return vk_code;
+    }
+  }
+
+  return 0;
+}
 
 struct ResourceBind {
   enum class BindType : std::uint8_t {
@@ -5909,6 +6007,8 @@ struct SettingsDeviceOption {
     DeviceData* data,
     const std::vector<SettingsDeviceOption>& device_options,
     uint32_t selected_device_index) {
+  snapshot_hotkey_input_active = false;
+
   DeviceData* pending_selected_device_data = nullptr;
   if (BeginSettingsSection("Snapshot")) {
     DrawSettingBoolCheckbox("Trace With Snapshot", "SnapshotTraceWithSnapshot", &snapshot_trace_with_snapshot);
@@ -5989,6 +6089,55 @@ struct SettingsDeviceOption {
 
   if (BeginSettingsSection("Other")) {
     DrawSettingDecimalTextbox("FPS Limit", "FPSLimit", &renodx::utils::swapchain::fps_limit);
+
+    {
+      static bool key_was_pressed = false;
+
+      const uint32_t current_hotkey = snapshot_hotkey.load();
+      const char* key_name = GetVirtualKeyName(current_hotkey);
+
+      std::array<char, 64> buf = {};
+      if (current_hotkey != 0 && key_name[0] != '\0') {
+        strncpy_s(buf.data(), buf.size(), key_name, _TRUNCATE);
+      }
+
+      ImGui::InputTextWithHint(
+          "Snapshot Hotkey",
+          "Press to bind...",
+          buf.data(),
+          buf.size(),
+          ImGuiInputTextFlags_ReadOnly);
+
+      const bool is_active = ImGui::IsItemActive();
+      snapshot_hotkey_input_active = is_active;
+
+      if (is_active) {
+        int key_pressed = GetLastKeyPressedImGui();
+
+        if (key_pressed != 0 && !key_was_pressed) {
+          uint32_t new_hotkey = current_hotkey;
+          if (key_pressed == VK_BACK || key_pressed == VK_DELETE) {
+            new_hotkey = 0;
+          } else if (key_pressed != VK_ESCAPE) {
+            new_hotkey = static_cast<uint32_t>(key_pressed);
+          }
+
+          if (new_hotkey != current_hotkey) {
+            snapshot_hotkey = new_hotkey;
+            reshade::set_config_value(nullptr, "renodx-dev", "SnapshotHotkey", new_hotkey);
+          }
+          key_was_pressed = true;
+        } else if (key_pressed == 0) {
+          key_was_pressed = false;
+        }
+      } else {
+        key_was_pressed = false;
+      }
+
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip)) {
+        ImGui::SetTooltip("Click and press a key to set.\nBackspace/Delete to clear. Escape to cancel.");
+      }
+    }
 
     EndSettingsSection();
   }
@@ -6958,11 +7107,18 @@ void InitializeUserSettings() {
   }
   for (const auto& [key, value] : std::vector<std::pair<const char*, std::atomic_uint32_t*>>({
            {"TraceInitialFrameCount", &renodx::utils::trace::trace_initial_frame_count},
+           {"SnapshotHotkey", &snapshot_hotkey},
        })) {
     uint32_t temp = *value;
     if (reshade::get_config_value(nullptr, "renodx-dev", key, temp)) {
       *value = temp;
     }
+  }
+
+  // Drop a stale SnapshotHotkey whose VK code is no longer in KEY_MAPPINGS
+  if (snapshot_hotkey != 0 && !IsKnownVirtualKey(snapshot_hotkey.load())) {
+    snapshot_hotkey = 0;
+    reshade::set_config_value(nullptr, "renodx-dev", "SnapshotHotkey", 0u);
   }
   {
     auto temp = static_cast<uint32_t>(setting_device_proxy_mode);
@@ -7280,6 +7436,34 @@ void OnPresent(
 
   if (setting_auto_dump) {
     renodx::utils::shader::dump::DumpAllPending();
+  }
+
+  // If the snapshot hotkey was pressed, queue a capture.
+  // Only act on the device selected in the devkit, and skip while a
+  // snapshot is already active or queued (matches menu gating).
+  if (const auto hotkey = snapshot_hotkey.load();
+      hotkey != 0
+      && !snapshot_hotkey_input_active
+      && snapshot_device == nullptr
+      && snapshot_queued_device == nullptr) {
+    const auto is_selected_device = [&device]() {
+      std::shared_lock list_lock(device_data_list_mutex);
+      const auto size = device_data_list.size();
+      if (size == 0) return false;
+
+      const auto selected_index = std::min<uint32_t>(
+          device_data_index.load(std::memory_order_relaxed),
+          static_cast<uint32_t>(size - 1u));
+      return device_data_list[selected_index]->device == device;
+    }();
+
+    if (is_selected_device) {
+      auto* device_data = get_data();
+      if (device_data != nullptr && device_data->runtime != nullptr
+          && device_data->runtime->is_key_pressed(hotkey)) {
+        QueueSnapshotCapture(device);
+      }
+    }
   }
 
   reshade::api::device* active_snapshot_device = snapshot_device;
