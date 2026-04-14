@@ -23,6 +23,7 @@ struct ShaderInjectData {
   float tone_map_flare;
   float custom_lut_strength;
   float custom_lut_scaling;
+  float custom_lut_gamut_restoration;
   float color_grade_color_space;
   float custom_fx_chromatic_aberration;
   float custom_random;
@@ -56,6 +57,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE                    shader_injection.tone_map_flare
 #define CUSTOM_LUT_STRENGTH                      shader_injection.custom_lut_strength
 #define CUSTOM_LUT_SCALING                       shader_injection.custom_lut_scaling
+#define CUSTOM_LUT_GAMUT_RESTORATION             shader_injection.custom_lut_gamut_restoration
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE     shader_injection.color_grade_color_space
 #define RENODX_GAMMA_CORRECTION                  GAMMA_CORRECTION_NONE
 #define RENODX_SWAP_CHAIN_ENCODING               ENCODING_PQ
