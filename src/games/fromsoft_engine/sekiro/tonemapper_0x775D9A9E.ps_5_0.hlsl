@@ -85,7 +85,9 @@ void main(
   r0.w = r0.w * r0.w;
   r0.xyz = r0.xyz * r0.www;
   if (g_bEnableFlags.z != 0) {
-    if (ApplyLUTAndToneMapAndRenderIntermediatePass(r0.rgb, g_ColorGradingLUTTexture, SS_ClampLinear_s, o0, v1)) {
+    if (ApplyLUTAndToneMapAndRenderIntermediatePass(r0.rgb, g_ColorGradingLUTTexture, SS_ClampLinear_s, o0, v1,
+                                                    g_ToneMapInvSceneLumScale, g_ReinhardParam, g_ToneMapParam,
+                                                    g_vHDRDisplayParam)) {
       return;
     }
 
