@@ -1,4 +1,4 @@
-#include "./LDRPostProcess.hlsli"
+#include "../common.hlsli"
 
 Texture2D<float> ReadonlyDepth : register(t0);
 
@@ -10,17 +10,16 @@ Texture3D<float> tVolumeMap : register(t3);
 
 Texture2D<float2> HazeNoiseResult : register(t4);
 
-struct RadialBlurComputeResult {  // decomp missed this
+struct RadialBlurComputeResult {
   float computeAlpha;
 };
-
 StructuredBuffer<RadialBlurComputeResult> ComputeResultSRV : register(t5);
 
-// Texture3D<float4> tTextureMap0 : register(t6);
+Texture3D<float4> tTextureMap0 : register(t6);
 
-// Texture3D<float4> tTextureMap1 : register(t7);
+Texture3D<float4> tTextureMap1 : register(t7);
 
-// Texture3D<float4> tTextureMap2 : register(t8);
+Texture3D<float4> tTextureMap2 : register(t8);
 
 Texture2D<float4> ImagePlameBase : register(t9);
 
@@ -51,120 +50,122 @@ cbuffer SceneInfo : register(b0) {
   uint4 rayTracingParams : packoffset(c036.x);
   float4 sceneExtendedData : packoffset(c037.x);
   float2 projectionSpaceJitterOffset : packoffset(c038.x);
-  float tessellationParam : packoffset(c038.z);
-  uint sceneInfoAdditionalFlags : packoffset(c038.w);
+  uint blueNoiseJitterIndex : packoffset(c038.z);
+  float tessellationParam : packoffset(c038.w);
+  uint sceneInfoAdditionalFlags : packoffset(c039.x);
 };
 
-// cbuffer TonemapParam : register(b1) {
-//   float contrast : packoffset(c000.x);
-//   float linearBegin : packoffset(c000.y);
-//   float linearLength : packoffset(c000.z);
-//   float toe : packoffset(c000.w);
-//   float maxNit : packoffset(c001.x);
-//   float linearStart : packoffset(c001.y);
-//   float displayMaxNitSubContrastFactor : packoffset(c001.z);
-//   float contrastFactor : packoffset(c001.w);
-//   float mulLinearStartContrastFactor : packoffset(c002.x);
-//   float invLinearBegin : packoffset(c002.y);
-//   float madLinearStartContrastFactor : packoffset(c002.z);
-//   float tonemapParam_isHDRMode : packoffset(c002.w);
-//   float useDynamicRangeConversion : packoffset(c003.x);
-//   float useHuePreserve : packoffset(c003.y);
-//   float exposureScale : packoffset(c003.z);
-//   float kneeStartNit : packoffset(c003.w);
-//   float knee : packoffset(c004.x);
-//   float curve_HDRip : packoffset(c004.y);
-//   float curve_k2 : packoffset(c004.z);
-//   float curve_k4 : packoffset(c004.w);
-//   row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
-//   row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
-//   float tonemapGraphScale : packoffset(c013.x);
-//   float offsetEVCurveStart : packoffset(c013.y);
-//   float offsetEVCurveRange : packoffset(c013.z);
-// };
+cbuffer TonemapParam : register(b1) {
+  float contrast : packoffset(c000.x);
+  float linearBegin : packoffset(c000.y);
+  float linearLength : packoffset(c000.z);
+  float toe : packoffset(c000.w);
+  float maxNit : packoffset(c001.x);
+  float linearStart : packoffset(c001.y);
+  float displayMaxNitSubContrastFactor : packoffset(c001.z);
+  float contrastFactor : packoffset(c001.w);
+  float mulLinearStartContrastFactor : packoffset(c002.x);
+  float invLinearBegin : packoffset(c002.y);
+  float madLinearStartContrastFactor : packoffset(c002.z);
+  float tonemapParam_isHDRMode : packoffset(c002.w);
+  float useDynamicRangeConversion : packoffset(c003.x);
+  float useHuePreserve : packoffset(c003.y);
+  float exposureScale : packoffset(c003.z);
+  float kneeStartNit : packoffset(c003.w);
+  float knee : packoffset(c004.x);
+  float curve_HDRip : packoffset(c004.y);
+  float curve_k2 : packoffset(c004.z);
+  float curve_k4 : packoffset(c004.w);
+  row_major float4x4 RGBToXYZViaCrosstalkMatrix : packoffset(c005.x);
+  row_major float4x4 XYZToRGBViaCrosstalkMatrix : packoffset(c009.x);
+  float tonemapGraphScale : packoffset(c013.x);
+  float offsetEVCurveStart : packoffset(c013.y);
+  float offsetEVCurveRange : packoffset(c013.z);
+};
 
-// cbuffer LDRPostProcessParam : register(b2) {
-//   float fHazeFilterStart : packoffset(c000.x);
-//   float fHazeFilterInverseRange : packoffset(c000.y);
-//   float fHazeFilterHeightStart : packoffset(c000.z);
-//   float fHazeFilterHeightInverseRange : packoffset(c000.w);
-//   float4 fHazeFilterUVWOffset : packoffset(c001.x);
-//   float fHazeFilterScale : packoffset(c002.x);
-//   float fHazeFilterBorder : packoffset(c002.y);
-//   float fHazeFilterBorderFade : packoffset(c002.z);
-//   float fHazeFilterDepthDiffBias : packoffset(c002.w);
-//   uint fHazeFilterAttribute : packoffset(c003.x);
-//   uint fHazeFilterReductionResolution : packoffset(c003.y);
-//   uint fHazeFilterReserved1 : packoffset(c003.z);
-//   uint fHazeFilterReserved2 : packoffset(c003.w);
-//   float fDistortionCoef : packoffset(c004.x);
-//   float fRefraction : packoffset(c004.y);
-//   float fRefractionCenterRate : packoffset(c004.z);
-//   float fGradationStartOffset : packoffset(c004.w);
-//   float fGradationEndOffset : packoffset(c005.x);
-//   uint aberrationEnable : packoffset(c005.y);
-//   uint distortionType : packoffset(c005.z);
-//   float fCorrectCoef : packoffset(c005.w);
-//   uint aberrationBlurEnable : packoffset(c006.x);
-//   float fBlurNoisePower : packoffset(c006.y);
-//   float2 LensDistortion_Reserve : packoffset(c006.z);
-//   float4 fOptimizedParam : packoffset(c007.x);
-//   float2 fNoisePower : packoffset(c008.x);
-//   float2 fNoiseUVOffset : packoffset(c008.z);
-//   float fNoiseDensity : packoffset(c009.x);
-//   float fNoiseContrast : packoffset(c009.y);
-//   float fBlendRate : packoffset(c009.z);
-//   float fReverseNoiseSize : packoffset(c009.w);
-//   float fTextureSize : packoffset(c010.x);
-//   float fTextureBlendRate : packoffset(c010.y);
-//   float fTextureBlendRate2 : packoffset(c010.z);
-//   float fTextureInverseSize : packoffset(c010.w);
-//   float fHalfTextureInverseSize : packoffset(c011.x);
-//   float fOneMinusTextureInverseSize : packoffset(c011.y);
-//   float fColorCorrectTextureReserve : packoffset(c011.z);
-//   float fColorCorrectTextureReserve2 : packoffset(c011.w);
-//   row_major float4x4 fColorMatrix : packoffset(c012.x);
-//   float4 cvdR : packoffset(c016.x);
-//   float4 cvdG : packoffset(c017.x);
-//   float4 cvdB : packoffset(c018.x);
-//   float4 ColorParam : packoffset(c019.x);
-//   float Levels_Rate : packoffset(c020.x);
-//   float Levels_Range : packoffset(c020.y);
-//   uint Blend_Type : packoffset(c020.z);
-//   float ImagePlane_Reserve : packoffset(c020.w);
-//   float4 cbRadialColor : packoffset(c021.x);
-//   float2 cbRadialScreenPos : packoffset(c022.x);
-//   float2 cbRadialMaskSmoothstep : packoffset(c022.z);
-//   float2 cbRadialMaskRate : packoffset(c023.x);
-//   float cbRadialBlurPower : packoffset(c023.z);
-//   float cbRadialSharpRange : packoffset(c023.w);
-//   uint cbRadialBlurFlags : packoffset(c024.x);
-//   float cbRadialReserve0 : packoffset(c024.y);
-//   float cbRadialReserve1 : packoffset(c024.z);
-//   float cbRadialReserve2 : packoffset(c024.w);
-// };
+cbuffer LDRPostProcessParam : register(b2) {
+  float fHazeFilterStart : packoffset(c000.x);
+  float fHazeFilterInverseRange : packoffset(c000.y);
+  float fHazeFilterHeightStart : packoffset(c000.z);
+  float fHazeFilterHeightInverseRange : packoffset(c000.w);
+  float4 fHazeFilterUVWOffset : packoffset(c001.x);
+  float fHazeFilterScale : packoffset(c002.x);
+  float fHazeFilterBorder : packoffset(c002.y);
+  float fHazeFilterBorderFade : packoffset(c002.z);
+  float fHazeFilterDepthDiffBias : packoffset(c002.w);
+  uint fHazeFilterAttribute : packoffset(c003.x);
+  uint fHazeFilterReductionResolution : packoffset(c003.y);
+  uint fHazeFilterReserved1 : packoffset(c003.z);
+  uint fHazeFilterReserved2 : packoffset(c003.w);
+  float fDistortionCoef : packoffset(c004.x);
+  float fRefraction : packoffset(c004.y);
+  float fRefractionCenterRate : packoffset(c004.z);
+  float fGradationStartOffset : packoffset(c004.w);
+  float fGradationEndOffset : packoffset(c005.x);
+  uint aberrationEnable : packoffset(c005.y);
+  uint distortionType : packoffset(c005.z);
+  float fCorrectCoef : packoffset(c005.w);
+  uint aberrationBlurEnable : packoffset(c006.x);
+  float fBlurNoisePower : packoffset(c006.y);
+  float2 LensDistortion_Reserve : packoffset(c006.z);
+  float4 fOptimizedParam : packoffset(c007.x);
+  float2 fNoisePower : packoffset(c008.x);
+  float2 fNoiseUVOffset : packoffset(c008.z);
+  float fNoiseDensity : packoffset(c009.x);
+  float fNoiseContrast : packoffset(c009.y);
+  float fBlendRate : packoffset(c009.z);
+  float fReverseNoiseSize : packoffset(c009.w);
+  float fTextureSize : packoffset(c010.x);
+  float fTextureBlendRate : packoffset(c010.y);
+  float fTextureBlendRate2 : packoffset(c010.z);
+  float fTextureInverseSize : packoffset(c010.w);
+  float fHalfTextureInverseSize : packoffset(c011.x);
+  float fOneMinusTextureInverseSize : packoffset(c011.y);
+  float fColorCorrectTextureReserve : packoffset(c011.z);
+  float fColorCorrectTextureReserve2 : packoffset(c011.w);
+  row_major float4x4 fColorMatrix : packoffset(c012.x);
+  float4 cvdR : packoffset(c016.x);
+  float4 cvdG : packoffset(c017.x);
+  float4 cvdB : packoffset(c018.x);
+  float4 ColorParam : packoffset(c019.x);
+  float Levels_Rate : packoffset(c020.x);
+  float Levels_Range : packoffset(c020.y);
+  uint Blend_Type : packoffset(c020.z);
+  float ImagePlane_Reserve : packoffset(c020.w);
+  float4 cbRadialColor : packoffset(c021.x);
+  float2 cbRadialScreenPos : packoffset(c022.x);
+  float2 cbRadialMaskSmoothstep : packoffset(c022.z);
+  float2 cbRadialMaskRate : packoffset(c023.x);
+  float cbRadialBlurPower : packoffset(c023.z);
+  float cbRadialSharpRange : packoffset(c023.w);
+  uint cbRadialBlurFlags : packoffset(c024.x);
+  float cbRadialReserve0 : packoffset(c024.y);
+  float cbRadialReserve1 : packoffset(c024.z);
+  float cbRadialReserve2 : packoffset(c024.w);
+};
 
-// // clang-format off
-// cbuffer CBControl : register(b3) {
-//   float3 CBControl_reserve : packoffset(c000.x);
-//   uint cPassEnabled : packoffset(c000.w);
-//   row_major float4x4 fOCIOTransformMatrix : packoffset(c001.x);
-//   struct RGCParam {
-//     float CyanLimit;
-//     float MagentaLimit;
-//     float YellowLimit;
-//     float CyanThreshold;
-//     float MagentaThreshold;
-//     float YellowThreshold;
-//     float RollOff;
-//     uint EnableReferenceGamutCompress;
-//     float InvCyanSTerm;
-//     float InvMagentaSTerm;
-//     float InvYellowSTerm;
-//     float InvRollOff;
-//   } cbControlRGCParam: packoffset(c005.x);
-// };
-// // clang-format on
+// clang-format off
+cbuffer CBControl : register(b3) {
+  float3 CBControl_reserve : packoffset(c000.x);
+  uint cPassEnabled : packoffset(c000.w);
+  row_major float4x4 fOCIOTransformMatrix : packoffset(c001.x);
+  struct RGCParam {
+    float CyanLimit;
+    float MagentaLimit;
+    float YellowLimit;
+    float CyanThreshold;
+    float MagentaThreshold;
+    float YellowThreshold;
+    float RollOff;
+    uint EnableReferenceGamutCompress;
+    float InvCyanSTerm;
+    float InvMagentaSTerm;
+    float InvYellowSTerm;
+    float InvRollOff;
+  } cbControlRGCParam: packoffset(c005.x);
+};
+// clang-format on
+
 
 SamplerState PointClamp : register(s1, space32);
 
@@ -174,7 +175,7 @@ SamplerState BilinearClamp : register(s5, space32);
 
 SamplerState BilinearBorder : register(s6, space32);
 
-// SamplerState TrilinearClamp : register(s9, space32);
+SamplerState TrilinearClamp : register(s9, space32);
 
 float4 main(
     noperspective float4 SV_Position: SV_Position,
@@ -936,11 +937,6 @@ float4 main(
     _1895 = _1794;
     _1896 = _1795;
   }
-
-  _1894 = lerp(_1793, _1894, CUSTOM_NOISE);
-  _1895 = lerp(_1794, _1895, CUSTOM_NOISE);
-  _1896 = lerp(_1795, _1896, CUSTOM_NOISE);
-
   float _1911 = mad(_1896, (fOCIOTransformMatrix[2].x), mad(_1895, (fOCIOTransformMatrix[1].x), ((fOCIOTransformMatrix[0].x) * _1894)));
   float _1914 = mad(_1896, (fOCIOTransformMatrix[2].y), mad(_1895, (fOCIOTransformMatrix[1].y), ((fOCIOTransformMatrix[0].y) * _1894)));
   float _1917 = mad(_1896, (fOCIOTransformMatrix[2].z), mad(_1895, (fOCIOTransformMatrix[1].z), ((fOCIOTransformMatrix[0].z) * _1894)));
@@ -988,15 +984,7 @@ float4 main(
     _2004 = _1914;
     _2005 = _1917;
   }
-#if 1
-  ApplyColorGrading(_2003, _2004, _2005,
-                    _2424, _2425, _2426);
-#else
-#if SKIP_LUTS
-  if (false) {
-#else
   if (!((cPassEnabled & 4) == 0)) {
-#endif
     bool _2031 = !(_2003 <= 0.0078125f);
     do {
       if (!_2031) {
@@ -1258,13 +1246,6 @@ float4 main(
     _2425 = _2004;
     _2426 = _2005;
   }
-#if 1
-  _2424 = lerp(_2003, _2424, COLOR_GRADE_LUT_STRENGTH);
-  _2425 = lerp(_2004, _2425, COLOR_GRADE_LUT_STRENGTH);
-  _2426 = lerp(_2005, _2426, COLOR_GRADE_LUT_STRENGTH);
-#endif
-#endif
-
   float _2427 = min(_2424, 65000.0f);
   float _2428 = min(_2425, 65000.0f);
   float _2429 = min(_2426, 65000.0f);
@@ -1359,8 +1340,5 @@ float4 main(
   SV_Target.y = _2655;
   SV_Target.z = _2656;
   SV_Target.w = 0.0f;
-
-  float2 grain_uv = SV_Position.xy * screenInverseSize;
-
   return SV_Target;
 }
