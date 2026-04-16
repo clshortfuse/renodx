@@ -57,41 +57,50 @@ OutputSignature main(
     noperspective float4 SV_Position: SV_Position,
     linear float2 TEXCOORD: TEXCOORD) {
   float4 SV_Target;
+  SV_Target.w = 1.0f;
+
   float4 SV_Target_1;
+  SV_Target_1.w = 1.0f;
+
+  OutputSignature output_signature;
+
   float4 _11 = SrcTexture.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
 
-  float _17;
-
+  if (TONE_MAP_TYPE != 0.f) {
+    float3 untonemapped_ap1 = _11.rgb;
 #if 1
-  SetExposureAndContrastForOCIOLUT(_17, _11.rgb);
+    SV_Target = float4(ApplyToneMapEncodePQ(untonemapped_ap1, displayMaxNits, whitePaperNits, TEXCOORD), SV_Target.w);
+    SV_Target_1 = SV_Target;
+    output_signature.SV_Target = SV_Target;
+    output_signature.SV_Target_1 = SV_Target_1;
+    return output_signature;
+
+    // return float4(renodx_custom::aces::rrtodt_academy_rec2020_1000nits_15nits_st2084::Apply(untonemapped_ap1), SV_Target.w);
 #else
-  if (TONE_MAP_TYPE == 0.f) {
-    _17 = whitePaperNits * 0.01f;
-  } else {
-    _17 = RENODX_CUSTOM_EXPOSURE;
+    SV_Target.rgb = renodx_custom::aces::odt_srgb_100nits_dim::Apply(
+        renodx_custom::aces::rrt::ApplyToODTInputFromAP1(_11.rgb));
 
-#if APPLY_HIGHLIGHT_BOOST == 1
-    float y_in = renodx::color::y::from::AP1(_11.rgb);
-    float y_out = SplitContrast(y_in, 1.f, 1.1f, 0.18f * RENODX_CUSTOM_EXPOSURE);
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      SV_Target.rgb = renodx::color::gamma::DecodeSafe(SV_Target.rgb);
+    } else {
+      SV_Target.rgb = renodx::color::srgb::DecodeSafe(SV_Target.rgb);
+    }
 
-    _11.rgb = renodx::color::correct::Luminance(_11.rgb, y_in, y_out);
-#elif APPLY_HIGHLIGHT_BOOST == 2
-    _11.rgb = SplitContrast(_11.rgb, 1.f, 1.1f, 0.18f * RENODX_CUSTOM_EXPOSURE);
+    SV_Target.rgb = renodx::color::bt2020::from::BT709(SV_Target.rgb);
+    SV_Target.rgb *= RENODX_DIFFUSE_WHITE_NITS;
+    SV_Target.rgb = renodx::color::pq::EncodeSafe(SV_Target.rgb, 1.f);
+
+    SV_Target_1 = SV_Target;
+    output_signature.SV_Target = SV_Target;
+    output_signature.SV_Target_1 = SV_Target_1;
 #endif
   }
-#endif
+
+  float _17 = whitePaperNits * 0.01f;
 
   float _18 = _17 * _11.x;
   float _19 = _17 * _11.y;
   float _20 = _17 * _11.z;
-
-#if SKIP_OCIO_LUT
-  SV_Target.rgb = float3(_18, _19, _20);
-  SV_Target.rgb = renodx::color::bt2020::from::AP1(SV_Target.rgb);
-  SV_Target.rgb = renodx::color::pq::EncodeSafe(SV_Target.rgb, 100.f);
-  return SV_Target;
-#endif
-
   float _35;
   float _50;
   float _65;
@@ -126,16 +135,12 @@ OutputSignature main(
   SV_Target.x = _74.x;
   SV_Target.y = _74.y;
   SV_Target.z = _74.z;
-  SV_Target.w = 1.0f;
   SV_Target_1.x = _74.x;
   SV_Target_1.y = _74.y;
   SV_Target_1.z = _74.z;
-  SV_Target_1.w = 1.0f;
 
-  // SV_Target.rgb *= 999.f;
-  // SV_Target_1.rgb *= 999.f;
-
-  OutputSignature output_signature = { SV_Target, SV_Target_1 };
+  output_signature.SV_Target = SV_Target;
+  output_signature.SV_Target_1 = SV_Target_1;
   return output_signature;
 }
 

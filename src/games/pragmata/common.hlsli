@@ -264,4 +264,94 @@ float3 ApplyHueAndPurityGrading(
   return color_bt2020;
 }
 
+float3 ApplyCustomGradingAP1(float3 ungraded) {
+  float3 graded = ungraded;
+
+  float3 ungraded_bt2020 = renodx::color::bt2020::from::AP1(ungraded);
+
+  const UserGradingConfig cg_config = {
+    RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
+    RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
+    RENODX_TONE_MAP_SHADOWS,                              // float shadows;
+    RENODX_TONE_MAP_CONTRAST,                             // float contrast;
+    0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
+    RENODX_TONE_MAP_GAMMA,                                // float gamma;
+    RENODX_TONE_MAP_SATURATION,                           // float saturation;
+    RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
+    -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
+    0.f,                                                  // float hue_emulation;
+    0.f                                                   // float purity_emulation;
+  };
+
+  float luminosity = LuminosityFromBT2020LuminanceNormalized(ungraded_bt2020);
+  float3 graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, luminosity, cg_config, 0.18f);
+  graded_bt2020 = ApplyHueAndPurityGrading(graded_bt2020, ungraded_bt2020, luminosity, cg_config);
+
+  graded = renodx::color::ap1::from::BT2020(graded_bt2020);
+
+  return graded;
+}
+
+float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, float cbuffer_diffuse_white_nits, float2 uv) {
+  untonemapped_ap1 = ApplyCustomGradingAP1(untonemapped_ap1);
+
+  untonemapped_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
+
+  float3 tonemapped_bt2020;
+
+  float ACES_MID;
+  if (TONE_MAP_TYPE == 1.f) {
+    ACES_MID = 10.f;
+  } else {
+    ACES_MID = 4.8f;
+  }
+  const float ACES_DIFFUSE = ACES_MID * 10.f;
+  const float ACES_MIN = 0.0001f;
+  float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
+  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  // float aces_max = (100.f);
+
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    aces_max = renodx::color::correct::Gamma(aces_max, true);
+    aces_min = renodx::color::correct::Gamma(aces_min, true);
+  } else if (RENODX_GAMMA_CORRECTION == 2.f) {
+    aces_min /= 10.f;
+  }
+
+  renodx::tonemap::aces::ODTConfig ODT_config = renodx::tonemap::aces::CreateODTConfig(aces_min * ACES_DIFFUSE, aces_max * ACES_DIFFUSE, ACES_MID, true, ACES_DIFFUSE, 0.02f);
+  float3 tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / ACES_DIFFUSE;
+  if (TONE_MAP_TYPE == 1.f) {
+    tonemapped_ap1 = lerp(renodx::color::y::from::AP1(tonemapped_ap1), tonemapped_ap1, 0.96);
+  }
+
+  float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
+
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
+  }
+
+  // {
+  //   float untonemapped_y = renodx::color::y::from::AP1(untonemapped_ap1);
+  //   float tonemapped_y = renodx::tonemap::aces::ODTToneMap(untonemapped_y, ODT_config) / ACES_DIFFUSE;
+  //   if (RENODX_GAMMA_CORRECTION != 0.f) {
+  //     tonemapped_y = renodx::color::correct::GammaSafe(tonemapped_y);
+  //   }
+  //   float3 tonemapped_y_bt709 = renodx::color::bt709::from::AP1(renodx::color::correct::Luminance(untonemapped_ap1, untonemapped_y, tonemapped_y));
+
+  //   tonemapped_bt709 = renodx::color::correct::Chrominance(tonemapped_y_bt709, tonemapped_bt709);
+  // }
+  tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
+
+  // tonemapped_bt2020 = lerp(CorrectHueAndPurityMB_BT2020(tonemapped_bt2020, renodx::color::bt2020::from::AP1(untonemapped_ap1), 1.f, 0.f), tonemapped_bt2020, saturate(tonemapped_bt2020 / 0.1f));
+
+
+  if (CUSTOM_GRAIN_STRENGTH > 0.f) {
+    tonemapped_bt2020 = renodx::effects::ApplyFilmGrain(
+        tonemapped_bt2020, uv, CUSTOM_RANDOM, CUSTOM_GRAIN_STRENGTH * 0.06f,
+        1.f, false, renodx::color::BT2020_TO_XYZ_MAT);
+  }
+
+  return renodx::color::pq::EncodeSafe(tonemapped_bt2020, RENODX_DIFFUSE_WHITE_NITS);
+}
+
 #endif  // PRAGMATA_COMMON_HLSLI
