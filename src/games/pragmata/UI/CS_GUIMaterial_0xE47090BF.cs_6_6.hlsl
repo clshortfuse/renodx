@@ -29,8 +29,9 @@ cbuffer SceneInfo : register(b0) {
   uint4 rayTracingParams : packoffset(c036.x);
   float4 sceneExtendedData : packoffset(c037.x);
   float2 projectionSpaceJitterOffset : packoffset(c038.x);
-  float tessellationParam : packoffset(c038.z);
-  uint sceneInfoAdditionalFlags : packoffset(c038.w);
+  uint blueNoiseJitterIndex : packoffset(c038.z);
+  float tessellationParam : packoffset(c038.w);
+  uint sceneInfoAdditionalFlags : packoffset(c039.x);
 };
 
 // cbuffer HDRMapping : register(b1) {
@@ -106,7 +107,6 @@ void main(
   min16int _31 = ((min16int)(((min16int)(((min16int)(((min16int)(_14 & 1)) | ((min16uint)((min16int)(min16int((uint)(SV_GroupID.x))) << 4)))) | ((min16int)(_16 & 2)))) | ((min16int)(_19 & 4)))) | ((min16int)(_22 & 8));
   min16int _36 = ((min16int)(((min16int)(((min16int)(((min16int)(_16 & 1)) | ((min16uint)((min16int)(min16int((uint)(SV_GroupID.y))) << 4)))) | ((min16int)(_19 & 2)))) | ((min16int)(_22 & 4)))) | ((min16int)(((min16int)((min16uint)(_14) >> 4)) & 8));
   float4 _48 = GUIImage.SampleLevel(PointClamp, float2(((float((min16uint)_31) + 0.5f) * screenInverseSize.x), ((float((min16uint)_36) + 0.5f) * screenInverseSize.y)), 0.0f);
-
 #if 1
   if (TONE_MAP_TYPE != 0.f) {
     if (RENODX_GAMMA_CORRECTION_UI != 0.f) {
@@ -226,7 +226,7 @@ void main(
         float _349 = exp2(log2(saturate(mad(0.04331360012292862f, _328, mad(0.3292819857597351f, _327, (_326 * 0.627403974533081f))) / _340)) * 0.1593017578125f);
         float _361 = exp2(log2(saturate(mad(0.011361200362443924f, _328, mad(0.9195399880409241f, _327, (_326 * 0.06909699738025665f))) / _340)) * 0.1593017578125f);
         float _373 = exp2(log2(saturate(mad(0.8955950140953064f, _328, mad(0.08801320195198059f, _327, (_326 * 0.01639159955084324f))) / _340)) * 0.1593017578125f);
-        if (CUSTOM_SHOW_UI) {
+        if (CUSTOM_SHOW_UI != 0.f) {
           RWResult[int2(_325, _324)] = float3(saturate(exp2(log2(((_349 * 18.8515625f) + 0.8359375f) / ((_349 * 18.6875f) + 1.0f)) * 78.84375f)), saturate(exp2(log2(((_361 * 18.8515625f) + 0.8359375f) / ((_361 * 18.6875f) + 1.0f)) * 78.84375f)), saturate(exp2(log2(((_373 * 18.8515625f) + 0.8359375f) / ((_373 * 18.6875f) + 1.0f)) * 78.84375f)));
         }
       } while (false);
