@@ -28,38 +28,6 @@ float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma,
   return unclamped_gamma;
 }
 
-float3 UpgradeToneMapMaxChannel(
-    float3 color_untonemapped,
-    float3 color_tonemapped,
-    float3 color_tonemapped_graded,
-    float post_process_strength = 1.f,
-    float auto_correction = 1.f) {
-  float ratio = 1.f;
-
-  float max_untonemapped = renodx::math::Max(color_untonemapped);
-  float max_tonemapped = renodx::math::Max(color_tonemapped);
-  float max_tonemapped_graded = renodx::math::Max(color_tonemapped_graded);
-
-  if (max_untonemapped < max_tonemapped) {
-    // If substracting (user contrast or paperwhite) scale down instead
-    // Should only apply on mismatched HDR
-    ratio = max_untonemapped / max_tonemapped;
-  } else {
-    float max_delta = max_untonemapped - max_tonemapped;
-    max_delta = max(0, max_delta);  // Cleans up NaN
-    const float max_new = max_tonemapped_graded + max_delta;
-
-    const bool max_valid = (max_tonemapped_graded > 0);  // Cleans up NaN and ignore black
-    ratio = max_valid ? (max_new / max_tonemapped_graded) : 0;
-  }
-  float auto_correct_ratio = lerp(1.f, ratio, saturate(max_untonemapped));
-  ratio = lerp(ratio, auto_correct_ratio, auto_correction);
-
-  float3 color_scaled = color_tonemapped_graded * ratio;
-
-  return lerp(color_untonemapped, color_scaled, post_process_strength);
-}
-
 struct UserGradingConfig {
   float exposure;
   float highlights;
