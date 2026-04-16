@@ -1,4 +1,5 @@
 #include "../../common.hlsli"
+#include "../../RRT.hlsli"
 
 Texture2D<float4> SrcTexture : register(t0);
 
@@ -16,12 +17,15 @@ float4 main(
   SV_Target.w = 1.0f;
   float4 _9 = SrcTexture.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
 
-#if SKIP_OCIO_LUT
-  SV_Target.rgb = _9.rgb;
-  SV_Target.rgb = renodx::color::bt709::from::AP1(SV_Target.rgb);
-  SV_Target.rgb = renodx::color::srgb::EncodeSafe(SV_Target.rgb);
-  return SV_Target;
+#if 0
+  if (TONE_MAP_TYPE != 0.f) {
+    SV_Target.rgb = renodx_custom::aces::odt_srgb_100nits_dim::Apply(
+        renodx_custom::aces::rrt::ApplyToODTInputFromAP1(_9.rgb));
+
+    return SV_Target;
+  }
 #endif
+
   float _27;
   float _42;
   float _57;
@@ -58,4 +62,3 @@ float4 main(
   SV_Target.z = _66.z;
   return SV_Target;
 }
-

@@ -129,47 +129,9 @@ static float maxNit = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_maxNit : renodx::math::F
 static float linearStart = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_linearStart : renodx::math::FLT32_MAX;
 static float toe = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_toe : 1.f;
 
-static float tonemapParam_isHDRMode = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_tonemapParam_isHDRMode : 0.f;
+static float tonemapParam_isHDRMode = (TONE_MAP_APPLY_PRE_TONE_MAP_CURVE == 0.f) ? ORIGINAL_tonemapParam_isHDRMode : 0.f;
 
 // END DECLARATIONS ---------------------------------------------------------------------------------------
-
-// float3 BlendLUTs(float3 color) {
-//   const float lut_scale = 1.f - fTextureInverseSize;
-//   const float lut_offset = fTextureInverseSize * 0.5f;
-//   float3 color_encoded = renodx::color::acescct::Encode(color);
-
-//   float3 output;
-//   if (TONE_MAP_TYPE == 0.f) {
-//     output = tTextureMap0.SampleLevel(TrilinearClamp, color_encoded * lut_scale + lut_offset, 0.f).rgb;
-//     output = renodx::color::acescct::Decode(output);
-//   } else {
-//     output = renodx::lut::SampleTetrahedral(tTextureMap0, color_encoded, (uint)fTextureSize).rgb;
-//     output = renodx::color::acescct::Decode(output);
-//   }
-
-//   [branch]
-//   if (fTextureBlendRate > 0.f) {
-//     float3 lut1;
-//     if (TONE_MAP_TYPE == 0.f) {
-//       lut1 = tTextureMap1.SampleLevel(TrilinearClamp, color_encoded * lut_scale + lut_offset, 0.f).rgb;
-//       lut1 = renodx::color::acescct::Decode(lut1);
-//     } else {
-//       lut1 = renodx::lut::SampleTetrahedral(tTextureMap1, color_encoded, (uint)fTextureSize).rgb;
-//       lut1 = renodx::color::acescct::Decode(lut1);
-//     }
-//     output = lerp(output.rgb, lut1, fTextureBlendRate);
-//   }
-
-//   [branch]
-//   if (fTextureBlendRate2 > 0.f) {
-//     // missing lut scale and offset for some reason
-//     float3 lut2 = tTextureMap2.SampleLevel(TrilinearClamp, renodx::color::acescct::Encode(output), 0.f).rgb;
-//     lut2 = renodx::color::acescct::Decode(lut2);
-//     output = lerp(output, lut2, fTextureBlendRate2);
-//   }
-
-//   return output;
-// }
 
 float3 BlendLUTs(float3 color) {
   const float lut_scale = 1.f - fTextureInverseSize;
@@ -244,40 +206,4 @@ void ApplyColorGrading(float r_in, float g_in, float b_in,
 
   r_out = working_color.r, g_out = working_color.g, b_out = working_color.b;
   return;
-}
-
-float3 ApplyCustomGrading(float3 ungraded, float3 untonemapped, float2 uv) {
-  float3 graded = ungraded;
-
-  float3 ungraded_bt2020 = renodx::color::bt2020::from::AP1(ungraded);
-
-  const UserGradingConfig cg_config = {
-    RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
-    RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
-    RENODX_TONE_MAP_SHADOWS,                              // float shadows;
-    RENODX_TONE_MAP_CONTRAST,                             // float contrast;
-    0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
-    RENODX_TONE_MAP_GAMMA,                                // float gamma;
-    RENODX_TONE_MAP_SATURATION,                           // float saturation;
-    RENODX_TONE_MAP_DECHROMA,                              // float dechroma;
-    -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
-    0.f,                                                  // float hue_emulation;
-    0.f                                                   // float purity_emulation;
-  };
-
-  float luminosity = LuminosityFromBT2020LuminanceNormalized(ungraded_bt2020);
-  float3 graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, luminosity, cg_config, 0.14f);
-  graded_bt2020 = ApplyHueAndPurityGrading(graded_bt2020, ungraded_bt2020, luminosity, cg_config);
-
-  if (CUSTOM_GRAIN_STRENGTH > 0.f) {
-    graded_bt2020 = renodx::color::bt2020::from::BT709(renodx::effects::ApplyFilmGrain(
-        renodx::color::bt709::from::BT2020(graded_bt2020),
-        uv,
-        CUSTOM_RANDOM,
-        CUSTOM_GRAIN_STRENGTH * 0.01f));
-  }
-
-  graded = renodx::color::ap1::from::BT2020(graded_bt2020);
-
-  return graded;
 }

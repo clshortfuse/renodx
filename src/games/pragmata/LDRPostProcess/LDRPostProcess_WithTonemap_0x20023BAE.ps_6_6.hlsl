@@ -1265,7 +1265,7 @@ float4 main(
 #endif
 #endif
 
-      float _2427 = min(_2424, 65000.0f);
+  float _2427 = min(_2424, 65000.0f);
   float _2428 = min(_2425, 65000.0f);
   float _2429 = min(_2426, 65000.0f);
   bool _2432 = isfinite(max(max(_2427, _2428), _2429));
@@ -1319,11 +1319,7 @@ float4 main(
     _2548 = _2468;
     _2549 = _2469;
   }
-#if SKIP_TONEMAP
-  if (false) {
-#else
   if (tonemapParam_isHDRMode == 0.0f) {
-#endif
     float _2557 = invLinearBegin * _2547;
     do {
       if (!(_2547 >= linearBegin)) {
@@ -1365,7 +1361,6 @@ float4 main(
   SV_Target.w = 0.0f;
 
   float2 grain_uv = SV_Position.xy * screenInverseSize;
-  SV_Target.rgb = ApplyCustomGrading(SV_Target.rgb, float3(_2547, _2548, _2549), grain_uv);
 
   return SV_Target;
 }
