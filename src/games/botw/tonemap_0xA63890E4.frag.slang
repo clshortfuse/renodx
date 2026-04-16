@@ -163,24 +163,22 @@ void main()
     float param_23 = PV0f.x;
     R0f.z = mul_nonIEEE(param_22, param_23) + R126f.z;
 
-    float3 tonemapped = R0f.xyz;
+    float3 tonemapped = saturate(R0f.xyz);
     float3 untonemapped = float3(_64 + _80);
-    float3 grading_input = max(untonemapped, 0.f);
-    float3 output = renodx::draw::ToneMapPass(saturate(tonemapped));
+    float3 output = renodx::draw::ToneMapPass(tonemapped);
     if (RENODX_TONE_MAP_TYPE != 0.f) {
       float3 neutral_sdr = lerp(
-          renodx::tonemap::renodrt::NeutralSDR(grading_input),
-          renodx::tonemap::ExponentialRollOff(grading_input, 0.75f),
+          renodx::tonemap::renodrt::NeutralSDR(tonemapped),
+          renodx::tonemap::ExponentialRollOff(tonemapped, 0.75f),
           CUSTOM_SATURATION_CLIP);
 
       if (RENODX_COLOR_GRADE_STRENGTH == 0.f) {
         output = renodx::draw::ToneMapPass(untonemapped);
       } else {
-        float3 graded_sdr = max(tonemapped, 0.f);
 
         output = renodx::draw::ToneMapPass(
             untonemapped,
-            graded_sdr,
+            tonemapped,
             neutral_sdr);
       }
     }
