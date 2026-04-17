@@ -1,13 +1,18 @@
 #ifndef SRC_FROMSOFT_ENGINE_H_
 #define SRC_FROMSOFT_ENGINE_H_
 
+#define FORCE_SDR 0
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
   float graphics_white_nits;
+  float custom_ui_visibility;
   float tone_map_type;
+  float tone_map_per_channel;
+  float tone_map_hue_emulation_method;
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;
@@ -16,6 +21,9 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
+  float custom_lut_strength;
+  float custom_lut_scaling;
+  float custom_lut_gamut_restoration;
   float color_grade_color_space;
   float custom_fx_chromatic_aberration;
   float custom_random;
@@ -36,6 +44,9 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_PEAK_WHITE_NITS                   shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS                shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS               shader_injection.graphics_white_nits
+#define CUSTOM_SHOW_UI                           shader_injection.custom_ui_visibility
+#define RENODX_TONE_MAP_PER_CHANNEL              shader_injection.tone_map_per_channel
+#define RENODX_TONE_MAP_HUE_EMULATION_METHOD     shader_injection.tone_map_hue_emulation_method
 #define RENODX_TONE_MAP_EXPOSURE                 shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS               shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS                  shader_injection.tone_map_shadows
@@ -44,6 +55,9 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION     shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT                  shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                    shader_injection.tone_map_flare
+#define CUSTOM_LUT_STRENGTH                      shader_injection.custom_lut_strength
+#define CUSTOM_LUT_SCALING                       shader_injection.custom_lut_scaling
+#define CUSTOM_LUT_GAMUT_RESTORATION             shader_injection.custom_lut_gamut_restoration
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE     shader_injection.color_grade_color_space
 #define RENODX_GAMMA_CORRECTION                  GAMMA_CORRECTION_NONE
 #define RENODX_SWAP_CHAIN_ENCODING               ENCODING_PQ
