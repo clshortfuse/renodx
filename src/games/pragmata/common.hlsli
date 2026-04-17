@@ -2,6 +2,7 @@
 #define PRAGMATA_COMMON_HLSLI
 
 #include "./macleod_boynton.hlsli"
+#include "./psycho_test17_custom.hlsli"
 #include "./shared.h"
 
 #define SPLIT_CONTRAST_GENERATOR(T)                                                                                    \
@@ -119,15 +120,13 @@ float3 ApplyHueAndPurityGrading(
                            ? mb_white_override
                            : renodx_custom::color::macleod_boynton::MB_White_D65();
 
-  float color_purity01 = renodx_custom::color::macleod_boynton::ApplyBT2020(
-                             color_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                             .purityCur01;
+  float color_purity01 = Purity01FromBT2020MB(
+      color_bt2020, mb_white_override, t_min);
 
   // MB hue + purity emulation (analog of OkLab hue/chrominance section).
   if (config.hue_emulation != 0.f || config.purity_emulation != 0.f) {
-    float reference_purity01 = renodx_custom::color::macleod_boynton::ApplyBT2020(
-                                   reference_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                                   .purityCur01;
+    float reference_purity01 = Purity01FromBT2020MB(
+        reference_bt2020, mb_white_override, t_min);
 
     float purity_current = color_purity01;
     float purity_ratio = 1.f;
@@ -178,9 +177,8 @@ float3 ApplyHueAndPurityGrading(
               mul(renodx_custom::color::macleod_boynton::LMS_TO_XYZ_2006,
                   renodx_custom::color::macleod_boynton::LMS_From_MB_T(white + blended_unit * seed_len, target_t)));
 
-          float purity_post = renodx_custom::color::macleod_boynton::ApplyBT2020(
-                                  hue_seed_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                                  .purityCur01;
+          float purity_post = Purity01FromBT2020MB(
+              hue_seed_bt2020, mb_white_override, t_min);
           purity_ratio = renodx::math::SafeDivision(purity_current, purity_post, 1.f);
           purity_current = purity_post;
         }
@@ -287,31 +285,33 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
   }
 
   renodx::tonemap::aces::ODTConfig ODT_config = renodx::tonemap::aces::CreateODTConfig(aces_min * ACES_DIFFUSE, aces_max * ACES_DIFFUSE, ACES_MID, true, ACES_DIFFUSE, 0.02f);
+
   float3 tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / ACES_DIFFUSE;
   if (TONE_MAP_TYPE == 1.f) {
     tonemapped_ap1 = lerp(renodx::color::y::from::AP1(tonemapped_ap1), tonemapped_ap1, 0.96);
   }
-
   float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
 
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
   }
 
-  // {
-  //   float untonemapped_y = renodx::color::y::from::AP1(untonemapped_ap1);
-  //   float tonemapped_y = renodx::tonemap::aces::ODTToneMap(untonemapped_y, ODT_config) / ACES_DIFFUSE;
-  //   if (RENODX_GAMMA_CORRECTION != 0.f) {
-  //     tonemapped_y = renodx::color::correct::GammaSafe(tonemapped_y);
-  //   }
-  //   float3 tonemapped_y_bt709 = renodx::color::bt709::from::AP1(renodx::color::correct::Luminance(untonemapped_ap1, untonemapped_y, tonemapped_y));
-
-  //   tonemapped_bt709 = renodx::color::correct::Chrominance(tonemapped_y_bt709, tonemapped_bt709);
-  // }
   tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
 
-  // tonemapped_bt2020 = lerp(CorrectHueAndPurityMB_BT2020(tonemapped_bt2020, renodx::color::bt2020::from::AP1(untonemapped_ap1), 1.f, 0.f), tonemapped_bt2020, saturate(tonemapped_bt2020 / 0.1f));
+  if (RENODX_TONE_MAP_SCALING == 0.f) {
+    float untonemapped_yf = renodx::color::yf::from::AP1(untonemapped_ap1);
+    float tonemapped_yf = renodx::tonemap::aces::ODTToneMap(untonemapped_yf, ODT_config) / ACES_DIFFUSE;
+    if (RENODX_GAMMA_CORRECTION == 1.f) {
+      tonemapped_yf = renodx::color::correct::GammaSafe(tonemapped_yf);
+    }
+    float3 tonemapped_lum_bt2020 = renodx::color::bt2020::from::AP1(max(0, renodx::color::correct::Luminance(untonemapped_ap1, untonemapped_yf, tonemapped_yf)));
 
+    float t = saturate((tonemapped_yf - 0.1f) / 0.9f);  // 0 at <= 0.1, 1 at >= 1.0
+    float hue_amount = lerp(0.5f, 1.0f, t);             // 0.5 in shadows, ramps to 1.0
+    tonemapped_bt2020 = renodx_custom::tonemap::psycho::psycho17_ApplyPurityAndHueFromBT2020(
+        tonemapped_bt2020, tonemapped_lum_bt2020, 1.f, hue_amount);
+    // tonemapped_bt2020 = CorrectHueAndPurityMB_BT2020(tonemapped_lum_bt2020, tonemapped_bt2020, hue_amount, 1.f);
+  }
 
   if (CUSTOM_GRAIN_STRENGTH > 0.f) {
     tonemapped_bt2020 = renodx::effects::ApplyFilmGrain(
