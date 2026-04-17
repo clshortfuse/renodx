@@ -5,7 +5,7 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -34,7 +34,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "ACES (Customized to Match SDR)", "ACES"},
+        .labels = {"Vanilla", "ACES (Customized)", "ACES"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -51,7 +51,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapApplyPreToneMapCurve",
         .binding = &shader_injection.tone_map_apply_pre_tone_map_curve,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Apply Pre Tone Map Curve",
         .section = "Tone Mapping",
     },
@@ -76,6 +76,17 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Emulates a 2.2 EOTF",
         .labels = {"Off", "2.2", "Lower ACES Min Nits"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapScaling",
+        .binding = &shader_injection.tone_map_scaling,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Scaling",
+        .section = "Tone Mapping",
+        .tooltip = "Luminance scales colors consistently",
+        .labels = {"Luminance", "Per Channel"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
@@ -225,7 +236,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
-        .default_value = 25.f,
+        .default_value = 50.f,
         .label = "FilmGrain",
         .section = "Effects",
         .max = 100.f,
@@ -256,6 +267,7 @@ renodx::utils::settings::Settings settings = {
               {"GammaCorrection", 1.f},
               {"ToneMapType", 1.f},
               {"ToneMapApplyPreToneMapCurve", 1.f},
+              {"ToneMapScaling", 1.f},
               {"FxNoise", 100.f},
               {"FxGrainStrength", 0.f},
           });
@@ -331,6 +343,7 @@ void OnPresetOff() {
       {"ToneMapUINits", 203.f},
       {"UIGammaCorrection", 0.f},
       {"UIVisibility", 1.f},
+      {"ToneMapScaling", 1.f},
       {"GammaCorrection", 0.f},
       {"ToneMapBlowout", 100.f},
       {"ToneMapHueShift", 20.f},
