@@ -236,7 +236,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
-        .default_value = 50.f,
+        .default_value = 25.f,
         .label = "FilmGrain",
         .section = "Effects",
         .max = 100.f,
