@@ -62,8 +62,8 @@ cbuffer cb13 : register(b0, space50) {
 #define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma
-#define COLOR_GRADE_LUT_STRENGTH             shader_injection.color_grade_lut_strength
-#define COLOR_GRADE_LUT_SCALING              shader_injection.color_grade_lut_scaling
+#define COLOR_GRADE_LUT_STRENGTH             1.f
+#define COLOR_GRADE_LUT_SCALING              0.f
 
 #define CUSTOM_NOISE          shader_injection.custom_noise
 #define CUSTOM_RANDOM         shader_injection.custom_random
