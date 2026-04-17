@@ -280,6 +280,9 @@ float3 BT709(float3 bt709) {
 float3 BT2020(float3 bt2020) {
   return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(BT2020_TO_XYZ_MAT, bt2020)));
 }
+float3 AP1(float3 ap1) {
+  return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(D60_TO_D65_MAT, mul(AP1_TO_XYZ_MAT, ap1))));
+}
 }  // namespace from
 }  // namespace xfyfzf
 
@@ -293,6 +296,9 @@ float BT709(float3 bt709) {
 }
 float BT2020(float3 bt2020) {
   return xfyfzf::from::BT2020(bt2020).y;
+}
+float AP1(float3 ap1) {
+  return xfyfzf::from::AP1(ap1).y;
 }
 }  // namespace from
 }  // namespace yf
@@ -398,6 +404,10 @@ float3 BT709(float3 bt709) {
 float3 BT2020(float3 bt2020) {
   return mul(BT2020_TO_AP1_MAT, bt2020);
 }
+
+float3 LMS(float3 lms) {
+  return mul(XYZ_TO_AP1_MAT, mul(D65_TO_D60_CAT, mul(STOCKMAN_SHARP_LMS_TO_XYZ_MAT, lms)));
+}
 }  // namespace from
 }  // namespace ap1
 
@@ -439,6 +449,9 @@ float3 BT709(float3 bt709) {
 }
 float3 BT2020(float3 bt2020) {
   return mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(BT2020_TO_XYZ_MAT, bt2020));
+}
+float3 AP1(float3 ap1) {
+  return mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(D60_TO_D65_MAT, mul(AP1_TO_XYZ_MAT, ap1)));
 }
 
 float3 XYZ(float3 xyz) {
