@@ -34,7 +34,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "ACES (Customized)", "ACES"},
+        .labels = {"Vanilla", "ACES"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -54,6 +54,20 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Apply Pre Tone Map Curve",
         .section = "Tone Mapping",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapACESMidGray",
+        .binding = &shader_injection.tone_map_aces_mid_gray,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "ACES Mid Gray",
+        .section = "Tone Mapping",
+        .tooltip = "Selects the ACES mid-gray target:\n"
+                   "4.8 is ACES reference behavior.\n"
+                   "10.0 matches the SDR tonemapper [RRT + ODT.Academy.RGBmonitor_100nits_dim / ODT.Academy.Rec709_100nits_dim].\n"
+                   "15.0 matches the HDR tonemapper [RRTODT.Academy.Rec2020_1000nits_15nits_ST2084].",
+        .labels = {"4.8 (Reference ACES)", "10.0 (Matches SDR)", "15.0 (Matches HDR)"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -127,6 +141,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 2.f,
         .format = "%.2f",
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeGamma",
@@ -137,6 +152,7 @@ renodx::utils::settings::Settings settings = {
         .min = 0.75f,
         .max = 1.25f,
         .format = "%.2f",
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
@@ -145,6 +161,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -154,6 +171,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -163,6 +181,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -172,6 +191,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -182,6 +202,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -192,6 +213,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -202,6 +224,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     // new renodx::utils::settings::Setting{
@@ -240,6 +263,7 @@ renodx::utils::settings::Settings settings = {
         .label = "FilmGrain",
         .section = "Effects",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -257,16 +281,33 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Purist",
+        .label = "Match SDR",
         .section = "Options",
         .group = "button-line-0",
-        .tooltip = "Matches SDR on a 2.2 gamma display. Matches what the developers likely saw during development, preserving original artistic intent.",
+        .tooltip = "Matches SDR on a 2.2 gamma display at 203 nits. Matches what the developers likely saw during development, preserving original artistic intent.",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 1.f},
-              {"ToneMapType", 1.f},
-              {"ToneMapApplyPreToneMapCurve", 1.f},
+              {"ToneMapScaling", 1.f},
+              {"FxNoise", 100.f},
+              {"FxGrainStrength", 0.f},
+          });
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Match HDR",
+        .section = "Options",
+        .group = "button-line-0",
+        .tooltip = "Matches HDR with the `Brightness (HDR)` slider set to +4 ticks from the left (neutral setting).",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ToneMapACESMidGray", 2.f},
+              {"ToneMapGameNits", 150.f},
+              {"GammaCorrection", 0.f},
+              {"ToneMapApplyPreToneMapCurve", 0.f},
               {"ToneMapScaling", 1.f},
               {"FxNoise", 100.f},
               {"FxGrainStrength", 0.f},
@@ -341,6 +382,8 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
+      {"ToneMapApplyPreToneMapCurve", 0.f},
+      {"ToneMapACESMidGray", 2.f},
       {"UIGammaCorrection", 0.f},
       {"UIVisibility", 1.f},
       {"ToneMapScaling", 1.f},
@@ -358,8 +401,8 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"ColorGradeLUTStrength", 100.f},
       {"ColorGradeLUTScaling", 0.f},
-      {"FxSharpeningType", 0.f},
-      {"FxSharpeningStrength", 100.f},
+      {"FxNoise", 100.f},
+      {"FxGrainStrength", 0.f},
   });
 }
 
