@@ -10,7 +10,7 @@
 // Should be 4x32
 struct ShaderInjectData {
   float tone_map_type;
-  float tone_map_use_aces;
+  float tone_map_aces_mid_gray;
   float gamma_correction;
   float gamma_correction_ui;
   float peak_white_nits;
@@ -43,6 +43,7 @@ cbuffer cb13 : register(b0, space50) {
 }
 
 #define TONE_MAP_TYPE                     shader_injection.tone_map_type
+#define TONE_MAP_ACES_MID_GRAY            shader_injection.tone_map_aces_mid_gray
 #define TONE_MAP_APPLY_PRE_TONE_MAP_CURVE shader_injection.tone_map_apply_pre_tone_map_curve
 #define RENODX_PEAK_WHITE_NITS            shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS         shader_injection.diffuse_white_nits
