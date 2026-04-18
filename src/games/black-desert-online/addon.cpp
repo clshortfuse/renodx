@@ -331,11 +331,9 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
         .label = std::string("HDR Look button adjusts grading/settings to fix aggressive vanilla eye adaptation, highly recommend using it"),
         .on_draw = []() {
-          ImGui::SetWindowFontScale(2.0f);
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
           ImGui::TextWrapped("HDR Look button adjusts grading/settings to fix aggressive vanilla eye adaptation, highly recommend using it");
           ImGui::PopStyleColor();
-          ImGui::SetWindowFontScale(1.0f);
           return false;
         },
     },
