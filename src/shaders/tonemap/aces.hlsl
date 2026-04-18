@@ -373,12 +373,15 @@ ODTConfig CreateODTConfig(
 
   if (mid_y != 4.8f) {
     ODTConfig exp_shift_config;
-    if (stable_peak_exp_shift && exp_shift_max_reference != max_y) {  // derive exp-shift from a fixed reference curve so peak changes are stable
-      exp_shift_config = CreateODTConfig(min_y, exp_shift_max_reference);
+
+    // derive exp-shift from a fixed reference curve so peak changes are stable
+    const bool use_stable_reference =
+        stable_peak_exp_shift && (exp_shift_max_reference != max_y || exp_shift_min_reference != min_y);
+    if (use_stable_reference) {
+      exp_shift_config = CreateODTConfig(exp_shift_min_reference, exp_shift_max_reference);
     } else {
       exp_shift_config = config;
     }
-
     float exp_shift = log2(InvSSTS(mid_y, exp_shift_config)) - log2(0.18f);
     float shift_log10 = exp_shift * log10(2.f);
 
