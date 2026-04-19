@@ -44,7 +44,9 @@ float3 GenerateOutputAvatar(float3 ungraded_bt709, float contrast) {
       float3 corrected_lum = renodx::color::correct::Luminance(ungraded_bt709, lum_in, lum_out);
 
       float3 corrected_ch = renodx::color::correct::GammaSafe(ungraded_bt709);
-      graded_bt709 = renodx_custom::tonemap::psycho::psycho17_ApplyPurityFromBT2020(corrected_lum, corrected_ch, 1.f, 1.f);
+      graded_bt709 = renodx::color::bt709::from::BT2020(
+          renodx_custom::tonemap::psycho::psycho17_ApplyPurityFromBT2020(renodx::color::bt2020::from::BT709(corrected_lum),
+                                                                         renodx::color::bt2020::from::BT709(corrected_ch), 1.f, 1.f));
     }
   } else {  // RenoDX
     // `pow(c, contrast) * exposure_adjustment` per channel will essentially give uncapped version of vanilla
@@ -129,7 +131,9 @@ float3 GenerateOutputOutlaws(float3 ungraded_bt709, float contrast) {
       float3 corrected_lum = renodx::color::correct::Luminance(ungraded_bt709, lum_in, lum_out);
 
       float3 corrected_ch = renodx::color::correct::GammaSafe(ungraded_bt709);
-      graded_bt709 = renodx_custom::tonemap::psycho::psycho17_ApplyPurityFromBT2020(corrected_lum, corrected_ch, 1.f, 1.f);
+      graded_bt709 = renodx::color::bt709::from::BT2020(
+          renodx_custom::tonemap::psycho::psycho17_ApplyPurityFromBT2020(renodx::color::bt2020::from::BT709(corrected_lum),
+                                                                         renodx::color::bt2020::from::BT709(corrected_ch), 1.f, 1.f));
     }
   } else {  // RenoDX
     // `pow(c, contrast) * exposure_adjustment` per channel will essentially give uncapped version of vanilla
