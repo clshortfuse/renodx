@@ -511,7 +511,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
-      renodx::utils::random::binds.push_back(&shader_injection.custom_random);      // film grain
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
 
       break;
     case DLL_PROCESS_DETACH:
