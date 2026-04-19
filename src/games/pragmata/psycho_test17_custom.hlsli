@@ -1038,6 +1038,7 @@ struct Config {
   float shadows;
   float contrast;
   float flare;
+  float flare_lms;
   float contrast_highlights;
   float contrast_shadows;
   float purity_scale;
@@ -1061,6 +1062,7 @@ Config Create(
     float shadows = 1.f,
     float contrast = 1.f,
     float flare = 0.f,
+    float flare_lms = 0.f,
     float contrast_highlights = 1.f,
     float contrast_shadows = 1.f,
     float purity_scale = 1.f,
@@ -1082,6 +1084,7 @@ Config Create(
     shadows,
     contrast,
     flare,
+    flare_lms,
     contrast_highlights,
     contrast_shadows,
     purity_scale,
@@ -1136,27 +1139,29 @@ float3 ApplyTest17BT2020(float3 color_bt2020, float3 color_hue_shift_source_bt20
     float3 lms_peak_unit = renodx::color::lms::from::BT2020(psycho_config.peak_value.xxx);
     color_lms = psycho17_ReinhardPiecewise(color_lms, lms_peak_unit, midgray_lms);
 
-    // adaptive hue restore not needed
-    // color_lms = psycho17_RestoreHueAdaptive(
-    //     color_lms_raw,
-    //     color_lms,
-    //     midgray_lms,
-    //     psycho_config.hue_restore,
-    //     kEps);
-
     color_lms *= renodx::math::DivideSafe(
         lum_original,
         renodx::color::yf::from::LMS(color_lms),
         1.f);
   }
 
-  if (psycho_config.adaptation_contrast != 1.f || psycho_config.hue_emulation != 0.f) {
+  if (psycho_config.adaptation_contrast != 1.f || psycho_config.hue_emulation != 0.f || psycho_config.flare_lms != 0.f) {
     float3 source_lms = color_lms;
-    if (psycho_config.adaptation_contrast != 1.f) {
+    if (psycho_config.adaptation_contrast != 1.f || psycho_config.flare_lms != 0.f) {
       float3 lms_sigma_unit = max(midgray_lms, kEps.xxx);
-      float exponent = max(psycho_config.adaptation_contrast, kEps);
+      float exponent_base = max(psycho_config.adaptation_contrast, kEps);
 
       float3 ax = abs(color_lms);
+      float3 exponent = exponent_base.xxx;
+      if (psycho_config.flare_lms != 0.f) {
+        float3 x_normalized = renodx::math::DivideSafe(ax, lms_sigma_unit, 0.f.xxx);
+        float3 flare_ratio = renodx::math::DivideSafe(
+            x_normalized + psycho_config.flare_lms,
+            x_normalized,
+            1.f.xxx);
+        exponent *= max(flare_ratio, kEps.xxx);
+      }
+
       float3 ax_n = pow(ax, exponent);
       float3 s_n = pow(lms_sigma_unit, exponent);
       float3 response_target = ax_n / max(ax_n + s_n, kEps.xxx);

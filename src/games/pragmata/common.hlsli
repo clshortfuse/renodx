@@ -18,13 +18,13 @@ float3 ApplyCustomGradingAP1(float3 ungraded) {
   psycho17_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
   psycho17_config.shadows = RENODX_TONE_MAP_SHADOWS;
   psycho17_config.contrast = RENODX_TONE_MAP_CONTRAST;
-  psycho17_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
-  psycho17_config.contrast_highlights = 1.f;
-  psycho17_config.contrast_shadows = 1.f;
+  psycho17_config.flare_lms = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
+  psycho17_config.contrast_highlights = RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS;
+  psycho17_config.contrast_shadows = RENODX_TONE_MAP_CONTRAST_SHADOWS;
   psycho17_config.purity_scale = RENODX_TONE_MAP_SATURATION;
   psycho17_config.purity_highlights = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
   psycho17_config.dechroma = RENODX_TONE_MAP_DECHROMA;
-  psycho17_config.adaptation_contrast = 1.f;
+  psycho17_config.adaptation_contrast = RENODX_TONE_MAP_ADAPTATION_CONTRAST;
   psycho17_config.bleaching_intensity = 0.f;
   psycho17_config.hue_emulation = 0.f;
   psycho17_config.pre_gamut_compress = false;
