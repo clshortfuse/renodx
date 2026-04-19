@@ -1,0 +1,25 @@
+{
+  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "id": "pragmata",
+  "title": "PRAGMATA",
+  "summary": "RenoDX mod for PRAGMATA.",
+  "urls": [
+    {
+      "url": "https://github.com/praydog/REFramework-nightly/releases",
+      "kind": "reframework-download"
+    }
+  ],
+  "notes": [
+    "Requires REFramework nightly to function."
+  ],
+  "deploy": {
+    "game_exe": "PRAGMATA.exe",
+    "process_name": "PRAGMATA",
+    "api": "d3d12",
+    "steam_appid": 3357650,
+    "architecture": [
+      "x64"
+    ],
+    "platform": "steam"
+  }
+}
