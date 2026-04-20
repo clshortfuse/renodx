@@ -67,26 +67,3 @@ static float saturationForHDR = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_saturationForH
 static float whitePaperNits = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_whitePaperNits : RENODX_DIFFUSE_WHITE_NITS;
 // static float whitePaperNits = ORIGINAL_whitePaperNits;
 
-float SetPreExposureForOCIOLUT() {
-  return renodx::math::Select(TONE_MAP_TYPE == 0.f, whitePaperNits * 0.01f, 1.f);
-}
-
-void SetExposureAndContrastForOCIOLUT(inout float r, inout float g, inout float b) {
-  if (TONE_MAP_TYPE == 0.f) return;
-
-  float3 color = float3(r, g, b);
-
-  color *= RENODX_CUSTOM_EXPOSURE;
-
-#if APPLY_HIGHLIGHT_BOOST == 1
-  float y_in = LuminosityFromAP1LuminanceNormalized(color);
-  float y_out = SplitContrast(y_in, 1.f, RENODX_CUSTOM_HIGHLIGHT_CONTRAST, 0.18f * RENODX_CUSTOM_EXPOSURE);
-
-  color = renodx::color::correct::Luminance(color, y_in, y_out);
-#elif APPLY_HIGHLIGHT_BOOST == 2
-  color = SplitContrast(color, 1.f, RENODX_CUSTOM_HIGHLIGHT_CONTRAST, 0.18f * RENODX_CUSTOM_EXPOSURE);
-#endif
-  r = color.r, g = color.g, b = color.b;
-  return;
-}
-

@@ -122,7 +122,7 @@ float3 ApplyColorGradingLUTs(
     float lut_black_y = renodx::color::y::from::AP1(lut_black);
     if (lut_black_y > 0.f) {
       float3 lut_mid = SampleAndBlendLUTs(
-          max(lut_black, LUT_SCALING_1_MID),
+          lut_black,
           fTextureBlendRate,
           fTextureBlendRate2,
           fTextureSize,
@@ -143,7 +143,7 @@ float3 ApplyColorGradingLUTs(
 
       color_output *= lerp(
           1.f,
-          renodx::math::DivideSafe(LuminosityFromAP1(unclamped_linear), LuminosityFromAP1(color_output), 1.f),
+          renodx::math::DivideSafe(renodx::color::yf::from::AP1(unclamped_linear), renodx::color::yf::from::AP1(color_output), 1.f),
           COLOR_GRADE_LUT_SCALING);
     }
   }
