@@ -6,6 +6,7 @@
 #define ImTextureID ImU64
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 
+
 #include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
@@ -33,6 +34,23 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
         {"ToneMapUINits", &shader_injection.graphics_white_nits},
         {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
+    }),
+    {
+        new renodx::utils::settings::Setting{
+            .key = "tonemap_clamp_color_space",
+            .binding = &shader_injection.custom_tonemap_clamp,
+            .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+            .default_value = 0.f,
+            .can_reset = true,
+            .label = "Clamp Tonemap Grading",
+            .section = "Tone Mapping",
+            .tooltip = "Clamps the tonemap colour grading. Use BT.709 for a vanilla result.",
+            .labels = {"BT.709", "AP1"},
+            .parse = [](float value) { return value; },
+            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
+        },
+    },
+    renodx::templates::settings::CreateDefaultSettings({
         {"ColorGradeExposure", &shader_injection.tone_map_exposure},
         {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
         {"ColorGradeShadows", &shader_injection.tone_map_shadows},
@@ -44,36 +62,39 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
     }),
     {
         new renodx::utils::settings::Setting{
-          .key = "ColorGradeScene",
-          .binding = &shader_injection.scene_grade_strength,
-          .default_value = 100.f,
-          .label = "Scene Grading",
-          .section = "Color Grading",
-          .tooltip = "Scene grading as applied by the game",
-          .max = 100.f,
-          .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
-          .is_visible = []() { return renodx::templates::settings::current_settings_mode  > 1.f; },
-          .parse = [](float value) { return value * 0.01f; },
+            .key = "ColorGradeScene",
+            .binding = &shader_injection.scene_grade_strength,
+            .default_value = 100.f,
+            .label = "SDR Hue Emulation",
+            .section = "Color Grading",
+            .tooltip = "Emulates SDR hue shifts to match vanilla",
+            .max = 100.f,
+            .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+            .parse = [](float value) { return value * 0.01f; },
+            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
         },
+      
         new renodx::utils::settings::Setting{
-          .key = "FxHueClip",
-          .binding = &shader_injection.custom_bloom,
-          .default_value = 100.f,
-          .label = "Bloom",
-          .section = "Effects",
-          .tooltip = "Controls vanilla bloom strength",
-          .max = 100.f,
-          .parse = [](float value) { return value * 0.01f; },
+            .key = "VanillaSaturation",
+            .binding = &shader_injection.vanilla_saturation,
+            .default_value = 100.f,
+            .label = "Vanilla Saturation",
+            .section = "Color Grading",
+            .tooltip = "Controls intensity of saturation applied by the game",
+            .max = 100.f,
+            .parse = [](float value) { return value * 0.01f; },
+            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
         },
+        
         new renodx::utils::settings::Setting{
-          .key = "FxSaturationClip",
-          .binding = &shader_injection.custom_saturation_clip,
-          .default_value = 0.f,
-          .label = "Saturation Clip",
-          .section = "Effects",
-          .max = 100.f,
-          .is_enabled = []() { return shader_injection.tone_map_type > 0.f and shader_injection.scene_grade_strength != 0.f; },
-          .parse = [](float value) { return value * 0.01f; },
+            .key = "FxHueClip",
+            .binding = &shader_injection.custom_bloom,
+            .default_value = 100.f,
+            .label = "Bloom",
+            .section = "Effects",
+            .tooltip = "Controls vanilla bloom strength",
+            .max = 100.f,
+            .parse = [](float value) { return value * 0.01f; },
         },
         // new renodx::utils::settings::Setting{
         //     .key = "FxBloom",
@@ -91,6 +112,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Links",
             .group = "button-line-1",
             .tint = 0x5865F2,
+            .parse = [](float value) { return value; },
             .on_change = []() {
               renodx::utils::platform::LaunchURL("https://discord.gg/kSTf", "EbcCpC");
             },
@@ -101,6 +123,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Links",
             .group = "button-line-1",
             .tint = 0x5865F2,
+            .parse = [](float value) { return value; },
             .on_change = []() {
               renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
             },
@@ -110,6 +133,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .label = "Github",
             .section = "Links",
             .group = "button-line-1",
+            .parse = [](float value) { return value; },
             .on_change = []() {
               renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
             },
@@ -120,6 +144,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Links",
             .group = "button-line-1",
             .tint = 0xFF5F5F,
+            .parse = [](float value) { return value; },
             .on_change = []() {
               renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil");
             },
@@ -130,6 +155,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Links",
             .group = "button-line-1",
             .tint = 0xFF5F5F,
+            .parse = [](float value) { return value; },
             .on_change = []() {
               renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
             },
@@ -140,6 +166,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Links",
             .group = "button-line-1",
             .tint = 0xFF5F5F,
+            .parse = [](float value) { return value; },
             .on_change = []() {
               renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
             },
@@ -155,7 +182,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "About",
         },
     },
-    
 });
 
 
