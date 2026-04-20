@@ -22,7 +22,6 @@ float4 main(float4 vpos: SV_POSITION, float2 uv: TEXCOORD0)
 
   [branch]
   if (RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE == RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE) {  // HDR10
-    [branch]
     if (RENODX_OUTPUT_COLOR_SPACE < 2.f) {  // BT.2020
       [branch]
       if (RENODX_OUTPUT_COLOR_SPACE == 0.f) {  // BT.709 -> BT.2020
