@@ -1,18 +1,8 @@
-#ifndef PRAGMATA_COMMON_HLSLI
-#define PRAGMATA_COMMON_HLSLI
+#ifndef RE9REQUIEM_COMMON_HLSLI
+#define RE9REQUIEM_COMMON_HLSLI
 
-#include "./macleod_boynton.hlsli"
+#include "./psycho_test17_custom.hlsli"
 #include "./shared.h"
-
-#define SPLIT_CONTRAST_GENERATOR(T)                                                                                    \
-  T SplitContrast(T color, float contrast_shadows = 1.f, float contrast_highlights = 1.f, float split_point = 0.18f) { \
-    T contrast = renodx::math::Select(color < split_point, contrast_shadows, contrast_highlights);                     \
-    return pow(color / split_point, contrast) * split_point;                                                           \
-  }
-
-SPLIT_CONTRAST_GENERATOR(float)
-SPLIT_CONTRAST_GENERATOR(float3)
-#undef SPLIT_CONTRAST_GENERATOR
 
 float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
   const float3 added_gamma = black_gamma;
@@ -28,305 +18,114 @@ float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma,
   return unclamped_gamma;
 }
 
-float3 UpgradeToneMapMaxChannel(
-    float3 color_untonemapped,
-    float3 color_tonemapped,
-    float3 color_tonemapped_graded,
-    float post_process_strength = 1.f,
-    float auto_correction = 1.f) {
-  float ratio = 1.f;
-
-  float max_untonemapped = renodx::math::Max(color_untonemapped);
-  float max_tonemapped = renodx::math::Max(color_tonemapped);
-  float max_tonemapped_graded = renodx::math::Max(color_tonemapped_graded);
-
-  if (max_untonemapped < max_tonemapped) {
-    // If substracting (user contrast or paperwhite) scale down instead
-    // Should only apply on mismatched HDR
-    ratio = max_untonemapped / max_tonemapped;
-  } else {
-    float max_delta = max_untonemapped - max_tonemapped;
-    max_delta = max(0, max_delta);  // Cleans up NaN
-    const float max_new = max_tonemapped_graded + max_delta;
-
-    const bool max_valid = (max_tonemapped_graded > 0);  // Cleans up NaN and ignore black
-    ratio = max_valid ? (max_new / max_tonemapped_graded) : 0;
-  }
-  float auto_correct_ratio = lerp(1.f, ratio, saturate(max_untonemapped));
-  ratio = lerp(ratio, auto_correct_ratio, auto_correction);
-
-  float3 color_scaled = color_tonemapped_graded * ratio;
-
-  return lerp(color_untonemapped, color_scaled, post_process_strength);
-}
-
-struct UserGradingConfig {
-  float exposure;
-  float highlights;
-  float contrast_highlights;
-  float shadows;
-  float contrast_shadows;
-  float contrast;
-  float flare;
-  float gamma;
-  float saturation;
-  float dechroma;
-  float highlight_saturation;
-  float hue_emulation;
-  float purity_emulation;
-};
-
-float Highlights(float x, float highlights, float mid_gray) {
-  if (highlights == 1.f) return x;
-
-  if (highlights > 1.f) {
-    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.f)));
-  } else {  // highlights < 1.f
-    float b = mid_gray * pow(x / mid_gray, 2.f - highlights);
-    float t = min(x, 1.f);  // clamp extreme influence
-    return min(x, renodx::math::DivideSafe(x * x, lerp(x, b, t), x));
-  }
-}
-
-float Shadows(float x, float shadows, float mid_gray) {
-  if (shadows == 1.f) return x;
-
-  const float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
-  const float base_term = x * mid_gray;
-  const float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
-
-  if (shadows > 1.f) {
-    float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
-    float reference = x * (1.f + base_scale);
-    return max(x, x + (raised - reference));
-  } else {  // shadows < 1.f
-    float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
-    float reference = x * (1.f - base_scale);
-    return clamp(x + (lowered - reference), 0.f, x);
-  }
-}
-
-float ContrastAndFlare(float x, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
-  if (contrast == 1.f && flare == 0.f && contrast_highlights == 1.f && contrast_shadows == 1.f) return x;
-
-  const float x_normalized = x / mid_gray;
-  const float split_contrast = renodx::math::Select(x < mid_gray, contrast_shadows, contrast_highlights);
-  float flare_ratio = renodx::math::DivideSafe(x_normalized + flare, x_normalized, 1.f);
-  float exponent = contrast * split_contrast * flare_ratio;
-  return pow(x_normalized, exponent) * mid_gray;
-}
-
-float3 ApplyLuminosityGrading(float3 untonemapped, float lum, UserGradingConfig config, float mid_gray = 0.18f) {
-  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f
-      && config.contrast_highlights == 1.f && config.contrast_shadows == 1.f && config.flare == 0.f && config.gamma == 1.f) {
-    return untonemapped;
-  }
-  float3 color = untonemapped;
-
-  color *= config.exposure;
-
-  // gamma
-  float lum_gamma_adjusted = renodx::math::Select(lum < 1.f, pow(lum, config.gamma), lum);
-
-  // contrast & flare
-  const float lum_contrasted = ContrastAndFlare(lum_gamma_adjusted, config.contrast, config.contrast_highlights, config.contrast_shadows, config.flare, mid_gray);
-
-  // highlights
-  float lum_highlighted = Highlights(lum_contrasted, config.highlights, mid_gray);
-
-  // shadows
-  float lum_shadowed = Shadows(lum_highlighted, config.shadows, mid_gray);
-
-  const float lum_final = lum_shadowed;
-
-  color = renodx::color::correct::Luminance(color, lum, lum_final);
-
-  return color;
-}
-
-float3 ApplyHueAndPurityGrading(
-    float3 ungraded_bt2020,
-    float3 reference_bt2020,
-    float lum,
-    UserGradingConfig config,
-    float curve_gamma = 1.f,
-    float2 mb_white_override = float2(-1.f, -1.f),
-    float t_min = 1e-7f) {
-  float3 color_bt2020 = ungraded_bt2020;
-  if (config.saturation == 1.f && config.dechroma == 0.f && config.hue_emulation == 0.f && config.purity_emulation == 0.f && config.highlight_saturation == 0.f) {
-    return color_bt2020;
-  }
-
-  const float kNearWhiteEpsilon = renodx_custom::color::macleod_boynton::MB_NEAR_WHITE_EPSILON;
-  const float2 white = (mb_white_override.x >= 0.f && mb_white_override.y >= 0.f)
-                           ? mb_white_override
-                           : renodx_custom::color::macleod_boynton::MB_White_D65();
-
-  float color_purity01 = renodx_custom::color::macleod_boynton::ApplyBT2020(
-                             color_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                             .purityCur01;
-
-  // MB hue + purity emulation (analog of OkLab hue/chrominance section).
-  if (config.hue_emulation != 0.f || config.purity_emulation != 0.f) {
-    float reference_purity01 = renodx_custom::color::macleod_boynton::ApplyBT2020(
-                                   reference_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                                   .purityCur01;
-
-    float purity_current = color_purity01;
-    float purity_ratio = 1.f;
-    float3 hue_seed_bt2020 = color_bt2020;
-
-    if (config.hue_emulation != 0.f) {
-      float3 target_lms = mul(renodx_custom::color::macleod_boynton::XYZ_TO_LMS_2006,
-                              mul(renodx::color::BT2020_TO_XYZ_MAT, color_bt2020));
-      float3 reference_lms = mul(renodx_custom::color::macleod_boynton::XYZ_TO_LMS_2006,
-                                 mul(renodx::color::BT2020_TO_XYZ_MAT, reference_bt2020));
-
-      float target_t = target_lms.x + target_lms.y;
-      if (target_t > t_min) {
-        float2 target_direction = renodx_custom::color::macleod_boynton::MB_From_LMS(target_lms) - white;
-        float2 reference_direction = renodx_custom::color::macleod_boynton::MB_From_LMS(reference_lms) - white;
-
-        float target_len_sq = dot(target_direction, target_direction);
-        float reference_len_sq = dot(reference_direction, reference_direction);
-
-        if (target_len_sq > kNearWhiteEpsilon || reference_len_sq > kNearWhiteEpsilon) {
-          float2 target_unit = (target_len_sq > kNearWhiteEpsilon)
-                                   ? target_direction * rsqrt(target_len_sq)
-                                   : float2(0.f, 0.f);
-          float2 reference_unit = (reference_len_sq > kNearWhiteEpsilon)
-                                      ? reference_direction * rsqrt(reference_len_sq)
-                                      : target_unit;
-
-          if (target_len_sq <= kNearWhiteEpsilon) {
-            target_unit = reference_unit;
-          }
-
-          float2 blended_unit = lerp(target_unit, reference_unit, config.hue_emulation);
-          float blended_len_sq = dot(blended_unit, blended_unit);
-          if (blended_len_sq <= kNearWhiteEpsilon) {
-            blended_unit = (config.hue_emulation >= 0.5f) ? reference_unit : target_unit;
-            blended_len_sq = dot(blended_unit, blended_unit);
-          }
-          blended_unit *= rsqrt(max(blended_len_sq, 1e-20f));
-
-          float seed_len = sqrt(max(target_len_sq, 0.f));
-          if (seed_len <= 1e-6f) {
-            seed_len = sqrt(max(reference_len_sq, 0.f));
-          }
-          seed_len = max(seed_len, 1e-6f);
-
-          hue_seed_bt2020 = mul(
-              renodx::color::XYZ_TO_BT2020_MAT,
-              mul(renodx_custom::color::macleod_boynton::LMS_TO_XYZ_2006,
-                  renodx_custom::color::macleod_boynton::LMS_From_MB_T(white + blended_unit * seed_len, target_t)));
-
-          float purity_post = renodx_custom::color::macleod_boynton::ApplyBT2020(
-                                  hue_seed_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                                  .purityCur01;
-          purity_ratio = renodx::math::SafeDivision(purity_current, purity_post, 1.f);
-          purity_current = purity_post;
-        }
-      }
-    }
-
-    if (config.purity_emulation != 0.f) {
-      float target_purity_ratio = renodx::math::SafeDivision(reference_purity01, purity_current, 1.f);
-      purity_ratio = lerp(purity_ratio, target_purity_ratio, config.purity_emulation);
-    }
-
-    float applied_purity01 = saturate(purity_current * max(purity_ratio, 0.f));
-    color_bt2020 = renodx_custom::color::macleod_boynton::ApplyBT2020(
-                       hue_seed_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
-                       .rgbOut;
-    color_purity01 = applied_purity01;
-  }
-
-  float purity_scale = 1.f;
-
-  // dechroma
-  if (config.dechroma != 0.f) {
-    purity_scale *= lerp(1.f, 0.f, saturate(pow(lum / (10000.f / 100.f), (1.f - config.dechroma))));
-  }
-
-  // highlight saturation
-  if (config.highlight_saturation != 0.f) {
-    float percent_max = saturate(lum * 100.f / 10000.f);
-    // positive = 1 to 0, negative = 1 to 2
-    float blowout_strength = 100.f;
-    float blowout_change = pow(1.f - percent_max, blowout_strength * abs(config.highlight_saturation));
-    if (config.highlight_saturation < 0) {
-      blowout_change = (2.f - blowout_change);
-    }
-
-    purity_scale *= blowout_change;
-  }
-
-  // saturation
-  purity_scale *= config.saturation;
-
-  if (purity_scale != 1.f) {
-    float scaled_purity01 = saturate(color_purity01 * max(purity_scale, 0.f));
-    color_bt2020 = renodx_custom::color::macleod_boynton::ApplyBT2020(
-                       color_bt2020, scaled_purity01, curve_gamma, mb_white_override, t_min)
-                       .rgbOut;
-  }
-
-  return color_bt2020;
-}
-
-float3 ApplyNeutwoByMaxChannel(float3 input, float peak_ratio, float white_clip = 100.f,
-                               float gray_in = 0.18f, float gray_out = 0.18f, float min_ratio = 0.f) {
-  float max_channel = renodx::math::Max(input);
-
-  float mapped_peak = renodx::tonemap::Neutwo(max_channel, peak_ratio, white_clip, gray_in, gray_out, min_ratio);
-  float scale = renodx::math::DivideSafe(mapped_peak, max_channel, 1.f);
-  float3 tonemapped = input * scale;
-  return tonemapped;
-}
-
-float3 ApplyCustomGrading(float3 ungraded) {
+float3 ApplyCustomGradingAP1(float3 ungraded) {
   float3 graded = ungraded;
 
   float3 ungraded_bt2020 = renodx::color::bt2020::from::AP1(ungraded);
 
-  const UserGradingConfig cg_config = {
-    RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
-    RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
-    1.f,                                                  // float highlight_contrast;
-    RENODX_TONE_MAP_SHADOWS,                              // float shadows;
-    1.f,                                                  // float contrast_shadows;
-    RENODX_TONE_MAP_CONTRAST,                             // float contrast;
-    0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
-    1.f,                                                  // float gamma;
-    RENODX_TONE_MAP_SATURATION,                           // float saturation;
-    RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
-    -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
-    0.f,                                                  // float hue_emulation;
-    0.f                                                   // float purity_emulation;
-  };
+  renodx_custom::tonemap::psycho::config17::Config psycho17_config =
+      renodx_custom::tonemap::psycho::config17::Create();
+  psycho17_config.peak_value = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  psycho17_config.clip_point = 100.f;
+  psycho17_config.exposure = RENODX_TONE_MAP_EXPOSURE;
+  psycho17_config.gamma = RENODX_TONE_MAP_GAMMA;
+  psycho17_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+  psycho17_config.shadows = RENODX_TONE_MAP_SHADOWS;
+  psycho17_config.contrast = RENODX_TONE_MAP_CONTRAST;
+  psycho17_config.flare_lms = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
+  psycho17_config.contrast_highlights = RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS;
+  psycho17_config.contrast_shadows = RENODX_TONE_MAP_CONTRAST_SHADOWS;
+  psycho17_config.purity_scale = RENODX_TONE_MAP_SATURATION;
+  psycho17_config.purity_highlights = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+  psycho17_config.dechroma = RENODX_TONE_MAP_DECHROMA;
+  psycho17_config.adaptation_contrast = RENODX_TONE_MAP_ADAPTATION_CONTRAST;
+  psycho17_config.bleaching_intensity = 0.f;
+  psycho17_config.hue_emulation = 0.f;
+  psycho17_config.pre_gamut_compress = false;
+  psycho17_config.post_gamut_compress = true;
+  psycho17_config.apply_tonemap = false;
 
-  float luminosity = LuminosityFromBT2020LuminanceNormalized(ungraded_bt2020);
-  float3 graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, luminosity, cg_config, 0.18f);
-  graded_bt2020 = ApplyHueAndPurityGrading(graded_bt2020, ungraded_bt2020, luminosity, cg_config);
+  float3 graded_bt2020 = renodx_custom::tonemap::psycho::ApplyTest17BT2020(ungraded_bt2020, ungraded_bt2020, psycho17_config);
 
   graded = renodx::color::ap1::from::BT2020(graded_bt2020);
 
-  graded = max(0, graded);
   return graded;
 }
 
-float3 ApplyGammaCorrectionByLuminosity(float3 incorrect_color) {
-  float luminosity_incorrect = LuminosityFromBT709LuminanceNormalized(incorrect_color);
-  float luminosity_corrected = renodx::color::correct::Gamma(max(0, luminosity_incorrect));
+// User grading -> ACES -> 2.2 EOTF emulation -> apply per channel purity onto luminance curve -> grain -> diffuse white scale + PQ encode
+float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, float cbuffer_diffuse_white_nits, float2 uv) {
+  untonemapped_ap1 = ApplyCustomGradingAP1(untonemapped_ap1);
 
-  float3 lum_corrected = renodx::color::correct::Luminance(incorrect_color, luminosity_incorrect, luminosity_corrected);
+  untonemapped_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
 
-  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
+  float3 tonemapped_bt2020;
 
-  lum_corrected = CorrectPurityMBBT709WithBT2020(lum_corrected, ch);
+  // In order to change ACES_MID, we use The Academy's exp-shift system
+  // The curve is built around 4.8 ACES_MID however, so changing it causes the curve to break
+  // Values other than 4.8 make it so that increasing peak causes midtones to compress and vice-versa
+  // We fix this by basing the exp-shifted curve on reference ACES_MAX and ACES_MIN values
+  // We then scale brightness like SDR as a linear scalar
+  // ACES_MAX and ACES_MIN are pre-adjusted in order to account for the post-tonemap diffuse white scalar which we define as `10.f * ACES_MID`
+  float ACES_MID;
+  float EXP_SHIFT_REFERENCE_MAX;
+  float EXP_SHIFT_REFERENCE_MIN;
+  if (TONE_MAP_ACES_MID_GRAY == 0.f) {
+    ACES_MID = 4.8f;
+    EXP_SHIFT_REFERENCE_MAX = 48.f;
+    EXP_SHIFT_REFERENCE_MIN = 0.02f;
+  } else if (TONE_MAP_ACES_MID_GRAY == 1.f) {
+    ACES_MID = 10.f;
+    EXP_SHIFT_REFERENCE_MAX = 100.f;
+    EXP_SHIFT_REFERENCE_MIN = 0.02f;
+  } else {
+    ACES_MID = 15.f;
+    EXP_SHIFT_REFERENCE_MAX = 1000.f;
+    EXP_SHIFT_REFERENCE_MIN = 0.0001f;
+  }
+  const float ACES_DIFFUSE = ACES_MID * 10.f;
+  const float ACES_MIN = 0.0001f;
+  float aces_min = ACES_MIN / RENODX_DIFFUSE_WHITE_NITS;
+  float aces_max = (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
 
-  return lum_corrected;
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    aces_max = renodx::color::correct::Gamma(aces_max, true);
+    aces_min = renodx::color::correct::Gamma(aces_min, true);
+  } else if (RENODX_GAMMA_CORRECTION == 2.f) {
+    aces_min /= 3.f;
+  }
+
+  renodx::tonemap::aces::ODTConfig ODT_config = renodx::tonemap::aces::CreateODTConfig(aces_min * ACES_DIFFUSE, aces_max * ACES_DIFFUSE, ACES_MID, true, EXP_SHIFT_REFERENCE_MAX, EXP_SHIFT_REFERENCE_MIN);
+
+  float3 tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / ACES_DIFFUSE;
+  float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
+
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
+  }
+
+  tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
+
+  if (RENODX_TONE_MAP_SCALING == 0.f) {
+    float untonemapped_yf = renodx::color::yf::from::AP1(untonemapped_ap1);
+    float tonemapped_yf = renodx::tonemap::aces::ODTToneMap(untonemapped_yf, ODT_config) / ACES_DIFFUSE;
+    if (RENODX_GAMMA_CORRECTION == 1.f) {
+      tonemapped_yf = renodx::color::correct::GammaSafe(tonemapped_yf);
+    }
+    float3 tonemapped_lum_bt2020 = renodx::color::bt2020::from::AP1(max(0, renodx::color::correct::Luminance(untonemapped_ap1, untonemapped_yf, tonemapped_yf)));
+
+    float t = saturate((tonemapped_yf - 0.1f) / 0.9f);  // 0 at <= 0.1, 1 at >= 1.0
+    float hue_amount = lerp(0.5f, 1.0f, t);             // 0.5 in shadows, ramps to 1.0
+    tonemapped_bt2020 = renodx_custom::tonemap::psycho::psycho17_ApplyPurityAndHueFromBT2020(
+        tonemapped_bt2020, tonemapped_lum_bt2020, 1.f, hue_amount);
+  }
+
+  if (CUSTOM_GRAIN_STRENGTH > 0.f) {
+    tonemapped_bt2020 = renodx::effects::ApplyFilmGrain(
+        tonemapped_bt2020, uv, CUSTOM_RANDOM, CUSTOM_GRAIN_STRENGTH * 0.06f,
+        1.f, false, renodx::color::BT2020_TO_XYZ_MAT);
+  }
+
+  return renodx::color::pq::EncodeSafe(tonemapped_bt2020, RENODX_DIFFUSE_WHITE_NITS);
 }
 
-#endif  // PRAGMATA_COMMON_HLSLI
+#endif  // RE9REQUIEM_COMMON_HLSLI

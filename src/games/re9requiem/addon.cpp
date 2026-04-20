@@ -5,18 +5,17 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
-
-#include <atomic>
 
 #include <embed/shaders.h>
 
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/random.hpp"
+#include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "shared.h"
 
@@ -24,35 +23,9 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-void MarkToneMappingLutInvalidated();
-void MarkToneMappingLutRefreshed();
-
-constexpr uint32_t TONE_MAPPING_LUT_BUILDER_CRC32 = 0x2450198E;
-std::atomic_bool tone_mapping_lut_invalidated = false;
-
-renodx::mods::shader::CustomShaders custom_shaders = {
-    {TONE_MAPPING_LUT_BUILDER_CRC32, {
-                                         .crc32 = TONE_MAPPING_LUT_BUILDER_CRC32,
-                                         .code = __0x2450198E,  // OCIOTransformBakeCS_0x2450198E (Tone Mapping LUT builder)
-                                         .on_drawn = [](reshade::api::command_list* /*cmd_list*/) {
-                                           MarkToneMappingLutRefreshed();
-                                         },
-                                     }},
-    __ALL_CUSTOM_SHADERS};
-
-void OnToneMappingLutSettingChanged(float previous, float current) {
-  if (previous != current) MarkToneMappingLutInvalidated();
-}
+renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 renodx::utils::settings::Settings settings = {
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "WARNING: Some changes have not been applied yet. Toggle HDR Off/On in-game to apply them.",
-        .section = "Tone Mapping",
-        .tint = 0xFF3B30,
-        .is_visible = []() { return tone_mapping_lut_invalidated.load(std::memory_order_relaxed); },
-        .is_sticky = true,
-    },
     new renodx::utils::settings::Setting{
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
@@ -60,22 +33,34 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
-        .tooltip = "Sets the tone mapper type.\nToggle HDR off and on again to rebuild the Tone Mapping LUT and fully apply changes.",
-        .labels = {"Vanilla", "RenoDX (Vanilla + Neutwo)"},
-        .on_change_value = &OnToneMappingLutSettingChanged,
+        .tooltip = "Sets the tone mapper type",
+        .labels = {"Vanilla", "ACES"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
         .default_value = 1000.f,
-        .can_reset = false,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
-        .tooltip = "Sets the value of peak white in nits.\nToggle HDR off and on again to rebuild the Tone Mapping LUT and fully apply changes.",
+        .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
-        .max = 4000.f,
+        .max = 10000.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .on_change_value = &OnToneMappingLutSettingChanged,
+        .is_logarithmic = true,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapACESMidGray",
+        .binding = &shader_injection.tone_map_aces_mid_gray,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
+        .label = "ACES Mid Gray",
+        .section = "Tone Mapping",
+        .tooltip = "Selects the ACES mid-gray target:\n"
+                   "4.8 is ACES reference behavior.\n"
+                   "10.0 matches the SDR tonemapper [RRT + ODT.Academy.RGBmonitor_100nits_dim / ODT.Academy.Rec709_100nits_dim].\n"
+                   "15.0 matches the HDR tonemapper [RRTODT.Academy.Rec2020_1000nits_15nits_ST2084].",
+        .labels = {"4.8 (Reference ACES)", "10.0 (Matches SDR)", "15.0 (Matches HDR)"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -83,23 +68,32 @@ renodx::utils::settings::Settings settings = {
         .default_value = 203.f,
         .label = "Game Brightness",
         .section = "Tone Mapping",
-        .tooltip = "Sets the value of 100% white in nits.\nToggle HDR off and on again to rebuild the Tone Mapping LUT and fully apply changes.",
+        .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .on_change_value = &OnToneMappingLutSettingChanged,
     },
     new renodx::utils::settings::Setting{
-        .key = "GammaCorrection",
+        .key = "EOTFEmulation",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 2.f,
         .label = "SDR EOTF Emulation",
         .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF.\nToggle HDR off and on again to rebuild the Tone Mapping LUT and fully apply changes.",
-        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminosity)"},
+        .tooltip = "Emulates a 2.2 EOTF",
+        .labels = {"Off", "2.2", "Lower ACES Min Nits"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .on_change_value = &OnToneMappingLutSettingChanged,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapScaling",
+        .binding = &shader_injection.tone_map_scaling,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Scaling",
+        .section = "Tone Mapping",
+        .tooltip = "Luminance scales colors consistently while per channel matches the original behavior of the tonemapper",
+        .labels = {"Luminance", "Per Channel"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
@@ -113,7 +107,7 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
-        .key = "UIGammaCorrection",
+        .key = "UIEOTFEmulation",
         .binding = &shader_injection.gamma_correction_ui,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
         .default_value = 1.f,
@@ -148,8 +142,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Gamma",
         .section = "Color Grading",
-        .min = 0.5f,
-        .max = 1.5f,
+        .min = 0.75f,
+        .max = 1.25f,
         .format = "%.2f",
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
@@ -164,29 +158,29 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradePreToneMapShadows",
+        .key = "ColorGradeHighlightContrast",
+        .binding = &shader_injection.tone_map_contrast_highlights,
+        .default_value = 50.f,
+        .label = "Highlight Contrast",
+        .section = "Color Grading",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
         .default_value = 50.f,
-        .label = "Pre Tone Map Shadows",
+        .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradePostToneMapShadows",
-        .binding = &shader_injection.post_tone_map_shadows,
+        .key = "ColorGradeShadowContrast",
+        .binding = &shader_injection.tone_map_contrast_shadows,
         .default_value = 50.f,
-        .label = "Post Tone Map Shadows",
-        .section = "Color Grading",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradePostToneMapShadowContrast",
-        .binding = &shader_injection.post_tone_map_shadow_contrast,
-        .default_value = 42.f,
         .label = "Shadow Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -201,6 +195,16 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeAdaptationContrast",
+        .binding = &shader_injection.tone_map_adaptation_contrast,
+        .default_value = 50.f,
+        .label = "Adaptation Contrast",
+        .section = "Color Grading",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -247,45 +251,22 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradePostToneMapFlare",
-        .binding = &shader_injection.post_tone_map_flare,
-        .default_value = 0.f,
-        .label = "Post Tone Map Flare",
-        .section = "Color Grading",
-        .tooltip = "Flare/Glare Compensation",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeScene",
+        .key = "ColorGradeLUTStrength",
         .binding = &shader_injection.color_grade_lut_strength,
         .default_value = 100.f,
-        .label = "Scene Grading",
+        .label = "LUT Strength",
         .section = "Color Grading",
-        .tooltip = "Selects the strength of the game's custom scene grading.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeSceneScaling",
+        .key = "ColorGradeLUTScaling",
         .binding = &shader_injection.color_grade_lut_scaling,
-        .default_value = 0.f,
-        .label = "Scene Grading Scaling",
+        .default_value = 100.f,
+        .label = "LUT Scaling",
         .section = "Color Grading",
-        .tooltip = "Scales the scene grading to full range when size is clamped.",
+        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeSceneScaling2",
-        .binding = &shader_injection.color_grade_lut_scaling_2,
-        .default_value = 0.f,
-        .label = "Secondary Scene Grading Scaling",
-        .section = "Color Grading",
-        .tooltip = "Scales the scene grading to full range when size is clamped for the secondary scene grading.",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -314,6 +295,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Custom Film Grain",
         .section = "Effects",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -336,40 +318,45 @@ renodx::utils::settings::Settings settings = {
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
-          MarkToneMappingLutInvalidated();
         },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Purist",
+        .label = "Match SDR",
         .section = "Options",
         .group = "button-line-0",
+        .tooltip = "Matches SDR with sRGB color space selected in the menu on a 2.2 gamma display.",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-              {"GammaCorrection", 1.f},
-              {"ColorGradePostToneMapShadowContrast", 50.f},
+              {"ToneMapACESMidGray", 1.f},
+              {"EOTFEmulation", 1.f},
+              {"ToneMapScaling", 1.f},
+              {"ColorGradeLUTScaling", 0.f},
               {"FxNoise", 100.f},
               {"FxVanillaGrainStrength", 100.f},
               {"FxGrainStrength", 0.f},
           });
-          MarkToneMappingLutInvalidated();
         },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Preserve Shadow Detail",
+        .label = "Match HDR",
         .section = "Options",
         .group = "button-line-0",
+        .tooltip = "Matches Vanilla HDR with the `Brightness (HDR)` slider set to +4 ticks from the left (neutral setting).",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-              {"GammaCorrection", 0.f},
-              {"ColorGradePostToneMapShadowContrast", 50.f},
-              {"ColorGradeSceneScaling", 100.f},
-              {"ColorGradeSceneScaling2", 100.f},
+              {"ToneMapACESMidGray", 2.f},
+              {"ToneMapGameNits", 150.f},
+              {"EOTFEmulation", 0.f},
+              {"ToneMapScaling", 1.f},
+              {"ColorGradeLUTScaling", 0.f},
+              {"FxNoise", 100.f},
+              {"FxVanillaGrainStrength", 100.f},
+              {"FxGrainStrength", 0.f},
           });
-          MarkToneMappingLutInvalidated();
         },
     },
     new renodx::utils::settings::Setting{
@@ -429,50 +416,41 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Requires HDR on in game"
-                             "\n- Requires REFramework"),
+        .label = std::string("- Requires HDR on in game\n"),
         .section = "About",
     },
 };
-
-void MarkToneMappingLutInvalidated() {
-  tone_mapping_lut_invalidated.store(true, std::memory_order_relaxed);
-}
-
-void MarkToneMappingLutRefreshed() {
-  tone_mapping_lut_invalidated.store(false, std::memory_order_relaxed);
-}
 
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
-      {"GammaCorrection", 0.f},
       {"ToneMapUINits", 203.f},
-      {"UIGammaCorrection", 0.f},
+      {"ToneMapACESMidGray", 2.f},
+      {"ToneMapScaling", 1.f},
+      {"EOTFEmulation", 0.f},
+      {"UIEOTFEmulation", 0.f},
       {"UIVisibility", 1.f},
       {"ColorGradeExposure", 1.f},
-      {"ColorGradeGamma", 1.f},
       {"ColorGradeHighlights", 50.f},
-      {"ColorGradePreToneMapShadows", 50.f},
-      {"ColorGradePostToneMapShadows", 50.f},
-      {"ColorGradePostToneMapShadowContrast", 50.f},
+      {"ColorGradeHighlightContrast", 50.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeShadowContrast", 50.f},
       {"ColorGradeContrast", 50.f},
+      {"ColorGradeAdaptationContrast", 50.f},
+      {"ColorGradeGamma", 1.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
-      {"ColorGradePostToneMapFlare", 0.f},
-      {"ColorGradeScene", 100.f},
-      {"ColorGradeSceneScaling", 0.f},
-      {"ColorGradeSceneScaling2", 0.f},
+      {"ColorGradeLUTStrength", 100.f},
+      {"ColorGradeLUTScaling", 0.f},
       {"FxNoise", 100.f},
       {"FxVanillaGrainStrength", 100.f},
-      {"FxFilmDamageStrength", 100.f},
       {"FxGrainStrength", 0.f},
+      {"FxFilmDamageStrength", 100.f},
   });
-  MarkToneMappingLutInvalidated();
 }
 
 bool fired_on_init_swapchain = false;
@@ -482,8 +460,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (peak.has_value()) {
-    settings[2]->default_value = peak.value();
-    settings[2]->can_reset = true;
+    settings[1]->default_value = peak.value();
+    settings[1]->can_reset = true;
   }
 }
 
@@ -499,13 +477,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
+
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
-        renodx::utils::settings::on_preset_changed_callbacks.emplace_back([]() {
-          MarkToneMappingLutInvalidated();
-        });
 
         initialized = true;
       }
@@ -515,6 +492,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
+      renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
+
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
       reshade::unregister_addon(h_module);
