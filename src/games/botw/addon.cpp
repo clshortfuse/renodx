@@ -26,7 +26,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
-
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
     renodx::templates::settings::CreateDefaultSettings({
         {"ToneMapType", &shader_injection.tone_map_type},
@@ -49,6 +48,18 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .parse = [](float value) { return value; },
             .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
         },
+        new renodx::utils::settings::Setting{
+            .key = "ColorGradeScene",
+            .binding = &shader_injection.scene_grade_strength,
+            .default_value = 100.f,
+            .label = "SDR Hue Emulation",
+            .section = "Tone Mapping",
+            .tooltip = "Emulates SDR hue shifts to match vanilla",
+            .max = 100.f,
+            .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+            .parse = [](float value) { return value * 0.01f; },
+            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
+        },
     },
     renodx::templates::settings::CreateDefaultSettings({
         {"ColorGradeExposure", &shader_injection.tone_map_exposure},
@@ -61,19 +72,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         {"ColorGradeFlare", &shader_injection.tone_map_flare},
     }),
     {
-        new renodx::utils::settings::Setting{
-            .key = "ColorGradeScene",
-            .binding = &shader_injection.scene_grade_strength,
-            .default_value = 100.f,
-            .label = "SDR Hue Emulation",
-            .section = "Color Grading",
-            .tooltip = "Emulates SDR hue shifts to match vanilla",
-            .max = 100.f,
-            .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
-            .parse = [](float value) { return value * 0.01f; },
-            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
-        },
-      
+
         new renodx::utils::settings::Setting{
             .key = "VanillaSaturation",
             .binding = &shader_injection.vanilla_saturation,
@@ -85,7 +84,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .parse = [](float value) { return value * 0.01f; },
             .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
         },
-        
+
         new renodx::utils::settings::Setting{
             .key = "FxHueClip",
             .binding = &shader_injection.custom_bloom,
@@ -113,9 +112,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .group = "button-line-1",
             .tint = 0x5865F2,
             .parse = [](float value) { return value; },
-            .on_change = []() {
-              renodx::utils::platform::LaunchURL("https://discord.gg/kSTf", "EbcCpC");
-            },
+            .on_change = []() { renodx::utils::platform::LaunchURL("https://discord.gg/kSTf", "EbcCpC"); },
         },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -124,9 +121,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .group = "button-line-1",
             .tint = 0x5865F2,
             .parse = [](float value) { return value; },
-            .on_change = []() {
-              renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc");
-            },
+            .on_change = []() { renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc"); },
         },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -134,9 +129,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Links",
             .group = "button-line-1",
             .parse = [](float value) { return value; },
-            .on_change = []() {
-              renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx");
-            },
+            .on_change = []() { renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx"); },
         },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -145,9 +138,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .group = "button-line-1",
             .tint = 0xFF5F5F,
             .parse = [](float value) { return value; },
-            .on_change = []() {
-              renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil");
-            },
+            .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil"); },
         },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -156,9 +147,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .group = "button-line-1",
             .tint = 0xFF5F5F,
             .parse = [](float value) { return value; },
-            .on_change = []() {
-              renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse");
-            },
+            .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse"); },
         },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -167,13 +156,11 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .group = "button-line-1",
             .tint = 0xFF5F5F,
             .parse = [](float value) { return value; },
-            .on_change = []() {
-              renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
-            },
+            .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden"); },
         },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = "Game mod by souperman9, RenoDX Framework by ShortFuse, RenoVK fork by Ritsu. \nSpecial thanks to Izueh, Marat, and miru97",
+            .label = "Game mod by souperman9, RenoDX Framework by ShortFuse, RenoVK fork by Ritsu. \nSpecial thanks to Izueh, Marat, miru97, and Musa",
             .section = "About",
         },
         new renodx::utils::settings::Setting{
@@ -183,8 +170,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         },
     },
 });
-
-
 
 void OnPresent(
     reshade::api::command_queue* queue,
