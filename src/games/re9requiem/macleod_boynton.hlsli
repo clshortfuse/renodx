@@ -1,5 +1,5 @@
-#ifndef XSRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
-#define XSRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
+#ifndef RE9REQUIEM_MACLEOD_BOYNTON_HLSL_
+#define RE9REQUIEM_MACLEOD_BOYNTON_HLSL_
 
 #include "./shared.h"
 
@@ -528,7 +528,7 @@ float3 CorrectPurityMBBT709WithBT2020(
     float strength = 1.f,
     float curve_gamma = 1.f,
     float2 mb_white_override = float2(-1.f, -1.f),
-    float t_min = 1e-7f,
+    float t_min = 1e-6f,
     float clamp_purity_loss = 0.f) {
   if (strength <= 0.f) return target_color_bt709;
 
@@ -1303,4 +1303,4 @@ float LuminosityFromAP1LuminanceNormalized(float3 ap1_linear) {
   return LuminosityFromAP1(ap1_linear) / LuminosityFromAP1(1.f);
 }
 
-#endif  // XSRC_SHADERS_COLOR_MACLEOD_BOYNTON_HLSL_
+#endif  // RE9REQUIEM_MACLEOD_BOYNTON_HLSL_
