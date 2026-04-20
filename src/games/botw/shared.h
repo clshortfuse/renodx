@@ -135,7 +135,6 @@ cbuffer injected_buffer : register(b13) {
 #endif
 
 #include "../../shaders/renodx.hlsl"
-#include "../../shaders/tonemap/psycho_test17.hlsl"
 
 #endif
 
