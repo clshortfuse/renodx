@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-#define ImTextureID ImU64
+#define ImTextureID                   ImU64
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
-
 
 #include <embed/shaders.h>
 
@@ -39,27 +38,40 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .key = "tonemap_clamp_color_space",
             .binding = &shader_injection.custom_tonemap_clamp,
             .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-            .default_value = 0.f,
+            .default_value = 1.f,
             .can_reset = true,
             .label = "Clamp Tonemap Grading",
             .section = "Tone Mapping",
             .tooltip = "Clamps the tonemap colour grading. Use BT.709 for a vanilla result.",
-            .labels = {"BT.709", "AP1"},
+            .labels = {"BT.709", "BT.2020"},
             .parse = [](float value) { return value; },
             .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
         },
         new renodx::utils::settings::Setting{
-            .key = "ColorGradeScene",
-            .binding = &shader_injection.scene_grade_strength,
-            .default_value = 100.f,
-            .label = "SDR Hue Emulation",
+            .key = "SDRBlendFactor",
+            .binding = &shader_injection.tone_map_sdr_blend_factor,
+            .default_value = 18.f,
+            .label = "SDR Blend Factor",
             .section = "Tone Mapping",
             .tooltip = "Emulates SDR hue shifts to match vanilla",
-            .max = 100.f,
+            .min = 10.f,
+            .max = 60.f,
             .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
             .parse = [](float value) { return value * 0.01f; },
             .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
         },
+        // new renodx::utils::settings::Setting{
+        //     .key = "ColorGradeScene",
+        //     .binding = &shader_injection.scene_grade_strength,
+        //     .default_value = 100.f,
+        //     .label = "SDR Hue Emulation",
+        //     .section = "Tone Mapping",
+        //     .tooltip = "Emulates SDR hue shifts to match vanilla",
+        //     .max = 100.f,
+        //     .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+        //     .parse = [](float value) { return value * 0.01f; },
+        //     .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
+        // },
     },
     renodx::templates::settings::CreateDefaultSettings({
         {"ColorGradeExposure", &shader_injection.tone_map_exposure},
@@ -181,10 +193,6 @@ void OnPresent(
   // Reset frame state
 }
 
-
-
-
-
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
@@ -228,7 +236,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
       renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
 
-
       /*
         If expand_existing_constant_buffer is set to false renoDX will add new cbuffer range (instead of reusing the game's).
         This behaviour is overridden if renoDX finds a cbuffer that targets all shader_stages in minimum_constant_buffer_stages.
@@ -237,11 +244,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-        renodx::mods::swapchain::resource_upgrade_infos.push_back({
-            .old_format = reshade::api::format::r10g10b10a2_typeless,
-            .new_format = target_format,
-            .ignore_size = true, //risky...?
-        });
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::r10g10b10a2_typeless,
+          .new_format = target_format,
+          .ignore_size = true,  // risky...?
+      });
 
       if (!initialized) {
         // renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
@@ -258,7 +265,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
-  // renodx::utils::random::Use(DLL_PROCESS_ATTACH); 
+  // renodx::utils::random::Use(DLL_PROCESS_ATTACH);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
