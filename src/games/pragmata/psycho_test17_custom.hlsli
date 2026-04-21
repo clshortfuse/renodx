@@ -1,5 +1,6 @@
-#include "./shared.h"
 #include "./macleod_boynton.hlsli"
+#include "./shared.h"
+
 
 #ifndef RENODX_PRAGMATA_PSYCHO_TEST17_HLSLI_
 #define RENODX_PRAGMATA_PSYCHO_TEST17_HLSLI_
@@ -301,8 +302,7 @@ float3 psycho17_RestoreHueFromLMS(
   float target_len_sq = dot(target_direction, target_direction);
   float source_len_sq = dot(source_direction, source_direction);
 
-  if (target_len_sq < renodx_custom::color::macleod_boynton::MB_NEAR_WHITE_EPSILON &&
-      source_len_sq < renodx_custom::color::macleod_boynton::MB_NEAR_WHITE_EPSILON) {
+  if (target_len_sq < renodx_custom::color::macleod_boynton::MB_NEAR_WHITE_EPSILON && source_len_sq < renodx_custom::color::macleod_boynton::MB_NEAR_WHITE_EPSILON) {
     return lms_target;
   }
 
@@ -1268,6 +1268,63 @@ float3 ApplyTest17BT2020(float3 color_bt2020, float3 color_hue_shift_source_bt20
   }
 
   return color_bt2020;
+}
+
+float3 ApplyPreToneMapCurvesBT2020(float3 color_bt2020, config17::Config psycho_config) {
+  // Keep only this subset from ApplyTest17BT2020:
+  // exposure, gamma, highlights, shadows, contrast, flare, flare_lms,
+  // contrast_highlights, contrast_shadows, adaptation_contrast, bleaching_intensity.
+  psycho_config.apply_tonemap = false;
+  psycho_config.pre_gamut_compress = false;
+  psycho_config.post_gamut_compress = false;
+  psycho_config.purity_scale = 1.f;
+  psycho_config.purity_highlights = 0.f;
+  psycho_config.dechroma = 0.f;
+  psycho_config.hue_emulation = 0.f;
+
+  return ApplyTest17BT2020(color_bt2020, color_bt2020, psycho_config);
+}
+
+float3 ApplyPostToneMapCurvesBT2020(float3 color_bt2020, float lum_target, config17::Config psycho_config) {
+  if (psycho_config.purity_scale == 1.f
+      && psycho_config.dechroma == 0.f
+      && psycho_config.purity_highlights == 0.f
+      && !psycho_config.post_gamut_compress) {
+    return color_bt2020;
+  }
+
+  const float kEps = 1e-7f;
+  float3 midgray_lms = renodx::color::lms::from::BT2020(psycho_config.mid_gray.xxx);
+  float3 color_lms = renodx::color::lms::from::BT2020(color_bt2020);
+
+  float purity_scale = psycho_config.purity_scale;
+
+  if (psycho_config.dechroma != 0.f) {
+    purity_scale *= lerp(1.f, 0.f, saturate(pow(lum_target / (10000.f / 100.f), (1.f - psycho_config.dechroma))));
+  }
+
+  if (psycho_config.purity_highlights != 0.f) {
+    float percent_max = saturate(lum_target * 100.f / 10000.f);
+    float blowout_change = pow(1.f - percent_max, 100.f * abs(psycho_config.purity_highlights));
+    if (psycho_config.purity_highlights < 0.f) {
+      blowout_change = 2.f - blowout_change;
+    }
+    purity_scale *= blowout_change;
+  }
+
+  if (purity_scale != 1.f) {
+    color_lms = psycho17_ScalePurityMBAdaptive(color_lms, purity_scale, midgray_lms, kEps);
+  }
+
+  if (psycho_config.post_gamut_compress) {
+    color_lms = psycho17_GamutCompressLMSBoundAdaptive(
+        color_lms,
+        midgray_lms,
+        renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
+        1.f);
+  }
+
+  return renodx::color::bt2020::from::LMS(color_lms);
 }
 
 }  // namespace psycho
