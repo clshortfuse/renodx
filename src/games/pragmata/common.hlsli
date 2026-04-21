@@ -4,11 +4,7 @@
 #include "./psycho_test17_custom.hlsli"
 #include "./shared.h"
 
-float3 ApplyCustomGradingAP1(float3 ungraded) {
-  float3 graded = ungraded;
-
-  float3 ungraded_bt2020 = renodx::color::bt2020::from::AP1(ungraded);
-
+renodx_custom::tonemap::psycho::config17::Config CreatePsycho17Config() {
   renodx_custom::tonemap::psycho::config17::Config psycho17_config =
       renodx_custom::tonemap::psycho::config17::Create();
   psycho17_config.peak_value = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
@@ -30,19 +26,17 @@ float3 ApplyCustomGradingAP1(float3 ungraded) {
   psycho17_config.pre_gamut_compress = false;
   psycho17_config.post_gamut_compress = true;
   psycho17_config.apply_tonemap = false;
-
-  float3 graded_bt2020 = renodx_custom::tonemap::psycho::ApplyTest17BT2020(ungraded_bt2020, ungraded_bt2020, psycho17_config);
-
-  graded = renodx::color::ap1::from::BT2020(graded_bt2020);
-
-  return graded;
+  return psycho17_config;
 }
 
 // User grading -> ACES -> 2.2 EOTF emulation -> apply per channel purity onto luminance curve -> grain -> diffuse white scale + PQ encode
 float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, float cbuffer_diffuse_white_nits, float2 uv) {
-  untonemapped_ap1 = ApplyCustomGradingAP1(untonemapped_ap1);
-
   untonemapped_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
+
+  float untonemapped_lum = renodx::color::yf::from::AP1(untonemapped_ap1);
+  renodx_custom::tonemap::psycho::config17::Config psycho17_config = CreatePsycho17Config();
+  untonemapped_ap1 = renodx::color::ap1::from::BT2020(
+      renodx_custom::tonemap::psycho::ApplyPreToneMapCurvesBT2020(renodx::color::bt2020::from::AP1(untonemapped_ap1), psycho17_config));
 
   float3 tonemapped_bt2020;
 
@@ -104,6 +98,8 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
     tonemapped_bt2020 = renodx_custom::tonemap::psycho::psycho17_ApplyPurityAndHueFromBT2020(
         tonemapped_bt2020, tonemapped_lum_bt2020, 1.f, hue_amount);
   }
+
+  tonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyPostToneMapCurvesBT2020(tonemapped_bt2020, untonemapped_lum, psycho17_config);
 
   if (CUSTOM_GRAIN_STRENGTH > 0.f) {
     tonemapped_bt2020 = renodx::effects::ApplyFilmGrain(
