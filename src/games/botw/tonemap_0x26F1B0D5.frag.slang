@@ -1,1 +1,1 @@
-#include "./tonemap_0xA63890E4.frag.slang"
+#include "./tonemap.slang"
