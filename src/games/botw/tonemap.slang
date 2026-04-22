@@ -93,7 +93,8 @@ float3 ApplyVanillaToneMapExtended(float3 untonemapped, float range = 1.f, float
 
   float3 tonemapped_perch = VanillaToneCurveExtended(untonemapped, range, pivot_point);
 
-  float blend_weight = pow(saturate(lum_out), 2.f);
+  float blend_weight = range * (1.f - exp(-lum_in / range));
+  blend_weight = pow(saturate(blend_weight), 2.f);
   float3 tonemapped = lerp(tonemapped_lum, tonemapped_perch, blend_weight);
 
   return tonemapped;
@@ -144,6 +145,9 @@ void main() {
     float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
     if (RENODX_GAMMA_CORRECTION == 1.f) {
       peak = renodx::color::correct::GammaSafe(peak, true);
+    }
+    if (RENODX_GAMMA_CORRECTION == 2.f) {
+      peak = renodx::color::correct::GammaSafe(peak, true, 2.4);
     }
     float3 graded_tonemapped = renodx::tonemap::neutwo::MaxChannel(graded_untonemapped, peak);
 
