@@ -46,10 +46,10 @@ void main(
   float4 ramp = r1 * (cb4[9] - 1.f) + 1.f;
   float4 inv_r1 = 1.f - r1;
 
+  // Keep the base scene unmasked here. After moving the final tone-map endpoint
+  // to this pass, t0 can contain HDR scene values from 0x61888319; the original
+  // SDR bit-mask remap can collapse those values back into SDR headroom.
   float4 base_sample = t0.Sample(s0_s, v5.xy);
-  uint4 base_bits = asuint(base_sample);
-  base_bits = (base_bits & asuint(cb3[44])) | asuint(cb3[45]);
-  base_sample = asfloat(base_bits);
 
   float4 combined = r0 * ramp + base_sample;
   float4 additive_term = abs(r0) * inv_r1;
@@ -58,4 +58,5 @@ void main(
   additive_term *= gradient_strength;
 
   o0 = additive_term * cb4[10] + combined;
+  o0.rgb = ToneMapAndRenderIntermediatePass(o0.rgb, v5.xy);
 }

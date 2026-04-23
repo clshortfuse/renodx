@@ -26,12 +26,36 @@
 
 namespace {
 
+auto no_inject = [](reshade::api::command_list*) { return false; };
+
+bool ActivateCurrentRenderTargets(reshade::api::command_list* cmd_list) {
+  auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
+  bool changed = false;
+
+  for (auto rtv : rtvs) {
+    changed |= renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);
+  }
+
+  if (changed) {
+    renodx::mods::swapchain::FlushDescriptors(cmd_list);
+    renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});
+  }
+
+  return true;
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x788AFF56),  // White gradient / sun flare control
-    CustomShaderEntry(0x61888319),  // LUT / final scene grading + tonemapping
+    CustomShaderEntryCallback(0x788AFF56, ActivateCurrentRenderTargets),  // White gradient / sun flare control
+    CustomShaderEntryCallback(0x61888319, ActivateCurrentRenderTargets),  // LUT / final scene grading + tonemapping
+    CustomShaderEntry(0x471059BE),  // Video final packed texture decode
+    CustomShaderEntry(0xC7CE95B3),  // Video packed decode fullscreen triangle VS
+    CustomShaderEntry(0xA2F269CA),  // Video processing fullscreen geometry VS
+    CustomShaderEntry(0xC4FF799B),  // Video/swapchain copy fullscreen triangle VS
+    CustomShaderEntry(0x880A17D3),  // Video/swapchain copy
+    CustomShaderEntry(0x915F8B01),  // Video
     CustomShaderEntry(0x8B4B475C),  // UI Map
     CustomShaderEntry(0x12BA0F50),  // HUD Text
-    CustomShaderEntry(0x0DA2DE91)   // HUD
+    CustomShaderEntry(0x0DA2DE91),  // HUD
 };
 
 ShaderInjectData shader_injection;
@@ -102,7 +126,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
-        .default_value = 54.f,
+        .default_value = 55.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
@@ -122,7 +146,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
         .binding = &shader_injection.tone_map_contrast,
-        .default_value = 53.f,
+        .default_value = 50.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -196,7 +220,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxWhiteGradientStrength",
         .binding = &shader_injection.custom_bloom,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "White Gradient / Sun Flare",
         .section = "Effects",
         .tooltip = "Controls the strength of the bright scene gradient overlay.",
@@ -212,6 +236,16 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Adds perceptual film grain",
         .labels = {"Off", "Perceptual"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxVideoAutoHDR",
+        .binding = &shader_injection.custom_video_hdr,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Video AutoHDR",
+        .section = "Effects",
+        .tooltip = "Upgrades SDR prerendered video when detected.",
+        .labels = {"Off", "BT2446A"},
     },
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
@@ -293,6 +327,14 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse"); },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Hartapfel's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-3",
+        .tint = 0xFF5A16,
+        .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/hartapfel"); },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
@@ -319,6 +361,7 @@ void OnPresetOff() {
       {"ColorGradeSceneScaling", 0.f},
       {"FxWhiteGradientStrength", 100.f},
       {"FxGrainType", 0.f},
+      {"FxVideoAutoHDR", 1.f},
       {"FxGrainStrength", 50.f}
    });
 }
@@ -573,6 +616,25 @@ void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swap
   };
   cmd_list->begin_render_pass(1, &render_target, nullptr);
 
+  // Ensure fullscreen coverage regardless of whatever viewport/scissor the
+  // game had bound before present (video paths may use smaller rectangles).
+  const reshade::api::viewport viewport = {
+      0.0f,
+      0.0f,
+      static_cast<float>(back_buffer_desc.texture.width),
+      static_cast<float>(back_buffer_desc.texture.height),
+      0.0f,
+      1.0f,
+  };
+  cmd_list->bind_viewports(0, 1, &viewport);
+  const reshade::api::rect scissor = {
+      0,
+      0,
+      static_cast<int32_t>(back_buffer_desc.texture.width),
+      static_cast<int32_t>(back_buffer_desc.texture.height),
+  };
+  cmd_list->bind_scissor_rects(0, 1, &scissor);
+
   // Bind sampler/SRV used by the final pass shader.
   const reshade::api::descriptor_table tables[] = {
       swapchain_data->sampler_table,
@@ -785,21 +847,58 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
-
-        // renodx::mods::swapchain::use_resource_cloning = false;
+        renodx::mods::swapchain::use_resource_cloning = true;
         // renodx::mods::swapchain::swapchain_proxy_revert_state = true;
 
         renodx::mods::shader::expected_constant_buffer_index = 13;
 
 #if 1  // Render Target Upgrades
 
-        // Main Render
+        // Preserve HDR headroom between the LUT/final scene pass and later
+        // compositing passes. Restricting this to a single index can miss the
+        // actual scene handoff target and clamp the whole image to SDR.
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
                            .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
             .usage_include = reshade::api::resource_usage::render_target,
+            .name = "Main Scene Intermediate",
+        });
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_unorm,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .aspect_ratio = 16.f / 9.f,
+            .aspect_ratio_tolerance = 0.001f,
+            .usage_include = reshade::api::resource_usage::render_target,
+            .name = "Main Scene 16x9 Bootstrap",
+        });
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_unorm,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .ignore_size = true,
+            .use_resource_view_cloning = true,
+            .use_resource_view_hot_swap = true,
+            .usage_include = reshade::api::resource_usage::render_target,
+            .name = "Final Tonemapper RTV HotSwap",
+        });
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_unorm_srgb,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .ignore_size = true,
+            .use_resource_view_cloning = true,
+            .use_resource_view_hot_swap = true,
+            .usage_include = reshade::api::resource_usage::render_target,
+            .name = "Final Tonemapper SRGB RTV HotSwap",
+        });
+        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_typeless,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .ignore_size = true,
+            .use_resource_view_cloning = true,
+            .use_resource_view_hot_swap = true,
+            .usage_include = reshade::api::resource_usage::render_target,
+            .name = "Final Tonemapper Typeless RTV HotSwap",
         });
 
         // Bloom

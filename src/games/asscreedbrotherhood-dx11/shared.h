@@ -1,5 +1,5 @@
-#ifndef SRC_ASSCREED1_SHARED_H_
-#define SRC_ASSCREED1_SHARED_H_
+#ifndef SRC_ASSCREEDBROTHERHOOD_DX11_SHARED_H_
+#define SRC_ASSCREEDBROTHERHOOD_DX11_SHARED_H_
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -28,8 +28,7 @@ struct ShaderInjectData {
   float custom_random;
   float custom_grain_type;
   float custom_grain_strength;
-  float custom_sky_brightness;
-  float custom_sky_contrast;
+  float custom_video_hdr;
 };
 
 #ifndef __cplusplus
@@ -60,11 +59,10 @@ cbuffer cb13 : register(b13) {
 #define CUSTOM_RANDOM         shader_injection.custom_random
 #define CUSTOM_GRAIN_TYPE     shader_injection.custom_grain_type
 #define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
-#define CUSTOM_SKY_BRIGHTNESS shader_injection.custom_sky_brightness
-#define CUSTOM_SKY_CONTRAST   shader_injection.custom_sky_contrast
+#define CUSTOM_VIDEO_HDR      shader_injection.custom_video_hdr
 
 #include "../../shaders/renodx.hlsl"
 
 #endif
 
-#endif  // SRC_ASSCREED1_SHARED_H_
+#endif  // SRC_ASSCREEDBROTHERHOOD_DX11_SHARED_H_

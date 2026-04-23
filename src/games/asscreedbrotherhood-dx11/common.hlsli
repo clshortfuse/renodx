@@ -212,6 +212,7 @@ float3 ApplyToneMap(float3 untonemapped) {
   float3 tonemapped;
 
   if (RENODX_TONE_MAP_TYPE == 0) {
+    // Preserve original vanilla behavior.
     tonemapped = saturate(untonemapped);
   } else {
     // set up grading config
@@ -225,9 +226,10 @@ float3 ApplyToneMap(float3 untonemapped) {
     }
     untonemapped_graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(untonemapped_graded, hue_correction_source, y, cg_config);
     if (RENODX_TONE_MAP_TYPE == 1.f) {
-      tonemapped = renodx::color::bt709::from::BT2020(
-          renodx::tonemap::neutwo::MaxChannel(
-              renodx::color::bt2020::from::BT709(untonemapped_graded), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f));
+      // Match the AC1 path: keep HDR scene values uncompressed here and let the
+      // final scRGB scale determine their display brightness. Compressing this
+      // stage was effectively pinning ordinary highlights to paper white.
+      tonemapped = untonemapped_graded;
     } else {
       renodx::tonemap::Config config = renodx::tonemap::config::Create();
       config.type = renodx::tonemap::config::type::RENODRT;
@@ -275,37 +277,45 @@ float3 ApplyToneMapAndGrain(float3 color, float2 position) {
 }
 
 float3 ToneMapAndRenderIntermediatePass(float3 color, float2 position) {
+  const float safe_peak_white_nits = max(RENODX_PEAK_WHITE_NITS, 1.f);
+  const float safe_diffuse_white_nits = max(RENODX_DIFFUSE_WHITE_NITS, 1.f);
+  const float game_to_peak_scale = safe_diffuse_white_nits / safe_peak_white_nits;
+
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     color = renodx::color::gamma::DecodeSafe(color, 2.2f);
     color = ApplyToneMapAndGrain(color, position);
-    color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_PEAK_WHITE_NITS;
+    color *= game_to_peak_scale;
     color = renodx::color::gamma::EncodeSafe(color, 2.2f);
   } else if (RENODX_GAMMA_CORRECTION == 2.f) {
     color = renodx::color::gamma::DecodeSafe(color, 2.4f);
     color = ApplyToneMapAndGrain(color, position);
-    color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_PEAK_WHITE_NITS;
+    color *= game_to_peak_scale;
     color = renodx::color::gamma::EncodeSafe(color, 2.4f);
   } else {
     color = renodx::color::srgb::DecodeSafe(color);
     color = ApplyToneMapAndGrain(color, position);
-    color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_PEAK_WHITE_NITS;
+    color *= game_to_peak_scale;
     color = renodx::color::srgb::EncodeSafe(color);
   }
   return color;
 }
 
 float3 InvertIntermediatePass(float3 color) {
+  const float safe_peak_white_nits = max(RENODX_PEAK_WHITE_NITS, 1.f);
+  const float safe_diffuse_white_nits = max(RENODX_DIFFUSE_WHITE_NITS, 1.f);
+  const float peak_to_game_scale = safe_peak_white_nits / safe_diffuse_white_nits;
+
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     color = renodx::color::gamma::DecodeSafe(color, 2.2f);
-    color *= RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+    color *= peak_to_game_scale;
     color = renodx::color::gamma::EncodeSafe(color, 2.2f);
   } else if (RENODX_GAMMA_CORRECTION == 2.f) {
     color = renodx::color::gamma::DecodeSafe(color, 2.4f);
-    color *= RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+    color *= peak_to_game_scale;
     color = renodx::color::gamma::EncodeSafe(color, 2.4f);
   } else {
     color = renodx::color::srgb::DecodeSafe(color);
-    color *= RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+    color *= peak_to_game_scale;
     color = renodx::color::srgb::EncodeSafe(color);
   }
   return color;
@@ -313,28 +323,33 @@ float3 InvertIntermediatePass(float3 color) {
 
 float3 ClampIntermediatePass(float3 color) {
   if (RENODX_TONE_MAP_TYPE == 0.f) {
+    // Preserve original vanilla behavior.
     color = saturate(color);
   } else {
-    color = min(color, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    // Keep non-vanilla paths unclamped for HDR headroom.
   }
   return color;
 }
 
 float3 ClampAndRenderIntermediatePass(float3 color) {
+  const float safe_peak_white_nits = max(RENODX_PEAK_WHITE_NITS, 1.f);
+  const float safe_diffuse_white_nits = max(RENODX_DIFFUSE_WHITE_NITS, 1.f);
+  const float game_to_peak_scale = safe_diffuse_white_nits / safe_peak_white_nits;
+
   if (RENODX_GAMMA_CORRECTION == 1.f) {
     color = renodx::color::gamma::DecodeSafe(color, 2.2f);
     color = ClampIntermediatePass(color);
-    color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_PEAK_WHITE_NITS;
+    color *= game_to_peak_scale;
     color = renodx::color::gamma::EncodeSafe(color, 2.2f);
   } else if (RENODX_GAMMA_CORRECTION == 2.f) {
     color = renodx::color::gamma::DecodeSafe(color, 2.4f);
     color = ClampIntermediatePass(color);
-    color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_PEAK_WHITE_NITS;
+    color *= game_to_peak_scale;
     color = renodx::color::gamma::EncodeSafe(color, 2.4f);
   } else {
     color = renodx::color::srgb::DecodeSafe(color);
     color = ClampIntermediatePass(color);
-    color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_PEAK_WHITE_NITS;
+    color *= game_to_peak_scale;
     color = renodx::color::srgb::EncodeSafe(color);
   }
   return color;
