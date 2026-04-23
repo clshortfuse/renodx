@@ -6,8 +6,8 @@
 #pragma once
 
 #include <atomic>
+#include <charconv>
 #include <cstdint>
-
 #include <mutex>
 #include <span>
 #include <sstream>
@@ -75,10 +75,13 @@ static void CheckShadersOnDisk(const reshade::api::device_api device_api = resha
     if (basename.length() < 2 + 8) continue;
     if (!basename.starts_with("0x")) continue;
     auto hash_string = basename.substr(2, 8);
-    uint32_t shader_hash;
-    try {
-      shader_hash = std::stoul(hash_string, nullptr, 16);
-    } catch (const std::exception& e) {
+    uint32_t shader_hash = 0u;
+    const auto [hash_end, hash_error] = std::from_chars(
+        hash_string.data(),
+        hash_string.data() + hash_string.size(),
+        shader_hash,
+        16);
+    if (hash_error != std::errc{} || hash_end != hash_string.data() + hash_string.size()) {
       std::stringstream s;
       s << "utils::shader::dump(Invalid shader string: ";
       s << hash_string;

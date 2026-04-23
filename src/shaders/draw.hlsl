@@ -41,6 +41,7 @@ struct Config {
   float tone_map_pass_autocorrection;        // 0.f
   float reno_drt_tone_map_method;            // 0.f
   float reno_drt_white_clip;                 // 100.f
+  float reno_drt_scaling_method;             // 0
   float gamma_correction;                    // 0 = srgb/none, 1 = 2.2, 2 = 2.4
   float intermediate_scaling;                // generally game / ui nits
   float intermediate_encoding;               // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
@@ -249,6 +250,11 @@ Config BuildConfig() {
 #define RENODX_RENO_DRT_WHITE_CLIP 100.f
 #endif
   config.reno_drt_white_clip = RENODX_RENO_DRT_WHITE_CLIP;
+
+#if !defined(RENODX_RENO_DRT_SCALING_METHOD)
+#define RENODX_RENO_DRT_SCALING_METHOD 0
+#endif
+  config.reno_drt_scaling_method = RENODX_RENO_DRT_SCALING_METHOD;
 
 #if !defined(RENODX_GAMMA_CORRECTION)
 #define RENODX_GAMMA_CORRECTION renodx::draw::GAMMA_CORRECTION_GAMMA_2_2
@@ -623,6 +629,7 @@ float3 ToneMapPass(float3 color, Config draw_config) {
   tone_map_config.reno_drt_clamp_peak = draw_config.tone_map_clamp_peak;
   tone_map_config.reno_drt_tone_map_method = draw_config.reno_drt_tone_map_method;
   tone_map_config.reno_drt_white_clip = draw_config.reno_drt_white_clip;
+  tone_map_config.reno_drt_scaling_method = draw_config.reno_drt_scaling_method;
 
   tone_map_config.hue_correction_strength = draw_config.tone_map_hue_correction;
 
