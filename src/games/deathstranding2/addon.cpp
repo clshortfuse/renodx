@@ -86,7 +86,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Vanilla Hue Emulation",
         .section = "Tone Mapping",
-        .tooltip = "Adjusts hues to match the original tonemapper's",
+        .tooltip = "Adjusts hues to match the original tonemapper",
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
