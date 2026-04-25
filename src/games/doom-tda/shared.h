@@ -1,6 +1,0 @@
-#ifndef SRC_DOOMTDA_SHARED_H_
-#define SRC_DOOMTDA_SHARED_H_
-
-#define USE_SHADER_TOGGLE 1
-
-#endif  // SRC_DOOMTDA_SHARED_H_

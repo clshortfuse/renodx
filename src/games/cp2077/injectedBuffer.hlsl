@@ -1,6 +1,0 @@
-#ifndef SRC_CP2077_INJECTEDBUFFER_HLSL
-#define SRC_CP2077_INJECTEDBUFFER_HLSL
-
-#include "./cp2077.h"
-
-#endif
