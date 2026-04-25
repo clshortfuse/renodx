@@ -10,11 +10,17 @@ struct ShaderInjectData {
   float graphics_white_nits;
   float sdr_eotf_emulation;
   float sdr_eotf_emulation_ui;
+  float tone_map_hue_emulation;
   float tone_map_white_clip;
+
   float tone_map_exposure;
+  float tone_map_gamma;
   float tone_map_highlights;
   float tone_map_shadows;
   float tone_map_contrast;
+  float tone_map_contrast_shadows;
+  float tone_map_contrast_highlights;
+  float tone_map_adaptation_contrast;
   float tone_map_saturation;
   float tone_map_highlight_saturation;
   float tone_map_dechroma;
@@ -29,17 +35,23 @@ cbuffer cb13 : register(b13, space50) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
-#define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
-#define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
-#define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
-#define RENODX_SDR_EOTF_EMULATION            shader_injection.sdr_eotf_emulation
-#define RENODX_SDR_EOTF_EMULATION_UI         shader_injection.sdr_eotf_emulation_ui
-#define RENODX_TONE_MAP_WHITE_CLIP           shader_injection.tone_map_white_clip
+#define RENODX_TONE_MAP_TYPE          shader_injection.tone_map_type
+#define RENODX_PEAK_WHITE_NITS        shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS     shader_injection.diffuse_white_nits
+#define RENODX_GRAPHICS_WHITE_NITS    shader_injection.graphics_white_nits
+#define RENODX_TONE_MAP_HUE_EMULATION shader_injection.tone_map_hue_emulation
+#define RENODX_SDR_EOTF_EMULATION     shader_injection.sdr_eotf_emulation
+#define RENODX_SDR_EOTF_EMULATION_UI  shader_injection.sdr_eotf_emulation_ui
+#define RENODX_TONE_MAP_WHITE_CLIP    shader_injection.tone_map_white_clip
+
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
+#define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
 #define RENODX_TONE_MAP_CONTRAST             shader_injection.tone_map_contrast
+#define RENODX_TONE_MAP_CONTRAST_SHADOWS     shader_injection.tone_map_contrast_shadows
+#define RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS  shader_injection.tone_map_contrast_highlights
+#define RENODX_TONE_MAP_ADAPTATION_CONTRAST  shader_injection.tone_map_adaptation_contrast
 #define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
