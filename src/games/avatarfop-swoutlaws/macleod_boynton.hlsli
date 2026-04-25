@@ -1,5 +1,5 @@
-#ifndef SRC_GAMES_CRIMSONDESERT_MACLEOD_BOYNTON_HLSLI_
-#define SRC_GAMES_CRIMSONDESERT_MACLEOD_BOYNTON_HLSLI_
+#ifndef SRC_GAMES_AVATARFOP_MACLEOD_BOYNTON_HLSLI_
+#define SRC_GAMES_AVATARFOP_MACLEOD_BOYNTON_HLSLI_
 
 #include "./shared.h"
 
@@ -1303,4 +1303,4 @@ float LuminosityFromAP1LuminanceNormalized(float3 ap1_linear) {
   return LuminosityFromAP1(ap1_linear) / LuminosityFromAP1(1.f);
 }
 
-#endif  // SRC_GAMES_CRIMSONDESERT_MACLEOD_BOYNTON_HLSLI_
+#endif  // SRC_GAMES_AVATARFOP_MACLEOD_BOYNTON_HLSLI_
