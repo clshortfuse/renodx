@@ -44,15 +44,22 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
-        .max = 10000.f,
+        .max = 4000.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .is_logarithmic = true,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapApplyPreToneMapCurve",
+        .binding = &shader_injection.tone_map_apply_pre_tone_map_curve,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Apply Pre Tone Map Curve",
+        .section = "Tone Mapping",
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapACESMidGray",
         .binding = &shader_injection.tone_map_aces_mid_gray,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 1.f,
         .label = "ACES Mid Gray",
         .section = "Tone Mapping",
         .tooltip = "Selects the ACES mid-gray target:\n"
@@ -250,25 +257,25 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeLUTStrength",
-        .binding = &shader_injection.color_grade_lut_strength,
-        .default_value = 100.f,
-        .label = "LUT Strength",
-        .section = "Color Grading",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeLUTScaling",
-        .binding = &shader_injection.color_grade_lut_scaling,
-        .default_value = 100.f,
-        .label = "LUT Scaling",
-        .section = "Color Grading",
-        .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ColorGradeLUTStrength",
+    //     .binding = &shader_injection.color_grade_lut_strength,
+    //     .default_value = 100.f,
+    //     .label = "LUT Strength",
+    //     .section = "Color Grading",
+    //     .max = 100.f,
+    //     .parse = [](float value) { return value * 0.01f; },
+    // },
+    // new renodx::utils::settings::Setting{
+    //     .key = "ColorGradeLUTScaling",
+    //     .binding = &shader_injection.color_grade_lut_scaling,
+    //     .default_value = 0.f,
+    //     .label = "LUT Scaling",
+    //     .section = "Color Grading",
+    //     .tooltip = "Scales the color grade LUT to full range when size is clamped.",
+    //     .max = 100.f,
+    //     .parse = [](float value) { return value * 0.01f; },
+    // },
     new renodx::utils::settings::Setting{
         .key = "FxNoise",
         .binding = &shader_injection.custom_noise,
@@ -280,31 +287,13 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxVanillaGrainStrength",
-        .binding = &shader_injection.vanilla_grain_strength,
-        .default_value = 0.f,
-        .label = "Vanilla Film Grain",
-        .section = "Effects",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
         .binding = &shader_injection.custom_grain_strength,
-        .default_value = 50.f,
-        .label = "Custom Film Grain",
+        .default_value = 25.f,
+        .label = "FilmGrain",
         .section = "Effects",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "FxFilmDamageStrength",
-        .binding = &shader_injection.film_damage_strength,
-        .default_value = 100.f,
-        .label = "Film Damage",
-        .section = "Effects",
-        .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -325,16 +314,13 @@ renodx::utils::settings::Settings settings = {
         .label = "Match SDR",
         .section = "Options",
         .group = "button-line-0",
-        .tooltip = "Matches SDR with sRGB color space selected in the menu on a 2.2 gamma display.",
+        .tooltip = "Matches SDR on a 2.2 gamma display. Matches what the developers likely saw during development, preserving original artistic intent.",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-              {"ToneMapACESMidGray", 1.f},
               {"EOTFEmulation", 1.f},
               {"ToneMapScaling", 1.f},
-              {"ColorGradeLUTScaling", 0.f},
               {"FxNoise", 100.f},
-              {"FxVanillaGrainStrength", 100.f},
               {"FxGrainStrength", 0.f},
           });
         },
@@ -344,17 +330,16 @@ renodx::utils::settings::Settings settings = {
         .label = "Match HDR",
         .section = "Options",
         .group = "button-line-0",
-        .tooltip = "Matches Vanilla HDR with the `Brightness (HDR)` slider set to +4 ticks from the left (neutral setting).",
+        .tooltip = "Matches HDR with the `Brightness (HDR)` slider set to +4 ticks from the left (neutral setting).",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"ToneMapACESMidGray", 2.f},
               {"ToneMapGameNits", 150.f},
               {"EOTFEmulation", 0.f},
+              {"ToneMapApplyPreToneMapCurve", 0.f},
               {"ToneMapScaling", 1.f},
-              {"ColorGradeLUTScaling", 0.f},
               {"FxNoise", 100.f},
-              {"FxVanillaGrainStrength", 100.f},
               {"FxGrainStrength", 0.f},
           });
         },
@@ -366,7 +351,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "t9v7wx9NTD");
         },
     },
     new renodx::utils::settings::Setting{
@@ -427,6 +412,7 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
+      {"ToneMapApplyPreToneMapCurve", 0.f},
       {"ToneMapACESMidGray", 2.f},
       {"ToneMapScaling", 1.f},
       {"EOTFEmulation", 0.f},
@@ -447,9 +433,7 @@ void OnPresetOff() {
       {"ColorGradeLUTStrength", 100.f},
       {"ColorGradeLUTScaling", 0.f},
       {"FxNoise", 100.f},
-      {"FxVanillaGrainStrength", 100.f},
       {"FxGrainStrength", 0.f},
-      {"FxFilmDamageStrength", 100.f},
   });
 }
 
@@ -470,7 +454,7 @@ bool initialized = false;
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Resident Evil Requiem";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for PRAGMATA";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {

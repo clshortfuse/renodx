@@ -1,3 +1,5 @@
+#include "../OCIO.hlsli"
+
 Texture2D<float4> SrcTexture : register(t0);
 
 cbuffer RGCParamCB : register(b0) {
@@ -82,5 +84,10 @@ float4 main(
   SV_Target.y = _108;
   SV_Target.z = _109;
   SV_Target.w = 1.0f;
+
+  // SV_Target.rgb *= 999.f;
+
   return SV_Target;
 }
+
+

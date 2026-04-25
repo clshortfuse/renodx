@@ -14,33 +14,12 @@ struct OutputSignature {
 };
 
 OutputSignature main(
-    noperspective float4 SV_Position: SV_Position,
-    linear float2 TEXCOORD: TEXCOORD) {
+  noperspective float4 SV_Position : SV_Position,
+  linear float2 TEXCOORD : TEXCOORD
+) {
   float4 SV_Target;
   float4 SV_Target_1;
-
-  SV_Target.w = 1.0f;
-  SV_Target_1.w = 1.0f;
-
   float4 _9 = SrcTexture.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
-
-#if SKIP_OCIO_LUT
-  SV_Target.rgb = _9.rgb;
-  SV_Target.rgb = renodx::color::bt709::from::AP1(SV_Target.rgb);
-  SV_Target.rgb = renodx::color::srgb::EncodeSafe(SV_Target.rgb);
-
-  SV_Target_1.rgb = SV_Target.rgb;
-
-  OutputSignature output_sig = { SV_Target, SV_Target_1 };
-  return output_sig;
-#endif
-
-#if 1
-  if (TONE_MAP_TYPE != 0.f) {
-    _9.rgb = ApplyCustomGrading(_9.rgb);
-  }
-#endif
-
   float _27;
   float _42;
   float _57;
@@ -72,17 +51,20 @@ OutputSignature main(
     _57 = -0.35844698548316956f;
   }
   float4 _66 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_27 * 0.984375f) + 0.0078125f), ((_42 * 0.984375f) + 0.0078125f), ((_57 * 0.984375f) + 0.0078125f)), 0.0f);
-
-#if 1
-  _66.rgb = ApplyPostToneMapProcessingGammaInput(_66.rgb, TEXCOORD, _9.rgb, SrcLUT, TrilinearClamp);
-#endif
-
   SV_Target.x = _66.x;
   SV_Target.y = _66.y;
   SV_Target.z = _66.z;
+  SV_Target.w = 1.0f;
   SV_Target_1.x = _66.x;
   SV_Target_1.y = _66.y;
   SV_Target_1.z = _66.z;
+  SV_Target_1.w = 1.0f;
+
+  // SV_Target.rgb *= 999.f;
+  // SV_Target_1.rgb *= 999.f;
+
   OutputSignature output_signature = { SV_Target, SV_Target_1 };
   return output_signature;
 }
+
+

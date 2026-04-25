@@ -1,28 +1,10 @@
-#ifndef RE9REQUIEM_COMMON_HLSLI
-#define RE9REQUIEM_COMMON_HLSLI
+#ifndef PRAGMATA_COMMON_HLSLI
+#define PRAGMATA_COMMON_HLSLI
 
 #include "./psycho_test17_custom.hlsli"
 #include "./shared.h"
 
-float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
-  const float3 added_gamma = black_gamma;
-
-  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
-
-  // Remove from 0 to mid-gray
-  const float shadow_length = mid_gray_average;
-  const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
-  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
-
-  const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
-  return unclamped_gamma;
-}
-
-float3 ApplyCustomGradingAP1(float3 ungraded) {
-  float3 graded = ungraded;
-
-  float3 ungraded_bt2020 = renodx::color::bt2020::from::AP1(ungraded);
-
+renodx_custom::tonemap::psycho::config17::Config CreatePsycho17Config() {
   renodx_custom::tonemap::psycho::config17::Config psycho17_config =
       renodx_custom::tonemap::psycho::config17::Create();
   psycho17_config.peak_value = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
@@ -44,19 +26,17 @@ float3 ApplyCustomGradingAP1(float3 ungraded) {
   psycho17_config.pre_gamut_compress = false;
   psycho17_config.post_gamut_compress = true;
   psycho17_config.apply_tonemap = false;
-
-  float3 graded_bt2020 = renodx_custom::tonemap::psycho::ApplyTest17BT2020(ungraded_bt2020, ungraded_bt2020, psycho17_config);
-
-  graded = renodx::color::ap1::from::BT2020(graded_bt2020);
-
-  return graded;
+  return psycho17_config;
 }
 
 // User grading -> ACES -> 2.2 EOTF emulation -> apply per channel purity onto luminance curve -> grain -> diffuse white scale + PQ encode
 float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, float cbuffer_diffuse_white_nits, float2 uv) {
-  untonemapped_ap1 = ApplyCustomGradingAP1(untonemapped_ap1);
-
   untonemapped_ap1 = renodx::tonemap::aces::RRT(mul(renodx::color::AP1_TO_AP0_MAT, untonemapped_ap1));
+
+  float untonemapped_lum = renodx::color::yf::from::AP1(untonemapped_ap1);
+  renodx_custom::tonemap::psycho::config17::Config psycho17_config = CreatePsycho17Config();
+  untonemapped_ap1 = renodx::color::ap1::from::BT2020(
+      renodx_custom::tonemap::psycho::ApplyPreToneMapCurvesBT2020(renodx::color::bt2020::from::AP1(untonemapped_ap1), psycho17_config));
 
   float3 tonemapped_bt2020;
 
@@ -91,7 +71,7 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
     aces_max = renodx::color::correct::Gamma(aces_max, true);
     aces_min = renodx::color::correct::Gamma(aces_min, true);
   } else if (RENODX_GAMMA_CORRECTION == 2.f) {
-    aces_min /= 3.f;
+    aces_min /= 10.f;
   }
 
   renodx::tonemap::aces::ODTConfig ODT_config = renodx::tonemap::aces::CreateODTConfig(aces_min * ACES_DIFFUSE, aces_max * ACES_DIFFUSE, ACES_MID, true, EXP_SHIFT_REFERENCE_MAX, EXP_SHIFT_REFERENCE_MIN);
@@ -119,6 +99,8 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
         tonemapped_bt2020, tonemapped_lum_bt2020, 1.f, hue_amount);
   }
 
+  tonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyPostToneMapCurvesBT2020(tonemapped_bt2020, untonemapped_lum, psycho17_config);
+
   if (CUSTOM_GRAIN_STRENGTH > 0.f) {
     tonemapped_bt2020 = renodx::effects::ApplyFilmGrain(
         tonemapped_bt2020, uv, CUSTOM_RANDOM, CUSTOM_GRAIN_STRENGTH * 0.06f,
@@ -128,4 +110,4 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
   return renodx::color::pq::EncodeSafe(tonemapped_bt2020, RENODX_DIFFUSE_WHITE_NITS);
 }
 
-#endif  // RE9REQUIEM_COMMON_HLSLI
+#endif  // PRAGMATA_COMMON_HLSLI

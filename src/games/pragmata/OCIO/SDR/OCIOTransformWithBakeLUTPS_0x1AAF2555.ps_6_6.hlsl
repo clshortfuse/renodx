@@ -1,4 +1,5 @@
-#include "../OCIO.hlsli"
+#include "../../common.hlsli"
+#include "../../RRT.hlsli"
 
 Texture2D<float4> SrcTexture : register(t0);
 
@@ -13,18 +14,15 @@ float4 main(
     linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
   float4 SV_Target;
+  SV_Target.w = 1.0f;
   float4 _9 = SrcTexture.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
 
-#if SKIP_OCIO_LUT
-  SV_Target.rgb = _9.rgb;
-  SV_Target.rgb = renodx::color::bt709::from::AP1(SV_Target.rgb);
-  SV_Target.rgb = renodx::color::srgb::EncodeSafe(SV_Target.rgb);
-  return SV_Target;
-#endif
-
-#if 1
+#if 0
   if (TONE_MAP_TYPE != 0.f) {
-    _9.rgb = ApplyCustomGrading(_9.rgb);
+    SV_Target.rgb = renodx_custom::aces::odt_srgb_100nits_dim::Apply(
+        renodx_custom::aces::rrt::ApplyToODTInputFromAP1(_9.rgb));
+
+    return SV_Target;
   }
 #endif
 
@@ -59,14 +57,8 @@ float4 main(
     _57 = -0.35844698548316956f;
   }
   float4 _66 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_27 * 0.984375f) + 0.0078125f), ((_42 * 0.984375f) + 0.0078125f), ((_57 * 0.984375f) + 0.0078125f)), 0.0f);
-
-#if 1
-  _66.rgb = ApplyPostToneMapProcessingGammaInput(_66.rgb, TEXCOORD, _9.rgb, SrcLUT, TrilinearClamp);
-#endif
-
   SV_Target.x = _66.x;
   SV_Target.y = _66.y;
   SV_Target.z = _66.z;
-  SV_Target.w = 1.0f;
   return SV_Target;
 }

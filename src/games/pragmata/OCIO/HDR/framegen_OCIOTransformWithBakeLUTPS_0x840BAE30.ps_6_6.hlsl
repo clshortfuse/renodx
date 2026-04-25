@@ -16,36 +16,32 @@ Texture3D<float4> SrcLUT : register(t1);
 //   float4 secondaryStandardMaxNitsRect : packoffset(c004.x);
 //   float2 displayMaxNitsRectSize : packoffset(c005.x);
 //   float2 standardMaxNitsRectSize : packoffset(c005.z);
-//   float4 standardMinNitsRect : packoffset(c006.x);
-//   float4 secondaryStandardMinNitsRect : packoffset(c007.x);
-//   float4 displayMinNitsRect : packoffset(c008.x);
-//   float4 secondaryDisplayMinNitsRect : packoffset(c009.x);
-//   float4 mdrOutRangeRect : packoffset(c010.x);
-//   uint drawMode : packoffset(c011.x);
-//   float gammaForHDR : packoffset(c011.y);
-//   float displayMaxNitsST2084 : packoffset(c011.z);
-//   float displayMinNitsST2084 : packoffset(c011.w);
-//   uint drawModeOnMDRPass : packoffset(c012.x);
-//   float saturationForHDR : packoffset(c012.y);
-//   float2 targetInvSize : packoffset(c012.z);
-//   float toeEnd : packoffset(c013.x);
-//   float toeStrength : packoffset(c013.y);
-//   float blackPoint : packoffset(c013.z);
-//   float shoulderStartPoint : packoffset(c013.w);
-//   float shoulderStrength : packoffset(c014.x);
-//   float whitePaperNitsForOverlay : packoffset(c014.y);
-//   float saturationOnDisplayMapping : packoffset(c014.z);
-//   float graphScale : packoffset(c014.w);
-//   float4 hdrImageRect : packoffset(c015.x);
-//   float2 hdrImageRectSize : packoffset(c016.x);
-//   float secondaryDisplayMaxNits : packoffset(c016.z);
-//   float secondaryDisplayMinNits : packoffset(c016.w);
-//   float2 secondaryDisplayMaxNitsRectSize : packoffset(c017.x);
-//   float2 secondaryStandardMaxNitsRectSize : packoffset(c017.z);
-//   float shoulderAngle : packoffset(c018.x);
-//   uint enableHDRAdjustmentForOverlay : packoffset(c018.y);
-//   float brightnessAdjustmentForOverlay : packoffset(c018.z);
-//   float saturateAdjustmentForOverlay : packoffset(c018.w);
+//   float4 mdrOutRangeRect : packoffset(c006.x);
+//   uint drawMode : packoffset(c007.x);
+//   float gammaForHDR : packoffset(c007.y);
+//   float displayMaxNitsST2084 : packoffset(c007.z);
+//   float displayMinNitsST2084 : packoffset(c007.w);
+//   uint drawModeOnMDRPass : packoffset(c008.x);
+//   float saturationForHDR : packoffset(c008.y);
+//   float2 targetInvSize : packoffset(c008.z);
+//   float toeEnd : packoffset(c009.x);
+//   float toeStrength : packoffset(c009.y);
+//   float blackPoint : packoffset(c009.z);
+//   float shoulderStartPoint : packoffset(c009.w);
+//   float shoulderStrength : packoffset(c010.x);
+//   float whitePaperNitsForOverlay : packoffset(c010.y);
+//   float saturationOnDisplayMapping : packoffset(c010.z);
+//   float graphScale : packoffset(c010.w);
+//   float4 hdrImageRect : packoffset(c011.x);
+//   float2 hdrImageRectSize : packoffset(c012.x);
+//   float secondaryDisplayMaxNits : packoffset(c012.z);
+//   float secondaryDisplayMinNits : packoffset(c012.w);
+//   float2 secondaryDisplayMaxNitsRectSize : packoffset(c013.x);
+//   float2 secondaryStandardMaxNitsRectSize : packoffset(c013.z);
+//   float shoulderAngle : packoffset(c014.x);
+//   uint enableHDRAdjustmentForOverlay : packoffset(c014.y);
+//   float brightnessAdjustmentForOverlay : packoffset(c014.z);
+//   float saturateAdjustmentForOverlay : packoffset(c014.w);
 // };
 
 SamplerState PointBorder : register(s2, space32);
@@ -101,23 +97,44 @@ OutputSignature main(
   }
 
   float _17 = whitePaperNits * 0.01f;
+
   float _18 = _17 * _11.x;
   float _19 = _17 * _11.y;
   float _20 = _17 * _11.z;
   float _35;
   float _50;
   float _65;
-
-  _35 = renodx::color::acescc::Encode(_18);
-  _50 = renodx::color::acescc::Encode(_19);
-  _65 = renodx::color::acescc::Encode(_20);
-
-  float3 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f).rgb;
-
+  if (!(_18 <= 0.0f)) {
+    if (_18 < 3.0517578125e-05f) {
+      _35 = ((log2((_18 * 0.5f) + 1.52587890625e-05f) * 0.05707760155200958f) + 0.5547950267791748f);
+    } else {
+      _35 = ((log2(_18) * 0.05707760155200958f) + 0.5547950267791748f);
+    }
+  } else {
+    _35 = -0.35844698548316956f;
+  }
+  if (!(_19 <= 0.0f)) {
+    if (_19 < 3.0517578125e-05f) {
+      _50 = ((log2((_19 * 0.5f) + 1.52587890625e-05f) * 0.05707760155200958f) + 0.5547950267791748f);
+    } else {
+      _50 = ((log2(_19) * 0.05707760155200958f) + 0.5547950267791748f);
+    }
+  } else {
+    _50 = -0.35844698548316956f;
+  }
+  if (!(_20 <= 0.0f)) {
+    if (_20 < 3.0517578125e-05f) {
+      _65 = ((log2((_20 * 0.5f) + 1.52587890625e-05f) * 0.05707760155200958f) + 0.5547950267791748f);
+    } else {
+      _65 = ((log2(_20) * 0.05707760155200958f) + 0.5547950267791748f);
+    }
+  } else {
+    _65 = -0.35844698548316956f;
+  }
+  float4 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f);
   SV_Target.x = _74.x;
   SV_Target.y = _74.y;
   SV_Target.z = _74.z;
-
   SV_Target_1.x = _74.x;
   SV_Target_1.y = _74.y;
   SV_Target_1.z = _74.z;
@@ -126,3 +143,4 @@ OutputSignature main(
   output_signature.SV_Target_1 = SV_Target_1;
   return output_signature;
 }
+

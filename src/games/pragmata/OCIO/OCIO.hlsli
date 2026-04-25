@@ -1,46 +1,9 @@
-Texture2D<float4> OCIO_lut1d_0 : register(t0);
+#include "../common.hlsli"
 
-Texture3D<float4> OCIO_lut3d_1 : register(t1);
-
-RWTexture3D<float4> OutLUT : register(u0);
-
-cbuffer OutputColorAdjustment : register(b0) {
-  float fGamma : packoffset(c000.x);
-  float fLowerLimit : packoffset(c000.y);
-  float fUpperLimit : packoffset(c000.z);
-  float fConvertToLimit : packoffset(c000.w);
-  float4 fConfigDrawRect : packoffset(c001.x);
-  float4 fSecondaryConfigDrawRect : packoffset(c002.x);
-  float2 fConfigDrawRectSize : packoffset(c003.x);
-  float2 fSecondaryConfigDrawRectSize : packoffset(c003.z);
-  uint uConfigMode : packoffset(c004.x);
-  float fConfigImageIntensity : packoffset(c004.y);
-  float fSecondaryConfigImageIntensity : packoffset(c004.z);
-  float fConfigImageAlphaScale : packoffset(c004.w);
-  float fGammaForOverlay : packoffset(c005.x);
-  float fLowerLimitForOverlay : packoffset(c005.y);
-  float fConvertToLimitForOverlay : packoffset(c005.z);
-};
-
-SamplerState BilinearClamp : register(s5, space32);
-
-SamplerState TrilinearClamp : register(s9, space32);
-
-[numthreads(8, 8, 8)]
-void main(
-    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
-    uint3 SV_GroupID: SV_GroupID,
-    uint3 SV_GroupThreadID: SV_GroupThreadID,
-    uint SV_GroupIndex: SV_GroupIndex) {
-  float _11 = float((uint)SV_DispatchThreadID.x);
-  float _12 = float((uint)SV_DispatchThreadID.y);
-  float _13 = float((uint)SV_DispatchThreadID.z);
-  float _14 = _11 * 0.01587301678955555f;
-  float _15 = _12 * 0.01587301678955555f;
-  float _16 = _13 * 0.01587301678955555f;
-  float _30;
-  float _44;
-  float _58;
+float3 SampleOCIO(
+    float3 _61, float _64, float _67,
+    Texture2D<float4> OCIO_lut1d_0, SamplerState BilinearClamp,
+    Texture3D<float4> OCIO_lut3d_1, SamplerState TrilinearClamp) {
   float _81;
   float _110;
   float _137;
@@ -49,36 +12,8 @@ void main(
   float _311;
   float _312;
   float _313;
-  if (!(!(_14 <= -0.3013699948787689f))) {
-    _30 = (exp2((_11 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
-  } else {
-    if (_14 < 1.468000054359436f) {
-      _30 = exp2((_11 * 0.2780952751636505f) + -9.720000267028809f);
-    } else {
-      _30 = 65504.0f;
-    }
-  }
-  if (!(!(_15 <= -0.3013699948787689f))) {
-    _44 = (exp2((_12 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
-  } else {
-    if (_15 < 1.468000054359436f) {
-      _44 = exp2((_12 * 0.2780952751636505f) + -9.720000267028809f);
-    } else {
-      _44 = 65504.0f;
-    }
-  }
-  if (!(!(_16 <= -0.3013699948787689f))) {
-    _58 = (exp2((_13 * 0.2780952751636505f) + -8.720000267028809f) + -3.0517578125e-05f);
-  } else {
-    if (_16 < 1.468000054359436f) {
-      _58 = exp2((_13 * 0.2780952751636505f) + -9.720000267028809f);
-    } else {
-      _58 = 65504.0f;
-    }
-  }
-  float _61 = mad(_58, 0.1638689935207367f, mad(_44, 0.1406790018081665f, (_30 * 0.6954519748687744f)));
-  float _64 = mad(_58, 0.0955343022942543f, mad(_44, 0.8596709966659546f, (_30 * 0.04479460045695305f)));
-  float _67 = mad(_58, 1.0015000104904175f, mad(_44, 0.004025210160762072f, (_30 * -0.00552588002756238f)));
+
+  // lut sample START
   float _68 = abs(_61);
   if (_68 > 6.103515625e-05f) {
     float _71 = min(_68, 65504.0f);
@@ -91,6 +26,7 @@ void main(
   float _84 = _81 + select((_61 < 0.0f), 32768.0f, 0.0f);
   float _86 = floor(_84 * 0.00024420025874860585f);
   float4 _95 = OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_84 + 0.5f) - (_86 * 4095.0f)) * 0.000244140625f), ((_86 + 0.5f) * 0.05882352963089943f)), 0.0f);
+
   float _97 = abs(_64);
   if (_97 > 6.103515625e-05f) {
     float _100 = min(_97, 65504.0f);
@@ -103,6 +39,7 @@ void main(
   float _113 = _110 + select((_64 < 0.0f), 32768.0f, 0.0f);
   float _115 = floor(_113 * 0.00024420025874860585f);
   float4 _122 = OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_113 + 0.5f) - (_115 * 4095.0f)) * 0.000244140625f), ((_115 + 0.5f) * 0.05882352963089943f)), 0.0f);
+
   float _124 = abs(_67);
   if (_124 > 6.103515625e-05f) {
     float _127 = min(_124, 65504.0f);
@@ -115,6 +52,7 @@ void main(
   float _140 = _137 + select((_67 < 0.0f), 32768.0f, 0.0f);
   float _142 = floor(_140 * 0.00024420025874860585f);
   float4 _149 = OCIO_lut1d_0.SampleLevel(BilinearClamp, float2((((_140 + 0.5f) - (_142 * 4095.0f)) * 0.000244140625f), ((_142 + 0.5f) * 0.05882352963089943f)), 0.0f);
+
   float _151 = _95.x * 64.0f;
   float _152 = _122.x * 64.0f;
   float _153 = _149.x * 64.0f;
@@ -124,6 +62,7 @@ void main(
   float _157 = _151 - _154;
   float _158 = _152 - _155;
   float _159 = _153 - _156;
+
   float _163 = (_156 + 0.5f) * 0.015384615398943424f;
   float _164 = (_155 + 0.5f) * 0.015384615398943424f;
   float _165 = (_154 + 0.5f) * 0.015384615398943424f;
@@ -132,6 +71,7 @@ void main(
   float _173 = _164 + 0.015384615398943424f;
   float _174 = _165 + 0.015384615398943424f;
   float4 _175 = OCIO_lut3d_1.SampleLevel(TrilinearClamp, float3(_172, _173, _174), 0.0f);
+
   if (!(!(_157 >= _158))) {
     if (!(!(_158 >= _159))) {
       float4 _183 = OCIO_lut3d_1.SampleLevel(TrilinearClamp, float3(_163, _164, _174), 0.0f);
@@ -201,9 +141,12 @@ void main(
       }
     }
   }
-  float _314 = 1.0f - _312;
 
-  OutLUT[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = float4(((exp2(log2(((_314 * _168.x) + _309) + (_313 * _175.x)) * fGamma) * fConvertToLimit) + fLowerLimit),
-                                                                                                                     ((exp2(log2(((_314 * _168.y) + _310) + (_313 * _175.y)) * fGamma) * fConvertToLimit) + fLowerLimit),
-                                                                                                                     ((exp2(log2(((_314 * _168.z) + _311) + (_313 * _175.z)) * fGamma) * fConvertToLimit) + fLowerLimit), 1.0f);
+  float _314 = 1.0f - _312;
+  float3 lut_output = float3((((_314 * _168.x) + _309) + (_313 * _175.x)),
+                             (((_314 * _168.y) + _310) + (_313 * _175.y)),
+                             (((_314 * _168.z) + _311) + (_313 * _175.z)));
+  // lut sample END
+
+  return lut_output;
 }

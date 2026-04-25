@@ -190,6 +190,100 @@ struct ODTConfig {
   float coefs_high[6];
 };
 
+float InvSSTS(float y, ODTConfig config) {
+  static const int N_KNOTS_LOW = 4;
+  static const int N_KNOTS_HIGH = 4;
+
+  float min_x = config.y_min.x;
+  float mid_x = config.y_mid.x;
+  float max_x = config.y_max.x;
+
+  float knot_inc_low = (mid_x - min_x) / (N_KNOTS_LOW - 1.f);
+  float knot_inc_high = (max_x - mid_x) / (N_KNOTS_HIGH - 1.f);
+
+  float knot_y_low[N_KNOTS_LOW];
+  float knot_y_high[N_KNOTS_HIGH];
+
+  [unroll]
+  for (int i = 0; i < N_KNOTS_LOW; ++i) {
+    knot_y_low[i] = 0.5f * (config.coefs_low[i] + config.coefs_low[i + 1]);
+  }
+
+  [unroll]
+  for (int i = 0; i < N_KNOTS_HIGH; ++i) {
+    knot_y_high[i] = 0.5f * (config.coefs_high[i] + config.coefs_high[i + 1]);
+  }
+
+  // Check for negatives or zero before taking the log. If negative or zero,
+  // set to HALF_MIN.
+  float log_y = log10(max(y, renodx::math::FLT_MIN));
+  float log_x;
+
+  if (log_y >= config.y_max.y) {
+    // Above max breakpoint (overshoot)
+    // Inverse of flat max extension.
+    log_x = max_x;
+  } else if (log_y > config.y_mid.y) {
+    // Part of upper spline segment.
+    uint j = 0u;
+    float3 cf = float3(config.coefs_high[0], config.coefs_high[1], config.coefs_high[2]);
+
+    if (log_y > knot_y_high[1] && log_y <= knot_y_high[2]) {
+      cf = float3(config.coefs_high[1], config.coefs_high[2], config.coefs_high[3]);
+      j = 1u;
+    } else if (log_y > knot_y_high[2]) {
+      cf = float3(config.coefs_high[2], config.coefs_high[3], config.coefs_high[4]);
+      j = 2u;
+    }
+
+    float3 quad = mul(M, cf);
+    float a = quad.x;
+    float b = quad.y;
+    float c = quad.z - log_y;
+
+    float d = sqrt(max(b * b - 4.f * a * c, 0.f));
+    float denom = -d - b;
+    if (abs(denom) < 1e-10f) {
+      denom = (denom >= 0.f) ? 1e-10f : -1e-10f;
+    }
+    float t = (2.f * c) / denom;
+
+    log_x = mid_x + (t + (float)j) * knot_inc_high;
+  } else if (log_y > config.y_min.y) {
+    // Part of lower spline segment.
+    uint j = 0u;
+    float3 cf = float3(config.coefs_low[0], config.coefs_low[1], config.coefs_low[2]);
+
+    if (log_y > knot_y_low[1] && log_y <= knot_y_low[2]) {
+      cf = float3(config.coefs_low[1], config.coefs_low[2], config.coefs_low[3]);
+      j = 1u;
+    } else if (log_y > knot_y_low[2]) {
+      cf = float3(config.coefs_low[2], config.coefs_low[3], config.coefs_low[4]);
+      j = 2u;
+    }
+
+    float3 quad = mul(M, cf);
+    float a = quad.x;
+    float b = quad.y;
+    float c = quad.z - log_y;
+
+    float d = sqrt(max(b * b - 4.f * a * c, 0.f));
+    float denom = -d - b;
+    if (abs(denom) < 1e-10f) {
+      denom = (denom >= 0.f) ? 1e-10f : -1e-10f;
+    }
+    float t = (2.f * c) / denom;
+
+    log_x = min_x + (t + (float)j) * knot_inc_low;
+  } else {  //(log_y <= (C.Min.y))
+    // Below min breakpoint (undershoot)
+    // Inverse of flat min extension.
+    log_x = min_x;
+  }
+
+  return pow(10.0, log_x);
+}
+
 ODTConfig CreateODTConfig(float min_y, float max_y) {
   ODTConfig config;
 
@@ -264,6 +358,37 @@ ODTConfig CreateODTConfig(float min_y, float max_y) {
   config.y_min = float3(log_min.x, log_min.y, 0);
   config.y_mid = float3(LOG_MID.x, LOG_MID.y, MID_PT.z);
   config.y_max = float3(log_max.x, log_max.y, 0);
+
+  return config;
+}
+
+ODTConfig CreateODTConfig(
+    float min_y,
+    float max_y,
+    float mid_y,
+    bool stable_peak_exp_shift = false,
+    float exp_shift_max_reference = 1000.f,
+    float exp_shift_min_reference = 0.0001f) {
+  ODTConfig config = CreateODTConfig(min_y, max_y);
+
+  if (mid_y != 4.8f) {
+    ODTConfig exp_shift_config;
+
+    // derive exp-shift from a fixed reference curve so peak changes are stable
+    const bool use_stable_reference =
+        stable_peak_exp_shift && (exp_shift_max_reference != max_y || exp_shift_min_reference != min_y);
+    if (use_stable_reference) {
+      exp_shift_config = CreateODTConfig(exp_shift_min_reference, exp_shift_max_reference);
+    } else {
+      exp_shift_config = config;
+    }
+    float exp_shift = log2(InvSSTS(mid_y, exp_shift_config)) - log2(0.18f);
+    float shift_log10 = exp_shift * log10(2.f);
+
+    config.y_min.x -= shift_log10;
+    config.y_mid.x -= shift_log10;
+    config.y_max.x -= shift_log10;
+  }
 
   return config;
 }
