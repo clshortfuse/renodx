@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "dai",
-  "title": "Dragon Age: Inquisition"
+  "title": "Dragon Age: Inquisition",
+  "maintainers": [
+    "Voosh"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/dragonageinquisition/mods/4286",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 1222690
+  }
 }

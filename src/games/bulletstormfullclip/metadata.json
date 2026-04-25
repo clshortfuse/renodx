@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "bulletstormfullclip",
-  "title": "Bulletstorm: Full Clip Edition"
+  "title": "Bulletstorm: Full Clip Edition",
+  "maintainers": [
+    "Voosh"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 501590
+  }
 }

@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "ngsigma2",
-  "title": "Ninja Gaiden Sigma 2"
+  "title": "Ninja Gaiden Sigma 2",
+  "maintainers": [
+    "Akuru"
+  ],
+  "status": "beta",
+  "deploy": {
+    "steam_appid": 1580790
+  }
 }

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "asscreed1",
+  "title": "Assassin's Creed: Director's Cut Edition (DX10)",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 15100,
+    "architecture": [
+      "x86"
+    ]
+  }
+}

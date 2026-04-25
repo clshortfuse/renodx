@@ -1,5 +1,19 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "reveil",
-  "title": "REVEIL/Shift 87"
+  "title": "REVEIL/Shift 87",
+  "games": [
+    {
+      "title": "REVEIL",
+      "deploy": {
+        "steam_appid": 809060
+      }
+    },
+    {
+      "title": "Shift 87",
+      "deploy": {
+        "steam_appid": 2981650
+      }
+    }
+  ]
 }

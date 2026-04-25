@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "kingdomcome2",
-  "title": "Kingdom Come Deliverance 2"
+  "title": "Kingdom Come Deliverance 2",
+  "maintainers": [
+    "Ritsu"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/kingdomcomedeliverance2/mods/354?",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 1771300
+  }
 }

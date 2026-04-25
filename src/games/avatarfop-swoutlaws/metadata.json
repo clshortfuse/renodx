@@ -1,0 +1,25 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "avatarfop-swoutlaws",
+  "title": "Avatar: Frontiers of Pandora & Star Wars Outlaws",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "stable",
+  "games": [
+    {
+      "id": "avatar-frontiers-of-pandora",
+      "title": "Avatar: Frontiers of Pandora",
+      "deploy": {
+        "steam_appid": 2840770
+      }
+    },
+    {
+      "id": "star-wars-outlaws",
+      "title": "Star Wars Outlaws",
+      "deploy": {
+        "steam_appid": 2842040
+      }
+    }
+  ]
+}

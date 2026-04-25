@@ -1,5 +1,19 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "oblivionremastered",
-  "title": "Oblivion Remastered"
+  "title": "The Elder Scrolls IV: Oblivion Remastered",
+  "maintainers": [
+    "ShortFuse"
+  ],
+  "status": "beta",
+  "urls": [
+    {
+      "url": "https://github.com/clshortfuse/renodx/discussions/197",
+      "kind": "discussion"
+    }
+  ],
+  "header": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2623190/a7cee9165bb1bfc092c390c5cff215ce0e381dfc/header.jpg",
+  "deploy": {
+    "steam_appid": 2623190
+  }
 }

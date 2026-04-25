@@ -1,0 +1,34 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "borderlands2",
+  "title": "Borderlands 2 & The Pre-Sequel",
+  "maintainers": [
+    "Steve161803"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/borderlands2/mods/585",
+      "kind": "nexus_mods"
+    }
+  ],
+  "games": [
+    {
+      "title": "Borderlands 2",
+      "deploy": {
+        "steam_appid": 49520
+      }
+    },
+    {
+      "title": "Borderlands: The Pre-Sequel",
+      "deploy": {
+        "steam_appid": 261640
+      }
+    }
+  ],
+  "deploy": {
+    "architecture": [
+      "x86"
+    ]
+  }
+}

@@ -1,5 +1,21 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "rememberme",
-  "title": "Remember Me"
+  "title": "Remember Me",
+  "maintainers": [
+    "Steve161803"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/rememberme/mods/43",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 228300,
+    "architecture": [
+      "x86"
+    ]
+  }
 }

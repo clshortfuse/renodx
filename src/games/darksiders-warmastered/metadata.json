@@ -1,5 +1,21 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "darksiders-warmastered",
-  "title": "Darksiders Warmastered"
+  "title": "Darksiders Warmastered",
+  "maintainers": [
+    "OopyDoopy (Jon)"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/darksiderswarmasterededition/mods/22",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 462780,
+    "architecture": [
+      "x86"
+    ]
+  }
 }

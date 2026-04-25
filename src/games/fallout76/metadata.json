@@ -1,5 +1,19 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "fallout76",
-  "title": "Fallout 76"
+  "title": "Fallout 76",
+  "maintainers": [
+    "Musa",
+    "ShortFuse"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/fallout76/mods/2559/",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 1151340
+  }
 }

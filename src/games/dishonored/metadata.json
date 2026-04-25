@@ -1,5 +1,16 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "dishonored",
-  "title": "Dishonored"
+  "title": "Dishonored",
+  "maintainers": [
+    "OopyDoopy (Jon)"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 205100,
+    "architecture": [
+      "x86",
+      "x64"
+    ]
+  }
 }

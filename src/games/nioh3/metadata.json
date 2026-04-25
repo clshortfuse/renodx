@@ -1,5 +1,13 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "nioh3",
-  "title": "Nioh 3"
+  "title": "Nioh 3",
+  "maintainers": [
+    "Ritsu"
+  ],
+  "status": "stable",
+  "header": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3681010/a21264e9fd476dcb2901c2432b598107d024c5a8/header.jpg",
+  "deploy": {
+    "steam_appid": 3681010
+  }
 }

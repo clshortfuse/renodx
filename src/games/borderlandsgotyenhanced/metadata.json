@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "borderlandsgotyenhanced",
-  "title": "Borderlands GOTY Enhanced"
+  "title": "Borderlands GOTY Enhanced",
+  "maintainers": [
+    "Steve161803"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/borderlandsgotyenhanced/mods/37",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 729040
+  }
 }

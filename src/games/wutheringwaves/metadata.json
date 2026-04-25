@@ -1,5 +1,19 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "wutheringwaves",
-  "title": "Wuthering Waves"
+  "title": "Wuthering Waves",
+  "maintainers": [
+    "Wuwano"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://discord.com/invite/renodx",
+      "kind": "discord"
+    }
+  ],
+  "header": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3513350/def229d7f1bf39fab1ccf752b49654017e13ef53/header.jpg",
+  "deploy": {
+    "steam_appid": 3513350
+  }
 }

@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "thewitness",
-  "title": "The Witness"
+  "title": "The Witness",
+  "maintainers": [
+    "ShortFuse"
+  ],
+  "status": "beta",
+  "deploy": {
+    "steam_appid": 210970
+  }
 }

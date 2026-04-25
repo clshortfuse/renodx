@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "opus-eos",
-  "title": "OPUS: Echo of Starsong - Full Bloom Edition"
+  "title": "OPUS: Echo of Starsong - Full Bloom Edition",
+  "maintainers": [
+    "Talos"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/opusechoofstarsongfullbloomedition/mods/1",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 1504500
+  }
 }

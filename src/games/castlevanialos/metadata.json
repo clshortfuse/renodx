@@ -1,5 +1,35 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "castlevanialos",
-  "title": "Castlevania Lords of Shadow 1 & 2"
+  "title": "Castlevania Lords of Shadow 1 & 2",
+  "maintainers": [
+    "OopyDoopy",
+    "Voosh"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://github.com/clshortfuse/renodx/discussions/211",
+      "kind": "discussion"
+    }
+  ],
+  "games": [
+    {
+      "title": "Castlevania: Lords of Shadow",
+      "deploy": {
+        "steam_appid": 234080
+      }
+    },
+    {
+      "title": "Castlevania: Lords of Shadow 2",
+      "deploy": {
+        "steam_appid": 239250
+      }
+    }
+  ],
+  "deploy": {
+    "architecture": [
+      "x86"
+    ]
+  }
 }

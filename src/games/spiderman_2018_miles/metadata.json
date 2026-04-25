@@ -1,5 +1,37 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "spiderman_2018_miles",
-  "title": "Spider-Man: Remastered and Spider-Man: Miles Morales"
+  "title": "Spider-Man: Remastered and Spider-Man: Miles Morales",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "stable",
+  "games": [
+    {
+      "title": "Marvel's Spider-Man Remastered",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 1817070
+      },
+      "urls": [
+        {
+          "url": "https://www.nexusmods.com/marvelsspidermanremastered/mods/5568",
+          "kind": "nexus_mods"
+        }
+      ]
+    },
+    {
+      "title": "Marvel's Spider-Man Miles Morales",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 1817190
+      },
+      "urls": [
+        {
+          "url": "https://www.nexusmods.com/spidermanmilesmorales/mods/782",
+          "kind": "nexus_mods"
+        }
+      ]
+    }
+  ]
 }

@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "thewitcher3",
-  "title": "The Witcher 3: Wild Hunt"
+  "title": "The Witcher 3: Wild Hunt",
+  "maintainers": [
+    "OopyDoopy (Jon)"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/witcher3/mods/10900",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 292030
+  }
 }

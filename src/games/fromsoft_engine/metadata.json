@@ -1,5 +1,40 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "fromsoft_engine",
-  "title": "Fromsoft Engine"
+  "title": "FromSoftware Engine",
+  "maintainers": [
+    "Ritsu"
+  ],
+  "support": "engine",
+  "status": "stable",
+  "games": [
+    {
+      "title": "Armored Core VI: Fires of Rubicon",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 1888160
+      }
+    },
+    {
+      "title": "Elden Ring",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 1245620
+      }
+    },
+    {
+      "title": "Elden Ring: Nightreign",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 2622380
+      }
+    },
+    {
+      "title": "Sekiro: Shadows Die Twice",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 814380
+      }
+    }
+  ]
 }

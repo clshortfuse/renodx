@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "risetombraider",
-  "title": "Rise of the Tomb Raider"
+  "title": "Rise of the Tomb Raider",
+  "maintainers": [
+    "ShortFuse"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 391220
+  }
 }

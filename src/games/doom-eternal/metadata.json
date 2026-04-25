@@ -1,5 +1,14 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "doom-eternal",
-  "title": "DOOM Eternal"
+  "title": "DOOM Eternal",
+  "maintainers": [
+    "Ritsu"
+  ],
+  "notes": [
+    "Requires ReShade Vulkan; broken since the launcher update"
+  ],
+  "deploy": {
+    "steam_appid": 782330
+  }
 }

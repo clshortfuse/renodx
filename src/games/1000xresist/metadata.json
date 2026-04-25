@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "1000xresist",
-  "title": "1000xResist"
+  "title": "1000xResist",
+  "maintainers": [
+    "Ritsu"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 1675830
+  }
 }

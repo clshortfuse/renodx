@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "talesofgracesf",
-  "title": "Tales of Graces F"
+  "title": "Tales of Graces f Remastered",
+  "maintainers": [
+    "Ritsu"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/talesofgracesfremastered/mods/6/",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 2530980
+  }
 }

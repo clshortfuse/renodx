@@ -1,7 +1,11 @@
 {
-  "$schema": "../../../renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "hollowknight-silksong",
   "title": "Hollow Knight: Silksong",
+  "maintainers": [
+    "ShortFuse"
+  ],
+  "status": "stable",
   "summary": "Adds HDR support, reduced banding, adds tone mapper, and film grain.",
   "tags": [
     "graphics",
@@ -13,12 +17,10 @@
   "notes": [
     "Disable exclusive fullscreen"
   ],
-  "images": [
-    "https://cdn.akamai.steamstatic.com/steam/apps/1030300/header.jpg"
-  ],
+  "header": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1030300/header.jpg",
   "deploy": {
     "game_exe": "Hollow Knight Silksong.exe",
-    "steam_appid": 1030300,
-    "nexus_mods_game_id": 8136
+    "nexus_mods_game_id": 8136,
+    "steam_appid": 1030300
   }
 }

@@ -1,5 +1,21 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "alienisolation",
-  "title": "Alien: Isolation"
+  "title": "Alien: Isolation",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "beta",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/alienisolation/mods/78",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 214490,
+    "architecture": [
+      "x86"
+    ]
+  }
 }

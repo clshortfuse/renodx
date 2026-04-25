@@ -1,5 +1,17 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "endfield",
-  "title": "(Generic)"
+  "title": "Arknights: Endfield",
+  "header": "https://cdn1.epicgames.com/spt-assets/3dc91103cd1b492c8ce095fea4e07c5f/arknightsendfield-47ajg.png?resize=1&w=415&h=215",
+  "maintainers": [
+    "Spiwar",
+    "Forge"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://github.com/clshortfuse/renodx/discussions/490",
+      "kind": "discussion"
+    }
+  ]
 }

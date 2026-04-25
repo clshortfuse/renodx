@@ -1,0 +1,13 @@
+{
+  "name": "renodx-web",
+  "version": "1.0.0",
+  "description": "RenoDX mod browser and downloads",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "serve": "node scripts/serve.mjs",
+    "clean": "node scripts/clean.mjs"
+  },
+  "devDependencies": {}
+}

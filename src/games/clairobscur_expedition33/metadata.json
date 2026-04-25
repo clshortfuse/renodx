@@ -1,5 +1,19 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "clairobscur_expedition33",
-  "title": "Expedition 33"
+  "title": "Clair Obscur: Expedition 33",
+  "maintainers": [
+    "Ritsu",
+    "Musa"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/clairobscurexpedition33/mods/6",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 1903340
+  }
 }

@@ -1,5 +1,10 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "honkai-starrail",
-  "title": "Honkai: Star Rail"
+  "title": "Honkai: Star Rail",
+  "header": "https://cdn1.epicgames.com/spt-assets/6f3979ff608f42e286c83507a69b27f5/honkai-star-rail-19tfu.jpg?resize=1&w=460&h=215",
+  "maintainers": [
+    "Maple"
+  ],
+  "status": "stable"
 }

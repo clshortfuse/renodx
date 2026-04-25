@@ -1,5 +1,8 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "bge20",
-  "title": "Beyond Good and Evil - 20th Anniversary Edition"
+  "title": "Beyond Good and Evil - 20th Anniversary Edition",
+  "deploy": {
+    "steam_appid": 2556990
+  }
 }

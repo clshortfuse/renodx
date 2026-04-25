@@ -1,5 +1,21 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "alicemadnessreturns",
-  "title": "Alice: Madness Returns"
+  "title": "Alice: Madness Returns",
+  "maintainers": [
+    "Steve161803"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/alicemadnessreturns/mods/67",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 19680,
+    "architecture": [
+      "x86"
+    ]
+  }
 }

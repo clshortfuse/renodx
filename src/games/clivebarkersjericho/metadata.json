@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "clivebarkersjericho",
-  "title": "(Generic)"
+  "title": "Clive Barker's Jericho",
+  "maintainers": [
+    "MaxG3D"
+  ],
+  "status": "beta",
+  "notes": [
+    "ACES output is broken, need to be removed in next update."
+  ],
+  "deploy": {
+    "architecture": [
+      "x86"
+    ],
+    "steam_appid": 11420
+  }
 }

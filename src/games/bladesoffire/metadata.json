@@ -1,5 +1,9 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "bladesoffire",
-  "title": "Blades of Fire"
+  "title": "Blades of Fire",
+  "header": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2091020/93a6cdd9e770fcfbc50272de78c1e48f0cfe47e3/header.jpg",
+  "deploy": {
+    "steam_appid": 2091020
+  }
 }

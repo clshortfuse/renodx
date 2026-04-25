@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
-  "title": "RenoDX Mod Metadata",
-  "description": "Schema for per-game metadata used by RenoDX tooling and the index page.",
+  "$id": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "title": "RenoDX Addon Metadata",
+  "description": "Schema for per-addon metadata used by RenoDX tooling and the index page.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,11 +16,27 @@
     },
     "id": {
       "type": "string",
-      "description": "Machine-safe ID for the game/mod (folder name)."
+      "description": "Machine-safe ID for the addon package (folder name and build artifact ID)."
     },
     "title": {
       "type": "string",
-      "description": "Human-friendly game title."
+      "description": "Human-friendly addon title or primary supported game title."
+    },
+    "variant": {
+      "type": "string",
+      "description": "Short package variant label when multiple RenoDX addon packages target the same game (e.g., Archive, SDR, Generic)."
+    },
+    "maintainers": {
+      "type": "array",
+      "description": "People credited with maintaining this addon package.",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "support": {
+      "type": "string",
+      "description": "Free-form package support relationship, e.g. bespoke, generic, engine, alternate, legacy. Can be overridden per games[] entry."
     },
     "summary": {
       "type": "string",
@@ -66,9 +82,13 @@
       },
       "uniqueItems": true
     },
+    "header": {
+      "type": "string",
+      "description": "Header image URL/path for the game card on the index page. Use this when generated store artwork is missing or incorrect."
+    },
     "images": {
       "type": "array",
-      "description": "Screenshots or hero images (URLs/paths) for the index page.",
+      "description": "Additional screenshots or gallery images (URLs/paths) for the index page.",
       "items": {
         "type": "string"
       },
@@ -87,9 +107,84 @@
       "description": "Semver-style version of the mod metadata.",
       "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9.-]+)?$"
     },
+    "games": {
+      "type": "array",
+      "description": "Game targets this addon supports. Release tooling compiles this into the searchable game index; if omitted, title/deploy are treated as a single legacy game target.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Optional stable game target ID. Store IDs take precedence when grouping entries across addons."
+          },
+          "title": {
+            "type": "string",
+            "description": "Human-friendly game title used for game-centric browsing."
+          },
+          "variant": {
+            "type": "string",
+            "description": "Optional game-specific label for this addon package when shown under this game."
+          },
+          "support": {
+            "type": "string",
+            "description": "Free-form support relationship for this game target, e.g. bespoke, generic, engine, alternate, legacy."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "stable",
+              "beta",
+              "experimental"
+            ],
+            "description": "Game-target-specific support status."
+          },
+          "aliases": {
+            "type": "array",
+            "description": "Alternate game titles or search labels.",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "tags": {
+            "type": "array",
+            "description": "Game-target-specific labels.",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "notes": {
+            "type": "array",
+            "description": "Game-target-specific notes/requirements/known issues.",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "urls": {
+            "$ref": "#/properties/urls"
+          },
+          "header": {
+            "$ref": "#/properties/header"
+          },
+          "images": {
+            "$ref": "#/properties/images"
+          },
+          "deploy": {
+            "$ref": "#/properties/deploy"
+          }
+        }
+      },
+      "uniqueItems": true
+    },
     "deploy": {
       "type": "object",
-      "description": "Machine-readable deployment and installer metadata.",
+      "description": "Machine-readable deployment and installer metadata. For addons that support multiple games, put game-specific identifiers in games[].deploy; release tooling only inherits shared addon deployment fields from top-level deploy into explicit games[].",
       "additionalProperties": false,
       "properties": {
         "reshade_version_range": {
@@ -133,7 +228,7 @@
             "integer",
             "null"
           ],
-          "description": "Steam appid if applicable."
+          "description": "Steam appid if applicable. Use null to explicitly mark a game as having no Steam app."
         },
         "gog_product_id": {
           "type": [
@@ -186,7 +281,7 @@
             ]
           },
           "uniqueItems": true,
-          "default": ["x86", "x64"],
+          "default": ["x64"],
           "description": "Target architectures for compilation (x86=32bit, x64=64bit, arm64=ARM 64-bit)."
         },
         "platform": {

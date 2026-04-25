@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "citizensleeper2",
-  "title": "Tales of Graces F"
+  "title": "Citizen Sleeper 2",
+  "maintainers": [
+    "Ritsu"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 2442460
+  }
 }

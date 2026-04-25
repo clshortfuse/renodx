@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "ff7remake",
-  "title": "Final Fantasy 7 REMAKE INTEGRADE"
+  "title": "Final Fantasy VII Remake Intergrade",
+  "maintainers": [
+    "ShortFuse"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 1462040
+  }
 }
