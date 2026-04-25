@@ -27,12 +27,12 @@ float4 main(
     linear float2 TEXCOORD_1: TEXCOORD1) : SV_Target {
   float4 SV_Target;
 
-  float4 _10 = HDRScene.Sample(SS_ClampLinear, float2(TEXCOORD_1.x, TEXCOORD_1.y));  // Directly from tonemapper
-  float4 _14 = UIScene.Sample(SS_ClampLinear, float2(TEXCOORD_1.x, TEXCOORD_1.y));
-
-  if (HandleFinal(_10, _14, SV_Target, SV_Position)) {
+  if (HandleFinal(float4(HDRScene.Sample(SS_ClampLinear, TEXCOORD_1.xy).xyz, 1.f), UIScene.Sample(SS_ClampLinear, TEXCOORD_1.xy).xyzw, SV_Target, SV_Position)) {
     return SV_Target;
   }
+
+  float4 _10 = HDRScene.Sample(SS_ClampLinear, float2(TEXCOORD_1.x, TEXCOORD_1.y));  // Directly from tonemapper
+  float4 _14 = UIScene.Sample(SS_ClampLinear, float2(TEXCOORD_1.x, TEXCOORD_1.y));
 
   // Scene gets decoded here, then again when merged with UI
   float _33 = exp2(log2(_10.x * 2.009232997894287f) * 1.5f);

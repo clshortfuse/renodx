@@ -1122,6 +1122,37 @@ inline reshade::api::format FormatToTypeless(reshade::api::format value) {
   }
 }
 
+inline bool IsDepthStencilCopyCompatible(
+    reshade::api::format source,
+    reshade::api::format destination) {
+  const auto source_typeless = FormatToTypeless(source);
+  const auto destination_typeless = FormatToTypeless(destination);
+
+  if (source_typeless == destination_typeless) return true;
+
+  // Depth-only copies make r32_* and r32_g8_* families copy-compatible
+  switch (source_typeless) {
+    case reshade::api::format::r32_typeless:
+      return destination_typeless == reshade::api::format::r32_g8_typeless;
+    case reshade::api::format::r32_g8_typeless:
+      return destination_typeless == reshade::api::format::r32_typeless;
+    case reshade::api::format::d24_unorm_x8_uint:
+      return destination_typeless == reshade::api::format::r24_g8_typeless;
+    case reshade::api::format::r24_g8_typeless:
+      return destination_typeless == reshade::api::format::d24_unorm_x8_uint;
+    default:
+      return false;
+  }
+}
+
+inline bool AreCopyFormatsCompatible(
+    reshade::api::format source,
+    reshade::api::format destination) {
+  return source == destination
+         || IsDepthStencilCopyCompatible(source, destination)
+         || IsCompressible(source, destination);
+}
+
 static bool attached = false;
 
 static void Use(DWORD fdw_reason) {
