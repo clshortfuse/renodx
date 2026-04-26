@@ -55,10 +55,11 @@ struct ShaderInjectData {
   // float tone_map_working_color_space;
   //float tone_map_clamp_color_space;
   // float tone_map_clamp_peak;
-  float tone_map_hue_processor;
+  // float tone_map_hue_processor;
   // float tone_map_per_channel;
   // float gamma_correction;
   float intermediate_scaling;
+  // float reno_drt_scaling_method;
   // float intermediate_encoding;
   // float intermediate_color_space;
   // float swap_chain_decoding;
@@ -87,11 +88,12 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
 #define RENODX_GAMMA_CORRECTION              GAMMA_CORRECTION_GAMMA_2_2
-#define RENODX_TONE_MAP_PER_CHANNEL          1.f
+// #define RENODX_TONE_MAP_PER_CHANNEL          0.f
 #define RENODX_TONE_MAP_WORKING_COLOR_SPACE  color::convert::COLOR_SPACE_BT2020
-#define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
+#define RENODX_TONE_MAP_HUE_PROCESSOR        1.f
 #define RENODX_TONE_MAP_HUE_CORRECTION       1.f
-#define RENODX_TONE_MAP_HUE_SHIFT            0.75f
+#define RENODX_TONE_MAP_HUE_SHIFT            0.8f
+// #define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
 #define RENODX_TONE_MAP_CLAMP_PEAK           color::convert::COLOR_SPACE_BT2020
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
@@ -113,8 +115,9 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING             ENCODING_SCRGB
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709
-#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
-// #define RENODX_RENO_DRT_WHITE_CLIP 8.f
+#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::NEUTWO
+#define RENODX_RENO_DRT_SCALING_METHOD        2.f
+#define RENODX_RENO_DRT_WHITE_CLIP 5.5f
 
 #include "../../shaders/renodx.hlsl"
 
