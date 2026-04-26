@@ -1,7 +1,6 @@
 #include "./macleod_boynton.hlsli"
 #include "./shared.h"
 
-
 #ifndef RENODX_PRAGMATA_PSYCHO_TEST17_HLSLI_
 #define RENODX_PRAGMATA_PSYCHO_TEST17_HLSLI_
 
@@ -216,14 +215,18 @@ float3 psycho17_ApplyPurityFromBT2020(
   return renodx::color::bt2020::from::LMS(lms_out);
 }
 
-float3 psycho17_RestoreHueAdaptive(
+static const int PSYCHO17_HUE_PURITY_WEIGHT_NONE = 0;
+static const int PSYCHO17_HUE_PURITY_WEIGHT_LOSS = 1;
+static const int PSYCHO17_HUE_PURITY_WEIGHT_GAIN = 2;
+
+float3 psycho17_RestoreHueAdaptiveCore(
     float3 lms_source,
     float3 lms_target,
     float3 lms_adaptive_state,
     float amount,
-    bool weight_by_purity_loss = true,
-    bool use_adaptive_hue_sensitivity = true,
-    float eps = 1e-7f) {
+    int purity_weight_mode,
+    bool use_adaptive_hue_sensitivity,
+    float eps) {
   if (amount <= 0.f) return lms_target;
 
   float3 lms_source_relative_weighted = psycho17_ToAdaptiveRelativeWeightedLMS(
@@ -247,15 +250,19 @@ float3 psycho17_RestoreHueAdaptive(
   float hue_sensitivity = use_adaptive_hue_sensitivity
                               ? psycho17_AdaptiveHueSensitivityFromTClip(target_t_clip)
                               : 1.f;
-  float purity_loss_weight = 1.f;
-  if (weight_by_purity_loss) {
+  float purity_weight = 1.f;
+  if (purity_weight_mode != PSYCHO17_HUE_PURITY_WEIGHT_NONE) {
     float source_t_clip = psycho17_RayExitTCIE1702(mb_adapted_bg.xy, source_offset);
     float source_purity_signal = psycho17_HueRelativePuritySignalFromTClip(source_t_clip);
     float target_purity_signal = psycho17_HueRelativePuritySignalFromTClip(target_t_clip);
-    purity_loss_weight = source_purity_signal > eps ? saturate(target_purity_signal / source_purity_signal) : 1.f;
+    if (purity_weight_mode == PSYCHO17_HUE_PURITY_WEIGHT_LOSS) {
+      purity_weight = source_purity_signal > eps ? saturate(target_purity_signal / source_purity_signal) : 1.f;
+    } else if (purity_weight_mode == PSYCHO17_HUE_PURITY_WEIGHT_GAIN) {
+      purity_weight = target_purity_signal > eps ? saturate(source_purity_signal / target_purity_signal) : 1.f;
+    }
   }
 
-  float restore_weight = amount * hue_sensitivity * purity_loss_weight;
+  float restore_weight = amount * hue_sensitivity * purity_weight;
   if (restore_weight <= 0.f) return lms_target;
 
   float inv_target_radius = rsqrt(tgt2);
@@ -279,6 +286,42 @@ float3 psycho17_RestoreHueAdaptive(
       psycho17_FromAdaptiveRelativeWeightedLMS(
           lms_restored_relative_weighted,
           lms_adaptive_state));
+}
+
+float3 psycho17_RestoreHueAdaptive(
+    float3 lms_source,
+    float3 lms_target,
+    float3 lms_adaptive_state,
+    float amount,
+    bool weight_by_purity_loss = true,
+    bool use_adaptive_hue_sensitivity = true,
+    float eps = 1e-7f) {
+  return psycho17_RestoreHueAdaptiveCore(
+      lms_source,
+      lms_target,
+      lms_adaptive_state,
+      amount,
+      weight_by_purity_loss ? PSYCHO17_HUE_PURITY_WEIGHT_LOSS : PSYCHO17_HUE_PURITY_WEIGHT_NONE,
+      use_adaptive_hue_sensitivity,
+      eps);
+}
+
+float3 psycho17_RestoreHueAdaptiveWeightByPurityGain(
+    float3 lms_source,
+    float3 lms_target,
+    float3 lms_adaptive_state,
+    float amount,
+    bool weight_by_purity_gain = true,
+    bool use_adaptive_hue_sensitivity = true,
+    float eps = 1e-7f) {
+  return psycho17_RestoreHueAdaptiveCore(
+      lms_source,
+      lms_target,
+      lms_adaptive_state,
+      amount,
+      weight_by_purity_gain ? PSYCHO17_HUE_PURITY_WEIGHT_GAIN : PSYCHO17_HUE_PURITY_WEIGHT_NONE,
+      use_adaptive_hue_sensitivity,
+      eps);
 }
 
 // Direct MB hue transfer in LMS domain (matches CorrectHueAndPurityMB geometry).
@@ -1270,7 +1313,7 @@ float3 ApplyTest17BT2020(float3 color_bt2020, float3 color_hue_shift_source_bt20
   return color_bt2020;
 }
 
-float3 ApplyPreToneMapCurvesBT2020(float3 color_bt2020, config17::Config psycho_config) {
+float3 ApplyPreToneMapColorGradeBT2020(float3 color_bt2020, config17::Config psycho_config) {
   // Keep only this subset from ApplyTest17BT2020:
   // exposure, gamma, highlights, shadows, contrast, flare, flare_lms,
   // contrast_highlights, contrast_shadows, adaptation_contrast, bleaching_intensity.
@@ -1285,8 +1328,13 @@ float3 ApplyPreToneMapCurvesBT2020(float3 color_bt2020, config17::Config psycho_
   return ApplyTest17BT2020(color_bt2020, color_bt2020, psycho_config);
 }
 
-float3 ApplyPostToneMapCurvesBT2020(float3 color_bt2020, float lum_target, config17::Config psycho_config) {
-  if (psycho_config.purity_scale == 1.f
+float3 ApplyPostToneMapColorGradeBT2020(
+    float3 color_bt2020,
+    float3 hue_emulation_source_bt2020,
+    float lum_target,
+    config17::Config psycho_config) {
+  if (psycho_config.hue_emulation == 0.f
+      && psycho_config.purity_scale == 1.f
       && psycho_config.dechroma == 0.f
       && psycho_config.purity_highlights == 0.f
       && !psycho_config.post_gamut_compress) {
@@ -1296,6 +1344,17 @@ float3 ApplyPostToneMapCurvesBT2020(float3 color_bt2020, float lum_target, confi
   const float kEps = 1e-7f;
   float3 midgray_lms = renodx::color::lms::from::BT2020(psycho_config.mid_gray.xxx);
   float3 color_lms = renodx::color::lms::from::BT2020(color_bt2020);
+
+  if (psycho_config.hue_emulation != 0.f) {
+    float3 hue_source_lms = renodx::color::lms::from::BT2020(hue_emulation_source_bt2020);
+    color_lms = psycho17_RestoreHueAdaptiveWeightByPurityGain(
+        hue_source_lms,
+        color_lms,
+        midgray_lms,
+        psycho_config.hue_emulation,
+        true,
+        false);
+  }
 
   float purity_scale = psycho_config.purity_scale;
 

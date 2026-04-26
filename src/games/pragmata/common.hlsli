@@ -22,7 +22,7 @@ renodx_custom::tonemap::psycho::config17::Config CreatePsycho17Config() {
   psycho17_config.dechroma = RENODX_TONE_MAP_DECHROMA;
   psycho17_config.adaptation_contrast = RENODX_TONE_MAP_ADAPTATION_CONTRAST;
   psycho17_config.bleaching_intensity = 0.f;
-  psycho17_config.hue_emulation = 0.f;
+  psycho17_config.hue_emulation = RENODX_TONE_MAP_HUE_RETENTION;
   psycho17_config.pre_gamut_compress = false;
   psycho17_config.post_gamut_compress = true;
   psycho17_config.apply_tonemap = false;
@@ -36,7 +36,7 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
   float untonemapped_lum = renodx::color::yf::from::AP1(untonemapped_ap1);
   renodx_custom::tonemap::psycho::config17::Config psycho17_config = CreatePsycho17Config();
   untonemapped_ap1 = renodx::color::ap1::from::BT2020(
-      renodx_custom::tonemap::psycho::ApplyPreToneMapCurvesBT2020(renodx::color::bt2020::from::AP1(untonemapped_ap1), psycho17_config));
+      renodx_custom::tonemap::psycho::ApplyPreToneMapColorGradeBT2020(renodx::color::bt2020::from::AP1(untonemapped_ap1), psycho17_config));
 
   float3 tonemapped_bt2020;
 
@@ -99,7 +99,15 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
         tonemapped_bt2020, tonemapped_lum_bt2020, 1.f, hue_amount);
   }
 
-  tonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyPostToneMapCurvesBT2020(tonemapped_bt2020, untonemapped_lum, psycho17_config);
+  float3 hue_emulation_source_bt2020 = tonemapped_bt2020;
+  if (psycho17_config.hue_emulation > 0.f) {
+    hue_emulation_source_bt2020 = renodx::color::bt2020::from::AP1(untonemapped_ap1 * 0.1f / 0.18f);
+  }
+  tonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyPostToneMapColorGradeBT2020(
+      tonemapped_bt2020,
+      hue_emulation_source_bt2020,
+      untonemapped_lum,
+      psycho17_config);
 
   if (CUSTOM_GRAIN_STRENGTH > 0.f) {
     tonemapped_bt2020 = renodx::effects::ApplyFilmGrain(
