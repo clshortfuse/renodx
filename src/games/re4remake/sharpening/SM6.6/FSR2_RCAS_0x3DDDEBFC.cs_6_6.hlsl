@@ -1,12 +1,10 @@
+#include "../sharpening.hlsli"
+
 Texture2D<float2> r_exposure : register(t0);
 
 Texture2D<float4> r_rcas_input : register(t1);
 
 RWTexture2D<float4> rw_upscaled_output : register(u0);
-
-#ifndef CUSTOM_CLAMP_RCAS_INPUT
-#define CUSTOM_CLAMP_RCAS_INPUT 1
-#endif
 
 cbuffer cbFSR2 : register(b0) {
   int2 iRenderSize : packoffset(c000.x);
@@ -38,16 +36,19 @@ cbuffer cbRCAS : register(b1) {
 };
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 [numthreads(64, 1, 1)]
 void main(
-  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
-  uint3 SV_GroupID : SV_GroupID,
-  uint3 SV_GroupThreadID : SV_GroupThreadID,
-  uint SV_GroupIndex : SV_GroupIndex
-) {
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
   int _19;
   int _20;
   int _23;
