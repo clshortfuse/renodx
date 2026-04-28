@@ -1,3 +1,4 @@
+// shader hash was originally 0xF32EAEEC in alias isolation
 #include "../shared.h"
 
 Texture2D<float4> t3 : register(t3);

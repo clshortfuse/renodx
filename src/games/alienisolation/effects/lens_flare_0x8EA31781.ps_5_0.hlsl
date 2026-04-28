@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 
 SamplerState g_flare_sampler : register(s0);
 Texture2D<float4> g_flare_texture : register(t0);
@@ -8,10 +8,6 @@ void main(
     float4 flare_intensity: TEXCOORD1,
     float4 v2: SV_Position0,
     out float4 output_color: SV_Target0) {
-#if CUSTOM_LENS_FLARE  // reduces size of black artifact in center of lens flare
-  flare_intensity = saturate(flare_intensity);
-#endif
-
   float falloff;
   const float base_falloff_offset = 0.09;
 
@@ -25,9 +21,22 @@ void main(
   output_color.rgb = flare_texture * scaled_intensity;
   output_color.a = 1;
 
-  // we linearize as it draws directly onto the swapchain after tonemapping
-  output_color.rgb = saturate(output_color.rgb);
-  output_color.rgb = renodx::color::gamma::Decode(output_color.rgb, 2.2f);
   output_color.rgb *= injectedData.fxLensFlare;
+
+  // uses INV_DEST_COLOR blending
+#if CUSTOM_LENS_FLARE
+  if (injectedData.toneMapType != 0.f) {
+    output_color.rgb = saturate(output_color.rgb);
+    float peak_ratio = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+    if (peak_ratio > 1.f) {
+      float inv_peak_ratio = 1.f / peak_ratio;
+      float3 compressed = renodx::tonemap::neutwo::PerChannel(output_color.rgb, inv_peak_ratio, 1.f);
+      output_color.rgb = renodx::color::gamma::Encode(max(0, renodx::color::correct::Hue(renodx::color::gamma::Decode(compressed),
+                                                                                         renodx::color::gamma::Decode(output_color.rgb))));
+      output_color.rgb = min(output_color.rgb, inv_peak_ratio);
+    }
+  }
+#endif
+
   return;
 }
