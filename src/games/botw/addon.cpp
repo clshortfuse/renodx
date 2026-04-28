@@ -225,16 +225,31 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   const auto target_format = reshade::api::format::r16g16b16a16_float;
   const auto view_upgrades = renodx::utils::resource::VIEW_UPGRADES_RGBA16F;
   switch (fdw_reason) {
-    case DLL_PROCESS_ATTACH:
+    case DLL_PROCESS_ATTACH: {
       if (!reshade::register_addon(h_module)) return FALSE;
+
+      auto process_path = renodx::utils::platform::GetCurrentProcessPath();
+      auto filename = process_path.filename().string();
+
+      if (filename == "Cemu.exe") {
+        renodx::mods::swapchain::target_format = target_format;
+        renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+      };
 
       // Always set to true for Vulkan
       renodx::mods::shader::allow_multiple_push_constants = true;
-      renodx::mods::swapchain::target_format = target_format;
-      renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+
+      auto common_aspect_ratio = 16.f / 9.f;
+      auto common_aspect_ratio_tolerance = 0.00001f;
+
+      const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
+          .width = 720,
+          .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+          .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+      };
 
       /*
         If expand_existing_constant_buffer is set to false renoDX will add new cbuffer range (instead of reusing the game's).
@@ -244,11 +259,31 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
-          .old_format = reshade::api::format::r10g10b10a2_typeless,
-          .new_format = target_format,
-          .ignore_size = true,  // risky...?
-      });
+      if (filename == "Ryujinx.exe") {
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+            .old_format = reshade::api::format::r10g10b10a2_typeless,
+            .new_format = target_format,
+            .aspect_ratio = common_aspect_ratio,
+            .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+            .min_dimensions = min_dimensions,
+
+        });
+
+        // renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        //     .old_format = reshade::api::format::r11g11b10_float,
+        //     .new_format = target_format,
+        //     .aspect_ratio = common_aspect_ratio,
+        //     .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+        //     .min_dimensions = min_dimensions,
+
+        // });
+      } else {
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+            .old_format = reshade::api::format::r10g10b10a2_typeless,
+            .new_format = target_format,
+            .ignore_size = true,  // risky...?
+        });
+      }
 
       if (!initialized) {
         // renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
@@ -259,6 +294,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
+    }
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
