@@ -1180,7 +1180,7 @@ float3 ApplyTest17BT2020(float3 color_bt2020, float3 color_hue_shift_source_bt20
 
   if (psycho_config.apply_tonemap) {
     float3 lms_peak_unit = renodx::color::lms::from::BT2020(psycho_config.peak_value.xxx);
-    color_lms = psycho17_ReinhardPiecewise(color_lms, lms_peak_unit, midgray_lms);
+    color_lms = renodx::tonemap::neutwo::PerChannel(color_lms, lms_peak_unit);
 
     color_lms *= renodx::math::DivideSafe(
         lum_original,
