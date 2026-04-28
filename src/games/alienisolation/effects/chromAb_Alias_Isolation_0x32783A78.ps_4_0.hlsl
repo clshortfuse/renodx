@@ -1,3 +1,5 @@
+#include "../shared.h"
+
 // No HLSL available - function stub generated
 
 SamplerState LinearSampler : register(s0);

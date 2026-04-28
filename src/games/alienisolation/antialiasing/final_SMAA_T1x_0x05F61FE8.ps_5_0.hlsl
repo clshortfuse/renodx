@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "./antialiasing.hlsli"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:42:57 2024
 
@@ -49,7 +49,7 @@ void main(
   r1.z = dot(r0.xyzw, float4(1, 1, 1, 1));
   r1.z = cmp(r1.z < 9.99999975e-006);
   if (r1.z != 0) {
-    r2.xyz = colorTex.SampleLevel(LinearSampler_s, v1.xy, 0).xyz;
+    r2.xyz = SampleLevelWithSRGBDecode(colorTex, LinearSampler_s, v1.xy, 0).rgb;
   } else {
     r1.xy = max(r0.xy, r1.yx);
     r1.x = cmp(r1.y < r1.x);
@@ -60,14 +60,15 @@ void main(
     r0.xy = r0.xy / r0.zz;
     r1.xyzw = float4(1, 1, -1, -1) * SMAA_RTMetrics.xyxy;
     r1.xyzw = r3.xyzw * r1.xyzw + v1.xyxy;
-    r3.xyz = colorTex.SampleLevel(LinearSampler_s, r1.xy, 0).xyz;
-    r1.xyz = colorTex.SampleLevel(LinearSampler_s, r1.zw, 0).xyz;
+    r3.xyz = SampleLevelWithSRGBDecode(colorTex, LinearSampler_s, r1.xy, 0).rgb;
+    r1.xyz = SampleLevelWithSRGBDecode(colorTex, LinearSampler_s, r1.zw, 0).rgb;
     r0.yzw = r1.xyz * r0.yyy;
     r2.xyz = r0.xxx * r3.xyz + r0.yzw;
   }
 
+  o0.rgb = r2.rgb;
   // skip sRGB encoding as image is not linearized from resource views
-  o0.rgb = r2.rgb;  // o0.rgb = renodx::color::srgb::EncodeSafe(r2.rgb);
+  o0.rgb = renodx::color::srgb::EncodeSafe(o0.rgb);
   o0.w = 0;
   return;
 }

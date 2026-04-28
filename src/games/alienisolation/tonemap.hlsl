@@ -601,7 +601,7 @@ float3 ApplyToneMapVignette(
     r0.xyz = applyVignette(r0.rgb, v2, v1, untonemapped_lum);
 
     output_color = r0.xyz;
-  } else {  // ACES & RenoDRT
+  } else {  // Extrapolated
     r0.rgb = ApplyVanillaTonemapExtrapolated(untonemapped, untonemapped_lum, v2.xy, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
     r0.xyz = applyVignette(r0.rgb, v2, v1, untonemapped_lum);
 
@@ -649,7 +649,6 @@ float4 FinalizeToneMapOutput(float3 input_color) {
     output_color = max(0, output_color);
   }
 
-  output_color = GameScale(output_color);
   output_color.w = max(0, renodx::color::y::from::BT709(output_color.rgb));
   return output_color;
 }

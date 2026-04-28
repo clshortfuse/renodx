@@ -1,3 +1,5 @@
+#include "./antialiasing.hlsli"
+
 // ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:43:36 2024
 
 cbuffer cbDefaultXSC : register(b0) {
@@ -100,11 +102,13 @@ void main(
   r1.z = dot(r0.xyzw, float4(1, 1, 1, 1));
   r1.z = cmp(r1.z < 9.99999975e-006);
   if (r1.z != 0) {
-    r2.xyz = colorTex.SampleLevel(LinearSampler_s, v1.xy, 0).xyz;
+    r2.xyz = SampleLevelWithSRGBDecode(colorTex, LinearSampler_s, v1.xy, 0).rgb;
     r1.zw = velocityTex.SampleLevel(LinearSampler_s, v1.xy, 0).xy;
     r1.z = dot(r1.zw, r1.zw);
     r1.z = sqrt(r1.z);
     o0.xyz = r2.xyz;
+    o0.rgb = WriteWithSRGBEncode(o0.rgb);
+
   } else {
     r1.xy = max(r0.xy, r1.yx);
     r1.x = cmp(r1.y < r1.x);
@@ -115,10 +119,12 @@ void main(
     r0.xy = r0.xy / r0.zz;
     r3.xyzw = float4(1, 1, -1, -1) * SMAA_RTMetrics.xyxy;
     r2.xyzw = r2.xyzw * r3.xyzw + v1.xyxy;
-    r1.xyw = colorTex.SampleLevel(LinearSampler_s, r2.xy, 0).xyz;
-    r3.xyz = colorTex.SampleLevel(LinearSampler_s, r2.zw, 0).xyz;
+    r1.xyw = SampleLevelWithSRGBDecode(colorTex, LinearSampler_s, r2.xy, 0).rgb;
+    r3.xyz = SampleLevelWithSRGBDecode(colorTex, LinearSampler_s, r2.zw, 0).rgb;
     r3.xyz = r3.xyz * r0.yyy;
     o0.xyz = r0.xxx * r1.xyw + r3.xyz;
+    o0.rgb = WriteWithSRGBEncode(o0.rgb);
+
     r0.zw = velocityTex.SampleLevel(LinearSampler_s, r2.xy, 0).xy;
     r1.xy = velocityTex.SampleLevel(LinearSampler_s, r2.zw, 0).xy;
     r1.xy = r1.xy * r0.yy;
@@ -129,5 +135,6 @@ void main(
   r0.x = motionBlurTex.SampleLevel(LinearSampler_s, v1.xy, 0).w;
   o0.w = Blur_Direction.x * r0.x;
   o1.xyzw = r1.zzzz;
+
   return;
 }

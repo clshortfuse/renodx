@@ -1,3 +1,4 @@
+#include "./antialiasing.hlsli"
 // ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:43:03 2024
 
 SamplerState PointSampler_s : register(s1);
