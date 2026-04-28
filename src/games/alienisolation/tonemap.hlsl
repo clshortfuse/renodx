@@ -75,24 +75,22 @@ float GetVanillaHighlightDesatPower(float mapped_luma) {
   return max(10e-6f, 1.f - desat_luma * desat_luma);
 }
 
-float3 ApplyVanillaChromaCurveNoDesat(
+float3 ApplyVanillaChromaCurveClampedDesat(
     float3 untonemapped,
     float untonemapped_luminance,
-    float mapped_luma) {
+    float mapped_luma,
+    float branch_mapped_luma) {
   float safe_luma = max(10e-5f, untonemapped_luminance);
   float3 positive_color = max(0.f, untonemapped);
 
   float3 ratio = positive_color / safe_luma;
-  float chroma_power = GetVanillaHighlightDesatPower(mapped_luma);
-  float3 curved_ratio = pow(ratio, chroma_power);
-  float3 ratio_above_neutral = step(1.f, ratio);
 
-  float3 saturating_ratio = lerp(
-      min(curved_ratio, ratio),
-      max(curved_ratio, ratio),
-      ratio_above_neutral);
+  // apply desaturation, but limited to not exceed amount at branching point
+  float chroma_power = max(
+      GetVanillaHighlightDesatPower(mapped_luma),
+      GetVanillaHighlightDesatPower(branch_mapped_luma));
 
-  return saturating_ratio * mapped_luma;
+  return pow(ratio, chroma_power) * mapped_luma;
 }
 
 float3 ApplyVanillaToneMapDebug(float3 color, float metric) {
@@ -124,10 +122,11 @@ float3 ApplyVanillaTonemapExtrapolated(
       SamplerToneMapCurve_TEX,
       SamplerToneMapCurve_SMP_s);
 
-  float3 luma_tonemap = ApplyVanillaChromaCurveNoDesat(
+  float3 luma_tonemap = ApplyVanillaChromaCurveClampedDesat(
       untonemapped,
       untonemapped_luminance,
-      mapped_luma);
+      mapped_luma,
+      extrapolation.pivot_y);
 
   luma_tonemap = ApplyVanillaToneMapDebug(
       luma_tonemap,
@@ -492,14 +491,14 @@ float3 ApplyFilmGrain(float3 input_color, Texture2D<float4> SamplerNoise_TEX,
           linear_color,
           v1.xy,        // Screen-space coordinates
           random_seed,  // Sample noise tex for random seed
-          injectedData.fxFilmGrain * .02f);
+          injectedData.fxFilmGrain * .04f);
     } else {  // Colored
       float3 random_seed = SamplerNoise_TEX.Sample(SamplerNoise_SMP_s, v1.xy).rgb;
       grained_color = renodx::effects::ApplyFilmGrainColored(
           linear_color,
           v1.xy,        // Screen-space coordinates
           random_seed,  // Sample noise tex for random seed
-          injectedData.fxFilmGrain * .02f);
+          injectedData.fxFilmGrain * .04f);
     }
     grained_color = renodx::color::gamma::EncodeSafe(grained_color, 2.2f);
   }
