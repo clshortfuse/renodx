@@ -16,54 +16,91 @@ float4 FinalizeOutput(float4 color) {
   return color;
 }
 
-// from Lilium
-// RCAS - Robust Contrast Adaptive Sharpening
-float3 ApplyRCAS(
-    float3 center_color, float2 tex_coord,
-    Texture2D<float4> SamplerFrameBuffer_TEX, SamplerState SamplerFrameBuffer_SMP_s) {
-  if (injectedData.fxSharpening == 0) return center_color;  // Skip sharpening if amount is zero
+float3 ApplyCustomFilmGrain(float3 color, float2 uv) {
+  if (injectedData.fxFilmGrain > 0.f) {
+    if (injectedData.fxFilmGrainType == 1.f) {  // B&W
+      color = renodx::effects::ApplyFilmGrain(
+          color, uv,
+          injectedData.custom_random,
+          injectedData.fxFilmGrain * .04f);
+    } else if (injectedData.fxFilmGrainType == 2.f) {  // Colored
+      color = renodx::effects::ApplyFilmGrainColored(
+          color, uv,
+          injectedData.custom_random,
+          injectedData.fxFilmGrain * .04f);
+    }
+  }
+  return color;
+}
 
-#define SHARPENING_NORMALIZATION_POINT 125
+namespace Lilium {
+namespace RCAS {
 
-#define ENABLE_NOISE_REMOVAL 0u
-#define ENABLE_NORMALIZATION 1u
+#define LILIUM_RCAS_ENABLE_NOISE_REMOVAL 1u
+#define LILIUM_RCAS_ENABLE_NORMALIZATION 1u
 
-  uint width, height;
-  SamplerFrameBuffer_TEX.GetDimensions(width, height);
+// This is set at the limit of providing unnatural results for sharpening.
+// 0.25f - (1.f / 16.f)
+#define LILIUM_RCAS_LIMIT 0.1875f
+
+struct Neighborhood {
+  float3 b;
+  float3 d;
+  float3 e;
+  float3 f;
+  float3 h;
+};
+
+Neighborhood SampleNeighborhood(
+    float3 center_color,
+    float2 tex_coord,
+    uint width,
+    uint height,
+    Texture2D<float4> SamplerFrameBuffer_TEX,
+    SamplerState SamplerFrameBuffer_SMP_s) {
   float2 texel_size = 1.0 / float2(width, height);
+
+  Neighborhood samples;
 
   // Algorithm uses minimal 3x3 pixel neighborhood.
   //    b
   //  d e f
   //    h
-  float3 b =
-      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, -1) * texel_size, 0).rgb;
-  float3 d =
-      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(-1, 0) * texel_size, 0).rgb;
-  float3 e =
-      center_color;
-  float3 f =
-      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(1, 0) * texel_size, 0).rgb;
-  float3 h =
-      SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, 1) * texel_size, 0).rgb;
+  samples.b = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, -1) * texel_size, 0).rgb;
+  samples.d = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(-1, 0) * texel_size, 0).rgb;
+  samples.e = center_color;
+  samples.f = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(1, 0) * texel_size, 0).rgb;
+  samples.h = SamplerFrameBuffer_TEX.SampleLevel(SamplerFrameBuffer_SMP_s, tex_coord + float2(0, 1) * texel_size, 0).rgb;
 
-#if ENABLE_NORMALIZATION
-  b /= SHARPENING_NORMALIZATION_POINT;
-  d /= SHARPENING_NORMALIZATION_POINT;
-  e /= SHARPENING_NORMALIZATION_POINT;
-  f /= SHARPENING_NORMALIZATION_POINT;
-  h /= SHARPENING_NORMALIZATION_POINT;
+  return samples;
+}
+
+// from Lilium
+// RCAS - Robust Contrast Adaptive Sharpening
+float3 ApplyCore(Neighborhood samples, float sharpening, float normalization_value = 1.f) {
+  float3 b = samples.b;
+  float3 d = samples.d;
+  float3 e = samples.e;
+  float3 f = samples.f;
+  float3 h = samples.h;
+
+#if LILIUM_RCAS_ENABLE_NORMALIZATION
+  b /= normalization_value;
+  d /= normalization_value;
+  e /= normalization_value;
+  f /= normalization_value;
+  h /= normalization_value;
 #endif
 
   // Immediate constants for peak range.
   static const float2 peakC = float2(1.f, -4.f);
 
   // Calculate luminance of center and neighbors
-  float bLum = renodx::color::y::from::BT709(b);
-  float dLum = renodx::color::y::from::BT709(d);
-  float eLum = renodx::color::y::from::BT709(e);
-  float fLum = renodx::color::y::from::BT709(f);
-  float hLum = renodx::color::y::from::BT709(h);
+  float bLum = renodx::color::yf::from::BT709(b);
+  float dLum = renodx::color::yf::from::BT709(d);
+  float eLum = renodx::color::yf::from::BT709(e);
+  float fLum = renodx::color::yf::from::BT709(f);
+  float hLum = renodx::color::yf::from::BT709(h);
 
   // Min and max of ring.
   float min4Lum = renodx::math::Min(bLum, dLum, fLum, hLum);
@@ -82,15 +119,11 @@ float3 ApplyRCAS(
 
   float localLobe = max(-hitMinLum, hitMaxLum);
 
-// This is set at the limit of providing unnatural results for sharpening.
-// 0.25f - (1.f / 16.f)
-#define FSR_RCAS_LIMIT 0.1875f
-
-  float lobe = max(float(-FSR_RCAS_LIMIT),
+  float lobe = max(float(-LILIUM_RCAS_LIMIT),
                    min(localLobe, 0.f))
-               * injectedData.fxSharpening;
+               * sharpening;
 
-#if ENABLE_NOISE_REMOVAL
+#if LILIUM_RCAS_ENABLE_NOISE_REMOVAL
   float bLuma2x = bLum * 2.f;
   float dLuma2x = dLum * 2.f;
   float eLuma2x = eLum * 2.f;
@@ -118,9 +151,33 @@ float3 ApplyRCAS(
   float pixLum = ((bLum + dLum + hLum + fLum) * lobe + eLum) * rcpL;
   float3 pix = clamp((pixLum / eLum), 0.f, 4.f) * e;
 
-#if ENABLE_NORMALIZATION
-  pix *= SHARPENING_NORMALIZATION_POINT;
+#if LILIUM_RCAS_ENABLE_NORMALIZATION
+  pix *= normalization_value;
 #endif
 
   return pix;
 }
+
+float3 ApplyCore(float3 b, float3 d, float3 e, float3 f, float3 h, float sharpening, float normalization_value = 1.f) {
+  Neighborhood samples;
+  samples.b = b;
+  samples.d = d;
+  samples.e = e;
+  samples.f = f;
+  samples.h = h;
+  return ApplyCore(samples, sharpening, normalization_value);
+}
+
+float3 Apply(
+    float3 center_color, float2 tex_coord,
+    Texture2D<float4> SamplerFrameBuffer_TEX, SamplerState SamplerFrameBuffer_SMP_s, float normalization_value = 1.f) {
+  if (injectedData.fxSharpening == 0) return center_color;  // Skip sharpening if amount is zero
+
+  uint width, height;
+  SamplerFrameBuffer_TEX.GetDimensions(width, height);
+  Neighborhood samples = SampleNeighborhood(center_color, tex_coord, width, height, SamplerFrameBuffer_TEX, SamplerFrameBuffer_SMP_s);
+  return ApplyCore(samples, injectedData.fxSharpening, normalization_value);
+}
+
+}  // namespace RCAS
+}  // namespace Lilium

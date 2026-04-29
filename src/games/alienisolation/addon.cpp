@@ -14,10 +14,10 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./aliasisolation/aliasisolation.hpp"
 #include "./shared.h"
-
 
 namespace {
 
@@ -171,6 +171,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     UpgradeRTVReplaceShader(0x23F15352),  // SMAA 1
     UpgradeRTVReplaceShader(0x007F7E1C),  // SMAA 2
     UpgradeRTVReplaceShader(0xD212ED15),  // SMAA T2x
+
+    CustomShaderEntry(0xEEEC0277),  // FXAA
 
 };
 
@@ -354,15 +356,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "FxSharpening",
-        .binding = &shader_injection.fxSharpening,
-        .default_value = 0.f,
-        .label = "Sharpening",
-        .section = "Effects",
-        .max = 100.f,
-        .parse = [](float value) { return value == 0 ? 0.f : exp2(-(1.f - (value * 0.01f))); },
-    },
-    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -454,7 +447,6 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrainType", 0.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrain", 50.f);
-  renodx::utils::settings::UpdateSetting("FxSharpening", 0.f);
   alienisolation::aliasisolation::OnPresetOff();
 }
 
@@ -689,6 +681,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       alienisolation::aliasisolation::AppendSettings(settings, &shader_injection);
 
+      renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
+
       renodx::mods::shader::expected_constant_buffer_index = 11;
       // renodx::mods::shader::force_pipeline_cloning = true;
 
@@ -706,14 +700,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       });
       renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_typeless,
-          .use_resource_view_cloning = true,
-          .use_resource_view_hot_swap = true,
-          .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER, .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
-      });
-      // Alias Isolation - Chromatic Aberration
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_typeless,
           .use_resource_view_cloning = true,
           .use_resource_view_hot_swap = true,
@@ -739,6 +725,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   alienisolation::aliasisolation::Use(fdw_reason, &shader_injection);
+  renodx::utils::random::Use(fdw_reason);  // film grain
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);

@@ -1,5 +1,14 @@
 #pragma once
 
+/*
+ * Lightweight shader identity tracker.
+ *
+ * ReShade draw callbacks give us the currently bound pipeline handle, not the
+ * game's original shader identity. This file records DXBC-checksum identities
+ * at pipeline creation and maintains the currently bound vertex/pixel/compute
+ * shader IDs for the descriptor and TAA systems.
+ */
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -8,7 +17,7 @@
 
 #include <include/reshade.hpp>
 
-#include "../../../utils/bitwise.hpp"
+#include "../../../../utils/bitwise.hpp"
 #include "./logging.hpp"
 #include "./shader_ids.hpp"
 
@@ -51,6 +60,8 @@ inline void OnInitPipeline(
     reshade::api::pipeline pipeline) {
   PipelineShaders shaders = {};
 
+  // Only shaders with checksums listed in shader_ids.hpp are stored. Unknown
+  // pipelines are ignored to keep the map small.
   for (uint32_t i = 0; i < subobject_count; ++i) {
     const auto& subobject = subobjects[i];
     switch (subobject.type) {
@@ -97,6 +108,8 @@ inline void BindPipeline(BoundShaders& bound, reshade::api::pipeline_stage stage
   auto it = pipelines.find(pipeline.handle);
   const PipelineShaders shaders = (it != pipelines.end()) ? it->second : PipelineShaders{};
 
+  // D3D11-style all-stage binds replace previous stage state. Partial binds
+  // only update the stages named by the ReShade callback.
   if (stages == reshade::api::pipeline_stage::all) {
     bound = {};
   }

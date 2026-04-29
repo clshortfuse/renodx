@@ -1,4 +1,4 @@
-#include "../shared.h"
+#include "../common.hlsl"
 
 float4 SampleWithSRGBDecode(Texture2D<float4> texture_input, SamplerState sampler_input, float2 texcoord) {
   float4 color = texture_input.Sample(sampler_input, texcoord);

@@ -1,5 +1,14 @@
 #pragma once
 
+/*
+ * Resource-view fixup for Alias Isolation shader replacement paths.
+ *
+ * Some game-created Texture3D views arrive with an unknown view type before
+ * RenoDX's resource upgrade code inspects them. Populating the default view
+ * description here keeps the upgrade hook from asserting while preserving the
+ * game's intended format and mip/layer coverage.
+ */
+
 #include <limits>
 
 #include <include/reshade.hpp>
@@ -21,6 +30,8 @@ inline bool OnCreateResourceView(
   const auto resource_desc = device->get_resource_desc(resource);
   if (resource_desc.type != reshade::api::resource_type::texture_3d) return false;
 
+  // Fill in the D3D11 default-view equivalent: full texture for SRVs and a
+  // single mip for UAVs.
   desc.type = reshade::api::resource_view_type::texture_3d;
   if (desc.format == reshade::api::format::unknown) {
     desc.format = resource_desc.texture.format;

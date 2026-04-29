@@ -1,3 +1,5 @@
+#include "./antialiasing.hlsli"
+
 // ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:43:41 2024
 
 cbuffer cbDefaultPSC : register(b2) {
@@ -257,5 +259,10 @@ void main(
   } else {
     o0.xyzw = r0.xyzw;
   }
+
+  o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb);
+  o0.rgb = ApplyCustomFilmGrain(o0.rgb, v1.xy);
+  o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb);
+
   return;
 }

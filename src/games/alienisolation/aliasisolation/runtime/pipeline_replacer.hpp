@@ -1,5 +1,15 @@
 #pragma once
 
+/*
+ * DXBC-checksum shader replacement for non-TAA Alias Isolation fixes.
+ *
+ * The original ASI replaces a few game shaders directly by matching the DXBC
+ * header checksum. RenoDX normally uses CRC32-based shader replacement, but
+ * these Alias Isolation replacements stay self-contained by cloning the runtime
+ * pipeline when a matching shader subobject is created and rebinding the clone
+ * while the Alias Isolation toggle is enabled.
+ */
+
 #include <array>
 #include <cstdlib>
 #include <cstring>
@@ -11,8 +21,8 @@
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
 
-#include "../../../utils/bitwise.hpp"
-#include "../../../utils/pipeline.hpp"
+#include "../../../../utils/bitwise.hpp"
+#include "../../../../utils/pipeline.hpp"
 #include "./constant_buffers.hpp"
 #include "./logging.hpp"
 #include "./shader_ids.hpp"
@@ -26,6 +36,8 @@ struct ReplacementShader {
 };
 
 struct ReplacementPipeline {
+  // Keep both handles so we can destroy the clone with the right device and map
+  // replacement handles back to originals during destruction callbacks.
   reshade::api::device* device = nullptr;
   reshade::api::pipeline original = {0u};
   reshade::api::pipeline replacement = {0u};
@@ -56,14 +68,18 @@ inline std::span<const uint8_t> SpanOf(const auto& shader) {
 
 inline ReplacementShader ReplacementFor(ShaderId id) {
   switch (id) {
+#if ALIENISOLATION_ENABLE_BARREL_DISTORTION_REMOVAL
     case ShaderId::MainPostVs:
       return {SpanOf(__aliasisolation_main_post), "aliasisolation_main_post", reshade::api::pipeline_stage::vertex_shader};
+#endif
     case ShaderId::ShadowLinearizePs:
       return {SpanOf(__aliasisolation_shadow_linearize), "aliasisolation_shadow_linearize", reshade::api::pipeline_stage::pixel_shader};
     case ShaderId::ShadowDownsamplePs:
       return {SpanOf(__aliasisolation_shadow_downsample), "aliasisolation_shadow_downsample", reshade::api::pipeline_stage::pixel_shader};
+#if ALIENISOLATION_ENABLE_BLOOM_MERGE_REPLACEMENT
     case ShaderId::BloomMergePs:
       return {SpanOf(__aliasisolation_bloom_merge), "aliasisolation_bloom_merge", reshade::api::pipeline_stage::pixel_shader};
+#endif
     default:
       return {};
   }
@@ -108,6 +124,8 @@ inline void ReplaceShaderCode(reshade::api::pipeline_subobject& subobject, std::
   auto* desc = static_cast<reshade::api::shader_desc*>(subobject.data);
   if (desc == nullptr) return;
 
+  // ClonePipelineSubObjects allocates shader bytecode buffers; free the old one
+  // before installing the embedded Alias Isolation bytecode into the clone.
   if (desc->code != nullptr) {
     free(const_cast<void*>(desc->code));
   }
@@ -149,6 +167,8 @@ inline void OnInitPipeline(
   std::vector<PendingReplacement> pending_replacements;
   std::array<ShaderId, 3> shader_ids = {ShaderId::Unknown, ShaderId::Unknown, ShaderId::Unknown};
 
+  // Scan the incoming pipeline for any game shader that Alias Isolation knows
+  // how to replace. Multiple subobjects can be replaced in the same clone.
   for (uint32_t i = 0; i < subobject_count; ++i) {
     const auto& subobject = subobjects[i];
     if (!IsReplacementStage(subobject.type) || subobject.data == nullptr || subobject.count == 0u) continue;
@@ -165,6 +185,9 @@ inline void OnInitPipeline(
 
   if (pending_replacements.empty()) return;
 
+  // Build a separate replacement pipeline instead of mutating the original
+  // pipeline object. That lets the toggle switch replacements on/off at bind
+  // time without changing RenoDX core behavior.
   auto* replacement_subobjects = renodx::utils::pipeline::ClonePipelineSubObjects(subobjects, subobject_count);
   if (replacement_subobjects == nullptr) return;
 
@@ -256,6 +279,8 @@ inline void OnBindPipeline(reshade::api::command_list* cmd_list, reshade::api::p
   }
 
   rebinding_replacement = true;
+  // Re-entering bind_pipeline triggers the same ReShade callback, so the guard
+  // above prevents an infinite rebinding loop.
   cmd_list->bind_pipeline(stages, replacement->second.replacement);
   rebinding_replacement = false;
 }

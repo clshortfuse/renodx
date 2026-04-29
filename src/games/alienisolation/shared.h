@@ -27,7 +27,7 @@ struct ShaderInjectData {
   float fxSharpening;
   float fxChromaticAberration;
   float fxAliasIsolation;
-  float padding1;
+  float custom_random;
   float padding2;
   float padding3;
 };
