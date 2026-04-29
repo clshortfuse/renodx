@@ -40,7 +40,7 @@ inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderIn
   });
 
   insert_pos = settings.insert(
-      ++insert_pos,
+      insert_pos,
       new renodx::utils::settings::Setting{
           .value_type = renodx::utils::settings::SettingValueType::TEXT,
           .label = "Requires in-game Video settings:\nAnti-aliasing = SMAA T1x\nChromatic Aberration = Off\nMotion Blur = On.",
@@ -59,7 +59,7 @@ inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderIn
       ++insert_pos,
       new renodx::utils::settings::Setting{
           .key = "AliasIsolationTAA",
-          .binding = &constant_buffers::enabled,
+          .binding = &shader_injection->fxAliasIsolation,
           .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
           .default_value = 0.f,
           .label = "Alias Isolation",
@@ -109,26 +109,11 @@ inline bool HandleDraw(reshade::api::command_list* cmd_list) {
 
     if (!smaa_replacement_enabled) {
       if (logging::ShouldLogFrame(constant_buffers::frame_state.frame_index, last_smaa_bypass_log)) {
-        logging::Warn("SMAA/final pass replacement temporarily disabled; allowing original game pass frame=",
+        logging::Info("SMAA final replacement is handled by the CRC shader branch; allowing game draw frame=",
                       constant_buffers::frame_state.frame_index);
       }
       return false;
     }
-
-    if (logging::ShouldLogFrame(constant_buffers::frame_state.frame_index, last_smaa_bypass_log)) {
-      logging::Info("replacing game SMAA spatial/final pass frame=", constant_buffers::frame_state.frame_index,
-                    " post_effects=", logging::Bool(post_effects_enabled));
-    }
-
-    const bool replaced = post_effects_enabled
-                              ? post::Run(cmd_list, *data, injected_data)
-                              : post::RunNeutralBlit(cmd_list, *data, injected_data);
-    if (!replaced) {
-      logging::Warn("SMAA replacement failed; allowing original game pass to draw");
-      return false;
-    }
-
-    return true;
   }
 
   return false;
@@ -193,6 +178,7 @@ inline void OnPresent(
 
 inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
   injected_data = shader_injection;
+  constant_buffers::enabled_binding = shader_injection != nullptr ? &shader_injection->fxAliasIsolation : &constant_buffers::enabled;
 
   renodx::utils::resource::Use(fdw_reason);
   renodx::utils::pipeline_layout::Use(fdw_reason);

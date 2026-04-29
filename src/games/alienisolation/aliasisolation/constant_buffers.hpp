@@ -13,10 +13,11 @@ struct FrameState {
 };
 
 inline float enabled = 0.f;
+inline float* enabled_binding = &enabled;
 inline FrameState frame_state = {};
 
 inline bool IsEnabled() {
-  return enabled > 0.f;
+  return enabled_binding != nullptr && *enabled_binding > 0.f;
 }
 
 inline float HammersleySample(uint32_t bits, uint32_t seed) {
