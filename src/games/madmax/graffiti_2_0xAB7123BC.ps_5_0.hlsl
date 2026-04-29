@@ -85,6 +85,6 @@ void main(
   o1.w = r1.y;
   o2.w = r1.z;
   o2.x = 0;
-  o0.rgb = saturate(o0.rgb);
+  o0.rgb = renodx::tonemap::neutwo::BT709(o0.rgb);
   return;
 }
