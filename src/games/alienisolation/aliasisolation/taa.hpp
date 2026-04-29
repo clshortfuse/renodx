@@ -525,5 +525,3 @@ inline bool MaybeRun(reshade::api::command_list* cmd_list, const descriptor_trac
 }
 
 }  // namespace alienisolation::aliasisolation::taa
-
-

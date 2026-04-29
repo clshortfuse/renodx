@@ -10,7 +10,8 @@ struct PSInput {
   float2 param1 : TEXCOORD0;
 };
 
-float4 main(in PSInput IN) : SV_Target0 {
+float4 main(in PSInput IN)
+    : SV_Target0 {
   uint screenWidth, screenHeight;
   colorTex.GetDimensions(screenWidth, screenHeight);
 

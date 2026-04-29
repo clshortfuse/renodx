@@ -16,20 +16,15 @@
 #include "./logging.hpp"
 #include "./pipeline_replacer.hpp"
 #include "./pipeline_tracker.hpp"
-#include "./post.hpp"
 #include "./resource_view_sanitizer.hpp"
 #include "./taa.hpp"
 
 namespace alienisolation::aliasisolation {
 
-inline ShaderInjectData* injected_data = nullptr;
 inline bool attached = false;
-inline constexpr bool post_effects_enabled = false;
-inline constexpr bool smaa_replacement_enabled = false;
 inline bool settings_appended = false;
 inline bool logged_master_state = false;
 inline bool last_master_state = false;
-inline uint64_t last_smaa_bypass_log = UINT64_MAX;
 
 inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderInjectData* shader_injection) {
   if (settings_appended || shader_injection == nullptr) return;
@@ -77,7 +72,7 @@ inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderIn
           .max = 100.f,
           .is_enabled = []() { return constant_buffers::IsEnabled(); },
           .parse = [](float value) { return value * 0.01f; },
-          .is_visible = []() { return post_effects_enabled; },
+          .is_visible = []() { return false; },
       });
 }
 
@@ -102,18 +97,6 @@ inline bool HandleDraw(reshade::api::command_list* cmd_list) {
 
   if (enabled) {
     taa::MaybeRun(cmd_list, *data);
-  }
-
-  if (data->shaders.pixel == ShaderId::SmaaSpatialPs) {
-    if (!enabled) return false;
-
-    if (!smaa_replacement_enabled) {
-      if (logging::ShouldLogFrame(constant_buffers::frame_state.frame_index, last_smaa_bypass_log)) {
-        logging::Info("SMAA final replacement is handled by the CRC shader branch; allowing game draw frame=",
-                      constant_buffers::frame_state.frame_index);
-      }
-      return false;
-    }
   }
 
   return false;
@@ -150,7 +133,6 @@ inline bool OnDrawOrDispatchIndirect(
 
 inline void OnDestroyDevice(reshade::api::device* device) {
   logging::Info("destroy device");
-  post::Destroy(device);
   taa::Destroy(device);
   pipeline_replacer::Destroy(device);
   pipeline_tracker::pipelines.clear();
@@ -177,7 +159,6 @@ inline void OnPresent(
 }
 
 inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
-  injected_data = shader_injection;
   constant_buffers::enabled_binding = shader_injection != nullptr ? &shader_injection->fxAliasIsolation : &constant_buffers::enabled;
 
   renodx::utils::resource::Use(fdw_reason);

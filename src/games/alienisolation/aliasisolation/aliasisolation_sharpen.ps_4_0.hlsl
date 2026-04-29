@@ -12,7 +12,8 @@ struct PSInput {
   float2 param1 : TEXCOORD0;
 };
 
-float4 main(in PSInput IN) : SV_Target0 {
+float4 main(in PSInput IN)
+    : SV_Target0 {
   uint screenWidth, screenHeight;
   colorTex.GetDimensions(screenWidth, screenHeight);
   const float2 texelSize = 1.0.xx / float2(screenWidth, screenHeight);
@@ -22,10 +23,10 @@ float4 main(in PSInput IN) : SV_Target0 {
 
   if (injectedData.fxSharpening > 0.f) {
     float3 neighbors[4] = {
-        renodx::color::srgb::DecodeSafe(colorTex.SampleLevel(PointSampler, IN.param1 + float2(1, 1) * texelSize, 0).xyz),
-        renodx::color::srgb::DecodeSafe(colorTex.SampleLevel(PointSampler, IN.param1 + float2(-1, 1) * texelSize, 0).xyz),
-        renodx::color::srgb::DecodeSafe(colorTex.SampleLevel(PointSampler, IN.param1 + float2(1, -1) * texelSize, 0).xyz),
-        renodx::color::srgb::DecodeSafe(colorTex.SampleLevel(PointSampler, IN.param1 + float2(-1, -1) * texelSize, 0).xyz),
+      renodx::color::srgb::DecodeSafe(colorTex.SampleLevel(PointSampler, IN.param1 + float2(1, 1) * texelSize, 0).xyz),
+      renodx::color::srgb::DecodeSafe(colorTex.SampleLevel(PointSampler, IN.param1 + float2(-1, 1) * texelSize, 0).xyz),
+      renodx::color::srgb::DecodeSafe(colorTex.SampleLevel(PointSampler, IN.param1 + float2(1, -1) * texelSize, 0).xyz),
+      renodx::color::srgb::DecodeSafe(colorTex.SampleLevel(PointSampler, IN.param1 + float2(-1, -1) * texelSize, 0).xyz),
     };
 
     float neighborDiff = 0.f;

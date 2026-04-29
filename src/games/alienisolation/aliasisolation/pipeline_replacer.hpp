@@ -85,7 +85,7 @@ inline ShaderId IdentifyShader(reshade::api::pipeline_subobject_type type, const
 
 inline bool IsReplacementStage(reshade::api::pipeline_subobject_type type) {
   return type == reshade::api::pipeline_subobject_type::vertex_shader
-      || type == reshade::api::pipeline_subobject_type::pixel_shader;
+         || type == reshade::api::pipeline_subobject_type::pixel_shader;
 }
 
 inline void SetShaderId(std::array<ShaderId, 3>& ids, reshade::api::pipeline_subobject_type type, ShaderId id) {
@@ -261,4 +261,3 @@ inline void OnBindPipeline(reshade::api::command_list* cmd_list, reshade::api::p
 }
 
 }  // namespace alienisolation::aliasisolation::pipeline_replacer
-
