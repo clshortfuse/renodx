@@ -75,22 +75,10 @@ inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderIn
               .is_enabled = []() { return constant_buffers::IsEnabled(); },
               .parse = [](float value) { return value == 0 ? 0.f : std::exp2(-(1.f - (value * 0.01f))); },
           },
-          new renodx::utils::settings::Setting{
-              .key = "FxChromaticAberration",
-              .binding = &shader_injection->fxChromaticAberration,
-              .default_value = 50.f,
-              .label = "Chromatic Aberration",
-              .section = "Alias Isolation",
-              .max = 100.f,
-              .is_enabled = []() { return constant_buffers::IsEnabled(); },
-              .parse = [](float value) { return value * 0.01f; },
-              .is_visible = []() { return false; },
-          },
       });
 }
 
 inline void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("FxChromaticAberration", 0.f);
   renodx::utils::settings::UpdateSetting("FxSharpening", 0.f);
   renodx::utils::settings::UpdateSetting("AliasIsolationTAA", 0.f);
 }
