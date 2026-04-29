@@ -1,5 +1,14 @@
 #pragma once
 
+/*
+ * CPU-side jitter injection for Alien Isolation's camera constant buffers.
+ *
+ * Alias Isolation modifies the game's mapped D3D11 cbuffers before the post
+ * passes consume them. This RenoDX version emulates that by identifying the same
+ * buffers through shader/register usage, watching map/unmap callbacks, and
+ * patching the data on unmap for fullscreen camera rendering only.
+ */
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -108,6 +117,8 @@ struct RenderState {
 };
 
 struct MatrixState {
+  // Kept without jitter so velocity/shadow fixes can compose their own precise
+  // transforms instead of reusing already-jittered game matrices.
   Matrix4 curr_view_matrix = {};
   Matrix4 prev_view_proj_no_jitter = {};
   Matrix4 curr_view_proj_no_jitter = {};
@@ -345,6 +356,9 @@ inline void TrackBuffer(BufferKind kind, reshade::api::buffer_range range) {
 inline void CaptureConstantBuffers(reshade::api::command_list*, const descriptor_tracker::CommandListData& data) {
   if (!constant_buffers::IsEnabled()) return;
 
+  // These bindings mirror the original ASI's hard-coded knowledge of the
+  // game's passes: SMAA VS exposes DefaultXSC, RGBM VS exposes DefaultVSC, and
+  // camera motion PS exposes DefaultPSC.
   if (data.shaders.vertex == ShaderId::SmaaVs) {
     if (const auto range = descriptor_tracker::GetBufferRange(data.vertex_cbs, 0u); range.has_value()) {
       TrackBuffer(BufferKind::DefaultXSC, *range);
@@ -403,6 +417,9 @@ inline void ApplyDefaultXSC(CbDefaultXSC* xsc) {
                              || xsc_cache.sample_index != constant_buffers::frame_state.taa_sample_index;
 
   if (needs_rebuild) {
+    // Cache the jittered variants for this frame/sample. The same XSC buffer can
+    // be mapped more than once, and recomputing from an already-jittered matrix
+    // would accumulate the offset.
     xsc_cache.disabled = false;
     xsc_cache.sample_index = constant_buffers::frame_state.taa_sample_index;
 
@@ -587,6 +604,8 @@ inline void OnMapBufferRegion(
   const BufferKind kind = KindForResource(resource);
   if (kind == BufferKind::Unknown) return;
 
+  // ReShade reports UINT64_MAX for "map the rest of the buffer" on some paths.
+  // Resolve it so the unmap handler can safely bounds-check the expected layout.
   uint64_t resolved_size = size;
   if (resolved_size == UINT64_MAX) {
     const auto desc = device->get_resource_desc(resource);
@@ -604,6 +623,8 @@ inline void OnUnmapBufferRegion(reshade::api::device*, reshade::api::resource re
   const auto it = mapped_buffers.find(resource.handle);
   if (it == mapped_buffers.end()) return;
 
+  // The game writes the cbuffer while it is mapped; patch after that write but
+  // before the GPU consumes the data.
   const BufferKind kind = it->second.kind;
   const bool applied = ApplyMappedBuffer(it->second);
   mapped_buffers.erase(it);

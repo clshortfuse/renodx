@@ -1,7 +1,17 @@
 #pragma once
 
+/*
+ * Entry point for the self-contained Alias Isolation integration.
+ *
+ * addon.cpp includes this file only; the rest of the Alias Isolation port stays
+ * under aliasisolation/runtime. This header wires the RenoDX setting, registers
+ * the ReShade callbacks, and routes draw-time events to the jitter and TAA
+ * systems.
+ */
+
 #include <windows.h>
 #include <algorithm>
+#include <cmath>
 
 #include <include/reshade.hpp>
 
@@ -10,14 +20,14 @@
 #include "../../../utils/settings.hpp"
 #include "../../../utils/state.hpp"
 #include "../shared.h"
-#include "./constant_buffers.hpp"
-#include "./descriptor_tracker.hpp"
-#include "./jitter.hpp"
-#include "./logging.hpp"
-#include "./pipeline_replacer.hpp"
-#include "./pipeline_tracker.hpp"
-#include "./resource_view_sanitizer.hpp"
-#include "./taa.hpp"
+#include "./runtime/constant_buffers.hpp"
+#include "./runtime/descriptor_tracker.hpp"
+#include "./runtime/jitter.hpp"
+#include "./runtime/logging.hpp"
+#include "./runtime/pipeline_replacer.hpp"
+#include "./runtime/pipeline_tracker.hpp"
+#include "./runtime/resource_view_sanitizer.hpp"
+#include "./runtime/taa.hpp"
 
 namespace alienisolation::aliasisolation {
 
@@ -30,54 +40,58 @@ inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderIn
   if (settings_appended || shader_injection == nullptr) return;
   settings_appended = true;
 
-  auto insert_pos = std::find_if(settings.begin(), settings.end(), [](const renodx::utils::settings::Setting* setting) {
-    return setting != nullptr && setting->section == "Options";
-  });
-
-  insert_pos = settings.insert(
-      insert_pos,
-      new renodx::utils::settings::Setting{
-          .value_type = renodx::utils::settings::SettingValueType::TEXT,
-          .label = "Requires in-game Video settings:\nAnti-aliasing = SMAA T1x\nChromatic Aberration = Off\nMotion Blur = On.",
-          .section = "Alias Isolation",
-      });
-
-  insert_pos = settings.insert(
-      ++insert_pos,
-      new renodx::utils::settings::Setting{
-          .value_type = renodx::utils::settings::SettingValueType::TEXT,
-          .label = "Special thanks to Ryan J. Gray and Rick Runyon for creating Alias Isolation.",
-          .section = "Alias Isolation",
-      });
-
-  insert_pos = settings.insert(
-      ++insert_pos,
-      new renodx::utils::settings::Setting{
-          .key = "AliasIsolationTAA",
-          .binding = &shader_injection->fxAliasIsolation,
-          .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-          .default_value = 0.f,
-          .label = "Alias Isolation",
-          .section = "Alias Isolation",
-      });
-
-  insert_pos = settings.insert(
-      ++insert_pos,
-      new renodx::utils::settings::Setting{
-          .key = "FxChromaticAberration",
-          .binding = &shader_injection->fxChromaticAberration,
-          .default_value = 50.f,
-          .label = "Chromatic Aberration",
-          .section = "Alias Isolation",
-          .max = 100.f,
-          .is_enabled = []() { return constant_buffers::IsEnabled(); },
-          .parse = [](float value) { return value * 0.01f; },
-          .is_visible = []() { return false; },
+  // Keep the Alias Isolation controls above the generic Options section so the
+  // game-setting requirements are visible before the reset buttons.
+  settings.insert(
+      std::find_if(settings.begin(), settings.end(), [](const renodx::utils::settings::Setting* setting) {
+        return setting != nullptr && setting->section == "Options";
+      }),
+      {
+          new renodx::utils::settings::Setting{
+              .value_type = renodx::utils::settings::SettingValueType::TEXT,
+              .label = "Requires in-game video settings:\nAnti-aliasing = SMAA T1x\nMotion Blur = On.",
+              .section = "Alias Isolation",
+          },
+          new renodx::utils::settings::Setting{
+              .value_type = renodx::utils::settings::SettingValueType::TEXT,
+              .label = "Special thanks to Ryan J. Gray and Rick Runyon for creating Alias Isolation.",
+              .section = "Alias Isolation",
+          },
+          new renodx::utils::settings::Setting{
+              .key = "AliasIsolationTAA",
+              .binding = &shader_injection->fxAliasIsolation,
+              .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+              .default_value = 1.f,
+              .label = "Alias Isolation TAA",
+              .section = "Alias Isolation",
+          },
+          new renodx::utils::settings::Setting{
+              .key = "FxSharpening",
+              .binding = &shader_injection->fxSharpening,
+              .default_value = 100.f,
+              .label = "Sharpening",
+              .section = "Alias Isolation",
+              .max = 100.f,
+              .is_enabled = []() { return constant_buffers::IsEnabled(); },
+              .parse = [](float value) { return value == 0 ? 0.f : std::exp2(-(1.f - (value * 0.01f))); },
+          },
+          new renodx::utils::settings::Setting{
+              .key = "FxChromaticAberration",
+              .binding = &shader_injection->fxChromaticAberration,
+              .default_value = 50.f,
+              .label = "Chromatic Aberration",
+              .section = "Alias Isolation",
+              .max = 100.f,
+              .is_enabled = []() { return constant_buffers::IsEnabled(); },
+              .parse = [](float value) { return value * 0.01f; },
+              .is_visible = []() { return false; },
+          },
       });
 }
 
 inline void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("FxChromaticAberration", 0.f);
+  renodx::utils::settings::UpdateSetting("FxSharpening", 0.f);
   renodx::utils::settings::UpdateSetting("AliasIsolationTAA", 0.f);
 }
 
@@ -87,6 +101,9 @@ inline bool HandleDraw(reshade::api::command_list* cmd_list) {
 
   const bool enabled = constant_buffers::IsEnabled();
 
+  // All three paths are draw-driven because the original game provides the
+  // needed resources during ordinary post-processing draws, not standalone
+  // compute passes.
   if (enabled) {
     jitter::CaptureConstantBuffers(cmd_list, *data);
   }
@@ -146,6 +163,8 @@ inline void OnPresent(
     const reshade::api::rect*,
     uint32_t,
     const reshade::api::rect*) {
+  // Advance the frame after presentation. The next frame's jitter must be based
+  // on whether TAA actually dispatched during the frame that just ended.
   jitter::FinishFrame();
   constant_buffers::BeginFrame();
 
@@ -161,6 +180,8 @@ inline void OnPresent(
 inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
   constant_buffers::enabled_binding = shader_injection != nullptr ? &shader_injection->fxAliasIsolation : &constant_buffers::enabled;
 
+  // The runtime uses RenoDX's resource, pipeline-layout, and state helpers but
+  // keeps all game-specific behavior in this folder.
   renodx::utils::resource::Use(fdw_reason);
   renodx::utils::pipeline_layout::Use(fdw_reason);
   renodx::utils::state::Use(fdw_reason);
@@ -171,6 +192,8 @@ inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
       attached = true;
       logging::Info("attach");
 
+      // Registration is intentionally centralized here so detach mirrors attach
+      // exactly and addon.cpp does not need to know about the internal modules.
       reshade::register_event<reshade::addon_event::init_swapchain>(jitter::OnInitSwapchain);
       reshade::register_event<reshade::addon_event::destroy_swapchain>(jitter::OnDestroySwapchain);
       reshade::register_event<reshade::addon_event::init_command_list>(descriptor_tracker::OnInitCommandList);

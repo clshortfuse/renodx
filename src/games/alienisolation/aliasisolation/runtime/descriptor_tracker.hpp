@@ -1,5 +1,14 @@
 #pragma once
 
+/*
+ * Per-command-list descriptor and state tracker.
+ *
+ * ReShade callbacks tell us when pipelines, render targets, viewports, SRVs,
+ * and constant buffers are bound, but the TAA insertion point only sees a draw
+ * event. This tracker reconstructs the D3D11-like register state needed to find
+ * Alias Isolation's color, depth, velocity, and camera cbuffers at that draw.
+ */
+
 #include <cstdint>
 #include <optional>
 #include <type_traits>
@@ -9,15 +18,17 @@
 
 #include <include/reshade.hpp>
 
-#include "../../../utils/bitwise.hpp"
-#include "../../../utils/hash.hpp"
-#include "../../../utils/pipeline_layout.hpp"
+#include "../../../../utils/bitwise.hpp"
+#include "../../../../utils/hash.hpp"
+#include "../../../../utils/pipeline_layout.hpp"
 #include "./pipeline_tracker.hpp"
 
 namespace alienisolation::aliasisolation::descriptor_tracker {
 
 using RegisterSlot = std::pair<uint32_t, uint32_t>;
 
+// Stored as command-list private data so deferred/immediate command lists keep
+// independent binding state.
 struct __declspec(uuid("dce8f351-c8e0-40f9-a17d-73d7b9b37135")) CommandListData {
   pipeline_tracker::BoundShaders shaders;
   std::unordered_map<RegisterSlot, reshade::api::resource_view, renodx::utils::hash::HashPair> pixel_srvs;
@@ -66,6 +77,8 @@ inline bool ResolveRegister(
   const auto& param = layout_data->params[layout_param];
   const uint32_t binding = update.binding + descriptor_index;
 
+  // Translate ReShade's abstract pipeline-layout parameter back into the DX
+  // register index/space the game's shader expects.
   switch (param.type) {
     case reshade::api::pipeline_layout_param_type::push_descriptors:
       slot = {param.push_descriptors.dx_register_index + binding, param.push_descriptors.dx_register_space};
@@ -90,6 +103,8 @@ inline bool ResolveRegister(
 
 template <typename MapT, typename ValueT>
 inline void StoreDescriptor(MapT& map, const RegisterSlot& slot, const ValueT& value) {
+  // Null descriptors clear stale register state; otherwise later draw hooks
+  // would see resources that the game has already unbound.
   if constexpr (std::is_same_v<ValueT, reshade::api::resource_view>) {
     if (value.handle == 0u) {
       map.erase(slot);
@@ -172,6 +187,8 @@ inline void OnPushDescriptors(
   auto* data = Get(cmd_list);
   if (data == nullptr) return;
 
+  // Only SRVs and constant buffers are tracked here. UAVs and samplers are
+  // managed by the manual TAA dispatch when it binds its own compute pipeline.
   for (uint32_t i = 0; i < update.count; ++i) {
     RegisterSlot slot = {};
     if (!ResolveRegister(layout, layout_param, update, i, slot)) continue;

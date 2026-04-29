@@ -40,7 +40,9 @@ void main(
   r0.xyz = r0.xxx * r1.xyz + r2.xyz;
 
   o0.rgb = r0.rgb;
-  // skip sRGB encoding as image is not linearized from resource views
+
+  o0.rgb = ApplyCustomFilmGrain(o0.rgb, v1.xy);
+
   o0.rgb = WriteWithSRGBEncode(o0.rgb);
   o0.w = 0;
   return;

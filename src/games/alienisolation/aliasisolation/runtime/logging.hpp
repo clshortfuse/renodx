@@ -1,5 +1,13 @@
 #pragma once
 
+/*
+ * Compile-time gated logging helpers for the Alias Isolation port.
+ *
+ * Define ALIENISOLATION_ALIAS_LOGGING when diagnosing pass detection or TAA
+ * resource capture. In normal builds these helpers compile down to argument
+ * suppression so the runtime path does not spam ReShade.log.
+ */
+
 #include <cstdint>
 #include <limits>
 #include <sstream>
@@ -18,6 +26,8 @@ inline constexpr bool enabled = false;
 
 template <typename... Args>
 inline void Message(reshade::log::level level, Args&&... args) {
+  // Keep the formatting call site simple while making the whole body disappear
+  // unless detailed Alias Isolation logging is explicitly enabled.
 #if defined(ALIENISOLATION_ALIAS_LOGGING)
   std::ostringstream stream;
   stream << "AliasIsolation: ";

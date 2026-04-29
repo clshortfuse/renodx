@@ -43,7 +43,29 @@ void main(
   float4 fDest;
 
   if (injectedData.fxAliasIsolation > 0.f) {
+    uint width, height;
+    colorTex.GetDimensions(width, height);
+
     o0.rgb = colorTex.SampleLevel(LinearSampler_s, v1.xy, 0).rgb;
+    o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb);
+
+    if (injectedData.fxSharpening > 0.f) {
+      Lilium::RCAS::Neighborhood rcasSamples = Lilium::RCAS::SampleNeighborhood(o0.rgb, v1.xy, width, height, colorTex, LinearSampler_s);
+
+      rcasSamples.b = renodx::color::gamma::DecodeSafe(rcasSamples.b);
+      rcasSamples.d = renodx::color::gamma::DecodeSafe(rcasSamples.d);
+      rcasSamples.f = renodx::color::gamma::DecodeSafe(rcasSamples.f);
+      rcasSamples.h = renodx::color::gamma::DecodeSafe(rcasSamples.h);
+
+      o0.rgb = rcasSamples.e;
+
+      o0.rgb = Lilium::RCAS::ApplyCore(rcasSamples, injectedData.fxSharpening, injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
+    }
+
+    o0.rgb = ApplyCustomFilmGrain(o0.rgb, v1.xy);
+
+    o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb);
+
     o0.w = 0;
     return;
   }
@@ -73,8 +95,10 @@ void main(
   }
 
   o0.rgb = r2.rgb;
-  // skip sRGB encoding as image is not linearized from resource views
-  o0.rgb = renodx::color::srgb::EncodeSafe(o0.rgb);
+
+  o0.rgb = ApplyCustomFilmGrain(o0.rgb, v1.xy);
+
+  o0.rgb = WriteWithSRGBEncode(o0.rgb);
   o0.w = 0;
   return;
 }

@@ -1,5 +1,14 @@
 #pragma once
 
+/*
+ * Alias Isolation temporal resolve implementation.
+ *
+ * This module captures the game's current HDR color, velocity, and depth
+ * resources at the same passes the original ASI used, dispatches the embedded
+ * TAA compute shader, stores ping-pong history textures, and copies the resolved
+ * result back into the game's HDR color resource before later post passes run.
+ */
+
 #include <array>
 #include <cstdint>
 #include <limits>
@@ -9,7 +18,7 @@
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
 
-#include "../../../utils/state.hpp"
+#include "../../../../utils/state.hpp"
 #include "./constant_buffers.hpp"
 #include "./descriptor_tracker.hpp"
 #include "./logging.hpp"
@@ -24,6 +33,8 @@ struct HistoryTexture {
 };
 
 struct Resources {
+  // History is ping-ponged each successful dispatch: one texture is read as
+  // previous history while the other receives the current resolved frame.
   std::array<HistoryTexture, 2> history = {};
   uint32_t width = 0u;
   uint32_t height = 0u;
@@ -40,6 +51,8 @@ struct Resources {
   reshade::api::resource_view velocity_srv = {0};
   reshade::api::format velocity_view_format = reshade::api::format::unknown;
   reshade::api::resource_view depth_srv = {0};
+  // Used to reject stale velocity/depth if the camera-motion pass was not seen
+  // on the same frame as the insertion point.
   uint64_t capture_frame = std::numeric_limits<uint64_t>::max();
 };
 
@@ -125,6 +138,8 @@ inline bool EnsureComputePipeline(reshade::api::command_list* cmd_list) {
 
   DestroyCompute(device);
 
+  // Layout mirrors the shader registers:
+  // s0-s1 samplers, t0-t3 inputs, and u0 output history.
   std::array<reshade::api::pipeline_layout_param, 3> params = {};
   params[0].type = reshade::api::pipeline_layout_param_type::push_descriptors;
   params[0].push_descriptors.count = 2;
@@ -195,6 +210,8 @@ inline bool GetSupportedHistoryFormat(
   const auto color_desc = device->get_resource_desc(color_resource);
   const auto color_view_desc = device->get_resource_view_desc(color_srv);
 
+  // Match the current HDR resource when possible. The typeless path is kept for
+  // the future R16G16B16A16 upgrade, where float typed SRV/UAV views are used.
   resource_format = color_desc.texture.format;
   view_format = color_view_desc.format != reshade::api::format::unknown
                     ? color_view_desc.format
@@ -247,6 +264,9 @@ inline bool EnsureHistory(reshade::api::command_list* cmd_list, reshade::api::re
                        && resources.view_format == view_format;
   if (matches) return true;
 
+  // Recreate history when resolution or HDR format changes, then seed both
+  // buffers from the current color so the first resolve does not blend with
+  // uninitialized history.
   DestroyHistory(device);
 
   reshade::api::resource_desc desc = {};
@@ -332,6 +352,8 @@ inline bool EnsureVelocitySrv(reshade::api::command_list* cmd_list, reshade::api
 
   DestroyVelocitySrv(device);
 
+  // Camera motion writes velocity as an RTV; the TAA compute shader needs an SRV
+  // of that same texture.
   const auto view_desc = reshade::api::resource_view_desc(reshade::api::resource_view_type::texture_2d, view_format, 0, 1, 0, 1);
   if (!device->create_resource_view(velocity_resource, reshade::api::resource_usage::shader_resource, view_desc, &resources.velocity_srv)) {
     resources.velocity_resource = {0};
@@ -354,6 +376,7 @@ inline void CaptureCameraMotion(reshade::api::command_list* cmd_list, const desc
   }
 
   const auto velocity_rtv = command_data.render_targets[0];
+  // Alias Isolation uses pixel t8 from the camera-motion pass as depth.
   const auto depth_srv = descriptor_tracker::GetView(command_data.pixel_srvs, 8u);
   if (velocity_rtv.handle == 0u || depth_srv.handle == 0u) {
     if (LogEvery(last_capture_missing_log)) {
@@ -427,6 +450,8 @@ inline bool DispatchCompute(
   cmd_list->barrier(resources.velocity_resource, reshade::api::resource_usage::render_target, reshade::api::resource_usage::shader_resource);
   cmd_list->barrier(resources.history[current].resource, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::unordered_access);
 
+  // Bind the compute pass directly instead of using mods::shader so this port
+  // stays self-contained and independent from CRC32 shader replacement.
   cmd_list->push_descriptors(reshade::api::shader_stage::all_compute, resources.compute_layout, 0, updates[0]);
   cmd_list->push_descriptors(reshade::api::shader_stage::all_compute, resources.compute_layout, 1, updates[1]);
   cmd_list->push_descriptors(reshade::api::shader_stage::all_compute, resources.compute_layout, 2, updates[2]);
@@ -441,6 +466,8 @@ inline bool DispatchCompute(
   cmd_list->barrier(resources.velocity_resource, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::render_target);
 
   if (previous_state.has_value()) {
+    // Restore the game pipeline/descriptors after the manual compute dispatch so
+    // the draw that triggered this insertion can continue normally.
     previous_state->Apply(cmd_list);
   }
   return true;
@@ -504,6 +531,8 @@ inline bool MaybeRun(reshade::api::command_list* cmd_list, const descriptor_trac
   const bool before_rgbm = command_data.shaders.vertex == ShaderId::RgbmEncodeVs && command_data.shaders.pixel == ShaderId::RgbmEncodePs;
   if (!before_dof && !before_rgbm) return false;
 
+  // Prefer DoF encode, matching the original mod. RGBM encode is a later
+  // fallback in case the DoF path is absent for a scene/frame.
   if (before_dof && !logged_dof_insertion) {
     logged_dof_insertion = true;
     logging::Info("using DoF encode insertion point for TAA");
