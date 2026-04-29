@@ -10,13 +10,24 @@
 
 namespace alienisolation::aliasisolation::logging {
 
+#if defined(ALIENISOLATION_ALIAS_LOGGING)
+inline constexpr bool enabled = true;
+#else
+inline constexpr bool enabled = false;
+#endif
+
 template <typename... Args>
 inline void Message(reshade::log::level level, Args&&... args) {
+#if defined(ALIENISOLATION_ALIAS_LOGGING)
   std::ostringstream stream;
   stream << "AliasIsolation: ";
   (stream << ... << std::forward<Args>(args));
   const std::string message = stream.str();
   reshade::log::message(level, message.c_str());
+#else
+  (void)level;
+  ((void)args, ...);
+#endif
 }
 
 template <typename... Args>
@@ -41,6 +52,9 @@ inline const char* Bool(bool value) {
 }
 
 inline bool ShouldLogFrame(uint64_t frame, uint64_t& last_frame, uint64_t interval = 120u) {
+  if constexpr (!enabled) {
+    return false;
+  }
   if (last_frame == std::numeric_limits<uint64_t>::max() || frame >= last_frame + interval) {
     last_frame = frame;
     return true;

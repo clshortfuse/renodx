@@ -15,8 +15,9 @@
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
-#include "./shared.h"
 #include "./aliasisolation/aliasisolation.hpp"
+#include "./shared.h"
+
 
 namespace {
 
@@ -36,68 +37,30 @@ static bool HasRGBA16FloatRenderTarget(reshade::api::command_list* cmd_list) {
   return false;
 }
 
-static void ActivateCurrentRenderTargetHotSwap(reshade::api::command_list* cmd_list) {
-  auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
-  bool changed = false;
-  for (auto rtv : rtvs) {
-    changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv) || changed;
-  }
-  if (changed) {
-    renodx::mods::swapchain::FlushDescriptors(cmd_list);
-    renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});
-  }
-}
-
-static bool OnUpgradeRTVDraw(reshade::api::command_list* cmd_list) {
-  ActivateCurrentRenderTargetHotSwap(cmd_list);
-  return true;
-}
-
-static bool OnAliasIsolationSmaaFinalDraw(reshade::api::command_list* cmd_list, const char* label) {
-  ActivateCurrentRenderTargetHotSwap(cmd_list);
-  static uint64_t last_log_frame = UINT64_MAX;
-  if (alienisolation::aliasisolation::constant_buffers::IsEnabled()
-      && alienisolation::aliasisolation::logging::ShouldLogFrame(
-          alienisolation::aliasisolation::constant_buffers::frame_state.frame_index,
-          last_log_frame)) {
-    alienisolation::aliasisolation::logging::Info("using ", label, " Alias Isolation shader branch frame=",
-                                                  alienisolation::aliasisolation::constant_buffers::frame_state.frame_index);
-  }
-  return true;
-}
-
 #define CustomRGBA16FloatShader(value)                                                      \
   {                                                                                         \
     value, { .crc32 = value, .code = __##value, .on_replace = &HasRGBA16FloatRenderTarget } \
   }
 
-#define UpgradeRTVShader(value)              \
-  {                                          \
-      value,                                 \
-      {                                      \
-          .crc32 = value,                    \
-          .on_draw = &OnUpgradeRTVDraw, \
-      },                                     \
-  }
-
-#define UpgradeRTVReplaceShader(value)       \
-  {                                          \
-      value,                                 \
-      {                                      \
-          .crc32 = value,                    \
-          .code = __##value,                 \
-          .on_draw = &OnUpgradeRTVDraw, \
-      },                                     \
-  }
-
-#define UpgradeRTVReplaceAliasSmaaFinalShader(value, label) \
-  {                                                         \
-      value,                                                \
-      {                                                     \
-          .crc32 = value,                                   \
-          .code = __##value,                                \
-          .on_draw = [](auto* cmd_list) { return OnAliasIsolationSmaaFinalDraw(cmd_list, label); }, \
-      },                                                    \
+#define UpgradeRTVReplaceShader(value)                                                                         \
+  {                                                                                                            \
+      value,                                                                                                   \
+      {                                                                                                        \
+          .crc32 = value,                                                                                      \
+          .code = __##value,                                                                                   \
+          .on_draw = [](auto* cmd_list) {                                                                      \
+            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                                  \
+            bool changed = false;                                                                              \
+            for (auto rtv : rtvs) {                                                                            \
+              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv) || changed; \
+            }                                                                                                  \
+            if (changed) {                                                                                     \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                             \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});          \
+            }                                                                                                  \
+            return true;                                                                                       \
+          },                                                                                                   \
+      },                                                                                                       \
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -203,7 +166,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomRGBA16FloatShader(0xB95A4E01),  // UI - can't see difference? cxmul red text background when searching container
     CustomRGBA16FloatShader(0xECFC10A2),  // UI - maybe
 
-    UpgradeRTVReplaceAliasSmaaFinalShader(0x05F61FE8, "SMAA T1x final 0x05F61FE8"),
+    UpgradeRTVReplaceShader(0x05F61FE8),  // final game shader - SMAA T1x
     UpgradeRTVReplaceShader(0x2D6BBE3A),  // final game shader - SMAA T2x
     UpgradeRTVReplaceShader(0x23F15352),  // SMAA 1
     UpgradeRTVReplaceShader(0x007F7E1C),  // SMAA 2

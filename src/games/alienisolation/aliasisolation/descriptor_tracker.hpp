@@ -2,8 +2,8 @@
 
 #include <cstdint>
 #include <optional>
-#include <unordered_map>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -205,6 +205,3 @@ inline void OnPushDescriptors(
 }
 
 }  // namespace alienisolation::aliasisolation::descriptor_tracker
-
-
-

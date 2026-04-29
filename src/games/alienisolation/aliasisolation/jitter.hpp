@@ -313,7 +313,7 @@ inline bool IsFullscreenPass() {
   const float screen_width = static_cast<float>(render_state.screen_width);
   const float screen_height = static_cast<float>(render_state.screen_height);
   return std::abs(render_state.viewport_width - screen_width) < 0.5f
-      && std::abs(render_state.viewport_height - screen_height) < 0.5f;
+         && std::abs(render_state.viewport_height - screen_height) < 0.5f;
 }
 
 inline void TrackBuffer(BufferKind kind, reshade::api::buffer_range range) {

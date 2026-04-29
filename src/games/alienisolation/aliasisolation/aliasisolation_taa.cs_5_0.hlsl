@@ -12,7 +12,6 @@ SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
-
 RWTexture2D<float4> u0 : register(u0);
 
 #define cmp            -
@@ -219,6 +218,4 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   u0[vThreadID.xy] = r0.xyzw;
   return;
 }
-
-
 
