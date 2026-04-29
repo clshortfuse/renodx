@@ -129,9 +129,21 @@ inline std::unordered_map<uint64_t, MappedBuffer> mapped_buffers;
 inline RenderState render_state = {};
 inline MatrixState matrix_state = {};
 inline XscCache xsc_cache = {};
-inline uint64_t last_track_log = std::numeric_limits<uint64_t>::max();
-inline uint64_t last_apply_log = std::numeric_limits<uint64_t>::max();
-inline uint64_t last_skip_log = std::numeric_limits<uint64_t>::max();
+inline std::array<uint64_t, 4> last_track_log = [] {
+  std::array<uint64_t, 4> result = {};
+  result.fill(std::numeric_limits<uint64_t>::max());
+  return result;
+}();
+inline std::array<uint64_t, 4> last_apply_log = [] {
+  std::array<uint64_t, 4> result = {};
+  result.fill(std::numeric_limits<uint64_t>::max());
+  return result;
+}();
+inline std::array<uint64_t, 4> last_skip_log = [] {
+  std::array<uint64_t, 4> result = {};
+  result.fill(std::numeric_limits<uint64_t>::max());
+  return result;
+}();
 inline uint64_t last_swapchain_log = std::numeric_limits<uint64_t>::max();
 
 inline const char* BufferKindName(BufferKind kind) {
@@ -149,6 +161,10 @@ inline const char* BufferKindName(BufferKind kind) {
 
 inline bool LogEvery(uint64_t& last_frame, uint64_t interval = 120u) {
   return logging::ShouldLogFrame(constant_buffers::frame_state.frame_index, last_frame, interval);
+}
+
+inline uint64_t& LogSlot(std::array<uint64_t, 4>& slots, BufferKind kind) {
+  return slots[static_cast<size_t>(kind)];
 }
 
 inline Matrix4 Identity() {
@@ -321,7 +337,7 @@ inline void TrackBuffer(BufferKind kind, reshade::api::buffer_range range) {
   if (target->handle == range.buffer.handle) return;
   *target = range.buffer;
 
-  if (LogEvery(last_track_log, 30u)) {
+  if (LogEvery(LogSlot(last_track_log, kind), 30u)) {
     logging::Info("tracking ", BufferKindName(kind), " resource=", logging::Hex(range.buffer.handle));
   }
 }
@@ -422,11 +438,13 @@ inline void ApplyDefaultPSC(CbDefaultPSC* psc) {
   if (psc == nullptr || !matrix_state.has_curr_view_proj || !matrix_state.has_prev_view_proj) return;
 
   // The velocity shader multiplies these matrices in single precision. Alias
-  // Isolation does the multiply on CPU with doubles and zeroes the second matrix
-  // to reduce subtle screen shake in the generated velocity vectors.
+  // Isolation does the multiply on CPU with doubles and leaves the second matrix
+  // as identity, which reduces subtle screen shake in the generated velocity
+  // vectors. The original ASI is built with GLM_FORCE_CTOR_INIT, so
+  // `glm::mat4()` is identity here, not a zero matrix.
   const Matrix4d prev_view_proj = ToDouble(matrix_state.prev_view_proj_no_jitter);
   psc->MotionBlurCurrInvViewProjection = ToFloat(Multiply(matrix_state.curr_inv_view_proj_no_jitter, prev_view_proj));
-  psc->MotionBlurPrevViewProjection = {};
+  psc->MotionBlurPrevViewProjection = Identity();
 
   const auto sample_offset = GetFrameJitter();
   const Matrix4d jitter_remove = JitterAddD(-static_cast<double>(sample_offset[0]), -static_cast<double>(sample_offset[1]));
@@ -443,8 +461,8 @@ inline bool ApplyMappedBuffer(const MappedBuffer& mapped) {
   if (mapped.data == nullptr) return false;
   if (!constant_buffers::IsEnabled()) return false;
   if (!IsFullscreenPass()) {
-    if (LogEvery(last_skip_log)) {
-      logging::Info("skipping jitter outside fullscreen pass rt=", render_state.rt_width, "x", render_state.rt_height,
+    if (LogEvery(LogSlot(last_skip_log, mapped.kind))) {
+      logging::Info("skipping ", BufferKindName(mapped.kind), " jitter outside fullscreen pass rt=", render_state.rt_width, "x", render_state.rt_height,
                     " viewport=", render_state.viewport_width, "x", render_state.viewport_height,
                     " screen=", render_state.screen_width, "x", render_state.screen_height);
     }
@@ -590,7 +608,7 @@ inline void OnUnmapBufferRegion(reshade::api::device*, reshade::api::resource re
   const bool applied = ApplyMappedBuffer(it->second);
   mapped_buffers.erase(it);
 
-  if (applied && LogEvery(last_apply_log)) {
+  if (applied && LogEvery(LogSlot(last_apply_log, kind))) {
     const auto sample_offset = GetFrameJitter();
     logging::Info("applied jitter to ", BufferKindName(kind),
                   " frame=", constant_buffers::frame_state.frame_index,

@@ -42,6 +42,12 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  if (injectedData.fxAliasIsolation > 0.f) {
+    o0.rgb = colorTex.SampleLevel(LinearSampler_s, v1.xy, 0).rgb;
+    o0.w = 0;
+    return;
+  }
+
   r0.x = blendTex.Sample(LinearSampler_s, v2.xy).w;
   r0.y = blendTex.Sample(LinearSampler_s, v2.zw).y;
   r1.xy = blendTex.Sample(LinearSampler_s, v1.xy).xz;

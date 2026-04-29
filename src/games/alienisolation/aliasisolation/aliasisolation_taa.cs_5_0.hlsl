@@ -192,10 +192,12 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r0.x = saturate(min(r6.x, r0.x));
   r6.xyzw = r7.xyzw * r0.xxxx + r9.zxyz;
 
-  // originally BT.601
-  r0.x = renodx::color::y::from::BT709(r5.rgb);
-  r0.y = renodx::color::y::from::BT709(r3.rgb);
-  r1.z = renodx::color::y::from::BT709(r4.rgb);
+  // r0.x = dot(float3(0.298999995, 0.587000012, 0.114), r5.rgb);
+  // r0.y = dot(float3(0.298999995, 0.587000012, 0.114), r3.rgb);
+  // r1.z = dot(float3(0.298999995, 0.587000012, 0.114), r4.rgb);
+  r0.x = renodx::color::yf::from::BT709(r5.rgb);
+  r0.y = renodx::color::yf::from::BT709(r3.rgb);
+  r1.z = renodx::color::yf::from::BT709(r4.rgb);
 
   r1.w = r0.x + -r0.y;
   r0.x = -r1.z + r0.x;

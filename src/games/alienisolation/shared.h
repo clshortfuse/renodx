@@ -26,6 +26,10 @@ struct ShaderInjectData {
   float fxFilmGrain;
   float fxSharpening;
   float fxChromaticAberration;
+  float fxAliasIsolation;
+  float padding1;
+  float padding2;
+  float padding3;
 };
 
 #ifndef __cplusplus

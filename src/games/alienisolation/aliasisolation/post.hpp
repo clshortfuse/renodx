@@ -227,15 +227,9 @@ inline bool RenderPass(
 
 inline bool RunNeutralBlit(
     reshade::api::command_list* cmd_list,
-    const descriptor_tracker::CommandListData& command_data,
+    reshade::api::resource_view source_srv,
+    reshade::api::resource_view target_rtv,
     ShaderInjectData* injected_data) {
-  if (command_data.render_targets.empty()) {
-    if (LogEvery(last_post_failure_log)) logging::Warn("neutral final blit has no RTV");
-    return false;
-  }
-
-  const auto target_rtv = command_data.render_targets[0];
-  const auto source_srv = descriptor_tracker::GetView(command_data.pixel_srvs, 0u);
   if (target_rtv.handle == 0u || source_srv.handle == 0u) {
     if (LogEvery(last_post_failure_log)) {
       logging::Warn("neutral final blit missing views source_srv=", logging::Hex(source_srv.handle),
@@ -257,6 +251,20 @@ inline bool RunNeutralBlit(
 
   LogViews("neutral final blit", cmd_list, source_srv, target_rtv, last_final_blit_log);
   return RenderPass(cmd_list, resources.sharpen_pass, source_srv, target_rtv, &neutral);
+}
+
+inline bool RunNeutralBlit(
+    reshade::api::command_list* cmd_list,
+    const descriptor_tracker::CommandListData& command_data,
+    ShaderInjectData* injected_data) {
+  if (command_data.render_targets.empty()) {
+    if (LogEvery(last_post_failure_log)) logging::Warn("neutral final blit has no RTV");
+    return false;
+  }
+
+  const auto target_rtv = command_data.render_targets[0];
+  const auto source_srv = descriptor_tracker::GetView(command_data.pixel_srvs, 0u);
+  return RunNeutralBlit(cmd_list, source_srv, target_rtv, injected_data);
 }
 
 inline bool Run(
