@@ -1,0 +1,55 @@
+#pragma once
+
+#include <array>
+#include <cmath>
+#include <cstdint>
+
+namespace alienisolation::aliasisolation::constant_buffers {
+
+struct FrameState {
+  uint32_t taa_sample_index = 0u;
+  uint64_t frame_index = 0u;
+  bool taa_ran_this_frame = false;
+};
+
+inline float enabled = 0.f;
+inline FrameState frame_state = {};
+
+inline bool IsEnabled() {
+  return enabled > 0.f;
+}
+
+inline float HammersleySample(uint32_t bits, uint32_t seed) {
+  bits = (bits << 16u) | (bits >> 16u);
+  bits = ((bits & 0x00ff00ffu) << 8u) | ((bits & 0xff00ff00u) >> 8u);
+  bits = ((bits & 0x0f0f0f0fu) << 4u) | ((bits & 0xf0f0f0f0u) >> 4u);
+  bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xccccccccu) >> 2u);
+  bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xaaaaaaaau) >> 1u);
+  bits ^= seed;
+  return static_cast<float>(bits) * 2.3283064365386963e-10f;
+}
+
+inline std::array<float, 2> CurrentFrameJitter(uint32_t width, uint32_t height) {
+  if (frame_state.taa_ran_this_frame || width == 0u || height == 0u) return {0.f, 0.f};
+
+  const uint32_t sample = (frame_state.taa_sample_index * 7u) % 16u;
+  std::array<float, 2> result = {
+      (static_cast<float>(sample) + 0.5f) / 16.f,
+      HammersleySample(sample, 238308531u),
+  };
+  result[0] = (result[0] - 0.5f) * 2.f / static_cast<float>(width);
+  result[1] = (result[1] - 0.5f) * 2.f / static_cast<float>(height);
+  return result;
+}
+
+inline void BeginFrame() {
+  ++frame_state.frame_index;
+  frame_state.taa_ran_this_frame = false;
+}
+
+inline void MarkTaaDispatched() {
+  frame_state.taa_ran_this_frame = true;
+  ++frame_state.taa_sample_index;
+}
+
+}  // namespace alienisolation::aliasisolation::constant_buffers

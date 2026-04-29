@@ -16,6 +16,7 @@
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
+#include "./aliasisolation/aliasisolation.hpp"
 
 namespace {
 
@@ -187,9 +188,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     UpgradeRTVReplaceShader(0x23F15352),  // SMAA 1
     UpgradeRTVReplaceShader(0x007F7E1C),  // SMAA 2
     UpgradeRTVReplaceShader(0xD212ED15),  // SMAA T2x
-
-    UpgradeRTVReplaceShader(0x7E16EE16),  // Sharpening - from Alias: Isolation
-    UpgradeRTVReplaceShader(0x32783A78),  // Chromatic Aberration - from Alias: Isolation
 
 };
 
@@ -474,6 +472,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("FxFilmGrainType", 0.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrain", 50.f);
   renodx::utils::settings::UpdateSetting("FxSharpening", 0.f);
+  alienisolation::aliasisolation::OnPresetOff();
 }
 
 struct __declspec(uuid("95F75086-12B7-4574-BE86-A91EA9390802")) DeviceData {
@@ -705,8 +704,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      alienisolation::aliasisolation::AppendSettings(settings, &shader_injection);
+
       renodx::mods::shader::expected_constant_buffer_index = 11;
-      renodx::mods::shader::force_pipeline_cloning = true;
+      // renodx::mods::shader::force_pipeline_cloning = true;
 
       renodx::mods::swapchain::use_resource_cloning = true;
 
@@ -754,6 +755,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
+  alienisolation::aliasisolation::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
