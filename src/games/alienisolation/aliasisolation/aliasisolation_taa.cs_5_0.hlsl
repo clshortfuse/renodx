@@ -1,5 +1,4 @@
-// shader hash was originally 0xF32EAEEC in alias isolation
-#include "../shared.h"
+#include "../../../shaders/renodx.hlsl"
 
 Texture2D<float4> t3 : register(t3);
 
@@ -13,9 +12,6 @@ SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
-cbuffer cb0 : register(b0) {
-  float4 cb0[1];
-}
 
 RWTexture2D<float4> u0 : register(u0);
 
@@ -28,16 +24,23 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  uint screenWidth, screenHeight;
+  t0.GetDimensions(screenWidth, screenHeight);
+  if (vThreadID.x >= screenWidth || vThreadID.y >= screenHeight) return;
+
+  const float2 screenSize = float2(screenWidth, screenHeight);
+  const float2 invScreenSize = 1.0.xx / screenSize;
+
   r0.xy = (uint2)vThreadID.xy;
   r0.xy = float2(0.5, 0.5) + r0.xy;
-  r0.zw = asuint(cb0[0].xy);
+  r0.zw = screenSize;
   r0.xy = r0.xy / r0.zw;
-  r1.xy = -cb0[0].zw + r0.xy;
+  r1.xy = -invScreenSize + r0.xy;
 
   r2.xyz = t0.SampleLevel(s1_s, r1.xy, 0).xyz;
   r3.xyz = min(100000, r2.xyz);
   r4.xyz = max(-100000, r2.xyz);
-  r5.xyzw = cb0[0].zwzw * float4(0, -1, 1, -1) + r0.xyxy;
+  r5.xyzw = invScreenSize.xyxy * float4(0, -1, 1, -1) + r0.xyxy;
 
   r6.xyz = t0.SampleLevel(s1_s, r5.xy, 0).xyz;
   r7.xyzw = 0.101266459 * r6.xyzx;
@@ -51,7 +54,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r2.xyzw = r8.xyzx * 0.0102548962 + r2.xyzw;
   r3.xyz = min(r8.xyz, r3.xyz);
   r4.xyz = max(r8.xyz, r4.xyz);
-  r8.xyzw = cb0[0].zwzw * float4(-1, 0, 1, 0) + r0.xyxy;
+  r8.xyzw = invScreenSize.xyxy * float4(-1, 0, 1, 0) + r0.xyxy;
   r9.xyz = t0.SampleLevel(s1_s, r8.xy, 0).xyz;
   r2.xyzw = r9.xyzx * 0.101266459 + r2.xyzw;
   r3.xyz = min(r9.xyz, r3.xyz);
@@ -72,7 +75,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r4.xyz = max(r8.xyz, r4.xyz);
   r7.xyz = min(r8.xyz, r7.xyz);
   r6.xyz = max(r8.xyz, r6.xyz);
-  r8.xyzw = cb0[0].zwzw * float4(-1, 1, 0, 1) + r0.xyxy;
+  r8.xyzw = invScreenSize.xyxy * float4(-1, 1, 0, 1) + r0.xyxy;
 
   r9.xyz = t0.SampleLevel(s1_s, r8.xy, 0).xyz;
   r2.xyzw = r9.xyzx * 0.0102548962 + r2.xyzw;
@@ -85,7 +88,7 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   r4.xyz = max(r9.xyz, r4.xyz);
   r7.xyz = min(r9.xyz, r7.xyz);
   r6.xyz = max(r9.xyz, r6.xyz);
-  r1.zw = cb0[0].zw + r0.xy;
+  r1.zw = invScreenSize + r0.xy;
 
   r9.xyz = t0.SampleLevel(s1_s, r1.zw, 0).xyz;
   r2.xyzw = r9.xyzx * 0.0102548962 + r2.xyzw;
@@ -214,3 +217,6 @@ void main(uint3 vThreadID: SV_DispatchThreadID) {
   u0[vThreadID.xy] = r0.xyzw;
   return;
 }
+
+
+
