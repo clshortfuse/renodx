@@ -166,6 +166,7 @@ inline void OnPresent(
 }
 
 inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
+  taa::shader_injection = shader_injection;
   constant_buffers::enabled_binding = shader_injection != nullptr ? &shader_injection->custom_alias_isolation_taa : &constant_buffers::enabled;
 
   // The runtime uses RenoDX's resource, pipeline-layout, and state helpers but
