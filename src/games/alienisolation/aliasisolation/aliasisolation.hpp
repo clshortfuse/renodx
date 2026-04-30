@@ -69,7 +69,7 @@ inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderIn
               .key = "FxSharpening",
               .binding = &shader_injection->custom_sharpening,
               .default_value = 100.f,
-              .label = "Sharpening",
+              .label = "Lilium RCAS Sharpening",
               .section = "Alias Isolation",
               .max = 100.f,
               .is_enabled = []() { return constant_buffers::IsEnabled(); },
