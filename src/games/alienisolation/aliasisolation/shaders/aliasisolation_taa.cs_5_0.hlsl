@@ -1,219 +1,221 @@
-Texture2D<float4> t3 : register(t3);
+#include "../../shared.h"
 
-Texture2D<float4> t2 : register(t2);
+Texture2D<float4> current_color_texture : register(t0);
 
-Texture2D<float4> t1 : register(t1);
+Texture2D<float4> previous_history_texture : register(t1);
 
-Texture2D<float4> t0 : register(t0);
+Texture2D<float4> velocity_texture : register(t2);
 
-SamplerState s1_s : register(s1);
+Texture2D<float4> depth_texture : register(t3);
 
-SamplerState s0_s : register(s0);
+SamplerState linear_sampler : register(s0);
 
-RWTexture2D<float4> u0 : register(u0);
+SamplerState point_sampler : register(s1);
 
-#define cmp            -
-#define DISPATCH_BLOCK 8
+RWTexture2D<float4> current_history_output : register(u0);
 
-[numthreads(DISPATCH_BLOCK, DISPATCH_BLOCK, 1)]
-void main(uint3 vThreadID: SV_DispatchThreadID) {
-  float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11;
-  uint4 bitmask, uiDest;
-  float4 fDest;
+struct CurrentNeighborhood {
+  float3 filtered_color;
+  float3 clip_min;
+  float3 clip_max;
+};
 
-  uint screenWidth, screenHeight;
-  t0.GetDimensions(screenWidth, screenHeight);
-  if (vThreadID.x >= screenWidth || vThreadID.y >= screenHeight) return;
+struct CurrentTap {
+  float2 offset;
+  float weight;
+  bool tight_bounds;
+};
 
-  const float2 screenSize = float2(screenWidth, screenHeight);
-  const float2 invScreenSize = 1.0.xx / screenSize;
+// Filters the current frame and builds broad/tight color bounds for history clipping.
+CurrentNeighborhood BuildCurrentNeighborhood(float2 uv, float2 inv_screen_size) {
+  static const float CURRENT_FILTER_EXPONENT = 2.29f;
+  static const float CURRENT_DIAGONAL_WEIGHT = exp(-CURRENT_FILTER_EXPONENT * 2.f);  // 0.0102548962f
+  static const float CURRENT_CARDINAL_WEIGHT = exp(-CURRENT_FILTER_EXPONENT);        // 0.101266459f
+  static const float CURRENT_CENTER_WEIGHT = 1.f;
+  static const float CURRENT_NORMALIZATION = 1.f / (CURRENT_CENTER_WEIGHT + 4.f * CURRENT_CARDINAL_WEIGHT + 4.f * CURRENT_DIAGONAL_WEIGHT);  // 0.691522062f
+  static const float INITIAL_BOUNDS_MIN = 100000.f;
+  static const float INITIAL_BOUNDS_MAX = -100000.f;
 
-  r0.xy = (uint2)vThreadID.xy;
-  r0.xy = float2(0.5, 0.5) + r0.xy;
-  r0.zw = screenSize;
-  r0.xy = r0.xy / r0.zw;
-  r1.xy = -invScreenSize + r0.xy;
+  // Current filter uses a full 3x3 pixel neighborhood.
+  //  a b c
+  //  d e f
+  //  g h i
+  //
+  // Tight clipping bounds use the cross only.
+  //    b
+  //  d e f
+  //    h
+  static const CurrentTap CURRENT_TAPS[9] = {
+    { float2(-1.f, -1.f), CURRENT_DIAGONAL_WEIGHT, false },
+    { float2(0.f, -1.f), CURRENT_CARDINAL_WEIGHT, true },
+    { float2(1.f, -1.f), CURRENT_DIAGONAL_WEIGHT, false },
+    { float2(-1.f, 0.f), CURRENT_CARDINAL_WEIGHT, true },
+    { float2(0.f, 0.f), CURRENT_CENTER_WEIGHT, true },
+    { float2(1.f, 0.f), CURRENT_CARDINAL_WEIGHT, true },
+    { float2(-1.f, 1.f), CURRENT_DIAGONAL_WEIGHT, false },
+    { float2(0.f, 1.f), CURRENT_CARDINAL_WEIGHT, true },
+    { float2(1.f, 1.f), CURRENT_DIAGONAL_WEIGHT, false },
+  };
 
-  r2.xyz = t0.SampleLevel(s1_s, r1.xy, 0).xyz;
-  r3.xyz = min(100000, r2.xyz);
-  r4.xyz = max(-100000, r2.xyz);
-  r5.xyzw = invScreenSize.xyxy * float4(0, -1, 1, -1) + r0.xyxy;
+  float3 filtered_sum = 0.f.xxx;
+  float3 broad_min = INITIAL_BOUNDS_MIN;
+  float3 broad_max = INITIAL_BOUNDS_MAX;
+  float3 tight_min = INITIAL_BOUNDS_MIN;
+  float3 tight_max = INITIAL_BOUNDS_MAX;
 
-  r6.xyz = t0.SampleLevel(s1_s, r5.xy, 0).xyz;
-  r7.xyzw = 0.101266459 * r6.xyzx;
-  r2.xyzw = r2.xyzx * 0.0102548962 + r7.xyzw;
-  r3.xyz = min(r6.xyz, r3.xyz);
-  r4.xyz = max(r6.xyz, r4.xyz);
-  r7.xyz = min(100000, r6.xyz);
-  r6.xyz = max(-100000, r6.xyz);
+  [unroll]
+  for (uint i = 0u; i < 9u; ++i) {
+    const CurrentTap tap = CURRENT_TAPS[i];
+    const float3 sample_color = current_color_texture.SampleLevel(point_sampler, uv + tap.offset * inv_screen_size, 0).xyz;
 
-  r8.xyz = t0.SampleLevel(s1_s, r5.zw, 0).xyz;
-  r2.xyzw = r8.xyzx * 0.0102548962 + r2.xyzw;
-  r3.xyz = min(r8.xyz, r3.xyz);
-  r4.xyz = max(r8.xyz, r4.xyz);
-  r8.xyzw = invScreenSize.xyxy * float4(-1, 0, 1, 0) + r0.xyxy;
-  r9.xyz = t0.SampleLevel(s1_s, r8.xy, 0).xyz;
-  r2.xyzw = r9.xyzx * 0.101266459 + r2.xyzw;
-  r3.xyz = min(r9.xyz, r3.xyz);
-  r4.xyz = max(r9.xyz, r4.xyz);
-  r7.xyz = min(r9.xyz, r7.xyz);
-  r6.xyz = max(r9.xyz, r6.xyz);
+    filtered_sum += sample_color * tap.weight;
+    broad_min = min(sample_color, broad_min);
+    broad_max = max(sample_color, broad_max);
 
-  r9.xyz = t0.SampleLevel(s1_s, r0.xy, 0).xyz;
-  r2.xyzw = r9.xyzx + r2.xyzw;
-  r3.xyz = min(r9.xyz, r3.xyz);
-  r4.xyz = max(r9.xyz, r4.xyz);
-  r7.xyz = min(r9.xyz, r7.xyz);
-  r6.xyz = max(r9.xyz, r6.xyz);
-
-  r8.xyz = t0.SampleLevel(s1_s, r8.zw, 0).xyz;
-  r2.xyzw = r8.xyzx * 0.101266459 + r2.xyzw;
-  r3.xyz = min(r8.xyz, r3.xyz);
-  r4.xyz = max(r8.xyz, r4.xyz);
-  r7.xyz = min(r8.xyz, r7.xyz);
-  r6.xyz = max(r8.xyz, r6.xyz);
-  r8.xyzw = invScreenSize.xyxy * float4(-1, 1, 0, 1) + r0.xyxy;
-
-  r9.xyz = t0.SampleLevel(s1_s, r8.xy, 0).xyz;
-  r2.xyzw = r9.xyzx * 0.0102548962 + r2.xyzw;
-  r3.xyz = min(r9.xyz, r3.xyz);
-  r4.xyz = max(r9.xyz, r4.xyz);
-
-  r9.xyz = t0.SampleLevel(s1_s, r8.zw, 0).xyz;
-  r2.xyzw = r9.xyzx * 0.101266459 + r2.xyzw;
-  r3.xyz = min(r9.xyz, r3.xyz);
-  r4.xyz = max(r9.xyz, r4.xyz);
-  r7.xyz = min(r9.xyz, r7.xyz);
-  r6.xyz = max(r9.xyz, r6.xyz);
-  r1.zw = invScreenSize + r0.xy;
-
-  r9.xyz = t0.SampleLevel(s1_s, r1.zw, 0).xyz;
-  r2.xyzw = r9.xyzx * 0.0102548962 + r2.xyzw;
-  r3.xyz = min(r9.xyz, r3.xyz);
-  r4.xyz = max(r9.xyz, r4.xyz);
-  r9.xyz = 0.691522062 * r2.yzw;
-  r7.xyz = r7.xyz + -r3.xyz;
-  r3.xyz = r7.xyz * float3(0.5, 0.5, 0.5) + r3.xyz;
-  r6.xyz = r6.xyz + -r4.xyz;
-  r4.xyz = r6.xyz * float3(0.5, 0.5, 0.5) + r4.xyz;
-  r6.xy = t2.SampleLevel(s1_s, r0.xy, 0).xy;
-  r3.w = t3.SampleLevel(s1_s, r0.xy, 0).x;
-  r6.z = -abs(r3.w);
-  r7.xy = t2.SampleLevel(s1_s, r1.zw, 0).xy;
-  r1.z = t3.SampleLevel(s1_s, r1.zw, 0).x;
-  r7.z = -abs(r1.z);
-  r1.z = cmp(abs(r3.w) < abs(r1.z));
-  r6.xyz = r1.zzz ? r6.xyz : r7.xyz;
-  r7.xy = t2.SampleLevel(s1_s, r8.xy, 0).xy;
-  r1.z = t3.SampleLevel(s1_s, r8.xy, 0).x;
-  r7.z = -abs(r1.z);
-  r1.z = cmp(r7.z < r6.z);
-  r6.xyz = r1.zzz ? r6.xyz : r7.xyz;
-  r7.xy = t2.SampleLevel(s1_s, r5.zw, 0).xy;
-  r1.z = t3.SampleLevel(s1_s, r5.zw, 0).x;
-  r7.z = -abs(r1.z);
-  r1.z = cmp(r7.z < r6.z);
-  r5.xyz = r1.zzz ? r6.xyz : r7.xyz;
-  r1.zw = t2.SampleLevel(s1_s, r1.xy, 0).xy;
-  r1.x = t3.SampleLevel(s1_s, r1.xy, 0).x;
-  r1.x = cmp(-abs(r1.x) < r5.z);
-  r1.xy = r1.xx ? r5.xy : r1.zw;
-  r0.xy = -r1.xy + r0.xy;
-  r1.zw = float2(-0.5, -0.5) + r0.xy;
-  r1.zw = cmp(abs(r1.zw) < float2(0.5, 0.5));
-  r1.z = r1.w ? r1.z : 0;
-  if (r1.z != 0) {
-    r1.zw = float2(1, 1) / r0.zw;
-    r5.xy = r0.xy * r0.zw + float2(-0.5, -0.5);
-    r5.xy = floor(r5.xy);
-    r6.xyzw = float4(0.5, 0.5, -0.5, -0.5) + r5.xyxy;
-    r0.xy = r0.xy * r0.zw + -r6.xy;
-    r5.zw = r0.xy * r0.xy;
-    r7.xy = r5.zw * r0.xy;
-    r7.zw = r5.zw * r0.xy + r0.xy;
-    r7.zw = -r7.zw * float2(0.5, 0.5) + r5.zw;
-    r8.xy = float2(2.5, 2.5) * r5.zw;
-    r7.xy = r7.xy * float2(1.5, 1.5) + -r8.xy;
-    r7.xy = float2(1, 1) + r7.xy;
-    r0.xy = r5.zw * r0.xy + -r5.zw;
-    r5.zw = float2(0.5, 0.5) * r0.xy;
-    r8.xy = float2(1, 1) + -r7.zw;
-    r8.xy = r8.xy + -r7.xy;
-    r0.xy = -r0.xy * float2(0.5, 0.5) + r8.xy;
-    r7.xy = r7.xy + r0.xy;
-    r0.xy = r0.xy / r7.xy;
-    r0.xy = r6.xy + r0.xy;
-    r5.xy = float2(2.5, 2.5) + r5.xy;
-    r6.xw = r6.zw * r1.zw;
-    r6.yz = r0.yx * r1.wz;
-    r8.xy = r5.xy * r1.zw;
-    r10.xyz = t1.SampleLevel(s0_s, r6.xw, 0).xyz;
-    r10.xyz = r10.xyz * r7.zzz;
-    r11.xyz = t1.SampleLevel(s0_s, r6.zw, 0).xyz;
-    r11.xyz = r11.xyz * r7.xxx;
-    r11.xyz = r11.xyz * r7.www;
-    r10.xyz = r10.xyz * r7.www + r11.xyz;
-    r8.zw = r6.wy;
-    r11.xyz = t1.SampleLevel(s0_s, r8.xz, 0).xyz;
-    r11.xyz = r11.xyz * r5.zzz;
-    r10.xyz = r11.xyz * r7.www + r10.xyz;
-    r11.xyz = t1.SampleLevel(s0_s, r6.xy, 0).xyz;
-    r11.xyz = r11.xyz * r7.zzz;
-    r10.xyz = r11.xyz * r7.yyy + r10.xyz;
-    r11.xyz = t1.SampleLevel(s0_s, r6.zy, 0).xyz;
-    r11.xyz = r11.xyz * r7.xxx;
-    r10.xyz = r11.xyz * r7.yyy + r10.xyz;
-    r11.xyz = t1.SampleLevel(s0_s, r8.xw, 0).xyz;
-    r11.xyz = r11.xyz * r5.zzz;
-    r10.xyz = r11.xyz * r7.yyy + r10.xyz;
-    r6.y = r8.y;
-    r11.xyz = t1.SampleLevel(s0_s, r6.xy, 0).xyz;
-    r7.yzw = r11.xyz * r7.zzz;
-    r7.yzw = r7.yzw * r5.www + r10.xyz;
-    r6.xyz = t1.SampleLevel(s0_s, r6.zy, 0).xyz;
-    r6.xyz = r6.xyz * r7.xxx;
-    r6.xyz = r6.xyz * r5.www + r7.yzw;
-    r7.xyz = t1.SampleLevel(s0_s, r8.xy, 0).xyz;
-    r5.xyz = r7.xyz * r5.zzz;
-    r5.xyz = r5.xyz * r5.www + r6.xyz;
-  } else {
-    r5.xyz = r9.zxy;
+    if (tap.tight_bounds) {
+      tight_min = min(sample_color, tight_min);
+      tight_max = max(sample_color, tight_max);
+    }
   }
-  r6.xyz = -r2.wyz * 0.691522062 + r4.xyz;
-  r7.xyzw = -r2.wyzw * 0.691522062 + r5.xyzx;
-  r6.xyz = r6.xyz / r7.xyz;
-  r8.xyz = -r2.wyz * 0.691522062 + r3.xyz;
-  r8.xyz = r8.xyz / r7.xyz;
-  r6.xyz = max(r8.xyz, r6.xyz);
-  r0.x = min(r6.y, r6.z);
-  r0.x = saturate(min(r6.x, r0.x));
-  r6.xyzw = r7.xyzw * r0.xxxx + r9.zxyz;
 
-  // r0.x = dot(float3(0.298999995, 0.587000012, 0.114), r5.rgb);
-  // r0.y = dot(float3(0.298999995, 0.587000012, 0.114), r3.rgb);
-  // r1.z = dot(float3(0.298999995, 0.587000012, 0.114), r4.rgb);
-  r0.x = dot(float3(0.2126390059f, 0.7151686788f, 0.0721923154f), r5.rgb);
-  r0.y = dot(float3(0.2126390059f, 0.7151686788f, 0.0721923154f), r3.rgb);
-  r1.z = dot(float3(0.2126390059f, 0.7151686788f, 0.0721923154f), r4.rgb);
-
-  r1.w = r0.x + -r0.y;
-  r0.x = -r1.z + r0.x;
-  r0.y = r1.z + -r0.y;
-  r0.x = min(abs(r1.w), abs(r0.x));
-  r0.x = r0.x / r0.y;
-  r0.yz = abs(r1.xy) * r0.zw;
-  r0.yz = frac(r0.yz);
-  r0.yz = float2(-0.5, -0.5) + r0.yz;
-  r0.yz = float2(0.5, 0.5) + -abs(r0.yz);
-  r0.x = 0.15 * r0.x;
-  r0.y = dot(r0.yz, float2(1, 1));
-  r0.y = 1 + r0.y;
-  r0.x = saturate(r0.x * r0.y);
-  r1.xyzw = r2.xyzw * 0.691522062 + -r6.wyzw;
-  r0.xyzw = r0.xxxx * r1.xyzw + r6.xyzw;
-  r0.xyzw = max(0.f, r0.xyzw);
-  r0.xyzw = min(65502.f, r0.xyzw);
-  u0[vThreadID.xy] = r0.xyzw;
-  return;
+  CurrentNeighborhood neighborhood;
+  neighborhood.filtered_color = filtered_sum * CURRENT_NORMALIZATION;
+  neighborhood.clip_min = broad_min + 0.5f * (tight_min - broad_min);
+  neighborhood.clip_max = broad_max + 0.5f * (tight_max - broad_max);
+  return neighborhood;
 }
 
+// Chooses the velocity from the current pixel or diagonal neighbors using nearest-depth selection.
+float2 SelectNearestVelocity(float2 uv, float2 inv_screen_size) {
+  // Velocity search uses center plus diagonal neighbors.
+  //  a   b
+  //    e
+  //  c   d
+  static const float2 VELOCITY_OFFSETS[5] = {
+    float2(0.f, 0.f),
+    float2(1.f, 1.f),
+    float2(-1.f, 1.f),
+    float2(1.f, -1.f),
+    float2(-1.f, -1.f),
+  };
+
+  float2 velocity = velocity_texture.SampleLevel(point_sampler, uv, 0).xy;
+  float nearest_abs_depth = abs(depth_texture.SampleLevel(point_sampler, uv, 0).x);
+
+  [unroll]
+  for (uint i = 1u; i < 5u; ++i) {
+    const float2 candidate_uv = uv + VELOCITY_OFFSETS[i] * inv_screen_size;
+    const float candidate_abs_depth = abs(depth_texture.SampleLevel(point_sampler, candidate_uv, 0).x);
+
+    if (candidate_abs_depth <= nearest_abs_depth) {
+      velocity = velocity_texture.SampleLevel(point_sampler, candidate_uv, 0).xy;
+      nearest_abs_depth = candidate_abs_depth;
+    }
+  }
+
+  return velocity;
+}
+
+// Rejects reprojected history samples that land outside normalized screen UVs.
+bool IsInsideScreen(float2 uv) {
+  return all(abs(uv - 0.5f.xx) < 0.5f.xx);
+}
+
+// Samples previous history with a nine-tap optimized Catmull-Rom reconstruction.
+float3 SampleHistoryCatmullRom(float2 uv, float2 screen_size, float2 inv_screen_size) {
+  const float2 base_pixel = floor(uv * screen_size - 0.5f.xx);
+  const float4 near_pixel = base_pixel.xyxy + float4(0.5f, 0.5f, -0.5f, -0.5f);
+  const float2 offset = uv * screen_size - near_pixel.xy;
+  const float2 offset_squared = offset * offset;
+  const float2 offset_cubed = offset_squared * offset;
+
+  const float2 negative_weight = offset_squared - 0.5f.xx * (offset_cubed + offset);
+  const float2 center_weight = 1.f.xx + 1.5f.xx * offset_cubed - 2.5f.xx * offset_squared;
+  const float2 positive_weight = 0.5f.xx * (offset_cubed - offset_squared);
+  const float2 middle_offset_weight = 1.f.xx - negative_weight - center_weight - positive_weight;
+  const float2 middle_weight = center_weight + middle_offset_weight;
+
+  const float2 negative_uv = near_pixel.zw * inv_screen_size;
+  const float2 middle_offset = renodx::math::DivideSafe(middle_offset_weight, middle_weight, 0.f.xx);
+  const float2 middle_uv = (near_pixel.xy + middle_offset) * inv_screen_size;
+  const float2 positive_uv = (base_pixel + 2.5f.xx) * inv_screen_size;
+
+  float3 history_color = 0.f.xxx;
+
+  const float3 sample_u = float3(negative_uv.x, middle_uv.x, positive_uv.x);
+  const float3 sample_v = float3(negative_uv.y, middle_uv.y, positive_uv.y);
+  const float3 weight_u = float3(negative_weight.x, middle_weight.x, positive_weight.x);
+  const float3 weight_v = float3(negative_weight.y, middle_weight.y, positive_weight.y);
+
+  [unroll]
+  for (int y = 0; y < 3; ++y) {
+    [unroll]
+    for (int x = 0; x < 3; ++x) {
+      history_color += previous_history_texture.SampleLevel(linear_sampler, float2(sample_u[x], sample_v[y]), 0).xyz * weight_u[x] * weight_v[y];
+    }
+  }
+
+  return history_color;
+}
+
+// Clips reprojected history toward the filtered current color inside the neighborhood color box.
+float3 ClipHistory(float3 history_color, float3 filtered_color, float3 clip_min, float3 clip_max) {
+  const float3 history_delta = history_color - filtered_color;
+  const float3 max_scale = renodx::math::DivideSafe(clip_max - filtered_color, history_delta);
+  const float3 min_scale = renodx::math::DivideSafe(clip_min - filtered_color, history_delta);
+  const float3 clip_scale_rgb = max(min_scale, max_scale);
+  const float clip_scale = saturate(renodx::math::Min(clip_scale_rgb));
+
+  return history_delta * clip_scale + filtered_color;
+}
+
+// Computes how much clipped history survives based on luma distance and subpixel velocity.
+float ComputeHistoryBlend(float3 history_color, float3 clip_min, float3 clip_max, float2 velocity, float2 screen_size) {
+  const float history_luma = renodx::color::yf::from::BT709(history_color);
+  const float min_luma = renodx::color::yf::from::BT709(clip_min);
+  const float max_luma = renodx::color::yf::from::BT709(clip_max);
+  const float luma_range = max_luma - min_luma;
+  const float luma_edge_factor = renodx::math::DivideSafe(
+      min(abs(history_luma - min_luma), abs(history_luma - max_luma)),
+      luma_range,
+      0.f);
+
+  float2 subpixel_weight = frac(abs(velocity) * screen_size);
+  subpixel_weight = 0.5f.xx - abs(subpixel_weight - 0.5f.xx);
+
+  return saturate(0.15f * luma_edge_factor * (1.f + subpixel_weight.x + subpixel_weight.y));
+}
+
+[numthreads(8, 8, 1)]
+void main(uint3 dispatch_thread_id: SV_DispatchThreadID) {
+  uint screen_width, screen_height;
+  current_color_texture.GetDimensions(screen_width, screen_height);
+  if (dispatch_thread_id.x >= screen_width || dispatch_thread_id.y >= screen_height) return;
+
+  const float2 screen_size = float2(screen_width, screen_height);
+  const float2 inv_screen_size = 1.0.xx / screen_size;
+
+  const float2 uv = (float2(dispatch_thread_id.xy) + 0.5f.xx) / screen_size;
+
+  const CurrentNeighborhood neighborhood = BuildCurrentNeighborhood(uv, inv_screen_size);
+  const float2 velocity = SelectNearestVelocity(uv, inv_screen_size);
+  const float2 history_uv = uv - velocity;
+  const float3 history_color = IsInsideScreen(history_uv)
+                                   ? SampleHistoryCatmullRom(history_uv, screen_size, inv_screen_size)
+                                   : neighborhood.filtered_color;
+  const float3 clipped_history = ClipHistory(
+      history_color,
+      neighborhood.filtered_color,
+      neighborhood.clip_min, neighborhood.clip_max);
+  const float blend = ComputeHistoryBlend(
+      history_color,
+      neighborhood.clip_min, neighborhood.clip_max,
+      velocity,
+      screen_size);
+
+  const float3 resolved_color = max(0, lerp(clipped_history, neighborhood.filtered_color, blend));
+
+  // Preserve the original compute output packing: RGBR
+  current_history_output[dispatch_thread_id.xy] = float4(resolved_color, resolved_color.r);
+  return;
+}

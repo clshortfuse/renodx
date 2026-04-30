@@ -18,6 +18,7 @@
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
 
+#include "../../shared.h"
 #include "../../../../utils/state.hpp"
 #include "./constant_buffers.hpp"
 #include "./descriptor_tracker.hpp"
@@ -70,6 +71,7 @@ inline uint64_t last_compute_fail_log = std::numeric_limits<uint64_t>::max();
 inline uint64_t last_stale_capture_log = std::numeric_limits<uint64_t>::max();
 inline bool logged_dof_insertion = false;
 inline bool logged_rgbm_insertion = false;
+inline ShaderInjectData* shader_injection = nullptr;
 
 inline bool LogEvery(uint64_t& last_frame, uint64_t interval = 120u) {
   return logging::ShouldLogFrame(constant_buffers::frame_state.frame_index, last_frame, interval);
@@ -139,8 +141,8 @@ inline bool EnsureComputePipeline(reshade::api::command_list* cmd_list) {
   DestroyCompute(device);
 
   // Layout mirrors the shader registers:
-  // s0-s1 samplers, t0-t3 inputs, and u0 output history.
-  std::array<reshade::api::pipeline_layout_param, 3> params = {};
+  // s0-s1 samplers, t0-t3 inputs, u0 output history, and b11 shader injection.
+  std::array<reshade::api::pipeline_layout_param, 4> params = {};
   params[0].type = reshade::api::pipeline_layout_param_type::push_descriptors;
   params[0].push_descriptors.count = 2;
   params[0].push_descriptors.type = reshade::api::descriptor_type::sampler;
@@ -158,6 +160,12 @@ inline bool EnsureComputePipeline(reshade::api::command_list* cmd_list) {
   params[2].push_descriptors.type = reshade::api::descriptor_type::texture_unordered_access_view;
   params[2].push_descriptors.dx_register_index = 0;
   params[2].push_descriptors.dx_register_space = 0;
+
+  params[3].type = reshade::api::pipeline_layout_param_type::push_constants;
+  params[3].push_constants.count = sizeof(ShaderInjectData) / sizeof(uint32_t);
+  params[3].push_constants.dx_register_index = 11;
+  params[3].push_constants.dx_register_space = 0;
+  params[3].push_constants.visibility = reshade::api::shader_stage::compute;
 
   if (!device->create_pipeline_layout(static_cast<uint32_t>(params.size()), params.data(), &resources.compute_layout)) {
     if (LogEvery(last_compute_fail_log)) logging::Warn("failed to create TAA compute pipeline layout");
@@ -404,6 +412,10 @@ inline bool DispatchCompute(
     uint32_t current,
     uint32_t previous) {
   if (!EnsureComputePipeline(cmd_list)) return false;
+  if (shader_injection == nullptr) {
+    if (LogEvery(last_compute_fail_log)) logging::Warn("TAA compute dispatch missing shader injection data");
+    return false;
+  }
 
   std::optional<renodx::utils::state::CommandListState> previous_state;
   if (auto* current_state = renodx::utils::state::GetCurrentState(cmd_list); current_state != nullptr) {
@@ -455,6 +467,13 @@ inline bool DispatchCompute(
   cmd_list->push_descriptors(reshade::api::shader_stage::all_compute, resources.compute_layout, 0, updates[0]);
   cmd_list->push_descriptors(reshade::api::shader_stage::all_compute, resources.compute_layout, 1, updates[1]);
   cmd_list->push_descriptors(reshade::api::shader_stage::all_compute, resources.compute_layout, 2, updates[2]);
+  cmd_list->push_constants(
+      reshade::api::shader_stage::all_compute,
+      resources.compute_layout,
+      3,
+      0,
+      sizeof(ShaderInjectData) / sizeof(uint32_t),
+      shader_injection);
   cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_compute, resources.compute_pipeline);
   cmd_list->dispatch((resources.width + 7u) / 8u, (resources.height + 7u) / 8u, 1u);
 

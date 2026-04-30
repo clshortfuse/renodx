@@ -119,7 +119,8 @@ checks when changing the TAA path.
 | `CameraMotionPs` capture happens before DoF/RGBM insertion. | The resolve needs velocity and depth before it can run. | Game pass order plus `taa::Run` input validation. |
 | Draw hooks return `false`. | Lets the original game draw continue after the pre-draw compute insertion. | `aliasisolation::HandleDraw`. |
 | Graphics state is restored after compute dispatch. | Prevents the manual compute pass from corrupting the following graphics draw. | `renodx::utils::state::CommandListState` restore in `taa::DispatchCompute`. |
-| Compute layout matches `s0-s1`, `t0-t3`, `u0`. | Keeps runtime descriptor binding aligned with `aliasisolation_taa.cs_5_0.hlsl`. | `taa::EnsureComputePipeline`. |
+| Compute layout matches `s0-s1`, `t0-t3`, `u0`, and `b11`. | Keeps runtime descriptor and shader-injection binding aligned with `aliasisolation_taa.cs_5_0.hlsl`. | `taa::EnsureComputePipeline`. |
+| Resolve math is RGB-only and the history write remains `RGBR`. | Alpha is original Alias Isolation packing, not independent resolved color data. | Final write in `aliasisolation_taa.cs_5_0.hlsl`. |
 | Velocity SRV is owned; depth SRV is borrowed. | Prevents lifetime mistakes when destroying runtime resources. | `taa::EnsureVelocitySrv`, `taa::DestroyVelocitySrv`, borrowed `depth_srv` storage. |
 | History matches color size and format. | Keeps copy-back valid and avoids format reinterpretation bugs. | `taa::EnsureHistory`. |
 | Cbuffer jitter is fullscreen-only. | Avoids jittering shadow, reflection, and smaller post-processing passes. | `jitter::IsFullscreenPass`. |
@@ -150,15 +151,16 @@ Known game registers:
 
 TAA compute registers:
 
-| Register | Bound resource |
-| --- | --- |
-| `s0` | Linear sampler. |
-| `s1` | Point sampler. |
-| `t0` | Current HDR color at the insertion point. |
-| `t1` | Previous history texture. |
-| `t2` | Velocity SRV created from the camera-motion RTV. |
-| `t3` | Depth SRV captured from camera-motion pixel `t8`. |
-| `u0` | Current history texture UAV. |
+| Register | Shader name | Bound resource / notes |
+| --- | --- | --- |
+| `s0` | `linear_sampler` | Linear sampler used by the optimized Catmull-Rom history reconstruction. |
+| `s1` | `point_sampler` | Point sampler used for current-color, velocity, and depth neighborhood taps. |
+| `t0` | `current_color_texture` | Current HDR color SRV from pixel `t0` at the insertion point. Its dimensions drive the dispatch bounds. |
+| `t1` | `previous_history_texture` | Previous ping-pong history SRV, using the supported history view format. |
+| `t2` | `velocity_texture` | SRV created from the camera-motion RTV with the same typed view format as the RTV. |
+| `t3` | `depth_texture` | Borrowed depth SRV captured from camera-motion pixel `t8`. |
+| `u0` | `current_history_output` | Current ping-pong history UAV. The shader writes `float4(resolved.rgb, resolved.r)`. |
+| `b11` | `ShaderInjectData` | RenoDX shader-injection push constants from `shared.h`. |
 
 Owned TAA resources:
 
@@ -224,7 +226,7 @@ Dispatch sequence:
 | Reject duplicates | `taa::MaybeRun` | `frame_state.taa_ran_this_frame` is false. | Allows one resolve attempt for the frame. |
 | Validate captured inputs | `taa::Run` | Velocity SRV and depth SRV exist, and `capture_frame == frame_index`. | Prevents stale motion/depth from being used. |
 | Validate history | `taa::EnsureHistory` | History size/format matches current color resource. | Reuses history or recreates and seeds both textures from current color. |
-| Validate compute state | `taa::EnsureComputePipeline` | Layout, pipeline, and samplers exist. | Creates push-descriptor layout for `s0-s1`, `t0-t3`, `u0` and embedded `__aliasisolation_taa` pipeline. |
+| Validate compute state | `taa::EnsureComputePipeline` | Layout, pipeline, and samplers exist. | Creates push-descriptor layout for `s0-s1`, `t0-t3`, `u0`, push constants for `b11`, and the embedded `__aliasisolation_taa` pipeline. |
 | Dispatch compute | `taa::DispatchCompute` | All SRVs/UAVs and samplers are available. | Dispatches `(width + 7) / 8` by `(height + 7) / 8` thread groups. |
 | Copy back | `taa::DispatchCompute` | Current history contains resolved output. | Copies current history resource back into the game's color resource. |
 | Restore draw state | `taa::DispatchCompute` | Previous graphics state was captured. | Reapplies the state so the original game draw continues normally. |
@@ -249,29 +251,46 @@ Resource transitions around dispatch:
 
 ## TAA Resolve Algorithm
 
-`shaders/aliasisolation_taa.cs_5_0.hlsl` is a decompiled/ported compute resolve.
-It runs one thread per output pixel and writes the current resolved frame to
-history UAV `u0`. The shader derives dimensions from `t0`; it does not use a
-dedicated constant buffer.
+`shaders/aliasisolation_taa.cs_5_0.hlsl` is a cleaned-up port of Alias
+Isolation's decompiled compute resolve. It runs one thread per output pixel,
+derives dimensions from `current_color_texture`, and writes the current resolved
+frame to `current_history_output`. The shader includes `shared.h`, so RenoDX
+helpers and `ShaderInjectData` are available through `b11`, but the current
+resolve path does not rely on runtime debug variants.
+
+Current-frame filtering and bounds are built together in
+`BuildCurrentNeighborhood`:
+
+| Item | Details |
+| --- | --- |
+| Current filter | Full 3x3 point-sampled neighborhood. Center weight is `1`, cardinal weights are `exp(-2.29)`, diagonal weights are `exp(-2.29 * 2)`, and normalization is about `0.691522062`. |
+| Broad bounds | Min/max over the full 3x3 neighborhood. |
+| Tight bounds | Min/max over the center-plus-cardinals cross. |
+| Final clip box | Halfway between broad and tight bounds: `broad + 0.5 * (tight - broad)`. |
+| Representation | `CurrentTap` stores each tap's offset, weight, and whether it participates in tight bounds. `CurrentNeighborhood` returns filtered RGB plus clip min/max RGB. |
 
 Per-pixel resolve:
 
 | Step | Operation | Inputs | Output | Purpose |
 | --- | --- | --- | --- | --- |
-| 1 | Build current UV | `SV_DispatchThreadID`, `t0` dimensions | Pixel-center UV | Locates the current output pixel in texture space. |
-| 2 | Sample current neighborhood | Current color `t0` | 3x3 current samples | Gives the resolve local color context. |
-| 3 | Filter current color | 3x3 current samples | Filtered current color | Stabilizes the current frame; center sample is dominant, cardinal samples are lighter, diagonal samples are lightest. |
-| 4 | Build color bounds | Broad 3x3 samples and tighter cross-shaped samples | Current-frame min/max bounds | Rejects history that is not plausible for the current neighborhood. |
-| 5 | Choose velocity | Velocity `t2`, depth `t3` around current pixel | Depth-guided velocity | Reduces foreground/background motion bleed. |
-| 6 | Reproject history | Current UV and chosen velocity | Previous-frame UV | Finds where this pixel came from in history. |
-| 7 | Sample history | Previous UV, previous history `t1` | Historical color or current fallback | Uses custom filtered history when on screen; falls back to current color when off screen. |
-| 8 | Clip history | Historical color, filtered current color, current bounds | Clipped historical color | Reduces ghosting and stale-history trails. |
-| 9 | Compute blend | BT.709 luminance, color bounds, velocity/subpixel terms | Blend amount | Controls how much history survives. |
-| 10 | Write output | Filtered current color and clipped history | Current history UAV `u0` | Produces resolved HDR color clamped to `[0, 65502]`. |
+| 1 | Build current UV | `SV_DispatchThreadID`, current color dimensions | Pixel-center UV | Locates the output pixel in normalized texture space. |
+| 2 | Build current neighborhood | `current_color_texture`, `point_sampler` | Filtered current RGB and clip bounds | Gives the resolve local color context. |
+| 3 | Choose velocity | `velocity_texture`, `depth_texture`, center plus diagonal taps | Depth-guided velocity | Uses the velocity from the nearest absolute depth to reduce foreground/background bleed. |
+| 4 | Reproject history | Current UV and chosen velocity | Previous-frame UV | Finds where the current pixel came from in history. |
+| 5 | Sample history | Previous UV, `previous_history_texture`, `linear_sampler` | Historical RGB or filtered-current fallback | Uses a nine-tap optimized Catmull-Rom reconstruction when the reprojected UV is on screen. |
+| 6 | Clip history | Historical RGB, filtered current RGB, current clip bounds | Clipped historical RGB | Clips history toward the filtered current color inside the RGB color box. |
+| 7 | Compute blend | RenoDX `Yf` from BT.709, clip bounds, velocity/subpixel terms | Current-frame blend amount | Keeps more history when it is plausibly inside the luma range and adjusts for subpixel velocity. |
+| 8 | Resolve color | Clipped history, filtered current, blend | Resolved RGB | `max(0, lerp(clipped_history, filtered_current, blend))`; there is no upper clamp. |
+| 9 | Write history | Resolved RGB | `current_history_output` | Writes `RGBR` as `float4(resolved_color, resolved_color.r)` to preserve the original packed behavior. |
 
-After the dispatch, `taa::DispatchCompute` copies `u0`'s resource back into the
-game color resource that the original post-processing draw is about to sample.
-That is why the original draw can continue normally after the hook returns.
+History clipping is RGB-only. The alpha lane is ignored during the resolve and
+only restored at the final write by duplicating red into alpha, matching the
+original compute output packing.
+
+After the dispatch, `taa::DispatchCompute` copies `current_history_output`'s
+resource back into the game color resource that the original post-processing
+draw is about to sample. That is why the original draw can continue normally
+after the hook returns.
 
 ## Pipeline Tracking And Replacements
 
@@ -327,7 +346,8 @@ code:
 | --- | --- |
 | Shader identity | Update `shader_ids.hpp` checksums and verify `pipeline_tracker` detections. |
 | Game register assumptions | Update the register map and every access through `descriptor_tracker::GetView` or `GetBufferRange`. |
-| TAA shader registers | Update `taa::EnsureComputePipeline`, `taa::DispatchCompute`, and the TAA compute register map together. |
+| TAA shader registers | Update `taa::EnsureComputePipeline`, `taa::DispatchCompute`, shader declarations, and the TAA compute register map together. |
+| TAA resolve math | Preserve the intentional `float3` resolve path and final `RGBR` write unless the runtime copy-back/output assumptions are also changed. |
 | Resource formats | Update `taa::GetSupportedHistoryFormat` and history creation/copy-back assumptions. |
 | Insertion point | Preserve once-per-frame dispatch, same-frame velocity/depth validation, graphics-state restore, and draw-hook return value. |
 | Jitter behavior | Preserve fullscreen gating and keep no-jitter matrix state separate from patched game matrices. |
