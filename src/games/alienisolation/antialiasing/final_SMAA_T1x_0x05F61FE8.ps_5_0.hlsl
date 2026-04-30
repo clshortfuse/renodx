@@ -59,7 +59,8 @@ void main(
 
       o0.rgb = rcasSamples.e;
 
-      o0.rgb = Lilium::RCAS::ApplyCore(rcasSamples, CUSTOM_SHARPENING, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+      float normalization_value = (RENODX_TONE_MAP_TYPE == 0.f) ? 1.f : RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+      o0.rgb = Lilium::RCAS::ApplyCore(rcasSamples, CUSTOM_SHARPENING, normalization_value);
     }
 
     o0.rgb = ApplyCustomFilmGrain(o0.rgb, v1.xy);
