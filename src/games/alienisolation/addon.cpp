@@ -442,11 +442,11 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
   renodx::utils::settings::UpdateSetting("ColorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
-  renodx::utils::settings::UpdateSetting("FxLensFlare", 50.f);
-  renodx::utils::settings::UpdateSetting("FxVignette", 50.f);
+  renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
+  renodx::utils::settings::UpdateSetting("FxLensFlare", 100.f);
+  renodx::utils::settings::UpdateSetting("FxVignette", 100.f);
   renodx::utils::settings::UpdateSetting("FxFilmGrainType", 0.f);
-  renodx::utils::settings::UpdateSetting("FxFilmGrain", 50.f);
+  renodx::utils::settings::UpdateSetting("FxFilmGrain", 100.f);
   alienisolation::aliasisolation::OnPresetOff();
 }
 
