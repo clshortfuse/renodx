@@ -31,7 +31,7 @@ void main(
   o0.xyz = r0.www * float3(0, -0.39199999, 2.01699996) + r0.xyz;
   o0.w = v0.w;
 
-  if (injectedData.toneMapType == 0.f) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0.rgb = saturate(o0.rgb);
   } else {
     o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb);

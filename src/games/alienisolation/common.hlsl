@@ -3,7 +3,7 @@
 float4 UIScale(float4 color) {
   color = saturate(color);
   color.rgb = renodx::color::gamma::Decode(color.rgb, 2.2f);
-  color.rgb *= injectedData.toneMapUINits / injectedData.toneMapGameNits;
+  color.rgb *= RENODX_GRAPHICS_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
   color.rgb = renodx::color::gamma::Encode(color.rgb, 2.2f);
 
   return color;
@@ -11,23 +11,23 @@ float4 UIScale(float4 color) {
 
 float4 FinalizeOutput(float4 color) {
   color.rgb = renodx::color::gamma::DecodeSafe(color.rgb, 2.2f);
-  color.rgb *= injectedData.toneMapGameNits / renodx::color::srgb::REFERENCE_WHITE;
+  color.rgb *= RENODX_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
 
   return color;
 }
 
 float3 ApplyCustomFilmGrain(float3 color, float2 uv) {
-  if (injectedData.fxFilmGrain > 0.f) {
-    if (injectedData.fxFilmGrainType == 1.f) {  // B&W
+  if (CUSTOM_GRAIN_STRENGTH > 0.f) {
+    if (CUSTOM_GRAIN_TYPE == 1.f) {  // B&W
       color = renodx::effects::ApplyFilmGrain(
           color, uv,
-          injectedData.custom_random,
-          injectedData.fxFilmGrain * .04f);
-    } else if (injectedData.fxFilmGrainType == 2.f) {  // Colored
+          CUSTOM_RANDOM,
+          CUSTOM_GRAIN_STRENGTH * .04f);
+    } else if (CUSTOM_GRAIN_TYPE == 2.f) {  // Colored
       color = renodx::effects::ApplyFilmGrainColored(
           color, uv,
-          injectedData.custom_random,
-          injectedData.fxFilmGrain * .04f);
+          CUSTOM_RANDOM,
+          CUSTOM_GRAIN_STRENGTH * .04f);
     }
   }
   return color;
@@ -171,12 +171,12 @@ float3 ApplyCore(float3 b, float3 d, float3 e, float3 f, float3 h, float sharpen
 float3 Apply(
     float3 center_color, float2 tex_coord,
     Texture2D<float4> SamplerFrameBuffer_TEX, SamplerState SamplerFrameBuffer_SMP_s, float normalization_value = 1.f) {
-  if (injectedData.fxSharpening == 0) return center_color;  // Skip sharpening if amount is zero
+  if (CUSTOM_SHARPENING == 0) return center_color;  // Skip sharpening if amount is zero
 
   uint width, height;
   SamplerFrameBuffer_TEX.GetDimensions(width, height);
   Neighborhood samples = SampleNeighborhood(center_color, tex_coord, width, height, SamplerFrameBuffer_TEX, SamplerFrameBuffer_SMP_s);
-  return ApplyCore(samples, injectedData.fxSharpening, normalization_value);
+  return ApplyCore(samples, CUSTOM_SHARPENING, normalization_value);
 }
 
 }  // namespace RCAS

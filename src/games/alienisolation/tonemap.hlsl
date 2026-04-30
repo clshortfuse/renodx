@@ -266,7 +266,7 @@ float3 ApplyBloomType1(
     Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
   float3 bloom_sample = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, tex_coord).xyz;
   float3 bloom_color = bloom_sample * bloom_sample * HDR_EncodeScale2.z;
-  float3 combined_color = input_color + bloom_color * injectedData.fxBloom;
+  float3 combined_color = input_color + bloom_color * CUSTOM_BLOOM;
 
   return combined_color;
 }
@@ -276,7 +276,7 @@ float3 ApplyBloomType2(
     Texture2D<float4> SamplerBloomMap0_TEX, SamplerState SamplerBloomMap0_SMP_s) {
   float3 bloom_sample = SamplerBloomMap0_TEX.Sample(SamplerBloomMap0_SMP_s, tex_coord).xyz;
   float3 bloom_color = bloom_sample * bloom_sample * HDR_EncodeScale2.z;
-  float3 combined_color = input_color * HDR_EncodeScale.w + bloom_color * injectedData.fxBloom;
+  float3 combined_color = input_color * HDR_EncodeScale.w + bloom_color * CUSTOM_BLOOM;
 
   return combined_color;
 }
@@ -396,7 +396,7 @@ float3 applyVignette(
   r0.xyz = r1.xxx ? r1.yzw : r0.xyz;
   r0.xyz = texcoord.zzz * r0.xyz;  // Use v1 (texcoord) for final adjustment
 
-  r0.rgb = lerp(tonemapped, r0.rgb, injectedData.fxVignette);
+  r0.rgb = lerp(tonemapped, r0.rgb, CUSTOM_VIGNETTE);
   return r0.rgb;
 }
 
@@ -417,7 +417,7 @@ float3 ApplyLUT(
   r1.xyz = r1.xyz * r1.xyz + -lutInputColor;
   lutOutputColor = r0.w * r1.xyz + lutInputColor;
 
-  lutOutputColor = lerp(lutInputColor, lutOutputColor, injectedData.colorGradeLUTStrength);
+  lutOutputColor = lerp(lutInputColor, lutOutputColor, CUSTOM_LUT_STRENGTH);
   return lutOutputColor;  // Return the adjusted color
 }
 
@@ -440,7 +440,7 @@ float3 applyDualLUT(
   r0.xyz = -r1.rgb + r2.xyz;  // r0.xyz = -r0.xyz * v1.zzz + r2.xyz;
   r0.xyz = rp_parameter_ps[2].xxx * r0.xyz + r1.xyz;
 
-  float3 lut_output_color = lerp(lut_input_color, r0.xyz, injectedData.colorGradeLUTStrength);
+  float3 lut_output_color = lerp(lut_input_color, r0.xyz, CUSTOM_LUT_STRENGTH);
 
   return lut_output_color;
 }
@@ -464,7 +464,7 @@ float3 EncodeGamma(float3 linear_color) {
 float3 ApplyFilmGrain(float3 input_color, Texture2D<float4> SamplerNoise_TEX,
                       SamplerState SamplerNoise_SMP_s, float4 v1) {
   float3 output_color = input_color;
-  if (injectedData.fxFilmGrainType == 0.f) {  // Noise
+  if (CUSTOM_GRAIN_TYPE == 0.f) {  // Noise
     float4 r0, r2;
     float3 r1, r3;
     r0.rgb = input_color;
@@ -479,7 +479,7 @@ float3 ApplyFilmGrain(float3 input_color, Texture2D<float4> SamplerNoise_TEX,
     r3.xyz = r2.yyy * r1.xyz;
     r2.xyw = r1.xyz * r2.xxx + r3.xyz;
     r1.xyz = r1.xyz * r2.zzz + r2.xyw;
-    r0.xyz = injectedData.fxFilmGrain * r1.xyz + r0.xyz;
+    r0.xyz = CUSTOM_GRAIN_STRENGTH * r1.xyz + r0.xyz;
 
     output_color = r0.rgb;
   }
@@ -517,7 +517,7 @@ float3 ApplyToneMapVignetteLUT(
   float3 r0 = untonemapped;
 
   float3 output_color = r0.xyz;
-  if (injectedData.toneMapType == 0) {  // vanilla tonemap
+  if (RENODX_TONE_MAP_TYPE == 0) {  // vanilla tonemap
     r0.xyz = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
     r0.xyz = applyVignette(r0.rgb, v2, v1, untonemapped_lum);
     r0.xyz = ApplyLUT(r0.rgb, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
@@ -546,7 +546,7 @@ float3 ApplyToneMapVignetteDualLUTs(
   float3 r0 = untonemapped;
 
   float3 output_color = r0.xyz;
-  if (injectedData.toneMapType == 0) {  // vanilla tonemap
+  if (RENODX_TONE_MAP_TYPE == 0) {  // vanilla tonemap
     r0.xyz = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
     r0.xyz = applyVignette(r0.rgb, v2, v1, untonemapped_lum);
     r0.xyz = ApplyLUT(r0.rgb, SamplerColourLUT_TEX, SamplerColourLUT_SMP_s);
@@ -577,7 +577,7 @@ float3 ApplyToneMapVignette(
   float3 r0 = untonemapped;
 
   float3 output_color = r0.xyz;
-  if (injectedData.toneMapType == 0) {  // vanilla tonemap
+  if (RENODX_TONE_MAP_TYPE == 0) {  // vanilla tonemap
     r0.xyz = ApplyVanillaTonemap(untonemapped, untonemapped_lum, SamplerToneMapCurve_TEX, SamplerToneMapCurve_SMP_s);
     r0.xyz = applyVignette(r0.rgb, v2, v1, untonemapped_lum);
 
@@ -597,26 +597,26 @@ float4 FinalizeToneMapOutput(float3 input_color) {
 
   output_color.rgb = input_color * rp_parameter_ps[0].x + rp_parameter_ps[0].y;  // remove saturate
 
-  if (injectedData.toneMapType != 0) {
+  if (RENODX_TONE_MAP_TYPE != 0) {
     output_color.rgb = renodx::color::gamma::DecodeSafe(output_color.rgb);
     output_color.rgb = renodx::color::bt2020::from::BT709(output_color.rgb);
     output_color.rgb = max(0, output_color.rgb);
 
     renodx_custom::tonemap::psycho::config17::Config psycho17_config =
         renodx_custom::tonemap::psycho::config17::Create();
-    psycho17_config.peak_value = injectedData.toneMapPeakNits / injectedData.toneMapGameNits;
+    psycho17_config.peak_value = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
     psycho17_config.clip_point = 100.f;
-    psycho17_config.exposure = injectedData.colorGradeExposure;
+    psycho17_config.exposure = RENODX_TONE_MAP_EXPOSURE;
     psycho17_config.gamma = 1.f;
-    psycho17_config.highlights = injectedData.colorGradeHighlights;
-    psycho17_config.shadows = injectedData.colorGradeShadows;
-    psycho17_config.contrast = injectedData.colorGradeContrast;
-    psycho17_config.flare = 0.10f * pow(injectedData.colorGradeFlare, 10.f);
+    psycho17_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
+    psycho17_config.shadows = RENODX_TONE_MAP_SHADOWS;
+    psycho17_config.contrast = RENODX_TONE_MAP_CONTRAST;
+    psycho17_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
     psycho17_config.contrast_highlights = 1.f;
     psycho17_config.contrast_shadows = 1.f;
-    psycho17_config.purity_scale = injectedData.colorGradeSaturation;
-    psycho17_config.purity_highlights = -1.f * (injectedData.colorGradeHighlightSaturation - 1.f);
-    psycho17_config.dechroma = injectedData.colorGradeBlowout;
+    psycho17_config.purity_scale = RENODX_TONE_MAP_SATURATION;
+    psycho17_config.purity_highlights = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
+    psycho17_config.dechroma = RENODX_TONE_MAP_DECHROMA;
     psycho17_config.adaptation_contrast = 1.f;
     psycho17_config.bleaching_intensity = 0.f;
     psycho17_config.hue_emulation = 0.f;

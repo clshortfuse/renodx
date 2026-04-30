@@ -59,7 +59,7 @@ inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderIn
           },
           new renodx::utils::settings::Setting{
               .key = "AliasIsolationTAA",
-              .binding = &shader_injection->fxAliasIsolation,
+              .binding = &shader_injection->custom_alias_isolation_taa,
               .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
               .default_value = 1.f,
               .label = "Alias Isolation TAA",
@@ -67,7 +67,7 @@ inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderIn
           },
           new renodx::utils::settings::Setting{
               .key = "FxSharpening",
-              .binding = &shader_injection->fxSharpening,
+              .binding = &shader_injection->custom_sharpening,
               .default_value = 100.f,
               .label = "Sharpening",
               .section = "Alias Isolation",
@@ -166,7 +166,7 @@ inline void OnPresent(
 }
 
 inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
-  constant_buffers::enabled_binding = shader_injection != nullptr ? &shader_injection->fxAliasIsolation : &constant_buffers::enabled;
+  constant_buffers::enabled_binding = shader_injection != nullptr ? &shader_injection->custom_alias_isolation_taa : &constant_buffers::enabled;
 
   // The runtime uses RenoDX's resource, pipeline-layout, and state helpers but
   // keeps all game-specific behavior in this folder.

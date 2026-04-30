@@ -42,14 +42,14 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  if (injectedData.fxAliasIsolation > 0.f) {
+  if (CUSTOM_ALIAS_ISOLATION_TAA > 0.f) {
     uint width, height;
     colorTex.GetDimensions(width, height);
 
     o0.rgb = colorTex.SampleLevel(LinearSampler_s, v1.xy, 0).rgb;
     o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb);
 
-    if (injectedData.fxSharpening > 0.f) {
+    if (CUSTOM_SHARPENING > 0.f) {
       Lilium::RCAS::Neighborhood rcasSamples = Lilium::RCAS::SampleNeighborhood(o0.rgb, v1.xy, width, height, colorTex, LinearSampler_s);
 
       rcasSamples.b = renodx::color::gamma::DecodeSafe(rcasSamples.b);
@@ -59,7 +59,7 @@ void main(
 
       o0.rgb = rcasSamples.e;
 
-      o0.rgb = Lilium::RCAS::ApplyCore(rcasSamples, injectedData.fxSharpening, injectedData.toneMapPeakNits / injectedData.toneMapGameNits);
+      o0.rgb = Lilium::RCAS::ApplyCore(rcasSamples, CUSTOM_SHARPENING, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
     }
 
     o0.rgb = ApplyCustomFilmGrain(o0.rgb, v1.xy);
