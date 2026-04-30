@@ -38,7 +38,7 @@ velocity target.
 2. During `DLL_PROCESS_ATTACH`, it calls
    `alienisolation::aliasisolation::AppendSettings(settings, &shader_injection)`.
    This inserts the `Alias Isolation` settings section and binds the toggle to
-   `ShaderInjectData::fxAliasIsolation`.
+   `ShaderInjectData::custom_alias_isolation_taa`.
 3. The main preset reset calls
    `alienisolation::aliasisolation::OnPresetOff()`, which disables Alias
    Isolation TAA and sharpening.
@@ -56,7 +56,7 @@ Isolation runs inside:
 - Tonemap, SMAA, and final shaders use `UpgradeRTVReplaceShader(...)` so their
   render targets are hot-swapped to the upgraded resources.
 - `antialiasing/final_SMAA_T1x_0x05F61FE8.ps_5_0.hlsl` has a special
-  `fxAliasIsolation > 0` branch. When Alias Isolation is on, that final pass
+  `custom_alias_isolation_taa > 0` branch. When Alias Isolation is on, that final pass
   samples the already-resolved color, optionally applies RCAS sharpening, applies
   film grain, and skips the vanilla SMAA blend.
 
@@ -96,7 +96,7 @@ previous graphics state, and then lets the original draw continue.
 
 | Phase | Trigger | Code path | Reads | Writes / side effects |
 | --- | --- | --- | --- | --- |
-| Startup | `addon.cpp::DllMain` | `AppendSettings`, then `aliasisolation::Use` | `ShaderInjectData` pointer | Adds settings, binds `fxAliasIsolation`, registers Alias Isolation callbacks. |
+| Startup | `addon.cpp::DllMain` | `AppendSettings`, then `aliasisolation::Use` | `ShaderInjectData` pointer | Adds settings, binds `custom_alias_isolation_taa`, registers Alias Isolation callbacks. |
 | Pipeline identity | `init_pipeline`, `bind_pipeline` | `pipeline_tracker`, `pipeline_replacer` | Pipeline shader bytecode | Records `ShaderId`s by DXBC checksum and binds replacement pipelines when enabled. |
 | Descriptor tracking | RTV/viewport binds and `push_descriptors` | `descriptor_tracker` | ReShade descriptor updates | Reconstructs per-command-list D3D11-style shader registers, RTVs, and viewport state. |
 | Cbuffer capture | Draw callback | `jitter::CaptureConstantBuffers` | Current `ShaderId`s and cbuffer registers | Tracks `DefaultXSC`, `DefaultVSC`, and `DefaultPSC` resources for later map/unmap patching. |
