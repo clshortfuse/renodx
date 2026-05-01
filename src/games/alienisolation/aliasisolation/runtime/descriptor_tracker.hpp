@@ -3,23 +3,18 @@
 /*
  * Per-command-list descriptor and state tracker.
  *
- * ReShade callbacks tell us when pipelines, render targets, viewports, SRVs,
- * and constant buffers are bound, but the TAA insertion point only sees a draw
- * event. This tracker reconstructs the D3D11-like register state needed to find
- * Alias Isolation's color, depth, velocity, and camera cbuffers at that draw.
+ * ReShade callbacks tell us when pipelines, render targets, SRVs, and constant
+ * buffers are bound, but the TAA insertion point only sees a draw event. This
+ * tracker keeps the D3D11-like register state needed to find Alias Isolation's
+ * color, depth, velocity, and camera cbuffers at that draw.
  */
 
 #include <cstdint>
-#include <optional>
-#include <type_traits>
-#include <unordered_map>
 #include <utility>
-#include <vector>
 
 #include <include/reshade.hpp>
 
 #include "../../../../utils/bitwise.hpp"
-#include "../../../../utils/hash.hpp"
 #include "../../../../utils/pipeline_layout.hpp"
 #include "./pipeline_tracker.hpp"
 
@@ -31,38 +26,18 @@ using RegisterSlot = std::pair<uint32_t, uint32_t>;
 // independent binding state.
 struct __declspec(uuid("dce8f351-c8e0-40f9-a17d-73d7b9b37135")) CommandListData {
   pipeline_tracker::BoundShaders shaders;
-  std::unordered_map<RegisterSlot, reshade::api::resource_view, renodx::utils::hash::HashPair> pixel_srvs;
-  std::unordered_map<RegisterSlot, reshade::api::resource_view, renodx::utils::hash::HashPair> vertex_srvs;
-  std::unordered_map<RegisterSlot, reshade::api::resource_view, renodx::utils::hash::HashPair> compute_srvs;
-  std::unordered_map<RegisterSlot, reshade::api::buffer_range, renodx::utils::hash::HashPair> pixel_cbs;
-  std::unordered_map<RegisterSlot, reshade::api::buffer_range, renodx::utils::hash::HashPair> vertex_cbs;
-  std::unordered_map<RegisterSlot, reshade::api::buffer_range, renodx::utils::hash::HashPair> compute_cbs;
-  std::vector<reshade::api::resource_view> render_targets;
-  reshade::api::resource_view depth_stencil = {0};
-  std::vector<reshade::api::viewport> viewports;
+  reshade::api::resource_view pixel_srv_t0 = {0};
+  reshade::api::resource_view pixel_srv_t8 = {0};
+  reshade::api::buffer_range vertex_cb_b0 = {};
+  reshade::api::buffer_range vertex_cb_b1 = {};
+  reshade::api::buffer_range pixel_cb_b2 = {};
+  reshade::api::resource_view render_target_0 = {0};
 };
 
 inline CommandListData* Get(reshade::api::command_list* cmd_list) {
   if (cmd_list == nullptr) return nullptr;
   auto* data = cmd_list->get_private_data<CommandListData>();
   return data != nullptr ? data : cmd_list->create_private_data<CommandListData>();
-}
-
-inline reshade::api::resource_view GetView(
-    const std::unordered_map<RegisterSlot, reshade::api::resource_view, renodx::utils::hash::HashPair>& views,
-    uint32_t slot,
-    uint32_t space = 0u) {
-  auto it = views.find({slot, space});
-  return it != views.end() ? it->second : reshade::api::resource_view{0};
-}
-
-inline std::optional<reshade::api::buffer_range> GetBufferRange(
-    const std::unordered_map<RegisterSlot, reshade::api::buffer_range, renodx::utils::hash::HashPair>& ranges,
-    uint32_t slot,
-    uint32_t space = 0u) {
-  auto it = ranges.find({slot, space});
-  if (it == ranges.end()) return std::nullopt;
-  return it->second;
 }
 
 inline bool ResolveRegister(
@@ -101,35 +76,33 @@ inline bool ResolveRegister(
   }
 }
 
-template <typename MapT, typename ValueT>
-inline void StoreDescriptor(MapT& map, const RegisterSlot& slot, const ValueT& value) {
-  // Null descriptors clear stale register state; otherwise later draw hooks
-  // would see resources that the game has already unbound.
-  if constexpr (std::is_same_v<ValueT, reshade::api::resource_view>) {
-    if (value.handle == 0u) {
-      map.erase(slot);
-    } else {
-      map[slot] = value;
-    }
-  } else {
-    if (value.buffer.handle == 0u) {
-      map.erase(slot);
-    } else {
-      map[slot] = value;
-    }
+inline void StoreViewByStage(CommandListData* data, reshade::api::shader_stage stages, const RegisterSlot& slot, reshade::api::resource_view view) {
+  if (!renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) return;
+  if (slot.second != 0u) return;
+
+  // Only the draw-time inputs needed by the Alias Isolation insertion are kept.
+  // Null descriptors still assign through here, which clears stale state.
+  if (slot.first == 0u) {
+    data->pixel_srv_t0 = view;
+  } else if (slot.first == 8u) {
+    data->pixel_srv_t8 = view;
   }
 }
 
-inline void StoreViewByStage(CommandListData* data, reshade::api::shader_stage stages, const RegisterSlot& slot, reshade::api::resource_view view) {
-  if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::vertex)) StoreDescriptor(data->vertex_srvs, slot, view);
-  if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) StoreDescriptor(data->pixel_srvs, slot, view);
-  if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::compute)) StoreDescriptor(data->compute_srvs, slot, view);
-}
-
 inline void StoreConstantBufferByStage(CommandListData* data, reshade::api::shader_stage stages, const RegisterSlot& slot, reshade::api::buffer_range range) {
-  if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::vertex)) StoreDescriptor(data->vertex_cbs, slot, range);
-  if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) StoreDescriptor(data->pixel_cbs, slot, range);
-  if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::compute)) StoreDescriptor(data->compute_cbs, slot, range);
+  if (slot.second != 0u) return;
+
+  if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::vertex)) {
+    if (slot.first == 0u) {
+      data->vertex_cb_b0 = range;
+    } else if (slot.first == 1u) {
+      data->vertex_cb_b1 = range;
+    }
+  }
+
+  if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel) && slot.first == 2u) {
+    data->pixel_cb_b2 = range;
+  }
 }
 
 inline void OnInitCommandList(reshade::api::command_list* cmd_list) {
@@ -155,27 +128,10 @@ inline void OnBindRenderTargetsAndDepthStencil(
     reshade::api::command_list* cmd_list,
     uint32_t count,
     const reshade::api::resource_view* rtvs,
-    reshade::api::resource_view dsv) {
+    reshade::api::resource_view) {
   auto* data = Get(cmd_list);
   if (data == nullptr) return;
-  if (rtvs == nullptr || count == 0u) {
-    data->render_targets.clear();
-  } else {
-    data->render_targets.assign(rtvs, rtvs + count);
-  }
-  data->depth_stencil = dsv;
-}
-
-inline void OnBindViewports(
-    reshade::api::command_list* cmd_list,
-    uint32_t first,
-    uint32_t count,
-    const reshade::api::viewport* viewports) {
-  auto* data = Get(cmd_list);
-  if (data == nullptr) return;
-  if (first == 0u) data->viewports.clear();
-  if (data->viewports.size() < first + count) data->viewports.resize(first + count);
-  for (uint32_t i = 0; i < count; ++i) data->viewports[first + i] = viewports[i];
+  data->render_target_0 = (rtvs != nullptr && count != 0u) ? rtvs[0] : reshade::api::resource_view{0};
 }
 
 inline void OnPushDescriptors(
@@ -186,6 +142,22 @@ inline void OnPushDescriptors(
     const reshade::api::descriptor_table_update& update) {
   auto* data = Get(cmd_list);
   if (data == nullptr) return;
+
+  const bool tracks_pixel = renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel);
+  const bool tracks_vertex = renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::vertex);
+
+  switch (update.type) {
+    case reshade::api::descriptor_type::sampler_with_resource_view:
+    case reshade::api::descriptor_type::shader_resource_view:
+    case reshade::api::descriptor_type::buffer_shader_resource_view:
+      if (!tracks_pixel) return;
+      break;
+    case reshade::api::descriptor_type::constant_buffer:
+      if (!tracks_vertex && !tracks_pixel) return;
+      break;
+    default:
+      return;
+  }
 
   // Only SRVs and constant buffers are tracked here. UAVs and samplers are
   // managed by the manual TAA dispatch when it binds its own compute pipeline.

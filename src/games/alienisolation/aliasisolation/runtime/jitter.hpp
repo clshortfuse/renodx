@@ -110,6 +110,7 @@ struct RenderState {
   uint32_t screen_height = 0u;
   uint32_t rt_width = 0u;
   uint32_t rt_height = 0u;
+  reshade::api::resource_view rt_view = {0};
   float viewport_width = 0.f;
   float viewport_height = 0.f;
   bool has_render_target = false;
@@ -359,22 +360,16 @@ inline void CaptureConstantBuffers(reshade::api::command_list*, const descriptor
   // These bindings mirror the original ASI's hard-coded knowledge of the
   // game's passes: SMAA VS exposes DefaultXSC, RGBM VS exposes DefaultVSC, and
   // camera motion PS exposes DefaultPSC.
-  if (data.shaders.vertex == ShaderId::SmaaVs) {
-    if (const auto range = descriptor_tracker::GetBufferRange(data.vertex_cbs, 0u); range.has_value()) {
-      TrackBuffer(BufferKind::DefaultXSC, *range);
-    }
+  if (data.shaders.vertex == ShaderId::SmaaVs && data.vertex_cb_b0.buffer.handle != 0u) {
+    TrackBuffer(BufferKind::DefaultXSC, data.vertex_cb_b0);
   }
 
-  if (data.shaders.vertex == ShaderId::RgbmEncodeVs) {
-    if (const auto range = descriptor_tracker::GetBufferRange(data.vertex_cbs, 1u); range.has_value()) {
-      TrackBuffer(BufferKind::DefaultVSC, *range);
-    }
+  if (data.shaders.vertex == ShaderId::RgbmEncodeVs && data.vertex_cb_b1.buffer.handle != 0u) {
+    TrackBuffer(BufferKind::DefaultVSC, data.vertex_cb_b1);
   }
 
-  if (data.shaders.pixel == ShaderId::CameraMotionPs) {
-    if (const auto range = descriptor_tracker::GetBufferRange(data.pixel_cbs, 2u); range.has_value()) {
-      TrackBuffer(BufferKind::DefaultPSC, *range);
-    }
+  if (data.shaders.pixel == ShaderId::CameraMotionPs && data.pixel_cb_b2.buffer.handle != 0u) {
+    TrackBuffer(BufferKind::DefaultPSC, data.pixel_cb_b2);
   }
 }
 
@@ -549,6 +544,7 @@ inline void OnDestroySwapchain(reshade::api::swapchain*, bool) {
   render_state.screen_height = 0u;
   render_state.has_render_target = false;
   render_state.has_viewport = false;
+  render_state.rt_view = {0};
 }
 
 inline void OnBindRenderTargetsAndDepthStencil(
@@ -558,8 +554,11 @@ inline void OnBindRenderTargetsAndDepthStencil(
     reshade::api::resource_view) {
   if (cmd_list == nullptr || count == 0u || rtvs == nullptr || rtvs[0].handle == 0u) {
     render_state.has_render_target = false;
+    render_state.rt_view = {0};
     return;
   }
+
+  if (render_state.has_render_target && render_state.rt_view.handle == rtvs[0].handle) return;
 
   auto* device = cmd_list->get_device();
   if (device == nullptr) return;
@@ -567,12 +566,14 @@ inline void OnBindRenderTargetsAndDepthStencil(
   const auto resource = device->get_resource_from_view(rtvs[0]);
   if (resource.handle == 0u) {
     render_state.has_render_target = false;
+    render_state.rt_view = {0};
     return;
   }
 
   const auto desc = device->get_resource_desc(resource);
   render_state.rt_width = desc.texture.width;
   render_state.rt_height = desc.texture.height;
+  render_state.rt_view = rtvs[0];
   render_state.has_render_target = true;
 }
 
