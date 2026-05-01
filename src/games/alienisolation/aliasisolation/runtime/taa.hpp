@@ -12,8 +12,8 @@
 #include <array>
 #include <cstdint>
 #include <limits>
-#include <optional>
-#include <tuple>
+#include <utility>
+#include <vector>
 
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
@@ -43,12 +43,19 @@ struct Resources {
   reshade::api::format view_format = reshade::api::format::unknown;
   uint32_t accum_index = 0u;
   bool initialized = false;
+  // Stable insertion-point color handles are cached so steady-state dispatches
+  // do not have to re-query the resource and view descriptions every frame.
+  reshade::api::resource_view color_srv = {0};
+  reshade::api::resource color_resource = {0};
 
   reshade::api::pipeline_layout compute_layout = {0};
   reshade::api::pipeline compute_pipeline = {0};
   std::array<reshade::api::sampler, 2> samplers = {};
 
   reshade::api::resource velocity_resource = {0};
+  // The camera-motion pass exposes velocity as RTV 0; this cache avoids
+  // recreating the matching SRV while that RTV handle is unchanged.
+  reshade::api::resource_view velocity_rtv = {0};
   reshade::api::resource_view velocity_srv = {0};
   reshade::api::format velocity_view_format = reshade::api::format::unknown;
   reshade::api::resource_view depth_srv = {0};
@@ -75,6 +82,49 @@ inline ShaderInjectData* shader_injection = nullptr;
 
 inline bool LogEvery(uint64_t& last_frame, uint64_t interval = 120u) {
   return logging::ShouldLogFrame(constant_buffers::frame_state.frame_index, last_frame, interval);
+}
+
+struct PreviousComputeState {
+  // The resolve is inserted before a graphics draw, but it still changes
+  // compute bindings. Restore only compute state so later compute work is not
+  // polluted without rebinding the graphics state the pending draw already has.
+  std::array<std::pair<reshade::api::pipeline_stage, reshade::api::pipeline>, 4> pipelines = {};
+  uint32_t pipeline_count = 0u;
+  reshade::api::pipeline_layout layout = {0};
+  std::vector<reshade::api::descriptor_table> descriptor_tables;
+};
+
+inline bool IsComputePipelineStage(reshade::api::pipeline_stage stage) {
+  return (static_cast<uint32_t>(stage) & static_cast<uint32_t>(reshade::api::pipeline_stage::all_compute)) != 0u;
+}
+
+inline PreviousComputeState CaptureComputeState(reshade::api::command_list* cmd_list) {
+  PreviousComputeState result = {};
+  const auto* current_state = renodx::utils::state::GetCurrentState(cmd_list);
+  if (current_state == nullptr) return result;
+
+  for (const auto& [stage, pipeline] : current_state->pipelines) {
+    if (!IsComputePipelineStage(stage) || result.pipeline_count >= result.pipelines.size()) continue;
+    result.pipelines[result.pipeline_count++] = {stage, pipeline};
+  }
+  result.layout = current_state->compute_pipeline_layout;
+  result.descriptor_tables = current_state->compute_descriptor_tables;
+  return result;
+}
+
+inline void RestoreComputeState(reshade::api::command_list* cmd_list, const PreviousComputeState& state) {
+  for (uint32_t i = 0u; i < state.pipeline_count; ++i) {
+    cmd_list->bind_pipeline(state.pipelines[i].first, state.pipelines[i].second);
+  }
+
+  if (state.layout.handle != 0u) {
+    cmd_list->bind_descriptor_tables(
+        reshade::api::shader_stage::all_compute,
+        state.layout,
+        0,
+        static_cast<uint32_t>(state.descriptor_tables.size()),
+        state.descriptor_tables.data());
+  }
 }
 
 inline void DestroyCompute(reshade::api::device* device) {
@@ -108,6 +158,8 @@ inline void DestroyHistory(reshade::api::device* device) {
   resources.height = 0u;
   resources.resource_format = reshade::api::format::unknown;
   resources.view_format = reshade::api::format::unknown;
+  resources.color_srv = {0};
+  resources.color_resource = {0};
   resources.accum_index = 0u;
   resources.initialized = false;
 
@@ -118,6 +170,7 @@ inline void DestroyVelocitySrv(reshade::api::device* device) {
   if (device == nullptr) return;
   if (resources.velocity_srv.handle != 0u) device->destroy_resource_view(resources.velocity_srv);
   resources.velocity_resource = {0};
+  resources.velocity_rtv = {0};
   resources.velocity_srv = {0};
   resources.velocity_view_format = reshade::api::format::unknown;
 }
@@ -208,18 +261,13 @@ inline bool EnsureComputePipeline(reshade::api::command_list* cmd_list) {
 }
 
 inline bool GetSupportedHistoryFormat(
-    reshade::api::device* device,
-    reshade::api::resource_view color_srv,
+    const reshade::api::resource_desc& color_desc,
+    const reshade::api::resource_view_desc& color_view_desc,
     reshade::api::format& resource_format,
     reshade::api::format& view_format) {
-  const auto color_resource = device->get_resource_from_view(color_srv);
-  if (color_resource.handle == 0u) return false;
-
-  const auto color_desc = device->get_resource_desc(color_resource);
-  const auto color_view_desc = device->get_resource_view_desc(color_srv);
-
-  // Match the current HDR resource when possible. The typeless path is kept for
-  // the future R16G16B16A16 upgrade, where float typed SRV/UAV views are used.
+  // Match the current HDR resource when possible. Typeless R16G16B16A16
+  // resources use float typed SRV/UAV views so history can be sampled and
+  // written by the compute resolve.
   resource_format = color_desc.texture.format;
   view_format = color_view_desc.format != reshade::api::format::unknown
                     ? color_view_desc.format
@@ -245,21 +293,28 @@ inline bool GetSupportedHistoryFormat(
   return false;
 }
 
-inline bool EnsureHistory(reshade::api::command_list* cmd_list, reshade::api::resource_view color_srv) {
+inline bool EnsureHistory(reshade::api::command_list* cmd_list, reshade::api::resource_view color_srv, reshade::api::resource& color_resource) {
   auto* device = cmd_list->get_device();
   if (device == nullptr || color_srv.handle == 0u) return false;
 
-  const auto color_resource = device->get_resource_from_view(color_srv);
+  if (resources.history[0].resource.handle != 0u
+      && resources.color_srv.handle == color_srv.handle
+      && resources.color_resource.handle != 0u) {
+    color_resource = resources.color_resource;
+    return true;
+  }
+
+  color_resource = device->get_resource_from_view(color_srv);
   if (color_resource.handle == 0u) return false;
 
   const auto color_desc = device->get_resource_desc(color_resource);
+  const auto color_view_desc = device->get_resource_view_desc(color_srv);
   reshade::api::format resource_format = reshade::api::format::unknown;
   reshade::api::format view_format = reshade::api::format::unknown;
-  if (!GetSupportedHistoryFormat(device, color_srv, resource_format, view_format)) {
+  if (!GetSupportedHistoryFormat(color_desc, color_view_desc, resource_format, view_format)) {
     if (LogEvery(last_history_format_log)) {
-      const auto view_desc = device->get_resource_view_desc(color_srv);
       logging::Warn("unsupported TAA color format resource_format=", static_cast<uint32_t>(color_desc.texture.format),
-                    " view_format=", static_cast<uint32_t>(view_desc.format),
+                    " view_format=", static_cast<uint32_t>(color_view_desc.format),
                     " frame=", constant_buffers::frame_state.frame_index);
     }
     return false;
@@ -270,7 +325,11 @@ inline bool EnsureHistory(reshade::api::command_list* cmd_list, reshade::api::re
                        && resources.height == color_desc.texture.height
                        && resources.resource_format == resource_format
                        && resources.view_format == view_format;
-  if (matches) return true;
+  if (matches) {
+    resources.color_srv = color_srv;
+    resources.color_resource = color_resource;
+    return true;
+  }
 
   // Recreate history when resolution or HDR format changes, then seed both
   // buffers from the current color so the first resolve does not blend with
@@ -319,16 +378,18 @@ inline bool EnsureHistory(reshade::api::command_list* cmd_list, reshade::api::re
   resources.height = color_desc.texture.height;
   resources.resource_format = resource_format;
   resources.view_format = view_format;
+  resources.color_srv = color_srv;
+  resources.color_resource = color_resource;
   resources.accum_index = 0u;
   resources.initialized = true;
 
+  cmd_list->barrier(color_resource, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::copy_source);
   for (auto& item : resources.history) {
-    cmd_list->barrier(color_resource, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::copy_source);
     cmd_list->barrier(item.resource, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::copy_dest);
     cmd_list->copy_resource(color_resource, item.resource);
     cmd_list->barrier(item.resource, reshade::api::resource_usage::copy_dest, reshade::api::resource_usage::shader_resource);
-    cmd_list->barrier(color_resource, reshade::api::resource_usage::copy_source, reshade::api::resource_usage::shader_resource);
   }
+  cmd_list->barrier(color_resource, reshade::api::resource_usage::copy_source, reshade::api::resource_usage::shader_resource);
 
   logging::Info("created TAA history ", resources.width, "x", resources.height,
                 " resource_format=", static_cast<uint32_t>(resources.resource_format),
@@ -347,6 +408,12 @@ inline reshade::api::format GetTypedViewFormat(reshade::api::device* device, res
 inline bool EnsureVelocitySrv(reshade::api::command_list* cmd_list, reshade::api::resource_view velocity_rtv) {
   auto* device = cmd_list->get_device();
   if (device == nullptr || velocity_rtv.handle == 0u) return false;
+
+  if (resources.velocity_srv.handle != 0u
+      && resources.velocity_rtv.handle == velocity_rtv.handle
+      && resources.velocity_resource.handle != 0u) {
+    return true;
+  }
 
   const auto velocity_resource = device->get_resource_from_view(velocity_rtv);
   if (velocity_resource.handle == 0u) return false;
@@ -371,6 +438,7 @@ inline bool EnsureVelocitySrv(reshade::api::command_list* cmd_list, reshade::api
   }
 
   resources.velocity_resource = velocity_resource;
+  resources.velocity_rtv = velocity_rtv;
   resources.velocity_view_format = view_format;
   logging::Info("created velocity SRV resource=", logging::Hex(velocity_resource.handle),
                 " view_format=", static_cast<uint32_t>(view_format));
@@ -378,14 +446,14 @@ inline bool EnsureVelocitySrv(reshade::api::command_list* cmd_list, reshade::api
 }
 
 inline void CaptureCameraMotion(reshade::api::command_list* cmd_list, const descriptor_tracker::CommandListData& command_data) {
-  if (command_data.render_targets.empty()) {
+  if (command_data.render_target_0.handle == 0u) {
     if (LogEvery(last_capture_missing_log)) logging::Warn("camera motion pass has no RTVs");
     return;
   }
 
-  const auto velocity_rtv = command_data.render_targets[0];
+  const auto velocity_rtv = command_data.render_target_0;
   // Alias Isolation uses pixel t8 from the camera-motion pass as depth.
-  const auto depth_srv = descriptor_tracker::GetView(command_data.pixel_srvs, 8u);
+  const auto depth_srv = command_data.pixel_srv_t8;
   if (velocity_rtv.handle == 0u || depth_srv.handle == 0u) {
     if (LogEvery(last_capture_missing_log)) {
       logging::Warn("camera motion capture missing input velocity_rtv=", logging::Hex(velocity_rtv.handle),
@@ -417,10 +485,7 @@ inline bool DispatchCompute(
     return false;
   }
 
-  std::optional<renodx::utils::state::CommandListState> previous_state;
-  if (auto* current_state = renodx::utils::state::GetCurrentState(cmd_list); current_state != nullptr) {
-    previous_state.emplace(*current_state);
-  }
+  const PreviousComputeState previous_compute_state = CaptureComputeState(cmd_list);
 
   const std::array<reshade::api::resource_view, 4> srvs = {
       color_srv,
@@ -484,11 +549,7 @@ inline bool DispatchCompute(
   cmd_list->barrier(resources.history[current].resource, reshade::api::resource_usage::copy_source, reshade::api::resource_usage::shader_resource);
   cmd_list->barrier(resources.velocity_resource, reshade::api::resource_usage::shader_resource, reshade::api::resource_usage::render_target);
 
-  if (previous_state.has_value()) {
-    // Restore the game pipeline/descriptors after the manual compute dispatch so
-    // the draw that triggered this insertion can continue normally.
-    previous_state->Apply(cmd_list);
-  }
+  RestoreComputeState(cmd_list, previous_compute_state);
   return true;
 }
 
@@ -507,13 +568,8 @@ inline bool Run(reshade::api::command_list* cmd_list, reshade::api::resource_vie
     }
     return false;
   }
-  if (!EnsureHistory(cmd_list, color_srv)) return false;
-
-  auto* device = cmd_list->get_device();
-  if (device == nullptr) return false;
-
-  const auto color_resource = device->get_resource_from_view(color_srv);
-  if (color_resource.handle == 0u) return false;
+  reshade::api::resource color_resource = {0};
+  if (!EnsureHistory(cmd_list, color_srv, color_resource)) return false;
 
   const uint32_t current = resources.accum_index;
   const uint32_t previous = 1u - current;
@@ -561,7 +617,7 @@ inline bool MaybeRun(reshade::api::command_list* cmd_list, const descriptor_trac
     logging::Info("using RGBM encode insertion point for TAA fallback");
   }
 
-  const auto color_srv = descriptor_tracker::GetView(command_data.pixel_srvs, 0u);
+  const auto color_srv = command_data.pixel_srv_t0;
   if (color_srv.handle == 0u) {
     if (LogEvery(last_missing_color_log)) {
       logging::Warn("TAA insertion point has no color SRV at pixel t0 frame=", constant_buffers::frame_state.frame_index,

@@ -88,19 +88,29 @@ inline bool HandleDraw(reshade::api::command_list* cmd_list) {
   if (data == nullptr) return false;
 
   const bool enabled = constant_buffers::IsEnabled();
+  if (!enabled) return false;
+
+  const ShaderId vertex_shader = data->shaders.vertex;
+  const ShaderId pixel_shader = data->shaders.pixel;
 
   // All three paths are draw-driven because the original game provides the
   // needed resources during ordinary post-processing draws, not standalone
   // compute passes.
-  if (enabled) {
+  const bool captures_constant_buffer = vertex_shader == ShaderId::SmaaVs
+                                        || vertex_shader == ShaderId::RgbmEncodeVs
+                                        || pixel_shader == ShaderId::CameraMotionPs;
+  if (captures_constant_buffer) {
     jitter::CaptureConstantBuffers(cmd_list, *data);
   }
 
-  if (enabled && data->shaders.pixel == ShaderId::CameraMotionPs) {
+  if (pixel_shader == ShaderId::CameraMotionPs) {
     taa::CaptureCameraMotion(cmd_list, *data);
   }
 
-  if (enabled) {
+  const bool can_insert_taa = !constant_buffers::frame_state.taa_ran_this_frame
+                              && (pixel_shader == ShaderId::DofEncodePs
+                                  || (vertex_shader == ShaderId::RgbmEncodeVs && pixel_shader == ShaderId::RgbmEncodePs));
+  if (can_insert_taa) {
     taa::MaybeRun(cmd_list, *data);
   }
 
@@ -198,7 +208,6 @@ inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
       reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(jitter::OnBindRenderTargetsAndDepthStencil);
       reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(descriptor_tracker::OnBindRenderTargetsAndDepthStencil);
       reshade::register_event<reshade::addon_event::bind_viewports>(jitter::OnBindViewports);
-      reshade::register_event<reshade::addon_event::bind_viewports>(descriptor_tracker::OnBindViewports);
       reshade::register_event<reshade::addon_event::push_descriptors>(descriptor_tracker::OnPushDescriptors);
       reshade::register_event<reshade::addon_event::map_buffer_region>(jitter::OnMapBufferRegion);
       reshade::register_event<reshade::addon_event::unmap_buffer_region>(jitter::OnUnmapBufferRegion);
@@ -229,7 +238,6 @@ inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
       reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(jitter::OnBindRenderTargetsAndDepthStencil);
       reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(descriptor_tracker::OnBindRenderTargetsAndDepthStencil);
       reshade::unregister_event<reshade::addon_event::bind_viewports>(jitter::OnBindViewports);
-      reshade::unregister_event<reshade::addon_event::bind_viewports>(descriptor_tracker::OnBindViewports);
       reshade::unregister_event<reshade::addon_event::push_descriptors>(descriptor_tracker::OnPushDescriptors);
       reshade::unregister_event<reshade::addon_event::map_buffer_region>(jitter::OnMapBufferRegion);
       reshade::unregister_event<reshade::addon_event::unmap_buffer_region>(jitter::OnUnmapBufferRegion);
