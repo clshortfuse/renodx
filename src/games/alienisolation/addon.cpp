@@ -6,6 +6,7 @@
 #define ImTextureID                   ImU64
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 #define DEBUG_LEVEL_0
+// #define ALIENISOLATION_ALIAS_LOGGING 1
 
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>

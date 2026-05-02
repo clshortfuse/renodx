@@ -111,7 +111,7 @@ the compute pipeline manually.
 | `bind_pipeline` | `pipeline_replacer`, `descriptor_tracker` | Rebind replacement pipelines when enabled and track current shader IDs. |
 | `bind_render_targets_and_depth_stencil` | `jitter`, `descriptor_tracker` | Track fullscreen render state and current RTV 0. |
 | `bind_viewports` | `jitter` | Track fullscreen viewport state. |
-| `push_descriptors` | `descriptor_tracker` | Map ReShade descriptor updates back to shader registers like `t0`, `t8`, `b0`, `b1`, and `b2`. |
+| `push_descriptors` | `descriptor_tracker` | Map ReShade descriptor updates back to shader registers like `t0`, `t8`, `b0`, `b1`, and `b2`. SRV extraction uses `renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate`; constant buffers are extracted locally. |
 | `map_buffer_region` / `unmap_buffer_region` | `jitter` | Patch tracked camera cbuffers after the game writes them. |
 | `draw`, `draw_indexed`, `draw_or_dispatch_indirect` | `aliasisolation.hpp` | Run the draw-driven capture and TAA insertion logic. |
 | `destroy_device` | `aliasisolation.hpp` | Destroy history, compute objects, replacement pipelines, and jitter state. |
@@ -119,6 +119,13 @@ the compute pipeline manually.
 
 The draw callbacks all call `HandleDraw`. If Alias Isolation is disabled,
 `HandleDraw` returns without changing the command list.
+
+`aliasisolation::Use` also registers a RenoDX resource-view destroy callback
+(`renodx::utils::resource::RegisterOnDestroyResourceViewInfoCallback`) pointing
+to `taa::OnDestroyResourceView`. That function explicitly zeroes `resources.color_srv`,
+`resources.color_resource`, `resources.velocity_rtv`, and `resources.depth_srv` when
+the underlying view is destroyed, so the next `EnsureHistory` or `EnsureVelocitySrv`
+call rebuilds from scratch instead of comparing against a dangling handle.
 
 ## Frame Flow
 
