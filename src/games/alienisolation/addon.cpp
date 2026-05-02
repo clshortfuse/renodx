@@ -688,7 +688,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
 
       renodx::mods::shader::expected_constant_buffer_index = 11;
-      // renodx::mods::shader::force_pipeline_cloning = true;
+      renodx::mods::shader::force_pipeline_cloning = true;
 
       renodx::mods::swapchain::use_resource_cloning = true;
 
