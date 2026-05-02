@@ -216,6 +216,7 @@ inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
       reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
       reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
+      renodx::utils::resource::RegisterOnDestroyResourceViewInfoCallback(taa::OnDestroyResourceView);
       break;
 
     case DLL_PROCESS_DETACH:
@@ -246,6 +247,7 @@ inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
       reshade::unregister_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
       reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      renodx::utils::resource::UnregisterOnDestroyResourceViewInfoCallback(taa::OnDestroyResourceView);
       break;
   }
 }

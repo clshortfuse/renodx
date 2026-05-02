@@ -569,7 +569,6 @@ inline void OnBindRenderTargetsAndDepthStencil(
     render_state.rt_view = {0};
     return;
   }
-
   const auto desc = device->get_resource_desc(resource);
   render_state.rt_width = desc.texture.width;
   render_state.rt_height = desc.texture.height;

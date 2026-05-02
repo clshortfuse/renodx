@@ -15,6 +15,7 @@
 #include <include/reshade.hpp>
 
 #include "../../../../utils/bitwise.hpp"
+#include "../../../../utils/descriptor.hpp"
 #include "../../../../utils/pipeline_layout.hpp"
 #include "./pipeline_tracker.hpp"
 
@@ -166,22 +167,13 @@ inline void OnPushDescriptors(
     if (!ResolveRegister(layout, layout_param, update, i, slot)) continue;
 
     switch (update.type) {
-      case reshade::api::descriptor_type::sampler:
-        break;
-      case reshade::api::descriptor_type::sampler_with_resource_view: {
-        const auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i];
-        StoreViewByStage(data, stages, slot, item.view);
-        break;
-      }
+      case reshade::api::descriptor_type::sampler_with_resource_view:
       case reshade::api::descriptor_type::shader_resource_view:
       case reshade::api::descriptor_type::buffer_shader_resource_view: {
-        const auto view = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+        const auto view = renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate(update, i);
         StoreViewByStage(data, stages, slot, view);
         break;
       }
-      case reshade::api::descriptor_type::unordered_access_view:
-      case reshade::api::descriptor_type::buffer_unordered_access_view:
-        break;
       case reshade::api::descriptor_type::constant_buffer: {
         const auto range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
         StoreConstantBufferByStage(data, stages, slot, range);

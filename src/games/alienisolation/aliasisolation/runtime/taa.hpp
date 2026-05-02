@@ -18,8 +18,9 @@
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
 
-#include "../../shared.h"
+#include "../../../../utils/resource.hpp"
 #include "../../../../utils/state.hpp"
+#include "../../shared.h"
 #include "./constant_buffers.hpp"
 #include "./descriptor_tracker.hpp"
 #include "./logging.hpp"
@@ -82,6 +83,21 @@ inline ShaderInjectData* shader_injection = nullptr;
 
 inline bool LogEvery(uint64_t& last_frame, uint64_t interval = 120u) {
   return logging::ShouldLogFrame(constant_buffers::frame_state.frame_index, last_frame, interval);
+}
+
+inline void OnDestroyResourceView(renodx::utils::resource::ResourceViewInfo* info) {
+  if (info == nullptr) return;
+  const uint64_t h = info->view.handle;
+  if (h == resources.color_srv.handle) {
+    resources.color_srv = {0};
+    resources.color_resource = {0};
+  }
+  if (h == resources.velocity_rtv.handle) {
+    resources.velocity_rtv = {0};
+  }
+  if (h == resources.depth_srv.handle) {
+    resources.depth_srv = {0};
+  }
 }
 
 struct PreviousComputeState {
