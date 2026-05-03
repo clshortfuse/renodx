@@ -7,9 +7,6 @@
 #define ImTextureID                   ImU64
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 
-#define DEBUG_LEVEL_0
-#define DEBUG_LEVEL_1
-
 #include <embed/shaders.h>
 
 #include <deps/imgui/imgui.h>
@@ -253,7 +250,9 @@ bool OnLateFinalDraw(reshade::api::command_list* cmd_list) {
         return true;
     }
 
-    if (desc.texture.width != 6880) return true;
+    if (desc.texture.width < 1600 || desc.texture.height < 900) return true;
+    if (desc.texture.format != reshade::api::format::r8g8b8a8_typeless) return true;
+    if (resource_view_info->desc.format != reshade::api::format::r8g8b8a8_unorm_srgb) return true;
 
     resource_info->clone_target = &late_final_clone_info;
     resource_info->clone_enabled = true;
