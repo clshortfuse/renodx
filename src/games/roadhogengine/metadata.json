@@ -1,5 +1,51 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "roadhogengine",
-  "title": "Hard Reset Redux, Shadow Warrior (2013) & 2"
+  "title": "Hard Reset Redux, Shadow Warrior (2013) & 2",
+  "maintainers": [
+    "Voosh"
+  ],
+  "support": "engine",
+  "status": "stable",
+  "games": [
+    {
+      "title": "Hard Reset Redux",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 407810
+      },
+      "urls": [
+        {
+          "url": "https://www.nexusmods.com/shadowwarrior2/mods/7",
+          "kind": "nexus_mods"
+        }
+      ]
+    },
+    {
+      "title": "Shadow Warrior (2013)",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 233130
+      },
+      "urls": [
+        {
+          "url": "https://www.nexusmods.com/shadowwarrior2/mods/7",
+          "kind": "nexus_mods"
+        }
+      ]
+    },
+    {
+      "title": "Shadow Warrior 2",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 324800
+      },
+      "urls": [
+        {
+          "url": "https://www.nexusmods.com/shadowwarrior2/mods/7",
+          "kind": "nexus_mods"
+        }
+      ]
+    }
+  ]
 }

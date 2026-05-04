@@ -1,5 +1,8 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "gfl2",
-  "title": "Girls Frontline 2: Exilium"
+  "title": "Girls Frontline 2: Exilium",
+  "deploy": {
+    "steam_appid": 3347400
+  }
 }

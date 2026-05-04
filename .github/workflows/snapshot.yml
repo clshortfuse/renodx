@@ -102,6 +102,9 @@ jobs:
       - name: Generate metadata manifest
         run: node scripts/generate-release-manifest.mjs
 
+      - name: Build web UI
+        run: node src/web/scripts/build.mjs
+
 
       - name: Put current date into a variable
         run: |

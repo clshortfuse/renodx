@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "gtav-enhanced",
-  "title": "GTA:V Enhanced"
+  "title": "Grand Theft Auto V: Enhanced",
+  "maintainers": [
+    "ShortFuse"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 3240220
+  }
 }

@@ -1,5 +1,21 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "batmanaa",
-  "title": "Batman: Arkham Asylum"
+  "title": "Batman: Arkham Asylum",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/batmanarkhamasylum/mods/283",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 35140,
+    "architecture": [
+      "x86"
+    ]
+  }
 }

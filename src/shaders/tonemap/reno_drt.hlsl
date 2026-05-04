@@ -7,6 +7,7 @@
 #include "../math.hlsl"
 #include "./daniele.hlsl"
 #include "./hermite_spline.hlsl"
+#include "./neutwo.hlsl"
 #include "./reinhard.hlsl"
 
 #ifndef RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK
@@ -62,11 +63,12 @@ struct Config {
   float tone_map_method;
   float hue_correction_type;
   float working_color_space;
-  bool per_channel;
+  bool per_channel;  // deprecated - use scaling_method
   float blowout;
   float clamp_color_space;
   float clamp_peak;
   float white_clip;
+  float scaling_method;
 };
 
 namespace config {
@@ -87,6 +89,13 @@ static const float NONE = -1.f;
 static const float DANIELE = 0.f;
 static const float REINHARD = 1.f;
 static const float HERMITE_SPLINE = 2.f;
+static const float NEUTWO = 3.f;
+}
+
+namespace scaling_method {
+static const float LUMINANCE = 0.f;
+static const float PER_CHANNEL = 1.f;
+static const float MAX_CHANNEL = 2.f;
 }
 
 Config Create(
@@ -110,7 +119,8 @@ Config Create(
     float blowout = 0.f,
     float clamp_color_space = 2.f,
     float clamp_peak = 0.f,
-    float white_clip = 100.f) {
+    float white_clip = 100.f,
+    float scaling_method = config::scaling_method::LUMINANCE) {
   const Config renodrt_config = {
     nits_peak,
     mid_gray_value,
@@ -132,7 +142,8 @@ Config Create(
     blowout,
     clamp_color_space,
     clamp_peak,
-    white_clip
+    white_clip,
+    scaling_method
   };
   return renodrt_config;
 }
@@ -142,6 +153,10 @@ float3 BT709(float3 bt709, Config current_config) {
   const float reference_white = 100.f;
 
   float peak = (current_config.nits_peak / reference_white);
+
+  if (current_config.per_channel) {
+    current_config.scaling_method = config::scaling_method::PER_CHANNEL;
+  }
 
   float3 input_color;
   float y_original;
@@ -174,7 +189,7 @@ float3 BT709(float3 bt709, Config current_config) {
 
   float3 per_channel_color;
   [branch]
-  if (current_config.per_channel) {
+  if (current_config.scaling_method == config::scaling_method::PER_CHANNEL) {
     per_channel_color = input_color * (y_original > 0 ? (y / y_original) : 0);
   } else {
     per_channel_color = input_color;
@@ -195,7 +210,7 @@ float3 BT709(float3 bt709, Config current_config) {
     daniele_config.t_1 = current_config.flare;          // shadow toe
 
     [branch]
-    if (current_config.per_channel) {
+    if (current_config.scaling_method == config::scaling_method::PER_CHANNEL) {
       float3 ts3 = float3(
           renodx::tonemap::daniele::ToneMap(per_channel_color.r, daniele_config),
           renodx::tonemap::daniele::ToneMap(per_channel_color.g, daniele_config),
@@ -203,6 +218,13 @@ float3 BT709(float3 bt709, Config current_config) {
 
       color_output = clamp(ts3, 0, peak);
     } else {
+      if (current_config.scaling_method == config::scaling_method::MAX_CHANNEL) {
+        // apply y change now then recompute Y for max channel scaling
+        input_color *= (y_original > 0 ? (y / y_original) : 1.f);
+        float max_channel = renodx::math::Max(abs(input_color.rgb));
+        y_original = max_channel;
+        y = y_original;
+      }
       float ts = renodx::tonemap::daniele::ToneMap(y, daniele_config);
 
       float y_new = clamp(ts, 0, peak);
@@ -234,7 +256,7 @@ float3 BT709(float3 bt709, Config current_config) {
     }
 
     [branch]
-    if (current_config.per_channel) {
+    if (current_config.scaling_method == config::scaling_method::PER_CHANNEL) {
       color_output = per_channel_color;
       float3 signs = sign(color_output);
       color_output = abs(color_output);
@@ -255,12 +277,17 @@ float3 BT709(float3 bt709, Config current_config) {
             0,
             current_config.mid_gray_value,
             current_config.mid_gray_nits / 100.f);
-      } else {
-        // HERMITE_SPLINE
+      } else if (current_config.tone_map_method == config::tone_map_method::HERMITE_SPLINE) {
         color_output = HermiteSplinePerChannelRolloff(
             color_output,
             peak,
             clamp(white_clip, peak, 500.f));
+      } else {
+        // NEUTWO
+        color_output = renodx::tonemap::neutwo::PerChannel(
+            color_output,
+            peak,
+            max(white_clip, peak));
       }
 
       color_output *= signs;
@@ -268,6 +295,13 @@ float3 BT709(float3 bt709, Config current_config) {
     } else {
       if (current_config.contrast != 1.f || current_config.flare != 0.f) {
         y = renodx::color::grade::Contrast(y, computed_contrast, current_config.mid_gray_value);
+      }
+      if (current_config.scaling_method == config::scaling_method::MAX_CHANNEL) {
+        // apply y change now then recompute Y for max channel scaling
+        input_color *= (y_original > 0 ? (y / y_original) : 0);
+        float max_channel = renodx::math::Max(abs(input_color.rgb));
+        y_original = max_channel;
+        y = y_original;
       }
       float y_new = y;
       [branch]
@@ -281,15 +315,22 @@ float3 BT709(float3 bt709, Config current_config) {
             0,
             current_config.mid_gray_value,
             current_config.mid_gray_nits / 100.f);
-      } else {
-        // HERMITE_SPLINE
+      } else if (current_config.tone_map_method == config::tone_map_method::HERMITE_SPLINE) {
         y_new = HermiteSplineLuminanceRolloff(
             y,
             peak,
             clamp(white_clip, peak, 500.f));
+      } else {
+        // NEUTWO
+        y_new = renodx::tonemap::Neutwo(
+            y,
+            peak,
+            max(white_clip, peak));
       }
 
-      color_output = input_color * (y_original > 0 ? (y_new / y_original) : 0);
+      float scale = (y_original > 0 ? (y_new / y_original) : 1.f);
+
+      color_output = input_color * scale;
     }
   }
 

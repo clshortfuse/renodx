@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "jedisurvivor",
-  "title": "STAR WARS Jedi: Survivor™"
+  "title": "STAR WARS Jedi: Survivor™",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 1774580
+  }
 }

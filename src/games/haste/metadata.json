@@ -1,5 +1,14 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "haste",
-  "title": "Haste"
+  "title": "Haste",
+  "maintainers": [
+    "OopyDoopy (Jon)"
+  ],
+  "notes": [
+    "Superseded by Generic Unity mod"
+  ],
+  "deploy": {
+    "steam_appid": 1796470
+  }
 }

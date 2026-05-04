@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "gbfrelink",
-  "title": "Granblue Fantasy: Relink"
+  "title": "Granblue Fantasy: Relink",
+  "maintainers": [
+    "Akuru"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 881020
+  }
 }

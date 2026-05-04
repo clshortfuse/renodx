@@ -1,5 +1,19 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "lostinrandom",
-  "title": "Lost in Random / Lost in Random: The Eternal Die"
+  "title": "Lost in Random / Lost in Random: The Eternal Die",
+  "games": [
+    {
+      "title": "Lost in Random",
+      "deploy": {
+        "steam_appid": 1462570
+      }
+    },
+    {
+      "title": "Lost in Random: The Eternal Die",
+      "deploy": {
+        "steam_appid": 2564520
+      }
+    }
+  ]
 }

@@ -1,5 +1,15 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "sonicgenerations",
-  "title": "Sonic Generations"
+  "title": "Sonic Generations",
+  "maintainers": [
+    "ShortFuse"
+  ],
+  "status": "beta",
+  "deploy": {
+    "steam_appid": 71340,
+    "architecture": [
+      "x86"
+    ]
+  }
 }

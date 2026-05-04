@@ -1,5 +1,19 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "metro",
-  "title": "Metro 2033 and Last Light Redux"
+  "title": "Metro 2033 and Last Light Redux",
+  "games": [
+    {
+      "title": "Metro 2033 Redux",
+      "deploy": {
+        "steam_appid": 286690
+      }
+    },
+    {
+      "title": "Metro: Last Light Redux",
+      "deploy": {
+        "steam_appid": 287390
+      }
+    }
+  ]
 }
