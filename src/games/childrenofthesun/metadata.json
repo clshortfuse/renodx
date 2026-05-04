@@ -1,5 +1,8 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "childrenofthesun",
-  "title": "Children of the Sun"
+  "title": "Children of the Sun",
+  "deploy": {
+    "steam_appid": 1309950
+  }
 }

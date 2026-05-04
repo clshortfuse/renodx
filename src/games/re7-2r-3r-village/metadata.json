@@ -1,5 +1,63 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "re7-2r-3r-village",
-  "title": "Resident Evil 7, 2 Remake, 3 Remake, and Village"
+  "title": "Resident Evil 7, 2 Remake, 3 Remake, and Village",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "stable",
+  "games": [
+    {
+      "title": "Resident Evil 2 Remake",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 883710
+      },
+      "urls": [
+        {
+          "url": "https://www.nexusmods.com/residentevil22019/mods/1644",
+          "kind": "nexus_mods"
+        }
+      ]
+    },
+    {
+      "title": "Resident Evil 3 Remake",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 952060
+      },
+      "urls": [
+        {
+          "url": "https://www.nexusmods.com/residentevil32020/mods/998",
+          "kind": "nexus_mods"
+        }
+      ]
+    },
+    {
+      "title": "Resident Evil 7",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 418370
+      },
+      "urls": [
+        {
+          "url": "https://www.nexusmods.com/residentevil7/mods/152",
+          "kind": "nexus_mods"
+        }
+      ]
+    },
+    {
+      "title": "Resident Evil Village",
+      "status": "stable",
+      "deploy": {
+        "steam_appid": 1196590
+      },
+      "urls": [
+        {
+          "url": "https://www.nexusmods.com/residentevilvillage/mods/490",
+          "kind": "nexus_mods"
+        }
+      ]
+    }
+  ]
 }

@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "hitmanwoa",
-  "title": "HITMAN World of Assassination"
+  "title": "HITMAN World of Assassination",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/hitman3/mods/1002",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 1659040
+  }
 }

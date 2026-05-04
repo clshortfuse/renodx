@@ -1,5 +1,8 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "lysfanga",
-  "title": "Lysfanga: The Time Shift Warrior"
+  "title": "Lysfanga: The Time Shift Warrior",
+  "deploy": {
+    "steam_appid": 2161620
+  }
 }

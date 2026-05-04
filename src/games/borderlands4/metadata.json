@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "borderlands4",
-  "title": "Borderlands 4"
+  "title": "Borderlands 4",
+  "maintainers": [
+    "OopyDoopy (Jon)"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/borderlands4/mods/41",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 1285190
+  }
 }

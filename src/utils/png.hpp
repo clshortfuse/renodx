@@ -94,13 +94,10 @@ class ScopedComInitialization {
   HRESULT initialize_result;
 };
 
-inline BOOL CALLBACK InitializeWicFactory(PINIT_ONCE init_once, PVOID parameter, PVOID* context) {
-  static_cast<void>(init_once);
-  static_cast<void>(parameter);
-
+[[nodiscard]] inline ComPtr<IWICImagingFactory> CreateWicFactory() {
   const auto* ole32_api = GetOle32Api();
   if (ole32_api == nullptr) {
-    return FALSE;
+    return {};
   }
 
   ComPtr<IWICImagingFactory> factory;
@@ -118,24 +115,9 @@ inline BOOL CALLBACK InitializeWicFactory(PINIT_ONCE init_once, PVOID parameter,
         IID_PPV_ARGS(&factory));
   }
   if (FAILED(result)) {
-    return FALSE;
+    return {};
   }
 
-  *context = factory.Detach();
-  return TRUE;
-}
-
-[[nodiscard]] inline IWICImagingFactory* GetWicFactory() {
-  static INIT_ONCE init_once = INIT_ONCE_STATIC_INIT;
-  IWICImagingFactory* factory = nullptr;
-  if (InitOnceExecuteOnce(
-          &init_once,
-          InitializeWicFactory,
-          nullptr,
-          reinterpret_cast<LPVOID*>(&factory))
-      == FALSE) {
-    return nullptr;
-  }
   return factory;
 }
 
@@ -147,7 +129,72 @@ inline BOOL CALLBACK InitializeWicFactory(PINIT_ONCE init_once, PVOID parameter,
   return bgra_pixels;
 }
 
+[[nodiscard]] inline std::vector<std::uint8_t> ConvertBgraToRgba(std::span<const std::uint8_t> bgra_pixels) {
+  std::vector<std::uint8_t> rgba_pixels(bgra_pixels.begin(), bgra_pixels.end());
+  for (std::size_t index = 0; index + 3u < rgba_pixels.size(); index += 4u) {
+    std::swap(rgba_pixels[index + 0u], rgba_pixels[index + 2u]);
+  }
+  return rgba_pixels;
+}
+
 }  // namespace internal
+
+[[nodiscard]] inline bool ReadRgba8(
+    const std::filesystem::path& input_path,
+    std::uint32_t& width,
+    std::uint32_t& height,
+    std::vector<std::uint8_t>& rgba_pixels) {
+  width = 0u;
+  height = 0u;
+  rgba_pixels.clear();
+
+  internal::ScopedComInitialization com;
+  if (!com.IsUsable()) return false;
+
+  auto factory = internal::CreateWicFactory();
+  if (factory == nullptr) return false;
+
+  ComPtr<IWICBitmapDecoder> decoder;
+  if (FAILED(factory->CreateDecoderFromFilename(
+          input_path.c_str(),
+          nullptr,
+          GENERIC_READ,
+          WICDecodeMetadataCacheOnDemand,
+          &decoder))) {
+    return false;
+  }
+
+  ComPtr<IWICBitmapFrameDecode> frame;
+  if (FAILED(decoder->GetFrame(0u, &frame))) return false;
+
+  UINT decoded_width = 0u;
+  UINT decoded_height = 0u;
+  if (FAILED(frame->GetSize(&decoded_width, &decoded_height))) return false;
+  if (decoded_width == 0u || decoded_height == 0u) return false;
+
+  ComPtr<IWICFormatConverter> converter;
+  if (FAILED(factory->CreateFormatConverter(&converter))) return false;
+  if (FAILED(converter->Initialize(
+          frame.Get(),
+          internal::WIC_PIXEL_FORMAT_32BPP_BGRA_GUID,
+          WICBitmapDitherTypeNone,
+          nullptr,
+          0.0f,
+          WICBitmapPaletteTypeCustom))) {
+    return false;
+  }
+
+  std::vector<std::uint8_t> bgra_pixels(
+      static_cast<std::size_t>(decoded_width) * static_cast<std::size_t>(decoded_height) * 4u);
+  const auto stride = decoded_width * 4u;
+  const auto buffer_size = static_cast<UINT>(bgra_pixels.size());
+  if (FAILED(converter->CopyPixels(nullptr, stride, buffer_size, bgra_pixels.data()))) return false;
+
+  width = decoded_width;
+  height = decoded_height;
+  rgba_pixels = internal::ConvertBgraToRgba(bgra_pixels);
+  return true;
+}
 
 [[nodiscard]] inline bool WriteRgba8(
     const std::filesystem::path& output_path,
@@ -160,7 +207,7 @@ inline BOOL CALLBACK InitializeWicFactory(PINIT_ONCE init_once, PVOID parameter,
   internal::ScopedComInitialization com;
   if (!com.IsUsable()) return false;
 
-  auto* factory = internal::GetWicFactory();
+  auto factory = internal::CreateWicFactory();
   if (factory == nullptr) return false;
 
   ComPtr<IWICStream> stream;

@@ -1,5 +1,8 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "projectidiva_megamix",
-  "title": "(Hatsune Miku: Project DIVA Mega Mix+)"
+  "title": "Hatsune Miku: Project DIVA Mega Mix+",
+  "deploy": {
+    "steam_appid": 1761390
+  }
 }

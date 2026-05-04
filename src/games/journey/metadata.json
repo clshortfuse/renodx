@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "journey",
-  "title": "Journey"
+  "title": "Journey",
+  "maintainers": [
+    "Steve161803"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/journey/mods/19",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 638230
+  }
 }

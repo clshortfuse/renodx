@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "shadowofwar",
-  "title": "Middle-earth™: Shadow of War™"
+  "title": "Middle-earth™: Shadow of War™",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/middleearthshadowofwar/mods/130?tab=description",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 356190
+  }
 }
