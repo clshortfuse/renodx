@@ -102,10 +102,6 @@ void main(
       float corePunch = smoothstep(1.5f, 4.0f, liftedLum);
       lifted *= lerp(1.0f, 5.0f, corePunch);
 
-      // ---- SATURATION BOOST -----------------------------------------------
-      // Adds perceived intensity without raising luminance much.
-      float finalLum = dot(lifted, float3(0.2125f, 0.7154f, 0.0721f));
-      lifted = lerp(float3(finalLum, finalLum, finalLum), lifted, 1.4f);
       lifted = max(lifted, 0.0);
       lifted = min(lifted, hdrScale * 4.0); // clamp relative to HDR headroom
 
