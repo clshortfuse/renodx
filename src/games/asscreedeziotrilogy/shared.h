@@ -1,5 +1,5 @@
-#ifndef SRC_ASSCREEDBROTHERHOOD_DX11_SHARED_H_
-#define SRC_ASSCREEDBROTHERHOOD_DX11_SHARED_H_
+#ifndef SRC_ASSCREED2_SHARED_H_
+#define SRC_ASSCREED2_SHARED_H_
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -24,11 +24,14 @@ struct ShaderInjectData {
   float scene_grade_strength;
   float color_grade_scaling;
 
-  float custom_bloom;
-  float custom_random;
+  float custom_reserved_debug0;
+  float custom_reserved_debug1;
   float custom_grain_type;
   float custom_grain_strength;
   float custom_video_hdr;
+  float custom_flip_uv_y;
+  float custom_white_gradient_strength;
+  float custom_reserved0;
 };
 
 #ifndef __cplusplus
@@ -55,14 +58,13 @@ cbuffer cb13 : register(b13) {
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.scene_grade_strength
 #define RENODX_COLOR_GRADE_SCALING           shader_injection.color_grade_scaling
 
-#define CUSTOM_BLOOM          shader_injection.custom_bloom
-#define CUSTOM_RANDOM         shader_injection.custom_random
 #define CUSTOM_GRAIN_TYPE     shader_injection.custom_grain_type
 #define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
 #define CUSTOM_VIDEO_HDR      shader_injection.custom_video_hdr
+#define CUSTOM_WHITE_GRADIENT_STRENGTH shader_injection.custom_white_gradient_strength
 
 #include "../../shaders/renodx.hlsl"
 
 #endif
 
-#endif  // SRC_ASSCREEDBROTHERHOOD_DX11_SHARED_H_
+#endif  // SRC_ASSCREED2_SHARED_H_

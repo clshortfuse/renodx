@@ -1,4 +1,4 @@
-#include "./common.hlsli"
+#include ".././common.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 SamplerState s0_s : register(s0);
@@ -40,13 +40,15 @@ void main(
       (dot(raw_rgb, 1.f) > 1e-3f);
   float3 video_rgb = masked_looks_broken ? raw_rgb : masked_rgb;
 
-  if (CUSTOM_VIDEO_HDR != 0.f) {
+  if (CUSTOM_VIDEO_HDR == 1.f) {
     const float safe_peak_white_nits = max(RENODX_PEAK_WHITE_NITS, 100.f);
     const float safe_diffuse_white_nits = max(RENODX_DIFFUSE_WHITE_NITS, 1.f);
     const float video_peak = safe_peak_white_nits / (safe_diffuse_white_nits / 100.f);
 
     float3 hdr_video = renodx::tonemap::inverse::bt2446a::BT709(video_rgb, 100.f, video_peak);
-    hdr_video /= max(video_peak, 1.f);  // Normalize to 1.0 == peak.
+    // The rest of the pipeline expects scene-linear values where
+    // 1.0 == diffuse white, not 1.0 == peak white.
+    hdr_video /= safe_diffuse_white_nits;
     video_rgb = ClampAndRenderIntermediatePass(max(0.f, hdr_video));
   } else {
     video_rgb = ToneMapAndRenderIntermediatePass(video_rgb, v5.xy);
