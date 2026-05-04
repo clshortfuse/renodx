@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <include/reshade_api_format.hpp>
 #define ImTextureID                   ImU64
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 
@@ -16,7 +15,6 @@
 #include "../../mods/swapchain.hpp"
 #include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
-#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -226,7 +224,11 @@ void OnPresetOff() {
   });
 }
 
-bool initialized = false;
+constexpr uint32_t kLateFinalShaderCrc = 0xEF015FAB;
+constexpr uint32_t kLateFinalMinimumWidth = 1600;
+constexpr uint32_t kLateFinalMinimumHeight = 900;
+constexpr reshade::api::format kLateFinalResourceFormat = reshade::api::format::r8g8b8a8_typeless;
+constexpr reshade::api::format kLateFinalViewFormat = reshade::api::format::r8g8b8a8_unorm_srgb;
 
 renodx::utils::resource::ResourceUpgradeInfo late_final_clone_info = []() {
     renodx::utils::resource::ResourceUpgradeInfo info = {};
@@ -234,43 +236,66 @@ renodx::utils::resource::ResourceUpgradeInfo late_final_clone_info = []() {
     info.use_resource_view_cloning = true;
     info.use_resource_view_hot_swap = true;
     info.usage_set = static_cast<uint32_t>(
-        reshade::api::resource_usage::shader_resource
-        | reshade::api::resource_usage::render_target);
+            reshade::api::resource_usage::shader_resource
+            | reshade::api::resource_usage::render_target);
     return info;
 }();
 
-bool OnLateFinalDraw(reshade::api::command_list* cmd_list) {
-    auto& render_targets = renodx::utils::swapchain::GetRenderTargets(cmd_list);
-    if (render_targets.empty() || render_targets[0].handle == 0u) return true;
+bool SkipLateFinalShaderReplacement(reshade::api::command_list*) {
+    return false;
+}
 
-    auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo(render_targets[0]);
-    if (resource_view_info == nullptr || resource_view_info->resource_info == nullptr) return true;
+bool IsLateFinalRenderTarget(const renodx::utils::resource::ResourceViewInfo* resource_view_info) {
+    if (resource_view_info == nullptr || resource_view_info->resource_info == nullptr) return false;
 
-    auto* resource_info = resource_view_info->resource_info;
-    const auto& desc = resource_info->desc;
+    const auto& desc = resource_view_info->resource_info->desc;
     if (desc.type != reshade::api::resource_type::texture_2d
             && desc.type != reshade::api::resource_type::surface) {
-        return true;
+        return false;
     }
 
-    if (desc.texture.width < 1600 || desc.texture.height < 900) return true;
-    if (desc.texture.format != reshade::api::format::r8g8b8a8_typeless) return true;
-    if (resource_view_info->desc.format != reshade::api::format::r8g8b8a8_unorm_srgb) return true;
+    return desc.texture.width >= kLateFinalMinimumWidth
+            && desc.texture.height >= kLateFinalMinimumHeight
+            && desc.texture.format == kLateFinalResourceFormat
+            && resource_view_info->desc.format == kLateFinalViewFormat;
+}
 
-    resource_info->clone_target = &late_final_clone_info;
-    bool changed = renodx::mods::swapchain::ActivateCloneHotSwap(
-        cmd_list->get_device(),
-        render_targets[0]);
-    if (!changed) return true;
+bool UpgradeLateFinalRenderTarget(
+        reshade::api::command_list* cmd_list,
+        reshade::api::resource_view render_target) {
+    auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo(render_target);
+    if (!IsLateFinalRenderTarget(resource_view_info)) return false;
+
+    resource_view_info->resource_info->clone_target = &late_final_clone_info;
+    return renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), render_target);
+}
+
+bool RewriteLateFinalRenderTargets(
+        reshade::api::command_list* cmd_list,
+        const std::vector<reshade::api::resource_view>& render_targets) {
+    if (render_targets.empty() || render_targets[0].handle == 0u) return false;
+    if (!UpgradeLateFinalRenderTarget(cmd_list, render_targets[0])) return false;
 
     renodx::mods::swapchain::FlushDescriptors(cmd_list);
     renodx::mods::swapchain::RewriteRenderTargets(
-        cmd_list,
-        static_cast<uint32_t>(render_targets.size()),
-        render_targets.data(),
-        renodx::utils::swapchain::GetDepthStencil(cmd_list));
-
+            cmd_list,
+            static_cast<uint32_t>(render_targets.size()),
+            render_targets.data(),
+            renodx::utils::swapchain::GetDepthStencil(cmd_list));
     return true;
+}
+
+bool OnLateFinalDraw(reshade::api::command_list* cmd_list) {
+    auto& render_targets = renodx::utils::swapchain::GetRenderTargets(cmd_list);
+    RewriteLateFinalRenderTargets(cmd_list, render_targets);
+    return true;
+}
+
+void RegisterLateFinalShader() {
+    auto& shader = custom_shaders[kLateFinalShaderCrc];
+    shader.crc32 = kLateFinalShaderCrc;
+    shader.on_replace = &SkipLateFinalShaderReplacement;
+    shader.on_draw = &OnLateFinalDraw;
 }
 
 }  // namespace
@@ -283,27 +308,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH: {
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      auto process_path = renodx::utils::platform::GetCurrentProcessPath();
-      auto filename = process_path.filename().string();
       renodx::mods::swapchain::use_resource_cloning = true;
 
       // Always set to true for Vulkan
       renodx::mods::shader::allow_multiple_push_constants = true;
-
-      auto common_aspect_ratio = 16.f / 9.f;
-      auto common_aspect_ratio_tolerance = 0.00001f;
-
-      const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
-          .width = 720,
-          .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
-          .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
-      };
-
-      const renodx::utils::resource::ResourceUpgradeInfo::Dimensions dimensions = {
-          .width = 6880,
-          .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
-          .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
-      };
 
       /*
         If expand_existing_constant_buffer is set to false renoDX will add new cbuffer range (instead of reusing the game's).
@@ -313,59 +321,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-            if (auto shader = custom_shaders.find(0xEF015FAB); shader != custom_shaders.end()) {
-                shader->second.on_draw = &OnLateFinalDraw;
-                shader->second.on_replace = [](reshade::api::command_list*) { return false; };
-            } else {
-                custom_shaders[0xEF015FAB] = {
-                        .crc32 = 0xEF015FAB,
-                        .on_replace = [](reshade::api::command_list*) { return false; },
-                        .on_draw = &OnLateFinalDraw,
-                };
-            }
-
-    //   renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    //       .old_format = reshade::api::format::r8g8b8a8_typeless,
-    //       .new_format = reshade::api::format::r16g16b16a16_unorm,
-    //       .view_upgrades = renodx::utils::resource::VIEW_UPGRADES_RGBA16_UNORM,
-    //       .dimensions = dimensions,  
-    //   });
-
-    //         renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    //       .old_format = reshade::api::format::r8g8b8a8_typeless,
-    //       .new_format = reshade::api::format::r16g16b16a16_float,
-    //       .index = 1,
-    //       .dimensions = dimensions,  
-    //   });
-
-    //         renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    //       .old_format = reshade::api::format::r8g8b8a8_typeless,
-    //       .new_format = reshade::api::format::r16g16b16a16_float,
-    //       .index = 2,
-    //       .dimensions = dimensions,  
-    //   });
-
-
-      //     // renodx::mods::swapchain::resource_upgrade_infos.push_back({
-      //     //     .old_format = reshade::api::format::r11g11b10_float,
-      //     //     .new_format = target_format,
-      //     //     .aspect_ratio = common_aspect_ratio,
-      //     //     .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
-      //     //     .min_dimensions = min_dimensions,
-
-      //     // });
-      //   } else {
-      //     renodx::mods::swapchain::resource_upgrade_infos.push_back({
-      //         .old_format = reshade::api::format::r10g10b10a2_typeless,
-      //         .new_format = target_format,
-      //         .ignore_size = true,  // risky...?
-      //     });
-      //   }
-
-      if (!initialized) {
-        // renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
-        initialized = true;
-      }
+    RegisterLateFinalShader();
 
       // Register event handlers
       reshade::register_event<reshade::addon_event::present>(OnPresent);
@@ -378,7 +334,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
-  // renodx::utils::random::Use(DLL_PROCESS_ATTACH);
     renodx::mods::swapchain::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
