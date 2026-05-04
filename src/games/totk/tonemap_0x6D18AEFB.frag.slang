@@ -23,6 +23,8 @@ static const float kInputClamp = 10000.0;
 static const float kBt601RedWeight = 0.29890000820159912109375;
 static const float kNegInvLn2 = -1.44269502162933349609375;
 static const float kRedGradeWeight = 0.666666686534881591796875;
+static const float kHueTransferChromaStart = 0.02;
+static const float kHueTransferChromaEnd = 0.12;
 
 float ToneCurve(float value) {
   return 1.0 - exp2(value * kNegInvLn2);
@@ -126,15 +128,23 @@ float3 ApplyVanillaToneMapExtended(float3 untonemapped, float range = 1.f, float
   return lerp(tonemapped_lum, tonemapped_perch, blend_weight);
 }
 
+float ComputeHueTransferStrength(float3 donor) {
+  float donor_max = max(donor.r, max(donor.g, donor.b));
+  float donor_min = min(donor.r, min(donor.g, donor.b));
+  float donor_chroma = renodx::math::DivideSafe(donor_max - donor_min, donor_max, 0.f);
+  return smoothstep(kHueTransferChromaStart, kHueTransferChromaEnd, donor_chroma);
+}
+
 // Applies SDR hue and chroma onto the HDR-graded color.
 float3 ComputeUntonemappedGraded(float3 untonemapped) {
   float3 untonemapped_graded = ApplyVanillaToneMapExtended(untonemapped, 1.f, RENODX_TONE_MAP_SDR_BLEND_FACTOR);
   float3 tonemapped_sdr = saturate(ApplyVanillaToneMap(untonemapped));
+  float hue_transfer_strength = RENODX_COLOR_GRADE_STRENGTH * ComputeHueTransferStrength(tonemapped_sdr);
 
   untonemapped_graded = CorrectHueAndPurityMBBT709WithBT2020(
       untonemapped_graded,
       tonemapped_sdr,
-      RENODX_COLOR_GRADE_STRENGTH,
+      hue_transfer_strength,
       RENODX_TONE_MAP_BLOWOUT);
 
   return untonemapped_graded;
@@ -161,7 +171,6 @@ void main() {
   float saturation_grade_bias = grading._m0[0].x;
   float saturation_grade_scale = grading._m0[0].y * VANILLA_SATURATION;
   float3 output;
-  vec3 test;
 
   if (RENODX_TONE_MAP_TYPE == 0.0) {
     float3 tonemapped = ApplyTotkVanillaToneMap(untonemapped);
@@ -174,7 +183,6 @@ void main() {
     float maxch_scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(graded_untonemapped);
     graded_untonemapped = ApplySaturationGrading(graded_untonemapped * maxch_scale, saturation_grade_bias, saturation_grade_scale) / maxch_scale;
 
-     test = graded_untonemapped;
     if (CUSTOM_TONEMAP_CLAMP == 0.0) {
       graded_untonemapped = renodx::color::bt709::clamp::BT709(graded_untonemapped);
     }
