@@ -228,13 +228,16 @@ void OnPresetOff() {
 
 bool initialized = false;
 
-renodx::utils::resource::ResourceUpgradeInfo late_final_clone_info = {
-        .new_format = reshade::api::format::r16g16b16a16_float,
-        .usage_set = static_cast<uint32_t>(
-                reshade::api::resource_usage::shader_resource
-                | reshade::api::resource_usage::render_target),
-        .use_resource_view_cloning_and_upgrade = true,
-};
+renodx::utils::resource::ResourceUpgradeInfo late_final_clone_info = []() {
+    renodx::utils::resource::ResourceUpgradeInfo info = {};
+    info.new_format = reshade::api::format::r16g16b16a16_float;
+    info.use_resource_view_cloning = true;
+    info.use_resource_view_hot_swap = true;
+    info.usage_set = static_cast<uint32_t>(
+        reshade::api::resource_usage::shader_resource
+        | reshade::api::resource_usage::render_target);
+    return info;
+}();
 
 bool OnLateFinalDraw(reshade::api::command_list* cmd_list) {
     auto& render_targets = renodx::utils::swapchain::GetRenderTargets(cmd_list);
@@ -255,22 +258,17 @@ bool OnLateFinalDraw(reshade::api::command_list* cmd_list) {
     if (resource_view_info->desc.format != reshade::api::format::r8g8b8a8_unorm_srgb) return true;
 
     resource_info->clone_target = &late_final_clone_info;
-    resource_info->clone_enabled = true;
+    bool changed = renodx::mods::swapchain::ActivateCloneHotSwap(
+        cmd_list->get_device(),
+        render_targets[0]);
+    if (!changed) return true;
 
-    auto clone_view = renodx::utils::resource::upgrade::GetResourceViewClone(render_targets[0]);
-    if (clone_view.handle == 0u) return true;
-
-    auto rebound_targets = render_targets;
-    rebound_targets[0] = clone_view;
-    cmd_list->bind_render_targets_and_depth_stencil(
-            static_cast<uint32_t>(rebound_targets.size()),
-            rebound_targets.data(),
-            renodx::utils::swapchain::GetDepthStencil(cmd_list));
-
-    auto clone_resource = renodx::utils::resource::upgrade::GetResourceClone(resource_info);
-    if (clone_resource.handle != 0u) {
-        renodx::mods::swapchain::SetSwapchainProxySourceOverride(cmd_list, clone_resource);
-    }
+    renodx::mods::swapchain::FlushDescriptors(cmd_list);
+    renodx::mods::swapchain::RewriteRenderTargets(
+        cmd_list,
+        static_cast<uint32_t>(render_targets.size()),
+        render_targets.data(),
+        renodx::utils::swapchain::GetDepthStencil(cmd_list));
 
     return true;
 }
@@ -281,32 +279,13 @@ extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Breath of the Wild";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
-  const auto target_format = reshade::api::format::r16g16b16a16_float;
-  const auto view_upgrades = renodx::utils::resource::VIEW_UPGRADES_RGBA16F;
-  
-  
-
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
       if (!reshade::register_addon(h_module)) return FALSE;
 
       auto process_path = renodx::utils::platform::GetCurrentProcessPath();
       auto filename = process_path.filename().string();
-
-      if (filename == "Cemu.exe") {
-        renodx::mods::swapchain::target_format = target_format;
-        renodx::mods::swapchain::use_resource_cloning = true;
-        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
-      };
-
-            if (filename == "Ryujinx.exe") {
-                renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
-                renodx::mods::swapchain::use_resource_cloning = true;
-                renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-                renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-            }
+      renodx::mods::swapchain::use_resource_cloning = true;
 
       // Always set to true for Vulkan
       renodx::mods::shader::allow_multiple_push_constants = true;
@@ -400,7 +379,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   // renodx::utils::random::Use(DLL_PROCESS_ATTACH);
-  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+    renodx::mods::swapchain::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
