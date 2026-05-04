@@ -57,7 +57,7 @@ jobs:
         run: cmake --preset clang-x64 -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build (x64)
-        run: cmake --build --preset clang-x64-release --verbose
+        run: cmake --build --preset clang-x64-release --verbose --target totk
 
       - name: Set up Clang
         uses: egor-tensin/setup-clang@v1
