@@ -57,12 +57,15 @@ float4 ApplyToneMappingScaling(float3 agx_sdr, float2 pixel_position) {
     untonemapped *= 0.667f;  // eye-balled midgray matching
 
     [branch]
-    if (RENODX_TONE_MAP_TYPE == 3.f) {  // vanilla+ (blend sdr and hdr)
+    if (RENODX_TONE_MAP_TYPE == 3.f) {
       float y = renodx::color::y::from::BT709(untonemapped);
+      color = untonemapped;
 
-      // blend sdr and hdr
-      float t = smoothstep(0.f, 1.f, y);
-      color = lerp(color, untonemapped, t);
+      // use AgX low end for luminance and chrominance 
+      // (better gradients than simple blend due to chrominance loss clamp)
+      const float t = 1.f - smoothstep(0.f, 1.f, y);
+      color = renodx::color::correct::Luminance(color, agx_sdr, t);
+      color = renodx::color::correct::Chrominance(color, agx_sdr, t, 1.f);
     } else {
       color = untonemapped;
     }
