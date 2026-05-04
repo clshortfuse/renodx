@@ -1,18 +1,19 @@
-#include "../../common.hlsli"
+#define SHADER_HASH 0xE4345E78
+#include "../tonemap.hlsli"
 
 Texture2D<float4> HDRImage : register(t0);
 
-cbuffer Tonemap : register(b0) {
-  float exposureAdjustment : packoffset(c000.x);
-  float tonemapRange : packoffset(c000.y);
-  float sharpness : packoffset(c000.z);
-  float preTonemapRange : packoffset(c000.w);
-  int useAutoExposure : packoffset(c001.x);
-  float echoBlend : packoffset(c001.y);
-  float AABlend : packoffset(c001.z);
-  float AASubPixel : packoffset(c001.w);
-  float ResponsiveAARate : packoffset(c002.x);
-};
+// cbuffer Tonemap : register(b0) {
+//   float exposureAdjustment : packoffset(c000.x);
+//   float tonemapRange : packoffset(c000.y);
+//   float sharpness : packoffset(c000.z);
+//   float preTonemapRange : packoffset(c000.w);
+//   int useAutoExposure : packoffset(c001.x);
+//   float echoBlend : packoffset(c001.y);
+//   float AABlend : packoffset(c001.z);
+//   float AASubPixel : packoffset(c001.w);
+//   float ResponsiveAARate : packoffset(c002.x);
+// };
 
 cbuffer CameraKerare : register(b1) {
   float kerare_scale : packoffset(c000.x);
@@ -25,12 +26,6 @@ float4 main(
     linear float4 Kerare: Kerare,
     linear float Exposure: Exposure)
     : SV_Target {
-  float tonemap_range = tonemapRange;
-
-#if 1
-  tonemap_range = 0.f;  // no highlight compression
-#endif
-
   float4 SV_Target;
   float4 _13 = HDRImage.Load(int3((uint)(uint(SV_Position.x)), (uint)(uint(SV_Position.y)), 0));
   float _19 = Kerare.x / Kerare.w;
@@ -47,7 +42,7 @@ float4 main(
   float _56;
   float _57;
   if (isfinite(_44)) {
-    float _50 = (tonemap_range * _44) + 1.0f;
+    float _50 = (tonemapRange * _44) + 1.0f;
     _55 = (_38 / _50);
     _56 = (_40 / _50);
     _57 = (_42 / _50);
@@ -62,7 +57,9 @@ float4 main(
   SV_Target.w = 1.0f;
 
 #if 1
-  SV_Target.rgb = ApplyPreDisplayMap(SV_Target.rgb);
+  float2 grain_uv = SV_Position.xy;
+  SV_Target.rgb = ApplyUserGradingAndToneMap(SV_Target.rgb, grain_uv);
 #endif
+
   return SV_Target;
 }

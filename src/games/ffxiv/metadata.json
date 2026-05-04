@@ -1,5 +1,19 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "ffxiv",
-  "title": "Final Fantasy XIV Online"
+  "title": "Final Fantasy XIV Online",
+  "maintainers": [
+    "Ersh",
+    "Pumbo"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/finalfantasy14/mods/2326",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 39210
+  }
 }

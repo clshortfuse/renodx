@@ -23,7 +23,13 @@ void main(
   float4 fDest;
 
   r0.xyzw = t0.Sample(s0_s, v2.xy).xyzw;
-  r1.xyzw = r0.wxyz * v1.wxyz + float4(-0.00999999978, -0.5, -0.5, -0.5);
+
+  // r1.xyzw = r0.wxyz * v1.wxyz + float4(-0.00999999978, -0.5, -0.5, -0.5);
+  // Fast alpha skips below 0.01 which is too low
+  float alpha_clamp = 0.0001f;
+
+  r1.xyzw = r0.wxyz * v1.wxyz + float4(-alpha_clamp, -0.5, -0.5, -0.5);
+
   r0.xyzw = v1.wxyz * r0.wxyz;
   r1.x = cmp(r1.x < 0);
   if (r1.x != 0) discard;

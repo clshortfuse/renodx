@@ -600,12 +600,13 @@ static void OnInitPipelineLayout(
   }
 
   {
-    auto& pipeline_data = *utils::pipeline_layout::GetPipelineLayoutData(layout, true);
-    pipeline_data.layout = layout;
-    pipeline_data.injection_index = injection_index;
-    pipeline_data.injection_layout = injection_layout;
-    pipeline_data.injection_register_index = cbv_index;
-    pipeline_data.failed_injection = false;
+    utils::pipeline_layout::UpdatePipelineLayoutData(layout, [&](utils::pipeline_layout::PipelineLayoutData& pipeline_data) {
+      pipeline_data.layout = layout;
+      pipeline_data.injection_index = injection_index;
+      pipeline_data.injection_layout = injection_layout;
+      pipeline_data.injection_register_index = cbv_index;
+      pipeline_data.failed_injection = false;
+    });
   }
 
   std::stringstream s;
@@ -845,14 +846,15 @@ inline DrawResponse HandleStatesAndBypass(
   if (shader_injection_size != 0 && should_inject) {
     if (state.pipeline_details->layout_data->injection_index == -1) {
 #ifdef DEBUG_LEVEL_1
-      if (!state.pipeline_details->layout_data->failed_injection) {
-        state.pipeline_details->layout_data->failed_injection = true;
+      utils::pipeline_layout::UpdatePipelineLayoutData(state.pipeline_details->layout, [&](utils::pipeline_layout::PipelineLayoutData& mutable_layout_data) {
+        if (mutable_layout_data.failed_injection) return;
+        mutable_layout_data.failed_injection = true;
         std::stringstream s;
         s << "mods::shader::PushShaderInjections(did not find modded pipeline root index";
         s << ", layout: " << PRINT_PTR(state.pipeline_details->layout.handle);
         s << ")";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      }
+      });
 #endif
       return response;
     }

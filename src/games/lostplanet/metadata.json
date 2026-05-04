@@ -1,5 +1,21 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "lostplanet",
-  "title": "Lost Planet"
+  "title": "Lost Planet",
+  "maintainers": [
+    "ShortFuse"
+  ],
+  "status": "stable",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/lostplanetextremeconditioncoloniesedition/mods/2",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 45720,
+    "architecture": [
+      "x86"
+    ]
+  }
 }

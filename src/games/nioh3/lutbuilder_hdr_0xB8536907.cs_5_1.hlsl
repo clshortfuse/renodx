@@ -276,11 +276,11 @@ float4 vanillaTonemapper(float3 color) {
     cg_config.blowout = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
 
     x = ApplyExposureContrastFlareHighlightsShadowsByLuminance(
-        x, renodx::color::y::from::AP1(untonemapped_lum), cg_config);
+        x, untonemapped_lum, cg_config);
 
     float A = 30.9882221;
     float B = 1.19912136;
-    B *= 0.3f;
+    // B *= 0.3f;
     float C = 32.667881;
     float D = 9.87056255;
     float E = 8.97784805;

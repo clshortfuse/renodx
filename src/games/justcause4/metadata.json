@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "justcause4",
-  "title": "Just Cause 4"
+  "title": "Just Cause 4",
+  "maintainers": [
+    "ShortFuse"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 517630
+  }
 }

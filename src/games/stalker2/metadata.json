@@ -1,5 +1,12 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "stalker2",
-  "title": "Stalker 2"
+  "title": "S.T.A.L.K.E.R. 2: Heart of Chornobyl",
+  "maintainers": [
+    "Ritsu"
+  ],
+  "status": "beta",
+  "deploy": {
+    "steam_appid": 1643320
+  }
 }

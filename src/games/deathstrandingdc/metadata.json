@@ -1,5 +1,18 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "deathstrandingdc",
-  "title": "Death Stranding Director's Cut"
+  "title": "Death Stranding Director's Cut",
+  "maintainers": [
+    "Musa"
+  ],
+  "status": "beta",
+  "urls": [
+    {
+      "url": "https://www.nexusmods.com/deathstranding/mods/95",
+      "kind": "nexus_mods"
+    }
+  ],
+  "deploy": {
+    "steam_appid": 1850570
+  }
 }

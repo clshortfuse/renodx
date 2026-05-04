@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <initializer_list>
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -77,7 +78,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "Hermite Spline"},
+        .labels = {"Vanilla", "None", "Neutwo"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -216,6 +217,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
+        .default_value = 0.f,
+        .label = "Dechroma",
+        .section = "Color Grading",
+        .tooltip = "Controls highlight desaturation due to overexposure.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.tone_map_type != 3; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
         .binding = &shader_injection.tone_map_flare,
         .default_value = 0.f,
@@ -239,7 +251,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
         .binding = &shader_injection.custom_bloom,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Bloom",
         .section = "Effects",
         .max = 100.f,
@@ -418,6 +430,7 @@ void OnPresetOff() {
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
       {"GammaCorrection", 0},
+      {"ColorGradeBlowout", 0.f},
       {"ToneMapHueShift", 100.f},
       {"ToneMapWhiteClip", 100.f},
       {"ColorGradeExposure", 1.f},
@@ -426,7 +439,7 @@ void OnPresetOff() {
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
-      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeScene", 100.f},
       {"FxBloom", 100.f},
@@ -459,6 +472,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
+bool initialized = false;
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -469,36 +484,36 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::mods::shader::force_pipeline_cloning = true;
-      //   renodx::mods::shader::trace_unmodified_shaders = true;
-      renodx::mods::swapchain::force_borderless = false;
-      //   renodx::mods::swapchain::prevent_full_screen = true;
-
-      renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // auto detect peak and paper white
 
-      // 2: TAA History
-      for (auto index : {2, 3, 4}) {
+      if (!initialized) {
+        renodx::mods::swapchain::force_borderless = false;
+        renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+
+        // 2: TAA History
+        for (auto index : {2, 3, 4}) {
+          renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+              .old_format = reshade::api::format::r8g8b8a8_typeless,
+              .new_format = reshade::api::format::r16g16b16a16_float,
+              .index = index,
+              // .use_resource_view_cloning = true,
+              .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+              .usage_include = reshade::api::resource_usage::render_target,
+          });
+        }
+
+        // LUT
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            .index = index,
-            // .use_resource_view_cloning = true,
-            .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+            .dimensions = {.width = 256, .height = 1},
             .usage_include = reshade::api::resource_usage::render_target,
         });
-      }
 
-      // LUT
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .dimensions = {.width = 256, .height = 1},
-          .usage_include = reshade::api::resource_usage::render_target,
-      });
+        initialized = true;
+      }
 
       break;
     case DLL_PROCESS_DETACH:

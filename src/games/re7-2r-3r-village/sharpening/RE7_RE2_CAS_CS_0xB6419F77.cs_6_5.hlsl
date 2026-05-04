@@ -18,7 +18,7 @@ void main(
   int _15 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
   int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
 
-  if (CUSTOM_SHARPENING == 0.f) {
+  if (CUSTOM_SHARPENING == 1.f && CUSTOM_SHARPENING_STRENGTH == 0.f) {
     int pass_119 = _15 | 8;
     int pass_220 = _16 | 8;
 
@@ -28,8 +28,8 @@ void main(
     OutputImage[int2(pass_119, pass_220)] = float4(SrcImage.Load(int3(pass_119, pass_220, 0)).rgb, 1.f);
     OutputImage[int2(_15, pass_220)] = float4(SrcImage.Load(int3(_15, pass_220, 0)).rgb, 1.f);
     return;
-  } else if (CUSTOM_SHARPENING == 2.f) {  // Lilium RCAS
-    float sharpness_strength = 0.75f;     // asfloat(const1.x)
+  } else if (CUSTOM_SHARPENING == 1.f) {                    // Lilium RCAS
+    float sharpness_strength = CUSTOM_SHARPENING_STRENGTH;  // asfloat(const1.x)
 
     uint tex_width, tex_height;
     SrcImage.GetDimensions(tex_width, tex_height);

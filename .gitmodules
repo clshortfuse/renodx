@@ -21,3 +21,18 @@
 [submodule "external/frozen"]
 	path = external/frozen
 	url = https://github.com/serge-sans-paille/frozen.git
+[submodule "external/DirectXTex"]
+	path = external/DirectXTex
+	url = https://github.com/microsoft/DirectXTex.git
+[submodule "external/openexr"]
+	path = external/openexr
+	url = https://github.com/AcademySoftwareFoundation/openexr.git
+[submodule "Imath"]
+	path = Imath
+	url = https://github.com/AcademySoftwareFoundation/Imath.git
+[submodule "external/Imath"]
+	path = external/Imath
+	url = https://github.com/AcademySoftwareFoundation/Imath.git
+[submodule "external/json"]
+	path = external/json
+	url = https://github.com/nlohmann/json.git

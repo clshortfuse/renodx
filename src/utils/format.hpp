@@ -92,6 +92,28 @@ inline std::ostream& operator<<(std::ostream& os, const reshade::api::blend_op v
   };
 }
 
+inline std::ostream& operator<<(std::ostream& os, const reshade::api::logic_op value) {
+  switch (value) {
+    case reshade::api::logic_op::clear:                return os << "clear";
+    case reshade::api::logic_op::bitwise_and:          return os << "bitwise_and";
+    case reshade::api::logic_op::bitwise_and_reverse:  return os << "bitwise_and_reverse";
+    case reshade::api::logic_op::copy:                 return os << "copy";
+    case reshade::api::logic_op::bitwise_and_inverted: return os << "bitwise_and_inverted";
+    case reshade::api::logic_op::noop:                 return os << "noop";
+    case reshade::api::logic_op::bitwise_xor:          return os << "bitwise_xor";
+    case reshade::api::logic_op::bitwise_or:           return os << "bitwise_or";
+    case reshade::api::logic_op::bitwise_nor:          return os << "bitwise_nor";
+    case reshade::api::logic_op::equivalent:           return os << "equivalent";
+    case reshade::api::logic_op::invert:               return os << "invert";
+    case reshade::api::logic_op::bitwise_or_reverse:   return os << "bitwise_or_reverse";
+    case reshade::api::logic_op::copy_inverted:        return os << "copy_inverted";
+    case reshade::api::logic_op::bitwise_or_inverted:  return os << "bitwise_or_inverted";
+    case reshade::api::logic_op::bitwise_nand:         return os << "bitwise_nand";
+    case reshade::api::logic_op::set:                  return os << "set";
+    default:                                           return os << "unknown";
+  };
+}
+
 inline std::ostream& operator<<(std::ostream& os, const reshade::api::pipeline_stage value) {
   switch (value) {
     case reshade::api::pipeline_stage::vertex_shader:        return os << "vertex_shader";

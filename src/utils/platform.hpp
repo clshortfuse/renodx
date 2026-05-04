@@ -294,4 +294,12 @@ static HMODULE FindModule(const std::string& module_name) {
   return module;
 }
 
+static bool IsModuleLoaded(const std::string& module_name) {
+  const auto module_file = std::filesystem::path(module_name).filename().string();
+  if (module_file.empty()) return false;
+
+  HMODULE module = GetModuleHandleA(module_file.c_str());
+  return module != nullptr;
+}
+
 }  // namespace renodx::utils::platform

@@ -12,11 +12,18 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_CACHE_SIZE: "5G"
+      SCCACHE_C_CUSTOM_CACHE_BUSTER: "${{ github.workflow }}"
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Download Slang binaries
         run: |
@@ -39,7 +46,7 @@ jobs:
           arch: amd64
 
       - name: Configure CMake (x64)
-        run: cmake --preset clang-x64
+        run: cmake --preset clang-x64 -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build (x64)
         run: cmake --build --preset clang-x64-release --verbose
@@ -56,10 +63,14 @@ jobs:
           arch: amd64_x86
 
       - name: Configure CMake (x86)
-        run: cmake --preset clang-x86
+        run: cmake --preset clang-x86 -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build (x86)
         run: cmake --build --preset clang-x86-release --verbose
+
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats
 
       - name: Prepare Release folder
         run: md githubrelease

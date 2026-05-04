@@ -55,15 +55,10 @@ static bool attached = false;
 static bool use_resource_cloning = false;
 static bool use_auto_cloning = false;
 static bool is_primary_hook = false;
-static reshade::api::device* shared_handle_creator_device = nullptr;
 static renodx::utils::resource::ResourceUpgradeInfo auto_upgrade_target = {
     .new_format = reshade::api::format::r16g16b16a16_float,
     .use_resource_view_cloning_and_upgrade = true,
 };
-
-inline void SetSharedHandleCreatorDevice(reshade::api::device* device) {
-  shared_handle_creator_device = device;
-}
 
 static thread_local renodx::utils::resource::ResourceUpgradeInfo* local_applied_target = nullptr;
 static thread_local std::optional<reshade::api::swapchain_desc> upgraded_swapchain_desc;
@@ -209,40 +204,11 @@ inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resou
   void** shared_handle = nullptr;
 
   if (target->use_shared_handle) {
-    new_desc.flags = reshade::api::resource_flags::shared;
-    new_desc.type = reshade::api::resource_type::texture_2d;
-    shared_handle = &resource_info->shared_handle;
-
-    if (resource_info->device->get_api() == reshade::api::device_api::opengl) {
-      new_desc.flags |= reshade::api::resource_flags::shared_nt_handle;
-    }
-    new_desc.usage |= reshade::api::resource_usage::copy_source;
-    new_desc.usage |= reshade::api::resource_usage::copy_dest;
-    if (resource_info->device != shared_handle_creator_device) {
-      if (shared_handle_creator_device == nullptr) {
-        // no present yet, ignore
-        return {0u};
-      }
-      assert(resource_info->proxy_resource.handle == 0u);
-
-      // Export a shared handle from the creator device so host creation below imports it.
-      *shared_handle = nullptr;
-      shared_handle_creator_device->create_resource(new_desc, nullptr, initial_state, &resource_info->proxy_resource, shared_handle);
-
-      assert(resource_info->proxy_resource.handle != 0u);
-
-      renodx::utils::resource::store->resource_infos[resource_info->proxy_resource.handle] = {
-          .device = shared_handle_creator_device,
-          .desc = new_desc,
-          .resource = resource_info->proxy_resource,
-      };
-
-      // shared handle can now be used in opengl or dx9
-    }
-
-  } else {
-    new_desc.flags = reshade::api::resource_flags::none;
+    assert(false && "Cloning with shared handle is not currently supported");
+    return {0u};
   }
+
+  new_desc.flags = reshade::api::resource_flags::none;
 
   auto* device = resource_info->device;
   if (device->create_resource(
@@ -325,6 +291,7 @@ inline reshade::api::resource_view GetResourceViewClone(
   auto* target = resource_view_info->clone_target;
   if (target == nullptr) {
     if (resource_view_info == nullptr
+        || resource_view_info->resource_info == nullptr
         || resource_view_info->resource_info->clone_target == nullptr) {
       return {0u};
     }
@@ -743,8 +710,14 @@ static bool OnCreateResource(
   if (private_data->back_buffer_desc.type == reshade::api::resource_type::unknown) {
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
-    s << "utils::resource::upgrade::OnCreateResource(No swapchain desc: ";
-    s << reinterpret_cast<uintptr_t>(device);
+    s << "utils::resource::upgrade::OnCreateResource(No swapchain desc";
+    s << ", device: " << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
+    s << ", flags: 0x" << std::hex << static_cast<uint32_t>(desc.flags) << std::dec;
+    s << ", state: 0x" << std::hex << static_cast<uint32_t>(initial_state) << std::dec;
+    s << ", format: " << desc.texture.format;
+    s << ", width: " << desc.texture.width;
+    s << ", height: " << desc.texture.height;
+    s << ", usage: " << desc.usage << "(" << std::hex << static_cast<uint32_t>(desc.usage) << std::dec << ")";
     s << ")";
     reshade::log::message(reshade::log::level::warning, s.str().c_str());
 #endif
@@ -937,11 +910,16 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
 
     if (device_back_buffer_desc.type == reshade::api::resource_type::unknown) {
 #ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "utils::resource::upgrade::OnCreateResource(No swapchain desc: ";
-      s << reinterpret_cast<uintptr_t>(device);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    std::stringstream s;
+    s << "utils::resource::upgrade::OnInitResource(No swapchain desc: ";
+    s << ", device: " << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
+    s << ", flags: 0x" << std::hex << static_cast<uint32_t>(desc.flags) << std::dec;
+    s << ", state: 0x" << std::hex << static_cast<uint32_t>(initial_state) << std::dec;
+    s << ", format: " << desc.texture.format;
+    s << ", width: " << desc.texture.width;
+    s << ", height: " << desc.texture.height;
+    s << ", usage: " << desc.usage << "(" << std::hex << static_cast<uint32_t>(desc.usage) << std::dec << ")";
+    s << ")";
 #endif
       // New, upgrade infos can now handle unknown back buffer state
       // return;
@@ -1137,13 +1115,13 @@ inline bool OnCopyBufferToTexture(
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-    cmd_list->copy_buffer_to_texture(source, source_offset, row_length, slice_height, dest_clone, dest_subresource);
+    cmd_list->copy_buffer_to_texture(source, source_offset, row_length, slice_height, dest_clone, dest_subresource, dest_box);
 
     return true;
     // remap to other
   }
   // Mismatched, copy to original and blit?
-  cmd_list->copy_buffer_to_texture(source, source_offset, row_length, slice_height, dest, dest_subresource);
+  cmd_list->copy_buffer_to_texture(source, source_offset, row_length, slice_height, dest, dest_subresource, dest_box);
 
   std::stringstream s;
   s << "utils::resource::upgrade::OnCopyBufferToTexture(mismatched ";
@@ -1164,11 +1142,9 @@ inline bool OnCopyBufferToTexture(
     cmd_list->copy_texture_region(dest, dest_subresource, dest_box, dest_clone, dest_subresource, dest_box);
     return true;
   } else {
-    // Perform DirectX blit
+    // Can't blit on D3D12 with mismatched formats.
     return true;
   }
-
-  return true;
 }
 
 inline bool OnCreateResourceView(
@@ -2287,8 +2263,9 @@ inline bool OnCopyTextureRegion(
     cmd_list->copy_texture_region(source, source_subresource, source_box, dest, dest_subresource, dest_box);
     return true;
   } else {
-    // Perform DirectX blit
-    return true;
+    // Can't blit on D3D12 with mismatched formats.
+    // Fall through to the original copy rather than silently dropping it.
+    return false;
   }
 }
 
@@ -2321,10 +2298,10 @@ static void Use(DWORD fdw_reason) {
       reshade::register_event<reshade::addon_event::create_resource>(OnCreateResource);
       reshade::register_event<reshade::addon_event::create_resource_view>(OnCreateResourceView);
 
-      renodx::utils::resource::store->on_init_resource_info_callbacks.emplace_back(&OnInitResourceInfo);
-      renodx::utils::resource::store->on_destroy_resource_info_callbacks.emplace_back(&OnDestroyResourceInfo);
-      renodx::utils::resource::store->on_init_resource_view_info_callbacks.emplace_back(&OnInitResourceViewInfo);
-      renodx::utils::resource::store->on_destroy_resource_view_info_callbacks.emplace_back(&OnDestroyResourceViewInfo);
+      renodx::utils::resource::RegisterOnInitResourceInfoCallback(&OnInitResourceInfo);
+      renodx::utils::resource::RegisterOnDestroyResourceInfoCallback(&OnDestroyResourceInfo);
+      renodx::utils::resource::RegisterOnInitResourceViewInfoCallback(&OnInitResourceViewInfo);
+      renodx::utils::resource::RegisterOnDestroyResourceViewInfoCallback(&OnDestroyResourceViewInfo);
 
       reshade::register_event<reshade::addon_event::copy_resource>(OnCopyResource);
 
@@ -2367,10 +2344,10 @@ static void Use(DWORD fdw_reason) {
       reshade::unregister_event<reshade::addon_event::create_resource>(OnCreateResource);
       reshade::unregister_event<reshade::addon_event::create_resource_view>(OnCreateResourceView);
 
-      // renodx::utils::resource::on_init_resource_info_callbacks.erase(&OnInitResourceInfo);
-      // renodx::utils::resource::on_destroy_resource_info_callbacks.erase(&OnDestroyResourceInfo);
-      // renodx::utils::resource::on_init_resource_view_info_callbacks.erase(&OnInitResourceViewInfo);
-      // renodx::utils::resource::on_destroy_resource_view_info_callbacks.erase(&OnDestroyResourceViewInfo);
+      renodx::utils::resource::UnregisterOnInitResourceInfoCallback(&OnInitResourceInfo);
+      renodx::utils::resource::UnregisterOnDestroyResourceInfoCallback(&OnDestroyResourceInfo);
+      renodx::utils::resource::UnregisterOnInitResourceViewInfoCallback(&OnInitResourceViewInfo);
+      renodx::utils::resource::UnregisterOnDestroyResourceViewInfoCallback(&OnDestroyResourceViewInfo);
 
       reshade::unregister_event<reshade::addon_event::copy_resource>(OnCopyResource);
 

@@ -7,6 +7,7 @@
 #define RENODX_GAME_NITS                     shader_injection.toneMapGameNits
 #define RENODX_UI_NITS                       shader_injection.toneMapUINits
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.colorGradeExposure
+#define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.colorGradeHighlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.colorGradeShadows
 #define RENODX_TONE_MAP_CONTRAST             shader_injection.colorGradeContrast
@@ -19,17 +20,19 @@
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.colorGradeColorSpace
 #define RENODX_SWAP_CHAIN_OUTPUT_PRESET      renodx::draw::SWAP_CHAIN_OUTPUT_PRESET_HDR10
 //  Game's UI and render are linear, so we gamma correct everything at the end
-#define RENODX_GAMMA_CORRECTION            GAMMA_CORRECTION_GAMMA_2_2
+#define RENODX_GAMMA_CORRECTION            shader_injection.gamma_correction
 #define RENODX_INTERMEDIATE_ENCODING       GAMMA_CORRECTION_NONE
-#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION GAMMA_CORRECTION_GAMMA_2_2
-#define CUSTOM_FILM_GRAIN_TYPE             shader_injection.custom_film_grain_type
-#define CUSTOM_FILM_GRAIN_STRENGTH         shader_injection.custom_film_grain
-#define CUSTOM_LUT_STRENGTH                1.f
-#define CUSTOM_LUT_SCALING                 1.f
-#define CUSTOM_RANDOM                      shader_injection.custom_random
-#define CUSTOM_SHARPNESS                   shader_injection.custom_sharpness
-#define CUSTOM_VIGNETTE                    shader_injection.custom_vignette
-#define CUSTOM_DECHROMA                    shader_injection.colorGradeBlowout
+#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION shader_injection.gamma_correction
+// Etc effects
+#define CUSTOM_FILM_GRAIN_TYPE     shader_injection.custom_film_grain_type
+#define CUSTOM_FILM_GRAIN_STRENGTH shader_injection.custom_film_grain
+#define CUSTOM_LUT_STRENGTH        1.f
+#define CUSTOM_LUT_SCALING         1.f
+#define CUSTOM_RANDOM              shader_injection.custom_random
+#define CUSTOM_SHARPNESS           shader_injection.custom_sharpness
+#define CUSTOM_VIGNETTE            shader_injection.custom_vignette
+#define CUSTOM_DECHROMA            shader_injection.colorGradeBlowout
+#define FX_BLOOM_STRENGTH          shader_injection.fx_bloom_strength
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -39,7 +42,10 @@ struct ShaderInjectData {
   float toneMapGameNits;
   float toneMapUINits;
 
+  float gamma_correction;
+
   float colorGradeExposure;
+  float tone_map_gamma;
   float colorGradeHighlights;
   float colorGradeShadows;
   float colorGradeContrast;
@@ -57,6 +63,8 @@ struct ShaderInjectData {
   float custom_random;
   float custom_sharpness;
   float custom_vignette;
+
+  float fx_bloom_strength;
 };
 
 #ifndef __cplusplus

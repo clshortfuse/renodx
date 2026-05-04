@@ -1,3 +1,4 @@
+#include "./macleod_boynton.hlsli"
 #include "./shared.h"
 
 float3 HueAndChrominanceOKLab(
@@ -135,7 +136,7 @@ float3 ApplyUserColorGradingAP1(float3 ungraded_ap1) {
   cg_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
   cg_config.hue_correction_strength = 0.f;  // no hue correction
   cg_config.blowout = 0.f;                  // no highlight saturation
-  float ungraded_y = renodx::color::y::from::AP1(ungraded_ap1);
+  float ungraded_y = LuminosityFromAP1LuminanceNormalized(ungraded_ap1);
 
   float3 graded_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded_ap1, ungraded_y, cg_config);
   graded_ap1 = ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(graded_ap1, ungraded_ap1, ungraded_y, cg_config);
@@ -147,13 +148,13 @@ float3 GammaCorrectHuePreserving(float3 incorrect_color) {
 #if USE_LUM_GAMMA_CORRECTION_WITH_CHROMINANCE_CORRECTION
   float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
 
-  const float y_in = max(0, renodx::color::y::from::BT709(incorrect_color));
+  const float y_in = max(0, LuminosityFromBT709LuminanceNormalized(incorrect_color));
   const float y_out = renodx::color::correct::Gamma(y_in);
 
   float3 lum = renodx::color::correct::Luminance(incorrect_color, y_in, y_out);
 
-  // use chrominance from per channel gamma correction
-  float3 result = renodx::color::correct::ChrominanceOKLab(lum, ch, 1.f, 1.f);
+  // use purity from per channel gamma correction
+  float3 result = CorrectPurityMBBT709WithBT2020(lum, ch, 1.f, 1.f);
 #else
   float3 corrected_color = renodx::color::correct::GammaSafe(incorrect_color);
   float3 result = renodx::color::correct::Hue(corrected_color, incorrect_color);
@@ -238,22 +239,21 @@ float3 ApplyVanillaPlusToneMapByLuminanceBlended(float3 untonemapped_ap1, float 
 #endif
 
 #if USE_LUM_TM_WITH_CHROMINANCE_CORRECTION
-  float y_in = renodx::color::y::from::AP1(untonemapped_ap1);
+  float y_in = LuminosityFromAP1LuminanceNormalized(untonemapped_ap1);
   float y_out = ApplyACShadowsToneMap(y_in, peak_ratio * 100.f, min_ratio * 100.f);
 
   float3 tonemapped_lum_bt709 = renodx::color::bt709::from::AP1(renodx::color::correct::Luminance(untonemapped_ap1, y_in, y_out));
   float3 tonemapped_perch_bt709 = renodx::color::bt709::from::AP1(ApplyACShadowsToneMap(untonemapped_ap1, peak_ratio * 100.f, min_ratio * 100.f));
 
-  tonemapped_lum_bt709 = renodx::color::correct::Chrominance(tonemapped_lum_bt709, tonemapped_perch_bt709, 1.f);  // take chrominance from per channel
-  tonemapped_lum_bt709 = renodx::color::bt709::clamp::AP1(tonemapped_lum_bt709);
+  tonemapped_lum_bt709 = CorrectPurityMBBT709WithBT2020(tonemapped_lum_bt709, tonemapped_perch_bt709, 1.f);  // take purity from per channel
 
-  const float blending_ratio = renodx::color::y::from::BT709(tonemapped_lum_bt709);
+  const float blending_ratio = LuminosityFromBT709LuminanceNormalized(tonemapped_lum_bt709);
   float3 tonemapped_bt709 = lerp(tonemapped_lum_bt709, tonemapped_perch_bt709, saturate(blending_ratio));  // take highlights from per channel
 #else
   float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(ApplyACShadowsToneMap(untonemapped_ap1, peak_ratio * 100.f, min_ratio * 100.f));
   float3 tonemapped_bt709_hue_corrected = renodx::color::correct::Hue(tonemapped_bt709, renodx::color::bt709::from::AP1(untonemapped_ap1));
 
-  const float blending_ratio = renodx::color::y::from::BT709(tonemapped_bt709_hue_corrected);
+  const float blending_ratio = LuminosityFromBT709LuminanceNormalized(tonemapped_bt709_hue_corrected);
   tonemapped_bt709 = lerp(tonemapped_bt709_hue_corrected, tonemapped_bt709, saturate(blending_ratio));  // take highlights from per channel
 #endif
 
@@ -288,12 +288,12 @@ float3 ApplyACESByLuminanceBlended(float3 untonemapped_ap1, float peak_white = 1
   return renodx::color::bt2020::from::BT709(tonemapped_bt709);
 }
 
-float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float peak_white = 100.f, float diffuse_white = 100.f) {
+float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_white = 100.f, float cbuffer_diffuse_white = 100.f) {
   float3 tonemapped_bt2020;
   if (RENODX_TONE_MAP_TYPE == 2.f) {
-    tonemapped_bt2020 = ApplyACESByLuminanceBlended(untonemapped_ap1, peak_white, diffuse_white);
+    tonemapped_bt2020 = ApplyACESByLuminanceBlended(untonemapped_ap1, cbuffer_peak_white, cbuffer_diffuse_white);
   } else {
-    tonemapped_bt2020 = ApplyVanillaPlusToneMapByLuminanceBlended(untonemapped_ap1, peak_white, diffuse_white);
+    tonemapped_bt2020 = ApplyVanillaPlusToneMapByLuminanceBlended(untonemapped_ap1, cbuffer_peak_white, cbuffer_diffuse_white);
   }
-  return renodx::color::pq::EncodeSafe(tonemapped_bt2020, diffuse_white);
+  return renodx::color::pq::EncodeSafe(tonemapped_bt2020, cbuffer_diffuse_white);
 }

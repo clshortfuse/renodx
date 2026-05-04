@@ -11,7 +11,8 @@ sub hdr_calibration(string s_dst = "")
 			string s_hdrlinear_tmp = "HDR_LINEAR_TEMP";
 
 			PushMarker("HDR Calibration");
-				BufferScreenFormat(s_hdrlinear_tmp, 1, "R16G16B16A16_FLOAT", "ui");
+				// BufferScreenFormat(s_hdrlinear_tmp, 1, "R11G11B10_FLOAT", "ui");
+				BufferScreenFormat(s_hdrlinear_tmp, 1, "R16G16B16A16_FLOAT", "ui"); // CUSTOM EDIT
 					SetRenderTargets(s_hdrlinear_tmp, "");
 						SetBuffer(USERMAP_TMP_0, s_dst);
 						Mesh("tri_screen.msh", "copy.mat", "std");

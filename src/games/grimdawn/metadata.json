@@ -1,5 +1,35 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "grimdawn",
-  "title": "Grim Dawn"
+  "title": "Grim Dawn and Titan Quest Anniversary Edition",
+  "maintainers": [
+    "OopyDoopy (Jon)"
+  ],
+  "status": "stable",
+  "games": [
+    {
+      "title": "Grim Dawn",
+      "deploy": {
+        "steam_appid": 219990,
+        "architecture": [
+          "x64"
+        ]
+      }
+    },
+    {
+      "title": "Titan Quest Anniversary Edition",
+      "deploy": {
+        "steam_appid": 475150,
+        "architecture": [
+          "x86"
+        ]
+      }
+    }
+  ],
+  "deploy": {
+    "architecture": [
+      "x86",
+      "x64"
+    ]
+  }
 }

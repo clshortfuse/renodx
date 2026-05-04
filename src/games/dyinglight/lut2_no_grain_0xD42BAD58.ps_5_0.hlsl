@@ -35,10 +35,15 @@ void main(
   r0.x = saturate(-r0.x * r0.y + 1);
   r0.x = cb0[2].x * r0.x;
   r0.x = cb0[0].w * r0.x;
-  r0.y = t0.SampleLevel(s0_s, v1.xy, 0).x;
-  r0.z = t0.SampleLevel(s0_s, v1.zw, 0).z;
+  r0.y = t0.SampleLevel(s0_s, v1.xy, 0).x; // chromatic aberration red
+  r0.z = t0.SampleLevel(s0_s, v1.zw, 0).z; // chromatic aberration blue
   r1.xyzw = t0.SampleLevel(s0_s, v2.zw, 0).xyzw;  // render
   r0.yz = -r1.xz + r0.yz;
+
+  if (CUSTOM_CLAMP_CHROMATIC_ABERRATION) {
+    r0.yz = saturate(r0.yz);
+  }
+
   r1.xz = r0.xx * r0.yz + r1.xz;
   o0.w = r1.w;
   r0.x = dot(float3(0.212500006, 0.715399981, 0.0720999986), r1.xyz);
@@ -54,7 +59,7 @@ void main(
   float3 lut_input = r0.xyz;
   float scale = 1.f;
   if (RENODX_TONE_MAP_TYPE != 0) {
-    scale = ComputeReinhardSmoothClampScale(r0.xyz);
+    scale = ComputeMaxChCompressionScale(r0.xyz);
   }
   r0.rgb = lut_input * scale;
 

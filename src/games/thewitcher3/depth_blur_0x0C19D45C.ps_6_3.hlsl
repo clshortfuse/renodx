@@ -64,9 +64,15 @@ float4 main(
   noperspective float4 SV_Position : SV_Position
 ) : SV_Target {
   float4 SV_Target;
+
+  //float alpha = 1.f;
+
   float _11 = float(int(SV_Position.x));
   float _12 = float(int(SV_Position.y));
   float4 _19 = t1.Load(int3((uint)(uint(cb12_271x * _11)), (uint)(uint(cb12_271x * _12)), 0));
+
+  //_19.w = 1.f;
+
   float _112;
   [branch]
   if (!(!(_19.x >= SV_Position.z))) {
@@ -99,20 +105,39 @@ float4 main(
   float _126 = (cb12_073z * _112) * cb12_271x;
   float _128 = (cb12_073w * _112) * cb12_271x;
   float4 _129 = t0.SampleLevel(s0, float2(_122, _124), 0.0f);
+
+  //_129.w = alpha;
+
   float _134 = _126 * 0.5f;
   float _135 = _128 * 1.5f;
   float4 _138 = t0.SampleLevel(s0, float2((_122 - _134), (_124 - _135)), 0.0f);
+
+  //_138.w = alpha;
+
   float _143 = _126 * 1.5f;
   float _144 = _128 * 0.5f;
   float4 _147 = t0.SampleLevel(s0, float2((_143 + _122), (_124 - _144)), 0.0f);
   float4 _154 = t0.SampleLevel(s0, float2((_134 + _122), (_135 + _124)), 0.0f);
   float4 _161 = t0.SampleLevel(s0, float2((_122 - _143), (_144 + _124)), 0.0f);
+
+  //_147.w = alpha;
+  //_154.w = alpha;
+  //_161.w = alpha;
+
   float _166 = _126 * 2.0f;
   float4 _171 = t0.SampleLevel(s0, float2((_122 - _166), (cb12_271x * (cb12_073w * (SV_Position.y - _112)))), 0.0f);
+
+  //_171.w = alpha;
+
   float _176 = _128 * 2.0f;
   float4 _181 = t0.SampleLevel(s0, float2((cb12_271x * (cb12_073z * (_112 + SV_Position.x))), (_124 - _176)), 0.0f);
   float4 _190 = t0.SampleLevel(s0, float2((_166 + _122), (cb12_271x * (cb12_073w * (_112 + SV_Position.y)))), 0.0f);
   float4 _199 = t0.SampleLevel(s0, float2((cb12_271x * (cb12_073z * (SV_Position.x - _112))), (_176 + _124)), 0.0f);
+
+  //_181.w = alpha;
+  //_190.w = alpha;
+  //_199.w = alpha;
+
   float _239 = ((((_171.w + _129.w) + _181.w) + _190.w) + _199.w) + ((((_147.w + _138.w) + _154.w) + _161.w) * 4.0f);
   float _240 = max(0.0010000000474974513f, _239);
   SV_Target.x = (((((((_171.x + _129.x) + _181.x) + _190.x) + _199.x) + ((((_147.x + _138.x) + _154.x) + _161.x) * 4.0f)) / _240) * 0.0416666679084301f);
@@ -121,6 +146,8 @@ float4 main(
   SV_Target.w = saturate(_239 * 25.0f);
 
   //SV_Target.rgb *= 5.f;
+
+  //SV_Target.rgb = renodx::color::correct::Luminance(SV_Target.rgb, _129.rgb);
 
   return SV_Target;
 }

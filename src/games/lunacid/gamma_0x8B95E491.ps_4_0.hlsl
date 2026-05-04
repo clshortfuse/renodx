@@ -29,19 +29,25 @@ void main(
   r0.xy = v1.xy * cb0[4].xy + cb0[4].zw;
   r0.xyzw = t0.Sample(s0_s, r0.xy).xyzw;
 
+  float4 bypass = r0;
+  if (RENODX_TONE_MAP_TYPE != 0) {
+    o0 = bypass;
+    return;
+  }
+
   //r0.xyz = renodx::draw::InvertIntermediatePass(renodx::color::srgb::EncodeSafe(r0.xyz));
 
   r0.w = saturate(cb0[5].y);
   r0.xyz = r0.xyz + r0.www;
 
-  //r0.xyz = saturate(float3(-1, -1, -1) + r0.xyz);
-  r0.xyz = float3(-1, -1, -1) + r0.xyz;
+  r0.xyz = saturate(float3(-1, -1, -1) + r0.xyz);
+  //r0.xyz = float3(-1, -1, -1) + r0.xyz;
 
   r0.w = max(1, cb0[5].y);
   r0.w = min(4, r0.w);
 
-  //r0.xyz = saturate(r0.xyz * r0.www + -cb0[5].xxx);
-  r0.xyz = r0.xyz * r0.www + (-cb0[5].xxx * 1);
+  r0.xyz = saturate(r0.xyz * r0.www + -cb0[5].xxx);
+  //r0.xyz = r0.xyz * r0.www + (-cb0[5].xxx * 1);
 
   r1.xy = cb0[5].xx * float2(-14,-14) + float2(16,15);
   r1.xzw = r1.xxx * r0.xyz;
@@ -52,8 +58,8 @@ void main(
   o0.xyz = r0.www * r1.xyz + r0.xyz;
   o0.w = 1;
 
-  o0.rgb = renodx::draw::RenderIntermediatePass(renodx::color::srgb::DecodeSafe(o0.rgb));
-  //o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+  // o0.rgb = renodx::draw::RenderIntermediatePass(renodx::color::srgb::DecodeSafe(o0.rgb));
+  // o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
 
   return;
 }

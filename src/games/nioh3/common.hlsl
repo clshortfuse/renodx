@@ -99,14 +99,17 @@ float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma,
 }
 
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
-  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
+  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f && RENODX_TONE_MAP_GAMMA == 1.f) {
     return untonemapped;
   }
   float3 color = untonemapped;
 
   color *= config.exposure;
 
-  const float y_normalized = y / mid_gray;
+  // gamma
+  float lum_gamma_adjusted = renodx::math::Select(y < 1.f, pow(y, RENODX_TONE_MAP_GAMMA), y);
+
+  const float y_normalized = lum_gamma_adjusted / mid_gray;
   const float highlight_mask = 1.f / mid_gray;
   const float shadow_mask = mid_gray;
 
@@ -268,7 +271,17 @@ float4 ProcessColor(float3 untonemapped, float3 graded) {
 }
 
 float4 ProcessColor(float4 color) {
-  color.rgb = renodx::tonemap::neutwo::BT709(color.rgb, RENODX_PEAK_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_RENO_DRT_WHITE_CLIP);
+  float peak_ratio = RENODX_PEAK_NITS / RENODX_GAME_NITS;
+  [branch]
+  if (RENODX_GAMMA_CORRECTION != 0.f) {
+    peak_ratio = renodx::color::correct::Gamma(peak_ratio,
+                                               true,
+                                               renodx::math::Select((RENODX_GAMMA_CORRECTION == 1.f), 2.2f, 2.4f)
+
+    );
+  }
+
+  color.rgb = renodx::tonemap::neutwo::BT709(color.rgb, peak_ratio, RENODX_RENO_DRT_WHITE_CLIP);
   color.rgb = renodx::draw::RenderIntermediatePass(color.rgb);
   color.a = 1.f;
 
@@ -293,8 +306,8 @@ float NiohDerivative(float x, float A, float B, float C, float D, float E) {
   return num / (denom * denom);
 }
 
-// static const float kInflectionPoint = 0.267011;
-static const float kInflectionPoint = 0.28160194f; // To accomodate B * 0.3f
+static const float kInflectionPoint = 0.267011;
+// static const float kInflectionPoint = 0.28160194f;  // To accommodate B * 0.3f
 
 #define APPLYNIOHEXTENDED_GENERATOR(T)                                   \
   T ApplyNiohExtended(                                                   \

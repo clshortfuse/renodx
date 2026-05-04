@@ -1,6 +1,8 @@
 #ifndef RENODX_SHADERS_COLOR_RGB_HLSL
 #define RENODX_SHADERS_COLOR_RGB_HLSL
 
+#include "../math.hlsl"
+
 namespace renodx {
 namespace color {
 
@@ -79,17 +81,28 @@ static const float3x3 XYZ_TO_CAT97_LMS_MAT = float3x3(
     -0.8360f, +1.8327f, +0.0033f,
     +0.0357f, -0.0469f, +1.0112f);
 
-// Manually recomputed from CIE 1931 XYZ 1nm to Stockman 2deg 1nm 8dp with MB2 Weights
-static const float3x3 XYZ_TO_STOCKMAN_SHARP_LMS_MAT = float3x3(
-    0.185082982238733f, 0.584081279463687f, -0.0240722415044404f,
-    -0.134433056469973f, 0.405752392775348f, 0.0358252602217631f,
-    0.000789456671966863f, -0.000912281325916184f, 0.0198490812339463f);
+static const float3x3 STOCKMAN_CVRL_XYZ_TO_LMS_2DEG_FIT = float3x3(
+    0.2670502842655792, 0.8471990148492798, -0.03470416612462053,
+    -0.38706882411220156, 1.165429935890458, 0.10302286696614202,
+    0.026727793989083093, -0.02729131667566509, 0.5333267257603284);
+static const float3x3 STOCKMAN_CVRL_LMS_TO_XYZ_2DEG_FIT = renodx::math::Invert3x3(STOCKMAN_CVRL_XYZ_TO_LMS_2DEG_FIT);
+
+static const float3x3 XYZ_TO_STOCKMAN_SHARP_LMS_MAT = STOCKMAN_CVRL_XYZ_TO_LMS_2DEG_FIT;
+static const float3x3 STOCKMAN_SHARP_LMS_TO_XYZ_MAT = STOCKMAN_CVRL_LMS_TO_XYZ_2DEG_FIT;
 
 // Stockman & Sharpe 2 degree
-static const float3x3 XYZf_TO_STOCKMAN_SHARP_LMS_MAT = float3x3(
+static const float3x3 STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT = float3x3(
     1.94735469f, -1.41445123f, 0.36476327f,
     0.68990272f, +0.34832189f, 0.00000000f,
     0.00000000f, +0.00000000f, 1.93485343f);
+
+static const float3x3 XFYFZF_TO_STOCKMAN_SHARP_LMS_MAT = renodx::math::Invert3x3(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT);
+
+// Fit CIE 170-2 Table 10.5 (`data/CIE_smb_cc_2deg.csv`) using Stockman-Sharpe 2-degree LMS
+static const float3 CIE1702_MB_CIE_WEIGHTS = float3(
+    STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT[1][0],  // LMS=>XfYfZf weight for L
+    STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT[1][1],  // LMS=>XfYfZf weight for M
+    0.0371597069161f);
 
 static const float3x3 PLMS_TO_IPT_MAT = float3x3(
     0.4f, 0.4f, 0.2f,
@@ -220,6 +233,9 @@ static const float3 BOURGIN_D65_Y = float3(0.222015, 0.706655, 0.071330);
 // 1931 2 degree standard observer
 static const float2 WHITE_POINT_D65 = float2(0.31272, 0.32903);
 
+// Equal-energy illuminant chromaticity (not related to energy/quantal unit choice).
+static const float2 WHITE_POINT_E = float2(1.f / 3.f, 1.f / 3.f);
+
 // https://www.arri.com/resource/blob/31918/66f56e6abb6e5b6553929edf9aa7483e/2017-03-alexa-logc-curve-in-vfx-data.pdf
 static const float3x3 ALEXA_WIDE_GAMUT_TO_BT709_MAT = float3x3(
     1.485007, -0.401216, -0.083791,
@@ -246,8 +262,40 @@ float3 BT2020(float3 bt2020) {
   return mul(BT2020_TO_XYZ_MAT, bt2020);
 }
 
+float3 LMS(float3 lms) {
+  return mul(STOCKMAN_SHARP_LMS_TO_XYZ_MAT, lms);
+}
+
 }  // namespace from
 }  // namespace xyz
+
+namespace xfyfzf {
+namespace from {
+float3 LMS(float3 lms) {
+  return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, lms);
+}
+float3 BT709(float3 bt709) {
+  return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(BT709_TO_XYZ_MAT, bt709)));
+}
+float3 BT2020(float3 bt2020) {
+  return mul(STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT, mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(BT2020_TO_XYZ_MAT, bt2020)));
+}
+}  // namespace from
+}  // namespace xfyfzf
+
+namespace yf {
+namespace from {
+float LMS(float3 lms) {
+  return xfyfzf::from::LMS(lms).y;
+}
+float BT709(float3 bt709) {
+  return xfyfzf::from::BT709(bt709).y;
+}
+float BT2020(float3 bt2020) {
+  return xfyfzf::from::BT2020(bt2020).y;
+}
+}  // namespace from
+}  // namespace yf
 
 namespace xyY {
 namespace from {
@@ -313,6 +361,10 @@ float3 BT709D93(float3 bt709d93) {
   return mul(BT709_D93_TO_BT709_D65_MAT, bt709d93);
 }
 
+float3 LMS(float3 lms) {
+  return mul(XYZ_TO_BT709_MAT, mul(STOCKMAN_SHARP_LMS_TO_XYZ_MAT, lms));
+}
+
 }  // namespace from
 }  // namespace bt709
 
@@ -328,6 +380,10 @@ float3 AP1(float3 ap1) {
 
 float3 XYZ(float3 XYZ) {
   return mul(XYZ_TO_BT2020_MAT, XYZ);
+}
+
+float3 LMS(float3 lms) {
+  return mul(XYZ_TO_BT2020_MAT, mul(STOCKMAN_SHARP_LMS_TO_XYZ_MAT, lms));
 }
 
 }  // namespace from
@@ -375,6 +431,34 @@ float BT601(float3 bt601) {
 }
 }  // namespace from
 }  // namespace luma
+
+namespace lms {
+namespace from {
+float3 BT709(float3 bt709) {
+  return mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(BT709_TO_XYZ_MAT, bt709));
+}
+float3 BT2020(float3 bt2020) {
+  return mul(XYZ_TO_STOCKMAN_SHARP_LMS_MAT, mul(BT2020_TO_XYZ_MAT, bt2020));
+}
+
+float3 XYZ(float3 xyz) {
+  return mul(renodx::color::XYZ_TO_STOCKMAN_SHARP_LMS_MAT, xyz);
+}
+
+float3 XYWhite(float2 white_xy, float white_level = 1.f) {
+  return XYZ(renodx::color::xyz::from::xyY(float3(white_xy, white_level)));
+}
+
+float3 WhiteD65(float white_level = 1.f) {
+  return XYWhite(renodx::color::WHITE_POINT_D65, white_level);
+}
+
+// Compatibility alias.
+float3 WhiteE(float white_level = 1.f) {
+  return XYWhite(renodx::color::WHITE_POINT_E, white_level);
+}
+}  // namespace from
+}  // namespace lms
 
 namespace bt2408 {
 static const float REFERENCE_WHITE = 203.f;

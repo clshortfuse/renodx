@@ -53,6 +53,8 @@ void main(
 
   r0.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
 
+  
+
   // srgb to linear
   r1.xyz = float3(0.0549999997,0.0549999997,0.0549999997) + r0.xyz;
   r1.xyz = float3(0.947867334,0.947867334,0.947867334) * r1.xyz;
@@ -83,8 +85,9 @@ void main(
   r1.xyzw = r2.xyzw + r1.xyzw;
   r1.xyzw = cb0[34].yyyy * r1.xyzw;
   r2.xyzw = float4(0.25,0.25,0.25,1) * r1.xyzw;
-  r1.xyzw = float4(0.25,0.25,0.25,0.25) * r1.xyzw;
-  r3.xyz = cb0[35].xyz * r2.xyz;
+  r1.xyzw = float4(0.25, 0.25, 0.25, 0.25) * r1.xyzw;
+  r3.xyz = cb0[35].xyz * CUSTOM_BLOOM * r2.xyz;
+
   r3.w = 0.25 * r2.w;
   r0.xyzw = r3.xyzw + r0.xyzw;
   r2.xy = v1.xy * cb0[33].xy + cb0[33].zw;
@@ -92,6 +95,9 @@ void main(
   r2.xyz = cb0[34].zzz * r2.xyz;
   r2.w = 0;
   r0.xyzw = r2.xyzw * r1.xyzw + r0.xyzw;
+
+  float3 no_grain = r0.xyz;
+
   r1.xyz = saturate(r0.xyz);
   r1.x = dot(r1.xyz, float3(0.212672904,0.715152204,0.0721750036));
   r1.x = sqrt(r1.x);
@@ -104,21 +110,27 @@ void main(
   // r0.xyz = saturate(r1.yzw * r1.xxx + r0.xyz);
   r0.xyz = r1.yzw * r1.xxx + r0.xyz;
 
+  r0.xyz = lerp(no_grain, r0.xyz, saturate((1 - CUSTOM_FILM_GRAIN_TYPE) * CUSTOM_FILM_GRAIN_STRENGTH));
+
   r0.w = saturate(r0.w);
   o0.w = r0.w;
 
   float3 untonemapped = r0.rgb;
-  r0.xyz = saturate(untonemapped);
+  float sdr_scale = ComputeReinhardSmoothClampScale(untonemapped);
+  r0.xyz = untonemapped * sdr_scale;
+  r0.xyz = renodx::color::srgb::Encode(r0.zxy);
+  r0.xyz = saturate(r0.xyz);
 
-  // linear to srgb
-  r1.xyz = max(float3(1.1920929e-07,1.1920929e-07,1.1920929e-07), r0.zxy);
-  r1.xyz = log2(r1.xyz);
-  r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
-  r1.xyz = exp2(r1.xyz);
-  r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
-  r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.zxy;
-  r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.zxy);
-  r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
+
+  // // linear to srgb
+  // r1.xyz = max(float3(1.1920929e-07,1.1920929e-07,1.1920929e-07), r0.zxy);
+  // r1.xyz = log2(r1.xyz);
+  // r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
+  // r1.xyz = exp2(r1.xyz);
+  // r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
+  // r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.zxy;
+  // r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.zxy);
+  // r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
 
  // LUT Sampling
   r0.yzw = cb0[36].zzz * r0.xyz;
@@ -135,28 +147,32 @@ void main(
   r0.yzw = r2.xyz + -r1.xyz;
   r0.xyz = r0.xxx * r0.yzw + r1.xyz;
 
-  float3 tonemapped_bt709 = renodx::color::srgb::DecodeSafe(r1.rgb);
+  float3 tonemapped_bt709 = renodx::color::srgb::DecodeSafe(r0.rgb);
+  float3 hdr_color = tonemapped_bt709 / sdr_scale;
+  hdr_color = lerp(untonemapped, hdr_color, SCENE_GRADE_GRADING_STRENGTH);
+  hdr_color = CustomTonemap(hdr_color, w1.xy);
+  r0.xyz = hdr_color;
 
-  // srgb to linear (srgb decode)
-  r1.xyz = float3(0.0549999997, 0.0549999997, 0.0549999997) + r0.xyz;
-  r1.xyz = float3(0.947867334, 0.947867334, 0.947867334) * r1.xyz;
-  r1.xyz = max(float3(1.1920929e-07,1.1920929e-07,1.1920929e-07), abs(r1.xyz));
-  r1.xyz = log2(r1.xyz);
-  r1.xyz = float3(2.4000001,2.4000001,2.4000001) * r1.xyz;
-  r1.xyz = exp2(r1.xyz);
-  r2.xyz = float3(0.0773993805,0.0773993805,0.0773993805) * r0.xyz;
-  r0.xyz = cmp(float3(0.0404499993,0.0404499993,0.0404499993) >= r0.xyz);
-  r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
+  // // srgb to linear (srgb decode)
+  // r1.xyz = float3(0.0549999997, 0.0549999997, 0.0549999997) + r0.xyz;
+  // r1.xyz = float3(0.947867334, 0.947867334, 0.947867334) * r1.xyz;
+  // r1.xyz = max(float3(1.1920929e-07,1.1920929e-07,1.1920929e-07), abs(r1.xyz));
+  // r1.xyz = log2(r1.xyz);
+  // r1.xyz = float3(2.4000001,2.4000001,2.4000001) * r1.xyz;
+  // r1.xyz = exp2(r1.xyz);
+  // r2.xyz = float3(0.0773993805,0.0773993805,0.0773993805) * r0.xyz;
+  // r0.xyz = cmp(float3(0.0404499993,0.0404499993,0.0404499993) >= r0.xyz);
+  // r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
 
-  // linear to srgb
-  r1.xyz = max(float3(1.1920929e-07,1.1920929e-07,1.1920929e-07), abs(r0.xyz));
-  r1.xyz = log2(r1.xyz);
-  r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
-  r1.xyz = exp2(r1.xyz);
-  r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
-  r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
-  r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
-  r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
+  // // linear to srgb
+  // r1.xyz = max(float3(1.1920929e-07,1.1920929e-07,1.1920929e-07), abs(r0.xyz));
+  // r1.xyz = log2(r1.xyz);
+  // r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
+  // r1.xyz = exp2(r1.xyz);
+  // r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
+  // r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
+  // r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
+  // r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
 
   // dithering noise
   r1.xy = v1.xy * cb0[30].xy + cb0[30].zw;
@@ -170,8 +186,7 @@ void main(
   r0.w = r1.x * r0.w;
   o0.xyz = r0.www * float3(0.00392156886,0.00392156886,0.00392156886) + r0.xyz;
 
-  float3 sdr_color = renodx::color::srgb::DecodeSafe(o0.rgb);
+  //o0.xyz = test;
 
-  o0.rgb = CustomTonemap(untonemapped, tonemapped_bt709, sdr_color);
   return;
 }

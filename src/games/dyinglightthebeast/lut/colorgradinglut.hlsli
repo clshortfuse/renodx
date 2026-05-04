@@ -46,8 +46,8 @@ float3 SampleLUT(Texture3D lut_texture, renodx::lut::Config lut_config, float3 c
       unclamped_linear = renodx::color::correct::GammaSafe(unclamped_linear, true);
 #endif
 
-      float3 recolored = renodx::lut::RecolorUnclamped(color_output, unclamped_linear, lut_config.scaling);
-      recolored = GamutCompress(recolored);
+      float3 recolored = color_output * lerp(1.f, renodx::math::DivideSafe(renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT709(unclamped_linear), renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT709(color_output), 1.f), lut_config.scaling);
+      // recolored = GamutCompress(recolored);
       recolored = max(0, recolored);
       color_output = recolored;
     }

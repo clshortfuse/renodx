@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2024 Musa Haji
- * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
 
@@ -14,7 +13,6 @@
 
 #include <embed/shaders.h>
 
-#include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
@@ -22,15 +20,7 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xC6879C29),  // Color Grading - Sample LUT
-
-    CustomShaderEntry(0x1B418D49),  // Tonemap - LUTbuilder - alternate
-    CustomShaderEntry(0x48E37C1E),  // Tonemap - LUTbuilder - main
-    CustomShaderEntry(0x11C53BBA),  // Tonemap - Sample LUT + Sliders + Exponential Rolloff
-
-    CustomShaderEntry(0x36496C32),  // UI
-};
+renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
 
@@ -66,33 +56,11 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapHueCorrection",
-        .binding = &shader_injection.tone_map_hue_correction,
-        .default_value = 0.f,
-        .label = "Hue Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Hue retention strength.",
-        .min = 0.f,
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapShoulderStart",
-        .binding = &shader_injection.tone_map_shoulder_start,
-        .default_value = 0.5f,
-        .label = "Shoulder Start",
-        .section = "Tone Mapping",
-        .tooltip = "Sets the starting point for highlight rolloff.",
-        .min = 0.5f,
-        .max = 1.f,
-        .format = "%.3f",
-    },
-    new renodx::utils::settings::Setting{
         .key = "ToneMapGammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
         .default_value = 1.f,
-        .label = "Gamma Correction",
+        .label = "SDR EOTF Emulation",
         .section = "Tone Mapping",
         .tooltip = "Overrides in-game contrast slider, emulates a 2.2 EOTF",
         .labels = {"Off", "2.2"},
@@ -143,14 +111,34 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
+        .key = "ColorGradeHighlightSaturation",
+        .binding = &shader_injection.tone_map_highlight_saturation,
+        .default_value = 50.f,
+        .label = "Highlight Saturation",
+        .section = "Color Grading",
+        .tooltip = "Adds or removes highlight color.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
         .default_value = 0.f,
-        .label = "Blowout",
+        .label = "Dechroma",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeFlare",
+        .binding = &shader_injection.tone_map_flare,
+        .default_value = 0.f,
+        .label = "Flare",
+        .section = "Color Grading",
+        .tooltip = "Flare/Glare Compensation",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeScene",
@@ -177,7 +165,17 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Discord",
+        .label = "RenoDX Discord",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0x5865F2,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "Ce9bQHQrSV");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "HDR Den Discord",
         .section = "Links",
         .group = "button-line-2",
         .tint = 0x5865F2,
@@ -214,26 +212,41 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/musaqh"); },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-3",
+        .tint = 0xFF5A16,
+        .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse"); },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- The off preset is an approximation of the game's vanilla HDR with Peak 1000, Brightness 100, Contrast 1.00"),
         .section = "About",
     },
 };
 
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 1000.f);
-  renodx::utils::settings::UpdateSetting("ToneMapGameNits", 225.f);
-  renodx::utils::settings::UpdateSetting("ToneMapUINits", 300.f);
-  renodx::utils::settings::UpdateSetting("ToneMapHueCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("ToneMapShoulderStart", 0.5f);
-  renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
-  renodx::utils::settings::UpdateSetting("ColorGradeScene", 100.f);
+  renodx::utils::settings::UpdateSettings({
+      {"ToneMapPeakNits", 1000.f},
+      {"ToneMapGameNits", 225.f},
+      {"ToneMapUINits", 300.f},
+      {"ToneMapGammaCorrection", 0},
+      {"ColorGradeExposure", 1.f},
+      {"ColorGradeHighlights", 32.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeContrast", 50.f},
+      {"ColorGradeSaturation", 100.f},
+      {"ColorGradeHighlightSaturation", 50.f},
+      {"ColorGradeDechroma", 90.f},
+      {"ColorGradeFlare", 0.f},
+      {"ColorGradeScene", 100.f},
+  });
 }
 
 bool fired_on_init_swapchain = false;
@@ -248,6 +261,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
+bool initialized = false;
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -258,8 +273,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::mods::shader::force_pipeline_cloning = true;
-      renodx::mods::shader::expected_constant_buffer_index = 13;
+      if (!initialized) {
+        renodx::mods::shader::force_pipeline_cloning = true;
+        renodx::mods::shader::expected_constant_buffer_index = 13;
+      }
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       break;

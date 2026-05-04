@@ -60,7 +60,12 @@ struct ShaderInjectData {
   float custom_film_grain_toggle;
   float custom_hdr_boost;
   float gamma_correction;
-  float padding;
+  float swap_chain_output_preset;
+
+  float scene_grade_per_channel_blowout;
+  float scene_grade_per_channel_hue_shift;
+  float scene_grade_hue_clip;
+  float padding0;
   //float saturation_clip;
 
   //float hdr_toggle;
@@ -97,14 +102,17 @@ float4 shader_injection[8] : register(c50);
 #define CUSTOM_FILM_GRAIN_TOGGLE               shader_injection[4][0]
 #define CUSTOM_HDR_BOOST                       shader_injection[4][1]
 #define RENODX_GAMMA_CORRECTION                shader_injection[4][2]
-// #define CUSTOM_SATURATION_CLIP                 shader_injection[4][3]
+#define RENODX_SWAP_CHAIN_OUTPUT_PRESET        shader_injection[4][3]
+
+#define SCENE_GRADE_PER_CHANNEL_BLOWOUT        shader_injection[5][0]
+#define SCENE_GRADE_PER_CHANNEL_HUE_SHIFT      shader_injection[5][1]
+#define SCENE_GRADE_HUE_CLIP                   shader_injection[5][2]
 
 // #define CUSTOM_HDR_TOGGLE                      shader_injection[5][0]
 
 #define RENODX_RENO_DRT_TONE_MAP_METHOD renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
-#define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ
-#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
+
 #else
 #if ((__SHADER_TARGET_MAJOR == 5 && __SHADER_TARGET_MINOR >= 1) || __SHADER_TARGET_MAJOR >= 6)
 cbuffer shader_injection : register(b13, space50) {

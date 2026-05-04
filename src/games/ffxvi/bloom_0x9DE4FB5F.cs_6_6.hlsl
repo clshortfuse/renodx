@@ -162,13 +162,14 @@ void main(
 
     float4 _81 = u0.Load(int2((uint2)(SV_DispatchThreadID.xy)));
 
-    if (cConstant0_000.cConstant0_Struct_016.BloomParameter_000 > 0.f) {
+    if (cConstant0_000.cConstant0_Struct_016.BloomParameter_000 > 0.f & CUSTOM_BLOOM_SCALING > 0.f) {
       float mid_gray_bloomed = (0.18 + renodx::color::y::from::BT709(bloom_color)) / 0.18;
 
       float scene_luminance = renodx::color::y::from::BT709(_81.rgb) * mid_gray_bloomed;
       float bloom_blend = saturate(smoothstep(0.f, 0.18f, scene_luminance));
       float3 bloom_scaled = lerp(0.f, bloom_color, bloom_blend);
-      bloom_color = lerp(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * 0.5f);
+      bloom_color = renodx::lut::RecolorUnclamped(bloom_color, bloom_scaled, CUSTOM_BLOOM_SCALING * 0.2f);
+      bloom_color = max(0, bloom_color);
     }
 
     float3 bloom_output = _81.rgb + bloom_color;

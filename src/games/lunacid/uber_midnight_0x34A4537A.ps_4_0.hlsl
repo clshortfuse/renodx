@@ -76,10 +76,9 @@ void main(
   r0.xyzw = cb0[34].yyyy * r0.xyzw;
   r1.xyzw = float4(0.0625,0.0625,0.0625,1) * r0.xyzw;
   r0.xyzw = float4(0.0625,0.0625,0.0625,0.0625) * r0.xyzw;
-  r2.xyz = cb0[35].xyz * r1.xyz;
+  r2.xyz = cb0[35].xyz * CUSTOM_BLOOM * r1.xyz;
   r2.w = 0.0625 * r1.w;
   r1.xyzw = t1.Sample(s1_s, w1.xy).xyzw;
-
 
   // srgb to linear (srgb decode)
   r3.xyz = float3(0.0549999997,0.0549999997,0.0549999997) + r1.xyz;
@@ -102,17 +101,19 @@ void main(
   r2.w = 0;
   r0.xyzw = r2.xyzw * r0.xyzw + r1.xyzw;
 
-  float3 untonemapped = r0.xyz;
+  float3 untonemapped = r0.xyz; 
+  float3 hdr_color = CustomTonemap(untonemapped, w1.xy);
+  r0.xyz = hdr_color;
 
-  // linear to srgb (srgb encode)
-  r1.xyz = max(float3(1.1920929e-07,1.1920929e-07,1.1920929e-07), abs(r0.xyz));
-  r1.xyz = log2(r1.xyz);
-  r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
-  r1.xyz = exp2(r1.xyz);
-  r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
-  r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
-  r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
-  r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
+  // // linear to srgb (srgb encode)
+  // r1.xyz = max(float3(1.1920929e-07,1.1920929e-07,1.1920929e-07), abs(r0.xyz));
+  // r1.xyz = log2(r1.xyz);
+  // r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
+  // r1.xyz = exp2(r1.xyz);
+  // r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
+  // r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
+  // r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
+  // r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
   o0.w = r0.w;
 
   // dithering noise
@@ -127,8 +128,5 @@ void main(
   r0.w = r1.x * r0.w;
   o0.xyz = r0.www * float3(0.00392156886,0.00392156886,0.00392156886) + r0.xyz;
 
-  float3 sdr_color = renodx::color::srgb::DecodeSafe(o0.rgb);
-
-  o0.rgb = CustomTonemapClip(untonemapped, sdr_color);
   return;
 }

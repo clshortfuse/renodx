@@ -64,12 +64,13 @@ OutputSignature main(
   float3 gammaGameColor = _29.rgb;
   float3 linearGameColor = renodx::color::gamma::DecodeSafe(gammaGameColor, gamma);
   linearGameColor.xyz = ApplyRCAS(linearGameColor.xyz, TEXCOORD, t0, s1);
-  linearGameColor.xyz = CustomTonemap(linearGameColor.xyz);
+  //linearGameColor.xyz = CustomTonemap(linearGameColor.xyz);
   linearGameColor.xyz = renodx::effects::ApplyFilmGrain(
       linearGameColor.xyz,
       float2(TEXCOORD.x, TEXCOORD.y),
       CUSTOM_RANDOM,
       CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
+  //linearGameColor.rgb = CustomGammaCorrection(linearGameColor.rgb);
   linearGameColor.rgb = renodx::draw::RenderIntermediatePass(linearGameColor.rgb);
 
   // float _50 = linearGameColor.x;

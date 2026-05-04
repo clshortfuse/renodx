@@ -5,6 +5,7 @@
 #pragma warning(disable: 3554)  // [branch] on dead-code elimination
 
 #include "./color.hlsl"
+#include "./canvas.hlsl"
 #include "./color_convert.hlsl"
 #include "./colorcorrect.hlsl"
 #include "./colorgrade.hlsl"

@@ -1,5 +1,9 @@
 {
-  "$schema": "https://clshortfuse.github.io/renodx/renodx-metadata-schema.json",
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "nfstr",
-  "title": "(Need for Speed: The Run)"
+  "title": "Need for Speed: The Run",
+  "header": "https://images.igdb.com/igdb/image/upload/t_cover_big/co20a4.webp",
+  "deploy": {
+    "steam_appid": null
+  }
 }

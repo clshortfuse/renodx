@@ -18,7 +18,7 @@ void main(
   int _15 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
   int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
 
-  if (CUSTOM_SHARPENING == 0.f) {
+  if (CUSTOM_SHARPENING == 1.f && CUSTOM_SHARPENING_STRENGTH == 0.f) {
     uint tex_width, tex_height;
     SrcImage.GetDimensions(tex_width, tex_height);
     int2 tex_max = int2(tex_width - 1, tex_height - 1);
@@ -31,8 +31,8 @@ void main(
     OutputImage[int2(_119, _220)] = float4(SampleScaledSource(SrcImage, int2(_119, _220), tex_max, const0), 1.f);
     OutputImage[int2(_15, _220)] = float4(SampleScaledSource(SrcImage, int2(_15, _220), tex_max, const0), 1.f);
     return;
-  } else if (CUSTOM_SHARPENING == 2.f) {
-    float sharpness_strength = 0.75f;  // asfloat(const1.x)
+  } else if (CUSTOM_SHARPENING == 1.f) {
+    float sharpness_strength = CUSTOM_SHARPENING_STRENGTH;  // asfloat(const1.x)
 
     uint tex_width, tex_height;
     SrcImage.GetDimensions(tex_width, tex_height);

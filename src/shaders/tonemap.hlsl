@@ -9,9 +9,12 @@
 #include "./tonemap/dice.hlsl"
 #include "./tonemap/frostbite.hlsl"
 #include "./tonemap/hermite_spline.hlsl"
+#include "./tonemap/naka_rushton.hlsl"
+#include "./tonemap/neutwo.hlsl"
 #include "./tonemap/reinhard.hlsl"
 #include "./tonemap/reno_drt.hlsl"
-#include "./tonemap/neutwo.hlsl"
+#include "./tonemap/rushton_henry.hlsl"
+
 
 namespace renodx {
 namespace tonemap {
@@ -313,6 +316,7 @@ struct Config {
   float reno_drt_clamp_color_space;
   float reno_drt_clamp_peak;
   float reno_drt_white_clip;
+  float reno_drt_scaling_method;
 };
 
 float3 UpgradeToneMap(
@@ -390,7 +394,8 @@ Config Create(
     float reno_drt_blowout = 0.f,
     float reno_drt_clamp_color_space = 2.f,
     float reno_drt_clamp_peak = 1.f,
-    float reno_drt_white_clip = 100.f) {
+    float reno_drt_white_clip = 100.f,
+    float reno_drt_scaling_method = renodrt::config::scaling_method::LUMINANCE) {
   const Config tm_config = {
     type,
     peak_nits,
@@ -419,7 +424,8 @@ Config Create(
     reno_drt_blowout,
     reno_drt_clamp_color_space,
     reno_drt_clamp_peak,
-    reno_drt_white_clip
+    reno_drt_white_clip,
+    reno_drt_scaling_method
   };
   return tm_config;
 }
@@ -464,6 +470,7 @@ float3 ApplyRenoDRT(float3 color, Config tm_config) {
   reno_drt_config.clamp_color_space = tm_config.reno_drt_clamp_color_space;
   reno_drt_config.clamp_peak = tm_config.reno_drt_clamp_peak;
   reno_drt_config.white_clip = tm_config.reno_drt_white_clip;
+  reno_drt_config.scaling_method = tm_config.reno_drt_scaling_method;
 
   return renodrt::BT709(color, reno_drt_config);
 }

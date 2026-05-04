@@ -9,7 +9,8 @@ extern int FOG_VERSION;
 sub sky_buffers()
 {
 	BufferFormat("SUN_FLARE_MASK", 1, 1, "R8_UNORM", ""); //averaged mask of the sun flare's current position
-	BufferFormat("CLD_TEX_SKY", 512, 256, "R16G16B16A16_FLOAT", "ua esram");
+	// BufferFormat("CLD_TEX_SKY", 512, 256, "R11G11B10_FLOAT", "ua esram");
+	BufferFormat("CLD_TEX_SKY", 512, 256, "R16G16B16A16_FLOAT", "ua esram"); // CUSTOM EDIT
 
 	if (DEBUG_ON)
 	{
@@ -30,7 +31,8 @@ sub sky_clouds_update()
 
 		If("f_pp_clouds_particles_on")
 		{
-			BufferFormat("CLD_TEX_SKY_TMP", 512, 256, "R16G16B16A16_FLOAT", "ua esram");
+			// BufferFormat("CLD_TEX_SKY_TMP", 512, 256, "R11G11B10_FLOAT", "ua esram");
+			BufferFormat("CLD_TEX_SKY_TMP", 512, 256, "R16G16B16A16_FLOAT", "ua esram"); // CUSTOM EDIT
 			use clear_rtv_color(s_buf = "CLD_TEX_SKY_TMP", value = 0.0);
 
 			SetBuffer(UAV_0, "CLOUDS_INDIRECT_ARGS");

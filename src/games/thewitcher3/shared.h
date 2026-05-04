@@ -19,7 +19,6 @@
 // #define RENODX_TONE_MAP_HUE_PROCESSOR          shader_injection.tone_map_hue_processor
 //#define RENODX_TONE_MAP_PER_CHANNEL            shader_injection.tone_map_per_channel
 //#define RENODX_COLOR_GRADE_STRENGTH            shader_injection.tone_map_color_grade_strength
-#define RENODX_COLOR_GRADE_STRENGTH            shader_injection.scene_grade_strength
 #define RENODX_INTERMEDIATE_ENCODING           renodx::draw::ENCODING_NONE
 #define RENODX_SWAP_CHAIN_DECODING             renodx::draw::ENCODING_NONE
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION     renodx::draw::GAMMA_CORRECTION_NONE
@@ -30,17 +29,23 @@
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING             renodx::draw::ENCODING_PQ
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT2020
-#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::NONE
 //#define RENODX_RENO_DRT_WHITE_CLIP             100.f
 //#define CUSTOM_SCENE_GRADE_METHOD              shader_injection.scene_grade_method
-#define CUSTOM_SCENE_HUE_METHOD                shader_injection.scene_hue_method
+#define CUSTOM_SCENE_HUE_METHOD                1
+//#define CUSTOM_SCENE_GRADE_HUE_CORRECTION_BIAS shader_injection.scene_grade_hue_correction_bias
 #define CUSTOM_SCENE_GRADE_HUE_CORRECTION      shader_injection.scene_grade_hue_correction
 #define CUSTOM_SCENE_GRADE_SATURATION_CORRECTION shader_injection.scene_grade_saturation_correction
-#define CUSTOM_SCENE_GRADE_BLOWOUT_RESTORATION shader_injection.scene_grade_blowout_restoration
-//#define CUSTOM_SCENE_GRADE_HUE_SHIFT           shader_injection.scene_grade_hue_shift
+#define CUSTOM_SCENE_GRADE_PER_CHANNEL_BLOWOUT shader_injection.scene_grade_per_channel_blowout
+#define CUSTOM_SCENE_GRADE_HUE_SHIFT           shader_injection.scene_grade_hue_shift
+#define CUSTOM_SCENE_GRADE_SHOULDER_STRENGTH   shader_injection.scene_grade_shoulder_strength
+#define CUSTOM_SCENE_GRADE_TOE_STRENGTH        shader_injection.scene_grade_toe_strength
 #define CUSTOM_FILM_GRAIN_STRENGTH             shader_injection.custom_film_grain
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_LUT_STRENGTH                    shader_injection.custom_lut_strength
+#define CUSTOM_LUT_SCALING                     shader_injection.custom_lut_scaling
+#define CUSTOM_GAMUT_UNCLAMP                   shader_injection.custom_gamut_unclamp
+#define CUSTOM_COLOR_GRADING                   shader_injection.custom_color_grading
 //#define CUSTOM_POST_MAXCLL                     shader_injection.custom_post_maxcll
 #define CUSTOM_LENS_DIRT                       shader_injection.custom_lens_dirt
 #define CUSTOM_SUNSHAFTS_STRENGTH              shader_injection.custom_sunshafts_strength
@@ -51,18 +56,24 @@
 
 #define BLOOM_EMULATION                        shader_injection.bloom_emulation
 #define CUSTOM_BLOOM                           shader_injection.custom_bloom
+#define CUSTOM_VIGNETTE                        shader_injection.custom_vignette
+#define CUSTOM_VIGNETTE_BLACK_LEVEL            shader_injection.custom_vignette_black_level
 #define CUSTOM_BLOOM_PEAK                 shader_injection.custom_bloom_peak
 #define CUSTOM_SUNSHAFT_PEAK              shader_injection.custom_sunshaft_peak
-#define CUSTOM_BLOOM_ROLLOFF_START                 shader_injection.custom_bloom_rolloff_start
-#define CUSTOM_SUNSHAFT_ROLLOFF_START             shader_injection.custom_sunshaft_rolloff_start
+// #define CUSTOM_BLOOM_ROLLOFF_START                 shader_injection.custom_bloom_rolloff_start
+// #define CUSTOM_SUNSHAFT_ROLLOFF_START             shader_injection.custom_sunshaft_rolloff_start
 // #define CUSTOM_BLOOM_THRESHOLD                 shader_injection.custom_bloom_threshold
 // #define CUSTOM_BLOOM_CURVE                     shader_injection.custom_bloom_curve
 //#define CUSTOM_BLOOM_RADIUS                    shader_injection.custom_bloom_radius
 
 #define CUSTOM_INVERSE_TONEMAP                 shader_injection.custom_inverse_tonemap
+// #define CUSTOM_GAMMA_TYPE                      shader_injection.custom_gamma_type
+// #define CUSTOM_GAMMA_VALUE                     shader_injection.custom_gamma_value
 
 //#define UTILITY_COMPARISON                    shader_injection.utility_comparison
 //#define UTILITY_HUD                            shader_injection.utility_hud
+
+#define LAST_IS_HDR                          shader_injection.last_is_hdr
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -79,22 +90,25 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
-  // float tone_map_hue_correction;
   //float tone_map_hue_shift;
   //float tone_map_hue_processor;
   float tone_map_per_channel;
-  float tone_map_color_grade_strength;
   float swap_chain_custom_color_space;
   //float scene_grade_method;
-  float scene_hue_method;
+  //float scene_hue_method;
+  //float scene_grade_hue_correction_bias;
   float scene_grade_hue_correction;
-  float scene_grade_strength;
+  float scene_grade_shoulder_strength;
+  float scene_grade_toe_strength;
   float scene_grade_saturation_correction;
-  float scene_grade_blowout_restoration;
-  //float scene_grade_hue_shift;
+  float scene_grade_per_channel_blowout;
+  float scene_grade_hue_shift;
   float custom_film_grain;
   float custom_random;
   float custom_lut_strength;
+  float custom_lut_scaling;
+  float custom_color_grading;
+  float custom_gamut_unclamp;
   //float custom_post_maxcll;
   float custom_lens_dirt;
   float custom_sunshafts_strength;
@@ -106,17 +120,22 @@ struct ShaderInjectData {
   float custom_inverse_tonemap;
 
   float custom_bloom;
+  float custom_vignette;
+  float custom_vignette_black_level;
   //float bloom_emulation;
   float custom_bloom_peak;
   float custom_sunshaft_peak;
-  float custom_bloom_rolloff_start;
-  float custom_sunshaft_rolloff_start;
+  // float custom_bloom_rolloff_start;
+  // float custom_sunshaft_rolloff_start;
   // float custom_bloom_threshold;
   // float custom_bloom_curve;
   //float custom_bloom_radius;
+  float custom_gamma_type;
+  float custom_gamma_value;
 
   //float utility_comparison;
   //float utility_hud;
+  bool last_is_hdr;
 };
 
 #ifndef __cplusplus

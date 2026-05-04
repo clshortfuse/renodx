@@ -241,19 +241,19 @@ static void OnPushDescriptors(
   auto* cmd_list_data = cmd_list->get_private_data<CommandListData>();
   if (cmd_list_data == nullptr) return;
 
-  renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
+  const renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
   for (uint32_t i = 0; i < update.count; i++) {
     if (update.type != reshade::api::descriptor_type::constant_buffer) continue;
 
     if (layout_data == nullptr) {
-      layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout, true);
+      layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout);
       if (layout_data == nullptr) {
         assert(layout_data != nullptr);
         return;
       }
     }
 
-    auto& param = layout_data->params[layout_param];
+    const auto& param = layout_data->params[layout_param];
 
     uint32_t dx_register_index = param.push_constants.dx_register_index + update.binding + i;
     uint32_t dx_register_space = param.push_constants.dx_register_space;

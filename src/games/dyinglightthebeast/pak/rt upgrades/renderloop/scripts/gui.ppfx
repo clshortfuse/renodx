@@ -231,7 +231,8 @@ sub render_gui(string background = "", string s_out_offscreen_ui = "", string s_
         // VTS-GSL (azahidi) : As multiple layers  of UI can be present, we need to blend each one of them on the HDR buffer using the reinhard compositing.
         if(HDR_ON)
         {
-            BufferScreenFormat(blended_buffer, 1, "R16G16B16A16_FLOAT", "ui");
+            // BufferScreenFormat(blended_buffer, 1, "R11G11B10_FLOAT", "ui");
+            BufferScreenFormat(blended_buffer, 1, "R16G16B16A16_FLOAT", "ui"); // CUSTOM EDIT
             BufferScreenFormat(blended_buffer_ldr, 1, "R8G8B8A8_UNORM", "ui");
 
             if(background != s_out_offscreen_ui)
@@ -296,7 +297,8 @@ sub gui(string s_in = "", bool s_allow_framegen = true)
     string s_HUDLESS_UPSCALED = "HUDLESS_UPSCALED";
     if (DOES_REQUIRE_UPSCALING)
     {
-        BufferScreenFormat(s_HUDLESS_UPSCALED, 1, HDR_ON ? "R16G16B16A16_FLOAT" : "R8G8B8A8_UNORM", "ui");
+        // BufferScreenFormat(s_HUDLESS_UPSCALED, 1, HDR_ON ? "R11G11B10_FLOAT" : "R8G8B8A8_UNORM", "ui");
+        BufferScreenFormat(s_HUDLESS_UPSCALED, 1, HDR_ON ? "R16G16B16A16_FLOAT" : "R8G8B8A8_UNORM", "ui"); // CUSTOM EDIT
 
         PushMarker("HUDLESS_UPSCALING");
 
@@ -338,7 +340,8 @@ sub gui(string s_in = "", bool s_allow_framegen = true)
 
     // preparing output data
     string S_OUT = "FINAL_SCENE";
-    BufferScreenFormat(S_OUT, 1, HDR_ON ? "R16G16B16A16_FLOAT" : "R8G8B8A8_UNORM", "ui esram ua");
+    // BufferScreenFormat(S_OUT, 1, HDR_ON ? "R11G11B10_FLOAT" : "R8G8B8A8_UNORM", "ui esram ua");
+    BufferScreenFormat(S_OUT, 1, HDR_ON ? "R16G16B16A16_FLOAT" : "R8G8B8A8_UNORM", "ui esram ua"); // CUSTOM EDIT
         SetRenderTargets(S_OUT, "");
 
     PushMarker("UI Composition");

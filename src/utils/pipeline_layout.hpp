@@ -22,6 +22,7 @@ namespace renodx::utils::pipeline_layout {
 struct PipelineLayoutData {
   std::vector<reshade::api::pipeline_layout_param> params;
   std::vector<std::vector<reshade::api::descriptor_range>> ranges;
+  [[deprecated("Use renodx::utils::state descriptor-table tracking instead.")]]
   std::vector<reshade::api::descriptor_table> tables;
   reshade::api::pipeline_layout layout = {0u};
   reshade::api::pipeline_layout replacement_layout = {0u};
@@ -39,14 +40,10 @@ static Store* store = &local_store;
 
 static bool is_primary_hook = false;
 
-static PipelineLayoutData* GetPipelineLayoutData(const reshade::api::pipeline_layout& layout, bool create = false) {
-  if (create) {
-    auto [pointer, inserted] = store->pipeline_layout_data.try_emplace_p(layout.handle, PipelineLayoutData({.layout = layout}));
-    return &pointer->second;
-  }
-  PipelineLayoutData* data = nullptr;
+static const PipelineLayoutData* GetPipelineLayoutData(const reshade::api::pipeline_layout& layout) {
+  const PipelineLayoutData* data = nullptr;
 
-  store->pipeline_layout_data.if_contains(layout.handle, [&data](std::pair<const uint64_t, PipelineLayoutData>& pair) {
+  store->pipeline_layout_data.if_contains(layout.handle, [&data](const std::pair<const uint64_t, PipelineLayoutData>& pair) {
     data = &pair.second;
   });
   if (data == nullptr) {
@@ -56,6 +53,36 @@ static PipelineLayoutData* GetPipelineLayoutData(const reshade::api::pipeline_la
     assert(data != nullptr);
   }
   return data;
+}
+
+template <typename F>
+static bool CreatePipelineLayoutData(const reshade::api::pipeline_layout& layout, F&& f) {
+  return store->pipeline_layout_data.lazy_emplace_l(
+      layout.handle,
+      [&](std::pair<const uint64_t, PipelineLayoutData>& pair) {
+        std::forward<F>(f)(pair.second);
+      },
+      [&](const data::ParallelNodeHashMap<uint64_t, PipelineLayoutData, std::shared_mutex>::constructor& ctor) {
+        PipelineLayoutData data = {.layout = layout};
+        std::forward<F>(f)(data);
+        ctor(layout.handle, std::move(data));
+      });
+}
+
+template <typename F>
+static bool UpdatePipelineLayoutData(const reshade::api::pipeline_layout& layout, F&& f) {
+  bool updated = false;
+  store->pipeline_layout_data.modify_if(layout.handle, [&](std::pair<const uint64_t, PipelineLayoutData>& pair) {
+    std::forward<F>(f)(pair.second);
+    updated = true;
+  });
+  if (!updated) {
+    log::e("utils::pipeline_layout::UpdatePipelineLayoutData(",
+           "Pipeline layout not found: ", log::AsPtr(layout.handle),
+           ")");
+    assert(updated);
+  }
+  return updated;
 }
 
 struct __declspec(uuid("080a74f2-9a2a-4af6-bb2c-8d083e0a354d")) DeviceData {
@@ -104,35 +131,34 @@ static void OnInitPipelineLayout(
     assert(layout.handle != 0u);
     return;
   }
-  auto* layout_data = GetPipelineLayoutData(layout, true);
+  CreatePipelineLayoutData(layout, [&](PipelineLayoutData& layout_data) {
+    layout_data.params.assign(params, params + param_count);
+    layout_data.ranges.resize(param_count);
 
-  layout_data->params.assign(params, params + param_count);
-  layout_data->ranges.resize(param_count);
-  layout_data->tables.resize(param_count);
-
-  for (uint32_t i = 0; i < param_count; ++i) {
-    const auto& param = params[i];
-    switch (param.type) {
-      case reshade::api::pipeline_layout_param_type::descriptor_table:
-        if (param.descriptor_table.count == 0u) continue;
-        {
-          layout_data->ranges[i].assign(
-              param.descriptor_table.ranges,
-              param.descriptor_table.ranges + param.descriptor_table.count);
-          layout_data->params[i].descriptor_table.ranges = layout_data->ranges[i].data();
-        }
-        break;
-      case reshade::api::pipeline_layout_param_type::push_constants:
-      case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
-      case reshade::api::pipeline_layout_param_type::push_descriptors:
-      case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
-      case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
-        break;
-      default:
-        // No other known types
-        assert(false);
+    for (uint32_t i = 0; i < param_count; ++i) {
+      const auto& param = params[i];
+      switch (param.type) {
+        case reshade::api::pipeline_layout_param_type::descriptor_table:
+          if (param.descriptor_table.count == 0u) continue;
+          {
+            layout_data.ranges[i].assign(
+                param.descriptor_table.ranges,
+                param.descriptor_table.ranges + param.descriptor_table.count);
+            layout_data.params[i].descriptor_table.ranges = layout_data.ranges[i].data();
+          }
+          break;
+        case reshade::api::pipeline_layout_param_type::push_constants:
+        case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
+        case reshade::api::pipeline_layout_param_type::push_descriptors:
+        case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
+        case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
+          break;
+        default:
+          // No other known types
+          assert(false);
+      }
     }
-  }
+  });
 }
 
 static void OnDestroyPipelineLayout(

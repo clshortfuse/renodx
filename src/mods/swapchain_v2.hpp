@@ -93,7 +93,7 @@ struct __declspec(uuid("d8712fa7-66e5-45e2-9e07-80fe6354f507")) DeviceData {
 
   // <swap_chain_back_buffer_handle, SwapchainProxyPass*>
   std::unordered_map<uint64_t, renodx::utils::draw::SwapchainProxyPass*> swapchain_proxy_passes;
-  reshade::api::swapchain_desc swapchain_desc;
+  reshade::api::swapchain_desc swapchain_desc = {};
 };
 
 // Variables
@@ -765,10 +765,12 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
   HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
 
-  const auto& swapchain_desc = upgraded_swapchain_desc.has_value() ? upgraded_swapchain_desc.value() : original_swapchain_desc.value();
+  const auto& swapchain_desc_optional = upgraded_swapchain_desc.has_value() ? upgraded_swapchain_desc : original_swapchain_desc;
+
   if (!resize && hwnd != nullptr && utils::swapchain::IsDXGI(swapchain)
-      && (swapchain_desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)
-          || swapchain_desc.present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD))) {
+      && swapchain_desc_optional.has_value()
+      && (swapchain_desc_optional->present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)
+          || swapchain_desc_optional->present_mode == static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD))) {
     flip_swapchains_by_window[hwnd].insert(swapchain);
   }
 
@@ -805,31 +807,38 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
   {
     const std::unique_lock lock(data->mutex);
-    data->swapchain_desc = swapchain_desc;
-    if (upgraded_swapchain_desc.has_value()) {
-      data->upgraded_swapchains[swapchain] = upgraded_swapchain_desc.value();
-      data->swap_chain_upgrade_info.new_format = upgraded_swapchain_desc.value().back_buffer.texture.format;
-
-      if (original_swapchain_desc->fullscreen_state && !upgraded_swapchain_desc->fullscreen_state) {
-        data->fake_fullscreen_pending = true;
-        utils::windowing::HookSwapchainWindowProc(hwnd, OnSwapchainWindowMessage, nullptr);
-        std::stringstream s;
-        s << "mods::swapchain::OnInitSwapchain(fake_fullscreen_pending=1, hwnd="
-          << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd))
-          << ", reason=virtualize_initial_fullscreen)";
-        reshade::log::message(reshade::log::level::info, s.str().c_str());
+    if (!resize) {
+      // OpenGL may not have fired create_swapchain
+      if (swapchain_desc_optional.has_value()) {
+        data->swapchain_desc = swapchain_desc_optional.value();
       }
+      if (upgraded_swapchain_desc.has_value()) {
+        data->upgraded_swapchains[swapchain] = upgraded_swapchain_desc.value();
+        data->swap_chain_upgrade_info.new_format = upgraded_swapchain_desc.value().back_buffer.texture.format;
 
-      if (original_swapchain_desc->back_buffer.texture.format != upgraded_swapchain_desc->back_buffer.texture.format) {
-        upgraded_resource_format = true;
-        data->swap_chain_upgrade_info.new_format = upgraded_swapchain_desc->back_buffer.texture.format;
-        if (upgraded_swapchain_desc->back_buffer.texture.format == reshade::api::format::r10g10b10a2_unorm) {
-          data->swap_chain_upgrade_info.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
+        if (original_swapchain_desc.has_value()) {
+          if (original_swapchain_desc->fullscreen_state && !upgraded_swapchain_desc->fullscreen_state) {
+            data->fake_fullscreen_pending = true;
+            utils::windowing::HookSwapchainWindowProc(hwnd, OnSwapchainWindowMessage, nullptr);
+            std::stringstream s;
+            s << "mods::swapchain::OnInitSwapchain(fake_fullscreen_pending=1, hwnd="
+              << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd))
+              << ", reason=virtualize_initial_fullscreen)";
+            reshade::log::message(reshade::log::level::info, s.str().c_str());
+          }
+
+          if (original_swapchain_desc->back_buffer.texture.format != upgraded_swapchain_desc->back_buffer.texture.format) {
+            upgraded_resource_format = true;
+            data->swap_chain_upgrade_info.new_format = upgraded_swapchain_desc->back_buffer.texture.format;
+            if (upgraded_swapchain_desc->back_buffer.texture.format == reshade::api::format::r10g10b10a2_unorm) {
+              data->swap_chain_upgrade_info.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
+            }
+          }
         }
+        upgraded_swapchain_desc.reset();
+      } else {
+        data->swap_chain_upgrade_info.new_format = primary_swapchain_resource_desc.texture.format;
       }
-      upgraded_swapchain_desc.reset();
-    } else {
-      data->swap_chain_upgrade_info.new_format = primary_swapchain_resource_desc.texture.format;
     }
     data->primary_swapchain_resource_desc = primary_swapchain_resource_desc;
     data->primary_swapchain_window = hwnd;
@@ -922,19 +931,21 @@ static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) 
 
   {
     const std::unique_lock lock(data->mutex);
-    data->upgraded_swapchains.erase(swapchain);
+    if (!resize) {
+      data->upgraded_swapchains.erase(swapchain);
 
-    if (!resize && data->prevent_full_screen && hwnd != nullptr) {
-      bool has_other_swapchain_on_window = false;
-      for (const auto& [tracked_swapchain, tracked_desc] : data->upgraded_swapchains) {
-        (void)tracked_desc;
-        if (tracked_swapchain == nullptr) continue;
-        if (static_cast<HWND>(tracked_swapchain->get_hwnd()) == hwnd) {
-          has_other_swapchain_on_window = true;
-          break;
+      if (data->prevent_full_screen && hwnd != nullptr) {
+        bool has_other_swapchain_on_window = false;
+        for (const auto& [tracked_swapchain, tracked_desc] : data->upgraded_swapchains) {
+          (void)tracked_desc;
+          if (tracked_swapchain == nullptr) continue;
+          if (static_cast<HWND>(tracked_swapchain->get_hwnd()) == hwnd) {
+            has_other_swapchain_on_window = true;
+            break;
+          }
         }
+        should_unhook_wndproc = !has_other_swapchain_on_window;
       }
-      should_unhook_wndproc = !has_other_swapchain_on_window;
     }
 
     DestroySwapchainProxyItems(device, data);

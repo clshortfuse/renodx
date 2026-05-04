@@ -1,0 +1,287 @@
+#include "./fsrfg.hlsli"
+
+static const uint _32[4] = { 0u, 1u, 0u, 1u };
+static const uint _35[4] = { 0u, 0u, 1u, 1u };
+
+cbuffer cbFIUBO : register(b0, space0) {
+  float4 cbFI_m0[11] : packoffset(c0);
+};
+
+Texture2D<float4> r_previous_interpolation_source : register(t3, space0);
+Texture2D<float4> r_current_interpolation_source : register(t4, space0);
+Texture2D<int4> r_optical_flow : register(t0, space0);
+RWTexture2D<uint> rw_optical_flow_motion_vector_field_x : register(u0, space0);
+RWTexture2D<uint> rw_optical_flow_motion_vector_field_y : register(u1, space0);
+SamplerState s_LinearClamp : register(s0, space0);
+
+static uint3 gl_GlobalInvocationID;
+struct SPIRV_Cross_Input {
+  uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
+};
+
+uint spvPackHalf2x16(float2 value) {
+  uint2 Packed = f32tof16(value);
+  return Packed.x | (Packed.y << 16);
+}
+
+float2 spvUnpackHalf2x16(uint value) {
+  return f16tof32(uint2(value & 0xffff, value >> 16));
+}
+
+void comp_main() {
+  float max_lum = SetMaxLuminance(cbFI_m0[9u].y);
+
+  float _53;
+  float _55;
+  float _57;
+  float _61;
+  float _62;
+  float _63;
+  uint _64;
+  float _51 = 0.0f;
+  float _54 = 0.0f;
+  float _56 = 0.0f;
+  uint _58 = 4294967295u;
+  for (;;) {
+    _61 = _51;
+    _62 = _54;
+    _63 = _56;
+    _64 = 4294967295u;
+    for (;;) {
+      uint4 _73 = uint4(r_optical_flow.Load(int3(uint2(_64 + gl_GlobalInvocationID.x, _58 + gl_GlobalInvocationID.y), 0u)));
+      float _84 = float(int(_73.x)) * cbFI_m0[5u].x;
+      float _85 = float(int(_73.y)) * cbFI_m0[5u].y;
+      uint4 _89 = asuint(cbFI_m0[7u]);
+      float _94 = float(int(_89.z)) * _84;
+      float _95 = float(int(_89.w)) * _85;
+      float _100 = sqrt((_94 * _94) + (_95 * _95));
+      float _108 = float(_100 > 1.0f) * max(0.0f, 512.0f - _100);
+      _53 = (_108 * _84) + _61;
+      _55 = (_108 * _85) + _62;
+      _57 = _108 + _63;
+      uint _65 = _64 + 1u;
+      if (_65 == 2u) {
+        break;
+      } else {
+        _61 = _53;
+        _62 = _55;
+        _63 = _57;
+        _64 = _65;
+      }
+    }
+    uint _60 = _58 + 1u;
+    if (_60 == 2u) {
+      break;
+    } else {
+      _51 = _53;
+      _54 = _55;
+      _56 = _57;
+      _58 = _60;
+      continue;
+    }
+  }
+  float _114 = _53 / _57;
+  float _115 = _55 / _57;
+  float _117;
+  float _119;
+  float _121;
+  float _140;
+  float _141;
+  float _149;
+  float _150;
+  float _124;
+  float _125;
+  float _126;
+  uint _127;
+  float _116 = 0.0f;
+  float _118 = 0.0f;
+  float _120 = 0.0f;
+  uint _122 = 4294967295u;
+  for (;;) {
+    _124 = _116;
+    _125 = _118;
+    _126 = _120;
+    _127 = 4294967295u;
+    for (;;) {
+      uint4 _133 = uint4(r_optical_flow.Load(int3(uint2(_127 + gl_GlobalInvocationID.x, _122 + gl_GlobalInvocationID.y), 0u)));
+      _140 = cbFI_m0[5u].x;
+      _141 = cbFI_m0[5u].y;
+      float _142 = float(int(_133.x)) * _140;
+      float _143 = float(int(_133.y)) * _141;
+      uint4 _146 = asuint(cbFI_m0[7u]);
+      _149 = float(int(_146.z));
+      _150 = float(int(_146.w));
+      float _151 = _149 * _142;
+      float _152 = _150 * _143;
+      float _156 = sqrt((_151 * _151) + (_152 * _152));
+      float _171 = (float(_156 > 1.0f) * max(0.0f, 512.0f - _156)) * max(0.0f, exp2(log2(dot(float2(_114, _115), float2(_142, _143))) * 1.25f));
+      _117 = (_171 * _142) + _124;
+      _119 = (_171 * _143) + _125;
+      _121 = _171 + _126;
+      uint _128 = _127 + 1u;
+      if (_128 == 2u) {
+        break;
+      } else {
+        _124 = _117;
+        _125 = _119;
+        _126 = _121;
+        _127 = _128;
+      }
+    }
+    uint _123 = _122 + 1u;
+    if (_123 == 2u) {
+      break;
+    } else {
+      _116 = _117;
+      _118 = _119;
+      _120 = _121;
+      _122 = _123;
+      continue;
+    }
+  }
+  bool _176 = _121 > 0.001000000047497451305389404296875f;
+  float _180 = _176 ? (_117 / _121) : _117;
+  float _181 = _176 ? (_119 / _121) : _119;
+  float _191 = float(int(asuint(cbFI_m0[5u]).z));
+  float _198 = float(int(uint(int(1.0f / (_191 * _140)))));
+  float _199 = float(int(uint(int(1.0f / (_191 * _141)))));
+  float _200 = (float(gl_GlobalInvocationID.x) + 0.5f) / _198;
+  float _201 = (float(gl_GlobalInvocationID.y) + 0.5f) / _199;
+  float _202 = _180 * 0.5f;
+  float _203 = _181 * 0.5f;
+  float _204 = _200 + _180;
+  float _205 = _201 + _181;
+  float4 _208 = r_previous_interpolation_source.SampleLevel(s_LinearClamp, float2(_204, _205), 0.0f);
+  float _210 = _208.x;
+  float _211 = _208.y;
+  float _212 = _208.z;
+  float4 _214 = r_current_interpolation_source.SampleLevel(s_LinearClamp, float2(_200, _201), 0.0f);
+  float _216 = _214.x;
+  float _217 = _214.y;
+  float _218 = _214.z;
+  uint4 _222 = asuint(cbFI_m0[8u]);
+  uint _223 = _222.w;
+  float _224;
+  switch (_223) {
+    case 0u: {
+      float _244 = exp2(log2((_210 * 0.94786727428436279296875f) + 0.0521326996386051177978515625f) * 2.400000095367431640625f);
+      float _245 = exp2(log2((_211 * 0.94786727428436279296875f) + 0.0521326996386051177978515625f) * 2.400000095367431640625f);
+      float _246 = exp2(log2((_212 * 0.94786727428436279296875f) + 0.0521326996386051177978515625f) * 2.400000095367431640625f);
+      float _259 = clamp((_210 + (-0.040449999272823333740234375f)) * asfloat(0xff800000u /* -inf */), 0.0f, 1.0f);
+      float _260 = clamp((_211 + (-0.040449999272823333740234375f)) * asfloat(0xff800000u /* -inf */), 0.0f, 1.0f);
+      float _261 = clamp((_212 + (-0.040449999272823333740234375f)) * asfloat(0xff800000u /* -inf */), 0.0f, 1.0f);
+      _224 = dot(float3((_244 - (_259 * _244)) + ((_210 * 0.077399380505084991455078125f) * _259), (_245 - (_260 * _245)) + ((_211 * 0.077399380505084991455078125f) * _260), (_246 - (_261 * _246)) + ((_212 * 0.077399380505084991455078125f) * _261)), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+      break;
+    }
+    case 1u: {
+      float _287 = exp2(log2(_210) * 0.01268330030143260955810546875f);
+      float _288 = exp2(log2(_211) * 0.01268330030143260955810546875f);
+      float _289 = exp2(log2(_212) * 0.01268330030143260955810546875f);
+      float _322 = 10000.0f / max_lum;
+      _224 = (((_322 * exp2(log2(clamp(_288 + (-0.835937976837158203125f), 0.0f, 1.0f) / (18.85160064697265625f - (_288 * 18.6875f))) * 6.277390003204345703125f)) * 0.677999973297119140625f) + ((_322 * exp2(log2(clamp(_287 + (-0.835937976837158203125f), 0.0f, 1.0f) / (18.85160064697265625f - (_287 * 18.6875f))) * 6.277390003204345703125f)) * 0.2626999914646148681640625f)) + ((_322 * exp2(log2(clamp(_289 + (-0.835937976837158203125f), 0.0f, 1.0f) / (18.85160064697265625f - (_289 * 18.6875f))) * 6.277390003204345703125f)) * 0.0593000017106533050537109375f);
+      break;
+    }
+    case 2u: {
+      float _338 = cbFI_m0[9u].x * 0.012500000186264514923095703125f;
+      float _344 = (max_lum - cbFI_m0[9u].x) * 0.012500000186264514923095703125f;
+      _224 = dot(float3((_210 - _338) / _344, (_211 - _338) / _344, (_212 - _338) / _344), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+      break;
+    }
+    default: {
+      _224 = 0.0f;
+      break;
+    }
+  }
+  float _228 = _224 + 0.001000000047497451305389404296875f;
+  float _350;
+  switch (_223) {
+    case 0u: {
+      float _388 = exp2(log2((_216 * 0.94786727428436279296875f) + 0.0521326996386051177978515625f) * 2.400000095367431640625f);
+      float _389 = exp2(log2((_217 * 0.94786727428436279296875f) + 0.0521326996386051177978515625f) * 2.400000095367431640625f);
+      float _390 = exp2(log2((_218 * 0.94786727428436279296875f) + 0.0521326996386051177978515625f) * 2.400000095367431640625f);
+      float _400 = clamp((_216 + (-0.040449999272823333740234375f)) * asfloat(0xff800000u /* -inf */), 0.0f, 1.0f);
+      float _401 = clamp((_217 + (-0.040449999272823333740234375f)) * asfloat(0xff800000u /* -inf */), 0.0f, 1.0f);
+      float _402 = clamp((_218 + (-0.040449999272823333740234375f)) * asfloat(0xff800000u /* -inf */), 0.0f, 1.0f);
+      _350 = dot(float3((_388 - (_400 * _388)) + ((_216 * 0.077399380505084991455078125f) * _400), (_389 - (_401 * _389)) + ((_217 * 0.077399380505084991455078125f) * _401), (_390 - (_402 * _390)) + ((_218 * 0.077399380505084991455078125f) * _402)), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+      break;
+    }
+    case 1u: {
+      float _423 = exp2(log2(_216) * 0.01268330030143260955810546875f);
+      float _424 = exp2(log2(_217) * 0.01268330030143260955810546875f);
+      float _425 = exp2(log2(_218) * 0.01268330030143260955810546875f);
+      float _453 = 10000.0f / max_lum;
+      _350 = (((_453 * exp2(log2(clamp(_424 + (-0.835937976837158203125f), 0.0f, 1.0f) / (18.85160064697265625f - (_424 * 18.6875f))) * 6.277390003204345703125f)) * 0.677999973297119140625f) + ((_453 * exp2(log2(clamp(_423 + (-0.835937976837158203125f), 0.0f, 1.0f) / (18.85160064697265625f - (_423 * 18.6875f))) * 6.277390003204345703125f)) * 0.2626999914646148681640625f)) + ((_453 * exp2(log2(clamp(_425 + (-0.835937976837158203125f), 0.0f, 1.0f) / (18.85160064697265625f - (_425 * 18.6875f))) * 6.277390003204345703125f)) * 0.0593000017106533050537109375f);
+      break;
+    }
+    case 2u: {
+      float _465 = cbFI_m0[9u].x * 0.012500000186264514923095703125f;
+      float _470 = (max_lum - cbFI_m0[9u].x) * 0.012500000186264514923095703125f;
+      _350 = dot(float3((_216 - _465) / _470, (_217 - _465) / _470, (_218 - _465) / _470), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+      break;
+    }
+    default: {
+      _350 = 0.0f;
+      break;
+    }
+  }
+  float _354 = _350 + 0.001000000047497451305389404296875f;
+  float _355 = _180 * _149;
+  float _356 = _181 * _150;
+  float _360 = sqrt((_356 * _356) + (_355 * _355));
+  float _361 = _149 * 0.0500000007450580596923828125f;
+  float _363 = _150 * 0.0500000007450580596923828125f;
+  uint _372 = uint(clamp(_360 / sqrt((_361 * _361) + (_363 * _363)), 0.0f, 1.0f) * 1023.0f);
+  if (!((_360 <= 1.0f) || (_372 == 0u))) {
+    float _476 = max(_228, _354);
+    float _480;
+    if (_476 != 0.0f) {
+      _480 = min(_228, _354) / _476;
+    } else {
+      _480 = 0.0f;
+    }
+    bool _493;
+    if ((_204 > 0.0f) && (_204 < 1.0f)) {
+      _493 = (_205 > 0.0f) && (_205 < 1.0f);
+    } else {
+      _493 = false;
+    }
+    uint _503 = ((_372 << 21u) | (_493 ? ((uint(round(exp2(log2(_480)) * 31.0f)) << 16u) & 2031616u) : 0u)) | 2147483648u;
+    uint _507 = _503 | spvPackHalf2x16(float2(_202, 0.0f));
+    uint _510 = _503 | spvPackHalf2x16(float2(_203, 0.0f));
+    uint _520 = uint(int(floor(((_200 + _202) * _198) + (-0.5f))));
+    uint _521 = uint(int(floor(((_201 + _203) * _199) + (-0.5f))));
+    uint _527;
+    uint _522 = 0u;
+    uint _524 = 0u;
+    uint _526 = 0u;
+    uint _528;
+    uint _529;
+    bool _547;
+    for (;;) {
+      _528 = _524 + _520;
+      _529 = _522 + _521;
+      float _538 = float(int(asuint(cbFI_m0[5u]).z));
+      _547 = (_528 < uint(int(1.0f / (_538 * cbFI_m0[5u].x)))) && (_529 < uint(int(1.0f / (_538 * cbFI_m0[5u].y))));
+      if (_547) {
+        uint _551;
+        InterlockedMax(rw_optical_flow_motion_vector_field_x[uint2(_528, _529)], _507, _551);
+        uint _554;
+        InterlockedMax(rw_optical_flow_motion_vector_field_y[uint2(_528, _529)], _510, _554);
+      }
+      _527 = _526 + 1u;
+      if (_527 == 4u) {
+        break;
+      }
+      _522 = _35[_527];
+      _524 = _32[_527];
+      _526 = _527;
+      continue;
+    }
+  }
+}
+
+[numthreads(8, 8, 1)]
+void main(SPIRV_Cross_Input stage_input) {
+  gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
+  comp_main();
+}

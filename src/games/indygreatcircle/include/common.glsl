@@ -76,6 +76,14 @@ const mat3 BT2020_TO_BT709_MAT = mat3(
     vec3(-0.5876411199569702, 1.1328998804092407, -0.10057889670133591),
     vec3(-0.07284986227750778, -0.00834942236542702, 1.1187297105789185));
 
+vec3 BT2020FromBT709(vec3 bt709) {
+  return BT709_TO_BT2020_MAT * bt709;
+}
+
+vec3 BT709FromBT2020(vec3 bt2020) {
+  return BT2020_TO_BT709_MAT * bt2020;
+}
+
 // START ACES INCLUDE
 
 // color conversion matrices
@@ -1026,7 +1034,7 @@ vec3 SaturationBlowoutAP1ICtCp(vec3 ap1, float y, float saturation, float dechro
   return max(vec3(0.0), BT709_TO_AP1_MAT * bt709);
 }
 
-vec3 ChrominanceOKLab(vec3 incorrect_color_ap1, vec3 correct_color_ap1, float strength) {
+vec3 ChrominanceOKLabAP1(vec3 incorrect_color_ap1, vec3 correct_color_ap1, float strength) {
   if (strength == 0.0) return incorrect_color_ap1;
 
   // Convert both AP1 inputs to BT.709 for OkLab conversion
@@ -1078,6 +1086,51 @@ vec3 ChrominanceICtCp(vec3 incorrect_color_ap1, vec3 correct_color_ap1, float st
   // Convert back to BT.709, then to AP1, clamp negatives
   vec3 bt709 = BT709FromICtCp(incorrect_ictcp);
   return max(vec3(0.0), BT709_TO_AP1_MAT * bt709);
+}
+
+vec3 CorrectHueAndChrominanceOKLabAP1(
+    vec3 incorrect_color_ap1,
+    vec3 reference_color_ap1,
+    float hue_emulation_strength,
+    float chrominance_emulation_strength,
+    float hue_emulation_ramp_start,
+    float hue_emulation_ramp_end) {
+  if (hue_emulation_strength == 0.0 && chrominance_emulation_strength == 0.0) {
+    return incorrect_color_ap1;
+  }
+
+  vec3 incorrect_color_bt709 = AP1_TO_BT709_MAT * incorrect_color_ap1;
+  vec3 reference_color_bt709 = AP1_TO_BT709_MAT * reference_color_ap1;
+
+  vec3 perceptual_new = okLabFromBT709(incorrect_color_bt709);
+  vec3 perceptual_reference = okLabFromBT709(reference_color_bt709);
+
+  float chrominance_current = length(perceptual_new.yz);
+  float chrominance_ratio = 1.0;
+
+  if (hue_emulation_strength != 0.0) {
+    float ramp_denom = hue_emulation_ramp_end - hue_emulation_ramp_start;
+    float ramp_t = clamp(DivideSafe(perceptual_new.x - hue_emulation_ramp_start, ramp_denom, 0.0), 0.0, 1.0);
+    hue_emulation_strength *= ramp_t;
+
+    float chrominance_pre = chrominance_current;
+    perceptual_new.yz = mix(perceptual_new.yz, perceptual_reference.yz, hue_emulation_strength);
+    float chrominance_post = length(perceptual_new.yz);
+    chrominance_ratio = DivideSafe(chrominance_pre, chrominance_post, 1.0);
+    chrominance_current = chrominance_post;
+  }
+
+  if (chrominance_emulation_strength != 0.0) {
+    float reference_chrominance = length(perceptual_reference.yz);
+    float target_chrominance_ratio = DivideSafe(reference_chrominance, chrominance_current, 1.0);
+    chrominance_ratio = mix(chrominance_ratio, target_chrominance_ratio, chrominance_emulation_strength);
+  }
+
+  perceptual_new.yz *= chrominance_ratio;
+
+  vec3 corrected_color_bt709 = bt709FromOKLab(perceptual_new);
+  vec3 corrected_color_ap1 = max(BT709_TO_AP1_MAT * corrected_color_bt709, vec3(0.0));
+  return corrected_color_ap1;
 }
 
 // END INCLUDES
