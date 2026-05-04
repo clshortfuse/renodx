@@ -40,35 +40,17 @@ using ResourceViewUpgradeMap = cross_addon::unordered_map<
     reshade::api::format,
     utils::hash::HashPair>;
 
-const ResourceViewUpgradeMap VIEW_UPGRADES_RGBA16F = {
-    ViewUpgradeAll(r16g16b16a16_typeless, r16g16b16a16_typeless),
-    ViewUpgradeAll(r10g10b10a2_typeless, r16g16b16a16_typeless),
-    ViewUpgradeAll(r8g8b8a8_typeless, r16g16b16a16_typeless),
-    ViewUpgradeAll(r16g16b16a16_float, r16g16b16a16_float),
-    ViewUpgradeAll(r16g16b16a16_unorm, r16g16b16a16_float),
-    ViewUpgradeAll(r16g16b16a16_snorm, r16g16b16a16_float),
-    ViewUpgradeAll(r10g10b10a2_unorm, r16g16b16a16_float),
-    ViewUpgradeAll(b10g10r10a2_unorm, r16g16b16a16_float),
-    ViewUpgradeAll(r8g8b8a8_unorm, r16g16b16a16_float),
-    ViewUpgradeAll(b8g8r8a8_unorm, r16g16b16a16_float),
-    ViewUpgradeAll(r8g8b8a8_snorm, r16g16b16a16_float),
-    ViewUpgradeAll(r8g8b8x8_unorm, r16g16b16a16_float),
-    ViewUpgradeAll(r8g8b8a8_unorm_srgb, r16g16b16a16_float),
-    ViewUpgradeAll(r8g8b8x8_unorm_srgb, r16g16b16a16_float),
-    ViewUpgradeAll(b8g8r8a8_unorm_srgb, r16g16b16a16_float),
-    ViewUpgradeAll(r11g11b10_float, r16g16b16a16_float),
-    ViewUpgradeAll(b8g8r8x8_unorm, r16g16b16a16_float),
-    ViewUpgradeAll(b8g8r8x8_unorm_srgb, r16g16b16a16_float),
-};
-
-const ResourceViewUpgradeMap VIEW_UPGRADES_RGBA8_UNORM = {
-    ViewUpgradeAll(r8g8b8a8_typeless, r8g8b8a8_typeless),
-    ViewUpgradeAll(r8g8b8a8_unorm, r8g8b8a8_unorm),
-    ViewUpgradeAll(r8g8b8a8_unorm_srgb, r8g8b8a8_unorm),
-    ViewUpgradeAll(b8g8r8a8_unorm, r8g8b8a8_unorm),
-    ViewUpgradeAll(b8g8r8a8_unorm_srgb, r8g8b8a8_unorm),
-    ViewUpgradeAll(b8g8r8x8_unorm, r8g8b8a8_unorm),
-    ViewUpgradeAll(b8g8r8x8_unorm_srgb, r8g8b8a8_unorm),
+const std::unordered_map<
+    std::pair<reshade::api::resource_usage, reshade::api::format>,
+    reshade::api::format, utils::hash::HashPair>
+    VIEW_UPGRADES_RGBA8_UNORM = {
+        ViewUpgradeAll(r8g8b8a8_typeless, r8g8b8a8_typeless),
+        ViewUpgradeAll(r8g8b8a8_unorm, r8g8b8a8_unorm),
+        ViewUpgradeAll(r8g8b8a8_unorm_srgb, r8g8b8a8_unorm),
+        ViewUpgradeAll(b8g8r8a8_unorm, r8g8b8a8_unorm),
+        ViewUpgradeAll(b8g8r8a8_unorm_srgb, r8g8b8a8_unorm),
+        ViewUpgradeAll(b8g8r8x8_unorm, r8g8b8a8_unorm),
+        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r8g8b8a8_unorm),
 };
 
 const ResourceViewUpgradeMap VIEW_UPGRADES_R10G10B10A2_UNORM = {
