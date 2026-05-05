@@ -4,8 +4,9 @@
  * Compile-time feature toggles for Alias Isolation extras.
  *
  * Set either value to 0 from the build or before including the runtime headers
- * to remove that replacement path from shader identification and pipeline
- * cloning. TAA, jitter, and the shadow fixes stay independent of these toggles.
+ * to remove that optional replacement path from Alien Isolation's
+ * `custom_shaders` map. TAA, jitter, and the shadow fixes stay independent of
+ * these toggles.
  */
 
 #ifndef ALIENISOLATION_ENABLE_BARREL_DISTORTION_REMOVAL

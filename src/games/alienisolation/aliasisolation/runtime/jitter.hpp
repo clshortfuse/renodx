@@ -22,7 +22,6 @@
 #include "./constant_buffers.hpp"
 #include "./descriptor_tracker.hpp"
 #include "./logging.hpp"
-#include "./shader_ids.hpp"
 
 namespace alienisolation::aliasisolation::jitter {
 
@@ -354,21 +353,25 @@ inline void TrackBuffer(BufferKind kind, reshade::api::buffer_range range) {
   }
 }
 
-inline void CaptureConstantBuffers(reshade::api::command_list*, const descriptor_tracker::CommandListData& data) {
+inline void CaptureConstantBuffers(
+    const descriptor_tracker::CommandListData& data,
+    bool is_smaa_vs,
+    bool is_rgbm_encode_vs,
+    bool is_camera_motion_ps) {
   if (!constant_buffers::IsEnabled()) return;
 
   // These bindings mirror the original ASI's hard-coded knowledge of the
   // game's passes: SMAA VS exposes DefaultXSC, RGBM VS exposes DefaultVSC, and
   // camera motion PS exposes DefaultPSC.
-  if (data.shaders.vertex == ShaderId::SmaaVs && data.vertex_cb_b0.buffer.handle != 0u) {
+  if (is_smaa_vs && data.vertex_cb_b0.buffer.handle != 0u) {
     TrackBuffer(BufferKind::DefaultXSC, data.vertex_cb_b0);
   }
 
-  if (data.shaders.vertex == ShaderId::RgbmEncodeVs && data.vertex_cb_b1.buffer.handle != 0u) {
+  if (is_rgbm_encode_vs && data.vertex_cb_b1.buffer.handle != 0u) {
     TrackBuffer(BufferKind::DefaultVSC, data.vertex_cb_b1);
   }
 
-  if (data.shaders.pixel == ShaderId::CameraMotionPs && data.pixel_cb_b2.buffer.handle != 0u) {
+  if (is_camera_motion_ps && data.pixel_cb_b2.buffer.handle != 0u) {
     TrackBuffer(BufferKind::DefaultPSC, data.pixel_cb_b2);
   }
 }

@@ -12,21 +12,21 @@
 #include <windows.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include <include/reshade.hpp>
 
 #include "../../../utils/pipeline_layout.hpp"
 #include "../../../utils/resource.hpp"
 #include "../../../utils/settings.hpp"
+#include "../../../utils/shader.hpp"
 #include "../../../utils/state.hpp"
 #include "../shared.h"
+#include "./runtime/config.hpp"
 #include "./runtime/constant_buffers.hpp"
 #include "./runtime/descriptor_tracker.hpp"
 #include "./runtime/jitter.hpp"
 #include "./runtime/logging.hpp"
-#include "./runtime/pipeline_replacer.hpp"
-#include "./runtime/pipeline_tracker.hpp"
-#include "./runtime/resource_view_sanitizer.hpp"
 #include "./runtime/taa.hpp"
 
 namespace alienisolation::aliasisolation {
@@ -35,6 +35,71 @@ inline bool attached = false;
 inline bool settings_appended = false;
 inline bool logged_master_state = false;
 inline bool last_master_state = false;
+inline bool logged_texture_3d_default_view = false;
+inline bool logged_smaa_vs = false;
+inline bool logged_rgbm_encode_vs = false;
+inline bool logged_rgbm_encode_ps = false;
+inline bool logged_dof_encode_ps = false;
+inline bool logged_camera_motion_ps = false;
+
+namespace shader_hashes {
+
+#if ALIENISOLATION_ENABLE_BARREL_DISTORTION_REMOVAL
+inline constexpr uint32_t MAIN_POST_VS = 0x5D907E29u;
+#endif
+inline constexpr uint32_t SMAA_VS = 0x5C784290u;
+inline constexpr uint32_t RGBM_ENCODE_VS = 0x901CDB44u;
+inline constexpr uint32_t RGBM_ENCODE_PS = 0x7B682313u;
+inline constexpr uint32_t DOF_ENCODE_PS = 0x39E3BE10u;
+inline constexpr uint32_t CAMERA_MOTION_PS = 0xC33A92A2u;
+inline constexpr uint32_t SHADOW_LINEARIZE_PS = 0xF4DCB0D4u;
+inline constexpr uint32_t SHADOW_DOWNSAMPLE_PS = 0x098D6289u;
+#if ALIENISOLATION_ENABLE_BLOOM_MERGE_REPLACEMENT
+inline constexpr uint32_t BLOOM_MERGE_PS = 0xA8200442u;
+#endif
+
+}  // namespace shader_hashes
+
+inline void LogObservedShader(const char* stage, const char* name, uint32_t hash, bool& logged) {
+  if (logged) return;
+  logged = true;
+  logging::Info("observed ", stage, " shader ", name, " hash=", logging::Crc32(hash));
+}
+
+inline reshade::api::resource_view CurrentRenderTarget0(reshade::api::command_list* cmd_list) {
+  const auto* state = renodx::utils::state::GetCurrentState(cmd_list);
+  if (state == nullptr || state->render_targets.empty()) return {0};
+  return state->render_targets[0];
+}
+
+inline bool OnCreateResourceView(
+    reshade::api::device* device,
+    reshade::api::resource resource,
+    reshade::api::resource_usage usage_type,
+    reshade::api::resource_view_desc& desc) {
+  if (device == nullptr || resource.handle == 0u) return false;
+  if (desc.type != reshade::api::resource_view_type::unknown) return false;
+
+  const auto resource_desc = device->get_resource_desc(resource);
+  if (resource_desc.type != reshade::api::resource_type::texture_3d) return false;
+
+  desc.type = reshade::api::resource_view_type::texture_3d;
+  if (desc.format == reshade::api::format::unknown) {
+    desc.format = resource_desc.texture.format;
+  }
+  desc.texture.first_level = 0u;
+  desc.texture.level_count = usage_type == reshade::api::resource_usage::unordered_access ? 1u : UINT32_MAX;
+  desc.texture.first_layer = 0u;
+  desc.texture.layer_count = UINT32_MAX;
+
+  if (!logged_texture_3d_default_view) {
+    logged_texture_3d_default_view = true;
+    logging::Info("populated default Texture3D resource view before resource upgrade hook resource=", logging::Hex(resource.handle),
+                  " format=", static_cast<uint32_t>(desc.format),
+                  " usage=", static_cast<uint32_t>(usage_type));
+  }
+  return true;
+}
 
 inline void AppendSettings(renodx::utils::settings::Settings& settings, ShaderInjectData* shader_injection) {
   if (settings_appended || shader_injection == nullptr) return;
@@ -90,28 +155,44 @@ inline bool HandleDraw(reshade::api::command_list* cmd_list) {
   const bool enabled = constant_buffers::IsEnabled();
   if (!enabled) return false;
 
-  const ShaderId vertex_shader = data->shaders.vertex;
-  const ShaderId pixel_shader = data->shaders.pixel;
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  if (shader_state == nullptr) return false;
+
+  const uint32_t vertex_hash = renodx::utils::shader::GetCurrentVertexShaderHash(shader_state);
+  const uint32_t pixel_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
+  const bool is_smaa_vs = vertex_hash == shader_hashes::SMAA_VS;
+  const bool is_rgbm_encode_vs = vertex_hash == shader_hashes::RGBM_ENCODE_VS;
+  const bool is_rgbm_encode_ps = pixel_hash == shader_hashes::RGBM_ENCODE_PS;
+  const bool is_dof_encode_ps = pixel_hash == shader_hashes::DOF_ENCODE_PS;
+  const bool is_camera_motion_ps = pixel_hash == shader_hashes::CAMERA_MOTION_PS;
+
+  if (is_smaa_vs) LogObservedShader("vertex", "SMAA VS", vertex_hash, logged_smaa_vs);
+  if (is_rgbm_encode_vs) LogObservedShader("vertex", "RGBM encode VS", vertex_hash, logged_rgbm_encode_vs);
+  if (is_rgbm_encode_ps) LogObservedShader("pixel", "RGBM encode PS", pixel_hash, logged_rgbm_encode_ps);
+  if (is_dof_encode_ps) LogObservedShader("pixel", "DoF encode PS", pixel_hash, logged_dof_encode_ps);
+  if (is_camera_motion_ps) LogObservedShader("pixel", "camera motion PS", pixel_hash, logged_camera_motion_ps);
 
   // All three paths are draw-driven because the original game provides the
   // needed resources during ordinary post-processing draws, not standalone
   // compute passes.
-  const bool captures_constant_buffer = vertex_shader == ShaderId::SmaaVs
-                                        || vertex_shader == ShaderId::RgbmEncodeVs
-                                        || pixel_shader == ShaderId::CameraMotionPs;
+  const bool captures_constant_buffer = is_smaa_vs || is_rgbm_encode_vs || is_camera_motion_ps;
   if (captures_constant_buffer) {
-    jitter::CaptureConstantBuffers(cmd_list, *data);
+    jitter::CaptureConstantBuffers(*data, is_smaa_vs, is_rgbm_encode_vs, is_camera_motion_ps);
   }
 
-  if (pixel_shader == ShaderId::CameraMotionPs) {
-    taa::CaptureCameraMotion(cmd_list, *data);
+  if (is_camera_motion_ps) {
+    taa::CaptureCameraMotion(cmd_list, *data, CurrentRenderTarget0(cmd_list));
   }
 
-  const bool can_insert_taa = !constant_buffers::frame_state.taa_ran_this_frame
-                              && (pixel_shader == ShaderId::DofEncodePs
-                                  || (vertex_shader == ShaderId::RgbmEncodeVs && pixel_shader == ShaderId::RgbmEncodePs));
-  if (can_insert_taa) {
-    taa::MaybeRun(cmd_list, *data);
+  taa::InsertionPoint insertion_point = taa::InsertionPoint::None;
+  if (is_dof_encode_ps) {
+    insertion_point = taa::InsertionPoint::DofEncode;
+  } else if (is_rgbm_encode_vs && is_rgbm_encode_ps) {
+    insertion_point = taa::InsertionPoint::RgbmEncode;
+  }
+
+  if (!constant_buffers::frame_state.taa_ran_this_frame && insertion_point != taa::InsertionPoint::None) {
+    taa::MaybeRun(cmd_list, *data, insertion_point);
   }
 
   return false;
@@ -149,8 +230,6 @@ inline bool OnDrawOrDispatchIndirect(
 inline void OnDestroyDevice(reshade::api::device* device) {
   logging::Info("destroy device");
   taa::Destroy(device);
-  pipeline_replacer::Destroy(device);
-  pipeline_tracker::pipelines.clear();
   jitter::Reset();
 }
 
@@ -183,6 +262,7 @@ inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
   // keeps all game-specific behavior in this folder.
   renodx::utils::resource::Use(fdw_reason);
   renodx::utils::pipeline_layout::Use(fdw_reason);
+  renodx::utils::shader::Use(fdw_reason);
   renodx::utils::state::Use(fdw_reason);
 
   switch (fdw_reason) {
@@ -198,15 +278,8 @@ inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
       reshade::register_event<reshade::addon_event::init_command_list>(descriptor_tracker::OnInitCommandList);
       reshade::register_event<reshade::addon_event::destroy_command_list>(descriptor_tracker::OnDestroyCommandList);
       reshade::register_event<reshade::addon_event::reset_command_list>(descriptor_tracker::OnResetCommandList);
-      reshade::register_event<reshade::addon_event::create_resource_view>(resource_view_sanitizer::OnCreateResourceView);
-      reshade::register_event<reshade::addon_event::init_pipeline>(pipeline_replacer::OnInitPipeline);
-      reshade::register_event<reshade::addon_event::init_pipeline>(pipeline_tracker::OnInitPipeline);
-      reshade::register_event<reshade::addon_event::destroy_pipeline>(pipeline_replacer::OnDestroyPipeline);
-      reshade::register_event<reshade::addon_event::destroy_pipeline>(pipeline_tracker::OnDestroyPipeline);
-      reshade::register_event<reshade::addon_event::bind_pipeline>(pipeline_replacer::OnBindPipeline);
-      reshade::register_event<reshade::addon_event::bind_pipeline>(descriptor_tracker::OnBindPipeline);
+      reshade::register_event<reshade::addon_event::create_resource_view>(OnCreateResourceView);
       reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(jitter::OnBindRenderTargetsAndDepthStencil);
-      reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(descriptor_tracker::OnBindRenderTargetsAndDepthStencil);
       reshade::register_event<reshade::addon_event::bind_viewports>(jitter::OnBindViewports);
       reshade::register_event<reshade::addon_event::push_descriptors>(descriptor_tracker::OnPushDescriptors);
       reshade::register_event<reshade::addon_event::map_buffer_region>(jitter::OnMapBufferRegion);
@@ -229,15 +302,8 @@ inline void Use(DWORD fdw_reason, ShaderInjectData* shader_injection) {
       reshade::unregister_event<reshade::addon_event::init_command_list>(descriptor_tracker::OnInitCommandList);
       reshade::unregister_event<reshade::addon_event::destroy_command_list>(descriptor_tracker::OnDestroyCommandList);
       reshade::unregister_event<reshade::addon_event::reset_command_list>(descriptor_tracker::OnResetCommandList);
-      reshade::unregister_event<reshade::addon_event::create_resource_view>(resource_view_sanitizer::OnCreateResourceView);
-      reshade::unregister_event<reshade::addon_event::init_pipeline>(pipeline_replacer::OnInitPipeline);
-      reshade::unregister_event<reshade::addon_event::init_pipeline>(pipeline_tracker::OnInitPipeline);
-      reshade::unregister_event<reshade::addon_event::destroy_pipeline>(pipeline_replacer::OnDestroyPipeline);
-      reshade::unregister_event<reshade::addon_event::destroy_pipeline>(pipeline_tracker::OnDestroyPipeline);
-      reshade::unregister_event<reshade::addon_event::bind_pipeline>(pipeline_replacer::OnBindPipeline);
-      reshade::unregister_event<reshade::addon_event::bind_pipeline>(descriptor_tracker::OnBindPipeline);
+      reshade::unregister_event<reshade::addon_event::create_resource_view>(OnCreateResourceView);
       reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(jitter::OnBindRenderTargetsAndDepthStencil);
-      reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(descriptor_tracker::OnBindRenderTargetsAndDepthStencil);
       reshade::unregister_event<reshade::addon_event::bind_viewports>(jitter::OnBindViewports);
       reshade::unregister_event<reshade::addon_event::push_descriptors>(descriptor_tracker::OnPushDescriptors);
       reshade::unregister_event<reshade::addon_event::map_buffer_region>(jitter::OnMapBufferRegion);

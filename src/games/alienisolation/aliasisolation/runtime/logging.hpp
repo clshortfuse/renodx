@@ -3,12 +3,13 @@
 /*
  * Compile-time gated logging helpers for the Alias Isolation port.
  *
- * Define ALIENISOLATION_ALIAS_LOGGING when diagnosing pass detection or TAA
- * resource capture. In normal builds these helpers compile down to argument
- * suppression so the runtime path does not spam ReShade.log.
+ * Logging is default-enabled while shader CRC32 matching and TAA runtime
+ * capture are being verified. Set ALIENISOLATION_ALIAS_LOGGING to 0 for quiet
+ * builds; the helpers then compile down to argument suppression.
  */
 
 #include <cstdint>
+#include <iomanip>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -18,17 +19,17 @@
 
 namespace alienisolation::aliasisolation::logging {
 
-#if defined(ALIENISOLATION_ALIAS_LOGGING)
-inline constexpr bool enabled = true;
-#else
-inline constexpr bool enabled = false;
+#ifndef ALIENISOLATION_ALIAS_LOGGING
+#define ALIENISOLATION_ALIAS_LOGGING 0
 #endif
+
+inline constexpr bool enabled = ALIENISOLATION_ALIAS_LOGGING != 0;
 
 template <typename... Args>
 inline void Message(reshade::log::level level, Args&&... args) {
   // Keep the formatting call site simple while making the whole body disappear
-  // unless detailed Alias Isolation logging is explicitly enabled.
-#if defined(ALIENISOLATION_ALIAS_LOGGING)
+  // when detailed Alias Isolation logging is disabled.
+#if ALIENISOLATION_ALIAS_LOGGING
   std::ostringstream stream;
   stream << "AliasIsolation: ";
   (stream << ... << std::forward<Args>(args));
@@ -54,6 +55,12 @@ template <typename T>
 inline std::string Hex(T value) {
   std::ostringstream stream;
   stream << "0x" << std::hex << static_cast<uint64_t>(value);
+  return stream.str();
+}
+
+inline std::string Crc32(uint32_t value) {
+  std::ostringstream stream;
+  stream << "0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << value;
   return stream.str();
 }
 

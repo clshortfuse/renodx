@@ -1,12 +1,11 @@
 #pragma once
 
 /*
- * Per-command-list descriptor and state tracker.
+ * Per-command-list descriptor tracker.
  *
- * ReShade callbacks tell us when pipelines, render targets, SRVs, and constant
- * buffers are bound, but the TAA insertion point only sees a draw event. This
- * tracker keeps the D3D11-like register state needed to find Alias Isolation's
- * color, depth, velocity, and camera cbuffers at that draw.
+ * ReShade callbacks tell us when SRVs and constant buffers are pushed, but the
+ * TAA insertion point only sees a draw event. This tracker keeps the small
+ * D3D11-like register subset Alias Isolation still needs at draw time.
  */
 
 #include <cstdint>
@@ -17,7 +16,6 @@
 #include "../../../../utils/bitwise.hpp"
 #include "../../../../utils/descriptor.hpp"
 #include "../../../../utils/pipeline_layout.hpp"
-#include "./pipeline_tracker.hpp"
 
 namespace alienisolation::aliasisolation::descriptor_tracker {
 
@@ -26,13 +24,11 @@ using RegisterSlot = std::pair<uint32_t, uint32_t>;
 // Stored as command-list private data so deferred/immediate command lists keep
 // independent binding state.
 struct __declspec(uuid("dce8f351-c8e0-40f9-a17d-73d7b9b37135")) CommandListData {
-  pipeline_tracker::BoundShaders shaders;
   reshade::api::resource_view pixel_srv_t0 = {0};
   reshade::api::resource_view pixel_srv_t8 = {0};
   reshade::api::buffer_range vertex_cb_b0 = {};
   reshade::api::buffer_range vertex_cb_b1 = {};
   reshade::api::buffer_range pixel_cb_b2 = {};
-  reshade::api::resource_view render_target_0 = {0};
 };
 
 inline CommandListData* Get(reshade::api::command_list* cmd_list) {
@@ -117,22 +113,6 @@ inline void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
 inline void OnResetCommandList(reshade::api::command_list* cmd_list) {
   auto* data = Get(cmd_list);
   if (data != nullptr) *data = {};
-}
-
-inline void OnBindPipeline(reshade::api::command_list* cmd_list, reshade::api::pipeline_stage stages, reshade::api::pipeline pipeline) {
-  auto* data = Get(cmd_list);
-  if (data == nullptr) return;
-  pipeline_tracker::BindPipeline(data->shaders, stages, pipeline);
-}
-
-inline void OnBindRenderTargetsAndDepthStencil(
-    reshade::api::command_list* cmd_list,
-    uint32_t count,
-    const reshade::api::resource_view* rtvs,
-    reshade::api::resource_view) {
-  auto* data = Get(cmd_list);
-  if (data == nullptr) return;
-  data->render_target_0 = (rtvs != nullptr && count != 0u) ? rtvs[0] : reshade::api::resource_view{0};
 }
 
 inline void OnPushDescriptors(

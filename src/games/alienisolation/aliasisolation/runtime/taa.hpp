@@ -24,9 +24,25 @@
 #include "./constant_buffers.hpp"
 #include "./descriptor_tracker.hpp"
 #include "./logging.hpp"
-#include "./shader_ids.hpp"
 
 namespace alienisolation::aliasisolation::taa {
+
+enum class InsertionPoint {
+  None,
+  DofEncode,
+  RgbmEncode,
+};
+
+inline const char* InsertionPointName(InsertionPoint insertion_point) {
+  switch (insertion_point) {
+    case InsertionPoint::DofEncode:
+      return "DoFEncode";
+    case InsertionPoint::RgbmEncode:
+      return "RGBMEncode";
+    default:
+      return "None";
+  }
+}
 
 struct HistoryTexture {
   reshade::api::resource resource = {0};
@@ -461,13 +477,15 @@ inline bool EnsureVelocitySrv(reshade::api::command_list* cmd_list, reshade::api
   return true;
 }
 
-inline void CaptureCameraMotion(reshade::api::command_list* cmd_list, const descriptor_tracker::CommandListData& command_data) {
-  if (command_data.render_target_0.handle == 0u) {
+inline void CaptureCameraMotion(
+    reshade::api::command_list* cmd_list,
+    const descriptor_tracker::CommandListData& command_data,
+    reshade::api::resource_view velocity_rtv) {
+  if (velocity_rtv.handle == 0u) {
     if (LogEvery(last_capture_missing_log)) logging::Warn("camera motion pass has no RTVs");
     return;
   }
 
-  const auto velocity_rtv = command_data.render_target_0;
   // Alias Isolation uses pixel t8 from the camera-motion pass as depth.
   const auto depth_srv = command_data.pixel_srv_t8;
   if (velocity_rtv.handle == 0u || depth_srv.handle == 0u) {
@@ -607,7 +625,10 @@ inline bool Run(reshade::api::command_list* cmd_list, reshade::api::resource_vie
   return true;
 }
 
-inline bool MaybeRun(reshade::api::command_list* cmd_list, const descriptor_tracker::CommandListData& command_data) {
+inline bool MaybeRun(
+    reshade::api::command_list* cmd_list,
+    const descriptor_tracker::CommandListData& command_data,
+    InsertionPoint insertion_point) {
   if (!constant_buffers::IsEnabled()) return false;
   if (!dispatch_enabled) {
     if (!logged_dispatch_disabled) {
@@ -617,18 +638,15 @@ inline bool MaybeRun(reshade::api::command_list* cmd_list, const descriptor_trac
     return false;
   }
   if (constant_buffers::frame_state.taa_ran_this_frame) return false;
-
-  const bool before_dof = command_data.shaders.pixel == ShaderId::DofEncodePs;
-  const bool before_rgbm = command_data.shaders.vertex == ShaderId::RgbmEncodeVs && command_data.shaders.pixel == ShaderId::RgbmEncodePs;
-  if (!before_dof && !before_rgbm) return false;
+  if (insertion_point == InsertionPoint::None) return false;
 
   // Prefer DoF encode, matching the original mod. RGBM encode is a later
   // fallback in case the DoF path is absent for a scene/frame.
-  if (before_dof && !logged_dof_insertion) {
+  if (insertion_point == InsertionPoint::DofEncode && !logged_dof_insertion) {
     logged_dof_insertion = true;
     logging::Info("using DoF encode insertion point for TAA");
   }
-  if (before_rgbm && !logged_rgbm_insertion) {
+  if (insertion_point == InsertionPoint::RgbmEncode && !logged_rgbm_insertion) {
     logged_rgbm_insertion = true;
     logging::Info("using RGBM encode insertion point for TAA fallback");
   }
@@ -637,7 +655,7 @@ inline bool MaybeRun(reshade::api::command_list* cmd_list, const descriptor_trac
   if (color_srv.handle == 0u) {
     if (LogEvery(last_missing_color_log)) {
       logging::Warn("TAA insertion point has no color SRV at pixel t0 frame=", constant_buffers::frame_state.frame_index,
-                    " shader=", ShaderIdName(command_data.shaders.pixel));
+                    " insertion=", InsertionPointName(insertion_point));
     }
     return false;
   }
