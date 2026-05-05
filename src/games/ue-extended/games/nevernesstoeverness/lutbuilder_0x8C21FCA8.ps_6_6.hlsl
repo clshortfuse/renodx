@@ -1,10 +1,5 @@
 // Custom lutbuilder used in character menus nte
 
-// Override to bring brightness down
-#include "../../shared.h"
-#undef RENODX_DIFFUSE_WHITE_NITS
-#define RENODX_DIFFUSE_WHITE_NITS (shader_injection.diffuse_white_nits * 0.6f)
-
 #include "../../lutbuilder/lutbuilderoutput.hlsli"
 
 cbuffer cb0 : register(b0) {
@@ -811,12 +806,16 @@ float4 main(
   _805 = ((_691 * (((cb0_021x + cb0_036x) + _588) + (((cb0_020x * cb0_035x) * _597) * exp2(log2(exp2(((cb0_018x * cb0_033x) * _615) * log2(max(0.0f, ((((cb0_017x * cb0_032x) * _624) * _515) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019x * cb0_034x) * _606)))))) + (_579 * (((cb0_021x + cb0_026x) + _455) + (((cb0_020x * cb0_025x) * _469) * exp2(log2(exp2(((cb0_018x * cb0_023x) * _497) * log2(max(0.0f, ((((cb0_017x * cb0_022x) * _511) * _515) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019x * cb0_024x) * _483))))))) + ((((cb0_021x + cb0_031x) + _700) + (((cb0_020x * cb0_030x) * _709) * exp2(log2(exp2(((cb0_018x * cb0_028x) * _727) * log2(max(0.0f, ((((cb0_017x * cb0_027x) * _736) * _515) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019x * cb0_029x) * _718))))) * _794);
   _807 = ((_691 * (((cb0_021y + cb0_036y) + _588) + (((cb0_020y * cb0_035y) * _597) * exp2(log2(exp2(((cb0_018y * cb0_033y) * _615) * log2(max(0.0f, ((((cb0_017y * cb0_032y) * _624) * _516) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019y * cb0_034y) * _606)))))) + (_579 * (((cb0_021y + cb0_026y) + _455) + (((cb0_020y * cb0_025y) * _469) * exp2(log2(exp2(((cb0_018y * cb0_023y) * _497) * log2(max(0.0f, ((((cb0_017y * cb0_022y) * _511) * _516) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019y * cb0_024y) * _483))))))) + ((((cb0_021y + cb0_031y) + _700) + (((cb0_020y * cb0_030y) * _709) * exp2(log2(exp2(((cb0_018y * cb0_028y) * _727) * log2(max(0.0f, ((((cb0_017y * cb0_027y) * _736) * _516) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019y * cb0_029y) * _718))))) * _794);
   _809 = ((_691 * (((cb0_021z + cb0_036z) + _588) + (((cb0_020z * cb0_035z) * _597) * exp2(log2(exp2(((cb0_018z * cb0_033z) * _615) * log2(max(0.0f, ((((cb0_017z * cb0_032z) * _624) * _517) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019z * cb0_034z) * _606)))))) + (_579 * (((cb0_021z + cb0_026z) + _455) + (((cb0_020z * cb0_025z) * _469) * exp2(log2(exp2(((cb0_018z * cb0_023z) * _497) * log2(max(0.0f, ((((cb0_017z * cb0_022z) * _511) * _517) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019z * cb0_024z) * _483))))))) + ((((cb0_021z + cb0_031z) + _700) + (((cb0_020z * cb0_030z) * _709) * exp2(log2(exp2(((cb0_018z * cb0_028z) * _727) * log2(max(0.0f, ((((cb0_017z * cb0_027z) * _736) * _517) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019z * cb0_029z) * _718))))) * _794);
-  
+
+  // Scale brightness down
+  float3 untonemapped_ap1 = float3(_805, _807, _809);
+  untonemapped_ap1 *= 0.65f;
+
   UECbufferConfig cb_config = CreateCbufferConfig();
   cb_config.ue_filmblackclip = 0.0f;
   cb_config.ue_filmtoe = 0.3f;
   cb_config.ue_filmshoulder = 0.26f;
-  cb_config.ue_filmslope = 1.9f;
+  cb_config.ue_filmslope = 1.6f;
   cb_config.ue_filmwhiteclip = 0.04f;
   cb_config.ue_tonecurveammount = 1.f;
   cb_config.ue_mappingpolynomial = float3(cb0_043x, cb0_043y, cb0_043z);
@@ -824,7 +823,7 @@ float4 main(
   cb_config.ue_bluecorrection = cb0_038z;
   cb_config.ue_colorscale = float3(cb0_016x, cb0_016y, cb0_016z);
 
-  SV_Target = ProcessLutbuilder(float3(_805, _807, _809), cb_config, SV_Target, asuint(cb0_044w));
+  SV_Target = ProcessLutbuilder(untonemapped_ap1, cb_config, SV_Target, asuint(cb0_044w));
   return SV_Target;
 
   _845 = ((mad(0.061360642313957214f, _809, mad(-4.540197551250458e-09f, _807, (_805 * 0.9386394023895264f))) - _805) * cb0_038z) + _805;
