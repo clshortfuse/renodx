@@ -1,5 +1,10 @@
 // Custom lutbuilder used in character menus nte
 
+// Override to bring brightness down
+#include "../../shared.h"
+#undef RENODX_DIFFUSE_WHITE_NITS
+#define RENODX_DIFFUSE_WHITE_NITS (shader_injection.diffuse_white_nits * 0.6f)
+
 #include "../../lutbuilder/lutbuilderoutput.hlsli"
 
 cbuffer cb0 : register(b0) {
