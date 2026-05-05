@@ -1,34 +1,36 @@
 # Alias Isolation TAA Implementation
 
-This folder contains the RenoDX port of Alias Isolation's temporal anti-aliasing
-for `src/games/alienisolation`. The integration is intentionally self-contained:
-`addon.cpp` includes `aliasisolation/aliasisolation.hpp`, and all game-specific
-TAA, jitter, shader identification, descriptor tracking, and helper fixes live
-under `aliasisolation/runtime`.
+This folder contains the RenoDX port of Alias Isolation's temporal
+anti-aliasing for `src/games/alienisolation`. The integration keeps the TAA
+compute dispatch manual for functional parity, but uses RenoDX utilities for
+shader CRC32 tracking, resource/view metadata, pipeline-layout decoding, current
+render state, and non-TAA shader replacement.
 
 The runtime depends on two in-game settings:
 
 - Anti-aliasing: `SMAA T1x`
 - Motion Blur: `On`
 
-`SMAA T1x` gives this port the final AA shader branch it expects, and motion
-blur keeps the game's camera-motion pass active so Alias Isolation can reuse the
-velocity target.
+`SMAA T1x` gives this port the final AA branch it expects, and motion blur keeps
+the camera-motion pass active so the TAA resolve can reuse the velocity target.
 
 ## File Map
 
 | File | Role |
 | --- | --- |
-| `aliasisolation.hpp` | Public entry point used by `addon.cpp`; adds settings, registers ReShade callbacks, and routes draw events to jitter/TAA. |
-| `runtime/constant_buffers.hpp` | Shared master enable binding, frame counters, TAA sample index, and Alias Isolation's Hammersley jitter sequence. |
-| `runtime/descriptor_tracker.hpp` | Tracks the fixed D3D11-style SRV, cbuffer, RTV, and shader-ID slots needed by Alias Isolation from ReShade callbacks. |
-| `runtime/jitter.hpp` | Tracks game camera cbuffers, patches mapped data on unmap, stores current/previous no-jitter matrices, and applies the per-frame projection jitter. |
+| `aliasisolation.hpp` | Public entry point used by `addon.cpp`; adds settings, registers callbacks, owns known CRC32 hash constants, normalizes Texture3D view creation, and routes draw events to jitter/TAA. |
+| `runtime/config.hpp` | Compile-time toggles for optional barrel-distortion and bloom replacement paths. |
+| `runtime/constant_buffers.hpp` | Master enable binding, frame counters, TAA sample index, and the Alias Isolation Hammersley jitter sequence. |
+| `runtime/descriptor_tracker.hpp` | Tracks only the fixed D3D11-style registers still needed from `push_descriptors`: pixel `t0`, pixel `t8`, vertex `b0`, vertex `b1`, and pixel `b2`. |
+| `runtime/jitter.hpp` | Tracks game camera cbuffers, patches mapped data on unmap, stores current/previous no-jitter matrices, and applies per-frame projection jitter. |
 | `runtime/taa.hpp` | Captures velocity/depth/color resources, owns history textures and compute state, dispatches the TAA compute shader, and copies the result back into the game's color resource. |
-| `runtime/pipeline_tracker.hpp` | Detects important game pipelines by DXBC checksum and tracks which shader IDs are currently bound. |
-| `runtime/pipeline_replacer.hpp` | Clones pipelines for Alias Isolation's non-TAA shader replacements, such as the shadow fixes. |
-| `runtime/resource_view_sanitizer.hpp` | Fills missing Texture3D resource-view descriptions before RenoDX's resource upgrade helpers inspect them. |
-| `runtime/shader_ids.hpp` | DXBC checksum table for the game passes this port recognizes. |
+| `runtime/logging.hpp` | Compile-time gated Alias Isolation logging helpers. Logging is currently default-enabled for verification. |
 | `shaders/aliasisolation_taa.cs_5_0.hlsl` | Embedded compute shader that performs the temporal resolve. |
+
+Alias Isolation's non-TAA replacement shaders are registered in
+`src/games/alienisolation/addon.cpp` through the existing
+`renodx::mods::shader::CustomShaders` map. There is no separate Alias Isolation
+pipeline tracker, replacer, shader-ID table, or resource-view sanitizer header.
 
 ## Port Differences From Original ASI
 
@@ -37,143 +39,114 @@ This section compares the RenoDX port against the original
 
 | Area | Original Alias Isolation | RenoDX port |
 | --- | --- | --- |
-| Hooking model | Hooks D3D11 methods directly with MinHook: `Draw`, `VSSetShader`, `PSSetShader`, `Map`, `Unmap`, resize, and present. | Uses ReShade add-on callbacks for pipeline creation/binding, descriptor pushes, RTV/viewport binds, map/unmap, draw, and present. |
-| Shader identity | Stores raw `ID3D11VertexShader*` and `ID3D11PixelShader*` pointers when shaders are created. | Identifies pipelines by DXBC checksum and tracks current `ShaderId`s per command list. |
+| Hooking model | Hooks D3D11 methods directly with MinHook: `Draw`, `VSSetShader`, `PSSetShader`, `Map`, `Unmap`, resize, and present. | Uses ReShade add-on callbacks for descriptor pushes, RTV/viewport binds, map/unmap, draw, present, and resource lifetime. |
+| Shader identity | Stores raw `ID3D11VertexShader*` and `ID3D11PixelShader*` pointers when shaders are created. | Uses `renodx::utils::shader::GetCurrentVertexShaderHash` and `GetCurrentPixelShaderHash` during draw callbacks, comparing against local CRC32 constants in `aliasisolation.hpp`. |
+| Replacement shaders | Intercepts shader creation and swaps raw shader objects at bind time. | Registers replacement bytecode in Alien Isolation's existing `custom_shaders` map and lets `renodx::mods::shader` build/bind replacement pipelines. Replacements are gated by `constant_buffers::IsEnabled()`. |
 | Draw coverage | Runs from the D3D11 `Draw` hook. | Handles `draw`, `draw_indexed`, and `draw_or_dispatch_indirect`. |
-| Resource discovery | Queries live D3D11 context state with calls like `PSGetShaderResources`, `VSGetConstantBuffers`, `OMGetRenderTargets`, and `RSGetViewports`. | Reconstructs only the needed D3D11-style bindings from ReShade callbacks: pixel `t0`, pixel `t8`, vertex `b0`, vertex `b1`, pixel `b2`, and RTV 0. |
-| TAA execution context | Records TAA on a deferred context, finishes a command list, then executes it on the immediate context. | Dispatches the compute pass directly on the current ReShade command list before the original draw continues. |
-| State handling | Calls `ClearState()` on the deferred context and relies on `ExecuteCommandList(..., true)` to restore immediate-context state. | Captures and restores only compute pipeline/descriptors after the dispatch, leaving the current graphics draw state untouched. |
+| Resource discovery | Queries live D3D11 context state with calls like `PSGetShaderResources`, `VSGetConstantBuffers`, `OMGetRenderTargets`, and `RSGetViewports`. | Reconstructs only the needed descriptor registers from ReShade `push_descriptors`; uses `renodx::utils::state` for current RTV 0 during camera-motion capture. |
+| TAA execution context | Records TAA on a deferred context, finishes a command list, then executes it on the immediate context. | Dispatches compute directly on the current ReShade command list before the original draw continues. |
+| State handling | Calls `ClearState()` on the deferred context and relies on `ExecuteCommandList(..., true)` to restore immediate-context state. | Captures and restores only compute pipeline/descriptors after dispatch, leaving the current graphics draw state untouched. |
 | History format | Requires `DXGI_FORMAT_R11G11B10_FLOAT` for the main color resource and history textures. | Supports `r11g11b10_float` plus HDR-upgraded `r16g16b16a16_typeless` / `r16g16b16a16_float` paths. |
 | History initialization | Creates two history textures on first use or resolution change, but does not seed them from current color. | Recreates history when size/format changes and seeds both history textures from the current color resource. |
-| TAA constants | Creates and updates a private dynamic cbuffer containing screen size and inverse screen size. | The shader derives dimensions from bound textures; runtime push constants provide `ShaderInjectData` at `b11`. |
-| Resource transitions | Uses D3D11's implicit resource state model. | Emits explicit ReShade resource barriers around velocity SRV use, history UAV/copy use, and color copy-back. |
-| Velocity/depth capture | Captures velocity when `CameraMotionPs` is set and depth from pixel `t8` during draw. Inputs are stored globally. | Captures velocity RTV 0 and depth `t8` during the `CameraMotionPs` draw, creates/reuses the velocity SRV, and records the frame index. |
+| Resource transitions | Uses D3D11's implicit resource state model. | Emits explicit ReShade barriers around velocity SRV use, history UAV/copy use, and color copy-back. |
+| Velocity/depth capture | Captures velocity when `CameraMotionPs` is set and depth from pixel `t8` during draw. | Captures current RTV 0 and pixel `t8` during the `CameraMotionPs` draw, creates/reuses the velocity SRV, and records the frame index. |
 | Stale input handling | Uses the last captured velocity/depth resources. | Rejects the resolve if velocity/depth were not captured in the same frame as the insertion point. |
-| Resolve luminance | Uses the old incorrect BT.601-style luma formula for blend weighting. | Uses BT.709 Stockman luminance through RenoDX `Yf`. |
-| Jitter patching | Hooks D3D11 `Map`/`Unmap` and polls current RTV/viewport during `Unmap`. | Uses ReShade map/unmap callbacks, tracks mapped ranges by resource handle, and uses cached RTV/viewport state from callbacks. |
-| Frame advancement | `finishFrame` resets `taaRanThisFrame`, releases unused shaders, and promotes the previous no-jitter matrix in the original render flow. | ReShade `present` calls `jitter::FinishFrame()` and then `constant_buffers::BeginFrame()`. The TAA sample index advances only after a successful dispatch/copy-back. |
-| Shader replacements | Replaces shaders by intercepting `CreatePixelShader` / `CreateVertexShader` and swapping raw shader objects at bind time. | Clones ReShade pipelines that contain known shaders and binds the replacement pipeline while the Alias Isolation toggle is enabled. |
-| Failure behavior | Uses `DX_CHECK`, `DebugBreak`, and Tracy zones for diagnostics. | Uses soft validation and frame-throttled logging; missing inputs usually skip the resolve instead of breaking execution. |
-| User control | Original menu and hook-enable path. | RenoDX setting bound to `ShaderInjectData::custom_alias_isolation_taa`, with preset reset integration. |
+| Resolve luminance | Uses the old incorrect BT.601-style luma formula for blend weighting. | Uses RenoDX `Yf`, which is BT.709 Stockman luminance. |
+| Jitter patching | Hooks D3D11 `Map`/`Unmap` and polls current RTV/viewport during `Unmap`. | Uses ReShade map/unmap callbacks, tracked mapped ranges, and cached RTV/viewport state from callbacks. |
+| Frame advancement | `finishFrame` resets per-frame state and promotes the previous no-jitter matrix in the original render flow. | ReShade `present` calls `jitter::FinishFrame()` and then `constant_buffers::BeginFrame()`. The TAA sample index advances only after successful dispatch/copy-back. |
 
 The most important behavioral changes are HDR-format support, explicit resource
-lifetime, same-frame velocity/depth validation, history seeding, BT.709 Stockman
-luminance for resolve weighting, direct command list dispatch, and ReShade
-callback-based state reconstruction. The main tradeoff is that this port depends
-on callback-tracked state being accurate, whereas the original could query D3D11
-immediate-context state directly when it needed it.
+lifetime, same-frame velocity/depth validation, seeded history, BT.709 Stockman
+luminance for resolve weighting, direct command-list dispatch, and
+RenoDX/ReShade callback-based state reconstruction.
 
 ## How It Hooks Into `addon.cpp`
 
-`addon.cpp` touches Alias Isolation in four places:
+`addon.cpp` touches Alias Isolation in these places:
 
 1. It includes `./aliasisolation/aliasisolation.hpp`.
-2. During `DLL_PROCESS_ATTACH`, it calls
-   `alienisolation::aliasisolation::AppendSettings(settings, &shader_injection)`.
-   This inserts the `Alias Isolation` settings section and binds the toggle to
+2. It appends the `Alias Isolation` settings section and binds the toggle to
    `ShaderInjectData::custom_alias_isolation_taa`.
-3. The main preset reset calls
-   `alienisolation::aliasisolation::OnPresetOff()`, which disables Alias
-   Isolation TAA and sharpening.
-4. At the end of `DllMain`, it calls
-   `alienisolation::aliasisolation::Use(fdw_reason, &shader_injection)` for both
-   attach and detach. That function registers or unregisters all ReShade
-   callbacks owned by this folder.
+3. `OnPresetOff()` disables Alias Isolation TAA and sharpening.
+4. It registers Alias Isolation replacement shaders in the existing
+   `custom_shaders` map:
+   - optional `MAIN_POST_VS` barrel-distortion removal
+   - always-on shadow linearize replacement
+   - always-on shadow downsample replacement
+   - optional bloom merge replacement
+5. It calls `alienisolation::aliasisolation::Use(fdw_reason, &shader_injection)`
+   from `DllMain`.
 
-The main addon also sets up the larger Alien: Isolation HDR path that Alias
-Isolation runs inside:
-
-- `renodx::mods::swapchain::use_resource_cloning = true`
-- Back-buffer-sized `b8g8r8a8_typeless` and `r8g8b8a8_typeless` resources are
-  upgraded to `r16g16b16a16_typeless`.
-- Tonemap, SMAA, and final shaders use `UpgradeRTVReplaceShader(...)` so their
-  render targets are hot-swapped to the upgraded resources.
-- `antialiasing/final_SMAA_T1x_0x05F61FE8.ps_5_0.hlsl` has a special
-  `custom_alias_isolation_taa > 0` branch. When Alias Isolation is on, that final pass
-  samples the already-resolved color, optionally applies RCAS sharpening, applies
-  film grain, and skips the vanilla SMAA blend.
-
-The Alias Isolation runtime does not use RenoDX's CRC32 custom shader replacement
-for the TAA pass. The compute shader is compiled by the normal CMake shader
-embedding path into `__aliasisolation_taa`, then `taa.hpp` creates and dispatches
-the compute pipeline manually.
+The replacement entries use `.on_replace` to stay toggle-gated and `.on_inject`
+to suppress RenoDX shader-injection constants for these original Alias Isolation
+replacement shaders. The manual TAA compute shader is not registered as a
+`mods::shader` replacement; `taa.hpp` creates and dispatches it directly from
+the embedded `__aliasisolation_taa` bytecode.
 
 ## Callback Wiring
 
-`aliasisolation::Use` registers these ReShade callbacks:
+`aliasisolation::Use` registers these callbacks:
 
 | Callback | Owner | Purpose |
 | --- | --- | --- |
 | `init_swapchain` / `destroy_swapchain` | `jitter` | Cache/reset the screen size used for jitter scaling. |
-| `init_command_list` / `destroy_command_list` / `reset_command_list` | `descriptor_tracker` | Maintain per-command-list binding state. |
-| `create_resource_view` | `resource_view_sanitizer` | Normalize unknown Texture3D view descriptions. |
-| `init_pipeline` / `destroy_pipeline` | `pipeline_replacer`, `pipeline_tracker` | Identify game shaders by DXBC checksum and create replacement pipelines where needed. |
-| `bind_pipeline` | `pipeline_replacer`, `descriptor_tracker` | Rebind replacement pipelines when enabled and track current shader IDs. |
-| `bind_render_targets_and_depth_stencil` | `jitter`, `descriptor_tracker` | Track fullscreen render state and current RTV 0. |
+| `init_command_list` / `destroy_command_list` / `reset_command_list` | `descriptor_tracker` | Maintain per-command-list descriptor-register state. |
+| `create_resource_view` | `aliasisolation.hpp` | Normalize unknown Texture3D view descriptions before RenoDX resource helpers inspect them. |
+| `bind_render_targets_and_depth_stencil` | `jitter` | Track fullscreen render state for safe cbuffer patching. |
 | `bind_viewports` | `jitter` | Track fullscreen viewport state. |
-| `push_descriptors` | `descriptor_tracker` | Map ReShade descriptor updates back to shader registers like `t0`, `t8`, `b0`, `b1`, and `b2`. SRV extraction uses `renodx::utils::descriptor::GetResourceViewFromDescriptorUpdate`; constant buffers are extracted locally. |
+| `push_descriptors` | `descriptor_tracker` | Map ReShade descriptor updates back to `t0`, `t8`, `b0`, `b1`, and `b2`. |
 | `map_buffer_region` / `unmap_buffer_region` | `jitter` | Patch tracked camera cbuffers after the game writes them. |
-| `draw`, `draw_indexed`, `draw_or_dispatch_indirect` | `aliasisolation.hpp` | Run the draw-driven capture and TAA insertion logic. |
-| `destroy_device` | `aliasisolation.hpp` | Destroy history, compute objects, replacement pipelines, and jitter state. |
+| `draw`, `draw_indexed`, `draw_or_dispatch_indirect` | `aliasisolation.hpp` | Read RenoDX current shader hashes, run draw-driven capture, and insert TAA. |
+| `destroy_device` | `aliasisolation.hpp` | Destroy history, compute objects, velocity SRV, and jitter state. |
 | `present` | `aliasisolation.hpp` | Advance frame state after the frame is presented. |
 
-The draw callbacks all call `HandleDraw`. If Alias Isolation is disabled,
-`HandleDraw` returns without changing the command list.
-
-`aliasisolation::Use` also registers a RenoDX resource-view destroy callback
-(`renodx::utils::resource::RegisterOnDestroyResourceViewInfoCallback`) pointing
-to `taa::OnDestroyResourceView`. That function explicitly zeroes `resources.color_srv`,
-`resources.color_resource`, `resources.velocity_rtv`, and `resources.depth_srv` when
-the underlying view is destroyed, so the next `EnsureHistory` or `EnsureVelocitySrv`
-call rebuilds from scratch instead of comparing against a dangling handle.
+`aliasisolation::Use` also calls `renodx::utils::resource::Use`,
+`renodx::utils::pipeline_layout::Use`, `renodx::utils::shader::Use`, and
+`renodx::utils::state::Use`. `mods::shader::Use` is still called from
+`addon.cpp` for the global Alien Isolation shader replacement system.
 
 ## Frame Flow
 
 The TAA insertion point is draw-driven. ReShade calls the draw hook before the
-game draw executes, so the runtime dispatches compute, copies the resolved result
-back into the color texture that the upcoming draw will sample, restores the
-previous compute state, and then lets the original draw continue.
+game draw executes, so the runtime dispatches compute, copies the resolved
+result back into the color texture that the upcoming draw will sample, restores
+the previous compute state, and then lets the original draw continue.
 
 | Phase | Trigger | Code path | Reads | Writes / side effects |
 | --- | --- | --- | --- | --- |
-| Startup | `addon.cpp::DllMain` | `AppendSettings`, then `aliasisolation::Use` | `ShaderInjectData` pointer | Adds settings, binds `custom_alias_isolation_taa`, registers Alias Isolation callbacks. |
-| Pipeline identity | `init_pipeline`, `bind_pipeline` | `pipeline_tracker`, `pipeline_replacer` | Pipeline shader bytecode | Records `ShaderId`s by DXBC checksum and binds replacement pipelines when enabled. |
-| Descriptor tracking | RTV 0 binds and `push_descriptors` | `descriptor_tracker` | ReShade descriptor updates | Reconstructs the per-command-list shader registers and RTV 0 used by the TAA path. |
-| Cbuffer capture | Draw callback | `jitter::CaptureConstantBuffers` | Current `ShaderId`s and cbuffer registers | Tracks `DefaultXSC`, `DefaultVSC`, and `DefaultPSC` resources for later map/unmap patching. |
-| Jitter patch | `map_buffer_region`, `unmap_buffer_region` | `jitter::OnMapBufferRegion`, `jitter::OnUnmapBufferRegion` | Mapped tracked cbuffers, fullscreen render state | Patches projection/motion/shadow matrices before the GPU consumes them. |
-| Camera-motion capture | Draw using `CameraMotionPs` | `taa::CaptureCameraMotion` | RTV 0 and pixel `t8` | Creates/reuses velocity SRV, stores depth SRV, records capture frame. |
+| Startup | `addon.cpp::DllMain` | `AppendSettings`, replacement registration, `aliasisolation::Use` | `ShaderInjectData` pointer | Adds settings, registers callbacks, and enables RenoDX helper utilities. |
+| Shader hash routing | Draw callback | `aliasisolation::HandleDraw` | `renodx::utils::shader` current VS/PS hashes | Detects SMAA, RGBM, DoF, and camera-motion passes by CRC32. |
+| Descriptor tracking | `push_descriptors` | `descriptor_tracker` | ReShade descriptor updates | Tracks pixel `t0`, pixel `t8`, vertex `b0`, vertex `b1`, and pixel `b2`. |
+| Cbuffer capture | Draw callback | `jitter::CaptureConstantBuffers` | Hash-match booleans and cbuffer registers | Tracks `DefaultXSC`, `DefaultVSC`, and `DefaultPSC` resources for later map/unmap patching. |
+| Jitter patch | `map_buffer_region`, `unmap_buffer_region` | `jitter` | Mapped tracked cbuffers, fullscreen render state | Patches projection/motion/shadow matrices before GPU use. |
+| Camera-motion capture | Draw using `CameraMotionPs` | `taa::CaptureCameraMotion` | `renodx::utils::state` RTV 0 and pixel `t8` | Creates/reuses velocity SRV, stores depth SRV, records capture frame. |
 | TAA insertion | Draw using `DofEncodePs`, or RGBM fallback | `taa::MaybeRun`, `taa::Run` | Pixel `t0`, velocity, depth, previous history | Validates same-frame inputs, dispatches compute, copies current history back into game color. |
 | Original post draw | Hook returns `false` | Game draw continues | Resolved game color resource | Upcoming draw samples resolved color normally. |
 | Frame advance | `present` | `jitter::FinishFrame`, `constant_buffers::BeginFrame` | Current no-jitter matrix, TAA dispatch flag | Promotes previous matrix state, increments frame index, clears per-frame TAA flag. |
 
 ## Critical Invariants
 
-These are the assumptions that keep the port stable. Treat them as regression
-checks when changing the TAA path.
-
 | Invariant | Why it matters | Enforced by |
 | --- | --- | --- |
 | TAA dispatches at most once per frame. | Prevents multiple history writes and multiple jitter sample advances in one frame. | `frame_state.taa_ran_this_frame` in `taa::MaybeRun`. |
 | `taa_sample_index` advances only after dispatch and copy-back succeed. | Keeps camera jitter synchronized with valid history. | `constant_buffers::MarkTaaDispatched`. |
 | Velocity/depth capture is same-frame as insertion. | Avoids reprojecting with stale motion/depth. | `taa::resources.capture_frame` check in `taa::Run`. |
-| `CameraMotionPs` capture happens before DoF/RGBM insertion. | The resolve needs velocity and depth before it can run. | Game pass order plus `taa::Run` input validation. |
 | Draw hooks return `false`. | Lets the original game draw continue after the pre-draw compute insertion. | `aliasisolation::HandleDraw`. |
-| Compute state is restored after compute dispatch. | Prevents the manual compute pass from leaking its compute pipeline/descriptors into later compute work while leaving the current graphics draw untouched. | `taa::CaptureComputeState` / `taa::RestoreComputeState`. |
+| Compute state is restored after dispatch. | Prevents the manual compute pass from leaking compute bindings into later compute work. | `taa::CaptureComputeState` / `taa::RestoreComputeState`. |
 | Compute layout matches `s0-s1`, `t0-t3`, `u0`, and `b11`. | Keeps runtime descriptor and shader-injection binding aligned with `aliasisolation_taa.cs_5_0.hlsl`. | `taa::EnsureComputePipeline`. |
-| Resolve math is RGB-only and the history write remains `RGBR`. | Alpha is original Alias Isolation packing, not independent resolved color data. | Final write in `aliasisolation_taa.cs_5_0.hlsl`. |
+| Resolve math is RGB-only and the history write remains `RGBR`. | Alpha is original Alias Isolation packing, not independent color data. | Final write in `aliasisolation_taa.cs_5_0.hlsl`. |
 | Velocity SRV is owned; depth SRV is borrowed. | Prevents lifetime mistakes when destroying runtime resources. | `taa::EnsureVelocitySrv`, `taa::DestroyVelocitySrv`, borrowed `depth_srv` storage. |
-| History matches color size and format. | Keeps copy-back valid and avoids format reinterpretation bugs. | `taa::EnsureHistory`. |
 | Cbuffer jitter is fullscreen-only. | Avoids jittering shadow, reflection, and smaller post-processing passes. | `jitter::IsFullscreenPass`. |
 
 ## Register And Resource Map
 
-Tracked game state:
+Tracked runtime state:
 
-| State | Source callback | Stored in | Why it matters |
+| State | Source | Stored in | Why it matters |
 | --- | --- | --- | --- |
 | Screen size | `init_swapchain` | `jitter::render_state.screen_width/height` | Scales jitter offsets and gates fullscreen-only cbuffer patching. |
-| Current shader IDs | `init_pipeline`, `bind_pipeline` | `CommandListData::shaders` | Identifies `SmaaVs`, `RgbmEncodeVs`, `RgbmEncodePs`, `DofEncodePs`, and `CameraMotionPs`. |
-| Render target 0 | `bind_render_targets_and_depth_stencil` | `CommandListData::render_target_0` plus `jitter::render_state` | Supplies camera-motion RTV 0 and validates fullscreen cbuffer patching. |
+| Current shader hashes | `renodx::utils::shader` draw-time state | Local variables in `HandleDraw` | Identifies `SmaaVs`, `RgbmEncodeVs`, `RgbmEncodePs`, `DofEncodePs`, and `CameraMotionPs`. |
+| Render target 0 | `renodx::utils::state` current render targets | Local value passed to `taa::CaptureCameraMotion` | Supplies camera-motion velocity RTV 0. |
 | Viewport | `bind_viewports` | `jitter::render_state` | Part of the fullscreen guard for jitter. |
 | SRVs | `push_descriptors` | `CommandListData::pixel_srv_t0`, `pixel_srv_t8` | Supplies color `t0` and depth `t8`. |
 | Cbuffers | `push_descriptors` | `CommandListData::vertex_cb_b0`, `vertex_cb_b1`, `pixel_cb_b2` | Finds the game camera cbuffers that will later be patched on map/unmap. |
@@ -193,22 +166,14 @@ TAA compute registers:
 
 | Register | Shader name | Bound resource / notes |
 | --- | --- | --- |
-| `s0` | `linear_sampler` | Linear sampler used by the optimized Catmull-Rom history reconstruction. |
-| `s1` | `point_sampler` | Point sampler used for current-color, velocity, and depth neighborhood taps. |
-| `t0` | `current_color_texture` | Current HDR color SRV from pixel `t0` at the insertion point. Its dimensions drive the dispatch bounds. |
-| `t1` | `previous_history_texture` | Previous ping-pong history SRV, using the supported history view format. |
-| `t2` | `velocity_texture` | SRV created from the camera-motion RTV with the same typed view format as the RTV. |
+| `s0` | `linear_sampler` | Linear sampler used by optimized Catmull-Rom history reconstruction. |
+| `s1` | `point_sampler` | Point sampler used for current-color, velocity, and depth taps. |
+| `t0` | `current_color_texture` | Current HDR color SRV from pixel `t0` at the insertion point. |
+| `t1` | `previous_history_texture` | Previous ping-pong history SRV. |
+| `t2` | `velocity_texture` | SRV created from the camera-motion RTV with the same typed view format. |
 | `t3` | `depth_texture` | Borrowed depth SRV captured from camera-motion pixel `t8`. |
-| `u0` | `current_history_output` | Current ping-pong history UAV. The shader writes `float4(resolved.rgb, resolved.r)`. |
+| `u0` | `current_history_output` | Current ping-pong history UAV. |
 | `b11` | `ShaderInjectData` | RenoDX shader-injection push constants from `shared.h`. |
-
-Owned TAA resources:
-
-| Resource | Created by | Lifetime notes |
-| --- | --- | --- |
-| Two history textures with SRV/UAV views | `taa::EnsureHistory` | Recreated when resolution or HDR format changes. Seeded from the current color resource on creation. |
-| Velocity SRV | `taa::EnsureVelocitySrv` | Recreated when the velocity resource or typed view format changes. |
-| Compute pipeline layout, pipeline, and samplers | `taa::EnsureComputePipeline` | Destroyed on device destruction or TAA resource teardown. |
 
 ## Jitter Injection
 
@@ -217,61 +182,31 @@ buffers on the CPU. The runtime first identifies the game's camera cbuffers from
 known shader/register pairs, then patches mapped data on unmap before the GPU
 uses it.
 
-> **Key behavior:** Jitter is tied to successful resolves, not merely to
-> presented frames. If the runtime misses velocity, depth, or the insertion
-> point, the next frame reuses the same jitter sample.
-
-Jitter sample generation:
-
-| Step | Operation | Formula / code | Result |
-| --- | --- | --- | --- |
-| Pick sample | Permute a 16-sample sequence. | `sample = (taa_sample_index * 7) % 16` | Reorders samples to avoid walking the pattern linearly. |
-| Compute normalized X | Place X at the center of one of 16 bins. | `(sample + 0.5) / 16` | Normalized horizontal sample. |
-| Compute normalized Y | Use the Alias Isolation Hammersley radical inverse. | `HammersleySample(sample, 238308531)` | Normalized vertical sample. |
-| Convert to projection offset | Center around zero and scale by screen dimensions. | `(value - 0.5) * 2 / width_or_height` | Clip/projection-space jitter offset. |
-| Hold sample when needed | Return zero after TAA already ran this frame; do not advance on missed resolves. | `CurrentFrameJitter`, `MarkTaaDispatched` | Keeps camera jitter and history in sync. |
-
-Cbuffer patch pipeline:
-
-| Stage | Code path | Condition | Effect |
-| --- | --- | --- | --- |
-| Track cbuffer resource | `jitter::CaptureConstantBuffers` | Current draw uses a known shader/register pair. | Stores `DefaultXSC`, `DefaultVSC`, or `DefaultPSC` resource handles. |
-| Observe map | `jitter::OnMapBufferRegion` | Mapped resource matches a tracked cbuffer. | Records mapped pointer, kind, and size. |
-| Guard patch | `jitter::IsFullscreenPass` | RTV and viewport match the swapchain size. | Allows camera-pass patching and rejects shadow/reflection/smaller passes. |
-| Patch data | `jitter::OnUnmapBufferRegion` | Tracked mapped buffer passes size and fullscreen checks. | Applies jitter or velocity/shadow matrix fixes before GPU use. |
-| Advance matrix state | `jitter::FinishFrame` during present | Current no-jitter view-projection was captured. | Promotes current no-jitter matrix to previous-frame state. |
-
-Patched cbuffers:
+Jitter is tied to successful resolves, not merely to presented frames. If the
+runtime misses velocity, depth, or the insertion point, the next frame reuses
+the same jitter sample.
 
 | Cbuffer | Tracked from | Main changes | Guards / notes |
 | --- | --- | --- | --- |
 | `DefaultXSC` | `SmaaVs` vertex `b0` | Caches no-jitter `ViewProj`; updates `SecondaryProj`, `ViewProj`, and `SecondaryViewProj` with `JitterAdd(x, y)`. | Skips planar reflections via identity `SecondaryProj`; skips shadow-like views by comparing reconstructed camera position with `CameraPosition`. |
-| `DefaultVSC` | `RgbmEncodeVs` vertex `b1` | Applies jitter to `ProjMatrix`, `PrevViewProj`, and `PrevSecViewProj`. | Uses a simple existing-jitter check to avoid repeated application. |
-| `DefaultPSC` | `CameraMotionPs` pixel `b2` | Rewrites motion matrices so `MotionBlurCurrInvViewProjection = curr_inv_view_proj_no_jitter * prev_view_proj_no_jitter`, sets `MotionBlurPrevViewProjection` to identity, and removes current jitter from `Spotlight0_Transform`. | Requires current and previous no-jitter view-projection matrices. Stabilizes velocity vectors and shadows. |
-
-During `aliasisolation::OnPresent`, `jitter::FinishFrame` runs before
-`constant_buffers::BeginFrame`. `BeginFrame` increments the frame index and
-clears `taa_ran_this_frame`.
+| `DefaultVSC` | `RgbmEncodeVs` vertex `b1` | Applies jitter to `ProjMatrix`, `PrevViewProj`, and `PrevSecViewProj`. | Uses an existing-jitter check to avoid repeated application. |
+| `DefaultPSC` | `CameraMotionPs` pixel `b2` | Rewrites motion matrices, sets `MotionBlurPrevViewProjection` to identity, and removes current jitter from `Spotlight0_Transform`. | Requires current and previous no-jitter view-projection matrices. |
 
 ## TAA Dispatch
 
 `aliasisolation::HandleDraw` calls `taa::MaybeRun` only at the known DoF/RGBM
 insertion points while Alias Isolation is enabled. `taa::MaybeRun` keeps the
-same guards internally so the compute resolve can still run at most once per
-frame.
-
-Dispatch sequence:
+same guards internally so the compute resolve can run at most once per frame.
 
 | Stage | Code path | Requirement | Result if successful |
 | --- | --- | --- | --- |
 | Choose insertion point | `taa::MaybeRun` | Current draw is `DofEncodePs`, or later `RgbmEncodeVs + RgbmEncodePs` fallback. | Uses pixel `t0` as current HDR color. |
-| Reject duplicates | `taa::MaybeRun` | `frame_state.taa_ran_this_frame` is false. | Allows one resolve attempt for the frame. |
 | Validate captured inputs | `taa::Run` | Velocity SRV and depth SRV exist, and `capture_frame == frame_index`. | Prevents stale motion/depth from being used. |
 | Validate history | `taa::EnsureHistory` | History size/format matches current color resource. | Reuses history or recreates and seeds both textures from current color. |
-| Validate compute state | `taa::EnsureComputePipeline` | Layout, pipeline, and samplers exist. | Creates push-descriptor layout for `s0-s1`, `t0-t3`, `u0`, push constants for `b11`, and the embedded `__aliasisolation_taa` pipeline. |
+| Validate compute state | `taa::EnsureComputePipeline` | Layout, pipeline, and samplers exist. | Creates push-descriptor layout and embedded `__aliasisolation_taa` pipeline. |
 | Dispatch compute | `taa::DispatchCompute` | All SRVs/UAVs and samplers are available. | Dispatches `(width + 7) / 8` by `(height + 7) / 8` thread groups. |
 | Copy back | `taa::DispatchCompute` | Current history contains resolved output. | Copies current history resource back into the game's color resource. |
-| Restore compute state | `taa::DispatchCompute` | Previous compute pipeline/descriptors were captured. | Reapplies compute state after the manual resolve without rebinding the current graphics draw state. |
+| Restore compute state | `taa::DispatchCompute` | Previous compute pipeline/descriptors were captured. | Reapplies compute state without rebinding current graphics draw state. |
 | Advance TAA state | `taa::Run` | Dispatch and copy-back succeeded. | Ping-pongs history index and calls `MarkTaaDispatched`. |
 
 Supported history formats:
@@ -283,113 +218,77 @@ Supported history formats:
 | `r11g11b10_float` resource | `r11g11b10_float` | `r11g11b10_float` |
 | `r16g16b16a16_float` view over another resource | `r16g16b16a16_typeless` | `r16g16b16a16_float` |
 
-Resource transitions around dispatch:
-
-| Resource | Before compute | During compute / copy | Restored to |
-| --- | --- | --- | --- |
-| Velocity resource | Render target | Shader resource | Render target |
-| Current history | Shader resource | UAV, then copy source | Shader resource |
-| Game color resource | Shader resource | Copy destination | Shader resource |
-
-## TAA Resolve Algorithm
+## TAA Resolve Shader
 
 `shaders/aliasisolation_taa.cs_5_0.hlsl` is a cleaned-up port of Alias
 Isolation's decompiled compute resolve. It runs one thread per output pixel,
 derives dimensions from `current_color_texture`, and writes the current resolved
-frame to `current_history_output`. The shader includes `shared.h`, so RenoDX
-helpers and `ShaderInjectData` are available through `b11`, but the current
-resolve path does not rely on runtime debug variants.
+frame to `current_history_output`.
 
-Current-frame filtering and bounds are built together in
-`BuildCurrentNeighborhood`:
+The only intentional functional difference from the original shader body is the
+luminance calculation: blend weighting now uses RenoDX `Yf` BT.709 Stockman
+luminance instead of the old incorrect BT.601-style luma formula. The rest of
+the shader restructuring is meant to preserve behavior, including the final
+`RGBR` history write.
 
-| Item | Details |
-| --- | --- |
-| Current filter | Full 3x3 point-sampled neighborhood. Center weight is `1`, cardinal weights are `exp(-2.29)`, diagonal weights are `exp(-2.29 * 2)`, and normalization is about `0.691522062`. |
-| Broad bounds | Min/max over the full 3x3 neighborhood. |
-| Tight bounds | Min/max over the center-plus-cardinals cross. |
-| Final clip box | Halfway between broad and tight bounds: `broad + 0.5 * (tight - broad)`. |
-| Representation | `CurrentTap` stores each tap's offset, weight, and whether it participates in tight bounds. `CurrentNeighborhood` returns filtered RGB plus clip min/max RGB. |
+## Shader Hash Routing And Replacements
 
-Per-pixel resolve:
+Known draw-pass hashes live in `aliasisolation.hpp::shader_hashes`. During draw
+callbacks, `HandleDraw` reads the current RenoDX shader hashes and compares them
+against:
 
-| Step | Operation | Inputs | Output | Purpose |
-| --- | --- | --- | --- | --- |
-| 1 | Build current UV | `SV_DispatchThreadID`, current color dimensions | Pixel-center UV | Locates the output pixel in normalized texture space. |
-| 2 | Build current neighborhood | `current_color_texture`, `point_sampler` | Filtered current RGB and clip bounds | Gives the resolve local color context. |
-| 3 | Choose velocity | `velocity_texture`, `depth_texture`, center plus diagonal taps | Depth-guided velocity | Uses the velocity from the nearest absolute depth to reduce foreground/background bleed. |
-| 4 | Reproject history | Current UV and chosen velocity | Previous-frame UV | Finds where the current pixel came from in history. |
-| 5 | Sample history | Previous UV, `previous_history_texture`, `linear_sampler` | Historical RGB or filtered-current fallback | Uses a nine-tap optimized Catmull-Rom reconstruction when the reprojected UV is on screen. |
-| 6 | Clip history | Historical RGB, filtered current RGB, current clip bounds | Clipped historical RGB | Clips history toward the filtered current color inside the RGB color box. |
-| 7 | Compute blend | RenoDX `Yf` BT.709 Stockman luminance, clip bounds, velocity/subpixel terms | Current-frame blend amount | Keeps more history when it is plausibly inside the luminance range and adjusts for subpixel velocity. |
-| 8 | Resolve color | Clipped history, filtered current, blend | Resolved RGB | `max(0, lerp(clipped_history, filtered_current, blend))`; there is no upper clamp. |
-| 9 | Write history | Resolved RGB | `current_history_output` | Writes `RGBR` as `float4(resolved_color, resolved_color.r)` to preserve the original packed behavior. |
+- `SMAA_VS`
+- `RGBM_ENCODE_VS`
+- `RGBM_ENCODE_PS`
+- `DOF_ENCODE_PS`
+- `CAMERA_MOTION_PS`
 
-History clipping is RGB-only. The alpha lane is ignored during the resolve and
-only restored at the final write by duplicating red into alpha, matching the
-original compute output packing.
+The original ASI matched the DXBC header checksum words. This port uses the
+same full-bytecode CRC32 identity used by RenoDX dumped shader filenames and
+replacement tables.
 
-After the dispatch, `taa::DispatchCompute` copies `current_history_output`'s
-resource back into the game color resource that the original post-processing
-draw is about to sample. That is why the original draw can continue normally
-after the hook returns.
+Replacement hashes are also defined in `shader_hashes`, but their replacement
+bytecode is registered in `addon.cpp` through `renodx::mods::shader`:
 
-## Pipeline Tracking And Replacements
+- `SHADOW_LINEARIZE_PS`
+- `SHADOW_DOWNSAMPLE_PS`
+- optional `MAIN_POST_VS`
+- optional `BLOOM_MERGE_PS`
 
-The Alias Isolation port identifies game shaders by DXBC checksum words in
-`shader_ids.hpp`. These checksums are the DXBC header checksum used by the
-original ASI, not the CRC32 names used by RenoDX dumped shader files.
-
-`pipeline_tracker` records shader IDs when pipelines are created and maintains
-the currently bound shader IDs per command list. The descriptor tracker stores
-those IDs in `CommandListData::shaders`, which is why `taa.hpp` can ask questions
-like "is the current pixel shader `CameraMotionPs`?" during a draw callback.
-
-`pipeline_replacer` handles non-TAA Alias Isolation shader fixes. It clones a
-pipeline when a known replaceable shader is found and swaps in embedded Alias
-Isolation bytecode for the clone. At bind time, if Alias Isolation is enabled, it
-binds the clone instead of the original pipeline. The always-enabled replacement
-paths are the shadow linearize/downsample pixel shaders. Barrel distortion
-removal and bloom merge replacement are compile-time options and default to off
-in `runtime/config.hpp`.
+This means replacement pipeline creation, replacement binding, and pipeline
+lifetime are handled by RenoDX's shader utility path instead of Alias
+Isolation-specific code.
 
 ## Debug Runbook
 
-Define `ALIENISOLATION_ALIAS_LOGGING` to enable detailed runtime logging. When
-TAA does not run, check this path in order:
+`ALIENISOLATION_ALIAS_LOGGING` is currently default-enabled in
+`runtime/logging.hpp`. When TAA does not run, check this path in order:
 
 | Order | Check | Expected evidence |
 | --- | --- | --- |
 | 1 | User-facing settings | In-game AA is `SMAA T1x`, Motion Blur is `On`, and RenoDX `Alias Isolation TAA` is enabled. |
-| 2 | Shader detection | `shader_ids.hpp` identifies `SmaaVs`, `RgbmEncodeVs`, `RgbmEncodePs`, `DofEncodePs`, and `CameraMotionPs`. |
-| 3 | Cbuffer tracking | `jitter::CaptureConstantBuffers` tracks `DefaultXSC`, `DefaultVSC`, and `DefaultPSC` from `b0`, `b1`, and `b2`. |
-| 4 | Camera-motion capture | `taa::CaptureCameraMotion` sees RTV 0 and pixel `t8` during `CameraMotionPs`. |
-| 5 | Insertion point | `taa::MaybeRun` reaches `DofEncodePs`, or the RGBM fallback, with pixel `t0` color SRV. |
-| 6 | Same-frame validation | Camera-motion `capture_frame` matches the insertion frame. |
-| 7 | History setup | `taa::EnsureHistory` accepts the color format and creates history at the expected resolution. |
-| 8 | Compute dispatch | `taa::DispatchCompute` creates the compute layout/pipeline, dispatches once, and copies history back to game color. |
-| 9 | Final shader path | Final SMAA T1x Alias branch is active and not falling through to vanilla SMAA blending. |
+| 2 | Shader hash observation | Log lines for observed `SMAA VS`, `RGBM encode VS`, `RGBM encode PS`, `DoF encode PS`, and `camera motion PS` hashes. |
+| 3 | Replacement gates | Log lines like `using mods::shader replacement shadow linearize PS` while Alias Isolation is enabled. |
+| 4 | Cbuffer tracking | `jitter::CaptureConstantBuffers` tracks `DefaultXSC`, `DefaultVSC`, and `DefaultPSC` from `b0`, `b1`, and `b2`. |
+| 5 | Camera-motion capture | `taa::CaptureCameraMotion` sees RTV 0 and pixel `t8` during `CameraMotionPs`. |
+| 6 | Insertion point | `taa::MaybeRun` reaches `DofEncodePs`, or the RGBM fallback, with pixel `t0` color SRV. |
+| 7 | Same-frame validation | Camera-motion `capture_frame` matches the insertion frame. |
+| 8 | History setup | `taa::EnsureHistory` accepts the color format and creates history at the expected resolution. |
+| 9 | Compute dispatch | `taa::DispatchCompute` creates the compute layout/pipeline, dispatches once, and copies history back to game color. |
+| 10 | Final shader path | Final SMAA T1x Alias branch is active and not falling through to vanilla SMAA blending. |
 
-If the image jitters, flickers, or drifts:
-
-| Symptom | First checks |
-| --- | --- |
-| Camera jitter advances but history does not stabilize | Confirm `taa_sample_index` advances only after successful copy-back. |
-| Shadows, reflections, or small passes flicker | Confirm the fullscreen guard is not patching non-camera passes. |
-| Motion-vector instability | Check `DefaultPSC` patching and same-frame velocity/depth capture. |
-| Previous-frame reprojection feels wrong | Confirm `jitter::FinishFrame` receives a valid current no-jitter matrix before promoting it to previous-frame state. |
+Stale camera-motion warnings can appear during pause/menu/toggle transitions.
+They are acceptable if capture and dispatch resume afterward.
 
 ## Change Checklist
 
-Before changing this integration, verify the affected item against the current
-code:
-
 | Change area | Must update / preserve |
 | --- | --- |
-| Shader identity | Update `shader_ids.hpp` checksums and verify `pipeline_tracker` detections. |
-| Game register assumptions | Update the register map and the fixed fields in `descriptor_tracker::CommandListData`. |
-| TAA shader registers | Update `taa::EnsureComputePipeline`, `taa::DispatchCompute`, shader declarations, and the TAA compute register map together. |
-| TAA resolve math | Preserve the intentional `float3` resolve path and final `RGBR` write unless the runtime copy-back/output assumptions are also changed. |
+| Shader identity | Update CRC32 constants in `aliasisolation.hpp::shader_hashes` and verify observed-hash logs. |
+| Replacement shaders | Update the `custom_shaders` entries in `addon.cpp` and keep `.on_replace` toggle gating plus `.on_inject` suppression. |
+| Game register assumptions | Update the register map and fixed fields in `descriptor_tracker::CommandListData`. |
+| TAA shader registers | Update `taa::EnsureComputePipeline`, `taa::DispatchCompute`, shader declarations, and the compute register map together. |
+| TAA resolve math | Preserve the intentional `float3` resolve path and final `RGBR` write unless copy-back/output assumptions are also changed. |
 | Resource formats | Update `taa::GetSupportedHistoryFormat` and history creation/copy-back assumptions. |
 | Insertion point | Preserve once-per-frame dispatch, same-frame velocity/depth validation, compute-state restore, and draw-hook return value. |
 | Jitter behavior | Preserve fullscreen gating and keep no-jitter matrix state separate from patched game matrices. |

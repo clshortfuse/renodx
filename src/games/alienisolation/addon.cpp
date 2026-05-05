@@ -38,6 +38,32 @@ static bool HasRGBA16FloatRenderTarget(reshade::api::command_list* cmd_list) {
   return false;
 }
 
+static bool IsAliasIsolationEnabled(reshade::api::command_list*) {
+  return alienisolation::aliasisolation::constant_buffers::IsEnabled();
+}
+
+static bool SkipAliasIsolationShaderInjection(reshade::api::command_list*) {
+  return false;
+}
+
+static bool logged_alias_shadow_linearize = false;
+static bool logged_alias_shadow_downsample = false;
+#if ALIENISOLATION_ENABLE_BARREL_DISTORTION_REMOVAL
+static bool logged_alias_main_post = false;
+#endif
+#if ALIENISOLATION_ENABLE_BLOOM_MERGE_REPLACEMENT
+static bool logged_alias_bloom_merge = false;
+#endif
+
+static bool AliasIsolationReplacementGate(const char* name, uint32_t hash, bool& logged) {
+  const bool enabled = IsAliasIsolationEnabled(nullptr);
+  if (enabled && !logged) {
+    logged = true;
+    alienisolation::aliasisolation::logging::Info("using mods::shader replacement ", name, " hash=", alienisolation::aliasisolation::logging::Crc32(hash));
+  }
+  return enabled;
+}
+
 #define CustomRGBA16FloatShader(value)                                                      \
   {                                                                                         \
     value, { .crc32 = value, .code = __##value, .on_replace = &HasRGBA16FloatRenderTarget } \
@@ -64,9 +90,44 @@ static bool HasRGBA16FloatRenderTarget(reshade::api::command_list* cmd_list) {
       },                                                                                                       \
   }
 
+#define AliasIsolationReplacementShader(value, replacement_shader, name, log_state)                                        \
+  {                                                                                                                        \
+    value, {                                                                                                               \
+        .crc32 = value,                                                                                                    \
+        .code = replacement_shader,                                                                                        \
+        .on_replace = [](reshade::api::command_list*) { return AliasIsolationReplacementGate(name, value, log_state); },   \
+        .on_inject = &SkipAliasIsolationShaderInjection,                                                                   \
+    }                                                                                                                      \
+  }
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x2726E8B6),  // Fog
     CustomShaderEntry(0x043049C7),  // Video
+
+#if ALIENISOLATION_ENABLE_BARREL_DISTORTION_REMOVAL
+    AliasIsolationReplacementShader(
+        alienisolation::aliasisolation::shader_hashes::MAIN_POST_VS,
+        __aliasisolation_main_post,
+        "barrel distortion VS",
+        logged_alias_main_post),
+#endif
+    AliasIsolationReplacementShader(
+        alienisolation::aliasisolation::shader_hashes::SHADOW_LINEARIZE_PS,
+        __aliasisolation_shadow_linearize,
+        "shadow linearize PS",
+        logged_alias_shadow_linearize),
+    AliasIsolationReplacementShader(
+        alienisolation::aliasisolation::shader_hashes::SHADOW_DOWNSAMPLE_PS,
+        __aliasisolation_shadow_downsample,
+        "shadow downsample PS",
+        logged_alias_shadow_downsample),
+#if ALIENISOLATION_ENABLE_BLOOM_MERGE_REPLACEMENT
+    AliasIsolationReplacementShader(
+        alienisolation::aliasisolation::shader_hashes::BLOOM_MERGE_PS,
+        __aliasisolation_bloom_merge,
+        "bloom merge PS",
+        logged_alias_bloom_merge),
+#endif
 
     UpgradeRTVReplaceShader(0x8EA31781),  // Lens Flare
 
