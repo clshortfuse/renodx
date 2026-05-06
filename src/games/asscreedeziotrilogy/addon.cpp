@@ -29,63 +29,19 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
-/* bool ActivateTrackedRenderTargets(
-    reshade::api::command_list* cmd_list,
-    const char* pass_name,
-    uint32_t shader_hash) {
-  auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);
-  bool changed = false;
-
-  for (auto rtv : rtvs) {
-    changed |= renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);
-  }
-
-  if (changed) {
-    std::stringstream s;
-    s << "generic::ActivateTrackedRenderTargets(pass=" << pass_name
-      << ", shader=0x" << std::hex << shader_hash << std::dec
-      << ", count=" << rtvs.size() << ")";
-    reshade::log::message(reshade::log::level::info, s.str().c_str());
-
-    renodx::mods::swapchain::FlushDescriptors(cmd_list);
-    renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});
-  }
-
-  return true; 
-} */
-
-/* bool ActivateFinalSceneRenderTargets(reshade::api::command_list* cmd_list) {
-  return ActivateTrackedRenderTargets(cmd_list, "final_scene", 0x61888319);
-} */
-
-/* bool ActivateSceneGradingRenderTargets(reshade::api::command_list* cmd_list) {
-  return ActivateTrackedRenderTargets(cmd_list, "scene_grading", 0xC8769384);
-} */
-
 namespace {
 
+ShaderInjectData shader_injection;
+
+bool MarkGameplaySceneActive(reshade::api::command_list* cmd_list) {
+  shader_injection.custom_reserved0 = 1.f;
+  return true;
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
-/*     CustomShaderEntry(0x61888319), // Final Scene
-    CustomShaderEntry(0x788AFF56), // White Gradient (Brotherhood)
-    CustomShaderEntry(0x915F8B01), // Video main
-    CustomShaderEntry(0x6B2C6439), // Video
-    CustomShaderEntry(0x6B413C5D), // Video
-    CustomShaderEntry(0x880A17D3), // Video
-    CustomShaderEntry(0xC4FF799B), // Video
-    CustomShaderEntry(0xC7CE95B3), // Video
-    CustomShaderEntry(0x471059BE), // Video
-    CustomShaderEntry(0xF10B2A7F), // Video
-    CustomShaderEntry(0xA2F269CA), // Video
-    CustomShaderEntry(0x0B466944), // shoes */
-/*     BypassShaderEntry(0x5546B0F2),
-    BypassShaderEntry(0x510F293F),    
-    BypassShaderEntry(0x5546B0F2),
-    BypassShaderEntry(0x28B15490),
-    BypassShaderEntry(0xCFD3B919),*/
+    {0x61888319, {.crc32 = 0x61888319, .code = __0x61888319, .on_draw = &MarkGameplaySceneActive}},
     __ALL_CUSTOM_SHADERS 
 };
-
-ShaderInjectData shader_injection;
 bool has_white_gradient_shader = false;
 
 renodx::utils::settings::Settings settings = {
@@ -405,6 +361,7 @@ void OnPresent(reshade::api::command_queue* queue,
                const reshade::api::rect* dest_rect,
                uint32_t dirty_rect_count,
                const reshade::api::rect* dirty_rects) {
+  shader_injection.custom_reserved0 = 0.f;
   auto* device = queue->get_device();
   if (device->get_api() == reshade::api::device_api::opengl) {
     shader_injection.custom_flip_uv_y = 1.f;
@@ -440,7 +397,7 @@ bool initialized = false;
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX (RenoDX for Assassin's Creed 2)";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Assassin's Creed Ezio Trilogy";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
@@ -462,23 +419,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::use_device_proxy = false;
 
-        // Three-tier upgrade pattern for each scene-format we care about:
-        //   1) back-buffer-sized exact match (canonical scene RT, no clone)
-        //   2) 16:9 aspect-ratio match (catches half-res sky/clouds/etc.)
-        //   3) catch-all with view cloning + hot swap (everything else)
-        // Each entry only fires on RTs that match its filter, so this is
-        // additive — adding more formats doesn't double-upgrade existing RTs.
         for (auto fmt : {
                  reshade::api::format::r8g8b8a8_typeless,
              }) {
           renodx::mods::swapchain::resource_upgrade_infos.push_back({
               .old_format = fmt,
               .new_format = reshade::api::format::r16g16b16a16_typeless,
-              .ignore_size = false,
+              .ignore_size = true,
               .use_resource_view_cloning = true,
-              .use_resource_view_hot_swap = false,
+/*               .use_resource_view_hot_swap = false,
               .aspect_ratio = 16.f / 9.f,
-              .aspect_ratio_tolerance = 0.001f,
+              .aspect_ratio_tolerance = 0.001f, */
               .usage_include = reshade::api::resource_usage::render_target,
               .name = "Scene Intermediate",
           });
