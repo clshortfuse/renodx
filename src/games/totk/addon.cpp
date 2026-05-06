@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <include/reshade_api_format.hpp>
 #define ImTextureID                   ImU64
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 
@@ -15,6 +16,7 @@
 #include "../../mods/swapchain.hpp"
 #include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -224,79 +226,7 @@ void OnPresetOff() {
   });
 }
 
-constexpr uint32_t kLateFinalShaderCrc = 0xEF015FAB;
-constexpr uint32_t kLateFinalMinimumWidth = 1600;
-constexpr uint32_t kLateFinalMinimumHeight = 900;
-constexpr reshade::api::format kLateFinalResourceFormat = reshade::api::format::r8g8b8a8_typeless;
-constexpr reshade::api::format kLateFinalViewFormat = reshade::api::format::r8g8b8a8_unorm_srgb;
-
-renodx::utils::resource::ResourceUpgradeInfo late_final_clone_info = []() {
-    renodx::utils::resource::ResourceUpgradeInfo info = {};
-    info.new_format = reshade::api::format::r16g16b16a16_float;
-    info.use_resource_view_cloning = true;
-    info.use_resource_view_hot_swap = true;
-    info.usage_set = static_cast<uint32_t>(
-            reshade::api::resource_usage::shader_resource
-            | reshade::api::resource_usage::render_target);
-    return info;
-}();
-
-bool SkipLateFinalShaderReplacement(reshade::api::command_list*) {
-    return false;
-}
-
-bool IsLateFinalRenderTarget(const renodx::utils::resource::ResourceViewInfo* resource_view_info) {
-    if (resource_view_info == nullptr || resource_view_info->resource_info == nullptr) return false;
-
-    const auto& desc = resource_view_info->resource_info->desc;
-    if (desc.type != reshade::api::resource_type::texture_2d
-            && desc.type != reshade::api::resource_type::surface) {
-        return false;
-    }
-
-    return desc.texture.width >= kLateFinalMinimumWidth
-            && desc.texture.height >= kLateFinalMinimumHeight
-            && desc.texture.format == kLateFinalResourceFormat
-            && resource_view_info->desc.format == kLateFinalViewFormat;
-}
-
-bool UpgradeLateFinalRenderTarget(
-        reshade::api::command_list* cmd_list,
-        reshade::api::resource_view render_target) {
-    auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo(render_target);
-    if (!IsLateFinalRenderTarget(resource_view_info)) return false;
-
-    resource_view_info->resource_info->clone_target = &late_final_clone_info;
-    return renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), render_target);
-}
-
-bool RewriteLateFinalRenderTargets(
-        reshade::api::command_list* cmd_list,
-        const std::vector<reshade::api::resource_view>& render_targets) {
-    if (render_targets.empty() || render_targets[0].handle == 0u) return false;
-    if (!UpgradeLateFinalRenderTarget(cmd_list, render_targets[0])) return false;
-
-    renodx::mods::swapchain::FlushDescriptors(cmd_list);
-    renodx::mods::swapchain::RewriteRenderTargets(
-            cmd_list,
-            static_cast<uint32_t>(render_targets.size()),
-            render_targets.data(),
-            renodx::utils::swapchain::GetDepthStencil(cmd_list));
-    return true;
-}
-
-bool OnLateFinalDraw(reshade::api::command_list* cmd_list) {
-    auto& render_targets = renodx::utils::swapchain::GetRenderTargets(cmd_list);
-    RewriteLateFinalRenderTargets(cmd_list, render_targets);
-    return true;
-}
-
-void RegisterLateFinalShader() {
-    auto& shader = custom_shaders[kLateFinalShaderCrc];
-    shader.crc32 = kLateFinalShaderCrc;
-    shader.on_replace = &SkipLateFinalShaderReplacement;
-    shader.on_draw = &OnLateFinalDraw;
-}
+bool initialized = false;
 
 }  // namespace
 
@@ -304,14 +234,49 @@ extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Breath of the Wild";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
+  const auto target_format = reshade::api::format::r16g16b16a16_float;
+  const auto view_upgrades = renodx::utils::resource::VIEW_UPGRADES_RGBA16F;
+
+  const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
+      .width = 1600,
+      .height = 900,
+      .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+  };
+
+  const std::unordered_map<
+      std::pair<reshade::api::resource_usage, reshade::api::format>,
+      reshade::api::format,
+      renodx::utils::hash::HashPair>
+      view_upgrades_custom = {
+          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r8g8b8a8_typeless},
+           reshade::api::format::r16g16b16a16_typeless},
+          {{reshade::api::resource_usage::render_target, reshade::api::format::r8g8b8a8_unorm},
+           reshade::api::format::r16g16b16a16_unorm},
+          {{reshade::api::resource_usage::render_target, reshade::api::format::r8g8b8a8_unorm_srgb},
+           reshade::api::format::r16g16b16a16_float},
+      };
+
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      auto process_path = renodx::utils::platform::GetCurrentProcessPath();
+      auto filename = process_path.filename().string();
+
       renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::target_format = target_format;
+
+      if (filename == "Cemu.exe") {
+        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+      };
 
       // Always set to true for Vulkan
       renodx::mods::shader::allow_multiple_push_constants = true;
+
+      auto common_aspect_ratio = 16.f / 9.f;
+      auto common_aspect_ratio_tolerance = 10000.f;
 
       /*
         If expand_existing_constant_buffer is set to false renoDX will add new cbuffer range (instead of reusing the game's).
@@ -321,7 +286,37 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-    RegisterLateFinalShader();
+      for (int i = 0; i < 1; i++) {
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_typeless,
+            .new_format = target_format,
+            .shader_hash = 0xEF015FAB,
+            //   .ignore_size = true,  // risky...?
+            .use_resource_view_cloning = true,
+            //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
+            .aspect_ratio = common_aspect_ratio,
+            .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+            .view_upgrades = view_upgrades,
+            .min_dimensions = min_dimensions,
+        });
+      }
+
+      //   for (int i = 0; i < 3; i++) {
+      //     renodx::mods::swapchain::resource_upgrade_infos.push_back({
+      //         .old_format = reshade::api::format::r8g8b8a8_typeless,
+      //         .new_format = target_format,
+      //         .ignore_size = true,
+      //         .shader_hash = 0xEF015FAB,
+      //         //   .ignore_size = true,  // risky...?
+      //         .use_resource_view_cloning = true,
+      //         .view_upgrades = view_upgrades,
+      //     });
+      //   }
+
+      if (!initialized) {
+        // renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
+        initialized = true;
+      }
 
       // Register event handlers
       reshade::register_event<reshade::addon_event::present>(OnPresent);
@@ -334,7 +329,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
-    renodx::mods::swapchain::Use(fdw_reason);
+  // renodx::utils::random::Use(DLL_PROCESS_ATTACH);
+  renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
