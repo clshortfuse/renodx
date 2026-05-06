@@ -82,8 +82,6 @@ struct Resources {
 };
 
 inline Resources resources;
-inline constexpr bool dispatch_enabled = true;
-inline bool logged_dispatch_disabled = false;
 inline uint64_t last_capture_log = std::numeric_limits<uint64_t>::max();
 inline uint64_t last_capture_missing_log = std::numeric_limits<uint64_t>::max();
 inline uint64_t last_dispatch_log = std::numeric_limits<uint64_t>::max();
@@ -630,13 +628,6 @@ inline bool MaybeRun(
     const descriptor_tracker::CommandListData& command_data,
     InsertionPoint insertion_point) {
   if (!constant_buffers::IsEnabled()) return false;
-  if (!dispatch_enabled) {
-    if (!logged_dispatch_disabled) {
-      logged_dispatch_disabled = true;
-      logging::Warn("TAA dispatch/copy-back temporarily disabled for black-screen isolation");
-    }
-    return false;
-  }
   if (constant_buffers::frame_state.taa_ran_this_frame) return false;
   if (insertion_point == InsertionPoint::None) return false;
 
