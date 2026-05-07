@@ -26,7 +26,30 @@ VSOutput main(
     uint vertex_id : SV_VertexID) {
   VSOutput output;
 
-  if (CUSTOM_IS_GAMEPLAY_SCENE >= 0.5f) {
+  if (CUSTOM_FINAL_SCENE_SEEN < 0.5f) {
+    if (vertex_id == 0u) {
+      output.position = float4(-1.f, 1.f, 0.f, 1.f);
+      output.texcoord0 = float4(0.f, 0.f, 0.f, 1.f);
+    } else if (vertex_id == 1u) {
+      output.position = float4(3.f, 1.f, 0.f, 1.f);
+      output.texcoord0 = float4(2.f, 0.f, 0.f, 1.f);
+    } else {
+      output.position = float4(-1.f, -3.f, 0.f, 1.f);
+      output.texcoord0 = float4(0.f, 2.f, 0.f, 1.f);
+    }
+
+    output.texcoord8 = output.position;
+    output.color0 = float4(1.f, 1.f, 1.f, 1.f);
+    output.color1 = float4(0.f, 0.f, 0.f, 1.f);
+    output.texcoord9 = float4(1.f, 0.f, 0.f, 0.f);
+    output.texcoord1 = float4(0.f, 0.f, 0.f, 1.f);
+    output.texcoord2 = float4(0.f, 0.f, 0.f, 1.f);
+    output.texcoord3 = float4(0.f, 0.f, 0.f, 1.f);
+    output.texcoord4 = float4(0.f, 0.f, 0.f, 1.f);
+    output.texcoord5 = float4(0.f, 0.f, 0.f, 1.f);
+    output.texcoord6 = float4(0.f, 0.f, 0.f, 1.f);
+    output.texcoord7 = float4(0.f, 0.f, 0.f, 1.f);
+  } else {
     output.position = v0;
     output.texcoord8 = v0;
     output.color0 = float4(1.f, 1.f, 1.f, 1.f);
@@ -40,31 +63,7 @@ VSOutput main(
     output.texcoord5 = float4(0.f, 0.f, 0.f, 1.f);
     output.texcoord6 = float4(0.f, 0.f, 0.f, 1.f);
     output.texcoord7 = float4(0.f, 0.f, 0.f, 1.f);
-    return output;
   }
-
-  if (vertex_id == 0u) {
-    output.position = float4(-1.f, 1.f, 0.f, 1.f);
-    output.texcoord0 = float4(0.f, 0.f, 0.f, 1.f);
-  } else if (vertex_id == 1u) {
-    output.position = float4(3.f, 1.f, 0.f, 1.f);
-    output.texcoord0 = float4(2.f, 0.f, 0.f, 1.f);
-  } else {
-    output.position = float4(-1.f, -3.f, 0.f, 1.f);
-    output.texcoord0 = float4(0.f, 2.f, 0.f, 1.f);
-  }
-
-  output.texcoord8 = output.position;
-  output.color0 = float4(1.f, 1.f, 1.f, 1.f);
-  output.color1 = float4(0.f, 0.f, 0.f, 1.f);
-  output.texcoord9 = float4(1.f, 0.f, 0.f, 0.f);
-  output.texcoord1 = float4(0.f, 0.f, 0.f, 1.f);
-  output.texcoord2 = float4(0.f, 0.f, 0.f, 1.f);
-  output.texcoord3 = float4(0.f, 0.f, 0.f, 1.f);
-  output.texcoord4 = float4(0.f, 0.f, 0.f, 1.f);
-  output.texcoord5 = float4(0.f, 0.f, 0.f, 1.f);
-  output.texcoord6 = float4(0.f, 0.f, 0.f, 1.f);
-  output.texcoord7 = float4(0.f, 0.f, 0.f, 1.f);
 
   return output;
 }

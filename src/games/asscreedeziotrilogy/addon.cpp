@@ -33,15 +33,20 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-bool MarkGameplaySceneActive(reshade::api::command_list* cmd_list) {
+bool MarkFinalSceneSeen(reshade::api::command_list* cmd_list) {
   shader_injection.custom_reserved0 = 1.f;
   return true;
 }
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    {0x61888319, {.crc32 = 0x61888319, .code = __0x61888319, .on_draw = &MarkGameplaySceneActive}},
-    __ALL_CUSTOM_SHADERS 
-};
+renodx::mods::shader::CustomShaders custom_shaders = []() {
+  renodx::mods::shader::CustomShaders shaders = {
+      __ALL_CUSTOM_SHADERS
+  };
+  if (auto it = shaders.find(0x61888319); it != shaders.end()) {
+    it->second.on_draw = &MarkFinalSceneSeen;
+  }
+  return shaders;
+}();
 bool has_white_gradient_shader = false;
 
 renodx::utils::settings::Settings settings = {
@@ -366,30 +371,6 @@ void OnPresent(reshade::api::command_queue* queue,
   if (device->get_api() == reshade::api::device_api::opengl) {
     shader_injection.custom_flip_uv_y = 1.f;
   }
-
-  // Ensure fullscreen coverage regardless of whatever viewport/scissor the
-  // game had bound before present (video paths may use smaller rectangles).
-  auto* cmd_list = queue->get_immediate_command_list();
-  auto back_buffer_resource = swapchain->get_current_back_buffer();
-  auto back_buffer_desc = device->get_resource_desc(back_buffer_resource);
-
-  const reshade::api::viewport viewport = {
-      0.0f,
-      0.0f,
-      static_cast<float>(back_buffer_desc.texture.width),
-      static_cast<float>(back_buffer_desc.texture.height),
-      0.0f,
-      1.0f,
-  };
-  cmd_list->bind_viewports(0, 1, &viewport);
-
-  const reshade::api::rect scissor = {
-      0,
-      0,
-      static_cast<int32_t>(back_buffer_desc.texture.width),
-      static_cast<int32_t>(back_buffer_desc.texture.height),
-  };
-  cmd_list->bind_scissor_rects(0, 1, &scissor);
 }
 
 bool initialized = false;
@@ -409,7 +390,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         std::transform(process_path.begin(), process_path.end(), process_path.begin(), towlower);
         has_white_gradient_shader = process_path.find(L"brotherhood") != std::wstring::npos;
 
-        renodx::mods::shader::force_pipeline_cloning = true;
+        //renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::allow_multiple_push_constants = true;
@@ -425,11 +406,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           renodx::mods::swapchain::resource_upgrade_infos.push_back({
               .old_format = fmt,
               .new_format = reshade::api::format::r16g16b16a16_typeless,
-              .ignore_size = true,
+              .ignore_size = false,
               .use_resource_view_cloning = true,
-/*               .use_resource_view_hot_swap = false,
+              .use_resource_view_hot_swap = false,
               .aspect_ratio = 16.f / 9.f,
-              .aspect_ratio_tolerance = 0.001f, */
+              .aspect_ratio_tolerance = 0.001f,
               .usage_include = reshade::api::resource_usage::render_target,
               .name = "Scene Intermediate",
           });

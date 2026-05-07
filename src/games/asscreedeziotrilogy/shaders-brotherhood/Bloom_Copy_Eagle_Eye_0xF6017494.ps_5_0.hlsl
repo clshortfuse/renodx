@@ -87,6 +87,7 @@ void main(
 
   r0.x *= max(r0.y, 0.f);
   r2 = max(12.f * r0.xxxx, 0.f);
+  r2 = 1.f - exp2(-r2);
 
   r0.w = r2.w * 255.f + 0.0001f;
   r0.w = (uint)r0.w;
