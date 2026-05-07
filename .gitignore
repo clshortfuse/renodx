@@ -39,6 +39,10 @@ build.vs/**
 build32.vs/**
 
 bin/**
+dump/**
+tmp/**
+tmp_disasm.txt
+ReShade.log
 **/.vshistory/
 .cache/**
 .env
