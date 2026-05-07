@@ -39,14 +39,19 @@ void main(
   float3 linear_color = renodx::color::gamma::DecodeSafe(color, 2.2f);
   float3 hdr_color = ACESFilmicInverse(linear_color);
 
-  // RenoDRT with low game_nits so it doesn't compress as hard
-  // The ACES inverse gives values 0-5 for typical scenes.
-  // Setting game_nits=80 means value 1.0 = 80 nits (SDR white)
-  // The sun at ~5.0 = 400 nits, which is closer to peak.
+  // Color temperature: shift warm/cool
+  float temp = shader_injection.custom_color_temp;
+  hdr_color.r *= 1.0f + temp * 0.3f;
+  hdr_color.b *= 1.0f - temp * 0.3f;
+
+  // Shadow lift: raise the black floor
+  float lift = shader_injection.custom_shadow_lift;
+  hdr_color += lift * 0.05f;
+
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = shader_injection.tone_map_type;
   config.peak_nits = shader_injection.peak_white_nits;
-  config.game_nits = 80.f;  // Treat 1.0 as 80 nits so highlights have more room
+  config.game_nits = 80.f;
   config.gamma_correction = shader_injection.gamma_correction;
   config.exposure = shader_injection.tone_map_exposure;
   config.highlights = shader_injection.tone_map_highlights;
@@ -67,6 +72,10 @@ void main(
   config.reno_drt_working_color_space = shader_injection.tone_map_working_color_space;
 
   float3 tonemapped = renodx::tonemap::config::Apply(hdr_color, config);
+
+  // Boost to fill display peak
+  float boost = shader_injection.peak_white_nits / 460.f;
+  tonemapped *= boost;
 
   output = float4(tonemapped, 1.0f);
 }

@@ -234,6 +234,28 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type > 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
+    new renodx::utils::settings::Setting{
+        .key = "ColorTemp",
+        .binding = &shader_injection.custom_color_temp,
+        .default_value = 50.f,
+        .label = "Color Temperature",
+        .section = "Color Grading",
+        .tooltip = "Shifts white balance. Lower = cooler/blue, Higher = warmer/orange",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .parse = [](float value) { return (value - 50.f) * 0.02f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ShadowLift",
+        .binding = &shader_injection.custom_shadow_lift,
+        .default_value = 0.f,
+        .label = "Shadow Lift",
+        .section = "Color Grading",
+        .tooltip = "Raises the black floor to reveal detail in dark areas",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
 };
 
 void OnPresetOff() {
@@ -251,6 +273,8 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeScene", 100.f);
+  renodx::utils::settings::UpdateSetting("ColorTemp", 50.f);
+  renodx::utils::settings::UpdateSetting("ShadowLift", 0.f);
 }
 
 bool initialized = false;
