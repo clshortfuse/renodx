@@ -36,19 +36,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
     }),
     {
         new renodx::utils::settings::Setting{
-            .key = "tonemap_clamp_color_space",
-            .binding = &shader_injection.custom_tonemap_clamp,
-            .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-            .default_value = 0.f,
-            .can_reset = true,
-            .label = "Clamp Tonemap Grading",
-            .section = "Tone Mapping",
-            .tooltip = "Clamps the tonemap colour grading. Use BT.709 for a vanilla result.",
-            .labels = {"BT.709", "BT.2020"},
-            .parse = [](float value) { return value; },
-            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
-        },
-        new renodx::utils::settings::Setting{
             .key = "SDRBlendFactor",
             .binding = &shader_injection.tone_map_sdr_blend_factor,
             .default_value = 18.f,
@@ -243,19 +230,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
   };
 
-  const std::unordered_map<
-      std::pair<reshade::api::resource_usage, reshade::api::format>,
-      reshade::api::format,
-      renodx::utils::hash::HashPair>
-      view_upgrades_custom = {
-          {{reshade::api::resource_usage::shader_resource, reshade::api::format::r8g8b8a8_typeless},
-           reshade::api::format::r16g16b16a16_typeless},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r8g8b8a8_unorm},
-           reshade::api::format::r16g16b16a16_unorm},
-          {{reshade::api::resource_usage::render_target, reshade::api::format::r8g8b8a8_unorm_srgb},
-           reshade::api::format::r16g16b16a16_float},
-      };
-
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
       if (!reshade::register_addon(h_module)) return FALSE;
@@ -286,7 +260,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-      for (int i = 0; i < 1; i++) {
+      for (int i = 0; i < 3; i++) {
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
             .new_format = target_format,
@@ -296,6 +270,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
             .aspect_ratio = common_aspect_ratio,
             .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+            .ignore_reset = true,
             .view_upgrades = view_upgrades,
             .min_dimensions = min_dimensions,
         });
