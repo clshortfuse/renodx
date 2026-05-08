@@ -3,25 +3,6 @@
 Texture2D<float4> g_Texture : register(t0);
 SamplerState g_Sampler_LinearClamp : register(s1);
 
-// Inverse ACES filmic tonemap
-float3 ACESFilmicInverse(float3 x) {
-  const float a = 2.51f;
-  const float b = 0.03f;
-  const float c = 2.43f;
-  const float d = 0.59f;
-  const float e = 0.14f;
-
-  float3 A = a - c * x;
-  float3 B = b - d * x;
-  float3 C = -e * x;
-
-  float3 discriminant = B * B - 4.0f * A * C;
-  discriminant = max(0, discriminant);
-
-  float3 result = (-B + sqrt(discriminant)) / (2.0f * A);
-  return max(0, result);
-}
-
 void main(
     float4 pos : SV_Position,
     float2 uv : TEXCOORD0,
@@ -29,29 +10,39 @@ void main(
   float3 color = g_Texture.SampleLevel(g_Sampler_LinearClamp, uv, 0).rgb;
 
   if (shader_injection.tone_map_type == 0) {
-    // Vanilla: decode gamma and output at SDR white
-    float3 linear_color = renodx::color::gamma::DecodeSafe(color, 2.2f);
-    output = float4(linear_color, 1.0f);
+    // Vanilla: just output as-is
+    output = float4(color, 1.0f);
     return;
   }
 
-  // HDR: decode gamma, inverse tonemap, apply RenoDRT
-  float3 linear_color = renodx::color::gamma::DecodeSafe(color, 2.2f);
-  float3 hdr_color = ACESFilmicInverse(linear_color);
+  // Decode gamma to linear
+  float3 linear_color = renodx::color::srgb::DecodeSafe(color);
 
-  // Color temperature: shift warm/cool
+  // Color temperature
   float temp = shader_injection.custom_color_temp;
-  hdr_color.r *= 1.0f + temp * 0.3f;
-  hdr_color.b *= 1.0f - temp * 0.3f;
+  linear_color.r *= 1.0f + temp * 0.3f;
+  linear_color.b *= 1.0f - temp * 0.3f;
 
-  // Shadow lift: raise the black floor
+  // Shadow lift
   float lift = shader_injection.custom_shadow_lift;
-  hdr_color += lift * 0.05f;
+  linear_color += lift * 0.02f;
+  linear_color = max(0, linear_color);
+
+  // Highlight expansion: extend the [0,1] tonemapped range into HDR
+  // Use RenoDX extended tonemap - feed the linear SDR values through
+  // with peak_nits > game_nits to expand highlights
+  // The key: treat the input as if game_nits = 80 (SDR)
+  // and let RenoDRT/ACES expand to peak_nits
+  // Scale input to give RenoDRT headroom for expansion
+  // The game's ACES compressed everything to [0,1]. We stretch it back out
+  // so highlights have room to expand into HDR.
+  float expansion = shader_injection.peak_white_nits / 80.f;
+  linear_color *= expansion;
 
   renodx::tonemap::Config config = renodx::tonemap::config::Create();
   config.type = shader_injection.tone_map_type;
   config.peak_nits = shader_injection.peak_white_nits;
-  config.game_nits = 80.f;
+  config.game_nits = 80.f;  // Treat input 1.0 as 80 nits for more expansion headroom
   config.gamma_correction = shader_injection.gamma_correction;
   config.exposure = shader_injection.tone_map_exposure;
   config.highlights = shader_injection.tone_map_highlights;
@@ -71,11 +62,10 @@ void main(
   config.reno_drt_hue_correction_method = shader_injection.tone_map_hue_processor;
   config.reno_drt_working_color_space = shader_injection.tone_map_working_color_space;
 
-  float3 tonemapped = renodx::tonemap::config::Apply(hdr_color, config);
+  float3 result = renodx::tonemap::config::Apply(linear_color, config);
 
-  // Boost to fill display peak
-  float boost = shader_injection.peak_white_nits / 460.f;
-  tonemapped *= boost;
+  // Boost to fill display peak (RenoDRT compresses conservatively)
+  result *= shader_injection.peak_white_nits / 543.f;
 
-  output = float4(tonemapped, 1.0f);
+  output = float4(result, 1.0f);
 }
