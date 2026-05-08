@@ -17,7 +17,9 @@
 #include "../../utils/date.hpp"
 #include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
+#include "./ryujinxlog.hpp"
 #include "./shared.h"
+
 
 namespace {
 
@@ -216,6 +218,24 @@ void OnPresetOff() {
 
 bool initialized = false;
 
+const auto RYUJINX_PROCESS_NAME = std::string_view("Ryujinx.exe");
+const auto RYUJINX_LOADED_TITLE_MARKER = std::string_view("Application Loaded:");
+const std::string_view ACCEPTED_RYUJINX_TITLES[] = {
+    "01007ef00011e000",
+    "the legend of zelda: breath of the wild",
+};
+
+bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
+  return ryujinxlog::DoesLatestLogLastMatchingLineContainAny({
+             .logs_path = process_path.parent_path() / "Logs",
+             .line_marker = RYUJINX_LOADED_TITLE_MARKER,
+             .accepted_terms = ACCEPTED_RYUJINX_TITLES,
+         })
+         || ryujinxlog::DoesCurrentProcessWindowTitleContainAny({
+             .accepted_terms = ACCEPTED_RYUJINX_TITLES,
+         });
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -231,9 +251,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       auto process_path = renodx::utils::platform::GetCurrentProcessPath();
       auto filename = process_path.filename().string();
 
+      if (filename == RYUJINX_PROCESS_NAME && !ShouldAttachForRyujinx(process_path)) return FALSE;
+
+      renodx::mods::swapchain::use_resource_cloning = true;
+
       if (filename == "Cemu.exe") {
         renodx::mods::swapchain::target_format = target_format;
-        renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
         renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
         renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
@@ -268,6 +291,22 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .min_dimensions = min_dimensions,
 
         });
+
+        for (int i = 0; i < 3; i++) {
+          renodx::mods::swapchain::resource_upgrade_infos.push_back({
+              .old_format = reshade::api::format::r8g8b8a8_typeless,
+              .new_format = target_format,
+              .shader_hash = 0xEF015FAB,
+              //   .ignore_size = true,  // risky...?
+              .use_resource_view_cloning = true,
+              //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
+              .aspect_ratio = common_aspect_ratio,
+              .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+              .ignore_reset = true,
+              .view_upgrades = view_upgrades,
+              .min_dimensions = min_dimensions,
+          });
+        }
 
         // renodx::mods::swapchain::resource_upgrade_infos.push_back({
         //     .old_format = reshade::api::format::r11g11b10_float,
