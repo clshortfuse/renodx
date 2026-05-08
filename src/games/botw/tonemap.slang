@@ -14,6 +14,9 @@ layout(set = 1, binding = 1) uniform sampler2D textureUnitPS1;
 layout(location = 0) in float4 passParameterSem0;
 layout(location = 0) out float4 passPixelColor0;
 
+static const float kHueTransferChromaStart = 0.02;
+static const float kHueTransferChromaEnd = 0.12;
+
 float3 ApplySaturationGrading(float3 color, float grade_bias, float grade_scale) {
   float triangle = dot(color, float3(2.f / 3.f)) - 1.0;
   float grade = (1.0 - triangle * triangle) * grade_scale + grade_bias;
@@ -100,13 +103,21 @@ float3 ApplyVanillaToneMapExtended(float3 untonemapped, float range = 1.f, float
   return tonemapped;
 }
 
+float ComputeHueTransferStrength(float3 donor) {
+  float donor_max = max(donor.r, max(donor.g, donor.b));
+  float donor_min = min(donor.r, min(donor.g, donor.b));
+  float donor_chroma = renodx::math::DivideSafe(donor_max - donor_min, donor_max, 0.f);
+  return smoothstep(kHueTransferChromaStart, kHueTransferChromaEnd, donor_chroma);
+}
+
 // applies hues and chrominance from a tonemapped color onto untonemapped
 float3 ComputeUntonemappedGraded(float3 untonemapped) {
   float3 untonemapped_graded = ApplyVanillaToneMapExtended(untonemapped, 1.f, RENODX_TONE_MAP_SDR_BLEND_FACTOR);
   float3 tonemapped_sdr = ApplyVanillaToneMap(untonemapped);
   tonemapped_sdr = min(1, tonemapped_sdr);  // blues overshoot due to luminance tm
+  float hue_transfer_strength = RENODX_COLOR_GRADE_STRENGTH * ComputeHueTransferStrength(tonemapped_sdr);
 
-  untonemapped_graded = CorrectHueAndPurityMBBT709WithBT2020(untonemapped_graded, tonemapped_sdr, RENODX_COLOR_GRADE_STRENGTH, 0.85f);
+  untonemapped_graded = CorrectHueAndPurityMBBT709WithBT2020(untonemapped_graded, tonemapped_sdr, hue_transfer_strength, RENODX_TONE_MAP_BLOWOUT);
 
   return untonemapped_graded;
 }
@@ -149,7 +160,7 @@ void main() {
     if (RENODX_GAMMA_CORRECTION == 2.f) {
       peak = renodx::color::correct::GammaSafe(peak, true, 2.4);
     }
-    float3 graded_tonemapped = renodx::tonemap::neutwo::MaxChannel(graded_untonemapped, peak);
+    float3 graded_tonemapped = renodx::tonemap::neutwo::PerChannel(graded_untonemapped, peak);
 
     output = graded_tonemapped;
   }
