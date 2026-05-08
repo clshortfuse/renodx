@@ -237,7 +237,11 @@ bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
+<<<<<<< Updated upstream
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Breath of the Wild";
+=======
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for The Legend of Zelda: Tears of the Kingdom";
+>>>>>>> Stashed changes
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   const auto target_format = reshade::api::format::r16g16b16a16_float;
