@@ -11,6 +11,27 @@ cbuffer cb3 : register(b3) {
   float4 cb3[77];
 }
 
+float2 GetVideoUV(float4 position, float4 texcoord) {
+  float2 uv_from_texcoord = texcoord.xy;
+  bool texcoord_is_normalized =
+      all(uv_from_texcoord >= -0.001f) &&
+      all(uv_from_texcoord <= 1.001f);
+  if (texcoord_is_normalized) {
+    return saturate(uv_from_texcoord);
+  }
+
+  bool texcoord_is_fullscreen =
+      all(uv_from_texcoord >= -0.001f) &&
+      all(uv_from_texcoord <= 2.001f);
+  if (texcoord_is_fullscreen) {
+    return saturate(uv_from_texcoord * 0.5f);
+  }
+
+  uint width, height;
+  t0.GetDimensions(width, height);
+  return saturate(position.xy / max(float2(width, height), 1.f.xx));
+}
+
 void main(
     float4 v0 : SV_POSITION0,
     float4 v1 : TEXCOORD8,
@@ -26,7 +47,7 @@ void main(
     float4 v11 : TEXCOORD6,
     float4 v12 : TEXCOORD7,
     out float4 o0 : SV_TARGET0) {
-  float4 raw_sample = t0.Sample(s0_s, v5.xy);
+  float4 raw_sample = t0.Sample(s0_s, GetVideoUV(v0, v5));
 
   // Mirror original shader's bit-mask path, but keep a safe fallback for
   // wrapped/upgrade cases where mask constants are invalid and collapse video.
@@ -51,7 +72,7 @@ void main(
     hdr_video /= safe_diffuse_white_nits;
     video_rgb = ClampAndRenderIntermediatePass(max(0.f, hdr_video));
   } else {
-    video_rgb = ToneMapAndRenderIntermediatePass(video_rgb, v5.xy);
+    video_rgb = ToneMapAndRenderIntermediatePass(video_rgb, GetVideoUV(v0, v5));
   }
 
   o0.rgb = video_rgb;

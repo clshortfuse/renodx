@@ -32,8 +32,10 @@
 namespace {
 
 ShaderInjectData shader_injection;
+uint32_t video_playback_latch = 0;
 
-bool MarkFinalSceneSeen(reshade::api::command_list* cmd_list) {
+bool MarkVideoPlaybackSeen(reshade::api::command_list* cmd_list) {
+  video_playback_latch = 2u;
   shader_injection.custom_reserved0 = 1.f;
   return true;
 }
@@ -42,8 +44,8 @@ renodx::mods::shader::CustomShaders custom_shaders = []() {
   renodx::mods::shader::CustomShaders shaders = {
       __ALL_CUSTOM_SHADERS
   };
-  if (auto it = shaders.find(0x61888319); it != shaders.end()) {
-    it->second.on_draw = &MarkFinalSceneSeen;
+  if (auto it = shaders.find(0x915F8B01); it != shaders.end()) {
+    it->second.on_draw = &MarkVideoPlaybackSeen;
   }
   return shaders;
 }();
@@ -366,11 +368,11 @@ void OnPresent(reshade::api::command_queue* queue,
                const reshade::api::rect* dest_rect,
                uint32_t dirty_rect_count,
                const reshade::api::rect* dirty_rects) {
-  shader_injection.custom_reserved0 = 0.f;
-  auto* device = queue->get_device();
-  if (device->get_api() == reshade::api::device_api::opengl) {
-    shader_injection.custom_flip_uv_y = 1.f;
+  shader_injection.custom_reserved0 = video_playback_latch > 0u ? 1.f : 0.f;
+  if (video_playback_latch > 0u) {
+    video_playback_latch--;
   }
+  auto* device = queue->get_device();
 }
 
 bool initialized = false;

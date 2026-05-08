@@ -26,7 +26,7 @@ VSOutput main(
     uint vertex_id : SV_VertexID) {
   VSOutput output;
 
-  if (CUSTOM_FINAL_SCENE_SEEN < 0.5f) {
+  if (CUSTOM_VIDEO_PLAYBACK_SEEN > 0.5f) {
     if (vertex_id == 0u) {
       output.position = float4(-1.f, 1.f, 0.f, 1.f);
       output.texcoord0 = float4(0.f, 0.f, 0.f, 1.f);

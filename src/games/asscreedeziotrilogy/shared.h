@@ -62,7 +62,7 @@ cbuffer cb13 : register(b13) {
 #define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
 #define CUSTOM_VIDEO_HDR      shader_injection.custom_video_hdr
 #define CUSTOM_WHITE_GRADIENT_STRENGTH shader_injection.custom_white_gradient_strength
-#define CUSTOM_FINAL_SCENE_SEEN shader_injection.custom_reserved0
+#define CUSTOM_VIDEO_PLAYBACK_SEEN shader_injection.custom_reserved0
 
 #include "../../shaders/renodx.hlsl"
 

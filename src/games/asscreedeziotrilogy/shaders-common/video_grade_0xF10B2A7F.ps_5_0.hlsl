@@ -10,14 +10,24 @@ cbuffer cb3 : register(b3) {
 }
 
 float2 GetVideoUV(float4 position, float4 texcoord) {
+  float2 uv_from_texcoord = texcoord.xy;
+  bool texcoord_is_normalized =
+      all(uv_from_texcoord >= -0.001f) &&
+      all(uv_from_texcoord <= 1.001f);
+  if (texcoord_is_normalized) {
+    return saturate(uv_from_texcoord);
+  }
+
+  bool texcoord_is_fullscreen =
+      all(uv_from_texcoord >= -0.001f) &&
+      all(uv_from_texcoord <= 2.001f);
+  if (texcoord_is_fullscreen) {
+    return saturate(uv_from_texcoord * 0.5f);
+  }
+
   uint width, height;
   t0.GetDimensions(width, height);
-
-  float2 uv_from_position = saturate(position.xy / max(float2(width, height), 1.f));
-  float2 uv_from_texcoord = texcoord.xy;
-  bool texcoord_valid = all(uv_from_texcoord >= -0.001f) && all(uv_from_texcoord <= 1.001f) && any(abs(uv_from_texcoord) > 0.0001f);
-
-  return texcoord_valid ? saturate(uv_from_texcoord) : uv_from_position;
+  return saturate(position.xy / max(float2(width, height), 1.f));
 }
 
 void main(
