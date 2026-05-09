@@ -13,12 +13,11 @@
 #include <dxgi1_6.h>
 #include <unknwnbase.h>
 
-
 namespace renodx::utils::directx {
 
 namespace internal {
 inline bool initialized = false;
-}
+}  // namespace internal
 
 inline decltype(&CreateDXGIFactory1) pCreateDXGIFactory1 = nullptr;
 inline decltype(&CreateDXGIFactory2) pCreateDXGIFactory2 = nullptr;
@@ -32,15 +31,15 @@ inline PFN_D3D_COMPILE pD3DCompile = nullptr;
 struct DECLSPEC_UUID("7F2C9A11-3B4E-4D6A-812F-5E9CD37A1B42") ReShadeRetrieveBaseInterface : IUnknown {};
 template <typename T>
 inline bool NativeFromReShadeProxy(T** reshade_proxy) {
+  if (reshade_proxy == nullptr) return false;
   auto* unknown = static_cast<IUnknown*>(*reshade_proxy);
   if (unknown == nullptr) return false;
   ReShadeRetrieveBaseInterface* native_base = nullptr;
   if (SUCCEEDED(unknown->QueryInterface(&native_base))) {
     native_base->Release();
-    *reshade_proxy = (T*)(native_base);
+    *reshade_proxy = reinterpret_cast<T*>(native_base);
     return true;
   }
-  assert(false);
   return false;
 }
 

@@ -54,6 +54,8 @@ enum class OutputFormat : std::uint8_t {
 struct PendingRequest {
   reshade::api::resource_view resource_view = {0u};
   std::optional<std::filesystem::path> output_path = std::nullopt;
+  std::optional<std::filesystem::path> output_directory = std::nullopt;
+  std::optional<std::string> name_prefix = std::nullopt;
   PreviewMode preview_mode = PreviewMode::CLAMPED;
   std::string preview_mode_name = "clamped";
   bool prefer_clone = false;
@@ -93,9 +95,13 @@ namespace internal {
   return std::format("{}", static_cast<std::uint32_t>(format));
 }
 
-[[nodiscard]] inline renodx::utils::resource::ResourceViewInfo* FindTrackedResourceViewInfo(reshade::api::resource_view resource_view) {
-  if (resource_view.handle == 0u) return nullptr;
-  return renodx::utils::resource::GetResourceViewInfo(resource_view);
+[[nodiscard]] inline std::optional<renodx::utils::resource::ResourceViewInfo> FindTrackedResourceViewInfo(reshade::api::resource_view resource_view) {
+  if (resource_view.handle == 0u) return std::nullopt;
+  std::optional<renodx::utils::resource::ResourceViewInfo> result = std::nullopt;
+  renodx::utils::resource::GetResourceViewInfo(resource_view, [&result](const renodx::utils::resource::ResourceViewInfo& info) {
+    result = info;
+  });
+  return result;
 }
 
 struct AnalysisTarget {
@@ -157,16 +163,29 @@ inline void to_json(json& j, const RatioStats& value) {
     reshade::api::resource_view resource_view,
     reshade::api::device* device,
     bool prefer_clone) {
-  auto* resource_view_info = FindTrackedResourceViewInfo(resource_view);
-  if (resource_view_info == nullptr || resource_view_info->destroyed || resource_view_info->resource_info == nullptr) {
+  const auto resource_view_info = FindTrackedResourceViewInfo(resource_view);
+  if (!resource_view_info.has_value() || resource_view_info->destroyed) {
     throw std::runtime_error(std::format("resourceViewHandle {} is not currently tracked.", resource_view.handle));
   }
   if (resource_view_info->device != device) {
     throw std::runtime_error("resourceViewHandle does not belong to the selected device.");
   }
 
-  const auto* resource_info = resource_view_info->resource_info;
-  if (resource_info->destroyed) {
+  reshade::api::resource resolved_resource = {0u};
+  reshade::api::resource_desc resolved_resource_desc = {};
+  bool clone_enabled = false;
+  reshade::api::resource clone_resource = {0u};
+  reshade::api::resource_desc clone_resource_desc = {};
+  bool resource_destroyed = false;
+  const auto found_resource_info = renodx::utils::resource::GetResourceInfo(resource_view_info->original_resource, [&](const renodx::utils::resource::ResourceInfo& info) {
+    resolved_resource = info.resource;
+    resolved_resource_desc = info.desc;
+    clone_enabled = info.clone_enabled;
+    clone_resource = info.clone;
+    clone_resource_desc = info.clone_desc;
+    resource_destroyed = info.destroyed;
+  });
+  if (!found_resource_info || resource_destroyed) {
     throw std::runtime_error("The selected resource view points to a destroyed resource.");
   }
 
@@ -174,23 +193,23 @@ inline void to_json(json& j, const RatioStats& value) {
       .requested_view = resource_view,
       .resolved_view = resource_view,
       .resolved_view_desc = resource_view_info->desc,
-      .resolved_resource = resource_info->resource,
-      .resolved_resource_desc = resource_info->desc,
+      .resolved_resource = resolved_resource,
+      .resolved_resource_desc = resolved_resource_desc,
       .used_clone = false,
   };
 
   if (prefer_clone) {
-    if (!resource_info->clone_enabled) {
+    if (!clone_enabled) {
       throw std::runtime_error("preferClone was requested, but clone hotswap is not enabled for the backing resource.");
     }
-    if (resource_view_info->clone.handle == 0u || resource_info->clone.handle == 0u) {
+    if (resource_view_info->clone.handle == 0u || clone_resource.handle == 0u) {
       throw std::runtime_error("preferClone was requested, but the clone view/resource is not currently instantiated. Render a frame after enabling clone hotswap and try again.");
     }
 
     target.resolved_view = resource_view_info->clone;
     target.resolved_view_desc = resource_view_info->clone_desc;
-    target.resolved_resource = resource_info->clone;
-    target.resolved_resource_desc = resource_info->clone_desc;
+    target.resolved_resource = clone_resource;
+    target.resolved_resource_desc = clone_resource_desc;
     target.used_clone = true;
   }
 
@@ -267,6 +286,166 @@ inline void to_json(json& j, const RatioStats& value) {
 
 [[nodiscard]] inline OutputFormat GetOutputFormat(const std::filesystem::path& output_path) {
   return output_path.extension() == L".exr" ? OutputFormat::EXR : OutputFormat::PNG;
+}
+
+[[nodiscard]] inline std::string FormatCrc32(uint32_t crc32) {
+  return std::format("0x{:08X}", crc32);
+}
+
+[[nodiscard]] inline std::string SanitizeFileStem(std::string_view value) {
+  std::string result = {};
+  result.reserve(value.size());
+
+  bool previous_was_separator = false;
+  for (const char character : value) {
+    const bool is_alphanumeric = (character >= '0' && character <= '9')
+                                 || (character >= 'A' && character <= 'Z')
+                                 || (character >= 'a' && character <= 'z');
+    const bool keep_character = is_alphanumeric || character == '-' || character == '.';
+    if (keep_character) {
+      result.push_back(character);
+      previous_was_separator = false;
+      continue;
+    }
+
+    if (!previous_was_separator) {
+      result.push_back('_');
+      previous_was_separator = true;
+    }
+  }
+
+  while (!result.empty() && result.front() == '_') {
+    result.erase(result.begin());
+  }
+  while (!result.empty() && result.back() == '_') {
+    result.pop_back();
+  }
+
+  if (result.empty()) {
+    return "resource";
+  }
+  return result;
+}
+
+[[nodiscard]] inline std::string MakeSuggestedFileName(
+    std::string_view prefix,
+    std::string_view format_name,
+    uint32_t width,
+    uint32_t height,
+    uint32_t crc32,
+    std::string_view extension) {
+  return std::format(
+      "{}_{}_{}x{}_{}.{}",
+      SanitizeFileStem(prefix),
+      SanitizeFileStem(format_name),
+      width,
+      height,
+      FormatCrc32(crc32),
+      extension);
+}
+
+[[nodiscard]] inline uint32_t ComputeMappedTextureCrc32(
+    reshade::api::format format,
+    const reshade::api::subresource_data& mapped_data,
+    uint32_t width,
+    uint32_t height) {
+  const auto row_pitch = reshade::api::format_row_pitch(format, width);
+  const auto slice_pitch = reshade::api::format_slice_pitch(format, row_pitch, height);
+  if (row_pitch == 0u || slice_pitch == 0u || mapped_data.data == nullptr) {
+    return 0u;
+  }
+
+  if (mapped_data.row_pitch == row_pitch) {
+    return renodx::utils::hash::ComputeCRC32(static_cast<const std::uint8_t*>(mapped_data.data), slice_pitch);
+  }
+
+  const auto row_count = std::max<std::size_t>(1u, slice_pitch / row_pitch);
+  auto crc = 0xFFFFFFFFu;
+  const auto* bytes = static_cast<const std::uint8_t*>(mapped_data.data);
+  for (std::size_t row_index = 0; row_index < row_count; ++row_index) {
+    crc = renodx::utils::hash::UpdateCRC32(
+        crc,
+        bytes + (static_cast<std::size_t>(mapped_data.row_pitch) * row_index),
+        row_pitch);
+  }
+  return renodx::utils::hash::FinalizeCRC32(crc);
+}
+
+[[nodiscard]] inline bool TryBuildRawPngPixels(
+    reshade::api::format format,
+    const reshade::api::subresource_data& mapped_data,
+    uint32_t width,
+    uint32_t height,
+    std::vector<std::uint8_t>& rgba_pixels) {
+  if (mapped_data.data == nullptr || width == 0u || height == 0u) return false;
+
+  rgba_pixels.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u);
+  for (uint32_t y = 0; y < height; ++y) {
+    const auto* row = static_cast<const std::uint8_t*>(mapped_data.data)
+                      + (static_cast<std::size_t>(mapped_data.row_pitch) * y);
+    auto* out_row = rgba_pixels.data() + (static_cast<std::size_t>(width) * static_cast<std::size_t>(y) * 4u);
+    switch (format) {
+      case reshade::api::format::r8g8b8a8_unorm:
+      case reshade::api::format::r8g8b8a8_unorm_srgb:
+        std::memcpy(out_row, row, static_cast<std::size_t>(width) * 4u);
+        break;
+      case reshade::api::format::b8g8r8a8_unorm:
+      case reshade::api::format::b8g8r8a8_unorm_srgb:
+        for (uint32_t x = 0; x < width; ++x) {
+          const auto* pixel = row + (static_cast<std::size_t>(x) * 4u);
+          auto* out_pixel = out_row + (static_cast<std::size_t>(x) * 4u);
+          out_pixel[0] = pixel[2];
+          out_pixel[1] = pixel[1];
+          out_pixel[2] = pixel[0];
+          out_pixel[3] = pixel[3];
+        }
+        break;
+      case reshade::api::format::r8g8b8x8_unorm:
+      case reshade::api::format::r8g8b8x8_unorm_srgb:
+        for (uint32_t x = 0; x < width; ++x) {
+          const auto* pixel = row + (static_cast<std::size_t>(x) * 4u);
+          auto* out_pixel = out_row + (static_cast<std::size_t>(x) * 4u);
+          out_pixel[0] = pixel[0];
+          out_pixel[1] = pixel[1];
+          out_pixel[2] = pixel[2];
+          out_pixel[3] = 255u;
+        }
+        break;
+      case reshade::api::format::b8g8r8x8_unorm:
+      case reshade::api::format::b8g8r8x8_unorm_srgb:
+        for (uint32_t x = 0; x < width; ++x) {
+          const auto* pixel = row + (static_cast<std::size_t>(x) * 4u);
+          auto* out_pixel = out_row + (static_cast<std::size_t>(x) * 4u);
+          out_pixel[0] = pixel[2];
+          out_pixel[1] = pixel[1];
+          out_pixel[2] = pixel[0];
+          out_pixel[3] = 255u;
+        }
+        break;
+      default:
+        rgba_pixels.clear();
+        return false;
+    }
+  }
+
+  return true;
+}
+
+[[nodiscard]] inline json UploadSignatureToJson(const renodx::utils::resource::ResourceUploadSignature& value) {
+  return json{
+      {"source", renodx::utils::resource::ResourceUploadSourceName(value.source)},
+      {"subresource", value.subresource},
+      {"crc32", FormatCrc32(value.crc32)},
+      {"crc32Value", value.crc32},
+      {"format", std::format("{}", static_cast<std::uint32_t>(value.format))},
+      {"width", value.width},
+      {"height", value.height},
+      {"depthOrLayers", value.depth_or_layers},
+      {"rowPitch", value.row_pitch},
+      {"slicePitch", value.slice_pitch},
+      {"sourceSize", value.source_size},
+      {"fullUpdate", value.full_update},
+  };
 }
 
 [[nodiscard]] inline PreviewMode ParsePreviewMode(std::string_view value) {
@@ -450,6 +629,8 @@ inline void EncodePreviewPixel(
     reshade::api::command_queue* queue,
     reshade::api::resource_view resource_view,
     const std::optional<std::filesystem::path>& output_path,
+    const std::optional<std::filesystem::path>& output_directory,
+    const std::optional<std::string>& name_prefix,
     PreviewMode preview_mode,
     std::string_view preview_mode_name,
     bool prefer_clone) {
@@ -483,6 +664,19 @@ inline void EncodePreviewPixel(
         .is_error = true,
     };
   }
+
+  const auto summary_view = target.used_clone ? target.resolved_view : resource_view;
+  const auto resource_view_summary_value = context.build_resource_view_summary
+                                               ? std::optional<resource_view_summary::ResourceViewSummary>(
+                                                     context.build_resource_view_summary(summary_view, device))
+                                               : std::nullopt;
+  const auto upload_resource = [&]() {
+    if (const auto resource_from_view = renodx::utils::resource::GetResourceFromView(resource_view);
+        resource_from_view.handle != 0u) {
+      return resource_from_view;
+    }
+    return target.resolved_resource;
+  }();
 
   const auto first_level = target.resolved_view_desc.texture.first_level;
   const auto first_layer = target.resolved_view_desc.texture.first_layer;
@@ -557,10 +751,34 @@ inline void EncodePreviewPixel(
     uint64_t pixels_any_above_four = 0u;
     bool supported_format = true;
     std::vector<std::uint8_t> preview_pixels;
+    std::vector<std::uint8_t> raw_png_pixels;
     std::vector<float> exr_pixels;
     const auto output_format = output_path.has_value()
                                    ? GetOutputFormat(output_path.value())
                                    : OutputFormat::PNG;
+    const auto resource_format_name = FormatFormat(context, intermediate_format);
+    const auto live_raw_crc32 = ComputeMappedTextureCrc32(intermediate_format, mapped_data, width, height);
+    const auto initial_upload = renodx::utils::resource::GetInitialUploadSignature(upload_resource);
+    const auto latest_upload = renodx::utils::resource::GetLatestUploadSignature(upload_resource);
+    std::string preferred_crc32_source = "live_readback";
+    uint32_t preferred_crc32 = live_raw_crc32;
+    if (initial_upload.has_value()
+        && initial_upload->subresource == subresource
+        && initial_upload->format == target.resolved_resource_desc.texture.format
+        && initial_upload->width == width
+        && initial_upload->height == height
+        && initial_upload->full_update) {
+      preferred_crc32 = initial_upload->crc32;
+      preferred_crc32_source = "initial_upload";
+    } else if (latest_upload.has_value()
+               && latest_upload->subresource == subresource
+               && latest_upload->format == target.resolved_resource_desc.texture.format
+               && latest_upload->width == width
+               && latest_upload->height == height
+               && latest_upload->full_update) {
+      preferred_crc32 = latest_upload->crc32;
+      preferred_crc32_source = "latest_upload";
+    }
     if (output_path.has_value() && output_format == OutputFormat::PNG) {
       preview_pixels.resize(static_cast<size_t>(width) * static_cast<size_t>(height) * 4u);
     }
@@ -646,6 +864,7 @@ inline void EncodePreviewPixel(
       };
     } else {
       json output_json = nullptr;
+      json hash_dump_json = nullptr;
       std::optional<std::string> output_error = std::nullopt;
       if (output_path.has_value()) {
         std::error_code filesystem_error;
@@ -721,6 +940,62 @@ inline void EncodePreviewPixel(
         }
       }
 
+      if (!output_error.has_value() && output_directory.has_value()) {
+        std::error_code directory_error = {};
+        std::filesystem::create_directories(output_directory.value(), directory_error);
+        if (directory_error) {
+          output_error = std::format(
+              "Failed to create output directory '{}': {}",
+              output_directory->string(),
+              directory_error.message());
+        } else if (!TryBuildRawPngPixels(intermediate_format, mapped_data, width, height, raw_png_pixels)) {
+          output_error = std::format(
+              "Hash-named dumping currently supports only RGBA8/BGRA8-style resource formats. The current resource format is {}.",
+              resource_format_name);
+        } else {
+          std::string chosen_prefix = name_prefix.value_or("");
+          if (chosen_prefix.empty() && resource_view_summary_value.has_value()) {
+            if (resource_view_summary_value->resource_reflection.has_value()
+                && !resource_view_summary_value->resource_reflection->empty()) {
+              chosen_prefix = resource_view_summary_value->resource_reflection.value();
+            } else if (resource_view_summary_value->resource_view_reflection.has_value()
+                       && !resource_view_summary_value->resource_view_reflection->empty()) {
+              chosen_prefix = resource_view_summary_value->resource_view_reflection.value();
+            }
+          }
+          if (chosen_prefix.empty()) {
+            chosen_prefix = "resource";
+          }
+
+          const auto file_name = MakeSuggestedFileName(
+              chosen_prefix,
+              resource_format_name,
+              width,
+              height,
+              preferred_crc32,
+              "png");
+          const auto hash_dump_path = (output_directory.value() / file_name).lexically_normal();
+          if (!WritePngPreview(hash_dump_path, width, height, raw_png_pixels)) {
+            output_error = std::format(
+                "Failed to write hash-named PNG dump to '{}'.",
+                hash_dump_path.string());
+          } else {
+            hash_dump_json = json{
+                {"path", hash_dump_path.string()},
+                {"fileName", file_name},
+                {"format", "png"},
+                {"width", width},
+                {"height", height},
+                {"crc32", FormatCrc32(preferred_crc32)},
+                {"crc32Value", preferred_crc32},
+                {"crc32Source", preferred_crc32_source},
+                {"liveCrc32", FormatCrc32(live_raw_crc32)},
+                {"liveCrc32Value", live_raw_crc32},
+            };
+          }
+        }
+      }
+
       device->unmap_texture_region(intermediate, 0);
 
       if (output_error.has_value()) {
@@ -733,8 +1008,22 @@ inline void EncodePreviewPixel(
         return tool_result;
       }
 
-      auto resource_view_json = context.build_resource_view_summary
-                                    ? json(context.build_resource_view_summary(resource_view, device))
+      std::string suggested_prefix = name_prefix.value_or("");
+      if (suggested_prefix.empty() && resource_view_summary_value.has_value()) {
+        if (resource_view_summary_value->resource_reflection.has_value()
+            && !resource_view_summary_value->resource_reflection->empty()) {
+          suggested_prefix = resource_view_summary_value->resource_reflection.value();
+        } else if (resource_view_summary_value->resource_view_reflection.has_value()
+                   && !resource_view_summary_value->resource_view_reflection->empty()) {
+          suggested_prefix = resource_view_summary_value->resource_view_reflection.value();
+        }
+      }
+      if (suggested_prefix.empty()) {
+        suggested_prefix = "resource";
+      }
+
+      auto resource_view_json = resource_view_summary_value.has_value()
+                                    ? json(resource_view_summary_value.value())
                                     : json(nullptr);
       json analysis_target_json = {
           {"preferClone", prefer_clone},
@@ -754,6 +1043,19 @@ inline void EncodePreviewPixel(
           {"resourceViewHandle", FormatHandle(context, resource_view.handle)},
           {"resourceView", resource_view_json},
           {"analysisTarget", analysis_target_json},
+          {
+              "resourceIdentity",
+              {
+                  {"liveCrc32", FormatCrc32(live_raw_crc32)},
+                  {"liveCrc32Value", live_raw_crc32},
+                  {"preferredCrc32", FormatCrc32(preferred_crc32)},
+                  {"preferredCrc32Value", preferred_crc32},
+                  {"preferredCrc32Source", preferred_crc32_source},
+                  {"initialUpload", initial_upload.has_value() ? UploadSignatureToJson(initial_upload.value()) : json(nullptr)},
+                  {"latestUpload", latest_upload.has_value() ? UploadSignatureToJson(latest_upload.value()) : json(nullptr)},
+                  {"suggestedFileName", MakeSuggestedFileName(suggested_prefix, resource_format_name, width, height, preferred_crc32, "png")},
+              },
+          },
           {
               "analysis",
               {
@@ -795,6 +1097,9 @@ inline void EncodePreviewPixel(
           result["dump"] = output_json;
         }
       }
+      if (!hash_dump_json.is_null()) {
+        result["hashDump"] = hash_dump_json;
+      }
 
       std::string text;
       const auto analyzed_view_handle = FormatHandle(context, target.resolved_view.handle);
@@ -824,16 +1129,32 @@ inline void EncodePreviewPixel(
               output_path->string(),
               pixels_any_above_one);
         }
+        if (!hash_dump_json.is_null()) {
+          text += std::format(" Saved a hash-named PNG dump to '{}'.", hash_dump_json["path"].get<std::string>());
+        }
       } else {
-        text = std::format(
-            "Analyzed {}x{} {} {} {} on device #{}. {} pixel(s) are above 1.0 in at least one RGB channel.",
-            width,
-            height,
-            FormatFormat(context, analysis_format),
-            analyzed_view_label,
-            analyzed_view_handle,
-            device_index,
-            pixels_any_above_one);
+        if (!hash_dump_json.is_null()) {
+          text = std::format(
+              "Analyzed {}x{} {} {} {} on device #{}. Saved a hash-named PNG dump to '{}'. {} pixel(s) are above 1.0 in at least one RGB channel.",
+              width,
+              height,
+              FormatFormat(context, analysis_format),
+              analyzed_view_label,
+              analyzed_view_handle,
+              device_index,
+              hash_dump_json["path"].get<std::string>(),
+              pixels_any_above_one);
+        } else {
+          text = std::format(
+              "Analyzed {}x{} {} {} {} on device #{}. {} pixel(s) are above 1.0 in at least one RGB channel.",
+              width,
+              height,
+              FormatFormat(context, analysis_format),
+              analyzed_view_label,
+              analyzed_view_handle,
+              device_index,
+              pixels_any_above_one);
+        }
       }
       tool_result = ToolResult{
           .text = text,
@@ -877,6 +1198,8 @@ inline void EncodePreviewPixel(
   auto request = std::make_shared<PendingRequest>();
   request->resource_view = reshade::api::resource_view{resource_view_handle};
   request->output_path = std::move(output_path);
+  request->output_directory = std::nullopt;
+  request->name_prefix = std::nullopt;
   request->preview_mode = preview_mode;
   request->preview_mode_name = std::string(internal::GetPreviewModeName(preview_mode));
   request->prefer_clone = prefer_clone;
@@ -921,6 +1244,74 @@ inline void EncodePreviewPixel(
   return request->result.value();
 }
 
+[[nodiscard]] inline ToolResult HandleDumpResourceWithHashTool(const json& arguments, const ToolContext& context) {
+  if (!context.resolve_device_index || !context.enqueue_request) {
+    throw std::runtime_error("AnalyzeResourceToolContext is not initialized.");
+  }
+
+  const auto resource_view_handle = resource_handle::GetRequired(arguments, "resourceViewHandle");
+  const auto device_index = context.resolve_device_index(arguments);
+  const auto output_directory_value = mcp_arguments::GetRequired<std::string>(arguments, "outputDirectory");
+  const auto prefer_clone = mcp_arguments::GetOptional<bool>(arguments, "preferClone").value_or(false);
+  const auto name_prefix = mcp_arguments::GetOptional<std::string>(arguments, "namePrefix");
+
+  auto output_directory = std::filesystem::path(output_directory_value);
+  if (!output_directory.is_absolute()) {
+    throw std::runtime_error("outputDirectory must be an absolute path.");
+  }
+  output_directory = output_directory.lexically_normal();
+
+  auto request = std::make_shared<PendingRequest>();
+  request->resource_view = reshade::api::resource_view{resource_view_handle};
+  request->output_path = std::nullopt;
+  request->output_directory = output_directory;
+  request->name_prefix = name_prefix.has_value() && !name_prefix->empty()
+                             ? std::optional<std::string>(*name_prefix)
+                             : std::nullopt;
+  request->preview_mode = PreviewMode::CLAMPED;
+  request->preview_mode_name = std::string(internal::GetPreviewModeName(PreviewMode::CLAMPED));
+  request->prefer_clone = prefer_clone;
+
+  if (!context.enqueue_request(device_index, request)) {
+    const auto error = std::format("Failed to queue the resource dump request for device #{}.", device_index);
+    return ToolResult{
+        .text = error,
+        .structured_content = json{{"error", error}},
+        .is_error = true,
+    };
+  }
+
+  {
+    std::unique_lock request_lock(request->mutex);
+    if (!request->cv.wait_for(request_lock, std::chrono::seconds(15), [&request] { return request->completed || request->started; })) {
+      request->canceled = true;
+      request_lock.unlock();
+      if (context.cancel_request) {
+        context.cancel_request(device_index, request);
+      }
+      return ToolResult{
+          .text = "Timed out waiting for the next present to process the resource dump request.",
+          .structured_content = json{{"error", "Timed out waiting for the next present to process the resource dump request."}},
+          .is_error = true,
+      };
+    }
+
+    if (!request->completed) {
+      request->cv.wait(request_lock, [&request] { return request->completed; });
+    }
+  }
+
+  if (!request->result.has_value()) {
+    return ToolResult{
+        .text = "The resource dump request completed without a result.",
+        .structured_content = json{{"error", "The resource dump request completed without a result."}},
+        .is_error = true,
+    };
+  }
+
+  return request->result.value();
+}
+
 inline void ProcessPendingRequests(
     const std::deque<std::shared_ptr<PendingRequest>>& requests,
     std::uint32_t device_index,
@@ -952,6 +1343,8 @@ inline void ProcessPendingRequests(
           queue,
           request->resource_view,
           request->output_path,
+          request->output_directory,
+          request->name_prefix,
           request->preview_mode,
           request->preview_mode_name,
           request->prefer_clone);

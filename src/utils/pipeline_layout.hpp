@@ -7,43 +7,60 @@
 
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include <shared_mutex>
-#include <sstream>
-#include <vector>
 
 #include <include/reshade.hpp>
 
+#include "./cross_addon.hpp"
 #include "./data.hpp"
-#include "./format.hpp"
+#include "./hash.hpp"
 #include "./log.hpp"
 
 namespace renodx::utils::pipeline_layout {
 
+using DescriptorPushLocation = std::pair<uint32_t, uint32_t>;
+
+struct DescriptorBindingKey {
+  reshade::api::descriptor_type type = static_cast<reshade::api::descriptor_type>(0u);
+  uint32_t slot = 0u;
+  uint32_t space = 0u;
+
+  bool operator==(const DescriptorBindingKey& other) const = default;
+};
+
+struct DescriptorBindingKeyHash {
+  size_t operator()(const DescriptorBindingKey& key) const {
+    return hash::HashPair{}(std::make_pair(
+        static_cast<uint64_t>(static_cast<uint32_t>(key.type)),
+        (static_cast<uint64_t>(key.space) << 32u) | static_cast<uint64_t>(key.slot)));
+  }
+};
+
 struct PipelineLayoutData {
-  std::vector<reshade::api::pipeline_layout_param> params;
-  std::vector<std::vector<reshade::api::descriptor_range>> ranges;
-  [[deprecated("Use renodx::utils::state descriptor-table tracking instead.")]]
-  std::vector<reshade::api::descriptor_table> tables;
+  cross_addon::vector<reshade::api::pipeline_layout_param> params;
+  cross_addon::vector<cross_addon::vector<reshade::api::descriptor_range>> ranges;
   reshade::api::pipeline_layout layout = {0u};
   reshade::api::pipeline_layout replacement_layout = {0u};
   reshade::api::pipeline_layout injection_layout = {0u};
   int32_t injection_index = -1;
   int32_t injection_register_index = -1;
+  cross_addon::unordered_map<DescriptorBindingKey, DescriptorPushLocation, DescriptorBindingKeyHash> descriptor_push_locations;
   bool failed_injection = false;
 };
 
-static struct Store {
-  data::ParallelNodeHashMap<uint64_t, PipelineLayoutData, std::shared_mutex> pipeline_layout_data;
-} local_store;
+using PipelineLayoutDataMap = cross_addon::parallel_node_hash_map<uint64_t, PipelineLayoutData, std::shared_mutex>;
 
-static Store* store = &local_store;
+struct __declspec(uuid("080a74f2-9a2a-4af6-bb2c-8d083e0a354d")) Data {
+  PipelineLayoutDataMap pipeline_layout_data;
+};
 
-static bool is_primary_hook = false;
+static cross_addon::Shared<Data> shared;
 
-static const PipelineLayoutData* GetPipelineLayoutData(const reshade::api::pipeline_layout& layout) {
+[[deprecated("Use GetPipelineLayoutData<F>")]] [[nodiscard]] static const PipelineLayoutData* GetPipelineLayoutData(const reshade::api::pipeline_layout& layout) {
   const PipelineLayoutData* data = nullptr;
 
-  store->pipeline_layout_data.if_contains(layout.handle, [&data](const std::pair<const uint64_t, PipelineLayoutData>& pair) {
+  shared.data->pipeline_layout_data.if_contains(layout.handle, [&data](const std::pair<const uint64_t, PipelineLayoutData>& pair) {
     data = &pair.second;
   });
   if (data == nullptr) {
@@ -56,13 +73,25 @@ static const PipelineLayoutData* GetPipelineLayoutData(const reshade::api::pipel
 }
 
 template <typename F>
+static bool GetPipelineLayoutData(const reshade::api::pipeline_layout& layout, F&& f) {
+  if (layout.handle == 0u) return false;
+
+  bool found = false;
+  shared.data->pipeline_layout_data.if_contains(layout.handle, [&f, &found](const std::pair<const uint64_t, PipelineLayoutData>& pair) {
+    std::invoke(f, &pair.second);
+    found = true;
+  });
+  return found;
+}
+
+template <typename F>
 static bool CreatePipelineLayoutData(const reshade::api::pipeline_layout& layout, F&& f) {
-  return store->pipeline_layout_data.lazy_emplace_l(
+  return shared.data->pipeline_layout_data.lazy_emplace_l(
       layout.handle,
       [&](std::pair<const uint64_t, PipelineLayoutData>& pair) {
         std::forward<F>(f)(pair.second);
       },
-      [&](const data::ParallelNodeHashMap<uint64_t, PipelineLayoutData, std::shared_mutex>::constructor& ctor) {
+      [&](const PipelineLayoutDataMap::constructor& ctor) {
         PipelineLayoutData data = {.layout = layout};
         std::forward<F>(f)(data);
         ctor(layout.handle, std::move(data));
@@ -72,7 +101,7 @@ static bool CreatePipelineLayoutData(const reshade::api::pipeline_layout& layout
 template <typename F>
 static bool UpdatePipelineLayoutData(const reshade::api::pipeline_layout& layout, F&& f) {
   bool updated = false;
-  store->pipeline_layout_data.modify_if(layout.handle, [&](std::pair<const uint64_t, PipelineLayoutData>& pair) {
+  shared.data->pipeline_layout_data.modify_if(layout.handle, [&](std::pair<const uint64_t, PipelineLayoutData>& pair) {
     std::forward<F>(f)(pair.second);
     updated = true;
   });
@@ -83,43 +112,6 @@ static bool UpdatePipelineLayoutData(const reshade::api::pipeline_layout& layout
     assert(updated);
   }
   return updated;
-}
-
-struct __declspec(uuid("080a74f2-9a2a-4af6-bb2c-8d083e0a354d")) DeviceData {
-  Store* store;
-};
-
-static void OnInitDevice(reshade::api::device* device) {
-  DeviceData* data;
-  bool created = renodx::utils::data::CreateOrGet(device, data);
-
-  if (created) {
-    log::d(
-        "utils::pipeline_layout::OnInitDevice(Hooking device: ",
-        log::AsPtr(device),
-        ", api: ", device->get_api(),
-        ")");
-    is_primary_hook = true;
-    data->store = store;
-  } else {
-    std::stringstream s;
-    s << "utils::pipeline_layout::OnInitDevice(Attaching to hook: ";
-    s << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
-    s << ", api: " << device->get_api();
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-    store = data->store;
-  }
-}
-
-static void OnDestroyDevice(reshade::api::device* device) {
-  if (!is_primary_hook) return;
-  std::stringstream s;
-  s << "utils::resource::OnDestroyDevice(";
-  s << reinterpret_cast<uintptr_t>(device);
-  s << ")";
-  reshade::log::message(reshade::log::level::info, s.str().c_str());
-  device->destroy_private_data<DeviceData>();
 }
 
 static void OnInitPipelineLayout(
@@ -164,31 +156,23 @@ static void OnInitPipelineLayout(
 static void OnDestroyPipelineLayout(
     reshade::api::device* device,
     reshade::api::pipeline_layout layout) {
-  store->pipeline_layout_data.erase(layout.handle);
+  shared.data->pipeline_layout_data.erase(layout.handle);
 }
-
-static bool attached = false;
 
 static void Use(DWORD fdw_reason) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-      if (attached) return;
-      attached = true;
-      reshade::log::message(reshade::log::level::info, "PipelineLayoutUtil attached.");
-
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::register_event<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
-      reshade::register_event<reshade::addon_event::destroy_pipeline_layout>(OnDestroyPipelineLayout);
+      if (shared.RegisterModule()) {
+        reshade::log::message(reshade::log::level::info, "PipelineLayoutUtil attached.");
+      }
+      shared.RegisterEvent<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
+      shared.RegisterEvent<reshade::addon_event::destroy_pipeline_layout>(OnDestroyPipelineLayout);
 
       break;
     case DLL_PROCESS_DETACH:
-      if (!attached) return;
-      attached = false;
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
-      reshade::unregister_event<reshade::addon_event::destroy_pipeline_layout>(OnDestroyPipelineLayout);
+      shared.UnregisterEvent<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
+      shared.UnregisterEvent<reshade::addon_event::destroy_pipeline_layout>(OnDestroyPipelineLayout);
+      shared.UnregisterModule();
 
       break;
   }

@@ -8,7 +8,8 @@
 #include <sl_core_types.h>
 
 #include <cstdlib>
-#include <map>
+#include <shared_mutex>
+#include <vector>
 
 #include <d3d11.h>
 #include <d3d12.h>
@@ -30,7 +31,9 @@
 
 #include <source/dxgi/dxgi_factory.hpp>
 
+#include "../data.hpp"
 #include "../directx.hpp"
+#include "../platform.hpp"
 #include "../resource.hpp"
 #include "./DXGIFactoryWrapper.hpp"
 #include "./DXGISwapChainWrapper.hpp"
@@ -43,8 +46,16 @@ namespace renodx::utils::streamline::v2 {
 
 static decltype(&slInit) Real_slInit = nullptr;
 static decltype(&slGetNativeInterface) Real_slGetNativeInterface = nullptr;
+static bool streamline_bootstrap_initialized = false;
+static bool streamline_bootstrap_init_in_progress = false;
+static bool streamline_runtime_initialized = false;
+using DLSSGSetOptionsOverrideCallback = void (*)(const sl::ViewportHandle& viewport, sl::DLSSGOptions& options);
+static DLSSGSetOptionsOverrideCallback override_dlssg_set_options = nullptr;
+
+static void ProcessDeferredStreamlineUpgrades();
 
 SL_API sl::Result Hooked_slInit(const sl::Preferences& pref, uint64_t sdkVersion = sl::kSDKVersion) {
+#ifdef DEBUG_LEVEL_0
   std::stringstream s;
   s << "utils::streamline_v2::slInit(pref = {";
   s << " showConsole: " << std::boolalpha << pref.showConsole;
@@ -134,13 +145,14 @@ SL_API sl::Result Hooked_slInit(const sl::Preferences& pref, uint64_t sdkVersion
   s << ", renderAPI: " << static_cast<uint32_t>(pref.renderAPI);
   s << " })";
   log::d(s.str());
+#endif
 
   auto pref_copy = pref;
   pref_copy.showConsole = true;
-  pref_copy.flags |= sl::PreferenceFlags::eUseDXGIFactoryProxy;
-  pref_copy.flags |= sl::PreferenceFlags::eDisableDebugText;
-  pref_copy.flags |= sl::PreferenceFlags::eUseManualHooking;
-  pref_copy.flags &= ~sl::PreferenceFlags::eAllowOTA;
+  // pref_copy.flags |= sl::PreferenceFlags::eUseDXGIFactoryProxy;
+  // pref_copy.flags |= sl::PreferenceFlags::eDisableDebugText;
+  // pref_copy.flags |= sl::PreferenceFlags::eUseManualHooking;
+  // pref_copy.flags &= ~sl::PreferenceFlags::eAllowOTA;
   pref_copy.logLevel = sl::LogLevel::eVerbose;
 
   const wchar_t* pathToLogsAndData = L"./";
@@ -148,20 +160,67 @@ SL_API sl::Result Hooked_slInit(const sl::Preferences& pref, uint64_t sdkVersion
   pref_copy.pathToLogsAndData = pathToLogsAndData;
   // pref_copy.flags |= sl::PreferenceFlags::eUseDXGIFactoryProxy;
 
-#ifdef DEBUG_LEVEL_1
-  return Real_slInit(pref_copy, sdkVersion);
+  if (streamline_bootstrap_initialized && !streamline_bootstrap_init_in_progress) {
+    return sl::Result::eOk;
+  }
+
+#if defined(DEBUG_LEVEL_1) && !defined(NDEBUG)
+  const auto ret = Real_slInit(pref_copy, sdkVersion);
+#else
+  const auto ret = Real_slInit(pref, sdkVersion);
 #endif
 
-  return Real_slInit(pref, sdkVersion);
+  if (ret == sl::Result::eOk || ret == sl::Result::eErrorInitNotCalled) {
+    streamline_bootstrap_initialized = true;
+    streamline_runtime_initialized = true;
+    ProcessDeferredStreamlineUpgrades();
+  }
+
+  return ret;
 }
 
-std::map<ID3D12Device*, reshade::api::device*> device_impl_map;
-std::map<ID3D12CommandQueue*, reshade::api::command_queue*> command_queue_map;
+using DeviceImplMap = utils::data::ParallelFlatHashMap<ID3D12Device*, reshade::api::device*, std::shared_mutex>;
+
+DeviceImplMap device_impl_map;
+
+struct TrackedCommandListInfo {
+  reshade::api::command_list* reshade_command_list = nullptr;
+  ID3D12Device* native_device = nullptr;
+};
+
+using CommandListMap = utils::data::ParallelFlatHashMap<ID3D12GraphicsCommandList*, TrackedCommandListInfo, std::shared_mutex>;
+CommandListMap tracked_command_lists;
+
+struct TrackedCommandQueueInfo {
+  reshade::api::command_queue* reshade_queue = nullptr;
+  ID3D12Device* native_device = nullptr;
+};
+
+using TrackedCommandQueueMap = utils::data::ParallelFlatHashMap<ID3D12CommandQueue*, TrackedCommandQueueInfo, std::shared_mutex>;
+TrackedCommandQueueMap tracked_command_queues;
 
 // Result slUpgradeInterface(void** baseInterface)
 extern "C" decltype(&slUpgradeInterface) Real_slUpgradeInterface = nullptr;
 extern "C" sl::Result Hooked_slUpgradeInterface(void** baseInterface) {
   auto* unknown = static_cast<IUnknown*>(*baseInterface);
+
+  ID3D12CommandQueue* d3d12_command_queue{};
+  if (SUCCEEDED(unknown->QueryInterface(&d3d12_command_queue))) {
+    d3d12_command_queue->Release();
+
+    auto ret = Real_slUpgradeInterface(baseInterface);
+    if (ret != sl::Result::eOk) {
+      log::e("utils::streamline_v2::slUpgradeInterface() - Failed to upgrade command queue interface");
+      return ret;
+    }
+
+    auto* upgraded_unknown = static_cast<IUnknown*>(*baseInterface);
+    ID3D12CommandQueue* upgraded_command_queue{};
+    if (SUCCEEDED(upgraded_unknown->QueryInterface(&upgraded_command_queue))) {
+      upgraded_command_queue->Release();
+    }
+    return ret;
+  }
 
   ID3D12Device* d3d12_device{};
   if (SUCCEEDED(unknown->QueryInterface(&d3d12_device))) {
@@ -171,7 +230,6 @@ extern "C" sl::Result Hooked_slUpgradeInterface(void** baseInterface) {
       log::e("utils::streamline_v2::slUpgradeInterface() - Failed to upgrade interface");
       return ret;
     }
-    log::d(std::format("utils::streamline_v2::slUpgradeInterface() - ID3D12Device: {:p} => {:p}", (void*)unknown, *baseInterface).c_str());
     return ret;
   }
 
@@ -183,7 +241,6 @@ extern "C" sl::Result Hooked_slUpgradeInterface(void** baseInterface) {
       log::e("utils::streamline_v2::slUpgradeInterface() - Failed to upgrade interface");
       return ret;
     }
-    log::d(std::format("utils::streamline_v2::slUpgradeInterface() - IDXGIDevice: {:p} => {:p}", (void*)unknown, *baseInterface).c_str());
     return ret;
   }
 
@@ -195,7 +252,6 @@ extern "C" sl::Result Hooked_slUpgradeInterface(void** baseInterface) {
       log::e("utils::streamline_v2::slUpgradeInterface() - Failed to upgrade interface");
       return ret;
     }
-    log::d(std::format("utils::streamline_v2::slUpgradeInterface() - IDXGISwapChain: {:p} => {:p}", (void*)unknown, *baseInterface).c_str());
     return ret;
   }
 
@@ -204,7 +260,6 @@ extern "C" sl::Result Hooked_slUpgradeInterface(void** baseInterface) {
     // dxgiFactory7->Release();
 
     // Upgrade ReShade's internal factory to use the Streamline factory
-    assert(IsDebuggerPresent());
     DXGIFactory* reshade_factory = nullptr;
     UINT size = sizeof(reshade_factory);
     dxgi_factory7->GetPrivateData(__uuidof(DXGIFactory), &size, &reshade_factory);
@@ -221,11 +276,7 @@ extern "C" sl::Result Hooked_slUpgradeInterface(void** baseInterface) {
     auto* factory_wrapper = new DXGIFactoryWrapper(reshade_factory);
     // factory_wrapper->SetSLGetNativeInterface(Real_slGetNativeInterface);
     // factory_wrapper->SetSLUpgradeInterface(Real_slUpgradeInterface);
-    // factory_wrapper->SetCommandQueueMap(&command_queue_map);
-
     *baseInterface = factory_wrapper;
-    log::d("utils::streamline_v2::slUpgradeInterface() - Upgraded DXGIFactory wrapper:",
-           log::AsPtr(reshade_factory), " => ", log::AsPtr(reshade_factory->_orig));
 
     return sl::Result::eOk;
   }
@@ -236,7 +287,6 @@ extern "C" sl::Result Hooked_slUpgradeInterface(void** baseInterface) {
 
 extern "C" decltype(&CreateDXGIFactory) Real_CreateDXGIFactory = nullptr;
 extern "C" HRESULT Hooked_CreateDXGIFactory(REFIID riid, void** ppFactory) {
-  log::d("utils::streamline_v2::CreateDXGIFactory()");
   return Real_CreateDXGIFactory(riid, ppFactory);
 }
 
@@ -247,55 +297,278 @@ static void UpdateReshadeApiObject(reshade::api::api_object* object, void* orig)
   reinterpret_cast<void**>(object)[1] = orig;
 }
 
-static void OnInitDevice(reshade::api::device* device) {
-  auto* native_device = (ID3D12Device*)device->get_native();
+static bool TryUpgradeTrackedStreamlineDevice(reshade::api::device* device) {
+  if (device == nullptr) return false;
 
-  device_impl_map.emplace(native_device, device);
-  utils::log::d("utils::streamline_v2::OnInitDevice() - Device: ", utils::log::AsPtr(native_device), " => ", utils::log::AsPtr(device));
+  auto* native_device = reinterpret_cast<ID3D12Device*>(static_cast<uintptr_t>(device->get_native()));
+  if (native_device == nullptr) {
+    return false;
+  }
+
+  ID3D12Device14* d3d12_device14{};
+  if (FAILED(static_cast<IUnknown*>(native_device)->QueryInterface(&d3d12_device14))) {
+    return false;
+  }
+  d3d12_device14->Release();
+
+  if (Real_slUpgradeInterface == nullptr) {
+    return false;
+  }
+
+  auto* upgraded_device = native_device;
+  auto ret = Real_slUpgradeInterface(reinterpret_cast<void**>(&upgraded_device));
+  if (ret != sl::Result::eOk) {
+    log::e(std::format(
+               "utils::streamline_v2::TryUpgradeTrackedStreamlineDevice() - Failed to upgrade native device {:p}, result: {}",
+               (void*)native_device,
+               static_cast<uint32_t>(ret))
+               .c_str());
+    return false;
+  }
+
+  if (upgraded_device == native_device) {
+    return true;
+  }
+
+  UpdateReshadeApiObject(device, upgraded_device);
+
+  device_impl_map.lazy_emplace_l(
+      upgraded_device,
+      [&device](auto& pair) {
+        pair.second = device;
+      },
+      [upgraded_device, device](const DeviceImplMap::constructor& ctor) {
+        ctor(upgraded_device, device);
+      });
+
+  return true;
+}
+
+static bool TryUpgradeTrackedStreamlineCommandQueue(reshade::api::command_queue* queue) {
+  if (queue == nullptr) return false;
+
+  auto* native_command_queue = reinterpret_cast<ID3D12CommandQueue*>(static_cast<uintptr_t>(queue->get_native()));
+  if (native_command_queue == nullptr) {
+    return false;
+  }
+
+  if (Real_slUpgradeInterface == nullptr) {
+    return false;
+  }
+
+  ID3D12Device* before_device = nullptr;
+  if (FAILED(native_command_queue->GetDevice(IID_PPV_ARGS(&before_device)))) {
+    before_device = nullptr;
+  }
+
+  auto* upgraded_command_queue = native_command_queue;
+  auto ret = Real_slUpgradeInterface(reinterpret_cast<void**>(&upgraded_command_queue));
+  if (ret != sl::Result::eOk) {
+    log::e(std::format(
+               "utils::streamline_v2::TryUpgradeTrackedStreamlineCommandQueue() - Failed to upgrade native command queue {:p}, result: {}",
+               (void*)native_command_queue,
+               static_cast<uint32_t>(ret))
+               .c_str());
+    if (before_device != nullptr) before_device->Release();
+    return false;
+  }
+
+  ID3D12Device* after_device = nullptr;
+  if (FAILED(upgraded_command_queue->GetDevice(IID_PPV_ARGS(&after_device)))) {
+    after_device = nullptr;
+  }
+
+  if (upgraded_command_queue == native_command_queue) {
+    if (before_device != nullptr) before_device->Release();
+    if (after_device != nullptr) after_device->Release();
+    return true;
+  }
+
+  UpdateReshadeApiObject(queue, upgraded_command_queue);
+
+  TrackedCommandQueueInfo previous_info = {};
+  const bool had_previous_info = tracked_command_queues.erase_if(native_command_queue, [&previous_info](auto& pair) {
+    previous_info = pair.second;
+    return true;
+  });
+  if (had_previous_info) {
+    previous_info.reshade_queue = queue;
+    previous_info.native_device = after_device;
+    tracked_command_queues.lazy_emplace_l(
+        upgraded_command_queue,
+        [&previous_info](auto& pair) {
+          pair.second = previous_info;
+        },
+        [&previous_info, upgraded_command_queue](const TrackedCommandQueueMap::constructor& ctor) {
+          ctor(upgraded_command_queue, previous_info);
+        });
+  }
+
+  if (before_device != nullptr) before_device->Release();
+  if (after_device != nullptr) after_device->Release();
+  return true;
+}
+
+static void OnInitDevice(reshade::api::device* device) {
+  auto* native_device = reinterpret_cast<ID3D12Device*>(static_cast<uintptr_t>(device->get_native()));
+
+  device_impl_map.lazy_emplace_l(
+      native_device,
+      [&device](auto& pair) {
+        pair.second = device;
+      },
+      [native_device, device](const DeviceImplMap::constructor& ctor) {
+        ctor(native_device, device);
+      });
 
   if (!is_streamline_device) return;
+  if (!streamline_runtime_initialized) {
+    return;
+  }
+  TryUpgradeTrackedStreamlineDevice(device);
+}
 
-  // Upgrade to 14
-  ID3D12Device14* d3d12Device14{};
-  if (SUCCEEDED(static_cast<IUnknown*>(native_device)->QueryInterface(&d3d12Device14))) {
-    d3d12Device14->Release();
+static void OnDestroyDevice(reshade::api::device* device) {
+  if (device == nullptr) return;
 
-    auto* upgraded_device = (ID3D12Device*)native_device;
-
-    // Upgrade to Streamline's proxy device
-    auto ret = Real_slUpgradeInterface((void**)&upgraded_device);
-    assert(ret == sl::Result::eOk);
-    if (ret != sl::Result::eOk) {
-      log::e("utils::streamline_v2::OnInitDevice() - Failed to upgrade interface");
-      return;
+  std::vector<ID3D12Device*> devices_to_erase = {};
+  device_impl_map.for_each([&devices_to_erase, device](const auto& pair) {
+    if (pair.second == device) {
+      devices_to_erase.push_back(pair.first);
     }
-    log::d(std::format("utils::streamline_v2::OnInitDevice() - ID3D12Device: {:p} => {:p}", (void*)native_device, (void*)upgraded_device).c_str());
-
-    UpdateReshadeApiObject(device, upgraded_device);
+  });
+  for (auto* native_device : devices_to_erase) {
+    device_impl_map.erase(native_device);
   }
 }
 
 static void OnInitCommandQueue(reshade::api::command_queue* queue) {
+  if (queue == nullptr) return;
   auto* device = queue->get_device();
   // assert(IsDebuggerPresent());
-  if (device->get_api() != reshade::api::device_api::d3d12) return;
+  if (device == nullptr || device->get_api() != reshade::api::device_api::d3d12) return;
 
-  auto* native_command_queue = (ID3D12CommandQueue*)queue->get_native();
+  auto* native_command_queue = reinterpret_cast<ID3D12CommandQueue*>(static_cast<uintptr_t>(queue->get_native()));
+  if (native_command_queue == nullptr) {
+    return;
+  }
 
-  command_queue_map.emplace(native_command_queue, queue);
-  utils::log::d("utils::streamline_v2::OnInitCommandQueue() - Command Queue: ", utils::log::AsPtr(native_command_queue), " => ", utils::log::AsPtr(queue));
+  TrackedCommandQueueInfo info = {};
+  info.reshade_queue = queue;
+  info.native_device = reinterpret_cast<ID3D12Device*>(static_cast<uintptr_t>(device->get_native()));
+  tracked_command_queues.lazy_emplace_l(
+      native_command_queue,
+      [&info](auto& pair) {
+        pair.second = info;
+      },
+      [&info, native_command_queue](const TrackedCommandQueueMap::constructor& ctor) {
+        ctor(native_command_queue, info);
+      });
+
+  if (!streamline_runtime_initialized) {
+    return;
+  }
+
+  TryUpgradeTrackedStreamlineCommandQueue(queue);
+}
+
+static void OnDestroyCommandQueue(reshade::api::command_queue* queue) {
+  if (queue == nullptr) return;
+
+  auto* native_command_queue = reinterpret_cast<ID3D12CommandQueue*>(static_cast<uintptr_t>(queue->get_native()));
+  if (native_command_queue == nullptr) return;
+
+  const bool found = tracked_command_queues.erase_if(native_command_queue, [](auto&) {
+    return true;
+  });
+
+  if (!found) {
+    return;
+  }
+}
+
+static void OnInitCommandList(reshade::api::command_list* cmd_list) {
+  if (cmd_list == nullptr) return;
+  auto* device = cmd_list->get_device();
+  if (device == nullptr || device->get_api() != reshade::api::device_api::d3d12) return;
+
+  auto* native_command_list = reinterpret_cast<ID3D12GraphicsCommandList*>(static_cast<uintptr_t>(cmd_list->get_native()));
+  if (native_command_list == nullptr) {
+    return;
+  }
+
+  ID3D12Device* native_device = nullptr;
+  if (FAILED(native_command_list->GetDevice(IID_PPV_ARGS(&native_device)))) {
+    native_device = nullptr;
+  }
+
+  TrackedCommandListInfo info = {};
+  info.reshade_command_list = cmd_list;
+  info.native_device = native_device;
+  tracked_command_lists.lazy_emplace_l(
+      native_command_list,
+      [&info](auto& pair) {
+        pair.second = info;
+      },
+      [&info, native_command_list](const CommandListMap::constructor& ctor) {
+        ctor(native_command_list, info);
+      });
+
+  if (native_device != nullptr) {
+    native_device->Release();
+  }
+}
+
+static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
+  if (cmd_list == nullptr) return;
+
+  auto* native_command_list = reinterpret_cast<ID3D12GraphicsCommandList*>(static_cast<uintptr_t>(cmd_list->get_native()));
+  if (native_command_list == nullptr) return;
+
+  const bool found = tracked_command_lists.erase_if(native_command_list, [](auto&) {
+    return true;
+  });
+
+  if (!found) {
+    return;
+  }
+}
+
+static void ProcessDeferredStreamlineUpgrades() {
+  std::vector<reshade::api::device*> devices_to_upgrade;
+  std::vector<reshade::api::command_queue*> queues_to_upgrade;
+
+  device_impl_map.for_each([&devices_to_upgrade](const auto& pair) {
+    if (pair.second != nullptr) {
+      devices_to_upgrade.push_back(pair.second);
+    }
+  });
+
+  tracked_command_queues.for_each([&queues_to_upgrade](const auto& pair) {
+    const auto& info = pair.second;
+    if (info.reshade_queue != nullptr) {
+      queues_to_upgrade.push_back(info.reshade_queue);
+    }
+  });
+
+  for (auto* device : devices_to_upgrade) {
+    TryUpgradeTrackedStreamlineDevice(device);
+  }
+  for (auto* queue : queues_to_upgrade) {
+    TryUpgradeTrackedStreamlineCommandQueue(queue);
+  }
 }
 
 extern "C" decltype(&D3D12CreateDevice) Real_D3D12CreateDevice = nullptr;
 extern "C" HRESULT Hooked_D3D12CreateDevice(IUnknown* pAdapter, D3D_FEATURE_LEVEL MinimumFeatureLevel, REFIID riid, void** ppDevice) {
   // assert(IsDebuggerPresent());
-  log::d("utils::streamline_v2::D3D12CreateDevice()");
   renodx::utils::directx::Initialize();
-  ID3D12Device* device = nullptr;
 
   assert(is_streamline_device == false);
   is_streamline_device = true;
-  auto hr = renodx::utils::directx::pD3D12CreateDevice(pAdapter, MinimumFeatureLevel, riid, ppDevice);
+  auto hr = renodx::utils::directx::pD3D12CreateDevice != nullptr
+                ? renodx::utils::directx::pD3D12CreateDevice(pAdapter, MinimumFeatureLevel, riid, ppDevice)
+                : E_FAIL;
   is_streamline_device = false;
 
   return hr;
@@ -303,13 +576,11 @@ extern "C" HRESULT Hooked_D3D12CreateDevice(IUnknown* pAdapter, D3D_FEATURE_LEVE
 
 extern "C" decltype(&CreateDXGIFactory1) Real_CreateDXGIFactory1 = nullptr;
 extern "C" HRESULT Hooked_CreateDXGIFactory1(REFIID riid, void** ppFactory) {
-  log::d("utils::streamline_v2::CreateDXGIFactory1()");
   return Real_CreateDXGIFactory1(riid, ppFactory);
 }
 
 static decltype(&CreateDXGIFactory2) Real_CreateDXGIFactory2 = nullptr;
 SL_API HRESULT Hooked_CreateDXGIFactory2(UINT flags, REFIID riid, void** ppFactory) {
-  log::d("utils::streamline_v2::CreateDXGIFactory2()");
   renodx::utils::directx::Initialize();
   // Make real ReShade Factory instead of Streamline factory
   IDXGIFactory2* unknown = nullptr;
@@ -320,7 +591,6 @@ SL_API HRESULT Hooked_CreateDXGIFactory2(UINT flags, REFIID riid, void** ppFacto
   }
   IDXGIFactory7* dxgi_factory7{};
   if (SUCCEEDED(unknown->QueryInterface(&dxgi_factory7))) {
-    log::d(std::format("utils::streamline_v2::CreateDXGIFactory2() - IDXGIFactory7 created: {:p}", (void*)dxgi_factory7).c_str());
     dxgi_factory7->Release();
 
     // Upgrade ReShade's internal factory to use the Streamline factory
@@ -337,7 +607,6 @@ SL_API HRESULT Hooked_CreateDXGIFactory2(UINT flags, REFIID riid, void** ppFacto
     reshade_factory->_orig = real_factory;
 
     *ppFactory = reshade_factory;
-    log::d(std::format("utils::streamline_v2::CreateDXGIFactory2() - DXGIFactoryWrapper: {:p} => {:p}", (void*)unknown, (void*)*ppFactory).c_str());
   }
 
   return ret;
@@ -346,7 +615,22 @@ SL_API HRESULT Hooked_CreateDXGIFactory2(UINT flags, REFIID riid, void** ppFacto
 // slGetNativeInterface
 
 SL_API sl::Result Hooked_slGetNativeInterface(void* proxyInterface, void** baseInterface) {
-  log::d("utils::streamline_v2::slGetNativeInterface()");
+  ID3D12CommandQueue* d3d12_command_queue{};
+  if (SUCCEEDED(static_cast<IUnknown*>(proxyInterface)->QueryInterface(&d3d12_command_queue))) {
+    d3d12_command_queue->Release();
+
+    auto ret = Real_slGetNativeInterface(proxyInterface, baseInterface);
+    if (ret != sl::Result::eOk) {
+      log::e("utils::streamline_v2::slGetNativeInterface() - Failed to get native command queue interface");
+      return ret;
+    }
+
+    ID3D12CommandQueue* native_command_queue{};
+    if (SUCCEEDED(static_cast<IUnknown*>(*baseInterface)->QueryInterface(&native_command_queue))) {
+      native_command_queue->Release();
+    }
+    return ret;
+  }
 
   ID3D12Device* d3d12Device{};
   if (SUCCEEDED(static_cast<IUnknown*>(proxyInterface)->QueryInterface(&d3d12Device))) {
@@ -356,7 +640,6 @@ SL_API sl::Result Hooked_slGetNativeInterface(void* proxyInterface, void** baseI
       log::e("utils::streamline_v2::slGetNativeInterface() - Failed to get native interface");
       return ret;
     }
-    log::d(std::format("utils::streamline_v2::slGetNativeInterface() - ID3D12Device: {:p} => {:p}", (void*)proxyInterface, (void*)*baseInterface).c_str());
     return ret;
   }
 
@@ -368,7 +651,6 @@ SL_API sl::Result Hooked_slGetNativeInterface(void* proxyInterface, void** baseI
       log::e("utils::streamline_v2::slGetNativeInterface() - Failed to get native interface");
       return ret;
     }
-    log::d(std::format("utils::streamline_v2::slGetNativeInterface() - IDXGIDevice: {:p} => {:p}", (void*)proxyInterface, (void*)*baseInterface).c_str());
     return ret;
   }
 
@@ -382,10 +664,8 @@ SL_API sl::Result Hooked_slGetNativeInterface(void* proxyInterface, void** baseI
       log::e("utils::streamline_v2::slGetNativeInterface() - Failed to get native interface");
       return ret;
     }
-    log::d(std::format("utils::streamline_v2::slGetNativeInterface() - IDXGISwapChain: {:p} => {:p}", (void*)proxyInterface, (void*)native_directx_swapchain).c_str());
     // We have no way to create a ReShade swapchain here, so just return the ReShade one, but wrapped with a new pointer
     *baseInterface = new DXGISwapChainWrapper((IDXGISwapChain4*)dxgiSwapChain);
-    log::d(std::format("utils::streamline_v2::slGetNativeInterface() - Wrapped IDXGISwapChain: {:p} => {:p}", (void*)dxgiSwapChain, (void*)*baseInterface).c_str());
     return ret;
   }
 
@@ -398,7 +678,6 @@ SL_API sl::Result Hooked_slGetNativeInterface(void* proxyInterface, void** baseI
       log::e("utils::streamline_v2::slGetNativeInterface() - Failed to get native interface");
       return ret;
     }
-    log::d(std::format("utils::streamline_v2::slGetNativeInterface() - IDXGIFactory: {:p} => {:p}", (void*)proxyInterface, (void*)*baseInterface).c_str());
 
     return ret;
   }
@@ -408,14 +687,15 @@ SL_API sl::Result Hooked_slGetNativeInterface(void* proxyInterface, void** baseI
 
 static decltype(&slEvaluateFeature) Real_slEvaluateFeature = nullptr;
 SL_API sl::Result Hooked_slEvaluateFeature(sl::Feature feature, const sl::FrameToken& frame, const sl::BaseStructure** inputs, uint32_t numInputs, sl::CommandBuffer* cmdBuffer) {
-  utils::directx::NativeFromReShadeProxy(&cmdBuffer);
+  (void)frame;
+  const bool unwrapped = utils::directx::NativeFromReShadeProxy(&cmdBuffer);
+  assert((unwrapped || cmdBuffer == nullptr) && "slEvaluateFeature expected a ReShade proxy command buffer.");
   return Real_slEvaluateFeature(feature, frame, inputs, numInputs, cmdBuffer);
 }
 
 // slDLSSSetOptions
 extern "C" decltype(&slDLSSSetOptions) Real_slDLSSSetOptions = nullptr;
 extern "C" sl::Result Hooked_slDLSSSetOptions(const sl::ViewportHandle& viewport, const sl::DLSSOptions& options) {
-  log::d("utils::streamline_v2::slDLSSSetOptions()");
   sl::DLSSOptions options_copy = options;
   options_copy.colorBuffersHDR = sl::Boolean::eTrue;
   options_copy.useAutoExposure = sl::Boolean::eTrue;
@@ -423,57 +703,68 @@ extern "C" sl::Result Hooked_slDLSSSetOptions(const sl::ViewportHandle& viewport
   return Real_slDLSSSetOptions(viewport, options_copy);
 }
 
-// slDLSSSetOptions
+// slDLSSGSetOptions
 extern "C" decltype(&slDLSSGSetOptions) Real_slDLSSGSetOptions = nullptr;
 extern "C" sl::Result Hooked_slDLSSGSetOptions(const sl::ViewportHandle& viewport, const sl::DLSSGOptions& options) {
-  log::d("utils::streamline_v2::slDLSSGSetOptions()");
-  auto options_copy = options;
-  // options_copy.colorBuffersHDR = sl::Boolean::eTrue;
-  // options_copy.useAutoExposure = sl::Boolean::eTrue;
+  sl::DLSSGOptions options_copy = options;
+  if (override_dlssg_set_options != nullptr) {
+    override_dlssg_set_options(viewport, options_copy);
+  }
+
   return Real_slDLSSGSetOptions(viewport, options_copy);
+}
+
+extern "C" decltype(&slDLSSGGetState) Real_slDLSSGGetState = nullptr;
+extern "C" sl::Result Hooked_slDLSSGGetState(const sl::ViewportHandle& viewport, sl::DLSSGState& state, const sl::DLSSGOptions* options) {
+  return Real_slDLSSGGetState(viewport, state, options);
 }
 
 static decltype(&slSetD3DDevice) Real_slSetD3DDevice = nullptr;
 static sl::Result Hooked_slSetD3DDevice(void* d3dDevice) {
-  log::d(std::format("utils::streamline_v2::slSetD3DDevice({})", (void*)d3dDevice).c_str());
-  // return Real_slSetD3DDevice(d3dDevice);
-
   auto* native_device = static_cast<IUnknown*>(d3dDevice);
-  if (renodx::utils::directx::NativeFromReShadeProxy(&native_device)) {
-    log::d(std::format("utils::streamline_v2::slSetD3DDevice() - Unwrapped ReShade proxy: {} => {}", d3dDevice, (void*)native_device).c_str());
-  } else {
-    log::d(std::format("utils::streamline_v2::slSetD3DDevice() - Using original device pointer: {}", d3dDevice).c_str());
+  renodx::utils::directx::NativeFromReShadeProxy(&native_device);
+
+  auto* d3d12_device = static_cast<ID3D12Device*>(native_device);
+  auto ret = Real_slSetD3DDevice(native_device);
+  if (ret != sl::Result::eOk) {
+    log::e(std::format(
+               "utils::streamline_v2::slSetD3DDevice() - Real_slSetD3DDevice failed for {:p} with result {}",
+               (void*)d3d12_device,
+               static_cast<uint32_t>(ret))
+               .c_str());
+    return ret;
   }
 
-  return Real_slSetD3DDevice(native_device);
+  return ret;
 }
 
 static decltype(&slGetFeatureFunction) Real_slGetFeatureFunction = nullptr;
 SL_API sl::Result Hooked_slGetFeatureFunction(sl::Feature feature, const char* functionName, void*& function) {
-  log::d(std::format("utils::streamline_v2::slGetFeatureFunction({}, {})", static_cast<uint32_t>(feature), functionName).c_str());
-  return Real_slGetFeatureFunction(feature, functionName, function);
+  const auto ret = Real_slGetFeatureFunction(feature, functionName, function);
+  if (ret != sl::Result::eOk) {
+    return ret;
+  }
+
   switch (feature) {
     case sl::kFeatureDLSS:
       if (std::strcmp(functionName, "slDLSSSetOptions") == 0) {
+        Real_slDLSSSetOptions = reinterpret_cast<decltype(&slDLSSSetOptions)>(function);
         function = (void*)&Hooked_slDLSSSetOptions;
-        Real_slDLSSSetOptions = (decltype(&slDLSSSetOptions))function;
         return sl::Result::eOk;
       }
       break;
     case sl::kFeatureDLSS_G:
       if (std::strcmp(functionName, "slDLSSGSetOptions") == 0) {
+        Real_slDLSSGSetOptions = reinterpret_cast<decltype(&slDLSSGSetOptions)>(function);
         function = (void*)&Hooked_slDLSSGSetOptions;
-        Real_slDLSSGSetOptions = (decltype(&slDLSSGSetOptions))function;
         return sl::Result::eOk;
       }
       break;
     default:
       break;
   }
-  return Real_slGetFeatureFunction(feature, functionName, function);
+  return ret;
 }
-
-static gtl::parallel_node_hash_map<uint64_t, sl::Resource> resource_map;
 
 // Mirror the legacy signature without naming the deprecated API in a type expression.
 static sl::Result (*Real_slSetTag)(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags, uint32_t numTags, sl::CommandBuffer* cmdBuffer) = nullptr;
@@ -589,15 +880,22 @@ static sl::Result Hooked_slSetTag(const sl::ViewportHandle& viewport, const sl::
       default:                                       s << std::format("Unknown ({})", (uint32_t)tag.resource->state); break;
     }
 
-    auto* info = renodx::utils::resource::GetResourceInfo(reshade::api::resource{(uint64_t)tag.resource->native});
-    if (info != nullptr) {
-      s << ", format: " << info->desc.texture.format;
-      if (info->clone.handle != 0) {
-        s << ", clone: ";
-        s << PRINT_PTR(info->clone.handle);
-        s << ", clone-format: ";
-        s << info->clone_desc.texture.format;
-      }
+    reshade::api::format resource_format = reshade::api::format::unknown;
+    uint64_t clone_handle = 0u;
+    reshade::api::format clone_format = reshade::api::format::unknown;
+    renodx::utils::resource::GetResourceInfo(
+        reshade::api::resource{(uint64_t)tag.resource->native},
+        [&resource_format, &clone_handle, &clone_format](const renodx::utils::resource::ResourceInfo& info) {
+          resource_format = info.desc.texture.format;
+          clone_handle = info.clone.handle;
+          clone_format = info.clone_desc.texture.format;
+        });
+    s << ", format: " << resource_format;
+    if (clone_handle != 0u) {
+      s << ", clone: ";
+      s << PRINT_PTR(clone_handle);
+      s << ", clone-format: ";
+      s << clone_format;
     }
 
     s << ")";
@@ -606,9 +904,10 @@ static sl::Result Hooked_slSetTag(const sl::ViewportHandle& viewport, const sl::
 #endif
 
   sl::ResourceTag* new_tags = nullptr;
+  std::vector<sl::Resource> rewritten_resources = {};
   for (auto i = 0u; i < numTags; ++i) {
     const auto& tag = tags[i];
-    if (tag.type == sl::kBufferTypeBackbuffer) continue;
+    // if (tag.type == sl::kBufferTypeBackbuffer) continue;
     if (tag.resource == nullptr) continue;
     if (tag.resource->native == nullptr) continue;
 
@@ -624,37 +923,36 @@ static sl::Result Hooked_slSetTag(const sl::ViewportHandle& viewport, const sl::
     //   auto new_sl_resource_tag = sl::ResourceTag(&resources.back(), tag.type, tag.lifecycle, &tag.extent);
     //   new_tags[i] = new_sl_resource_tag;
     // } else {
-    auto& value = resource_map[(uint64_t)tag.resource->native];
-    if (value.native == nullptr) {
-      auto* info = renodx::utils::resource::GetResourceInfo(reshade::api::resource{(uint64_t)tag.resource->native});
-      if (info == nullptr) {
-        log::e(std::format("utils::streamline_v2::slSetTag() - Resource info not found for resource: {}", (void*)tag.resource->native).c_str());
-        continue;
-      }
-      if (info->clone_target != nullptr) {
-        value.native = (void*)info->clone.handle;
-      } else {
-        value.native = tag.resource->native;
-      }
-      value.type = tag.resource->type;
-      value.state = tag.resource->state;
+    void* redirected_native = tag.resource->native;
+    const auto found = renodx::utils::resource::GetResourceInfo(
+        reshade::api::resource{(uint64_t)tag.resource->native},
+        [&redirected_native](const renodx::utils::resource::ResourceInfo& info) {
+          if (info.clone_enabled && info.clone.handle != 0u) {
+            redirected_native = reinterpret_cast<void*>(info.clone.handle);
+          }
+        });
+    if (!found) {
+      log::e(std::format("utils::streamline_v2::slSetTag() - Resource info not found for resource: {}", (void*)tag.resource->native).c_str());
+      continue;
     }
 
-    if (value.native != tag.resource->native) {
-      value.state = tag.resource->state;
+    if (redirected_native != tag.resource->native) {
       if (new_tags == nullptr) {
         auto size = sizeof(sl::ResourceTag) * numTags;
         new_tags = reinterpret_cast<sl::ResourceTag*>(malloc(sizeof(sl::ResourceTag) * numTags));
         memcpy(new_tags, tags, sizeof(sl::ResourceTag) * numTags);
+        rewritten_resources.reserve(numTags);
       }
 
-      auto new_sl_resource_tag = sl::ResourceTag(&value, tag.type, tag.lifecycle, &tag.extent);
+      rewritten_resources.emplace_back(tag.resource->type, redirected_native, tag.resource->state);
+      auto new_sl_resource_tag = sl::ResourceTag(&rewritten_resources.back(), tag.type, tag.lifecycle, &tag.extent);
       new_tags[i] = new_sl_resource_tag;
     }
     // }
   }
 
-  utils::directx::NativeFromReShadeProxy(&cmdBuffer);
+  const bool unwrapped = utils::directx::NativeFromReShadeProxy(&cmdBuffer);
+  assert((unwrapped || cmdBuffer == nullptr) && "slSetTag expected a ReShade proxy command buffer.");
 
   // return sl::Result::eOk;
   if (new_tags == nullptr) {
@@ -669,6 +967,7 @@ static sl::Result Hooked_slSetTag(const sl::ViewportHandle& viewport, const sl::
 
 static decltype(&slSetTagForFrame) Real_slSetTagForFrame = nullptr;
 static sl::Result Hooked_slSetTagForFrame(const sl::FrameToken& frame, const sl::ViewportHandle& viewport, const sl::ResourceTag* tags, uint32_t numTags, sl::CommandBuffer* cmdBuffer) {
+  (void)frame;
 #if defined(DEBUG_LEVEL_2)
   for (auto i = 0u; i < numTags; ++i) {
     const auto& tag = tags[i];
@@ -780,15 +1079,22 @@ static sl::Result Hooked_slSetTagForFrame(const sl::FrameToken& frame, const sl:
       default:                                       s << std::format("Unknown ({})", (uint32_t)tag.resource->state); break;
     }
 
-    auto* info = renodx::utils::resource::GetResourceInfo(reshade::api::resource{(uint64_t)tag.resource->native});
-    if (info != nullptr) {
-      s << ", format: " << info->desc.texture.format;
-      if (info->clone.handle != 0) {
-        s << ", clone: ";
-        s << PRINT_PTR(info->clone.handle);
-        s << ", clone-format: ";
-        s << info->clone_desc.texture.format;
-      }
+    reshade::api::format resource_format = reshade::api::format::unknown;
+    uint64_t clone_handle = 0u;
+    reshade::api::format clone_format = reshade::api::format::unknown;
+    renodx::utils::resource::GetResourceInfo(
+        reshade::api::resource{(uint64_t)tag.resource->native},
+        [&resource_format, &clone_handle, &clone_format](const renodx::utils::resource::ResourceInfo& info) {
+          resource_format = info.desc.texture.format;
+          clone_handle = info.clone.handle;
+          clone_format = info.clone_desc.texture.format;
+        });
+    s << ", format: " << resource_format;
+    if (clone_handle != 0u) {
+      s << ", clone: ";
+      s << PRINT_PTR(clone_handle);
+      s << ", clone-format: ";
+      s << clone_format;
     }
 
     s << ")";
@@ -797,41 +1103,41 @@ static sl::Result Hooked_slSetTagForFrame(const sl::FrameToken& frame, const sl:
 #endif
 
   sl::ResourceTag* new_tags = nullptr;
+  std::vector<sl::Resource> rewritten_resources = {};
   for (auto i = 0u; i < numTags; ++i) {
     const auto& tag = tags[i];
     if (tag.type == sl::kBufferTypeBackbuffer) continue;
     if (tag.resource == nullptr) continue;
     if (tag.resource->native == nullptr) continue;
-    auto& value = resource_map[(uint64_t)tag.resource->native];
-    if (value.native == nullptr) {
-      auto* info = renodx::utils::resource::GetResourceInfo(reshade::api::resource{(uint64_t)tag.resource->native});
-      if (info == nullptr) {
-        log::e(std::format("utils::streamline_v2::slSetTagForFrame() - Resource info not found for resource: {}", (void*)tag.resource->native).c_str());
-        continue;
-      }
-      if (info->clone_target != nullptr) {
-        value.native = (void*)info->clone.handle;
-      } else {
-        value.native = tag.resource->native;
-      }
-      value.type = tag.resource->type;
-      value.state = tag.resource->state;
+    void* redirected_native = tag.resource->native;
+    const auto found = renodx::utils::resource::GetResourceInfo(
+        reshade::api::resource{(uint64_t)tag.resource->native},
+        [&redirected_native](const renodx::utils::resource::ResourceInfo& info) {
+          if (info.clone_enabled && info.clone.handle != 0u) {
+            redirected_native = reinterpret_cast<void*>(info.clone.handle);
+          }
+        });
+    if (!found) {
+      log::e(std::format("utils::streamline_v2::slSetTagForFrame() - Resource info not found for resource: {}", (void*)tag.resource->native).c_str());
+      continue;
     }
 
-    if (value.native != tag.resource->native) {
-      value.state = tag.resource->state;
+    if (redirected_native != tag.resource->native) {
       if (new_tags == nullptr) {
         auto size = sizeof(sl::ResourceTag) * numTags;
         new_tags = reinterpret_cast<sl::ResourceTag*>(malloc(sizeof(sl::ResourceTag) * numTags));
         memcpy(new_tags, tags, sizeof(sl::ResourceTag) * numTags);
+        rewritten_resources.reserve(numTags);
       }
 
-      auto new_sl_resource_tag = sl::ResourceTag(&value, tag.type, tag.lifecycle, &tag.extent);
+      rewritten_resources.emplace_back(tag.resource->type, redirected_native, tag.resource->state);
+      auto new_sl_resource_tag = sl::ResourceTag(&rewritten_resources.back(), tag.type, tag.lifecycle, &tag.extent);
       new_tags[i] = new_sl_resource_tag;
     }
   }
 
-  utils::directx::NativeFromReShadeProxy(&cmdBuffer);
+  const bool unwrapped = utils::directx::NativeFromReShadeProxy(&cmdBuffer);
+  assert((unwrapped || cmdBuffer == nullptr) && "slSetTagForFrame expected a ReShade proxy command buffer.");
 
   if (new_tags == nullptr) {
     return Real_slSetTagForFrame(frame, viewport, tags, numTags, cmdBuffer);

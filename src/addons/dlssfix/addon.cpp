@@ -7,10 +7,6 @@
 
 #define DEBUG_LEVEL_0
 
-#ifndef NDEBUG
-#define DEBUG_LEVEL_1
-#endif
-
 #include <cstring>
 #include <filesystem>
 #include <sstream>

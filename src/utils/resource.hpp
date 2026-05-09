@@ -7,21 +7,24 @@
 
 #include <algorithm>
 #include <cassert>
-#include <functional>
+#include <optional>
+#include <ranges>
 #include <shared_mutex>
 #include <sstream>
-#include <unordered_map>
-#include <vector>
+#include <type_traits>
+#include <utility>
 
 #include <include/reshade.hpp>
 
 #include "../utils/bitwise.hpp"
-#include "../utils/data.hpp"
+#include "../utils/cross_addon.hpp"
 #include "../utils/format.hpp"
 #include "../utils/hash.hpp"
 #include "../utils/log.hpp"
 
 namespace renodx::utils::resource {
+
+static bool use_resource_replace = false;
 
 #define ViewUpgrade(usage, source, destination) \
   {{reshade::api::resource_usage::usage, reshade::api::format::source}, reshade::api::format::destination}
@@ -31,94 +34,84 @@ namespace renodx::utils::resource {
       ViewUpgrade(unordered_access, source, destination), \
       ViewUpgrade(render_target, source, destination)
 
-const std::unordered_map<
+using ResourceViewUpgradeMap = cross_addon::unordered_map<
     std::pair<reshade::api::resource_usage, reshade::api::format>,
-    reshade::api::format, utils::hash::HashPair>
-    VIEW_UPGRADES_RGBA16F = {
-        ViewUpgradeAll(r16g16b16a16_typeless, r16g16b16a16_typeless),
-        ViewUpgradeAll(r10g10b10a2_typeless, r16g16b16a16_typeless),
-        ViewUpgradeAll(r8g8b8a8_typeless, r16g16b16a16_typeless),
-        ViewUpgradeAll(r16g16b16a16_float, r16g16b16a16_float),
-        ViewUpgradeAll(r16g16b16a16_unorm, r16g16b16a16_float),
-        ViewUpgradeAll(r16g16b16a16_snorm, r16g16b16a16_float),
-        ViewUpgradeAll(r10g10b10a2_unorm, r16g16b16a16_float),
-        ViewUpgradeAll(b10g10r10a2_unorm, r16g16b16a16_float),
-        ViewUpgradeAll(r8g8b8a8_unorm, r16g16b16a16_float),
-        ViewUpgradeAll(b8g8r8a8_unorm, r16g16b16a16_float),
-        ViewUpgradeAll(r8g8b8a8_snorm, r16g16b16a16_float),
-        ViewUpgradeAll(r8g8b8a8_unorm_srgb, r16g16b16a16_float),
-        ViewUpgradeAll(b8g8r8a8_unorm_srgb, r16g16b16a16_float),
-        ViewUpgradeAll(r11g11b10_float, r16g16b16a16_float),
-        ViewUpgradeAll(b8g8r8x8_unorm, r16g16b16a16_float),
-        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r16g16b16a16_float),
+  reshade::api::format,
+  utils::hash::HashPair>;
+
+const ResourceViewUpgradeMap VIEW_UPGRADES_RGBA16F = {
+  ViewUpgradeAll(r16g16b16a16_typeless, r16g16b16a16_typeless),
+  ViewUpgradeAll(r10g10b10a2_typeless, r16g16b16a16_typeless),
+  ViewUpgradeAll(r8g8b8a8_typeless, r16g16b16a16_typeless),
+  ViewUpgradeAll(r16g16b16a16_float, r16g16b16a16_float),
+  ViewUpgradeAll(r16g16b16a16_unorm, r16g16b16a16_float),
+  ViewUpgradeAll(r16g16b16a16_snorm, r16g16b16a16_float),
+  ViewUpgradeAll(r10g10b10a2_unorm, r16g16b16a16_float),
+  ViewUpgradeAll(b10g10r10a2_unorm, r16g16b16a16_float),
+  ViewUpgradeAll(r8g8b8a8_unorm, r16g16b16a16_float),
+  ViewUpgradeAll(b8g8r8a8_unorm, r16g16b16a16_float),
+  ViewUpgradeAll(r8g8b8a8_snorm, r16g16b16a16_float),
+  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r16g16b16a16_float),
+  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r16g16b16a16_float),
+  ViewUpgradeAll(r11g11b10_float, r16g16b16a16_float),
+  ViewUpgradeAll(b8g8r8x8_unorm, r16g16b16a16_float),
+  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r16g16b16a16_float),
 };
 
-const std::unordered_map<
-    std::pair<reshade::api::resource_usage, reshade::api::format>,
-    reshade::api::format, utils::hash::HashPair>
-    VIEW_UPGRADES_RGBA8_UNORM = {
-        ViewUpgradeAll(r8g8b8a8_typeless, r8g8b8a8_typeless),
-        ViewUpgradeAll(r8g8b8a8_unorm, r8g8b8a8_unorm),
-        ViewUpgradeAll(r8g8b8a8_unorm_srgb, r8g8b8a8_unorm),
-        ViewUpgradeAll(b8g8r8a8_unorm, r8g8b8a8_unorm),
-        ViewUpgradeAll(b8g8r8a8_unorm_srgb, r8g8b8a8_unorm),
-        ViewUpgradeAll(b8g8r8x8_unorm, r8g8b8a8_unorm),
-        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r8g8b8a8_unorm),
+const ResourceViewUpgradeMap VIEW_UPGRADES_RGBA8_UNORM = {
+  ViewUpgradeAll(r8g8b8a8_typeless, r8g8b8a8_typeless),
+  ViewUpgradeAll(r8g8b8a8_unorm, r8g8b8a8_unorm),
+  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r8g8b8a8_unorm),
+  ViewUpgradeAll(b8g8r8a8_unorm, r8g8b8a8_unorm),
+  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r8g8b8a8_unorm),
+  ViewUpgradeAll(b8g8r8x8_unorm, r8g8b8a8_unorm),
+  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r8g8b8a8_unorm),
 };
 
-const std::unordered_map<
-    std::pair<reshade::api::resource_usage, reshade::api::format>,
-    reshade::api::format, utils::hash::HashPair>
-    VIEW_UPGRADES_R10G10B10A2_UNORM = {
-        ViewUpgradeAll(r10g10b10a2_typeless, r10g10b10a2_typeless),
-        ViewUpgradeAll(r8g8b8a8_typeless, r10g10b10a2_typeless),
-        ViewUpgradeAll(r10g10b10a2_unorm, r10g10b10a2_unorm),
-        ViewUpgradeAll(b10g10r10a2_unorm, r10g10b10a2_unorm),
-        ViewUpgradeAll(r8g8b8a8_unorm, r10g10b10a2_unorm),
-        ViewUpgradeAll(b8g8r8a8_unorm, r10g10b10a2_unorm),
-        ViewUpgradeAll(r8g8b8a8_unorm_srgb, r10g10b10a2_unorm),
-        ViewUpgradeAll(b8g8r8a8_unorm_srgb, r10g10b10a2_unorm),
-        ViewUpgradeAll(b8g8r8x8_unorm, r10g10b10a2_unorm),
-        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r10g10b10a2_unorm),
+const ResourceViewUpgradeMap VIEW_UPGRADES_R10G10B10A2_UNORM = {
+  ViewUpgradeAll(r10g10b10a2_typeless, r10g10b10a2_typeless),
+  ViewUpgradeAll(r8g8b8a8_typeless, r10g10b10a2_typeless),
+  ViewUpgradeAll(r10g10b10a2_unorm, r10g10b10a2_unorm),
+  ViewUpgradeAll(b10g10r10a2_unorm, r10g10b10a2_unorm),
+  ViewUpgradeAll(r8g8b8a8_unorm, r10g10b10a2_unorm),
+  ViewUpgradeAll(b8g8r8a8_unorm, r10g10b10a2_unorm),
+  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r10g10b10a2_unorm),
+  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r10g10b10a2_unorm),
+  ViewUpgradeAll(b8g8r8x8_unorm, r10g10b10a2_unorm),
+  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r10g10b10a2_unorm),
 };
 
-const std::unordered_map<
-    std::pair<reshade::api::resource_usage, reshade::api::format>,
-    reshade::api::format, utils::hash::HashPair>
-    VIEW_UPGRADES_R11G11B10_FLOAT = {
-        ViewUpgradeAll(r10g10b10a2_typeless, r11g11b10_float),
-        ViewUpgradeAll(r8g8b8a8_typeless, r11g11b10_float),
-        ViewUpgradeAll(r10g10b10a2_unorm, r11g11b10_float),
-        ViewUpgradeAll(b10g10r10a2_unorm, r11g11b10_float),
-        ViewUpgradeAll(r8g8b8a8_unorm, r11g11b10_float),
-        ViewUpgradeAll(b8g8r8a8_unorm, r11g11b10_float),
-        ViewUpgradeAll(r8g8b8a8_unorm_srgb, r11g11b10_float),
-        ViewUpgradeAll(b8g8r8a8_unorm_srgb, r11g11b10_float),
-        ViewUpgradeAll(b8g8r8x8_unorm, r11g11b10_float),
-        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r11g11b10_float),
+const ResourceViewUpgradeMap VIEW_UPGRADES_R11G11B10_FLOAT = {
+  ViewUpgradeAll(r10g10b10a2_typeless, r11g11b10_float),
+  ViewUpgradeAll(r8g8b8a8_typeless, r11g11b10_float),
+  ViewUpgradeAll(r10g10b10a2_unorm, r11g11b10_float),
+  ViewUpgradeAll(b10g10r10a2_unorm, r11g11b10_float),
+  ViewUpgradeAll(r8g8b8a8_unorm, r11g11b10_float),
+  ViewUpgradeAll(b8g8r8a8_unorm, r11g11b10_float),
+  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r11g11b10_float),
+  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r11g11b10_float),
+  ViewUpgradeAll(b8g8r8x8_unorm, r11g11b10_float),
+  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r11g11b10_float),
 };
 
-const std::unordered_map<
-    std::pair<reshade::api::resource_usage, reshade::api::format>,
-    reshade::api::format, utils::hash::HashPair>
-    VIEW_UPGRADES_R9G9B9E5 = {
-        ViewUpgradeAll(r16g16b16a16_typeless, r9g9b9e5),
-        ViewUpgradeAll(r10g10b10a2_typeless, r9g9b9e5),
-        ViewUpgradeAll(r8g8b8a8_typeless, r9g9b9e5),
-        ViewUpgradeAll(r16g16b16a16_float, r9g9b9e5),
-        ViewUpgradeAll(r16g16b16a16_unorm, r9g9b9e5),
-        ViewUpgradeAll(r16g16b16a16_snorm, r9g9b9e5),
-        ViewUpgradeAll(r10g10b10a2_unorm, r9g9b9e5),
-        ViewUpgradeAll(b10g10r10a2_unorm, r9g9b9e5),
-        ViewUpgradeAll(r8g8b8a8_unorm, r9g9b9e5),
-        ViewUpgradeAll(b8g8r8a8_unorm, r9g9b9e5),
-        ViewUpgradeAll(r8g8b8a8_snorm, r9g9b9e5),
-        ViewUpgradeAll(r8g8b8a8_unorm_srgb, r9g9b9e5),
-        ViewUpgradeAll(b8g8r8a8_unorm_srgb, r9g9b9e5),
-        ViewUpgradeAll(r11g11b10_float, r9g9b9e5),
-        ViewUpgradeAll(r9g9b9e5, r9g9b9e5),
-        ViewUpgradeAll(b8g8r8x8_unorm, r9g9b9e5),
-        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r9g9b9e5),
+const ResourceViewUpgradeMap VIEW_UPGRADES_R9G9B9E5 = {
+  ViewUpgradeAll(r16g16b16a16_typeless, r9g9b9e5),
+  ViewUpgradeAll(r10g10b10a2_typeless, r9g9b9e5),
+  ViewUpgradeAll(r8g8b8a8_typeless, r9g9b9e5),
+  ViewUpgradeAll(r16g16b16a16_float, r9g9b9e5),
+  ViewUpgradeAll(r16g16b16a16_unorm, r9g9b9e5),
+  ViewUpgradeAll(r16g16b16a16_snorm, r9g9b9e5),
+  ViewUpgradeAll(r10g10b10a2_unorm, r9g9b9e5),
+  ViewUpgradeAll(b10g10r10a2_unorm, r9g9b9e5),
+  ViewUpgradeAll(r8g8b8a8_unorm, r9g9b9e5),
+  ViewUpgradeAll(b8g8r8a8_unorm, r9g9b9e5),
+  ViewUpgradeAll(r8g8b8a8_snorm, r9g9b9e5),
+  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r9g9b9e5),
+  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r9g9b9e5),
+  ViewUpgradeAll(r11g11b10_float, r9g9b9e5),
+  ViewUpgradeAll(r9g9b9e5, r9g9b9e5),
+  ViewUpgradeAll(b8g8r8x8_unorm, r9g9b9e5),
+  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r9g9b9e5),
 };
 
 #undef ViewUpgrade
@@ -146,10 +139,7 @@ struct ResourceUpgradeInfo {
 
   bool ignore_reset = false;
 
-  std::unordered_map<
-      std::pair<reshade::api::resource_usage, reshade::api::format>,
-      reshade::api::format, utils::hash::HashPair>
-      view_upgrades = VIEW_UPGRADES_RGBA16F;
+  ResourceViewUpgradeMap view_upgrades = VIEW_UPGRADES_RGBA16F;
 
   struct Dimensions {
     int16_t width = ANY;
@@ -164,7 +154,7 @@ struct ResourceUpgradeInfo {
 
   bool use_resource_view_cloning_and_upgrade = false;
 
-  std::string name;
+  cross_addon::string name;
 
   [[nodiscard]] bool CheckResourceDesc(
       reshade::api::resource_desc desc,
@@ -222,8 +212,40 @@ struct ResourceUpgradeInfo {
   bool completed = false;
 };
 
+enum class ResourceUploadSource : uint8_t {
+  UNKNOWN = 0u,
+  INITIAL_DATA = 1u,
+  UPDATE_TEXTURE_REGION = 2u,
+};
+
+struct ResourceUploadSignature {
+  ResourceUploadSource source = ResourceUploadSource::UNKNOWN;
+  uint32_t subresource = 0u;
+  uint32_t crc32 = 0u;
+  reshade::api::format format = reshade::api::format::unknown;
+  uint32_t width = 0u;
+  uint32_t height = 0u;
+  uint32_t depth_or_layers = 0u;
+  uint32_t row_pitch = 0u;
+  uint32_t slice_pitch = 0u;
+  uint64_t source_size = 0u;
+  bool full_update = true;
+};
+
+inline const char* ResourceUploadSourceName(ResourceUploadSource source) {
+  switch (source) {
+    case ResourceUploadSource::INITIAL_DATA:
+      return "initial_data";
+    case ResourceUploadSource::UPDATE_TEXTURE_REGION:
+      return "update_texture_region";
+    case ResourceUploadSource::UNKNOWN:
+    default:
+      return "unknown";
+  }
+}
+
 struct ResourceInfo {
-  reshade::api::device* device;
+  reshade::api::device* device = nullptr;
   reshade::api::resource_desc desc;
   reshade::api::resource_desc clone_desc;
   reshade::api::resource_desc fallback_desc;
@@ -233,21 +255,25 @@ struct ResourceInfo {
   bool destroyed = false;
   bool upgraded = false;
   bool clone_enabled = false;
+  bool clone_can_deactivate = false;
   bool is_swap_chain = false;
   bool is_clone = false;
   uint32_t extra_vram = 0;
   ResourceUpgradeInfo* clone_target = nullptr;
   ResourceUpgradeInfo* upgrade_target = nullptr;
   reshade::api::resource_usage initial_state = reshade::api::resource_usage::undefined;
+  cross_addon::unordered_set<uint64_t> resource_view_handles;
   float resource_tag = -1;
   reshade::api::resource_view swap_chain_proxy_clone_srv = {0u};
   reshade::api::resource_view swap_chain_proxy_rtv = {0u};
   void* shared_handle = nullptr;
   reshade::api::resource proxy_resource = {0u};
+  std::optional<ResourceUploadSignature> initial_upload = std::nullopt;
+  std::optional<ResourceUploadSignature> latest_upload = std::nullopt;
 };
 
 struct ResourceViewInfo {
-  reshade::api::device* device;
+  reshade::api::device* device = nullptr;
 
   reshade::api::resource_view_desc desc;
   reshade::api::resource_view_desc clone_desc;
@@ -257,6 +283,8 @@ struct ResourceViewInfo {
   reshade::api::resource_view fallback = {0u};
   bool destroyed = false;
   bool upgraded = false;
+  bool clone_enabled = false;
+  bool clone_can_deactivate = false;
   reshade::api::resource original_resource = {0u};
   reshade::api::resource clone_resource = {0u};
   ResourceInfo* resource_info = nullptr;
@@ -264,102 +292,116 @@ struct ResourceViewInfo {
   ResourceUpgradeInfo* upgrade_target = nullptr;
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
   bool is_clone = false;
+  bool is_swap_chain = false;
 };
 
-static bool local_callbacks_migrated = false;
-
-static struct Store {
-  data::ParallelNodeHashMap<uint64_t, ResourceInfo, std::shared_mutex> resource_infos;
-  data::ParallelNodeHashMap<uint64_t, ResourceViewInfo, std::shared_mutex> resource_view_infos;
-  std::vector<std::function<void(ResourceInfo* resource_info)>> on_init_resource_info_callbacks;
-  std::vector<std::function<void(ResourceInfo* resource_info)>> on_destroy_resource_info_callbacks;
-
-  std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_init_resource_view_info_callbacks;
-  std::vector<std::function<void(ResourceViewInfo* resource_view_info)>> on_destroy_resource_view_info_callbacks;
-
-  Store* primary_store = nullptr;
-} local_store;
-
-static Store* store = &local_store;
-
-static bool IsPrimaryHook() { return store->primary_store == &local_store; }
+using ResourceInfoMap = cross_addon::parallel_node_hash_map<uint64_t, ResourceInfo, std::shared_mutex>;
+using ResourceViewInfoMap = cross_addon::parallel_node_hash_map<uint64_t, ResourceViewInfo, std::shared_mutex>;
 
 template <typename T>
-inline void AddCallback(std::vector<std::function<void(T*)>>& callbacks, const std::function<void(T*)>& callback) {
-  const auto* callback_target = callback.template target<void (*)(T*)>();
-  assert(callback_target != nullptr);
-  if (!std::ranges::any_of(callbacks, [callback_target](const std::function<void(T*)>& fn) {
-        const auto* target = fn.template target<void (*)(T*)>();
-        return target != nullptr && *target == *callback_target;
+using TypedCallback = void (*)(T*);
+
+template <typename T>
+using CallbackList = cross_addon::vector<TypedCallback<T>>;
+
+using VoidCallback = void (*)();
+using VoidCallbackList = cross_addon::vector<VoidCallback>;
+
+struct __declspec(uuid("b5fdfd6a-cb13-4523-a499-e3b5e4759665")) SharedData {
+  ResourceInfoMap resource_infos;
+  ResourceViewInfoMap resource_view_infos;
+
+  CallbackList<ResourceInfo> on_init_resource_info_callbacks;
+  CallbackList<ResourceInfo> on_destroy_resource_info_callbacks;
+
+  CallbackList<ResourceViewInfo> on_init_resource_view_info_callbacks;
+  CallbackList<ResourceViewInfo> on_destroy_resource_view_info_callbacks;
+  VoidCallbackList on_after_destroy_callbacks;
+
+  bool use_resource_replace = false;
+};
+
+static cross_addon::Shared<SharedData> shared;
+
+template <typename Callback>
+inline void AddCallback(cross_addon::vector<Callback>& callbacks, Callback callback) {
+  assert(callback != nullptr);
+  if (callback == nullptr) return;
+
+  if (!std::ranges::any_of(callbacks, [callback](Callback record) {
+        return record == callback;
       })) {
-    callbacks.emplace_back(callback);
+    callbacks.push_back(callback);
   }
 }
 
-template <typename T>
-inline void RemoveCallback(std::vector<std::function<void(T*)>>& callbacks, void (*callback)(T*)) {
-  std::erase_if(callbacks, [callback](const std::function<void(T*)>& fn) {
-    const auto* target = fn.template target<void (*)(T*)>();
-    return target != nullptr && *target == callback;
+template <typename Callback>
+inline void RemoveCallback(cross_addon::vector<Callback>& callbacks, Callback callback) {
+  assert(callback != nullptr);
+  if (callback == nullptr) return;
+
+  std::erase_if(callbacks, [callback](Callback record) {
+    return record == callback;
   });
 }
 
-inline void RegisterOnInitResourceInfoCallback(const std::function<void(ResourceInfo*)>& callback) {
-  AddCallback(store->on_init_resource_info_callbacks, callback);
+inline void RegisterOnInitResourceInfoCallback(TypedCallback<ResourceInfo> callback) {
+  AddCallback(shared.data->on_init_resource_info_callbacks, callback);
 }
-inline void RegisterOnDestroyResourceInfoCallback(const std::function<void(ResourceInfo*)>& callback) {
-  AddCallback(store->on_destroy_resource_info_callbacks, callback);
+inline void RegisterOnDestroyResourceInfoCallback(TypedCallback<ResourceInfo> callback) {
+  AddCallback(shared.data->on_destroy_resource_info_callbacks, callback);
 }
-inline void RegisterOnInitResourceViewInfoCallback(const std::function<void(ResourceViewInfo*)>& callback) {
-  AddCallback(store->on_init_resource_view_info_callbacks, callback);
+inline void RegisterOnInitResourceViewInfoCallback(TypedCallback<ResourceViewInfo> callback) {
+  AddCallback(shared.data->on_init_resource_view_info_callbacks, callback);
 }
-inline void RegisterOnDestroyResourceViewInfoCallback(const std::function<void(ResourceViewInfo*)>& callback) {
-  AddCallback(store->on_destroy_resource_view_info_callbacks, callback);
+inline void RegisterOnDestroyResourceViewInfoCallback(TypedCallback<ResourceViewInfo> callback) {
+  AddCallback(shared.data->on_destroy_resource_view_info_callbacks, callback);
 }
-
-inline void UnregisterOnInitResourceInfoCallback(void (*callback)(ResourceInfo*)) {
-  RemoveCallback(store->on_init_resource_info_callbacks, callback);
-}
-inline void UnregisterOnDestroyResourceInfoCallback(void (*callback)(ResourceInfo*)) {
-  RemoveCallback(store->on_destroy_resource_info_callbacks, callback);
-}
-inline void UnregisterOnInitResourceViewInfoCallback(void (*callback)(ResourceViewInfo*)) {
-  RemoveCallback(store->on_init_resource_view_info_callbacks, callback);
-}
-inline void UnregisterOnDestroyResourceViewInfoCallback(void (*callback)(ResourceViewInfo*)) {
-  RemoveCallback(store->on_destroy_resource_view_info_callbacks, callback);
+inline void RegisterOnAfterDestroyCallback(VoidCallback callback) {
+  AddCallback(shared.data->on_after_destroy_callbacks, callback);
 }
 
-static void MigrateLocalCallbacksToActiveStore() {
-  if (local_callbacks_migrated || store == &local_store) return;
+inline void UnregisterOnInitResourceInfoCallback(TypedCallback<ResourceInfo> callback) {
+  RemoveCallback(shared.data->on_init_resource_info_callbacks, callback);
+}
+inline void UnregisterOnDestroyResourceInfoCallback(TypedCallback<ResourceInfo> callback) {
+  RemoveCallback(shared.data->on_destroy_resource_info_callbacks, callback);
+}
+inline void UnregisterOnInitResourceViewInfoCallback(TypedCallback<ResourceViewInfo> callback) {
+  RemoveCallback(shared.data->on_init_resource_view_info_callbacks, callback);
+}
+inline void UnregisterOnDestroyResourceViewInfoCallback(TypedCallback<ResourceViewInfo> callback) {
+  RemoveCallback(shared.data->on_destroy_resource_view_info_callbacks, callback);
+}
+inline void UnregisterOnAfterDestroyCallback(VoidCallback callback) {
+  RemoveCallback(shared.data->on_after_destroy_callbacks, callback);
+}
 
-  for (const auto& callback : local_store.on_init_resource_info_callbacks) {
-    RegisterOnInitResourceInfoCallback(callback);
+template <typename T, CallbackList<T> SharedData::* member>
+static void DispatchCallbacks(T* value) {
+  for (const auto& callback : shared.data->*member) {
+    if (callback != nullptr) {
+      callback(value);
+    }
   }
-  for (const auto& callback : local_store.on_destroy_resource_info_callbacks) {
-    RegisterOnDestroyResourceInfoCallback(callback);
-  }
-  for (const auto& callback : local_store.on_init_resource_view_info_callbacks) {
-    RegisterOnInitResourceViewInfoCallback(callback);
-  }
-  for (const auto& callback : local_store.on_destroy_resource_view_info_callbacks) {
-    RegisterOnDestroyResourceViewInfoCallback(callback);
-  }
-
-  local_store.on_init_resource_info_callbacks.clear();
-  local_store.on_destroy_resource_info_callbacks.clear();
-  local_store.on_init_resource_view_info_callbacks.clear();
-  local_store.on_destroy_resource_view_info_callbacks.clear();
-  local_callbacks_migrated = true;
 }
 
+static void DispatchAfterDestroyCallbacks() {
+  for (const auto& callback : shared.data->on_after_destroy_callbacks) {
+    if (callback != nullptr) {
+      callback();
+    }
+  }
+}
+
+[[deprecated("Use GetResourceInfo<F>")]] [[nodiscard]]
 inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource, const bool& create = false) {
   if (create) {
-    auto [pointer, inserted] = store->resource_infos.try_emplace_p(resource.handle, ResourceInfo({.resource = resource}));
+    auto [pointer, inserted] = shared.data->resource_infos.try_emplace_p(resource.handle, ResourceInfo({.resource = resource}));
     return &pointer->second;
   }
   ResourceInfo* info = nullptr;
-  store->resource_infos.if_contains(resource.handle, [&info](std::pair<const uint64_t, ResourceInfo>& pair) {
+  shared.data->resource_infos.if_contains(resource.handle, [&info](std::pair<const uint64_t, ResourceInfo>& pair) {
     info = &pair.second;
   });
   if (info == nullptr) {
@@ -370,13 +412,14 @@ inline ResourceInfo* GetResourceInfo(const reshade::api::resource& resource, con
   return info;
 }
 
+[[deprecated("Use GetResourceInfo<F> or UpdateResourceInfo<F>")]] [[nodiscard]]
 inline ResourceInfo* GetResourceInfoUnsafe(const reshade::api::resource& resource, const bool& create = false) {
   if (create) {
-    auto [pointer, inserted] = store->resource_infos.try_emplace_p(resource.handle, ResourceInfo({.resource = resource}));
+    auto [pointer, inserted] = shared.data->resource_infos.try_emplace_p(resource.handle, ResourceInfo({.resource = resource}));
     return &pointer->second;
   }
   ResourceInfo* data = nullptr;
-  store->resource_infos.if_contains_unsafe(resource.handle, [&data](std::pair<const uint64_t, ResourceInfo>& pair) {
+  shared.data->resource_infos.if_contains_unsafe(resource.handle, [&data](std::pair<const uint64_t, ResourceInfo>& pair) {
     data = &pair.second;
   });
   if (data == nullptr) {
@@ -388,13 +431,61 @@ inline ResourceInfo* GetResourceInfoUnsafe(const reshade::api::resource& resourc
   return data;
 }
 
+template <typename F>
+inline bool GetResourceInfo(const reshade::api::resource& resource, F&& f) {
+  assert(resource.handle != 0u && "Cannot get ResourceInfo for a resource with null handle.");
+
+  return shared.data->resource_infos.if_contains(resource.handle, [&f](const std::pair<const uint64_t, ResourceInfo>& pair) {
+    std::forward<F>(f)(pair.second);
+  });
+}
+
+template <typename F>
+inline bool GetLiveResourceInfo(const reshade::api::resource& resource, F&& f) {
+  assert(resource.handle != 0u && "Cannot get ResourceInfo for a resource with null handle.");
+
+  bool found_live = false;
+  shared.data->resource_infos.if_contains(resource.handle, [&f, &found_live](const std::pair<const uint64_t, ResourceInfo>& pair) {
+    if (pair.second.destroyed) return;
+    found_live = true;
+    std::forward<F>(f)(pair.second);
+  });
+  return found_live;
+}
+
+template <typename F>
+inline bool UpdateResourceInfo(const reshade::api::resource& resource, F&& f) {
+  assert(resource.handle != 0u && "Cannot update ResourceInfo for a resource with null handle.");
+
+  return shared.data->resource_infos.modify_if(resource.handle, [&f](std::pair<const uint64_t, ResourceInfo>& pair) {
+    std::forward<F>(f)(&pair.second);
+  });
+}
+
+template <typename F>
+inline bool UpsertResourceInfo(const reshade::api::resource& resource, F&& f) {
+  assert(resource.handle != 0u && "Cannot upsert ResourceInfo for a resource with null handle.");
+
+  return shared.data->resource_infos.lazy_emplace_l(
+      resource.handle,
+      [&](std::pair<const uint64_t, ResourceInfo>& pair) {
+        std::forward<F>(f)(&pair.second, false);
+      },
+      [&](const ResourceInfoMap::constructor& ctor) {
+        ResourceInfo data = {.resource = resource};
+        std::forward<F>(f)(&data, true);
+        ctor(resource.handle, data);
+      });
+}
+
+[[deprecated("Use GetResourceViewInfo<F>")]] [[nodiscard]]
 inline ResourceViewInfo* GetResourceViewInfo(const reshade::api::resource_view& view, const bool& create = false) {
   if (create) {
-    auto [pointer, inserted] = store->resource_view_infos.try_emplace_p(view.handle, ResourceViewInfo({.view = view}));
+    auto [pointer, inserted] = shared.data->resource_view_infos.try_emplace_p(view.handle, ResourceViewInfo({.view = view}));
     return &pointer->second;
   }
   ResourceViewInfo* data = nullptr;
-  store->resource_view_infos.if_contains(view.handle, [&data](std::pair<const uint64_t, ResourceViewInfo>& pair) {
+  shared.data->resource_view_infos.if_contains(view.handle, [&data](std::pair<const uint64_t, ResourceViewInfo>& pair) {
     data = &pair.second;
   });
   if (data == nullptr) {
@@ -405,13 +496,14 @@ inline ResourceViewInfo* GetResourceViewInfo(const reshade::api::resource_view& 
   return data;
 }
 
+[[deprecated("Use GetResourceViewInfo<F>")]] [[nodiscard]]
 inline ResourceViewInfo* GetResourceViewInfoUnsafe(const reshade::api::resource_view& view, const bool& create = false) {
   if (create) {
-    auto [pointer, inserted] = store->resource_view_infos.try_emplace_p(view.handle, ResourceViewInfo({.view = view}));
+    auto [pointer, inserted] = shared.data->resource_view_infos.try_emplace_p(view.handle, ResourceViewInfo({.view = view}));
     return &pointer->second;
   }
   ResourceViewInfo* data = nullptr;
-  store->resource_view_infos.if_contains_unsafe(view.handle, [&data](std::pair<const uint64_t, ResourceViewInfo>& pair) {
+  shared.data->resource_view_infos.if_contains_unsafe(view.handle, [&data](std::pair<const uint64_t, ResourceViewInfo>& pair) {
     data = &pair.second;
   });
   if (data == nullptr) {
@@ -422,13 +514,153 @@ inline ResourceViewInfo* GetResourceViewInfoUnsafe(const reshade::api::resource_
   return data;
 }
 
+template <typename F>
+inline bool GetResourceViewInfo(const reshade::api::resource_view& view, F&& f) {
+  assert(view.handle != 0u && "Cannot get ResourceViewInfo for a view with null handle.");
+
+  return shared.data->resource_view_infos.if_contains(view.handle, [&f](const std::pair<const uint64_t, ResourceViewInfo>& pair) {
+    std::forward<F>(f)(pair.second);
+  });
+}
+
+template <typename F>
+inline bool GetLiveResourceViewInfo(const reshade::api::resource_view& view, F&& f) {
+  assert(view.handle != 0u && "Cannot get ResourceViewInfo for a view with null handle.");
+
+  bool found_live = false;
+  shared.data->resource_view_infos.if_contains(view.handle, [&f, &found_live](const std::pair<const uint64_t, ResourceViewInfo>& pair) {
+    if (pair.second.destroyed) return;
+    found_live = true;
+    std::forward<F>(f)(pair.second);
+  });
+  return found_live;
+}
+
+template <typename F>
+inline bool UpdateResourceViewInfo(const reshade::api::resource_view& view, F&& f) {
+  assert(view.handle != 0u && "Cannot update ResourceViewInfo for a view with null handle.");
+
+  return shared.data->resource_view_infos.modify_if(view.handle, [&f](std::pair<const uint64_t, ResourceViewInfo>& pair) {
+    std::forward<F>(f)(&pair.second);
+  });
+}
+
+inline reshade::api::resource_desc GetResourceDesc(
+    const reshade::api::device* device,
+    const reshade::api::resource& resource) {
+  if (device == nullptr || resource.handle == 0u) return {};
+
+  switch (device->get_api()) {
+    case reshade::api::device_api::opengl: {
+      reshade::api::resource_desc desc = {};
+      bool found = false;
+      GetResourceInfo(resource, [&desc, &found](const ResourceInfo& resource_info) {
+        if (resource_info.destroyed) return;
+        desc = resource_info.desc;
+        found = desc.type != reshade::api::resource_type::unknown;
+      });
+      if (found) {
+        return desc;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  return device->get_resource_desc(resource);
+}
+
+inline reshade::api::resource_view_desc GetResourceViewDesc(
+    const reshade::api::device* device,
+    const reshade::api::resource_view& view) {
+  if (device == nullptr || view.handle == 0u) return {};
+
+  switch (device->get_api()) {
+    case reshade::api::device_api::d3d12:
+    case reshade::api::device_api::opengl: {
+      reshade::api::resource_view_desc desc = {};
+      bool found = false;
+      GetResourceViewInfo(view, [&desc, &found](const ResourceViewInfo& resource_view_info) {
+        if (resource_view_info.destroyed) return;
+        desc = resource_view_info.desc;
+        found = desc.type != reshade::api::resource_view_type::unknown;
+      });
+      if (found) {
+        return desc;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  return device->get_resource_view_desc(view);
+}
+
+inline reshade::api::resource GetResourceFromView(
+    const reshade::api::device* device,
+    const reshade::api::resource_view& view) {
+  if (device == nullptr || view.handle == 0u) return {0u};
+
+  switch (device->get_api()) {
+    case reshade::api::device_api::d3d12: {
+      reshade::api::resource resource = {0u};
+      bool destroyed = true;
+      const auto found = GetResourceViewInfo(view, [&resource, &destroyed](const ResourceViewInfo& resource_view_info) {
+        destroyed = resource_view_info.destroyed;
+        if (destroyed) return;
+        resource = resource_view_info.original_resource;
+      });
+      if (found && !destroyed) {
+        return resource;
+      }
+    }
+    default:
+      break;
+  }
+
+  return device->get_resource_from_view(view);
+}
+
+template <typename F>
+inline bool UpsertResourceViewInfo(const reshade::api::resource_view& view, F&& f) {
+  assert(view.handle != 0u && "Cannot upsert ResourceViewInfo for a view with null handle.");
+
+  return shared.data->resource_view_infos.lazy_emplace_l(
+      view.handle,
+      [&](std::pair<const uint64_t, ResourceViewInfo>& pair) {
+        std::forward<F>(f)(&pair.second, false);
+      },
+      [&](const ResourceViewInfoMap::constructor& ctor) {
+        ResourceViewInfo data = {.view = view};
+        std::forward<F>(f)(&data, true);
+        ctor(view.handle, data);
+      });
+}
+
+template <typename F>
+inline void ForEachResourceInfo(F&& f) {
+  shared.data->resource_infos.for_each([&f](const std::pair<const uint64_t, ResourceInfo>& pair) {
+    std::forward<F>(f)(pair.second);
+  });
+}
+
+template <typename F>
+inline void ForEachResourceViewInfo(F&& f) {
+  shared.data->resource_view_infos.for_each([&f](const std::pair<const uint64_t, ResourceViewInfo>& pair) {
+    std::forward<F>(f)(pair.second);
+  });
+}
+
 // Insert a ResourceViewInfo entry, or reuse an existing one. When reusing,
 // optionally assert that the existing entry was destroyed.
+[[deprecated("Use UpsertResourceViewInfo<F>")]]
 inline std::pair<ResourceViewInfo*, bool> EmplaceResourceViewInfoOrReuse(
     const reshade::api::resource_view& view,
     const ResourceViewInfo& info,
     const bool require_destroyed) {
-  auto [it, inserted] = store->resource_view_infos.try_emplace_p(view.handle, info);
+  auto [it, inserted] = shared.data->resource_view_infos.try_emplace_p(view.handle, info);
   if (!inserted) {
     if (require_destroyed) {
       assert(it->second.destroyed && "ResourceViewInfo reused but it was not destroyed.");
@@ -438,57 +670,7 @@ inline std::pair<ResourceViewInfo*, bool> EmplaceResourceViewInfoOrReuse(
   return {&it->second, inserted};
 }
 
-struct __declspec(uuid("3c7a0a1f-4bf3-4e7a-ac02-6f63fdc70187")) DeviceData {
-  Store* store;
-};
-
-static void OnInitDevice(reshade::api::device* device) {
-  DeviceData* data;
-  bool created = renodx::utils::data::CreateOrGet(device, data);
-
-  if (created) {
-    std::stringstream s;
-    s << "utils::resource::OnInitDevice(Hooking device: ";
-    s << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
-    s << ", api: " << device->get_api();
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-
-    data->store = store;
-    if (store->primary_store == nullptr) {
-      store->primary_store = &local_store;
-    }
-  } else {
-    std::stringstream s;
-    s << "utils::resource::OnInitDevice(Attaching to hook: ";
-    s << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
-    s << ", api: " << device->get_api();
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-    store = data->store;
-
-    if (store == &local_store) {
-      log::e("utils::resource::OnInitDevice(Warning: Attaching to a hook but store is still the local store. This should not happen.)");
-      assert(store != &local_store);
-      return;
-    }
-    assert(store->primary_store != nullptr);
-    MigrateLocalCallbacksToActiveStore();
-  }
-}
-
-static void OnDestroyDevice(reshade::api::device* device) {
-  if (!IsPrimaryHook()) return;
-  std::stringstream s;
-  s << "utils::resource::OnDestroyDevice(";
-  s << reinterpret_cast<uintptr_t>(device);
-  s << ")";
-  reshade::log::message(reshade::log::level::info, s.str().c_str());
-  device->destroy_private_data<DeviceData>();
-}
-
-static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (!IsPrimaryHook()) return;
+inline void RegisterSwapchainInitialized(reshade::api::swapchain* swapchain, bool resize) {
   auto* device = swapchain->get_device();
 
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
@@ -503,23 +685,31 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
         .is_swap_chain = true,
         .initial_state = reshade::api::resource_usage::general,
     };
+    bool inserted = false;
     bool was_destroyed = false;
-    auto [pair, inserted] = store->resource_infos.try_emplace_p(resource.handle, new_info);
-    if (!inserted) {
-      assert(pair->second.resource.handle == resource.handle);
-      was_destroyed = pair->second.destroyed;
-      if (!pair->second.destroyed) {
-        for (auto& callback : store->on_destroy_resource_info_callbacks) {
-          callback(&pair->second);
+    bool should_run_after_destroy_callbacks = false;
+    UpsertResourceInfo(resource, [&](ResourceInfo* info, const bool was_inserted) {
+      inserted = was_inserted;
+      if (!was_inserted) {
+        assert(info->resource.handle == resource.handle);
+        was_destroyed = info->destroyed;
+        if (!info->destroyed) {
+          DispatchCallbacks<ResourceInfo, &SharedData::on_destroy_resource_info_callbacks>(info);
+          should_run_after_destroy_callbacks = true;
         }
       }
-      pair->second = new_info;
+
+      *info = new_info;
+      DispatchCallbacks<ResourceInfo, &SharedData::on_init_resource_info_callbacks>(info);
+    });
+    if (should_run_after_destroy_callbacks) {
+      DispatchAfterDestroyCallbacks();
     }
 
 #ifdef DEBUG_LEVEL_2
     {
       std::stringstream s;
-      s << "utils::resource::OnInitSwapchain(";
+      s << "utils::resource::RegisterSwapchainInitialized(";
       s << PRINT_PTR(resource.handle);
       if (device->get_api() == reshade::api::device_api::opengl) {
         const int opengl_target = resource.handle >> 40;
@@ -547,29 +737,118 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
       reshade::log::message(reshade::log::level::debug, s.str().c_str());
     }
 #endif
-    for (auto& callback : store->on_init_resource_info_callbacks) {
-      callback(&pair->second);
-    }
   }
 }
 
-static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (!IsPrimaryHook()) return;
+inline void RegisterSwapchainDestroyed(reshade::api::swapchain* swapchain, bool resize) {
   const size_t back_buffer_count = swapchain->get_back_buffer_count();
 
   for (uint32_t index = 0; index < back_buffer_count; ++index) {
     auto buffer = swapchain->get_back_buffer(index);
-    auto* info = GetResourceInfo(buffer, false);
-    if (info == nullptr) {
-      assert(info != nullptr);
+    bool should_run_after_destroy_callbacks = false;
+    const auto found = UpdateResourceInfo(buffer, [&](ResourceInfo* info) {
+      if (info->device == nullptr) {
+        info->device = swapchain->get_device();
+      }
+      info->destroyed = true;
+      DispatchCallbacks<ResourceInfo, &SharedData::on_destroy_resource_info_callbacks>(info);
+      should_run_after_destroy_callbacks = true;
+    });
+    if (!found) {
+      assert(found);
       continue;
     }
-    info->destroyed = true;
-
-    for (auto& callback : store->on_destroy_resource_info_callbacks) {
-      callback(info);
+    if (should_run_after_destroy_callbacks) {
+      DispatchAfterDestroyCallbacks();
     }
   }
+}
+
+template <typename F>
+inline std::invoke_result_t<F&&> RegisterSwapchainChange(reshade::api::swapchain* swapchain, F&& change) {
+  using Result = std::invoke_result_t<F&&>;
+
+  RegisterSwapchainDestroyed(swapchain, true);
+  if constexpr (std::is_void_v<Result>) {
+    std::forward<F>(change)();
+    RegisterSwapchainInitialized(swapchain, true);
+  } else {
+    auto result = std::forward<F>(change)();
+    RegisterSwapchainInitialized(swapchain, true);
+    return result;
+  }
+}
+
+static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  RegisterSwapchainInitialized(swapchain, resize);
+}
+
+static void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
+  RegisterSwapchainDestroyed(swapchain, resize);
+}
+
+inline bool IsUploadSignatureTrackable(const reshade::api::resource_desc& desc) {
+  if (desc.type != reshade::api::resource_type::texture_2d) return false;
+  if (desc.texture.width == 0u || desc.texture.height == 0u) return false;
+  return true;
+}
+
+inline bool IsFullSubresourceUpdate(
+    const reshade::api::resource_desc& desc,
+    uint32_t subresource,
+    const reshade::api::subresource_box* box) {
+  if (box == nullptr) return true;
+  if (!IsUploadSignatureTrackable(desc)) return false;
+
+  const auto levels = std::max<uint32_t>(desc.texture.levels, 1u);
+  const auto level = subresource % levels;
+  const auto width = std::max<uint32_t>(desc.texture.width >> level, 1u);
+  const auto height = std::max<uint32_t>(desc.texture.height >> level, 1u);
+  const auto depth = 1u;
+
+  return static_cast<uint32_t>(box->left) == 0u
+         && static_cast<uint32_t>(box->top) == 0u
+         && static_cast<uint32_t>(box->front) == 0u
+         && static_cast<uint32_t>(box->right - box->left) == width
+         && static_cast<uint32_t>(box->bottom - box->top) == height
+         && static_cast<uint32_t>(box->back - box->front) == depth;
+}
+
+inline std::optional<ResourceUploadSignature> BuildUploadSignature(
+    const reshade::api::resource_desc& desc,
+    const reshade::api::subresource_data& data,
+    uint32_t subresource,
+    ResourceUploadSource source,
+    bool full_update = true) {
+  if (!IsUploadSignatureTrackable(desc)) return std::nullopt;
+  if (data.data == nullptr) return std::nullopt;
+
+  const auto levels = std::max<uint32_t>(desc.texture.levels, 1u);
+  const auto level = subresource % levels;
+  const auto width = std::max<uint32_t>(desc.texture.width >> level, 1u);
+  const auto height = std::max<uint32_t>(desc.texture.height >> level, 1u);
+  const auto depth_or_layers = 1u;
+  const auto row_pitch = data.row_pitch != 0u
+                             ? data.row_pitch
+                             : reshade::api::format_row_pitch(desc.texture.format, width);
+  const auto slice_pitch = data.slice_pitch != 0u
+                               ? data.slice_pitch
+                               : reshade::api::format_slice_pitch(desc.texture.format, row_pitch, height);
+  if (slice_pitch == 0u) return std::nullopt;
+
+  return ResourceUploadSignature{
+      .source = source,
+      .subresource = subresource,
+      .crc32 = utils::hash::ComputeCRC32(static_cast<const uint8_t*>(data.data), slice_pitch),
+      .format = desc.texture.format,
+      .width = width,
+      .height = height,
+      .depth_or_layers = depth_or_layers,
+      .row_pitch = row_pitch,
+      .slice_pitch = slice_pitch,
+      .source_size = slice_pitch,
+      .full_update = full_update,
+  };
 }
 
 inline void OnInitResource(
@@ -578,9 +857,11 @@ inline void OnInitResource(
     const reshade::api::subresource_data* initial_data,
     reshade::api::resource_usage initial_state,
     reshade::api::resource resource) {
-  if (!IsPrimaryHook()) return;
   if (resource.handle == 0) return;
 
+  bool inserted = false;
+  bool was_destroyed = false;
+  bool should_run_after_destroy_callbacks = false;
   ResourceInfo new_data = {
       .device = device,
       .desc = desc,
@@ -588,28 +869,36 @@ inline void OnInitResource(
       .destroyed = false,
       .initial_state = initial_state,
   };
-
-  ResourceInfo* pointer = nullptr;
-
-  bool was_destroyed = false;
-
-  auto [pair, inserted] = store->resource_infos.try_emplace_p(resource.handle, new_data);
-  if (!inserted) {
-    assert(pair->second.resource.handle == resource.handle);
-    was_destroyed = pair->second.destroyed;
-    if (!pair->second.destroyed) {
+  if (shared.data->use_resource_replace && initial_data != nullptr) {
+    const auto upload_signature = BuildUploadSignature(desc, initial_data[0], 0u, ResourceUploadSource::INITIAL_DATA, true);
+    if (upload_signature.has_value()) {
+      new_data.initial_upload = upload_signature;
+      new_data.latest_upload = upload_signature;
+    }
+  }
+  UpsertResourceInfo(resource, [&](ResourceInfo* info, const bool was_inserted) {
+    inserted = was_inserted;
+    if (!was_inserted) {
+      assert(info->resource.handle == resource.handle);
+      was_destroyed = info->destroyed;
+      if (!info->destroyed) {
 #ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "utils::resource::OnInitResource(Resource reused: ";
-      s << static_cast<uintptr_t>(resource.handle);
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+        std::stringstream s;
+        s << "utils::resource::OnInitResource(Resource reused: ";
+        s << static_cast<uintptr_t>(resource.handle);
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-      for (auto& callback : store->on_destroy_resource_info_callbacks) {
-        callback(&pair->second);
+        DispatchCallbacks<ResourceInfo, &SharedData::on_destroy_resource_info_callbacks>(info);
+        should_run_after_destroy_callbacks = true;
       }
     }
-    pair->second = new_data;
+    *info = new_data;
+
+    DispatchCallbacks<ResourceInfo, &SharedData::on_init_resource_info_callbacks>(info);
+  });
+  if (should_run_after_destroy_callbacks) {
+    DispatchAfterDestroyCallbacks();
   }
 
 #ifdef DEBUG_LEVEL_2
@@ -649,68 +938,90 @@ inline void OnInitResource(
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
   }
 #endif
+}
 
-  for (auto& callback : store->on_init_resource_info_callbacks) {
-    callback(&pair->second);
-  }
+inline bool OnUpdateTextureRegion(
+    reshade::api::device* device,
+    const reshade::api::subresource_data& data,
+    reshade::api::resource dest,
+    uint32_t dest_subresource,
+    const reshade::api::subresource_box* dest_box) {
+  if (dest.handle == 0u) return false;
+  if (!shared.data->use_resource_replace) return false;
+
+  std::optional<ResourceUploadSignature> signature = std::nullopt;
+  const auto found = GetResourceInfo(dest, [&device, &data, dest_subresource, dest_box, &signature](const ResourceInfo& resource_info) {
+    if (resource_info.destroyed) return;
+    if (resource_info.device != device) return;
+
+    signature = BuildUploadSignature(
+        resource_info.desc,
+        data,
+        dest_subresource,
+        ResourceUploadSource::UPDATE_TEXTURE_REGION,
+        IsFullSubresourceUpdate(resource_info.desc, dest_subresource, dest_box));
+  });
+  if (!found || !signature.has_value()) return false;
+
+  shared.data->resource_infos.modify_if(dest.handle, [&device, &signature](std::pair<const uint64_t, ResourceInfo>& pair) {
+    if (pair.second.destroyed) return;
+    if (pair.second.device != device) return;
+    pair.second.latest_upload = signature;
+  });
+  return false;
 }
 
 // NOLINTNEXTLINE(misc-no-recursion)
 inline void OnDestroyResource(reshade::api::device* device, reshade::api::resource resource) {
-  if (!IsPrimaryHook()) return;
   if (resource.handle == 0) return;
 
-  reshade::api::resource pending_fallback = {0u};
-  auto exists = store->resource_infos.if_contains(
-      resource.handle,
-      [&device, &resource, &pending_fallback](std::pair<const uint64_t, ResourceInfo>& pair) {
-        auto* resource_info = &pair.second;
-        if (resource_info->destroyed) {
-          log::w("utils::resource::OnDestroyResource(Resource already destroyed: ",
-                 log::AsPtr(resource.handle), ")");
-          assert(!resource_info->destroyed);
-          return;
-        }
-        if (resource_info->device != device) {
-          log::e("utils::resource::OnDestroyResource(Resource destroyed on different device: ",
-                 log::AsPtr(resource.handle), ")");
-          assert(resource_info->device == device);
-        }
-        if (resource_info->resource.handle != resource.handle) {
-          log::e("utils::resource::OnDestroyResource(Resource handle mismatch: ",
-                 log::AsPtr(resource.handle), " != ", log::AsPtr(resource_info->resource.handle), ")");
-          assert(resource_info->resource.handle == resource.handle);
-          return;
-        }
-        if (resource_info->is_clone) {
-          log::e("utils::resource::OnDestroyResource(Resource is a clone, cannot destroy directly: ",
-                 log::AsPtr(resource.handle), ")");
-          assert(!resource_info->is_clone);
-          assert(resource_info->fallback.handle != 0u);
+  bool should_run_after_destroy_callbacks = false;
+  const auto found = UpdateResourceInfo(resource, [&](ResourceInfo* resource_info) {
+    if (resource_info->destroyed) {
+      log::w("utils::resource::OnDestroyResource(Resource already destroyed: ",
+             log::AsPtr(resource.handle), ")");
+      assert(!resource_info->destroyed);
+      return;
+    }
+    if (resource_info->device != device) {
+      log::e("utils::resource::OnDestroyResource(Resource destroyed on different device: ",
+             log::AsPtr(resource.handle), ")");
+      assert(resource_info->device == device);
+    }
+    if (resource_info->resource.handle != resource.handle) {
+      log::e("utils::resource::OnDestroyResource(Resource handle mismatch: ",
+             log::AsPtr(resource.handle), " != ", log::AsPtr(resource_info->resource.handle), ")");
+      assert(resource_info->resource.handle == resource.handle);
+      return;
+    }
+    if (resource_info->is_clone) {
+      log::e("utils::resource::OnDestroyResource(Resource is a clone, cannot destroy directly: ",
+             log::AsPtr(resource.handle), ")");
+      assert(!resource_info->is_clone);
+      return;
+    }
 
-          pending_fallback = resource_info->fallback;
-          return;
-        }
-
-        resource_info->device = device;
-        resource_info->destroyed = true;
-
-        for (auto& callback : store->on_destroy_resource_info_callbacks) {
-          callback(resource_info);
-        }
-      });
-  if (pending_fallback.handle != 0u) {
-    // If we have a pending fallback, destroy it instead
-    device->destroy_resource(pending_fallback);
-    OnDestroyResource(device, pending_fallback);
+    // resource_info->device = device;
+    resource_info->destroyed = true;
+    DispatchCallbacks<ResourceInfo, &SharedData::on_destroy_resource_info_callbacks>(resource_info);
+    should_run_after_destroy_callbacks = true;
+  });
+  if (!found) {
+    log::e("utils::resource::OnDestroyResource(Resource not found for handle: ",
+           log::AsPtr(resource.handle), ")");
+    assert(found);
+    return;
+  }
+  if (should_run_after_destroy_callbacks) {
+    DispatchAfterDestroyCallbacks();
   }
 }
 
 inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
-    reshade::api::device* device,
+    const reshade::api::device* device,
     const reshade::api::resource_view_desc& desc,
-    reshade::api::resource_usage usage_type,
-    ResourceInfo* resource_info) {
+    const reshade::api::resource_usage usage_type,
+    const reshade::api::resource_desc& resource_desc) {
   reshade::api::resource_view_desc new_desc = desc;
   switch (device->get_api()) {
     case reshade::api::device_api::d3d9:
@@ -728,24 +1039,20 @@ inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
       // and are typed (not raw or structured), and for textures SRVs target
       // a full texture, all mips and all array slices.
       // Not all resources support null descriptor initialization.
-      if (resource_info == nullptr) {
-        assert(resource_info != nullptr);
-        return desc;
-      }
-      switch (resource_info->desc.type) {
+      switch (resource_desc.type) {
         case reshade::api::resource_type::buffer:
           new_desc.type = reshade::api::resource_view_type::buffer;
           new_desc.format = reshade::api::format::unknown;
           break;
         case reshade::api::resource_type::texture_1d:
-          if (resource_info->desc.texture.depth_or_layers > 1) {
+          if (resource_desc.texture.depth_or_layers > 1) {
             new_desc.type = reshade::api::resource_view_type::texture_1d_array;
           } else {
             new_desc.type = reshade::api::resource_view_type::texture_1d;
           }
           new_desc.texture.level_count = UINT32_MAX;
-          new_desc.texture.layer_count = resource_info->desc.texture.depth_or_layers;
-          new_desc.format = resource_info->desc.texture.format;
+          new_desc.texture.layer_count = resource_desc.texture.depth_or_layers;
+          new_desc.format = resource_desc.texture.format;
           break;
         case reshade::api::resource_type::surface:
         case reshade::api::resource_type::texture_2d:
@@ -756,26 +1063,26 @@ inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
             default:
               new_desc.texture.level_count = UINT32_MAX;
           }
-          new_desc.texture.layer_count = resource_info->desc.texture.depth_or_layers;
-          if (resource_info->desc.texture.depth_or_layers > 1) {
-            if (resource_info->desc.texture.samples > 1) {
+          new_desc.texture.layer_count = resource_desc.texture.depth_or_layers;
+          if (resource_desc.texture.depth_or_layers > 1) {
+            if (resource_desc.texture.samples > 1) {
               new_desc.type = reshade::api::resource_view_type::texture_2d_multisample_array;
-            } else if (renodx::utils::bitwise::HasFlag(resource_info->desc.flags, reshade::api::resource_flags::cube_compatible)) {
+            } else if (renodx::utils::bitwise::HasFlag(resource_desc.flags, reshade::api::resource_flags::cube_compatible)) {
               new_desc.type = reshade::api::resource_view_type::texture_cube_array;
             } else {
               new_desc.type = reshade::api::resource_view_type::texture_2d_array;
             }
-          } else if (resource_info->desc.texture.samples > 1) {
+          } else if (resource_desc.texture.samples > 1) {
             new_desc.type = reshade::api::resource_view_type::texture_2d_multisample;
-          } else if (renodx::utils::bitwise::HasFlag(resource_info->desc.flags, reshade::api::resource_flags::cube_compatible)) {
+          } else if (renodx::utils::bitwise::HasFlag(resource_desc.flags, reshade::api::resource_flags::cube_compatible)) {
             new_desc.type = reshade::api::resource_view_type::texture_cube;
           } else {
             new_desc.type = reshade::api::resource_view_type::texture_2d;
           }
-          new_desc.format = resource_info->desc.texture.format;
+          new_desc.format = resource_desc.texture.format;
           break;
         case reshade::api::resource_type::texture_3d:
-          new_desc.format = resource_info->desc.texture.format;
+          new_desc.format = resource_desc.texture.format;
           new_desc.texture.level_count = UINT32_MAX;
           new_desc.texture.layer_count = UINT32_MAX;
           break;
@@ -805,13 +1112,25 @@ inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
   return new_desc;
 }
 
+[[deprecated("Use PopulateUnknownResourceViewDesc(device, desc, usage_type, resource_desc) instead.")]]
+inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
+    reshade::api::device* device,
+    const reshade::api::resource_view_desc& desc,
+    reshade::api::resource_usage usage_type,
+    const ResourceInfo* resource_info) {
+  if (resource_info == nullptr) {
+    assert(resource_info != nullptr);
+    return desc;
+  }
+  return PopulateUnknownResourceViewDesc(device, desc, usage_type, resource_info->desc);
+}
+
 inline void OnInitResourceView(
     reshade::api::device* device,
     reshade::api::resource resource,
     reshade::api::resource_usage usage_type,
     const reshade::api::resource_view_desc& desc,
     reshade::api::resource_view view) {
-  if (!IsPrimaryHook()) return;
   if (view.handle == 0u) return;
 
   ResourceViewInfo new_data = {
@@ -821,13 +1140,32 @@ inline void OnInitResourceView(
       .original_resource = resource,
       .usage = usage_type,
   };
+  reshade::api::resource_desc populated_resource_desc = {};
+  bool has_populated_resource_desc = false;
 
   if (resource.handle != 0u) {
-    new_data.resource_info = GetResourceInfo(resource, false);
-    if (new_data.resource_info != nullptr) {
-      new_data.clone_target = new_data.resource_info->clone_target;
-    } else {
-      assert(new_data.resource_info != nullptr);
+    const auto found = UpdateResourceInfo(resource, [&](ResourceInfo* resource_info) {
+      resource_info->resource_view_handles.insert(view.handle);
+      new_data.resource_info = resource_info;
+      new_data.clone_target = resource_info->clone_target;
+      new_data.clone_enabled = resource_info->clone_enabled;
+      new_data.clone_can_deactivate = resource_info->clone_can_deactivate;
+      new_data.is_swap_chain = resource_info->is_swap_chain;
+      populated_resource_desc = resource_info->desc;
+      has_populated_resource_desc = true;
+    });
+    if (!found || !has_populated_resource_desc) {
+      populated_resource_desc = device->get_resource_desc(resource);
+      has_populated_resource_desc = true;
+#ifdef DEBUG_LEVEL_1
+      std::stringstream s;
+      s << "utils::resource::OnInitResourceView(Resource missing during view init: ";
+      s << PRINT_PTR(view.handle);
+      s << ", resource: ";
+      s << PRINT_PTR(resource.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
     }
   }
 
@@ -835,85 +1173,189 @@ inline void OnInitResourceView(
       || (desc.format == reshade::api::format::unknown
           && desc.type != reshade::api::resource_view_type::buffer
           && desc.type != reshade::api::resource_view_type::acceleration_structure)) {
-    new_data.desc = PopulateUnknownResourceViewDesc(device, desc, usage_type, new_data.resource_info);
+    if (!has_populated_resource_desc) {
+      assert(resource.handle != 0u);
+    } else {
+      new_data.desc = PopulateUnknownResourceViewDesc(device, desc, usage_type, populated_resource_desc);
+    }
   }
 
-  auto [pair, inserted] = store->resource_view_infos.try_emplace_p(view.handle, new_data);
-  if (!inserted) {
-    assert(pair->second.view.handle == view.handle);
-    if (!pair->second.destroyed) {
+  bool inserted = false;
+  bool was_destroyed = false;
+  bool should_run_after_destroy_callbacks = false;
+  UpsertResourceViewInfo(view, [&](ResourceViewInfo* info, const bool was_inserted) {
+    inserted = was_inserted;
+    if (!was_inserted) {
+      assert(info->view.handle == view.handle);
+      was_destroyed = info->destroyed;
+      if (!info->destroyed) {
 #ifdef DEBUG_LEVEL_2
-      std::stringstream s;
-      s << "utils::resource::OnInitResourceView(Resource view reused: ";
-      s << PRINT_PTR(view.handle);
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+        std::stringstream s;
+        s << "utils::resource::OnInitResourceView(Resource view reused: ";
+        s << PRINT_PTR(view.handle);
+        s << ")";
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-      for (const auto& callback : store->on_destroy_resource_view_info_callbacks) {
-        callback(&pair->second);
+        DispatchCallbacks<ResourceViewInfo, &SharedData::on_destroy_resource_view_info_callbacks>(info);
+        should_run_after_destroy_callbacks = true;
       }
     }
-    pair->second = new_data;
-  }
-  for (const auto& callback : store->on_init_resource_view_info_callbacks) {
-    callback(&pair->second);
+
+    *info = new_data;
+    DispatchCallbacks<ResourceViewInfo, &SharedData::on_init_resource_view_info_callbacks>(info);
+  });
+  if (should_run_after_destroy_callbacks) {
+    DispatchAfterDestroyCallbacks();
   }
 }
 
 inline void OnDestroyResourceView(reshade::api::device* device, reshade::api::resource_view view) {
-  if (!IsPrimaryHook()) return;
   if (view.handle == 0u) return;
 
-  auto* resource_view_info = GetResourceViewInfo(view);
-  if (resource_view_info == nullptr) {
+  bool should_run_after_destroy_callbacks = false;
+  reshade::api::resource original_resource = {0u};
+  const auto found = UpdateResourceViewInfo(view, [&](ResourceViewInfo* resource_view_info) {
+    if (resource_view_info->destroyed) {
+      log::w("utils::resource::OnDestroyResourceView(Resource view already destroyed: ",
+             log::AsPtr(view.handle), ")");
+      return;
+    }
+
+    if (resource_view_info->device == nullptr) {
+      resource_view_info->device = device;
+    }
+    original_resource = resource_view_info->original_resource;
+    resource_view_info->destroyed = true;
+    DispatchCallbacks<ResourceViewInfo, &SharedData::on_destroy_resource_view_info_callbacks>(resource_view_info);
+    should_run_after_destroy_callbacks = true;
+    assert(resource_view_info->view.handle != 0u);
+  });
+  if (!found) {
     log::e("utils::resource::OnDestroyResourceView(Resource view not found for handle: ",
            log::AsPtr(view.handle), ")");
-    assert(resource_view_info != nullptr);
+    assert(found);
     return;
   }
-
-  resource_view_info->destroyed = true;
-  assert(resource_view_info->view.handle != 0u);
-  for (auto& callback : store->on_destroy_resource_view_info_callbacks) {
-    callback(resource_view_info);
+  if (original_resource.handle != 0u) {
+    UpdateResourceInfo(original_resource, [&](ResourceInfo* resource_info) {
+      resource_info->resource_view_handles.erase(view.handle);
+    });
+  }
+  if (should_run_after_destroy_callbacks) {
+    DispatchAfterDestroyCallbacks();
   }
 }
 
 static float GetResourceTag(const reshade::api::resource& resource) {
-  auto* resource_info = GetResourceInfo(resource);
-  if (resource_info == nullptr) return -1;
-  return resource_info->resource_tag;
+  float resource_tag = -1.f;
+  GetResourceInfo(resource, [&resource_tag](const ResourceInfo& resource_info) {
+    resource_tag = resource_info.resource_tag;
+  });
+  return resource_tag;
 }
 
 static float GetResourceTag(const reshade::api::resource_view& resource_view) {
-  auto* resource_view_info = GetResourceViewInfo(resource_view);
-  if (resource_view_info == nullptr) return -1;
-  if (resource_view_info->destroyed) return -1;
-  if (resource_view_info->resource_info == nullptr) return -1;
-  return resource_view_info->resource_info->resource_tag;
+  reshade::api::resource original_resource = {0u};
+  bool destroyed = false;
+  const auto found_resource_view_info = GetResourceViewInfo(resource_view, [&original_resource, &destroyed](const ResourceViewInfo& resource_view_info) {
+    original_resource = resource_view_info.original_resource;
+    destroyed = resource_view_info.destroyed;
+  });
+  if (!found_resource_view_info || destroyed) return -1;
+  float resource_tag = -1.f;
+  GetResourceInfo(original_resource, [&resource_tag](const ResourceInfo& resource_info) {
+    if (resource_info.destroyed) return;
+    resource_tag = resource_info.resource_tag;
+  });
+  return resource_tag;
+}
+
+inline std::optional<ResourceUploadSignature> GetInitialUploadSignature(const reshade::api::resource& resource) {
+  std::optional<ResourceUploadSignature> signature = std::nullopt;
+  GetResourceInfo(resource, [&signature](const ResourceInfo& resource_info) {
+    if (resource_info.destroyed) return;
+    signature = resource_info.initial_upload;
+  });
+  return signature;
+}
+
+inline std::optional<ResourceUploadSignature> GetLatestUploadSignature(const reshade::api::resource& resource) {
+  std::optional<ResourceUploadSignature> signature = std::nullopt;
+  GetResourceInfo(resource, [&signature](const ResourceInfo& resource_info) {
+    if (resource_info.destroyed) return;
+    signature = resource_info.latest_upload;
+  });
+  return signature;
+}
+
+inline std::optional<ResourceUploadSignature> GetInitialUploadSignature(const reshade::api::resource_view& resource_view) {
+  reshade::api::resource original_resource = {0u};
+  bool destroyed = false;
+  const auto found_resource_view_info = GetResourceViewInfo(resource_view, [&original_resource, &destroyed](const ResourceViewInfo& resource_view_info) {
+    original_resource = resource_view_info.original_resource;
+    destroyed = resource_view_info.destroyed;
+  });
+  if (!found_resource_view_info || destroyed) {
+    return std::nullopt;
+  }
+  std::optional<ResourceUploadSignature> signature = std::nullopt;
+  GetResourceInfo(original_resource, [&signature](const ResourceInfo& resource_info) {
+    if (resource_info.destroyed) return;
+    signature = resource_info.initial_upload;
+  });
+  return signature;
+}
+
+inline std::optional<ResourceUploadSignature> GetLatestUploadSignature(const reshade::api::resource_view& resource_view) {
+  reshade::api::resource original_resource = {0u};
+  bool destroyed = false;
+  const auto found_resource_view_info = GetResourceViewInfo(resource_view, [&original_resource, &destroyed](const ResourceViewInfo& resource_view_info) {
+    original_resource = resource_view_info.original_resource;
+    destroyed = resource_view_info.destroyed;
+  });
+  if (!found_resource_view_info || destroyed) {
+    return std::nullopt;
+  }
+  std::optional<ResourceUploadSignature> signature = std::nullopt;
+  GetResourceInfo(original_resource, [&signature](const ResourceInfo& resource_info) {
+    if (resource_info.destroyed) return;
+    signature = resource_info.latest_upload;
+  });
+  return signature;
 }
 
 static bool IsKnownResourceView(const reshade::api::resource_view& view) {
   if (view.handle == 0u) return false;
-  auto* resource_view_info = GetResourceViewInfo(view);
-  return resource_view_info != nullptr && !resource_view_info->destroyed;
+  bool destroyed = true;
+  const auto found = GetResourceViewInfo(view, [&destroyed](const ResourceViewInfo& resource_view_info) {
+    destroyed = resource_view_info.destroyed;
+  });
+  return found && !destroyed;
 }
 
+[[deprecated("Use GetResourceFromView(device, view) instead.")]]
 inline reshade::api::resource GetResourceFromView(const reshade::api::resource_view& view) {
   if (view.handle == 0u) return {0};
-  auto* resource_view_info = GetResourceViewInfo(view);
-  if (resource_view_info == nullptr) return {0u};
-  if (resource_view_info->destroyed) return {0u};
-  if (resource_view_info->resource_info == nullptr) return {0u};
-  return resource_view_info->resource_info->resource;
+  reshade::api::resource original_resource = {0u};
+  bool destroyed = false;
+  const auto found = GetResourceViewInfo(view, [&original_resource, &destroyed](const ResourceViewInfo& resource_view_info) {
+    original_resource = resource_view_info.original_resource;
+    destroyed = resource_view_info.destroyed;
+  });
+  if (!found || destroyed) return {0u};
+  return original_resource;
 }
 
 static bool IsResourceViewEmpty(reshade::api::device* device, const reshade::api::resource_view& view) {
   if (view.handle == 0u) return true;
-  auto* resource_view_info = GetResourceViewInfo(view);
-  if (resource_view_info == nullptr) return true;
-  if (resource_view_info->destroyed) return true;
-  return (resource_view_info->original_resource.handle == 0u);
+  reshade::api::resource original_resource = {0u};
+  bool destroyed = false;
+  const auto found = GetResourceViewInfo(view, [&original_resource, &destroyed](const ResourceViewInfo& resource_view_info) {
+    original_resource = resource_view_info.original_resource;
+    destroyed = resource_view_info.destroyed;
+  });
+  if (!found || destroyed) return true;
+  return original_resource.handle == 0u;
 }
 
 static uint32_t ComputeTextureSize(
@@ -1122,39 +1564,36 @@ inline reshade::api::format FormatToTypeless(reshade::api::format value) {
   }
 }
 
-static bool attached = false;
-
 static void Use(DWORD fdw_reason) {
   switch (fdw_reason) {
-    case DLL_PROCESS_ATTACH:
-      if (attached) return;
-      attached = true;
-      reshade::log::message(reshade::log::level::info, "ResourceUtil attached.");
+    case DLL_PROCESS_ATTACH: {
+      const bool registered = shared.RegisterModule([](SharedData& data) {
+        data.use_resource_replace = data.use_resource_replace || use_resource_replace;
+      });
+      shared.RegisterEvent<reshade::addon_event::update_texture_region>(OnUpdateTextureRegion, use_resource_replace);
 
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::register_event<reshade::addon_event::init_resource>(OnInitResource);
-      reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
-      reshade::register_event<reshade::addon_event::init_resource_view>(OnInitResourceView);
-      reshade::register_event<reshade::addon_event::destroy_resource_view>(OnDestroyResourceView);
+      if (registered) {
+        reshade::log::message(reshade::log::level::info, "ResourceUtil attached.");
+      }
+
+      shared.RegisterEvent<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      shared.RegisterEvent<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+      shared.RegisterEvent<reshade::addon_event::init_resource>(OnInitResource);
+      shared.RegisterEvent<reshade::addon_event::destroy_resource>(OnDestroyResource);
+      shared.RegisterEvent<reshade::addon_event::init_resource_view>(OnInitResourceView);
+      shared.RegisterEvent<reshade::addon_event::destroy_resource_view>(OnDestroyResourceView);
       break;
+    }
 
     case DLL_PROCESS_DETACH:
-      if (!attached) return;
-      attached = false;
-      if (store->primary_store == &local_store) {
-        store->primary_store = nullptr;
-      }
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::unregister_event<reshade::addon_event::init_resource>(OnInitResource);
-      reshade::unregister_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
-      reshade::unregister_event<reshade::addon_event::init_resource_view>(OnInitResourceView);
-      reshade::unregister_event<reshade::addon_event::destroy_resource_view>(OnDestroyResourceView);
+      shared.UnregisterEvent<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      shared.UnregisterEvent<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+      shared.UnregisterEvent<reshade::addon_event::init_resource>(OnInitResource);
+      shared.UnregisterEvent<reshade::addon_event::update_texture_region>(OnUpdateTextureRegion);
+      shared.UnregisterEvent<reshade::addon_event::destroy_resource>(OnDestroyResource);
+      shared.UnregisterEvent<reshade::addon_event::init_resource_view>(OnInitResourceView);
+      shared.UnregisterEvent<reshade::addon_event::destroy_resource_view>(OnDestroyResourceView);
+      shared.UnregisterModule();
       break;
   }
 }
