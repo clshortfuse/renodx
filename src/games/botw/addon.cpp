@@ -20,12 +20,13 @@
 #include "./ryujinxlog.hpp"
 #include "./shared.h"
 
-
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
+
+bool isRyujinx = false;
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
     renodx::templates::settings::CreateDefaultSettings({
@@ -47,7 +48,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .tooltip = "Clamps the tonemap colour grading. Use BT.709 for a vanilla result.",
             .labels = {"BT.709", "BT.2020"},
             .parse = [](float value) { return value; },
-            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
+            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f && !isRyujinx; },
         },
         new renodx::utils::settings::Setting{
             .key = "SDRBlendFactor",
@@ -280,8 +281,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       auto common_aspect_ratio_tolerance = 0.00001f;
 
       const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
-          .width = 720,
-          .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+          .width = 1280,
+          .height = 720,
           .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
       };
 
@@ -294,6 +295,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
       if (filename == "Ryujinx.exe") {
+        isRyujinx = true;
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r10g10b10a2_typeless,
             .new_format = target_format,
