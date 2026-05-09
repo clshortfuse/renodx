@@ -266,13 +266,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (filename == RYUJINX_PROCESS_NAME && !ShouldAttachForRyujinx(process_path)) return FALSE;
 
       renodx::mods::swapchain::use_resource_cloning = true;
-
-      if (filename == "Cemu.exe") {
-        renodx::mods::swapchain::target_format = target_format;
-        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
-      };
+      renodx::mods::swapchain::target_format = target_format;
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
 
       // Always set to true for Vulkan
       renodx::mods::shader::allow_multiple_push_constants = true;
@@ -299,6 +296,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r10g10b10a2_typeless,
             .new_format = target_format,
+            // .shader_hash = 0x795F09E4,
+            // .use_resource_view_cloning = true,
             .aspect_ratio = common_aspect_ratio,
             .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
             .min_dimensions = min_dimensions,
@@ -334,6 +333,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .old_format = reshade::api::format::r10g10b10a2_typeless,
             .new_format = target_format,
             .ignore_size = true,  // risky...?
+            .min_dimensions = min_dimensions,
         });
       }
 
