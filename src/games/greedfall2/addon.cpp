@@ -65,7 +65,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
         .binding = &shader_injection.diffuse_white_nits,
-        .default_value = 203.f,
+        .default_value = 130.f,
         .label = "Game Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of 100% white in nits",
@@ -141,7 +141,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 2.f,
         .format = "%.2f",
-        .parse = [](float value) { return value * 0.4f; },
+        .parse = [](float value) { return value * 0.2f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
@@ -167,11 +167,11 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
         .binding = &shader_injection.tone_map_contrast,
-        .default_value = 55.f,
+        .default_value = 50.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.028f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
@@ -240,13 +240,13 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ShadowLift",
         .binding = &shader_injection.custom_shadow_lift,
-        .default_value = 40.f,
+        .default_value = 50.f,
         .label = "Black Floor",
         .section = "Color Grading",
         .tooltip = "Raise or lower the black floor",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type > 0; },
-        .parse = [](float value) { return (value - 50.f) * 0.0001f; },
+        .parse = [](float value) { return (value - 60.f) * 0.0001f; },
     },
 };
 
