@@ -65,7 +65,7 @@ renodx_custom::tonemap::psycho::config17::Config BuildPsycho17Config() {
   config.contrast_shadows = 1.f;
   config.purity_scale = RENODX_TONE_MAP_SATURATION;
   config.purity_highlights = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
-  config.dechroma = RENODX_TONE_MAP_BLOWOUT;
+  //config.dechroma = RENODX_TONE_MAP_BLOWOUT;
   config.adaptation_contrast = 1.f;
   config.bleaching_intensity = 0.f;
   config.hue_emulation = 0.f;
