@@ -7,18 +7,19 @@ Uses the ReShade Add-on API to rewrite the game's DX12 final output shader — t
 [size=4][b]Features[/b][/size]
 [list]
 [*][b]HDR output[/b] — scRGB swapchain upgrade for true HDR signal to your display
-[*][b]RenoDRT tonemapping[/b] — highlight expansion with adjustable peak brightness
-[*][b]Full color grading[/b] — exposure, contrast, saturation, shadows, highlight saturation, blowout, flare, hue shift
+[*][b]ACES and RenoDRT tonemapping[/b] — highlight expansion with adjustable peak brightness
+[*][b]Full color grading[/b] — exposure, contrast, saturation, shadows, highlights, highlight saturation, blowout, flare, hue shift/correction
 [*][b]Color temperature[/b] — warm/cool white balance adjustment
-[*][b]Shadow lift[/b] — raises black floor to reveal detail in dark areas
+[*][b]Black floor[/b] — raise or lower the black level
 [*][b]Scene grading control[/b] — dial back or strengthen the game's original color grading
+[*][b]Per-tonemapper nits compensation[/b] — peak brightness matches the slider regardless of tonemapper choice
 [*][b]UI intact[/b] — game HUD and menus remain fully functional
 [/list]
 
 [line]
 
 [size=4][b]How It Works[/b][/size]
-The game's swapchain is upgraded to 16-bit float (scRGB). The final output shader is replaced to decode the game's SDR signal to linear, expand the dynamic range, and apply RenoDRT tonemapping with your configured peak brightness. Highlights are expanded into HDR while midtones and shadows are preserved.
+The game's swapchain is upgraded to 16-bit float (scRGB). The final output shader is replaced to decode the game's tonemapped output to linear, expand the dynamic range to fill your display's peak, and apply ACES or RenoDRT tonemapping. Midtones and shadows stay true to the game's original look while highlights are expanded into HDR.
 
 [line]
 
@@ -65,22 +66,23 @@ Also works with traditional ReShade installs — just place the addon DLL in the
 
 [b]Tone Mapping[/b]
 [list]
-[*][b]Tone Mapper[/b] — Vanilla (original look), None, ACES, or RenoDRT
+[*][b]Tone Mapper[/b] — Vanilla (original look), ACES, or RenoDRT
 [*][b]Peak Brightness[/b] — Set to your display's peak nits (e.g. 780, 1000, 1400)
 [*][b]Game Brightness[/b] — SDR reference white level (default 203 nits)
 [/list]
 
 [b]Color Grading[/b]
 [list]
-[*][b]Exposure[/b] — Overall brightness multiplier
+[*][b]Exposure[/b] — Overall brightness
 [*][b]Contrast[/b] — Midtone contrast
 [*][b]Saturation[/b] — Global color intensity
+[*][b]Highlights[/b] — Highlight tone adjustment
 [*][b]Shadows[/b] — Shadow tone adjustment
 [*][b]Highlight Saturation[/b] — Color intensity in bright areas
-[*][b]Blowout[/b] — Highlight desaturation from overexposure
-[*][b]Flare[/b] — Glare compensation
+[*][b]Blowout[/b] — Highlight desaturation from overexposure (RenoDRT)
+[*][b]Flare[/b] — Glare compensation (RenoDRT)
 [*][b]Color Temperature[/b] — Warm/cool white balance shift
-[*][b]Shadow Lift[/b] — Raises black floor to reveal shadow detail
+[*][b]Black Floor[/b] — Raise or lower the black level
 [*][b]Scene Grading[/b] — Strength of the game's original color grading
 [/list]
 

@@ -22,12 +22,41 @@ void main(
   // Decode sRGB gamma to linear
   float3 linear_color = renodx::color::srgb::DecodeSafe(color);
 
+  // Apply custom grading before ToneMapPass
+  // Color temperature
+  float temp = shader_injection.custom_color_temp;
+  if (temp != 0.f) {
+    linear_color.r *= 1.f + temp * 0.5f;
+    linear_color.b *= 1.f - temp * 0.5f;
+  }
+
+  // Black floor (positive = lift, negative = crush)
+  float lift = shader_injection.custom_shadow_lift;
+  if (lift != 0.f) {
+    linear_color += lift;
+    linear_color = max(0, linear_color);
+  }
+
+  // Scene grading strength — blend toward neutral gray
+  float scene_strength = shader_injection.color_grade_strength;
+  if (scene_strength < 1.f) {
+    float luma = dot(linear_color, float3(0.2126f, 0.7152f, 0.0722f));
+    linear_color = lerp(float3(luma, luma, luma), linear_color, scene_strength);
+  }
+
   // Scale up to give ToneMapPass HDR headroom
   // peak/80 tells ToneMapPass the scene extends to peak brightness
   linear_color *= RENODX_PEAK_WHITE_NITS / 80.f;
 
   // ToneMapPass expands highlights based on peak/diffuse ratio
   float3 tonemapped = renodx::draw::ToneMapPass(linear_color);
+
+  // Compensate for each tonemapper's natural compression
+  if (RENODX_TONE_MAP_TYPE == 2) {
+    tonemapped *= 1.30f;  // ACES
+  } else if (RENODX_TONE_MAP_TYPE == 3) {
+    tonemapped *= 1.90f;  // RenoDRT
+  }
 
   // Convert ToneMapPass output to scRGB
   // ToneMapPass outputs where 1.0 = diffuse white reference
