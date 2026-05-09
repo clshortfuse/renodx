@@ -5,7 +5,10 @@
 
 #pragma once
 
+#if defined(RESHADE_API_LIBRARY) || (defined(__has_include) && __has_include(<include/reshade.hpp>))
 #include <include/reshade.hpp>
+#define RENODX_HAS_RESHADE_HEADERS 1
+#endif
 
 #include <Windows.h>
 #include <cstdint>
@@ -39,6 +42,7 @@ static std::filesystem::path GetExecutableBasePath() {
 static std::filesystem::path GetReShadeBasePath() {
   std::filesystem::path base_path;
 
+#if defined(RENODX_HAS_RESHADE_HEADERS)
   bool is_reshade_addon =
 #ifdef RESHADE_API_LIBRARY
       true;
@@ -53,10 +57,12 @@ static std::filesystem::path GetReShadeBasePath() {
       reshade::get_reshade_base_path(reshade_base_path.data(), &path_size);
       reshade_base_path.resize(path_size);
       if (!reshade_base_path.empty()) {
-        base_path = std::filesystem::path(std::u8string(reshade_base_path.begin(), reshade_base_path.end()));
+        base_path = std::filesystem::path(std::u8string(
+            reshade_base_path.begin(), reshade_base_path.end()));
       }
     }
   }
+#endif  // RENODX_HAS_RESHADE_HEADERS
 
   if (base_path.empty()) {
     base_path = GetExecutableBasePath();
@@ -116,3 +122,5 @@ static void WriteTextFile(const std::filesystem::path& path, std::string& string
 }
 
 }  // namespace renodx::utils::path
+
+#undef RENODX_HAS_RESHADE_HEADERS
