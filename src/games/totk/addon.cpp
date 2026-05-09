@@ -171,8 +171,17 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden"); },
         },
         new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "NX Optimizer",
+            .section = "Links",
+            .group = "button-line-1",
+            .tint = 0x7B1ED9,
+            .parse = [](float value) { return value; },
+            .on_change = []() { renodx::utils::platform::LaunchURL("https://www.nxoptimizer.com/"); },
+        },
+        new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = "Game mod by souperman9, tonemapper updated by Musa, RenoDX Framework by ShortFuse, RenoVK fork by Ritsu. \nSpecial thanks to Izueh, Marat, and miru97",
+            .label = "Game mod by souperman9, tonemapper updated by Musa, RenoDX Framework by ShortFuse, RenoVK fork by Ritsu. \nSpecial thanks to MaxLastBreath, Izueh, Marat, and miru97",
             .section = "About",
         },
         new renodx::utils::settings::Setting{
@@ -224,24 +233,20 @@ const std::string_view ACCEPTED_RYUJINX_TITLES[] = {
 };
 
 bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
-    return ryujinxlog::DoesLatestLogLastMatchingLineContainAny({
-                         .logs_path = process_path.parent_path() / "Logs",
-                         .line_marker = RYUJINX_LOADED_TITLE_MARKER,
-                         .accepted_terms = ACCEPTED_RYUJINX_TITLES,
-                 })
-                 || ryujinxlog::DoesCurrentProcessWindowTitleContainAny({
-                         .accepted_terms = ACCEPTED_RYUJINX_TITLES,
-                 });
+  return ryujinxlog::DoesLatestLogLastMatchingLineContainAny({
+             .logs_path = process_path.parent_path() / "Logs",
+             .line_marker = RYUJINX_LOADED_TITLE_MARKER,
+             .accepted_terms = ACCEPTED_RYUJINX_TITLES,
+         })
+         || ryujinxlog::DoesCurrentProcessWindowTitleContainAny({
+             .accepted_terms = ACCEPTED_RYUJINX_TITLES,
+         });
 }
 
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-<<<<<<< Updated upstream
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Breath of the Wild";
-=======
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for The Legend of Zelda: Tears of the Kingdom";
->>>>>>> Stashed changes
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   const auto target_format = reshade::api::format::r16g16b16a16_float;
@@ -264,12 +269,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::target_format = target_format;
-
-      if (filename == "Cemu.exe") {
-        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
-      };
+      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
 
       // Always set to true for Vulkan
       renodx::mods::shader::allow_multiple_push_constants = true;
@@ -301,17 +303,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         });
       }
 
-
-          renodx::mods::swapchain::resource_upgrade_infos.push_back({
-              .old_format = reshade::api::format::r8g8b8a8_typeless,
-              .new_format = target_format,
-              .ignore_size = true,
-              .shader_hash = 0xF3C7B934,
-              //   .ignore_size = true,  // risky...?
-              .use_resource_view_cloning = true,
-              .view_upgrades = view_upgrades,
-          });
-
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = target_format,
+          .ignore_size = true,
+          .shader_hash = 0xF3C7B934,
+          //   .ignore_size = true,  // risky...?
+          .use_resource_view_cloning = true,
+          .view_upgrades = view_upgrades,
+      });
 
       if (!initialized) {
         // renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
