@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <exception>
 #include <filesystem>
@@ -12,12 +13,16 @@
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <sstream>
+#include <string>
+#include <system_error>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
 #include <vector>
 #include "./format.hpp"
+#include "./hlsl_dependencies.hpp"
 #include "./path.hpp"
 #include "./shader_compiler_directx.hpp"
 
@@ -30,7 +35,7 @@ struct CustomShader {
   bool is_hlsl = false;
   bool is_glsl = false;
   std::filesystem::path file_path;
-  uint32_t shader_hash;
+  uint32_t shader_hash = 0u;
   bool removed = false;
 
   [[nodiscard]] bool IsCompilationOK() const {
@@ -41,7 +46,15 @@ struct CustomShader {
     return std::get<std::vector<uint8_t>>(compilation);
   }
 
+  [[nodiscard]] const std::vector<uint8_t>& GetCompilationData() const {
+    return std::get<std::vector<uint8_t>>(compilation);
+  }
+
   [[nodiscard]] std::exception& GetCompilationException() {
+    return std::get<std::exception>(compilation);
+  }
+
+  [[nodiscard]] const std::exception& GetCompilationException() const {
     return std::get<std::exception>(compilation);
   }
 
@@ -65,48 +78,212 @@ static std::atomic_bool shared_shaders_changed = false;
 static std::atomic_bool shared_compile_pending = false;
 static std::optional<std::thread> worker_thread;
 
-constexpr uint32_t MAX_SHADER_DEFINES = 4;
-const bool PRECOMPILE_CUSTOM_SHADERS = true;
-
 static std::shared_mutex mutex;
 static std::unordered_map<uint32_t, CustomShader> custom_shaders_cache;
+static std::unordered_map<uint32_t, CustomShader> pending_custom_shaders_cache;
+struct DependencyMetadata {
+  std::filesystem::path path;
+  bool exists = false;
+  std::filesystem::file_time_type last_write_time = std::filesystem::file_time_type::min();
+
+  bool operator==(const DependencyMetadata&) const = default;
+};
+struct BuildMetadata {
+  std::filesystem::path file_path;
+  std::vector<DependencyMetadata> dependencies;
+  std::size_t defines_revision = 0u;
+};
+static std::unordered_map<uint32_t, BuildMetadata> build_metadata_cache;
 static std::vector<std::pair<std::string, std::string>> shared_shader_defines;
+static std::size_t shared_shader_defines_revision = 0u;
 static std::string live_path;
+static std::filesystem::path watched_directory;
 
 static OVERLAPPED overlapped;
 static HANDLE m_target_dir_handle = INVALID_HANDLE_VALUE;
 static std::aligned_storage_t<1U << 18, std::max<size_t>(alignof(FILE_NOTIFY_EXTENDED_INFORMATION), alignof(FILE_NOTIFY_INFORMATION))> watch_buffer;
 
+static std::filesystem::path GetEffectiveLiveDirectory() {
+  if (!live_path.empty()) {
+    return std::filesystem::path(live_path).lexically_normal();
+  }
+  return renodx::utils::path::GetLiveOutputPath().lexically_normal();
+}
+
+static std::filesystem::path NormalizePathForComparison(const std::filesystem::path& path) {
+  std::error_code error_code;
+  auto normalized_path = std::filesystem::weakly_canonical(path, error_code);
+  if (!error_code) {
+    return normalized_path;
+  }
+
+  error_code.clear();
+  normalized_path = std::filesystem::absolute(path, error_code);
+  if (!error_code) {
+    return normalized_path.lexically_normal();
+  }
+
+  return path.lexically_normal();
+}
+
+static bool HasHexPrefix(const std::string& text, std::size_t offset) {
+  return text.size() >= offset + 2u
+         && text[offset] == '0'
+         && (text[offset + 1u] == 'x' || text[offset + 1u] == 'X');
+}
+
+static bool AreShadersEquivalent(const CustomShader& lhs, const CustomShader& rhs) {
+  if (lhs.is_hlsl != rhs.is_hlsl
+      || lhs.is_glsl != rhs.is_glsl
+      || lhs.file_path != rhs.file_path
+      || lhs.shader_hash != rhs.shader_hash
+      || lhs.removed != rhs.removed) {
+    return false;
+  }
+
+  if (lhs.IsCompilationOK() != rhs.IsCompilationOK()) {
+    return false;
+  }
+
+  if (lhs.IsCompilationOK()) {
+    return lhs.GetCompilationData() == rhs.GetCompilationData();
+  }
+
+  return std::string(lhs.GetCompilationException().what()) == rhs.GetCompilationException().what();
+}
+
+static void QueueShaderUpdate(uint32_t shader_hash, const CustomShader& custom_shader) {
+  pending_custom_shaders_cache[shader_hash] = custom_shader;
+  shared_shaders_changed = true;
+}
+
+static std::vector<DependencyMetadata> CollectDependencyMetadata(const std::filesystem::path& entry_path, bool is_hlsl) {
+  std::vector<DependencyMetadata> dependencies;
+  if (is_hlsl) {
+    for (const auto& dependency : renodx::utils::shader::dependencies::CollectDependencies(entry_path)) {
+      auto last_write_time = std::filesystem::file_time_type::min();
+      if (dependency.exists) {
+        std::error_code error_code;
+        last_write_time = std::filesystem::last_write_time(dependency.path, error_code);
+        if (error_code) {
+          last_write_time = std::filesystem::file_time_type::min();
+        }
+      }
+      dependencies.push_back(DependencyMetadata{
+          .path = dependency.path,
+          .exists = dependency.exists,
+          .last_write_time = last_write_time,
+      });
+    }
+    return dependencies;
+  }
+
+  auto normalized_path = NormalizePathForComparison(entry_path);
+  dependencies.push_back(DependencyMetadata{
+      .path = normalized_path,
+      .exists = false,
+      .last_write_time = std::filesystem::file_time_type::min(),
+  });
+  std::error_code error_code;
+  dependencies.front().exists = std::filesystem::exists(normalized_path, error_code) && !error_code;
+  if (dependencies.front().exists) {
+    error_code.clear();
+    dependencies.front().last_write_time = std::filesystem::last_write_time(normalized_path, error_code);
+    if (error_code) {
+      dependencies.front().last_write_time = std::filesystem::file_time_type::min();
+    }
+  }
+  return dependencies;
+}
+
+static CustomShader CompileShader(
+    const std::filesystem::path& entry_path,
+    uint32_t shader_hash,
+    bool is_hlsl,
+    bool is_glsl,
+    const std::string& shader_target) {
+  CustomShader custom_shader = {
+      .is_hlsl = is_hlsl,
+      .is_glsl = is_glsl,
+      .file_path = entry_path,
+      .shader_hash = shader_hash,
+      .removed = false,
+  };
+
+  if (is_hlsl) {
+    {
+      std::stringstream s;
+      s << "loadCustomShaders(Compiling file: ";
+      s << entry_path.string();
+      s << ", hash: " << PRINT_CRC32(shader_hash);
+      s << ", target: " << shader_target;
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+    }
+
+    try {
+      custom_shader.compilation = renodx::utils::shader::compiler::directx::CompileShaderFromFile(
+          entry_path.c_str(),
+          shader_target.c_str(),
+          shared_shader_defines);
+    } catch (std::exception& exception) {
+      custom_shader.compilation = exception;
+      std::stringstream s;
+      s << "loadCustomShaders(Compilation failed: ";
+      s << entry_path.string();
+      s << ", " << custom_shader.GetCompilationException().what();
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+    }
+    return custom_shader;
+  }
+
+  try {
+    custom_shader.compilation = utils::path::ReadBinaryFile(entry_path);
+  } catch (std::exception& exception) {
+    custom_shader.compilation = exception;
+    std::stringstream s;
+    s << "loadCustomShaders(Failed to load file: ";
+    s << entry_path.string();
+    s << ", " << custom_shader.GetCompilationException().what();
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+  }
+
+  return custom_shader;
+}
+
 static bool CompileCustomShaders() {
   const std::unique_lock lock(mutex);
 
-  std::filesystem::path directory;
-  if (live_path.empty()) {
-    directory = renodx::utils::path::GetOutputPath();
-    if (!std::filesystem::exists(directory)) {
-      std::filesystem::create_directory(directory);
-      return false;
-    }
-    directory /= "live";
-  } else {
-    directory = live_path;
-  }
+  const auto directory = GetEffectiveLiveDirectory();
   std::unordered_set<uint32_t> shader_hashes_processed = {};
-  std::unordered_set<uint32_t> shader_hashes_failed = {};
-  std::unordered_set<uint32_t> shader_hashes_updated = {};
+  bool has_updates = false;
   try {
     if (!std::filesystem::exists(directory)) {
-      std::filesystem::create_directory(directory);
-      return false;
+      std::filesystem::create_directories(directory);
     }
 
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
+    std::vector<std::filesystem::path> shader_file_paths;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(
+             directory,
+             std::filesystem::directory_options::skip_permission_denied)) {
       if (!entry.is_regular_file()) continue;
 
-      const auto& entry_path = entry.path();
+      const auto entry_path = NormalizePathForComparison(entry.path());
 
       if (!entry_path.has_stem() || !entry_path.has_extension()) continue;
 
+      shader_file_paths.push_back(entry_path);
+    }
+
+    // Duplicate hashes are ignored after the first match, so process paths in a stable order:
+    // the first path alphabetically wins.
+    std::sort(shader_file_paths.begin(), shader_file_paths.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.native() < rhs.native();
+    });
+
+    for (const auto& entry_path : shader_file_paths) {
       const bool is_hlsl = entry_path.extension().compare(".hlsl") == 0;
       const bool is_cso = entry_path.extension().compare(".cso") == 0;
       const bool is_glsl = entry_path.extension().compare(".glsl") == 0;
@@ -116,19 +293,19 @@ static bool CompileCustomShaders() {
       auto basename = entry_path.stem().string();
       std::string hash_string;
       std::string shader_target;
-      std::string shader_stage;
-
       if (is_hlsl) {
         auto length = basename.length();
         if (length < strlen("0x12345678.xx_x_x")) continue;
+        const auto hash_prefix_offset = length - strlen("0x12345678.xx_x_x");
+        if (!HasHexPrefix(basename, hash_prefix_offset)) continue;
         shader_target = basename.substr(length - strlen("xx_x_x"), strlen("xx_x_x"));
         if (shader_target[2] != '_') continue;
         if (shader_target[4] != '_') continue;
         // uint32_t versionMajor = shader_target[3] - '0';
         hash_string = basename.substr(length - strlen("12345678.xx_x_x"), 8);
       } else if (is_cso || is_spv || is_glsl) {
-        // Binaries files must start with 0x12345678. The rest of the basename is ignored.
-        if (basename.size() < 10) {
+        // Binary files must start with 0x12345678. The rest of the basename is ignored.
+        if (basename.size() < 10 || !HasHexPrefix(basename, 0u)) {
           std::stringstream s;
           s << "CompileCustomShaders(Invalid file format: ";
           s << basename;
@@ -139,10 +316,13 @@ static bool CompileCustomShaders() {
         hash_string = basename.substr(2, 8);
       }
 
-      uint32_t shader_hash;
-      try {
-        shader_hash = std::stoul(hash_string, nullptr, 16);
-      } catch (std::exception& e) {
+      uint32_t shader_hash = 0u;
+      const auto [hash_end, hash_error] = std::from_chars(
+          hash_string.data(),
+          hash_string.data() + hash_string.size(),
+          shader_hash,
+          16);
+      if (hash_error != std::errc{} || hash_end != hash_string.data() + hash_string.size()) {
         std::stringstream s;
         s << "CompileCustomShaders(Invalid shader hash: ";
         s << hash_string;
@@ -162,116 +342,81 @@ static bool CompileCustomShaders() {
         continue;
       }
 
-      // Prepare new custom shader entry but hold off unless it actually compiles ()
-
-      CustomShader custom_shader = {
-          .is_hlsl = is_hlsl,
-          .is_glsl = is_glsl,
+      BuildMetadata next_build_metadata = {
           .file_path = entry_path,
+          .dependencies = CollectDependencyMetadata(entry_path, is_hlsl),
+          .defines_revision = shared_shader_defines_revision,
       };
+      shader_hashes_processed.emplace(shader_hash);
 
-      if (is_hlsl) {
-        {
-          std::stringstream s;
-          s << "loadCustomShaders(Compiling file: ";
-          s << entry_path.string();
-          s << ", hash: " << PRINT_CRC32(shader_hash);
-          s << ", target: " << shader_target;
-          s << ")";
-          reshade::log::message(reshade::log::level::debug, s.str().c_str());
-        }
-
-        try {
-          custom_shader.compilation = renodx::utils::shader::compiler::directx::CompileShaderFromFile(
-              entry_path.c_str(),
-              shader_target.c_str(),
-              shared_shader_defines);
-          shader_hashes_processed.emplace(shader_hash);
-          shader_hashes_failed.erase(shader_hash);
-        } catch (std::exception& e) {
-          shader_hashes_failed.emplace(shader_hash);
-          custom_shader.compilation = e;
-          std::stringstream s;
-          s << "loadCustomShaders(Compilation failed: ";
-          s << entry_path.string();
-          s << ", " << custom_shader.GetCompilationException().what();
-          s << ")";
-          reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        }
-
-      } else if (is_cso || is_spv || is_glsl) {
-        try {
-          custom_shader.compilation = utils::path::ReadBinaryFile(entry_path);
-          shader_hashes_processed.emplace(shader_hash);
-          shader_hashes_failed.erase(shader_hash);
-        } catch (std::exception& e) {
-          custom_shader.compilation = e;
-          shader_hashes_failed.emplace(shader_hash);
-          continue;
-        }
+      const auto previous_build_metadata = build_metadata_cache.find(shader_hash);
+      const auto previous_shader = custom_shaders_cache.find(shader_hash);
+      const bool has_previous_shader = previous_shader != custom_shaders_cache.end();
+      const bool cached_build_is_identical = previous_build_metadata != build_metadata_cache.end()
+                                             && has_previous_shader
+                                             && previous_build_metadata->second.file_path == entry_path
+                                             && previous_build_metadata->second.defines_revision == shared_shader_defines_revision
+                                             && std::ranges::equal(
+                                                 previous_build_metadata->second.dependencies,
+                                                 next_build_metadata.dependencies);
+      if (cached_build_is_identical) {
+        continue;
       }
 
-      // Find previous entry
-      bool insert_or_replace = true;
-      if (auto previous_pair = custom_shaders_cache.find(shader_hash);
-          previous_pair != custom_shaders_cache.end()) {
-        auto& previous_custom_shader = previous_pair->second;
-        if (custom_shader.IsCompilationOK()
-            && previous_custom_shader.IsCompilationOK()
-            && custom_shader.GetCompilationData() == previous_custom_shader.GetCompilationData()) {
-          // Same data, update source
-          previous_custom_shader.is_hlsl = is_hlsl,
-          previous_custom_shader.file_path = entry_path,
-          insert_or_replace = false;
-        }
+      auto custom_shader = CompileShader(entry_path, shader_hash, is_hlsl, is_glsl, shader_target);
+
+      build_metadata_cache[shader_hash] = std::move(next_build_metadata);
+
+      if (!has_previous_shader || !AreShadersEquivalent(previous_shader->second, custom_shader)) {
+        QueueShaderUpdate(shader_hash, custom_shader);
+        has_updates = true;
       }
-      if (insert_or_replace) {
-        // New entry
-        custom_shaders_cache[shader_hash] = custom_shader;
-        shader_hashes_updated.emplace(shader_hash);
-      }
+
+      custom_shaders_cache[shader_hash] = std::move(custom_shader);
     }
   } catch (std::exception& ex) {
     reshade::log::message(reshade::log::level::error, ex.what());
     return false;
   }
 
-  for (auto& [shader_hash, custom_shader] : custom_shaders_cache) {
-    if (!shader_hashes_processed.contains(shader_hash)) {
-      if (!custom_shader.removed) {
-        custom_shader.removed = true;
-        shader_hashes_updated.insert(shader_hash);
-      }
+  for (auto iterator = build_metadata_cache.begin(); iterator != build_metadata_cache.end();) {
+    const auto shader_hash = iterator->first;
+    if (shader_hashes_processed.contains(shader_hash)) {
+      ++iterator;
+      continue;
+    }
+
+    iterator = build_metadata_cache.erase(iterator);
+    if (auto custom_shader = custom_shaders_cache.find(shader_hash); custom_shader != custom_shaders_cache.end()) {
+      auto removed_shader = custom_shader->second;
+      removed_shader.removed = true;
+      QueueShaderUpdate(shader_hash, removed_shader);
+      custom_shaders_cache.erase(custom_shader);
+      has_updates = true;
     }
   }
 
-  if (shader_hashes_updated.size() != 0) {
-    custom_shaders_count = custom_shaders_cache.size();
-    shared_shaders_changed = true;
-    return true;
+  custom_shaders_count = custom_shaders_cache.size();
+  if (!has_updates && pending_custom_shaders_cache.empty()) {
+    shared_shaders_changed = false;
   }
-  return false;
+  return has_updates;
 }
 
 static void CALLBACK HandleEventCallback(DWORD error_code, DWORD bytes_transferred, LPOVERLAPPED overlapped) {
+  if (error_code == ERROR_OPERATION_ABORTED) {
+    return;
+  }
   shared_watcher_running = false;
   shared_compile_pending = true;
 }
 
-static bool EnableLiveWatcher() {
-  auto directory = utils::path::GetOutputPath();
-  if (!std::filesystem::exists(directory)) {
-    std::filesystem::create_directory(directory);
-  }
-
-  directory /= "live";
-
-  if (!std::filesystem::exists(directory)) {
-    std::filesystem::create_directory(directory);
-  }
+static bool EnableLiveWatcher(const std::filesystem::path& directory) {
+  std::filesystem::create_directories(directory);
 
   reshade::log::message(reshade::log::level::info, "Watching live.");
 
+  watched_directory = NormalizePathForComparison(directory);
   m_target_dir_handle = CreateFileW(
       directory.c_str(),
       FILE_LIST_DIRECTORY,
@@ -296,6 +441,17 @@ static bool EnableLiveWatcher() {
   memset(&watch_buffer, 0, sizeof(watch_buffer));
   overlapped = {0};
   overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);  // NOLINT
+  if (overlapped.hEvent == nullptr) {
+    CloseHandle(m_target_dir_handle);
+    m_target_dir_handle = INVALID_HANDLE_VALUE;
+    watched_directory.clear();
+    std::stringstream s;
+    s << "ToggleLiveWatching(CreateEvent: Failed: ";
+    s << GetLastError();
+    s << ")";
+    reshade::log::message(reshade::log::level::error, s.str().c_str());
+    return false;
+  }
 
   const BOOL success = ReadDirectoryChangesExW(
       m_target_dir_handle,
@@ -315,6 +471,10 @@ static bool EnableLiveWatcher() {
 
   if (success == FALSE) {
     CloseHandle(m_target_dir_handle);
+    m_target_dir_handle = INVALID_HANDLE_VALUE;
+    CloseHandle(overlapped.hEvent);
+    overlapped.hEvent = nullptr;
+    watched_directory.clear();
     std::stringstream s;
     s << "ToggleLiveWatching(ReadDirectoryChangesExW: Failed: ";
     s << GetLastError();
@@ -326,10 +486,20 @@ static bool EnableLiveWatcher() {
   return true;
 }
 
-static void DisableLiveWatcher() {
-  reshade::log::message(reshade::log::level::info, "Cancelling live.");
-  CancelIoEx(m_target_dir_handle, &overlapped);
-  CloseHandle(m_target_dir_handle);
+static void DisableLiveWatcher(bool cancel_pending = true) {
+  if (m_target_dir_handle != INVALID_HANDLE_VALUE) {
+    if (cancel_pending) {
+      reshade::log::message(reshade::log::level::info, "Cancelling live.");
+      CancelIoEx(m_target_dir_handle, &overlapped);
+    }
+    CloseHandle(m_target_dir_handle);
+    m_target_dir_handle = INVALID_HANDLE_VALUE;
+  }
+  if (overlapped.hEvent != nullptr) {
+    CloseHandle(overlapped.hEvent);
+    overlapped.hEvent = nullptr;
+  }
+  watched_directory.clear();
 }
 
 static void Watch() {
@@ -340,14 +510,23 @@ static void Watch() {
         shared_watcher_running = false;
         return;
       }
+      std::filesystem::path effective_directory;
+      {
+        const std::shared_lock state_lock(mutex);
+        effective_directory = NormalizePathForComparison(GetEffectiveLiveDirectory());
+      }
+      if (shared_watcher_running && effective_directory != watched_directory) {
+        DisableLiveWatcher();
+        shared_watcher_running = false;
+      }
       if (!shared_watcher_running) {
-        if (EnableLiveWatcher()) {
+        DisableLiveWatcher(false);
+        if (EnableLiveWatcher(effective_directory)) {
           shared_watcher_running = true;
         }
       }
-      if (shared_compile_pending) {
+      if (shared_compile_pending.exchange(false)) {
         CompileCustomShaders();
-        shared_compile_pending = false;
       }
     }
 
@@ -381,11 +560,15 @@ static bool IsEnabled() {
 // Retrieves and consumes all compiled shareds
 static std::unordered_map<uint32_t, CustomShader> FlushCompiledShaders() {
   const std::unique_lock lock(internal::mutex);
-  std::unordered_map<uint32_t, CustomShader> copy = internal::custom_shaders_cache;
-  internal::custom_shaders_cache.clear();
-  custom_shaders_count = 0;
+  std::unordered_map<uint32_t, CustomShader> copy = internal::pending_custom_shaders_cache;
+  internal::pending_custom_shaders_cache.clear();
   internal::shared_shaders_changed = false;
   return copy;
+}
+
+static std::unordered_map<uint32_t, CustomShader> GetCompiledShaders() {
+  const std::shared_lock lock(internal::mutex);
+  return internal::custom_shaders_cache;
 }
 
 static bool HasChanged() {
@@ -397,17 +580,21 @@ static bool CompileSync() {
 }
 
 template <class T>
-static void SetShaderDefines(T& defines) {
+static void SetShaderDefines(const T& defines) {
   const std::unique_lock lock(internal::mutex);
   internal::shared_shader_defines.clear();
-  for (auto& pair : defines) {
+  for (const auto& pair : defines) {
     internal::shared_shader_defines.emplace_back(pair);
   }
+  internal::shared_shader_defines_revision += 1u;
+  internal::shared_compile_pending = true;
 }
 
-static void SetShaderDefines(std::vector<std::pair<std::string, std::string>>& defines) {
+static void SetShaderDefines(const std::vector<std::pair<std::string, std::string>>& defines) {
   const std::unique_lock lock(internal::mutex);
   internal::shared_shader_defines = defines;
+  internal::shared_shader_defines_revision += 1u;
+  internal::shared_compile_pending = true;
 }
 
 static std::string GetLivePath() {
@@ -418,6 +605,7 @@ static std::string GetLivePath() {
 static void SetLivePath(const std::string& live_path) {
   const std::unique_lock lock(internal::mutex);
   internal::live_path.assign(live_path);
+  internal::shared_compile_pending = true;
 }
 
 static void RequestCompile() {
