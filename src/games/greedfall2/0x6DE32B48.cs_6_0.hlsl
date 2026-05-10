@@ -1,8 +1,26 @@
-// Replace game's ACES tonemap — skip tonemap, pass HDR through
-// Uses minimal cbuffer access to avoid root signature overflow
+// Original shader 0x6DE32B48: finalCompositing compute pass
+// Original code (decompiled): applies Narkowicz ACES tonemap and packs to R10G10B10A2.
+//
+//   float3 color = g_Texture.SampleLevel(g_Sampler_LinearClamp, uv, 0).rgb;
+//   color = max(0, color);
+//   float3 tonemapped = (color * (2.51f * color + 0.03f)) / (color * (2.43f * color + 0.59f) + 0.14f);
+//   tonemapped = saturate(tonemapped);
+//   uint packed = ((uint)(tonemapped.r * 1023 + 0.5))
+//              | (((uint)(tonemapped.g * 1023 + 0.5)) << 10)
+//              | (((uint)(tonemapped.b * 1023 + 0.5)) << 20)
+//              | (3u << 30);
+//   g_Output[dtid.xy] = packed;
+//
+// Replacement: skip ACES, gamma-encode HDR/3 for transport through R10G10B10A2.
 
 #include "./shared.h"
 
+cbuffer cbObjectDynamic : register(b3) {
+  float4 cb_data[24];
+};
+
+Texture2D<float4> g_AverageLuminance : register(t0);
+Texture2D<float4> g_AverageLowLuminance : register(t1);
 Texture2D<float4> g_Texture : register(t2);
 SamplerState g_Sampler_LinearClamp : register(s1);
 RWTexture2D<uint> g_Output : register(u0);
@@ -36,9 +54,8 @@ void main(uint3 dtid : SV_DispatchThreadID) {
     // Vanilla: apply original ACES
     g_Output[dtid.xy] = PackR10G10B10A2(ACESFitted(color));
   } else {
-    // HDR: gamma-encode HDR/3 for better precision in midtones (vs linear ÷3)
-    float3 normalized = saturate(color / 3.0f);
-    float3 encoded = pow(normalized, 1.0f / 2.2f);
-    g_Output[dtid.xy] = PackR10G10B10A2(encoded);
+    // HDR: PQ encode for maximum precision through R10G10B10A2
+    float3 pq = renodx::color::pq::EncodeSafe(color, 1.0f);
+    g_Output[dtid.xy] = PackR10G10B10A2(pq);
   }
 }

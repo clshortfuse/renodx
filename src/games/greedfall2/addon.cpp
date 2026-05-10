@@ -20,8 +20,9 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x6DE32B48),  // Tonemap compute - skip ACES, ÷3 encode HDR
-    CustomShaderEntry(0xD2C8C305),  // Final blit - ×3 decode + ToneMapPass
+    CustomShaderEntry(0x6DE32B48),  // Tonemap compute - skip ACES, gamma-encode HDR/3
+    CustomShaderEntry(0xF27041D0),  // Compositing - passthrough test
+    CustomShaderEntry(0xD2C8C305),  // Final blit - decode + ToneMapPass
 };
 
 ShaderInjectData shader_injection;
@@ -48,9 +49,9 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "ACES", "RenoDRT"},
+        .labels = {"Vanilla", "ACES", "RenoDRT", "Psycho"},
         .is_visible = []() { return current_settings_mode >= 1; },
-        .parse = [](float value) { return value == 0.f ? 0.f : value + 1.f; },
+        .parse = [](float value) { return value == 0.f ? 0.f : value + 1.f; },  // 0=Vanilla, 1→2=ACES, 2→3=RenoDRT, 3→4=Psycho
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
