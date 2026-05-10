@@ -234,13 +234,10 @@ const std::string_view ACCEPTED_RYUJINX_TITLES[] = {
 
 bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
   return ryujinxlog::DoesLatestLogLastMatchingLineContainAny({
-             .logs_path = process_path.parent_path() / "Logs",
-             .line_marker = RYUJINX_LOADED_TITLE_MARKER,
-             .accepted_terms = ACCEPTED_RYUJINX_TITLES,
-         })
-         || ryujinxlog::DoesCurrentProcessWindowTitleContainAny({
-             .accepted_terms = ACCEPTED_RYUJINX_TITLES,
-         });
+      .logs_path = process_path.parent_path() / "Logs",
+      .line_marker = RYUJINX_LOADED_TITLE_MARKER,
+      .accepted_terms = ACCEPTED_RYUJINX_TITLES,
+  });
 }
 
 }  // namespace
@@ -261,7 +258,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
       if (!reshade::register_addon(h_module)) return FALSE;
-
       auto process_path = renodx::utils::platform::GetCurrentProcessPath();
       auto filename = process_path.filename().string();
 
