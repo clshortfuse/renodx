@@ -242,9 +242,6 @@ bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
              .logs_path = process_path.parent_path() / "Logs",
              .line_marker = RYUJINX_LOADED_TITLE_MARKER,
              .accepted_terms = ACCEPTED_RYUJINX_TITLES,
-         })
-         || ryujinxlog::DoesCurrentProcessWindowTitleContainAny({
-             .accepted_terms = ACCEPTED_RYUJINX_TITLES,
          });
 }
 
