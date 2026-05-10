@@ -5,9 +5,7 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
-
-#include <atomic>
+// #define DEBUG_LEVEL_0
 
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
@@ -23,48 +21,64 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-std::atomic_uint64_t g_current_uav0 = 0;
+struct ToneMapOutputBinding {
+  reshade::api::shader_stage stages = reshade::api::shader_stage::all_compute;
+  reshade::api::pipeline_layout layout = {0u};
+  uint32_t layout_param = 0u;
+  uint32_t binding = 0u;
+  reshade::api::resource_view view = {0u};
+};
+
+thread_local ToneMapOutputBinding g_tone_map_output = {};
+
+reshade::api::resource_view GetToneMapOutputClone(const reshade::api::resource_view& output) {
+  if (output.handle == 0u) return {0u};
+  return renodx::mods::swapchain::GetResourceViewClone(output);
+}
 
 bool OnToneMapDraw(reshade::api::command_list* cmd_list) {
-  reshade::api::resource_view current_uav0 = {g_current_uav0};
-  auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo(current_uav0);
-  if (resource_view_info->resource_info == nullptr) return true;
-  if (resource_view_info->resource_info->clone_enabled) return true;
-  resource_view_info->resource_info->clone_enabled = true;
-  renodx::mods::swapchain::FlushDescriptors(cmd_list);  // Not implemented yet, will fix next draw
+  const auto current_uav0 = g_tone_map_output.view;
+  if (current_uav0.handle == 0u) return false;
+
+  renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), current_uav0);
+
+  const auto clone_uav0 = GetToneMapOutputClone(current_uav0);
+  if (clone_uav0.handle == 0u) return false;
+
+  cmd_list->push_descriptors(
+      g_tone_map_output.stages,
+      g_tone_map_output.layout,
+      g_tone_map_output.layout_param,
+      reshade::api::descriptor_table_update{
+          .table = {},
+          .binding = g_tone_map_output.binding,
+          .array_offset = 0,
+          .count = 1,
+          .type = reshade::api::descriptor_type::texture_unordered_access_view,
+          .descriptors = &clone_uav0,
+      });
   return true;
 }
 
-#define UpgradeRTVReplaceShader(value)                                                   \
-  {                                                                                      \
-      value,                                                                             \
-      {                                                                                  \
-          .crc32 = value,                                                                \
-          .code = __##value,                                                             \
-          .on_draw = [](auto* cmd_list) {                                                \
-            auto& rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);           \
-            auto& dsv = renodx::utils::swapchain::GetDepthStencil(cmd_list);             \
-            bool changed = false;                                                        \
-                                                                                         \
-            for (auto rtv : rtvs) {                                                      \
-              if (rtv.handle == 0u) continue;                                            \
-              auto* view_info = renodx::utils::resource::GetResourceViewInfo(rtv);       \
-              if (view_info == nullptr || view_info->resource_info == nullptr) continue; \
-              const auto& desc = view_info->resource_info->desc;                         \
-              if (desc.texture.format != reshade::api::format::r8g8b8a8_unorm) continue; \
-              if (desc.texture.width != 256 || desc.texture.height != 16) continue;      \
-                                                                                         \
-              changed |= renodx::mods::swapchain::ActivateCloneHotSwap(                  \
-                  cmd_list->get_device(), rtv);                                          \
-            }                                                                            \
-                                                                                         \
-            if (changed) {                                                               \
-              renodx::mods::swapchain::RewriteRenderTargets(                             \
-                  cmd_list, static_cast<uint32_t>(rtvs.size()), rtvs.data(), dsv);       \
-            }                                                                            \
-            return true;                                                                 \
-          },                                                                             \
-      },                                                                                 \
+#define UpgradeRTVReplaceShader(value)                                                                         \
+  {                                                                                                            \
+      value,                                                                                                   \
+      {                                                                                                        \
+          .crc32 = value,                                                                                      \
+          .code = __##value,                                                                                   \
+          .on_draw = [](auto* cmd_list) {                                                                      \
+            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                                  \
+            bool changed = false;                                                                              \
+            for (auto rtv : rtvs) {                                                                            \
+              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv) || changed; \
+            }                                                                                                  \
+            if (changed) {                                                                                     \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                             \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});          \
+            }                                                                                                  \
+            return true;                                                                                       \
+          },                                                                                                   \
+      },                                                                                                       \
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -485,7 +499,20 @@ inline void OnPushDescriptors(
     // Optimized: Use hardcoded Reshade DX11 psuedo-layout values
     if (layout_param != 3) continue;          // Only UAVs
     if ((update.binding + i) != 0) continue;  // Only for slot 0
-    g_current_uav0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[i].handle;
+    const auto current_uav0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+    if (current_uav0.handle == 0u) continue;
+    bool is_clone_view = false;
+    renodx::utils::resource::GetResourceViewInfo(current_uav0, [&](const renodx::utils::resource::ResourceViewInfo& info) {
+      is_clone_view = info.is_clone;
+    });
+    if (is_clone_view) continue;
+    g_tone_map_output = {
+        .stages = stages,
+        .layout = layout,
+        .layout_param = layout_param,
+        .binding = update.binding + i,
+        .view = current_uav0,
+    };
     return;
   }
 }
@@ -504,7 +531,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::trace_unmodified_shaders = true;
       renodx::mods::swapchain::force_borderless = false;
       renodx::mods::swapchain::prevent_full_screen = true;
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .ignore_size = true,
@@ -514,7 +541,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       });
 
       // upgrade LUTbuilders
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r8g8b8a8_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
@@ -524,6 +551,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       });
 
       renodx::mods::swapchain::use_resource_cloning = true;
+      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+      renodx::mods::swapchain::SetUseHDR10();
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
 
