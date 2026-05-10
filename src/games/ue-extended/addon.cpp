@@ -658,7 +658,7 @@ void AddGamePatches() {
     AddSonicRacingCrossWorldsUpgrades();
   } else if (filename == "Ace7Game.exe") {
     renodx::mods::swapchain::swapchain_proxy_revert_state = true;
-  } else if (filename == "Mixtape-WinGDK-Shipping.exe") {
+  } else if (product_name == "Mixtape") {
     AddMixtapeUpgrades();
   } else {
     return;
@@ -777,9 +777,9 @@ const std::unordered_map<
             },
         },
         {
-            "Mixtape-WinGDK-Shipping.exe",
+            "Mixtape",
             {
-                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE}
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
         {
