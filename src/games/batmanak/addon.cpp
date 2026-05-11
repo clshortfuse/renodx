@@ -7,6 +7,8 @@
 
 // #define DEBUG_LEVEL_0
 
+#include <atomic>
+
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
@@ -21,42 +23,12 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-struct ToneMapOutputBinding {
-  reshade::api::shader_stage stages = reshade::api::shader_stage::all_compute;
-  reshade::api::pipeline_layout layout = {0u};
-  uint32_t layout_param = 0u;
-  uint32_t binding = 0u;
-  reshade::api::resource_view view = {0u};
-};
-
-thread_local ToneMapOutputBinding g_tone_map_output = {};
-
-reshade::api::resource_view GetToneMapOutputClone(const reshade::api::resource_view& output) {
-  if (output.handle == 0u) return {0u};
-  return renodx::mods::swapchain::GetResourceViewClone(output);
-}
+std::atomic_uint64_t g_current_uav0 = 0;
 
 bool OnToneMapDraw(reshade::api::command_list* cmd_list) {
-  const auto current_uav0 = g_tone_map_output.view;
-  if (current_uav0.handle == 0u) return false;
-
-  renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), current_uav0);
-
-  const auto clone_uav0 = GetToneMapOutputClone(current_uav0);
-  if (clone_uav0.handle == 0u) return false;
-
-  cmd_list->push_descriptors(
-      g_tone_map_output.stages,
-      g_tone_map_output.layout,
-      g_tone_map_output.layout_param,
-      reshade::api::descriptor_table_update{
-          .table = {},
-          .binding = g_tone_map_output.binding,
-          .array_offset = 0,
-          .count = 1,
-          .type = reshade::api::descriptor_type::texture_unordered_access_view,
-          .descriptors = &clone_uav0,
-      });
+  reshade::api::resource_view current_uav0 = {g_current_uav0};
+  if (!renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), current_uav0)) return true;
+  renodx::mods::swapchain::FlushDescriptors(cmd_list);  // Not implemented yet, will fix next draw
   return true;
 }
 
@@ -499,20 +471,7 @@ inline void OnPushDescriptors(
     // Optimized: Use hardcoded Reshade DX11 psuedo-layout values
     if (layout_param != 3) continue;          // Only UAVs
     if ((update.binding + i) != 0) continue;  // Only for slot 0
-    const auto current_uav0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
-    if (current_uav0.handle == 0u) continue;
-    bool is_clone_view = false;
-    renodx::utils::resource::GetResourceViewInfo(current_uav0, [&](const renodx::utils::resource::ResourceViewInfo& info) {
-      is_clone_view = info.is_clone;
-    });
-    if (is_clone_view) continue;
-    g_tone_map_output = {
-        .stages = stages,
-        .layout = layout,
-        .layout_param = layout_param,
-        .binding = update.binding + i,
-        .view = current_uav0,
-    };
+    g_current_uav0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[i].handle;
     return;
   }
 }
