@@ -23,7 +23,7 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-std::atomic_uint64_t g_current_uav0 = 0;
+thread_local uint64_t g_current_uav0 = 0;
 
 bool OnToneMapDraw(reshade::api::command_list* cmd_list) {
   reshade::api::resource_view current_uav0 = {g_current_uav0};
