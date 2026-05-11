@@ -7,8 +7,6 @@
 
 // #define DEBUG_LEVEL_0
 
-#include <atomic>
-
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
