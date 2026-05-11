@@ -37,6 +37,7 @@ struct ShaderInjectData {
   float custom_flip_uv_y;
   float custom_color_temp;
   float custom_shadow_lift;
+  float custom_tonemap_has_drawn;
 };
 
 #ifndef __cplusplus

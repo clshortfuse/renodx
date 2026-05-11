@@ -19,13 +19,21 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0x6DE32B48),  // Tonemap compute - skip ACES, gamma-encode HDR/3
-    CustomShaderEntry(0xF27041D0),  // Compositing - passthrough test
-    CustomShaderEntry(0xD2C8C305),  // Final blit - decode + ToneMapPass
-};
-
 ShaderInjectData shader_injection;
+
+renodx::mods::shader::CustomShaders custom_shaders = {
+    {0x6DE32B48, {.crc32 = 0x6DE32B48, .code = __0x6DE32B48,
+        .on_drawn = [](reshade::api::command_list* cmd_list) {
+            shader_injection.custom_tonemap_has_drawn = 1.f;
+            return true;
+        }}},
+    CustomShaderEntry(0xF27041D0),  // Compositing - inverted alpha UI
+    {0xD2C8C305, {.crc32 = 0xD2C8C305, .code = __0xD2C8C305,
+        .on_drawn = [](reshade::api::command_list* cmd_list) {
+            shader_injection.custom_tonemap_has_drawn = 0.f;
+            return true;
+        }}},
+};
 
 float current_settings_mode = 0;
 
@@ -49,7 +57,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "ACES", "RenoDRT", "Psycho"},
+        .labels = {"Vanilla", "ACES", "RenoDRT"},
         .is_visible = []() { return current_settings_mode >= 1; },
         .parse = [](float value) { return value == 0.f ? 0.f : value + 1.f; },  // 0=Vanilla, 1→2=ACES, 2→3=RenoDRT, 3→4=Psycho
     },
@@ -77,7 +85,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
         .binding = &shader_injection.graphics_white_nits,
-        .default_value = 203.f,
+        .default_value = 150.f,
         .label = "UI Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the brightness of UI elements in nits",
@@ -178,7 +186,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
         .binding = &shader_injection.tone_map_contrast,
-        .default_value = 50.f,
+        .default_value = 56.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -196,7 +204,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.tone_map_highlight_saturation,
-        .default_value = 55.f,
+        .default_value = 52.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -251,7 +259,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ShadowLift",
         .binding = &shader_injection.custom_shadow_lift,
-        .default_value = 40.f,
+        .default_value = 45.f,
         .label = "Black Floor",
         .section = "Color Grading",
         .tooltip = "Raise or lower the black floor",

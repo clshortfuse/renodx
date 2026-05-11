@@ -50,6 +50,15 @@ void main(uint3 dtid : SV_DispatchThreadID) {
   float3 color = g_Texture.SampleLevel(g_Sampler_LinearClamp, uv, 0).rgb;
   color = max(0, color);
 
+  // Auto-exposure from original shader
+  float avg_lum = g_AverageLuminance.SampleLevel(g_Sampler_LinearClamp, float2(0.5f, 0.5f), 0).r;
+  float avg_low_lum = g_AverageLowLuminance.SampleLevel(g_Sampler_LinearClamp, float2(0.5f, 0.5f), 0).r;
+  float log_exposure = log(max(cb_data[20].x, 0.001f));
+  float range = abs(log(max(avg_lum, 0.0001f)) - log(max(avg_low_lum, 0.0001f))) * cb_data[21].x;
+  float exposure_mult = exp(log_exposure * range);
+  exposure_mult = clamp(exposure_mult, 0.01f, 100.f);
+  color *= exposure_mult;
+
   if (RENODX_TONE_MAP_TYPE == 0) {
     // Vanilla: apply original ACES
     g_Output[dtid.xy] = PackR10G10B10A2(ACESFitted(color));

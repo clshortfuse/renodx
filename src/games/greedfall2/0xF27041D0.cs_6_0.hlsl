@@ -1,8 +1,18 @@
 // Original shader 0xF27041D0: mainCSFinal compositing pass
-// Original UI compositing uses INVERTED alpha:
-//   result = scene * ui.a + ui.rgb
-//   alpha=1 in empty areas (scene passes through)
-//   alpha<1 in UI areas (scene dimmed, UI added)
+// Original code (decompiled): applies sharpening, film grain, vignette, then composites UI.
+// Key UI compositing logic uses INVERTED alpha:
+//
+//   float3 scene = g_Texture.SampleLevel(g_Sampler_LinearClamp, uv, 0).rgb;
+//   // ... sharpening, grain, vignette applied to scene ...
+//   if (g_ApplyGUI) {
+//     float4 ui = g_TextureUI.SampleLevel(g_Sampler_LinearClamp, uv, 0);
+//     scene = scene * ui.a + ui.rgb;  // inverted alpha: a=1 → show scene, a<1 → UI present
+//   }
+//   // ... fadeScene and fadeGUI lerps ...
+//   g_OutputRW[dtid.xy] = float4(scene, 1.0);
+//
+// Replacement: skip sharpening/grain/vignette, PQ-encode UI at controlled brightness,
+// composite with inverted alpha.
 
 #include "./shared.h"
 
@@ -37,6 +47,7 @@ void main(uint3 dtid : SV_DispatchThreadID) {
 
   // Inverted alpha: scene * alpha + ui_pq
   float3 result = scene_pq * ui.a + ui_pq;
+  result = saturate(result);  // Clamp to [0,1] to prevent buffer overflow
 
   g_OutputRW[dtid.xy] = float4(result, 1.0f);
 }

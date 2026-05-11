@@ -10,7 +10,6 @@
 // We decode, recover ×3, then apply ToneMapPass with real pre-tonemap HDR values.
 
 #include "./shared.h"
-#include "./psycho_test17.hlsl"
 
 Texture2D<float4> g_Texture : register(t0);
 SamplerState g_Sampler_LinearClamp : register(s1);
@@ -23,6 +22,12 @@ void main(
 
   if (RENODX_TONE_MAP_TYPE == 0) {
     // Vanilla: 0x6DE32B48 applied ACES, data is tonemapped SDR
+    output = float4(color, 1.0f);
+    return;
+  }
+
+  // If tonemap shader didn't run this frame (main menu/loading/video), passthrough
+  if (shader_injection.custom_tonemap_has_drawn == 0.f) {
     output = float4(color, 1.0f);
     return;
   }
@@ -49,57 +54,14 @@ void main(
     hdr = lerp(float3(luma, luma, luma), hdr, scene_strength);
   }
 
-  // Apply tonemapping
-  float3 tonemapped;
-  if (RENODX_TONE_MAP_TYPE == 4) {
-    // Psycho tonemapper — apply grading before, pass only saturation/blowout to psycho
-    float3 psycho_input = hdr * shader_injection.tone_map_exposure;
+  // Apply tonemapping (ACES / RenoDRT via ToneMapPass)
+  float3 tonemapped = renodx::draw::ToneMapPass(hdr);
 
-    // Apply highlights/shadows/contrast in luminosity space
-    float yf = renodx::color::y::from::BT709(psycho_input);
-    float yf_midgray = 0.18f;
-    float yf_target = yf;
-    if (shader_injection.tone_map_highlights != 1.f) {
-      yf_target = renodx::color::grade::Highlights(yf_target, shader_injection.tone_map_highlights, yf_midgray);
-    }
-    if (shader_injection.tone_map_shadows != 1.f) {
-      yf_target = renodx::color::grade::Shadows(yf_target, shader_injection.tone_map_shadows, yf_midgray);
-    }
-    if (shader_injection.tone_map_contrast != 1.f) {
-      yf_target = renodx::color::grade::ContrastSafe(yf_target, shader_injection.tone_map_contrast, yf_midgray);
-    }
-    float yf_scale = (yf > 0.f) ? (yf_target / yf) : 1.f;
-    psycho_input *= yf_scale;
-
-    float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-    tonemapped = renodx::tonemap::psycho::psychotm_test17(
-        psycho_input,
-        peak,
-        1.f,                                      // exposure (already applied)
-        1.f,                                      // highlights (already applied)
-        1.f,                                      // shadows (already applied)
-        1.f,                                      // contrast (already applied)
-        shader_injection.tone_map_saturation,     // purity_scale
-        shader_injection.tone_map_blowout,        // bleaching_intensity
-        100.f,                                    // clip_point
-        shader_injection.tone_map_hue_correction, // hue_restore
-        1.f,                                      // adaptation_contrast
-        0,                                        // white_curve_mode (neutwo)
-        1.f,                                      // cone_response_exponent
-        0.18f,                                    // current_adaptive_state
-        0.18f,                                    // current_background_state
-        1.f,                                      // gamut_compression
-        1);                                       // gamut_compression_mode
-  } else {
-    // ACES / RenoDRT via ToneMapPass
-    tonemapped = renodx::draw::ToneMapPass(hdr);
-
-    // Compensate for ÷3 input cap limiting ToneMapPass output
-    if (RENODX_TONE_MAP_TYPE == 2) {
-      tonemapped *= 1.71f;  // ACES
-    } else if (RENODX_TONE_MAP_TYPE == 3) {
-      tonemapped *= 2.23f;  // RenoDRT
-    }
+  // Compensate for PQ input range limiting ToneMapPass output
+  if (RENODX_TONE_MAP_TYPE == 2) {
+    tonemapped *= 1.71f;  // ACES
+  } else if (RENODX_TONE_MAP_TYPE == 3) {
+    tonemapped *= 2.23f;  // RenoDRT
   }
 
   // Convert to scRGB
