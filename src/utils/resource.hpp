@@ -822,6 +822,10 @@ inline std::optional<ResourceUploadSignature> BuildUploadSignature(
     bool full_update = true) {
   if (!IsUploadSignatureTrackable(desc)) return std::nullopt;
   if (data.data == nullptr) return std::nullopt;
+  // ReShade does not provide the source byte size for update_texture_region.
+  // For partial boxes, deriving it from the destination resource can over-read
+  // the caller's upload pointer, so only signature-track complete subresources.
+  if (!full_update) return std::nullopt;
 
   const auto levels = std::max<uint32_t>(desc.texture.levels, 1u);
   const auto level = subresource % levels;

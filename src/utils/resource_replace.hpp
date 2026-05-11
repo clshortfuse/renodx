@@ -413,6 +413,14 @@ inline std::uint64_t RecordObservation(
     bool replacement_applied,
     std::optional<reshade::api::memory_heap> source_heap = std::nullopt) {
   if (device_data == nullptr || source_data.data == nullptr) return 0u;
+  // ReShade exposes row pitch, but no source byte count. For partial texture
+  // boxes, hashing a derived full-slice size can walk past the upload buffer.
+  if (!renodx::utils::resource::IsFullSubresourceUpdate(
+          destination_desc,
+          context.dest_subresource,
+          context.update_box)) {
+    return 0u;
+  }
 
   const auto row_pitch = GetEffectiveRowPitch(destination_desc, source_data, context.dest_subresource);
   const auto slice_pitch = GetEffectiveSlicePitch(destination_desc, source_data, context.dest_subresource);
@@ -799,7 +807,9 @@ static void Use(DWORD fdw_reason) {
       renodx::utils::resource::use_resource_replace = true;
       renodx::utils::resource::Use(fdw_reason);
 
-      shared.RegisterModule();
+      if (shared.RegisterModule()) {
+        reshade::log::message(reshade::log::level::info, "utils::resource::replace attached.");
+      }
       shared.RegisterEvent<reshade::addon_event::init_device>(OnInitDevice);
       shared.RegisterEvent<reshade::addon_event::destroy_device>(OnDestroyDevice);
       shared.RegisterEvent<reshade::addon_event::create_resource>(OnCreateResource);
