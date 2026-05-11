@@ -1086,6 +1086,7 @@ inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
           new_desc.format = resource_desc.texture.format;
           break;
         case reshade::api::resource_type::texture_3d:
+          new_desc.type = reshade::api::resource_view_type::texture_3d;
           new_desc.format = resource_desc.texture.format;
           new_desc.texture.level_count = UINT32_MAX;
           new_desc.texture.layer_count = UINT32_MAX;
