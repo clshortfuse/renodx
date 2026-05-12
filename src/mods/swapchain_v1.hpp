@@ -2573,9 +2573,9 @@ inline bool OnCopyResource(
       dest_desc_new = destination_info->clone_desc;
       dest_new = dest_clone;
     }
-    can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                    || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
-                    || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
+    can_be_copied = utils::resource::AreCopyFormatsCompatible(
+        source_desc_new.texture.format,
+        dest_desc_new.texture.format);
 
     if (!can_be_copied && use_auto_upgrade) {
       if (source_info->desc.texture.format != auto_upgrade_target.new_format && source_info->clone_target == nullptr) {
@@ -2602,9 +2602,9 @@ inline bool OnCopyResource(
       }
     }
   } else {
-    can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                    || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
-                    || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
+    can_be_copied = utils::resource::AreCopyFormatsCompatible(
+        source_desc_new.texture.format,
+        dest_desc_new.texture.format);
   }
 
   // {
@@ -3219,9 +3219,9 @@ inline bool OnResolveTextureRegion(
       dest_desc_new = destination_info->clone_desc;
       dest_new = dest_clone;
     }
-    can_be_resolved = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                      || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
-                      || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
+    can_be_resolved = utils::resource::AreCopyFormatsCompatible(
+        source_desc_new.texture.format,
+        dest_desc_new.texture.format);
 
     if (!can_be_resolved && use_auto_upgrade) {
       if (source_info->desc.texture.format != auto_upgrade_target.new_format && source_info->clone_target == nullptr) {
@@ -3248,9 +3248,9 @@ inline bool OnResolveTextureRegion(
       }
     }
   } else {
-    can_be_resolved = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                      || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
-                      || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
+    can_be_resolved = utils::resource::AreCopyFormatsCompatible(
+        source_desc_new.texture.format,
+        dest_desc_new.texture.format);
   }
 
   if (can_be_resolved) {
@@ -3368,9 +3368,9 @@ inline bool OnCopyTextureRegion(
     }
   }
 
-  bool can_be_copied = (source_desc_new.texture.format == dest_desc_new.texture.format)
-                       || (utils::resource::FormatToTypeless(source_desc_new.texture.format) == utils::resource::FormatToTypeless(dest_desc_new.texture.format))
-                       || utils::resource::IsCompressible(source_desc_new.texture.format, dest_desc_new.texture.format);
+  bool can_be_copied = utils::resource::AreCopyFormatsCompatible(
+        source_desc_new.texture.format,
+        dest_desc_new.texture.format);
 
   if (can_be_copied) {
     cmd_list->copy_texture_region(source_new, source_subresource, source_box, dest_new, dest_subresource, dest_box, filter);
