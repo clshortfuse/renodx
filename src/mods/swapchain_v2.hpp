@@ -1217,7 +1217,7 @@ inline void OnPresent(
   }
   assert(proxy_pass != nullptr);
 
-  if (!proxy_pass->Render(swapchain, queue, nullptr, dest_rect)) {
+  if (!proxy_pass->Render(swapchain, queue)) {
     proxy_pass->Destroy(device);
     data->swapchain_proxy_passes.erase(back_buffer_handle);
   }
