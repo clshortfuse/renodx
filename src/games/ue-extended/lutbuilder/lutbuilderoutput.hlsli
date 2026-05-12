@@ -3,6 +3,16 @@
 
 // No SDR Lut
 float4 ProcessLutbuilder(float3 untonemapped_ap1, UECbufferConfig cb_config, float4 SV_Target, uint outputdevice) {
+  // The rare game uses linear output for some menus
+  // So we will skip everything, and just return untonemapped
+
+  if (outputdevice == 8u) {
+    float3 linear_output;
+    linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
+    linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
+    return float4(linear_output, 0.f);
+  }
+
   float3 tonemapped;
 
   ApplyFilmToneMapWithBlueCorrect(untonemapped_ap1, tonemapped, cb_config);
@@ -22,6 +32,13 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, UECbufferConfig cb_config, flo
 // 1 SDR Lut
 
 float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler, Texture2D<float4> lut_texture, UECbufferConfig cb_config, float4 SV_Target, uint outputdevice) {
+  if (outputdevice == 8u) {
+    float3 linear_output;
+    linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
+    linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
+    return float4(linear_output, 0.f);
+  }
+
   float3 tonemapped;
 
   ApplyFilmToneMapWithBlueCorrect(untonemapped_ap1, tonemapped, cb_config);
@@ -41,6 +58,13 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler, Text
 // 2 SDR Luts
 
 float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, SamplerState lut_sampler2, Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, UECbufferConfig cb_config, float4 SV_Target, uint outputdevice) {
+  if (outputdevice == 8u) {
+    float3 linear_output;
+    linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
+    linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
+    return float4(linear_output, 0.f);
+  }
+
   float3 tonemapped;
 
   ApplyFilmToneMapWithBlueCorrect(untonemapped_ap1, tonemapped, cb_config);
@@ -60,6 +84,13 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, Sam
 // 3 SDR Luts
 
 float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, SamplerState lut_sampler2, SamplerState lut_sampler3, Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, Texture2D<float4> lut_texture3, UECbufferConfig cb_config, float4 SV_Target, uint outputdevice) {
+  if (outputdevice == 8u) {
+    float3 linear_output;
+    linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
+    linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
+    return float4(linear_output, 0.f);
+  }
+
   float3 tonemapped;
 
   ApplyFilmToneMapWithBlueCorrect(untonemapped_ap1, tonemapped, cb_config);
@@ -79,6 +110,13 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, Sam
 // 4 SDR luts
 
 float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, SamplerState lut_sampler2, SamplerState lut_sampler3, SamplerState lut_sampler4, Texture2D<float4> lut_texture1, Texture2D<float4> lut_texture2, Texture2D<float4> lut_texture3, Texture2D<float4> lut_texture4, UECbufferConfig cb_config, float4 SV_Target, uint outputdevice) {
+  if (outputdevice == 8u) {
+    float3 linear_output;
+    linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
+    linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
+    return float4(linear_output, 0.f);
+  }
+
   float3 tonemapped;
 
   ApplyFilmToneMapWithBlueCorrect(untonemapped_ap1, tonemapped, cb_config);
