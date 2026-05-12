@@ -49,7 +49,7 @@ bool UsingSwapchainUtil() {
 void UpdateReshadeResolutionUniforms(reshade::api::effect_runtime* runtime, uint32_t width, uint32_t height) {
   float fwidth = static_cast<float>(width);
   float fheight = static_cast<float>(height);
-  
+
   // Enumerate all uniform variables and update those with resolution-related source annotations
   runtime->enumerate_uniform_variables(nullptr, [fwidth, fheight](reshade::api::effect_runtime* rt, reshade::api::effect_uniform_variable variable) {
     char source[64] = {};
@@ -66,7 +66,7 @@ void UpdateReshadeResolutionUniforms(reshade::api::effect_runtime* runtime, uint
       else if (std::strcmp(source, "rcpwidth") == 0 || std::strcmp(source, "bufwidth_rcp") == 0) {
         rt->set_uniform_value_float(variable, 1.0f / fwidth);
       }
-      // Update reciprocal height (1.0 / BUFFER_HEIGHT) 
+      // Update reciprocal height (1.0 / BUFFER_HEIGHT)
       else if (std::strcmp(source, "rcpheight") == 0 || std::strcmp(source, "bufheight_rcp") == 0) {
         rt->set_uniform_value_float(variable, 1.0f / fheight);
       }
@@ -106,9 +106,9 @@ static float prev_tech_test_look = -1.f;   // impossible initial value forces fi
 
 // Callback to disable effects during normal present when bypass is enabled
 // This prevents double-rendering (once via bypass, once via normal present)
-void OnReshadeBeginEffects(reshade::api::effect_runtime* runtime, 
+void OnReshadeBeginEffects(reshade::api::effect_runtime* runtime,
                            reshade::api::command_list* cmd_list,
-                           reshade::api::resource_view rtv, 
+                           reshade::api::resource_view rtv,
                            reshade::api::resource_view rtv_srgb) {
   // Only intercept if bypass is enabled AND we're not currently in bypass render
   // When bypass is disabled (current_render_reshade_before_ui == 0), let ReShade render normally
@@ -157,17 +157,17 @@ bool ExecuteReshadeEffects(reshade::api::command_list* cmd_list) {
 #ifdef DEBUG_LEVEL_0
       uint32_t swapchain_width = 0, swapchain_height = 0;
       runtime->get_screenshot_width_and_height(&swapchain_width, &swapchain_height);
-      
+
       std::stringstream ss;
-      ss << "[Endfield] ExecuteReshadeEffects: Rendering at RTV=" << rtv_width << "x" << rtv_height 
+      ss << "[Endfield] ExecuteReshadeEffects: Rendering at RTV=" << rtv_width << "x" << rtv_height
          << " (Swapchain=" << swapchain_width << "x" << swapchain_height << ")";
       reshade::log::message(reshade::log::level::info, ss.str().c_str());
 #endif
-      
+
       last_rtv_width = rtv_width;
       last_rtv_height = rtv_height;
     }
-    
+
     UpdateReshadeResolutionUniforms(runtime, rtv_width, rtv_height);
     bypass_render_active = true;
     runtime->set_effects_state(true);
@@ -204,16 +204,60 @@ bool OnPingDraw(reshade::api::command_list* cmd_list) {
 bool OnUIDDraw(reshade::api::command_list* cmd_list) {
   if (is_uid_input_candidate) {
     if (shader_injection.status_text_opacity < 0.5f) {
-      return false; 
+      return false;
     }
   }
   return true;
 }
 
+bool OnUiVisibilityDraw(reshade::api::command_list* cmd_list) {
+  return shader_injection.ui_visibility >= 0.5f;
+}
+
+bool OnUidOrUiVisibilityDraw(reshade::api::command_list* cmd_list) {
+  if (shader_injection.ui_visibility < 0.5f) return false;
+  return OnUIDDraw(cmd_list);
+}
+
+bool KeepOriginalShader(reshade::api::command_list* cmd_list) {
+  return false;
+}
+
+void RegisterUiVisibilityBypassShader(uint32_t crc) {
+  auto it = custom_shaders.find(crc);
+  if (it == custom_shaders.end()) {
+    renodx::mods::shader::CustomShader cs{};
+    cs.crc32 = crc;
+    cs.on_draw = OnUiVisibilityDraw;
+    cs.on_replace = KeepOriginalShader;
+    custom_shaders.emplace(crc, std::move(cs));
+    return;
+  }
+
+  it->second.on_draw = OnUiVisibilityDraw;
+  it->second.on_replace = KeepOriginalShader;
+}
+
+void RegisterUidBypassShader(uint32_t crc) {
+  auto it = custom_shaders.find(crc);
+  if (it == custom_shaders.end()) {
+    renodx::mods::shader::CustomShader cs{};
+    cs.crc32 = crc;
+    cs.on_draw = OnUidOrUiVisibilityDraw;
+    cs.on_replace = KeepOriginalShader;
+    custom_shaders.emplace(crc, std::move(cs));
+    return;
+  }
+
+  it->second.on_draw = OnUidOrUiVisibilityDraw;
+  it->second.on_replace = KeepOriginalShader;
+}
+
+
 // Helper function to get key name from virtual key code
 std::string GetKeyName(int keycode) {
   if (keycode == 0 || keycode >= 256) return "";
-  
+
   static const char* keyboard_keys[256] = {
     "", "Left Mouse", "Right Mouse", "Cancel", "Middle Mouse", "X1 Mouse", "X2 Mouse", "", "Backspace", "Tab", "", "", "Clear", "Enter", "", "",
     "Shift", "Control", "Alt", "Pause", "Caps Lock", "", "", "", "", "", "", "Escape", "", "", "", "",
@@ -232,7 +276,7 @@ std::string GetKeyName(int keycode) {
     "", "", "OEM <", "", "", "", "", "", "", "", "", "", "", "", "", "",
     "", "", "", "", "", "", "Attn", "CrSel", "ExSel", "Erase EOF", "Play", "Zoom", "", "PA1", "OEM Clear", ""
   };
-  
+
   return keyboard_keys[keycode];
 }
 
@@ -242,7 +286,7 @@ int GetLastKeyPressedImGui() {
     ImGuiKey imgui_key;
     int vk_code;
   };
-  
+
   static const KeyMapping kKeyMappings[] = {
     // Function keys
     {ImGuiKey_F1, VK_F1}, {ImGuiKey_F2, VK_F2}, {ImGuiKey_F3, VK_F3}, {ImGuiKey_F4, VK_F4},
@@ -279,7 +323,7 @@ int GetLastKeyPressedImGui() {
     {ImGuiKey_Semicolon, VK_OEM_1}, {ImGuiKey_Apostrophe, VK_OEM_7},
     {ImGuiKey_Comma, VK_OEM_COMMA}, {ImGuiKey_Period, VK_OEM_PERIOD}, {ImGuiKey_Slash, VK_OEM_2},
   };
-  
+
   for (const auto& mapping : kKeyMappings) {
     if (ImGui::IsKeyPressed(mapping.imgui_key, false)) {
       return mapping.vk_code;
@@ -607,7 +651,7 @@ renodx::utils::settings::Settings settings = {
         .on_draw = []() {
           static bool key_was_pressed = false;
           bool changed = false;
-          
+
           // Get current key name for display
           std::string key_name = ui_toggle_hotkey != 0 ? GetKeyName(ui_toggle_hotkey) : "";
           char buf[64] = {0};
@@ -615,7 +659,7 @@ renodx::utils::settings::Settings settings = {
             size_t copy_len = (key_name.size() < sizeof(buf) - 1) ? key_name.size() : sizeof(buf) - 1;
             memcpy(buf, key_name.c_str(), copy_len);
           }
-          
+
           // Create the input text widget
           ImGui::InputTextWithHint(
               "UI Toggle Hotkey",
@@ -624,12 +668,12 @@ renodx::utils::settings::Settings settings = {
               sizeof(buf),
               ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_NoUndoRedo | ImGuiInputTextFlags_NoHorizontalScroll
           );
-          
+
           // Check if widget is active and capture key presses
           if (ImGui::IsItemActive()) {
             hotkey_input_active = true;
             int key_pressed = GetLastKeyPressedImGui();
-            
+
             if (key_pressed != 0 && !key_was_pressed) {
               if (key_pressed == VK_BACK || key_pressed == VK_DELETE) {
                 ui_toggle_hotkey = 0;
@@ -638,7 +682,7 @@ renodx::utils::settings::Settings settings = {
                 ui_toggle_hotkey = key_pressed;
                 changed = true;
               }
-              
+
               if (changed) {
                 reshade::set_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "UIVisibilityHotkey", ui_toggle_hotkey);
               }
@@ -650,11 +694,11 @@ renodx::utils::settings::Settings settings = {
             hotkey_input_active = false;
             key_was_pressed = false;
           }
-          
+
           if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip)) {
             ImGui::SetTooltip("Click and press any key to set hotkey.\nPress Backspace or Delete to clear.");
           }
-          
+
           return changed;
         },
         .is_global = true,
@@ -982,12 +1026,12 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "- Addon maintained by Spiwar & Forge.",
+        .label = "- Addon developed by Spiwar & Forge.",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "- Made for Arknights: Endfield 1.0",
+        .label = "- Fixed by Rat for Arknights: Endfield 1.2.4",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -1041,7 +1085,7 @@ bool OnDraw(
     uint32_t first_vertex,
     uint32_t first_instance) {
   draw_call_vertex_count = vertex_count;
-  return false; 
+  return false;
 }
 
 // OnDrawIndexed event handler for heuristic-based ping/UID detection
@@ -1052,6 +1096,11 @@ bool OnDrawIndexed(
     uint32_t first_index,
     int32_t vertex_offset,
     uint32_t first_instance) {
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  const uint32_t pixel_shader_hash = shader_state != nullptr
+      ? renodx::utils::shader::GetCurrentPixelShaderHash(shader_state)
+      : 0u;
+
   // Constants for ping/latency bar detection
   constexpr uint32_t PING_INDEX_COUNT = 18;
   constexpr uint32_t PING_FIRST_INDEX = 0;
@@ -1070,16 +1119,23 @@ bool OnDrawIndexed(
   constexpr int32_t UID_VERTEX_OFFSET = 12;
 
   // Detect UID text: drawn right after ping with specific parameters
-  // Use is_ping_drawn (set by OnPingDraw) since ping shader draws before UID shader
-  is_uid_input_candidate = (first_index == UID_FIRST_INDEX) &&
-                           (index_count > UID_MIN_INDEX_COUNT) &&
-                           (vertex_offset == UID_VERTEX_OFFSET) &&
-                           is_ping_drawn;
+  // Use is_ping_drawn (set by OnPingDraw) for the original path. The current
+  // post-combat UID path can switch to 0xC24C4DBB without replaying that ping
+  // callback, so allow the same geometry test on that text shader hash.
+  const bool uid_geometry_candidate = (first_index == UID_FIRST_INDEX) &&
+                                      (index_count > UID_MIN_INDEX_COUNT) &&
+                                      (vertex_offset == UID_VERTEX_OFFSET);
+  const bool uid_shader_candidate = pixel_shader_hash == 0xC24C4DBBu;
+  is_uid_input_candidate = uid_geometry_candidate && (is_ping_drawn || uid_shader_candidate);
 
   // Reset vertex count after processing
   draw_call_vertex_count = 0;
 
-  return false; 
+  if (is_uid_input_candidate && shader_injection.status_text_opacity < 0.5f) {
+    return true;
+  }
+
+  return false;
 }
 
 void OnPresent(reshade::api::command_queue* queue,
@@ -1331,7 +1387,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         */
         const uint32_t target_crcs[] = {
         // Enviroment deferred (doesnt apply to grass/foliage)
-        /* 
+        /*
           0xD88CD7C9u,
           0x1E8A471Eu,
           0x8BA3C806u,
@@ -1341,22 +1397,21 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           0xA4113DE8u,
           0xD5B102A4u,
         };
-        */    
- 
+        */
+
       // grass/foliage deferred (grass, plants, trees will be included in AO)
-        
-        0x37837806u,
-        0xD3FA93FCu,
-        0x620A40FDu,
-        0xE322C21Du,
-        0xB094C87Eu,
-        0xF901F0ECu,
-        0x518D3855u,
-        0xBD99F0C4u,
-        };  
+        0xF314003Eu,
+        0xDC895E4Au,
+        0x5F55ACC9u,
+        0xB9D5AA7Bu,
+        0x32F53924u,
+        0xEA6F34B7u,
+        0xD9882F6Bu,
+        0x89E4F419u,
+        };
 
       // Uberpost
-        /*  
+        /*
         0x00C16AFBu,
         0x039C28DAu,
         0x086097D2u,
@@ -1401,6 +1456,21 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           }
         }
 
+        // UI visibility-only hashes: bypass the draw when hidden, keep the
+        // game's original shader untouched when visible to avoid text-mask bugs.
+        const uint32_t ui_visibility_bypass_crcs[] = {
+            0x0A02B5A1u,
+            0x193A48A5u,
+            0x904EE4BBu,
+        };
+        for (uint32_t crc : ui_visibility_bypass_crcs) {
+          RegisterUiVisibilityBypassShader(crc);
+        }
+
+        // Post-combat UID can switch to this text hash after combat.
+        // Keep the original shader, but only hide the draw when it matches the UID heuristic.
+        RegisterUidBypassShader(0xC24C4DBBu);
+
         // Add on_draw callbacks for ping/UID shaders (heuristic-based detection)
         // Ping/latency bar shader: 0xEF07F89A
         {
@@ -1416,7 +1486,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             it->second.on_draw = OnUIDDraw;
           }
         }
-
         // Register draw and draw_indexed events for heuristic ping/UID detection
         reshade::register_event<reshade::addon_event::draw>(OnDraw);
         reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
