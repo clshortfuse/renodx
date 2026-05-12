@@ -328,9 +328,11 @@ bool OnDrawIndexed(
   std::shared_lock read_only_lock(data->mutex);
 
   if (data->injection_layout.handle == 0) {
-    const auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pixel_state->pipeline_details->layout);
-    if (layout_data != nullptr) {
-      data->injection_layout = layout_data->injection_layout;
+    if (renodx::utils::pipeline_layout::GetPipelineLayoutData(
+            pixel_state->pipeline_details->layout, [&](auto* layout_data) {
+              data->injection_layout = layout_data->injection_layout;
+            })) {
+      // noop
     } else {
       return false;
     }

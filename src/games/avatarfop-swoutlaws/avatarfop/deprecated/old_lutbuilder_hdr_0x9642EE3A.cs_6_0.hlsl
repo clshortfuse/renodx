@@ -1,4 +1,4 @@
-#include "..\lutbuilder.hlsli"
+#include "..\..\lutbuilder.hlsli"
 
 cbuffer CB0_buf : register(b2200, space0) {
   float3 CB0_m0 : packoffset(c0);

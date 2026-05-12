@@ -49,10 +49,8 @@ struct ResourceViewSlots {
   std::vector<reshade::api::resource_view> generated_views;
   // Helpers (used to auto populate)
   std::vector<reshade::api::resource_view_desc> view_descs;
-  std::vector<renodx::utils::resource::ResourceViewInfo*> view_infos;
   std::vector<reshade::api::resource> resources;
   std::vector<reshade::api::resource_desc> resource_descs;
-  std::vector<renodx::utils::resource::ResourceInfo*> resource_infos;
   reshade::api::resource_usage usage = reshade::api::resource_usage::undefined;
 
   reshade::api::resource_view GenerateResourceView(
@@ -88,31 +86,37 @@ struct ResourceViewSlots {
 
     this->generated_views.push_back(view);
 
-    auto [resource_view_info, inserted] =
-        renodx::utils::resource::EmplaceResourceViewInfoOrReuse(
-            view,
-            {.view = view},
-            true);
-    assert(resource_view_info != nullptr);
+    renodx::utils::resource::ResourceUpgradeInfo* clone_target = nullptr;
+    bool is_swap_chain = false;
+    renodx::utils::resource::GetResourceInfo(resource, [&](const renodx::utils::resource::ResourceInfo& tracked_resource_info) {
+      clone_target = tracked_resource_info.clone_target;
+      is_swap_chain = tracked_resource_info.is_swap_chain;
+    });
+
+    renodx::utils::resource::UpsertResourceViewInfo(
+        view,
+        [&](renodx::utils::resource::ResourceViewInfo* resource_view_info, const bool inserted) {
 #ifdef DEBUG_LEVEL_2
-    if (!inserted) {
-      std::stringstream s;
-      s << "utils::render::ResourceViewSlots::GenerateResourceView(reused view info, view="
-        << PRINT_PTR(view.handle)
-        << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-    }
+          if (!inserted) {
+            assert(resource_view_info->destroyed && "ResourceViewInfo reused but it was not destroyed.");
+            std::stringstream s;
+            s << "utils::render::ResourceViewSlots::GenerateResourceView(reused view info, view="
+              << PRINT_PTR(view.handle)
+              << ")";
+            reshade::log::message(reshade::log::level::warning, s.str().c_str());
+          }
 #endif
-    resource_view_info->view = view;
-    resource_view_info->desc = view_desc;
-    resource_view_info->usage = usage;
-    resource_view_info->device = device;
-    resource_view_info->original_resource = resource;
-    resource_view_info->destroyed = false;
-    resource_view_info->resource_info = renodx::utils::resource::GetResourceInfo(resource, false);
-    if (resource_view_info->resource_info != nullptr) {
-      resource_view_info->clone_target = resource_view_info->resource_info->clone_target;
-    }
+          *resource_view_info = {
+              .device = device,
+              .desc = view_desc,
+              .view = view,
+              .original_resource = resource,
+              .resource_info = nullptr,
+              .clone_target = clone_target,
+              .usage = usage,
+              .is_swap_chain = is_swap_chain,
+          };
+        });
 
     return view;
   }
@@ -120,59 +124,12 @@ struct ResourceViewSlots {
   bool Populate(reshade::api::command_list* cmd_list) {
     if (!this->views.empty()) return true;
 
-    // Try via view_infos
-    if (!this->view_infos.empty()) {
-      assert(this->view_descs.empty());
-      this->view_descs.clear();
-      for (const auto& view_info : view_infos) {
-        assert(!view_info->destroyed);
-        this->views.push_back(view_info->view);
-        this->view_descs.push_back(view_info->desc);
-      }
-      return true;
-    }
-
-    // Try via resource_infos
-    if (!this->resource_infos.empty()) {
-      assert(this->resources.empty());
-      this->resources.clear();
-      for (const auto& res_info : resource_infos) {
-        assert(!res_info->destroyed);
-        reshade::api::resource_view_desc view_desc(res_info->desc.texture.format);
-        if (this->view_descs.size() > this->views.size()) {
-          view_desc = this->view_descs[this->views.size()];
-        }
-        auto view = GenerateResourceView(cmd_list, res_info->resource, res_info->desc, view_desc);
-        if (view.handle == 0) {
-          assert(view.handle != 0);
-          return false;
-        }
-        this->views.push_back(view);
-        this->resources.push_back(res_info->resource);
-        this->resource_descs.push_back(res_info->desc);
-#ifdef DEBUG_LEVEL_2
-        {
-          std::stringstream s;
-          s << "utils::render::ResourceViewSlots::Populate(view_from_resource_info, view="
-            << PRINT_PTR(view.handle)
-            << ", resource=" << PRINT_PTR(res_info->resource.handle)
-            << ", usage=" << static_cast<uint32_t>(this->usage)
-            << ", format=" << view_desc.format
-            << ")";
-          reshade::log::message(reshade::log::level::info, s.str().c_str());
-        }
-#endif
-      }
-    }
-
     // Try via resources
     if (!this->resources.empty()) {
       for (const auto& resource : this->resources) {
-        reshade::api::resource_desc desc = {};
-        auto* resource_info = renodx::utils::resource::GetResourceInfo(resource, false);
-        if (resource_info != nullptr) {
-          desc = resource_info->desc;
-        } else {
+        auto* device = cmd_list->get_device();
+        auto desc = renodx::utils::resource::GetResourceDesc(device, resource);
+        if (desc.type == reshade::api::resource_type::unknown) {
 #ifdef DEBUG_LEVEL_2
           {
             std::stringstream s;
@@ -183,10 +140,8 @@ struct ResourceViewSlots {
             reshade::log::message(reshade::log::level::debug, s.str().c_str());
           }
 #endif
-          auto* device = cmd_list->get_device();
-          desc = device->get_resource_desc(resource);
+          return false;
         }
-        if (desc.type == reshade::api::resource_type::unknown) return false;
         reshade::api::resource_view_desc view_desc(desc.texture.format);
         if (this->view_descs.size() > this->views.size()) {
           view_desc = this->view_descs[this->views.size()];
@@ -210,16 +165,12 @@ struct ResourceViewSlots {
           reshade::log::message(reshade::log::level::info, s.str().c_str());
         }
 #endif
-        if (resource_info != nullptr) {
-          this->resource_infos.push_back(resource_info);
-        }
       }
     }
 
     return true;
   }
 };
-
 struct RenderTargetSlots : ResourceViewSlots {
   std::vector<reshade::api::render_pass_render_target_desc> render_pass_descs;
 
@@ -334,8 +285,8 @@ class RenderPass {
       s << "utils::render::RenderPass(rt_views=" << this->render_target_slots.views.size();
       for (size_t i = 0; i < this->render_target_slots.views.size(); ++i) {
         const auto& view = this->render_target_slots.views[i];
-        auto res = device->get_resource_from_view(view);
-        auto desc = device->get_resource_view_desc(view);
+        auto res = renodx::utils::resource::GetResourceFromView(device, view);
+        auto desc = renodx::utils::resource::GetResourceViewDesc(device, view);
         s << " [" << i << " view=" << PRINT_PTR(view.handle)
           << " res=" << PRINT_PTR(res.handle)
           << " format=" << desc.format
@@ -349,8 +300,8 @@ class RenderPass {
       s << "utils::render::RenderPass(srv_views=" << this->shader_resource_slots.views.size();
       for (size_t i = 0; i < this->shader_resource_slots.views.size(); ++i) {
         const auto& view = this->shader_resource_slots.views[i];
-        auto res = device->get_resource_from_view(view);
-        auto desc = device->get_resource_view_desc(view);
+        auto res = renodx::utils::resource::GetResourceFromView(device, view);
+        auto desc = renodx::utils::resource::GetResourceViewDesc(device, view);
         s << " [" << i << " view=" << PRINT_PTR(view.handle)
           << " res=" << PRINT_PTR(res.handle)
           << " format=" << desc.format
@@ -416,6 +367,32 @@ class RenderPass {
       }
       this->auto_generate_descriptor_table_updates = false;
     }
+
+#ifdef DEBUG_LEVEL_2
+    if (!push_constants.empty()) {
+      std::stringstream s;
+      s << "utils::render::RenderPass(push_constants=" << push_constants.size();
+      for (const auto& [slot_space, span] : push_constants) {
+        s << " [b" << static_cast<uint32_t>(slot_space.slot)
+          << " s" << static_cast<uint32_t>(slot_space.space)
+          << " count=" << span.size();
+        if (!span.empty()) {
+          s << " values=";
+          const size_t preview_count = std::min<size_t>(span.size(), 6);
+          for (size_t i = 0; i < preview_count; ++i) {
+            if (i != 0) s << ",";
+            s << span[i];
+          }
+          if (span.size() > preview_count) {
+            s << ",...";
+          }
+        }
+        s << "]";
+      }
+      s << ")";
+      reshade::log::message(reshade::log::level::info, s.str().c_str());
+    }
+#endif
 
 #ifdef DEBUG_LEVEL_2
     {
@@ -510,14 +487,7 @@ class RenderPass {
       if (this->auto_generate_render_target_formats) {
         std::vector<reshade::api::format> rt_formats;
         for (const auto& rtv : this->render_target_slots.views) {
-          reshade::api::resource_view_desc res_info_desc;
-          auto* res_info = renodx::utils::resource::GetResourceViewInfo(rtv);
-          if (res_info == nullptr) {
-            assert(false && "Failed to get RTV ResourceViewInfo.");
-            res_info_desc = device->get_resource_view_desc(rtv);
-          } else {
-            res_info_desc = res_info->desc;
-          }
+          auto res_info_desc = renodx::utils::resource::GetResourceViewDesc(device, rtv);
           if (res_info_desc.type == reshade::api::resource_view_type::unknown) {
 #ifdef DEBUG_LEVEL_2
             {
@@ -627,31 +597,20 @@ class RenderPass {
             has_desc = true;
           }
 
-          if (!has_desc && this->render_target_slots.view_infos.size() > i) {
-            auto* view_info = this->render_target_slots.view_infos[i];
-            if (view_info != nullptr) {
-              auto* res_info = renodx::utils::resource::GetResourceInfo(view_info->original_resource, false);
-              desc = (res_info != nullptr) ? res_info->desc : device->get_resource_desc(view_info->original_resource);
-              has_desc = true;
-            }
-          }
-
           if (!has_desc && this->render_target_slots.resources.size() > i) {
             const auto& resource = this->render_target_slots.resources[i];
-            auto* res_info = renodx::utils::resource::GetResourceInfo(resource, false);
-            desc = (res_info != nullptr) ? res_info->desc : device->get_resource_desc(resource);
-            has_desc = true;
+            desc = renodx::utils::resource::GetResourceDesc(device, resource);
+            has_desc = desc.type != reshade::api::resource_type::unknown;
           }
 
           if (!has_desc) {
             const auto& rtv = this->render_target_slots.views[i];
-            auto* rtv_info = renodx::utils::resource::GetResourceViewInfo(rtv);
-            if (rtv_info != nullptr) {
-              auto* rtv_res_info = renodx::utils::resource::GetResourceInfo(rtv_info->original_resource, false);
-              desc = (rtv_res_info != nullptr) ? rtv_res_info->desc : device->get_resource_desc(rtv_info->original_resource);
-              has_desc = true;
+            auto original_resource = renodx::utils::resource::GetResourceFromView(rtv);
+            if (original_resource.handle != 0u) {
+              desc = renodx::utils::resource::GetResourceDesc(device, original_resource);
+              has_desc = desc.type != reshade::api::resource_type::unknown;
             } else {
-              auto resource = device->get_resource_from_view(rtv);
+              auto resource = renodx::utils::resource::GetResourceFromView(device, rtv);
               if (resource.handle == 0) {
 #ifdef DEBUG_LEVEL_2
                 reshade::log::message(reshade::log::level::warning, "utils::render::RenderPass(get_resource_from_view failed)");
@@ -659,8 +618,8 @@ class RenderPass {
                 assert(false);
                 return false;
               }
-              desc = device->get_resource_desc(resource);
-              has_desc = true;
+              desc = renodx::utils::resource::GetResourceDesc(device, resource);
+              has_desc = desc.type != reshade::api::resource_type::unknown;
             }
           }
 
@@ -731,40 +690,35 @@ class RenderPass {
     return true;
   }
 
-  static void DestroyGeneratedViews(reshade::api::command_list* cmd_list,
-                                    std::vector<reshade::api::resource_view>* generated_resource_views) {
-    auto* device = cmd_list->get_device();
-    for (const auto& view : *generated_resource_views) {
-      if (view.handle == 0) continue;
-      device->destroy_resource_view(view);
-      auto* info = renodx::utils::resource::GetResourceViewInfo(view);
-      if (info == nullptr) continue;
-      info->destroyed = true;
-    }
-    generated_resource_views->clear();
-  }
-
   static void DestroyGeneratedViews(reshade::api::device* device,
                                     std::vector<reshade::api::resource_view>* generated_resource_views) {
     if (device == nullptr) return;
     for (const auto& view : *generated_resource_views) {
       if (view.handle == 0) continue;
+      renodx::utils::resource::UpdateResourceViewInfo(view, [device](renodx::utils::resource::ResourceViewInfo* info) {
+        assert(!info->destroyed && "Generated resource view already destroyed.");
+        if (info->destroyed) return;
+        if (info->device == nullptr) {
+          info->device = device;
+        }
+        info->destroyed = true;
+      });
       device->destroy_resource_view(view);
-      auto* info = renodx::utils::resource::GetResourceViewInfo(view);
-      if (info == nullptr) continue;
-      info->destroyed = true;
     }
     generated_resource_views->clear();
+  }
+
+  static void DestroyGeneratedViews(reshade::api::command_list* cmd_list,
+                                    std::vector<reshade::api::resource_view>* generated_resource_views) {
+    DestroyGeneratedViews(cmd_list->get_device(), generated_resource_views);
   }
 
   void InvalidateRenderTargets(reshade::api::command_list* cmd_list) {
     DestroyGeneratedViews(cmd_list, &this->render_target_slots.generated_views);
     this->render_target_slots.views.clear();
     this->render_target_slots.view_descs.clear();
-    this->render_target_slots.view_infos.clear();
     this->render_target_slots.resources.clear();
     this->render_target_slots.resource_descs.clear();
-    this->render_target_slots.resource_infos.clear();
     this->render_target_slots.render_pass_descs.clear();
     this->viewports.clear();
     this->scissors.clear();

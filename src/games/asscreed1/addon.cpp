@@ -4,7 +4,6 @@
  */
 
 #define ImTextureID ImU64
-
 #define DEBUG_LEVEL_0
 
 #include <embed/shaders.h>
@@ -22,6 +21,7 @@
 #include "../../utils/date.hpp"
 #include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/resource_upgrade.hpp"
 #include "./shared.h"
 
 namespace {
@@ -726,7 +726,7 @@ constexpr std::pair<const char*, int> kBloomDivs[] = {
 
 void UpdateBloomTargets(reshade::api::swapchain* swapchain) {
   auto* device = swapchain->get_device();
-  auto* data = renodx::utils::data::Get<renodx::mods::swapchain::DeviceData>(device);
+  auto* data = renodx::utils::data::Get<renodx::utils::resource::upgrade::DeviceData>(device);
   if (!data) return;
 
   auto bb = device->get_resource_desc(swapchain->get_current_back_buffer());
@@ -734,7 +734,7 @@ void UpdateBloomTargets(reshade::api::swapchain* swapchain) {
 
   // apply per-divisor upgrades to matching bloom targets
   for (const auto& [name, div] : kBloomDivs) {
-    for (auto& target : data->swap_chain_upgrade_targets) {
+    for (auto& target : data->upgrade_infos) {
       if (target.name == name) {
         target.dimensions = {
             static_cast<int16_t>(bb.texture.width / div),

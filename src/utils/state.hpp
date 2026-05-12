@@ -7,15 +7,15 @@
 
 #include <include/reshade.hpp>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "./bitwise.hpp"
+#include "./cross_addon.hpp"
 #include "./data.hpp"
 #include "./resource.hpp"
 
 namespace renodx::utils::state {
-
-struct __declspec(uuid("01943e81-4c29-720a-8eff-0de3060b910f")) DeviceData {};
 
 struct CommandListState {
   std::vector<reshade::api::resource_view> render_targets;
@@ -120,26 +120,15 @@ struct __declspec(uuid("019382d7-4364-7f3f-a42c-1a2619748db0")) CommandListData 
   CommandListState current_state;
 };
 
-static bool is_primary_hook = false;
-static void OnInitDevice(reshade::api::device* device) {
-  DeviceData* data;
-  bool created = renodx::utils::data::CreateOrGet<DeviceData>(device, data);
-  if (!created) return;
+struct __declspec(uuid("7c6cd738-f6c7-437c-9c92-e19fd10dfc19")) SharedData {};
 
-  is_primary_hook = true;
-}
-static void OnDestroyDevice(reshade::api::device* device) {
-  if (!is_primary_hook) return;
-  device->destroy_private_data<DeviceData>();
-}
+static cross_addon::Shared<SharedData> shared;
 
 static void OnInitCommandList(reshade::api::command_list* cmd_list) {
-  if (!is_primary_hook) return;
   renodx::utils::data::Create<CommandListData>(cmd_list);
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
-  if (!is_primary_hook) return;
   renodx::utils::data::Delete<CommandListData>(cmd_list);
 }
 
@@ -148,7 +137,6 @@ static void OnBindRenderTargetsAndDepthStencil(
     uint32_t count,
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv) {
-  if (!is_primary_hook) return;
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (data == nullptr) return;
   auto& state = data->current_state;
@@ -160,7 +148,6 @@ static void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stages,
     reshade::api::pipeline pipeline) {
-  if (!is_primary_hook) return;
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (data == nullptr) return;
   auto& state = data->current_state;
@@ -177,7 +164,6 @@ static void OnBindPipelineStates(
     reshade::api::command_list* cmd_list,
     uint32_t count, const reshade::api::dynamic_state* states,
     const uint32_t* values) {
-  if (!is_primary_hook) return;
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (data == nullptr) return;
   auto& state = data->current_state;
@@ -252,7 +238,6 @@ static void OnBindViewports(
     reshade::api::command_list* cmd_list,
     uint32_t first, uint32_t count,
     const reshade::api::viewport* viewports) {
-  if (!is_primary_hook) return;
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (data == nullptr) return;
   auto& state = data->current_state;
@@ -271,7 +256,6 @@ static void OnBindScissorRects(
     reshade::api::command_list* cmd_list,
     uint32_t first, uint32_t count,
     const reshade::api::rect* rects) {
-  if (!is_primary_hook) return;
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (data == nullptr) return;
   auto& state = data->current_state;
@@ -291,7 +275,6 @@ static void OnBindDescriptorTables(reshade::api::command_list* cmd_list,
                                    reshade::api::pipeline_layout layout,
                                    uint32_t first, uint32_t count,
                                    const reshade::api::descriptor_table* tables) {
-  if (!is_primary_hook) return;
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (data == nullptr) return;
   auto& current_state = data->current_state;
@@ -329,7 +312,6 @@ static void OnBindDescriptorTables(reshade::api::command_list* cmd_list,
 }
 
 static void OnResetCommandList(reshade::api::command_list* cmd_list) {
-  if (!is_primary_hook) return;
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (data == nullptr) return;
   auto& state = data->current_state;
@@ -342,47 +324,34 @@ static CommandListState* GetCurrentState(reshade::api::command_list* cmd_list) {
   return &data->current_state;
 }
 
-static bool attached = false;
-
 static void Use(DWORD fdw_reason) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-      if (attached) return;
-      attached = true;
-      reshade::log::message(reshade::log::level::info, "State attached.");
-
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-
-      reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
-      reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
-
-      reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
-      reshade::register_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
-      reshade::register_event<reshade::addon_event::bind_pipeline_states>(OnBindPipelineStates);
-      reshade::register_event<reshade::addon_event::bind_viewports>(OnBindViewports);
-      reshade::register_event<reshade::addon_event::bind_scissor_rects>(OnBindScissorRects);
-      reshade::register_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
-
-      reshade::register_event<reshade::addon_event::reset_command_list>(OnResetCommandList);
+      if (shared.RegisterModule()) {
+        reshade::log::message(reshade::log::level::info, "State attached.");
+      }
+      shared.RegisterEvent<reshade::addon_event::init_command_list>(OnInitCommandList);
+      shared.RegisterEvent<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
+      shared.RegisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
+      shared.RegisterEvent<reshade::addon_event::bind_pipeline>(OnBindPipeline);
+      shared.RegisterEvent<reshade::addon_event::bind_pipeline_states>(OnBindPipelineStates);
+      shared.RegisterEvent<reshade::addon_event::bind_viewports>(OnBindViewports);
+      shared.RegisterEvent<reshade::addon_event::bind_scissor_rects>(OnBindScissorRects);
+      shared.RegisterEvent<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
+      shared.RegisterEvent<reshade::addon_event::reset_command_list>(OnResetCommandList);
 
       break;
     case DLL_PROCESS_DETACH:
-      if (!attached) return;
-      attached = false;
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
-      reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
-
-      reshade::unregister_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
-      reshade::unregister_event<reshade::addon_event::bind_pipeline>(OnBindPipeline);
-      reshade::unregister_event<reshade::addon_event::bind_pipeline_states>(OnBindPipelineStates);
-      reshade::unregister_event<reshade::addon_event::bind_viewports>(OnBindViewports);
-      reshade::unregister_event<reshade::addon_event::bind_scissor_rects>(OnBindScissorRects);
-      reshade::unregister_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
-
-      reshade::unregister_event<reshade::addon_event::reset_command_list>(OnResetCommandList);
+      shared.UnregisterEvent<reshade::addon_event::init_command_list>(OnInitCommandList);
+      shared.UnregisterEvent<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
+      shared.UnregisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
+      shared.UnregisterEvent<reshade::addon_event::bind_pipeline>(OnBindPipeline);
+      shared.UnregisterEvent<reshade::addon_event::bind_pipeline_states>(OnBindPipelineStates);
+      shared.UnregisterEvent<reshade::addon_event::bind_viewports>(OnBindViewports);
+      shared.UnregisterEvent<reshade::addon_event::bind_scissor_rects>(OnBindScissorRects);
+      shared.UnregisterEvent<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
+      shared.UnregisterEvent<reshade::addon_event::reset_command_list>(OnResetCommandList);
+      shared.UnregisterModule();
 
       break;
   }

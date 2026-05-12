@@ -168,12 +168,15 @@ sub gui_m3d_map_end(string s_postfix = "")
     }
 }
 
-sub render_gui(string background = "", string s_out_offscreen_ui = "", string s_postfix = "")
+sub render_gui(string background = "", string s_out_offscreen_ui = "", string s_postfix = "", bool s_scene_renderer = true)
 {
     PushMarker("render_gui" + s_postfix);
     SetRenderView("GUI");
 
-    use gui_m3d_map_begin(s_postfix = s_postfix);
+    if (s_scene_renderer)
+    {
+        use gui_m3d_map_begin(s_postfix = s_postfix);
+    }
 
     if ((HW_PLATFORM & PLATFORM_ORBIS) > 0)
     {
@@ -183,8 +186,11 @@ sub render_gui(string background = "", string s_out_offscreen_ui = "", string s_
         SetRenderTargets(s_rgba8_ui, "");
             SetBuffer(USERMAP_TMP_0, background);
                 Mesh("tri_screen.msh", "copy$filla_blinn.mat", "std");
-        
-        use gui_m3d_map_draw(s_postfix = s_postfix);
+
+        if (s_scene_renderer)
+        {
+            use gui_m3d_map_draw(s_postfix = s_postfix);
+        }
         Scene("std"); //GUI elements (before all blur layers)
 
         use render_gui_blur_layer(tech = "std2", var = "f_gui_items_l1", s_in = s_rgba8_ui, s_unique_postfix = s_postfix + "_1_TEMPOR", s_out = s_rgba8_ui);
@@ -221,7 +227,10 @@ sub render_gui(string background = "", string s_out_offscreen_ui = "", string s_
 
         PushMarker("GUI" + s_postfix);
             SetRenderTargets(s_out_offscreen_ui, "");
-                use gui_m3d_map_draw(s_postfix = s_postfix);
+                if (s_scene_renderer)
+                {
+                    use gui_m3d_map_draw(s_postfix = s_postfix);
+                }
                 Scene("std"); //GUI elements (before all blur layers)
         PopMarker();
 
@@ -273,18 +282,21 @@ sub render_gui(string background = "", string s_out_offscreen_ui = "", string s_
         }
     }
 
-    use gui_m3d_map_end(s_postfix = s_postfix);
+    if (s_scene_renderer)
+    {
+        use gui_m3d_map_end(s_postfix = s_postfix);
+    }
 
     PopMarker();
 }
 
-sub gui(string s_in = "", bool s_allow_framegen = true)
+sub gui(string s_in = "", bool s_allow_framegen = true, bool s_scene_renderer = true)
 {   
     // todo as arguments
     string s_HUDLESS = s_in; // rendered game
     string s_OFFSCREEN = "GUI_OFFSCREEN"; // place for UI
 
-    string s_MV = "1_R16G16_MV"; // motion vectors
+    string s_MV = "1_R16G16_MV_FG"; // motion vectors
     string s_ZBUFFER = "ZBUFFER"; // zbuffer of the game
     
     if (DEBUG_ON)
@@ -315,7 +327,7 @@ sub gui(string s_in = "", bool s_allow_framegen = true)
     BufferScreenFormat(s_OFFSCREEN, 1, "R8G8B8A8_UNORM", "ui esram ua");
     SetClearColor(0.0, 0.0, 0.0, 0.0);
     SetRenderTargets(s_OFFSCREEN, "color");
-        use render_gui(background = s_HUDLESS_UI_RES, s_out_offscreen_ui = s_OFFSCREEN, s_postfix = "_A");
+        use render_gui(background = s_HUDLESS_UI_RES, s_out_offscreen_ui = s_OFFSCREEN, s_postfix = "_A", s_scene_renderer = s_scene_renderer);
 
     // render debug stuff to s_OFFSCREEN
     if (DEBUG_ON)

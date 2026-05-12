@@ -34,6 +34,7 @@
 #include "../utils/bitwise.hpp"
 #include "../utils/data.hpp"
 #include "../utils/device_proxy.hpp"
+#include "../utils/device_upgrade.hpp"
 #include "../utils/draw.hpp"
 #include "../utils/format.hpp"
 #include "../utils/mutex.hpp"
@@ -320,6 +321,7 @@ inline bool DeactivateCloneHotSwap(
   return utils::resource::upgrade::DeactivateCloneHotSwap(device, resource_view);
 }
 
+[[deprecated("Use CloneResource(const reshade::api::resource& resource) instead")]]
 inline reshade::api::resource CloneResource(utils::resource::ResourceInfo* resource_info) {
   return renodx::utils::resource::upgrade::CloneResource(resource_info);
 }
@@ -332,6 +334,7 @@ inline void SetupSwapchainProxyLayout(reshade::api::device* device, DeviceData* 
   // moved to utils::device_proxy
 }
 
+[[deprecated("Use GetResourceClone(const reshade::api::resource& resource) instead")]]
 inline reshade::api::resource GetResourceClone(utils::resource::ResourceInfo* resource_info = nullptr) {
   return utils::resource::upgrade::GetResourceClone(resource_info);
 }
@@ -340,9 +343,11 @@ inline reshade::api::resource GetResourceClone(const reshade::api::resource& res
   return utils::resource::upgrade::GetResourceClone(resource);
 }
 
+[[deprecated("Use GetResourceViewClone(const reshade::api::resource_view& view) instead")]]
 inline reshade::api::resource_view GetResourceViewClone(
     utils::resource::ResourceViewInfo* resource_view_info = nullptr) {
-  return utils::resource::upgrade::GetResourceViewClone(resource_view_info);
+  if (resource_view_info == nullptr) return {0u};
+  return utils::resource::upgrade::GetResourceViewClone(resource_view_info->view);
 }
 
 inline reshade::api::resource_view GetResourceViewClone(const reshade::api::resource_view& view) {
@@ -417,7 +422,7 @@ static void OnInitDevice(reshade::api::device* device) {
 
   renodx::utils::resource::upgrade::SetUpgradeInfos(device, resource_upgrade_infos);
 
-  const bool prevent_exclusive = use_device_proxy || prevent_full_screen;
+  const bool prevent_exclusive = utils::device_proxy::UseProxyRequested() || prevent_full_screen;
   data->prevent_full_screen = prevent_exclusive;
 
   if (prevent_exclusive && device->get_api() == reshade::api::device_api::d3d9) {
@@ -450,7 +455,7 @@ static void OnInitDevice(reshade::api::device* device) {
   data->expected_constant_buffer_index = expected_constant_buffer_index;
   data->expected_constant_buffer_space = expected_constant_buffer_space;
 
-  if (utils::device_proxy::use_device_proxy) {
+  if (utils::device_proxy::UseProxyRequested()) {
     renodx::utils::draw::SwapchainProxyPass proxy_settings;
     proxy_settings.vertex_shader = data->swap_chain_proxy_vertex_shader;
     proxy_settings.pixel_shader = data->swap_chain_proxy_pixel_shader;
@@ -604,7 +609,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   auto old_buffer_count = desc.back_buffer_count;
 
   if (is_dxgi) {
-    if (!use_resize_buffer && !use_device_proxy) {
+    if (!use_resize_buffer && !utils::device_proxy::UseProxyRequested()) {
       desc.back_buffer.texture.format = target_format;
 
       if (desc.back_buffer_count == 1) {
@@ -613,7 +618,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
       }
     }
 
-    if (!use_device_proxy) {
+    if (!utils::device_proxy::UseProxyRequested()) {
       switch (desc.present_mode) {
         case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
           desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL);
@@ -638,14 +643,14 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
       }
     }
   } else if (device_api == reshade::api::device_api::d3d9) {
-    if (prevent_full_screen || use_device_proxy) {
+    if (prevent_full_screen || utils::device_proxy::UseProxyRequested()) {
       desc.present_flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
       // desc.present_mode |= D3DSWAPEFFECT_FLIPEX;
     }
   } else if (device_api == reshade::api::device_api::opengl) {
     // Nothing for now
   }
-  if (prevent_full_screen || use_device_proxy) {
+  if (prevent_full_screen || utils::device_proxy::UseProxyRequested()) {
     if (desc.fullscreen_state) {
       desc.fullscreen_state = false;
       desc.fullscreen_refresh_rate = 0.0f;
@@ -774,7 +779,7 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     flip_swapchains_by_window[hwnd].insert(swapchain);
   }
 
-  if (use_device_proxy && device == utils::device_proxy::proxy_device_reshade) {
+  if (utils::device_proxy::UseProxyRequested() && device == utils::device_proxy::proxy_device_reshade) {
     // Don't modify proxy device swapchains
     reshade::log::message(reshade::log::level::info, "mods::swapchain::OnInitSwapchain(Abort for proxy device swapchain.)");
     return;
@@ -803,8 +808,6 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
   auto primary_swapchain_resource_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
 
-  bool upgraded_resource_format = false;
-
   {
     const std::unique_lock lock(data->mutex);
     if (!resize) {
@@ -828,7 +831,6 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
           }
 
           if (original_swapchain_desc->back_buffer.texture.format != upgraded_swapchain_desc->back_buffer.texture.format) {
-            upgraded_resource_format = true;
             data->swap_chain_upgrade_info.new_format = upgraded_swapchain_desc->back_buffer.texture.format;
             if (upgraded_swapchain_desc->back_buffer.texture.format == reshade::api::format::r10g10b10a2_unorm) {
               data->swap_chain_upgrade_info.view_upgrades = utils::resource::VIEW_UPGRADES_R10G10B10A2_UNORM;
@@ -853,37 +855,31 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
       reshade::log::message(reshade::log::level::info, s.str().c_str());
     }
 
-    if (use_device_proxy) {
+    if (utils::device_proxy::UseProxyRequested()) {
       return;
     }
+  }
 
-    // Handle directly here instead of OnInitResourceInfo
-    const auto back_buffer_count = swapchain->get_back_buffer_count();
-    for (uint32_t index = 0; index < back_buffer_count; ++index) {
-      const auto buffer = swapchain->get_back_buffer(index);
-      utils::resource::ResourceInfo* info = nullptr;
-      utils::resource::store->resource_infos.if_contains(
-          buffer.handle, [&info](std::pair<const uint64_t, utils::resource::ResourceInfo>& pair) {
-            info = &pair.second;
-          });
-      if (info == nullptr || !info->is_swap_chain) continue;
+  // Handle directly here instead of OnInitResourceInfo
+  const auto back_buffer_count = swapchain->get_back_buffer_count();
+  for (uint32_t index = 0; index < back_buffer_count; ++index) {
+    const auto buffer = swapchain->get_back_buffer(index);
+    renodx::utils::resource::UpdateResourceInfo(buffer, [&](utils::resource::ResourceInfo* info) {
+      if (!info->is_swap_chain) return;
       if (info->desc.texture.width != primary_swapchain_resource_desc.texture.width
           || info->desc.texture.height != primary_swapchain_resource_desc.texture.height) {
-        continue;
+        return;
       }
-      if (upgraded_resource_format) {
+      if (data->swap_chain_upgrade_info.new_format != reshade::api::format::unknown
+          && info->desc.texture.format != data->swap_chain_upgrade_info.new_format) {
         info->upgrade_target = &data->swap_chain_upgrade_info;
       }
       if (use_resource_cloning && !data->swap_chain_proxy_pixel_shader.empty()) {
-        if (!UsingSwapchainCompatibilityMode()) {
-          info->clone_enabled = true;
-        }
-        if (info->clone_target != nullptr) {
-          reshade::log::message(reshade::log::level::info, "mods::swapchain::OnInitSwapchain(Overriding existing clone target.)");
-        }
         info->clone_target = &data->swap_chain_clone_info;
+        info->clone_enabled = utils::device_proxy::UseProxyRequested() || !UsingSwapchainCompatibilityMode();
+        info->clone_can_deactivate = false;
       }
-    }
+    });
   }
 
   CheckSwapchainSize(swapchain, primary_swapchain_resource_desc);
@@ -1192,7 +1188,7 @@ inline void OnPresent(
     }
   }
 
-  if (use_device_proxy) {
+  if (utils::device_proxy::UseProxyRequested()) {
     return;
   }
 
@@ -1225,17 +1221,21 @@ inline void OnPresent(
 
 template <typename T = float*>
 static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
-  renodx::utils::resource::Use(fdw_reason);
-  renodx::utils::swapchain::Use(fdw_reason);
-  if (use_device_proxy) {
-    renodx::utils::device_proxy::Use(fdw_reason);
-  }
-  if (swapchain_proxy_revert_state) {
-    renodx::utils::state::Use(fdw_reason);
-  }
-  renodx::utils::resource::upgrade::Use(fdw_reason);
-  if (use_resource_cloning) {
-    // renodx::utils::descriptor::Use(fdw_reason);
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    renodx::utils::device_upgrade::use_dx9ex_upgrade = renodx::utils::device_proxy::use_device_proxy;
+    renodx::utils::resource::Use(fdw_reason);
+    renodx::utils::swapchain::Use(fdw_reason);
+    if (utils::device_proxy::UseProxyRequested()) {
+      renodx::utils::device_proxy::Use(fdw_reason);
+      renodx::utils::device_upgrade::Use(fdw_reason);
+    }
+    if (swapchain_proxy_revert_state) {
+      renodx::utils::state::Use(fdw_reason);
+    }
+    renodx::utils::resource::upgrade::Use(fdw_reason);
+    if (use_resource_cloning) {
+      // renodx::utils::descriptor::Use(fdw_reason);
+    }
   }
 
   switch (fdw_reason) {
@@ -1297,6 +1297,21 @@ static void Use(DWORD fdw_reason, T* new_injections = nullptr) {
       reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
 
       break;
+  }
+
+  if (fdw_reason == DLL_PROCESS_DETACH) {
+    if (use_resource_cloning) {
+      // renodx::utils::descriptor::Use(fdw_reason);
+    }
+    if (utils::device_proxy::UseProxyRequested()) {
+      renodx::utils::device_proxy::Use(fdw_reason);
+    }
+    renodx::utils::resource::upgrade::Use(fdw_reason);
+    if (swapchain_proxy_revert_state) {
+      renodx::utils::state::Use(fdw_reason);
+    }
+    renodx::utils::swapchain::Use(fdw_reason);
+    renodx::utils::resource::Use(fdw_reason);
   }
 }
 }  // namespace renodx::mods::swapchain::v2

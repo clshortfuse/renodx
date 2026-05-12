@@ -3,6 +3,10 @@
 
 #include "../shared.h"
 
+#ifndef CUSTOM_CLAMP_RCAS_INPUT
+#define CUSTOM_CLAMP_RCAS_INPUT 1
+#endif
+
 // from Lilium
 // RCAS - Robust Contrast Adaptive Sharpening
 // Optimized version that accepts pre-calculated texture bounds

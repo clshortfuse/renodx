@@ -26,7 +26,7 @@ flowchart LR
     Protocol["utils/mcp/protocol.hpp<br/>protocol helpers"]
     Server["utils/mcp/server.hpp<br/>generic MCP Server"]
     Catalog["tool_catalog.hpp<br/>typed metadata"]
-    Handlers["tool headers<br/>snapshot_tools / shader_inspection / live_shaders / resource_analysis / resource_clone"]
+    Handlers["tool headers<br/>snapshot_tools / shader_inspection / live_shaders / resource_analysis / resource_clone / texture_replace"]
     Context["ToolContext callbacks"]
     Addon["addons/devkit/addon.cpp"]
     Runtime["tracked devices / shaders / resources / snapshots"]
@@ -78,8 +78,9 @@ This keeps tool definitions readable without building large raw JSON blobs by ha
 | [`snapshot_tools.hpp`](/C:/Mods/renodx/src/addons/devkit/mcp/snapshot_tools.hpp) | Snapshot/status/list/select tool handlers over a callback context. |
 | [`shader_inspection.hpp`](/C:/Mods/renodx/src/addons/devkit/mcp/shader_inspection.hpp) | Shader summary/disassembly/decompilation tool handlers. |
 | [`live_shaders.hpp`](/C:/Mods/renodx/src/addons/devkit/mcp/live_shaders.hpp) | Dump/load/unload live shader tool handlers. |
-| [`resource_analysis.hpp`](/C:/Mods/renodx/src/addons/devkit/mcp/resource_analysis.hpp) | Resource readback, preview, and EXR/PNG dump handlers. |
+| [`resource_analysis.hpp`](/C:/Mods/renodx/src/addons/devkit/mcp/resource_analysis.hpp) | Resource readback, preview, EXR/PNG dump, and hash-named dump handlers. |
 | [`resource_clone.hpp`](/C:/Mods/renodx/src/addons/devkit/mcp/resource_clone.hpp) | Clone hotswap toggle tool handler. |
+| [`texture_replace.hpp`](/C:/Mods/renodx/src/addons/devkit/mcp/texture_replace.hpp) | Texture replacement rule, observation, dump, and enable-state tool handlers. |
 
 ## Runtime Flow
 
@@ -105,8 +106,16 @@ sequenceDiagram
 ## Practical Notes
 
 - The bridge advertises the DevKit tool surface up front and auto-connects when exactly one backend pipe is available.
+- `renodx_list_connections` includes `bridgeInfo` so MCP clients can inspect the active bridge version/build.
+- `devkit_status` includes `serverInfo` so MCP clients can inspect the connected devkit backend version/build.
 - Snapshot-backed inspection tools stay empty until a frame snapshot is queued and captured with `devkit_queue_snapshot`.
 - `devkit_set_tools_path` should usually point at the repo `bin` directory when a game ships conflicting shader tool binaries.
+- Default devkit content folders live under `renodx-dev/`:
+  `live/`, `dump/`, and `boot/`.
+- `boot/` contains decoded PNG texture replacements for early upload paths like `create_resource` + `initial_data`.
+- Boot texture replacement is create-time only; it does not scan `live/` for runtime hotswap replacements.
+- Use `devkit_dump_texture_replace_observation` with `outputPath` set to the `boot/` directory to create the canonical replacement filename, edit that PNG, then reload with `devkit_reload_texture_replace_boot_cache` or restart the game.
+- Use resource clone tools for immediate live hotswap comparison.
 - Shader decompilation is best-effort. Disassembly is generally available first; decompilation may still be unavailable for some older DirectX shader formats.
 
 ## Why `ToolContext` Exists
@@ -148,3 +157,43 @@ Keep the split consistent:
 - parsing and handler policy in `src/addons/devkit/mcp/*.hpp`
 - runtime state access in `addon.cpp`
 - protocol transport logic in `src/utils/*`
+
+## Draw Search via `devkit_list_draws`
+
+`devkit_list_draws` now supports optional filtering so MCP clients can narrow large snapshots before paging.
+
+Supported filter fields:
+
+- `method` (string, case-insensitive exact match)
+- `shaderHash` (string, case-insensitive exact match against `shaderHashes`)
+- `activeShaderStage` (string, case-insensitive exact match)
+- `minSrvCount` (integer)
+- `minUavCount` (integer)
+- `minConstantCount` (integer)
+- `minRenderTargetCount` (integer)
+- `minPipelineCount` (integer)
+
+Example tool arguments:
+
+```json
+{
+  "deviceIndex": 0,
+  "method": "Draw",
+  "minRenderTargetCount": 1,
+  "shaderHash": "0x1AD0E9A5",
+  "limit": 50,
+  "offset": 0
+}
+```
+
+Response additions:
+
+- `totalDraws`: unfiltered snapshot draw count
+- `totalFilteredDraws`: count after filter application
+- `filters`: echo of applied filter fields
+
+## Version Metadata
+
+- `bridgeInfo` contains `name`, `title`, `version`, and when available `sourceDateEpoch` and `buildTimestampUtc`.
+- `serverInfo` contains the same fields for the connected devkit backend.
+- Agents can compare `version` and optionally `sourceDateEpoch` or `buildTimestampUtc` to detect an older bridge or backend.

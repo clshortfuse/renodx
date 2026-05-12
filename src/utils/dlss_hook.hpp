@@ -141,17 +141,21 @@ static void Use(DWORD fdw_reason) {
 
       {
 #ifndef NDEBUG
-        assert(IsDebuggerPresent());
-        renodx::utils::iat_hook::PatchIAT("kernel32.dll", (void*)&LoadLibraryA, (void*)&HookLoadLibraryA, (void**)&real_LoadLibraryA, "LoadLibraryA");
-        renodx::utils::iat_hook::PatchIAT("kernel32.dll", (void*)&LoadLibraryExA, (void*)&HookLoadLibraryExA, (void**)&real_LoadLibraryExA, "LoadLibraryExA");
-        renodx::utils::iat_hook::PatchIAT("kernel32.dll", (void*)&LoadLibraryW, (void*)&HookLoadLibraryW, (void**)&real_LoadLibraryW, "LoadLibraryW");
-        renodx::utils::iat_hook::PatchIAT("kernel32.dll", (void*)&LoadLibraryExW, (void*)&HookLoadLibraryExW, (void**)&real_LoadLibraryExW, "LoadLibraryExW");
+        // assert(IsDebuggerPresent());
+        // renodx::utils::iat_hook::PatchIAT("kernel32.dll", (void*)&LoadLibraryA, (void*)&HookLoadLibraryA, (void**)&real_LoadLibraryA, "LoadLibraryA");
+        // renodx::utils::iat_hook::PatchIAT("kernel32.dll", (void*)&LoadLibraryExA, (void*)&HookLoadLibraryExA, (void**)&real_LoadLibraryExA, "LoadLibraryExA");
+        // renodx::utils::iat_hook::PatchIAT("kernel32.dll", (void*)&LoadLibraryW, (void*)&HookLoadLibraryW, (void**)&real_LoadLibraryW, "LoadLibraryW");
+        // renodx::utils::iat_hook::PatchIAT("kernel32.dll", (void*)&LoadLibraryExW, (void*)&HookLoadLibraryExW, (void**)&real_LoadLibraryExW, "LoadLibraryExW");
 #endif
         auto* sl_interposer = utils::platform::FindModule(streamline_interposer_file_path);
         if (sl_interposer != nullptr) {
           utils::vtable::Hook(sl_interposer, streamline::v2::INTERPOSER_HOOKS);
           reshade::register_event<reshade::addon_event::init_device>(streamline::v2::OnInitDevice);
+          reshade::register_event<reshade::addon_event::destroy_device>(streamline::v2::OnDestroyDevice);
           reshade::register_event<reshade::addon_event::init_command_queue>(streamline::v2::OnInitCommandQueue);
+          reshade::register_event<reshade::addon_event::destroy_command_queue>(streamline::v2::OnDestroyCommandQueue);
+          reshade::register_event<reshade::addon_event::init_command_list>(streamline::v2::OnInitCommandList);
+          reshade::register_event<reshade::addon_event::destroy_command_list>(streamline::v2::OnDestroyCommandList);
         } else {
           utils::log::w("Streamline interposer not found: ", streamline_interposer_file_path.c_str());
         }
@@ -168,6 +172,12 @@ static void Use(DWORD fdw_reason) {
     case DLL_PROCESS_DETACH:
       if (!internal::attached) return;
       internal::attached = false;
+      reshade::unregister_event<reshade::addon_event::init_device>(streamline::v2::OnInitDevice);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(streamline::v2::OnDestroyDevice);
+      reshade::unregister_event<reshade::addon_event::init_command_queue>(streamline::v2::OnInitCommandQueue);
+      reshade::unregister_event<reshade::addon_event::destroy_command_queue>(streamline::v2::OnDestroyCommandQueue);
+      reshade::unregister_event<reshade::addon_event::init_command_list>(streamline::v2::OnInitCommandList);
+      reshade::unregister_event<reshade::addon_event::destroy_command_list>(streamline::v2::OnDestroyCommandList);
       // utils::vtable::Unhook(streamline_interposer_file_path.c_str(), streamline::v2::INTERPOSER_HOOKS);
       // utils::vtable::Unhook(nvngx_dlss_file_path.c_str(), dlss::nvngx::DLSS_HOOKS);
       // internal::attached = false;

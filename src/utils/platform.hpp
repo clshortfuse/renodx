@@ -2,8 +2,17 @@
 
 #pragma comment(lib, "version.lib")
 
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <dxgi1_6.h>
+#include <iterator>
+#include <limits>
+#include <memory>
+#include <new>
 #include <shellapi.h>
+#include <utility>
 #include <windows.h>
 #include <winver.h>
 #if WIN32
@@ -19,6 +28,151 @@
 #include <vector>
 
 namespace renodx::utils::platform {
+
+template <typename T>
+struct ProcessAllocator {
+  using value_type = T;
+
+  constexpr ProcessAllocator() noexcept = default;
+
+  template <typename U>
+  explicit constexpr ProcessAllocator(const ProcessAllocator<U>& other) noexcept {
+    (void)other;
+  }
+
+  [[nodiscard]] T* allocate(std::size_t count) {  // NOLINT(readability-identifier-naming)
+    if (count > (std::numeric_limits<std::size_t>::max)() / sizeof(T)) {
+      throw std::bad_array_new_length();
+    }
+
+    auto* storage = static_cast<T*>(::HeapAlloc(::GetProcessHeap(), 0, count * sizeof(T)));
+    if (storage == nullptr) {
+      throw std::bad_alloc();
+    }
+    return storage;
+  }
+
+  void deallocate(T* storage, std::size_t count) noexcept {  // NOLINT(readability-identifier-naming)
+    (void)count;
+    if (storage == nullptr) return;
+    ::HeapFree(::GetProcessHeap(), 0, storage);
+  }
+};
+
+template <typename T, typename U>
+inline bool operator==(const ProcessAllocator<T>& left, const ProcessAllocator<U>& right) noexcept {
+  (void)left;
+  (void)right;
+  return true;
+}
+
+template <typename T, typename U>
+inline bool operator!=(const ProcessAllocator<T>& left, const ProcessAllocator<U>& right) noexcept {
+  (void)left;
+  (void)right;
+  return false;
+}
+
+template <typename T, typename... Args>
+inline T* CreateSharedObject(Args&&... args) {
+  auto* storage = static_cast<T*>(::HeapAlloc(::GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(T)));
+  assert(storage != nullptr);
+  if (storage == nullptr) return nullptr;
+
+  return std::construct_at(storage, std::forward<Args>(args)...);
+}
+
+template <typename T>
+inline void DeleteSharedObject(T* object) {
+  if (object == nullptr) return;
+
+  object->~T();
+  ::HeapFree(::GetProcessHeap(), 0, object);
+}
+
+template <typename T>
+struct ProcessSharedSlot {
+  T** value = nullptr;
+  void* view = nullptr;
+  void* handle = nullptr;
+};
+
+inline void FormatProcessSharedSlotName(wchar_t* buffer, size_t buffer_count, const wchar_t* kind, const GUID& guid) {
+  std::swprintf(
+      buffer,
+      buffer_count,
+      L"Local\\RenoDX.CrossAddon.%lu.%ls.%08lX%04hX%04hX%02X%02X%02X%02X%02X%02X%02X%02X",
+      ::GetCurrentProcessId(),
+      kind,
+      guid.Data1,
+      guid.Data2,
+      guid.Data3,
+      guid.Data4[0],
+      guid.Data4[1],
+      guid.Data4[2],
+      guid.Data4[3],
+      guid.Data4[4],
+      guid.Data4[5],
+      guid.Data4[6],
+      guid.Data4[7]);
+}
+
+template <typename T>
+inline ProcessSharedSlot<T> OpenProcessSharedSlot(const GUID& guid, auto&& initialize) {
+  struct SlotStorage {
+    T* value = nullptr;
+  };
+
+  wchar_t mapping_name[128] = {};
+  wchar_t mutex_name[128] = {};
+  FormatProcessSharedSlotName(mapping_name, std::size(mapping_name), L"Mapping", guid);
+  FormatProcessSharedSlotName(mutex_name, std::size(mutex_name), L"Mutex", guid);
+
+  auto* const mutex_handle = ::CreateMutexW(nullptr, FALSE, mutex_name);
+  assert(mutex_handle != nullptr);
+  if (mutex_handle == nullptr) return {};
+
+  const auto wait_result = ::WaitForSingleObject(mutex_handle, INFINITE);
+  assert(wait_result == WAIT_OBJECT_0 || wait_result == WAIT_ABANDONED);
+  if (wait_result != WAIT_OBJECT_0 && wait_result != WAIT_ABANDONED) {
+    ::CloseHandle(mutex_handle);
+    return {};
+  }
+
+  ProcessSharedSlot<T> slot = {};
+  slot.handle = ::CreateFileMappingW(
+      INVALID_HANDLE_VALUE,
+      nullptr,
+      PAGE_READWRITE,
+      0u,
+      sizeof(SlotStorage),
+      mapping_name);
+  assert(slot.handle != nullptr);
+  if (slot.handle != nullptr) {
+    auto* view = static_cast<SlotStorage*>(::MapViewOfFile(
+        slot.handle,
+        FILE_MAP_ALL_ACCESS,
+        0u,
+        0u,
+        sizeof(SlotStorage)));
+    assert(view != nullptr);
+    if (view != nullptr) {
+      slot.view = view;
+      slot.value = &view->value;
+    } else {
+      ::CloseHandle(slot.handle);
+      slot.handle = nullptr;
+    }
+  }
+
+  if (slot.value != nullptr) {
+    std::forward<decltype(initialize)>(initialize)(*slot.value);
+  }
+
+  ::ReleaseMutex(mutex_handle);
+  ::CloseHandle(mutex_handle);
+  return slot;
+}
 
 static std::vector<DISPLAYCONFIG_PATH_INFO> GetPathInfos() {
   for (LONG result = ERROR_INSUFFICIENT_BUFFER;
@@ -99,17 +253,17 @@ static std::filesystem::path GetCurrentWorkingPath() {
   return std::filesystem::current_path();
 }
 
-std::map<std::string, std::string> GetEnvironmentVariables() {
+static std::map<std::string, std::string> GetEnvironmentVariables() {
   std::map<std::string, std::string> env_map;
 
 #ifdef WIN32
   LPWCH env_strings = GetEnvironmentStringsW();
-  if (!env_strings) {
+  if (env_strings == nullptr) {
     return env_map;
   }
 
   LPWCH p = env_strings;
-  while (*p) {
+  while (*p != L'\0') {
     std::wstring ws(p);
     size_t pos = ws.find(L'=');
     if (pos != std::wstring::npos) {

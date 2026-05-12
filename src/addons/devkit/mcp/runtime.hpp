@@ -18,6 +18,7 @@
 #include "resource_clone.hpp"
 #include "shader_inspection.hpp"
 #include "snapshot_tools.hpp"
+#include "texture_replace.hpp"
 #include "tool_catalog.hpp"
 
 namespace renodx::addons::devkit::mcp::runtime {
@@ -28,6 +29,7 @@ struct RegistrationContext {
   std::function<live_shaders::ToolContext()> build_live_shaders_tool_context;
   std::function<resource_analysis::ToolContext()> build_analyze_resource_tool_context;
   std::function<resource_clone::ToolContext()> build_resource_clone_tool_context;
+  std::function<texture_replace::ToolContext()> build_texture_replace_tool_context;
   std::function<renodx::utils::mcp::ToolResult(const std::optional<std::string>&)> set_tools_path;
 };
 
@@ -99,9 +101,45 @@ inline void RegisterTools(renodx::utils::mcp::Server& server, const Registration
                                                const renodx::utils::mcp::json& arguments) {
     return resource_analysis::HandleAnalyzeResourceTool(arguments, build_analyze_resource_tool_context());
   });
+  register_tool("devkit_dump_resource_with_hash", [build_analyze_resource_tool_context = context.build_analyze_resource_tool_context](
+                                                       const renodx::utils::mcp::json& arguments) {
+    return resource_analysis::HandleDumpResourceWithHashTool(arguments, build_analyze_resource_tool_context());
+  });
   register_tool("devkit_set_resource_clone", [build_resource_clone_tool_context = context.build_resource_clone_tool_context](
                                                  const renodx::utils::mcp::json& arguments) {
     return resource_clone::HandleSetResourceCloneTool(arguments, build_resource_clone_tool_context());
+  });
+  register_tool("devkit_replace_resource_with_file", [build_resource_clone_tool_context = context.build_resource_clone_tool_context](
+                                                         const renodx::utils::mcp::json& arguments) {
+    return resource_clone::HandleReplaceResourceWithFileTool(arguments, build_resource_clone_tool_context());
+  });
+  register_tool("devkit_set_texture_replace_enabled", [build_texture_replace_tool_context = context.build_texture_replace_tool_context](
+                                                           const renodx::utils::mcp::json& arguments) {
+    return texture_replace::HandleSetTextureReplaceEnabledTool(arguments, build_texture_replace_tool_context());
+  });
+  register_tool("devkit_reload_texture_replace_boot_cache", [build_texture_replace_tool_context = context.build_texture_replace_tool_context](
+                                                                  const renodx::utils::mcp::json& arguments) {
+    return texture_replace::HandleReloadBootTextureCacheTool(arguments, build_texture_replace_tool_context());
+  });
+  register_tool("devkit_set_texture_replace_rules", [build_texture_replace_tool_context = context.build_texture_replace_tool_context](
+                                                         const renodx::utils::mcp::json& arguments) {
+    return texture_replace::HandleSetTextureReplaceRulesTool(arguments, build_texture_replace_tool_context());
+  });
+  register_tool("devkit_get_texture_replace_state", [build_texture_replace_tool_context = context.build_texture_replace_tool_context](
+                                                         const renodx::utils::mcp::json& arguments) {
+    return texture_replace::HandleGetTextureReplaceStateTool(arguments, build_texture_replace_tool_context());
+  });
+  register_tool("devkit_list_texture_replace_observations", [build_texture_replace_tool_context = context.build_texture_replace_tool_context](
+                                                                 const renodx::utils::mcp::json& arguments) {
+    return texture_replace::HandleListTextureReplaceObservationsTool(arguments, build_texture_replace_tool_context());
+  });
+  register_tool("devkit_clear_texture_replace_observations", [build_texture_replace_tool_context = context.build_texture_replace_tool_context](
+                                                                  const renodx::utils::mcp::json& arguments) {
+    return texture_replace::HandleClearTextureReplaceObservationsTool(arguments, build_texture_replace_tool_context());
+  });
+  register_tool("devkit_dump_texture_replace_observation", [build_texture_replace_tool_context = context.build_texture_replace_tool_context](
+                                                                const renodx::utils::mcp::json& arguments) {
+    return texture_replace::HandleDumpTextureReplaceObservationTool(arguments, build_texture_replace_tool_context());
   });
   register_tool("devkit_snapshot_summary", [build_snapshot_tools_context = context.build_snapshot_tools_context](
                                                const renodx::utils::mcp::json& arguments) {

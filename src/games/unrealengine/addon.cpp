@@ -708,156 +708,191 @@ void OnPushDescriptors(
 
   auto* device = cmd_list->get_device();
 
-  const renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
-  auto populate_layout_data = [&]() {
-    if (layout_data != nullptr) return true;
-    const auto* local_layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout);
-    if (local_layout_data == nullptr) {
-      reshade::log::message(reshade::log::level::error, "Could not find handle.");
-      return false;
+  bool is_uav = false;
+  switch (update.type) {
+    case reshade::api::descriptor_type::sampler:
+      return;
+    case reshade::api::descriptor_type::unordered_access_view:
+    case reshade::api::descriptor_type::buffer_unordered_access_view:
+      is_uav = true;
+      [[fallthrough]];
+    case reshade::api::descriptor_type::shader_resource_view:
+    case reshade::api::descriptor_type::buffer_shader_resource_view:
+    case reshade::api::descriptor_type::sampler_with_resource_view:  {
+      std::map<std::pair<uint32_t, uint32_t>, reshade::api::resource_view>* destination = nullptr;
+
+      if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) {
+        destination = (is_uav ? &data->pixel_uav_binds : &data->pixel_srv_binds);
+      } else if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::compute)) {
+        destination = (is_uav ? &data->compute_uav_binds : &data->compute_srv_binds);
+      } else {
+        return;
+      }
+
+      bool has_directx_slot_info = false;
+      bool failed_directx_offset_lookup = false;
+      uint32_t dx_register_index = 0;
+      uint32_t dx_register_space = 0;
+      auto populate_directx_offsets = [&]() {
+        if (has_directx_slot_info) return true;
+        if (failed_directx_offset_lookup) return false;
+
+        bool found_directx_offsets = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto& local_layout_data) {
+          const auto& layout_data = *local_layout_data;
+          if (layout_param >= layout_data.params.size()) {
+            reshade::log::message(reshade::log::level::error, "Layout param out of range.");
+            return;
+          }
+
+          const auto& param = layout_data.params[layout_param];
+          switch (param.type) {
+            case reshade::api::pipeline_layout_param_type::descriptor_table: {
+              if (param.descriptor_table.count != 1) {
+                reshade::log::message(reshade::log::level::error, "Wrong count.");
+                return;
+              }
+              dx_register_index = param.descriptor_table.ranges[0].dx_register_index;
+              dx_register_space = param.descriptor_table.ranges[0].dx_register_space;
+              has_directx_slot_info = true;
+              break;
+            }
+            case reshade::api::pipeline_layout_param_type::push_descriptors:
+              dx_register_index = param.push_descriptors.dx_register_index;
+              dx_register_space = param.push_descriptors.dx_register_space;
+              has_directx_slot_info = true;
+              break;
+            default:
+              reshade::log::message(reshade::log::level::error, "Not descriptor table.");
+              break;
+          }
+        });
+
+        if (!found_directx_offsets) {
+          failed_directx_offset_lookup = true;
+          reshade::log::message(reshade::log::level::error, "Could not find handle.");
+        }
+        return has_directx_slot_info;
+      };
+
+      for (uint32_t i = 0; i < update.count; i++) {
+        reshade::api::resource_view view = {0u};
+        if (update.type == reshade::api::descriptor_type::sampler_with_resource_view) {
+          view = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i].view;
+        } else {
+          view = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+        }
+
+        uint32_t pair_a = 0;
+        uint32_t pair_b = 0;
+        switch (device->get_api()) {
+          case reshade::api::device_api::d3d9:
+          case reshade::api::device_api::d3d10:
+          case reshade::api::device_api::d3d11:
+          case reshade::api::device_api::d3d12:
+            if (!populate_directx_offsets()) return;
+            pair_a = dx_register_index + update.binding + i;
+            pair_b = dx_register_space;
+            break;
+          case reshade::api::device_api::opengl:
+          case reshade::api::device_api::vulkan:
+            pair_a = update.binding;
+            pair_b = update.array_offset + i;
+            break;
+          default:
+            assert(false);
+            return;
+        }
+
+        auto slot = std::pair<uint32_t, uint32_t>(pair_a, pair_b);
+        if (view.handle == 0u) {
+          destination->erase(slot);
+        } else {
+          (*destination)[slot] = view;
+        }
+      }
+      return;
     }
-    layout_data = local_layout_data;
-    return true;
-  };
 
-  auto log_resource_view = [&](uint32_t index,
-                               reshade::api::resource_view view,
-                               std::map<std::pair<uint32_t, uint32_t>,
-                                        reshade::api::resource_view>& destination) {
-    if (!populate_layout_data()) return;
-
-    auto layout_params = layout_data->params;
-    const auto& param = layout_params[layout_param];
-    uint32_t dx_register_index = 0;
-    uint32_t dx_register_space = 0;
-    switch (param.type) {
-      case reshade::api::pipeline_layout_param_type::descriptor_table: {
-        if (param.descriptor_table.count != 1) {
-          reshade::log::message(reshade::log::level::error, "Wrong count.");
-          // add warning
+    case reshade::api::descriptor_type::constant_buffer: {
+      bool found_descriptor_layout = renodx::utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto& local_layout_data) {
+        const auto& layout_data = *local_layout_data;
+        if (layout_param >= layout_data.params.size()) {
+          reshade::log::message(reshade::log::level::error, "Layout param out of range.");
           return;
         }
-        dx_register_index = param.descriptor_table.ranges[0].dx_register_index;
-        dx_register_space = param.descriptor_table.ranges[0].dx_register_space;
-        break;
-      }
-      case reshade::api::pipeline_layout_param_type::push_descriptors:
-        dx_register_index = param.push_descriptors.dx_register_index;
-        dx_register_space = param.push_descriptors.dx_register_space;
-        break;
-      default:
-        reshade::log::message(reshade::log::level::error, "Not descriptor table.");
-        return;
-    }
 
-    auto slot = std::pair<uint32_t, uint32_t>(dx_register_index + update.binding + index, dx_register_space);
-
-    if (view.handle == 0u) {
-      destination.erase(slot);
-    } else {
-      destination[slot] = view;
-    }
-  };
-
-  for (uint32_t i = 0; i < update.count; i++) {
-    switch (update.type) {
-      case reshade::api::descriptor_type::sampler:
-        break;
-      case reshade::api::descriptor_type::sampler_with_resource_view: {
-        auto item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i];
-        if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) {
-          log_resource_view(i, item.view, data->pixel_srv_binds);
-        } else if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::compute)) {
-          log_resource_view(i, item.view, data->compute_srv_binds);
-        }
-      } break;
-      case reshade::api::descriptor_type::buffer_shader_resource_view:
-      case reshade::api::descriptor_type::shader_resource_view:        {
-        auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
-        if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) {
-          log_resource_view(i, item, data->pixel_srv_binds);
-        } else if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::compute)) {
-          log_resource_view(i, item, data->compute_srv_binds);
-        }
-        break;
-      }
-      case reshade::api::descriptor_type::buffer_unordered_access_view:
-      case reshade::api::descriptor_type::unordered_access_view:        {
-        auto item = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
-        if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) {
-          log_resource_view(i, item, data->pixel_uav_binds);
-        } else if (renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::compute)) {
-          log_resource_view(i, item, data->compute_uav_binds);
-        }
-
-        break;
-      }
-      case reshade::api::descriptor_type::constant_buffer: {
-        if (!populate_layout_data()) return;
-        auto layout_params = layout_data->params;
-        auto param = layout_params[layout_param];
-        if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
-          assert(param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer);
-
+        const auto& param = layout_data.params[layout_param];
+        for (uint32_t i = 0; i < update.count; i++) {
           uint32_t pair_a = 0;
           uint32_t pair_b = 0;
-          switch (device->get_api()) {
-            case reshade::api::device_api::d3d9:
-            case reshade::api::device_api::d3d10:
-            case reshade::api::device_api::d3d11:
-            case reshade::api::device_api::d3d12:
-              pair_a = param.push_constants.dx_register_index + update.binding + i;
-              pair_b = param.push_constants.dx_register_space;
+          switch (param.type) {
+            case reshade::api::pipeline_layout_param_type::push_descriptors: {
+              assert(param.push_descriptors.type == reshade::api::descriptor_type::constant_buffer);
+              switch (device->get_api()) {
+                case reshade::api::device_api::d3d9:
+                case reshade::api::device_api::d3d10:
+                case reshade::api::device_api::d3d11:
+                case reshade::api::device_api::d3d12:
+                  pair_a = param.push_constants.dx_register_index + update.binding + i;
+                  pair_b = param.push_constants.dx_register_space;
+                  break;
+                case reshade::api::device_api::opengl:
+                  pair_a = update.binding;
+                  pair_b = update.array_offset + i;
+                  break;
+                case reshade::api::device_api::vulkan:
+                  pair_a = update.binding;
+                  pair_b = update.array_offset + i;
+                  break;
+                default:
+                  assert(false);
+                  continue;
+              }
               break;
+            }
+            case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges: {
+              switch (device->get_api()) {
+                case reshade::api::device_api::d3d9:
+                case reshade::api::device_api::d3d10:
+                case reshade::api::device_api::d3d11:
+                case reshade::api::device_api::d3d12:
+                  assert(false);
+                  continue;
+                case reshade::api::device_api::opengl:
+                  pair_a = update.binding;
+                  pair_b = update.array_offset + i;
+                  break;
 
-            case reshade::api::device_api::opengl:
+                case reshade::api::device_api::vulkan:
+                  assert(param.descriptor_table.count > update.binding);
+                  assert(param.descriptor_table.ranges[update.binding].binding == update.binding);
+                  pair_a = update.binding;
+                  pair_b = update.array_offset + i;
+                  break;
+                default:
+                  assert(false);
+                  continue;
+              }
               break;
-
-            case reshade::api::device_api::vulkan:
-              pair_a = update.binding;
-              pair_b = update.array_offset + i;
-              break;
+            }
             default:
               assert(false);
+              continue;
           }
           auto buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
           auto slot = std::pair<uint32_t, uint32_t>(pair_a, pair_b);
           data->constants[slot] = buffer_range;
-        } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges) {
-          uint32_t pair_a = 0;
-          uint32_t pair_b = 0;
-
-          switch (device->get_api()) {
-            case reshade::api::device_api::d3d9:
-            case reshade::api::device_api::d3d10:
-            case reshade::api::device_api::d3d11:
-            case reshade::api::device_api::d3d12:
-              assert(false);
-              break;
-            case reshade::api::device_api::opengl:
-              break;
-
-            case reshade::api::device_api::vulkan:
-              assert(param.descriptor_table.count > update.binding);
-              assert(param.descriptor_table.ranges[update.binding].binding == update.binding);
-              pair_a = update.binding;
-              pair_b = update.array_offset + i;
-              break;
-            default:
-              assert(false);
-          }
-          auto buffer_range = static_cast<const reshade::api::buffer_range*>(update.descriptors)[i];
-          auto slot = std::pair<uint32_t, uint32_t>(pair_a, pair_b);
-          data->constants[slot] = buffer_range;
-
-        } else {
-          assert(false);
         }
+      });
 
-      } break;
-      default:
-        break;
+      if (!found_descriptor_layout) {
+        reshade::log::message(reshade::log::level::error, "Could not find handle.");
+      }
+      return;
     }
+
+    default:
+      return;
   }
 }
 
@@ -963,16 +998,15 @@ bool OnDispatch(
   if (shader_state->last_pipeline != 0u) {
     auto* pipeline_shader_details = renodx::utils::shader::GetPipelineShaderDetails(shader_state->last_pipeline);
     if (pipeline_shader_details != nullptr) {
-      const auto* layout_data = renodx::utils::pipeline_layout::GetPipelineLayoutData(pipeline_shader_details->layout);
-      if (layout_data != nullptr) {
+      renodx::utils::pipeline_layout::GetPipelineLayoutData(pipeline_shader_details->layout, [&](const auto& layout_data) {
         const auto* command_list_state = renodx::utils::state::GetCurrentState(cmd_list);
-        if (command_list_state == nullptr) return false;
+        if (command_list_state == nullptr) return;
         if (command_list_state->compute_pipeline_layout == pipeline_shader_details->layout) {
           const auto& info = *layout_data;
           const auto& bound_descriptor_tables = command_list_state->compute_descriptor_tables;
           auto param_count = info.params.size();
           auto* descriptor_data = renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
-          if (descriptor_data == nullptr) return false;
+          if (descriptor_data == nullptr) return;
 
           for (auto param_index = 0; param_index < param_count; ++param_index) {
             if (param_index >= bound_descriptor_tables.size()) continue;
@@ -1073,8 +1107,9 @@ bool OnDispatch(
                   if (resource_view.handle == 0u) {
                     compute_uav_binds.erase(slot);
                   } else {
-                    auto* resource_view_info = renodx::utils::resource::GetResourceViewInfo(resource_view);
-                    if (resource_view_info->resource_info == nullptr && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
+                    const auto original_resource = renodx::utils::resource::GetResourceFromView(device, resource_view);
+                    if (original_resource.handle == 0u
+                        && renodx::utils::resource::IsResourceViewEmpty(device, resource_view)) {
                       compute_uav_binds.erase(slot);
                     } else {
                       compute_uav_binds[slot] = resource_view;
@@ -1096,19 +1131,25 @@ bool OnDispatch(
             }
           }
         }
-      }
+      });
     }
   }
 
   if (compute_uav_binds.empty()) return false;
-  auto pair = compute_uav_binds.find({0, 0});
-  if (pair == compute_uav_binds.end()) return false;
-  auto uav_view = pair->second;
-  if (uav_view.handle == 0u) return false;
-  auto* uav_view_info = renodx::utils::resource::GetResourceViewInfo(uav_view);
-  if (uav_view_info == nullptr) return false;
-  if (uav_view_info->resource_info == nullptr) return false;
-  if (uav_view_info->resource_info->resource_tag != 1.f) return false;
+  bool found_lut_uav = std::ranges::any_of(
+      compute_uav_binds,
+      [](const auto& pair) {
+        const auto& uav_view = pair.second;
+        if (uav_view.handle == 0u) return false;
+        const auto original_resource = renodx::utils::resource::GetResourceFromView(uav_view);
+        if (original_resource.handle == 0u) return false;
+        bool found_match = false;
+        renodx::utils::resource::GetResourceInfo(original_resource, [&](const renodx::utils::resource::ResourceInfo& resource_info) {
+          found_match = resource_info.resource_tag == 1.f;
+        });
+        return found_match;
+      });
+  if (!found_lut_uav) return false;
 
   reshade::log::message(
       reshade::log::level::debug,

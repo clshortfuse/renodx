@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./antialiasing.hlsli"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:42:57 2024
 
@@ -42,6 +42,35 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  if (CUSTOM_ALIAS_ISOLATION_TAA > 0.f) {
+    uint width, height;
+    colorTex.GetDimensions(width, height);
+
+    o0.rgb = colorTex.SampleLevel(LinearSampler_s, v1.xy, 0).rgb;
+    o0.rgb = renodx::color::gamma::DecodeSafe(o0.rgb);
+
+    if (CUSTOM_SHARPENING > 0.f) {
+      Lilium::RCAS::Neighborhood rcasSamples = Lilium::RCAS::SampleNeighborhood(o0.rgb, v1.xy, width, height, colorTex, LinearSampler_s);
+
+      rcasSamples.b = renodx::color::gamma::DecodeSafe(rcasSamples.b);
+      rcasSamples.d = renodx::color::gamma::DecodeSafe(rcasSamples.d);
+      rcasSamples.f = renodx::color::gamma::DecodeSafe(rcasSamples.f);
+      rcasSamples.h = renodx::color::gamma::DecodeSafe(rcasSamples.h);
+
+      o0.rgb = rcasSamples.e;
+
+      float normalization_value = (RENODX_TONE_MAP_TYPE == 0.f) ? 1.f : RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+      o0.rgb = Lilium::RCAS::ApplyCore(rcasSamples, CUSTOM_SHARPENING, normalization_value);
+    }
+
+    o0.rgb = ApplyCustomFilmGrain(o0.rgb, v1.xy);
+
+    o0.rgb = renodx::color::gamma::EncodeSafe(o0.rgb);
+
+    o0.w = 0;
+    return;
+  }
+
   r0.x = blendTex.Sample(LinearSampler_s, v2.xy).w;
   r0.y = blendTex.Sample(LinearSampler_s, v2.zw).y;
   r1.xy = blendTex.Sample(LinearSampler_s, v1.xy).xz;
@@ -49,7 +78,7 @@ void main(
   r1.z = dot(r0.xyzw, float4(1, 1, 1, 1));
   r1.z = cmp(r1.z < 9.99999975e-006);
   if (r1.z != 0) {
-    r2.xyz = colorTex.SampleLevel(LinearSampler_s, v1.xy, 0).xyz;
+    r2.xyz = SampleLevelWithSRGBDecode(colorTex, LinearSampler_s, v1.xy, 0).rgb;
   } else {
     r1.xy = max(r0.xy, r1.yx);
     r1.x = cmp(r1.y < r1.x);
@@ -60,14 +89,17 @@ void main(
     r0.xy = r0.xy / r0.zz;
     r1.xyzw = float4(1, 1, -1, -1) * SMAA_RTMetrics.xyxy;
     r1.xyzw = r3.xyzw * r1.xyzw + v1.xyxy;
-    r3.xyz = colorTex.SampleLevel(LinearSampler_s, r1.xy, 0).xyz;
-    r1.xyz = colorTex.SampleLevel(LinearSampler_s, r1.zw, 0).xyz;
+    r3.xyz = SampleLevelWithSRGBDecode(colorTex, LinearSampler_s, r1.xy, 0).rgb;
+    r1.xyz = SampleLevelWithSRGBDecode(colorTex, LinearSampler_s, r1.zw, 0).rgb;
     r0.yzw = r1.xyz * r0.yyy;
     r2.xyz = r0.xxx * r3.xyz + r0.yzw;
   }
 
-  // skip sRGB encoding as image is not linearized from resource views
-  o0.rgb = r2.rgb;  // o0.rgb = renodx::color::srgb::EncodeSafe(r2.rgb);
+  o0.rgb = r2.rgb;
+
+  o0.rgb = ApplyCustomFilmGrain(o0.rgb, v1.xy);
+
+  o0.rgb = WriteWithSRGBEncode(o0.rgb);
   o0.w = 0;
   return;
 }

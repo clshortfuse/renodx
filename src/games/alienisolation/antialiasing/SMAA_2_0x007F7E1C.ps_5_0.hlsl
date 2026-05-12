@@ -1,3 +1,5 @@
+#include "./antialiasing.hlsli"
+
 // ---- Created with 3Dmigoto v1.3.16 on Sun Sep 22 01:42:56 2024
 
 cbuffer cbDefaultXSC : register(b0) {

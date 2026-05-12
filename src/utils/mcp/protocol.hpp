@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -14,6 +15,11 @@
 namespace renodx::utils::mcp {
 
 inline constexpr std::string_view PROTOCOL_VERSION = "2025-11-25";
+inline constexpr std::string_view PROTOCOL_VERSION_2025_06_18 = "2025-06-18";
+inline constexpr std::array<std::string_view, 2> SUPPORTED_PROTOCOL_VERSIONS = {
+    PROTOCOL_VERSION,
+    PROTOCOL_VERSION_2025_06_18,
+};
 inline constexpr std::string_view TRANSPORT_MESSAGE_NAME = "mcp";
 inline constexpr std::string_view METHOD_INITIALIZE = "initialize";
 inline constexpr std::string_view METHOD_PING = "ping";
@@ -53,6 +59,37 @@ struct ToolCallResponse {
   bool is_error = false;
 };
 
+[[nodiscard]] inline bool IsSupportedProtocolVersion(std::string_view version) {
+  for (const auto supported_version : SUPPORTED_PROTOCOL_VERSIONS) {
+    if (version == supported_version) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+[[nodiscard]] inline std::string_view NegotiateProtocolVersion(std::string_view requested_version) {
+  for (const auto supported_version : SUPPORTED_PROTOCOL_VERSIONS) {
+    if (requested_version == supported_version) {
+      return supported_version;
+    }
+  }
+
+  return PROTOCOL_VERSION;
+}
+
+[[nodiscard]] inline std::string_view NegotiateProtocolVersionFromInitializeParams(const json& params) {
+  if (!params.is_object()) {
+    return PROTOCOL_VERSION;
+  }
+  if (!params.contains("protocolVersion") || !params["protocolVersion"].is_string()) {
+    return PROTOCOL_VERSION;
+  }
+
+  return NegotiateProtocolVersion(std::string_view(params["protocolVersion"].get_ref<const std::string&>()));
+}
+
 [[nodiscard]] inline std::optional<json> ValidateInitializeRequest(const json& id, const json& params) {
   if (!params.is_object()) {
     return renodx::utils::json_rpc::ErrorResponseMessage{
@@ -70,20 +107,6 @@ struct ToolCallResponse {
         .error = renodx::utils::json_rpc::ErrorObject{
             .code = renodx::utils::json_rpc::INVALID_PARAMS,
             .message = "initialize requires a string protocolVersion",
-        },
-    };
-  }
-
-  if (params["protocolVersion"].get_ref<const std::string&>() != PROTOCOL_VERSION) {
-    return renodx::utils::json_rpc::ErrorResponseMessage{
-        .id = id,
-        .error = renodx::utils::json_rpc::ErrorObject{
-            .code = renodx::utils::json_rpc::INVALID_PARAMS,
-            .message = "Unsupported MCP protocol version",
-            .data = json{
-                {"protocolVersion", params["protocolVersion"]},
-                {"supportedProtocolVersion", PROTOCOL_VERSION},
-            },
         },
     };
   }

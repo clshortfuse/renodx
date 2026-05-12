@@ -18,8 +18,6 @@ namespace renodx::utils::iat_hook {
 
 namespace internal {
 
-static bool is_primary_hook = false;
-
 static bool attached = false;
 }  // namespace internal
 
