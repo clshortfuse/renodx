@@ -45,7 +45,8 @@ struct SwapchainProxyPass {
   bool Render(
       reshade::api::swapchain* swapchain,
       reshade::api::command_queue* queue,
-      const reshade::api::resource* swapchain_clone_override = nullptr) {
+      const reshade::api::resource* swapchain_clone_override = nullptr,
+      const reshade::api::rect* dest_rect = nullptr) {
     auto* cmd_list = queue->get_immediate_command_list();
     auto current_back_buffer = swapchain->get_current_back_buffer();
     auto* device = swapchain->get_device();
@@ -189,6 +190,26 @@ struct SwapchainProxyPass {
     pass.pipeline_subobjects.vertex_shader = vertex_shader;
     pass.pipeline_subobjects.pixel_shader = pixel_shader;
     pass.pipeline_subobjects.compute_shader = {};
+    if (dest_rect != nullptr) {
+      pass.auto_generate_viewport = false;
+      pass.auto_generate_scissors = false;
+      pass.viewports = {
+          reshade::api::viewport{
+              .x = static_cast<float>(dest_rect->left),
+              .y = static_cast<float>(dest_rect->top),
+              .width = static_cast<float>(dest_rect->right - dest_rect->left),
+              .height = static_cast<float>(dest_rect->bottom - dest_rect->top),
+              .min_depth = 0.f,
+              .max_depth = 1.f,
+          }
+      };
+      pass.scissors = {*dest_rect};
+    } else {
+      pass.auto_generate_viewport = true;
+      pass.auto_generate_scissors = true;
+      pass.viewports.clear();
+      pass.scissors.clear();
+    }
 
     if (pass.sampler_descs.empty()) {
       pass.sampler_descs.push_back(reshade::api::sampler_desc{});

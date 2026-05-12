@@ -94,6 +94,11 @@ UserGradingConfig CreateColorGradeConfig() {
   return cg_config;
 }
 
+float GetNeutwoWhiteClip() {
+  const float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  return max(RENODX_TONE_MAP_WHITE_CLIP, peak + 0.001f);
+}
+
 float Highlights(float x, float highlights, float mid_gray) {
   if (highlights == 1.f) return x;
 
@@ -221,16 +226,19 @@ float3 ApplyToneMap(float3 untonemapped) {
 
     float3 untonemapped_graded = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped, y, cg_config);
     if (RENODX_TONE_MAP_HUE_SHIFT > 0.f || RENODX_TONE_MAP_BLOWOUT > 0.f) {
-      hue_correction_source = renodx::tonemap::neutwo::PerChannel(untonemapped, 8.f, 100.f);
+      const float white_clip = GetNeutwoWhiteClip();
+      hue_correction_source = renodx::tonemap::neutwo::PerChannel(untonemapped, 8.f, white_clip);
     }
     untonemapped_graded = ApplySaturationBlowoutHueCorrectionHighlightSaturation(untonemapped_graded, hue_correction_source, y, cg_config);
 
     if (RENODX_TONE_MAP_TYPE == 1.f) {
       tonemapped = untonemapped_graded;
     } else {
+      const float peak = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+      const float white_clip = GetNeutwoWhiteClip();
       tonemapped = renodx::color::bt709::from::BT2020(
           renodx::tonemap::neutwo::MaxChannel(
-              renodx::color::bt2020::from::BT709(untonemapped_graded), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f));
+              renodx::color::bt2020::from::BT709(untonemapped_graded), peak, white_clip));
     }
   }
   return tonemapped;

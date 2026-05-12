@@ -75,6 +75,17 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type == 2; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapWhiteClip",
+        .binding = &shader_injection.tone_map_white_clip,
+        .default_value = 100.f,
+        .label = "White Clip",
+        .section = "Tone Mapping",
+        .tooltip = "Controls the Neutwo shoulder clip point.",
+        .min = 0.f,
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type == 2; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
         .binding = &shader_injection.diffuse_white_nits,
         .default_value = 203.f,
@@ -344,7 +355,7 @@ void OnPresetOff() {
       {"GammaCorrection", 0},
       {"ToneMapHueShift", 0},
       {"ToneMapBlowout", 0.f},
-      {"ToneMapWhiteClip", 0.f},
+      {"ToneMapWhiteClip", 100.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -373,6 +384,27 @@ void OnPresent(reshade::api::command_queue* queue,
     video_playback_latch--;
   }
   auto* device = queue->get_device();
+  auto back_buffer = swapchain->get_current_back_buffer();
+  auto back_buffer_desc = device->get_resource_desc(back_buffer);
+  shader_injection.custom_proxy_source_left = 0.f;
+  shader_injection.custom_proxy_source_top = 0.f;
+  shader_injection.custom_proxy_source_right = 1.f;
+  shader_injection.custom_proxy_source_bottom = 1.f;
+  if (source_rect != nullptr
+      && back_buffer_desc.texture.width != 0u
+      && back_buffer_desc.texture.height != 0u) {
+    const float width = static_cast<float>(back_buffer_desc.texture.width);
+    const float height = static_cast<float>(back_buffer_desc.texture.height);
+    shader_injection.custom_proxy_source_left = static_cast<float>(source_rect->left) / width;
+    shader_injection.custom_proxy_source_top = static_cast<float>(source_rect->top) / height;
+    shader_injection.custom_proxy_source_right = static_cast<float>(source_rect->right) / width;
+    shader_injection.custom_proxy_source_bottom = static_cast<float>(source_rect->bottom) / height;
+  }
+  if (device->get_api() == reshade::api::device_api::opengl) {
+    shader_injection.custom_flip_uv_y = 1.f;
+  } else {
+    shader_injection.custom_flip_uv_y = 0.f;
+  }
 }
 
 bool initialized = false;
@@ -407,7 +439,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
              }) {
           renodx::mods::swapchain::resource_upgrade_infos.push_back({
               .old_format = fmt,
-              .new_format = reshade::api::format::r16g16b16a16_typeless,
+              .new_format = reshade::api::format::r16g16b16a16_float,
               .ignore_size = false,
               .use_resource_view_cloning = true,
               .use_resource_view_hot_swap = false,

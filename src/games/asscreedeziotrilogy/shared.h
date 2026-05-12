@@ -32,6 +32,10 @@ struct ShaderInjectData {
   float custom_flip_uv_y;
   float custom_white_gradient_strength;
   float custom_reserved0;
+  float custom_proxy_source_left;
+  float custom_proxy_source_top;
+  float custom_proxy_source_right;
+  float custom_proxy_source_bottom;
 };
 
 #ifndef __cplusplus
@@ -45,6 +49,7 @@ cbuffer cb13 : register(b13) {
 #define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
 #define RENODX_GAMMA_CORRECTION    shader_injection.gamma_correction
 #define RENODX_TONE_MAP_HUE_SHIFT  shader_injection.tone_map_hue_shift
+#define RENODX_TONE_MAP_WHITE_CLIP shader_injection.tone_map_white_clip
 #define RENODX_TONE_MAP_BLOWOUT    shader_injection.tone_map_blowout
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
@@ -63,6 +68,7 @@ cbuffer cb13 : register(b13) {
 #define CUSTOM_VIDEO_HDR      shader_injection.custom_video_hdr
 #define CUSTOM_WHITE_GRADIENT_STRENGTH shader_injection.custom_white_gradient_strength
 #define CUSTOM_VIDEO_PLAYBACK_SEEN shader_injection.custom_reserved0
+#define CUSTOM_PROXY_SOURCE_RECT float4(shader_injection.custom_proxy_source_left, shader_injection.custom_proxy_source_top, shader_injection.custom_proxy_source_right, shader_injection.custom_proxy_source_bottom)
 
 #include "../../shaders/renodx.hlsl"
 
