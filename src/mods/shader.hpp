@@ -396,7 +396,6 @@ static bool OnCreatePipelineLayout(
           cbv_index = param.push_descriptors.dx_register_index + param.push_descriptors.count;
         }
       }
-#if RESHADE_API_VERSION >= 13
     } else if (is_dx && param.type == reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers) {
       if (device_api == reshade::api::device_api::d3d12) {
         if (param.descriptor_table_with_static_samplers.count != 0u
@@ -414,6 +413,32 @@ static bool OnCreatePipelineLayout(
       }
       for (uint32_t range_index = 0; range_index < param.descriptor_table_with_static_samplers.count; ++range_index) {
         const auto& range = param.descriptor_table_with_static_samplers.ranges[range_index];
+        if (range.type == reshade::api::descriptor_type::constant_buffer) {
+          if (
+              range.dx_register_space == data->expected_constant_buffer_space
+              && cbv_index < range.dx_register_index + range.count) {
+            cbv_index = range.dx_register_index + range.count;
+          }
+        }
+      }
+    } else if (is_dx && param.type == reshade::api::pipeline_layout_param_type(6)) {  // descriptor_table_with_flags
+      const auto* ranges = reinterpret_cast<const renodx::utils::pipeline_layout::DescriptorRangeWithFlagsBackport*>(param.descriptor_table.ranges);
+      if (device_api == reshade::api::device_api::d3d12) {
+        if (param.descriptor_table.count != 0u
+            && ranges[0].count != 0u) {
+          for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+            const auto& range = ranges[range_index];
+            if (range.count == 0u) continue;
+            if (range.type == reshade::api::descriptor_type::sampler && range.static_samplers != nullptr) continue;
+            dword_count += 1u;
+            break;
+          }
+        }
+      } else {
+        dword_count += 1u;
+      }
+      for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+        const auto& range = ranges[range_index];
         if (range.type == reshade::api::descriptor_type::constant_buffer) {
           if (
               range.dx_register_space == data->expected_constant_buffer_space
@@ -466,7 +491,49 @@ static bool OnCreatePipelineLayout(
           }
         }
       }
-#endif
+    } else if (is_dx && param.type == reshade::api::pipeline_layout_param_type(7)) {  // push_descriptors_with_ranges_and_flags
+      if (pdss_index == -1) pdss_index = param_index;
+      const auto* ranges = reinterpret_cast<const renodx::utils::pipeline_layout::DescriptorRangeWithFlagsBackport*>(param.descriptor_table.ranges);
+      if (device_api == reshade::api::device_api::d3d12) {
+        if (param.descriptor_table.count != 0u
+            && ranges[0].count != 0u) {
+          if (param.descriptor_table.count == 1u
+              && ranges[0].count == 1u
+              && ranges[0].binding == 0u) {
+            switch (ranges[0].type) {
+              case reshade::api::descriptor_type::constant_buffer:
+              case reshade::api::descriptor_type::buffer_shader_resource_view:
+              case reshade::api::descriptor_type::buffer_unordered_access_view:
+              case reshade::api::descriptor_type::acceleration_structure:
+                dword_count += 2u;
+                break;
+              default:
+                dword_count += 1u;
+                break;
+            }
+          } else {
+            for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+              const auto& range = ranges[range_index];
+              if (range.count == 0u) continue;
+              if (range.type == reshade::api::descriptor_type::sampler && range.static_samplers != nullptr) continue;
+              dword_count += 1u;
+              break;
+            }
+          }
+        }
+      } else {
+        dword_count += 2u;
+      }
+      for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+        const auto& range = ranges[range_index];
+        if (range.type == reshade::api::descriptor_type::constant_buffer) {
+          if (
+              range.dx_register_space == data->expected_constant_buffer_space
+              && cbv_index < range.dx_register_index + range.count) {
+            cbv_index = range.dx_register_index + range.count;
+          }
+        }
+      }
     }
   }
 
@@ -776,7 +843,6 @@ static void OnInitPipelineLayout(
           cbv_index = param.push_descriptors.dx_register_index + param.push_descriptors.count;
         }
       }
-#if RESHADE_API_VERSION >= 13
     } else if (param.type == reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers) {
       if (device_api == reshade::api::device_api::d3d12
           && param.descriptor_table_with_static_samplers.count != 0u
@@ -791,6 +857,29 @@ static void OnInitPipelineLayout(
       }
       for (uint32_t range_index = 0; range_index < param.descriptor_table_with_static_samplers.count; ++range_index) {
         auto range = param.descriptor_table_with_static_samplers.ranges[range_index];
+        if (range.type == reshade::api::descriptor_type::constant_buffer) {
+          if (
+              range.dx_register_space == data->expected_constant_buffer_space
+              && cbv_index < range.dx_register_index + range.count) {
+            cbv_index = range.dx_register_index + range.count;
+          }
+        }
+      }
+    } else if (param.type == reshade::api::pipeline_layout_param_type(6)) {  // descriptor_table_with_flags
+      const auto* ranges = reinterpret_cast<const renodx::utils::pipeline_layout::DescriptorRangeWithFlagsBackport*>(param.descriptor_table.ranges);
+      if (device_api == reshade::api::device_api::d3d12
+          && param.descriptor_table.count != 0u
+          && ranges[0].count != 0u) {
+        for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+          const auto& range = ranges[range_index];
+          if (range.count == 0u) continue;
+          if (range.type == reshade::api::descriptor_type::sampler && range.static_samplers != nullptr) continue;
+          dword_count += 1u;
+          break;
+        }
+      }
+      for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+        const auto& range = ranges[range_index];
         if (range.type == reshade::api::descriptor_type::constant_buffer) {
           if (
               range.dx_register_space == data->expected_constant_buffer_space
@@ -840,7 +929,46 @@ static void OnInitPipelineLayout(
           }
         }
       }
-#endif
+    } else if (param.type == reshade::api::pipeline_layout_param_type(7)) {  // push_descriptors_with_ranges_and_flags
+      const auto* ranges = reinterpret_cast<const renodx::utils::pipeline_layout::DescriptorRangeWithFlagsBackport*>(param.descriptor_table.ranges);
+      if (device_api == reshade::api::device_api::d3d12
+          && param.descriptor_table.count != 0u
+          && ranges[0].count != 0u) {
+        if (param.descriptor_table.count == 1u
+            && ranges[0].count == 1u
+            && ranges[0].binding == 0u) {
+          switch (ranges[0].type) {
+            case reshade::api::descriptor_type::constant_buffer:
+            case reshade::api::descriptor_type::buffer_shader_resource_view:
+            case reshade::api::descriptor_type::buffer_unordered_access_view:
+            case reshade::api::descriptor_type::acceleration_structure:
+              dword_count += 2u;
+              break;
+            default:
+              dword_count += 1u;
+              break;
+          }
+        } else {
+          for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+            const auto& range = ranges[range_index];
+            if (range.count == 0u) continue;
+            if (range.type == reshade::api::descriptor_type::sampler && range.static_samplers != nullptr) continue;
+            dword_count += 1u;
+            break;
+          }
+        }
+      }
+      if (pdss_index == -1) pdss_index = param_index;
+      for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+        const auto& range = ranges[range_index];
+        if (range.type == reshade::api::descriptor_type::constant_buffer) {
+          if (
+              range.dx_register_space == data->expected_constant_buffer_space
+              && cbv_index < range.dx_register_index + range.count) {
+            cbv_index = range.dx_register_index + range.count;
+          }
+        }
+      }
     }
   }
 
