@@ -320,7 +320,7 @@ void main(
   cb_config.ue_bluecorrection = BlueCorrection;
   cb_config.ue_colorscale = ColorScale;
 
-  float4 output = ProcessLutbuilder(float3(_797, _799, _801), cb_config, RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))], 0u);
+  float4 output = ProcessLutbuilder(float3(_797, _799, _801), cb_config, RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))], OutputDevice);
   RWOutputTexture[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = output;
   return;
 

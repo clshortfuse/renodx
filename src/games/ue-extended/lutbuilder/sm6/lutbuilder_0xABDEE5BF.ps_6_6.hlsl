@@ -337,7 +337,7 @@ float4 main(
       cb_config.ue_bluecorrection = cb0_038z;
       cb_config.ue_colorscale = float3(cb0_016x, cb0_016y, cb0_016z);
 
-      SV_Target = ProcessLutbuilder(float3(_806, _808, _810), cb_config, SV_Target, 3u);
+      SV_Target = ProcessLutbuilder(float3(_806, _808, _810), cb_config, SV_Target, cb0_042w);
       return SV_Target;
 
       float _846 = ((mad(0.061360642313957214f, _810, mad(-4.540197551250458e-09f, _808, (_806 * 0.9386394023895264f))) - _806) * cb0_038z) + _806;
@@ -1296,7 +1296,7 @@ float4 main(
   cb_config.ue_bluecorrection = cb0_038z;
   cb_config.ue_colorscale = float3(cb0_016x, cb0_016y, cb0_016z);
 
-  SV_Target = ProcessLutbuilder(float3(_806, _808, _810), cb_config, SV_Target, 3u);
+  SV_Target = ProcessLutbuilder(float3(_806, _808, _810), cb_config, SV_Target, cb0_042w);
   return SV_Target;
 
   float _846 = ((mad(0.061360642313957214f, _810, mad(-4.540197551250458e-09f, _808, (_806 * 0.9386394023895264f))) - _806) * cb0_038z) + _806;

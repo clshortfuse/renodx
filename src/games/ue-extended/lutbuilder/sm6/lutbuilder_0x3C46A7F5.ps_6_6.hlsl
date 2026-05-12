@@ -299,7 +299,7 @@ float4 main(
       float _412 = (_403 / _407) + -1.0f;
       float _413 = (_406 / _407) + -1.0f;
 
-      //float _425 = (1.0f - exp2(((_407 * _407) * -4.0f) * cb0_038w)) * (1.0f - exp2(dot(float3(_411, _412, _413), float3(_411, _412, _413)) * -4.0f));
+      // float _425 = (1.0f - exp2(((_407 * _407) * -4.0f) * cb0_038w)) * (1.0f - exp2(dot(float3(_411, _412, _413), float3(_411, _412, _413)) * -4.0f));
       float _425 = (1.0f - exp2(((_407 * _407) * -4.0f) * 0.f)) * (1.0f - exp2(dot(float3(_411, _412, _413), float3(_411, _412, _413)) * -4.0f));
 
       float _441 = ((mad(-0.06368321925401688f, _406, mad(-0.3292922377586365f, _403, (_400 * 1.3704125881195068f))) - _400) * _425) + _400;
@@ -348,7 +348,7 @@ float4 main(
       float4 lutweights[2] = { float4(cb0_005x, cb0_005y, 0.f, 0.f), float4(0.f, 0.f, 0.f, 0.f) };
       cb_config.ue_lutweights = lutweights;  // Only Lutweights[0].xy is used
 
-      SV_Target = ProcessLutbuilder(float3(_808, _810, _812), s0, t0, cb_config, SV_Target, 3u);
+      SV_Target = ProcessLutbuilder(float3(_808, _810, _812), s0, t0, cb_config, SV_Target, cb0_042w);
       return SV_Target;
 
       float _848 = ((mad(0.061360642313957214f, _812, mad(-4.540197551250458e-09f, _810, (_808 * 0.9386394023895264f))) - _808) * cb0_038z) + _808;
@@ -1342,9 +1342,9 @@ float4 main(
   float4 lutweights[2] = { float4(cb0_005x, cb0_005y, 0.f, 0.f), float4(0.f, 0.f, 0.f, 0.f) };
   cb_config.ue_lutweights = lutweights;  // Only Lutweights[0].xy is used
 
-  SV_Target = ProcessLutbuilder(float3(_808, _810, _812), s0, t0, cb_config, SV_Target, 3u);
+  SV_Target = ProcessLutbuilder(float3(_808, _810, _812), s0, t0, cb_config, SV_Target, cb0_042w);
   return SV_Target;
-  
+
   float _848 = ((mad(0.061360642313957214f, _812, mad(-4.540197551250458e-09f, _810, (_808 * 0.9386394023895264f))) - _808) * cb0_038z) + _808;
   float _849 = ((mad(0.169205904006958f, _812, mad(0.8307942152023315f, _810, (_808 * 6.775371730327606e-08f))) - _810) * cb0_038z) + _810;
   float _850 = (mad(-2.3283064365386963e-10f, _810, (_808 * -9.313225746154785e-10f)) * cb0_038z) + _812;

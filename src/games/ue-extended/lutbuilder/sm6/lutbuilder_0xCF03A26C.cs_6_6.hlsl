@@ -344,7 +344,7 @@ void main(
       cb_config.ue_bluecorrection = cb0_038z;
       cb_config.ue_colorscale = float3(cb0_016x, cb0_016y, cb0_016z);
 
-      float4 output = ProcessLutbuilder(float3(_816, _818, _820), cb_config, u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))], 3u);
+      float4 output = ProcessLutbuilder(float3(_816, _818, _820), cb_config, u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))], cb0_042w);
       u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = output;
       return;
 
@@ -1301,7 +1301,7 @@ void main(
   cb_config.ue_bluecorrection = cb0_038z;
   cb_config.ue_colorscale = float3(cb0_016x, cb0_016y, cb0_016z);
 
-  float4 output = ProcessLutbuilder(float3(_816, _818, _820), cb_config, u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))], 3u);
+  float4 output = ProcessLutbuilder(float3(_816, _818, _820), cb_config, u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))], cb0_042w);
   u0[int3((uint)(SV_DispatchThreadID.x), (uint)(SV_DispatchThreadID.y), (uint)(SV_DispatchThreadID.z))] = output;
   return;
 
