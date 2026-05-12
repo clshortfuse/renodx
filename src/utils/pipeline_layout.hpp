@@ -21,6 +21,11 @@ namespace renodx::utils::pipeline_layout {
 
 using DescriptorPushLocation = std::pair<uint32_t, uint32_t>;
 
+struct DescriptorRangeWithFlagsBackport : public reshade::api::descriptor_range {
+  const reshade::api::sampler_desc* static_samplers = nullptr;
+  uint32_t flags = 0u;
+};
+
 struct DescriptorBindingKey {
   reshade::api::descriptor_type type = static_cast<reshade::api::descriptor_type>(0u);
   uint32_t slot = 0u;
@@ -40,6 +45,7 @@ struct DescriptorBindingKeyHash {
 struct PipelineLayoutData {
   cross_addon::vector<reshade::api::pipeline_layout_param> params;
   cross_addon::vector<cross_addon::vector<reshade::api::descriptor_range>> ranges;
+  cross_addon::vector<cross_addon::vector<reshade::api::sampler_desc>> static_samplers;
   reshade::api::pipeline_layout layout = {0u};
   reshade::api::pipeline_layout replacement_layout = {0u};
   reshade::api::pipeline_layout injection_layout = {0u};
@@ -126,6 +132,7 @@ static void OnInitPipelineLayout(
   CreatePipelineLayoutData(layout, [&](PipelineLayoutData& layout_data) {
     layout_data.params.assign(params, params + param_count);
     layout_data.ranges.resize(param_count);
+    layout_data.static_samplers.resize(param_count);
 
     for (uint32_t i = 0; i < param_count; ++i) {
       const auto& param = params[i];
@@ -139,8 +146,41 @@ static void OnInitPipelineLayout(
             layout_data.params[i].descriptor_table.ranges = layout_data.ranges[i].data();
           }
           break;
-        case reshade::api::pipeline_layout_param_type::push_constants:
         case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
+          if (param.descriptor_table_with_static_samplers.count == 0u) continue;
+          {
+            layout_data.ranges[i].reserve(param.descriptor_table_with_static_samplers.count);
+            for (uint32_t range_index = 0; range_index < param.descriptor_table_with_static_samplers.count; ++range_index) {
+              const auto& range = param.descriptor_table_with_static_samplers.ranges[range_index];
+              layout_data.ranges[i].push_back(range);
+              if (range.static_samplers != nullptr && range.count != UINT32_MAX) {
+                layout_data.static_samplers[i].insert(
+                    layout_data.static_samplers[i].end(),
+                    range.static_samplers,
+                    range.static_samplers + range.count);
+              }
+            }
+          }
+          break;
+        case reshade::api::pipeline_layout_param_type(6):  // descriptor_table_with_flags
+        case reshade::api::pipeline_layout_param_type(7):  // push_descriptors_with_ranges_and_flags
+          if (param.descriptor_table.count == 0u) continue;
+          {
+            const auto* ranges = reinterpret_cast<const DescriptorRangeWithFlagsBackport*>(param.descriptor_table.ranges);
+            layout_data.ranges[i].reserve(param.descriptor_table.count);
+            for (uint32_t range_index = 0; range_index < param.descriptor_table.count; ++range_index) {
+              const auto& range = ranges[range_index];
+              layout_data.ranges[i].push_back(range);
+              if (range.static_samplers != nullptr && range.count != UINT32_MAX) {
+                layout_data.static_samplers[i].insert(
+                    layout_data.static_samplers[i].end(),
+                    range.static_samplers,
+                    range.static_samplers + range.count);
+              }
+            }
+          }
+          break;
+        case reshade::api::pipeline_layout_param_type::push_constants:
         case reshade::api::pipeline_layout_param_type::push_descriptors:
         case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
         case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers:
