@@ -10,7 +10,7 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, UECbufferConfig cb_config, flo
     float3 linear_output;
     linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
     linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
-    return float4(linear_output, 0.f);
+    return float4((linear_output / 1.05f), 0.f);
   }
 
   float3 tonemapped;
@@ -36,7 +36,7 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler, Text
     float3 linear_output;
     linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
     linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
-    return float4(linear_output, 0.f);
+    return float4((linear_output / 1.05f), 0.f);
   }
 
   float3 tonemapped;
@@ -62,7 +62,7 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, Sam
     float3 linear_output;
     linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
     linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
-    return float4(linear_output, 0.f);
+    return float4((linear_output / 1.05f), 0.f);
   }
 
   float3 tonemapped;
@@ -88,7 +88,7 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, Sam
     float3 linear_output;
     linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
     linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
-    return float4(linear_output, 0.f);
+    return float4((linear_output / 1.05f), 0.f);
   }
 
   float3 tonemapped;
@@ -114,7 +114,7 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, Sam
     float3 linear_output;
     linear_output = cb_config.ue_colorscale.xyz * renodx::color::bt709::from::AP1(untonemapped_ap1);
     linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
-    return float4(linear_output, 0.f);
+    return float4((linear_output / 1.05f), 0.f);
   }
 
   float3 tonemapped;
