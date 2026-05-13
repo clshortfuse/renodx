@@ -361,6 +361,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+      renodx::mods::swapchain::swapchain_proxy_revert_state = true;
 
       renodx::mods::swapchain::force_borderless = true;
       renodx::mods::swapchain::force_screen_tearing = true;
@@ -375,8 +376,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .ignore_size = false,
             .use_resource_view_cloning = true,
             .use_resource_view_hot_swap = false,
-/*             .aspect_ratio = 16.f / 9.f,
-            .aspect_ratio_tolerance = 0.001f, */
             .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
                            .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
             .usage_include = reshade::api::resource_usage::render_target,

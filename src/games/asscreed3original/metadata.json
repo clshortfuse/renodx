@@ -1,0 +1,17 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "asscreed3original",
+  "title": "Assassin's Creed 3 Original",
+  "maintainers": [
+    "Hartapfel"
+  ],
+  "status": "WIP",
+  "notes": [
+    "FMVs currently don't work."
+  ],
+  "deploy": {
+    "architecture": [
+      "x86"
+    ]
+  }
+}

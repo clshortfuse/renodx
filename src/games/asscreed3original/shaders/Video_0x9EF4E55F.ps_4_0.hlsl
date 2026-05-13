@@ -1,5 +1,5 @@
 // ---- Created with 3Dmigoto v1.3.16 on Wed May 13 18:56:48 2026
-
+#include ".././common.hlsli"
 cbuffer _Globals : register(b0)
 {
   float4x4 g_WorldViewProj : packoffset(c0);
@@ -29,5 +29,8 @@ void main(
   r0.xyzw = tex0.Sample(tex0_s, v1.xy).xyzw;
   o0.xyz = r0.zyx;
   o0.w = g_BinkConsts.w;
+
+  //saturate
+  o0.w = saturate(o0.w);
   return;
 }
