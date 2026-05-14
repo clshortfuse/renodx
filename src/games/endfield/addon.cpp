@@ -790,11 +790,11 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
         .label = std::string("Reshade shader bypass, applies on_drawn after game's deferred lighting pass. Only properly works with DLAA/TAAU 100 scaling atm"),
         .on_draw = []() {
-          ImGui::SetWindowFontScale(2.0f);
+          ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 2.0f);
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
           ImGui::TextWrapped("Reshade shader bypass, applies on_drawn after game's deferred lighting pass. Only properly works with DLAA/TAAU 100 scaling atm");
           ImGui::PopStyleColor();
-          ImGui::SetWindowFontScale(1.0f);
+          ImGui::PopFont();
           return false;
         },
     },
