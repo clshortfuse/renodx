@@ -94,6 +94,16 @@ UserGradingConfig CreateColorGradeConfig() {
   return cg_config;
 }
 
+float3 DecodeIntermediateForToneMap(float3 color) {
+  if (RENODX_GAMMA_CORRECTION == 1.f) {
+    return renodx::color::gamma::DecodeSafe(color, 2.2f);
+  } else if (RENODX_GAMMA_CORRECTION == 2.f) {
+    return renodx::color::gamma::DecodeSafe(color, 2.4f);
+  } else {
+    return renodx::color::srgb::DecodeSafe(color);
+  }
+}
+
 float GetNeutwoWhiteClip(float peak) {
   return max(RENODX_TONE_MAP_WHITE_CLIP, peak + 0.001f);
 }

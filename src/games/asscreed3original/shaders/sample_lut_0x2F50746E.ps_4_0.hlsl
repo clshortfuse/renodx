@@ -40,13 +40,13 @@ void main(
   // game always uses 16x16x16 LUTs
   float3 untonemapped_gamma = (((input * g_PreLutScale.xyz + g_PreLutOffset.xyz) - 0.03125) / 0.9375);
 
-  float3 untonemapped = renodx::color::gamma::DecodeSafe(untonemapped_gamma);
+  float3 untonemapped = DecodeIntermediateForToneMap(untonemapped_gamma);
 
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     float3 graded_gamma = ColorBalance3DTexture.Sample(
         ColorBalance3DTexture_s,
         saturate(untonemapped_gamma * 0.9375 + 0.03125)).rgb;
-    float3 graded_linear = renodx::color::gamma::DecodeSafe(max(0, graded_gamma));
+    float3 graded_linear = DecodeIntermediateForToneMap(max(0, graded_gamma));
     float3 vanilla_linear = lerp(untonemapped, graded_linear, RENODX_COLOR_GRADE_STRENGTH);
     o0.rgb = renodx::draw::RenderIntermediatePass(saturate(max(0, vanilla_linear)));
   } else {
