@@ -58,6 +58,7 @@ float3 CorrectHueAndPurityMBGated(
     float curve_gamma = 1.f,
     float2 mb_white_override = float2(-1.f, -1.f),
     float t_min = 1e-6f) {
+  static const float kNearWhiteEpsilon = 1e-14f;
   if (purity_strength <= 0.f && hue_strength <= 0.f) {
     return target_color_bt709;
   }
@@ -65,100 +66,61 @@ float3 CorrectHueAndPurityMBGated(
   float3 target_color_bt2020 = renodx::color::bt2020::from::BT709(target_color_bt709);
   float3 reference_color_bt2020 = renodx::color::bt2020::from::BT709(reference_color_bt709);
 
-  if (hue_strength <= 0.f) {
-    float target_purity01 = renodx::color::macleod_boynton::ApplyBT2020(
-                                target_color_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                                .purityCur01;
-    float reference_purity01 = renodx::color::macleod_boynton::ApplyBT2020(
-                                   reference_color_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                                   .purityCur01;
-    float applied_purity01 = lerp(target_purity01, reference_purity01, saturate(purity_strength));
-    return renodx::color::bt709::from::BT2020(
-        renodx::color::macleod_boynton::ApplyBT2020(
-            target_color_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
-            .rgbOut);
-  }
+  float3 target_mb = renodx::color::macleod_boynton::from::BT2020(target_color_bt2020);
+  float3 reference_mb = renodx::color::macleod_boynton::from::BT2020(reference_color_bt2020);
 
-  float3 target_lms = mul(renodx::color::macleod_boynton::XYZ_TO_LMS_2006,
-                          mul(renodx::color::BT2020_TO_XYZ_MAT, target_color_bt2020));
-  float target_t = target_lms.x + target_lms.y;
-  if (target_t <= t_min) {
+  if (target_mb.z <= t_min) {
     return target_color_bt709;
   }
 
   float hue_blend = saturate(hue_strength) *
-                    saturate(renodx::math::DivideSafe(target_t - hue_t_ramp_start,
+                    saturate(renodx::math::DivideSafe(target_mb.z - hue_t_ramp_start,
                                                       hue_t_ramp_end - hue_t_ramp_start, 0.f));
-
-  float target_purity01 = renodx::color::macleod_boynton::ApplyBT2020(
-                              target_color_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                              .purityCur01;
-  float reference_purity01 = renodx::color::macleod_boynton::ApplyBT2020(
-                                 reference_color_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                                 .purityCur01;
-  float applied_purity01 = lerp(target_purity01, reference_purity01, saturate(purity_strength));
-
-  if (hue_blend <= 0.f) {
-    return renodx::color::bt709::from::BT2020(
-        renodx::color::macleod_boynton::ApplyBT2020(
-            target_color_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
-            .rgbOut);
-  }
-
-  float3 reference_lms = mul(renodx::color::macleod_boynton::XYZ_TO_LMS_2006,
-                             mul(renodx::color::BT2020_TO_XYZ_MAT, reference_color_bt2020));
 
   float2 white = (mb_white_override.x >= 0.f && mb_white_override.y >= 0.f)
                      ? mb_white_override
-                     : renodx::color::macleod_boynton::MB_White_D65();
+                     : renodx::color::macleod_boynton::from::D65XY();
 
-  float2 target_direction = renodx::color::macleod_boynton::MB_From_LMS(target_lms) - white;
-  float2 reference_direction = renodx::color::macleod_boynton::MB_From_LMS(reference_lms) - white;
+  float2 target_direction = target_mb.xy - white;
+  float2 reference_direction = reference_mb.xy - white;
 
   float target_len_sq = dot(target_direction, target_direction);
   float reference_len_sq = dot(reference_direction, reference_direction);
 
-  if (target_len_sq < renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON &&
-      reference_len_sq < renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON) {
-    return renodx::color::bt709::from::BT2020(
-        renodx::color::macleod_boynton::ApplyBT2020(
-            target_color_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
-            .rgbOut);
+  if (target_len_sq < kNearWhiteEpsilon && reference_len_sq < kNearWhiteEpsilon) {
+    return target_color_bt709;
   }
 
-  float2 target_unit = (target_len_sq > renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON)
+  float target_len = sqrt(max(target_len_sq, 0.f));
+  float reference_len = sqrt(max(reference_len_sq, 0.f));
+
+  float purity_blend = pow(saturate(purity_strength), max(curve_gamma, 1e-6f));
+  float applied_purity = lerp(target_len, reference_len, purity_blend);
+
+  float2 target_unit = (target_len_sq > kNearWhiteEpsilon)
                            ? target_direction * rsqrt(target_len_sq)
                            : float2(0.f, 0.f);
-  float2 reference_unit = (reference_len_sq > renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON)
+  float2 reference_unit = (reference_len_sq > kNearWhiteEpsilon)
                               ? reference_direction * rsqrt(reference_len_sq)
                               : target_unit;
-  if (target_len_sq <= renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON) {
+  if (target_len_sq <= kNearWhiteEpsilon) {
     target_unit = reference_unit;
   }
 
-  float2 blended_unit = lerp(target_unit, reference_unit, hue_blend);
-  float blended_len_sq = dot(blended_unit, blended_unit);
-  if (blended_len_sq <= renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON) {
-    blended_unit = (hue_blend >= 0.5f) ? reference_unit : target_unit;
-    blended_len_sq = dot(blended_unit, blended_unit);
+  float2 blended_unit = target_unit;
+  if (hue_blend > 0.f) {
+    blended_unit = lerp(target_unit, reference_unit, hue_blend);
+    float blended_len_sq = dot(blended_unit, blended_unit);
+    if (blended_len_sq <= kNearWhiteEpsilon) {
+      blended_unit = (hue_blend >= 0.5f) ? reference_unit : target_unit;
+      blended_len_sq = dot(blended_unit, blended_unit);
+    }
+    blended_unit *= rsqrt(max(blended_len_sq, 1e-20f));
   }
-  blended_unit *= rsqrt(max(blended_len_sq, 1e-20f));
 
-  float seed_len = sqrt(max(target_len_sq, 0.f));
-  if (seed_len <= 1e-6f) {
-    seed_len = sqrt(max(reference_len_sq, 0.f));
-  }
-  seed_len = max(seed_len, 1e-6f);
-
-  float3 seed_bt2020 = mul(
-      renodx::color::XYZ_TO_BT2020_MAT,
-      mul(renodx::color::macleod_boynton::LMS_TO_XYZ_2006,
-          renodx::color::macleod_boynton::LMS_From_MB_T(white + blended_unit * seed_len, target_t)));
-
-  return renodx::color::bt709::from::BT2020(
-      renodx::color::macleod_boynton::ApplyBT2020(
-          seed_bt2020, applied_purity01, curve_gamma, mb_white_override, t_min)
-          .rgbOut);
+  float2 final_mb_xy = white + blended_unit * max(applied_purity, 0.f);
+  float3 final_bt2020 = renodx::color::bt2020::from::MacLeodBoynton(final_mb_xy, target_mb.z);
+  return renodx::color::bt709::from::BT2020(final_bt2020);
 }
 
 float3 ApplyMBLowHueThenHighHueAndPurity(
@@ -171,35 +133,27 @@ float3 ApplyMBLowHueThenHighHueAndPurity(
     float curve_gamma = 1.f,
     float2 mb_white_override = float2(-1.f, -1.f),
     float t_min = 1e-6f) {
-  const float kNearWhiteEpsilon = renodx::color::macleod_boynton::MB_NEAR_WHITE_EPSILON;
+  const float kNearWhiteEpsilon = 1e-14f;
 
   float3 target_bt2020 = renodx::color::bt2020::from::BT709(target_bt709);
   float3 low_reference_bt2020 = renodx::color::bt2020::from::BT709(low_hue_reference_bt709);
   float3 high_reference_bt2020 = renodx::color::bt2020::from::BT709(high_reference_bt709);
 
-  float high_purity01 = renodx::color::macleod_boynton::ApplyBT2020(
-                           high_reference_bt2020, 1.f, 1.f, mb_white_override, t_min)
-                           .purityCur01;
+  float3 target_mb = renodx::color::macleod_boynton::from::BT2020(target_bt2020);
+  float3 low_reference_mb = renodx::color::macleod_boynton::from::BT2020(low_reference_bt2020);
+  float3 high_reference_mb = renodx::color::macleod_boynton::from::BT2020(high_reference_bt2020);
 
-  float3 target_lms = mul(renodx::color::macleod_boynton::XYZ_TO_LMS_2006,
-                          mul(renodx::color::BT2020_TO_XYZ_MAT, target_bt2020));
-  float3 low_reference_lms = mul(renodx::color::macleod_boynton::XYZ_TO_LMS_2006,
-                                 mul(renodx::color::BT2020_TO_XYZ_MAT, low_reference_bt2020));
-  float3 high_reference_lms = mul(renodx::color::macleod_boynton::XYZ_TO_LMS_2006,
-                                  mul(renodx::color::BT2020_TO_XYZ_MAT, high_reference_bt2020));
-
-  float target_t = target_lms.x + target_lms.y;
-  if (target_t <= t_min) {
+  if (target_mb.z <= t_min) {
     return target_bt709;
   }
 
   float2 white = (mb_white_override.x >= 0.f && mb_white_override.y >= 0.f)
                      ? mb_white_override
-                     : renodx::color::macleod_boynton::MB_White_D65();
+                     : renodx::color::macleod_boynton::from::D65XY();
 
-  float2 target_direction = renodx::color::macleod_boynton::MB_From_LMS(target_lms) - white;
-  float2 low_reference_direction = renodx::color::macleod_boynton::MB_From_LMS(low_reference_lms) - white;
-  float2 high_reference_direction = renodx::color::macleod_boynton::MB_From_LMS(high_reference_lms) - white;
+  float2 target_direction = target_mb.xy - white;
+  float2 low_reference_direction = low_reference_mb.xy - white;
+  float2 high_reference_direction = high_reference_mb.xy - white;
 
   float target_len_sq = dot(target_direction, target_direction);
   float low_len_sq = dot(low_reference_direction, low_reference_direction);
@@ -219,36 +173,31 @@ float3 ApplyMBLowHueThenHighHueAndPurity(
                          : low_unit;
 
   float hue_blend = saturate(high_hue_strength) *
-                    saturate(renodx::math::DivideSafe(target_t - hue_t_ramp_start,
+                    saturate(renodx::math::DivideSafe(target_mb.z - hue_t_ramp_start,
                                                       hue_t_ramp_end - hue_t_ramp_start, 0.f));
 
   float2 hue_unit = lerp(low_unit, high_unit, hue_blend);
 
   float hue_len_sq = dot(hue_unit, hue_unit);
   if (hue_len_sq <= kNearWhiteEpsilon) {
-    return renodx::color::bt709::from::BT2020(
-        renodx::color::macleod_boynton::ApplyBT2020(
-            target_bt2020, high_purity01, curve_gamma, mb_white_override, t_min)
-            .rgbOut);
+    if (target_len_sq <= kNearWhiteEpsilon) {
+      return target_bt709;
+    }
+    float target_len = sqrt(max(target_len_sq, 0.f));
+    float high_len = sqrt(max(high_len_sq, 0.f));
+    float applied_purity = pow(max(high_len, 0.f), max(curve_gamma, 1e-6f));
+    float2 target_unit = target_direction * rsqrt(target_len_sq);
+    float2 final_mb_xy = white + target_unit * max(applied_purity, 0.f);
+    float3 final_bt2020 = renodx::color::bt2020::from::MacLeodBoynton(final_mb_xy, target_mb.z);
+    return renodx::color::bt709::from::BT2020(final_bt2020);
   }
 
   hue_unit *= rsqrt(hue_len_sq);
-
-  float seed_len = sqrt(max(target_len_sq, 0.f));
-  if (seed_len <= 1e-6f) {
-    seed_len = sqrt(max(lerp(low_len_sq, high_len_sq, hue_blend), 0.f));
-  }
-  seed_len = max(seed_len, 1e-6f);
-
-  float3 seed_bt2020 = mul(
-      renodx::color::XYZ_TO_BT2020_MAT,
-      mul(renodx::color::macleod_boynton::LMS_TO_XYZ_2006,
-          renodx::color::macleod_boynton::LMS_From_MB_T(white + hue_unit * seed_len, target_t)));
-
-  return renodx::color::bt709::from::BT2020(
-      renodx::color::macleod_boynton::ApplyBT2020(
-          seed_bt2020, high_purity01, curve_gamma, mb_white_override, t_min)
-          .rgbOut);
+  float high_len = sqrt(max(high_len_sq, 0.f));
+  float applied_purity = pow(max(high_len, 0.f), max(curve_gamma, 1e-6f));
+  float2 final_mb_xy = white + hue_unit * max(applied_purity, 0.f);
+  float3 final_bt2020 = renodx::color::bt2020::from::MacLeodBoynton(final_mb_xy, target_mb.z);
+  return renodx::color::bt709::from::BT2020(final_bt2020);
 }
 
 float3 ApplyHermiteSplineByMaxChannel(float3 input, float peak_ratio, float white_clip = 100.f) {
@@ -386,14 +335,22 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
 
     if (abs(mb_scale - 1.f) > 1e-6f) {
       float3 color_bt2020 = renodx::color::bt2020::from::BT709(color);
-      color = renodx::color::bt709::from::BT2020(
-          renodx::color::macleod_boynton::ApplyScaleBT2020(color_bt2020, mb_scale)
-              .rgbOut);
+      float3 color_mb = renodx::color::macleod_boynton::from::BT2020(color_bt2020);
+      float2 white = renodx::color::macleod_boynton::from::D65XY();
+      float2 direction = color_mb.xy - white;
+      float len_sq = dot(direction, direction);
+      if (len_sq > 1e-14f) {
+        float len = sqrt(len_sq);
+        float scaled_len = len * mb_scale;
+        float2 scaled_xy = white + direction * (scaled_len / len);
+        color_bt2020 = renodx::color::bt2020::from::MacLeodBoynton(scaled_xy, color_mb.z);
+      }
+      color = renodx::color::bt709::from::BT2020(color_bt2020);
     }
 
     color = renodx::color::bt709::clamp::AP1(color);
 
-    /* Disabled OKLab path (kept for reference)
+    /* Old OKlab stuff
 
     float3 perceptual_new = renodx::color::oklab::from::BT709(color);
 
