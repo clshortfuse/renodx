@@ -24,7 +24,7 @@ struct ShaderInjectData {
   float scene_grade_strength;
   float color_grade_scaling;
 
-  float custom_reserved0;
+  float custom_video_hdr;
   float custom_reserved1;
   float custom_reserved2;
   float custom_reserved3;
@@ -57,6 +57,8 @@ cbuffer cb13 : register(b13) {
 #define RENODX_TONE_MAP_DECHROMA             shader_injection.tone_map_dechroma
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.scene_grade_strength
 #define RENODX_COLOR_GRADE_SCALING           shader_injection.color_grade_scaling
+
+#define CUSTOM_VIDEO_HDR                     shader_injection.custom_video_hdr
 
 #include "../../shaders/renodx.hlsl"
 

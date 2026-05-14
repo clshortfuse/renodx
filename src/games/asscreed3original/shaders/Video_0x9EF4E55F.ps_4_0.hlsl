@@ -23,11 +23,20 @@ void main(
   out float4 o0 : SV_Target0)
 {
   float4 r0;
-  uint4 bitmask, uiDest;
-  float4 fDest;
 
   r0.xyzw = tex0.Sample(tex0_s, v1.xy).xyzw;
-  o0.xyz = r0.zyx;
+  float3 video_rgb = r0.zyx;
+  if (CUSTOM_VIDEO_HDR == 1.f) {
+    const float safe_peak_white_nits = max(RENODX_PEAK_WHITE_NITS, 100.f);
+    const float safe_diffuse_white_nits = max(RENODX_DIFFUSE_WHITE_NITS, 1.f);
+    const float video_peak = safe_peak_white_nits / (safe_diffuse_white_nits / 100.f);
+
+    float3 hdr_video = renodx::tonemap::inverse::bt2446a::BT709(video_rgb, 100.f, video_peak);
+    hdr_video /= safe_diffuse_white_nits;
+    video_rgb = ClampAndRenderIntermediatePass(max(0.f, hdr_video));
+  }
+
+  o0.xyz = video_rgb;
   o0.w = g_BinkConsts.w;
 
   //saturate

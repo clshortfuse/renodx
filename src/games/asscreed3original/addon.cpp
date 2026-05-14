@@ -7,11 +7,13 @@
 
 #define DEBUG_LEVEL_0
 
+
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
 
 #include <embed/shaders.h>
 
 #include <array>
+#include <vector>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -20,15 +22,61 @@
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
 
 ShaderInjectData shader_injection;
 
+constexpr uint32_t kVideoDecodeShaderHash = 0x9EF4E55F;
+
+struct VideoRenderTargetOverrideState {
+  bool active = false;
+  std::vector<reshade::api::resource_view> render_targets = {};
+  reshade::api::resource_view depth_stencil = {0u};
+};
+
+thread_local VideoRenderTargetOverrideState video_rtv_override_state = {};
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     __ALL_CUSTOM_SHADERS
 };
+
+bool OnVideoDecodeDraw(reshade::api::command_list* cmd_list) {
+  auto* swapchain_state = renodx::utils::swapchain::GetCurrentState(cmd_list);
+  if (swapchain_state == nullptr) return true;
+  if (swapchain_state->current_render_targets.empty()) return true;
+
+  auto* cloned_rtvs = renodx::mods::swapchain::ApplyRenderTargetClones(
+      swapchain_state->current_render_targets.data(),
+      static_cast<uint32_t>(swapchain_state->current_render_targets.size()));
+  if (cloned_rtvs == nullptr) return true;
+
+  video_rtv_override_state.active = true;
+  video_rtv_override_state.render_targets = swapchain_state->current_render_targets;
+  video_rtv_override_state.depth_stencil = swapchain_state->current_depth_stencil;
+
+  cmd_list->bind_render_targets_and_depth_stencil(
+      static_cast<uint32_t>(swapchain_state->current_render_targets.size()),
+      cloned_rtvs,
+      swapchain_state->current_depth_stencil);
+  free(cloned_rtvs);
+  return true;
+}
+
+void OnVideoDecodeDrawn(reshade::api::command_list* cmd_list) {
+  if (!video_rtv_override_state.active) return;
+
+  cmd_list->bind_render_targets_and_depth_stencil(
+      static_cast<uint32_t>(video_rtv_override_state.render_targets.size()),
+      video_rtv_override_state.render_targets.data(),
+      video_rtv_override_state.depth_stencil);
+
+  video_rtv_override_state.active = false;
+  video_rtv_override_state.render_targets.clear();
+  video_rtv_override_state.depth_stencil = {0u};
+}
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -221,6 +269,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxVideoAutoHDR",
+        .binding = &shader_injection.custom_video_hdr,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Video AutoHDR",
+        .section = "Video",
+        .tooltip = "Upgrades SDR prerendered video when detected.",
+        .labels = {"Off", "BT2446A"},
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -324,6 +382,7 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"ColorGradeScene", 100.f},
       {"ColorGradeSceneScaling", 0.f},
+      {"FxVideoAutoHDR", 1.f},
   });
 }
 
@@ -357,15 +416,30 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
 
       if (!initialized) {
-      renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
-      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
-      renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+        if (auto it = custom_shaders.find(kVideoDecodeShaderHash); it != custom_shaders.end()) {
+          it->second.on_draw = &OnVideoDecodeDraw;
+          it->second.on_drawn = &OnVideoDecodeDrawn;
+        }
 
-      renodx::mods::swapchain::force_borderless = true;
-      renodx::mods::swapchain::force_screen_tearing = true;
-      renodx::mods::swapchain::prevent_full_screen = true;
+        // Runtime-only callback for the native video path when there is no replacement file.
+        if (!custom_shaders.contains(kVideoDecodeShaderHash)) {
+          custom_shaders[kVideoDecodeShaderHash] = {
+              .crc32 = kVideoDecodeShaderHash,
+              .on_replace = [](reshade::api::command_list*) { return false; },
+              .on_draw = &OnVideoDecodeDraw,
+              .on_drawn = &OnVideoDecodeDrawn,
+          };
+        }
+
+        renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
+        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+        renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+
+        renodx::mods::swapchain::force_borderless = true;
+        renodx::mods::swapchain::force_screen_tearing = true;
+        renodx::mods::swapchain::prevent_full_screen = true;
 
 #if 1  // Render Target Upgrades
 
