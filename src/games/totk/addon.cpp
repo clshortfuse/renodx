@@ -297,6 +297,21 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .view_upgrades = view_upgrades,
             .min_dimensions = min_dimensions,
         });
+
+        // intel version
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_typeless,
+            .new_format = target_format,
+            .shader_hash = 0xC7B41AEE, 
+            //   .ignore_size = true,  // risky...?
+            .use_resource_view_cloning = true,
+            //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
+            .aspect_ratio = common_aspect_ratio,
+            .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+            .ignore_reset = true,
+            .view_upgrades = view_upgrades,
+            .min_dimensions = min_dimensions,
+        });
       }
 
       renodx::mods::swapchain::resource_upgrade_infos.push_back({
