@@ -9,7 +9,7 @@ struct ShaderInjectData {
   float diffuse_white_nits;
   float graphics_white_nits;
   float gamma_correction;
-  float tone_map_scaling;
+  float tone_map_hue_emulation;
 
   float tone_map_exposure;
   float tone_map_gamma;
@@ -31,12 +31,12 @@ cbuffer shader_injection : register(b0, space50) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
-#define RENODX_TONE_MAP_TYPE       shader_injection.tone_map_type
-#define RENODX_PEAK_WHITE_NITS     shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS  shader_injection.diffuse_white_nits
-#define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
-#define RENODX_GAMMA_CORRECTION    shader_injection.gamma_correction
-#define RENODX_TONE_MAP_SCALING    shader_injection.tone_map_scaling
+#define RENODX_TONE_MAP_TYPE          shader_injection.tone_map_type
+#define RENODX_PEAK_WHITE_NITS        shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS     shader_injection.diffuse_white_nits
+#define RENODX_GRAPHICS_WHITE_NITS    shader_injection.graphics_white_nits
+#define RENODX_GAMMA_CORRECTION       shader_injection.gamma_correction
+#define RENODX_TONE_MAP_HUE_EMULATION shader_injection.tone_map_hue_emulation
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma

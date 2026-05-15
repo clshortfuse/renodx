@@ -47,7 +47,7 @@ struct HashPair {
   }
 };
 
-inline uint32_t ComputeCRC32(const uint8_t* data, size_t size) {
+inline uint32_t UpdateCRC32(uint32_t crc, const uint8_t* data, size_t size) {
   // CRC polynomial 0xEDB88320
   static constexpr uint32_t CRC32_TABLE[256] = {
       0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0x076DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3,
@@ -83,11 +83,18 @@ inline uint32_t ComputeCRC32(const uint8_t* data, size_t size) {
       0xBDBDF21C, 0xCABAC28A, 0x53B39330, 0x24B4A3A6, 0xBAD03605, 0xCDD70693, 0x54DE5729, 0x23D967BF,
       0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D};
 
-  uint32_t crc = 0xFFFFFFFF;
   for (; size != 0; --size, ++data) {
     crc = (crc >> 8) ^ CRC32_TABLE[(crc ^ (*data)) & 0xFF];
   }
+  return crc;
+}
+
+inline uint32_t FinalizeCRC32(uint32_t crc) {
   return ~crc;
+}
+
+inline uint32_t ComputeCRC32(const uint8_t* data, size_t size) {
+  return FinalizeCRC32(UpdateCRC32(0xFFFFFFFFu, data, size));
 }
 
 }  // namespace renodx::utils::hash

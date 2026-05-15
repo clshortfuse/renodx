@@ -48,12 +48,10 @@ void comp_main() {
   float _256 = _246 * CB0_m0.x;
   float _257 = _247 * CB0_m0.y;
   float _258 = _248 * CB0_m0.z;
-
   float _1336;
   float _1337;
   float _1338;
   if (CB1_m[0u].x != 0u) {
-    //   if (false) {
     float _929;
     float _930;
     float _931;
@@ -74,7 +72,7 @@ void comp_main() {
       if (!((asfloat(CB1_m[20u].y) == 0.0f) && ((asfloat(CB1_m[20u].x) == 0.0f) && (asfloat(CB1_m[20u].z) == 0.0f)))) {
         float _307 = abs(_286);
         float _309 = abs(_307 - 1.0f);
-        float _327 = min(clamp((asfloat(CB1_m[8u].x) - min(_309, 1.0f - _309)) * asfloat(CB1_m[8u].y), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].z)) * 10.0f, 0.0f, 1.0f));
+        float _327 = min(clamp((asfloat(CB1_m[8u].y) - min(_309, 1.0f - _309)) * asfloat(CB1_m[8u].z), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].w)) * 10.0f, 0.0f, 1.0f));
         bool _328 = _327 != 0.0f;
         float _332 = _307 + asfloat(CB1_m[20u].x);
         float _337 = clamp(_288 + asfloat(CB1_m[20u].y), 0.0f, 1.0f);
@@ -100,7 +98,7 @@ void comp_main() {
       if (!(((asfloat(CB1_m[21u].x) == 0.0f) && (asfloat(CB1_m[21u].z) == 0.0f)) && (asfloat(CB1_m[21u].y) == 0.0f))) {
         float _418 = abs(_286);
         float _420 = abs(_418 - 0.3333333432674407958984375f);
-        float _438 = min(clamp((asfloat(CB1_m[8u].x) - min(_420, 1.0f - _420)) * asfloat(CB1_m[8u].y), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].z)) * 10.0f, 0.0f, 1.0f));
+        float _438 = min(clamp((asfloat(CB1_m[8u].y) - min(_420, 1.0f - _420)) * asfloat(CB1_m[8u].z), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].w)) * 10.0f, 0.0f, 1.0f));
         bool _439 = _438 != 0.0f;
         float _443 = _418 + asfloat(CB1_m[21u].x);
         float _448 = clamp(_288 + asfloat(CB1_m[21u].y), 0.0f, 1.0f);
@@ -122,7 +120,7 @@ void comp_main() {
       if (!((asfloat(CB1_m[22u].y) == 0.0f) && ((asfloat(CB1_m[22u].x) == 0.0f) && (asfloat(CB1_m[22u].z) == 0.0f)))) {
         float _522 = abs(_286);
         float _524 = abs(_522 - 0.666666686534881591796875f);
-        float _542 = min(clamp((asfloat(CB1_m[8u].x) - min(_524, 1.0f - _524)) * asfloat(CB1_m[8u].y), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].z)) * 10.0f, 0.0f, 1.0f));
+        float _542 = min(clamp((asfloat(CB1_m[8u].y) - min(_524, 1.0f - _524)) * asfloat(CB1_m[8u].z), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].w)) * 10.0f, 0.0f, 1.0f));
         bool _543 = _542 != 0.0f;
         float _547 = _522 + asfloat(CB1_m[22u].x);
         float _552 = clamp(_288 + asfloat(CB1_m[22u].y), 0.0f, 1.0f);
@@ -144,7 +142,7 @@ void comp_main() {
       if (!((asfloat(CB1_m[23u].y) == 0.0f) && ((asfloat(CB1_m[23u].x) == 0.0f) && (asfloat(CB1_m[23u].z) == 0.0f)))) {
         float _626 = abs(_286);
         float _628 = abs(_626 - 0.5f);
-        float _646 = min(clamp((asfloat(CB1_m[8u].x) - min(_628, 1.0f - _628)) * asfloat(CB1_m[8u].y), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].z)) * 10.0f, 0.0f, 1.0f));
+        float _646 = min(clamp((asfloat(CB1_m[8u].y) - min(_628, 1.0f - _628)) * asfloat(CB1_m[8u].z), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].w)) * 10.0f, 0.0f, 1.0f));
         bool _647 = _646 != 0.0f;
         float _651 = _626 + asfloat(CB1_m[23u].x);
         float _656 = clamp(_288 + asfloat(CB1_m[23u].y), 0.0f, 1.0f);
@@ -166,7 +164,7 @@ void comp_main() {
       if (!((asfloat(CB1_m[24u].y) == 0.0f) && ((asfloat(CB1_m[24u].x) == 0.0f) && (asfloat(CB1_m[24u].z) == 0.0f)))) {
         float _730 = abs(_286);
         float _732 = abs(_730 - 0.83333337306976318359375f);
-        float _750 = min(clamp((asfloat(CB1_m[8u].x) - min(_732, 1.0f - _732)) * asfloat(CB1_m[8u].y), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].z)) * 10.0f, 0.0f, 1.0f));
+        float _750 = min(clamp((asfloat(CB1_m[8u].y) - min(_732, 1.0f - _732)) * asfloat(CB1_m[8u].z), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].w)) * 10.0f, 0.0f, 1.0f));
         bool _751 = _750 != 0.0f;
         float _755 = _730 + asfloat(CB1_m[24u].x);
         float _760 = clamp(_288 + asfloat(CB1_m[24u].y), 0.0f, 1.0f);
@@ -188,7 +186,7 @@ void comp_main() {
       if (!((asfloat(CB1_m[25u].y) == 0.0f) && ((asfloat(CB1_m[25u].x) == 0.0f) && (asfloat(CB1_m[25u].z) == 0.0f)))) {
         float _834 = abs(_286);
         float _836 = abs(_834 - 0.16666667163372039794921875f);
-        float _854 = min(clamp((asfloat(CB1_m[8u].x) - min(_836, 1.0f - _836)) * asfloat(CB1_m[8u].y), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].z)) * 10.0f, 0.0f, 1.0f));
+        float _854 = min(clamp((asfloat(CB1_m[8u].y) - min(_836, 1.0f - _836)) * asfloat(CB1_m[8u].z), 0.0f, 1.0f), clamp((_288 - asfloat(CB1_m[8u].w)) * 10.0f, 0.0f, 1.0f));
         bool _855 = _854 != 0.0f;
         float _859 = _834 + asfloat(CB1_m[25u].x);
         float _864 = clamp(_288 + asfloat(CB1_m[25u].y), 0.0f, 1.0f);
@@ -213,7 +211,6 @@ void comp_main() {
       _931 = _256;
     }
     float3 _940 = float3(asfloat(CB1_m[9u].x), asfloat(CB1_m[9u].y), asfloat(CB1_m[9u].z));
-    // float3 _940 = 1.f;
     float _950 = mad(log2(dp3_f32(float3(0.61319148540496826171875f, 0.3395120799541473388671875f, 0.0473663322627544403076171875f), _940)) + 2.4739310741424560546875f, 0.0555555559694766998291015625f, 0.449999988079071044921875f);
     float _951 = mad(log2(dp3_f32(float3(0.070206902921199798583984375f, 0.9163358211517333984375f, 0.01345001161098480224609375f), _940)) + 2.4739310741424560546875f, 0.0555555559694766998291015625f, 0.449999988079071044921875f);
     float _952 = mad(log2(dp3_f32(float3(0.02061887085437774658203125f, 0.109567292034626007080078125f, 0.8696067333221435546875f), _940)) + 2.4739310741424560546875f, 0.0555555559694766998291015625f, 0.449999988079071044921875f);
@@ -307,147 +304,81 @@ void comp_main() {
   float _1348 = exp2((clamp(_1338, 0.0f, 1.0f) - 0.449999988079071044921875f) * 18.0f);
   float _1349 = exp2((clamp(_1337, 0.0f, 1.0f) - 0.449999988079071044921875f) * 18.0f);
   float _1350 = exp2((clamp(_1336, 0.0f, 1.0f) - 0.449999988079071044921875f) * 18.0f);
-  float _1359 = dp3_f32(
-      float3(_1348 * 0.180000007152557373046875f,
-             _1349 * 0.180000007152557373046875f,
-             _1350 * 0.180000007152557373046875f),
-      asfloat(CB1_m[0u].w).xxx);
-  float3 _1363 = float3(mad(_1348, 0.180000007152557373046875f, _1359),
-                        mad(_1349, 0.180000007152557373046875f, _1359),
-                        mad(_1350, 0.180000007152557373046875f, _1359));
+  float _1359 = dp3_f32(float3(_1348 * 0.180000007152557373046875f, _1349 * 0.180000007152557373046875f, _1350 * 0.180000007152557373046875f), asfloat(CB1_m[0u].w).xxx);
+  float3 _1363 = float3(mad(_1348, 0.180000007152557373046875f, _1359), mad(_1349, 0.180000007152557373046875f, _1359), mad(_1350, 0.180000007152557373046875f, _1359));
 
 #if 1  // custom tonemapper
   float3 ungraded_bt709 = _1363;
   if (RENODX_TONE_MAP_TYPE != 0 && RENODX_TONE_MAP_TYPE != 3.f) {
-    float contrast = asfloat(CB1_m[4u].x);
+    float contrast = asfloat(CB1_m[4u].y);
     U0[CB2_m11.y][gl_GlobalInvocationID] = float4(GenerateOutputAvatar(ungraded_bt709, contrast), 1.f);
     return;
   }
 #endif
 
   // BT.709 -> AP1
-  float3 _1367 = float3(dp3_f32(float3(0.61319148540496826171875f, 0.3395120799541473388671875f, 0.0473663322627544403076171875f), _1363),
-                        dp3_f32(float3(0.070206902921199798583984375f, 0.9163358211517333984375f, 0.01345001161098480224609375f), _1363),
-                        dp3_f32(float3(0.02061887085437774658203125f, 0.109567292034626007080078125f, 0.8696067333221435546875f), _1363));
-
-  // AP1 -> ICtCp LMS
+  float3 _1367 = float3(dp3_f32(float3(0.61319148540496826171875f, 0.3395120799541473388671875f, 0.0473663322627544403076171875f), _1363), dp3_f32(float3(0.070206902921199798583984375f, 0.9163358211517333984375f, 0.01345001161098480224609375f), _1363), dp3_f32(float3(0.02061887085437774658203125f, 0.109567292034626007080078125f, 0.8696067333221435546875f), _1363));
   float _1371 = max(dp3_f32(float3(0.450864851474761962890625f, 0.528371751308441162109375f, 0.02073897421360015869140625f), _1367), 0.0f);
   float _1372 = max(dp3_f32(float3(0.1640706360340118408203125f, 0.756849944591522216796875f, 0.079059422016143798828125f), _1367), 0.0f);
   float _1373 = max(dp3_f32(float3(-0.004941581748425960540771484375f, 0.001257075113244354724884033203125f, 1.00365674495697021484375f), _1367), 0.0f);
-
-  // Linear -> PQ
-  float _1376 = asfloat(CB1_m[1u].y);  // ICtCp diffuse white, defaults to 250.f / 10000.f
+  float _1376 = asfloat(CB1_m[1u].y);
   float _1389 = exp2(log2(max(_1371 * _1376, 0.0f)) * 0.1593017578125f);
   float _1390 = exp2(log2(max(_1372 * _1376, 0.0f)) * 0.1593017578125f);
   float _1391 = exp2(log2(max(_1373 * _1376, 0.0f)) * 0.1593017578125f);
   float _1407 = exp2(log2(mad(_1389, 18.8515625f, 0.8359375f) / mad(_1389, 18.6875f, 1.0f)) * 78.84375f);
   float _1408 = exp2(log2(mad(_1390, 18.8515625f, 0.8359375f) / mad(_1390, 18.6875f, 1.0f)) * 78.84375f);
-  // Intensity
   float3 _1412 = float3(_1407, _1408, exp2(log2(mad(_1391, 18.8515625f, 0.8359375f) / mad(_1391, 18.6875f, 1.0f)) * 78.84375f));
-
   float _1415 = max(_1373, _1372);
   float _1416 = max(_1371, _1415);
-  float _1419 = asfloat(CB1_m[3u].w);
-  float _1424 = asfloat(CB1_m[4u].x);  // adjusting changes contrast
+  float _1419 = asfloat(CB1_m[4u].x);
+  float _1424 = asfloat(CB1_m[4u].y);
   float _1425 = log2(clamp(_1371, _1415, _1419)) * _1424;
-  float _1429 = asfloat(CB1_m[4u].y);
-  float _1434 = asfloat(CB1_m[4u].z);
-  float _1437 = asfloat(CB1_m[4u].w);  // adjusting changes contrast
+  float _1429 = asfloat(CB1_m[4u].z);
+  float _1434 = asfloat(CB1_m[4u].w);
+  float _1437 = asfloat(CB1_m[5u].x);
   float _1439 = exp2(_1425) / mad(exp2(_1425 * _1429), _1434, _1437);
   float _1440 = _1371 / _1416;
   float _1441 = _1372 / _1416;
   float _1442 = _1373 / _1416;
   float _1445 = clamp(dp3_f32(float3(_1440, _1441, _1442), float3(0.60000002384185791015625f, 1.5f, -0.300000011920928955078125f)), 0.0f, 1.0f);
-  float _1459 = exp2(log2(clamp(mad(dp2_f32(0.5f.xx, float2(_1407, _1408)), asfloat(CB1_m[7u].y), asfloat(CB1_m[7u].z)), 0.0f, 1.0f)) * asfloat(CB1_m[7u].w));
+  float _1459 = exp2(log2(clamp(mad(dp2_f32(0.5f.xx, float2(_1407, _1408)), asfloat(CB1_m[7u].z), asfloat(CB1_m[7u].w)), 0.0f, 1.0f)) * asfloat(CB1_m[8u].x));
   float _1460 = 1.0f - _1459;
-  float _1470 = mad(_1445, (1.0f - exp2(log2(_1439) * asfloat(CB1_m[5u].x))) + (_1459 - 1.0f), _1460);
+  float _1470 = mad(_1445, (1.0f - exp2(log2(_1439) * asfloat(CB1_m[5u].y))) + (_1459 - 1.0f), _1460);
   float _1474 = mad(_1440 - 1.0f, _1470, 1.0f);
   float _1475 = mad(_1441 - 1.0f, _1470, 1.0f);
   float _1476 = mad(_1442 - 1.0f, _1470, 1.0f);
-
-  float _1485 = asfloat(CB1_m[6u].x);  // desaturation
-
-  float _1498 = log2(min(mad(1.0f - _1440, _1485, _1440) * _1416, _1419)) * _1424;
+  float _1485 = asfloat(CB1_m[6u].y);
+  float _1498 = _1424 * log2(min(_1419, _1416 * mad(1.0f - _1440, _1485, _1440)));
   float _1499 = log2(min(mad(1.0f - _1441, _1485, _1441) * _1416, _1419)) * _1424;
   float _1500 = log2(min(mad(1.0f - _1442, _1485, _1442) * _1416, _1419)) * _1424;
-
-  float _1549, _1550, _1551;
-  if (RENODX_TONE_MAP_TYPE == 3.f) {  // custom tonemapper
-    // just exiting log2 space and doubling exposure seemingly gives an uncapped version of SDR
-    _1549 = exp2(_1498) * 2.f;
-    _1550 = exp2(_1499) * 2.f;
-    _1551 = exp2(_1500) * 2.f;
-
-    float3 untonemapped = float3(_1549, _1550, _1551);
-    float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-    if (RENODX_SDR_EOTF_EMULATION) peak_ratio = renodx::color::correct::GammaSafe(peak_ratio, true);
-
-    float3 tonemapped = renodx::tonemap::HermiteSplinePerChannelRolloff(untonemapped, peak_ratio, 200.f);
-    _1549 = tonemapped.r, _1550 = tonemapped.g, _1551 = tonemapped.b;
-  } else {
-    // sdr tonemapping thats stretched to work in hdr
-    // custom parameters would work differently in hdr due to the scaling, so it seems to basically just be neutral?
-    float _1521 = asfloat(CB1_m[7u].x);
-    float _1524 = clamp(mad(_1445, asfloat(CB1_m[6u].y) - _1521, _1521), 0.0f, 1.0f);
-    _1549 = ((mad(-_1474, _1439, exp2(_1498) / mad(exp2(_1498 * _1429), _1434, _1437)) * _1524) + (_1474 * _1439));
-    _1550 = ((mad(-_1475, _1439, exp2(_1499) / mad(exp2(_1499 * _1429), _1434, _1437)) * _1524) + (_1475 * _1439));
-    _1551 = ((mad(-_1476, _1439, exp2(_1500) / mad(exp2(_1500 * _1429), _1434, _1437)) * _1524) + (_1476 * _1439));
-  }
-
-  // Linear -> PQ
-  _1549 = _1549 * _1376;
-  _1550 = _1550 * _1376;
-  _1551 = _1551 * _1376;
-  _1549 = max(_1549, 0.f);
-  _1550 = max(_1550, 0.f);
-  _1551 = max(_1551, 0.f);
-  _1549 = pow(_1549, 0.1593017578125f);
-  _1550 = pow(_1550, 0.1593017578125f);
-  _1551 = pow(_1551, 0.1593017578125f);
+  float _1521 = asfloat(CB1_m[7u].y);
+  float _1524 = clamp(mad(_1445, asfloat(CB1_m[6u].z) - _1521, _1521), 0.0f, 1.0f);
+  float _1549 = exp2(log2(max(_1376 * ((_1439 * _1474) + (_1524 * mad(-_1439, _1474, exp2(_1498) / mad(_1434, exp2(_1429 * _1498), _1437)))), 0.0f)) * 0.1593017578125f);
+  float _1550 = exp2(log2(max(((mad(-_1475, _1439, exp2(_1499) / mad(exp2(_1499 * _1429), _1434, _1437)) * _1524) + (_1475 * _1439)) * _1376, 0.0f)) * 0.1593017578125f);
+  float _1551 = exp2(log2(max(((mad(-_1476, _1439, exp2(_1500) / mad(exp2(_1500 * _1429), _1434, _1437)) * _1524) + (_1476 * _1439)) * _1376, 0.0f)) * 0.1593017578125f);
   float _1567 = exp2(log2(mad(_1549, 18.8515625f, 0.8359375f) / mad(_1549, 18.6875f, 1.0f)) * 78.84375f);
   float _1568 = exp2(log2(mad(_1550, 18.8515625f, 0.8359375f) / mad(_1550, 18.6875f, 1.0f)) * 78.84375f);
   float3 _1572 = float3(_1567, _1568, exp2(log2(mad(_1551, 18.8515625f, 0.8359375f) / mad(_1551, 18.6875f, 1.0f)) * 78.84375f));
-
-  // ICtCp LMS -> ICtCp
   float _1573 = dp3_f32(float3(1.61370003223419189453125f, -3.323400020599365234375f, 1.70969998836517333984375f), _1572);
   float _1574 = dp3_f32(float3(4.377999782562255859375f, -4.245500087738037109375f, -0.132499992847442626953125f), _1572);
-  float _1578 = _1460 * asfloat(CB1_m[6u].w);  // highlight saturation
+  float _1578 = _1460 * asfloat(CB1_m[7u].x);
   float3 _1583 = float3(dp2_f32(0.5f.xx, float2(_1567, _1568)), mad(_1578, dp3_f32(float3(1.61370003223419189453125f, -3.323400020599365234375f, 1.70969998836517333984375f), _1412) - _1573, _1573), mad(dp3_f32(float3(4.377999782562255859375f, -4.245500087738037109375f, -0.132499992847442626953125f), _1412) - _1574, _1578, _1574));
-
-  // ICtCp -> ICtCp LMS
   float _1593 = exp2(log2(dp3_f32(float3(1.0f, 0.008605144917964935302734375f, 0.111035592854022979736328125f), _1583)) * 0.0126833133399486541748046875f);
   float _1594 = exp2(log2(dp3_f32(float3(1.0f, -0.008605144917964935302734375f, -0.111035592854022979736328125f), _1583)) * 0.0126833133399486541748046875f);
   float _1595 = exp2(log2(dp3_f32(float3(1.0f, 0.5600488185882568359375f, -0.3206374347209930419921875f), _1583)) * 0.0126833133399486541748046875f);
   float _1617 = 1.0f / _1376;
-
-  float _1623 = asfloat(CB1_m[6u].z);
-
-  // PQ -> Linear
+  float _1623 = asfloat(CB1_m[6u].w);
   float3 _1627 = float3((exp2(log2(max(_1593 - 0.8359375f, 0.0f) / mad(_1593, -18.6875f, 18.8515625f)) * 6.277394771575927734375f) * _1617) * _1623, (exp2(log2(max(_1594 - 0.8359375f, 0.0f) / mad(_1594, -18.6875f, 18.8515625f)) * 6.277394771575927734375f) * _1617) * _1623, (exp2(log2(max(_1595 - 0.8359375f, 0.0f) / mad(_1595, -18.6875f, 18.8515625f)) * 6.277394771575927734375f) * _1617) * _1623);
-
-  // ICtCp LMS -> AP1
-  float3 _1631 = float3(dp3_f32(float3(2.974892139434814453125f, -2.0770013332366943359375f, 0.10213525593280792236328125f), _1627),
-                        dp3_f32(float3(-0.646511554718017578125f, 1.77281856536865234375f, -0.12628759443759918212890625f), _1627),
-                        dp3_f32(float3(0.015456843189895153045654296875f, -0.01244670711457729339599609375f, 0.99701797962188720703125f), _1627));
-
-  float3 final_ap1 = _1631;
-  float3 final_bt2020 = renodx::color::bt2020::from::AP1(final_ap1);
-
-  float paper_white = asfloat(CB1_m[1u].x);  // actually the peak brightness cbuffer
-  if (RENODX_TONE_MAP_TYPE == 3.f) {         // custom tonemapper
-    paper_white = RENODX_DIFFUSE_WHITE_NITS / 10000.f;
-    if (RENODX_SDR_EOTF_EMULATION || RENODX_TONE_MAP_HUE_SHIFT != 1.f) {
-      float3 final_bt709 = renodx::color::bt709::from::BT2020(final_bt2020);
-      final_bt709 = renodx::color::correct::Hue(final_bt709, ungraded_bt709, 1 - RENODX_TONE_MAP_HUE_SHIFT);
-      final_bt709 = ApplySDREOTFEmulation(final_bt709);
-      final_bt2020 = renodx::color::bt2020::from::BT709(final_bt709);
-    }
-  }
-
-  final_bt2020 *= paper_white;
-  float3 final_pq = renodx::color::pq::EncodeSafe(final_bt2020);
-
-  U0[CB2_m11.y][uint3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, gl_GlobalInvocationID.z)] = float4(final_pq, 1.f);
+  float3 _1631 = float3(dp3_f32(float3(2.974892139434814453125f, -2.0770013332366943359375f, 0.10213525593280792236328125f), _1627), dp3_f32(float3(-0.646511554718017578125f, 1.77281856536865234375f, -0.12628759443759918212890625f), _1627), dp3_f32(float3(0.015456843189895153045654296875f, -0.01244670711457729339599609375f, 0.99701797962188720703125f), _1627));
+  float _1637 = asfloat(CB1_m[1u].x);
+  float _1647 = exp2(log2(dp3_f32(float3(1.025799274444580078125f, -0.02005250938236713409423828125f, -0.005771367810666561126708984375f), _1631) * _1637) * 0.1593017578125f);
+  float _1648 = exp2(log2(dp3_f32(float3(-0.00223502493463456630706787109375f, 1.0045826435089111328125f, -0.00235231337137520313262939453125f), _1631) * _1637) * 0.1593017578125f);
+  float _1649 = exp2(log2(dp3_f32(float3(-0.005014003254473209381103515625f, -0.025293387472629547119140625f, 1.03044021129608154296875f), _1631) * _1637) * 0.1593017578125f);
+  U0[CB2_m11.y][uint3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, gl_GlobalInvocationID.z)] = float4(
+      exp2(log2(mad(_1647, 18.8515625f, 0.8359375f) / mad(_1647, 18.6875f, 1.0f)) * 78.84375f),
+      exp2(log2(mad(_1648, 18.8515625f, 0.8359375f) / mad(_1648, 18.6875f, 1.0f)) * 78.84375f),
+      exp2(log2(mad(_1649, 18.8515625f, 0.8359375f) / mad(_1649, 18.6875f, 1.0f)) * 78.84375f),
+      1.0f);
 }
 
 [numthreads(8, 8, 1)]
