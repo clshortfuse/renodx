@@ -351,7 +351,7 @@ renodx::utils::settings::Settings settings = {
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
-        .tooltip = "Sets the tone mapper type",
+        .tooltip = "Sets the tone mapper type. True Vanilla requires going back to the LOGIN MENU for all the changes to have an effect.",
         .labels = {"Vanilla", "RenoDRT"},
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -464,7 +464,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Hue retention strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return false;},
     },
@@ -477,7 +476,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Hue-shift emulation strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return false; },
     },
@@ -490,7 +488,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Per Channel Blowout strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return false; },
     },
@@ -943,7 +940,6 @@ renodx::utils::settings::Settings settings = {
         .label = "Encoding",
         .section = "Display Output",
         .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .on_change_value = [](float previous, float current) {
           bool is_hdr10 = current == 4;
           shader_injection.swap_chain_encoding_color_space = (is_hdr10 ? 1.f : 0.f);

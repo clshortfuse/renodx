@@ -442,26 +442,7 @@ LUTSampleResult LUTSAMPLE(
 }
 
 float3 SDRGRADE(LUTSampleResult lut_sample) {
-  float3 graded = lut_sample.graded;
-  float3 graded_ap1 = lut_sample.graded_ap1;
-  float y = lut_sample.y;
-
-  float3 hue_chrominance_reference_color =
-      renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 1.0f));
-
-  UserGradingConfig cg_config;
-  cg_config.saturation = 1.f;
-  cg_config.dechroma = .1f;
-  cg_config.hue_emulation_strength = 1.f;
-  cg_config.chrominance_emulation_strength = .5f;
-  cg_config.highlight_saturation = 0.f;
-
-  float3 output = ApplySaturationBlowoutHueCorrectionHighlightSaturation(
-      graded, hue_chrominance_reference_color, y, cg_config);
-  output = renodx::color::bt2020::from::BT709(output);
-  output = renodx::tonemap::neutwo::MaxChannel(output, 1.0f, 2.0f);
-  output = renodx::color::bt709::from::BT2020(output);
-  return output;
+  return lut_sample.graded;
 }
 
 float3 HDRGRADE(LUTSampleResult lut_sample) {
