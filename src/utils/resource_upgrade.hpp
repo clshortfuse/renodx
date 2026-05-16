@@ -57,6 +57,8 @@ struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData 
   std::vector<BoundDescriptorInfo> unbound_descriptors;
   std::vector<PushDescriptorInfo> unpushed_updates;
   uint8_t pass_count = 0;
+  std::vector<reshade::api::render_pass_render_target_desc> pending_render_pass_render_targets;
+  std::optional<reshade::api::render_pass_depth_stencil_desc> pending_render_pass_depth_stencil;
 };
 
 struct __declspec(uuid("1d1ad3fa-98f4-4496-9a3d-1da0104d62ab")) SharedData {
@@ -728,6 +730,28 @@ static reshade::api::render_pass_render_target_desc* ApplyRenderTargetClones(
     new_rts[i].view = new_resource_view;
   }
   return new_rts;
+}
+
+inline bool HandlePendingRenderPassRenderTargets(
+    reshade::api::command_list* cmd_list,
+    CommandListData* cmd_list_data = nullptr) {
+  if (cmd_list_data == nullptr) {
+    cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+    if (cmd_list_data == nullptr) return false;
+  };
+  if (cmd_list_data->pending_render_pass_render_targets.empty()) return false;
+  cmd_list->end_render_pass();
+  cmd_list->begin_render_pass(
+      cmd_list_data->pending_render_pass_render_targets.size(),
+      cmd_list_data->pending_render_pass_render_targets.data(),
+      cmd_list_data->pending_render_pass_depth_stencil.has_value()
+          ? &*cmd_list_data->pending_render_pass_depth_stencil
+          : nullptr);
+
+  cmd_list_data->pending_render_pass_render_targets.clear();
+  cmd_list_data->pending_render_pass_depth_stencil.reset();
+
+  return true;
 }
 
 inline void RewriteRenderTargets(
@@ -2418,28 +2442,79 @@ inline void OnBindRenderTargetsAndDepthStencil(
   RewriteRenderTargets(cmd_list, count, rtvs, dsv);
 }
 
-static void OnBeginRenderPass(
+#if RESHADE_API_VERSION >= 20
+#define RENODX_RENDER_PASS_RETURN_TYPE  bool
+#define RENODX_RENDER_PASS_RETURN_VALUE false;
+#else
+#define RENODX_RENDER_PASS_RETURN_TYPE  void
+#define RENODX_RENDER_PASS_RETURN_VALUE ;
+#endif
+
+static RENODX_RENDER_PASS_RETURN_TYPE OnBeginRenderPass(
     reshade::api::command_list* cmd_list,
     uint32_t count, const reshade::api::render_pass_render_target_desc* rts,
-    const reshade::api::render_pass_depth_stencil_desc* ds) {
+    const reshade::api::render_pass_depth_stencil_desc* ds
+#if RESHADE_API_VERSION >= 20
+    ,
+    reshade::api::render_pass_flags flags
+#endif
+) {
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
-  if (cmd_list_data == nullptr) return;
+  if (cmd_list_data == nullptr) {
+    assert(cmd_list_data != nullptr);
+    return RENODX_RENDER_PASS_RETURN_VALUE;
+  }
 
-  // Ignore subpasses
-  if (cmd_list_data->pass_count++ != 0) return;
+  // ReShade handles nested render passes by ending previous
+  assert(cmd_list_data->pass_count == 0);
+  cmd_list_data->pass_count++;
+
+  if (count == 0u) {
+    // TODO(shortfuse): Support depth clones
+    return RENODX_RENDER_PASS_RETURN_VALUE;
+  }
 
   auto* new_rts = ApplyRenderTargetClones(rts, count);
-  if (new_rts == nullptr) return;
-  cmd_list->end_render_pass();
-  cmd_list->begin_render_pass(count, new_rts, ds);
+  if (new_rts == nullptr) return RENODX_RENDER_PASS_RETURN_VALUE;
+#if RESHADE_API_VERSION >= 20
+  cmd_list->begin_render_pass2(count, new_rts, ds, flags);
   free(new_rts);
+  return true;
+#else
+  // Game can possibly have sent an unused render pass
+  // Doesn't truly matter if old was one flushed
+  assert(cmd_list_data->pending_render_pass_render_targets.empty() && "utils::resource::upgrade::OnBeginRenderPass() - pending_render_pass_render_targets should be empty");
+  cmd_list_data->pending_render_pass_render_targets.assign(new_rts, new_rts + count);
+  free(new_rts);
+  if (ds == nullptr) {
+    cmd_list_data->pending_render_pass_depth_stencil.reset();
+  } else {
+    reshade::api::render_pass_depth_stencil_desc desc_copy = (*ds);
+    cmd_list_data->pending_render_pass_depth_stencil = desc_copy;
+  }
+#endif
 }
 
-static void OnEndRenderPass(reshade::api::command_list* cmd_list) {
+static RENODX_RENDER_PASS_RETURN_TYPE OnEndRenderPass(reshade::api::command_list* cmd_list) {
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
-  if (cmd_list_data == nullptr) return;
-  cmd_list_data->pass_count--;
+  if (cmd_list_data != nullptr) {
+    if (cmd_list_data->pass_count > 0u) {
+      cmd_list_data->pass_count--;
+    } else {
+      assert(cmd_list_data->pass_count > 0u && "utils::resource::upgrade::OnEndRenderPass() - pass_count should be greater than 0");
+    }
+    // Probe for now
+    assert(cmd_list_data->pending_render_pass_render_targets.empty() && "utils::resource::upgrade::OnEndRenderPass() - pending_render_pass_render_targets should be empty");
+
+    cmd_list_data->pending_render_pass_render_targets.clear();
+    cmd_list_data->pending_render_pass_depth_stencil.reset();
+  }
+
+  return RENODX_RENDER_PASS_RETURN_VALUE;
 }
+
+#undef RENODX_RENDER_PASS_RETURN_TYPE
+#undef RENODX_RENDER_PASS_RETURN_VALUE
 
 inline bool OnClearRenderTargetView(
     reshade::api::command_list* cmd_list,
@@ -2447,10 +2522,62 @@ inline bool OnClearRenderTargetView(
     const float color[4],
     uint32_t rect_count,
     const reshade::api::rect* rects) {
+  auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+  if (cmd_list_data == nullptr) return false;
+  HandlePendingRenderPassRenderTargets(cmd_list, cmd_list_data);
   if (rtv.handle == 0) return false;
   auto clone = GetResourceViewClone(rtv);
   if (clone.handle != 0) {
     cmd_list->clear_render_target_view(clone, color, rect_count, rects);
+  }
+  return false;
+}
+
+inline bool OnDraw(
+    reshade::api::command_list* cmd_list,
+    uint32_t vertex_count,
+    uint32_t instance_count,
+    uint32_t first_vertex,
+    uint32_t first_instance) {
+  HandlePendingRenderPassRenderTargets(cmd_list);
+  return false;
+}
+
+inline bool OnDrawIndexed(
+    reshade::api::command_list* cmd_list,
+    uint32_t index_count,
+    uint32_t instance_count,
+    uint32_t first_index,
+    int32_t base_vertex,
+    uint32_t first_instance) {
+  HandlePendingRenderPassRenderTargets(cmd_list);
+  return false;
+}
+
+inline bool OnDispatchMesh(
+    reshade::api::command_list* cmd_list,
+    uint32_t thread_group_count_x,
+    uint32_t thread_group_count_y,
+    uint32_t thread_group_count_z) {
+  HandlePendingRenderPassRenderTargets(cmd_list);
+  return false;
+}
+
+inline bool OnDrawOrDispatchIndirect(
+    reshade::api::command_list* cmd_list,
+    reshade::api::indirect_command type,
+    reshade::api::resource buffer,
+    uint64_t offset,
+    uint32_t draw_count,
+    uint32_t stride) {
+  switch (type) {
+    case reshade::api::indirect_command::draw:
+    case reshade::api::indirect_command::draw_indexed:
+    case reshade::api::indirect_command::dispatch_mesh:
+      HandlePendingRenderPassRenderTargets(cmd_list);
+      break;
+    default:
+      break;
   }
   return false;
 }
@@ -3035,6 +3162,10 @@ static void Use(DWORD fdw_reason) {
       shared.RegisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil, use_resource_cloning);
       shared.RegisterEvent<reshade::addon_event::begin_render_pass>(OnBeginRenderPass, use_resource_cloning);
       shared.RegisterEvent<reshade::addon_event::end_render_pass>(OnEndRenderPass, use_resource_cloning);
+      shared.RegisterEvent<reshade::addon_event::draw>(OnDraw, use_resource_cloning);
+      shared.RegisterEvent<reshade::addon_event::draw_indexed>(OnDrawIndexed, use_resource_cloning);
+      shared.RegisterEvent<reshade::addon_event::dispatch_mesh>(OnDispatchMesh, use_resource_cloning);
+      shared.RegisterEvent<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect, use_resource_cloning);
       shared.RegisterEvent<reshade::addon_event::push_descriptors>(OnPushDescriptors, use_resource_cloning);
       shared.RegisterEvent<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables, use_resource_cloning);
       // shared.RegisterEvent<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables, use_resource_cloning);
@@ -3073,6 +3204,10 @@ static void Use(DWORD fdw_reason) {
       shared.UnregisterEvent<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
       shared.UnregisterEvent<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
       shared.UnregisterEvent<reshade::addon_event::end_render_pass>(OnEndRenderPass);
+      shared.UnregisterEvent<reshade::addon_event::draw>(OnDraw);
+      shared.UnregisterEvent<reshade::addon_event::draw_indexed>(OnDrawIndexed);
+      shared.UnregisterEvent<reshade::addon_event::dispatch_mesh>(OnDispatchMesh);
+      shared.UnregisterEvent<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
 
       shared.UnregisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
       shared.UnregisterEvent<reshade::addon_event::push_descriptors>(OnPushDescriptors);
