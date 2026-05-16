@@ -849,7 +849,7 @@ static bool SetUpgradeInfos(reshade::api::device* device, std::span<renodx::util
 
 // THIS SPACE INTENTIONALLY LEFT BLANK
 
-// clang-format off
+// clang-format on
 
 // Hooks
 
@@ -1315,8 +1315,8 @@ inline void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
 
   if (!info->is_clone && info->fallback.handle != 0u) {
     pending_resource_destroys.insert({
-      .device = info->device,
-      .resource = info->fallback,
+        .device = info->device,
+        .resource = info->fallback,
     });
   }
 
@@ -1343,8 +1343,8 @@ inline void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
 
     // Device points to original device (may not be current)
     pending_resource_destroys.insert({
-      .device = info->device,
-      .resource = info->clone,
+        .device = info->device,
+        .resource = info->clone,
     });
   }
 
@@ -1641,7 +1641,6 @@ inline bool OnCreateResourceView(
   };
 #endif
 
-
   if (shared.data->use_resource_cloning) {
     if (clone_target != nullptr) {
       const auto* upgrade_info = clone_target;
@@ -1688,16 +1687,16 @@ inline void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resourc
   if (resource_view_info->clone.handle != 0u) {
     assert(resource_view_info->device != nullptr);
     pending_resource_view_destroys.insert({
-      .device = resource_view_info->device,
-      .view = resource_view_info->clone,
+        .device = resource_view_info->device,
+        .view = resource_view_info->clone,
     });
   }
 
   if (!resource_view_info->is_clone && resource_view_info->fallback.handle != 0u) {
     assert(resource_view_info->device != nullptr);
     pending_resource_view_destroys.insert({
-      .device = resource_view_info->device,
-      .view = resource_view_info->fallback,
+        .device = resource_view_info->device,
+        .view = resource_view_info->fallback,
     });
   }
 }
@@ -1834,11 +1833,13 @@ inline bool OnCopyResource(
         source_clone_desc = info->clone_desc;
       });
       if (should_activate_auto_clone) {
-        source_clone_existing = GetResourceClone(source, {
-                                  .require_enabled = false,
-                                  .allow_create = true,
-                                  .activate = true,
-                                });
+        source_clone_existing = GetResourceClone(
+            source,
+            {
+                .require_enabled = false,
+                .allow_create = true,
+                .activate = true,
+            });
         source_clone_attempted = true;
         utils::resource::GetResourceInfo(source, [&](const utils::resource::ResourceInfo& info) {
           source_clone_desc = info.clone_desc;
@@ -1869,11 +1870,13 @@ inline bool OnCopyResource(
         dest_clone_desc = info->clone_desc;
       });
       if (should_activate_auto_clone) {
-        destination_clone_existing = GetResourceClone(dest, {
-                                     .require_enabled = false,
-                                     .allow_create = true,
-                                     .activate = true,
-                                   });
+        destination_clone_existing = GetResourceClone(
+            dest,
+            {
+                .require_enabled = false,
+                .allow_create = true,
+                .activate = true,
+            });
         destination_clone_attempted = true;
         utils::resource::GetResourceInfo(dest, [&](const utils::resource::ResourceInfo& info) {
           dest_clone_desc = info.clone_desc;
@@ -2653,7 +2656,10 @@ inline bool OnResolveTextureRegion(
     source_clone_existing = info.clone;
   });
   if (!found_source_info) return false;
-
+  if (source_desc.type != reshade::api::resource_type::texture_2d
+      && source_desc.type != reshade::api::resource_type::texture_3d) {
+    return false;
+  }
   reshade::api::resource_desc dest_desc = {};
   reshade::api::resource_desc dest_clone_desc = {};
   bool destination_clone_enabled = false;
@@ -2665,7 +2671,7 @@ inline bool OnResolveTextureRegion(
     destination_clone_existing = info.clone;
   });
   if (!found_destination_info) return false;
-
+  if (dest_desc.type != source_desc.type) return false;
   auto source_new = source;
   auto dest_new = dest;
   auto source_desc_new = source_desc;
@@ -2702,11 +2708,13 @@ inline bool OnResolveTextureRegion(
         source_clone_desc = info->clone_desc;
       });
       if (should_activate_auto_clone) {
-        source_clone_existing = GetResourceClone(source, {
-                                  .require_enabled = false,
-                                  .allow_create = true,
-                                  .activate = true,
-                                });
+        source_clone_existing = GetResourceClone(
+            source,
+            {
+                .require_enabled = false,
+                .allow_create = true,
+                .activate = true,
+            });
         source_clone_attempted = true;
         utils::resource::GetResourceInfo(source, [&](const utils::resource::ResourceInfo& info) {
           source_clone_desc = info.clone_desc;
@@ -2737,11 +2745,13 @@ inline bool OnResolveTextureRegion(
         dest_clone_desc = info->clone_desc;
       });
       if (should_activate_auto_clone) {
-        destination_clone_existing = GetResourceClone(dest, {
-                                     .require_enabled = false,
-                                     .allow_create = true,
-                                     .activate = true,
-                                   });
+        destination_clone_existing = GetResourceClone(
+            dest,
+            {
+                .require_enabled = false,
+                .allow_create = true,
+                .activate = true,
+            });
         destination_clone_attempted = true;
         utils::resource::GetResourceInfo(dest, [&](const utils::resource::ResourceInfo& info) {
           dest_clone_desc = info.clone_desc;
@@ -2814,7 +2824,7 @@ inline bool OnResolveTextureRegion(
 
   // Mismatched (don't resolve);
   assert(false);
-#ifndef DEBUG_LEVEL_1
+#ifdef DEBUG_LEVEL_1
   std::stringstream s;
   s << "utils::resource::upgrade::OnResolveTextureRegion(";
   s << "prevent texture resolve: ";
@@ -2975,11 +2985,13 @@ inline bool OnCopyTextureRegion(
         source_clone_desc = info->clone_desc;
       });
       if (should_activate_auto_clone) {
-        source_clone_existing = GetResourceClone(source, {
-                                  .require_enabled = false,
-                                  .allow_create = true,
-                                  .activate = true,
-                                });
+        source_clone_existing = GetResourceClone(
+            source,
+            {
+                .require_enabled = false,
+                .allow_create = true,
+                .activate = true,
+            });
         source_clone_attempted = true;
         utils::resource::GetResourceInfo(source, [&](const utils::resource::ResourceInfo& info) {
           source_clone_desc = info.clone_desc;
@@ -3010,11 +3022,13 @@ inline bool OnCopyTextureRegion(
         dest_clone_desc = info->clone_desc;
       });
       if (should_activate_auto_clone) {
-        destination_clone_existing = GetResourceClone(dest, {
-                                     .require_enabled = false,
-                                     .allow_create = true,
-                                     .activate = true,
-                                   });
+        destination_clone_existing = GetResourceClone(
+            dest,
+            {
+                .require_enabled = false,
+                .allow_create = true,
+                .activate = true,
+            });
         destination_clone_attempted = true;
         utils::resource::GetResourceInfo(dest, [&](const utils::resource::ResourceInfo& info) {
           dest_clone_desc = info.clone_desc;
@@ -3106,7 +3120,6 @@ inline bool OnCopyTextureRegion(
   }
 }
 
-
 // clang-format off
 
 
@@ -3133,7 +3146,9 @@ static void Use(DWORD fdw_reason) {
               data.auto_upgrade_target = auto_upgrade_target;
             }
           })) {
+#ifdef DEBUG_LEVEL_0
         reshade::log::message(reshade::log::level::info, "Resource upgrade attached.");
+#endif
       }
 
       shared.RegisterEvent<reshade::addon_event::init_device>(OnInitDevice);
@@ -3223,7 +3238,9 @@ static void Use(DWORD fdw_reason) {
       shared.UnregisterEvent<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture);
 
       if (shared.UnregisterModule()) {
+#ifdef DEBUG_LEVEL_0
         reshade::log::message(reshade::log::level::info, "ResourceUtil detached.");
+#endif
       }
 
       break;
