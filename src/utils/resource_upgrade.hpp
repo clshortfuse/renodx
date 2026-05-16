@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <functional>
 #include <include/reshade.hpp>
-#include <include/reshade_api_resource.hpp>
 #include <optional>
 #include <set>
 #include <shared_mutex>
@@ -833,22 +832,26 @@ static bool SetUpgradeInfos(reshade::api::device* device, std::span<renodx::util
 static void OnInitDevice(reshade::api::device* device) {
   renodx::utils::data::Create<DeviceData>(device);
 
+#ifdef DEBUG_LEVEL_0
   std::stringstream s;
   s << "utils::resource::upgrade::OnInitDevice(";
   s << reinterpret_cast<uintptr_t>(device);
   s << ", api: " << device->get_api();
   s << ")";
   reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
 };
 
 static void OnDestroyDevice(reshade::api::device* device) {
   renodx::utils::data::Delete<DeviceData>(device);
 
+#ifdef DEBUG_LEVEL_0
   std::stringstream s;
   s << "utils::resource::upgrade::OnDestroyDevice(";
   s << reinterpret_cast<uintptr_t>(device);
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
+#endif
 }
 
 inline void OnInitCommandList(reshade::api::command_list* cmd_list) {
@@ -866,7 +869,9 @@ static void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   const std::unique_lock lock(data->mutex);
   data->resource_upgrade_finished.store(true, std::memory_order_release);
   data->back_buffer_desc = device->get_resource_desc(swapchain->get_current_back_buffer());
+#ifdef DEBUG_LEVEL_0
   reshade::log::message(reshade::log::level::debug, "utils::resource::upgrade::OnInitSwapchain(reset resource upgrade)");
+#endif
   const uint32_t len = data->upgrade_counts.size();
   // Reset
   for (uint32_t i = 0; i < len; i++) {
@@ -1150,16 +1155,16 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
 
     if (device_back_buffer_desc.type == reshade::api::resource_type::unknown) {
 #ifdef DEBUG_LEVEL_1
-    std::stringstream s;
-    s << "utils::resource::upgrade::OnInitResource(No swapchain desc: ";
-    s << ", device: " << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
-    s << ", flags: 0x" << std::hex << static_cast<uint32_t>(desc.flags) << std::dec;
-    s << ", state: 0x" << std::hex << static_cast<uint32_t>(initial_state) << std::dec;
-    s << ", format: " << desc.texture.format;
-    s << ", width: " << desc.texture.width;
-    s << ", height: " << desc.texture.height;
-    s << ", usage: " << desc.usage << "(" << std::hex << static_cast<uint32_t>(desc.usage) << std::dec << ")";
-    s << ")";
+      std::stringstream s;
+      s << "utils::resource::upgrade::OnInitResource(No swapchain desc: ";
+      s << ", device: " << PRINT_PTR(reinterpret_cast<uintptr_t>(device));
+      s << ", flags: 0x" << std::hex << static_cast<uint32_t>(desc.flags) << std::dec;
+      s << ", state: 0x" << std::hex << static_cast<uint32_t>(initial_state) << std::dec;
+      s << ", format: " << desc.texture.format;
+      s << ", width: " << desc.texture.width;
+      s << ", height: " << desc.texture.height;
+      s << ", usage: " << desc.usage << "(" << std::hex << static_cast<uint32_t>(desc.usage) << std::dec << ")";
+      s << ")";
 #endif
       // New, upgrade infos can now handle unknown back buffer state
       // return;
@@ -1932,19 +1937,37 @@ inline bool OnUpdateDescriptorTables(
 #ifdef DEBUG_LEVEL_3
   reshade::log::message(reshade::log::level::debug, "utils::resource::upgrade::OnUpdateDescriptorTables()");
 #endif
-  reshade::api::descriptor_table_update* new_updates = nullptr;
+  static thread_local std::vector<reshade::api::descriptor_table_update> new_updates;
+  static thread_local std::vector<std::vector<reshade::api::resource_view>> resource_view_descriptors;
+  static thread_local std::vector<std::vector<reshade::api::sampler_with_resource_view>> sampler_resource_view_descriptors;
   bool changed = false;
   // bool active = false;
 
   // std::vector<std::pair<std::pair<int, int>, utils::resource::ResourceViewInfo*>> infos;
 
+  uint32_t last_written_update_index = 0u;
+  auto copy_updates_until = [&](uint32_t end_index) {
+    if (!changed) {
+      if (new_updates.size() < count) new_updates.resize(count);
+      changed = true;
+    }
+    if (last_written_update_index < end_index) {
+      memcpy(new_updates.data() + last_written_update_index, updates + last_written_update_index, sizeof(reshade::api::descriptor_table_update) * (end_index - last_written_update_index));
+      last_written_update_index = end_index;
+    }
+  };
+
   for (uint32_t i = 0; i < count; ++i) {
     const auto& update = updates[i];
-    if (update.table.handle == 0u) continue;
-    for (uint32_t j = 0; j < update.count; j++) {
-      switch (update.type) {
-        case reshade::api::descriptor_type::sampler_with_resource_view: {
-          const auto& item = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[j];
+    if (update.table.handle == 0u) {
+      continue;
+    }
+    switch (update.type) {
+      case reshade::api::descriptor_type::sampler_with_resource_view: {
+        const auto* original_descriptors = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors);
+        reshade::api::sampler_with_resource_view* replacement_descriptors = nullptr;
+        for (uint32_t j = 0; j < update.count; j++) {
+          const auto& item = original_descriptors[j];
           auto resource_view = item.view;
           if (resource_view.handle == 0u) continue;
           const auto resource_view_clone = GetResourceViewClone(resource_view);
@@ -1957,24 +1980,39 @@ inline bool OnUpdateDescriptorTables(
           reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
-          if (!changed) {
-            new_updates = renodx::utils::descriptor::CloneDescriptorTableUpdates(updates, count);
+          if (replacement_descriptors == nullptr) {
+            copy_updates_until(i);
+            if (sampler_resource_view_descriptors.size() <= i) {
+              sampler_resource_view_descriptors.resize(i + 1u);
+            }
+            auto& descriptors = sampler_resource_view_descriptors[i];
+            if (descriptors.size() < update.count) {
+              descriptors.resize(update.count);
+            }
+            replacement_descriptors = descriptors.data();
+            memcpy(replacement_descriptors, original_descriptors, sizeof(reshade::api::sampler_with_resource_view) * update.count);
+            auto new_update = update;
+            new_update.descriptors = replacement_descriptors;
+            new_updates[i] = new_update;
+            last_written_update_index = i + 1u;
           }
 
-          // NOLINTNEXTLINE(google-readability-casting)
-          ((reshade::api::sampler_with_resource_view*)(new_updates[i].descriptors))[j].view = resource_view_clone;
-          changed = true;
+          replacement_descriptors[j].view = resource_view_clone;
           // if (data.enabled_cloned_resources.contains(new_resource.handle)) {
           //   active = true;
           // }
+        }
 
-        } break;
-        case reshade::api::descriptor_type::texture_shader_resource_view:
-        case reshade::api::descriptor_type::texture_unordered_access_view:
-        case reshade::api::descriptor_type::buffer_shader_resource_view:
-        case reshade::api::descriptor_type::buffer_unordered_access_view:
-        case reshade::api::descriptor_type::acceleration_structure:        {
-          const auto& resource_view = static_cast<const reshade::api::resource_view*>(update.descriptors)[j];
+      } break;
+      case reshade::api::descriptor_type::texture_shader_resource_view:
+      case reshade::api::descriptor_type::texture_unordered_access_view:
+      case reshade::api::descriptor_type::buffer_shader_resource_view:
+      case reshade::api::descriptor_type::buffer_unordered_access_view:
+      case reshade::api::descriptor_type::acceleration_structure:        {
+        const auto* original_descriptors = static_cast<const reshade::api::resource_view*>(update.descriptors);
+        reshade::api::resource_view* replacement_descriptors = nullptr;
+        for (uint32_t j = 0; j < update.count; j++) {
+          const auto& resource_view = original_descriptors[j];
           if (resource_view.handle == 0u) continue;
           reshade::api::resource_view resource_view_clone = GetResourceViewClone(resource_view);
           if (resource_view_clone.handle == 0u) continue;
@@ -1986,26 +2024,39 @@ inline bool OnUpdateDescriptorTables(
           reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
-          if (!changed) {
-            new_updates = renodx::utils::descriptor::CloneDescriptorTableUpdates(updates, count);
+          if (replacement_descriptors == nullptr) {
+            copy_updates_until(i);
+            if (resource_view_descriptors.size() <= i) {
+              resource_view_descriptors.resize(i + 1u);
+            }
+            auto& descriptors = resource_view_descriptors[i];
+            if (descriptors.size() < update.count) {
+              descriptors.resize(update.count);
+            }
+            replacement_descriptors = descriptors.data();
+            memcpy(replacement_descriptors, original_descriptors, sizeof(reshade::api::resource_view) * update.count);
+            auto new_update = update;
+            new_update.descriptors = replacement_descriptors;
+            new_updates[i] = new_update;
+            last_written_update_index = i + 1u;
           }
 
-          // NOLINTNEXTLINE(google-readability-casting)
-          ((reshade::api::resource_view*)(new_updates[i].descriptors))[j] = resource_view_clone;
-          changed = true;
+          replacement_descriptors[j] = resource_view_clone;
           // if (data.enabled_cloned_resources.contains(new_resource.handle)) {
           //   active = true;
           // }
-        } break;
-        default:
-          break;
-      }
+        }
+      } break;
+      default:
+        break;
     }
   }
 
   if (changed) {
-    device->update_descriptor_tables(count, new_updates);
-    renodx::utils::descriptor::DestroyDescriptorTableUpdates(new_updates, count);
+    if (last_written_update_index < count) {
+      memcpy(new_updates.data() + last_written_update_index, updates + last_written_update_index, sizeof(reshade::api::descriptor_table_update) * (count - last_written_update_index));
+    }
+    device->update_descriptor_tables(count, new_updates.data());
 
   } else {
 #ifdef DEBUG_LEVEL_2
@@ -2266,21 +2317,22 @@ inline void OnPushDescriptors(
     const reshade::api::descriptor_table_update& update) {
   if (update.count == 0u) return;
 
-  reshade::api::descriptor_table_update* new_updates = nullptr;
-  reshade::api::descriptor_table_update new_update = {};
+  static thread_local std::vector<reshade::api::resource_view> resource_view_descriptors;
+  static thread_local std::vector<reshade::api::sampler_with_resource_view> sampler_resource_view_descriptors;
+  static thread_local reshade::api::descriptor_table_update new_update;
 
 #ifdef DEBUG_LEVEL_3
   reshade::log::message(reshade::log::level::debug, "utils::resource::upgrade::OnPushDescriptors()");
 #endif
 
   bool changed = false;
-  bool active = false;
 
-  for (uint32_t i = 0; i < update.count; i++) {
-    // if (!update.table.handle) continue;
-    switch (update.type) {
-      case reshade::api::descriptor_type::sampler_with_resource_view: {
-        auto resource_view = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i].view;
+  switch (update.type) {
+    case reshade::api::descriptor_type::sampler_with_resource_view: {
+      const auto* original_descriptors = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors);
+      reshade::api::sampler_with_resource_view* replacement_descriptors = nullptr;
+      for (uint32_t i = 0; i < update.count; i++) {
+        auto resource_view = original_descriptors[i].view;
         if (resource_view.handle == 0) continue;
         auto clone = GetResourceViewClone(resource_view);
         if (clone.handle == 0) continue;
@@ -2293,22 +2345,27 @@ inline void OnPushDescriptors(
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
-        if (!changed) {
-          new_updates = renodx::utils::descriptor::CloneDescriptorTableUpdates(&update, 1);
-          new_update = new_updates[0];
+        if (replacement_descriptors == nullptr) {
+          if (sampler_resource_view_descriptors.size() < update.count) sampler_resource_view_descriptors.resize(update.count);
+          replacement_descriptors = sampler_resource_view_descriptors.data();
+          memcpy(replacement_descriptors, original_descriptors, sizeof(reshade::api::sampler_with_resource_view) * update.count);
+          new_update = update;
+          new_update.descriptors = replacement_descriptors;
+          changed = true;
         }
 
-        // NOLINTNEXTLINE(google-readability-casting)
-        ((reshade::api::sampler_with_resource_view*)(new_update.descriptors))[i].view = clone;
-        changed = true;
-        break;
+        replacement_descriptors[i].view = clone;
       }
-      case reshade::api::descriptor_type::texture_shader_resource_view:
-      case reshade::api::descriptor_type::texture_unordered_access_view:
-      case reshade::api::descriptor_type::buffer_shader_resource_view:
-      case reshade::api::descriptor_type::buffer_unordered_access_view:
-      case reshade::api::descriptor_type::acceleration_structure:        {
-        auto resource_view = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+    } break;
+    case reshade::api::descriptor_type::texture_shader_resource_view:
+    case reshade::api::descriptor_type::texture_unordered_access_view:
+    case reshade::api::descriptor_type::buffer_shader_resource_view:
+    case reshade::api::descriptor_type::buffer_unordered_access_view:
+    case reshade::api::descriptor_type::acceleration_structure:        {
+      const auto* original_descriptors = static_cast<const reshade::api::resource_view*>(update.descriptors);
+      reshade::api::resource_view* replacement_descriptors = nullptr;
+      for (uint32_t i = 0; i < update.count; i++) {
+        auto resource_view = original_descriptors[i];
         if (resource_view.handle == 0) continue;
         auto clone = GetResourceViewClone(resource_view);
         if (clone.handle == 0) continue;
@@ -2321,23 +2378,23 @@ inline void OnPushDescriptors(
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
 
-        if (!changed) {
-          new_updates = renodx::utils::descriptor::CloneDescriptorTableUpdates(&update, 1);
-          new_update = new_updates[0];
+        if (replacement_descriptors == nullptr) {
+          if (resource_view_descriptors.size() < update.count) resource_view_descriptors.resize(update.count);
+          replacement_descriptors = resource_view_descriptors.data();
+          memcpy(replacement_descriptors, original_descriptors, sizeof(reshade::api::resource_view) * update.count);
+          new_update = update;
+          new_update.descriptors = replacement_descriptors;
+          changed = true;
         }
 
-        // NOLINTNEXTLINE(google-readability-casting)
-        ((reshade::api::resource_view*)(new_update.descriptors))[i] = clone;
-        changed = true;
-
-        break;
+        replacement_descriptors[i] = clone;
       }
-      default:
-        break;
-    }
+    } break;
+    default:
+      break;
   }
 
-  if (changed || active) {
+  if (changed) {
 #ifdef DEBUG_LEVEL_1
     std::stringstream s;
     s << "utils::resource::upgrade::OnPushDescriptors(apply push)";
@@ -2345,7 +2402,6 @@ inline void OnPushDescriptors(
 #endif
     cmd_list->push_descriptors(stages, layout, layout_param, new_update);
   }
-  renodx::utils::descriptor::DestroyDescriptorTableUpdates(new_updates, 1);
 #ifdef DEBUG_LEVEL_3
   reshade::log::message(reshade::log::level::debug, "push_descriptors(done)");
 #endif
@@ -2670,8 +2726,16 @@ inline void OnBarrier(
 
   // Prefer thread_local vector rather than map; benchmarked faster for < 128 entries.
   static thread_local std::vector<std::pair<uint64_t, reshade::api::resource>> cached_resource_clones;
-  cached_resource_clones.clear();
-  cached_resource_clones.reserve(count);
+  static thread_local std::vector<reshade::api::resource> clone_barrier_resources;
+  static thread_local std::vector<reshade::api::resource_usage> clone_barrier_old_states;
+  static thread_local std::vector<reshade::api::resource_usage> clone_barrier_new_states;
+  if (cached_resource_clones.size() < count) cached_resource_clones.resize(count);
+  if (clone_barrier_resources.size() < count) clone_barrier_resources.resize(count);
+  if (clone_barrier_old_states.size() < count) clone_barrier_old_states.resize(count);
+  if (clone_barrier_new_states.size() < count) clone_barrier_new_states.resize(count);
+
+  uint32_t cached_resource_clone_count = 0u;
+  uint32_t clone_barrier_count = 0u;
 
   for (uint32_t i = 0; i < count; ++i) {
     if (old_states[i] == reshade::api::resource_usage::undefined) continue;
@@ -2680,7 +2744,8 @@ inline void OnBarrier(
 
     reshade::api::resource clone = {0u};
     bool found_cached_entry = false;
-    for (const auto& cached_resource_clone : cached_resource_clones) {
+    for (uint32_t cache_index = 0u; cache_index < cached_resource_clone_count; ++cache_index) {
+      const auto& cached_resource_clone = cached_resource_clones[cache_index];
       if (cached_resource_clone.first != resource.handle) continue;
       clone = cached_resource_clone.second;
       found_cached_entry = true;
@@ -2689,11 +2754,22 @@ inline void OnBarrier(
 
     if (!found_cached_entry) {
       clone = GetResourceClone(resource);
-      cached_resource_clones.emplace_back(resource.handle, clone);
+      cached_resource_clones[cached_resource_clone_count++] = {resource.handle, clone};
     }
 
     if (clone.handle == 0u) continue;
-    cmd_list->barrier(clone, old_states[i], new_states[i]);
+    clone_barrier_resources[clone_barrier_count] = clone;
+    clone_barrier_old_states[clone_barrier_count] = old_states[i];
+    clone_barrier_new_states[clone_barrier_count] = new_states[i];
+    ++clone_barrier_count;
+  }
+
+  if (clone_barrier_count != 0u) {
+    cmd_list->barrier(
+        clone_barrier_count,
+        clone_barrier_resources.data(),
+        clone_barrier_old_states.data(),
+        clone_barrier_new_states.data());
   }
 }
 
