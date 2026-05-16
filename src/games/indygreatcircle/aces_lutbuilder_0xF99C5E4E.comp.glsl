@@ -1144,7 +1144,7 @@ void main() {
 
   vec3 _2960;
   if (RENODX_TONE_MAP_TYPE == 0.f || !useHDR) {
-    vec3 _2960 = _217(_2961, _2963, _2965);
+    _2960 = _217(_2961, _2963, _2965);
   } else if (RENODX_TONE_MAP_TYPE == 1.f) {
     _2960 = BT709_TO_BT2020_MAT * _2961 * diffuse_white;
   } else {
