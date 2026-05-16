@@ -10,7 +10,7 @@
 //   t1: Environment/fallback sky cubemap lookup
 //   t2: Main skybox texture (4096x2048 equirectangular)
 //   t3: Reflection probe 1 texture
-//   t4: Reflection probe 2 texture  
+//   t4: Reflection probe 2 texture
 //   t5: Reflection probe 1 detail/tint
 //   t6: Reflection probe 2 detail/tint
 // ============================================================================
@@ -48,7 +48,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[185];
+  float4 cb0[187];
 }
 
 
@@ -79,8 +79,8 @@ void main(
   r0.w = dot(r0.xyz, r0.xyz);
   r1.x = max(9.99999994e-09, r0.w);
   r1.x = rsqrt(r1.x);
-  r1.yzw = r1.xxx * r0.xyz; 
-  r1.x = r1.x * r0.w;       
+  r1.yzw = r1.xxx * r0.xyz;
+  r1.x = r1.x * r0.w;
 
   // ==========================================================================
   // OCTAHEDRAL / CUBEMAP UV MAPPING FOR t1 (fallback environment)
@@ -92,7 +92,7 @@ void main(
   r2.x = r1.y * r2.x + -r2.z;
   r3.xy = float2(1,1) + r2.yx;
   r2.xy = float2(0.5,0.5) * r3.xy;
-  r2.xyz = t1.SampleLevel(s0_s, r2.xy, 0).xyz; 
+  r2.xyz = t1.SampleLevel(s0_s, r2.xy, 0).xyz;
   r2.w = saturate(r1.z * 10 + 1);
   // ==========================================================================
   // PROCEDURAL SUN DISK CALCULATION
@@ -102,11 +102,11 @@ void main(
   // cb1[9].xyz = sun color, cb1[9].w = sun intensity
   r3.x = saturate(dot(-cb1[11].xyz, -r1.yzw));  // Sun-view alignment (1 = looking at sun)
   r3.x = log2(r3.x);
-  
+
   // Sun size adjustment: multiply exponent to shrink disk (5.0 = ~80% smaller)
   float sunSizeMultiplier = (SUN_INTENSITY > 0.5f) ? 5.0f : 1.0f;
   r3.x = cb1[10].x * sunSizeMultiplier * r3.x;   // Apply sun size exponent
-  
+
   r3.x = exp2(r3.x);
   r3.y = r3.x * r3.x + 1;    // Soft falloff numerator
   r3.x = -r3.x * 1.98000002 + 1.98010004;  // Soft falloff denominator
@@ -123,7 +123,7 @@ void main(
   // ==========================================================================
   // EQUIRECTANGULAR SKYBOX UV CALCULATION (for t2: 4096x2048)
   // ==========================================================================
-  r3.y = r1.y / r1.w;       
+  r3.y = r1.y / r1.w;
   r3.z = cmp(abs(r3.y) < 1);
   r3.w = 1 / abs(r3.y);
   r3.w = r3.z ? abs(r3.y) : r3.w;
@@ -147,7 +147,7 @@ void main(
   r5.x = r3.z * r4.z + r3.y;
   r3.y = -r3.w * r4.x + 3.14159274;
   r3.y = r4.w ? r4.y : r3.y;
-  r5.y = 1.57079637 + -r3.y;  
+  r5.y = 1.57079637 + -r3.y;
   r3.yz = r5.xy * float2(0.159099996,0.318300009) + float2(0.5,0.5);
   r3.y = -cb1[8].w * 0.00277777785 + r3.y;
   r4.x = 1 + r3.y;
@@ -162,9 +162,9 @@ void main(
   r6.xyzw = cb1[5].xyzw * r5.xyzw;
   r3.y = max(r6.x, r6.y);
   r5.xyzw = -r5.xyzw * cb1[5].xyzw + r3.yyyy;
-  r5.xyzw = cb1[7].xxxx * r5.xyzw + r6.xyzw; 
-  r5.xyzw = cb1[6].xyzw * r5.xyzw; 
-  r3.y = r4.w ? 1.000000 : 0; 
+  r5.xyzw = cb1[7].xxxx * r5.xyzw + r6.xyzw;
+  r5.xyzw = cb1[6].xyzw * r5.xyzw;
+  r3.y = r4.w ? 1.000000 : 0;
   r4.x = r5.w * r3.y;
   r4.x = saturate(r4.x);
 
@@ -184,48 +184,48 @@ void main(
   r3.xzw = cb1[10].www * r3.xzw;   // Sun intensity multiplier
   r3.xzw = cb1[11].www * r3.xzw;   // Sun shadow/occlusion
   r3.xzw = max(float3(0,0,0), r3.xzw);
-  
+
   // HDR Sun toggle
   if (SUN_INTENSITY > 0.5f) {
     // Calculate sun-view alignment (1 = looking directly at sun center)
-    float sunDot = saturate(dot(-cb1[11].xyz, -r1.yzw)); 
-    
+    float sunDot = saturate(dot(-cb1[11].xyz, -r1.yzw));
+
     // === HORIZON REDDENING ===
     // Sun direction Y component indicates height (-1 = below, 0 = horizon, 1 = zenith)
     float sunHeight = saturate(cb1[11].y + 0.1f);  // Shift so effect starts slightly above horizon
-    
+
     // Warm shift when sun is low (more red/orange near horizon)
     float3 horizonTint = lerp(float3(1.0f, 0.6f, 0.3f),   // Low sun: warm orange
                               float3(1.0f, 0.95f, 0.9f),   // High sun: nearly white
                               sunHeight);
-    
+
     // === LIMB DARKENING ===
     // Real stars appear darker at edges due to optical depth through atmosphere
     // Use a soft power curve - center is brightest, edges darken
     float limbDarkening = pow(sunDot, 0.4f);  // Subtle darkening toward edges
-    
+
     // === CHROMATIC SUN EDGE ===
     // Core is white-hot, edges transition to yellow/orange
     float3 sunCoreColor = float3(1.0f, 1.0f, 1.0f);       // White-hot center
     float3 sunEdgeColor = float3(1.0f, 0.85f, 0.6f);      // Warm yellow edge
-    
+
     // Blend from edge color to core color based on how centered we are
     float coreFactor = pow(sunDot, 3.0f);  // Sharp transition to white core
     float3 chromaticColor = lerp(sunEdgeColor, sunCoreColor, coreFactor);
-    
+
     // === COMBINE SUN DISK ===
     // Apply limb darkening and chromatic color to base sun
     r3.xzw = r3.xzw * limbDarkening * chromaticColor * horizonTint;
-    
+
     // Boost the sun intensity for HDR
     r3.xzw = r3.xzw * 5.0f;
-    
+
     // === CORONA GLOW ===
     // Inner corona (tight glow)
     float coronaInner = pow(sunDot, 64.0f);
     // Outer corona (wide soft glow)
     float coronaOuter = pow(sunDot, 8.0f);
-    
+
     // Corona colors - also affected by horizon
     float3 coronaColorInner = lerp(float3(1.0f, 0.5f, 0.2f),   // Warm inner at horizon
                                    float3(1.0f, 0.7f, 0.3f),    // Normal inner
@@ -233,29 +233,29 @@ void main(
     float3 coronaColorOuter = lerp(float3(1.0f, 0.3f, 0.1f),   // Deep orange at horizon
                                    float3(1.0f, 0.5f, 0.2f),    // Normal outer
                                    sunHeight);
-    
-    float3 corona = coronaInner * coronaColorInner * 2.0f 
+
+    float3 corona = coronaInner * coronaColorInner * 2.0f
                   + coronaOuter * coronaColorOuter * 0.5f;
-    
+
     // Modulate corona by sun color/intensity from game
     corona *= cb1[9].xyz * cb1[9].w;
     corona *= cb1[11].w;  // Sun shadow/occlusion
-    
+
     // Add corona to sun
     r3.xzw += corona;
-    
+
     // === DESATURATE SUN (50%) ===
     float sunLuma = dot(r3.xzw, float3(0.2126f, 0.7152f, 0.0722f));
     r3.xzw = lerp(r3.xzw, float3(sunLuma, sunLuma, sunLuma), 0.5f);
-    
+
     // === BLOOM BOOST ===
     r3.xzw *= 10.0f;
-    
+
   } else {
     // Vanilla clamp
     r3.xzw = min(float3(3,3,3), r3.xzw);
   }
-  
+
   // Blend environment + sun + skybox
   r2.xyz = r2.xyz * r2.www + r3.xzw;
   r3.xzw = r5.xyz * r3.yyy + -r2.xyz;
@@ -268,8 +268,8 @@ void main(
   if (r3.x != 0) {
     r2.w = rsqrt(r0.w);
     r4.yzw = r2.www * r0.yxz;
-    r2.w = dot(r4.zyw, cb1[23].xyz); 
-    r3.x = cb1[27].x * cb1[27].x + -1; 
+    r2.w = dot(r4.zyw, cb1[23].xyz);
+    r3.x = cb1[27].x * cb1[27].x + -1;
     r3.x = r2.w * r2.w + r3.x;
     r3.w = max(0, r3.x);
     r3.w = sqrt(r3.w);
@@ -307,7 +307,7 @@ void main(
     r2.w = saturate(dot(cb1[25].xyz, r6.xyz));
     r2.w = saturate(r2.w * cb1[45].x + cb1[45].z);
     r6.xyz = t5.SampleBias(s4_s, r7.xy, cb0[108].x).xyz;
-    r6.xyz = cb1[41].xyz * r6.xyz; 
+    r6.xyz = cb1[41].xyz * r6.xyz;
     r6.xyz = r8.xyz * r2.www + r6.xyz;
     r2.w = dot(cb1[23].xyz, cb1[23].xyz);
     r2.w = rsqrt(r2.w);
@@ -319,15 +319,15 @@ void main(
     r2.w = r2.w ? 1.000000 : 0;
     r6.xyz = r6.xyz * r2.www;
     r6.xyz = r6.xyz * r8.www;
-    r6.xyz = cb1[37].xyz * r6.xyz;  
+    r6.xyz = cb1[37].xyz * r6.xyz;
     r4.y = saturate(r4.y);
     r2.w = -1 + r4.y;
     r2.w = cb1[48].w * r2.w + 1;
     r4.yzw = r6.xyz * r2.www;
     r3.x = dot(r4.yzw, float3(0.212672904,0.715152204,0.0721750036));
     r4.yzw = r6.xyz * r2.www + -r3.xxx;
-    r4.yzw = cb0[184].www * r4.yzw + r3.xxx; 
-    r2.xyz = r4.yzw * cb0[184].xyz + r2.xyz;  
+    r4.yzw = cb0[186].www * r4.yzw + r3.xxx;
+    r2.xyz = r4.yzw * cb0[186].xyz + r2.xyz;
   }
 
   // ==========================================================================
@@ -336,8 +336,8 @@ void main(
   if (r3.z != 0) {
     r0.w = rsqrt(r0.w);
     r0.xzw = r0.yxz * r0.www;
-    r2.w = dot(r0.zxw, cb1[24].xyz);  
-    r3.x = cb1[28].x * cb1[28].x + -1; 
+    r2.w = dot(r0.zxw, cb1[24].xyz);
+    r3.x = cb1[28].x * cb1[28].x + -1;
     r3.x = r2.w * r2.w + r3.x;
     r3.z = max(0, r3.x);
     r3.z = sqrt(r3.z);
@@ -391,9 +391,9 @@ void main(
     r0.x = saturate(r0.x);
     r0.x = -1 + r0.x;
     r0.x = cb1[51].w * r0.x + 1;
-    r2.xyz = r3.xzw * r0.xxx + r2.xyz; 
+    r2.xyz = r3.xzw * r0.xxx + r2.xyz;
   }
-  
+
   // Final skybox blend
   r0.xzw = r5.xyz * r3.yyy + -r2.xyz;
   r0.xzw = r4.xxx * r0.xzw + r2.xyz;
@@ -416,7 +416,7 @@ void main(
   r2.xyz = cb0[155].xyz * r2.xxx;
   r2.xyz = float3(1.44269502,1.44269502,1.44269502) * r2.xyz;
   r2.xyz = exp2(r2.xyz);
-  
+
   r2.w = dot(r1.yzw, cb0[154].xyz);
   r3.x = cb0[155].w * cb0[155].w + 1;
   r3.y = dot(r2.ww, cb0[155].ww);
@@ -425,7 +425,7 @@ void main(
   // ==========================================================================
   // VOLUMETRIC FOG SAMPLING (t0: 3D fog volume)
   // ==========================================================================
-  r3.y = cmp(0 < cb0[163].z); 
+  r3.y = cmp(0 < cb0[163].z);
   if (r3.y != 0) {
     r4.xy = (uint2)v0.xy;
     r4.z = 7 & asint(cb0[108].w);
@@ -540,7 +540,7 @@ void main(
     r0.y = r0.y + r1.z;
     r1.y = min(1, r0.y);
     r0.y = 1 + -r1.y;
-    r3.yzw = cb0[161].xyz * r0.yyy;  
+    r3.yzw = cb0[161].xyz * r0.yyy;
   }
 
   // ==========================================================================
@@ -549,9 +549,9 @@ void main(
   // Desaturation based on luminance
   r0.y = dot(r0.xzw, float3(0.212672904,0.715152204,0.0721750036));  // Luminance
   r0.xzw = r0.xzw + -r0.yyy;
-  r0.xyz = cb0[184].www * r0.xzw + r0.yyy;  // Saturation control
-  r0.xyz = cb0[184].xyz * r0.xyz;  // Color tint/exposure
-  r1.xzw = r2.xyz * r1.yyy; 
+  r0.xyz = cb0[186].www * r0.xzw + r0.yyy;  // Saturation control
+  r0.xyz = cb0[186].xyz * r0.xyz;  // Color tint/exposure
+  r1.xzw = r2.xyz * r1.yyy;
   r0.w = r2.w * r2.w + 1;
   r0.w = 0.0596831031 * r0.w;
   r4.xyz = cb0[156].xyz * r0.www + cb0[158].xyz;
@@ -562,11 +562,19 @@ void main(
   r2.w = max(0.00100000005, r2.w);
   r0.w = r0.w / r2.w;
   r4.xyz = saturate(cb0[157].xyz * r0.www + r4.xyz);
-  r4.xyz = float3(255,255,255) * r4.xyz; 
+  r4.xyz = float3(255,255,255) * r4.xyz;
   r2.xyz = float3(1,1,1) + -r2.xyz;
   r2.xyz = r4.xyz * r2.xyz;
-  r2.xyz = r2.xyz * r1.yyy + r3.yzw; 
+  r2.xyz = r2.xyz * r1.yyy + r3.yzw;
   o0.xyz = r0.xyz * r1.xzw + r2.xyz;
+
+  // ==========================================================================
+  // SKYBOX DESATURATION (50%) - Tech Test Look
+  // ==========================================================================
+  if (TECH_TEST_LOOK > 0.5f) {
+    float skyboxLuma = dot(o0.xyz, float3(0.2126f, 0.7152f, 0.0722f));
+    o0.xyz = lerp(o0.xyz, float3(skyboxLuma, skyboxLuma, skyboxLuma), 0.5f);
+  }
 
   // ==========================================================================
   // VELOCITY BUFFER OUTPUT (for motion blur / TAA)
@@ -575,18 +583,18 @@ void main(
   r0.xy = v3.xy / r0.xx;
   r0.z = max(9.99999994e-09, v4.z);
   r0.zw = v4.xy / r0.zz;
-  r0.xy = r0.xy + -r0.zw;  
+  r0.xy = r0.xy + -r0.zw;
   r1.xy = float2(0.5,-0.5) * r0.xy;
   r1.xy = sqrt(abs(r1.xy));
-  r1.xy = sqrt(r1.xy);  
+  r1.xy = sqrt(r1.xy);
   r0.z = -r0.y;
   r0.yw = cmp(float2(0,0) < r0.xz);
   r0.xz = cmp(r0.xz < float2(0,0));
   r0.xy = (int2)-r0.yw + (int2)r0.xz;
   r0.xy = (int2)r0.xy;
   r0.xy = r1.xy * r0.xy;
-  o1.xy = r0.xy * float2(0.5,0.5) + float2(0.5,0.5); 
-  o0.w = 1;  
+  o1.xy = r0.xy * float2(0.5,0.5) + float2(0.5,0.5);
+  o0.w = 1;
   o1.zw = float2(0,0);
   return;
 }
