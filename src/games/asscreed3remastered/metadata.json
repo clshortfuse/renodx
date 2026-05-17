@@ -1,0 +1,17 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "asscreed3remastered",
+  "title": "Assassin's Creed 3 Remastered",
+  "maintainers": [
+    "Vik"
+  ],
+  "status": "WIP",
+  "notes": [
+    "Native HDR game. Swapchain upgrades are intentionally not enabled."
+  ],
+  "deploy": {
+    "architecture": [
+      "x64"
+    ]
+  }
+}
