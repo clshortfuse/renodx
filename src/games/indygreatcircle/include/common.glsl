@@ -150,6 +150,14 @@ const mat3 BT2020_TO_AP1_MAT = mat3(
     vec3(0.0195991086, 0.9955354689, 0.0245320166),
     vec3(0.0055059134, 0.0022849683, 0.9706707437));
 
+vec3 BT2020FromAP1(vec3 ap1) {
+  return AP1_TO_BT2020_MAT * ap1;
+}
+
+vec3 AP1FromBT2020(vec3 bt2020) {
+  return BT2020_TO_AP1_MAT * bt2020;
+}
+
 // chromatic adaptation method: von Kries
 // chromatic adaptation transform: Bradford
 const mat3 D65_TO_D60_CAT = mat3(
@@ -347,6 +355,7 @@ float Interpolate1D(mat2 table, float p) {
   if (p < x0) return y0;
   if (p >= x1) return y1;
 
+  // p = clamp(p, table[0].x, table[1].x);
   float s = (p - x0) / (x1 - x0);  // 0-to-1 mix factor
   return mix(y0, y1, s);
 }
@@ -363,66 +372,266 @@ float LookUpAcesMax(float max_lum_log10) {
   return 0.18 * exp2(Interpolate1D(MAX_LUM_TABLE, max_lum_log10));
 }
 
-float SSTS(
-    float x,
-    vec3 y_min, vec3 y_mid, vec3 y_max,
-    vec3 coefs_low_a, vec3 coefs_low_b,
-    vec3 coefs_high_a, vec3 coefs_high_b) {
+struct ODTConfig {
+  vec3 y_min;
+  vec3 y_mid;
+  vec3 y_max;
+  float coefs_low[6];
+  float coefs_high[6];
+};
+
+const float ACES_FLT_MIN = 1.17549435082228750797e-38;
+
+float InvSSTS(float y, ODTConfig config) {
   const int N_KNOTS_LOW = 4;
   const int N_KNOTS_HIGH = 4;
 
-  float coefs_low[6];
+  float min_x = config.y_min.x;
+  float mid_x = config.y_mid.x;
+  float max_x = config.y_max.x;
 
-  coefs_low[0] = coefs_low_a.x;
-  coefs_low[1] = coefs_low_a.y;
-  coefs_low[2] = coefs_low_a.z;
-  coefs_low[3] = coefs_low_b.x;
-  coefs_low[4] = coefs_low_b.y;
-  coefs_low[5] = coefs_low_b.z;
-  float coefs_high[6];
-  coefs_high[0] = coefs_high_a.x;
-  coefs_high[1] = coefs_high_a.y;
-  coefs_high[2] = coefs_high_a.z;
-  coefs_high[3] = coefs_high_b.x;
-  coefs_high[4] = coefs_high_b.y;
-  coefs_high[5] = coefs_high_b.z;
+  float knot_inc_low = (mid_x - min_x) / (float(N_KNOTS_LOW) - 1.0);
+  float knot_inc_high = (max_x - mid_x) / (float(N_KNOTS_HIGH) - 1.0);
+
+  float knot_y_low[N_KNOTS_LOW];
+  float knot_y_high[N_KNOTS_HIGH];
+
+  for (int i = 0; i < N_KNOTS_LOW; ++i) {
+    knot_y_low[i] = 0.5 * (config.coefs_low[i] + config.coefs_low[i + 1]);
+  }
+
+  for (int i = 0; i < N_KNOTS_HIGH; ++i) {
+    knot_y_high[i] = 0.5 * (config.coefs_high[i] + config.coefs_high[i + 1]);
+  }
 
   // Check for negatives or zero before taking the log. If negative or zero,
   // set to HALF_MIN.
-  float log_x = log10(max(x, 1.17549435082228750797e-38));  // equivalent to asfloat(0x00800000)
+  float log_y = log10(max(y, ACES_FLT_MIN));
+  float log_x;
+
+  if (log_y >= config.y_max.y) {
+    // Above max breakpoint (overshoot)
+    // Inverse of flat max extension.
+    log_x = max_x;
+  } else if (log_y > config.y_mid.y) {
+    // Part of upper spline segment.
+    int j = 0;
+    vec3 cf = vec3(config.coefs_high[0], config.coefs_high[1], config.coefs_high[2]);
+
+    if (log_y > knot_y_high[1] && log_y <= knot_y_high[2]) {
+      cf = vec3(config.coefs_high[1], config.coefs_high[2], config.coefs_high[3]);
+      j = 1;
+    } else if (log_y > knot_y_high[2]) {
+      cf = vec3(config.coefs_high[2], config.coefs_high[3], config.coefs_high[4]);
+      j = 2;
+    }
+
+    vec3 quad = M * cf;
+    float a = quad.x;
+    float b = quad.y;
+    float c = quad.z - log_y;
+
+    float d = sqrt(max(b * b - 4.0 * a * c, 0.0));
+    float denom = -d - b;
+    if (abs(denom) < 1e-10) {
+      denom = (denom >= 0.0) ? 1e-10 : -1e-10;
+    }
+    float t = (2.0 * c) / denom;
+
+    log_x = mid_x + (t + float(j)) * knot_inc_high;
+  } else if (log_y > config.y_min.y) {
+    // Part of lower spline segment.
+    int j = 0;
+    vec3 cf = vec3(config.coefs_low[0], config.coefs_low[1], config.coefs_low[2]);
+
+    if (log_y > knot_y_low[1] && log_y <= knot_y_low[2]) {
+      cf = vec3(config.coefs_low[1], config.coefs_low[2], config.coefs_low[3]);
+      j = 1;
+    } else if (log_y > knot_y_low[2]) {
+      cf = vec3(config.coefs_low[2], config.coefs_low[3], config.coefs_low[4]);
+      j = 2;
+    }
+
+    vec3 quad = M * cf;
+    float a = quad.x;
+    float b = quad.y;
+    float c = quad.z - log_y;
+
+    float d = sqrt(max(b * b - 4.0 * a * c, 0.0));
+    float denom = -d - b;
+    if (abs(denom) < 1e-10) {
+      denom = (denom >= 0.0) ? 1e-10 : -1e-10;
+    }
+    float t = (2.0 * c) / denom;
+
+    log_x = min_x + (t + float(j)) * knot_inc_low;
+  } else {
+    // Below min breakpoint (undershoot)
+    // Inverse of flat min extension.
+    log_x = min_x;
+  }
+
+  return pow(10.0, log_x);
+}
+
+ODTConfig CreateODTConfig(float min_y, float max_y) {
+  ODTConfig config;
+
+  // Aces-dev has more expensive version
+  // AcesParams PARAMS = init_aces_params(minY, maxY);
+  const mat2 BENDS_LOW_TABLE = mat2(
+      MIN_STOP_RRT, MIN_STOP_SDR,
+      0.18, 0.35);
+
+  const mat2 BENDS_HIGH_TABLE = mat2(
+      MAX_STOP_SDR, MAX_STOP_RRT,
+      0.89, 0.90);
+
+  float min_lum_log10 = log10(min_y);
+  float max_lum_log10 = log10(max_y);
+  float aces_min = LookUpAcesMin(min_lum_log10);
+  float aces_max = LookUpAcesMax(max_lum_log10);
+
+  // float3 MIN_PT = float3(lookup_ACESmin(minLum), minLum, 0.0);
+  const vec3 MID_PT = vec3(0.18, 4.8, 1.55);
+  // float3 MAX_PT = float3(lookup_ACESmax(maxLum), maxLum, 0.0);
+  // float coefs_low[5];
+  // float coefs_high[5];
+
+  vec2 log_min = vec2(log10(aces_min), min_lum_log10);
+  const vec2 LOG_MID = vec2(log10(0.18), log10(4.8));
+  vec2 log_max = vec2(log10(aces_max), max_lum_log10);
+
+  float knot_inc_low = (LOG_MID.x - log_min.x) / 3.0;
+  // float halfKnotInc = (logMid.x - log_min.x) / 6.;
+
+  // Determine two lowest coefficients (straddling minPt)
+  // coefs_low[0] = (MIN_PT.z * (log_min.x - 0.5 * knot_inc_low)) + (log_min.y - MIN_PT.z * log_min.x);
+  // coefs_low[1] = (MIN_PT.z * (log_min.x + 0.5 * knot_inc_low)) + (log_min.y - MIN_PT.z * log_min.x);
+  // NOTE: if slope=0, then the above becomes just
+  config.coefs_low[0] = log_min.y;
+  config.coefs_low[1] = config.coefs_low[0];
+  // leaving it as a variable for now in case we decide we need non-zero slope extensions
+
+  // Determine two highest coefficients (straddling midPt)
+  float min_coef = (LOG_MID.y - MID_PT.z * LOG_MID.x);
+  config.coefs_low[3] = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_low)) + min_coef;
+  config.coefs_low[4] = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_low)) + min_coef;
+  config.coefs_low[5] = config.coefs_low[4];
+
+  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
+  float pct_low = Interpolate1D(BENDS_LOW_TABLE, log2(aces_min / 0.18));
+  config.coefs_low[2] = log_min.y + pct_low * (LOG_MID.y - log_min.y);
+
+  float knot_inc_high = (log_max.x - LOG_MID.x) / 3.0;
+  // float halfKnotInc = (log_max.x - logMid.x) / 6.;
+
+  // Determine two lowest coefficients (straddling midPt)
+  // float minCoef = (logMid.y - MID_PT.z * logMid.x);
+  config.coefs_high[0] = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_high)) + min_coef;
+  config.coefs_high[1] = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_high)) + min_coef;
+
+  // Determine two highest coefficients (straddling maxPt)
+  // coefs_high[3] = (MAX_PT.z * (log_max.x - 0.5 * knotIncHigh)) + (log_max.y - MAX_PT.z * log_max.x);
+  // coefs_high[4] = (MAX_PT.z * (log_max.x + 0.5 * knotIncHigh)) + (log_max.y - MAX_PT.z * log_max.x);
+  // NOTE: if slope=0, then the above becomes just
+  config.coefs_high[3] = log_max.y;
+  config.coefs_high[4] = config.coefs_high[3];
+  config.coefs_high[5] = config.coefs_high[4];
+  // leaving it as a variable for now in case we decide we need non-zero slope extensions
+
+  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
+  float pct_high = Interpolate1D(BENDS_HIGH_TABLE, log2(aces_max / 0.18));
+  config.coefs_high[2] = LOG_MID.y + pct_high * (log_max.y - LOG_MID.y);
+
+  config.y_min = vec3(log_min.x, log_min.y, 0.0);
+  config.y_mid = vec3(LOG_MID.x, LOG_MID.y, MID_PT.z);
+  config.y_max = vec3(log_max.x, log_max.y, 0.0);
+
+  return config;
+}
+
+ODTConfig CreateODTConfig(
+    float min_y,
+    float max_y,
+    float mid_y,
+    bool stable_peak_exp_shift,
+    float exp_shift_max_reference,
+    float exp_shift_min_reference) {
+  ODTConfig config = CreateODTConfig(min_y, max_y);
+
+  if (mid_y != 4.8) {
+    ODTConfig exp_shift_config;
+
+    // derive exp-shift from a fixed reference curve so peak changes are stable
+    bool use_stable_reference =
+        stable_peak_exp_shift && (exp_shift_max_reference != max_y || exp_shift_min_reference != min_y);
+    if (use_stable_reference) {
+      exp_shift_config = CreateODTConfig(exp_shift_min_reference, exp_shift_max_reference);
+    } else {
+      exp_shift_config = config;
+    }
+
+    float exp_shift = log2(InvSSTS(mid_y, exp_shift_config)) - log2(0.18);
+    float shift_log10 = exp_shift * log10(2.0);
+
+    config.y_min.x -= shift_log10;
+    config.y_mid.x -= shift_log10;
+    config.y_max.x -= shift_log10;
+  }
+
+  return config;
+}
+
+ODTConfig CreateODTConfig(float min_y, float max_y, float mid_y, bool stable_peak_exp_shift) {
+  return CreateODTConfig(min_y, max_y, mid_y, stable_peak_exp_shift, 1000.0, 0.0001);
+}
+
+ODTConfig CreateODTConfig(float min_y, float max_y, float mid_y) {
+  return CreateODTConfig(min_y, max_y, mid_y, false, 1000.0, 0.0001);
+}
+
+float SSTS(float x, ODTConfig config) {
+  const int N_KNOTS_LOW = 4;
+  const int N_KNOTS_HIGH = 4;
+
+  // Check for negatives or zero before taking the log. If negative or zero,
+  // set to HALF_MIN.
+  float log_x = log10(max(x, ACES_FLT_MIN));
 
   float log_y;
 
-  if (log_x > y_max.x) {
+  if (log_x > config.y_max.x) {
     // Above max breakpoint (overshoot)
     // If MAX_PT slope is 0, this is just a straight line and always returns
     // maxLum
     // y = mx+b
     // log_y = computeGraphY(C.Max.z, log_x, (C.Max.y) - (C.Max.z * (C.Max.x)));
-    log_y = y_max.y;
-  } else if (log_x >= y_mid.x) {
+    log_y = config.y_max.y;
+  } else if (log_x >= config.y_mid.x) {
     // Part of Midtones area (Must have slope)
-    float knot_coord = float(N_KNOTS_HIGH - 1) * (log_x - y_mid.x) / (y_max.x - y_mid.x);
+    float knot_coord = float(N_KNOTS_HIGH - 1) * (log_x - config.y_mid.x) / (config.y_max.x - config.y_mid.x);
     int j = int(knot_coord);
     float t = knot_coord - float(j);
 
-    vec3 cf = vec3(coefs_high[j], coefs_high[j + 1], coefs_high[j + 2]);
+    vec3 cf = vec3(config.coefs_high[j], config.coefs_high[j + 1], config.coefs_high[j + 2]);
 
     vec3 monomials = vec3(t * t, t, 1.0);
     log_y = dot(monomials, M * cf);
-  } else if (log_x > y_min.x) {
-    float knot_coord = float(N_KNOTS_LOW - 1) * (log_x - y_min.x) / (y_mid.x - y_min.x);
+  } else if (log_x > config.y_min.x) {
+    // Part of shadows area.
+    float knot_coord = float(N_KNOTS_LOW - 1) * (log_x - config.y_min.x) / (config.y_mid.x - config.y_min.x);
     int j = int(knot_coord);
     float t = knot_coord - float(j);
 
-    vec3 cf = vec3(coefs_low[j], coefs_low[j + 1], coefs_low[j + 2]);
+    vec3 cf = vec3(config.coefs_low[j], config.coefs_low[j + 1], config.coefs_low[j + 2]);
 
     vec3 monomials = vec3(t * t, t, 1.0);
     log_y = dot(monomials, M * cf);
-  } else {  //(log_x <= (C.Min.x))
+  } else {
     // Below min breakpoint (undershoot)
     // log_y = computeGraphY(C.Min.z, log_x, ((C.Min.y) - C.Min.z * (C.Min.x)));
-    log_y = y_min.y;
+    log_y = config.y_min.y;
   }
 
   return pow(10.0, log_y);
@@ -520,187 +729,91 @@ vec3 RRT(vec3 aces) {
   return rgb_pre;
 }
 
-vec3 ODTToneMap(vec3 rgb_pre, float min_y, float max_y) {
-  // Aces-dev has more expensive version
-  // AcesParams PARAMS = init_aces_params(minY, maxY);
-
-  const mat2 BENDS_LOW_TABLE = mat2(
-      MIN_STOP_RRT, MIN_STOP_SDR,
-      0.18, 0.35);
-
-  const mat2 BENDS_HIGH_TABLE = mat2(
-      MAX_STOP_SDR, MAX_STOP_RRT,
-      0.89, 0.90);
-
-  float min_lum_log10 = log10(min_y);
-  float max_lum_log10 = log10(max_y);
-  float aces_min = LookUpAcesMin(min_lum_log10);
-  float aces_max = LookUpAcesMax(max_lum_log10);
-
-  // float3 MIN_PT = vec3(lookup_ACESmin(minLum), minLum, 0.0);
-  const vec3 MID_PT = vec3(0.18, 4.8, 1.55);
-  // float3 MAX_PT = vec3(lookup_ACESmax(maxLum), maxLum, 0.0);
-
-  vec3 coefs_low_a;
-  vec3 coefs_low_b;
-  vec3 coefs_high_a;
-  vec3 coefs_high_b;
-
-  vec2 log_min = vec2(log10(aces_min), min_lum_log10);
-  vec2 LOG_MID = vec2(log10(MID_PT.xy));
-  vec2 log_max = vec2(log10(aces_max), max_lum_log10);
-
-  float knot_inc_low = (LOG_MID.x - log_min.x) / 3.0;
-
-  // Determine two lowest coefficients (straddling minPt)
-  coefs_low_a.x = log_min.y;
-  coefs_low_a.y = coefs_low_a.x;
-
-  // Determine two highest coefficients (straddling midPt)
-  float min_coef = (LOG_MID.y - MID_PT.z * LOG_MID.x);
-  coefs_low_b.x = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
-  coefs_low_b.y = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
-  coefs_low_b.z = coefs_low_b.y;
-
-  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
-  float pct_low = Interpolate1D(BENDS_LOW_TABLE, log2(aces_min / 0.18));
-  coefs_low_a.z = log_min.y + pct_low * (LOG_MID.y - log_min.y);
-
-  float knot_inc_high = (log_max.x - LOG_MID.x) / 3.0;
-
-  // Determine two lowest coefficients (straddling midPt)
-  // float minCoef = ( logMid.y - MID_PT.z * logMid.x);
-  coefs_high_a.x = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_high)) + min_coef;
-  coefs_high_a.y = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_high)) + min_coef;
-
-  // Determine two highest coefficients (straddling maxPt)
-  // coefs_high[3] = (MAX_PT.z * (log_max.x-0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
-  // coefs_high[4] = (MAX_PT.z * (log_max.x+0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
-  // NOTE: if slope=0, then the above becomes just
-  coefs_high_b.x = log_max.y;
-  coefs_high_b.y = coefs_high_b.x;
-  coefs_high_b.z = coefs_high_b.y;
-  // leaving it as a variable for now in case we decide we need non-zero slope extensions
-
-  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
-
-  float pct_high = Interpolate1D(BENDS_HIGH_TABLE, log2(aces_max / 0.18));
-  coefs_high_a.z = LOG_MID.y + pct_high * (log_max.y - LOG_MID.y);
-
-  vec3 rgb_post = vec3(
-      SSTS(rgb_pre.x, vec3(log_min.x, log_min.y, 0.0), vec3(LOG_MID.x, LOG_MID.y, MID_PT.z), vec3(log_max.x, log_max.y, 0.0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b),
-      SSTS(rgb_pre.y, vec3(log_min.x, log_min.y, 0.0), vec3(LOG_MID.x, LOG_MID.y, MID_PT.z), vec3(log_max.x, log_max.y, 0.0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b),
-      SSTS(rgb_pre.z, vec3(log_min.x, log_min.y, 0.0), vec3(LOG_MID.x, LOG_MID.y, MID_PT.z), vec3(log_max.x, log_max.y, 0.0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b));
-
-  // Nits to Linear
-  vec3 linear_cv = YToLinCV(rgb_post, max_y, min_y);
-  return clamp(rgb_post, 0.0, 65535.0);
+// Output Display Transform spline tone scale.
+float ODTToneMap(float x, ODTConfig config) {
+  return clamp(SSTS(x, config), 0.0, 65535.0);
 }
 
-vec4 ODTToneMap(vec4 rgb_pre, float min_y, float max_y) {
-  // Aces-dev has more expensive version
-  // AcesParams PARAMS = init_aces_params(minY, maxY);
+vec3 ODTToneMap(vec3 rgb, ODTConfig config) {
+  return clamp(
+      vec3(
+          SSTS(rgb.r, config),
+          SSTS(rgb.g, config),
+          SSTS(rgb.b, config)),
+      0.0, 65535.0);
+}
 
-  const mat2 BENDS_LOW_TABLE = mat2(
-      MIN_STOP_RRT, MIN_STOP_SDR,
-      0.18, 0.35);
+vec4 ODTToneMap(vec4 rgba, ODTConfig config) {
+  return clamp(
+      vec4(
+          SSTS(rgba.r, config),
+          SSTS(rgba.g, config),
+          SSTS(rgba.b, config),
+          SSTS(rgba.a, config)),
+      0.0, 65535.0);
+}
 
-  const mat2 BENDS_HIGH_TABLE = mat2(
-      MAX_STOP_SDR, MAX_STOP_RRT,
-      0.89, 0.90);
+float ODTToneMap(float x, float min_y, float max_y) {
+  return ODTToneMap(x, CreateODTConfig(min_y, max_y));
+}
 
-  float min_lum_log10 = log10(min_y);
-  float max_lum_log10 = log10(max_y);
-  float aces_min = LookUpAcesMin(min_lum_log10);
-  float aces_max = LookUpAcesMax(max_lum_log10);
+vec3 ODTToneMap(vec3 rgb, float min_y, float max_y) {
+  return ODTToneMap(rgb, CreateODTConfig(min_y, max_y));
+}
 
-  // float3 MIN_PT = vec3(lookup_ACESmin(minLum), minLum, 0.0);
-  const vec3 MID_PT = vec3(0.18, 4.8, 1.55);
-  // float3 MAX_PT = vec3(lookup_ACESmax(maxLum), maxLum, 0.0);
+vec4 ODTToneMap(vec4 rgba, float min_y, float max_y) {
+  return ODTToneMap(rgba, CreateODTConfig(min_y, max_y));
+}
 
-  vec3 coefs_low_a;
-  vec3 coefs_low_b;
-  vec3 coefs_high_a;
-  vec3 coefs_high_b;
+vec3 ODT(vec3 rgb_pre, ODTConfig config, mat3 odt_matrix) {
+  vec3 tonescaled = ODTToneMap(rgb_pre, config);
 
-  vec2 log_min = vec2(log10(aces_min), min_lum_log10);
-  vec2 LOG_MID = vec2(log10(MID_PT.xy));
-  vec2 log_max = vec2(log10(aces_max), max_lum_log10);
+  return odt_matrix * tonescaled;
+}
 
-  float knot_inc_low = (LOG_MID.x - log_min.x) / 3.0;
+vec4 ODT(vec4 rgb_pre, ODTConfig config, mat3 odt_matrix) {
+  vec4 tonescaled = ODTToneMap(rgb_pre, config);
 
-  // Determine two lowest coefficients (straddling minPt)
-  coefs_low_a.x = log_min.y;
-  coefs_low_a.y = coefs_low_a.x;
-
-  // Determine two highest coefficients (straddling midPt)
-  float min_coef = (LOG_MID.y - MID_PT.z * LOG_MID.x);
-  coefs_low_b.x = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
-  coefs_low_b.y = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_low)) + (LOG_MID.y - MID_PT.z * LOG_MID.x);
-  coefs_low_b.z = coefs_low_b.y;
-
-  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
-  float pct_low = Interpolate1D(BENDS_LOW_TABLE, log2(aces_min / 0.18));
-  coefs_low_a.z = log_min.y + pct_low * (LOG_MID.y - log_min.y);
-
-  float knot_inc_high = (log_max.x - LOG_MID.x) / 3.0;
-
-  // Determine two lowest coefficients (straddling midPt)
-  // float minCoef = ( logMid.y - MID_PT.z * logMid.x);
-  coefs_high_a.x = (MID_PT.z * (LOG_MID.x - 0.5 * knot_inc_high)) + min_coef;
-  coefs_high_a.y = (MID_PT.z * (LOG_MID.x + 0.5 * knot_inc_high)) + min_coef;
-
-  // Determine two highest coefficients (straddling maxPt)
-  // coefs_high[3] = (MAX_PT.z * (log_max.x-0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
-  // coefs_high[4] = (MAX_PT.z * (log_max.x+0.5*knotIncHigh)) + ( log_max.y - MAX_PT.z * log_max.x);
-  // NOTE: if slope=0, then the above becomes just
-  coefs_high_b.x = log_max.y;
-  coefs_high_b.y = coefs_high_b.x;
-  coefs_high_b.z = coefs_high_b.y;
-  // leaving it as a variable for now in case we decide we need non-zero slope extensions
-
-  // Middle coefficient (which defines the "sharpness of the bend") is linearly interpolated
-
-  float pct_high = Interpolate1D(BENDS_HIGH_TABLE, log2(aces_max / 0.18));
-  coefs_high_a.z = LOG_MID.y + pct_high * (log_max.y - LOG_MID.y);
-
-  vec4 rgb_post = vec4(
-      SSTS(rgb_pre.x, vec3(log_min.x, log_min.y, 0.0), vec3(LOG_MID.x, LOG_MID.y, MID_PT.z), vec3(log_max.x, log_max.y, 0.0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b),
-      SSTS(rgb_pre.y, vec3(log_min.x, log_min.y, 0.0), vec3(LOG_MID.x, LOG_MID.y, MID_PT.z), vec3(log_max.x, log_max.y, 0.0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b),
-      SSTS(rgb_pre.z, vec3(log_min.x, log_min.y, 0.0), vec3(LOG_MID.x, LOG_MID.y, MID_PT.z), vec3(log_max.x, log_max.y, 0.0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b),
-      SSTS(rgb_pre.w, vec3(log_min.x, log_min.y, 0.0), vec3(LOG_MID.x, LOG_MID.y, MID_PT.z), vec3(log_max.x, log_max.y, 0.0), coefs_low_a, coefs_low_b, coefs_high_a, coefs_high_b));
-
-  // Nits to Linear
-  vec4 linear_cv = YToLinCV(rgb_post, max_y, min_y);
-  return clamp(rgb_post, 0.0, 65535.0);
+  return vec4(odt_matrix * tonescaled.rgb, tonescaled.a);
 }
 
 vec3 ODT(vec3 rgb_pre, float min_y, float max_y, mat3 odt_matrix) {
-  vec3 tonescaled = ODTToneMap(rgb_pre, min_y, max_y);
-  vec3 output_color = odt_matrix * tonescaled;
-  return output_color;
+  return ODT(rgb_pre, CreateODTConfig(min_y, max_y), odt_matrix);
 }
 
 vec4 ODT(vec4 rgb_pre, float min_y, float max_y, mat3 odt_matrix) {
-  vec4 tonescaled = ODTToneMap(rgb_pre, min_y, max_y);
-  vec4 output_color = vec4(odt_matrix * tonescaled.rgb, tonescaled.a);
-  return output_color;
+  return ODT(rgb_pre, CreateODTConfig(min_y, max_y), odt_matrix);
+}
+
+// ACES with
+// Reference Rendering Transform
+// Output Display Transform
+vec3 RRTAndODT(vec3 color, ODTConfig config, mat3 odt_matrix) {
+  color = BT709_TO_AP0_MAT * color;
+  color = RRT(color);
+  color = ODT(color, config, odt_matrix);
+  return color;
 }
 
 vec3 RRTAndODT(vec3 color, float min_y, float max_y, mat3 odt_matrix) {
-  color = BT709_TO_AP0_MAT * color;
-  color = RRT(color);
-  color = ODT(color, min_y, max_y, odt_matrix);
+  return RRTAndODT(color, CreateODTConfig(min_y, max_y), odt_matrix);
+}
+
+// ACES for Scene-Linear BT709 with:
+// Reference Gamma Compression
+// Reference Rendering Transform
+// Output Display Transform
+vec3 RGCAndRRTAndODT(vec3 color, ODTConfig config, mat3 odt_matrix) {
+  color = BT709_TO_AP1_MAT * color;        // BT709 to AP1
+  color = GamutCompress(color);            // Compresses to AP1
+  color = AP1_TO_AP0_MAT * color;          // Convert to AP0
+  color = RRT(color);                      // RRT AP0 => AP1
+  color = ODT(color, config, odt_matrix);  // ODT AP1 => Matrix
   return color;
 }
 
 vec3 RGCAndRRTAndODT(vec3 color, float min_y, float max_y, mat3 odt_matrix) {
-  color = BT709_TO_AP1_MAT * color;              // BT709 to AP1
-  color = GamutCompress(color);                  // Compresses to AP1
-  color = AP1_TO_AP0_MAT * color;                // Convert to AP0
-  color = RRT(color);                            // RRT AP0 => AP1
-  color = ODT(color, min_y, max_y, odt_matrix);  // ODT AP1 => Matrix
-  return color;
+  return RGCAndRRTAndODT(color, CreateODTConfig(min_y, max_y), odt_matrix);
 }
 
 // END ACES INCLUDE

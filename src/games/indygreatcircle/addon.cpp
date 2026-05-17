@@ -5,7 +5,7 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
 
 #include <embed/shaders.h>
 
@@ -23,11 +23,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // CustomShaderEntry(0x0FB3C8A5),  // post process + ACES ToneMap
 
 
-    CustomShaderEntry(0xF99C5E4E),  // Old ACES ToneMap LUTbuilder
-    CustomShaderEntry(0x1ECA9E9E),  // Old Composite Scene + UI
-
-    CustomShaderEntry(0x3AF8585D),  // Old ACES ToneMap LUTbuilder
-    CustomShaderEntry(0xF40407A5),  // Old Composite Scene + UI
+    CustomShaderEntry(0xF99C5E4E),  // ACES ToneMap LUTbuilder
+    CustomShaderEntry(0x1ECA9E9E),  // Composite Scene + UI
 };
 
 namespace shader_toggle {

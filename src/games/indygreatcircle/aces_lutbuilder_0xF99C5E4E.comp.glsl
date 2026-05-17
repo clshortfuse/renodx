@@ -3,6 +3,7 @@
 
 #extension GL_GOOGLE_include_directive : require
 #include "./include/common.glsl"
+#include "./include/psychov_17.glsl"
 #include "./shared.h"
 
 #extension GL_EXT_buffer_reference2 : require
@@ -1137,19 +1138,24 @@ void main() {
   vec3 _2961 = _2916;
   bool _2963 = _2956;
   _211 _2965 = _2939;
-//   vec3 _2960 = _217(_2961, _2963, _2965);
+  //   vec3 _2960 = _217(_2961, _2963, _2965);
 
   float diffuse_white = _2939._m2 * 10.0;
   float peak_nits = _2939._m1;
 
+  vec3 untonemapped_bt709 = _2961;
   vec3 _2960;
   if (RENODX_TONE_MAP_TYPE == 0.f || !useHDR) {
     _2960 = _217(_2961, _2963, _2965);
   } else if (RENODX_TONE_MAP_TYPE == 1.f) {
     _2960 = BT709_TO_BT2020_MAT * _2961 * diffuse_white;
   } else {
+    const float ACES_MID = 10.f;
+    const float EXP_SHIFT_REFERENCE_MAX = 1000.f;
+    const float EXP_SHIFT_REFERENCE_MIN = 0.0001f;
+
     const float ACES_MIN = 0.0001f;
-    const float ACES_DIFFUSE_WHITE = 48.f;
+    const float ACES_DIFFUSE_WHITE = ACES_MID * 10.f;
     float aces_min = ACES_MIN / diffuse_white;
     float aces_max = (_2939._m1 / diffuse_white);
 
@@ -1157,8 +1163,10 @@ void main() {
       aces_max = CorrectGammaMismatch(aces_max, true);
       aces_min = CorrectGammaMismatch(aces_min, true);
     } else if (RENODX_SDR_EOTF_EMULATION == 2.f) {
-      aces_min /= 5.f;
+      aces_min /= 250.f;
     }
+
+    ODTConfig odt_config = CreateODTConfig(aces_min * ACES_DIFFUSE_WHITE, aces_max * ACES_DIFFUSE_WHITE, ACES_MID, true, EXP_SHIFT_REFERENCE_MAX, EXP_SHIFT_REFERENCE_MIN);
 
     // Apply ACES ToneMap
     vec3 untonemapped_ap0 = BT709_TO_AP0_MAT * _2961;
@@ -1166,26 +1174,26 @@ void main() {
 
     vec3 tonemapped_ap1;
     if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
-      float y_in = dot(untonemapped_graded_ap1, vec3(0.2722287168, 0.6740817658, 0.0536895174));
-      vec4 tonemapped_ap1_combined = max(vec4(0.0), ODT(vec4(untonemapped_graded_ap1, y_in), aces_min * ACES_DIFFUSE_WHITE, aces_max * ACES_DIFFUSE_WHITE, mat3(1.0)) / ACES_DIFFUSE_WHITE);
+      float y_in = psycho17_YFFromAP1(untonemapped_graded_ap1);
+      vec4 tonemapped_ap1_combined = max(vec4(0.0), ODT(vec4(untonemapped_graded_ap1, y_in), odt_config, mat3(1.0)) / ACES_DIFFUSE_WHITE);
       tonemapped_ap1 = tonemapped_ap1_combined.rgb;
       float y_out = tonemapped_ap1_combined.a;
 
       // ODT by luminance
-      vec3 luminance_tonemapped_ap1 = untonemapped_graded_ap1 * (y_out / y_in);
+      vec3 luminance_tonemapped_ap1 = untonemapped_graded_ap1 * DivideSafe(y_out, y_in, 0.0);
+      vec3 tonemapped_source_bt2020 = BT2020FromAP1(max(vec3(0.0), tonemapped_ap1));
+      vec3 tonemapped_lum_bt2020 = BT2020FromAP1(max(vec3(0.0), luminance_tonemapped_ap1));
+      float t = clamp((y_out - 0.1) / 0.9, 0.0, 1.0);
+      float hue_amount = mix(0.35, 1.0, t);
 
-      luminance_tonemapped_ap1 = CorrectHueAndChrominanceOKLabAP1(
-          luminance_tonemapped_ap1, tonemapped_ap1,
-          1.f,   // hue emulation strength
-          0.6f,  // chrominance emulation strength
-          0.5f,  // hue emulation ramp start
-          1.f    // hue emulation ramp end
-      );
-
-      tonemapped_ap1 = luminance_tonemapped_ap1;
+      tonemapped_ap1 = max(vec3(0.0), AP1FromBT2020(psycho17_ApplyPurityAndHueFromBT2020(
+                                          tonemapped_source_bt2020,
+                                          tonemapped_lum_bt2020,
+                                          1.0,
+                                          hue_amount, 0.f, 1e-7f, true, false)));
 
     } else {
-      tonemapped_ap1 = max(vec3(0.0), ODT(untonemapped_graded_ap1, aces_min * ACES_DIFFUSE_WHITE, aces_max * ACES_DIFFUSE_WHITE, mat3(1.0)) / ACES_DIFFUSE_WHITE);
+      tonemapped_ap1 = max(vec3(0.0), ODT(untonemapped_graded_ap1, odt_config, mat3(1.0)) / ACES_DIFFUSE_WHITE);
     }
 
     vec3 tonemapped_bt709 = AP1_TO_BT709_MAT * tonemapped_ap1;
@@ -1200,7 +1208,7 @@ void main() {
   }
   // END CUSTOM
 
-//   imageStore(_2969, ivec3(_2876), vec4(_2959, 1.0));
+  //   imageStore(_2969, ivec3(_2876), vec4(_2959, 1.0));
 
   imageStore(_2970, ivec3(_2876), vec4(_2960, 1.0));
 }
