@@ -451,7 +451,7 @@ float3 HDRGRADE(LUTSampleResult lut_sample) {
   float y = lut_sample.y;
 
   float3 hue_chrominance_reference_color =
-      renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 0.5f));
+      renodx::color::bt709::from::AP1(renodx::tonemap::ReinhardPiecewise(graded_ap1, 2.f, 0.18f));
 
   UserGradingConfig cg_config = CreateColorGradeConfig();
 
