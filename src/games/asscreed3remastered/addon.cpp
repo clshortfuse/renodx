@@ -16,6 +16,7 @@
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
+#include "../../utils/windowing.hpp"
 #include "./shared.h"
 
 namespace {
@@ -48,8 +49,6 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.tone_map_peak_nits,
-        .default_value = 1000.f,
-        .can_reset = false,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the display peak brightness in nits.",
@@ -293,15 +292,77 @@ void OnPresetOff() {
 }
 
 bool fired_on_init_swapchain = false;
+bool borderless_fullscreen_pending = false;
+
+bool ApplyBorderlessFullscreen(reshade::api::swapchain* swapchain) {
+  if (swapchain == nullptr) return false;
+  if (!renodx::utils::swapchain::IsDXGI(swapchain)) return false;
+
+  HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
+  if (hwnd == nullptr) return false;
+
+  auto* device = swapchain->get_device();
+  if (device == nullptr) return false;
+
+  const auto back_buffer = swapchain->get_current_back_buffer();
+  if (back_buffer.handle == 0) return false;
+
+  const auto back_buffer_desc = device->get_resource_desc(back_buffer);
+  if (back_buffer_desc.texture.width == 0 || back_buffer_desc.texture.height == 0) return false;
+
+  RECT monitor_rect = {};
+  if (!renodx::utils::windowing::GetMonitorRect(hwnd, &monitor_rect)) return false;
+
+  const auto monitor_width = static_cast<uint32_t>(monitor_rect.right - monitor_rect.left);
+  const auto monitor_height = static_cast<uint32_t>(monitor_rect.bottom - monitor_rect.top);
+
+  if (monitor_width != back_buffer_desc.texture.width || monitor_height != back_buffer_desc.texture.height) {
+    return false;
+  }
+
+  renodx::utils::windowing::RemoveWindowBorder(hwnd);
+  return renodx::utils::windowing::SetWindowPositionAndSize(
+      hwnd,
+      monitor_rect.left,
+      monitor_rect.top,
+      monitor_width,
+      monitor_height);
+}
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (fired_on_init_swapchain) return;
   if (!renodx::utils::swapchain::IsDXGI(swapchain)) return;
 
-  float peak = renodx::utils::swapchain::GetPeakNits(swapchain).value_or(1000.f);
-  settings[3]->default_value = peak;
+  if (!fired_on_init_swapchain) {
+    float peak = renodx::utils::swapchain::GetPeakNits(swapchain).value_or(1000.f);
+    settings[3]->default_value = peak;
 
-  fired_on_init_swapchain = true;
+    fired_on_init_swapchain = true;
+  }
+
+  auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
+  IDXGIFactory* factory = nullptr;
+  if (native_swapchain != nullptr && SUCCEEDED(native_swapchain->GetParent(IID_PPV_ARGS(&factory)))) {
+    factory->MakeWindowAssociation(static_cast<HWND>(swapchain->get_hwnd()), DXGI_MWA_NO_WINDOW_CHANGES);
+    factory->Release();
+  }
+
+  borderless_fullscreen_pending = !ApplyBorderlessFullscreen(swapchain);
+}
+
+bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
+  if (fullscreen) {
+    borderless_fullscreen_pending = true;
+    ApplyBorderlessFullscreen(swapchain);
+    return true;
+  }
+
+  borderless_fullscreen_pending = false;
+  return false;
+}
+
+void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain, const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect, uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
+  if (!borderless_fullscreen_pending) return;
+  borderless_fullscreen_pending = !ApplyBorderlessFullscreen(swapchain);
 }
 
 bool initialized = false;
@@ -322,9 +383,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         initialized = true;
       }
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }
