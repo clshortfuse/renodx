@@ -38,6 +38,12 @@ inline fs::path NormalizePath(const fs::path& path) {
   return path.lexically_normal();
 }
 
+inline bool ShouldTrackIncludeDependency(const fs::path& include_path, bool exists) {
+  if (include_path.extension() == ".hpp") return false;
+  if (!exists && !include_path.has_extension()) return false;
+  return true;
+}
+
 inline std::set<fs::path> ParseIncludes(const fs::path& hlsl_file) {
   std::set<fs::path> includes;
   std::ifstream file(hlsl_file);
@@ -45,7 +51,10 @@ inline std::set<fs::path> ParseIncludes(const fs::path& hlsl_file) {
     return includes;
   }
 
-  static const std::regex INCLUDE_REGEX(R"(^\s*#\s*include\s+[\"<]([^\">]+)[\">])");
+  // Only quoted includes are local shader file dependencies. Angle includes are
+  // compiler/system include lookups (for example C++ headers in shared files)
+  // and should not be resolved relative to the current HLSL file.
+  static const std::regex INCLUDE_REGEX(R"(^\s*#\s*include\s+"([^"]+)["])");
   std::string line;
   const auto base_dir = NormalizePath(hlsl_file).parent_path();
 
@@ -77,11 +86,16 @@ inline void CollectIncludedDependencies(
     for (const auto& include_path : ParseIncludes(normalized)) {
       std::error_code error_code;
       const bool exists = fs::exists(include_path, error_code);
+      const bool valid_dependency = exists && !error_code;
+      if (!ShouldTrackIncludeDependency(include_path, valid_dependency)) {
+        continue;
+      }
+
       dependencies.push_back(DependencyPath{
           .path = include_path,
-          .exists = exists && !error_code,
+          .exists = valid_dependency,
       });
-      if (exists && !error_code) {
+      if (valid_dependency) {
         pending.push_back(include_path);
       }
     }

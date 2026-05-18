@@ -11,6 +11,7 @@
 #include "./tonemap/hermite_spline.hlsl"
 #include "./tonemap/naka_rushton.hlsl"
 #include "./tonemap/neutwo.hlsl"
+#include "./tonemap/psychov.hlsl"
 #include "./tonemap/reinhard.hlsl"
 #include "./tonemap/reno_drt.hlsl"
 #include "./tonemap/rushton_henry.hlsl"
