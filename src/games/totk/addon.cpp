@@ -227,16 +227,21 @@ bool initialized = false;
 
 const auto RYUJINX_PROCESS_NAME = std::string_view("Ryujinx.exe");
 const auto RYUJINX_LOADED_TITLE_MARKER = std::string_view("Application Loaded:");
-const std::string_view ACCEPTED_RYUJINX_TITLES[] = {
+const std::array<std::string_view, 2> ACCEPTED_RYUJINX_TITLES = {
     "0100f2c0115b6000",
     "the legend of zelda: tears of the kingdom",
 };
 
 bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
+  const std::array<std::filesystem::path, 2> candidate_log_paths = {
+      process_path.parent_path() / "logs",
+      process_path.parent_path() / "portable" / "Logs",
+  };
+
   return ryujinxlog::DoesLatestLogLastMatchingLineContainAny({
-      .logs_path = process_path.parent_path() / "Logs",
       .line_marker = RYUJINX_LOADED_TITLE_MARKER,
       .accepted_terms = ACCEPTED_RYUJINX_TITLES,
+      .logs_paths = candidate_log_paths,
   });
 }
 

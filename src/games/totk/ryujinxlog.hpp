@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cctype>
 #include <filesystem>
@@ -19,6 +20,7 @@ struct LatestLogLineMatchConfig {
   std::filesystem::path logs_path;
   std::string_view line_marker;
   std::span<const std::string_view> accepted_terms;
+  std::span<const std::filesystem::path> logs_paths;
 };
 
 struct ProcessWindowTitleMatchConfig {
@@ -34,33 +36,46 @@ inline std::string ToLowerAscii(std::string value) {
   return value;
 }
 
-inline std::optional<std::filesystem::path> FindLatestLogPath(const std::filesystem::path& logs_path) {
-  if (!std::filesystem::exists(logs_path) || !std::filesystem::is_directory(logs_path)) return std::nullopt;
-
+inline std::optional<std::filesystem::path> FindLatestLogPath(std::span<const std::filesystem::path> logs_paths) {
   std::optional<std::filesystem::path> latest_log_path;
   std::filesystem::file_time_type latest_write_time;
 
-  for (const auto& entry : std::filesystem::directory_iterator(logs_path)) {
-    if (!entry.is_regular_file()) continue;
-    if (entry.path().extension() != ".log") continue;
+  for (const auto& logs_path : logs_paths) {
+    if (!std::filesystem::exists(logs_path) || !std::filesystem::is_directory(logs_path)) continue;
 
-    std::error_code last_write_time_error;
-    const auto last_write_time = entry.last_write_time(last_write_time_error);
-    if (last_write_time_error) continue;
+    for (const auto& entry : std::filesystem::directory_iterator(logs_path)) {
+      if (!entry.is_regular_file()) continue;
+      if (entry.path().extension() != ".log") continue;
 
-    if (!latest_log_path.has_value() ||
-        last_write_time > latest_write_time ||
-        (last_write_time == latest_write_time && entry.path().filename().string() > latest_log_path->filename().string())) {
-      latest_log_path = entry.path();
-      latest_write_time = last_write_time;
+      std::error_code last_write_time_error;
+      const auto last_write_time = entry.last_write_time(last_write_time_error);
+      if (last_write_time_error) continue;
+
+      if (!latest_log_path.has_value() ||
+          last_write_time > latest_write_time ||
+          (last_write_time == latest_write_time && entry.path().filename().string() > latest_log_path->filename().string())) {
+        latest_log_path = entry.path();
+        latest_write_time = last_write_time;
+      }
     }
   }
 
   return latest_log_path;
 }
 
+inline std::optional<std::filesystem::path> FindLatestLogPath(const std::filesystem::path& logs_path) {
+  const std::array<std::filesystem::path, 1> log_paths = {logs_path};
+  return FindLatestLogPath(log_paths);
+}
+
 inline bool DoesLatestLogLastMatchingLineContainAny(const LatestLogLineMatchConfig& config) {
-  const auto latest_log_path = FindLatestLogPath(config.logs_path);
+  auto log_paths = std::vector<std::filesystem::path>{};
+  if (!config.logs_path.empty()) {
+    log_paths.push_back(config.logs_path);
+  }
+  log_paths.insert(log_paths.end(), config.logs_paths.begin(), config.logs_paths.end());
+
+  const auto latest_log_path = log_paths.empty() ? std::nullopt : FindLatestLogPath(log_paths);
   if (!latest_log_path.has_value()) return true;
 
   const auto log_contents = renodx::utils::path::ReadTextFile(*latest_log_path);
