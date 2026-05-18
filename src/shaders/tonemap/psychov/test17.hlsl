@@ -1,10 +1,10 @@
 #ifndef RENODX_SHADERS_TONEMAP_PSYCHOV_TEST17_HLSL_
 #define RENODX_SHADERS_TONEMAP_PSYCHOV_TEST17_HLSL_
 
-#include "../color.hlsl"
-#include "../colorgrade.hlsl"
-#include "./naka_rushton.hlsl"
-#include "./neutwo.hlsl"
+#include "../../color.hlsl"
+#include "../../colorgrade.hlsl"
+#include "../naka_rushton.hlsl"
+#include "../neutwo.hlsl"
 
 /*
  * Copyright (C) 2026 Carlos Lopez
