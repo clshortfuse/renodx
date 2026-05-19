@@ -22,6 +22,7 @@
 #include <vector>
 
 // Local utilities
+#include "device.hpp"
 #include "pipeline.hpp"
 #include "resource.hpp"
 #include "state.hpp"
@@ -220,6 +221,8 @@ class RenderPass {
 
   bool auto_generate_descriptor_table_updates{true};
   std::vector<reshade::api::descriptor_table_update> descriptor_table_updates;
+  std::vector<reshade::api::descriptor_table> descriptor_tables;
+  bool generated_descriptor_tables = false;
 
   reshade::api::pipeline_layout layout{0};
   bool generated_layout = false;
@@ -409,30 +412,50 @@ class RenderPass {
 
     // Build pipeline layout if not supplied
     if (this->layout.handle == 0u) {
+      std::vector<reshade::api::descriptor_range> descriptor_ranges = {};
+      descriptor_ranges.reserve(
+          (samplers.empty() ? 0u : 1u)
+          + (this->shader_resource_slots.views.empty() ? 0u : 1u)
+          + (this->unordered_access_slots.views.empty() ? 0u : 1u));
       std::vector<reshade::api::pipeline_layout_param> layout_params = {};
       // Samplers
       if (!samplers.empty()) {
-        reshade::api::pipeline_layout_param param_sampler;
-        param_sampler.type = reshade::api::pipeline_layout_param_type::push_descriptors;
-        param_sampler.push_descriptors.count = samplers.size();
-        param_sampler.push_descriptors.type = reshade::api::descriptor_type::sampler;
-        layout_params.push_back(param_sampler);
+        descriptor_ranges.push_back({
+            .binding = 0,
+            .dx_register_index = 0,
+            .dx_register_space = 0,
+            .count = static_cast<uint32_t>(samplers.size()),
+            .visibility = reshade::api::shader_stage::all,
+            .array_size = 1,
+            .type = reshade::api::descriptor_type::sampler,
+        });
+        layout_params.emplace_back(1, &descriptor_ranges.back());
       }
 
       if (!this->shader_resource_slots.views.empty()) {
-        reshade::api::pipeline_layout_param param_srv;
-        param_srv.type = reshade::api::pipeline_layout_param_type::push_descriptors;
-        param_srv.push_descriptors.count = this->shader_resource_slots.views.size();
-        param_srv.push_descriptors.type = reshade::api::descriptor_type::texture_shader_resource_view;
-        layout_params.push_back(param_srv);
+        descriptor_ranges.push_back({
+            .binding = 0,
+            .dx_register_index = 0,
+            .dx_register_space = 0,
+            .count = static_cast<uint32_t>(this->shader_resource_slots.views.size()),
+            .visibility = reshade::api::shader_stage::all,
+            .array_size = 1,
+            .type = reshade::api::descriptor_type::texture_shader_resource_view,
+        });
+        layout_params.emplace_back(1, &descriptor_ranges.back());
       }
 
       if (!this->unordered_access_slots.views.empty()) {
-        reshade::api::pipeline_layout_param param_uav;
-        param_uav.type = reshade::api::pipeline_layout_param_type::push_descriptors;
-        param_uav.push_descriptors.count = this->unordered_access_slots.views.size();
-        param_uav.push_descriptors.type = reshade::api::descriptor_type::texture_unordered_access_view;
-        layout_params.push_back(param_uav);
+        descriptor_ranges.push_back({
+            .binding = 0,
+            .dx_register_index = 0,
+            .dx_register_space = 0,
+            .count = static_cast<uint32_t>(this->unordered_access_slots.views.size()),
+            .visibility = reshade::api::shader_stage::all,
+            .array_size = 1,
+            .type = reshade::api::descriptor_type::texture_unordered_access_view,
+        });
+        layout_params.emplace_back(1, &descriptor_ranges.back());
       }
 
       if (!push_constants.empty()) {
@@ -457,9 +480,12 @@ class RenderPass {
         for (size_t i = 0; i < layout_params.size(); ++i) {
           const auto& p = layout_params[i];
           s << " [" << i << " type=" << p.type;
-          if (p.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
-            s << " desc_type=" << p.push_descriptors.type
-              << " count=" << p.push_descriptors.count;
+          if (p.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
+            s << " ranges=" << p.descriptor_table.count;
+            if (p.descriptor_table.count != 0u) {
+              s << " desc_type=" << p.descriptor_table.ranges[0].type;
+              s << " count=" << p.descriptor_table.ranges[0].count;
+            }
           } else if (p.type == reshade::api::pipeline_layout_param_type::push_constants) {
             s << " dx_reg=" << p.push_constants.dx_register_index
               << " space=" << p.push_constants.dx_register_space
@@ -484,7 +510,8 @@ class RenderPass {
     }
 
     if (this->pipeline.handle == 0) {
-      if (this->auto_generate_render_target_formats) {
+      const bool is_compute_pipeline = this->IsComputePass();
+      if (!is_compute_pipeline && this->auto_generate_render_target_formats) {
         std::vector<reshade::api::format> rt_formats;
         for (const auto& rtv : this->render_target_slots.views) {
           auto res_info_desc = renodx::utils::resource::GetResourceViewDesc(device, rtv);
@@ -504,10 +531,27 @@ class RenderPass {
         pipeline_subobjects.render_target_formats = rt_formats;
         this->auto_generate_render_target_formats = false;
       }
-      this->pipeline = renodx::utils::pipeline::CreateRenderPipeline(
-          device,
-          this->layout,
-          this->pipeline_subobjects);
+
+      if (is_compute_pipeline) {
+        reshade::api::shader_desc cs_desc = {
+            .code = this->pipeline_subobjects.compute_shader.data(),
+            .code_size = this->pipeline_subobjects.compute_shader.size(),
+        };
+        reshade::api::pipeline_subobject cs = {
+            .type = reshade::api::pipeline_subobject_type::compute_shader,
+            .count = 1,
+            .data = &cs_desc,
+        };
+        if (!device->create_pipeline(this->layout, 1, &cs, &this->pipeline)) {
+          assert(false && "Create compute pipeline failed.");
+          return false;
+        }
+      } else {
+        this->pipeline = renodx::utils::pipeline::CreateRenderPipeline(
+            device,
+            this->layout,
+            this->pipeline_subobjects);
+      }
       if (this->pipeline.handle == 0) {
 #ifdef DEBUG_LEVEL_2
         reshade::log::message(reshade::log::level::warning, "utils::render::RenderPass(CreateRenderPipeline failed)");
@@ -541,49 +585,72 @@ class RenderPass {
       }
     }
 
-    cmd_list->begin_render_pass(
+    const auto update_descriptor_tables = [&]() -> bool {
+      if (this->descriptor_table_updates.empty()) {
+        this->DestroyDescriptorTables(device);
+        return true;
+      }
+
+      if (this->descriptor_tables.size() != this->descriptor_table_updates.size()) {
+        this->DestroyDescriptorTables(device);
+        this->descriptor_tables.assign(this->descriptor_table_updates.size(), reshade::api::descriptor_table{});
+
+        for (uint32_t index = 0; index < static_cast<uint32_t>(this->descriptor_tables.size()); ++index) {
+          if (!device->allocate_descriptor_table(this->layout, index, &this->descriptor_tables[index])) {
+            this->DestroyDescriptorTables(device);
+            return false;
+          }
+        }
+        this->generated_descriptor_tables = true;
+      }
+
+      std::vector<reshade::api::descriptor_table_update> table_updates = this->descriptor_table_updates;
+      for (size_t i = 0; i < table_updates.size(); ++i) {
+        table_updates[i].table = this->descriptor_tables[i];
+      }
+      device->update_descriptor_tables(static_cast<uint32_t>(table_updates.size()), table_updates.data());
+      return true;
+    };
+
+    if (!update_descriptor_tables()) {
+      return false;
+    }
+
+    const auto push_bindings = [&](reshade::api::shader_stage descriptor_stage) {
+      uint32_t current_layout_param_index = 0;
+      if (!this->descriptor_tables.empty()) {
+        cmd_list->bind_descriptor_tables(
+            descriptor_stage,
+            this->layout,
+            0,
+            static_cast<uint32_t>(this->descriptor_tables.size()),
+            this->descriptor_tables.data());
+        current_layout_param_index = static_cast<uint32_t>(this->descriptor_tables.size());
+      }
+
+      // Push constants
+      for (const auto& [slot_space, span] : push_constants) {
+        cmd_list->push_constants(
+            descriptor_stage,
+            this->layout,
+            current_layout_param_index,
+            0,
+            static_cast<uint32_t>(span.size()),
+            span.data());
+        ++current_layout_param_index;
+      }
+    };
+
+    const bool is_graphics_pass = !this->IsComputePass();
+
+    if (is_graphics_pass) {
+      cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, this->pipeline);
+      cmd_list->begin_render_pass(
         static_cast<uint32_t>(this->render_target_slots.render_pass_descs.size()),
         this->render_target_slots.render_pass_descs.data(),
         nullptr);
+      push_bindings(reshade::api::shader_stage::all_graphics);
 
-    bool is_compute = this->IsComputePass();
-    // TODO(clshortfuse): Allocate/bind descriptor tables instead
-    auto descriptor_stage = is_compute
-                                ? reshade::api::shader_stage::all_compute
-                                : reshade::api::shader_stage::all_graphics;
-    auto current_layout_param_index = 0;
-    while (current_layout_param_index < descriptor_table_updates.size()) {
-#ifdef DEBUG_LEVEL_2
-      {
-        std::stringstream s;
-        const auto& u = descriptor_table_updates[current_layout_param_index];
-        s << "utils::render::RenderPass(push_descriptors index=" << current_layout_param_index
-          << " type=" << u.type
-          << " count=" << u.count << ")";
-        reshade::log::message(reshade::log::level::info, s.str().c_str());
-      }
-#endif
-      cmd_list->push_descriptors(
-          descriptor_stage,
-          this->layout,
-          current_layout_param_index,
-          descriptor_table_updates[current_layout_param_index]);
-      ++current_layout_param_index;
-    }
-
-    // Push constants
-    for (const auto& [slot_space, span] : push_constants) {
-      cmd_list->push_constants(
-          descriptor_stage,
-          this->layout,
-          current_layout_param_index,
-          0,
-          static_cast<uint32_t>(span.size()),
-          span.data());
-      ++current_layout_param_index;
-    }
-
-    if (!is_compute) {
       // Viewport / scissor configuration
       if (this->auto_generate_viewport && this->viewports.size() != this->render_target_slots.views.size()) {
         this->viewports.clear();
@@ -663,20 +730,21 @@ class RenderPass {
         }
       }
 
-      cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, this->pipeline);
       cmd_list->bind_viewports(0, this->viewports.size(), this->viewports.data());
       cmd_list->bind_scissor_rects(0, this->scissors.size(), this->scissors.data());
       cmd_list->draw(3, 1, 0, 0);
+      cmd_list->end_render_pass();
     } else {
+      // Match ReShade's runtime compute order in external/reshade/source/runtime.cpp:
+      // bind the compute pipeline, bind compute descriptors, dispatch, and never enter a render pass.
       cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_compute, this->pipeline);
+      push_bindings(reshade::api::shader_stage::all_compute);
       if (this->dispatch_group_counts.has_value()) {
         const auto& counts = *dispatch_group_counts;
         cmd_list->dispatch(std::get<0>(counts), std::get<1>(counts), std::get<2>(counts));
       } else {
       }
     }
-
-    cmd_list->end_render_pass();
 
     if (this->flush_after_render) {
       assert(queue != nullptr);
@@ -713,6 +781,17 @@ class RenderPass {
     DestroyGeneratedViews(cmd_list->get_device(), generated_resource_views);
   }
 
+  void DestroyDescriptorTables(reshade::api::device* device) {
+    if (generated_descriptor_tables && device != nullptr) {
+      for (const auto& table : descriptor_tables) {
+        if (table.handle == 0u) continue;
+        device->free_descriptor_table(table);
+      }
+    }
+    descriptor_tables.clear();
+    generated_descriptor_tables = false;
+  }
+
   void InvalidateRenderTargets(reshade::api::command_list* cmd_list) {
     DestroyGeneratedViews(cmd_list, &this->render_target_slots.generated_views);
     this->render_target_slots.views.clear();
@@ -730,6 +809,8 @@ class RenderPass {
     DestroyGeneratedViews(cmd_list, &this->unordered_access_slots.generated_views);
 
     auto* device = cmd_list->get_device();
+
+    DestroyDescriptorTables(device);
 
     for (const auto& sampler : generated_samplers) {
       if (sampler.handle == 0) continue;
@@ -756,6 +837,8 @@ class RenderPass {
     DestroyGeneratedViews(device, &this->unordered_access_slots.generated_views);
 
     if (device == nullptr) return;
+
+    DestroyDescriptorTables(device);
 
     for (const auto& sampler : generated_samplers) {
       if (sampler.handle == 0) continue;

@@ -36,82 +36,82 @@ static bool use_resource_replace = false;
 
 using ResourceViewUpgradeMap = cross_addon::unordered_map<
     std::pair<reshade::api::resource_usage, reshade::api::format>,
-  reshade::api::format,
-  utils::hash::HashPair>;
+    reshade::api::format,
+    utils::hash::HashPair>;
 
 const ResourceViewUpgradeMap VIEW_UPGRADES_RGBA16F = {
-  ViewUpgradeAll(r16g16b16a16_typeless, r16g16b16a16_typeless),
-  ViewUpgradeAll(r10g10b10a2_typeless, r16g16b16a16_typeless),
-  ViewUpgradeAll(r8g8b8a8_typeless, r16g16b16a16_typeless),
-  ViewUpgradeAll(r16g16b16a16_float, r16g16b16a16_float),
-  ViewUpgradeAll(r16g16b16a16_unorm, r16g16b16a16_float),
-  ViewUpgradeAll(r16g16b16a16_snorm, r16g16b16a16_float),
-  ViewUpgradeAll(r10g10b10a2_unorm, r16g16b16a16_float),
-  ViewUpgradeAll(b10g10r10a2_unorm, r16g16b16a16_float),
-  ViewUpgradeAll(r8g8b8a8_unorm, r16g16b16a16_float),
-  ViewUpgradeAll(b8g8r8a8_unorm, r16g16b16a16_float),
-  ViewUpgradeAll(r8g8b8a8_snorm, r16g16b16a16_float),
-  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r16g16b16a16_float),
-  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r16g16b16a16_float),
-  ViewUpgradeAll(r11g11b10_float, r16g16b16a16_float),
-  ViewUpgradeAll(b8g8r8x8_unorm, r16g16b16a16_float),
-  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r16g16b16a16_float),
+    ViewUpgradeAll(r16g16b16a16_typeless, r16g16b16a16_typeless),
+    ViewUpgradeAll(r10g10b10a2_typeless, r16g16b16a16_typeless),
+    ViewUpgradeAll(r8g8b8a8_typeless, r16g16b16a16_typeless),
+    ViewUpgradeAll(r16g16b16a16_float, r16g16b16a16_float),
+    ViewUpgradeAll(r16g16b16a16_unorm, r16g16b16a16_float),
+    ViewUpgradeAll(r16g16b16a16_snorm, r16g16b16a16_float),
+    ViewUpgradeAll(r10g10b10a2_unorm, r16g16b16a16_float),
+    ViewUpgradeAll(b10g10r10a2_unorm, r16g16b16a16_float),
+    ViewUpgradeAll(r8g8b8a8_unorm, r16g16b16a16_float),
+    ViewUpgradeAll(b8g8r8a8_unorm, r16g16b16a16_float),
+    ViewUpgradeAll(r8g8b8a8_snorm, r16g16b16a16_float),
+    ViewUpgradeAll(r8g8b8a8_unorm_srgb, r16g16b16a16_float),
+    ViewUpgradeAll(b8g8r8a8_unorm_srgb, r16g16b16a16_float),
+    ViewUpgradeAll(r11g11b10_float, r16g16b16a16_float),
+    ViewUpgradeAll(b8g8r8x8_unorm, r16g16b16a16_float),
+    ViewUpgradeAll(b8g8r8x8_unorm_srgb, r16g16b16a16_float),
 };
 
 const ResourceViewUpgradeMap VIEW_UPGRADES_RGBA8_UNORM = {
-  ViewUpgradeAll(r8g8b8a8_typeless, r8g8b8a8_typeless),
-  ViewUpgradeAll(r8g8b8a8_unorm, r8g8b8a8_unorm),
-  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r8g8b8a8_unorm),
-  ViewUpgradeAll(b8g8r8a8_unorm, r8g8b8a8_unorm),
-  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r8g8b8a8_unorm),
-  ViewUpgradeAll(b8g8r8x8_unorm, r8g8b8a8_unorm),
-  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r8g8b8a8_unorm),
+    ViewUpgradeAll(r8g8b8a8_typeless, r8g8b8a8_typeless),
+    ViewUpgradeAll(r8g8b8a8_unorm, r8g8b8a8_unorm),
+    ViewUpgradeAll(r8g8b8a8_unorm_srgb, r8g8b8a8_unorm),
+    ViewUpgradeAll(b8g8r8a8_unorm, r8g8b8a8_unorm),
+    ViewUpgradeAll(b8g8r8a8_unorm_srgb, r8g8b8a8_unorm),
+    ViewUpgradeAll(b8g8r8x8_unorm, r8g8b8a8_unorm),
+    ViewUpgradeAll(b8g8r8x8_unorm_srgb, r8g8b8a8_unorm),
 };
 
 const ResourceViewUpgradeMap VIEW_UPGRADES_R10G10B10A2_UNORM = {
-  ViewUpgradeAll(r10g10b10a2_typeless, r10g10b10a2_typeless),
-  ViewUpgradeAll(r8g8b8a8_typeless, r10g10b10a2_typeless),
-  ViewUpgradeAll(r10g10b10a2_unorm, r10g10b10a2_unorm),
-  ViewUpgradeAll(b10g10r10a2_unorm, r10g10b10a2_unorm),
-  ViewUpgradeAll(r8g8b8a8_unorm, r10g10b10a2_unorm),
-  ViewUpgradeAll(b8g8r8a8_unorm, r10g10b10a2_unorm),
-  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r10g10b10a2_unorm),
-  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r10g10b10a2_unorm),
-  ViewUpgradeAll(b8g8r8x8_unorm, r10g10b10a2_unorm),
-  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r10g10b10a2_unorm),
+    ViewUpgradeAll(r10g10b10a2_typeless, r10g10b10a2_typeless),
+    ViewUpgradeAll(r8g8b8a8_typeless, r10g10b10a2_typeless),
+    ViewUpgradeAll(r10g10b10a2_unorm, r10g10b10a2_unorm),
+    ViewUpgradeAll(b10g10r10a2_unorm, r10g10b10a2_unorm),
+    ViewUpgradeAll(r8g8b8a8_unorm, r10g10b10a2_unorm),
+    ViewUpgradeAll(b8g8r8a8_unorm, r10g10b10a2_unorm),
+    ViewUpgradeAll(r8g8b8a8_unorm_srgb, r10g10b10a2_unorm),
+    ViewUpgradeAll(b8g8r8a8_unorm_srgb, r10g10b10a2_unorm),
+    ViewUpgradeAll(b8g8r8x8_unorm, r10g10b10a2_unorm),
+    ViewUpgradeAll(b8g8r8x8_unorm_srgb, r10g10b10a2_unorm),
 };
 
 const ResourceViewUpgradeMap VIEW_UPGRADES_R11G11B10_FLOAT = {
-  ViewUpgradeAll(r10g10b10a2_typeless, r11g11b10_float),
-  ViewUpgradeAll(r8g8b8a8_typeless, r11g11b10_float),
-  ViewUpgradeAll(r10g10b10a2_unorm, r11g11b10_float),
-  ViewUpgradeAll(b10g10r10a2_unorm, r11g11b10_float),
-  ViewUpgradeAll(r8g8b8a8_unorm, r11g11b10_float),
-  ViewUpgradeAll(b8g8r8a8_unorm, r11g11b10_float),
-  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r11g11b10_float),
-  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r11g11b10_float),
-  ViewUpgradeAll(b8g8r8x8_unorm, r11g11b10_float),
-  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r11g11b10_float),
+    ViewUpgradeAll(r10g10b10a2_typeless, r11g11b10_float),
+    ViewUpgradeAll(r8g8b8a8_typeless, r11g11b10_float),
+    ViewUpgradeAll(r10g10b10a2_unorm, r11g11b10_float),
+    ViewUpgradeAll(b10g10r10a2_unorm, r11g11b10_float),
+    ViewUpgradeAll(r8g8b8a8_unorm, r11g11b10_float),
+    ViewUpgradeAll(b8g8r8a8_unorm, r11g11b10_float),
+    ViewUpgradeAll(r8g8b8a8_unorm_srgb, r11g11b10_float),
+    ViewUpgradeAll(b8g8r8a8_unorm_srgb, r11g11b10_float),
+    ViewUpgradeAll(b8g8r8x8_unorm, r11g11b10_float),
+    ViewUpgradeAll(b8g8r8x8_unorm_srgb, r11g11b10_float),
 };
 
 const ResourceViewUpgradeMap VIEW_UPGRADES_R9G9B9E5 = {
-  ViewUpgradeAll(r16g16b16a16_typeless, r9g9b9e5),
-  ViewUpgradeAll(r10g10b10a2_typeless, r9g9b9e5),
-  ViewUpgradeAll(r8g8b8a8_typeless, r9g9b9e5),
-  ViewUpgradeAll(r16g16b16a16_float, r9g9b9e5),
-  ViewUpgradeAll(r16g16b16a16_unorm, r9g9b9e5),
-  ViewUpgradeAll(r16g16b16a16_snorm, r9g9b9e5),
-  ViewUpgradeAll(r10g10b10a2_unorm, r9g9b9e5),
-  ViewUpgradeAll(b10g10r10a2_unorm, r9g9b9e5),
-  ViewUpgradeAll(r8g8b8a8_unorm, r9g9b9e5),
-  ViewUpgradeAll(b8g8r8a8_unorm, r9g9b9e5),
-  ViewUpgradeAll(r8g8b8a8_snorm, r9g9b9e5),
-  ViewUpgradeAll(r8g8b8a8_unorm_srgb, r9g9b9e5),
-  ViewUpgradeAll(b8g8r8a8_unorm_srgb, r9g9b9e5),
-  ViewUpgradeAll(r11g11b10_float, r9g9b9e5),
-  ViewUpgradeAll(r9g9b9e5, r9g9b9e5),
-  ViewUpgradeAll(b8g8r8x8_unorm, r9g9b9e5),
-  ViewUpgradeAll(b8g8r8x8_unorm_srgb, r9g9b9e5),
+    ViewUpgradeAll(r16g16b16a16_typeless, r9g9b9e5),
+    ViewUpgradeAll(r10g10b10a2_typeless, r9g9b9e5),
+    ViewUpgradeAll(r8g8b8a8_typeless, r9g9b9e5),
+    ViewUpgradeAll(r16g16b16a16_float, r9g9b9e5),
+    ViewUpgradeAll(r16g16b16a16_unorm, r9g9b9e5),
+    ViewUpgradeAll(r16g16b16a16_snorm, r9g9b9e5),
+    ViewUpgradeAll(r10g10b10a2_unorm, r9g9b9e5),
+    ViewUpgradeAll(b10g10r10a2_unorm, r9g9b9e5),
+    ViewUpgradeAll(r8g8b8a8_unorm, r9g9b9e5),
+    ViewUpgradeAll(b8g8r8a8_unorm, r9g9b9e5),
+    ViewUpgradeAll(r8g8b8a8_snorm, r9g9b9e5),
+    ViewUpgradeAll(r8g8b8a8_unorm_srgb, r9g9b9e5),
+    ViewUpgradeAll(b8g8r8a8_unorm_srgb, r9g9b9e5),
+    ViewUpgradeAll(r11g11b10_float, r9g9b9e5),
+    ViewUpgradeAll(r9g9b9e5, r9g9b9e5),
+    ViewUpgradeAll(b8g8r8x8_unorm, r9g9b9e5),
+    ViewUpgradeAll(b8g8r8x8_unorm_srgb, r9g9b9e5),
 };
 
 #undef ViewUpgrade
@@ -982,9 +982,17 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
   bool should_run_after_destroy_callbacks = false;
   const auto found = UpdateResourceInfo(resource, [&](ResourceInfo* resource_info) {
     if (resource_info->destroyed) {
-      log::w("utils::resource::OnDestroyResource(Resource already destroyed: ",
-             log::AsPtr(resource.handle), ")");
-      assert(!resource_info->destroyed);
+#ifdef DEBUG_LEVEL_0
+      if (resource_info->is_swap_chain) {
+        log::w("utils::resource::OnDestroyResource(Swap chain resource already destroyed: ",
+               log::AsPtr(resource.handle), ")");
+      } else {
+        log::w("utils::resource::OnDestroyResource(Resource already destroyed: ",
+               log::AsPtr(resource.handle), ")");
+
+        assert(!resource_info->destroyed);
+      }
+#endif
       return;
     }
     if (resource_info->device != device) {
@@ -1567,6 +1575,37 @@ inline reshade::api::format FormatToTypeless(reshade::api::format value) {
     default:
       return value;
   }
+}
+
+inline bool IsDepthStencilCopyCompatible(
+    reshade::api::format source,
+    reshade::api::format destination) {
+  const auto source_typeless = FormatToTypeless(source);
+  const auto destination_typeless = FormatToTypeless(destination);
+
+  if (source_typeless == destination_typeless) return true;
+
+  // Depth-only copies make r32_* and r32_g8_* families copy-compatible
+  switch (source_typeless) {
+    case reshade::api::format::r32_typeless:
+      return destination_typeless == reshade::api::format::r32_g8_typeless;
+    case reshade::api::format::r32_g8_typeless:
+      return destination_typeless == reshade::api::format::r32_typeless;
+    case reshade::api::format::d24_unorm_x8_uint:
+      return destination_typeless == reshade::api::format::r24_g8_typeless;
+    case reshade::api::format::r24_g8_typeless:
+      return destination_typeless == reshade::api::format::d24_unorm_x8_uint;
+    default:
+      return false;
+  }
+}
+
+inline bool AreCopyFormatsCompatible(
+    reshade::api::format source,
+    reshade::api::format destination) {
+  return source == destination
+         || IsDepthStencilCopyCompatible(source, destination)
+         || IsCompressible(source, destination);
 }
 
 static void Use(DWORD fdw_reason) {
