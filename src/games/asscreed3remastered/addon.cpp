@@ -18,6 +18,7 @@
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "../../utils/windowing.hpp"
+#include "./dlss.hpp"
 #include "./shared.h"
 
 namespace {
@@ -205,6 +206,26 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "DLAA",
+        .binding = &ac3r::dlss::dlaa_enabled,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 0.f,
+        .label = "DLAA",
+        .section = "Upscaling/AA",
+        .tooltip = "Runs NVIDIA DLAA in place of the game's native temporal AA pass. Requires nvngx_dlss.dll next to the game executable.",
+    },
+    new renodx::utils::settings::Setting{
+        .key = "DLAAPreset",
+        .binding = &ac3r::dlss::dlaa_render_preset,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
+        .label = "DLSS Preset",
+        .section = "Upscaling/AA",
+        .tooltip = "Selects the NGX DLSS/DLAA render preset.",
+        .labels = {"F - CNN", "J - Transformer 1", "K - Transformer 1", "L - Transformer 2", "M - Transformer 2"},
+        .is_enabled = []() { return ac3r::dlss::dlaa_enabled != 0.f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "HDRExposureCompensation",
         .binding = &shader_injection.exposure_compensation,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -310,6 +331,8 @@ void OnPresetOff() {
       {"ColorFilterStrength", 100.f},
       {"FxFilmGrain", 0.f},
       {"FxFilmGrainStrength", 50.f},
+      {"DLAA", 0.f},
+      {"DLAAPreset", 2.f},
       {"HDRExposureCompensation", 0.f},
       {"HDRContrastCompensation", 0.f},
   });
@@ -422,6 +445,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::utils::random::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  ac3r::dlss::Use(fdw_reason);
 
   return TRUE;
 }
