@@ -24,6 +24,11 @@ struct ShaderInjectData {
   float custom_color_filter_strength;
   float exposure_compensation;
   float contrast_compensation;
+
+  float custom_film_grain_type;
+  float custom_film_grain_strength;
+  float custom_random;
+  float custom_reserved0;
 };
 
 #ifndef __cplusplus
@@ -49,6 +54,9 @@ cbuffer shader_injection : register(b13) {
 
 #define CUSTOM_EXPOSURE_COMPENSATION shader_injection.exposure_compensation
 #define CUSTOM_CONTRAST_COMPENSATION shader_injection.contrast_compensation
+#define CUSTOM_FILM_GRAIN_TYPE       shader_injection.custom_film_grain_type
+#define CUSTOM_FILM_GRAIN_STRENGTH   shader_injection.custom_film_grain_strength
+#define CUSTOM_RANDOM                shader_injection.custom_random
 
 #include "../../shaders/renodx.hlsl"
 #endif

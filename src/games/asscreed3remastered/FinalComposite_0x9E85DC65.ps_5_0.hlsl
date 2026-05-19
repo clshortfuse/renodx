@@ -35,7 +35,7 @@ void main(
 
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     r0.xyzw = g_InputTexture0.Sample(g_PointClampSampler_s, v1.xy).xyzw;
-    o0.xyz = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(r0.xyz));
+    o0.xyz = ApplyAC3RFilmGrain(ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(r0.xyz)), v1.xy);
     o0.w = r0.w;
     return;
   }
@@ -72,5 +72,6 @@ void main(
   r0.y = dot(r1.xyz, float3(-0.969243646,1.8759675,0.0415550582));
   r0.z = dot(r1.xyz, float3(0.0556300804,-0.203976959,1.05697155));
   o0.xyz = float3(0.0125000002,0.0125000002,0.0125000002) * r0.xyz;
+  o0.xyz = ApplyAC3RFilmGrain(o0.xyz, v1.xy);
   return;
 }

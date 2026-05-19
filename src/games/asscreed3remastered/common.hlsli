@@ -284,6 +284,9 @@ float3 ApplyAC3RDisplayTransformToScRGB(float3 untonemapped_ap1) {
   float3 tonemapped_ap1 = lerp(tonemapped_lum_ap1, tonemapped_perch_ap1, blend);
 
   float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(max(0.f, tonemapped_ap1));
+  float3 tonemapped_perch_bt709 = renodx::color::bt709::from::AP1(max(0.f, tonemapped_perch_ap1));
+  tonemapped_bt709 = renodx::color::correct::Chrominance(tonemapped_bt709, tonemapped_perch_bt709);
+  tonemapped_bt709 = renodx::color::bt709::clamp::AP1(tonemapped_bt709);
   float3 tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
   tonemapped_bt2020 = GamutCompressBT2020(tonemapped_bt2020);
 
@@ -295,6 +298,17 @@ float3 ApplyAC3RDisplayTransformToScRGB(float3 untonemapped_ap1) {
 float3 ApplyAC3RUIBrightness(float3 color) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return color;
   return color * (max(RENODX_GRAPHICS_WHITE_NITS, 1.f) / AC3R_NATIVE_DIFFUSE_WHITE_NITS);
+}
+
+float3 ApplyAC3RFilmGrain(float3 color, float2 position) {
+  if (CUSTOM_FILM_GRAIN_TYPE == 0.f || CUSTOM_FILM_GRAIN_STRENGTH <= 0.f) return color;
+
+  return renodx::effects::ApplyFilmGrain(
+      color,
+      position,
+      CUSTOM_RANDOM,
+      CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+      AC3R_NATIVE_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE);
 }
 
 float3 NormalizeAC3RWhitePointScale(float3 white_point_scale) {

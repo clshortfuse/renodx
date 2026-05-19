@@ -14,6 +14,7 @@
 
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "../../utils/windowing.hpp"
@@ -183,6 +184,27 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxFilmGrain",
+        .binding = &shader_injection.custom_film_grain_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Perceptual Film Grain",
+        .section = "Effects",
+        .tooltip = "Adds perceptual luminance-based film grain to the final image.",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxFilmGrainStrength",
+        .binding = &shader_injection.custom_film_grain_strength,
+        .default_value = 50.f,
+        .label = "Film Grain Strength",
+        .section = "Effects",
+        .tooltip = "Controls perceptual film grain strength.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.custom_film_grain_type != 0.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "HDRExposureCompensation",
         .binding = &shader_injection.exposure_compensation,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -286,6 +308,8 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorFilterStrength", 100.f},
+      {"FxFilmGrain", 0.f},
+      {"FxFilmGrainStrength", 50.f},
       {"HDRExposureCompensation", 0.f},
       {"HDRContrastCompensation", 0.f},
   });
@@ -380,6 +404,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!initialized) {
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::force_pipeline_cloning = true;
+        renodx::utils::random::binds.push_back(&shader_injection.custom_random);
         initialized = true;
       }
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
@@ -395,6 +420,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+  renodx::utils::random::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;
