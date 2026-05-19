@@ -50,6 +50,7 @@ struct NgxRuntime {
   uint32_t temporal_constants_staging_size = 0u;
   uint32_t width = 0u;
   uint32_t height = 0u;
+  DXGI_FORMAT output_format = DXGI_FORMAT_UNKNOWN;
   int render_preset = -1;
   int feature_flags = 0;
   bool initialized = false;
@@ -63,12 +64,14 @@ struct NgxRuntime {
 };
 
 inline float dlaa_enabled = 0.f;
-inline float dlaa_render_preset = 2.f;
+inline float dlaa_render_preset = 0.f;
 inline float dlaa_sharpness = 0.f;
 inline float dlaa_responsive_mask = 1.f;
 inline float dlaa_jitter_scale = 1.f;
 inline float dlaa_motion_vector_mode = 3.f;
 inline float dlaa_motion_vectors_jittered = 0.f;
+inline bool is_nvidia_device = false;
+inline bool hdr_output_active = true;
 inline bool attached = false;
 inline bool logged_taa_inputs = false;
 inline NgxRuntime ngx;
@@ -221,6 +224,10 @@ inline const char* ResultToString(NVSDK_NGX_Result result) {
   }
 }
 
+inline bool IsSupported() {
+  return is_nvidia_device;
+}
+
 inline void ReleaseFeature() {
   if (ngx.feature != nullptr) {
     NVSDK_NGX_D3D11_ReleaseFeature(ngx.feature);
@@ -232,6 +239,7 @@ inline void ReleaseFeature() {
   ngx.preconditioned_motion_vectors_uav.Reset();
   ngx.width = 0u;
   ngx.height = 0u;
+  ngx.output_format = DXGI_FORMAT_UNKNOWN;
   ngx.render_preset = -1;
   ngx.feature_flags = 0;
   ngx.create_failed = false;
@@ -314,9 +322,10 @@ inline bool EnsureNgxInitialized(reshade::api::device* device) {
   return true;
 }
 
-inline bool EnsureOutputTexture(ID3D11Device* device, uint32_t width, uint32_t height) {
+inline bool EnsureOutputTexture(ID3D11Device* device, uint32_t width, uint32_t height, DXGI_FORMAT format) {
   if (device == nullptr || width == 0u || height == 0u) return false;
-  if (ngx.output_texture != nullptr && ngx.width == width && ngx.height == height) return true;
+  if (format == DXGI_FORMAT_UNKNOWN) return false;
+  if (ngx.output_texture != nullptr && ngx.width == width && ngx.height == height && ngx.output_format == format) return true;
 
   ReleaseFeature();
 
@@ -325,7 +334,7 @@ inline bool EnsureOutputTexture(ID3D11Device* device, uint32_t width, uint32_t h
   desc.Height = height;
   desc.MipLevels = 1u;
   desc.ArraySize = 1u;
-  desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  desc.Format = format;
   desc.SampleDesc.Count = 1u;
   desc.Usage = D3D11_USAGE_DEFAULT;
   desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_RENDER_TARGET;
@@ -340,6 +349,7 @@ inline bool EnsureOutputTexture(ID3D11Device* device, uint32_t width, uint32_t h
 
   ngx.width = width;
   ngx.height = height;
+  ngx.output_format = format;
   return true;
 }
 
@@ -468,34 +478,34 @@ inline bool EnsureMotionVectorPrepass(ID3D11Device* device, uint32_t width, uint
   return true;
 }
 
-inline NVSDK_NGX_DLSS_Hint_Render_Preset GetRenderPreset() {
+inline int GetRenderPresetValue() {
   switch (static_cast<int>(dlaa_render_preset)) {
-    case 0:
-      return NVSDK_NGX_DLSS_Hint_Render_Preset_F;
     case 1:
-      return NVSDK_NGX_DLSS_Hint_Render_Preset_J;
+      return static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_F);
     case 2:
-      return NVSDK_NGX_DLSS_Hint_Render_Preset_K;
+      return static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_J);
     case 3:
-      return NVSDK_NGX_DLSS_Hint_Render_Preset_L;
+      return static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_K);
     case 4:
-      return NVSDK_NGX_DLSS_Hint_Render_Preset_M;
+      return static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_L);
+    case 5:
+      return static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_M);
     default:
-      return NVSDK_NGX_DLSS_Hint_Render_Preset_K;
+      return static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_Default);
   }
 }
 
-inline const char* GetRenderPresetName(NVSDK_NGX_DLSS_Hint_Render_Preset preset) {
+inline const char* GetRenderPresetName(int preset) {
   switch (preset) {
-    case NVSDK_NGX_DLSS_Hint_Render_Preset_F:
+    case static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_F):
       return "F";
-    case NVSDK_NGX_DLSS_Hint_Render_Preset_J:
+    case static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_J):
       return "J";
-    case NVSDK_NGX_DLSS_Hint_Render_Preset_K:
+    case static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_K):
       return "K";
-    case NVSDK_NGX_DLSS_Hint_Render_Preset_L:
+    case static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_L):
       return "L";
-    case NVSDK_NGX_DLSS_Hint_Render_Preset_M:
+    case static_cast<int>(NVSDK_NGX_DLSS_Hint_Render_Preset_M):
       return "M";
     default:
       return "Default";
@@ -515,10 +525,18 @@ inline void ReleaseFeatureHandleOnly() {
   ngx.logged_jitter = false;
 }
 
+inline void SetHDROutputActive(bool active) {
+  if (hdr_output_active == active) return;
+  hdr_output_active = active;
+  ReleaseFeatureHandleOnly();
+}
+
 inline int GetFeatureFlags() {
-  int flags = NVSDK_NGX_DLSS_Feature_Flags_IsHDR
-              | NVSDK_NGX_DLSS_Feature_Flags_DepthInverted
+  int flags = NVSDK_NGX_DLSS_Feature_Flags_DepthInverted
               | NVSDK_NGX_DLSS_Feature_Flags_AutoExposure;
+  if (hdr_output_active) {
+    flags |= NVSDK_NGX_DLSS_Feature_Flags_IsHDR;
+  }
   if (dlaa_motion_vectors_jittered != 0.f) {
     flags |= NVSDK_NGX_DLSS_Feature_Flags_MVJittered;
   }
@@ -526,7 +544,11 @@ inline int GetFeatureFlags() {
 }
 
 inline std::string GetFeatureFlagsName(int flags) {
-  std::string name = "IsHDR|DepthInverted|AutoExposure";
+  std::string name;
+  if ((flags & NVSDK_NGX_DLSS_Feature_Flags_IsHDR) != 0) {
+    name += "IsHDR|";
+  }
+  name += "DepthInverted|AutoExposure";
   if ((flags & NVSDK_NGX_DLSS_Feature_Flags_MVJittered) != 0) {
     name += "|MVJittered";
   }
@@ -570,8 +592,7 @@ inline std::pair<float, float> GetMotionVectorScale(uint32_t width, uint32_t hei
 
 inline bool EnsureFeature(ID3D11DeviceContext* context, uint32_t width, uint32_t height) {
   if (context == nullptr || ngx.parameters == nullptr || ngx.output_texture == nullptr) return false;
-  const NVSDK_NGX_DLSS_Hint_Render_Preset render_preset = GetRenderPreset();
-  const int render_preset_value = static_cast<int>(render_preset);
+  const int render_preset_value = GetRenderPresetValue();
   const int feature_flags = GetFeatureFlags();
   if (ngx.feature != nullptr
       && ngx.width == width
@@ -615,7 +636,7 @@ inline bool EnsureFeature(ID3D11DeviceContext* context, uint32_t width, uint32_t
   std::stringstream s;
   s << "AC3R DLAA: feature created at " << width << "x" << height
     << " flags=" << GetFeatureFlagsName(feature_flags)
-    << " preset=" << GetRenderPresetName(render_preset);
+    << " preset=" << GetRenderPresetName(render_preset_value);
   reshade::log::message(reshade::log::level::info, s.str().c_str());
   return true;
 }
@@ -926,7 +947,7 @@ inline ID3D11Resource* RunMotionVectorPrepass(
 }
 
 inline bool EvaluateDLAA(reshade::api::command_list* cmd_list, const CommandListData* data) {
-  if (cmd_list == nullptr || data == nullptr || dlaa_enabled == 0.f) return false;
+  if (cmd_list == nullptr || data == nullptr || dlaa_enabled == 0.f || !IsSupported()) return false;
 
   auto* device = cmd_list->get_device();
   if (device == nullptr) return false;
@@ -953,12 +974,24 @@ inline bool EvaluateDLAA(reshade::api::command_list* cmd_list, const CommandList
     color_texture->Release();
   }
 
+  D3D11_TEXTURE2D_DESC output_desc = {};
+  {
+    ID3D11Texture2D* output_texture = nullptr;
+    if (FAILED(output_target->QueryInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&output_texture)))
+        || output_texture == nullptr) {
+      return false;
+    }
+    output_texture->GetDesc(&output_desc);
+    output_texture->Release();
+  }
+
   const uint32_t width = color_desc.Width;
   const uint32_t height = color_desc.Height;
   if (width == 0u || height == 0u) return false;
+  if (output_desc.Width != width || output_desc.Height != height) return false;
 
   if (!EnsureNgxInitialized(device)) return false;
-  if (!EnsureOutputTexture(native_device, width, height)) return false;
+  if (!EnsureOutputTexture(native_device, width, height, output_desc.Format)) return false;
   if (!EnsureFeature(context, width, height)) return false;
   if (ngx.eval_failed) return false;
 
@@ -1053,7 +1086,7 @@ inline bool OnDraw(
   LogTemporalAAInputs(cmd_list);
 
   CommandListData* data = nullptr;
-  if (dlaa_enabled == 0.f || !IsTemporalAADraw(cmd_list, data)) return false;
+  if (dlaa_enabled == 0.f || !IsSupported() || !IsTemporalAADraw(cmd_list, data)) return false;
 
   return EvaluateDLAA(cmd_list, data);
 }
@@ -1068,7 +1101,7 @@ inline bool OnDrawIndexed(
   LogTemporalAAInputs(cmd_list);
 
   CommandListData* data = nullptr;
-  if (dlaa_enabled == 0.f || !IsTemporalAADraw(cmd_list, data)) return false;
+  if (dlaa_enabled == 0.f || !IsSupported() || !IsTemporalAADraw(cmd_list, data)) return false;
 
   return EvaluateDLAA(cmd_list, data);
 }
@@ -1085,6 +1118,21 @@ inline bool OnDrawOrDispatchIndirect(
 
 inline void OnDestroyDevice(reshade::api::device*) {
   ReleaseNgx();
+  is_nvidia_device = false;
+}
+
+inline void OnInitDevice(reshade::api::device* device) {
+  is_nvidia_device = false;
+  if (device == nullptr) return;
+
+  int vendor_id = 0;
+  const bool retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
+  is_nvidia_device = retrieved && vendor_id == 0x10de;
+
+  if (!is_nvidia_device) {
+    dlaa_enabled = 0.f;
+    reshade::log::message(reshade::log::level::info, "AC3R DLAA: hidden because the active graphics adapter is not NVIDIA");
+  }
 }
 
 inline void Use(DWORD fdw_reason) {
@@ -1094,6 +1142,7 @@ inline void Use(DWORD fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (attached) return;
       attached = true;
+      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::init_command_list>(OnInitCommandList);
       reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
       reshade::register_event<reshade::addon_event::reset_command_list>(OnResetCommandList);
@@ -1107,6 +1156,7 @@ inline void Use(DWORD fdw_reason) {
     case DLL_PROCESS_DETACH:
       if (!attached) return;
       attached = false;
+      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitCommandList);
       reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
       reshade::unregister_event<reshade::addon_event::reset_command_list>(OnResetCommandList);

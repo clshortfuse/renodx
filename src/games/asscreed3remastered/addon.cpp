@@ -24,6 +24,25 @@
 namespace {
 
 ShaderInjectData shader_injection;
+ShaderInjectData effective_shader_injection;
+bool hdr_output_active = true;
+bool hdr_output_state_known = false;
+
+bool IsHDROutputActive() {
+  return !hdr_output_state_known || hdr_output_active;
+}
+
+void UpdateEffectiveShaderInjection() {
+  ac3r::dlss::SetHDROutputActive(IsHDROutputActive());
+
+  effective_shader_injection = shader_injection;
+
+  if (!IsHDROutputActive()) {
+    effective_shader_injection.tone_map_type = 0.f;
+    effective_shader_injection.custom_film_grain_type = 0.f;
+    effective_shader_injection.custom_film_grain_strength = 0.f;
+  }
+}
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
@@ -47,6 +66,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Vanilla leaves the game's native HDR tonemapping unchanged. Vanilla+ uses RenoDX ACES.",
         .labels = {"Vanilla", "Vanilla+"},
+        .is_enabled = []() { return IsHDROutputActive(); },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -56,7 +76,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the display peak brightness in nits.",
         .min = 48.f,
         .max = 4000.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -67,7 +87,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% scene white in nits.",
         .min = 48.f,
         .max = 500.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
@@ -78,7 +98,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets UI and HUD brightness in nits for the UI HDR conversion LUT.",
         .min = 48.f,
         .max = 500.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueCorrection",
@@ -88,7 +108,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Hue retention strength.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -99,7 +119,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 2.f,
         .format = "%.2f",
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
@@ -108,7 +128,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -118,7 +138,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -128,7 +148,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -138,7 +158,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -149,7 +169,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -160,7 +180,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -171,7 +191,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/glare compensation.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -193,6 +213,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Adds perceptual luminance-based film grain to the final image.",
         .labels = {"Off", "On"},
+        .is_enabled = []() { return IsHDROutputActive(); },
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrainStrength",
@@ -202,7 +223,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Controls perceptual film grain strength.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.custom_film_grain_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.custom_film_grain_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -210,20 +231,23 @@ renodx::utils::settings::Settings settings = {
         .binding = &ac3r::dlss::dlaa_enabled,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
         .default_value = 0.f,
-        .label = "DLAA",
-        .section = "Upscaling/AA",
+        .label = "TAA/DLSS",
+        .section = "Antialiasing",
         .tooltip = "Runs NVIDIA DLAA in place of the game's native temporal AA pass. Requires nvngx_dlss.dll next to the game executable.",
+        .labels = {"TAA", "DLSS"},
+        .is_visible = []() { return ac3r::dlss::IsSupported(); },
     },
     new renodx::utils::settings::Setting{
         .key = "DLAAPreset",
         .binding = &ac3r::dlss::dlaa_render_preset,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 0.f,
         .label = "DLSS Preset",
-        .section = "Upscaling/AA",
+        .section = "Antialiasing",
         .tooltip = "Selects the NGX DLSS/DLAA render preset.",
-        .labels = {"F - CNN", "J - Transformer 1", "K - Transformer 1", "L - Transformer 2", "M - Transformer 2"},
+        .labels = {"Default", "F - CNN", "J - Transformer 1", "K - Transformer 1", "L - Transformer 2", "M - Transformer 2"},
         .is_enabled = []() { return ac3r::dlss::dlaa_enabled != 0.f; },
+        .is_visible = []() { return ac3r::dlss::IsSupported(); },
     },
     new renodx::utils::settings::Setting{
         .key = "HDRExposureCompensation",
@@ -233,7 +257,7 @@ renodx::utils::settings::Settings settings = {
         .label = "HDR Exposure Compensation",
         .section = "Advanced",
         .tooltip = "Attempts to compensate exposure shifts from the game's white scale.",
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "HDRContrastCompensation",
@@ -243,7 +267,7 @@ renodx::utils::settings::Settings settings = {
         .label = "HDR Contrast Compensation",
         .section = "Advanced",
         .tooltip = "Attempts to compensate contrast shifts from the game's white scale.",
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -332,7 +356,7 @@ void OnPresetOff() {
       {"FxFilmGrain", 0.f},
       {"FxFilmGrainStrength", 50.f},
       {"DLAA", 0.f},
-      {"DLAAPreset", 2.f},
+      {"DLAAPreset", 0.f},
       {"HDRExposureCompensation", 0.f},
       {"HDRContrastCompensation", 0.f},
   });
@@ -379,9 +403,16 @@ bool ApplyBorderlessFullscreen(reshade::api::swapchain* swapchain) {
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (!renodx::utils::swapchain::IsDXGI(swapchain)) return;
 
+  const auto display_info = renodx::utils::swapchain::GetDisplayInfo(swapchain);
+  hdr_output_state_known = true;
+  hdr_output_active = display_info.hdr_enabled && renodx::utils::swapchain::IsHDRColorSpace(swapchain);
+  UpdateEffectiveShaderInjection();
+
   if (!fired_on_init_swapchain) {
-    float peak = renodx::utils::swapchain::GetPeakNits(swapchain).value_or(1000.f);
-    settings[3]->default_value = peak;
+    if (hdr_output_active) {
+      float peak = renodx::utils::swapchain::GetPeakNits(swapchain).value_or(1000.f);
+      settings[3]->default_value = peak;
+    }
 
     fired_on_init_swapchain = true;
   }
@@ -408,6 +439,8 @@ bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullscreen, v
 }
 
 void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain, const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect, uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
+  UpdateEffectiveShaderInjection();
+
   if (!borderless_fullscreen_pending) return;
   borderless_fullscreen_pending = !ApplyBorderlessFullscreen(swapchain);
 }
@@ -428,6 +461,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::utils::random::binds.push_back(&shader_injection.custom_random);
+        UpdateEffectiveShaderInjection();
         initialized = true;
       }
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
@@ -443,8 +477,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+  UpdateEffectiveShaderInjection();
   renodx::utils::random::Use(fdw_reason);
-  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::mods::shader::Use(fdw_reason, custom_shaders, &effective_shader_injection);
   ac3r::dlss::Use(fdw_reason);
 
   return TRUE;
