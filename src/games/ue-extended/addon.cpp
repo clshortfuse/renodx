@@ -924,6 +924,12 @@ const std::unordered_map<
                 {"Set_Path", 0.f},
             },
         },
+        {
+            "LEGOBatmanLotDK-Win64-Shipping.exe",
+            {
+                {"Set_Path", 0.f},
+            },
+        },
 };
 
 float g_dump_shaders = 0.f;
