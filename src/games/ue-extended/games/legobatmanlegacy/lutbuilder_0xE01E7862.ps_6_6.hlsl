@@ -893,7 +893,7 @@ float4 main(
   cb_config.ue_tonecurveammount = 0.f;
   cb_config.ue_mappingpolynomial = float3(cb0_041x, cb0_041y, cb0_041z);
   cb_config.ue_overlaycolor = float4(cb0_015x, cb0_015y, cb0_015z, cb0_015w);
-  cb_config.ue_bluecorrection = cb0_038z;
+  cb_config.ue_bluecorrection = 0.f;
   cb_config.ue_colorscale = float3(cb0_016x, cb0_016y, cb0_016z);
 
   float4 output = ProcessLutbuilder(float3(_806, _808, _810), cb_config, SV_Target, asuint(cb0_042w));
