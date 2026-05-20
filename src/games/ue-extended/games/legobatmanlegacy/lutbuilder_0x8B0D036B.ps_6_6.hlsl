@@ -1,6 +1,6 @@
 // Lego Batman Legacy
 
-#include "../lutbuilderoutput.hlsli"
+#include "../../lutbuilder/lutbuilderoutput.hlsli"
 
 cbuffer cb0 : register(b0) {
   float cb0_008x : packoffset(c008.x);
@@ -784,7 +784,7 @@ float4 main(
   cb_config.ue_filmshoulder = cb0_039w;
   cb_config.ue_filmslope = cb0_039y;
   cb_config.ue_filmwhiteclip = cb0_040y;
-  cb_config.ue_tonecurveammount = cb0_039x;
+  cb_config.ue_tonecurveammount = 0.f;
   cb_config.ue_mappingpolynomial = float3(cb0_041x, cb0_041y, cb0_041z);
   cb_config.ue_overlaycolor = float4(cb0_015x, cb0_015y, cb0_015z, cb0_015w);
   cb_config.ue_bluecorrection = cb0_038z;
