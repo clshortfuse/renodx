@@ -32,15 +32,9 @@ void main()
 
     vec3 lutOut = texture(fp_t_tcb_A, lut_uv).xyz;
 
-    lutOut /= lutScale;
-
-    //lutOut = renodx::color::gamma::DecodeSafe(lutOut);
-
-    lutOut = lerp(gamma_curve / lutScale, lutOut, LUT_STRENGTH);
-
-
+    lutOut = lerp(gamma_curve, lutOut, LUT_STRENGTH);
     lutOut = renodx::color::srgb::DecodeSafe(lutOut);
-
+    lutOut /= lutScale;
     // colour grade (stupid)
     renodx::draw::Config config = renodx::draw::BuildConfig();
     config.tone_map_exposure = RENODX_TONE_MAP_EXPOSURE;
