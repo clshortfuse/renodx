@@ -627,7 +627,9 @@ float4 main(
   cb_config.ue_overlaycolor = float4(cb0_013x, cb0_013y, cb0_013z, cb0_013w);
   cb_config.ue_bluecorrection = cb0_036z;
   cb_config.ue_colorscale = float3(cb0_014x, cb0_014y, cb0_014z);
-  float4 output = ProcessLutbuilder(float3(_897, _898, _899), cb_config, SV_Target, 0u);
+  float4 lutweights[2] = { float4(cb0_005x, cb0_005y, 0.f, 0.f), float4(0.f, 0.f, 0.f, 0.f) };
+  cb_config.ue_lutweights = lutweights;  // Only Lutweights[0].xy is used
+  float4 output = ProcessLutbuilder(float3(_897, _898, _899), s0, t0, cb_config, SV_Target, 0u);
   SV_Target = output;
   return SV_Target;
   _915 = ((mad(0.061360642313957214f, _899, mad(-4.540197551250458e-09f, _898, (_897 * 0.9386394023895264f))) - _897) * cb0_036z) + _897;
