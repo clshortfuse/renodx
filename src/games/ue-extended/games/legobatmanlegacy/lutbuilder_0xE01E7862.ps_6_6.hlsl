@@ -122,14 +122,6 @@ cbuffer cb0 : register(b0) {
   float cb0_042z : packoffset(c042.z);
   int cb0_042w : packoffset(c042.w);
   int cb0_043x : packoffset(c043.x);
-  // Added for ProcessLutbuilder
-  float cb0_038z : packoffset(c038.z);
-  float cb0_039x : packoffset(c039.x);
-  float cb0_039y : packoffset(c039.y);
-  float cb0_039z : packoffset(c039.z);
-  float cb0_039w : packoffset(c039.w);
-  float cb0_040x : packoffset(c040.x);
-  float cb0_040y : packoffset(c040.y);
 };
 
 cbuffer cb1 : register(b1) {
@@ -885,15 +877,10 @@ float4 main(
   _810 = ((_692 * (_679 + (_673 * exp2(log2(exp2(_640 * log2(max(0.0f, ((_628 * _518) + _442)) * 5.55555534362793f)) * 0.18000000715255737f) * _661)))) + (_580 * (_569 + (_563 * exp2(log2(exp2(_530 * log2(max(0.0f, ((_515 * _518) + _442)) * 5.55555534362793f)) * 0.18000000715255737f) * _551))))) + ((_791 + (_785 * exp2(log2(exp2(_752 * log2(max(0.0f, ((_740 * _518) + _442)) * 5.55555534362793f)) * 0.18000000715255737f) * _773))) * _795);
 
   UECbufferConfig cb_config = CreateCbufferConfig();
-  cb_config.ue_filmblackclip = cb0_040x;
-  cb_config.ue_filmtoe = cb0_039z;
-  cb_config.ue_filmshoulder = cb0_039w;
-  cb_config.ue_filmslope = cb0_039y;
-  cb_config.ue_filmwhiteclip = cb0_040y;
-  cb_config.ue_tonecurveammount = 0.f;
+  cb_config.ue_tonecurveammount = 0.f;  // Skip filmic
+  cb_config.ue_bluecorrection = 0.f;    // No blue correction in this shader
   cb_config.ue_mappingpolynomial = float3(cb0_041x, cb0_041y, cb0_041z);
   cb_config.ue_overlaycolor = float4(cb0_015x, cb0_015y, cb0_015z, cb0_015w);
-  cb_config.ue_bluecorrection = 0.f;
   cb_config.ue_colorscale = float3(cb0_016x, cb0_016y, cb0_016z);
 
   float4 output = ProcessLutbuilder(float3(_806, _808, _810), cb_config, SV_Target, asuint(cb0_042w));

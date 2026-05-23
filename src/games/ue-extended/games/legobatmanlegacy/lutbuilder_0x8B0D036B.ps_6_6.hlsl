@@ -122,14 +122,6 @@ cbuffer cb0 : register(b0) {
   float cb0_042z : packoffset(c042.z);
   int cb0_042w : packoffset(c042.w);
   int cb0_043x : packoffset(c043.x);
-  // Added for ProcessLutbuilder
-  float cb0_038z : packoffset(c038.z);
-  float cb0_039x : packoffset(c039.x);
-  float cb0_039y : packoffset(c039.y);
-  float cb0_039z : packoffset(c039.z);
-  float cb0_039w : packoffset(c039.w);
-  float cb0_040x : packoffset(c040.x);
-  float cb0_040y : packoffset(c040.y);
 };
 
 cbuffer cb1 : register(b1) {
@@ -779,15 +771,10 @@ float4 main(
   _809 = ((_691 * (((cb0_021z + cb0_036z) + _588) + (((cb0_020z * cb0_035z) * _597) * exp2(log2(exp2(((cb0_018z * cb0_033z) * _615) * log2(max(0.0f, ((((cb0_017z * cb0_032z) * _624) * _517) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019z * cb0_034z) * _606)))))) + (_579 * (((cb0_021z + cb0_026z) + _455) + (((cb0_020z * cb0_025z) * _469) * exp2(log2(exp2(((cb0_018z * cb0_023z) * _497) * log2(max(0.0f, ((((cb0_017z * cb0_022z) * _511) * _517) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019z * cb0_024z) * _483))))))) + ((((cb0_021z + cb0_031z) + _700) + (((cb0_020z * cb0_030z) * _709) * exp2(log2(exp2(((cb0_018z * cb0_028z) * _727) * log2(max(0.0f, ((((cb0_017z * cb0_027z) * _736) * _517) + _441)) * 5.55555534362793f)) * 0.18000000715255737f) * (1.0f / ((cb0_019z * cb0_029z) * _718))))) * _794);
 
   UECbufferConfig cb_config = CreateCbufferConfig();
-  cb_config.ue_filmblackclip = cb0_040x;
-  cb_config.ue_filmtoe = cb0_039z;
-  cb_config.ue_filmshoulder = cb0_039w;
-  cb_config.ue_filmslope = cb0_039y;
-  cb_config.ue_filmwhiteclip = cb0_040y;
-  cb_config.ue_tonecurveammount = 0.f;
+  cb_config.ue_tonecurveammount = 0.f;  // Skip filmic
+  cb_config.ue_bluecorrection = 0.f;    // No blue correction in this shader
   cb_config.ue_mappingpolynomial = float3(cb0_041x, cb0_041y, cb0_041z);
   cb_config.ue_overlaycolor = float4(cb0_015x, cb0_015y, cb0_015z, cb0_015w);
-  cb_config.ue_bluecorrection = 0.f;
   cb_config.ue_colorscale = float3(cb0_016x, cb0_016y, cb0_016z);
 
   float4 output = ProcessLutbuilder(float3(_805, _807, _809), cb_config, SV_Target, asuint(cb0_042w));
