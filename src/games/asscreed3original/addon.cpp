@@ -92,8 +92,6 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
-        .default_value = 1000.f,
-        .can_reset = false,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
@@ -443,17 +441,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
 #if 1  // Render Target Upgrades
 
-        // Main Render
+        // Main Render 16:9
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .ignore_size = false,
             .use_resource_view_cloning = true,
             .use_resource_view_hot_swap = false,
-            .dimensions = {.width = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER,
-                           .height = renodx::utils::resource::ResourceUpgradeInfo::BACK_BUFFER},
+            .aspect_ratio = 16.f / 9.f,
+            .aspect_ratio_tolerance = 0.001f,
             .usage_include = reshade::api::resource_usage::render_target,
-            .name = "Scene Intermediate",
+            .name = "Scene Intermediate 16/9",
         });
 
 #endif
