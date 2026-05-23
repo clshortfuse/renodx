@@ -925,7 +925,7 @@ const std::unordered_map<
             },
         },
         {
-            "LEGOBatmanLotDK-Win64-Shipping.exe",
+            "LEGOBatmanLotDK",
             {
                 {"Set_Path", 0.f},
             },
