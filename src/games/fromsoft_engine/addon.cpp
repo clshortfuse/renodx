@@ -464,6 +464,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }; */
 
       if (!initialized) {
+        renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
+          return (params.size() != 4);
+        };
+
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
