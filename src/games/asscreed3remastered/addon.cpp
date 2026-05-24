@@ -58,6 +58,7 @@ void UpdateEffectiveShaderInjection() {
     effective_shader_injection.custom_film_grain_type = 0.f;
     effective_shader_injection.custom_film_grain_strength = 0.f;
     effective_shader_injection.custom_rcas_strength = 0.f;
+    effective_shader_injection.custom_chromatic_aberration_type = 0.f;
     effective_shader_injection.custom_chromatic_aberration_strength = 0.f;
   }
 }
@@ -257,13 +258,24 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "FxChromaticAberration",
-        .binding = &shader_injection.custom_chromatic_aberration_strength,
+        .binding = &shader_injection.custom_chromatic_aberration_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "Chromatic Aberration",
         .section = "Effects",
         .tooltip = "Adds a subtle radial RGB lens-fringing effect to the final Vanilla+ image.",
-        .max = 100.f,
+        .labels = {"Off", "On"},
         .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxChromaticAberrationStrength",
+        .binding = &shader_injection.custom_chromatic_aberration_strength,
+        .default_value = 75.f,
+        .label = "Chromatic Aberration Strength",
+        .section = "Effects",
+        .tooltip = "Controls radial RGB lens-fringing strength.",
+        .max = 100.f,
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f && shader_injection.custom_chromatic_aberration_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -434,6 +446,7 @@ void OnPresetOff() {
       {"FxFilmGrainStrength", 50.f},
       {"FxRCAS", 0.f},
       {"FxChromaticAberration", 0.f},
+      {"FxChromaticAberrationStrength", 50.f},
       {"DLAA", 0.f},
       {"DLAAPreset", 0.f},
       {"TextureMipBias", 0.f},

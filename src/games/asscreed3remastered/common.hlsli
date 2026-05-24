@@ -445,7 +445,7 @@ float3 ApplyAC3RRCASEncoded(float3 center_color, float2 tex_coord, Texture2D<flo
 }
 
 float3 ApplyAC3RChromaticAberration(float3 center_color, float2 tex_coord, Texture2D<float4> scene_texture, SamplerState scene_sampler) {
-  if (CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return center_color;
+  if (CUSTOM_CHROMATIC_ABERRATION_TYPE == 0.f || CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return center_color;
 
   uint width, height;
   scene_texture.GetDimensions(width, height);
@@ -483,7 +483,7 @@ float3 ApplyAC3RChromaticAberration(float3 center_color, float2 tex_coord, Textu
 }
 
 float3 ApplyAC3RChromaticAberrationEncoded(float3 center_color, float2 tex_coord, Texture2D<float4> scene_texture, SamplerState scene_sampler) {
-  if (CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return center_color;
+  if (CUSTOM_CHROMATIC_ABERRATION_TYPE == 0.f || CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return center_color;
 
   uint width, height;
   scene_texture.GetDimensions(width, height);
@@ -521,7 +521,7 @@ float3 ApplyAC3RScenePostEffectsEncoded(float3 center_color, float2 tex_coord, T
   float3 processed_center = ApplyAC3RRCASEncoded(center_color, tex_coord, scene_texture, scene_sampler);
   processed_center = ApplyAC3RFilmGrainEncoded(processed_center, tex_coord);
 
-  if (CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return processed_center;
+  if (CUSTOM_CHROMATIC_ABERRATION_TYPE == 0.f || CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return processed_center;
 
   uint width, height;
   scene_texture.GetDimensions(width, height);

@@ -29,6 +29,7 @@ struct ShaderInjectData {
   float custom_film_grain_strength;
   float custom_random;
   float custom_rcas_strength;
+  float custom_chromatic_aberration_type;
   float custom_chromatic_aberration_strength;
 };
 
@@ -59,6 +60,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_FILM_GRAIN_STRENGTH   shader_injection.custom_film_grain_strength
 #define CUSTOM_RANDOM                shader_injection.custom_random
 #define CUSTOM_RCAS_STRENGTH         shader_injection.custom_rcas_strength
+#define CUSTOM_CHROMATIC_ABERRATION_TYPE shader_injection.custom_chromatic_aberration_type
 #define CUSTOM_CHROMATIC_ABERRATION_STRENGTH shader_injection.custom_chromatic_aberration_strength
 
 #include "../../shaders/renodx.hlsl"

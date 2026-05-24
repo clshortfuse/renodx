@@ -18,7 +18,7 @@ void main(
   o0.xyzw = s0.Sample(s0_s, v1.xy).xyzw;
 
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    o0.xyz = ApplyAC3RScenePostEffectsEncoded(o0.xyz, v1.xy, s0, s0_s);
+    o0.xyz = ApplyAC3RChromaticAberrationEncoded(o0.xyz, v1.xy, s0, s0_s);
   }
 
   return;
