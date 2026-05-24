@@ -1,4 +1,3 @@
-#include "./psychov_17.hlsl"
 #include "./shared.h"
 
 // typical AgX tonemap params, don't seem to change.
@@ -83,7 +82,7 @@ float4 ApplyToneMappingScaling(float3 agx_sdr, float2 pixel_position) {
 
     const float cone_response_exponent = 1.f;
 
-    color = renodx::tonemap::psycho::psychov_17(
+    color = renodx::tonemap::psychov::psychotm_test17(
         color,                       // BT709 input
         peak_nits,                   // HDR peak relative to SDR white
         RENODX_TONE_MAP_EXPOSURE,    // Exposure
