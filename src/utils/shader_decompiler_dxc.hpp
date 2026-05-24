@@ -232,9 +232,7 @@ class Decompiler {
     return std::format("{}", input);
   }
 
-  // Pitfall 9: Convert negative integer constants to unsigned equivalents based on DXIL type width.
-  // DXIL uses two's complement, so i16 -25536 = uint16 40000, i32 -1 = uint32 4294967295.
-  // Without this, (uint)-25536.0f is UB in HLSL (produces 0), silently breaking comparisons.
+  // Convert negative constants to unsigned equivalents (two's complement)
   static std::string ParseUnsignedConstant(std::string_view input, std::string_view dxil_type) {
     if (input == "undef") return "0u";
     if (input.starts_with("%")) return std::string(input);  // variable, not a constant
@@ -295,8 +293,7 @@ class Decompiler {
       uint32_t float_bits = sign | (exponent << 23) | mantissa;
 
       float as_float;
-      memcpy(&as_float, &float_bits, sizeof(as_float));  // Reinterpret bits
-      // Pitfall 12: NaN has no HLSL literal — emit asfloat(0x7FC00000) instead
+      memcpy(&as_float, &float_bits, sizeof(as_float));
       if (std::isnan(as_float)) {
         return "asfloat(0x7FC00000u)";
       }
@@ -307,7 +304,6 @@ class Decompiler {
       uint64_t as_uint64 = unsigned_long;
       double_t as_double;
       memcpy(&as_double, &as_uint64, sizeof(as_double));
-      // Pitfall 12: NaN has no HLSL literal — emit asfloat(0x7FC00000) instead
       if (std::isnan(as_double)) {
         return "asfloat(0x7FC00000u)";
       }
@@ -317,12 +313,9 @@ class Decompiler {
       FromStringView(input, as_double);
       output = std::format("{}", as_double);
     }
-    // Pitfall 12: catch NaN from any path (e.g., non-hex NaN literals)
     if (output == "nan" || output == "-nan" || output == "nan(ind)") {
       return "asfloat(0x7FC00000u)";
     }
-    // Infinity fallback — std::format on double ±infinity produces "inf"/"-inf"
-    // which are not valid HLSL literals. Emit HLSL #INF forms instead.
     if (output == "inf" || output == "+inf") return "+1.#INF";
     if (output == "-inf") return "-1.#INF";
     bool has_dot = output.find('.') != std::string::npos;
@@ -741,8 +734,7 @@ class Decompiler {
 
     [[nodiscard]] std::string ToString() const {
       std::stringstream string_stream;
-      // Pitfall 13: Add precise to SV_Position outputs to prevent Z-fighting
-      // from fast-math precision mismatches with depth pre-pass shaders.
+      // Prevent Z-fighting from fast-math precision mismatches with depth pre-pass
       if (name == "SV_Position") {
         string_stream << "precise ";
       }
@@ -2160,8 +2152,6 @@ class Decompiler {
       if (type == "i32") return ParseInt(input);
       if (type == "int") return ParseInt(input);
       if (type == "uint") return ParseUint(input);
-      // Pitfall 9: i16 must be parsed as integer, not float.
-      // Negative i16 constants (e.g., -25536) parsed as float produce (uint)-25536.0f which is UB.
       if (type == "i16") return ParseInt(input);
       if (type == "i64") return ParseInt64(input);
       if (type == "half") return ParseHalf(input);
@@ -2711,10 +2701,7 @@ class Decompiler {
               };
               assignment_value = std::format("(int){}({}, {})", pair->second, cast_uint(a_str), cast_uint(b_str));
             } else {
-              // Pitfall 5: IMax/IMin (opcodes 37/38) require signed comparison semantics.
-              // Without (int) casts, max(uint_value, 0u) is a no-op since uint >= 0 always.
-              // The original intent is signed clamping: if unsigned subtraction wraps,
-              // the signed interpretation is negative, and IMax with 0 clamps to 0.
+              // IMax/IMin require signed comparison semantics
               auto a_str = std::string(ParseInt(a));
               auto b_str = std::string(ParseInt(b));
               auto cast_int = [](const std::string& s) -> std::string {
@@ -4043,13 +4030,9 @@ class Decompiler {
             int literal_index;
             FromStringView(index, literal_index);
 
-            // Pitfall 11: Check if this cbuffer uses raw uint4 array (due to 16-bit field packing)
             auto cbv_range_idx = static_cast<uint32_t>(cbv_resource - preprocess_state.cbv_resources.data());
             if (preprocess_state.cbv_dynamic_access_indices.count(cbv_range_idx)) {
-              // Extract half from raw uint4 array using f16tof32.
-              // CBufRet.f16.8 packs 8 halves per register:
-              //   indices 0-3 = low 16 bits of xyzw
-              //   indices 4-7 = high 16 bits of xyzw
+              // f16.8: indices 0-3 = low 16 bits of xyzw, 4-7 = high 16 bits
               int component = literal_index % 4;
               bool high_half = literal_index >= 4;
               if (high_half) {
@@ -4376,10 +4359,7 @@ class Decompiler {
         assignment_type = ParseType(variable_type);
         assignment_value = std::format("({}){} >> {}", ParseUnsignedType(variable_type), ParseWrapped(ParseUint(a)), ParseInt(b));
       } else if (instruction == "ashr") {
-        // %95 = ashr i32 %68, 2
-        // %36 = exact i32 %35, 16
-        // Pitfall 10: ashr is arithmetic right shift — result MUST be signed (int)
-        // so that HLSL >> performs sign-extension, not zero-fill.
+        // ashr: arithmetic right shift — result must be signed for sign-extension
         auto [exact, no_unsigned_wrap, no_signed_wrap, variable_type, a, b] = StringViewMatch<6>(assignment, std::regex{R"(ashr (exact )?(nuw )?(nsw )?(\S+) (\S+), (\S+))"});
         assignment_type = ParseType(variable_type);
         // Force signed type for ashr — HLSL >> on int is arithmetic shift
@@ -4508,8 +4488,7 @@ class Decompiler {
           cast = "(int)";
         }
 
-        // Pitfall 9: For unsigned comparisons, convert negative constants to their
-        // unsigned equivalents based on DXIL type width. e.g., i16 -25536 → 40000u.
+        // Convert negative constants to unsigned equivalents for unsigned comparisons
         auto parse_icmp_operand = [&](std::string_view operand) -> std::string {
           if (op.starts_with("u") && !operand.empty() && operand[0] == '-') {
             return ParseUnsignedConstant(operand, type);
@@ -5788,14 +5767,10 @@ class Decompiler {
 
       // store float %1358, float* %1369, align 4, !tbaa !26, !alias.scope !30
       // store i32 %62, i32 addrspace(3)* %ptr, align 4
-      // Pitfall 2/6: Parse the store type to use correct value parser.
-      // Float stores to int groupshared need asuint(); int stores should not use ParseFloat.
+      // Parse store type to use correct value parser (float stores to int groupshared need asuint)
       static auto regex = std::regex{R"(^  store (\S+) ([^,]+), [^*]+\* %([A-Za-z0-9]+),?.*)"};
       auto [store_type, value, pointer] = StringViewMatch<3>(line, regex);
 
-      // Returns the HLSL reinterpret-cast helper needed when storing `stored_type`
-      // through a pointer whose underlying element type is `element_type`.
-      // Returns empty string when no cast is needed.
       auto get_reinterpret_for_mismatch = [](std::string_view stored_type, std::string_view element_type) -> std::string {
         if (element_type.empty() || stored_type == element_type) return "";
         // float -> integer storage: preserve bits via asuint/asint
@@ -6882,9 +6857,8 @@ class Decompiler {
     }
     this->source_lines = StringViewSplitAll(disassembly, '\n');
 
-    // Pre-scan: identify handle variables that are used with dynamic cbuffer access
-    // This is needed because extractvalue on a static cbuffer load may appear before
-    // the dynamic load that marks the cbuffer as needing raw access
+    // Pre-scan: identify handle variables used with dynamic cbuffer access
+    // (extractvalue on a static load may appear before the dynamic load that marks it)
     {
       static auto dynamic_cbuf_regex = std::regex(
           R"(call %dx\.types\.CBufRet\.\w+ @dx\.op\.cbufferLoadLegacy\.\w+\(i32 \d+, %dx\.types\.Handle (%\d+), i32 %)"
@@ -7223,9 +7197,7 @@ class Decompiler {
             }
             bool is_groupshared = (scope == "external" || scope == "" || has_addrspace3);
             if (!array_type.empty()) {
-              // Pitfall 3: Use uint for i32 groupshared arrays so InterlockedAdd
-              // and other atomic intrinsics get a valid l-value of the correct type.
-              // Keep int for static const arrays (they don't need atomic access).
+              // Use uint for groupshared i32 arrays (atomic intrinsics need uint l-values)
               auto hlsl_array_type = (array_type == "i32") ? (is_groupshared ? std::string_view("uint") : std::string_view("int"))
                                    : (array_type == "i16") ? std::string_view("int16_t")
                                    : array_type;
@@ -7416,13 +7388,10 @@ class Decompiler {
       }
     }
 
-    // Apply cbuffer packing rules to CBV types without annotation data.
-    // This must happen after resources are parsed (metadata) but before DecompileLines.
+    // Apply cbuffer packing rules (must happen after metadata parse, before DecompileLines)
     preprocess_state.ApplyCBufferPacking();
 
-    // Pitfall 11: Pre-detect cbuffers with half/min16float fields and mark them for
-    // raw uint4 array access. This must happen before DecompileLines() so the extractvalue
-    // handlers use asfloat/asint on the raw array instead of named field access.
+    // Mark cbuffers with 16-bit fields for raw uint4 array access
     {
       std::function<bool(std::string_view)> type_uses_native_16bit = [&](std::string_view raw_type_name) -> bool {
         DataType info(raw_type_name);
@@ -7449,10 +7418,7 @@ class Decompiler {
 
     // Decompilation also notes
 
-    // Pre-pass: resolve cbufferLoad extractvalues that may be used before their
-    // defining block is processed (forward references in block-number order).
-    // This ensures ParseVariable() can resolve them regardless of processing order.
-    // Store pre-pass aliases separately so they can be seeded into replacement functions.
+    // Pre-pass: resolve cbufferLoad extractvalues for forward references
     std::map<std::string, std::pair<std::string, std::string>> cbuffer_prepass_aliases;
     {
       static const auto create_handle_regex = std::regex(
@@ -9560,6 +9526,7 @@ class Decompiler {
         // intentional no-op
       } else {
         static const std::regex heap_re(R"(^(.+\s+_HeapResource_\d+\s*=\s*ResourceDescriptorHeap\[.+\]);)");
+        std::set<std::string> hoisted_heap_lines;
         for (const auto& [block_num, cb] : current_code_function->code_blocks) {
           for (const auto& hl : cb.hlsl_lines) {
             std::smatch m;
@@ -9571,10 +9538,17 @@ class Decompiler {
                 if (!declared_vars.contains(var_name)) {
                   string_stream << spacing << hl << "\n";
                   declared_vars.insert(var_name);
+                  hoisted_heap_lines.insert(hl);
                 }
               }
             }
           }
+        }
+        // Remove hoisted declarations from code blocks to prevent duplication
+        for (auto& [block_num, cb] : current_code_function->code_blocks) {
+          std::erase_if(cb.hlsl_lines, [&](const std::string& line) {
+            return hoisted_heap_lines.contains(line);
+          });
         }
       }
     }

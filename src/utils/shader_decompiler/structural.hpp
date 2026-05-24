@@ -1,23 +1,9 @@
 // ===== STRUCTURAL CODE GENERATION =====
-// Ported from ShortFuse's structural analysis code path.
-// This file is #included inside the Decompiler::Decompile() method when
-// decompile_options.structural is true.
-//
-// Available in scope from the caller:
-//   - current_code_function, string_stream, spacing, decompile_options
-//   - indent_spacing(), unindent_spacing()
-//   - ParseType(), ParseWrapped(), OptimizeString(), IsWrapped()
-//   - convergences, recursions, dominators, predecessors (from default path setup)
-//   - preprocess_state
-//
-// This code path replaces the entire block iteration loop (append_code_block)
-// with ShortFuse's deferred-target + branch-folding approach.
+// #included inside Decompiler::Decompile() when decompile_options.structural is true.
+// Replaces the default append_code_block loop with deferred-target + branch-folding.
 
 {
-  // The structural path uses ListRecursions (any backward edge = loop) instead
-  // of ListNaturalLoops (only dominator-validated back edges).  ShortFuse's
-  // structural analysis relies on this broader detection to avoid "unsupported
-  // loop" errors on blocks that branch backward to convergence targets.
+  // Use ListRecursions (any backward edge) instead of ListNaturalLoops
   auto recursions = current_code_function->ListRecursions();  // shadows outer `recursions`
 
   // Recompute analysis using structural-specific functions
@@ -26,7 +12,6 @@
   auto structural_predecessors = current_code_function->ListPredecessorsVec();
   auto ladder_index = current_code_function->BuildBranchLadderIndex(structural_predecessors, immediate_postdominators);
 
-  // Track which block declares each temporary variable (for scope validation)
   std::map<int, int> temporary_declaration_blocks;
 
   auto is_temp_local_variable_token = [](std::string_view token) {
@@ -106,7 +91,6 @@
     }
   }
 
-  // AssumedCondition: tracks assumed branch conditions for optimization
   struct AssumedCondition {
     std::string variable;
     bool value;
@@ -117,16 +101,8 @@
   std::vector<int> structural_current_loops;
   std::vector<int> active_deferred_phi_join_targets;
 
-  // Phi variable coalescing map: maps convergence phi variable names to loop phi variable names.
-  // When a convergence point inside a loop has a phi that forwards a loop header phi unchanged
-  // on the pass-through path, and that convergence phi feeds back into the same loop phi on the
-  // back-edge, the two variables form an identity cycle. DXC can exploit this by replacing the
-  // initial loop phi value with undef. Coalescing prevents this by using the same variable name
-  // for both, eliminating the intermediate copy.
-  // NOTE: Currently disabled - requires liveness analysis to verify the convergence phi variable
-  // is not used between the convergence point and the back-edge (other than in the back-edge
-  // phi assignment itself). Without this check, coalescing can break shaders where the
-  // convergence phi is read by code after the convergence.
+  // Phi coalescing: maps convergence phi names to loop phi names to prevent
+  // DXC from exploiting identity cycles. Currently disabled (needs liveness analysis).
   std::map<std::string, std::string> structural_phi_coalescing;
 
   auto emit_annotation_comment = [&](std::string_view comment) {
@@ -276,18 +252,12 @@
           std::format("({})", known_expression));
     }
 
-    // Safety check: if any variable defined in this block is used outside the
-    // block (i.e., not transitively consumed by the branch condition), expanding
-    // would lose its definition.  Detect this by checking whether each defined
-    // variable is referenced by at least one other assignment in the block or by
-    // the branch condition itself.
+    // Safety: bail if a variable defined here is used only externally
     for (const auto& [var_name, _expr] : known_assignments) {
       bool referenced_internally = false;
-      // Check if used by another assignment in the block
       for (const auto& [other_var, other_expr] : known_assignments) {
         if (other_var == var_name) continue;
         if (other_expr.find(var_name) != std::string::npos) {
-          // Verify it's a whole-identifier match, not a substring
           auto pos = other_expr.find(var_name);
           while (pos != std::string::npos) {
             bool left_ok = (pos == 0) || !is_identifier_character(other_expr[pos - 1]);
@@ -302,7 +272,6 @@
         }
       }
       if (!referenced_internally) {
-        // Check if used by the branch condition
         auto cond_str = std::string(branch_code_block.code_branch.branch_condition);
         auto pos = cond_str.find(var_name);
         while (pos != std::string::npos) {
@@ -316,20 +285,11 @@
         }
       }
       if (!referenced_internally) {
-        // This variable is defined in the block but not used by the condition
-        // or any other assignment that feeds the condition — it must be used
-        // externally.  Bail out to preserve its definition.
         return std::nullopt;
       }
     }
 
-    // Safety check 2: even if a variable is used internally, it may ALSO be
-    // used by other code blocks in the function (e.g. a sibling branch that
-    // will be emitted via a chained fold). Folding would make the assignment
-    // disappear, leaving the external reference dangling (produces `undef`
-    // in DXIL). Scan every other block's hlsl_lines, phi assignments, and
-    // branch_condition string for whole-identifier references; if any are
-    // found, bail out.
+    // Safety: bail if a variable is also referenced by other blocks
     auto check_variable_referenced_externally = [&](const std::string& var_name) -> bool {
       auto contains_whole_identifier = [&](std::string_view haystack) -> bool {
         auto pos = haystack.find(var_name);
@@ -347,13 +307,10 @@
           if (other_line.starts_with("//")) continue;
           if (contains_whole_identifier(other_line)) return true;
         }
-        // Phi lines can also reference the variable
         for (const auto& [phi_var, phi_type, phi_value, phi_predecessor, phi_code_function, phi_is_assign] : other_code_block.phi_lines) {
           if (!phi_is_assign) continue;
           if (contains_whole_identifier(phi_value)) return true;
         }
-        // Branch condition string lives outside hlsl_lines and can reference
-        // the variable directly (e.g. `_784 * ... > ...`).
         if (contains_whole_identifier(other_code_block.code_branch.branch_condition)) return true;
       }
       return false;
@@ -406,13 +363,9 @@
   }();
 
   // ===== Main structural append_code_block =====
-  // Safety limit: abort with an exception if the output grows beyond a
-  // reasonable size.  This prevents the "vector too long" crash from
-  // std::string reallocation and gives a clear error message instead.
-  constexpr size_t MAX_OUTPUT_SIZE = 128 * 1024 * 1024;  // 128 MB
+  constexpr size_t MAX_OUTPUT_SIZE = 128 * 1024 * 1024;  // 128 MB safety limit
 
   std::function<void(int line_number)> structural_append_code_block = [&](int line_number) {
-    // Check for code size explosion
     auto current_size = static_cast<size_t>(string_stream.tellp());
     if (current_size > MAX_OUTPUT_SIZE) {
       throw std::runtime_error(std::format(
@@ -427,15 +380,8 @@
       string_stream << spacing << "while(true) {\n";
       indent_spacing();
 
-      // Phi pre-initialization for inner-loop convergence points.
-      // Detects identity cycles between loop header phis and convergence phis,
-      // and emits pre-initialization assignments at the loop header to prevent
-      // DXC from replacing initial values with undef.
-      // Only applies when:
-      // 1. The convergence is a direct successor of the loop header
-      // 2. The convergence is inside the loop (dominated by the loop header)
-      // 3. The convergence phi forms a back-edge cycle with the loop header phi
-      // 4. The convergence phi is not used in any hlsl_lines (pure forwarding)
+      // Phi pre-initialization: emit _convergence = _loop_phi at loop header
+      // to prevent DXC from replacing initial values with undef in identity cycles.
       {
         auto& loop_header_block = current_code_function->code_blocks[line_number];
         auto loop_dom_it = dominators.find(line_number);
@@ -443,17 +389,14 @@
         for (const auto& [cv_variable, cv_type, cv_value, cv_predecessor, cv_code_function, cv_is_assign] : loop_header_block.phi_lines) {
           if (!cv_is_assign) continue;
           if (cv_code_function == line_number) continue;
-          // Must be a direct successor of the loop header
           if (cv_code_function != loop_header_block.code_branch.branch_condition_true
               && cv_code_function != loop_header_block.code_branch.branch_condition_false) continue;
-          // Must be inside the loop (dominated by loop header)
           auto conv_dom_it = dominators.find(cv_code_function);
           if (conv_dom_it == dominators.end() || !conv_dom_it->second.contains(line_number)) continue;
           auto cv_value_str = std::string(cv_value);
           if (cv_value_str.empty() || cv_value_str[0] != '%') continue;
           auto loop_phi_var = cv_value_str.substr(1);
           
-          // Verify back-edge cycle
           bool found_back_edge = false;
           for (auto& [block_num, block] : current_code_function->code_blocks) {
             if (block_num == line_number) continue;
@@ -468,7 +411,6 @@
           }
           if (!found_back_edge) continue;
           
-          // Safety: convergence phi must not appear in any hlsl_lines
           auto conv_var_name = std::format("_{}", cv_variable);
           bool used_in_code = false;
           for (const auto& [block_num, block] : current_code_function->code_blocks) {
@@ -564,34 +506,26 @@
           emit_annotation_comment(std::format("pending-convergence [{}]", format_int_list(structural_pending_convergences)));
         }
       }
-      // Regex to detect type-prefixed variable assignments like "float _30 = ..."
-      // When the variable was already pre-declared at function scope, strip the
-      // type prefix to avoid redefinition errors.
+      // Strip type prefix from pre-declared variables to avoid redefinition
       static const std::regex structural_var_decl_re(
           R"(^(float4|float3|float2|float|int|uint|bool|uint4|int4|int2|uint2|int3|uint3|double|int64_t|uint64_t|int16_t|uint16_t|half|min16float|min16int|min16uint|[A-Z_]\w*)\s+(_\d+)\s*=)");
-      // Also match "type _N; ..." patterns (e.g., GetDimensions: "uint2 _39; srv.GetDimensions(...)")
-      // where the declaration is followed by a semicolon and then a function call.
       static const std::regex structural_var_decl_noassign_re(
           R"(^(float4|float3|float2|float|int|uint|bool|uint4|int4|int2|uint2|int3|uint3|double|int64_t|uint64_t|int16_t|uint16_t|half|min16float|min16int|min16uint|[A-Z_]\w*)\s+(_\d+)\s*;)");
       for (const auto& hlsl_line : emit_code_block.hlsl_lines) {
         auto optimized_line = (decompile_options.flatten ? OptimizeString(hlsl_line) : hlsl_line);
-        // Strip type prefix if variable was pre-declared
         std::smatch decl_match;
         auto line_str = std::string(optimized_line);
         if (std::regex_search(line_str, decl_match, structural_var_decl_re)) {
           std::string var_name = decl_match[2].str();
           if (declared_vars.contains(var_name)) {
-            // Replace "type _N = ..." with "_N = ..."
-            line_str = line_str.substr(decl_match[1].length() + 1);  // skip "type "
+            line_str = line_str.substr(decl_match[1].length() + 1);
             string_stream << spacing << line_str << "\n";
             continue;
           }
         } else if (std::regex_search(line_str, decl_match, structural_var_decl_noassign_re)) {
           std::string var_name = decl_match[2].str();
           if (declared_vars.contains(var_name)) {
-            // Replace "type _N; rest..." with "rest..." (strip the redundant declaration)
-            // The declaration part ends at the semicolon after the variable name
-            auto decl_end = decl_match[0].length();  // length of "type _N;"
+            auto decl_end = decl_match[0].length();
             auto remainder = StringViewTrim(std::string_view(line_str).substr(decl_end));
             if (!remainder.empty()) {
               string_stream << spacing << remainder << "\n";
@@ -604,7 +538,6 @@
       for (const auto& [variable, type, value, predecessor, code_function, is_assign] : emit_code_block.phi_lines) {
         if (is_assign) continue;
         auto var_name = std::format("_{}", variable);
-        // Only declare if not already pre-declared at function scope
         if (!declared_vars.contains(var_name)) {
           auto assignment_type = ParseType(type);
           string_stream << spacing << std::format("{} {};", assignment_type, var_name) << "\n";
@@ -649,9 +582,6 @@
 
     std::optional<int> deferred_phi_join_target;
     auto on_branch_from = [&](CodeBlock* source_code_block, int branch_number, bool is_fallthrough = false) {
-      // Capture the CURRENT convergence at call time, not at lambda definition time.
-      // pending_convergences changes during recursive emission, so next_convergence
-      // (captured at block start) may be stale.
       int active_convergence = structural_pending_convergences.empty() ? -1 : structural_pending_convergences.back();
 
       if (!is_fallthrough) {
@@ -862,9 +792,7 @@
         pushed_pair_convergence = true;
       }
     } else {
-      // No immediate post-dominator found — unconditional blocks or exit blocks.
-      // Conditional blocks without ipdom would cause code duplication, but the
-      // re-emission guard above prevents exponential blowup.
+      // No ipdom — exit block or unconditional
     }
 
     // ===== Structural analysis: SharedBranchChain =====
@@ -1475,21 +1403,8 @@
       if (!has_true_side || !has_false_side) {
         return has_true_side ? "single-side-false" : "single-side-true";
       }
-      // Bypass-edge check: reject if any block branches to BOTH the candidate
-      // AND directly to pair_convergence. Such a block bypasses the candidate
-      // on one of its outgoing edges, so the candidate does not dominate all
-      // paths to the convergence. Deferring the candidate would cause the
-      // bypass path to fall through into the candidate's body (emitted after
-      // the if/else), executing it unexpectedly on the bypass path.
-      //
-      // Example (bug in 0x1873FC64 ReflectionTraceVoxelsCS):
-      //   %1543 -> %1553  (candidate)
-      //   %1543 -> %1568  (pair_convergence; bypass edge)
-      //   %1038 (current) -> %1553 (false edge)
-      //   %1038 -> %1057 -> ... -> %1543
-      //   %1553 is a 2-pred phi-join target, but %1543 branches to EITHER
-      //   %1553 OR %1568 directly. Deferring %1553 causes the %1543->%1568
-      //   path to fall through into %1553's body after the if/else.
+      // Reject if any predecessor of pair_convergence also branches to the candidate
+      // (bypass edge — deferring would execute the candidate on the bypass path)
       {
         auto pair_convergence_preds_it = structural_predecessors.find(pair_convergence);
         if (pair_convergence_preds_it != structural_predecessors.end()) {
@@ -2178,7 +2093,6 @@
     on_complete();
   };  // end structural_append_code_block
 
-  // Emit loop jump target variable if needed
   if (uses_loop_jump_target) {
     string_stream << spacing << "int " << LOOP_JUMP_TARGET_NAME << " = -1;\n";
   }
