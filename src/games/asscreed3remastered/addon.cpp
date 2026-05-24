@@ -57,6 +57,7 @@ void UpdateEffectiveShaderInjection() {
     effective_shader_injection.tone_map_type = 0.f;
     effective_shader_injection.custom_film_grain_type = 0.f;
     effective_shader_injection.custom_film_grain_strength = 0.f;
+    effective_shader_injection.custom_rcas_strength = 0.f;
   }
 }
 
@@ -243,6 +244,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxRCAS",
+        .binding = &shader_injection.custom_rcas_strength,
+        .default_value = 0.f,
+        .label = "RCAS Sharpening",
+        .section = "Effects",
+        .tooltip = "Adds luminance-preserving RCAS sharpening to the final Vanilla+ image.",
+        .max = 100.f,
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "DLAA",
         .binding = &ac3r::dlss::dlaa_enabled,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -408,6 +420,7 @@ void OnPresetOff() {
       {"ColorFilterStrength", 100.f},
       {"FxFilmGrain", 0.f},
       {"FxFilmGrainStrength", 50.f},
+      {"FxRCAS", 0.f},
       {"DLAA", 0.f},
       {"DLAAPreset", 0.f},
       {"TextureMipBias", 0.f},

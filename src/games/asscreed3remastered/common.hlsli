@@ -311,6 +311,71 @@ float3 ApplyAC3RFilmGrain(float3 color, float2 position) {
       AC3R_NATIVE_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE);
 }
 
+float AC3RMax4(float a, float b, float c, float d) {
+  return max(max(a, b), max(c, d));
+}
+
+float AC3RMin4(float a, float b, float c, float d) {
+  return min(min(a, b), min(c, d));
+}
+
+float3 ApplyAC3RRCAS(float3 center_color, float2 tex_coord, Texture2D<float4> scene_texture, SamplerState scene_sampler) {
+  if (CUSTOM_RCAS_STRENGTH <= 0.f) return center_color;
+
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return center_color;
+
+  const float2 texel_size = rcp(float2(width, height));
+
+  float3 b = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord + float2(0.f, -1.f) * texel_size, 0).rgb));
+  float3 d = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord + float2(-1.f, 0.f) * texel_size, 0).rgb));
+  float3 e = center_color;
+  float3 f = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord + float2(1.f, 0.f) * texel_size, 0).rgb));
+  float3 h = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord + float2(0.f, 1.f) * texel_size, 0).rgb));
+
+  const float normalization_point = AC3R_NATIVE_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
+  b /= normalization_point;
+  d /= normalization_point;
+  e /= normalization_point;
+  f /= normalization_point;
+  h /= normalization_point;
+
+  float b_lum = renodx::color::y::from::BT709(b);
+  float d_lum = renodx::color::y::from::BT709(d);
+  float e_lum = max(renodx::color::y::from::BT709(e), 1e-6f);
+  float f_lum = renodx::color::y::from::BT709(f);
+  float h_lum = renodx::color::y::from::BT709(h);
+
+  float min_lum = max(AC3RMin4(b_lum, d_lum, f_lum, h_lum), 1e-6f);
+  float max_lum = AC3RMax4(b_lum, d_lum, f_lum, h_lum);
+  float limited_max_lum = min(max_lum, 0.99f);
+
+  float hit_min = min_lum * rcp(4.f * limited_max_lum + 1e-6f);
+  float hit_max = (1.f - limited_max_lum) * rcp(4.f * min_lum - 4.f);
+  float local_lobe = max(-hit_min, hit_max);
+
+  static const float FSR_RCAS_LIMIT = 0.1875f;
+  float lobe = max(-FSR_RCAS_LIMIT, min(local_lobe, 0.f)) * CUSTOM_RCAS_STRENGTH;
+
+  float b_lum_2x = b_lum * 2.f;
+  float d_lum_2x = d_lum * 2.f;
+  float e_lum_2x = e_lum * 2.f;
+  float f_lum_2x = f_lum * 2.f;
+  float h_lum_2x = h_lum * 2.f;
+  float noise = 0.25f * (b_lum_2x + d_lum_2x + f_lum_2x + h_lum_2x) - e_lum_2x;
+  float max_lum_2x = max(AC3RMax4(b_lum_2x, d_lum_2x, f_lum_2x, h_lum_2x), e_lum_2x);
+  float min_lum_2x = min(AC3RMin4(b_lum_2x, d_lum_2x, f_lum_2x, h_lum_2x), e_lum_2x);
+  noise = saturate(abs(noise) * rcp(max_lum_2x - min_lum_2x + 1e-6f));
+  lobe *= (-0.5f * noise + 1.f);
+
+  float rcp_lobe = rcp(4.f * lobe + 1.f);
+  float sharpened_lum = ((b_lum + d_lum + h_lum + f_lum) * lobe + e_lum) * rcp_lobe;
+  float3 sharpened = clamp(sharpened_lum / e_lum, 0.f, 4.f) * e;
+
+  return max(0.f, sharpened * normalization_point);
+}
+
 float3 NormalizeAC3RWhitePointScale(float3 white_point_scale) {
   const float white_scale = max(dot(white_point_scale, float3(0.333333343f, 0.333333343f, 0.333333343f)), 0.0001f);
   return white_point_scale / white_scale;
