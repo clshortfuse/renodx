@@ -311,12 +311,30 @@ float3 ApplyAC3RFilmGrain(float3 color, float2 position) {
       AC3R_NATIVE_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE);
 }
 
+float3 ApplyAC3RFilmGrainEncoded(float3 encoded_color, float2 position) {
+  if (CUSTOM_FILM_GRAIN_TYPE == 0.f || CUSTOM_FILM_GRAIN_STRENGTH <= 0.f) return encoded_color;
+
+  float3 linear_ap1 = DecodeAC3RSceneIntermediate(encoded_color);
+  linear_ap1 = renodx::effects::ApplyFilmGrain(
+      linear_ap1,
+      position,
+      CUSTOM_RANDOM,
+      CUSTOM_FILM_GRAIN_STRENGTH * 0.03f,
+      AC3R_NATIVE_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE);
+
+  return EncodeAC3RSceneIntermediate(max(0.f, linear_ap1));
+}
+
 float AC3RMax4(float a, float b, float c, float d) {
   return max(max(a, b), max(c, d));
 }
 
 float AC3RMin4(float a, float b, float c, float d) {
   return min(min(a, b), min(c, d));
+}
+
+float2 AC3RClampUVToTexelCenter(float2 tex_coord, float2 texel_size) {
+  return clamp(tex_coord, texel_size * 0.5f, 1.f - texel_size * 0.5f);
 }
 
 float3 ApplyAC3RRCAS(float3 center_color, float2 tex_coord, Texture2D<float4> scene_texture, SamplerState scene_sampler) {
@@ -328,11 +346,11 @@ float3 ApplyAC3RRCAS(float3 center_color, float2 tex_coord, Texture2D<float4> sc
 
   const float2 texel_size = rcp(float2(width, height));
 
-  float3 b = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord + float2(0.f, -1.f) * texel_size, 0).rgb));
-  float3 d = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord + float2(-1.f, 0.f) * texel_size, 0).rgb));
+  float3 b = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, AC3RClampUVToTexelCenter(tex_coord + float2(0.f, -1.f) * texel_size, texel_size), 0).rgb));
+  float3 d = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, AC3RClampUVToTexelCenter(tex_coord + float2(-1.f, 0.f) * texel_size, texel_size), 0).rgb));
   float3 e = center_color;
-  float3 f = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord + float2(1.f, 0.f) * texel_size, 0).rgb));
-  float3 h = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord + float2(0.f, 1.f) * texel_size, 0).rgb));
+  float3 f = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, AC3RClampUVToTexelCenter(tex_coord + float2(1.f, 0.f) * texel_size, texel_size), 0).rgb));
+  float3 h = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, AC3RClampUVToTexelCenter(tex_coord + float2(0.f, 1.f) * texel_size, texel_size), 0).rgb));
 
   const float normalization_point = AC3R_NATIVE_DIFFUSE_WHITE_NITS / renodx::color::srgb::REFERENCE_WHITE;
   b /= normalization_point;
@@ -374,6 +392,176 @@ float3 ApplyAC3RRCAS(float3 center_color, float2 tex_coord, Texture2D<float4> sc
   float3 sharpened = clamp(sharpened_lum / e_lum, 0.f, 4.f) * e;
 
   return max(0.f, sharpened * normalization_point);
+}
+
+float3 ApplyAC3RRCASEncoded(float3 center_color, float2 tex_coord, Texture2D<float4> scene_texture, SamplerState scene_sampler) {
+  if (CUSTOM_RCAS_STRENGTH <= 0.f) return center_color;
+
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return center_color;
+
+  const float2 texel_size = rcp(float2(width, height));
+
+  float3 b = DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, AC3RClampUVToTexelCenter(tex_coord + float2(0.f, -1.f) * texel_size, texel_size), 0).rgb);
+  float3 d = DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, AC3RClampUVToTexelCenter(tex_coord + float2(-1.f, 0.f) * texel_size, texel_size), 0).rgb);
+  float3 e = DecodeAC3RSceneIntermediate(center_color);
+  float3 f = DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, AC3RClampUVToTexelCenter(tex_coord + float2(1.f, 0.f) * texel_size, texel_size), 0).rgb);
+  float3 h = DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, AC3RClampUVToTexelCenter(tex_coord + float2(0.f, 1.f) * texel_size, texel_size), 0).rgb);
+
+  float b_lum = renodx::color::y::from::AP1(b);
+  float d_lum = renodx::color::y::from::AP1(d);
+  float e_lum = max(renodx::color::y::from::AP1(e), 1e-6f);
+  float f_lum = renodx::color::y::from::AP1(f);
+  float h_lum = renodx::color::y::from::AP1(h);
+
+  float min_lum = max(AC3RMin4(b_lum, d_lum, f_lum, h_lum), 1e-6f);
+  float max_lum = AC3RMax4(b_lum, d_lum, f_lum, h_lum);
+  float limited_max_lum = min(max_lum, 0.99f);
+
+  float hit_min = min_lum * rcp(4.f * limited_max_lum + 1e-6f);
+  float hit_max = (1.f - limited_max_lum) * rcp(4.f * min_lum - 4.f);
+  float local_lobe = max(-hit_min, hit_max);
+
+  static const float FSR_RCAS_LIMIT = 0.1875f;
+  float lobe = max(-FSR_RCAS_LIMIT, min(local_lobe, 0.f)) * CUSTOM_RCAS_STRENGTH;
+
+  float b_lum_2x = b_lum * 2.f;
+  float d_lum_2x = d_lum * 2.f;
+  float e_lum_2x = e_lum * 2.f;
+  float f_lum_2x = f_lum * 2.f;
+  float h_lum_2x = h_lum * 2.f;
+  float noise = 0.25f * (b_lum_2x + d_lum_2x + f_lum_2x + h_lum_2x) - e_lum_2x;
+  float max_lum_2x = max(AC3RMax4(b_lum_2x, d_lum_2x, f_lum_2x, h_lum_2x), e_lum_2x);
+  float min_lum_2x = min(AC3RMin4(b_lum_2x, d_lum_2x, f_lum_2x, h_lum_2x), e_lum_2x);
+  noise = saturate(abs(noise) * rcp(max_lum_2x - min_lum_2x + 1e-6f));
+  lobe *= (-0.5f * noise + 1.f);
+
+  float rcp_lobe = rcp(4.f * lobe + 1.f);
+  float sharpened_lum = ((b_lum + d_lum + h_lum + f_lum) * lobe + e_lum) * rcp_lobe;
+  float3 sharpened = clamp(sharpened_lum / e_lum, 0.f, 4.f) * e;
+
+  return EncodeAC3RSceneIntermediate(max(0.f, sharpened));
+}
+
+float3 ApplyAC3RChromaticAberration(float3 center_color, float2 tex_coord, Texture2D<float4> scene_texture, SamplerState scene_sampler) {
+  if (CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return center_color;
+
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return center_color;
+
+  const float2 dimensions = float2(width, height);
+  const float2 texel_size = rcp(dimensions);
+  float2 pixel_from_center = (tex_coord - 0.5f) * dimensions;
+  float distance_from_center = length(pixel_from_center);
+  if (distance_from_center <= 1e-4f) return center_color;
+
+  float edge_distance = saturate(distance_from_center / (0.5f * length(dimensions)));
+  float edge_weight = smoothstep(0.15f, 1.f, edge_distance);
+  edge_weight *= edge_weight;
+
+  float2 screen_edge_distance = abs(tex_coord * 2.f - 1.f);
+  float axial_edge_weight = smoothstep(0.55f, 1.f, max(screen_edge_distance.x, screen_edge_distance.y)) * 0.35f;
+  edge_weight = max(edge_weight, axial_edge_weight);
+
+  float2 direction = pixel_from_center / distance_from_center;
+  float desired_offset_pixels = CUSTOM_CHROMATIC_ABERRATION_STRENGTH * 9.f * edge_weight;
+  float2 edge_room_pixels = min(tex_coord, 1.f - tex_coord) * dimensions;
+  float2 safe_offset_pixels_xy = edge_room_pixels / max(abs(direction), 1e-4f);
+  float safe_offset_pixels = max(0.f, min(safe_offset_pixels_xy.x, safe_offset_pixels_xy.y) - 1.f);
+  float offset_pixels = min(desired_offset_pixels, safe_offset_pixels);
+  float2 offset = direction * texel_size * offset_pixels;
+
+  float3 red_sample = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord + offset, 0).rgb));
+  float3 blue_sample = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(scene_texture.SampleLevel(scene_sampler, tex_coord - offset, 0).rgb));
+
+  float3 color = center_color;
+  color.r = red_sample.r;
+  color.b = blue_sample.b;
+  return max(0.f, color);
+}
+
+float3 ApplyAC3RChromaticAberrationEncoded(float3 center_color, float2 tex_coord, Texture2D<float4> scene_texture, SamplerState scene_sampler) {
+  if (CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return center_color;
+
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return center_color;
+
+  const float2 dimensions = float2(width, height);
+  const float2 texel_size = rcp(dimensions);
+  float2 pixel_from_center = (tex_coord - 0.5f) * dimensions;
+  float distance_from_center = length(pixel_from_center);
+  if (distance_from_center <= 1e-4f) return center_color;
+
+  float edge_distance = saturate(distance_from_center / (0.5f * length(dimensions)));
+  float edge_weight = smoothstep(0.15f, 1.f, edge_distance);
+  edge_weight *= edge_weight;
+
+  float2 screen_edge_distance = abs(tex_coord * 2.f - 1.f);
+  float axial_edge_weight = smoothstep(0.55f, 1.f, max(screen_edge_distance.x, screen_edge_distance.y)) * 0.35f;
+  edge_weight = max(edge_weight, axial_edge_weight);
+
+  float2 direction = pixel_from_center / distance_from_center;
+  float desired_offset_pixels = CUSTOM_CHROMATIC_ABERRATION_STRENGTH * 9.f * edge_weight;
+  float2 edge_room_pixels = min(tex_coord, 1.f - tex_coord) * dimensions;
+  float2 safe_offset_pixels_xy = edge_room_pixels / max(abs(direction), 1e-4f);
+  float safe_offset_pixels = max(0.f, min(safe_offset_pixels_xy.x, safe_offset_pixels_xy.y) - 1.f);
+  float offset_pixels = min(desired_offset_pixels, safe_offset_pixels);
+  float2 offset = direction * texel_size * offset_pixels;
+
+  float3 color = center_color;
+  color.r = scene_texture.SampleLevel(scene_sampler, tex_coord + offset, 0).r;
+  color.b = scene_texture.SampleLevel(scene_sampler, tex_coord - offset, 0).b;
+  return max(0.f, color);
+}
+
+float3 ApplyAC3RScenePostEffectsEncoded(float3 center_color, float2 tex_coord, Texture2D<float4> scene_texture, SamplerState scene_sampler) {
+  float3 processed_center = ApplyAC3RRCASEncoded(center_color, tex_coord, scene_texture, scene_sampler);
+  processed_center = ApplyAC3RFilmGrainEncoded(processed_center, tex_coord);
+
+  if (CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return processed_center;
+
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return processed_center;
+
+  const float2 dimensions = float2(width, height);
+  const float2 texel_size = rcp(dimensions);
+  float2 pixel_from_center = (tex_coord - 0.5f) * dimensions;
+  float distance_from_center = length(pixel_from_center);
+  if (distance_from_center <= 1e-4f) return processed_center;
+
+  float edge_distance = saturate(distance_from_center / (0.5f * length(dimensions)));
+  float edge_weight = smoothstep(0.15f, 1.f, edge_distance);
+  edge_weight *= edge_weight;
+
+  float2 screen_edge_distance = abs(tex_coord * 2.f - 1.f);
+  float axial_edge_weight = smoothstep(0.55f, 1.f, max(screen_edge_distance.x, screen_edge_distance.y)) * 0.35f;
+  edge_weight = max(edge_weight, axial_edge_weight);
+
+  float2 direction = pixel_from_center / distance_from_center;
+  float desired_offset_pixels = CUSTOM_CHROMATIC_ABERRATION_STRENGTH * 9.f * edge_weight;
+  float2 edge_room_pixels = min(tex_coord, 1.f - tex_coord) * dimensions;
+  float2 safe_offset_pixels_xy = edge_room_pixels / max(abs(direction), 1e-4f);
+  float safe_offset_pixels = max(0.f, min(safe_offset_pixels_xy.x, safe_offset_pixels_xy.y) - 1.f);
+  float offset_pixels = min(desired_offset_pixels, safe_offset_pixels);
+  float2 offset = direction * texel_size * offset_pixels;
+
+  float2 red_uv = AC3RClampUVToTexelCenter(tex_coord + offset, texel_size);
+  float2 blue_uv = AC3RClampUVToTexelCenter(tex_coord - offset, texel_size);
+  float3 red_color = scene_texture.SampleLevel(scene_sampler, red_uv, 0).rgb;
+  float3 blue_color = scene_texture.SampleLevel(scene_sampler, blue_uv, 0).rgb;
+  red_color = ApplyAC3RRCASEncoded(red_color, red_uv, scene_texture, scene_sampler);
+  blue_color = ApplyAC3RRCASEncoded(blue_color, blue_uv, scene_texture, scene_sampler);
+  red_color = ApplyAC3RFilmGrainEncoded(red_color, red_uv);
+  blue_color = ApplyAC3RFilmGrainEncoded(blue_color, blue_uv);
+
+  float3 color = processed_center;
+  color.r = red_color.r;
+  color.b = blue_color.b;
+  return max(0.f, color);
 }
 
 float3 NormalizeAC3RWhitePointScale(float3 white_point_scale) {
