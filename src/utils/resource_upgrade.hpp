@@ -1,6 +1,8 @@
 #pragma once
 
+#include <d3d12.h>
 #include <windows.h>
+
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -81,6 +83,7 @@ using ResourceViewCloneOptions = ResourceCloneOptions;
 static cross_addon::Shared<SharedData> shared;
 
 static bool use_resource_cloning = false;
+static bool use_resource_cloning_dx12_only = false;
 static bool use_auto_cloning = false;
 static renodx::utils::resource::ResourceUpgradeInfo auto_upgrade_target = {
     .new_format = reshade::api::format::r16g16b16a16_float,
@@ -92,6 +95,9 @@ static thread_local std::optional<reshade::api::swapchain_desc> upgraded_swapcha
 static thread_local std::optional<reshade::api::resource> local_original_resource;
 static thread_local std::optional<reshade::api::resource_desc> local_original_resource_desc;
 static thread_local std::optional<reshade::api::resource_view_desc> local_original_resource_view_desc;
+
+
+static thread_local std::optional<ResourceViewInfo> pending_dx12_clone_resource_view_info;
 
 template <typename ViewHandles>
 inline void UpdateResourceViewsCloneState(
@@ -879,10 +885,14 @@ static void OnDestroyDevice(reshade::api::device* device) {
 }
 
 inline void OnInitCommandList(reshade::api::command_list* cmd_list) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return;
+
   renodx::utils::data::Create<CommandListData>(cmd_list);
 }
 
 static void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return;
+
   renodx::utils::data::Delete<CommandListData>(cmd_list);
 }
 
@@ -1668,6 +1678,139 @@ inline void OnInitResourceViewInfo(utils::resource::ResourceViewInfo* resource_v
     resource_view_info->fallback_desc = local_original_resource_view_desc.value();
     local_original_resource_view_desc.reset();
   }
+
+  if (!shared.IsEventHandler()) return;
+
+  if (resource_view_info->device->get_api() != reshade::api::device_api::d3d12) return;
+
+  if (resource_view_info->clone_target == nullptr) return;
+  if (resource_view_info->clone_target->use_resource_view_hot_swap) return;
+  if (!resource_view_info->clone_target->use_resource_view_cloning
+      && !resource_view_info->clone_target->use_resource_view_cloning_and_upgrade) return;
+
+  switch (resource_view_info->usage) {
+    case reshade::api::resource_usage::render_target:
+    case reshade::api::resource_usage::shader_resource:
+    case reshade::api::resource_usage::unordered_access:
+      break;
+    default:
+      return;
+  }
+
+  // Copy locally
+  pending_dx12_clone_resource_view_info = *resource_view_info;
+
+#ifdef DEBUG_LEVEL_1
+  {
+    std::stringstream s;
+    s << "utils::resource::upgrade::OnInitResourceViewInfo(queue d3d12 fast clone";
+    s << ", resource: " << PRINT_PTR(resource_view_info->original_resource.handle);
+    s << ", view: " << PRINT_PTR(resource_view_info->view.handle);
+    s << ", usage: " << resource_view_info->usage;
+    s << ", desc type: " << resource_view_info->desc.type;
+    s << ", desc format: " << resource_view_info->desc.format;
+    s << ", target: " << resource_view_info->clone_target->name;
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+  }
+#endif
+}
+
+inline void OnInitResourceView(
+    reshade::api::device* device,
+    reshade::api::resource resource,
+    reshade::api::resource_usage usage_type,
+    const reshade::api::resource_view_desc& desc,
+    reshade::api::resource_view view) {
+  if (device->get_api() != reshade::api::device_api::d3d12) return;
+
+  if (!pending_dx12_clone_resource_view_info.has_value()) return;
+  if (pending_dx12_clone_resource_view_info->device != device || pending_dx12_clone_resource_view_info->view.handle != view.handle) {
+#ifdef DEBUG_LEVEL_1
+    std::stringstream s;
+    s << "utils::resource::upgrade::OnInitResourceView(skip d3d12 fast clone; pending mismatch";
+    s << ", pending device: " << pending_dx12_clone_resource_view_info->device;
+    s << ", current device: " << device;
+    s << ", pending view: " << PRINT_PTR(pending_dx12_clone_resource_view_info->view.handle);
+    s << ", current view: " << PRINT_PTR(view.handle);
+    s << ", current resource: " << PRINT_PTR(resource.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+    return;
+  }
+  if (resource.handle == 0u || pending_dx12_clone_resource_view_info->original_resource.handle != resource.handle) {
+#ifdef DEBUG_LEVEL_0
+    std::stringstream s;
+    s << "utils::resource::upgrade::OnInitResourceView(reset d3d12 fast clone; resource mismatch";
+    s << ", pending resource: " << PRINT_PTR(pending_dx12_clone_resource_view_info->original_resource.handle);
+    s << ", current resource: " << PRINT_PTR(resource.handle);
+    s << ", view: " << PRINT_PTR(view.handle);
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+    pending_dx12_clone_resource_view_info.reset();
+    return;
+  }
+  if (pending_dx12_clone_resource_view_info->usage != usage_type) {
+#ifdef DEBUG_LEVEL_0
+    std::stringstream s;
+    s << "utils::resource::upgrade::OnInitResourceView(reset d3d12 fast clone; usage mismatch";
+    s << ", resource: " << PRINT_PTR(resource.handle);
+    s << ", view: " << PRINT_PTR(view.handle);
+    s << ", pending usage: " << pending_dx12_clone_resource_view_info->usage;
+    s << ", current usage: " << usage_type;
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+    pending_dx12_clone_resource_view_info.reset();
+    return;
+  }
+  pending_dx12_clone_resource_view_info.reset();
+
+  const auto clone = GetResourceViewClone(view, {.activate = true});
+
+  if (clone.handle == 0u) {
+#ifdef DEBUG_LEVEL_0
+    std::stringstream s;
+    s << "utils::resource::upgrade::OnInitResourceView(failed d3d12 fast clone";
+    s << ", resource: " << PRINT_PTR(resource.handle);
+    s << ", view: " << PRINT_PTR(view.handle);
+    s << ", usage: " << usage_type;
+    s << ", desc type: " << desc.type;
+    s << ", desc format: " << desc.format;
+    s << ")";
+    reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+    return;
+  }
+
+  const auto heap_type = usage_type == reshade::api::resource_usage::render_target
+                             ? D3D12_DESCRIPTOR_HEAP_TYPE_RTV
+                             : D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+
+  const D3D12_CPU_DESCRIPTOR_HANDLE destination_descriptor = {static_cast<SIZE_T>(view.handle)};
+  const D3D12_CPU_DESCRIPTOR_HANDLE source_descriptor = {static_cast<SIZE_T>(clone.handle)};
+
+  auto* dx12_device = reinterpret_cast<ID3D12Device*>(static_cast<uintptr_t>(device->get_native()));  // NOLINT(performance-no-int-to-ptr)
+
+  dx12_device->CopyDescriptorsSimple(1u, destination_descriptor, source_descriptor, heap_type);
+
+#ifdef DEBUG_LEVEL_1
+  {
+    std::stringstream s;
+    s << "utils::resource::upgrade::OnInitResourceView(copied d3d12 fast clone descriptor";
+    s << ", resource: " << PRINT_PTR(resource.handle);
+    s << ", view: " << PRINT_PTR(view.handle);
+    s << " => clone: " << PRINT_PTR(clone.handle);
+    s << ", usage: " << usage_type;
+    s << ", heap_type: " << heap_type;
+    s << ", desc type: " << desc.type;
+    s << ", desc format: " << desc.format;
+    s << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
+  }
+#endif
 }
 
 inline void OnDestroyResourceViewInfo(utils::resource::ResourceViewInfo* resource_view_info) {
@@ -1961,6 +2104,7 @@ inline bool OnUpdateDescriptorTables(
     uint32_t count,
     const reshade::api::descriptor_table_update* updates) {
   if (count == 0u) return false;
+  if (device->get_api() == reshade::api::device_api::d3d12) return false;
 #ifdef DEBUG_LEVEL_3
   reshade::log::message(reshade::log::level::debug, "utils::resource::upgrade::OnUpdateDescriptorTables()");
 #endif
@@ -2102,6 +2246,7 @@ inline bool OnCopyDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_copy* copies) {
+  if (device->get_api() == reshade::api::device_api::d3d12) return false;
   if (!shared.data->use_resource_cloning) return false;
 #ifdef DEBUG_LEVEL_2
   reshade::log::message(reshade::log::level::debug, "utils::resource::upgrade::OnCopyDescriptorTables()");
@@ -2343,6 +2488,7 @@ inline void OnPushDescriptors(
     uint32_t layout_param,
     const reshade::api::descriptor_table_update& update) {
   if (update.count == 0u) return;
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return;
 
   static thread_local std::vector<reshade::api::resource_view> resource_view_descriptors;
   static thread_local std::vector<reshade::api::sampler_with_resource_view> sampler_resource_view_descriptors;
@@ -2441,6 +2587,7 @@ inline void OnBindRenderTargetsAndDepthStencil(
     const reshade::api::resource_view* rtvs,
     reshade::api::resource_view dsv) {
   if (count == 0u) return;
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return;
 
   RewriteRenderTargets(cmd_list, count, rtvs, dsv);
 }
@@ -2462,6 +2609,8 @@ static RENODX_RENDER_PASS_RETURN_TYPE OnBeginRenderPass(
     reshade::api::render_pass_flags flags
 #endif
 ) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return RENODX_RENDER_PASS_RETURN_VALUE;
+
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (cmd_list_data == nullptr) {
     assert(cmd_list_data != nullptr);
@@ -2499,6 +2648,8 @@ static RENODX_RENDER_PASS_RETURN_TYPE OnBeginRenderPass(
 }
 
 static RENODX_RENDER_PASS_RETURN_TYPE OnEndRenderPass(reshade::api::command_list* cmd_list) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return RENODX_RENDER_PASS_RETURN_VALUE;
+
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (cmd_list_data != nullptr) {
     if (cmd_list_data->pass_count > 0u) {
@@ -2525,6 +2676,8 @@ inline bool OnClearRenderTargetView(
     const float color[4],
     uint32_t rect_count,
     const reshade::api::rect* rects) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
+
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (cmd_list_data == nullptr) return false;
   HandlePendingRenderPassRenderTargets(cmd_list, cmd_list_data);
@@ -2542,6 +2695,8 @@ inline bool OnDraw(
     uint32_t instance_count,
     uint32_t first_vertex,
     uint32_t first_instance) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
+
   HandlePendingRenderPassRenderTargets(cmd_list);
   return false;
 }
@@ -2553,6 +2708,8 @@ inline bool OnDrawIndexed(
     uint32_t first_index,
     int32_t base_vertex,
     uint32_t first_instance) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
+
   HandlePendingRenderPassRenderTargets(cmd_list);
   return false;
 }
@@ -2562,6 +2719,8 @@ inline bool OnDispatchMesh(
     uint32_t thread_group_count_x,
     uint32_t thread_group_count_y,
     uint32_t thread_group_count_z) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
+
   HandlePendingRenderPassRenderTargets(cmd_list);
   return false;
 }
@@ -2573,6 +2732,8 @@ inline bool OnDrawOrDispatchIndirect(
     uint64_t offset,
     uint32_t draw_count,
     uint32_t stride) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
+
   switch (type) {
     case reshade::api::indirect_command::draw:
     case reshade::api::indirect_command::draw_indexed:
@@ -2591,6 +2752,8 @@ inline bool OnClearUnorderedAccessViewUint(
     const uint32_t values[4],
     uint32_t rect_count,
     const reshade::api::rect* rects) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
+
   reshade::api::resource_view clone = {0u};
   reshade::api::format format = reshade::api::format::unknown;
   const auto found_info = utils::resource::GetResourceViewInfo(uav, [&clone, &format](const utils::resource::ResourceViewInfo& info) {
@@ -2626,6 +2789,8 @@ inline bool OnClearUnorderedAccessViewFloat(
     const float values[4],
     uint32_t rect_count,
     const reshade::api::rect* rects) {
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
+
   auto clone = GetResourceViewClone(uav);
 
   if (clone.handle != 0) {
@@ -2848,6 +3013,7 @@ inline void OnBarrier(
     const reshade::api::resource_usage* old_states,
     const reshade::api::resource_usage* new_states) {
   if (count == 0u) return;
+  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return;
 
   if (count == 1u) {
     if (old_states[0] == reshade::api::resource_usage::undefined) return;
@@ -3138,9 +3304,9 @@ static void Use(DWORD fdw_reason) {
   }
 
   switch (fdw_reason) {
-    case DLL_PROCESS_ATTACH:
+    case DLL_PROCESS_ATTACH: {
       if (shared.RegisterModule([](SharedData& data) {
-            data.use_resource_cloning = data.use_resource_cloning || use_resource_cloning;
+            data.use_resource_cloning = data.use_resource_cloning || use_resource_cloning || use_resource_cloning_dx12_only;
             data.use_auto_cloning = data.use_auto_cloning || use_auto_cloning;
             if (use_auto_cloning) {
               data.auto_upgrade_target = auto_upgrade_target;
@@ -3165,34 +3331,40 @@ static void Use(DWORD fdw_reason) {
       renodx::utils::resource::RegisterOnDestroyResourceViewInfoCallback(&OnDestroyResourceViewInfo);
       renodx::utils::resource::RegisterOnAfterDestroyCallback(&OnAfterDestroy);
 
+      const bool use_non_dx12_resource_cloning_events = use_resource_cloning && !use_resource_cloning_dx12_only;
+      const bool use_resource_cloning_any = use_resource_cloning || use_resource_cloning_dx12_only;
+
+      shared.RegisterEvent<reshade::addon_event::init_resource_view>(OnInitResourceView, use_resource_cloning_any);
+
       shared.RegisterEvent<reshade::addon_event::copy_resource>(OnCopyResource);
 
       shared.RegisterEvent<reshade::addon_event::resolve_texture_region>(OnResolveTextureRegion);
 
       shared.RegisterEvent<reshade::addon_event::copy_texture_region>(OnCopyTextureRegion);
 
-      shared.RegisterEvent<reshade::addon_event::init_command_list>(OnInitCommandList, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::destroy_command_list>(OnDestroyCommandList, use_resource_cloning);
+      shared.RegisterEvent<reshade::addon_event::init_command_list>(OnInitCommandList, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::destroy_command_list>(OnDestroyCommandList, use_non_dx12_resource_cloning_events);
 
-      shared.RegisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::begin_render_pass>(OnBeginRenderPass, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::end_render_pass>(OnEndRenderPass, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::draw>(OnDraw, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::draw_indexed>(OnDrawIndexed, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::dispatch_mesh>(OnDispatchMesh, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::push_descriptors>(OnPushDescriptors, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables, use_resource_cloning);
+      shared.RegisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::begin_render_pass>(OnBeginRenderPass, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::end_render_pass>(OnEndRenderPass, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::draw>(OnDraw, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::draw_indexed>(OnDrawIndexed, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::dispatch_mesh>(OnDispatchMesh, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::push_descriptors>(OnPushDescriptors, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables, use_non_dx12_resource_cloning_events);
       // shared.RegisterEvent<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables, use_resource_cloning);
       // shared.RegisterEvent<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::clear_render_target_view>(OnClearRenderTargetView, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::clear_unordered_access_view_uint>(OnClearUnorderedAccessViewUint, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::clear_unordered_access_view_float>(OnClearUnorderedAccessViewFloat, use_resource_cloning);
+      shared.RegisterEvent<reshade::addon_event::clear_render_target_view>(OnClearRenderTargetView, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::clear_unordered_access_view_uint>(OnClearUnorderedAccessViewUint, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::clear_unordered_access_view_float>(OnClearUnorderedAccessViewFloat, use_non_dx12_resource_cloning_events);
 
-      shared.RegisterEvent<reshade::addon_event::barrier>(OnBarrier, use_resource_cloning);
-      shared.RegisterEvent<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture, use_resource_cloning);
+      shared.RegisterEvent<reshade::addon_event::barrier>(OnBarrier, use_non_dx12_resource_cloning_events);
+      shared.RegisterEvent<reshade::addon_event::copy_buffer_to_texture>(OnCopyBufferToTexture, use_resource_cloning_any);
 
       break;
+    }
 
     case DLL_PROCESS_DETACH:
       shared.UnregisterEvent<reshade::addon_event::init_device>(OnInitDevice);
@@ -3210,6 +3382,8 @@ static void Use(DWORD fdw_reason) {
       renodx::utils::resource::UnregisterOnInitResourceViewInfoCallback(&OnInitResourceViewInfo);
       renodx::utils::resource::UnregisterOnDestroyResourceViewInfoCallback(&OnDestroyResourceViewInfo);
       renodx::utils::resource::UnregisterOnAfterDestroyCallback(&OnAfterDestroy);
+
+      shared.UnregisterEvent<reshade::addon_event::init_resource_view>(OnInitResourceView);
 
       shared.UnregisterEvent<reshade::addon_event::copy_resource>(OnCopyResource);
 

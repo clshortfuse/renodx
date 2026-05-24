@@ -110,6 +110,7 @@ static reshade::api::color_space target_color_space = reshade::api::color_space:
 static bool set_color_space = true;
 static bool use_shared_device = false;
 static bool& use_resource_cloning = utils::resource::upgrade::use_resource_cloning;
+static bool& use_resource_cloning_dx12_only = utils::resource::upgrade::use_resource_cloning_dx12_only;
 static bool use_resize_buffer = false;
 static bool use_resize_buffer_on_set_full_screen = false;
 static bool use_resize_buffer_on_demand = false;
