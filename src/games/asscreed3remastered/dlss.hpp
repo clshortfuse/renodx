@@ -68,6 +68,8 @@ inline float dlaa_render_preset = 0.f;
 inline float dlaa_sharpness = 0.f;
 inline float dlaa_responsive_mask = 1.f;
 inline float dlaa_jitter_scale = 1.f;
+inline float dlaa_jitter_mode = 0.f;
+inline float dlaa_motion_vector_prepass_jitter_mode = 0.f;
 inline float dlaa_motion_vector_mode = 3.f;
 inline float dlaa_motion_vectors_jittered = 0.f;
 inline bool is_nvidia_device = false;
@@ -568,6 +570,52 @@ inline const char* GetMotionVectorModeName() {
   }
 }
 
+inline const char* GetJitterModeName(float mode) {
+  switch (static_cast<int>(mode)) {
+    case 1:
+      return "Flip X";
+    case 2:
+      return "Flip Y";
+    case 3:
+      return "Flip XY";
+    case 4:
+      return "Zero";
+    default:
+      return "Native";
+  }
+}
+
+inline const char* GetJitterModeName() {
+  return GetJitterModeName(dlaa_jitter_mode);
+}
+
+inline const char* GetMotionVectorPrepassJitterModeName() {
+  return GetJitterModeName(dlaa_motion_vector_prepass_jitter_mode);
+}
+
+inline std::pair<float, float> GetJitterOffset(float mode, float jitter_x, float jitter_y) {
+  switch (static_cast<int>(mode)) {
+    case 1:
+      return {-jitter_x, jitter_y};
+    case 2:
+      return {jitter_x, -jitter_y};
+    case 3:
+      return {-jitter_x, -jitter_y};
+    case 4:
+      return {0.f, 0.f};
+    default:
+      return {jitter_x, jitter_y};
+  }
+}
+
+inline std::pair<float, float> GetJitterOffset(float jitter_x, float jitter_y) {
+  return GetJitterOffset(dlaa_jitter_mode, jitter_x, jitter_y);
+}
+
+inline std::pair<float, float> GetMotionVectorPrepassJitterOffset(float jitter_x, float jitter_y) {
+  return GetJitterOffset(dlaa_motion_vector_prepass_jitter_mode, jitter_x, jitter_y);
+}
+
 inline std::pair<float, float> GetMotionVectorScale(uint32_t width, uint32_t height) {
   float scale_x = static_cast<float>(width);
   float scale_y = static_cast<float>(height);
@@ -940,7 +988,11 @@ inline ID3D11Resource* RunMotionVectorPrepass(
 
   if (!ngx.logged_mv_prepass) {
     ngx.logged_mv_prepass = true;
-    reshade::log::message(reshade::log::level::info, "AC3R DLAA: using depth-neighborhood motion-vector prepass");
+    std::stringstream s;
+    s << "AC3R DLAA: using depth-neighborhood motion-vector prepass"
+      << " jitter_mode=" << GetMotionVectorPrepassJitterModeName()
+      << " jitter=(" << jitter_x << ", " << jitter_y << ")";
+    reshade::log::message(reshade::log::level::info, s.str().c_str());
   }
 
   return ngx.preconditioned_motion_vectors.Get();
@@ -998,14 +1050,16 @@ inline bool EvaluateDLAA(reshade::api::command_list* cmd_list, const CommandList
   float jitter_x = 0.f;
   float jitter_y = 0.f;
   const bool has_jitter = ReadTemporalAAJitter(native_device, context, data->temporal_aa_constants, jitter_x, jitter_y);
+  const auto prepass_jitter_offset = GetMotionVectorPrepassJitterOffset(jitter_x, jitter_y);
   ID3D11Resource* preconditioned_motion_vectors = RunMotionVectorPrepass(
       native_device,
       context,
       data,
       width,
       height,
-      has_jitter ? jitter_x : 0.f,
-      has_jitter ? jitter_y : 0.f);
+      has_jitter ? prepass_jitter_offset.first : 0.f,
+      has_jitter ? prepass_jitter_offset.second : 0.f);
+  const auto jitter_offset = GetJitterOffset(jitter_x, jitter_y);
 
   NVSDK_NGX_D3D11_DLSS_Eval_Params eval = {};
   eval.Feature.pInColor = color;
@@ -1014,8 +1068,8 @@ inline bool EvaluateDLAA(reshade::api::command_list* cmd_list, const CommandList
   eval.pInDepth = depth;
   eval.pInMotionVectors = preconditioned_motion_vectors != nullptr ? preconditioned_motion_vectors : motion_vectors;
   eval.pInBiasCurrentColorMask = dlaa_responsive_mask != 0.f ? responsive_aa : nullptr;
-  eval.InJitterOffsetX = has_jitter ? -jitter_x * dlaa_jitter_scale : 0.f;
-  eval.InJitterOffsetY = has_jitter ? -jitter_y * dlaa_jitter_scale : 0.f;
+  eval.InJitterOffsetX = has_jitter ? jitter_offset.first * dlaa_jitter_scale : 0.f;
+  eval.InJitterOffsetY = has_jitter ? jitter_offset.second * dlaa_jitter_scale : 0.f;
   eval.InRenderSubrectDimensions.Width = width;
   eval.InRenderSubrectDimensions.Height = height;
   eval.InReset = 0;
@@ -1066,7 +1120,8 @@ inline bool EvaluateDLAA(reshade::api::command_list* cmd_list, const CommandList
     std::stringstream s;
     s << "AC3R DLAA: using TemporalAA jitter raw=(" << jitter_x << ", " << jitter_y
       << ") ngx=(" << eval.InJitterOffsetX << ", " << eval.InJitterOffsetY
-      << ") scale=" << dlaa_jitter_scale
+      << ") mode=" << GetJitterModeName()
+      << " scale=" << dlaa_jitter_scale
       << " mv_mode=" << GetMotionVectorModeName()
       << " mv_scale=(" << motion_vector_scale.first << ", " << motion_vector_scale.second << ")"
       << " mv_jittered=" << (dlaa_motion_vectors_jittered != 0.f ? "on" : "off")

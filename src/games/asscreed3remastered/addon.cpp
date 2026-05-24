@@ -27,9 +27,25 @@ ShaderInjectData shader_injection;
 ShaderInjectData effective_shader_injection;
 bool hdr_output_active = true;
 bool hdr_output_state_known = false;
+float texture_mip_lod_bias = 0.f;
 
 bool IsHDROutputActive() {
   return !hdr_output_state_known || hdr_output_active;
+}
+
+bool HasMipLODBias() {
+  return texture_mip_lod_bias <= -0.001f || texture_mip_lod_bias >= 0.001f;
+}
+
+bool OnCreateSampler(reshade::api::device* device, reshade::api::sampler_desc& desc) {
+  if (!HasMipLODBias()) return false;
+
+  const auto filter_value = static_cast<uint32_t>(desc.filter);
+  const bool is_comparison_sampler = (filter_value & 0x80u) != 0u;
+  if (is_comparison_sampler) return false;
+
+  desc.mip_lod_bias += texture_mip_lod_bias;
+  return true;
 }
 
 void UpdateEffectiveShaderInjection() {
@@ -250,6 +266,17 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return ac3r::dlss::IsSupported(); },
     },
     new renodx::utils::settings::Setting{
+        .key = "TextureMipBias",
+        .binding = &texture_mip_lod_bias,
+        .default_value = 0.f,
+        .label = "Texture Mip Bias",
+        .section = "Antialiasing",
+        .tooltip = "Offsets texture mip selection. Negative values sharpen textures; a restart is recommended after changing this.",
+        .min = -2.f,
+        .max = 1.f,
+        .format = "%.2f",
+    },
+    new renodx::utils::settings::Setting{
         .key = "HDRExposureCompensation",
         .binding = &shader_injection.exposure_compensation,
         .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
@@ -268,6 +295,32 @@ renodx::utils::settings::Settings settings = {
         .section = "Advanced",
         .tooltip = "Attempts to compensate contrast shifts from the game's white scale.",
         .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
+    },
+        new renodx::utils::settings::Setting{
+        .key = "DLAAJitterMode",
+        .binding = &ac3r::dlss::dlaa_jitter_mode,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 4.f,
+        .label = "DLSS Jitter Mode",
+        .section = "Debug",
+        .tooltip = "Debugs the sign of the temporal jitter passed to DLSS.",
+        .labels = {"Native", "Flip X", "Flip Y", "Flip XY", "Zero"},
+        .is_enabled = []() { return ac3r::dlss::dlaa_enabled != 0.f; },
+        .on_change = []() { ac3r::dlss::ngx.logged_jitter = false; },
+        .is_visible = []() { return ac3r::dlss::IsSupported(); },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "DLAAMotionVectorPrepassJitterMode",
+        .binding = &ac3r::dlss::dlaa_motion_vector_prepass_jitter_mode,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 4.f,
+        .label = "DLSS MV Prepass Jitter",
+        .section = "Debug",
+        .tooltip = "Debugs the jitter direction used by the depth-neighborhood motion-vector prepass.",
+        .labels = {"Native", "Flip X", "Flip Y", "Flip XY", "Zero"},
+        .is_enabled = []() { return ac3r::dlss::dlaa_enabled != 0.f; },
+        .on_change = []() { ac3r::dlss::ngx.logged_mv_prepass = false; },
+        .is_visible = []() { return ac3r::dlss::IsSupported(); },
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -357,13 +410,17 @@ void OnPresetOff() {
       {"FxFilmGrainStrength", 50.f},
       {"DLAA", 0.f},
       {"DLAAPreset", 0.f},
+      {"TextureMipBias", 0.f},
       {"HDRExposureCompensation", 0.f},
       {"HDRContrastCompensation", 0.f},
+      {"DLAAJitterMode", 4.f},
+      {"DLAAMotionVectorPrepassJitterMode", 4.f},
   });
 }
 
 bool fired_on_init_swapchain = false;
 bool borderless_fullscreen_pending = false;
+uint32_t borderless_fullscreen_attempts = 0;
 
 bool ApplyBorderlessFullscreen(reshade::api::swapchain* swapchain) {
   if (swapchain == nullptr) return false;
@@ -371,33 +428,29 @@ bool ApplyBorderlessFullscreen(reshade::api::swapchain* swapchain) {
 
   HWND hwnd = static_cast<HWND>(swapchain->get_hwnd());
   if (hwnd == nullptr) return false;
-
-  auto* device = swapchain->get_device();
-  if (device == nullptr) return false;
-
-  const auto back_buffer = swapchain->get_current_back_buffer();
-  if (back_buffer.handle == 0) return false;
-
-  const auto back_buffer_desc = device->get_resource_desc(back_buffer);
-  if (back_buffer_desc.texture.width == 0 || back_buffer_desc.texture.height == 0) return false;
+  if (IsWindow(hwnd) == FALSE) return false;
 
   RECT monitor_rect = {};
   if (!renodx::utils::windowing::GetMonitorRect(hwnd, &monitor_rect)) return false;
 
   const auto monitor_width = static_cast<uint32_t>(monitor_rect.right - monitor_rect.left);
   const auto monitor_height = static_cast<uint32_t>(monitor_rect.bottom - monitor_rect.top);
-
-  if (monitor_width != back_buffer_desc.texture.width || monitor_height != back_buffer_desc.texture.height) {
-    return false;
-  }
+  if (monitor_width == 0 || monitor_height == 0) return false;
 
   renodx::utils::windowing::RemoveWindowBorder(hwnd);
-  return renodx::utils::windowing::SetWindowPositionAndSize(
+  const bool positioned = renodx::utils::windowing::SetWindowPositionAndSize(
       hwnd,
       monitor_rect.left,
       monitor_rect.top,
       monitor_width,
-      monitor_height);
+      monitor_height,
+      SWP_ASYNCWINDOWPOS | SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER | SWP_NOACTIVATE);
+
+  if (positioned) {
+    UpdateWindow(hwnd);
+  }
+
+  return positioned;
 }
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
@@ -417,32 +470,31 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     fired_on_init_swapchain = true;
   }
 
-  auto* native_swapchain = reinterpret_cast<IDXGISwapChain*>(swapchain->get_native());
-  IDXGIFactory* factory = nullptr;
-  if (native_swapchain != nullptr && SUCCEEDED(native_swapchain->GetParent(IID_PPV_ARGS(&factory)))) {
-    factory->MakeWindowAssociation(static_cast<HWND>(swapchain->get_hwnd()), DXGI_MWA_NO_WINDOW_CHANGES);
-    factory->Release();
-  }
-
-  borderless_fullscreen_pending = !ApplyBorderlessFullscreen(swapchain);
+  borderless_fullscreen_pending = true;
+  borderless_fullscreen_attempts = 60;
 }
 
 bool OnSetFullscreenState(reshade::api::swapchain* swapchain, bool fullscreen, void* hmonitor) {
-  if (fullscreen) {
-    borderless_fullscreen_pending = true;
-    ApplyBorderlessFullscreen(swapchain);
-    return true;
+  if (!fullscreen) {
+    return false;
   }
 
-  borderless_fullscreen_pending = false;
-  return false;
+  borderless_fullscreen_pending = true;
+  borderless_fullscreen_attempts = 60;
+  ApplyBorderlessFullscreen(swapchain);
+  return true;
 }
 
 void OnPresent(reshade::api::command_queue* queue, reshade::api::swapchain* swapchain, const reshade::api::rect* source_rect, const reshade::api::rect* dest_rect, uint32_t dirty_rect_count, const reshade::api::rect* dirty_rects) {
   UpdateEffectiveShaderInjection();
 
   if (!borderless_fullscreen_pending) return;
-  borderless_fullscreen_pending = !ApplyBorderlessFullscreen(swapchain);
+  if (ApplyBorderlessFullscreen(swapchain) || borderless_fullscreen_attempts == 0) {
+    borderless_fullscreen_pending = false;
+    return;
+  }
+
+  --borderless_fullscreen_attempts;
 }
 
 bool initialized = false;
@@ -466,11 +518,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
+      reshade::register_event<reshade::addon_event::create_sampler>(OnCreateSampler);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::set_fullscreen_state>(OnSetFullscreenState);
+      reshade::unregister_event<reshade::addon_event::create_sampler>(OnCreateSampler);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
