@@ -77,15 +77,15 @@ struct ShaderInjectData {
 #define RENODX_COLOR_GRADE_STRENGTH shader_injection.scene_grade_strength
 // #define RENODX_TONE_MAP_WORKING_COLOR_SPACE       shader_injection.tone_map_working_color_space
 // #define RENODX_TONE_MAP_HUE_PROCESSOR             shader_injection.tone_map_hue_processor
-#define RENODX_RENO_DRT_TONE_MAP_METHOD renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+#define RENODX_RENO_DRT_TONE_MAP_METHOD -1
 #define RENODX_GAMMA_CORRECTION         shader_injection.gamma_correction
 #define CUSTOM_SATURATION_CLIP          shader_injection.custom_saturation_clip
 #define CUSTOM_BLOOM                    shader_injection.custom_bloom
 #define LENS_FLARE                      shader_injection.lens_flare
 #define RENODX_INTERMEDIATE_SCALING     (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS)
 // #define RENODX_INTERMEDIATE_COLOR_SPACE        color::convert::COLOR_SPACE_BT709
-#define RENODX_SWAP_CHAIN_DECODING         2.f  // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
-#define RENODX_INTERMEDIATE_ENCODING       2.f  // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
+#define RENODX_SWAP_CHAIN_DECODING         1.f  // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
+#define RENODX_INTERMEDIATE_ENCODING       1.f  // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION RENODX_GAMMA_CORRECTION
 // #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE RENODX_INTERMEDIATE_COLOR_SPACE
 // #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE   COLOR_SPACE_CUSTOM_BT709D65

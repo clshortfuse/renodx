@@ -235,10 +235,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         }
       }
 
-      if (!initialized) {
-        // renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
-        initialized = true;
-      }
 
       // Register event handlers
       reshade::register_event<reshade::addon_event::present>(OnPresent);
