@@ -431,6 +431,226 @@ float3 ApplyAC3RChromaticAberrationEncoded(float3 center_color, float2 tex_coord
   return max(0.f, color);
 }
 
+float3 SampleAC3RLUTBuilderResolved(
+    Texture2D<float4> scene_texture,
+    SamplerState scene_sampler,
+    Texture2D<float4> exposure_texture,
+    SamplerState exposure_sampler,
+    Texture2D<float4> bloom_texture,
+    SamplerState bloom_sampler,
+    Texture3D<float4> aces_lut,
+    Texture3D<float4> aces_ldr_lut,
+    Texture3D<float4> ldr_to_hdr_lut,
+    SamplerState lut_sampler,
+    float2 uv,
+    float global_lighting_scale,
+    float3 bloom_tint,
+    float vignette,
+    float use_aces_lut,
+    float ldr_split) {
+  float3 color = scene_texture.SampleLevel(scene_sampler, uv, 0).xyz;
+  color *= global_lighting_scale;
+
+  const float exposure = exposure_texture.SampleLevel(exposure_sampler, float2(0.f, 0.f), 0).x;
+  const float3 bloom = bloom_texture.SampleLevel(bloom_sampler, uv, 0).xyz * bloom_tint;
+  color = color * exposure + bloom;
+
+  if (vignette != 0.f) {
+    const float2 centered_uv = uv - 0.5f;
+    float vignette_weight = max(0.f, 1.f - dot(centered_uv, centered_uv));
+    vignette_weight = exp2(vignette * log2(vignette_weight));
+    color *= vignette_weight;
+  }
+
+  float3 resolved = 0.f;
+  if (use_aces_lut != 0.f) {
+    float3 lut_uv = saturate(log2(color) * 0.0588235296f + 0.527878284f);
+    lut_uv = lut_uv * 0.96875f + 0.015625f;
+    resolved = aces_lut.SampleLevel(lut_sampler, lut_uv, 0).xyz;
+
+    if (ldr_split != 0.f) {
+      bool in_ldr_split = false;
+      if (ldr_split > 0.f) {
+        in_ldr_split = uv.x < ldr_split;
+      } else {
+        in_ldr_split = -ldr_split < uv.x;
+      }
+
+      if (in_ldr_split) {
+        float3 ldr = aces_ldr_lut.SampleLevel(lut_sampler, lut_uv, 0).xyz;
+        ldr = saturate(ldr) * 0.96875f + 0.015625f;
+        resolved = ldr_to_hdr_lut.SampleLevel(lut_sampler, ldr, 0).xyz;
+      }
+    }
+  } else {
+    float3 denominator = color * 0.97709924f + 1.46564889f;
+    color = saturate(color / denominator);
+    float3 linear_segment = color * 12.9200001f;
+    float3 gamma_segment = exp2(log2(color) * 0.416666657f) * 1.05499995f - 0.0549999997f;
+    resolved = (0.00313080009f >= color) ? linear_segment : gamma_segment;
+  }
+
+  return resolved;
+}
+
+float3 ApplyAC3RLUTBuilderChromaticAberration(
+    float3 center_color,
+    float2 tex_coord,
+    Texture2D<float4> scene_texture,
+    SamplerState scene_sampler,
+    Texture2D<float4> exposure_texture,
+    SamplerState exposure_sampler,
+    Texture2D<float4> bloom_texture,
+    SamplerState bloom_sampler,
+    Texture3D<float4> aces_lut,
+    Texture3D<float4> aces_ldr_lut,
+    Texture3D<float4> ldr_to_hdr_lut,
+    SamplerState lut_sampler,
+    float global_lighting_scale,
+    float3 bloom_tint,
+    float vignette,
+    float use_aces_lut,
+    float ldr_split) {
+  if (CUSTOM_CHROMATIC_ABERRATION_TYPE == 0.f || CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return center_color;
+
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return center_color;
+
+  const float2 dimensions = float2(width, height);
+  const float2 texel_size = rcp(dimensions);
+  float2 pixel_from_center = (tex_coord - 0.5f) * dimensions;
+  float distance_from_center = length(pixel_from_center);
+  if (distance_from_center <= 1e-4f) return center_color;
+
+  float edge_distance = saturate(distance_from_center / (0.5f * length(dimensions)));
+  float edge_weight = smoothstep(0.15f, 1.f, edge_distance);
+  edge_weight *= edge_weight;
+
+  float2 screen_edge_distance = abs(tex_coord * 2.f - 1.f);
+  float axial_edge_weight = smoothstep(0.55f, 1.f, max(screen_edge_distance.x, screen_edge_distance.y)) * 0.35f;
+  edge_weight = max(edge_weight, axial_edge_weight);
+
+  float2 direction = pixel_from_center / distance_from_center;
+  float desired_offset_pixels = CUSTOM_CHROMATIC_ABERRATION_STRENGTH * 9.f * edge_weight;
+  float2 edge_room_pixels = min(tex_coord, 1.f - tex_coord) * dimensions;
+  float2 safe_offset_pixels_xy = edge_room_pixels / max(abs(direction), 1e-4f);
+  float safe_offset_pixels = max(0.f, min(safe_offset_pixels_xy.x, safe_offset_pixels_xy.y) - 1.f);
+  float offset_pixels = min(desired_offset_pixels, safe_offset_pixels);
+  float2 offset = direction * texel_size * offset_pixels;
+
+  float3 positive_color = SampleAC3RLUTBuilderResolved(
+      scene_texture, scene_sampler,
+      exposure_texture, exposure_sampler,
+      bloom_texture, bloom_sampler,
+      aces_lut, aces_ldr_lut, ldr_to_hdr_lut, lut_sampler,
+      tex_coord + offset,
+      global_lighting_scale, bloom_tint, vignette, use_aces_lut, ldr_split);
+  float3 negative_color = SampleAC3RLUTBuilderResolved(
+      scene_texture, scene_sampler,
+      exposure_texture, exposure_sampler,
+      bloom_texture, bloom_sampler,
+      aces_lut, aces_ldr_lut, ldr_to_hdr_lut, lut_sampler,
+      tex_coord - offset,
+      global_lighting_scale, bloom_tint, vignette, use_aces_lut, ldr_split);
+
+  float3 color = center_color;
+  color.r = positive_color.r;
+  color.b = negative_color.b;
+  return max(0.f, color);
+}
+
+float3 SampleAC3RLUTBuilderAcesResolved(
+    Texture2D<float4> scene_texture,
+    SamplerState scene_sampler,
+    Texture2D<float4> exposure_texture,
+    SamplerState exposure_sampler,
+    Texture2D<float4> bloom_texture,
+    SamplerState bloom_sampler,
+    Texture3D<float4> aces_lut,
+    SamplerState lut_sampler,
+    float2 uv,
+    float global_lighting_scale,
+    float3 bloom_tint,
+    float vignette) {
+  float2 centered_uv = uv - 0.5f;
+  float vignette_weight = max(0.f, 1.f - dot(centered_uv, centered_uv));
+  vignette_weight = exp2(vignette * log2(vignette_weight));
+
+  float3 color = scene_texture.SampleLevel(scene_sampler, uv, 0).xyz;
+  color *= global_lighting_scale;
+  float3 bloom = bloom_texture.SampleLevel(bloom_sampler, uv, 0).xyz * bloom_tint;
+  float exposure = exposure_texture.SampleLevel(exposure_sampler, float2(0.f, 0.f), 0).x;
+  color = (color * exposure + bloom) * vignette_weight;
+
+  float3 lut_uv = saturate(log2(color) * 0.0588235296f + 0.527878284f);
+  lut_uv = lut_uv * 0.96875f + 0.015625f;
+  return aces_lut.SampleLevel(lut_sampler, lut_uv, 0).xyz;
+}
+
+float3 ApplyAC3RLUTBuilderAcesChromaticAberration(
+    float3 center_color,
+    float2 tex_coord,
+    Texture2D<float4> scene_texture,
+    SamplerState scene_sampler,
+    Texture2D<float4> exposure_texture,
+    SamplerState exposure_sampler,
+    Texture2D<float4> bloom_texture,
+    SamplerState bloom_sampler,
+    Texture3D<float4> aces_lut,
+    SamplerState lut_sampler,
+    float global_lighting_scale,
+    float3 bloom_tint,
+    float vignette) {
+  if (CUSTOM_CHROMATIC_ABERRATION_TYPE == 0.f || CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return center_color;
+
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return center_color;
+
+  const float2 dimensions = float2(width, height);
+  const float2 texel_size = rcp(dimensions);
+  float2 pixel_from_center = (tex_coord - 0.5f) * dimensions;
+  float distance_from_center = length(pixel_from_center);
+  if (distance_from_center <= 1e-4f) return center_color;
+
+  float edge_distance = saturate(distance_from_center / (0.5f * length(dimensions)));
+  float edge_weight = smoothstep(0.15f, 1.f, edge_distance);
+  edge_weight *= edge_weight;
+
+  float2 screen_edge_distance = abs(tex_coord * 2.f - 1.f);
+  float axial_edge_weight = smoothstep(0.55f, 1.f, max(screen_edge_distance.x, screen_edge_distance.y)) * 0.35f;
+  edge_weight = max(edge_weight, axial_edge_weight);
+
+  float2 direction = pixel_from_center / distance_from_center;
+  float desired_offset_pixels = CUSTOM_CHROMATIC_ABERRATION_STRENGTH * 9.f * edge_weight;
+  float2 edge_room_pixels = min(tex_coord, 1.f - tex_coord) * dimensions;
+  float2 safe_offset_pixels_xy = edge_room_pixels / max(abs(direction), 1e-4f);
+  float safe_offset_pixels = max(0.f, min(safe_offset_pixels_xy.x, safe_offset_pixels_xy.y) - 1.f);
+  float offset_pixels = min(desired_offset_pixels, safe_offset_pixels);
+  float2 offset = direction * texel_size * offset_pixels;
+
+  float3 positive_color = SampleAC3RLUTBuilderAcesResolved(
+      scene_texture, scene_sampler,
+      exposure_texture, exposure_sampler,
+      bloom_texture, bloom_sampler,
+      aces_lut, lut_sampler,
+      tex_coord + offset,
+      global_lighting_scale, bloom_tint, vignette);
+  float3 negative_color = SampleAC3RLUTBuilderAcesResolved(
+      scene_texture, scene_sampler,
+      exposure_texture, exposure_sampler,
+      bloom_texture, bloom_sampler,
+      aces_lut, lut_sampler,
+      tex_coord - offset,
+      global_lighting_scale, bloom_tint, vignette);
+
+  float3 color = center_color;
+  color.r = positive_color.r;
+  color.b = negative_color.b;
+  return max(0.f, color);
+}
+
 float3 NormalizeAC3RWhitePointScale(float3 white_point_scale) {
   const float white_scale = max(dot(white_point_scale, float3(0.333333343f, 0.333333343f, 0.333333343f)), 0.0001f);
   return white_point_scale / white_scale;
