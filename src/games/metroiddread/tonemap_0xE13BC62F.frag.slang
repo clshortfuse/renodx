@@ -26,11 +26,9 @@ void main()
 {
     vec2 uv = _33.xy;
 
-    float lutU = saturate(uv.x * fp_c3_1._m0[11].x * fp_c3_1._m0[10].z);
-    float lutV = saturate(uv.y * fp_c3_1._m0[11].y * fp_c3_1._m0[10].w);
-
-    vec3 lutA = texture(fp_t_tcb_14, vec2(lutU, lutV)).xyz;
-    vec3 lutB = texture(fp_t_tcb_C, vec2(lutU, lutV)).xyz;
+    vec2 lutUV = saturate(uv.xy * fp_c3_1._m0[11].xy * fp_c3_1._m0[10].zw);
+    vec3 lutA = texture(fp_t_tcb_14, lutUV).xyz;
+    vec3 lutB = texture(fp_t_tcb_C, lutUV).xyz;
     vec3 base = texture(fp_t_tcb_8, uv).xyz;
 
     float exposure = exp2(fp_c3_1._m0[0].x);
@@ -68,7 +66,7 @@ vec3 ApplyTonemap(vec3 hdr, bool useHdrPath = false)
   const float kBiasB = 0.02999999932944774627685546875;
   const float kLumaR = 0.2989999949932098388671875;
   const float kHdrBlendStart = 0.0;
-  const float kHdrBlendEnd = 4.0;
+  const float kHdrBlendEnd = 1.0;
 
   vec3 curve = fma(hdr, fp_c1_1._m0[0].x, kBiasA);
   vec3 toe = fma(hdr, fp_c1_1._m0[0].y, kBiasB);
@@ -78,7 +76,7 @@ vec3 ApplyTonemap(vec3 hdr, bool useHdrPath = false)
   vec3 toneMapped = mappedSdr;
   if (useHdrPath) {
     vec3 mappedHdr = (hdr * toe) * (1.0 / denom);
-    float hdrPeak = max(max(hdr.x, hdr.y), hdr.z);
+    float hdrPeak = renodx::math::Max(hdr);
     float hdrBlend = smoothstep(kHdrBlendStart, kHdrBlendEnd, hdrPeak);
     toneMapped = mix(mappedHdr, hdr, hdrBlend);
   }
