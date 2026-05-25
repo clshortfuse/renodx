@@ -55,11 +55,11 @@ void UpdateEffectiveShaderInjection() {
 
   if (!IsHDROutputActive()) {
     effective_shader_injection.tone_map_type = 0.f;
-    effective_shader_injection.custom_film_grain_type = 0.f;
-    effective_shader_injection.custom_film_grain_strength = 0.f;
-    effective_shader_injection.custom_rcas_strength = 0.f;
     effective_shader_injection.custom_chromatic_aberration_type = 0.f;
     effective_shader_injection.custom_chromatic_aberration_strength = 0.f;
+    effective_shader_injection.custom_rcas_strength = 0.f;
+    effective_shader_injection.custom_film_grain_type = 0.f;
+    effective_shader_injection.custom_film_grain_strength = 0.f;
   }
 }
 
@@ -224,15 +224,26 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxRCAS",
+        .binding = &shader_injection.custom_rcas_strength,
+        .default_value = 0.f,
+        .label = "RCAS Sharpening",
+        .section = "Effects",
+        .tooltip = "Applies RCAS sharpening to the final image.",
+        .max = 100.f,
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
         .binding = &shader_injection.custom_film_grain_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "Perceptual Film Grain",
         .section = "Effects",
-        .tooltip = "Adds perceptual luminance-based film grain to the final image.",
+        .tooltip = "Adds luminance-aware film grain to the final image.",
         .labels = {"Off", "On"},
-        .is_enabled = []() { return IsHDROutputActive(); },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrainStrength",
@@ -242,18 +253,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Controls perceptual film grain strength.",
         .max = 100.f,
-        .is_enabled = []() { return IsHDROutputActive() && shader_injection.custom_film_grain_type != 0.f; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "FxRCAS",
-        .binding = &shader_injection.custom_rcas_strength,
-        .default_value = 0.f,
-        .label = "RCAS Sharpening",
-        .section = "Effects",
-        .tooltip = "Adds luminance-preserving RCAS sharpening to the final Vanilla+ image.",
-        .max = 100.f,
-        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f && shader_injection.custom_film_grain_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -263,7 +263,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "Chromatic Aberration",
         .section = "Effects",
-        .tooltip = "Adds a subtle radial RGB lens-fringing effect to the final Vanilla+ image.",
+        .tooltip = "Adds a subtle radial RGB lens-fringing effect to the final image.",
         .labels = {"Off", "On"},
         .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
     },
@@ -442,11 +442,11 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorFilterStrength", 100.f},
+      {"FxRCAS", 0.f},
       {"FxFilmGrain", 0.f},
       {"FxFilmGrainStrength", 50.f},
-      {"FxRCAS", 0.f},
       {"FxChromaticAberration", 0.f},
-      {"FxChromaticAberrationStrength", 50.f},
+      {"FxChromaticAberrationStrength", 75.f},
       {"DLAA", 0.f},
       {"DLAAPreset", 0.f},
       {"TextureMipBias", 0.f},
@@ -551,7 +551,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!initialized) {
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::force_pipeline_cloning = true;
-        renodx::utils::random::binds.push_back(&shader_injection.custom_random);
         UpdateEffectiveShaderInjection();
         initialized = true;
       }
@@ -570,8 +569,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+  renodx::utils::random::Use(fdw_reason, {&shader_injection.custom_random});
   UpdateEffectiveShaderInjection();
-  renodx::utils::random::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &effective_shader_injection);
   ac3r::dlss::Use(fdw_reason);
 

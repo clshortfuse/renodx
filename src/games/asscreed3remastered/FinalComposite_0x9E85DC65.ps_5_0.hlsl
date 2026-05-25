@@ -36,8 +36,8 @@ void main(
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     r0.xyzw = g_InputTexture0.Sample(g_PointClampSampler_s, v1.xy).xyzw;
     o0.xyz = ApplyAC3RDisplayTransformToScRGB(DecodeAC3RSceneIntermediate(r0.xyz));
-    o0.xyz = ApplyAC3RRCAS(o0.xyz, v1.xy, g_InputTexture0, g_PointClampSampler_s);
-    o0.xyz = ApplyAC3RFilmGrain(o0.xyz, v1.xy);
+    o0.xyz = ApplyAC3RRCASScRGB(o0.xyz, v1.xy, g_InputTexture0, g_PointClampSampler_s);
+    o0.xyz = ApplyAC3RFilmGrainScRGB(o0.xyz, v1.xy);
     o0.w = r0.w;
     return;
   }
