@@ -32,6 +32,7 @@ struct ShaderInjectData {
 
   float custom_film_grain_strength;
   float custom_random;
+  float custom_bloom_strength;
 };
 
 #ifndef __cplusplus
@@ -63,6 +64,7 @@ cbuffer shader_injection : register(b13) {
 #define CUSTOM_FILM_GRAIN_TYPE shader_injection.custom_film_grain_type
 #define CUSTOM_FILM_GRAIN_STRENGTH shader_injection.custom_film_grain_strength
 #define CUSTOM_RANDOM shader_injection.custom_random
+#define CUSTOM_BLOOM_STRENGTH shader_injection.custom_bloom_strength
 
 #include "../../shaders/renodx.hlsl"
 #endif

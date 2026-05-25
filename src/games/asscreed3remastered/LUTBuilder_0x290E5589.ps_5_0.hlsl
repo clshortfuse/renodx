@@ -86,7 +86,7 @@ void main(
   r0.xyz = g_LightingConsts.m_GlobalLightingScale.yyy * r0.xyz;
   r0.w = Exposure.Sample(Exposure_s, float2(0,0)).x;
   r1.xyz = Bloom.Sample(Bloom_s, v1.xy).xyz;
-  r1.xyz = g_HDR.BloomTint.xyz * r1.xyz;
+  r1.xyz = ApplyAC3RBloom(r1.xyz, g_HDR.BloomTint.xyz);
   r0.xyz = r0.xyz * r0.www + r1.xyz;
   r1.xy = cmp(float2(0,0) != g_HDR.Vignette);
   r1.zw = float2(-0.5,-0.5) + v1.xy;

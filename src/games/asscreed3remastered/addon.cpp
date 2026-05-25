@@ -60,6 +60,7 @@ void UpdateEffectiveShaderInjection() {
     effective_shader_injection.custom_rcas_strength = 0.f;
     effective_shader_injection.custom_film_grain_type = 0.f;
     effective_shader_injection.custom_film_grain_strength = 0.f;
+    effective_shader_injection.custom_bloom_strength = 1.f;
   }
 }
 
@@ -90,6 +91,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.tone_map_peak_nits,
+        .default_value = 1000.f,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the display peak brightness in nits.",
@@ -222,6 +224,17 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxBloom",
+        .binding = &shader_injection.custom_bloom_strength,
+        .default_value = 50.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .tooltip = "Scales the game's bloom contribution.",
+        .max = 100.f,
+        .is_enabled = []() { return IsHDROutputActive() && shader_injection.tone_map_type != 0.f; },
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxRCAS",
@@ -442,6 +455,7 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorFilterStrength", 100.f},
+      {"FxBloom", 50.f},
       {"FxRCAS", 0.f},
       {"FxFilmGrain", 0.f},
       {"FxFilmGrainStrength", 50.f},

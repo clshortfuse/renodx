@@ -90,7 +90,7 @@ void main(
   r0.yzw = Scene.Sample(Scene_s, v1.xy).xyz;
   r0.yzw = g_LightingConsts.m_GlobalLightingScale.yyy * r0.yzw;
   r1.xyz = Bloom.Sample(Bloom_s, v1.xy).xyz;
-  r1.xyz = g_HDR.BloomTint.xyz * r1.xyz;
+  r1.xyz = ApplyAC3RBloom(r1.xyz, g_HDR.BloomTint.xyz);
   r1.w = Exposure.Sample(Exposure_s, float2(0,0)).x;
   r0.yzw = r0.yzw * r1.www + r1.xyz;
   r0.xyz = r0.yzw * r0.xxx;

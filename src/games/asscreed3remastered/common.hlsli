@@ -431,6 +431,11 @@ float3 ApplyAC3RChromaticAberrationEncoded(float3 center_color, float2 tex_coord
   return max(0.f, color);
 }
 
+float3 ApplyAC3RBloom(float3 bloom_color, float3 bloom_tint) {
+  float bloom_strength = RENODX_TONE_MAP_TYPE != 0.f ? CUSTOM_BLOOM_STRENGTH : 1.f;
+  return bloom_color * bloom_tint * bloom_strength;
+}
+
 float3 SampleAC3RLUTBuilderResolved(
     Texture2D<float4> scene_texture,
     SamplerState scene_sampler,
@@ -452,7 +457,7 @@ float3 SampleAC3RLUTBuilderResolved(
   color *= global_lighting_scale;
 
   const float exposure = exposure_texture.SampleLevel(exposure_sampler, float2(0.f, 0.f), 0).x;
-  const float3 bloom = bloom_texture.SampleLevel(bloom_sampler, uv, 0).xyz * bloom_tint;
+  const float3 bloom = ApplyAC3RBloom(bloom_texture.SampleLevel(bloom_sampler, uv, 0).xyz, bloom_tint);
   color = color * exposure + bloom;
 
   if (vignette != 0.f) {
@@ -579,7 +584,7 @@ float3 SampleAC3RLUTBuilderAcesResolved(
 
   float3 color = scene_texture.SampleLevel(scene_sampler, uv, 0).xyz;
   color *= global_lighting_scale;
-  float3 bloom = bloom_texture.SampleLevel(bloom_sampler, uv, 0).xyz * bloom_tint;
+  float3 bloom = ApplyAC3RBloom(bloom_texture.SampleLevel(bloom_sampler, uv, 0).xyz, bloom_tint);
   float exposure = exposure_texture.SampleLevel(exposure_sampler, float2(0.f, 0.f), 0).x;
   color = (color * exposure + bloom) * vignette_weight;
 
