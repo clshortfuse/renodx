@@ -501,11 +501,11 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   UpdateEffectiveShaderInjection();
 
   if (!fired_on_init_swapchain) {
-    if (hdr_output_active) {
-      float peak = renodx::utils::swapchain::GetPeakNits(swapchain).value_or(1000.f);
-      settings[3]->default_value = peak;
+    auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
+    if (peak.has_value()) {
+      settings[3]->default_value = peak.value();
+      settings[3]->can_reset = true;
     }
-
     fired_on_init_swapchain = true;
   }
 
