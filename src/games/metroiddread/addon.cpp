@@ -219,22 +219,21 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-      static std::vector<uint32_t> hashes = {0x41845DB5};  // final buffer
+      static std::vector<uint32_t> hashes = {0x775494D9};  // final buffer
 
-      for (uint32_t hash : hashes) {
-        for (int i = 0; i < 2; i++) {
-          renodx::mods::swapchain::resource_upgrade_infos.push_back({
-              .old_format = reshade::api::format::r8g8b8a8_typeless,
-              .new_format = target_format,
-              .index = 0,
-              .ignore_size = true,  // risky...?
-              .shader_hash = hash,
-              .use_resource_view_cloning = true,
-              .ignore_reset = true,
-          });
+        for (uint32_t hash : hashes) {
+          for (int i = 0; i < 2; i++) {
+            renodx::mods::swapchain::resource_upgrade_infos.push_back({
+                .old_format = reshade::api::format::r8g8b8a8_typeless,
+                .new_format = target_format,
+                .index = 0,
+                .ignore_size = true,  // risky...?
+                .shader_hash = hash,
+                .use_resource_view_cloning = true,
+                .ignore_reset = true,
+            });
+          }
         }
-      }
-
 
       // Register event handlers
       reshade::register_event<reshade::addon_event::present>(OnPresent);
