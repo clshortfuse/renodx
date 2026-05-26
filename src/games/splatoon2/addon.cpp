@@ -258,7 +258,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
       static std::vector<uint32_t> hashes = {0xEF015FAB};  // final buffer
-      static std::vector<uint32_t> tonemap_hashes = {0x6AACC705, 0x9063BD29, 0xFA7AFD3A};  // tonemap
+      static std::vector<uint32_t> tonemap_hashes = {0x6AACC705, 0x9063BD29, 0xFA7AFD3A, 0x65F02A9E};  // tonemap
 
       for (uint32_t hash : hashes) {
         for (int i = 0; i < 3; i++) {
@@ -273,6 +273,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         }
       }
     for (uint32_t hash : tonemap_hashes) {
+        for (int i = 0; i < 3; i++) {
       renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = target_format,
@@ -280,7 +281,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .shader_hash = hash,
           .use_resource_view_cloning = true,
           .ignore_reset = false,
-      });}
+      });}}
 
       // Register event handlers
       reshade::register_event<reshade::addon_event::present>(OnPresent);
