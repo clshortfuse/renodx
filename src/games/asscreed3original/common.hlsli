@@ -274,6 +274,186 @@ float3 ToneMapAndRenderIntermediatePass(float3 color, float2 position) {
   return color;
 }
 
+float AC3OMax4(float a, float b, float c, float d) {
+  return max(max(a, b), max(c, d));
+}
+
+float AC3OMin4(float a, float b, float c, float d) {
+  return min(min(a, b), min(c, d));
+}
+
+float AC3OMax5(float a, float b, float c, float d, float e) {
+  return max(AC3OMax4(a, b, c, d), e);
+}
+
+float AC3OMin5(float a, float b, float c, float d, float e) {
+  return min(AC3OMin4(a, b, c, d), e);
+}
+
+float2 AC3OClampToTexelCenter(float2 uv, float2 texel_size) {
+  return clamp(uv, texel_size * 0.5f, 1.f - texel_size * 0.5f);
+}
+
+float3 SampleAC3OToneMappedLUT(
+    Texture2D<float4> scene_texture,
+    SamplerState scene_sampler,
+    Texture3D<float4> lut_texture,
+    SamplerState lut_sampler,
+    float2 uv,
+    float3 pre_lut_scale,
+    float3 pre_lut_offset) {
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return 0.f;
+
+  const float2 texel_size = rcp(float2(width, height));
+  uv = AC3OClampToTexelCenter(uv, texel_size);
+
+  float3 input = scene_texture.SampleLevel(scene_sampler, uv, 0).rgb;
+  float3 untonemapped_gamma = (((input * pre_lut_scale + pre_lut_offset) - 0.03125f) / 0.9375f);
+  float3 untonemapped = DecodeIntermediateForToneMap(untonemapped_gamma);
+
+  renodx::lut::Config lut_config = CreateLUTConfig(lut_sampler);
+  const float compression_scale = ComputeMaxChCompressionScale(untonemapped);
+
+  const float3 color_sdr = untonemapped * compression_scale;
+  const float3 color_sdr_graded = Sample(lut_texture, lut_config, color_sdr);
+  float3 color_final = color_sdr_graded / max(compression_scale, 1e-6f);
+
+  color_final = renodx::color::gamma::EncodeSafe(color_final, 2.2f);
+  return ToneMapAndRenderIntermediatePass(color_final, uv);
+}
+
+float3 ApplyAC3ORCAS(
+    float3 center_color,
+    float2 tex_coord,
+    Texture2D<float4> scene_texture,
+    SamplerState scene_sampler,
+    Texture3D<float4> lut_texture,
+    SamplerState lut_sampler,
+    float3 pre_lut_scale,
+    float3 pre_lut_offset) {
+  if (RENODX_TONE_MAP_TYPE == 0.f || CUSTOM_RCAS_STRENGTH <= 0.f) return center_color;
+
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return center_color;
+
+  const float2 texel_size = rcp(float2(width, height));
+  const float2 uv = AC3OClampToTexelCenter(tex_coord, texel_size);
+
+  float3 b = SampleAC3OToneMappedLUT(scene_texture, scene_sampler, lut_texture, lut_sampler, uv + float2(0.f, -1.f) * texel_size, pre_lut_scale, pre_lut_offset);
+  float3 d = SampleAC3OToneMappedLUT(scene_texture, scene_sampler, lut_texture, lut_sampler, uv + float2(-1.f, 0.f) * texel_size, pre_lut_scale, pre_lut_offset);
+  float3 e = center_color;
+  float3 f = SampleAC3OToneMappedLUT(scene_texture, scene_sampler, lut_texture, lut_sampler, uv + float2(1.f, 0.f) * texel_size, pre_lut_scale, pre_lut_offset);
+  float3 h = SampleAC3OToneMappedLUT(scene_texture, scene_sampler, lut_texture, lut_sampler, uv + float2(0.f, 1.f) * texel_size, pre_lut_scale, pre_lut_offset);
+
+  float b_luma = max(renodx::color::y::from::BT709(b), 0.f);
+  float d_luma = max(renodx::color::y::from::BT709(d), 0.f);
+  float e_luma = max(renodx::color::y::from::BT709(e), 0.f);
+  float f_luma = max(renodx::color::y::from::BT709(f), 0.f);
+  float h_luma = max(renodx::color::y::from::BT709(h), 0.f);
+
+  if (e_luma <= 1e-6f) return center_color;
+
+  float min_ring_luma = AC3OMin4(b_luma, d_luma, f_luma, h_luma);
+  float max_ring_luma = AC3OMax4(b_luma, d_luma, f_luma, h_luma);
+  float limited_max_ring_luma = min(max(max_ring_luma, 1e-6f), 0.99f);
+  float limited_min_ring_luma = max(min_ring_luma, 1e-6f);
+
+  float hit_min_luma = limited_min_ring_luma * rcp(4.f * limited_max_ring_luma);
+  float hit_max_luma = (1.f - limited_max_ring_luma) * rcp(4.f * limited_min_ring_luma - 4.f);
+  float local_lobe = max(-hit_min_luma, hit_max_luma);
+
+  const float rcas_limit = 0.1875f;
+  float lobe = max(-rcas_limit, min(local_lobe, 0.f)) * CUSTOM_RCAS_STRENGTH;
+
+  float b_luma_2x = b_luma * 2.f;
+  float d_luma_2x = d_luma * 2.f;
+  float e_luma_2x = e_luma * 2.f;
+  float f_luma_2x = f_luma * 2.f;
+  float h_luma_2x = h_luma * 2.f;
+  float noise = 0.25f * (b_luma_2x + d_luma_2x + f_luma_2x + h_luma_2x) - e_luma_2x;
+  float max_luma_2x = AC3OMax5(b_luma_2x, d_luma_2x, e_luma_2x, f_luma_2x, h_luma_2x);
+  float min_luma_2x = AC3OMin5(b_luma_2x, d_luma_2x, e_luma_2x, f_luma_2x, h_luma_2x);
+  noise = saturate(abs(noise) * rcp(max(max_luma_2x - min_luma_2x, 1e-6f)));
+  lobe *= 1.f - 0.5f * noise;
+
+  float rcp_lobe = rcp(4.f * lobe + 1.f);
+  float sharpened_luma = ((b_luma + d_luma + f_luma + h_luma) * lobe + e_luma) * rcp_lobe;
+  float luma_ratio = clamp(sharpened_luma / e_luma, 0.f, 4.f);
+
+  return center_color * luma_ratio;
+}
+
+float3 ApplyAC3OFilmGrain(float3 color, float2 position) {
+  if (RENODX_TONE_MAP_TYPE == 0.f || CUSTOM_FILM_GRAIN_TYPE == 0.f || CUSTOM_FILM_GRAIN_STRENGTH <= 0.f) return color;
+
+  return renodx::effects::ApplyFilmGrain(
+      color,
+      position,
+      CUSTOM_RANDOM,
+      CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
+}
+
+float3 ApplyAC3OChromaticAberration(
+    float3 center_color,
+    float2 tex_coord,
+    Texture2D<float4> scene_texture,
+    SamplerState scene_sampler,
+    Texture3D<float4> lut_texture,
+    SamplerState lut_sampler,
+    float3 pre_lut_scale,
+    float3 pre_lut_offset) {
+  if (RENODX_TONE_MAP_TYPE == 0.f || CUSTOM_CHROMATIC_ABERRATION_TYPE == 0.f || CUSTOM_CHROMATIC_ABERRATION_STRENGTH <= 0.f) return center_color;
+
+  uint width, height;
+  scene_texture.GetDimensions(width, height);
+  if (width == 0 || height == 0) return center_color;
+
+  const float2 dimensions = float2(width, height);
+  const float2 texel_size = rcp(dimensions);
+  float2 pixel_from_center = (tex_coord - 0.5f) * dimensions;
+  float distance_from_center = length(pixel_from_center);
+  if (distance_from_center <= 1e-4f) return center_color;
+
+  float edge_distance = saturate(distance_from_center / (0.5f * length(dimensions)));
+  float edge_weight = smoothstep(0.15f, 1.f, edge_distance);
+  edge_weight *= edge_weight;
+
+  float2 screen_edge_distance = abs(tex_coord * 2.f - 1.f);
+  float axial_edge_weight = smoothstep(0.55f, 1.f, max(screen_edge_distance.x, screen_edge_distance.y)) * 0.35f;
+  edge_weight = max(edge_weight, axial_edge_weight);
+
+  float2 direction = pixel_from_center / distance_from_center;
+  float desired_offset_pixels = CUSTOM_CHROMATIC_ABERRATION_STRENGTH * 9.f * edge_weight;
+  float2 edge_room_pixels = min(tex_coord, 1.f - tex_coord) * dimensions;
+  float2 safe_offset_pixels_xy = edge_room_pixels / max(abs(direction), 1e-4f);
+  float safe_offset_pixels = max(0.f, min(safe_offset_pixels_xy.x, safe_offset_pixels_xy.y) - 1.f);
+  float offset_pixels = min(desired_offset_pixels, safe_offset_pixels);
+  float2 offset = direction * texel_size * offset_pixels;
+
+  float3 color = center_color;
+  color.r = SampleAC3OToneMappedLUT(scene_texture, scene_sampler, lut_texture, lut_sampler, tex_coord + offset, pre_lut_scale, pre_lut_offset).r;
+  color.b = SampleAC3OToneMappedLUT(scene_texture, scene_sampler, lut_texture, lut_sampler, tex_coord - offset, pre_lut_scale, pre_lut_offset).b;
+  return color;
+}
+
+float3 ApplyAC3OPostProcess(
+    float3 color,
+    float2 tex_coord,
+    Texture2D<float4> scene_texture,
+    SamplerState scene_sampler,
+    Texture3D<float4> lut_texture,
+    SamplerState lut_sampler,
+    float3 pre_lut_scale,
+    float3 pre_lut_offset) {
+  color = ApplyAC3ORCAS(color, tex_coord, scene_texture, scene_sampler, lut_texture, lut_sampler, pre_lut_scale, pre_lut_offset);
+  color = ApplyAC3OFilmGrain(color, tex_coord);
+  color = ApplyAC3OChromaticAberration(color, tex_coord, scene_texture, scene_sampler, lut_texture, lut_sampler, pre_lut_scale, pre_lut_offset);
+  return color;
+}
+
 float3 InvertIntermediatePass(float3 color) {
   return color;
 

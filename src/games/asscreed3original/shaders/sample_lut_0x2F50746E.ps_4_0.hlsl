@@ -61,6 +61,15 @@ void main(
 
     o0.xyz = renodx::color::gamma::EncodeSafe(color_final, 2.2f);
     o0.rgb = ToneMapAndRenderIntermediatePass(o0.rgb, v1.xy);
+    o0.rgb = ApplyAC3OPostProcess(
+        o0.rgb,
+        v1.xy,
+        FrameBuffer,
+        FrameBuffer_s,
+        ColorBalance3DTexture,
+        ColorBalance3DTexture_s,
+        g_PreLutScale.xyz,
+        g_PreLutOffset.xyz);
   }
 
   return;

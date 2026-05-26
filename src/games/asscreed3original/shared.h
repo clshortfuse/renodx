@@ -25,11 +25,12 @@ struct ShaderInjectData {
   float color_grade_scaling;
 
   float custom_video_hdr;
-  float custom_reserved1;
-  float custom_reserved2;
-  float custom_reserved3;
-  float custom_reserved4;
-  float custom_reserved5;
+  float custom_rcas_strength;
+  float custom_film_grain_type;
+  float custom_film_grain_strength;
+  float custom_random;
+  float custom_chromatic_aberration_type;
+  float custom_chromatic_aberration_strength;
   float custom_reserved6;
 };
 
@@ -58,7 +59,13 @@ cbuffer cb13 : register(b13) {
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.scene_grade_strength
 #define RENODX_COLOR_GRADE_SCALING           shader_injection.color_grade_scaling
 
-#define CUSTOM_VIDEO_HDR                     shader_injection.custom_video_hdr
+#define CUSTOM_VIDEO_HDR shader_injection.custom_video_hdr
+#define CUSTOM_RCAS_STRENGTH shader_injection.custom_rcas_strength
+#define CUSTOM_FILM_GRAIN_TYPE shader_injection.custom_film_grain_type
+#define CUSTOM_FILM_GRAIN_STRENGTH shader_injection.custom_film_grain_strength
+#define CUSTOM_RANDOM shader_injection.custom_random
+#define CUSTOM_CHROMATIC_ABERRATION_TYPE shader_injection.custom_chromatic_aberration_type
+#define CUSTOM_CHROMATIC_ABERRATION_STRENGTH shader_injection.custom_chromatic_aberration_strength
 
 #include "../../shaders/renodx.hlsl"
 

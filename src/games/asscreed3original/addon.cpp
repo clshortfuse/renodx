@@ -21,6 +21,7 @@
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
@@ -267,6 +268,61 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxRCAS",
+        .binding = &shader_injection.custom_rcas_strength,
+        .default_value = 0.f,
+        .label = "RCAS Sharpening",
+        .section = "Effects",
+        .tooltip = "Applies RCAS sharpening after tone mapping.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxFilmGrain",
+        .binding = &shader_injection.custom_film_grain_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Perceptual Film Grain",
+        .section = "Effects",
+        .tooltip = "Applies perceptual film grain after tone mapping.",
+        .labels = {"Off", "On"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxFilmGrainStrength",
+        .binding = &shader_injection.custom_film_grain_strength,
+        .default_value = 50.f,
+        .label = "Film Grain Strength",
+        .section = "Effects",
+        .tooltip = "Controls perceptual film grain strength.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.custom_film_grain_type != 0.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxChromaticAberration",
+        .binding = &shader_injection.custom_chromatic_aberration_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Chromatic Aberration",
+        .section = "Effects",
+        .tooltip = "Applies chromatic aberration after sharpening and film grain.",
+        .labels = {"Off", "On"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxChromaticAberrationStrength",
+        .binding = &shader_injection.custom_chromatic_aberration_strength,
+        .default_value = 50.f,
+        .label = "Chromatic Aberration Strength",
+        .section = "Effects",
+        .tooltip = "Controls chromatic aberration strength.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0.f && shader_injection.custom_chromatic_aberration_type != 0.f; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "FxVideoAutoHDR",
         .binding = &shader_injection.custom_video_hdr,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -367,8 +423,8 @@ void OnPresetOff() {
       {"ToneMapWhiteClip", 100.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
-      {"GammaCorrection", 0},
-      {"ToneMapHueShift", 0},
+      {"GammaCorrection", 0.f},
+      {"ToneMapHueShift", 0.f},
       {"ToneMapBlowout", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
@@ -380,6 +436,11 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"ColorGradeScene", 100.f},
       {"ColorGradeSceneScaling", 0.f},
+      {"FxRCAS", 0.f},
+      {"FxFilmGrain", 0.f},
+      {"FxFilmGrainStrength", 50.f},
+      {"FxChromaticAberration", 0.f},
+      {"FxChromaticAberrationStrength", 50.f},
       {"FxVideoAutoHDR", 1.f},
   });
 }
@@ -469,6 +530,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+  renodx::utils::random::Use(fdw_reason, {&shader_injection.custom_random});
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
