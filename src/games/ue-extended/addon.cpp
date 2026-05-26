@@ -788,6 +788,14 @@ const std::unordered_map<
                 {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
+        {
+            "Ruiner Game",
+            {
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"ToneMapGammaCorrection", 0.f},
+            },
+        },
         // Native HDR on games (Path off)
         {
             "Hell is Us",
