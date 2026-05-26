@@ -23,6 +23,7 @@ inline decltype(&CreateDXGIFactory1) pCreateDXGIFactory1 = nullptr;
 inline decltype(&CreateDXGIFactory2) pCreateDXGIFactory2 = nullptr;
 inline decltype(&D3D12CreateDevice) pD3D12CreateDevice = nullptr;
 inline decltype(&D3D11CreateDevice) pD3D11CreateDevice = nullptr;
+inline decltype(&D3D12GetInterface) pD3D12GetInterface = nullptr;
 inline decltype(&D3D12GetDebugInterface) pD3D12GetDebugInterface = nullptr;
 inline decltype(&D3D12SerializeRootSignature) pD3D12SerializeRootSignature = nullptr;
 using PFN_D3D_COMPILE = HRESULT(WINAPI*)(LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
@@ -103,6 +104,14 @@ static bool Initialize() {
     if (pD3D12CreateDevice == nullptr) {
       // reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d12.dll, D3D12CreateDevice) failed)");
       return false;
+    }
+  }
+
+  if (pD3D12GetInterface == nullptr) {
+    HMODULE d3d12_module = LoadLibraryW(L"d3d12.dll");
+    if (d3d12_module != nullptr) {
+      pD3D12GetInterface = reinterpret_cast<decltype(&D3D12GetInterface)>(
+          GetProcAddress(d3d12_module, "D3D12GetInterface"));
     }
   }
 
