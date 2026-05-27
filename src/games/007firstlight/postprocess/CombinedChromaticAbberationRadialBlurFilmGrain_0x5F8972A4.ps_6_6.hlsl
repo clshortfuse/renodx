@@ -43,35 +43,58 @@ float4 SampleRadialBlurInput(float2 uv) {
   return color;
 }
 
-// Film grain uses the noise texture to push squared color values, fading near white.
+// Vanilla film grain uses the noise texture to push squared color values, fading near white.
 float3 ApplyFilmGrain(float3 color, float2 uv) {
   if (cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity <= 0.f) {
     return color;
   }
 
-  if (CUSTOM_GRAIN_TYPE != 0.f) {
+  float2 noise_uv = cbCombinedChromaticAbberationRadialBlurFilmGrain.vTilingNoiseTexture * uv
+                    + cbCombinedChromaticAbberationRadialBlurFilmGrain.vRandOffset;
+  float noise = srvNoise.SampleLevel(samplerPointWrapNode, noise_uv, 0.f);
+
+  if (CUSTOM_GRAIN_TYPE == 2.f) {  // renodx perceptual grain
     color = renodx::color::gamma::DecodeSafe(color);
     color = renodx::effects::ApplyFilmGrain(
-        color,
-        uv,
-        srvNoise.SampleLevel(samplerPointWrapNode,
-                             (cbCombinedChromaticAbberationRadialBlurFilmGrain.vTilingNoiseTexture.xy * uv.xy) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vRandOffset.xy,
-                             0.0f)
-            .x,
-        CUSTOM_GRAIN_STRENGTH * 0.04f * cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity,
-        1.f);
+        color, uv, noise.x, CUSTOM_GRAIN_STRENGTH * 0.04f * cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity);
     color = renodx::color::gamma::EncodeSafe(color);
     return color;
-  } else {
-    float noise = srvNoise.SampleLevel(
-        samplerPointWrapNode,
-        float2((cbCombinedChromaticAbberationRadialBlurFilmGrain.vTilingNoiseTexture.x * uv.x) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vRandOffset.x,
-               (cbCombinedChromaticAbberationRadialBlurFilmGrain.vTilingNoiseTexture.y * uv.y) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vRandOffset.y),
-        0.0f);
-    float3 color_squared = color * color;
-    float3 grain = (noise * (1.0f - color_squared)) * 2.0f;
+  } else if (CUSTOM_GRAIN_TYPE == 1.f) {  // vanilla grain with clamped mask
 
-    return sqrt((((((1.0f - grain) * color_squared) + grain) * color_squared) - color_squared) * cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity + color_squared);
+    // linearize properly instead of approximating with square
+    float3 color_linear = renodx::color::gamma::DecodeSafe(color, 2.2f);
+
+    // Grain fades out as linear color approaches 1.
+    // The saturate prevents negative grain behavior above 1 in HDR.
+    float3 grain_mask = 1.f - saturate(color_linear);
+    float3 grain = noise * grain_mask * 2.f;
+
+    float3 blended_linear = lerp(color_linear, 1.f, grain);
+
+    // Mask the full grain delta so highlights above 1 do not get boosted.
+    float3 grain_delta = ((blended_linear * color_linear) - color_linear) * grain_mask;
+
+    float grain_strength = cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity * CUSTOM_GRAIN_STRENGTH;
+
+    color_linear = grain_delta * grain_strength + color_linear;
+
+    return renodx::color::gamma::EncodeSafe(color_linear, 2.2f);
+  } else {  // vanilla grain (broken in hdr)
+
+    float3 color_squared = color * color;
+
+    // Grain fades out as color_squared approaches 1.
+    // Above 1 this becomes negative, which is why this vanilla path breaks in HDR.
+    float3 grain_mask = 1.f - color_squared;
+    float3 grain = noise * grain_mask * 2.f;
+
+    float3 blended_squared = lerp(color_squared, 1.f, grain);
+
+    float grain_strength = cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity * CUSTOM_GRAIN_STRENGTH;
+
+    float3 grained_squared = ((blended_squared * color_squared) - color_squared) * grain_strength + color_squared;
+
+    return sqrt(grained_squared);
   }
 }
 
