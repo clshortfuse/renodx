@@ -19,16 +19,15 @@
 #include <cstdint>
 #include <cstdio>
 #include <functional>
-#include <mutex>
 #include <optional>
-#include <shared_mutex>
+#include <span>
 #include <sstream>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include <include/reshade.hpp>
 
+#include "../utils/command_action.hpp"
 #include "../utils/constants.hpp"
 #include "../utils/data.hpp"
 #include "../utils/format.hpp"
@@ -162,7 +161,7 @@ static size_t shader_injection_size = 0;
 static bool use_pipeline_layout_cloning = false;
 static bool manual_shader_scheduling = false;
 static bool force_pipeline_cloning = false;
-static bool trace_unmodified_shaders = false;
+[[deprecated]] static bool trace_unmodified_shaders = false;  // Deprecated/dead no-op.
 static bool allow_multiple_push_constants = false;
 static bool push_injections_on_present = false;
 static bool revert_constant_buffer_ranges = false;
@@ -171,8 +170,6 @@ static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static uint32_t constant_buffer_offset = 0;
 
-static std::shared_mutex unmodified_shaders_mutex;
-static std::unordered_set<uint32_t> unmodified_shaders;
 static renodx::utils::data::ParallelNodeHashMap<uint32_t, CustomShader> custom_shaders;
 
 static std::unordered_map<uint32_t, uint32_t> counted_shaders;
@@ -1267,432 +1264,362 @@ inline void OnBindDescriptorTables(
   }
 }
 
-struct DrawResponse {
-  bool bypass_draw = false;
-  int injection_register_index = -1;
-  std::function<void(reshade::api::command_list*)> on_drawn = nullptr;
-};
+inline constexpr auto OnCommandAction = []<typename T, typename Context>(
+                                            Context& context) -> renodx::utils::command_action::CallbackResult<Context> {
+  struct DrawResponse {
+    bool bypass_draw = false;
+    const std::function<void(reshade::api::command_list*)>* on_drawn = nullptr;
+    bool revert_constant_buffer_range = false;
+  };
 
-inline DrawResponse HandleStatesAndBypass(
-    reshade::api::command_list* cmd_list,
-    renodx::utils::shader::CommandListData* shader_state,
-    const int& index,
-    float resource_tag = -1) {
-  auto& state = shader_state->stage_states[index];
-  DrawResponse response = {.bypass_draw = false};
+  auto* shader_state = renodx::utils::command_action::GetShaderState(&context);
+  assert(shader_state != nullptr);
+  if (shader_state == nullptr) return {};
 
-  if (state.pipeline == 0u) return response;
+  const bool is_dispatch = context.IsDispatch();
+  float resource_tag = -1;
+  if (!is_dispatch && resource_tag_float != nullptr) {
+    auto* swapchain_state = renodx::utils::command_action::GetSwapchainState(&context);
+    if (swapchain_state == nullptr) {
+      reshade::log::message(reshade::log::level::error, "mods::shader::OnCommandAction(swapchain state is null)");
+    } else if (!swapchain_state->current_render_targets.empty()) {
+      resource_tag = renodx::utils::resource::GetResourceTag(swapchain_state->current_render_targets.at(0));
+    }
+  }
 
-  const auto& shader_hash = renodx::utils::shader::GetCurrentShaderHash(&state, index);
-  if (shader_hash == 0u) return response;
-  auto custom_shader_info_pair = custom_shaders.find(shader_hash);
-  bool is_custom_shader = custom_shader_info_pair != custom_shaders.end();
-  if (!is_custom_shader) {
-    if (
-        index != renodx::utils::shader::COMPUTE_INDEX
-        && trace_unmodified_shaders
-        && renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list)) {
-      std::unique_lock lock(unmodified_shaders_mutex);
-      if (unmodified_shaders.insert(shader_hash).second) {
+  const auto handle_stage = [&](renodx::utils::shader::ShaderStageIndex shader_stage, uint32_t matched_shader_hash = 0u, const CustomShader* matched_custom_shader = nullptr) -> DrawResponse {
+    auto& state = shader_state->stage_states[shader_stage];
+    DrawResponse response = {};
+
+    if (state.pipeline == 0u) return response;
+
+    renodx::utils::shader::PopulateStageState(&state);
+    if (state.pipeline_details == nullptr) return response;
+
+    const uint32_t state_shader_hash = state.pipeline_details->compatible_shader_infos[shader_stage].shader_hash;
+    assert(matched_shader_hash == 0u || matched_shader_hash == state_shader_hash);
+    const uint32_t shader_hash = matched_shader_hash != 0u ? matched_shader_hash : state_shader_hash;
+    if (shader_hash == 0u) return response;
+
+    const CustomShader* custom_shader_info = matched_custom_shader;
+    if (custom_shader_info == nullptr) {
+      const auto custom_shader_it = custom_shaders.find(shader_hash);
+      if (custom_shader_it == custom_shaders.end()) return response;
+      custom_shader_info = &custom_shader_it->second;
+    }
+
+#ifdef DEBUG_LEVEL_1
+    std::stringstream s;
+    s << "mods::shader::OnCommandAction(found shader: ";
+    s << PRINT_CRC32(shader_hash);
+    s << ")";
+    reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+
+    if (custom_shader_info->on_draw != nullptr) {
+      bool should_draw = custom_shader_info->on_draw(context.cmd_list);
+      if (!should_draw) {
+#ifdef DEBUG_LEVEL_1
         std::stringstream s;
-        s << "mods::shader::HandlePreDraw(unmodified ";
-        s << state.stage;
-        s << " shader writing to swapchain: ";
+        s << "mods::shader::OnCommandAction(bypass draw: ";
         s << PRINT_CRC32(shader_hash);
         s << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
+#endif
+        response.bypass_draw = true;
+        return response;
       }
     }
 
-    return response;  // move to next shader
-  }
-
-  auto& custom_shader_info = custom_shader_info_pair->second;
-#ifdef DEBUG_LEVEL_1
-  std::stringstream s;
-  s << "mods::shader::HandlePreDraw(found shader: ";
-  s << PRINT_CRC32(shader_hash);
-  s << ")";
-  reshade::log::message(reshade::log::level::debug, s.str().c_str());
-#endif
-
-  if (custom_shader_info.on_draw != nullptr) {
-    bool should_draw = custom_shader_info.on_draw(cmd_list);
-    if (!should_draw) {
-#ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "mods::shader::HandlePreDraw(bypass draw: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
-#endif
-      response.bypass_draw = true;
-      return response;
+    if (custom_shader_info->on_drawn != nullptr) {
+      response.on_drawn = &custom_shader_info->on_drawn;
     }
-  }
 
-  response.on_drawn = custom_shader_info.on_drawn;
-
-  if (custom_shader_info.on_replace != nullptr) {
-    bool should_replace = custom_shader_info.on_replace(cmd_list);
-    if (!should_replace) {
+    if (custom_shader_info->on_replace != nullptr) {
+      bool should_replace = custom_shader_info->on_replace(context.cmd_list);
+      if (!should_replace) {
 #ifdef DEBUG_LEVEL_1
-      std::stringstream s;
-      s << "mods::shader::HandlePreDraw(Not replacing: ";
-      s << PRINT_CRC32(shader_hash);
-      s << ", stage:" << state.stage;
-      s << ")";
-      reshade::log::message(reshade::log::level::debug, s.str().c_str());
-#endif
-      // state.replacement_pipeline = {0u};
-      return response;
-    }
-  }
-
-  bool should_inject = true;
-  if (custom_shader_info.on_inject != nullptr) {
-    should_inject = custom_shader_info.on_inject(cmd_list);
-  }
-
-  utils::shader::BuildReplacementPipeline(state.pipeline_details);
-
-  // Perform Push
-  if (shader_injection_size != 0 && should_inject) {
-    if (state.pipeline_details->injection_layout == 0u || state.pipeline_details->injection_index == -1) {
-#ifdef DEBUG_LEVEL_1
-      utils::pipeline_layout::UpdatePipelineLayoutData(state.pipeline_details->layout, [&](utils::pipeline_layout::PipelineLayoutData& mutable_layout_data) {
-        if (mutable_layout_data.failed_injection) return;
-        mutable_layout_data.failed_injection = true;
         std::stringstream s;
-        s << "mods::shader::PushShaderInjections(did not find modded pipeline root index";
-        s << ", layout: " << PRINT_PTR(state.pipeline_details->layout.handle);
+        s << "mods::shader::OnCommandAction(Not replacing: ";
+        s << PRINT_CRC32(shader_hash);
+        s << ", stage:" << state.stage;
         s << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      });
+        reshade::log::message(reshade::log::level::debug, s.str().c_str());
 #endif
-      return response;
-    }
-
-    renodx::utils::constants::PushShaderInjections(
-        cmd_list,
-        state.pipeline_details->injection_layout,
-        static_cast<uint32_t>(state.pipeline_details->injection_index),
-        index == renodx::utils::shader::COMPUTE_INDEX,
-        {shader_injection, shader_injection_size},
-        constant_buffer_offset,
-        resource_tag_float,
-        resource_tag);
-    if (revert_constant_buffer_ranges) {
-      switch (cmd_list->get_device()->get_api()) {
-        case reshade::api::device_api::d3d10:
-        case reshade::api::device_api::d3d11:
-        case reshade::api::device_api::d3d12: {
-          response.injection_register_index = state.pipeline_details->injection_register_index;
-          break;
-        }
-        default:
-          break;
+        // state.replacement_pipeline = {0u};
+        return response;
       }
     }
-  }
 
-  if (!custom_shader_info.views.empty()) {
-    if (state.pipeline_details->injection_layout == 0u) {
-#ifdef DEBUG_LEVEL_0
-      std::stringstream s;
-      s << "mods::shader::HandleStatesAndBypass(";
-      s << "descriptor push unavailable for shader ";
-      s << PRINT_CRC32(custom_shader_info.crc32);
-      s << ": injection layout missing";
-      s << ", pipeline: " << PRINT_PTR(state.pipeline_details->pipeline.handle);
-      s << ", original layout: " << PRINT_PTR(state.pipeline_details->layout.handle);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-#endif
-    } else if (state.pipeline_details->descriptor_push_locations.empty()) {
-#ifdef DEBUG_LEVEL_0
-      std::stringstream s;
-      s << "mods::shader::HandleStatesAndBypass(";
-      s << "descriptor push unavailable for shader ";
-      s << PRINT_CRC32(custom_shader_info.crc32);
-      s << ": descriptor push locations missing";
-      s << ", pipeline: " << PRINT_PTR(state.pipeline_details->pipeline.handle);
-      s << ", injection layout: " << PRINT_PTR(state.pipeline_details->injection_layout.handle);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-#endif
-    } else {
-      struct PendingViewPush {
-        uint32_t layout_param = 0u;
-        uint32_t binding = 0u;
-        reshade::api::descriptor_type type = static_cast<reshade::api::descriptor_type>(0u);
-        reshade::api::resource_view view = {0u};
-      };
+    bool should_inject = true;
+    if (custom_shader_info->on_inject != nullptr) {
+      should_inject = custom_shader_info->on_inject(context.cmd_list);
+    }
 
-      std::vector<PendingViewPush> pending_view_pushes;
-      pending_view_pushes.reserve(custom_shader_info.views.size());
+    utils::shader::BuildReplacementPipeline(state.pipeline_details);
 
-      bool has_missing_view = false;
-      for (const auto& view_binding : custom_shader_info.views) {
-        const auto location_it = state.pipeline_details->descriptor_push_locations
-                                     .find({view_binding.type, view_binding.slot, view_binding.space});
-        if (location_it == state.pipeline_details->descriptor_push_locations.end()) {
-#ifdef DEBUG_LEVEL_0
+    // Perform Push
+    if (shader_injection_size != 0 && should_inject) {
+      if (state.pipeline_details->injection_layout == 0u || state.pipeline_details->injection_index == -1) {
+        assert(false && "custom shader injection requested but injection layout/index is missing");
+#ifdef DEBUG_LEVEL_1
+        utils::pipeline_layout::UpdatePipelineLayoutData(state.pipeline_details->layout, [&](utils::pipeline_layout::PipelineLayoutData& mutable_layout_data) {
+          if (mutable_layout_data.failed_injection) return;
+          mutable_layout_data.failed_injection = true;
           std::stringstream s;
-          s << "mods::shader::HandleStatesAndBypass(";
-          s << "view binding location missing for shader ";
-          s << PRINT_CRC32(custom_shader_info.crc32);
-          s << ": type=" << view_binding.type;
-          s << ", slot=" << view_binding.slot;
-          s << ", space=" << view_binding.space;
+          s << "mods::shader::PushShaderInjections(did not find modded pipeline root index";
+          s << ", layout: " << PRINT_PTR(state.pipeline_details->layout.handle);
           s << ")";
           reshade::log::message(reshade::log::level::warning, s.str().c_str());
-#endif
-          has_missing_view = true;
-          break;
-        }
-
-        assert(view_binding.get_view != nullptr);
-        const auto view = view_binding.get_view(cmd_list);
-        if (view.handle == 0u) {
-#ifdef DEBUG_LEVEL_0
-          std::stringstream s;
-          s << "mods::shader::HandleStatesAndBypass(";
-          s << "view binding returned null for shader ";
-          s << PRINT_CRC32(custom_shader_info.crc32);
-          s << ", slot=" << view_binding.slot;
-          s << ", space=" << view_binding.space;
-          s << ")";
-          reshade::log::message(reshade::log::level::warning, s.str().c_str());
-#endif
-          has_missing_view = true;
-          break;
-        }
-
-        pending_view_pushes.push_back({
-            .layout_param = location_it->second.first,
-            .binding = location_it->second.second,
-            .type = view_binding.type,
-            .view = view,
         });
-      }
-
-      if (has_missing_view) {
+#endif
         return response;
       }
 
-      const auto descriptor_stages =
-          index == renodx::utils::shader::COMPUTE_INDEX
-              ? reshade::api::shader_stage::all_compute
-              : reshade::api::shader_stage::all_graphics;
-
-      std::ranges::sort(
-          pending_view_pushes,
-          [](const PendingViewPush& lhs, const PendingViewPush& rhs) {
-            if (lhs.layout_param != rhs.layout_param) return lhs.layout_param < rhs.layout_param;
-            if (lhs.type != rhs.type) return lhs.type < rhs.type;
-            return lhs.binding < rhs.binding;
-          });
-
-      std::vector<reshade::api::resource_view> descriptor_views;
-      descriptor_views.reserve(pending_view_pushes.size());
-      size_t span_begin = 0u;
-      while (span_begin < pending_view_pushes.size()) {
-        const auto& first_view_push = pending_view_pushes[span_begin];
-        descriptor_views.clear();
-        descriptor_views.push_back(first_view_push.view);
-
-        size_t span_end = span_begin + 1u;
-        uint32_t previous_binding = first_view_push.binding;
-        while (span_end < pending_view_pushes.size()) {
-          const auto& next_view_push = pending_view_pushes[span_end];
-          if (next_view_push.layout_param != first_view_push.layout_param
-              || next_view_push.type != first_view_push.type
-              || next_view_push.binding != previous_binding + 1u) {
+      renodx::utils::constants::PushShaderInjections(
+          context.cmd_list,
+          state.pipeline_details->injection_layout,
+          static_cast<uint32_t>(state.pipeline_details->injection_index),
+          shader_stage == renodx::utils::shader::COMPUTE_INDEX,
+          {shader_injection, shader_injection_size},
+          constant_buffer_offset,
+          resource_tag_float,
+          resource_tag);
+      if (revert_constant_buffer_ranges) {
+        switch (context.cmd_list->get_device()->get_api()) {
+          case reshade::api::device_api::d3d10:
+          case reshade::api::device_api::d3d11:
+          case reshade::api::device_api::d3d12: {
+            response.revert_constant_buffer_range = true;
             break;
           }
-          descriptor_views.push_back(next_view_push.view);
-          previous_binding = next_view_push.binding;
-          ++span_end;
+          default:
+            break;
+        }
+      }
+    }
+
+    if (!custom_shader_info->views.empty()) {
+      if (state.pipeline_details->injection_layout == 0u) {
+        assert(false && "custom shader view binding requires an injection layout");
+#ifdef DEBUG_LEVEL_0
+        std::stringstream s;
+        s << "mods::shader::OnCommandAction(";
+        s << "descriptor push unavailable for shader ";
+        s << PRINT_CRC32(custom_shader_info->crc32);
+        s << ": injection layout missing";
+        s << ", pipeline: " << PRINT_PTR(state.pipeline_details->pipeline.handle);
+        s << ", original layout: " << PRINT_PTR(state.pipeline_details->layout.handle);
+        s << ")";
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+      } else if (state.pipeline_details->descriptor_push_locations.empty()) {
+        assert(false && "custom shader view binding requires descriptor push locations");
+#ifdef DEBUG_LEVEL_0
+        std::stringstream s;
+        s << "mods::shader::OnCommandAction(";
+        s << "descriptor push unavailable for shader ";
+        s << PRINT_CRC32(custom_shader_info->crc32);
+        s << ": descriptor push locations missing";
+        s << ", pipeline: " << PRINT_PTR(state.pipeline_details->pipeline.handle);
+        s << ", injection layout: " << PRINT_PTR(state.pipeline_details->injection_layout.handle);
+        s << ")";
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+      } else {
+        struct PendingViewPush {
+          uint32_t layout_param = 0u;
+          uint32_t binding = 0u;
+          reshade::api::descriptor_type type = static_cast<reshade::api::descriptor_type>(0u);
+          reshade::api::resource_view view = {0u};
+        };
+
+        static thread_local std::vector<PendingViewPush> pending_view_pushes;
+        if (pending_view_pushes.size() < custom_shader_info->views.size()) {
+          pending_view_pushes.resize(custom_shader_info->views.size());
+        }
+        uint32_t pending_view_push_count = 0u;
+
+        bool has_missing_view = false;
+        for (const auto& view_binding : custom_shader_info->views) {
+          const auto location_it = state.pipeline_details->descriptor_push_locations
+                                       .find({view_binding.type, view_binding.slot, view_binding.space});
+          if (location_it == state.pipeline_details->descriptor_push_locations.end()) {
+            assert(false && "custom shader view binding location is missing");
+#ifdef DEBUG_LEVEL_0
+            std::stringstream s;
+            s << "mods::shader::OnCommandAction(";
+            s << "view binding location missing for shader ";
+            s << PRINT_CRC32(custom_shader_info->crc32);
+            s << ": type=" << view_binding.type;
+            s << ", slot=" << view_binding.slot;
+            s << ", space=" << view_binding.space;
+            s << ")";
+            reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+            has_missing_view = true;
+            break;
+          }
+
+          assert(view_binding.get_view != nullptr);
+          const auto view = view_binding.get_view(context.cmd_list);
+          if (view.handle == 0u) {
+            assert(false && "custom shader view binding returned a null view");
+#ifdef DEBUG_LEVEL_0
+            std::stringstream s;
+            s << "mods::shader::OnCommandAction(";
+            s << "view binding returned null for shader ";
+            s << PRINT_CRC32(custom_shader_info->crc32);
+            s << ", slot=" << view_binding.slot;
+            s << ", space=" << view_binding.space;
+            s << ")";
+            reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+            has_missing_view = true;
+            break;
+          }
+
+          pending_view_pushes[pending_view_push_count++] = {
+              .layout_param = location_it->second.first,
+              .binding = location_it->second.second,
+              .type = view_binding.type,
+              .view = view,
+          };
         }
 
-        cmd_list->push_descriptors(
-            descriptor_stages,
-            state.pipeline_details->injection_layout,
-            first_view_push.layout_param,
-            reshade::api::descriptor_table_update{
-                .table = {},
-                .binding = first_view_push.binding,
-                .array_offset = 0,
-                .count = static_cast<uint32_t>(descriptor_views.size()),
-                .type = first_view_push.type,
-                .descriptors = descriptor_views.data(),
+        if (has_missing_view) {
+          return response;
+        }
+
+        const auto descriptor_stages =
+            shader_stage == renodx::utils::shader::COMPUTE_INDEX
+                ? reshade::api::shader_stage::all_compute
+                : reshade::api::shader_stage::all_graphics;
+
+        std::sort(
+            pending_view_pushes.begin(),
+            pending_view_pushes.begin() + pending_view_push_count,
+            [](const PendingViewPush& lhs, const PendingViewPush& rhs) {
+              if (lhs.layout_param != rhs.layout_param) return lhs.layout_param < rhs.layout_param;
+              if (lhs.type != rhs.type) return lhs.type < rhs.type;
+              return lhs.binding < rhs.binding;
             });
 
-        span_begin = span_end;
+        static thread_local std::vector<reshade::api::resource_view> descriptor_views;
+        if (descriptor_views.size() < pending_view_push_count) {
+          descriptor_views.resize(pending_view_push_count);
+        }
+        size_t span_begin = 0u;
+        while (span_begin < pending_view_push_count) {
+          const auto& first_view_push = pending_view_pushes[span_begin];
+          descriptor_views[0] = first_view_push.view;
+          uint32_t descriptor_view_count = 1u;
+
+          size_t span_end = span_begin + 1u;
+          uint32_t previous_binding = first_view_push.binding;
+          while (span_end < pending_view_push_count) {
+            const auto& next_view_push = pending_view_pushes[span_end];
+            if (next_view_push.layout_param != first_view_push.layout_param
+                || next_view_push.type != first_view_push.type
+                || next_view_push.binding != previous_binding + 1u) {
+              break;
+            }
+            descriptor_views[descriptor_view_count++] = next_view_push.view;
+            previous_binding = next_view_push.binding;
+            ++span_end;
+          }
+
+          context.cmd_list->push_descriptors(
+              descriptor_stages,
+              state.pipeline_details->injection_layout,
+              first_view_push.layout_param,
+              reshade::api::descriptor_table_update{
+                  .table = {},
+                  .binding = first_view_push.binding,
+                  .array_offset = 0,
+                  .count = descriptor_view_count,
+                  .type = first_view_push.type,
+                  .descriptors = descriptor_views.data(),
+              });
+
+          span_begin = span_end;
+        }
       }
     }
-  }
 
-  // Perform bind
+    // Perform bind
 
-  utils::shader::ApplyReplacement(cmd_list, &state);
+    utils::shader::ApplyReplacement(context.cmd_list, &state);
 
-  return response;
-}
+    return response;
+  };
 
-inline DrawResponse HandlePreDraw(reshade::api::command_list* cmd_list, bool is_dispatch) {
-  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
-
-  assert(shader_state != nullptr);
-
-  float resource_tag = -1;
-
-  if (!is_dispatch && resource_tag_float != nullptr) {
-    auto* swapchain_state = renodx::utils::data::Get<renodx::utils::swapchain::CommandListData>(cmd_list);
-    if (swapchain_state == nullptr) {
-      reshade::log::message(reshade::log::level::error, "mods::shader::HandlePreDraw(swapchain state is null)");
-      return {.bypass_draw = false};
+  DrawResponse response = {};
+  if (!context.matched_shader_stage.has_value()) {
+    if (is_dispatch) {
+      response = handle_stage(renodx::utils::shader::COMPUTE_INDEX);
+    } else {
+      response = handle_stage(renodx::utils::shader::VERTEX_INDEX);
+      if (!response.bypass_draw) {
+        response = handle_stage(renodx::utils::shader::PIXEL_INDEX);
+      }
     }
-    if (!swapchain_state->current_render_targets.empty()) {
-      auto rv = swapchain_state->current_render_targets.at(0);
-      resource_tag = renodx::utils::resource::GetResourceTag(rv);
-    }
-  }
-
-  DrawResponse response;
-  if (is_dispatch) {
-    response = HandleStatesAndBypass(
-        cmd_list, shader_state, renodx::utils::shader::COMPUTE_INDEX, resource_tag);
   } else {
-    response = HandleStatesAndBypass(
-        cmd_list, shader_state, renodx::utils::shader::VERTEX_INDEX, resource_tag);
-    if (!response.bypass_draw) {
-      response = HandleStatesAndBypass(
-          cmd_list, shader_state, renodx::utils::shader::PIXEL_INDEX, resource_tag);
-    }
+    response = handle_stage(context.matched_shader_stage.value(), context.matched_shader_hash, &context.template GetCallbackData<T>());
   }
 
-  return response;
-}
+  renodx::utils::command_action::CallbackResult<Context> result = {
+      .bypass = response.bypass_draw,
+  };
+  if (response.bypass_draw) return result;
 
-inline bool OnDraw(
-    reshade::api::command_list* cmd_list,
-    uint32_t vertex_count,
-    uint32_t instance_count,
-    uint32_t first_vertex,
-    uint32_t first_instance) {
-  auto response = HandlePreDraw(cmd_list, false);
-  if (response.bypass_draw) return true;
-  if (response.on_drawn == nullptr && response.injection_register_index == -1) return false;
-
-  cmd_list->draw(vertex_count, instance_count, first_vertex, first_instance);
-
-  if (response.on_drawn != nullptr) {
-    response.on_drawn(cmd_list);
-  }
-  if (response.injection_register_index != -1) {
-    renodx::utils::constants::RevertBufferRange(cmd_list, response.injection_register_index);
-  }
-  return true;
-}
-
-inline bool OnDispatch(
-    reshade::api::command_list* cmd_list,
-    uint32_t group_count_x,
-    uint32_t group_count_y,
-    uint32_t group_count_z) {
-  auto response = HandlePreDraw(cmd_list, true);
-  if (response.bypass_draw) return true;
-  if (response.on_drawn == nullptr && response.injection_register_index == -1) return false;
-
-  cmd_list->dispatch(group_count_x, group_count_y, group_count_z);
-
-  if (response.on_drawn != nullptr) {
-    response.on_drawn(cmd_list);
-  }
-
-  if (response.injection_register_index != -1) {
-    renodx::utils::constants::RevertBufferRange(
-        cmd_list,
-        response.injection_register_index,
-        0,
-        reshade::api::shader_stage::compute);
-  }
-
-  return true;
-}
-
-inline bool OnDrawIndexed(
-    reshade::api::command_list* cmd_list,
-    uint32_t index_count,
-    uint32_t instance_count,
-    uint32_t first_index,
-    int32_t vertex_offset,
-    uint32_t first_instance) {
-  auto response = HandlePreDraw(cmd_list, false);
-  if (response.bypass_draw) return true;
-  if (response.on_drawn == nullptr && response.injection_register_index == -1) return false;
-
-  cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
-
-  if (response.on_drawn != nullptr) {
-    response.on_drawn(cmd_list);
-  }
-
-  if (response.injection_register_index != -1) {
-    renodx::utils::constants::RevertBufferRange(cmd_list, response.injection_register_index);
-  }
-
-  return true;
-}
-
-inline bool OnDrawOrDispatchIndirect(
-    reshade::api::command_list* cmd_list,
-    reshade::api::indirect_command type,
-    reshade::api::resource buffer,
-    uint64_t offset,
-    uint32_t draw_count,
-    uint32_t stride) {
-  bool is_dispatch = false;
-  switch (type) {
-    case reshade::api::indirect_command::unknown: {
-      {
-        auto* cmd_list_data = renodx::utils::shader::GetCurrentState(cmd_list);
-        auto shader_hash = renodx::utils::shader::GetCurrentComputeShaderHash(cmd_list_data);
-        is_dispatch = (shader_hash != 0u);
+  struct PostCommandAction {
+    static void OnDrawn(Context& context, const void* data) {
+      const auto* on_drawn = static_cast<const std::function<void(reshade::api::command_list*)>*>(data);
+      assert(on_drawn != nullptr);
+      if (on_drawn != nullptr && static_cast<bool>(*on_drawn)) {
+        (*on_drawn)(context.cmd_list);
       }
-      break;
     }
-    case reshade::api::indirect_command::dispatch:
-    case reshade::api::indirect_command::dispatch_mesh:
-    case reshade::api::indirect_command::dispatch_rays:
-      is_dispatch = true;
-      break;
-    default:
-      break;
+
+    static void RevertConstantBufferRange(Context& context, const void*) {
+      auto* shader_state = renodx::utils::command_action::GetShaderState(&context);
+      if (shader_state == nullptr) return;
+      const auto shader_stage = context.matched_shader_stage.value_or(
+          context.IsDispatch() ? renodx::utils::shader::COMPUTE_INDEX : renodx::utils::shader::PIXEL_INDEX);
+      auto& state = shader_state->stage_states[shader_stage];
+      if (state.pipeline_details == nullptr) {
+        renodx::utils::shader::PopulateStageState(&state);
+      }
+      if (state.pipeline_details == nullptr || state.pipeline_details->injection_register_index == -1) return;
+
+      renodx::utils::constants::RevertBufferRange(
+          context.cmd_list,
+          static_cast<uint32_t>(state.pipeline_details->injection_register_index),
+          0,
+          context.IsDispatch() ? reshade::api::shader_stage::compute : reshade::api::shader_stage::pixel);
+    }
+
+    static void OnDrawnAndRevertConstantBufferRange(Context& context, const void* data) {
+      OnDrawn(context, data);
+      RevertConstantBufferRange(context, nullptr);
+    }
+  };
+
+  if (response.on_drawn != nullptr || response.revert_constant_buffer_range) {
+    result.replay = true;
+    result.post_callback = response.on_drawn != nullptr
+                               ? response.revert_constant_buffer_range
+                                     ? PostCommandAction::OnDrawnAndRevertConstantBufferRange
+                                     : PostCommandAction::OnDrawn
+                           : response.revert_constant_buffer_range
+                               ? PostCommandAction::RevertConstantBufferRange
+                               : nullptr;
+    result.post_data = response.on_drawn;
   }
 
-  auto response = HandlePreDraw(cmd_list, is_dispatch);
-  if (response.bypass_draw) return true;
-  if (response.on_drawn == nullptr && response.injection_register_index == -1) return false;
-
-  cmd_list->draw_or_dispatch_indirect(type, buffer, offset, draw_count, stride);
-
-  if (response.on_drawn != nullptr) {
-    response.on_drawn(cmd_list);
-  }
-
-  if (response.injection_register_index != -1) {
-    renodx::utils::constants::RevertBufferRange(
-        cmd_list,
-        response.injection_register_index,
-        0,
-        is_dispatch ? reshade::api::shader_stage::compute : reshade::api::shader_stage::pixel);
-  }
-
-  return true;
-}
+  return result;
+};
 
 inline void OnPresent(
     reshade::api::command_queue* queue,
@@ -1730,11 +1657,23 @@ static bool attached = false;
 template <typename T = float*, std::ranges::range CustomShaderList>
   requires std::convertible_to<std::ranges::range_value_t<CustomShaderList>, CustomShader>
 static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T* new_injections = nullptr) {
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    using_custom_replace = false;
+    using_custom_inject = false;
+    using_counted_shaders = false;
+    for (const auto& custom_shader : new_custom_shaders) {
+      if (custom_shader.on_replace != nullptr) using_custom_replace = true;
+      if (custom_shader.on_inject != nullptr) using_custom_inject = true;
+      if (custom_shader.index != -1) using_counted_shaders = true;
+    }
+    renodx::utils::shader::use_replace_on_bind = !(using_custom_replace || using_custom_inject);
+  }
+
   renodx::utils::shader::Use(fdw_reason);
   if (resource_tag_float != nullptr) {
     renodx::utils::resource::Use(fdw_reason);
   }
-  if (trace_unmodified_shaders || invoked_custom_swapchain_shader != nullptr) {
+  if (invoked_custom_swapchain_shader != nullptr) {
     renodx::utils::swapchain::Use(fdw_reason);
   }
   renodx::utils::pipeline_layout::Use(fdw_reason);
@@ -1757,19 +1696,12 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
       custom_shaders.reserve(new_custom_shaders.size());
       for (const auto& custom_shader : new_custom_shaders) {
         custom_shaders.emplace(custom_shader.crc32, custom_shader);
-        if (custom_shader.on_replace != nullptr) using_custom_replace = true;
-        if (custom_shader.on_inject != nullptr) using_custom_inject = true;
-        if (custom_shader.index != -1) using_counted_shaders = true;
       }
 
       custom_shaders.rehash(custom_shaders.size());
 
       if (using_counted_shaders || push_injections_on_present) {
         reshade::register_event<reshade::addon_event::present>(OnPresent);
-      }
-
-      if (using_custom_replace || using_custom_inject) {
-        renodx::utils::shader::use_replace_on_bind = false;
       }
 
       if (!manual_shader_scheduling) {
@@ -1800,10 +1732,20 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
         }
       }
 
-      reshade::register_event<reshade::addon_event::draw>(OnDraw);
-      reshade::register_event<reshade::addon_event::dispatch>(OnDispatch);
-      reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
-      reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
+      {
+        for (const auto& [hash, shader] : custom_shaders) {
+          renodx::utils::command_action::Register(
+              OnCommandAction,
+              {
+                  .shader_hash = hash,
+                  .command_types = renodx::utils::command_action::COMMAND_TYPE_DIRECT_DRAW
+                                   | renodx::utils::command_action::COMMAND_TYPE_DISPATCH
+                                   | renodx::utils::command_action::COMMAND_TYPE_INDIRECT,
+              },
+              &shader);
+        }
+      }
+      renodx::utils::command_action::Use(fdw_reason);
 
       {
         std::stringstream s;
@@ -1849,10 +1791,8 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
 
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
 
-      reshade::unregister_event<reshade::addon_event::draw>(OnDraw);
-      reshade::unregister_event<reshade::addon_event::dispatch>(OnDispatch);
-      reshade::unregister_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
-      reshade::unregister_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
+      renodx::utils::command_action::Unregister(OnCommandAction);
+      renodx::utils::command_action::Use(fdw_reason);
 
       reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(OnCreatePipelineLayout);
 

@@ -11,10 +11,12 @@
 #include <set>
 #include <shared_mutex>
 #include <sstream>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "./command_action.hpp"
 #include "./cross_addon.hpp"
 #include "./data.hpp"
 #include "./descriptor.hpp"
@@ -2689,62 +2691,26 @@ inline bool OnClearRenderTargetView(
   return false;
 }
 
-inline bool OnDraw(
-    reshade::api::command_list* cmd_list,
-    uint32_t vertex_count,
-    uint32_t instance_count,
-    uint32_t first_vertex,
-    uint32_t first_instance) {
-  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
+inline auto on_render_pass_command = []<typename Context>(Context& context) -> renodx::utils::command_action::CallbackResult<Context> {
+  if (!shared.IsEventHandler()) return {};
+  if (context.cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return {};
 
-  HandlePendingRenderPassRenderTargets(cmd_list);
-  return false;
-}
-
-inline bool OnDrawIndexed(
-    reshade::api::command_list* cmd_list,
-    uint32_t index_count,
-    uint32_t instance_count,
-    uint32_t first_index,
-    int32_t base_vertex,
-    uint32_t first_instance) {
-  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
-
-  HandlePendingRenderPassRenderTargets(cmd_list);
-  return false;
-}
-
-inline bool OnDispatchMesh(
-    reshade::api::command_list* cmd_list,
-    uint32_t thread_group_count_x,
-    uint32_t thread_group_count_y,
-    uint32_t thread_group_count_z) {
-  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
-
-  HandlePendingRenderPassRenderTargets(cmd_list);
-  return false;
-}
-
-inline bool OnDrawOrDispatchIndirect(
-    reshade::api::command_list* cmd_list,
-    reshade::api::indirect_command type,
-    reshade::api::resource buffer,
-    uint64_t offset,
-    uint32_t draw_count,
-    uint32_t stride) {
-  if (cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12) return false;
-
-  switch (type) {
-    case reshade::api::indirect_command::draw:
-    case reshade::api::indirect_command::draw_indexed:
-    case reshade::api::indirect_command::dispatch_mesh:
-      HandlePendingRenderPassRenderTargets(cmd_list);
-      break;
-    default:
-      break;
+  if constexpr (std::is_same_v<typename Context::ArgumentType, renodx::utils::command_action::IndirectArguments>) {
+    switch (context.arguments.command) {
+      case reshade::api::indirect_command::draw:
+      case reshade::api::indirect_command::draw_indexed:
+      case reshade::api::indirect_command::dispatch_mesh:
+        HandlePendingRenderPassRenderTargets(context.cmd_list);
+        break;
+      default:
+        break;
+    }
+  } else {
+    HandlePendingRenderPassRenderTargets(context.cmd_list);
   }
-  return false;
-}
+
+  return {};
+};
 
 inline bool OnClearUnorderedAccessViewUint(
     reshade::api::command_list* cmd_list,
@@ -3348,10 +3314,16 @@ static void Use(DWORD fdw_reason) {
       shared.RegisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil, use_non_dx12_resource_cloning_events);
       shared.RegisterEvent<reshade::addon_event::begin_render_pass>(OnBeginRenderPass, use_non_dx12_resource_cloning_events);
       shared.RegisterEvent<reshade::addon_event::end_render_pass>(OnEndRenderPass, use_non_dx12_resource_cloning_events);
-      shared.RegisterEvent<reshade::addon_event::draw>(OnDraw, use_non_dx12_resource_cloning_events);
-      shared.RegisterEvent<reshade::addon_event::draw_indexed>(OnDrawIndexed, use_non_dx12_resource_cloning_events);
-      shared.RegisterEvent<reshade::addon_event::dispatch_mesh>(OnDispatchMesh, use_non_dx12_resource_cloning_events);
-      shared.RegisterEvent<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect, use_non_dx12_resource_cloning_events);
+      if (use_non_dx12_resource_cloning_events) {
+        renodx::utils::command_action::Register(
+            on_render_pass_command,
+            {
+                .command_types = renodx::utils::command_action::COMMAND_TYPE_DIRECT_DRAW
+                               | renodx::utils::command_action::COMMAND_TYPE_DISPATCH_MESH
+                               | renodx::utils::command_action::COMMAND_TYPE_INDIRECT,
+            });
+        renodx::utils::command_action::Use(fdw_reason);
+      }
       shared.RegisterEvent<reshade::addon_event::push_descriptors>(OnPushDescriptors, use_non_dx12_resource_cloning_events);
       shared.RegisterEvent<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables, use_non_dx12_resource_cloning_events);
       // shared.RegisterEvent<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables, use_resource_cloning);
@@ -3393,10 +3365,10 @@ static void Use(DWORD fdw_reason) {
       shared.UnregisterEvent<reshade::addon_event::destroy_command_list>(OnDestroyCommandList);
       shared.UnregisterEvent<reshade::addon_event::begin_render_pass>(OnBeginRenderPass);
       shared.UnregisterEvent<reshade::addon_event::end_render_pass>(OnEndRenderPass);
-      shared.UnregisterEvent<reshade::addon_event::draw>(OnDraw);
-      shared.UnregisterEvent<reshade::addon_event::draw_indexed>(OnDrawIndexed);
-      shared.UnregisterEvent<reshade::addon_event::dispatch_mesh>(OnDispatchMesh);
-      shared.UnregisterEvent<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
+      if (use_resource_cloning && !use_resource_cloning_dx12_only) {
+        renodx::utils::command_action::Unregister(on_render_pass_command);
+        renodx::utils::command_action::Use(fdw_reason);
+      }
 
       shared.UnregisterEvent<reshade::addon_event::bind_render_targets_and_depth_stencil>(OnBindRenderTargetsAndDepthStencil);
       shared.UnregisterEvent<reshade::addon_event::push_descriptors>(OnPushDescriptors);
