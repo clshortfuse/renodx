@@ -14,7 +14,6 @@
 
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
-#include "../../utils/resource_upgrade.hpp"
 #include "../../utils/settings.hpp"
 #include "shared.h"
 
@@ -364,8 +363,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
-
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::allow_multiple_push_constants = true;
@@ -377,8 +374,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
-      renodx::utils::resource::upgrade::Use(fdw_reason);  // fp16 upgrades
-
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
       reshade::unregister_addon(h_module);
