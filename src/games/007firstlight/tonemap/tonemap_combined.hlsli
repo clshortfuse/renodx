@@ -321,20 +321,72 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
     float3 per_channel_tonemapped_lms_normalized = ApplyFilmToneMapExtended(untonemapped_lms_normalized, film_tonemap_config, sdr_blend_strength);
     float3 per_channel_tonemapped_lms = per_channel_tonemapped_lms_normalized * LMS_WHITE_BT709;
 
-    // roughly match bt709 tonemap saturation
-    per_channel_tonemapped_lms = lerp(renodx::color::yf::from::LMS(per_channel_tonemapped_lms), per_channel_tonemapped_lms, 0.9875f);
+#if 1
+    float3 display_scaled_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(
+        per_channel_tonemapped_lms,
+        LMS_WHITE_BT709);
+    float3 lms_cones_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(
+        untonemapped_lms,
+        LMS_WHITE_BT709);
+    float3 mb_source = renodx::color::macleod_boynton::from::WeightedLMS(lms_cones_relative_weighted);
+    float3 mb_display_target = renodx::color::macleod_boynton::from::WeightedLMS(display_scaled_relative_weighted);
+    float3 mb_adapted_bg = renodx::color::macleod_boynton::from::LMS(1.f.xxx);
+
+    float2 source_offset = mb_source.xy - mb_adapted_bg.xy;
+    float2 display_target_offset = mb_display_target.xy - mb_adapted_bg.xy;
+    float src2 = dot(source_offset, source_offset);
+    float display_tgt2 = dot(display_target_offset, display_target_offset);
+    if (src2 > 1e-7f && display_tgt2 > 1e-7f) {
+      float inv_target_radius = rsqrt(display_tgt2);
+      float target_radius = display_tgt2 * inv_target_radius;
+      float source_t_clip = renodx::tonemap::psychov::psycho17_RayExitTCIE1702(mb_adapted_bg.xy, source_offset);
+      float display_t_clip = renodx::tonemap::psychov::psycho17_RayExitTCIE1702(mb_adapted_bg.xy, display_target_offset);
+      float source_purity_signal = renodx::tonemap::psychov::psycho17_HueRelativePuritySignalFromTClip(source_t_clip);
+      float display_purity_signal = renodx::tonemap::psychov::psycho17_HueRelativePuritySignalFromTClip(display_t_clip);
+      float purity_signal_loss = saturate(display_purity_signal / source_purity_signal);
+      float hue_sensitivity = renodx::tonemap::psychov::psycho17_AdaptiveHueSensitivityFromTClip(display_t_clip);
+      float restore_weight = hue_sensitivity * 0.35f * purity_signal_loss;
+      if (restore_weight > 0.f) {
+        float inv_source_radius = rsqrt(src2);
+        float2 source_dir = source_offset * inv_source_radius;
+        float2 display_target_dir = display_target_offset * inv_target_radius;
+        float2 blended_dir = lerp(display_target_dir, source_dir, restore_weight);
+        float blended_len2 = dot(blended_dir, blended_dir);
+        if (blended_len2 > 1e-7f) {
+          blended_dir *= rsqrt(blended_len2);
+        } else {
+          blended_dir = display_target_dir;
+        }
+
+        float2 mb_restored_xy = mb_adapted_bg.xy + blended_dir * target_radius;
+        float3 mb_restored = float3(mb_restored_xy, mb_display_target.z);
+        display_scaled_relative_weighted = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(mb_restored);
+      }
+    }
+
+    per_channel_tonemapped_lms = renodx::color::macleod_boynton::UnweighLMS(
+        renodx::tonemap::psychov::psycho17_FromAdaptiveRelativeWeightedLMS(
+            display_scaled_relative_weighted,
+            LMS_WHITE_BT709));
+#endif
 
     float3 peak_lms = LMS_WHITE_BT709 * (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
     float3 hue_and_purity_reference = renodx::tonemap::neutwo::PerChannel(per_channel_tonemapped_lms, peak_lms);
+
+    // roughly match bt709 tonemap saturation
+    hue_and_purity_reference = lerp(renodx::color::yf::from::LMS(hue_and_purity_reference), hue_and_purity_reference, 0.9875f);
+
     if (RENODX_TONE_MAP_SCALING == 0.f) {
       float y_in = renodx::color::yf::from::LMS(untonemapped_lms);
       float y_out = ApplyFilmToneMapExtended(y_in, film_tonemap_config, sdr_blend_strength);
       float3 luminance_tonemapped_lms = renodx::color::correct::Luminance(untonemapped_lms, y_in, y_out);
 
       float3 tonemapped_lms = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::LMS(hue_and_purity_reference), renodx::color::yf::from::LMS(luminance_tonemapped_lms));
+      tonemapped_lms = max(0, tonemapped_lms);
       tonemapped = renodx::color::bt709::from::LMS(tonemapped_lms);
     } else {
       float3 tonemapped_lms = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::LMS(hue_and_purity_reference), renodx::color::yf::from::LMS(per_channel_tonemapped_lms));
+      tonemapped_lms = max(0, tonemapped_lms);
       tonemapped = renodx::color::bt709::from::LMS(tonemapped_lms);
     }
   } else {
