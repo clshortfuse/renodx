@@ -20,8 +20,8 @@ float4 ProcessOutputDevice89(float3 untonemapped_ap1, float3 processed, uint out
     output = linear_output;
   }
   if (outputdevice == 9u) {
-    float3 filmic_processed_linear = lerp(processed * cb_config.ue_colorscale.xyz, cb_config.ue_overlaycolor.xyz, cb_config.ue_overlaycolor.w);
-    output = filmic_processed_linear;
+    output = processed;
+    output = renodx::tonemap::neutwo::PerChannel(output, 1.f);
   }
 
   return float4((output / 1.05f), 0.f);
