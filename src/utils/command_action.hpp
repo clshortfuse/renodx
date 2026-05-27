@@ -535,10 +535,10 @@ inline void RegisterCallback(Callback&& callback, Filter filter) {
   constexpr bool supports_indirect = std::is_invocable_r_v<CallbackResult<CommandContext<IndirectArguments>>, CallbackType, CommandContext<IndirectArguments>&>;
   constexpr bool supports_dispatch_mesh = std::is_invocable_r_v<CallbackResult<CommandContext<DispatchMeshArguments>>, CallbackType, CommandContext<DispatchMeshArguments>&>;
   constexpr uint32_t supported_command_types = (supports_draw ? COMMAND_TYPE_DRAW : 0u)
-                                             | (supports_draw_indexed ? COMMAND_TYPE_DRAW_INDEXED : 0u)
-                                             | (supports_dispatch ? COMMAND_TYPE_DISPATCH : 0u)
-                                             | (supports_indirect ? COMMAND_TYPE_INDIRECT : 0u)
-                                             | (supports_dispatch_mesh ? COMMAND_TYPE_DISPATCH_MESH : 0u);
+                                               | (supports_draw_indexed ? COMMAND_TYPE_DRAW_INDEXED : 0u)
+                                               | (supports_dispatch ? COMMAND_TYPE_DISPATCH : 0u)
+                                               | (supports_indirect ? COMMAND_TYPE_INDIRECT : 0u)
+                                               | (supports_dispatch_mesh ? COMMAND_TYPE_DISPATCH_MESH : 0u);
   const uint32_t command_types = filter.command_types & supported_command_types;
 
   internal::shared.RegisterModule();
@@ -559,11 +559,11 @@ inline void RegisterCallback(Callback&& callback, Filter filter) {
   registrations.push_back({
       .command_types = command_types,
       .command_thunks = {
-        supports_draw ? internal::InvokeCallback<CallbackType, CommandContext<DrawArguments>> : nullptr,
-        supports_draw_indexed ? internal::InvokeCallback<CallbackType, CommandContext<DrawIndexedArguments>> : nullptr,
-        supports_dispatch ? internal::InvokeCallback<CallbackType, CommandContext<DispatchArguments>> : nullptr,
-        supports_indirect ? internal::InvokeCallback<CallbackType, CommandContext<IndirectArguments>> : nullptr,
-        supports_dispatch_mesh ? internal::InvokeCallback<CallbackType, CommandContext<DispatchMeshArguments>> : nullptr,
+          supports_draw ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<DrawArguments>>) : nullptr,
+          supports_draw_indexed ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<DrawIndexedArguments>>) : nullptr,
+          supports_dispatch ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<DispatchArguments>>) : nullptr,
+          supports_indirect ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<IndirectArguments>>) : nullptr,
+          supports_dispatch_mesh ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<DispatchMeshArguments>>) : nullptr,
       },
       .callback = callback_identity,
       .callback_data = nullptr,
@@ -580,20 +580,20 @@ inline void RegisterCallback(Callback&& callback, Filter filter, const T* callba
   static_assert(std::is_default_constructible_v<CallbackType>);
 
   constexpr bool supports_draw = internal::IS_DATA_TEMPLATE_CALLBACK<CallbackType, CommandContext<DrawArguments>, DataType>
-                  || std::is_invocable_r_v<CallbackResult<CommandContext<DrawArguments>>, CallbackType, CommandContext<DrawArguments>&>;
+                                 || std::is_invocable_r_v<CallbackResult<CommandContext<DrawArguments>>, CallbackType, CommandContext<DrawArguments>&>;
   constexpr bool supports_draw_indexed = internal::IS_DATA_TEMPLATE_CALLBACK<CallbackType, CommandContext<DrawIndexedArguments>, DataType>
-                      || std::is_invocable_r_v<CallbackResult<CommandContext<DrawIndexedArguments>>, CallbackType, CommandContext<DrawIndexedArguments>&>;
+                                         || std::is_invocable_r_v<CallbackResult<CommandContext<DrawIndexedArguments>>, CallbackType, CommandContext<DrawIndexedArguments>&>;
   constexpr bool supports_dispatch = internal::IS_DATA_TEMPLATE_CALLBACK<CallbackType, CommandContext<DispatchArguments>, DataType>
-                    || std::is_invocable_r_v<CallbackResult<CommandContext<DispatchArguments>>, CallbackType, CommandContext<DispatchArguments>&>;
+                                     || std::is_invocable_r_v<CallbackResult<CommandContext<DispatchArguments>>, CallbackType, CommandContext<DispatchArguments>&>;
   constexpr bool supports_indirect = internal::IS_DATA_TEMPLATE_CALLBACK<CallbackType, CommandContext<IndirectArguments>, DataType>
-                    || std::is_invocable_r_v<CallbackResult<CommandContext<IndirectArguments>>, CallbackType, CommandContext<IndirectArguments>&>;
+                                     || std::is_invocable_r_v<CallbackResult<CommandContext<IndirectArguments>>, CallbackType, CommandContext<IndirectArguments>&>;
   constexpr bool supports_dispatch_mesh = internal::IS_DATA_TEMPLATE_CALLBACK<CallbackType, CommandContext<DispatchMeshArguments>, DataType>
-                       || std::is_invocable_r_v<CallbackResult<CommandContext<DispatchMeshArguments>>, CallbackType, CommandContext<DispatchMeshArguments>&>;
+                                          || std::is_invocable_r_v<CallbackResult<CommandContext<DispatchMeshArguments>>, CallbackType, CommandContext<DispatchMeshArguments>&>;
   constexpr uint32_t supported_command_types = (supports_draw ? COMMAND_TYPE_DRAW : 0u)
-                                             | (supports_draw_indexed ? COMMAND_TYPE_DRAW_INDEXED : 0u)
-                                             | (supports_dispatch ? COMMAND_TYPE_DISPATCH : 0u)
-                                             | (supports_indirect ? COMMAND_TYPE_INDIRECT : 0u)
-                                             | (supports_dispatch_mesh ? COMMAND_TYPE_DISPATCH_MESH : 0u);
+                                               | (supports_draw_indexed ? COMMAND_TYPE_DRAW_INDEXED : 0u)
+                                               | (supports_dispatch ? COMMAND_TYPE_DISPATCH : 0u)
+                                               | (supports_indirect ? COMMAND_TYPE_INDIRECT : 0u)
+                                               | (supports_dispatch_mesh ? COMMAND_TYPE_DISPATCH_MESH : 0u);
   const uint32_t command_types = filter.command_types & supported_command_types;
 
   internal::shared.RegisterModule();
@@ -617,11 +617,11 @@ inline void RegisterCallback(Callback&& callback, Filter filter, const T* callba
   registrations.push_back({
       .command_types = command_types,
       .command_thunks = {
-        supports_draw ? internal::InvokeCallback<CallbackType, CommandContext<DrawArguments>, DataType> : nullptr,
-        supports_draw_indexed ? internal::InvokeCallback<CallbackType, CommandContext<DrawIndexedArguments>, DataType> : nullptr,
-        supports_dispatch ? internal::InvokeCallback<CallbackType, CommandContext<DispatchArguments>, DataType> : nullptr,
-        supports_indirect ? internal::InvokeCallback<CallbackType, CommandContext<IndirectArguments>, DataType> : nullptr,
-        supports_dispatch_mesh ? internal::InvokeCallback<CallbackType, CommandContext<DispatchMeshArguments>, DataType> : nullptr,
+          supports_draw ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<DrawArguments>, DataType>) : nullptr,
+          supports_draw_indexed ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<DrawIndexedArguments>, DataType>) : nullptr,
+          supports_dispatch ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<DispatchArguments>, DataType>) : nullptr,
+          supports_indirect ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<IndirectArguments>, DataType>) : nullptr,
+          supports_dispatch_mesh ? static_cast<CallbackThunk>(&internal::InvokeCallback<CallbackType, CommandContext<DispatchMeshArguments>, DataType>) : nullptr,
       },
       .callback = callback_identity,
       .callback_data = erased_data,
