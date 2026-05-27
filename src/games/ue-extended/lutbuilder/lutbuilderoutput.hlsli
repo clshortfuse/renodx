@@ -1,17 +1,17 @@
 #include "./filmiclutbuilder.hlsli"
 #include "./lutbuildercommon.hlsli"
 
-float4 ProcessOutputDevice789(float3 untonemapped_ap1, float3 processed, uint outputdevice, UECbufferConfig cb_config) {
+float4 ProcessOutputDevice89(float3 untonemapped_ap1, float3 processed, uint outputdevice, UECbufferConfig cb_config) {
   // 7 = Linear output (HDR)
   // 8 = Linear final color, no tone curve (HDR)
   // 9 = Linear final color with tone curve (HDR)
 
   float3 output;
 
-  if (outputdevice == 7u) {
-    float3 pq_output = renodx::color::bt2020::from::AP1(untonemapped_ap1);
-    output = renodx::color::pq::EncodeSafe(pq_output, RENODX_DIFFUSE_WHITE_NITS);
-  }
+  // if (outputdevice == 7u) {
+  //   float3 pq_output = renodx::color::bt2020::from::AP1(untonemapped_ap1);
+  //   output = renodx::color::pq::EncodeSafe(pq_output, RENODX_DIFFUSE_WHITE_NITS);
+  // }
 
   if (outputdevice == 8u) {
     float3 linear_output;
@@ -19,7 +19,6 @@ float4 ProcessOutputDevice789(float3 untonemapped_ap1, float3 processed, uint ou
     linear_output = ((cb_config.ue_overlaycolor.xyz - linear_output) * cb_config.ue_overlaycolor.w) + linear_output;
     output = linear_output;
   }
-
   if (outputdevice == 9u) {
     float3 filmic_processed_linear = lerp(processed * cb_config.ue_colorscale.xyz, cb_config.ue_overlaycolor.xyz, cb_config.ue_overlaycolor.w);
     output = filmic_processed_linear;
@@ -47,8 +46,9 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, UECbufferConfig cb_config, flo
   float3 output = ((cb_config.ue_overlaycolor.xyz - scaled) * cb_config.ue_overlaycolor.w) + scaled;
 
   // Handle linear output device
-  if (outputdevice >= 7u) {
-    return ProcessOutputDevice789(untonemapped_ap1, output, outputdevice, cb_config);
+  bool is_linear = (outputdevice == 8u || outputdevice == 9u);
+  if (is_linear) {
+    return ProcessOutputDevice89(untonemapped_ap1, output, outputdevice, cb_config);
   }
 
   return GenerateOutput(output.xyz, untonemapped_ap1, SV_Target, outputdevice);
@@ -70,9 +70,9 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler, Text
 
   float3 output = ((cb_config.ue_overlaycolor.xyz - scaled) * cb_config.ue_overlaycolor.w) + scaled;
 
-  // Handle linear output device
-  if (outputdevice >= 7u) {
-    return ProcessOutputDevice789(untonemapped_ap1, output, outputdevice, cb_config);
+  bool is_linear = (outputdevice == 8u || outputdevice == 9u);
+  if (is_linear) {
+    return ProcessOutputDevice89(untonemapped_ap1, output, outputdevice, cb_config);
   }
 
   return GenerateOutput(output.xyz, untonemapped_ap1, SV_Target, outputdevice);
@@ -94,9 +94,9 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, Sam
 
   float3 output = ((cb_config.ue_overlaycolor.xyz - scaled) * cb_config.ue_overlaycolor.w) + scaled;
 
-  // Handle linear output device
-  if (outputdevice >= 7u) {
-    return ProcessOutputDevice789(untonemapped_ap1, output, outputdevice, cb_config);
+  bool is_linear = (outputdevice == 8u || outputdevice == 9u);
+  if (is_linear) {
+    return ProcessOutputDevice89(untonemapped_ap1, output, outputdevice, cb_config);
   }
 
   return GenerateOutput(output.xyz, untonemapped_ap1, SV_Target, outputdevice);
@@ -118,9 +118,9 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, Sam
 
   float3 output = ((cb_config.ue_overlaycolor.xyz - scaled) * cb_config.ue_overlaycolor.w) + scaled;
 
-  // Handle linear output device
-  if (outputdevice >= 7u) {
-    return ProcessOutputDevice789(untonemapped_ap1, output, outputdevice, cb_config);
+  bool is_linear = (outputdevice == 8u || outputdevice == 9u);
+  if (is_linear) {
+    return ProcessOutputDevice89(untonemapped_ap1, output, outputdevice, cb_config);
   }
 
   return GenerateOutput(output.xyz, untonemapped_ap1, SV_Target, outputdevice);
@@ -142,9 +142,9 @@ float4 ProcessLutbuilder(float3 untonemapped_ap1, SamplerState lut_sampler1, Sam
 
   float3 output = ((cb_config.ue_overlaycolor.xyz - scaled) * cb_config.ue_overlaycolor.w) + scaled;
 
-  // Handle linear output device
-  if (outputdevice >= 7u) {
-    return ProcessOutputDevice789(untonemapped_ap1, output, outputdevice, cb_config);
+  bool is_linear = (outputdevice == 8u || outputdevice == 9u);
+  if (is_linear) {
+    return ProcessOutputDevice89(untonemapped_ap1, output, outputdevice, cb_config);
   }
 
   return GenerateOutput(output.xyz, untonemapped_ap1, SV_Target, outputdevice);
