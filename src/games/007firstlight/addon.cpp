@@ -200,6 +200,7 @@ renodx::utils::settings::Settings settings = {
         .label = "LUT Strength",
         .section = "Color Grading",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -225,10 +226,10 @@ renodx::utils::settings::Settings settings = {
         .key = "FxFilmGrainType",
         .binding = &shader_injection.custom_film_grain_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .label = "Film Grain Type",
         .section = "Effects",
-        .labels = {"Vanilla", "Perceptual"},
+        .labels = {"Vanilla (Broken)", "Vanilla (Fixed)", "Perceptual"},
     },
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
@@ -237,7 +238,6 @@ renodx::utils::settings::Settings settings = {
         .label = "FilmGrain",
         .section = "Effects",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
