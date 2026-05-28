@@ -80,7 +80,6 @@ float3 ApplyFilmGrain(float3 color, float2 uv) {
 
     return renodx::color::gamma::EncodeSafe(color_linear, 2.2f);
   } else {  // vanilla grain (broken in hdr)
-
     float3 color_squared = color * color;
 
     // Grain fades out as color_squared approaches 1.
