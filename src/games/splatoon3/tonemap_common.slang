@@ -27,7 +27,7 @@ void main() {
   vec3 mapped = Tonemap(color);
   vec3 hdr = Tonemap(color, true);
 #if USE_LUT
-  mapped = lerp(renodx::tonemap::ExponentialRollOff(mapped), lut(mapped), LUT_STRENGTH);
+  mapped = lerp(mapped, lut(mapped), LUT_STRENGTH);
   hdr = lerp(hdr, lut(hdr, true), LUT_STRENGTH);
 #endif
 
