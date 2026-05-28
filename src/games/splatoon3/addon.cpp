@@ -264,7 +264,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           renodx::mods::swapchain::resource_upgrade_infos.push_back({
               .old_format = reshade::api::format::r8g8b8a8_typeless,
               .new_format = target_format,
-              .ignore_size = true,  // risky...?
+              .min_dimensions = min_dimensions,
               .shader_hash = hash,
               .use_resource_view_cloning = true,
               .ignore_reset = true,
@@ -275,8 +275,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = target_format,
-          .ignore_size = true,  // risky...?
           .ignore_reset = false,
+          .min_dimensions = min_dimensions,
       });
 
       // Register event handlers
