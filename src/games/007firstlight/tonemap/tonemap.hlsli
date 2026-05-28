@@ -68,41 +68,7 @@ float3 ReinhardPiecewise(float3 x, float x_max, float3 shoulder) {
   return ReinhardPiecewise(x, x_max.xxx, shoulder);
 }
 
-float3 ApplyHuePurityFromLMS(
-    float3 lms_source,
-    float3 lms_target,
-    float amount = 1.f,
-    float hue_amount = 0.f,
-    float clamp_purity_loss = 0.f,
-    float eps = 1e-7f,
-    bool compress_bt2020 = false) {
-  float3 mb_source = renodx::color::macleod_boynton::from::LMS(lms_source);
-  float3 mb_target = renodx::color::macleod_boynton::from::LMS(lms_target);
-  float2 mb_white = renodx::color::macleod_boynton::from::D65XY();
-
-  float2 source_offset = mb_source.xy - mb_white;
-  float2 target_offset = mb_target.xy - mb_white;
-  float src_radius = length(source_offset);
-  float tgt_radius = length(target_offset);
-  if (tgt_radius <= eps) return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(lms_target, 1.f) : lms_target;
-
-  float2 source_hue_offset = source_offset * (tgt_radius / max(src_radius, eps));
-  float2 hue_offset = lerp(target_offset, source_hue_offset, saturate(hue_amount));
-  float hue_radius = length(hue_offset);
-
-  if (hue_radius <= eps) return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(lms_target, 1.f) : lms_target;
-
-  float transfer_scale = src_radius / max(hue_radius, eps);
-  float no_purity_loss_scale = max(transfer_scale, 1.f);
-  transfer_scale = lerp(transfer_scale, no_purity_loss_scale, clamp_purity_loss);
-  float scale = lerp(1.f, transfer_scale, amount);
-  float2 mb_scaled = mb_white + hue_offset * scale;
-
-  float3 output_lms = renodx::color::lms::from::MacLeodBoynton(float3(mb_scaled, mb_target.z));
-  return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(output_lms, 1.f) : output_lms;
-}
-
-float3 ApplyWeightedHuePurityFromLMS(
+float3 TransferPurityAndWeightedHueFromLMS(
     float3 lms_source,
     float3 lms_target,
     float amount = 1.f,
@@ -141,67 +107,6 @@ float3 ApplyWeightedHuePurityFromLMS(
 
   float3 output_lms = renodx::color::lms::from::MacLeodBoynton(float3(mb_scaled, mb_target.z));
   return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(output_lms, 1.f) : output_lms;
-}
-
-float3 ApplyPurityFromLMS(
-    float3 lms_source,
-    float3 lms_target,
-    float amount = 1.f,
-    float clamp_purity_loss = 0.f,
-    float eps = 1e-7f,
-    bool compress_bt2020 = false) {
-  return ApplyHuePurityFromLMS(lms_source, lms_target, amount, 0.f, clamp_purity_loss, eps, compress_bt2020);
-}
-
-float3 RestoreHueAdaptiveLMS(
-    float3 untonemapped_lms, float3 per_channel_tonemapped_lms, float3 lms_white = LMS_WHITE_BT709,
-    float hue_restore = 0.35f, float eps = 1e-7f) {
-  float3 display_scaled_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(
-      per_channel_tonemapped_lms,
-      lms_white);
-  float3 lms_cones_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(
-      untonemapped_lms,
-      lms_white);
-  float3 mb_source = renodx::color::macleod_boynton::from::WeightedLMS(lms_cones_relative_weighted);
-  float3 mb_display_target = renodx::color::macleod_boynton::from::WeightedLMS(display_scaled_relative_weighted);
-  float3 mb_adapted_bg = renodx::color::macleod_boynton::from::LMS(1.f.xxx);
-
-  float2 source_offset = mb_source.xy - mb_adapted_bg.xy;
-  float2 display_target_offset = mb_display_target.xy - mb_adapted_bg.xy;
-  float src2 = dot(source_offset, source_offset);
-  float display_tgt2 = dot(display_target_offset, display_target_offset);
-  if (src2 > eps && display_tgt2 > eps) {
-    float inv_target_radius = rsqrt(display_tgt2);
-    float target_radius = display_tgt2 * inv_target_radius;
-    float source_t_clip = renodx::tonemap::psychov::psycho17_RayExitTCIE1702(mb_adapted_bg.xy, source_offset);
-    float display_t_clip = renodx::tonemap::psychov::psycho17_RayExitTCIE1702(mb_adapted_bg.xy, display_target_offset);
-    float source_purity_signal = renodx::tonemap::psychov::psycho17_HueRelativePuritySignalFromTClip(source_t_clip);
-    float display_purity_signal = renodx::tonemap::psychov::psycho17_HueRelativePuritySignalFromTClip(display_t_clip);
-    float purity_signal_loss = saturate(display_purity_signal / source_purity_signal);
-    float hue_sensitivity = renodx::tonemap::psychov::psycho17_AdaptiveHueSensitivityFromTClip(display_t_clip);
-    float restore_weight = hue_sensitivity * hue_restore * purity_signal_loss;
-    if (restore_weight > 0.f) {
-      float inv_source_radius = rsqrt(src2);
-      float2 source_dir = source_offset * inv_source_radius;
-      float2 display_target_dir = display_target_offset * inv_target_radius;
-      float2 blended_dir = lerp(display_target_dir, source_dir, restore_weight);
-      float blended_len2 = dot(blended_dir, blended_dir);
-      if (blended_len2 > eps) {
-        blended_dir *= rsqrt(blended_len2);
-      } else {
-        blended_dir = display_target_dir;
-      }
-
-      float2 mb_restored_xy = mb_adapted_bg.xy + blended_dir * target_radius;
-      float3 mb_restored = float3(mb_restored_xy, mb_display_target.z);
-      display_scaled_relative_weighted = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(mb_restored);
-    }
-  }
-
-  return renodx::color::macleod_boynton::UnweighLMS(
-      renodx::tonemap::psychov::psycho17_FromAdaptiveRelativeWeightedLMS(
-          display_scaled_relative_weighted,
-          lms_white));
 }
 
 struct FilmTonemapConfig {
@@ -302,8 +207,9 @@ renodx::lut::Config CreateLUTConfig(SamplerState lut_sampler) {
   lut_config.scaling = 0.f;
   lut_config.lut_sampler = lut_sampler;
   lut_config.size = 16u;
-  lut_config.recolor = 0.f;
+#if !USE_EXPENSIVE_LUT_GAMUT_RESTORATION
   lut_config.gamut_compress = 0.f;
+#endif
   lut_config.strength = COLOR_GRADE_LUT_STRENGTH;
   return lut_config;
 }

@@ -32,7 +32,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDX (Enhanced)", "RenoDX (Purist)"},
+        .labels = {"Vanilla", "RenoDX"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
