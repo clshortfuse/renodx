@@ -392,6 +392,6 @@ void main(
   float3 output = float3((((_284 + _296) + (((-0.054999999701976776f - _284) + (exp2(log2(abs(_260)) * 0.4166666567325592f) * 1.0549999475479126f)) * float((bool)(uint)(_260 > 0.0031308000907301903f)))) * cbPostChainMerge.vHDRParams.w),
                          (((_285 + _296) + (((-0.054999999701976776f - _285) + (exp2(log2(abs(_261)) * 0.4166666567325592f) * 1.0549999475479126f)) * float((bool)(uint)(_261 > 0.0031308000907301903f)))) * cbPostChainMerge.vHDRParams.w),
                          (((_286 + _296) + (((-0.054999999701976776f - _286) + (exp2(log2(abs(_262)) * 0.4166666567325592f) * 1.0549999475479126f)) * float((bool)(uint)(_262 > 0.0031308000907301903f)))) * cbPostChainMerge.vHDRParams.w));
-  output = DrawPostChainMergeCBufferDebug(output, float2((float)(SV_DispatchThreadID.x), (float)(SV_DispatchThreadID.y)));
+  // output = DrawPostChainMergeCBufferDebug(output, float2((float)(SV_DispatchThreadID.x), (float)(SV_DispatchThreadID.y)));
   uavOutput1[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(output, 1.0f);
 }

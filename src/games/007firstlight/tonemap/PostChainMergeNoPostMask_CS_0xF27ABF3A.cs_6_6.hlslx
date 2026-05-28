@@ -315,7 +315,7 @@ void main(
     float3 output = float3(saturate((((-0.054999999701976776f - _51) + (exp2(log2(abs(_27)) * 0.4166666567325592f) * 1.0549999475479126f)) * float((bool)(uint)(_27 > 0.0031308000907301903f))) + _51),
                            saturate((((-0.054999999701976776f - _52) + (exp2(log2(abs(_28)) * 0.4166666567325592f) * 1.0549999475479126f)) * float((bool)(uint)(_28 > 0.0031308000907301903f))) + _52),
                            saturate((((-0.054999999701976776f - _53) + (exp2(log2(abs(_29)) * 0.4166666567325592f) * 1.0549999475479126f)) * float((bool)(uint)(_29 > 0.0031308000907301903f))) + _53));
-    output = DrawPostChainMergeCBufferDebug(output, float2((float)(SV_DispatchThreadID.x), (float)(SV_DispatchThreadID.y)));
+    // output = DrawPostChainMergeCBufferDebug(output, float2((float)(SV_DispatchThreadID.x), (float)(SV_DispatchThreadID.y)));
     uavOutput1[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(output, (_125 * 0.25f));
     break;
   }
