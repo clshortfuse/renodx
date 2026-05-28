@@ -1,6 +1,8 @@
 #ifndef SRC_007FIRSTLIGHT_SHARED_H_
 #define SRC_007FIRSTLIGHT_SHARED_H_
 
+#define USE_EXPENSIVE_LUT_GAMUT_RESTORATION 0
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {

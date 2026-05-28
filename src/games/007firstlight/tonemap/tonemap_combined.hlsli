@@ -79,6 +79,45 @@ RWTexture2D<float4> uavOutput1 : register(u0);
 SamplerState samplerLinearClampNode : register(s4);
 #endif
 
+float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
+  float3 tonemapped;
+#if POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_NONE
+  tonemapped = untonemapped;
+#elif POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_REINHARD
+  tonemapped = renodx::tonemap::Reinhard(untonemapped);
+#elif POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_HABLE
+  tonemapped = renodx::tonemap::ApplyCurve(untonemapped, 0.6f, 1.f, 0.1f, 1.f, 0.004f, 0.06f);
+#elif POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_FILM
+
+  if (TONE_MAP_TYPE != 0.f) {
+    FilmTonemapConfig film_tonemap_config = CreateFilmTonemapConfig(100.f);
+    const float sdr_blend_strength = 0.88f;
+
+    // branch tonemapper at (0.18, f(0.18)) and blend towards SDR so it isn't overly bright
+    float3 per_channel_tonemapped = ApplyFilmToneMapExtended(untonemapped, film_tonemap_config, sdr_blend_strength);
+
+    // add extra hue shifts and blowout based on user's peak setting
+    // restore luminance afterwards so that max channel scaling to user peak can be deferred to the end
+    float3 hue_and_purity_reference = renodx::tonemap::neutwo::PerChannel(per_channel_tonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    if (RENODX_TONE_MAP_SCALING == 0.f) {
+      float y_in = renodx::color::yf::from::BT709(untonemapped);
+      float y_out = ApplyFilmToneMapExtended(y_in, film_tonemap_config, sdr_blend_strength);
+      float3 lum_tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
+
+      tonemapped = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(hue_and_purity_reference), renodx::color::lms::from::BT709(lum_tonemapped)));
+    } else {
+      tonemapped = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::BT709(hue_and_purity_reference), renodx::color::yf::from::BT709(per_channel_tonemapped));
+    }
+  } else {
+    tonemapped = ApplyFilmToneMap(untonemapped, film_white_clip);
+  }
+#else
+#error Unsupported POSTCHAINMERGE_TONEMAP_TYPE.
+#endif
+
+  return tonemapped;
+}
+
 float3 ApplyVignetteWhitePointAndVerticalFade(float3 color, float4 grid) {
   float radial_vignette = grid.z;
   float vertical_fade = grid.w;
@@ -94,19 +133,20 @@ float3 SampleSRGBColorCorrectionLUT(float3 color, float hdr_scale, float hdr_hea
   if (TONE_MAP_TYPE != 0.f) {
     float3 adaptive_state_lms;
     float gamut_compression_scale;
-    if (TONE_MAP_TYPE == 1.f) {
-      adaptive_state_lms = LMS_WHITE_BT709 * 0.18f;
-      gamut_compression_scale = renodx::color::gamut::ComputeGamutCompressionScaleBT709AdaptiveD65(color, adaptive_state_lms, 1.f);
-      color = renodx::color::gamut::GamutCompressBT709AdaptiveD65(color, adaptive_state_lms, gamut_compression_scale);
-    }
+
+#if USE_EXPENSIVE_LUT_GAMUT_RESTORATION
+    adaptive_state_lms = LMS_WHITE_BT709 * 0.18f;
+    gamut_compression_scale = renodx::color::gamut::ComputeGamutCompressionScaleBT709AdaptiveD65(color, adaptive_state_lms, 1.f);
+    color = renodx::color::gamut::GamutCompressBT709AdaptiveD65(color, adaptive_state_lms, gamut_compression_scale);
+#endif
 
     color = max(0, color);
     float maxch_scale = ComputeMaxChCompressionScale(color);
     float3 lut_color = renodx::lut::Sample(srvColorCorrectionVolume, CreateLUTConfig(samplerLinearClampNode), color * maxch_scale) / maxch_scale;
 
-    if (TONE_MAP_TYPE == 1.f) {
-      lut_color = renodx::color::gamut::GamutDecompressBT709AdaptiveD65(lut_color, adaptive_state_lms, gamut_compression_scale);
-    }
+#if USE_EXPENSIVE_LUT_GAMUT_RESTORATION
+    lut_color = renodx::color::gamut::GamutDecompressBT709AdaptiveD65(lut_color, adaptive_state_lms, gamut_compression_scale);
+#endif
 
     lut_color = renodx::color::srgb::EncodeSafe(lut_color);
     return lut_color;
@@ -142,108 +182,20 @@ float3 ApplyOptionalGammaAdjust(float3 color) {
   return color;
 }
 
-float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
-  float3 tonemapped;
-#if POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_NONE
-  tonemapped = untonemapped;
-#elif POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_REINHARD
-  tonemapped = renodx::tonemap::Reinhard(untonemapped);
-#elif POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_HABLE
-  tonemapped = renodx::tonemap::ApplyCurve(untonemapped, 0.6f, 1.f, 0.1f, 1.f, 0.004f, 0.06f);
-#elif POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_FILM
-
-  if (TONE_MAP_TYPE != 0.f) {  // run tonemapper in lms with weighted hue correction
-    FilmTonemapConfig film_tonemap_config = CreateFilmTonemapConfig(100.f);
-    const float sdr_blend_strength = 0.88f;
-
-    if (TONE_MAP_TYPE == 2.f) {  // per-channel BT.709
-      float3 per_channel_tonemapped = ApplyFilmToneMapExtended(untonemapped, film_tonemap_config, sdr_blend_strength);
-      float3 hue_and_purity_reference = renodx::tonemap::neutwo::PerChannel(per_channel_tonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-
-      if (RENODX_TONE_MAP_SCALING == 0.f) {
-        float y_in = renodx::color::yf::from::BT709(untonemapped);
-        float y_out = ApplyFilmToneMapExtended(y_in, film_tonemap_config, sdr_blend_strength);
-
-        tonemapped = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::BT709(hue_and_purity_reference), y_out);
-      } else {
-        tonemapped = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::BT709(hue_and_purity_reference), renodx::color::yf::from::BT709(per_channel_tonemapped));
-      }
-
-    } else {
-      float3 untonemapped_lms = renodx::color::lms::from::BT709(untonemapped);
-      float3 untonemapped_lms_normalized = renodx::math::DivideSafe(untonemapped_lms, LMS_WHITE_BT709, 0.f.xxx);
-      float3 per_channel_tonemapped_lms_normalized = ApplyFilmToneMapExtended(untonemapped_lms_normalized, film_tonemap_config, sdr_blend_strength);
-      per_channel_tonemapped_lms_normalized = RestoreHueAdaptiveLMS(untonemapped_lms_normalized, per_channel_tonemapped_lms_normalized, 1.f.xxx);
-      float3 per_channel_tonemapped_lms = per_channel_tonemapped_lms_normalized * LMS_WHITE_BT709;
-
-      float3 peak_lms = LMS_WHITE_BT709 * (RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-      float3 hue_and_purity_reference = renodx::tonemap::neutwo::PerChannel(per_channel_tonemapped_lms, peak_lms);
-
-      // roughly match bt709 tonemap saturation
-      hue_and_purity_reference = lerp(renodx::color::yf::from::LMS(hue_and_purity_reference), hue_and_purity_reference, 0.9875f);
-
-      float3 tonemapped_lms;
-      if (RENODX_TONE_MAP_SCALING == 0.f) {
-        float y_in = renodx::color::yf::from::LMS(untonemapped_lms);
-        float y_out = ApplyFilmToneMapExtended(y_in, film_tonemap_config, sdr_blend_strength);
-
-        tonemapped_lms = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::LMS(hue_and_purity_reference), y_out);
-      } else {
-        tonemapped_lms = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::LMS(hue_and_purity_reference), renodx::color::yf::from::LMS(per_channel_tonemapped_lms));
-      }
-      tonemapped = renodx::color::bt709::from::LMS(max(0, tonemapped_lms));
-
-      tonemapped = renodx::color::bt709::clamp::AP1(tonemapped);
-    }
-  } else {
-    tonemapped = ApplyFilmToneMap(untonemapped, film_white_clip);
-  }
-#else
-#error Unsupported POSTCHAINMERGE_TONEMAP_TYPE.
-#endif
-
-  return tonemapped;
-}
-
 float3 FinalizeOutput(float3 color) {
   if (TONE_MAP_TYPE != 0.f) {
     color = renodx::color::srgb::DecodeSafe(color);
 
-    if (TONE_MAP_TYPE == 2.f) {  // gamma correction in BT.709
-      if (RENODX_TONE_MAP_SCALING == 1.f) {
-        color = renodx::color::correct::GammaSafe(color);
-      } else {  // luminance gamma correction with BT.709 per-channel hue and purity
-        float y_in = renodx::color::yf::from::BT709(color);
-        float y_out = renodx::color::correct::Gamma(max(0, y_in));
-        float3 color_corrected_lum = renodx::color::correct::Luminance(color, y_in, y_out);
+    if (RENODX_TONE_MAP_SCALING == 1.f) {
+      color = renodx::color::correct::GammaSafe(color);
+    } else {  // per channel gamma correction with luminance from by luminance
+      float y_in = renodx::color::yf::from::BT709(color);
+      float y_out = renodx::color::correct::Gamma(max(0, y_in));
+      float3 color_corrected_lum = renodx::color::correct::Luminance(color, y_in, y_out);
 
-        float3 color_corrected_ch = renodx::color::correct::GammaSafe(color);
+      float3 color_corrected_ch = renodx::color::correct::GammaSafe(color);
 
-        color = renodx::color::correct::Luminance(
-            color_corrected_ch,
-            renodx::color::yf::from::BT709(color_corrected_ch),
-            renodx::color::yf::from::BT709(color_corrected_lum));
-      }
-    } else {  // gamma correction in LMS normalized to BT.709 white
-      float3 source_lms = max(0, renodx::color::lms::from::BT709(color) / LMS_WHITE_BT709);
-      float3 color_lms = source_lms;
-      if (RENODX_TONE_MAP_SCALING == 1.f) {
-        color_lms = renodx::color::correct::GammaSafe(color_lms);
-        color_lms = RestoreHueAdaptiveLMS(source_lms, color_lms, 1.f.xxx);
-      } else {  // luminance gamma correction with LMS per-channel hue and purity
-        float y_in = renodx::color::yf::from::LMS(color_lms);
-        float y_out = renodx::color::correct::Gamma(max(0, y_in));
-
-        float3 color_corrected_ch_lms = renodx::color::correct::GammaSafe(color_lms);
-        color_corrected_ch_lms = RestoreHueAdaptiveLMS(color_lms, color_corrected_ch_lms, 1.f.xxx);
-
-        color_lms = renodx::color::correct::Luminance(
-            color_corrected_ch_lms,
-            renodx::color::yf::from::LMS(color_corrected_ch_lms),
-            y_out);
-      }
-      color_lms *= LMS_WHITE_BT709;
-      color = renodx::color::bt709::from::LMS(color_lms);
+      color = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(color_corrected_ch), renodx::color::lms::from::BT709(color_corrected_lum)));
     }
 
     color = renodx::color::bt2020::from::BT709(color);
