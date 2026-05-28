@@ -139,6 +139,6 @@ void main(
   float3 output = float3((cbPostChainMerge.fFadeValue * _282),
                          (cbPostChainMerge.fFadeValue * _283),
                          (cbPostChainMerge.fFadeValue * _284));
-  output = DrawPostChainMergeCBufferDebug(output, float2((float)(SV_DispatchThreadID.x), (float)(SV_DispatchThreadID.y)));
+  // output = DrawPostChainMergeCBufferDebug(output, float2((float)(SV_DispatchThreadID.x), (float)(SV_DispatchThreadID.y)));
   uavOutput1[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(output, 0.0f);
 }
