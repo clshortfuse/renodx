@@ -1,5 +1,5 @@
-#ifndef SRC_TEMPLATE_SHARED_H_
-#define SRC_TEMPLATE_SHARED_H_
+#ifndef SRC_GAMES_WOBBLYLIFE_SHARED_H_
+#define SRC_GAMES_WOBBLYLIFE_SHARED_H_
 
 // #define RENODX_PEAK_WHITE_NITS                 1000.f
 // #define RENODX_DIFFUSE_WHITE_NITS              renodx::color::bt2408::REFERENCE_WHITE
@@ -56,7 +56,16 @@ struct ShaderInjectData {
 
   float swap_chain_output_preset;
   float custom_custom_lut_count;
+  float custom_is_wardrobe_render;
+  float custom_hue_clip;
+  float custom_saturation_clip;
+  float custom_sdr_gamut_compression;
+  float custom_cone_response;
 };
+
+#define RENODX_TONE_MAP_TYPE_VANILLA   0.f
+#define RENODX_TONE_MAP_TYPE_RENODRT   3.f
+#define RENODX_TONE_MAP_TYPE_PSYCHOV17 4.f
 
 #ifndef __cplusplus
 #if ((__SHADER_TARGET_MAJOR == 5 && __SHADER_TARGET_MINOR >= 1) || __SHADER_TARGET_MAJOR >= 6)
@@ -72,6 +81,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_DIFFUSE_WHITE_NITS                     shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS                    shader_injection.graphics_white_nits
 #define RENODX_GAMMA_CORRECTION                       shader_injection.gamma_correction
+#define RENODX_TONE_MAP_HUE_CORRECTION                0.f
 #define RENODX_TONE_MAP_HUE_PROCESSOR                 shader_injection.tone_map_hue_processor
 #define RENODX_TONE_MAP_EXPOSURE                      shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS                    shader_injection.tone_map_highlights
@@ -83,18 +93,24 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE                         shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH                   1.0
 #define RENODX_TONE_MAP_CLAMP_PEAK                    -1.f
-#define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
-#define RENODX_TONE_MAP_HUE_CORRECTION                0.f
+#define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::NEUTWO
 #define RENODX_SWAP_CHAIN_OUTPUT_PRESET               shader_injection.swap_chain_output_preset
 #define RENODX_RENO_DRT_WHITE_CLIP                    shader_injection.tone_map_white_clip
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.f
-#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::NEUTWO
 #define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP        20.f
+#define CUSTOM_HUE_CLIP                               shader_injection.custom_hue_clip
+#define CUSTOM_SATURATION_CLIP                        shader_injection.custom_saturation_clip
 #define CUSTOM_CUSTOM_LUT_COUNT                       shader_injection.custom_custom_lut_count
+#define CUSTOM_IS_WARDROBE_RENDER                     shader_injection.custom_is_wardrobe_render
+#define CUSTOM_SDR_GAMUT_COMPRESSION                  shader_injection.custom_sdr_gamut_compression
+#define CUSTOM_CONE_RESPONSE                          shader_injection.custom_cone_response
+#define RENODX_RENO_DRT_SCALING_METHOD                renodx::tonemap::renodrt::config::scaling_method::MAX_CHANNEL
+#define RENODX_TONE_MAP_WORKING_COLOR_SPACE           0.f
 
 #include "../../shaders/renodx.hlsl"
 
 #endif
 
-#endif  // SRC_TEMPLATE_SHARED_H_
+#endif  // SRC_GAMES_WOBBLYLIFE_SHARED_H_

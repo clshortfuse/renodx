@@ -247,6 +247,8 @@ class RenderPass {
   uint32_t dispatch_texture2d_tilesize = 16;
   std::optional<std::tuple<uint32_t, uint32_t, uint32_t>> dispatch_group_counts;
 
+  bool use_render_pass = true;
+
   [[nodiscard]] bool IsComputePass() const {
     return !pipeline_subobjects.compute_shader.empty();
   }
@@ -562,10 +564,12 @@ class RenderPass {
       this->generated_pipeline = true;
     }
 
+    const bool is_graphics_pass = !this->IsComputePass();
+
     auto render_target_views_size = this->render_target_slots.views.size();
     auto render_pass_render_target_descs_size = this->render_target_slots.render_pass_descs.size();
 
-    if (render_pass_render_target_descs_size < render_target_views_size) {
+    if (is_graphics_pass && this->use_render_pass && render_pass_render_target_descs_size < render_target_views_size) {
       this->render_target_slots.render_pass_descs.resize(render_target_views_size);
       auto insert_index = render_pass_render_target_descs_size;
       while (insert_index < render_target_views_size) {
@@ -641,14 +645,18 @@ class RenderPass {
       }
     };
 
-    const bool is_graphics_pass = !this->IsComputePass();
-
     if (is_graphics_pass) {
       cmd_list->bind_pipeline(reshade::api::pipeline_stage::all_graphics, this->pipeline);
-      cmd_list->begin_render_pass(
-        static_cast<uint32_t>(this->render_target_slots.render_pass_descs.size()),
-        this->render_target_slots.render_pass_descs.data(),
-        nullptr);
+      if (this->use_render_pass) {
+        cmd_list->begin_render_pass(
+            static_cast<uint32_t>(this->render_target_slots.render_pass_descs.size()),
+            this->render_target_slots.render_pass_descs.data(),
+            nullptr);
+      } else {
+        cmd_list->bind_render_targets_and_depth_stencil(
+            static_cast<uint32_t>(this->render_target_slots.views.size()),
+            this->render_target_slots.views.data());
+      }
       push_bindings(reshade::api::shader_stage::all_graphics);
 
       // Viewport / scissor configuration
@@ -733,7 +741,9 @@ class RenderPass {
       cmd_list->bind_viewports(0, this->viewports.size(), this->viewports.data());
       cmd_list->bind_scissor_rects(0, this->scissors.size(), this->scissors.data());
       cmd_list->draw(3, 1, 0, 0);
-      cmd_list->end_render_pass();
+      if (this->use_render_pass) {
+        cmd_list->end_render_pass();
+      }
     } else {
       // Match ReShade's runtime compute order in external/reshade/source/runtime.cpp:
       // bind the compute pipeline, bind compute descriptors, dispatch, and never enter a render pass.

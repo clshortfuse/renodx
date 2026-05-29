@@ -523,6 +523,167 @@ float3 GamutCompressWeightedLMSCoreRGBBoundFromAdaptiveWeightedInputPrecise(
       strength);
 }
 
+float ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromWeightedInput(
+    float3 lms_weighted_input,
+    float2 bound_r,
+    float2 bound_g,
+    float2 bound_b,
+    float strength) {
+  float3 lms_weighted_clamped = ClampWeightedLMSToCIE1702(max(lms_weighted_input, 0));
+  float3 mb = renodx::color::macleod_boynton::from::WeightedLMS(lms_weighted_clamped);
+  float y_mb = mb.z;
+  float2 ls = mb.xy;
+  if (!(y_mb > EPSILON)) {
+    return 1.f;
+  }
+
+  float2 mb_white = CIE1702WhiteChromaticity();
+  float2 direction = ls - mb_white;
+  if (dot(direction, direction) <= MB_NEAR_WHITE_EPSILON) {
+    return 1.f;
+  }
+
+  bool has_peak = false;
+  float t_peak = RayMaxT_RGBTriangleInMB(
+      mb_white, direction, bound_r, bound_g, bound_b, has_peak);
+  float t_clip = RayExitTCIE1702D(direction);
+  if (!has_peak) {
+    t_peak = t_clip;
+  }
+
+  float t_hard = saturate(t_peak);
+  float t_soft = NeutwoScaleFromRayT(min(t_peak, t_clip), t_clip);
+  float soft_mix = saturate(strength) * SoftCompressionActivationFromRayT(t_peak);
+  return lerp(t_hard, t_soft, soft_mix);
+}
+
+float ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromWeightedInput(
+    float3 lms_weighted_input,
+    float3x3 bound_rgb_to_lms_weighted_mat,
+    float strength) {
+  float2 bound_r;
+  float2 bound_g;
+  float2 bound_b;
+  MakeRGBTriangleInMBWeighted(bound_rgb_to_lms_weighted_mat, bound_r, bound_g, bound_b);
+  return ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromWeightedInput(
+      lms_weighted_input,
+      bound_r,
+      bound_g,
+      bound_b,
+      strength);
+}
+
+float ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromAdaptiveWeightedInput(
+    float3 lms_weighted_input,
+    float3 current_adaptive_state_lms,
+    float3x3 bound_rgb_to_lms_weighted_mat,
+    float strength) {
+  float2 bound_r;
+  float2 bound_g;
+  float2 bound_b;
+  MakeRGBTriangleInMBAdaptiveWeighted(
+      bound_rgb_to_lms_weighted_mat,
+      current_adaptive_state_lms,
+      bound_r,
+      bound_g,
+      bound_b);
+  return ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromWeightedInput(
+      lms_weighted_input,
+      bound_r,
+      bound_g,
+      bound_b,
+      strength);
+}
+
+float3 CompressWeightedLMSFromCIE1702White(float3 lms_weighted_input, float compression_scale) {
+  float3 lms_weighted_clamped = ClampWeightedLMSToCIE1702(max(lms_weighted_input, 0));
+  float3 mb = renodx::color::macleod_boynton::from::WeightedLMS(lms_weighted_clamped);
+  float y_mb = mb.z;
+  float2 ls = mb.xy;
+  if (!(y_mb > EPSILON)) {
+    return float3(lms_weighted_clamped.x, lms_weighted_clamped.y, 0.f);
+  }
+
+  float2 mb_white = CIE1702WhiteChromaticity();
+  float2 direction = ls - mb_white;
+  if (dot(direction, direction) <= MB_NEAR_WHITE_EPSILON) {
+    return lms_weighted_clamped;
+  }
+
+  float2 ls_out = mb_white + saturate(compression_scale) * direction;
+  return renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(ls_out, y_mb);
+}
+
+float3 DecompressWeightedLMSFromCIE1702White(float3 lms_weighted_input, float compression_scale) {
+  float3 lms_weighted_clamped = max(lms_weighted_input, 0);
+  float3 mb = renodx::color::macleod_boynton::from::WeightedLMS(lms_weighted_clamped);
+  float y_mb = mb.z;
+  float2 ls = mb.xy;
+  if (!(y_mb > EPSILON)) {
+    return float3(lms_weighted_clamped.x, lms_weighted_clamped.y, 0.f);
+  }
+
+  float2 mb_white = CIE1702WhiteChromaticity();
+  float2 direction = ls - mb_white;
+  if (dot(direction, direction) <= MB_NEAR_WHITE_EPSILON) {
+    return lms_weighted_clamped;
+  }
+
+  float safe_scale = max(compression_scale, 1e-6f);
+  float2 ls_out = mb_white + direction * rcp(safe_scale);
+  return renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(ls_out, y_mb);
+}
+
+float ComputeGamutCompressionScaleBT709AdaptiveD65(
+    float3 bt709_input,
+    float3 current_adaptive_state_lms,
+    float strength = 1.f) {
+  float3 lms_input = renodx::color::lms::from::BT709(bt709_input);
+  float3 lms_weighted_relative = renodx::math::DivideSafe(
+      renodx::color::macleod_boynton::WeighLMS(lms_input),
+      current_adaptive_state_lms,
+      0.f);
+  return ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromAdaptiveWeightedInput(
+      lms_weighted_relative,
+      current_adaptive_state_lms,
+      renodx::color::macleod_boynton::BT709_TO_LMS_WEIGHTED_MAT,
+      strength);
+}
+
+float3 GamutCompressBT709AdaptiveD65(
+    float3 bt709_input,
+    float3 current_adaptive_state_lms,
+    float compression_scale) {
+  float3 lms_input = renodx::color::lms::from::BT709(bt709_input);
+  float3 lms_weighted_relative = renodx::math::DivideSafe(
+      renodx::color::macleod_boynton::WeighLMS(lms_input),
+      current_adaptive_state_lms,
+      0.f);
+  float3 lms_weighted_relative_out = CompressWeightedLMSFromCIE1702White(
+      lms_weighted_relative,
+      compression_scale);
+  return renodx::color::bt709::from::LMS(
+      renodx::color::macleod_boynton::UnweighLMS(
+          lms_weighted_relative_out * max(current_adaptive_state_lms, 1e-6f)));
+}
+
+float3 GamutDecompressBT709AdaptiveD65(
+    float3 bt709_input,
+    float3 current_adaptive_state_lms,
+    float compression_scale) {
+  float3 lms_input = renodx::color::lms::from::BT709(bt709_input);
+  float3 lms_weighted_relative = renodx::math::DivideSafe(
+      renodx::color::macleod_boynton::WeighLMS(lms_input),
+      current_adaptive_state_lms,
+      0.f);
+  float3 lms_weighted_relative_out = DecompressWeightedLMSFromCIE1702White(
+      lms_weighted_relative,
+      compression_scale);
+  return renodx::color::bt709::from::LMS(
+      renodx::color::macleod_boynton::UnweighLMS(
+          lms_weighted_relative_out * max(current_adaptive_state_lms, 1e-6f)));
+}
+
 float3 GamutCompressLMS(float3 lms_input, float strength = 1.f) {
   float3 lms_weighted_input = renodx::color::macleod_boynton::WeighLMS(lms_input);
   float3 lms_weighted_clamped = max(lms_weighted_input, 0);

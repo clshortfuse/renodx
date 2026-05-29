@@ -43,10 +43,12 @@ static bool use_replace_async = false;
 static bool use_shader_cache = false;
 static std::atomic_size_t runtime_replacement_count = 0;
 
-static const int VERTEX_INDEX = 0;
-static const int PIXEL_INDEX = 1;
-static const int COMPUTE_INDEX = 2;
-static const auto COMPATIBLE_STAGES_SIZE = 3;
+enum ShaderStageIndex : std::uint8_t {
+  VERTEX_INDEX = 0,
+  PIXEL_INDEX,
+  COMPUTE_INDEX,
+  COMPATIBLE_STAGES_SIZE,
+};
 
 static const std::array<reshade::api::pipeline_stage, COMPATIBLE_STAGES_SIZE> COMPATIBLE_STAGES = {
     reshade::api::pipeline_stage::vertex_shader,
