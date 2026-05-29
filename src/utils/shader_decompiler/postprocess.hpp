@@ -1144,7 +1144,9 @@
 
       auto resource = std::string(trimmed.substr(0, store_pos));
       auto address = std::string(trimmed.substr(store_pos + 7, value_pos - (store_pos + 7)));
-      auto value = std::string(trimmed.substr(value_pos + 10, trimmed.size() - value_pos - 13));
+      static constexpr std::string_view VALUE_PREFIX = ", asuint(";
+      auto value_start = value_pos + VALUE_PREFIX.size();
+      auto value = std::string(trimmed.substr(value_start, trimmed.size() - value_start - 3));
       return std::tuple<std::string, std::string, std::string, std::string>(
           line.substr(0, indent_length), resource, address, value);
     };
@@ -1238,9 +1240,17 @@
         if (next_resource != resource || next_address != address) {
           continue;
         }
+        if (next_indent != indent) {
+          continue;
+        }
 
         bool assigned_between = false;
         for (size_t k = i + 1; k < j && !assigned_between; ++k) {
+          auto trimmed_between = trim(lines[k]);
+          if (trimmed_between.find('{') != std::string_view::npos || trimmed_between.find('}') != std::string_view::npos) {
+            assigned_between = true;
+            break;
+          }
           for (const auto& identifier : identifiers) {
             if (line_assigns_identifier(lines[k], identifier)) {
               assigned_between = true;

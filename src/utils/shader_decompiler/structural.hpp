@@ -181,6 +181,7 @@
   };
 
   auto expand_block_branch_condition = [&](const CodeBlock& branch_code_block) -> std::optional<std::string> {
+    constexpr size_t MAX_EXPANDED_BRANCH_CONDITION_SIZE = 16 * 1024;
     if (branch_code_block.code_branch.branch_condition.empty()) {
       return std::nullopt;
     }
@@ -216,6 +217,61 @@
       }
       return output;
     };
+    auto count_whole_identifier = [&](std::string_view input, std::string_view identifier) {
+      size_t count = 0;
+      size_t cursor = 0;
+      while (cursor < input.size()) {
+        auto match_index = input.find(identifier, cursor);
+        if (match_index == std::string_view::npos) break;
+        auto has_left_identifier =
+            match_index > 0 && is_identifier_character(input[match_index - 1]);
+        auto match_end = match_index + identifier.size();
+        auto has_right_identifier =
+            match_end < input.size() && is_identifier_character(input[match_end]);
+        if (!has_left_identifier && !has_right_identifier) {
+          ++count;
+        }
+        cursor = match_end;
+      }
+      return count;
+    };
+    auto is_trivial_inline_expression = [](std::string_view expression) {
+      return StringViewTrim(expression).size() <= 32;
+    };
+    auto make_parenthesized_expression = [](std::string_view expression) {
+      std::string parenthesized_expression;
+      parenthesized_expression.reserve(expression.size() + 2);
+      parenthesized_expression.push_back('(');
+      parenthesized_expression.append(expression);
+      parenthesized_expression.push_back(')');
+      return parenthesized_expression;
+    };
+    auto try_inline_known_expression = [&](std::string& expression, const std::string& known_variable, const std::string& known_expression) {
+      const auto use_count = count_whole_identifier(expression, known_variable);
+      if (use_count == 0) {
+        return true;
+      }
+      // This is only a fold heuristic. If inlining would duplicate a non-trivial
+      // expression, keep the original block structure instead of manufacturing a
+      // massive condition with repeated resource/wave/hash expressions.
+      if (use_count > 1 && !is_trivial_inline_expression(known_expression)) {
+        return false;
+      }
+      if (expression.size() > MAX_EXPANDED_BRANCH_CONDITION_SIZE) {
+        return false;
+      }
+      const auto replacement_size = known_expression.size() + 2;
+      if (replacement_size > known_variable.size()) {
+        const auto growth_per_use = replacement_size - known_variable.size();
+        if (growth_per_use > 0
+            && use_count > (MAX_EXPANDED_BRANCH_CONDITION_SIZE - expression.size()) / growth_per_use) {
+          return false;
+        }
+      }
+      auto parenthesized_expression = make_parenthesized_expression(known_expression);
+      expression = replace_whole_identifier(expression, known_variable, parenthesized_expression);
+      return expression.size() <= MAX_EXPANDED_BRANCH_CONDITION_SIZE;
+    };
 
     std::vector<std::string_view> executable_lines;
     executable_lines.reserve(branch_code_block.hlsl_lines.size());
@@ -236,20 +292,18 @@
       }
       std::string expanded_expression(expression);
       for (const auto& [known_variable, known_expression] : known_assignments) {
-        expanded_expression = replace_whole_identifier(
-            expanded_expression,
-            known_variable,
-            std::format("({})", known_expression));
+        if (!try_inline_known_expression(expanded_expression, known_variable, known_expression)) {
+          return std::nullopt;
+        }
       }
       known_assignments.emplace(variable_name, expanded_expression);
     }
 
     std::string expanded_condition(branch_code_block.code_branch.branch_condition);
     for (const auto& [known_variable, known_expression] : known_assignments) {
-      expanded_condition = replace_whole_identifier(
-          expanded_condition,
-          known_variable,
-          std::format("({})", known_expression));
+      if (!try_inline_known_expression(expanded_condition, known_variable, known_expression)) {
+        return std::nullopt;
+      }
     }
 
     // Safety: bail if a variable defined here is used only externally
@@ -734,7 +788,9 @@
         && code_block.code_branch.branch_condition_true != next_convergence
         && code_block.code_branch.branch_condition_false != next_convergence
         && std::ranges::find(structural_pending_convergences, code_block.code_branch.branch_condition_true) == structural_pending_convergences.end()
-        && std::ranges::find(structural_pending_convergences, code_block.code_branch.branch_condition_false) == structural_pending_convergences.end()) {
+        && std::ranges::find(structural_pending_convergences, code_block.code_branch.branch_condition_false) == structural_pending_convergences.end()
+        && !recursions.contains(code_block.code_branch.branch_condition_true)
+        && !recursions.contains(code_block.code_branch.branch_condition_false)) {
       auto message = std::format(
           "Unsupported loop detected at block {} (true={}, false={}, current_loop={}, next_convergence={})",
           line_number,
@@ -1657,7 +1713,14 @@
 
     // Deferred shared target setup
     std::vector<std::pair<int, std::string>> deferred_shared_targets;
-    const bool allow_deferred_shared_targets = !decompile_options.flatten;
+    // Structural always runs with flatten=true (forced on in Decompile), but the
+    // deferred-target mechanism below is exactly what prevents shared join/loop
+    // blocks from being duplicated along every reaching path. It must run
+    // regardless of flatten: its scope validation is derived from the
+    // (post-inline) hlsl_lines scanned at the top of this file, so it stays
+    // consistent with single-use inlining. Gating it on !flatten made the entire
+    // mechanism dead code under --structural and caused massive block duplication.
+    const bool allow_deferred_shared_targets = !decompile_options.flatten; // this both helps some things and hurts others so.... bleh
     if (pair_convergence != -1 && allow_deferred_shared_targets) {
       std::optional<int> deferred_target;
       size_t deferred_target_predecessor_count = 0;
@@ -1709,7 +1772,9 @@
           continue;
         }
         auto bridge_rejection_reason = get_convergence_bridge_rejection_reason(candidate_target);
-        if (bridge_rejection_reason.has_value()) continue;
+        if (bridge_rejection_reason.has_value()) {
+          continue;
+        }
         size_t candidate_predecessor_count = structural_predecessors.at(candidate_target).size();
         if (!deferred_target.has_value()
             || candidate_predecessor_count > deferred_target_predecessor_count
@@ -2093,7 +2158,11 @@
     on_complete();
   };  // end structural_append_code_block
 
-  if (uses_loop_jump_target) {
+  // The structural emitter can still produce break-to-ancestor loop jumps in
+  // on_branch_from() for some nested-loop shapes even when the conservative
+  // pre-scan above misses them. Declare the helper for any structural loop;
+  // unused locals are harmless, while missing this declaration breaks HLSL.
+  if (uses_loop_jump_target || !recursions.empty()) {
     string_stream << spacing << "int " << LOOP_JUMP_TARGET_NAME << " = -1;\n";
   }
 
