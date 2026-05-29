@@ -688,6 +688,7 @@ class Decompiler {
     std::string_view name;
     SignaturePacked packed;
     SignatureProperty property;
+    std::string variable_name_override;
 
     explicit Signature() = default;
 
@@ -713,6 +714,7 @@ class Decompiler {
 
     // eg: float; float3; float4
     [[nodiscard]] std::string VariableString() const {
+      if (!variable_name_override.empty()) return variable_name_override;
       if (property.index == 0) return std::string{this->name};
 
       std::stringstream string_stream;
@@ -874,10 +876,19 @@ class Decompiler {
       auto [name, type, format, dimensions, id, hlslBinding, count] = StringViewMatch<7>(line, regex);
 
       if (name.empty()) {
-        // Fallback for unusual formatting
+        // Fallback: split on 2+ space boundaries
         static auto alt_regex = std::regex{R"(; (.+?)\s{2,}(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*))"};
         auto [n, t, f, d, i, h, c] = StringViewMatch<7>(line, alt_regex);
         name = n; type = t; format = f; dimensions = d; id = i; hlslBinding = h; count = c;
+      }
+
+      // Handle merged type+format (e.g., "UAVunorm_f32" → type="UAV", format="unorm_f32")
+      if (name.empty() || type.empty()) {
+        static auto merged_regex = std::regex{R"(; (.+?)\s{2,}(UAV)(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*))"};
+        auto [n, t, f, d, i, h, c] = StringViewMatch<7>(line, merged_regex);
+        if (!n.empty()) {
+          name = n; type = t; format = f; dimensions = d; id = i; hlslBinding = h; count = c;
+        }
       }
 
       this->name = StringViewTrim(name);
@@ -1365,6 +1376,7 @@ class Decompiler {
   struct HeapResourceInfo {
     Resource::ResourceKind resource_kind = Resource::ResourceKind::Invalid;
     std::string data_type;
+    uint32_t stride = 0;
   };
 
   struct PreprocessState {
@@ -1427,6 +1439,19 @@ class Decompiler {
       if (resource_class == "0" && range_index < srv_resources.size()) return srv_resources[range_index].data_type;
       if (resource_class == "1" && range_index < uav_resources.size()) return uav_resources[range_index].data_type;
       return "float4";
+    }
+
+    // Helper to get the byte stride for structured resource binding variables.
+    uint32_t GetResourceStride(const std::string& var_name) const {
+      auto heap_it = heap_resource_info.find(var_name);
+      if (heap_it != heap_resource_info.end()) return heap_it->second.stride;
+      auto binding_it = resource_binding_variables.find(var_name);
+      if (binding_it == resource_binding_variables.end()) return 0;
+      auto& binding = binding_it->second;
+      auto [name, range_index, resource_class] = binding;
+      if (resource_class == "0" && range_index < srv_resources.size()) return srv_resources[range_index].stride;
+      if (resource_class == "1" && range_index < uav_resources.size()) return uav_resources[range_index].stride;
+      return 0;
     }
 
     size_t GetTypeSize(const DataType& data_type) {
@@ -1706,7 +1731,8 @@ class Decompiler {
           || effective_type_name.starts_with("%\"hostlayout.class.StructuredBuffer<") || effective_type_name.starts_with("%\"hostlayout.class.RWStructuredBuffer<")) {
         auto struct_pair = type_definitions.find(definition.variables[0].type);
         if (struct_pair != type_definitions.end()) {
-          return "." + DataTypeNameAtIndex(struct_pair->second.variables, index);
+          auto field_name = DataTypeNameAtIndex(struct_pair->second.variables, index);
+          return field_name.empty() ? "" : "." + field_name;
         }
         return GetSubValueFromType(definition.variables[0].type, DataType(definition.variables[0].type), index);
       }
@@ -1832,9 +1858,29 @@ class Decompiler {
           candidate_name = candidate_name.substr(0, array_start_index);
         }
 
-        if (candidate_name.empty()) {
-          assert(!candidate_name.empty());
-          break;
+        if (candidate_name.empty()
+            || candidate_name == "bool"
+            || candidate_name == "uint"
+            || candidate_name == "uint2"
+            || candidate_name == "uint3"
+            || candidate_name == "uint4"
+            || candidate_name == "int"
+            || candidate_name == "int2"
+            || candidate_name == "int3"
+            || candidate_name == "int4"
+            || candidate_name == "float"
+            || candidate_name == "float2"
+            || candidate_name == "float3"
+            || candidate_name == "float4"
+            || candidate_name == "half"
+            || candidate_name == "half2"
+            || candidate_name == "half3"
+            || candidate_name == "half4"
+            || candidate_name == "double") {
+          // DXC reflection sometimes emits padding/anonymous fields as e.g. `uint ;`.
+          // Keep the generated offset-based name so subsequent reflected fields stay aligned.
+          item.offset = line_offset_number - base_offset;
+          continue;
         }
 
         item.name.assign(candidate_name);
@@ -2066,6 +2112,44 @@ class Decompiler {
       ++count;
     }
 
+    bool EnsureResourceBindingVariable(const std::string& ref, PreprocessState& preprocess_state) {
+      if (preprocess_state.resource_binding_variables.contains(ref)) return true;
+
+      static const auto annotate_handle_regex = std::regex{
+          R"(^  %([A-Za-z0-9]+) = call %dx\.types\.Handle @dx\.op\.annotateHandle\(i32 \d+, %dx\.types\.Handle %([A-Za-z0-9]+),.*)"};
+
+      for (const auto& line : this->lines) {
+        const auto [annotated_ref, source_ref] = StringViewMatch<2>(line, annotate_handle_regex);
+        if (annotated_ref != ref) continue;
+
+        const std::string source_key{source_ref};
+        if (!preprocess_state.resource_binding_variables.contains(source_key)) {
+          EnsureResourceBindingVariable(source_key, preprocess_state);
+        }
+
+        const auto source_binding = preprocess_state.resource_binding_variables.find(source_key);
+        if (source_binding == preprocess_state.resource_binding_variables.end()) return false;
+
+        preprocess_state.resource_binding_variables[ref] = source_binding->second;
+        if (preprocess_state.cbv_handles_with_dynamic_access.contains(std::format("%{}", ref))) {
+          auto& binding = preprocess_state.resource_binding_variables[ref];
+          if (binding.resource_class == "2") {
+            preprocess_state.cbv_dynamic_access_indices.insert(binding.range_index);
+          }
+        }
+        return true;
+      }
+
+      return false;
+    }
+
+    ResourceBindingVariable& GetResourceBindingVariable(const std::string& ref, PreprocessState& preprocess_state) {
+      if (!EnsureResourceBindingVariable(ref, preprocess_state)) {
+        throw std::runtime_error(std::format("Resource binding not found for handle %{}", ref));
+      }
+      return preprocess_state.resource_binding_variables.at(ref);
+    }
+
     std::string ParseVariable(std::string_view input, const std::string& expected_type = "float") {
       auto result_string = std::string(input.substr(1));
       IncrementVariableCounter(input.substr(1));
@@ -2156,6 +2240,123 @@ class Decompiler {
       if (type == "i64") return ParseInt64(input);
       if (type == "half") return ParseHalf(input);
       return ParseFloat(input);
+    }
+
+    int CountDxilMaskComponents(std::string_view mask) {
+      int mask_val = 0;
+      FromStringView(mask, mask_val);
+      int component_count = 0;
+      if (mask_val & 1) component_count++;
+      if (mask_val & 2) component_count++;
+      if (mask_val & 4) component_count++;
+      if (mask_val & 8) component_count++;
+      return component_count == 0 ? 1 : component_count;
+    }
+
+    std::string BuildStructuredByteAddress(std::string_view index, std::string_view element_offset, uint32_t stride) {
+      auto byte_address = ParseInt(index);
+      if (stride > 1) {
+        byte_address = std::format("({} * {})", byte_address, stride);
+      }
+      if (element_offset != "undef" && element_offset != "0") {
+        byte_address = std::format("({} + {})", byte_address, ParseInt(element_offset));
+      }
+      return byte_address;
+    }
+
+    std::string ResolveStoredPointer(std::string_view pointer, PreprocessState& preprocess_state) {
+      const auto pointer_key = std::string(pointer);
+      if (auto it = stored_pointers.find(pointer);
+          it != stored_pointers.end() && !it->second.empty()) {
+        return it->second;
+      }
+
+      const std::string assignment_prefix = std::format("  %{} = ", pointer_key);
+      for (const auto& source_line : this->lines) {
+        if (!source_line.starts_with(assignment_prefix)) continue;
+        auto assignment = source_line.substr(assignment_prefix.size());
+        if (auto comment_pos = assignment.find(';'); comment_pos != std::string_view::npos) {
+          assignment = StringViewTrim(assignment.substr(0, comment_pos));
+        }
+
+        auto [array_size_str, element_type, source, index] = StringViewMatch<4>(
+            assignment,
+            std::regex{R"(getelementptr (?:inbounds )?\[(\d+) x ([^\]]+)\], \[[^\]]+\](?: addrspace\(\d+\))?\* (\S+), i32 \S+, i32 (\S+).*)"});
+        if (!array_size_str.empty()) {
+          int array_size = 0;
+          FromStringView(array_size_str, array_size);
+
+          std::string parsed_source;
+          if (source.starts_with('%')) {
+            parsed_source = std::format("_{}", source.substr(1));
+          } else if (source.starts_with('@')) {
+            if (auto pair = preprocess_state.global_variables.find(std::string(source));
+                pair != preprocess_state.global_variables.end()) {
+              parsed_source = pair->second;
+            } else {
+              auto source_str = std::string(source);
+              bool found_base = false;
+              auto last_quote = source_str.rfind('"');
+              if (last_quote != std::string::npos && last_quote > 0) {
+                auto inner = source_str.substr(0, last_quote);
+                while (!found_base) {
+                  auto last_dot = inner.rfind('.');
+                  if (last_dot == std::string::npos) break;
+                  auto suffix = inner.substr(last_dot + 1);
+                  bool all_digits = !suffix.empty() && std::ranges::all_of(suffix, [](char c) { return c >= '0' && c <= '9'; });
+                  if (!all_digits) break;
+                  inner = inner.substr(0, last_dot);
+                  auto candidate = inner + "\"";
+                  if (auto pair2 = preprocess_state.global_variables.find(candidate);
+                      pair2 != preprocess_state.global_variables.end()) {
+                    parsed_source = pair2->second;
+                    found_base = true;
+                  }
+                }
+              }
+              if (!found_base) {
+                parsed_source = std::format("/* {} */", source);
+              }
+            }
+          }
+
+          if (!parsed_source.empty()) {
+            auto parsed_index = ParseInt(index);
+            bool is_dynamic_index = index.starts_with('%');
+            std::string clamped_index;
+            if (is_dynamic_index && array_size > 0) {
+              clamped_index = std::format("min((uint)({}), {}u)", parsed_index, array_size - 1);
+            } else {
+              clamped_index = parsed_index;
+            }
+            const auto pointer_value = std::format("{}[{}]", parsed_source, clamped_index);
+            stored_pointers[pointer] = pointer_value;
+            if (!element_type.empty()) {
+              stored_pointer_element_types[pointer_key] = std::string(element_type);
+            }
+            return pointer_value;
+          }
+        }
+
+        static auto bitcast_regex = std::regex{R"(bitcast (\S+(?:\s+addrspace\(\d+\))?\*?) (\S+) to (\S+(?:\s+addrspace\(\d+\))?\*?))"};
+        auto [source_type, source_variable, dest_type] = StringViewMatch<3>(assignment, bitcast_regex);
+        if (!source_type.empty() && dest_type.find('*') != std::string_view::npos && source_variable.starts_with('%')) {
+          auto source_ref = source_variable.substr(1);
+          auto pointer_value = ResolveStoredPointer(source_ref, preprocess_state);
+          stored_pointers[pointer] = pointer_value;
+          auto it = stored_pointer_element_types.find(std::string(source_ref));
+          if (it != stored_pointer_element_types.end()) {
+            stored_pointer_element_types[pointer_key] = it->second;
+          }
+          return pointer_value;
+        }
+      }
+
+      if (auto it = stored_pointers.find(pointer);
+          it != stored_pointers.end()) {
+        return it->second;
+      }
+      return std::format("_{}", pointer);
     }
 
     CodeFunction() = default;
@@ -2287,6 +2488,9 @@ class Decompiler {
             auto srv = std::ranges::find_if(preprocess_state.srv_resources, [&](SRVResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
+            if (srv == preprocess_state.srv_resources.end()) {
+              throw std::runtime_error(std::format("createHandleFromBinding: SRV not found (space={}, index={})", space_value, bind_start_value));
+            }
             range_index = srv - preprocess_state.srv_resources.begin();
             name = srv->name;
             if (srv->array_size.has_value()) {
@@ -2300,6 +2504,9 @@ class Decompiler {
             auto uav = std::ranges::find_if(preprocess_state.uav_resources, [&](UAVResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
+            if (uav == preprocess_state.uav_resources.end()) {
+              throw std::runtime_error(std::format("createHandleFromBinding: UAV not found (space={}, index={})", space_value, bind_start_value));
+            }
             range_index = uav - preprocess_state.uav_resources.begin();
             name = uav->name;
             if (uav->array_size.has_value()) {
@@ -2313,6 +2520,9 @@ class Decompiler {
             auto cbv = std::ranges::find_if(preprocess_state.cbv_resources, [&](CBVResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
+            if (cbv == preprocess_state.cbv_resources.end()) {
+              throw std::runtime_error(std::format("createHandleFromBinding: CBV not found (space={}, index={})", space_value, bind_start_value));
+            }
             range_index = cbv - preprocess_state.cbv_resources.begin();
             name = cbv->name;
             if (cbv->array_size.has_value()) {
@@ -2326,6 +2536,9 @@ class Decompiler {
             auto sampler = std::find_if(preprocess_state.sampler_resources.begin(), preprocess_state.sampler_resources.end(), [&](SamplerResource& resource) {
               return resource.space == space_value && resource.signature_index == bind_start_value;
             });
+            if (sampler == preprocess_state.sampler_resources.end()) {
+              throw std::runtime_error(std::format("createHandleFromBinding: Sampler not found (space={}, index={})", space_value, bind_start_value));
+            }
             range_index = sampler - preprocess_state.sampler_resources.begin();
             name = sampler->name;
             if (sampler->array_size.has_value()) {
@@ -2375,7 +2588,7 @@ class Decompiler {
             uint32_t kind_bits = 0;
             if (!kind_bits_str.empty()) FromStringView(kind_bits_str, kind_bits);
             uint32_t resource_kind = kind_bits & 0xFF;
-            bool is_uav = (kind_bits >> 11) & 1;
+            bool is_uav = (kind_bits >> 12) & 1;
 
             auto& heap_info = heap_it->second;
             std::string synth_name = std::format("_HeapResource_{}", preprocess_state.heap_srv_counter++);
@@ -2398,6 +2611,8 @@ class Decompiler {
             std::string hint;
             std::string data_type;
             auto rk = static_cast<Resource::ResourceKind>(resource_kind);
+            uint32_t extra = 0;
+            if (!extra_str.empty()) FromStringView(extra_str, extra);
             if (rk == Resource::ResourceKind::RawBuffer) {
               hint = is_uav ? "RWByteAddressBuffer" : "ByteAddressBuffer";
               data_type = "";
@@ -2410,8 +2625,6 @@ class Decompiler {
             } else {
               // Texture types — parse element type from second props word
               // Second word: low 8 bits = component type, bits 8+ = component count
-              uint32_t extra = 0;
-              if (!extra_str.empty()) FromStringView(extra_str, extra);
               uint32_t comp_type = extra & 0xFF;
               uint32_t comp_count = (extra >> 8) & 0xFF;
               if (comp_count == 0) comp_count = 1;  // fallback
@@ -2441,6 +2654,7 @@ class Decompiler {
             preprocess_state.heap_resource_info[std::string(variable)] = {
                 .resource_kind = rk,
                 .data_type = data_type,
+              .stride = (rk == Resource::ResourceKind::StructuredBuffer) ? extra : 0,
             };
 
             // Emit actual variable declaration using ResourceDescriptorHeap
@@ -2558,10 +2772,10 @@ class Decompiler {
           auto& cbv_resource = preprocess_state.cbv_resources[range_index];
 
           if (regIndex.starts_with("%")) {
-            // Dynamic cbuffer offset — emit as array-style access via raw uint4 view
+            // Dynamic cbuffer offset — emit as array-style access via raw float4 view
             preprocess_state.cbv_dynamic_access_indices.insert(range_index);
             assignment_type = "float4";
-            assignment_value = std::format("asfloat({}_raw[{}])", cbv_resource.name, ParseVariable(regIndex));
+            assignment_value = std::format("{}_raw[{}]", cbv_resource.name, ParseVariable(regIndex));
             is_identity = false;
             use_comment = false;
           } else {
@@ -2582,10 +2796,10 @@ class Decompiler {
           auto& cbv_resource = preprocess_state.cbv_resources[range_index];
 
           if (regIndex.starts_with("%")) {
-            // Dynamic cbuffer offset — emit as array-style access via raw float4 view
+            // Dynamic cbuffer offset — emit as array-style access via overlapping raw uint4 view
             preprocess_state.cbv_dynamic_access_indices.insert(range_index);
             assignment_type = "int4";
-            assignment_value = std::format("asint({}_raw[{}])", cbv_resource.name, ParseVariable(regIndex));
+            assignment_value = std::format("asint({}_raw_uint[{}])", cbv_resource.name, ParseVariable(regIndex));
             is_identity = false;
             use_comment = false;
           } else {
@@ -2752,9 +2966,10 @@ class Decompiler {
           const bool has_offset_z = offset2 != "undef";
           const bool has_mip_level = mipLevelOrSampleCount != "undef";
           std::string coords;
-          auto [binding_name, range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto [binding_name, range_index, resource_class] = GetResourceBindingVariable(ref_resource, preprocess_state);
           Resource::ResourceKind shape = preprocess_state.GetResourceShape(ref_resource);
-          if (resource_class == "0") {
+          const bool is_heap_resource = preprocess_state.IsHeapResource(ref_resource);
+          if (resource_class == "0" || is_heap_resource) {
             assignment_type = preprocess_state.GetResourceDataType(ref_resource);
           } else if (resource_class == "1") {
             shape = preprocess_state.uav_resources[range_index].shape;
@@ -2801,12 +3016,27 @@ class Decompiler {
           } else {
             offset = std::format("{}", ParseInt(offset0));
           }
+          const bool is_uav_texture_load = resource_class == "1" && !is_heap_resource;
           if (offset == "undef" || offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
-            assignment_value = std::format("{}.Load({})", binding_name, coords);
+            assignment_value = is_uav_texture_load
+                                   ? std::format("{}[{}]", binding_name, coords)
+                                   : std::format("{}.Load({})", binding_name, coords);
             // decompiled = std::format("{} _{} = {}.Load({});", srv_resource.data_type, variable, binding_name, coords);
           } else {
-            assignment_value = std::format("{}.Load({}, {})", binding_name, coords, offset);
+            assignment_value = is_uav_texture_load
+                                   ? std::format("{}[{} + {}]", binding_name, coords, offset)
+                                   : std::format("{}.Load({}, {})", binding_name, coords, offset);
             // decompiled = std::format("{} _{} = {}.Load({}, {});", srv_resource.data_type, variable, binding_name, coords, offset);
+          }
+          if (is_uav_texture_load) {
+            int component_count = 1;
+            if (!assignment_type.empty()) {
+              char last_char = assignment_type.back();
+              if (last_char >= '2' && last_char <= '4') component_count = last_char - '0';
+            }
+            preprocess_state.uav_binding_load_variables[variable] = {
+                nullptr, assignment_value, std::to_string(component_count), "raw", ""};
+            use_comment = true;
           }
         } else if (functionName == "@dx.op.sample.f32" || functionName == "@dx.op.sample.f16") {
           //  call %dx.types.ResRet.f32 @dx.op.sample.f32(i32 60, %dx.types.Handle %1, %dx.types.Handle %2, float %4, float %5, float undef, float undef, i32 0, i32 0, i32 undef, float undef)  ; Sample(srv,sampler,coord0,coord1,coord2,coord3,offset0,offset1,offset2,clamp)
@@ -2839,9 +3069,9 @@ class Decompiler {
             throw std::runtime_error("Unknown clamp");
           }
 
-          auto [srv_name, srv_range_index, srv_resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
+          auto [srv_name, srv_range_index, srv_resource_class] = GetResourceBindingVariable(ref_resource, preprocess_state);
           assert(srv_resource_class == "0");
-          auto [sampler_name, sampler_range_index, sampler_resource_class] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto [sampler_name, sampler_range_index, sampler_resource_class] = GetResourceBindingVariable(ref_sampler, preprocess_state);
           auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
           assignment_type = preprocess_state.GetResourceDataType(ref_resource);
           if (offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
@@ -2882,8 +3112,8 @@ class Decompiler {
             offset = std::format("{}", ParseInt(offset0));
           }
 
-          auto [srv_name, srv_range_index, srv_resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
-          auto [sampler_name, sampler_range_index, sampler_resource_class] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto [srv_name, srv_range_index, srv_resource_class] = GetResourceBindingVariable(ref_resource, preprocess_state);
+          auto [sampler_name, sampler_range_index, sampler_resource_class] = GetResourceBindingVariable(ref_sampler, preprocess_state);
           auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
           assignment_type = preprocess_state.GetResourceDataType(ref_resource);
           if (offset == "" || offset == "0" || offset == "int2(0, 0)" || offset == "int3(0, 0, 0)") {
@@ -2912,8 +3142,8 @@ class Decompiler {
             coords = ParseFloat(coord0);
           }
 
-          auto [srv_name, srv_range_index, srv_resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
-          auto [sampler_name, sampler_range_index, sampler_resource_class] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto [srv_name, srv_range_index, srv_resource_class] = GetResourceBindingVariable(ref_resource, preprocess_state);
+          auto [sampler_name, sampler_range_index, sampler_resource_class] = GetResourceBindingVariable(ref_sampler, preprocess_state);
           assignment_type = "float";
           assignment_value = std::format(
               "{}.{}({}, {})",
@@ -2990,13 +3220,7 @@ class Decompiler {
 
           if (is_raw_buffer) {
             assert(elementOffset == "undef");
-            int mask_val;
-            FromStringView(mask, mask_val);
-            int component_count = 0;
-            if (mask_val & 1) component_count++;
-            if (mask_val & 2) component_count++;
-            if (mask_val & 4) component_count++;
-            if (mask_val & 8) component_count++;
+            int component_count = CountDxilMaskComponents(mask);
             std::string load_func = (component_count == 1) ? "Load" :
                                     std::format("Load{}", component_count);
             assignment_type = (component_count == 1) ? "float" :
@@ -3031,14 +3255,23 @@ class Decompiler {
                 res_name,
             };
           } else if (preprocess_state.IsHeapResource(ref)) {
-            // Heap-created structured buffer — store with nullptr resource
+            // Heap-created structured buffers are declared as ByteAddressBuffer.
+            // DXIL rawBufferLoad uses element index + byte offset, so turn it
+            // into a byte address instead of invalid ByteAddressBuffer[index].x.
+            int component_count = CountDxilMaskComponents(mask);
+            std::string load_func = (component_count == 1) ? "Load" :
+                                    std::format("Load{}", component_count);
+            auto byte_address = BuildStructuredByteAddress(index, elementOffset, preprocess_state.GetResourceStride(ref));
+            assignment_value = std::format("asfloat({}.{}({}))", res_name, load_func, byte_address);
+            std::string count_str = std::to_string(component_count);
             if (resource_class == "0") {
               preprocess_state.srv_binding_load_variables[variable] = {
-                  nullptr, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment), res_name};
+                  nullptr, assignment_value, count_str, "raw", ""};
             } else {
               preprocess_state.uav_binding_load_variables[variable] = {
-                  nullptr, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment), res_name};
+                  nullptr, assignment_value, count_str, "raw", ""};
             }
+            use_comment = true;
           }
         } else if (functionName == "@dx.op.rawBufferLoad.i32" || functionName == "@dx.op.rawBufferLoad.i16") {
           auto [opNumber, srv, index, elementOffset, mask, alignment] = StringViewSplit<6>(functionParamsString, param_regex, 2);
@@ -3049,13 +3282,7 @@ class Decompiler {
 
           if (is_raw_buffer) {
             assert(elementOffset == "undef");
-            int mask_val;
-            FromStringView(mask, mask_val);
-            int component_count = 0;
-            if (mask_val & 1) component_count++;
-            if (mask_val & 2) component_count++;
-            if (mask_val & 4) component_count++;
-            if (mask_val & 8) component_count++;
+            int component_count = CountDxilMaskComponents(mask);
             std::string load_func = (component_count == 1) ? "Load" :
                                     std::format("Load{}", component_count);
             assignment_type = (component_count == 1) ? "int" :
@@ -3088,13 +3315,77 @@ class Decompiler {
                 res_name,
             };
           } else if (preprocess_state.IsHeapResource(ref)) {
+            int component_count = CountDxilMaskComponents(mask);
+            std::string load_func = (component_count == 1) ? "Load" :
+                                    std::format("Load{}", component_count);
+            auto byte_address = BuildStructuredByteAddress(index, elementOffset, preprocess_state.GetResourceStride(ref));
+            assignment_value = std::format("asint({}.{}({}))", res_name, load_func, byte_address);
+            std::string count_str = std::to_string(component_count);
             if (resource_class == "0") {
               preprocess_state.srv_binding_load_variables[variable] = {
-                  nullptr, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment), res_name};
+                  nullptr, assignment_value, count_str, "raw", ""};
             } else {
               preprocess_state.uav_binding_load_variables[variable] = {
-                  nullptr, ParseInt(index), ParseInt(elementOffset), ParseInt(alignment), res_name};
+                  nullptr, assignment_value, count_str, "raw", ""};
             }
+            use_comment = true;
+          }
+        } else if (functionName == "@dx.op.rawBufferLoad.i64") {
+          // call %dx.types.ResRet.i64 @dx.op.rawBufferLoad.i64(i32 139, %dx.types.Handle %29, i32 %8, i32 0, i8 1, i32 8)  ; RawBufferLoad(srv,index,elementOffset,mask,alignment)
+          auto [opNumber, srv, index, elementOffset, mask, alignment] = StringViewSplit<6>(functionParamsString, param_regex, 2);
+          auto ref = std::string{srv.substr(1)};
+          auto binding = preprocess_state.resource_binding_variables.at(ref);
+          auto [res_name, range_index, resource_class] = binding;
+          bool is_raw_buffer = preprocess_state.GetResourceShape(ref) == Resource::ResourceKind::RawBuffer;
+
+          if (is_raw_buffer) {
+            int component_count = CountDxilMaskComponents(mask);
+            std::string load_type = (component_count == 1) ? "int64_t" : std::format("int64_t{}", component_count);
+            std::string byte_offset = ParseInt(index);
+            if (elementOffset != "undef" && elementOffset != "0") {
+              byte_offset = std::format("({} + {})", byte_offset, ParseInt(elementOffset));
+            }
+            assignment_type = load_type;
+            assignment_value = std::format("{}.Load<{}>({})", res_name, load_type, byte_offset);
+            std::string count_str = std::to_string(component_count);
+            if (resource_class == "0") {
+              preprocess_state.srv_binding_load_variables[variable] = {
+                  nullptr, assignment_value, count_str, "raw", ""};
+            } else {
+              preprocess_state.uav_binding_load_variables[variable] = {
+                  nullptr, assignment_value, count_str, "raw", ""};
+            }
+            use_comment = true;
+          } else if (!preprocess_state.IsHeapResource(ref) && resource_class == "0") {
+            preprocess_state.srv_binding_load_variables[variable] = {
+                &preprocess_state.srv_resources[range_index],
+                ParseInt(index),
+                ParseInt(elementOffset),
+                ParseInt(alignment),
+                res_name,
+            };
+          } else if (!preprocess_state.IsHeapResource(ref) && resource_class == "1") {
+            preprocess_state.uav_binding_load_variables[variable] = {
+                &preprocess_state.uav_resources[range_index],
+                ParseInt(index),
+                ParseInt(elementOffset),
+                ParseInt(alignment),
+                res_name,
+            };
+          } else if (preprocess_state.IsHeapResource(ref)) {
+            int component_count = CountDxilMaskComponents(mask);
+            std::string load_type = (component_count == 1) ? "int64_t" : std::format("int64_t{}", component_count);
+            auto byte_address = BuildStructuredByteAddress(index, elementOffset, preprocess_state.GetResourceStride(ref));
+            assignment_value = std::format("{}.Load<{}>({})", res_name, load_type, byte_address);
+            std::string count_str = std::to_string(component_count);
+            if (resource_class == "0") {
+              preprocess_state.srv_binding_load_variables[variable] = {
+                  nullptr, assignment_value, count_str, "raw", ""};
+            } else {
+              preprocess_state.uav_binding_load_variables[variable] = {
+                  nullptr, assignment_value, count_str, "raw", ""};
+            }
+            use_comment = true;
           }
         } else if (functionName == "@dx.op.bufferLoad.i32" || functionName == "@dx.op.bufferLoad.i16") {
           // call %dx.types.ResRet.i32 @dx.op.bufferLoad.i32(i32 68, %dx.types.Handle %4, i32 6, i32 undef)  ; BufferLoad(srv,index,wot)
@@ -3291,8 +3582,8 @@ class Decompiler {
             offset = std::format("{}", ParseInt(offset0));
           }
 
-          auto [srv_name, srv_range_index, srv_resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
-          auto [sampler_name, sampler_range_index, sampler_resource_class] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto [srv_name, srv_range_index, srv_resource_class] = GetResourceBindingVariable(ref_resource, preprocess_state);
+          auto [sampler_name, sampler_range_index, sampler_resource_class] = GetResourceBindingVariable(ref_sampler, preprocess_state);
           auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
 
           assignment_type = preprocess_state.GetResourceDataType(ref_resource);
@@ -3351,8 +3642,8 @@ class Decompiler {
             ddy = std::format("{}", ParseFloat(ddy0));
           }
 
-          auto [srv_name, srv_range_index, srv_resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
-          auto [sampler_name, sampler_range_index, sampler_resource_class] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto [srv_name, srv_range_index, srv_resource_class] = GetResourceBindingVariable(ref_resource, preprocess_state);
+          auto [sampler_name, sampler_range_index, sampler_resource_class] = GetResourceBindingVariable(ref_sampler, preprocess_state);
           auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
 
           assignment_type = preprocess_state.GetResourceDataType(ref_resource);
@@ -3388,8 +3679,8 @@ class Decompiler {
             offset = std::format("{}", ParseInt(offset0));
           }
 
-          auto [srv_name, srv_range_index, srv_resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
-          auto [sampler_name, sampler_range_index, sampler_resource_class] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto [srv_name, srv_range_index, srv_resource_class] = GetResourceBindingVariable(ref_resource, preprocess_state);
+          auto [sampler_name, sampler_range_index, sampler_resource_class] = GetResourceBindingVariable(ref_sampler, preprocess_state);
           auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
 
           assignment_type = preprocess_state.GetResourceDataType(ref_resource);
@@ -3418,8 +3709,8 @@ class Decompiler {
             offset = std::format("{}", ParseInt(offset0));
           }
 
-          auto [srv_name, srv_range_index, srv_resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
-          auto [sampler_name, sampler_range_index, sampler_resource_class] = preprocess_state.resource_binding_variables.at(ref_sampler);
+          auto [srv_name, srv_range_index, srv_resource_class] = GetResourceBindingVariable(ref_resource, preprocess_state);
+          auto [sampler_name, sampler_range_index, sampler_resource_class] = GetResourceBindingVariable(ref_sampler, preprocess_state);
           auto sampler_resource = preprocess_state.sampler_resources[sampler_range_index];
           std::string channel_string;
           if (channel == "0") {
@@ -3441,6 +3732,22 @@ class Decompiler {
             assignment_type = "float4";
           }
           assignment_value = std::format("{}.Gather{}({}, {})", srv_name, channel_string, sampler_name, coords);
+        } else if (functionName == "@dx.op.textureGatherCmp.f32") {
+          // %X = call %dx.types.ResRet.f32 @dx.op.textureGatherCmp.f32(i32 74, %dx.types.Handle %srv, %dx.types.Handle %samp, float %c0, float %c1, float %c2, float %c3, i32 off0, i32 off1, i32 channel, float %cmpVal)
+          auto [op, srv, sampler, coord0, coord1, coord2, coord3, offset0, offset1, channel, compareValue] = StringViewSplit<11>(functionParamsString, param_regex, 2);
+          auto ref_resource = std::string{srv.substr(1)};
+          auto ref_sampler = std::string{sampler.substr(1)};
+          const bool has_coord_z = coord2 != "undef";
+          std::string coords;
+          if (has_coord_z) {
+            coords = std::format("float3({}, {}, {})", ParseFloat(coord0), ParseFloat(coord1), ParseFloat(coord2));
+          } else {
+            coords = std::format("float2({}, {})", ParseFloat(coord0), ParseFloat(coord1));
+          }
+          auto [srv_name, srv_range_index, srv_resource_class] = GetResourceBindingVariable(ref_resource, preprocess_state);
+          auto [sampler_name, sampler_range_index, sampler_resource_class] = GetResourceBindingVariable(ref_sampler, preprocess_state);
+          assignment_type = "float4";
+          assignment_value = std::format("{}.GatherCmp({}, {}, {})", srv_name, sampler_name, coords, ParseFloat(compareValue));
         } else if (functionName == "@dx.op.waveReadLaneFirst.f32") {
           // call float @dx.op.waveReadLaneFirst.f32(i32 118, float %503)  ; WaveReadLaneFirst(value)
           auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -3451,6 +3758,10 @@ class Decompiler {
           auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
           assignment_type = "int";
           assignment_value = std::format("WaveReadLaneFirst{}", ParseWrapped(ParseInt(value)));
+        } else if (functionName == "@dx.op.waveReadLaneFirst.i1") {
+          auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "bool";
+          assignment_value = std::format("WaveReadLaneFirst{}", ParseWrapped(ParseBool(value)));
 
         } else if (functionName == "@dx.op.waveActiveOp.i32") {
           // call i32 @dx.op.waveActiveOp.i32(i32 119, i32 %140, i8 3, i8 1)  ; WaveActiveOp(value,op,sop)
@@ -3552,6 +3863,27 @@ class Decompiler {
           // %347 = call i32 @dx.op.waveGetLaneIndex(i32 111)  ; WaveGetLaneIndex()
           assignment_type = "int";
           assignment_value = "WaveGetLaneIndex()";
+        } else if (functionName == "@dx.op.waveActiveAllEqual.i32"
+                   || functionName == "@dx.op.waveActiveAllEqual.f32"
+                   || functionName == "@dx.op.waveActiveAllEqual.i1") {
+          // %254 = call i1 @dx.op.waveActiveAllEqual.i32(i32 115, i32 %246)  ; WaveActiveAllEqual(value)
+          auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
+          assignment_type = "bool";
+          if (functionName.ends_with(".f32")) {
+            assignment_value = std::format("WaveActiveAllEqual{}", ParseWrapped(ParseFloat(value)));
+          } else if (functionName.ends_with(".i1")) {
+            assignment_value = std::format("WaveActiveAllEqual{}", ParseWrapped(ParseBool(value)));
+          } else {
+            assignment_value = std::format("WaveActiveAllEqual{}", ParseWrapped(ParseInt(value)));
+          }
+        } else if (functionName == "@dx.op.sampleIndex.i32") {
+          // %36 = call i32 @dx.op.sampleIndex.i32(i32 90)  ; SampleIndex()
+          assignment_type = "uint";
+          assignment_value = "SV_SampleIndex";
+        } else if (functionName == "@dx.op.isHelperLane.i1") {
+          // %449 = call i1 @dx.op.isHelperLane.i1(i32 221)  ; IsHelperLane()
+          assignment_type = "bool";
+          assignment_value = "IsHelperLane()";
         } else if (functionName == "@dx.op.waveActiveBallot") {
           // %X = call %dx.types.fouri32 @dx.op.waveActiveBallot(i32 116, i1 %cond)  ; WaveActiveBallot(cond)
           auto [opNumber, cond] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -3594,6 +3926,12 @@ class Decompiler {
           else if (wave_op == "1") op_name = "WaveMultiPrefixProduct";
           else op_name = std::format("WaveMultiPrefixOp/*op={}*/", wave_op);
           assignment_value = std::format("{}({}, {})", op_name, val_parsed, mask_str);
+        } else if (functionName == "@dx.op.waveMultiPrefixBitCount") {
+          // %170 = call i32 @dx.op.waveMultiPrefixBitCount(i32 167, i1 true, i32 %166, i32 %167, i32 %168, i32 %169)  ; WaveMultiPrefixBitCount(value,mask0,mask1,mask2,mask3)
+          auto [op_id, value, m0, m1, m2, m3] = StringViewSplit<6>(functionParamsString, param_regex, 2);
+          auto mask_str = std::format("uint4({}, {}, {}, {})", ParseUint(m0), ParseUint(m1), ParseUint(m2), ParseUint(m3));
+          assignment_type = "uint";
+          assignment_value = std::format("WaveMultiPrefixCountBits({}, {})", ParseBool(value), mask_str);
         } else if (functionName == "@dx.op.quadReadLaneAt.f32") {
           // call float @dx.op.quadReadLaneAt.f32(i32 122, float %val, i32 0)  ; QuadReadLaneAt(value,quadLane)
           auto [op, value, quadLane] = StringViewSplit<3>(functionParamsString, param_regex, 2);
@@ -3611,6 +3949,28 @@ class Decompiler {
           auto [op, value, quadLane] = StringViewSplit<3>(functionParamsString, param_regex, 2);
           assignment_type = "int16_t";
           assignment_value = std::format("QuadReadLaneAt({}, {})", ParseInt(value), ParseInt(quadLane));
+        } else if (functionName == "@dx.op.quadOp.f32") {
+          // %1158 = call float @dx.op.quadOp.f32(i32 123, float %1143, i8 0)  ; QuadOp(value,op)
+          // op: 0=ReadAcrossX, 1=ReadAcrossY, 2=ReadAcrossDiagonal
+          auto [op, value, quadOp] = StringViewSplit<3>(functionParamsString, param_regex, 2);
+          assignment_type = "float";
+          if (quadOp == "0") {
+            assignment_value = std::format("QuadReadAcrossX({})", ParseFloat(value));
+          } else if (quadOp == "1") {
+            assignment_value = std::format("QuadReadAcrossY({})", ParseFloat(value));
+          } else {
+            assignment_value = std::format("QuadReadAcrossDiagonal({})", ParseFloat(value));
+          }
+        } else if (functionName == "@dx.op.quadOp.i32") {
+          auto [op, value, quadOp] = StringViewSplit<3>(functionParamsString, param_regex, 2);
+          assignment_type = "int";
+          if (quadOp == "0") {
+            assignment_value = std::format("QuadReadAcrossX({})", ParseInt(value));
+          } else if (quadOp == "1") {
+            assignment_value = std::format("QuadReadAcrossY({})", ParseInt(value));
+          } else {
+            assignment_value = std::format("QuadReadAcrossDiagonal({})", ParseInt(value));
+          }
         } else if (functionName == "@dx.op.legacyF32ToF16") {
           //   %1390 = call i32 @dx.op.legacyF32ToF16(i32 130, float %115)  ; LegacyF32ToF16(value)
           auto [op, value] = StringViewSplit<2>(functionParamsString, param_regex, 2);
@@ -3794,6 +4154,7 @@ class Decompiler {
 
           auto uav_resource = preprocess_state.uav_resources[uav_range_index];
           const bool has_offset_y = offset1 != "undef";
+          const bool has_offset_z = offset2 != "undef";
           const bool is_raw_buffer = (uav_resource.shape == Resource::ResourceKind::RawBuffer);
           const bool is_structured = (uav_resource.shape == Resource::ResourceKind::StructuredBuffer);
           std::string target;
@@ -3826,6 +4187,8 @@ class Decompiler {
             target = std::format("{}[{}]{}", uav_name, ParseInt(offset0), field_access);
           } else if (is_structured) {
             target = std::format("{}[{}]", uav_name, ParseInt(offset0));
+          } else if (has_offset_z) {
+            target = std::format("{}[int3({}, {}, {})]", uav_name, ParseInt(offset0), ParseInt(offset1), ParseInt(offset2));
           } else if (has_offset_y) {
             target = std::format("{}[int2({}, {})]", uav_name, ParseInt(offset0), ParseInt(offset1));
           } else {
@@ -3878,6 +4241,7 @@ class Decompiler {
             case 204: assignment_value = std::format("{}.CandidatePrimitiveIndex()", rq_var); break;
             case 207: assignment_value = std::format("{}.CommittedInstanceIndex()", rq_var); break;
             case 208: assignment_value = std::format("{}.CommittedInstanceID()", rq_var); break;
+            case 215: assignment_value = std::format("{}.CommittedInstanceContributionToHitGroupIndex()", rq_var); break;
             case 209: assignment_value = std::format("{}.CommittedGeometryIndex()", rq_var); break;
             case 210: assignment_value = std::format("{}.CommittedPrimitiveIndex()", rq_var); break;
             default: throw std::runtime_error(std::format("Unknown rayQuery_StateScalar.i32 opcode {}", op_code));
@@ -3951,11 +4315,22 @@ class Decompiler {
             int literal_index;
             FromStringView(index, literal_index);
 
-            // Check if this cbuffer uses dynamic access (float4 array only)
+            // Check if this cbuffer uses dynamic access (overlapping raw float4/uint4 arrays)
             auto cbv_range_idx = static_cast<uint32_t>(cbv_resource - preprocess_state.cbv_resources.data());
             if (preprocess_state.cbv_dynamic_access_indices.count(cbv_range_idx)) {
-              // Use raw array access: cbuffer_raw[regIndex].component (uint4, reinterpret as float)
-              assignment_value = std::format("asfloat({}_raw[{}u].{})", cbv_resource->name, cbv_variable_index, ParseIndex(index));
+              // Use raw float access to preserve cbufferLoadLegacy.f32 in recompiled DXIL.
+              const uint32_t full_register_count = cbv_resource->buffer_size / 16u;
+              const uint32_t tail_bytes = cbv_resource->buffer_size % 16u;
+              const uint32_t tail_component_count = (tail_bytes + 3u) / 4u;
+              const uint32_t component_index = static_cast<uint32_t>(literal_index);
+              if (tail_bytes != 0u && cbv_variable_index >= full_register_count) {
+                if (cbv_variable_index != full_register_count || component_index >= tail_component_count) {
+                  throw std::runtime_error("Static cbuffer f32 access exceeds dynamic raw tail view");
+                }
+                assignment_value = std::format("{}_raw_tail.{}", cbv_resource->name, ParseIndex(index));
+              } else {
+                assignment_value = std::format("{}_raw[{}u].{}", cbv_resource->name, cbv_variable_index, ParseIndex(index));
+              }
             } else {
               auto value_from_reflection = preprocess_state.ResourceVariableNameAtIndex(*cbv_resource, (cbv_variable_index * 16) + (literal_index * 4));
 
@@ -3994,11 +4369,22 @@ class Decompiler {
             int literal_index;
             FromStringView(index, literal_index);
 
-            // Check if this cbuffer uses dynamic access (float4 array only)
+            // Check if this cbuffer uses dynamic access (overlapping raw float4/uint4 arrays)
             auto cbv_range_idx = static_cast<uint32_t>(cbv_resource - preprocess_state.cbv_resources.data());
             if (preprocess_state.cbv_dynamic_access_indices.count(cbv_range_idx)) {
-              // Use raw array access: cbuffer_raw[regIndex].component
-              assignment_value = std::format("asint({}_raw[{}u].{})", cbv_resource->name, cbv_variable_index, ParseIndex(index));
+              // Use raw uint access to preserve cbufferLoadLegacy.i32 in recompiled DXIL.
+              const uint32_t full_register_count = cbv_resource->buffer_size / 16u;
+              const uint32_t tail_bytes = cbv_resource->buffer_size % 16u;
+              const uint32_t tail_component_count = (tail_bytes + 3u) / 4u;
+              const uint32_t component_index = static_cast<uint32_t>(literal_index);
+              if (tail_bytes != 0u && cbv_variable_index >= full_register_count) {
+                if (cbv_variable_index != full_register_count || component_index >= tail_component_count) {
+                  throw std::runtime_error("Static cbuffer i32 access exceeds dynamic raw tail view");
+                }
+                assignment_value = std::format("asint({}_raw_uint_tail.{})", cbv_resource->name, ParseIndex(index));
+              } else {
+                assignment_value = std::format("asint({}_raw_uint[{}u].{})", cbv_resource->name, cbv_variable_index, ParseIndex(index));
+              }
             } else {
               auto value_from_reflection = preprocess_state.ResourceVariableNameAtIndex(*cbv_resource, (cbv_variable_index * 16) + (literal_index * 4));
 
@@ -4035,10 +4421,20 @@ class Decompiler {
               // f16.8: indices 0-3 = low 16 bits of xyzw, 4-7 = high 16 bits
               int component = literal_index % 4;
               bool high_half = literal_index >= 4;
+              const uint32_t full_register_count = cbv_resource->buffer_size / 16u;
+              const uint32_t tail_bytes = cbv_resource->buffer_size % 16u;
+              const uint32_t tail_component_count = (tail_bytes + 3u) / 4u;
+              const bool use_tail = tail_bytes != 0u && cbv_variable_index >= full_register_count;
+              if (use_tail && (cbv_variable_index != full_register_count || static_cast<uint32_t>(component) >= tail_component_count)) {
+                throw std::runtime_error("Static cbuffer f16 access exceeds dynamic raw tail view");
+              }
+              const auto raw_uint_access = use_tail
+                                             ? std::format("{}_raw_uint_tail.{}", cbv_resource->name, VECTOR_INDEXES[component])
+                                             : std::format("{}_raw_uint[{}u].{}", cbv_resource->name, cbv_variable_index, VECTOR_INDEXES[component]);
               if (high_half) {
-                assignment_value = std::format("f16tof32({}_raw[{}u].{} >> 16u)", cbv_resource->name, cbv_variable_index, VECTOR_INDEXES[component]);
+                assignment_value = std::format("f16tof32({} >> 16u)", raw_uint_access);
               } else {
-                assignment_value = std::format("f16tof32({}_raw[{}u].{})", cbv_resource->name, cbv_variable_index, VECTOR_INDEXES[component]);
+                assignment_value = std::format("f16tof32({})", raw_uint_access);
               }
             } else {
               auto value_from_reflection = preprocess_state.ResourceVariableNameAtIndex(*cbv_resource, (cbv_variable_index * 16) + (literal_index * 2));
@@ -4086,12 +4482,16 @@ class Decompiler {
               FromStringView(element_offset, literal_element_offset);
               int literal_alignment;
               FromStringView(alignment, literal_alignment);
-              // Use binding name (includes array index for unbounded arrays) instead of resource name
-              auto& access_name = srv_binding_name.empty() ? srv_resource->name : srv_binding_name;
-              assignment_value = std::format("{}[{}]{}",
-                                             access_name,
-                                             ParseInt(srv_index),
-                                             preprocess_state.ResourceVariableNameAtIndex(*srv_resource, (literal_element_offset) + (literal_index * 4)));
+              if (srv_resource) {
+                auto& access_name = srv_binding_name.empty() ? srv_resource->name : srv_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*srv_resource, (literal_element_offset) + (literal_index * 4)));
+              } else {
+                // Heap resource without type info — use raw component access
+                assignment_value = std::format("{}[{}].{}", srv_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
               is_identity = false;
               use_comment = false;
             }
@@ -4117,10 +4517,16 @@ class Decompiler {
               FromStringView(element_offset, literal_element_offset);
               int literal_alignment;
               FromStringView(alignment, literal_alignment);
-              assignment_value = std::format("{}[{}]{}",
-                                             (uav_binding_name.empty() ? uav_resource->name : uav_binding_name),
-                                             ParseInt(srv_index),
-                                             preprocess_state.ResourceVariableNameAtIndex(*uav_resource, (literal_element_offset) + (literal_index * 4)));
+              if (uav_resource) {
+                auto& access_name = uav_binding_name.empty() ? uav_resource->name : uav_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*uav_resource, (literal_element_offset) + (literal_index * 4)));
+              } else {
+                // Heap resource without type info — use raw component access
+                assignment_value = std::format("{}[{}].{}", uav_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
               is_identity = false;
               use_comment = false;
             }
@@ -4157,11 +4563,16 @@ class Decompiler {
               FromStringView(element_offset, literal_element_offset);
               int literal_alignment;
               FromStringView(alignment, literal_alignment);
-              auto& access_name = srv_binding_name.empty() ? srv_resource->name : srv_binding_name;
-              assignment_value = std::format("{}[{}]{}",
-                                             access_name,
-                                             ParseInt(srv_index),
-                                             preprocess_state.ResourceVariableNameAtIndex(*srv_resource, (literal_element_offset) + (literal_index * 2)));
+              if (srv_resource) {
+                auto& access_name = srv_binding_name.empty() ? srv_resource->name : srv_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*srv_resource, (literal_element_offset) + (literal_index * 2)));
+              } else {
+                // Heap resource without type info — use raw component access
+                assignment_value = std::format("{}[{}].{}", srv_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
               is_identity = false;
               use_comment = false;
             }
@@ -4187,10 +4598,16 @@ class Decompiler {
               FromStringView(element_offset, literal_element_offset);
               int literal_alignment;
               FromStringView(alignment, literal_alignment);
-              assignment_value = std::format("{}[{}]{}",
-                                             (uav_binding_name.empty() ? uav_resource->name : uav_binding_name),
-                                             ParseInt(srv_index),
-                                             preprocess_state.ResourceVariableNameAtIndex(*uav_resource, (literal_element_offset) + (literal_index * 2)));
+              if (uav_resource) {
+                auto& access_name = uav_binding_name.empty() ? uav_resource->name : uav_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*uav_resource, (literal_element_offset) + (literal_index * 2)));
+              } else {
+                // Heap resource without type info — use raw component access
+                assignment_value = std::format("{}[{}].{}", uav_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
               is_identity = false;
               use_comment = false;
             }
@@ -4223,11 +4640,16 @@ class Decompiler {
               FromStringView(element_offset, literal_element_offset);
               int literal_alignment;
               FromStringView(alignment, literal_alignment);
-              auto& access_name = srv_binding_name.empty() ? srv_resource->name : srv_binding_name;
-              assignment_value = std::format("{}[{}]{}",
-                                             access_name,
-                                             ParseInt(srv_index),
-                                             preprocess_state.ResourceVariableNameAtIndex(*srv_resource, (literal_element_offset) + (literal_index * 4)));
+              if (srv_resource) {
+                auto& access_name = srv_binding_name.empty() ? srv_resource->name : srv_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*srv_resource, (literal_element_offset) + (literal_index * 4)));
+              } else {
+                // Heap resource without type info — use raw component access
+                assignment_value = std::format("{}[{}].{}", srv_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
               is_identity = false;
               use_comment = false;
             }
@@ -4253,10 +4675,16 @@ class Decompiler {
               FromStringView(element_offset, literal_element_offset);
               int literal_alignment;
               FromStringView(alignment, literal_alignment);
-              assignment_value = std::format("{}[{}]{}",
-                                             (uav_binding_name.empty() ? uav_resource->name : uav_binding_name),
-                                             ParseInt(srv_index),
-                                             preprocess_state.ResourceVariableNameAtIndex(*uav_resource, (literal_element_offset) + (literal_index * 4)));
+              if (uav_resource) {
+                auto& access_name = uav_binding_name.empty() ? uav_resource->name : uav_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*uav_resource, (literal_element_offset) + (literal_index * 4)));
+              } else {
+                // Heap resource without type info — use raw component access
+                assignment_value = std::format("{}[{}].{}", uav_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
               is_identity = false;
               use_comment = false;
             }
@@ -4291,11 +4719,16 @@ class Decompiler {
               FromStringView(element_offset, literal_element_offset);
               int literal_alignment;
               FromStringView(alignment, literal_alignment);
-              auto& access_name = srv_binding_name.empty() ? srv_resource->name : srv_binding_name;
-              assignment_value = std::format("{}[{}]{}",
-                                             access_name,
-                                             ParseInt(srv_index),
-                                             preprocess_state.ResourceVariableNameAtIndex(*srv_resource, (literal_element_offset) + (literal_index * 2)));
+              if (srv_resource) {
+                auto& access_name = srv_binding_name.empty() ? srv_resource->name : srv_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*srv_resource, (literal_element_offset) + (literal_index * 2)));
+              } else {
+                // Heap resource without type info — use raw component access
+                assignment_value = std::format("{}[{}].{}", srv_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
               is_identity = false;
               use_comment = false;
             }
@@ -4321,10 +4754,91 @@ class Decompiler {
               FromStringView(element_offset, literal_element_offset);
               int literal_alignment;
               FromStringView(alignment, literal_alignment);
-              assignment_value = std::format("{}[{}]{}",
-                                             (uav_binding_name.empty() ? uav_resource->name : uav_binding_name),
-                                             ParseInt(srv_index),
-                                             preprocess_state.ResourceVariableNameAtIndex(*uav_resource, (literal_element_offset) + (literal_index * 2)));
+              if (uav_resource) {
+                auto& access_name = uav_binding_name.empty() ? uav_resource->name : uav_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*uav_resource, (literal_element_offset) + (literal_index * 2)));
+              } else {
+                // Heap resource without type info — use raw component access
+                assignment_value = std::format("{}[{}].{}", uav_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
+              is_identity = false;
+              use_comment = false;
+            }
+          } else {
+            assignment_value = std::format("{}.{}", ParseVariable(input), ParseIndex(index));
+            is_identity = true;
+          }
+        } else if (type == R"(%dx.types.ResRet.i64)") {
+          auto source_variable = raw_source_variable;
+          assignment_type = "int64_t";
+          if (auto pair = preprocess_state.srv_binding_load_variables.find(source_variable);
+              pair != preprocess_state.srv_binding_load_variables.end()) {
+            const auto& [srv_resource, srv_index, element_offset, alignment, srv_binding_name] = pair->second;
+            if (alignment == "raw") {
+              int comp_count = 0;
+              FromStringView(element_offset, comp_count);
+              int literal_index;
+              FromStringView(index, literal_index);
+              if (comp_count == 1) {
+                assignment_value = srv_index;
+              } else {
+                assignment_value = std::format("{}.{}", srv_index, ParseIndex(index));
+              }
+              is_identity = false;
+              use_comment = false;
+            } else {
+              int literal_index;
+              FromStringView(index, literal_index);
+              int literal_element_offset;
+              FromStringView(element_offset, literal_element_offset);
+              int literal_alignment;
+              FromStringView(alignment, literal_alignment);
+              if (srv_resource) {
+                auto& access_name = srv_binding_name.empty() ? srv_resource->name : srv_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*srv_resource, (literal_element_offset) + (literal_index * 8)));
+              } else {
+                assignment_value = std::format("{}[{}].{}", srv_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
+              is_identity = false;
+              use_comment = false;
+            }
+          } else if (auto pair = preprocess_state.uav_binding_load_variables.find(source_variable);
+                     pair != preprocess_state.uav_binding_load_variables.end()) {
+            const auto& [uav_resource, srv_index, element_offset, alignment, uav_binding_name] = pair->second;
+            if (alignment == "raw") {
+              int comp_count = 0;
+              FromStringView(element_offset, comp_count);
+              int literal_index;
+              FromStringView(index, literal_index);
+              if (comp_count == 1) {
+                assignment_value = srv_index;
+              } else {
+                assignment_value = std::format("{}.{}", srv_index, ParseIndex(index));
+              }
+              is_identity = false;
+              use_comment = false;
+            } else {
+              int literal_index;
+              FromStringView(index, literal_index);
+              int literal_element_offset;
+              FromStringView(element_offset, literal_element_offset);
+              int literal_alignment;
+              FromStringView(alignment, literal_alignment);
+              if (uav_resource) {
+                auto& access_name = uav_binding_name.empty() ? uav_resource->name : uav_binding_name;
+                assignment_value = std::format("{}[{}]{}",
+                                               access_name,
+                                               ParseInt(srv_index),
+                                               preprocess_state.ResourceVariableNameAtIndex(*uav_resource, (literal_element_offset) + (literal_index * 8)));
+              } else {
+                assignment_value = std::format("{}[{}].{}", uav_binding_name, ParseInt(srv_index), VECTOR_INDEXES[literal_index]);
+              }
               is_identity = false;
               use_comment = false;
             }
@@ -4412,7 +4926,7 @@ class Decompiler {
         // %39 = fcmp fast ogt float %37, 0.000000e+00
         auto [fast, op, value_type, a, b] = StringViewMatch<5>(assignment, std::regex{R"(fcmp (fast )?(\S+) (\S+) (\S+), (\S+))"});
 
-        bool is_fast = !fast.empty();
+        (void)fast;
         assignment_type = "bool";
 
         auto a_parsed = ParseByType(a, value_type);
@@ -4434,42 +4948,17 @@ class Decompiler {
         } else if (op == "ord") {
           assignment_value = std::format("(!isnan{} && !isnan{})", ParseWrapped(a_parsed), ParseWrapped(b_parsed));
         } else if (op == "ueq") {
-          // With fast: unordered == ordered, emit direct comparison
-          if (is_fast) {
-            assignment_value = std::format("({} == {})", a_parsed, b_parsed);
-          } else {
-            assignment_value = std::format("!({} != {})", a_parsed, b_parsed);
-          }
+          assignment_value = std::format("!({} != {})", a_parsed, b_parsed);
         } else if (op == "ugt") {
-          if (is_fast) {
-            assignment_value = std::format("({} > {})", a_parsed, b_parsed);
-          } else {
-            assignment_value = std::format("!({} <= {})", a_parsed, b_parsed);
-          }
+          assignment_value = std::format("!({} <= {})", a_parsed, b_parsed);
         } else if (op == "uge") {
-          if (is_fast) {
-            assignment_value = std::format("({} >= {})", a_parsed, b_parsed);
-          } else {
-            assignment_value = std::format("!({} < {})", a_parsed, b_parsed);
-          }
+          assignment_value = std::format("!({} < {})", a_parsed, b_parsed);
         } else if (op == "ult") {
-          if (is_fast) {
-            assignment_value = std::format("({} < {})", a_parsed, b_parsed);
-          } else {
-            assignment_value = std::format("!({} >= {})", a_parsed, b_parsed);
-          }
+          assignment_value = std::format("!({} >= {})", a_parsed, b_parsed);
         } else if (op == "ule") {
-          if (is_fast) {
-            assignment_value = std::format("({} <= {})", a_parsed, b_parsed);
-          } else {
-            assignment_value = std::format("!({} > {})", a_parsed, b_parsed);
-          }
+          assignment_value = std::format("!({} > {})", a_parsed, b_parsed);
         } else if (op == "une") {
-          if (is_fast) {
-            assignment_value = std::format("({} != {})", a_parsed, b_parsed);
-          } else {
-            assignment_value = std::format("!({} == {})", a_parsed, b_parsed);
-          }
+          assignment_value = std::format("!({} == {})", a_parsed, b_parsed);
         } else if (op == "uno") {
           assignment_value = std::format("(isnan{} || isnan{})", ParseWrapped(a_parsed), ParseWrapped(b_parsed));
         } else {
@@ -4483,9 +4972,9 @@ class Decompiler {
         std::string cast;
 
         if (op.starts_with("u")) {
-          cast = "(uint)";
+          cast = (type == "i64") ? "(uint64_t)" : "(uint)";
         } else if (op.starts_with("s")) {
-          cast = "(int)";
+          cast = (type == "i64") ? "(int64_t)" : "(int)";
         }
 
         // Convert negative constants to unsigned equivalents for unsigned comparisons
@@ -4556,7 +5045,7 @@ class Decompiler {
         // uitofp i16 %32 to float
         auto [from_type, a, to_type] = StringViewMatch<3>(assignment, std::regex{R"(uitofp (\S+) (\S+) to (\S+))"});
         assignment_type = ParseType(to_type);
-        assignment_value = std::format("{}(({}){})", assignment_type, ParseUnsignedType(from_type), ParseUint(a));
+        assignment_value = std::format("({})(({}){})", assignment_type, ParseUnsignedType(from_type), ParseUint(a));
       } else if (instruction == "fptoui") {
         auto [a] = StringViewMatch<1>(assignment, std::regex{R"(fptoui (?:\S+) (\S+) to (?:\S+))"});
         assignment_type = "uint";
@@ -4581,7 +5070,7 @@ class Decompiler {
           assignment_value = std::format("{} && {}", ParseBool(a), ParseBool(b));
         } else {
           assignment_type = ParseType(type);
-          assignment_value = std::format("{} & {}", ParseInt(a), ParseInt(b));
+          assignment_value = std::format("{} & {}", ParseByType(a, type), ParseByType(b, type));
         }
       } else if (instruction == "urem") {
         //   %100 = urem i32 %99, 5
@@ -4761,7 +5250,7 @@ class Decompiler {
           } else {
             assignment_type = "float";
           }
-          assignment_value = stored_pointers[source];
+          assignment_value = ResolveStoredPointer(source, preprocess_state);
         }
       } else if (instruction == "bitcast") {
         // %63 = bitcast i32 %62 to float
@@ -4949,7 +5438,7 @@ class Decompiler {
           op_str = std::string(op);
           operand_str_raw = std::string(operand);
           if (pointer.starts_with('%')) {
-            parsed_pointer = stored_pointers.count(pointer.substr(1)) ? stored_pointers[pointer.substr(1)] : std::format("_{}", pointer.substr(1));
+            parsed_pointer = ResolveStoredPointer(pointer.substr(1), preprocess_state);
           } else if (pointer.starts_with('@')) {
             if (auto pair = preprocess_state.global_variables.find(std::string(pointer));
                 pair != preprocess_state.global_variables.end()) {
@@ -5151,9 +5640,10 @@ class Decompiler {
 
         auto [opNumber, uav, index, elementOffset, value0, value1, value2, value3, mask, alignment] = StringViewSplit<10>(functionParamsString, param_regex, 2);
         auto ref = std::string{uav.substr(1)};
-        auto binding_store_f32 = preprocess_state.resource_binding_variables.at(ref);
+        auto binding_store_f32 = GetResourceBindingVariable(ref, preprocess_state);
         auto [res_name, range_index, resource_class] = binding_store_f32;
         bool is_raw_buffer = preprocess_state.GetResourceShape(ref) == Resource::ResourceKind::RawBuffer;
+        bool is_heap_resource = preprocess_state.IsHeapResource(ref);
 
         const bool has_value_y = value1 != "undef";
         const bool has_value_z = value2 != "undef";
@@ -5185,15 +5675,18 @@ class Decompiler {
         // assert(is_raw_buffer);
 
         // assert(elementOffset == "undef");
-        if (is_raw_buffer) {
+        if (is_raw_buffer || is_heap_resource) {
           int component_count = 1;
           if (has_value_w) component_count = 4;
           else if (has_value_z) component_count = 3;
           else if (has_value_y) component_count = 2;
           std::string store_func = (component_count == 1) ? "Store" :
                                    std::format("Store{}", component_count);
+          std::string byte_address = is_heap_resource
+              ? BuildStructuredByteAddress(index, elementOffset, preprocess_state.GetResourceStride(ref))
+              : ParseInt(index);
           decompiled = std::format("{}.{}({}, asuint({}));",
-                                   res_name, store_func, ParseInt(index), value);
+                                   res_name, store_func, byte_address, value);
         } else if (elementOffset.starts_with("%")) {
           // Dynamic element offset on a StructuredBuffer — resolve using struct layout.
           auto& uav_resource = preprocess_state.uav_resources[range_index];
@@ -5293,9 +5786,10 @@ class Decompiler {
 
         auto [opNumber, uav, index, elementOffset, value0, value1, value2, value3, mask, alignment] = StringViewSplit<10>(functionParamsString, param_regex, 2);
         auto ref = std::string{uav.substr(1)};
-        auto binding_store_i32 = preprocess_state.resource_binding_variables.at(ref);
+        auto binding_store_i32 = GetResourceBindingVariable(ref, preprocess_state);
         auto [res_name, range_index, resource_class] = binding_store_i32;
         bool is_raw_buffer = preprocess_state.GetResourceShape(ref) == Resource::ResourceKind::RawBuffer;
+        bool is_heap_resource = preprocess_state.IsHeapResource(ref);
 
         const bool has_value_y = value1 != "undef";
         const bool has_value_z = value2 != "undef";
@@ -5324,11 +5818,14 @@ class Decompiler {
           }
         }
 
-        if (is_raw_buffer) {
+        if (is_raw_buffer || is_heap_resource) {
+          std::string byte_address = is_heap_resource
+              ? BuildStructuredByteAddress(index, elementOffset, preprocess_state.GetResourceStride(ref))
+              : ParseInt(index);
           decompiled = std::format("{}.{}({}, asuint({}));",
                                    res_name,
                                    has_value_w ? "Store4" : has_value_z ? "Store3" : has_value_y ? "Store2" : "Store",
-                                   ParseInt(index), value);
+                                   byte_address, value);
         } else if (elementOffset.starts_with("%")) {
           // Dynamic element offset on a StructuredBuffer — resolve using struct layout.
           // Extract the constant field offset from the IR definition of the offset variable.
@@ -5428,6 +5925,38 @@ class Decompiler {
                                      res_name, ParseInt(index), value);
           }
         }
+      } else if (functionName == "@dx.op.rawBufferStore.i64") {
+        // call void @dx.op.rawBufferStore.i64(i32 140, %dx.types.Handle %5, i32 %4, i32 0, i64 0, i64 undef, i64 undef, i64 undef, i8 1, i32 8)
+        auto [opNumber, uav, index, elementOffset, value0, value1, value2, value3, mask, alignment] = StringViewSplit<10>(functionParamsString, param_regex, 2);
+        auto ref = std::string{uav.substr(1)};
+        auto [res_name, range_index, resource_class] = GetResourceBindingVariable(ref, preprocess_state);
+        bool is_raw_buffer = preprocess_state.GetResourceShape(ref) == Resource::ResourceKind::RawBuffer;
+        bool is_heap_resource = preprocess_state.IsHeapResource(ref);
+        const bool has_value_y = value1 != "undef";
+        std::string value;
+        if (has_value_y) {
+          value = std::format("uint64_t2({}, {})", ParseInt64(value0), ParseInt64(value1));
+        } else {
+          value = ParseInt64(value0);
+        }
+        if (is_raw_buffer || is_heap_resource) {
+          std::string byte_address = is_heap_resource
+              ? BuildStructuredByteAddress(index, elementOffset, preprocess_state.GetResourceStride(ref))
+              : ParseInt(index);
+          decompiled = std::format("{}.Store({}, {});", res_name, byte_address, value);
+        } else {
+          int literal_element_offset = 0;
+          if (elementOffset != "undef") {
+            FromStringView(elementOffset, literal_element_offset);
+          }
+          auto& uav_resource = preprocess_state.uav_resources[range_index];
+          std::string field_access = preprocess_state.ResourceFieldNameAtOffset(uav_resource, literal_element_offset);
+          if (!field_access.empty()) {
+            decompiled = std::format("{}[{}]{} = {};", res_name, ParseInt(index), field_access, value);
+          } else {
+            decompiled = std::format("{}[{}] = {};", res_name, ParseInt(index), value);
+          }
+        }
       } else if (functionName == "@dx.op.storeOutput.f32" || functionName == "@dx.op.storeOutput.f16") {
         // call void @dx.op.storeOutput.f32(i32 5, i32 0, i32 0, i8 0, float %2772)  ; StoreOutput(outputSigId,rowIndex,colIndex,value)
         auto [opNumber, outputSigId, rowIndex, colIndex, value] = StringViewSplit<5>(functionParamsString, param_regex, 2);
@@ -5465,7 +5994,6 @@ class Decompiler {
         const bool has_coord_z = coord2 != "undef";
         std::string coords;
         auto [uav_name, uav_range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
-        auto uav_resource = preprocess_state.uav_resources[uav_range_index];
         if (has_coord_z) {
           coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2));
         } else if (has_coord_y) {
@@ -5476,14 +6004,15 @@ class Decompiler {
         bool has_value_y = value1 != "undef";
         bool has_value_z = value2 != "undef";
         bool has_value_w = value3 != "undef";
+        const auto uav_data_type = preprocess_state.GetResourceDataType(ref_resource);
 
-        if (has_value_w && value3 == value0 && uav_resource.data_type != "float4") {
+        if (has_value_w && value3 == value0 && uav_data_type != "float4") {
           has_value_w = false;
         }
-        if (has_value_z && value2 == value0 && uav_resource.data_type != "float3") {
+        if (has_value_z && value2 == value0 && uav_data_type != "float3") {
           has_value_z = false;
         }
-        if (has_value_y && value1 == value0 && uav_resource.data_type != "float2") {
+        if (has_value_y && value1 == value0 && uav_data_type != "float2") {
           has_value_y = false;
         }
         std::string value;
@@ -5506,7 +6035,6 @@ class Decompiler {
         const bool has_coord_z = coord2 != "undef";
         std::string coords;
         auto [uav_name, uav_range_index, resource_class] = preprocess_state.resource_binding_variables.at(ref_resource);
-        auto uav_resource = preprocess_state.uav_resources[uav_range_index];
         if (has_coord_z) {
           coords = std::format("int3({}, {}, {})", ParseInt(coord0), ParseInt(coord1), ParseInt(coord2));
         } else if (has_coord_y) {
@@ -5517,14 +6045,15 @@ class Decompiler {
         bool has_value_y = value1 != "undef";
         bool has_value_z = value2 != "undef";
         bool has_value_w = value3 != "undef";
+        const auto uav_data_type = preprocess_state.GetResourceDataType(ref_resource);
 
-        if (has_value_w && value3 == value0 && uav_resource.data_type != "uint4") {
+        if (has_value_w && value3 == value0 && uav_data_type != "uint4") {
           has_value_w = false;
         }
-        if (has_value_z && value2 == value0 && uav_resource.data_type != "uint3") {
+        if (has_value_z && value2 == value0 && uav_data_type != "uint3") {
           has_value_z = false;
         }
-        if (has_value_y && value1 == value0 && uav_resource.data_type != "uint2") {
+        if (has_value_y && value1 == value0 && uav_data_type != "uint2") {
           has_value_y = false;
         }
         std::string value;
@@ -5844,7 +6373,7 @@ class Decompiler {
           parsed_value = std::format("{}({})", cast, parsed_value);
         }
       }
-      std::string decompiled = std::format("{} = {};", stored_pointers[pointer], parsed_value);
+      std::string decompiled = std::format("{} = {};", ResolveStoredPointer(pointer, preprocess_state), parsed_value);
 
 #if DECOMPILER_DXC_DEBUG >= 3
       std::cout << decompiled << "\n";
@@ -5865,27 +6394,31 @@ class Decompiler {
     auto DecompileLines(PreprocessState& preprocess_state) {
       for (auto it = this->lines.begin(); it != this->lines.end(); ++it) {
         auto& line = *it;
-        if (line.starts_with("  %")) {
-          this->AddCodeAssign(line, preprocess_state);
-        } else if (line.starts_with("  call ")) {
-          this->AddCodeCall(line, preprocess_state);
-        } else if (line.starts_with("  store ")) {
-          this->AddCodeStore(line, preprocess_state);
-        } else if (line.starts_with("  ret ")) {
-          this->CloseBranch();
-        } else if (line.starts_with("  br ")) {
-          this->AddCodeBranch(line, preprocess_state);
-        } else if (line.starts_with("  switch ")) {
-          this->AddCodeSwitch(line, preprocess_state, it);
-        } else if (line.empty()) {
-          //
-        } else if (line == "entry:") {
-          // noop
-        } else if (line.starts_with("; <label>:")) {
-          this->ParseBlockDefinition(line);
-        } else {
-          std::cerr << line << "\n";
-          throw std::runtime_error("Unexpected code block");
+        try {
+          if (line.starts_with("  %")) {
+            this->AddCodeAssign(line, preprocess_state);
+          } else if (line.starts_with("  call ")) {
+            this->AddCodeCall(line, preprocess_state);
+          } else if (line.starts_with("  store ")) {
+            this->AddCodeStore(line, preprocess_state);
+          } else if (line.starts_with("  ret ")) {
+            this->CloseBranch();
+          } else if (line.starts_with("  br ")) {
+            this->AddCodeBranch(line, preprocess_state);
+          } else if (line.starts_with("  switch ")) {
+            this->AddCodeSwitch(line, preprocess_state, it);
+          } else if (line.empty()) {
+            //
+          } else if (line == "entry:") {
+            // noop
+          } else if (line.starts_with("; <label>:")) {
+            this->ParseBlockDefinition(line);
+          } else {
+            std::cerr << line << "\n";
+            throw std::runtime_error("Unexpected code block");
+          }
+        } catch (const std::exception& ex) {
+          throw std::runtime_error(std::format("{} while decompiling DXIL line: {}", ex.what(), StringViewTrim(line)));
         }
       }
     }
@@ -6789,6 +7322,30 @@ class Decompiler {
     }
   }
 
+  static void DisambiguateOutputSignatureNames(
+      const std::vector<Signature>& input_signatures,
+      std::vector<Signature>& output_signatures) {
+    std::set<std::string> used_names;
+    for (const auto& signature : input_signatures) {
+      used_names.insert(signature.VariableString());
+    }
+
+    for (auto& signature : output_signatures) {
+      auto variable_name = signature.VariableString();
+      if (!used_names.contains(variable_name)) {
+        used_names.insert(variable_name);
+        continue;
+      }
+
+      auto renamed_variable = std::format("__out_{}", variable_name);
+      for (uint32_t suffix = 1; used_names.contains(renamed_variable); ++suffix) {
+        renamed_variable = std::format("__out_{}_{}", variable_name, suffix);
+      }
+      signature.variable_name_override = renamed_variable;
+      used_names.insert(renamed_variable);
+    }
+  }
+
   void Init() {
     this->line_number = 0;
     this->state = TokenizerState::START;
@@ -7111,6 +7668,7 @@ class Decompiler {
             if (!created_signatures) {
               CreateSignatures(input_sigs_packed, input_sigs_property, preprocess_state.input_signature);
               CreateSignatures(output_sigs_packed, output_sigs_property, preprocess_state.output_signature);
+              DisambiguateOutputSignatureNames(preprocess_state.input_signature, preprocess_state.output_signature);
               created_signatures = true;
             };
             if (line.empty() || line[0] == '\0') {
@@ -7517,6 +8075,73 @@ class Decompiler {
           if (!assignment_value.empty()) {
             cbuffer_prepass_aliases.emplace(var, std::pair<std::string, std::string>(assignment_type, assignment_value));
           }
+        }
+      }
+
+      // Structural emission can encounter a use of a late extractvalue before
+      // source-order parsing reaches the extractvalue definition. Keep this
+      // narrow: only pre-seed identity aliases for extractvalues from
+      // textureLoad results, because those source result variables are emitted
+      // as real HLSL locals (e.g. `float4 _4595 = tex.Load(...)`).
+      {
+        static const auto texture_load_regex = std::regex(
+            R"(^\s+%(\d+) = call %dx\.types\.ResRet\.(f32|f16|i32|i16) @dx\.op\.textureLoad\.)");
+        static const auto texture_extract_regex = std::regex(
+            R"(^\s+%(\d+) = extractvalue %dx\.types\.ResRet\.(f32|f16|i32|i16) %(\d+), (\d+))");
+        static const auto def_regex = std::regex(R"(^\s+%(\d+)\s*=)");
+        static const auto use_regex = std::regex(R"(%(\d+))");
+
+        std::map<std::string, std::string> texture_load_types;
+        std::map<std::string, size_t> first_use_line;
+        for (size_t line_index = 0; line_index < current_code_function->lines.size(); ++line_index) {
+          const auto& src_line = current_code_function->lines[line_index];
+          std::match_results<std::string_view::const_iterator> m;
+          if (std::regex_search(src_line.begin(), src_line.end(), m, texture_load_regex)) {
+            texture_load_types.emplace(m[1].str(), m[2].str());
+          }
+
+          auto search_start = src_line.begin();
+          std::match_results<std::string_view::const_iterator> dm;
+          std::string defined_var;
+          if (std::regex_search(src_line.begin(), src_line.end(), dm, def_regex)) {
+            defined_var = dm[1].str();
+            search_start = dm[0].second;
+          }
+
+          std::match_results<std::string_view::const_iterator> um;
+          while (std::regex_search(search_start, src_line.end(), um, use_regex)) {
+            std::string used_var = um[1].str();
+            if (used_var != defined_var) {
+              first_use_line.try_emplace(used_var, line_index);
+            }
+            search_start = um[0].second;
+          }
+        }
+
+        for (size_t line_index = 0; line_index < current_code_function->lines.size(); ++line_index) {
+          const auto& src_line = current_code_function->lines[line_index];
+          std::match_results<std::string_view::const_iterator> m;
+          if (!std::regex_search(src_line.begin(), src_line.end(), m, texture_extract_regex)) continue;
+
+          const std::string var = m[1].str();
+          const std::string ret_type = m[2].str();
+          const std::string source_var = m[3].str();
+          uint32_t component_index = 0;
+          FromStringView(std::string_view(m[4].str()), component_index);
+          if (component_index >= 4) continue;
+          if (!texture_load_types.contains(source_var)) continue;
+          auto first_use_it = first_use_line.find(var);
+          if (first_use_it == first_use_line.end() || first_use_it->second >= line_index) continue;
+
+          std::string assignment_type;
+          if (ret_type == "f32") assignment_type = "float";
+          else if (ret_type == "f16") assignment_type = "half";
+          else if (ret_type == "i16") assignment_type = "int16_t";
+          else assignment_type = "int";
+
+          cbuffer_prepass_aliases.emplace(
+              var,
+              std::pair<std::string, std::string>{assignment_type, std::format("_{}.{}", source_var, VECTOR_INDEXES[component_index])});
         }
       }
 
@@ -7988,15 +8613,30 @@ class Decompiler {
     for (size_t cbv_idx = 0; cbv_idx < preprocess_state.cbv_resources.size(); ++cbv_idx) {
       const auto& cbv_resource = preprocess_state.cbv_resources[cbv_idx];
 
-      // For cbuffers with dynamic access, emit as float4 array only
+      // For cbuffers with dynamic access, emit overlapping float4/uint4 raw views.
+      // HLSL allows cbuffer variables to share packoffsets, and DXC uses the
+      // selected view's element type to preserve cbufferLoadLegacy.f32/i32.
       if (preprocess_state.cbv_dynamic_access_indices.count(static_cast<uint32_t>(cbv_idx))) {
-        uint32_t num_float4s = static_cast<uint32_t>(ceil(static_cast<float>(cbv_resource.buffer_size) / 16.f));
+        const uint32_t full_register_count = cbv_resource.buffer_size / 16u;
+        const uint32_t tail_bytes = cbv_resource.buffer_size % 16u;
+        const uint32_t tail_component_count = (tail_bytes + 3u) / 4u;
+        const uint32_t raw_array_register_count = std::max(1u, full_register_count);
+        auto vector_type = [](std::string_view scalar_type, uint32_t component_count) {
+          if (component_count <= 1u) return std::string(scalar_type);
+          return std::format("{}{}", scalar_type, component_count);
+        };
+
         string_stream << "cbuffer " << cbv_resource.name << " : register(b" << cbv_resource.signature_index;
         if (cbv_resource.space != 0u) {
           string_stream << ", space" << cbv_resource.space;
         }
         string_stream << ") {\n";
-        string_stream << "  uint4 " << cbv_resource.name << "_raw[" << num_float4s << "];\n";
+        string_stream << "  float4 " << cbv_resource.name << "_raw[" << raw_array_register_count << "] : packoffset(c0);\n";
+        string_stream << "  uint4 " << cbv_resource.name << "_raw_uint[" << raw_array_register_count << "] : packoffset(c0);\n";
+        if (tail_component_count != 0u) {
+          string_stream << "  " << vector_type("float", tail_component_count) << " " << cbv_resource.name << "_raw_tail : packoffset(c" << full_register_count << ");\n";
+          string_stream << "  " << vector_type("uint", tail_component_count) << " " << cbv_resource.name << "_raw_uint_tail : packoffset(c" << full_register_count << ");\n";
+        }
         string_stream << "};\n\n";
         continue;
       }
@@ -9531,6 +10171,10 @@ class Decompiler {
           for (const auto& hl : cb.hlsl_lines) {
             std::smatch m;
             if (std::regex_search(hl, m, heap_re)) {
+              static const std::regex temp_ref_re(R"(_\d+)");
+              if (std::regex_search(hl, temp_ref_re)) {
+                continue;
+              }
               static const std::regex name_re(R"((_HeapResource_\d+))");
               std::smatch nm;
               if (std::regex_search(hl, nm, name_re)) {
