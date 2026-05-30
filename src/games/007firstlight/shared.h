@@ -28,6 +28,11 @@ struct ShaderInjectData {
   float custom_bloom;
   float custom_film_grain_type;
   float custom_grain_strength;
+  float custom_isfast_shadows;
+
+  float custom_shadow_reserved_0;
+  float custom_shadow_reserved_1;
+  float custom_shadow_reserved_2;
 };
 
 #ifndef __cplusplus
@@ -55,15 +60,18 @@ cbuffer cb13 : register(b0, space50) {
 #define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma
 #define COLOR_GRADE_LUT_STRENGTH             shader_injection.color_grade_lut_strength
 
-#define CUSTOM_BLOOM          shader_injection.custom_bloom
-#define CUSTOM_GRAIN_TYPE     shader_injection.custom_film_grain_type
-#define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
+#define CUSTOM_BLOOM              shader_injection.custom_bloom
+#define CUSTOM_GRAIN_TYPE         shader_injection.custom_film_grain_type
+#define CUSTOM_GRAIN_STRENGTH     shader_injection.custom_grain_strength
+#define CUSTOM_ISFAST_SHADOWS     shader_injection.custom_isfast_shadows
 
+#ifndef RENODX_SKIP_SHARED_RENODX_HLSL
 #if (__SHADER_TARGET_MAJOR >= 6)
 #pragma dxc diagnostic ignored "-Wparentheses-equality"
 #endif
 
 #include "../../shaders/renodx.hlsl"
+#endif
 
 #endif
 
