@@ -3,6 +3,48 @@
 #define LMS_WHITE_BT709  renodx::color::lms::from::BT709(1.0f)
 #define LMS_WHITE_BT2020 renodx::color::lms::from::BT2020(1.0f)
 
+// Defaults match PostChainMergeHDR_T3_CS_0x33CB3D22.
+#define POSTCHAINMERGE_TONEMAP_NONE     0
+#define POSTCHAINMERGE_TONEMAP_REINHARD 1
+#define POSTCHAINMERGE_TONEMAP_HABLE    2
+#define POSTCHAINMERGE_TONEMAP_FILM     3
+
+#ifndef POSTCHAINMERGE_TONEMAP_TYPE
+#define POSTCHAINMERGE_TONEMAP_TYPE POSTCHAINMERGE_TONEMAP_FILM
+#endif
+
+#ifndef POSTCHAINMERGE_IS_SDR
+#define POSTCHAINMERGE_IS_SDR 0
+#endif
+
+#ifndef POSTCHAINMERGE_APPLY_SDR_DITHER
+#define POSTCHAINMERGE_APPLY_SDR_DITHER POSTCHAINMERGE_IS_SDR
+#endif
+
+#ifndef POSTCHAINMERGE_OUTPUT_ALPHA
+#define POSTCHAINMERGE_OUTPUT_ALPHA 0.f
+#endif
+
+#ifndef POSTCHAINMERGE_ENABLE_CBUFFER_DEBUG
+#define POSTCHAINMERGE_ENABLE_CBUFFER_DEBUG 0
+#endif
+
+#ifndef POSTCHAINMERGE_DEBUG_FILM_TONEMAPPED_OUTPUT
+#define POSTCHAINMERGE_DEBUG_FILM_TONEMAPPED_OUTPUT 0
+#endif
+
+struct SHDRAdaptationState {
+  float m_fLuminanceGeometricMean;
+  float m_fAdaptedMiddleGray;
+  float m_fAdaptedBloomPoint;
+  float m_fAdaptedBloomPointThreshold;
+  float m_fAdaptedBloomPointClamp;
+  float m_fAdaptedLuminance;
+  float m_fAdaptedExposure;
+  float m_fAdaptedBrightPassThreshold;
+  float m_fAdaptedBrightPassClamp;
+};
+
 struct S_cbPostChainMerge {
   float2 vPixelSize;
   uint _pad_0;
@@ -40,20 +82,21 @@ cbuffer _cbPostChainMerge : register(b5) {
   S_cbPostChainMerge cbPostChainMerge : packoffset(c000.x);
 };
 
-void CalculateFilmTonemapHDRHeadroom(inout float hdr_scale, inout float hdr_headroom, inout float film_white_clip) {
-  float black_offset = cbPostChainMerge.vHDRParams.x;
-  float peak_white = cbPostChainMerge.vHDRParams.y;
-  float diffuse_white = cbPostChainMerge.vHDRParams.z;
-  if (TONE_MAP_TYPE != 0.f) {
-    hdr_scale = 1.f;
-    hdr_headroom = 0.f;
-    film_white_clip = cbPostChainMerge.fFilmWhiteClip;
-  } else {
-    hdr_scale = max((peak_white - black_offset), diffuse_white) / diffuse_white;
-    hdr_headroom = hdr_scale - 1.f;
-    film_white_clip = max(hdr_headroom, cbPostChainMerge.fFilmWhiteClip);
-  }
-}
+Texture2D<float4> mapLinearLightTexture : register(t0);
+
+Texture2D<float4> mapGlareTexture : register(t1);
+
+Texture3D<float4> srvColorCorrectionVolume : register(t2);
+
+Texture2D<float4> mapGridTexture : register(t3);
+
+StructuredBuffer<SHDRAdaptationState> srvHDRAdaptationState : register(t6);
+
+Texture2D<float> srvExposures : register(t14);
+
+RWTexture2D<float4> uavOutput1 : register(u0);
+
+SamplerState samplerLinearClampNode : register(s4);
 
 float3 ReinhardPiecewise(float3 x, float3 x_max, float3 shoulder) {
   const float x_min = 0.f;
@@ -71,7 +114,9 @@ float3 ReinhardPiecewise(float3 x, float x_max, float3 shoulder) {
 float3 TransferPurityAndWeightedHueFromLMS(
     float3 lms_source,
     float3 lms_target,
-    float amount = 1.f,
+    float purity_loss_hue_power = 1.f,
+    float baseline_hue_amount = 0.f,
+    float purity_amount = 1.f,
     float clamp_purity_loss = 0.f,
     float eps = 1e-7f,
     bool compress_bt2020 = false) {
@@ -91,7 +136,12 @@ float3 TransferPurityAndWeightedHueFromLMS(
   // - purity loss  (source radius < target radius): more source hue, up to 1
   float no_change_distance = max(tgt_radius - eps, eps);
   float purity_delta = src_radius - tgt_radius;
-  float hue_amount = saturate(0.5f - (purity_delta / (2.f * no_change_distance)));
+  float raw_hue_amount = saturate(0.5f - (purity_delta / (2.f * no_change_distance)));
+  float purity_loss_hue_signal = saturate((raw_hue_amount - 0.5f) * 2.f);
+  purity_loss_hue_signal = 1.f - pow(1.f - purity_loss_hue_signal, max(purity_loss_hue_power, eps));
+  float purity_loss_hue_amount = 0.5f + (0.5f * purity_loss_hue_signal);
+  float hue_amount = lerp(raw_hue_amount, purity_loss_hue_amount, step(0.5f, raw_hue_amount));
+  hue_amount = max(hue_amount, saturate(baseline_hue_amount));
 
   float2 source_hue_offset = source_offset * (tgt_radius / max(src_radius, eps));
   float2 hue_offset = lerp(target_offset, source_hue_offset, hue_amount);
@@ -102,7 +152,7 @@ float3 TransferPurityAndWeightedHueFromLMS(
   float transfer_scale = src_radius / max(hue_radius, eps);
   float no_purity_loss_scale = max(transfer_scale, 1.f);
   transfer_scale = lerp(transfer_scale, no_purity_loss_scale, clamp_purity_loss);
-  float scale = lerp(1.f, transfer_scale, amount);
+  float scale = lerp(1.f, transfer_scale, purity_amount);
   float2 mb_scaled = mb_white + hue_offset * scale;
 
   float3 output_lms = renodx::color::lms::from::MacLeodBoynton(float3(mb_scaled, mb_target.z));
