@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <charconv>
 #include <cctype>
 #include <filesystem>
 #include <optional>
@@ -33,6 +34,57 @@ inline std::string ToLowerAscii(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
     return static_cast<char>(std::tolower(character));
   });
+  return value;
+}
+
+inline std::string_view TrimAsciiWhitespace(std::string_view value) {
+  while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front())) != 0) {
+    value.remove_prefix(1);
+  }
+
+  while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back())) != 0) {
+    value.remove_suffix(1);
+  }
+
+  return value;
+}
+
+inline float ReadLatestLogValueForMarker(const std::string& log_contents, std::string_view marker, float default_value) {
+  if (log_contents.empty()) return default_value;
+
+  const auto normalized_marker = ToLowerAscii(std::string(marker));
+
+  size_t search_offset = 0;
+  std::optional<std::string> last_matching_line;
+  while (search_offset < log_contents.size()) {
+    const auto line_end = log_contents.find_first_of("\r\n", search_offset);
+    const auto line_length = (line_end == std::string::npos ? log_contents.size() : line_end) - search_offset;
+    auto normalized_line = ToLowerAscii(log_contents.substr(search_offset, line_length));
+    if (normalized_line.find(normalized_marker) != std::string::npos) {
+      last_matching_line = std::move(normalized_line);
+    }
+
+    if (line_end == std::string::npos) break;
+
+    search_offset = line_end + 1;
+    if (search_offset < log_contents.size() && log_contents[search_offset] == '\n' && log_contents[line_end] == '\r') {
+      search_offset += 1;
+    }
+  }
+
+  if (!last_matching_line.has_value()) return default_value;
+
+  const auto marker_position = last_matching_line->find(normalized_marker);
+  if (marker_position == std::string::npos) return default_value;
+
+  auto value_text = std::string_view(*last_matching_line).substr(marker_position + normalized_marker.size());
+  value_text = TrimAsciiWhitespace(value_text);
+  if (value_text.empty()) return default_value;
+
+  float value = default_value;
+  const auto [parsed_end, parse_error] = std::from_chars(value_text.data(), value_text.data() + value_text.size(), value);
+  if (parse_error != std::errc{} || parsed_end == value_text.data()) return default_value;
+
   return value;
 }
 
@@ -111,6 +163,30 @@ inline bool DoesLatestLogLastMatchingLineContainAny(const LatestLogLineMatchConf
   }
 
   return false;
+}
+
+inline float GetLatestLogResScale(const std::filesystem::path& logs_path, std::span<const std::filesystem::path> logs_paths) {
+  auto log_paths = std::vector<std::filesystem::path>{};
+  if (!logs_path.empty()) {
+    log_paths.push_back(logs_path);
+  }
+  log_paths.insert(log_paths.end(), logs_paths.begin(), logs_paths.end());
+
+  const auto latest_log_path = log_paths.empty() ? std::nullopt : FindLatestLogPath(log_paths);
+  if (!latest_log_path.has_value()) return 1.f;
+
+  const auto log_contents = renodx::utils::path::ReadTextFile(*latest_log_path);
+  const auto res_scale = ReadLatestLogValueForMarker(log_contents, "ResScale set to:", 1.f);
+  if (res_scale == -1.f) {
+    return ReadLatestLogValueForMarker(log_contents, "ResScaleCustom set to:", 1.f);
+  }
+
+  return res_scale;
+}
+
+inline float GetLatestLogResScale(const std::filesystem::path& logs_path) {
+  const std::array<std::filesystem::path, 1> log_paths = {logs_path};
+  return GetLatestLogResScale(std::filesystem::path{}, log_paths);
 }
 
 struct ProcessWindowTitleSearchContext {
