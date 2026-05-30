@@ -1,5 +1,5 @@
 #define POSTCHAINMERGE_TONEMAP_TYPE POSTCHAINMERGE_TONEMAP_HABLE
-#define POSTCHAINMERGE_IS_SDR 1
+#define POSTCHAINMERGE_IS_SDR       1
 #define POSTCHAINMERGE_OUTPUT_ALPHA 0.f
 
-#include "./tonemap_combined.hlsli"
+#include "./PostChainMerge.hlsli"

@@ -3,86 +3,31 @@
 
 #include "./tonemap.hlsli"
 
-// Defaults match PostChainMergeHDR_T3_CS_0x33CB3D22.
-#define POSTCHAINMERGE_TONEMAP_NONE     0
-#define POSTCHAINMERGE_TONEMAP_REINHARD 1
-#define POSTCHAINMERGE_TONEMAP_HABLE    2
-#define POSTCHAINMERGE_TONEMAP_FILM     3
-
-#ifndef POSTCHAINMERGE_TONEMAP_TYPE
-#define POSTCHAINMERGE_TONEMAP_TYPE POSTCHAINMERGE_TONEMAP_FILM
-#endif
-
-#ifndef POSTCHAINMERGE_FULL_POST
-#define POSTCHAINMERGE_FULL_POST 1
-#endif
-
-#ifndef POSTCHAINMERGE_IS_SDR
-#define POSTCHAINMERGE_IS_SDR 0
-#endif
-
-#ifndef POSTCHAINMERGE_APPLY_SDR_DITHER
-#define POSTCHAINMERGE_APPLY_SDR_DITHER POSTCHAINMERGE_IS_SDR
-#endif
-
-#ifndef POSTCHAINMERGE_OUTPUT_ALPHA
-#define POSTCHAINMERGE_OUTPUT_ALPHA 0.f
-#endif
-
-#ifndef POSTCHAINMERGE_ENABLE_CBUFFER_DEBUG
-#define POSTCHAINMERGE_ENABLE_CBUFFER_DEBUG 0
-#endif
-
-#ifndef POSTCHAINMERGE_DEBUG_FILM_TONEMAPPED_OUTPUT
-#define POSTCHAINMERGE_DEBUG_FILM_TONEMAPPED_OUTPUT 0
-#endif
-
-#ifndef POSTCHAINMERGE_DECLARE_RESOURCES
-#define POSTCHAINMERGE_DECLARE_RESOURCES 1
-#endif
-
-#ifndef POSTCHAINMERGE_ENTRY_POINT
-#define POSTCHAINMERGE_ENTRY_POINT main
-#endif
-
-#if !POSTCHAINMERGE_FULL_POST
-#error tonemap_combined.hlsli currently reconstructs the full PostChainMerge T0-T3 path only.
-#endif
-
-#if POSTCHAINMERGE_DECLARE_RESOURCES
-struct SHDRAdaptationState {
-  float m_fLuminanceGeometricMean;
-  float m_fAdaptedMiddleGray;
-  float m_fAdaptedBloomPoint;
-  float m_fAdaptedBloomPointThreshold;
-  float m_fAdaptedBloomPointClamp;
-  float m_fAdaptedLuminance;
-  float m_fAdaptedExposure;
-  float m_fAdaptedBrightPassThreshold;
-  float m_fAdaptedBrightPassClamp;
-};
-
-Texture2D<float4> mapLinearLightTexture : register(t0);
-
-Texture2D<float4> mapGlareTexture : register(t1);
-
-Texture3D<float4> srvColorCorrectionVolume : register(t2);
-
-Texture2D<float4> mapGridTexture : register(t3);
-
-StructuredBuffer<SHDRAdaptationState> srvHDRAdaptationState : register(t6);
-
-Texture2D<float> srvExposures : register(t14);
-
-RWTexture2D<float4> uavOutput1 : register(u0);
-
-SamplerState samplerLinearClampNode : register(s4);
-#endif
+void CalculateFilmTonemapHDRHeadroom(inout float hdr_scale, inout float hdr_headroom, inout float film_white_clip) {
+  float black_offset = cbPostChainMerge.vHDRParams.x;
+  float peak_white = cbPostChainMerge.vHDRParams.y;
+  float diffuse_white = cbPostChainMerge.vHDRParams.z;
+  if (TONE_MAP_TYPE != 0.f) {
+    hdr_scale = 1.f;
+    hdr_headroom = 0.f;
+    film_white_clip = cbPostChainMerge.fFilmWhiteClip;
+  } else {
+    hdr_scale = max((peak_white - black_offset), diffuse_white) / diffuse_white;
+    hdr_headroom = hdr_scale - 1.f;
+    film_white_clip = max(hdr_headroom, cbPostChainMerge.fFilmWhiteClip);
+  }
+}
 
 float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
   float3 tonemapped;
 #if POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_NONE
-  tonemapped = untonemapped;
+  if (TONE_MAP_TYPE != 0.f) {
+    float3 hue_and_purity_reference = renodx::tonemap::neutwo::PerChannel(untonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+
+    tonemapped = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::BT709(hue_and_purity_reference), renodx::color::yf::from::BT709(untonemapped));
+  } else {
+    tonemapped = untonemapped;
+  }
 #elif POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_REINHARD
   tonemapped = renodx::tonemap::Reinhard(untonemapped);
 #elif POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_HABLE
@@ -104,7 +49,7 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
       float y_out = ApplyFilmToneMapExtended(y_in, film_tonemap_config, sdr_blend_strength);
       float3 lum_tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
 
-      tonemapped = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(hue_and_purity_reference), renodx::color::lms::from::BT709(lum_tonemapped)));
+      tonemapped = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(hue_and_purity_reference), renodx::color::lms::from::BT709(lum_tonemapped), 5.f, 0.35f));
     } else {
       tonemapped = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::BT709(hue_and_purity_reference), renodx::color::yf::from::BT709(per_channel_tonemapped));
     }
@@ -141,7 +86,12 @@ float3 SampleSRGBColorCorrectionLUT(float3 color, float hdr_scale, float hdr_hea
 #endif
 
     color = max(0, color);
+#if POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_FILM || POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_NONE
     float maxch_scale = ComputeMaxChCompressionScale(color);
+#else  // don't use max channel scaling with SDR tonemappers
+    float maxch_scale = 1.f;
+#endif
+
     float3 lut_color = renodx::lut::Sample(srvColorCorrectionVolume, CreateLUTConfig(samplerLinearClampNode), color * maxch_scale) / maxch_scale;
 
 #if USE_EXPENSIVE_LUT_GAMUT_RESTORATION
@@ -195,7 +145,7 @@ float3 FinalizeOutput(float3 color) {
 
       float3 color_corrected_ch = renodx::color::correct::GammaSafe(color);
 
-      color = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(color_corrected_ch), renodx::color::lms::from::BT709(color_corrected_lum)));
+      color = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(color_corrected_ch), renodx::color::lms::from::BT709(color_corrected_lum), 1.f, 0.35f));
     }
 
     color = renodx::color::bt2020::from::BT709(color);
@@ -213,11 +163,10 @@ float3 FinalizeOutput(float3 color) {
 }
 
 [numthreads(8, 8, 1)]
-void POSTCHAINMERGE_ENTRY_POINT(
-    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
-    uint3 SV_GroupID: SV_GroupID,
-    uint3 SV_GroupThreadID: SV_GroupThreadID,
-    uint SV_GroupIndex: SV_GroupIndex) {
+void main(uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+          uint3 SV_GroupID: SV_GroupID,
+          uint3 SV_GroupThreadID: SV_GroupThreadID,
+          uint SV_GroupIndex: SV_GroupIndex) {
   float2 pixel_uv = (float2(SV_DispatchThreadID.xy) + 0.5f) * cbPostChainMerge.vPixelSize;
 
   float2 grid_uv = (pixel_uv * cbPostChainMerge.vUVToGridUV.xy) + cbPostChainMerge.vUVToGridUV.zw;

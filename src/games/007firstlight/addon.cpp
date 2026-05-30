@@ -211,16 +211,6 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
     },
-    // new renodx::utils::settings::Setting{
-    //     .key = "ColorGradeLUTScaling",
-    //     .binding = &shader_injection.color_grade_lut_scaling,
-    //     .default_value = 0.f,
-    //     .label = "LUT Scaling",
-    //     .section = "Color Grading",
-    //     .tooltip = "Scales the color grade LUT to full range when size is clamped.",
-    //     .max = 100.f,
-    //     .parse = [](float value) { return value * 0.01f; },
-    // },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrainType",
         .binding = &shader_injection.custom_film_grain_type,
@@ -250,6 +240,20 @@ renodx::utils::settings::Settings settings = {
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Purist",
+        .section = "Options",
+        .group = "button-line-0",
+        .tooltip = "Follows the original artistic intent more closely.",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"FxFilmGrainType", 1.f},
+              {"ToneMapScaling", 1.f},
+          });
         },
     },
     new renodx::utils::settings::Setting{
