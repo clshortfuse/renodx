@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Musa Haji
+ * Copyright (C) 2026 Musa Haji and Lazorr
  * SPDX-License-Identifier: MIT
  */
 
@@ -7,14 +7,19 @@
 
 #define DEBUG_LEVEL_0
 
+#include <atomic>
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
+#include <mutex>
+#include <span>
+#include <vector>
 
 #include <embed/shaders.h>
 
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "assets/noise/fast_noise_rg8.h"
 #include "shared.h"
 
 namespace {
@@ -22,6 +27,126 @@ namespace {
 ShaderInjectData shader_injection;
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
+
+reshade::api::resource fast_noise_resource = {0};
+reshade::api::resource_view fast_noise_srv = {0};
+std::atomic<bool> fast_noise_created{false};
+reshade::api::device* fast_noise_owner_device = nullptr;
+reshade::api::device* pending_device = nullptr;
+
+static constexpr uint32_t NOISE_WIDTH = 128u;
+static constexpr uint32_t NOISE_HEIGHT = 128u;
+static constexpr uint32_t NOISE_SLICES = 32u;
+static constexpr uint32_t NOISE_TEXEL_COUNT = NOISE_WIDTH * NOISE_HEIGHT * NOISE_SLICES;
+static constexpr uint32_t NOISE_BYTES_PER_ELEMENT = static_cast<uint32_t>(sizeof(float) * 2u);
+static constexpr uint64_t NOISE_BUFFER_BYTES = static_cast<uint64_t>(NOISE_TEXEL_COUNT) * NOISE_BYTES_PER_ELEMENT;
+
+void CreateFASTNoiseBuffer(reshade::api::device* device) {
+  if (fast_noise_created) return;
+
+  static_assert(sizeof(__fast_noise_rg8_base) == NOISE_WIDTH * NOISE_HEIGHT * 2u * NOISE_SLICES,
+                "Embedded IS-FAST noise data size mismatch");
+
+  std::vector<float> decoded(NOISE_TEXEL_COUNT * 2u);
+  for (uint32_t i = 0u; i < NOISE_TEXEL_COUNT; ++i) {
+    decoded[i * 2u + 0u] = static_cast<float>(__fast_noise_rg8_base[i * 2u + 0u]) / 255.0f;
+    decoded[i * 2u + 1u] = static_cast<float>(__fast_noise_rg8_base[i * 2u + 1u]) / 255.0f;
+  }
+
+  reshade::api::subresource_data initial_data = {};
+  initial_data.data = decoded.data();
+  initial_data.row_pitch = static_cast<uint32_t>(NOISE_BUFFER_BYTES);
+  initial_data.slice_pitch = static_cast<uint32_t>(NOISE_BUFFER_BYTES);
+
+  reshade::api::resource_desc buffer_desc(
+      NOISE_BUFFER_BYTES,
+      reshade::api::memory_heap::gpu_only,
+      reshade::api::resource_usage::shader_resource);
+
+  if (!device->create_resource(buffer_desc, &initial_data,
+                               reshade::api::resource_usage::shader_resource, &fast_noise_resource)) {
+    reshade::log::message(reshade::log::level::error,
+                          "007firstlight: Failed to create IS-FAST noise buffer resource");
+    return;
+  }
+
+  reshade::api::resource_view_desc srv_desc(
+      reshade::api::format::r32_typeless,
+      0u,
+      static_cast<uint64_t>(NOISE_BUFFER_BYTES / sizeof(uint32_t)));
+
+  if (!device->create_resource_view(fast_noise_resource,
+                                    reshade::api::resource_usage::shader_resource, srv_desc, &fast_noise_srv)) {
+    reshade::log::message(reshade::log::level::error,
+                          "007firstlight: Failed to create SRV for IS-FAST noise buffer");
+    device->destroy_resource(fast_noise_resource);
+    fast_noise_resource = {0};
+    return;
+  }
+
+  fast_noise_created = true;
+  fast_noise_owner_device = device;
+  reshade::log::message(reshade::log::level::info,
+                        "007firstlight: IS-FAST noise buffer created for deferred shadow filtering");
+}
+
+void DestroyFASTNoiseBuffer(reshade::api::device* device) {
+  if (!fast_noise_created) return;
+  if (fast_noise_srv.handle != 0u) {
+    device->destroy_resource_view(fast_noise_srv);
+    fast_noise_srv = {0};
+  }
+  if (fast_noise_resource.handle != 0u) {
+    device->destroy_resource(fast_noise_resource);
+    fast_noise_resource = {0};
+  }
+  fast_noise_created = false;
+  fast_noise_owner_device = nullptr;
+}
+
+reshade::api::resource_view GetNoiseSRV(reshade::api::command_list* cmd_list) {
+  if (!fast_noise_created) {
+    static std::mutex creation_mutex;
+    std::lock_guard lock(creation_mutex);
+    if (!fast_noise_created) {
+      reshade::api::device* device = cmd_list != nullptr ? cmd_list->get_device() : pending_device;
+      if (device != nullptr) {
+        pending_device = device;
+        CreateFASTNoiseBuffer(device);
+      }
+    }
+  }
+  return fast_noise_srv;
+}
+
+void AddISFASTShader(uint32_t crc32, std::span<const uint8_t> code) {
+  custom_shaders[crc32] = {
+      .crc32 = crc32,
+      .code = code,
+      .views = {
+          {
+              .type = reshade::api::descriptor_type::buffer_shader_resource_view,
+              .slot = 0,
+              .space = 50u,
+              .get_view = &GetNoiseSRV,
+          },
+      },
+  };
+}
+
+void AddISFASTShaders() {
+  AddISFASTShader(0x91447257, __0x91447257);
+  AddISFASTShader(0xABDB27F9, __0xABDB27F9);
+  AddISFASTShader(0x1D61DE2A, __0x1D61DE2A);
+  AddISFASTShader(0x5BF99A8E, __0x5BF99A8E);
+  AddISFASTShader(0x9A4B52C5, __0x9A4B52C5);
+  AddISFASTShader(0x3C2C790A, __0x3C2C790A);
+  AddISFASTShader(0xC02773BA, __0xC02773BA);
+  AddISFASTShader(0x7ACD617D, __0x7ACD617D);
+  AddISFASTShader(0x6BE10C9B, __0x6BE10C9B);
+  AddISFASTShader(0x025B6584, __0x025B6584);
+  AddISFASTShader(0x33EEFA91, __0x33EEFA91);
+}
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -230,6 +355,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxISFASTShadows",
+        .binding = &shader_injection.custom_isfast_shadows,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "IS-FAST Shadow Noise",
+        .section = "Shadows",
+        .tooltip = "Uses IS-FAST noise for deferred shadow sample rotation to reduce vertical jitter artifacts.",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -340,6 +475,7 @@ void OnPresetOff() {
       {"FxBloom", 100.f},
       {"FxFilmGrainType", 0.f},
       {"FxGrainStrength", 50.f},
+      {"FxISFASTShadows", 0.f},
   });
 }
 
@@ -357,6 +493,19 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
 
 bool initialized = false;
 
+void OnInitDevice(reshade::api::device* device) {
+  pending_device = device;
+}
+
+void OnDestroyDevice(reshade::api::device* device) {
+  if (fast_noise_created && device == fast_noise_owner_device) {
+    DestroyFASTNoiseBuffer(device);
+  }
+  if (device == pending_device) {
+    pending_device = nullptr;
+  }
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -372,13 +521,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::allow_multiple_push_constants = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
 
+        AddISFASTShaders();
+
         initialized = true;
       }
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
+      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
 
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
+      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
 
       reshade::unregister_addon(h_module);
       break;
