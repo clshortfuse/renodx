@@ -192,6 +192,7 @@ void OnPresetOff() {
 }
 
 bool initialized = false;
+float res_scale = 1.f;
 
 const auto RYUJINX_PROCESS_NAME = std::string_view("Ryujinx.exe");
 const auto RYUJINX_LOADED_TITLE_MARKER = std::string_view("Application Loaded:");
@@ -206,6 +207,7 @@ bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
       process_path.parent_path() / "logs",
       process_path.parent_path() / "portable" / "Logs",
   };
+  res_scale = ryujinxlog::GetLatestLogResScale(std::filesystem::path{}, candidate_log_paths);
 
   return ryujinxlog::DoesLatestLogLastMatchingLineContainAny({
       .line_marker = RYUJINX_LOADED_TITLE_MARKER,
@@ -223,12 +225,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   const auto target_format = reshade::api::format::r16g16b16a16_float;
   const auto view_upgrades = renodx::utils::resource::VIEW_UPGRADES_RGBA16F;
 
-  const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
-      .width = 1200,
-      .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
-      .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
-  };
-
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
       if (!reshade::register_addon(h_module)) return FALSE;
@@ -237,6 +233,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       if (filename == RYUJINX_PROCESS_NAME && !ShouldAttachForRyujinx(process_path)) return FALSE;
 
+    const auto log_message = std::string("ResScale: ") + std::to_string(res_scale);
+    reshade::log::message(reshade::log::level::info, log_message.c_str());
+
+      const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
+          .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+          .height = static_cast<int16_t>(720 * res_scale),
+          .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+      };
+      
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::target_format = target_format;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
@@ -257,7 +262,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-      static std::vector<uint32_t> hashes = {0xEF015FAB};  // final buffer
+      static std::vector<uint32_t> hashes = {0xEF015FAB};                                              // final buffer
       static std::vector<uint32_t> tonemap_hashes = {0x6AACC705, 0x9063BD29, 0xFA7AFD3A, 0x65F02A9E};  // tonemap
 
       for (uint32_t hash : hashes) {
@@ -265,23 +270,26 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           renodx::mods::swapchain::resource_upgrade_infos.push_back({
               .old_format = reshade::api::format::r8g8b8a8_typeless,
               .new_format = target_format,
-              .ignore_size = true,  // risky...?
               .shader_hash = hash,
               .use_resource_view_cloning = true,
-              .ignore_reset = true,
+              .ignore_reset = false,
+              .min_dimensions = min_dimensions,
           });
         }
       }
-    for (uint32_t hash : tonemap_hashes) {
+
+      for (uint32_t hash : tonemap_hashes) {
         for (int i = 0; i < 3; i++) {
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
-          .old_format = reshade::api::format::r10g10b10a2_typeless,
-          .new_format = target_format,
-          .ignore_size = true,  // risky...?
-          .shader_hash = hash,
-          .use_resource_view_cloning = true,
-          .ignore_reset = false,
-      });}}
+          renodx::mods::swapchain::resource_upgrade_infos.push_back({
+              .old_format = reshade::api::format::r10g10b10a2_typeless,
+              .new_format = target_format,
+              .ignore_size = true,  // risky...?
+              .shader_hash = hash,
+              .use_resource_view_cloning = true,
+              .ignore_reset = false,
+          });
+        }
+      }
 
       // Register event handlers
       reshade::register_event<reshade::addon_event::present>(OnPresent);
