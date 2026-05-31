@@ -44,14 +44,17 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
     // add extra hue shifts and blowout based on user's peak setting
     // restore luminance afterwards so that max channel scaling to user peak can be deferred to the end
     float3 hue_and_purity_reference = renodx::tonemap::neutwo::PerChannel(per_channel_tonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-    if (RENODX_TONE_MAP_SCALING == 0.f) {
+    if (RENODX_TONE_MAP_SCALING == 0.f) {  // luminance tonemapping with purity and some hues from per channel
       float y_in = renodx::color::yf::from::BT709(untonemapped);
       float y_out = ApplyFilmToneMapExtended(y_in, film_tonemap_config, sdr_blend_strength);
       float3 lum_tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
 
-      tonemapped = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(hue_and_purity_reference), renodx::color::lms::from::BT709(lum_tonemapped), 5.f, 0.35f));
+      tonemapped = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(hue_and_purity_reference),
+                                                                                       renodx::color::lms::from::BT709(lum_tonemapped), 5.f, 0.35f));
     } else {
-      tonemapped = renodx::color::correct::Luminance(hue_and_purity_reference, renodx::color::yf::from::BT709(hue_and_purity_reference), renodx::color::yf::from::BT709(per_channel_tonemapped));
+      tonemapped = renodx::color::correct::Luminance(hue_and_purity_reference,
+                                                     renodx::color::yf::from::BT709(hue_and_purity_reference),
+                                                     renodx::color::yf::from::BT709(per_channel_tonemapped));
     }
   } else {
     tonemapped = ApplyFilmToneMap(untonemapped, film_white_clip);
@@ -101,6 +104,7 @@ float3 SampleSRGBColorCorrectionLUT(float3 color, float hdr_scale, float hdr_hea
     lut_color = renodx::color::srgb::EncodeSafe(lut_color);
     return lut_color;
   } else {
+    // compress by maxch to fit into LUT range
     color = min(color, hdr_scale);
     float max_channel = max(color.r, max(color.g, color.b));
     float max_channel_scale = max(1.f, max_channel);
@@ -108,12 +112,15 @@ float3 SampleSRGBColorCorrectionLUT(float3 color, float hdr_scale, float hdr_hea
     float compression_start = saturate(hdr_headroom);
     float compression_amount = saturate((max_channel - compression_start) / (hdr_scale - compression_start));
 
+    // lerp between maxch compression and clipping as color approaches peak
     float3 compressed_lut_color = lerp(max_channel_scaled_color, saturate(color), compression_amount);
+
     float compressed_lut_luminance = renodx::color::y::from::BT709(compressed_lut_color);
 
     float3 lut_color = renodx::color::srgb::EncodeSafe(compressed_lut_color);
     float3 lut_sample = srvColorCorrectionVolume.SampleLevel(samplerLinearClampNode, (saturate(lut_color) * 0.9375f) + 0.03125f, 0.f).rgb;
 
+    // calculate luminance lost during compression to restore to HDR range
     float luminance_scale = pow(renodx::color::y::from::BT709(color) / select((compressed_lut_luminance > 0.f), compressed_lut_luminance, 1.f), 1.f / 2.2f);
     float hdr_black_offset = cbPostChainMerge.vHDRParams.x * 0.01f;
     float hdr_output_scale = pow(cbPostChainMerge.vHDRParams.w, 1.f / 2.2f);
@@ -125,7 +132,7 @@ float3 SampleSRGBColorCorrectionLUT(float3 color, float hdr_scale, float hdr_hea
 float3 ApplyOptionalGammaAdjust(float3 color) {
   if (TONE_MAP_TYPE == 0.f) {
     if (cbPostChainMerge.fOptionalGammaAdjust > 0.f) {
-      color = saturate(pow(max(color, 0.0f), cbPostChainMerge.fOptionalGammaAdjust));
+      color = saturate(pow(max(color, 0.f), cbPostChainMerge.fOptionalGammaAdjust));
     }
   }
 
@@ -138,14 +145,15 @@ float3 FinalizeOutput(float3 color) {
 
     if (RENODX_TONE_MAP_SCALING == 1.f) {
       color = renodx::color::correct::GammaSafe(color);
-    } else {  // per channel gamma correction with luminance from by luminance
+    } else {  // luminance gamma correction with purity and some hues from per channel
       float y_in = renodx::color::yf::from::BT709(color);
       float y_out = renodx::color::correct::Gamma(max(0, y_in));
       float3 color_corrected_lum = renodx::color::correct::Luminance(color, y_in, y_out);
 
       float3 color_corrected_ch = renodx::color::correct::GammaSafe(color);
 
-      color = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(color_corrected_ch), renodx::color::lms::from::BT709(color_corrected_lum), 1.f, 0.35f));
+      color = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(color_corrected_ch),
+                                                                                  renodx::color::lms::from::BT709(color_corrected_lum), 1.f, 0.35f));
     }
 
     color = renodx::color::bt2020::from::BT709(color);
