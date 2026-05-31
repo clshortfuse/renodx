@@ -30,7 +30,7 @@ struct ShaderInjectData {
   float custom_grain_strength;
   float custom_isfast_shadows;
 
-  float custom_shadow_reserved_0;
+  float custom_ssr_reflection_fix;
   float custom_shadow_reserved_1;
   float custom_shadow_reserved_2;
 };
@@ -64,6 +64,7 @@ cbuffer cb13 : register(b0, space50) {
 #define CUSTOM_GRAIN_TYPE         shader_injection.custom_film_grain_type
 #define CUSTOM_GRAIN_STRENGTH     shader_injection.custom_grain_strength
 #define CUSTOM_ISFAST_SHADOWS     shader_injection.custom_isfast_shadows
+#define CUSTOM_SSR_REFLECTION_FIX shader_injection.custom_ssr_reflection_fix
 
 #ifndef RENODX_SKIP_SHARED_RENODX_HLSL
 #if (__SHADER_TARGET_MAJOR >= 6)
