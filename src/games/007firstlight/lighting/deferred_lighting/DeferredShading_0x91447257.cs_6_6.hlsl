@@ -375,6 +375,16 @@ SamplerState samplerLinearBorderBlackNode : register(s6);
 uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
 uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
 
+float3 RenoDX_DecodeDeferredNormal(float2 encoded_normal) {
+  float nx = (saturate(encoded_normal.x) * 2.0f) + -1.0f;
+  float ny = (saturate(encoded_normal.y) * 2.0f) + -1.0f;
+  float nz = (1.0f - abs(nx)) - abs(ny);
+  float t = saturate(-0.0f - nz);
+  nx += (nx >= 0.0f) ? (-0.0f - t) : t;
+  ny += (ny >= 0.0f) ? (-0.0f - t) : t;
+  return float3(nx, ny, nz) * rsqrt(dot(float3(nx, ny, nz), float3(nx, ny, nz)));
+}
+
 groupshared uint _global_0;
 groupshared uint _global_1;
 groupshared uint _global_2;
@@ -2928,7 +2938,77 @@ void main(
       _237 = srvReflectionsWeight.Load(int3(((uint)(_64) >> _233), ((uint)(_65) >> _233), 0));
       _243 = ((float)((uint)((uint)(_237.x & 254)))) * 0.003921568859368563f;
       if ((_237.x & 1) == 0) {
-        _252 = srvReflectionsColor.SampleLevel(samplerLinearClampNode, float2((cbSharedPerViewData.vViewportSize.x * _126), (cbSharedPerViewData.vViewportSize.y * _127)), 0.0f);
+        if (CUSTOM_SSR_REFLECTION_FIX >= 1.5f) {
+          int2 renodx_ssr_pixel = int2(((uint)(_64) >> _233), ((uint)(_65) >> _233));
+          int renodx_gbuffer_step = (int)(1u << (uint)(_233));
+          uint renodx_ssr_width;
+          uint renodx_ssr_height;
+          uint renodx_gbuffer_width;
+          uint renodx_gbuffer_height;
+          srvReflectionsWeight.GetDimensions(renodx_ssr_width, renodx_ssr_height);
+          srvGlobalGBuffer0.GetDimensions(renodx_gbuffer_width, renodx_gbuffer_height);
+
+          float renodx_center_reflection_weight = _243;
+          float3 renodx_center_reflection_color = srvReflectionsColor.Load(int3(renodx_ssr_pixel, 0)).xyz;
+          float3 renodx_center_normal = float3(_187, _188, _189);
+          float3 renodx_filtered_color = float3(0.0f, 0.0f, 0.0f);
+          float renodx_filter_kernel_sum = 0.0f;
+
+          if (renodx_center_reflection_weight > 0.0f) {
+            [unroll]
+            for (int renodx_y = -2; renodx_y <= 2; renodx_y++) {
+              [unroll]
+              for (int renodx_x = -2; renodx_x <= 2; renodx_x++) {
+                int2 renodx_ssr_sample_pixel = renodx_ssr_pixel + int2(renodx_x, renodx_y);
+                int2 renodx_gbuffer_sample_pixel = int2(_64, _65) + (int2(renodx_x, renodx_y) * renodx_gbuffer_step);
+                if (((renodx_ssr_sample_pixel.x | renodx_ssr_sample_pixel.y | renodx_gbuffer_sample_pixel.x | renodx_gbuffer_sample_pixel.y) >= 0)
+                    && ((uint)(renodx_ssr_sample_pixel.x) < renodx_ssr_width)
+                    && ((uint)(renodx_ssr_sample_pixel.y) < renodx_ssr_height)
+                    && ((uint)(renodx_gbuffer_sample_pixel.x) < renodx_gbuffer_width)
+                    && ((uint)(renodx_gbuffer_sample_pixel.y) < renodx_gbuffer_height)) {
+                  uint renodx_sample_packed_weight = srvReflectionsWeight.Load(int3(renodx_ssr_sample_pixel, 0));
+                  float renodx_sample_reflection_weight = ((float)((uint)(renodx_sample_packed_weight & 254u))) * 0.003921568859368563f;
+                  float renodx_weight_similarity = saturate(1.0f - (abs(renodx_sample_reflection_weight - renodx_center_reflection_weight) / max(0.0625f, renodx_center_reflection_weight)));
+                  renodx_weight_similarity *= renodx_weight_similarity;
+                  if (((renodx_sample_packed_weight & 1u) == 0u) && (renodx_sample_reflection_weight > 0.0f) && (renodx_weight_similarity > 0.0f)) {
+                    float2 renodx_filter_offset = float2((float)(renodx_x), (float)(renodx_y));
+                    float renodx_spatial_weight = rcp(1.0f + (dot(renodx_filter_offset, renodx_filter_offset) * 0.5f));
+
+                    float renodx_sample_depth = srvGlobalGBuffer0.Load(int3(renodx_gbuffer_sample_pixel, 0)).x;
+                    float renodx_sample_view_depth = 1.0f / ((cbSharedPerViewData.vViewRemap.z * renodx_sample_depth) - cbSharedPerViewData.vViewRemap.y);
+                    float renodx_depth_sigma = max(0.05000000074505806f, abs(_224) * 0.029999999329447746f);
+                    float renodx_depth_weight = saturate(1.0f - (abs(renodx_sample_view_depth - _224) / renodx_depth_sigma));
+                    renodx_depth_weight *= renodx_depth_weight;
+
+                    float3 renodx_sample_normal = RenoDX_DecodeDeferredNormal(srvGlobalGBuffer1.Load(int3(renodx_gbuffer_sample_pixel, 0)).xy);
+                    float renodx_normal_weight = saturate((dot(renodx_center_normal, renodx_sample_normal) + -0.800000011920929f) * 5.0f);
+                    renodx_normal_weight *= renodx_normal_weight;
+
+                    float renodx_kernel_weight = renodx_spatial_weight * renodx_depth_weight * renodx_normal_weight * renodx_weight_similarity;
+                    float3 renodx_sample_reflection_color = srvReflectionsColor.Load(int3(renodx_ssr_sample_pixel, 0)).xyz;
+                    renodx_filtered_color += renodx_sample_reflection_color * renodx_kernel_weight;
+                    renodx_filter_kernel_sum += renodx_kernel_weight;
+                  }
+                }
+              }
+            }
+          }
+
+          if (renodx_filter_kernel_sum > 0.0f) {
+            float3 renodx_filtered_reflection_color = renodx_filtered_color / renodx_filter_kernel_sum;
+            float renodx_center_luminance = dot(renodx_center_reflection_color, float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
+            float renodx_filtered_luminance = dot(renodx_filtered_reflection_color, float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
+            renodx_filtered_reflection_color *= min(1.0f, (renodx_center_luminance + 9.999999747378752e-05f) / max(renodx_filtered_luminance, 9.999999747378752e-05f));
+            _243 = renodx_center_reflection_weight;
+            _252 = float4(lerp(renodx_center_reflection_color, renodx_filtered_reflection_color, 0.8500000238418579f), 1.0f);
+          } else {
+            _252 = float4(renodx_center_reflection_color, 1.0f);
+          }
+        } else if (CUSTOM_SSR_REFLECTION_FIX != 0.0f) {
+          _252 = srvReflectionsColor.Load(int3(((uint)(_64) >> _233), ((uint)(_65) >> _233), 0));
+        } else {
+          _252 = srvReflectionsColor.SampleLevel(samplerLinearClampNode, float2((cbSharedPerViewData.vViewportSize.x * _126), (cbSharedPerViewData.vViewportSize.y * _127)), 0.0f);
+        }
         _261 = (1.0f - _243);
         _262 = (_252.x * _243);
         _263 = (_252.y * _243);

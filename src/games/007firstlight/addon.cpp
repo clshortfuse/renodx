@@ -242,6 +242,16 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "On"},
     },
     new renodx::utils::settings::Setting{
+        .key = "FxSSRReflectionFix",
+        .binding = &shader_injection.custom_ssr_reflection_fix,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "SSR Pixelation Fix",
+        .section = "Reflections",
+        .tooltip = "Off uses the original linear SSR color sample. Point Load is the sharp validated fix. Strong Blur is a conservative 5x5 color blur that preserves the point-loaded SSR footprint.",
+        .labels = {"Off", "Sharp", "Filtered"},
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -353,6 +363,7 @@ void OnPresetOff() {
       {"FxFilmGrainType", 0.f},
       {"FxGrainStrength", 50.f},
       {"FxISFASTShadows", 0.f},
+      {"FxSSRReflectionFix", 0.f},
   });
 }
 
