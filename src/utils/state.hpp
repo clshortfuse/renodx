@@ -40,7 +40,6 @@ struct CommandListState {
       // Destroyed RTVs are not removed
       std::vector<reshade::api::resource_view> new_rtvs = render_targets;
       size_t len = render_targets.size();
-      auto* device = cmd_list->get_device();
       for (size_t i = 0; i < len; ++i) {
         const auto& rtv = render_targets[i];
         if (!renodx::utils::resource::IsKnownResourceView(rtv)) {
@@ -80,22 +79,47 @@ struct CommandListState {
       cmd_list->bind_scissor_rects(0, static_cast<uint32_t>(scissor_rects.size()), scissor_rects.data());
     }
 
-    if (graphics_pipeline_layout.handle != 0u) {
-      cmd_list->bind_descriptor_tables(
-          reshade::api::shader_stage::all_graphics,
-          graphics_pipeline_layout,
-          0,
-          static_cast<uint32_t>(graphics_descriptor_tables.size()),
-          graphics_descriptor_tables.data());
-    }
-    if (compute_pipeline_layout.handle != 0u) {
-      cmd_list->bind_descriptor_tables(
-          reshade::api::shader_stage::all_compute,
-          compute_pipeline_layout,
-          0,
-          static_cast<uint32_t>(compute_descriptor_tables.size()),
-          compute_descriptor_tables.data());
-    }
+    const bool is_d3d12 = cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12;
+    const auto bind_descriptor_tables = [&](reshade::api::shader_stage stages,
+                                            reshade::api::pipeline_layout layout,
+                                            const std::vector<reshade::api::descriptor_table>& tables) {
+      if (layout.handle == 0u) return;
+
+      if (is_d3d12) {
+        bool bound_table = false;
+        for (uint32_t index = 0; index < tables.size(); ++index) {
+          if (tables[index].handle == 0u) continue;
+          cmd_list->bind_descriptor_tables(stages, layout, index, 1u, &tables[index]);
+          bound_table = true;
+        }
+
+        if (!bound_table) {
+          cmd_list->bind_descriptor_tables(stages, layout, 0u, 0u, nullptr);
+        }
+        return;
+      }
+
+      if (tables.empty()) return;
+
+      size_t index = 0;
+      while (index < tables.size()) {
+        while (index < tables.size() && tables[index].handle == 0u) {
+          ++index;
+        }
+        if (index >= tables.size()) break;
+
+        const size_t first = index;
+        while (index < tables.size() && tables[index].handle != 0u) {
+          ++index;
+        }
+        const auto count = static_cast<uint32_t>(index - first);
+
+        cmd_list->bind_descriptor_tables(stages, layout, static_cast<uint32_t>(first), count, tables.data() + first);
+      }
+    };
+
+    bind_descriptor_tables(reshade::api::shader_stage::all_graphics, graphics_pipeline_layout, graphics_descriptor_tables);
+    bind_descriptor_tables(reshade::api::shader_stage::all_compute, compute_pipeline_layout, compute_descriptor_tables);
   }
 
   void Clear() {
