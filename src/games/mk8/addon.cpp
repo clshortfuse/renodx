@@ -91,16 +91,24 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .section = "Effects",
             .tooltip = "Controls intensity of LUT applied by the game",
             .max = 100.f,
-            .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
             .parse = [](float value) { return value * 0.01f; },
             .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
 
         },
         new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-            .label = "RenoDX Discord",
+            .label = "My Ko-Fi",
             .section = "Links",
             .group = "button-line-1",
+            .tint = 0x6b221a,
+            .parse = [](float value) { return value; },
+            .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/souperman9"); },
+        },
+        new renodx::utils::settings::Setting{
+            .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+            .label = "RenoDX Discord",
+            .section = "Links",
+            .group = "button-line-2",
             .tint = 0x5865F2,
             .parse = [](float value) { return value; },
             .on_change = []() { renodx::utils::platform::LaunchURL("https://discord.gg/kSTf", "EbcCpC"); },
@@ -109,7 +117,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "HDR Den Discord",
             .section = "Links",
-            .group = "button-line-1",
+            .group = "button-line-2",
             .tint = 0x5865F2,
             .parse = [](float value) { return value; },
             .on_change = []() { renodx::utils::platform::LaunchURL("https://discord.gg/XUhv", "tR54yc"); },
@@ -118,7 +126,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "Github",
             .section = "Links",
-            .group = "button-line-1",
+            .group = "button-line-2",
             .parse = [](float value) { return value; },
             .on_change = []() { renodx::utils::platform::LaunchURL("https://github.com/clshortfuse/renodx"); },
         },
@@ -126,7 +134,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "Ritsu's Ko-Fi",
             .section = "Links",
-            .group = "button-line-1",
+            .group = "button-line-3",
             .tint = 0xFF5F5F,
             .parse = [](float value) { return value; },
             .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/ritsucecil"); },
@@ -135,7 +143,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "ShortFuse's Ko-Fi",
             .section = "Links",
-            .group = "button-line-1",
+            .group = "button-line-3",
             .tint = 0xFF5F5F,
             .parse = [](float value) { return value; },
             .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/shortfuse"); },
@@ -144,7 +152,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .value_type = renodx::utils::settings::SettingValueType::BUTTON,
             .label = "HDR Den's Ko-Fi",
             .section = "Links",
-            .group = "button-line-1",
+            .group = "button-line-3",
             .tint = 0xFF5F5F,
             .parse = [](float value) { return value; },
             .on_change = []() { renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden"); },
@@ -285,14 +293,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = target_format,
-          .use_resource_view_cloning = true, // required to prevent some crashes for some reason
+          .use_resource_view_cloning = true,  // required to prevent some crashes for some reason
           .min_dimensions = min_dimensions,
       });
 
       renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = target_format,
-          .shader_hash = 0xB5D68617,
+          .shader_hash = 0xB5D68617,  // ui
           .use_resource_view_cloning = true,
           //   .ignore_size = true,  // risky...?
           //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
@@ -306,6 +314,30 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = target_format,
           .shader_hash = 0xE5002336,
+          .use_resource_view_cloning = true,
+          //   .ignore_size = true,  // risky...?
+          //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
+          .aspect_ratio = common_aspect_ratio,
+          .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+          .min_dimensions = min_dimensions,
+      });
+
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::r10g10b10a2_typeless,
+          .new_format = target_format,
+          .shader_hash = 0xBBD21661,  // lut
+          .use_resource_view_cloning = true,
+          //   .ignore_size = true,  // risky...?
+          //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
+          .aspect_ratio = common_aspect_ratio,
+          .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+          .min_dimensions = min_dimensions,
+      });
+
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::r10g10b10a2_typeless,
+          .new_format = target_format,
+          .shader_hash = 0x54FE8525,  // alternate lut
           .use_resource_view_cloning = true,
           //   .ignore_size = true,  // risky...?
           //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
