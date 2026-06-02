@@ -164,7 +164,7 @@ SL_API sl::Result Hooked_slInit(const sl::Preferences& pref, uint64_t sdkVersion
     return sl::Result::eOk;
   }
 
-#if defined(DEBUG_LEVEL_1) && !defined(NDEBUG)
+#if defined(DEBUG_LEVEL_3) && !defined(NDEBUG)
   const auto ret = Real_slInit(pref_copy, sdkVersion);
 #else
   const auto ret = Real_slInit(pref, sdkVersion);
@@ -198,6 +198,10 @@ struct TrackedCommandQueueInfo {
 
 using TrackedCommandQueueMap = utils::data::ParallelFlatHashMap<ID3D12CommandQueue*, TrackedCommandQueueInfo, std::shared_mutex>;
 TrackedCommandQueueMap tracked_command_queues;
+
+static constexpr bool SUPPORT_UNKNOWN_CREATE_DXGI_FACTORY2_FLAGS = false;
+// Only zero and DXGI_CREATE_FACTORY_DEBUG are documented; bypass RenoDX/Streamline factory wrapping for anything else unless explicitly enabled above.
+static constexpr UINT CREATE_DXGI_FACTORY2_ALLOWED_FLAGS = DXGI_CREATE_FACTORY_DEBUG;
 
 // Result slUpgradeInterface(void** baseInterface)
 extern "C" decltype(&slUpgradeInterface) Real_slUpgradeInterface = nullptr;
@@ -257,18 +261,21 @@ extern "C" sl::Result Hooked_slUpgradeInterface(void** baseInterface) {
 
   IDXGIFactory7* dxgi_factory7{};
   if (SUCCEEDED(unknown->QueryInterface(&dxgi_factory7))) {
-    // dxgiFactory7->Release();
-
     // Upgrade ReShade's internal factory to use the Streamline factory
     DXGIFactory* reshade_factory = nullptr;
     UINT size = sizeof(reshade_factory);
-    dxgi_factory7->GetPrivateData(__uuidof(DXGIFactory), &size, &reshade_factory);
-    if (reshade_factory == nullptr) {
+    const HRESULT proxy_result = dxgi_factory7->GetPrivateData(__uuidof(DXGIFactory), &size, &reshade_factory);
+    if (FAILED(proxy_result) || reshade_factory == nullptr) {
       log::e("utils::streamline_v2::slUpgradeInterface() - Failed to get DXGIFactory proxy from IDXGIFactory7");
+      return Real_slUpgradeInterface(baseInterface);
     }
     auto* Real_factory = (IDXGIFactory7*)reshade_factory->_orig;
 
-    Real_slUpgradeInterface((void**)&Real_factory);
+    auto ret = Real_slUpgradeInterface((void**)&Real_factory);
+    if (ret != sl::Result::eOk) {
+      log::e("utils::streamline_v2::slUpgradeInterface() - Failed to upgrade DXGIFactory interface");
+      return ret;
+    }
 
     reshade_factory->_orig = Real_factory;
 
@@ -564,12 +571,57 @@ extern "C" HRESULT Hooked_D3D12CreateDevice(IUnknown* pAdapter, D3D_FEATURE_LEVE
   // assert(IsDebuggerPresent());
   renodx::utils::directx::Initialize();
 
+#ifdef DEBUG_LEVEL_0
+  log::i(std::format(
+             "utils::streamline_v2::D3D12CreateDevice(adapter: {:p}, feature_level: {:#x}, ppDevice: {:p})",
+             (void*)pAdapter,
+             static_cast<uint32_t>(MinimumFeatureLevel),
+             (void*)ppDevice)
+             .c_str());
+#endif
+
   assert(is_streamline_device == false);
   is_streamline_device = true;
   auto hr = renodx::utils::directx::pD3D12CreateDevice != nullptr
                 ? renodx::utils::directx::pD3D12CreateDevice(pAdapter, MinimumFeatureLevel, riid, ppDevice)
                 : E_FAIL;
   is_streamline_device = false;
+
+#ifdef DEBUG_LEVEL_0
+  log::i(std::format(
+             "utils::streamline_v2::D3D12CreateDevice -> hr: {:#010x}, device: {:p}",
+             static_cast<uint32_t>(hr),
+             ppDevice != nullptr ? *ppDevice : nullptr)
+             .c_str());
+#endif
+
+  return hr;
+}
+
+extern "C" decltype(&D3D12GetInterface) Real_D3D12GetInterface = nullptr;
+extern "C" HRESULT Hooked_D3D12GetInterface(REFCLSID rclsid, REFIID riid, void** ppvDebug) {
+  renodx::utils::directx::Initialize();
+
+#ifdef DEBUG_LEVEL_0
+  log::i(std::format(
+             "utils::streamline_v2::D3D12GetInterface(rclsid: {}, riid: {}, out: {:p})",
+             rclsid.Data1,
+             riid.Data1,
+             (void*)ppvDebug)
+             .c_str());
+#endif
+
+  auto hr = renodx::utils::directx::pD3D12GetInterface != nullptr
+                ? renodx::utils::directx::pD3D12GetInterface(rclsid, riid, ppvDebug)
+                : E_NOINTERFACE;
+
+#ifdef DEBUG_LEVEL_0
+  log::i(std::format(
+             "utils::streamline_v2::D3D12GetInterface -> hr: {:#010x}, interface: {:p}",
+             static_cast<uint32_t>(hr),
+             ppvDebug != nullptr ? *ppvDebug : nullptr)
+             .c_str());
+#endif
 
   return hr;
 }
@@ -582,32 +634,76 @@ extern "C" HRESULT Hooked_CreateDXGIFactory1(REFIID riid, void** ppFactory) {
 static decltype(&CreateDXGIFactory2) Real_CreateDXGIFactory2 = nullptr;
 SL_API HRESULT Hooked_CreateDXGIFactory2(UINT flags, REFIID riid, void** ppFactory) {
   renodx::utils::directx::Initialize();
+#ifdef DEBUG_LEVEL_0
+  log::i(std::format(
+             "utils::streamline_v2::CreateDXGIFactory2(flags: {:#x}, ppFactory: {:p})",
+             flags,
+             (void*)ppFactory)
+             .c_str());
+#endif
+
+  if (!SUPPORT_UNKNOWN_CREATE_DXGI_FACTORY2_FLAGS && (flags & ~CREATE_DXGI_FACTORY2_ALLOWED_FLAGS) != 0u) {
+    if (renodx::utils::directx::pCreateDXGIFactory2 != nullptr) {
+      return renodx::utils::directx::pCreateDXGIFactory2(flags, riid, ppFactory);
+    }
+    if (Real_CreateDXGIFactory2 != nullptr) {
+      return Real_CreateDXGIFactory2(flags, riid, ppFactory);
+    }
+    return E_NOINTERFACE;
+  }
+
+  if (ppFactory == nullptr) {
+    return E_POINTER;
+  }
+
+  if (renodx::utils::directx::pCreateDXGIFactory2 == nullptr) {
+    return E_NOINTERFACE;
+  }
+
   // Make real ReShade Factory instead of Streamline factory
   IDXGIFactory2* unknown = nullptr;
   auto ret = renodx::utils::directx::pCreateDXGIFactory2(flags, riid, reinterpret_cast<void**>(&unknown));
-  if (ret != S_OK) {
+#ifdef DEBUG_LEVEL_0
+  log::i(std::format(
+             "utils::streamline_v2::CreateDXGIFactory2 -> reshade hr: {:#010x}, unknown: {:p}",
+             static_cast<uint32_t>(ret),
+             (void*)unknown)
+             .c_str());
+#endif
+  if (FAILED(ret) || unknown == nullptr) {
     log::e("utils::streamline_v2::CreateDXGIFactory2() - Failed to create DXGIFactory2");
     return ret;
   }
-  IDXGIFactory7* dxgi_factory7{};
-  if (SUCCEEDED(unknown->QueryInterface(&dxgi_factory7))) {
-    dxgi_factory7->Release();
 
-    // Upgrade ReShade's internal factory to use the Streamline factory
-    DXGIFactory* reshade_factory = nullptr;
-    UINT size = sizeof(reshade_factory);
-    dxgi_factory7->GetPrivateData(__uuidof(DXGIFactory), &size, &reshade_factory);
-    if (reshade_factory == nullptr) {
-      log::e("utils::streamline_v2::CreateDXGIFactory2() - Failed to get DXGIFactory proxy from IDXGIFactory7");
-    }
-    auto* real_factory = (IDXGIFactory7*)reshade_factory->_orig;
+  *ppFactory = unknown;
 
-    Real_slUpgradeInterface((void**)&real_factory);  // Now Streamline factory
-
-    reshade_factory->_orig = real_factory;
-
-    *ppFactory = reshade_factory;
+  // Upgrade ReShade's internal factory to use the Streamline factory
+  DXGIFactory* reshade_factory = nullptr;
+  UINT size = sizeof(reshade_factory);
+  const HRESULT proxy_result = unknown->GetPrivateData(__uuidof(DXGIFactory), &size, &reshade_factory);
+  if (FAILED(proxy_result) || reshade_factory == nullptr) {
+    log::e("utils::streamline_v2::CreateDXGIFactory2() - Failed to get DXGIFactory proxy from IDXGIFactory7");
+    return ret;
   }
+  auto* real_factory = (IDXGIFactory7*)reshade_factory->_orig;
+
+  auto upgrade_result = Real_slUpgradeInterface((void**)&real_factory);  // Now Streamline factory
+  if (upgrade_result != sl::Result::eOk || real_factory == nullptr) {
+    log::e("utils::streamline_v2::CreateDXGIFactory2() - Failed to upgrade DXGIFactory interface");
+    return ret;
+  }
+
+#ifdef DEBUG_LEVEL_0
+  log::i(std::format(
+             "utils::streamline_v2::CreateDXGIFactory2 -> upgraded factory: reshade {:p}, original {:p}",
+             (void*)reshade_factory,
+             (void*)real_factory)
+             .c_str());
+#endif
+
+  reshade_factory->_orig = real_factory;
+
+  *ppFactory = reshade_factory;
 
   return ret;
 }
@@ -903,8 +999,17 @@ static sl::Result Hooked_slSetTag(const sl::ViewportHandle& viewport, const sl::
   }
 #endif
 
-  sl::ResourceTag* new_tags = nullptr;
-  std::vector<sl::Resource> rewritten_resources = {};
+  static thread_local std::vector<sl::ResourceTag> rewritten_tags;
+  static thread_local std::vector<sl::Resource> rewritten_resources;
+  uint32_t rewritten_resource_count = 0u;
+  uint32_t last_written_tag_index = 0u;
+  auto copy_tags_until = [&](uint32_t end_index) {
+    if (rewritten_tags.size() < numTags) rewritten_tags.resize(numTags);
+    if (last_written_tag_index < end_index) {
+      memcpy(rewritten_tags.data() + last_written_tag_index, tags + last_written_tag_index, sizeof(sl::ResourceTag) * (end_index - last_written_tag_index));
+      last_written_tag_index = end_index;
+    }
+  };
   for (auto i = 0u; i < numTags; ++i) {
     const auto& tag = tags[i];
     // if (tag.type == sl::kBufferTypeBackbuffer) continue;
@@ -937,31 +1042,28 @@ static sl::Result Hooked_slSetTag(const sl::ViewportHandle& viewport, const sl::
     }
 
     if (redirected_native != tag.resource->native) {
-      if (new_tags == nullptr) {
-        auto size = sizeof(sl::ResourceTag) * numTags;
-        new_tags = reinterpret_cast<sl::ResourceTag*>(malloc(sizeof(sl::ResourceTag) * numTags));
-        memcpy(new_tags, tags, sizeof(sl::ResourceTag) * numTags);
-        rewritten_resources.reserve(numTags);
+      if (rewritten_resource_count == 0u) {
+        if (rewritten_resources.size() < numTags) rewritten_resources.resize(numTags);
       }
+      copy_tags_until(i);
 
-      rewritten_resources.emplace_back(tag.resource->type, redirected_native, tag.resource->state);
-      auto new_sl_resource_tag = sl::ResourceTag(&rewritten_resources.back(), tag.type, tag.lifecycle, &tag.extent);
-      new_tags[i] = new_sl_resource_tag;
+      rewritten_resources[rewritten_resource_count] = sl::Resource(tag.resource->type, redirected_native, tag.resource->state);
+      auto new_sl_resource_tag = sl::ResourceTag(&rewritten_resources[rewritten_resource_count++], tag.type, tag.lifecycle, &tag.extent);
+      rewritten_tags[i] = new_sl_resource_tag;
+      last_written_tag_index = i + 1u;
     }
-    // }
   }
 
   const bool unwrapped = utils::directx::NativeFromReShadeProxy(&cmdBuffer);
   assert((unwrapped || cmdBuffer == nullptr) && "slSetTag expected a ReShade proxy command buffer.");
 
   // return sl::Result::eOk;
-  if (new_tags == nullptr) {
+  if (rewritten_resource_count == 0u) {
     return Real_slSetTag(viewport, tags, numTags, cmdBuffer);
   }
+  copy_tags_until(numTags);
 
-  sl::Result result = Real_slSetTag(viewport, new_tags, numTags, cmdBuffer);
-  free(new_tags);
-  new_tags = nullptr;
+  sl::Result result = Real_slSetTag(viewport, rewritten_tags.data(), numTags, cmdBuffer);
   return result;
 }
 
@@ -1102,8 +1204,17 @@ static sl::Result Hooked_slSetTagForFrame(const sl::FrameToken& frame, const sl:
   }
 #endif
 
-  sl::ResourceTag* new_tags = nullptr;
-  std::vector<sl::Resource> rewritten_resources = {};
+  static thread_local std::vector<sl::ResourceTag> rewritten_tags;
+  static thread_local std::vector<sl::Resource> rewritten_resources;
+  uint32_t rewritten_resource_count = 0u;
+  uint32_t last_written_tag_index = 0u;
+  auto copy_tags_until = [&](uint32_t end_index) {
+    if (rewritten_tags.size() < numTags) rewritten_tags.resize(numTags);
+    if (last_written_tag_index < end_index) {
+      memcpy(rewritten_tags.data() + last_written_tag_index, tags + last_written_tag_index, sizeof(sl::ResourceTag) * (end_index - last_written_tag_index));
+      last_written_tag_index = end_index;
+    }
+  };
   for (auto i = 0u; i < numTags; ++i) {
     const auto& tag = tags[i];
     if (tag.type == sl::kBufferTypeBackbuffer) continue;
@@ -1123,29 +1234,27 @@ static sl::Result Hooked_slSetTagForFrame(const sl::FrameToken& frame, const sl:
     }
 
     if (redirected_native != tag.resource->native) {
-      if (new_tags == nullptr) {
-        auto size = sizeof(sl::ResourceTag) * numTags;
-        new_tags = reinterpret_cast<sl::ResourceTag*>(malloc(sizeof(sl::ResourceTag) * numTags));
-        memcpy(new_tags, tags, sizeof(sl::ResourceTag) * numTags);
-        rewritten_resources.reserve(numTags);
+      if (rewritten_resource_count == 0u) {
+        if (rewritten_resources.size() < numTags) rewritten_resources.resize(numTags);
       }
+      copy_tags_until(i);
 
-      rewritten_resources.emplace_back(tag.resource->type, redirected_native, tag.resource->state);
-      auto new_sl_resource_tag = sl::ResourceTag(&rewritten_resources.back(), tag.type, tag.lifecycle, &tag.extent);
-      new_tags[i] = new_sl_resource_tag;
+      rewritten_resources[rewritten_resource_count] = sl::Resource(tag.resource->type, redirected_native, tag.resource->state);
+      auto new_sl_resource_tag = sl::ResourceTag(&rewritten_resources[rewritten_resource_count++], tag.type, tag.lifecycle, &tag.extent);
+      rewritten_tags[i] = new_sl_resource_tag;
+      last_written_tag_index = i + 1u;
     }
   }
 
   const bool unwrapped = utils::directx::NativeFromReShadeProxy(&cmdBuffer);
   assert((unwrapped || cmdBuffer == nullptr) && "slSetTagForFrame expected a ReShade proxy command buffer.");
 
-  if (new_tags == nullptr) {
+  if (rewritten_resource_count == 0u) {
     return Real_slSetTagForFrame(frame, viewport, tags, numTags, cmdBuffer);
   }
+  copy_tags_until(numTags);
 
-  sl::Result result = Real_slSetTagForFrame(frame, viewport, new_tags, numTags, cmdBuffer);
-  free(new_tags);
-  new_tags = nullptr;
+  sl::Result result = Real_slSetTagForFrame(frame, viewport, rewritten_tags.data(), numTags, cmdBuffer);
   return result;
 }
 
@@ -1162,6 +1271,7 @@ static const std::vector<std::tuple<const char*, void**, void*>> INTERPOSER_HOOK
     {"CreateDXGIFactory1", (void**)&Real_CreateDXGIFactory1, &Hooked_CreateDXGIFactory1},
     {"CreateDXGIFactory2", (void**)&Real_CreateDXGIFactory2, &Hooked_CreateDXGIFactory2},
     {"D3D12CreateDevice", (void**)&Real_D3D12CreateDevice, &Hooked_D3D12CreateDevice},
+    {"D3D12GetInterface", (void**)&Real_D3D12GetInterface, &Hooked_D3D12GetInterface},
 };
 
 }  // namespace renodx::utils::streamline::v2
