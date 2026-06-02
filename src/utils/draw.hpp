@@ -71,19 +71,10 @@ struct SwapchainProxyPass {
 #endif
 
     reshade::api::resource existing_clone = {0u};
+    bool destroyed = false;
     const auto found_resource_info = utils::resource::GetResourceInfo(current_back_buffer, [&](const utils::resource::ResourceInfo& info) {
       existing_clone = info.clone;
-    });
-    if (!found_resource_info) {
-      std::stringstream s;
-      s << "utils::draw::SwapchainProxyPass::Render(failed: no resource_info";
-      s << ", bb=" << PRINT_PTR(current_back_buffer.handle);
-      s << ")";
-      reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      return false;
-    }
-
-    utils::resource::GetResourceInfo(current_back_buffer, [&](const utils::resource::ResourceInfo& info) {
+      destroyed = info.destroyed;
 #ifdef DEBUG_LEVEL_2
       {
         std::stringstream s;
@@ -117,17 +108,34 @@ struct SwapchainProxyPass {
         s << ")";
         reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
-#else
-      (void)info;
 #endif
     });
 
+    if (!found_resource_info) {
+      std::stringstream s;
+      s << "utils::draw::SwapchainProxyPass::Render(failed: no resource_info";
+      s << ", bb=" << PRINT_PTR(current_back_buffer.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      return false;
+    }
+
+    if (destroyed) {
+      std::stringstream s;
+      s << "utils::draw::SwapchainProxyPass::Render(failed: resource destroyed";
+      s << ", bb=" << PRINT_PTR(current_back_buffer.handle);
+      s << ")";
+      reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      return false;
+    }
     reshade::api::resource swapchain_clone;
 
     if (swapchain_clone_override != nullptr && swapchain_clone_override->handle != 0u) {
       swapchain_clone = *swapchain_clone_override;
     } else if (use_compatibility_mode) {
-      swapchain_clone = renodx::utils::resource::upgrade::GetResourceClone(current_back_buffer);
+      swapchain_clone = (existing_clone.handle != 0u)
+                            ? existing_clone
+                            : renodx::utils::resource::upgrade::CloneResource(current_back_buffer);
       if (swapchain_clone.handle == 0u) {
         std::stringstream s;
         s << "utils::draw::SwapchainProxyPass::Render(failed: no clone after CloneResource";
