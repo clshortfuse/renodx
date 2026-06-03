@@ -643,9 +643,6 @@ SL_API HRESULT Hooked_CreateDXGIFactory2(UINT flags, REFIID riid, void** ppFacto
 #endif
 
   if (!SUPPORT_UNKNOWN_CREATE_DXGI_FACTORY2_FLAGS && (flags & ~CREATE_DXGI_FACTORY2_ALLOWED_FLAGS) != 0u) {
-    if (renodx::utils::directx::pCreateDXGIFactory2 != nullptr) {
-      return renodx::utils::directx::pCreateDXGIFactory2(flags, riid, ppFactory);
-    }
     if (Real_CreateDXGIFactory2 != nullptr) {
       return Real_CreateDXGIFactory2(flags, riid, ppFactory);
     }
