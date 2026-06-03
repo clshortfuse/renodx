@@ -158,7 +158,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
         .binding = &shader_injection.tone_map_exposure,
-        .default_value = 0.80f,
+        .default_value = 1.00f,
         .label = "Exposure",
         .section = "Color Grading",
         .max = 2.f,
@@ -188,7 +188,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
         .binding = &shader_injection.tone_map_contrast,
-        .default_value = 58.f,
+        .default_value = 50.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -197,7 +197,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
         .binding = &shader_injection.tone_map_saturation,
-        .default_value = 55.f,
+        .default_value = 50.f,
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
@@ -206,7 +206,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.tone_map_highlight_saturation,
-        .default_value = 52.f,
+        .default_value = 50.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -272,7 +272,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FilmGrain",
         .binding = &shader_injection.custom_film_grain,
-        .default_value = 12.f,
+        .default_value = 6.f,
         .label = "Film Grain",
         .section = "Effects",
         .tooltip = "Adds perceptual film grain to mask banding",
