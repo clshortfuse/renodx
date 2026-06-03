@@ -202,6 +202,7 @@ class Server {
     return renodx::utils::json_rpc::SuccessResponseMessage{
         .id = id,
         .result = InitializeResult{
+            .protocol_version = NegotiateProtocolVersionFromInitializeParams(params),
             .server_info = {
                 .name = config.server_name,
                 .title = config.server_title,

@@ -172,6 +172,77 @@ inline void to_json(json& j, const ResourceSummary& value) {
   }
 }
 
+struct UploadSignatureSummary {
+  std::string source;
+  std::string label;
+  std::uint32_t subresource = 0u;
+  std::string crc32;
+  std::uint32_t crc32_value = 0u;
+  std::string format;
+  std::uint32_t format_value = 0u;
+  std::uint32_t width = 0u;
+  std::uint32_t height = 0u;
+  std::uint32_t depth_or_layers = 0u;
+  std::uint32_t row_pitch = 0u;
+  std::uint32_t slice_pitch = 0u;
+  std::uint64_t source_size = 0u;
+  bool full_update = true;
+};
+
+// NOLINTNEXTLINE(readability-identifier-naming)
+inline void to_json(json& j, const UploadSignatureSummary& value) {
+  j = {
+      {"source", value.source},
+      {"label", value.label},
+      {"subresource", value.subresource},
+      {"crc32", value.crc32},
+      {"crc32Value", value.crc32_value},
+      {"format", value.format},
+      {"formatValue", value.format_value},
+      {"width", value.width},
+      {"height", value.height},
+      {"depthOrLayers", value.depth_or_layers},
+      {"rowPitch", value.row_pitch},
+      {"slicePitch", value.slice_pitch},
+      {"sourceSize", value.source_size},
+      {"fullUpdate", value.full_update},
+  };
+}
+
+struct UploadSummary {
+  std::optional<UploadSignatureSummary> initial = std::nullopt;
+  std::optional<UploadSignatureSummary> latest = std::nullopt;
+};
+
+// NOLINTNEXTLINE(readability-identifier-naming)
+inline void to_json(json& j, const UploadSummary& value) {
+  j = {
+      {"initial", value.initial.has_value() ? json(value.initial.value()) : json(nullptr)},
+      {"latest", value.latest.has_value() ? json(value.latest.value()) : json(nullptr)},
+  };
+}
+
+struct TextureReplaceSummary {
+  bool has_initial_data = false;
+  bool boot_compatible = false;
+  bool default_rule_match = false;
+  std::optional<std::string> reason = std::nullopt;
+  std::optional<std::string> boot_file_name = std::nullopt;
+  std::optional<std::string> boot_path = std::nullopt;
+};
+
+// NOLINTNEXTLINE(readability-identifier-naming)
+inline void to_json(json& j, const TextureReplaceSummary& value) {
+  j = {
+      {"hasInitialData", value.has_initial_data},
+      {"bootCompatible", value.boot_compatible},
+      {"defaultRuleMatch", value.default_rule_match},
+      {"reason", value.reason.has_value() ? json(value.reason.value()) : json(nullptr)},
+      {"bootFileName", value.boot_file_name.has_value() ? json(value.boot_file_name.value()) : json(nullptr)},
+      {"bootPath", value.boot_path.has_value() ? json(value.boot_path.value()) : json(nullptr)},
+  };
+}
+
 struct ModSummary {
   bool is_swapchain = false;
   bool is_render_target_upgraded = false;
@@ -216,6 +287,8 @@ struct ResourceViewSummary {
   std::optional<std::string> resource_reflection = std::nullopt;
   ResourceSummary resource;
   ModSummary mod;
+  std::optional<UploadSummary> upload = std::nullopt;
+  std::optional<TextureReplaceSummary> texture_replace = std::nullopt;
   std::optional<CloneSummary> clone = std::nullopt;
 };
 
@@ -229,6 +302,8 @@ inline void to_json(json& j, const ResourceViewSummary& value) {
       {"resourceReflection", value.resource_reflection.has_value() ? json(value.resource_reflection.value()) : json(nullptr)},
       {"resource", value.resource},
       {"mod", value.mod},
+      {"upload", value.upload.has_value() ? json(value.upload.value()) : json(nullptr)},
+      {"textureReplace", value.texture_replace.has_value() ? json(value.texture_replace.value()) : json(nullptr)},
       {"clone", value.clone.has_value() ? json(value.clone.value()) : json(nullptr)},
   };
 }

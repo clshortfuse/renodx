@@ -11,7 +11,7 @@
 namespace renodx::mods::swapchain {
 
 #ifndef RENODX_MODS_SWAPCHAIN_VERSION
-#define RENODX_MODS_SWAPCHAIN_VERSION 1
+#define RENODX_MODS_SWAPCHAIN_VERSION 2
 #endif
 
 #if RENODX_MODS_SWAPCHAIN_VERSION == 1

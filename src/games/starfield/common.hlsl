@@ -29,7 +29,7 @@ half3 ComputeCAS(half3 a, half3 b, half3 c, half3 d, half3 e, half strength) {
   half value_2 = 1.0h / (value_1 * 4.0h + 1.0h);
 
   half3 computed = ((value_1 * (a + b + d + e) + c) * value_2);
-  computed = renodx::color::bt709::clamp::BT2020(computed);
+  computed = (half3)renodx::color::bt709::clamp::BT2020(computed);
   return computed;
 }
 

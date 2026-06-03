@@ -73,4 +73,51 @@ namespace renodx::utils::float16 {
   return encoded;
 }
 
+// Converts an IEEE 754 binary16 value to IEEE 754 float32.
+[[nodiscard]] inline float Decode(std::uint16_t value) {
+  static constexpr std::uint16_t HALF_SIGN_MASK = 0b10000000'00000000u;
+  static constexpr std::uint16_t HALF_EXPONENT_MASK = 0b01111100'00000000u;
+  static constexpr std::uint16_t HALF_MANTISSA_MASK = 0b00000011'11111111u;
+
+  static constexpr std::uint32_t FLOAT32_SIGN_MASK = 0x80000000u;
+  static constexpr std::uint32_t FLOAT32_EXPONENT_MASK = 0x7F800000u;
+  static constexpr std::uint32_t FLOAT32_MANTISSA_MASK = 0x007FFFFFu;
+
+  std::uint32_t bits = static_cast<std::uint32_t>(value & HALF_SIGN_MASK) << 16u;
+  const auto exponent = static_cast<std::uint16_t>((value & HALF_EXPONENT_MASK) >> 10u);
+  const auto mantissa = static_cast<std::uint16_t>(value & HALF_MANTISSA_MASK);
+
+  if (exponent == 0u) {
+    if (mantissa == 0u) {
+      return std::bit_cast<float>(bits);
+    }
+
+    // Renormalize denormals into float32 format.
+    std::uint32_t normalized_mantissa = mantissa;
+    int normalized_exponent = -14;
+    while ((normalized_mantissa & 0x400u) == 0u) {
+      normalized_mantissa <<= 1u;
+      --normalized_exponent;
+    }
+    normalized_mantissa &= HALF_MANTISSA_MASK;
+    bits |= static_cast<std::uint32_t>(normalized_exponent + 127) << 23u;
+    bits |= normalized_mantissa << 13u;
+    return std::bit_cast<float>(bits);
+  }
+
+  if (exponent == 0x1Fu) {
+    bits |= FLOAT32_EXPONENT_MASK;
+    if (mantissa != 0u) {
+      bits |= static_cast<std::uint32_t>(mantissa) << 13u;
+      bits |= 0x00400000u;  // quiet NaN
+    }
+    return std::bit_cast<float>(bits);
+  }
+
+  bits |= static_cast<std::uint32_t>(exponent + (127 - 15)) << 23u;
+  bits |= static_cast<std::uint32_t>(mantissa) << 13u;
+  bits &= (FLOAT32_SIGN_MASK | FLOAT32_EXPONENT_MASK | FLOAT32_MANTISSA_MASK);
+  return std::bit_cast<float>(bits);
+}
+
 }  // namespace renodx::utils::float16

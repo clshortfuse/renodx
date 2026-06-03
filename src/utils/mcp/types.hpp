@@ -28,6 +28,9 @@ struct InputSchemaProperty {
   std::vector<std::string> enum_values;
   std::vector<std::string> item_types;
   std::vector<std::string> item_enum_values;
+  std::vector<std::pair<std::string, InputSchemaProperty>> item_properties;
+  std::vector<std::string> item_required;
+  bool item_additional_properties = false;
 };
 
 struct InputSchema {
@@ -81,6 +84,10 @@ inline void to_json(json& value, const InputSchemaProperty& property) {
   if (property.item_types.empty() && !property.item_enum_values.empty()) {
     throw std::logic_error("InputSchemaProperty.item_enum_values requires item_types.");
   }
+  if (property.item_types.empty()
+      && (!property.item_properties.empty() || !property.item_required.empty() || property.item_additional_properties)) {
+    throw std::logic_error("InputSchemaProperty.item_properties requires item_types.");
+  }
 
   value = json::object();
   if (property.types.size() == 1u) {
@@ -106,6 +113,17 @@ inline void to_json(json& value, const InputSchemaProperty& property) {
     }
     if (!property.item_enum_values.empty()) {
       items["enum"] = property.item_enum_values;
+    }
+    if (!property.item_properties.empty()) {
+      json item_properties = json::object();
+      for (const auto& [field_name, item_property] : property.item_properties) {
+        item_properties[field_name] = item_property;
+      }
+      items["properties"] = std::move(item_properties);
+      items["additionalProperties"] = property.item_additional_properties;
+      if (!property.item_required.empty()) {
+        items["required"] = property.item_required;
+      }
     }
     value["items"] = items;
   }

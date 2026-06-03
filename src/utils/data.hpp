@@ -6,10 +6,18 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
+#include <shared_mutex>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include <gtl/phmap.hpp>
 
 #include <include/reshade.hpp>
+
+#include "./platform.hpp"
 
 namespace renodx::utils::data {
 
@@ -45,7 +53,7 @@ inline T* Get(const reshade::api::api_object* api_object) {
 template <typename T, typename... Args>
 inline T* Create(reshade::api::api_object* api_object, Args&&... args) {
   uint64_t res;
-  res = reinterpret_cast<uintptr_t>(new T(static_cast<Args&&>(args)...));
+  res = reinterpret_cast<uintptr_t>(new T(std::forward<Args>(args)...));
   api_object->set_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), res);
   return reinterpret_cast<T*>(static_cast<uintptr_t>(res));
 }
@@ -55,7 +63,7 @@ inline bool CreateOrGet(reshade::api::api_object* api_object, T*& private_data, 
   uint64_t res;
   api_object->get_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), &res);
   if (res == 0) {
-    res = reinterpret_cast<uintptr_t>(new T(static_cast<Args&&>(args)...));
+    res = reinterpret_cast<uintptr_t>(new T(std::forward<Args>(args)...));
     api_object->set_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), res);
     private_data = reinterpret_cast<T*>(static_cast<uintptr_t>(res));
     // modelled after insert_or_assign()
@@ -66,14 +74,21 @@ inline bool CreateOrGet(reshade::api::api_object* api_object, T*& private_data, 
 }
 
 template <typename T>
-inline void Delete(reshade::api::api_object* api_object, T* private_data) {
+inline void Delete(reshade::api::api_object* api_object, T* const private_data) {
   delete private_data;
   api_object->set_private_data(reinterpret_cast<const uint8_t*>(&__uuidof(T)), 0);
 }
 
 template <typename T>
 inline void Delete(reshade::api::api_object* api_object) {
-  Delete(api_object, api_object->get_private_data<T>());
+  auto* private_data = Get<T>(api_object);
+  if (private_data == nullptr) return;
+  Delete(api_object, private_data);
+}
+
+template <typename T, typename... Args>
+inline T* CreateSharedObject(Args&&... args) {
+  return platform::CreateSharedObject<T>(std::forward<Args>(args)...);
 }
 
 }  // namespace renodx::utils::data

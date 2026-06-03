@@ -1,4 +1,5 @@
 #include "../shared.h"
+#include "common.hlsli"
 
 struct CameraBlock {
   float3 CameraBlock_000;
@@ -545,9 +546,34 @@ float4 main(
 
   float3 untonemapped = float3(_70, _71, _72);
 
+  int vanilla_tonemap_mode = int((uint)(stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_004));
+  StarfieldVanillaTonemapParams vanilla_tonemap_params = StarfieldCreateVanillaTonemapParams(
+      vanilla_tonemap_mode,
+      PerSceneConstants_000.SPerSceneConstants_52144.TonemappingParams_000,
+      PerSceneConstants_000.SPerSceneConstants_52144.TonemappingParams_004,
+      PerSceneConstants_000.SPerSceneConstants_52144.TonemappingParams_008,
+      PerSceneConstants_000.SPerSceneConstants_52144.TonemappingParams_012,
+      PerSceneConstants_000.SPerSceneConstants_52144.TonemappingParams_016,
+      PerSceneConstants_000.SPerSceneConstants_52144.TonemappingParams_020,
+      PerSceneConstants_000.SPerSceneConstants_52144.TonemappingParams_024);
+  const float vanilla_midgray_input = 0.18f;
+  float vanilla_midgray_output = vanilla_midgray_input;
+  StarfieldVanillaTonemapReference vanilla_reference;
+  vanilla_reference.input = vanilla_midgray_input;
+  vanilla_reference.output = vanilla_midgray_input;
+  vanilla_reference.slope = 1.f;
+  vanilla_reference.exposure = 1.f;
+  vanilla_reference.contrast = 1.f;
+  float2 vanilla_reference_io = vanilla_midgray_input.xx;
+  float vanilla_reference_slope = 1.f;
+
   float mid_gray = 0.18f;
   // Duplicate for midgray computation
-  {
+  [branch]
+  if (RENODX_TONE_MAP_TYPE != RENODX_TONE_MAP_TYPE_VANILLA) {
+    vanilla_midgray_output = StarfieldEvalVanillaTonemapScalar(
+        vanilla_midgray_input,
+        vanilla_tonemap_params);
     _70 = 0.18f;
     if ((uint)(stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_004) == 0) {
       _302 = (saturate(_70));
@@ -645,11 +671,11 @@ float4 main(
         }
       }
     }
-    mid_gray = _302;
+    mid_gray = vanilla_midgray_output;
     _70 = untonemapped.r;
   }
 
-  if (CUSTOM_VANILLA_BY_LUMINANCE != 0) {
+  if (CUSTOM_RENODRT_TONEMAP_BY_LUMINANCE) {
     _70 = renodx::color::y::from::BT709(untonemapped);
   }
 
@@ -780,7 +806,7 @@ float4 main(
   float _405 = (_360 / ((sqrt((_360 * _360) + 1.0f)) * _366)) + 0.5f;
   float _406 = (_361 / ((sqrt((_361 * _361) + 1.0f)) * _366)) + 0.5f;
 
-  if (CUSTOM_VANILLA_BY_LUMINANCE != 0) {
+  if (CUSTOM_RENODRT_TONEMAP_BY_LUMINANCE) {
     float3 by_luminance = untonemapped * renodx::math::DivideSafe(_404, _70, 0);
     by_luminance = renodx::color::correct::Hue(by_luminance, untonemapped, 1.f);
 
@@ -798,19 +824,16 @@ float4 main(
   _405 = corrected_color.g;
   _406 = corrected_color.b;
 
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.lut_sampler = s0;
-  lut_config.strength = CUSTOM_LUT_STRENGTH;
-  lut_config.scaling = CUSTOM_LUT_SCALING;
-  lut_config.tetrahedral = false;
-  lut_config.type_input = renodx::lut::config::type::SRGB;
-  lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.size = 16u;
-  lut_config.recolor = 0.f;  // imprecise
-  float3 lut_output_color = renodx::lut::Sample(float3(_404, _405, _406), lut_config, t3);
+  if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_VANILLA) {
+    _404 = saturate(_404);
+    _405 = saturate(_405);
+    _406 = saturate(_406);
+  }
 
-  float3 mid_gray_lut = renodx::lut::Sample((mid_gray).xxx, lut_config, t3);
-  mid_gray = renodx::color::y::from::BT709(mid_gray_lut);
+  renodx::lut::Config lut_config = StarfieldCreateLutConfig(s0);
+  float3 lut_output_color = StarfieldSampleLut(float3(_404, _405, _406), lut_config, t3);
+  float mid_gray_tonemap = mid_gray;
+  mid_gray = StarfieldComputeMidGrayAfterLut(mid_gray, lut_config, t3);
 
   // float3 _415 = t3.Sample(s0, float3(((_404 * 0.9375f) + 0.03125f), ((_405 * 0.9375f) + 0.03125f), ((_406 * 0.9375f) + 0.03125f)));
   float3 _415 = renodx::color::srgb::EncodeSafe(lut_output_color);
@@ -850,8 +873,51 @@ float4 main(
   float3 vanilla_linear = renodx::color::srgb::DecodeSafe(SV_Target.rgb);
   float3 color = vanilla_linear;
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    color = renodx::draw::ToneMapPass(untonemapped * mid_gray / 0.18f, vanilla_linear);
+  [branch]
+  if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_PSYCHOV17) {
+    float mid_gray_scale = renodx::math::DivideSafe(mid_gray_tonemap, STARFIELD_TONEMAP_MID_GRAY, 1.f);
+    [branch]
+    if (CUSTOM_PSYCHOV_USE_VANILLA_MIDGRAY || CUSTOM_PSYCHOV_USE_VANILLA_SLOPE) {
+      vanilla_reference = StarfieldResolvePsychoVVanillaReference(
+          mid_gray_tonemap,
+          vanilla_tonemap_params);
+      vanilla_reference_io = float2(vanilla_reference.input, vanilla_reference.output);
+      vanilla_reference_slope = vanilla_reference.slope;
+      [branch]
+      if (CUSTOM_PSYCHOV_USE_VANILLA_MIDGRAY) {
+        mid_gray_scale = vanilla_reference.exposure;
+      }
+    }
+    float2 psychov_packed_eye = STARFIELD_PSYCHOV_NEUTRAL_EYE_AVERAGE.xx;
+    [branch]
+    if (CUSTOM_EYE_ADAPTATION_PERCEPTUAL) {
+      psychov_packed_eye = StarfieldResolvePsychoVEyeAdaptation().xy;
+    }
+    color = StarfieldPsychoVPass(
+        untonemapped,
+        mid_gray_tonemap,
+        mid_gray_scale,
+        vanilla_reference_io.x,
+        vanilla_reference_io.y,
+        vanilla_reference_slope,
+        psychov_packed_eye.x,
+        psychov_packed_eye.y,
+        TEXCOORD,
+        lut_config,
+        t3,
+        t1,
+        s0);
+  } else if (RENODX_TONE_MAP_TYPE != 0.f) {
+    color = StarfieldRenoDRTPass(
+        untonemapped,
+        vanilla_linear,
+        mid_gray_tonemap,
+        TEXCOORD.xy,
+        lut_config,
+        t3,
+        t1,
+        s0,
+        vanilla_tonemap_params);
   } else {
     color = max(0, color);
   }

@@ -33,6 +33,10 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
+  if (HandleFinal(float4(HDRScene.Sample(PointSampler_s, v2.xy).xyz, 1.f), UIScene.Sample(PointSampler_s, v2.xy).xyzw, o0, v0)) {
+    return;
+  }
+
   r0.x = 0.100000024 * uiMaxLumScale;
   r0.yzw = HDRScene.Sample(PointSampler_s, v2.xy).xyz;
   float4 scene = float4(r0.yzw, 1.f);
@@ -53,10 +57,10 @@ void main(
   r0.x = r0.x + -r1.x;
   r2.xyzw = UIScene.Sample(PointSampler_s, v2.xy).xyzw;
   float4 ui = r2;
-  
-  if (HandleFinal(scene, ui, o0, v0)) {
-    return;
-  }
+
+  // if (HandleFinal(scene, ui, o0, v0)) {
+  //   return;
+  // }
 
   r1.y = -r2.w * r2.w + 1;
   r0.x = r1.y * r0.x + r1.x;
