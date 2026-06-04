@@ -1,9 +1,9 @@
-float4 UniformPixelVector_0 : register( c0 );
-float4 UniformPixelVector_1 : register( c4 );
-float4 UniformPixelVector_2 : register( c5 );
-float4 UniformPixelScalars_0 : register( c6 );
-float4 UniformPixelScalars_1 : register( c7 );
-float MatInverseGamma : register( c8 );
+float4 UniformPixelVector_0 : register(c0);
+float4 UniformPixelVector_1 : register(c4);
+float4 UniformPixelVector_2 : register(c5);
+float4 UniformPixelScalars_0 : register(c6);
+float4 UniformPixelScalars_1 : register(c7);
+float MatInverseGamma : register(c8);
 
 struct PS_IN
 {
