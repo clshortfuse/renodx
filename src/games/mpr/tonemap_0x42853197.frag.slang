@@ -59,7 +59,7 @@ vec3 Tonemap(vec3 color, bool extended = false)
     vec4 curve1_params = fp_c3_1._m0[2];
     vec4 curve2_params = fp_c3_1._m0[3];
 
-    precise vec3 scaled = color * fp_c3_1._m0[0].xxx;
+    precise vec3 scaled = color * fp_c3_1._m0[0].x;
     float scale = renodx::math::Select(extended, renodx::tonemap::neutwo::ComputeMaxChannelScale(scaled), 1.f);
     scaled *= scale;
     precise vec3 base_curve = fma(
