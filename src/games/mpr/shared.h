@@ -83,7 +83,7 @@ struct ShaderInjectData {
 #define CUSTOM_SATURATION_CLIP          shader_injection.custom_saturation_clip
 #define CUSTOM_BLOOM                    shader_injection.custom_bloom
 #define LENS_FLARE                      shader_injection.lens_flare
-#define RENODX_INTERMEDIATE_SCALING     (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS)
+#define RENODX_INTERMEDIATE_SCALING   (RENODX_TONE_MAP_TYPE == 0.f) ? 1.f : (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS)
 // #define RENODX_INTERMEDIATE_COLOR_SPACE        color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_DECODING         0.f  // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
 #define RENODX_INTERMEDIATE_ENCODING       0.f  // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
@@ -91,8 +91,8 @@ struct ShaderInjectData {
 #define CUSTOM_VIGNETTE                   shader_injection.custom_vignette
 // #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE RENODX_INTERMEDIATE_COLOR_SPACE
 // #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE   COLOR_SPACE_CUSTOM_BT709D65
-// #define RENODX_SWAP_CHAIN_SCALING_NITS         RENODX_GRAPHICS_WHITE_NITS
-#define RENODX_SWAP_CHAIN_CLAMP_NITS        9999.f
+#define RENODX_SWAP_CHAIN_SCALING_NITS      (RENODX_TONE_MAP_TYPE == 0.f) ? RENODX_DIFFUSE_WHITE_NITS : RENODX_GRAPHICS_WHITE_NITS
+#define RENODX_SWAP_CHAIN_CLAMP_NITS        RENODX_PEAK_WHITE_NITS
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE renodx::color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING          ENCODING_SCRGB
 // #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE color::convert::COLOR_SPACE_BT709

@@ -109,6 +109,7 @@ void main()
     _32.z = _142;
     _32.w = _144;
     //_32.xyz = ApplyColorGrade(_32.xyz);
+    _32.xyz *= CUSTOM_BLOOM;
     _32 = renodx::draw::InvertIntermediatePass(_32);
     _32 = renodx::draw::RenderIntermediatePass(_32);
 }
