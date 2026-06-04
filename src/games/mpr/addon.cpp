@@ -31,38 +31,60 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
     renodx::templates::settings::CreateDefaultSettings({
         {"ToneMapType", &shader_injection.tone_map_type},
         {"ToneMapPeakNits", &shader_injection.peak_white_nits},
-        {"ToneMapGameNits", &shader_injection.diffuse_white_nits},
-        {"ToneMapUINits", &shader_injection.graphics_white_nits},
+    }),
+    {new renodx::utils::settings::Setting{
+         .key = "ToneMapGameNits",
+         .binding = &shader_injection.diffuse_white_nits,
+         .default_value = 203.f,
+         .label = "Game Brightness",
+         .section = "Tone Mapping",
+         .tooltip = "Sets the value of 100% white in nits",
+         .min = 48.f,
+         .max = 500.f,
+     },
+     new renodx::utils::settings::Setting{
+         .key = "ToneMapUINits",
+         .binding = &shader_injection.graphics_white_nits,
+         .default_value = 203.f,
+         .label = "UI Brightness",
+         .section = "Tone Mapping",
+         .tooltip = "Sets the brightness of UI and HUD elements in nits",
+         .min = 48.f,
+         .max = 500.f,
+         .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+     }},
+     renodx::templates::settings::CreateDefaultSettings({
         {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
     }),
     {
-        new renodx::utils::settings::Setting{
-            .key = "ColorGradeScene",
-            .binding = &shader_injection.scene_grade_strength,
-            .default_value = 50.f,
-            .label = "Hue Shift",
-            .section = "Tone Mapping",
-            .tooltip = "Emulates SDR hue shifts to match vanilla",
-            .max = 100.f,
-            .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
-            .parse = [](float value) { return value * 0.01f; },
-            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
-        },
-        new renodx::utils::settings::Setting{
-            .key = "ColorGradeBlowout",
-            .binding = &shader_injection.tone_map_blowout,
-            .default_value = 50.f,
-            .label = "SDR Blowout",
-            .section = "Tone Mapping",
-            .tooltip = "Emulates SDR blowout to match vanilla",
-            .max = 100.f,
-            .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
-            .parse = [](float value) { return value * 0.01f; },
-            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeScene",
+        .binding = &shader_injection.scene_grade_strength,
+        .default_value = 50.f,
+        .label = "Hue Shift",
+        .section = "Tone Mapping",
+        .tooltip = "Emulates SDR hue shifts to match vanilla",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeBlowout",
+        .binding = &shader_injection.tone_map_blowout,
+        .default_value = 50.f,
+        .label = "SDR Blowout",
+        .section = "Tone Mapping",
+        .tooltip = "Emulates SDR blowout to match vanilla",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
         },
     },
 
     renodx::templates::settings::CreateDefaultSettings({
+        {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
         {"ColorGradeExposure", &shader_injection.tone_map_exposure},
         {"ColorGradeHighlights", &shader_injection.tone_map_highlights},
         {"ColorGradeShadows", &shader_injection.tone_map_shadows},
@@ -85,7 +107,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
         },
 
         new renodx::utils::settings::Setting{
-            .key = "FxHueClip",
+            .key = "FxBloom",
             .binding = &shader_injection.custom_bloom,
             .default_value = 100.f,
             .label = "Bloom",
@@ -93,23 +115,6 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .tooltip = "Controls vanilla bloom strength",
             .max = 100.f,
             .parse = [](float value) { return value * 0.01f; },
-        },
-        new renodx::utils::settings::Setting{
-            .key = "FxVignette",
-            .binding = &shader_injection.custom_vignette,
-            .default_value = 100.f,
-            .label = "Vignette",
-            .section = "Effects",
-            .max = 100.f,
-            .parse = [](float value) { return value * 0.01f; },
-        },
-        new renodx::utils::settings::Setting{
-            .key = "HideUI",
-            .binding = &shader_injection.hide_ui,
-            .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-            .default_value = 0,
-            .label = "Hide UI",
-            .section = "Effects",
         },
 
         // new renodx::utils::settings::Setting{
@@ -223,10 +228,8 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorGradeScene", 100.f},
-      {"FxHueClip", 100.f},
+      {"FxBloom", 100.f},
       {"LutStrength", 0.f},
-      {"FxVignette", 100.f},
-      {"HideUI", 0.f},
   });
 }
 
@@ -235,9 +238,11 @@ float res_scale = 1.f;
 
 const auto RYUJINX_PROCESS_NAME = std::string_view("Ryujinx.exe");
 const auto RYUJINX_LOADED_TITLE_MARKER = std::string_view("Application Loaded:");
-const std::array<std::string_view, 3> ACCEPTED_RYUJINX_TITLES = {
+const std::array<std::string_view, 4> ACCEPTED_RYUJINX_TITLES = {
     "010012101468c000",
+    "010019a01e2f2000",
     "metroid prime remastered",
+    "metroid prime 4: beyond"
 };
 
 bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
