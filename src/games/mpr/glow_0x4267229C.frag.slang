@@ -11,7 +11,8 @@ void main()
 {
     vec4 texel = texture(fp_t_tcb_8, in_uv.xy);
 
-    out = texel / (texel + 1.0);
+    if (RENODX_TONE_MAP_TYPE == 0) texel / (texel + 1.0);
+    out = texel;
     out.w = texel.w;
     
     out.xyz = ApplyColorGrade(out.xyz);
