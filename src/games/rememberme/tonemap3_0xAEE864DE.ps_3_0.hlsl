@@ -1,25 +1,25 @@
-#include "./common.hlsl"
+#include "./common.hlsli"
 
-float4 BloomTintAndScreenBlendThreshold : register( c0 );
-float4 ImageAdjustments1 : register( c7 );
-float4 ImageAdjustments2 : register( c8 );
-float4 HalfResMaskRect : register( c9 );
-float4 LightShaftParameters : register( c10 );
-float4 AspectRatioAndInvAspectRatio : register( c11 );
-float2 TextureSpaceBlurOrigin : register( c12 );
-float DistanceFade : register( c13 );
-float BloomScreenBlendThreshold : register( c14 );
-float4 BloomTintAndThreshold : register( c15 );
-float4 DNEImageGrainParameter : register( c16 );
-float4 DNEVignetColor : register( c17 );
-float4 DNEVignetMaskFactors : register( c18 );
-sampler2D SceneColorTexture : register( s0 );
-sampler2D FilterColor1Texture : register( s1 );
-sampler2D LightShaftsTexture : register( s2 );
-sampler2D DNEImageGrainTexture : register( s3 );
-sampler2D DNEVignetTexture : register( s4 );
-sampler2D ColorGradingLUT : register( s5 );
-sampler2D LowResPostProcessBuffer : register( s6 );
+float4 BloomTintAndScreenBlendThreshold : register(c0);
+float4 ImageAdjustments1 : register(c7);
+float4 ImageAdjustments2 : register(c8);
+float4 HalfResMaskRect : register(c9);
+float4 LightShaftParameters : register(c10);
+float4 AspectRatioAndInvAspectRatio : register(c11);
+float2 TextureSpaceBlurOrigin : register(c12);
+float DistanceFade : register(c13);
+float BloomScreenBlendThreshold : register(c14);
+float4 BloomTintAndThreshold : register(c15);
+float4 DNEImageGrainParameter : register(c16);
+float4 DNEVignetColor : register(c17);
+float4 DNEVignetMaskFactors : register(c18);
+sampler2D SceneColorTexture : register(s0);
+sampler2D FilterColor1Texture : register(s1);
+sampler2D LightShaftsTexture : register(s2);
+sampler2D DNEImageGrainTexture : register(s3);
+sampler2D DNEVignetTexture : register(s4);
+sampler2D ColorGradingLUT : register(s5);
+sampler2D LowResPostProcessBuffer : register(s6);
 
 struct PS_IN
 {
@@ -43,14 +43,13 @@ float4 main(PS_IN i) : COLOR
 	r1.xy = max(i.texcoord1.zw, HalfResMaskRect.xy);
 	r2.xy = min(HalfResMaskRect.zw, r1.xy);
 	r1 = tex2D(LowResPostProcessBuffer, r2);
+	// r0 = r1.zzxy * -4 + r0.zzxy;
+	// r2 = r1.zzxy * 4;
+	// r0 = r1.w * r0 + r2;
+	float3 hdr_color = lerp(r1.xyz * 4, r0.rgb, r1.w);
 
-    float3 hdr_color = r0.rgb;
-    float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
-
-	r0 = r1.zzxy * -4 + r0.zzxy;
-	r2 = r1.zzxy * 4;
-	r0 = r1.w * r0 + r2;
-	r1.x = dot(r0.zwy, float3(0.300000012, 0.589999974, 0.109999999));
+	// r1.x = dot(r0.zwy, float3(0.300000012, 0.589999974, 0.109999999));
+	r1.x = dot(hdr_color, float3(0.300000012, 0.589999974, 0.109999999));
 	r1.x = r1.x * -3;
 	r1.x = exp2(r1.x);
 	r1.y = saturate(r1.x * BloomTintAndScreenBlendThreshold.w);
@@ -58,14 +57,15 @@ float4 main(PS_IN i) : COLOR
 	r2 = tex2D(FilterColor1Texture, i.texcoord.zwzw);
 	r2 = r2.zzxy * BloomTintAndScreenBlendThreshold.zzxy;
 	r2 = r2 * 4 * CUSTOM_BLOOM;
-	r0 = r2 * r1.y + r0;
+	// r0 = r2 * r1.y + r0;	
+	hdr_color += r2.zwy * r1.y;
 	r1.zw = AspectRatioAndInvAspectRatio.xy;
 	r1.yz = i.texcoord.xz * -r1.xz + TextureSpaceBlurOrigin.x;
 	r1.y = dot(r1.y, r1.y) + 0;
 	r1.y = 1 / sqrt(r1.y);
 	r1.y = 1 / r1.y;
 	r1.y = saturate(r1.y * 0.5);
-	r2.xy = float2(0.5, 1.5);
+	r2.xy = float4(0.5, 1.5, 15, 0.0625).xy;
 	r1.z = LightShaftParameters.w * -r2.x + r2.y;
 	r2 = tex2D(LightShaftsTexture, i.texcoord.zwzw);
 	r1.w = r2.w * r2.w;
@@ -76,8 +76,16 @@ float4 main(PS_IN i) : COLOR
 	r1.x = DistanceFade.x * DistanceFade.x;
 	r1.x = r1.x * DistanceFade.x;
 	r3.x = lerp(r4.x, 1, r1.x);
-	r0 = r0 * r3.x;
-	r0 = r2 * 4 + r0;
+	// r0 = r0 * r3.x;
+	// r0 = r2 * 4 + r0;
+	hdr_color = hdr_color * r3.x + r2.zwy * 4;
+	float3 hdr_color_tm = renodx::tonemap::neutwo::ComputeMaxChannelScale(hdr_color);
+	float3 pre_lut_color = hdr_color;
+	if (RENODX_TONE_MAP_TYPE > 0) {
+	  pre_lut_color = (hdr_color * hdr_color_tm);
+	}
+	r0 = float4(pre_lut_color.b, pre_lut_color.b, pre_lut_color.r, pre_lut_color.g);
+
 	r1.xyz = r0.zwy * ImageAdjustments2.y + ImageAdjustments2.x;
 	r2.z = 1 / r1.x;
 	r2.w = 1 / r1.y;
@@ -92,21 +100,29 @@ float4 main(PS_IN i) : COLOR
 	r2 = tex2D(ColorGradingLUT, r1.xy);
 	r1 = tex2D(ColorGradingLUT, r1.zwzw);
 	r3 = lerp(r2, r1, r0.x);
+
+	float3 sdr_color = renodx::color::srgb::DecodeSafe(r3.rgb);
+	float3 output_color = DisplayMap(hdr_color, hdr_color_tm, sdr_color);
+	r3.rgb = renodx::color::srgb::EncodeSafe(output_color);
+
 	r0 = tex2D(DNEVignetTexture, i.texcoord2.zwzw);
-	r0.x = saturate(dot(r0, DNEVignetMaskFactors)) * CUSTOM_VIGNETTE;
-	r1.xz = float2(1, 0);
+	r0.x = saturate(dot(r0, DNEVignetMaskFactors));
+	r1.xz = float4(1, 0, 4, -3).xz;
 	r0.yzw = (-r1.x + DNEVignetColor.xxyz).yzw;
 	r0.xyz = r0.x * r0.yzw + 1;
-	//r1.xy = i.texcoord2.zw * r1.z + DNEImageGrainParameter.xy;
-	//r1 = tex2D(DNEImageGrainTexture, r1);
-	//r0.w = r1.x * 2 + -1;
-	//r0.w = r0.w * ImageAdjustments1.w;
-	//o.xyz = saturate(r3.xyz * r0.xyz + r0.w);
-	o.xyz = saturate(r3.xyz * r0.xyz);
-
-	float3 sdr_color = renodx::color::srgb::DecodeSafe(o.rgb);
-	o.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, i.texcoord.xy);
-	o.rgb = renodx::draw::RenderIntermediatePass(o.rgb);
+	r0.xyz = lerp(1.0, r0.xyz, CUSTOM_VIGNETTE);
+	if (FILM_GRAIN_TYPE == 0) {
+	  o.xyz = r3.xyz * r0.xyz;
+	  output_color = renodx::color::srgb::DecodeSafe(o.rgb);	
+	  float3 film_grain = FilmGrain(output_color, i.texcoord.xy, DNEImageGrainParameter.xy);
+	  o.rgb = renodx::color::srgb::EncodeSafe(film_grain);	
+	} else {	
+	  r1.xy = i.texcoord2.zw * r1.z + DNEImageGrainParameter.xy;
+	  r1 = tex2D(DNEImageGrainTexture, r1);
+	  r0.w = r1.x * 2 + -1;
+	  r0.w = r0.w * ImageAdjustments1.w * (CUSTOM_FILM_GRAIN_STRENGTH * 2.f);
+	  o.xyz = r3.xyz * r0.xyz + r0.w;
+	}
 	o.w = r3.w;
 	return o;
 }
