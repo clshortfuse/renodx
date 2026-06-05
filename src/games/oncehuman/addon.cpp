@@ -19,12 +19,14 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
+
+const std::string build_date = __DATE__;
+const std::string build_time = __TIME__;
 
 // Final tonemap / output passes replaced with renodx tonemapping. Hashes were
 // identified by tracing each pass's render target on a live frame.
@@ -217,6 +219,39 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FxVignette",
+        .binding = &shader_injection.vignette_strength,
+        .default_value = 100.f,  // 100% = vanilla, 0% = off
+        .label = "Vignette",
+        .section = "Effects",
+        .tooltip = "Strength of the game's vignette (edge darkening).",
+        .min = 0.f,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxChromaticAberration",
+        .binding = &shader_injection.chromatic_aberration_strength,
+        .default_value = 100.f,  // 100% = vanilla, 0% = off
+        .label = "Chromatic Aberration",
+        .section = "Effects",
+        .tooltip = "Strength of the game's chromatic aberration (edge color fringing).",
+        .min = 0.f,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxBloom",
+        .binding = &shader_injection.bloom_strength,
+        .default_value = 100.f,  // 100% = vanilla
+        .label = "Bloom",
+        .section = "Effects",
+        .tooltip = "Strength of the game's bloom.",
+        .min = 0.f,
+        .max = 200.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
         .binding = &shader_injection.swap_chain_custom_color_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -341,17 +376,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         });
         settings.push_back(new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
+            .label = "Build: " + build_date + " at " + build_time + ".",
             .section = "About",
         });
         settings.push_back(new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = "- HDR mod by NatsumeLS",
+            .label = "- Addon by NatsumeLS",
             .section = "About",
         });
         settings.push_back(new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = "- Built with RenoDX by ShortFuse",
+            .label = "- RenoDX by ShortFuse",
             .section = "About",
         });
 

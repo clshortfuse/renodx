@@ -57,7 +57,7 @@ void main(
   float4 fDest;
 
   r0.xy = v0.xy * float2(2, -2) + float2(-1, 1);
-  r0.xy = VignetteIntensity * r0.xy;
+  r0.xy = (VignetteIntensity * shader_injection.vignette_strength) * r0.xy;  // RENODX: vignette strength
   r0.x = dot(r0.xy, r0.xy);
   r0.x = 1 + r0.x;
   r0.x = 1 / r0.x;
@@ -84,7 +84,7 @@ void main(
   r2.xyzw = (int4)-r3.xyzw + (int4)r2.xyzw;
   r2.xyzw = (int4)r2.xyzw;
   r1.xyzw = r2.xyzw * r1.xyzw;
-  r1.xyzw = ChromaticAberrationIntensity * r1.xyzw;
+  r1.xyzw = (ChromaticAberrationIntensity * shader_injection.chromatic_aberration_strength) * r1.xyzw;  // RENODX: CA strength
   r1.xyzw = r1.xyzw * float4(-0.00999998953, -0.00999998953, -0.0199999791, -0.0199999791) + v0.xyxy;
   r0.w = BgTex.Sample(Sampler_Bilinear_Clamp_s, r1.xy).y;
   r0.y = BgTex.Sample(Sampler_Bilinear_Clamp_s, r1.zw).z;
@@ -92,7 +92,7 @@ void main(
   r0.xyz = r0.yzw * r0.xxx;
   r0.w = AutoExposureTex.Sample(Sampler_Bilinear_Clamp_s, float2(0.5, 0.5)).x;
   r1.xyz = BloomTex.Sample(Sampler_Bilinear_Clamp_s, v0.xy).xyz;
-  r0.xyz = r0.xyz * r0.www + r1.zxy;
+  r0.xyz = r0.xyz * r0.www + r1.zxy * shader_injection.bloom_strength;  // RENODX: bloom strength
 
   // RENODX: HDR scene tapped here (pre log-shaper / pre-LUT). Channels rotated (B,R,G) -> reorder.
   float3 untonemapped = r0.yzx;

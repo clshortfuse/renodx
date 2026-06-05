@@ -38,6 +38,10 @@ struct ShaderInjectData {
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
   float custom_flip_uv_y;
+  // Post-processing effect strengths (1.0 = vanilla).
+  float vignette_strength;
+  float chromatic_aberration_strength;
+  float bloom_strength;
 };
 
 #ifndef __cplusplus

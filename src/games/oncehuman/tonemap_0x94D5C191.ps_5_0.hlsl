@@ -75,7 +75,7 @@ void main(
   r2.xyzw = r2.xyzw * r2.xyzw;
   r2.xyzw = r3.xyzw * r2.xyzw;
   r0.xyzw = r2.xyzw * r0.xyzw;
-  r0.xyzw = ChromaticAberrationIntensity * r0.xyzw;
+  r0.xyzw = (ChromaticAberrationIntensity * shader_injection.chromatic_aberration_strength) * r0.xyzw;  // RENODX: CA strength
   r0.xyzw = r0.xyzw * float4(-0.00999998953, -0.00999998953, -0.0199999791, -0.0199999791) + v0.xyxy;
   r1.w = BgTex.Sample(Sampler_Bilinear_Clamp_s, r0.xy).y;
   r1.y = BgTex.Sample(Sampler_Bilinear_Clamp_s, r0.zw).z;
@@ -85,7 +85,7 @@ void main(
   r0.x = min(r0.x, r0.y);
   r0.x = r0.x * -r1.x + 1;
   r0.zw = v0.xy * float2(2, -2) + float2(-1, 1);
-  r0.zw = VignetteIntensity * r0.zw;
+  r0.zw = (VignetteIntensity * shader_injection.vignette_strength) * r0.zw;  // RENODX: vignette strength
   r0.z = dot(r0.zw, r0.zw);
   r0.z = 1 + r0.z;
   r0.z = 1 / r0.z;
@@ -98,7 +98,7 @@ void main(
   r2.xyz = float3(0.899999976, 0.899999976, 0.899999976) * r2.xyz;
   r1.xyz = r1.zxy * float3(0.100000001, 0.100000001, 0.100000001) + r2.xyz;
   r0.y = AutoExposureTex.Sample(Sampler_Bilinear_Clamp_s, float2(0.5, 0.5)).x;
-  r0.xyz = r0.xzw * r0.yyy + r1.xyz;
+  r0.xyz = r0.xzw * r0.yyy + r1.xyz * shader_injection.bloom_strength;  // RENODX: bloom strength
 
   // RENODX: HDR scene tapped here (pre log-shaper / pre-LUT). Linear, game working space.
   // The decompiled composite stores channels rotated as (B, R, G); reorder to (R, G, B).
