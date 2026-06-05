@@ -50,10 +50,10 @@ float3 ApplyRCAS(
   // 0.99 limiter bounds overshoot; eps-guard the black-neighborhood denominator (4*max4 -> 0 -> NaN).
   const float limited_max4 = min(max4, 0.99f);
   const float hitMin = min4 * rcp(max(4.f * limited_max4, MEA_RCAS_EPS));
-  // Guard the min4==1 singularity (denom 0 -> rcp inf) sign-preservingly: min4 can be <1 or >1, so
-  // only nudge sub-eps magnitudes; non-singular pixels stay bit-identical.
+  // Sign-preserving guard for the min4==1 singularity. Sign matters: rcp_norm lets min4 > 1 (denom > 0
+  // -> lobe clamps to 0), so a fixed -eps would flip it and false-sharpen flat-white/bright regions.
   float hitMaxDenom = 4.f * min4 - 4.f;
-  hitMaxDenom = (abs(hitMaxDenom) < MEA_RCAS_EPS) ? -MEA_RCAS_EPS : hitMaxDenom;
+  hitMaxDenom = (abs(hitMaxDenom) < MEA_RCAS_EPS) ? (hitMaxDenom < 0.f ? -MEA_RCAS_EPS : MEA_RCAS_EPS) : hitMaxDenom;
   const float hitMax = (1.f - limited_max4) * rcp(hitMaxDenom);
   float lobe = max(-MEA_RCAS_LIMIT, min(max(-hitMin, hitMax), 0.f)) * CUSTOM_SHARPNESS;
 

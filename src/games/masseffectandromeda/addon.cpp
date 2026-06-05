@@ -144,8 +144,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts highlight brightness. 50 = vanilla.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -156,8 +156,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts shadow brightness. 50 = vanilla.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -168,8 +168,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts contrast. 50 = vanilla.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -180,8 +180,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -192,8 +192,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts overall saturation. 50 = vanilla.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -204,8 +204,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -216,8 +216,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Shifts highlight hue toward the per-channel (SDR-display) look. 0 = vanilla.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -228,8 +228,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Scales the game's bloom. 50 = vanilla, 0 = off.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -240,8 +240,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Scales the game's vignette. 50 = vanilla, 0 = off.",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -252,8 +252,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Scales the game's chromatic aberration. 100 = vanilla, 0 = off (requires the in-game CA setting on).",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -266,8 +266,8 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         // Deliberate linear response (slider% -> CUSTOM_SHARPNESS directly). Some sibling RCAS sliders
         // use an exp2 curve, so the same % is not perceptually comparable across mods.
-        .parse = [](float value) { return value * 0.01f; },
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
