@@ -116,6 +116,7 @@ inline constexpr std::wstring_view DEVKIT_MCP_PIPE_PREFIX = L"renodx-devkit-mcp"
 
 std::atomic<reshade::api::device*> snapshot_device = nullptr;
 std::atomic<reshade::api::device*> snapshot_queued_device = nullptr;
+std::atomic<uint32_t> snapshot_submission_counter = 0u;
 auto devkit_mcp_session = devkit_mcp_server_session::Create(DEVKIT_MCP_PIPE_PREFIX);
 std::atomic<uint32_t> devkit_primary_device_api = 0u;
 
@@ -227,6 +228,9 @@ struct DrawDetails {
   } draw_method;
 
   std::chrono::time_point<std::chrono::system_clock> timestamp;
+  uint64_t cmd_list_handle = 0u;
+  uint32_t cmd_list_draw_index = 0u;
+  uint32_t submission_order = 0u;
   std::map<std::pair<uint32_t, uint32_t>, ResourceViewDetails> srv_binds;
   std::map<std::pair<uint32_t, uint32_t>, ResourceViewDetails> uav_binds;
   std::map<std::pair<uint32_t, uint32_t>, reshade::api::buffer_range> constants;
@@ -318,6 +322,7 @@ struct __declspec(uuid("3224946b-5c5f-478a-8691-83fbb9f88f1b")) CommandListData 
   std::map<uint32_t, ResourceViewDetails> render_targets;
   std::optional<reshade::api::blend_desc> blend_desc = std::nullopt;
   std::optional<reshade::api::rasterizer_desc> rasterizer_desc = std::nullopt;
+  uint32_t draw_counter = 0u;
 
   // std::vector<PipelineBindDetails> pipeline_binds;
 };
@@ -381,6 +386,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   std::unordered_map<uint32_t, ShaderDetails> shader_details;
   // std::vector<CommandListData> command_list_data;
   std::vector<DrawDetails> draw_details_list;
+  std::unordered_map<uint64_t, std::vector<size_t>> draw_detail_indexes_by_cmd_list;
   std::unordered_set<uint64_t> live_pipelines;
   std::unordered_map<uint64_t, std::unordered_map<reshade::api::format, reshade::api::resource_view>> preview_srvs;
   std::shared_mutex mutex;
@@ -4295,9 +4301,14 @@ bool OnCopyResource(
     DrawDetails draw_details = {
         .draw_method = DrawDetails::DrawMethods::COPY,
         .timestamp = std::chrono::system_clock::now(),
+        .cmd_list_handle = reinterpret_cast<uint64_t>(cmd_list),
         .copy_source = source,
         .copy_destination = dest,
     };
+    if (auto* command_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+        command_list_data != nullptr) {
+      draw_details.cmd_list_draw_index = command_list_data->draw_counter++;
+    }
 
     auto* device_data = renodx::utils::data::Get<DeviceData>(device);
     if (device_data == nullptr) return false;
@@ -4305,7 +4316,11 @@ bool OnCopyResource(
     if (snapshot_trace_with_snapshot) {
       reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
     }
-    device_data->draw_details_list.push_back(draw_details);
+    const auto draw_index = device_data->draw_details_list.size();
+    device_data->draw_details_list.push_back(std::move(draw_details));
+    if (device_data->draw_details_list.back().cmd_list_handle != 0u) {
+      device_data->draw_detail_indexes_by_cmd_list[device_data->draw_details_list.back().cmd_list_handle].push_back(draw_index);
+    }
     device_data->snapshot_rows_valid = false;
   } else {
     reshade::log::message(reshade::log::level::debug, "Foreign Copy.");
@@ -4332,9 +4347,14 @@ bool OnCopyTextureRegion(
     DrawDetails draw_details = {
         .draw_method = DrawDetails::DrawMethods::COPY,
         .timestamp = std::chrono::system_clock::now(),
+        .cmd_list_handle = reinterpret_cast<uint64_t>(cmd_list),
         .copy_source = source,
         .copy_destination = dest,
     };
+    if (auto* command_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
+        command_list_data != nullptr) {
+      draw_details.cmd_list_draw_index = command_list_data->draw_counter++;
+    }
 
     auto* device_data = renodx::utils::data::Get<DeviceData>(device);
     if (device_data == nullptr) return false;
@@ -4342,7 +4362,11 @@ bool OnCopyTextureRegion(
     if (snapshot_trace_with_snapshot) {
       reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
     }
-    device_data->draw_details_list.push_back(draw_details);
+    const auto draw_index = device_data->draw_details_list.size();
+    device_data->draw_details_list.push_back(std::move(draw_details));
+    if (device_data->draw_details_list.back().cmd_list_handle != 0u) {
+      device_data->draw_detail_indexes_by_cmd_list[device_data->draw_details_list.back().cmd_list_handle].push_back(draw_index);
+    }
     device_data->snapshot_rows_valid = false;
   } else {
     reshade::log::message(reshade::log::level::debug, "Foreign Copy.");
@@ -4586,6 +4610,8 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     DrawDetails draw_details = {};
     draw_details.timestamp = std::chrono::system_clock::now();
     draw_details.draw_method = draw_method;
+    draw_details.cmd_list_handle = reinterpret_cast<uint64_t>(cmd_list);
+    draw_details.cmd_list_draw_index = command_list_data->draw_counter++;
     draw_details.constants = command_list_data->constants;
     // draw_details.pipeline_binds = command_list_data->pipeline_binds;
     if (draw_method == DrawDetails::DrawMethods::DISPATCH) {
@@ -4907,7 +4933,12 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     if (snapshot_trace_with_snapshot) {
       reshade::log::message(reshade::log::level::debug, std::format("Snapshot #{}", device_data->draw_details_list.size()).c_str());
     }
+    const auto draw_index = device_data->draw_details_list.size();
+    const auto cmd_list_handle = draw_details.cmd_list_handle;
     device_data->draw_details_list.push_back(std::move(draw_details));
+    if (cmd_list_handle != 0u) {
+      device_data->draw_detail_indexes_by_cmd_list[cmd_list_handle].push_back(draw_index);
+    }
     device_data->snapshot_rows_valid = false;
     // command_list_data->draw_details.clear();
   } else if (snapshot_device != nullptr) {
@@ -8638,6 +8669,34 @@ void OnRegisterOverlay(reshade::api::effect_runtime* runtime) {
   ImGui::EndChild();
 }
 
+void OnExecuteCommandList(
+    reshade::api::command_queue* queue,
+    reshade::api::command_list* cmd_list) {
+  if (snapshot_device == nullptr) return;
+
+  auto* device = cmd_list->get_device();
+  if (device != snapshot_device) return;
+
+  auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+  if (device_data == nullptr) return;
+
+  const uint32_t order = snapshot_submission_counter.fetch_add(1u, std::memory_order_relaxed) + 1u;
+  const uint64_t cmd_handle = reinterpret_cast<uint64_t>(cmd_list);
+
+  std::unique_lock lock(device_data->mutex);
+  const auto index_pair = device_data->draw_detail_indexes_by_cmd_list.find(cmd_handle);
+  if (index_pair == device_data->draw_detail_indexes_by_cmd_list.end()) return;
+
+  for (const auto draw_index : index_pair->second) {
+    if (draw_index >= device_data->draw_details_list.size()) continue;
+    auto& draw = device_data->draw_details_list[draw_index];
+    if (draw.submission_order == 0u) {
+      draw.submission_order = order;
+    }
+  }
+  device_data->draw_detail_indexes_by_cmd_list.erase(index_pair);
+}
+
 void OnPresent(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
@@ -8745,10 +8804,12 @@ void OnPresent(
       auto* device_data = get_data();
       std::unique_lock lock(device_data->mutex);
       device_data->draw_details_list.clear();
+      device_data->draw_detail_indexes_by_cmd_list.clear();
       device_data->resource_usage_by_handle.clear();
       device_data->snapshot_rows.clear();
       device_data->snapshot_row_layout_key = 0u;
       device_data->snapshot_rows_valid = false;
+      snapshot_submission_counter.store(0u, std::memory_order_relaxed);
       snapshot_device = device;
       snapshot_queued_device = nullptr;
     }
@@ -8757,9 +8818,12 @@ void OnPresent(
     auto* device_data = get_data();
     std::unique_lock lock(device_data->mutex);
     std::ranges::sort(device_data->draw_details_list, [](const DrawDetails& a, const DrawDetails& b) {
+      if (a.submission_order != b.submission_order) return a.submission_order < b.submission_order;
+      if (a.cmd_list_handle == b.cmd_list_handle) return a.cmd_list_draw_index < b.cmd_list_draw_index;
       return a.timestamp < b.timestamp;
     });
 
+    device_data->draw_detail_indexes_by_cmd_list.clear();
     device_data->shader_draw_indexes.clear();
     device_data->resource_usage_by_handle.clear();
     for (auto i = 0; i < device_data->draw_details_list.size(); ++i) {
@@ -8851,6 +8915,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
       reshade::register_event<reshade::addon_event::dispatch>(OnDispatch);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
+      reshade::register_event<reshade::addon_event::execute_command_list>(OnExecuteCommandList);
       reshade::register_event<reshade::addon_event::create_swapchain>(OnCreateSwapchain);
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
@@ -8889,6 +8954,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
       reshade::unregister_event<reshade::addon_event::create_swapchain>(OnCreateSwapchain);
       reshade::unregister_event<reshade::addon_event::dispatch>(OnDispatch);
+      reshade::unregister_event<reshade::addon_event::execute_command_list>(OnExecuteCommandList);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
       reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
