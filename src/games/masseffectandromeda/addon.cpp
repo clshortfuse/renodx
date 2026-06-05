@@ -42,8 +42,10 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     CustomShaderEntry(0xE3D57A10),  // CA on  / grain on
     CustomShaderEntryCallback(0xF5B0DBFA, SetSwapchainPresentFlag),  // main HDR present (1:1), RCAS gate
     CustomShaderEntryCallback(0xAFFFA4AB, SetSwapchainPresentFlag),  // upscaling HDR present (res scale < 100%)
+    CustomShaderEntryCallback(0x8498DBD5, SetSwapchainPresentFlag),  // HDR present at Post Process = Low
     CustomShaderEntry(0xF5B7A93D),  // loading-screen / video present (1:1)
     CustomShaderEntry(0x667C56AF),  // loading-screen / video present (upscaled)
+    CustomShaderEntry(0x182C8867),  // loading-screen / video present (1:1, scene sampler on s1)
     // FMV YUV->RGB decode: flags fxVideoActive so the present treats the layer as video, not UI.
     CustomShaderEntryCallback(0x7ED07F45, [](reshade::api::command_list* cmd_list) {
       shader_injection.fxVideoActive = 1.f;
