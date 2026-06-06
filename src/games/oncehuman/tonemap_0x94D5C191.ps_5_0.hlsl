@@ -1,4 +1,4 @@
-// Once Human - tonemap + color-grade pass (final image -> r8 LDR buffer 0x74C96560)
+// Once Human (sm5 / DX11) - tonemap + color-grade pass (gameplay; final image -> r8 LDR buffer 0x74C96560)
 // RenoDX HDR injection: tap pre-LUT HDR scene + post-LUT graded SDR, run renodx tonemap.
 // Original decompile by 3Dmigoto; vanilla output preserved in comments at the bottom.
 #include "./shared.h"

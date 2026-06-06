@@ -45,8 +45,15 @@ struct ShaderInjectData {
 };
 
 #ifndef __cplusplus
-// DX11 (Shader Model 5.0): the injection constant buffer is bound at b13.
+// Injection constant buffer binding:
+//  - DX11 (sm5.0, FXC): no register spaces -> b13.
+//  - DX12 (sm5.1 proxy + sm6 game shaders): bound at b13, space50 to match
+//    renodx::mods::shader/swapchain expected_constant_buffer_space = 50.
+#if ((__SHADER_TARGET_MAJOR == 5 && __SHADER_TARGET_MINOR >= 1) || __SHADER_TARGET_MAJOR >= 6)
+cbuffer shader_injection : register(b13, space50) {
+#else
 cbuffer shader_injection : register(b13) {
+#endif
   ShaderInjectData shader_injection : packoffset(c0);
 }
 

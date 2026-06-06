@@ -1,8 +1,9 @@
 /*
- * RenoDX HDR addon for Once Human (NetEase NeoX engine) - DirectX 11.
+ * RenoDX HDR addon for Once Human (NetEase NeoX engine) - DirectX 11 and DirectX 12.
  *
  * Upgrades the 8-bit swapchain to fp16 and replaces the game's baked SDR
- * tonemap/LUT output with renodx tonemapping for HDR output.
+ * tonemap/LUT output with renodx tonemapping for HDR output. A single binary
+ * serves both APIs: the sm5 (DXBC) shaders match on d3d11, the sm6 (DXIL) on d3d12.
  *
  * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
@@ -19,21 +20,28 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
 namespace {
 
-const std::string build_date = __DATE__;
-const std::string build_time = __TIME__;
 
 // Final tonemap / output passes replaced with renodx tonemapping. Hashes were
 // identified by tracing each pass's render target on a live frame.
 renodx::mods::shader::CustomShaders custom_shaders = {
+    // DX11 (sm5 / DXBC) passes.
     CustomShaderEntry(0x94D5C191),  // tonemap + color grade (gameplay / photo mode)
     CustomShaderEntry(0x24C65B31),  // tonemap + color grade (menu / inventory variant)
     CustomShaderEntry(0x6AEF81FE),  // post sharpen / AA -> swapchain
+    // DX12 (sm6 / DXIL) passes. Each hash matches only on its own API (the sm5 and sm6
+    // bytecode for "the same" pass have different hashes), so registering both sets is safe.
+    CustomShaderEntry(0x749C84C9),  // tonemap + color grade (gameplay)
+    CustomShaderEntry(0xB01E4700),  // tonemap + color grade (gameplay variant)
+    CustomShaderEntry(0xCFEC26F0),  // tonemap + color grade (menu / inventory)
+    CustomShaderEntry(0xCCD56442),  // tonemap + color grade (menu / inventory variant)
+    CustomShaderEntry(0x51731F8B),  // post sharpen / AA -> swapchain
 };
 
 ShaderInjectData shader_injection;
@@ -313,13 +321,22 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::set_color_space = true;  // let HDR10 set the DXGI color space
 
-        // Swapchain proxy: re-encodes the upgraded back buffer for HDR output.
+        // Swapchain proxy: re-encodes the upgraded back buffer for HDR output. The proxy
+        // source is dual-target (.ps_5_x/.vs_5_x) so it compiles to sm5.0 DXBC for d3d11 and
+        // sm5.1 DXBC for d3d12 (which D3D12 accepts for our standalone proxy pipeline).
         renodx::mods::swapchain::swap_chain_proxy_shaders = {
             {
                 reshade::api::device_api::d3d11,
                 {
-                    .vertex_shader = __swap_chain_proxy_vertex_shader,
-                    .pixel_shader = __swap_chain_proxy_pixel_shader,
+                    .vertex_shader = __swap_chain_proxy_vertex_shader_dx11,
+                    .pixel_shader = __swap_chain_proxy_pixel_shader_dx11,
+                },
+            },
+            {
+                reshade::api::device_api::d3d12,
+                {
+                    .vertex_shader = __swap_chain_proxy_vertex_shader_dx12,
+                    .pixel_shader = __swap_chain_proxy_pixel_shader_dx12,
                 },
             },
         };
@@ -329,6 +346,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
+            // View cloning (not in-place): keeps the original r8 resource so buffer->texture
+            // uploads still size-match, while RT writes / SRV reads go through an fp16 clone.
+            // Without this, a full-screen RT that is also a CopyBufferToTexture target gets
+            // upgraded in place and DX12's strict model crashes on the size mismatch. Mirrors
+            // the r8g8b8a8_typeless target below (proven on DX11).
+            .use_resource_view_cloning = true,
+            .usage_include = reshade::api::resource_usage::render_target,
         });
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
@@ -376,7 +400,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         });
         settings.push_back(new renodx::utils::settings::Setting{
             .value_type = renodx::utils::settings::SettingValueType::TEXT,
-            .label = "Build: " + build_date + " at " + build_time + ".",
+            .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
             .section = "About",
         });
         settings.push_back(new renodx::utils::settings::Setting{

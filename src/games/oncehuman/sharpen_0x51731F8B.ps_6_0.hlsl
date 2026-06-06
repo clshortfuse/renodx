@@ -1,0 +1,243 @@
+// Once Human (sm6 / DX12) - post-tonemap sharpen / AA resolve (reads LDR -> writes swapchain).
+// RenoDX HDR injection: ONLY change is removing the saturate() ceiling on the main path
+// (the >=0 floor stays) so HDR values from the upgraded tonemap survive into the swapchain.
+
+Texture2D<float4> SrcTex : register(t0);
+
+cbuffer _Globals : register(b0) {
+  float4 RTSize : packoffset(c000.x);
+};
+
+cbuffer PerCamera : register(b2) {
+  float4 CameraInfo : packoffset(c000.x);
+  float4 PhysicalCameraInfo : packoffset(c001.x);
+  float4 CameraPosition : packoffset(c002.x);
+  float4 CameraPositionLast : packoffset(c003.x);
+  float4 ZBufferParams : packoffset(c004.x);
+  float4 InverseView[4] : packoffset(c005.x);
+  float4 InverseViewLastFrame[4] : packoffset(c009.x);
+  float4 View[4] : packoffset(c013.x);
+  float4 ViewLast[4] : packoffset(c017.x);
+  float4 ViewProjection[4] : packoffset(c021.x);
+  float4 InverseViewProjection[4] : packoffset(c025.x);
+  float4 InverseProjection[4] : packoffset(c029.x);
+  float4 Projection[4] : packoffset(c033.x);
+  float4 ProjectionLast[4] : packoffset(c037.x);
+  float4 ViewProjectionLastFrame[4] : packoffset(c041.x);
+  float4 WorldViewProjection[4] : packoffset(c045.x);
+  float4 TaaInfo[2] : packoffset(c049.x);
+  float4 TaaSampleWeights[3] : packoffset(c051.x);
+  float4 ClipToLast[4] : packoffset(c054.x);
+  float4 ViewProjectionJitter[4] : packoffset(c058.x);
+  float4 InverseViewProjectionJitter[4] : packoffset(c062.x);
+  float4 InverseProjectionJitter[4] : packoffset(c066.x);
+  float4 ProjectionJitter[4] : packoffset(c070.x);
+  float4 ViewProjectionLastFrameJitter[4] : packoffset(c074.x);
+  float4 ViewportTrans[4] : packoffset(c078.x);
+  float4 FirstPersonTransform[4] : packoffset(c082.x);
+  float4 PrevFirstPersonTransform[4] : packoffset(c086.x);
+};
+
+SamplerState Sampler_Point_Clamp : register(s0);
+
+float4 main(
+  linear float2 TEXCOORD : TEXCOORD,
+  linear float4 TEXCOORD_1 : TEXCOORD1
+) : SV_Target {
+  float4 SV_Target;
+  float _9 = TEXCOORD.y - RTSize.w;
+  float4 _10 = SrcTex.Sample(Sampler_Point_Clamp, float2(TEXCOORD.x, _9));
+  float _17 = TEXCOORD.x - RTSize.z;
+  float4 _18 = SrcTex.Sample(Sampler_Point_Clamp, float2(_17, TEXCOORD.y));
+  float4 _23 = SrcTex.Sample(Sampler_Point_Clamp, float2(TEXCOORD.x, TEXCOORD.y));
+  float _30 = RTSize.z + TEXCOORD.x;
+  float4 _31 = SrcTex.Sample(Sampler_Point_Clamp, float2(_30, TEXCOORD.y));
+  float _38 = RTSize.w + TEXCOORD.y;
+  float4 _39 = SrcTex.Sample(Sampler_Point_Clamp, float2(TEXCOORD.x, _38));
+  float _44 = _10.x * _10.x;
+  float _45 = _10.y * _10.y;
+  float _46 = _10.z * _10.z;
+  float _47 = _18.x * _18.x;
+  float _48 = _18.y * _18.y;
+  float _49 = _18.z * _18.z;
+  float _50 = _23.x * _23.x;
+  float _51 = _23.y * _23.y;
+  float _52 = _23.z * _23.z;
+  float _53 = _31.x * _31.x;
+  float _54 = _31.y * _31.y;
+  float _55 = _31.z * _31.z;
+  float _56 = _39.x * _39.x;
+  float _57 = _39.y * _39.y;
+  float _58 = _39.z * _39.z;
+  float _59 = _46 + _44;
+  float _60 = _59 * 0.5f;
+  float _61 = _60 + _45;
+  float _62 = _49 + _47;
+  float _63 = _62 * 0.5f;
+  float _64 = _63 + _48;
+  float _65 = _52 + _50;
+  float _66 = _65 * 0.5f;
+  float _67 = _66 + _51;
+  float _68 = _55 + _53;
+  float _69 = _68 * 0.5f;
+  float _70 = _69 + _54;
+  float _71 = _58 + _56;
+  float _72 = _71 * 0.5f;
+  float _73 = _72 + _57;
+  float _74 = min(_47, _53);
+  float _75 = min(_48, _54);
+  float _76 = min(_49, _55);
+  float _77 = min(_44, _74);
+  float _78 = min(_45, _75);
+  float _79 = min(_46, _76);
+  float _80 = min(_77, _56);
+  float _81 = min(_78, _57);
+  float _82 = min(_79, _58);
+  float _83 = max(_47, _53);
+  float _84 = max(_48, _54);
+  float _85 = max(_49, _55);
+  float _86 = max(_44, _83);
+  float _87 = max(_45, _84);
+  float _88 = max(_46, _85);
+  float _89 = max(_86, _56);
+  float _90 = max(_87, _57);
+  float _91 = max(_88, _58);
+  float _92 = _50 - _80;
+  float _93 = _51 - _81;
+  float _94 = _52 - _82;
+  float _95 = _50 - _89;
+  float _96 = _51 - _90;
+  float _97 = _52 - _91;
+  bool _98 = (_92 < 0.0f);
+  bool _99 = (_93 < 0.0f);
+  bool _100 = (_94 < 0.0f);
+  bool _101 = _98 && _99;
+  bool _102 = _101 && _100;
+  bool _103 = (_95 > 0.0f);
+  bool _104 = (_96 > 0.0f);
+  bool _105 = (_97 > 0.0f);
+  bool _106 = _103 && _104;
+  bool _107 = _106 && _105;
+  bool _108 = _102 || _107;
+  float _172;
+  float _207;
+  float _208;
+  float _209;
+  float _210;
+  if (!_108) {
+    float _110 = 1.0f - _89;
+    float _111 = 1.0f - _90;
+    float _112 = 1.0f - _91;
+    float _113 = _80 * 4.0f;
+    float _114 = _81 * 4.0f;
+    float _115 = _82 * 4.0f;
+    float _116 = _113 + -4.0f;
+    float _117 = _114 + -4.0f;
+    float _118 = _115 + -4.0f;
+    float _119 = _110 / _116;
+    float _120 = _111 / _117;
+    float _121 = _112 / _118;
+    float _122 = _89 * 4.0f;
+    float _123 = _90 * 4.0f;
+    float _124 = _91 * 4.0f;
+    float _125 = _122 + 9.999999747378752e-06f;
+    float _126 = _123 + 9.999999747378752e-06f;
+    float _127 = _124 + 9.999999747378752e-06f;
+    float _128 = _80 / _125;
+    float _129 = _81 / _126;
+    float _130 = _82 / _127;
+    float _131 = -0.0f - _128;
+    float _132 = -0.0f - _129;
+    float _133 = -0.0f - _130;
+    float _134 = max(_131, _119);
+    float _135 = max(_132, _120);
+    float _136 = max(_133, _121);
+    float _137 = max(_135, _136);
+    float _138 = max(_134, _137);
+    float _139 = min(_138, 0.0f);
+    float _140 = max(-0.1875f, _139);
+    float _141 = _140 * 0.8408960103988647f;
+    bool _144 = ((TaaInfo[0].x) > 0.5f);
+    bool _146 = ((TaaInfo[0].y) > 0.5f);
+    bool _147 = _144 || _146;
+    if (!_147) {
+      float _149 = _64 + _61;
+      float _150 = _149 + _70;
+      float _151 = _150 + _73;
+      float _152 = _151 * 0.25f;
+      float _153 = _152 - _67;
+      float _154 = abs(_153);
+      float _155 = max(_70, _73);
+      float _156 = max(_64, _67);
+      float _157 = max(_61, _156);
+      float _158 = max(_157, _155);
+      float _159 = min(_70, _73);
+      float _160 = min(_64, _67);
+      float _161 = min(_61, _160);
+      float _162 = min(_161, _159);
+      float _163 = _158 + 9.999999747378752e-06f;
+      float _164 = _163 - _162;
+      float _165 = _154 / _164;
+      float _166 = max(_165, 0.0f);
+      float _167 = min(_166, 1.0f);
+      float _168 = _167 * 0.5f;
+      float _169 = 1.0f - _168;
+      float _170 = _169 * _141;
+      _172 = _170;
+    } else {
+      _172 = _141;
+    }
+    float _173 = _47 + _44;
+    float _174 = _48 + _45;
+    float _175 = _49 + _46;
+    float _176 = _18.w + _10.w;
+    float _177 = _173 + _53;
+    float _178 = _177 + _56;
+    float _179 = _174 + _54;
+    float _180 = _179 + _57;
+    float _181 = _175 + _55;
+    float _182 = _181 + _58;
+    float _183 = _176 + _31.w;
+    float _184 = _183 + _39.w;
+    float _185 = _172 * _178;
+    float _186 = _172 * _180;
+    float _187 = _172 * _182;
+    float _188 = _172 * _184;
+    float _189 = _185 + _50;
+    float _190 = _186 + _51;
+    float _191 = _187 + _52;
+    float _192 = _188 + _23.w;
+    float _193 = _172 * 4.0f;
+    float _194 = _193 + 1.0f;
+    float _195 = 1.0f / _194;
+    float _196 = _189 * _195;
+    float _197 = _190 * _195;
+    float _198 = _191 * _195;
+    float _199 = _192 * _195;
+    float _200 = max(_196, 0.0f);
+    float _201 = max(_197, 0.0f);
+    float _202 = max(_198, 0.0f);
+    // RENODX: saturate() ceiling removed -- the min(_,1) is dropped (the max(_,0) floor on
+    // _200/_201/_202 above stays) so HDR highlights >1.0 survive the gamma-2.0 sharpen.
+    float _203 = _200;
+    float _204 = _201;
+    float _205 = _202;
+    _207 = _203;
+    _208 = _204;
+    _209 = _205;
+    _210 = _199;
+  } else {
+    _207 = _50;
+    _208 = _51;
+    _209 = _52;
+    _210 = 1.0f;
+  }
+  float _211 = sqrt(_207);
+  float _212 = sqrt(_208);
+  float _213 = sqrt(_209);
+  SV_Target.x = _211;
+  SV_Target.y = _212;
+  SV_Target.z = _213;
+  SV_Target.w = _210;
+  return SV_Target;
+}

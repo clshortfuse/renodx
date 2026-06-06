@@ -1,4 +1,4 @@
-// Once Human - post-tonemap sharpen / AA resolve (reads LDR buffer -> writes swapchain).
+// Once Human (sm5 / DX11) - post-tonemap sharpen / AA resolve (reads LDR buffer -> writes swapchain).
 // RenoDX HDR injection: the ONLY change is removing the saturate() clamp on the main
 // path so HDR values (>1.0) emitted by the upgraded tonemap survive into the swapchain.
 // Original decompile by 3Dmigoto.

@@ -1,4 +1,4 @@
-// Once Human - tonemap + color-grade pass, MENU/INVENTORY variant (no SDFCheckerBuffer).
+// Once Human (sm5 / DX11) - tonemap + color-grade pass, MENU/INVENTORY variant (no SDFCheckerBuffer).
 // Twin of 0x94D5C191; used for the 3D world rendered behind the inventory/menus.
 // Same RenoDX HDR injection: tap pre-LUT HDR scene + post-LUT graded SDR, run renodx tonemap.
 #include "./shared.h"
