@@ -15,11 +15,6 @@ RWTexture2D<unorm float4> u0 : register(u0);
 
 [numthreads(8, 8, 1)]
 void main(uint3 vThreadID : SV_DispatchThreadID) {
-  if (shader_injection.disable_game_ao >= 0.5f) {
-    u0[vThreadID.xy] = 1.0;
-    return;
-  }
-
   float2 pixel = float2(vThreadID.xy) + 0.5;
   float2 uv = pixel * cb0[4].zw;
 
@@ -31,11 +26,11 @@ void main(uint3 vThreadID : SV_DispatchThreadID) {
   float2 texel_size = cb0[4].zw;
 
   float2 offset = 0.0;
-  float3 accum = float3(0.0, 0.0, -1.0);
+  float3 accum = float3(0.0, 0.0, -3.0);
 
   [loop]
   while (true) {
-    if (1.0 < accum.z) break;
+    if (3.0 < accum.z) break;
 
     float2 step_offset = float2(0.0, accum.z * texel_size.y * radius_scale);
 

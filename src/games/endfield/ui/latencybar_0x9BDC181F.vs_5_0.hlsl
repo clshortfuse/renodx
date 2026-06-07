@@ -81,7 +81,7 @@ void main(
   float2 v2 : TEXCOORD0,
   out float4 o0 : SV_Position0,
   out float4 o1 : TEXCOORD0,
-  out float4 o2 : TEXCOORD1,
+  out float2 o2 : TEXCOORD1,
   out float4 o3 : TEXCOORD2,
   out float4 o4 : TEXCOORD3,
   out float4 o5 : TEXCOORD4)
@@ -127,7 +127,6 @@ void main(
   r3.xyzw = cb3[2].xyzw * v1.xyzw;
   o1.xyzw = r3.xyzw * r1.xyzw;
   o2.xy = v2.xy * cb3[5].xy + cb3[5].zw;
-  o2.zw = float2(0, 0);  
   o3.xyzw = v0.xyzw;
   r1.xz = r0.zz != 0 ? cb5[8].yx : cb2[5].yx;
   r1.yw = r0.zz != 0 ? cb5[9].yx : cb2[6].yx;

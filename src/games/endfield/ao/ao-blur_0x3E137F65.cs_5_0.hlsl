@@ -31,11 +31,11 @@ void main(uint3 vThreadID : SV_DispatchThreadID) {
   float inv_width = cb0[4].z;
 
   float2 offset = 0.0;
-  float3 accum = float3(-1.0, 0.0, 0.0);
+  float3 accum = float3(-3.0, 0.0, 0.0);
 
   [loop]
   while (true) {
-    if (1.0 < accum.x) break;
+    if (3.0 < accum.x) break;
 
     float step_offset = accum.x * inv_width;
     offset.x = step_offset * radius_scale;

@@ -74,7 +74,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r1.x = exp2(r1.x);
     r1.x = 0.970000029 * r1.x;
     r1.y = r3.y + -r2.y;
-    r1.y = -721.347534 * abs(r1.y);
+    r1.y = -1442.69507 * abs(r1.y);
     r1.y = exp2(r1.y);
     r3.z = r1.x * r1.y;
   }

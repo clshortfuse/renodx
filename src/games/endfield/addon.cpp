@@ -787,11 +787,9 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
         .label = std::string("Reshade shader bypass, applies on_drawn after game's deferred lighting pass. Only properly works with DLAA/TAAU 100 scaling atm"),
         .on_draw = []() {
-          ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 2.0f);
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
           ImGui::TextWrapped("Reshade shader bypass, applies on_drawn after game's deferred lighting pass. Only properly works with DLAA/TAAU 100 scaling atm");
           ImGui::PopStyleColor();
-          ImGui::PopFont();
           return false;
         },
     },
@@ -1027,7 +1025,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "- Fixed by Rat for Arknights: Endfield 1.2.4",
+        .label = "- Fixed by Rat for Arknights: Endfield 1.3.3",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -1168,7 +1166,7 @@ void OnPresent(reshade::api::command_queue* queue,
   if (pending_tech_test_preset == 1) {
     renodx::utils::settings::UpdateSetting("GammaCorrection", 2.f);
     renodx::utils::settings::UpdateSetting("SwapChainGammaCorrection", 2.f);
-    renodx::utils::settings::UpdateSetting("ToneMapPerChannelBlowout", 35.f);
+    renodx::utils::settings::UpdateSetting("ToneMapPerChannelBlowout", 75.f);
     renodx::utils::settings::UpdateSetting("ColorGradeExposure", 0.75f);
     renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
     renodx::utils::settings::UpdateSetting("ColorGradeShadows", 80.f);
@@ -1396,14 +1394,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         */
 
       // grass/foliage deferred (grass, plants, trees will be included in AO)
-        0xF314003Eu,
-        0xDC895E4Au,
-        0x5F55ACC9u,
-        0xB9D5AA7Bu,
-        0x32F53924u,
-        0xEA6F34B7u,
-        0xD9882F6Bu,
-        0x89E4F419u,
+        0xBB9276D0u,
+        0x6B2D0D3Fu,
+        0x46368E6Bu,
+        0xC75E6D72u,
+        0xF50042ECu,
+        0x3826B75Eu,
+        0x60D37BB1u,
+        0x51B20E29u,
         };
 
       // Uberpost
