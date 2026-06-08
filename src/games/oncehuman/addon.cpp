@@ -48,8 +48,22 @@ ShaderInjectData shader_injection;
 
 float current_settings_mode = 0;
 
-// Index of "Peak Brightness" in `settings`; OnInitSwapchain rewrites its default.
-constexpr size_t PEAK_BRIGHTNESS_INDEX = 2;
+// Pointers to settings updated outside the static initializer (avoids fragile positional
+// indices): the Peak Brightness default is rewritten in OnInitSwapchain, and Output Mode
+// drives swapchain setup. Each is captured where its Setting is constructed.
+renodx::utils::settings::Setting* peak_brightness_setting = nullptr;
+renodx::utils::settings::Setting* output_mode_setting = nullptr;
+
+// Keep the live swapchain-encoding fields in sync with the SDR/HDR toggle. The proxy reads
+// these per frame, so the encoding curve updates immediately; switching the swapchain
+// container itself (8-bit SDR <-> 10-bit HDR10) still needs a restart (noted in the tooltip).
+void SyncSwapChainOutput() {
+  const bool is_hdr = output_mode_setting != nullptr && output_mode_setting->GetValue() != 0.f;
+  shader_injection.swap_chain_encoding = is_hdr ? 4.f : 1.f;              // HDR10 : sRGB
+  shader_injection.swap_chain_encoding_color_space = is_hdr ? 1.f : 0.f;  // BT2020 : BT709
+  renodx::mods::swapchain::SetUseHDR10(is_hdr);
+  renodx::mods::swapchain::use_resize_buffer = !is_hdr;
+}
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -77,7 +91,7 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value == 0.f ? 0.f : 3.f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
-    new renodx::utils::settings::Setting{
+    peak_brightness_setting = new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
         .binding = &shader_injection.peak_white_nits,
         .default_value = 1000.f,  // replaced with the detected display peak in OnInitSwapchain
@@ -292,7 +306,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (!peak.has_value()) peak = 1000.f;
-  settings[PEAK_BRIGHTNESS_INDEX]->default_value = peak.value();
+  peak_brightness_setting->default_value = peak.value();
 }
 
 bool initialized = false;
@@ -366,30 +380,27 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         shader_injection.tone_map_hue_shift = 0.5f;
         shader_injection.swap_chain_clamp_color_space = 1.f;  // BT2020
 
-        // Output Encoding. Created here (not in the static list) because its value drives
-        // swapchain setup at init; it is then appended to the settings UI.
+        // Output Mode (SDR / HDR). Created here (not in the static list) because its value
+        // drives swapchain setup at init; it is then appended to the settings UI.
         {
-          auto* setting = new renodx::utils::settings::Setting{
-              .key = "SwapChainEncoding",
-              .binding = &shader_injection.swap_chain_encoding,
+          output_mode_setting = new renodx::utils::settings::Setting{
+              .key = "OutputMode",
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 4.f,  // HDR10
-              .label = "Encoding",
+              .default_value = 1.f,  // HDR
+              .can_reset = false,
+              .label = "Output Mode",
               .section = "Display Output",
-              .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
-              .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-              .on_change_value = [](float previous, float current) {
-                shader_injection.swap_chain_encoding_color_space = (current == 4.f) ? 1.f : 0.f;
-              },
+              .tooltip = "Selects the swapchain output path."
+                         "\nSDR: 8-bit sRGB / BT.709."
+                         "\nHDR: 10-bit PQ (HDR10) / BT.2020."
+                         "\nSwitching SDR <-> HDR requires a game restart.",
+              .labels = {"SDR", "HDR"},
+              .on_change_value = [](float, float) { SyncSwapChainOutput(); },
               .is_global = true,
-              .is_visible = []() { return current_settings_mode >= 2; },
           };
-          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-          bool is_hdr10 = setting->GetValue() == 4.f;
-          renodx::mods::swapchain::SetUseHDR10(is_hdr10);
-          renodx::mods::swapchain::use_resize_buffer = setting->GetValue() < 4.f;
-          shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
-          settings.push_back(setting);
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, output_mode_setting);
+          SyncSwapChainOutput();  // apply the persisted SDR/HDR choice at init
+          settings.push_back(output_mode_setting);
         }
 
         // About section, appended last so it renders after the Display Output group.
