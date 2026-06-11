@@ -265,7 +265,6 @@ static bool CompileCustomShaders() {
     }
 
     std::vector<std::filesystem::path> shader_file_paths;
-    const auto normalized_directory = NormalizePathForComparison(directory);
     for (auto iterator = std::filesystem::recursive_directory_iterator(
              directory,
              std::filesystem::directory_options::skip_permission_denied);
