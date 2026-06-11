@@ -265,9 +265,20 @@ static bool CompileCustomShaders() {
     }
 
     std::vector<std::filesystem::path> shader_file_paths;
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(
+    const auto normalized_directory = NormalizePathForComparison(directory);
+    for (auto iterator = std::filesystem::recursive_directory_iterator(
              directory,
-             std::filesystem::directory_options::skip_permission_denied)) {
+             std::filesystem::directory_options::skip_permission_denied);
+         iterator != std::filesystem::recursive_directory_iterator();
+         ++iterator) {
+      const auto& entry = *iterator;
+      if (entry.is_directory()) {
+        const auto folder_name = entry.path().filename().string();
+        if (!folder_name.empty() && folder_name.front() == '.') {
+          iterator.disable_recursion_pending();
+          continue;
+        }
+      }
       if (!entry.is_regular_file()) continue;
 
       const auto entry_path = NormalizePathForComparison(entry.path());
