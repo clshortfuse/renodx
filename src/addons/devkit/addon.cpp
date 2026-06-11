@@ -127,6 +127,7 @@ std::atomic_bool snapshot_pane_show_compute_shaders = true;
 std::atomic_bool snapshot_pane_show_blends = true;
 std::atomic_bool snapshot_pane_expand_all_nodes = true;
 std::atomic_bool snapshot_pane_filter_resources_by_shader_use = true;
+std::atomic_bool snapshot_pane_show_non_executed_command_lists = false;
 std::atomic_bool shaders_pane_show_vertex_shaders = false;
 std::atomic_bool shaders_pane_show_pixel_shaders = true;
 std::atomic_bool shaders_pane_show_compute_shaders = true;
@@ -254,6 +255,10 @@ struct DrawDetails {
   [[nodiscard]] bool IsDispatch() const {
     return draw_method == DrawMethods::DISPATCH;
   };
+
+  [[nodiscard]] bool HasUnknownSubmissionOrder() const {
+    return submission_order == 0u;
+  }
 
   [[nodiscard]] std::string DrawMethodString() const {
     switch (draw_method) {
@@ -5206,7 +5211,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
         | (snapshot_pane_show_pixel_shaders ? 1u << 1u : 0u)
         | (snapshot_pane_show_compute_shaders ? 1u << 2u : 0u)
         | (snapshot_pane_filter_resources_by_shader_use ? 1u << 3u : 0u)
-        | (snapshot_pane_expand_all_nodes ? 1u << 4u : 0u);
+        | (snapshot_pane_expand_all_nodes ? 1u << 4u : 0u)
+        | (snapshot_pane_show_non_executed_command_lists ? 1u << 5u : 0u);
 
     const auto focus_pending_draw = [&](int draw_index) {
       if (draw_index == pending_draw_index_focus) {
@@ -6338,6 +6344,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
 
       for (int draw_index = 0; draw_index < static_cast<int>(data->draw_details_list.size()); ++draw_index) {
         const auto& draw_details = data->draw_details_list[static_cast<size_t>(draw_index)];
+        if (!snapshot_pane_show_non_executed_command_lists && draw_details.HasUnknownSubmissionOrder()) continue;
         const bool draw_node_open = get_tree_node_open_state(draw_index, snapshot_pane_expand_all_nodes);
         const int draw_row_index = append_row({
             .kind = SnapshotRow::Kind::DRAW,
@@ -7359,6 +7366,7 @@ struct SettingsDeviceOption {
     DrawSettingBoolCheckbox("Show Vertex Shaders", "SnapshotPaneShowVertexShaders", &snapshot_pane_show_vertex_shaders);
     DrawSettingBoolCheckbox("Show Pixel Shaders", "SnapshotPaneShowPixelShaders", &snapshot_pane_show_pixel_shaders);
     DrawSettingBoolCheckbox("Show Compute Shaders", "SnapshotPaneShowComputeShaders", &snapshot_pane_show_compute_shaders);
+    DrawSettingBoolCheckbox("Show Non-Executed Command Lists", "SnapshotPaneShowNonExecutedCommandLists", &snapshot_pane_show_non_executed_command_lists);
     DrawSettingBoolCheckbox("Expand All Nodes", "SnapshotPaneExpandAllNodes", &snapshot_pane_expand_all_nodes);
     DrawSettingBoolCheckbox("Filter Resources by Shader Use", "SnapshotPaneFilterResourcesByShaderUse", &snapshot_pane_filter_resources_by_shader_use);
     DrawSettingBoolCheckbox("Show Blends", "SnapshotPaneShowBlends", &snapshot_pane_show_blends);
@@ -8410,6 +8418,7 @@ void InitializeUserSettings() {
            {"SnapshotPaneShowBlends", &snapshot_pane_show_blends},
            {"SnapshotPaneExpandAllNodes", &snapshot_pane_expand_all_nodes},
            {"SnapshotPaneFilterResourcesByShaderUse", &snapshot_pane_filter_resources_by_shader_use},
+           {"SnapshotPaneShowNonExecutedCommandLists", &snapshot_pane_show_non_executed_command_lists},
            {"ShadersPaneShowVertexShaders", &shaders_pane_show_vertex_shaders},
            {"ShadersPaneShowPixelShaders", &shaders_pane_show_pixel_shaders},
            {"ShadersPaneShowComputeShaders", &shaders_pane_show_compute_shaders},
@@ -8818,7 +8827,10 @@ void OnPresent(
     auto* device_data = get_data();
     std::unique_lock lock(device_data->mutex);
     std::ranges::sort(device_data->draw_details_list, [](const DrawDetails& a, const DrawDetails& b) {
-      if (a.submission_order != b.submission_order) return a.submission_order < b.submission_order;
+      const bool a_unknown_submission = a.submission_order == 0u;
+      const bool b_unknown_submission = b.submission_order == 0u;
+      if (a_unknown_submission != b_unknown_submission) return !a_unknown_submission;
+      if (!a_unknown_submission && a.submission_order != b.submission_order) return a.submission_order < b.submission_order;
       if (a.cmd_list_handle == b.cmd_list_handle) return a.cmd_list_draw_index < b.cmd_list_draw_index;
       return a.timestamp < b.timestamp;
     });
