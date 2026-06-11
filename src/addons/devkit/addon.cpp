@@ -4136,6 +4136,12 @@ void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
 }
 
 void OnResetCommandList(reshade::api::command_list* cmd_list) {
+  if (auto* device_data = renodx::utils::data::Get<DeviceData>(cmd_list->get_device());
+      device_data != nullptr) {
+    const std::unique_lock lock(device_data->mutex);
+    device_data->draw_detail_indexes_by_cmd_list.erase(reinterpret_cast<uint64_t>(cmd_list));
+  }
+
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (data == nullptr) return;
   renodx::utils::data::Delete<CommandListData>(cmd_list);
