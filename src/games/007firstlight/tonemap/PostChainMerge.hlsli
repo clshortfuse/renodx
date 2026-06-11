@@ -50,7 +50,7 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
       float3 lum_tonemapped = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
 
       tonemapped = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(hue_and_purity_reference),
-                                                                                       renodx::color::lms::from::BT709(lum_tonemapped), 5.f, 0.35f));
+                                                                                       renodx::color::lms::from::BT709(lum_tonemapped), 5.f, 0.75f));
     } else {
       tonemapped = renodx::color::correct::Luminance(hue_and_purity_reference,
                                                      renodx::color::yf::from::BT709(hue_and_purity_reference),
@@ -153,7 +153,7 @@ float3 FinalizeOutput(float3 color) {
       float3 color_corrected_ch = renodx::color::correct::GammaSafe(color);
 
       color = renodx::color::bt709::from::LMS(TransferPurityAndWeightedHueFromLMS(renodx::color::lms::from::BT709(color_corrected_ch),
-                                                                                  renodx::color::lms::from::BT709(color_corrected_lum), 1.f, 0.35f));
+                                                                                  renodx::color::lms::from::BT709(color_corrected_lum), 1.f, 0.75f));
     }
 
     color = renodx::color::bt2020::from::BT709(color);
