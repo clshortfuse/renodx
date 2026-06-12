@@ -304,9 +304,10 @@ bool fired_on_init_swapchain = false;
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
   fired_on_init_swapchain = true;
-  auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
-  if (!peak.has_value()) peak = 1000.f;
-  peak_brightness_setting->default_value = peak.value();
+  float peak_nits = renodx::utils::swapchain::GetPeakNits(swapchain).value_or(1000.f);
+  if (peak_nits < peak_brightness_setting->min) peak_nits = peak_brightness_setting->min;
+  if (peak_nits > peak_brightness_setting->max) peak_nits = peak_brightness_setting->max;
+  peak_brightness_setting->default_value = peak_nits;
 }
 
 bool initialized = false;
