@@ -16,8 +16,8 @@
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
-#include "isfast_noise.hpp"
 #include "dlss.hpp"
+#include "isfast_noise.hpp"
 #include "shared.h"
 
 namespace {
@@ -253,16 +253,6 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "Sharp", "Filtered"},
     },
     new renodx::utils::settings::Setting{
-        .key = "DLSSGHUDGhostingFix",
-        .binding = &firstlight::dlss::dlssg_hud_ghosting_fix,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .label = "DLSS FG HUD Ghosting Fix",
-        .section = "DLSS Frame Generation",
-        .tooltip = "Hides the game's HDR UI alpha and HUD-less color inputs from DLSS Frame Generation to reduce HUD ghosting and disocclusion artifacts.",
-        .labels = {"Off", "On"},
-    },
-    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -375,8 +365,8 @@ void OnPresetOff() {
       {"FxGrainStrength", 50.f},
       {"FxISFASTShadows", 0.f},
       {"FxSSRReflectionFix", 0.f},
-      {"DLSSGHUDGhostingFix", 1.f},
   });
+  firstlight::dlss::OnPresetOff();
 }
 
 bool fired_on_init_swapchain = false;
@@ -409,6 +399,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
 
         firstlight::isfast::AddShaders(custom_shaders);
+        firstlight::dlss::AppendSettings(settings);
 
         initialized = true;
       }
@@ -428,7 +419,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
-  firstlight::dlss::Use(fdw_reason);
+    firstlight::dlss::Use(fdw_reason);
 
   return TRUE;
 }
