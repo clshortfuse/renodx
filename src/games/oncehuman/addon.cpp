@@ -285,7 +285,7 @@ renodx::utils::settings::Settings settings = {
                    "\nJPN Modern for BT.709 D93."
                    "\nUS CRT for BT.601 (NTSC-U)."
                    "\nJPN CRT for BT.601 ARIB-TR-B9 D93 (NTSC-J)."
-                   "\nDefault: US CRT",
+                   "\nDefault: US Modern",
         .labels = {
             "US Modern",
             "JPN Modern",
