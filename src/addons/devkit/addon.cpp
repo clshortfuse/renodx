@@ -133,6 +133,12 @@ std::atomic_bool shaders_pane_show_pixel_shaders = true;
 std::atomic_bool shaders_pane_show_compute_shaders = true;
 
 uint32_t skip_draw_count = 0;
+
+[[nodiscard]] bool SupportsSnapshotSubmissionOrder(reshade::api::device_api api) {
+  return api == reshade::api::device_api::d3d12
+         || api == reshade::api::device_api::vulkan;
+}
+
 void QueueSnapshotCapture(reshade::api::device* device) {
   snapshot_queued_device = device;
   if (snapshot_trace_with_snapshot.load()) {
@@ -4132,14 +4138,26 @@ void OnInitCommandList(reshade::api::command_list* cmd_list) {
 }
 
 void OnDestroyCommandList(reshade::api::command_list* cmd_list) {
+  auto* device = cmd_list->get_device();
+  if (SupportsSnapshotSubmissionOrder(device->get_api())) {
+    if (auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+        device_data != nullptr) {
+      const std::unique_lock lock(device_data->mutex);
+      device_data->draw_detail_indexes_by_cmd_list.erase(reinterpret_cast<uint64_t>(cmd_list));
+    }
+  }
+
   renodx::utils::data::Delete<CommandListData>(cmd_list);
 }
 
 void OnResetCommandList(reshade::api::command_list* cmd_list) {
-  if (auto* device_data = renodx::utils::data::Get<DeviceData>(cmd_list->get_device());
-      device_data != nullptr) {
-    const std::unique_lock lock(device_data->mutex);
-    device_data->draw_detail_indexes_by_cmd_list.erase(reinterpret_cast<uint64_t>(cmd_list));
+  auto* device = cmd_list->get_device();
+  if (SupportsSnapshotSubmissionOrder(device->get_api())) {
+    if (auto* device_data = renodx::utils::data::Get<DeviceData>(device);
+        device_data != nullptr) {
+      const std::unique_lock lock(device_data->mutex);
+      device_data->draw_detail_indexes_by_cmd_list.erase(reinterpret_cast<uint64_t>(cmd_list));
+    }
   }
 
   auto* data = renodx::utils::data::Get<CommandListData>(cmd_list);
@@ -4329,7 +4347,7 @@ bool OnCopyResource(
     }
     const auto draw_index = device_data->draw_details_list.size();
     device_data->draw_details_list.push_back(std::move(draw_details));
-    if (device_data->draw_details_list.back().cmd_list_handle != 0u) {
+    if (SupportsSnapshotSubmissionOrder(device->get_api()) && device_data->draw_details_list.back().cmd_list_handle != 0u) {
       device_data->draw_detail_indexes_by_cmd_list[device_data->draw_details_list.back().cmd_list_handle].push_back(draw_index);
     }
     device_data->snapshot_rows_valid = false;
@@ -4375,7 +4393,7 @@ bool OnCopyTextureRegion(
     }
     const auto draw_index = device_data->draw_details_list.size();
     device_data->draw_details_list.push_back(std::move(draw_details));
-    if (device_data->draw_details_list.back().cmd_list_handle != 0u) {
+    if (SupportsSnapshotSubmissionOrder(device->get_api()) && device_data->draw_details_list.back().cmd_list_handle != 0u) {
       device_data->draw_detail_indexes_by_cmd_list[device_data->draw_details_list.back().cmd_list_handle].push_back(draw_index);
     }
     device_data->snapshot_rows_valid = false;
@@ -4947,7 +4965,7 @@ bool OnDraw(reshade::api::command_list* cmd_list, DrawDetails::DrawMethods draw_
     const auto draw_index = device_data->draw_details_list.size();
     const auto cmd_list_handle = draw_details.cmd_list_handle;
     device_data->draw_details_list.push_back(std::move(draw_details));
-    if (cmd_list_handle != 0u) {
+    if (SupportsSnapshotSubmissionOrder(device->get_api()) && cmd_list_handle != 0u) {
       device_data->draw_detail_indexes_by_cmd_list[cmd_list_handle].push_back(draw_index);
     }
     device_data->snapshot_rows_valid = false;
@@ -5218,7 +5236,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
         | (snapshot_pane_show_compute_shaders ? 1u << 2u : 0u)
         | (snapshot_pane_filter_resources_by_shader_use ? 1u << 3u : 0u)
         | (snapshot_pane_expand_all_nodes ? 1u << 4u : 0u)
-        | (snapshot_pane_show_non_executed_command_lists ? 1u << 5u : 0u);
+    | (snapshot_pane_show_non_executed_command_lists ? 1u << 5u : 0u);
 
     const auto focus_pending_draw = [&](int draw_index) {
       if (draw_index == pending_draw_index_focus) {
@@ -6350,7 +6368,11 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
 
       for (int draw_index = 0; draw_index < static_cast<int>(data->draw_details_list.size()); ++draw_index) {
         const auto& draw_details = data->draw_details_list[static_cast<size_t>(draw_index)];
-        if (!snapshot_pane_show_non_executed_command_lists && draw_details.HasUnknownSubmissionOrder()) continue;
+        if (SupportsSnapshotSubmissionOrder(device->get_api())
+            && !snapshot_pane_show_non_executed_command_lists
+            && draw_details.HasUnknownSubmissionOrder()) {
+          continue;
+        }
         const bool draw_node_open = get_tree_node_open_state(draw_index, snapshot_pane_expand_all_nodes);
         const int draw_row_index = append_row({
             .kind = SnapshotRow::Kind::DRAW,
@@ -8691,6 +8713,7 @@ void OnExecuteCommandList(
 
   auto* device = cmd_list->get_device();
   if (device != snapshot_device) return;
+  if (!SupportsSnapshotSubmissionOrder(device->get_api())) return;
 
   auto* device_data = renodx::utils::data::Get<DeviceData>(device);
   if (device_data == nullptr) return;
