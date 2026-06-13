@@ -472,7 +472,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::b8g8r8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
+            .ignore_size = true,
             .use_resource_view_cloning = true,
+            .use_resource_view_cloning_and_upgrade = true,
             .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
             .usage_include = reshade::api::resource_usage::render_target,
         });
