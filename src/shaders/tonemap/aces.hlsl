@@ -362,37 +362,6 @@ ODTConfig CreateODTConfig(float min_y, float max_y) {
   return config;
 }
 
-ODTConfig CreateODTConfig(
-    float min_y,
-    float max_y,
-    float mid_y,
-    bool stable_peak_exp_shift = false,
-    float exp_shift_max_reference = 1000.f,
-    float exp_shift_min_reference = 0.0001f) {
-  ODTConfig config = CreateODTConfig(min_y, max_y);
-
-  if (mid_y != 4.8f) {
-    ODTConfig exp_shift_config;
-
-    // derive exp-shift from a fixed reference curve so peak changes are stable
-    const bool use_stable_reference =
-        stable_peak_exp_shift && (exp_shift_max_reference != max_y || exp_shift_min_reference != min_y);
-    if (use_stable_reference) {
-      exp_shift_config = CreateODTConfig(exp_shift_min_reference, exp_shift_max_reference);
-    } else {
-      exp_shift_config = config;
-    }
-    float exp_shift = log2(InvSSTS(mid_y, exp_shift_config)) - log2(0.18f);
-    float shift_log10 = exp_shift * log10(2.f);
-
-    config.y_min.x -= shift_log10;
-    config.y_mid.x -= shift_log10;
-    config.y_max.x -= shift_log10;
-  }
-
-  return config;
-}
-
 float SSTS(float x, ODTConfig config) {
   static const int N_KNOTS_LOW = 4;
   static const int N_KNOTS_HIGH = 4;
