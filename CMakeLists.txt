@@ -126,8 +126,7 @@ function(generate_resource_rc ADDON)
   list(JOIN STRIPPED_VERSION_LIST "," VERSION_FALLBACK)
 
   set(RESOURCE_RC_CONTENT "
-#define VS_FF_DEBUG 0x00000001L
-#define VFT_DLL 0x00000002L
+#include <winver.h>
 
 #ifndef VER_FILEVERSION
 #define VER_FILEVERSION ${VERSION_FALLBACK}
