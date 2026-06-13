@@ -52,16 +52,17 @@ cbuffer cb13 : register(b0, space50) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
-#define TONE_MAP_TYPE                     shader_injection.tone_map_type
-#define TONE_MAP_ACES_MID_GRAY            shader_injection.tone_map_aces_mid_gray
-#define RENODX_PEAK_WHITE_NITS            shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS         shader_injection.diffuse_white_nits
-#define RENODX_GRAPHICS_WHITE_NITS        shader_injection.graphics_white_nits
-#define CUSTOM_SHOW_UI                    shader_injection.custom_ui_visibility
+#define TONE_MAP_TYPE              shader_injection.tone_map_type
+#define TONE_MAP_ACES_MID_GRAY     shader_injection.tone_map_aces_mid_gray
+#define RENODX_PEAK_WHITE_NITS     shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS  shader_injection.diffuse_white_nits
+#define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
+#define CUSTOM_SHOW_UI             shader_injection.custom_ui_visibility
 
-#define RENODX_TONE_MAP_SCALING    shader_injection.tone_map_scaling
-#define RENODX_GAMMA_CORRECTION    shader_injection.gamma_correction
-#define RENODX_GAMMA_CORRECTION_UI shader_injection.gamma_correction_ui
+#define RENODX_TONE_MAP_SCALING       shader_injection.tone_map_scaling
+#define RENODX_TONE_MAP_HUE_RETENTION 0.f
+#define RENODX_GAMMA_CORRECTION       shader_injection.gamma_correction
+#define RENODX_GAMMA_CORRECTION_UI    shader_injection.gamma_correction_ui
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
