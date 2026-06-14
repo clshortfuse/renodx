@@ -47,6 +47,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 
     CustomShaderEntry(0x4BA8AA92),  // PS_puddleMaskAndPassCombined
     CustomShaderEntry(0x06E3253E),  // PS_Rain
+    CustomShaderEntry(0x0A54D2D5),  // PS_SunBloom
 };
 
 ShaderInjectData shader_injection;
