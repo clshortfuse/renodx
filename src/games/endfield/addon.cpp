@@ -45,6 +45,29 @@ bool UsingSwapchainUtil() {
           || UsingSwapchainUpgrade());
 }
 
+void ApplySwapChainEncodingTarget(float encoding_value) {
+  const bool is_hdr10 = encoding_value == 4.f;
+  const bool is_scrgb = encoding_value == 5.f;
+
+  if (is_hdr10) {
+    renodx::mods::swapchain::target_format = reshade::api::format::r10g10b10a2_unorm;
+    renodx::mods::swapchain::target_color_space = reshade::api::color_space::hdr10_st2084;
+    renodx::mods::swapchain::use_resize_buffer = false;
+  } else if (is_scrgb) {
+    renodx::mods::swapchain::target_format = reshade::api::format::r16g16b16a16_float;
+    renodx::mods::swapchain::target_color_space = reshade::api::color_space::extended_srgb_linear;
+    renodx::mods::swapchain::use_resize_buffer = false;
+  } else {
+    renodx::mods::swapchain::target_format = reshade::api::format::r8g8b8a8_unorm;
+    renodx::mods::swapchain::target_color_space = reshade::api::color_space::srgb_nonlinear;
+    renodx::mods::swapchain::use_resize_buffer = true;
+  }
+
+  renodx::utils::device_proxy::SetTargetFormat(renodx::mods::swapchain::target_format);
+  renodx::utils::device_proxy::SetTargetColorSpace(renodx::mods::swapchain::target_color_space);
+  shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
+}
+
 // Helper to update resolution-based uniform variables in ReShade effects
 void UpdateReshadeResolutionUniforms(reshade::api::effect_runtime* runtime, uint32_t width, uint32_t height) {
   float fwidth = static_cast<float>(width);
@@ -939,8 +962,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Display Output",
         .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
         .on_change_value = [](float previous, float current) {
-          bool is_hdr10 = current == 4;
-          shader_injection.swap_chain_encoding_color_space = (is_hdr10 ? 1.f : 0.f);
+          ApplySwapChainEncodingTarget(current);
         },
         .is_global = true,
         .is_visible = []() { return current_settings_mode >= 1; },
@@ -1274,10 +1296,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         {
           float encoding_value = 4.f;  // default
           reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "SwapChainEncoding", encoding_value);
-          bool is_hdr10 = encoding_value == 4;
-          renodx::mods::swapchain::SetUseHDR10(is_hdr10);
-          renodx::mods::swapchain::use_resize_buffer = encoding_value < 4;
-          shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
+          ApplySwapChainEncodingTarget(encoding_value);
         }
 
         {

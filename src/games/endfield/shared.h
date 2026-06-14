@@ -139,8 +139,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   shader_injection.swap_chain_gamma_correction
 // #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE shader_injection.swap_chain_decoding_color_space
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
-// #define RENODX_SWAP_CHAIN_SCALING_NITS         shader_injection.swap_chain_scaling_nits
-// #define RENODX_SWAP_CHAIN_CLAMP_NITS           shader_injection.swap_chain_clamp_nits
+#define RENODX_SWAP_CHAIN_SCALING_NITS         (shader_injection.swap_chain_encoding < 4.f ? 1.f : shader_injection.graphics_white_nits)
+#define RENODX_SWAP_CHAIN_CLAMP_NITS           (shader_injection.swap_chain_encoding < 4.f ? 1.f : shader_injection.peak_white_nits)
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    shader_injection.swap_chain_clamp_color_space
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
