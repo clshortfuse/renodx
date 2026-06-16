@@ -58,7 +58,17 @@ The exact MCP schema can evolve, but the current workflow is built around these 
 ### Resource inspection
 
 - `devkit_analyze_resource`
+- `devkit_dump_resource_with_hash`
 - `devkit_set_resource_clone`
+
+### Texture replacement rules (experimental)
+
+- `devkit_set_texture_replace_enabled`
+- `devkit_set_texture_replace_rules`
+- `devkit_get_texture_replace_state`
+- `devkit_list_texture_replace_observations`
+- `devkit_clear_texture_replace_observations`
+- `devkit_dump_texture_replace_observation`
 
 ### Shader dump and live iteration
 
@@ -67,6 +77,16 @@ The exact MCP schema can evolve, but the current workflow is built around these 
 - `devkit_set_live_shader_path`
 - `devkit_load_live_shaders`
 - `devkit_unload_live_shaders`
+
+Default devkit folder layout under the ReShade base path:
+
+- `renodx-dev/live`
+- `renodx-dev/dump`
+- `renodx-dev/boot`
+
+`boot/` is scanned and decoded at devkit startup so matching `initial_data` uploads can be replaced immediately.
+If boot assets are found, devkit texture replacement is enabled automatically.
+Texture replacement lookup checks `live` first, then the decoded `boot` cache.
 
 ## 4. Recommended investigation loop
 
