@@ -701,15 +701,13 @@ static void OnBindPipeline(
   s << "bind_pipeline(";
   s << PRINT_PTR(pipeline.handle);
 
-  renodx::utils::shader::PipelineShaderDetails* details = nullptr;
   if (pipeline.handle != 0u && stages != reshade::api::pipeline_stage::ray_tracing_shader) {
-    details = renodx::utils::shader::GetPipelineShaderDetails(pipeline);
-  }
-  if (details != nullptr) {
-    s << ", layout: " << PRINT_PTR(details->layout.handle);
-    for (const auto& info : details->subobject_shaders) {
-      s << ", " << info.stage << ": " << PRINT_CRC32(info.shader_hash);
-    }
+    renodx::utils::shader::GetPipelineShaderDetails(pipeline, [&](const auto& details) {
+      s << ", layout: " << PRINT_PTR(details.layout.handle);
+      for (const auto& info : details.subobject_shaders) {
+        s << ", " << info.stage << ": " << PRINT_CRC32(info.shader_hash);
+      }
+    });
   }
   s << ", stages: " << stages << " (" << std::hex << static_cast<uint32_t>(stages) << std::dec << ")";
   s << ")";

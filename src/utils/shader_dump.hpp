@@ -159,76 +159,75 @@ static void OnInitPipeline(
   auto* data = internal::shared.data;
   if (data == nullptr) return;
 
-  auto* details = renodx::utils::shader::GetPipelineShaderDetails(pipeline);
-  if (details == nullptr) return;
+  renodx::utils::shader::GetPipelineShaderDetails(pipeline, [&](const auto& details) {
+    for (const auto& info : details.subobject_shaders) {
+      // Store immediately in case pipeline destroyed before present
+      const auto& shader_hash = info.shader_hash;
+      if (info.index >= subobject_count) continue;
 
-  for (const auto& info : details->subobject_shaders) {
-    // Store immediately in case pipeline destroyed before present
-    const auto& shader_hash = info.shader_hash;
-    if (info.index >= subobject_count) continue;
+      bool skip_shader = false;
+      data->shaders.if_contains(shader_hash, [&skip_shader](std::pair<const uint32_t, ShaderInfo>& pair) {
+        skip_shader = pair.second.dumped || pair.second.pending;
+      });
+      if (skip_shader) continue;
 
-    bool skip_shader = false;
-    data->shaders.if_contains(shader_hash, [&skip_shader](std::pair<const uint32_t, ShaderInfo>& pair) {
-      skip_shader = pair.second.dumped || pair.second.pending;
-    });
-    if (skip_shader) continue;
+      const auto& subobject = subobjects[info.index];
+      if (subobject.data == nullptr) continue;
+      const reshade::api::shader_desc desc = *static_cast<const reshade::api::shader_desc*>(subobject.data);
+      if (desc.code == nullptr || desc.code_size == 0) continue;
+      auto shader_data = cross_addon::vector<uint8_t>(
+          static_cast<const uint8_t*>(desc.code),
+          static_cast<const uint8_t*>(desc.code) + desc.code_size);
 
-    const auto& subobject = subobjects[info.index];
-    if (subobject.data == nullptr) continue;
-    const reshade::api::shader_desc desc = *static_cast<const reshade::api::shader_desc*>(subobject.data);
-    if (desc.code == nullptr || desc.code_size == 0) continue;
-    auto shader_data = cross_addon::vector<uint8_t>(
-        static_cast<const uint8_t*>(desc.code),
-        static_cast<const uint8_t*>(desc.code) + desc.code_size);
-
-    if (device::IsDirectX(device)) {
-      try {
-        auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data);
-        if (shader_version.GetMajor() == 0) {
-          // No shader information found
+      if (device::IsDirectX(device)) {
+        try {
+          auto shader_version = renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data);
+          if (shader_version.GetMajor() == 0) {
+            // No shader information found
+            continue;
+          }
+        } catch (std::exception& e) {
+          std::stringstream s;
+          s << "utils::shader::dump(Failed to decode shader data: ";
+          s << PRINT_CRC32(shader_hash);
+          s << ")";
+          reshade::log::message(reshade::log::level::warning, s.str().c_str());
           continue;
         }
-      } catch (std::exception& e) {
-        std::stringstream s;
-        s << "utils::shader::dump(Failed to decode shader data: ";
-        s << PRINT_CRC32(shader_hash);
-        s << ")";
-        reshade::log::message(reshade::log::level::warning, s.str().c_str());
-        continue;
+      } else {
+        // Assume Vulkan
       }
-    } else {
-      // Assume Vulkan
+      std::stringstream s;
+      s << "utils::shader::dump(storing: ";
+      s << PRINT_CRC32(shader_hash);
+      s << ", size: " << shader_data.size();
+      s << ")";
+      reshade::log::message(reshade::log::level::debug, s.str().c_str());
+
+      bool queued = false;
+      data->shaders.lazy_emplace_l(
+          shader_hash,
+          [&](std::pair<const uint32_t, ShaderInfo>& pair) {
+            if (pair.second.dumped || pair.second.pending) return;
+            pair.second.data = std::move(shader_data);
+            pair.second.type = subobject.type;
+            pair.second.device_api = device->get_api();
+            pair.second.pending = true;
+            queued = true;
+          },
+          [&](const ShaderInfoMap::constructor& ctor) {
+            ShaderInfo shader_info = {};
+            shader_info.data = std::move(shader_data);
+            shader_info.type = subobject.type;
+            shader_info.device_api = device->get_api();
+            shader_info.pending = true;
+            ctor(shader_hash, std::move(shader_info));
+            queued = true;
+          });
+
+      if (queued) data->pending_dump_count.fetch_add(1u);
     }
-    std::stringstream s;
-    s << "utils::shader::dump(storing: ";
-    s << PRINT_CRC32(shader_hash);
-    s << ", size: " << shader_data.size();
-    s << ")";
-    reshade::log::message(reshade::log::level::debug, s.str().c_str());
-
-    bool queued = false;
-    data->shaders.lazy_emplace_l(
-        shader_hash,
-        [&](std::pair<const uint32_t, ShaderInfo>& pair) {
-          if (pair.second.dumped || pair.second.pending) return;
-          pair.second.data = std::move(shader_data);
-          pair.second.type = subobject.type;
-          pair.second.device_api = device->get_api();
-          pair.second.pending = true;
-          queued = true;
-        },
-        [&](const ShaderInfoMap::constructor& ctor) {
-          ShaderInfo shader_info = {};
-          shader_info.data = std::move(shader_data);
-          shader_info.type = subobject.type;
-          shader_info.device_api = device->get_api();
-          shader_info.pending = true;
-          ctor(shader_hash, std::move(shader_info));
-          queued = true;
-        });
-
-    if (queued) data->pending_dump_count.fetch_add(1u);
-  }
+  });
 }
 
 }  // namespace internal
