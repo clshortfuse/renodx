@@ -480,6 +480,99 @@ struct ShaderTextSections {
   ShaderTextResult decompilation = std::nullopt;
 };
 
+void RunCmdDecompiler(const std::filesystem::path& cmd_decompiler_path,
+                      const std::filesystem::path& input_path,
+                      const std::filesystem::path& working_directory) {
+  auto command_line = std::format(
+      L"\"{}\" -D \"{}\"",
+      cmd_decompiler_path.wstring(),
+      input_path.wstring());
+
+  STARTUPINFOW startup_info = {};
+  startup_info.cb = sizeof(startup_info);
+  PROCESS_INFORMATION process_info = {};
+
+  if (CreateProcessW(
+          cmd_decompiler_path.c_str(),
+          command_line.data(),
+          nullptr,
+          nullptr,
+          FALSE,
+          CREATE_NO_WINDOW,
+          nullptr,
+          working_directory.c_str(),
+          &startup_info,
+          &process_info)
+      == 0) {
+    throw std::runtime_error(std::format("Failed to start cmd_Decompiler.exe: {}", GetLastError()));
+  }
+
+  const auto close_process_handles = [&process_info]() {
+    CloseHandle(process_info.hThread);
+    CloseHandle(process_info.hProcess);
+  };
+
+  if (WaitForSingleObject(process_info.hProcess, INFINITE) == WAIT_FAILED) {
+    const auto error = GetLastError();
+    close_process_handles();
+    throw std::runtime_error(std::format("Failed to wait for cmd_Decompiler.exe: {}", error));
+  }
+
+  DWORD exit_code = 0;
+  if (GetExitCodeProcess(process_info.hProcess, &exit_code) == 0) {
+    const auto error = GetLastError();
+    close_process_handles();
+    throw std::runtime_error(std::format("Failed to read cmd_Decompiler.exe exit code: {}", error));
+  }
+
+  close_process_handles();
+
+  if (exit_code != 0) {
+    throw std::runtime_error(std::format("cmd_Decompiler.exe failed with exit code {}", exit_code));
+  }
+}
+
+[[nodiscard]] std::string DecompileDxbcWithCmdDecompiler(std::vector<uint8_t>& shader_data) {
+  const auto tools_path = renodx::utils::shader::compiler::directx::GetToolsPath();
+  if (tools_path.empty()) {
+    throw std::runtime_error("No DevKit tools directory is configured. Use devkit_set_tools_path first.");
+  }
+
+  const auto cmd_decompiler_path = tools_path / "cmd_Decompiler.exe";
+  if (!renodx::utils::path::CheckExistsFile(cmd_decompiler_path)) {
+    throw std::runtime_error(std::format("cmd_Decompiler.exe was not found in '{}'.", tools_path.string()));
+  }
+
+  auto output_directory = renodx::utils::path::GetOutputSubdirectory("decompile");
+  std::filesystem::create_directories(output_directory);
+
+  static std::atomic_uint32_t decompile_index = 0;
+  auto input_path = output_directory / std::format(
+                                        "shader_{}_{}.cso",
+                                        GetCurrentProcessId(),
+                                        decompile_index.fetch_add(1, std::memory_order_relaxed));
+  renodx::utils::path::WriteBinaryFile(input_path, std::span(shader_data.data(), shader_data.size()));
+
+  RunCmdDecompiler(cmd_decompiler_path, input_path, tools_path);
+
+  auto replaced_extension_path = input_path;
+  replaced_extension_path.replace_extension(".hlsl");
+  auto appended_extension_path = input_path;
+  appended_extension_path += ".hlsl";
+
+  std::error_code ignored;
+  for (const auto* candidate_path : {&replaced_extension_path, &appended_extension_path}) {
+    if (!renodx::utils::path::CheckExistsFile(*candidate_path)) continue;
+    auto output = renodx::utils::path::ReadTextFile(*candidate_path);
+    std::filesystem::remove(input_path, ignored);
+    std::filesystem::remove(*candidate_path, ignored);
+    return output;
+  }
+
+  std::filesystem::remove(input_path, ignored);
+  throw std::runtime_error("cmd_Decompiler.exe finished without producing an HLSL file.");
+}
+
 [[nodiscard]] ShaderTextSections BuildDecompilationForShaderData(
     reshade::api::device* device,
     std::vector<uint8_t>& shader_data) {
@@ -488,14 +581,16 @@ struct ShaderTextSections {
   try {
     if (renodx::utils::device::IsDirectX(device)) {
       auto disassembly_string = renodx::utils::shader::compiler::directx::DisassembleShader(shader_data);
-      auto decompiler = renodx::utils::shader::decompiler::dxc::Decompiler();
-
       sections.disassembly = disassembly_string;
-      sections.decompilation = decompiler.Decompile(
-          disassembly_string,
-          {
-              .flatten = true,
-          });
+      if (renodx::utils::shader::compiler::directx::DecodeShaderVersion(shader_data).GetMajor() < 6) {
+        sections.decompilation = DecompileDxbcWithCmdDecompiler(shader_data);
+      } else {
+        sections.decompilation = renodx::utils::shader::decompiler::dxc::Decompiler().Decompile(
+            disassembly_string,
+            {
+                .flatten = true,
+            });
+      }
       return sections;
     }
     if (device->get_api() == reshade::api::device_api::opengl) {

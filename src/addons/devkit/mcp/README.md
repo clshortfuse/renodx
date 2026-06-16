@@ -116,7 +116,7 @@ sequenceDiagram
 - Boot texture replacement is create-time only; it does not scan `live/` for runtime hotswap replacements.
 - Use `devkit_dump_texture_replace_observation` with `outputPath` set to the `boot/` directory to create the canonical replacement filename, edit that PNG, then reload with `devkit_reload_texture_replace_boot_cache` or restart the game.
 - Use resource clone tools for immediate live hotswap comparison.
-- Shader decompilation is best-effort. Disassembly is generally available first; decompilation may still be unavailable for some older DirectX shader formats.
+- Shader decompilation is best-effort. Disassembly is generally available first. DXBC SM4/5 decompilation uses `cmd_Decompiler.exe` from the configured tools path; DXIL SM6 decompilation uses the internal DXC decompiler path.
 
 ## Why `ToolContext` Exists
 

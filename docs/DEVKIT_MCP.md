@@ -151,7 +151,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-dev-env.ps1 -Install
 
 That installs `cmd_Decompiler.exe` into `.\bin`. For the full tool bootstrap and the remaining optional reverse-engineering binaries, see `docs/CONTRIBUTING.md`.
 
-Devkit MCP can already disassemble tracked DirectX shaders. Decompilation is best-effort and currently uses the DXC path, so it may be unavailable for some older DXBC-era shaders even when the tools path is configured correctly. The external tools in `.\bin` are still useful when you want standalone files on disk or alternate reverse-engineering workflows.
+Devkit MCP can already disassemble tracked DirectX shaders. Decompilation is best-effort: DXBC SM4/5 shaders use `cmd_Decompiler.exe` from the configured tools path, while DXIL SM6 shaders use the internal DXC decompiler path. The external tools in `.\bin` are still useful when you want standalone files on disk or alternate reverse-engineering workflows.
 
 Example:
 

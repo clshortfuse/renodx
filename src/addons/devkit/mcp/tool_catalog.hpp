@@ -100,7 +100,7 @@ inline const renodx::utils::mcp::ToolCatalog METADATA = {
         "devkit_get_shader",
         {
             .title = "Get Shader",
-            .description = "Return metadata for a tracked shader and optionally include disassembly or DXC decompilation text via a named view or a views array.",
+            .description = "Return metadata for a tracked shader and optionally include disassembly or decompilation text via a named view or a views array. DXBC uses configured cmd_Decompiler.exe; DXIL uses the internal DXC decompiler.",
             .input_schema = {
                 .properties = {
                     {"deviceIndex", {.types = {"integer"}, .minimum = 0}},
