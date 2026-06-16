@@ -4268,9 +4268,6 @@ void OnBindPipeline(
     if (!shader_details->program_version.has_value()) {
       if (shader_details->shader_data.empty()) {
         try {
-          auto* pipeline_details = renodx::utils::shader::GetPipelineShaderDetails(pipeline);
-          if (pipeline_details == nullptr) return;
-
           auto shader_data = renodx::utils::shader::GetShaderData(pipeline, shader_hash);
           if (!shader_data.has_value()) {
             throw std::runtime_error("Failed to get shader data");
@@ -5297,10 +5294,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
 
     const auto render_shader_row = [&](const SnapshotRow& row) {
       auto* shader_details = data->GetShaderDetails(row.shader_hash);
-      auto* pipeline_details_ptr = renodx::utils::shader::GetPipelineShaderDetails(row.pipeline_bind->pipeline);
-      if (pipeline_details_ptr != nullptr) {
-        auto& pipeline_details = *pipeline_details_ptr;
-
+      std::optional<std::string> pipeline_tag;
+      renodx::utils::shader::UpdatePipelineShaderDetails(row.pipeline_bind->pipeline, [&](auto& pipeline_details) {
         if (!pipeline_details.tag.has_value()) {
           pipeline_details.tag.emplace();
           if (data->live_pipelines.contains(row.pipeline_bind->pipeline.handle)) {
@@ -5310,7 +5305,10 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
             }
           }
         }
-      }
+        if (pipeline_details.tag.has_value() && !pipeline_details.tag->empty()) {
+          pipeline_tag.emplace(pipeline_details.tag->begin(), pipeline_details.tag->end());
+        }
+      });
 
       SettingSelection search = {.shader_hash = row.shader_hash};
       auto& selection = GetSelection(search);
@@ -5423,8 +5421,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
         auto entrypoint = GetEntryPointForShaderDetails(device, data, shader_details);
         if (!entrypoint.empty() && entrypoint != "main") {
           ImGui::TextUnformatted(entrypoint.c_str());
-        } else if (pipeline_details_ptr != nullptr && pipeline_details_ptr->tag.has_value() && !pipeline_details_ptr->tag->empty()) {
-          ImGui::TextUnformatted(pipeline_details_ptr->tag->c_str());
+        } else if (pipeline_tag.has_value()) {
+          ImGui::TextUnformatted(pipeline_tag->c_str());
         }
       }
     };
