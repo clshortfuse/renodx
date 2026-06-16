@@ -169,28 +169,40 @@ void comp_main() {
   float _663 = (((_562 * clamp(abs(mad(frac(_613 + 0.3333333432674407958984375f), 6.0f, -3.0f)) - 1.0f, 0.0f, 1.0f)) - _589) * _651) + _589;
   float _672 = clamp(mad(_560 - asfloat(cb6_m[17u].x), asfloat(cb6_m[17u].y), 0.5f), 0.0f, 1.0f);
   float _675 = (_672 * _672) * mad(_672, -2.0f, 3.0f);
-  float3 final_color_ap1 = float3(
+  float3 untonemapped_ap1 = float3(
       mad(_675, (_587 + (_635 * ((_562 * clamp(abs(mad(frac(_592 + 1.0f), 6.0f, -3.0f)) - 1.0f, 0.0f, 1.0f)) - _587))) - _661, _661),
       mad(((((_562 * clamp(abs(mad(frac(_592 + 0.666666686534881591796875f), 6.0f, -3.0f)) - 1.0f, 0.0f, 1.0f)) - _588) * _635) + _588) - _662, _675, _662),
       mad(((((_562 * clamp(abs(mad(frac(_592 + 0.3333333432674407958984375f), 6.0f, -3.0f)) - 1.0f, 0.0f, 1.0f)) - _589) * _635) + _589) - _663, _675, _663));
 
+#if 1
+  float untonemapped_lum = renodx::color::yf::from::AP1(untonemapped_ap1);
+  renodx_custom::tonemap::psycho::config17::Config psycho17_config = CreatePsycho17Config();
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    untonemapped_ap1 = renodx::color::ap1::from::BT2020(
+        renodx_custom::tonemap::psycho::ApplyPreToneMapColorGradeBT2020(renodx::color::bt2020::from::AP1(untonemapped_ap1), psycho17_config));
+  }
+#endif
+
   const float MID_GRAY = 0.18f;
   const float LUT_LOG2_RANGE = 21.0f;
-  float3 encoded_color = log2(final_color_ap1 / MID_GRAY) / LUT_LOG2_RANGE + 0.5f;
+  float3 encoded_color = log2(untonemapped_ap1 / MID_GRAY) / LUT_LOG2_RANGE + 0.5f;
 
   float3 final_color_encoded = t102.SampleLevel(s13, saturate(encoded_color) * 0.96875f + 0.015625f, 0.0f).xyz;
 
   float peak_nits = asfloat(cb6_m[22u].w);
   float exposure = asfloat(cb6_m[22u].z);
   float diffuse_white_nits = (exposure / 128.f) * 203.f;
-  float3 untonemapped_ap1 = final_color_ap1;
 
-#if 0
-  float3 final_color_bt2020 = renodx::color::pq::DecodeSafe(final_color_encoded, diffuse_white_nits);
+#if 1
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    float3 final_color_bt2020 = renodx::color::pq::DecodeSafe(final_color_encoded, diffuse_white_nits);
 
-  final_color_encoded = renodx::color::pq::EncodeSafe(final_color_bt2020, diffuse_white_nits);
+    final_color_bt2020 = renodx_custom::tonemap::psycho::ApplyPostToneMapColorGradeBT2020(
+        final_color_bt2020, final_color_bt2020, untonemapped_lum, psycho17_config);
+
+    final_color_encoded = renodx::color::pq::EncodeSafe(final_color_bt2020, diffuse_white_nits);
+  }
 #endif
-
 
   u4[gl_GlobalInvocationID] = float4(final_color_encoded, 1.f);
 }
