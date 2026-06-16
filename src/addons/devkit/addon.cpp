@@ -409,6 +409,7 @@ struct __declspec(uuid("0190ec1a-2e19-74a6-ad41-4df0d4d8caed")) DeviceData {
   std::unordered_map<uint64_t, SnapshotResourceUsage> resource_usage_by_handle;
   std::vector<SnapshotRow> snapshot_rows;
   uint32_t snapshot_row_layout_key = 0u;
+  uint32_t snapshot_rows_generation = 0u;
   bool snapshot_rows_valid = false;
   std::unordered_map<reshade::api::swapchain*, reshade::api::swapchain_desc> swapchain_descs;
   std::unordered_map<reshade::api::swapchain*, HWND> swapchain_windows;
@@ -877,7 +878,38 @@ bool g_device_proxy_disable_flip_bootstrap_pending = false;
          && !renodx::utils::device_proxy::shared.data->remove_device_proxy.load(std::memory_order_relaxed);
 }
 
-int pending_draw_index_focus = -1;
+// Tracks pending scroll-to-shader navigation in the snapshot pane.
+struct SnapshotNavigation {
+  int target_draw_index = -1;
+  uint32_t target_shader_hash = 0;  // 0 = draw-level nav
+  uint32_t source_snapshot_rows_generation = 0u;
+  int source_model_row = -1;        // snapshot_rows index of the row that was clicked
+  float source_scroll_y = 0.f;      // GetScrollY() at click time
+
+  void Clear() {
+    target_draw_index = -1;
+    target_shader_hash = 0;
+    source_snapshot_rows_generation = 0u;
+    source_model_row = -1;
+    source_scroll_y = 0.f;
+  }
+
+  [[nodiscard]] bool IsPending() const { return target_draw_index >= 0; }
+  [[nodiscard]] bool HasShaderTarget() const { return target_shader_hash != 0; }
+
+  void ScrollToRow(int target_model_row, float row_height, uint32_t snapshot_rows_generation) {
+    if (source_model_row >= 0
+        && target_model_row >= 0
+        && source_snapshot_rows_generation == snapshot_rows_generation) {
+      int row_delta = target_model_row - source_model_row;
+      ImGui::SetScrollY(source_scroll_y + (static_cast<float>(row_delta) * row_height));
+    } else {
+      ImGui::SetScrollHereY(0.5f);
+    }
+
+    Clear();
+  }
+} snapshot_nav;
 
 struct SettingSelection {
   uint32_t shader_hash = 0;
@@ -5319,20 +5351,38 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
-    const float snapshot_row_height = ImGui::GetFrameHeight();
+    // Row height must include CellPadding.y on both sides. Using the wrong
+    // value causes the ImGuiListClipper to underreport total content height,
+    // clipping the bottom rows and miscalculating scroll-to-row offsets.
+    const float snapshot_row_height = ImGui::GetFrameHeight() + (ImGui::GetStyle().CellPadding.y * 2.0f);
     const uint32_t snapshot_row_layout_key =
         (snapshot_pane_show_vertex_shaders ? 1u << 0u : 0u)
         | (snapshot_pane_show_pixel_shaders ? 1u << 1u : 0u)
         | (snapshot_pane_show_compute_shaders ? 1u << 2u : 0u)
         | (snapshot_pane_filter_resources_by_shader_use ? 1u << 3u : 0u)
         | (snapshot_pane_expand_all_nodes ? 1u << 4u : 0u)
-    | (snapshot_pane_show_non_executed_command_lists ? 1u << 5u : 0u);
+        | (snapshot_pane_show_non_executed_command_lists ? 1u << 5u : 0u);
 
+    int current_model_row = -1;
+
+    // Called from render_draw_row after the tree node. For draw-level nav,
+    // scrolls here. For shader-level nav, defers to focus_pending_shader.
     const auto focus_pending_draw = [&](int draw_index) {
-      if (draw_index == pending_draw_index_focus) {
+      if (draw_index == snapshot_nav.target_draw_index) {
+        if (snapshot_nav.HasShaderTarget()) return;
+
         ImGui::SetItemDefaultFocus();
-        ImGui::SetScrollHereY();
-        pending_draw_index_focus = -1;
+        snapshot_nav.ScrollToRow(current_model_row, snapshot_row_height, data->snapshot_rows_generation);
+      }
+    };
+
+    // Called from render_shader_row. Matches on draw index + shader hash
+    // to scroll to the exact shader row, not just the parent draw.
+    const auto focus_pending_shader = [&](const SnapshotRow& row) {
+      if (snapshot_nav.HasShaderTarget()
+          && row.draw_index == snapshot_nav.target_draw_index
+          && row.shader_hash == snapshot_nav.target_shader_hash) {
+        snapshot_nav.ScrollToRow(current_model_row, snapshot_row_height, data->snapshot_rows_generation);
       }
     };
 
@@ -5464,13 +5514,18 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
               ImGui::EndDisabled();
             };
 
-            ImGui::PushID(row.draw_index);
+            ImGui::PushID(row.id_seed);
             render_nav_button("##prev", !has_prev, has_prev ? *prev_it : -1);
             render_nav_button("##next", !has_next, has_next ? *next_it : -1);
             ImGui::PopID();
 
             if (new_index != -1) {
-              pending_draw_index_focus = new_index;
+              snapshot_nav.target_draw_index = new_index;
+              snapshot_nav.target_shader_hash = row.shader_hash;
+              snapshot_nav.source_snapshot_rows_generation = data->snapshot_rows_generation;
+              snapshot_nav.source_model_row = current_model_row;
+              snapshot_nav.source_scroll_y = ImGui::GetScrollY();
+
               MakeSelectionCurrent(selection);
             }
           }
@@ -5495,7 +5550,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
           ImGui::TreeNodeEx("", bullet_flags, "%s", s.str().c_str());
         }
         ImGui::PopID();
-        if (pending_draw_index_focus == -1) {
+        if (!snapshot_nav.IsPending()) {
           if (ImGui::IsItemClicked()) {
             MakeSelectionCurrent(selection);
             ImGui::SetItemDefaultFocus();
@@ -5518,6 +5573,8 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
           ImGui::TextUnformatted(pipeline_tag->c_str());
         }
       }
+
+      focus_pending_shader(row);
     };
 
     const auto render_srv_row = [&](const SnapshotRow& row, bool& next_tree_open) {
@@ -6315,6 +6372,7 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
         sync_snapshot_tree_stack(ancestor_chain);
         ImGui::TableNextRow(ImGuiTableRowFlags_None, snapshot_row_height);
         ++rendered_row_count;
+        current_model_row = row_model_index;
 
         bool next_tree_open = false;
 
@@ -6725,19 +6783,67 @@ void RenderCapturePane(reshade::api::device* device, DeviceData* data) {
       }
 
       data->snapshot_row_layout_key = snapshot_row_layout_key;
+      ++data->snapshot_rows_generation;
       data->snapshot_rows_valid = true;
     };
+
+    // Shader rows only exist in the model when their parent draw's tree is
+    // open. Force the target draw open so rebuild_snapshot_rows includes the
+    // shader children we need to scroll to.
+    if (snapshot_nav.IsPending() && snapshot_nav.HasShaderTarget()) {
+      const int draw_count = static_cast<int>(data->draw_details_list.size());
+      if (snapshot_nav.target_draw_index >= 0 && snapshot_nav.target_draw_index < draw_count) {
+        ImGui::PushID(snapshot_nav.target_draw_index);
+        ImGui::GetStateStorage()->SetInt(ImGui::GetID(""), 1);
+        ImGui::PopID();
+        data->snapshot_rows_valid = false;
+      } else {
+        snapshot_nav.Clear();
+      }
+    }
     if (!data->snapshot_rows_valid || data->snapshot_row_layout_key != snapshot_row_layout_key) {
       rebuild_snapshot_rows();
     }
     int rendered_row_count = 0;
-    if (pending_draw_index_focus != -1 || data->snapshot_rows.empty()) {
-      rendered_row_count = render_capture_pane_rows(
-          0,
-          static_cast<int>(data->snapshot_rows.size()));
-    } else {
+    {
       ImGuiListClipper clipper;
       clipper.Begin(static_cast<int>(data->snapshot_rows.size()), snapshot_row_height);
+      if (snapshot_nav.IsPending()) {
+        int draw_row_idx = -1;
+        int shader_row_idx = -1;
+
+        for (int i = 0; i < static_cast<int>(data->snapshot_rows.size()); ++i) {
+          const auto& r = data->snapshot_rows[static_cast<size_t>(i)];
+
+          if (draw_row_idx < 0
+              && r.kind == SnapshotRow::Kind::DRAW
+              && r.draw_index == snapshot_nav.target_draw_index) {
+            draw_row_idx = i;
+          }
+
+          if (snapshot_nav.HasShaderTarget()
+              && r.kind == SnapshotRow::Kind::SHADER
+              && r.draw_index == snapshot_nav.target_draw_index
+              && r.shader_hash == snapshot_nav.target_shader_hash) {
+            shader_row_idx = i;
+          }
+
+          if (draw_row_idx >= 0 && (snapshot_nav.target_shader_hash == 0 || shader_row_idx >= 0)) break;
+        }
+
+        if (draw_row_idx < 0) {
+          snapshot_nav = {};
+        } else {
+          // If we searched and the shader row doesn't exist, fall back to
+          // draw-level scroll.
+          if (snapshot_nav.HasShaderTarget() && shader_row_idx < 0) {
+            snapshot_nav.target_shader_hash = 0;
+          }
+
+          clipper.IncludeItemByIndex(draw_row_idx);
+          if (shader_row_idx >= 0) clipper.IncludeItemByIndex(shader_row_idx);
+        }
+      }
       while (clipper.Step()) {
         rendered_row_count += render_capture_pane_rows(
             clipper.DisplayStart,
@@ -6765,8 +6871,9 @@ inline void CreateDrawIndexLink(const std::string& label, int draw_index, const 
     ImGui::PushStyleColor(ImGuiCol_Text, *color);
   }
   if (ImGui::TextLink(label.c_str())) {
-    setting_nav_item = 0;  // Snapshot is the first nav item
-    pending_draw_index_focus = draw_index;
+    setting_nav_item = 0;
+    snapshot_nav.Clear();
+    snapshot_nav.target_draw_index = draw_index;
   }
   if (color != nullptr) {
     ImGui::PopStyleColor();
@@ -8945,6 +9052,7 @@ void OnPresent(
       device_data->resource_usage_by_handle.clear();
       device_data->snapshot_rows.clear();
       device_data->snapshot_row_layout_key = 0u;
+      ++device_data->snapshot_rows_generation;
       device_data->snapshot_rows_valid = false;
       snapshot_submission_counter.store(0u, std::memory_order_relaxed);
       snapshot_device = device;
