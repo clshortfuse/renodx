@@ -15,7 +15,6 @@
 #include <cctype>
 #include <charconv>
 #include <chrono>
-#include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
@@ -26,7 +25,6 @@
 #include <filesystem>
 #include <format>
 #include <initializer_list>
-#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -201,13 +199,13 @@ struct PendingLiveShaderRequest {
 
 struct ResourceViewDetails {
   reshade::api::resource_view resource_view = {0};
-  reshade::api::resource_view_desc resource_view_desc = {};
+  reshade::api::resource_view_desc resource_view_desc;
   reshade::api::resource resource = {0};
-  reshade::api::resource_desc resource_desc = {};
+  reshade::api::resource_desc resource_desc;
   reshade::api::resource_view clone_view = {0};
-  reshade::api::resource_view_desc clone_view_desc = {};
+  reshade::api::resource_view_desc clone_view_desc;
   reshade::api::resource clone_resource = {0};
-  reshade::api::resource_desc clone_resource_desc = {};
+  reshade::api::resource_desc clone_resource_desc;
   std::string resource_reflection;
   std::string resource_view_reflection;
   std::optional<renodx::utils::resource::ResourceUploadSignature> initial_upload = std::nullopt;
@@ -912,7 +910,7 @@ struct BootTextureReplacement {
   std::filesystem::path path = {};
   std::uint32_t width = 0u;
   std::uint32_t height = 0u;
-  std::vector<std::uint8_t> rgba_pixels = {};
+  std::vector<std::uint8_t> rgba_pixels;
 };
 
 std::shared_mutex boot_texture_cache_mutex;
@@ -1251,7 +1249,7 @@ void RenderTextureReplaceabilityCell(
 
 [[nodiscard]] bool TryParseCrc32(std::string_view text, std::uint32_t& value) {
   if (text.size() != 10u) return false;
-  if (!(text[0] == '0' && (text[1] == 'x' || text[1] == 'X'))) return false;
+  if (text[0] != '0' || (text[1] != 'x' && text[1] != 'X')) return false;
   value = 0u;
   const auto* begin = text.data() + 2;
   const auto* end = text.data() + text.size();
@@ -1368,7 +1366,7 @@ void RenderTextureReplaceabilityCell(
 }
 
 [[nodiscard]] bool LoadBootTextureReplacement(
-    const renodx::utils::resource::replace::ResourceReplaceRule&,
+    [[maybe_unused]] const renodx::utils::resource::replace::ResourceReplaceRule& rule,
     const renodx::utils::resource::replace::MatchContext& context,
     const reshade::api::resource_desc& destination_desc,
     const reshade::api::subresource_data& source_data,
@@ -1783,7 +1781,7 @@ renodx::utils::resource::ResourceUpgradeInfo devkit_texture_file_clone_target = 
     clone_handle_before = info.clone.handle;
     clone_target_before = reinterpret_cast<uintptr_t>(info.clone_target);
 
-    auto* blocked_reason = GetResourceCloneToggleBlockedReason(device, &info, enabled, target);
+    const auto* blocked_reason = GetResourceCloneToggleBlockedReason(device, &info, enabled, target);
     if (blocked_reason != nullptr) {
       blocked = true;
       blocked_reason_text = blocked_reason;
@@ -3264,7 +3262,7 @@ std::vector<LoadedDiskShaderResult> LoadDiskShaders(reshade::api::device* device
       };
     }
     if (view_device != device) {
-      const auto error = "resourceViewHandle does not belong to the selected device.";
+      const auto* const error = "resourceViewHandle does not belong to the selected device.";
       return ToolResult{
           .text = error,
           .structured_content = json{{"error", error}},
@@ -3278,7 +3276,7 @@ std::vector<LoadedDiskShaderResult> LoadDiskShaders(reshade::api::device* device
   }
 
   if (info == nullptr) {
-    const auto error = "The selected resource is not currently tracked.";
+    const auto* const error = "The selected resource is not currently tracked.";
     return ToolResult{
         .text = error,
         .structured_content = json{{"error", error}},
@@ -3286,7 +3284,7 @@ std::vector<LoadedDiskShaderResult> LoadDiskShaders(reshade::api::device* device
     };
   }
   if (info->device != device) {
-    const auto error = "The selected resource belongs to a different device.";
+    const auto* const error = "The selected resource belongs to a different device.";
     return ToolResult{
         .text = error,
         .structured_content = json{{"error", error}},
@@ -3334,7 +3332,7 @@ std::vector<LoadedDiskShaderResult> LoadDiskShaders(reshade::api::device* device
   const auto clone = renodx::utils::resource::upgrade::GetResourceClone(info->resource);
   auto* updated_info = TryGetTrackedResourceInfo(info->resource);
   if (clone.handle == 0u || updated_info == nullptr || updated_info->clone.handle == 0u) {
-    const auto error = "Failed to create a clone resource for file replacement.";
+    const auto* const error = "Failed to create a clone resource for file replacement.";
     return ToolResult{
         .text = error,
         .structured_content = json{{"error", error}},
@@ -3637,7 +3635,7 @@ std::vector<LoadedDiskShaderResult> LoadDiskShaders(reshade::api::device* device
     }
     const auto& observation = observations[observation_index];
     if (!CanUsePngTextureReplacement(observation.format, observation.depth_or_layers)) {
-      const auto error = "This observation is not compatible with boot PNG texture replacement.";
+      const auto* const error = "This observation is not compatible with boot PNG texture replacement.";
       return ToolResult{
           .text = error,
           .structured_content = json{{"error", error}},
@@ -7940,17 +7938,25 @@ void RenderInfoPane(reshade::api::device* device, DeviceData* data) {
     const bool proxy_teardown_pending =
         renodx::utils::device_proxy::shared.data->remove_device_proxy.load(std::memory_order_relaxed);
     const auto output_mode = ResolveDeviceProxyOutputModeConfig();
+    const char* proxy_state = "Disabled";
+    if (proxy_teardown_pending) {
+      proxy_state = "Tearing Down";
+    } else if (proxy_enabled) {
+      proxy_state = "Enabled";
+    }
+    const bool dx9ex_upgrade_applied =
+        renodx::utils::device_upgrade::shared.data->dx9ex_upgrade_applied.load(std::memory_order_relaxed);
+    const bool dx9ex_upgrade_requested =
+        renodx::utils::device_upgrade::shared.data->dx9ex_upgrade_requested.load(std::memory_order_relaxed);
+    const char* dx9ex_upgrade_state = "Inactive";
+    if (dx9ex_upgrade_applied) {
+      dx9ex_upgrade_state = "Applied";
+    } else if (dx9ex_upgrade_requested) {
+      dx9ex_upgrade_state = "Requested";
+    }
 
-    ImGui::Text(
-        "State: %s",
-        proxy_teardown_pending
-            ? "Tearing Down"
-            : (proxy_enabled ? "Enabled" : "Disabled"));
-    ImGui::Text(
-        "DX9Ex Upgrade: %s",
-        renodx::utils::device_upgrade::shared.data->dx9ex_upgrade_applied.load(std::memory_order_relaxed)
-            ? "Applied"
-            : (renodx::utils::device_upgrade::shared.data->dx9ex_upgrade_requested.load(std::memory_order_relaxed) ? "Requested" : "Inactive"));
+    ImGui::Text("State: %s", proxy_state);
+    ImGui::Text("DX9Ex Upgrade: %s", dx9ex_upgrade_state);
     ImGui::Text("Output: %s", output_mode.output_mode_name);
 
     if (data != nullptr && data->primary_swapchain_desc.has_value()) {
@@ -7973,8 +7979,8 @@ void RenderInfoPane(reshade::api::device* device, DeviceData* data) {
         "Proxy Swapchain: %s",
         renodx::utils::device_proxy::proxy_swap_chain == nullptr ? "Not created" : "Ready");
     ImGui::Text(
-        "Proxy HWND Override: %p",
-        reinterpret_cast<HWND>(renodx::utils::device_proxy::local_proxy_swapchain_hwnd_override));
+        "Proxy HWND Override: %s",
+        FormatHandle(renodx::utils::device_proxy::local_proxy_swapchain_hwnd_override).c_str());
     ImGui::Text(
         "Proxy Output Window: %p",
         g_device_proxy_output_window);
