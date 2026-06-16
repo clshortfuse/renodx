@@ -97,11 +97,12 @@ OutputSignature main(
   float _78 = _73 * cb4_014z;
   float _79 = _74 * cb4_014z;
   
-  // Wrap the color outputs in saturate() to restrict emissive levels to standard SDR bounds.
-  // This keeps the rain's transparency blending soft and natural in the upgraded r16g16b16a16_float backbuffer.
-  SV_Target.x = saturate(_77);
-  SV_Target.y = saturate(_78);
-  SV_Target.z = saturate(_79);
+  // SV_Target.x = _77;
+  // SV_Target.y = _78;
+  // SV_Target.z = _79;
+  float3 rain_color = float3(_77, _78, _79);
+  rain_color = renodx::tonemap::neutwo::MaxChannel(rain_color, 1.0f);
+  SV_Target.rgb = rain_color;
   SV_Target.w = _28;
   
   bool _80 = !(_28 <= 0.0f);

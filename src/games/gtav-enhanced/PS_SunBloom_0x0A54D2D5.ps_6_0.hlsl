@@ -62,10 +62,11 @@ float4 main(
     float _56 = dot(float2(TEXCOORD.x, TEXCOORD.y), float2(TEXCOORD.x, TEXCOORD.y));
     float _57 = sqrt(_56);
     float _58 = 1.0f - _57;
+    // float _59 = _55 * 0.5f;
     float _59 = clamp(_55 * 0.5f, 0.0f, 0.5f);
     float _60 = _59 * _58;
     
-    // Clamp the bloom input to ensure no negative values pass to log2 (e.g. outside the circle)
+    // float _61 = clamp(_60, 0.0f, 0.5f);
     float _61 = max(_60, 0.0f);
     
     float _62 = log2(_61);

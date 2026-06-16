@@ -113,7 +113,6 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_BT2020
 #define RENODX_SWAP_CHAIN_ENCODING               renodx::draw::ENCODING_PQ
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE   color::convert::COLOR_SPACE_BT2020
-#define RENODX_SWAP_CHAIN_CLAMP_NITS             RENODX_PEAK_WHITE_NITS
 #define RENODX_RENO_DRT_TONE_MAP_METHOD          renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
 #include "../../shaders/renodx.hlsl"
