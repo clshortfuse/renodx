@@ -1184,7 +1184,7 @@ void main() {
       vec3 tonemapped_source_bt2020 = BT2020FromAP1(max(vec3(0.0), tonemapped_ap1));
       vec3 tonemapped_lum_bt2020 = BT2020FromAP1(max(vec3(0.0), luminance_tonemapped_ap1));
       float t = clamp((y_out - 0.1) / 0.9, 0.0, 1.0);
-      float hue_amount = mix(0.65, 1.0, t);
+      float hue_amount = mix(0.5, 1.0, t);
 
       tonemapped_ap1 = max(vec3(0.0), AP1FromBT2020(psycho17_ApplyPurityAndHueFromBT2020(
                                           tonemapped_source_bt2020,
