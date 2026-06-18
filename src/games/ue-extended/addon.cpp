@@ -650,14 +650,10 @@ void AddGamePatches() {
 
   if (product_name == "Expedition 33") {
     AddExpedition33Upgrades();
-  } else if (product_name == "Tony Hawks(TM) Pro Skater(TM) 3 + 4") {
-    renodx::mods::swapchain::swapchain_proxy_revert_state = true;
   } else if (product_name == "Project_Plague") {
     AddWuchangUpgrades();
   } else if (product_name == "SonicRacingCrossWorlds") {
     AddSonicRacingCrossWorldsUpgrades();
-  } else if (filename == "Ace7Game.exe") {
-    renodx::mods::swapchain::swapchain_proxy_revert_state = true;
   } else if (product_name == "Mixtape") {
     AddMixtapeUpgrades();
   } else {
@@ -786,6 +782,7 @@ const std::unordered_map<
             "Ace7Game.exe",
             {
                 {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Proxy_Revert_State", 1.f},
             },
         },
         {
@@ -794,6 +791,19 @@ const std::unordered_map<
                 {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_SIZE},
                 {"ToneMapGammaCorrection", 0.f},
+            },
+        },
+        {
+            "Tony Hawks(TM) Pro Skater(TM) 3 + 4",
+            {
+                {"Proxy_Revert_State", 1.f},
+            },
+        },
+        {
+            "Astro-Win64-Shipping.exe",
+            {
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Proxy_Revert_State", 1.f},
             },
         },
         // Native HDR on games (Path off)
@@ -954,6 +964,7 @@ const std::unordered_map<
 
 float g_dump_shaders = 0.f;
 float g_upgrade_copy_destinations = 0.f;
+float g_proxy_revert_state;
 float g_path;
 
 namespace lut_dump {
@@ -1571,6 +1582,32 @@ void AddAdvancedSettings() {
     add_setting(setting);
 
     g_upgrade_copy_destinations = setting->GetValue();
+  }
+
+  {
+    auto* revert_state = new renodx::utils::settings::Setting{
+        .key = "Proxy_Revert_State",
+        .binding = &g_proxy_revert_state,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Proxy Revert State",
+        .section = "Resource Upgrades",
+        .tooltip = "If the game's UI has blocky artifacts, turn this on and restart the game.",
+        .labels = {
+            "Off",
+            "On",
+        },
+        .is_global = true,
+        //.is_visible = []() { return ((settings[0]->GetValue() >= 2) && (shader_injection.processing_path == 1.f)); },
+        .is_visible = []() { return settings[0]->GetValue() >= 2; },
+    };
+    add_setting(revert_state);
+
+    g_proxy_revert_state = revert_state->GetValue();
+
+    if (g_proxy_revert_state != 0.f) {
+      renodx::mods::swapchain::swapchain_proxy_revert_state = true;
+    }
   }
 
   for (const auto& [key, format] : UPGRADE_TARGETS) {
