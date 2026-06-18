@@ -83,9 +83,6 @@ thread_local uint64_t g_current_uav0 = 0;
   }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xDEAFF53A),  // bloom
-    CustomShaderEntry(0x2F04633E),  // video
-
     // Upgrades
     UpgradeRTVReplaceShader(0xD7E646E3),  // tonemap
     UpgradeRTVReplaceShader(0x6BE69EF3),  // tonemap, no bloom
@@ -103,7 +100,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     UpgradeUAVShader(0xF28CD45D),  // FSR1 Compute Shader
     UpgradeUAVShader(0x5647AAC2),  // FSR1 Compute Shader
 
-};
+    __ALL_CUSTOM_SHADERS};
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
