@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "./common.hlsli"
 
 // ---- Created with 3Dmigoto v1.4.1 on Sat Apr 26 16:41:21 2025
 
@@ -37,20 +37,23 @@ void main(
 
   r0.xyzw = Consts[9].xyzw * v1.xyxy;
   r1.xyz = LensDirtTexture.Sample(LensDirtTexture_s, r0.zw).xyz;
-  r1.xyz = r1.xyz * Consts[12].www + float3(1, 1, 1);
+  r1.xyz = r1.xyz * (Consts[12].www * CUSTOM_LENS_DIRT) + float3(1, 1, 1);
   r2.xyz = SecondaryBloomTexture.Sample(SecondaryBloomTexture_s, r0.xy).xyz * CUSTOM_BLOOM;
   r2.xyz = Consts[3].yyy * r2.xyz;
   r1.xyz = r2.xyz * r1.xyz;
   r2.xyz = BloomTexture.Sample(BloomTexture_s, r0.xy).xyz * CUSTOM_BLOOM;
   r0.xyz = SceneTexture.Sample(SceneTexture_s, r0.xy).xyz;
   r1.xyz = r2.xyz * Consts[3].xxx + r1.xyz;
-  r2.xyz = EdgeFadeTexture.Sample(EdgeFadeTexture_s, v1.xy).xyz;
+  r2.xyz = lerp(1.f, EdgeFadeTexture.Sample(EdgeFadeTexture_s, v1.xy).xyz, CUSTOM_VIGNETTE);
   r0.xyz = r2.xyz * r0.xyz;
   r0.xyz = r0.xyz * Consts[2].xxx + r1.xyz;
 
   float3 hdr_color = r0.rgb;
-  float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
-
+  float3 hdr_color_tm = renodx::tonemap::neutwo::ComputeBT709Scale(hdr_color);
+  if (RENODX_TONE_MAP_TYPE > 0) {
+    r0.rgb = (hdr_color * hdr_color_tm);
+  }
+  
   r0.xyz = max(float3(1.00000001e-07,1.00000001e-07,1.00000001e-07), r0.xyz);
   r1.xyz = r0.xyz * float3(0.150000006,0.150000006,0.150000006) + float3(0.0500000007,0.0500000007,0.0500000007);
   r1.xyz = r0.xyz * r1.xyz + float3(0.00400000019,0.00400000019,0.00400000019);
@@ -59,16 +62,17 @@ void main(
   r0.xyz = r1.xyz / r0.xyz;
   r0.xyz = float3(-0.0666666701,-0.0666666701,-0.0666666701) + r0.xyz;
   r0.xyz = Consts[1].xyz * r0.xyz;
-  r0.xyz = sqrt(r0.xyz);
-  r0.xyz = min(float3(1,1,1), r0.xyz);
-  r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
-  r0.xyz = ColorCorrectionTexture.Sample(ColorCorrectionTexture_s, r0.xyz).xyz;
-  r0.xyz = r0.xyz * r0.xyz;
+  // r0.xyz = sqrt(r0.xyz);
+  // r0.xyz = min(float3(1,1,1), r0.xyz);
+  // r0.xyz = r0.xyz * float3(0.96875,0.96875,0.96875) + float3(0.015625,0.015625,0.015625);
+  // r0.xyz = ColorCorrectionTexture.Sample(ColorCorrectionTexture_s, r0.xyz).xyz;
+  r0.rgb = LutSample(r0.rgb, ColorCorrectionTexture, ColorCorrectionTexture_s);  
+  // r0.xyz = r0.xyz * r0.xyz;
   r0.w = dot(r0.xyz, float3(0.298999995,0.587000012,0.114));
   o0.xyz = r0.xyz;
   o0.w = sqrt(r0.w);
 
   float3 sdr_color = o0.rgb;
-  o0.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, v1);
+  o0.rgb = DisplayMap(hdr_color, hdr_color_tm, sdr_color, v1.xy);
   return;
 }

@@ -74,17 +74,20 @@ void main(
 
   float peak_nits;
   float3 untonemapped = r0.rgb;
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    r0.rgb = ApplyExposureContrastFlareHighlightsShadowsByLuminanceBT2020(r0.rgb);
+  }
   if (!RENODX_OVERRIDE_BRIGHTNESS) {
     if (RENODX_TONE_MAP_TYPE) {
       peak_nits = RENODX_PEAK_WHITE_NITS / (cb0[24].y * 100.f);
-      r0.rgb = renodx::tonemap::ExponentialRollOff(r0.rgb, min(1.f, peak_nits * 0.5f), peak_nits);
+      r0.rgb = renodx::tonemap::neutwo::PerChannel(r0.rgb, peak_nits);
     }
     r0.rgb = renodx::color::bt2020::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::BT2020(r0.rgb), untonemapped));
     r0.xyz = cb0[24].yyy * r0.xyz;
   } else {
     if (RENODX_TONE_MAP_TYPE) {
       peak_nits = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-      r0.rgb = renodx::tonemap::ExponentialRollOff(r0.rgb, min(1.f, peak_nits * 0.5f), peak_nits);
+      r0.rgb = renodx::tonemap::neutwo::PerChannel(r0.rgb, peak_nits);
     }
     r0.rgb = renodx::color::bt2020::from::BT709(ApplySaturationBlowoutHueCorrectionHighlightSaturation(renodx::color::bt709::from::BT2020(r0.rgb), untonemapped));
     r0.rgb *= RENODX_DIFFUSE_WHITE_NITS / 100.f;

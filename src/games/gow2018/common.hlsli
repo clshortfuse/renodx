@@ -76,15 +76,15 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 tonemapped,
   return color;
 }
 
-float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 ungraded) {
+float3 ApplyExposureContrastFlareHighlightsShadowsByLuminanceBT2020(float3 ungraded) {
   renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
   cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;
   cg_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
   cg_config.shadows = RENODX_TONE_MAP_SHADOWS;
   cg_config.contrast = RENODX_TONE_MAP_CONTRAST;
-  cg_config.flare = RENODX_TONE_MAP_FLARE;
+  cg_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
 
-  return ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, renodx::color::y::from::BT709(ungraded), cg_config, 0.18f);
+  return ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded, renodx::color::y::from::BT2020(ungraded), cg_config, 0.18f);
 }
 
 float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 ungraded, float3 untonemapped) {
@@ -97,95 +97,6 @@ float3 ApplySaturationBlowoutHueCorrectionHighlightSaturation(float3 ungraded, f
   return ApplySaturationBlowoutHueCorrectionHighlightSaturation(ungraded, ungraded, renodx::color::y::from::BT709(untonemapped), cg_config);
 }
 
-// from Pumbo
-// 0 None
-// 1 Reduce saturation and increase brightness until luminance is >= 0
-// 2 Clip negative colors (makes luminance >= 0)
-// 3 Snap to black
-void FixColorGradingLUTNegativeLuminance(inout float3 col, uint type = 1)
-        {
-  if (type <= 0) { return; }
-
-  float luminance = renodx::color::y::from::BT709(col.xyz);
-  if (luminance < -renodx::math::FLT_MIN)  // -asfloat(0x00800000): -1.175494351e-38f
-  {
-    if (type == 1)
-                {
-      // Make the color more "SDR" (less saturated, and thus less beyond Rec.709) until the luminance is not negative anymore (negative luminance means the color was beyond Rec.709 to begin with, unless all components were negative).
-      // This is preferrable to simply clipping all negative colors or snapping to black, because it keeps some HDR colors, even if overall it's still "black", luminance wise.
-      // This should work even in case "positiveLuminance" was <= 0, as it will simply make the color black.
-      float3 positiveColor = max(col.xyz, 0.0);
-      float3 negativeColor = min(col.xyz, 0.0);
-      float positiveLuminance = renodx::color::y::from::BT709(positiveColor);
-      float negativeLuminance = renodx::color::y::from::BT709(negativeColor);
-#pragma warning(disable: 4008)
-      float negativePositiveLuminanceRatio = positiveLuminance / -negativeLuminance;
-#pragma warning(default: 4008)
-      negativeColor.xyz *= negativePositiveLuminanceRatio;
-      col.xyz = positiveColor + negativeColor;
-    }
-                else if (type == 2)
-                {
-      // This can break gradients as it snaps colors to brighter ones (it depends on how the displays clips HDR10 or scRGB invalid colors)
-      col.xyz = max(col.xyz, 0.0);
-    }
-                else  // if (type >= 3)
-    {
-      col.xyz = 0.0;
-    }
-  }
-}
-
-
-float3 ChrominanceOKLab(
-    float3 incorrect_color,
-    float3 reference_color,
-    float strength = 1.f,
-    float clamp_chrominance_loss = 0.f) {
-  if (strength == 0.f) return incorrect_color;
-
-  float3 incorrect_lab = renodx::color::oklab::from::BT709(incorrect_color);
-  float3 reference_lab = renodx::color::oklab::from::BT709(reference_color);
-
-  float2 incorrect_ab = incorrect_lab.yz;
-  float2 reference_ab = reference_lab.yz;
-
-  // Compute chrominance (magnitude of the a–b vector)
-  float incorrect_chrominance = length(incorrect_ab);
-  float correct_chrominance = length(reference_ab);
-
-  // Scale original chrominance vector toward target chrominance
-  float chrominance_ratio = renodx::math::DivideSafe(correct_chrominance, incorrect_chrominance, 1.f);
-  float scale = lerp(1.f, chrominance_ratio, strength);
-
-  float t = 1.0f - step(1.0f, scale);  // t = 1 when scale < 1, 0 when scale >= 1
-  scale = lerp(scale, 1.0f, t * clamp_chrominance_loss);
-
-  incorrect_lab.yz = incorrect_ab * scale;
-
-  float3 result = renodx::color::bt709::from::OkLab(incorrect_lab);
-  FixColorGradingLUTNegativeLuminance(result);
-  return result;
-}
-
-float3 GammaCorrectHuePreserving(float3 incorrect_color) {
-  float3 ch = renodx::color::correct::GammaSafe(incorrect_color);
-
-  const float y_in = max(0, renodx::color::y::from::BT709(incorrect_color));
-  const float y_out = renodx::color::correct::Gamma(y_in);
-
-  float3 lum = incorrect_color * (y_in > 0 ? y_out / y_in : 0.f);
-
-  // use chrominance from per channel gamma correction
-  float3 result = ChrominanceOKLab(lum, ch, 1.f, 1.f);
-
-  return result;
-}
-
 float3 ApplyGammaCorrection(float3 incorrect_color) {
-  if (RENODX_GAMMA_CORRECTION == 2.f) {
-    return GammaCorrectHuePreserving(incorrect_color);
-  } else {
-    return renodx::color::correct::GammaSafe(incorrect_color);
-  }
+  return renodx::color::correct::GammaSafe(incorrect_color);
 }

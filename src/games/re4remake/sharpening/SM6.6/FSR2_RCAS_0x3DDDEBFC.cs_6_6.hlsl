@@ -1,0 +1,636 @@
+#include "../sharpening.hlsli"
+
+Texture2D<float2> r_exposure : register(t0);
+
+Texture2D<float4> r_rcas_input : register(t1);
+
+RWTexture2D<float4> rw_upscaled_output : register(u0);
+
+cbuffer cbFSR2 : register(b0) {
+  int2 iRenderSize : packoffset(c000.x);
+  int2 iDisplaySize : packoffset(c000.z);
+  int2 iLumaMipDimensions : packoffset(c001.x);
+  int iLumaMipLevelToUse : packoffset(c001.z);
+  uint uFrameIndex : packoffset(c001.w);
+  float2 fDisplaySizeRcp : packoffset(c002.x);
+  float2 fJitter : packoffset(c002.z);
+  float2 fProjSpaceJitter : packoffset(c003.x);
+  float2 fPadding : packoffset(c003.z);
+  float4 fDeviceToViewDepth : packoffset(c004.x);
+  float2 depthclip_uv_scale : packoffset(c005.x);
+  float2 postprocessed_lockstatus_uv_scale : packoffset(c005.z);
+  float2 reactive_mask_dim_rcp : packoffset(c006.x);
+  float2 fDownscaleFactor : packoffset(c006.z);
+  float fPreExposure : packoffset(c007.x);
+  float fTanHalfFOV : packoffset(c007.y);
+  float fJitterSequenceLength : packoffset(c007.z);
+  float fLockInitialLifetime : packoffset(c007.w);
+  float fLockTickDelta : packoffset(c008.x);
+  float fDeltaTime : packoffset(c008.y);
+  float fDynamicResChangeFactor : packoffset(c008.z);
+  float fLumaMipRcp : packoffset(c008.w);
+};
+
+cbuffer cbRCAS : register(b1) {
+  uint4 rcasConfig : packoffset(c000.x);
+};
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+
+[numthreads(64, 1, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  int _19;
+  int _20;
+  int _23;
+  int _24;
+  int _25;
+  float4 _27;
+  float _35;
+  float _36;
+  float _37;
+  float _38;
+  float _42;
+  float _43;
+  float _44;
+  float _45;
+  int _46;
+  float4 _47;
+  float _51;
+  float _52;
+  float _53;
+  float _57;
+  float _58;
+  float _59;
+  float _60;
+  float4 _61;
+  float _65;
+  float _66;
+  float _67;
+  float _71;
+  float _73;
+  int _75;
+  float4 _76;
+  float _80;
+  float _81;
+  float _82;
+  float _86;
+  float _87;
+  float _88;
+  float _89;
+  int _90;
+  float4 _91;
+  float _95;
+  float _96;
+  float _97;
+  float _101;
+  float _102;
+  float _103;
+  float _104;
+  float _109;
+  float _114;
+  float _119;
+  float _124;
+  float _129;
+  float _144;
+  float _147;
+  float _157;
+  float _160;
+  float _163;
+  float _166;
+  float _169;
+  float _172;
+  float _206;
+  float _208;
+  float _211;
+  float _214;
+  float _220;
+  float _226;
+  float _232;
+  float _237;
+  uint _242;
+  uint _244;
+  int _251;
+  int _254;
+  float4 _256;
+  float _264;
+  float _265;
+  float _266;
+  float _267;
+  float _271;
+  float _272;
+  float _273;
+  float _274;
+  int _275;
+  float4 _276;
+  float _280;
+  float _281;
+  float _282;
+  float _286;
+  float _287;
+  float _288;
+  float _289;
+  float4 _290;
+  float _294;
+  float _295;
+  float _296;
+  float _300;
+  float _302;
+  int _304;
+  float4 _305;
+  float _309;
+  float _310;
+  float _311;
+  float _315;
+  float _316;
+  float _317;
+  float _318;
+  float4 _319;
+  float _323;
+  float _324;
+  float _325;
+  float _329;
+  float _330;
+  float _331;
+  float _332;
+  float _337;
+  float _342;
+  float _347;
+  float _352;
+  float _357;
+  float _372;
+  float _375;
+  float _385;
+  float _388;
+  float _391;
+  float _394;
+  float _397;
+  float _400;
+  float _434;
+  float _436;
+  float _439;
+  float _442;
+  float _448;
+  float _454;
+  float _460;
+  float _465;
+  uint _470;
+  int _477;
+  int _480;
+  int _481;
+  float4 _483;
+  float _491;
+  float _492;
+  float _493;
+  float _494;
+  float _498;
+  float _499;
+  float _500;
+  float _501;
+  float4 _502;
+  float _506;
+  float _507;
+  float _508;
+  float _512;
+  float _513;
+  float _514;
+  float _515;
+  float4 _516;
+  float _520;
+  float _521;
+  float _522;
+  float _526;
+  float _528;
+  float4 _530;
+  float _534;
+  float _535;
+  float _536;
+  float _540;
+  float _541;
+  float _542;
+  float _543;
+  int _544;
+  float4 _545;
+  float _549;
+  float _550;
+  float _551;
+  float _555;
+  float _556;
+  float _557;
+  float _558;
+  float _563;
+  float _568;
+  float _573;
+  float _578;
+  float _583;
+  float _598;
+  float _601;
+  float _611;
+  float _614;
+  float _617;
+  float _620;
+  float _623;
+  float _626;
+  float _660;
+  float _662;
+  float _665;
+  float _668;
+  float _674;
+  float _680;
+  float _686;
+  float _691;
+  uint _696;
+  float4 _706;
+  float _714;
+  float _715;
+  float _716;
+  float _717;
+  float _721;
+  float _722;
+  float _723;
+  float _724;
+  float4 _725;
+  float _729;
+  float _730;
+  float _731;
+  float _735;
+  float _736;
+  float _737;
+  float _738;
+  float4 _739;
+  float _743;
+  float _744;
+  float _745;
+  float _749;
+  float _751;
+  float4 _753;
+  float _757;
+  float _758;
+  float _759;
+  float _763;
+  float _764;
+  float _765;
+  float _766;
+  float4 _767;
+  float _771;
+  float _772;
+  float _773;
+  float _777;
+  float _778;
+  float _779;
+  float _780;
+  float _785;
+  float _790;
+  float _795;
+  float _800;
+  float _805;
+  float _820;
+  float _823;
+  float _833;
+  float _836;
+  float _839;
+  float _842;
+  float _845;
+  float _848;
+  float _882;
+  float _884;
+  float _887;
+  float _890;
+  float _896;
+  float _902;
+  float _908;
+  float _913;
+  _19 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
+  _20 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
+  _23 = _19 & 65527;
+  _24 = _20 & 65527;
+  _25 = _24 + -1;
+  _27 = r_rcas_input.Load(int3(_23, _25, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _27 = max(0, _27);
+#endif
+  _35 = select(((((float2)(r_exposure.Load(int3(0, 0, 0)))).x) == 0.0f), 1.0f, (((float2)(r_exposure.Load(int3(0, 0, 0)))).x));
+  _36 = _35 * _27.x;
+  _37 = _35 * _27.y;
+  _38 = _35 * _27.z;
+  _42 = max(max(0.0f, _36), max(_37, _38)) + 1.0f;
+  _43 = _36 / _42;
+  _44 = _37 / _42;
+  _45 = _38 / _42;
+  _46 = _23 + -1;
+  _47 = r_rcas_input.Load(int3(_46, _24, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _47 = max(0, _47);
+#endif
+  _51 = _35 * _47.x;
+  _52 = _35 * _47.y;
+  _53 = _35 * _47.z;
+  _57 = max(max(0.0f, _51), max(_52, _53)) + 1.0f;
+  _58 = _51 / _57;
+  _59 = _52 / _57;
+  _60 = _53 / _57;
+  _61 = r_rcas_input.Load(int3(_23, _24, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _61 = max(0, _61);
+#endif
+  _65 = _35 * _61.x;
+  _66 = _35 * _61.y;
+  _67 = _35 * _61.z;
+  _71 = max(max(0.0f, _65), max(_66, _67)) + 1.0f;
+  _73 = _66 / _71;
+  _75 = _23 + 1;
+  _76 = r_rcas_input.Load(int3(_75, _24, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _76 = max(0, _76);
+#endif
+  _80 = _35 * _76.x;
+  _81 = _35 * _76.y;
+  _82 = _35 * _76.z;
+  _86 = max(max(0.0f, _80), max(_81, _82)) + 1.0f;
+  _87 = _80 / _86;
+  _88 = _81 / _86;
+  _89 = _82 / _86;
+  _90 = _24 + 1;
+  _91 = r_rcas_input.Load(int3(_23, _90, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _91 = max(0, _91);
+#endif
+  _95 = _35 * _91.x;
+  _96 = _35 * _91.y;
+  _97 = _35 * _91.z;
+  _101 = max(max(0.0f, _95), max(_96, _97)) + 1.0f;
+  _102 = _95 / _101;
+  _103 = _96 / _101;
+  _104 = _97 / _101;
+  _109 = (((_35 * (_27.z + _27.x)) / _42) * 0.5f) + _44;
+  _114 = (((_35 * (_47.z + _47.x)) / _57) * 0.5f) + _59;
+  _119 = (((_35 * (_61.z + _61.x)) / _71) * 0.5f) + _73;
+  _124 = (((_35 * (_76.z + _76.x)) / _86) * 0.5f) + _88;
+  _129 = (((_35 * (_91.z + _91.x)) / _101) * 0.5f) + _103;
+  _144 = max(max(_109, max(_114, _119)), max(_124, _129)) - min(min(_109, min(_114, _119)), min(_124, _129));
+  _147 = asfloat(((uint)(2129764351u - (int)(asint(_144)))));
+  _157 = min(min(_43, min(_58, _87)), _102);
+  _160 = min(min(_44, min(_59, _88)), _103);
+  _163 = min(min(_45, min(_60, _89)), _104);
+  _166 = max(max(_43, max(_58, _87)), _102);
+  _169 = max(max(_44, max(_59, _88)), _103);
+  _172 = max(max(_45, max(_60, _89)), _104);
+  _206 = ((1.0f - (saturate((_147 * abs(((((_114 + _109) + _124) + _129) * 0.25f) - _119)) * (2.0f - (_147 * _144))) * 0.5f)) * asfloat(rcasConfig.x)) * max(-0.1875f, min(max(max((-0.0f - (_157 * (0.25f / _166))), ((1.0f / ((_157 * 4.0f) + -4.0f)) * (1.0f - _166))), max(max((-0.0f - (_160 * (0.25f / _169))), ((1.0f / ((_160 * 4.0f) + -4.0f)) * (1.0f - _169))), max((-0.0f - (_163 * (0.25f / _172))), ((1.0f / ((_163 * 4.0f) + -4.0f)) * (1.0f - _172))))), 0.0f));
+  _208 = (_206 * 4.0f) + 1.0f;
+  _211 = asfloat(((uint)(2129764351u - (int)(asint(_208)))));
+  _214 = (2.0f - (_211 * _208)) * _211;
+  _220 = _214 * ((_206 * (((_58 + _43) + _87) + _102)) + (_65 / _71));
+  _226 = _214 * ((_206 * (((_59 + _44) + _88) + _103)) + _73);
+  _232 = _214 * ((_206 * (((_60 + _45) + _89) + _104)) + (_67 / _71));
+  _237 = _35 * max(0.0010000000474974513f, (1.0f - max(_220, max(_226, _232))));
+  _242 = ((uint)(_19 << 16)) >> 16;
+  _244 = ((uint)(_20 << 16)) >> 16;
+  rw_upscaled_output[int2(_242, _244)] = float4((fPreExposure * (_220 / _237)), (fPreExposure * (_226 / _237)), (fPreExposure * (_232 / _237)), 1.0f);
+  _251 = _19 | 8;
+  _254 = _251 & 65535;
+  _256 = r_rcas_input.Load(int3(_254, _25, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _256 = max(0, _256);
+#endif
+  _264 = select(((((float2)(r_exposure.Load(int3(0, 0, 0)))).x) == 0.0f), 1.0f, (((float2)(r_exposure.Load(int3(0, 0, 0)))).x));
+  _265 = _264 * _256.x;
+  _266 = _264 * _256.y;
+  _267 = _264 * _256.z;
+  _271 = max(max(0.0f, _265), max(_266, _267)) + 1.0f;
+  _272 = _265 / _271;
+  _273 = _266 / _271;
+  _274 = _267 / _271;
+  _275 = _254 + -1;
+  _276 = r_rcas_input.Load(int3(_275, _24, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _276 = max(0, _276);
+#endif
+  _280 = _264 * _276.x;
+  _281 = _264 * _276.y;
+  _282 = _264 * _276.z;
+  _286 = max(max(0.0f, _280), max(_281, _282)) + 1.0f;
+  _287 = _280 / _286;
+  _288 = _281 / _286;
+  _289 = _282 / _286;
+  _290 = r_rcas_input.Load(int3(_254, _24, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _290 = max(0, _290);
+#endif
+  _294 = _264 * _290.x;
+  _295 = _264 * _290.y;
+  _296 = _264 * _290.z;
+  _300 = max(max(0.0f, _294), max(_295, _296)) + 1.0f;
+  _302 = _295 / _300;
+  _304 = _254 + 1;
+  _305 = r_rcas_input.Load(int3(_304, _24, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _305 = max(0, _305);
+#endif
+  _309 = _264 * _305.x;
+  _310 = _264 * _305.y;
+  _311 = _264 * _305.z;
+  _315 = max(max(0.0f, _309), max(_310, _311)) + 1.0f;
+  _316 = _309 / _315;
+  _317 = _310 / _315;
+  _318 = _311 / _315;
+  _319 = r_rcas_input.Load(int3(_254, _90, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _319 = max(0, _319);
+#endif
+  _323 = _264 * _319.x;
+  _324 = _264 * _319.y;
+  _325 = _264 * _319.z;
+  _329 = max(max(0.0f, _323), max(_324, _325)) + 1.0f;
+  _330 = _323 / _329;
+  _331 = _324 / _329;
+  _332 = _325 / _329;
+  _337 = (((_264 * (_256.z + _256.x)) / _271) * 0.5f) + _273;
+  _342 = (((_264 * (_276.z + _276.x)) / _286) * 0.5f) + _288;
+  _347 = (((_264 * (_290.z + _290.x)) / _300) * 0.5f) + _302;
+  _352 = (((_264 * (_305.z + _305.x)) / _315) * 0.5f) + _317;
+  _357 = (((_264 * (_319.z + _319.x)) / _329) * 0.5f) + _331;
+  _372 = max(max(_337, max(_342, _347)), max(_352, _357)) - min(min(_337, min(_342, _347)), min(_352, _357));
+  _375 = asfloat(((uint)(2129764351u - (int)(asint(_372)))));
+  _385 = min(min(_272, min(_287, _316)), _330);
+  _388 = min(min(_273, min(_288, _317)), _331);
+  _391 = min(min(_274, min(_289, _318)), _332);
+  _394 = max(max(_272, max(_287, _316)), _330);
+  _397 = max(max(_273, max(_288, _317)), _331);
+  _400 = max(max(_274, max(_289, _318)), _332);
+  _434 = ((1.0f - (saturate((_375 * abs(((((_342 + _337) + _352) + _357) * 0.25f) - _347)) * (2.0f - (_375 * _372))) * 0.5f)) * asfloat(rcasConfig.x)) * max(-0.1875f, min(max(max((-0.0f - (_385 * (0.25f / _394))), ((1.0f / ((_385 * 4.0f) + -4.0f)) * (1.0f - _394))), max(max((-0.0f - (_388 * (0.25f / _397))), ((1.0f / ((_388 * 4.0f) + -4.0f)) * (1.0f - _397))), max((-0.0f - (_391 * (0.25f / _400))), ((1.0f / ((_391 * 4.0f) + -4.0f)) * (1.0f - _400))))), 0.0f));
+  _436 = (_434 * 4.0f) + 1.0f;
+  _439 = asfloat(((uint)(2129764351u - (int)(asint(_436)))));
+  _442 = (2.0f - (_439 * _436)) * _439;
+  _448 = _442 * ((_434 * (((_287 + _272) + _316) + _330)) + (_294 / _300));
+  _454 = _442 * ((_434 * (((_288 + _273) + _317) + _331)) + _302);
+  _460 = _442 * ((_434 * (((_289 + _274) + _318) + _332)) + (_296 / _300));
+  _465 = _264 * max(0.0010000000474974513f, (1.0f - max(_448, max(_454, _460))));
+  _470 = ((uint)(_251 << 16)) >> 16;
+  rw_upscaled_output[int2(_470, _244)] = float4((fPreExposure * (_448 / _465)), (fPreExposure * (_454 / _465)), (fPreExposure * (_460 / _465)), 1.0f);
+  _477 = _20 | 8;
+  _480 = _477 & 65535;
+  _481 = _480 + -1;
+  _483 = r_rcas_input.Load(int3(_254, _481, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _483 = max(0, _483);
+#endif
+  _491 = select(((((float2)(r_exposure.Load(int3(0, 0, 0)))).x) == 0.0f), 1.0f, (((float2)(r_exposure.Load(int3(0, 0, 0)))).x));
+  _492 = _491 * _483.x;
+  _493 = _491 * _483.y;
+  _494 = _491 * _483.z;
+  _498 = max(max(0.0f, _492), max(_493, _494)) + 1.0f;
+  _499 = _492 / _498;
+  _500 = _493 / _498;
+  _501 = _494 / _498;
+  _502 = r_rcas_input.Load(int3(_275, _480, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _502 = max(0, _502);
+#endif
+  _506 = _491 * _502.x;
+  _507 = _491 * _502.y;
+  _508 = _491 * _502.z;
+  _512 = max(max(0.0f, _506), max(_507, _508)) + 1.0f;
+  _513 = _506 / _512;
+  _514 = _507 / _512;
+  _515 = _508 / _512;
+  _516 = r_rcas_input.Load(int3(_254, _480, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _516 = max(0, _516);
+#endif
+  _520 = _491 * _516.x;
+  _521 = _491 * _516.y;
+  _522 = _491 * _516.z;
+  _526 = max(max(0.0f, _520), max(_521, _522)) + 1.0f;
+  _528 = _521 / _526;
+  _530 = r_rcas_input.Load(int3(_304, _480, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _530 = max(0, _530);
+#endif
+  _534 = _491 * _530.x;
+  _535 = _491 * _530.y;
+  _536 = _491 * _530.z;
+  _540 = max(max(0.0f, _534), max(_535, _536)) + 1.0f;
+  _541 = _534 / _540;
+  _542 = _535 / _540;
+  _543 = _536 / _540;
+  _544 = _480 + 1;
+  _545 = r_rcas_input.Load(int3(_254, _544, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _545 = max(0, _545);
+#endif
+  _549 = _491 * _545.x;
+  _550 = _491 * _545.y;
+  _551 = _491 * _545.z;
+  _555 = max(max(0.0f, _549), max(_550, _551)) + 1.0f;
+  _556 = _549 / _555;
+  _557 = _550 / _555;
+  _558 = _551 / _555;
+  _563 = (((_491 * (_483.z + _483.x)) / _498) * 0.5f) + _500;
+  _568 = (((_491 * (_502.z + _502.x)) / _512) * 0.5f) + _514;
+  _573 = (((_491 * (_516.z + _516.x)) / _526) * 0.5f) + _528;
+  _578 = (((_491 * (_530.z + _530.x)) / _540) * 0.5f) + _542;
+  _583 = (((_491 * (_545.z + _545.x)) / _555) * 0.5f) + _557;
+  _598 = max(max(_563, max(_568, _573)), max(_578, _583)) - min(min(_563, min(_568, _573)), min(_578, _583));
+  _601 = asfloat(((uint)(2129764351u - (int)(asint(_598)))));
+  _611 = min(min(_499, min(_513, _541)), _556);
+  _614 = min(min(_500, min(_514, _542)), _557);
+  _617 = min(min(_501, min(_515, _543)), _558);
+  _620 = max(max(_499, max(_513, _541)), _556);
+  _623 = max(max(_500, max(_514, _542)), _557);
+  _626 = max(max(_501, max(_515, _543)), _558);
+  _660 = ((1.0f - (saturate((_601 * abs(((((_568 + _563) + _578) + _583) * 0.25f) - _573)) * (2.0f - (_601 * _598))) * 0.5f)) * asfloat(rcasConfig.x)) * max(-0.1875f, min(max(max((-0.0f - (_611 * (0.25f / _620))), ((1.0f / ((_611 * 4.0f) + -4.0f)) * (1.0f - _620))), max(max((-0.0f - (_614 * (0.25f / _623))), ((1.0f / ((_614 * 4.0f) + -4.0f)) * (1.0f - _623))), max((-0.0f - (_617 * (0.25f / _626))), ((1.0f / ((_617 * 4.0f) + -4.0f)) * (1.0f - _626))))), 0.0f));
+  _662 = (_660 * 4.0f) + 1.0f;
+  _665 = asfloat(((uint)(2129764351u - (int)(asint(_662)))));
+  _668 = (2.0f - (_665 * _662)) * _665;
+  _674 = _668 * ((_660 * (((_513 + _499) + _541) + _556)) + (_520 / _526));
+  _680 = _668 * ((_660 * (((_514 + _500) + _542) + _557)) + _528);
+  _686 = _668 * ((_660 * (((_515 + _501) + _543) + _558)) + (_522 / _526));
+  _691 = _491 * max(0.0010000000474974513f, (1.0f - max(_674, max(_680, _686))));
+  _696 = ((uint)(_477 << 16)) >> 16;
+  rw_upscaled_output[int2(_470, _696)] = float4((fPreExposure * (_674 / _691)), (fPreExposure * (_680 / _691)), (fPreExposure * (_686 / _691)), 1.0f);
+  _706 = r_rcas_input.Load(int3(_23, _481, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _706 = max(0, _706);
+#endif
+  _714 = select(((((float2)(r_exposure.Load(int3(0, 0, 0)))).x) == 0.0f), 1.0f, (((float2)(r_exposure.Load(int3(0, 0, 0)))).x));
+  _715 = _714 * _706.x;
+  _716 = _714 * _706.y;
+  _717 = _714 * _706.z;
+  _721 = max(max(0.0f, _715), max(_716, _717)) + 1.0f;
+  _722 = _715 / _721;
+  _723 = _716 / _721;
+  _724 = _717 / _721;
+  _725 = r_rcas_input.Load(int3(_46, _480, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _725 = max(0, _725);
+#endif
+  _729 = _714 * _725.x;
+  _730 = _714 * _725.y;
+  _731 = _714 * _725.z;
+  _735 = max(max(0.0f, _729), max(_730, _731)) + 1.0f;
+  _736 = _729 / _735;
+  _737 = _730 / _735;
+  _738 = _731 / _735;
+  _739 = r_rcas_input.Load(int3(_23, _480, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _739 = max(0, _739);
+#endif
+  _743 = _714 * _739.x;
+  _744 = _714 * _739.y;
+  _745 = _714 * _739.z;
+  _749 = max(max(0.0f, _743), max(_744, _745)) + 1.0f;
+  _751 = _744 / _749;
+  _753 = r_rcas_input.Load(int3(_75, _480, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _753 = max(0, _753);
+#endif
+  _757 = _714 * _753.x;
+  _758 = _714 * _753.y;
+  _759 = _714 * _753.z;
+  _763 = max(max(0.0f, _757), max(_758, _759)) + 1.0f;
+  _764 = _757 / _763;
+  _765 = _758 / _763;
+  _766 = _759 / _763;
+  _767 = r_rcas_input.Load(int3(_23, _544, 0));
+#if CUSTOM_CLAMP_RCAS_INPUT
+  _767 = max(0, _767);
+#endif
+  _771 = _714 * _767.x;
+  _772 = _714 * _767.y;
+  _773 = _714 * _767.z;
+  _777 = max(max(0.0f, _771), max(_772, _773)) + 1.0f;
+  _778 = _771 / _777;
+  _779 = _772 / _777;
+  _780 = _773 / _777;
+  _785 = (((_714 * (_706.z + _706.x)) / _721) * 0.5f) + _723;
+  _790 = (((_714 * (_725.z + _725.x)) / _735) * 0.5f) + _737;
+  _795 = (((_714 * (_739.z + _739.x)) / _749) * 0.5f) + _751;
+  _800 = (((_714 * (_753.z + _753.x)) / _763) * 0.5f) + _765;
+  _805 = (((_714 * (_767.z + _767.x)) / _777) * 0.5f) + _779;
+  _820 = max(max(_785, max(_790, _795)), max(_800, _805)) - min(min(_785, min(_790, _795)), min(_800, _805));
+  _823 = asfloat(((uint)(2129764351u - (int)(asint(_820)))));
+  _833 = min(min(_722, min(_736, _764)), _778);
+  _836 = min(min(_723, min(_737, _765)), _779);
+  _839 = min(min(_724, min(_738, _766)), _780);
+  _842 = max(max(_722, max(_736, _764)), _778);
+  _845 = max(max(_723, max(_737, _765)), _779);
+  _848 = max(max(_724, max(_738, _766)), _780);
+  _882 = ((1.0f - (saturate((_823 * abs(((((_790 + _785) + _800) + _805) * 0.25f) - _795)) * (2.0f - (_823 * _820))) * 0.5f)) * asfloat(rcasConfig.x)) * max(-0.1875f, min(max(max((-0.0f - (_833 * (0.25f / _842))), ((1.0f / ((_833 * 4.0f) + -4.0f)) * (1.0f - _842))), max(max((-0.0f - (_836 * (0.25f / _845))), ((1.0f / ((_836 * 4.0f) + -4.0f)) * (1.0f - _845))), max((-0.0f - (_839 * (0.25f / _848))), ((1.0f / ((_839 * 4.0f) + -4.0f)) * (1.0f - _848))))), 0.0f));
+  _884 = (_882 * 4.0f) + 1.0f;
+  _887 = asfloat(((uint)(2129764351u - (int)(asint(_884)))));
+  _890 = (2.0f - (_887 * _884)) * _887;
+  _896 = _890 * ((_882 * (((_736 + _722) + _764) + _778)) + (_743 / _749));
+  _902 = _890 * ((_882 * (((_737 + _723) + _765) + _779)) + _751);
+  _908 = _890 * ((_882 * (((_738 + _724) + _766) + _780)) + (_745 / _749));
+  _913 = _714 * max(0.0010000000474974513f, (1.0f - max(_896, max(_902, _908))));
+  rw_upscaled_output[int2(_242, _696)] = max(0, float4((fPreExposure * (_896 / _913)), (fPreExposure * (_902 / _913)), (fPreExposure * (_908 / _913)), 1.0f));
+}

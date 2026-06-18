@@ -1,8 +1,8 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
-float4 DynamicTonemappingParam : register( c0 );
-sampler2D SceneColorTexture : register( s0 );
-sampler2D Tex0 : register( s1 );
+float4 DynamicTonemappingParam : register(c0);
+sampler2D SceneColorTexture : register(s0);
+sampler2D Tex0 : register(s1);
 
 float4 main(float2 texcoord : TEXCOORD) : COLOR
 {
@@ -19,10 +19,10 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
 	r1.x = max(r0.x, DynamicTonemappingParam.y);
 	r0.x = min(DynamicTonemappingParam.z, r1.x);
 	r1 = tex2D(SceneColorTexture, texcoord);
-	
-	r1.rgb = max(r1.rgb, 0.000000999999997);
+	if (RENODX_TONE_MAP_TYPE > 0) {
+      r1.rgb = max(r1.rgb, 0);
+    }
 	r0.x = lerp(1.f, r0.x, CUSTOM_AUTO_EXPOSURE);
-
 	o.xyz = r0.x * r1.xyz;
 	o.w = r1.w;
 	return o;

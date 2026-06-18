@@ -23,25 +23,36 @@ struct SPIRV_Cross_Output {
 void frag_main() {
   uint4 _34 = asuint(_15_m0[0u]);
   float4 _70 = _8.Sample(_18, float2(TEXCOORD.x, TEXCOORD.y));
-  // float _73 = _70.x;
-  // float _87 = (((frac(sin(((float(int(uint(int(asfloat(_34.x))) & 1023u)) * 0.000977517105638980865478515625f) + TEXCOORD.x) + (((float(int(uint(int(asfloat(_34.y))) & 1023u)) * 0.000977517105638980865478515625f) + TEXCOORD.y) * 521.0f)) * 493013.0f) * 2.0f) + (-1.0f)) * asfloat(_34.z)) * clamp(1.0f - dot(float3(_73, _70.yz), float3(0.2125000059604644775390625f, 0.7153999805450439453125f, 0.07209999859333038330078125f)), 0.0f, 1.0f);
-  // SV_Target.x = clamp(_87 + _73, 0.0f, 1.0f);
-  // SV_Target.y = clamp(_87 + _70.y, 0.0f, 1.0f);
-  // SV_Target.z = clamp(_87 + _70.z, 0.0f, 1.0f);
   SV_Target.rgb = _70.rgb;
 
-  if (CUSTOM_FILM_GRAIN) {
+  if (CUSTOM_FILM_GRAIN_USE_PERCEPTUAL) {
     float3 outputColor = SV_Target.rgb;
     outputColor = renodx::draw::InvertIntermediatePass(outputColor);
     outputColor = renodx::effects::ApplyFilmGrain(
         outputColor,
         TEXCOORD.xy,
         CUSTOM_RANDOM,
-        _34.z ? CUSTOM_FILM_GRAIN * 0.03f : 0,
+        _34.z != 0u ? CUSTOM_FILM_GRAIN * 0.03f : 0,
         1.f);
 
     outputColor = renodx::draw::RenderIntermediatePass(outputColor);
     SV_Target.rgb = outputColor;
+  } else {
+    const float _73 = _70.x;
+    const float _87 =
+        (((frac(sin(((float(int(uint(int(asfloat(_34.x))) & 1023u)) * 0.000977517105638980865478515625f) + TEXCOORD.x)
+                    + (((float(int(uint(int(asfloat(_34.y))) & 1023u)) * 0.000977517105638980865478515625f) + TEXCOORD.y) * 521.0f))
+               * 493013.0f)
+           * 2.0f)
+          + (-1.0f))
+         * (asfloat(_34.z) * CUSTOM_FILM_GRAIN))
+        * clamp(
+            1.0f - dot(float3(_73, _70.yz), float3(0.2125000059604644775390625f, 0.7153999805450439453125f, 0.07209999859333038330078125f)),
+            0.0f,
+            1.0f);
+    SV_Target.x = _87 + _73;
+    SV_Target.y = _87 + _70.y;
+    SV_Target.z = _87 + _70.z;
   }
   SV_Target.w = 1.0f;
 }

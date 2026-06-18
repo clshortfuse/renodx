@@ -188,7 +188,7 @@ namespace internal {
     return ParseViewMode(arguments["view"].get<std::string>());
   }
 
-  return ViewMode::ALL;
+  return ViewMode::SUMMARY;
 }
 
 [[nodiscard]] inline std::optional<std::size_t> GetOptionalMaxTextLength(
