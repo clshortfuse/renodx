@@ -2,7 +2,6 @@
 
 #version 450
 
-#include "./common.slangi"
 
 layout(set = 0, binding = 0, std140) uniform support_buffer
 {
