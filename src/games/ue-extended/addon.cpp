@@ -806,6 +806,12 @@ const std::unordered_map<
                 {"Proxy_Revert_State", 1.f},
             },
         },
+        {
+            "The Adventures of Elliot_The Millennium Tales",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_RATIO},
+            },
+        },
         // Native HDR on games (Path off)
         {
             "Hell is Us",
