@@ -20,6 +20,35 @@ layout(set = 2, binding = 128) uniform sampler2D fp_t_tcb_8;
 layout(location = 0) noperspective in vec4 uv;
 layout(location = 0) out vec4 out;
 
+vec3 DrawParamOverlay(vec3 base_color, vec2 uv_coords, vec2 param) {
+  float2 resolution = float2(textureSize(fp_t_tcb_8, 0));
+  float2 position = float2(uv_coords.x * resolution.x, (1.0f - uv_coords.y) * resolution.y);
+
+  float2 panel_min = float2(16.0f, 16.0f);
+  float2 panel_max = panel_min + float2(220.0f, 56.0f);
+  float2 text_origin = panel_min + float2(8.0f, 8.0f);
+
+  renodx::canvas::Context canvas = renodx::canvas::CreateContext(
+      position,
+      text_origin,
+      float2(8.0f, 12.0f),
+      base_color,
+      0.0f);
+
+  renodx::canvas::SetColor(canvas, 0x000000, 0.80f);
+  renodx::canvas::FillRect(canvas, panel_min, panel_max);
+
+  renodx::canvas::SetColor(canvas, 0xFFFFFF, 0.95f);
+  renodx::canvas::DrawText(canvas, 'p', 'a', 'r', 'a', 'm', '.', 'x', ':', ' ');
+  renodx::canvas::DrawFloat(canvas, param.x, 2.0f, 6.0f, false, false);
+
+  renodx::canvas::NewLine(canvas);
+  renodx::canvas::DrawText(canvas, 'p', 'a', 'r', 'a', 'm', '.', 'y', ':', ' ');
+  renodx::canvas::DrawFloat(canvas, param.y, 2.0f, 6.0f, false, false);
+
+  return renodx::canvas::GetOutput(canvas).rgb;
+}
+
 void main() {
   vec4 scene = textureLodOffset(fp_t_tcb_8, uv.xy, 0.0, ivec2(0)).xyzw;
   float _46 = scene.x;
@@ -98,15 +127,25 @@ void main() {
     out.rgb = vanilla;
   } 
   else if (RENODX_TONE_MAP_TYPE == 3.f) {
+    // vec3 color = scene.rgb * exposure;
+    // color = max(0, color - 0.004f);
+    // color = renodx::color::lms::from::BT709(color);
+    // vec3 lmsWhite = renodx::color::lms::from::BT709(1.f);
+    // color /= lmsWhite;
+    // color = HejlDawson::ApplyExtended(color, 2.2f, param.xy);
+    // color *= lmsWhite;
+    // color = renodx::color::bt709::from::LMS(color);
     out.rgb = ColorCorrect(untonemapped, vanilla);
   }
   else if (RENODX_TONE_MAP_TYPE == 6.f) {
     out.rgb = ZeldaEOWApplyHejlDawsonToneMap(untonemapped, param.x, param.y);
+    out.rgb = DrawParamOverlay(out.rgb, uv.xy, param);
     out.rgb = renodx::draw::RenderIntermediatePass(out.rgb);
     return;
   }
 
   out.rgb = ApplyColorGrade(out.rgb);
   out.rgb = DisplayMap(out.rgb);
+  out.rgb = DrawParamOverlay(out.rgb, uv.xy, param);
   out.rgb = renodx::draw::RenderIntermediatePass(out.rgb);
 }

@@ -77,9 +77,33 @@ float3 DisplayMap(float3 color, bool ui = false)
   return renodx::tonemap::neutwo::PerChannel(color, peakRatio);
 }
 
-float HejlDawsonCustomMidGrayExponentialContrast(float x, float y) {
-  const float input_value = ZELDA_EOW_TONE_MAP_MID_GRAY;
+float HejlDawsonCustomInputForOutput(float output_value, float x, float y) {
+  const float curve = pow(max(0.f, output_value), 1.f / 2.2f);
+  const float a = x * (curve - 1.f);
+  const float b = fma(1.7f, curve, -0.5f);
+  const float c = curve * y;
+
+  if (abs(a) < renodx::math::FLT_EPSILON) {
+    const float linear_color = renodx::math::DivideSafe(-c, b, 0.f);
+    return linear_color > 0.f ? linear_color + ZELDA_EOW_HEJL_DAWSON_BLACK_OFFSET : ZELDA_EOW_TONE_MAP_MID_GRAY;
+  }
+
+  const float discriminant = fma(-4.f * a, c, b * b);
+  if (discriminant < 0.f) return ZELDA_EOW_TONE_MAP_MID_GRAY;
+
+  const float sqrt_discriminant = sqrt(discriminant);
+  const float denominator = 2.f * a;
+  const float root_0 = (-b - sqrt_discriminant) / denominator;
+  const float root_1 = (-b + sqrt_discriminant) / denominator;
+  float color = root_0 > 0.f ? root_0 : root_1;
+  color = root_1 > 0.f && (color <= 0.f || root_1 < color) ? root_1 : color;
+  return color > 0.f ? color + ZELDA_EOW_HEJL_DAWSON_BLACK_OFFSET : ZELDA_EOW_TONE_MAP_MID_GRAY;
+}
+
+float HejlDawsonCustomExponentialContrast(float input_value, float x, float y) {
   const float color = input_value - ZELDA_EOW_HEJL_DAWSON_BLACK_OFFSET;
+  if (color <= 0.f || input_value <= 0.f) return 0.f;
+
   const float numerator = color * (color * x + 0.5f);
   const float denominator = color * (color * x + 1.7f) + y;
   const float numerator_slope = fma(2.f * x, color, 0.5f);
@@ -101,7 +125,12 @@ float ZeldaEOWComputePsychoV17Peak() {
   return peak;
 }
 
-float3 ZeldaEOWApplyPsychoV17HejlDawson(float3 untonemapped, float param_x, float param_y, float reference_mid_gray) {
+float3 ZeldaEOWApplyPsychoV17HejlDawson(float3 untonemapped, float param_x, float param_y) {
+  // Accurate Starfield-style midgray reference: solve vanilla f(reference_input) = 0.18,
+  // then match the analytic vanilla slope there without applying Hejl's black offset to PsychoV input.
+  const float reference_input = HejlDawsonCustomInputForOutput(ZELDA_EOW_TONE_MAP_MID_GRAY, param_x, param_y);
+  const float reference_cone_response = HejlDawsonCustomExponentialContrast(reference_input, param_x, param_y);
+
   return renodx::tonemap::psychov::psychotm_test17(
       untonemapped,
       ZeldaEOWComputePsychoV17Peak(),
@@ -115,28 +144,15 @@ float3 ZeldaEOWApplyPsychoV17HejlDawson(float3 untonemapped, float param_x, floa
       1.f,
       1.f,
       1,
-      // Match vanilla's effective mid-gray slope with the black offset, but do not apply that offset to the PsychoV input.
-      HejlDawsonCustomMidGrayExponentialContrast(param_x, param_y) * max(0.f, CUSTOM_CONE_RESPONSE),
+      reference_cone_response * max(0.f, CUSTOM_CONE_RESPONSE),
+      reference_input.xxx,
       ZELDA_EOW_TONE_MAP_MID_GRAY.xxx,
-      max(reference_mid_gray, renodx::math::FLT_EPSILON).xxx,
       1.f,
       1);
 }
 
 float3 ZeldaEOWApplyHejlDawsonToneMap(float3 untonemapped, float param_x, float param_y) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
-    return saturate(HejlDawsonCustom(untonemapped, param_x, param_y));
-  }
-  const float vanilla_mid_gray = HejlDawsonCustom(ZELDA_EOW_TONE_MAP_MID_GRAY, param_x, param_y);
-  if (RENODX_TONE_MAP_TYPE == 6.f) {
-    return ZeldaEOWApplyPsychoV17HejlDawson(
-        untonemapped,
-        param_x,
-        param_y,
-        vanilla_mid_gray);
-  }
-  const float3 vanilla = HejlDawsonCustom(untonemapped, param_x, param_y);
-  return renodx::draw::ToneMapPass(untonemapped * vanilla_mid_gray / ZELDA_EOW_TONE_MAP_MID_GRAY, vanilla);
+    return ZeldaEOWApplyPsychoV17HejlDawson(untonemapped, param_x, param_y);
 }
 
 float3 WobblyApplyPsychoV17(float3 untonemapped_bt709, bool is_sdr = false) {
