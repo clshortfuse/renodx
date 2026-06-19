@@ -102,6 +102,38 @@ GTAV_HABLE_TONEMAP_GENERATOR(float)
 GTAV_HABLE_TONEMAP_GENERATOR(float3)
 #undef GTAV_HABLE_TONEMAP_GENERATOR
 
+float ApplyGTAVHableTonemapInverse(float tonemapped,
+                                   float a,          // shoulder_strength
+                                   float b,          // linear_strength
+                                   float c_times_b,  // linear_angle_times_strength
+                                   float d_times_e,  // toe_strength_times_numerator
+                                   float d_times_f,  // toe_strength_times_denominator
+                                   float e_over_f,   // toe_numerator_over_denominator
+                                   float white_scale) {
+  float target = renodx::math::SafeDivision(tonemapped, white_scale, 0.f) + e_over_f;
+
+  float qa = a * (1.f - target);
+  float qb = c_times_b - (target * b);
+  float qc = d_times_e - (target * d_times_f);
+
+  if (abs(qa) < 1e-6f) {
+    return max(0.f, renodx::math::SafeDivision(-qc, qb, 0.f));
+  }
+
+  float discriminant = max(0.f, (qb * qb) - (4.f * qa * qc));
+  float sqrt_discriminant = sqrt(discriminant);
+  float inv_2qa = 0.5f / qa;
+  float root_a = (-qb + sqrt_discriminant) * inv_2qa;
+  float root_b = (-qb - sqrt_discriminant) * inv_2qa;
+
+  bool root_a_valid = root_a > 0.f;
+  bool root_b_valid = root_b > 0.f;
+  if (root_a_valid && root_b_valid) return min(root_a, root_b);
+  if (root_a_valid) return root_a;
+  if (root_b_valid) return root_b;
+  return 0.f;
+}
+
 float CalculateGTAVHableDerivative(float x,
                                    float a,          // shoulder_strength
                                    float b,          // linear_strength
@@ -269,6 +301,7 @@ float4 GenerateGTAVOutput(float3 input_color, float2 position, float2 screen_pos
     config.d_times_f = abs(config.d_times_f);
     config.e_over_f = abs(config.e_over_f);
 
+#if 1  // inflection
     const float mid_gray_in = FindGTAVHableInflection(config.a,
                                                       config.b,
                                                       config.c_times_b,
@@ -282,6 +315,17 @@ float4 GenerateGTAVOutput(float3 input_color, float2 position, float2 screen_pos
                                                      config.d_times_f,
                                                      config.e_over_f,
                                                      config.white_scale);
+#else  // 0.18 out
+    const float mid_gray_out = 0.18f;
+    const float mid_gray_in = ApplyGTAVHableTonemapInverse(mid_gray_out,
+                                                           config.a,
+                                                           config.b,
+                                                           config.c_times_b,
+                                                           config.d_times_e,
+                                                           config.d_times_f,
+                                                           config.e_over_f,
+                                                           config.white_scale);
+#endif
 
     const float hable_slope = CalculateGTAVHableDerivative(mid_gray_in,
                                                            config.a,
