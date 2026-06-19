@@ -1,8 +1,7 @@
 #ifndef SRC_GAMES_ONCEHUMAN_SHARED_H_
 #define SRC_GAMES_ONCEHUMAN_SHARED_H_
 
-// Must be 32bit aligned
-// Should be 4x32
+// 32-bit aligned, 4x32.
 struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
@@ -30,10 +29,7 @@ struct ShaderInjectData {
   float intermediate_color_space;
   float swap_chain_decoding;
   float swap_chain_gamma_correction;
-  //  float swap_chain_decoding_color_space;
   float swap_chain_custom_color_space;
-  // float swap_chain_scaling_nits;
-  // float swap_chain_clamp_nits;
   float swap_chain_clamp_color_space;
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
@@ -45,10 +41,7 @@ struct ShaderInjectData {
 };
 
 #ifndef __cplusplus
-// Injection constant buffer binding:
-//  - DX11 (sm5.0, FXC): no register spaces -> b13.
-//  - DX12 (sm5.1 proxy + sm6 game shaders): bound at b13, space50 to match
-//    renodx::mods::shader/swapchain expected_constant_buffer_space = 50.
+// Injection cbuffer: b13 (DX11) / b13, space50 (DX12).
 #if ((__SHADER_TARGET_MAJOR == 5 && __SHADER_TARGET_MINOR >= 1) || __SHADER_TARGET_MAJOR >= 6)
 cbuffer shader_injection : register(b13, space50) {
 #else
@@ -78,16 +71,11 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
-// Intermediate Encoding / Swapchain Decoding sliders were removed from the UI; their
-// "Auto" behaviour (= Scene Gamma Correction + 1) is reproduced here so encoding still
-// tracks the Scene Gamma Correction setting.
+// Intermediate encoding / swap chain decoding derived from gamma correction (no UI slider).
 #define RENODX_INTERMEDIATE_ENCODING         (shader_injection.gamma_correction + 1.f)
 #define RENODX_SWAP_CHAIN_DECODING           (shader_injection.gamma_correction + 1.f)
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   shader_injection.swap_chain_gamma_correction
-// #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE shader_injection.swap_chain_decoding_color_space
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
-// #define RENODX_SWAP_CHAIN_SCALING_NITS         shader_injection.swap_chain_scaling_nits
-// #define RENODX_SWAP_CHAIN_CLAMP_NITS           shader_injection.swap_chain_clamp_nits
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    shader_injection.swap_chain_clamp_color_space
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
