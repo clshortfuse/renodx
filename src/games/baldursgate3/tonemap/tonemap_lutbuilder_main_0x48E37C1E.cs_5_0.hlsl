@@ -1,5 +1,26 @@
 #include "./tonemap.hlsli"
 
+// -----------------------------------------------------------------------------
+// Baldur's Gate 3 LUT builder / ZCAM DRT notes
+// -----------------------------------------------------------------------------
+// This decompiled compute shader closely matches the public
+// `ZCAM_v9_v11_Combined_With_BG3_Compatibility_LMT.hlsl` shader from the
+// aces-vwg-ot-code repository. The cleaner source names the algorithm as a ZCAM
+// display rendering transform with BG3-specific compatibility hacks:
+//
+//   - SDR uses a blend between a newer ZCAM DRT v11 and an older v9-like path for
+//     selected red/orange hues. This is meant to preserve BG3 fire, skin, brine
+//     bulbs, and other legacy-authored assets.
+//   - HDR uses the newer DRT path only, with more highlight desaturation,
+//     P3-D65 limiting primaries for gamut compression, and HDR10/BT.2020 output.
+//   - The main tonescale is ACES SSTS-like: it maps log10(luminance) through a
+//     quadratic B-spline curve and converts back with pow(10, y).
+//   - The tone curve is applied to ZCAM Iz/lightness, not independently to RGB.
+//     Hue and colorfulness are rebuilt afterwards and gamut-compressed in JMh.
+//
+// Variable names are still decompiler names. Comments below describe the closest
+// source-level concepts from the public shader.
+
 cbuffer cb0_buf : register(b0) {
   float4 cb0_m0 : packoffset(c0);
   float2 cb0_m1 : packoffset(c1);
@@ -54,6 +75,19 @@ void comp_main() {
   hdr_enabled = false;
 #endif
 
+  // ---------------------------------------------------------------------------
+  // 1. Build the LUT input color from the dispatch coordinate.
+  // ---------------------------------------------------------------------------
+  // The clean source uses AcesCc_2_Linear(uvw). Decompilation folded that into:
+  //   linear = exp2(uvw * 17.52 - 9.72)
+  // where uvw is represented by the thread id and the 63^3 LUT grid spacing.
+  // The constants here are 17.52 / 63 and -9.72, so _413/_414/_415 are the
+  // unrendered scene-linear AP1 LUT sample.
+  //
+  // The max-channel distance compression that produces _472 is the source
+  // AcesCompress() call. It works in an ACES/AP1-ish RGB ratio space: find the
+  // achromatic axis max(rgb), measure per-channel distance from that axis, apply
+  // ACES Reference Gamut Compression-style thresholds, then reconstruct RGB.
   float _413 = exp2(mad(float(gl_GlobalInvocationID.x), 0.2780952751636505126953125f, -9.72000026702880859375f));
   float _414 = exp2(mad(float(gl_GlobalInvocationID.y), 0.2780952751636505126953125f, -9.72000026702880859375f));
   float _415 = exp2(mad(float(gl_GlobalInvocationID.z), 0.2780952751636505126953125f, -9.72000026702880859375f));
@@ -69,6 +103,8 @@ void comp_main() {
       mad(-_417, (_422 < 0.802999973297119140625f) ? _422 : (((_428 * 1.0f) / exp2(log2(exp2(log2(_428 * 3.49726104736328125f) * 1.2000000476837158203125f) + 1.0f) * 0.833333313465118408203125f)) + 0.802999973297119140625f), _417),
       mad(-_417, (_423 < 0.9900000095367431640625f) ? _423 : (((_429 * 0.999999940395355224609375f) / exp2(log2(exp2(log2(_429 * 98.70603179931640625f) * 1.2000000476837158203125f) + 1.0f) * 0.833333313465118408203125f)) + 0.9900000095367431640625f), _417));
 
+  // RenoDX override block. This is local/custom code, not part of the BG3/ZCAM DRT
+  // analysis below.
 #if 1
   float3 untonemapped_ap1 = _472;
 
@@ -79,6 +115,22 @@ void comp_main() {
 
 #endif
 
+  // ---------------------------------------------------------------------------
+  // 2. BG3 "Sweeteners": AP1 -> AP0 plus low/high hue shaping.
+  // ---------------------------------------------------------------------------
+  // The public source calls this Sweeteners(colorAP1). It first applies the ACES
+  // compression above, converts AP1 to AP0, then performs two hue-dependent
+  // channel-ratio modifications:
+  //
+  //   low-range shaping:  global + blue powers, blended strongest in shadows
+  //                       with f = saturate(max / (max^2 + max + 0.005))^2.
+  //   high-range shaping: cyan/blue power adjustment, blended in highlights
+  //                       with f = saturate(1 - 1 / (max + 1)^2).
+  //
+  // The HDR/SDR constants differ:
+  //   HDR: globalPower=1.0, bluePower=1.15, cyanPower=0.9
+  //   SDR: globalPower=0.9, bluePower=1.035, cyanPower=1.0
+  // This is color rendering / gamut grooming, not the main tone curve.
   // AP1 -> AP0
   float _473 = dp3_f32(float3(0.695452213287353515625f, 0.140678703784942626953125f, 0.16386906802654266357421875f), _472);
   float _474 = dp3_f32(float3(0.0447945632040500640869140625f, 0.859671115875244140625f, 0.095534317195415496826171875f), _472);
@@ -144,6 +196,16 @@ void comp_main() {
   float _674 = mad(mad(_603, (_608 <= 0.0f) ? _608 : mad(_640, exp2(log2(_608) * _484) - _608, _608), -_599), _667, _599);
   float _675 = mad(mad(_603, (_609 <= 0.0f) ? _609 : mad(_640, exp2(_484 * log2(_609)) - _609, _609), -_600), _667, _600);
   float _676 = mad(mad(_603, (_610 <= 0.0f) ? _610 : mad(_640, exp2(_484 * log2(_610)) - _610, _610), -_601), _667, _601);
+
+  // ---------------------------------------------------------------------------
+  // 3. SDR red/orange compatibility blend factor.
+  // ---------------------------------------------------------------------------
+  // This is GetBlendFactor(colorAP0) from the public shader. It estimates AP0
+  // hue and creates a soft mask centered on the red/orange/purple-to-red regions.
+  // In SDR only, this blends the newer ZCAM v11 path with older v9-like behavior
+  // for BG3 content. The goal is compatibility rather than colorimetric purity:
+  // prevent fire from becoming pink, keep skin acceptable, and avoid some legacy
+  // assets going too white. HDR forces the factor to 0 and uses the v11 path.
   bool _677 = hdr_enabled == 1u;
   float _678 = max(_675, 0.0f);
   float _679 = max(_676, 0.0f);
@@ -166,8 +228,24 @@ void comp_main() {
   float _739 = mad(_738, -2.0f, 3.0f);
   float _740 = _738 * _738;
   float _756 = (_677 || ((max(_674, max(_676, _675)) - min(_674, min(_676, _675))) < 0.001000000047497451305389404296875f)) ? 0.0f : min(clamp(_720 + (clamp(_727 + _727, 0.0f, 1.0f) * (((mad(_723, -2.0f, 3.0f) * (_723 * _723)) * 1.25f) - _720)), 0.0f, 1.0f) + ((_705 < 0.977777779102325439453125f) ? (_739 * _740) : mad(_739, _740, clamp(mad(_705, 360.0f, -352.0f) * 0.0199999995529651641845703125f, 0.0f, 1.0f))), 1.0f);
+
+  // Blend alternate SDR SSTS parameters. In the clean source, blendFactor updates
+  // CoefsHigh[0..5], Min.x, Mid.x, Max.x, Max.y, and MaxLum. Here those lerps are
+  // decompiled into cb0_m* blends controlled by _756.
   float _763 = mad(cb0_m12.x - cb0_m0.x, _756, cb0_m0.x);
   float _771 = mad(exp2(cb0_m13.y * 3.3219280242919921875f) - cb0_m7.w, _756, cb0_m7.w);
+
+  // ---------------------------------------------------------------------------
+  // 4. AP0 -> XYZ -> modified ZCAM Izazbz.
+  // ---------------------------------------------------------------------------
+  // The public shader does:
+  //   XYZ     = AP0_2_XYZ(colorAP0) * refLum
+  //   Izazbz  = XYZ_to_Izazbz(CAT_Zhai2018(XYZ, ACES white, D65 white, ...))
+  //
+  // refLum is 125 nits for SDR and 200 nits for HDR. The CAT02-like matrix and
+  // Zhai 2018 chromatic adaptation are baked into the constants below. The ZCAM
+  // XYZ->LMS matrix is intentionally not the official one; the source notes it
+  // was adjusted to stop dark blues from shifting toward cyan.
   float3 _780 = float3(dp2_f32(float2(0.952552378177642822265625f, 9.3678601842839270830154418945313e-05f), float2(_674, _676)) * _481, dp3_f32(float3(0.3439664542675018310546875f, 0.728166103363037109375f, -0.07213254272937774658203125f), float3(_674, _675, _676)) * _481, (_676 * _481) * 1.00882518291473388671875f);
   float3 _787 = float3(dp3_f32(float3(0.732800006866455078125f, 0.4296000003814697265625f, -0.1624000072479248046875f), _780) * 0.9848167896270751953125f, dp3_f32(float3(-0.703599989414215087890625f, 1.6974999904632568359375f, 0.006099999882280826568603515625f), _780) * 1.001965045928955078125f, dp3_f32(float3(0.0030000000260770320892333984375f, 0.013600000180304050445556640625f, 0.98339998722076416015625f), _780) * 1.07822644710540771484375f);
   float _788 = dp3_f32(float3(1.09612381458282470703125f, -0.2788690030574798583984375f, 0.18274517357349395751953125f), _787);
@@ -189,6 +267,24 @@ void comp_main() {
   float _885 = log2(mad(_881, 18.8515625f, 0.8359375f) / mad(_881, 18.6875f, 1.0f));
   float _890 = min(exp2(log2(_867) * 0.0074607725255191326141357421875f), 1.00870001316070556640625f);
   float _905 = (((_867 <= 0.0f) || (_890 <= 0.8359375f)) ? 0.0f : ((float(int(_867 > 0.0f)) * exp2(log2((_890 - 0.8359375f) / mad(_890, -18.6875f, 18.8515625f)) * 6.277394771575927734375f)) * 10285.52734375f)) / _481;
+
+  // ---------------------------------------------------------------------------
+  // 5. Forward tonescale: ACES SSTS-like curve on ZCAM Iz/lightness.
+  // ---------------------------------------------------------------------------
+  // _867 is the ZCAM Iz channel in its PQ-like domain. _905 is Iz converted back
+  // to a normalized linear luminance ratio, matching:
+  //   linearLum = IzToLuminance(inputIzazbz.x) / refLum
+  //
+  // The actual tone curve is ssts(linearLum, tsParams). It is structurally the
+  // same family as ACES SSTS:
+  //   logx = log10(max(x, 2^-14))
+  //   logy = low linear toe, low quadratic B-spline, high quadratic B-spline,
+  //          or high linear shoulder
+  //   y    = pow(10, logy)
+  //
+  // In this decompile, log10 is written as log2(x) * log10(2), and pow(10, y)
+  // is written as exp2(y * log2(10)). The tone mapper is therefore luminance /
+  // perceptual-lightness based rather than RGB-per-channel.
   float _907 = log2(max(_905, 6.103515625e-05f));
   float _908 = _907 * 0.3010300099849700927734375f;
   float _1144;
@@ -229,9 +325,16 @@ void comp_main() {
     }
     _1144 = _1143;
   }
+
+  // _1146 is the SSTS output luminance ratio. _1164 converts that ratio back to
+  // ZCAM's Iz PQ-like axis, matching LuminanceToIz(luminanceTS).
   float _1146 = exp2(_1144 * 3.3219280242919921875f);
   float _1151 = exp2(log2(_1146 * 9.7223979537375271320343017578125e-05f) * 0.1593017578125f);
   float _1164 = ((_1146 <= 0.0f) || (_1146 == 0.0f)) ? 0.0f : (float(int(_1146 > 0.0f)) * exp2(log2(mad(_1151, 18.8515625f, 0.8359375f) / mad(_1151, 18.6875f, 1.0f)) * 134.0343780517578125f));
+
+  // Convert the toned Izazbz value to ZCAM JMh. _1205 is hue angle h in degrees,
+  // _1233 is J/lightness, and _1246 below is M/colorfulness before highlight
+  // desaturation. The many powers and cosine terms are the ZCAM JMh formulas.
   float _1168 = abs(_865);
   float _1169 = abs(_866);
   float _1173 = min(_1168, _1169) * (1.0f / max(_1168, _1169));
@@ -252,6 +355,17 @@ void comp_main() {
   float _1243 = exp2(log2(cos((_1205 + 89.03800201416015625f) * 0.0174532942473888397216796875f) + 1.01499998569488525390625f) * 0.06800000369548797607421875f) * _874;
   float _1244 = _1231 * 0.89125096797943115234375f;
   float _1246 = (_1243 / _1244) * (exp2(log2(dp2_f32(_1234, _1234)) * 0.37000000476837158203125f) * 100.0f);
+
+  // ---------------------------------------------------------------------------
+  // 6. Highlight desaturation.
+  // ---------------------------------------------------------------------------
+  // The source uses HighlightDesatFactor() and, for the SDR red/orange blend,
+  // OldHighlightDesatFactor(). HDR uses stronger desaturation parameters:
+  //   SDR hlDesat = 3.5, real_gmThresh = 0.75
+  //   HDR hlDesat = 4.0, real_gmThresh = 0.70
+  // _1329 is the new factor; _1349/_1360 implement the old SDR red-hack factor
+  // and blend it in with _756. The final M/colorfulness entering gamut mapping is
+  // _1361 = _1246 * desatFactor.
   float _1329;
   if (_905 >= 0.180000007152557373046875f) {
     float _1251 = _480 ? 4.0f : 3.5f;
@@ -270,6 +384,15 @@ void comp_main() {
   float _1349 = clamp(((((_1164 <= 0.0f) || (_1331 <= 0.8359375f)) ? 0.0f : ((_1217 * exp2(log2((_1331 - 0.8359375f) / mad(_1331, -18.6875f, 18.8515625f)) * 6.277394771575927734375f)) * 10285.52734375f)) - cb0_m7.z) / cb0_m7.z, 0.0f, 1.0f) * (_867 - _1164);
   float _1360 = mad((1.0f - ((_1349 > 0.2909090816974639892578125f) ? mad(1.0f - (1.0f / mad(mad(_1349, 2.75f, -0.800000011920928955078125f), 5.0f, 1.0f)), 0.20000000298023223876953125f, 0.800000011920928955078125f) : (_1349 * 2.75f))) - _1329, _756, _1329);
   float _1361 = _1246 * _1360;
+
+  // ---------------------------------------------------------------------------
+  // 7. Limiting and output primaries setup.
+  // ---------------------------------------------------------------------------
+  // These constants are the limiting-primary RGB->XYZ matrices selected by
+  // OutputDevice:
+  //   SDR: BT.709 / sRGB limiting primaries
+  //   HDR: P3-D65 limiting primaries
+  // This is only for gamut compression. The final HDR output later uses BT.2020.
   float _1362 = _480 ? 0.486570894718170166015625f : 0.4123909175395965576171875f;
   float _1363 = _480 ? 0.2656676471233367919921875f : 0.35758435726165771484375f;
   float _1364 = _480 ? 0.19821725785732269287109375f : 0.18048079311847686767578125f;
@@ -307,7 +430,11 @@ void comp_main() {
   float _1538 = dp3_f32(float3(-0.089891873300075531005859375f, -0.3052776157855987548828125f, 1.51366293430328369140625f), _1535);
   float _1539 = mad(_1538, 0.1500000059604644775390625f, dp3_f32(float3(1.9734058380126953125f, -0.996146976947784423828125f, -0.02567376196384429931640625f), _1535));
 
-  // if hdr_enabled ? XYZ -> DCI-P3 : XYZ -> BT.709
+  // Convert the current JMh candidate back to limiting-primary RGB for the first
+  // cusp estimate. HDR uses XYZ->P3-D65 here; SDR uses XYZ->BT.709. This confirms
+  // the clean source's GetLimitingPrimaries_XYZ_2_RGB_Matrix(). It is not the
+  // final HDR output conversion.
+  // if hdr_enabled ? XYZ -> P3-D65 : XYZ -> BT.709
 
   // _1543 = hdr_enabled ? float3(2.49349689, -0.93138361, -0.402710766) : float3(3.24096918, -1.53738272, -0.498610646);
   // _1546 = hdr_enabled ? float3(-0.829488993, 1.76266408, 0.0236246902) : float3(-0.969243646, 1.87596738, 0.0415550806);
@@ -397,6 +524,9 @@ void comp_main() {
     float _1788 = _1603;
     uint _1790 = 0u;
     for (;;) {
+      // EstimateGamutCusp(): march around the limiting-primary RGB hue slice
+      // until the source ZCAM hue is bracketed. The loop is bounded at 360 hue
+      // steps in the clean source too.
       if (int(_1790) >= 360) {
         _1991 = 0.0f;
         _1992 = 0.0f;
@@ -465,6 +595,25 @@ void comp_main() {
   float _2038 = mad((((_2024 == 0.0f) ? 0.0f : ((float(int(_2024 > 0.0f)) * exp2(log2(_2024) * 1.08385694026947021484375f)) * 100.0f)) / _1232) - _1997, 0.5f, _1997);
   float _2048 = _1996 * ((_1233 > _2038) ? ((_2035 - _2038) / max(_2035 - min(_1233, _2035), 9.9999997473787516355514526367188e-05f)) : (_2038 / max(_1233, 9.9999997473787516355514526367188e-05f)));
   float _2049 = _2048 * (-0.5f);
+
+  // ---------------------------------------------------------------------------
+  // 8. CompressGamut(): focus point and boundary search in ZCAM J/M.
+  // ---------------------------------------------------------------------------
+  // The cleaner source estimates the gamut cusp, builds a focus point below the
+  // achromatic axis, then projects the input J/M through that focus. If the point
+  // is outside the limiting RGB cube it finds a boundary point and compresses the
+  // radial distance with CompressPowerP(). This avoids hard RGB clipping and keeps
+  // hue stable as much as possible.
+  //
+  // The values here correspond approximately to:
+  //   JMinput             = float2(J, M)
+  //   JMcusp              = EstimateGamutCusp(...)
+  //   JMfocus             = focus point below the achromatic axis
+  //   achromaticIntercept = where the input/focus line crosses M=0
+  //   JMboundary          = FindBoundary(...)
+  //
+  // HDR constrains against P3-D65; SDR constrains against BT.709. Final HDR is
+  // still written to BT.2020 after this compression.
   float _2052 = (_1233 - _2038) / (_1361 - _2049);
   float _2054 = mad(-_2049, _2052, _2038);
   float _3124;
@@ -635,6 +784,10 @@ void comp_main() {
     uint _2920 = _2906;
     uint _2926 = 0u;
     for (;;) {
+      // FindBoundary(): binary-ish stepping along the J/M ray. Outer loop halves
+      // the step direction up to 10 times; inner loop takes up to 128 steps. The
+      // IsInsideCube() test uses rounded cube corners controlled by gmSmoothCusps
+      // so gamut compression is less angular around RGB/CMY cusps.
       if (int(_2926) >= 10) {
         break;
       }
@@ -670,7 +823,10 @@ void comp_main() {
         float3 _3057 = float3((_3003 <= 0.8359375f) ? 0.0f : ((float(int(((_2989 < 0.0f) ? 4294967295u : 0u) + uint(_2989 > 0.0f))) * exp2(log2((_3003 - 0.8359375f) / mad(_3003, -18.6875f, 18.8515625f)) * 6.277394771575927734375f)) * 10000.0f), (_3004 <= 0.8359375f) ? 0.0f : ((exp2(log2((_3004 - 0.8359375f) / mad(_3004, -18.6875f, 18.8515625f)) * 6.277394771575927734375f) * float(int(uint(_2985 > 0.0f) + ((_2985 < 0.0f) ? 4294967295u : 0u)))) * 10000.0f), (_3005 <= 0.8359375f) ? 0.0f : ((exp2(log2((_3005 - 0.8359375f) / mad(_3005, -18.6875f, 18.8515625f)) * 6.277394771575927734375f) * float(int(uint(_2990 > 0.0f) + ((_2990 < 0.0f) ? 4294967295u : 0u)))) * 10000.0f));
         float _3060 = dp3_f32(float3(-0.089891873300075531005859375f, -0.3052776157855987548828125f, 1.51366293430328369140625f), _3057);
 
-        // maybe related to JzAzBz?
+        // Izazbz_to_XYZ() candidate for the boundary test. The previous math
+        // rebuilt an Izazbz point from the trial J/M value and the current hue;
+        // this reverses the modified ZCAM LMS/XYZ transform so the candidate can
+        // be tested in the limiting-primary RGB cube.
         float _3061 = mad(_3060, 0.1500000059604644775390625f,
                           dp3_f32(float3(1.9734058380126953125f, -0.996146976947784423828125f, -0.02567376196384429931640625f),
                                   _3057));
@@ -725,6 +881,10 @@ void comp_main() {
   float _3140 = _3134 * _3139;
   float _3141 = _677 ? 0.699999988079071044921875f : 0.75f;
   float _3143 = _677 ? 0.500000059604644775390625f : 0.4500000476837158203125f;
+
+  // CompressPowerP() of the normalized distance to the gamut boundary. The HDR
+  // threshold is lower, so HDR desaturates/compresses sooner. The output is a
+  // compressed J/M point with the original hue preserved.
   float _3155 = mad(_3134, _3139, _677 ? (-0.699999988079071044921875f) : (-0.75f));
   float _3166 = (_3140 < _3141) ? _3140 : ((_3155 / exp2(log2(exp2(log2(_3155 / (_3143 / exp2(log2(exp2(log2((_677 ? 0.300000011920928955078125f : 0.25f) / _3143) * (-1.2000000476837158203125f)) - 1.0f) * 0.833333313465118408203125f))) * 1.2000000476837158203125f) + 1.0f) * 0.833333313465118408203125f)) + _3141);
   bool _3169 = (_1361 == 0.0f) && (_1233 == _2054);
@@ -735,6 +895,14 @@ void comp_main() {
   float _3309;
   float _3310;
   if (_3181) {
+    // -------------------------------------------------------------------------
+    // 9. SDR red compatibility fallback gamut compressor.
+    // -------------------------------------------------------------------------
+    // This is OldCompressGamut(), blended in only by the SDR red/orange mask.
+    // It intentionally ignores the high limit and reintroduces some clipping for
+    // selected reds. The public source calls this a hack for BG3 old assets: it
+    // keeps bright fire orange instead of pink and prevents some Avernus brine
+    // bulbs from going completely white.
     uint _3186;
     float _3281;
     uint _3185 = 0u;
@@ -789,6 +957,19 @@ void comp_main() {
   float _3384 = mad(_3383, 0.1500000059604644775390625f,
                     dp3_f32(float3(1.9734058380126953125f, -0.996146976947784423828125f, -0.02567376196384429931640625f),
                             _3380));
+
+  // ---------------------------------------------------------------------------
+  // 10. Reconstruct final XYZ, apply lightness in XYZ, then convert to output RGB.
+  // ---------------------------------------------------------------------------
+  // The source deliberately applies lightness compression as a scale in linear
+  // XYZ rather than leaving it entirely inside ZCAM. This prevents the fake night
+  // atmosphere from shifting dark blue toward dark cyan.
+  //
+  // Final output primaries are selected here:
+  //   SDR: XYZ -> BT.709 / sRGB
+  //   HDR: XYZ -> BT.2020
+  // This is distinct from the P3-D65 HDR limiting primaries used for gamut
+  // compression above.
   float3 _3401 = float3((_3384 * _3313) * 0.8695652484893798828125f, (mad(_3384, -0.2608695924282073974609375f, dp3_f32(float3(0.350645840167999267578125f, 0.708214223384857177734375f, -0.046372711658477783203125f), _3380)) * _3313) * 1.4285714626312255859375f, _3383 * _3313);
   float _3407 = dp3_f32(float3(_480 ? 1.71665096282958984375f : 3.240969181060791015625f, _480 ? (-0.355670750141143798828125f) : (-1.53738272190093994140625f), _480 ? (-0.2533662319183349609375f) : (-0.4986106455326080322265625f)), _3401);
   float _3408 = dp3_f32(float3(_480 ? (-0.66668426990509033203125f) : (-0.96924364566802978515625f), _480 ? 1.6164810657501220703125f : 1.87596738338470458984375f, _480 ? 0.01576853729784488677978515625f : 0.0415550805628299713134765625f), _3401);
@@ -802,12 +983,20 @@ void comp_main() {
   float _3537;
   float _3538;
   if (_3181) {
+    // SDR output: convert absolute-ish linear BT.709 RGB to normalized display
+    // RGB, then sRGB encode. The decompiled shader uses RenoDX's safe sRGB
+    // helper in place of the original Y_2_sRGB().
     color_output = float3(_3407, _3408, _3409) / 100.f;
 
     color_output = renodx::color::srgb::EncodeSafe(color_output);
     // color_output = renodx::color::correct::GammaSafe(color_output);
 
   } else {
+    // HDR output: BT.2020 RGB -> contrast adjustment -> paper-white scale ->
+    // 20% peak headroom clamp -> ST.2084/PQ encode. The contrast adjustment
+    // matches the XDK HDRCalibration-style function from the public source:
+    // for gamma < 1, values above ~2 stay more linear so reduced contrast does
+    // not dim the scene's maximum brightness.
     float _3437 = _3407 / _481;
     float _3438 = _3408 / _481;
     float _3439 = _3409 / _481;
