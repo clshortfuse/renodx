@@ -1,4 +1,4 @@
-#include "./common.hlsli"
+#include "./tonemap.hlsli"
 Texture3D<float4> t1 : register(t1);
 
 Texture2D<float4> t0 : register(t0);
@@ -67,23 +67,47 @@ void main(
   r0.xyz = t1.SampleLevel(s0_s, r1.xyz, 0).xyz;  // tonemapping
 
 #if 1
+  float3 output_pq = r0.rgb;
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    r0.rgb = renodx::color::pq::DecodeSafe(r0.rgb, 100.f);
+    float3 untonemapped_bt2020 = renodx::color::pq::DecodeSafe(output_pq, 100.f);
 
-    r0.rgb = renodx::color::bt709::from::BT2020(r0.rgb);
+    float3 untonemapped_lms = renodx::color::lms::from::BT2020(untonemapped_bt2020);
     if (RENODX_GAMMA_CORRECTION == 0.f) {
-      r0.rgb = GammaCorrectHuePreserving(r0.rgb, true);
+      const float3 bt2020_white_lms = renodx::color::lms::from::BT2020(1.f);
+      untonemapped_lms = renodx::color::correct::GammaSafe(untonemapped_lms / bt2020_white_lms, true) * bt2020_white_lms;
     }
 
-    r0.rgb = ApplyUserGrading(r0.rgb);
+    // Apply LMS luminance and purity grading.
+    float3 desired_background_state_lms = renodx::color::lms::from::AP1(0.1f);  // output midgray from tonemap was 0.1 in AP1
+    float output_mid_gray = renodx::color::yf::from::LMS(desired_background_state_lms);
+    untonemapped_lms = ApplyLuminanceGradingLMS(untonemapped_lms,
+                                                RENODX_TONE_MAP_EXPOSURE,
+                                                RENODX_TONE_MAP_HIGHLIGHTS,
+                                                RENODX_TONE_MAP_SHADOWS,
+                                                RENODX_TONE_MAP_CONTRAST,
+                                                0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                                output_mid_gray);
+    untonemapped_lms = ApplyPurityGradingLMS(untonemapped_lms,
+                                             RENODX_TONE_MAP_SATURATION,
+                                             -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
+                                             RENODX_TONE_MAP_DECHROMA,
+                                             desired_background_state_lms);
 
-    r0.rgb = renodx::color::bt2020::from::BT709(r0.rgb);
-
+    float3 tonemapped_lms;
     if (RENODX_TONE_MAP_TYPE == 2.f) {
-      r0.rgb = renodx::tonemap::neutwo::MaxChannel(max(0, r0.rgb), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
+      float3 peak_lms = renodx::color::lms::from::BT2020(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+      float3 mid_gray_lms = renodx::color::lms::from::BT2020(0.1f);
+      float3 clip_lms = renodx::color::lms::from::BT2020(100.f);
+      tonemapped_lms = psycho_ReinhardPiecewise(untonemapped_lms, peak_lms, mid_gray_lms);
+    } else {
+      tonemapped_lms = untonemapped_lms;
     }
-    r0.rgb = renodx::color::pq::EncodeSafe(r0.rgb, RENODX_DIFFUSE_WHITE_NITS);
+
+    float3 tonemapped_bt2020 = renodx::color::bt2020::from::LMS(tonemapped_lms);
+
+    output_pq = renodx::color::pq::EncodeSafe(tonemapped_bt2020, RENODX_DIFFUSE_WHITE_NITS);
   }
+  r0.rgb = output_pq;
 #endif
 
   r0.w = 1;

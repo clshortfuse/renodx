@@ -1,4 +1,5 @@
-#include "./common.hlsli"
+#include "./tonemap.hlsli"
+
 cbuffer cb0 : register(b0) {
   float4 cb0[8];
 }
