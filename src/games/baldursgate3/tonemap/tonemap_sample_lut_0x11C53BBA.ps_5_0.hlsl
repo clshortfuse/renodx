@@ -77,35 +77,44 @@ void main(
       untonemapped_lms = renodx::color::correct::GammaSafe(untonemapped_lms / bt2020_white_lms, true) * bt2020_white_lms;
     }
 
-    // Apply LMS luminance and purity grading.
-    float3 desired_background_state_lms = renodx::color::lms::from::AP1(0.1f);  // output midgray from tonemap was 0.1 in AP1
-    float output_mid_gray = renodx::color::yf::from::LMS(desired_background_state_lms);
-    untonemapped_lms = ApplyLuminanceGradingLMS(untonemapped_lms,
+    float3 tonemapped_lms;
+
+    {
+      // display map in lms to peak then restore untonemapped luminance
+      float3 peak_lms = renodx::color::lms::from::BT2020(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+      float3 mid_gray_lms = renodx::color::lms::from::BT2020(0.1f);
+      float3 clip_lms = renodx::color::lms::from::BT2020(100.f);
+      tonemapped_lms = psycho_ReinhardPiecewise(untonemapped_lms, peak_lms, mid_gray_lms);
+
+      float untonemapped_yf = renodx::color::yf::from::LMS(untonemapped_lms);
+      float tonemapped_yf = renodx::color::yf::from::LMS(tonemapped_lms);
+      tonemapped_lms *= renodx::math::DivideSafe(untonemapped_yf, tonemapped_yf, 1.f);
+
+      // Apply LMS luminance and purity grading.
+      float3 desired_background_state_lms = renodx::color::lms::from::AP1(0.1f);  // output midgray from tonemap was 0.1 in AP1
+      float output_mid_gray = renodx::color::yf::from::LMS(desired_background_state_lms);
+      tonemapped_lms = ApplyLuminanceGradingLMS(tonemapped_lms,
                                                 RENODX_TONE_MAP_EXPOSURE,
                                                 RENODX_TONE_MAP_HIGHLIGHTS,
                                                 RENODX_TONE_MAP_SHADOWS,
                                                 RENODX_TONE_MAP_CONTRAST,
                                                 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
                                                 output_mid_gray);
-    untonemapped_lms = ApplyPurityGradingLMS(untonemapped_lms,
+      tonemapped_lms = ApplyPurityGradingLMS(tonemapped_lms,
                                              RENODX_TONE_MAP_SATURATION,
                                              -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
                                              RENODX_TONE_MAP_DECHROMA,
                                              desired_background_state_lms);
-
-    float3 tonemapped_lms;
-    if (RENODX_TONE_MAP_TYPE == 2.f) {
-      float3 peak_lms = renodx::color::lms::from::BT2020(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-      float3 mid_gray_lms = renodx::color::lms::from::BT2020(0.1f);
-      float3 clip_lms = renodx::color::lms::from::BT2020(100.f);
-      tonemapped_lms = psycho_ReinhardPiecewise(untonemapped_lms, peak_lms, mid_gray_lms);
-    } else {
-      tonemapped_lms = untonemapped_lms;
     }
 
-    float3 tonemapped_bt2020 = renodx::color::bt2020::from::LMS(tonemapped_lms);
+    float3 tonemapped_bt2020 = max(0, renodx::color::bt2020::from::LMS(tonemapped_lms));
 
-    output_pq = renodx::color::pq::EncodeSafe(tonemapped_bt2020, RENODX_DIFFUSE_WHITE_NITS);
+    float max_channel = renodx::math::Max(tonemapped_bt2020);
+    float new_max = renodx::tonemap::ReinhardPiecewiseExtended(max_channel, 100.f, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.1f);
+    float scale = renodx::math::DivideSafe(new_max, max_channel, 1.f);
+    float3 displaymapped_bt2020 = tonemapped_bt2020 * scale;
+
+    output_pq = renodx::color::pq::EncodeSafe(displaymapped_bt2020, RENODX_DIFFUSE_WHITE_NITS);
   }
   r0.rgb = output_pq;
 #endif
