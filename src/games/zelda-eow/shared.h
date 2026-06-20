@@ -53,6 +53,8 @@ struct ShaderInjectData {
   float custom_bloom;
   float custom_dof;
   float lut_strength;
+
+  float custom_vignette;
 };
 
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
@@ -80,6 +82,7 @@ struct ShaderInjectData {
 #define CUSTOM_CONE_RESPONSE            shader_injection.custom_cone_response
 #define CUSTOM_BLOOM                    shader_injection.custom_bloom
 #define CUSTOM_DOF                      shader_injection.custom_dof
+#define CUSTOM_VIGNETTE                 shader_injection.custom_vignette
 #define RENODX_INTERMEDIATE_SCALING     (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS)
 // #define RENODX_INTERMEDIATE_COLOR_SPACE        color::convert::COLOR_SPACE_BT709
 #define RENODX_SWAP_CHAIN_DECODING         0.f  // 0 = linear, 1 = srgb, 2 = 2.2, 3 = 2.4, 4 = pq
