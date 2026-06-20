@@ -7,44 +7,44 @@ static const float ZELDA_EOW_HEJL_DAWSON_BLACK_OFFSET = 0.004f;
 static const float ZELDA_EOW_TONE_MAP_MID_GRAY = 0.18f;
 //static const float CUSTOM_CONE_RESPONSE = 1.2f;
 
-float3 HejlDawsonCustom(float3 color, vec2 param, bool extended = false) {
-  float scale = renodx::math::Select(extended, renodx::tonemap::neutwo::ComputeMaxChannelScale(color), 1.f);
-  float x = param.x;
-  float y = param.y;
-  color *= scale;
-  color = max(0, color - ZELDA_EOW_HEJL_DAWSON_BLACK_OFFSET);
-  float3 a = fma(color, x, 1.7);
-  float3 b = fma(color, x, 0.5);
-  float3 c = fma(color, a, y);
-  float3 d = color * b / c;
+// float3 HejlDawsonCustom(float3 color, vec2 param, bool extended = false) {
+//   float scale = renodx::math::Select(extended, renodx::tonemap::neutwo::ComputeMaxChannelScale(color), 1.f);
+//   float x = param.x;
+//   float y = param.y;
+//   color *= scale;
+//   color = max(0, color - ZELDA_EOW_HEJL_DAWSON_BLACK_OFFSET);
+//   float3 a = fma(color, x, 1.7);
+//   float3 b = fma(color, x, 0.5);
+//   float3 c = fma(color, a, y);
+//   float3 d = color * b / c;
 
-  return pow(abs(d), 2.2f) / scale;
-}
+//   return pow(abs(d), 2.2f) / scale;
+// }
 
-float3 HejlDawsonCustom(float3 color, float x, float y, bool extended = false) {
-  return HejlDawsonCustom(color, vec2(x,y), extended);
-}
+// float3 HejlDawsonCustom(float3 color, float x, float y, bool extended = false) {
+//   return HejlDawsonCustom(color, vec2(x,y), extended);
+// }
 
-float HejlDawsonCustom(float color, float x, float y, bool extended = false) {
-  return HejlDawsonCustom(color, vec2(x,y), extended);
-}
+// float HejlDawsonCustom(float color, float x, float y, bool extended = false) {
+//   return HejlDawsonCustom(color, vec2(x,y), extended);
+// }
 
-float HejlDawsonCustom(float color, vec2 param, bool extended = false) {
-  float scale = renodx::math::Select(extended, renodx::tonemap::neutwo::ComputeMaxChannelScale(color), 1.f);
-  float x = param.x;
-  float y = param.y;
-  color *= scale;
-  color = max(0, color - 0.004f);
-  float a = fma(color, x, 1.7);
-  float b = fma(color, x, 0.5);
-  float c = fma(color, a, y);
-  float d = color * b / c;
+// float HejlDawsonCustom(float color, vec2 param, bool extended = false) {
+//   float scale = renodx::math::Select(extended, renodx::tonemap::neutwo::ComputeMaxChannelScale(color), 1.f);
+//   float x = param.x;
+//   float y = param.y;
+//   color *= scale;
+//   color = max(0, color - 0.004f);
+//   float a = fma(color, x, 1.7);
+//   float b = fma(color, x, 0.5);
+//   float c = fma(color, a, y);
+//   float d = color * b / c;
 
-  return pow(abs(d), 2.2f) / scale;
-}
+//   return pow(abs(d), 2.2f) / scale;
+// }
 
 float3 ColorCorrect(float3 colour, float3 reference) {
-  float3 corrected = renodx::color::correct::ChrominanceOKLab(colour, reference, RENODX_HUE_SHIFT);
+  float3 corrected = renodx::color::correct::ChrominanceOKLab(colour, reference, RENODX_HUE_SHIFT * 0.7f);
   return renodx::color::correct::HueOKLab(corrected, reference, RENODX_HUE_SHIFT);
 }
 
