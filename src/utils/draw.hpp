@@ -9,6 +9,7 @@
 
 #include <d3d11.h>
 #include <d3d12.h>
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +19,7 @@
 #include <span>
 #include <utility>
 
+#include "./device.hpp"
 #include "./mutex.hpp"
 #include "./render.hpp"
 #include "./resource.hpp"
@@ -49,6 +51,10 @@ struct SwapchainProxyPass {
     auto* cmd_list = queue->get_immediate_command_list();
     auto current_back_buffer = swapchain->get_current_back_buffer();
     auto* device = swapchain->get_device();
+    const auto device_api = device->get_api();
+    const bool is_vulkan = device_api == reshade::api::device_api::vulkan;
+    const bool uses_explicit_resource_barriers = device_api == reshade::api::device_api::d3d12
+                                                 || device_api == reshade::api::device_api::vulkan;
 
 #ifdef DEBUG_LEVEL_2
     {
@@ -155,7 +161,38 @@ struct SwapchainProxyPass {
         reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 #endif
+      if (uses_explicit_resource_barriers) {
+        static constexpr std::array PRE_COPY_OLD_STATES = {
+            reshade::api::resource_usage::present
+                | reshade::api::resource_usage::render_target
+                | reshade::api::resource_usage::general,
+            reshade::api::resource_usage::general
+                | reshade::api::resource_usage::shader_resource};
+        static constexpr std::array PRE_COPY_NEW_STATES = {
+            reshade::api::resource_usage::copy_source,
+            reshade::api::resource_usage::copy_dest};
+        const std::array pre_copy_resources = {current_back_buffer, swapchain_clone};
+        cmd_list->barrier(
+            static_cast<uint32_t>(pre_copy_resources.size()),
+            pre_copy_resources.data(),
+            PRE_COPY_OLD_STATES.data(),
+            PRE_COPY_NEW_STATES.data());
+      }
       cmd_list->copy_resource(current_back_buffer, swapchain_clone);
+      if (uses_explicit_resource_barriers) {
+        static constexpr std::array POST_COPY_OLD_STATES = {
+            reshade::api::resource_usage::copy_dest,
+            reshade::api::resource_usage::copy_source};
+        static constexpr std::array POST_COPY_NEW_STATES = {
+            reshade::api::resource_usage::shader_resource,
+            reshade::api::resource_usage::render_target};
+        const std::array post_copy_resources = {swapchain_clone, current_back_buffer};
+        cmd_list->barrier(
+            static_cast<uint32_t>(post_copy_resources.size()),
+            post_copy_resources.data(),
+            POST_COPY_OLD_STATES.data(),
+            POST_COPY_NEW_STATES.data());
+      }
 #ifdef DEBUG_LEVEL_2
       reshade::log::message(reshade::log::level::info, "utils::draw::SwapchainProxyPass::Render(copy_resource end)");
 #endif
@@ -211,6 +248,7 @@ struct SwapchainProxyPass {
     }
 #endif
     pass.revert_state_after_render = revert_state;
+    pass.render_target_load_op = reshade::api::render_pass_load_op::discard;
     pass.pipeline_subobjects.vertex_shader = vertex_shader;
     pass.pipeline_subobjects.pixel_shader = pixel_shader;
     pass.pipeline_subobjects.compute_shader = {};
@@ -220,16 +258,16 @@ struct SwapchainProxyPass {
     }
     pass.push_constants.clear();
 
+    const bool uses_root_constants = device_api == reshade::api::device_api::d3d12
+                                     || device_api == reshade::api::device_api::vulkan;
     if (shader_injection_size != 0u) {
-      const bool is_modern_api = device->get_api() == reshade::api::device_api::d3d12
-                                 || device->get_api() == reshade::api::device_api::vulkan;
       uint8_t register_index;
       if (expected_constant_buffer_index == -1) {
-        register_index = is_modern_api ? 0 : 13;
+        register_index = uses_root_constants ? 0 : 13;
       } else {
         register_index = static_cast<uint8_t>(expected_constant_buffer_index);
       }
-      uint8_t register_space = is_modern_api
+      uint8_t register_space = uses_root_constants
                                    ? static_cast<uint8_t>(expected_constant_buffer_space)
                                    : 0;
       const renodx::utils::render::ConstantBuffersSlots slot = {
@@ -239,7 +277,7 @@ struct SwapchainProxyPass {
       pass.push_constants[slot] = std::span<const float>(shader_injection, shader_injection_size);
     }
 
-    if (auto_device_flush && device->get_api() != reshade::api::device_api::d3d12) {
+    if (auto_device_flush && !uses_root_constants) {
       pass.flush_after_render = true;
     }
 
@@ -248,6 +286,19 @@ struct SwapchainProxyPass {
       reshade::log::message(reshade::log::level::warning, "utils::draw::SwapchainProxyPass::Render(RenderPass::Render failed)");
 #endif
       return false;
+    }
+
+    if (uses_explicit_resource_barriers) {
+      static constexpr std::array FINAL_OLD_STATES = {
+          reshade::api::resource_usage::render_target};
+      static constexpr std::array FINAL_NEW_STATES = {
+          reshade::api::resource_usage::present};
+      const std::array final_resources = {current_back_buffer};
+      cmd_list->barrier(
+          static_cast<uint32_t>(final_resources.size()),
+          final_resources.data(),
+          FINAL_OLD_STATES.data(),
+          FINAL_NEW_STATES.data());
     }
 
     return true;
