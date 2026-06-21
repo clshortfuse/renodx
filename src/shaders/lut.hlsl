@@ -214,10 +214,10 @@ float3 CenterTexel(float3 color, float size) {
                                                                                             \
   SAMPLE_TEXTURE_TETRAHEDRAL_UINT_SIZE_FUNCTION_GENERATOR(TextureType)                      \
   SAMPLE_TEXTURE_TETRAHEDRAL_SIZE_FUNCTION_GENERATOR(TextureType, int)                      \
-  SAMPLE_TEXTURE_TETRAHEDRAL_SIZE_FUNCTION_GENERATOR(TextureType, float)
+  SAMPLE_TEXTURE_TETRAHEDRAL_FLOAT_SIZE_FUNCTION_GENERATOR(TextureType)
 
 #define SAMPLE_TEXTURE_TETRAHEDRAL_SIZE_FUNCTION_GENERATOR(TextureType, SizeType) \
-  float3 SampleTetrahedral(TextureType lut, float3 color, SizeType size = 0) {    \
+  float3 SampleTetrahedral(TextureType lut, float3 color, SizeType size) {        \
     /* Removed by compiler if specified */                                        \
     if (size == 0) {                                                              \
       GetLutSize(lut, size);                                                      \
@@ -225,8 +225,17 @@ float3 CenterTexel(float3 color, float size) {
     return SampleTetrahedral(lut, color, (int)size, (float)size);                 \
   }
 
+#define SAMPLE_TEXTURE_TETRAHEDRAL_FLOAT_SIZE_FUNCTION_GENERATOR(TextureType)    \
+  float3 SampleTetrahedral(TextureType lut, float3 color, float size = 0.f) {    \
+    /* Removed by compiler if specified */                                       \
+    if (size == 0.f) {                                                           \
+      GetLutSize(lut, size);                                                     \
+    }                                                                            \
+    return SampleTetrahedral(lut, color, (int)size, size);                       \
+  }
+
 #define SAMPLE_TEXTURE_TETRAHEDRAL_UINT_SIZE_FUNCTION_GENERATOR(TextureType) \
-  float3 SampleTetrahedral(TextureType lut, float3 color, uint size = 0) {   \
+  float3 SampleTetrahedral(TextureType lut, float3 color, uint size) {       \
     /* Removed by compiler if specified */                                   \
     if (size == 0) {                                                         \
       size = GetLutSize(lut);                                                \
@@ -363,6 +372,7 @@ SAMPLE_COLOR_2D_FUNCTION_GENERATOR(Texture2D<float3>);
 #undef LOAD_TEXEL_3D_FUNCTION_GENERATOR
 #undef SAMPLE_TEXTURE_TETRAHEDRAL_UINT_SIZE_FUNCTION_GENERATOR
 #undef SAMPLE_TEXTURE_TETRAHEDRAL_SIZE_FUNCTION_GENERATOR
+#undef SAMPLE_TEXTURE_TETRAHEDRAL_FLOAT_SIZE_FUNCTION_GENERATOR
 #undef SAMPLE_TEXTURE_TETRAHEDRAL_FUNCTION_GENERATOR
 #undef SAMPLE_TEXTURE_3D_FUNCTION_GENERATOR
 #undef SAMPLE_TEXTURE_2D_PRECOMPUTED_FUNCTION_GENERATOR
