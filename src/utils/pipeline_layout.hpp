@@ -46,6 +46,7 @@ struct PipelineLayoutData {
   reshade::api::pipeline_layout injection_layout = {0u};
   int32_t injection_index = -1;
   int32_t injection_register_index = -1;
+  int32_t injection_constant_buffer_offset = 0;
   cross_addon::unordered_map<DescriptorBindingKey, DescriptorPushLocation, DescriptorBindingKeyHash> descriptor_push_locations;
   bool failed_injection = false;
 };

@@ -6,10 +6,10 @@
   Creates a local `bin` folder and downloads commonly required shader tool binaries
   (example: the DirectX Shader Compiler package with dxc.exe/dxcompiler.dll,
   and Slang) into it if they're missing.
-  Checks for the Windows 10/11 SDK and can optionally install it via winget.
+  Checks for the Windows 10/11 SDK and Vulkan SDK and can optionally install them via winget.
 
 .PARAMETER Install
-    When specified, the script will perform installs (including attempting to install the Windows 10/11 SDK via winget when necessary).
+  When specified, the script will perform installs (including attempting to install the Windows 10/11 SDK and Vulkan SDK via winget when necessary).
 
 .PARAMETER Update
     Re-runs version-aware install checks and updates managed tools when the configured package is newer than the installed one.
@@ -230,6 +230,50 @@ function Get-WindowsSdkVersionText {
     Select-Object -First 1 -ExpandProperty Name
 
   return $version
+}
+
+function Get-VulkanSdkInfo {
+  function Test-VulkanSdkRoot {
+    param([string]$Path)
+
+    if (-not $Path) { return $false }
+
+    $validator = Join-Path $Path 'Bin\glslangValidator.exe'
+    $vulkanHeader = Join-Path $Path 'Include\vulkan\vulkan.h'
+    $vulkanLib = Join-Path $Path 'Lib\vulkan-1.lib'
+
+    return ((Test-Path $validator) -and (Test-Path $vulkanHeader) -and (Test-Path $vulkanLib))
+  }
+
+  $candidates = @()
+
+  if ($env:VULKAN_SDK) {
+    $candidates += $env:VULKAN_SDK
+  }
+
+  $vulkanRoot = Join-Path $env:SystemDrive 'VulkanSDK'
+  if (Test-Path $vulkanRoot) {
+    $candidates += @(Get-ChildItem -Path $vulkanRoot -Directory -ErrorAction SilentlyContinue |
+      Sort-Object Name -Descending |
+      ForEach-Object { $_.FullName })
+  }
+
+  $pathCommand = Get-Command glslangValidator.exe -ErrorAction SilentlyContinue
+  if ($pathCommand) {
+    $binPath = Split-Path -Parent $pathCommand.Source
+    $candidates += (Split-Path -Parent $binPath)
+  }
+
+  foreach ($candidate in @($candidates | Where-Object { $_ } | Select-Object -Unique)) {
+    if (Test-VulkanSdkRoot -Path $candidate) {
+      return [pscustomobject]@{
+        Path    = $candidate
+        Version = [System.IO.Path]::GetFileName($candidate)
+      }
+    }
+  }
+
+  return $null
 }
 
 function Get-ToolActionDetails {
@@ -670,6 +714,60 @@ function Install-WindowsSdk {
   }
 }
 
+function Test-VulkanSdk {
+  if (Get-VulkanSdkInfo) {
+    return $true
+  }
+
+  if ($isDryRun) { return $false }
+
+  Write-Warn 'Vulkan SDK not found.'
+  if ($Install) {
+    if (Install-VulkanSdk -DryRun:$isDryRun) {
+      return $true
+    }
+  } else {
+    Write-Warn 'Vulkan SDK installation is only attempted with -Install.'
+  }
+
+  return $false
+}
+
+function Install-VulkanSdk {
+  param(
+    [bool]$DryRun = $true
+  )
+
+  if ($DryRun) { Write-Info 'Would attempt to install Vulkan SDK via winget (dry-run).' ; return }
+
+  if (Get-Command winget -ErrorAction SilentlyContinue) {
+    Write-Info 'Attempting to install Vulkan SDK via winget...'
+    try {
+      & winget install --id KhronosGroup.VulkanSDK -e --silent --force --accept-package-agreements --accept-source-agreements
+      $exitCode = $LASTEXITCODE
+      if ($exitCode -ne 0) {
+        Write-Warn "winget install exited with code $exitCode."
+        return $false
+      }
+
+      $installedInfo = Get-VulkanSdkInfo
+      if ($installedInfo) {
+        Write-Info "Vulkan SDK installed: $($installedInfo.Version) ($($installedInfo.Path))"
+        return $true
+      }
+
+      Write-Warn 'winget install returned, but a complete Vulkan SDK root was not found. Open a new terminal and re-run this script; if it still fails, repair or uninstall old Vulkan SDK entries from Apps & features and try again.'
+      return $false
+    } catch {
+      Write-Warn "winget install failed: $($_.Exception.Message)"
+      return $false
+    }
+  } else {
+    Write-Warn 'winget not available. Please install the Vulkan SDK manually or enable winget.'
+    return $false
+  }
+}
+
 ### Script root: minimal orchestration
 # Install or report tools
 # Install or report tools
@@ -677,6 +775,8 @@ Import-HelperModule
 Initialize-BinDir
 # Ensure Windows SDK / fxc.exe (needed early for fxc.exe copy)
 [void](Test-WindowsSdk)
+# Ensure Vulkan SDK / glslangValidator.exe (needed by Vulkan shader builds)
+[void](Test-VulkanSdk)
 
 function Get-MissingCoreToolFiles {
   param(
@@ -693,8 +793,10 @@ function Get-MissingCoreToolFiles {
 
 $toolActionCount = Install-Tools
 $missingCoreFiles = @(Get-MissingCoreToolFiles)
-$setupComplete = ($missingCoreFiles.Count -eq 0)
 $sdkVersion = Get-WindowsSdkVersionText
+$vulkanSdkInfo = Get-VulkanSdkInfo
+$vulkanSdkMissing = ($null -eq $vulkanSdkInfo)
+$setupComplete = (($missingCoreFiles.Count -eq 0) -and (-not $vulkanSdkMissing))
 $needsFxcCopy = ($missingCoreFiles -contains 'fxc.exe')
 
 if ($isDryRun) {
@@ -702,15 +804,17 @@ if ($isDryRun) {
     $toolChangeLabel = if ($toolActionCount -eq 1) { '1 managed tool change is available.' } else { "$toolActionCount managed tool changes are available." }
     if ($needsFxcCopy) {
       Write-Info "Preview mode. $toolChangeLabel fxc.exe also needs to be copied into ${binDir}."
-    } elseif (-not $sdkVersion) {
-      Write-Info "Preview mode. $toolChangeLabel Windows SDK is also missing."
+    } elseif ((-not $sdkVersion) -or $vulkanSdkMissing) {
+      $missingSdkLabel = if ((-not $sdkVersion) -and $vulkanSdkMissing) { 'Windows SDK and Vulkan SDK are also missing' } elseif (-not $sdkVersion) { 'Windows SDK is also missing' } else { 'Vulkan SDK is also missing' }
+      Write-Info "Preview mode. $toolChangeLabel $missingSdkLabel."
     } else {
       Write-Info "Preview mode. $toolChangeLabel"
     }
   } elseif ($needsFxcCopy) {
     Write-Info "Preview mode. Managed tools already match the configured versions; fxc.exe still needs to be copied into ${binDir}."
-  } elseif (-not $sdkVersion) {
-    Write-Info "Preview mode. Managed tools already match the configured versions; Windows SDK is missing."
+  } elseif ((-not $sdkVersion) -or $vulkanSdkMissing) {
+    $missingSdkLabel = if ((-not $sdkVersion) -and $vulkanSdkMissing) { 'Windows SDK and Vulkan SDK are missing' } elseif (-not $sdkVersion) { 'Windows SDK is missing' } else { 'Vulkan SDK is missing' }
+    Write-Info "Preview mode. Managed tools already match the configured versions; $missingSdkLabel."
   } else {
     Write-Info "Preview mode. Managed tools already match the configured versions."
   }
@@ -725,18 +829,24 @@ if ($isDryRun) {
     Write-Info "Windows SDK: missing"
   }
 
+  if ($vulkanSdkInfo) {
+    Write-Info "Vulkan SDK: $($vulkanSdkInfo.Version) ($($vulkanSdkInfo.Path))"
+  } else {
+    Write-Info "Vulkan SDK: missing"
+  }
+
   foreach ($name in @('dxc', 'slang', '3dmigoto')) {
     Write-Info (Get-ToolStatusLine -Name $name)
   }
 
-  if ($toolActionCount -gt 0 -and -not $sdkVersion) {
-    Write-Info "Next: use -Update to apply the managed tool changes above, or -Install to also attempt Windows SDK installation."
+  if ($toolActionCount -gt 0 -and ((-not $sdkVersion) -or $vulkanSdkMissing)) {
+    Write-Info "Next: use -Update to apply the managed tool changes above, or -Install to also attempt missing SDK installation."
   } elseif ($toolActionCount -gt 0 -and $needsFxcCopy) {
     Write-Info "Next: use -Update or -Install to apply the managed tool changes above and copy fxc.exe from the installed Windows SDK."
   } elseif ($toolActionCount -gt 0) {
     Write-Info "Next: use -Update to apply the managed tool changes above."
-  } elseif (-not $sdkVersion) {
-    Write-Info "Next: use -Install to attempt Windows SDK installation."
+  } elseif ((-not $sdkVersion) -or $vulkanSdkMissing) {
+    Write-Info "Next: use -Install to attempt missing SDK installation."
   } elseif ($needsFxcCopy) {
     Write-Info "Next: use -Update or -Install to copy fxc.exe from the installed Windows SDK into ${binDir}."
   } else {
@@ -745,6 +855,11 @@ if ($isDryRun) {
 } elseif ($setupComplete -and $toolActionCount -eq 0) {
   Write-Info "No tool file changes needed."
 } elseif (-not $setupComplete -and -not $isDryRun) {
-  Write-Warn "Missing core tool files in ${binDir}: $($missingCoreFiles -join ', ')"
+  if ($missingCoreFiles.Count -gt 0) {
+    Write-Warn "Missing core tool files in ${binDir}: $($missingCoreFiles -join ', ')"
+  }
+  if ($vulkanSdkMissing) {
+    Write-Warn "Vulkan SDK is missing. Install it manually or re-run with -Install, then open a new terminal."
+  }
   Write-Warn "Dev environment setup incomplete. The script could not provide all required files; review the warnings above for the failing tool or download step."
 }
