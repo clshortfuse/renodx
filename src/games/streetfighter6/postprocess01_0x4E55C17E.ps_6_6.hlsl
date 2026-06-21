@@ -34,6 +34,14 @@ float4 main(
     linear float4 Kerare: Kerare,
     linear float Exposure: Exposure) : SV_Target {
   float4 SV_Target;
+
+  float custom_linearStart = linearStart;
+  float custom_maxNit = maxNit;
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    custom_linearStart = 100.f;
+    custom_maxNit = 100.f;
+  }
+
   float4 _18 = HDRImage.Load(int3((uint)(uint(SV_Position.x)), (uint)(uint(SV_Position.y)), 0));
   float _24 = Kerare.x / Kerare.w;
   float _25 = Kerare.y / Kerare.w;
@@ -44,8 +52,12 @@ float4 main(
   float _43 = (_18.x * Exposure) * _41;
   float _45 = (_18.y * Exposure) * _41;
   float _47 = (_18.z * Exposure) * _41;
-  float3 untonemapped = float3(_43, _45, _47);
-  
+
+  float3 untonemapped = ApplyCustomGrade1(float3(_43, _45, _47));
+  _43 = untonemapped.x;
+  _45 = untonemapped.y;
+  _47 = untonemapped.z;
+
   float _150;
   float _151;
   float _152;
@@ -60,17 +72,24 @@ float4 main(
     float _75 = select((_43 >= linearBegin), 0.0f, (1.0f - ((_56 * _56) * (3.0f - (_56 * 2.0f)))));
     float _77 = select((_45 >= linearBegin), 0.0f, (1.0f - ((_62 * _62) * (3.0f - (_62 * 2.0f)))));
     float _79 = select((_47 >= linearBegin), 0.0f, (1.0f - ((_68 * _68) * (3.0f - (_68 * 2.0f)))));
-    float _85 = select((_43 < linearStart), 0.0f, 1.0f);
-    float _86 = select((_45 < linearStart), 0.0f, 1.0f);
-    float _87 = select((_47 < linearStart), 0.0f, 1.0f);
-    _150 = (((((contrast * _43) + madLinearStartContrastFactor) * ((1.0f - _85) - _75)) + (((pow(_56, toe)) * _75) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _43) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _85));
-    _151 = (((((contrast * _45) + madLinearStartContrastFactor) * ((1.0f - _86) - _77)) + (((pow(_62, toe)) * _77) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _45) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _86));
-    _152 = (((((contrast * _47) + madLinearStartContrastFactor) * ((1.0f - _87) - _79)) + (((pow(_68, toe)) * _79) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _47) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _87));
+    float _85 = select((_43 < custom_linearStart), 0.0f, 1.0f);
+    float _86 = select((_45 < custom_linearStart), 0.0f, 1.0f);
+    float _87 = select((_47 < custom_linearStart), 0.0f, 1.0f);
+    _150 = (((((contrast * _43) + madLinearStartContrastFactor) * ((1.0f - _85) - _75)) + (((pow(_56, toe)) * _75) * linearBegin)) + ((custom_maxNit - (exp2((contrastFactor * _43) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _85));
+    _151 = (((((contrast * _45) + madLinearStartContrastFactor) * ((1.0f - _86) - _77)) + (((pow(_62, toe)) * _77) * linearBegin)) + ((custom_maxNit - (exp2((contrastFactor * _45) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _86));
+    _152 = (((((contrast * _47) + madLinearStartContrastFactor) * ((1.0f - _87) - _79)) + (((pow(_68, toe)) * _79) * linearBegin)) + ((custom_maxNit - (exp2((contrastFactor * _47) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _87));
   } else {
     _150 = 1.0f;
     _151 = 1.0f;
     _152 = 1.0f;
   }
+
+  float3 tonemapped = float3(_150, _151, _152);
+  float3 new_tonemap = HDRTonemap(untonemapped, tonemapped);
+  _150 = new_tonemap.x;
+  _151 = new_tonemap.y;
+  _152 = new_tonemap.z;
+
   if (!(useDynamicRangeConversion == 0.0f)) {
     float _162 = mad(0.16500000655651093f, _152, mad(0.16500000655651093f, _151, (_150 * 0.6699999570846558f)));
     float _163 = _150 * 0.16500000655651093f;
@@ -103,12 +122,20 @@ float4 main(
     _226 = _151;
     _227 = _152;
   }
-  SV_Target.x = saturate(_225);
-  SV_Target.y = saturate(_226);
-  SV_Target.z = saturate(_227);
+  SV_Target.x = (_225);
+  SV_Target.y = (_226);
+  SV_Target.z = (_227);
   SV_Target.w = 1.0f;
 
   // untonemapped is linear
-  SV_Target.rgb = Tonemap(untonemapped, SV_Target.rgb);
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    SV_Target.rgb = ApplyCustomGrade2(SV_Target.rgb);
+    SV_Target.rgb = renodx::tonemap::neutwo::MaxChannel(SV_Target.rgb, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 100.f);
+  } else {
+    SV_Target.rgb = saturate(SV_Target.rgb);
+  }
+  if (SF6_POST_PROCESS_03 == 0.f) {
+    SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
+  }
   return SV_Target;
 }
