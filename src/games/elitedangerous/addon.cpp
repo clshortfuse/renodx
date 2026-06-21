@@ -21,41 +21,115 @@
 
 namespace {
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xDEAFF53A),  // Bloom
-    CustomShaderEntry(0xD7E646E3),  // Tonemap
-
-    CustomShaderEntry(0x2F04633E),  // Video
-};
-
 ShaderInjectData shader_injection;
+
+thread_local uint64_t g_current_uav0 = 0;
+
+#define UpgradeRTVReplaceShader(value)                                                                         \
+  {                                                                                                            \
+      value,                                                                                                   \
+      {                                                                                                        \
+          .crc32 = value,                                                                                      \
+          .code = __##value,                                                                                   \
+          .on_draw = [](auto* cmd_list) {                                                                      \
+            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                                  \
+            bool changed = false;                                                                              \
+            for (auto rtv : rtvs) {                                                                            \
+              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv) || changed; \
+            }                                                                                                  \
+            if (changed) {                                                                                     \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                             \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});          \
+            }                                                                                                  \
+            return true;                                                                                       \
+          },                                                                                                   \
+      },                                                                                                       \
+  }
+
+#define UpgradeRTVShader(value)                                                                                \
+  {                                                                                                            \
+      value,                                                                                                   \
+      {                                                                                                        \
+          .crc32 = value,                                                                                      \
+          .on_draw = [](auto* cmd_list) {                                                                      \
+            auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                                  \
+            bool changed = false;                                                                              \
+            for (auto rtv : rtvs) {                                                                            \
+              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv) || changed; \
+            }                                                                                                  \
+            if (changed) {                                                                                     \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                             \
+              renodx::mods::swapchain::RewriteRenderTargets(cmd_list, rtvs.size(), rtvs.data(), {0});          \
+            }                                                                                                  \
+            return true;                                                                                       \
+          },                                                                                                   \
+      },                                                                                                       \
+  }
+
+#define UpgradeUAVShader(value)                                                                        \
+  {                                                                                                    \
+      value,                                                                                           \
+      {                                                                                                \
+          .crc32 = value,                                                                              \
+          .on_draw = [](auto* cmd_list) {                                                              \
+            reshade::api::resource_view current_uav0 = {g_current_uav0};                               \
+            if (current_uav0.handle == 0) return true;                                                 \
+            if (renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), current_uav0)) { \
+              renodx::mods::swapchain::FlushDescriptors(cmd_list);                                     \
+            }                                                                                          \
+            return true;                                                                               \
+          },                                                                                           \
+      },                                                                                               \
+  }
+
+renodx::mods::shader::CustomShaders custom_shaders = {
+    // Upgrades
+    UpgradeRTVReplaceShader(0xD7E646E3),  // tonemap
+    UpgradeRTVReplaceShader(0x6BE69EF3),  // tonemap, no bloom
+    UpgradeRTVReplaceShader(0xEBD83636),  // tonemap, no bloom, no lut
+
+    UpgradeRTVShader(0x723CBF3F),  // AA?
+    UpgradeRTVShader(0x315EA715),  // AA?
+
+    UpgradeRTVShader(0x7561AC83),  // MLAAx2/x4
+    UpgradeRTVShader(0x44FAE038),  // MLAAx2/x4
+
+    UpgradeRTVShader(0x8A421A14),  // FXAA
+    UpgradeRTVShader(0x0B263009),  // FXAA
+
+    UpgradeUAVShader(0xF28CD45D),  // FSR1 Compute Shader
+    UpgradeUAVShader(0x5647AAC2),  // FSR1 Compute Shader
+
+    __ALL_CUSTOM_SHADERS};
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
-        .key = "toneMapType",
-        .binding = &RENODX_TONE_MAP_TYPE,
+        .key = "ToneMapType",
+        .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 3.f,
+        .default_value = 2.f,
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "ACES", "RenoDRT"},
+        .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Custom)"},
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapPeakNits",
-        .binding = &RENODX_PEAK_WHITE_NITS,
+        .key = "ToneMapPeakNits",
+        .binding = &shader_injection.peak_white_nits,
         .default_value = 1000.f,
         .can_reset = false,
         .label = "Peak Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
-        .max = 4000.f,
+        .max = 10000.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_logarithmic = true,
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapGameNits",
-        .binding = &RENODX_DIFFUSE_WHITE_NITS,
+        .key = "ToneMapGameNits",
+        .binding = &shader_injection.diffuse_white_nits,
         .default_value = 203.f,
         .label = "Game Brightness",
         .section = "Tone Mapping",
@@ -64,8 +138,8 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapUINits",
-        .binding = &RENODX_GRAPHICS_WHITE_NITS,
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.graphics_white_nits,
         .default_value = 203.f,
         .label = "UI Brightness",
         .section = "Tone Mapping",
@@ -74,135 +148,102 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
-        .key = "toneMapGammaCorrection",
-        .binding = &RENODX_GAMMA_CORRECTION,
-        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
-        .default_value = 1.f,
-        .label = "Gamma Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Emulates a 2.2 EOTF",
-    },
-    new renodx::utils::settings::Setting{
-        .key = "toneMapHueCorrection",
-        .binding = &RENODX_TONE_MAP_HUE_CORRECTION,
-        .default_value = 75.f,
-        .label = "Hue Correction",
-        .section = "Tone Mapping",
-        .tooltip = "Emulates Vanilla hue shifts.",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ToneMapScaling",
-        .binding = &RENODX_TONE_MAP_PER_CHANNEL,
+        .binding = &shader_injection.tone_map_per_channel,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
         .label = "Scaling",
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
         .labels = {"Luminance", "Per Channel"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3.f; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 1.f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeExposure",
-        .binding = &RENODX_TONE_MAP_EXPOSURE,
+        .key = "ColorGradeExposure",
+        .binding = &shader_injection.tone_map_exposure,
         .default_value = 1.f,
         .label = "Exposure",
         .section = "Color Grading",
-        .max = 10.f,
+        .max = 2.f,
         .format = "%.2f",
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
-
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeHighlights",
-        .binding = &RENODX_TONE_MAP_HIGHLIGHTS,
+        .key = "ColorGradeHighlights",
+        .binding = &shader_injection.tone_map_highlights,
         .default_value = 50.f,
         .label = "Highlights",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeShadows",
-        .binding = &RENODX_TONE_MAP_SHADOWS,
+        .key = "ColorGradeShadows",
+        .binding = &shader_injection.tone_map_shadows,
         .default_value = 50.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeContrast",
-        .binding = &RENODX_TONE_MAP_CONTRAST,
+        .key = "ColorGradeContrast",
+        .binding = &shader_injection.tone_map_contrast,
         .default_value = 50.f,
         .label = "Contrast",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeSaturation",
-        .binding = &RENODX_TONE_MAP_SATURATION,
+        .key = "ColorGradeSaturation",
+        .binding = &shader_injection.tone_map_saturation,
         .default_value = 50.f,
         .label = "Saturation",
         .section = "Color Grading",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
-        .binding = &RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
+        .binding = &shader_injection.tone_map_highlight_saturation,
         .default_value = 50.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE >= 3.f; },
-        .parse = [](float value) { return (value * -0.02f) + 1.f; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &RENODX_TONE_MAP_BLOWOUT,
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
         .default_value = 0.f,
-        .label = "Blowout",
+        .label = "Dechroma",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3.f; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "colorGradeFlare",
-        .binding = &RENODX_TONE_MAP_FLARE,
-        .default_value = 50.f,
+        .key = "ColorGradeFlare",
+        .binding = &shader_injection.tone_map_flare,
+        .default_value = 0.f,
         .label = "Flare",
         .section = "Color Grading",
         .tooltip = "Flare/Glare",
         .max = 100.f,
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE == 3.f; },
-        .parse = [](float value) { return value * 0.02f; },
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeRestorationMethod",
-        .binding = &RENODX_TONE_MAP_RESTORATION_METHOD,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "Grading Application",
-        .section = "Color Grading",
-        .tooltip = "Chooses method to apply grading for HDR.",
-        .labels = {"Luminance", "Per Channel", "Perceptual"},
-        .is_enabled = []() { return RENODX_TONE_MAP_TYPE != 0; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "colorGradeLUTStrength",
-        .binding = &CUSTOM_LUT_STRENGTH,
+        .key = "ColorGradeLUTStrength",
+        .binding = &shader_injection.custom_lut_strength,
         .default_value = 100.f,
         .label = "LUT Strength",
         .section = "Color Grading",
@@ -211,17 +252,18 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
-        .binding = &CUSTOM_BLOOM,
+        .binding = &shader_injection.custom_bloom,
         .default_value = 100.f,
         .label = "Bloom",
         .section = "Effects",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "FxGrainStrength",
-        .binding = &CUSTOM_GRAIN_STRENGTH,
-        .default_value = 50.f,
+        .binding = &shader_injection.custom_grain_strength,
+        .default_value = 0.f,
         .label = "Grain Strength",
         .section = "Effects",
         .max = 100.f,
@@ -230,41 +272,14 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
-        .section = "Color Grading Templates",
-        .group = "Templates",
+        .section = "Options",
+        .group = "button-line-0",
         .on_change = []() {
           for (auto* setting : settings) {
             if (setting->key.empty()) continue;
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
-        },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Recommended Settings",
-        .section = "Color Grading Templates",
-        .group = "Templates",
-        .tooltip = "Less black crush and by luminance tonemapper for less hue shifting",
-        .on_change = []() {
-          renodx::utils::settings::UpdateSetting("toneMapType", 3.f);
-          renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-          renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-          renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 1.f);
-          renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 75.f);
-          renodx::utils::settings::UpdateSetting("ToneMapScaling", 0.f);
-          renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-          renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-          renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-          renodx::utils::settings::UpdateSetting("colorGradeContrast", 31.f);
-          renodx::utils::settings::UpdateSetting("colorGradeSaturation", 60.f);
-          renodx::utils::settings::UpdateSetting("ColorGradeRestorationMethod", 0.f);
-          renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-          renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 45.f);
-          renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 0.f);
-          renodx::utils::settings::UpdateSetting("colorGradeFlare", 75.f);
-          renodx::utils::settings::UpdateSetting("FxBloom", 50.f);
-          renodx::utils::settings::UpdateSetting("FxGrainStrength", 50.f);
         },
     },
     new renodx::utils::settings::Setting{
@@ -294,7 +309,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-1",
         .tint = 0x2B3137,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://github.com/", "clshortfuse/renodx/");
+          renodx::utils::platform::LaunchURL("https://github.com/", "clshortfuse/renodx");
         },
     },
     new renodx::utils::settings::Setting{
@@ -304,7 +319,17 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0xFF5A16,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://ko-fi.com/", "musaqh/");
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/", "musaqh");
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "ShortFuse's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0xFF5A16,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/", "shortfuse");
         },
     },
     new renodx::utils::settings::Setting{
@@ -313,23 +338,25 @@ renodx::utils::settings::Settings settings = {
         .section = "About",
     },
 };
-
 void OnPresetOff() {
-  renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("toneMapHueCorrection", 0.f);
-  renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
-  renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeContrast", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
-  renodx::utils::settings::UpdateSetting("colorGradeBlowout", 0.f);
-  renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
-  renodx::utils::settings::UpdateSetting("FxBloom", 100.f);
-  renodx::utils::settings::UpdateSetting("FxGrainStrength", 0.f);
+  renodx::utils::settings::UpdateSettings({
+      {"ToneMapType", 0.f},
+      {"ToneMapPeakNits", 203.f},
+      {"ToneMapGameNits", 203.f},
+      {"ToneMapUINits", 203.f},
+      {"ToneMapScaling", 0.f},
+      {"ColorGradeExposure", 1.f},
+      {"ColorGradeHighlights", 50.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeContrast", 50.f},
+      {"ColorGradeSaturation", 50.f},
+      {"ColorGradeHighlightSaturation", 50.f},
+      {"ColorGradeDechroma", 0.f},
+      {"ColorGradeFlare", 0.f},
+      {"ColorGradeLUTStrength", 100.f},
+      {"FxBloom", 100.f},
+      {"FxGrainStrength", 0.f},
+  });
 }
 
 bool fired_on_init_swapchain = false;
@@ -344,6 +371,25 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
+bool initialized = false;
+
+void OnPushDescriptors(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    uint32_t layout_param,
+    const reshade::api::descriptor_table_update& update) {
+  if (update.count == 0u) return;
+  if (update.type != reshade::api::descriptor_type::texture_unordered_access_view) return;
+
+  for (uint32_t i = 0u; i < update.count; i++) {
+    if ((update.binding + i) != 0u) continue;
+
+    g_current_uav0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[i].handle;
+    return;
+  }
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
@@ -354,63 +400,45 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
-      renodx::mods::shader::expected_constant_buffer_index = 13;
-      renodx::mods::shader::force_pipeline_cloning = true;
+      if (!initialized) {
+        renodx::mods::shader::expected_constant_buffer_index = 13;
+        renodx::mods::shader::force_pipeline_cloning = true;
 
-      // swapchain proxy
-      renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::mods::swapchain::expected_constant_buffer_index = 13;
-      renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
-      renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
+        // Swapchain Proxy
+        renodx::mods::swapchain::SetUseHDR10();
+        renodx::mods::swapchain::use_resource_cloning = true;
+        renodx::mods::swapchain::expected_constant_buffer_index = 13;
+        renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
+        renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
 
-      // film grain
-      renodx::utils::random::binds.push_back(&shader_injection.custom_random);
-
-#if 1  // NOLINT main textures
-      for (auto index : {3, 4}) {
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        // On Demand Upgrades
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r8g8b8a8_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,
-            .index = index,
+            .ignore_size = true,
+            .use_resource_view_cloning = true,
+            .use_resource_view_hot_swap = true,
         });
-      }
-#endif
 
-#if 0  
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-        //   .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-      });
-#endif
-#if 0  // NOLINT Seemingly unused (they might be used for copies of the scene buffer used as UI background)
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm_srgb,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::b8g8r8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::b8g8r8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::b8g8r8a8_unorm_srgb,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-#endif
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_typeless,
+            .new_format = reshade::api::format::r16g16b16a16_float,
+            .ignore_size = true,
+            .use_resource_view_cloning = true,
+            .use_resource_view_hot_swap = true,
+            .usage_include = reshade::api::resource_usage::unordered_access,
+        });
+
+        initialized = true;
+      }
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::register_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
 
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
       reshade::unregister_addon(h_module);
       break;
   }
@@ -418,7 +446,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
-  renodx::utils::random::Use(fdw_reason);
+  renodx::utils::random::Use(fdw_reason, {&shader_injection.custom_random});
 
   return TRUE;
 }

@@ -297,27 +297,26 @@ float4 main(
   float _517 = _503 / _504;
   float _519 = 1.0f / (((((_506 + _507) * _505) + _510) / (((_506 + _486) * _505) + _514)) - _517);
 
-  float mid_gray = 0.18f;
-  {
-    float _523 = 0.18f;
-    float _524 = 0.18f;
-    float _525 = 0.18f;
-    float _526 = _523 * _485;
-    float _527 = _524 * _485;
-    float _528 = _525 * _485;
-    // Replace saturate with max
-    float _556 = max(0.f, (((((_526 + _507) * _523) + _510) / (((_526 + _486) * _523) + _514)) - _517) * _519);
-    float _557 = max(0.f, (((((_527 + _507) * _524) + _510) / (((_527 + _486) * _524) + _514)) - _517) * _519);
-    float _558 = max(0.f, (((((_528 + _507) * _525) + _510) / (((_528 + _486) * _525) + _514)) - _517) * _519);
-
-    mid_gray = renodx::color::y::from::BT709(float3(_556, _557, _558));
-  }
-
   float _523 = max(0.0f, (min(((lerp(cb12_space1_058x, 1.0f, _441)) * (_398 + select(_369, (((cb5_014w * _375) - _398) * _409), ((_375 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _524 = max(0.0f, (min(((lerp(cb12_space1_058y, 1.0f, _441)) * (_399 + select(_369, (((cb5_014w * _376) - _399) * _409), ((_376 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
   float _525 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _441)) * (_400 + select(_369, (((cb5_014w * _377) - _400) * _409), ((_377 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
 
-  float3 untonemapped = float3(_523, _524, _525) * mid_gray / 0.18f;
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    GTAVTonemapConfig tonemap_config;
+    tonemap_config.a = _485;
+    tonemap_config.b = _486;
+    tonemap_config.c_times_b = _507;
+    tonemap_config.d_times_e = _510;
+    tonemap_config.d_times_f = _514;
+    tonemap_config.e_over_f = _517;
+    tonemap_config.white_scale = _519;
+    tonemap_config.saturation = cb12_space1_067x;
+    tonemap_config.grade_a = float3(cb12_space1_066x, cb12_space1_066y, cb12_space1_066z);
+    tonemap_config.grade_b = float3(cb12_space1_065x, cb12_space1_065y, cb12_space1_065z);
+    tonemap_config.grade_luma_max = cb12_space1_066w;
+    tonemap_config.blend_range = cb12_space1_065w;
+    return GenerateGTAVOutput(float3(_523, _524, _525), TEXCOORD.xy, SV_Position.xy, tonemap_config);
+  }
 
   float _526 = _523 * _485;
   float _527 = _524 * _485;
@@ -328,7 +327,6 @@ float4 main(
   float _557 = max(0.f, (((((_527 + _507) * _524) + _510) / (((_527 + _486) * _524) + _514)) - _517) * _519);
   float _558 = max(0.f, (((((_528 + _507) * _525) + _510) / (((_528 + _486) * _525) + _514)) - _517) * _519);
 
-  ApplyPerChannelCorrection(untonemapped, _556, _557, _558);
 
   float _559 = dot(float3(_556, _557, _558), float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
   float _568 = (cb12_space1_067x * (_556 - _559)) + _559;
@@ -340,14 +338,6 @@ float4 main(
   float _593 = (lerp(cb12_space1_066z, cb12_space1_065z, _574)) * _570;
   float _599 = saturate(((_559 + -1.0f) + cb12_space1_065w) / max(0.009999999776482582f, cb12_space1_065w));
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    return CustomToneMap(
-        untonemapped,
-        float3(_591, _592, _593),
-        float3(_568, _569, _570),
-        _599,
-        TEXCOORD.xy);
-  }
   float _644 = (1.0f - (((sin((cb12_space1_063w + TEXCOORD.y) * cb12_space1_063y) * 0.5f) + 0.5f) * cb12_space1_063x)) - (((sin(((cb12_space1_063w * 0.5f) + TEXCOORD.y) * cb12_space1_063z) * 0.5f) + 0.5f) * cb12_space1_063x);
   float4 _660 = t17_space1.Sample(s8_space1, float2(frac(((TEXCOORD.x * 1.600000023841858f) * cb12_space1_015w) + cb12_space1_015x), frac(((TEXCOORD.y * 0.8999999761581421f) * cb12_space1_015w) + cb12_space1_015y)));
   float _664 = (_660.w + -0.5f) * cb12_space1_015z;
