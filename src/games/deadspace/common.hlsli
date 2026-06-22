@@ -1,0 +1,5 @@
+#ifndef DEADSPACE_COMMON_HLSLI
+#define DEADSPACE_COMMON_HLSLI
+#include "./shared.h"
+
+#endif  // DEADSPACE_COMMON_HLSLI
