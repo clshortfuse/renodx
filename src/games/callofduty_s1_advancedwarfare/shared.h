@@ -1,5 +1,5 @@
-#ifndef SRC_SKYRIMSE_SHARED_H_
-#define SRC_SKYRIMSE_SHARED_H_
+#ifndef SRC_TEMPLATE_SHARED_H_
+#define SRC_TEMPLATE_SHARED_H_
 
 // #define RENODX_PEAK_WHITE_NITS                 1000.f
 // #define RENODX_DIFFUSE_WHITE_NITS              renodx::color::bt2408::REFERENCE_WHITE
@@ -62,9 +62,6 @@ struct ShaderInjectData {
   float intermediate_encoding;
   float intermediate_color_space;
   float swap_chain_decoding;
-  float fxSceneFilter;
-  float fxBloom;
-  float fxAutoExposure;
   float swap_chain_gamma_correction;
   //  float swap_chain_decoding_color_space;
   float swap_chain_custom_color_space;
@@ -73,7 +70,31 @@ struct ShaderInjectData {
   float swap_chain_clamp_color_space;
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
-  float custom_flip_uv_y;
+
+  float custom_preexposure_final;
+  // float custom_preexposure_offset_mode;
+  float custom_preexposure_offset_multiplier;
+  // float custom_preexposure_auto_mode;
+  float custom_preexposure_auto_multiplier;
+
+  // float custom_mov_type;
+  // float custom_mov_shoulderpow;
+
+  // float custom_upgradetonemap_auto;
+  float custom_upgradetonemap_saveblacks;
+
+  float custom_is_calibration;
+  float custom_bloom_multiplier;
+  float custom_adssights_multiplier;
+  float custom_is_ui;
+
+  float custom_grade_chroma;
+  float custom_grade_luma;
+
+  // float custom_compressor_gain;
+  // float custom_compressor_pow;
+
+  // float custom_
 };
 
 #ifndef __cplusplus
@@ -118,8 +139,35 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
+#define CUSTOM_PREEXPOSURE_FINAL shader_injection.custom_preexposure_final
+// #define CUSTOM_PREEXPOSURE_OFFSET_MODE       shader_injection.custom_preexposure_offset_mode
+#define CUSTOM_PREEXPOSURE_OFFSET_MULTIPLIER shader_injection.custom_preexposure_offset_multiplier
+// #define CUSTOM_PREEXPOSURE_AUTO_MODE         shader_injection.custom_preexposure_auto_mode
+#define CUSTOM_PREEXPOSURE_AUTO_MULTIPLIER shader_injection.custom_preexposure_auto_multiplier
+
+// #define CUSTOM_MOV_TYPE        shader_injection.custom_mov_type
+// #define CUSTOM_MOV_SHOULDERPOW shader_injection.custom_mov_shoulderpow
+
+// #define CUSTOM_UPGRADETONEMAP_AUTO        shader_injection.custom_upgradetonemap_auto
+#define CUSTOM_UPGRADETONEMAP_SAVEBLACKS shader_injection.custom_upgradetonemap_saveblacks
+
+#define CUSTOM_IS_CALIBRATION      shader_injection.custom_is_calibration
+#define CUSTOM_BLOOM_MULTIPLIER    shader_injection.custom_bloom_multiplier
+#define CUSTOM_ADSSIGHT_MULTIPLIER shader_injection.custom_adssights_multiplier
+#define CUSTOM_IS_UI               shader_injection.custom_is_ui
+
+#define CUSTOM_GRADE_CHROMA shader_injection.custom_grade_chroma
+#define CUSTOM_GRADE_LUMA   shader_injection.custom_grade_luma
+
+// #define CUSTOM_COMPRESSOR_GAIN     shader_injection.custom_compressor_gain
+// #define CUSTOM_COMPRESSOR_POW      shader_injection.custom_compressor_pow
+
+// #define CUSTOM_                    shader_injection.custom_
+
+// #define DEBUG_MODE
+
 #include "../../shaders/renodx.hlsl"
 
 #endif
 
- #endif  // SRC_SKYRIMSE_SHARED_H_
+#endif  // SRC_TEMPLATE_SHARED_H_

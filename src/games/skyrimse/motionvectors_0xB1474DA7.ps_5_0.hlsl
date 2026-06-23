@@ -76,8 +76,7 @@ void main(
   r2.xy = (int2)-r2.xy + (int2)r2.zw;
   r2.xy = (int2)r2.xy;
 
-  // Clamp adaptation rate — this is the key change.
-  // Original: 0.00390625 (1/256). We raise the floor so max speed is slower.
+  // Original: 0.00390625 (1/256). We lower the floor so adaptation can be slower.
   float maxAdaptRate = 0.00001f;  // TUNE: lower = slower adaptation = less flicker
   r1.zw = max(float2(maxAdaptRate, maxAdaptRate), abs(r1.zw));
 

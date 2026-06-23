@@ -104,7 +104,7 @@ void main(
   }
 
   // ===== HDR PATH (RenoDRT / ACES / None) =====
-  if (RENODX_TONE_MAP_TYPE == 1.f) {
+  if (RENODX_TONE_MAP_TYPE == renodx::draw::TONE_MAP_TYPE_RENO_DRT) {
   // Eye adaptation
   float lum = dot(float3(0.212500006, 0.715399981, 0.0720999986), r0.xyz);
   lum = max(9.99999975e-006, lum);

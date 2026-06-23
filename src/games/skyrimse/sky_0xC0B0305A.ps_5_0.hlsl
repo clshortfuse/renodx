@@ -33,7 +33,7 @@ bool IsSunTexture() {
   float w, h;
   t0.GetDimensions(w, h);
 
-  if (w != 512.f || h != 512.f) return false;
+  if (w != 512u || h != 512u) return false;
 
   float4 center = t0.SampleLevel(s0_s, float2(0.5f, 0.5f), 0);
   if (center.a < 0.9f) return false;

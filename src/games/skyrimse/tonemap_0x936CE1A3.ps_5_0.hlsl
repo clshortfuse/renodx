@@ -102,12 +102,14 @@ void main(
   }
 
   // ===== HDR PATH (RenoDRT / ACES / None) =====
-  if (RENODX_TONE_MAP_TYPE == 1.f) {
+  if (RENODX_TONE_MAP_TYPE == renodx::draw::TONE_MAP_TYPE_RENO_DRT) {
   // Eye adaptation
   float lum = dot(float3(0.212500006, 0.715399981, 0.0720999986), r0.xyz);
   lum = max(9.99999975e-006, lum);
   float lumAdjusted = lum * r2.y / r2.x;
+  r0.xyz = r0.xyz * lumAdjusted / lum;
 
+  r0.xyz = r0.xyz * (lumAdjusted / lum);
   // Bloom (pre-tonemap)
   const float bloomStrength = 0.0;
   r0.xyz = (r1.xyz * saturate(cb2[2].x - renodx::color::y::from::BT709(r0.xyz))) * bloomStrength + r0.xyz;
