@@ -116,7 +116,7 @@ float4 main(
   uint samplerIdx = (uint)(layer0_sampler);
   
   float4 sampledColor = g_textures2D[textureIdx].Sample(g_samplers[samplerIdx], TEXCOORD0_centroid.xy);
-  float3 color = renodx::math::SafePow(sampledColor.rgb, exposure.x); // wcg :D
-  color = renodx::draw::SwapChainPass(color);
-  return float4(color, 1.0f);
+  //float3 color = renodx::math::SafePow(sampledColor.rgb, exposure.x); // wcg :D
+  sampledColor = renodx::draw::SwapChainPass(sampledColor);
+  return float4(sampledColor.xyz, 1.0f);
 }
