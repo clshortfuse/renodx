@@ -6,8 +6,8 @@
 //   }
 //
 // Game tonemaps with Narkowicz ACES in compute pass 0x6DE32B48.
-// When 0x6DE32B48 is replaced, t0 contains gamma-encoded HDR/3 in R10G10B10A2.
-// We decode, recover ×3, then apply ToneMapPass with real pre-tonemap HDR values.
+// When 0x6DE32B48 is replaced, t0 contains PQ-encoded HDR carried through R10G10B10A2.
+// We PQ-decode back to linear HDR, then apply ToneMapPass and output scRGB to the float16 swapchain.
 
 #include "./shared.h"
 #include "./psycho_test17.hlsl"
@@ -55,17 +55,11 @@ void main(
     hdr = lerp(float3(luma, luma, luma), hdr, scene_strength);
   }
 
-  // Gamma encode before ToneMapPass
-  hdr = renodx::color::correct::GammaSafe(hdr, true);
-
   float3 tonemapped;
 
   if (RENODX_TONE_MAP_TYPE == 4) {
     // Psycho: apply grading in luminosity space, then call psycho
     float3 psycho_input = hdr;
-
-    // Decode gamma (psycho expects linear input)
-    psycho_input = renodx::color::correct::GammaSafe(psycho_input, false);
 
     // Apply exposure, highlights, shadows, contrast in luminosity space
     psycho_input *= RENODX_TONE_MAP_EXPOSURE;

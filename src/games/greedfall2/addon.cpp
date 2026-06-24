@@ -87,7 +87,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
         .binding = &shader_injection.graphics_white_nits,
-        .default_value = 150.f,
+        .default_value = 100.f,
         .label = "UI Brightness",
         .section = "Tone Mapping",
         .tooltip = "Sets the brightness of UI elements in nits",
@@ -261,7 +261,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ShadowLift",
         .binding = &shader_injection.custom_shadow_lift,
-        .default_value = 50.f,
+        .default_value = 60.f,
         .label = "Black Floor",
         .section = "Color Grading",
         .tooltip = "Raise or lower the black floor",
@@ -376,7 +376,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSetting("ColorGradeFlare", 0.f);
   renodx::utils::settings::UpdateSetting("ColorGradeScene", 100.f);
   renodx::utils::settings::UpdateSetting("ColorTemp", 50.f);
-  renodx::utils::settings::UpdateSetting("ShadowLift", 0.f);
+  renodx::utils::settings::UpdateSetting("ShadowLift", 50.f);
 }
 
 bool initialized = false;
