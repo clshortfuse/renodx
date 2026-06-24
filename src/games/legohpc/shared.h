@@ -34,6 +34,7 @@ struct ShaderInjectData {
   float custom_bloom;
 
   float custom_vignette;
+  float custom_dof;
 };
 
 #ifndef __cplusplus
@@ -61,6 +62,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
 #define LUT_STRENGTH                   shader_injection.lut_strength
 #define STUD_STRENGTH                  shader_injection.stud_strength
+#define CUSTOM_DOF                  shader_injection.custom_dof
 #define LETTERBOX           !shader_injection.letterbox
 // #define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
 // #define RENODX_TONE_MAP_HUE_SHIFT_METHOD     HUE_SHIFT_METHOD_SDR_MODIFIED
