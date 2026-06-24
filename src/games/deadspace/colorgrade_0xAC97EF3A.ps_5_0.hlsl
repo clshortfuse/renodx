@@ -266,6 +266,19 @@ void main(
     r2.z = dot(float3(-0.0117062014, -0.264827281, 1.27643752), r0.xyz);
   }
 
+  if (TONE_MAP_TYPE != 0.f) {
+    r2.rgb = ApplyLuminanceAndPurityGradingBT709(r2.rgb,
+                                                 RENODX_TONE_MAP_EXPOSURE,
+                                                 RENODX_TONE_MAP_HIGHLIGHTS,
+                                                 RENODX_TONE_MAP_SHADOWS,
+                                                 RENODX_TONE_MAP_CONTRAST,
+                                                 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                                 RENODX_TONE_MAP_SATURATION,
+                                                 -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
+                                                 RENODX_TONE_MAP_DECHROMA,
+                                                 0.18f);
+  }
+
   // Clamp negative color before the final LUT/output stages.
   r0.xyz = max(float3(0, 0, 0), r2.xyz);
 
@@ -281,7 +294,6 @@ void main(
     r2.xyz = f32tof16(r2.xyz);
     r2.xyz = (uint3)r2.xyz;
     r2.xyz = cb0[1].yyy * r2.xyz;
-
 
     r2.xyz = r2.xyz * float3(0.96875, 0.96875, 0.96875) + float3(0.015625, 0.015625, 0.015625);
     r0.xyz = t1.SampleLevel(s1_s, r2.xyz, 0).xyz;
@@ -302,7 +314,6 @@ void main(
   // Output final graded color/metadata and pass through the uint2 value loaded from t7.
   o0.xyzw = r0.xyzw;
   o1.xy = r1.zw;
-
 
   return;
 }

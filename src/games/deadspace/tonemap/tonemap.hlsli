@@ -1,7 +1,6 @@
 #include "../../../shaders/tonemap/psychov/test17.hlsl"
 #include "../common.hlsli"
 
-
 namespace renodx_custom {
 namespace tonemap {
 namespace aces {
@@ -41,6 +40,31 @@ renodx::tonemap::aces::ODTConfig CreateODTConfig(
 }  // namespace tonemap
 }  // namespace renodx
 
+float3 ApplyConeBleaching(
+    float3 lms_cones,
+    float3 adaptive_white_lms,
+    float bleaching_intensity,
+    float mid_gray = 0.18f,
+    float troland_scale = 4.f,
+    float half_bleach_trolands = 20000.f) {
+  if (bleaching_intensity == 0.f) return lms_cones;
+
+  const float REFERENCE_WHITE_NITS = 203.f;
+  float3 mid_gray_lms = adaptive_white_lms * mid_gray;
+  float3 lms_cones_adapted = renodx::math::DivideSafe(lms_cones, mid_gray_lms, 0.f.xxx);
+  float3 current_adaptive_state_adapted = 1.f.xxx;
+
+  float3 stimulus_trolands = max(current_adaptive_state_adapted, 0.f) * mid_gray * REFERENCE_WHITE_NITS * troland_scale;
+  float3 availability = 1.f.xxx / (1.f.xxx + stimulus_trolands / half_bleach_trolands);
+  availability = lerp(1.f.xxx, availability, bleaching_intensity);
+
+  float y = lms_cones_adapted.x + lms_cones_adapted.y;
+  float white_y = current_adaptive_state_adapted.x + current_adaptive_state_adapted.y;
+  float3 white_at_y = current_adaptive_state_adapted * renodx::math::DivideSafe(y, white_y, 0.f);
+  float3 delta = (lms_cones_adapted - white_at_y) * availability;
+  return (white_at_y + delta) * mid_gray_lms;
+}
+
 float3 ApplyToneMap(float3 untonemapped_ap1) {
   const float ACES_MIN = 0.0001f;
   const float ACES_MID = 15.232879f;
@@ -51,9 +75,6 @@ float3 ApplyToneMap(float3 untonemapped_ap1) {
     diffuse_white = RENODX_DIFFUSE_WHITE_NITS;
   }
 
-  // const float ACES_MAX = 422.5f;     // 400
-  // const float ACES_MAX = 30013.89f;  // 10k
-  // const float ACES_MAX = 10000.f;    // 4k
   float aces_min = ACES_MIN / diffuse_white;
   float aces_max = (RENODX_PEAK_WHITE_NITS / diffuse_white);
 
@@ -68,7 +89,10 @@ float3 ApplyToneMap(float3 untonemapped_ap1) {
     tonemapped_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, odt_config);
   } else {
     const float3 AP1_WHITE = renodx::color::lms::from::AP1(1.f);
-    float3 untonemapped_lms_normalized = renodx::color::lms::from::AP1(untonemapped_ap1) / AP1_WHITE;
+    float3 untonemapped_lms = renodx::color::lms::from::AP1(untonemapped_ap1);
+    // untonemapped_lms = ApplyConeBleaching(untonemapped_lms, AP1_WHITE, 1.f, 0.18f, 4.f, 4000.f);
+
+    float3 untonemapped_lms_normalized = untonemapped_lms / AP1_WHITE;
     float3 tonemapped_lms_normalized = renodx::tonemap::aces::ODTToneMap(untonemapped_lms_normalized, odt_config) / ACES_DIFFUSE;
     float3 tonemapped_lms = max(0, tonemapped_lms_normalized * AP1_WHITE);
 
@@ -127,10 +151,9 @@ float3 ApplyToneMap(float3 untonemapped_ap1) {
 
     tonemapped_ap1 = renodx::color::ap1::from::LMS(tonemapped_lms) * ACES_DIFFUSE;
   }
+  tonemapped_ap1 = max(0, tonemapped_ap1);
 
   tonemapped_ap1 /= ACES_DIFFUSE;  // normalize so diffuse white is at 1.0
-
-  tonemapped_ap1 = max(0, tonemapped_ap1);
 
   tonemapped_ap1 *= diffuse_white;
 
