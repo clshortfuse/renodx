@@ -19,13 +19,37 @@ namespace deadspace::resource_upgrades {
 #if DEADSPACE_ENABLE_RESOURCE_UPGRADES
 
 inline std::atomic_bool restart_required = false;
-inline bool settings_appended = false;
 inline renodx::utils::settings::Setting* setting = nullptr;
 
 inline void OnSettingChanged(float previous, float current) {
   if (previous != current) {
     restart_required.store(true, std::memory_order_relaxed);
   }
+}
+
+inline renodx::utils::settings::Setting* CreateRestartWarningSetting() {
+  return new renodx::utils::settings::Setting{
+      .value_type = renodx::utils::settings::SettingValueType::TEXT,
+      .label = "WARNING: Resource format changes require a restart to apply.",
+      .section = "Advanced",
+      .tint = 0xFF3B30,
+      .is_visible = []() { return restart_required.load(std::memory_order_relaxed); },
+      .is_sticky = true,
+  };
+}
+
+inline renodx::utils::settings::Setting* CreateSetting() {
+  return setting = new renodx::utils::settings::Setting{
+             .key = "FxUpgradeResources",
+             .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+             .default_value = 1.f,
+             .label = "Render Format",
+             .section = "Advanced",
+             .tooltip = "Upgrades HDR render resources to R16G16B16A16F to add wide gamut support and improve bit depth (requires restart). Disabled on AMD GPUs.",
+             .labels = {"R11G11B10F", "R16G16B16A16F"},
+             .on_change_value = &OnSettingChanged,
+             .is_global = true,
+         };
 }
 
 inline void OnInitDevice(reshade::api::device* device) {
@@ -68,35 +92,6 @@ inline void OnInitDevice(reshade::api::device* device) {
   renodx::utils::resource::upgrade::SetUpgradeInfos(device, upgrade_infos);
 }
 
-inline void AppendSettings(renodx::utils::settings::Settings& settings) {
-  if (settings_appended) return;
-  settings_appended = true;
-
-  settings.insert(
-      settings.begin(),
-      {
-          new renodx::utils::settings::Setting{
-              .value_type = renodx::utils::settings::SettingValueType::TEXT,
-              .label = "WARNING: Resource format changes require a restart to apply.",
-              .section = "Advanced",
-              .tint = 0xFF3B30,
-              .is_visible = []() { return restart_required.load(std::memory_order_relaxed); },
-              .is_sticky = true,
-          },
-          setting = new renodx::utils::settings::Setting{
-              .key = "FxUpgradeResources",
-              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 1.f,
-              .label = "Render Format",
-              .section = "Advanced",
-              .tooltip = "Upgrades HDR render resources to R16G16B16A16F to add wide gamut support and improve bit depth (requires restart). Disabled on AMD GPUs.",
-              .labels = {"R11G11B10F", "R16G16B16A16F"},
-              .on_change_value = &OnSettingChanged,
-              .is_global = true,
-          },
-      });
-}
-
 inline void Register() {
   renodx::utils::resource::upgrade::use_resource_cloning_dx12_only = true;
   renodx::utils::resource::upgrade::Use(DLL_PROCESS_ATTACH);
@@ -110,8 +105,6 @@ inline void Unregister() {
 
 #else
 
-// Disabled build fallback: keep the API callable for any ungated call sites.
-inline void AppendSettings(renodx::utils::settings::Settings&) {}
 inline void Register() {}
 inline void Unregister() {}
 

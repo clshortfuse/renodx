@@ -183,6 +183,19 @@ void main(
     r1.y = dot(float3(-1.32386422, 2.5601418, -0.236103922), r0.xyz);
     r1.z = dot(float3(-0.0117062014, -0.264827281, 1.27643752), r0.xyz);
   }
+
+  if (TONE_MAP_TYPE != 0.f) {
+    r1.rgb = ApplyLuminanceAndPurityGradingBT709(r1.rgb,
+                                                 RENODX_TONE_MAP_HIGHLIGHTS,
+                                                 RENODX_TONE_MAP_SHADOWS,
+                                                 RENODX_TONE_MAP_CONTRAST,
+                                                 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                                 RENODX_TONE_MAP_SATURATION,
+                                                 -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
+                                                 RENODX_TONE_MAP_DECHROMA,
+                                                 0.18f);
+  }
+
   r0.xyz = max(float3(0, 0, 0), r1.xyz);
   r1.xy = asint(cb0[0].xx) & int2(4, 4096);
   if (r1.x != 0) {
