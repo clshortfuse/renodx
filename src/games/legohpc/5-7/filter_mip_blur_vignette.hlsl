@@ -33,6 +33,7 @@ float4 main(
 
   // Blend: mip + (full - mip) * mip.w
   float3 scene = mipColor.xyz + (fullColor.xyz - mipColor.xyz) * mipColor.w;
+  scene = lerp(fullColor.xyz, scene, CUSTOM_DOF);
   
   // Add blur blend
   scene += blurColor.xyz * (TEXCOORD_2.x * 0.5f) * CUSTOM_BLOOM;
