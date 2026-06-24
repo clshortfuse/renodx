@@ -112,6 +112,7 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .label = "Vignette",
             .section = "Effects",
             .parse = [](float value) { return value * 0.01f; },
+            .is_visible = []() { return is_harry2; },
         },
         new renodx::utils::settings::Setting{
             .key = "StudStrength",
@@ -122,6 +123,16 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
             .tooltip = "Boosts stud brightness",
             .max = 100.f,
             .parse = [](float value) { return 1 + (value * 0.01f); },
+        },
+        new renodx::utils::settings::Setting{
+            .key = "FxDof",
+            .binding = &shader_injection.custom_dof,
+            .value_type = renodx::utils::settings::SettingValueType::FLOAT,
+            .default_value = 100.f,
+            .label = "Depth of Field",
+            .section = "Effects",
+            .parse = [](float value) { return value * 0.01f; },
+            .is_visible = []() { return is_harry2; },
         },
 
         // new renodx::utils::settings::Setting{

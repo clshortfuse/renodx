@@ -3,6 +3,7 @@
 // Optional defines before include:
 //   FILTER_VIGNETTE - enable vignette pass and vignette cbuffer layout.
 //   FILTER_MIP_BLEND - blend mipColor1 over fullColor before blur/LUT.
+//   FILTER_LUT_ONLY - fullColor -> scale -> LUT path (no blur, mip, vignette, or final display mapping).
 //   FILTER_TEXCOORD3 - include TEXCOORD3 in pixel-shader signature.
 #include "../shared.h"
 #include "../common.hlsli"
@@ -45,6 +46,22 @@ cbuffer Globals : register(b0) {
 
 SamplerState g_samplers[] : register(s0);
 
+float4 ApplyLut(float3 scene) {
+  float3 lutInput = scene;
+  float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(lutInput);
+  lutInput *= scale;
+
+  uint cubeTexIdx = (uint)(cubeTex_t);
+  uint cubeSmpIdx = (uint)(cubeTex);
+  float4 hdr = g_textures3D[cubeTexIdx].Sample(g_samplers[cubeSmpIdx], lutInput) / scale;
+  float4 lutColor = g_textures3D[cubeTexIdx].Sample(g_samplers[cubeSmpIdx], scene);
+  lutColor.xyz = lerp(saturate(scene.xyz), lutColor.xyz, LUT_STRENGTH);
+  hdr.xyz = lerp(scene.xyz, hdr.xyz, LUT_STRENGTH);
+  if (RENODX_TONE_MAP_TYPE != 0) lutColor.xyz = ColourCorrect(hdr.xyz, lutColor.xyz);
+
+  return lutColor;
+}
+
 float4 main(
   precise noperspective float4 SV_Position : SV_Position,
   linear float4 TEXCOORD : TEXCOORD,
@@ -63,9 +80,9 @@ float4 main(
   uint mipTexIdx = (uint)(mipColor1_tex_t);
   uint mipSmpIdx = (uint)(mipColor1_tex);
   float4 mipSample = g_textures2D[mipTexIdx].Sample(g_samplers[mipSmpIdx], TEXCOORD.zw);
-
-  // Decompiled order: mip + ((full - mip) * mip.a)
   float3 scene = mipSample.xyz + ((fullColor - mipSample.xyz) * mipSample.w);
+  scene = lerp(fullColor, scene, CUSTOM_DOF);
+  //scene = saturate(mipSample.xyz);// * mipSample.w;
 #else
   float3 scene = fullColor;
 #endif
@@ -76,23 +93,13 @@ float4 main(
   scene += blurColor * (TEXCOORD_2.x * 0.5f) * CUSTOM_BLOOM;
 
   scene *= TEXCOORD_4.y;
-  float3 lutInput = scene;
-  float scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(lutInput);
-  lutInput *= scale;
-
-  uint cubeTexIdx = (uint)(cubeTex_t);
-  uint cubeSmpIdx = (uint)(cubeTex);
-  float4 hdr = g_textures3D[cubeTexIdx].Sample(g_samplers[cubeSmpIdx], lutInput) / scale;
-  float4 lutColor = g_textures3D[cubeTexIdx].Sample(g_samplers[cubeSmpIdx], scene);
-  lutColor.xyz = lerp(saturate(scene.xyz), lutColor.xyz, LUT_STRENGTH);
-  hdr.xyz = lerp(scene.xyz, hdr.xyz, LUT_STRENGTH);
-  if (RENODX_TONE_MAP_TYPE != 0) lutColor.xyz = ColourCorrect(hdr.xyz, lutColor.xyz);
+  float4 lutColor = ApplyLut(scene);
 
 #if defined(FILTER_VIGNETTE)
   float invY = 1.0f - TEXCOORD.y;
   float invX = 1.0f - TEXCOORD.x;
   float vigBase = (invX * TEXCOORD.x) * (TEXCOORD.y * invY) * g_VigParams.y;
-  float vigFactor = renodx::math::SafePow(vigBase, g_VigParams.x);
+  float vigFactor = saturate(pow(max(0.0f, vigBase), g_VigParams.x));
   float4 vigDelta = (g_VigColourB - g_VigColour) * TEXCOORD.y;
   float vigW = vigDelta.w + g_VigColour.w;
   float3 vigRgb = g_VigColour.xyz - lutColor.xyz + vigDelta.xyz;
