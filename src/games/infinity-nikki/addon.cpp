@@ -301,7 +301,7 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.custom_grain_type != 0; },
         .parse = [](float value) { return value * 0.02f; },
     },
-    new renodx::utils::settings::Setting{
+/*     new renodx::utils::settings::Setting{
         .key = "FxSharpening",
         .binding = &shader_injection.custom_sharpness,
         .default_value = 0.f,
@@ -332,7 +332,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Emulates a 2.2 EOTF for the UI",
         .labels = {"Off", "2.2"},
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-    },
+    }, */
 };
 
 void OnPresetOff() {
