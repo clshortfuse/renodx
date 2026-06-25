@@ -1,12 +1,17 @@
 /*
- * RenoDX HDR addon for Once Human (NetEase NeoX engine) - DirectX 11 and DirectX 12.
+ * =====================================================================================
+ * RenoDX HDR Addon for Once Human
+ * Engine: NetEase NeoX
+ * API: DirectX 11 & DirectX 12
  *
- * Upgrades the 8-bit swapchain to fp16 and replaces the game's baked SDR
- * tonemap/LUT output with renodx tonemapping for HDR output. A single binary
- * serves both APIs: the sm5 (DXBC) shaders match on d3d11, the sm6 (DXIL) on d3d12.
+ * Details:
+ * - Upgrades the 8-bit swapchain to fp16.
+ * - Replaces the game's baked SDR tonemap/LUT output with RenoDX tonemapping.
+ * - A single binary serves both APIs: sm5 (DXBC) for D3D11, sm6 (DXIL) for D3D12.
  *
  * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
+ * =====================================================================================
  */
 
 #define ImTextureID ImU64

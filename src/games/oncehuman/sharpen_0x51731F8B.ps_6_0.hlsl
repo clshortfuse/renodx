@@ -1,6 +1,11 @@
-// Once Human (sm6 / DX12) - post-tonemap sharpen / AA resolve (reads LDR -> writes swapchain).
-// RenoDX HDR injection: ONLY change is removing the saturate() ceiling on the main path
-// (the >=0 floor stays) so HDR values from the upgraded tonemap survive into the swapchain.
+// =====================================================================================
+// Once Human - Post-Tonemap Sharpen & AA Resolve
+// API: DX12 (sm6)
+// 
+// RenoDX Injection Details:
+// - Removes the saturate() ceiling on the main path (the >=0 floor stays).
+// - Ensures HDR values from the upgraded tonemap survive into the swapchain.
+// =====================================================================================
 
 Texture2D<float4> SrcTex : register(t0);
 
