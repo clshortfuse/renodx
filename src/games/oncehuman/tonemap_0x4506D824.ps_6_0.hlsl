@@ -1,7 +1,12 @@
-// Once Human (sm6 / DX12) - tonemap + color-grade pass (menu / inventory variant).
-// RenoDX HDR injection. The body is the verbatim DXC decompile of the game pass; the only edits
-// are the effect-strength sliders (multiplied in at each effect source below) and the final
-// display-gamma encode, which is replaced with renodx tone mapping (see end of main).
+// =====================================================================================
+// Once Human - Tonemap & Color Grade Pass (Menu / Inventory)
+// API: DX12 (sm6)
+// 
+// RenoDX Injection Details:
+// - Verbatim DXC decompile of the game pass.
+// - Custom effect-strength sliders multiplied in at each effect source.
+// - Bypasses vanilla display-gamma encode in favor of RenoDX tone mapping.
+// =====================================================================================
 #include "./shared.h"
 
 Texture2D<float4> AutoExposureTex : register(t0);

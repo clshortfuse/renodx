@@ -3,12 +3,12 @@
  * RenoDX HDR Addon for Once Human
  * Engine: NetEase NeoX
  * API: DirectX 11 & DirectX 12
- *
+ * 
  * Details:
  * - Upgrades the 8-bit swapchain to fp16.
  * - Replaces the game's baked SDR tonemap/LUT output with RenoDX tonemapping.
  * - A single binary serves both APIs: sm5 (DXBC) for D3D11, sm6 (DXIL) for D3D12.
- *
+ * 
  * Copyright (C) 2024 Carlos Lopez
  * SPDX-License-Identifier: MIT
  * =====================================================================================
@@ -35,14 +35,16 @@ namespace {
 // Custom shader replacements for tonemap / output passes.
 renodx::mods::shader::CustomShaders custom_shaders = {
     // DX11 (sm5 / DXBC) passes.
-    CustomShaderEntry(0x94D5C191),  // tonemap + color grade (gameplay / photo mode)
-    CustomShaderEntry(0x24C65B31),  // tonemap + color grade (menu / inventory variant)
+    CustomShaderEntry(0x97189CC3),  // tonemap + color grade (gameplay)
+    CustomShaderEntry(0x9CBB8C92),  // tonemap + color grade (gameplay variant)
+    CustomShaderEntry(0x0FAF8922),  // tonemap + color grade (menu / inventory)
+    CustomShaderEntry(0x0C0D9DB1),  // tonemap + color grade (menu / inventory variant)
     CustomShaderEntry(0x6AEF81FE),  // post sharpen / AA -> swapchain
     // DX12 (sm6 / DXIL) passes. sm5 and sm6 hashes differ, so registering both is safe.
-    CustomShaderEntry(0x749C84C9),  // tonemap + color grade (gameplay)
-    CustomShaderEntry(0xB01E4700),  // tonemap + color grade (gameplay variant)
-    CustomShaderEntry(0xCFEC26F0),  // tonemap + color grade (menu / inventory)
-    CustomShaderEntry(0xCCD56442),  // tonemap + color grade (menu / inventory variant)
+    CustomShaderEntry(0x80419ACE),  // tonemap + color grade (gameplay)
+    CustomShaderEntry(0x2FC428AF),  // tonemap + color grade (gameplay variant)
+    CustomShaderEntry(0xEC5A7D52),  // tonemap + color grade (menu / inventory)
+    CustomShaderEntry(0x4506D824),  // tonemap + color grade (menu / inventory variant)
     CustomShaderEntry(0x51731F8B),  // post sharpen / AA -> swapchain
 };
 

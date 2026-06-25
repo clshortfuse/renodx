@@ -1,6 +1,13 @@
-// Once Human (sm5 / DX11) - tonemap + color-grade pass (gameplay; final image -> r8 LDR buffer 0x74C96560)
-// RenoDX HDR injection: tap pre-LUT HDR scene + post-LUT graded SDR, run renodx tonemap.
-// Original decompile by 3Dmigoto; vanilla output preserved in comments at the bottom.
+// =====================================================================================
+// Once Human - Tonemap & Color Grade Pass (Menu / Inventory)
+// API: DX11 (sm5)
+// 
+// RenoDX Injection Details:
+// - Used for the 3D world rendered behind the inventory/menus (lacks SDFCheckerBuffer).
+// - Taps the pre-LUT HDR scene and the post-LUT graded SDR scene.
+// - Bypasses vanilla display-gamma encode in favor of RenoDX tone mapping.
+// - Original decompile by 3Dmigoto.
+// =====================================================================================
 #include "./shared.h"
 
 cbuffer _Globals : register(b0) {
@@ -41,12 +48,10 @@ cbuffer PerScene : register(b1) {
 }
 
 SamplerState Sampler_Bilinear_Clamp_s : register(s0);
-SamplerState Sampler_Point_Clamp_s : register(s1);
-Texture2D<float4> SDFCheckerBuffer : register(t0);
-Texture2D<float4> AutoExposureTex : register(t1);
-Texture2D<float4> BloomTex : register(t2);
-Texture2D<float4> ColorGradingLut : register(t3);
-Texture2D<float4> BgTex : register(t4);
+Texture2D<float4> AutoExposureTex : register(t0);
+Texture2D<float4> BloomTex : register(t1);
+Texture2D<float4> ColorGradingLut : register(t2);
+Texture2D<float4> BgTex : register(t3);
 
 #define cmp -
 
@@ -58,50 +63,45 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = float4(-0.5, -0.5, -0.5, -0.5) + v0.xyxy;
-  r1.xyzw = cmp(float4(0, 0, 0, 0) < r0.zwzw);
-  r0.xyzw = cmp(r0.xyzw < float4(0, 0, 0, 0));
-  r0.xyzw = (int4)-r1.xyzw + (int4)r0.xyzw;
-  r0.xyzw = (int4)r0.xyzw;
-  r1.x = saturate(1 + -ChromaticAberrationRange);
-  r1.y = 1 + -r1.x;
-  r1.y = 1 / r1.y;
-  r2.xyzw = v0.yxyx * float4(2, 2, 2, 2) + float4(-1, -1, -1, -1);
-  r3.xyzw = abs(r2.yzwx) + -r1.xxxx;
-  r2.x = saturate(-r2.x);
-  r1.x = r2.x * r2.x;
-  r2.xyzw = saturate(r3.xyzw * r1.yyyy);
-  r3.xyzw = r2.zwzw * float4(-2, -2, -2, -2) + float4(3, 3, 3, 3);
-  r2.xyzw = r2.xyzw * r2.xyzw;
-  r2.xyzw = r3.xyzw * r2.xyzw;
-  r0.xyzw = r2.xyzw * r0.xyzw;
-  r0.xyzw = (ChromaticAberrationIntensity * shader_injection.chromatic_aberration_strength) * r0.xyzw;  // RENODX: CA strength
-  r0.xyzw = r0.xyzw * float4(-0.00999998953, -0.00999998953, -0.0199999791, -0.0199999791) + v0.xyxy;
-  r1.w = BgTex.Sample(Sampler_Bilinear_Clamp_s, r0.xy).y;
-  r1.y = BgTex.Sample(Sampler_Bilinear_Clamp_s, r0.zw).z;
-  r0.x = -VolumeWeight + 1;
-  r0.x = min(DayNightFade.w, r0.x);
-  r0.y = SDFCheckerBuffer.SampleLevel(Sampler_Point_Clamp_s, float2(0.5, 0.5), 0).w;
-  r0.x = min(r0.x, r0.y);
-  r0.x = r0.x * -r1.x + 1;
-  r0.zw = v0.xy * float2(2, -2) + float2(-1, 1);
-  r0.zw = (VignetteIntensity * shader_injection.vignette_strength) * r0.zw;  // RENODX: vignette strength
-  r0.z = dot(r0.zw, r0.zw);
-  r0.z = 1 + r0.z;
-  r0.z = 1 / r0.z;
+  r0.xy = v0.xy * float2(2, -2) + float2(-1, 1);
+  r0.xy = (VignetteIntensity * shader_injection.vignette_strength) * r0.xy;  // RENODX: vignette strength
+  r0.x = dot(r0.xy, r0.xy);
+  r0.x = 1 + r0.x;
+  r0.x = 1 / r0.x;
+  r0.x = r0.x * r0.x;
+  r0.y = -VolumeWeight + 1;
+  r0.y = min(DayNightFade.w, r0.y);
+  r0.y = min(1, r0.y);
+  r1.xyzw = v0.xyxy * float4(2, 2, 2, 2) + float4(-1, -1, -1, -1);
+  r0.z = saturate(-r1.w);
   r0.z = r0.z * r0.z;
-  r0.x = r0.z * r0.x;
-  r1.z = BgTex.Sample(Sampler_Bilinear_Clamp_s, v0.xy).x;
-  r0.xzw = r1.yzw * r0.xxx;
+  r0.y = r0.y * -r0.z + 1;
+  r0.x = r0.x * r0.y;
+  r0.y = saturate(1 + -ChromaticAberrationRange);
+  r1.xyzw = abs(r1.xyzw) + -r0.yyyy;
+  r0.y = 1 + -r0.y;
+  r0.y = 1 / r0.y;
+  r1.xyzw = saturate(r1.xyzw * r0.yyyy);
+  r2.xyzw = r1.zwzw * float4(-2, -2, -2, -2) + float4(3, 3, 3, 3);
+  r1.xyzw = r1.xyzw * r1.xyzw;
+  r1.xyzw = r2.xyzw * r1.xyzw;
+  r2.xyzw = float4(-0.5, -0.5, -0.5, -0.5) + v0.xyxy;
+  r3.xyzw = cmp(float4(0, 0, 0, 0) < r2.zwzw);
+  r2.xyzw = cmp(r2.xyzw < float4(0, 0, 0, 0));
+  r2.xyzw = (int4)-r3.xyzw + (int4)r2.xyzw;
+  r2.xyzw = (int4)r2.xyzw;
+  r1.xyzw = r2.xyzw * r1.xyzw;
+  r1.xyzw = (ChromaticAberrationIntensity * shader_injection.chromatic_aberration_strength) * r1.xyzw;  // RENODX: CA strength
+  r1.xyzw = r1.xyzw * float4(-0.00999998953, -0.00999998953, -0.0199999791, -0.0199999791) + v0.xyxy;
+  r0.w = BgTex.Sample(Sampler_Bilinear_Clamp_s, r1.xy).y;
+  r0.y = BgTex.Sample(Sampler_Bilinear_Clamp_s, r1.zw).z;
+  r0.z = BgTex.Sample(Sampler_Bilinear_Clamp_s, v0.xy).x;
+  r0.xyz = r0.yzw * r0.xxx;
+  r0.w = AutoExposureTex.Sample(Sampler_Bilinear_Clamp_s, float2(0.5, 0.5)).x;
   r1.xyz = BloomTex.Sample(Sampler_Bilinear_Clamp_s, v0.xy).xyz;
-  r2.xyz = r1.zxy * r0.yyy;
-  r2.xyz = float3(0.899999976, 0.899999976, 0.899999976) * r2.xyz;
-  r1.xyz = r1.zxy * float3(0.100000001, 0.100000001, 0.100000001) + r2.xyz;
-  r0.y = AutoExposureTex.Sample(Sampler_Bilinear_Clamp_s, float2(0.5, 0.5)).x;
-  r0.xyz = r0.xzw * r0.yyy + r1.xyz * shader_injection.bloom_strength;  // RENODX: bloom strength
+  r0.xyz = r0.xyz * r0.www + r1.zxy * shader_injection.bloom_strength;  // RENODX: bloom strength
 
-  // RENODX: HDR scene tapped here (pre log-shaper / pre-LUT). Linear, game working space.
-  // The decompiled composite stores channels rotated as (B, R, G); reorder to (R, G, B).
+  // RENODX: HDR scene tapped here (pre log-shaper / pre-LUT). Channels rotated (B,R,G) -> reorder.
   float3 untonemapped = r0.yzx;
 
   r0.xyz = float3(-0.0110916002, -0.0110916002, -0.0110916002) + r0.xyz;
@@ -129,10 +129,7 @@ void main(
   // RENODX: graded SDR look tapped here (linear, before vanilla display-gamma encode).
   float3 graded = r0.xyz;
 
-  // RENODX: HDR tone mapping. Reads tone-mapper/peak/etc. config from shader_injection (shared.h).
-  // RenderIntermediatePass applies intermediate_scaling (diffuse/graphics) + intermediate encoding
-  // so the downstream swapchain-proxy SwapChainPass lands the scene at Game Brightness (diffuse),
-  // NOT UI Brightness (graphics). Without it the scene inherits graphics_white and reads dark.
+  // RENODX: HDR tone mapping + intermediate encode (matches the gameplay tonemapper).
   o0.rgb = renodx::draw::RenderIntermediatePass(renodx::draw::ToneMapPass(untonemapped, graded));
   o0.w = 1.0;
   return;

@@ -1,6 +1,13 @@
-// Once Human (sm5 / DX11) - tonemap + color-grade pass, MENU/INVENTORY variant (no SDFCheckerBuffer).
-// Twin of 0x94D5C191; used for the 3D world rendered behind the inventory/menus.
-// Same RenoDX HDR injection: tap pre-LUT HDR scene + post-LUT graded SDR, run renodx tonemap.
+// =====================================================================================
+// Once Human - Tonemap & Color Grade Pass (Menu / Inventory)
+// API: DX11 (sm5)
+// 
+// RenoDX Injection Details:
+// - Used for the 3D world rendered behind the inventory/menus (lacks SDFCheckerBuffer).
+// - Taps the pre-LUT HDR scene and the post-LUT graded SDR scene.
+// - Bypasses vanilla display-gamma encode in favor of RenoDX tone mapping.
+// - Original decompile by 3Dmigoto.
+// =====================================================================================
 #include "./shared.h"
 
 cbuffer _Globals : register(b0) {
@@ -122,7 +129,7 @@ void main(
   // RENODX: graded SDR look tapped here (linear, before vanilla display-gamma encode).
   float3 graded = r0.xyz;
 
-  // RENODX: HDR tone mapping + intermediate encode (matches the gameplay tonemapper 0x94D5C191).
+  // RENODX: HDR tone mapping + intermediate encode (matches the gameplay tonemapper).
   o0.rgb = renodx::draw::RenderIntermediatePass(renodx::draw::ToneMapPass(untonemapped, graded));
   o0.w = 1.0;
   return;
