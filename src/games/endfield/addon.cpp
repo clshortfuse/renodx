@@ -1175,6 +1175,9 @@ bool OnDrawIndexed(
     int32_t vertex_offset,
     uint32_t first_instance) {
   auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  const uint32_t vertex_shader_hash = shader_state != nullptr
+      ? renodx::utils::shader::GetCurrentVertexShaderHash(shader_state)
+      : 0u;
   const uint32_t pixel_shader_hash = shader_state != nullptr
       ? renodx::utils::shader::GetCurrentPixelShaderHash(shader_state)
       : 0u;
@@ -1183,13 +1186,20 @@ bool OnDrawIndexed(
   constexpr uint32_t PING_INDEX_COUNT = 18;
   constexpr uint32_t PING_FIRST_INDEX = 0;
   constexpr int32_t PING_VERTEX_OFFSET = 0;
+  constexpr uint32_t PING_VERTEX_SHADER_HASH = 0x9BDC181Fu;
 
   // Detect ping/latency bar
-  // This distinguishes it from menu backgrounds that also have 18 indices but have a preceding draw
-  is_ping_input_candidate = (index_count == PING_INDEX_COUNT) &&
-                            (first_index == PING_FIRST_INDEX) &&
-                            (vertex_offset == PING_VERTEX_OFFSET) &&
-                            (draw_call_vertex_count == 0);
+  const bool ping_geometry_candidate = (index_count == PING_INDEX_COUNT) &&
+                                       (first_index == PING_FIRST_INDEX) &&
+                                       (vertex_offset == PING_VERTEX_OFFSET);
+  is_ping_input_candidate = ping_geometry_candidate &&
+                            (vertex_shader_hash == PING_VERTEX_SHADER_HASH);
+
+  if (is_ping_input_candidate) {
+    is_ping_drawn = true;
+    draw_call_vertex_count = 0;
+    return !IsVisible(shader_injection.ping_text_opacity);
+  }
 
   // Constants for UID text detection
   constexpr uint32_t UID_FIRST_INDEX = 18;
