@@ -213,10 +213,10 @@ bool is_uid_input_candidate = false;
 uint32_t draw_call_vertex_count = 0;  // Track vertex count from draw calls (not draw_indexed)
 
 // on_draw callback for ping/latency bar shader (0xEF07F89A)
-// Only used to set is_ping_drawn flag for UID detection - latency bar icon hiding is done in vertex shader
 bool OnPingDraw(reshade::api::command_list* cmd_list) {
   if (is_ping_input_candidate) {
     is_ping_drawn = true;
+    return shader_injection.ping_text_opacity >= 0.5f;
   } else {
     is_ping_drawn = false;
   }

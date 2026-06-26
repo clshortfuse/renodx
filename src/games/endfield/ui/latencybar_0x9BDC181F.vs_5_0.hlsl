@@ -1,6 +1,4 @@
 
-#include "../shared.h"
-
 cbuffer cb5 : register(b5)
 {
   float4 cb5[45];
@@ -29,50 +27,6 @@ cbuffer cb1 : register(b1)
 cbuffer cb0 : register(b0)
 {
   float4 cb0[7];
-}
-
-// Latency bar icon vertex positions (12 vertices = 3 bars)
-// Y coordinates are computed dynamically based on aspect ratio
-// Formula: Y = offset - 1200.0 * (height/width)
-// This ensures correct detection on both 16:9 and 21:9 (ultrawide) displays
-float2 GetLatencyBarVert(int index)
-{
-  float aspect = UI_ASPECT_RATIO;
-  float base_y = 21.5 - 1200.0 * aspect;
-  
-  // X positions and Y offsets for each vertex
-  // Vertices form 3 bars: short (9px), medium (13px), tall (17px)
-  switch (index)
-  {
-    case 0:  return float2(-1167.0, base_y);                      // bar1 bottom-left
-    case 1:  return float2(-1167.0, 30.5 - 1200.0 * aspect);     // bar1 top-left
-    case 2:  return float2(-1162.0, 30.5 - 1200.0 * aspect);     // bar1 top-right
-    case 3:  return float2(-1162.0, base_y);                      // bar1 bottom-right
-    case 4:  return float2(-1160.5, base_y);                      // bar2 bottom-left
-    case 5:  return float2(-1160.5, 34.5 - 1200.0 * aspect);     // bar2 top-left
-    case 6:  return float2(-1155.5, 34.5 - 1200.0 * aspect);     // bar2 top-right
-    case 7:  return float2(-1155.5, base_y);                      // bar2 bottom-right
-    case 8:  return float2(-1154.0, base_y);                      // bar3 bottom-left
-    case 9:  return float2(-1154.0, 38.5 - 1200.0 * aspect);     // bar3 top-left
-    case 10: return float2(-1149.0, 38.5 - 1200.0 * aspect);     // bar3 top-right
-    case 11: return float2(-1149.0, base_y);                      // bar3 bottom-right
-    default: return float2(0, 0);
-  }
-}
-
-// Check if this vertex is part of the latency bar icon
-bool IsLatencyBarVertex(float2 pos)
-{
-  [unroll]
-  for (int i = 0; i < 12; i++)
-  {
-    float2 diff = abs(GetLatencyBarVert(i) - pos);
-    if (dot(diff, diff) < 1.0)
-    {
-      return true;
-    }
-  }
-  return false;
 }
 
 void main(
@@ -143,15 +97,6 @@ void main(
   r0.xyzw = min(float4(2e+10,2e+10,2e+10,2e+10), r0.xyzw);
   r0.xy = v0.xy * float2(2,2) + -r0.xy;
   o4.xy = r0.xy + -r0.zw;
-
-  if (PING_TEXT_OPACITY < 0.5)
-  {
-    if (IsLatencyBarVertex(v0.xy))
-    {
-      
-      o0 = float4(0, 0, 0, 0);
-    }
-  }
 
   return;
 }
