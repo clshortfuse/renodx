@@ -7,6 +7,7 @@
 
 // #define DEBUG_LEVEL_0
 
+#include <algorithm>
 #include <shared_mutex>
 #include <sstream>
 
@@ -21,6 +22,7 @@
 #include "../../utils/random.hpp"
 #include "../../utils/resource.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/state.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
@@ -212,11 +214,60 @@ bool is_ping_drawn = false;
 bool is_uid_input_candidate = false;
 uint32_t draw_call_vertex_count = 0;  // Track vertex count from draw calls (not draw_indexed)
 
+bool IsVisible(float value) {
+  return value >= 0.5f;
+}
+
+reshade::api::rect IntersectRects(const reshade::api::rect& lhs, const reshade::api::rect& rhs) {
+  return {
+      .left = std::max(lhs.left, rhs.left),
+      .top = std::max(lhs.top, rhs.top),
+      .right = std::min(lhs.right, rhs.right),
+      .bottom = std::min(lhs.bottom, rhs.bottom),
+  };
+}
+
+bool DrawTextRegion(
+    reshade::api::command_list* cmd_list,
+    uint32_t index_count,
+    uint32_t instance_count,
+    uint32_t first_index,
+    int32_t vertex_offset,
+    uint32_t first_instance,
+    bool keep_latency_text) {
+  auto* current_state = renodx::utils::state::GetCurrentState(cmd_list);
+  if (current_state == nullptr || current_state->viewports.empty()) return false;
+
+  const auto previous_state = *current_state;
+  const auto& viewport = current_state->viewports[0];
+  const int32_t left = static_cast<int32_t>(viewport.x);
+  const int32_t top = static_cast<int32_t>(viewport.y);
+  const int32_t right = static_cast<int32_t>(viewport.x + viewport.width);
+  const int32_t bottom = static_cast<int32_t>(viewport.y + viewport.height);
+  if (right <= left || bottom <= top) return false;
+
+  constexpr float kTextSplitFromHeight = 192.f / 2160.f;
+  const int32_t split_x = left + static_cast<int32_t>((bottom - top) * kTextSplitFromHeight + 0.5f);
+  reshade::api::rect clip_rect = keep_latency_text
+      ? reshade::api::rect{.left = left, .top = top, .right = split_x, .bottom = bottom}
+      : reshade::api::rect{.left = split_x, .top = top, .right = right, .bottom = bottom};
+
+  if (!current_state->scissor_rects.empty()) {
+    clip_rect = IntersectRects(clip_rect, current_state->scissor_rects[0]);
+  }
+  if (clip_rect.right <= clip_rect.left || clip_rect.bottom <= clip_rect.top) return true;
+
+  cmd_list->bind_scissor_rects(0, 1, &clip_rect);
+  cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
+  previous_state.Apply(cmd_list);
+  return true;
+}
+
 // on_draw callback for ping/latency bar shader (0xEF07F89A)
 bool OnPingDraw(reshade::api::command_list* cmd_list) {
   if (is_ping_input_candidate) {
     is_ping_drawn = true;
-    return shader_injection.ping_text_opacity >= 0.5f;
+    return IsVisible(shader_injection.ping_text_opacity);
   } else {
     is_ping_drawn = false;
   }
@@ -226,7 +277,8 @@ bool OnPingDraw(reshade::api::command_list* cmd_list) {
 // on_draw callback for UID text shader (0x6B8E9049)
 bool OnUIDDraw(reshade::api::command_list* cmd_list) {
   if (is_uid_input_candidate) {
-    if (shader_injection.status_text_opacity < 0.5f) {
+    if (!IsVisible(shader_injection.status_text_opacity) &&
+        !IsVisible(shader_injection.latency_text_opacity)) {
       return false;
     }
   }
@@ -636,19 +688,29 @@ renodx::utils::settings::Settings settings = {
         .binding = &shader_injection.status_text_opacity,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
-        .label = "UID / Latency Text",
+        .label = "UID Text",
         .section = "User Interface & Video",
         .tooltip = "Toggle UID text visibility",
         .labels = {"Hidden", "Visible"},
     },
-        new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
+        .key = "UIOpacityLatencyText",
+        .binding = &shader_injection.latency_text_opacity,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Latency Text",
+        .section = "User Interface & Video",
+        .tooltip = "Toggle latency text visibility",
+        .labels = {"Hidden", "Visible"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "UIOpacityPingText",
         .binding = &shader_injection.ping_text_opacity,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "Latency Bar",
         .section = "User Interface & Video",
-        .tooltip = "Toggle ping text visibility",
+        .tooltip = "Toggle latency bar visibility",
         .labels = {"Hidden", "Visible"},
     },
     new renodx::utils::settings::Setting{
@@ -1147,11 +1209,25 @@ bool OnDrawIndexed(
   // Reset vertex count after processing
   draw_call_vertex_count = 0;
 
-  if (is_uid_input_candidate && shader_injection.status_text_opacity < 0.5f) {
-    return true;
+  if (!is_uid_input_candidate) {
+    return false;
   }
+  if (!IsVisible(shader_injection.ui_visibility)) return true;
 
-  return false;
+  const bool show_uid_text = IsVisible(shader_injection.status_text_opacity);
+  const bool show_latency_text = IsVisible(shader_injection.latency_text_opacity);
+  if (show_uid_text && show_latency_text) return false;
+  if (!show_uid_text && !show_latency_text) return true;
+
+  DrawTextRegion(
+      cmd_list,
+      index_count,
+      instance_count,
+      first_index,
+      vertex_offset,
+      first_instance,
+      show_latency_text);
+  return true;
 }
 
 void OnPresent(reshade::api::command_queue* queue,
@@ -1520,6 +1596,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::utils::state::Use(fdw_reason);
   renodx::utils::random::binds.push_back(&shader_injection.custom_random);
   renodx::utils::random::Use(fdw_reason);
 

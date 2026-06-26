@@ -80,7 +80,7 @@ struct ShaderInjectData {
   float reno_drt_tone_map_method;
   float status_text_opacity;
   float ping_text_opacity;
-  float ui_disable_ping;
+  float latency_text_opacity;
   float ui_disable_uid;
   float custom_random;
   float custom_grain_strength;
@@ -148,6 +148,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_VIDEO_NITS                      shader_injection.tone_map_video_nits
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        shader_injection.reno_drt_tone_map_method
 #define PING_TEXT_OPACITY                      shader_injection.ping_text_opacity
+#define LATENCY_TEXT_OPACITY                   shader_injection.latency_text_opacity
 #define STATUS_TEXT_OPACITY                    shader_injection.status_text_opacity
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_GRAIN_STRENGTH                  shader_injection.custom_grain_strength
