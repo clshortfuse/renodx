@@ -1,4 +1,6 @@
 
+#include "../shared.h"
+
 cbuffer cb5 : register(b5)
 {
   float4 cb5[45];
@@ -97,6 +99,14 @@ void main(
   r0.xyzw = min(float4(2e+10,2e+10,2e+10,2e+10), r0.xyzw);
   r0.xy = v0.xy * float2(2,2) + -r0.xy;
   o4.xy = r0.xy + -r0.zw;
+
+  if (LATENCY_BAR_DRAW_OPACITY < 0.5f) {
+    float2 ndc = o0.xy / max(abs(o0.w), 0.00001f);
+    if ((ndc.x >= -0.99f && ndc.x <= -0.93f) &&
+        (ndc.y >= -0.99f && ndc.y <= -0.90f)) {
+      o0 = float4(2.0f, 2.0f, 0.0f, 1.0f);
+    }
+  }
 
   return;
 }

@@ -267,7 +267,6 @@ bool DrawTextRegion(
 bool OnPingDraw(reshade::api::command_list* cmd_list) {
   if (is_ping_input_candidate) {
     is_ping_drawn = true;
-    return IsVisible(shader_injection.ping_text_opacity);
   } else {
     is_ping_drawn = false;
   }
@@ -1163,6 +1162,7 @@ bool OnDraw(
     uint32_t first_vertex,
     uint32_t first_instance) {
   draw_call_vertex_count = vertex_count;
+  shader_injection.latency_bar_draw_opacity = 1.f;
   return false;
 }
 
@@ -1187,18 +1187,23 @@ bool OnDrawIndexed(
   constexpr uint32_t PING_FIRST_INDEX = 0;
   constexpr int32_t PING_VERTEX_OFFSET = 0;
   constexpr uint32_t PING_VERTEX_SHADER_HASH = 0x9BDC181Fu;
+  constexpr uint32_t PING_PIXEL_SHADER_HASH = 0xEF07F89Au;
 
   // Detect ping/latency bar
   const bool ping_geometry_candidate = (index_count == PING_INDEX_COUNT) &&
                                        (first_index == PING_FIRST_INDEX) &&
                                        (vertex_offset == PING_VERTEX_OFFSET);
   is_ping_input_candidate = ping_geometry_candidate &&
-                            (vertex_shader_hash == PING_VERTEX_SHADER_HASH);
+                            (vertex_shader_hash == PING_VERTEX_SHADER_HASH) &&
+                            (pixel_shader_hash == PING_PIXEL_SHADER_HASH);
+  shader_injection.latency_bar_draw_opacity = is_ping_input_candidate
+      ? shader_injection.ping_text_opacity
+      : 1.f;
 
   if (is_ping_input_candidate) {
     is_ping_drawn = true;
     draw_call_vertex_count = 0;
-    return !IsVisible(shader_injection.ping_text_opacity);
+    return false;
   }
 
   // Constants for UID text detection
@@ -1262,6 +1267,7 @@ void OnPresent(reshade::api::command_queue* queue,
   is_uid_input_candidate = false;
   is_ping_drawn = false;
   draw_call_vertex_count = 0;
+  shader_injection.latency_bar_draw_opacity = 1.f;
 
   // Detect Tech Test state changes from preset loads, game startup, or manual toggle
   float current_tech_test = shader_injection.tech_test_look;
