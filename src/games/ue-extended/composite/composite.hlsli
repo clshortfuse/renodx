@@ -42,6 +42,7 @@ float3 ApplyFilmGrain(float3 color, float2 position, float random) {
 
 bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout float4 output_color, float2 position, Texture2D<float4> scene_color_texture, SamplerState scene_color_sampler, uint output_mode = 0u) {
   // if (RENODX_TONE_MAP_TYPE == 0.f) return false;
+  if (CUSTOM_HIDE_UI == 0.f) ui_color_gamma = 0.f;
   float ui_alpha = saturate(ui_color_gamma.a);
 
   float3 ui_color_linear;
