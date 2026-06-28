@@ -94,7 +94,18 @@ renodx::utils::settings::Settings settings = {
         .min = 48.f,
         .max = 500.f,
     },
-
+    new renodx::utils::settings::Setting{
+        .key = "UIVisibility",
+        .binding = &shader_injection.custom_hide_ui,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "UI Visibility",
+        .section = "Tone Mapping",
+        .tooltip = "Sets the visibility of UI and HUD elements.\n"
+                   "Only works with native HDR games.",
+        .labels = {"Hide", "Show"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0 && shader_injection.processing_path == 0.f; },
+    },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGammaCorrection",
         .binding = &shader_injection.gamma_correction,
@@ -812,6 +823,50 @@ const std::unordered_map<
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_RATIO},
             },
         },
+        {
+            "Rebuilder-Win64-Shipping.exe",  // Product name "UE4"
+            {
+                {"Proxy_Revert_State", 1.f},
+            },
+        },
+        {
+            "SILAS",  // Sprawl Zero
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+        {
+            "Marvel Rivals",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+        {
+            "PenguinHotel-Win64-Shipping.exe",  // Meccha Chameleon, product name "LINK"
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+        {
+            "Delta",
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_ANY},
+                {"Proxy_Revert_State", 1.f},
+            },
+        },
+        {
+            "Hatred-Win64-Shipping.exe",  // Product name "Unreal Engine"
+            {
+                {"Proxy_Revert_State", 1.f},
+            },
+        },
+        {
+            "Forgive Me Father",
+            {
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Proxy_Revert_State", 1.f},
+            },
+        },
         // Native HDR on games (Path off)
         {
             "Hell is Us",
@@ -962,6 +1017,18 @@ const std::unordered_map<
         },
         {
             "Gothic 1 Remake",
+            {
+                {"Set_Path", 0.f},
+            },
+        },
+        {
+            "FarFarWest-Win64-Shipping.exe",  // Product name "UnrealGame"
+            {
+                {"Set_Path", 0.f},
+            },
+        },
+        {
+            "Mistfall Hunter",
             {
                 {"Set_Path", 0.f},
             },

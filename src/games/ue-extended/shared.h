@@ -27,11 +27,13 @@
 #define CUSTOM_LUT_SCALING                     shader_injection.custom_lut_scaling
 #define CUSTOM_LUT_GAMUT_RESTORATION           shader_injection.custom_lut_gamut_restoration
 
-#define CUSTOM_RANDOM           shader_injection.custom_random
-#define CUSTOM_GRAIN_TYPE       shader_injection.custom_grain_type
-#define CUSTOM_GRAIN_STRENGTH   shader_injection.custom_grain_strength
-#define CUSTOM_SHARPNESS        shader_injection.custom_sharpness
-#define TONEMAP_UNDER_UI        shader_injection.tm_under_ui
+#define CUSTOM_RANDOM         shader_injection.custom_random
+#define CUSTOM_GRAIN_TYPE     shader_injection.custom_grain_type
+#define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
+#define CUSTOM_SHARPNESS      shader_injection.custom_sharpness
+#define TONEMAP_UNDER_UI      shader_injection.tm_under_ui
+#define CUSTOM_HIDE_UI        shader_injection.custom_hide_ui
+
 #define RENODX_TONE_MAP_SCALING shader_injection.tone_map_scaling
 #define BLEND_FACTOR            shader_injection.blend_factor
 
@@ -73,6 +75,7 @@ struct ShaderInjectData {
   float custom_sharpness;
 
   float tm_under_ui;
+  float custom_hide_ui;
 
   // float fix_post_process;
 
