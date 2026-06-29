@@ -6,11 +6,11 @@
 #include "./math.hlsl"
 
 #ifndef RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION
-#define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION 3
+#define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION 4
 #endif
 
 #ifndef RENODX_COLOR_GRADE_SHADOWS_VERSION
-#define RENODX_COLOR_GRADE_SHADOWS_VERSION 3
+#define RENODX_COLOR_GRADE_SHADOWS_VERSION 4
 #endif
 
 namespace renodx {
@@ -40,7 +40,18 @@ float3 Contrast(float3 color, float contrast, float mid_gray = 0.18f, float3x3 c
 float Highlights(float x, float highlights, float mid_gray, float highlights_version) {
   float value;
   [branch]
-  if (highlights_version == 2.f) {
+  if (highlights_version == 4.f) {
+    [branch]
+    if (highlights > 1.f) {
+      value = max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.f)));
+    } else if (highlights < 1.f) {
+      float b = mid_gray * pow(x / mid_gray, 2.f - highlights);
+      float t = min(x, 1.f);
+      value = min(x, renodx::math::DivideSafe(x * x, lerp(x, b, t), x));
+    } else {
+      value = x;
+    }
+  } else if (highlights_version == 2.f) {
     [branch]
     if (highlights > 1.f) {
       float bias = 0.10f;
@@ -78,7 +89,24 @@ float Highlights(float x, float highlights = 1.f, float mid_gray = 0.18f) {
 float Shadows(float x, float shadows, float mid_gray, float shadows_version) {
   float value;
   [branch]
-  if (shadows_version == 1.f) {
+  if (shadows_version == 4.f) {
+    if (shadows == 1.f) return x;
+
+    float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
+    float base_term = x * mid_gray;
+    float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
+
+    [branch]
+    if (shadows > 1.f) {
+      float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
+      float reference = x * (1.f + base_scale);
+      value = max(x, x + (raised - reference));
+    } else {
+      float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
+      float reference = x * (1.f - base_scale);
+      value = clamp(x + (lowered - reference), 0.f, x);
+    }
+  } else if (shadows_version == 1.f) {
     float scaled = x / mid_gray;
     float shadowed = pow(scaled, -1.f * (shadows - 2.f));
     float lerped = lerp(shadowed, scaled, saturate(shadowed));
@@ -94,7 +122,7 @@ float Shadows(float x, float shadows, float mid_gray, float shadows_version) {
     } else if (shadows < 1.f) {
       // float contrasted = mid_gray * pow(x / mid_gray, 2.f - shadows);
       // value = x* (1.f - x * mid_gray * (1.f / contrasted));
-      value = clamp(x * (1.f - (x * mid_gray / pow(x / mid_gray, 2.f - shadows))), 0.f , x);
+      value = clamp(x * (1.f - (x * mid_gray / pow(x / mid_gray, 2.f - shadows))), 0.f, x);
     } else {
       value = x;
       // 0
