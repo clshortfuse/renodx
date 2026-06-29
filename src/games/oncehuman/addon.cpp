@@ -130,7 +130,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Scene Gamma Correction",
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF for the scene.",
-        .labels = {"Off", "2.2", "BT.1886"},
+        .labels = {"Off", "2.2", "2.4"},
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
