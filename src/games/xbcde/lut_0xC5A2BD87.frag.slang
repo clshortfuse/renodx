@@ -40,11 +40,12 @@ void main()
 vec3 lut(vec3 color, bool extended = false) {
   vec3 tcbA = texture(fp_t_tcb_A, uv.xy).xyz;
   float scale = renodx::math::Select(extended, renodx::tonemap::neutwo::ComputeMaxChannelScale(color), 1.f);
-  vec3 encoded = renodx::math::SafePow(color * scale, fp_c3_1._m0[2].x);
+  color *= scale;
+  vec3 encoded = renodx::math::SafePow(color, fp_c3_1._m0[2].x);
 
   vec3 sampleCoord = encoded * fp_c3_1._m0[3].z + fp_c3_1._m0[3].w;
-  vec3 tcbC = texture(fp_t_tcb_C, sampleCoord).xyz / scale;
-  vec3 tcbE = texture(fp_t_tcb_E, sampleCoord).xyz / scale;
+  vec3 tcbC = texture(fp_t_tcb_C, sampleCoord).xyz;
+  vec3 tcbE = texture(fp_t_tcb_E, sampleCoord).xyz;
 
   float blendSeed = fma(tcbA.y, 31.875, tcbA.x * 0.125);
   blendSeed = fma(tcbA.z, fp_c1_1._m0[0].x, blendSeed);
@@ -59,7 +60,7 @@ vec3 lut(vec3 color, bool extended = false) {
   // finalColor = renodx::color::srgb::DecodeSafe(finalColor);
   // finalColor = renodx::color::gamma::DecodeSafe(finalColor, 1 / fp_c3_1._m0[2].x);
   finalColor = renodx::color::srgb::DecodeSafe(finalColor);
-  finalColor = lerp(color, finalColor, LUT_STRENGTH);
+  finalColor = lerp(color, finalColor, LUT_STRENGTH) / scale;
 
   return finalColor;
 }
