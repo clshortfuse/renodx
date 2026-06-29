@@ -1034,6 +1034,7 @@ const std::vector<std::pair<const char*, const char*>> SETTING_NAV_TITLES = {
 
 bool setting_auto_dump = false;
 bool setting_live_reload = false;
+std::atomic_bool setting_resource_clone_allow_vulkan = true;
 uint32_t setting_nav_item = 0;
 uint32_t setting_device_proxy_output_mode = 2;
 
@@ -1943,8 +1944,9 @@ renodx::utils::resource::ResourceUpgradeInfo devkit_texture_file_clone_target = 
   if (device->get_api() == reshade::api::device_api::d3d12) {
     return "DX12 per-resource clone hotswap is not supported in devkit yet.";
   }
-  if (device->get_api() == reshade::api::device_api::vulkan) {
-    return "Vulkan per-resource clone hotswap is not supported in devkit yet.";
+  if (device->get_api() == reshade::api::device_api::vulkan
+      && !setting_resource_clone_allow_vulkan.load(std::memory_order_relaxed)) {
+    return "Vulkan per-resource clone hotswap is disabled by devkit setting.";
   }
   if (enabling
       && info->clone_target != nullptr
