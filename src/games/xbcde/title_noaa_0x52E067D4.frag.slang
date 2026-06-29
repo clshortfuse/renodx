@@ -28,7 +28,6 @@ void main() {
 
   float depthNumerator = fma(-2.0 * blendSeed, fp_c3_1._m0[2].y, fp_c3_1._m0[2].z);
   gl_FragDepth = depthNumerator / (2.0 * blendSeed);
-
   
   vec3 scene = texture(fp_t_tcb_8, uv.xy).xyz;
   float exposure = 1.0 / texture(fp_t_tcb_10, vec2(0.0)).x;
@@ -47,28 +46,10 @@ void main() {
 }
 
 vec3 lut(vec3 color, bool extended = false) {
-  vec3 tcbA = texture(fp_t_tcb_A, uv.xy).xyz;
   float scale = renodx::math::Select(extended, renodx::tonemap::neutwo::ComputeMaxChannelScale(color), 1.f);
   vec3 encoded = renodx::math::SafePow(color * scale, fp_c3_1._m0[2].x);
-
   vec3 sampleCoord = encoded * fp_c3_1._m0[3].z + fp_c3_1._m0[3].w;
-  vec3 tcbC = texture(fp_t_tcb_C, sampleCoord).xyz / scale;
-  vec3 tcbE = texture(fp_t_tcb_E, sampleCoord).xyz / scale;
-
-  float blendSeed = fma(tcbA.y, 31.875, tcbA.x * 0.125);
-  blendSeed = fma(tcbA.z, fp_c1_1._m0[0].x, blendSeed);
-  float blend;
-  // blend = exp2(log2(clamp((blendSeed - fp_c3_1._m0[1].x) * fp_c3_1._m0[1].y, 0.0, 1.0)) * fp_c3_1._m0[1].z) * fp_c3_1._m0[1].w;
-  blend = saturate((blendSeed - fp_c3_1._m0[1].x) * fp_c3_1._m0[1].y);
-  blend = pow(blend, fp_c3_1._m0[1].z) * fp_c3_1._m0[1].w;
-
-  vec3 mixed = mix(tcbC, tcbE, blend);
-  vec3 base = renodx::math::SafePow(color, fp_c3_1._m0[2].x);
-  // finalColor = renodx::color::srgb::DecodeSafe(finalColor);
-  vec3 finalColor = mix(base, mixed, fp_c3_1._m0[2].w);
-  // finalColor = renodx::color::gamma::DecodeSafe(finalColor, 1 / fp_c3_1._m0[2].x);
-  finalColor = renodx::color::srgb::DecodeSafe(finalColor);
-  finalColor = lerp(color, finalColor, LUT_STRENGTH);
-
-  return finalColor;
+  vec3 lut = texture(fp_t_tcb_C, sampleCoord).xyz / scale;
+  lut = lerp(color, lut, LUT_STRENGTH);
+  return renodx::color::srgb::DecodeSafe(lut);
 }
