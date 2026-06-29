@@ -32,12 +32,12 @@ float4 main(
   linear float2 TEXCOORD_1 : TEXCOORD1
 ) : SV_Target {
   float4 SV_Target;
-  float4 _16 = HDRScene.Sample(LinearClampSampler, float2((g_HDRTexturePercentage.x * TEXCOORD_1.x), (g_HDRTexturePercentage.y * TEXCOORD_1.y)));
-  float4 _25 = UIScene.Sample(LinearClampSampler, float2((g_UITexturePercentage.x * TEXCOORD_1.x), (g_UITexturePercentage.y * TEXCOORD_1.y)));
-
-  if (HandleFinal(_16, _25, SV_Target, SV_Position)) {
+  if (HandleFinal(float4(HDRScene.Sample(LinearClampSampler, TEXCOORD_1.xy).xyz, 1.f), UIScene.Sample(LinearClampSampler, TEXCOORD_1.xy).xyzw, SV_Target, SV_Position)) {
     return SV_Target;
   }
+
+  float4 _16 = HDRScene.Sample(LinearClampSampler, float2((g_HDRTexturePercentage.x * TEXCOORD_1.x), (g_HDRTexturePercentage.y * TEXCOORD_1.y)));
+  float4 _25 = UIScene.Sample(LinearClampSampler, float2((g_UITexturePercentage.x * TEXCOORD_1.x), (g_UITexturePercentage.y * TEXCOORD_1.y)));
 
   float _44 = exp2(log2(_16.x * 2.009232997894287f) * 1.5f);
   float _45 = exp2(log2(_16.y * 2.009232997894287f) * 1.5f);

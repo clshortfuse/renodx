@@ -405,7 +405,6 @@ renodx::utils::settings::Settings settings = {
               {"ColorGradeContrast", 55.f},
               {"ColorGradeSaturation", 57.f},
               {"ColorGradeDechroma", 15.f},
-              {"ColorGradeFlare", 55.f},
           });
         },
     },

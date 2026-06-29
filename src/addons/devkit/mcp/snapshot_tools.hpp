@@ -6,6 +6,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -19,6 +20,7 @@
 
 #include "../../../utils/mcp/types.hpp"
 #include "../../../utils/mcp/arguments.hpp"
+#include "../../../utils/build_info.hpp"
 #include "device_summary.hpp"
 #include "device_selection.hpp"
 #include "draw_summary.hpp"
@@ -53,6 +55,98 @@ struct ToolContext {
 };
 
 namespace internal {
+
+[[nodiscard]] inline std::string ToLowerAscii(std::string_view value) {
+  std::string lowered;
+  lowered.reserve(value.size());
+  for (const auto character : value) {
+    lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(character))));
+  }
+  return lowered;
+}
+
+[[nodiscard]] inline bool EqualsInsensitive(std::string_view left, std::string_view right) {
+  return ToLowerAscii(left) == ToLowerAscii(right);
+}
+
+struct DrawFilters {
+  std::optional<std::string> method = std::nullopt;
+  std::optional<std::string> shader_hash = std::nullopt;
+  std::optional<std::string> active_shader_stage = std::nullopt;
+  std::optional<std::uint32_t> min_srv_count = std::nullopt;
+  std::optional<std::uint32_t> min_uav_count = std::nullopt;
+  std::optional<std::uint32_t> min_constant_count = std::nullopt;
+  std::optional<std::uint32_t> min_render_target_count = std::nullopt;
+  std::optional<std::uint32_t> min_pipeline_count = std::nullopt;
+};
+
+[[nodiscard]] inline DrawFilters ParseDrawFilters(const json& arguments) {
+  const auto parse_min_filter = [&arguments](std::string_view key) {
+    const auto value = mcp_arguments::GetOptional<std::uint32_t>(arguments, key);
+    if (!value.has_value()) return value;
+    return std::optional<std::uint32_t>(mcp_arguments::ValidateRange(
+        key,
+        value.value(),
+        0u,
+        (std::numeric_limits<std::uint32_t>::max)()));
+  };
+
+  return DrawFilters{
+      .method = mcp_arguments::GetOptional<std::string>(arguments, "method"),
+      .shader_hash = mcp_arguments::GetOptional<std::string>(arguments, "shaderHash"),
+      .active_shader_stage = mcp_arguments::GetOptional<std::string>(arguments, "activeShaderStage"),
+      .min_srv_count = parse_min_filter("minSrvCount"),
+      .min_uav_count = parse_min_filter("minUavCount"),
+      .min_constant_count = parse_min_filter("minConstantCount"),
+      .min_render_target_count = parse_min_filter("minRenderTargetCount"),
+      .min_pipeline_count = parse_min_filter("minPipelineCount"),
+  };
+}
+
+[[nodiscard]] inline bool MatchesDrawFilters(const draw_summary::DrawSummary& draw, const DrawFilters& filters) {
+  if (filters.method.has_value() && !EqualsInsensitive(draw.method, filters.method.value())) {
+    return false;
+  }
+
+  if (filters.shader_hash.has_value()) {
+    const auto has_shader_hash = std::any_of(
+        draw.shader_hashes.begin(),
+        draw.shader_hashes.end(),
+        [&filters](const std::string& shader_hash) {
+          return EqualsInsensitive(shader_hash, filters.shader_hash.value());
+        });
+    if (!has_shader_hash) {
+      return false;
+    }
+  }
+
+  if (filters.active_shader_stage.has_value()) {
+    if (!draw.active_shader_stage.has_value()) {
+      return false;
+    }
+    if (!EqualsInsensitive(draw.active_shader_stage.value(), filters.active_shader_stage.value())) {
+      return false;
+    }
+  }
+
+  if (filters.min_srv_count.has_value() && draw.srv_count < filters.min_srv_count.value()) {
+    return false;
+  }
+  if (filters.min_uav_count.has_value() && draw.uav_count < filters.min_uav_count.value()) {
+    return false;
+  }
+  if (filters.min_constant_count.has_value() && draw.constant_count < filters.min_constant_count.value()) {
+    return false;
+  }
+  if (filters.min_render_target_count.has_value() && draw.render_target_count < filters.min_render_target_count.value()) {
+    return false;
+  }
+  if (filters.min_pipeline_count.has_value() && draw.pipeline_count < filters.min_pipeline_count.value()) {
+    return false;
+  }
+
+  return true;
+}
 
 [[nodiscard]] inline std::uint32_t ResolveDeviceIndex(const json& arguments, const ToolContext& context) {
   if (!context.get_device_count || !context.get_selected_device_index) {
@@ -90,6 +184,11 @@ inline ToolResult HandleStatusTool([[maybe_unused]] const json& arguments, const
 
   json result = {
       {"pipeName", context.get_pipe_name ? json(context.get_pipe_name()) : json(nullptr)},
+      {"serverInfo", {
+                 {"name", "renodx-devkit"},
+                 {"title", "RenoDX DevKit"},
+                 {"version", std::string(renodx::build_info::kBuildVersion)},
+               }},
       {"connected", context.is_connected ? context.is_connected() : false},
       {"deviceCount", device_count},
       {"devices", devices},
@@ -99,6 +198,13 @@ inline ToolResult HandleStatusTool([[maybe_unused]] const json& arguments, const
                        {"queued", context.has_queued_snapshot ? context.has_queued_snapshot() : false},
                    }},
   };
+
+  if (renodx::build_info::HasKnownBuildTimestamp()) {
+    result["serverInfo"]["buildTimestampUtc"] = renodx::build_info::kBuildTimestampUtc;
+  }
+  if (renodx::build_info::HasKnownSourceDateEpoch()) {
+    result["serverInfo"]["sourceDateEpoch"] = renodx::build_info::kSourceDateEpoch;
+  }
 
   if (device_count == 0u) {
     return ToolResult{
@@ -211,32 +317,82 @@ inline ToolResult HandleListDrawsTool(const json& arguments, const ToolContext& 
       mcp_arguments::GetOptional<std::uint32_t>(arguments, "offset").value_or(0u),
       0u,
       (std::numeric_limits<std::uint32_t>::max)());
+  const auto filters = internal::ParseDrawFilters(arguments);
   const auto device_index = internal::ResolveDeviceIndex(arguments, context);
   auto draws = context.list_draws(device_index);
   const auto total_draws = draws.size();
-  const auto clamped_offset = std::min<std::size_t>(offset, total_draws);
-  const auto end_index = std::min<std::size_t>(clamped_offset + limit, total_draws);
+
+  std::vector<draw_summary::DrawSummary> filtered_draws;
+  filtered_draws.reserve(draws.size());
+  std::copy_if(
+      draws.begin(),
+      draws.end(),
+      std::back_inserter(filtered_draws),
+      [&filters](const draw_summary::DrawSummary& draw) {
+        return internal::MatchesDrawFilters(draw, filters);
+      });
+
+  const auto total_filtered_draws = filtered_draws.size();
+  const auto clamped_offset = std::min<std::size_t>(offset, total_filtered_draws);
+  const auto end_index = std::min<std::size_t>(clamped_offset + limit, total_filtered_draws);
 
   std::vector<draw_summary::DrawSummary> paged_draws;
   paged_draws.reserve(end_index - clamped_offset);
   for (std::size_t index = clamped_offset; index < end_index; ++index) {
-    paged_draws.push_back(draws[index]);
+    paged_draws.push_back(filtered_draws[index]);
   }
 
   json result = {
       {"deviceIndex", device_index},
       {"totalDraws", total_draws},
+      {"totalFilteredDraws", total_filtered_draws},
       {"offset", clamped_offset},
       {"limit", limit},
       {"returned", paged_draws.size()},
       {"draws", paged_draws},
   };
+  if (filters.method.has_value()
+      || filters.shader_hash.has_value()
+      || filters.active_shader_stage.has_value()
+      || filters.min_srv_count.has_value()
+      || filters.min_uav_count.has_value()
+      || filters.min_constant_count.has_value()
+      || filters.min_render_target_count.has_value()
+      || filters.min_pipeline_count.has_value()) {
+    json filters_json = json::object();
+    if (filters.method.has_value()) {
+      filters_json["method"] = filters.method.value();
+    }
+    if (filters.shader_hash.has_value()) {
+      filters_json["shaderHash"] = filters.shader_hash.value();
+    }
+    if (filters.active_shader_stage.has_value()) {
+      filters_json["activeShaderStage"] = filters.active_shader_stage.value();
+    }
+    if (filters.min_srv_count.has_value()) {
+      filters_json["minSrvCount"] = filters.min_srv_count.value();
+    }
+    if (filters.min_uav_count.has_value()) {
+      filters_json["minUavCount"] = filters.min_uav_count.value();
+    }
+    if (filters.min_constant_count.has_value()) {
+      filters_json["minConstantCount"] = filters.min_constant_count.value();
+    }
+    if (filters.min_render_target_count.has_value()) {
+      filters_json["minRenderTargetCount"] = filters.min_render_target_count.value();
+    }
+    if (filters.min_pipeline_count.has_value()) {
+      filters_json["minPipelineCount"] = filters.min_pipeline_count.value();
+    }
+    result["filters"] = filters_json;
+  }
 
   auto text = std::format(
-      "Returned {} draw(s) from the current snapshot on device #{} (offset {} of {}).",
+      "Returned {} draw(s) from device #{} after filtering (offset {} of {}; snapshot had {}).",
       paged_draws.size(),
       device_index,
       clamped_offset,
+      total_filtered_draws,
       total_draws);
   return ToolResult{
       .text = text,

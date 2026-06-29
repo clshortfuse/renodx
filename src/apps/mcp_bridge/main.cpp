@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "../../addons/devkit/mcp/tool_catalog.hpp"
+#include "../../utils/build_info.hpp"
 #include "../../utils/ipc/ipc.hpp"
 #include "../../utils/mcp/protocol.hpp"
 #include "../../utils/mcp/types.hpp"
@@ -39,7 +40,7 @@ constexpr std::string_view DEFAULT_PIPE_PREFIX = "renodx-devkit-mcp";
 constexpr std::uint32_t DEFAULT_PIPE_WAIT_MS = 1000u;
 constexpr std::string_view BRIDGE_SERVER_NAME = "renodx-mcp-bridge";
 constexpr std::string_view BRIDGE_SERVER_TITLE = "RenoDX MCP Bridge";
-constexpr std::string_view BRIDGE_SERVER_VERSION = "0.1.0";
+constexpr std::string_view BRIDGE_SERVER_VERSION = renodx::build_info::kBuildVersion;
 constexpr std::string_view BRIDGE_TOOL_LIST_CONNECTIONS = "renodx_list_connections";
 constexpr std::string_view BRIDGE_TOOL_CONNECT = "renodx_connect";
 constexpr std::string_view BRIDGE_INSTRUCTIONS =
@@ -73,6 +74,7 @@ struct PipeConnection {
 struct ConnectionsStructuredContent {
   size_t available_count = 0u;
   std::vector<PipeConnection> connections;
+  json bridge_info = json::object();
   std::optional<std::string> selected_pipe = std::nullopt;
   std::optional<std::string> connected_pipe = std::nullopt;
   bool manual_selection = false;
@@ -119,6 +121,7 @@ inline void to_json(json& j, const ConnectionsStructuredContent& content) {
   j = {
       {"availableCount", content.available_count},
       {"connections", content.connections},
+      {"bridgeInfo", content.bridge_info},
       {"selectedPipe", content.selected_pipe.has_value() ? json(content.selected_pipe.value()) : json(nullptr)},
       {"connectedPipe", content.connected_pipe.has_value() ? json(content.connected_pipe.value()) : json(nullptr)},
       {"manualSelection", content.manual_selection},
@@ -274,17 +277,24 @@ struct HandleFrameResult {
   return pipes;
 }
 
-const std::vector<ToolDescriptor> FALLBACK_DEVKIT_TOOLS = [] {
-  std::vector<ToolDescriptor> tools = {};
-  tools.reserve(devkit_tool_catalog::METADATA.size());
-  for (const auto& [tool_name, metadata] : devkit_tool_catalog::METADATA) {
-    tools.push_back(ToolDescriptor{
-        .name = tool_name,
-        .metadata = metadata,
-    });
-  }
-  return tools;
-}();
+[[nodiscard]] const std::vector<ToolDescriptor>& GetFallbackDevkitTools() {
+  static const std::vector<ToolDescriptor> TOOLS = [] {
+    std::vector<ToolDescriptor> built_tools = {};
+    built_tools.reserve(devkit_tool_catalog::METADATA.size());
+    for (const auto& [tool_name, metadata] : devkit_tool_catalog::METADATA) {
+      built_tools.push_back(ToolDescriptor{
+          .name = tool_name,
+          .metadata = metadata,
+      });
+    }
+    return built_tools;
+  }();
+  return TOOLS;
+}
+
+[[nodiscard]] bool IsFallbackDevkitTool(std::string_view tool_name) {
+  return devkit_tool_catalog::METADATA.find(tool_name) != devkit_tool_catalog::METADATA.end();
+}
 
 const std::array<ToolDescriptor, 2> LOCAL_TOOLS = {
     ToolDescriptor{
@@ -421,7 +431,7 @@ class Bridge {
     if (!result.contains("protocolVersion") || !result["protocolVersion"].is_string()) {
       return "The backend did not return a valid initialize result protocolVersion.";
     }
-    if (result["protocolVersion"].get_ref<const std::string&>() != mcp::PROTOCOL_VERSION) {
+    if (!mcp::IsSupportedProtocolVersion(result["protocolVersion"].get_ref<const std::string&>())) {
       return std::format(
           "The backend requested unsupported MCP protocol version '{}'.",
           result["protocolVersion"].get_ref<const std::string&>());
@@ -447,10 +457,22 @@ class Bridge {
   [[nodiscard]] ConnectionsStructuredContent BuildConnectionsStructuredContent(const std::vector<std::string>& available_pipes) const {
     ConnectionsStructuredContent content = {
         .available_count = available_pipes.size(),
+        .bridge_info = json{
+            {"name", BRIDGE_SERVER_NAME},
+            {"title", BRIDGE_SERVER_TITLE},
+          {"version", std::string(renodx::build_info::kBuildVersion)},
+        },
         .selected_pipe = selected_pipe,
         .connected_pipe = connected_pipe,
         .manual_selection = manual_pipe_selection,
     };
+
+    if (renodx::build_info::HasKnownBuildTimestamp()) {
+      content.bridge_info["buildTimestampUtc"] = renodx::build_info::kBuildTimestampUtc;
+    }
+    if (renodx::build_info::HasKnownSourceDateEpoch()) {
+      content.bridge_info["sourceDateEpoch"] = renodx::build_info::kSourceDateEpoch;
+    }
     content.connections.reserve(available_pipes.size());
 
     for (size_t index = 0; index < available_pipes.size(); ++index) {
@@ -935,6 +957,7 @@ class Bridge {
       result.response = json(json_rpc::SuccessResponseMessage{
                                  .id = id,
                                  .result = mcp::InitializeResult{
+                                     .protocol_version = mcp::NegotiateProtocolVersionFromInitializeParams(params),
                                      .capabilities = {
                                          .tools = {
                                              .list_changed = true,
@@ -975,15 +998,16 @@ class Bridge {
 
     if (method == mcp::METHOD_TOOLS_LIST) {
       std::vector<BridgeToolDescriptor> tools = {};
-      tools.reserve(LOCAL_TOOLS.size() + FALLBACK_DEVKIT_TOOLS.size());
+      const auto& fallback_devkit_tools = GetFallbackDevkitTools();
+      tools.reserve(LOCAL_TOOLS.size() + fallback_devkit_tools.size());
       for (const auto& tool : LOCAL_TOOLS) {
         UpsertTool(tools, MakeBridgeToolDescriptor(tool));
       }
-      for (const auto& tool : FALLBACK_DEVKIT_TOOLS) {
+      for (const auto& tool : fallback_devkit_tools) {
         UpsertTool(tools, MakeBridgeToolDescriptor(tool));
       }
       for (const auto& tool : GetBackendTools()) {
-        if (IsLocalTool(tool.name)) {
+        if (IsLocalTool(tool.name) || IsFallbackDevkitTool(tool.name)) {
           continue;
         }
         UpsertTool(tools, tool);

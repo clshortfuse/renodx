@@ -27,13 +27,12 @@ float4 main(
   linear float2 TEXCOORD_1 : TEXCOORD1
 ) : SV_Target {
   float4 SV_Target;
-  float4 _10 = HDRScene.Sample(LinearClampSampler, float2(TEXCOORD_1.x, TEXCOORD_1.y));
-  float4 _14 = UIScene.Sample(LinearClampSampler, float2(TEXCOORD_1.x, TEXCOORD_1.y));
-
-  if (HandleFinal(_10, _14, SV_Target, SV_Position)) {
+  if (HandleFinal(float4(HDRScene.Sample(LinearClampSampler, TEXCOORD_1.xy).xyz, 1.f), UIScene.Sample(LinearClampSampler, TEXCOORD_1.xy).xyzw, SV_Target, SV_Position)) {
     return SV_Target;
   }
 
+  float4 _10 = HDRScene.Sample(LinearClampSampler, float2(TEXCOORD_1.x, TEXCOORD_1.y));
+  float4 _14 = UIScene.Sample(LinearClampSampler, float2(TEXCOORD_1.x, TEXCOORD_1.y));
   float _33 = exp2(log2(_10.x * 2.009232997894287f) * 1.5f);
   float _34 = exp2(log2(_10.y * 2.009232997894287f) * 1.5f);
   float _35 = exp2(log2(_10.z * 2.009232997894287f) * 1.5f);

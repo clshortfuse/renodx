@@ -14,11 +14,14 @@
 #include <cstdio>
 
 #include <shared_mutex>
+#include <span>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <include/reshade.hpp>
 
+#include "./cross_addon.hpp"
 #include "./data.hpp"
 #include "./hash.hpp"
 #if defined(DEBUG_LEVEL_1) || defined(DEBUG_LEVEL_2)
@@ -27,8 +30,13 @@
 
 namespace renodx::utils::descriptor {
 
-static bool is_primary_hook = false;
 static std::atomic_bool trace_descriptor_tables = false;
+
+struct __declspec(uuid("9c947e94-c631-4baf-b0e8-044d2cdf7426")) SharedData {
+  bool trace_descriptor_tables = false;
+};
+
+static cross_addon::Shared<SharedData> shared;
 
 struct DescriptorHeapSlot {
   reshade::api::descriptor_type type = reshade::api::descriptor_type::sampler;
@@ -64,7 +72,6 @@ struct __declspec(uuid("018fa2c9-7a8b-76dc-bc84-87c53574223f")) DeviceData {
   std::unordered_map<std::pair<uint64_t, uint32_t>, reshade::api::descriptor_table_update, hash::HashPair> table_descriptor_resource_views;
   std::unordered_map<uint64_t, std::vector<DescriptorHeapSlot>> heaps;
 
-  bool trace_descriptor_tables = false;
   std::shared_mutex mutex;
 };
 
@@ -134,21 +141,11 @@ static bool FlushResourceViewInDescriptorTable(
 }
 
 static void OnInitDevice(reshade::api::device* device) {
-  DeviceData* data;
-  bool created = renodx::utils::data::CreateOrGet(device, data);
-  if (!created) {
-    trace_descriptor_tables = data->trace_descriptor_tables;
-    return;
-  }
-
-  data->trace_descriptor_tables = trace_descriptor_tables;
-
-  is_primary_hook = true;
+  renodx::utils::data::Create<DeviceData>(device);
 }
 
 static void OnDestroyDevice(reshade::api::device* device) {
-  if (!is_primary_hook) return;
-  device->destroy_private_data<DeviceData>();
+  renodx::utils::data::Delete<DeviceData>(device);
 }
 
 // Create DescriptorTables with RSVs
@@ -156,15 +153,12 @@ static bool OnUpdateDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_update* updates) {
-  if (!is_primary_hook) return false;
   if (count == 0u) return false;
-  if (!trace_descriptor_tables) return false;
+  if (!shared.data->trace_descriptor_tables) return false;
 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return false;
   const std::unique_lock lock(data->mutex);
-
-  if (!data->trace_descriptor_tables) return false;
 
   for (uint32_t i = 0; i < count; ++i) {
     const auto& update = updates[i];
@@ -269,13 +263,11 @@ static bool OnCopyDescriptorTables(
     reshade::api::device* device,
     uint32_t count,
     const reshade::api::descriptor_table_copy* copies) {
-  if (!is_primary_hook) return false;
   if (count == 0u) return false;
-  if (!trace_descriptor_tables) return false;
+  if (!shared.data->trace_descriptor_tables) return false;
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return false;
   const std::unique_lock lock(data->mutex);
-  if (!data->trace_descriptor_tables) return false;
 
   for (uint32_t i = 0; i < count; ++i) {
     const reshade::api::descriptor_table_copy& copy = copies[i];
@@ -395,28 +387,39 @@ static reshade::api::descriptor_table_update* CloneDescriptorTableUpdates(
   return clone;
 }
 
-static bool attached = false;
+static void DestroyDescriptorTableUpdates(std::span<reshade::api::descriptor_table_update> updates) {
+  for (auto& update : updates) {
+    free(const_cast<void*>(update.descriptors));
+    update.descriptors = nullptr;
+  }
+}
+
+static void DestroyDescriptorTableUpdates(reshade::api::descriptor_table_update* updates, uint32_t count) {
+  if (updates == nullptr) return;
+  DestroyDescriptorTableUpdates({updates, updates + count});
+  free(updates);
+}
 
 static void Use(DWORD fdw_reason) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-      if (attached) return;
-      attached = true;
-      reshade::log::message(reshade::log::level::info, "DescriptorTableUtil attached.");
-
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::register_event<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables);
-      reshade::register_event<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables);
+      if (shared.RegisterModule([](SharedData& data) {
+        data.trace_descriptor_tables = data.trace_descriptor_tables || trace_descriptor_tables;
+      })) {
+        reshade::log::message(reshade::log::level::info, "DescriptorTableUtil attached.");
+      }
+      shared.RegisterEvent<reshade::addon_event::init_device>(OnInitDevice, trace_descriptor_tables);
+      shared.RegisterEvent<reshade::addon_event::destroy_device>(OnDestroyDevice, trace_descriptor_tables);
+      shared.RegisterEvent<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables, trace_descriptor_tables);
+      shared.RegisterEvent<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables, trace_descriptor_tables);
 
       break;
     case DLL_PROCESS_DETACH:
-      if (!attached) return;
-      attached = false;
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::unregister_event<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables);
-      reshade::unregister_event<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables);
+      shared.UnregisterEvent<reshade::addon_event::init_device>(OnInitDevice);
+      shared.UnregisterEvent<reshade::addon_event::destroy_device>(OnDestroyDevice);
+      shared.UnregisterEvent<reshade::addon_event::update_descriptor_tables>(OnUpdateDescriptorTables);
+      shared.UnregisterEvent<reshade::addon_event::copy_descriptor_tables>(OnCopyDescriptorTables);
+      shared.UnregisterModule();
 
       break;
   }

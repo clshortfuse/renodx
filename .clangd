@@ -1,0 +1,4 @@
+# Project-local clangd defaults for this very large workspace.
+# Background indexing has shown runaway memory use in this repository.
+Index:
+  Background: Skip

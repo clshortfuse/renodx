@@ -13,17 +13,17 @@
 #include <dxgi1_6.h>
 #include <unknwnbase.h>
 
-
 namespace renodx::utils::directx {
 
 namespace internal {
 inline bool initialized = false;
-}
+}  // namespace internal
 
 inline decltype(&CreateDXGIFactory1) pCreateDXGIFactory1 = nullptr;
 inline decltype(&CreateDXGIFactory2) pCreateDXGIFactory2 = nullptr;
 inline decltype(&D3D12CreateDevice) pD3D12CreateDevice = nullptr;
 inline decltype(&D3D11CreateDevice) pD3D11CreateDevice = nullptr;
+inline decltype(&D3D12GetInterface) pD3D12GetInterface = nullptr;
 inline decltype(&D3D12GetDebugInterface) pD3D12GetDebugInterface = nullptr;
 inline decltype(&D3D12SerializeRootSignature) pD3D12SerializeRootSignature = nullptr;
 using PFN_D3D_COMPILE = HRESULT(WINAPI*)(LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
@@ -32,15 +32,15 @@ inline PFN_D3D_COMPILE pD3DCompile = nullptr;
 struct DECLSPEC_UUID("7F2C9A11-3B4E-4D6A-812F-5E9CD37A1B42") ReShadeRetrieveBaseInterface : IUnknown {};
 template <typename T>
 inline bool NativeFromReShadeProxy(T** reshade_proxy) {
+  if (reshade_proxy == nullptr) return false;
   auto* unknown = static_cast<IUnknown*>(*reshade_proxy);
   if (unknown == nullptr) return false;
   ReShadeRetrieveBaseInterface* native_base = nullptr;
   if (SUCCEEDED(unknown->QueryInterface(&native_base))) {
     native_base->Release();
-    *reshade_proxy = (T*)(native_base);
+    *reshade_proxy = reinterpret_cast<T*>(native_base);
     return true;
   }
-  assert(false);
   return false;
 }
 
@@ -104,6 +104,14 @@ static bool Initialize() {
     if (pD3D12CreateDevice == nullptr) {
       // reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(d3d12.dll, D3D12CreateDevice) failed)");
       return false;
+    }
+  }
+
+  if (pD3D12GetInterface == nullptr) {
+    HMODULE d3d12_module = LoadLibraryW(L"d3d12.dll");
+    if (d3d12_module != nullptr) {
+      pD3D12GetInterface = reinterpret_cast<decltype(&D3D12GetInterface)>(
+          GetProcAddress(d3d12_module, "D3D12GetInterface"));
     }
   }
 

@@ -1,36 +1,90 @@
 #include "./shared.h"
 
-float3 HueAndChrominanceOKLab(
-    float3 incorrect_color, float3 reference_color,
-    float hue_correct_strength = 0.f,
-    float chrominance_correct_strength = 0.f) {
-  if (hue_correct_strength != 0.0 || chrominance_correct_strength != 0.0) {
-    float3 perceptual_new = renodx::color::oklab::from::BT709(incorrect_color);
-    const float3 reference_oklab = renodx::color::oklab::from::BT709(reference_color);
+#define LMS_WHITE_BT709  renodx::color::lms::from::BT709(1.0f)
+#define LMS_WHITE_BT2020 renodx::color::lms::from::BT2020(1.0f)
 
-    float chrominance_current = length(perceptual_new.yz);
-    float chrominance_ratio = 1.0;
+float3 ApplyPurityFromLMS(
+    float3 lms_source,
+    float3 lms_target,
+    float amount = 1.f,
+    float clamp_purity_loss = 0.f,
+    float eps = 1e-7f) {
+  float3 mb_source = renodx::color::macleod_boynton::from::LMS(lms_source);
+  float3 mb_target = renodx::color::macleod_boynton::from::LMS(lms_target);
+  float2 mb_white = renodx::color::macleod_boynton::from::D65XY();
 
-    if (hue_correct_strength != 0.0) {
-      const float chrominance_pre = chrominance_current;
-      perceptual_new.yz = lerp(perceptual_new.yz, reference_oklab.yz, hue_correct_strength);
-      const float chrominancePost = length(perceptual_new.yz);
-      chrominance_ratio = renodx::math::SafeDivision(chrominance_pre, chrominancePost, 1);
-      chrominance_current = chrominancePost;
-    }
+  float2 source_offset = mb_source.xy - mb_white;
+  float2 target_offset = mb_target.xy - mb_white;
+  float src_radius = length(source_offset);
+  float tgt_radius = length(target_offset);
+  if (tgt_radius <= eps) return lms_target;
 
-    if (chrominance_correct_strength != 0.0) {
-      const float reference_chrominance = length(reference_oklab.yz);
-      float target_chrominance_ratio = renodx::math::SafeDivision(reference_chrominance, chrominance_current, 1);
-      chrominance_ratio = lerp(chrominance_ratio, target_chrominance_ratio, chrominance_correct_strength);
-    }
-    perceptual_new.yz *= chrominance_ratio;
-
-    incorrect_color = renodx::color::bt709::from::OkLab(perceptual_new);
-    incorrect_color = renodx::color::bt709::clamp::AP1(incorrect_color);
-  }
-  return incorrect_color;
+  float transfer_scale = src_radius / max(tgt_radius, eps);
+  float no_purity_loss_scale = max(transfer_scale, 1.f);
+  transfer_scale = lerp(transfer_scale, no_purity_loss_scale, clamp_purity_loss);
+  float scale = lerp(1.f, transfer_scale, amount);
+  float2 mb_scaled = mb_white + target_offset * scale;
+  return renodx::color::lms::from::MacLeodBoynton(float3(mb_scaled, mb_target.z));
 }
+
+float3 ApplyPurityFromBT2020(
+    float3 bt2020_source,
+    float3 bt2020_target,
+    float amount = 1.f,
+    float clamp_purity_loss = 0.f,
+    float eps = 1e-7f,
+    bool compress_gamut = true) {
+  if (amount <= 0.f) return bt2020_target;
+
+  float3 lms_target = renodx::color::lms::from::BT2020(bt2020_target);
+  float3 lms_source = renodx::color::lms::from::BT2020(bt2020_source);
+  float3 lms_out = ApplyPurityFromLMS(
+      lms_source,
+      lms_target,
+      amount,
+      clamp_purity_loss,
+      eps);
+
+  if (compress_gamut) {
+    lms_out = renodx::tonemap::psychov::psycho17_GamutCompressLMSBoundAdaptive(
+        lms_out,
+        1.f.xxx,
+        renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
+        1.f);
+  }
+  return renodx::color::bt2020::from::LMS(lms_out);
+}
+
+float3 ApplyPurityFromBT709(
+    float3 bt709_source,
+    float3 bt709_target,
+    float amount = 1.f,
+    float clamp_purity_loss = 0.f,
+    float eps = 1e-7f,
+    bool compress_gamut = true) {
+  if (amount <= 0.f) return bt709_target;
+
+  float3 lms_target = renodx::color::lms::from::BT709(bt709_target);
+  float3 lms_source = renodx::color::lms::from::BT709(bt709_source);
+  float3 lms_out = ApplyPurityFromLMS(
+      lms_source,
+      lms_target,
+      amount,
+      clamp_purity_loss,
+      eps);
+
+  if (compress_gamut) {
+    lms_out = renodx::tonemap::psychov::psycho17_GamutCompressLMSBoundAdaptive(
+        lms_out,
+        1.f.xxx,
+        renodx::color::macleod_boynton::BT709_TO_LMS_WEIGHTED_MAT,
+        1.f);
+  }
+  return renodx::color::bt709::from::LMS(lms_out);
+}
+
+static const float HITMAN_BRANCHING_POINT = 0.00414824f;
+static const float REINHARD_BRANCHING_POINT = 0.465571f;
 
 #define APPLY_TONEMAP_HITMAN_GENERATOR(T)                                       \
   T ToneMapHitman(T x) {                                                        \
@@ -52,18 +106,20 @@ float ToneMapHitmanDerivative(float x) {
   return (Np * D - N * Dp) / (D * D);
 }
 
-#define APPLY_HITMAN_EXTENDED_GENERATOR(T)          \
-  T ToneMapHitmanExtended(                          \
-      T x,                                          \
-      T base) {                                     \
-    const float pivot_x = 0.0932816;                \
-    float pivot_y = ToneMapHitman(pivot_x);         \
-    float slope = ToneMapHitmanDerivative(pivot_x); \
-                                                    \
-    float offset = pivot_y - slope * pivot_x;       \
-    T extended = slope * x + offset;                \
-                                                    \
-    return lerp(base, extended, step(pivot_x, x));  \
+#define APPLY_HITMAN_EXTENDED_GENERATOR(T)                            \
+  T ToneMapHitmanExtended(T x, float original_blend_strength = 0.f) { \
+    const T base = ToneMapHitman(x);                                  \
+                                                                      \
+    const float pivot_x = HITMAN_BRANCHING_POINT;                     \
+    float pivot_y = ToneMapHitman(pivot_x);                           \
+    float slope = ToneMapHitmanDerivative(pivot_x);                   \
+                                                                      \
+    float offset = pivot_y - slope * pivot_x;                         \
+    T extended = slope * x + offset;                                  \
+                                                                      \
+    T hdr_tonemapped = lerp(base, extended, step(pivot_x, x));        \
+                                                                      \
+    return lerp(hdr_tonemapped, base, original_blend_strength);       \
   }
 
 APPLY_HITMAN_EXTENDED_GENERATOR(float)
@@ -72,41 +128,38 @@ APPLY_HITMAN_EXTENDED_GENERATOR(float3)
 #undef APPLY_HITMAN_EXTENDED_GENERATOR
 
 float3 ApplyCustomHitmanToneMap(float3 untonemapped) {
-#if 1
-  float y_in = renodx::color::y::from::BT709(untonemapped);
-  float y_out = ToneMapHitmanExtended(y_in, ToneMapHitman(y_in));
+  float y_in = renodx::color::yf::from::BT709(untonemapped);
+  float y_out = ToneMapHitmanExtended(y_in);
   float3 hdr_tonemap = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
-#else
-  float3 hdr_tonemap = ToneMapHitmanExtended(untonemapped, ToneMapHitman(untonemapped));
-#endif
 
-  float3 hue_chrominance_reference = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 6.f, 0.0932816);
+  float3 ch_tonemap = renodx::color::bt709::from::LMS(
+      renodx::tonemap::ReinhardPiecewise(
+          ToneMapHitmanExtended(renodx::color::lms::from::BT709(untonemapped) / LMS_WHITE_BT709), 4.f, HITMAN_BRANCHING_POINT)
+      * LMS_WHITE_BT709);
 
-  hdr_tonemap = HueAndChrominanceOKLab(
-      hdr_tonemap,
-      hue_chrominance_reference,  // hue and chrominance reference color
-      RENODX_TONE_MAP_HUE_SHIFT,  // hue correct strength
-      RENODX_TONE_MAP_BLOWOUT     // chrominance correct strength
-  );
+  hdr_tonemap = ApplyPurityFromBT709(ch_tonemap, hdr_tonemap, RENODX_TONE_MAP_BLOWOUT, 0.f, 1e-7f, true);
 
   return hdr_tonemap;
 }
 
-float ReinhardDerivative(float x, float peak) {
+float ReinhardDerivative(float x, float peak = 1.f) {
   return (peak * peak) / ((x + peak) * (x + peak));
 }
 
-#define APPLY_EXTENDED_GENERATOR(T)                           \
-  T ApplyReinhardPlus(                                        \
-      T x, T base, float peak = 1.f) {                        \
-    float pivot_x = 0.465571;                                 \
-    float pivot_y = renodx::tonemap::Reinhard(pivot_x, peak); \
-    float slope = ReinhardDerivative(pivot_x, peak);          \
-    T offset = pivot_y - slope * pivot_x;                     \
-                                                              \
-    T extended = slope * x + offset; /* match slope */        \
-                                                              \
-    return lerp(base, extended, step(pivot_x, x));            \
+#define APPLY_EXTENDED_GENERATOR(T)                               \
+  T ApplyReinhardPlus(T x, float original_blend_strength = 1.f) { \
+    const T base = renodx::tonemap::Reinhard(x);                  \
+                                                                  \
+    float pivot_x = REINHARD_BRANCHING_POINT;                     \
+    float pivot_y = renodx::tonemap::Reinhard(pivot_x);           \
+    float slope = ReinhardDerivative(pivot_x);                    \
+    T offset = pivot_y - slope * pivot_x;                         \
+                                                                  \
+    T extended = slope * x + offset; /* match slope */            \
+                                                                  \
+    T hdr_tonemapped = lerp(base, extended, step(pivot_x, x));    \
+                                                                  \
+    return lerp(hdr_tonemapped, base, original_blend_strength);   \
   }
 
 APPLY_EXTENDED_GENERATOR(float)
@@ -114,22 +167,16 @@ APPLY_EXTENDED_GENERATOR(float3)
 #undef APPLY_EXTENDED_GENERATOR
 
 float3 ApplyCustomSimpleReinhardToneMap(float3 untonemapped) {
-#if 1
-  float y_in = renodx::color::y::from::BT709(untonemapped);
-  float y_out = ApplyReinhardPlus(y_in, renodx::tonemap::Reinhard(y_in));
+  float y_in = renodx::color::yf::from::BT709(untonemapped);
+  float y_out = ApplyReinhardPlus(y_in);
   float3 hdr_tonemap = renodx::color::correct::Luminance(untonemapped, y_in, y_out);
-#else
-  float3 hdr_tonemap = ToneMapHitmanExtended(untonemapped, renodx::tonemap::Reinhard(untonemapped));
-#endif
 
-  float3 hue_chrominance_reference = renodx::tonemap::ReinhardPiecewise(hdr_tonemap, 6.f, 0.465571);
+  float3 ch_tonemap = renodx::color::bt709::from::LMS(
+      renodx::tonemap::ReinhardPiecewise(
+          ApplyReinhardPlus(renodx::color::lms::from::BT709(untonemapped) / LMS_WHITE_BT709), 4.f, REINHARD_BRANCHING_POINT)
+      * LMS_WHITE_BT709);
 
-  hdr_tonemap = HueAndChrominanceOKLab(
-      hdr_tonemap,
-      hue_chrominance_reference,  // hue and chrominance reference color
-      RENODX_TONE_MAP_HUE_SHIFT,  // hue correct strength
-      RENODX_TONE_MAP_BLOWOUT     // chrominance correct strength
-  );
+  hdr_tonemap = ApplyPurityFromBT709(ch_tonemap, hdr_tonemap, RENODX_TONE_MAP_BLOWOUT, 0.f, 1e-7f, true);
 
   return hdr_tonemap;
 }

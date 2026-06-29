@@ -1,0 +1,397 @@
+#include "./tonemap.hlsli"
+
+struct S_cbSharedPerViewData {
+  float4 mProjection[4][1];
+  float4 mProjectionPrev[4][1];
+  float4 mViewToViewport[4][1];
+  float4 mViewToWorld[3][1];
+  float4 mViewToWorldPrev[3][1];
+  float4 mWorldToView[3];
+  float4 mWorldToViewPrev[3];
+  float4 mProjToWorld[4];
+  float4 mFxWorldToSampleSpace[4];
+  float4 mViewToGlobalShadowVSPT[4];
+  float4 vViewRemap;
+  float4 vViewDepthRemap[1];
+  float4 vEyeVectorUL[1];
+  float4 vEyeVectorLR[1];
+  float4 vEyeVectorDelta[1];
+  float4 vPixelToEyeVectorScaleBias[1];
+  float4 vViewSpaceUpVector;
+  float4 vViewportSize;
+  float4 vEngineTime;
+  uint nFrameCounter;
+  float fShaderLodFactorRcp;
+  float fMipLODBias;
+  float fScaledMipLODBias;
+  float4 vShaderColor0;
+  float4 vShaderColor1;
+  float4 vShaderColor2;
+  float4 vShaderColor3;
+  float4 vClipPlane0;
+  float4 vClipPlane1;
+  float4 vClipPlane2;
+  float4 vClipPlane3;
+  float4 vClipPlane4;
+  float4 vClipPlane5;
+  float4 vClusteredLightingParams;
+  uint4 viClusteredLightingClusterParams;
+  float4 vMippedDepthRemap;
+  float4 vSpecularOcclusionSettings;
+  float4 vSaturatedAmbientOcclusionSettings;
+  float4 vHDRScale;
+  float4 vTweakableShaderParams;
+  float4 vAtmosphericScatteringParameters;
+  float4 vAtmosphericScatteringParameters2;
+  float4 vAtmosphericScatteringParameters3;
+  float3 vAtmosphericScatteringMieBeta;
+  uint _pad_0;
+  float3 vAtmosphericScatteringRayleighBeta;
+  uint _pad_1;
+  float3 vAtmosphericScatteringShadowedMieBeta;
+  uint _pad_2;
+  float3 vAtmosphericScatteringShadowedRayleighBeta;
+  uint _pad_3;
+  float3 vAttenuatedSunColor;
+  uint _pad_4;
+  float3 vSunDirectionVS;
+  uint _pad_5;
+  float3 vSunDirectionWS;
+  float fSunScatteringIntensity;
+  float4 vWindDirectionAndStrength;
+  float4 vWindDirectionAndStrengthPrev;
+  float4 vWindInitialDirectionAndStrength;
+  float4 vFxFadeParameters;
+  float2 vFxSize;
+  int nNumCSMCascades;
+  float fCSMFadeAdd;
+  int nEnableClothBias;
+  int nEnableCloth;
+  int nClothInstanceDataOffset;
+  uint _pad_6;
+  int2 viNumTiles;
+  int nLightTileDebugFlags;
+  int nSelectedBoxReflectionId;
+  int nEnableAtmosphericScatteringBackdrop;
+  int nFallbackRoomMask;
+  int nInspectorId;
+  uint _pad_7;
+  float4 vClearColor;
+  float4 vShadowAtlasSize;
+  float fShadowPoissonScaleInPixels;
+  int nShadowSpotKernel;
+  int nShadowCSMKernel;
+  uint _pad_8;
+  float4 vPixelJitter;
+  float2 vUnjitter;
+  float fMaxReactiveMask;
+  float fReactiveMaskMotionThreshold;
+  float2 vGlobalShadowSize;
+  float fGlobalShadowMapConstantBias;
+  float fGlobalShadowMapLinearBias;
+  float fGlobalShadowMapNormalOffsetBias;
+  float2 vGlobalCascadeOffset;
+  uint _pad_9;
+  float2 vGlobalCascadeScale;
+  float2 vGlobalCascadeFadeOffset;
+  float2 vGlobalCascadeFadeScale;
+  float fGlobalCascadeFadeAmount;
+  uint nGlobalCascadeBindlessID;
+  float fVTSMConstantDepthBias;
+  float fVTSMLinearDepthBias;
+  float fVTSMConstantNormalBias;
+  float fVTSMLinearNormalBias;
+  int nHashedAlphaPeriod;
+  int nIsRenderingOffscreen;
+  int nMirrorsDisabled;
+  int nScatterMode;
+  int nSrvObjectIndicesOffset;
+  int nCameraDistanceDitherEnable;
+  float fPixelAngleFootprintApprox;
+  int nSSROnTransparent;
+  int nSSRHalfRes;
+  uint nMaxViewDistance;
+  int nVolumetricLightingApplyEnable;
+  float fVolumetricLightingApplyZBias;
+  float fVolumetricLightingEndDistance;
+  float3 vVolumetricLightingViewToFroxelWParams;
+  float2 vVolumetricLightingPixelCoordToFroxel;
+  uint _pad_10;
+  uint _pad_11;
+  float3 vVolumetricLightingGridSize;
+  float fGlobalHeightFogFalloffScale;
+  float fGlobalHeightFogFalloffHeight;
+  uint _pad_12;
+  uint _pad_13;
+  uint _pad_14;
+  float4 vGlobalHeightFogAlbedoAndExtinction;
+  float3 vVolumetricLightingAmbientEmissive;
+  float fGlobalHeightFogFalloffHeightScaled;
+  float3 vVolumetricLightingHeightFogEmissive;
+  uint nOutsideBoxReflectionFallbackId;
+  float3 vGIProbesUVWScale;
+  uint nGIProbesNumGrids;
+  float3 vGIProbesUVWBias;
+  uint nLightingFeatureFlags;
+  uint nAccessibilityFlags;
+  uint _pad_15;
+  uint _pad_16;
+  uint _pad_17;
+  float4 vAccessibilityColorOpaque;
+  float4 vAccessibilityColorOpaqueCrowd;
+  float4 vAccessibilityColorEmissive;
+  float4 vAccessibilityColorTransparent;
+  float4 vAccessibilityColorParticles;
+  int nEnableContactShadows;
+  int nEnableContactShadowsDebugColor;
+  uint _pad_18;
+  uint _pad_19;
+  uint4 nGIProbesRoomBitsToIds[8];
+  uint4 viGIProbesCMResolution;
+  float4 vGIProbesVoxelSize;
+  float4 vGIProbesCMRegionMinWS[4];
+  float4 vGIProbesCMRegionMaxWS[4];
+  float4 vGIProbesCMBlendSizeWS[4];
+  float4 vGIProbesCMCoordToUVWScaleXY;
+  float4 vGIProbesCMCoordToUVWScaleZ;
+  float4 vGIProbesCMWorldToCoordScale;
+  float4 vGIProbesCoordToCMWorldScale;
+  float4 vGIProbesCMWorldToCoordBias[4];
+  float4 vGIProbesSampleParams;
+  uint nGIProbesFlags;
+  uint nGIProbesForceLevel;
+  uint _pad_20;
+  uint _pad_21;
+  float4 vWireBackCol;
+  float fWireThickness;
+  float fWireSmoothness;
+  float fWireThicknessFar;
+  float fWireSmoothnessFar;
+  float fWireFadeStart;
+  float fWireFadeEnd;
+  float fWireAlphaFadeStart;
+  float fWireAlphaFadeEnd;
+  float fWireAlphaFade;
+  uint nIsRenderingShadow;
+  uint nWireMode;
+  uint nSSGIEnabled;
+  uint nBentNormalsEnabled;
+  uint nPathTracingIsEnabled;
+  uint _pad_22;
+  uint _pad_23;
+  float3 vOutsideBoxReflectionFallbackModifier;
+  float fLogNearPlane;
+  float fInvLogPlaneDifference;
+  uint _pad_24;
+  uint _pad_25;
+  uint _pad_26;
+  float4 vMomentsSize;
+  float4 vWrappingZoneParameters;
+  float fOverestimation;
+  float fMomentBias;
+  uint2 oitDebugPixel;
+  float4 vTerrainRGNParams[8];
+  uint2 viTerrainSectorNearCam;
+  float fTerrainVTOneOverPageAtlasSizeXY;
+  uint nTerrainVTFlags;
+  uint nLightingShadowFeatures;
+  float2 vVolumetricReferenceTransmittanceDepthToUVScaleBias;
+  uint nSmolderCSMSplit;
+  float waterMaxtessellationFactor;
+  uint nSmolderCSMBindlessID;
+  float fSmolderCSMDepthOffset;
+  uint nDebugLightblocker;
+  uint4 vVoxelCount[4];
+  float4 vVoxelSize[4];
+  float4 vGridOrigins[8];
+  uint vortexTextureAtlasWidth;
+  uint vortexTextureAtlasHeight;
+  uint vortexTextureAtlasDepth;
+  uint collisionTextureAtlasWidth;
+  uint collisionTextureAtlasHeight;
+  uint collisionTextureAtlasDepth;
+  uint _pad_27;
+  uint _pad_28;
+  float4 mCinematicVolumeWorldToObject[3];
+  float3 vCinematicVolumeBoxHalfSize;
+  uint nCinematicVolumeEnabled;
+  float3 vCinematicVolumeBoxFadeNeg;
+  uint nCinematicVolumeRemoveCSM;
+  float3 vCinematicVolumeBoxFadePos;
+  uint nPadCinematicVolume1;
+};
+
+Texture2D<float4> mapLinearLightTexture : register(t0);
+
+RWTexture2D<float4> uavOutput1 : register(u0);
+
+cbuffer _cbSharedPerViewData : register(b2) {
+  S_cbSharedPerViewData cbSharedPerViewData : packoffset(c000.x);
+};
+
+SamplerState samplerPointClampNode : register(s0);
+
+[numthreads(8, 8, 1)]
+void main(
+    uint3 SV_DispatchThreadID: SV_DispatchThreadID,
+    uint3 SV_GroupID: SV_GroupID,
+    uint3 SV_GroupThreadID: SV_GroupThreadID,
+    uint SV_GroupIndex: SV_GroupIndex) {
+  float4 _21;
+  float _29;
+  float _30;
+  float _31;
+  float _32;
+  float _39;
+  float _48;
+  float _163;
+  float _208;
+  float _253;
+  float _254;
+  float _255;
+  float _66;
+  float _75;
+  float _84;
+  float _97;
+  float _100;
+  float _103;
+  float _106;
+  float _108;
+  float _109;
+  float _110;
+  float _118;
+  float _121;
+  float _124;
+  float _125;
+  float _126;
+  float _133;
+  float _136;
+  float _138;
+  bool _140;
+  float _141;
+  float _149;
+  float _151;
+  bool _152;
+  float _165;
+  float _168;
+  float _169;
+  float _182;
+  float _186;
+  float _188;
+  float _197;
+  float _210;
+  float _213;
+  float _214;
+  float _227;
+  float _231;
+  float _233;
+  float _242;
+  float _260;
+  float _261;
+  float _262;
+  float _284;
+  float _285;
+  float _286;
+  float _296;
+  _21 = mapLinearLightTexture.SampleLevel(samplerPointClampNode, float2((cbPostChainMerge.vPixelSize.x * (float((int)((int)(SV_DispatchThreadID.x))) + 0.5f)), ((float((int)((int)(SV_DispatchThreadID.y))) + 0.5f) * cbPostChainMerge.vPixelSize.y)), 0.0f);
+  _29 = cbPostChainMerge.fTonemapScale * cbSharedPerViewData.vHDRScale.x;
+  _30 = _29 * _21.x;
+  _31 = _29 * _21.y;
+  _32 = _29 * _21.z;
+  _39 = max((cbPostChainMerge.vHDRParams.y - cbPostChainMerge.vHDRParams.x), cbPostChainMerge.vHDRParams.z) / cbPostChainMerge.vHDRParams.z;
+  _48 = max((_39 + -1.0f), cbPostChainMerge.fFilmWhiteClip);
+  if (!(cbPostChainMerge.iToneMapType == 0)) {
+    if (cbPostChainMerge.iToneMapType == 1) {
+      _253 = (_30 / (_30 + 1.0f));
+      _254 = (_31 / (_31 + 1.0f));
+      _255 = (_32 / (_32 + 1.0f));
+    } else {
+      if (cbPostChainMerge.iToneMapType == 2) {
+        _66 = _30 * 0.6000000238418579f;
+        _75 = _31 * 0.6000000238418579f;
+        _84 = _32 * 0.6000000238418579f;
+        _253 = (((((_66 + 0.10000000149011612f) * _30) + 0.004000000189989805f) / (((_66 + 1.0f) * _30) + 0.06000000238418579f)) + -0.06666666269302368f);
+        _254 = (((((_75 + 0.10000000149011612f) * _31) + 0.004000000189989805f) / (((_75 + 1.0f) * _31) + 0.06000000238418579f)) + -0.06666666269302368f);
+        _255 = (((((_84 + 0.10000000149011612f) * _32) + 0.004000000189989805f) / (((_84 + 1.0f) * _32) + 0.06000000238418579f)) + -0.06666666269302368f);
+      } else {
+        if (cbPostChainMerge.iToneMapType == 3) {
+          _97 = log2(_30) * 0.3010300099849701f;
+          _100 = ((_97 + 0.7329999804496765f) * cbPostChainMerge.fFilmSlope) + 0.18000000715255737f;
+          _103 = ((0.8199999928474426f - cbPostChainMerge.fFilmToe) / cbPostChainMerge.fFilmSlope) + -0.7329999804496765f;
+          _106 = (1.0f - cbPostChainMerge.fFilmToe) + cbPostChainMerge.fFilmBlackClip;
+          _108 = _97 - _103;
+          _109 = _106 * 2.0f;
+          _110 = ((cbPostChainMerge.fFilmSlope * -2.0f) / _106) * 1.4426950216293335f;
+          _118 = ((cbPostChainMerge.fFilmShoulder + -0.18000000715255737f) / cbPostChainMerge.fFilmSlope) + -0.7329999804496765f;
+          _121 = (1.0f - cbPostChainMerge.fFilmShoulder) + _48;
+          _124 = _48 + 1.0f;
+          _125 = _121 * 2.0f;
+          _126 = ((cbPostChainMerge.fFilmSlope * 2.0f) / _121) * 1.4426950216293335f;
+          _133 = select((_97 < _103), ((_109 / (exp2(_110 * _108) + 1.0f)) - cbPostChainMerge.fFilmBlackClip), _100);
+          _136 = _118 - _103;
+          _138 = saturate(_108 / _136);
+          _140 = (_118 < _103);
+          _141 = select(_140, (1.0f - _138), _138);
+          _149 = -0.0f - cbPostChainMerge.fFilmBlackClip;
+          _151 = select((_30 < 1.0000000036274937e-15f), _149, ((((_141 * _141) * (select((_97 > _118), (_124 - (_125 / (exp2(_126 * (_97 - _118)) + 1.0f))), _100) - _133)) * (3.0f - (_141 * 2.0f))) + _133));
+          _152 = (cbPostChainMerge.fFilmToeLinearInterp > 0.0f);
+          do {
+            _163 = _151;
+            if (_152) {
+              _163 = ((saturate(exp2(log2(_30 / cbPostChainMerge.fFilmToeLinearInterp) * 0.6000000238418579f)) * (_151 - _30)) + _30);
+            }
+            _165 = log2(_31) * 0.3010300099849701f;
+            _168 = ((_165 + 0.7329999804496765f) * cbPostChainMerge.fFilmSlope) + 0.18000000715255737f;
+            _169 = _165 - _103;
+            _182 = select((_165 < _103), ((_109 / (exp2(_110 * _169) + 1.0f)) - cbPostChainMerge.fFilmBlackClip), _168);
+            _186 = saturate(_169 / _136);
+            _188 = select(_140, (1.0f - _186), _186);
+            _197 = select((_31 < 1.0000000036274937e-15f), _149, ((((_188 * _188) * (select((_165 > _118), (_124 - (_125 / (exp2(_126 * (_165 - _118)) + 1.0f))), _168) - _182)) * (3.0f - (_188 * 2.0f))) + _182));
+            do {
+              _208 = _197;
+              if (_152) {
+                _208 = ((saturate(exp2(log2(_31 / cbPostChainMerge.fFilmToeLinearInterp) * 0.6000000238418579f)) * (_197 - _31)) + _31);
+              }
+              _210 = log2(_32) * 0.3010300099849701f;
+              _213 = ((_210 + 0.7329999804496765f) * cbPostChainMerge.fFilmSlope) + 0.18000000715255737f;
+              _214 = _210 - _103;
+              _227 = select((_210 < _103), ((_109 / (exp2(_110 * _214) + 1.0f)) - cbPostChainMerge.fFilmBlackClip), _213);
+              _231 = saturate(_214 / _136);
+              _233 = select(_140, (1.0f - _231), _231);
+              _242 = select((_32 < 1.0000000036274937e-15f), _149, ((((_233 * _233) * (select((_210 > _118), (_124 - (_125 / (exp2(_126 * (_210 - _118)) + 1.0f))), _213) - _227)) * (3.0f - (_233 * 2.0f))) + _227));
+              if (_152) {
+                _253 = _163;
+                _254 = _208;
+                _255 = ((saturate(exp2(log2(_32 / cbPostChainMerge.fFilmToeLinearInterp) * 0.6000000238418579f)) * (_242 - _32)) + _32);
+              } else {
+                _253 = _163;
+                _254 = _208;
+                _255 = _242;
+              }
+            } while (false);
+          } while (false);
+        } else {
+          _253 = 0.0f;
+          _254 = 0.0f;
+          _255 = 0.0f;
+        }
+      }
+    }
+  } else {
+    _253 = _30;
+    _254 = _31;
+    _255 = _32;
+  }
+  _260 = min((cbPostChainMerge.fRcpMappedWhitePoint * _253), _39);
+  _261 = min((cbPostChainMerge.fRcpMappedWhitePoint * _254), _39);
+  _262 = min((cbPostChainMerge.fRcpMappedWhitePoint * _255), _39);
+  _284 = _260 * 12.920000076293945f;
+  _285 = _261 * 12.920000076293945f;
+  _286 = _262 * 12.920000076293945f;
+  _296 = cbPostChainMerge.vHDRParams.x * 0.009999999776482582f;
+  float3 output = float3((((_284 + _296) + (((-0.054999999701976776f - _284) + (exp2(log2(abs(_260)) * 0.4166666567325592f) * 1.0549999475479126f)) * float((bool)(uint)(_260 > 0.0031308000907301903f)))) * cbPostChainMerge.vHDRParams.w),
+                         (((_285 + _296) + (((-0.054999999701976776f - _285) + (exp2(log2(abs(_261)) * 0.4166666567325592f) * 1.0549999475479126f)) * float((bool)(uint)(_261 > 0.0031308000907301903f)))) * cbPostChainMerge.vHDRParams.w),
+                         (((_286 + _296) + (((-0.054999999701976776f - _286) + (exp2(log2(abs(_262)) * 0.4166666567325592f) * 1.0549999475479126f)) * float((bool)(uint)(_262 > 0.0031308000907301903f)))) * cbPostChainMerge.vHDRParams.w));
+  // output = DrawPostChainMergeCBufferDebug(output, float2((float)(SV_DispatchThreadID.x), (float)(SV_DispatchThreadID.y)));
+  uavOutput1[int2((int)(SV_DispatchThreadID.x), (int)(SV_DispatchThreadID.y))] = float4(output, 1.0f);
+}

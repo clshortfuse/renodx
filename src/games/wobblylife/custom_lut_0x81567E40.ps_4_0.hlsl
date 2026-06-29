@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 // ---- Created with 3Dmigoto v1.3.16 on Fri Dec 26 12:55:04 2025
 Texture3D<float4> t1 : register(t1);
@@ -94,50 +94,37 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0,
   r1.xyz = r0.xyz * cb0[5].xxx + cb0[5].yyy;
 
   if (RENODX_TONE_MAP_TYPE != 0.f && CUSTOM_CUSTOM_LUT_COUNT != 1) {
-    float3 input_color = r1.xyz;
-    // linearize
-    float3 linear_color = renodx::color::srgb::DecodeSafe(input_color);
+    if (CUSTOM_SDR_GAMUT_COMPRESSION == WOBBLY_SDR_GAMUT_COMPRESSION_ADAPTIVE_D65) {
+      WobblyMaxChannelSdrState sdr_state = WobblyCompressToSdrMaxChannel(
+          renodx::color::srgb::DecodeSafe(r1.xyz));
+      r1.xyz = renodx::color::srgb::EncodeSafe(sdr_state.neutral_sdr_bt709);
 
-    float linear_grayscale = renodx::color::convert::Luminance(linear_color, 0);
-    const float MID_GRAY_LINEAR = 1 / (pow(10, 0.75));                          // ~0.18f
-    const float MID_GRAY_PERCENT = 0.5f;                                        // 50%
-    const float MID_GRAY_GAMMA = log(MID_GRAY_LINEAR) / log(MID_GRAY_PERCENT);  // ~2.49f
-    float encode_gamma = MID_GRAY_GAMMA;
-    float3 encoded = renodx::color::gamma::EncodeSafe(linear_color, encode_gamma);
-    float encoded_grayscale = renodx::color::gamma::Encode(linear_grayscale, encode_gamma);
-    float compression_scale = renodx::color::correct::ComputeGamutCompressionScale(encoded, encoded_grayscale);
-    float3 compressed = renodx::color::correct::GamutCompress(encoded, encoded_grayscale, compression_scale);
-    linear_color = renodx::color::gamma::DecodeSafe(compressed, encode_gamma);
-    r1.xyz = renodx::color::srgb::EncodeSafe(linear_color);
+      r1.xyz = t1.Sample(s1_s, r1.xyz).xyz;
+      r1.xyz = renodx::color::srgb::EncodeSafe(WobblyReconstructFromSdrMaxChannel(
+          renodx::color::srgb::DecodeSafe(r1.xyz),
+          sdr_state));
+    } else {
+      WobblyGammaGamutCompressionState gamut_state;
+      float3 linear_color = WobblyCompressGammaGamutForLut(
+          renodx::color::srgb::DecodeSafe(r1.xyz),
+          gamut_state);
+      r1.xyz = renodx::color::srgb::EncodeSafe(linear_color);
 
-    float max_channel = renodx::math::Max(r1.rgb);
-    float new_scale = renodx::tonemap::ReinhardScalable(
-        max_channel,
-        1.0,
-        0,
-        0.5f,
-        0.5f);
+      float new_scale = WobblyComputeMaxChannelSdrScale(r1.rgb);
 
-    // new_scale = min(new_scale, max_max_channel);
-    float final_scale = max_channel != 0 ? new_scale / max_channel : 1.f;
+      r1.rgb *= new_scale;
+      r1.xyz = t1.Sample(s1_s, r1.xyz).xyz;
+      r1.xyz = renodx::math::DivideSafe(r1.xyz, float3(new_scale, new_scale, new_scale), r1.xyz);
 
-    float old_scale = 1.f / max_channel;
-
-    r1.rgb *= final_scale;
-    r1.xyz = t1.Sample(s1_s, r1.xyz).xyz;
-    r1.xyz /= final_scale;
-
-    linear_grayscale = renodx::color::convert::Luminance(linear_color, 0);
-    linear_color = renodx::color::srgb::DecodeSafe(r1.xyz);
-    encoded = renodx::color::gamma::EncodeSafe(linear_color, encode_gamma);
-    encoded_grayscale = renodx::color::gamma::Encode(linear_grayscale, encode_gamma);
-    float3 decompressed = renodx::color::correct::GamutDecompress(encoded, encoded_grayscale, compression_scale);
-    r1.xyz = renodx::color::gamma::DecodeSafe(decompressed, encode_gamma);
-    r1.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
+      linear_color = renodx::color::srgb::DecodeSafe(r1.xyz);
+      r1.xyz = WobblyDecompressGammaGamutFromLut(linear_color, gamut_state);
+      r1.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
+    }
 
     r1.xyz = r1.xyz * cb0[3].xyz;
 
     o0.rgb = renodx::color::srgb::DecodeSafe(r1.rgb);
+    // o0.rgb = linear_color;
     o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
 
     return;
@@ -146,10 +133,8 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0,
 
   float3 untonemapped = renodx::color::srgb::Decode(untonemapped_gamma.rgb);
 
-  float3 neutral_sdr = lerp(
-      renodx::tonemap::renodrt::NeutralSDR(untonemapped),        // Luminance
-      renodx::tonemap::ExponentialRollOff(untonemapped, 0.75f),  // Per channel
-      0.5f);
+  WobblyMaxChannelSdrState sdr_state = WobblyCompressToSdrMaxChannel(untonemapped);
+  float3 neutral_sdr = sdr_state.neutral_sdr_bt709;
 
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     r1.xyz = renodx::color::srgb::Encode(neutral_sdr);
@@ -165,15 +150,8 @@ void main(float4 v0: SV_POSITION0, float2 v1: TEXCOORD0,
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     o0.rgb = graded_color;
   } else {
-    float3 neutral_sdr_gamma = renodx::color::srgb::EncodeSafe(neutral_sdr);
-    neutral_sdr_gamma *= cb0[3].xyz;
-    untonemapped_gamma *= cb0[3].xyz;
-
-    untonemapped = renodx::color::srgb::DecodeSafe(untonemapped_gamma);
-    neutral_sdr = renodx::color::srgb::DecodeSafe(neutral_sdr_gamma);
-
-    float3 final_color = renodx::draw::ToneMapPass(untonemapped, graded_color, neutral_sdr);
-    o0.rgb = final_color;
+    float3 untonemapped_graded = WobblyReconstructFromSdrMaxChannel(graded_color, sdr_state);
+    o0.rgb = WobblyApplyOutputToneMap(untonemapped_graded);
   }
 
   o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);

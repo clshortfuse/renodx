@@ -1,14 +1,17 @@
 #ifndef SRC_BATMAN_ARKHAMKNIGHT_SHARED_H_
 #define SRC_BATMAN_ARKHAMKNIGHT_SHARED_H_
 
-#define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
-#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
+#define RENODX_RENO_DRT_TONE_MAP_METHOD               renodx::tonemap::renodrt::config::tone_map_method::NEUTWO
+#define RENODX_RENO_DRT_NEUTRAL_SDR_TONE_MAP_METHOD   renodx::tonemap::renodrt::config::tone_map_method::NEUTWO
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_PEAK        -1.f
 #define RENODX_RENO_DRT_NEUTRAL_SDR_CLAMP_COLOR_SPACE -1.f
-#define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP        20.f
+#define RENODX_RENO_DRT_NEUTRAL_SDR_WHITE_CLIP        100.f
 #define RENODX_RENO_DRT_WHITE_CLIP                    100.f
+#define RENODX_TONE_MAP_WORKING_COLOR_SPACE           color::convert::COLOR_SPACE_BT2020
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE             renodx::color::convert::COLOR_SPACE_AP1
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE           renodx::color::convert::COLOR_SPACE_BT2020
+#define RENODX_SWAP_CHAIN_ENCODING                    renodx::draw::ENCODING_PQ
+#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE        color::convert::COLOR_SPACE_BT2020
 
 // Must be 32bit aligned
 // Should be 4x32

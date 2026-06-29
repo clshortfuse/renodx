@@ -1,4 +1,5 @@
 #include "../shared.h"
+#include "common.hlsli"
 
 struct CameraBlock {
   float3 CameraBlock_000;
@@ -557,9 +558,37 @@ float4 main(
   float _54 = ((_39.z * _36) * _45) + _22.z;
   float3 untonemapped = float3(_52, _53, _54);
 
-  float mid_gray = 0.18f;
-  {
-    _52 = mid_gray;
+  int vanilla_tonemap_mode = stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_004;
+  StarfieldVanillaTonemapParams vanilla_tonemap_params = StarfieldCreateVanillaTonemapParams(
+      vanilla_tonemap_mode,
+      PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_000,
+      PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_004,
+      PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_008,
+      PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_012,
+      PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_016,
+      PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_020,
+      PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_024);
+  const float vanilla_midgray_input = 0.18f;
+  float vanilla_midgray_output = vanilla_midgray_input;
+  StarfieldVanillaTonemapReference vanilla_reference;
+  vanilla_reference.input = vanilla_midgray_input;
+  vanilla_reference.output = vanilla_midgray_input;
+  vanilla_reference.slope = 1.f;
+  vanilla_reference.exposure = 1.f;
+  vanilla_reference.contrast = 1.f;
+  float2 vanilla_reference_io = vanilla_midgray_input.xx;
+  float vanilla_reference_slope = 1.f;
+
+  [branch]
+  if (RENODX_TONE_MAP_TYPE != RENODX_TONE_MAP_TYPE_PSYCHOV17) {
+    if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_RENODRT
+        && CUSTOM_RENODRT_TONEMAP_BY_LUMINANCE) {
+      float luminance_input = renodx::color::y::from::BT709(untonemapped);
+      _52 = luminance_input;
+      _53 = luminance_input;
+      _54 = luminance_input;
+    }
+
     if (stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_004 == 0) {
       _284 = saturate(_52);
       _285 = saturate(_53);
@@ -637,10 +666,9 @@ float4 main(
                 }
               }
               _18[_230] = (_267 * (1.0f / (_221 + _192)));
-              int _270 = _230 + 1;
-              if (!(_270 == 3)) {
-                _229 = (_17[_270]);
-                _230 = _270;
+              if (!((_230 + 1) == 3)) {
+                _229 = (_17[(_230 + 1)]);
+                _230 = (_230 + 1);
                 continue;
               }
               _284 = (_18[0]);
@@ -656,108 +684,6 @@ float4 main(
         }
       }
     }
-    mid_gray = _284;
-    _52 = untonemapped.r;
-  }
-
-  if (CUSTOM_VANILLA_BY_LUMINANCE != 0) {
-    _52 = renodx::color::y::from::BT709(untonemapped);
-  }
-
-  if (stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_004 == 0) {
-    _284 = saturate(_52);
-    _285 = saturate(_53);
-    _286 = saturate(_54);
-  } else {
-    if (stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_004 == 1) {
-      _284 = saturate((((_52 * 2.509999990463257f) + 0.029999999329447746f) * _52) / ((((_52 * 2.430000066757202f) + 0.5899999737739563f) * _52) + 0.14000000059604645f));
-      _285 = saturate((((_53 * 2.509999990463257f) + 0.029999999329447746f) * _53) / ((((_53 * 2.430000066757202f) + 0.5899999737739563f) * _53) + 0.14000000059604645f));
-      _286 = saturate((((_54 * 2.509999990463257f) + 0.029999999329447746f) * _54) / ((((_54 * 2.430000066757202f) + 0.5899999737739563f) * _54) + 0.14000000059604645f));
-    } else {
-      if (stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_004 == 2) {
-        float _101 = ((0.5600000023841858f / PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_000) + 2.430000066757202f) + (PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_004 / (PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_000 * PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_000));
-        _284 = saturate((((_101 * _52) + 0.029999999329447746f) * _52) / (PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_004 + (((_52 * 2.430000066757202f) + 0.5899999737739563f) * _52)));
-        _285 = saturate((((_101 * _53) + 0.029999999329447746f) * _53) / (PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_004 + (((_53 * 2.430000066757202f) + 0.5899999737739563f) * _53)));
-        _286 = saturate((((_101 * _54) + 0.029999999329447746f) * _54) / (PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_004 + (((_54 * 2.430000066757202f) + 0.5899999737739563f) * _54)));
-      } else {
-        if (stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_004 == 3) {
-          _17[0] = _52;
-          _17[1] = _53;
-          _17[2] = _54;
-          float _150 = max(0.0f, PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_016);
-          float _152 = saturate(PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_024);
-          float _153 = exp2(log2(saturate(PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_012)) * 2.200000047683716f) * 0.5f;
-          float _155 = (1.0f - saturate(PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_008)) * _153;
-          float _156 = 1.0f - _155;
-          float _158 = (1.0f - min(0.9999899864196777f, max(1.1920928955078125e-07f, saturate(PerSceneConstants_000.SPerSceneConstants_52080.TonemappingParams_020)))) * _156;
-          float _164 = ((_153 + -0.9999998807907104f) + _156) + exp2(_150);
-          float _171 = _153 / _164;
-          float _172 = (_158 + _153) / _164;
-          float _173 = (((_150 * 2.0f) * _152) * _164) / _164;
-          float _174 = _158 / _164;
-          float _178 = select((abs(_174) < 1.1920928955078125e-07f), 1.0f, (_158 / _174));
-          float _181 = _178 + 1.1920928955078125e-07f;
-          float _186 = max(1.1920928955078125e-07f, exp2(log2(_155)));
-          float _192 = exp2(log2(((_150 * 0.5f) * _152) + 1.0f));
-          float _195 = (_181 * _171) / (_186 + 1.1920928955078125e-07f);
-          float _201 = (1.0f - _172) + _173;
-          float _202 = _192 - max(1.1920928955078125e-07f, exp2(log2(_158 + _155)));
-          float _209 = ((_181 * _201) / (_202 + 1.1920928955078125e-07f)) * 0.6931471824645996f;
-          float _211 = (log2(_202) * 0.6931471824645996f) - (_209 * log2(_201));
-          if (_173 > 0.0f) {
-            _221 = (-0.0f - exp2(((_209 * log2(_173)) + _211) * 1.4426950216293335f));
-          } else {
-            _221 = -0.0f;
-          }
-          _18[0] = 0.0f;
-          _18[1] = 0.0f;
-          _18[2] = 0.0f;
-          _229 = _52;
-          _230 = 0;
-          while (true) {
-            float _231 = _229 * (1.0f / _164);
-            if (_231 < _171) {
-              if (_231 > 0.0f) {
-                _267 = exp2(((((log2(_231) * _195) + log2(_186)) * 0.6931471824645996f) + ((_195 * -0.6931471824645996f) * log2(_171))) * 1.4426950216293335f);
-              } else {
-                _267 = 0.0f;
-              }
-            } else {
-              if (_231 < _172) {
-                float _246 = _231 + ((_155 - (_178 * _171)) / _181);
-                if (_246 > 0.0f) {
-                  _267 = exp2(log2(_246) + log2(_181));
-                } else {
-                  _267 = 0.0f;
-                }
-              } else {
-                float _254 = (-1.0f - _173) + _231;
-                if (_254 < -0.0f) {
-                  _264 = exp2(((_209 * log2(-0.0f - _254)) + _211) * 1.4426950216293335f);
-                } else {
-                  _264 = 0.0f;
-                }
-                _267 = (_192 - _264);
-              }
-            }
-            _18[_230] = (_267 * (1.0f / (_221 + _192)));
-            if (!((_230 + 1) == 3)) {
-              _229 = (_17[(_230 + 1)]);
-              _230 = (_230 + 1);
-              continue;
-            }
-            _284 = (_18[0]);
-            _285 = (_18[1]);
-            _286 = (_18[2]);
-            break;
-          }
-        } else {
-          _284 = saturate(_52);
-          _285 = saturate(_53);
-          _286 = saturate(_54);
-        }
-      }
-    }
   }
   float _290 = t4_space5[stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_000].SHDRCompositeData_000.x;
   float _291 = t4_space5[stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_000].SHDRCompositeData_000.y;
@@ -770,101 +696,282 @@ float4 main(
   float _300 = t4_space5[stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_000].SHDRCompositeData_032;
   float _302 = t4_space5[stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_000].SHDRCompositeData_036;
   float _304 = t4_space5[stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_000].SHDRCompositeData_040;
-  float _307 = dot(float3(_284, _285, _286), float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
-  float _314 = ((_284 - _307) * _300) + _307;
-  float _315 = ((_285 - _307) * _300) + _307;
-  float _316 = ((_286 - _307) * _300) + _307;
-  float _338 = (((((((_307 * _290) - _314) * _293) + _314) * _302) - PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008) * _304) + PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008;
-  float _339 = (((((((_307 * _291) - _315) * _293) + _315) * _302) - PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008) * _304) + PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008;
-  float _340 = (((((((_307 * _292) - _316) * _293) + _316) * _302) - PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008) * _304) + PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008;
+  // RenoDX mod: shared LUT/debug prep injected ahead of the mode branch below.
+  // The original decompiled LUT blend path starts again at `_415`/`_420`.
+  renodx::lut::Config lut_config = StarfieldCreateLutConfig(s0_space5);
+  float3 color = 0.f.xxx;
+  float3 vanilla_linear = 0.f.xxx;
+  float2 psychov_packed_eye = STARFIELD_PSYCHOV_NEUTRAL_EYE_AVERAGE.xx;
+  float3 psychov_adaptive_state_lms = 0.f.xxx;
+  float psychov_gamut_compression_scale = 1.f;
+  float n2_scale = 1.f;
+  float _404 = 0.f;
+  float _405 = 0.f;
+  float _406 = 0.f;
+#ifndef NDEBUG
+  float vanilla_midgray_shift = 1.f;
+  float mid_gray_after_lut = vanilla_midgray_input;
+  float mid_gray_after_sdr_fx = vanilla_midgray_input;
+  float psychov_eye_raw_target = STARFIELD_PSYCHOV_NEUTRAL_EYE_AVERAGE;
+  float psychov_eye_gain = 1.f;
+  float3 psychov_debug_t2 = float3(_300, _302, _304);
+  float psychov_debug_eye_curr = STARFIELD_PSYCHOV_NEUTRAL_EYE_AVERAGE;
+#endif
 
-  // float _352 = max(SharedFrameData_000.FrameData_032, 0.0010000000474974513f);
-  // float _359 = (((lerp(_338, _295, _298)) * 2.0f) + -1.0f) * _352;
-  // float _360 = (((lerp(_339, _296, _298)) * 2.0f) + -1.0f) * _352;
-  // float _361 = (((lerp(_340, _297, _298)) * 2.0f) + -1.0f) * _352;
-  // float _366 = (_352 / sqrt((_352 * _352) + 1.0f)) * 2.0f;
-  // float _388 = 1.0f / max(SharedFrameData_000.FrameData_028, 0.0010000000474974513f);
-  // float _404 = max(((exp2(log2((_359 / (sqrt((_359 * _359) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-  // float _405 = max(((exp2(log2((_360 / (sqrt((_360 * _360) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-  // float _406 = max(((exp2(log2((_361 / (sqrt((_361 * _361) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-  // float3 _415 = t3_space5.Sample(s0_space5, float3(((_404 * 0.9375f) + 0.03125f), ((_405 * 0.9375f) + 0.03125f), ((_406 * 0.9375f) + 0.03125f)));
+  [branch]
+  if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_PSYCHOV17) {
+    vanilla_midgray_output = StarfieldEvalVanillaTonemapScalar(
+        vanilla_midgray_input,
+        vanilla_tonemap_params);
 
-  float _404 = lerp(_338, _295, _298);
-  float _405 = lerp(_339, _296, _298);
-  float _406 = lerp(_340, _297, _298);
+    float mid_gray_scale = 1.f;
+    float psychov_cone_response_baseline = 1.f;
+    [branch]
+    if (CUSTOM_PSYCHOV_USE_VANILLA_MIDGRAY || CUSTOM_PSYCHOV_USE_VANILLA_SLOPE) {
+      vanilla_reference = StarfieldResolvePsychoVVanillaReference(
+          vanilla_midgray_output,
+          vanilla_tonemap_params);
+      vanilla_reference_io = float2(vanilla_reference.input, vanilla_reference.output);
+      vanilla_reference_slope = vanilla_reference.slope;
 
-  if (CUSTOM_VANILLA_BY_LUMINANCE != 0) {
-    float3 by_luminance = untonemapped * renodx::math::DivideSafe(_404, _52, 0);
-    by_luminance = renodx::color::correct::Hue(by_luminance, untonemapped, 1.f);
+      [branch]
+      if (CUSTOM_PSYCHOV_USE_VANILLA_MIDGRAY) {
+        mid_gray_scale = vanilla_reference.exposure;
+      }
+      [branch]
+      if (CUSTOM_PSYCHOV_USE_VANILLA_SLOPE) {
+        psychov_cone_response_baseline = StarfieldResolvePsychoVConeResponseBaseline(vanilla_reference_io.x, vanilla_reference_io.y, vanilla_reference_slope);
+      }
+    }
 
-    _404 = by_luminance.r;
-    _405 = by_luminance.g;
-    _406 = by_luminance.b;
+    [branch]
+    if (CUSTOM_EYE_ADAPTATION_PERCEPTUAL) {
+#ifndef NDEBUG
+      float4 psychov_eye_adaptation = StarfieldResolvePsychoVEyeAdaptation();
+      psychov_packed_eye = psychov_eye_adaptation.xy;
+      psychov_eye_raw_target = psychov_eye_adaptation.z;
+      psychov_eye_gain = psychov_eye_adaptation.w;
+#else
+      psychov_packed_eye = StarfieldResolvePsychoVEyeAdaptation().xy;
+#endif
+
+#ifndef NDEBUG
+      [branch]
+      if (CUSTOM_DEBUG_ANY) {
+        psychov_debug_t2 = t2_space5.Load(int3(0, 0, 0));
+      }
+      [branch]
+      if (CUSTOM_EYE_ADAPTATION_HAS_DATA) {
+        psychov_debug_t2 = float3(
+            psychov_packed_eye.x,
+            psychov_packed_eye.y,
+            psychov_eye_adaptation.z);
+      }
+
+      psychov_debug_eye_curr = (CUSTOM_DEBUG_ANY && psychov_debug_t2.x > 0.0f)
+                                   ? psychov_debug_t2.x
+                                   : psychov_eye_adaptation.x;
+#endif
+    }
+
+    float3 psychov_hdr = StarfieldPsychoVTest17(
+        untonemapped,
+        mid_gray_scale,
+        psychov_packed_eye.x,
+        psychov_packed_eye.y,
+        false,
+        psychov_cone_response_baseline);
+
+    psychov_adaptive_state_lms = renodx::color::lms::from::BT709(max(vanilla_midgray_output.xxx, renodx::math::FLT_EPSILON.xxx));
+    psychov_gamut_compression_scale = renodx::color::gamut::ComputeGamutCompressionScaleBT709AdaptiveD65(
+        psychov_hdr,
+        psychov_adaptive_state_lms,
+        1.f);
+    float3 psychov_hdr_compressed = renodx::color::gamut::GamutCompressBT709AdaptiveD65(
+        psychov_hdr,
+        psychov_adaptive_state_lms,
+        psychov_gamut_compression_scale);
+    n2_scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(psychov_hdr_compressed);
+    float3 psychov_sdr_input = psychov_hdr_compressed * n2_scale.xxx;
+    _404 = psychov_sdr_input.r;
+    _405 = psychov_sdr_input.g;
+    _406 = psychov_sdr_input.b;
+
+  } else {
+    float _307 = dot(float3(_284, _285, _286), float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
+    float _314 = ((_284 - _307) * _300) + _307;
+    float _315 = ((_285 - _307) * _300) + _307;
+    float _316 = ((_286 - _307) * _300) + _307;
+    float _338 = (((((((_307 * _290) - _314) * _293) + _314) * _302) - PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008) * _304) + PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008;
+    float _339 = (((((((_307 * _291) - _315) * _293) + _315) * _302) - PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008) * _304) + PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008;
+    float _340 = (((((((_307 * _292) - _316) * _293) + _316) * _302) - PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008) * _304) + PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008;
+
+    // float _352 = max(SharedFrameData_000.FrameData_032, 0.0010000000474974513f);
+    // float _359 = (((lerp(_338, _295, _298)) * 2.0f) + -1.0f) * _352;
+    // float _360 = (((lerp(_339, _296, _298)) * 2.0f) + -1.0f) * _352;
+    // float _361 = (((lerp(_340, _297, _298)) * 2.0f) + -1.0f) * _352;
+    // float _366 = (_352 / sqrt((_352 * _352) + 1.0f)) * 2.0f;
+    // float _388 = 1.0f / max(SharedFrameData_000.FrameData_028, 0.0010000000474974513f);
+    // float _404 = max(((exp2(log2((_359 / (sqrt((_359 * _359) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+    // float _405 = max(((exp2(log2((_360 / (sqrt((_360 * _360) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+    // float _406 = max(((exp2(log2((_361 / (sqrt((_361 * _361) + 1.0f) * _366)) + 0.5f) * _388) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+    // float3 _415 = t3_space5.Sample(s0_space5, float3(((_404 * 0.9375f) + 0.03125f), ((_405 * 0.9375f) + 0.03125f), ((_406 * 0.9375f) + 0.03125f)));
+
+    _404 = lerp(_338, _295, _298);
+    _405 = lerp(_339, _296, _298);
+    _406 = lerp(_340, _297, _298);
+
+    if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_RENODRT
+        && CUSTOM_RENODRT_TONEMAP_BY_LUMINANCE) {
+      float3 by_luminance = untonemapped * renodx::math::DivideSafe(_404, _52, 0);
+      by_luminance = renodx::color::correct::Hue(by_luminance, untonemapped, 1.f);
+      float by_luminance_grayscale = renodx::color::y::from::BT709(by_luminance);
+      float by_luminance_gamut_compression_scale = renodx::color::correct::ComputeGamutCompressionScale(
+          by_luminance,
+          by_luminance_grayscale);
+      by_luminance = renodx::color::correct::GamutCompress(
+          by_luminance,
+          by_luminance_grayscale,
+          by_luminance_gamut_compression_scale);
+
+      _404 = by_luminance.r;
+      _405 = by_luminance.g;
+      _406 = by_luminance.b;
+    }
   }
 
-  float3 corrected_color = renodx::color::correct::Hue(
-      float3(_404, _405, _406),
-      untonemapped,
-      1.f);
-
-  _404 = corrected_color.r;
-  _405 = corrected_color.g;
-  _406 = corrected_color.b;
-
-  renodx::lut::Config lut_config = renodx::lut::config::Create();
-  lut_config.lut_sampler = s0_space5;
-  lut_config.strength = CUSTOM_LUT_STRENGTH;
-  lut_config.scaling = CUSTOM_LUT_SCALING;
-  lut_config.tetrahedral = CUSTOM_LUT_SAMPLING != 0.f;
-  lut_config.type_input = renodx::lut::config::type::SRGB;
-  lut_config.type_output = renodx::lut::config::type::SRGB;
-  lut_config.size = 16u;
-  lut_config.recolor = 0.f;
-  float3 lut_output_color = renodx::lut::Sample(float3(_404, _405, _406), lut_config, t3_space5);
-
-  float3 mid_gray_lut = renodx::lut::Sample((mid_gray).xxx, lut_config, t3_space5);
-  mid_gray = renodx::color::y::from::BT709(mid_gray_lut);
-
-  float3 _415 = renodx::color::srgb::EncodeSafe(lut_output_color);
-  float _420 = t1_space5.Sample(s0_space5, float2(TEXCOORD.x, TEXCOORD.y));
-  float _428 = (_420.x * (_404 - _415.x)) + _415.x;
-  float _429 = (_420.x * (_405 - _415.y)) + _415.y;
-  float _430 = (_420.x * (_406 - _415.z)) + _415.z;
-
-  if (false && !(SharedFrameData_000.FrameData_036 == 0)) {
-    float3 _435 = t3_space5.Sample(s0_space5, float3(0.03125f, 0.03125f, 0.03125f));
-    float3 _439 = t3_space5.Sample(s0_space5, float3(0.96875f, 0.96875f, 0.96875f));
-    float _444 = min(_435.x, min(_435.y, _435.z));
-    float _449 = 1.0f / max(0.0f, (max(_439.x, max(_439.y, _439.z)) - _444));
-    float _456 = saturate(_449 * (_428 - _444));
-    float _457 = saturate(_449 * (_429 - _444));
-    float _458 = saturate(_449 * (_430 - _444));
-    float _479 = (pow(_456, SharedFrameData_000.FrameData_044));
-    float _480 = (pow(_457, SharedFrameData_000.FrameData_044));
-    float _481 = (pow(_458, SharedFrameData_000.FrameData_044));
-    _505 = ((SharedFrameData_000.FrameData_040 * (((_479 * (1.0f - exp2((_456 * _456) * -14.42694091796875f))) - _428) + ((1.0f - _479) * _456))) + _428);
-    _506 = ((SharedFrameData_000.FrameData_040 * (((_480 * (1.0f - exp2((_457 * _457) * -14.42694091796875f))) - _429) + ((1.0f - _480) * _457))) + _429);
-    _507 = (((((_481 * (1.0f - exp2((_458 * _458) * -14.42694091796875f))) - _430) + ((1.0f - _481) * _458)) * SharedFrameData_000.FrameData_040) + _430);
-  } else {
-    _505 = _428;
-    _506 = _429;
-    _507 = _430;
+  if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_VANILLA) {
+    _404 = saturate(_404);
+    _405 = saturate(_405);
+    _406 = saturate(_406);
   }
-  SV_Target.x = _505;
-  SV_Target.y = _506;
-  SV_Target.z = _507;
-  SV_Target.w = 1.0f;
 
-  float3 vanilla_linear = renodx::color::srgb::DecodeSafe(SV_Target.rgb);
-  float3 color = vanilla_linear;
+  float3 lut_input_color = float3(_404, _405, _406);
+  float3 sdr_output_linear;
+  [branch]
+  if (CUSTOM_LUT_STRENGTH != 0) {
+    float3 lut_output_color = StarfieldSampleLut(lut_input_color, lut_config, t3_space5);
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    color = renodx::draw::ToneMapPass(untonemapped * mid_gray / 0.18f, vanilla_linear);
+    [branch]
+    if (CUSTOM_LUT_BLEND_MASK > 0.f) {
+      float3 _415 = renodx::color::srgb::EncodeSafe(lut_output_color);
+      float _420 = t1_space5.Sample(s0_space5, float2(TEXCOORD.x, TEXCOORD.y));
+      float _428 = (_420.x * (_404 - _415.x)) + _415.x;
+      float _429 = (_420.x * (_405 - _415.y)) + _415.y;
+      float _430 = (_420.x * (_406 - _415.z)) + _415.z;
+
+      if (false && !(SharedFrameData_000.FrameData_036 == 0)) {
+        float3 _435 = t3_space5.Sample(s0_space5, float3(0.03125f, 0.03125f, 0.03125f));
+        float3 _439 = t3_space5.Sample(s0_space5, float3(0.96875f, 0.96875f, 0.96875f));
+        float _444 = min(_435.x, min(_435.y, _435.z));
+        float _449 = 1.0f / max(0.0f, (max(_439.x, max(_439.y, _439.z)) - _444));
+        float _456 = saturate(_449 * (_428 - _444));
+        float _457 = saturate(_449 * (_429 - _444));
+        float _458 = saturate(_449 * (_430 - _444));
+        float _479 = (pow(_456, SharedFrameData_000.FrameData_044));
+        float _480 = (pow(_457, SharedFrameData_000.FrameData_044));
+        float _481 = (pow(_458, SharedFrameData_000.FrameData_044));
+        _505 = ((SharedFrameData_000.FrameData_040 * (((_479 * (1.0f - exp2((_456 * _456) * -14.42694091796875f))) - _428) + ((1.0f - _479) * _456))) + _428);
+        _506 = ((SharedFrameData_000.FrameData_040 * (((_480 * (1.0f - exp2((_457 * _457) * -14.42694091796875f))) - _429) + ((1.0f - _480) * _457))) + _429);
+        _507 = (((((_481 * (1.0f - exp2((_458 * _458) * -14.42694091796875f))) - _430) + ((1.0f - _481) * _458)) * SharedFrameData_000.FrameData_040) + _430);
+      } else {
+        _505 = _428;
+        _506 = _429;
+        _507 = _430;
+      }
+      sdr_output_linear = renodx::color::srgb::DecodeSafe(float3(_505, _506, _507));
+    } else {
+      sdr_output_linear = lut_output_color;
+    }
   } else {
-    color = max(0, color);
+    sdr_output_linear = lut_input_color;
+  }
+
+  [branch]
+  if (RENODX_TONE_MAP_TYPE == RENODX_TONE_MAP_TYPE_PSYCHOV17) {
+    float3 graded_hdr_compressed = renodx::math::DivideSafe(sdr_output_linear, n2_scale.xxx, sdr_output_linear);
+    color = renodx::color::gamut::GamutDecompressBT709AdaptiveD65(
+        graded_hdr_compressed,
+        psychov_adaptive_state_lms,
+        psychov_gamut_compression_scale);
+  } else if (RENODX_TONE_MAP_TYPE != RENODX_TONE_MAP_TYPE_VANILLA) {
+    vanilla_midgray_output = StarfieldEvalVanillaTonemapScalar(
+      vanilla_midgray_input,
+      vanilla_tonemap_params);
+    vanilla_linear = sdr_output_linear;
+    color = StarfieldRenoDRTPass(
+        untonemapped,
+        vanilla_linear,
+        vanilla_midgray_output,
+        TEXCOORD.xy,
+        lut_config,
+        t3_space5,
+        t1_space5,
+        s0_space5,
+        vanilla_tonemap_params);
+  } else {
+    vanilla_linear = sdr_output_linear;
+    color = saturate(vanilla_linear);
   }
 
   SV_Target.rgb = renodx::draw::RenderIntermediatePass(color);
 
+#ifndef NDEBUG
+  [branch]
+  if (CUSTOM_DEBUG_ANY) {
+    vanilla_midgray_output = StarfieldEvalVanillaTonemapScalar(
+        vanilla_midgray_input,
+        vanilla_tonemap_params);
+    vanilla_midgray_shift = renodx::math::DivideSafe(vanilla_midgray_output, vanilla_midgray_input, 1.f);
+    vanilla_reference = StarfieldResolvePsychoVVanillaReference(
+        vanilla_midgray_output,
+        vanilla_tonemap_params);
+    vanilla_reference_io = float2(vanilla_reference.input, vanilla_reference.output);
+    vanilla_reference_slope = vanilla_reference.slope;
+    mid_gray_after_lut = StarfieldComputeMidGrayAfterLut(vanilla_midgray_output, lut_config, t3_space5);
+    mid_gray_after_sdr_fx = mid_gray_after_lut;
+
+    float psychov_cone_baseline = StarfieldResolvePsychoVConeResponseBaseline(vanilla_reference_io.x, vanilla_reference_io.y, vanilla_reference_slope);
+    float psychov_cone_final = psychov_cone_baseline * max(0.f, CUSTOM_CONE_RESPONSE);
+
+    SV_Target.rgb = StarfieldDrawDebugCanvas(SV_Target.rgb, SV_Position.xy, vanilla_midgray_output, mid_gray_after_lut, mid_gray_after_sdr_fx, vanilla_reference_slope,
+        vanilla_midgray_shift,
+        psychov_cone_baseline,
+        psychov_cone_final,
+        psychov_debug_eye_curr,
+        psychov_packed_eye.y,
+        psychov_eye_raw_target,
+        psychov_eye_gain,
+        CUSTOM_EYE_ADAPTATION_MIN_BRIGHTNESS,
+        CUSTOM_EYE_ADAPTATION_MAX_BRIGHTNESS,
+        CUSTOM_EYE_ADAPTATION_HISTOGRAM_COUNT,
+        CUSTOM_EYE_ADAPTATION_RESOLVE_COUNT,
+        float4(
+            PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_000,
+            PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_004,
+            PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_008,
+            PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_012),
+        float4(
+            PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_016,
+            PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_020,
+            PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_024,
+            PerSceneConstants_000.SPerSceneConstants_4976.CameraExposureData_028),
+        float4(_290, _291, _292, _293),
+        float4(_295, _296, _297, _298),
+        float4(
+            _300,
+            _302,
+            _304,
+            float(t4_space5[stub_PushConstantWrapper_HDRComposite_000.PushConstantWrapper_HDRComposite_000].SHDRCompositeData_044)),
+        float4(
+            psychov_debug_t2.x,
+            psychov_debug_t2.y,
+            psychov_debug_t2.z,
+            0.f),
+        vanilla_tonemap_params);
+  }
+#endif
+
+  SV_Target.w = 1.0f;
   return SV_Target;
 }
