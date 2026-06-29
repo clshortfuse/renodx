@@ -118,25 +118,6 @@ void main(
   r3.x = dot(float3(0.0556300804, -0.203976959, 1.05697155), r3.xyz);
   r3.y = dot(float3(0.0556300804, -0.203976959, 1.05697155), r4.xyz);
   r3.z = dot(float3(0.0556300804, -0.203976959, 1.05697155), r5.xyz);
-
-  float3 untonemapped_ap1 = r0.xyz;
-
-  UECbufferConfig cb_config = CreateCbufferConfig();
-  cb_config.ue_filmblackclip = asfloat(cb0[27].w);
-  cb_config.ue_filmtoe = asfloat(cb0[27].y);
-  cb_config.ue_filmshoulder = asfloat(cb0[27].z);
-  cb_config.ue_filmslope = asfloat(cb0[27].x);
-  cb_config.ue_filmwhiteclip = asfloat(cb0[28].x);
-  cb_config.ue_tonecurveammount = asfloat(1.f);  // old UE version; 1.f = no tonecurve
-  cb_config.ue_mappingpolynomial = asfloat(cb0[17].xyz);
-  cb_config.ue_overlaycolor = asfloat(cb0[34].xyzw);
-  cb_config.ue_bluecorrection = asfloat(0.f);  // old UE version; 0.f = no bluecorrect
-  cb_config.ue_colorscale = asfloat(cb0[33].yzw);
-
-  o0 = ProcessLutbuilder(float3(untonemapped_ap1), cb_config, o0, asuint(cb0[40].w));
-
-  return;
-
   r1.x = dot(r1.xyz, r0.xyz);
   r1.y = dot(r2.xyz, r0.xyz);
   r1.z = dot(r3.xyz, r0.xyz);
@@ -157,6 +138,25 @@ void main(
   r0.xyz = r1.xyz * r0.xyz;
   r0.xyz = exp2(r0.xyz);
   r0.xyz = r0.xyz * cb0[39].xyz + cb0[40].xyz;
+
+  float3 untonemapped_ap1 = r0.xyz;
+
+  UECbufferConfig cb_config = CreateCbufferConfig();
+  cb_config.ue_filmblackclip = asfloat(cb0[27].w);
+  cb_config.ue_filmtoe = asfloat(cb0[27].y);
+  cb_config.ue_filmshoulder = asfloat(cb0[27].z);
+  cb_config.ue_filmslope = asfloat(cb0[27].x);
+  cb_config.ue_filmwhiteclip = asfloat(cb0[28].x);
+  cb_config.ue_tonecurveammount = asfloat(1.f);  // old UE version; 1.f = no tonecurve
+  cb_config.ue_mappingpolynomial = asfloat(cb0[17].xyz);
+  cb_config.ue_overlaycolor = asfloat(cb0[34].xyzw);
+  cb_config.ue_bluecorrection = asfloat(0.f);  // old UE version; 0.f = no bluecorrect
+  cb_config.ue_colorscale = asfloat(cb0[33].yzw);
+
+  o0 = ProcessLutbuilder(float3(untonemapped_ap1), cb_config, o0, asuint(cb0[40].w));
+
+  return;
+
   r1.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
   r1.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
   r1.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
