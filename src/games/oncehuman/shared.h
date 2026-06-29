@@ -16,24 +16,11 @@ struct ShaderInjectData {
   float tone_map_highlight_saturation;
   float tone_map_blowout;
   float tone_map_flare;
-  float tone_map_hue_correction;
-  float tone_map_hue_shift;
-  float tone_map_working_color_space;
-  float tone_map_clamp_color_space;
-  float tone_map_clamp_peak;
-  float tone_map_hue_processor;
-  float tone_map_per_channel;
   float gamma_correction;
-  float intermediate_scaling;
-  float intermediate_encoding;
-  float intermediate_color_space;
-  float swap_chain_decoding;
   float swap_chain_gamma_correction;
   float swap_chain_custom_color_space;
-  float swap_chain_clamp_color_space;
   float swap_chain_encoding;
   float swap_chain_encoding_color_space;
-  float custom_flip_uv_y;
   // Post-processing effect strengths (1.0 = vanilla).
   float vignette_strength;
   float chromatic_aberration_strength;
@@ -55,13 +42,13 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
 #define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
-#define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
-#define RENODX_TONE_MAP_WORKING_COLOR_SPACE  shader_injection.tone_map_working_color_space
-#define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
-#define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
-#define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
-#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE    shader_injection.tone_map_clamp_color_space
-#define RENODX_TONE_MAP_CLAMP_PEAK           shader_injection.tone_map_clamp_peak
+#define RENODX_TONE_MAP_PER_CHANNEL          0.f
+#define RENODX_TONE_MAP_WORKING_COLOR_SPACE  0.f
+#define RENODX_TONE_MAP_HUE_PROCESSOR        0.f
+#define RENODX_TONE_MAP_HUE_CORRECTION       1.f
+#define RENODX_TONE_MAP_HUE_SHIFT            0.5f
+#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE    0.f
+#define RENODX_TONE_MAP_CLAMP_PEAK           0.f
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
@@ -76,7 +63,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_DECODING           (shader_injection.gamma_correction + 1.f)
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   shader_injection.swap_chain_gamma_correction
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
-#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    shader_injection.swap_chain_clamp_color_space
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE  1.f
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
