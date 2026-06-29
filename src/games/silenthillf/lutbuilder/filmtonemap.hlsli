@@ -142,7 +142,7 @@ float3 ApplyToneCurveExtended(
 
 }  // unrealengine
 
-float3 ApplyToneCurveExtendedWithHermite(
+float3 ApplyToneCurveExtendedWithNeutwo(
     float3 untonemapped_rrt_prebluecorrect_ap1, float FilmSlope, float FilmToe,
     float FilmShoulder, float FilmBlackClip, float FilmWhiteClip) {
   float film_black_clip = FilmBlackClip;
@@ -150,26 +150,15 @@ float3 ApplyToneCurveExtendedWithHermite(
   unrealengine::filmtonemap::Config film_params =
       unrealengine::filmtonemap::config::Create(FilmSlope, FilmToe, FilmShoulder, film_black_clip, FilmWhiteClip);
 
-  float3 vanilla = unrealengine::filmtonemap::ApplyToneCurve(untonemapped_rrt_prebluecorrect_ap1, film_params);
+  float3 vanilla_prebluecorrect_ap1 = unrealengine::filmtonemap::ApplyToneCurve(untonemapped_rrt_prebluecorrect_ap1, film_params);
   float3 tonemapped_prebluecorrect_ap1 =
-      unrealengine::filmtonemap::extended::ApplyToneCurveExtended(untonemapped_rrt_prebluecorrect_ap1, vanilla, film_params);
+      unrealengine::filmtonemap::extended::ApplyToneCurveExtended(untonemapped_rrt_prebluecorrect_ap1, vanilla_prebluecorrect_ap1, film_params);
 
-#if 1
-  tonemapped_prebluecorrect_ap1 = lerp(
-      vanilla,
-      lerp(tonemapped_prebluecorrect_ap1, vanilla, 0.2f),
-      saturate(vanilla / 0.5f));
-#else
-  float lum_vanilla = renodx::color::y::from::AP1(vanilla);
-  float lum_hdr = renodx::color::y::from::AP1(tonemapped_prebluecorrect_ap1);
-  float blended_lum = lerp(lum_hdr, lum_vanilla, 0.2f);
-  blended_lum = lerp(lum_vanilla, blended_lum, saturate(lum_vanilla / 0.75f));
-  tonemapped_prebluecorrect_ap1 = renodx::color::correct::Luminance(tonemapped_prebluecorrect_ap1, lum_hdr, blended_lum);
-#endif
+  tonemapped_prebluecorrect_ap1 = lerp(tonemapped_prebluecorrect_ap1, vanilla_prebluecorrect_ap1, 0.5f);
 
   float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
   if (RENODX_GAMMA_CORRECTION) peak_ratio = renodx::color::correct::Gamma(peak_ratio, true);
-  tonemapped_prebluecorrect_ap1 = renodx::tonemap::HermiteSplinePerChannelRolloff(max(0, tonemapped_prebluecorrect_ap1), peak_ratio, 100.f);
+  tonemapped_prebluecorrect_ap1 = renodx::tonemap::neutwo::PerChannel(max(0, tonemapped_prebluecorrect_ap1), peak_ratio, 100.f);
 
   return tonemapped_prebluecorrect_ap1;
 }
