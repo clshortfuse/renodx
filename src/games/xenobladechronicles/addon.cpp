@@ -237,9 +237,13 @@ float res_scale = 1.f;
 
 const auto RYUJINX_PROCESS_NAME = std::string_view("Ryujinx.exe");
 const auto RYUJINX_LOADED_TITLE_MARKER = std::string_view("Application Loaded:");
-const std::array<std::string_view, 2> ACCEPTED_RYUJINX_TITLES = {
+const std::array<std::string_view, 6> ACCEPTED_RYUJINX_TITLES = {
+    "010074f013262000",
+    "xenoblade chronicles 3",
     "0100e95004038000",
     "xenoblade chronicles 2",
+    "0100ff500e34a000",
+    "xenoblade chronicles definitive edition",
 };
 
 bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
@@ -259,7 +263,7 @@ bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
-extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Xenoblade Chronicles 2";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX for Xenoblade Chronicles 1-3";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   const auto target_format = reshade::api::format::r16g16b16a16_float;
@@ -304,26 +308,25 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       static std::vector<uint32_t> hashes = {0x86878F42, 0x484D3AE8};  // final buffer
 
-    //   for (uint32_t hash : hashes) {
-    //     for (int i = 0; i < 3; i++) {
-    //       renodx::mods::swapchain::resource_upgrade_infos.push_back({
-    //           .old_format = reshade::api::format::r8g8b8a8_typeless,
-    //           .new_format = target_format,
-    //           .shader_hash = hash,
-    //           .use_resource_view_cloning = true,
-    //           .min_dimensions = min_dimensions,
-    //       });
-    //     }
-    //   }
+      //   for (uint32_t hash : hashes) {
+      //     for (int i = 0; i < 3; i++) {
+      //       renodx::mods::swapchain::resource_upgrade_infos.push_back({
+      //           .old_format = reshade::api::format::r8g8b8a8_typeless,
+      //           .new_format = target_format,
+      //           .shader_hash = hash,
+      //           .use_resource_view_cloning = true,
+      //           .min_dimensions = min_dimensions,
+      //       });
+      //     }
+      //   }
 
-        renodx::mods::swapchain::resource_upgrade_infos.push_back({
-            .old_format = reshade::api::format::r8g8b8a8_typeless,
-            .new_format = target_format,
-            .aspect_ratio = 16.f / 9.f,
-            .aspect_ratio_tolerance = 0.001f,
-            .usage_include = reshade::api::resource_usage::shader_resource,
-            .min_dimensions = min_dimensions,
-        });
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = target_format,
+          .aspect_ratio = 16.f / 9.f,
+          .aspect_ratio_tolerance = 0.05f,
+          //.usage_include = reshade::api::resource_usage::shader_resource,
+      });
 
       // Register event handlers
       reshade::register_event<reshade::addon_event::present>(OnPresent);

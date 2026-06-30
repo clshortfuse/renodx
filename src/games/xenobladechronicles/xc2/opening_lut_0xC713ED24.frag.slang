@@ -1,6 +1,6 @@
 #version 450
-#include "./shared.h"
-#include "./shared.slang"
+#include "../shared.h"
+#include "../shared.slang"
 
 layout(set = 0, binding = 22, std140) uniform fp_c3 {
   vec4 _m0[4096];
