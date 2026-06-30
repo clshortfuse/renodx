@@ -1,4 +1,4 @@
-#include "./lilium_cas.hlsl"
+#include "../lilium_cas.hlsl"
 
 cbuffer c0UBO : register(b0, space0) {
   float4 c0_m0[2] : packoffset(c0);

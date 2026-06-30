@@ -1,0 +1,4 @@
+#define TONEMAPPER_LAYOUT_MINIMAL_COLOR_FILTER
+#define TONEMAPPER_USE_COLOR_FILTER 1
+
+#include "tonemapper.hlsl"
