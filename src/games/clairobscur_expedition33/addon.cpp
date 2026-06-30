@@ -452,7 +452,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
-        return static_cast<bool>(params.size() < 20);
+        return params.size() < 20 && params.size() != 11;
       };
 
       if (!initialized) {
