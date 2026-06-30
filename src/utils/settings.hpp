@@ -675,6 +675,7 @@ static void Use(DWORD fdw_reason, Settings* new_settings, void (*new_on_preset_o
       if (!attached) return;
       attached = false;
       reshade::unregister_overlay(overlay_title.c_str(), OnRegisterOverlay);
+      reshade::unregister_event<reshade::addon_event::reshade_begin_effects>(OnReshadeBeginEffects);
       break;
   }
 }
