@@ -159,7 +159,7 @@ static Settings* settings = nullptr;
     .format = "%.2f",                                     \
   }
 
-bool useRenoDXHelper = false;
+static bool useRenoDXHelper = false;
 
 static Setting* FindSetting(const std::string& key) {
   for (auto* setting : *settings) {
