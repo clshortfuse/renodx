@@ -1,5 +1,5 @@
-#ifndef SRC_BOTW_SHARED_H_
-#define SRC_BOTW_SHARED_H_
+#ifndef SRC_GAMES_XENOBLADECHRONICLES_SHARED_H_
+#define SRC_GAMES_XENOBLADECHRONICLES_SHARED_H_
 
 /*
   Shaders use different push constants (depends on pipeline not shaders actually. So if a vertex shader is using
@@ -140,4 +140,4 @@ cbuffer injected_buffer : register(b13) {
 
 #endif
 
-#endif  // SRC_BOTW_SHARED_H_
+#endif  // SRC_GAMES_XENOBLADECHRONICLES_SHARED_H_
