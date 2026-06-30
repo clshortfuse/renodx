@@ -7,6 +7,7 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <mutex>
 #include <shared_mutex>
@@ -25,6 +26,7 @@
 namespace renodx_custom::utils::shader_hotswap {
 
 inline std::vector<renodx::utils::resource::ResourceUpgradeInfo> targets;
+inline std::vector<uint32_t> disable_hashes;
 
 namespace internal {
 
@@ -37,6 +39,7 @@ struct __declspec(uuid("7b4133e4-66d8-41d4-8b88-aeff73353fd3")) DeviceData {
   std::shared_mutex mutex;
   std::unordered_map<uint32_t, ShaderHotSwap> shader_hot_swaps;
   std::unordered_map<uint32_t, uint32_t> shader_hot_swap_pass_counts;
+  bool suspended = false;
 };
 
 struct __declspec(uuid("b566b301-2b89-45a6-a3bb-1afab2f599f4")) CommandListData {
@@ -52,6 +55,67 @@ inline void RebuildShaderHotSwaps(DeviceData& hot_swap_data) {
     auto& target = targets[i];
     if (target.shader_hash == 0u) continue;
     hot_swap_data.shader_hot_swaps[target.shader_hash].target_indices.push_back(i);
+  }
+}
+
+inline bool IsManagedTarget(const renodx::utils::resource::ResourceUpgradeInfo* target) {
+  if (target == nullptr || targets.empty()) return false;
+  const auto* target_begin = targets.data();
+  const auto* target_end = target_begin + targets.size();
+  return target >= target_begin && target < target_end;
+}
+
+inline bool IsDisableHash(uint32_t shader_hash) {
+  return std::ranges::any_of(disable_hashes, [shader_hash](uint32_t hash) {
+    return hash == shader_hash;
+  });
+}
+
+inline void ResetShaderHotSwapState(DeviceData* hot_swap_data = nullptr) {
+  if (hot_swap_data != nullptr) {
+    hot_swap_data->shader_hot_swaps.clear();
+    hot_swap_data->shader_hot_swap_pass_counts.clear();
+  }
+
+  for (auto& target : targets) {
+    target.completed = false;
+  }
+}
+
+inline void DetachPromotedTargets(reshade::api::device* device) {
+  if (device == nullptr) return;
+
+  std::vector<reshade::api::resource> managed_resources;
+  renodx::utils::resource::ForEachResourceInfo([&](const renodx::utils::resource::ResourceInfo& info) {
+    if (info.device != device) return;
+    if (!IsManagedTarget(info.clone_target)) return;
+    managed_resources.push_back(info.resource);
+  });
+
+  for (const auto& resource : managed_resources) {
+    std::vector<uint64_t> view_handles;
+    renodx::utils::resource::UpdateResourceInfo(resource, [&](renodx::utils::resource::ResourceInfo* info) {
+      if (info->destroyed || info->is_clone) return;
+      if (!IsManagedTarget(info->clone_target)) return;
+
+      info->clone_enabled = false;
+      info->clone_can_deactivate = false;
+      info->clone_target = nullptr;
+      info->resource_tag = -1.f;
+      view_handles.assign(info->resource_view_handles.begin(), info->resource_view_handles.end());
+    });
+
+    for (const auto view_handle : view_handles) {
+      if (view_handle == 0u) continue;
+      renodx::utils::resource::UpdateResourceViewInfo({view_handle}, [&](renodx::utils::resource::ResourceViewInfo* view_info) {
+        if (view_info->destroyed || view_info->is_clone) return;
+        if (!IsManagedTarget(view_info->clone_target)) return;
+
+        view_info->clone_enabled = false;
+        view_info->clone_can_deactivate = false;
+        view_info->clone_target = nullptr;
+      });
+    }
   }
 }
 
@@ -204,11 +268,8 @@ inline void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (hot_swap_data == nullptr) return;
 
   const std::unique_lock hot_swap_lock(hot_swap_data->mutex);
-  hot_swap_data->shader_hot_swaps.clear();
-  hot_swap_data->shader_hot_swap_pass_counts.clear();
-  for (auto& target : targets) {
-    target.completed = false;
-  }
+  hot_swap_data->suspended = false;
+  ResetShaderHotSwapState(hot_swap_data);
 }
 
 inline void OnPresent(
@@ -256,6 +317,56 @@ inline void OnBindPipeline(
   if (active_shader_hashes.empty()) return;
 
   cmd_list_data->active_shader_hashes.assign(active_shader_hashes.begin(), active_shader_hashes.end());
+
+  auto* hot_swap_data = renodx::utils::data::Get<DeviceData>(cmd_list->get_device());
+  if (hot_swap_data != nullptr) {
+    bool should_detach = false;
+    bool is_suspended = false;
+
+    {
+      const std::unique_lock hot_swap_lock(hot_swap_data->mutex);
+      if (hot_swap_data->shader_hot_swaps.empty()) {
+        RebuildShaderHotSwaps(*hot_swap_data);
+      }
+
+      bool has_disable_hash = false;
+      for (const auto shader_hash : cmd_list_data->active_shader_hashes) {
+        if (!IsDisableHash(shader_hash)) continue;
+        has_disable_hash = true;
+        break;
+      }
+
+      if (has_disable_hash) {
+        should_detach = !hot_swap_data->suspended;
+        hot_swap_data->suspended = true;
+        is_suspended = true;
+      } else if (hot_swap_data->suspended) {
+        bool has_managed_hash = false;
+        for (const auto shader_hash : cmd_list_data->active_shader_hashes) {
+          if (!hot_swap_data->shader_hot_swaps.contains(shader_hash)) continue;
+          has_managed_hash = true;
+          break;
+        }
+
+        if (has_managed_hash) {
+          hot_swap_data->suspended = false;
+          ResetShaderHotSwapState(hot_swap_data);
+        } else {
+          is_suspended = true;
+        }
+      }
+    }
+
+    if (should_detach) {
+      DetachPromotedTargets(cmd_list->get_device());
+      const std::unique_lock hot_swap_lock(hot_swap_data->mutex);
+      ResetShaderHotSwapState(hot_swap_data);
+      return;
+    }
+
+    if (is_suspended) return;
+  }
+
   (void)DiscoverShaderHotSwapRenderTargets(cmd_list);
 }
 
