@@ -1,6 +1,6 @@
 #version 450
-#include "./shared.h"
-#include "./shared.slang"
+#include "../shared.h"
+#include "../shared.slang"
 
 layout(set = 0, binding = 0, std140) uniform support_buffer
 {

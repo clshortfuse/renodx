@@ -1,6 +1,6 @@
 #version 450
-#include "./shared.h"
-#include "./shared.slang"
+#include "../shared.h"
+#include "../shared.slang"
 
 layout(set = 0, binding = 22, std140) uniform fp_c3
 {
@@ -47,8 +47,8 @@ vec3 lut(vec3 color, bool extended = false) {
 
   float blend_seed = fma(blend_sample.y, 31.875, blend_sample.x * 0.125);
   blend_seed = fma(blend_sample.z, fp_c1_1._m0[0].x, blend_seed);
-  float blend = clamp((blend_seed - fp_c3_1._m0[1].x) * fp_c3_1._m0[1].y, 0.0, 1.0);
-  blend = exp2(log2(blend) * fp_c3_1._m0[1].z) * fp_c3_1._m0[1].w;
+  float blend = saturate((blend_seed - fp_c3_1._m0[1].x) * fp_c3_1._m0[1].y);
+  blend = pow(blend, fp_c3_1._m0[1].z) * fp_c3_1._m0[1].w;
 
   vec3 lutColor = mix(lut_c, lut_e, blend);
   lutColor = lerp(color, renodx::color::srgb::DecodeSafe(lutColor) / scale, LUT_STRENGTH);
