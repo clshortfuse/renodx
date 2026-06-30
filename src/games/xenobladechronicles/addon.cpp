@@ -9,6 +9,8 @@
 
 #include <embed/shaders.h>
 
+#include <cstdint>
+
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
@@ -20,12 +22,22 @@
 #include "../../utils/settings.hpp"
 #include "./ryujinxlog.hpp"
 #include "./shared.h"
+#include "./utils/shader_hotswap.hpp"
 
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 
 ShaderInjectData shader_injection;
+
+enum class XenobladeGameType : std::uint8_t {
+  UNKNOWN = 0,
+  XENOBLADE_1 = 1,
+  XENOBLADE_2 = 2,
+  XENOBLADE_3 = 3,
+};
+
+XenobladeGameType current_game_type = XenobladeGameType::UNKNOWN;
 
 renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSettings({
     renodx::templates::settings::CreateDefaultSettings({
@@ -237,13 +249,18 @@ float res_scale = 1.f;
 
 const auto RYUJINX_PROCESS_NAME = std::string_view("Ryujinx.exe");
 const auto RYUJINX_LOADED_TITLE_MARKER = std::string_view("Application Loaded:");
-const std::array<std::string_view, 6> ACCEPTED_RYUJINX_TITLES = {
-    "010074f013262000",
-    "xenoblade chronicles 3",
-    "0100e95004038000",
-    "xenoblade chronicles 2",
-    "0100ff500e34a000",
-    "xenoblade chronicles definitive edition",
+struct RyujinxTitleGameType {
+  std::string_view title;
+  XenobladeGameType game_type;
+};
+
+const std::array<RyujinxTitleGameType, 6> ACCEPTED_RYUJINX_TITLES = {
+    RyujinxTitleGameType{.title = "010074f013262000", .game_type = XenobladeGameType::XENOBLADE_3},
+    RyujinxTitleGameType{.title = "xenoblade chronicles 3", .game_type = XenobladeGameType::XENOBLADE_3},
+    RyujinxTitleGameType{.title = "0100e95004038000", .game_type = XenobladeGameType::XENOBLADE_2},
+    RyujinxTitleGameType{.title = "xenoblade chronicles 2", .game_type = XenobladeGameType::XENOBLADE_2},
+    RyujinxTitleGameType{.title = "0100ff500e34a000", .game_type = XenobladeGameType::XENOBLADE_1},
+    RyujinxTitleGameType{.title = "xenoblade chronicles definitive edition", .game_type = XenobladeGameType::XENOBLADE_1},
 };
 
 bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
@@ -253,11 +270,31 @@ bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
   };
   res_scale = ryujinxlog::GetLatestLogResScale(std::filesystem::path{}, candidate_log_paths);
 
-  return ryujinxlog::DoesLatestLogLastMatchingLineContainAny({
+  const auto accepted_titles = std::array<std::string_view, ACCEPTED_RYUJINX_TITLES.size()>{
+      ACCEPTED_RYUJINX_TITLES[0].title,
+      ACCEPTED_RYUJINX_TITLES[1].title,
+      ACCEPTED_RYUJINX_TITLES[2].title,
+      ACCEPTED_RYUJINX_TITLES[3].title,
+      ACCEPTED_RYUJINX_TITLES[4].title,
+      ACCEPTED_RYUJINX_TITLES[5].title,
+  };
+
+  const auto matched_title = ryujinxlog::FindAcceptedTermInLatestLogLastMatchingLine({
       .line_marker = RYUJINX_LOADED_TITLE_MARKER,
-      .accepted_terms = ACCEPTED_RYUJINX_TITLES,
+      .accepted_terms = accepted_titles,
       .logs_paths = candidate_log_paths,
   });
+  if (!matched_title.has_value()) return false;
+
+  current_game_type = XenobladeGameType::UNKNOWN;
+  for (const auto& accepted_title : ACCEPTED_RYUJINX_TITLES) {
+    if (accepted_title.title != *matched_title) continue;
+
+    current_game_type = accepted_title.game_type;
+    return true;
+  }
+
+  return false;
 }
 
 }  // namespace
@@ -277,7 +314,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       if (filename == RYUJINX_PROCESS_NAME && !ShouldAttachForRyujinx(process_path)) return FALSE;
 
-      const auto log_message = std::string("ResScale: ") + std::to_string(res_scale);
+      const auto log_message = std::string("ResScale: ") + std::to_string(res_scale) + std::string(", XenobladeGameType: ") + std::to_string(static_cast<int>(current_game_type));
       reshade::log::message(reshade::log::level::info, log_message.c_str());
 
       const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
@@ -306,7 +343,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-      static std::vector<uint32_t> hashes = {0x86878F42, 0x484D3AE8};  // final buffer
+      static std::vector<uint32_t> hashes = {0x5B07D492, 0xDC741C4C, 0x5048764E, 0x6CA53F01, 0x0350D370, 0xA4A18BEA, 0xCDE68DD4, /* intel: */ 0x45490265,};
 
       //   for (uint32_t hash : hashes) {
       //     for (int i = 0; i < 3; i++) {
@@ -320,20 +357,54 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       //     }
       //   }
 
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = target_format,
-          .aspect_ratio = 16.f / 9.f,
-          .aspect_ratio_tolerance = 0.05f,
-          //.usage_include = reshade::api::resource_usage::shader_resource,
-      });
+      if (current_game_type == XenobladeGameType::XENOBLADE_3) {
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_typeless,
+            .new_format = target_format,
+            .index = 0,
+            .aspect_ratio = 16.f / 9.f,
+            .aspect_ratio_tolerance = 0.05f,
+            //.usage_include = reshade::api::resource_usage::shader_resource,
+        });
 
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_typeless,
+            .new_format = target_format,
+            .index = 1,
+            .aspect_ratio = 16.f / 9.f,
+            .aspect_ratio_tolerance = 0.05f,
+            //.usage_include = reshade::api::resource_usage::shader_resource,
+        });
+
+        renodx_custom::utils::shader_hotswap::targets.clear();
+        for (uint32_t hash : hashes) {
+          for (int i = 0; i < 2; i++) {
+            renodx_custom::utils::shader_hotswap::targets.push_back({
+                .old_format = reshade::api::format::r8g8b8a8_typeless,
+                .new_format = target_format,
+                .ignore_size = true,
+                .shader_hash = hash,
+                .use_resource_view_cloning = true,
+            });
+          }
+        }
+      } else {
+        renodx::mods::swapchain::resource_upgrade_infos.push_back({
+            .old_format = reshade::api::format::r8g8b8a8_typeless,
+            .new_format = target_format,
+            .aspect_ratio = 16.f / 9.f,
+            .aspect_ratio_tolerance = 0.05f,
+            //.usage_include = reshade::api::resource_usage::shader_resource,
+        });
+      }
       // Register event handlers
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
     }
     case DLL_PROCESS_DETACH:
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
@@ -343,6 +414,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx_custom::utils::shader_hotswap::UseLate(fdw_reason);
 
   return TRUE;
 }

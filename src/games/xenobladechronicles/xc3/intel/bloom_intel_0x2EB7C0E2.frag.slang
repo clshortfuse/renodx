@@ -1,0 +1,1 @@
+#include "../bloom_0x78A09DA1.frag.slang"

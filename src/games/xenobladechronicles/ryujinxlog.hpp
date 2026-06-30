@@ -120,20 +120,23 @@ inline std::optional<std::filesystem::path> FindLatestLogPath(const std::filesys
   return FindLatestLogPath(log_paths);
 }
 
-inline bool DoesLatestLogLastMatchingLineContainAny(const LatestLogLineMatchConfig& config) {
+inline std::optional<std::string> ReadLatestLogLastMatchingLine(
+    const std::filesystem::path& logs_path,
+    std::span<const std::filesystem::path> logs_paths,
+    std::string_view line_marker) {
   auto log_paths = std::vector<std::filesystem::path>{};
-  if (!config.logs_path.empty()) {
-    log_paths.push_back(config.logs_path);
+  if (!logs_path.empty()) {
+    log_paths.push_back(logs_path);
   }
-  log_paths.insert(log_paths.end(), config.logs_paths.begin(), config.logs_paths.end());
+  log_paths.insert(log_paths.end(), logs_paths.begin(), logs_paths.end());
 
   const auto latest_log_path = log_paths.empty() ? std::nullopt : FindLatestLogPath(log_paths);
-  if (!latest_log_path.has_value()) return true;
+  if (!latest_log_path.has_value()) return std::nullopt;
 
   const auto log_contents = renodx::utils::path::ReadTextFile(*latest_log_path);
-  if (log_contents.empty()) return false;
+  if (log_contents.empty()) return std::nullopt;
 
-  const auto normalized_marker = ToLowerAscii(std::string(config.line_marker));
+  const auto normalized_marker = ToLowerAscii(std::string(line_marker));
 
   size_t search_offset = 0;
   std::optional<std::string> last_matching_line;
@@ -153,16 +156,26 @@ inline bool DoesLatestLogLastMatchingLineContainAny(const LatestLogLineMatchConf
     }
   }
 
-  if (!last_matching_line.has_value()) return false;
+  return last_matching_line;
+}
+
+inline std::optional<std::string_view> FindAcceptedTermInLatestLogLastMatchingLine(const LatestLogLineMatchConfig& config) {
+  const auto last_matching_line = ReadLatestLogLastMatchingLine(config.logs_path, config.logs_paths, config.line_marker);
+  if (!last_matching_line.has_value()) return std::nullopt;
 
   for (const auto accepted_term : config.accepted_terms) {
     if (accepted_term.empty()) continue;
     if (last_matching_line->find(ToLowerAscii(std::string(accepted_term))) != std::string::npos) {
-      return true;
+      return accepted_term;
     }
   }
 
-  return false;
+  return std::nullopt;
+}
+
+inline bool DoesLatestLogLastMatchingLineContainAny(const LatestLogLineMatchConfig& config) {
+  if (config.logs_path.empty() && config.logs_paths.empty()) return true;
+  return FindAcceptedTermInLatestLogLastMatchingLine(config).has_value();
 }
 
 inline float GetLatestLogResScale(const std::filesystem::path& logs_path, std::span<const std::filesystem::path> logs_paths) {
