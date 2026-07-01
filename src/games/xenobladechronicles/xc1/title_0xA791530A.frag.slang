@@ -48,8 +48,7 @@ vec3 lut(vec3 color, bool extended = false) {
   vec3 encoded = renodx::math::SafePow(color, fp_c3_1._m0[2].x);
   vec3 sampleCoord = encoded * fp_c3_1._m0[3].z + fp_c3_1._m0[3].w;
   vec3 lut = texture(fp_t_tcb_C, sampleCoord).xyz;
-  lut = lerp(color, lut, LUT_STRENGTH);
+  lut = lerp(encoded, lut, LUT_STRENGTH);
   lut = renodx::color::srgb::DecodeSafe(lut) / scale;
   return lut;
-
 }

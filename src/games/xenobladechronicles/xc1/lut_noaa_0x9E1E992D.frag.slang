@@ -64,12 +64,9 @@ vec3 lut(vec3 color, bool extended = false) {
   blend = pow(blend, fp_c3_1._m0[1].z) * fp_c3_1._m0[1].w;
 
   vec3 mixed = mix(tcbC, tcbE, blend);
-  vec3 base = renodx::math::SafePow(color, fp_c3_1._m0[2].x);
-  // finalColor = renodx::color::srgb::DecodeSafe(finalColor);
-  vec3 finalColor = mix(base, mixed, fp_c3_1._m0[2].w);
-  // finalColor = renodx::color::gamma::DecodeSafe(finalColor, 1 / fp_c3_1._m0[2].x);
-  finalColor = renodx::color::srgb::DecodeSafe(finalColor);
-  finalColor = lerp(color, finalColor, LUT_STRENGTH) / scale;
+  vec3 finalColor = mix(encoded, mixed, fp_c3_1._m0[2].w);
+  finalColor = lerp(encoded, finalColor, LUT_STRENGTH);
+  finalColor = renodx::color::srgb::DecodeSafe(finalColor) / scale;
 
   return finalColor;
 }
