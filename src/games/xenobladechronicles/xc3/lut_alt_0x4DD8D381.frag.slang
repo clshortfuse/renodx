@@ -38,8 +38,7 @@ void main() {
 vec3 lut(vec3 color, bool extended = false) {
   if (!extended) color = saturate(color);
   float scale = renodx::math::Select(extended, renodx::tonemap::neutwo::ComputeMaxChannelScale(color), 1.f);
-  vec3 input = color * scale;
-  vec3 encoded = renodx::math::SafePow(input, fp_c3_1._m0[2].x);
+  vec3 encoded = renodx::math::SafePow(color * scale, fp_c3_1._m0[2].x);
   vec3 sampleCoord = encoded * fp_c3_1._m0[3].z + fp_c3_1._m0[3].w;
   vec3 lut_c = texture(fp_t_tcb_C, sampleCoord).xyz;
   vec3 lut_e = texture(fp_t_tcb_E, sampleCoord).xyz;
@@ -51,7 +50,8 @@ vec3 lut(vec3 color, bool extended = false) {
   float blend = blend_curve * fp_c3_1._m0[1].w;
 
   vec3 lutColor = mix(lut_c, lut_e, blend);
-  lutColor = lerp(color, renodx::color::srgb::DecodeSafe(lutColor) / scale, LUT_STRENGTH);
+  lutColor = lerp(encoded, lutColor, LUT_STRENGTH);
+  lutColor = renodx::color::srgb::DecodeSafe(lutColor) / scale;
 
   return lutColor;
 }
