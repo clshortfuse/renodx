@@ -7,7 +7,6 @@
 
 #include <windows.h>
 
-#include <algorithm>
 #include <cstdint>
 #include <mutex>
 #include <shared_mutex>
@@ -296,6 +295,7 @@ inline void OnBindPipeline(
     reshade::api::command_list* cmd_list,
     reshade::api::pipeline_stage stages,
     reshade::api::pipeline pipeline) {
+  (void)stages;
   auto* cmd_list_data = renodx::utils::data::Get<CommandListData>(cmd_list);
   if (cmd_list_data == nullptr) return;
   cmd_list_data->active_shader_hashes.clear();
@@ -304,19 +304,10 @@ inline void OnBindPipeline(
   auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
   if (shader_state == nullptr) return;
 
-  std::unordered_set<uint32_t> active_shader_hashes;
-  for (int i = 0; i < renodx::utils::shader::COMPATIBLE_STAGES_SIZE; ++i) {
-    const auto compatible_stage = renodx::utils::shader::COMPATIBLE_STAGES[i];
-    if (stages != reshade::api::pipeline_stage::all
-        && !renodx::utils::bitwise::HasFlag(stages, compatible_stage)) {
-      continue;
-    }
-    const auto shader_hash = renodx::utils::shader::GetCurrentShaderHash(shader_state, i);
-    if (shader_hash != 0u) active_shader_hashes.insert(shader_hash);
-  }
-  if (active_shader_hashes.empty()) return;
+  const auto pixel_shader_hash = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
+  if (pixel_shader_hash == 0u) return;
 
-  cmd_list_data->active_shader_hashes.assign(active_shader_hashes.begin(), active_shader_hashes.end());
+  cmd_list_data->active_shader_hashes.push_back(pixel_shader_hash);
 
   auto* hot_swap_data = renodx::utils::data::Get<DeviceData>(cmd_list->get_device());
   if (hot_swap_data != nullptr) {
@@ -329,26 +320,12 @@ inline void OnBindPipeline(
         RebuildShaderHotSwaps(*hot_swap_data);
       }
 
-      bool has_disable_hash = false;
-      for (const auto shader_hash : cmd_list_data->active_shader_hashes) {
-        if (!IsDisableHash(shader_hash)) continue;
-        has_disable_hash = true;
-        break;
-      }
-
-      if (has_disable_hash) {
+      if (IsDisableHash(pixel_shader_hash)) {
         should_detach = !hot_swap_data->suspended;
         hot_swap_data->suspended = true;
         is_suspended = true;
       } else if (hot_swap_data->suspended) {
-        bool has_managed_hash = false;
-        for (const auto shader_hash : cmd_list_data->active_shader_hashes) {
-          if (!hot_swap_data->shader_hot_swaps.contains(shader_hash)) continue;
-          has_managed_hash = true;
-          break;
-        }
-
-        if (has_managed_hash) {
+        if (hot_swap_data->shader_hot_swaps.contains(pixel_shader_hash)) {
           hot_swap_data->suspended = false;
           ResetShaderHotSwapState(hot_swap_data);
         } else {
