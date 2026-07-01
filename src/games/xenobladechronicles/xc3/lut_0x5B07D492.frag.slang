@@ -2,18 +2,6 @@
 #include "../shared.h"
 #include "../shared.slang"
 
-layout(set = 0, binding = 0, std140) uniform support_buffer
-{
-    uint _m0;
-    uint _m1[8];
-    vec4 _m2;
-    vec4 _m3;
-    int _m4;
-    float _m5[73];
-    ivec4 _m6;
-    int _m7;
-} support_buffer_1;
-
 layout(set = 0, binding = 22, std140) uniform fp_c3
 {
     vec4 _m0[4096];
@@ -48,7 +36,7 @@ vec3 lut(vec3 color, bool extended = false) {
   vec3 encoded = renodx::math::SafePow(input, fp_c3_1._m0[2].x);
   vec3 sampleCoord = encoded * fp_c3_1._m0[3].z + fp_c3_1._m0[3].w;
   vec3 lutColor = texture(fp_t_tcb_C, sampleCoord).xyz;
-  lutColor = lerp(color, renodx::color::srgb::DecodeSafe(lutColor) / scale, LUT_STRENGTH);
-
+  lutColor = lerp(encoded, lutColor, LUT_STRENGTH);
+  lutColor = renodx::color::srgb::DecodeSafe(lutColor) / scale;
   return lutColor;
 }

@@ -31,11 +31,11 @@ void main() {
 vec3 lut(vec3 color, bool extended = false) {
   if (!extended) color = saturate(color);
   float scale = renodx::math::Select(extended, renodx::tonemap::neutwo::ComputeMaxChannelScale(color), 1.f);
-  vec3 input = color * scale;
-  vec3 encoded = renodx::math::SafePow(input, fp_c3_1._m0[2].x);
+  vec3 encoded = renodx::math::SafePow(color * scale, fp_c3_1._m0[2].x);
   vec3 sampleCoord = encoded * fp_c3_1._m0[3].z + fp_c3_1._m0[3].w;
   vec3 lutColor = texture(fp_t_tcb_C, sampleCoord).xyz;
-  lutColor = lerp(color, renodx::color::srgb::DecodeSafe(lutColor) / scale, LUT_STRENGTH);
+  lutColor = lerp(encoded, lutColor, LUT_STRENGTH);
+  lutColor = renodx::color::srgb::DecodeSafe(lutColor) / scale;
 
   return lutColor;
 }
