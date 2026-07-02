@@ -1,5 +1,17 @@
 #include "../common.hlsli"
-#include "./test20.hlsli"
+
+float3 ApplyAdaptiveMBPurity(float3 lms_input, float3 adaptive_neutral_lms, float purity_scale) {
+  if (abs(purity_scale - 1.f) <= 1e-5f) return lms_input;
+
+  float3 relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(lms_input, adaptive_neutral_lms);
+  float3 mb = renodx::color::macleod_boynton::from::WeightedLMS(relative_weighted);
+  float3 mb_neutral = renodx::color::macleod_boynton::from::LMS(1.f.xxx);
+  float2 mb_scaled_xy = lerp(mb_neutral.xy, mb.xy, purity_scale);
+  float3 relative_weighted_out = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(float3(mb_scaled_xy, mb.z));
+
+  return renodx::color::macleod_boynton::UnweighLMS(
+      renodx::tonemap::psychov::psycho17_FromAdaptiveRelativeWeightedLMS(relative_weighted_out, adaptive_neutral_lms));
+}
 
 float Highlights(float x, float highlights, float mid_gray = 0.18f) {
   if (highlights == 1.f) return x;
@@ -35,17 +47,18 @@ float ContrastAndFlare(float x, float contrast, float flare, float mid_gray = 0.
   return pow(x_normalized, contrast * flare_ratio) * mid_gray;
 }
 
-float3 ApplyLuminanceGradingLMS(float3 color_lms, float highlights, float shadows, float contrast, float flare, float mid_gray_yf = 0.18f) {
+float3 ApplyLuminanceGradingLMS(float3 color_lms, float exposure, float highlights, float shadows, float contrast, float flare, float mid_gray_yf = 0.18f) {
   float yf = max(0.f, renodx::color::yf::from::LMS(color_lms));
-  float yf_adjusted = Highlights(yf, highlights, mid_gray_yf);
-  yf_adjusted = Shadows(yf_adjusted, shadows, mid_gray_yf);
+  float yf_adjusted = yf * exposure;
+  yf_adjusted = renodx::color::grade::Highlights(yf_adjusted, highlights, mid_gray_yf);
+  yf_adjusted = renodx::color::grade::Shadows(yf_adjusted, shadows, mid_gray_yf);
   yf_adjusted = ContrastAndFlare(yf_adjusted, contrast, flare, mid_gray_yf);
   return color_lms * renodx::math::DivideSafe(yf_adjusted, yf, 1.f);
 }
 
-float3 ApplyLuminanceGradingBT2020(float3 color_bt2020, float highlights, float shadows, float contrast, float flare, float mid_gray_yf = 0.18f) {
+float3 ApplyLuminanceGradingBT2020(float3 color_bt2020, float exposure, float highlights, float shadows, float contrast, float flare, float mid_gray_yf = 0.18f) {
   float3 color_lms = renodx::color::lms::from::BT2020(color_bt2020);
-  color_lms = ApplyLuminanceGradingLMS(color_lms, highlights, shadows, contrast, flare, mid_gray_yf);
+  color_lms = ApplyLuminanceGradingLMS(color_lms, exposure, highlights, shadows, contrast, flare, mid_gray_yf);
   return renodx::color::bt2020::from::LMS(color_lms);
 }
 
@@ -68,7 +81,7 @@ float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float purity_
   }
 
   if (purity_scale != 1.f) {
-    color_lms = renodx::tonemap::psychovtest20::psycho20_ApplyAdaptiveMBPurity(color_lms, mid_gray_lms, purity_scale);
+    color_lms = ApplyAdaptiveMBPurity(color_lms, mid_gray_lms, purity_scale);
   }
 
   return color_lms;
@@ -196,17 +209,21 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
 
   float3 untonemapped = renodx::color::gamma::DecodeSafe(untonemapped_gamma, 2.2f);
 
+  const float MID_GRAY_IN = 0.119121851127f;
+  const float MID_GRAY_OUT = 0.163979921774f;
+
   float3 tonemapped;
   if (RENODX_TONE_MAP_TYPE == 1.f) {
     untonemapped = renodx::color::bt2020::from::BT709(untonemapped);
 
     // Apply BT.2020 luminance and purity grading.
     untonemapped = ApplyLuminanceGradingBT2020(untonemapped,
+                                               RENODX_TONE_MAP_EXPOSURE,
                                                RENODX_TONE_MAP_HIGHLIGHTS,
                                                RENODX_TONE_MAP_SHADOWS,
                                                RENODX_TONE_MAP_CONTRAST,
                                                0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
-                                               0.18f);
+                                               MID_GRAY_OUT);
     untonemapped = ApplyPurityGradingBT2020(untonemapped,
                                             RENODX_TONE_MAP_SATURATION,
                                             -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
@@ -215,9 +232,6 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
     tonemapped = renodx::tonemap::neutwo::PerChannel(untonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
     tonemapped = renodx::color::bt709::from::BT2020(tonemapped);
   } else {
-    const float MID_GRAY_IN = 0.119121851127f;
-    const float MID_GRAY_OUT = 0.163979921774f;
-
     float3 untonemapped_lms = max(0, renodx::color::lms::from::BT709(untonemapped));
     float3 current_adaptive_state_lms = renodx::color::lms::from::BT709(MID_GRAY_IN);
     float3 desired_background_state_lms = renodx::color::lms::from::BT709(MID_GRAY_OUT);
@@ -229,6 +243,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
     // Apply LMS luminance and purity grading.
     float output_mid_gray = renodx::color::yf::from::LMS(desired_background_state_lms);
     tonemapped_lms = ApplyLuminanceGradingLMS(tonemapped_lms,
+                                              RENODX_TONE_MAP_EXPOSURE,
                                               RENODX_TONE_MAP_HIGHLIGHTS,
                                               RENODX_TONE_MAP_SHADOWS,
                                               RENODX_TONE_MAP_CONTRAST,
@@ -241,12 +256,12 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
                                            desired_background_state_lms);
 
     // Convert source to adapted weighted LMS.
-    float3 source_relative_weighted = renodx::tonemap::psychovtest20::psycho20_ToAdaptiveRelativeWeightedLMS(untonemapped_lms, current_adaptive_state_lms);
+    float3 source_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(untonemapped_lms, current_adaptive_state_lms);
 
     // Convert target to adapted weighted LMS.
-    float3 display_scaled_relative_weighted = renodx::tonemap::psychovtest20::psycho20_ToAdaptiveRelativeWeightedLMS(tonemapped_lms, desired_background_state_lms);
+    float3 display_scaled_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(tonemapped_lms, desired_background_state_lms);
 
-    // psychotm_test20-style MB hue direction restore.
+    // Psychov-style MB hue direction restore.
     {
       float3 mb_source = renodx::color::macleod_boynton::from::WeightedLMS(source_relative_weighted);
       float3 mb_display_target = renodx::color::macleod_boynton::from::WeightedLMS(display_scaled_relative_weighted);
@@ -276,8 +291,8 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
       }
     }
 
-    // psychotm_test20-style BT.2020-bound adaptive weighted LMS gamut compression.
-    display_scaled_relative_weighted = renodx::tonemap::psychovtest20::psycho20_GamutCompressAdaptiveRelativeWeightedLMSBound(
+    // Psychov-style BT.2020-bound adaptive weighted LMS gamut compression.
+    display_scaled_relative_weighted = renodx::tonemap::psychov::psycho17_GamutCompressAdaptiveRelativeWeightedLMSBound(
         display_scaled_relative_weighted,
         desired_background_state_lms,
         renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
@@ -285,7 +300,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
 
     // Return compressed target to LMS.
     tonemapped_lms = renodx::color::macleod_boynton::UnweighLMS(
-        renodx::tonemap::psychovtest20::psycho20_FromAdaptiveRelativeWeightedLMS(display_scaled_relative_weighted, desired_background_state_lms));
+        renodx::tonemap::psychov::psycho17_FromAdaptiveRelativeWeightedLMS(display_scaled_relative_weighted, desired_background_state_lms));
 
     // Compress channels to desaturate and hue shift highlights, then restore luminance.
     float tonemapped_yf = renodx::color::yf::from::LMS(tonemapped_lms);
