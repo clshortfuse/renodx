@@ -43,6 +43,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // DX12 (sm6 / DXIL) passes. sm5 and sm6 hashes differ, so registering both is safe.
     CustomShaderEntry(0x80419ACE),  // tonemap + color grade (gameplay)
     CustomShaderEntry(0x2FC428AF),  // tonemap + color grade (gameplay variant)
+    CustomShaderEntry(0xCCAD619A),  // tonemap + color grade (gameplay variant)
     CustomShaderEntry(0xEC5A7D52),  // tonemap + color grade (menu / inventory)
     CustomShaderEntry(0x4506D824),  // tonemap + color grade (menu / inventory variant)
     CustomShaderEntry(0x51731F8B),  // post sharpen / AA -> swapchain
