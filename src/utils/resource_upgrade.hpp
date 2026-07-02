@@ -717,69 +717,7 @@ inline reshade::api::resource_view GetResourceViewClone(
     const auto resource_clone = GetResourceClone(view_info->original_resource, options, &clone_target);
     if (resource_clone.handle == 0u) return {0u};
 
-        s << ", view_upgrades format: " << new_desc.format;
-        s << ", clone: " << PRINT_PTR(resource_clone.handle);
-        s << ", type: " << new_desc.type;
-        s << ", usage: 0x" << std::hex << static_cast<uint32_t>(usage) << std::dec << "(" << usage << ") ";
-        s << ")";
-        reshade::log::message(reshade::log::level::debug, s.str().c_str());
-#endif
-      } else {
-        new_desc.format = target->new_format;
-#ifdef DEBUG_LEVEL_1
-        std::stringstream s;
-        s << "utils::resource::upgrade::GetResourceViewClone(";
-        s << PRINT_PTR(resource_view_info->view.handle);
-        s << ", fallback format: " << new_desc.format;
-        s << ", clone: " << PRINT_PTR(resource_clone.handle);
-        s << ")";
-        reshade::log::message(reshade::log::level::debug, s.str().c_str());
-#endif
-      }
-
-      auto* device = resource_view_info->device;
-      bool created = device->create_resource_view(
-          resource_clone,
-          device->get_api() == reshade::api::device_api::vulkan ? reshade::api::resource_usage::undefined : usage,  // vulkan resource views are always undefined
-          new_desc,
-          &resource_view_info->clone);
-      if (created) {
-        renodx::utils::resource::store->resource_view_infos[resource_view_info->clone.handle] = renodx::utils::resource::ResourceViewInfo({
-            .device = device,
-            .desc = new_desc,
-            .view = resource_view_info->clone,
-            .fallback = resource_view_info->view,
-            .resource_info = resource_info,
-            // .clone_target = resource_info->clone_target,
-            .usage = usage,
-            .is_clone = true,
-        });
-      } else {
-        resource_view_info->clone.handle = 0;
-#ifdef DEBUG_LEVEL_0
-        std::stringstream s;
-        s << "utils::resource::upgrade::GetResourceViewClone(Failed to clone view: ";
-        s << PRINT_PTR(resource_view_info->view.handle);
-        s << ", original resource: " << PRINT_PTR(resource.handle);
-        s << ", new usage: " << usage;
-        s << ", new format: " << new_desc.format;
-        s << ", new type: " << new_desc.type;
-        s << ")";
-        reshade::log::message(reshade::log::level::error, s.str().c_str());
-#endif
-        assert(false && "Failed to clone resource view");
-      }
-#ifdef DEBUG_LEVEL_1
-      {
-        std::stringstream s;
-        s << "utils::resource::upgrade::GetResourceViewClone(";
-        s << PRINT_PTR(resource_view_info->view.handle);
-        s << " => " << PRINT_PTR(resource_view_info->clone.handle);
-        s << ")";
-        reshade::log::message(reshade::log::level::debug, s.str().c_str());
-      }
-#endif
-    }
+    clone = CloneResourceView(view, resource_clone, clone_target, view_info);
   }
 
   return clone;
