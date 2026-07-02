@@ -83,9 +83,9 @@ float3 ApplyLuminanceGradingLMS(float3 color_lms, float exposure, float highligh
   return color_lms * renodx::math::DivideSafe(yf_adjusted, yf, 1.f);
 }
 
-float3 ApplyLuminanceGradingBT2020(float3 color_bt2020, float highlights, float shadows, float contrast, float flare, float mid_gray_yf = 0.18f) {
+float3 ApplyLuminanceGradingBT2020(float3 color_bt2020, float exposure, float highlights, float shadows, float contrast, float flare, float mid_gray_yf = 0.18f) {
   float3 color_lms = renodx::color::lms::from::BT2020(color_bt2020);
-  color_lms = ApplyLuminanceGradingLMS(color_lms, highlights, shadows, contrast, flare, mid_gray_yf);
+  color_lms = ApplyLuminanceGradingLMS(color_lms, exposure, highlights, shadows, contrast, flare, mid_gray_yf);
   return renodx::color::bt2020::from::LMS(color_lms);
 }
 
