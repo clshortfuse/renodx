@@ -20,6 +20,7 @@
 #include "../../utils/settings.hpp"
 #include "./ryujinxlog.hpp"
 #include "./shared.h"
+#include "./utils/shader_hotswap.hpp"
 
 namespace {
 
@@ -290,6 +291,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       static std::vector<uint32_t> hashes = {0xEF015FAB, 0x7D419515, 0xC7B41AEE};  // final buffer
 
+      renodx_custom::utils::shader_hotswap::targets.clear();
       for (uint32_t hash : hashes) {
         for (int i = 0; i < 3; i++) {
           renodx::mods::swapchain::resource_upgrade_infos.push_back({
@@ -369,11 +371,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
 
       // Register event handlers
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
     }
     case DLL_PROCESS_DETACH:
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
@@ -383,6 +387,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx_custom::utils::shader_hotswap::UseLate(fdw_reason);
 
   return TRUE;
 }
