@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: "RenoDX pull request code review checklist for HDR/SDR matching, neutral defaults, tonemap/LUT shaders, SDR LUT clipping/domain mistakes, renodx::lut tooling, SwapChainPass, resource upgrades, inverse-tonemap rejection, vanilla look preservation, actionable review comments, mod PR scope hygiene, unrelated core files, and sensible commits. Use when performing Copilot code review."
+description: "RenoDX pull request code review checklist for HDR/SDR matching, neutral defaults, tonemap/LUT shaders, SDR LUT clipping/domain mistakes, renodx::lut tooling, SwapChainPass, HDR10-preferred SDR/HDR output toggles, rare scRGB paths, resource upgrades, inverse-tonemap rejection, vanilla look preservation, actionable review comments, mod PR scope hygiene, unrelated core files, and sensible commits. Use when performing Copilot code review."
 ---
 
 # RenoDX Code Review Skill
@@ -12,6 +12,22 @@ Use this skill when reviewing RenoDX pull requests. Apply it together with root 
 Copilot review should comment when a PR is technically buildable but violates RenoDX HDR behavior. Do not let a PR pass silently just because it compiles if the mod changes the default look, clips HDR through SDR, or treats the final swapchain frame as an HDR source.
 
 Review comments should be helpful and actionable: name the risky behavior, explain the missing proof or invariant, and suggest a concrete RenoDX pattern to employ. Mentioning another mod can be useful when pointing to a specific file, bridge, or technique, but do not assume every existing mod is high quality or treat a mod name as proof by itself.
+
+Every Copilot code review must include a `RenoDX review checklist` section in the review body. Do not leave a review without the checklist. Mark each relevant item as `Pass`, `Needs comment`, or `N/A`; leave actionable comments for every `Needs comment` item.
+
+## Required review checklist
+
+- PR scope and commits are tidy: mod PRs are mostly target game/mod changes plus required shared support.
+- Review comments are helpful: each issue explains the risky behavior or missing proof and suggests a concrete RenoDX pattern.
+- Defaults preserve the original/vanilla look as closely as practical; extra HDR look, contrast, saturation, or brightness is opt-in.
+- Preset Off/reset and Vanilla/0 behavior are clear; Vanilla/0 is not treated as full Off if grading/effects remain active.
+- The PR does not implement final-frame inverse tonemapping from a completed SDR swapchain/backbuffer.
+- Tonemap/LUT shaders prove the `untonemapped`, `neutral_sdr`, and `graded_sdr` signals used by `ToneMapPass` or `UpgradeToneMap`.
+- `ToneMapPass`, PsychoV, and other tonemappers receive linear input; encoded/gamma/sRGB values are decoded before tonemapping.
+- Vanilla LUT paths prove their domain, sampling, masks/strength/scaling, and HDR bridge/reconstruction strategy.
+- Hard clips, `saturate`, UNORM writes, or lower-format copies do not destroy HDR range before HDR-critical work is complete, except scoped Vanilla/0 resource-clamp emulation.
+- `SwapChainPass` is only final output encoding for a proven intermediate, not hidden tonemap replacement, LUT reconstruction, or inverse SDR expansion.
+- Output mode prefers HDR10/PQ with an SDR/HDR toggle; scRGB is used only for rare, justified compatibility or integration cases.
 
 ## Must-comment issues
 
@@ -31,6 +47,7 @@ Leave a review comment when changed code does any of the following:
 - Replaces a real upstream signal with `ToneMapPass` or PsychoV without preserving required vanilla presentation effects such as exposure, bloom, fades, vignette, LUT masks, grade strength, or output-domain expectations.
 - Adds `saturate`, `min`/`max`, UNORM resolves, or lower-format copies before HDR-critical work is complete, destroying values above SDR white, negative channels, or precision. Do not confuse this with a vanilla `saturate` after an already-tonemapped value that only trims small overflow, or a Vanilla/0 path that restores the original RGBA8U/UNORM clip after a resource upgrade.
 - Uses `SwapChainPass` on a final SDR buffer as if it proves HDR. `SwapChainPass` is valid final encoding only after a high-precision intermediate or real pre-SDR signal is proven.
+- Defaults to scRGB or a floating-point swapchain output without a rare-case justification, or omits an SDR/HDR output toggle when an HDR10/PQ path is viable. A float proxy/intermediate is not by itself a reason to expose scRGB as the primary output mode.
 - Lets unrelated files creep into a mod PR: scratch files, generated/debug artifacts, unrelated global CMake/CI/vendor changes, core/shared utility edits without a clear dependency, or changes from another game/mod. Multiple commits are fine, but the PR and each commit group should be coherent and reviewable.
 
 ## Expected review evidence
@@ -52,6 +69,7 @@ Prefer comments that identify the missing proof or preservation step:
 - If the PR uses PsychoV on a game with a LUT, does it use a modern bridge like Starfield/Wobbly Life: move PsychoV output into neutral SDR/LUT space, apply the grade, then reconstruct before final output?
 - Do resource formats preserve values above `1.0`, negative channels when needed, and precision until final output?
 - If another mod is cited as an example, is the cited pattern specific and relevant, rather than implying the whole mod is authoritative?
+- Does the output path prefer HDR10 with a clear SDR/HDR toggle, synchronized color space, and injected output preset? If scRGB is used, what rare compatibility or integration reason requires it?
 - Does the changed-file list match the PR's mod scope? Are core/shared files, generated files, scratch/debug artifacts, and unrelated game folders justified by the implementation?
 - Are multiple commits sensibly organized by topic, or do they mix unrelated cleanup/core changes with the mod work?
 
@@ -71,5 +89,6 @@ Prefer comments that identify the missing proof or preservation step:
 - Prefer `renodx::lut::Config` with explicit `type_input`, `type_output`, size/precompute, strength/scaling, and sampling selection; use direct texture sampling only when matching a proven vanilla packed/offset path.
 - For simple games without meaningful LUT/effect complexity, a straightforward graded `ToneMapPass` path can still be the right answer.
 - Move final scRGB/PQ/HDR10 conversion to a thin proxy/output shader using `renodx::draw::SwapChainPass(...)` only after source/resource proof.
+- Prefer HDR10/PQ output with an SDR/HDR toggle using the swapchain-resource-analysis output preset synchronization pattern. Keep scRGB available only for rare cases that need it, such as a specific integration or compatibility requirement.
 - Keep creative controls default-neutral and expose non-neutral looks as sliders or presets rather than baseline behavior.
 - Keep mod PRs focused on the relevant game/mod plus required shared support. Ask to split unrelated core, CI, vendor, cleanup, or other-game changes into separate PRs, and keep commits tidy enough that each commit has a clear purpose.

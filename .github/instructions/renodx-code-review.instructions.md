@@ -6,6 +6,24 @@ applyTo: "src/games/**,src/mods/**,src/shaders/**,src/utils/**"
 
 When reviewing RenoDX changes, check the domain behavior as well as syntax and buildability.
 
+Every Copilot code review must include a `RenoDX review checklist` section in the review body. Do not leave a review without this checklist. Mark each relevant item as `Pass`, `Needs comment`, or `N/A`; leave actionable review comments for every `Needs comment` item.
+
+## RenoDX review checklist
+
+- PR scope and commits are tidy: mod PRs are mostly target game/mod changes plus required shared support.
+- Review comments are helpful: each issue explains the risky behavior or missing proof and suggests a concrete RenoDX pattern.
+- Defaults preserve the original/vanilla look as closely as practical; extra HDR look, contrast, saturation, or brightness is opt-in.
+- Preset Off/reset and Vanilla/0 behavior are clear; Vanilla/0 is not treated as full Off if grading/effects remain active.
+- The PR does not implement final-frame inverse tonemapping from a completed SDR swapchain/backbuffer.
+- Tonemap/LUT shaders prove the `untonemapped`, `neutral_sdr`, and `graded_sdr` signals used by `ToneMapPass` or `UpgradeToneMap`.
+- `ToneMapPass`, PsychoV, and other tonemappers receive linear input; encoded/gamma/sRGB values are decoded before tonemapping.
+- Vanilla LUT paths prove their domain, sampling, masks/strength/scaling, and HDR bridge/reconstruction strategy.
+- Hard clips, `saturate`, UNORM writes, or lower-format copies do not destroy HDR range before HDR-critical work is complete, except scoped Vanilla/0 resource-clamp emulation.
+- `SwapChainPass` is only final output encoding for a proven intermediate, not hidden tonemap replacement, LUT reconstruction, or inverse SDR expansion.
+- Output mode prefers HDR10/PQ with an SDR/HDR toggle; scRGB is used only for rare, justified compatibility or integration cases.
+
+## Detailed checks
+
 - Review comments should be helpful and actionable. Explain the risky behavior or missing proof, then suggest a concrete RenoDX pattern, bridge, API, or preservation path to employ. References to other mods are useful only when pointing to a specific relevant pattern; do not assume an entire mod is high quality or authoritative.
 - Keep mod PR scope tidy. Changes should be mostly related to the target mod/game plus required shared support; flag unrelated core/global files, scratch/debug/generated artifacts, other-game edits, or drive-by cleanup. Multiple commits are fine when they are coherent and organized by topic.
 - Defaults must match the original/vanilla look as closely as practical. HDR should extend proven range/resource limits; visual augmentation belongs in sliders or named presets such as `HDR Look`.
@@ -22,3 +40,4 @@ When reviewing RenoDX changes, check the domain behavior as well as syntax and b
 - Verify LUT domain assumptions. Most vanilla SDR LUTs are sRGB/gamma-domain; linear input is rare and needs proof. PQ, HDR, log, packed 2D, tetrahedral, masks, strength, or scaling may need explicit preservation.
 - Flag `saturate`, `min`/`max` clamps, UNORM writes, or lower-format copies that destroy highlight range, negative channels, or precision before HDR-critical work is complete. A vanilla `saturate` on an already-tonemapped value may only trim small overflow, and a Vanilla/0 branch may need to emulate the original RGBA8U/UNORM resource clamp; hard clip of `untonemapped`/HDR for a LUT bridge or `neutral_sdr` is the issue.
 - Treat `SwapChainPass` as final output encoding for a proven intermediate. Do not hide tonemap replacement, LUT reconstruction, or inverse SDR expansion inside a swapchain proxy shader.
+- Prefer an HDR10/PQ output path with a clear SDR/HDR toggle and synchronized swapchain color space plus injected output preset. Treat scRGB as rare; require a concrete reason such as a dependency that needs a float/scRGB path, not just because the internal proxy/intermediate is RGBA16F.

@@ -1,6 +1,6 @@
 ---
 name: swapchain-resource-analysis
-description: "RenoDX DevKit workflow for tracing swapchain/output passes, SwapChainPass, RGBA8U/UNORM limits, RGBA16F proxy resources, gamma-space float pipelines, RGB10A2/PQ or scRGB output encoding, SDR/HDR output toggles, render resources, backbuffer formats, resource upgrades, neutral HDR source preservation, UI/HUD separation, and rejecting inverse-tonemap postprocess approaches. Use when investigating swapchain output, resource formats, final backbuffer shaders, swapchain proxies, AutoHDR/RTX HDR/ReShade FX style inverse tonemap ideas, resource upgrades, or proving where scene HDR data exists before shader-side ToneMapPass work."
+description: "RenoDX DevKit workflow for tracing swapchain/output passes, SwapChainPass, RGBA8U/UNORM limits, RGBA16F proxy resources, gamma-space float pipelines, HDR10-preferred SDR/HDR output toggles, rare scRGB output encoding, render resources, backbuffer formats, resource upgrades, neutral HDR source preservation, UI/HUD separation, and rejecting inverse-tonemap postprocess approaches. Use when investigating swapchain output, resource formats, final backbuffer shaders, swapchain proxies, AutoHDR/RTX HDR/ReShade FX style inverse tonemap ideas, resource upgrades, or proving where scene HDR data exists before shader-side ToneMapPass work."
 argument-hint: "game/frame target, graphics API, suspected final pass/resource, and whether the issue is HDR source proof, proxy/resource upgrade, or inverse-tonemap rejection"
 ---
 
@@ -145,6 +145,8 @@ Use the narrowest target that preserves real upstream data.
 
 The final swapchain pass can be edited only if draw inputs prove it is still part of the real game pipeline. A pass that reads a completed SDR frame and applies an inverse curve is not a RenoDX tonemap replacement.
 
+For new game mods, prefer an HDR10/PQ output path with an SDR/HDR toggle. The internal render/proxy path may still use RGBA16F or similar resources to preserve HDR-critical values, but that does not mean the public output mode should default to scRGB. Treat scRGB as a rare output choice for specific compatibility or integration needs.
+
 ### Swapchain proxy conversion checklist
 
 Use a swapchain proxy/output shader only after the resource chain proves a high-precision signal survives to that point.
@@ -153,6 +155,7 @@ Use a swapchain proxy/output shader only after the resource chain proves a high-
 
 - Prefer `renodx::draw::SwapChainPass(...)` in the proxy pixel shader when the final pass is just the shared output conversion for a proven intermediate signal.
 - Drive `SwapChainPass` with a compact injected preset when the mod exposes an SDR/HDR output mode. In current shared shader code the preset mapping is `-1` none, `0` SDR, `1` HDR10, `2` scRGB; prefer named constants/macros over raw numbers when editing shader code.
+- Prefer the HDR10 preset for HDR mode and the SDR preset for SDR mode. Use the scRGB preset only when a concrete compatibility or integration requirement needs it.
 - Treat HDR10 swapchain selection as a facilitator for the feature, not proof that the frame is HDR. Coordinate target format, DXGI color space, `SwapChainPass` preset, and user output mode together.
 - For an SDR/HDR toggle on an HDR10-capable path, the SDR mode may still use the upgraded/proxy machinery but should select the SDR preset and SDR color space; HDR mode should select the HDR10 preset and HDR10 color space.
 - For a scRGB path, select the scRGB preset and extended linear color space when the target format/proxy path is float/scRGB-compatible.
@@ -171,7 +174,7 @@ When a mod supports an SDR/HDR output toggle, the swapchain state and shader pre
 |---|---|---|---|
 | SDR | `SWAP_CHAIN_OUTPUT_PRESET_SDR` / `0` | SDR/sRGB color space, even if the proxy path remains enabled. | Keep SDR output available for compatibility and comparisons. |
 | HDR10 | `SWAP_CHAIN_OUTPUT_PRESET_HDR10` / `1` | RGB10A2-style target with HDR10/ST2084 color space. | PQ encode happens in `SwapChainPass`; do not inverse-tonemap SDR. |
-| scRGB | `SWAP_CHAIN_OUTPUT_PRESET_SCRGB` / `2` | Float/scRGB-compatible path with extended linear color space. | Useful when frame generation or integrations need RGBA16F/scRGB behavior. |
+| scRGB | `SWAP_CHAIN_OUTPUT_PRESET_SCRGB` / `2` | Float/scRGB-compatible path with extended linear color space. | Rare path for frame generation, integrations, or compatibility cases that specifically need RGBA16F/scRGB behavior. |
 
 Prefer a cbuffer-driven preset for per-frame toggles because it is cheap, works with one proxy shader, and can be updated from `OnPresent` after the mod knows the current user output mode and swapchain target. Avoid baking the user's SDR/HDR choice into static shader variants unless the game already requires separate output shaders.
 
