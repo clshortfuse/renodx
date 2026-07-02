@@ -43,11 +43,14 @@ float Highlights(float x, float highlights, float mid_gray, float highlights_ver
   if (highlights_version == 4.f) {
     [branch]
     if (highlights > 1.f) {
-      value = max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.f)));
+      float t = saturate((x - mid_gray) / (1.f - mid_gray));
+      t = t * t * t * (t * (t * 6.f - 15.f) + 10.f);
+      value = lerp(x, mid_gray * pow(x / mid_gray, highlights), t);
     } else if (highlights < 1.f) {
       float b = mid_gray * pow(x / mid_gray, 2.f - highlights);
-      float t = min(x, 1.f);
-      value = min(x, renodx::math::DivideSafe(x * x, lerp(x, b, t), x));
+      float t = saturate((x - mid_gray) / (1.f - mid_gray));
+      t = t * t * t * (t * (t * 6.f - 15.f) + 10.f);
+      value = renodx::math::DivideSafe(x * x, lerp(x, b, t), x);
     } else {
       value = x;
     }
