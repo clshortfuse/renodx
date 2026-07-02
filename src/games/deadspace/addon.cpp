@@ -345,7 +345,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "Github",
+        .label = "GitHub",
         .section = "Links",
         .group = "button-line-1",
         .tint = 0x2B3137,
