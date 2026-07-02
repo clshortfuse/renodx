@@ -1,7 +1,7 @@
 #ifndef SRC_GAMES_ONCEHUMAN_SHARED_H_
 #define SRC_GAMES_ONCEHUMAN_SHARED_H_
 
-// 32-bit aligned, 4x32.
+// Constant-buffer compatible layout (float32 fields; HLSL packs into 16-byte registers).
 struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;

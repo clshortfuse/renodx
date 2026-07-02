@@ -5,7 +5,7 @@
  * API: DirectX 11 & DirectX 12
  *
  * Details:
- * - Upgrades the 8-bit swapchain to fp16.
+ * - Upgrades the swapchain output to scRGB (fp16) for SDR and HDR10 (R10G10B10A2) for HDR.
  * - Replaces the game's baked SDR tonemap/LUT output with RenoDX tonemapping.
  * - A single binary serves both APIs: sm5 (DXBC) for D3D11, sm6 (DXIL) for D3D12.
  *
@@ -186,7 +186,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
-    },
+        .is_visible = []() { return current_settings_mode >= 1; },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
         .binding = &shader_injection.tone_map_saturation,
@@ -195,7 +195,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.02f; },
-    },
+        .is_visible = []() { return current_settings_mode >= 1; },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.tone_map_highlight_saturation,
@@ -386,10 +386,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       };
 
       for (int i = 0; i < 4; i++) {
-        // Upgrade r8 render targets to fp16 so HDR values survive to output.
-        // We use index to ONLY upgrade the swapchain back buffers (created first),
-        // preventing UI canvases from being upgraded and freezing the game.
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+        // Upgrade backbuffer-sized r8 render targets to fp16 so HDR values survive to output.
+        // Index-gated to limit upgrades to the first few matching RTs (avoids upgrading later UI canvases).
+        // NOTE: The swapchain itself is handled separately by the swapchain proxy/resize path.
             .old_format = reshade::api::format::r8g8b8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .index = i,
