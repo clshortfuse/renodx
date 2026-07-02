@@ -43,12 +43,18 @@ float Highlights(float x, float highlights, float mid_gray, float highlights_ver
   if (highlights_version == 4.f) {
     [branch]
     if (highlights > 1.f) {
-      float t = saturate((x - mid_gray) / (1.f - mid_gray));
+      float t = 0.f;
+      if (x > mid_gray) {
+        t = saturate(log2(x / mid_gray) / log2(1.f / mid_gray));
+      }
       t = t * t * t * (t * (t * 6.f - 15.f) + 10.f);
       value = lerp(x, mid_gray * pow(x / mid_gray, highlights), t);
     } else if (highlights < 1.f) {
       float b = mid_gray * pow(x / mid_gray, 2.f - highlights);
-      float t = saturate((x - mid_gray) / (1.f - mid_gray));
+      float t = 0.f;
+      if (x > mid_gray) {
+        t = saturate(log2(x / mid_gray) / log2(1.f / mid_gray));
+      }
       t = t * t * t * (t * (t * 6.f - 15.f) + 10.f);
       value = renodx::math::DivideSafe(x * x, lerp(x, b, t), x);
     } else {
@@ -103,11 +109,23 @@ float Shadows(float x, float shadows, float mid_gray, float shadows_version) {
     if (shadows > 1.f) {
       float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
       float reference = x * (1.f + base_scale);
-      value = max(x, x + (raised - reference));
+      float shadow_floor = mid_gray / 16.f;
+      float t = 1.f;
+      if (x > shadow_floor) {
+        t = saturate(log2(x / mid_gray) / log2(shadow_floor / mid_gray));
+      }
+      t = t * t * t * (t * (t * 6.f - 15.f) + 10.f);
+      value = x + (raised - reference) * t;
     } else {
       float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
       float reference = x * (1.f - base_scale);
-      value = clamp(x + (lowered - reference), 0.f, x);
+      float shadow_floor = mid_gray / 16.f;
+      float t = 1.f;
+      if (x > shadow_floor) {
+        t = saturate(log2(x / mid_gray) / log2(shadow_floor / mid_gray));
+      }
+      t = t * t * t * (t * (t * 6.f - 15.f) + 10.f);
+      value = x + (lowered - reference) * t;
     }
   } else if (shadows_version == 1.f) {
     float scaled = x / mid_gray;
