@@ -1,0 +1,24 @@
+---
+applyTo: "src/games/**,src/mods/**,src/shaders/**,src/utils/**"
+---
+
+# RenoDX Code Review Instructions
+
+When reviewing RenoDX changes, check the domain behavior as well as syntax and buildability.
+
+- Review comments should be helpful and actionable. Explain the risky behavior or missing proof, then suggest a concrete RenoDX pattern, bridge, API, or preservation path to employ. References to other mods are useful only when pointing to a specific relevant pattern; do not assume an entire mod is high quality or authoritative.
+- Keep mod PR scope tidy. Changes should be mostly related to the target mod/game plus required shared support; flag unrelated core/global files, scratch/debug/generated artifacts, other-game edits, or drive-by cleanup. Multiple commits are fine when they are coherent and organized by topic.
+- Defaults must match the original/vanilla look as closely as practical. HDR should extend proven range/resource limits; visual augmentation belongs in sliders or named presets such as `HDR Look`.
+- If settings or presets are added, Preset Off or equivalent reset should restore true 100% vanilla as closely as practical. `ToneMapPass` with `RENODX_TONE_MAP_TYPE == 0` / Vanilla can still allow user grading controls, so do not treat it as fully off unless custom grading, HDR-look controls, and effect overrides are disabled.
+- A Vanilla/0 path may explicitly `saturate` or clamp to emulate the original implicit RGBA8U/UNORM resource write clamp after a resource upgrade. Do not treat that as the same issue as hard clipping HDR for a LUT bridge or `neutral_sdr`.
+- Flag shader changes that add default contrast, saturation, colorfulness, or a new grade because HDR headroom exists.
+- Reject final-frame inverse tonemap approaches. RenoDX should preserve or recover upstream scene/pre-SDR data, then forward-map it through `ToneMapPass` or `SwapChainPass` as appropriate.
+- For tonemap/LUT shaders, require a proven `untonemapped`, `neutral_sdr`, or `graded_sdr` signal. When using three-argument `ToneMapPass`, `neutral_sdr` must be an engineered/proven reference baseline for `UpgradeToneMap`, not raw `saturate(untonemapped)`.
+- `ToneMapPass`, PsychoV, and other tonemappers require linear input. Flag encoded/gamma/sRGB values that flow into tonemapping without decode; encode only for a proven encoded LUT domain or output path.
+- For games with LUT/color-grade passes, expect deliberate LUT handling instead of a raw sample bolted onto HDR. A simple sampler can preserve vanilla, but it is also a sign to check whether LUT domain, strength/scaling, masks/blends, SDR bridge, and HDR reconstruction were left on the table.
+- Flag SDR LUT paths where HDR/pre-LUT scene is log-shaped or hard-clipped (`saturate`, `min(max(...), 1)`) into the vanilla LUT domain, sampled, then used as output or `graded_sdr` without a safe LUT-domain proxy, reconstruction path, or proven reference baseline. A valid SDR LUT bridge should map/compress the proven HDR/reference signal into the LUT's SDR domain, sample the vanilla LUT/grade, then reconstruct the HDR/reference signal or feed a graded `ToneMapPass` path with an engineered neutral/reference baseline. Do not accept raw `saturate(untonemapped)` as that baseline.
+- Hard clip into a vanilla LUT is not enough by itself if the clip collapses saturated highlights to white or wrong hues. Expect proof that hue and saturation survive the LUT bridge, such as max-channel/N2 plus gamut compression/reconstruction or selective hue/saturation clip emulation when the vanilla clip effect is intentional.
+- Prefer `renodx::lut` tooling for replacement paths: configure `renodx::lut::Config` with the proven input/output domain, size/precompute, strength/scaling, and sampling choice, then call `renodx::lut::Sample`/`SampleTetrahedral`. Direct `Texture.Sample` is acceptable when deliberately preserving exact vanilla packed-LUT addressing, but the domain and reconstruction still need to be proven. LUT centering/half-texel offsets are sampling fidelity, not the vanilla grade itself.
+- Verify LUT domain assumptions. Most vanilla SDR LUTs are sRGB/gamma-domain; linear input is rare and needs proof. PQ, HDR, log, packed 2D, tetrahedral, masks, strength, or scaling may need explicit preservation.
+- Flag `saturate`, `min`/`max` clamps, UNORM writes, or lower-format copies that destroy highlight range, negative channels, or precision before HDR-critical work is complete. A vanilla `saturate` on an already-tonemapped value may only trim small overflow, and a Vanilla/0 branch may need to emulate the original RGBA8U/UNORM resource clamp; hard clip of `untonemapped`/HDR for a LUT bridge or `neutral_sdr` is the issue.
+- Treat `SwapChainPass` as final output encoding for a proven intermediate. Do not hide tonemap replacement, LUT reconstruction, or inverse SDR expansion inside a swapchain proxy shader.

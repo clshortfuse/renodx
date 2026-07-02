@@ -1,7 +1,7 @@
 ---
 name: handle-sdr-tonemap-lut
-description: "RenoDX HLSL/Slang shader workflow for proven shader-side SDR tonemap, hard clip, LUT, color grade, and HDR bridge changes. Use when editing game shaders for neutral-by-default ToneMapPass/RenoDRT, PsychoV17, vanilla midgray/slope or inflection matching, UpgradeToneMap delta, SDR LUT bridges, N2 max-channel reconstruction, gamut compression, internal/user LUTs, or shader-side tonemap/LUT replacements after upstream HDR/SDR signals are identified."
-argument-hint: "game shader, proven HDR/SDR signals, and goal, e.g. audit LUT bridge, add PsychoV17, or fix hard-clip ToneMapPass"
+description: "RenoDX HLSL/Slang shader workflow for proven shader-side SDR tonemap, hard clip, LUT, color grade, and HDR bridge changes. Use when editing game shaders for neutral-by-default ToneMapPass/RenoDRT, vanilla/0 ToneMapPass user grading, Preset Off vanilla reset, PsychoV17, vanilla midgray/slope or inflection matching, UpgradeToneMap delta, SDR LUT bridges, N2 max-channel reconstruction, gamut compression, hue/saturation clip emulation, internal/user LUTs, or shader-side tonemap/LUT replacements after upstream HDR/SDR signals are identified."
+argument-hint: "game shader, proven HDR/SDR signals, and goal, e.g. audit LUT bridge, add PsychoV17, fix hard-clip ToneMapPass, or verify Preset Off"
 ---
 
 # Handle SDR Tonemap + Optional LUT
@@ -21,6 +21,9 @@ RenoDX mods should be neutral out of the box. Treat HDR as extending the origina
 - Use HDR headroom to preserve highlights, bloom, gradients, and gamut that the original pipeline clipped or compressed; do not add contrast or saturation just because the output is HDR.
 - Put creative/non-neutral looks behind explicit user settings that default to neutral, or behind named presets such as `HDR Look`; document rare exceptions with validation evidence.
 - Reject shader changes whose main visible effect is "more punch" without a proven vanilla reference or user-requested artistic control.
+- `ToneMapPass` with `RENODX_TONE_MAP_TYPE == 0` / Vanilla is a valid mode for keeping the game's vanilla process as the tonemap while still allowing user grading controls such as exposure, contrast, and saturation. Do not treat that as the same thing as a full Off preset.
+- A Vanilla/0 path may explicitly `saturate` or clamp to emulate the original implicit RGBA8U/UNORM resource write clamp after a resource upgrade. Keep that scoped to vanilla preservation/reset behavior; do not reuse it as an HDR bridge, LUT proxy, or `neutral_sdr` recommendation.
+- A Preset Off or equivalent reset should restore true 100% vanilla as closely as practical by disabling custom grading, HDR-look controls, and effect overrides; exact equivalence may be impossible after resource upgrades, but the difference must be intentional and documented.
 
 ## Related skills and scope
 
@@ -109,10 +112,14 @@ Prefer a linear scene capture before SDR clipping, but keep intentional presenta
 | Signal | Meaning |
 |---|---|
 | `untonemapped` | Linear scene/HDR source that will feed `ToneMapPass` or PsychoV. |
-| `neutral_sdr` | Vanilla ungraded SDR baseline, such as hard clip, neutral SDR tonemap, or neutral LUT input. |
-| `graded_sdr` | Vanilla SDR after LUT/color grade/masks. |
+| `neutral_sdr` | Linear vanilla ungraded SDR/reference baseline, such as an engineered SDR proxy, analytic vanilla tonemap, or neutral LUT-domain reconstruction. |
+| `graded_sdr` | Linear vanilla SDR after LUT/color grade/masks. |
 
-For hard-clip/no-tonemap shaders, do not omit `neutral_sdr` if vanilla neutral is `saturate(untonemapped)` or another custom proxy. The two-argument `ToneMapPass(untonemapped, graded_sdr)` defaults the neutral path to RenoDRT neutral SDR, which may be wrong for hard-clip vanilla. The Silksong-style repo path is the reference shape for this: keep SDR-like clip controls explicit, build `neutral_sdr`/`graded_sdr`, then call `ToneMapPass(untonemapped, graded_sdr, neutral_sdr)`.
+`ToneMapPass`, PsychoV, and other tonemappers expect linear input in the shader's proven working color space. Do not feed encoded/gamma/sRGB values into `ToneMapPass`. If a LUT must be sampled in sRGB/gamma space, encode only for the LUT address/sample, then decode the sampled result back to linear before using it as `graded_sdr`, `neutral_sdr`, or tonemapper input.
+
+For hard-clip/no-tonemap shaders, do not turn the HDR source into `neutral_sdr` with a raw hard clip. `ToneMapPass(untonemapped, graded_sdr, neutral_sdr)` uses `neutral_sdr` through `UpgradeToneMap`, so the neutral/reference baseline must be an engineered SDR/LUT-domain proxy, analytic vanilla tonemap, or other proven reference signal. The two-argument `ToneMapPass(untonemapped, graded_sdr)` defaults the neutral path to RenoDRT neutral SDR, which may be wrong for custom vanilla baselines. The Silksong-style repo path is the reference shape for this: keep SDR-like clip controls explicit, build a safe `neutral_sdr`/`graded_sdr`, then call `ToneMapPass(untonemapped, graded_sdr, neutral_sdr)` when that is the right bridge.
+
+Do not assume a hard clip is safe just because it is vanilla. Hard clipping `untonemapped` for an HDR bridge can collapse highlights to white or wrong hues; `ToneMapPass` can then scale that damaged grade back up. A `saturate` on an already-tonemapped value may simply trim small vanilla overflow, and a Vanilla/0 branch may intentionally simulate the original RGBA8U/UNORM resource clamp after an upgrade. Those are not the same issue. Wobbly Life is the warning case: vanilla hard-clip-to-LUT sampling needed max-channel/N2 scaling, gamut compression, and reconstruction to preserve hue and saturation. Silksong goes further when the clip itself is part of the look by emulating hue and saturation clip effects selectively instead of blindly scaling clipped white.
 
 In original/decompiled shaders, prefer a small injection shape:
 
@@ -128,7 +135,8 @@ Use [ToneMapPass injection snippets](./snippets/tone_map_pass.hlsl) as starting 
 |---|---|---|
 | `ToneMapPass(untonemapped)` | Preferred | No SDR LUT/grade needs to be preserved. |
 | `ToneMapPass(untonemapped, graded_sdr)` | Preferred | A trustworthy graded SDR result exists and default RenoDRT neutral SDR is acceptable. |
-| `ToneMapPass(untonemapped, graded_sdr, neutral_sdr)` | Preferred | Hard clip/no-tonemap or custom neutral SDR baseline. |
+| `ToneMapPass(untonemapped, graded_sdr, neutral_sdr)` | Preferred | Custom neutral/reference baseline that is safe for `UpgradeToneMap`; not a raw hard clip of `untonemapped`. |
+| `ToneMapPass` with Vanilla/0 config | Valid mode | Keep the game's vanilla process as the tonemap while allowing user grading controls; pair with a true Off preset/reset when no custom grading is requested. |
 | `direct-psychov17` | Preferred for PsychoV | User requests PsychoV17 or observer tonemap; handle LUT bridge after PsychoV unless final SDR look is the reference. |
 | `extended-vanilla` | Situational | Preserve an analytic vanilla curve shape above SDR range. |
 | `tonemap::config::Apply + LUT` | Legacy/compat | One-shot tonemap+LUT texture helper is already wired or low-risk. |
@@ -208,14 +216,27 @@ Use [SDR LUT bridge snippets](./snippets/sdr_lut_bridge.hlsl) as starting shapes
 
 Do not treat every committed LUT example as current best practice or every LUT as SDR. A game may have a high-quality older bridge, a compatibility-only `UpgradeToneMap` path, an analytic post-tonemap grade with no LUT, or a PQ/HDR/log LUT domain that must be sampled in its real domain. Keep WIP investigations in scratch notes until their final domain and bridge are stable.
 
+Most vanilla SDR LUTs are sampled in sRGB/gamma-encoded space and return encoded values. Linear LUT input is extremely rare and must be proven from shader math, resource naming, or measured behavior. Do not pass encoded LUT inputs or outputs directly into `ToneMapPass`; decode them before tonemapping or reconstruction.
+
+LUT centering, half-texel offsets, packed 2D strip addressing, and edge handling are sampling/addressing fidelity details, not the vanilla color grade itself. Preserve or deliberately replace them so the same LUT cells are sampled, but do not treat “centering” as a grade or as proof that the HDR bridge is correct.
+
+"Going to SDR" for a LUT means building a deliberate neutral SDR/LUT-domain proxy, not blindly clipping HDR to `[0, 1]`. Valid paths include RenoDRT neutral SDR, max-channel/N2 compression, adaptive-D65 gamut compression, gamma-gamut compression, smooth clamp, or a proven vanilla bounded signal. After the LUT sample, reconstruct the HDR/reference signal or pass the sampled grade as `graded_sdr` with the matching `neutral_sdr`.
+
+When auditing a vanilla LUT path, inspect the code immediately before the LUT sample. A log shaper followed by `saturate`, `min(max(...), 1)`, or equivalent is a hard SDR LUT-domain clip even if the sampled result is later passed as `graded_sdr`. A small `saturate` after a proven tonemap may only trim overflow, and a Vanilla/0 path may intentionally restore an original RGBA8U/UNORM resource clamp, but a hard clip of `untonemapped`/HDR before the LUT is not a valid HDR bridge. In that case, two-argument `ToneMapPass(untonemapped, graded_sdr)` usually compares against the wrong neutral; fix it with a safe LUT-domain proxy/reconstruction path, or with three-argument `ToneMapPass` only when `neutral_sdr` is the same engineered/proven reference baseline used for the grade. Do not use a raw hard clip of `untonemapped` as that proof.
+
+For vanilla hard-clip-to-LUT games, the bridge must also answer what happens to saturated highlights before the LUT. If the vanilla clip turns HDR color into white or shifts hue, passing a raw clipped value through `ToneMapPass` only preserves and scales that damage. Wobbly Life-style max-channel plus gamut compression/reconstruction and Silksong-style hue/saturation clip emulation are examples of engineering around that problem while still respecting the vanilla LUT/effect intent.
+
+Use `renodx::lut::Config` and `renodx::lut::Sample`/`SampleTetrahedral` when replacing or generalizing LUT sampling so input/output domains, size/precompute, strength, scaling, and sampling choice are explicit. Direct `Texture.Sample` is also valid when preserving exact packed/offset vanilla addressing, but document why `renodx::lut::Sample` is not equivalent. If a game has a meaningful LUT/color-grade pass, treat simple raw sampling as a prompt to check what options were left on the table, not as a final bridge by itself.
+
 | LUT/grade class | Current handling |
 |---|---|
-| SDR sRGB LUT | Compress HDR BT.709 to SDR LUT range, sample vanilla LUT, reconstruct back to HDR scene/reference. Hades II and Wobbly Life are compact references. |
+| SDR sRGB/gamma LUT | Compress HDR BT.709 to a neutral SDR LUT-domain proxy, encode for the LUT if required, sample the vanilla LUT, decode the result, then reconstruct back to HDR scene/reference. Hades II is a compact reference; Wobbly Life shows why hard-clip-to-LUT paths need hue/saturation-safe compression and reconstruction. |
 | SDR LUT with masks/effects | Preserve blend masks, strength, scaling, and effect textures instead of only sampling the LUT. Starfield is the reference for this shape. |
 | Unity internal/user LUT after clip | Capture post-exposure/fade-scaled scene before vanilla clip/LUT, branch around the vanilla SDR path for custom HDR, preserve optional user LUT and generated internal LUT, then reconstruct to the proven output domain. Hello Kitty Island Adventure is the active-workspace reference for this shape. |
-| Hard-clip + 1D LUT | Preserve SDR-like clipping controls, build explicit `neutral_sdr` and `graded_sdr`, sample the 1D LUT in the proven encoded domain, then use the three-argument `ToneMapPass`. Hollow Knight: Silksong is the reference for this shape. |
+| Hard-clip + 1D LUT | Preserve SDR-like clipping controls, build explicit `neutral_sdr` and `graded_sdr`, sample the 1D LUT in the proven encoded domain, then use the three-argument `ToneMapPass`. Hollow Knight: Silksong is the reference for selective hue and saturation clip emulation around this shape. |
+| PsychoV + SDR LUT | Compute the PsychoV HDR result, compress it into neutral SDR/LUT space with max-channel and/or gamut compression, apply vanilla LUT/effects, then reconstruct HDR/reference range. Starfield and Wobbly Life are modern references for this shape. |
 | Analytic post-tonemap grade | Do not invent a LUT bridge. Treat the analytic grade result as `graded_sdr` and feed `ToneMapPass(untonemapped, graded_sdr)` when appropriate. GTA V Enhanced is the reference for this shape. |
-| PQ/HDR/log LUT | Prove the domain, then configure `renodx::lut::Config` or dump/analyze the LUT. Valheim and XF Extreme Formula show why forcing SDR assumptions is wrong. |
+| Linear/PQ/HDR/log LUT | Prove the domain, then configure `renodx::lut::Config` or dump/analyze the LUT. Linear LUT input is rare; Valheim and XF Extreme Formula show why forcing SDR assumptions is wrong. |
 | Legacy compatibility bridge | Keep if already working, but do not prefer direct `UpgradeToneMap` for new work when graded `ToneMapPass` / `ComputeUntonemappedGraded` is viable. |
 | Older committed mod path | Use as evidence of a solved game constraint, not as a generic template. Check age and nearby newer mods before promoting it to skill guidance. |
 
@@ -229,7 +250,7 @@ Do not treat every committed LUT example as current best practice or every LUT a
 | `lut-blend-mask` | Preserve per-pixel masks or blend factors. |
 | `lut-strength` | Respect shader-side LUT strength. |
 | `lut-scaling` | Respect shader-side HDR reconstruction scaling. |
-| `trilinear` | Standard LUT sampling. |
+| `trilinear` | Standard LUT sampling when it matches vanilla or an explicit user/config option. |
 | `tetrahedral` | Use when vanilla or existing mod path expects tetrahedral sampling. |
 | `manual-2d-strip` | Preserve packed 2D LUT sampling when direct `renodx::lut::Sample` is not equivalent. |
 
@@ -291,6 +312,7 @@ Use these as references, not as templates to copy blindly. A committed mod can b
 - For inflection matching, verify the chosen pivot, derivative source, and output-space behavior.
 - For PsychoV matching, verify the anchor (`V(x)=0.18` or inflection) and slope source in viewer/output space when possible.
 - For LUT bridges, test neutral LUT, strong LUT, user LUT on/off, and saturated emissive colors.
+- For SDR LUT bridges, verify the path compresses/maps to SDR LUT space instead of only clipping, samples in the proven LUT domain, then reconstructs HDR/reference range or feeds a graded `ToneMapPass` path.
 - Check UI/HUD/video/menu shader paths separately if the edited shader can affect them.
 - Reject the change if validation shows the shader only expands completed SDR swapchain output instead of using a real pre-SDR or graded shader signal.
 - If compilation/build is needed, use the smallest existing validation path; do not expand this skill into C++ or addon workflow.

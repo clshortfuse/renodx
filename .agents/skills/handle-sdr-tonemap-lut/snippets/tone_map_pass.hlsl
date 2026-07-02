@@ -6,10 +6,16 @@
 
 #if 0
 
-// Pattern 1: neutral SDR is vanilla hard clip or a custom neutral baseline.
-float3 untonemapped = scene_color;          // Proven scene/pre-SDR signal.
-float3 neutral_sdr = saturate(untonemapped); // Replace if vanilla neutral differs.
-float3 graded_sdr = vanilla_graded_sdr;      // Vanilla SDR after grade/LUT/masks.
+// Pattern 1: graded path with an engineered neutral/reference baseline.
+// Do not set neutral_sdr to saturate(untonemapped). Raw hard clip of the HDR
+// source destroys hue/saturation and is not a valid recommendation. Use a
+// proven analytic vanilla tonemap, RenoDRT neutral, max-channel/gamut-compressed
+// LUT proxy, or selective clip-emulation baseline that matches the grade path.
+// All ToneMapPass inputs here are linear; decode sRGB/gamma LUT outputs before
+// assigning them to neutral_sdr or graded_sdr.
+float3 untonemapped = scene_color;              // Proven scene/pre-SDR signal.
+float3 neutral_sdr = engineered_neutral_sdr;    // Proven neutral/reference baseline for UpgradeToneMap.
+float3 graded_sdr = vanilla_graded_sdr;         // Vanilla SDR after grade/LUT/masks.
 float3 output_color = renodx::draw::ToneMapPass(untonemapped, graded_sdr, neutral_sdr);
 
 // Pattern 2: no grade/LUT preservation is needed.
