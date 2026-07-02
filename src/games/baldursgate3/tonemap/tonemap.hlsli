@@ -38,7 +38,7 @@ renodx::tonemap::aces::ODTConfig CreateODTConfig(
 
 }  // namespace aces
 }  // namespace tonemap
-}  // namespace renodx
+}  // namespace renodx_custom
 
 float Highlights(float x, float highlights, float mid_gray = 0.18f) {
   if (highlights == 1.f) return x;
