@@ -38,7 +38,7 @@ renodx::tonemap::aces::ODTConfig CreateODTConfig(
 
 }  // namespace aces
 }  // namespace tonemap
-}  // namespace renodx
+}  // namespace renodx_custom
 
 float3 ApplyConeBleaching(
     float3 lms_cones,
