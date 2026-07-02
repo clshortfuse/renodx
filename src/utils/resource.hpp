@@ -40,7 +40,6 @@ using ResourceViewUpgradeMap = cross_addon::unordered_map<
     reshade::api::format,
     utils::hash::HashPair>;
 
-        ViewUpgradeAll(b8g8r8x8_unorm_srgb, r8g8b8a8_unorm),
 const ResourceViewUpgradeMap VIEW_UPGRADES_RGBA16F = {
     ViewUpgradeAll(r16g16b16a16_typeless, r16g16b16a16_typeless),
     ViewUpgradeAll(r10g10b10a2_typeless, r16g16b16a16_typeless),

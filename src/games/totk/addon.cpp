@@ -256,8 +256,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   const auto view_upgrades = renodx::utils::resource::VIEW_UPGRADES_RGBA16F;
 
   const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
-      .width = 1600,
-      .height = 900,
+      .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+      .height = 899,
+      .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+  };
+
+  const renodx::utils::resource::ResourceUpgradeInfo::Dimensions dimensions = {
+      .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+      .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
       .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
   };
 
@@ -294,7 +300,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx_custom::utils::shader_hotswap::targets.clear();
       for (uint32_t hash : hashes) {
         for (int i = 0; i < 3; i++) {
-          renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          renodx_custom::utils::shader_hotswap::targets.push_back({
               .old_format = reshade::api::format::r8g8b8a8_typeless,
               .new_format = target_format,
               .shader_hash = hash,
@@ -305,6 +311,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
               .ignore_reset = true,
               .view_upgrades = view_upgrades,
+              .dimensions = dimensions,
               .min_dimensions = min_dimensions,
           });
         }
@@ -354,16 +361,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       //         .min_dimensions = min_dimensions,
       //     });
       //   }
-
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = target_format,
-          .ignore_size = true,
-          .shader_hash = 0xF3C7B934,
-          //   .ignore_size = true,  // risky...?
-          .use_resource_view_cloning = true,
-          .view_upgrades = view_upgrades,
-      });
 
       if (!initialized) {
         // renodx::utils::random::binds.push_back(&shader_injection.swap_chain_output_dither_seed);
