@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "./bitwise.hpp"
+#include "./cstring.hpp"
 #include "./format.hpp"
 #include "./hash.hpp"
 
@@ -21,7 +22,7 @@ namespace renodx::utils::pipeline {
 
 static reshade::api::pipeline_subobject* ClonePipelineSubObjects(const reshade::api::pipeline_subobject* subobjects, uint32_t subobject_count) {
   auto* new_subobjects = new reshade::api::pipeline_subobject[subobject_count];
-  memcpy(new_subobjects, subobjects, sizeof(reshade::api::pipeline_subobject) * subobject_count);
+  std::memcpy(new_subobjects, subobjects, sizeof(reshade::api::pipeline_subobject) * subobject_count);
   for (uint32_t i = 0; i < subobject_count; ++i) {
     const auto& subobject = subobjects[i];
 #ifdef DEBUG_LEVEL_2
@@ -50,6 +51,25 @@ static reshade::api::pipeline_subobject* ClonePipelineSubObjects(const reshade::
         memcpy(new_subobjects[i].data, subobject.data, sizeof(reshade::api::shader_desc));
         auto* old_desc = static_cast<reshade::api::shader_desc*>(subobject.data);
         auto* new_desc = static_cast<reshade::api::shader_desc*>(new_subobjects[i].data);
+
+        if (new_desc->entry_point != nullptr && new_desc->entry_point[0] == '\0') {
+          // Reshade guards against nullptr entry points but not empty strings, so we convert as a workaround
+          new_desc->entry_point = nullptr;
+        } else if (new_desc->entry_point != nullptr) {
+          new_desc->entry_point = renodx::utils::CloneCString(new_desc->entry_point);
+        }
+
+#ifdef DEBUG_LEVEL_2
+        {
+          std::stringstream s;
+          s << "utils::pipeline::ClonePipelineSubObjects(entry point";
+          s << " from " << (old_desc->entry_point != nullptr ? old_desc->entry_point : "(null)");
+          s << " to " << (new_desc->entry_point != nullptr ? new_desc->entry_point : "(null)");
+          s << ")";
+          reshade::log::message(reshade::log::level::debug, s.str().c_str());
+        }
+#endif
+
         if (old_desc->code_size != 0u) {
           void* code_copy = malloc(old_desc->code_size);
           memcpy(code_copy, old_desc->code, old_desc->code_size);
@@ -76,7 +96,7 @@ static reshade::api::pipeline_subobject* ClonePipelineSubObjects(const reshade::
         for (uint32_t j = 0; j < subobject.count; j++) {
           auto* old_input_elements = static_cast<reshade::api::input_element*>(subobject.data);
           auto* new_input_elements = static_cast<reshade::api::input_element*>(new_subobjects[i].data);
-          new_input_elements[j].semantic = _strdup(old_input_elements[j].semantic);
+          new_input_elements[j].semantic = renodx::utils::CloneCString(old_input_elements[j].semantic);
         }
         break;
       case reshade::api::pipeline_subobject_type::stream_output_state:
@@ -140,11 +160,34 @@ static void DestroyPipelineSubobjects(std::span<reshade::api::pipeline_subobject
     if (subobject.data == nullptr) continue;
     switch (subobject.type) {
       case reshade::api::pipeline_subobject_type::vertex_shader:
+      case reshade::api::pipeline_subobject_type::hull_shader:
+      case reshade::api::pipeline_subobject_type::domain_shader:
+      case reshade::api::pipeline_subobject_type::geometry_shader:
       case reshade::api::pipeline_subobject_type::compute_shader:
-      case reshade::api::pipeline_subobject_type::pixel_shader:   {
+      case reshade::api::pipeline_subobject_type::pixel_shader:
+      case reshade::api::pipeline_subobject_type::amplification_shader:
+      case reshade::api::pipeline_subobject_type::mesh_shader:
+      case reshade::api::pipeline_subobject_type::raygen_shader:
+      case reshade::api::pipeline_subobject_type::any_hit_shader:
+      case reshade::api::pipeline_subobject_type::closest_hit_shader:
+      case reshade::api::pipeline_subobject_type::miss_shader:
+      case reshade::api::pipeline_subobject_type::intersection_shader:
+      case reshade::api::pipeline_subobject_type::callable_shader:      {
         auto* desc = static_cast<reshade::api::shader_desc*>(subobject.data);
+        if (desc->entry_point != nullptr) {
+          std::free(const_cast<char*>(desc->entry_point));
+          desc->entry_point = nullptr;
+        }
         free(const_cast<void*>(desc->code));
         desc->code = nullptr;
+        break;
+      }
+      case reshade::api::pipeline_subobject_type::input_layout: {
+        auto* input_elements = static_cast<reshade::api::input_element*>(subobject.data);
+        for (uint32_t i = 0; i < subobject.count; ++i) {
+          std::free(const_cast<char*>(input_elements[i].semantic));
+          input_elements[i].semantic = nullptr;
+        }
         break;
       }
       default:

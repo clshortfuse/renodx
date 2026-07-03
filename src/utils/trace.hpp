@@ -1317,6 +1317,13 @@ static void OnBindDescriptorTables(
           case reshade::api::descriptor_type::sampler:
           case reshade::api::descriptor_type::constant_buffer:
           case reshade::api::descriptor_type::shader_storage_buffer:
+#if RESHADE_API_VERSION >= 20
+          case reshade::api::descriptor_type::constant_buffer_with_dynamic_offset:
+          case reshade::api::descriptor_type::shader_storage_buffer_with_dynamic_offset:
+#else
+          case static_cast<reshade::api::descriptor_type>(8u):  // VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+          case static_cast<reshade::api::descriptor_type>(9u):  // VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+#endif
             continue;
         }
 
