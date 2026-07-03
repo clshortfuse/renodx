@@ -106,6 +106,16 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapWorkingColorSpace",
+        .binding = &shader_injection.tone_map_working_color_space,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Working Color Space",
+        .section = "Tone Mapping",
+        .labels = {"BT.709", "LMS"},
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -160,7 +170,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 50.f,
+        .default_value = 80.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
@@ -170,7 +180,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadowContrast",
         .binding = &shader_injection.tone_map_shadow_contrast,
-        .default_value = 42.f,
+        .default_value = 45.f,
         .label = "Shadow Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -337,7 +347,9 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
+              {"ToneMapWorkingColorSpace", 0.f},
               {"GammaCorrection", 1.f},
+              {"ColorGradeShadows", 50.f},
               {"ColorGradeShadowContrast", 50.f},
               {"ColorGradeLUTScaling", 0.f},
               {"FxNoise", 100.f},
@@ -355,6 +367,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 0.f},
               {"ColorGradeExposure", 1.15f},
+              {"ColorGradeShadows", 50.f},
               {"ColorGradeHighlightContrast", 43.f},
               {"ColorGradeShadowContrast", 50.f},
               {"ColorGradeContrast", 55.f},
@@ -432,6 +445,7 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
+      {"ToneMapWorkingColorSpace", 0.f},
       {"GammaCorrection", 0.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},

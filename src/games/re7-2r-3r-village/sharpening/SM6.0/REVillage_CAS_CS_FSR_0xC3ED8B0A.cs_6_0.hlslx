@@ -1,0 +1,92 @@
+Texture2D<float4> SrcImage : register(t0);
+
+RWTexture2D<float4> OutputImage : register(u0);
+
+cbuffer cbCAS : register(b0) {
+  uint4 Const0 : packoffset(c000.x);
+};
+
+[numthreads(64, 1, 1)]
+void main(
+  uint3 SV_DispatchThreadID : SV_DispatchThreadID,
+  uint3 SV_GroupID : SV_GroupID,
+  uint3 SV_GroupThreadID : SV_GroupThreadID,
+  uint SV_GroupIndex : SV_GroupIndex
+) {
+  int _15 = (((uint)(SV_GroupThreadID.x) >> 1) & 7) | ((uint)((uint)(SV_GroupID.x) << 4));
+  int _16 = ((((uint)(SV_GroupThreadID.x) >> 3) & 6) | ((uint)(SV_GroupThreadID.x) & 1)) | ((uint)((uint)(SV_GroupID.y) << 4));
+  uint _19 = _16 + -1u;
+  float4 _20 = SrcImage.Load(int3(_15, _19, 0));
+  uint _24 = _15 + -1u;
+  float4 _25 = SrcImage.Load(int3(_24, _16, 0));
+  float4 _29 = SrcImage.Load(int3(_15, _16, 0));
+  int _33 = _15 + 1;
+  float4 _34 = SrcImage.Load(int3(_33, _16, 0));
+  int _38 = _16 + 1;
+  float4 _39 = SrcImage.Load(int3(_15, _38, 0));
+  float _45 = min(min(min(_20.x, _25.x), _34.x), _39.x);
+  float _48 = min(min(min(_20.y, _25.y), _34.y), _39.y);
+  float _51 = min(min(min(_20.z, _25.z), _34.z), _39.z);
+  float _54 = max(max(max(_20.x, _25.x), _34.x), _39.x);
+  float _57 = max(max(max(_20.y, _25.y), _34.y), _39.y);
+  float _60 = max(max(max(_20.z, _25.z), _34.z), _39.z);
+  float _93 = max(-0.1875f, min(max(max(max((-0.0f - (_45 * (0.25f / _54))), ((1.0f / ((_45 * 4.0f) + -4.0f)) * (1.0f - _54))), max((-0.0f - (_48 * (0.25f / _57))), ((1.0f / ((_48 * 4.0f) + -4.0f)) * (1.0f - _57)))), max((-0.0f - (_51 * (0.25f / _60))), ((1.0f / ((_51 * 4.0f) + -4.0f)) * (1.0f - _60)))), 0.0f)) * asfloat(Const0.x);
+  float _95 = (_93 * 4.0f) + 1.0f;
+  float _98 = asfloat(((uint)(2129764351u - (int)(asint(_95)))));
+  float _101 = (2.0f - (_98 * _95)) * _98;
+  OutputImage[int2(_15, _16)] = float4((_101 * ((_93 * (((_25.x + _20.x) + _34.x) + _39.x)) + _29.x)), (_101 * ((_93 * (((_25.y + _20.y) + _34.y) + _39.y)) + _29.y)), (_101 * ((_93 * (((_25.z + _20.z) + _34.z) + _39.z)) + _29.z)), 1.0f);
+  int _120 = _15 | 8;
+  float4 _123 = SrcImage.Load(int3(_120, _19, 0));
+  uint _127 = _120 + -1u;
+  float4 _128 = SrcImage.Load(int3(_127, _16, 0));
+  float4 _132 = SrcImage.Load(int3(_120, _16, 0));
+  uint _136 = _120 + 1u;
+  float4 _137 = SrcImage.Load(int3(_136, _16, 0));
+  float4 _141 = SrcImage.Load(int3(_120, _38, 0));
+  float _147 = min(min(min(_123.x, _128.x), _137.x), _141.x);
+  float _150 = min(min(min(_123.y, _128.y), _137.y), _141.y);
+  float _153 = min(min(min(_123.z, _128.z), _137.z), _141.z);
+  float _156 = max(max(max(_123.x, _128.x), _137.x), _141.x);
+  float _159 = max(max(max(_123.y, _128.y), _137.y), _141.y);
+  float _162 = max(max(max(_123.z, _128.z), _137.z), _141.z);
+  float _195 = max(-0.1875f, min(max(max(max((-0.0f - (_147 * (0.25f / _156))), ((1.0f / ((_147 * 4.0f) + -4.0f)) * (1.0f - _156))), max((-0.0f - (_150 * (0.25f / _159))), ((1.0f / ((_150 * 4.0f) + -4.0f)) * (1.0f - _159)))), max((-0.0f - (_153 * (0.25f / _162))), ((1.0f / ((_153 * 4.0f) + -4.0f)) * (1.0f - _162)))), 0.0f)) * asfloat(Const0.x);
+  float _197 = (_195 * 4.0f) + 1.0f;
+  float _200 = asfloat(((uint)(2129764351u - (int)(asint(_197)))));
+  float _203 = (2.0f - (_200 * _197)) * _200;
+  OutputImage[int2(_120, _16)] = float4((_203 * ((_195 * (((_128.x + _123.x) + _137.x) + _141.x)) + _132.x)), (_203 * ((_195 * (((_128.y + _123.y) + _137.y) + _141.y)) + _132.y)), (_203 * ((_195 * (((_128.z + _123.z) + _137.z) + _141.z)) + _132.z)), 1.0f);
+  int _222 = _16 | 8;
+  uint _225 = _222 + -1u;
+  float4 _226 = SrcImage.Load(int3(_120, _225, 0));
+  float4 _230 = SrcImage.Load(int3(_127, _222, 0));
+  float4 _234 = SrcImage.Load(int3(_120, _222, 0));
+  float4 _238 = SrcImage.Load(int3(_136, _222, 0));
+  uint _242 = _222 + 1u;
+  float4 _243 = SrcImage.Load(int3(_120, _242, 0));
+  float _249 = min(min(min(_226.x, _230.x), _238.x), _243.x);
+  float _252 = min(min(min(_226.y, _230.y), _238.y), _243.y);
+  float _255 = min(min(min(_226.z, _230.z), _238.z), _243.z);
+  float _258 = max(max(max(_226.x, _230.x), _238.x), _243.x);
+  float _261 = max(max(max(_226.y, _230.y), _238.y), _243.y);
+  float _264 = max(max(max(_226.z, _230.z), _238.z), _243.z);
+  float _297 = max(-0.1875f, min(max(max(max((-0.0f - (_249 * (0.25f / _258))), ((1.0f / ((_249 * 4.0f) + -4.0f)) * (1.0f - _258))), max((-0.0f - (_252 * (0.25f / _261))), ((1.0f / ((_252 * 4.0f) + -4.0f)) * (1.0f - _261)))), max((-0.0f - (_255 * (0.25f / _264))), ((1.0f / ((_255 * 4.0f) + -4.0f)) * (1.0f - _264)))), 0.0f)) * asfloat(Const0.x);
+  float _299 = (_297 * 4.0f) + 1.0f;
+  float _302 = asfloat(((uint)(2129764351u - (int)(asint(_299)))));
+  float _305 = (2.0f - (_302 * _299)) * _302;
+  OutputImage[int2(_120, _222)] = float4((_305 * ((_297 * (((_230.x + _226.x) + _238.x) + _243.x)) + _234.x)), (_305 * ((_297 * (((_230.y + _226.y) + _238.y) + _243.y)) + _234.y)), (_305 * ((_297 * (((_230.z + _226.z) + _238.z) + _243.z)) + _234.z)), 1.0f);
+  float4 _326 = SrcImage.Load(int3(_15, _225, 0));
+  float4 _330 = SrcImage.Load(int3(_24, _222, 0));
+  float4 _334 = SrcImage.Load(int3(_15, _222, 0));
+  float4 _338 = SrcImage.Load(int3(_33, _222, 0));
+  float4 _342 = SrcImage.Load(int3(_15, _242, 0));
+  float _348 = min(min(min(_326.x, _330.x), _338.x), _342.x);
+  float _351 = min(min(min(_326.y, _330.y), _338.y), _342.y);
+  float _354 = min(min(min(_326.z, _330.z), _338.z), _342.z);
+  float _357 = max(max(max(_326.x, _330.x), _338.x), _342.x);
+  float _360 = max(max(max(_326.y, _330.y), _338.y), _342.y);
+  float _363 = max(max(max(_326.z, _330.z), _338.z), _342.z);
+  float _396 = max(-0.1875f, min(max(max(max((-0.0f - (_348 * (0.25f / _357))), ((1.0f / ((_348 * 4.0f) + -4.0f)) * (1.0f - _357))), max((-0.0f - (_351 * (0.25f / _360))), ((1.0f / ((_351 * 4.0f) + -4.0f)) * (1.0f - _360)))), max((-0.0f - (_354 * (0.25f / _363))), ((1.0f / ((_354 * 4.0f) + -4.0f)) * (1.0f - _363)))), 0.0f)) * asfloat(Const0.x);
+  float _398 = (_396 * 4.0f) + 1.0f;
+  float _401 = asfloat(((uint)(2129764351u - (int)(asint(_398)))));
+  float _404 = (2.0f - (_401 * _398)) * _401;
+  OutputImage[int2(_15, _222)] = float4((_404 * ((_396 * (((_330.x + _326.x) + _338.x) + _342.x)) + _334.x)), (_404 * ((_396 * (((_330.y + _326.y) + _338.y) + _342.y)) + _334.y)), (_404 * ((_396 * (((_330.z + _326.z) + _338.z) + _342.z)) + _334.z)), 1.0f);
+}

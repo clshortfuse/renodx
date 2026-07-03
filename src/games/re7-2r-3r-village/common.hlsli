@@ -20,36 +20,6 @@ struct UserGradingConfig {
   float purity_emulation;
 };
 
-float Highlights(float x, float highlights, float mid_gray) {
-  if (highlights == 1.f) return x;
-
-  if (highlights > 1.f) {
-    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.f)));
-  } else {  // highlights < 1.f
-    float b = mid_gray * pow(x / mid_gray, 2.f - highlights);
-    float t = min(x, 1.f);  // clamp extreme influence
-    return min(x, renodx::math::DivideSafe(x * x, lerp(x, b, t), x));
-  }
-}
-
-float Shadows(float x, float shadows, float mid_gray) {
-  if (shadows == 1.f) return x;
-
-  const float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
-  const float base_term = x * mid_gray;
-  const float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
-
-  if (shadows > 1.f) {
-    float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
-    float reference = x * (1.f + base_scale);
-    return max(x, x + (raised - reference));
-  } else {  // shadows < 1.f
-    float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
-    float reference = x * (1.f - base_scale);
-    return clamp(x + (lowered - reference), 0.f, x);
-  }
-}
-
 float ContrastAndFlare(float x, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
   if (contrast == 1.f && flare == 0.f && contrast_highlights == 1.f && contrast_shadows == 1.f) return x;
 
@@ -76,10 +46,10 @@ float3 ApplyLuminosityGrading(float3 untonemapped, float lum, UserGradingConfig 
   const float lum_contrasted = ContrastAndFlare(lum_gamma_adjusted, config.contrast, config.contrast_highlights, config.contrast_shadows, config.flare, mid_gray);
 
   // highlights
-  float lum_highlighted = Highlights(lum_contrasted, config.highlights, mid_gray);
+  float lum_highlighted = renodx::color::grade::Highlights(lum_contrasted, config.highlights, mid_gray);
 
   // shadows
-  float lum_shadowed = Shadows(lum_highlighted, config.shadows, mid_gray);
+  float lum_shadowed = renodx::color::grade::Shadows(lum_highlighted, config.shadows, mid_gray);
 
   const float lum_final = lum_shadowed;
 
