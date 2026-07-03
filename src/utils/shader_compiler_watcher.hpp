@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <chrono>
+#include <cstdint>
 #include <exception>
 #include <filesystem>
 #include <include/reshade.hpp>
@@ -25,6 +26,7 @@
 #include "./hlsl_dependencies.hpp"
 #include "./path.hpp"
 #include "./shader_compiler_directx.hpp"
+#include "./shader_compiler_vulkan.hpp"
 
 namespace renodx::utils::shader::compiler::watcher {
 
@@ -34,6 +36,7 @@ struct CustomShader {
   std::variant<std::exception, std::vector<uint8_t>> compilation;
   bool is_hlsl = false;
   bool is_glsl = false;
+  bool is_slang = false;
   std::filesystem::path file_path;
   uint32_t shader_hash = 0u;
   bool removed = false;
@@ -59,14 +62,48 @@ struct CustomShader {
   }
 
   [[nodiscard]] std::string GetFileAlias() const {
-    if (!is_hlsl) return "";
-    static const auto CHARACTERS_TO_REMOVE_FROM_END = std::string("0x12345678.xx_x_x.hlsl").length();
     auto filename = file_path.filename().string();
-    filename.erase(filename.length() - (std::min)(CHARACTERS_TO_REMOVE_FROM_END, filename.length()));
-    if (filename.ends_with("_")) {
-      filename.erase(filename.length() - 1);
+    auto alias_before_hash = [](const std::string& base) -> std::string {
+      if (auto hash_pos = base.rfind("_0x"); hash_pos != std::string::npos) {
+        return base.substr(0, hash_pos);
+      }
+      if (base.size() == 10 && base.rfind("0x", 0) == 0) {
+        return "";
+      }
+      return base;
+    };
+    if (is_hlsl) {
+      static const auto CHARACTERS_TO_REMOVE_FROM_END = std::string("0x12345678.xx_x_x.hlsl").length();
+      filename.erase(filename.length() - (std::min)(CHARACTERS_TO_REMOVE_FROM_END, filename.length()));
+      if (filename.ends_with("_")) {
+        filename.erase(filename.length() - 1);
+      }
+      return filename;
     }
-    return filename;
+    if (is_slang) {
+      if (auto suffix_pos = filename.rfind(".slang"); suffix_pos != std::string::npos) {
+        filename.erase(suffix_pos);
+      }
+      if (auto target_pos = filename.rfind('.'); target_pos != std::string::npos) {
+        filename.erase(target_pos);
+      }
+      return alias_before_hash(filename);
+    }
+    if (is_glsl) {
+      if (auto suffix_pos = filename.rfind(".glsl"); suffix_pos != std::string::npos) {
+        filename.erase(suffix_pos);
+      }
+      if (filename.ends_with(".spv")) {
+        filename.erase(filename.size() - 4);
+      }
+      if (filename.ends_with(".frag") || filename.ends_with(".vert") || filename.ends_with(".comp")) {
+        if (auto target_pos = filename.rfind('.'); target_pos != std::string::npos) {
+          filename.erase(target_pos);
+        }
+      }
+      return alias_before_hash(filename);
+    }
+    return "";
   }
 };
 
@@ -79,6 +116,7 @@ static std::atomic_bool shared_compile_pending = false;
 static std::optional<std::thread> worker_thread;
 
 static std::shared_mutex mutex;
+static std::atomic_int shared_device_api = static_cast<int>(reshade::api::device_api::d3d11);
 static std::unordered_map<uint32_t, CustomShader> custom_shaders_cache;
 static std::unordered_map<uint32_t, CustomShader> pending_custom_shaders_cache;
 struct DependencyMetadata {
@@ -92,6 +130,7 @@ struct BuildMetadata {
   std::filesystem::path file_path;
   std::vector<DependencyMetadata> dependencies;
   std::size_t defines_revision = 0u;
+  reshade::api::device_api device_api = reshade::api::device_api::d3d11;
 };
 static std::unordered_map<uint32_t, BuildMetadata> build_metadata_cache;
 static std::vector<std::pair<std::string, std::string>> shared_shader_defines;
@@ -135,6 +174,7 @@ static bool HasHexPrefix(const std::string& text, std::size_t offset) {
 static bool AreShadersEquivalent(const CustomShader& lhs, const CustomShader& rhs) {
   if (lhs.is_hlsl != rhs.is_hlsl
       || lhs.is_glsl != rhs.is_glsl
+      || lhs.is_slang != rhs.is_slang
       || lhs.file_path != rhs.file_path
       || lhs.shader_hash != rhs.shader_hash
       || lhs.removed != rhs.removed) {
@@ -157,9 +197,9 @@ static void QueueShaderUpdate(uint32_t shader_hash, const CustomShader& custom_s
   shared_shaders_changed = true;
 }
 
-static std::vector<DependencyMetadata> CollectDependencyMetadata(const std::filesystem::path& entry_path, bool is_hlsl) {
+static std::vector<DependencyMetadata> CollectDependencyMetadata(const std::filesystem::path& entry_path, bool collect_include_dependencies) {
   std::vector<DependencyMetadata> dependencies;
-  if (is_hlsl) {
+  if (collect_include_dependencies) {
     for (const auto& dependency : renodx::utils::shader::dependencies::CollectDependencies(entry_path)) {
       auto last_write_time = std::filesystem::file_time_type::min();
       if (dependency.exists) {
@@ -254,11 +294,36 @@ static CustomShader CompileShader(
 }
 
 static bool CompileCustomShaders() {
-  const std::unique_lock lock(mutex);
+  const auto local_device_api = static_cast<reshade::api::device_api>(shared_device_api.load());
+
+  auto resolve_shader_target_for_api = [&](const std::string& target) {
+    if (target.size() < 4 || !target.ends_with("_x")) return target;
+    if (target.find("_5_") == std::string::npos) return target;
+    std::string resolved = target;
+    resolved[resolved.size() - 1] =
+        (local_device_api == reshade::api::device_api::d3d12) ? '1' : '0';
+    return resolved;
+  };
+
+  auto parse_stage_target_and_hash = [&](const std::filesystem::path& entry_path, const char* suffix, std::string& out_target, std::string& out_hash) {
+    const auto& filename = entry_path.filename().string();
+    const auto suffix_pos = filename.rfind(suffix);
+    if (suffix_pos == std::string::npos || suffix_pos == 0) return false;
+    const auto before_suffix = filename.substr(0, suffix_pos);
+    const auto target_dot = before_suffix.rfind('.');
+    if (target_dot == std::string::npos || target_dot == 0) return false;
+    out_target = before_suffix.substr(target_dot + 1);
+    const auto shader_name = before_suffix.substr(0, target_dot);
+    if (shader_name.size() < 10 || shader_name.rfind("0x") != shader_name.size() - 10) return false;
+    out_hash = shader_name.substr(shader_name.size() - 8, 8);
+    return true;
+  };
 
   const auto directory = GetEffectiveLiveDirectory();
   std::unordered_set<uint32_t> shader_hashes_processed = {};
   bool has_updates = false;
+
+  const std::unique_lock lock(mutex);
   try {
     if (!std::filesystem::exists(directory)) {
       std::filesystem::create_directories(directory);
@@ -298,7 +363,8 @@ static bool CompileCustomShaders() {
       const bool is_cso = entry_path.extension().compare(".cso") == 0;
       const bool is_glsl = entry_path.extension().compare(".glsl") == 0;
       const bool is_spv = entry_path.extension().compare(".spv") == 0;
-      if (!is_hlsl && !is_cso && !is_spv && !is_glsl) continue;
+      const bool is_slang = entry_path.extension().compare(".slang") == 0;
+      if (!is_hlsl && !is_cso && !is_spv && !is_glsl && !is_slang) continue;
 
       auto basename = entry_path.stem().string();
       std::string hash_string;
@@ -311,9 +377,28 @@ static bool CompileCustomShaders() {
         shader_target = basename.substr(length - strlen("xx_x_x"), strlen("xx_x_x"));
         if (shader_target[2] != '_') continue;
         if (shader_target[4] != '_') continue;
+        shader_target = resolve_shader_target_for_api(shader_target);
         // uint32_t versionMajor = shader_target[3] - '0';
         hash_string = basename.substr(length - strlen("12345678.xx_x_x"), 8);
-      } else if (is_cso || is_spv || is_glsl) {
+      } else if (is_slang) {
+        if (!parse_stage_target_and_hash(entry_path, ".slang", shader_target, hash_string)) continue;
+      } else if (is_glsl) {
+        const bool has_stage_suffix = parse_stage_target_and_hash(entry_path, ".spv.glsl", shader_target, hash_string)
+                                      || parse_stage_target_and_hash(entry_path, ".glsl", shader_target, hash_string);
+        if (!has_stage_suffix) {
+          if (basename.size() < 10 || !HasHexPrefix(basename, 0u)) {
+            std::stringstream s;
+            s << "CompileCustomShaders(Invalid file format: ";
+            s << basename;
+            s << ")";
+            reshade::log::message(reshade::log::level::warning, s.str().c_str());
+            continue;
+          }
+          hash_string = basename.substr(2, 8);
+        } else if (shader_target != "frag" && shader_target != "vert" && shader_target != "comp") {
+          shader_target.clear();
+        }
+      } else if (is_cso || is_spv) {
         // Binary files must start with 0x12345678. The rest of the basename is ignored.
         if (basename.size() < 10 || !HasHexPrefix(basename, 0u)) {
           std::stringstream s;
@@ -351,21 +436,23 @@ static bool CompileCustomShaders() {
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
         continue;
       }
+      shader_hashes_processed.emplace(shader_hash);
 
       BuildMetadata next_build_metadata = {
           .file_path = entry_path,
-          .dependencies = CollectDependencyMetadata(entry_path, is_hlsl),
+          .dependencies = CollectDependencyMetadata(entry_path, is_hlsl || is_slang || is_glsl),
           .defines_revision = shared_shader_defines_revision,
+          .device_api = local_device_api,
       };
-      shader_hashes_processed.emplace(shader_hash);
 
       const auto previous_build_metadata = build_metadata_cache.find(shader_hash);
       const auto previous_shader = custom_shaders_cache.find(shader_hash);
       const bool has_previous_shader = previous_shader != custom_shaders_cache.end();
       const bool cached_build_is_identical = previous_build_metadata != build_metadata_cache.end()
                                              && has_previous_shader
-                                             && previous_build_metadata->second.file_path == entry_path
-                                             && previous_build_metadata->second.defines_revision == shared_shader_defines_revision
+                                             && previous_build_metadata->second.file_path == next_build_metadata.file_path
+                                             && previous_build_metadata->second.defines_revision == next_build_metadata.defines_revision
+                                             && previous_build_metadata->second.device_api == next_build_metadata.device_api
                                              && std::ranges::equal(
                                                  previous_build_metadata->second.dependencies,
                                                  next_build_metadata.dependencies);
@@ -373,7 +460,59 @@ static bool CompileCustomShaders() {
         continue;
       }
 
-      auto custom_shader = CompileShader(entry_path, shader_hash, is_hlsl, is_glsl, shader_target);
+      CustomShader custom_shader = {
+          .is_hlsl = is_hlsl,
+          .is_glsl = is_glsl,
+          .is_slang = is_slang,
+          .file_path = entry_path,
+          .shader_hash = shader_hash,
+          .removed = false,
+      };
+
+      auto log_compilation_failed = [&]() {
+        std::stringstream s;
+        s << "loadCustomShaders(Compilation failed: ";
+        s << entry_path.string();
+        s << ", " << custom_shader.GetCompilationException().what();
+        s << ")";
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+      };
+
+      try {
+        if (is_hlsl) {
+          custom_shader.compilation = renodx::utils::shader::compiler::directx::CompileShaderFromFile(
+              entry_path.c_str(),
+              shader_target.c_str(),
+              shared_shader_defines);
+        } else if (is_slang && local_device_api == reshade::api::device_api::vulkan) {
+          const auto results = renodx::utils::shader::compiler::vulkan::CompileShadersFromFiles(
+              {{
+                  .file_path = entry_path,
+                  .shader_target = shader_target,
+                  .shader_hash = shader_hash,
+              }},
+              shared_shader_defines);
+          if (results.empty()) {
+            throw std::exception("Slang compiler produced no result.");
+          }
+          custom_shader.compilation = results.front().compilation;
+        } else if (is_glsl && local_device_api == reshade::api::device_api::vulkan) {
+          if (shader_target.empty()) {
+            throw std::exception("Invalid GLSL shader stage. Expected '.frag.glsl', '.vert.glsl', or '.comp.glsl'.");
+          }
+          custom_shader.compilation = renodx::utils::shader::compiler::vulkan::CompileGlslFromFile(
+              entry_path.c_str(),
+              shader_target.c_str(),
+              shared_shader_defines);
+        } else if (is_slang) {
+          throw std::exception("Slang source shaders require Vulkan API.");
+        } else {
+          custom_shader.compilation = utils::path::ReadBinaryFile(entry_path);
+        }
+      } catch (std::exception& exception) {
+        custom_shader.compilation = exception;
+        log_compilation_failed();
+      }
 
       build_metadata_cache[shader_hash] = std::move(next_build_metadata);
 
@@ -610,6 +749,10 @@ static void SetShaderDefines(const std::vector<std::pair<std::string, std::strin
 static std::string GetLivePath() {
   const std::shared_lock lock(internal::mutex);
   return internal::live_path;
+}
+
+static void SetDeviceApi(reshade::api::device_api device_api) {
+  internal::shared_device_api.store(static_cast<int>(device_api));
 }
 
 static void SetLivePath(const std::string& live_path) {
