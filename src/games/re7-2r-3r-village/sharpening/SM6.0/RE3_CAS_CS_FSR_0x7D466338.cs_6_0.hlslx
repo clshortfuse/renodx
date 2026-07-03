@@ -1,0 +1,172 @@
+cbuffer cbCASUBO : register(b0, space0)
+{
+    float4 cbCAS_m0[1] : packoffset(c0);
+};
+
+Texture2D<float4> SrcImage : register(t0, space0);
+RWTexture2D<float4> OutputImage : register(u0, space0);
+
+static uint3 gl_WorkGroupID;
+static uint3 gl_LocalInvocationID;
+struct SPIRV_Cross_Input
+{
+    uint3 gl_WorkGroupID : SV_GroupID;
+    uint3 gl_LocalInvocationID : SV_GroupThreadID;
+};
+
+uint spvPackHalf2x16(float2 value)
+{
+    uint2 Packed = f32tof16(value);
+    return Packed.x | (Packed.y << 16);
+}
+
+float2 spvUnpackHalf2x16(uint value)
+{
+    return f16tof32(uint2(value & 0xffff, value >> 16));
+}
+
+void comp_main()
+{
+    uint _45 = ((gl_LocalInvocationID.x >> 1u) & 7u) | (gl_WorkGroupID.x << 4u);
+    uint _46 = (((gl_LocalInvocationID.x >> 3u) & 6u) | (gl_LocalInvocationID.x & 1u)) | (gl_WorkGroupID.y << 4u);
+    uint _55 = _45 << 16u;
+    uint _57 = uint(int(_55) >> int(16u));
+    uint _58 = _46 << 16u;
+    uint _61 = uint(int(_58 + 4294901760u) >> int(16u));
+    half4 _67 = half4(SrcImage.Load(int3(uint2(_57, _61), 0u)));
+    half _68 = _67.x;
+    half _69 = _67.y;
+    half _70 = _67.z;
+    uint _72 = uint(int(_55 + 4294901760u) >> int(16u));
+    uint _73 = uint(int(_58) >> int(16u));
+    half4 _76 = half4(SrcImage.Load(int3(uint2(_72, _73), 0u)));
+    half _77 = _76.x;
+    half _78 = _76.y;
+    half _79 = _76.z;
+    half4 _82 = half4(SrcImage.Load(int3(uint2(_57, _73), 0u)));
+    uint _88 = uint(int(_55 + 65536u) >> int(16u));
+    half4 _91 = half4(SrcImage.Load(int3(uint2(_88, _73), 0u)));
+    half _92 = _91.x;
+    half _93 = _91.y;
+    half _94 = _91.z;
+    uint _96 = uint(int(_58 + 65536u) >> int(16u));
+    half4 _99 = half4(SrcImage.Load(int3(uint2(_57, _96), 0u)));
+    half _100 = _99.x;
+    half _101 = _99.y;
+    half _102 = _99.z;
+    uint16_t _103 = uint16_t(_45) | 8u;
+    uint _105 = uint(_103);
+    half4 _108 = half4(SrcImage.Load(int3(uint2(_105, _61), 0u)));
+    half _109 = _108.x;
+    half _110 = _108.y;
+    half _111 = _108.z;
+    uint _114 = uint((_103 + 65535u));
+    half4 _117 = half4(SrcImage.Load(int3(uint2(_114, _73), 0u)));
+    half _118 = _117.x;
+    half _119 = _117.y;
+    half _120 = _117.z;
+    half4 _123 = half4(SrcImage.Load(int3(uint2(_105, _73), 0u)));
+    uint _129 = uint((_103 + 1u));
+    half4 _132 = half4(SrcImage.Load(int3(uint2(_129, _73), 0u)));
+    half _133 = _132.x;
+    half _134 = _132.y;
+    half _135 = _132.z;
+    half4 _138 = half4(SrcImage.Load(int3(uint2(_105, _96), 0u)));
+    half _139 = _138.x;
+    half _140 = _138.y;
+    half _141 = _138.z;
+    half _147 = min(min(_68, min(_77, _92)), _100);
+    half _148 = min(min(_109, min(_118, _133)), _139);
+    half _153 = min(min(_69, min(_78, _93)), _101);
+    half _154 = min(min(_110, min(_119, _134)), _140);
+    half _159 = min(min(_70, min(_79, _94)), _102);
+    half _160 = min(min(_111, min(_120, _135)), _141);
+    half _165 = max(max(_68, max(_77, _92)), _100);
+    half _166 = max(max(_109, max(_118, _133)), _139);
+    half _171 = max(max(_69, max(_78, _93)), _101);
+    half _172 = max(max(_110, max(_119, _134)), _140);
+    half _177 = max(max(_70, max(_79, _94)), _102);
+    half _178 = max(max(_111, max(_120, _135)), _141);
+    half _253 = half(spvUnpackHalf2x16(asuint(cbCAS_m0[0u]).y & 65535u).x);
+    half _254 = _253 * max(half(-0.1875), min(max(max(half(-0.0) - (_147 * (half(0.25) / _165)), (half(1.0) / ((_147 * half(4.0)) + half(-4.0))) * (half(1.0) - _165)), max(max(half(-0.0) - (_153 * (half(0.25) / _171)), (half(1.0) / ((_153 * half(4.0)) + half(-4.0))) * (half(1.0) - _171)), max(half(-0.0) - (_159 * (half(0.25) / _177)), (half(1.0) / ((_159 * half(4.0)) + half(-4.0))) * (half(1.0) - _177)))), half(0.0)));
+    half _255 = _253 * max(half(-0.1875), min(max(max(half(-0.0) - (_148 * (half(0.25) / _166)), (half(1.0) / ((_148 * half(4.0)) + half(-4.0))) * (half(1.0) - _166)), max(max(half(-0.0) - (_154 * (half(0.25) / _172)), (half(1.0) / ((_154 * half(4.0)) + half(-4.0))) * (half(1.0) - _172)), max(half(-0.0) - (_160 * (half(0.25) / _178)), (half(1.0) / ((_160 * half(4.0)) + half(-4.0))) * (half(1.0) - _178)))), half(0.0)));
+    half _258 = (_254 * half(4.0)) + half(1.0);
+    half _259 = (_255 * half(4.0)) + half(1.0);
+    half _269 = half(spvUnpackHalf2x16((30605u - spvPackHalf2x16(float2(float(_258), 0.0f))) & 65535u).x);
+    half _277 = half(spvUnpackHalf2x16((30605u - spvPackHalf2x16(float2(float(_259), 0.0f))) & 65535u).x);
+    half _283 = (half(2.0) - (_258 * _269)) * _269;
+    half _284 = (half(2.0) - (_277 * _259)) * _277;
+    OutputImage[uint2(_45, _46)] = float4(float(_283 * ((_254 * (((_77 + _68) + _92) + _100)) + _82.x)), float(_283 * ((_254 * (((_78 + _69) + _93) + _101)) + _82.y)), float(_283 * ((_254 * (((_79 + _70) + _94) + _102)) + _82.z)), 0.0f);
+    uint _329 = _45 | 8u;
+    OutputImage[uint2(_329, _46)] = float4(float(_284 * ((_255 * (((_118 + _109) + _133) + _139)) + _123.x)), float(_284 * ((_255 * (((_119 + _110) + _134) + _140)) + _123.y)), float(_284 * ((_255 * (((_120 + _111) + _135) + _141)) + _123.z)), 0.0f);
+    uint _333 = _46 | 8u;
+    uint _338 = _333 << 16u;
+    uint _340 = uint(int(_338 + 4294901760u) >> int(16u));
+    half4 _343 = half4(SrcImage.Load(int3(uint2(_57, _340), 0u)));
+    half _344 = _343.x;
+    half _345 = _343.y;
+    half _346 = _343.z;
+    uint _347 = uint(int(_338) >> int(16u));
+    half4 _350 = half4(SrcImage.Load(int3(uint2(_72, _347), 0u)));
+    half _351 = _350.x;
+    half _352 = _350.y;
+    half _353 = _350.z;
+    half4 _356 = half4(SrcImage.Load(int3(uint2(_57, _347), 0u)));
+    half4 _362 = half4(SrcImage.Load(int3(uint2(_88, _347), 0u)));
+    half _363 = _362.x;
+    half _364 = _362.y;
+    half _365 = _362.z;
+    uint _367 = uint(int(_338 + 65536u) >> int(16u));
+    half4 _370 = half4(SrcImage.Load(int3(uint2(_57, _367), 0u)));
+    half _371 = _370.x;
+    half _372 = _370.y;
+    half _373 = _370.z;
+    half4 _376 = half4(SrcImage.Load(int3(uint2(_105, _340), 0u)));
+    half _377 = _376.x;
+    half _378 = _376.y;
+    half _379 = _376.z;
+    half4 _382 = half4(SrcImage.Load(int3(uint2(_114, _347), 0u)));
+    half _383 = _382.x;
+    half _384 = _382.y;
+    half _385 = _382.z;
+    half4 _388 = half4(SrcImage.Load(int3(uint2(_105, _347), 0u)));
+    half4 _394 = half4(SrcImage.Load(int3(uint2(_129, _347), 0u)));
+    half _395 = _394.x;
+    half _396 = _394.y;
+    half _397 = _394.z;
+    half4 _400 = half4(SrcImage.Load(int3(uint2(_105, _367), 0u)));
+    half _401 = _400.x;
+    half _402 = _400.y;
+    half _403 = _400.z;
+    half _408 = min(min(_344, min(_351, _363)), _371);
+    half _409 = min(min(_377, min(_383, _395)), _401);
+    half _414 = min(min(_345, min(_352, _364)), _372);
+    half _415 = min(min(_378, min(_384, _396)), _402);
+    half _420 = min(min(_346, min(_353, _365)), _373);
+    half _421 = min(min(_379, min(_385, _397)), _403);
+    half _426 = max(max(_344, max(_351, _363)), _371);
+    half _427 = max(max(_377, max(_383, _395)), _401);
+    half _432 = max(max(_345, max(_352, _364)), _372);
+    half _433 = max(max(_378, max(_384, _396)), _402);
+    half _438 = max(max(_346, max(_353, _365)), _373);
+    half _439 = max(max(_379, max(_385, _397)), _403);
+    half _505 = half(spvUnpackHalf2x16(asuint(cbCAS_m0[0u]).y & 65535u).x);
+    half _506 = _505 * max(half(-0.1875), min(max(max(half(-0.0) - (_408 * (half(0.25) / _426)), (half(1.0) / ((_408 * half(4.0)) + half(-4.0))) * (half(1.0) - _426)), max(max(half(-0.0) - (_414 * (half(0.25) / _432)), (half(1.0) / ((_414 * half(4.0)) + half(-4.0))) * (half(1.0) - _432)), max(half(-0.0) - (_420 * (half(0.25) / _438)), (half(1.0) / ((_420 * half(4.0)) + half(-4.0))) * (half(1.0) - _438)))), half(0.0)));
+    half _507 = _505 * max(half(-0.1875), min(max(max(half(-0.0) - (_409 * (half(0.25) / _427)), (half(1.0) / ((_409 * half(4.0)) + half(-4.0))) * (half(1.0) - _427)), max(max(half(-0.0) - (_415 * (half(0.25) / _433)), (half(1.0) / ((_415 * half(4.0)) + half(-4.0))) * (half(1.0) - _433)), max(half(-0.0) - (_421 * (half(0.25) / _439)), (half(1.0) / ((_421 * half(4.0)) + half(-4.0))) * (half(1.0) - _439)))), half(0.0)));
+    half _510 = (_506 * half(4.0)) + half(1.0);
+    half _511 = (_507 * half(4.0)) + half(1.0);
+    half _519 = half(spvUnpackHalf2x16((30605u - spvPackHalf2x16(float2(float(_510), 0.0f))) & 65535u).x);
+    half _527 = half(spvUnpackHalf2x16((30605u - spvPackHalf2x16(float2(float(_511), 0.0f))) & 65535u).x);
+    half _532 = (half(2.0) - (_510 * _519)) * _519;
+    half _533 = (half(2.0) - (_527 * _511)) * _527;
+    OutputImage[uint2(_45, _333)] = float4(float(_532 * ((_506 * (((_351 + _344) + _363) + _371)) + _356.x)), float(_532 * ((_506 * (((_352 + _345) + _364) + _372)) + _356.y)), float(_532 * ((_506 * (((_353 + _346) + _365) + _373)) + _356.z)), 0.0f);
+    OutputImage[uint2(_329, _333)] = float4(float(_533 * ((_507 * (((_383 + _377) + _395) + _401)) + _388.x)), float(_533 * ((_507 * (((_384 + _378) + _396) + _402)) + _388.y)), float(_533 * ((_507 * (((_385 + _379) + _397) + _403)) + _388.z)), 0.0f);
+}
+
+[numthreads(64, 1, 1)]
+void main(SPIRV_Cross_Input stage_input)
+{
+    gl_WorkGroupID = stage_input.gl_WorkGroupID;
+    gl_LocalInvocationID = stage_input.gl_LocalInvocationID;
+    comp_main();
+}

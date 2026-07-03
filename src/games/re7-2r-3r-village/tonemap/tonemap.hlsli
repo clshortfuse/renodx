@@ -206,12 +206,24 @@ float3 ApplyUserGradingAndToneMap(float3 color_bt709, float2 grain_uv) {
 
   color_bt709 = ApplyGammaCorrection(color_bt709);
 
-  {  // blow out and hue shift
-    float3 purity_and_hue_source = renodx::tonemap::ReinhardPiecewise(color_bt709, 5.f, 1.5f);
-    color_bt709 = renodx::color::correct::Luminance(purity_and_hue_source, LuminosityFromBT709(purity_and_hue_source), LuminosityFromBT709(color_bt709));
+  float3 color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709);
+
+  // blow out and hue shift
+  if (RENODX_TONE_MAP_WORKING_COLOR_SPACE == 0.f) {
+    float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+    float3 color_bt709_working = renodx::color::bt709::from::BT2020(color_bt2020);
+    float3 purity_and_hue_source = renodx::tonemap::ReinhardPiecewise(color_bt709_working, peak_ratio, min(1.5f, peak_ratio * 0.3f));
+    color_bt709_working = renodx::color::correct::Luminance(purity_and_hue_source, renodx::color::yf::from::BT709(purity_and_hue_source), renodx::color::yf::from::BT709(color_bt709_working));
+    color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709_working);
+  } else {
+    const float3 BT2020_WHITE_LMS = renodx::color::lms::from::BT2020(1.f);
+    float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+    float3 color_lms_normalized = renodx::color::lms::from::BT2020(color_bt2020) / BT2020_WHITE_LMS;
+    float3 purity_and_hue_source_lms_normalized = renodx::tonemap::ReinhardPiecewise(color_lms_normalized, peak_ratio, min(1.5f, peak_ratio * 0.3f));
+    color_lms_normalized = renodx::color::correct::Luminance(purity_and_hue_source_lms_normalized, renodx::color::yf::from::LMS(purity_and_hue_source_lms_normalized), renodx::color::yf::from::LMS(color_lms_normalized));
+    color_bt2020 = renodx::color::bt2020::from::LMS(color_lms_normalized * BT2020_WHITE_LMS);
   }
 
-  float3 color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709);
   color_bt2020 = ApplyCustomGrading(color_bt2020);
   color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
   color_bt709 = renodx::color::bt709::from::BT2020(color_bt2020);

@@ -1,4 +1,4 @@
-#include "./sharpening.hlsli"
+#include "../sharpening.hlsli"
 
 // cbuffer cbCAS {
 //   struct cbCAS {
@@ -26,6 +26,10 @@ uint spvPackHalf2x16(float2 value) {
 
 float2 spvUnpackHalf2x16(uint value) {
   return f16tof32(uint2(value & 0xffff, value >> 16));
+}
+
+uint spvSignExtendI16ToU32(uint value) {
+  return asuint(asint((value & 0xffffu) << 16u) >> 16);
 }
 
 void comp_main() {
@@ -89,13 +93,13 @@ void comp_main() {
   half _100 = _99.x;
   half _101 = _99.y;
   half _102 = _99.z;
-  uint16_t _103 = uint16_t(_45) | 8u;
-  uint _105 = uint(_103);
+  uint _103 = (_45 | 8u) & 0xffffu;
+  uint _105 = spvSignExtendI16ToU32(_103);
   half4 _108 = half4(SrcImage.Load(int3(uint2(_105, _61), 0u)));
   half _109 = _108.x;
   half _110 = _108.y;
   half _111 = _108.z;
-  uint _114 = uint((_103 + 65535u));
+  uint _114 = spvSignExtendI16ToU32(_103 + 65535u);
   half4 _117 = half4(SrcImage.Load(int3(uint2(_114, _73), 0u)));
   half _118 = _117.x;
   half _119 = _117.y;
@@ -104,7 +108,7 @@ void comp_main() {
   half _124 = _123.x;
   half _125 = _123.y;
   half _126 = _123.z;
-  uint _129 = uint((_103 + 1u));
+  uint _129 = spvSignExtendI16ToU32(_103 + 1u);
   half4 _132 = half4(SrcImage.Load(int3(uint2(_129, _73), 0u)));
   half _133 = _132.x;
   half _134 = _132.y;
@@ -203,8 +207,14 @@ void comp_main() {
   half _551 = half(spvUnpackHalf2x16((30605u - spvPackHalf2x16(float2(float(_535), 0.0f))) & 65535u).x);
   half _556 = (half(2.0) - (_534 * _543)) * _543;
   half _557 = (half(2.0) - (_551 * _535)) * _551;
-  OutputImage[uint2(_45, _345)] = float4(float(_556 * ((_530 * (((_363 + _356) + _375) + _383)) + _369)), float(_556 * ((_530 * (((_364 + _357) + _376) + _384)) + _370)), float(_556 * ((_530 * (((_365 + _358) + _377) + _385)) + _371)), 0.0f);
-  OutputImage[uint2(_341, _345)] = float4(float(_557 * ((_531 * (((_395 + _389) + _407) + _413)) + _401)), float(_557 * ((_531 * (((_396 + _390) + _408) + _414)) + _402)), float(_557 * ((_531 * (((_397 + _391) + _409) + _415)) + _403)), 0.0f);
+  OutputImage[uint2(_45, _345)] = float4(
+      float(_556 * ((_530 * (((_363 + _356) + _375) + _383)) + _369)),
+      float(_556 * ((_530 * (((_364 + _357) + _376) + _384)) + _370)),
+      float(_556 * ((_530 * (((_365 + _358) + _377) + _385)) + _371)), 0.0f);
+  OutputImage[uint2(_341, _345)] = float4(
+      float(_557 * ((_531 * (((_395 + _389) + _407) + _413)) + _401)),
+      float(_557 * ((_531 * (((_396 + _390) + _408) + _414)) + _402)),
+      float(_557 * ((_531 * (((_397 + _391) + _409) + _415)) + _403)), 0.0f);
 }
 
 [numthreads(64, 1, 1)]
