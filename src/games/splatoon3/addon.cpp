@@ -20,6 +20,7 @@
 #include "../../utils/settings.hpp"
 #include "./ryujinxlog.hpp"
 #include "./shared.h"
+#include "./utils/shader_hotswap.hpp"
 
 namespace {
 
@@ -232,15 +233,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       if (filename == RYUJINX_PROCESS_NAME && !ShouldAttachForRyujinx(process_path)) return FALSE;
 
-    const auto log_message = std::string("ResScale: ") + std::to_string(res_scale);
-    reshade::log::message(reshade::log::level::info, log_message.c_str());
+      const auto log_message = std::string("ResScale: ") + std::to_string(res_scale);
+      reshade::log::message(reshade::log::level::info, log_message.c_str());
 
       const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
           .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
-          .height = static_cast<int16_t>(720 * res_scale),
+          .height = static_cast<int16_t>(719 * res_scale),
           .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
       };
-      
+      const renodx::utils::resource::ResourceUpgradeInfo::Dimensions dimensions = {
+          .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+          .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+          .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+      };
+
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::target_format = target_format;
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
@@ -261,16 +267,18 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-      static std::vector<uint32_t> hashes = {0xEF015FAB};  // final buffer
+      static std::vector<uint32_t> hashes = {0xEF015FAB};                                              // final buffer
       static std::vector<uint32_t> tonemap_hashes = {0x6AACC705, 0x9063BD29, 0xFA7AFD3A, 0x65F02A9E};  // tonemap
 
+      renodx_custom::utils::shader_hotswap::targets.clear();
       for (uint32_t hash : hashes) {
         for (int i = 0; i < 3; i++) {
-          renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          renodx_custom::utils::shader_hotswap::targets.push_back({
               .old_format = reshade::api::format::r8g8b8a8_typeless,
               .new_format = target_format,
               .shader_hash = hash,
               .use_resource_view_cloning = true,
+              .dimensions = dimensions,
               .min_dimensions = min_dimensions,
           });
         }
@@ -280,15 +288,18 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = target_format,
           .ignore_reset = false,
+          .dimensions = dimensions,
           .min_dimensions = min_dimensions,
       });
 
       // Register event handlers
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
     }
     case DLL_PROCESS_DETACH:
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
@@ -298,6 +309,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx_custom::utils::shader_hotswap::UseLate(fdw_reason);
 
   return TRUE;
 }
