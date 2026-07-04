@@ -20,6 +20,7 @@
 #include "../../utils/settings.hpp"
 #include "./ryujinxlog.hpp"
 #include "./shared.h"
+#include "./utils/shader_hotswap.hpp"
 
 namespace {
 
@@ -53,33 +54,33 @@ renodx::utils::settings::Settings settings = renodx::templates::settings::JoinSe
          .max = 500.f,
          .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
      }},
-     renodx::templates::settings::CreateDefaultSettings({
+    renodx::templates::settings::CreateDefaultSettings({
         {"ToneMapGammaCorrection", &shader_injection.gamma_correction},
     }),
     {
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeScene",
-        .binding = &shader_injection.scene_grade_strength,
-        .default_value = 50.f,
-        .label = "Hue Shift",
-        .section = "Tone Mapping",
-        .tooltip = "Emulates SDR hue shifts to match vanilla",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
-        .default_value = 50.f,
-        .label = "SDR Blowout",
-        .section = "Tone Mapping",
-        .tooltip = "Emulates SDR blowout to match vanilla",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
+        new renodx::utils::settings::Setting{
+            .key = "ColorGradeScene",
+            .binding = &shader_injection.scene_grade_strength,
+            .default_value = 50.f,
+            .label = "Hue Shift",
+            .section = "Tone Mapping",
+            .tooltip = "Emulates SDR hue shifts to match vanilla",
+            .max = 100.f,
+            .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+            .parse = [](float value) { return value * 0.01f; },
+            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
+        },
+        new renodx::utils::settings::Setting{
+            .key = "ColorGradeBlowout",
+            .binding = &shader_injection.tone_map_blowout,
+            .default_value = 50.f,
+            .label = "SDR Blowout",
+            .section = "Tone Mapping",
+            .tooltip = "Emulates SDR blowout to match vanilla",
+            .max = 100.f,
+            .is_enabled = []() { return shader_injection.tone_map_type > 0.f; },
+            .parse = [](float value) { return value * 0.01f; },
+            .is_visible = []() { return renodx::templates::settings::current_settings_mode > 1.f; },
         },
     },
 
@@ -242,8 +243,7 @@ const std::array<std::string_view, 4> ACCEPTED_RYUJINX_TITLES = {
     "010012101468c000",
     "010019a01e2f2000",
     "metroid prime remastered",
-    "metroid prime 4: beyond"
-};
+    "metroid prime 4: beyond"};
 
 bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
   const std::array<std::filesystem::path, 2> candidate_log_paths = {
@@ -281,7 +281,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
           .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
-          .height = static_cast<int16_t>(720 * res_scale),
+          .height = static_cast<int16_t>(719 * res_scale),
+          .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+      };
+
+      const renodx::utils::resource::ResourceUpgradeInfo::Dimensions dimensions = {
+          .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+          .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
           .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
       };
 
@@ -305,16 +311,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-      static std::vector<uint32_t> hashes = {0x86878F42
-        , 0x484D3AE8};  // final buffer
+      static std::vector<uint32_t> hashes = {0x86878F42, 0x484D3AE8};  // final buffer
 
+      renodx_custom::utils::shader_hotswap::targets.clear();
       for (uint32_t hash : hashes) {
         for (int i = 0; i < 3; i++) {
-          renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          renodx_custom::utils::shader_hotswap::targets.push_back({
               .old_format = reshade::api::format::r8g8b8a8_typeless,
               .new_format = target_format,
               .shader_hash = hash,
               .use_resource_view_cloning = true,
+              .dimensions = dimensions,
               .min_dimensions = min_dimensions,
           });
         }
@@ -328,11 +335,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       //   });
 
       // Register event handlers
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
     }
     case DLL_PROCESS_DETACH:
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
@@ -342,6 +351,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx_custom::utils::shader_hotswap::UseLate(fdw_reason);
 
   return TRUE;
 }
