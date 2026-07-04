@@ -19,6 +19,7 @@
 #include "../../utils/settings.hpp"
 #include "./ryujinxlog.hpp"
 #include "./shared.h"
+#include "./utils/shader_hotswap.hpp"
 
 namespace {
 
@@ -201,6 +202,8 @@ void OnPresetOff() {
   });
 }
 
+float res_scale = 1.f;
+
 const auto RYUJINX_PROCESS_NAME = std::string_view("Ryujinx.exe");
 const auto RYUJINX_LOADED_TITLE_MARKER = std::string_view("Application Loaded:");
 const std::array<std::string_view, 2> ACCEPTED_RYUJINX_TITLES = {
@@ -213,6 +216,7 @@ bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
       process_path.parent_path() / "Logs",
       process_path.parent_path() / "portable" / "Logs",
   };
+  res_scale = ryujinxlog::GetLatestLogResScale(std::filesystem::path{}, candidate_log_paths);
 
   return ryujinxlog::DoesLatestLogLastMatchingLineContainAny({
       .line_marker = RYUJINX_LOADED_TITLE_MARKER,
@@ -231,14 +235,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   const auto view_upgrades = renodx::utils::resource::VIEW_UPGRADES_RGBA16F;
 
   const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
-      .width = 1600,
-      .height = 900,
+      .width = static_cast<int16_t>(1599 * res_scale),
+      .height = static_cast<int16_t>(899 * res_scale),
       .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
   };
 
   const renodx::utils::resource::ResourceUpgradeInfo::Dimensions dimensions = {
-      .width = 2208,
-      .height = 1240,
+      .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+      .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
       .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
   };
 
@@ -290,14 +294,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       //     }
       //   }
 
+      renodx_custom::utils::shader_hotswap::targets.clear();
       renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r8g8b8a8_typeless,
           .new_format = target_format,
           .use_resource_view_cloning = true,  // required to prevent some crashes for some reason
+          .dimensions = dimensions,
           .min_dimensions = min_dimensions,
+          .usage_include = reshade::api::resource_usage::render_target,
       });
 
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+      renodx_custom::utils::shader_hotswap::targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = target_format,
           .shader_hash = 0xB5D68617,  // ui
@@ -306,11 +313,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
           .aspect_ratio = common_aspect_ratio,
           .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+          .dimensions = dimensions,
           .min_dimensions = min_dimensions,
 
       });
 
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+      renodx_custom::utils::shader_hotswap::targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = target_format,
           .shader_hash = 0xE5002336,
@@ -319,10 +327,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
           .aspect_ratio = common_aspect_ratio,
           .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+          .dimensions = dimensions,
           .min_dimensions = min_dimensions,
       });
 
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+      renodx_custom::utils::shader_hotswap::targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = target_format,
           .shader_hash = 0xBBD21661,  // lut
@@ -331,10 +340,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
           .aspect_ratio = common_aspect_ratio,
           .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+          .dimensions = dimensions,
           .min_dimensions = min_dimensions,
       });
 
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+      renodx_custom::utils::shader_hotswap::targets.push_back({
           .old_format = reshade::api::format::r10g10b10a2_typeless,
           .new_format = target_format,
           .shader_hash = 0x54FE8525,  // alternate lut
@@ -343,15 +353,18 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           //.view_format = reshade::api::format::r8g8b8a8_unorm_srgb,
           .aspect_ratio = common_aspect_ratio,
           .aspect_ratio_tolerance = common_aspect_ratio_tolerance,
+          .dimensions = dimensions,
           .min_dimensions = min_dimensions,
       });
 
       // Register event handlers
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
     }
     case DLL_PROCESS_DETACH:
+      renodx_custom::utils::shader_hotswap::UseEarly(fdw_reason);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
@@ -361,6 +374,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx_custom::utils::shader_hotswap::UseLate(fdw_reason);
 
   return TRUE;
 }
