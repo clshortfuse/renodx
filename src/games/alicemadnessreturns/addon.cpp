@@ -52,7 +52,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "Neutwo"},
+        .labels = {"Vanilla", "PsychoV"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -83,19 +83,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapHueShift",
-        .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 100.f,
-        .label = "Hue Shift",
-        .section = "Tone Mapping",
-        .tooltip = "Hue-shift emulation strength.",
-        .min = 0.f,
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-        .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode == 2; },
     },
     new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
@@ -157,38 +144,25 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeHighlightSaturation",
-        .binding = &shader_injection.tone_map_highlight_saturation,
+        .key = "ColorGradeConeResponse",
+        .binding = &shader_injection.tone_map_cone_response,
         .default_value = 50.f,
-        .label = "Highlight Saturation",
+        .label = "Cone Response",
         .section = "Color Grading",
-        .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
-        .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode == 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
-        .default_value = 0.f,
-        .label = "Blowout",
-        .section = "Color Grading",
-        .tooltip = "Controls highlight desaturation due to overexposure.",
-        .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeFlare",
-        .binding = &shader_injection.tone_map_flare,
-        .default_value = 0.f,
-        .label = "Flare",
-        .section = "Color Grading",
-        .tooltip = "Flare/Glare Compensation",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type > 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type > 0; },        
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode == 1; },        
+    },    
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeHueRestore",
+        .binding = &shader_injection.tone_map_hue_restore,
+        .default_value = 0.f,
+        .label = "Hue Restore",
+        .section = "Color Grading",
+        .tooltip = "Hue retention strength.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeScene",
@@ -221,6 +195,16 @@ renodx::utils::settings::Settings settings = {
             "JPN CRT",
         },
     },
+    new renodx::utils::settings::Setting{
+        .key = "FxBloom",
+        .binding = &shader_injection.custom_bloom,
+        .default_value = 50.f,
+        .label = "Bloom",
+        .section = "Effects",
+        .tooltip = "Controls bloom effect.",
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.02f; },
+    },    
     new renodx::utils::settings::Setting{
         .key = "FxAutoExposure",
         .binding = &shader_injection.custom_auto_exposure,
@@ -299,6 +283,7 @@ void OnPresetOff() {
    renodx::utils::settings::UpdateSetting("ColorGradeShadows", 50.f);
    renodx::utils::settings::UpdateSetting("ColorGradeContrast", 50.f);
    renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 50.f);
+   renodx::utils::settings::UpdateSetting("FxBloom", 50.f);   
    renodx::utils::settings::UpdateSetting("FxAutoExposure", 100.f);   
    renodx::utils::settings::UpdateSetting("FxFilmGrain", 0.f);
 }

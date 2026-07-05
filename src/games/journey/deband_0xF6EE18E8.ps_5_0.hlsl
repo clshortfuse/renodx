@@ -59,6 +59,7 @@ void main(
   r0.zw = float2(31,31) * r2.xy;
   r1.zw = float2(-15,-15);
   r0.zw = r1.zw + r0.zw;
+  r0.zw = r0.zw * CUSTOM_NOISE;
   r2.xyzw = texColor.Sample(LinearClampSampler_s, v1.xy).xyzw;
   r0.zw = r0.zw * r1.xy;
   r0.xy = r0.xy + r0.zw;

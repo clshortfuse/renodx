@@ -65,6 +65,7 @@ float4 main(PS_IN i) : COLOR
 	r2.xy = r2.xy * 0.015625;
 	r2 = tex2D(NoiseTexture, r2);
 	r2.x = r2.x + -0.5;
+	r2.x = r2.x * CUSTOM_NOISE;
 	r0 = saturate(r2.x * r1 + r0);
 	r1.xy = -0.5 + i.texcoord1.xy;
 	r1.x = dot(r1.xy, -r1.xy) + 1;
@@ -86,7 +87,8 @@ float4 main(PS_IN i) : COLOR
 	o.xyz = r0.x * r0.yzw + r1.xyz;
 
 	float3 sdr_color = o.rgb;
-    o.rgb = DisplayMap(hdr_color, hdr_color_tm, sdr_color, i.texcoord.xy);
+    float3 output_color = DisplayMap(hdr_color, hdr_color_tm, sdr_color, i.texcoord.xy);
+    o.rgb = LutWhiteClip(output_color, sdr_color, ColorGradingLUT);
     o.w = 0;
 	return o;
 }

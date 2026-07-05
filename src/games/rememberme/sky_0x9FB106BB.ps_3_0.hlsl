@@ -10,24 +10,21 @@ struct PS_IN
 	float2 texcoord : TEXCOORD;
 };
 
-float4 SampleSkyBlur(float2 uv)
+float4 BlurTexture(sampler2D source_texture, float2 texcoord, float2 texel_size, float radius = 1.f)
 {
-	float2 blur_offset = (abs(ddx(uv)) + abs(ddy(uv))) * 3.5;
-	float2 outer_offset = blur_offset * 2.0;
-	float4 blurred = tex2D(PixelTexture2D_0, uv) * 0.1;
-	blurred += tex2D(PixelTexture2D_0, uv + float2(blur_offset.x, 0)) * 0.1;
-	blurred += tex2D(PixelTexture2D_0, uv - float2(blur_offset.x, 0)) * 0.1;
-	blurred += tex2D(PixelTexture2D_0, uv + float2(0, blur_offset.y)) * 0.1;
-	blurred += tex2D(PixelTexture2D_0, uv - float2(0, blur_offset.y)) * 0.1;
-	blurred += tex2D(PixelTexture2D_0, uv + blur_offset) * 0.075;
-	blurred += tex2D(PixelTexture2D_0, uv - blur_offset) * 0.075;
-	blurred += tex2D(PixelTexture2D_0, uv + float2(blur_offset.x, -blur_offset.y)) * 0.075;
-	blurred += tex2D(PixelTexture2D_0, uv + float2(-blur_offset.x, blur_offset.y)) * 0.075;
-	blurred += tex2D(PixelTexture2D_0, uv + float2(outer_offset.x, 0)) * 0.05;
-	blurred += tex2D(PixelTexture2D_0, uv - float2(outer_offset.x, 0)) * 0.05;
-	blurred += tex2D(PixelTexture2D_0, uv + float2(0, outer_offset.y)) * 0.05;
-	blurred += tex2D(PixelTexture2D_0, uv - float2(0, outer_offset.y)) * 0.05;
-	return blurred;
+	float2 offset = texel_size * radius;
+	float4 color = tex2D(source_texture, texcoord) * 4.f;
+
+	color += tex2D(source_texture, texcoord + float2(-offset.x, -offset.y));
+	color += tex2D(source_texture, texcoord + float2(0.f, -offset.y)) * 2.f;
+	color += tex2D(source_texture, texcoord + float2(offset.x, -offset.y));
+	color += tex2D(source_texture, texcoord + float2(-offset.x, 0.f)) * 2.f;
+	color += tex2D(source_texture, texcoord + float2(offset.x, 0.f)) * 2.f;
+	color += tex2D(source_texture, texcoord + float2(-offset.x, offset.y));
+	color += tex2D(source_texture, texcoord + float2(0.f, offset.y)) * 2.f;
+	color += tex2D(source_texture, texcoord + float2(offset.x, offset.y));
+
+	return color * (1.f / 16.f);
 }
 
 float4 main(PS_IN i) : COLOR
@@ -38,11 +35,8 @@ float4 main(PS_IN i) : COLOR
 	float3 r1;
 	float3 r2;
 	
-	if (RENODX_TONE_MAP_TYPE > 0.f) {
-	r0 = SampleSkyBlur(i.texcoord);
-	} else {
-	r0 = tex2D(PixelTexture2D_0, i.texcoord);	
-	}
+	// r0 = tex2D(PixelTexture2D_0, i.texcoord);
+	r0 = BlurTexture(PixelTexture2D_0, i.texcoord, float2(1.f / 2048.f, 1.f / 2048.f), 0.5f);	
 	r1.xyz = r0.xyz + -0.972000003;
 	r2.xyz = r0.xyz * -1.02750003 + 1;
 	r0.xyz = r0.xyz * 0.226050004;

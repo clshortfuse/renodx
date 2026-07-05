@@ -106,6 +106,7 @@ float4 main(PS_IN i) : COLOR
 
 	float3 sdr_color = renodx::color::srgb::DecodeSafe(o.rgb);
 	float3 output_color = DisplayMap(hdr_color, hdr_color_tm, sdr_color, i.texcoord.xy);
+	output_color = LutWhiteClip(output_color, sdr_color, ColorGradingLUT);
     o.rgb = renodx::draw::RenderIntermediatePass(output_color);
 	
 	o.w = 0;

@@ -17,13 +17,12 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
 	r0.x = (r0.y >= 0) ? r0.x : 10000;
 	r0.x = r0.x * DynamicTonemappingParam.x;
 	r1.x = max(r0.x, DynamicTonemappingParam.y);
-	r0.x = min(DynamicTonemappingParam.z, r1.x);
+	r0.x = lerp(1.f, min(DynamicTonemappingParam.z, r1.x), CUSTOM_AUTO_EXPOSURE);
 	r1 = tex2D(SceneColorTexture, texcoord);
 	if (RENODX_TONE_MAP_TYPE > 0) {
       r1.rgb = max(r1.rgb, 0);
     }
-	r0.x = lerp(1.f, r0.x, CUSTOM_AUTO_EXPOSURE);
 	o.xyz = r0.x * r1.xyz;
-	o.w = r1.w;
+	o.w = r0.x;
 	return o;
 }

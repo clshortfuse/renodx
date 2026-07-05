@@ -103,6 +103,7 @@ float4 main(PS_IN i) : COLOR
 
 	float3 sdr_color = renodx::color::srgb::DecodeSafe(r3.rgb);
 	float3 output_color = DisplayMap(hdr_color, hdr_color_tm, sdr_color);
+	output_color = LutWhiteClip(output_color, sdr_color, ColorGradingLUT);
 	r3.rgb = renodx::color::srgb::EncodeSafe(output_color);
 
 	r0 = tex2D(DNEVignetTexture, i.texcoord2.zwzw);
