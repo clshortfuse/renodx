@@ -147,7 +147,8 @@ void main(
   r0.y = -4 * r0.y;
   r0.y = exp2(r0.y);
   r0.x = r0.x * r0.x;
-  r0.x = ExpandGamut * r0.x;
+  // ExpandGamut set to 0
+  r0.x = 0.f * r0.x;
   r0.x = -4 * r0.x;
   r0.x = exp2(r0.x);
   r0.xy = float2(1, 1) + -r0.xy;
