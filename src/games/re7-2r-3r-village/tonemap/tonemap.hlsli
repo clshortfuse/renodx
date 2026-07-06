@@ -125,7 +125,8 @@ float3 ApplyColorGradingLUTs(
         unclamped_linear = renodx::color::correct::GammaSafe(unclamped_linear, true);
       }
 
-      color_output = color_output_original * lerp(1.f, renodx::math::DivideSafe(LuminosityFromBT709(unclamped_linear), LuminosityFromBT709(color_output_original), 1.f), COLOR_GRADE_LUT_SCALING);
+      // color_output = color_output_original * lerp(1.f, renodx::math::DivideSafe(LuminosityFromBT709(unclamped_linear), LuminosityFromBT709(color_output_original), 1.f), COLOR_GRADE_LUT_SCALING);
+      color_output = renodx::lut::RecolorUnclamped(color_output_original, unclamped_linear, COLOR_GRADE_LUT_SCALING);
     }
   }
 
@@ -201,31 +202,191 @@ void ApplyColorGrading(
   b_out = color_output.b;
 }
 
-float3 ApplyUserGradingAndToneMap(float3 color_bt709, float2 grain_uv) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) return color_bt709;
+float3 ApplyAdaptiveMBPurity(float3 lms_input, float3 adaptive_neutral_lms, float purity_scale) {
+  if (abs(purity_scale - 1.f) <= 1e-5f) return lms_input;
 
-  color_bt709 = ApplyGammaCorrection(color_bt709);
+  float3 relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(lms_input, adaptive_neutral_lms);
+  float3 mb = renodx::color::macleod_boynton::from::WeightedLMS(relative_weighted);
+  float3 mb_neutral = renodx::color::macleod_boynton::from::LMS(1.f.xxx);
+  float2 mb_scaled_xy = lerp(mb_neutral.xy, mb.xy, purity_scale);
+  float3 relative_weighted_out = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(float3(mb_scaled_xy, mb.z));
 
-  float3 color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709);
+  return renodx::color::macleod_boynton::UnweighLMS(
+      renodx::tonemap::psychov::psycho17_FromAdaptiveRelativeWeightedLMS(relative_weighted_out, adaptive_neutral_lms));
+}
 
-  // blow out and hue shift
-  if (RENODX_TONE_MAP_WORKING_COLOR_SPACE == 0.f) {
-    float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-    float3 color_bt709_working = renodx::color::bt709::from::BT2020(color_bt2020);
-    float3 purity_and_hue_source = renodx::tonemap::ReinhardPiecewise(color_bt709_working, peak_ratio, min(1.5f, peak_ratio * 0.3f));
-    color_bt709_working = renodx::color::correct::Luminance(purity_and_hue_source, renodx::color::yf::from::BT709(purity_and_hue_source), renodx::color::yf::from::BT709(color_bt709_working));
-    color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709_working);
-  } else {
-    const float3 BT2020_WHITE_LMS = renodx::color::lms::from::BT2020(1.f);
-    float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-    float3 color_lms_normalized = renodx::color::lms::from::BT2020(color_bt2020) / BT2020_WHITE_LMS;
-    float3 purity_and_hue_source_lms_normalized = renodx::tonemap::ReinhardPiecewise(color_lms_normalized, peak_ratio, min(1.5f, peak_ratio * 0.3f));
-    color_lms_normalized = renodx::color::correct::Luminance(purity_and_hue_source_lms_normalized, renodx::color::yf::from::LMS(purity_and_hue_source_lms_normalized), renodx::color::yf::from::LMS(color_lms_normalized));
-    color_bt2020 = renodx::color::bt2020::from::LMS(color_lms_normalized * BT2020_WHITE_LMS);
+float ApplyLuminanceGradingChannel(float channel, float gamma, float exposure, float highlights, float shadows, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
+  float channel_adjusted = channel * exposure;
+  if (gamma != 1.f) {
+    channel_adjusted = renodx::math::Select(channel_adjusted < 1.f, pow(channel_adjusted, gamma), channel_adjusted);
+  }
+  channel_adjusted = renodx::color::grade::Highlights(channel_adjusted, highlights, mid_gray);
+  channel_adjusted = renodx::color::grade::Shadows(channel_adjusted, shadows, mid_gray);
+  channel_adjusted = ContrastAndFlare(channel_adjusted, contrast, contrast_highlights, contrast_shadows, flare, mid_gray);
+  return channel_adjusted;
+}
+
+float3 ApplyLuminanceGrading(float3 color, float gamma, float exposure, float highlights, float shadows, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
+  float y = max(0.f, renodx::color::yf::from::BT2020(color));
+  float y_adjusted = ApplyLuminanceGradingChannel(y, gamma, exposure, highlights, shadows, contrast, contrast_highlights, contrast_shadows, flare, mid_gray);
+  return color * renodx::math::DivideSafe(y_adjusted, y, 1.f);
+}
+
+float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float purity_highlights, float dechroma, float3 mid_gray_lms = 0.18f) {
+  if (purity_scale == 1.f && purity_highlights == 0.f && dechroma == 0.f) return color_lms;
+
+  float lum_target = max(0.f, renodx::color::yf::from::LMS(color_lms));
+
+  if (dechroma != 0.f) {
+    purity_scale *= lerp(1.f, 0.f, saturate(pow(lum_target / (10000.f / 100.f), 1.f - dechroma)));
   }
 
-  color_bt2020 = ApplyCustomGrading(color_bt2020);
-  color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  if (purity_highlights != 0.f) {
+    float percent_max = saturate(lum_target * 100.f / 10000.f);
+    float blowout_change = pow(1.f - percent_max, 100.f * abs(purity_highlights));
+    if (purity_highlights < 0.f) {
+      blowout_change = 2.f - blowout_change;
+    }
+    purity_scale *= blowout_change;
+  }
+
+  if (purity_scale != 1.f) {
+    color_lms = ApplyAdaptiveMBPurity(color_lms, mid_gray_lms, purity_scale);
+  }
+
+  return color_lms;
+}
+
+float3 RestoreAdaptiveWeightedLMSHue(float3 source_lms, float3 target_lms, float3 adaptive_state_lms) {
+  source_lms = max(0.f, source_lms);
+  target_lms = max(0.f, target_lms);
+
+  // Convert source to adapted weighted LMS.
+  float3 source_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(source_lms, adaptive_state_lms);
+
+  // Convert target to adapted weighted LMS.
+  float3 display_scaled_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(target_lms, adaptive_state_lms);
+
+  // Psychov-style MB hue direction restore.
+  {
+    float3 mb_source = renodx::color::macleod_boynton::from::WeightedLMS(source_relative_weighted);
+    float3 mb_display_target = renodx::color::macleod_boynton::from::WeightedLMS(display_scaled_relative_weighted);
+    float3 mb_adapted_bg = renodx::color::macleod_boynton::from::LMS(1.f);
+
+    float2 source_offset = mb_source.xy - mb_adapted_bg.xy;
+    float2 display_target_offset = mb_display_target.xy - mb_adapted_bg.xy;
+
+    float src2 = dot(source_offset, source_offset);
+    float display_tgt2 = dot(display_target_offset, display_target_offset);
+
+    if (src2 > 1e-7f && display_tgt2 > 1e-7f) {
+      float target_radius = sqrt(display_tgt2);
+      float2 source_dir = source_offset * rsqrt(src2);
+      float2 display_target_dir = display_target_offset * rsqrt(display_tgt2);
+
+      float restore_weight = 0.5f;
+
+      float2 blended_dir = lerp(display_target_dir, source_dir, restore_weight);
+      float blended_len2 = dot(blended_dir, blended_dir);
+      blended_dir = (blended_len2 > 1e-7f) ? (blended_dir * rsqrt(blended_len2)) : display_target_dir;
+
+      float2 mb_restored_xy = mb_adapted_bg.xy + blended_dir * target_radius;
+      float3 mb_restored = float3(mb_restored_xy, mb_display_target.z);
+
+      display_scaled_relative_weighted = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(mb_restored);
+    }
+  }
+
+  // Psychov-style BT.2020-bound adaptive weighted LMS gamut compression.
+  // display_scaled_relative_weighted = renodx::tonemap::psychov::psycho17_GamutCompressAdaptiveRelativeWeightedLMSBound(
+  //     display_scaled_relative_weighted,
+  //     adaptive_state_lms,
+  //     renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
+  //     1.f);
+
+  // Return compressed target to LMS.
+  return renodx::color::macleod_boynton::UnweighLMS(
+      renodx::tonemap::psychov::psycho17_FromAdaptiveRelativeWeightedLMS(display_scaled_relative_weighted, adaptive_state_lms));
+}
+
+float3 ApplyUserGrading(float3 color_bt2020, float mid_gray = 0.1f) {
+  color_bt2020 = ApplyLuminanceGrading(color_bt2020,
+                                       RENODX_TONE_MAP_GAMMA,
+                                       RENODX_TONE_MAP_EXPOSURE,
+                                       RENODX_TONE_MAP_HIGHLIGHTS,
+                                       RENODX_TONE_MAP_SHADOWS,
+                                       RENODX_TONE_MAP_CONTRAST,
+                                       RENODX_TONE_MAP_HIGHLIGHT_CONTRAST,
+                                       RENODX_TONE_MAP_SHADOW_CONTRAST,
+                                       0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                       mid_gray);
+
+  float3 color_lms = renodx::color::lms::from::BT2020(color_bt2020);
+  color_lms = ApplyPurityGradingLMS(
+      color_lms,
+      RENODX_TONE_MAP_SATURATION,
+      -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
+      RENODX_TONE_MAP_DECHROMA,
+      renodx::color::lms::from::BT2020(mid_gray.xxx));
+
+  return renodx::color::bt2020::from::LMS(color_lms);
+}
+
+float3 ApplyUserGradingAndToneMap(float3 color_bt709, float2 grain_uv) {
+  if (RENODX_TONE_MAP_TYPE == 0.f) return color_bt709;
+  float3 color_input_bt709 = color_bt709;
+
+  const float MID_GRAY = 0.18f;
+  const float PEAK_RATIO = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+
+  float3 color_bt2020;
+  if (RENODX_TONE_MAP_WORKING_COLOR_SPACE == 0.f) {
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      color_bt709 = renodx::color::correct::GammaSafe(color_bt709);
+    }
+
+    // blow out and hue shift in BT.709
+    float3 purity_and_hue_source = renodx::tonemap::neutwo::PerChannel(color_bt709, PEAK_RATIO);
+    color_bt709 = renodx::color::correct::Luminance(purity_and_hue_source, renodx::color::yf::from::BT709(purity_and_hue_source), renodx::color::yf::from::BT709(color_bt709));
+
+    color_bt2020 = renodx::color::bt2020::from::BT709(color_bt709);
+  } else {
+    float3 target_lms;
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      // gamma correction in lms normalized to bt709 white
+      const float3 BT709_WHITE_LMS = renodx::color::lms::from::BT709(1.f);
+      float3 color_lms_normalized = renodx::color::lms::from::BT709(color_bt709) / BT709_WHITE_LMS;
+      color_lms_normalized = renodx::color::correct::GammaSafe(color_lms_normalized);
+      target_lms = color_lms_normalized * BT709_WHITE_LMS;
+    } else {
+      target_lms = renodx::color::lms::from::BT709(color_bt709);
+    }
+
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      // apply hue correction
+      target_lms = RestoreAdaptiveWeightedLMSHue(
+          renodx::color::lms::from::BT709(color_input_bt709),
+          target_lms,
+          renodx::color::lms::from::BT709(MID_GRAY));
+    }
+
+    // blow out and hue shift in LMS normalized to BT.2020 white
+    const float3 BT2020_WHITE_LMS = renodx::color::lms::from::BT2020(1.f);
+    float3 color_lms_normalized = target_lms / BT2020_WHITE_LMS;
+    float3 purity_and_hue_source_lms_normalized = renodx::tonemap::neutwo::PerChannel(color_lms_normalized, PEAK_RATIO);
+    color_lms_normalized = renodx::color::correct::Luminance(purity_and_hue_source_lms_normalized, renodx::color::yf::from::LMS(purity_and_hue_source_lms_normalized), renodx::color::yf::from::LMS(color_lms_normalized));
+    target_lms = color_lms_normalized * BT2020_WHITE_LMS;
+
+    color_bt2020 = renodx::color::bt2020::from::LMS(target_lms);
+  }
+
+  {
+    color_bt2020 = ApplyUserGrading(color_bt2020, MID_GRAY);
+  }
+
+  {
+    color_bt2020 = renodx::tonemap::neutwo::MaxChannel(color_bt2020, PEAK_RATIO);
+  }
   color_bt709 = renodx::color::bt709::from::BT2020(color_bt2020);
 
   color_bt709 = renodx::effects::ApplyFilmGrain(
