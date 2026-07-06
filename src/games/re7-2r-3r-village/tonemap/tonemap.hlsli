@@ -6,10 +6,8 @@
 float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
   const float3 added_gamma = black_gamma;
 
-  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
-
   // Remove from 0 to mid-gray
-  const float shadow_length = mid_gray_average;
+  const float shadow_length = renodx::math::Min(mid_gray_gamma);
   const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
   const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
 
