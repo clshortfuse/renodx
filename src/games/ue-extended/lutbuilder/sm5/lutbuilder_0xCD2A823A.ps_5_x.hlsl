@@ -253,7 +253,8 @@ void main(
   r1.x = exp2(r1.x);
   r1.x = 1 + -r1.x;
   r0.w = r0.w * r0.w;
-  r0.w = ExpandGamut * r0.w;
+  // ExpandGamut set to 0
+  r0.w = 0.f * r0.w;
   r0.w = -4 * r0.w;
   r0.w = exp2(r0.w);
   r0.w = 1 + -r0.w;

@@ -1,100 +1,19 @@
-// Found in Like a Dragon: Ishin (UE 4.27)
+// High On Life
 
 #include "../lutbuilderoutput.hlsli"
 
-// ---- Created with 3Dmigoto v1.3.16 on Fri Jun 20 17:46:48 2025
-
-cbuffer _Globals : register(b0) {
-  float4 PostprocessInput0Size : packoffset(c0);
-  float4 PostprocessInput1Size : packoffset(c1);
-  float4 PostprocessInput2Size : packoffset(c2);
-  float4 PostprocessInput3Size : packoffset(c3);
-  float4 PostprocessInput4Size : packoffset(c4);
-  float4 PostprocessInput5Size : packoffset(c5);
-  float4 PostprocessInput6Size : packoffset(c6);
-  float4 PostprocessInput7Size : packoffset(c7);
-  float4 PostprocessInput8Size : packoffset(c8);
-  float4 PostprocessInput9Size : packoffset(c9);
-  float4 PostprocessInput10Size : packoffset(c10);
-  float4 PostprocessInput0MinMax : packoffset(c11);
-  float4 PostprocessInput1MinMax : packoffset(c12);
-  float4 PostprocessInput2MinMax : packoffset(c13);
-  float4 PostprocessInput3MinMax : packoffset(c14);
-  float4 PostprocessInput4MinMax : packoffset(c15);
-  float4 PostprocessInput5MinMax : packoffset(c16);
-  float4 PostprocessInput6MinMax : packoffset(c17);
-  float4 PostprocessInput7MinMax : packoffset(c18);
-  float4 PostprocessInput8MinMax : packoffset(c19);
-  float4 PostprocessInput9MinMax : packoffset(c20);
-  float4 PostprocessInput10MinMax : packoffset(c21);
-  float4 ViewportSize : packoffset(c22);
-  uint4 ViewportRect : packoffset(c23);
-  float4 ScreenPosToPixel : packoffset(c24);
-  float4 SceneColorBufferUVViewport : packoffset(c25);
-  float3 MappingPolynomial : packoffset(c26);
-  float3 InverseGamma : packoffset(c27);
-  float4 ColorMatrixR_ColorCurveCd1 : packoffset(c28);
-  float4 ColorMatrixG_ColorCurveCd3Cm3 : packoffset(c29);
-  float4 ColorMatrixB_ColorCurveCm2 : packoffset(c30);
-  float4 ColorCurve_Cm0Cd0_Cd2_Ch0Cm1_Ch3 : packoffset(c31);
-  float4 ColorCurve_Ch1_Ch2 : packoffset(c32);
-  float4 ColorShadow_Luma : packoffset(c33);
-  float4 ColorShadow_Tint1 : packoffset(c34);
-  float4 ColorShadow_Tint2 : packoffset(c35);
-  float FilmSlope : packoffset(c36);
-  float FilmToe : packoffset(c36.y);
-  float FilmShoulder : packoffset(c36.z);
-  float FilmBlackClip : packoffset(c36.w);
-  float FilmWhiteClip : packoffset(c37);
-  float LUTWeights[5] : packoffset(c38);
-  float3 ColorScale : packoffset(c42.y);
-  float4 OverlayColor : packoffset(c43);
-  uint bIsTemperatureWhiteBalance : packoffset(c44);
-  uint bUseMobileTonemapper : packoffset(c44.y);
-  float WhiteTemp : packoffset(c44.z);
-  float WhiteTint : packoffset(c44.w);
-  float4 ColorSaturation : packoffset(c45);
-  float4 ColorContrast : packoffset(c46);
-  float4 ColorGamma : packoffset(c47);
-  float4 ColorGain : packoffset(c48);
-  float4 ColorOffset : packoffset(c49);
-  float4 ColorSaturationShadows : packoffset(c50);
-  float4 ColorContrastShadows : packoffset(c51);
-  float4 ColorGammaShadows : packoffset(c52);
-  float4 ColorGainShadows : packoffset(c53);
-  float4 ColorOffsetShadows : packoffset(c54);
-  float4 ColorSaturationMidtones : packoffset(c55);
-  float4 ColorContrastMidtones : packoffset(c56);
-  float4 ColorGammaMidtones : packoffset(c57);
-  float4 ColorGainMidtones : packoffset(c58);
-  float4 ColorOffsetMidtones : packoffset(c59);
-  float4 ColorSaturationHighlights : packoffset(c60);
-  float4 ColorContrastHighlights : packoffset(c61);
-  float4 ColorGammaHighlights : packoffset(c62);
-  float4 ColorGainHighlights : packoffset(c63);
-  float4 ColorOffsetHighlights : packoffset(c64);
-  float ColorCorrectionShadowsMax : packoffset(c65);
-  float ColorCorrectionHighlightsMin : packoffset(c65.y);
-  uint OutputDevice : packoffset(c65.z);
-  uint OutputGamut : packoffset(c65.w);
-  float BlueCorrection : packoffset(c66);
-  float ExpandGamut : packoffset(c66.y);
-  float ToneCurveAmount : packoffset(c66.z);
+// ---- Created with 3Dmigoto v1.4.1 on Mon Jan 13 18:16:40 2025
+cbuffer cb0 : register(b0) {
+  float4 cb0[68];
 }
 
-SamplerState Samplers_1_s : register(s0);
-SamplerState Samplers_2_s : register(s1);
-Texture2D<float4> Textures_1 : register(t0);
-Texture2D<float4> Textures_2 : register(t1);
+RWTexture3D<float4> u0 : register(u0);
 
 // 3Dmigoto declarations
 #define cmp -
 
-void main(
-    linear noperspective float2 v0: TEXCOORD0,
-    float4 v1: SV_POSITION0,
-    uint v2: SV_RenderTargetArrayIndex0,
-    out float4 o0: SV_Target0) {
+[numthreads(8, 8, 8)]
+void main(uint3 vThreadID: SV_DispatchThreadID) {
   const float4 icb[] = { { -4.000000, -0.718548, -4.970622, 0.808913 },
                          { -4.000000, 2.081031, -3.029378, 1.191087 },
                          { -3.157377, 3.668124, -2.126200, 1.568300 },
@@ -111,164 +30,64 @@ void main(
                          { 0.708813, 3.274629, 0, 0 },
                          { 1.291187, 3.327431, 0, 0 },
                          { 1.291187, 3.327431, 0, 0 } };
+  // Needs manual fix for instruction:
+  // unknown dcl_: dcl_uav_typed_texture3d (float,float,float,float) u0
   float4 r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12;
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xy = float2(-0.015625, -0.015625) + v0.xy;
-  r0.xy = float2(1.03225803, 1.03225803) * r0.xy;
-  r0.z = (uint)v2.x;
-  r1.z = 0.0322580636 * r0.z;
-  r0.z = cmp(OutputDevice >= 3);
-  r2.xy = log2(r0.xy);
-  r2.z = log2(r1.z);
-  r0.xyw = float3(0.0126833133, 0.0126833133, 0.0126833133) * r2.xyz;
-  r0.xyw = exp2(r0.xyw);
-  r2.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r0.xyw;
+  // Needs manual fix for instruction:
+  // unknown dcl_: dcl_thread_group 8, 8, 8
+  r0.xyz = (uint3)vThreadID.xyz;
+  r0.xy = float2(0.5, 0.5) + r0.xy;
+  r0.xy = r0.xy * cb0[67].xy + float2(-0.015625, -0.015625);
+  r1.xyz = float3(1.03225803, 1.03225803, 0.0322580636) * r0.xyz;
+  r0.x = cmp(asuint(cb0[65].z) >= 3);
+  r0.yzw = log2(r1.xyz);
+  r0.yzw = float3(0.0126833133, 0.0126833133, 0.0126833133) * r0.yzw;
+  r0.yzw = exp2(r0.yzw);
+  r2.xyz = float3(-0.8359375, -0.8359375, -0.8359375) + r0.yzw;
   r2.xyz = max(float3(0, 0, 0), r2.xyz);
-  r0.xyw = -r0.xyw * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
-  r0.xyw = r2.xyz / r0.xyw;
-  r0.xyw = log2(r0.xyw);
-  r0.xyw = float3(6.27739477, 6.27739477, 6.27739477) * r0.xyw;
-  r0.xyw = exp2(r0.xyw);
-  r0.xyw = float3(100, 100, 100) * r0.xyw;
-  r1.xy = v0.xy * float2(1.03225803, 1.03225803) + float2(-0.0161290318, -0.0161290318);
+  r0.yzw = -r0.yzw * float3(18.6875, 18.6875, 18.6875) + float3(18.8515625, 18.8515625, 18.8515625);
+  r0.yzw = r2.xyz / r0.yzw;
+  r0.yzw = log2(r0.yzw);
+  r0.yzw = float3(6.27739477, 6.27739477, 6.27739477) * r0.yzw;
+  r0.yzw = exp2(r0.yzw);
+  r0.yzw = float3(100, 100, 100) * r0.yzw;
   r1.xyz = float3(-0.434017599, -0.434017599, -0.434017599) + r1.xyz;
   r1.xyz = float3(14, 14, 14) * r1.xyz;
   r1.xyz = exp2(r1.xyz);
   r1.xyz = r1.xyz * float3(0.180000007, 0.180000007, 0.180000007) + float3(-0.00266771927, -0.00266771927, -0.00266771927);
-  r0.xyz = r0.zzz ? r0.xyw : r1.xyz;
-  r0.w = 1.00055635 * WhiteTemp;
-  r0.w = 1 / r0.w;
-  r1.x = cmp(6996.10791 >= WhiteTemp);
-  r1.yz = -r0.ww * float2(4.60700006e+09, 2.0064e+09) + float2(2967800, 1901800);
-  r1.yz = r1.yz * r0.ww + float2(99.1100006, 247.479996);
-  r1.yz = r1.yz * r0.ww + float2(0.244063005, 0.237039998);
-  r1.x = r1.x ? r1.y : r1.z;
-  r0.w = r1.x * r1.x;
-  r1.z = 2.86999989 * r1.x;
-  r0.w = r0.w * -3 + r1.z;
-  r1.y = -0.275000006 + r0.w;
-  r2.xyz = WhiteTemp * float3(0.000154118257, 0.00084242021, 4.22806261e-05) + float3(0.860117733, 1, 0.317398727);
-  r0.w = WhiteTemp * WhiteTemp;
-  r2.xyz = r0.www * float3(1.28641219e-07, 7.08145137e-07, 4.20481676e-08) + r2.xyz;
-  r2.x = r2.x / r2.y;
-  r1.z = -WhiteTemp * 2.8974182e-05 + 1;
-  r0.w = r0.w * 1.61456057e-07 + r1.z;
-  r2.y = r2.z / r0.w;
-  r1.zw = r2.xy + r2.xy;
-  r0.w = 3 * r2.x;
-  r1.z = -r2.y * 8 + r1.z;
-  r1.z = 4 + r1.z;
-  r3.x = r0.w / r1.z;
-  r3.y = r1.w / r1.z;
-  r0.w = cmp(WhiteTemp < 4000);
-  r1.xy = r0.ww ? r3.xy : r1.xy;
-  r0.w = dot(r2.xy, r2.xy);
-  r0.w = rsqrt(r0.w);
-  r1.zw = r2.xy * r0.ww;
-  r0.w = WhiteTint * -r1.w;
-  r0.w = r0.w * 0.0500000007 + r2.x;
-  r1.z = WhiteTint * r1.z;
-  r1.z = r1.z * 0.0500000007 + r2.y;
-  r1.w = 3 * r0.w;
-  r0.w = r0.w + r0.w;
-  r0.w = -r1.z * 8 + r0.w;
-  r0.w = 4 + r0.w;
-  r1.z = r1.z + r1.z;
-  r2.xy = r1.wz / r0.ww;
-  r1.zw = r2.xy + -r3.xy;
-  r1.xy = r1.xy + r1.zw;
-  r1.zw = float2(0.312700003, 0.328999996);
-  r1.xyzw = bIsTemperatureWhiteBalance ? r1.xyzw : r1.zwxy;
-  r2.xy = max(float2(1.00000001e-10, 1.00000001e-10), r1.yw);
-  r2.zw = float2(1, 1) + -r1.xz;
-  r1.yw = r2.zw + -r1.yw;
-  r3.xy = r1.xz / r2.xy;
-  r1.xy = r1.yw / r2.xy;
-  r3.z = 1;
-  r3.w = r1.x;
-  r0.w = dot(float3(0.895099998, 0.266400009, -0.161400005), r3.xzw);
-  r1.x = dot(float3(-0.750199974, 1.71350002, 0.0366999991), r3.xzw);
-  r2.x = dot(float3(0.0388999991, -0.0684999973, 1.02960002), r3.xzw);
-  r1.zw = r3.yz;
-  r2.y = dot(float3(-0.161400005, 0.895099998, 0.266400009), r1.yzw);
-  r2.z = dot(float3(0.0366999991, -0.750199974, 1.71350002), r1.yzw);
-  r1.y = dot(float3(1.02960002, 0.0388999991, -0.0684999973), r1.yzw);
-  r0.w = r2.y / r0.w;
-  r1.x = r2.z / r1.x;
-  r1.y = r1.y / r2.x;
-  r2.xyz = float3(0.895099998, 0.266400009, -0.161400005) * r0.www;
-  r1.xzw = float3(-0.750199974, 1.71350002, 0.0366999991) * r1.xxx;
-  r3.xyz = float3(0.0388999991, -0.0684999973, 1.02960002) * r1.yyy;
-  r4.x = r2.x;
-  r4.y = r1.x;
-  r4.z = r3.x;
-  r5.x = dot(float3(0.986992896, -0.1470543, 0.159962699), r4.xyz);
-  r6.x = r2.y;
-  r6.y = r1.z;
-  r6.z = r3.y;
-  r5.y = dot(float3(0.986992896, -0.1470543, 0.159962699), r6.xyz);
-  r3.x = r2.z;
-  r3.y = r1.w;
-  r5.z = dot(float3(0.986992896, -0.1470543, 0.159962699), r3.xyz);
-  r1.x = dot(float3(0.432305306, 0.518360317, 0.0492912009), r4.xyz);
-  r1.y = dot(float3(0.432305306, 0.518360317, 0.0492912009), r6.xyz);
-  r1.z = dot(float3(0.432305306, 0.518360317, 0.0492912009), r3.xyz);
-  r2.x = dot(float3(-0.0085287001, 0.040042799, 0.968486726), r4.xyz);
-  r2.y = dot(float3(-0.0085287001, 0.040042799, 0.968486726), r6.xyz);
-  r2.z = dot(float3(-0.0085287001, 0.040042799, 0.968486726), r3.xyz);
-  r3.x = dot(r5.xyz, float3(0.412456393, 0.212672904, 0.0193339009));
-  r4.x = dot(r5.xyz, float3(0.357576102, 0.715152204, 0.119191997));
-  r5.x = dot(r5.xyz, float3(0.180437505, 0.0721750036, 0.950304091));
-  r3.y = dot(r1.xyz, float3(0.412456393, 0.212672904, 0.0193339009));
-  r4.y = dot(r1.xyz, float3(0.357576102, 0.715152204, 0.119191997));
-  r5.y = dot(r1.xyz, float3(0.180437505, 0.0721750036, 0.950304091));
-  r3.z = dot(r2.xyz, float3(0.412456393, 0.212672904, 0.0193339009));
-  r4.z = dot(r2.xyz, float3(0.357576102, 0.715152204, 0.119191997));
-  r5.z = dot(r2.xyz, float3(0.180437505, 0.0721750036, 0.950304091));
-  r1.x = dot(float3(3.2409699, -1.5373832, -0.498610765), r3.xyz);
-  r1.y = dot(float3(3.2409699, -1.5373832, -0.498610765), r4.xyz);
-  r1.z = dot(float3(3.2409699, -1.5373832, -0.498610765), r5.xyz);
-  r2.x = dot(float3(-0.969243646, 1.8759675, 0.0415550582), r3.xyz);
-  r2.y = dot(float3(-0.969243646, 1.8759675, 0.0415550582), r4.xyz);
-  r2.z = dot(float3(-0.969243646, 1.8759675, 0.0415550582), r5.xyz);
-  r3.x = dot(float3(0.0556300804, -0.203976959, 1.05697155), r3.xyz);
-  r3.y = dot(float3(0.0556300804, -0.203976959, 1.05697155), r4.xyz);
-  r3.z = dot(float3(0.0556300804, -0.203976959, 1.05697155), r5.xyz);
-  r1.x = dot(r1.xyz, r0.xyz);
-  r1.y = dot(r2.xyz, r0.xyz);
-  r1.z = dot(r3.xyz, r0.xyz);
-  r0.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r1.xyz);
-  r0.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r1.xyz);
-  r0.z = dot(float3(0.0206188709, 0.109567292, 0.869606733), r1.xyz);
-  r0.w = dot(r0.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
-
-  r1.xyz = r0.xyz / r0.www;
-  r1.xyz = float3(-1, -1, -1) + r1.xyz;
-  r1.x = dot(r1.xyz, r1.xyz);
-  r1.x = -4 * r1.x;
-  r1.x = exp2(r1.x);
-  r1.x = 1 + -r1.x;
-  r0.w = r0.w * r0.w;
+  r0.xyz = r0.xxx ? r0.yzw : r1.xyz;
+  r1.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r0.xyz);
+  r1.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r0.xyz);
+  r1.z = dot(float3(0.0206188709, 0.109567292, 0.869606733), r0.xyz);
+  r0.x = dot(r1.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
+  r0.yzw = r1.xyz / r0.xxx;
+  r0.yzw = float3(-1, -1, -1) + r0.yzw;
+  r0.y = dot(r0.yzw, r0.yzw);
+  r0.y = -4 * r0.y;
+  r0.y = exp2(r0.y);
+  r0.x = r0.x * r0.x;
   // ExpandGamut set to 0
-  r0.w = 0.f * r0.w;
-  r0.w = -4 * r0.w;
-  r0.w = exp2(r0.w);
-  r0.w = 1 + -r0.w;
-  r0.w = r1.x * r0.w;
-  r1.x = dot(float3(1.37041271, -0.329291314, -0.0636827648), r0.xyz);
-  r1.y = dot(float3(-0.0834341869, 1.09709096, -0.0108615728), r0.xyz);
-  r1.z = dot(float3(-0.0257932581, -0.0986256376, 1.20369434), r0.xyz);
-  r1.xyz = r1.xyz + -r0.xyz;
-  r1.xyz = r0.www * r1.xyz + r0.xyz;
-  r0.xyz = bUseMobileTonemapper ? r0.xyz : r1.xyz;
+  // r0.x = cb0[66].y * r0.x;
+  r0.x = 0.f * r0.x;
+  r0.x = -4 * r0.x;
+  r0.x = exp2(r0.x);
+  r0.xy = float2(1, 1) + -r0.xy;
+  r0.x = r0.y * r0.x;
+  r2.x = dot(float3(1.37041271, -0.329291314, -0.0636827648), r1.xyz);
+  r2.y = dot(float3(-0.0834341869, 1.09709096, -0.0108615728), r1.xyz);
+  r2.z = dot(float3(-0.0257932581, -0.0986256376, 1.20369434), r1.xyz);
+  r0.yzw = r2.xyz + -r1.xyz;
+  r0.xyz = r0.xxx * r0.yzw + r1.xyz;
+  r0.xyz = (asuint(cb0[44].y) != 0u) ? r1.xyz : r0.xyz;
   r0.w = dot(r0.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
-  r1.xyzw = ColorSaturationShadows.xyzw * ColorSaturation.xyzw;
-  r2.xyzw = ColorContrastShadows.xyzw * ColorContrast.xyzw;
-  r3.xyzw = ColorGammaShadows.xyzw * ColorGamma.xyzw;
-  r4.xyzw = ColorGainShadows.xyzw * ColorGain.xyzw;
-  r5.xyzw = ColorOffsetShadows.xyzw + ColorOffset.xyzw;
+  r1.xyzw = cb0[50].xyzw * cb0[45].xyzw;
+  r2.xyzw = cb0[51].xyzw * cb0[46].xyzw;
+  r3.xyzw = cb0[52].xyzw * cb0[47].xyzw;
+  r4.xyzw = cb0[53].xyzw * cb0[48].xyzw;
+  r5.xyzw = cb0[54].xyzw + cb0[49].xyzw;
   r1.xyz = r1.xyz * r1.www;
   r0.xyz = r0.xyz + -r0.www;
   r1.xyz = r1.xyz * r0.xyz + r0.www;
@@ -287,16 +106,16 @@ void main(
   r2.xyz = r4.xyz * r4.www;
   r3.xyz = r5.xyz + r5.www;
   r1.xyz = r1.xyz * r2.xyz + r3.xyz;
-  r1.w = 1 / ColorCorrectionShadowsMax;
+  r1.w = 1 / cb0[65].x;
   r1.w = saturate(r1.w * r0.w);
   r2.x = r1.w * -2 + 3;
   r1.w = r1.w * r1.w;
   r1.w = -r2.x * r1.w + 1;
-  r2.xyzw = ColorSaturationHighlights.xyzw * ColorSaturation.xyzw;
-  r3.xyzw = ColorContrastHighlights.xyzw * ColorContrast.xyzw;
-  r4.xyzw = ColorGammaHighlights.xyzw * ColorGamma.xyzw;
-  r5.xyzw = ColorGainHighlights.xyzw * ColorGain.xyzw;
-  r6.xyzw = ColorOffsetHighlights.xyzw + ColorOffset.xyzw;
+  r2.xyzw = cb0[60].xyzw * cb0[45].xyzw;
+  r3.xyzw = cb0[61].xyzw * cb0[46].xyzw;
+  r4.xyzw = cb0[62].xyzw * cb0[47].xyzw;
+  r5.xyzw = cb0[63].xyzw * cb0[48].xyzw;
+  r6.xyzw = cb0[64].xyzw + cb0[49].xyzw;
   r2.xyz = r2.xyz * r2.www;
   r2.xyz = r2.xyz * r0.xyz + r0.www;
   r2.xyz = max(float3(0, 0, 0), r2.xyz);
@@ -314,18 +133,18 @@ void main(
   r3.xyz = r5.xyz * r5.www;
   r4.xyz = r6.xyz + r6.www;
   r2.xyz = r2.xyz * r3.xyz + r4.xyz;
-  r2.w = 1 + -ColorCorrectionHighlightsMin;
-  r3.x = -ColorCorrectionHighlightsMin + r0.w;
+  r2.w = 1 + -cb0[65].y;
+  r3.x = -cb0[65].y + r0.w;
   r2.w = 1 / r2.w;
   r2.w = saturate(r3.x * r2.w);
   r3.x = r2.w * -2 + 3;
   r2.w = r2.w * r2.w;
   r3.y = r3.x * r2.w;
-  r4.xyzw = ColorSaturationMidtones.xyzw * ColorSaturation.xyzw;
-  r5.xyzw = ColorContrastMidtones.xyzw * ColorContrast.xyzw;
-  r6.xyzw = ColorGammaMidtones.xyzw * ColorGamma.xyzw;
-  r7.xyzw = ColorGainMidtones.xyzw * ColorGain.xyzw;
-  r8.xyzw = ColorOffsetMidtones.xyzw + ColorOffset.xyzw;
+  r4.xyzw = cb0[55].xyzw * cb0[45].xyzw;
+  r5.xyzw = cb0[56].xyzw * cb0[46].xyzw;
+  r6.xyzw = cb0[57].xyzw * cb0[47].xyzw;
+  r7.xyzw = cb0[58].xyzw * cb0[48].xyzw;
+  r8.xyzw = cb0[59].xyzw + cb0[49].xyzw;
   r4.xyz = r4.xyz * r4.www;
   r0.xyz = r4.xyz * r0.xyz + r0.www;
   r0.xyz = max(float3(0, 0, 0), r0.xyz);
@@ -349,61 +168,59 @@ void main(
   r0.xyz = r1.xyz * r1.www + r0.xyz;
   r0.xyz = r2.xyz * r3.yyy + r0.xyz;
 
-  float3 untonemapped_ap1 = r0.xyz;
+    float3 untonemapped_ap1 = r0.xyz;
 
   UECbufferConfig cb_config = CreateCbufferConfig();
-  cb_config.ue_filmblackclip = FilmBlackClip;
-  cb_config.ue_filmtoe = FilmToe;
-  cb_config.ue_filmshoulder = FilmShoulder;
-  cb_config.ue_filmslope = FilmSlope;
-  cb_config.ue_filmwhiteclip = FilmWhiteClip;
-  cb_config.ue_tonecurveammount = ToneCurveAmount;
-  cb_config.ue_mappingpolynomial = MappingPolynomial;
-  cb_config.ue_overlaycolor = OverlayColor;
-  cb_config.ue_bluecorrection = BlueCorrection;
-  cb_config.ue_colorscale = ColorScale;
-  float4 lutweights[2] = { float4(asfloat(LUTWeights[0]), asfloat(LUTWeights[1]), asfloat(LUTWeights[2]), 0.f), float4(0.f, 0.f, 0.f, 0.f) };
-  cb_config.ue_lutweights = lutweights;  // Only Lutweights[0].xy is used
-
-  o0 = ProcessLutbuilder(float3(untonemapped_ap1), Samplers_1_s, Samplers_2_s, Textures_1, Textures_2, cb_config, o0, OutputDevice);
+  cb_config.ue_filmblackclip = asfloat(cb0[36].w);
+  cb_config.ue_filmtoe = asfloat(cb0[36].y);
+  cb_config.ue_filmshoulder = asfloat(cb0[36].z);
+  cb_config.ue_filmslope = asfloat(cb0[36].x);
+  cb_config.ue_filmwhiteclip = asfloat(cb0[37].x);
+  cb_config.ue_tonecurveammount = asfloat(cb0[66].z);
+  cb_config.ue_mappingpolynomial = asfloat(cb0[26].xyz);
+  cb_config.ue_overlaycolor = asfloat(cb0[43].xyzw);
+  cb_config.ue_bluecorrection = asfloat(cb0[66].x);
+  cb_config.ue_colorscale = asfloat(cb0[42].yzw);
+  float4 output = ProcessLutbuilder(float3(untonemapped_ap1), cb_config, u0[vThreadID.xyz], asuint(cb0[65].z));
+  u0[vThreadID.xyz] = output;
   return;
+
 
   r1.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
   r1.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
   r1.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
   [branch]
-  if (bUseMobileTonemapper != 0) {
-    r2.x = dot(r1.xyz, ColorMatrixR_ColorCurveCd1.xyz);
-    r2.y = dot(r1.xyz, ColorMatrixG_ColorCurveCd3Cm3.xyz);
-    r2.z = dot(r1.xyz, ColorMatrixB_ColorCurveCm2.xyz);
-    r0.w = dot(r1.xyz, ColorShadow_Luma.xyz);
+  if (asuint(cb0[44].y) != 0) {
+    r2.x = dot(r1.xyz, cb0[28].xyz);
+    r2.y = dot(r1.xyz, cb0[29].xyz);
+    r2.z = dot(r1.xyz, cb0[30].xyz);
+    r0.w = dot(r1.xyz, cb0[33].xyz);
     r0.w = 1 + r0.w;
     r0.w = rcp(r0.w);
-    r3.xyz = ColorShadow_Tint2.xyz * r0.www + ColorShadow_Tint1.xyz;
+    r3.xyz = cb0[35].xyz * r0.www + cb0[34].xyz;
     r2.xyz = r3.xyz * r2.xyz;
     r2.xyz = max(float3(0, 0, 0), r2.xyz);
-    r3.xyz = ColorCurve_Cm0Cd0_Cd2_Ch0Cm1_Ch3.xxx + -r2.xyz;
+    r3.xyz = cb0[31].xxx + -r2.xyz;
     r3.xyz = max(float3(0, 0, 0), r3.xyz);
-    r4.xyz = max(ColorCurve_Cm0Cd0_Cd2_Ch0Cm1_Ch3.zzz, r2.xyz);
-    r2.xyz = max(ColorCurve_Cm0Cd0_Cd2_Ch0Cm1_Ch3.xxx, r2.xyz);
-    r2.xyz = min(ColorCurve_Cm0Cd0_Cd2_Ch0Cm1_Ch3.zzz, r2.xyz);
-    r5.xyz = r4.xyz * ColorCurve_Ch1_Ch2.xxx + ColorCurve_Ch1_Ch2.yyy;
-    r4.xyz = ColorCurve_Cm0Cd0_Cd2_Ch0Cm1_Ch3.www + r4.xyz;
+    r4.xyz = max(cb0[31].zzz, r2.xyz);
+    r2.xyz = max(cb0[31].xxx, r2.xyz);
+    r2.xyz = min(cb0[31].zzz, r2.xyz);
+    r5.xyz = r4.xyz * cb0[32].xxx + cb0[32].yyy;
+    r4.xyz = cb0[31].www + r4.xyz;
     r4.xyz = rcp(r4.xyz);
-    r6.xyz = ColorMatrixR_ColorCurveCd1.www * r3.xyz;
-    r3.xyz = ColorCurve_Cm0Cd0_Cd2_Ch0Cm1_Ch3.yyy + r3.xyz;
+    r6.xyz = cb0[28].www * r3.xyz;
+    r3.xyz = cb0[31].yyy + r3.xyz;
     r3.xyz = rcp(r3.xyz);
-    r3.xyz = r6.xyz * r3.xyz + ColorMatrixG_ColorCurveCd3Cm3.www;
-    r2.xyz = r2.xyz * ColorMatrixB_ColorCurveCm2.www + r3.xyz;
+    r3.xyz = r6.xyz * r3.xyz + cb0[29].www;
+    r2.xyz = r2.xyz * cb0[30].www + r3.xyz;
     r2.xyz = r5.xyz * r4.xyz + r2.xyz;
     r2.xyz = float3(-0.00200000009, -0.00200000009, -0.00200000009) + r2.xyz;
-
   } else {
     r3.x = dot(float3(0.938639402, 1.02359565e-10, 0.0613606237), r0.xyz);
     r3.y = dot(float3(8.36008554e-11, 0.830794156, 0.169205874), r0.xyz);
     r3.z = dot(float3(2.13187367e-12, -5.63307213e-12, 1), r0.xyz);
     r3.xyz = r3.xyz + -r0.xyz;
-    r0.xyz = BlueCorrection * r3.xyz + r0.xyz;
+    r0.xyz = cb0[66].xxx * r3.xyz + r0.xyz;
     r3.y = dot(float3(0.695452213, 0.140678704, 0.163869068), r0.xyz);
     r3.z = dot(float3(0.0447945632, 0.859671116, 0.0955343172), r0.xyz);
     r3.w = dot(float3(-0.00552588236, 0.00402521016, 1.00150073), r0.xyz);
@@ -501,31 +318,31 @@ void main(
     r0.w = dot(r3.xyz, float3(0.272228718, 0.674081743, 0.0536895171));
     r3.xyz = r3.xyz + -r0.www;
     r3.xyz = r3.xyz * float3(0.959999979, 0.959999979, 0.959999979) + r0.www;
-    r4.xy = float2(1, 0.180000007) + FilmBlackClip;
-    r0.w = -FilmToe + r4.x;
-    r1.w = 1 + FilmWhiteClip;
-    r2.w = -FilmShoulder + r1.w;
-    r3.w = cmp(0.800000012 < FilmToe);
-    r4.xz = float2(0.819999993, 1) + -FilmToe;
-    r4.xz = r4.xz / FilmSlope;
+    r4.xy = float2(1, 0.180000007) + cb0[36].ww;
+    r0.w = -cb0[36].y + r4.x;
+    r1.w = 1 + cb0[37].x;
+    r2.w = -cb0[36].z + r1.w;
+    r3.w = cmp(0.800000012 < cb0[36].y);
+    r4.xz = float2(0.819999993, 1) + -cb0[36].yy;
+    r4.xz = r4.xz / cb0[36].xx;
     r4.y = r4.y / r0.w;
     r4.xw = float2(-0.744727492, -1) + r4.xy;
     r4.w = 1 + -r4.w;
     r4.y = r4.y / r4.w;
     r4.y = log2(r4.y);
     r4.y = 0.346573591 * r4.y;
-    r4.w = r0.w / FilmSlope;
+    r4.w = r0.w / cb0[36].x;
     r4.y = -r4.y * r4.w + -0.744727492;
     r3.w = r3.w ? r4.x : r4.y;
     r4.x = r4.z + -r3.w;
-    r4.y = FilmShoulder / FilmSlope;
+    r4.y = cb0[36].z / cb0[36].x;
     r4.y = r4.y + -r4.x;
     r3.xyz = log2(r3.xyz);
     r5.xyz = float3(0.30103001, 0.30103001, 0.30103001) * r3.xyz;
     r4.xzw = r3.xyz * float3(0.30103001, 0.30103001, 0.30103001) + r4.xxx;
-    r4.xzw = FilmSlope * r4.xzw;
+    r4.xzw = cb0[36].xxx * r4.xzw;
     r5.w = r0.w + r0.w;
-    r6.x = -2 * FilmSlope;
+    r6.x = -2 * cb0[36].x;
     r0.w = r6.x / r0.w;
     r6.xyz = r3.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r3.www;
     r7.xyz = r6.xyz * r0.www;
@@ -533,9 +350,9 @@ void main(
     r7.xyz = exp2(r7.xyz);
     r7.xyz = float3(1, 1, 1) + r7.xyz;
     r7.xyz = r5.www / r7.xyz;
-    r7.xyz = -FilmBlackClip + r7.xyz;
+    r7.xyz = -cb0[36].www + r7.xyz;
     r0.w = r2.w + r2.w;
-    r5.w = FilmSlope + FilmSlope;
+    r5.w = cb0[36].x + cb0[36].x;
     r2.w = r5.w / r2.w;
     r3.xyz = r3.xyz * float3(0.30103001, 0.30103001, 0.30103001) + -r4.yyy;
     r3.xyz = r3.xyz * r2.www;
@@ -563,66 +380,31 @@ void main(
     r3.xyz = r3.xyz * float3(0.930000007, 0.930000007, 0.930000007) + r0.www;
     r3.xyz = max(float3(0, 0, 0), r3.xyz);
     r3.xyz = r3.xyz + -r0.xyz;
-    r0.xyz = ToneCurveAmount * r3.xyz + r0.xyz;
+    r0.xyz = cb0[66].zzz * r3.xyz + r0.xyz;
     r3.x = dot(float3(1.06537485, 1.44678506e-06, -0.0653710067), r0.xyz);
     r3.y = dot(float3(-3.45525592e-07, 1.20366347, -0.203667715), r0.xyz);
     r3.z = dot(float3(1.9865448e-08, 2.12079581e-08, 0.999999583), r0.xyz);
     r3.xyz = r3.xyz + -r0.xyz;
-    r0.xyz = BlueCorrection * r3.xyz + r0.xyz;
+    r0.xyz = cb0[66].xxx * r3.xyz + r0.xyz;
     r3.x = dot(float3(1.70505154, -0.621790707, -0.0832583979), r0.xyz);
     r3.y = dot(float3(-0.130257145, 1.14080286, -0.0105485283), r0.xyz);
     r3.z = dot(float3(-0.0240032747, -0.128968775, 1.15297174), r0.xyz);
-
     r2.xyz = max(float3(0, 0, 0), r3.xyz);
   }
-  r2.xyz = saturate(r2.xyz);
-  r0.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r2.xyz;
-  r3.xyz = cmp(r2.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
-  r2.xyz = log2(r2.xyz);
-  r2.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r2.xyz;
-  r2.xyz = exp2(r2.xyz);
-  r2.xyz = r2.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
-  r0.xyz = r3.xyz ? r2.xyz : r0.xyz;
-  r2.yzw = r0.xyz * float3(0.9375, 0.9375, 0.9375) + float3(0.03125, 0.03125, 0.03125);
-  r0.w = r2.w * 16 + -0.5;
-  r1.w = floor(r0.w);
-  r0.w = -r1.w + r0.w;
-  r1.w = r2.y + r1.w;
-  r2.x = 0.0625 * r1.w;
-  r3.xyz = Textures_1.Sample(Samplers_1_s, r2.xz).xyz;
-  r2.yw = float2(0.0625, 0) + r2.xz;
-  r4.xyz = Textures_1.Sample(Samplers_1_s, r2.yw).xyz;
-  r4.xyz = r4.xyz + -r3.xyz;
-  r3.xyz = r0.www * r4.xyz + r3.xyz;
-  r3.xyz = LUTWeights[1] * r3.xyz;
-  r0.xyz = LUTWeights[0] * r0.xyz + r3.xyz;
-  r3.xyz = Textures_2.Sample(Samplers_2_s, r2.xz).xyz;
-  r2.xyz = Textures_2.Sample(Samplers_2_s, r2.yw).xyz;
-  r2.xyz = r2.xyz + -r3.xyz;
-  r2.xyz = r0.www * r2.xyz + r3.xyz;
-  r0.xyz = LUTWeights[2] * r2.xyz + r0.xyz;
-  r0.xyz = max(float3(6.10351999e-05, 6.10351999e-05, 6.10351999e-05), r0.xyz);
-  r2.xyz = cmp(float3(0.0404499993, 0.0404499993, 0.0404499993) < r0.xyz);
-  r3.xyz = r0.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
-  r3.xyz = log2(r3.xyz);
-  r3.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r3.xyz;
-  r3.xyz = exp2(r3.xyz);
-  r0.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r0.xyz;
-  r0.xyz = r2.xyz ? r3.xyz : r0.xyz;
-  r2.xyz = r0.xyz * r0.xyz;
-  r0.xyz = MappingPolynomial.yyy * r0.xyz;
-  r0.xyz = MappingPolynomial.xxx * r2.xyz + r0.xyz;
-  r0.xyz = MappingPolynomial.zzz + r0.xyz;
-  r2.xyz = ColorScale.xyz * r0.xyz;
-  r0.xyz = -r0.xyz * ColorScale.xyz + OverlayColor.xyz;
-  r0.xyz = OverlayColor.www * r0.xyz + r2.xyz;
+  r0.xyz = r2.xyz * r2.xyz;
+  r2.xyz = cb0[26].yyy * r2.xyz;
+  r0.xyz = cb0[26].xxx * r0.xyz + r2.xyz;
+  r0.xyz = cb0[26].zzz + r0.xyz;
+  r2.xyz = cb0[42].yzw * r0.xyz;
+  r0.xyz = -r0.xyz * cb0[42].yzw + cb0[43].xyz;
+  r0.xyz = cb0[43].www * r0.xyz + r2.xyz;
   r2.xyz = max(float3(0, 0, 0), r0.xyz);
   r2.xyz = log2(r2.xyz);
-  r2.xyz = InverseGamma.yyy * r2.xyz;
+  r2.xyz = cb0[27].yyy * r2.xyz;
   r3.xyz = exp2(r2.xyz);
 
   [branch]
-  if (OutputDevice == 0) {
+  if (asuint(cb0[65].z) == 0) {
     r4.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r3.xyz;
     r5.xyz = cmp(r3.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
     r2.xyz = float3(0.416666657, 0.416666657, 0.416666657) * r2.xyz;
@@ -630,7 +412,7 @@ void main(
     r2.xyz = r2.xyz * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
     r2.xyz = r5.xyz ? r2.xyz : r4.xyz;
   } else {
-    r4.xyzw = cmp(OutputGamut == int4(1, 2, 3, 4));
+    r4.xyzw = cmp(asint(cb0[65].wwww) == int4(1, 2, 3, 4));
     r5.xyz = r4.www ? float3(1, 0, 0) : float3(1.70505154, -0.621790707, -0.0832583979);
     r6.xyz = r4.www ? float3(0, 1, 0) : float3(-0.130257145, 1.14080286, -0.0105485283);
     r7.xyz = r4.www ? float3(0, 0, 1) : float3(-0.0240032747, -0.128968775, 1.15297174);
@@ -643,7 +425,7 @@ void main(
     r5.xyz = r4.xxx ? float3(1.37915885, -0.308850735, -0.0703467429) : r5.xyz;
     r6.xyz = r4.xxx ? float3(-0.0693352968, 1.08229232, -0.0129620517) : r6.xyz;
     r4.xyz = r4.xxx ? float3(-0.00215925858, -0.0454653986, 1.04775953) : r4.yzw;
-    r0.w = cmp(OutputDevice == 1);
+    r0.w = cmp(asint(cb0[65].z) == 1);
     if (r0.w != 0) {
       r7.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r3.xyz);
       r7.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r3.xyz);
@@ -660,10 +442,10 @@ void main(
       r7.xyz = r7.xyz * float3(1.09899998, 1.09899998, 1.09899998) + float3(-0.0989999995, -0.0989999995, -0.0989999995);
       r2.xyz = min(r8.xyz, r7.xyz);
     } else {
-      r7.xyz = ColorScale.xyz * r1.xyz;
-      r1.xyz = -r1.xyz * ColorScale.xyz + OverlayColor.xyz;
-      r1.xyz = OverlayColor.www * r1.xyz + r7.xyz;
-      r7.xy = cmp(OutputDevice == int2(3, 5));
+      r7.xyz = cb0[42].yzw * r1.xyz;
+      r1.xyz = -r1.xyz * cb0[42].yzw + cb0[43].xyz;
+      r1.xyz = cb0[43].www * r1.xyz + r7.xyz;
+      r7.xy = cmp(asint(cb0[65].zz) == int2(3, 5));
       r0.w = (int)r7.y | (int)r7.x;
       if (r0.w != 0) {
         r7.xyz = float3(1.5, 1.5, 1.5) * r1.xyz;
@@ -1118,7 +900,7 @@ void main(
         r7.xyz = float3(78.84375, 78.84375, 78.84375) * r7.xyz;
         r2.xyz = exp2(r7.xyz);
       } else {
-        r7.xy = cmp(OutputDevice == int2(4, 6));
+        r7.xy = cmp(asint(cb0[65].zz) == int2(4, 6));
         r0.w = (int)r7.y | (int)r7.x;
         if (r0.w != 0) {
           r7.xyz = float3(1.5, 1.5, 1.5) * r1.xyz;
@@ -1572,7 +1354,7 @@ void main(
           r7.xyz = float3(78.84375, 78.84375, 78.84375) * r7.xyz;
           r2.xyz = exp2(r7.xyz);
         } else {
-          r0.w = cmp(OutputDevice == 7);
+          r0.w = cmp(asint(cb0[65].z) == 7);
           if (r0.w != 0) {
             r7.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r1.xyz);
             r7.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r1.xyz);
@@ -1592,7 +1374,7 @@ void main(
             r7.xyz = float3(78.84375, 78.84375, 78.84375) * r7.xyz;
             r2.xyz = exp2(r7.xyz);
           } else {
-            r7.xy = cmp(OutputDevice == int2(8, 9));
+            r7.xy = cmp(asint(cb0[65].zz) == int2(8, 9));
             r8.x = dot(float3(0.613191485, 0.33951208, 0.0473663323), r0.xyz);
             r8.y = dot(float3(0.0702069029, 0.916335821, 0.0134500116), r0.xyz);
             r8.z = dot(float3(0.0206188709, 0.109567292, 0.869606733), r0.xyz);
@@ -1608,7 +1390,7 @@ void main(
             r3.x = log2(r0.w);
             r3.y = log2(r1.w);
             r3.z = log2(r2.w);
-            r3.xyz = InverseGamma.zzz * r3.xyz;
+            r3.xyz = cb0[27].zzz * r3.xyz;
             r3.xyz = exp2(r3.xyz);
             r0.xyz = r7.yyy ? r0.xyz : r3.xyz;
             r2.xyz = r7.xxx ? r1.xyz : r0.xyz;
@@ -1617,10 +1399,11 @@ void main(
       }
     }
   }
-  o0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r2.xyz;
-  o0.w = 0;
+  r0.xyz = float3(0.952381015, 0.952381015, 0.952381015) * r2.xyz;
+  r0.w = 0;
 
-  o0 = saturate(o0);
+  r0 = saturate(r0);
 
+  u0[vThreadID.xyz] = r0;
   return;
 }
