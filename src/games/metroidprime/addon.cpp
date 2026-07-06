@@ -311,7 +311,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       */
       renodx::mods::shader::minimum_constant_buffer_stages = reshade::api::shader_stage::pixel;
 
-      static std::vector<uint32_t> hashes = {0x86878F42, 0x484D3AE8};  // final buffer
+      static std::vector<uint32_t> hashes = {0x86878F42, 0x484D3AE8, 0xE3C47D1E};  // final buffer
 
       renodx_custom::utils::shader_hotswap::targets.clear();
       for (uint32_t hash : hashes) {
