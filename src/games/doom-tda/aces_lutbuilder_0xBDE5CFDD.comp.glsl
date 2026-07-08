@@ -2,6 +2,8 @@
 
 #extension GL_GOOGLE_include_directive : require
 #include "./include/common.glsl"
+#include "./include/psychov_17.glsl"
+#include "./shared.h"
 
 #extension GL_EXT_buffer_reference2 : require
 #if defined(GL_EXT_control_flow_attributes)
@@ -86,19 +88,19 @@ layout(set = 0, binding = 0, std140) uniform _2991_2993 {
   vec4 _m13;
   vec4 _m14;
   vec4 _m15;
-  float _m16;
-  float _m17;
-  uint _m18;
-  float _m19;
+  vec4 _m16;
+  vec4 _m17;
+  vec4 _m18;
+  vec4 _m19;
   float _m20;
   float _m21;
   float _m22;
   float _m23;
   float _m24;
-  uint _m25;
-  uint _m26;
+  float _m25;
+  float _m26;
   float _m27;
-  uint _m28;
+  float _m28;
   float _m29;
   float _m30;
   float _m31;
@@ -108,23 +110,36 @@ layout(set = 0, binding = 0, std140) uniform _2991_2993 {
   float _m35;
   float _m36;
   float _m37;
-  float _m38;
-  float _m39;
+  uint _m38;
+  uint _m39;
   float _m40;
-  float _m41;
+  uint _m41;
   float _m42;
-  uint _m43;
+  float _m43;
   float _m44;
   float _m45;
   float _m46;
   float _m47;
   float _m48;
-  uint _m49;
-  uint _m50;
-  uint _m51;
-  uint _m52;
-  int _m53;
-  uint _m54;
+  float _m49;
+  float _m50;
+  float _m51;
+  float _m52;
+  float _m53;  // max nits
+  float _m54;  // mid point slider
+  float _m55;  // min nits
+  uint _m56;
+  float _m57;
+  float _m58;
+  float _m59;
+  float _m60;
+  float _m61;
+  uint _m62;
+  uint _m63;
+  uint _m64;
+  uint _m65;  // flags; bit 0 is useHDR (0 = SDR path, 1 = HDR path)
+  int _m66;
+  uint _m67;
 }
 _2993;
 
@@ -1083,7 +1098,7 @@ vec3 _220(vec3 _217, uint _218, bool _219) {
   vec3 _2865 = _41(_2848, _2850);
   mat3 _2866 = mat3(vec3(1.01303005218505859375, 0.0061053098179399967193603515625, -0.014971000142395496368408203125), vec3(0.0076982299797236919403076171875, 0.99816501140594482421875, -0.005032029934227466583251953125), vec3(-0.0028413101099431514739990234375, 0.0046851597726345062255859375, 0.92450702190399169921875));
   vec3 _2880 = _41(_2865, _2866);
-  mat3 _2881 = mat3(vec3(1.04981100559234619140625, -0.0, -9.7479998657945543527603149414063e-05), vec3(-0.495902955532073974609375, 1.37331295013427734375, 0.09824003279209136962890625), vec3(3.9999999756901161163114011287689e-08, -0.0, 0.991252124309539794921875));
+  mat3 _2881 = mat3(vec3(1.04981100559234619140625, -0.0, -9.7479998657945543527603149414062e-05), vec3(-0.495902955532073974609375, 1.37331295013427734375, 0.09824003279209136962890625), vec3(3.9999999756901161163114011287689e-08, -0.0, 0.991252124309539794921875));
   vec3 _2834 = _41(_2880, _2881);
   vec3 _2883 = _2834;
   _2834 = _146(_2883);
@@ -1091,7 +1106,7 @@ vec3 _220(vec3 _217, uint _218, bool _219) {
   float _2887 = 0.0;
   float _2888 = 0.0;
   vec3 _2889 = vec3(0.0);
-  if ((_218 & 1u) == 0u) {
+  if ((_218 & 1u) == 0u) {  // useHDR == false
     vec3 _2896 = _2834;
     vec3 _2895 = _209(_2896);
     vec3 _2900 = _2895;
@@ -1131,14 +1146,11 @@ vec3 _220(vec3 _217, uint _218, bool _219) {
     _2889 = _41(_2980, _2982);
     vec3 _2984 = _2889;
     _2889 = _11(_2984);
-  } else {
-    float _2988 = _2993._m41;  // _2993._m41 - mid gray = 10.f default
+  } else {                     // useHDR == true
+    float _2988 = _2993._m54;  // mid point slider
     uint _2999 = 8388608u;
-    _2887 = max(_17(_2999), _2993._m42);  // _2993._m42 - aces minimum nits = 0.0001f
-
-    // _2887 = 0.000001f; // lower minimum nits
-
-    _2888 = _2993._m40;  // peak nits
+    _2887 = max(_17(_2999), _2993._m55);  // min nits
+    _2888 = _2993._m53;                   // max nits
     float _3009 = _2887;
     float _3011 = _2888;
     float _3013 = 0.0;
@@ -1191,7 +1203,7 @@ void main() {
   _233 = 1;
   _235 = 2;
   ivec3 _3102 = ivec3(gl_GlobalInvocationID);
-  int _3108 = _2993._m53;  // not contrast
+  int _3108 = _2993._m66;
   bool _3116 = _3102.x >= _3108;
   bool _3124;
   if (!_3116) {
@@ -1209,25 +1221,91 @@ void main() {
   if (_3132) {
     return;
   }
-  vec3 _3136 = vec3(_3102) / vec3(float(_2993._m53) - 1.0);
+  vec3 _3136 = vec3(_3102) / vec3(float(_2993._m66) - 1.0);
   vec3 _3145 = _3136;
   _3136 = _212(_3145);
   vec3 _3158 = _3136;
-  uint use_hdr = _2993._m52;  // 0u - false, 1u - true
+  uint _3160 = _2993._m65;  // flags; bit 0 is useHDR
   bool _3163 = (_3152._m1 & 1u) != 0u;
+  vec3 _3148;
 
-#if TONE_MAP_TYPE
+#if 1  // run custom tonemap code
+  vec3 untonemapped_bt709 = _3158;
+  bool use_hdr = (_3160 & 1u) != 0u;
 
-  const float peak_nits = _2993._m40;
-  const float paper_white = _2993._m41 * 10.f;
-  const vec3 untonemapped = _3136;
+  float min_nits = max(_17(8388608u), _2993._m55);
+  float max_nits = _2993._m53;
+  float mid_point = _2993._m54;
+  float diffuse_white = mid_point * 10.0;
+  float peak_nits = max_nits;
 
-  vec3 _3148 = ApplyACES(untonemapped, peak_nits, paper_white);
+  if (RENODX_TONE_MAP_TYPE == 0.f || !use_hdr) {  // Vanilla
+    _3148 = _220(untonemapped_bt709, _3160, _3163);
+  } else if (RENODX_TONE_MAP_TYPE == 1.f) {  // None
+    _3148 = BT709_TO_BT2020_MAT * untonemapped_bt709 * diffuse_white;
+  } else {  // RenoDX ACES
+    const float ACES_MID = 10.f;
+    const float EXP_SHIFT_REFERENCE_MAX = 1000.f;
+    const float EXP_SHIFT_REFERENCE_MIN = 0.0001f;
+
+    const float ACES_MIN = 0.0001f;
+    const float ACES_DIFFUSE_WHITE = ACES_MID * 10.f;
+    float aces_min = ACES_MIN / diffuse_white;
+    float aces_max = max_nits / diffuse_white;
+
+    if (RENODX_SDR_EOTF_EMULATION == 1.f) {
+      aces_max = CorrectGammaMismatch(aces_max, true);
+      aces_min = CorrectGammaMismatch(aces_min, true);
+    } else if (RENODX_SDR_EOTF_EMULATION == 2.f) {
+      aces_min /= 100000.f;
+    }
+
+    ODTConfig odt_config = CreateODTConfig(aces_min * ACES_DIFFUSE_WHITE, aces_max * ACES_DIFFUSE_WHITE, ACES_MID, true, EXP_SHIFT_REFERENCE_MAX, EXP_SHIFT_REFERENCE_MIN);
+
+    // Apply ACES ToneMap
+    vec3 untonemapped_ap0 = BT709_TO_AP0_MAT * untonemapped_bt709;
+    vec3 untonemapped_graded_ap1 = RRT(untonemapped_ap0);
+
+    vec3 tonemapped_ap1;
+    if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
+      float y_in = psycho17_YFFromAP1(untonemapped_graded_ap1);
+      vec4 tonemapped_ap1_combined = max(vec4(0.0), ODT(vec4(untonemapped_graded_ap1, y_in), odt_config, mat3(1.0)) / ACES_DIFFUSE_WHITE);
+      tonemapped_ap1 = tonemapped_ap1_combined.rgb;
+      float y_out = tonemapped_ap1_combined.a;
+
+      // ODT by luminance
+      vec3 luminance_tonemapped_ap1 = untonemapped_graded_ap1 * DivideSafe(y_out, y_in, 0.0);
+      vec3 tonemapped_source_bt2020 = BT2020FromAP1(max(vec3(0.0), tonemapped_ap1));
+      vec3 tonemapped_lum_bt2020 = BT2020FromAP1(max(vec3(0.0), luminance_tonemapped_ap1));
+      float t = clamp((y_out - 0.1) / 0.9, 0.0, 1.0);
+      float hue_amount = mix(0.5, 1.0, t);
+
+      tonemapped_ap1 = max(vec3(0.0), AP1FromBT2020(psycho17_ApplyPurityAndHueFromBT2020(
+                                          tonemapped_source_bt2020,
+                                          tonemapped_lum_bt2020,
+                                          1.0,
+                                          hue_amount, 0.f, 1e-7f, true, false)));
+
+    } else {
+      tonemapped_ap1 = max(vec3(0.0), ODT(untonemapped_graded_ap1, odt_config, mat3(1.0)) / ACES_DIFFUSE_WHITE);
+    }
+
+    vec3 tonemapped_bt709 = AP1_TO_BT709_MAT * tonemapped_ap1;
+
+    if (RENODX_SDR_EOTF_EMULATION == 1.f) {
+      tonemapped_bt709 = CorrectGammaMismatch(tonemapped_bt709, false);
+    }
+
+    vec3 tonemapped_bt2020 = BT709_TO_BT2020_MAT * tonemapped_bt709;
+    tonemapped_bt2020 *= diffuse_white;
+    _3148 = tonemapped_bt2020;
+  }
 
 #else
+  _3148 = _220(_3158, _3160, _3163);
 
-  vec3 _3148 = _220(_3158, use_hdr, _3163);
 #endif
+
   imageStore(_3167, _3102, vec4(_3148, 1.0));
 }
 
