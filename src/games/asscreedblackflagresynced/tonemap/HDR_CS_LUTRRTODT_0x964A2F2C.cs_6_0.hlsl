@@ -139,34 +139,33 @@ void main(
   float _429;
 
 #if 1
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    // unpack lut input
+    float3 untonemapped_ap1 = 32.f * exp2((((float3)((uint3)SV_DispatchThreadID)) * 0.6451612710952759f) + -12.473931312561035f);
 
-  // unpack lut input
-  float3 untonemapped_ap1 = 32.f * exp2((((float3)((uint3)SV_DispatchThreadID)) * 0.6451612710952759f) + -12.473931312561035f);
+    float exposure = cb0_space5_003z;
+    float display_peak_nits = cb0_space5_003w;
+    bool hdr_enabled = cb0_space5_003x != 0;
 
-  float exposure = cb0_space5_003z;
-  float peak_nits = cb0_space5_003w;
-  bool hdr_enabled = cb0_space5_003x != 0;
-
-  float diffuse_white_nits = (exposure / 92.f) * 203.f;  // turn exposure slider into diffuse white
-  float target_peak_ratio = peak_nits / diffuse_white_nits;
+    float diffuse_white_nits = (exposure / 64.f) * 203.f;  // turn exposure slider into diffuse white, game defaults to 2x exposure in hdr
+    // float diffuse_white_nits = 100.f;
+    float target_peak_ratio = display_peak_nits / diffuse_white_nits;
 #if RENODX_GAME_GAMMA_CORRECTION
-  target_peak_ratio = renodx::color::correct::GammaSafe(target_peak_ratio, true);  // account for gamma correction changing peak
+    target_peak_ratio = renodx::color::correct::GammaSafe(target_peak_ratio, true);  // account for gamma correction changing peak
 #endif
 
-  // set up tonemap parameters
-  float tone_map_contrast = 1.25f;
-  float tone_map_toe_threshold = 0.13f;
-  float tone_map_mid_point = 0.50f;
-  float tone_map_toe_slope = 1.00f;
-  float tone_map_black_offset = 0.00f;
-  if (!hdr_enabled) {
-    target_peak_ratio = 1.f;
-  }
-  float peak_value = target_peak_ratio * 100.f;
+    // set up tonemap parameters
+    float slope = 1.5f;
+    float toe_threshold = 0.05f;
+    float shoulder_start = 0.50f;
+    float toe_slope = 1.00f;
+    float black_offset = 0.00f;
+    if (!hdr_enabled) {
+      target_peak_ratio = 1.f;
+    }
+    float peak_nits = target_peak_ratio * 100.f;
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(
-        tone_map_contrast, tone_map_toe_threshold, tone_map_mid_point, tone_map_toe_slope, tone_map_black_offset, peak_value);
+    ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(slope, toe_threshold, shoulder_start, toe_slope, black_offset, peak_nits);
     float3 tonemapped_ap1 = ApplyImmortalsToneMap(untonemapped_ap1, config) / 100.f;
     float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
 #if RENODX_GAME_GAMMA_CORRECTION
@@ -175,16 +174,19 @@ void main(
     if (hdr_enabled) {
       u0_space5[SV_DispatchThreadID] = float4(renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(tonemapped_bt709), diffuse_white_nits), 1.f);
     } else {
-      u0_space5[SV_DispatchThreadID] = float4(renodx::color::srgb::EncodeSafe(tonemapped_bt709), 1.f);
+      u0_space5[SV_DispatchThreadID] = float4(renodx::color::gamma::EncodeSafe(tonemapped_bt709), 1.f);
     }
     return;
   }
 
 #endif
 
-  _20 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f);
-  _21 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f);
-  _22 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f);
+  // _20 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f);
+  // _21 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f);
+  // _22 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f);
+  _20 = 64.f * exp2((((float)((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f);
+  _21 = 64.f * exp2((((float)((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f);
+  _22 = 64.f * exp2((((float)((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f);
   switch ((int)(cb0_space5_003y)) {
     case 2: {
       _27 = abs(_20 * 0.009999999776482582f);

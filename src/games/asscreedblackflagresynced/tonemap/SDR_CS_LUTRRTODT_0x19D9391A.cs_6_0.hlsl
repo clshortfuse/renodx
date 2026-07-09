@@ -1,3 +1,5 @@
+#include "./tonemap.hlsli"
+
 struct ACESTonemapperParameters__Constants {
   float ACESTonemapperParameters__Constants_000;
 };
@@ -138,6 +140,15 @@ void main(
   _20 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f);
   _21 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f);
   _22 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f);
+  // _20 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f);
+  // _21 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f);
+  // _22 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f);
+
+#if 0
+  u0_space5[SV_DispatchThreadID] = float4(renodx::color::srgb::EncodeSafe(float3(_20, _21, _22)), 1.f);
+  return;
+#endif
+
   switch ((int)(cb0_space5_003y)) {
     case 2: {
       _27 = abs(_20 * 0.009999999776482582f);
@@ -207,6 +218,25 @@ void main(
       break;
     }
     case 1: {
+#if 0
+      // float slope = cb0_space5_000x;
+      // float toe_threshold = cb0_space5_000y;
+      // float shoulder_start = cb0_space5_000z;
+      // float toe_slope = cb0_space5_000w;
+      // float black_offset = cb0_space5_001x;
+      // float peak_nits = cb0_space5_003w;
+      float slope = 1.5f;
+      float toe_threshold = 0.05f;
+      float shoulder_start = 0.5f;
+      float toe_slope = 1.f;
+      float black_offset = 0.f;
+      float peak_nits = 100.f;
+      ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(slope, toe_threshold, shoulder_start, toe_slope, black_offset, peak_nits);
+      float3 tonemapped_ap1 = ApplyImmortalsToneMap(float3(_20, _21, _22), config);
+      _359 = tonemapped_ap1.x;
+      _360 = tonemapped_ap1.y;
+      _361 = tonemapped_ap1.z;
+#else
       _231 = abs(_20 * 0.009999999776482582f);
       _233 = cb0_space5_003w * 0.009999999776482582f;
       _243 = ((_233 - cb0_space5_000y) * cb0_space5_000z) / cb0_space5_000x;
@@ -234,6 +264,7 @@ void main(
       _359 = (((((_273 - _277) * ((_244 * cb0_space5_000x) + cb0_space5_000y)) + ((_233 - (exp2(((-0.0f - ((_244 - _243) * _260)) / _233) * 1.4426950216293335f) * _259)) * _277)) + ((1.0f - _273) * select(_247, ((exp2(log2(abs(_248)) * cb0_space5_000w) * cb0_space5_000y) + cb0_space5_001x), cb0_space5_001x))) * 100.0f);
       _360 = (((((_310 - _313) * ((_287 * cb0_space5_000x) + cb0_space5_000y)) + ((_233 - (exp2(((-0.0f - ((_287 - _243) * _260)) / _233) * 1.4426950216293335f) * _259)) * _313)) + ((1.0f - _310) * select(_247, ((exp2(log2(abs(_290)) * cb0_space5_000w) * cb0_space5_000y) + cb0_space5_001x), cb0_space5_001x))) * 100.0f);
       _361 = (((((_346 - _349) * ((_323 * cb0_space5_000x) + cb0_space5_000y)) + ((_233 - (exp2(((-0.0f - ((_323 - _243) * _260)) / _233) * 1.4426950216293335f) * _259)) * _349)) + ((1.0f - _346) * select(_247, ((exp2(log2(abs(_326)) * cb0_space5_000w) * cb0_space5_000y) + cb0_space5_001x), cb0_space5_001x))) * 100.0f);
+#endif
       break;
     }
     default: {

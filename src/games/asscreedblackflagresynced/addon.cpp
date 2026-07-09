@@ -129,7 +129,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type. Toggle in-game HDR setting or restart game to take effect.",
-        .labels = {"Vanilla", "RenoDX"},
+        .labels = {"Vanilla", "RenoDX (Vanilla+)"},
         .on_change_value = &OnToneMapLutControlledSettingChanged,
     },
     new renodx::utils::settings::Setting{
@@ -209,7 +209,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
         .binding = &shader_injection.custom_bloom,
-        .default_value = 50.f,
+        .default_value = 100.f,
         .label = "Bloom",
         .section = "Effects",
         .max = 100.f,
