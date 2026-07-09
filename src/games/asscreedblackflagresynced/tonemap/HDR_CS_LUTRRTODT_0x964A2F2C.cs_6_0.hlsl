@@ -158,7 +158,7 @@ void main(
   float tone_map_toe_threshold = 0.13f;
   float tone_map_mid_point = 0.50f;
   float tone_map_toe_slope = 1.00f;
-  float tone_map_black_offset = 1.00f;
+  float tone_map_black_offset = 0.00f;
   if (!hdr_enabled) {
     target_peak_ratio = 1.f;
   }
