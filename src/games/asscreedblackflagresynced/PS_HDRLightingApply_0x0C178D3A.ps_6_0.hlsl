@@ -1,3 +1,5 @@
+#include "./common.hlsli"
+
 struct CustomDepthMapParams__Constants {
   int CustomDepthMapParams__Constants_000;
   int CustomDepthMapParams__Constants_004;
@@ -624,6 +626,11 @@ float4 main(
   _161 = max(0.0f, (((_150 * _111) * (_131.x + -0.5f)) + _111));
   _162 = max(0.0f, (((_150 * _112) * (_131.y + -0.5f)) + _112));
   _163 = max(0.0f, ((((cb0_space2_008w * 0.03125f) * _113) * ((((float4)(t0.Load(int3((((int)((_135 + _27) + ((((int)(_135 << 16)) | _137) * _135))) & 63), (((int)(_137 + _28)) & 63), 0)))).x) + -0.5f)) + _113));
+
+  _161 *= CUSTOM_BLOOM;
+  _162 *= CUSTOM_BLOOM;
+  _163 *= CUSTOM_BLOOM;
+
   _165 = (cb0_space1_076x * 1215282323) + 2113019745u;
   _167 = (uint)(_165) >> 16;
   _182 = _161 + (_20.x * TEXCOORD_1);
