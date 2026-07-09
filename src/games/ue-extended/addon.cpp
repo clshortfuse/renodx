@@ -867,6 +867,12 @@ const std::unordered_map<
                 {"Proxy_Revert_State", 1.f},
             },
         },
+        {
+            "BLACKTAIL",
+            {
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
         // Native HDR on games (Path off)
         {
             "Hell is Us",
