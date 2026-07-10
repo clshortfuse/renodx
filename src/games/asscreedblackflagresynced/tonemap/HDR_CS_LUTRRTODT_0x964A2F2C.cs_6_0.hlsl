@@ -166,11 +166,34 @@ void main(
     float peak_nits = target_peak_ratio * 100.f;
 
     ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(slope, toe_threshold, shoulder_start, toe_slope, black_offset, peak_nits);
+
     float3 tonemapped_ap1 = ApplyImmortalsToneMap(untonemapped_ap1, config) / 100.f;
     float3 tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
-#if RENODX_GAME_GAMMA_CORRECTION
-    tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
-#endif
+
+    if (RENODX_GAME_GAMMA_CORRECTION != 0.f) {
+      tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
+    }
+
+    if (RENODX_TONE_MAP_TYPE == 1.f) {  // Enhanced
+      float y_in = max(0.f, renodx::color::yf::from::AP1(untonemapped_ap1));
+      float y_out = ApplyImmortalsToneMap(y_in, config) / 100.f;
+      if (RENODX_GAME_GAMMA_CORRECTION != 0.f) {
+        y_out = renodx::color::correct::GammaSafe(y_out);
+      }
+      float3 lum_tonemapped_ap1 = renodx::color::correct::Luminance(untonemapped_ap1, y_in, y_out);
+      float3 lum_tonemapped_bt709 = renodx::color::bt709::from::AP1(lum_tonemapped_ap1);
+
+      tonemapped_bt709 = renodx::color::bt709::from::LMS(
+          TransferPurityAndWeightedHueFromLMS(
+              renodx::color::lms::from::BT709(tonemapped_bt709),
+              renodx::color::lms::from::BT709(lum_tonemapped_bt709),
+              5.f,
+              0.6f,
+              1.f,
+              0.f,
+              1e-7f,
+              true));
+    }
     if (hdr_enabled) {
       u0_space5[SV_DispatchThreadID] = float4(renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(tonemapped_bt709), diffuse_white_nits), 1.f);
     } else {
@@ -181,12 +204,9 @@ void main(
 
 #endif
 
-  // _20 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f);
-  // _21 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f);
-  // _22 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f);
-  _20 = 64.f * exp2((((float)((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f);
-  _21 = 64.f * exp2((((float)((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f);
-  _22 = 64.f * exp2((((float)((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f);
+  _20 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.x)) * 0.6451612710952759f) + -12.473931312561035f);
+  _21 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.y)) * 0.6451612710952759f) + -12.473931312561035f);
+  _22 = cb0_space5_003z * exp2((((float)((uint)SV_DispatchThreadID.z)) * 0.6451612710952759f) + -12.473931312561035f);
   switch ((int)(cb0_space5_003y)) {
     case 2: {
       _27 = abs(_20 * 0.009999999776482582f);
