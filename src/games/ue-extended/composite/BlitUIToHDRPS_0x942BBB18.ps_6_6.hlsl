@@ -1,0 +1,58 @@
+#include "./composite.hlsli"
+
+// Found in Neverness To Everness UE 5.6 ini tweaks
+
+Texture2D<float4> t0 : register(t0);
+
+Texture2D<float4> t1 : register(t1);
+
+cbuffer cb0 : register(b0) {
+  float cb0_002x : packoffset(c002.x);
+  float cb0_002y : packoffset(c002.y);
+};
+
+SamplerState s0 : register(s0);
+
+float4 main(
+    noperspective float2 TEXCOORD: TEXCOORD,
+    noperspective float4 SV_Position: SV_Position) : SV_Target {
+  float4 SV_Target;
+  float4 _10 = t0.Sample(s0, float2(TEXCOORD.x, TEXCOORD.y));
+  float _39 = select((_10.x > 0.040449999272823334f), exp2(log2((abs(_10.x) * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_10.x * 0.07739938050508499f));
+  float _40 = select((_10.y > 0.040449999272823334f), exp2(log2((abs(_10.y) * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_10.y * 0.07739938050508499f));
+  float _41 = select((_10.z > 0.040449999272823334f), exp2(log2((abs(_10.z) * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_10.z * 0.07739938050508499f));
+  float4 _57 = t1.Sample(s0, float2(TEXCOORD.x, TEXCOORD.y));
+
+  if (HandleIntermediateCompositing(_10, _57, SV_Target)) {
+    return SV_Target;
+  }
+
+  float _67 = (pow(_57.x, 0.012683313339948654f));
+  float _68 = (pow(_57.y, 0.012683313339948654f));
+  float _69 = (pow(_57.z, 0.012683313339948654f));
+  float _94 = exp2(log2(max(0.0f, (_67 + -0.8359375f)) / (18.8515625f - (_67 * 18.6875f))) * 6.277394771575928f) * 10000.0f;
+  float _95 = exp2(log2(max(0.0f, (_68 + -0.8359375f)) / (18.8515625f - (_68 * 18.6875f))) * 6.277394771575928f) * 10000.0f;
+  float _96 = exp2(log2(max(0.0f, (_69 + -0.8359375f)) / (18.8515625f - (_69 * 18.6875f))) * 6.277394771575928f) * 10000.0f;
+  float _117;
+  float _118;
+  float _119;
+  if ((bool)(_10.w > 0.0f) && (bool)(_10.w < 1.0f)) {
+    float _102 = max(_94, 0.0f);
+    float _103 = max(_95, 0.0f);
+    float _104 = max(_96, 0.0f);
+    float _112 = ((((1.0f / ((dot(float3(_102, _103, _104), float3(0.26269999146461487f, 0.6779999732971191f, 0.059300001710653305f)) / cb0_002x) + 1.0f)) * cb0_002x) + -1.0f) * _10.w) + 1.0f;
+    _117 = (_112 * _102);
+    _118 = (_112 * _103);
+    _119 = (_112 * _104);
+  } else {
+    _117 = _94;
+    _118 = _95;
+    _119 = _96;
+  }
+  float _120 = 1.0f - _10.w;
+  SV_Target.x = (((_117 * _120) + ((cb0_002y * mad(0.043313056230545044f, _41, mad(0.3292830288410187f, _40, (_39 * 0.6274039149284363f)))) * cb0_002x)) * 0.012500000186264515f);
+  SV_Target.y = (((_118 * _120) + ((cb0_002y * mad(0.011362319812178612f, _41, mad(0.919540286064148f, _40, (_39 * 0.06909731030464172f)))) * cb0_002x)) * 0.012500000186264515f);
+  SV_Target.z = (((_119 * _120) + ((cb0_002y * mad(0.8955953121185303f, _41, mad(0.08801331371068954f, _40, (_39 * 0.016391439363360405f)))) * cb0_002x)) * 0.012500000186264515f);
+  SV_Target.w = 1.0f;
+  return SV_Target;
+}
