@@ -37,8 +37,16 @@ build.ninja/**
 build32.ninja/**
 build.vs/**
 build32.vs/**
+build_msvc/**
 
 bin/**
+dump/**
+tmp/**
+tmp_disasm.txt
+tmp_maincsfinal.txt
+bridge_out.txt
+bridge_err.txt
+ReShade.log
 **/.vshistory/
 .cache/**
 __pycache__/
@@ -50,9 +58,6 @@ __pycache__/
 !.env.example
 .vscode/mcp.json
 .kiro/
-.tmp/
-.codex-dumps/
-.dotnet/
-.test/
-.venv-analysis/
-tmp/*
+go and get up to speed.md
+
+nexus_description.bbcode
