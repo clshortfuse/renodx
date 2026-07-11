@@ -1,0 +1,172 @@
+// Final Shader for Gaiden and Infinite Wealth
+
+#include "./common.hlsl"
+
+Texture2D<float4> s0_t : register(t0);
+
+cbuffer cb_user : register(b9) {
+  float cb_user_000x : packoffset(c000.x);
+  float cb_user_000w : packoffset(c000.w);
+  float cb_user_002y : packoffset(c002.y);
+  float cb_user_002z : packoffset(c002.z);
+  float cb_user_002w : packoffset(c002.w);
+};
+
+SamplerState s0_s : register(s0);
+
+float4 main(
+    noperspective float2 TEXCOORD: TEXCOORD)
+    : SV_Target {
+  float4 SV_Target;
+  float4 _6 = s0_t.Sample(s0_s, float2((TEXCOORD.x), (TEXCOORD.y)));
+
+  if (injectedData.toneMapType != 0.f) {
+    float3 color = ProcessColor(_6.rgb);
+    SV_Target.xyz = color.rgb;
+    SV_Target.w = 1.f;
+    return SV_Target;
+  }
+
+  float _10 = max(0.0f, (_6.x));
+  float _11 = max(0.0f, (_6.y));
+  float _12 = max(0.0f, (_6.z));
+  float _15 = log2(_10);
+  float _16 = log2(_11);
+  float _17 = log2(_12);
+  float _18 = _15 * (cb_user_000w);
+  float _19 = _16 * (cb_user_000w);
+  float _20 = _17 * (cb_user_000w);
+  float _21 = exp2(_18);
+  float _22 = exp2(_19);
+  float _23 = exp2(_20);
+  float _25 = 1.0f / (cb_user_000x);
+  float _26 = log2(_21);
+  float _27 = log2(_22);
+  float _28 = log2(_23);
+  float _29 = _26 * _25;
+  float _30 = _27 * _25;
+  float _31 = _28 * _25;
+  float _32 = exp2(_29);
+  float _33 = exp2(_30);
+  float _34 = exp2(_31);
+  float _35 = _32 * 0.6274523735046387f;
+  float _36 = mad(0.32924848794937134f, _33, _35);
+  float _37 = mad(0.043299127370119095f, _34, _36);
+  float _38 = _32 * 0.06910918653011322f;
+  float _39 = mad(0.9195311069488525f, _33, _38);
+  float _40 = mad(0.011359736323356628f, _34, _39);
+  float _41 = _32 * 0.016397561877965927f;
+  float _42 = mad(0.0880301371216774f, _33, _41);
+  float _43 = mad(0.895572304725647f, _34, _42);
+  float _44 = _37 * 267.8399963378906f;
+  float _45 = _40 * 267.8399963378906f;
+  float _46 = _43 * 267.8399963378906f;
+  float _47 = _37 * 59.52080154418945f;
+  float _48 = _40 * 59.52080154418945f;
+  float _49 = _43 * 59.52080154418945f;
+  float _50 = log2(_47);
+  float _51 = log2(_48);
+  float _52 = log2(_49);
+  float _53 = _50 * 0.44999998807907104f;
+  float _54 = _51 * 0.44999998807907104f;
+  float _55 = _52 * 0.44999998807907104f;
+  float _56 = exp2(_53);
+  float _57 = exp2(_54);
+  float _58 = exp2(_55);
+  float _59 = _56 * 1.0989999771118164f;
+  float _60 = _57 * 1.0989999771118164f;
+  float _61 = _58 * 1.0989999771118164f;
+  float _62 = _59 + -0.0989999994635582f;
+  float _63 = _60 + -0.0989999994635582f;
+  float _64 = _61 + -0.0989999994635582f;
+  bool _65 = (_37 <= 0.0003024152829311788f);
+  bool _66 = (_40 <= 0.0003024152829311788f);
+  bool _67 = (_43 <= 0.0003024152829311788f);
+  float _68 = (_65 ? _44 : _62);
+  float _69 = (_66 ? _45 : _63);
+  float _70 = (_67 ? _46 : _64);
+  float _71 = log2(_68);
+  float _72 = log2(_69);
+  float _73 = log2(_70);
+  float _74 = _71 * 2.4000000953674316f;
+  float _75 = _72 * 2.4000000953674316f;
+  float _76 = _73 * 2.4000000953674316f;
+  float _77 = exp2(_74);
+  float _78 = exp2(_75);
+  float _79 = exp2(_76);
+  float _84 = _77 * 3.0f;
+  float _85 = _78 * 3.0f;
+  float _86 = _79 * 3.0f;
+  float _87 = (cb_user_002z) / (cb_user_002y);
+  float _88 = (cb_user_002w) - (cb_user_002z);
+  float _89 = (cb_user_002y) / _88;
+  float _90 = _84 - _87;
+  float _91 = _85 - _87;
+  float _92 = _86 - _87;
+  float _93 = _89 * -1.4426950216293335f;
+  float _94 = _93 * _90;
+  float _95 = _93 * _91;
+  float _96 = _93 * _92;
+  float _97 = exp2(_94);
+  float _98 = exp2(_95);
+  float _99 = exp2(_96);
+  float _100 = _97 * _88;
+  float _101 = _98 * _88;
+  float _102 = _99 * _88;
+  float _103 = (cb_user_002w)-_100;
+  float _104 = (cb_user_002w)-_101;
+  float _105 = (cb_user_002w)-_102;
+  bool _106 = (_84 < _87);
+  bool _107 = (_85 < _87);
+  bool _108 = (_86 < _87);
+  float _109 = (cb_user_002y)*_84;
+  float _110 = (cb_user_002y)*_85;
+  float _111 = (cb_user_002y)*_86;
+  float _112 = (_106 ? _109 : _103);
+  float _113 = (_107 ? _110 : _104);
+  float _114 = (_108 ? _111 : _105);
+  float _115 = _112 * 9.999999747378752e-05f;
+  float _116 = _113 * 9.999999747378752e-05f;
+  float _117 = _114 * 9.999999747378752e-05f;
+  float _118 = abs(_115);
+  float _119 = abs(_116);
+  float _120 = abs(_117);
+  float _121 = log2(_118);
+  float _122 = log2(_119);
+  float _123 = log2(_120);
+  float _124 = _121 * 0.1593017578125f;
+  float _125 = _122 * 0.1593017578125f;
+  float _126 = _123 * 0.1593017578125f;
+  float _127 = exp2(_124);
+  float _128 = exp2(_125);
+  float _129 = exp2(_126);
+  float _130 = _127 * 18.8515625f;
+  float _131 = _128 * 18.8515625f;
+  float _132 = _129 * 18.8515625f;
+  float _133 = _130 + 0.8359375f;
+  float _134 = _131 + 0.8359375f;
+  float _135 = _132 + 0.8359375f;
+  float _136 = _127 * 18.6875f;
+  float _137 = _128 * 18.6875f;
+  float _138 = _129 * 18.6875f;
+  float _139 = _136 + 1.0f;
+  float _140 = _137 + 1.0f;
+  float _141 = _138 + 1.0f;
+  float _142 = _133 / _139;
+  float _143 = _134 / _140;
+  float _144 = _135 / _141;
+  float _145 = log2(_142);
+  float _146 = log2(_143);
+  float _147 = log2(_144);
+  float _148 = _145 * 78.84375f;
+  float _149 = _146 * 78.84375f;
+  float _150 = _147 * 78.84375f;
+  float _151 = exp2(_148);
+  float _152 = exp2(_149);
+  float _153 = exp2(_150);
+  SV_Target.x = _151;
+  SV_Target.y = _152;
+  SV_Target.z = _153;
+  SV_Target.w = 1.0f;
+  return SV_Target;
+}

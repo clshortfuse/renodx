@@ -1,0 +1,12 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "masseffectandromeda",
+  "title": "Mass Effect: Andromeda",
+  "maintainers": [
+    "DristoforColumb"
+  ],
+  "status": "stable",
+  "deploy": {
+    "steam_appid": 1238000
+  }
+}
