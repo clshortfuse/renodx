@@ -115,6 +115,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Requires HDR on in game"),
+        .section = "Tone Mapping",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Adjust game brightness using the in-game exposure setting\n"
+                             "- Adjust peak brightness using the in-game peak setting"),
+        .section = "Tone Mapping",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Toggle in-game HDR setting or restart game to apply changes to Tone Mapper.",
         .section = "Tone Mapping",
         .tint = 0xFF0000,
@@ -129,8 +140,27 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type. Toggle in-game HDR setting or restart game to take effect.",
-        .labels = {"Vanilla", "RenoDX (Enhanced)", "RenoDX (Vanilla+)"},
+        .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Customized)"},
         .on_change_value = &OnToneMapLutControlledSettingChanged,
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Restart game to apply changes to UI Brightness.",
+        .section = "UI",
+        .tint = 0xFF0000,
+        .is_visible = []() { return ui_lut_invalidated.load(std::memory_order_relaxed); },
+        .is_sticky = false,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.graphics_white_nits,
+        .default_value = 203.f,
+        .label = "UI Brightness",
+        .section = "UI",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits. Requires a game restart to take effect.",
+        .min = 48.f,
+        .max = 500.f,
+        .on_change_value = &OnUiNitsSettingChanged,
     },
     new renodx::utils::settings::Setting{
         .key = "Exposure",
@@ -216,25 +246,6 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Restart game to apply changes to UI Brightness.",
-        .section = "Miscellaneous",
-        .tint = 0xFF0000,
-        .is_visible = []() { return ui_lut_invalidated.load(std::memory_order_relaxed); },
-        .is_sticky = false,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapUINits",
-        .binding = &shader_injection.graphics_white_nits,
-        .default_value = 203.f,
-        .label = "UI Brightness",
-        .section = "Miscellaneous",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits. Requires a game restart to take effect.",
-        .min = 48.f,
-        .max = 500.f,
-        .on_change_value = &OnUiNitsSettingChanged,
-    },
-    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -308,17 +319,6 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
-        .section = "About",
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Requires HDR on in game"),
-        .section = "About",
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Adjust paper white using the in-game exposure setting\n"
-                             "- Adjust peak brightness using the in-game peak setting"),
         .section = "About",
     },
 };

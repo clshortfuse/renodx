@@ -36,7 +36,7 @@ ImmortalsToneMapConfig CreateImmortalsToneMapConfig(
 }
 
 #define IMMORTALS_TONEMAP_GENERATOR(T)                                                                                                                                                                       \
-  T ApplyImmortalsToneMap(T untonemapped_ap1, ImmortalsToneMapConfig config) {                                                                                                                               \
+  T ApplyImmortalsToneMap(T untonemapped_ap1, ImmortalsToneMapConfig config, out T precompression_ap1) {                                                                                                    \
     T input_scaled = abs(untonemapped_ap1 * 0.00999999977648258209228515625f);                                                                                                                               \
     T toe_ratio = input_scaled / config.toe_threshold;                                                                                                                                                       \
     T toe_ratio_sat = saturate(toe_ratio);                                                                                                                                                                   \
@@ -46,55 +46,261 @@ ImmortalsToneMapConfig CreateImmortalsToneMapConfig(
     T toe_curve = renodx::math::Select(config.has_toe, mad(exp2(log2(abs(toe_ratio)) * config.toe_slope), config.toe_threshold, config.black_offset), config.black_offset);                                  \
     T toe_weight = mad(-toe_smooth, toe_ratio_sat_sq, 1.f);                                                                                                                                                  \
     T linear_curve = mad(input_scaled - config.toe_threshold, config.slope, config.toe_threshold);                                                                                                           \
-    T linear_weight = (mad(toe_smooth, toe_ratio_sat_sq, -1.f) + 1.f) - in_shoulder;                                                                                                                         \
+    T linear_weight = mad(toe_smooth, toe_ratio_sat_sq, -1.f) + 1.f;                                                                                                                                         \
+    T precompression_curve = (toe_weight * toe_curve) + (linear_weight * linear_curve);                                                                                                                      \
     T shoulder_curve = config.peak_luminance + (exp2(((config.shoulder_scale * (input_scaled - config.shoulder_start)) / config.peak_luminance) * (-1.44269502162933349609375f)) * config.shoulder_overage); \
-    return mad(shoulder_curve, in_shoulder, (toe_weight * toe_curve) + (linear_weight * linear_curve)) * 100.f;                                                                                              \
+    precompression_ap1 = precompression_curve * 100.f;                                                                                                                                                       \
+    return lerp(precompression_curve, shoulder_curve, in_shoulder) * 100.f;                                                                                                                                  \
+  }                                                                                                                                                                                                          \
+  T ApplyImmortalsToneMap(T untonemapped_ap1, ImmortalsToneMapConfig config) {                                                                                                                               \
+    T precompression_ap1;                                                                                                                                                                                    \
+    return ApplyImmortalsToneMap(untonemapped_ap1, config, precompression_ap1);                                                                                                                              \
   }
 
 IMMORTALS_TONEMAP_GENERATOR(float)
 IMMORTALS_TONEMAP_GENERATOR(float3)
 #undef IMMORTALS_TONEMAP_GENERATOR
 
-float3 TransferPurityAndWeightedHueFromLMS(
-    float3 lms_source,
-    float3 lms_target,
-    float purity_loss_hue_power = 1.f,
-    float baseline_hue_amount = 0.f,
-    float purity_amount = 1.f,
-    float clamp_purity_loss = 0.f,
-    float eps = 1e-7f,
-    bool compress_bt2020 = false) {
-  float3 mb_source = renodx::color::macleod_boynton::from::LMS(lms_source);
-  float3 mb_target = renodx::color::macleod_boynton::from::LMS(lms_target);
-  float2 mb_white = renodx::color::macleod_boynton::from::D65XY();
+static const float PSYCHO23_LOCAL_EPSILON = 1e-6f;
+static const float PSYCHO23_LOCAL_REFERENCE_SIMULTANEOUS_RANGE_LOG10 = 3.7f;
+static const float PSYCHO23_LOCAL_REFERENCE_CENTERED_RANGE_SIDE_COUNT = 2.f;
+static const float PSYCHO23_LOCAL_HEADROOM_RATIO_FALLBACK = 1.f;
+static const float PSYCHO23_LOCAL_MIN_AUTO_COMPRESSION = 1.f;
 
-  float2 source_offset = mb_source.xy - mb_white;
-  float2 target_offset = mb_target.xy - mb_white;
-  float src_radius = length(source_offset);
-  float tgt_radius = length(target_offset);
-  if (tgt_radius <= eps) return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(lms_target, 1.f) : lms_target;
+// Empirical signed-opponent appearance controls from PsychoV23.
+static const float PSYCHO23_LOCAL_RED_RETENTION = 1.5f;
+static const float PSYCHO23_LOCAL_GREEN_RETENTION = 2.f;
+static const float PSYCHO23_LOCAL_BLUE_RETENTION = 1.f;
+static const float PSYCHO23_LOCAL_YELLOW_RETENTION = 3.f;
 
-  float no_change_distance = max(tgt_radius - eps, eps);
-  float purity_delta = src_radius - tgt_radius;
-  float raw_hue_amount = saturate(0.5f - (purity_delta / (2.f * no_change_distance)));
-  float purity_loss_hue_signal = saturate((raw_hue_amount - 0.5f) * 2.f);
-  purity_loss_hue_signal = 1.f - pow(1.f - purity_loss_hue_signal, max(purity_loss_hue_power, eps));
-  float purity_loss_hue_amount = 0.5f + (0.5f * purity_loss_hue_signal);
-  float hue_amount = lerp(raw_hue_amount, purity_loss_hue_amount, step(0.5f, raw_hue_amount));
-  hue_amount = max(hue_amount, saturate(baseline_hue_amount));
+float Psycho23YfFromLMS(float3 lms) {
+  float3 weighted_lms = renodx::color::macleod_boynton::WeighLMS(lms);
+  return max(weighted_lms.x + weighted_lms.y, PSYCHO23_LOCAL_EPSILON);
+}
 
-  float2 source_hue_offset = source_offset * (tgt_radius / max(src_radius, eps));
-  float2 hue_offset = lerp(target_offset, source_hue_offset, hue_amount);
-  float hue_radius = length(hue_offset);
+float Psycho23AutoCompressionFromCenteredReferenceRange(float anchor_out_yf, float peak_yf) {
+  float peak_over_anchor = renodx::math::DivideSafe(
+      max(peak_yf, PSYCHO23_LOCAL_EPSILON),
+      max(anchor_out_yf, PSYCHO23_LOCAL_EPSILON),
+      PSYCHO23_LOCAL_HEADROOM_RATIO_FALLBACK);
+  peak_over_anchor = max(peak_over_anchor, 1.f + PSYCHO23_LOCAL_EPSILON);
 
-  if (hue_radius <= eps) return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(lms_target, 1.f) : lms_target;
+  float reference_one_side_range_log10 =
+      PSYCHO23_LOCAL_REFERENCE_SIMULTANEOUS_RANGE_LOG10
+      / PSYCHO23_LOCAL_REFERENCE_CENTERED_RANGE_SIDE_COUNT;
+  float actual_above_adaptation_range_log10 =
+      max(log10(peak_over_anchor), PSYCHO23_LOCAL_EPSILON);
 
-  float transfer_scale = src_radius / max(hue_radius, eps);
-  float no_purity_loss_scale = max(transfer_scale, 1.f);
-  transfer_scale = lerp(transfer_scale, no_purity_loss_scale, clamp_purity_loss);
-  float scale = lerp(1.f, transfer_scale, purity_amount);
-  float2 mb_scaled = mb_white + hue_offset * scale;
+  return max(
+      reference_one_side_range_log10 / actual_above_adaptation_range_log10,
+      PSYCHO23_LOCAL_MIN_AUTO_COMPRESSION);
+}
 
-  float3 output_lms = renodx::color::lms::from::MacLeodBoynton(float3(mb_scaled, mb_target.z));
-  return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(output_lms, 1.f) : output_lms;
+float3 Psycho23ToAdaptiveRelativeWeightedLMS(
+    float3 lms_input,
+    float3 current_adaptive_state_lms) {
+  return renodx::math::DivideSafe(
+      renodx::color::macleod_boynton::WeighLMS(lms_input),
+      current_adaptive_state_lms,
+      0.f.xxx);
+}
+
+float3 Psycho23FromAdaptiveRelativeWeightedLMS(
+    float3 lms_weighted_relative,
+    float3 current_adaptive_state_lms) {
+  return lms_weighted_relative * max(current_adaptive_state_lms, 1e-6f.xxx);
+}
+
+float3 Psycho23GamutCompressAdaptiveRelativeWeightedLMSBound(
+    float3 lms_weighted_relative_input,
+    float3 current_adaptive_state_lms,
+    float3x3 bound_rgb_to_lms_weighted_mat,
+    float strength) {
+  return renodx::color::gamut::GamutCompressWeightedLMSCoreRGBBoundFromAdaptiveWeightedInput(
+      lms_weighted_relative_input,
+      current_adaptive_state_lms,
+      bound_rgb_to_lms_weighted_mat,
+      strength);
+}
+
+float3 Psycho23AdaptiveRelativeWeightedNeutral() {
+  return renodx::color::macleod_boynton::WeighLMS(1.f.xxx);
+}
+
+float3 Psycho23OpponentACCFromWeightedDelta(float3 delta_weighted_lms) {
+  float3 neutral_weighted = Psycho23AdaptiveRelativeWeightedNeutral();
+  float m_to_l = renodx::math::DivideSafe(
+      neutral_weighted.x,
+      neutral_weighted.y,
+      0.f);
+  float s_to_lm = renodx::math::DivideSafe(
+      neutral_weighted.x + neutral_weighted.y,
+      neutral_weighted.z,
+      0.f);
+
+  return float3(
+      delta_weighted_lms.x + delta_weighted_lms.y,
+      delta_weighted_lms.x - m_to_l * delta_weighted_lms.y,
+      -delta_weighted_lms.x - delta_weighted_lms.y
+          + s_to_lm * delta_weighted_lms.z);
+}
+
+float3 Psycho23WeightedDeltaFromOpponentACC(float3 acc) {
+  float3 neutral_weighted = Psycho23AdaptiveRelativeWeightedNeutral();
+  float m_to_l = renodx::math::DivideSafe(
+      neutral_weighted.x,
+      neutral_weighted.y,
+      0.f);
+  float s_to_lm = renodx::math::DivideSafe(
+      neutral_weighted.x + neutral_weighted.y,
+      neutral_weighted.z,
+      0.f);
+
+  float delta_m = renodx::math::DivideSafe(acc.x - acc.y, 1.f + m_to_l, 0.f);
+  float delta_l = acc.x - delta_m;
+  float delta_s = renodx::math::DivideSafe(acc.z + acc.x, s_to_lm, 0.f);
+  return float3(delta_l, delta_m, delta_s);
+}
+
+float Psycho23SignedOpponentRetention(float white_progress, float retention_exponent) {
+  return 1.f - pow(
+                   saturate(white_progress),
+                   max(retention_exponent, PSYCHO23_LOCAL_EPSILON));
+}
+
+float3 Psycho23ApplySignedOpponentRetention(
+    float3 compressed_lms,
+    float3 source_lms,
+    float3 adaptive_state_lms,
+    float3 peak_lms,
+    float white_progress) {
+  if (white_progress <= 0.f
+      || min(source_lms.x, min(source_lms.y, source_lms.z)) <= 0.f) {
+    return compressed_lms;
+  }
+
+  float3 source_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
+      source_lms,
+      adaptive_state_lms);
+  float3 adapted_neutral = Psycho23AdaptiveRelativeWeightedNeutral();
+  float adapted_neutral_yf = adapted_neutral.x + adapted_neutral.y;
+  float source_yf = source_weighted.x + source_weighted.y;
+
+  if (source_yf <= PSYCHO23_LOCAL_EPSILON
+      || adapted_neutral_yf <= PSYCHO23_LOCAL_EPSILON) {
+    return compressed_lms;
+  }
+
+  float3 source_neutral = adapted_neutral
+      * renodx::math::DivideSafe(source_yf, adapted_neutral_yf, 1.f);
+  float3 source_acc =
+      Psycho23OpponentACCFromWeightedDelta(source_weighted - source_neutral)
+      / source_yf;
+
+  float red_retention = Psycho23SignedOpponentRetention(
+      white_progress,
+      PSYCHO23_LOCAL_RED_RETENTION);
+  float green_retention = Psycho23SignedOpponentRetention(
+      white_progress,
+      PSYCHO23_LOCAL_GREEN_RETENTION);
+  float blue_retention = Psycho23SignedOpponentRetention(
+      white_progress,
+      PSYCHO23_LOCAL_BLUE_RETENTION);
+  float yellow_retention = Psycho23SignedOpponentRetention(
+      white_progress,
+      PSYCHO23_LOCAL_YELLOW_RETENTION);
+
+  float rg_out = max(source_acc.y, 0.f) * red_retention
+                 - max(-source_acc.y, 0.f) * green_retention;
+  float yv_out = max(source_acc.z, 0.f) * blue_retention
+                 - max(-source_acc.z, 0.f) * yellow_retention;
+
+  float3 compressed_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
+      compressed_lms,
+      adaptive_state_lms);
+  float target_yf = compressed_weighted.x + compressed_weighted.y;
+  if (target_yf <= PSYCHO23_LOCAL_EPSILON) {
+    return compressed_lms;
+  }
+
+  float3 peak_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
+      peak_lms,
+      adaptive_state_lms);
+  float peak_weighted_yf = peak_weighted.x + peak_weighted.y;
+  if (peak_weighted_yf <= PSYCHO23_LOCAL_EPSILON) {
+    return compressed_lms;
+  }
+
+  float3 target_neutral = peak_weighted
+      * renodx::math::DivideSafe(target_yf, peak_weighted_yf, 1.f);
+  float3 target_delta = Psycho23WeightedDeltaFromOpponentACC(
+      float3(0.f, rg_out * target_yf, yv_out * target_yf));
+  float3 output_lms = renodx::color::macleod_boynton::UnweighLMS(
+      Psycho23FromAdaptiveRelativeWeightedLMS(
+          target_neutral + target_delta,
+          adaptive_state_lms));
+
+  float compressed_yf = Psycho23YfFromLMS(compressed_lms);
+  float output_yf = Psycho23YfFromLMS(output_lms);
+  if (output_yf <= PSYCHO23_LOCAL_EPSILON) {
+    return compressed_lms;
+  }
+
+  return output_lms
+      * renodx::math::DivideSafe(compressed_yf, output_yf, 1.f);
+}
+
+float3 ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
+    float3 precompression_lms,
+    float3 compressed_lms,
+    float3 input_adaptive_state_lms,
+    float3 output_anchor_lms,
+    float3 peak_white_lms,
+    float hue_restore = 1.f,
+    float gamut_compression = 1.f) {
+  float anchor_yf = Psycho23YfFromLMS(output_anchor_lms);
+  float peak_yf = Psycho23YfFromLMS(peak_white_lms);
+  float output_yf = Psycho23YfFromLMS(compressed_lms);
+
+  // Test23 measures white convergence in the compression power domain. Derive
+  // the same progress from the actual Immortals output instead of assuming its
+  // shoulder follows PsychoV's analytic compression curve.
+  float compression_power = Psycho23AutoCompressionFromCenteredReferenceRange(
+      anchor_yf,
+      peak_yf);
+  float anchor_over_peak = saturate(renodx::math::DivideSafe(anchor_yf, peak_yf, 1.f));
+  float output_over_peak = max(renodx::math::DivideSafe(output_yf, peak_yf, 0.f), 0.f);
+  float anchor_powered = pow(max(anchor_over_peak, 1e-6f), compression_power);
+  float white_progress = saturate(renodx::math::DivideSafe(
+      pow(output_over_peak, compression_power) - anchor_powered,
+      1.f - anchor_powered,
+      0.f));
+
+  float3 opponent_retained_lms = Psycho23ApplySignedOpponentRetention(
+      compressed_lms,
+      precompression_lms,
+      input_adaptive_state_lms,
+      peak_white_lms,
+      white_progress);
+  float3 hue_restored_lms = lerp(
+      compressed_lms,
+      opponent_retained_lms,
+      saturate(hue_restore));
+
+  float3 display_relative_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
+      hue_restored_lms,
+      input_adaptive_state_lms);
+
+  if (gamut_compression != 0.f) {
+    display_relative_weighted = Psycho23GamutCompressAdaptiveRelativeWeightedLMSBound(
+        display_relative_weighted,
+        input_adaptive_state_lms,
+        renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
+        gamut_compression);
+  }
+
+  return renodx::color::macleod_boynton::UnweighLMS(
+      Psycho23FromAdaptiveRelativeWeightedLMS(
+          display_relative_weighted,
+          input_adaptive_state_lms));
 }
