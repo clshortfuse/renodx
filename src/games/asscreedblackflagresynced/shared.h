@@ -14,6 +14,7 @@ struct ShaderInjectData {
   float tone_map_flare;
   float tone_map_saturation;
   float tone_map_dechroma;
+  float tone_map_coolness;
 
   float custom_bloom;
 
@@ -41,6 +42,7 @@ cbuffer shader_injection : register(b13, space50) {
 #define RENODX_TONE_MAP_SATURATION   shader_injection.tone_map_saturation
 #define RENODX_TONE_MAP_DECHROMA     shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE        shader_injection.tone_map_flare
+#define RENODX_COLOR_GRADE_COOLNESS  shader_injection.tone_map_coolness
 
 #define CUSTOM_BLOOM shader_injection.custom_bloom
 

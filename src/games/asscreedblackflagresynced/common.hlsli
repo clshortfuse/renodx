@@ -39,8 +39,6 @@ float3 ApplyLuminanceGradingAP1(float3 color, float gamma, float exposure, float
   float y_adjusted = ApplyLuminanceGradingChannel(y, gamma, exposure, highlights, shadows, contrast, contrast_highlights, contrast_shadows, flare, mid_gray);
   float3 color_adjusted = color * renodx::math::DivideSafe(y_adjusted, y, 1.f);
 
-  color_adjusted = renodx::lut::RecolorUnclamped(color, color_adjusted);
-
   return color_adjusted;
 }
 
@@ -69,6 +67,13 @@ float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float purity_
   return color_lms;
 }
 
+float3 ApplyCoolnessAP1(float3 color_ap1, float strength) {
+  return lerp(
+      color_ap1,
+      renodx::color::ap1::from::BT709(renodx::color::bt709::from::BT709D93(renodx::color::bt709::from::AP1(color_ap1))),
+      strength);
+}
+
 float3 ApplyUserGradingAP1(float3 color_ap1, float mid_gray = 0.18f) {
   color_ap1 = ApplyLuminanceGradingAP1(color_ap1,
                                        1.f,
@@ -89,5 +94,8 @@ float3 ApplyUserGradingAP1(float3 color_ap1, float mid_gray = 0.18f) {
       RENODX_TONE_MAP_DECHROMA,
       renodx::color::lms::from::AP1(mid_gray.xxx));
 
-  return renodx::color::ap1::from::LMS(color_lms);
+  color_ap1 = renodx::color::ap1::from::LMS(color_lms);
+  color_ap1 = ApplyCoolnessAP1(color_ap1, RENODX_COLOR_GRADE_COOLNESS);
+
+  return color_ap1;
 }
