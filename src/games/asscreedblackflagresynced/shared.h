@@ -39,7 +39,7 @@ cbuffer shader_injection : register(b13, space50) {
 #define RENODX_TONE_MAP_SHADOWS      shader_injection.tone_map_shadows
 #define RENODX_TONE_MAP_CONTRAST     shader_injection.tone_map_contrast
 #define RENODX_TONE_MAP_SATURATION   shader_injection.tone_map_saturation
-#define RENODX_TONE_MAP_DECHROMA      shader_injection.tone_map_dechroma
+#define RENODX_TONE_MAP_DECHROMA     shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_FLARE        shader_injection.tone_map_flare
 
 #define CUSTOM_BLOOM shader_injection.custom_bloom
