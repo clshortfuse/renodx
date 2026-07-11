@@ -194,9 +194,8 @@ void comp_main() {
 
 #if 1
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    final_color = ApplyUserGradingAP1(final_color);
+    final_color = ApplyUserGradingAP1(final_color, 0.45f);
   }
-
 #endif
 
   float3 encoded_color = (log2(final_color) * 0.0500000007450580596923828125f) + 0.6236965656280517578125f;

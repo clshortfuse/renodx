@@ -194,7 +194,7 @@ void comp_main() {
 
 #if 1
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    final_color = ApplyUserGradingAP1(final_color);
+    final_color = ApplyUserGradingAP1(final_color, 0.45f);
   }
 #endif
 
