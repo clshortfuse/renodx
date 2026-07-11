@@ -125,7 +125,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r2.zw = r5.xy + -r6.xy;
     r2.xy = r2.xy + r2.zw;
     r2.zw = float2(0.312700003,0.328999996);
-    r2.xyzw = cb0[40].wwww ? r2.xyzw : r2.zwxy;
+    r2.xyzw = (asuint(cb0[40].w) != 0u) ? r2.xyzw : r2.zwxy;
     r5.xy = max(float2(1.00000001e-10,1.00000001e-10), r2.yw);
     r5.zw = float2(1,1) + -r2.xz;
     r2.yw = r5.zw + -r2.yw;
@@ -521,14 +521,16 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r5.xyz = log2(r5.xyz);
   r5.xyz = cb0[42].yyy * r5.xyz;
   r5.xyz = exp2(r5.xyz);
-  if (cb0[42].w == 0) {
+  [branch]
+
+  if (asuint(cb0[42].w) == 0) {
     r6.x = dot(cb1[8].xyz, r5.xyz);
     r6.y = dot(cb1[9].xyz, r5.xyz);
     r6.z = dot(cb1[10].xyz, r5.xyz);
     r7.x = dot(r1.xzw, r6.xyz);
     r7.y = dot(r3.xyz, r6.xyz);
     r7.z = dot(r0.xyz, r6.xyz);
-    r6.xyz = cb1[24].xxx ? r5.xyz : r7.xyz;
+    r6.xyz = (asuint(cb1[24].x) != 0u) ? r5.xyz : r7.xyz;
     r7.xyz = float3(12.9200001,12.9200001,12.9200001) * r6.xyz;
     r8.xyz = cmp(r6.xyz >= float3(0.00313066994,0.00313066994,0.00313066994));
     r6.xyz = log2(r6.xyz);
