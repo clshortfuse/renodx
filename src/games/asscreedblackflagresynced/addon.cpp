@@ -302,7 +302,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "Ce9bQHQrSV");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "t9v7wx9NTD");
         },
     },
     new renodx::utils::settings::Setting{
@@ -312,7 +312,7 @@ renodx::utils::settings::Settings settings = {
         .group = "button-line-2",
         .tint = 0x5865F2,
         .on_change = []() {
-          renodx::utils::platform::LaunchURL("https://discord.gg/", "5WZXDpmbpP");
+          renodx::utils::platform::LaunchURL("https://discord.gg/", "a7HECzaPG7");
         },
     },
     new renodx::utils::settings::Setting{
