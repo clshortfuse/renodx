@@ -236,22 +236,22 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorFilterStrength",
-        .binding = &shader_injection.custom_color_filter_strength,
-        .default_value = 100.f,
-        .label = "Color Filter Strength",
-        .section = "Color Grading",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ColorGradeCoolness",
         .binding = &shader_injection.tone_map_coolness,
         .default_value = 0.f,
         .label = "Coolness",
         .section = "Color Grading",
         .tooltip = "Shifts the image toward cooler tones.",
+        .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorFilterStrength",
+        .binding = &shader_injection.custom_color_filter_strength,
+        .default_value = 100.f,
+        .label = "Color Filter Strength",
+        .section = "Color Grading",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
@@ -276,6 +276,21 @@ renodx::utils::settings::Settings settings = {
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
+          RefreshToneMapLutDirtyState();
+          RefreshUiLutDirtyState();
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended Settings",
+        .section = "Options",
+        .group = "button-line-1",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ToneMapType", 2.f},
+              {"ColorGradeCoolness", 50.f},
+          });
           RefreshToneMapLutDirtyState();
           RefreshUiLutDirtyState();
         },

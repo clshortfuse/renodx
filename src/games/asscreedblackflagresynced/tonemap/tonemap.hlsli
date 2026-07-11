@@ -36,7 +36,7 @@ ImmortalsToneMapConfig CreateImmortalsToneMapConfig(
 }
 
 #define IMMORTALS_TONEMAP_GENERATOR(T)                                                                                                                                                                       \
-  T ApplyImmortalsToneMap(T untonemapped_ap1, ImmortalsToneMapConfig config, out T precompression_ap1) {                                                                                                    \
+  T ApplyImmortalsToneMap(T untonemapped_ap1, ImmortalsToneMapConfig config, out T precompression_ap1) {                                                                                                     \
     T input_scaled = abs(untonemapped_ap1 * 0.00999999977648258209228515625f);                                                                                                                               \
     T toe_ratio = input_scaled / config.toe_threshold;                                                                                                                                                       \
     T toe_ratio_sat = saturate(toe_ratio);                                                                                                                                                                   \
@@ -163,9 +163,7 @@ float3 Psycho23WeightedDeltaFromOpponentACC(float3 acc) {
 }
 
 float Psycho23SignedOpponentRetention(float white_progress, float retention_exponent) {
-  return 1.f - pow(
-                   saturate(white_progress),
-                   max(retention_exponent, PSYCHO23_LOCAL_EPSILON));
+  return 1.f - pow(saturate(white_progress), max(retention_exponent, PSYCHO23_LOCAL_EPSILON));
 }
 
 float3 Psycho23ApplySignedOpponentRetention(
@@ -192,7 +190,7 @@ float3 Psycho23ApplySignedOpponentRetention(
   }
 
   float3 source_neutral = adapted_neutral
-      * renodx::math::DivideSafe(source_yf, adapted_neutral_yf, 1.f);
+                          * renodx::math::DivideSafe(source_yf, adapted_neutral_yf, 1.f);
   float3 source_acc =
       Psycho23OpponentACCFromWeightedDelta(source_weighted - source_neutral)
       / source_yf;
@@ -231,8 +229,7 @@ float3 Psycho23ApplySignedOpponentRetention(
     return compressed_lms;
   }
 
-  float3 target_neutral = peak_weighted
-      * renodx::math::DivideSafe(target_yf, peak_weighted_yf, 1.f);
+  float3 target_neutral = peak_weighted * renodx::math::DivideSafe(target_yf, peak_weighted_yf, 1.f);
   float3 target_delta = Psycho23WeightedDeltaFromOpponentACC(
       float3(0.f, rg_out * target_yf, yv_out * target_yf));
   float3 output_lms = renodx::color::macleod_boynton::UnweighLMS(
@@ -246,8 +243,7 @@ float3 Psycho23ApplySignedOpponentRetention(
     return compressed_lms;
   }
 
-  return output_lms
-      * renodx::math::DivideSafe(compressed_yf, output_yf, 1.f);
+  return output_lms * renodx::math::DivideSafe(compressed_yf, output_yf, 1.f);
 }
 
 float3 ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
@@ -256,6 +252,7 @@ float3 ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
     float3 input_adaptive_state_lms,
     float3 output_anchor_lms,
     float3 peak_white_lms,
+    float3x3 gamut_bound_rgb_to_lms_weighted_mat,
     float hue_restore = 1.f,
     float gamut_compression = 1.f) {
   float anchor_yf = Psycho23YfFromLMS(output_anchor_lms);
@@ -295,7 +292,7 @@ float3 ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
     display_relative_weighted = Psycho23GamutCompressAdaptiveRelativeWeightedLMSBound(
         display_relative_weighted,
         input_adaptive_state_lms,
-        renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
+        gamut_bound_rgb_to_lms_weighted_mat,
         gamut_compression);
   }
 
@@ -303,4 +300,133 @@ float3 ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
       Psycho23FromAdaptiveRelativeWeightedLMS(
           display_relative_weighted,
           input_adaptive_state_lms));
+}
+
+float3 BuildToneMapLUTOutput(uint3 lut_coordinates, float exposure, float display_peak_nits, bool hdr_enabled) {
+  float3 untonemapped_ap1 = 32.f * exp2((float3(lut_coordinates) * 0.6451612710952759f) - 12.473931312561035f);
+
+  // The game uses twice the SDR exposure by default when HDR is enabled.
+  float diffuse_white_nits = (exposure / 64.f) * 203.f;
+  float target_peak_ratio = display_peak_nits / diffuse_white_nits;
+  float3 tonemapped_bt709;
+
+  if (RENODX_TONE_MAP_TYPE == 2.f) {
+    if (!hdr_enabled) {
+      target_peak_ratio = 1.f;
+    }
+#if 1
+    float slope = 1.5f;
+    float shoulder_start = 0.5f;
+    float toe_threshold = 0.05f;
+    float toe_slope = 1.325f;
+    float black_offset = 0.f;
+    ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(
+        slope,
+        toe_threshold,
+        shoulder_start,
+        toe_slope,
+        black_offset,
+        target_peak_ratio * 100.f);
+
+    float3 ap1_white_lms = renodx::color::lms::from::AP1(1.f.xxx);
+    float3 untonemapped_lms = max(renodx::color::lms::from::AP1(untonemapped_ap1), 0.f);
+    float3 precompression_lms;
+    float3 tonemapped_lms = ApplyImmortalsToneMap(untonemapped_lms / ap1_white_lms, config, precompression_lms) * ap1_white_lms / 100.f;
+    precompression_lms = precompression_lms / 100.f * ap1_white_lms;
+
+    // The curve has no isolated inflection between its convex toe and concave shoulder.
+    // Fix the output anchor at SDR midgray and solve its input anchor from the linear section.
+    const float output_anchor = 0.18f;
+    const float input_adaptive_anchor = 100.f * (toe_threshold + ((output_anchor - toe_threshold) / slope));
+    float3 input_adaptive_anchor_lms = renodx::color::lms::from::AP1(input_adaptive_anchor.xxx);
+    float3 output_anchor_lms = renodx::color::lms::from::AP1(output_anchor.xxx);
+    float3 peak_white_lms = target_peak_ratio * ap1_white_lms;
+
+    tonemapped_lms = ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
+        precompression_lms,
+        tonemapped_lms,
+        input_adaptive_anchor_lms,
+        output_anchor_lms,
+        peak_white_lms,
+        hdr_enabled ? renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT
+                    : renodx::color::macleod_boynton::BT709_TO_LMS_WEIGHTED_MAT,
+        1.f,
+        1.f);
+    tonemapped_bt709 = renodx::color::bt709::from::LMS(tonemapped_lms);
+#else
+    tonemapped_bt709 = renodx::tonemap::psychov::psychotm_test23(
+        renodx::color::bt709::from::AP1(untonemapped_ap1),
+        target_peak_ratio,
+        1.f,
+        1.f,
+        1.f,
+        1.f,
+        1.f,
+        1.f,
+        100.f,
+        1.f,
+        1.f,
+        0,
+        1.18f,
+        26.1406f.xxx,
+        0.3671f.xxx,
+        1.f,
+        1,
+        1.f,
+        0.f);
+#endif
+  } else {
+    if (RENODX_GAME_GAMMA_CORRECTION != 0.f) {
+      target_peak_ratio = renodx::color::correct::GammaSafe(target_peak_ratio, true);
+    }
+
+    float slope = 1.5f;
+    float shoulder_start = 0.5f;
+    float toe_threshold = 0.05f;
+    float toe_slope = 1.f;
+    float black_offset = 0.f;
+    if (!hdr_enabled) {
+      target_peak_ratio = 1.f;
+    }
+
+    ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(
+        slope,
+        toe_threshold,
+        shoulder_start,
+        toe_slope,
+        black_offset,
+        target_peak_ratio * 100.f);
+    float3 tonemapped_ap1 = ApplyImmortalsToneMap(untonemapped_ap1, config) / 100.f;
+    tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
+
+    const float output_anchor = 0.18f;
+    const float input_adaptive_anchor =
+        100.f * (toe_threshold + ((output_anchor - toe_threshold) / slope));
+    float3 input_adaptive_anchor_lms =
+        renodx::color::lms::from::AP1(input_adaptive_anchor.xxx);
+    float3 tonemapped_lms = renodx::color::lms::from::BT709(tonemapped_bt709);
+    float3 tonemapped_relative_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
+        tonemapped_lms,
+        input_adaptive_anchor_lms);
+    tonemapped_relative_weighted = Psycho23GamutCompressAdaptiveRelativeWeightedLMSBound(
+        tonemapped_relative_weighted,
+        input_adaptive_anchor_lms,
+        hdr_enabled ? renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT
+                    : renodx::color::macleod_boynton::BT709_TO_LMS_WEIGHTED_MAT,
+        1.f);
+    tonemapped_bt709 = renodx::color::bt709::from::LMS(
+        renodx::color::macleod_boynton::UnweighLMS(
+            Psycho23FromAdaptiveRelativeWeightedLMS(
+                tonemapped_relative_weighted,
+                input_adaptive_anchor_lms)));
+
+    if (RENODX_GAME_GAMMA_CORRECTION != 0.f) {
+      tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
+    }
+  }
+
+  if (hdr_enabled) {
+    return renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(tonemapped_bt709), diffuse_white_nits);
+  }
+  return renodx::color::gamma::EncodeSafe(tonemapped_bt709);
 }
