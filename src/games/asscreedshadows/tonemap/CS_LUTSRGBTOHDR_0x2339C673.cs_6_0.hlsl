@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./tonemap.hlsli"
 
 cbuffer _14_16 : register(b0, space5) {
   float4 _16_m0[1] : packoffset(c0);

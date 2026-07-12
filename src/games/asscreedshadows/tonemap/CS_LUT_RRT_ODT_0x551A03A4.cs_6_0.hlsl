@@ -1,4 +1,4 @@
-#include "./common.hlsli"
+#include "./tonemap.hlsli"
 
 RWTexture3D<float4> ColorGradingGenerateRRTODTLUT_Output : register(u0, space5);
 
@@ -34,14 +34,29 @@ void main(
   float _456;
   float _457;
 
-  if (RENODX_TONE_MAP_TYPE != 0.f) {
-    float3 untonemapped_ap1 = max(0, float3(_20, _21, _22)) * 32.f;
-    float peak_white = cb0_space5_003w;
-    float diffuse_white = cb0_space5_003z * (203.f / 92.f);  // offset so 203 paper white at exposure 0.0
+  // if (RENODX_TONE_MAP_TYPE != 0.f) {
+  //   float3 untonemapped_ap1 = float3(_20, _21, _22) * 32.f;
+  //   float peak_white = cb0_space5_003w;
+  //   float diffuse_white = cb0_space5_003z * (203.f / 92.f);  // offset so 203 paper white at exposure 0.0
 
-    ColorGradingGenerateRRTODTLUT_Output[SV_DispatchThreadID] = float4(ApplyToneMapEncodePQ(untonemapped_ap1, peak_white, diffuse_white), 1.f);
+  //   ColorGradingGenerateRRTODTLUT_Output[SV_DispatchThreadID] = float4(ApplyToneMapEncodePQ(untonemapped_ap1, peak_white, diffuse_white), 1.f);
+  //   return;
+  // }
+
+#if 1
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    float3 untonemapped_ap1 = 32.f * exp2((float3(SV_DispatchThreadID) * 0.6451612710952759f) - 12.473931312561035f);
+    ColorGradingGenerateRRTODTLUT_Output[SV_DispatchThreadID] = float4(
+        BuildToneMapLUTOutput(
+            untonemapped_ap1,
+            cb0_space5_003z,
+            cb0_space5_003w,
+            cb0_space5_003x != 0),
+        1.f);
     return;
   }
+
+#endif
 
   _20 *= cb0_space5_003z, _21 *= cb0_space5_003z, _22 *= cb0_space5_003z;
   switch ((int)(cb0_space5_003y)) {
