@@ -387,26 +387,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           },
       };
 
-      for (int i = 0; i < 4; i++) {
-        // Upgrade backbuffer-sized r8 render targets to fp16 so HDR values survive to output.
-        // Index-gated to limit upgrades to the first few matching RTs (avoids upgrading later UI canvases).
-        // NOTE: The swapchain itself is handled separately by the swapchain proxy/resize path.
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r8g8b8a8_unorm,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .index = i,
-            // View cloning: keeps original r8 for buffer->texture uploads; DX12 crashes without it.
-            .use_resource_view_cloning = true,
-            .usage_include = reshade::api::resource_usage::render_target,
-        });
-        renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r8g8b8a8_typeless,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .index = i,
-            .use_resource_view_cloning = true,
-            .usage_include = reshade::api::resource_usage::render_target,
-        });
-      }
+      // Upgrade r8 render targets to fp16 so HDR values survive to output.
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          // View cloning: keeps original r8 for buffer->texture uploads; DX12 crashes without it.
+          .use_resource_view_cloning = true,
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
 
       // Load and apply persisted SDR/HDR choice.
       renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, output_mode_setting);
