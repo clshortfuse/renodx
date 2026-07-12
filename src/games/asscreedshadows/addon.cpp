@@ -105,6 +105,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Requires HDR on in game"),
+        .section = "Tone Mapping",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Adjust paper white using the in-game exposure setting\n"
+                             "- Adjust peak brightness using the in-game peak setting"),
+        .section = "Tone Mapping",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Toggle in-game HDR setting or restart game to apply changes to Tone Mapper.",
         .section = "Tone Mapping",
         .tint = 0xFF0000,
@@ -115,12 +126,31 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type. Toggle in-game HDR setting or restart game to take effect.",
-        .labels = {"Vanilla", "Vanilla+", "ACES"},
+        .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Enhanced)"},
         .on_change_value = &OnToneMapLutControlledSettingChanged,
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = "Restart game to apply changes to UI Brightness.",
+        .section = "Miscellaneous",
+        .tint = 0xFF0000,
+        .is_visible = []() { return ui_lut_invalidated.load(std::memory_order_relaxed); },
+        .is_sticky = false,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ToneMapUINits",
+        .binding = &shader_injection.graphics_white_nits,
+        .default_value = 203.f,
+        .label = "UI Brightness",
+        .section = "UI",
+        .tooltip = "Sets the brightness of UI and HUD elements in nits. Requires a game restart to take effect.",
+        .min = 48.f,
+        .max = 500.f,
+        .on_change_value = &OnUiNitsSettingChanged,
     },
     new renodx::utils::settings::Setting{
         .key = "LocalToneMapType",
@@ -198,13 +228,14 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeBlowout",
-        .binding = &shader_injection.tone_map_blowout,
+        .key = "ColorGradeDechroma",
+        .binding = &shader_injection.tone_map_dechroma,
         .default_value = 0.f,
-        .label = "Blowout",
+        .label = "Dechroma",
         .section = "Color Grading",
         .tooltip = "Controls highlight desaturation due to overexposure.",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
@@ -215,7 +246,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .parse = [](float value) { return value * 0.02f; },
+        .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorFilterStrength",
@@ -229,7 +260,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
         .binding = &shader_injection.custom_bloom,
-        .default_value = 50.f,
+        .default_value = 75.f,
         .label = "Bloom",
         .section = "Effects",
         .max = 100.f,
@@ -238,31 +269,12 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "FxBloomScaling",
         .binding = &shader_injection.custom_bloom_scaling,
-        .default_value = 100.f,
+        .default_value = 0.f,
         .label = "Bloom Scaling",
         .section = "Effects",
         .tooltip = "Scales the black floor of the bloom effect.",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "Restart game to apply changes to UI Brightness.",
-        .section = "Miscellaneous",
-        .tint = 0xFF0000,
-        .is_visible = []() { return ui_lut_invalidated.load(std::memory_order_relaxed); },
-        .is_sticky = false,
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapUINits",
-        .binding = &shader_injection.graphics_white_nits,
-        .default_value = 203.f,
-        .label = "UI Brightness",
-        .section = "Miscellaneous",
-        .tooltip = "Sets the brightness of UI and HUD elements in nits. Requires a game restart to take effect.",
-        .min = 48.f,
-        .max = 500.f,
-        .on_change_value = &OnUiNitsSettingChanged,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -340,17 +352,6 @@ renodx::utils::settings::Settings settings = {
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
     },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Requires HDR on in game"),
-        .section = "About",
-    },
-    new renodx::utils::settings::Setting{
-        .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = std::string("- Adjust paper white using the in-game exposure setting\n"
-                             "- Adjust peak brightness using the in-game peak setting"),
-        .section = "About",
-    },
 };
 
 void OnPresetOff() {
@@ -364,7 +365,7 @@ void OnPresetOff() {
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 50.f},
       {"ColorGradeSaturation", 50.f},
-      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeDechroma", 0.f},
       {"ColorGradeFlare", 0.f},
       {"ColorFilterStrength", 100.f},
       {"FxBloom", 100.f},
