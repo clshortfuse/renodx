@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2024 Musa Haji
- * Copyright (C) 2024 Carlos Lopez
+ * Copyright (C) 2026 Musa Haji
  * SPDX-License-Identifier: MIT
  */
 
