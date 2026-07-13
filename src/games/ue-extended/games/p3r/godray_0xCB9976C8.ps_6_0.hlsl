@@ -197,8 +197,7 @@ float4 main(
   if (PROCESSING_PATH == 1.f) {
     SV_Target.rgb = UpgradeToneMapAndScaleScene(SV_Target.rgb, tonemapped);
   }
-  SV_Target.xyz = tonemapped.xyz;
-  
+
   SV_Target.w = 1.0f;
   return SV_Target;
 }
