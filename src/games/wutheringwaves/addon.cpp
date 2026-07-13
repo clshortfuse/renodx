@@ -708,7 +708,7 @@ const std::map<Preset, std::map<std::string, float>> PRESET_VALUES = {
       {"ColorGradeStrength", 100.f},
       {"WuWaTonemapper", 3.f},
       {"WuWaTonemapStrength", 50.f},
-      {"WuWaLUTStrength", 100.f},
+      {"WuWaLUTStrength", 50.f},
       {"ColorGradeHueCorrection", 0.f},
       {"ColorGradeSaturationCorrection", 100.f},
       {"ColorGradeHueShift", 50.f},
