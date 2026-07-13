@@ -2,28 +2,6 @@
 
 Texture2D<float4> t0 : register(t0);
 
-Texture2D<float4> t1 : register(t1);
-
-Texture2D<float4> t2 : register(t2);
-
-Texture2D<float4> t3 : register(t3);
-
-Texture2D<float4> t4 : register(t4);
-
-Texture2D<float4> t5 : register(t5);
-
-Texture2D<float4> t6 : register(t6);
-
-Texture2D<float4> t7 : register(t7);
-
-Texture2D<float4> t8 : register(t8);
-
-Texture2D<float4> t9 : register(t9);
-
-Texture2D<float4> t10 : register(t10);
-
-Texture2D<float4> t11 : register(t11);
-
 cbuffer cb0 : register(b0) {
   float4 View_000[4] : packoffset(c000.x);
   float4 View_064[4] : packoffset(c004.x);
@@ -278,114 +256,102 @@ cbuffer cb0 : register(b0) {
   float4 View_4080[4] : packoffset(c255.x);
   float4 View_4144[2] : packoffset(c259.x);
   int View_4176 : packoffset(c261.x);
-  float View_4180 : packoffset(c261.y);
-  float View_4184 : packoffset(c261.z);
-  float View_4188 : packoffset(c261.w);
-  float4 View_4192 : packoffset(c262.x);
-  float2 View_4208 : packoffset(c263.x);
-  float View_4216 : packoffset(c263.z);
-  float View_4220 : packoffset(c263.w);
-  float4 View_4224 : packoffset(c264.x);
-  int View_4240 : packoffset(c265.x);
-  float View_4244 : packoffset(c265.y);
-  float View_4248 : packoffset(c265.z);
-  float View_4252 : packoffset(c265.w);
-  float4 View_4256 : packoffset(c266.x);
-  int View_4272 : packoffset(c267.x);
-  int View_4276 : packoffset(c267.y);
-  int View_4280 : packoffset(c267.z);
-  float View_4284 : packoffset(c267.w);
-  float View_4288 : packoffset(c268.x);
-  float View_4292 : packoffset(c268.y);
-  float View_4296 : packoffset(c268.z);
+  int View_4180 : packoffset(c261.y);
+  int View_4184 : packoffset(c261.z);
+  int View_4188 : packoffset(c261.w);
+  int View_4192 : packoffset(c262.x);
+  float View_4196 : packoffset(c262.y);
+  float View_4200 : packoffset(c262.z);
+  float View_4204 : packoffset(c262.w);
+  float4 View_4208 : packoffset(c263.x);
+  float2 View_4224 : packoffset(c264.x);
+  float View_4232 : packoffset(c264.z);
+  float View_4236 : packoffset(c264.w);
+  float4 View_4240 : packoffset(c265.x);
+  int View_4256 : packoffset(c266.x);
+  float View_4260 : packoffset(c266.y);
+  float View_4264 : packoffset(c266.z);
+  float View_4268 : packoffset(c266.w);
+  float4 View_4272 : packoffset(c267.x);
+  int View_4288 : packoffset(c268.x);
+  int View_4292 : packoffset(c268.y);
+  int View_4296 : packoffset(c268.z);
   float View_4300 : packoffset(c268.w);
-  float4 View_4304 : packoffset(c269.x);
+  float View_4304 : packoffset(c269.x);
+  float View_4308 : packoffset(c269.y);
+  float View_4312 : packoffset(c269.z);
+  float View_4316 : packoffset(c269.w);
   float4 View_4320 : packoffset(c270.x);
   float4 View_4336 : packoffset(c271.x);
   float4 View_4352 : packoffset(c272.x);
   float4 View_4368 : packoffset(c273.x);
   float4 View_4384 : packoffset(c274.x);
-  int View_4400 : packoffset(c275.x);
-  float View_4404 : packoffset(c275.y);
-  float View_4408 : packoffset(c275.z);
-  float View_4412 : packoffset(c275.w);
-  float4 View_4416 : packoffset(c276.x);
+  float4 View_4400 : packoffset(c275.x);
+  int View_4416 : packoffset(c276.x);
+  float View_4420 : packoffset(c276.y);
+  float View_4424 : packoffset(c276.z);
+  float View_4428 : packoffset(c276.w);
   float4 View_4432 : packoffset(c277.x);
-  float View_4448 : packoffset(c278.x);
-  float View_4452 : packoffset(c278.y);
-  float View_4456 : packoffset(c278.z);
-  float View_4460 : packoffset(c278.w);
-  int View_4464 : packoffset(c279.x);
+  float4 View_4448 : packoffset(c278.x);
+  float View_4464 : packoffset(c279.x);
   float View_4468 : packoffset(c279.y);
   float View_4472 : packoffset(c279.z);
   float View_4476 : packoffset(c279.w);
-  float4 View_4480 : packoffset(c280.x);
-  float View_4496 : packoffset(c281.x);
-  float View_4500 : packoffset(c281.y);
-  float View_4504 : packoffset(c281.z);
-  float View_4508 : packoffset(c281.w);
-  float View_4512 : packoffset(c282.x);
-  float View_4516 : packoffset(c282.y);
-  float View_4520 : packoffset(c282.z);
-  float View_4524 : packoffset(c282.w);
-  float4 View_4528 : packoffset(c283.x);
-  int View_4544 : packoffset(c284.x);
-  int View_4548 : packoffset(c284.y);
-  int View_4552 : packoffset(c284.z);
+  float View_4480 : packoffset(c280.x);
+  int View_4484 : packoffset(c280.y);
+  float View_4488 : packoffset(c280.z);
+  float View_4492 : packoffset(c280.w);
+  float4 View_4496 : packoffset(c281.x);
+  float4 View_4512 : packoffset(c282.x);
+  float View_4528 : packoffset(c283.x);
+  float View_4532 : packoffset(c283.y);
+  float View_4536 : packoffset(c283.z);
+  float View_4540 : packoffset(c283.w);
+  float View_4544 : packoffset(c284.x);
+  float View_4548 : packoffset(c284.y);
+  float View_4552 : packoffset(c284.z);
   float View_4556 : packoffset(c284.w);
-  float View_4560 : packoffset(c285.x);
-  float View_4564 : packoffset(c285.y);
-  float View_4568 : packoffset(c285.z);
-  float View_4572 : packoffset(c285.w);
-  float4 View_4576 : packoffset(c286.x);
-  float4 View_4592 : packoffset(c287.x);
+  float4 View_4560 : packoffset(c285.x);
+  int View_4576 : packoffset(c286.x);
+  int View_4580 : packoffset(c286.y);
+  int View_4584 : packoffset(c286.z);
+  float View_4588 : packoffset(c286.w);
+  float View_4592 : packoffset(c287.x);
+  float View_4596 : packoffset(c287.y);
+  float View_4600 : packoffset(c287.z);
+  float View_4604 : packoffset(c287.w);
   float4 View_4608 : packoffset(c288.x);
   float4 View_4624 : packoffset(c289.x);
-  float View_4640 : packoffset(c290.x);
-  float View_4644 : packoffset(c290.y);
-  float View_4648 : packoffset(c290.z);
-  float View_4652 : packoffset(c290.w);
+  float4 View_4640 : packoffset(c290.x);
   float4 View_4656 : packoffset(c291.x);
-  float4 View_4672 : packoffset(c292.x);
+  float View_4672 : packoffset(c292.x);
+  float View_4676 : packoffset(c292.y);
+  float View_4680 : packoffset(c292.z);
+  float View_4684 : packoffset(c292.w);
   float4 View_4688 : packoffset(c293.x);
   float4 View_4704 : packoffset(c294.x);
-  float4 View_4720 : packoffset(c295.x);
-  float View_4736 : packoffset(c296.x);
-  float View_4740 : packoffset(c296.y);
-  float View_4744 : packoffset(c296.z);
-  float View_4748 : packoffset(c296.w);
+  float View_4720 : packoffset(c295.x);
+  float View_4724 : packoffset(c295.y);
+  float View_4728 : packoffset(c295.z);
+  float View_4732 : packoffset(c295.w);
+  float4 View_4736 : packoffset(c296.x);
   float4 View_4752 : packoffset(c297.x);
   float4 View_4768 : packoffset(c298.x);
-  float View_4784 : packoffset(c299.x);
-  float View_4788 : packoffset(c299.y);
-  float View_4792 : packoffset(c299.z);
-  float View_4796 : packoffset(c299.w);
+  float4 View_4784 : packoffset(c299.x);
   float4 View_4800 : packoffset(c300.x);
-  float4 View_4816 : packoffset(c301.x);
-  float View_4832 : packoffset(c302.x);
-  float View_4836 : packoffset(c302.y);
-  float View_4840 : packoffset(c302.z);
-  float View_4844 : packoffset(c302.w);
-  float View_4848 : packoffset(c303.x);
-  float View_4852 : packoffset(c303.y);
-  float View_4856 : packoffset(c303.z);
-  float View_4860 : packoffset(c303.w);
-  float View_4864 : packoffset(c304.x);
-  float View_4868 : packoffset(c304.y);
-  float View_4872 : packoffset(c304.z);
-  float View_4876 : packoffset(c304.w);
+  float View_4816 : packoffset(c301.x);
+  float View_4820 : packoffset(c301.y);
+  float View_4824 : packoffset(c301.z);
+  float View_4828 : packoffset(c301.w);
+  float4 View_4832 : packoffset(c302.x);
+  float4 View_4848 : packoffset(c303.x);
+  float4 View_4864 : packoffset(c304.x);
   float View_4880 : packoffset(c305.x);
   float View_4884 : packoffset(c305.y);
   float View_4888 : packoffset(c305.z);
   float View_4892 : packoffset(c305.w);
-  float View_4896 : packoffset(c306.x);
-  float View_4900 : packoffset(c306.y);
-  float View_4904 : packoffset(c306.z);
-  float View_4908 : packoffset(c306.w);
-  float View_4912 : packoffset(c307.x);
-  float View_4916 : packoffset(c307.y);
-  float View_4920 : packoffset(c307.z);
-  float View_4924 : packoffset(c307.w);
+  float4 View_4896 : packoffset(c306.x);
+  float4 View_4912 : packoffset(c307.x);
   float View_4928 : packoffset(c308.x);
   float View_4932 : packoffset(c308.y);
   float View_4936 : packoffset(c308.z);
@@ -530,12 +496,18 @@ cbuffer cb0 : register(b0) {
   float View_5492 : packoffset(c343.y);
   float View_5496 : packoffset(c343.z);
   float View_5500 : packoffset(c343.w);
-  float4 View_5504 : packoffset(c344.x);
+  float View_5504 : packoffset(c344.x);
+  float View_5508 : packoffset(c344.y);
+  float View_5512 : packoffset(c344.z);
+  float View_5516 : packoffset(c344.w);
   float View_5520 : packoffset(c345.x);
   float View_5524 : packoffset(c345.y);
   float View_5528 : packoffset(c345.z);
   float View_5532 : packoffset(c345.w);
-  float4 View_5536 : packoffset(c346.x);
+  float View_5536 : packoffset(c346.x);
+  float View_5540 : packoffset(c346.y);
+  float View_5544 : packoffset(c346.z);
+  float View_5548 : packoffset(c346.w);
   float View_5552 : packoffset(c347.x);
   float View_5556 : packoffset(c347.y);
   float View_5560 : packoffset(c347.z);
@@ -548,16 +520,17 @@ cbuffer cb0 : register(b0) {
   float View_5588 : packoffset(c349.y);
   float View_5592 : packoffset(c349.z);
   float View_5596 : packoffset(c349.w);
-  float2 View_5600 : packoffset(c350.x);
-  float View_5608 : packoffset(c350.z);
-  float View_5612 : packoffset(c350.w);
-  float3 View_5616 : packoffset(c351.x);
+  float4 View_5600 : packoffset(c350.x);
+  float View_5616 : packoffset(c351.x);
+  float View_5620 : packoffset(c351.y);
+  float View_5624 : packoffset(c351.z);
   float View_5628 : packoffset(c351.w);
-  float3 View_5632 : packoffset(c352.x);
-  float View_5644 : packoffset(c352.w);
-  float3 View_5648 : packoffset(c353.x);
+  float4 View_5632 : packoffset(c352.x);
+  float View_5648 : packoffset(c353.x);
+  float View_5652 : packoffset(c353.y);
+  float View_5656 : packoffset(c353.z);
   float View_5660 : packoffset(c353.w);
-  float View_5664 : packoffset(c354.x);
+  int View_5664 : packoffset(c354.x);
   float View_5668 : packoffset(c354.y);
   float View_5672 : packoffset(c354.z);
   float View_5676 : packoffset(c354.w);
@@ -565,10 +538,36 @@ cbuffer cb0 : register(b0) {
   float View_5684 : packoffset(c355.y);
   float View_5688 : packoffset(c355.z);
   float View_5692 : packoffset(c355.w);
-  float4 View_5696 : packoffset(c356.x);
+  float View_5696 : packoffset(c356.x);
+  float View_5700 : packoffset(c356.y);
+  float2 View_5704 : packoffset(c356.z);
   float3 View_5712 : packoffset(c357.x);
   float View_5724 : packoffset(c357.w);
-  float View_5728 : packoffset(c358.x);
+  float3 View_5728 : packoffset(c358.x);
+  float View_5740 : packoffset(c358.w);
+  float3 View_5744 : packoffset(c359.x);
+  float View_5756 : packoffset(c359.w);
+  float View_5760 : packoffset(c360.x);
+  float View_5764 : packoffset(c360.y);
+  float View_5768 : packoffset(c360.z);
+  float View_5772 : packoffset(c360.w);
+  float View_5776 : packoffset(c361.x);
+  float View_5780 : packoffset(c361.y);
+  float View_5784 : packoffset(c361.z);
+  float View_5788 : packoffset(c361.w);
+  float4 View_5792 : packoffset(c362.x);
+  float3 View_5808 : packoffset(c363.x);
+  float View_5820 : packoffset(c363.w);
+  float View_5824 : packoffset(c364.x);
+  float View_5828 : packoffset(c364.y);
+  float View_5832 : packoffset(c364.z);
+  float View_5836 : packoffset(c364.w);
+  float3 View_5840 : packoffset(c365.x);
+  float View_5852 : packoffset(c365.w);
+  float View_5856 : packoffset(c366.x);
+  float View_5860 : packoffset(c366.y);
+  float View_5864 : packoffset(c366.z);
+  float View_5868 : packoffset(c366.w);
 };
 
 cbuffer cb1 : register(b1) {
@@ -832,55 +831,47 @@ cbuffer cb1 : register(b1) {
   float TranslucentBasePass_3172 : packoffset(c198.y);
   float TranslucentBasePass_3176 : packoffset(c198.z);
   float TranslucentBasePass_3180 : packoffset(c198.w);
-  float3 TranslucentBasePass_3184 : packoffset(c199.x);
+  float TranslucentBasePass_3184 : packoffset(c199.x);
+  float TranslucentBasePass_3188 : packoffset(c199.y);
+  float TranslucentBasePass_3192 : packoffset(c199.z);
   float TranslucentBasePass_3196 : packoffset(c199.w);
   float TranslucentBasePass_3200 : packoffset(c200.x);
   float TranslucentBasePass_3204 : packoffset(c200.y);
   float TranslucentBasePass_3208 : packoffset(c200.z);
   float TranslucentBasePass_3212 : packoffset(c200.w);
-  float TranslucentBasePass_3216 : packoffset(c201.x);
-  float TranslucentBasePass_3220 : packoffset(c201.y);
-  float TranslucentBasePass_3224 : packoffset(c201.z);
+  float3 TranslucentBasePass_3216 : packoffset(c201.x);
   float TranslucentBasePass_3228 : packoffset(c201.w);
-  float4 TranslucentBasePass_3232 : packoffset(c202.x);
-  float4 TranslucentBasePass_3248 : packoffset(c203.x);
-  float4 TranslucentBasePass_3264 : packoffset(c204.x);
+  float TranslucentBasePass_3232 : packoffset(c202.x);
+  float TranslucentBasePass_3236 : packoffset(c202.y);
+  float TranslucentBasePass_3240 : packoffset(c202.z);
+  float TranslucentBasePass_3244 : packoffset(c202.w);
+  float TranslucentBasePass_3248 : packoffset(c203.x);
+  float TranslucentBasePass_3252 : packoffset(c203.y);
+  float TranslucentBasePass_3256 : packoffset(c203.z);
+  float TranslucentBasePass_3260 : packoffset(c203.w);
+  float TranslucentBasePass_3264 : packoffset(c204.x);
+  float TranslucentBasePass_3268 : packoffset(c204.y);
+  float TranslucentBasePass_3272 : packoffset(c204.z);
+  float TranslucentBasePass_3276 : packoffset(c204.w);
   float4 TranslucentBasePass_3280 : packoffset(c205.x);
-  float4 TranslucentBasePass_3296 : packoffset(c206.x);
-  float4 TranslucentBasePass_3312 : packoffset(c207.x);
-  float2 TranslucentBasePass_3328 : packoffset(c208.x);
-  float TranslucentBasePass_3336 : packoffset(c208.z);
+  float TranslucentBasePass_3296 : packoffset(c206.x);
+  float TranslucentBasePass_3300 : packoffset(c206.y);
+  float TranslucentBasePass_3304 : packoffset(c206.z);
+  float TranslucentBasePass_3308 : packoffset(c206.w);
+  float TranslucentBasePass_3312 : packoffset(c207.x);
+  float TranslucentBasePass_3316 : packoffset(c207.y);
+  float TranslucentBasePass_3320 : packoffset(c207.z);
+  float TranslucentBasePass_3324 : packoffset(c207.w);
+  float3 TranslucentBasePass_3328 : packoffset(c208.x);
   float TranslucentBasePass_3340 : packoffset(c208.w);
-  float4 TranslucentBasePass_3344 : packoffset(c209.x);
-  float TranslucentBasePass_3360 : packoffset(c210.x);
-  float TranslucentBasePass_3364 : packoffset(c210.y);
-  float TranslucentBasePass_3368 : packoffset(c210.z);
-  float TranslucentBasePass_3372 : packoffset(c210.w);
-  float TranslucentBasePass_3376 : packoffset(c211.x);
-  float TranslucentBasePass_3380 : packoffset(c211.y);
-  float TranslucentBasePass_3384 : packoffset(c211.z);
-  float TranslucentBasePass_3388 : packoffset(c211.w);
-  float TranslucentBasePass_3392 : packoffset(c212.x);
-  float TranslucentBasePass_3396 : packoffset(c212.y);
-  float TranslucentBasePass_3400 : packoffset(c212.z);
-  float TranslucentBasePass_3404 : packoffset(c212.w);
+  float4 TranslucentBasePass_3344[4] : packoffset(c209.x);
   float4 TranslucentBasePass_3408 : packoffset(c213.x);
   float4 TranslucentBasePass_3424 : packoffset(c214.x);
   float4 TranslucentBasePass_3440 : packoffset(c215.x);
-  float TranslucentBasePass_3456 : packoffset(c216.x);
-  float TranslucentBasePass_3460 : packoffset(c216.y);
-  float TranslucentBasePass_3464 : packoffset(c216.z);
-  float TranslucentBasePass_3468 : packoffset(c216.w);
-  float TranslucentBasePass_3472 : packoffset(c217.x);
-  float TranslucentBasePass_3476 : packoffset(c217.y);
-  float TranslucentBasePass_3480 : packoffset(c217.z);
-  float TranslucentBasePass_3484 : packoffset(c217.w);
-  float TranslucentBasePass_3488 : packoffset(c218.x);
-  float TranslucentBasePass_3492 : packoffset(c218.y);
-  float TranslucentBasePass_3496 : packoffset(c218.z);
-  float TranslucentBasePass_3500 : packoffset(c218.w);
-  float TranslucentBasePass_3504 : packoffset(c219.x);
-  float TranslucentBasePass_3508 : packoffset(c219.y);
+  float4 TranslucentBasePass_3456 : packoffset(c216.x);
+  float4 TranslucentBasePass_3472 : packoffset(c217.x);
+  float4 TranslucentBasePass_3488 : packoffset(c218.x);
+  float2 TranslucentBasePass_3504 : packoffset(c219.x);
   float TranslucentBasePass_3512 : packoffset(c219.z);
   float TranslucentBasePass_3516 : packoffset(c219.w);
   float4 TranslucentBasePass_3520 : packoffset(c220.x);
@@ -892,13 +883,13 @@ cbuffer cb1 : register(b1) {
   float TranslucentBasePass_3556 : packoffset(c222.y);
   float TranslucentBasePass_3560 : packoffset(c222.z);
   float TranslucentBasePass_3564 : packoffset(c222.w);
-  float4 TranslucentBasePass_3568 : packoffset(c223.x);
+  float TranslucentBasePass_3568 : packoffset(c223.x);
+  float TranslucentBasePass_3572 : packoffset(c223.y);
+  float TranslucentBasePass_3576 : packoffset(c223.z);
+  float TranslucentBasePass_3580 : packoffset(c223.w);
   float4 TranslucentBasePass_3584 : packoffset(c224.x);
   float4 TranslucentBasePass_3600 : packoffset(c225.x);
-  float TranslucentBasePass_3616 : packoffset(c226.x);
-  float TranslucentBasePass_3620 : packoffset(c226.y);
-  float TranslucentBasePass_3624 : packoffset(c226.z);
-  float TranslucentBasePass_3628 : packoffset(c226.w);
+  float4 TranslucentBasePass_3616 : packoffset(c226.x);
   float TranslucentBasePass_3632 : packoffset(c227.x);
   float TranslucentBasePass_3636 : packoffset(c227.y);
   float TranslucentBasePass_3640 : packoffset(c227.z);
@@ -907,31 +898,29 @@ cbuffer cb1 : register(b1) {
   float TranslucentBasePass_3652 : packoffset(c228.y);
   float TranslucentBasePass_3656 : packoffset(c228.z);
   float TranslucentBasePass_3660 : packoffset(c228.w);
-  float3 TranslucentBasePass_3664 : packoffset(c229.x);
+  float TranslucentBasePass_3664 : packoffset(c229.x);
+  float TranslucentBasePass_3668 : packoffset(c229.y);
+  float TranslucentBasePass_3672 : packoffset(c229.z);
   float TranslucentBasePass_3676 : packoffset(c229.w);
   float TranslucentBasePass_3680 : packoffset(c230.x);
   float TranslucentBasePass_3684 : packoffset(c230.y);
   float TranslucentBasePass_3688 : packoffset(c230.z);
   float TranslucentBasePass_3692 : packoffset(c230.w);
-  float TranslucentBasePass_3696 : packoffset(c231.x);
-  float TranslucentBasePass_3700 : packoffset(c231.y);
-  float TranslucentBasePass_3704 : packoffset(c231.z);
-  float TranslucentBasePass_3708 : packoffset(c231.w);
+  float4 TranslucentBasePass_3696 : packoffset(c231.x);
   float TranslucentBasePass_3712 : packoffset(c232.x);
   float TranslucentBasePass_3716 : packoffset(c232.y);
-  float2 TranslucentBasePass_3720 : packoffset(c232.z);
-  int TranslucentBasePass_3728 : packoffset(c233.x);
-  int TranslucentBasePass_3732 : packoffset(c233.y);
+  float TranslucentBasePass_3720 : packoffset(c232.z);
+  float TranslucentBasePass_3724 : packoffset(c232.w);
+  float TranslucentBasePass_3728 : packoffset(c233.x);
+  float TranslucentBasePass_3732 : packoffset(c233.y);
   float TranslucentBasePass_3736 : packoffset(c233.z);
-  int TranslucentBasePass_3740 : packoffset(c233.w);
-  float TranslucentBasePass_3744 : packoffset(c234.x);
-  float TranslucentBasePass_3748 : packoffset(c234.y);
-  float TranslucentBasePass_3752 : packoffset(c234.z);
-  float TranslucentBasePass_3756 : packoffset(c234.w);
+  float TranslucentBasePass_3740 : packoffset(c233.w);
+  float4 TranslucentBasePass_3744 : packoffset(c234.x);
   float4 TranslucentBasePass_3760 : packoffset(c235.x);
-  float3 TranslucentBasePass_3776 : packoffset(c236.x);
-  float TranslucentBasePass_3788 : packoffset(c236.w);
-  float3 TranslucentBasePass_3792 : packoffset(c237.x);
+  float4 TranslucentBasePass_3776 : packoffset(c236.x);
+  float TranslucentBasePass_3792 : packoffset(c237.x);
+  float TranslucentBasePass_3796 : packoffset(c237.y);
+  float TranslucentBasePass_3800 : packoffset(c237.z);
   float TranslucentBasePass_3804 : packoffset(c237.w);
   float TranslucentBasePass_3808 : packoffset(c238.x);
   float TranslucentBasePass_3812 : packoffset(c238.y);
@@ -949,9 +938,7 @@ cbuffer cb1 : register(b1) {
   float TranslucentBasePass_3860 : packoffset(c241.y);
   float TranslucentBasePass_3864 : packoffset(c241.z);
   float TranslucentBasePass_3868 : packoffset(c241.w);
-  float TranslucentBasePass_3872 : packoffset(c242.x);
-  float TranslucentBasePass_3876 : packoffset(c242.y);
-  float TranslucentBasePass_3880 : packoffset(c242.z);
+  float3 TranslucentBasePass_3872 : packoffset(c242.x);
   float TranslucentBasePass_3884 : packoffset(c242.w);
   float TranslucentBasePass_3888 : packoffset(c243.x);
   float TranslucentBasePass_3892 : packoffset(c243.y);
@@ -965,59 +952,37 @@ cbuffer cb1 : register(b1) {
   float TranslucentBasePass_3924 : packoffset(c245.y);
   float TranslucentBasePass_3928 : packoffset(c245.z);
   float TranslucentBasePass_3932 : packoffset(c245.w);
-  float TranslucentBasePass_3936 : packoffset(c246.x);
-  float TranslucentBasePass_3940 : packoffset(c246.y);
-  float TranslucentBasePass_3944 : packoffset(c246.z);
-  float TranslucentBasePass_3948 : packoffset(c246.w);
+  float4 TranslucentBasePass_3936 : packoffset(c246.x);
   float TranslucentBasePass_3952 : packoffset(c247.x);
   float TranslucentBasePass_3956 : packoffset(c247.y);
   float TranslucentBasePass_3960 : packoffset(c247.z);
   float TranslucentBasePass_3964 : packoffset(c247.w);
-  float4 TranslucentBasePass_3968 : packoffset(c248.x);
-  float4 TranslucentBasePass_3984 : packoffset(c249.x);
-  float TranslucentBasePass_4000 : packoffset(c250.x);
-  float TranslucentBasePass_4004 : packoffset(c250.y);
-  float TranslucentBasePass_4008 : packoffset(c250.z);
-  float TranslucentBasePass_4012 : packoffset(c250.w);
-  float TranslucentBasePass_4016 : packoffset(c251.x);
-  float TranslucentBasePass_4020 : packoffset(c251.y);
-  float TranslucentBasePass_4024 : packoffset(c251.z);
-  float TranslucentBasePass_4028 : packoffset(c251.w);
-  float TranslucentBasePass_4032 : packoffset(c252.x);
-  float TranslucentBasePass_4036 : packoffset(c252.y);
-  float TranslucentBasePass_4040 : packoffset(c252.z);
-  float TranslucentBasePass_4044 : packoffset(c252.w);
-  float TranslucentBasePass_4048 : packoffset(c253.x);
-  float TranslucentBasePass_4052 : packoffset(c253.y);
-  float TranslucentBasePass_4056 : packoffset(c253.z);
-  float TranslucentBasePass_4060 : packoffset(c253.w);
+  float TranslucentBasePass_3968 : packoffset(c248.x);
+  float TranslucentBasePass_3972 : packoffset(c248.y);
+  float TranslucentBasePass_3976 : packoffset(c248.z);
+  float TranslucentBasePass_3980 : packoffset(c248.w);
+  float3 TranslucentBasePass_3984 : packoffset(c249.x);
+  float TranslucentBasePass_3996 : packoffset(c249.w);
+  float4 TranslucentBasePass_4000[4] : packoffset(c250.x);
   float TranslucentBasePass_4064 : packoffset(c254.x);
   float TranslucentBasePass_4068 : packoffset(c254.y);
-  float TranslucentBasePass_4072 : packoffset(c254.z);
-  float TranslucentBasePass_4076 : packoffset(c254.w);
-  float TranslucentBasePass_4080 : packoffset(c255.x);
-  float TranslucentBasePass_4084 : packoffset(c255.y);
+  float2 TranslucentBasePass_4072 : packoffset(c254.z);
+  int TranslucentBasePass_4080 : packoffset(c255.x);
+  int TranslucentBasePass_4084 : packoffset(c255.y);
   float TranslucentBasePass_4088 : packoffset(c255.z);
-  float TranslucentBasePass_4092 : packoffset(c255.w);
+  int TranslucentBasePass_4092 : packoffset(c255.w);
   float TranslucentBasePass_4096 : packoffset(c256.x);
   float TranslucentBasePass_4100 : packoffset(c256.y);
   float TranslucentBasePass_4104 : packoffset(c256.z);
   float TranslucentBasePass_4108 : packoffset(c256.w);
-  float TranslucentBasePass_4112 : packoffset(c257.x);
-  float TranslucentBasePass_4116 : packoffset(c257.y);
-  float TranslucentBasePass_4120 : packoffset(c257.z);
-  float TranslucentBasePass_4124 : packoffset(c257.w);
-  float TranslucentBasePass_4128 : packoffset(c258.x);
-  float TranslucentBasePass_4132 : packoffset(c258.y);
-  float TranslucentBasePass_4136 : packoffset(c258.z);
+  float4 TranslucentBasePass_4112 : packoffset(c257.x);
+  float3 TranslucentBasePass_4128 : packoffset(c258.x);
   float TranslucentBasePass_4140 : packoffset(c258.w);
-  float TranslucentBasePass_4144 : packoffset(c259.x);
-  float TranslucentBasePass_4148 : packoffset(c259.y);
-  float TranslucentBasePass_4152 : packoffset(c259.z);
+  float3 TranslucentBasePass_4144 : packoffset(c259.x);
   float TranslucentBasePass_4156 : packoffset(c259.w);
   float TranslucentBasePass_4160 : packoffset(c260.x);
   float TranslucentBasePass_4164 : packoffset(c260.y);
-  int TranslucentBasePass_4168 : packoffset(c260.z);
+  float TranslucentBasePass_4168 : packoffset(c260.z);
   float TranslucentBasePass_4172 : packoffset(c260.w);
   float TranslucentBasePass_4176 : packoffset(c261.x);
   float TranslucentBasePass_4180 : packoffset(c261.y);
@@ -1039,13 +1004,25 @@ cbuffer cb1 : register(b1) {
   float TranslucentBasePass_4244 : packoffset(c265.y);
   float TranslucentBasePass_4248 : packoffset(c265.z);
   float TranslucentBasePass_4252 : packoffset(c265.w);
-  float4 TranslucentBasePass_4256 : packoffset(c266.x);
+  float TranslucentBasePass_4256 : packoffset(c266.x);
+  float TranslucentBasePass_4260 : packoffset(c266.y);
+  float TranslucentBasePass_4264 : packoffset(c266.z);
+  float TranslucentBasePass_4268 : packoffset(c266.w);
   float TranslucentBasePass_4272 : packoffset(c267.x);
   float TranslucentBasePass_4276 : packoffset(c267.y);
   float TranslucentBasePass_4280 : packoffset(c267.z);
   float TranslucentBasePass_4284 : packoffset(c267.w);
-  float4 TranslucentBasePass_4288[4] : packoffset(c268.x);
-  int TranslucentBasePass_4352 : packoffset(c272.x);
+  float TranslucentBasePass_4288 : packoffset(c268.x);
+  float TranslucentBasePass_4292 : packoffset(c268.y);
+  float TranslucentBasePass_4296 : packoffset(c268.z);
+  float TranslucentBasePass_4300 : packoffset(c268.w);
+  float TranslucentBasePass_4304 : packoffset(c269.x);
+  float TranslucentBasePass_4308 : packoffset(c269.y);
+  float TranslucentBasePass_4312 : packoffset(c269.z);
+  float TranslucentBasePass_4316 : packoffset(c269.w);
+  float4 TranslucentBasePass_4320 : packoffset(c270.x);
+  float4 TranslucentBasePass_4336 : packoffset(c271.x);
+  float TranslucentBasePass_4352 : packoffset(c272.x);
   float TranslucentBasePass_4356 : packoffset(c272.y);
   float TranslucentBasePass_4360 : packoffset(c272.z);
   float TranslucentBasePass_4364 : packoffset(c272.w);
@@ -1060,6 +1037,93 @@ cbuffer cb1 : register(b1) {
   float TranslucentBasePass_4400 : packoffset(c275.x);
   float TranslucentBasePass_4404 : packoffset(c275.y);
   float TranslucentBasePass_4408 : packoffset(c275.z);
+  float TranslucentBasePass_4412 : packoffset(c275.w);
+  float TranslucentBasePass_4416 : packoffset(c276.x);
+  float TranslucentBasePass_4420 : packoffset(c276.y);
+  float TranslucentBasePass_4424 : packoffset(c276.z);
+  float TranslucentBasePass_4428 : packoffset(c276.w);
+  int4 TranslucentBasePass_4432 : packoffset(c277.x);
+  int TranslucentBasePass_4448 : packoffset(c278.x);
+  float TranslucentBasePass_4452 : packoffset(c278.y);
+  float TranslucentBasePass_4456 : packoffset(c278.z);
+  float TranslucentBasePass_4460 : packoffset(c278.w);
+  float TranslucentBasePass_4464 : packoffset(c279.x);
+  float TranslucentBasePass_4468 : packoffset(c279.y);
+  float TranslucentBasePass_4472 : packoffset(c279.z);
+  float TranslucentBasePass_4476 : packoffset(c279.w);
+  float TranslucentBasePass_4480 : packoffset(c280.x);
+  float TranslucentBasePass_4484 : packoffset(c280.y);
+  float TranslucentBasePass_4488 : packoffset(c280.z);
+  float TranslucentBasePass_4492 : packoffset(c280.w);
+  float TranslucentBasePass_4496 : packoffset(c281.x);
+  float TranslucentBasePass_4500 : packoffset(c281.y);
+  float TranslucentBasePass_4504 : packoffset(c281.z);
+  float TranslucentBasePass_4508 : packoffset(c281.w);
+  float TranslucentBasePass_4512 : packoffset(c282.x);
+  float TranslucentBasePass_4516 : packoffset(c282.y);
+  float TranslucentBasePass_4520 : packoffset(c282.z);
+  float TranslucentBasePass_4524 : packoffset(c282.w);
+  float TranslucentBasePass_4528 : packoffset(c283.x);
+  float TranslucentBasePass_4532 : packoffset(c283.y);
+  float TranslucentBasePass_4536 : packoffset(c283.z);
+  float TranslucentBasePass_4540 : packoffset(c283.w);
+  float TranslucentBasePass_4544 : packoffset(c284.x);
+  float TranslucentBasePass_4548 : packoffset(c284.y);
+  int TranslucentBasePass_4552 : packoffset(c284.z);
+  float TranslucentBasePass_4556 : packoffset(c284.w);
+  float TranslucentBasePass_4560 : packoffset(c285.x);
+  float TranslucentBasePass_4564 : packoffset(c285.y);
+  float TranslucentBasePass_4568 : packoffset(c285.z);
+  float TranslucentBasePass_4572 : packoffset(c285.w);
+  float TranslucentBasePass_4576 : packoffset(c286.x);
+  float TranslucentBasePass_4580 : packoffset(c286.y);
+  float TranslucentBasePass_4584 : packoffset(c286.z);
+  float TranslucentBasePass_4588 : packoffset(c286.w);
+  float TranslucentBasePass_4592 : packoffset(c287.x);
+  float TranslucentBasePass_4596 : packoffset(c287.y);
+  float TranslucentBasePass_4600 : packoffset(c287.z);
+  float TranslucentBasePass_4604 : packoffset(c287.w);
+  float TranslucentBasePass_4608 : packoffset(c288.x);
+  float TranslucentBasePass_4612 : packoffset(c288.y);
+  float TranslucentBasePass_4616 : packoffset(c288.z);
+  float TranslucentBasePass_4620 : packoffset(c288.w);
+  float TranslucentBasePass_4624 : packoffset(c289.x);
+  float TranslucentBasePass_4628 : packoffset(c289.y);
+  float TranslucentBasePass_4632 : packoffset(c289.z);
+  float TranslucentBasePass_4636 : packoffset(c289.w);
+  float4 TranslucentBasePass_4640 : packoffset(c290.x);
+  float TranslucentBasePass_4656 : packoffset(c291.x);
+  float TranslucentBasePass_4660 : packoffset(c291.y);
+  float TranslucentBasePass_4664 : packoffset(c291.z);
+  float TranslucentBasePass_4668 : packoffset(c291.w);
+  float TranslucentBasePass_4672 : packoffset(c292.x);
+  float TranslucentBasePass_4676 : packoffset(c292.y);
+  float TranslucentBasePass_4680 : packoffset(c292.z);
+  float TranslucentBasePass_4684 : packoffset(c292.w);
+  float TranslucentBasePass_4688 : packoffset(c293.x);
+  float TranslucentBasePass_4692 : packoffset(c293.y);
+  float TranslucentBasePass_4696 : packoffset(c293.z);
+  float TranslucentBasePass_4700 : packoffset(c293.w);
+  float4 TranslucentBasePass_4704[4] : packoffset(c294.x);
+  int TranslucentBasePass_4768 : packoffset(c298.x);
+  float TranslucentBasePass_4772 : packoffset(c298.y);
+  float TranslucentBasePass_4776 : packoffset(c298.z);
+  float TranslucentBasePass_4780 : packoffset(c298.w);
+  float TranslucentBasePass_4784 : packoffset(c299.x);
+  float TranslucentBasePass_4788 : packoffset(c299.y);
+  float TranslucentBasePass_4792 : packoffset(c299.z);
+  float TranslucentBasePass_4796 : packoffset(c299.w);
+  float TranslucentBasePass_4800 : packoffset(c300.x);
+  float TranslucentBasePass_4804 : packoffset(c300.y);
+  float TranslucentBasePass_4808 : packoffset(c300.z);
+  float TranslucentBasePass_4812 : packoffset(c300.w);
+  float TranslucentBasePass_4816 : packoffset(c301.x);
+  float TranslucentBasePass_4820 : packoffset(c301.y);
+  float TranslucentBasePass_4824 : packoffset(c301.z);
+  float TranslucentBasePass_4828 : packoffset(c301.w);
+  float TranslucentBasePass_4832 : packoffset(c302.x);
+  float TranslucentBasePass_4836 : packoffset(c302.y);
+  float TranslucentBasePass_4840 : packoffset(c302.z);
 };
 
 cbuffer cb2 : register(b2) {
@@ -1106,275 +1170,190 @@ cbuffer cb2 : register(b2) {
 };
 
 cbuffer cb3 : register(b3) {
-  float4 MaterialCollection0_000[2] : packoffset(c000.x);
-};
-
-cbuffer cb4 : register(b4) {
-  float4 Material_000[36] : packoffset(c000.x);
-  float4 Material_576[16] : packoffset(c036.x);
+  float4 Material_000[4] : packoffset(c000.x);
+  float4 Material_064[1] : packoffset(c004.x);
 };
 
 SamplerState s0 : register(s0);
 
-SamplerState s1 : register(s1);
-
-SamplerState s2 : register(s2);
-
-SamplerState s3 : register(s3);
-
-SamplerState s4 : register(s4);
-
-SamplerState s5 : register(s5);
-
-SamplerState s6 : register(s6);
-
-SamplerState s7 : register(s7);
-
-SamplerState s8 : register(s8);
-
-SamplerState s9 : register(s9);
-
-SamplerState s10 : register(s10);
-
-SamplerState s11 : register(s11);
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
 
 float4 main(
   linear float4 TEXCOORD10_centroid : TEXCOORD10_centroid,
   linear float4 TEXCOORD11_centroid : TEXCOORD11_centroid,
+  linear float4 COLOR : COLOR,
   linear float4 TEXCOORD : TEXCOORD,
   linear float4 TEXCOORD_7 : TEXCOORD7,
-  linear float3 TEXCOORD_9 : TEXCOORD9,
-  noperspective float4 SV_Position : SV_Position,
-  nointerpolation uint SV_IsFrontFace : SV_IsFrontFace
+  precise noperspective float4 SV_Position : SV_Position,
+  nointerpolation bool SV_IsFrontFace : SV_IsFrontFace
 ) : SV_Target {
   float4 SV_Target;
-  float _77 = mad(SV_Position.z, (View_704[2].w), mad(SV_Position.y, (View_704[1].w), ((View_704[0].w) * SV_Position.x))) + (View_704[3].w);
-  float _81 = ((mad(SV_Position.z, (View_704[2].x), mad(SV_Position.y, (View_704[1].x), ((View_704[0].x) * SV_Position.x))) + (View_704[3].x)) / _77) - View_1120.x;
-  float _82 = ((mad(SV_Position.z, (View_704[2].y), mad(SV_Position.y, (View_704[1].y), ((View_704[0].y) * SV_Position.x))) + (View_704[3].y)) / _77) - View_1120.y;
-  float _83 = ((mad(SV_Position.z, (View_704[2].z), mad(SV_Position.y, (View_704[1].z), ((View_704[0].z) * SV_Position.x))) + (View_704[3].z)) / _77) - View_1120.z;
-  float _84 = TEXCOORD_9.x - View_1120.x;
-  float _85 = TEXCOORD_9.y - View_1120.y;
-  float _86 = TEXCOORD_9.z - View_1120.z;
-  float _95 = ((Material_000[3].x) * TEXCOORD.x) + (Material_000[4].x);
-  float _96 = ((Material_000[3].y) * TEXCOORD.y) + (Material_000[4].y);
-  float _105 = (SV_Position.x - View_2144.x) * View_2160.z;
-  float _106 = (SV_Position.y - View_2144.y) * View_2160.w;
-  float _109 = _105 - _95;
-  float _110 = _106 - _96;
-  float _113 = ((Material_576[1].z) * _109) + _95;
-  float _114 = ((Material_576[1].z) * _110) + _96;
-  float _122 = (Material_576[2].x) * View_2376;
-  float _126 = (Material_576[2].y) * sin(_122 * 6.2831854820251465f);
-  float4 _131 = t0.SampleBias(s0, float2((_126 + (_113 * (Material_576[1].w))), (_126 + (_114 * (Material_576[1].w)))), View_2388, int2(0, 0));
-  float4 _158 = t1.SampleBias(s1, float2((((Material_576[2].z) * _113) + _122), (((Material_576[2].z) * _114) + _122)), View_2388, int2(0, 0));
-  float _181 = (Material_000[11].x) + _95;
-  float _182 = (Material_000[11].y) + _96;
-  float _185 = _105 - _181;
-  float _186 = _106 - _182;
-  float _197 = (Material_576[4].w) * View_2376;
-  float _200 = (Material_576[5].x) + _197;
-  float4 _205 = t2.SampleBias(s2, float2((_200 + (((_185 * (Material_576[4].y)) + _181) * (Material_576[4].z))), (_200 + (((_186 * (Material_576[4].y)) + _182) * (Material_576[4].z)))), View_2388, int2(0, 0));
-  float _219 = sin(_197 * 6.2831854820251465f) * 5.0f;
-  float4 _224 = t3.SampleBias(s3, float2((((((Material_576[4].y) * _185) + _181) * 2.0f) + _219), (((((Material_576[4].y) * _186) + _182) * 2.0f) + _219)), View_2388, int2(0, 0));
-  float _231 = (_224.x * _205.x) * (Material_576[5].y);
-  float _232 = (_224.x * _205.y) * (Material_576[5].y);
-  float _233 = (_224.x * _205.z) * (Material_576[5].y);
-  float _265 = (Material_576[6].x) * View_2376;
-  float4 _270 = t4.SampleBias(s4, float2((_265 + ((((Material_576[5].z) * _109) + _95) * (Material_576[5].w))), (_265 + ((((Material_576[5].z) * _110) + _96) * (Material_576[5].w)))), View_2388, int2(0, 0));
-  float _282 = (frac(((View_2376 * 0.009999999776482582f) * (Material_576[6].y)) + _270.x) * 100.0f) / (Material_576[6].z);
-  float _286 = frac(abs(_282));
-  float _289 = select((_282 >= (-0.0f - _282)), _286, (-0.0f - _286)) * (Material_576[6].z);
-  float _298 = 1.0f - (abs(_289 - (Material_576[7].x)) / (Material_576[7].x));
-  float _305 = select((_298 <= 2.980232949312267e-08f), 0.0f, exp2(log2(_298) * (Material_576[7].y))) * select(((Material_576[6].w) < _289), 0.0f, 1.0f);
-  float _318 = abs(_105 - (MaterialCollection0_000[0].x));
-  float _323 = abs(_106 - (MaterialCollection0_000[0].y));
-  float _328 = (Material_576[7].z) * (View_2160.x / View_2160.y);
-  float _337 = (((((Material_576[7].z) - _318) / (Material_576[7].z)) * select(((Material_576[7].z) < _318), 0.0f, 1.0f)) * select((_328 < _323), 0.0f, 1.0f)) * ((_328 - _323) / _328);
-  float _343 = select((_337 <= 2.980232949312267e-08f), 0.0f, exp2(log2(_337) * (Material_576[7].w)));
-  float _359 = select(((Material_576[8].x) < _105), 0.0f, 1.0f) * ((Material_576[8].x) - _105);
-  float _365 = select((_359 <= 2.980232949312267e-08f), 0.0f, exp2(log2(_359) * (Material_576[8].y)));
-  float _381 = select((_105 < (Material_576[8].z)), 0.0f, 1.0f) * ((_105 + -1.0f) + (Material_576[8].x));
-  float _386 = select((_381 <= 2.980232949312267e-08f), 0.0f, exp2(log2(_381) * (Material_576[8].y)));
-  float _387 = -0.0f - (MaterialCollection0_000[0].z);
-  float _394 = (((Material_000[19].x) * _387) * _386) + (((Material_000[19].x) * (MaterialCollection0_000[0].z)) * _365);
-  float _395 = (((Material_000[19].y) * _387) * _386) + (((Material_000[19].y) * (MaterialCollection0_000[0].z)) * _365);
-  float _396 = (((Material_000[19].z) * _387) * _386) + (((Material_000[19].z) * (MaterialCollection0_000[0].z)) * _365);
-  float _412 = ((((select((_231 <= 2.980232949312267e-08f), 0.0f, (_231 * _231)) * (Material_000[13].x)) + ((Material_000[7].x) * select(((_158.x * select((_131.x <= 2.980232949312267e-08f), 0.0f, (exp2(log2(_131.x)) * 2.0f))) < (Material_576[2].w)), 0.0f, 1.0f))) + min(max((((_343 * (Material_000[17].x)) + ((Material_000[15].x) * _305)) + _394), 0.0f), 1.0f)) + _394) + (Material_000[21].x);
-  float _415 = ((((select((_232 <= 2.980232949312267e-08f), 0.0f, (_232 * _232)) * (Material_000[13].y)) + (select(((_158.x * select((_131.y <= 2.980232949312267e-08f), 0.0f, (exp2(log2(_131.y)) * 2.0f))) < (Material_576[2].w)), 0.0f, 1.0f) * (Material_000[7].y))) + _395) + min(max((((_343 * (Material_000[17].y)) + ((Material_000[15].y) * _305)) + _395), 0.0f), 1.0f)) + (Material_000[21].y);
-  float _418 = ((((select((_233 <= 2.980232949312267e-08f), 0.0f, (_233 * _233)) * (Material_000[13].z)) + (select(((_158.x * select((_131.z <= 2.980232949312267e-08f), 0.0f, (exp2(log2(_131.z)) * 2.0f))) < (Material_576[2].w)), 0.0f, 1.0f) * (Material_000[7].z))) + _396) + min(max((((_343 * (Material_000[17].z)) + ((Material_000[15].z) * _305)) + _396), 0.0f), 1.0f)) + (Material_000[21].z);
-  float4 _419 = t5.SampleBias(s5, float2(_95, _96), View_2388, int2(0, 0));
-  float4 _423 = t6.SampleBias(s6, float2(_95, _96), View_2388, int2(0, 0));
-  float _429 = (Material_576[8].w) * _423.w;
-  float4 _436 = t7.SampleBias(s7, float2(_95, _96), View_2388, int2(0, 0));
-  float _443 = (Material_576[9].x) * _436.x;
-  float _446 = select((_443 < 0.10000000149011612f), 0.0f, 1.0f) * _443;
-  float _457 = (View_2376 * 0.10000000149011612f) * (Material_576[9].w);
-  float4 _462 = t8.SampleBias(s8, float2((_457 + ((Material_576[9].z) * TEXCOORD.x)), (_457 + ((Material_576[9].z) * TEXCOORD.y))), View_2388, int2(0, 0));
-  float _468 = ((_462.x + 0.10000002384185791f) * 0.5f) * (Material_576[10].x);
-  float _473 = (Material_576[9].x) * _436.y;
-  float _476 = select((_473 < 0.10000000149011612f), 0.0f, 1.0f) * _473;
-  float _484 = (Material_576[9].x) * _436.z;
-  float _487 = select((_484 < 0.10000000149011612f), 0.0f, 1.0f) * _484;
-  float _494 = (Material_576[9].x) * _436.w;
-  float _497 = select((_494 < 0.10000000149011612f), 0.0f, 1.0f) * _494;
-  float _511 = (Material_576[11].z) - _105;
-  float _513 = ((Material_576[11].y) - _106) * (View_2160.z / View_2160.w);
-  float4 _516 = t3.SampleBias(s3, float2(_105, _106), View_2388, int2(0, 0));
-  float _519 = (_516.x * -0.20000000298023224f) - sqrt(dot(float2(_511, _513), float2(_511, _513)));
-  float4 _531 = t9.SampleBias(s9, float2(_95, _96), View_2388, int2(0, 0));
-  float _536 = (Material_576[9].x) * _531.x;
-  float _539 = select((_536 < 0.10000000149011612f), 0.0f, 1.0f) * _536;
-  float _546 = (Material_576[9].x) * _531.y;
-  float _549 = select((_546 < 0.10000000149011612f), 0.0f, 1.0f) * _546;
-  float _556 = (Material_576[9].x) * _531.z;
-  float _559 = select((_556 < 0.10000000149011612f), 0.0f, 1.0f) * _556;
-  float _566 = (Material_576[9].x) * _531.w;
-  float _569 = select((_566 < 0.10000000149011612f), 0.0f, 1.0f) * _566;
-  float _588 = saturate(saturate(dot(float4(((((select(((Material_576[9].y) < _539), -0.0f, -2.0f) * _539) + _531.x) * _468) + _539), ((((select(((Material_576[9].y) < _549), -0.0f, -2.0f) * _549) + _531.y) * _468) + _549), ((((select(((Material_576[9].y) < _559), -0.0f, -2.0f) * _559) + _531.z) * _468) + _559), ((((select(((Material_576[9].y) < _569), -0.0f, -2.0f) * _569) + _531.w) * _468) + _569)), float4(((Material_000[31].x) + _519), ((Material_000[31].y) + _519), ((Material_000[31].z) + _519), ((Material_000[31].w) + _519)))) + saturate(dot(float4(((_468 * ((select(((Material_576[9].y) < _446), -0.0f, -2.0f) * _446) + _436.x)) + _446), ((((select(((Material_576[9].y) < _476), -0.0f, -2.0f) * _476) + _436.y) * _468) + _476), ((((select(((Material_576[9].y) < _487), -0.0f, -2.0f) * _487) + _436.z) * _468) + _487), ((((select(((Material_576[9].y) < _497), -0.0f, -2.0f) * _497) + _436.w) * _468) + _497)), float4((_519 + (Material_000[26].x)), (_519 + (Material_000[26].y)), (_519 + (Material_000[26].z)), (_519 + (Material_000[26].w))))));
-  float _598 = (_588 * ((_419.x - _412) + (_429 * (_423.x - _419.x)))) + _412;
-  float _599 = (_588 * ((_419.y - _415) + (_429 * (_423.y - _419.y)))) + _415;
-  float _600 = (_588 * ((_419.z - _418) + (_429 * (_423.z - _419.z)))) + _418;
-  float4 _617 = t10.SampleBias(s10, float2(((Material_576[13].x) * (((Material_576[12].w) * View_2376) + abs(((_96 + _95) * 2.0f) + -2.0f))), saturate((Material_576[13].y) + _588)), View_2388, int2(0, 0));
-  float _633 = ((((Material_576[13].z) * _617.x) - _598) * _617.w) + _598;
-  float _634 = ((((Material_576[13].z) * _617.y) - _599) * _617.w) + _599;
-  float _635 = ((((Material_576[13].z) * _617.z) - _600) * _617.w) + _600;
-  float _661;
-  float _662;
-  float _663;
-  float _756;
-  float _757;
-  float _758;
-  float _759;
-  float _794;
-  float _795;
-  float _796;
-  float _853;
-  float _854;
-  float _855;
-  float _906;
-  float _907;
-  float _908;
-  float _998;
-  float _999;
-  float _1000;
-  if ((Material_576[13].w) > 0.5f) {
-    _661 = max(((exp2(log2(max(_633, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-    _662 = max(((exp2(log2(max(_634, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
-    _663 = max(((exp2(log2(max(_635, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+  float _55;
+  float _59;
+  float _60;
+  float _61;
+  float _70;
+  float _71;
+  float _72;
+  float _116;
+  float _117;
+  float _118;
+  float _175;
+  float _176;
+  float _177;
+  float _178;
+  float _322;
+  float _323;
+  float _324;
+  float _351;
+  float _352;
+  float _353;
+  float4 _85;
+  float _119;
+  float _120;
+  float _121;
+  float _137;
+  float _138;
+  float _139;
+  float _140;
+  float _172;
+  float _211;
+  float _219;
+  float _220;
+  float _221;
+  float _222;
+  float _227;
+  float _228;
+  float _229;
+  float _242;
+  float _249;
+  float _250;
+  float _251;
+  float _252;
+  float _253;
+  float _254;
+  float _255;
+  float _262;
+  float _272;
+  float _279;
+  float _295;
+  float _296;
+  float _297;
+  float _298;
+  float _311;
+  float _346;
+  _55 = mad(SV_Position.z, (View_704[2].w), mad(SV_Position.y, (View_704[1].w), ((View_704[0].w) * SV_Position.x))) + (View_704[3].w);
+  _59 = ((mad(SV_Position.z, (View_704[2].x), mad(SV_Position.y, (View_704[1].x), ((View_704[0].x) * SV_Position.x))) + (View_704[3].x)) / _55) - View_1120.x;
+  _60 = ((mad(SV_Position.z, (View_704[2].y), mad(SV_Position.y, (View_704[1].y), ((View_704[0].y) * SV_Position.x))) + (View_704[3].y)) / _55) - View_1120.y;
+  _61 = ((mad(SV_Position.z, (View_704[2].z), mad(SV_Position.y, (View_704[1].z), ((View_704[0].z) * SV_Position.x))) + (View_704[3].z)) / _55) - View_1120.z;
+  if ((Material_064[0].x) < 0.5f) {
+    _70 = (COLOR.x * COLOR.x);
+    _71 = (COLOR.y * COLOR.y);
+    _72 = (COLOR.z * COLOR.z);
   } else {
-    _661 = _633;
-    _662 = _634;
-    _663 = _635;
+    _70 = COLOR.x;
+    _71 = COLOR.y;
+    _72 = COLOR.z;
   }
-  float4 _712 = t11.SampleBias(s11, float2((((mad(_86, (Primitive_096[2].x), mad(_85, (Primitive_096[1].x), ((Primitive_096[0].x) * _84))) + (Primitive_096[3].x)) - (Material_000[34].x)) / (Material_000[35].x)), (1.0f - (((mad(_86, (Primitive_096[2].y), mad(_85, (Primitive_096[1].y), ((Primitive_096[0].y) * _84))) + (Primitive_096[3].y)) - (Material_000[34].y)) / (Material_000[35].y)))), View_2388, int2(0, 0));
-  float _718 = saturate(saturate((Material_576[15].y) * _712.x));
-  float _719 = max(((((Material_000[32].x) - _661) * (Material_576[14].x)) + _661), 0.0f);
-  float _720 = max(((((Material_000[32].y) - _662) * (Material_576[14].x)) + _662), 0.0f);
-  float _721 = max(((((Material_000[32].z) - _663) * (Material_576[14].x)) + _663), 0.0f);
+  _85 = t0.Sample(s0, float2((dot(float2(TEXCOORD.x, TEXCOORD.y), float2((Material_000[2].x), (Material_000[2].y))) + (Material_000[1].x)), (dot(float2(TEXCOORD.x, TEXCOORD.y), float2((Material_000[2].z), (Material_000[2].w))) + (Material_000[1].y))));
+  if ((Material_064[0].x) > 0.5f) {
+    _116 = max(((exp2(log2(max(_85.x, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+    _117 = max(((exp2(log2(max(_85.y, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+    _118 = max(((exp2(log2(max(_85.z, 0.0f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f), 0.0f);
+  } else {
+    _116 = _85.x;
+    _117 = _85.y;
+    _118 = _85.z;
+  }
+  _119 = _116 * _70;
+  _120 = _117 * _71;
+  _121 = _118 * _72;
+  _137 = saturate(_85.w * COLOR.w);
+  _138 = max(((((Material_000[3].x) - _119) * (Material_064[0].y)) + _119), 0.0f);
+  _139 = max(((((Material_000[3].y) - _120) * (Material_064[0].y)) + _120), 0.0f);
+  _140 = max(((((Material_000[3].z) - _121) * (Material_064[0].y)) + _121), 0.0f);
   [branch]
   if (View_2336 > 0.0f) {
-    if ((bool)(abs(_83 - Primitive_080.z) > (Primitive_304.z + 1.0f)) || ((bool)((bool)(abs(_81 - Primitive_080.x) > (Primitive_304.x + 1.0f)) || (bool)(abs(_82 - Primitive_080.y) > (Primitive_304.y + 1.0f))))) {
-      float _753 = float((bool)(bool)(frac(dot(float3(_81, _82, _83), float3(0.5770000219345093f, 0.5770000219345093f, 0.5770000219345093f)) * 0.0020000000949949026f) > 0.5f));
-      _756 = 1.0f;
-      _757 = (1.0f - _753);
-      _758 = 1.0f;
-      _759 = _753;
+    if ((bool)(abs(_61 - Primitive_080.z) > (Primitive_304.z + 1.0f)) || ((bool)((bool)(abs(_59 - Primitive_080.x) > (Primitive_304.x + 1.0f)) || (bool)(abs(_60 - Primitive_080.y) > (Primitive_304.y + 1.0f))))) {
+      _172 = float((bool)(bool)(frac(dot(float3(_59, _60, _61), float3(0.5770000219345093f, 0.5770000219345093f, 0.5770000219345093f)) * 0.0020000000949949026f) > 0.5f));
+      _175 = 1.0f;
+      _176 = (1.0f - _172);
+      _177 = 1.0f;
+      _178 = _172;
     } else {
-      _756 = _718;
-      _757 = _719;
-      _758 = _720;
-      _759 = _721;
+      _175 = _137;
+      _176 = _138;
+      _177 = _139;
+      _178 = _140;
     }
   } else {
-    _756 = _718;
-    _757 = _719;
-    _758 = _720;
-    _759 = _721;
+    _175 = _137;
+    _176 = _138;
+    _177 = _139;
+    _178 = _140;
   }
   [branch]
-  if (!(TranslucentBasePass_4352 == 0)) {
-    do {
-      [branch]
-      if (TranslucentBasePass_4368 == 0.0f) {
-        float _783 = 1.0f / TranslucentBasePass_4356;
-        _794 = exp2(log2(1.0f - exp2((_757 * -1.4426950216293335f) * TranslucentBasePass_4364)) * _783);
-        _795 = exp2(log2(1.0f - exp2((_758 * -1.4426950216293335f) * TranslucentBasePass_4364)) * _783);
-        _796 = exp2(log2(1.0f - exp2((_759 * -1.4426950216293335f) * TranslucentBasePass_4364)) * _783);
-      } else {
-        _794 = _757;
-        _795 = _758;
-        _796 = _759;
-      }
-      do {
-        [branch]
-        if (TranslucentBasePass_4368 == 1.0f) {
-          float _800 = TranslucentBasePass_4372 * _794;
-          float _801 = TranslucentBasePass_4372 * _795;
-          float _802 = TranslucentBasePass_4372 * _796;
-          float _804 = TranslucentBasePass_4376 * 1.3600000143051147f;
-          float _805 = TranslucentBasePass_4376 * 0.9599999785423279f;
-          float _842 = 1.0f / TranslucentBasePass_4356;
-          _853 = exp2(log2(saturate(TranslucentBasePass_4380 + saturate((((_804 * _800) + 0.04699999839067459f) * _800) / ((((_805 * _800) + 0.5600000023841858f) * _800) + 0.14000000059604645f)))) * _842);
-          _854 = exp2(log2(saturate(TranslucentBasePass_4380 + saturate((((_804 * _801) + 0.04699999839067459f) * _801) / ((((_805 * _801) + 0.5600000023841858f) * _801) + 0.14000000059604645f)))) * _842);
-          _855 = exp2(log2(saturate(TranslucentBasePass_4380 + saturate((((_804 * _802) + 0.04699999839067459f) * _802) / ((((_805 * _802) + 0.5600000023841858f) * _802) + 0.14000000059604645f)))) * _842);
-        } else {
-          _853 = _794;
-          _854 = _795;
-          _855 = _796;
-        }
-        do {
-          [branch]
-          if (TranslucentBasePass_4368 == 2.0f) {
-            float _860 = TranslucentBasePass_4384 * _853;
-            float _861 = TranslucentBasePass_4384 * _854;
-            float _862 = TranslucentBasePass_4384 * _855;
-            float _868 = TranslucentBasePass_4392 * -0.16398000717163086f;
-            float _872 = (_868 / (_860 + -0.19505000114440918f)) + 1.0049500465393066f;
-            float _873 = (_868 / (_861 + -0.19505000114440918f)) + 1.0049500465393066f;
-            float _874 = (_868 / (_862 + -0.19505000114440918f)) + 1.0049500465393066f;
-            float _895 = 1.0f / TranslucentBasePass_4356;
-            _906 = exp2(log2(saturate(((_860 - _872) * select((TranslucentBasePass_4388 < _860), 0.0f, 1.0f)) + _872)) * _895);
-            _907 = exp2(log2(saturate(((_861 - _873) * select((TranslucentBasePass_4388 < _861), 0.0f, 1.0f)) + _873)) * _895);
-            _908 = exp2(log2(saturate(((_862 - _874) * select((TranslucentBasePass_4388 < _862), 0.0f, 1.0f)) + _874)) * _895);
-          } else {
-            _906 = _853;
-            _907 = _854;
-            _908 = _855;
-          }
-          [branch]
-          if (TranslucentBasePass_4368 == 3.0f) {
-            float _913 = TranslucentBasePass_4396 * _906;
-            float _914 = TranslucentBasePass_4396 * _907;
-            float _915 = TranslucentBasePass_4396 * _908;
-            float _950 = exp2(log2(abs(_913)) * TranslucentBasePass_4408) * float((int)(((int)(uint)((bool)(_913 > 0.0f))) - ((int)(uint)((bool)(_913 < 0.0f)))));
-            float _951 = exp2(log2(abs(_914)) * TranslucentBasePass_4408) * float((int)(((int)(uint)((bool)(_914 > 0.0f))) - ((int)(uint)((bool)(_914 < 0.0f)))));
-            float _952 = exp2(log2(abs(_915)) * TranslucentBasePass_4408) * float((int)(((int)(uint)((bool)(_915 > 0.0f))) - ((int)(uint)((bool)(_915 < 0.0f)))));
-            float _953 = TranslucentBasePass_4400 * 5.340000152587891f;
-            float _954 = _950 * _953;
-            float _955 = _951 * _953;
-            float _956 = _952 * _953;
-            float _978 = TranslucentBasePass_4404 + -0.0004396551812533289f;
-            float _987 = 1.0f / TranslucentBasePass_4356;
-            _998 = exp2(log2(saturate(_978 + ((((_954 + 2.609099864959717f) * _950) + 0.0013464000076055527f) / (((_954 + 1.1699999570846558f) * _950) + 3.0624001026153564f)))) * _987);
-            _999 = exp2(log2(saturate(_978 + ((((_955 + 2.609099864959717f) * _951) + 0.0013464000076055527f) / (((_955 + 1.1699999570846558f) * _951) + 3.0624001026153564f)))) * _987);
-            _1000 = exp2(log2(saturate(_978 + ((((_956 + 2.609099864959717f) * _952) + 0.0013464000076055527f) / (((_956 + 1.1699999570846558f) * _952) + 3.0624001026153564f)))) * _987);
-          } else {
-            _998 = _906;
-            _999 = _907;
-            _1000 = _908;
-          }
-        } while (false);
-      } while (false);
-    } while (false);
+  if (!(TranslucentBasePass_4768 == 0)) {
+    [branch]
+    if (TranslucentBasePass_4784 == 0.0f) {
+      _211 = (((TranslucentBasePass_4772 + 1.0f) * 0.009900989942252636f) * (TranslucentBasePass_4776 - TranslucentBasePass_4780)) + TranslucentBasePass_4780;
+      _219 = (((TranslucentBasePass_4840 + 1.0f) * 0.009900989942252636f) * (TranslucentBasePass_4832 - TranslucentBasePass_4836)) + TranslucentBasePass_4836;
+      _220 = (_211 * _176) * _219;
+      _221 = (_211 * _177) * _219;
+      _222 = (_211 * _178) * _219;
+      _227 = max((_220 - TranslucentBasePass_4828), 0.0f);
+      _228 = max((_221 - TranslucentBasePass_4828), 0.0f);
+      _229 = max((_222 - TranslucentBasePass_4828), 0.0f);
+      _242 = TranslucentBasePass_4812 * -1.4426950216293335f;
+      _249 = 1.0f - exp2(_242 * ((_220 - _227) + (_227 / (_227 + 1.0f))));
+      _250 = 1.0f - exp2(_242 * ((_221 - _228) + (_228 / (_228 + 1.0f))));
+      _251 = 1.0f - exp2(_242 * ((_222 - _229) + (_229 / (_229 + 1.0f))));
+      _252 = _249 * TranslucentBasePass_4788;
+      _253 = _250 * TranslucentBasePass_4788;
+      _254 = _251 * TranslucentBasePass_4788;
+      _255 = TranslucentBasePass_4796 * TranslucentBasePass_4792;
+      _262 = TranslucentBasePass_4804 * TranslucentBasePass_4800;
+      _272 = TranslucentBasePass_4808 * TranslucentBasePass_4800;
+      _279 = TranslucentBasePass_4804 / TranslucentBasePass_4808;
+      _295 = saturate(((saturate(((((_252 + _255) * _249) + _262) / (((_252 + TranslucentBasePass_4792) * _249) + _272)) - _279) + -0.5f) * TranslucentBasePass_4816) + 0.5f);
+      _296 = saturate(((saturate(((((_253 + _255) * _250) + _262) / (((_253 + TranslucentBasePass_4792) * _250) + _272)) - _279) + -0.5f) * TranslucentBasePass_4816) + 0.5f);
+      _297 = saturate(((saturate(((((_254 + _255) * _251) + _262) / (((_254 + TranslucentBasePass_4792) * _251) + _272)) - _279) + -0.5f) * TranslucentBasePass_4816) + 0.5f);
+      _298 = dot(float3(_295, _296, _297), float3(0.2125999927520752f, 0.7152000069618225f, 0.0722000002861023f));
+      _311 = 1.0f / TranslucentBasePass_4820;
+      _322 = exp2(log2(saturate(lerp(_298, _295, TranslucentBasePass_4824))) * _311);
+      _323 = exp2(log2(saturate(lerp(_298, _296, TranslucentBasePass_4824))) * _311);
+      _324 = exp2(log2(saturate(lerp(_298, _297, TranslucentBasePass_4824))) * _311);
+    } else {
+      _322 = _176;
+      _323 = _177;
+      _324 = _178;
+    }
+    [branch]
+    if (TranslucentBasePass_4784 == 1.0f) {
+      _346 = ((((TranslucentBasePass_4776 - TranslucentBasePass_4780) * saturate(TranslucentBasePass_4772 * 0.009999999776482582f)) + TranslucentBasePass_4780) * 0.012500000186264515f) * (((TranslucentBasePass_4832 - TranslucentBasePass_4836) * saturate(TranslucentBasePass_4840 * 0.009999999776482582f)) + TranslucentBasePass_4836);
+      _351 = (_346 * _322);
+      _352 = (_346 * _323);
+      _353 = (_346 * _324);
+    } else {
+      _351 = _322;
+      _352 = _323;
+      _353 = _324;
+    }
   } else {
-    _998 = _757;
-    _999 = _758;
-    _1000 = _759;
+    _351 = _176;
+    _352 = _177;
+    _353 = _178;
   }
-  SV_Target.x = (-0.0f - min((-0.0f - _998), 0.0f));
-  SV_Target.y = (-0.0f - min((-0.0f - _999), 0.0f));
-  SV_Target.z = (-0.0f - min((-0.0f - _1000), 0.0f));
-  SV_Target.w = _756;
-  SV_Target.w *= HUD_OPACITY;
+
+  
+  float3 _video_hdr = AutoHDRVideo(float3(_351, _352, _353), SV_Position.xy);
+
+
+  SV_Target.x = (-0.0f - min((-0.0f - _351), 0.0f));
+  SV_Target.y = (-0.0f - min((-0.0f - _352), 0.0f));
+  SV_Target.z = (-0.0f - min((-0.0f - _353), 0.0f));
+  SV_Target.w = _175;
   return SV_Target;
 }
