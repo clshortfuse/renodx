@@ -151,7 +151,7 @@ float3 UpgradeToneMapAndScaleScene(float3 srgb_color,
       1.f);
 
   // Re-encode to sRGB and re-apply the scene scaling.
-  return ScaleScene(ConditionalSrgbEncode(tonemapped_linear));
+  return ScaleScene(renodx::color::srgb::EncodeSafe(tonemapped_linear));
 }
 
 float4 main(
