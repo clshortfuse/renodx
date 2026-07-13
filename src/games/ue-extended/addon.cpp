@@ -697,6 +697,12 @@ const std::unordered_map<
             },
         },
         {
+            "P3R.exe",
+            {
+                {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
+        {
             "RainCodePlus-Win64-Shipping.exe",
             {
                 {"Upgrade_B8G8R8A8_TYPELESS", UPGRADE_TYPE_OUTPUT_RATIO},
