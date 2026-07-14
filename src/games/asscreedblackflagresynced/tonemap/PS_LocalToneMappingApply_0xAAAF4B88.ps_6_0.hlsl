@@ -852,7 +852,10 @@ float4 main(
     linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
   const float3 input_color = t0_space3.SampleLevel(s0_space99, TEXCOORD, 0.f).rgb;
-  const float input_luminance = renodx::color::y::from::BT709(input_color);
+  const bool use_enhanced_local_tonemap = CUSTOM_LOCAL_TONE_MAP_TYPE != 0.f;
+  const float input_luminance = use_enhanced_local_tonemap
+                                    ? renodx::color::yf::from::BT709(input_color)
+                                    : renodx::color::y::from::BT709(input_color);
   const LocalToneMapSharedContext context = ComputeLocalToneMapSharedContext(TEXCOORD);
   const LocalToneMapParams params = ComputeLocalToneMapParams(input_luminance, context);
   const LocalToneMapResult local_tonemap = ComputeLocalToneMapResult(input_luminance, params);
@@ -860,21 +863,25 @@ float4 main(
   const float3 local_tonemapped_without_toe_and_shoulder = local_tonemap.scale_without_toe_and_shoulder * input_color;
 
   float3 output_color;
-  if (CUSTOM_LOCAL_TONE_MAP_TYPE != 0.f) {
+  if (use_enhanced_local_tonemap) {
     const float3 bt709_white_lms = renodx::color::lms::from::BT709(1.f.xxx);
     const float3 input_lms = renodx::color::lms::from::BT709(input_color);
     const float3 precompression_lms = renodx::color::lms::from::BT709(local_tonemapped_without_toe_and_shoulder);
-    output_color = renodx::color::bt709::from::LMS(
+    float3 lms_tonemapped_color = renodx::color::bt709::from::LMS(
         ApplyLocalToneMapToeAndShoulderLMS(
             input_lms,
             precompression_lms,
             bt709_white_lms,
             params,
             context));
-
-    // output_color = local_tonemapped_without_toe_and_shoulder;
-
-    output_color = lerp(local_tonemapped_color, output_color, 0.4f);
+    lms_tonemapped_color = renodx::color::correct::Luminance(
+        lms_tonemapped_color,
+        renodx::color::yf::from::BT709(lms_tonemapped_color),
+        renodx::color::yf::from::BT709(local_tonemapped_color));
+    output_color = lerp(
+        lms_tonemapped_color,
+        local_tonemapped_color,
+        saturate(renodx::color::yf::from::BT709(local_tonemapped_color) / 0.5f));
   } else {
     output_color = local_tonemapped_color;
   }
