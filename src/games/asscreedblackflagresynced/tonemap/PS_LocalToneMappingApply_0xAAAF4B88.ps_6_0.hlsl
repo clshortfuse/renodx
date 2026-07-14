@@ -882,7 +882,8 @@ float4 main(
         lms_tonemapped_color,
         local_tonemapped_color,
         saturate(renodx::color::yf::from::BT709(local_tonemapped_color) / 0.5f));
-        output_color = lerp(output_color, local_tonemapped_color, 0.35f);
+    output_color = lerp(output_color, local_tonemapped_color, 0.35f);
+    output_color = max(0, output_color);
   } else {
     output_color = local_tonemapped_color;
   }
