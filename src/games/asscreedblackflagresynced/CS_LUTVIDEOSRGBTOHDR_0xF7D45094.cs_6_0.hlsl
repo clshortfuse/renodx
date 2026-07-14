@@ -1,3 +1,5 @@
+#include "./tonemap/tonemap.hlsli"
+
 struct ACESTonemapperParameters__Constants {
   float ACESTonemapperParameters__Constants_000;
 };
@@ -717,6 +719,20 @@ void main(
       break;
     }
   }
+#if 1
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    float3 untonemapped_ap1 = 32.f * float3(_652, _653, _654) / cb0_space5_008z;
+    u0_space5[SV_DispatchThreadID] = float4(
+        BuildToneMapLUTOutput(
+            untonemapped_ap1,
+            cb0_space5_003z,
+            cb0_space5_003w,
+            cb0_space5_003x != 0),
+        1.f);
+    return;
+  }
+#endif
+
   _662 = cb0_space5_003z * (_652 / cb0_space5_008z);
   _663 = cb0_space5_003z * (_653 / cb0_space5_008z);
   _664 = cb0_space5_003z * (_654 / cb0_space5_008z);

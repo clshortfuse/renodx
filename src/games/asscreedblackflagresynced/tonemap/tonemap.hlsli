@@ -302,9 +302,7 @@ float3 ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
           input_adaptive_state_lms));
 }
 
-float3 BuildToneMapLUTOutput(uint3 lut_coordinates, float exposure, float display_peak_nits, bool hdr_enabled) {
-  float3 untonemapped_ap1 = 32.f * exp2((float3(lut_coordinates) * 0.6451612710952759f) - 12.473931312561035f);
-
+float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float display_peak_nits, bool hdr_enabled) {
   // The game uses twice the SDR exposure by default when HDR is enabled.
   float diffuse_white_nits = (exposure / 64.f) * 203.f;
   float target_peak_ratio = display_peak_nits / diffuse_white_nits;
