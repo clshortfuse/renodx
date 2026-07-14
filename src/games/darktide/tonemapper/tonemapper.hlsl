@@ -152,6 +152,8 @@ cbuffer c0 : register(b2) {
 };
 
 static const float EPS = 6.0999998822808266e-05f;
+static const float DARKTIDE_TONEMAP_MID_GRAY = 0.1f;
+static const uint DARKTIDE_PSYCHOV_REFERENCE_MODE = 0u;  // 0 = scene midgray, 1 = output midgray
 static const float3 BT709_Y =
     float3(0.2126999944448471f, 0.7152000069618225f, 0.07209999859333038f);
 
@@ -333,6 +335,94 @@ float3 ApplyVanillaTonemap(float3 hdr_color) {
   return TonemapSimpleFilmic(hdr_color);
 }
 
+float EvalVanillaTonemapScalar(float input_value) {
+  return Luma709(ApplyVanillaTonemap(max(0.0f, input_value).xxx));
+}
+
+float EvalVanillaTonemapSlopeDeltaScalar(float input_value) {
+  // Runtime-stable central difference for the linear slope f'(x).
+  float x = max(0.0f, input_value);
+  float delta = max(0.005f, x * 0.01f);
+  float lower_input = max(0.0f, x - delta);
+  float upper_input = x + delta;
+  float lower_output = EvalVanillaTonemapScalar(lower_input);
+  float upper_output = EvalVanillaTonemapScalar(upper_input);
+  return renodx::math::DivideSafe(upper_output - lower_output,
+                                  upper_input - lower_input, 0.0f);
+}
+
+float ComputeVanillaExponentialContrast(float reference_input,
+                                        float reference_output,
+                                        float reference_slope) {
+  return max(0.0f, renodx::math::DivideSafe(reference_input * reference_slope,
+                                            reference_output, 1.0f));
+}
+
+struct VanillaTonemapReference {
+  float input;
+  float output;
+  float slope;
+  float cone;
+};
+
+VanillaTonemapReference CreateVanillaTonemapReference(float reference_input,
+                                                      float reference_output) {
+  VanillaTonemapReference reference;
+  reference.input = reference_input;
+  reference.output = reference_output;
+  reference.slope = EvalVanillaTonemapSlopeDeltaScalar(reference.input);
+  reference.cone = ComputeVanillaExponentialContrast(
+      reference.input, reference.output, reference.slope);
+  return reference;
+}
+
+float SolveVanillaTonemapInputForOutput(float target_output,
+                                        float fallback_input) {
+  float lower_input = 0.0f;
+  float upper_input = max(1.0f, fallback_input * 2.0f);
+
+  [unroll]
+  for (int i = 0; i < 8; ++i) {
+    if (EvalVanillaTonemapScalar(upper_input) >= target_output) break;
+    upper_input *= 2.0f;
+  }
+
+  if (EvalVanillaTonemapScalar(upper_input) < target_output) return fallback_input;
+
+  [unroll]
+  for (int j = 0; j < 16; ++j) {
+    float mid_input = (lower_input + upper_input) * 0.5f;
+    float mid_output = EvalVanillaTonemapScalar(mid_input);
+    if (mid_output < target_output) {
+      lower_input = mid_input;
+    } else {
+      upper_input = mid_input;
+    }
+  }
+
+  return upper_input;
+}
+
+VanillaTonemapReference ResolveVanillaSceneMidGrayReference() {
+  float reference_input = DARKTIDE_TONEMAP_MID_GRAY;
+  float reference_output = EvalVanillaTonemapScalar(reference_input);
+  return CreateVanillaTonemapReference(reference_input, reference_output);
+}
+
+VanillaTonemapReference ResolveVanillaOutputMidGrayReference() {
+  float reference_output = DARKTIDE_TONEMAP_MID_GRAY;
+  float reference_input = SolveVanillaTonemapInputForOutput(
+      reference_output, DARKTIDE_TONEMAP_MID_GRAY);
+  return CreateVanillaTonemapReference(reference_input, reference_output);
+}
+
+VanillaTonemapReference ResolveVanillaPsychoVReference() {
+  if (DARKTIDE_PSYCHOV_REFERENCE_MODE == 1u) {
+    return ResolveVanillaOutputMidGrayReference();
+  }
+  return ResolveVanillaSceneMidGrayReference();
+}
+
 float3 ApplyLatePost(float3 linear_sdr, float2 uv) {
   float3 color = renodx::color::gamma::Encode(max(linear_sdr, 0.0f.xxx));
   float2 centered_uv = uv - 0.5f.xx;
@@ -442,9 +532,12 @@ float4 main(precise noperspective float4 SV_Position : SV_Position,
   float3 output = hdr_color;
 
   if (RENODX_TONE_MAP_TYPE) {
-    float vanilla_midgray_output = Luma709(ApplyVanillaTonemap(0.18f.xxx));
-    float3 psychov_hdr =
-        PsychoVTest17(hdr_color, 1.f, 0.18f, 0.18f, false, 1.25f);
+    VanillaTonemapReference psychov_reference = ResolveVanillaPsychoVReference();
+    float vanilla_midgray_output = EvalVanillaTonemapScalar(DARKTIDE_TONEMAP_MID_GRAY);
+    float3 psychov_hdr = PsychoVTest17(
+        hdr_color, 1.f, psychov_reference.input, psychov_reference.output,
+        false, psychov_reference.cone);
+
 
     float3 psychov_adaptive_state_lms;
     float psychov_gamut_compression_scale;
@@ -462,7 +555,6 @@ float4 main(precise noperspective float4 SV_Position : SV_Position,
   } else {
     output = ApplyVanillaTonemap(hdr_color);
     output = ApplyLatePost(output, TEXCOORD);
-    // output = renodx::draw::ToneMapPass(hdr_color.rgb, output);
   }
   return float4(renodx::draw::RenderIntermediatePass(output), scene_sample.a);
 }

@@ -12,14 +12,10 @@
 #include <include/reshade.hpp>
 
 #include <algorithm>
-#include <cstring>
-#include <filesystem>
 #include <format>
 #include <shared_mutex>
 #include <span>
-#include <string_view>
 #include <unordered_set>
-#include <vector>
 
 #include <embed/shaders.h>
 
@@ -27,8 +23,6 @@
 #include "../../mods/swapchain.hpp"
 #include "../../utils/bitwise.hpp"
 #include "../../utils/descriptor.hpp"
-#include "../../utils/dlss_hook.hpp"
-#include "../../utils/path.hpp"
 #include "../../utils/pipeline_layout.hpp"
 #include "../../utils/platform.hpp"
 #include "../../utils/resource.hpp"
@@ -43,179 +37,8 @@ renodx::mods::shader::CustomShaders custom_shaders = {__ALL_CUSTOM_SHADERS};
 ShaderInjectData shader_injection;
 const std::string build_date = __DATE__;
 const std::string build_time = __TIME__;
-HMODULE addon_module_handle = nullptr;
-bool dlss_hooks_attached = false;
-bool dlss_frame_gen_had_early_load_on_boot = false;
 
 std::unordered_set<uint32_t> dumped_tonemapper_shaders = {};
-
-std::filesystem::path GetModulePath(HMODULE h_module) {
-  wchar_t path[MAX_PATH] = L"";
-  GetModuleFileNameW(h_module, path, ARRAYSIZE(path));
-  return path;
-}
-
-std::string GetAddonFileName() {
-  if (addon_module_handle == nullptr) return {};
-  return GetModulePath(addon_module_handle).filename().string();
-}
-
-bool EqualsInsensitive(std::string_view lhs, std::string_view rhs) {
-  return _stricmp(std::string(lhs).c_str(), std::string(rhs).c_str()) == 0;
-}
-
-std::vector<std::string> ReadConfigArray(const char* section, const char* key) {
-  size_t value_size = 0;
-  if (!reshade::get_config_value(nullptr, section, key, nullptr, &value_size) || value_size == 0) {
-    return {};
-  }
-
-  std::string raw_value(value_size, '\0');
-  if (!reshade::get_config_value(nullptr, section, key, raw_value.data(), &value_size)) {
-    return {};
-  }
-
-  std::vector<std::string> values;
-  for (size_t offset = 0; offset < raw_value.size();) {
-    const auto* entry = raw_value.c_str() + offset;
-    const size_t entry_size = std::strlen(entry);
-    if (entry_size == 0) break;
-
-    values.emplace_back(entry);
-    offset += entry_size + 1;
-  }
-
-  return values;
-}
-
-bool HasLoadFromDllMainEntry() {
-  const auto addon_file = GetAddonFileName();
-  if (addon_file.empty()) return false;
-
-  return std::ranges::any_of(
-      ReadConfigArray("ADDON", "LoadFromDllMain"),
-      [&](const auto& value) {
-        return EqualsInsensitive(std::filesystem::path(value).filename().string(), addon_file);
-      });
-}
-
-bool EnsureLoadFromDllMainEntry() {
-  const auto addon_file = GetAddonFileName();
-  if (addon_file.empty()) return false;
-
-  auto values = ReadConfigArray("ADDON", "LoadFromDllMain");
-  for (const auto& value : values) {
-    if (EqualsInsensitive(std::filesystem::path(value).filename().string(), addon_file)) {
-      return true;
-    }
-  }
-
-  values.push_back(addon_file);
-
-  std::string serialized;
-  for (const auto& value : values) {
-    serialized.append(value);
-    serialized.push_back('\0');
-  }
-
-  reshade::set_config_value(nullptr, "ADDON", "LoadFromDllMain", serialized.c_str(), serialized.size());
-
-  reshade::log::message(
-      reshade::log::level::info,
-      std::format("Added {} to ADDON.LoadFromDllMain in ReShade.ini. Restart required.", addon_file).c_str());
-  return true;
-}
-
-void ConfigureDlssHookPaths() {
-  auto dlss_path = renodx::utils::settings::ReadGlobalString("DLSSPath");
-  auto streamline_path = renodx::utils::settings::ReadGlobalString("StreamlinePath");
-
-  if (dlss_path.empty()) {
-    dlss_path = (renodx::utils::path::GetExecutableBasePath() / "nvngx_dlss.dll").string();
-  }
-  if (streamline_path.empty()) {
-    streamline_path = (renodx::utils::path::GetExecutableBasePath() / "sl.interposer.dll").string();
-  }
-
-  renodx::utils::dlss_hook::nvngx_dlss_file_path = dlss_path;
-  renodx::utils::dlss_hook::streamline_interposer_file_path = streamline_path;
-
-  reshade::log::message(
-      reshade::log::level::info,
-      std::format("Configured DLSS FG hook paths, DLSSPath: {}, StreamlinePath: {}", dlss_path, streamline_path).c_str());
-}
-
-void DetectDlssFrameGenLoadMode(HMODULE h_module) {
-  static bool checked_load_mode = false;
-
-  if (checked_load_mode) return;
-  checked_load_mode = true;
-
-  const auto module_file = GetModulePath(h_module).filename().string();
-  const bool streamline_loaded = renodx::utils::platform::IsModuleLoaded(
-      renodx::utils::dlss_hook::streamline_interposer_file_path);
-  const bool dlss_loaded = renodx::utils::platform::IsModuleLoaded(
-      renodx::utils::dlss_hook::nvngx_dlss_file_path);
-
-  if (HasLoadFromDllMainEntry()) {
-    reshade::log::message(
-        reshade::log::level::info,
-        std::format("{} is listed in ADDON.LoadFromDllMain.", module_file).c_str());
-    return;
-  }
-
-  std::stringstream s;
-  s << module_file << " is not listed in ADDON.LoadFromDllMain";
-
-  if (streamline_loaded || dlss_loaded) {
-    s << " and ";
-
-    if (streamline_loaded) {
-      s << std::filesystem::path(renodx::utils::dlss_hook::streamline_interposer_file_path).filename().string();
-    }
-
-    if (streamline_loaded && dlss_loaded) {
-      s << ", ";
-    }
-
-    if (dlss_loaded) {
-      s << std::filesystem::path(renodx::utils::dlss_hook::nvngx_dlss_file_path).filename().string();
-    }
-
-    s << " is already loaded. " << module_file
-      << " is not listed in ADDON.LoadFromDllMain, so early DLSS FG hooks may have been missed unless ReShade was loaded through another early path.";
-  } else {
-    s << ". " << module_file
-      << " is not listed in ADDON.LoadFromDllMain. Early DLSS FG hooks may still work if ReShade was loaded through another early path.";
-  }
-
-  reshade::log::message(reshade::log::level::warning, s.str().c_str());
-}
-
-void OverrideDlssgOptions(const sl::ViewportHandle& viewport_handle, sl::DLSSGOptions& options) {
-  (void)viewport_handle;
-
-  if (options.colorBufferFormat == 0u
-      && options.hudLessBufferFormat == 0u
-      && options.uiBufferFormat == 0u) {
-    return;
-  }
-
-  if (renodx::mods::swapchain::target_format != reshade::api::format::r10g10b10a2_unorm) {
-    return;
-  }
-
-  options.colorBufferFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
-  options.hudLessBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-}
-
-void AttachDlssHooks() {
-  if (dlss_hooks_attached) return;
-
-  renodx::utils::streamline::v2::override_dlssg_set_options = &OverrideDlssgOptions;
-  renodx::utils::dlss_hook::Use(DLL_PROCESS_ATTACH);
-  dlss_hooks_attached = true;
-}
 
 bool HasTonemapperColorGradingLut(reshade::api::command_list* cmd_list) {
   auto* device = cmd_list->get_device();
@@ -592,36 +415,6 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::platform::LaunchURL("https://ko-fi.com/hdrden");
         },
     },
-    // new renodx::utils::settings::Setting{
-    //     .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
-    //     .can_reset = false,
-    //     .label = "DLSS FG early-load hint",
-    //     .section = "Processing",
-    //     .tint = 0xFFB84D,
-    //     .on_draw = []() {
-    //           const auto addon_file = GetAddonFileName();
-    //           const bool configured = !dlss_frame_gen_had_early_load_on_boot
-    //                                   && HasLoadFromDllMainEntry();
-
-    //           if (configured) {
-    //             ImGui::BeginDisabled();
-    //           }
-    //           if (ImGui::Button(configured
-    //                                 ? "DLSS FG Early Load Configured (Restart Required)"
-    //                                 : "Enable DLSS FG Early Load")) {
-    //             EnsureLoadFromDllMainEntry();
-    //           }
-    //           if (configured) {
-    //             ImGui::EndDisabled();
-    //           }
-    //           if (ImGui::IsItemHovered()) {
-    //             ImGui::SetTooltip("[Addon]\nLoadFromDllMain=%s", addon_file.c_str());
-    //           }
-
-    //           return false; },
-    //     .is_visible = []() { return !dlss_frame_gen_had_early_load_on_boot; },
-    //     .is_sticky = true,
-    // },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = " - Upscaling must be used (DLSS/FSR/XeSS)!\n"
@@ -662,10 +455,6 @@ void OnPresetOff() {
 bool fired_on_init_swapchain = false;
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
-  if (!dlss_hooks_attached) {
-    AttachDlssHooks();
-  }
-
   if (fired_on_init_swapchain) return;
   fired_on_init_swapchain = true;
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
@@ -673,22 +462,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     settings[2]->default_value = peak.value();
     settings[2]->can_reset = true;
   }
-}
-
-// If you're including dlssfix then make sure it loads first!
-void ConfigureDLSSFix() {
-  const std::string global_dlss_fix_name = "RENODX-DLSSFIX";
-  const std::string dlss_path_key = "DLSSPath";
-  const std::string streamline_path_key = "StreamlinePath";
-
-  // const std::string default_dlss_path = R"(..\..\Plugins\DLSS\Binaries\ThirdParty\Win64\nvngx_dlss.dll)";
-  // const std::string default_streamline_path = R"(..\..\Plugins\DLSS\Binaries\ThirdParty\Win64\sl.interposer.dll)";
-
-  const std::string dlss_path = R"(..\launcher\nvngx_dlss.dll)";
-  const std::string streamline_path = R"(..\launcher\sl.interposer.dll)";
-
-  reshade::set_config_value(nullptr, global_dlss_fix_name.c_str(), dlss_path_key.c_str(), dlss_path.c_str());
-  reshade::set_config_value(nullptr, global_dlss_fix_name.c_str(), streamline_path_key.c_str(), streamline_path.c_str());
 }
 
 }  // namespace
@@ -699,7 +472,6 @@ extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION = "RenoDX Dar
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
-      addon_module_handle = h_module;
       if (!reshade::register_addon(h_module)) return FALSE;
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       // Dump tonemappers
@@ -707,16 +479,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       // reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
       // reshade::register_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
       // while (IsDebuggerPresent() == 0) Sleep(100);
-
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
-        // We only need output shader since it's the only shader using injected data
-        auto param_count = params.size();
-
-        if (param_count <= 15) {
-          return true;
-        }
-
-        return false;
+        return params.size() <= 15;
       };
 
       renodx::mods::shader::force_pipeline_cloning = true;
@@ -729,21 +493,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::mods::swapchain::swap_chain_proxy_vertex_shader = __swap_chain_proxy_vertex_shader;
       renodx::mods::swapchain::swap_chain_proxy_pixel_shader = __swap_chain_proxy_pixel_shader;
       // renodx::mods::swapchain::swap_chain_proxy_format = reshade::api::format::r10g10b10a2_unorm;
-      renodx::mods::swapchain::swapchain_proxy_compatibility_mode = false;
       renodx::mods::swapchain::SetUseHDR10(true);
-
-      // ConfigureDlssHookPaths();
-      // dlss_frame_gen_had_early_load_on_boot = HasLoadFromDllMainEntry();
-      // DetectDlssFrameGenLoadMode(h_module);
-      // // Hooking sl.interposer / nvngx during DllMain can break ReShade DXGI init.
-      // // Defer until swapchain creation unless early load is explicitly configured.
-      // if (dlss_frame_gen_had_early_load_on_boot) {
-      //   AttachDlssHooks();
-      // }
 
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::swapchain::use_resource_cloning = true;
-      renodx::utils::descriptor::trace_descriptor_tables = true;
+
+      // renodx::utils::descriptor::trace_descriptor_tables = true;
       renodx::utils::shader::use_shader_cache = true;
       // renodx::mods::shader::use_pipeline_layout_cloning = false;
 
@@ -759,31 +514,25 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .use_resource_view_cloning = true,
       });
 
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
-          .old_format = reshade::api::format::r10g10b10a2_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .use_resource_view_cloning = true,
-          .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
-          .usage_include = reshade::api::resource_usage::render_target,
-      });
+      // Causes glitches
+      // renodx::mods::swapchain::resource_upgrade_infos.push_back({
+      //     .old_format = reshade::api::format::r10g10b10a2_unorm,
+      //     .new_format = reshade::api::format::r16g16b16a16_float,
+      //     .use_resource_view_cloning = true,
+      //     .aspect_ratio = renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER,
+      //     .usage_include = reshade::api::resource_usage::render_target,
+      // });
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       // reshade::unregister_event<reshade::addon_event::draw>(OnDraw);
       // reshade::unregister_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
       // reshade::unregister_event<reshade::addon_event::draw_or_dispatch_indirect>(OnDrawOrDispatchIndirect);
-      if (dlss_hooks_attached) {
-        renodx::utils::streamline::v2::override_dlssg_set_options = nullptr;
-        renodx::utils::dlss_hook::Use(DLL_PROCESS_DETACH);
-        dlss_hooks_attached = false;
-      }
       reshade::unregister_addon(h_module);
-      dlss_frame_gen_had_early_load_on_boot = false;
-      addon_module_handle = nullptr;
       break;
   }
-  renodx::utils::state::Use(fdw_reason);
-  renodx::utils::descriptor::Use(fdw_reason);
+  // renodx::utils::state::Use(fdw_reason);
+  // renodx::utils::descriptor::Use(fdw_reason);
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
