@@ -1193,15 +1193,18 @@ bool OnDrawIndexed(
   const bool ping_geometry_candidate = (index_count == PING_INDEX_COUNT) &&
                                        (first_index == PING_FIRST_INDEX) &&
                                        (vertex_offset == PING_VERTEX_OFFSET);
-  is_ping_input_candidate = ping_geometry_candidate &&
-                            (vertex_shader_hash == PING_VERTEX_SHADER_HASH) &&
-                            (pixel_shader_hash == PING_PIXEL_SHADER_HASH);
-  shader_injection.latency_bar_draw_opacity = is_ping_input_candidate
+  const bool latency_bar_draw_candidate = ping_geometry_candidate &&
+                                          (vertex_shader_hash == PING_VERTEX_SHADER_HASH) &&
+                                          (pixel_shader_hash == PING_PIXEL_SHADER_HASH);
+  is_ping_input_candidate = latency_bar_draw_candidate && (draw_call_vertex_count == 0);
+  shader_injection.latency_bar_draw_opacity = latency_bar_draw_candidate
       ? shader_injection.ping_text_opacity
       : 1.f;
 
-  if (is_ping_input_candidate) {
-    is_ping_drawn = true;
+  if (latency_bar_draw_candidate) {
+    if (is_ping_input_candidate) {
+      is_ping_drawn = true;
+    }
     draw_call_vertex_count = 0;
     return false;
   }
