@@ -143,6 +143,16 @@ renodx::utils::settings::Settings settings = {
         .on_change_value = &OnToneMapLutControlledSettingChanged,
     },
     new renodx::utils::settings::Setting{
+        .key = "LocalToneMapType",
+        .binding = &shader_injection.custom_local_tone_map_type,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Local Tone Map Type",
+        .section = "Local Tone Mapping",
+        .tooltip = "Sets the local tone mapper type. Enhanced preserves prevents oversaturation in dark scenes.",
+        .labels = {"Vanilla", "Enhanced"},
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "Restart game to apply changes to UI Brightness.",
         .section = "UI",
@@ -288,6 +298,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"ToneMapType", 2.f},
+              {"LocalToneMapType", 1.f},
               {"ColorGradeCoolness", 50.f},
           });
           RefreshToneMapLutDirtyState();
@@ -360,6 +371,8 @@ renodx::utils::settings::Settings settings = {
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
+      {"LocalToneMapType", 0.f},
+      {"ToneMapUINits", 203.f},
       {"Exposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -370,7 +383,6 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"ColorFilterStrength", 100.f},
       {"FxBloom", 100.f},
-      {"ToneMapUINits", 203.f},
   });
 
   RefreshToneMapLutDirtyState();

@@ -140,9 +140,10 @@ void main(
 
 #if 1
   if (RENODX_TONE_MAP_TYPE != 0.f) {
+    float3 untonemapped_ap1 = 32.f * exp2((float3(SV_DispatchThreadID) * 0.6451612710952759f) - 12.473931312561035f);
     u0_space5[SV_DispatchThreadID] = float4(
         BuildToneMapLUTOutput(
-            SV_DispatchThreadID,
+            untonemapped_ap1,
             cb0_space5_003z,
             cb0_space5_003w,
             cb0_space5_003x != 0),
