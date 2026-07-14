@@ -9,7 +9,6 @@ struct ShaderInjectData {
   float tone_map_ui_nits;
   float tone_map_video_nits;
 
-  float color_grade_strength;
   float color_grade_blowout_restoration;
   float color_grade_hue_correction;
   float color_grade_saturation_correction;
@@ -76,15 +75,12 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_UI_NITS                           shader_injection.tone_map_ui_nits
 #define RENODX_VIDEO_NITS                        shader_injection.tone_map_video_nits
 
-#define RENODX_COLOR_GRADE_STRENGTH              shader_injection.color_grade_strength
 #define RENODX_PER_CHANNEL_BLOWOUT_RESTORATION   shader_injection.color_grade_blowout_restoration
 #define RENODX_PER_CHANNEL_HUE_CORRECTION        shader_injection.color_grade_hue_correction
 #define RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION \
                                                  shader_injection.color_grade_saturation_correction
 #define RENODX_PER_CHANNEL_HUE_SHIFT             shader_injection.color_grade_hue_shift
 
-// PsychoV semantic aliases for legacy-bound controls.
-#define RENODX_PSYCHOV_BLEND                     shader_injection.color_grade_strength
 #define RENODX_PSYCHOV_HUE_RESTORE               shader_injection.color_grade_hue_correction
 #define RENODX_PSYCHOV_PURITY_SCALE              shader_injection.color_grade_saturation_correction
 #define RENODX_PSYCHOV_HIGHLIGHT_PURITY_BIAS     shader_injection.color_grade_hue_shift
