@@ -27,7 +27,6 @@ cbuffer shader_injection : register(b13, space50) {
 }
 
 #define RENODX_GAME_GAMMA_CORRECTION 1u
-#define HUE_CORRECTION               1u
 
 #define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
