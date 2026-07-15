@@ -83,15 +83,15 @@ void main(
     // display map in lms to peak then restore untonemapped luminance
     float3 peak_lms = renodx::color::lms::from::BT2020(peak_ratio);
     float3 mid_gray_lms = renodx::color::lms::from::BT2020(0.1f);
-    float3 clip_lms = renodx::color::lms::from::BT2020(100.f);
-    tonemapped_lms = psycho_ReinhardPiecewise(untonemapped_lms, peak_lms, mid_gray_lms);
+    float3 clip_lms = renodx::color::lms::from::BT2020(80.f);
+    tonemapped_lms = renodx::tonemap::neutwo::PerChannel(untonemapped_lms, peak_lms, clip_lms);
 
     float untonemapped_yf = renodx::color::yf::from::LMS(untonemapped_lms);
     float tonemapped_yf = renodx::color::yf::from::LMS(tonemapped_lms);
     tonemapped_lms *= renodx::math::DivideSafe(untonemapped_yf, tonemapped_yf, 1.f);
 
     // Apply LMS luminance and purity grading.
-    float3 desired_background_state_lms = renodx::color::lms::from::AP1(0.1f);  // output midgray from tonemap was 0.1 in AP1
+    float3 desired_background_state_lms = renodx::color::lms::from::AP1(0.13309f);  // output midgray from tonemap was 0.13309
     float output_mid_gray = renodx::color::yf::from::LMS(desired_background_state_lms);
     tonemapped_lms = ApplyLuminanceGradingLMS(tonemapped_lms,
                                               RENODX_TONE_MAP_EXPOSURE,
@@ -109,7 +109,7 @@ void main(
     float3 tonemapped_bt2020 = max(0, renodx::color::bt2020::from::LMS(tonemapped_lms));
 
     float max_channel = renodx::math::Max(tonemapped_bt2020);
-    float new_max = renodx::tonemap::ReinhardPiecewiseExtended(max_channel, 100.f, peak_ratio, 0.1f);
+    float new_max = renodx::tonemap::Neutwo(max_channel, peak_ratio, 80.f);
     new_max = min(new_max, peak_ratio);
     float scale = renodx::math::DivideSafe(new_max, max_channel, 1.f);
     float3 displaymapped_bt2020 = tonemapped_bt2020 * scale;

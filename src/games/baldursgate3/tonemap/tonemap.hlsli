@@ -36,36 +36,47 @@ renodx::tonemap::aces::ODTConfig CreateODTConfig(
   return config;
 }
 
+float ODTToneMapDerivative(float x, renodx::tonemap::aces::ODTConfig config) {
+  if (!(x > 0.f)) return 0.f;
+
+  const float KNOT_INTERVAL_COUNT = 3.f;
+  float log_x = log10(x);
+  if (log_x <= config.y_min.x || log_x > config.y_max.x) {
+    return 0.f;
+  }
+
+  float knot_scale;
+  float knot_coord;
+  float3 coefficients;
+  if (log_x >= config.y_mid.x) {
+    knot_scale = KNOT_INTERVAL_COUNT / (config.y_max.x - config.y_mid.x);
+    knot_coord = (log_x - config.y_mid.x) * knot_scale;
+    int j = clamp((int)knot_coord, 0, 3);
+    coefficients = float3(
+        config.coefs_high[j],
+        config.coefs_high[j + 1],
+        config.coefs_high[j + 2]);
+    knot_coord -= float(j);
+  } else {
+    knot_scale = KNOT_INTERVAL_COUNT / (config.y_mid.x - config.y_min.x);
+    knot_coord = (log_x - config.y_min.x) * knot_scale;
+    int j = clamp((int)knot_coord, 0, 2);
+    coefficients = float3(
+        config.coefs_low[j],
+        config.coefs_low[j + 1],
+        config.coefs_low[j + 2]);
+    knot_coord -= float(j);
+  }
+
+  float3 quadratic = mul(renodx::tonemap::aces::M, coefficients);
+  float log_slope = mad(2.f * quadratic.x, knot_coord, quadratic.y) * knot_scale;
+  float y = renodx::tonemap::aces::ODTToneMap(x, config);
+  return (y / x) * log_slope;
+}
+
 }  // namespace aces
 }  // namespace tonemap
 }  // namespace renodx_custom
-
-float Highlights(float x, float highlights, float mid_gray = 0.18f) {
-  if (highlights == 1.f) return x;
-  if (highlights > 1.f) {
-    return max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.f)));
-  } else {
-    float b = mid_gray * pow(x / mid_gray, 2.f - highlights);
-    float t = min(x, 1.f);
-    return min(x, renodx::math::DivideSafe(x * x, lerp(x, b, t), x));
-  }
-}
-
-float Shadows(float x, float shadows, float mid_gray = 0.18f) {
-  if (shadows == 1.f) return x;
-  float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
-  float base_term = x * mid_gray;
-  float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
-  if (shadows > 1.f) {
-    float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
-    float reference = x * (1.f + base_scale);
-    return max(x, x + (raised - reference));
-  } else {
-    float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
-    float reference = x * (1.f - base_scale);
-    return clamp(x + (lowered - reference), 0.f, x);
-  }
-}
 
 float ContrastAndFlare(float x, float contrast, float flare, float mid_gray = 0.18f) {
   if (contrast == 1.f && flare == 0.f) return x;
@@ -77,8 +88,8 @@ float ContrastAndFlare(float x, float contrast, float flare, float mid_gray = 0.
 float3 ApplyLuminanceGradingLMS(float3 color_lms, float exposure, float highlights, float shadows, float contrast, float flare, float mid_gray_yf = 0.18f) {
   float yf = max(0.f, renodx::color::yf::from::LMS(color_lms));
   float yf_adjusted = yf * exposure;
-  yf_adjusted = Highlights(yf_adjusted, highlights, mid_gray_yf);
-  yf_adjusted = Shadows(yf_adjusted, shadows, mid_gray_yf);
+  yf_adjusted = renodx::color::grade::Highlights(yf_adjusted, highlights, mid_gray_yf);
+  yf_adjusted = renodx::color::grade::Shadows(yf_adjusted, shadows, mid_gray_yf);
   yf_adjusted = ContrastAndFlare(yf_adjusted, contrast, flare, mid_gray_yf);
   return color_lms * renodx::math::DivideSafe(yf_adjusted, yf, 1.f);
 }
@@ -153,21 +164,31 @@ float4 GenerateLUTbuilderOutput(float3 untonemapped_ap1) {
   // We then scale brightness like SDR as a linear scalar
   // ACES_MAX and ACES_MIN are pre-adjusted in order to account for the post-tonemap diffuse white scalar which we define as `10.f * ACES_MID`
   float ACES_MID = 50.f;
-  float EXP_SHIFT_REFERENCE_MAX = 500.f;
+  float EXP_SHIFT_REFERENCE_MAX = ACES_MID * 10.f;
   float EXP_SHIFT_REFERENCE_MIN = 0.0001f;
 
   const float ACES_DIFFUSE = ACES_MID * 10.f;
   const float ACES_MIN = 0.0001f;
   float aces_min = ACES_MIN / 100.f;
-  float aces_max = (10000.f / 100.f);
+  float aces_max = 40.f;
 
   if (true) {
     aces_max = renodx::color::correct::Gamma(aces_max, true);
     aces_min = renodx::color::correct::Gamma(aces_min, true);
+  } else if (true) {
+    aces_min /= 100000.f;
   }
 
   renodx::tonemap::aces::ODTConfig ODT_config = renodx_custom::tonemap::aces::CreateODTConfig(aces_min * ACES_DIFFUSE, aces_max * ACES_DIFFUSE, ACES_MID, true, EXP_SHIFT_REFERENCE_MAX, EXP_SHIFT_REFERENCE_MIN);
-  float3 tonemapped_lms_normalized = renodx::tonemap::aces::ODTToneMap(untonemapped_lms_normalized, ODT_config) / ACES_DIFFUSE;
+
+  // Preserve the ACES curve through the configured midpoint, then remove its
+  // shoulder with a value- and slope-matched linear tangent continuation.
+  const float MIDPOINT_INPUT = 0.18f;
+  float midpoint_output = renodx::tonemap::aces::ODTToneMap(MIDPOINT_INPUT, ODT_config);
+  float midpoint_slope = renodx_custom::tonemap::aces::ODTToneMapDerivative(MIDPOINT_INPUT, ODT_config);
+  float3 curved_lms = renodx::tonemap::aces::ODTToneMap(min(untonemapped_lms_normalized, MIDPOINT_INPUT), ODT_config);
+  float3 tangent_lms = mad(untonemapped_lms_normalized - MIDPOINT_INPUT, midpoint_slope, midpoint_output);
+  float3 tonemapped_lms_normalized = renodx::math::Select(untonemapped_lms_normalized > MIDPOINT_INPUT, tangent_lms, curved_lms) / ACES_DIFFUSE;
 
   if (true) {
     tonemapped_lms_normalized = renodx::color::correct::GammaSafe(tonemapped_lms_normalized);
