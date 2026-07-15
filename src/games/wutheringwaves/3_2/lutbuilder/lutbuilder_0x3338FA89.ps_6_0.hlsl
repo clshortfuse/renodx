@@ -590,6 +590,8 @@ float4 main(
 
   wuwa::lut::ApplyInverseSamplingScale(_1383, _1384, _1385, lut_sampling_scale);
 
+  wuwa::lut::PreserveReferenceLightness(_1383, _1384, _1385, float3(_1280, _1281, _1282));
+
   float _1411 = cb0_044y * (((cb0_026y + (cb0_026x * _1383)) * _1383) + cb0_026z);
   float _1412 = cb0_044z * (((cb0_026y + (cb0_026x * _1384)) * _1384) + cb0_026z);
   float _1413 = cb0_044w * (((cb0_026y + (cb0_026x * _1385)) * _1385) + cb0_026z);
