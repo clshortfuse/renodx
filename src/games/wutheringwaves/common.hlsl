@@ -7,7 +7,6 @@
 #define APPLY_EXTENDED_TONEMAP(c1, c2, c3) \
   float3 tonemapped; \
   if (RENODX_TONE_MAP_TYPE == 0.f) { \
-    wuwa::WUWAUncharted2::ApplyExtendedFromCoeffs((c1), (c2), (c3), untonemapped, cb0_037y, cb0_037z, cb0_037w, cb0_038x, cb0_038y, cb0_038z); \
     tonemapped = float3(c1, c2, c3); \
   } else if (RENODX_TONE_MAP_SCALING == 1.f) { \
     tonemapped = wuwa::ApplyPsychoV17(untonemapped); \
@@ -63,23 +62,47 @@ static inline float3 ApplyPsychoV17(float3 untonemapped_bt709) {
       RENODX_TONE_MAP_HIGHLIGHTS,
       RENODX_TONE_MAP_SHADOWS,
       RENODX_TONE_MAP_CONTRAST,
-      RENODX_TONE_MAP_SATURATION * RENODX_PSYCHOV_PURITY_SCALE,
-      0.f,
-      100.f,
-      RENODX_PSYCHOV_HUE_RESTORE,
-      RENODX_TONE_MAP_ADAPTATION_CONTRAST);
+      RENODX_TONE_MAP_SATURATION,       // purity_scale 
+      0.f,                              // bleaching_intensity
+      100.f,                            // clip_point
+      1.f,                              // hue_restore 
+      1.f,                              // adaptation_contrast
+      0,                                // white_curve_mode
+      1.065f,                           // cone_response_exponent
+      0.175f,                           // current_adaptive_state_bt709 
+      0.18f);                           // current_background_state_bt709
 }
 
+// User color grade in cone/LMS + MacLeod-Boynton space
 static inline float3 ApplyUserGrade(float3 color_bt709) {
-  return renodx::color::grade::UserColorGrading(
-      color_bt709,
-      RENODX_TONE_MAP_EXPOSURE,
-      RENODX_TONE_MAP_HIGHLIGHTS,
-      RENODX_TONE_MAP_SHADOWS,
-      RENODX_TONE_MAP_CONTRAST,
-      RENODX_TONE_MAP_SATURATION,
-      RENODX_TONE_MAP_DECHROMA,
-      0.f);
+  float3 bt709_scene = color_bt709 * RENODX_TONE_MAP_EXPOSURE;
+  float3 lms = renodx::color::lms::from::BT709(bt709_scene);
+  float3 adaptive_lms = renodx::color::lms::from::BT709(0.18f);
+
+  float yf_input = renodx::color::yf::from::LMS(lms);
+  float yf_midgray = renodx::color::yf::from::BT709(0.18f);
+  float yf_target = yf_input;
+  if (RENODX_TONE_MAP_HIGHLIGHTS != 1.f) {
+    yf_target = renodx::color::grade::Highlights(yf_target, RENODX_TONE_MAP_HIGHLIGHTS, yf_midgray);
+  }
+  if (RENODX_TONE_MAP_SHADOWS != 1.f) {
+    yf_target = renodx::color::grade::Shadows(yf_target, RENODX_TONE_MAP_SHADOWS, yf_midgray);
+  }
+  if (RENODX_TONE_MAP_CONTRAST != 1.f) {
+    yf_target = renodx::color::grade::ContrastSafe(yf_target, RENODX_TONE_MAP_CONTRAST, yf_midgray);
+  }
+  float yf_scale = renodx::math::DivideSafe(yf_target, yf_input, 1.f);
+  float3 lms_graded = lms * yf_scale;
+
+  if (RENODX_TONE_MAP_SATURATION != 1.f) {
+    float3 lms_relative = renodx::math::DivideSafe(lms_graded, adaptive_lms, 0.f.xxx);
+    float3 mb = renodx::color::macleod_boynton::from::LMS(lms_relative);
+    float2 mb_white = renodx::color::macleod_boynton::from::LMS(1.f.xxx).xy;
+    float2 mb_scaled = lerp(mb_white, mb.xy, RENODX_TONE_MAP_SATURATION);
+    lms_graded = renodx::color::lms::from::MacLeodBoynton(float3(mb_scaled, mb.z)) * max(adaptive_lms, 1e-6f);
+  }
+
+  return renodx::color::bt709::from::LMS(lms_graded);
 }
 
 static inline float3 CorrectHueAndPurityMBGated(
@@ -161,7 +184,8 @@ static inline float3 CorrectHueAndPurityMBGated(
 // Post-tonemap hue/purity emulation. Pulls the mapped color toward the hue and
 // purity of a Reinhard-piecewise reference of itself, gated by the emulation sliders.
 static inline float3 ApplyHueCorrection(float3 mapped_bt709) {
-  if (RENODX_TONE_MAP_SCALING == 0.f &&
+  if (
+
       (RENODX_PSYCHOV_HUE_EMULATION > 0.f || RENODX_PSYCHOV_CHROMA_EMULATION > 0.f)) {
     float3 mapped_ap1 = renodx::color::ap1::from::BT709(mapped_bt709);
     float3 hue_reference_bt709 = renodx::color::bt709::from::AP1(
@@ -219,11 +243,29 @@ static inline void ApplyInverseSamplingScale(inout float r, inout float g, inout
   }
 }
 
+static inline void PreserveReferenceLightness(inout float r, inout float g, inout float b, float3 reference_bt709) {
+  if (RENODX_TONE_MAP_TYPE == 0.f || RENODX_WUWA_LUT_LIGHTNESS >= 1.f) {
+    return;
+  }
+  float3 lut_lab = renodx::color::oklab::from::BT709(float3(r, g, b));
+  float3 ref_lab = renodx::color::oklab::from::BT709(reference_bt709);
+  lut_lab.x = lerp(ref_lab.x, lut_lab.x, RENODX_WUWA_LUT_LIGHTNESS);
+  float3 result = renodx::color::bt709::clamp::AP1(renodx::color::bt709::from::OkLab(lut_lab));
+  r = result.r;
+  g = result.g;
+  b = result.b;
+}
+
+
 static inline void ApplyLutStrength(inout float r, inout float g, inout float b, float3 ungraded) {
   float3 ungraded_bt709 = renodx::color::bt709::from::AP1(ungraded);
-  r = lerp(ungraded_bt709.r, r, RENODX_WUWA_LUT_STRENGTH);
-  g = lerp(ungraded_bt709.g, g, RENODX_WUWA_LUT_STRENGTH);
-  b = lerp(ungraded_bt709.b, b, RENODX_WUWA_LUT_STRENGTH);
+  float3 graded_lab = renodx::color::oklab::from::BT709(float3(r, g, b));
+  float3 ungraded_lab = renodx::color::oklab::from::BT709(ungraded_bt709);
+  graded_lab.yz = lerp(ungraded_lab.yz, graded_lab.yz, RENODX_WUWA_LUT_STRENGTH);
+  float3 result = renodx::color::bt709::clamp::AP1(renodx::color::bt709::from::OkLab(graded_lab));
+  r = result.r;
+  g = result.g;
+  b = result.b;
 }
 
 }
@@ -331,11 +373,19 @@ static inline float3 ApplyDisplayMap(float3 input_bt709) {
     return renodx::draw::RenderIntermediatePass(input_bt709);
   }
 
+  // Apply hue correction cause the game still seems to need it.
   input_bt709 = ApplyHueCorrection(input_bt709);
 
+
+  if (RENODX_TONE_MAP_SCALING == 1.f) {
+    return renodx::draw::RenderIntermediatePass(input_bt709);
+  }
+
+  // N2 Display-mapping to peak if on extended path
   float3 input_bt2020 = renodx::color::bt2020::from::BT709(max(0.f, input_bt709));
   float3 mapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(input_bt2020, WUWA_PEAK_SCALING);
-  return renodx::draw::RenderIntermediatePass(renodx::color::bt709::from::BT2020(mapped_bt2020));
+  float3 mapped_bt709 = renodx::color::bt709::from::BT2020(mapped_bt2020);
+  return renodx::draw::RenderIntermediatePass(mapped_bt709);
 }
 
 static inline float3 InvertAndApplyDisplayMap(float3 input_bt709) {
