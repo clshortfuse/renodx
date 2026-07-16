@@ -50,16 +50,6 @@ const float renodx_color_macleod_boynton_EPSILON = 1e-20;
 const float renodx_color_macleod_boynton_INTERVAL_MAX = 1e30;
 const float renodx_color_macleod_boynton_MB_NEAR_WHITE_EPSILON = 1e-14;
 
-vec3 renodx_color_macleod_boynton_LMS_From_BT709(vec3 bt709_linear) {
-  return renodx_color_macleod_boynton_XYZ_TO_LMS_2006
-         * (renodx_color_macleod_boynton_BT709_TO_XYZ_MAT * bt709_linear);
-}
-
-vec3 renodx_color_macleod_boynton_BT709_From_LMS(vec3 lms) {
-  return renodx_color_macleod_boynton_XYZ_TO_BT709_MAT
-         * (renodx_color_macleod_boynton_LMS_TO_XYZ_2006 * lms);
-}
-
 float renodx_color_macleod_boynton_DivideSafe(float a, float b, float fallback) {
   return (b == 0.0) ? fallback : (a / b);
 }
@@ -765,6 +755,264 @@ vec3 renodx_tonemap_psycho22_GamutCompressAdaptiveRelativeWeightedLMSBoundBT709(
   return renodx_tonemap_psycho22_WeightedLMSFromMB(
       white + t_final * direction, y_mb);
 }
+
+  const float renodx_tonemap_psycho23_EPSILON = 1e-6;
+  const float renodx_tonemap_psycho23_REFERENCE_SIMULTANEOUS_RANGE_LOG10 = 3.7;
+  const float renodx_tonemap_psycho23_REFERENCE_CENTERED_RANGE_SIDE_COUNT = 2.0;
+  const float renodx_tonemap_psycho23_HEADROOM_RATIO_FALLBACK = 1.0;
+  const float renodx_tonemap_psycho23_MIN_AUTO_COMPRESSION = 1.0;
+
+  // Empirical signed-opponent appearance controls from PsychoV23.
+  const float renodx_tonemap_psycho23_RED_RETENTION = 1.5;
+  const float renodx_tonemap_psycho23_GREEN_RETENTION = 2.0;
+  const float renodx_tonemap_psycho23_BLUE_RETENTION = 1.0;
+  const float renodx_tonemap_psycho23_YELLOW_RETENTION = 3.0;
+
+  float renodx_tonemap_psycho23_YfFromLMS(vec3 lms) {
+    vec3 weighted_lms = renodx_tonemap_psycho22_WeighLMS(lms);
+    return max(weighted_lms.x + weighted_lms.y, renodx_tonemap_psycho23_EPSILON);
+  }
+
+  float renodx_tonemap_psycho23_AutoCompressionFromCenteredReferenceRange(
+    float anchor_out_yf, float peak_yf) {
+    float peak_over_anchor = renodx_color_macleod_boynton_DivideSafe(
+      max(peak_yf, renodx_tonemap_psycho23_EPSILON),
+      max(anchor_out_yf, renodx_tonemap_psycho23_EPSILON),
+      renodx_tonemap_psycho23_HEADROOM_RATIO_FALLBACK);
+    peak_over_anchor = max(
+      peak_over_anchor,
+      1.0 + renodx_tonemap_psycho23_EPSILON);
+
+    float reference_one_side_range_log10 =
+      renodx_tonemap_psycho23_REFERENCE_SIMULTANEOUS_RANGE_LOG10
+      / renodx_tonemap_psycho23_REFERENCE_CENTERED_RANGE_SIDE_COUNT;
+    float actual_above_adaptation_range_log10 = max(
+      log2(peak_over_anchor) / log2(10.0),
+      renodx_tonemap_psycho23_EPSILON);
+
+    return max(
+      reference_one_side_range_log10 / actual_above_adaptation_range_log10,
+      renodx_tonemap_psycho23_MIN_AUTO_COMPRESSION);
+  }
+
+  vec3 renodx_tonemap_psycho23_ToAdaptiveRelativeWeightedLMS(
+    vec3 lms_input, vec3 current_adaptive_state_lms) {
+    return renodx_tonemap_psycho22_DivideSafe(
+      renodx_tonemap_psycho22_WeighLMS(lms_input),
+      current_adaptive_state_lms,
+      vec3(0.0));
+  }
+
+  vec3 renodx_tonemap_psycho23_FromAdaptiveRelativeWeightedLMS(
+    vec3 relative_weighted_lms, vec3 current_adaptive_state_lms) {
+    return relative_weighted_lms
+       * max(current_adaptive_state_lms, vec3(renodx_tonemap_psycho23_EPSILON));
+  }
+
+  vec3 renodx_tonemap_psycho23_AdaptiveRelativeWeightedNeutral() {
+    return renodx_tonemap_psycho22_WeighLMS(vec3(1.0));
+  }
+
+  vec3 renodx_tonemap_psycho23_OpponentACCFromWeightedDelta(vec3 delta_weighted_lms) {
+    vec3 neutral_weighted = renodx_tonemap_psycho23_AdaptiveRelativeWeightedNeutral();
+    float m_to_l = renodx_color_macleod_boynton_DivideSafe(
+      neutral_weighted.x,
+      neutral_weighted.y,
+      0.0);
+    float s_to_lm = renodx_color_macleod_boynton_DivideSafe(
+      neutral_weighted.x + neutral_weighted.y,
+      neutral_weighted.z,
+      0.0);
+
+    return vec3(
+      delta_weighted_lms.x + delta_weighted_lms.y,
+      delta_weighted_lms.x - m_to_l * delta_weighted_lms.y,
+      -delta_weighted_lms.x - delta_weighted_lms.y
+        + s_to_lm * delta_weighted_lms.z);
+  }
+
+  vec3 renodx_tonemap_psycho23_WeightedDeltaFromOpponentACC(vec3 acc) {
+    vec3 neutral_weighted = renodx_tonemap_psycho23_AdaptiveRelativeWeightedNeutral();
+    float m_to_l = renodx_color_macleod_boynton_DivideSafe(
+      neutral_weighted.x,
+      neutral_weighted.y,
+      0.0);
+    float s_to_lm = renodx_color_macleod_boynton_DivideSafe(
+      neutral_weighted.x + neutral_weighted.y,
+      neutral_weighted.z,
+      0.0);
+
+    float delta_m = renodx_color_macleod_boynton_DivideSafe(
+      acc.x - acc.y,
+      1.0 + m_to_l,
+      0.0);
+    float delta_l = acc.x - delta_m;
+    float delta_s = renodx_color_macleod_boynton_DivideSafe(
+      acc.z + acc.x,
+      s_to_lm,
+      0.0);
+    return vec3(delta_l, delta_m, delta_s);
+  }
+
+  float renodx_tonemap_psycho23_SignedOpponentRetention(
+    float white_progress, float retention_exponent) {
+    return 1.0 - pow(
+             clamp(white_progress, 0.0, 1.0),
+             max(retention_exponent, renodx_tonemap_psycho23_EPSILON));
+  }
+
+  vec3 renodx_tonemap_psycho23_ApplySignedOpponentRetention(
+    vec3 compressed_lms,
+    vec3 source_lms,
+    vec3 adaptive_state_lms,
+    vec3 peak_lms,
+    float white_progress) {
+    if (white_progress <= 0.0
+      || min(source_lms.x, min(source_lms.y, source_lms.z)) <= 0.0) {
+    return compressed_lms;
+    }
+
+    vec3 source_weighted = renodx_tonemap_psycho23_ToAdaptiveRelativeWeightedLMS(
+      source_lms,
+      adaptive_state_lms);
+    vec3 adapted_neutral = renodx_tonemap_psycho23_AdaptiveRelativeWeightedNeutral();
+    float adapted_neutral_yf = adapted_neutral.x + adapted_neutral.y;
+    float source_yf = source_weighted.x + source_weighted.y;
+
+    if (source_yf <= renodx_tonemap_psycho23_EPSILON
+      || adapted_neutral_yf <= renodx_tonemap_psycho23_EPSILON) {
+    return compressed_lms;
+    }
+
+    vec3 source_neutral = adapted_neutral
+              * renodx_color_macleod_boynton_DivideSafe(
+                source_yf,
+                adapted_neutral_yf,
+                1.0);
+    vec3 source_acc = renodx_tonemap_psycho23_OpponentACCFromWeightedDelta(
+              source_weighted - source_neutral)
+            / source_yf;
+
+    float red_retention = renodx_tonemap_psycho23_SignedOpponentRetention(
+      white_progress,
+      renodx_tonemap_psycho23_RED_RETENTION);
+    float green_retention = renodx_tonemap_psycho23_SignedOpponentRetention(
+      white_progress,
+      renodx_tonemap_psycho23_GREEN_RETENTION);
+    float blue_retention = renodx_tonemap_psycho23_SignedOpponentRetention(
+      white_progress,
+      renodx_tonemap_psycho23_BLUE_RETENTION);
+    float yellow_retention = renodx_tonemap_psycho23_SignedOpponentRetention(
+      white_progress,
+      renodx_tonemap_psycho23_YELLOW_RETENTION);
+
+    float rg_out = max(source_acc.y, 0.0) * red_retention
+           - max(-source_acc.y, 0.0) * green_retention;
+    float yv_out = max(source_acc.z, 0.0) * blue_retention
+           - max(-source_acc.z, 0.0) * yellow_retention;
+
+    vec3 compressed_weighted = renodx_tonemap_psycho23_ToAdaptiveRelativeWeightedLMS(
+      compressed_lms,
+      adaptive_state_lms);
+    float target_yf = compressed_weighted.x + compressed_weighted.y;
+    if (target_yf <= renodx_tonemap_psycho23_EPSILON) {
+    return compressed_lms;
+    }
+
+    vec3 peak_weighted = renodx_tonemap_psycho23_ToAdaptiveRelativeWeightedLMS(
+      peak_lms,
+      adaptive_state_lms);
+    float peak_weighted_yf = peak_weighted.x + peak_weighted.y;
+    if (peak_weighted_yf <= renodx_tonemap_psycho23_EPSILON) {
+    return compressed_lms;
+    }
+
+    vec3 target_neutral = peak_weighted
+              * renodx_color_macleod_boynton_DivideSafe(
+                target_yf,
+                peak_weighted_yf,
+                1.0);
+    vec3 target_delta = renodx_tonemap_psycho23_WeightedDeltaFromOpponentACC(
+      vec3(0.0, rg_out * target_yf, yv_out * target_yf));
+    vec3 output_lms = renodx_tonemap_psycho22_UnweighLMS(
+      renodx_tonemap_psycho23_FromAdaptiveRelativeWeightedLMS(
+        target_neutral + target_delta,
+        adaptive_state_lms));
+
+    float compressed_yf = renodx_tonemap_psycho23_YfFromLMS(compressed_lms);
+    float output_yf = renodx_tonemap_psycho23_YfFromLMS(output_lms);
+    if (output_yf <= renodx_tonemap_psycho23_EPSILON) {
+    return compressed_lms;
+    }
+
+    return output_lms
+       * renodx_color_macleod_boynton_DivideSafe(
+         compressed_yf,
+         output_yf,
+         1.0);
+  }
+
+  vec3 renodx_tonemap_psycho23_ApplySignedOpponentRetentionAndGamutCompressionLMS(
+    vec3 precompression_lms,
+    vec3 compressed_lms,
+    vec3 input_adaptive_state_lms,
+    vec3 output_anchor_lms,
+    vec3 peak_white_lms,
+    float hue_restore,
+    float gamut_compression) {
+    float anchor_yf = renodx_tonemap_psycho23_YfFromLMS(output_anchor_lms);
+    float peak_yf = renodx_tonemap_psycho23_YfFromLMS(peak_white_lms);
+    float output_yf = renodx_tonemap_psycho23_YfFromLMS(compressed_lms);
+
+    // Measure white convergence from the actual compressed output because the
+    // RDR2 shoulder is Neutwo rather than PsychoV's analytic compression curve.
+    float compression_power = renodx_tonemap_psycho23_AutoCompressionFromCenteredReferenceRange(
+      anchor_yf,
+      peak_yf);
+    float anchor_over_peak = clamp(
+      renodx_color_macleod_boynton_DivideSafe(anchor_yf, peak_yf, 1.0),
+      0.0,
+      1.0);
+    float output_over_peak = max(
+      renodx_color_macleod_boynton_DivideSafe(output_yf, peak_yf, 0.0),
+      0.0);
+    float anchor_powered = pow(
+      max(anchor_over_peak, renodx_tonemap_psycho23_EPSILON),
+      compression_power);
+    float white_progress = clamp(
+      renodx_color_macleod_boynton_DivideSafe(
+        pow(output_over_peak, compression_power) - anchor_powered,
+        1.0 - anchor_powered,
+        0.0),
+      0.0,
+      1.0);
+
+    vec3 opponent_retained_lms = renodx_tonemap_psycho23_ApplySignedOpponentRetention(
+      compressed_lms,
+      precompression_lms,
+      input_adaptive_state_lms,
+      peak_white_lms,
+      white_progress);
+    vec3 hue_restored_lms = mix(
+      compressed_lms,
+      opponent_retained_lms,
+      clamp(hue_restore, 0.0, 1.0));
+
+    vec3 display_relative_weighted = renodx_tonemap_psycho23_ToAdaptiveRelativeWeightedLMS(
+      hue_restored_lms,
+      input_adaptive_state_lms);
+    if (gamut_compression != 0.0) {
+    display_relative_weighted = renodx_tonemap_psycho22_GamutCompressAdaptiveRelativeWeightedLMSBoundBT709(
+      display_relative_weighted,
+      input_adaptive_state_lms,
+      gamut_compression);
+    }
+
+    return renodx_tonemap_psycho22_UnweighLMS(
+      renodx_tonemap_psycho23_FromAdaptiveRelativeWeightedLMS(
+        display_relative_weighted,
+        input_adaptive_state_lms));
+  }
 
 vec3 renodx_tonemap_psycho22_GamutCompressBT709(
     vec3 bt709, vec3 current_adaptive_state_bt709, float strength) {
