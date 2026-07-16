@@ -572,11 +572,20 @@ float Highlights(float x, float highlights, float mid_gray) {
   if (highlights == 1.0) return x;
 
   if (highlights > 1.0) {
-    return max(x, mix(x, mid_gray * pow(x / mid_gray, highlights), min(x, 1.0)));
+    float t = 0.0;
+    if (x > mid_gray) {
+      t = renodx_usergrading_saturate(log2(x / mid_gray) / log2(1.0 / mid_gray));
+    }
+    t = t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+    return mix(x, mid_gray * pow(x / mid_gray, highlights), t);
   } else {
     float b = mid_gray * pow(x / mid_gray, 2.0 - highlights);
-    float t = min(x, 1.0);  // clamp extreme influence
-    return min(x, renodx_usergrading_DivideSafe(x * x, mix(x, b, t), x));
+    float t = 0.0;
+    if (x > mid_gray) {
+      t = renodx_usergrading_saturate(log2(x / mid_gray) / log2(1.0 / mid_gray));
+    }
+    t = t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+    return renodx_usergrading_DivideSafe(x * x, mix(x, b, t), x);
   }
 }
 
@@ -590,11 +599,23 @@ float Shadows(float x, float shadows, float mid_gray) {
   if (shadows > 1.0) {
     float raised = x * (1.0 + renodx_usergrading_DivideSafe(base_term, pow(ratio, shadows), 0.0));
     float reference = x * (1.0 + base_scale);
-    return max(x, x + (raised - reference));
+    float shadow_floor = mid_gray / 16.0;
+    float t = 1.0;
+    if (x > shadow_floor) {
+      t = renodx_usergrading_saturate(log2(x / mid_gray) / log2(shadow_floor / mid_gray));
+    }
+    t = t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+    return x + (raised - reference) * t;
   } else {
-    float lowered = x * (1.0 + renodx_usergrading_DivideSafe(-base_term, pow(ratio, 2.0 - shadows), 0.0));
+    float lowered = x * (1.0 - renodx_usergrading_DivideSafe(base_term, pow(ratio, 2.0 - shadows), 0.0));
     float reference = x * (1.0 - base_scale);
-    return clamp(x + (lowered - reference), 0.0, x);
+    float shadow_floor = mid_gray / 16.0;
+    float t = 1.0;
+    if (x > shadow_floor) {
+      t = renodx_usergrading_saturate(log2(x / mid_gray) / log2(shadow_floor / mid_gray));
+    }
+    t = t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+    return x + (lowered - reference) * t;
   }
 }
 

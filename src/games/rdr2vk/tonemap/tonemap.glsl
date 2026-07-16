@@ -37,22 +37,10 @@ vec3 ApplyToneMap(vec3 _676, bool _679, float _638, float _m6, uint _m4, float _
     float pivot_point = rdr2_tonemap_FindSecondDerivativeRootMax(A, B, C, D, E);
 
     vec3 base;
-    if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
-      float y_in = renodx_color_macleod_boynton_LuminosityFromBT709LuminanceNormalized(untonemapped);
-      float base_y = rdr2_tonemap_Apply(y_in, A, B, C, D, E, F, white_precompute);
+    base = rdr2_tonemap_Apply(untonemapped, A, B, C, D, E, F, white_precompute);
+    tonemapped = rdr2_tonemap_ApplyExtended(untonemapped, base, pivot_point, white_precompute, A, B, C, D, E, F);
+    tonemapped = mix(tonemapped, base, RENODX_TONE_MAP_BLEND_STRENGTH);
 
-      float y_out = rdr2_tonemap_ApplyExtended(
-          y_in, base_y, pivot_point, white_precompute,
-          A, B, C, D, E, F);
-
-      // tonemapped = correctluminance(untonemapped, y_in, y_out);
-      tonemapped = untonemapped * DivideSafe(y_out, y_in, 1.f);
-    } else {
-      base = rdr2_tonemap_Apply(untonemapped, A, B, C, D, E, F, white_precompute);
-      tonemapped = rdr2_tonemap_ApplyExtended(
-          untonemapped, base, pivot_point, white_precompute,
-          A, B, C, D, E, F);
-    }
   } else {
     vec3 _685 = max(vec3(0.0), _676 * _638);
     vec3 _688 = _685 * _488.x;
@@ -87,28 +75,6 @@ vec3 DecodeLUTInput(vec3 lut_output, vec3 lut_input) {
   return lut_output;
 }
 
-float ComputeReinhardScale(float peak, float minimum, float gray_in, float gray_out) {
-  // s = (p * y - p * m) / (x * p - x * y)
-  float num = peak * (gray_out - minimum);  // p * (y - m)
-  float den = gray_in * (peak - gray_out);  // x * (p - y)
-  return num / den;
-}
-
-// Overload for default args: peak=1, minimum=0, gray_in=0.18, gray_out=0.18
-float ComputeReinhardScale() {
-  return ComputeReinhardScale(1.0, 0.0, 0.18, 0.18);
-}
-
-vec3 ReinhardPiecewise(vec3 x, float x_max, float shoulder) {
-  const float x_min = 0.0;
-  float exposure = ComputeReinhardScale(x_max, x_min, shoulder, shoulder);
-
-  vec3 tonemapped =
-      (x * exposure + x_min) / (x * (exposure / x_max) + (1.0 - x_min));
-
-  return mix(x, tonemapped, step(vec3(shoulder), x));
-}
-
 vec3 InverseReinhardScalablePiecewise(vec3 color, float channel_max, float shoulder) {
   float channel_min = 0.0;
   float exposure = (channel_max * (channel_min * shoulder + channel_min - shoulder))
@@ -126,6 +92,13 @@ float Neutwo(float x, float peak) {
   float p = peak;
   float numerator = p * x;
   float denominator_squared = fma(x, x, p * p);
+  return numerator * inversesqrt(denominator_squared);
+}
+
+vec3 Neutwo(vec3 x, float peak) {
+  float p = peak;
+  vec3 numerator = p * x;
+  vec3 denominator_squared = fma(x, x, vec3(p * p));
   return numerator * inversesqrt(denominator_squared);
 }
 
@@ -207,7 +180,7 @@ vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
         RENODX_TONE_MAP_SHADOW_CONTRAST,                      // float contrast_shadows;
         RENODX_TONE_MAP_CONTRAST,                             // float contrast;
         0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
-        1.f,                                                  // float gamma;
+        RENODX_TONE_MAP_GAMMA,                                // float gamma;
         RENODX_TONE_MAP_SATURATION,                           // float saturation;
         RENODX_TONE_MAP_DECHROMA,                             // float dechroma;
         -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),  // float highlight_saturation;
@@ -215,10 +188,10 @@ vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
         RENODX_TONE_MAP_BLOWOUT                               // float purity_emulation;
       };
 
-      vec3 hue_purity_reference_bt2020 = ReinhardPiecewise(ungraded_bt2020, 6.f, 1.f);
+      vec3 hue_purity_reference_bt2020 = Neutwo(ungraded_bt2020, 6.f);
 
       float lum = renodx_color_macleod_boynton_LuminosityFromBT2020LuminanceNormalized(ungraded_bt2020);
-      graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, lum, cg_config, 0.1f);
+      graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, lum, cg_config, 0.15f);
       graded_bt2020 = ApplyHueAndPurityGrading(graded_bt2020, hue_purity_reference_bt2020, lum, cg_config);
       graded_bt2020 = max(vec3(0.0), graded_bt2020);
 

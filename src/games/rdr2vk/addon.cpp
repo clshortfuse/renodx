@@ -125,17 +125,6 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminosity)"},
     },
     new renodx::utils::settings::Setting{
-        .key = "ToneMapScaling",
-        .binding = &shader_injection.tone_map_per_channel,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
-        .label = "Scaling",
-        .section = "Tone Mapping",
-        .tooltip = "Luminosity scales colors consistently while per-channel saturates shadows and hue shifts",
-        .labels = {"Luminosity", "Per Channel"},
-        .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
         .default_value = 100.f,
@@ -202,7 +191,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
         .binding = &shader_injection.tone_map_shadows,
-        .default_value = 50.f,
+        .default_value = 75.f,
         .label = "Shadows",
         .section = "Color Grading",
         .max = 100.f,
@@ -212,7 +201,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadowContrast",
         .binding = &shader_injection.tone_map_shadow_contrast,
-        .default_value = 42.f,
+        .default_value = 50.f,
         .label = "Shadow Contrast",
         .section = "Color Grading",
         .max = 100.f,
@@ -348,9 +337,7 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"GammaCorrection", 1.f},
-              {"ToneMapScaling", 1.f},
-              {"ColorGradeHighlights", 42.f},
-              {"ColorGradeShadowContrast", 50.f},
+              {"ColorGradeShadows", 50.f},
               {"UnclampLighting", 0.f},
           });
         },
@@ -431,7 +418,6 @@ void OnPresetOff() {
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 203.f},
       {"GammaCorrection", 0.f},
-      {"ToneMapScaling", 1.f},
       {"ToneMapHueShift", 100.f},
       {"ToneMapBlowout", 100.f},
       {"ColorGradeExposure", 1.f},
