@@ -237,11 +237,11 @@ float CompressLUTInputAlt(vec3 color, uint _m3, float _m7, float _m8, float _m9)
 
 vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
   if (IS_TONEMAPPED == 0.f) {
+    ungraded_bt709 = GammaSafe(ungraded_bt709, false);
+
     vec3 ungraded_bt2020 = BT2020FromBT709(ungraded_bt709);
     vec3 graded_bt2020;
     if (RENODX_TONE_MAP_TYPE != 0.f && RENODX_TONE_MAP_TYPE != 3.f) {
-      if (RENODX_SDR_EOTF_EMULATION != 0.f) ungraded_bt2020 = CorrectGammaMismatchBT2020ByYf(ungraded_bt2020, false);
-
       const UserGradingConfig cg_config = {
         RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
         RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
@@ -259,7 +259,7 @@ vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
       };
 
       float yf = renodx_color_yf_from_BT2020(ungraded_bt2020);
-      graded_bt2020 = ApplyLuminosityGrading(ungraded_bt2020, yf, cg_config, 0.15f);
+      graded_bt2020 = ApplyLuminanceGrading(ungraded_bt2020, yf, cg_config, 0.15f);
       graded_bt2020 = ApplyHueAndPurityGrading(graded_bt2020, ungraded_bt2020, yf, cg_config);
       graded_bt2020 = max(vec3(0.0), graded_bt2020);
 
@@ -267,8 +267,6 @@ vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
         float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
         graded_bt2020 *= ComputeMaxChannelScale(graded_bt2020, peak_ratio);
       }
-
-      if (RENODX_SDR_EOTF_EMULATION != 0.f) graded_bt2020 = CorrectGammaMismatchBT2020ByYf(graded_bt2020, true);
 
     } else {
       graded_bt2020 = ungraded_bt2020;
@@ -281,14 +279,10 @@ vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
     vec3 graded_bt709 = BT709FromBT2020(graded_bt2020);
 
     if (RENODX_TONE_MAP_TYPE != 0.f) {
-      if (RENODX_SDR_EOTF_EMULATION == 0.f) {
-        graded_bt709 *= vec3(RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS);
-      } else {
-        graded_bt709 = CorrectGammaMismatch(graded_bt709, false);
-        graded_bt709 *= vec3(RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS);
-        graded_bt709 = CorrectGammaMismatch(graded_bt709, true);
-      }
+      graded_bt709 *= vec3(RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS);
     }
+
+    graded_bt709 = GammaSafe(graded_bt709, true);
 
     return graded_bt709;
   } else {
