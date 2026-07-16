@@ -78,7 +78,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "None", "RenoDX", "SDR"},
+        .labels = {"Vanilla", "RenoDX (Customized)", "RenoDX (Vanilla+)", "SDR"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -90,7 +90,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
         .max = 4000.f,
-        .is_enabled = []() { return shader_injection.tone_map_type == 2.f; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 2.f || shader_injection.tone_map_type == 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
