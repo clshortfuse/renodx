@@ -228,7 +228,8 @@ void main() {
     _406 = vec4(_365.x, _365.y, _365.z, _316.w);
   }
   vec3 _409 = _406.xyz / vec3(_338);
-  _5 = vec4(_409.x, _409.y, _409.z, _406.w);
+  _5 = vec4(_409.x, _409.y, _409.z, _406.w);
+
 
   _5.rgb = ApplyGradingAndDisplayMap(_5.rgb, _4.xy);
 }
