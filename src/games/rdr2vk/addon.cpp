@@ -285,6 +285,7 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
+              {"ToneMapType", 2.f},
               {"GammaCorrection", 1.f},
               {"UnclampLighting", 0.f},
           });
