@@ -34,6 +34,12 @@ vec3 Neutwo(vec3 x, float peak) {
   return numerator * inversesqrt(denominator_squared);
 }
 
+vec3 Neutwo(vec3 x, vec3 peak) {
+  vec3 numerator = peak * x;
+  vec3 denominator_squared = fma(x, x, peak * peak);
+  return numerator * inversesqrt(denominator_squared);
+}
+
 // f(x) = x / sqrt(x*x + 1)
 float Neutwo(float x) {
   float numerator = x;
@@ -98,24 +104,33 @@ vec3 ApplyToneMap(vec3 _676, bool _679, float _638, float _m6, uint _m4, float _
 
     untonemapped = max(vec3(0.0), untonemapped * _638);
     if (RENODX_TONE_MAP_TYPE == 1.f) {  // Enhanced
-      vec3 lms_white = renodx_color_macleod_boynton_LMS_From_BT709(vec3(1.0));
-      untonemapped = renodx_color_macleod_boynton_LMS_From_BT709(untonemapped) / lms_white;
+      vec3 bt709_white_lms = renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(1.0));
+      untonemapped = renodx_tonemap_psycho22_StockmanLMSFromBT709(untonemapped);
 
       float anchor_out = rdr2_tonemap_Apply(pivot_point, A, B, C, D, E, F, white_precompute);
       float pivot_slope = rdr2_tonemap_Derivative(pivot_point, A, B, C, D, E, F) * white_precompute;
       float contrast = 2.0 * pivot_slope * pivot_point / anchor_out - 1.0;
-      tonemapped = ApplyAnchoredAdaptationContrast(untonemapped, contrast * 1.22f, vec3(pivot_point), vec3(anchor_out), 0.f);
+      tonemapped = ApplyAnchoredAdaptationContrast(untonemapped / bt709_white_lms, contrast * 1.22f, vec3(pivot_point), vec3(anchor_out), 0.f) * bt709_white_lms;
 
-      vec3 uncompressed_bt709 = renodx_color_macleod_boynton_BT709_From_LMS(tonemapped * lms_white);
-      float uncompressed_yf = renodx_color_yf_from_BT709(uncompressed_bt709);
+      vec3 precompression_lms = tonemapped;
+      float precompression_yf = renodx_color_yf_from_LMS(precompression_lms);
+      float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+      vec3 peak_white_lms = renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(peak_ratio));
+      vec3 compressed_lms = Neutwo(precompression_lms, peak_white_lms);
 
-      tonemapped = Neutwo(tonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-      vec3 compressed_bt709 = renodx_color_macleod_boynton_BT709_From_LMS(tonemapped * lms_white);
-      float compressed_yf = renodx_color_yf_from_BT709(compressed_bt709);
-
-      tonemapped *= DivideSafe(uncompressed_yf, compressed_yf, 1.0);
-      tonemapped = renodx_color_macleod_boynton_BT709_From_LMS(tonemapped * lms_white);
-      tonemapped = renodx_tonemap_psycho22_GamutCompressBT709(tonemapped, vec3(pivot_point), 1.0);
+      tonemapped = renodx_tonemap_psycho23_ApplySignedOpponentRetentionAndGamutCompressionLMS(
+          precompression_lms,
+          compressed_lms,
+          renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(pivot_point)),
+          renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(anchor_out)),
+          peak_white_lms,
+          1.0,
+          1.0);
+      tonemapped *= DivideSafe(
+          precompression_yf,
+          renodx_color_yf_from_LMS(tonemapped),
+          1.0);
+      tonemapped = renodx_tonemap_psycho22_BT709FromStockmanLMS(tonemapped);
     } else {  // Vanilla+
       vec3 base = rdr2_tonemap_Apply(untonemapped, A, B, C, D, E, F, white_precompute);
       tonemapped = rdr2_tonemap_ApplyExtended(untonemapped, base, pivot_point, white_precompute, A, B, C, D, E, F);
