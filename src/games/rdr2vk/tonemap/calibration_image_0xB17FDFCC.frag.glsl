@@ -58,7 +58,38 @@ void main() {
 
     vec3 color_untonemapped = InverseReinhardScalablePiecewise(color, 0.951f, 0.4f);
 
-    vec3 color_tonemapped = ApplyGradingAndDisplayMap(color_untonemapped, _5);
+    float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+    vec3 color_tonemapped;
+    if (RENODX_TONE_MAP_TYPE == 1.f) {
+      float precompression_yf = renodx_color_yf_from_BT709(color_untonemapped);
+      color_tonemapped = Neutwo(color_untonemapped, peak_ratio);
+      color_tonemapped *= DivideSafe(
+          precompression_yf,
+          renodx_color_yf_from_BT709(color_tonemapped),
+          1.0);
+    } else {
+      vec3 bt709_white_lms = renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(1.0));
+      vec3 precompression_lms = renodx_tonemap_psycho22_StockmanLMSFromBT709(color_untonemapped);
+      float precompression_yf = renodx_color_yf_from_LMS(precompression_lms);
+      vec3 peak_white_lms = renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(peak_ratio));
+      vec3 compressed_lms = Neutwo(precompression_lms, peak_white_lms);
+
+      vec3 tonemapped_lms = renodx_tonemap_psycho23_ApplySignedOpponentRetentionAndGamutCompressionLMS(
+          precompression_lms,
+          compressed_lms,
+          bt709_white_lms,
+          Neutwo(bt709_white_lms, peak_white_lms),
+          peak_white_lms,
+          1.0,
+          1.0);
+      tonemapped_lms *= DivideSafe(
+          precompression_yf,
+          renodx_color_yf_from_LMS(tonemapped_lms),
+          1.0);
+      color_tonemapped = renodx_tonemap_psycho22_BT709FromStockmanLMS(tonemapped_lms);
+    }
+
+    color_tonemapped = ApplyGradingAndDisplayMap(color_tonemapped, _5);
 
     _6 = vec4(color_tonemapped, 1.0);
   } else {

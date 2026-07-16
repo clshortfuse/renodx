@@ -122,7 +122,7 @@ renodx::utils::settings::Settings settings = {
         .label = "SDR EOTF Emulation",
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF",
-        .labels = {"Off", "2.2 (Per Channel)", "2.2 (By Luminosity)"},
+        .labels = {"Off", "2.2"},
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",

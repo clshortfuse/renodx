@@ -1,29 +1,5 @@
 #include "../common.glsl"
 
-vec3 GammaCorrectHuePreserving(vec3 x) {
-  float yf_in = renodx_color_yf_from_BT709(x);
-  float yf_out = CorrectGammaMismatch(yf_in, false);
-  vec3 yf_corrected = x * DivideSafe(yf_out, yf_in, 1.f);
-
-  vec3 ch = CorrectGammaMismatch(x, false);
-
-  vec3 corrected_bt2020 = renodx_color_macleod_boynton_TransferPurityBT2020(BT2020FromBT709(yf_corrected), BT2020FromBT709(ch), 1.f);
-
-  vec3 corrected = BT709FromBT2020(corrected_bt2020);
-
-  return corrected;
-}
-
-vec3 GammaSafe(vec3 x) {
-  if (RENODX_SDR_EOTF_EMULATION == 2.f) {
-    return GammaCorrectHuePreserving(x);
-  } else if (RENODX_SDR_EOTF_EMULATION == 1.f) {
-    return CorrectGammaMismatch(x, false);
-  } else {
-    return x;
-  }
-}
-
 vec3 ClampMaxChannel(vec3 color) {
   if (RENODX_TONE_MAP_TYPE != 0.f && RENODX_TONE_MAP_TYPE != 1.f && CLAMP_PEAK != 0.f) {
     float peak = RENODX_PEAK_WHITE_NITS;

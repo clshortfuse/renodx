@@ -97,15 +97,20 @@ vec3 CorrectGammaMismatch(vec3 x, bool inverse) {
   return s * result;
 }
 
-// Fix or undo gamma mismatch by converting between sRGB and gamma 2.2
-vec3 CorrectGammaMismatchBT2020ByYf(vec3 x, bool inverse) {
-  float yf_in = max(0.0, renodx_color_yf_from_BT2020(x));
-  float yf_out = inverse
-                     ? DecodeSRGB(EncodeGamma(yf_in, 2.2))   // undo fix
-                     : DecodeGamma(EncodeSRGB(yf_in), 2.2);  // apply fix
+vec3 GammaSafe(vec3 x) {
+  if (RENODX_SDR_EOTF_EMULATION != 0.f) {
+    return CorrectGammaMismatch(x, false);
+  } else {
+    return x;
+  }
+}
 
-  float yf_ratio = renodx_color_macleod_boynton_DivideSafe(yf_out, yf_in, 1.0);
-  return x * yf_ratio;
+vec3 GammaSafe(vec3 x, bool inverse) {
+  if (RENODX_SDR_EOTF_EMULATION != 0.f) {
+    return CorrectGammaMismatch(x, inverse);
+  } else {
+    return x;
+  }
 }
 
 const mat3 BT709_TO_BT2020_MAT = mat3(
