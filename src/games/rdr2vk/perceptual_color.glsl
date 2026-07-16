@@ -351,7 +351,7 @@ float ContrastAndFlare(
   return pow(x_normalized, exponent) * mid_gray;
 }
 
-vec3 ApplyLuminosityGrading(vec3 untonemapped, float lum, UserGradingConfig config, float mid_gray) {
+vec3 ApplyLuminanceGrading(vec3 untonemapped, float lum, UserGradingConfig config, float mid_gray) {
   if (config.exposure == 1.0 && config.shadows == 1.0 && config.highlights == 1.0 && config.contrast == 1.0
       && config.contrast_highlights == 1.0 && config.contrast_shadows == 1.0 && config.flare == 0.0 && config.gamma == 1.0) {
     return untonemapped;
