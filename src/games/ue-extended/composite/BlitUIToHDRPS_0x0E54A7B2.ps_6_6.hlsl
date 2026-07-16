@@ -14,9 +14,8 @@ cbuffer cb0 : register(b0) {
 SamplerState s0 : register(s0);
 
 float4 main(
-  noperspective float2 TEXCOORD : TEXCOORD,
-  precise noperspective float4 SV_Position : SV_Position
-) : SV_Target {
+    noperspective float2 TEXCOORD: TEXCOORD,
+    precise noperspective float4 SV_Position: SV_Position) : SV_Target {
   float4 SV_Target;
   float4 _10 = t0.Sample(s0, float2(TEXCOORD.x, TEXCOORD.y));
   float4 _57 = t1.Sample(s0, float2(TEXCOORD.x, TEXCOORD.y));
