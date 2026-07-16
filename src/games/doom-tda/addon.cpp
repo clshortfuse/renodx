@@ -19,10 +19,15 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
+#define DOOM_TDA_ACES_TONEMAP_LUTBUILDER_HASH 0xBDE5CFDD
+#define DOOM_TDA_CUSTOM_SHADER_ENTRY(crc32)   CustomShaderEntry(crc32)
+
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    CustomShaderEntry(0xE3A05FA7),  // ACES tonemap
+    DOOM_TDA_CUSTOM_SHADER_ENTRY(DOOM_TDA_ACES_TONEMAP_LUTBUILDER_HASH),  // ACES ToneMap LUTbuilder
+    CustomShaderEntry(0xBB506303),                                        // Color Grading LUTs + Sample TM
+    CustomShaderEntry(0x38FAEACF),                                        // Scene + UI Composite
 };
 
 #if USE_SHADER_TOGGLE
@@ -178,7 +183,7 @@ renodx::utils::settings::Settings settings = {
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("- Requires HDR on in game\n"
                              "- Set Game Brightness to 1.0\n"
-                             "- Set contrast to 50\n"
+                             "- Set contrast to 0.50\n"
                              "- Paper White = HDR Mid Point * 10. E.g. if you want 203 game brightness, then set HDR Mid Point to 20.3"),
         .section = "About",
     },
@@ -197,7 +202,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 #if USE_SHADER_TOGGLE
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::utils::shader::use_replace_async = true;
-      if (auto shader = custom_shaders.find(0xE3A05FA7); shader != custom_shaders.end()) {
+      if (auto shader = custom_shaders.find(DOOM_TDA_ACES_TONEMAP_LUTBUILDER_HASH); shader != custom_shaders.end()) {
         shader->second.on_drawn = &shader_toggle::runtime::OnToneMapLutBuilderDrawn;
       }
       shader_toggle::runtime::RegisterEvents();

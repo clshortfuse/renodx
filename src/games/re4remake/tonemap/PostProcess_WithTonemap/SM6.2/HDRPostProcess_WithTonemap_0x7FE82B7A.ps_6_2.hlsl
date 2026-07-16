@@ -956,11 +956,7 @@ float4 main(
     _2442 = _1368;
     _2443 = _1369;
   }
-  if (!((cPassEnabled & 2) == 0) && (CUSTOM_NOISE != 0.f)) {
-#if 1
-    float3 noise_input = float3(_2441, _2442, _2443);
-#endif
-
+  if (!((cPassEnabled & 2) == 0)) {
     float _2465 = floor(((screenSize.x * fNoiseUVOffset.x) + SV_Position.x) * fReverseNoiseSize);
     float _2467 = floor(((screenSize.y * fNoiseUVOffset.y) + SV_Position.y) * fReverseNoiseSize);
     float _2471 = frac(frac(dot(float2(_2465, _2467), float2(0.0671105608344078f, 0.005837149918079376f))) * 52.98291778564453f);
@@ -990,9 +986,9 @@ float4 main(
           } else {
             _2517 = 0.0f;
           }
-          float _2518 = _2485 * fNoisePower.x;
-          float _2519 = _2517 * fNoisePower.y;
-          float _2520 = _2501 * fNoisePower.y;
+          float _2518 = _2485 * fNoisePower.x * CUSTOM_NOISE;
+          float _2519 = _2517 * fNoisePower.y * CUSTOM_NOISE;
+          float _2520 = _2501 * fNoisePower.y * CUSTOM_NOISE;
           float _2534 = exp2(log2(1.0f - saturate(dot(float3(saturate(_2441), saturate(_2442), saturate(_2443)), float3(0.29899999499320984f, -0.16899999976158142f, 0.5f)))) * fNoiseContrast) * fBlendRate;
           _2545 = ((_2534 * (mad(_2520, 1.4019999504089355f, _2518) - _2441)) + _2441);
           _2546 = ((_2534 * (mad(_2520, -0.7139999866485596f, mad(_2519, -0.3440000116825104f, _2518)) - _2442)) + _2442);
@@ -1000,11 +996,6 @@ float4 main(
         } while (false);
       } while (false);
     } while (false);
-#if 1
-    _2545 = lerp(noise_input.r, _2545, CUSTOM_NOISE);
-    _2546 = lerp(noise_input.g, _2546, CUSTOM_NOISE);
-    _2547 = lerp(noise_input.b, _2547, CUSTOM_NOISE);
-#endif
   } else {
     _2545 = _2441;
     _2546 = _2442;
