@@ -3,16 +3,32 @@
 
 // START INCLUDES
 vec3 EncodeRDR2Gamma(vec3 color_linear) {
+  float curve_gamma = 2.2;
   float curve_toe_threshold = 0.0031308;
-  float curve_toe_slope = 9.275;
-  float curve_power = 1.0 / 2.2;
-  float curve_scale = 1.0471;
-  float curve_offset = 0.0471;
+  float curve_power = 1.0 / curve_gamma;
+  float curve_offset = 0.055 * (curve_gamma - 1.0) / (2.4 - 1.0);                                                      // Observed: 0.0471429
+  float curve_scale = 1.0 + curve_offset;                                                                              // Observed: 1.0471429
+  float curve_toe_slope = (pow(curve_toe_threshold, curve_power) * curve_scale - curve_offset) / curve_toe_threshold;  // Observed: 9.2649536
 
   return mix(
       (pow(color_linear, vec3(curve_power)) * curve_scale) - vec3(curve_offset),
       color_linear * curve_toe_slope,
       lessThan(color_linear, vec3(curve_toe_threshold)));
+}
+
+vec3 DecodeRDR2Gamma(vec3 color_encoded) {
+  float curve_gamma = 2.2;
+  float curve_toe_threshold = 0.0031308;
+  float curve_power = 1.0 / curve_gamma;
+  float curve_offset = 0.055 * (curve_gamma - 1.0) / (2.4 - 1.0);
+  float curve_scale = 1.0 + curve_offset;
+  float curve_toe_slope = (pow(curve_toe_threshold, curve_power) * curve_scale - curve_offset) / curve_toe_threshold;
+  float encoded_toe_threshold = curve_toe_threshold * curve_toe_slope;  // Approximately 0.0290067
+
+  return mix(
+      pow((color_encoded + vec3(curve_offset)) / curve_scale, vec3(curve_gamma)),
+      color_encoded / curve_toe_slope,
+      lessThan(color_encoded, vec3(encoded_toe_threshold)));
 }
 
 // --- sRGB ENCODING ---
@@ -82,14 +98,14 @@ vec3 CorrectGammaMismatch(vec3 x, bool inverse) {
 }
 
 // Fix or undo gamma mismatch by converting between sRGB and gamma 2.2
-vec3 CorrectGammaMismatchByLuminosity(vec3 x, bool inverse) {
-  float lum_in = max(0.0, renodx_color_macleod_boynton_LuminosityFromBT709LuminanceNormalized(x));
-  float lum_out = inverse
-                      ? DecodeSRGB(EncodeGamma(lum_in, 2.2))   // undo fix
-                      : DecodeGamma(EncodeSRGB(lum_in), 2.2);  // apply fix
+vec3 CorrectGammaMismatchBT2020ByYf(vec3 x, bool inverse) {
+  float yf_in = max(0.0, renodx_color_yf_from_BT2020(x));
+  float yf_out = inverse
+                     ? DecodeSRGB(EncodeGamma(yf_in, 2.2))   // undo fix
+                     : DecodeGamma(EncodeSRGB(yf_in), 2.2);  // apply fix
 
-  float lum_ratio = renodx_color_macleod_boynton_DivideSafe(lum_out, lum_in, 1.0);
-  return x * lum_ratio;
+  float yf_ratio = renodx_color_macleod_boynton_DivideSafe(yf_out, yf_in, 1.0);
+  return x * yf_ratio;
 }
 
 const mat3 BT709_TO_BT2020_MAT = mat3(

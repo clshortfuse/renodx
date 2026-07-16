@@ -1,13 +1,13 @@
 #include "../common.glsl"
 
 vec3 GammaCorrectHuePreserving(vec3 x) {
-  float lum_in = renodx_color_macleod_boynton_LuminosityFromBT709LuminanceNormalized(x);
-  float lum_out = CorrectGammaMismatch(lum_in, false);
-  vec3 lum = x * DivideSafe(lum_out, lum_in, 1.f);
+  float yf_in = renodx_color_yf_from_BT709(x);
+  float yf_out = CorrectGammaMismatch(yf_in, false);
+  vec3 yf_corrected = x * DivideSafe(yf_out, yf_in, 1.f);
 
   vec3 ch = CorrectGammaMismatch(x, false);
 
-  vec3 corrected_bt2020 = renodx_color_macleod_boynton_TransferPurityBT2020(BT2020FromBT709(lum), BT2020FromBT709(ch), 1.f);
+  vec3 corrected_bt2020 = renodx_color_macleod_boynton_TransferPurityBT2020(BT2020FromBT709(yf_corrected), BT2020FromBT709(ch), 1.f);
 
   vec3 corrected = BT709FromBT2020(corrected_bt2020);
 

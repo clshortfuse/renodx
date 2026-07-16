@@ -34,6 +34,16 @@ const mat3 renodx_color_macleod_boynton_XYZ_TO_BT2020_MAT = mat3(
     vec3(-0.3556707838, 1.6164812366, -0.0427706133),
     vec3(-0.2533662814, 0.0157685458, 0.9421031212));
 
+const mat3 renodx_color_XYZ_TO_STOCKMAN_SHARP_LMS_MAT = mat3(
+  vec3(0.2670502842655792, -0.38706882411220156, 0.026727793989083093),
+  vec3(0.8471990148492798, 1.165429935890458, -0.02729131667566509),
+  vec3(-0.03470416612462053, 0.10302286696614202, 0.5333267257603284));
+
+const mat3 renodx_color_STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT = mat3(
+  vec3(1.94735469, 0.68990272, 0.0),
+  vec3(-1.41445123, 0.34832189, 0.0),
+  vec3(0.36476327, 0.0, 1.93485343));
+
 const vec2 renodx_color_macleod_boynton_WHITE_POINT_D65 = vec2(0.31272, 0.32903);
 
 const float renodx_color_macleod_boynton_EPSILON = 1e-20;
@@ -513,26 +523,18 @@ vec3 renodx_color_macleod_boynton_GamutCompressAddWhiteBT2020(vec3 rgb2020_linea
   return renodx_color_macleod_boynton_GamutCompressAddWhiteBT2020(rgb2020_linear, vec2(-1.0), 1e-6);
 }
 
-float renodx_color_macleod_boynton_LuminosityFromBT709(vec3 bt709_linear) {
+float renodx_color_yf_from_LMS(vec3 lms) {
+  return (renodx_color_STOCKMAN_SHARP_LMS_TO_XFYFZF_MAT * lms).y;
+}
+
+float renodx_color_yf_from_BT709(vec3 bt709_linear) {
   vec3 xyz = renodx_color_macleod_boynton_BT709_TO_XYZ_MAT * bt709_linear;
-  vec3 lms = renodx_color_macleod_boynton_XYZ_TO_LMS_2006 * xyz;
-  return 1.55 * lms.x + lms.y;
+  return renodx_color_yf_from_LMS(renodx_color_XYZ_TO_STOCKMAN_SHARP_LMS_MAT * xyz);
 }
 
-float renodx_color_macleod_boynton_LuminosityFromBT709LuminanceNormalized(vec3 bt709_linear) {
-  float luminosity = renodx_color_macleod_boynton_LuminosityFromBT709(bt709_linear);
-  return luminosity / renodx_color_macleod_boynton_LuminosityFromBT709(vec3(1.0));
-}
-
-float renodx_color_macleod_boynton_LuminosityFromBT2020(vec3 bt2020_linear) {
+float renodx_color_yf_from_BT2020(vec3 bt2020_linear) {
   vec3 xyz = renodx_color_macleod_boynton_BT2020_TO_XYZ_MAT * bt2020_linear;
-  vec3 lms = renodx_color_macleod_boynton_XYZ_TO_LMS_2006 * xyz;
-  return 1.55 * lms.x + lms.y;
-}
-
-float renodx_color_macleod_boynton_LuminosityFromBT2020LuminanceNormalized(vec3 bt2020_linear) {
-  float luminosity = renodx_color_macleod_boynton_LuminosityFromBT2020(bt2020_linear);
-  return luminosity / renodx_color_macleod_boynton_LuminosityFromBT2020(vec3(1.0));
+  return renodx_color_yf_from_LMS(renodx_color_XYZ_TO_STOCKMAN_SHARP_LMS_MAT * xyz);
 }
 
 struct UserGradingConfig {

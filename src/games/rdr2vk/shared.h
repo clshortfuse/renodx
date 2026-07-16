@@ -10,9 +10,6 @@ struct ShaderInjectData {
   float graphics_white_nits;
 
   float sdr_eotf_emulation;
-  float tone_map_blend_strength;
-  float tone_map_blowout;
-  float tone_map_hue_shift;
 
   float tone_map_exposure;
   float tone_map_gamma;
@@ -34,7 +31,7 @@ struct ShaderInjectData {
   float custom_grain_strength;
   float custom_lut_encoding;
   float custom_unclamp_highlights;
-  
+
   float is_tonemapped;
 };
 
@@ -49,8 +46,6 @@ layout(push_constant) uniform PushData {
 #define RENODX_GRAPHICS_WHITE_NITS     shader_injection.graphics_white_nits
 #define RENODX_SDR_EOTF_EMULATION      shader_injection.sdr_eotf_emulation
 #define RENODX_TONE_MAP_BLEND_STRENGTH 0.5f
-#define RENODX_TONE_MAP_BLOWOUT        shader_injection.tone_map_blowout
-#define RENODX_TONE_MAP_HUE_SHIFT      shader_injection.tone_map_hue_shift
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma
