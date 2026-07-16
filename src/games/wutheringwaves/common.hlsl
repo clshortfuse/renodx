@@ -1,17 +1,24 @@
 #include "./shared.h"
-#include "./psycho_test11.hlsli"
 
 #define WUWA_PEAK_SCALING (RENODX_PEAK_NITS / RENODX_GAME_NITS)
 
 #define APPLY_BLOOM(c) (c).rgb *= RENODX_WUWA_BLOOM
 
 #define APPLY_EXTENDED_TONEMAP(c1, c2, c3) \
-  wuwa::WUWAUncharted2::ApplyExtendedFromCoeffs((c1), (c2), (c3), untonemapped, cb0_037y, cb0_037z, cb0_037w, cb0_038x, cb0_038y, cb0_038z); \
-  const float3 tonemapped = float3(c1, c2, c3); \
-  if (RENODX_TONE_MAP_TYPE != 0.f) { \
-    c1 = lerp(untonemapped.r, tonemapped.r, RENODX_WUWA_TONEMAP_STRENGTH); \
-    c2 = lerp(untonemapped.g, tonemapped.g, RENODX_WUWA_TONEMAP_STRENGTH); \
-    c3 = lerp(untonemapped.b, tonemapped.b, RENODX_WUWA_TONEMAP_STRENGTH); \
+  float3 tonemapped; \
+  if (RENODX_TONE_MAP_TYPE == 0.f) { \
+    tonemapped = float3(c1, c2, c3); \
+  } else if (RENODX_TONE_MAP_SCALING == 1.f) { \
+    tonemapped = wuwa::ApplyPsychoV17(untonemapped); \
+    c1 = tonemapped.r; c2 = tonemapped.g; c3 = tonemapped.b; \
+  } else { \
+    wuwa::WUWAUncharted2::ApplyExtendedFromCoeffs((c1), (c2), (c3), untonemapped, cb0_037y, cb0_037z, cb0_037w, cb0_038x, cb0_038y, cb0_038z); \
+    tonemapped = float3(c1, c2, c3); \
+    float3 result = lerp(untonemapped, tonemapped, RENODX_WUWA_TONEMAP_STRENGTH); \
+    result = wuwa::ApplyUserGrade(result); \
+    c1 = result.r; \
+    c2 = result.g; \
+    c3 = result.b; \
   }
 
 #define WUWA_TM_IS(N) ((uint)(RENODX_WUWA_TM) == (N))
@@ -47,7 +54,58 @@
 
 namespace wuwa {
 
-float3 CorrectHueAndPurityMBGated(
+static inline float3 ApplyPsychoV17(float3 untonemapped_bt709) {
+  return renodx::tonemap::psychov::psychotm_test17(
+      untonemapped_bt709,
+      RENODX_PEAK_NITS / RENODX_GAME_NITS,
+      RENODX_TONE_MAP_EXPOSURE,
+      RENODX_TONE_MAP_HIGHLIGHTS,
+      RENODX_TONE_MAP_SHADOWS,
+      RENODX_TONE_MAP_CONTRAST,
+      RENODX_TONE_MAP_SATURATION,       // purity_scale 
+      0.f,                              // bleaching_intensity
+      100.f,                            // clip_point
+      1.f,                              // hue_restore 
+      1.f,                              // adaptation_contrast
+      0,                                // white_curve_mode
+      1.065f,                           // cone_response_exponent
+      0.175f,                           // current_adaptive_state_bt709 
+      0.18f);                           // current_background_state_bt709
+}
+
+// User color grade in cone/LMS + MacLeod-Boynton space
+static inline float3 ApplyUserGrade(float3 color_bt709) {
+  float3 bt709_scene = color_bt709 * RENODX_TONE_MAP_EXPOSURE;
+  float3 lms = renodx::color::lms::from::BT709(bt709_scene);
+  float3 adaptive_lms = renodx::color::lms::from::BT709(0.18f);
+
+  float yf_input = renodx::color::yf::from::LMS(lms);
+  float yf_midgray = renodx::color::yf::from::BT709(0.18f);
+  float yf_target = yf_input;
+  if (RENODX_TONE_MAP_HIGHLIGHTS != 1.f) {
+    yf_target = renodx::color::grade::Highlights(yf_target, RENODX_TONE_MAP_HIGHLIGHTS, yf_midgray);
+  }
+  if (RENODX_TONE_MAP_SHADOWS != 1.f) {
+    yf_target = renodx::color::grade::Shadows(yf_target, RENODX_TONE_MAP_SHADOWS, yf_midgray);
+  }
+  if (RENODX_TONE_MAP_CONTRAST != 1.f) {
+    yf_target = renodx::color::grade::ContrastSafe(yf_target, RENODX_TONE_MAP_CONTRAST, yf_midgray);
+  }
+  float yf_scale = renodx::math::DivideSafe(yf_target, yf_input, 1.f);
+  float3 lms_graded = lms * yf_scale;
+
+  if (RENODX_TONE_MAP_SATURATION != 1.f) {
+    float3 lms_relative = renodx::math::DivideSafe(lms_graded, adaptive_lms, 0.f.xxx);
+    float3 mb = renodx::color::macleod_boynton::from::LMS(lms_relative);
+    float2 mb_white = renodx::color::macleod_boynton::from::LMS(1.f.xxx).xy;
+    float2 mb_scaled = lerp(mb_white, mb.xy, RENODX_TONE_MAP_SATURATION);
+    lms_graded = renodx::color::lms::from::MacLeodBoynton(float3(mb_scaled, mb.z)) * max(adaptive_lms, 1e-6f);
+  }
+
+  return renodx::color::bt709::from::LMS(lms_graded);
+}
+
+static inline float3 CorrectHueAndPurityMBGated(
     float3 target_color_bt709,
     float3 reference_color_bt709,
     float hue_strength = 1.f,
@@ -123,6 +181,27 @@ float3 CorrectHueAndPurityMBGated(
   return renodx::color::bt709::from::BT2020(final_bt2020);
 }
 
+// Post-tonemap hue/purity emulation. Pulls the mapped color toward the hue and
+// purity of a Reinhard-piecewise reference of itself, gated by the emulation sliders.
+static inline float3 ApplyHueCorrection(float3 mapped_bt709) {
+  if (
+
+      (RENODX_PSYCHOV_HUE_EMULATION > 0.f || RENODX_PSYCHOV_CHROMA_EMULATION > 0.f)) {
+    float3 mapped_ap1 = renodx::color::ap1::from::BT709(mapped_bt709);
+    float3 hue_reference_bt709 = renodx::color::bt709::from::AP1(
+        renodx::tonemap::ReinhardPiecewise(mapped_ap1, 2.f, 1.f));
+    mapped_bt709 = CorrectHueAndPurityMBGated(
+        mapped_bt709,
+        hue_reference_bt709,
+        RENODX_PSYCHOV_HUE_EMULATION,
+        0.5f,
+        1.f,
+        saturate(RENODX_PSYCHOV_CHROMA_EMULATION),
+        1.f);
+  }
+  return mapped_bt709;
+}
+
 namespace lut {
 
 static inline float PrepareLinearInput(inout float r, inout float g, inout float b) {
@@ -164,11 +243,29 @@ static inline void ApplyInverseSamplingScale(inout float r, inout float g, inout
   }
 }
 
+static inline void PreserveReferenceLightness(inout float r, inout float g, inout float b, float3 reference_bt709) {
+  if (RENODX_TONE_MAP_TYPE == 0.f || RENODX_WUWA_LUT_LIGHTNESS >= 1.f) {
+    return;
+  }
+  float3 lut_lab = renodx::color::oklab::from::BT709(float3(r, g, b));
+  float3 ref_lab = renodx::color::oklab::from::BT709(reference_bt709);
+  lut_lab.x = lerp(ref_lab.x, lut_lab.x, RENODX_WUWA_LUT_LIGHTNESS);
+  float3 result = renodx::color::bt709::clamp::AP1(renodx::color::bt709::from::OkLab(lut_lab));
+  r = result.r;
+  g = result.g;
+  b = result.b;
+}
+
+
 static inline void ApplyLutStrength(inout float r, inout float g, inout float b, float3 ungraded) {
   float3 ungraded_bt709 = renodx::color::bt709::from::AP1(ungraded);
-  r = lerp(ungraded_bt709.r, r, RENODX_WUWA_LUT_STRENGTH);
-  g = lerp(ungraded_bt709.g, g, RENODX_WUWA_LUT_STRENGTH);
-  b = lerp(ungraded_bt709.b, b, RENODX_WUWA_LUT_STRENGTH);
+  float3 graded_lab = renodx::color::oklab::from::BT709(float3(r, g, b));
+  float3 ungraded_lab = renodx::color::oklab::from::BT709(ungraded_bt709);
+  graded_lab.yz = lerp(ungraded_lab.yz, graded_lab.yz, RENODX_WUWA_LUT_STRENGTH);
+  float3 result = renodx::color::bt709::clamp::AP1(renodx::color::bt709::from::OkLab(graded_lab));
+  r = result.r;
+  g = result.g;
+  b = result.b;
 }
 
 }
@@ -276,86 +373,19 @@ static inline float3 ApplyDisplayMap(float3 input_bt709) {
     return renodx::draw::RenderIntermediatePass(input_bt709);
   }
 
-  float3 untonemapped_bt709 = max(0.f, input_bt709);
-  float3 untonemapped_bt2020 = renodx::color::bt2020::from::BT709(untonemapped_bt709);
-  float peak_ratio = RENODX_PEAK_NITS / RENODX_GAME_NITS;
+  // Apply hue correction cause the game still seems to need it.
+  input_bt709 = ApplyHueCorrection(input_bt709);
 
-  renodx_custom::tonemap::psycho::config::Config psycho_config = renodx_custom::tonemap::psycho::config::Create();
-  psycho_config.peak_value = peak_ratio;
-  psycho_config.exposure = RENODX_TONE_MAP_EXPOSURE;
-  psycho_config.gamma = RENODX_TONE_MAP_GAMMA;
-  psycho_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
-  psycho_config.shadows = RENODX_TONE_MAP_SHADOWS;
-  psycho_config.contrast = RENODX_TONE_MAP_CONTRAST;
-  psycho_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
-  psycho_config.contrast_highlights = RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS;
-  psycho_config.contrast_shadows = RENODX_TONE_MAP_CONTRAST_SHADOWS;
-  psycho_config.purity_scale = RENODX_TONE_MAP_SATURATION * RENODX_PSYCHOV_PURITY_SCALE;
-  if (RENODX_TONE_MAP_DECHROMA != 0.f) {
-    float dechroma_lum = renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(untonemapped_bt2020);
-    float dechroma_scale = lerp(1.f, 0.f, saturate(pow(dechroma_lum / (10000.f / 100.f), (1.f - RENODX_TONE_MAP_DECHROMA))));
-    psycho_config.purity_scale *= max(dechroma_scale, 0.f);
-  }
-  psycho_config.purity_highlights =
-      (-1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f)) + ((RENODX_PSYCHOV_HIGHLIGHT_PURITY_BIAS - 0.5f) * 2.f);
-  psycho_config.adaptation_contrast = RENODX_TONE_MAP_ADAPTATION_CONTRAST;
-  psycho_config.bleaching_intensity = 0.f;
-  psycho_config.hue_restore = RENODX_PSYCHOV_HUE_RESTORE;
-  psycho_config.pre_gamut_compress = false;
-  psycho_config.post_gamut_compress = true;
 
-  float3 tonemapped_bt2020;
-  if (RENODX_TONE_MAP_SCALING != 0.f) {
-    tonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyBT2020(untonemapped_bt2020, psycho_config);
-  } else {
-    float3 purity_and_hue_source = renodx::color::bt2020::from::BT709(renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 4.f, 0.5f));
-    untonemapped_bt2020 = renodx::color::correct::Luminance(
-        purity_and_hue_source,
-        renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(purity_and_hue_source),
-        renodx_custom::tonemap::psycho::psycho11_StockmanLuminanceFromBT2020(untonemapped_bt2020));
-
-    psycho_config.apply_tonemap = false;
-    psycho_config.purity_highlights = 0.f;
-    untonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyBT2020(untonemapped_bt2020, psycho_config);
-
-    if (RENODX_PSYCHOV_HUE_EMULATION > 0.f || RENODX_PSYCHOV_CHROMA_EMULATION > 0.f) {
-      float3 pre_max_bt709 = renodx::color::bt709::from::BT2020(untonemapped_bt2020);
-      float3 pre_max_ap1 = renodx::color::ap1::from::BT709(pre_max_bt709);
-      float3 pre_max_reference_bt709 = renodx::color::bt709::from::AP1(
-          renodx::tonemap::ReinhardPiecewise(pre_max_ap1, 2.f, 1.f));
-      pre_max_bt709 = CorrectHueAndPurityMBGated(
-          pre_max_bt709,
-          pre_max_reference_bt709,
-          RENODX_PSYCHOV_HUE_EMULATION,
-          0.5f,
-          1.f,
-          saturate(RENODX_PSYCHOV_CHROMA_EMULATION),
-          1.f);
-      untonemapped_bt2020 = renodx::color::bt2020::from::BT709(pre_max_bt709);
-    }
-
-    tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(untonemapped_bt2020, peak_ratio);
+  if (RENODX_TONE_MAP_SCALING == 1.f) {
+    return renodx::draw::RenderIntermediatePass(input_bt709);
   }
 
-  float3 mapped_bt709 = renodx::color::bt709::from::BT2020(tonemapped_bt2020);
-
-  if (RENODX_TONE_MAP_SCALING != 0.f &&
-      (RENODX_PSYCHOV_HUE_EMULATION > 0.f || RENODX_PSYCHOV_CHROMA_EMULATION > 0.f)) {
-    float3 mapped_ap1 = renodx::color::ap1::from::BT709(mapped_bt709);
-    float3 hue_reference_bt709 = renodx::color::bt709::from::AP1(
-        renodx::tonemap::ReinhardPiecewise(mapped_ap1, 2.f, 1.f));
-    mapped_bt709 = CorrectHueAndPurityMBGated(
-        mapped_bt709,
-        hue_reference_bt709,
-      RENODX_PSYCHOV_HUE_EMULATION,
-      0.5f,
-      1.f,
-      saturate(RENODX_PSYCHOV_CHROMA_EMULATION),
-      1.f);
-  }
-
-  float3 mapped_output = lerp(input_bt709, mapped_bt709, RENODX_PSYCHOV_BLEND);
-  return renodx::draw::RenderIntermediatePass(mapped_output);
+  // N2 Display-mapping to peak if on extended path
+  float3 input_bt2020 = renodx::color::bt2020::from::BT709(max(0.f, input_bt709));
+  float3 mapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(input_bt2020, WUWA_PEAK_SCALING);
+  float3 mapped_bt709 = renodx::color::bt709::from::BT2020(mapped_bt2020);
+  return renodx::draw::RenderIntermediatePass(mapped_bt709);
 }
 
 static inline float3 InvertAndApplyDisplayMap(float3 input_bt709) {

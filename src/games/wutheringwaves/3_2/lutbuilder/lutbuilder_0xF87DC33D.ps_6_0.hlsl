@@ -843,6 +843,7 @@ float4 main(
     _1520 = max(0.0f, mad(-0.010548528283834457f, _1394, mad(1.1408027410507202f, _1393, (_1392 * -0.13025718927383423f))));
     _1521 = max(0.0f, mad(1.152971863746643f, _1394, mad(-0.1289687603712082f, _1393, (_1392 * -0.024003278464078903f))));
   }
+  float3 pre_lut_reference = float3(_1519, _1520, _1521);
   float lut_sampling_scale = wuwa::lut::PrepareLinearInput(_1519, _1520, _1521);
 
   if (_1519 < 0.0031306699384003878f) {
@@ -888,6 +889,8 @@ float4 main(
   float _1655 = select((_1631 > 0.040449999272823334f), exp2(log2((_1631 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1631 * 0.07739938050508499f));
 
   wuwa::lut::ApplyInverseSamplingScale(_1653, _1654, _1655, lut_sampling_scale);
+
+  wuwa::lut::PreserveReferenceLightness(_1653, _1654, _1655, pre_lut_reference);
 
   float _1681 = cb0_044y * (((cb0_026y + (cb0_026x * _1653)) * _1653) + cb0_026z);
   float _1682 = cb0_044z * (((cb0_026y + (cb0_026x * _1654)) * _1654) + cb0_026z);
