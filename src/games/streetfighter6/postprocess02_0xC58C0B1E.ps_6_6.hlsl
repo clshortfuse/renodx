@@ -28,11 +28,23 @@ float4 main(
     linear float4 Kerare: Kerare,
     linear float Exposure: Exposure) : SV_Target {
   float4 SV_Target;
+
+  float custom_linearStart = linearStart;
+  float custom_maxNit = maxNit;
+  if (RENODX_TONE_MAP_TYPE > 0.f) {
+    custom_linearStart = 100.f;
+    custom_maxNit = 100.f;
+  }
+
   float4 _12 = HDRImage.Load(int3((uint)(uint(SV_Position.x)), (uint)(uint(SV_Position.y)), 0));
   float _16 = _12.x * Exposure;
   float _17 = _12.y * Exposure;
   float _18 = _12.z * Exposure;
-  float3 untonemapped = float3(_16, _17, _18);
+
+  float3 untonemapped = ApplyCustomGrade1(float3(_16, _17, _18));
+  _16 = untonemapped.x;
+  _17 = untonemapped.y;
+  _18 = untonemapped.z;
 
   float _121;
   float _122;
@@ -48,17 +60,24 @@ float4 main(
     float _46 = select((_16 >= linearBegin), 0.0f, (1.0f - ((_27 * _27) * (3.0f - (_27 * 2.0f)))));
     float _48 = select((_17 >= linearBegin), 0.0f, (1.0f - ((_33 * _33) * (3.0f - (_33 * 2.0f)))));
     float _50 = select((_18 >= linearBegin), 0.0f, (1.0f - ((_39 * _39) * (3.0f - (_39 * 2.0f)))));
-    float _56 = select((_16 < linearStart), 0.0f, 1.0f);
-    float _57 = select((_17 < linearStart), 0.0f, 1.0f);
-    float _58 = select((_18 < linearStart), 0.0f, 1.0f);
-    _121 = (((((contrast * _16) + madLinearStartContrastFactor) * ((1.0f - _56) - _46)) + (((pow(_27, toe)) * _46) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _16) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _56));
-    _122 = (((((contrast * _17) + madLinearStartContrastFactor) * ((1.0f - _57) - _48)) + (((pow(_33, toe)) * _48) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _17) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _57));
-    _123 = (((((contrast * _18) + madLinearStartContrastFactor) * ((1.0f - _58) - _50)) + (((pow(_39, toe)) * _50) * linearBegin)) + ((maxNit - (exp2((contrastFactor * _18) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _58));
+    float _56 = select((_16 < custom_linearStart), 0.0f, 1.0f);
+    float _57 = select((_17 < custom_linearStart), 0.0f, 1.0f);
+    float _58 = select((_18 < custom_linearStart), 0.0f, 1.0f);
+    _121 = (((((contrast * _16) + madLinearStartContrastFactor) * ((1.0f - _56) - _46)) + (((pow(_27, toe)) * _46) * linearBegin)) + ((custom_maxNit - (exp2((contrastFactor * _16) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _56));
+    _122 = (((((contrast * _17) + madLinearStartContrastFactor) * ((1.0f - _57) - _48)) + (((pow(_33, toe)) * _48) * linearBegin)) + ((custom_maxNit - (exp2((contrastFactor * _17) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _57));
+    _123 = (((((contrast * _18) + madLinearStartContrastFactor) * ((1.0f - _58) - _50)) + (((pow(_39, toe)) * _50) * linearBegin)) + ((custom_maxNit - (exp2((contrastFactor * _18) + mulLinearStartContrastFactor) * displayMaxNitSubContrastFactor)) * _58));
   } else {
     _121 = 1.0f;
     _122 = 1.0f;
     _123 = 1.0f;
   }
+
+  float3 tonemapped = float3(_121, _122, _123);
+  float3 new_tonemap = HDRTonemap(untonemapped, tonemapped);
+  _121 = new_tonemap.x;
+  _122 = new_tonemap.y;
+  _123 = new_tonemap.z;
+
   if (!(useDynamicRangeConversion == 0.0f)) {
     float _133 = mad(0.16500000655651093f, _123, mad(0.16500000655651093f, _122, (_121 * 0.6699999570846558f)));
     float _134 = _121 * 0.16500000655651093f;
@@ -92,13 +111,13 @@ float4 main(
     _197 = _122;
     _198 = _123;
   }
-  SV_Target.x = saturate(_196);
-  SV_Target.y = saturate(_197);
-  SV_Target.z = saturate(_198);
+  SV_Target.x = (_196);
+  SV_Target.y = (_197);
+  SV_Target.z = (_198);
 
   SV_Target.w = 1.0f;
 
   // untonemapped is linear
-  SV_Target.rgb = Tonemap(untonemapped, SV_Target.rgb);
+  SV_Target.rgb = Tonemap(SV_Target.rgb);
   return SV_Target;
 }
