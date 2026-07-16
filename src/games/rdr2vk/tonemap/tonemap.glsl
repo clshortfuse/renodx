@@ -168,11 +168,14 @@ vec3 EncodeLUTInput(vec3 x, float _m11, float _m12, float _m13, float _m14, bool
 }
 
 vec3 DecodeLUTInput(vec3 lut_output, vec3 lut_input, float compression_scale) {
-  if (CUSTOM_LUT_ENCODING != 0.f && IS_TONEMAPPED == 0.f) {  // sRGB
+  if (CUSTOM_LUT_ENCODING != 0.f && IS_TONEMAPPED == 0.f) {  // Custom encoded domain
     lut_output = DecodeSRGB(lut_output) / compression_scale;
     if (CUSTOM_LUT_STRENGTH != 1.f) {
       lut_output = mix(DecodeSRGB(lut_input), lut_output, CUSTOM_LUT_STRENGTH);
     }
+    // if (RENODX_TONE_MAP_TYPE == 1.f) {
+    //   lut_output = DecodeRDR2Gamma(EncodeSRGB(lut_output));
+    // }
   } else {
     lut_output = mix(lut_input, lut_output / compression_scale, CUSTOM_LUT_STRENGTH);
   }
@@ -221,18 +224,22 @@ vec3 CompressLUTInput(vec3 color, bool use_encoding, uint _m5, float _m7, float 
   return use_custom_encoding ? EncodeSRGB(compression_input) : compression_input;
 }
 
-float CompressLUTInputAlt(vec3 color, uint _m3, float _m7, float _m8, float _m9) {
-  float compression_scale;
+vec3 CompressLUTInputAlt(vec3 color, uint _m3, float _m7, float _m8, float _m9, out float compression_scale) {
+  bool use_custom_encoding = CUSTOM_LUT_ENCODING != 0.f && IS_TONEMAPPED == 0.f;
+  vec3 compression_input = use_custom_encoding ? DecodeSRGB(color) : color;
+
   if (RENODX_TONE_MAP_TYPE == 0.f) {
-    float maxch = max(max(color.x, max(color.y, color.z)), 10e-05);
+    float maxch = max(max(compression_input.x, max(compression_input.y, compression_input.z)), 10e-05);
     compression_scale = (_m3 != 0u) ? (((maxch > _m7) ? ((maxch * _m8) + _m9) : maxch) / maxch) : 1.0;
   } else if (RENODX_TONE_MAP_TYPE == 1.f || RENODX_TONE_MAP_TYPE == 2.f) {
-    compression_scale = ComputeMaxChannelScale(color);
+    compression_scale = ComputeMaxChannelScale(compression_input);
   } else {
     compression_scale = 1.f;
   }
 
-  return compression_scale;
+  compression_input *= compression_scale;
+
+  return use_custom_encoding ? EncodeSRGB(compression_input) : compression_input;
 }
 
 vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
@@ -243,11 +250,11 @@ vec3 ApplyGradingAndDisplayMap(vec3 ungraded_bt709, vec2 texcoord) {
     vec3 graded_bt2020;
     if (RENODX_TONE_MAP_TYPE != 0.f && RENODX_TONE_MAP_TYPE != 3.f) {
       const UserGradingConfig cg_config = {
-        RENODX_TONE_MAP_EXPOSURE,                             // float exposure;
+        1.f,                                                  // float exposure;
         RENODX_TONE_MAP_HIGHLIGHTS,                           // float highlights;
-        RENODX_TONE_MAP_HIGHLIGHT_CONTRAST,                   // float contrast_highlights;
+        1.f,                                                  // float contrast_highlights;
         RENODX_TONE_MAP_SHADOWS,                              // float shadows;
-        RENODX_TONE_MAP_SHADOW_CONTRAST,                      // float contrast_shadows;
+        1.f,                                                  // float contrast_shadows;
         RENODX_TONE_MAP_CONTRAST,                             // float contrast;
         0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),             // float flare;
         RENODX_TONE_MAP_GAMMA,                                // float gamma;

@@ -98,7 +98,7 @@ vec3 CorrectGammaMismatch(vec3 x, bool inverse) {
 }
 
 vec3 GammaSafe(vec3 x) {
-  if (RENODX_SDR_EOTF_EMULATION != 0.f) {
+  if (RENODX_SDR_EOTF_EMULATION != 0.f && RENODX_TONE_MAP_TYPE != 1.f) {
     return CorrectGammaMismatch(x, false);
   } else {
     return x;
@@ -106,7 +106,7 @@ vec3 GammaSafe(vec3 x) {
 }
 
 vec3 GammaSafe(vec3 x, bool inverse) {
-  if (RENODX_SDR_EOTF_EMULATION != 0.f) {
+  if (RENODX_SDR_EOTF_EMULATION != 0.f && RENODX_TONE_MAP_TYPE != 1.f) {
     return CorrectGammaMismatch(x, inverse);
   } else {
     return x;
