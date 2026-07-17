@@ -1,3 +1,5 @@
+#include "./common.hlsli"
+
 Texture2DArray<float> t1 : register(t1);
 
 Texture2D<float> t11_space1 : register(t11, space1);
@@ -128,10 +130,10 @@ SamplerState s0_space2[] : register(s0, space2);
 SamplerState s8_space1 : register(s8, space1);
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float4 TEXCOORD : TEXCOORD,
-  linear float TEXCOORD_1 : TEXCOORD1
-) : SV_Target {
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 TEXCOORD: TEXCOORD,
+    linear float TEXCOORD_1: TEXCOORD1)
+    : SV_Target {
   float4 SV_Target;
   float _22 = t11_space1.Sample(s0_space1, float2(TEXCOORD.x, TEXCOORD.y));
   float _24 = 1.0f - _22.x;
@@ -172,7 +174,7 @@ float4 main(
   float _145 = ((cb12_space1_013y - cb12_space1_011y) * _107) + cb12_space1_011y;
   float _146 = ((cb12_space1_013z - cb12_space1_011z) * _107) + cb12_space1_011z;
   float _147 = _146 * _126;
-  float _148 = (lerp(cb12_space1_010z, cb12_space1_012z, _107)) * _127;
+  float _148 = (lerp(cb12_space1_010z, cb12_space1_012z, _107))*_127;
   float _151 = _144 * _129;
   float _155 = _145 * _129;
   float _158 = _144 / _145;
@@ -191,9 +193,9 @@ float4 main(
   float _210 = (cb12_space1_067x * (_198 - _200)) + _200;
   float _211 = (cb12_space1_067x * (_199 - _200)) + _200;
   float _215 = saturate(_200 / cb12_space1_066w);
-  float _232 = (lerp(cb12_space1_066x, cb12_space1_065x, _215)) * _209;
-  float _233 = (lerp(cb12_space1_066y, cb12_space1_065y, _215)) * _210;
-  float _234 = (lerp(cb12_space1_066z, cb12_space1_065z, _215)) * _211;
+  float _232 = (lerp(cb12_space1_066x, cb12_space1_065x, _215))*_209;
+  float _233 = (lerp(cb12_space1_066y, cb12_space1_065y, _215))*_210;
+  float _234 = (lerp(cb12_space1_066z, cb12_space1_065z, _215))*_211;
   float _240 = saturate(((_200 + -1.0f) + cb12_space1_065w) / max(0.009999999776482582f, cb12_space1_065w));
   float _256 = cb12_space1_024z * dot(float3(saturate(lerp(_232, _209, _240)), saturate(lerp(_233, _210, _240)), saturate(lerp(_234, _211, _240))), float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
   float _260 = saturate(_256 / cb12_space1_023w);

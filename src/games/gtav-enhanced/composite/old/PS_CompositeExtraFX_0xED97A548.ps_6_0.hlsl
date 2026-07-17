@@ -148,7 +148,8 @@ SamplerState s8_space1 : register(s8, space1);
 float4 main(
     noperspective float4 SV_Position: SV_Position,
     linear float4 TEXCOORD: TEXCOORD,
-    linear float TEXCOORD_1: TEXCOORD1) : SV_Target {
+    linear float TEXCOORD_1: TEXCOORD1)
+    : SV_Target {
   float4 SV_Target;
   float _25 = t11_space1.Sample(s0_space1, float2(TEXCOORD.x, TEXCOORD.y));
   float _27 = 1.0f - _25.x;
@@ -265,7 +266,7 @@ float4 main(
   float _420 = ((cb12_space1_013y - cb12_space1_011y) * _382) + cb12_space1_011y;
   float _421 = ((cb12_space1_013z - cb12_space1_011z) * _382) + cb12_space1_011z;
   float _422 = _421 * _401;
-  float _423 = (lerp(cb12_space1_010z, cb12_space1_012z, _382)) * _402;
+  float _423 = (lerp(cb12_space1_010z, cb12_space1_012z, _382))*_402;
   float _426 = _419 * _404;
   float _430 = _420 * _404;
   float _433 = _419 / _420;
@@ -276,7 +277,7 @@ float4 main(
   float _441 = max(0.0f, (min(((lerp(cb12_space1_058z, 1.0f, _357)) * (_316 + select(_256, (((cb5_014w * _264) - _316) * _325), ((_264 * 0.25f) * cb12_space1_007y)))), 65504.0f) * TEXCOORD.z));
 
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    GTAVTonemapConfig tonemap_config;
+    GTAVTonemapConfig tonemap_config = CreateGTAVTonemapConfig();
     tonemap_config.a = _401;
     tonemap_config.b = _402;
     tonemap_config.c_times_b = _423;
@@ -306,9 +307,9 @@ float4 main(
   float _485 = (cb12_space1_067x * (_473 - _475)) + _475;
   float _486 = (cb12_space1_067x * (_474 - _475)) + _475;
   float _490 = saturate(_475 / cb12_space1_066w);
-  float _507 = (lerp(cb12_space1_066x, cb12_space1_065x, _490)) * _484;
-  float _508 = (lerp(cb12_space1_066y, cb12_space1_065y, _490)) * _485;
-  float _509 = (lerp(cb12_space1_066z, cb12_space1_065z, _490)) * _486;
+  float _507 = (lerp(cb12_space1_066x, cb12_space1_065x, _490))*_484;
+  float _508 = (lerp(cb12_space1_066y, cb12_space1_065y, _490))*_485;
+  float _509 = (lerp(cb12_space1_066z, cb12_space1_065z, _490))*_486;
   float _515 = saturate(((_475 + -1.0f) + cb12_space1_065w) / max(0.009999999776482582f, cb12_space1_065w));
 
   float _560 = (1.0f - (((sin((cb12_space1_063w + TEXCOORD.y) * cb12_space1_063y) * 0.5f) + 0.5f) * cb12_space1_063x)) - (((sin(((cb12_space1_063w * 0.5f) + TEXCOORD.y) * cb12_space1_063z) * 0.5f) + 0.5f) * cb12_space1_063x);
