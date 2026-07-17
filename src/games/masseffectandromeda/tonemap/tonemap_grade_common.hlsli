@@ -134,8 +134,14 @@ float3 ApplyScenePost(float2 uv, out float2 scene_uv) {
 }
 
 // PQ-encode the linear scene (1.0 == 100 nits) and sample the native 33^3 grade LUT (PQ space).
+// Vanilla+ optionally uses tetrahedral interpolation (higher quality, less banding) on the same LUT;
+// vanilla / Trilinear keep the game's hardware-trilinear sample with the 32/33 texel-center bias.
 float3 SampleNativeGrade(float3 color) {
   float3 pq_color = renodx::color::pq::EncodeSafe(color, 100.f);
+  if (IsVanillaPlus() && injectedData.customLutTetrahedral == 1.f) {
+    // Tetrahedral takes the pre-scale/bias coordinate; it centers and reads the size (33) internally.
+    return renodx::lut::SampleTetrahedral(colorGradingTexture, pq_color, 0.f);
+  }
   pq_color = pq_color * 0.96969697f + 0.01515152f;
   return colorGradingTexture.Sample(colorGradingSampler, pq_color).rgb;
 }

@@ -109,8 +109,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
-        .tooltip = "Vanilla = untouched native HDR. Vanilla+ = paper white, highlight roll-off, color grading and effects.",
-        .labels = {"Vanilla", "Vanilla+"},
+        .tooltip = "Sets the tone mapper type",
+        .labels = {"Vanilla", "Vanilla+", "Vanilla+ (Neutwo)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -122,7 +122,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 100.f,
         .max = 4000.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -134,7 +134,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },  // Vanilla+
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },  // Vanilla+
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
@@ -146,7 +146,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },  // Vanilla+
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },  // Vanilla+
     },
     new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
@@ -157,7 +157,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },  // Vanilla+
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },  // Vanilla+
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -170,7 +170,7 @@ renodx::utils::settings::Settings settings = {
         .min = 0.25f,
         .max = 4.f,
         .format = "%.2f",
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -181,7 +181,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts highlight brightness. 50 = vanilla.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -193,7 +193,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts shadow brightness. 50 = vanilla.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -205,7 +205,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts contrast. 50 = vanilla.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -217,7 +217,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -229,7 +229,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts overall saturation. 50 = vanilla.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -241,7 +241,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -253,8 +253,21 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Shifts highlight hue toward the per-channel (SDR-display) look. 0 = vanilla.",
         .max = 100.f,
+        // Vanilla+ (faithful) only: the Neutwo tone mapper is hue-stable, so Hue Shift is a no-op there.
         .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
         .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1.f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeLUTSampling",
+        .binding = &shader_injection.customLutTetrahedral,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "LUT Sampling",
+        .section = "Color Grading",
+        .tooltip = "Interpolation of the game's native grade LUT. Tetrahedral reduces banding; Trilinear = vanilla.",
+        .labels = {"Trilinear", "Tetrahedral"},
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -265,7 +278,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Scales the game's bloom. 50 = vanilla, 0 = off.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -277,7 +290,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Scales the game's vignette. 50 = vanilla, 0 = off.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -289,7 +302,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Scales the game's chromatic aberration. 100 = vanilla, 0 = off (requires the in-game CA setting on).",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -303,7 +316,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         // Deliberate linear response (slider% -> CUSTOM_SHARPNESS directly). Some sibling RCAS sliders
         // use an exp2 curve, so the same % is not perceptually comparable across mods.
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -317,7 +330,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Vanilla keeps the game's own grain. Monochrome / Colored use RenoDX perceptual grain "
                    "(reduces banding).",
         .labels = {"Vanilla", "Monochrome", "Colored"},
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -328,7 +341,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Film grain strength. Reduces banding.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f && shader_injection.fxFilmGrainType != 0.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f && shader_injection.fxFilmGrainType != 0.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
@@ -341,7 +354,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Inverse tonemaps SDR videos (BT.2446a)",
         .labels = {"Off", "On"},
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -425,6 +438,7 @@ void OnPresetOff() {
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeHueShift", 0.f},
+      {"ColorGradeLUTSampling", 0.f},
       {"GammaCorrection", 1.f},
       {"FxBloom", 50.f},
       {"FxVignette", 50.f},
