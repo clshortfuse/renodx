@@ -263,7 +263,7 @@ bool DrawTextRegion(
   return true;
 }
 
-// on_draw callback for ping/latency bar shader (0xEF07F89A)
+// on_draw callback for ping/latency bar shader (0xF1B0E28A)
 bool OnPingDraw(reshade::api::command_list* cmd_list) {
   if (is_ping_input_candidate) {
     is_ping_drawn = true;
@@ -273,7 +273,6 @@ bool OnPingDraw(reshade::api::command_list* cmd_list) {
   return true;
 }
 
-// on_draw callback for UID text shader (0x6B8E9049)
 bool OnUIDDraw(reshade::api::command_list* cmd_list) {
   if (is_uid_input_candidate) {
     if (!IsVisible(shader_injection.status_text_opacity) &&
@@ -295,6 +294,15 @@ bool OnUidOrUiVisibilityDraw(reshade::api::command_list* cmd_list) {
 
 bool KeepOriginalShader(reshade::api::command_list* cmd_list) {
   return false;
+}
+
+bool ReplaceImprovedGTAOShader(reshade::api::command_list* cmd_list) {
+  return shader_injection.improved_gtao >= 0.5f
+      || shader_injection.disable_game_ao >= 0.5f;
+}
+
+bool ReplaceDisableGTAOShader(reshade::api::command_list* cmd_list) {
+  return shader_injection.disable_game_ao >= 0.5f;
 }
 
 void RegisterUiVisibilityBypassShader(uint32_t crc) {
@@ -1108,7 +1116,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "- Fixed by Rat for Arknights: Endfield 1.3.3",
+        .label = "- Maintained by Rat for Arknights: Endfield 1.4.4",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -1186,8 +1194,8 @@ bool OnDrawIndexed(
   constexpr uint32_t PING_INDEX_COUNT = 18;
   constexpr uint32_t PING_FIRST_INDEX = 0;
   constexpr int32_t PING_VERTEX_OFFSET = 0;
-  constexpr uint32_t PING_VERTEX_SHADER_HASH = 0x9BDC181Fu;
-  constexpr uint32_t PING_PIXEL_SHADER_HASH = 0xEF07F89Au;
+  constexpr uint32_t PING_VERTEX_SHADER_HASH = 0xF4EF16E9u;
+  constexpr uint32_t PING_PIXEL_SHADER_HASH = 0xF1B0E28Au;
 
   // Detect ping/latency bar
   const bool ping_geometry_candidate = (index_count == PING_INDEX_COUNT) &&
@@ -1214,14 +1222,11 @@ bool OnDrawIndexed(
   constexpr uint32_t UID_MIN_INDEX_COUNT = 100;
   constexpr int32_t UID_VERTEX_OFFSET = 12;
 
-  // Detect UID text: drawn right after ping with specific parameters
-  // Use is_ping_drawn (set by OnPingDraw) for the original path. The current
-  // post-combat UID path can switch to 0xC24C4DBB without replaying that ping
-  // callback, so allow the same geometry test on that text shader hash.
+  // Detect UID text after the ping or post-combat shader
   const bool uid_geometry_candidate = (first_index == UID_FIRST_INDEX) &&
                                       (index_count > UID_MIN_INDEX_COUNT) &&
                                       (vertex_offset == UID_VERTEX_OFFSET);
-  const bool uid_shader_candidate = pixel_shader_hash == 0xC24C4DBBu;
+  const bool uid_shader_candidate = pixel_shader_hash == 0xC2B8AB6Bu;
   is_uid_input_candidate = uid_geometry_candidate && (is_ping_drawn || uid_shader_candidate);
 
   // Reset vertex count after processing
@@ -1493,63 +1498,17 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .usage_include = reshade::api::resource_usage::render_target,
         });
         */
+        // Grass/foliage deferred shaders for ReShade AO
         const uint32_t target_crcs[] = {
-        // Enviroment deferred (doesnt apply to grass/foliage)
-        /*
-          0xD88CD7C9u,
-          0x1E8A471Eu,
-          0x8BA3C806u,
-          0x7010AF4Bu,
-          0x0E84DFD1u,
-          0x99725481u,
-          0xA4113DE8u,
-          0xD5B102A4u,
+            0x4BF704A4u,
+            0xEFA7F46Fu,
+            0x66F41E33u,
+            0x7F533976u,
+            0x82083D15u,
+            0xACD57C4Du,
+            0xC181EA40u,
+            0xEE78E1BAu,
         };
-        */
-
-      // grass/foliage deferred (grass, plants, trees will be included in AO)
-        0xBB9276D0u,
-        0x6B2D0D3Fu,
-        0x46368E6Bu,
-        0xC75E6D72u,
-        0xF50042ECu,
-        0x3826B75Eu,
-        0x60D37BB1u,
-        0x51B20E29u,
-        };
-
-      // Uberpost
-        /*
-        0x00C16AFBu,
-        0x039C28DAu,
-        0x086097D2u,
-        0x09270FDAu,
-        0x0E520F06u,
-        0x10076711u,
-        0x21241B7Au,
-        0x51359B4Du,
-        0x53875523u,
-        0x53D50BD5u,
-        0x57737D9Fu,
-        0x5FC0BD3Cu,
-        0x6166487Au,
-        0x61908D50u,
-        0x64CEB255u,
-        0x6A76C719u,
-        0x86420EBCu,
-        0x9790A50Cu,
-        0x9AA3FC1Fu,
-        0xA6501734u,
-        0xA6E6ABE6u,
-        0xA8213A68u,
-        0xAFDCA263u,
-        0xAFECA8F4u,
-        0xBCD91195u,
-        0xD5BC74ACu,
-        0xE0058043u,
-        0xF8FA587Fu,
-        */
-
 
         for (uint32_t crc : target_crcs) {
           // Ensure an entry exists for the shader hash even if we don't have compiled HLSL
@@ -1564,34 +1523,51 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           }
         }
 
-        // UI visibility-only hashes: bypass the draw when hidden, keep the
-        // game's original shader untouched when visible to avoid text-mask bugs.
+        // Improved GTAO shaders
+        const uint32_t improved_gtao_crcs[] = {
+            0x43A0000Bu,
+            0xDD16F0F8u,
+        };
+        for (uint32_t crc : improved_gtao_crcs) {
+          auto it = custom_shaders.find(crc);
+          if (it != custom_shaders.end()) {
+            it->second.on_replace = ReplaceImprovedGTAOShader;
+          }
+        }
+
+        {
+          auto it = custom_shaders.find(0xA683B186u);
+          if (it != custom_shaders.end()) {
+            it->second.on_replace = ReplaceDisableGTAOShader;
+          }
+        }
+
+        // UI visibility shaders
         const uint32_t ui_visibility_bypass_crcs[] = {
-            0x0A02B5A1u,
-            0x193A48A5u,
-            0x904EE4BBu,
+            0xD98315D9u,
+            0x7B466CC5u,
+            0x483894D1u,
+            0xB7010B10u,
+            0xC954C30Bu,
+            0xE4D1754Au,
+            0xFB0D02ADu,
+            0x3A8D5F08u,
+            0xF16C9B1Fu,
+            0xD4922925u,
+            0x0FB686BDu,
         };
         for (uint32_t crc : ui_visibility_bypass_crcs) {
           RegisterUiVisibilityBypassShader(crc);
         }
 
-        // Post-combat UID can switch to this text hash after combat.
-        // Keep the original shader, but only hide the draw when it matches the UID heuristic.
-        RegisterUidBypassShader(0xC24C4DBBu);
+        // Post-combat UID shader
+        RegisterUidBypassShader(0xC2B8AB6Bu);
 
-        // Add on_draw callbacks for ping/UID shaders (heuristic-based detection)
-        // Ping/latency bar shader: 0xEF07F89A
+        // Ping/latency bar shader
         {
-          auto it = custom_shaders.find(0xEF07F89Au);
+          auto it = custom_shaders.find(0xF1B0E28Au);
           if (it != custom_shaders.end()) {
             it->second.on_draw = OnPingDraw;
-          }
-        }
-        // UID text shader: 0x6B8E9049
-        {
-          auto it = custom_shaders.find(0x6B8E9049u);
-          if (it != custom_shaders.end()) {
-            it->second.on_draw = OnUIDDraw;
           }
         }
         // Register draw and draw_indexed events for heuristic ping/UID detection
