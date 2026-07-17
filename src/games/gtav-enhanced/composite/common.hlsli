@@ -345,11 +345,11 @@ float4 GenerateGTAVOutput(float3 input_color, float2 position, float2 screen_pos
     if (RENODX_GAMMA_CORRECTION == 1.f) peak_value = renodx::color::correct::GammaSafe(peak_value, true, 2.2f);
     if (RENODX_GAMMA_CORRECTION == 2.f) peak_value = renodx::color::correct::GammaSafe(peak_value, true, 2.4f);
 
-    tonemapped = renodx::tonemap::psychov::psychotm_test17(
+    tonemapped = renodx::tonemap::psychov::psychotm_test22(
         untonemapped, peak_value,
         RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS, RENODX_TONE_MAP_CONTRAST,
         RENODX_TONE_MAP_SATURATION, 1.f, RENODX_RENO_DRT_WHITE_CLIP, 1.f, 1.f, 0,
-        hable_slope * mid_gray_in / mid_gray_out, mid_gray_in, mid_gray_out);
+        hable_slope * mid_gray_in / mid_gray_out, mid_gray_in, mid_gray_out, 1.f, 1, 1.f, 0.f);
 
     float maxch_scale = renodx::tonemap::neutwo::ComputeBT709Scale(tonemapped, 1.f, peak_value);
     float3 post_process_color = ApplyPostToneMapGrading(tonemapped * maxch_scale, config) / maxch_scale;
