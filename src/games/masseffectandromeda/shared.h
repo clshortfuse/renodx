@@ -26,6 +26,7 @@ struct ShaderInjectData {
   float fxSharpness;       // Lilium HDR RCAS strength (0 = off), Vanilla+ only
   float fxSwapchainPresent;  // runtime flag: 1 when the present draw targets the swapchain (RCAS gate)
   float customRandom;      // per-frame random seed for perceptual grain
+  float customLutTetrahedral;  // 0 = Trilinear (vanilla), 1 = Tetrahedral (higher-quality native LUT sampling)
 };
 
 #ifndef __cplusplus
@@ -34,7 +35,8 @@ cbuffer shader_injection : register(b13) {
 }
 
 #define TONE_MAP_VANILLA 0.f
-#define TONE_MAP_VANILLA_PLUS 1.f
+#define TONE_MAP_VANILLA_PLUS 1.f         // faithful log2 highlight roll-off (identity below the shoulder)
+#define TONE_MAP_VANILLA_PLUS_NEUTWO 2.f  // knee-free Neutwo highlight curve (continuous, no identity segment)
 
 #define FILM_GRAIN_VANILLA 0.f
 #define FILM_GRAIN_LUMINANCE 1.f
@@ -42,9 +44,10 @@ cbuffer shader_injection : register(b13) {
 
 #define CUSTOM_SHARPNESS injectedData.fxSharpness
 
-// "Full pipeline" (Vanilla+) predicate. Reads only injectedData, so usable from any pass.
+// "Full pipeline" predicate: true for any Vanilla+ mode (faithful roll-off OR Neutwo). Reads only
+// injectedData, so usable from any pass. Only the final display-mapping step differs between the two.
 bool IsVanillaPlus() {
-  return injectedData.toneMapType == TONE_MAP_VANILLA_PLUS;
+  return injectedData.toneMapType != TONE_MAP_VANILLA;
 }
 
 #include "../../shaders/renodx.hlsl"
@@ -130,8 +133,22 @@ float3 ApplyVanillaPlus(float3 color, float exposure, float paperWhite) {
   color = ApplyEotfEmulation(color);
 
   // Highlight roll-off pins the peak to Peak Brightness so paper white only moves diffuse/mids
-  // (not the peak). Luminance-preserving (keeps hue). Requires the in-game Peak Brightness at MAX.
+  // (not the peak). Requires the in-game Peak Brightness at MAX. peak = display HDR headroom ratio.
   const float peak = max(injectedData.toneMapPeakNits / paperWhite, 1.f + 1e-3f);
+
+  if (injectedData.toneMapType == TONE_MAP_VANILLA_PLUS_NEUTWO) {
+    // Neutwo (x/sqrt(x^2+p^2)) on the BT.2020 max channel: a knee-free continuous highlight curve,
+    // hue-stable by construction (so no Hue Shift), asymptoting to the peak. Clipless on purpose:
+    // MEA's native grade reaches ~10k nits (~80-100x diffuse white), so a fixed content-cap clip
+    // would crush every value above the cap into the peak; the 2-arg form maps the whole range
+    // smoothly and never exceeds the peak (no min() needed).
+    color = renodx::color::bt709::from::BT2020(
+        renodx::tonemap::neutwo::MaxChannel(
+            renodx::color::bt2020::from::BT709(color), peak));
+    return color;
+  }
+
+  // Vanilla+ (faithful): luminance-preserving log2 roll-off (keeps hue) + optional Hue Shift.
   const float rolloffStart = min(1.f, peak * 0.5f);
   const float3 preRolloff = color;
   const float y = renodx::color::y::from::BT709(color);
