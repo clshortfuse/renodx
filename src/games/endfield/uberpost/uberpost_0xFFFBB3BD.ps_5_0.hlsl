@@ -15,7 +15,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[110];
+  float4 cb0[28];
 }
 
 
@@ -38,7 +38,7 @@ void main(
   r1.x = r0.x * 0.5 + r0.y;
   r1.x = r0.z * 0.5 + r1.x;
   r2.xw = float2(0,0);
-  r2.yz = cb0[82].wz;
+  r2.yz = cb0[0].wz;
   r3.xyzw = v1.xyxy + -r2.zwxy;
   r2.xyzw = v1.xyxy + r2.xyzw;
   r1.yzw = t0.SampleLevel(s0_s, r3.xy, 0).xyz;
@@ -96,7 +96,7 @@ void main(
   r1.x = 1 / r1.x;
   r0.xyz = r1.xxx * r0.xyz;
   o0.w = min(1, r0.w);
-  r1.xyz = cb0[109].xxx * r0.xyz;
+  r1.xyz = cb0[27].xxx * r0.xyz;
   r0.w = max(r1.y, r1.z);
   r0.w = max(r0.w, r1.x);
   r2.xy = -cb1[10].yx + r0.ww;
@@ -119,13 +119,12 @@ void main(
   r5.xyz = cmp(float3(0.300000012,0.300000012,0.300000012) < r5.xyz);
   r3.xyz = r5.xyz ? r4.xyz : r3.zxy;
   r2.xyz = r3.xyz * cb1[11].zxy + r2.xyz;
-  r0.xyz = -r0.xyz * cb0[109].xxx + r2.xyz;
+  r0.xyz = -r0.xyz * cb0[27].xxx + r2.xyz;
   r0.xyz = cb1[9].xxx * r0.xyz + r1.xyz;
-  r0.w = cb0[82].x / cb0[82].y;
-  r1.x = -1 + r0.w;
-  r1.x = cb1[2].w * r1.x + 1;
-  r0.w = r0.w * 0.5625 + -r1.x;
-  r0.w = cb1[1].w * r0.w + r1.x;
+  r0.w = cb0[27].z + -1;
+  r0.w = cb1[2].w * r0.w + 1;
+  r1.x = cb0[27].z * 0.5625 + -r0.w;
+  r0.w = cb1[1].w * r1.x + r0.w;
   r1.x = saturate(cb1[2].x * 1.04999995);
   r1.x = r1.x * 1.5 + -1;
   r1.x = cb1[1].w * r1.x + 1;
@@ -183,7 +182,7 @@ void main(
     r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
     r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
     r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
-    r1.xy = cb0[82].xy * v1.xy;
+    r1.xy = cb0[0].xy * v1.xy;
     r0.w = dot(float2(171,231), r1.xy);
     r1.xyz = float3(0.00970873795,0.0140845068,0.010309278) * r0.www;
     r1.xyz = frac(r1.xyz);

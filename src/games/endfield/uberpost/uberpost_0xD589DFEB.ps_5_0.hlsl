@@ -1,14 +1,9 @@
-// ---- Created with 3Dmigoto v1.3.16 on Tue Jan 20 19:04:26 2026
 #include "../common.hlsl"
-Texture2D<float4> t3 : register(t3);
-
 Texture2D<float4> t2 : register(t2);
 
 Texture2D<float4> t1 : register(t1);
 
 Texture2D<float4> t0 : register(t0);
-
-SamplerState s1_s : register(s1);
 
 SamplerState s0_s : register(s0);
 
@@ -19,7 +14,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[110];
+  float4 cb0[28];
 }
 
 
@@ -55,7 +50,7 @@ void main(
   r0.z = -1 + r0.z;
   r0.z = cb1[25].z * r0.z + 1;
   r0.xy = r0.xy * r0.zz;
-  r1.xyzw = t0.SampleLevel(s1_s, v1.xy, 0).xyzw;
+  r1.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
   r2.xyz = r1.xyz;
   r0.z = 0;
   while (true) {
@@ -63,7 +58,7 @@ void main(
     if (r0.w != 0) break;
     r0.w = icb[r0.z+0].x * cb1[0].z;
     r3.xy = -r0.xy * r0.ww + v1.xy;
-    r3.xyz = t0.SampleLevel(s1_s, r3.xy, 0).xyz;
+    r3.xyz = t0.SampleLevel(s0_s, r3.xy, 0).xyz;
     r3.xyz = r3.xyz + r2.xyz;
     r0.w = (int)r0.z + 1;
     r2.xyz = r3.xyz;
@@ -72,13 +67,13 @@ void main(
   }
   r0.xyzw = r2.xyzz;
   r2.xw = float2(0,0);
-  r2.yz = cb0[82].wz;
+  r2.yz = cb0[0].wz;
   r3.xyzw = v1.xyxy + r2.xyzw;
-  r1.xyz = t0.SampleLevel(s1_s, r3.xy, 0).xyz;
+  r1.xyz = t0.SampleLevel(s0_s, r3.xy, 0).xyz;
   r2.xyzw = v1.xyxy + -r2.zwxy;
-  r4.xyz = t0.SampleLevel(s1_s, r2.xy, 0).xyz;
-  r3.xyz = t0.SampleLevel(s1_s, r3.zw, 0).xyz;
-  r2.xyz = t0.SampleLevel(s1_s, r2.zw, 0).xyz;
+  r4.xyz = t0.SampleLevel(s0_s, r2.xy, 0).xyz;
+  r3.xyz = t0.SampleLevel(s0_s, r3.zw, 0).xyz;
+  r2.xyz = t0.SampleLevel(s0_s, r2.zw, 0).xyz;
   r2.w = r1.x * 0.5 + r1.y;
   r2.w = r1.z * 0.5 + r2.w;
   r3.w = r4.x * 0.5 + r4.y;
@@ -132,8 +127,8 @@ void main(
   r1.xyz = r1.xyz + r3.zxy;
   r0.xzw = r0.xxx * r1.xyz + r5.zxy;
   r0.xyz = r0.xzw * r0.yyy;
-  r1.xyz = cb0[109].xxx * r0.xyz;
-  r2.xyz = t1.SampleLevel(s1_s, v1.xy, 0).xyz;
+  r1.xyz = cb0[27].xxx * r0.xyz;
+  r2.xyz = t1.SampleLevel(s0_s, v1.xy, 0).xyz;
   r0.w = -cb1[9].z + 1;
   r3.xyz = r2.zxy * r0.www;
   r3.xyz = cmp(float3(0.300000012,0.300000012,0.300000012) < r3.xyz);
@@ -146,72 +141,25 @@ void main(
   r5.xy = -cb1[10].yx + r0.ww;
   r2.w = max(0, r5.x);
   r2.w = min(cb1[10].z, r2.w);
-  r5.xzw = t3.SampleLevel(s0_s, v1.xy, 0).xyz;
-  r6.xy = -cb1[1].xy + v1.xy;
-  r3.w = -cb1[2].x + 1;
-  r3.w = cb1[1].w * r3.w + cb1[2].x;
-  r6.xy = abs(r6.xy) * r3.ww;
-  r3.w = saturate(cb1[2].x * 1.04999995);
-  r3.w = r3.w * 1.5 + -1;
-  r3.w = cb1[1].w * r3.w + 1;
-  r3.w = r6.x * r3.w;
-  r4.w = cb1[2].x * 2 + -1;
-  r4.w = cb1[1].w * r4.w + 1;
-  r6.x = saturate(cb1[2].x + -2.79999995);
-  r6.x = 5 * r6.x;
-  r6.y = saturate(r6.y * r4.w + r6.x);
-  r4.w = cb0[82].x / cb0[82].y;
-  r6.z = -1 + r4.w;
-  r6.z = cb1[2].w * r6.z + 1;
-  r4.w = r4.w * 0.5625 + -r6.z;
-  r4.w = cb1[1].w * r4.w + r6.z;
-  r6.x = saturate(r4.w * r3.w);
-  r6.xy = log2(r6.xy);
-  r6.xy = cb1[2].zz * r6.xy;
-  r6.xy = exp2(r6.xy);
   r2.w = r2.w * r2.w;
   r2.w = cb1[10].w * r2.w;
   r2.w = max(r2.w, r5.y);
   r0.w = max(9.99999975e-005, r0.w);
   r0.w = r2.w / r0.w;
-  r7.xyz = r1.xyz * r0.www;
-  r7.xyz = -r7.xyz * cb1[9].zzz + r1.xyz;
+  r5.xyz = r1.xyz * r0.www;
+  r5.xyz = -r5.xyz * cb1[9].zzz + r1.xyz;
   r2.xyz = r3.xyz ? r4.xyz : r2.zxy;
-  r2.xyz = r2.xyz * cb1[11].zxy + r7.xyz;
-  r0.xyz = -r0.xyz * cb0[109].xxx + r2.xyz;
+  r2.xyz = r2.xyz * cb1[11].zxy + r5.xyz;
+  r0.xyz = -r0.xyz * cb0[27].xxx + r2.xyz;
   r0.xyz = cb1[9].xxx * r0.xyz + r1.xyz;
-  r0.w = saturate(cb1[3].x * 3 + -2);
-  r1.x = min(r5.x, r5.z);
-  r1.x = min(r1.x, r5.w);
-  r1.x = -0.200000003 + r1.x;
-  r1.x = cmp(r1.x >= 0);
-  r1.x = r1.x ? 1.000000 : 0;
-  r0.w = -cb1[3].x + r0.w;
-  r0.w = r1.x * r0.w + cb1[3].x;
-  r1.xyz = float3(-1,-1,-1) + r5.wxz;
-  r1.xyz = r0.www * r1.xyz + float3(1,1,1);
-  r0.xyz = r1.xyz * r0.xyz;
-  r0.w = dot(r6.xy, r6.xy);
-  r0.w = 1 + -r0.w;
-  r0.w = max(0, r0.w);
-  r0.w = log2(r0.w);
-  r0.w = cb1[2].y * r0.w;
-  r0.w = exp2(r0.w);
-  float vignette_value = lerp(1.0, r0.w, VIGNETTE_STRENGTH);
-  r0.w = 1.0; // Disable original vignette, apply after tonemapping
-  r1.xyz = -cb1[4].zxy + float3(1,1,1);
-  r1.xyz = r0.www * r1.xyz + cb1[4].zxy;
-  r0.xyz = r1.xyz * r0.xyz;
   r0.xyz = cb1[7].www * r0.xyz;  
-  LUTSampleResult lut_sample = LUTSAMPLE(s1_s, cb1[7].xyz, t2, r0.yzx);
+  LUTSampleResult lut_sample = LUTSAMPLE(s0_s, cb1[7].xyz, t2, r0.yzx);
   [branch]
   if (shader_injection.tone_map_type == 0.f) {
     o0.xyz = SDRGRADE(lut_sample);
   } else {
     o0.xyz = HDRGRADE(lut_sample);
   }
-  // Apply vignette after tonemapping
-  o0.xyz *= vignette_value;
   if (CUSTOM_GRAIN_STRENGTH > 0) {
     o0.xyz = renodx::effects::ApplyFilmGrain(
         o0.xyz,

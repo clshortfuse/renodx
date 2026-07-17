@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.3.16 on Wed Jan 21 21:30:43 2026
+// ---- Created with 3Dmigoto v1.3.16 on Thu Jul 16 20:38:41 2026
 #include "../common.hlsl"
 Texture2D<float4> t2 : register(t2);
 
@@ -15,7 +15,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[110];
+  float4 cb0[28];
 }
 
 
@@ -98,7 +98,7 @@ void main(
     r0.xyz = t0.SampleLevel(s0_s, r0.xy, 0).xyz;
     r2.xyz = r0.xyz * float3(0,0,1) + r1.xyz;
   }
-  r0.xyz = cb0[109].xxx * r2.zxy;
+  r0.xyz = cb0[27].xxx * r2.zxy;
   r1.xyz = t1.SampleLevel(s0_s, v1.xy, 0).xyz;
   r0.w = -cb1[9].z + 1;
   r3.xyz = r1.zxy * r0.www;
@@ -121,12 +121,10 @@ void main(
   r5.xyz = -r5.xyz * cb1[9].zzz + r0.xyz;
   r1.xyz = r3.xyz ? r4.xyz : r1.zxy;
   r1.xyz = r1.xyz * cb1[11].zxy + r5.xyz;
-  r1.xyz = -r2.zxy * cb0[109].xxx + r1.xyz;
+  r1.xyz = -r2.zxy * cb0[27].xxx + r1.xyz;
   r0.xyz = cb1[9].xxx * r1.xyz + r0.xyz;
   r0.xyz = cb1[7].www * r0.xyz;
   /* Original Code
-  // Define untonemapped
-  float3 untonemapped = r0.yzx;
   r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
   r0.xyz = max(float3(0,0,0), r0.xyz);
   r0.xyz = log2(r0.xyz);
@@ -151,16 +149,12 @@ void main(
   r2.xyz = r2.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
   r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
   r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
-  r1.xy = cb0[82].xy * v1.xy;
+  r1.xy = cb0[0].xy * v1.xy;
   r0.w = dot(float2(171,231), r1.xy);
   r1.xyz = float3(0.00970873795,0.0140845068,0.010309278) * r0.www;
   r1.xyz = frac(r1.xyz);
   r1.xyz = float3(-0.5,-0.5,-0.5) + r1.xyz;
-  o0.xyz = r1.xyz * float3(0.0013725491, 0.0013725491, 0.0013725491) + r0.xyz;
-  // sRGB Decode and output
-  o0.xyz = renodx::color::srgb::Decode(o0.xyz);
-  o0.xyz = renodx::draw::ToneMapPass(untonemapped, o0.xyz);
-  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
+  o0.xyz = r1.xyz * float3(0.0013725491,0.0013725491,0.0013725491) + r0.xyz;
   o0.w = min(1, r1.w);
   return;
   */

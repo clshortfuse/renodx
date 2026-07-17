@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.3.16 on Wed Jan 21 21:30:43 2026
+// ---- Created with 3Dmigoto v1.3.16 on Thu Jul 16 20:38:41 2026
 #include "../common.hlsl"
 Texture2D<float4> t2 : register(t2);
 
@@ -15,7 +15,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[110];
+  float4 cb0[28];
 }
 
 
@@ -44,7 +44,7 @@ void main(
   r2.xyz = cmp(float3(0.300000012,0.300000012,0.300000012) < r2.xyz);
   r0.xyz = r2.xyz ? r1.xyz : r0.zxy;
   r1.xyzw = t0.SampleLevel(s0_s, v1.xy, 0).xyzw;
-  r2.xyz = cb0[109].xxx * r1.zxy;
+  r2.xyz = cb0[27].xxx * r1.zxy;
   r0.w = max(r2.y, r2.z);
   r0.w = max(r0.w, r2.x);
   r3.xy = -cb1[10].yx + r0.ww;
@@ -58,10 +58,43 @@ void main(
   r3.xyz = r2.xyz * r0.www;
   r3.xyz = -r3.xyz * cb1[9].zzz + r2.xyz;
   r0.xyz = r0.xyz * cb1[11].zxy + r3.xyz;
-  r0.xyz = -r1.zxy * cb0[109].xxx + r0.xyz;
+  r0.xyz = -r1.zxy * cb0[27].xxx + r0.xyz;
   o0.w = min(1, r1.w);
   r0.xyz = cb1[9].xxx * r0.xyz + r2.xyz;
   r0.xyz = cb1[7].www * r0.xyz;
+  /* Original Code
+  r0.xyz = r0.xyz * float3(5.55555582,5.55555582,5.55555582) + float3(0.0479959995,0.0479959995,0.0479959995);
+  r0.xyz = max(float3(0,0,0), r0.xyz);
+  r0.xyz = log2(r0.xyz);
+  r0.xyz = saturate(r0.xyz * float3(0.0734997839,0.0734997839,0.0734997839) + float3(0.386036009,0.386036009,0.386036009));
+  r0.yzw = cb1[7].zzz * r0.xyz;
+  r0.y = floor(r0.y);
+  r0.x = r0.x * cb1[7].z + -r0.y;
+  r1.xy = cb1[7].xy * float2(0.5,0.5);
+  r1.yz = r0.zw * cb1[7].xy + r1.xy;
+  r1.x = r0.y * cb1[7].y + r1.y;
+  r2.x = cb1[7].y;
+  r2.y = 0;
+  r0.yz = r2.xy + r1.xz;
+  r1.xyz = t2.SampleLevel(s0_s, r1.xz, 0).xyz;
+  r0.yzw = t2.SampleLevel(s0_s, r0.yz, 0).xyz;
+  r0.yzw = r0.yzw + -r1.xyz;
+  r0.xyz = r0.xxx * r0.yzw + r1.xyz;
+  r1.xyz = log2(abs(r0.xyz));
+  r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
+  r1.xyz = exp2(r1.xyz);
+  r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
+  r2.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
+  r0.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
+  r0.xyz = r0.xyz ? r2.xyz : r1.xyz;
+  r1.xy = cb0[0].xy * v1.xy;
+  r0.w = dot(float2(171,231), r1.xy);
+  r1.xyz = float3(0.00970873795,0.0140845068,0.010309278) * r0.www;
+  r1.xyz = frac(r1.xyz);
+  r1.xyz = float3(-0.5,-0.5,-0.5) + r1.xyz;
+  o0.xyz = r1.xyz * float3(0.0013725491,0.0013725491,0.0013725491) + r0.xyz;
+  return;
+  */
   LUTSampleResult lut_sample = LUTSAMPLE(s0_s, cb1[7].xyz, t2, r0.yzx);
   [branch]
   if (shader_injection.tone_map_type == 0.f) {

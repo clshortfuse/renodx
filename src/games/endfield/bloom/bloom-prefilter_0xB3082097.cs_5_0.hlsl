@@ -22,7 +22,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[110];
+  float4 cb0[28];
   // cb0[82].zw = sample offset scale
   // cb0[109].x = bloom intensity multiplier
 }
@@ -61,7 +61,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   while (true) {
     r1.w = cmp((int)r0.w >= 13);
     if (r1.w != 0) break;
-    r2.xy = icb[r0.w+0].xy * cb0[82].zw;
+    r2.xy = icb[r0.w+0].xy * cb0[0].zw;
     r2.xy = r0.xy * cb1[0].zw + r2.xy;
     r2.xyz = t0.SampleLevel(s0_s, r2.xy, 0).xyz;
     r1.w = max(r2.x, r2.y);
@@ -76,7 +76,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r1.w = r2.w / r1.w;               
     r2.xyz = r2.xyz * r1.www;
     
-    r2.xyz = cb0[109].xxx * r2.xyz * (BLOOM_STRENGTH / 50.0f);
+    r2.xyz = cb0[27].xxx * r2.xyz * (BLOOM_STRENGTH / 50.0f);
 
     r1.w = dot(r2.xyz, float3(0.212672904,0.715152204,0.0721750036)); 
     r1.w = 1 + r1.w;

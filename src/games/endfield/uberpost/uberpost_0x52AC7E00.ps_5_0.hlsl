@@ -1,5 +1,7 @@
-// ---- Created with 3Dmigoto v1.3.16 on Tue Jan 20 19:04:38 2026
+// ---- Created with 3Dmigoto v1.3.16 on Tue Jan 20 19:04:14 2026
 #include "../common.hlsl"
+Texture2D<float4> t2 : register(t2);
+
 Texture2D<float4> t1 : register(t1);
 
 Texture2D<float4> t0 : register(t0);
@@ -13,7 +15,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[110];
+  float4 cb0[28];
 }
 
 
@@ -36,7 +38,7 @@ void main(
   r1.x = r0.x * 0.5 + r0.y;
   r1.x = r0.z * 0.5 + r1.x;
   r2.xw = float2(0,0);
-  r2.yz = cb0[82].wz;
+  r2.yz = cb0[0].wz;
   r3.xyzw = v1.xyxy + -r2.zwxy;
   r2.xyzw = v1.xyxy + r2.xyzw;
   r1.yzw = t0.SampleLevel(s0_s, r3.xy, 0).xyz;
@@ -93,21 +95,48 @@ void main(
   r1.x = r1.x * 4 + 1;
   r1.x = 1 / r1.x;
   r0.xyz = r1.xxx * r0.xyz;
-  r0.xyz = cb0[109].xxx * r0.xyz;
-  r0.xyz = cb1[7].www * r0.xyz;  
-  LUTSampleResult lut_sample = LUTSAMPLE(s0_s, cb1[7].xyz, t1, r0.yzx);
+  o0.w = min(1, r0.w);
+  r1.xyz = cb0[27].xxx * r0.xyz;
+  r0.w = max(r1.y, r1.z);
+  r0.w = max(r0.w, r1.x);
+  r2.xy = -cb1[10].yx + r0.ww;
+  r0.w = max(9.99999975e-005, r0.w);
+  r1.w = max(0, r2.x);
+  r1.w = min(cb1[10].z, r1.w);
+  r1.w = r1.w * r1.w;
+  r1.w = cb1[10].w * r1.w;
+  r1.w = max(r1.w, r2.y);
+  r0.w = r1.w / r0.w;
+  r2.xyz = r1.xyz * r0.www;
+  r2.xyz = -r2.xyz * cb1[9].zzz + r1.xyz;
+  r3.xyz = t1.SampleLevel(s0_s, v1.xy, 0).xyz;
+  r4.xyz = log2(r3.zxy);
+  r4.xyz = float3(0.330000013,0.330000013,0.330000013) * r4.xyz;
+  r4.xyz = exp2(r4.xyz);
+  r4.xyz = r4.xyz * float3(1.49380004,1.49380004,1.49380004) + float3(-0.699999988,-0.699999988,-0.699999988);
+  r0.w = -cb1[9].z + 1;
+  r5.xyz = r3.zxy * r0.www;
+  r5.xyz = cmp(float3(0.300000012,0.300000012,0.300000012) < r5.xyz);
+  r3.xyz = r5.xyz ? r4.xyz : r3.zxy;
+  r2.xyz = r3.xyz * cb1[11].zxy + r2.xyz;
+  r0.xyz = -r0.xyz * cb0[27].xxx + r2.xyz;
+  r0.xyz = cb1[9].xxx * r0.xyz + r1.xyz;
+  r0.xyz = cb1[7].www * r0.xyz;
+
+  LUTSampleResult lut_sample = LUTSAMPLE(s0_s, cb1[7].xyz, t2, r0.yzx);
   [branch]
   if (shader_injection.tone_map_type == 0.f) {
     o0.xyz = SDRGRADE(lut_sample);
   } else {
     o0.xyz = HDRGRADE(lut_sample);
-  }  if (CUSTOM_GRAIN_STRENGTH > 0) {
+  }
+  if (CUSTOM_GRAIN_STRENGTH > 0) {
     o0.xyz = renodx::effects::ApplyFilmGrain(
         o0.xyz,
         v1.xy,
         CUSTOM_RANDOM,
         CUSTOM_GRAIN_STRENGTH * 0.03f);
-  }  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
-  o0.w = min(1, r0.w);
+  }
+  o0.xyz = renodx::draw::RenderIntermediatePass(o0.xyz);
   return;
 }

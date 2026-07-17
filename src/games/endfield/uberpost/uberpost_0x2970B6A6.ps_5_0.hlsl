@@ -14,7 +14,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[110];
+  float4 cb0[28];
 }
 
 #define cmp -
@@ -28,11 +28,10 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.x = cb0[82].x / cb0[82].y;
-  r0.y = -1 + r0.x;
-  r0.y = cb1[2].w * r0.y + 1;
-  r0.x = r0.x * 0.5625 + -r0.y;
-  r0.x = cb1[1].w * r0.x + r0.y;
+  r0.x = cb0[27].z + -1;
+  r0.x = cb1[2].w * r0.x + 1;
+  r0.y = cb0[27].z * 0.5625 + -r0.x;
+  r0.x = cb1[1].w * r0.y + r0.x;
   r0.y = saturate(cb1[2].x * 1.04999995);
   r0.y = r0.y * 1.5 + -1;
   r0.y = cb1[1].w * r0.y + 1;
@@ -72,12 +71,12 @@ void main(
   r0.w = r0.w * r1.w + cb1[3].x;
   r1.xyz = r0.www * r1.xyz + float3(1,1,1);
   r2.xyzw = t0.SampleLevel(s1_s, v1.xy, 0).xyzw;
-  r2.xyz = cb0[109].xxx * r2.zxy;
+  r2.xyz = cb0[27].xxx * r2.zxy;
   o0.w = min(1, r2.w);
   r1.xyz = r2.xyz * r1.xyz;
   r0.xyz = r1.xyz * r0.xyz;
   r0.xyz = cb1[7].www * r0.xyz;
-  
+
   LUTSampleResult lut_sample = LUTSAMPLE(s1_s, cb1[7].xyz, t1, r0.yzx);
   [branch]
   if (shader_injection.tone_map_type == 0.f) {
