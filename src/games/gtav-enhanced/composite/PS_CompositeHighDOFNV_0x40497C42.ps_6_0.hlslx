@@ -1,3 +1,5 @@
+#include "./common.hlsli"
+
 Texture2DArray<float> t1 : register(t1);
 
 Texture2D<float> t11_space1 : register(t11, space1);
@@ -135,10 +137,10 @@ SamplerState s0_space2[] : register(s0, space2);
 SamplerState s8_space1 : register(s8, space1);
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float4 TEXCOORD : TEXCOORD,
-  linear float TEXCOORD_1 : TEXCOORD1
-) : SV_Target {
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 TEXCOORD: TEXCOORD,
+    linear float TEXCOORD_1: TEXCOORD1)
+    : SV_Target {
   float4 SV_Target;
   float _23 = t11_space1.Sample(s0_space1, float2(TEXCOORD.x, TEXCOORD.y));
   float _30 = cb12_space1_000z / ((1.0f - _23.x) + cb12_space1_000w);
@@ -218,7 +220,7 @@ float4 main(
   float _271 = ((cb12_space1_013y - cb12_space1_011y) * _233) + cb12_space1_011y;
   float _272 = ((cb12_space1_013z - cb12_space1_011z) * _233) + cb12_space1_011z;
   float _273 = _272 * _252;
-  float _274 = (lerp(cb12_space1_010z, cb12_space1_012z, _233)) * _253;
+  float _274 = (lerp(cb12_space1_010z, cb12_space1_012z, _233))*_253;
   float _277 = _270 * _255;
   float _281 = _271 * _255;
   float _284 = _270 / _271;
@@ -237,9 +239,9 @@ float4 main(
   float _336 = (cb12_space1_067x * (_324 - _326)) + _326;
   float _337 = (cb12_space1_067x * (_325 - _326)) + _326;
   float _341 = saturate(_326 / cb12_space1_066w);
-  float _358 = (lerp(cb12_space1_066x, cb12_space1_065x, _341)) * _335;
-  float _359 = (lerp(cb12_space1_066y, cb12_space1_065y, _341)) * _336;
-  float _360 = (lerp(cb12_space1_066z, cb12_space1_065z, _341)) * _337;
+  float _358 = (lerp(cb12_space1_066x, cb12_space1_065x, _341))*_335;
+  float _359 = (lerp(cb12_space1_066y, cb12_space1_065y, _341))*_336;
+  float _360 = (lerp(cb12_space1_066z, cb12_space1_065z, _341))*_337;
   float _366 = saturate(((_326 + -1.0f) + cb12_space1_065w) / max(0.009999999776482582f, cb12_space1_065w));
   float _382 = cb12_space1_024z * dot(float3(saturate(lerp(_358, _335, _366)), saturate(lerp(_359, _336, _366)), saturate(lerp(_360, _337, _366))), float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
   float _386 = saturate(_382 / cb12_space1_023w);

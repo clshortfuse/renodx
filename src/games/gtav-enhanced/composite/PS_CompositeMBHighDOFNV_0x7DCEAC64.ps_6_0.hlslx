@@ -1,3 +1,5 @@
+#include "./common.hlsli"
+
 Texture2DArray<float> t1 : register(t1);
 
 Texture2D<float> t11_space1 : register(t11, space1);
@@ -196,10 +198,10 @@ SamplerState s6_space1 : register(s6, space1);
 SamplerState s8_space1 : register(s8, space1);
 
 float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float4 TEXCOORD : TEXCOORD,
-  linear float TEXCOORD_1 : TEXCOORD1
-) : SV_Target {
+    noperspective float4 SV_Position: SV_Position,
+    linear float4 TEXCOORD: TEXCOORD,
+    linear float TEXCOORD_1: TEXCOORD1)
+    : SV_Target {
   float4 SV_Target;
   float _30 = t11_space1.Sample(s0_space1, float2(TEXCOORD.x, TEXCOORD.y));
   float _37 = cb12_space1_000z / ((1.0f - _30.x) + cb12_space1_000w);
@@ -323,7 +325,7 @@ float4 main(
       _312 = _291;
       _313 = _222;
       _314 = 1;
-      while(true) {
+      while (true) {
         float _316 = float(_314) + ((_301.x + -0.5f) * 0.5f);
         float _330 = (round((((_286 * cb12_space1_017y) * _316) + TEXCOORD.x) * cb5_015x) + 0.5f) / cb5_015x;
         float _331 = (round((((_288 * cb12_space1_017y) * _316) + TEXCOORD.y) * cb5_015y) + 0.5f) / cb5_015y;
@@ -381,7 +383,7 @@ float4 main(
           _453 = 0.0f;
           _454 = 0.0f;
           _455 = 0;
-          while(true) {
+          while (true) {
             float _456 = float(_455);
             float _457 = (_445 + 0.5f) + _456;
             float _458 = _457 / _427;
@@ -479,7 +481,7 @@ float4 main(
             _687 = 0.0f;
             _688 = 0.0f;
             _689 = 0;
-            while(true) {
+            while (true) {
               float _690 = float(_689);
               float _691 = (_679 + 0.5f) + _690;
               float _692 = _691 / _661;
@@ -582,7 +584,7 @@ float4 main(
   float _925 = ((cb12_space1_013y - cb12_space1_011y) * _887) + cb12_space1_011y;
   float _926 = ((cb12_space1_013z - cb12_space1_011z) * _887) + cb12_space1_011z;
   float _927 = _926 * _906;
-  float _928 = (lerp(cb12_space1_010z, cb12_space1_012z, _887)) * _907;
+  float _928 = (lerp(cb12_space1_010z, cb12_space1_012z, _887))*_907;
   float _931 = _924 * _909;
   float _935 = _925 * _909;
   float _938 = _924 / _925;
@@ -601,9 +603,9 @@ float4 main(
   float _990 = (cb12_space1_067x * (_978 - _980)) + _980;
   float _991 = (cb12_space1_067x * (_979 - _980)) + _980;
   float _995 = saturate(_980 / cb12_space1_066w);
-  float _1012 = (lerp(cb12_space1_066x, cb12_space1_065x, _995)) * _989;
-  float _1013 = (lerp(cb12_space1_066y, cb12_space1_065y, _995)) * _990;
-  float _1014 = (lerp(cb12_space1_066z, cb12_space1_065z, _995)) * _991;
+  float _1012 = (lerp(cb12_space1_066x, cb12_space1_065x, _995))*_989;
+  float _1013 = (lerp(cb12_space1_066y, cb12_space1_065y, _995))*_990;
+  float _1014 = (lerp(cb12_space1_066z, cb12_space1_065z, _995))*_991;
   float _1020 = saturate(((_980 + -1.0f) + cb12_space1_065w) / max(0.009999999776482582f, cb12_space1_065w));
   float _1036 = cb12_space1_024z * dot(float3(saturate(lerp(_1012, _989, _1020)), saturate(lerp(_1013, _990, _1020)), saturate(lerp(_1014, _991, _1020))), float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
   float _1040 = saturate(_1036 / cb12_space1_023w);

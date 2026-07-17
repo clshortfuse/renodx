@@ -1,0 +1,1067 @@
+#include "./common.hlsli"
+
+Texture2DArray<float> t1 : register(t1);
+
+Texture2D<float> t11_space1 : register(t11, space1);
+
+Texture2D<float4> t14_space1 : register(t14, space1);
+
+Texture2D<float4> t15_space1 : register(t15, space1);
+
+Texture2D<float4> t16_space1 : register(t16, space1);
+
+Texture2D<float4> t17_space1 : register(t17, space1);
+
+Texture2D<uint2> t18_space1 : register(t18, space1);
+
+Texture2D<float4> t19_space1 : register(t19, space1);
+
+Texture2D<float4> t20_space1 : register(t20, space1);
+
+Texture2D<float2> t22_space1 : register(t22, space1);
+
+Texture2D<float4> t23_space1 : register(t23, space1);
+
+Texture2D<float4> t25_space1 : register(t25, space1);
+
+Texture2D<float4> t28_space1 : register(t28, space1);
+
+Texture2D<float4> t29_space1 : register(t29, space1);
+
+Texture2D<float4> t30_space1 : register(t30, space1);
+
+Texture2D<float4> t31_space1 : register(t31, space1);
+
+cbuffer cb2 : register(b2) {
+  float4 g_rage_matrices_000[4] : packoffset(c000.x);
+  float4 g_rage_matrices_064[4] : packoffset(c004.x);
+  float4 g_rage_matrices_128[4] : packoffset(c008.x);
+  float4 g_rage_matrices_192[4] : packoffset(c012.x);
+  float4 g_rage_matrices_256[4] : packoffset(c016.x);
+  float4 g_rage_matrices_320[4] : packoffset(c020.x);
+  float4 g_rage_matrices_384[4] : packoffset(c024.x);
+  float4 g_rage_matrices_448[4] : packoffset(c028.x);
+  float4 g_rage_matrices_512[4] : packoffset(c032.x);
+  float4 g_rage_matrices_576[4] : packoffset(c036.x);
+  float4 g_rage_matrices_640[4] : packoffset(c040.x);
+  float4 g_rage_matrices_704[4] : packoffset(c044.x);
+  float4 g_rage_matrices_768[4] : packoffset(c048.x);
+  float4 g_rage_matrices_832[4] : packoffset(c052.x);
+};
+
+cbuffer cb3 : register(b3) {
+  int g_rage_dynamicsamplerindices_000 : packoffset(c000.x);
+  int g_rage_dynamicsamplerindices_004 : packoffset(c000.y);
+  int g_rage_dynamicsamplerindices_008 : packoffset(c000.z);
+  int g_rage_dynamicsamplerindices_012 : packoffset(c000.w);
+  int g_rage_dynamicsamplerindices_016 : packoffset(c001.x);
+  int g_rage_dynamicsamplerindices_020 : packoffset(c001.y);
+  int g_rage_dynamicsamplerindices_024 : packoffset(c001.z);
+  int g_rage_dynamicsamplerindices_028 : packoffset(c001.w);
+  int g_rage_dynamicsamplerindices_032 : packoffset(c002.x);
+  int g_rage_dynamicsamplerindices_036 : packoffset(c002.y);
+  int g_rage_dynamicsamplerindices_040 : packoffset(c002.z);
+  int g_rage_dynamicsamplerindices_044 : packoffset(c002.w);
+  int g_rage_dynamicsamplerindices_048 : packoffset(c003.x);
+  int g_rage_dynamicsamplerindices_052 : packoffset(c003.y);
+  int g_rage_dynamicsamplerindices_056 : packoffset(c003.z);
+  int g_rage_dynamicsamplerindices_060 : packoffset(c003.w);
+  int g_rage_dynamicsamplerindices_064 : packoffset(c004.x);
+  int g_rage_dynamicsamplerindices_068 : packoffset(c004.y);
+  int g_rage_dynamicsamplerindices_072 : packoffset(c004.z);
+  int g_rage_dynamicsamplerindices_076 : packoffset(c004.w);
+  int g_rage_dynamicsamplerindices_080 : packoffset(c005.x);
+  int g_rage_dynamicsamplerindices_084 : packoffset(c005.y);
+};
+
+cbuffer cb5 : register(b5) {
+  float4 misc_globals_000 : packoffset(c000.x);
+  float misc_globals_016 : packoffset(c001.x);
+  float misc_globals_020 : packoffset(c001.y);
+  float misc_globals_024 : packoffset(c001.z);
+  float misc_globals_028 : packoffset(c001.w);
+  float4 misc_globals_032 : packoffset(c002.x);
+  float4 misc_globals_048 : packoffset(c003.x);
+  float4 misc_globals_064 : packoffset(c004.x);
+  float4 misc_globals_080 : packoffset(c005.x);
+  float4 misc_globals_096 : packoffset(c006.x);
+  float4 misc_globals_112[4] : packoffset(c007.x);
+  float4 misc_globals_176 : packoffset(c011.x);
+  float4 misc_globals_192 : packoffset(c012.x);
+  float4 misc_globals_208 : packoffset(c013.x);
+  float4 misc_globals_224 : packoffset(c014.x);
+  float4 misc_globals_240 : packoffset(c015.x);
+  int4 misc_globals_256 : packoffset(c016.x);
+  float4 misc_globals_272 : packoffset(c017.x);
+  float4 misc_globals_288 : packoffset(c018.x);
+  float misc_globals_304 : packoffset(c019.x);
+  float misc_globals_308 : packoffset(c019.y);
+  float4 misc_globals_320 : packoffset(c020.x);
+  float4 misc_globals_336 : packoffset(c021.x);
+  float misc_globals_352 : packoffset(c022.x);
+  int misc_globals_356 : packoffset(c022.y);
+  int misc_globals_360 : packoffset(c022.z);
+  int2 misc_globals_368 : packoffset(c023.x);
+  int2 misc_globals_376 : packoffset(c023.z);
+  int misc_globals_384 : packoffset(c024.x);
+  float misc_globals_388 : packoffset(c024.y);
+  int misc_globals_392 : packoffset(c024.z);
+  float misc_globals_396 : packoffset(c024.w);
+  float2 misc_globals_400 : packoffset(c025.x);
+  int misc_globals_408 : packoffset(c025.z);
+};
+
+cbuffer cb12_space1 : register(b12, space1) {
+  float4 postfx_cbuffer_000 : packoffset(c000.x);
+  float4 postfx_cbuffer_016 : packoffset(c001.x);
+  float4 postfx_cbuffer_032 : packoffset(c002.x);
+  float4 postfx_cbuffer_048 : packoffset(c003.x);
+  float4 postfx_cbuffer_064 : packoffset(c004.x);
+  float4 postfx_cbuffer_080 : packoffset(c005.x);
+  float4 postfx_cbuffer_096 : packoffset(c006.x);
+  float4 postfx_cbuffer_112 : packoffset(c007.x);
+  float4 postfx_cbuffer_128 : packoffset(c008.x);
+  float4 postfx_cbuffer_144 : packoffset(c009.x);
+  float4 postfx_cbuffer_160 : packoffset(c010.x);
+  float4 postfx_cbuffer_176 : packoffset(c011.x);
+  float4 postfx_cbuffer_192 : packoffset(c012.x);
+  float4 postfx_cbuffer_208 : packoffset(c013.x);
+  float2 postfx_cbuffer_224 : packoffset(c014.x);
+  float4 postfx_cbuffer_240 : packoffset(c015.x);
+  float4 postfx_cbuffer_256 : packoffset(c016.x);
+  float4 postfx_cbuffer_272 : packoffset(c017.x);
+  float4 postfx_cbuffer_288 : packoffset(c018.x);
+  float4 postfx_cbuffer_304 : packoffset(c019.x);
+  float4 postfx_cbuffer_320 : packoffset(c020.x);
+  float3 postfx_cbuffer_336 : packoffset(c021.x);
+  float3 postfx_cbuffer_352 : packoffset(c022.x);
+  float3 postfx_cbuffer_368 : packoffset(c023.x);
+  float postfx_cbuffer_380 : packoffset(c023.w);
+  float postfx_cbuffer_384 : packoffset(c024.x);
+  float postfx_cbuffer_388 : packoffset(c024.y);
+  float postfx_cbuffer_392 : packoffset(c024.z);
+  float postfx_cbuffer_396 : packoffset(c024.w);
+  float postfx_cbuffer_400 : packoffset(c025.x);
+  float postfx_cbuffer_404 : packoffset(c025.y);
+  float postfx_cbuffer_408 : packoffset(c025.z);
+  float postfx_cbuffer_412 : packoffset(c025.w);
+  float postfx_cbuffer_416 : packoffset(c026.x);
+  float postfx_cbuffer_420 : packoffset(c026.y);
+  float4 postfx_cbuffer_432 : packoffset(c027.x);
+  float4 postfx_cbuffer_448 : packoffset(c028.x);
+  float4 postfx_cbuffer_464 : packoffset(c029.x);
+  float4 postfx_cbuffer_480 : packoffset(c030.x);
+  float4 postfx_cbuffer_496 : packoffset(c031.x);
+  float4 postfx_cbuffer_512 : packoffset(c032.x);
+  float4 postfx_cbuffer_528 : packoffset(c033.x);
+  float4 postfx_cbuffer_544 : packoffset(c034.x);
+  float4 postfx_cbuffer_560 : packoffset(c035.x);
+  float4 postfx_cbuffer_576 : packoffset(c036.x);
+  float4 postfx_cbuffer_592 : packoffset(c037.x);
+  float4 postfx_cbuffer_608 : packoffset(c038.x);
+  float4 postfx_cbuffer_624 : packoffset(c039.x);
+  float4 postfx_cbuffer_640 : packoffset(c040.x);
+  float4 postfx_cbuffer_656 : packoffset(c041.x);
+  float4 postfx_cbuffer_672 : packoffset(c042.x);
+  float4 postfx_cbuffer_688 : packoffset(c043.x);
+  float4 postfx_cbuffer_704 : packoffset(c044.x);
+  float4 postfx_cbuffer_720 : packoffset(c045.x);
+  float4 postfx_cbuffer_736 : packoffset(c046.x);
+  float4 postfx_cbuffer_752 : packoffset(c047.x);
+  float4 postfx_cbuffer_768 : packoffset(c048.x);
+  float4 postfx_cbuffer_784 : packoffset(c049.x);
+  float4 postfx_cbuffer_800 : packoffset(c050.x);
+  float4 postfx_cbuffer_816 : packoffset(c051.x);
+  float4 postfx_cbuffer_832 : packoffset(c052.x);
+  float4 postfx_cbuffer_848 : packoffset(c053.x);
+  float4 postfx_cbuffer_864 : packoffset(c054.x);
+  float4 postfx_cbuffer_880 : packoffset(c055.x);
+  float postfx_cbuffer_896 : packoffset(c056.x);
+  float4 postfx_cbuffer_912 : packoffset(c057.x);
+  float4 postfx_cbuffer_928 : packoffset(c058.x);
+  float4 postfx_cbuffer_944 : packoffset(c059.x);
+  float4 postfx_cbuffer_960 : packoffset(c060.x);
+  float4 postfx_cbuffer_976 : packoffset(c061.x);
+  float4 postfx_cbuffer_992 : packoffset(c062.x);
+  float4 postfx_cbuffer_1008 : packoffset(c063.x);
+  float postfx_cbuffer_1024 : packoffset(c064.x);
+  float4 postfx_cbuffer_1040 : packoffset(c065.x);
+  float4 postfx_cbuffer_1056 : packoffset(c066.x);
+  float postfx_cbuffer_1072 : packoffset(c067.x);
+  float postfx_cbuffer_1076 : packoffset(c067.y);
+  float4 postfx_cbuffer_1088 : packoffset(c068.x);
+  float4 postfx_cbuffer_1104 : packoffset(c069.x);
+  float4 postfx_cbuffer_1120 : packoffset(c070.x);
+  float4 postfx_cbuffer_1136 : packoffset(c071.x);
+  float4 postfx_cbuffer_1152 : packoffset(c072.x);
+  float4 postfx_cbuffer_1168 : packoffset(c073.x);
+  float2 postfx_cbuffer_1184 : packoffset(c074.x);
+  float4 postfx_cbuffer_1200 : packoffset(c075.x);
+  float3 postfx_cbuffer_1216 : packoffset(c076.x);
+  float4 postfx_cbuffer_1232 : packoffset(c077.x);
+  float4 postfx_cbuffer_1248 : packoffset(c078.x);
+  float4 postfx_cbuffer_1264 : packoffset(c079.x);
+  float4 postfx_cbuffer_1280 : packoffset(c080.x);
+  float4 postfx_cbuffer_1296 : packoffset(c081.x);
+  float4 postfx_cbuffer_1312 : packoffset(c082.x);
+  float4 postfx_cbuffer_1328 : packoffset(c083.x);
+  float4 postfx_cbuffer_1344 : packoffset(c084.x);
+  float postfx_cbuffer_1360 : packoffset(c085.x);
+  float4 postfx_cbuffer_1376 : packoffset(c086.x);
+  float3 postfx_cbuffer_1392 : packoffset(c087.x);
+  float postfx_cbuffer_1404 : packoffset(c087.w);
+  float4 postfx_cbuffer_1408 : packoffset(c088.x);
+  float postfx_cbuffer_1424 : packoffset(c089.x);
+  float4 postfx_cbuffer_1440 : packoffset(c090.x);
+  float4 postfx_cbuffer_1456 : packoffset(c091.x);
+  float4 postfx_cbuffer_1472 : packoffset(c092.x);
+  float4 postfx_cbuffer_1488 : packoffset(c093.x);
+  float postfx_cbuffer_1504 : packoffset(c094.x);
+  float postfx_cbuffer_1508 : packoffset(c094.y);
+  float postfx_cbuffer_1512 : packoffset(c094.z);
+};
+
+SamplerState s0_space1 : register(s0, space1);
+
+SamplerState s1_space1 : register(s1, space1);
+
+SamplerState s2_space1 : register(s2, space1);
+
+SamplerState s3_space1 : register(s3, space1);
+
+SamplerState s0_space2[] : register(s0, space2);
+
+SamplerState s6_space1 : register(s6, space1);
+
+SamplerState s8_space1 : register(s8, space1);
+
+float4 main(
+    precise noperspective float4 SV_Position: SV_Position,
+    linear float4 TEXCOORD: TEXCOORD,
+    linear float TEXCOORD_1: TEXCOORD1)
+    : SV_Target {
+  float4 SV_Target;
+  float _41;
+  float _58;
+  float4 _77;
+  float4 _80;
+  float _104;
+  float _111;
+  float _112;
+  float _113;
+  float _114;
+  float _120;
+  float _121;
+  float _122;
+  float _123;
+  float _124;
+  float _128;
+  float _129;
+  float _132;
+  float _133;
+  float _134;
+  float _135;
+  float _136;
+  float _137;
+  float _138;
+  float _139;
+  float _140;
+  float _141;
+  float _146;
+  float _147;
+  float _159;
+  float _161;
+  float _163;
+  float _166;
+  float _178;
+  float _179;
+  float _182;
+  float _183;
+  float _184;
+  float _185;
+  float _186;
+  float _190;
+  float4 _195;
+  float4 _204;
+  float4 _215;
+  float4 _226;
+  float4 _237;
+  float _246;
+  float _247;
+  float _255;
+  float _256;
+  float _262;
+  float _275;
+  float _423;
+  float _424;
+  float _425;
+  float _535;
+  float _536;
+  float _537;
+  float _538;
+  int _539;
+  float _587;
+  float _588;
+  float _589;
+  float _590;
+  float _676;
+  float _677;
+  float _678;
+  float _679;
+  int _680;
+  float _799;
+  float _800;
+  float _801;
+  float _802;
+  float _810;
+  float _811;
+  float _812;
+  float _813;
+  float _910;
+  float _911;
+  float _912;
+  float _913;
+  int _914;
+  float _1035;
+  float _1036;
+  float _1037;
+  float _1038;
+  float _1046;
+  float _1047;
+  float _1048;
+  float _1049;
+  float _1070;
+  float _1071;
+  float _1072;
+  float _1119;
+  float _1120;
+  float _1121;
+  float _1494;
+  float _1495;
+  float _1496;
+  float _283;
+  float _284;
+  float _285;
+  float4 _286;
+  float _290;
+  float _291;
+  float _292;
+  float4 _293;
+  float _297;
+  float _298;
+  float4 _299;
+  float _303;
+  float _304;
+  float4 _305;
+  float4 _309;
+  float4 _313;
+  float4 _317;
+  float4 _321;
+  float4 _325;
+  float4 _329;
+  float _334;
+  float _336;
+  float _338;
+  bool _368;
+  float _387;
+  float _388;
+  float _393;
+  float _396;
+  float _397;
+  float _398;
+  float _399;
+  float _400;
+  int _428;
+  float _447;
+  float _450;
+  float _451;
+  float _474;
+  float _475;
+  float _476;
+  float _494;
+  float _496;
+  float _501;
+  float _502;
+  float _503;
+  bool _504;
+  float _505;
+  float _511;
+  float _513;
+  float _514;
+  float _515;
+  float _516;
+  float _541;
+  float _555;
+  float _556;
+  float _568;
+  float4 _569;
+  float _576;
+  float _577;
+  float _578;
+  float _579;
+  int _580;
+  float _591;
+  float _598;
+  float4 _616;
+  float2 _625;
+  float _630;
+  float _631;
+  float _640;
+  int _645;
+  float _649;
+  float _650;
+  float _652;
+  float _653;
+  float _670;
+  float _681;
+  float _682;
+  float _683;
+  float _686;
+  float _687;
+  float2 _688;
+  float _693;
+  float _694;
+  float _700;
+  float _708;
+  float _714;
+  float _715;
+  float _721;
+  float4 _728;
+  float _732;
+  float _733;
+  float _736;
+  float _737;
+  float2 _738;
+  float _741;
+  float _742;
+  float _747;
+  float _752;
+  float _758;
+  float _764;
+  float _770;
+  float4 _771;
+  bool _775;
+  bool _776;
+  float _778;
+  float _780;
+  float _788;
+  float _790;
+  float _792;
+  float _794;
+  int _795;
+  float _804;
+  float _814;
+  float4 _821;
+  float _826;
+  float4 _841;
+  float2 _850;
+  float4 _860;
+  float _864;
+  float _865;
+  float _874;
+  int _879;
+  float _883;
+  float _884;
+  float _886;
+  float _887;
+  float _904;
+  float _915;
+  float _916;
+  float _917;
+  float _920;
+  float _921;
+  float2 _922;
+  float _927;
+  float _928;
+  float _934;
+  float4 _942;
+  float _949;
+  float _950;
+  float _956;
+  float4 _963;
+  float _967;
+  float _968;
+  float _971;
+  float _972;
+  float2 _973;
+  float _976;
+  float _977;
+  float _982;
+  float4 _987;
+  float _994;
+  float _1000;
+  float _1006;
+  float4 _1007;
+  bool _1011;
+  bool _1012;
+  float _1014;
+  float _1016;
+  float _1024;
+  float _1026;
+  float _1028;
+  float _1030;
+  int _1031;
+  float _1040;
+  float _1050;
+  float4 _1057;
+  float _1062;
+  float4 _1073;
+  float _1085;
+  float _1086;
+  float _1087;
+  bool _1090;
+  float _1091;
+  float4 _1092;
+  float _1096;
+  float _1097;
+  float _1098;
+  float4 _1103;
+  float _1105;
+  float _1106;
+  float _1107;
+  float _1130;
+  float _1152;
+  float _1153;
+  float _1162;
+  float _1187;
+  float _1206;
+  float _1207;
+  float _1209;
+  float _1224;
+  float _1225;
+  float _1226;
+  float _1227;
+  float _1228;
+  float _1231;
+  float _1235;
+  float _1238;
+  float _1240;
+  float _1244;
+  float _1245;
+  float _1246;
+  float _1247;
+  float _1248;
+  float _1249;
+  float _1277;
+  float _1278;
+  float _1279;
+  float _1287;
+  float _1288;
+  float _1289;
+  float _1290;
+  float _1299;
+  float _1300;
+  float _1301;
+  float _1305;
+  float _1322;
+  float _1323;
+  float _1324;
+  float _1330;
+  float _1375;
+  float _1395;
+  float _1402;
+  float _1403;
+  float _1404;
+  bool _1414;
+  float _1416;
+  float _1473;
+  float _1479;
+  float _1483;
+  _41 = postfx_cbuffer_000.z / ((1.0f - ((t11_space1.Sample(s0_space1, float2(TEXCOORD.x, TEXCOORD.y))).x)) + postfx_cbuffer_000.w);
+  _58 = ((((((float4)(t16_space1.Sample(s2_space1, float2(TEXCOORD.x, TEXCOORD.y)))).x) * ((float)((bool)((uint)((_41 > postfx_cbuffer_480.y) && (_41 < postfx_cbuffer_480.y)))))) * postfx_cbuffer_528.z) * (postfx_cbuffer_480.w - postfx_cbuffer_480.z)) + postfx_cbuffer_480.z;
+  _77 = t29_space1.Sample(s3_space1, float2(((postfx_cbuffer_496.x * TEXCOORD.x) + postfx_cbuffer_496.z), ((postfx_cbuffer_496.y * TEXCOORD.y) + postfx_cbuffer_496.w)));
+  _80 = t29_space1.Sample(s3_space1, float2(((postfx_cbuffer_512.x * TEXCOORD.x) + postfx_cbuffer_512.z), ((postfx_cbuffer_512.y * TEXCOORD.y) + postfx_cbuffer_512.w)));
+  _104 = min(max((1.0f - saturate(((postfx_cbuffer_1152.z / postfx_cbuffer_1152.w) * 0.20000000298023224f) + -0.4000000059604645f)), 0.5f), 1.0f);
+  _111 = (((postfx_cbuffer_528.x * _58) * ((_77.x + -1.0f) + _80.x)) + TEXCOORD.x) + -0.5f;
+  _112 = (((postfx_cbuffer_528.y * _58) * ((_77.y + -1.0f) + _80.y)) + TEXCOORD.y) + -0.5f;
+  _113 = (postfx_cbuffer_1152.x / postfx_cbuffer_1152.y) * _111;
+  _114 = dot(float2(_113, _112), float2(_113, _112));
+  _120 = CUSTOM_LENS_DISTORTION * ((_104 * _114) * ((sqrt(_114) * postfx_cbuffer_1104.y) + postfx_cbuffer_1104.x)) + 1.0f;
+  _121 = _120 * _111;
+  _122 = _120 * _112;
+  _123 = _121 + 0.5f;
+  _124 = _122 + 0.5f;
+  _128 = _123 * misc_globals_240.x;
+  _129 = _124 * misc_globals_240.y;
+  _132 = floor(_128 + -0.5f);
+  _133 = floor(_129 + -0.5f);
+  _134 = _132 + 0.5f;
+  _135 = _133 + 0.5f;
+  _136 = _128 - _134;
+  _137 = _129 - _135;
+  _138 = _136 * _136;
+  _139 = _137 * _137;
+  _140 = _138 * _136;
+  _141 = _139 * _137;
+  _146 = _138 - ((_140 + _136) * 0.5f);
+  _147 = _139 - ((_141 + _137) * 0.5f);
+  _159 = (_136 * 0.5f) * (_138 - _136);
+  _161 = (_137 * 0.5f) * (_139 - _137);
+  _163 = (1.0f - _159) - _146;
+  _166 = (1.0f - _161) - _147;
+  _178 = (((_163 - (((_140 * 1.5f) - (_138 * 2.5f)) + 1.0f)) / _163) + _134) / misc_globals_240.x;
+  _179 = (((_166 - (((_141 * 1.5f) - (_139 * 2.5f)) + 1.0f)) / _166) + _135) / misc_globals_240.y;
+  _182 = _163 * _147;
+  _183 = _166 * _146;
+  _184 = _163 * _166;
+  _185 = _166 * _159;
+  _186 = _163 * _161;
+  _190 = (((_182 + _183) + _184) + _185) + _186;
+  _195 = t15_space1.SampleLevel(s0_space2[((uint)(g_rage_dynamicsamplerindices_016) + 0u)], float2(_178, ((_133 + -0.5f) / misc_globals_240.y)), 0.0f);
+  _204 = t15_space1.SampleLevel(s0_space2[((uint)(g_rage_dynamicsamplerindices_016) + 0u)], float2(((_132 + -0.5f) / misc_globals_240.x), _179), 0.0f);
+  _215 = t15_space1.SampleLevel(s0_space2[((uint)(g_rage_dynamicsamplerindices_016) + 0u)], float2(_178, _179), 0.0f);
+  _226 = t15_space1.SampleLevel(s0_space2[((uint)(g_rage_dynamicsamplerindices_016) + 0u)], float2(((_132 + 2.5f) / misc_globals_240.x), _179), 0.0f);
+  _237 = t15_space1.SampleLevel(s0_space2[((uint)(g_rage_dynamicsamplerindices_016) + 0u)], float2(_178, ((_133 + 2.5f) / misc_globals_240.y)), 0.0f);
+  _246 = max(0.0f, ((((((_204.y * _183) + (_195.y * _182)) + (_215.y * _184)) + (_226.y * _185)) + (_237.y * _186)) / _190));
+  _247 = max(0.0f, ((((((_204.z * _183) + (_195.z * _182)) + (_215.z * _184)) + (_226.z * _185)) + (_237.z * _186)) / _190));
+  _255 = (postfx_cbuffer_1152.x / postfx_cbuffer_1152.y) * _121;
+  _256 = dot(float2(_255, _122), float2(_255, _122));
+  _262 = CUSTOM_CHROMATIC_ABERRATION * ((_104 * _256) * ((sqrt(_256) * postfx_cbuffer_1104.w) + postfx_cbuffer_1104.z)) + 1.0f;
+  _275 = misc_globals_224.w * (((float4)(t15_space1.Sample(s0_space2[((uint)(g_rage_dynamicsamplerindices_012) + 0u)], float2(((_262 * _121) + 0.5f), ((_262 * _122) + 0.5f))))).x);
+  if (!(postfx_cbuffer_1360 > 0.0f)) {
+    _283 = postfx_cbuffer_1152.y * 0.5f;
+    _284 = _123 - postfx_cbuffer_1152.x;
+    _285 = _124 - _283;
+    _286 = t14_space1.Sample(s2_space1, float2(_284, _285));
+    _290 = postfx_cbuffer_1152.x * 0.5f;
+    _291 = _290 + _123;
+    _292 = _124 - postfx_cbuffer_1152.y;
+    _293 = t14_space1.Sample(s2_space1, float2(_291, _292));
+    _297 = _123 - _290;
+    _298 = postfx_cbuffer_1152.y + _124;
+    _299 = t14_space1.Sample(s2_space1, float2(_297, _298));
+    _303 = postfx_cbuffer_1152.x + _123;
+    _304 = _283 + _124;
+    _305 = t14_space1.Sample(s2_space1, float2(_303, _304));
+    _309 = t14_space1.Sample(s2_space1, float2(_123, _124));
+    _313 = t19_space1.Sample(s1_space1, float2(_284, _285));
+    _317 = t19_space1.Sample(s1_space1, float2(_291, _292));
+    _321 = t19_space1.Sample(s1_space1, float2(_297, _298));
+    _325 = t19_space1.Sample(s1_space1, float2(_303, _304));
+    _329 = t19_space1.Sample(s1_space1, float2(_123, _124));
+    _334 = (_329.x + _309.x) * 0.5f;
+    _336 = (_329.y + _309.y) * 0.5f;
+    _338 = (_329.z + _309.z) * 0.5f;
+    _368 = !(postfx_cbuffer_064.x == 0.0f);
+    _387 = max(saturate(1.0f - ((_41 - postfx_cbuffer_048.x) * postfx_cbuffer_048.y)), saturate((_41 - postfx_cbuffer_048.z) * postfx_cbuffer_048.w));
+    _388 = _387 * 2.0040080547332764f;
+    _393 = saturate(1.0f - _388);
+    _396 = 1.0f - _393;
+    _397 = min(saturate(2.0020039081573486f - _388), _396);
+    _398 = _396 - _397;
+    _399 = min(saturate(999.9999389648438f - (_387 * 999.9999389648438f)), _398);
+    _400 = _398 - _399;
+    _423 = ((((_397 * _329.x) + (_393 * _275)) + (_399 * select(_368, _329.x, _334))) + (_400 * select(_368, _329.x, (((((((((_293.x + _286.x) + _299.x) + _305.x) + _313.x) + _317.x) + _321.x) + _325.x) + _334) * 0.1111111119389534f))));
+    _424 = ((((_397 * _329.y) + (_393 * _246)) + (_399 * select(_368, _329.y, _336))) + (_400 * select(_368, _329.y, (((((((((_293.y + _286.y) + _299.y) + _305.y) + _313.y) + _317.y) + _321.y) + _325.y) + _336) * 0.1111111119389534f))));
+    _425 = ((((_397 * _329.z) + (_393 * _247)) + (_399 * select(_368, _329.z, _338))) + (_400 * select(_368, _329.z, (((((((((_293.z + _286.z) + _299.z) + _305.z) + _313.z) + _317.z) + _321.z) + _325.z) + _338) * 0.1111111119389534f))));
+  } else {
+    _423 = _275;
+    _424 = _246;
+    _425 = _247;
+  }
+  _428 = int(postfx_cbuffer_272.z);
+  if (_428 == 1) {
+    _447 = select(((((float)((uint)((uint)(((uint2)(t18_space1.Load(int3(int(misc_globals_240.x * _123), int(misc_globals_240.y * _124), 0)))).y)))) * 0.003921568859368563f) > postfx_cbuffer_896), 0.0f, 1.0f);
+    _450 = (_123 * 2.0f) + -1.0f;
+    _451 = 1.0f - (_124 * 2.0f);
+    _474 = (g_rage_matrices_192[3].x) + (dot(float3(_450, _451, 1.0f), float3(postfx_cbuffer_336.x, postfx_cbuffer_336.y, postfx_cbuffer_336.z)) * _41);
+    _475 = (g_rage_matrices_192[3].y) + (dot(float3(_450, _451, 1.0f), float3(postfx_cbuffer_352.x, postfx_cbuffer_352.y, postfx_cbuffer_352.z)) * _41);
+    _476 = (g_rage_matrices_192[3].z) + (dot(float3(_450, _451, 1.0f), float3(postfx_cbuffer_368.x, postfx_cbuffer_368.y, postfx_cbuffer_368.z)) * _41);
+    _494 = dot(float4(_474, _475, _476, 1.0f), float4(postfx_cbuffer_320.x, postfx_cbuffer_320.y, postfx_cbuffer_320.z, postfx_cbuffer_320.w));
+    _496 = select((_494 == 0.0f), 9.999999747378752e-06f, _494);
+    _501 = (_450 - (dot(float4(_474, _475, _476, 1.0f), float4(postfx_cbuffer_288.x, postfx_cbuffer_288.y, postfx_cbuffer_288.z, postfx_cbuffer_288.w)) / _496)) * 40.0f;
+    _502 = (_451 - (dot(float4(_474, _475, _476, 1.0f), float4(postfx_cbuffer_304.x, postfx_cbuffer_304.y, postfx_cbuffer_304.z, postfx_cbuffer_304.w)) / _496)) * -22.5f;
+    _503 = dot(float2(_501, _502), float2(_501, _502));
+    _504 = (_503 > 1.0f);
+    _505 = rsqrt(_503);
+    _511 = (postfx_cbuffer_256.x * 0.012500000186264515f) * select(_504, (_505 * _501), _501);
+    _513 = (postfx_cbuffer_256.x * 0.02222222276031971f) * select(_504, (_502 * _505), _502);
+    _514 = _447 * _423;
+    _515 = _447 * _424;
+    _516 = _447 * _425;
+    do {
+      _587 = _514;
+      _588 = _515;
+      _589 = _516;
+      _590 = _447;
+      if ((int)int(postfx_cbuffer_272.x) > (int)1) {
+        _535 = _514;
+        _536 = _515;
+        _537 = _516;
+        _538 = _447;
+        _539 = 1;
+        bool _loop_break_0 = false;
+        while (true) {
+          _541 = float((int)(_539)) + (((((float4)(t28_space1.Sample(s6_space1, float2(((_423 * 8.0f) + (_123 * 58.16400146484375f)), ((_424 * 8.0f) + (_124 * 47.130001068115234f)))))).x) + -0.5f) * 0.5f);
+          _555 = (round((((_511 * postfx_cbuffer_272.y) * _541) + _123) * misc_globals_240.x) + 0.5f) / misc_globals_240.x;
+          _556 = (round((((_513 * postfx_cbuffer_272.y) * _541) + _124) * misc_globals_240.y) + 0.5f) / misc_globals_240.y;
+          _568 = select(((((float)((uint)((uint)(((uint2)(t18_space1.Load(int3(int(misc_globals_240.x * _555), int(misc_globals_240.y * _556), 0)))).y)))) * 0.003921568859368563f) > postfx_cbuffer_896), 0.0f, 1.0f);
+          _569 = t19_space1.SampleLevel(s1_space1, float2(_555, _556), 0.0f);
+          _576 = (_569.x * _568) + _535;
+          _577 = (_569.y * _568) + _536;
+          _578 = (_569.z * _568) + _537;
+          _579 = _568 + _538;
+          _580 = _539 + 1;
+          do {
+            if ((int)_580 < (int)int(postfx_cbuffer_272.x)) {
+              _535 = _576;
+              _536 = _577;
+              _537 = _578;
+              _538 = _579;
+              _539 = _580;
+              _loop_break_0 = true;
+              break;
+            }
+            _587 = _576;
+            _588 = _577;
+            _589 = _578;
+            _590 = _579;
+          } while (false);
+          if (_loop_break_0) {
+            _loop_break_0 = false;
+            continue;
+          }
+          break;
+        }
+      }
+      _591 = max(_590, 0.10000000149011612f);
+      _598 = saturate(dot(float2(_511, _513), float2(_511, _513)) * 1e+05f) * _447;
+      _1070 = ((_598 * ((_587 / _591) - _423)) + _423);
+      _1071 = ((_598 * ((_588 / _591) - _424)) + _424);
+      _1072 = ((_598 * ((_589 / _591) - _425)) + _425);
+    } while (false);
+  } else {
+    if (_428 == 2) {
+      _616 = t23_space1.SampleLevel(s0_space1, float2((postfx_cbuffer_1408.x * _123), (postfx_cbuffer_1408.y * _124)), 0.0f);
+      do {
+        _810 = 0.0f;
+        _811 = 0.0f;
+        _812 = 0.0f;
+        _813 = 0.0f;
+        [branch]
+        if ((_616.z >= 1.0f) && (_616.w < 2.0f)) {
+          _625 = t22_space1.SampleLevel(s0_space1, float2(_123, _124), 0.0f);
+          _630 = postfx_cbuffer_256.x * _625.x;
+          _631 = postfx_cbuffer_256.x * _625.y;
+          _640 = min(_616.z, 2.0f);
+          _645 = int(min(2.0f, (_640 + 1.0f)));
+          _649 = postfx_cbuffer_1152.x * (_640 * (_616.x / _616.z));
+          _650 = postfx_cbuffer_1152.y * (_640 * (_616.y / _616.z));
+          _652 = float((int)(_645)) + -0.5f;
+          _653 = _652 / _640;
+          _670 = ((((((float)((uint)((uint)((int)(uint(SV_Position.y)) & 1)))) * 2.0f) + -1.0f) * ((((float)((uint)((uint)((int)(uint(SV_Position.x)) & 1)))) * 2.0f) + -1.0f)) * postfx_cbuffer_256.w) * saturate((_640 + -2.0f) * 0.5f);
+          do {
+            _799 = 0.0f;
+            _800 = 0.0f;
+            _801 = 0.0f;
+            _802 = 0.0f;
+            if ((int)_645 > (int)0) {
+              _676 = 0.0f;
+              _677 = 0.0f;
+              _678 = 0.0f;
+              _679 = 0.0f;
+              _680 = 0;
+              bool _loop_break_1 = false;
+              while (true) {
+                _681 = float((int)(_680));
+                _682 = (_670 + 0.5f) + _681;
+                _683 = _682 / _652;
+                _686 = (_649 * _683) + _123;
+                _687 = (_650 * _683) + _124;
+                _688 = t22_space1.SampleLevel(s0_space1, float2(_686, _687), 0.0f);
+                _693 = postfx_cbuffer_256.x * _688.x;
+                _694 = postfx_cbuffer_256.x * _688.y;
+                _700 = min(sqrt((_693 * _693) + (_694 * _694)), postfx_cbuffer_256.z);
+                _708 = postfx_cbuffer_000.z / ((1.0f - ((t11_space1.SampleLevel(s0_space1, float2(_686, _687), 0.0f)).x)) + postfx_cbuffer_000.w);
+                _714 = _653 * min(sqrt((_630 * _630) + (_631 * _631)), postfx_cbuffer_256.z);
+                _715 = _708 - _41;
+                _721 = max((_682 + -1.0f), 0.0f);
+                _728 = t19_space1.SampleLevel(s1_space1, float2(_686, _687), 0.0f);
+                _732 = _681 + (0.5f - _670);
+                _733 = _732 / _652;
+                _736 = _123 - (_649 * _733);
+                _737 = _124 - (_650 * _733);
+                _738 = t22_space1.SampleLevel(s0_space1, float2(_736, _737), 0.0f);
+                _741 = postfx_cbuffer_256.x * _738.x;
+                _742 = postfx_cbuffer_256.x * _738.y;
+                _747 = min(sqrt((_741 * _741) + (_742 * _742)), postfx_cbuffer_256.z);
+                _752 = postfx_cbuffer_000.z / ((1.0f - ((t11_space1.SampleLevel(s0_space1, float2(_736, _737), 0.0f)).x)) + postfx_cbuffer_000.w);
+                _758 = _752 - _41;
+                _764 = max((_732 + -1.0f), 0.0f);
+                _770 = dot(float2(saturate(_758 + 0.5f), saturate(0.5f - _758)), float2(saturate(_714 - _764), saturate((_747 * _653) - _764))) * (1.0f - saturate((1.0f - _747) * 8.0f));
+                _771 = t19_space1.SampleLevel(s1_space1, float2(_736, _737), 0.0f);
+                _775 = (_708 > _752);
+                _776 = (_747 > _700);
+                _778 = select((_776 && _775), _770, (dot(float2(saturate(_715 + 0.5f), saturate(0.5f - _715)), float2(saturate(_714 - _721), saturate((_700 * _653) - _721))) * (1.0f - saturate((1.0f - _700) * 8.0f))));
+                _780 = select((_776 || _775), _770, _778);
+                _788 = ((_778 * _728.x) + _676) + (_771.x * _780);
+                _790 = ((_778 * _728.y) + _677) + (_771.y * _780);
+                _792 = ((_778 * _728.z) + _678) + (_771.z * _780);
+                _794 = (_778 + _679) + _780;
+                _795 = _680 + 1;
+                do {
+                  if (!(_795 == _645)) {
+                    _676 = _788;
+                    _677 = _790;
+                    _678 = _792;
+                    _679 = _794;
+                    _680 = _795;
+                    _loop_break_1 = true;
+                    break;
+                  }
+                  _799 = _788;
+                  _800 = _790;
+                  _801 = _792;
+                  _802 = _794;
+                } while (false);
+                if (_loop_break_1) {
+                  _loop_break_1 = false;
+                  continue;
+                }
+                break;
+              }
+            }
+            _804 = float((int)(_645 << 1));
+            _810 = (_799 / _804);
+            _811 = (_800 / _804);
+            _812 = (_801 / _804);
+            _813 = (_802 / _804);
+          } while (false);
+        }
+        _814 = 1.0f - _813;
+        _821 = t20_space1.SampleLevel(s1_space1, float2(_123, _124), 0.0f);
+        _826 = 1.0f - _821.w;
+        _1070 = ((_826 * ((_814 * _423) + _810)) + _821.x);
+        _1071 = ((_826 * ((_814 * _424) + _811)) + _821.y);
+        _1072 = ((_826 * ((_814 * _425) + _812)) + _821.z);
+      } while (false);
+    } else {
+      if (_428 == 3) {
+        _841 = t23_space1.SampleLevel(s0_space1, float2((postfx_cbuffer_1408.x * _123), (postfx_cbuffer_1408.y * _124)), 0.0f);
+        do {
+          _1046 = 0.0f;
+          _1047 = 0.0f;
+          _1048 = 0.0f;
+          _1049 = 0.0f;
+          [branch]
+          if ((_841.z >= 1.0f) && (_841.w < 2.0f)) {
+            _850 = t22_space1.SampleLevel(s0_space1, float2(_123, _124), 0.0f);
+            _860 = t19_space1.Load(int3(int(misc_globals_240.x * _123), int(misc_globals_240.y * _124), 0));
+            _864 = postfx_cbuffer_256.x * _850.x;
+            _865 = postfx_cbuffer_256.x * _850.y;
+            _874 = min(_841.z, 2.0f);
+            _879 = int(min(2.0f, (_874 + 1.0f)));
+            _883 = postfx_cbuffer_1152.x * (_874 * (_841.x / _841.z));
+            _884 = postfx_cbuffer_1152.y * (_874 * (_841.y / _841.z));
+            _886 = float((int)(_879)) + -0.5f;
+            _887 = _886 / _874;
+            _904 = ((((((float)((uint)((uint)((int)(uint(SV_Position.y)) & 1)))) * 2.0f) + -1.0f) * ((((float)((uint)((uint)((int)(uint(SV_Position.x)) & 1)))) * 2.0f) + -1.0f)) * postfx_cbuffer_256.w) * saturate((_874 + -2.0f) * 0.5f);
+            do {
+              _1035 = 0.0f;
+              _1036 = 0.0f;
+              _1037 = 0.0f;
+              _1038 = 0.0f;
+              if ((int)_879 > (int)0) {
+                _910 = 0.0f;
+                _911 = 0.0f;
+                _912 = 0.0f;
+                _913 = 0.0f;
+                _914 = 0;
+                bool _loop_break_2 = false;
+                while (true) {
+                  _915 = float((int)(_914));
+                  _916 = (_904 + 0.5f) + _915;
+                  _917 = _916 / _886;
+                  _920 = (_883 * _917) + _123;
+                  _921 = (_884 * _917) + _124;
+                  _922 = t22_space1.SampleLevel(s0_space1, float2(_920, _921), 0.0f);
+                  _927 = postfx_cbuffer_256.x * _922.x;
+                  _928 = postfx_cbuffer_256.x * _922.y;
+                  _934 = min(sqrt((_927 * _927) + (_928 * _928)), postfx_cbuffer_256.z);
+                  _942 = t19_space1.Load(int3(int(misc_globals_240.x * _920), int(misc_globals_240.y * _921), 0));
+                  _949 = _887 * min(sqrt((_864 * _864) + (_865 * _865)), postfx_cbuffer_256.z);
+                  _950 = _942.w - _860.w;
+                  _956 = max((_916 + -1.0f), 0.0f);
+                  _963 = t19_space1.SampleLevel(s1_space1, float2(_920, _921), 0.0f);
+                  _967 = _915 + (0.5f - _904);
+                  _968 = _967 / _886;
+                  _971 = _123 - (_883 * _968);
+                  _972 = _124 - (_884 * _968);
+                  _973 = t22_space1.SampleLevel(s0_space1, float2(_971, _972), 0.0f);
+                  _976 = postfx_cbuffer_256.x * _973.x;
+                  _977 = postfx_cbuffer_256.x * _973.y;
+                  _982 = min(sqrt((_976 * _976) + (_977 * _977)), postfx_cbuffer_256.z);
+                  _987 = t19_space1.Load(int3(int(misc_globals_240.x * _971), int(misc_globals_240.y * _972), 0));
+                  _994 = _987.w - _860.w;
+                  _1000 = max((_967 + -1.0f), 0.0f);
+                  _1006 = dot(float2(saturate(_994 + 0.5f), saturate(0.5f - _994)), float2(saturate(_949 - _1000), saturate((_982 * _887) - _1000))) * (1.0f - saturate((1.0f - _982) * 8.0f));
+                  _1007 = t19_space1.SampleLevel(s1_space1, float2(_971, _972), 0.0f);
+                  _1011 = (_942.w > _987.w);
+                  _1012 = (_982 > _934);
+                  _1014 = select((_1012 && _1011), _1006, (dot(float2(saturate(_950 + 0.5f), saturate(0.5f - _950)), float2(saturate(_949 - _956), saturate((_934 * _887) - _956))) * (1.0f - saturate((1.0f - _934) * 8.0f))));
+                  _1016 = select((_1012 || _1011), _1006, _1014);
+                  _1024 = ((_1014 * _963.x) + _910) + (_1007.x * _1016);
+                  _1026 = ((_1014 * _963.y) + _911) + (_1007.y * _1016);
+                  _1028 = ((_1014 * _963.z) + _912) + (_1007.z * _1016);
+                  _1030 = (_1014 + _913) + _1016;
+                  _1031 = _914 + 1;
+                  do {
+                    if (!(_1031 == _879)) {
+                      _910 = _1024;
+                      _911 = _1026;
+                      _912 = _1028;
+                      _913 = _1030;
+                      _914 = _1031;
+                      _loop_break_2 = true;
+                      break;
+                    }
+                    _1035 = _1024;
+                    _1036 = _1026;
+                    _1037 = _1028;
+                    _1038 = _1030;
+                  } while (false);
+                  if (_loop_break_2) {
+                    _loop_break_2 = false;
+                    continue;
+                  }
+                  break;
+                }
+              }
+              _1040 = float((int)(_879 << 1));
+              _1046 = (_1035 / _1040);
+              _1047 = (_1036 / _1040);
+              _1048 = (_1037 / _1040);
+              _1049 = (_1038 / _1040);
+            } while (false);
+          }
+          _1050 = 1.0f - _1049;
+          _1057 = t20_space1.SampleLevel(s1_space1, float2(_123, _124), 0.0f);
+          _1062 = 1.0f - _1057.w;
+          _1070 = ((_1062 * ((_1050 * _423) + _1046)) + _1057.x);
+          _1071 = ((_1062 * ((_1050 * _424) + _1047)) + _1057.y);
+          _1072 = ((_1062 * ((_1050 * _425) + _1048)) + _1057.z);
+        } while (false);
+      } else {
+        _1070 = _423;
+        _1071 = _424;
+        _1072 = _425;
+      }
+    }
+  }
+  _1073 = t30_space1.Sample(s2_space1, float2(TEXCOORD.x, TEXCOORD.y));
+  _1085 = (postfx_cbuffer_1024 * (_1073.x - _1070)) + _1070;
+  _1086 = (postfx_cbuffer_1024 * (_1073.y - _1071)) + _1071;
+  _1087 = (postfx_cbuffer_1024 * (_1073.z - _1072)) + _1072;
+  _1090 = (postfx_cbuffer_112.y < 0.0f);
+  _1091 = select(_1090, 1.0f, TEXCOORD.w);
+  _1092 = t25_space1.Sample(s2_space1, float2(_123, _124));
+  _1092 *= CUSTOM_BLOOM;
+  _1096 = _1092.x * _1091;
+  _1097 = _1092.y * _1091;
+  _1098 = _1092.z * _1091;
+  if (postfx_cbuffer_1200.z > 0.0f) {
+    _1103 = t31_space1.Sample(s2_space1, float2(_123, _124));
+    _1103 = max(0.f, _1103);
+    _1105 = _1103.x * _1103.x;
+    _1106 = _1105 * _1105;
+    _1107 = _1106 * _1106 * CUSTOM_SUN_BLOOM;
+    _1119 = ((_1107 * postfx_cbuffer_736.x) + _1085);
+    _1120 = ((_1107 * postfx_cbuffer_736.y) + _1086);
+    _1121 = ((_1107 * postfx_cbuffer_736.z) + _1087);
+  } else {
+    _1119 = _1085;
+    _1120 = _1086;
+    _1121 = _1087;
+  }
+  _1130 = abs(postfx_cbuffer_112.y);
+  _1152 = TEXCOORD.x + -0.5f;
+  _1153 = TEXCOORD.y + -0.5f;
+  _1162 = saturate(saturate(exp2(log2(1.0f - dot(float2(_1152, _1153), float2(_1152, _1153))) * postfx_cbuffer_912.y) + postfx_cbuffer_912.x) * postfx_cbuffer_912.z);
+  _1162 = lerp(1.f, _1162, CUSTOM_VIGNETTE);
+  _1187 = saturate((postfx_cbuffer_224.x * TEXCOORD_1) + postfx_cbuffer_224.y);
+  _1206 = ((postfx_cbuffer_192.x - postfx_cbuffer_160.x) * _1187) + postfx_cbuffer_160.x;
+  _1207 = ((postfx_cbuffer_192.y - postfx_cbuffer_160.y) * _1187) + postfx_cbuffer_160.y;
+  _1209 = ((postfx_cbuffer_192.w - postfx_cbuffer_160.w) * _1187) + postfx_cbuffer_160.w;
+  _1224 = ((postfx_cbuffer_208.x - postfx_cbuffer_176.x) * _1187) + postfx_cbuffer_176.x;
+  _1225 = ((postfx_cbuffer_208.y - postfx_cbuffer_176.y) * _1187) + postfx_cbuffer_176.y;
+  _1226 = ((postfx_cbuffer_208.z - postfx_cbuffer_176.z) * _1187) + postfx_cbuffer_176.z;
+  _1227 = _1226 * _1206;
+  _1228 = (lerp(postfx_cbuffer_160.z, postfx_cbuffer_192.z, _1187))*_1207;
+  _1231 = _1224 * _1209;
+  _1235 = _1225 * _1209;
+  _1238 = _1224 / _1225;
+  _1240 = 1.0f / (((((_1227 + _1228) * _1226) + _1231) / (((_1227 + _1207) * _1226) + _1235)) - _1238);
+  _1244 = max(0.0f, (min(((lerp(postfx_cbuffer_928.x, 1.0f, _1162)) * (_1119 + select(_1090, (((misc_globals_224.w * _1096) - _1119) * _1130), ((_1096 * 0.25f) * postfx_cbuffer_112.y)))), 65504.0f) * TEXCOORD.z));
+  _1245 = max(0.0f, (min(((lerp(postfx_cbuffer_928.y, 1.0f, _1162)) * (_1120 + select(_1090, (((misc_globals_224.w * _1097) - _1120) * _1130), ((_1097 * 0.25f) * postfx_cbuffer_112.y)))), 65504.0f) * TEXCOORD.z));
+  _1246 = max(0.0f, (min(((lerp(postfx_cbuffer_928.z, 1.0f, _1162)) * (_1121 + select(_1090, (((misc_globals_224.w * _1098) - _1121) * _1130), ((_1098 * 0.25f) * postfx_cbuffer_112.y)))), 65504.0f) * TEXCOORD.z));
+
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
+    GTAVTonemapConfig tonemap_config = CreateGTAVTonemapConfig();
+    tonemap_config.a = _1206;
+    tonemap_config.b = _1207;
+    tonemap_config.c_times_b = _1228;
+    tonemap_config.d_times_e = _1231;
+    tonemap_config.d_times_f = _1235;
+    tonemap_config.e_over_f = _1238;
+    tonemap_config.white_scale = _1240;
+    tonemap_config.fade_to_white = postfx_cbuffer_208.w;
+    tonemap_config.saturation = postfx_cbuffer_1072;
+    tonemap_config.grade_a = postfx_cbuffer_1056.xyz;
+    tonemap_config.grade_b = postfx_cbuffer_1040.xyz;
+    tonemap_config.grade_luma_max = postfx_cbuffer_1056.w;
+    tonemap_config.blend_range = postfx_cbuffer_1040.w;
+    return GenerateGTAVOutput(float3(_1244, _1245, _1246), TEXCOORD.xy, SV_Position.xy, tonemap_config);
+  }
+
+  _1247 = _1244 * _1206;
+  _1248 = _1245 * _1206;
+  _1249 = _1246 * _1206;
+  _1277 = saturate((((((_1247 + _1228) * _1244) + _1231) / (((_1247 + _1207) * _1244) + _1235)) - _1238) * _1240);
+  _1278 = saturate((((((_1248 + _1228) * _1245) + _1231) / (((_1248 + _1207) * _1245) + _1235)) - _1238) * _1240);
+  _1279 = saturate((((((_1249 + _1228) * _1246) + _1231) / (((_1249 + _1207) * _1246) + _1235)) - _1238) * _1240);
+  _1287 = (postfx_cbuffer_208.w * (1.0f - _1277)) + _1277;
+  _1288 = (postfx_cbuffer_208.w * (1.0f - _1278)) + _1278;
+  _1289 = (postfx_cbuffer_208.w * (1.0f - _1279)) + _1279;
+  _1290 = dot(float3(_1287, _1288, _1289), float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
+  _1299 = ((_1287 - _1290) * postfx_cbuffer_1072) + _1290;
+  _1300 = ((_1288 - _1290) * postfx_cbuffer_1072) + _1290;
+  _1301 = ((_1289 - _1290) * postfx_cbuffer_1072) + _1290;
+  _1305 = saturate(_1290 / postfx_cbuffer_1056.w);
+  _1322 = (lerp(postfx_cbuffer_1056.x, postfx_cbuffer_1040.x, _1305))*_1299;
+  _1323 = (lerp(postfx_cbuffer_1056.y, postfx_cbuffer_1040.y, _1305))*_1300;
+  _1324 = (lerp(postfx_cbuffer_1056.z, postfx_cbuffer_1040.z, _1305))*_1301;
+  _1330 = saturate(((_1290 + -1.0f) + postfx_cbuffer_1040.w) / max(0.009999999776482582f, postfx_cbuffer_1040.w));
+  _1375 = (1.0f - (((sin((postfx_cbuffer_1008.w + TEXCOORD.y) * postfx_cbuffer_1008.y) * 0.5f) + 0.5f) * postfx_cbuffer_1008.x)) - (((sin(((postfx_cbuffer_1008.w * 0.5f) + TEXCOORD.y) * postfx_cbuffer_1008.z) * 0.5f) + 0.5f) * postfx_cbuffer_1008.x);
+  _1395 = ((((float4)(t17_space1.Sample(s8_space1, float2(frac(((TEXCOORD.x * 1.600000023841858f) * postfx_cbuffer_240.w) + postfx_cbuffer_240.x), frac(((TEXCOORD.y * 0.8999999761581421f) * postfx_cbuffer_240.w) + postfx_cbuffer_240.y))))).w) + -0.5f) * postfx_cbuffer_240.z;
+
+  ConfigureVanillaGrain(_1395, _1375);
+
+  _1402 = saturate(max(0.0f, (_1395 + (_1375 * exp2(log2(abs(saturate(lerp(_1322, _1299, _1330)))) * postfx_cbuffer_1076)))));
+  _1403 = saturate(max(0.0f, (_1395 + (_1375 * exp2(log2(abs(saturate(lerp(_1323, _1300, _1330)))) * postfx_cbuffer_1076)))));
+  _1404 = saturate(max(0.0f, (_1395 + (_1375 * exp2(log2(abs(saturate(lerp(_1324, _1301, _1330)))) * postfx_cbuffer_1076)))));
+  if (!(asint(postfx_cbuffer_1424) == 0)) {
+    _1414 = (asint(postfx_cbuffer_1472.w) != 0);
+    _1416 = max(_1402, max(_1403, _1404));
+    _1473 = (((t1.Load(int4(((int)(uint(SV_Position.x)) & 63), ((int)(uint(SV_Position.y)) & 63), (misc_globals_356 & 31), 0))).x) * 2.0f) + -1.0f;
+    _1479 = float((int)(((int)(uint)((int)(_1473 > 0.0f))) - ((int)(uint)((int)(_1473 < 0.0f)))));
+    _1483 = 1.0f - sqrt(1.0f - abs(_1473));
+    _1494 = (((_1483 * (((postfx_cbuffer_1456.x - postfx_cbuffer_1440.x) * exp2(log2(saturate((select(_1414, _1402, _1416) - postfx_cbuffer_1488.x) * postfx_cbuffer_1472.x)) * postfx_cbuffer_1488.w)) + postfx_cbuffer_1440.x)) * _1479) + _1402);
+    _1495 = (((_1483 * (((postfx_cbuffer_1456.y - postfx_cbuffer_1440.y) * exp2(log2(saturate((select(_1414, _1403, _1416) - postfx_cbuffer_1488.y) * postfx_cbuffer_1472.y)) * postfx_cbuffer_1488.w)) + postfx_cbuffer_1440.y)) * _1479) + _1403);
+    _1496 = (((_1483 * (((postfx_cbuffer_1456.z - postfx_cbuffer_1440.z) * exp2(log2(saturate((select(_1414, _1404, _1416) - postfx_cbuffer_1488.z) * postfx_cbuffer_1472.z)) * postfx_cbuffer_1488.w)) + postfx_cbuffer_1440.z)) * _1479) + _1404);
+
+    ConfigureVanillaDithering(
+        _1402, _1403, _1404,
+        _1494, _1495, _1496);
+  } else {
+    _1494 = _1402;
+    _1495 = _1403;
+    _1496 = _1404;
+  }
+  SV_Target.x = _1494;
+  SV_Target.y = _1495;
+  SV_Target.z = _1496;
+  SV_Target.w = dot(float3(_1402, _1403, _1404), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f));
+
+  SV_Target.rgb = renodx::draw::RenderIntermediatePass(renodx::color::gamma::Decode(SV_Target.rgb, 1.f / postfx_cbuffer_1076));
+  return SV_Target;
+}
