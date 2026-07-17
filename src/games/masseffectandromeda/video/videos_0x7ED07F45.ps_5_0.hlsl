@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 
 // FMV YUV->RGB decode. Faithful 1:1 vanilla reconstruction (BT.601 limited-range), sRGB-encoded into
 // the r8g8b8a8 video buffer. Registered via callback only to flag fxVideoActive; decode is unchanged.

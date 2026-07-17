@@ -4,7 +4,7 @@
 // Shared HDR present tail for both 1:1 (0xF5B0DBFA) and upscale (0xAFFFA4AB) presents -> HDR10 PQ.
 // Caller supplies the scene fetch (single tap vs bicubic) and bindings.
 // scene: rgb = pre-scale graded buffer, a = layer alpha. cb2 = cbData[2]: .x scene scale,
-// .y UI gate, .z UI alpha factor. Requires shared.h + lilium_rcas.hlsli first.
+// .y UI gate, .z UI alpha factor. Requires shared.h + linearize.hlsli + lilium_rcas.hlsli first.
 
 float4 PresentScene(
     float4 scene, float2 texcoord, float4 cb2,
@@ -14,8 +14,7 @@ float4 PresentScene(
     bool isUpscale) {
   scene *= cb2.x;
 
-  float3 color = SampleOutputLut(outputLut, lutSampler, max(0.f, scene.rgb));
-  color = max(0.f, color);
+  float3 color = max(0.f, LinearizeScene(outputLut, lutSampler, scene.rgb));
 
   // Vanilla = pure native passthrough (diffuse 100 nits, nothing applied).
   // Vanilla+ = paper white + highlight roll-off (pins peak) + grade + EOTF + effects.

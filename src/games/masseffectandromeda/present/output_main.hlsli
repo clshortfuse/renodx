@@ -1,6 +1,7 @@
-#include "./shared.h"
-#include "./lilium_rcas.hlsli"
-#include "./present_core.hlsli"
+// Main HDR present row (1:1, single tap). Requires shared.h + linearize.hlsli + lilium_rcas.hlsli +
+// present_core.hlsli first. outputLut (t2) linearizes the PQ graded buffer to scene-linear.
+// Output gamut is runtime-selected by the game (BT.2020 / DCI-P3 / no-matrix). Every per-hash wrapper
+// over this row normalizes to the forced HDR10/BT.2020 swapchain, so they all share this body unchanged.
 
 Texture2D<float4> sceneTexture : register(t0);
 Texture2D<float4> uiTexture : register(t1);
@@ -18,9 +19,6 @@ struct PSInput {
   float4 position : SV_Position;
   float2 texcoord : TEXCOORD;
 };
-
-// Main HDR present (1:1). Single scene tap; the tail (LUT linearize / grade / RCAS / EOTF / UI / PQ)
-// is the shared PresentScene. outputLut (t2) linearizes the PQ graded buffer to scene-linear.
 
 float4 main(PSInput input) : SV_Target {
   float4 scene = sceneTexture.SampleLevel(sceneSampler, input.texcoord, 0.f);

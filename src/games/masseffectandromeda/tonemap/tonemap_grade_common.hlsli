@@ -1,32 +1,41 @@
-#include "./shared.h"
+#include "../shared.h"
 
-// Faithful Frostbite scene tonemap+grade pass (VS 0xCD03DB44), shared by all four {CA, grain} perms.
+// Faithful Frostbite scene tonemap+grade pass (VS 0xCD03DB44), shared by all twelve perms.
 // Builds linear scene -> *0.01 -> ST.2084 PQ -> 33^3 LUT (PQ space), as vanilla. Parametrized by:
-//   MEA_TONEMAP_CA     0 = distortion warp (0xB6A91712 / 0x376C116B); 1 = chromatic aberration (0xEB91AB31 / 0xE3D57A10)
-//   MEA_TONEMAP_GRAIN  0 = no noise (grain-off); 1 = vanilla grain on t4 (grain-on)
+//   MEA_TONEMAP_CA          0 = distortion-offset warp; 1 = chromatic aberration (per-channel split on cb0[12])
+//   MEA_TONEMAP_DISTORTION  1 = radial lens warp on cb0[4] applied to the base UV
+//   MEA_TONEMAP_T4          t4 role: 0 = unused; 1 = additive film grain (cb0[1]); 2 = RGBA overlay
+//                           composited over the graded output (scanner/screen effects)
 // Vanilla+ user controls (neutral at vanilla): fxBloom, colorGradeExposure, fxVignette, fxChromaticAberration.
 
 #ifndef MEA_TONEMAP_CA
 #define MEA_TONEMAP_CA 0
 #endif
-#ifndef MEA_TONEMAP_GRAIN
-#define MEA_TONEMAP_GRAIN 0
+#ifndef MEA_TONEMAP_DISTORTION
+#define MEA_TONEMAP_DISTORTION 0
+#endif
+#ifndef MEA_TONEMAP_T4
+#define MEA_TONEMAP_T4 0
 #endif
 
 Texture2D<float4> sceneTexture : register(t0);
 Texture3D<float4> colorGradingTexture : register(t1);
 Texture2D<float4> distortionTexture : register(t2);
 Texture2D<float4> bloomTexture : register(t3);
-#if MEA_TONEMAP_GRAIN
+#if MEA_TONEMAP_T4 == 1
 Texture2D<float4> noiseTexture : register(t4);
+#elif MEA_TONEMAP_T4 == 2
+Texture2D<float4> overlayTexture : register(t4);
 #endif
 
 SamplerState sceneSampler : register(s0);
 SamplerState colorGradingSampler : register(s1);
 SamplerState distortionSampler : register(s2);
 SamplerState bloomSampler : register(s3);
-#if MEA_TONEMAP_GRAIN
+#if MEA_TONEMAP_T4 == 1
 SamplerState noiseSampler : register(s4);
+#elif MEA_TONEMAP_T4 == 2
+SamplerState overlaySampler : register(s4);
 #endif
 
 cbuffer cbData : register(b0) {
@@ -45,6 +54,7 @@ struct PSOutput {
 };
 
 // Vignette, blended toward 1.0 (no darkening) by the user Vignette control in Vanilla+ (1.0 = vanilla).
+// Always evaluated at the original (unwarped) UV.
 float ApplyVignette(float2 uv) {
   float2 vignette_uv = (uv - 0.5f) * cbData[10].xy;
   float vignette = dot(vignette_uv, vignette_uv);
@@ -55,9 +65,33 @@ float ApplyVignette(float2 uv) {
   return full ? max(0.f, lerp(1.f, vignette, injectedData.fxVignette)) : vignette;
 }
 
-// Scene composite (distortion warp / chromatic aberration + bloom + exposure + vignette) -> linear HDR.
-float3 ApplyScenePost(float2 uv) {
+#if MEA_TONEMAP_DISTORTION
+// Radial lens warp (cb0[4]): quadratic branch when cb0[4].y ~ 0, cubic otherwise. Replaces the
+// original UV as the base the distortion-offset chain starts from; vignette keeps the original UV.
+float2 ApplyRadialWarp(float2 uv) {
+  float2 centered = uv - 0.5f;
+  float r2 = dot(centered, centered);
+  float scale;
+  if (abs(cbData[4].y) < 0.0001f) {
+    scale = (r2 * cbData[4].x + 1.f) * cbData[4].z;
+  } else {
+    float k = cbData[4].y * sqrt(r2) + cbData[4].x;
+    scale = (r2 * k + 1.f) * cbData[4].w;
+  }
+  return centered * scale + 0.5f;
+}
+#endif
+
+// Scene composite (warp / chromatic aberration + bloom + exposure + vignette) -> linear HDR.
+// scene_uv returns the distorted UV the scene was fetched at (t4 overlay samples there too).
+float3 ApplyScenePost(float2 uv, out float2 scene_uv) {
   float3 distortion = distortionTexture.Sample(distortionSampler, uv).xyz;
+
+#if MEA_TONEMAP_DISTORTION
+  const float2 base = ApplyRadialWarp(uv);
+#else
+  const float2 base = uv;
+#endif
 
   // Vanilla mode applies nothing; Vanilla+ applies the user effect controls.
   const bool full = IsVanillaPlus();
@@ -65,7 +99,8 @@ float3 ApplyScenePost(float2 uv) {
 #if MEA_TONEMAP_CA
   // Chromatic aberration (port of 0xEB91AB31): split the base distorted UV per channel by cb0[12]
   // (0.5 = no split). Red at cb0[12].xy, green at .zw, blue keeps base UV + the dist.z bloom blend.
-  float2 base_uv = distortion.xy * cbData[13].xy + cbData[13].zw + uv;
+  float2 base_uv = distortion.xy * cbData[13].xy + cbData[13].zw + base;
+  scene_uv = base_uv;
   float scene_b = sceneTexture.Sample(sceneSampler, base_uv).z;
   float3 bloom = bloomTexture.Sample(bloomSampler, base_uv).xyz;
   // User Chromatic Aberration control (Vanilla+): lerp the per-channel split toward 0.5 (no split).
@@ -79,8 +114,9 @@ float3 ApplyScenePost(float2 uv) {
   float scene_g = sceneTexture.Sample(sceneSampler, green_uv).y;
   float3 color = float3(scene_r, scene_g, blend_b);
 #else
-  // Single-sample distortion warp (0xB6A91712): scene/bloom lerp by distortion.z.
-  float2 distorted_uv = distortion.xy * cbData[13].xy + cbData[13].zw + uv;
+  // Single-sample warp (0xB6A91712): scene/bloom lerp by distortion.z.
+  float2 distorted_uv = distortion.xy * cbData[13].xy + cbData[13].zw + base;
+  scene_uv = distorted_uv;
   float3 scene = sceneTexture.Sample(sceneSampler, distorted_uv).rgb;
   float3 bloom = bloomTexture.Sample(bloomSampler, distorted_uv).rgb;
   float3 color = lerp(scene, bloom, distortion.z);
@@ -107,10 +143,11 @@ float3 SampleNativeGrade(float3 color) {
 PSOutput main(PSInput input) {
   PSOutput output;
 
-  float3 linear_scene = ApplyScenePost(input.texcoord);
+  float2 scene_uv;
+  float3 linear_scene = ApplyScenePost(input.texcoord, scene_uv);
   float3 graded = SampleNativeGrade(linear_scene);
 
-#if MEA_TONEMAP_GRAIN
+#if MEA_TONEMAP_T4 == 1
   // Vanilla film grain (additive, post-LUT). Kept in native modes and Vanilla+ Film Grain = Vanilla;
   // Luminance / Per-Channel skip it here and apply perceptual grain in the present pass instead.
   if (!IsVanillaPlus() || injectedData.fxFilmGrainType == FILM_GRAIN_VANILLA) {
@@ -120,9 +157,19 @@ PSOutput main(PSInput input) {
   }
 #endif
 
+  // Vanilla writes the luma target before the overlay composite (grain, when present, is included).
+  float luma = dot(graded, float3(0.299f, 0.587f, 0.114f));
+
+#if MEA_TONEMAP_T4 == 2
+  // Gameplay overlay (scanner/screen effects), sampled at the scene's distorted UV and alpha-
+  // composited over the graded output. Not gated by any Vanilla+ control.
+  float4 overlay = overlayTexture.Sample(overlaySampler, scene_uv);
+  graded = graded * (1.f - overlay.a) + overlay.rgb;
+#endif
+
   output.color.rgb = graded;
   output.color.a = 1.f;
-  output.luma = dot(graded, float3(0.299f, 0.587f, 0.114f));
+  output.luma = luma;
 
   return output;
 }
