@@ -296,6 +296,10 @@ bool KeepOriginalShader(reshade::api::command_list* cmd_list) {
   return false;
 }
 
+bool ReplaceVFXBoostShader(reshade::api::command_list* cmd_list) {
+  return shader_injection.perchannelblowout >= 0.5f;
+}
+
 bool ReplaceImprovedGTAOShader(reshade::api::command_list* cmd_list) {
   return shader_injection.improved_gtao >= 0.5f
       || shader_injection.disable_game_ao >= 0.5f;
@@ -904,6 +908,16 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Disables the game's built-in GTAO (Ground Truth Ambient Occlusion).\nUseful when using ReShade-based AO instead.",
         .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "HDRVFXLuminance",
+        .binding = &shader_injection.perchannelblowout,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "VFX Boost (Experimental)",
+        .section = "Rendering Improvements",
+        .tooltip = "Boosts the luminance of supported VFX shaders for brighter HDR highlights.\nExperimental: this may also affect UI elements and cause unintended brightness or color changes.",
+        .labels = {"Original", "Enhanced"},
     },
     new renodx::utils::settings::Setting{
         .key = "HDRSun",
@@ -1520,6 +1534,19 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             custom_shaders.emplace(crc, std::move(cs));
           } else {
             it->second.on_drawn = ExecuteReshadeEffects;
+          }
+        }
+
+        const uint32_t vfx_boost_crcs[] = {
+            0x1BF3323Du,
+            0x50898C70u,
+            0x97BF4335u,
+            0x4D4DDEBEu,
+        };
+        for (uint32_t crc : vfx_boost_crcs) {
+          auto it = custom_shaders.find(crc);
+          if (it != custom_shaders.end()) {
+            it->second.on_replace = ReplaceVFXBoostShader;
           }
         }
 
