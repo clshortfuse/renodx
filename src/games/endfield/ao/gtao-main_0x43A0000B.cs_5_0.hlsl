@@ -63,25 +63,27 @@ void BM_ProcessSample(float3 deltaPos, float3 viewVec, float samplingDir, float 
 // --- End Visibility Bitmask helpers ---
 
 RWTexture2D<unorm float4> u0 : register(u0);
+RWTexture2D<unorm float4> u1 : register(u1);
 
 [numthreads(8, 8, 1)]
 void main(uint3 vThreadID : SV_DispatchThreadID)
 {
   float4 r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12,r13,r14,r15,r16;
 
-  // Select between vanilla cbuffer values and improved custom values
-  bool use_improved = (IMPROVED_GTAO >= 0.5);
-  float _ao_radius            = use_improved ? AO_RADIUS            : cb1[0].x;
-  float _ao_radius_scale      = use_improved ? AO_RADIUS_SCALE      : cb1[0].y;
-  float _ao_falloff_range     = use_improved ? AO_FALLOFF_RANGE     : cb1[0].z;
-  float _ao_distribution_power= use_improved ? AO_DISTRIBUTION_POWER: cb1[0].w;
-  float _ao_thin_occluder     = use_improved ? AO_THIN_OCCLUDER     : cb1[1].x;
-  float _ao_gamma             = use_improved ? AO_GAMMA             : cb1[1].y;
-  float _ao_mip_bias          = use_improved ? AO_MIP_BIAS          : cb1[1].w;
-  float _ao_thickness         = use_improved ? AO_THICKNESS         : 1.3;
-  float _ao_direction_count   = use_improved ? AO_DIRECTION_COUNT   : 3.0;
-  float _ao_normal_attenuation= use_improved ? AO_NORMAL_ATTENUATION: 0.05;
-  bool  _ao_bitmask           = use_improved && (AO_BITMASK >= 0.5);
+  // Select original or improved GTAO settings
+  bool use_improved = IMPROVED_GTAO >= 0.5;
+  float _ao_radius             = use_improved ? AO_RADIUS             : cb1[0].x;
+  float _ao_radius_scale       = use_improved ? AO_RADIUS_SCALE       : cb1[0].y;
+  float _ao_falloff_range      = use_improved ? AO_FALLOFF_RANGE      : cb1[0].z;
+  float _ao_distribution_power = use_improved ? AO_DISTRIBUTION_POWER : cb1[0].w;
+  float _ao_thin_occluder      = use_improved ? AO_THIN_OCCLUDER      : cb1[1].x;
+  float _ao_gamma              = use_improved ? AO_GAMMA              : cb1[1].y;
+  float _ao_mip_bias           = use_improved ? AO_MIP_BIAS           : cb1[1].w;
+  float _ao_thickness          = use_improved ? AO_THICKNESS          : 1.3;
+  float _ao_direction_count    = use_improved ? AO_DIRECTION_COUNT    : 3.0;
+  float _ao_normal_attenuation = use_improved ? AO_NORMAL_ATTENUATION : 0.05;
+  float _ao_max_mip            = use_improved ? 4.0                   : cb1[3].x - 1.0;
+  bool  _ao_bitmask            = use_improved && (AO_BITMASK >= 0.5);
 
   r0.xy = vThreadID.yx;
   r0.zw = float2(32, 0);
@@ -107,6 +109,18 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r0.xy = r0.xx * float2(0.754877687,0.569840312) + float2(0.5,0.5);
   r0.xy = frac(r0.xy);
   r0.zw = (uint2)vThreadID.xy;
+  float2 edge_uv = cb1[4].zw * r0.zw;
+  float4 edge_gather = t1.Gather(s0_s, edge_uv);
+  float4 edge_diagonal = t1.Gather(s0_s, edge_uv, int2(1, 1));
+  float4 edge_delta = float4(edge_gather.x, edge_diagonal.z, edge_gather.z, edge_diagonal.x) - edge_gather.y;
+  float4 edge_pair = edge_delta.yyww - edge_delta.xxzz;
+  edge_pair = edge_pair * float4(0.5,-0.5,0.5,-0.5) + edge_delta;
+  float4 edge_strength = min(abs(edge_pair), abs(edge_delta));
+  edge_strength = edge_strength / (0.0109999999 * edge_gather.y);
+  edge_strength = saturate(1.25 - edge_strength);
+  edge_strength = round(2.9000001 * edge_strength);
+  float edge_packed = dot(edge_strength, float4(0.250980407,0.0627451017,0.0156862754,0.00392156886));
+  u1[vThreadID.xy] = edge_packed.xxxx;
   r1.xyzw = float4(0.5,0.5,0.5,0.5) + r0.zwzw;
   r2.xy = cb1[4].zw * r1.zw;
   r2.zw = t0.SampleLevel(s0_s, r2.xy, 0).xy;
@@ -143,7 +157,10 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   // to prevent over-attenuation of AO on distant objects.
   // No scaling within 100 units (near-field), then ramps at 0.02 per unit beyond.
   float viewDist = length(float3(r4.x, r4.w, r4.z));
-  float scaledThickness = _ao_thickness * (1.0 + max(0.0, viewDist - 100.0) * 0.02);
+  bool use_distance_scaling = use_improved;
+  float scaledThickness = use_distance_scaling
+      ? _ao_thickness * (1.0 + max(0.0, viewDist - 100.0) * 0.02)
+      : _ao_thickness;
 
   r0.z = _ao_radius * _ao_radius_scale;
   r0.w = _ao_falloff_range * r0.z;
@@ -219,7 +236,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r6.w = log2(r6.w);
     r6.w = -_ao_mip_bias + r6.w;
     r6.w = max(0, r6.w);
-    r6.w = min(4, r6.w);
+    r6.w = min(_ao_max_mip, r6.w);
     r9.zw = round(r9.zw);
     r9.zw = cb1[4].zw * r9.zw;
     r10.xy = r1.zw * cb1[4].zw + r9.zw;
@@ -284,7 +301,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r7.z = log2(r7.z);
     r7.z = -_ao_mip_bias + r7.z;
     r7.z = max(0, r7.z);
-    r7.z = min(4, r7.z);
+    r7.z = min(_ao_max_mip, r7.z);
     r10.xyzw = round(r8.xyzw);
     r10.xyzw = cb1[4].zwzw * r10.xyzw;
     r11.xyzw = r1.zwzw * cb1[4].zwzw + r10.xyzw;
@@ -339,7 +356,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r7.w = log2(r7.w);
     r7.w = -_ao_mip_bias + r7.w;
     r7.w = max(0, r7.w);
-    r7.w = min(4, r7.w);
+    r7.w = min(_ao_max_mip, r7.w);
     r8.w = t1.SampleLevel(s0_s, r11.zw, r7.w).x;
     r8.xy = r13.zw * r8.ww;
     r10.w = t1.SampleLevel(s0_s, r10.zw, r7.w).x;
@@ -422,6 +439,11 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r0.x = _ao_gamma * r0.x;
   r0.x = exp2(r0.x);
   r0.x = max(0.0299999993, r0.x);
+  r0.x = 0.666666687 * r0.x;
+  r0.x = min(1, r0.x);
+  if (shader_injection.disable_game_ao >= 0.5f) {
+    r0.x = 1.0f;
+  }
   u0[vThreadID.xy] = r0.xxxx;
   return;
 }

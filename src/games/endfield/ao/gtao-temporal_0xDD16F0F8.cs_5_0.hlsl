@@ -113,6 +113,9 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
     r0.x = r0.x + -r3.x;
     r3.x = r3.z * r0.x + r3.x;
   }
+  if (shader_injection.disable_game_ao >= 0.5f) {
+    r3.x = 1.0f;
+  }
   r3.w = 0;
   u0[vThreadID.xy] = r3.xyzw;
   return;
