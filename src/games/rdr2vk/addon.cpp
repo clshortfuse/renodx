@@ -29,19 +29,19 @@ void OnTonemapShaderDrawn(reshade::api::command_list*) {
 renodx::mods::shader::CustomShaders custom_shaders = {
     // tonemap
     {0x0C1275BE, {.crc32 = 0x0C1275BE, .code = __0x0C1275BE, .on_drawn = &OnTonemapShaderDrawn}},
-    {0x2B012EDD, {.crc32 = 0x2B012EDD, .code = __0x2B012EDD, .on_drawn = &OnTonemapShaderDrawn}},
+    // {0x2B012EDD, {.crc32 = 0x2B012EDD, .code = __0x2B012EDD, .on_drawn = &OnTonemapShaderDrawn}},
     {0x4205843B, {.crc32 = 0x4205843B, .code = __0x4205843B, .on_drawn = &OnTonemapShaderDrawn}},
     {0x54F0BD84, {.crc32 = 0x54F0BD84, .code = __0x54F0BD84, .on_drawn = &OnTonemapShaderDrawn}},
-    {0x6B9382CA, {.crc32 = 0x6B9382CA, .code = __0x6B9382CA, .on_drawn = &OnTonemapShaderDrawn}},
+    // {0x6B9382CA, {.crc32 = 0x6B9382CA, .code = __0x6B9382CA, .on_drawn = &OnTonemapShaderDrawn}},
     {0x809F5852, {.crc32 = 0x809F5852, .code = __0x809F5852, .on_drawn = &OnTonemapShaderDrawn}},
     {0x9B304112, {.crc32 = 0x9B304112, .code = __0x9B304112, .on_drawn = &OnTonemapShaderDrawn}},
     {0x9F191B0B, {.crc32 = 0x9F191B0B, .code = __0x9F191B0B, .on_drawn = &OnTonemapShaderDrawn}},
     {0xA2ED1CB7, {.crc32 = 0xA2ED1CB7, .code = __0xA2ED1CB7, .on_drawn = &OnTonemapShaderDrawn}},
     {0xCD6F15F2, {.crc32 = 0xCD6F15F2, .code = __0xCD6F15F2, .on_drawn = &OnTonemapShaderDrawn}},
     {0xCF7FE0D7, {.crc32 = 0xCF7FE0D7, .code = __0xCF7FE0D7, .on_drawn = &OnTonemapShaderDrawn}},
-    {0xDA9A5AA0, {.crc32 = 0xDA9A5AA0, .code = __0xDA9A5AA0, .on_drawn = &OnTonemapShaderDrawn}},
+    // {0xDA9A5AA0, {.crc32 = 0xDA9A5AA0, .code = __0xDA9A5AA0, .on_drawn = &OnTonemapShaderDrawn}},
     {0xDD04030E, {.crc32 = 0xDD04030E, .code = __0xDD04030E, .on_drawn = &OnTonemapShaderDrawn}},
-    {0xE3E0B5C4, {.crc32 = 0xE3E0B5C4, .code = __0xE3E0B5C4, .on_drawn = &OnTonemapShaderDrawn}},
+    // {0xE3E0B5C4, {.crc32 = 0xE3E0B5C4, .code = __0xE3E0B5C4, .on_drawn = &OnTonemapShaderDrawn}},
 
     // output
     CustomShaderEntry(0x14BF23D4),
