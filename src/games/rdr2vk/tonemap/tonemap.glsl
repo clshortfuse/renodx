@@ -153,7 +153,7 @@ vec3 ApplyToneMap(vec3 _676, bool _679, float _638, float _m6, uint _m4, float _
 }
 
 vec3 EncodeLUTInput(vec3 x, float _m11, float _m12, float _m13, float _m14, bool skip_encoding) {
-  if (CUSTOM_LUT_ENCODING != 0.f && IS_TONEMAPPED == 0.f) {  // sRGB-like encoding (defaults to 2.2, controlled by the SDR gamma slider)
+  if (CUSTOM_LUT_ENCODING != 0.f) {  // sRGB-like encoding (defaults to 2.2, controlled by the SDR gamma slider)
     return EncodeRDR2Gamma(x);
   } else {  // vanilla (2.2 sRGB-like in SDR, none in HDR)
     vec3 encoded = mix(
@@ -167,8 +167,12 @@ vec3 EncodeLUTInput(vec3 x, float _m11, float _m12, float _m13, float _m14, bool
   }
 }
 
+vec3 EncodeLUTInput(vec3 x) {
+  return (CUSTOM_LUT_ENCODING != 0.f) ? EncodeRDR2Gamma(x) : x;
+}
+
 vec3 DecodeLUTInput(vec3 lut_output, vec3 lut_input, float compression_scale) {
-  if (CUSTOM_LUT_ENCODING != 0.f && IS_TONEMAPPED == 0.f) {  // Custom encoded domain
+  if (CUSTOM_LUT_ENCODING != 0.f) {  // Custom encoded domain
     lut_output = DecodeSRGB(lut_output) / compression_scale;
     if (CUSTOM_LUT_STRENGTH != 1.f) {
       lut_output = mix(DecodeSRGB(lut_input), lut_output, CUSTOM_LUT_STRENGTH);
@@ -215,7 +219,7 @@ float CompressLUTInput(vec3 color, bool use_encoding, uint _m5, float _m7, float
 }
 
 vec3 CompressLUTInput(vec3 color, bool use_encoding, uint _m5, float _m7, float _m8, float _m9, out float compression_scale) {
-  bool use_custom_encoding = CUSTOM_LUT_ENCODING != 0.f && IS_TONEMAPPED == 0.f;
+  bool use_custom_encoding = CUSTOM_LUT_ENCODING != 0.f;
   vec3 compression_input = use_custom_encoding ? DecodeSRGB(color) : color;
 
   compression_scale = CompressLUTInput(compression_input, use_encoding, _m5, _m7, _m8, _m9);
@@ -225,7 +229,7 @@ vec3 CompressLUTInput(vec3 color, bool use_encoding, uint _m5, float _m7, float 
 }
 
 vec3 CompressLUTInputAlt(vec3 color, uint _m3, float _m7, float _m8, float _m9, out float compression_scale) {
-  bool use_custom_encoding = CUSTOM_LUT_ENCODING != 0.f && IS_TONEMAPPED == 0.f;
+  bool use_custom_encoding = CUSTOM_LUT_ENCODING != 0.f;
   vec3 compression_input = use_custom_encoding ? DecodeSRGB(color) : color;
 
   if (RENODX_TONE_MAP_TYPE == 0.f) {
