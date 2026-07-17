@@ -68,7 +68,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDRT", "PsychoV-17"},
+        .labels = {"Vanilla", "RenoDRT", "PsychoV-22"},
         .parse = [](float value) { return value * 3.f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -81,7 +81,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Sets the value of peak white in nits",
         .min = 48.f,
-        .max = 4000.f,
+        .max = 10000.f,
+        .is_logarithmic = true,
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
