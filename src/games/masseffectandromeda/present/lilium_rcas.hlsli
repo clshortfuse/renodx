@@ -3,22 +3,22 @@
 
 // Lilium HDR RCAS (FSR Robust Contrast Adaptive Sharpening) for MEA.
 // center_color = LUT-linearized scene (1.0 ~= diffuse white). Neighbors linearize through the same
-// SampleOutputLut + scene_scale as the center, so sharpness 0 is a pure passthrough. Scene is
+// LinearizeScene + scene_scale as the center, so sharpness 0 is a pure passthrough. Scene is
 // diffuse-relative, so luma is normalized by the HDR headroom ratio for the FSR math (else min4 > 1
 // silently disables sharpening). Caller gates to Vanilla+ AND the swapchain present.
-// Requires shared.h (renodx + CUSTOM_SHARPNESS + injectedData) first.
+// Requires shared.h (renodx + CUSTOM_SHARPNESS + injectedData) + linearize.hlsli first.
 
 #define MEA_RCAS_LIMIT 0.1875f  // FSR_RCAS_LIMIT: limit of natural-looking sharpening
 #define MEA_RCAS_EPS 1e-6f      // denominator guard (black / flat neighborhoods -> 0 * rcp(0) = NaN)
 
-// One RCAS tap: scene sample -> scene_scale -> shared SampleOutputLut -> BT.709 luma (same path as
+// One RCAS tap: scene sample -> scene_scale -> shared LinearizeScene -> BT.709 luma (same path as
 // the present center, so they can't drift).
 float RcasTapLuma(
     Texture2D<float4> scene_tex, SamplerState scene_smp,
     Texture1D<float4> lut_tex, SamplerState lut_smp,
     float2 uv, float scene_scale) {
-  const float3 c = SampleOutputLut(
-      lut_tex, lut_smp, max(0.f, scene_tex.SampleLevel(scene_smp, uv, 0.f).rgb * scene_scale));
+  const float3 c = LinearizeScene(
+      lut_tex, lut_smp, scene_tex.SampleLevel(scene_smp, uv, 0.f).rgb * scene_scale);
   return renodx::color::y::from::BT709(max(0.f, c));
 }
 

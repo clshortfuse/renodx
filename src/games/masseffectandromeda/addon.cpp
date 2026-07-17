@@ -34,18 +34,53 @@ bool SetSwapchainPresentFlag(reshade::api::command_list* cmd_list) {
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // Scene tonemap + grade (bloom / vignette / exposure / film grain). Four permutations
-    // selected by the in-game {Chromatic Aberration, Film Grain} toggles — all share one core.
-    CustomShaderEntry(0xB6A91712),  // CA off / grain off
-    CustomShaderEntry(0x376C116B),  // CA off / grain on
-    CustomShaderEntry(0xEB91AB31),  // CA on  / grain off
-    CustomShaderEntry(0xE3D57A10),  // CA on  / grain on
-    CustomShaderEntryCallback(0xF5B0DBFA, SetSwapchainPresentFlag),  // main HDR present (1:1), RCAS gate
-    CustomShaderEntryCallback(0xAFFFA4AB, SetSwapchainPresentFlag),  // upscaling HDR present (res scale < 100%)
-    CustomShaderEntryCallback(0x8498DBD5, SetSwapchainPresentFlag),  // HDR present at Post Process = Low
-    CustomShaderEntry(0xF5B7A93D),  // loading-screen / video present (1:1)
-    CustomShaderEntry(0x667C56AF),  // loading-screen / video present (upscaled)
-    CustomShaderEntry(0x182C8867),  // loading-screen / video present (1:1, scene sampler on s1)
+    // Scene tonemap + grade (bloom / vignette / exposure). Twelve permutations on three axes —
+    // {warp | chromatic aberration} x {radial lens distortion} x {t4: none | grain | overlay} —
+    // all share one core (tonemap/).
+    CustomShaderEntry(0xB6A91712),  // warp / no grain
+    CustomShaderEntry(0x376C116B),  // warp / grain
+    CustomShaderEntry(0xEB91AB31),  // CA   / no grain
+    CustomShaderEntry(0xE3D57A10),  // CA   / grain
+    CustomShaderEntry(0xA42A680A),  // warp / overlay (scanner/screen effects)
+    CustomShaderEntry(0x62D3752D),  // CA   / overlay
+    CustomShaderEntry(0x71562FF9),  // warp / distortion / no t4
+    CustomShaderEntry(0x339025EE),  // CA   / distortion / no t4
+    CustomShaderEntry(0x66BE1F36),  // warp / distortion / grain
+    CustomShaderEntry(0x18AC2B1A),  // CA   / distortion / grain
+    CustomShaderEntry(0xF8A12BF4),  // warp / distortion / overlay
+    CustomShaderEntry(0x18F31608),  // CA   / distortion / overlay
+    // HDR presents (present/). Rows: main 1:1, Post Process = Low, upscaling — each with a 32^3
+    // calibration-LUT twin (lut3d) and in three runtime gamut variants (BT.2020 / DCI-P3 /
+    // no-matrix, display-dependent); every variant normalizes to the forced HDR10/BT.2020 output.
+    CustomShaderEntryCallback(0xF5B0DBFA, SetSwapchainPresentFlag),  // main (BT.2020), RCAS gate
+    CustomShaderEntryCallback(0xBE69B105, SetSwapchainPresentFlag),  // main lut3d (BT.2020)
+    CustomShaderEntryCallback(0x9FCE7944, SetSwapchainPresentFlag),  // main (P3)
+    CustomShaderEntryCallback(0x3196D1D2, SetSwapchainPresentFlag),  // main lut3d (P3)
+    CustomShaderEntryCallback(0xD0200425, SetSwapchainPresentFlag),  // main (no-matrix)
+    CustomShaderEntryCallback(0xFED81CFB, SetSwapchainPresentFlag),  // main lut3d (no-matrix)
+    CustomShaderEntryCallback(0x8498DBD5, SetSwapchainPresentFlag),  // PP-Low (BT.2020)
+    CustomShaderEntryCallback(0x20EE9B0F, SetSwapchainPresentFlag),  // PP-Low lut3d (BT.2020)
+    CustomShaderEntryCallback(0xA550FC99, SetSwapchainPresentFlag),  // PP-Low (P3)
+    CustomShaderEntryCallback(0xA888DCF8, SetSwapchainPresentFlag),  // PP-Low lut3d (P3)
+    CustomShaderEntryCallback(0x950D3AE4, SetSwapchainPresentFlag),  // PP-Low (no-matrix)
+    CustomShaderEntryCallback(0x6BDFE71C, SetSwapchainPresentFlag),  // PP-Low lut3d (no-matrix)
+    CustomShaderEntryCallback(0xAFFFA4AB, SetSwapchainPresentFlag),  // upscale (BT.2020)
+    CustomShaderEntryCallback(0xA1B754F2, SetSwapchainPresentFlag),  // upscale lut3d (BT.2020)
+    CustomShaderEntryCallback(0x6A9767E9, SetSwapchainPresentFlag),  // upscale (P3)
+    CustomShaderEntryCallback(0x0BF0C1CA, SetSwapchainPresentFlag),  // upscale lut3d (P3)
+    CustomShaderEntryCallback(0x8FD42D7C, SetSwapchainPresentFlag),  // upscale (no-matrix)
+    CustomShaderEntryCallback(0x22179331, SetSwapchainPresentFlag),  // upscale lut3d (no-matrix)
+    // Loading-screen / video presents (loading/). Rows: 1:1 (scene sampler s0), 1:1 (s1),
+    // upscaling — same three gamut variants each.
+    CustomShaderEntry(0xF5B7A93D),  // 1:1 s0 (BT.2020)
+    CustomShaderEntry(0xB78EE6A9),  // 1:1 s0 (P3)
+    CustomShaderEntry(0xA4E53513),  // 1:1 s0 (no-matrix)
+    CustomShaderEntry(0x182C8867),  // 1:1 s1 (BT.2020)
+    CustomShaderEntry(0x70888904),  // 1:1 s1 (P3)
+    CustomShaderEntry(0xBF998050),  // 1:1 s1 (no-matrix)
+    CustomShaderEntry(0x667C56AF),  // upscale (BT.2020)
+    CustomShaderEntry(0x48E0CE55),  // upscale (P3)
+    CustomShaderEntry(0x4ACE2324),  // upscale (no-matrix)
     // FMV YUV->RGB decode: flags fxVideoActive so the present treats the layer as video, not UI.
     CustomShaderEntryCallback(0x7ED07F45, [](reshade::api::command_list* cmd_list) {
       shader_injection.fxVideoActive = 1.f;
