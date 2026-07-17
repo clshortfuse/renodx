@@ -10,7 +10,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[109];
+  float4 cb0[27];
 }
 
 
@@ -30,7 +30,7 @@ void main(
   uint4 bitmask, uiDest;
   float4 fDest;
 
-  r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[108].x).xyzw;
+  r0.xyzw = t0.SampleBias(s0_s, v1.xy, cb0[26].x).xyzw;
   r0.xyzw = cb1[6].xyzw * r0.xyzw;
   o0.xyzw = w1 * r0.xyzw * 0.25f;
   return;

@@ -15,7 +15,7 @@ SamplerState s0_s : register(s0);
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[8];
+  float4 cb0[6];
 }
 
 
@@ -50,6 +50,6 @@ void main(
   o0.x = rgb.x;
   o0.y = rgb.y;
   o0.z = rgb.z;
-  o0.w = -cb0[7].x + 1;
+  o0.w = -cb0[5].z + 1;
   return;
 }

@@ -1,12 +1,12 @@
 
 #include "../shared.h"
 
-Texture2D<float4> t2 : register(t2); 
-Texture2D<float4> t1 : register(t1);  
-Texture2D<float4> t0 : register(t0);  
+Texture2D<float4> t2 : register(t2);
+Texture2D<float4> t1 : register(t1);
+Texture2D<float4> t0 : register(t0);
 
-SamplerState s1_s : register(s1);  
-SamplerState s0_s : register(s0);  
+SamplerState s1_s : register(s1);
+SamplerState s0_s : register(s0);
 
 cbuffer cb1 : register(b1)
 {
@@ -15,7 +15,7 @@ cbuffer cb1 : register(b1)
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[83];
+  float4 cb0[1];
 }
 
 RWTexture2D<float4> u0 : register(u0);
@@ -31,7 +31,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
 
   r0.xy = (uint2)vThreadID.xy;
   r0.xy = float2(0.5, 0.5) + r0.xy;
-  r0.xy = cb0[82].zw * r0.xy;
+  r0.xy = cb0[0].zw * r0.xy;
 
   // Sample sharp temporal color and apply inverse Reinhard
   r1.xyz = t1.SampleLevel(s1_s, r0.xy, 0).xyz;

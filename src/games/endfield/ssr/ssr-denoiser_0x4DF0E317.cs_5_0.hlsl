@@ -10,7 +10,7 @@ SamplerState s0_s : register(s0);
 
 cbuffer cb0 : register(b0)
 {
-  float4 cb0[83];
+  float4 cb0[1];
 }
 
 RWTexture2D<float4> u0 : register(u0);
@@ -28,7 +28,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r0.xyzw = (int4)vThreadID.xyxy + int4(0,1,1,1);
   r0.xyzw = (int4)r0.xyzw;
   r0.xyzw = float4(0.5,0.5,0.5,0.5) + r0.xyzw;
-  r0.xyzw = cb0[82].zwzw * r0.xyzw;
+  r0.xyzw = cb0[0].zwzw * r0.xyzw;
   r1.xyz = t1.SampleLevel(s0_s, r0.zw, 0).xyz;
   r0.xyz = t1.SampleLevel(s0_s, r0.xy, 0).xyz;
   r0.w = dot(r1.xz, float2(0.5,-0.5));
@@ -44,7 +44,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r0.xyzw = (int4)vThreadID.xyxy + int4(1,0,-1,1);
   r0.xyzw = (int4)r0.xyzw;
   r0.xyzw = float4(0.5,0.5,0.5,0.5) + r0.xyzw;
-  r0.xyzw = cb0[82].zwzw * r0.xyzw;
+  r0.xyzw = cb0[0].zwzw * r0.xyzw;
   r3.xyz = t1.SampleLevel(s0_s, r0.zw, 0).xyz;
   r0.xyz = t1.SampleLevel(s0_s, r0.xy, 0).xyz;
   r0.w = dot(r3.xz, float2(0.5,-0.5));
@@ -60,7 +60,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r0.xyzw = (int4)vThreadID.xyxy + int4(1,-1,-1,0);
   r0.xyzw = (int4)r0.xyzw;
   r0.xyzw = float4(0.5,0.5,0.5,0.5) + r0.xyzw;
-  r0.xyzw = cb0[82].zwzw * r0.xyzw;
+  r0.xyzw = cb0[0].zwzw * r0.xyzw;
   r5.xyz = t1.SampleLevel(s0_s, r0.zw, 0).xyz;
   r0.xyz = t1.SampleLevel(s0_s, r0.xy, 0).xyz;
   r0.w = dot(r5.xz, float2(0.5,-0.5));
@@ -76,7 +76,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r0.xyzw = (int4)vThreadID.xyxy + int4(-1,-1,0,-1);
   r0.xyzw = (int4)r0.xyzw;
   r0.xyzw = float4(0.5,0.5,0.5,0.5) + r0.xyzw;
-  r0.xyzw = cb0[82].zwzw * r0.xyzw;
+  r0.xyzw = cb0[0].zwzw * r0.xyzw;
   r7.xyz = t1.SampleLevel(s0_s, r0.xy, 0).xyz;
   r0.xyz = t1.SampleLevel(s0_s, r0.zw, 0).xyz;
   r0.w = dot(r7.xz, float2(0.5,-0.5));
@@ -95,7 +95,7 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r0.xyz = r6.xyz * r6.xyz + r0.xyz;
   r9.xy = (int2)vThreadID.xy;
   r9.xy = float2(0.5,0.5) + r9.xy;
-  r9.xy = cb0[82].zw * r9.xy;
+  r9.xy = cb0[0].zw * r9.xy;
   r10.xyz = t1.SampleLevel(s0_s, r9.xy, 0).xyz;
   r0.w = dot(r10.xz, float2(0.5,-0.5));
   r11.y = 0.501960814 + r0.w;
@@ -166,13 +166,13 @@ void main(uint3 vThreadID : SV_DispatchThreadID)
   r0.w = 0.899999976 * r0.w;
   if (shader_injection.improved_ssr >= 0.5f) {
     // Manual bilinear interpolation for history color
-    float2 texelPos = r2.xy * cb0[82].xy - 0.5;
+    float2 texelPos = r2.xy * cb0[0].xy - 0.5;
     float2 f = frac(texelPos);
-    float2 base = (floor(texelPos) + 0.5) * cb0[82].zw;
+    float2 base = (floor(texelPos) + 0.5) * cb0[0].zw;
     float3 h00 = t3.SampleLevel(s0_s, base, 0).xyz;
-    float3 h10 = t3.SampleLevel(s0_s, base + float2(cb0[82].z, 0), 0).xyz;
-    float3 h01 = t3.SampleLevel(s0_s, base + float2(0, cb0[82].w), 0).xyz;
-    float3 h11 = t3.SampleLevel(s0_s, base + cb0[82].zw, 0).xyz;
+    float3 h10 = t3.SampleLevel(s0_s, base + float2(cb0[0].z, 0), 0).xyz;
+    float3 h01 = t3.SampleLevel(s0_s, base + float2(0, cb0[0].w), 0).xyz;
+    float3 h11 = t3.SampleLevel(s0_s, base + cb0[0].zw, 0).xyz;
     r2.xyz = lerp(lerp(h00, h10, f.x), lerp(h01, h11, f.x), f.y);
   } else {
     r2.xyz = t3.SampleLevel(s0_s, r2.xy, 0).xyz;
