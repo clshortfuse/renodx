@@ -1,0 +1,28 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "rdr2vk",
+  "title": "Red Dead Redemption 2",
+  "variant": "Vulkan",
+  "maintainers": [
+    "Musa"
+  ],
+  "summary": "Adds configurable HDR tone mapping and color grading to Red Dead Redemption 2's Vulkan renderer.",
+  "tags": [
+    "HDR",
+    "Vulkan"
+  ],
+  "status": "stable",
+  "notes": [
+    "Requires Vulkan, Exclusive Fullscreen, and HDR enabled in game."
+  ],
+  "deploy": {
+    "game_exe": "RDR2.exe",
+    "process_name": "RDR2.exe",
+    "api": "vulkan",
+    "steam_appid": 1174180,
+    "architecture": [
+      "x64"
+    ],
+    "platform": "steam"
+  }
+}
