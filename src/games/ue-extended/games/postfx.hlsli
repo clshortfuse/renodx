@@ -160,3 +160,29 @@ float3 ConvertSRGBtoPQAndUpgradeToneMap(float3 srgb_color,
       renodx::color::bt2020::from::BT709(tonemapped_linear),
       RENODX_DIFFUSE_WHITE_NITS);
 }
+
+// Convert the current processing path to unscaled sRGB-encoded BT.709.
+float3 InvertLUTEncode(float3 color) {
+  if (PROCESSING_PATH == 0.f) return ConvertPQToSRGB(color);
+
+  if (RENODX_DIFFUSE_WHITE_NITS != RENODX_GRAPHICS_WHITE_NITS) {
+    color = renodx::color::gamma::DecodeSafe(color);
+    color /= (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS);
+    color = renodx::color::gamma::EncodeSafe(color);
+  }
+
+  return color;
+}
+
+// Convert sRGB-encoded BT.709 to the scaled current processing path.
+float3 ApplyLUTEncode(float3 color) {
+  if (PROCESSING_PATH == 0.f) return ConvertSRGBtoPQ(color);
+
+  if (RENODX_DIFFUSE_WHITE_NITS != RENODX_GRAPHICS_WHITE_NITS) {
+    color = renodx::color::gamma::DecodeSafe(color);
+    color *= (RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS);
+    color = renodx::color::gamma::EncodeSafe(color);
+  }
+
+  return color;
+}
