@@ -110,7 +110,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "Vanilla+", "Vanilla+ (Neutwo)"},
+        .labels = {"Vanilla", "Vanilla+", "Vanilla+ (Neutwo)", "Vanilla+ (PsychoV-24)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -134,7 +134,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
-        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },  // Vanilla+
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
@@ -146,7 +146,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
-        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },  // Vanilla+
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
@@ -157,7 +157,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
-        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },  // Vanilla+
+        .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
     },
     new renodx::utils::settings::Setting{
@@ -314,8 +314,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Adds RCAS, as implemented by Lilium for HDR. Disable other sharpening (DLAA / ReShade) to avoid double-sharpening.",
         .max = 100.f,
-        // Deliberate linear response (slider% -> CUSTOM_SHARPNESS directly). Some sibling RCAS sliders
-        // use an exp2 curve, so the same % is not perceptually comparable across mods.
+        // Deliberate linear map: slider% goes straight to CUSTOM_SHARPNESS (parse below), not an exp2 curve.
         .is_enabled = []() { return shader_injection.toneMapType >= 1.f; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1.f; },
@@ -452,7 +451,7 @@ void OnPresetOff() {
 
 bool fired_on_init_swapchain = false;
 
-// Seed the Peak Brightness default from the display's HDR metadata (RDR1 pattern).
+// Seed the Peak Brightness default from the display's HDR metadata.
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
   // Latch only on a successful read: the transient 1280x720 boot swapchain may have no metadata,
@@ -466,7 +465,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
 }
 
-// Feed a fresh per-frame random seed for the perceptual film grain (TW3 pattern).
+// Feed a fresh per-frame random seed for the perceptual film grain.
 void OnPresent(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
@@ -521,13 +520,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         initialized = true;
       }
 
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // seed peak default
-      reshade::register_event<reshade::addon_event::present>(OnPresent);               // per-frame grain seed
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // seed peak default
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);               // per-frame grain seed
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }
