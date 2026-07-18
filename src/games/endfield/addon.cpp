@@ -18,7 +18,9 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/bitwise.hpp"
 #include "../../utils/data.hpp"
+#include "../../utils/pipeline_layout.hpp"
 #include "../../utils/random.hpp"
 #include "../../utils/resource.hpp"
 #include "../../utils/settings.hpp"
@@ -214,6 +216,84 @@ bool is_ping_drawn = false;
 bool is_uid_input_candidate = false;
 uint32_t draw_call_vertex_count = 0;  // Track vertex count from draw calls (not draw_indexed)
 
+struct __declspec(uuid("019bf1c8-074a-7e13-b353-54ce3ceec3de")) VfxCommandListData {
+  reshade::api::resource_view pixel_srv_t0 = {0u};
+};
+
+void OnInitVfxCommandList(reshade::api::command_list* cmd_list) {
+  renodx::utils::data::Create<VfxCommandListData>(cmd_list);
+}
+
+void OnDestroyVfxCommandList(reshade::api::command_list* cmd_list) {
+  renodx::utils::data::Delete<VfxCommandListData>(cmd_list);
+}
+
+void OnResetVfxCommandList(reshade::api::command_list* cmd_list) {
+  auto* data = renodx::utils::data::Get<VfxCommandListData>(cmd_list);
+  if (data != nullptr) {
+    data->pixel_srv_t0 = {0u};
+  }
+}
+
+void OnPushVfxDescriptors(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    uint32_t layout_param,
+    const reshade::api::descriptor_table_update& update) {
+  if (!renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) return;
+
+  switch (update.type) {
+    case reshade::api::descriptor_type::shader_resource_view:
+    case reshade::api::descriptor_type::buffer_shader_resource_view:
+    case reshade::api::descriptor_type::sampler_with_resource_view:
+      break;
+    default:
+      return;
+  }
+
+  uint32_t dx_register_index = 0u;
+  uint32_t dx_register_space = 0u;
+  bool has_register = false;
+  const bool found_layout = renodx::utils::pipeline_layout::GetPipelineLayoutData(
+      layout,
+      [&](const auto* layout_data) {
+        if (layout_param >= layout_data->params.size()) return;
+
+        const auto& param = layout_data->params[layout_param];
+        switch (param.type) {
+          case reshade::api::pipeline_layout_param_type::descriptor_table:
+            if (param.descriptor_table.count != 1u) return;
+            dx_register_index = param.descriptor_table.ranges[0].dx_register_index;
+            dx_register_space = param.descriptor_table.ranges[0].dx_register_space;
+            has_register = true;
+            break;
+          case reshade::api::pipeline_layout_param_type::push_descriptors:
+            dx_register_index = param.push_descriptors.dx_register_index;
+            dx_register_space = param.push_descriptors.dx_register_space;
+            has_register = true;
+            break;
+          default:
+            break;
+        }
+      });
+  if (!found_layout || !has_register || dx_register_space != 0u) return;
+
+  auto* data = renodx::utils::data::Get<VfxCommandListData>(cmd_list);
+  if (data == nullptr) return;
+
+  for (uint32_t i = 0u; i < update.count; ++i) {
+    if (dx_register_index + update.binding + i != 0u) continue;
+
+    if (update.type == reshade::api::descriptor_type::sampler_with_resource_view) {
+      data->pixel_srv_t0 = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i].view;
+    } else {
+      data->pixel_srv_t0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
+    }
+    break;
+  }
+}
+
 bool IsVisible(float value) {
   return value >= 0.5f;
 }
@@ -296,8 +376,58 @@ bool KeepOriginalShader(reshade::api::command_list* cmd_list) {
   return false;
 }
 
+void RestoreVFXBoostShader(
+    reshade::api::command_list* cmd_list,
+    renodx::utils::shader::CommandListData* shader_state) {
+  if (shader_state == nullptr) return;
+
+  auto* pixel_state = renodx::utils::shader::GetCurrentPixelState(shader_state);
+  if (pixel_state->pipeline.handle == 0u) return;
+  cmd_list->bind_pipeline(pixel_state->applied_stage, pixel_state->pipeline);
+}
+
 bool ReplaceVFXBoostShader(reshade::api::command_list* cmd_list) {
-  return shader_injection.perchannelblowout >= 0.5f;
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  if (shader_state == nullptr) return false;
+  if (shader_injection.perchannelblowout < 0.5f) {
+    RestoreVFXBoostShader(cmd_list, shader_state);
+    return false;
+  }
+
+  uint32_t texture_crc = 0u;
+  switch (renodx::utils::shader::GetCurrentPixelShaderHash(shader_state)) {
+    case 0x97BF4335u:
+      texture_crc = 0x512923BCu;
+      break;
+    case 0x4D4DDEBEu:
+      texture_crc = 0xFA6BD53Au;
+      break;
+    case 0x50898C70u:
+      texture_crc = 0x1A45F4EBu;
+      break;
+    case 0x1BF3323Du:
+      texture_crc = 0xF38B0BAAu;
+      break;
+    default:
+      RestoreVFXBoostShader(cmd_list, shader_state);
+      return false;
+  }
+
+  auto* data = renodx::utils::data::Get<VfxCommandListData>(cmd_list);
+  if (data == nullptr || data->pixel_srv_t0.handle == 0u) {
+    RestoreVFXBoostShader(cmd_list, shader_state);
+    return false;
+  }
+
+  auto upload = renodx::utils::resource::GetInitialUploadSignature(data->pixel_srv_t0);
+  if (!upload.has_value()) {
+    upload = renodx::utils::resource::GetLatestUploadSignature(data->pixel_srv_t0);
+  }
+  const bool should_replace = upload.has_value() && upload->crc32 == texture_crc;
+  if (!should_replace) {
+    RestoreVFXBoostShader(cmd_list, shader_state);
+  }
+  return should_replace;
 }
 
 bool ReplaceImprovedGTAOShader(reshade::api::command_list* cmd_list) {
@@ -910,13 +1040,13 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "On"},
     },
     new renodx::utils::settings::Setting{
-        .key = "HDRVFXLuminance",
+        .key = "VFXBoost",
         .binding = &shader_injection.perchannelblowout,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
         .label = "VFX Boost (Experimental)",
         .section = "Rendering Improvements",
-        .tooltip = "Boosts the luminance of supported VFX shaders for brighter HDR highlights.\nExperimental: this may also affect UI elements and cause unintended brightness or color changes.",
+        .tooltip = "Boosts the luminance of supported VFX shaders for brighter highlights.\nExperimental: this may have unintended effects.",
         .labels = {"Original", "Enhanced"},
     },
     new renodx::utils::settings::Setting{
@@ -1343,6 +1473,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::allow_multiple_push_constants = true;
+        renodx::utils::resource::use_resource_replace = true;
 
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
@@ -1598,6 +1729,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           }
         }
         // Register draw and draw_indexed events for heuristic ping/UID detection
+        reshade::register_event<reshade::addon_event::init_command_list>(OnInitVfxCommandList);
+        reshade::register_event<reshade::addon_event::reset_command_list>(OnResetVfxCommandList);
+        reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyVfxCommandList);
+        reshade::register_event<reshade::addon_event::push_descriptors>(OnPushVfxDescriptors);
         reshade::register_event<reshade::addon_event::draw>(OnDraw);
         reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
 
@@ -1606,6 +1741,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitVfxCommandList);
+      reshade::unregister_event<reshade::addon_event::reset_command_list>(OnResetVfxCommandList);
+      reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyVfxCommandList);
+      reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushVfxDescriptors);
       reshade::unregister_event<reshade::addon_event::draw>(OnDraw);
       reshade::unregister_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
