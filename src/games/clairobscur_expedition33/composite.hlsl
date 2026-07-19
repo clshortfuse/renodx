@@ -36,8 +36,8 @@ renodx::draw::Config GetSwapchainConfig(bool is_pq = true) {
 
 bool HandleUICompositing(float4 ui_color_gamma, float4 scene_color_pq, inout float4 output_color, uint output_mode = 0u) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
-  // Unreal HDR: defer to UE native composite_hdr fallthrough (same as ToneMap Vanilla).
-  // Fixes status-icon dark boxes without rewriting UI blend math.
+  // Unreal HDR: defer to UE native composite_hdr fallthrough (same as ToneMap Vanilla)
+  // fixes dark boxes around combat status icons without rewriting UI blend math
   if (CUSTOM_UNREAL_HDR == 1.f) return false;
   float ui_alpha = ui_color_gamma.a;
 
