@@ -8,8 +8,10 @@
 // #define DEBUG_LEVEL_0
 
 #include <algorithm>
+#include <mutex>
 #include <shared_mutex>
 #include <sstream>
+#include <unordered_map>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -20,9 +22,8 @@
 #include "../../mods/swapchain.hpp"
 #include "../../utils/bitwise.hpp"
 #include "../../utils/data.hpp"
-#include "../../utils/pipeline_layout.hpp"
+#include "../../utils/hash.hpp"
 #include "../../utils/random.hpp"
-#include "../../utils/resource.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/state.hpp"
 #include "../../utils/swapchain.hpp"
@@ -220,6 +221,79 @@ struct __declspec(uuid("019bf1c8-074a-7e13-b353-54ce3ceec3de")) VfxCommandListDa
   reshade::api::resource_view pixel_srv_t0 = {0u};
 };
 
+struct VfxBoostMatch {
+  uint32_t shader_crc;
+  uint32_t texture_crc;
+};
+
+constexpr VfxBoostMatch vfx_boost_matches[] = {
+    {0x97BF4335u, 0x512923BCu},
+    {0x4D4DDEBEu, 0xFA6BD53Au},
+    {0x50898C70u, 0x1A45F4EBu},
+    {0x1BF3323Du, 0xF38B0BAAu},
+};
+
+std::shared_mutex vfx_handle_mutex;
+std::unordered_map<uint64_t, uint32_t> vfx_handle_shaders;
+
+void OnInitVfxResource(
+    reshade::api::device* /*device*/,
+    const reshade::api::resource_desc& desc,
+    const reshade::api::subresource_data* initial_data,
+    reshade::api::resource_usage /*initial_state*/,
+    reshade::api::resource resource) {
+  if (resource.handle == 0u
+      || initial_data == nullptr
+      || initial_data->data == nullptr
+      || desc.type != reshade::api::resource_type::texture_2d
+      || desc.texture.format != reshade::api::format::bc7_unorm_srgb
+      || desc.texture.width != 256u
+      || desc.texture.height != 256u) {
+    return;
+  }
+
+  const auto source_size = initial_data->slice_pitch != 0u
+                               ? initial_data->slice_pitch
+                               : reshade::api::format_slice_pitch(
+                                     desc.texture.format,
+                                     initial_data->row_pitch != 0u
+                                         ? initial_data->row_pitch
+                                         : reshade::api::format_row_pitch(desc.texture.format, desc.texture.width),
+                                     desc.texture.height);
+  if (source_size != 65536u) return;
+
+  const auto texture_crc = renodx::utils::hash::ComputeCRC32(
+      static_cast<const uint8_t*>(initial_data->data), source_size);
+  const auto match = std::ranges::find(vfx_boost_matches, texture_crc, &VfxBoostMatch::texture_crc);
+  if (match == std::end(vfx_boost_matches)) return;
+
+  const std::lock_guard lock(vfx_handle_mutex);
+  vfx_handle_shaders[resource.handle] = match->shader_crc;
+}
+
+void OnDestroyVfxResource(reshade::api::device* /*device*/, reshade::api::resource resource) {
+  const std::lock_guard lock(vfx_handle_mutex);
+  vfx_handle_shaders.erase(resource.handle);
+}
+
+void OnInitVfxResourceView(
+    reshade::api::device* /*device*/,
+    reshade::api::resource resource,
+    reshade::api::resource_usage /*usage*/,
+    const reshade::api::resource_view_desc& /*desc*/,
+    reshade::api::resource_view view) {
+  const std::lock_guard lock(vfx_handle_mutex);
+  const auto match = vfx_handle_shaders.find(resource.handle);
+  if (match != vfx_handle_shaders.end()) {
+    vfx_handle_shaders[view.handle] = match->second;
+  }
+}
+
+void OnDestroyVfxResourceView(reshade::api::device* /*device*/, reshade::api::resource_view view) {
+  const std::lock_guard lock(vfx_handle_mutex);
+  vfx_handle_shaders.erase(view.handle);
+}
+
 void OnInitVfxCommandList(reshade::api::command_list* cmd_list) {
   renodx::utils::data::Create<VfxCommandListData>(cmd_list);
 }
@@ -238,60 +312,20 @@ void OnResetVfxCommandList(reshade::api::command_list* cmd_list) {
 void OnPushVfxDescriptors(
     reshade::api::command_list* cmd_list,
     reshade::api::shader_stage stages,
-    reshade::api::pipeline_layout layout,
+    reshade::api::pipeline_layout /*layout*/,
     uint32_t layout_param,
     const reshade::api::descriptor_table_update& update) {
-  if (!renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) return;
-
-  switch (update.type) {
-    case reshade::api::descriptor_type::shader_resource_view:
-    case reshade::api::descriptor_type::buffer_shader_resource_view:
-    case reshade::api::descriptor_type::sampler_with_resource_view:
-      break;
-    default:
-      return;
+  if (layout_param != 1u
+      || update.type != reshade::api::descriptor_type::shader_resource_view
+      || update.binding != 0u
+      || update.count == 0u
+      || !renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) {
+    return;
   }
-
-  uint32_t dx_register_index = 0u;
-  uint32_t dx_register_space = 0u;
-  bool has_register = false;
-  const bool found_layout = renodx::utils::pipeline_layout::GetPipelineLayoutData(
-      layout,
-      [&](const auto* layout_data) {
-        if (layout_param >= layout_data->params.size()) return;
-
-        const auto& param = layout_data->params[layout_param];
-        switch (param.type) {
-          case reshade::api::pipeline_layout_param_type::descriptor_table:
-            if (param.descriptor_table.count != 1u) return;
-            dx_register_index = param.descriptor_table.ranges[0].dx_register_index;
-            dx_register_space = param.descriptor_table.ranges[0].dx_register_space;
-            has_register = true;
-            break;
-          case reshade::api::pipeline_layout_param_type::push_descriptors:
-            dx_register_index = param.push_descriptors.dx_register_index;
-            dx_register_space = param.push_descriptors.dx_register_space;
-            has_register = true;
-            break;
-          default:
-            break;
-        }
-      });
-  if (!found_layout || !has_register || dx_register_space != 0u) return;
 
   auto* data = renodx::utils::data::Get<VfxCommandListData>(cmd_list);
   if (data == nullptr) return;
-
-  for (uint32_t i = 0u; i < update.count; ++i) {
-    if (dx_register_index + update.binding + i != 0u) continue;
-
-    if (update.type == reshade::api::descriptor_type::sampler_with_resource_view) {
-      data->pixel_srv_t0 = static_cast<const reshade::api::sampler_with_resource_view*>(update.descriptors)[i].view;
-    } else {
-      data->pixel_srv_t0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[i];
-    }
-    break;
-  }
+  data->pixel_srv_t0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[0];
 }
 
 bool IsVisible(float value) {
@@ -394,36 +428,16 @@ bool ReplaceVFXBoostShader(reshade::api::command_list* cmd_list) {
     return false;
   }
 
-  uint32_t texture_crc = 0u;
-  switch (renodx::utils::shader::GetCurrentPixelShaderHash(shader_state)) {
-    case 0x97BF4335u:
-      texture_crc = 0x512923BCu;
-      break;
-    case 0x4D4DDEBEu:
-      texture_crc = 0xFA6BD53Au;
-      break;
-    case 0x50898C70u:
-      texture_crc = 0x1A45F4EBu;
-      break;
-    case 0x1BF3323Du:
-      texture_crc = 0xF38B0BAAu;
-      break;
-    default:
-      RestoreVFXBoostShader(cmd_list, shader_state);
-      return false;
-  }
-
   auto* data = renodx::utils::data::Get<VfxCommandListData>(cmd_list);
   if (data == nullptr || data->pixel_srv_t0.handle == 0u) {
     RestoreVFXBoostShader(cmd_list, shader_state);
     return false;
   }
 
-  auto upload = renodx::utils::resource::GetInitialUploadSignature(data->pixel_srv_t0);
-  if (!upload.has_value()) {
-    upload = renodx::utils::resource::GetLatestUploadSignature(data->pixel_srv_t0);
-  }
-  const bool should_replace = upload.has_value() && upload->crc32 == texture_crc;
+  const auto shader_crc = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
+  const std::shared_lock lock(vfx_handle_mutex);
+  const auto match = vfx_handle_shaders.find(data->pixel_srv_t0.handle);
+  const bool should_replace = match != vfx_handle_shaders.end() && match->second == shader_crc;
   if (!should_replace) {
     RestoreVFXBoostShader(cmd_list, shader_state);
   }
@@ -1334,6 +1348,13 @@ bool OnDrawIndexed(
       ? renodx::utils::shader::GetCurrentPixelShaderHash(shader_state)
       : 0u;
 
+  if (!IsVisible(shader_injection.ui_visibility)
+      && (vertex_shader_hash == 0x1529ADE6u || pixel_shader_hash == 0x1529ADE6u
+          || vertex_shader_hash == 0xEB8D2859u || pixel_shader_hash == 0xEB8D2859u)) {
+    draw_call_vertex_count = 0;
+    return true;
+  }
+
   // Constants for ping/latency bar detection
   constexpr uint32_t PING_INDEX_COUNT = 18;
   constexpr uint32_t PING_FIRST_INDEX = 0;
@@ -1358,7 +1379,7 @@ bool OnDrawIndexed(
       is_ping_drawn = true;
     }
     draw_call_vertex_count = 0;
-    return false;
+    return !IsVisible(shader_injection.ping_text_opacity);
   }
 
   // Constants for UID text detection
@@ -1473,8 +1494,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::allow_multiple_push_constants = true;
-        renodx::utils::resource::use_resource_replace = true;
-
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
         renodx::mods::swapchain::use_resource_cloning = true;
@@ -1668,14 +1687,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           }
         }
 
-        const uint32_t vfx_boost_crcs[] = {
-            0x1BF3323Du,
-            0x50898C70u,
-            0x97BF4335u,
-            0x4D4DDEBEu,
-        };
-        for (uint32_t crc : vfx_boost_crcs) {
-          auto it = custom_shaders.find(crc);
+        for (const auto& match : vfx_boost_matches) {
+          auto it = custom_shaders.find(match.shader_crc);
           if (it != custom_shaders.end()) {
             it->second.on_replace = ReplaceVFXBoostShader;
           }
@@ -1732,6 +1745,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         reshade::register_event<reshade::addon_event::init_command_list>(OnInitVfxCommandList);
         reshade::register_event<reshade::addon_event::reset_command_list>(OnResetVfxCommandList);
         reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyVfxCommandList);
+        reshade::register_event<reshade::addon_event::init_resource>(OnInitVfxResource);
+        reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyVfxResource);
+        reshade::register_event<reshade::addon_event::init_resource_view>(OnInitVfxResourceView);
+        reshade::register_event<reshade::addon_event::destroy_resource_view>(OnDestroyVfxResourceView);
         reshade::register_event<reshade::addon_event::push_descriptors>(OnPushVfxDescriptors);
         reshade::register_event<reshade::addon_event::draw>(OnDraw);
         reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
@@ -1744,6 +1761,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitVfxCommandList);
       reshade::unregister_event<reshade::addon_event::reset_command_list>(OnResetVfxCommandList);
       reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyVfxCommandList);
+      reshade::unregister_event<reshade::addon_event::init_resource>(OnInitVfxResource);
+      reshade::unregister_event<reshade::addon_event::destroy_resource>(OnDestroyVfxResource);
+      reshade::unregister_event<reshade::addon_event::init_resource_view>(OnInitVfxResourceView);
+      reshade::unregister_event<reshade::addon_event::destroy_resource_view>(OnDestroyVfxResourceView);
       reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushVfxDescriptors);
       reshade::unregister_event<reshade::addon_event::draw>(OnDraw);
       reshade::unregister_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
