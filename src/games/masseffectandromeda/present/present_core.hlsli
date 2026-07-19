@@ -37,6 +37,7 @@ float4 PresentScene(
         color = renodx::effects::ApplyFilmGrain(color, texcoord, injectedData.customRandom, strength, 1.f);
       } else if (injectedData.fxFilmGrainType == FILM_GRAIN_PER_CHANNEL) {
         const float r = injectedData.customRandom;
+        // Irrational (phi, pi) offsets decorrelate the three channel seeds from one uniform draw.
         const float3 seed = float3(r, frac(r * 1.6180339887f + 0.5f), frac(r * 3.1415926535f + 0.25f));
         color = renodx::effects::ApplyFilmGrainColored(color, texcoord, seed, strength, 1.f);
       }
@@ -51,8 +52,8 @@ float4 PresentScene(
     // The UI arrives sRGB-decoded (t1 is an _srgb view). When SDR EOTF emulation is on,
     // re-interpret it with the selected gamma (2.2 / BT.1886) to match the scene's SDR look.
     float3 uiRgb = ui.rgb;
-    if (p.eotf != 0.f) {
-      uiRgb = renodx::color::correct::Gamma(uiRgb, false, EotfGamma());
+    if (p.uiGamma != 0.f) {
+      uiRgb = renodx::color::correct::Gamma(uiRgb, false, p.uiGamma);
     }
     CompositeUI(scene_nits, scene.a, ui.a, cb2, uiRgb * p.uiNits);
   }

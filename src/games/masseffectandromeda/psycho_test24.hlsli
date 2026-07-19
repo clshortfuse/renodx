@@ -1,5 +1,7 @@
-#ifndef RENODX_SHADERS_TONEMAP_PSYCHOV_TEST24_HLSL_
-#define RENODX_SHADERS_TONEMAP_PSYCHOV_TEST24_HLSL_
+// Game-scoped include guard: if upstream ever ships test24 in src/shaders/tonemap/psychov, its
+// RENODX_SHADERS_* guard must not collide with this local import.
+#ifndef SRC_GAMES_MASSEFFECTANDROMEDA_PSYCHO_TEST24_HLSLI_
+#define SRC_GAMES_MASSEFFECTANDROMEDA_PSYCHO_TEST24_HLSLI_
 
 #include "../../shaders/color.hlsl"
 
@@ -551,4 +553,4 @@ float3 psychotm_test24(float3 bt709_linear_input, float peak_value = 1000.f / 20
 }  // namespace tonemap
 }  // namespace renodx
 
-#endif  // RENODX_SHADERS_TONEMAP_PSYCHOV_TEST24_HLSL_
+#endif  // SRC_GAMES_MASSEFFECTANDROMEDA_PSYCHO_TEST24_HLSLI_

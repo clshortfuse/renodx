@@ -139,11 +139,10 @@ float3 ApplyScenePost(float2 uv, out float2 scene_uv) {
 float3 SampleNativeGrade(float3 color) {
   float3 pq_color = renodx::color::pq::EncodeSafe(color, 100.f);
   if (IsVanillaPlus() && injectedData.customLutTetrahedral == 1.f) {
-    // Tetrahedral takes the pre-scale/bias coordinate; it centers and reads the size (33) internally.
-    return renodx::lut::SampleTetrahedral(colorGradingTexture, pq_color, 0.f);
+    // Tetrahedral takes the pre-scale/bias coordinate and centers internally.
+    return renodx::lut::SampleTetrahedral(colorGradingTexture, pq_color, 33.f);
   }
-  pq_color = pq_color * 0.96969697f + 0.01515152f;
-  return colorGradingTexture.Sample(colorGradingSampler, pq_color).rgb;
+  return colorGradingTexture.Sample(colorGradingSampler, renodx::lut::CenterTexel(pq_color, 33.f)).rgb;
 }
 
 PSOutput main(PSInput input) {

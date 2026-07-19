@@ -1,8 +1,7 @@
 // Upscaling HDR present row (Resolution Scale < 100%): 16-tap bicubic scene fetch, shared tail.
 // Binding quirk: s1 = scene taps AND LUT, s2 = UI, no s0. cbData[0].xy = source res, .zw = texel.
 // Requires shared.h + linearize.hlsli + lilium_rcas.hlsli + present_core.hlsli + bicubic_upscale.hlsli.
-// Output gamut is runtime-selected by the game (BT.2020 / DCI-P3 / no-matrix). Every per-hash wrapper
-// over this row normalizes to the forced HDR10/BT.2020 swapchain, so they all share this body unchanged.
+// Per-gamut wrapper hashes share this body unchanged: see FinalizeToPQ in shared.h.
 
 Texture2D<float4> sceneTexture : register(t0);
 Texture2D<float4> uiTexture : register(t1);

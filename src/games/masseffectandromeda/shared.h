@@ -1,26 +1,29 @@
 #ifndef SRC_GAMES_MASSEFFECTANDROMEDA_SHARED_H_
 #define SRC_GAMES_MASSEFFECTANDROMEDA_SHARED_H_
 
+// C++/HLSL contract (host writes, shaders read at b13) plus the game-wide HLSL helpers every
+// replaced pass builds on (output-LUT linearize, EOTF emulation, present params, Vanilla+ display map).
+
 // Must be 32-bit aligned.
 struct ShaderInjectData {
   float toneMapType;       // 0 = Vanilla, 1 = Vanilla+ (faithful), 2 = Vanilla+ (Neutwo), 3 = Vanilla+ (Psycho v24)
   float toneMapPeakNits;   // display peak the roll-off pins highlights to (Vanilla+)
-  float toneMapGameNits;
-  float toneMapUINits;
-  float colorGradeExposure;
-  float colorGradeHighlights;
-  float colorGradeShadows;
-  float colorGradeContrast;
-  float colorGradeSaturation;
+  float toneMapGameNits;   // diffuse-white (paper white) nits; Vanilla pins 100
+  float toneMapUINits;     // UI/HUD white nits; Vanilla pins 100
+  float colorGradeExposure;    // pre-tonemap exposure scale (1.0 = vanilla)
+  float colorGradeHighlights;  // 1.0 = vanilla
+  float colorGradeShadows;     // 1.0 = vanilla
+  float colorGradeContrast;    // 1.0 = vanilla
+  float colorGradeSaturation;  // 1.0 = vanilla; test24 routes this through purity_scale instead
   float colorGradeHighlightSaturation;  // 1.0 = vanilla; >1 boosts highlight color, <1 blows out to white
-  float colorGradeFlare;
+  float colorGradeFlare;     // flare/glare compensation (0 = vanilla/off)
   float colorGradeHueShift;  // 0 = keep BioWare hue, >0 = blend highlights toward per-channel hue
   float gammaCorrection;   // 0 = Off, 1 = 2.2, 2 = BT.1886 (2.4); RenoDX per-channel gamma correction
   float fxBloom;           // additive bloom scale (1.0 = vanilla)
   float fxVignette;             // vignette strength (1.0 = vanilla, 0 = off)
   float fxChromaticAberration;  // chromatic aberration strength (1.0 = vanilla, 0 = off)
   float fxFilmGrain;       // perceptual film grain strength (0 = off)
-  float fxFilmGrainType;   // 0 = Vanilla (game grain), 1 = Luminance, 2 = Per-Channel (perceptual)
+  float fxFilmGrainType;   // 0 = Vanilla (game grain), 1 = Monochrome (luminance), 2 = Colored (per-channel)
   float fxHDRVideos;       // 0 = Off, 1 = BT.2446a (FMV inverse tone map)
   float fxVideoActive;     // runtime flag: an FMV decode pass ran this frame
   float fxSharpness;       // Lilium HDR RCAS strength (0 = off), Vanilla+ only
@@ -35,7 +38,7 @@ cbuffer shader_injection : register(b13) {
 }
 
 #define TONE_MAP_VANILLA 0.f
-#define TONE_MAP_VANILLA_PLUS 1.f         // faithful log2 highlight roll-off (identity below the shoulder)
+#define TONE_MAP_VANILLA_PLUS 1.f         // faithful log2 highlight roll-off; the fall-through mode (never compared)
 #define TONE_MAP_VANILLA_PLUS_NEUTWO 2.f  // knee-free Neutwo highlight curve (continuous, no identity segment)
 #define TONE_MAP_VANILLA_PLUS_TEST24 3.f  // PsychoV test24 perceptual observer-model curve (experimental)
 
@@ -63,20 +66,20 @@ float3 SampleOutputLut(Texture1D<float4> lut_tex, SamplerState lut_smp, float3 c
       lut_tex.SampleLevel(lut_smp, color.b, 0.f).r);
 }
 
-// SDR EOTF emulation = RenoDX per-channel gamma correction. 0 = Off, 1 = 2.2, 2 = BT.1886 (2.4).
-// GammaSafe is sign-preserving (color grading can push a channel negative; non-Safe Gamma -> NaN).
-float3 ApplyEotfEmulation(float3 color) {
-  if (injectedData.gammaCorrection == renodx::draw::GAMMA_CORRECTION_GAMMA_2_2) {
-    color = renodx::color::correct::GammaSafe(color, false, 2.2f);
-  } else if (injectedData.gammaCorrection == renodx::draw::GAMMA_CORRECTION_GAMMA_2_4) {
-    color = renodx::color::correct::GammaSafe(color, false, 2.4f);
-  }
-  return color;
+// Selected SDR EOTF gamma: 0 = Off, else 2.2 / 2.4 (BT.1886). Single source for the gamma-mode
+// dispatch — the scene emulation, the test24 peak fold, and the present UI re-gamma all read it.
+float EotfGamma() {
+  if (injectedData.gammaCorrection == renodx::draw::GAMMA_CORRECTION_GAMMA_2_4) return 2.4f;
+  if (injectedData.gammaCorrection == renodx::draw::GAMMA_CORRECTION_GAMMA_2_2) return 2.2f;
+  return 0.f;
 }
 
-// Selected EOTF gamma (2.4 = BT.1886, else 2.2) so the present tails re-interpret the UI to match.
-float EotfGamma() {
-  return injectedData.gammaCorrection == renodx::draw::GAMMA_CORRECTION_GAMMA_2_4 ? 2.4f : 2.2f;
+// SDR EOTF emulation = RenoDX per-channel gamma correction with the selected gamma.
+// GammaSafe is sign-preserving (color grading can push a channel negative; non-Safe Gamma -> NaN).
+float3 ApplyEotfEmulation(float3 color) {
+  const float gamma = EotfGamma();
+  if (gamma != 0.f) color = renodx::color::correct::GammaSafe(color, false, gamma);
+  return color;
 }
 
 // Per-present tone-map params, shared by both present tails. Vanilla pins diffuse/UI to 100 nits
@@ -85,19 +88,22 @@ struct PresentParams {
   bool full;
   float paperWhite;
   float uiNits;
-  float eotf;
+  float uiGamma;  // 0 = sRGB decode (Vanilla / EOTF off), else re-interpret the UI with this gamma
 };
 PresentParams GetPresentParams() {
   PresentParams p;
   p.full = IsVanillaPlus();
   p.paperWhite = p.full ? max(injectedData.toneMapGameNits, 1.f) : 100.f;
   p.uiNits = p.full ? max(injectedData.toneMapUINits, 1.f) : 100.f;
-  p.eotf = p.full ? injectedData.gammaCorrection : 0.f;
+  p.uiGamma = p.full ? EotfGamma() : 0.f;
   return p;
 }
 
 // Final HDR10 output, shared by both present tails: BT.709 nits -> BT.2020 -> ST.2084 PQ. Caller
 // supplies the alpha.
+// The game runtime-selects an output gamut per display (BT.2020 / DCI-P3 / no-matrix — separate
+// hashes); every variant lands here on the forced HDR10/BT.2020 swapchain, which is why the
+// per-gamut wrappers share their row bodies unchanged.
 float3 FinalizeToPQ(float3 scene_nits) {
   return renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(scene_nits), 1.f);
 }
@@ -116,6 +122,14 @@ void CompositeUI(inout float3 scene_nits, inout float scene_a, float ui_alpha_sr
 // faithful luminance roll-off + Hue Shift), each pinning the peak to Peak Brightness. exposure is 1.0
 // for the main pass (applied pre-tonemap) / the slider for loading; paperWhite = diffuse-white nits.
 float3 ApplyVanillaPlus(float3 color, float exposure, float paperWhite) {
+  // test24 routes the Saturation slider through the tonemapper's purity_scale instead of the
+  // pre-grade; every other mode saturates in the grade as before. One decision, two consumers.
+  const bool satViaPurity = injectedData.toneMapType == TONE_MAP_VANILLA_PLUS_TEST24;
+
+  // Highlight roll-off pins the peak to Peak Brightness so paper white only moves diffuse/mids
+  // (not the peak). Requires the in-game Peak Brightness at MAX. peak = display HDR headroom ratio.
+  const float peak = max(injectedData.toneMapPeakNits / paperWhite, 1.f + 1e-3f);
+
   // User color grading (neutral sliders early-return to a no-op).
   renodx::color::grade::Config cg = renodx::color::grade::config::Create(
       exposure,
@@ -123,9 +137,7 @@ float3 ApplyVanillaPlus(float3 color, float exposure, float paperWhite) {
       injectedData.colorGradeShadows,
       injectedData.colorGradeContrast,
       injectedData.colorGradeFlare,
-      // test24 routes saturation through the tonemapper's purity_scale instead, so keep it out of the
-      // pre-grade for that mode; every other mode saturates here as before.
-      (injectedData.toneMapType == TONE_MAP_VANILLA_PLUS_TEST24) ? 1.f : injectedData.colorGradeSaturation,
+      satViaPurity ? 1.f : injectedData.colorGradeSaturation,
       0.f,  // dechroma
       0.f,  // hue_correction_strength
       float3(0.f, 0.f, 0.f),
@@ -139,12 +151,9 @@ float3 ApplyVanillaPlus(float3 color, float exposure, float paperWhite) {
   // H/S/C are graded upstream (passed neutral); saturation rides purity_scale; gamut compresses to
   // the BT.2020 hull (HDR10).
   if (injectedData.toneMapType == TONE_MAP_VANILLA_PLUS_TEST24) {
-    float peakT24 = max(injectedData.toneMapPeakNits / paperWhite, 1.f + 1e-3f);
-    if (injectedData.gammaCorrection == renodx::draw::GAMMA_CORRECTION_GAMMA_2_2) {
-      peakT24 = renodx::color::correct::GammaSafe(peakT24, true, 2.2f);
-    } else if (injectedData.gammaCorrection == renodx::draw::GAMMA_CORRECTION_GAMMA_2_4) {
-      peakT24 = renodx::color::correct::GammaSafe(peakT24, true, 2.4f);
-    }
+    float peakT24 = peak;
+    const float gamma = EotfGamma();
+    if (gamma != 0.f) peakT24 = renodx::color::correct::GammaSafe(peakT24, true, gamma);
     float3 t24 = renodx::tonemap::psychov::psychotm_test24(
         color,        // BT.709 linear, graded (no EOTF on the input)
         peakT24,      // display headroom ratio, inverse-gamma'd
@@ -170,19 +179,15 @@ float3 ApplyVanillaPlus(float3 color, float exposure, float paperWhite) {
   // SDR EOTF emulation (selected gamma).
   color = ApplyEotfEmulation(color);
 
-  // Highlight roll-off pins the peak to Peak Brightness so paper white only moves diffuse/mids
-  // (not the peak). Requires the in-game Peak Brightness at MAX. peak = display HDR headroom ratio.
-  const float peak = max(injectedData.toneMapPeakNits / paperWhite, 1.f + 1e-3f);
-
   if (injectedData.toneMapType == TONE_MAP_VANILLA_PLUS_NEUTWO) {
     // Neutwo (x/sqrt(x^2+p^2)) on the BT.2020 max channel: a knee-free continuous highlight curve,
     // hue-stable by construction (so no Hue Shift), asymptoting to the peak. Clipless on purpose:
     // MEA's native grade reaches ~10k nits (~80-100x diffuse white), so a fixed content-cap clip
     // would crush every value above the cap into the peak; the 2-arg form maps the whole range
-    // smoothly and never exceeds the peak (no min() needed).
-    color = renodx::color::bt709::from::BT2020(
-        renodx::tonemap::neutwo::MaxChannel(
-            renodx::color::bt2020::from::BT709(color), peak));
+    // smoothly and never exceeds the peak (no min() needed). The scale is a scalar, so it applies
+    // to the BT.709 color directly (no round-trip matrix needed).
+    color *= renodx::tonemap::neutwo::ComputeMaxChannelScale(
+        renodx::color::bt2020::from::BT709(color), peak);
     return color;
   }
 

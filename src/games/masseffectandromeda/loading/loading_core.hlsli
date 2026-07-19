@@ -39,8 +39,8 @@ float4 LoadingPresentScene(
     } else {
       // Raw unorm UI/HUD. Decode with sRGB by default, or the selected gamma (2.2 / BT.1886) when
       // SDR EOTF emulation is on.
-      const float3 uiLinear = (p.eotf != 0.f)
-          ? renodx::color::gamma::DecodeSafe(max(0.f, ui.rgb), EotfGamma())
+      const float3 uiLinear = (p.uiGamma != 0.f)
+          ? renodx::color::gamma::DecodeSafe(max(0.f, ui.rgb), p.uiGamma)
           : renodx::color::srgb::DecodeSafe(max(0.f, ui.rgb));
       uiTermNits = uiLinear * p.uiNits;
     }
