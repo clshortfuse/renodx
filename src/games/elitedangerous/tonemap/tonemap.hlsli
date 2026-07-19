@@ -296,7 +296,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
 
   float3 tonemapped;
   if (RENODX_TONE_MAP_TYPE == 1.f) {  // Vanilla+
-    untonemapped = renodx::color::bt2020::from::BT709(untonemapped);
+    untonemapped = max(0, renodx::color::bt2020::from::BT709(untonemapped));
 
     // Apply BT.2020 luminance and purity grading.
     untonemapped = ApplyLuminanceGradingBT2020(untonemapped,
@@ -310,6 +310,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
                                             RENODX_TONE_MAP_SATURATION,
                                             -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
                                             RENODX_TONE_MAP_DECHROMA);
+    untonemapped = max(untonemapped, 1e-7f);
 
     tonemapped = renodx::tonemap::neutwo::PerChannel(untonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
     tonemapped = renodx::color::bt709::from::BT2020(tonemapped);
@@ -320,8 +321,31 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
     float3 peak_lms = renodx::color::lms::from::BT2020(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
 
     // Apply anchored LMS contrast.
-    float3 graded_lms = ApplyAnchoredAdaptationContrast(untonemapped_lms, 1.78107f * RENODX_TONE_MAP_CONTRAST, current_adaptive_state_lms, desired_background_state_lms, 0.0025f + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS);
-    // float3 graded_lms = ApplyAnchoredPowerContrast(untonemapped_lms, 1.2823704 * RENODX_TONE_MAP_CONTRAST, current_adaptive_state_lms, desired_background_state_lms, 0.0025f + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS);
+    float3 graded_lms = ApplyAnchoredAdaptationContrast(untonemapped_lms,
+                                                        (1.71f) * RENODX_TONE_MAP_CONTRAST,
+                                                        current_adaptive_state_lms, desired_background_state_lms,
+                                                        0.004f + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                                        RENODX_TONE_MAP_HIGHLIGHTS,
+                                                        RENODX_TONE_MAP_SHADOWS);
+    // float3 graded_lms = ApplyAnchoredPowerContrast(untonemapped_lms, MID_GRAY_SLOPE * MID_GRAY_IN / MID_GRAY_OUT * RENODX_TONE_MAP_CONTRAST, current_adaptive_state_lms, desired_background_state_lms, 0.004f + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS);
+
+#if 0  // Apply the Yf-graded luminance to the per-channel graded color.
+    float untonemapped_yf = renodx::color::yf::from::LMS(untonemapped_lms);
+    float current_adaptive_state_yf = renodx::color::yf::from::LMS(current_adaptive_state_lms);
+    float desired_background_state_yf = renodx::color::yf::from::LMS(desired_background_state_lms);
+    float target_graded_yf = ApplyAnchoredAdaptationContrast(
+                                 untonemapped_yf.xxx,
+                                 1.71f * RENODX_TONE_MAP_CONTRAST,
+                                 current_adaptive_state_yf.xxx,
+                                 desired_background_state_yf.xxx,
+                                 0.004f + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                 RENODX_TONE_MAP_HIGHLIGHTS,
+                                 RENODX_TONE_MAP_SHADOWS)
+                                 .x;
+    graded_lms *= renodx::math::DivideSafe(target_graded_yf, renodx::color::yf::from::LMS(graded_lms), 1.f);
+#endif
+
+    graded_lms = max(graded_lms, 1e-7f);
 
     // Apply LMS luminance and purity grading.
     graded_lms = ApplyPurityGradingLMS(graded_lms,
@@ -329,18 +353,17 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
                                        -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
                                        RENODX_TONE_MAP_DECHROMA,
                                        desired_background_state_lms);
+    graded_lms = max(graded_lms, 1e-7f);
 
     // Apply Test24 peak compression with compression = 0 auto behavior.
-    float3 anchor_out = desired_background_state_lms;
-    float3 contrast_lms = graded_lms;
-    float3 compression_rolloff = ComputePeakCompressionRolloff(contrast_lms, anchor_out, peak_lms);
+    float3 compression_rolloff = ComputePeakCompressionRolloff(graded_lms, desired_background_state_lms, peak_lms);
     float3 compressed_lms = peak_lms * compression_rolloff;
 
     // Test24 authored adaptive MacLeod-Boynton hue-direction restoration.
     float to_white_progress = max(compression_rolloff.x, max(compression_rolloff.y, compression_rolloff.z));
     float3 hue_restored_lms = renodx_custom::tonemap::psychov::psycho24_ApplyManualHueDirection(
         compressed_lms,
-        contrast_lms,
+        graded_lms,
         desired_background_state_lms,
         to_white_progress);
 
@@ -359,17 +382,6 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
             renodx_custom::tonemap::psychov::psycho24_FromAdaptiveRelativeWeightedLMS(
                 display_scaled_relative_weighted,
                 desired_background_state_lms)));
-
-    // Match Test24's default-disabled post-gamut OKLab hue repair.
-    const float gamut_hue_restore = 0.f;
-    if (gamut_hue_restore != 0.f) {
-      float3 pre_gamut_bt709 = renodx::color::bt709::from::LMS(hue_restored_lms);
-      float3 hue_fixed_bt709 = renodx_custom::tonemap::psychov::psycho24_ApplyOKLabGamutHueDirection(
-          gamut_mapped_bt709,
-          pre_gamut_bt709,
-          1);
-      gamut_mapped_bt709 = lerp(gamut_mapped_bt709, hue_fixed_bt709, gamut_hue_restore);
-    }
 
     tonemapped = gamut_mapped_bt709;
   }
