@@ -1348,6 +1348,13 @@ bool OnDrawIndexed(
       ? renodx::utils::shader::GetCurrentPixelShaderHash(shader_state)
       : 0u;
 
+  if (!IsVisible(shader_injection.ui_visibility)
+      && (vertex_shader_hash == 0x1529ADE6u || pixel_shader_hash == 0x1529ADE6u
+          || vertex_shader_hash == 0xEB8D2859u || pixel_shader_hash == 0xEB8D2859u)) {
+    draw_call_vertex_count = 0;
+    return true;
+  }
+
   // Constants for ping/latency bar detection
   constexpr uint32_t PING_INDEX_COUNT = 18;
   constexpr uint32_t PING_FIRST_INDEX = 0;
@@ -1372,7 +1379,7 @@ bool OnDrawIndexed(
       is_ping_drawn = true;
     }
     draw_call_vertex_count = 0;
-    return false;
+    return !IsVisible(shader_injection.ping_text_opacity);
   }
 
   // Constants for UID text detection
