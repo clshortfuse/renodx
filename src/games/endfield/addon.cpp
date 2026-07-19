@@ -5,9 +5,13 @@
 
 #define ImTextureID ImU64
 
-#define DEBUG_LEVEL_0
+// #define DEBUG_LEVEL_0
 
+#include <algorithm>
+#include <mutex>
 #include <shared_mutex>
+#include <sstream>
+#include <unordered_map>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -16,10 +20,12 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
+#include "../../utils/bitwise.hpp"
 #include "../../utils/data.hpp"
+#include "../../utils/hash.hpp"
 #include "../../utils/random.hpp"
-#include "../../utils/resource.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/state.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
@@ -44,6 +50,112 @@ bool UsingSwapchainUtil() {
           || UsingSwapchainUpgrade());
 }
 
+void ApplySwapChainEncodingTarget(float encoding_value) {
+  const bool is_hdr10 = encoding_value == 4.f;
+  const bool is_scrgb = encoding_value == 5.f;
+
+  if (is_hdr10) {
+    renodx::mods::swapchain::target_format = reshade::api::format::r10g10b10a2_unorm;
+    renodx::mods::swapchain::target_color_space = reshade::api::color_space::hdr10_st2084;
+    renodx::mods::swapchain::use_resize_buffer = false;
+  } else if (is_scrgb) {
+    renodx::mods::swapchain::target_format = reshade::api::format::r16g16b16a16_float;
+    renodx::mods::swapchain::target_color_space = reshade::api::color_space::extended_srgb_linear;
+    renodx::mods::swapchain::use_resize_buffer = false;
+  } else {
+    renodx::mods::swapchain::target_format = reshade::api::format::r8g8b8a8_unorm;
+    renodx::mods::swapchain::target_color_space = reshade::api::color_space::srgb_nonlinear;
+    renodx::mods::swapchain::use_resize_buffer = true;
+  }
+
+  renodx::utils::device_proxy::SetTargetFormat(renodx::mods::swapchain::target_format);
+  renodx::utils::device_proxy::SetTargetColorSpace(renodx::mods::swapchain::target_color_space);
+  shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
+}
+
+// Helper to update resolution-based uniform variables in ReShade effects
+void UpdateReshadeResolutionUniforms(reshade::api::effect_runtime* runtime, uint32_t width, uint32_t height) {
+  float fwidth = static_cast<float>(width);
+  float fheight = static_cast<float>(height);
+
+  // Enumerate all uniform variables and update those with resolution-related source annotations
+  runtime->enumerate_uniform_variables(nullptr, [fwidth, fheight](reshade::api::effect_runtime* rt, reshade::api::effect_uniform_variable variable) {
+    char source[64] = {};
+    if (rt->get_annotation_string_from_uniform_variable(variable, "source", source)) {
+      // Update BUFFER_WIDTH uniform
+      if (std::strcmp(source, "bufwidth") == 0) {
+        rt->set_uniform_value_float(variable, fwidth);
+      }
+      // Update BUFFER_HEIGHT uniform
+      else if (std::strcmp(source, "bufheight") == 0) {
+        rt->set_uniform_value_float(variable, fheight);
+      }
+      // Update reciprocal width (1.0 / BUFFER_WIDTH)
+      else if (std::strcmp(source, "rcpwidth") == 0 || std::strcmp(source, "bufwidth_rcp") == 0) {
+        rt->set_uniform_value_float(variable, 1.0f / fwidth);
+      }
+      // Update reciprocal height (1.0 / BUFFER_HEIGHT)
+      else if (std::strcmp(source, "rcpheight") == 0 || std::strcmp(source, "bufheight_rcp") == 0) {
+        rt->set_uniform_value_float(variable, 1.0f / fheight);
+      }
+      // Update BUFFER_RCP_WIDTH (alternative naming convention)
+      else if (std::strcmp(source, "buffer_rcp_width") == 0) {
+        rt->set_uniform_value_float(variable, 1.0f / fwidth);
+      }
+      // Update BUFFER_RCP_HEIGHT (alternative naming convention)
+      else if (std::strcmp(source, "buffer_rcp_height") == 0) {
+        rt->set_uniform_value_float(variable, 1.0f / fheight);
+      }
+      // Update pixel size (float2 with 1/width, 1/height)
+      else if (std::strcmp(source, "pixelsize") == 0) {
+        float pixel_size[2] = { 1.0f / fwidth, 1.0f / fheight };
+        rt->set_uniform_value_float(variable, pixel_size, 2);
+      }
+      // Update screen size (float2 with width, height)
+      else if (std::strcmp(source, "screensize") == 0) {
+        float screen_size[2] = { fwidth, fheight };
+        rt->set_uniform_value_float(variable, screen_size, 2);
+      }
+    }
+  });
+}
+
+// Track the last known RTV resolution to detect resolution changes
+static uint32_t last_rtv_width = 0;
+static uint32_t last_rtv_height = 0;
+
+// Flag to track if we're currently executing our bypass render
+// This prevents ReShade from rendering during normal present while allowing our bypass to work
+static bool bypass_render_active = false;
+
+// Deferred Tech Test preset application (avoids crash from UpdateSetting inside on_change_value)
+static int pending_tech_test_preset = -1;  // -1 = none, 0 = restore defaults, 1 = apply tech test
+static float prev_tech_test_look = -1.f;   // impossible initial value forces first-frame detection
+
+// Callback to disable effects during normal present when bypass is enabled
+// This prevents double-rendering (once via bypass, once via normal present)
+void OnReshadeBeginEffects(reshade::api::effect_runtime* runtime,
+                           reshade::api::command_list* cmd_list,
+                           reshade::api::resource_view rtv,
+                           reshade::api::resource_view rtv_srgb) {
+  // Only intercept if bypass is enabled AND we're not currently in bypass render
+  // When bypass is disabled (current_render_reshade_before_ui == 0), let ReShade render normally
+  if (current_render_reshade_before_ui != 0.f && !bypass_render_active) {
+    runtime->set_effects_state(false);
+  }
+}
+
+// Callback to re-enable effects after present (keeps effects available for bypass)
+void OnReshadeFinishEffects(reshade::api::effect_runtime* runtime,
+                            reshade::api::command_list* cmd_list,
+                            reshade::api::resource_view rtv,
+                            reshade::api::resource_view rtv_srgb) {
+  // Only re-enable if bypass is enabled AND we disabled them
+  if (current_render_reshade_before_ui != 0.f && !bypass_render_active) {
+    runtime->set_effects_state(true);
+  }
+}
+
 bool ExecuteReshadeEffects(reshade::api::command_list* cmd_list) {
   if (current_render_reshade_before_ui == 0.f) return true;
   if (!UsingSwapchainUtil()) return true;
@@ -52,23 +164,402 @@ bool ExecuteReshadeEffects(reshade::api::command_list* cmd_list) {
   if (cmd_list_data == nullptr) return true;
   if (cmd_list_data->current_render_targets.empty()) return true;
 
+  // Get the ORIGINAL RTV from deferred lighting - do NOT use the clone here
+  // The clone is at swapchain resolution (e.g., 3840x2160) but we want to render
+  // ReShade effects at the pre-upscale resolution
   auto rtv0 = cmd_list_data->current_render_targets[0];
   if (rtv0.handle == 0) return true;
-  if (UsingSwapchainUpgrade()) {
-    auto* info = renodx::utils::resource::GetResourceViewInfo(rtv0);
-    if (info->clone.handle != 0u) {
-      rtv0 = info->clone;
-    }
-  }
-
-  auto* data = renodx::utils::data::Get<renodx::utils::swapchain::DeviceData>(cmd_list->get_device());
+  auto* device = cmd_list->get_device();
+  auto* data = renodx::utils::data::Get<renodx::utils::swapchain::DeviceData>(device);
   if (data == nullptr) return true;
+
+  // Get the render target resolution
+  auto resource = device->get_resource_from_view(rtv0);
+  auto resource_desc = device->get_resource_desc(resource);
+  uint32_t rtv_width = resource_desc.texture.width;
+  uint32_t rtv_height = resource_desc.texture.height;
+
   const std::shared_lock lock(data->mutex);
   for (auto* runtime : data->effect_runtimes) {
+    if (rtv_width != last_rtv_width || rtv_height != last_rtv_height) {
+#ifdef DEBUG_LEVEL_0
+      uint32_t swapchain_width = 0, swapchain_height = 0;
+      runtime->get_screenshot_width_and_height(&swapchain_width, &swapchain_height);
+
+      std::stringstream ss;
+      ss << "[Endfield] ExecuteReshadeEffects: Rendering at RTV=" << rtv_width << "x" << rtv_height
+         << " (Swapchain=" << swapchain_width << "x" << swapchain_height << ")";
+      reshade::log::message(reshade::log::level::info, ss.str().c_str());
+#endif
+
+      last_rtv_width = rtv_width;
+      last_rtv_height = rtv_height;
+    }
+
+    UpdateReshadeResolutionUniforms(runtime, rtv_width, rtv_height);
+    bypass_render_active = true;
+    runtime->set_effects_state(true);
     runtime->render_effects(cmd_list, rtv0, rtv0);
+    bypass_render_active = false;
   }
 
   return true;
+}
+
+// Hotkey state tracking
+bool ui_toggle_key_was_pressed = false;
+int ui_toggle_hotkey = 0;
+bool hotkey_input_active = false;
+
+// Heuristic tracking for UID UI
+bool is_ping_input_candidate = false;
+bool is_ping_drawn = false;
+bool is_uid_input_candidate = false;
+uint32_t draw_call_vertex_count = 0;  // Track vertex count from draw calls (not draw_indexed)
+
+struct __declspec(uuid("019bf1c8-074a-7e13-b353-54ce3ceec3de")) VfxCommandListData {
+  reshade::api::resource_view pixel_srv_t0 = {0u};
+};
+
+struct VfxBoostMatch {
+  uint32_t shader_crc;
+  uint32_t texture_crc;
+};
+
+constexpr VfxBoostMatch vfx_boost_matches[] = {
+    {0x97BF4335u, 0x512923BCu},
+    {0x4D4DDEBEu, 0xFA6BD53Au},
+    {0x50898C70u, 0x1A45F4EBu},
+    {0x1BF3323Du, 0xF38B0BAAu},
+};
+
+std::shared_mutex vfx_handle_mutex;
+std::unordered_map<uint64_t, uint32_t> vfx_handle_shaders;
+
+void OnInitVfxResource(
+    reshade::api::device* /*device*/,
+    const reshade::api::resource_desc& desc,
+    const reshade::api::subresource_data* initial_data,
+    reshade::api::resource_usage /*initial_state*/,
+    reshade::api::resource resource) {
+  if (resource.handle == 0u
+      || initial_data == nullptr
+      || initial_data->data == nullptr
+      || desc.type != reshade::api::resource_type::texture_2d
+      || desc.texture.format != reshade::api::format::bc7_unorm_srgb
+      || desc.texture.width != 256u
+      || desc.texture.height != 256u) {
+    return;
+  }
+
+  const auto source_size = initial_data->slice_pitch != 0u
+                               ? initial_data->slice_pitch
+                               : reshade::api::format_slice_pitch(
+                                     desc.texture.format,
+                                     initial_data->row_pitch != 0u
+                                         ? initial_data->row_pitch
+                                         : reshade::api::format_row_pitch(desc.texture.format, desc.texture.width),
+                                     desc.texture.height);
+  if (source_size != 65536u) return;
+
+  const auto texture_crc = renodx::utils::hash::ComputeCRC32(
+      static_cast<const uint8_t*>(initial_data->data), source_size);
+  const auto match = std::ranges::find(vfx_boost_matches, texture_crc, &VfxBoostMatch::texture_crc);
+  if (match == std::end(vfx_boost_matches)) return;
+
+  const std::lock_guard lock(vfx_handle_mutex);
+  vfx_handle_shaders[resource.handle] = match->shader_crc;
+}
+
+void OnDestroyVfxResource(reshade::api::device* /*device*/, reshade::api::resource resource) {
+  const std::lock_guard lock(vfx_handle_mutex);
+  vfx_handle_shaders.erase(resource.handle);
+}
+
+void OnInitVfxResourceView(
+    reshade::api::device* /*device*/,
+    reshade::api::resource resource,
+    reshade::api::resource_usage /*usage*/,
+    const reshade::api::resource_view_desc& /*desc*/,
+    reshade::api::resource_view view) {
+  const std::lock_guard lock(vfx_handle_mutex);
+  const auto match = vfx_handle_shaders.find(resource.handle);
+  if (match != vfx_handle_shaders.end()) {
+    vfx_handle_shaders[view.handle] = match->second;
+  }
+}
+
+void OnDestroyVfxResourceView(reshade::api::device* /*device*/, reshade::api::resource_view view) {
+  const std::lock_guard lock(vfx_handle_mutex);
+  vfx_handle_shaders.erase(view.handle);
+}
+
+void OnInitVfxCommandList(reshade::api::command_list* cmd_list) {
+  renodx::utils::data::Create<VfxCommandListData>(cmd_list);
+}
+
+void OnDestroyVfxCommandList(reshade::api::command_list* cmd_list) {
+  renodx::utils::data::Delete<VfxCommandListData>(cmd_list);
+}
+
+void OnResetVfxCommandList(reshade::api::command_list* cmd_list) {
+  auto* data = renodx::utils::data::Get<VfxCommandListData>(cmd_list);
+  if (data != nullptr) {
+    data->pixel_srv_t0 = {0u};
+  }
+}
+
+void OnPushVfxDescriptors(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout /*layout*/,
+    uint32_t layout_param,
+    const reshade::api::descriptor_table_update& update) {
+  if (layout_param != 1u
+      || update.type != reshade::api::descriptor_type::shader_resource_view
+      || update.binding != 0u
+      || update.count == 0u
+      || !renodx::utils::bitwise::HasFlag(stages, reshade::api::shader_stage::pixel)) {
+    return;
+  }
+
+  auto* data = renodx::utils::data::Get<VfxCommandListData>(cmd_list);
+  if (data == nullptr) return;
+  data->pixel_srv_t0 = static_cast<const reshade::api::resource_view*>(update.descriptors)[0];
+}
+
+bool IsVisible(float value) {
+  return value >= 0.5f;
+}
+
+reshade::api::rect IntersectRects(const reshade::api::rect& lhs, const reshade::api::rect& rhs) {
+  return {
+      .left = std::max(lhs.left, rhs.left),
+      .top = std::max(lhs.top, rhs.top),
+      .right = std::min(lhs.right, rhs.right),
+      .bottom = std::min(lhs.bottom, rhs.bottom),
+  };
+}
+
+bool DrawTextRegion(
+    reshade::api::command_list* cmd_list,
+    uint32_t index_count,
+    uint32_t instance_count,
+    uint32_t first_index,
+    int32_t vertex_offset,
+    uint32_t first_instance,
+    bool keep_latency_text) {
+  auto* current_state = renodx::utils::state::GetCurrentState(cmd_list);
+  if (current_state == nullptr || current_state->viewports.empty()) return false;
+
+  const auto previous_state = *current_state;
+  const auto& viewport = current_state->viewports[0];
+  const int32_t left = static_cast<int32_t>(viewport.x);
+  const int32_t top = static_cast<int32_t>(viewport.y);
+  const int32_t right = static_cast<int32_t>(viewport.x + viewport.width);
+  const int32_t bottom = static_cast<int32_t>(viewport.y + viewport.height);
+  if (right <= left || bottom <= top) return false;
+
+  constexpr float kTextSplitFromHeight = 192.f / 2160.f;
+  const int32_t split_x = left + static_cast<int32_t>((bottom - top) * kTextSplitFromHeight + 0.5f);
+  reshade::api::rect clip_rect = keep_latency_text
+      ? reshade::api::rect{.left = left, .top = top, .right = split_x, .bottom = bottom}
+      : reshade::api::rect{.left = split_x, .top = top, .right = right, .bottom = bottom};
+
+  if (!current_state->scissor_rects.empty()) {
+    clip_rect = IntersectRects(clip_rect, current_state->scissor_rects[0]);
+  }
+  if (clip_rect.right <= clip_rect.left || clip_rect.bottom <= clip_rect.top) return true;
+
+  cmd_list->bind_scissor_rects(0, 1, &clip_rect);
+  cmd_list->draw_indexed(index_count, instance_count, first_index, vertex_offset, first_instance);
+  previous_state.Apply(cmd_list);
+  return true;
+}
+
+// on_draw callback for ping/latency bar shader (0xF1B0E28A)
+bool OnPingDraw(reshade::api::command_list* cmd_list) {
+  if (is_ping_input_candidate) {
+    is_ping_drawn = true;
+  } else {
+    is_ping_drawn = false;
+  }
+  return true;
+}
+
+bool OnUIDDraw(reshade::api::command_list* cmd_list) {
+  if (is_uid_input_candidate) {
+    if (!IsVisible(shader_injection.status_text_opacity) &&
+        !IsVisible(shader_injection.latency_text_opacity)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool OnUiVisibilityDraw(reshade::api::command_list* cmd_list) {
+  return shader_injection.ui_visibility >= 0.5f;
+}
+
+bool OnUidOrUiVisibilityDraw(reshade::api::command_list* cmd_list) {
+  if (shader_injection.ui_visibility < 0.5f) return false;
+  return OnUIDDraw(cmd_list);
+}
+
+bool KeepOriginalShader(reshade::api::command_list* cmd_list) {
+  return false;
+}
+
+void RestoreVFXBoostShader(
+    reshade::api::command_list* cmd_list,
+    renodx::utils::shader::CommandListData* shader_state) {
+  if (shader_state == nullptr) return;
+
+  auto* pixel_state = renodx::utils::shader::GetCurrentPixelState(shader_state);
+  if (pixel_state->pipeline.handle == 0u) return;
+  cmd_list->bind_pipeline(pixel_state->applied_stage, pixel_state->pipeline);
+}
+
+bool ReplaceVFXBoostShader(reshade::api::command_list* cmd_list) {
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  if (shader_state == nullptr) return false;
+  if (shader_injection.perchannelblowout < 0.5f) {
+    RestoreVFXBoostShader(cmd_list, shader_state);
+    return false;
+  }
+
+  auto* data = renodx::utils::data::Get<VfxCommandListData>(cmd_list);
+  if (data == nullptr || data->pixel_srv_t0.handle == 0u) {
+    RestoreVFXBoostShader(cmd_list, shader_state);
+    return false;
+  }
+
+  const auto shader_crc = renodx::utils::shader::GetCurrentPixelShaderHash(shader_state);
+  const std::shared_lock lock(vfx_handle_mutex);
+  const auto match = vfx_handle_shaders.find(data->pixel_srv_t0.handle);
+  const bool should_replace = match != vfx_handle_shaders.end() && match->second == shader_crc;
+  if (!should_replace) {
+    RestoreVFXBoostShader(cmd_list, shader_state);
+  }
+  return should_replace;
+}
+
+bool ReplaceImprovedGTAOShader(reshade::api::command_list* cmd_list) {
+  return shader_injection.improved_gtao >= 0.5f
+      || shader_injection.disable_game_ao >= 0.5f;
+}
+
+bool ReplaceDisableGTAOShader(reshade::api::command_list* cmd_list) {
+  return shader_injection.disable_game_ao >= 0.5f;
+}
+
+void RegisterUiVisibilityBypassShader(uint32_t crc) {
+  auto it = custom_shaders.find(crc);
+  if (it == custom_shaders.end()) {
+    renodx::mods::shader::CustomShader cs{};
+    cs.crc32 = crc;
+    cs.on_draw = OnUiVisibilityDraw;
+    cs.on_replace = KeepOriginalShader;
+    custom_shaders.emplace(crc, std::move(cs));
+    return;
+  }
+
+  it->second.on_draw = OnUiVisibilityDraw;
+  it->second.on_replace = KeepOriginalShader;
+}
+
+void RegisterUidBypassShader(uint32_t crc) {
+  auto it = custom_shaders.find(crc);
+  if (it == custom_shaders.end()) {
+    renodx::mods::shader::CustomShader cs{};
+    cs.crc32 = crc;
+    cs.on_draw = OnUidOrUiVisibilityDraw;
+    cs.on_replace = KeepOriginalShader;
+    custom_shaders.emplace(crc, std::move(cs));
+    return;
+  }
+
+  it->second.on_draw = OnUidOrUiVisibilityDraw;
+  it->second.on_replace = KeepOriginalShader;
+}
+
+
+// Helper function to get key name from virtual key code
+std::string GetKeyName(int keycode) {
+  if (keycode == 0 || keycode >= 256) return "";
+
+  static const char* keyboard_keys[256] = {
+    "", "Left Mouse", "Right Mouse", "Cancel", "Middle Mouse", "X1 Mouse", "X2 Mouse", "", "Backspace", "Tab", "", "", "Clear", "Enter", "", "",
+    "Shift", "Control", "Alt", "Pause", "Caps Lock", "", "", "", "", "", "", "Escape", "", "", "", "",
+    "Space", "Page Up", "Page Down", "End", "Home", "Left Arrow", "Up Arrow", "Right Arrow", "Down Arrow", "Select", "", "", "Print Screen", "Insert", "Delete", "Help",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "", "", "", "", "", "",
+    "", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Left Windows", "Right Windows", "Apps", "", "Sleep",
+    "Numpad 0", "Numpad 1", "Numpad 2", "Numpad 3", "Numpad 4", "Numpad 5", "Numpad 6", "Numpad 7", "Numpad 8", "Numpad 9", "Numpad *", "Numpad +", "", "Numpad -", "Numpad Decimal", "Numpad /",
+    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16",
+    "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24", "", "", "", "", "", "", "", "",
+    "Num Lock", "Scroll Lock", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "Left Shift", "Right Shift", "Left Control", "Right Control", "Left Menu", "Right Menu", "Browser Back", "Browser Forward", "Browser Refresh", "Browser Stop", "Browser Search", "Browser Favorites", "Browser Home", "Volume Mute", "Volume Down", "Volume Up",
+    "Next Track", "Previous Track", "Media Stop", "Media Play/Pause", "Mail", "Media Select", "Launch App 1", "Launch App 2", "", "", "OEM ;", "OEM +", "OEM ,", "OEM -", "OEM .", "OEM /",
+    "OEM ~", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "", "", "", "", "", "OEM [", "OEM \\", "OEM ]", "OEM '", "OEM 8",
+    "", "", "OEM <", "", "", "", "", "", "", "", "", "", "", "", "", "",
+    "", "", "", "", "", "", "Attn", "CrSel", "ExSel", "Erase EOF", "Play", "Zoom", "", "PA1", "OEM Clear", ""
+  };
+
+  return keyboard_keys[keycode];
+}
+
+int GetLastKeyPressedImGui() {
+
+  struct KeyMapping {
+    ImGuiKey imgui_key;
+    int vk_code;
+  };
+
+  static const KeyMapping kKeyMappings[] = {
+    // Function keys
+    {ImGuiKey_F1, VK_F1}, {ImGuiKey_F2, VK_F2}, {ImGuiKey_F3, VK_F3}, {ImGuiKey_F4, VK_F4},
+    {ImGuiKey_F5, VK_F5}, {ImGuiKey_F6, VK_F6}, {ImGuiKey_F7, VK_F7}, {ImGuiKey_F8, VK_F8},
+    {ImGuiKey_F9, VK_F9}, {ImGuiKey_F10, VK_F10}, {ImGuiKey_F11, VK_F11}, {ImGuiKey_F12, VK_F12},
+    // Navigation keys
+    {ImGuiKey_Insert, VK_INSERT}, {ImGuiKey_Delete, VK_DELETE}, {ImGuiKey_Home, VK_HOME}, {ImGuiKey_End, VK_END},
+    {ImGuiKey_PageUp, VK_PRIOR}, {ImGuiKey_PageDown, VK_NEXT},
+    // Arrow keys
+    {ImGuiKey_LeftArrow, VK_LEFT}, {ImGuiKey_RightArrow, VK_RIGHT}, {ImGuiKey_UpArrow, VK_UP}, {ImGuiKey_DownArrow, VK_DOWN},
+    // Special keys
+    {ImGuiKey_Backspace, VK_BACK}, {ImGuiKey_Space, VK_SPACE}, {ImGuiKey_Enter, VK_RETURN},
+    {ImGuiKey_Escape, VK_ESCAPE}, {ImGuiKey_Tab, VK_TAB},
+    {ImGuiKey_Pause, VK_PAUSE}, {ImGuiKey_ScrollLock, VK_SCROLL}, {ImGuiKey_PrintScreen, VK_SNAPSHOT},
+    // Numpad
+    {ImGuiKey_Keypad0, VK_NUMPAD0}, {ImGuiKey_Keypad1, VK_NUMPAD1}, {ImGuiKey_Keypad2, VK_NUMPAD2},
+    {ImGuiKey_Keypad3, VK_NUMPAD3}, {ImGuiKey_Keypad4, VK_NUMPAD4}, {ImGuiKey_Keypad5, VK_NUMPAD5},
+    {ImGuiKey_Keypad6, VK_NUMPAD6}, {ImGuiKey_Keypad7, VK_NUMPAD7}, {ImGuiKey_Keypad8, VK_NUMPAD8},
+    {ImGuiKey_Keypad9, VK_NUMPAD9}, {ImGuiKey_KeypadDecimal, VK_DECIMAL},
+    {ImGuiKey_KeypadDivide, VK_DIVIDE}, {ImGuiKey_KeypadMultiply, VK_MULTIPLY},
+    {ImGuiKey_KeypadSubtract, VK_SUBTRACT}, {ImGuiKey_KeypadAdd, VK_ADD}, {ImGuiKey_KeypadEnter, VK_RETURN},
+    // Letters
+    {ImGuiKey_A, 'A'}, {ImGuiKey_B, 'B'}, {ImGuiKey_C, 'C'}, {ImGuiKey_D, 'D'}, {ImGuiKey_E, 'E'},
+    {ImGuiKey_F, 'F'}, {ImGuiKey_G, 'G'}, {ImGuiKey_H, 'H'}, {ImGuiKey_I, 'I'}, {ImGuiKey_J, 'J'},
+    {ImGuiKey_K, 'K'}, {ImGuiKey_L, 'L'}, {ImGuiKey_M, 'M'}, {ImGuiKey_N, 'N'}, {ImGuiKey_O, 'O'},
+    {ImGuiKey_P, 'P'}, {ImGuiKey_Q, 'Q'}, {ImGuiKey_R, 'R'}, {ImGuiKey_S, 'S'}, {ImGuiKey_T, 'T'},
+    {ImGuiKey_U, 'U'}, {ImGuiKey_V, 'V'}, {ImGuiKey_W, 'W'}, {ImGuiKey_X, 'X'}, {ImGuiKey_Y, 'Y'}, {ImGuiKey_Z, 'Z'},
+    // Numbers
+    {ImGuiKey_0, '0'}, {ImGuiKey_1, '1'}, {ImGuiKey_2, '2'}, {ImGuiKey_3, '3'}, {ImGuiKey_4, '4'},
+    {ImGuiKey_5, '5'}, {ImGuiKey_6, '6'}, {ImGuiKey_7, '7'}, {ImGuiKey_8, '8'}, {ImGuiKey_9, '9'},
+    // Punctuation
+    {ImGuiKey_GraveAccent, VK_OEM_3}, {ImGuiKey_Minus, VK_OEM_MINUS}, {ImGuiKey_Equal, VK_OEM_PLUS},
+    {ImGuiKey_LeftBracket, VK_OEM_4}, {ImGuiKey_RightBracket, VK_OEM_6}, {ImGuiKey_Backslash, VK_OEM_5},
+    {ImGuiKey_Semicolon, VK_OEM_1}, {ImGuiKey_Apostrophe, VK_OEM_7},
+    {ImGuiKey_Comma, VK_OEM_COMMA}, {ImGuiKey_Period, VK_OEM_PERIOD}, {ImGuiKey_Slash, VK_OEM_2},
+  };
+
+  for (const auto& mapping : kKeyMappings) {
+    if (ImGui::IsKeyPressed(mapping.imgui_key, false)) {
+      return mapping.vk_code;
+    }
+  }
+  return 0;
 }
 
 renodx::utils::settings::Settings settings = {
@@ -90,7 +581,7 @@ renodx::utils::settings::Settings settings = {
         .can_reset = false,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
-        .tooltip = "Sets the tone mapper type",
+        .tooltip = "Sets the tone mapper type. True Vanilla requires going back to the LOGIN MENU for all the changes to have an effect.",
         .labels = {"Vanilla", "RenoDRT"},
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -203,33 +694,30 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Hue retention strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return false;},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueShift",
         .binding = &shader_injection.tone_map_hue_shift,
-        .default_value = 100.f,
+        .default_value = 85.f,
         .label = "Hue Shift",
         .section = "Tone Mapping",
         .tooltip = "Hue-shift emulation strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPerChannelBlowout",
         .binding = &shader_injection.tone_map_blowout,
-        .default_value = 50.f,
+        .default_value = 75.f,
         .label = "Per Channel Blowout",
         .section = "Tone Mapping",
         .tooltip = "Per Channel Blowout strength.",
         .min = 0.f,
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -360,14 +848,24 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Toggle UID text visibility",
         .labels = {"Hidden", "Visible"},
     },
-        new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
+        .key = "UIOpacityLatencyText",
+        .binding = &shader_injection.latency_text_opacity,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Latency Text",
+        .section = "User Interface & Video",
+        .tooltip = "Toggle latency text visibility",
+        .labels = {"Hidden", "Visible"},
+    },
+    new renodx::utils::settings::Setting{
         .key = "UIOpacityPingText",
         .binding = &shader_injection.ping_text_opacity,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 0.f,
-        .label = "Ping Text",
+        .label = "Latency Bar",
         .section = "User Interface & Video",
-        .tooltip = "Toggle ping text visibility",
+        .tooltip = "Toggle latency bar visibility",
         .labels = {"Hidden", "Visible"},
     },
     new renodx::utils::settings::Setting{
@@ -377,8 +875,70 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "UI Visibility",
         .section = "User Interface & Video",
-        .tooltip = "Toggle UI visibility for screenshots",
+        .tooltip = "Toggle UI visibility for screenshots (use hotkey for quick toggle)",
         .labels = {"Hidden", "Visible"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "UIVisibilityHotkey",
+        .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
+        .default_value = 0.f,
+        .label = "UI Toggle Hotkey",
+        .section = "User Interface & Video",
+        .tooltip = "Click in the field and press any key to set the hotkey, or press Backspace/Delete to clear",
+        .on_draw = []() {
+          static bool key_was_pressed = false;
+          bool changed = false;
+
+          // Get current key name for display
+          std::string key_name = ui_toggle_hotkey != 0 ? GetKeyName(ui_toggle_hotkey) : "";
+          char buf[64] = {0};
+          if (!key_name.empty()) {
+            size_t copy_len = (key_name.size() < sizeof(buf) - 1) ? key_name.size() : sizeof(buf) - 1;
+            memcpy(buf, key_name.c_str(), copy_len);
+          }
+
+          // Create the input text widget
+          ImGui::InputTextWithHint(
+              "UI Toggle Hotkey",
+              "Click to set keyboard shortcut",
+              buf,
+              sizeof(buf),
+              ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_NoUndoRedo | ImGuiInputTextFlags_NoHorizontalScroll
+          );
+
+          // Check if widget is active and capture key presses
+          if (ImGui::IsItemActive()) {
+            hotkey_input_active = true;
+            int key_pressed = GetLastKeyPressedImGui();
+
+            if (key_pressed != 0 && !key_was_pressed) {
+              if (key_pressed == VK_BACK || key_pressed == VK_DELETE) {
+                ui_toggle_hotkey = 0;
+                changed = true;
+              } else if (key_pressed != VK_ESCAPE) {
+                ui_toggle_hotkey = key_pressed;
+                changed = true;
+              }
+
+              if (changed) {
+                reshade::set_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "UIVisibilityHotkey", ui_toggle_hotkey);
+              }
+              key_was_pressed = true;
+            } else if (key_pressed == 0) {
+              key_was_pressed = false;
+            }
+          } else {
+            hotkey_input_active = false;
+            key_was_pressed = false;
+          }
+
+          if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip)) {
+            ImGui::SetTooltip("Click and press any key to set hotkey.\nPress Backspace or Delete to clear.");
+          }
+
+          return changed;
+        },
+        .is_global = true,
     },
     new renodx::utils::settings::Setting{
         .key = "VideoAutoHDR",
@@ -441,6 +1001,17 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "ChromaticAberrationStrength",
+        .binding = &shader_injection.chromatic_aberration_strength,
+        .default_value = 50.f,
+        .label = "Chromatic Aberration",
+        .section = "Effects",
+        .tooltip = "Controls the intensity of chromatic aberration effect.",
+        .min = 0.f,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "BloomStrength",
         .binding = &shader_injection.bloom_strength,
         .value_type = renodx::utils::settings::SettingValueType::FLOAT,
@@ -452,6 +1023,16 @@ renodx::utils::settings::Settings settings = {
         .min = 0.f,
         .max = 100.f,
     },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
+        .label = std::string("Reshade shader bypass, applies on_drawn after game's deferred lighting pass. Only properly works with DLAA/TAAU 100 scaling atm"),
+        .on_draw = []() {
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+          ImGui::TextWrapped("Reshade shader bypass, applies on_drawn after game's deferred lighting pass. Only properly works with DLAA/TAAU 100 scaling atm");
+          ImGui::PopStyleColor();
+          return false;
+        },
+    },
         new renodx::utils::settings::Setting{
         .key = "RenderReshadeBeforeUI",
         .binding = &current_render_reshade_before_ui,
@@ -461,6 +1042,26 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Executes ReShade effects before UI is drawn.",
         .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "DisableGameAO",
+        .binding = &shader_injection.disable_game_ao,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Disable Game GTAO",
+        .section = "Effects",
+        .tooltip = "Disables the game's built-in GTAO (Ground Truth Ambient Occlusion).\nUseful when using ReShade-based AO instead.",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "VFXBoost",
+        .binding = &shader_injection.perchannelblowout,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "VFX Boost (Experimental)",
+        .section = "Rendering Improvements",
+        .tooltip = "Boosts the luminance of supported VFX shaders for brighter highlights.\nExperimental: this may have unintended effects.",
+        .labels = {"Original", "Enhanced"},
     },
     new renodx::utils::settings::Setting{
         .key = "HDRSun",
@@ -483,8 +1084,8 @@ renodx::utils::settings::Settings settings = {
         .labels = {"Off", "Vanilla", "2x", "3x"},
     },
     new renodx::utils::settings::Setting{
-        .key = "AO_INTENSITY",
-        .binding = &shader_injection.ao_intensity,
+        .key = "SHADOW_HARDENING",
+        .binding = &shader_injection.shadow_hardening,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
         .label = "Improved Shadows",
@@ -492,6 +1093,71 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Toggle improved shadow occlusion for objects and foliage",
         .labels = {"Off", "On"},
         .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FAKE_CLOUD_SHADOWS",
+        .binding = &shader_injection.fake_cloud_shadows,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Vanilla Fake Cloud Shadows",
+        .section = "Rendering Improvements",
+        .tooltip = "Toggles fake cloud shadows",
+        .labels = {"Off", "On / Vanilla"},
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FogModification",
+        .binding = &shader_injection.fog_modification,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Hue-Preserving Fog",
+        .section = "Rendering Improvements",
+        .tooltip = "Toggles alternative hue-preserving fog",
+        .labels = {"Original", "Alt"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "CubemapAmbientLink",
+        .binding = &shader_injection.cubemap_ambient_link,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Cubemap Ambient Link",
+        .section = "Rendering Improvements",
+        .tooltip = "Modulates cubemap reflections by ambient luminance",
+        .labels = {"Off", "On"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "GlassTransparency",
+        .binding = &shader_injection.glass_transparency,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "Glass Transparency",
+        .section = "Rendering Improvements",
+        .tooltip = "Improves glass rendering to look more transparent and less cloudy/glowing",
+        .labels = {"Vanilla", "Improved"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ImprovedSSR",
+        .binding = &shader_injection.improved_ssr,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "SSR Quality",
+        .section = "Rendering Improvements",
+        .tooltip = "Controls the game's SSR denoiser behavior.\n"
+                   "Vanilla: Original denoiser.\n"
+                   "Improved: Sharper reflections on smooth surfaces (metals, glass)\n"
+                   "  while retaining proper diffusion on rough surfaces (wood, stone).\n"
+                   "  Temporal smoothing is preserved to minimize firefly artifacts.",
+        .labels = {"Vanilla", "Improved"},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ImprovedGTAO",
+        .binding = &shader_injection.improved_gtao,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "GTAO + Visibility Bitmask + Deferred AO Modulation",
+        .section = "Rendering Improvements",
+        .tooltip = "Improves vanilla GTAO with visibility bitmask and AO modulation on direct lights (spotlights, point lights).",
+        .labels = {"Original", "Improved"},
     },
     new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
@@ -513,6 +1179,20 @@ renodx::utils::settings::Settings settings = {
             "JPN CRT",
         },
         .is_visible = []() { return settings[0]->GetValue() >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "SwapChainEncoding",
+        .binding = &shader_injection.swap_chain_encoding,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 4.f,
+        .label = "Encoding",
+        .section = "Display Output",
+        .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
+        .on_change_value = [](float previous, float current) {
+          ApplySwapChainEncodingTarget(current);
+        },
+        .is_global = true,
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "IntermediateDecoding",
@@ -555,6 +1235,19 @@ renodx::utils::settings::Settings settings = {
         .is_visible = []() { return false; },
     },
     new renodx::utils::settings::Setting{
+        .key = "TechTestLook",
+        .binding = &shader_injection.tech_test_look,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 0.f,
+        .label = "Tech Test Look",
+        .section = "Alternative Grading",
+        .tooltip = "Activates visual adjustments to match the 2024 tech test aesthetic",
+        .labels = {"Off", "On"},
+        .on_change_value = [](float previous, float current) {
+          if (current >= 1.f) pending_tech_test_preset = 1;
+        },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
@@ -576,12 +1269,17 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "- Addon maintained by Spiwar & Forge.",
+        .label = "- Addon developed by Spiwar & Forge.",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "- Made for Arknights: Endfield 1.0",
+        .label = "- Maintained by Rat for Arknights: Endfield 1.4.4",
+        .section = "About",
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::TEXT,
+        .label = std::string("- Special thanks to both Musa & Miru for helping with the addon"),
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -597,11 +1295,22 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-  //   renodx::utils::settings::UpdateSetting("toneMapType", 0.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapPeakNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGameNits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapUINits", 203.f);
-  //   renodx::utils::settings::UpdateSetting("toneMapGammaCorrection", 0);
+     renodx::utils::settings::UpdateSetting("ToneMapType", 0.f);
+     renodx::utils::settings::UpdateSetting("ToneMapPeakNits", 203.f);
+     renodx::utils::settings::UpdateSetting("ToneMapGameNits", 203.f);
+     renodx::utils::settings::UpdateSetting("ToneMapUINits", 203.f);
+     renodx::utils::settings::UpdateSetting("ToneMapGammaCorrection", 1.f);
+     renodx::utils::settings::UpdateSetting("GammaCorrection", 1.f);
+     renodx::utils::settings::UpdateSetting("SwapChainGammaCorrection", 1.f);
+     renodx::utils::settings::UpdateSetting("HDRSun", 0.f);
+     renodx::utils::settings::UpdateSetting("Godrays", 1.f);
+     renodx::utils::settings::UpdateSetting("SHADOW_HARDENING", 0.f);
+     renodx::utils::settings::UpdateSetting("FogModification", 0.f);
+     renodx::utils::settings::UpdateSetting("CubemapAmbientLink", 0.f);
+     renodx::utils::settings::UpdateSetting("GlassTransparency", 0.f);
+     renodx::utils::settings::UpdateSetting("ImprovedSSR", 0.f);
+     renodx::utils::settings::UpdateSetting("ImprovedGTAO", 0.f);
+     renodx::utils::settings::UpdateSetting("TechTestLook", 0.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeExposure", 1.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeHighlights", 50.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeShadows", 50.f);
@@ -609,6 +1318,104 @@ void OnPresetOff() {
   //   renodx::utils::settings::UpdateSetting("colorGradeSaturation", 50.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeLUTStrength", 100.f);
   //   renodx::utils::settings::UpdateSetting("colorGradeLUTScaling", 0.f);
+}
+
+// OnDraw handler to track vertex count from draw calls
+bool OnDraw(
+    reshade::api::command_list* cmd_list,
+    uint32_t vertex_count,
+    uint32_t instance_count,
+    uint32_t first_vertex,
+    uint32_t first_instance) {
+  draw_call_vertex_count = vertex_count;
+  shader_injection.latency_bar_draw_opacity = 1.f;
+  return false;
+}
+
+// OnDrawIndexed event handler for heuristic-based ping/UID detection
+bool OnDrawIndexed(
+    reshade::api::command_list* cmd_list,
+    uint32_t index_count,
+    uint32_t instance_count,
+    uint32_t first_index,
+    int32_t vertex_offset,
+    uint32_t first_instance) {
+  auto* shader_state = renodx::utils::shader::GetCurrentState(cmd_list);
+  const uint32_t vertex_shader_hash = shader_state != nullptr
+      ? renodx::utils::shader::GetCurrentVertexShaderHash(shader_state)
+      : 0u;
+  const uint32_t pixel_shader_hash = shader_state != nullptr
+      ? renodx::utils::shader::GetCurrentPixelShaderHash(shader_state)
+      : 0u;
+
+  if (!IsVisible(shader_injection.ui_visibility)
+      && (vertex_shader_hash == 0x1529ADE6u || pixel_shader_hash == 0x1529ADE6u
+          || vertex_shader_hash == 0xEB8D2859u || pixel_shader_hash == 0xEB8D2859u)) {
+    draw_call_vertex_count = 0;
+    return true;
+  }
+
+  // Constants for ping/latency bar detection
+  constexpr uint32_t PING_INDEX_COUNT = 18;
+  constexpr uint32_t PING_FIRST_INDEX = 0;
+  constexpr int32_t PING_VERTEX_OFFSET = 0;
+  constexpr uint32_t PING_VERTEX_SHADER_HASH = 0xF4EF16E9u;
+  constexpr uint32_t PING_PIXEL_SHADER_HASH = 0xF1B0E28Au;
+
+  // Detect ping/latency bar
+  const bool ping_geometry_candidate = (index_count == PING_INDEX_COUNT) &&
+                                       (first_index == PING_FIRST_INDEX) &&
+                                       (vertex_offset == PING_VERTEX_OFFSET);
+  const bool latency_bar_draw_candidate = ping_geometry_candidate &&
+                                          (vertex_shader_hash == PING_VERTEX_SHADER_HASH) &&
+                                          (pixel_shader_hash == PING_PIXEL_SHADER_HASH);
+  is_ping_input_candidate = latency_bar_draw_candidate && (draw_call_vertex_count == 0);
+  shader_injection.latency_bar_draw_opacity = latency_bar_draw_candidate
+      ? shader_injection.ping_text_opacity
+      : 1.f;
+
+  if (latency_bar_draw_candidate) {
+    if (is_ping_input_candidate) {
+      is_ping_drawn = true;
+    }
+    draw_call_vertex_count = 0;
+    return !IsVisible(shader_injection.ping_text_opacity);
+  }
+
+  // Constants for UID text detection
+  constexpr uint32_t UID_FIRST_INDEX = 18;
+  constexpr uint32_t UID_MIN_INDEX_COUNT = 100;
+  constexpr int32_t UID_VERTEX_OFFSET = 12;
+
+  // Detect UID text after the ping or post-combat shader
+  const bool uid_geometry_candidate = (first_index == UID_FIRST_INDEX) &&
+                                      (index_count > UID_MIN_INDEX_COUNT) &&
+                                      (vertex_offset == UID_VERTEX_OFFSET);
+  const bool uid_shader_candidate = pixel_shader_hash == 0xC2B8AB6Bu;
+  is_uid_input_candidate = uid_geometry_candidate && (is_ping_drawn || uid_shader_candidate);
+
+  // Reset vertex count after processing
+  draw_call_vertex_count = 0;
+
+  if (!is_uid_input_candidate) {
+    return false;
+  }
+  if (!IsVisible(shader_injection.ui_visibility)) return true;
+
+  const bool show_uid_text = IsVisible(shader_injection.status_text_opacity);
+  const bool show_latency_text = IsVisible(shader_injection.latency_text_opacity);
+  if (show_uid_text && show_latency_text) return false;
+  if (!show_uid_text && !show_latency_text) return true;
+
+  DrawTextRegion(
+      cmd_list,
+      index_count,
+      instance_count,
+      first_index,
+      vertex_offset,
+      first_instance,
+      show_latency_text);
+  return true;
 }
 
 void OnPresent(reshade::api::command_queue* queue,
@@ -622,6 +1429,52 @@ void OnPresent(reshade::api::command_queue* queue,
     shader_injection.custom_flip_uv_y = 1.f;
   }
 
+  // Compute UI aspect ratio from swapchain for dynamic latency bar detection
+  auto bb = device->get_resource_desc(swapchain->get_current_back_buffer());
+  if (bb.type != reshade::api::resource_type::unknown) {
+    shader_injection.ui_aspect_ratio = static_cast<float>(bb.texture.height) / static_cast<float>(bb.texture.width);
+  }
+
+  // Reset heuristic tracking flags for ping/UID detection
+  is_ping_input_candidate = false;
+  is_uid_input_candidate = false;
+  is_ping_drawn = false;
+  draw_call_vertex_count = 0;
+  shader_injection.latency_bar_draw_opacity = 1.f;
+
+  // Detect Tech Test state changes from preset loads, game startup, or manual toggle
+  float current_tech_test = shader_injection.tech_test_look;
+  if (current_tech_test != prev_tech_test_look) {
+    if (current_tech_test >= 1.f) pending_tech_test_preset = 1;
+    prev_tech_test_look = current_tech_test;
+  }
+
+  // Apply deferred Tech Test preset (safe context, outside settings callback)
+  if (pending_tech_test_preset == 1) {
+    renodx::utils::settings::UpdateSetting("GammaCorrection", 2.f);
+    renodx::utils::settings::UpdateSetting("SwapChainGammaCorrection", 2.f);
+    renodx::utils::settings::UpdateSetting("ToneMapPerChannelBlowout", 75.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeExposure", 0.75f);
+    renodx::utils::settings::UpdateSetting("ColorGradeHighlights", 50.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeShadows", 80.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeContrast", 55.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeSaturation", 35.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeHighlightSaturation", 100.f);
+    renodx::utils::settings::UpdateSetting("ColorGradeBlowout", 30.f);
+    pending_tech_test_preset = -1;
+  }
+
+  // Check UI visibility hotkey (skip if user is currently setting a new hotkey)
+  if (ui_toggle_hotkey != 0 && !hotkey_input_active) {
+    bool key_down = (GetAsyncKeyState(ui_toggle_hotkey) & 0x8000) != 0;
+    if (key_down && !ui_toggle_key_was_pressed) {
+      // Toggle UI visibility
+      shader_injection.ui_visibility = (shader_injection.ui_visibility == 0.f) ? 1.f : 0.f;
+      // Update the setting value to keep UI in sync
+      renodx::utils::settings::UpdateSetting("UIVisibility", shader_injection.ui_visibility);
+    }
+    ui_toggle_key_was_pressed = key_down;
+  }
 }
 
 bool initialized = false;
@@ -641,7 +1494,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::shader::expected_constant_buffer_space = 50;
         renodx::mods::shader::expected_constant_buffer_index = 13;
         renodx::mods::shader::allow_multiple_push_constants = true;
-
         renodx::mods::swapchain::expected_constant_buffer_index = 13;
         renodx::mods::swapchain::expected_constant_buffer_space = 50;
         renodx::mods::swapchain::use_resource_cloning = true;
@@ -704,30 +1556,11 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           settings.push_back(setting);
         }
 
+        // Initialize SwapChainEncoding-related settings
         {
-          auto* setting = new renodx::utils::settings::Setting{
-              .key = "SwapChainEncoding",
-              .binding = &shader_injection.swap_chain_encoding,
-              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 4.f,
-              .label = "Encoding",
-              .section = "Display Output",
-              .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
-              .is_enabled = []() { return shader_injection.tone_map_type >= 1; },
-              .on_change_value = [](float previous, float current) {
-                bool is_hdr10 = current == 4;
-                shader_injection.swap_chain_encoding_color_space = (is_hdr10 ? 1.f : 0.f);
-                // return void
-              },
-              .is_global = true,
-              .is_visible = []() { return false; },
-          };
-          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
-          bool is_hdr10 = setting->GetValue() == 4;
-          renodx::mods::swapchain::SetUseHDR10(is_hdr10);
-          renodx::mods::swapchain::use_resize_buffer = setting->GetValue() < 4;
-          shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
-          settings.push_back(setting);
+          float encoding_value = 4.f;  // default
+          reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "SwapChainEncoding", encoding_value);
+          ApplySwapChainEncodingTarget(encoding_value);
         }
 
         {
@@ -745,12 +1578,23 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           bool use_device_proxy = setting->GetValue() == 1.f;
           renodx::mods::swapchain::use_device_proxy = use_device_proxy;
           renodx::mods::swapchain::set_color_space = !use_device_proxy;
-          if (use_device_proxy) {
-            reshade::register_event<reshade::addon_event::present>(OnPresent);
-          } else {
+          if (!use_device_proxy) {
             shader_injection.custom_flip_uv_y = 0.f;
           }
+          reshade::register_event<reshade::addon_event::present>(OnPresent);
+          // Register callbacks to ALWAYS disable ReShade during normal present
+          // This ensures ReShade only ever renders at internal resolution via bypass
+          reshade::register_event<reshade::addon_event::reshade_begin_effects>(OnReshadeBeginEffects);
+          reshade::register_event<reshade::addon_event::reshade_finish_effects>(OnReshadeFinishEffects);
           settings.push_back(setting);
+        }
+
+        // Load UI visibility hotkey from saved config
+        {
+          int saved_hotkey = 0;
+          if (reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "UIVisibilityHotkey", saved_hotkey)) {
+            ui_toggle_hotkey = saved_hotkey;
+          }
         }
 
         {
@@ -789,73 +1633,144 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
 
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-            .old_format = reshade::api::format::r8g8b8a8_typeless,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-            .ignore_size = false,
-            .use_resource_view_cloning = true,
-            .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
-            .usage_include = reshade::api::resource_usage::render_target,
+        .old_format = reshade::api::format::r8g8b8a8_typeless,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .ignore_size = false,
+        //.use_resource_view_cloning = true,
+        .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
+        .aspect_ratio_tolerance = 0.02f,
+        .usage_include = reshade::api::resource_usage::render_target,
         });
+        // Need aspect ratio upgrade or grass will be broken
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r8g8b8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .ignore_size = false,
-            .use_resource_view_cloning = true,
+            //.use_resource_view_cloning = true,
             .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
+            .aspect_ratio_tolerance = 0.02f,
             .usage_include = reshade::api::resource_usage::render_target,
         });
+        /*
         renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
             .old_format = reshade::api::format::r10g10b10a2_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,
             .ignore_size = false,
-            .use_resource_view_cloning = true,
+            //.use_resource_view_cloning = true,
             .aspect_ratio = static_cast<float>(renodx::mods::swapchain::SwapChainUpgradeTarget::BACK_BUFFER),
+            .aspect_ratio_tolerance = 0.02f,
             .usage_include = reshade::api::resource_usage::render_target,
         });
-
+        */
+        // Grass/foliage deferred shaders for ReShade AO
         const uint32_t target_crcs[] = {
-            0x00C16AFBu,
-            0x039C28DAu,
-            0x086097D2u,
-            0x09270FDAu,
-            0x0E520F06u,
-            0x10076711u,
-            0x21241B7Au,
-            0x51359B4Du,
-            0x53875523u,
-            0x53D50BD5u,
-            0x57737D9Fu,
-            0x5FC0BD3Cu,
-            0x6166487Au,
-            0x61908D50u,
-            0x64CEB255u,
-            0x6A76C719u,
-            0x86420EBCu,
-            0x9790A50Cu,
-            0x9AA3FC1Fu,
-            0xA6501734u,
-            0xA6E6ABE6u,
-            0xA8213A68u,
-            0xAFDCA263u,
-            0xAFECA8F4u,
-            0xBCD91195u,
-            0xD5BC74ACu,
-            0xE0058043u,
-            0xF8FA587Fu,
+            0x4BF704A4u,
+            0xEFA7F46Fu,
+            0x66F41E33u,
+            0x7F533976u,
+            0x82083D15u,
+            0xACD57C4Du,
+            0xC181EA40u,
+            0xEE78E1BAu,
         };
 
         for (uint32_t crc : target_crcs) {
-          if (custom_shaders.find(crc) != custom_shaders.end()) {
-            custom_shaders[crc].on_drawn = ExecuteReshadeEffects;
+          // Ensure an entry exists for the shader hash even if we don't have compiled HLSL
+          auto it = custom_shaders.find(crc);
+          if (it == custom_shaders.end()) {
+            renodx::mods::shader::CustomShader cs{};
+            cs.crc32 = crc;
+            cs.on_drawn = ExecuteReshadeEffects;
+            custom_shaders.emplace(crc, std::move(cs));
+          } else {
+            it->second.on_drawn = ExecuteReshadeEffects;
           }
         }
+
+        for (const auto& match : vfx_boost_matches) {
+          auto it = custom_shaders.find(match.shader_crc);
+          if (it != custom_shaders.end()) {
+            it->second.on_replace = ReplaceVFXBoostShader;
+          }
+        }
+
+        // Improved GTAO shaders
+        const uint32_t improved_gtao_crcs[] = {
+            0x43A0000Bu,
+            0xDD16F0F8u,
+        };
+        for (uint32_t crc : improved_gtao_crcs) {
+          auto it = custom_shaders.find(crc);
+          if (it != custom_shaders.end()) {
+            it->second.on_replace = ReplaceImprovedGTAOShader;
+          }
+        }
+
+        {
+          auto it = custom_shaders.find(0xA683B186u);
+          if (it != custom_shaders.end()) {
+            it->second.on_replace = ReplaceDisableGTAOShader;
+          }
+        }
+
+        // UI visibility shaders
+        const uint32_t ui_visibility_bypass_crcs[] = {
+            0xD98315D9u,
+            0x7B466CC5u,
+            0x483894D1u,
+            0xB7010B10u,
+            0xC954C30Bu,
+            0xE4D1754Au,
+            0xFB0D02ADu,
+            0x3A8D5F08u,
+            0xF16C9B1Fu,
+            0xD4922925u,
+            0x0FB686BDu,
+        };
+        for (uint32_t crc : ui_visibility_bypass_crcs) {
+          RegisterUiVisibilityBypassShader(crc);
+        }
+
+        // Post-combat UID shader
+        RegisterUidBypassShader(0xC2B8AB6Bu);
+
+        // Ping/latency bar shader
+        {
+          auto it = custom_shaders.find(0xF1B0E28Au);
+          if (it != custom_shaders.end()) {
+            it->second.on_draw = OnPingDraw;
+          }
+        }
+        // Register draw and draw_indexed events for heuristic ping/UID detection
+        reshade::register_event<reshade::addon_event::init_command_list>(OnInitVfxCommandList);
+        reshade::register_event<reshade::addon_event::reset_command_list>(OnResetVfxCommandList);
+        reshade::register_event<reshade::addon_event::destroy_command_list>(OnDestroyVfxCommandList);
+        reshade::register_event<reshade::addon_event::init_resource>(OnInitVfxResource);
+        reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyVfxResource);
+        reshade::register_event<reshade::addon_event::init_resource_view>(OnInitVfxResourceView);
+        reshade::register_event<reshade::addon_event::destroy_resource_view>(OnDestroyVfxResourceView);
+        reshade::register_event<reshade::addon_event::push_descriptors>(OnPushVfxDescriptors);
+        reshade::register_event<reshade::addon_event::draw>(OnDraw);
+        reshade::register_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
 
         initialized = true;
       }
 
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_command_list>(OnInitVfxCommandList);
+      reshade::unregister_event<reshade::addon_event::reset_command_list>(OnResetVfxCommandList);
+      reshade::unregister_event<reshade::addon_event::destroy_command_list>(OnDestroyVfxCommandList);
+      reshade::unregister_event<reshade::addon_event::init_resource>(OnInitVfxResource);
+      reshade::unregister_event<reshade::addon_event::destroy_resource>(OnDestroyVfxResource);
+      reshade::unregister_event<reshade::addon_event::init_resource_view>(OnInitVfxResourceView);
+      reshade::unregister_event<reshade::addon_event::destroy_resource_view>(OnDestroyVfxResourceView);
+      reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushVfxDescriptors);
+      reshade::unregister_event<reshade::addon_event::draw>(OnDraw);
+      reshade::unregister_event<reshade::addon_event::draw_indexed>(OnDrawIndexed);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      reshade::unregister_event<reshade::addon_event::reshade_begin_effects>(OnReshadeBeginEffects);
+      reshade::unregister_event<reshade::addon_event::reshade_finish_effects>(OnReshadeFinishEffects);
       reshade::unregister_addon(h_module);
       break;
   }
@@ -863,6 +1778,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::utils::state::Use(fdw_reason);
   renodx::utils::random::binds.push_back(&shader_injection.custom_random);
   renodx::utils::random::Use(fdw_reason);
 
