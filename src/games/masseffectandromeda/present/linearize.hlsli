@@ -17,7 +17,7 @@ Texture3D<float4> calibLutTexture : register(t5);
 float3 LinearizeScene(Texture1D<float4> lut_tex, SamplerState lut_smp, float3 scaled_rgb) {
   scaled_rgb = max(0.f, scaled_rgb);
 #if MEA_PRESENT_LUT3D
-  scaled_rgb = calibLutTexture.SampleLevel(lut_smp, scaled_rgb * 0.96875f + 0.015625f, 0.f).rgb;
+  scaled_rgb = calibLutTexture.SampleLevel(lut_smp, renodx::lut::CenterTexel(scaled_rgb, 32.f), 0.f).rgb;
 #endif
   return SampleOutputLut(lut_tex, lut_smp, scaled_rgb);
 }

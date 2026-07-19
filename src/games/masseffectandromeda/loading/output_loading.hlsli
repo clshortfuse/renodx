@@ -1,12 +1,18 @@
-// Loading/video present row (1:1, single tap). Art (t0) is sRGB-encoded (no 1D LUT); tail is the
-// shared LoadingPresentScene. Without it the vanilla pass PQ-encodes the art at ~1500 nits.
-// The scene sampler slot is the MEA_LOADING_SCENE_SAMPLER axis (default s0; the s1 perms override).
+// Loading/video present row. Art (t0) is sRGB-encoded (no 1D LUT); tail is the shared
+// LoadingPresentScene. Without it the vanilla pass PQ-encodes the art at ~1500 nits.
+// Axes (per-hash wrappers override):
+//   MEA_LOADING_SCENE_SAMPLER  scene sampler slot (default s0; the s1 perms override)
+//   MEA_LOADING_BICUBIC        1 = 16-tap bicubic fetch (Resolution Scale != 100%): resample-then-
+//                              decode, matching vanilla; requires bicubic_upscale.hlsli first,
+//                              cbData[0].xy = source res, .zw = texel
 // Requires shared.h + loading_core.hlsli first.
-// Output gamut is runtime-selected by the game (BT.2020 / DCI-P3 / no-matrix). Every per-hash wrapper
-// over this row normalizes to the forced HDR10/BT.2020 swapchain, so they all share this body unchanged.
+// Per-gamut wrapper hashes share this body unchanged: see FinalizeToPQ in shared.h.
 
 #ifndef MEA_LOADING_SCENE_SAMPLER
 #define MEA_LOADING_SCENE_SAMPLER s0
+#endif
+#ifndef MEA_LOADING_BICUBIC
+#define MEA_LOADING_BICUBIC 0
 #endif
 
 Texture2D<float4> sceneTexture : register(t0);
@@ -25,6 +31,11 @@ struct PSInput {
 };
 
 float4 main(PSInput input) : SV_Target {
+#if MEA_LOADING_BICUBIC
+  // Alpha = 1, matching the vanilla upscale present (no scene alpha carried).
+  float4 scene = float4(SampleSceneBicubic(sceneTexture, sceneSampler, input.texcoord, cbData[0]), 1.f);
+#else
   float4 scene = sceneTexture.SampleLevel(sceneSampler, input.texcoord, 0.f);
+#endif
   return LoadingPresentScene(scene, input.texcoord, cbData[2], uiTexture, uiSampler);
 }
