@@ -32,7 +32,25 @@ cbuffer cb6 : register(b6)
 #ifndef CUSTOM_HDR_HIGHLIGHT_POWER
 #define CUSTOM_HDR_HIGHLIGHT_POWER 1.35
 #endif
+#define cmp -
+#ifndef MANUAL_SRGB_RT_ENCODE
+#define MANUAL_SRGB_RT_ENCODE 1
+#endif
 
+float3 LinearToSRGB(float3 c)
+{
+  float3 lo = c * 12.92;
+  float3 hi = 1.055 * pow(max(c, 0.0), 1.0 / 2.4) - 0.055;
+  return lerp(lo, hi, step(0.0031308, c));
+}
+
+float3 EncodeSRGBOutput(float3 c)
+{
+#if MANUAL_SRGB_RT_ENCODE
+  c = LinearToSRGB(max(c, 0.0));
+#endif
+  return c;
+}
 static const float3 CUSTOM_LUMA = float3(0.2126, 0.7152, 0.0722);
 
 float3 ExpandToHDR(float3 color)
@@ -83,6 +101,7 @@ void main(
   r0.xyz = r1.xyz * cb6[1].xxx + r0.xyz;
 
   o0.xyz = ExpandToHDR(r0.xyz);
+   o0.xyz = EncodeSRGBOutput(o0.xyz);
   o0.w = 1;
   return;
 }

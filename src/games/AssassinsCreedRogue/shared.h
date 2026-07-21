@@ -20,6 +20,38 @@
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
+#define RENODX_TONE_MAP_TYPE_PSYCHOV22       22.f
+#endif
+#ifndef RENODX_PSYCHOV22_COMPRESSION
+#define RENODX_PSYCHOV22_COMPRESSION         shader_injection.psychov22_compression
+#endif
+#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV22_GAMUT_COMPRESSION   shader_injection.psychov22_gamut_compression
+#endif
+#ifndef RENODX_PSYCHOV22_GAMUT_MODE
+#define RENODX_PSYCHOV22_GAMUT_MODE          shader_injection.psychov22_gamut_mode
+#endif
+#ifndef RENODX_PSYCHOV22_CONE_RESPONSE
+#define RENODX_PSYCHOV22_CONE_RESPONSE       shader_injection.psychov22_cone_response
+#endif
+
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
+#define RENODX_TONE_MAP_TYPE_PSYCHOV22       22.f
+#endif
+#ifndef RENODX_PSYCHOV22_COMPRESSION
+#define RENODX_PSYCHOV22_COMPRESSION         shader_injection.psychov22_compression
+#endif
+#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV22_GAMUT_COMPRESSION   shader_injection.psychov22_gamut_compression
+#endif
+#ifndef RENODX_PSYCHOV22_GAMUT_MODE
+#define RENODX_PSYCHOV22_GAMUT_MODE          shader_injection.psychov22_gamut_mode
+#endif
+#ifndef RENODX_PSYCHOV22_CONE_RESPONSE
+#define RENODX_PSYCHOV22_CONE_RESPONSE       shader_injection.psychov22_cone_response
+#endif
+
 #define RENODX_GAMMA_CORRECTION               0.f
 
 #define CUSTOM_GRADING_STRENGTH              shader_injection.custom_grading_strength
@@ -90,6 +122,12 @@ struct ShaderInjectData {
   float custom_bloom;
   float custom_lens_dirt;
   float custom_fog_density;
+
+  // PsychoV22 controls, appended so the existing layout stays stable.
+  float psychov22_compression;
+  float psychov22_gamut_compression;
+  float psychov22_gamut_mode;
+  float psychov22_cone_response;
 };
 
 #ifndef __cplusplus

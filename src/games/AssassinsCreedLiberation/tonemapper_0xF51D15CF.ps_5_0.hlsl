@@ -1,9 +1,17 @@
 #include "./common.hlsl"
 
 // ---- Created with 3Dmigoto v1.3.16 on Sat Jun 20 21:15:57 2026
-// RenoDX exposure / tonemap replacement
-// SDR path: original ACES fitted tonemap.
-// HDR path: RenoDX HDR tonemap with SDR low/mid-grey preservation.
+// Fixed RenoDX exposure pass
+//
+// Fix:
+//   This pass NO LONGER applies HDRDisplayMap / Psycho / PostTonemapSliders
+//   in HDR modes.
+//   It only applies exposure and forwards scene color to the later LUT/final
+//   tonemap pass.
+//
+// Result:
+//   Prevents double tonemapping.
+//   The later LUT/final pass is now the only HDR tonemapper.
 
 SamplerState _sampler_Scene_s : register(s0);
 SamplerState _sampler_Exposure_s : register(s1);
@@ -11,10 +19,9 @@ SamplerState _sampler_Exposure_s : register(s1);
 Texture2D<float4> _texture_Scene : register(t0);
 Texture2D<float4> _texture_Exposure : register(t1);
 
-#ifndef RENODX_APPLY_FILM_GRAIN_IN_TONEMAPPER
-#define RENODX_APPLY_FILM_GRAIN_IN_TONEMAPPER 1
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
+#define RENODX_TONE_MAP_TYPE_PSYCHOV22 22.0f
 #endif
-
 
 float3 EncodeSRGBSafeLocal(float3 color)
 {
@@ -48,75 +55,25 @@ float3 GameACESFittedTonemap(float3 color)
   return saturate(output);
 }
 
-float3 RestoreSDRLowMidGreys(float3 hdrColor, float3 sdrReference)
+bool IsRenoDRTMode()
 {
-#if RENODX_HDR_SDR_MID_GREY_RESTORE
-  hdrColor = max(hdrColor, 0.0f);
-  sdrReference = max(sdrReference, 0.0f);
-
-  float hdrY = renodx::color::y::from::BT709(hdrColor);
-  float sdrY = renodx::color::y::from::BT709(sdrReference);
-
-  if (hdrY <= 0.000001f || sdrY <= 0.000001f)
-  {
-    return hdrColor;
-  }
-
-  float midMask = 1.0f - smoothstep(
-    RENODX_HDR_SDR_MID_GREY_START,
-    RENODX_HDR_SDR_MID_GREY_END,
-    sdrY
-  );
-
-  float blackMask = 1.0f - smoothstep(0.0f, 0.08f, sdrY);
-
-  float strength = saturate(RENODX_HDR_SDR_MID_GREY_STRENGTH);
-  strength += blackMask * saturate(RENODX_HDR_SDR_BLACK_EXTRA_STRENGTH);
-  strength = saturate(strength);
-
-  float amount = midMask * strength;
-
-  float targetY = min(hdrY, sdrY);
-  float restoredY = lerp(hdrY, targetY, amount);
-
-  float maxDarkenY = hdrY * (1.0f - saturate(RENODX_HDR_SDR_MID_GREY_MAX_DARKEN) * amount);
-  restoredY = max(restoredY, maxDarkenY);
-
-  hdrColor *= restoredY / max(hdrY, 0.000001f);
-
-  return max(hdrColor, 0.0f);
-#else
-  return hdrColor;
-#endif
+  return abs(RENODX_TONE_MAP_TYPE - renodx::draw::TONE_MAP_TYPE_RENO_DRT) < 0.5f;
 }
 
-float3 ApplyRenoDXSceneTonemapNoUIPass(float3 sceneColor, float2 coords)
+bool IsPsychoV22Mode()
 {
-  sceneColor = max(sceneColor, 0.0f);
+  return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV22) < 0.5f;
+}
 
-  float3 sdrReference = GameACESFittedTonemap(sceneColor);
+bool IsCustomHDRMode()
+{
+  return IsRenoDRTMode() || IsPsychoV22Mode();
+}
 
-  sceneColor = PreTonemapSliders(sceneColor);
-
-  float3 hdrColor = HDRDisplayMap(sceneColor);
-
-  hdrColor = RestoreSDRLowMidGreys(
-    hdrColor,
-    sdrReference
-  );
-
-  hdrColor = PostTonemapSliders(hdrColor);
-
-#if RENODX_APPLY_FILM_GRAIN_IN_TONEMAPPER
-  hdrColor = renodx::effects::ApplyFilmGrain(
-    hdrColor,
-    coords,
-    CUSTOM_RANDOM,
-    CUSTOM_FILM_GRAIN_STRENGTH * 0.03f
-  );
-#endif
-
-  return renodx::color::gamma::EncodeSafe(max(hdrColor, 0.0f));
+float3 SafeFinite3(float3 color)
+{
+  color = (color == color) ? color : 0.0f.xxx;
+  return clamp(color, 0.0f.xxx, 65504.0f.xxx);
 }
 
 void main(
@@ -127,9 +84,17 @@ void main(
   float3 sceneColor = _texture_Scene.Sample(_sampler_Scene_s, v1.xy).xyz;
   float exposure = _texture_Exposure.Sample(_sampler_Exposure_s, float2(0.0f, 0.0f)).x;
 
-  sceneColor = max(sceneColor, 0.0f) * exposure;
+  sceneColor = SafeFinite3(sceneColor);
+  exposure = (exposure == exposure) ? exposure : 1.0f;
+  exposure = clamp(exposure, 0.0f, 65504.0f);
 
-  if (RENODX_TONE_MAP_TYPE == 0.0f)
+  sceneColor *= exposure;
+  sceneColor = SafeFinite3(sceneColor);
+
+  // Vanilla / SDR path:
+  // Keep the original ACES fitted tonemap here because the next LUT pass expects
+  // SDR gamma input when not using the custom HDR path.
+  if (!IsCustomHDRMode())
   {
     float3 sdrColor = GameACESFittedTonemap(sceneColor);
 
@@ -138,7 +103,13 @@ void main(
     return;
   }
 
-  o0.rgb = ApplyRenoDXSceneTonemapNoUIPass(sceneColor, v1.xy);
+  // HDR path:
+  // Important: do NOT call PreTonemapSliders, HDRDisplayMap, PostTonemapSliders,
+  // or film grain here.
+  //
+  // This pass only forwards exposure-applied scene color to the next pass.
+  // The next LUT/final pass will do the actual RenoDX/PsychoV22 tonemap.
+  o0.rgb = renodx::color::gamma::EncodeSafe(sceneColor);
   o0.a = 1.0f;
   return;
 }

@@ -17,7 +17,7 @@ float LinearToSRGB1(float c)
 {
     float lo = c * 12.92;
     float hi = pow(max(c, 0.0), 1.0 / 2.4) * 1.055 - 0.055;
-    return (c <= 0.003131) ? lo : hi;
+    return (c <= 0.0031308) ? lo : hi;
 }
 
 float3 LinearToSRGB3(float3 c)
@@ -36,7 +36,7 @@ float3 LinearToSRGB3(float3 c)
 float ExpandScalarLikeFinalPass(float x)
 {
     float highlight = saturate((x - 0.18) / 0.82);
-    highlight = highlight * highlight;
+    highlight *= highlight;
 
     float peak_ratio = max(
         1.0,
@@ -51,56 +51,40 @@ float InverseExpandScalarLikeFinalPass(float target)
     float lo = 0.0;
     float hi = 1.0;
 
-    float mid;
-    float expanded;
+    // Enough iterations for a stable UI clamp without being expensive.
+    [unroll]
+    for (int step = 0; step < 8; step++)
+    {
+        float mid = (lo + hi) * 0.5;
+        float expanded = ExpandScalarLikeFinalPass(mid);
 
-    mid = (lo + hi) * 0.5;
-    expanded = ExpandScalarLikeFinalPass(mid);
-    if (expanded < target) lo = mid; else hi = mid;
-
-    mid = (lo + hi) * 0.5;
-    expanded = ExpandScalarLikeFinalPass(mid);
-    if (expanded < target) lo = mid; else hi = mid;
-
-    mid = (lo + hi) * 0.5;
-    expanded = ExpandScalarLikeFinalPass(mid);
-    if (expanded < target) lo = mid; else hi = mid;
-
-    mid = (lo + hi) * 0.5;
-    expanded = ExpandScalarLikeFinalPass(mid);
-    if (expanded < target) lo = mid; else hi = mid;
-
-    mid = (lo + hi) * 0.5;
-    expanded = ExpandScalarLikeFinalPass(mid);
-    if (expanded < target) lo = mid; else hi = mid;
-
-    mid = (lo + hi) * 0.5;
-    expanded = ExpandScalarLikeFinalPass(mid);
-    if (expanded < target) lo = mid; else hi = mid;
-
-    mid = (lo + hi) * 0.5;
-    expanded = ExpandScalarLikeFinalPass(mid);
-    if (expanded < target) lo = mid; else hi = mid;
-
-    mid = (lo + hi) * 0.5;
-    expanded = ExpandScalarLikeFinalPass(mid);
-    if (expanded < target) lo = mid; else hi = mid;
+        if (expanded < target)
+        {
+            lo = mid;
+        }
+        else
+        {
+            hi = mid;
+        }
+    }
 
     return hi;
 }
 
 float3 PreCompressUIForFinalHDRPass(float3 linear_color)
 {
-    // Desired final UI/HUD peak in diffuse-white-relative units.
-    float ui_peak = max(
+    linear_color = max(linear_color, 0.0);
+
+    // RenoDX UI/graphics white target relative to diffuse white.
+    // This makes the shader respond to the RenoDX white point / UI white setting.
+    float ui_white_relative = max(
         1.0,
         RENODX_GRAPHICS_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0)
     );
 
-    // Find the maximum SDR input value this HUD shader should output
-    // so that after the final full-screen HDR expansion pass, it lands
-    // near the UI/graphics white target instead of scene peak white.
-    float allowed_input_peak = InverseExpandScalarLikeFinalPass(ui_peak);
+    // Find the SDR-range value that will become the chosen UI white
+    // after the final fullscreen HDR expansion pass.
+    float allowed_input_peak = InverseExpandScalarLikeFinalPass(ui_white_relative);
 
     float max_channel = max(max(linear_color.r, linear_color.g), linear_color.b);
 
@@ -109,7 +93,7 @@ float3 PreCompressUIForFinalHDRPass(float3 linear_color)
         linear_color *= allowed_input_peak / max(max_channel, 0.000001);
     }
 
-    return max(linear_color, 0.0);
+    return linear_color;
 }
 
 float4 main(PS_IN i) : COLOR
@@ -134,16 +118,16 @@ float4 main(PS_IN i) : COLOR
     // Original shader multiplies albedo by this lighting/color value.
     float3 linear_color = albedo * multiplier;
 
-    const float UI_SDR_WHITE = 0.31;
+    // ------------------------------------------------------------
+    // RenoDX white-point aware UI/HUD pre-compression
+    //
+    // This replaces the old hard-coded:
+    // const float UI_SDR_WHITE = 0.31;
+    //
+    // Now the result follows the RenoDX UI/graphics white setting.
+    // ------------------------------------------------------------
 
-    float max_channel = max(max(linear_color.r, linear_color.g), linear_color.b);
-
-    if (max_channel > UI_SDR_WHITE)
-{
-      linear_color *= UI_SDR_WHITE / max(max_channel, 0.000001);
-    }
-
-    linear_color = max(linear_color, 0.0);
+    linear_color = PreCompressUIForFinalHDRPass(linear_color);
 
     // ------------------------------------------------------------
     // Original linear to sRGB output

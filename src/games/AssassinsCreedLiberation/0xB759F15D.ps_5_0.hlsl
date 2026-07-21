@@ -53,7 +53,7 @@ void main(
 
   o0.xyzw = r0.xxxy * g_ConstColor.xyzw + g_ConstColorAdd.xyzw;
 
-  o0.rgb = ApplyRenoDXUIWhite(o0.rgb);
+  o0.rgb = saturate(o0.rgb);
 
   return;
 }

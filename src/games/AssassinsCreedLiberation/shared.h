@@ -90,6 +90,12 @@ struct ShaderInjectData {
   float custom_bloom;
   float custom_lens_dirt;
   float custom_fog_density;
+
+  // PsychoV22 controls, appended so the existing layout stays stable.
+  float psychov22_compression;
+  float psychov22_gamut_compression;
+  float psychov22_gamut_mode;
+  float psychov22_cone_response;
 };
 
 #ifndef __cplusplus
@@ -121,6 +127,22 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
+
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
+#define RENODX_TONE_MAP_TYPE_PSYCHOV22       22.f
+#endif
+#ifndef RENODX_PSYCHOV22_COMPRESSION
+#define RENODX_PSYCHOV22_COMPRESSION         shader_injection.psychov22_compression
+#endif
+#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV22_GAMUT_COMPRESSION   shader_injection.psychov22_gamut_compression
+#endif
+#ifndef RENODX_PSYCHOV22_GAMUT_MODE
+#define RENODX_PSYCHOV22_GAMUT_MODE          shader_injection.psychov22_gamut_mode
+#endif
+#ifndef RENODX_PSYCHOV22_CONE_RESPONSE
+#define RENODX_PSYCHOV22_CONE_RESPONSE       shader_injection.psychov22_cone_response
+#endif
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
 #define RENODX_INTERMEDIATE_ENCODING         shader_injection.intermediate_encoding
 #define RENODX_SWAP_CHAIN_DECODING           shader_injection.swap_chain_decoding

@@ -1,5 +1,15 @@
 #include "./common.hlsl"
 
+// Put psychov-22.hlsl here:
+//   src/shaders/tonemap/psychov/psychov-22.hlsl
+#ifndef RENODX_USE_PSYCHOV22
+#define RENODX_USE_PSYCHOV22 1
+#endif
+
+#if RENODX_USE_PSYCHOV22
+#include "../../shaders/tonemap/psychov/psychov-22.hlsl"
+#endif
+
 Texture2D<float4> t7 : register(t7);
 Texture2D<float4> t6 : register(t6);
 Texture2D<float4> t5 : register(t5);
@@ -34,6 +44,90 @@ cbuffer cb0 : register(b0)
 #ifndef RENODX_MID_GREY_RANGE
 #define RENODX_MID_GREY_RANGE 0.50f
 #endif
+
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
+#define RENODX_TONE_MAP_TYPE_PSYCHOV22 22.0f
+#endif
+
+#ifndef RENODX_PSYCHOV22_COMPRESSION
+#define RENODX_PSYCHOV22_COMPRESSION 4.0f
+#endif
+
+#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV22_GAMUT_COMPRESSION 1.0f
+#endif
+
+#ifndef RENODX_PSYCHOV22_GAMUT_MODE
+#define RENODX_PSYCHOV22_GAMUT_MODE 1.0f
+#endif
+
+#ifndef RENODX_PSYCHOV22_CONE_RESPONSE
+#define RENODX_PSYCHOV22_CONE_RESPONSE 1.0f
+#endif
+
+
+float SafeFinite1(float v)
+{
+  // NaN is the only value where v != v.
+  v = (v == v) ? v : 0.0f;
+  return min(max(v, 0.0f), 65504.0f);
+}
+
+float3 SafePositive(float3 c)
+{
+  return float3(SafeFinite1(c.r), SafeFinite1(c.g), SafeFinite1(c.b));
+}
+
+bool IsRenoDRTMode()
+{
+  return abs(RENODX_TONE_MAP_TYPE - renodx::draw::TONE_MAP_TYPE_RENO_DRT) < 0.5f;
+}
+
+bool IsPsychoV22Mode()
+{
+  return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV22) < 0.5f;
+}
+
+bool IsCustomHDRMode()
+{
+  return IsRenoDRTMode() || IsPsychoV22Mode();
+}
+
+float3 ApplyPsychoV22HDRTonemap(float3 hdr_color)
+{
+  hdr_color = SafePositive(hdr_color);
+
+#if RENODX_USE_PSYCHOV22
+  float peak_value = max(
+      RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f),
+      1.0f);
+
+  int gamut_mode = (RENODX_PSYCHOV22_GAMUT_MODE > 0.5f) ? 1 : 0;
+
+  hdr_color = renodx::tonemap::psychov::psychotm_test22(
+      hdr_color,
+      peak_value,
+      RENODX_TONE_MAP_EXPOSURE,
+      RENODX_TONE_MAP_HIGHLIGHTS,
+      RENODX_TONE_MAP_SHADOWS,
+      RENODX_TONE_MAP_CONTRAST,
+      RENODX_TONE_MAP_SATURATION,
+      1.0f,                                  // bleaching_intensity, reserved
+      100.0f,                                // clip_point, reserved
+      RENODX_TONE_MAP_HUE_CORRECTION,
+      1.0f,                                  // adaptation_contrast, deprecated
+      0,                                     // white_curve_mode, deprecated
+      RENODX_PSYCHOV22_CONE_RESPONSE,        // cone_response_exponent
+      0.18f.xxx,                             // current adaptive state / anchor-in
+      0.18f.xxx,                             // desired background state / anchor-out
+      RENODX_PSYCHOV22_GAMUT_COMPRESSION,
+      gamut_mode,
+      1.0f,                                  // adaptive_normalization, deprecated
+      RENODX_PSYCHOV22_COMPRESSION);
+#endif
+
+  return SafePositive(hdr_color);
+}
 
 void GetLutScaleBias(out float3 scale, out float3 bias)
 {
@@ -73,7 +167,7 @@ float3 ApplyGameLUTAndGrade(float3 inputColor)
 {
   float4 r0, r1, r2, r3, r4;
 
-  bool hdr_path = ((RENODX_TONE_MAP_TYPE == renodx::draw::TONE_MAP_TYPE_RENO_DRT));
+  bool hdr_path = IsCustomHDRMode();
 
   r0.xyz = inputColor;
   r0.xyz = r0.xyz * cb0[128].xyz + cb0[129].xyz;
@@ -172,7 +266,7 @@ void main(
   float3 sceneColor = t0.Sample(s0_s, v1.xy).xyz;
   float3 bloomColor = t4.Sample(s4_s, v1.xy).xyz;
 
-  if (RENODX_TONE_MAP_TYPE != renodx::draw::TONE_MAP_TYPE_RENO_DRT) 
+  if (!IsCustomHDRMode())
   {
     float3 colorSDR = saturate(sceneColor + bloomColor);
     colorSDR = ApplyGameLUTAndGrade(colorSDR);
@@ -198,6 +292,11 @@ void main(
   float3 graded_color = renodx::color::gamma::DecodeSafe(max(graded_lut_output, 0.0));
 
   float3 outputColor = CustomGradingEnd(ungraded_color, sdr_color, graded_color);
+
+  if (IsPsychoV22Mode())
+  {
+    outputColor = ApplyPsychoV22HDRTonemap(outputColor);
+  }
 
   outputColor = CounteractBlackAndMidGreyRaise(outputColor);
 

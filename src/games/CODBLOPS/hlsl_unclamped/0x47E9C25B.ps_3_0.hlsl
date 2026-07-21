@@ -1,0 +1,349 @@
+// Mechanically reconstructed from 0x47E9C25B.ps_3_0.cso.
+// HDR edit: terminal RGB upper clamp removed; zero floor retained.
+// Original terminal path: saturate(linear RGB) -> sqrt encode.
+// Modified terminal path: max(linear RGB, 0) -> sqrt encode.
+// Intermediate clamps, alpha clamps, masks, depth, and control flow are unchanged.
+// Entry point: main    Target: ps_3_0
+
+float4 c[224] : register(c0);
+sampler2D s0 : register(s0);
+sampler2D s1 : register(s1);
+sampler2D s2 : register(s2);
+sampler2D s3 : register(s3);
+sampler2D s4 : register(s4);
+sampler2D s5 : register(s5);
+sampler2D s6 : register(s6);
+sampler2D s12 : register(s12);
+sampler2D s13 : register(s13);
+sampler2D s14 : register(s14);
+samplerCUBE s15 : register(s15);
+
+struct PS_INPUT
+{
+    float4 v0 : TEXCOORD1;
+    float4 v1 : TEXCOORD0;
+    float4 v2 : TEXCOORD2;
+    float4 v3 : TEXCOORD3;
+    float4 v4 : TEXCOORD4;
+    float4 v5 : TEXCOORD5;
+    float4 v6 : TEXCOORD6;
+    float4 v7 : TEXCOORD7;
+    float4 v8 : TEXCOORD8;
+    float2 vPosInput : VPOS;
+};
+
+float4 main(PS_INPUT input) : COLOR0
+{
+    float4 v0 = input.v0;
+    float4 v1 = input.v1;
+    float4 v2 = input.v2;
+    float4 v3 = input.v3;
+    float4 v4 = input.v4;
+    float4 v5 = input.v5;
+    float4 v6 = input.v6;
+    float4 v7 = input.v7;
+    float4 v8 = input.v8;
+    float4 vPos = float4(input.vPosInput.xy, 0.0f, 0.0f);
+    const float4 c1 = float4(300.0f, -64.0301971f, 9.40301991f, 60.0f);
+    const float4 c3 = float4(4.07999992f, 4.06451607f, -2.07999992f, -2.06451607f);
+    const float4 c4 = float4(1.0f, 0.5f, 0.0f, 1000.0f);
+    const float4 c12 = float4(0.00333333341f, -2.0f, -0.5f, -1.0f);
+    const float4 c13 = float4(1.0f, 0.0f, -2.0f, 3.0f);
+    const float4 c14 = float4(0.000244140625f, 0.0f, -0.000244140625f, 0.25f);
+    const float4 c15 = float4(0.00048828125f, -0.000122070312f, 0.0f, 0.75f);
+    const float4 c16 = float4(4.0f, -3.0f, -4.0f, 31.875f);
+    const float4 c19 = float4(4.0f, -2.0f, 8.0f, 0.0f);
+    const float4 c42 = float4(0.5f, -0.5f, 0.0f, 0.0f);
+    float4 r0 = 0.0f;
+    float4 r1 = 0.0f;
+    float4 r2 = 0.0f;
+    float4 r3 = 0.0f;
+    float4 r4 = 0.0f;
+    float4 r5 = 0.0f;
+    float4 r6 = 0.0f;
+    float4 r7 = 0.0f;
+    float4 r8 = 0.0f;
+    float4 r9 = 0.0f;
+    float4 r10 = 0.0f;
+    float4 r11 = 0.0f;
+    float4 r12 = 0.0f;
+    float4 oC0 = 0.0f;
+
+    r0.xy = (v8.zw) * (-(c12.wz));
+    r2 = tex2D(s13, r0.xy);
+    r0.xy = (v8.zw) * (c4.xy) + (c4.zy);
+    r0 = tex2D(s13, r0.xy);
+    r1.xyz = v7.xyz;
+    r3.xyz = (r1.zxy) * (v5.yzx);
+    r2.w = r0.y;
+    r3.xyz = (r1.yzx) * (v5.zxy) + (-(r3.xyz));
+    r4.xy = (r2.yw) * (c19.xx) + (c19.yy);
+    r1.xyz = (r3.xyz) * (v5.www);
+    r0.w = dot(v7.xyz, v7.xyz);
+    r1.xyz = (r4.yyy) * (r1.xyz);
+    r0.w = rsqrt(r0.w);
+    r1.xyz = (r4.xxx) * (v5.xyz) + (r1.xyz);
+    r1.xyz = (v7.xyz) * (r0.www) + (r1.xyz);
+    r4.xyz = normalize(r1.xyz);
+    r8.xyz = (r0.www) * (v7.xyz);
+    r1 = tex2D(s14, v8.zw);
+    r6.xy = (r1.xy) * (c16.ww);
+    r2.w = dot(r4.xyz, r8.xyz);
+    r7.xy = (r2.xz) * (r6.xx);
+    r0.w = (r1.x) * (c16.w) + (-(r7.x));
+    r5.xy = (r0.xz) * (r6.yy);
+    r0.w = (r2.z) * (-(r6.x)) + (r0.w);
+    r0.y = (r1.y) * (c16.w) + (-(r5.x));
+    r1.w = (r0.z) * (-(r6.y)) + (r0.y);
+    r4.y = (r0.w) + (r0.w);
+    r0 = tex2D(s4, v8.xy);
+    r0.w = saturate(r0.y);
+    r0.xyz = c[36].xyz;
+    r0.xyz = (-(r0.yzx)) + (c[37].yzx);
+    r2.y = (r1.w) + (r1.w);
+    r6.xyz = (r0.www) * (r0.xyz) + (c[36].yzx);
+    r4.xz = (r7.xy) * (c16.xx);
+    r0.z = frac(r6.y);
+    r7.xw = c12.xw;
+    r0.w = (r7.x) * (c[26].w);
+    r0.y = (r6.y) + (-(r0.z));
+    r0.w = frac(abs(r0.w));
+    r0.y = (r0.y) * (c12.y);
+    r0.w = ((c[26].w) >= 0.0f ? (r0.w) : (-(r0.w)));
+    r5.w = exp2(r0.y);
+    r3.w = (r0.z) + (c12.z);
+    r0 = (r0.wwww) * (c1);
+    r1.w = ((r3.w) >= 0.0f ? (-(c12.z)) : (-(c12.y)));
+    r1.xy = (c[34].xy) * (r0.xx) + (v8.xy);
+    r4.w = (r5.w) * (r1.w);
+    r12.xy = (r1.xy) * (c[35].xx);
+    r2.xz = (r5.xy) * (c16.xx);
+    r7.x = (r12.x) * (r4.w) + (r0.w);
+    r1.x = (r12.x) * (r5.w) + (r0.w);
+    r1.z = (r5.w) * (r12.y);
+    r1 = tex2D(s5, r1.xz);
+    r5.xy = (r1.wy) * (c3.xy) + (c3.zw);
+    r1.xy = (r12.xy) * (r5.ww) + (r0.yz);
+    r1 = tex2D(s5, r1.xy);
+    r1.xy = (r1.wy) * (c3.xy) + (c3.zw);
+    r1.xy = (r5.xy) * (r1.xy);
+    r0.xy = (r12.xy) * (r4.ww) + (r0.yz);
+    r0 = tex2D(s5, r0.xy);
+    r5.xy = (r0.wy) * (c3.xy) + (c3.zw);
+    r7.z = (r4.w) * (r12.y);
+    r0 = tex2D(s5, r7.xz);
+    r0.xy = (r0.wy) * (c3.xy) + (c3.zw);
+    r0.z = (abs(r3.w)) + (abs(r3.w));
+    r0.xy = (r5.xy) * (r0.xy) + (-(r1.xy));
+    r0.w = (r6.x) * (c[39].x);
+    r0.xy = (r0.zz) * (r0.xy) + (r1.xy);
+    r10.xyz = (r2.www) * (r2.xyz) + (r4.xyz);
+    r2.xy = (r0.ww) * (r0.xy);
+    r0 = tex2D(s3, r12.xy);
+    r1.xy = (r0.wy) * (c3.xy) + (c3.zw);
+    r0.xyz = (vPos.yyy) * (c[28].xyz);
+    r2.xy = (c[38].xx) * (r1.xy) + (r2.xy);
+    r1.xyz = (vPos.xxx) * (c[27].xyz) + (r0.xyz);
+    r0.xyz = (-(r3.xyz)) * (r2.yyy);
+    r9.xyz = (r1.xyz) + (c[29].xyz);
+    r0.xyz = (r2.xxx) * (v5.xyz) + (r0.xyz);
+    r0.w = dot(r9.xyz, r9.xyz);
+    r1.xyz = normalize(c[17].xyz);
+    r6.w = rsqrt(r0.w);
+    r0.xyz = (r0.xyz) + (v7.xyz);
+    r2.xyz = (r9.xyz) * (r6.www) + (r1.xyz);
+    r7.xyz = normalize(r0.xyz);
+    r0.xyz = normalize(r2.xyz);
+    r8.w = saturate(dot(r8.xyz, r1.xyz));
+    r0.w = saturate(dot(r7.xyz, r0.xyz));
+    r6.x = pow(abs(r0.w), c4.w);
+    r0.w = dot(r7.xyz, r8.xyz);
+    r0.w = (r0.w) + (c12.w);
+    r0.xyz = (-(v6.xyz)) + (c[5].xyz);
+    r1.w = (r0.w) * (c[40].x);
+    r11.xyz = normalize(r0.xyz);
+    r6.y = saturate(dot(r8.xyz, r11.xyz));
+    r0 = v1;
+    r1 = (r0) * (r1.wwww) + (v0);
+    if ((-(c12.w)) >= (r1.w))
+    {
+        r2 = (r1.xyzx) * (c13.xxxy);
+        r0 = (r2) + (c14.xxyy);
+        r0 = tex2Dlod(s0, r0);
+        r3 = (r2) + (c14.zzyy);
+        r5 = tex2Dlod(s0, r3);
+        r3 = (r2) + (c15.xyzz);
+        r3 = tex2Dlod(s0, r3);
+        r4 = (r2) + (-(c15.xyzz));
+        r2 = tex2Dlod(s0, r4);
+        r0.y = r5.x;
+        r0.z = r3.x;
+        r0.w = r2.x;
+        r1.z = dot(r0, c14.wwww);
+        if ((c15.w) < (r1.w))
+        {
+            r3.zw = r4.zw;
+            r2.zw = r3.zw;
+            r1.xy = (r1.xy) * (c[2].ww) + (c[2].xy);
+            r0.zw = r2.zw;
+            r0.xy = (r1.xy) + (-(c15.xy));
+            r0 = tex2Dlod(s0, r0);
+            r0.w = r0.x;
+            r4.xy = (r1.xy) + (c14.xx);
+            r4 = tex2Dlod(s0, r4);
+            r0.x = r4.x;
+            r3.xy = (r1.xy) + (c14.zz);
+            r3 = tex2Dlod(s0, r3);
+            r0.y = r3.x;
+            r2.xy = (r1.xy) + (c15.xy);
+            r2 = tex2Dlod(s0, r2);
+            r0.z = r2.x;
+            r0.w = dot(r0, c14.wwww);
+            r0.z = (-(r1.z)) + (r0.w);
+            r0.w = (r1.w) * (c16.x) + (c16.y);
+            r2.w = (r0.w) * (r0.z) + (r1.z);
+        }
+        else
+        {
+            r2.w = r1.z;
+        }
+    }
+    else
+    {
+        r0.w = (r1.w) + (c16.z);
+        r2.w = ((r0.w) >= 0.0f ? (c13.y) : (c13.x));
+        r0 = tex2D(s12, v8.zw);
+        if ((r2.w) != (-(r2.w)))
+        {
+            r5.zw = (r1.zz) * (c13.xy);
+            r4.zw = r5.zw;
+            r1.xy = (r1.xy) * (c[2].ww) + (c[2].xy);
+            r3.zw = r4.zw;
+            r2.xy = (r1.xy) + (-(c15.xy));
+            r2.zw = r3.zw;
+            r2 = tex2Dlod(s0, r2);
+            r2.w = r2.x;
+            r5.xy = (r1.xy) + (c14.xx);
+            r5 = tex2Dlod(s0, r5);
+            r2.x = r5.x;
+            r4.xy = (r1.xy) + (c14.zz);
+            r4 = tex2Dlod(s0, r4);
+            r2.y = r4.x;
+            r3.xy = (r1.xy) + (c15.xy);
+            r3 = tex2Dlod(s0, r3);
+            r2.z = r3.x;
+            r0.x = dot(r2, c14.wwww);
+            r0.w = saturate((r1.w) + (-(c13.w)));
+            r0.z = (r0.y) + (-(r0.x));
+            r0.w = (r0.w) * (r0.z) + (r0.x);
+        }
+        else
+        {
+            r0.w = r0.y;
+        }
+        r2.w = r0.w;
+    }
+    r0.w = dot(r11.xyz, c[21].xyz);
+    r0.w = saturate((r0.w) * (c[22].x) + (c[22].y));
+    r0.z = (r0.w) * (c13.z) + (c13.w);
+    r0.w = (r0.w) * (r0.w);
+    r1.xyz = (r9.xyz) * (r6.www) + (r11.xyz);
+    r2.z = (r0.z) * (r0.w);
+    r0.xyz = normalize(r1.xyz);
+    r2.y = saturate(dot(r7.xyz, r0.xyz));
+    r0 = (v6.xyzx) * (c13.xxxy) + (c13.yyyx);
+    r1.w = pow(abs(r2.y), c4.w);
+    r1.z = dot(r0, c[20]);
+    r1.z = 1.0f / (r1.z);
+    r2.x = dot(r0, c[11]);
+    r1.x = dot(r0, c[9]);
+    r2.y = (r2.x) * (r2.x);
+    r1.y = dot(r0, c[10]);
+    r0.w = dot(c[7].yz, r2.xy) + (c[7].x);
+    r0.z = saturate(1.0f / (r0.w));
+    r0.xy = saturate((r2.xx) * (c[8].xy) + (c[8].zw));
+    r2.xy = (r0.xy) * (c13.zz) + (c13.ww);
+    r0.xy = (r0.xy) * (r0.xy);
+    r0.w = ((-abs(r0.w)) >= 0.0f ? (c13.y) : (r0.z));
+    r0.z = (r2.x) * (r0.x);
+    r0.w = (r0.w) * (r0.z);
+    r0.z = (r0.y) * (-(r2.y)) + (-(c12.w));
+    r0.xy = (r1.zz) * (r1.xy);
+    r0.w = (r0.w) * (r0.z);
+    r1.z = (r2.z) * (r0.w);
+    r0.xy = (r0.xy) * (-(c12.zz)) + (-(c12.zz));
+    r0 = tex2D(s1, r0.xy);
+    r0.xyz = (r0.xyz) * (r0.xyz);
+    r0.xyz = (r1.zzz) * (r0.xyz);
+    r2.xyz = (r2.www) * (c[18].xyz);
+    r1.xyz = (r0.xyz) * (c[6].xyz);
+    r0.xyz = (r8.www) * (r2.xyz);
+    r2.xyz = (r6.xxx) * (r2.xyz);
+    r0.xyz = (r6.yyy) * (r1.xyz) + (r0.xyz);
+    r1.xyz = (r1.www) * (r1.xyz) + (r2.xyz);
+    r2.xyz = (r10.xyz) + (r0.xyz);
+    r0 = tex2D(s6, r12.xy);
+    r4.xyz = (r9.xyz) * (r6.www);
+    r0.w = dot(-(r4.xyz), r7.xyz);
+    r0.w = (r0.w) + (r0.w);
+    r3.xyz = (r7.xyz) * (-(r0.www)) + (-(r4.xyz));
+    r2.xyz = (r2.xyz) * (r0.xyz);
+    r0.w = dot(r3.xyz, r8.xyz);
+    r0.w = ((-(r0.w)) >= 0.0f ? (r0.w) : (c13.y));
+    r0.xyz = normalize(-(v6.xyz));
+    r1.w = (r0.w) + (r0.w);
+    r0.w = dot(-(r0.xyz), r7.xyz);
+    r3.xyz = (r1.www) * (-(r8.xyz)) + (r3.xyz);
+    r0.w = (r0.w) + (r0.w);
+    r0.xyz = (r7.xyz) * (-(r0.www)) + (-(r0.xyz));
+    r0.w = c13.y;
+    r0 = texCUBElod(s15, r0);
+    r5.xyz = (r3.yyy) * (v3.xyw);
+    r5.xyz = (r3.xxx) * (v2.xyw) + (r5.xyz);
+    r5.xyz = (r3.zzz) * (v4.xyw) + (r5.xyz);
+    r0.w = 1.0f / (r5.z);
+    r5.xy = (r5.xy) * (r0.ww);
+    r0.xyz = (r0.xyz) * (r0.xyz);
+    r1.w = max(abs(r5.x), abs(r5.y));
+    r0.xyz = (r0.xyz) * (c[31].xxx);
+    r0.w = pow(abs(r1.w), c[32].x);
+    r3.xyz = (r0.xyz) * (c19.zzz);
+    r0.w = saturate((-(r0.w)) + (-(c12.w)));
+    r1.w = ((-(r5.z)) >= 0.0f ? (c13.y) : (r0.w));
+    r0.xy = (r5.xy) * (c42.xy) + (c42.xx);
+    r0 = tex2D(s2, r0.xy);
+    r0.xyz = (r0.xyz) * (r0.xyz);
+    r0.w = 1.0f / (c[30].x);
+    r0.xyz = (r0.xyz) * (r0.www);
+    r0.w = saturate(dot(r7.xyz, r4.xyz));
+    r0.xyz = (r0.xyz) * (c[33].xxx) + (-(r3.xyz));
+    r0.w = (-(r0.w)) + (-(c12.w));
+    r0.xyz = (r1.www) * (r0.xyz) + (r3.xyz);
+    r1.w = (r0.w) * (r0.w);
+    r0.xyz = (r1.xyz) + (r0.xyz);
+    r1.w = (r1.w) * (r1.w);
+    r1.xyz = (r0.xyz) * (r6.zzz) + (-(r2.xyz));
+    r0.w = (r0.w) * (r1.w);
+    r1.w = (-(r7.w)) + (-(c[41].x));
+    r0.xyz = normalize(v6.xyz);
+    r1.w = saturate((r0.w) * (r1.w) + (c[41].x));
+    r0.w = dot(c[23].xyz, r0.xyz);
+    r0.w = saturate((c[25].y) * (r0.w) + (c[25].x));
+    r0.xyz = c[0].xyz;
+    r0.xyz = (-(r0.xyz)) + (c[24].xyz);
+    r1.xyz = (r1.www) * (r1.xyz) + (r2.xyz);
+    r0.xyz = (r0.www) * (r0.xyz) + (c[0].xyz);
+    r1.xyz = (r0.xyz) * (-(c[0].www)) + (r1.xyz);
+    r1.xyz = (r1.xyz) * (v6.www);
+    r0.xyz = (r0.xyz) * (c[0].www) + (r1.xyz);
+    r0.xyz = max(((r0.xyz) * (c[30].xxx)), 0.0f); // HDR: removed only the 1.0 ceiling
+    r0.x = rsqrt(r0.x);
+    r0.y = rsqrt(r0.y);
+    r0.z = rsqrt(r0.z);
+    oC0.x = 1.0f / (r0.x);
+    oC0.y = 1.0f / (r0.y);
+    oC0.z = 1.0f / (r0.z);
+    oC0.w = -(c12.w);
+
+    return oC0;
+}
