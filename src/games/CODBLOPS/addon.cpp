@@ -14,12 +14,19 @@
 #include <embed/shaders.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <iomanip>
 #include <limits>
+#include <mutex>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
@@ -77,6 +84,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 ShaderInjectData shader_injection;
 
 float current_settings_mode = 0;
+float dx9_auto_output_unclamp_mode = 1.f;
 
 constexpr float TONE_MAP_TYPE_VANILLA = 0.f;
 constexpr float TONE_MAP_TYPE_RENODRT = 3.f;
@@ -100,6 +108,827 @@ void ApplySwapChainEncoding(float value) {
   renodx::mods::swapchain::SetUseHDR10(is_hdr10);
   renodx::mods::swapchain::use_resize_buffer = value < 4.f;
   shader_injection.swap_chain_encoding_color_space = is_hdr10 ? 1.f : 0.f;
+}
+
+
+// ============================================================================
+// Allowlisted D3D9 terminal output unclamping
+// ============================================================================
+//
+// A terminal sqrt(saturate(...)) sequence is not enough to prove that a shader
+// writes final scene color. BO1 uses the same encoding pattern in many surface,
+// character, weapon, shadow-adjacent, and packed/intermediate passes. Patching
+// all such shaders can produce pink silhouettes, broken shading, and stretched
+// or corrupted textures.
+//
+// The default mode therefore patches only a small hash allowlist of known
+// post-processing and sky/cloud shaders. Model/material lighting is separated
+// into an explicit experimental mode. Broad heuristic modes remain available
+// for debugging, but are intentionally labelled unsafe.
+//
+// Supported terminal forms:
+//
+//   1. sqrt(saturate(rgb)) output chains:
+//
+//        mul_sat r0.xyz, ...
+//        rsq     r0.x, r0.x
+//        rsq     r0.y, r0.y
+//        rsq     r0.z, r0.z
+//        rcp     oC0.x, r0.x
+//        rcp     oC0.y, r0.y
+//        rcp     oC0.z, r0.z
+//
+//      becomes the bytecode equivalent of:
+//
+//        rgb = original_expression;
+//        rgb = max(rgb, 0.0f);
+//        output = sqrt(rgb);
+//
+//   2. A direct final RGB _sat write to oC0.xyz. The original instruction is
+//      redirected through a free temporary register, then max(rgb, 0) is
+//      written to oC0.xyz.
+//
+// The lower zero bound is deliberately retained. Blindly clearing _sat before
+// an rsq/rcp square-root sequence would allow negative values to create NaNs.
+//
+// The patch runs after RenoDX's normal shader replacement hook is registered,
+// so embedded hash-based replacements are processed first. The patched shader
+// bytecode is cached for the lifetime of the addon.
+
+constexpr uint32_t DX9_AUTO_UNCLAMP_OFF = 0u;
+constexpr uint32_t DX9_AUTO_UNCLAMP_CURATED_POST_SKY = 1u;
+constexpr uint32_t DX9_AUTO_UNCLAMP_CURATED_WITH_MODEL = 2u;
+constexpr uint32_t DX9_AUTO_UNCLAMP_HEURISTIC_SQRT = 3u;
+constexpr uint32_t DX9_AUTO_UNCLAMP_HEURISTIC_ALL = 4u;
+
+constexpr uint32_t DX9_PS_3_0_VERSION = 0xFFFF0300u;
+constexpr uint32_t DX9_SHADER_END = 0x0000FFFFu;
+constexpr uint32_t DX9_SHADER_COMMENT_OPCODE = 0x0000FFFEu;
+constexpr uint32_t DX9_OPCODE_MASK = 0x0000FFFFu;
+constexpr uint32_t DX9_INSTRUCTION_LENGTH_MASK = 0x0F000000u;
+constexpr uint32_t DX9_INSTRUCTION_LENGTH_SHIFT = 24u;
+constexpr uint32_t DX9_COMMENT_LENGTH_MASK = 0x7FFF0000u;
+constexpr uint32_t DX9_COMMENT_LENGTH_SHIFT = 16u;
+constexpr uint32_t DX9_INSTRUCTION_PREDICATED = 0x10000000u;
+
+constexpr uint32_t DX9_PARAMETER_TOKEN = 0x80000000u;
+constexpr uint32_t DX9_REGISTER_NUMBER_MASK = 0x000007FFu;
+constexpr uint32_t DX9_REGISTER_TYPE_MASK = 0x70001800u;
+constexpr uint32_t DX9_WRITE_MASK_MASK = 0x000F0000u;
+constexpr uint32_t DX9_WRITE_MASK_SHIFT = 16u;
+constexpr uint32_t DX9_DEST_MODIFIER_MASK = 0x00F00000u;
+constexpr uint32_t DX9_DEST_SATURATE = 0x00100000u;
+constexpr uint32_t DX9_DEST_PARTIAL_PRECISION = 0x00200000u;
+constexpr uint32_t DX9_SOURCE_SWIZZLE_MASK = 0x00FF0000u;
+constexpr uint32_t DX9_SOURCE_SWIZZLE_SHIFT = 16u;
+constexpr uint32_t DX9_SOURCE_MODIFIER_MASK = 0x0F000000u;
+
+constexpr uint32_t DX9_REGISTER_TEMP = 0u;
+constexpr uint32_t DX9_REGISTER_COLOR_OUTPUT = 8u;
+
+constexpr uint16_t DX9_OP_MOV = 1u;
+constexpr uint16_t DX9_OP_ADD = 2u;
+constexpr uint16_t DX9_OP_SUB = 3u;
+constexpr uint16_t DX9_OP_MAD = 4u;
+constexpr uint16_t DX9_OP_MUL = 5u;
+constexpr uint16_t DX9_OP_RCP = 6u;
+constexpr uint16_t DX9_OP_RSQ = 7u;
+constexpr uint16_t DX9_OP_DP3 = 8u;
+constexpr uint16_t DX9_OP_DP4 = 9u;
+constexpr uint16_t DX9_OP_MIN = 10u;
+constexpr uint16_t DX9_OP_MAX = 11u;
+constexpr uint16_t DX9_OP_LRP = 18u;
+constexpr uint16_t DX9_OP_DCL = 31u;
+constexpr uint16_t DX9_OP_DEFB = 47u;
+constexpr uint16_t DX9_OP_DEFI = 48u;
+constexpr uint16_t DX9_OP_TEXLD = 66u;
+constexpr uint16_t DX9_OP_DEF = 81u;
+constexpr uint16_t DX9_OP_CMP = 88u;
+
+constexpr uint32_t DX9_WRITE_X = 0x1u;
+constexpr uint32_t DX9_WRITE_Y = 0x2u;
+constexpr uint32_t DX9_WRITE_Z = 0x4u;
+constexpr uint32_t DX9_WRITE_W = 0x8u;
+constexpr uint32_t DX9_WRITE_RGB = 0x7u;
+
+constexpr uint32_t DX9_SWIZZLE_X = 0x00u;
+constexpr uint32_t DX9_SWIZZLE_Y = 0x55u;
+constexpr uint32_t DX9_SWIZZLE_Z = 0xAAu;
+constexpr uint32_t DX9_SWIZZLE_W = 0xFFu;
+constexpr uint32_t DX9_SWIZZLE_XYZW = 0xE4u;
+
+// Known scene/post-process and sky/cloud output shaders. These are the only
+// shaders patched by the default mode. A hash still has to pass the strict
+// terminal-output bytecode matcher before it is modified.
+const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_POST_SKY_ALLOWLIST = {
+    0x1167C22Au,
+    0x23B35169u,
+    0x357DE7FDu,
+    0x59760569u,
+    0x706435ADu,
+    0x70F19652u,
+    0x783482DEu,
+    0x79E32AF8u,
+    0x81444CACu,
+    0x88954051u,
+    0x8F5D2EFFu,
+    0x93610C4Cu,  // LUT pass: current matcher intentionally leaves it unchanged.
+    0xC9558BEFu,
+    0xCAB1BCB8u,
+    0x94BC7D3Eu,  // Sky/cloud.
+    0xDAC6E2D9u,  // Sky/cloud.
+};
+
+// Exact matches to the supplied spotlight/model-lighting example. These are
+// kept out of the default mode because surface shaders can feed special model,
+// shadow, thermal/highlight, or intermediate paths in some scenes.
+const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_MODEL_ALLOWLIST = {
+    0xBACB9CF2u,
+    0xCDCD3EAEu,
+};
+
+// Add hashes here when a shader is confirmed to contain packed data or a
+// special effect that should never be changed, even in heuristic modes.
+const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_DENYLIST = {
+    // 0x00000000u,
+};
+
+bool DX9AutoUnclampModeAllowsHash(uint32_t mode, uint32_t hash) {
+  if (DX9_AUTO_UNCLAMP_DENYLIST.contains(hash)) return false;
+
+  switch (mode) {
+    case DX9_AUTO_UNCLAMP_CURATED_POST_SKY:
+      return DX9_AUTO_UNCLAMP_POST_SKY_ALLOWLIST.contains(hash);
+
+    case DX9_AUTO_UNCLAMP_CURATED_WITH_MODEL:
+      return DX9_AUTO_UNCLAMP_POST_SKY_ALLOWLIST.contains(hash)
+          || DX9_AUTO_UNCLAMP_MODEL_ALLOWLIST.contains(hash);
+
+    case DX9_AUTO_UNCLAMP_HEURISTIC_SQRT:
+    case DX9_AUTO_UNCLAMP_HEURISTIC_ALL:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+bool DX9AutoUnclampModeAllowsDirectOutput(uint32_t mode) {
+  return mode == DX9_AUTO_UNCLAMP_CURATED_POST_SKY
+      || mode == DX9_AUTO_UNCLAMP_CURATED_WITH_MODEL
+      || mode == DX9_AUTO_UNCLAMP_HEURISTIC_ALL;
+}
+
+enum class DX9AutoUnclampPatchKind : uint32_t {
+  NONE = 0u,
+  SQRT_OUTPUT,
+  DIRECT_OUTPUT,
+};
+
+struct DX9InstructionInfo {
+  size_t token_offset = 0u;
+  uint16_t opcode = 0u;
+  uint8_t operand_count = 0u;
+  uint32_t instruction_token = 0u;
+};
+
+struct DX9AutoUnclampPlan {
+  DX9AutoUnclampPatchKind kind = DX9AutoUnclampPatchKind::NONE;
+  size_t instruction_index = 0u;
+  std::array<uint32_t, 2u> free_temps = {0u, 0u};
+  uint32_t free_temp_count = 0u;
+};
+
+struct DX9CachedAutoUnclampShader {
+  uint32_t source_crc32 = 0u;
+  size_t source_size = 0u;
+  DX9AutoUnclampPatchKind kind = DX9AutoUnclampPatchKind::NONE;
+  std::vector<uint32_t> bytecode;
+};
+
+std::mutex g_dx9_auto_unclamp_mutex;
+std::unordered_map<uint64_t, DX9CachedAutoUnclampShader>
+    g_dx9_auto_unclamp_cache;
+uint32_t g_dx9_auto_unclamp_sqrt_count = 0u;
+uint32_t g_dx9_auto_unclamp_direct_count = 0u;
+uint32_t g_dx9_auto_unclamp_log_count = 0u;
+
+uint32_t DX9GetRegisterType(uint32_t token) {
+  return ((token >> 28u) & 0x7u) | ((token >> 8u) & 0x18u);
+}
+
+uint32_t DX9GetRegisterNumber(uint32_t token) {
+  return token & DX9_REGISTER_NUMBER_MASK;
+}
+
+uint32_t DX9GetWriteMask(uint32_t token) {
+  return (token & DX9_WRITE_MASK_MASK) >> DX9_WRITE_MASK_SHIFT;
+}
+
+uint32_t DX9GetSourceSwizzle(uint32_t token) {
+  return (token & DX9_SOURCE_SWIZZLE_MASK) >> DX9_SOURCE_SWIZZLE_SHIFT;
+}
+
+uint32_t DX9EncodeRegisterType(uint32_t type) {
+  return ((type & 0x7u) << 28u) | ((type & 0x18u) << 8u);
+}
+
+uint32_t DX9SetRegister(uint32_t token, uint32_t type, uint32_t number) {
+  token &= ~(DX9_REGISTER_TYPE_MASK | DX9_REGISTER_NUMBER_MASK);
+  token |= DX9_PARAMETER_TOKEN;
+  token |= DX9EncodeRegisterType(type);
+  token |= number & DX9_REGISTER_NUMBER_MASK;
+  return token;
+}
+
+uint32_t DX9MakeInstruction(uint16_t opcode, uint32_t operand_count) {
+  return static_cast<uint32_t>(opcode)
+      | ((operand_count << DX9_INSTRUCTION_LENGTH_SHIFT)
+         & DX9_INSTRUCTION_LENGTH_MASK);
+}
+
+uint32_t DX9MakeTempDest(
+    uint32_t register_number,
+    uint32_t write_mask,
+    bool partial_precision) {
+  uint32_t token = DX9_PARAMETER_TOKEN;
+  token |= DX9EncodeRegisterType(DX9_REGISTER_TEMP);
+  token |= register_number & DX9_REGISTER_NUMBER_MASK;
+  token |= (write_mask << DX9_WRITE_MASK_SHIFT) & DX9_WRITE_MASK_MASK;
+  if (partial_precision) token |= DX9_DEST_PARTIAL_PRECISION;
+  return token;
+}
+
+uint32_t DX9MakeTempSource(
+    uint32_t register_number,
+    uint32_t swizzle = DX9_SWIZZLE_XYZW) {
+  uint32_t token = DX9_PARAMETER_TOKEN;
+  token |= DX9EncodeRegisterType(DX9_REGISTER_TEMP);
+  token |= register_number & DX9_REGISTER_NUMBER_MASK;
+  token |= (swizzle << DX9_SOURCE_SWIZZLE_SHIFT)
+      & DX9_SOURCE_SWIZZLE_MASK;
+  return token;
+}
+
+bool DX9OpcodeMayHaveSaturatedColorDestination(uint16_t opcode) {
+  switch (opcode) {
+    case DX9_OP_MOV:
+    case DX9_OP_ADD:
+    case DX9_OP_SUB:
+    case DX9_OP_MAD:
+    case DX9_OP_MUL:
+    case DX9_OP_DP3:
+    case DX9_OP_DP4:
+    case DX9_OP_MIN:
+    case DX9_OP_MAX:
+    case DX9_OP_LRP:
+    case DX9_OP_TEXLD:
+    case DX9_OP_CMP:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool DX9ParseShader(
+    const uint32_t* tokens,
+    size_t token_count,
+    std::vector<DX9InstructionInfo>& instructions) {
+  instructions.clear();
+
+  if (tokens == nullptr || token_count < 2u) return false;
+  if (tokens[0] != DX9_PS_3_0_VERSION) return false;
+
+  size_t token_offset = 1u;
+  while (token_offset < token_count) {
+    const uint32_t instruction_token = tokens[token_offset];
+    const uint16_t opcode =
+        static_cast<uint16_t>(instruction_token & DX9_OPCODE_MASK);
+
+    if (opcode == static_cast<uint16_t>(DX9_SHADER_END)) {
+      instructions.push_back({
+          .token_offset = token_offset,
+          .opcode = opcode,
+          .operand_count = 0u,
+          .instruction_token = instruction_token,
+      });
+      return true;
+    }
+
+    if (opcode == static_cast<uint16_t>(DX9_SHADER_COMMENT_OPCODE)) {
+      const size_t comment_dwords =
+          (instruction_token & DX9_COMMENT_LENGTH_MASK)
+          >> DX9_COMMENT_LENGTH_SHIFT;
+      if (token_offset + 1u + comment_dwords > token_count) return false;
+      token_offset += 1u + comment_dwords;
+      continue;
+    }
+
+    const uint32_t operand_count =
+        (instruction_token & DX9_INSTRUCTION_LENGTH_MASK)
+        >> DX9_INSTRUCTION_LENGTH_SHIFT;
+    if (token_offset + 1u + operand_count > token_count) return false;
+
+    instructions.push_back({
+        .token_offset = token_offset,
+        .opcode = opcode,
+        .operand_count = static_cast<uint8_t>(operand_count),
+        .instruction_token = instruction_token,
+    });
+
+    token_offset += 1u + operand_count;
+  }
+
+  return false;
+}
+
+std::array<bool, 32u> DX9FindUsedTemporaryRegisters(
+    const uint32_t* tokens,
+    const std::vector<DX9InstructionInfo>& instructions) {
+  std::array<bool, 32u> used = {};
+
+  for (const auto& instruction : instructions) {
+    if (instruction.opcode == static_cast<uint16_t>(DX9_SHADER_END)) continue;
+
+    uint32_t first_parameter = 0u;
+    uint32_t parameter_count = instruction.operand_count;
+
+    // dcl stores a usage token first and the actual register second.
+    if (instruction.opcode == DX9_OP_DCL) {
+      first_parameter = 1u;
+      parameter_count = instruction.operand_count > 1u ? 1u : 0u;
+    // def/defi/defb contain literal data after the first register token.
+    } else if (instruction.opcode == DX9_OP_DEF
+               || instruction.opcode == DX9_OP_DEFI
+               || instruction.opcode == DX9_OP_DEFB) {
+      parameter_count = std::min<uint32_t>(instruction.operand_count, 1u);
+    }
+
+    for (uint32_t parameter = 0u;
+         parameter < parameter_count;
+         ++parameter) {
+      const uint32_t token =
+          tokens[instruction.token_offset + 1u + first_parameter + parameter];
+      if ((token & DX9_PARAMETER_TOKEN) == 0u) continue;
+      if (DX9GetRegisterType(token) != DX9_REGISTER_TEMP) continue;
+
+      const uint32_t register_number = DX9GetRegisterNumber(token);
+      if (register_number < used.size()) used[register_number] = true;
+    }
+  }
+
+  return used;
+}
+
+bool DX9IsTempComponentSource(
+    uint32_t token,
+    uint32_t register_number,
+    uint32_t component) {
+  static constexpr std::array<uint32_t, 4u> COMPONENT_SWIZZLES = {
+      DX9_SWIZZLE_X,
+      DX9_SWIZZLE_Y,
+      DX9_SWIZZLE_Z,
+      DX9_SWIZZLE_W,
+  };
+
+  if (component >= COMPONENT_SWIZZLES.size()) return false;
+  return DX9GetRegisterType(token) == DX9_REGISTER_TEMP
+      && DX9GetRegisterNumber(token) == register_number
+      && DX9GetSourceSwizzle(token) == COMPONENT_SWIZZLES[component]
+      && (token & DX9_SOURCE_MODIFIER_MASK) == 0u;
+}
+
+bool DX9IsSingleComponentWrite(uint32_t write_mask) {
+  return write_mask == DX9_WRITE_X
+      || write_mask == DX9_WRITE_Y
+      || write_mask == DX9_WRITE_Z
+      || write_mask == DX9_WRITE_W;
+}
+
+uint32_t DX9WriteMaskToComponent(uint32_t write_mask) {
+  switch (write_mask) {
+    case DX9_WRITE_X: return 0u;
+    case DX9_WRITE_Y: return 1u;
+    case DX9_WRITE_Z: return 2u;
+    case DX9_WRITE_W: return 3u;
+    default: return UINT32_MAX;
+  }
+}
+
+bool DX9IsOutputAlphaMove(
+    const uint32_t* tokens,
+    const DX9InstructionInfo& instruction) {
+  if (instruction.opcode != DX9_OP_MOV || instruction.operand_count < 2u) {
+    return false;
+  }
+
+  const uint32_t dest = tokens[instruction.token_offset + 1u];
+  return DX9GetRegisterType(dest) == DX9_REGISTER_COLOR_OUTPUT
+      && DX9GetRegisterNumber(dest) == 0u
+      && DX9GetWriteMask(dest) == DX9_WRITE_W;
+}
+
+bool DX9MatchesTerminalSqrtOutput(
+    const uint32_t* tokens,
+    const std::vector<DX9InstructionInfo>& instructions,
+    size_t candidate_index,
+    uint32_t temp_register) {
+  std::array<bool, 3u> saw_rsq = {false, false, false};
+  std::array<bool, 3u> saw_rcp = {false, false, false};
+
+  for (size_t index = candidate_index + 1u;
+       index + 1u < instructions.size();
+       ++index) {
+    const auto& instruction = instructions[index];
+    if ((instruction.instruction_token & DX9_INSTRUCTION_PREDICATED) != 0u) {
+      return false;
+    }
+
+    if (instruction.opcode == DX9_OP_RSQ
+        && instruction.operand_count >= 2u) {
+      const uint32_t dest = tokens[instruction.token_offset + 1u];
+      const uint32_t source = tokens[instruction.token_offset + 2u];
+      const uint32_t write_mask = DX9GetWriteMask(dest);
+
+      if (DX9GetRegisterType(dest) == DX9_REGISTER_TEMP
+          && DX9GetRegisterNumber(dest) == temp_register
+          && DX9IsSingleComponentWrite(write_mask)) {
+        const uint32_t component = DX9WriteMaskToComponent(write_mask);
+        if (DX9IsTempComponentSource(source, temp_register, component)) {
+          if (component < 3u) saw_rsq[component] = true;
+          // An optional alpha square root is allowed but not modified.
+          continue;
+        }
+      }
+    }
+
+    if (instruction.opcode == DX9_OP_RCP
+        && instruction.operand_count >= 2u) {
+      const uint32_t dest = tokens[instruction.token_offset + 1u];
+      const uint32_t source = tokens[instruction.token_offset + 2u];
+      const uint32_t write_mask = DX9GetWriteMask(dest);
+
+      if (DX9GetRegisterType(dest) == DX9_REGISTER_COLOR_OUTPUT
+          && DX9GetRegisterNumber(dest) == 0u
+          && DX9IsSingleComponentWrite(write_mask)) {
+        const uint32_t component = DX9WriteMaskToComponent(write_mask);
+        if (DX9IsTempComponentSource(source, temp_register, component)) {
+          if (component < 3u) {
+            if (!saw_rsq[component]) return false;
+            saw_rcp[component] = true;
+          }
+          // An optional alpha reciprocal is allowed but not modified.
+          continue;
+        }
+      }
+    }
+
+    if (DX9IsOutputAlphaMove(tokens, instruction)) continue;
+
+    // Any other operation after the candidate means the saturation is not a
+    // strict terminal sqrt/output clamp and is intentionally left alone.
+    return false;
+  }
+
+  return std::ranges::all_of(saw_rsq, [](bool value) { return value; })
+      && std::ranges::all_of(saw_rcp, [](bool value) { return value; });
+}
+
+bool DX9MatchesDirectFinalOutput(
+    const uint32_t* tokens,
+    const std::vector<DX9InstructionInfo>& instructions,
+    size_t candidate_index) {
+  for (size_t index = candidate_index + 1u;
+       index + 1u < instructions.size();
+       ++index) {
+    if (!DX9IsOutputAlphaMove(tokens, instructions[index])) return false;
+  }
+  return true;
+}
+
+DX9AutoUnclampPlan DX9BuildAutoUnclampPlan(
+    const uint32_t* tokens,
+    const std::vector<DX9InstructionInfo>& instructions,
+    uint32_t mode) {
+  DX9AutoUnclampPlan plan = {};
+  if (mode == DX9_AUTO_UNCLAMP_OFF || instructions.size() < 2u) return plan;
+
+  // Adding the lower-bound reconstruction costs two arithmetic instructions.
+  // ps_3_0 has a 512-slot limit; use the total instruction count as a
+  // conservative guard rather than trying to estimate special opcode costs.
+  if (instructions.size() > 510u) return plan;
+
+  const auto used_temps = DX9FindUsedTemporaryRegisters(tokens, instructions);
+  std::array<uint32_t, 32u> free_temps = {};
+  uint32_t free_temp_count = 0u;
+  for (uint32_t temp = 0u; temp < used_temps.size(); ++temp) {
+    if (!used_temps[temp]) free_temps[free_temp_count++] = temp;
+  }
+
+  for (size_t candidate_index = instructions.size() - 1u;
+       candidate_index-- > 0u;) {
+    const auto& instruction = instructions[candidate_index];
+    if (!DX9OpcodeMayHaveSaturatedColorDestination(instruction.opcode)) {
+      continue;
+    }
+    if (instruction.operand_count == 0u) continue;
+    if ((instruction.instruction_token & DX9_INSTRUCTION_PREDICATED) != 0u) {
+      continue;
+    }
+
+    const uint32_t dest = tokens[instruction.token_offset + 1u];
+    if ((dest & DX9_DEST_SATURATE) == 0u) continue;
+    if (DX9GetWriteMask(dest) != DX9_WRITE_RGB) continue;
+
+    const uint32_t register_type = DX9GetRegisterType(dest);
+    const uint32_t register_number = DX9GetRegisterNumber(dest);
+
+    if (register_type == DX9_REGISTER_TEMP
+        && free_temp_count >= 1u
+        && DX9MatchesTerminalSqrtOutput(
+            tokens,
+            instructions,
+            candidate_index,
+            register_number)) {
+      plan.kind = DX9AutoUnclampPatchKind::SQRT_OUTPUT;
+      plan.instruction_index = candidate_index;
+      plan.free_temps[0] = free_temps[0];
+      plan.free_temp_count = 1u;
+      return plan;
+    }
+
+    if (DX9AutoUnclampModeAllowsDirectOutput(mode)
+        && register_type == DX9_REGISTER_COLOR_OUTPUT
+        && register_number == 0u
+        && free_temp_count >= 2u
+        && DX9MatchesDirectFinalOutput(
+            tokens,
+            instructions,
+            candidate_index)) {
+      plan.kind = DX9AutoUnclampPatchKind::DIRECT_OUTPUT;
+      plan.instruction_index = candidate_index;
+      plan.free_temps[0] = free_temps[0];
+      plan.free_temps[1] = free_temps[1];
+      plan.free_temp_count = 2u;
+      return plan;
+    }
+  }
+
+  return plan;
+}
+
+bool DX9ApplyAutoUnclampPlan(
+    const uint32_t* source_tokens,
+    size_t token_count,
+    const std::vector<DX9InstructionInfo>& instructions,
+    const DX9AutoUnclampPlan& plan,
+    std::vector<uint32_t>& patched_tokens) {
+  if (plan.kind == DX9AutoUnclampPatchKind::NONE) return false;
+  if (plan.instruction_index >= instructions.size()) return false;
+
+  const auto& candidate = instructions[plan.instruction_index];
+  if (candidate.operand_count == 0u) return false;
+
+  const size_t dest_offset = candidate.token_offset + 1u;
+  const size_t insert_offset =
+      candidate.token_offset + 1u + candidate.operand_count;
+  if (dest_offset >= token_count || insert_offset > token_count) return false;
+
+  patched_tokens.assign(source_tokens, source_tokens + token_count);
+
+  const uint32_t original_dest = patched_tokens[dest_offset];
+  const bool partial_precision =
+      (original_dest & DX9_DEST_PARTIAL_PRECISION) != 0u;
+  const uint32_t original_register = DX9GetRegisterNumber(original_dest);
+
+  std::array<uint32_t, 8u> inserted = {};
+
+  if (plan.kind == DX9AutoUnclampPatchKind::SQRT_OUTPUT) {
+    const uint32_t zero_temp = plan.free_temps[0];
+
+    // Remove only _sat from the original RGB-producing instruction.
+    patched_tokens[dest_offset] = original_dest & ~DX9_DEST_SATURATE;
+
+    // rZero.rgb = rColor.rgb - rColor.rgb;  // exact 0 for finite input
+    inserted[0] = DX9MakeInstruction(DX9_OP_SUB, 3u);
+    inserted[1] = DX9MakeTempDest(
+        zero_temp,
+        DX9_WRITE_RGB,
+        partial_precision);
+    inserted[2] = DX9MakeTempSource(original_register);
+    inserted[3] = DX9MakeTempSource(original_register);
+
+    // rColor.rgb = max(rColor.rgb, rZero.rgb);
+    inserted[4] = DX9MakeInstruction(DX9_OP_MAX, 3u);
+    inserted[5] = DX9MakeTempDest(
+        original_register,
+        DX9_WRITE_RGB,
+        partial_precision);
+    inserted[6] = DX9MakeTempSource(original_register);
+    inserted[7] = DX9MakeTempSource(zero_temp);
+  } else if (plan.kind == DX9AutoUnclampPatchKind::DIRECT_OUTPUT) {
+    const uint32_t color_temp = plan.free_temps[0];
+    const uint32_t zero_temp = plan.free_temps[1];
+
+    // Redirect the original oC0.rgb write into a free temporary and remove
+    // only _sat. The original write mask and partial-precision modifier remain.
+    patched_tokens[dest_offset] = DX9SetRegister(
+        original_dest & ~DX9_DEST_SATURATE,
+        DX9_REGISTER_TEMP,
+        color_temp);
+
+    inserted[0] = DX9MakeInstruction(DX9_OP_SUB, 3u);
+    inserted[1] = DX9MakeTempDest(
+        zero_temp,
+        DX9_WRITE_RGB,
+        partial_precision);
+    inserted[2] = DX9MakeTempSource(color_temp);
+    inserted[3] = DX9MakeTempSource(color_temp);
+
+    // oC0.rgb = max(rColor.rgb, rZero.rgb);
+    inserted[4] = DX9MakeInstruction(DX9_OP_MAX, 3u);
+    inserted[5] = original_dest & ~DX9_DEST_SATURATE;
+    inserted[6] = DX9MakeTempSource(color_temp);
+    inserted[7] = DX9MakeTempSource(zero_temp);
+  } else {
+    return false;
+  }
+
+  patched_tokens.insert(
+      patched_tokens.begin() + static_cast<std::ptrdiff_t>(insert_offset),
+      inserted.begin(),
+      inserted.end());
+  return true;
+}
+
+uint32_t DX9CRC32(const void* data, size_t size) {
+  static const std::array<uint32_t, 256u> TABLE = []() {
+    std::array<uint32_t, 256u> table = {};
+    for (uint32_t index = 0u; index < table.size(); ++index) {
+      uint32_t value = index;
+      for (uint32_t bit = 0u; bit < 8u; ++bit) {
+        value = (value >> 1u)
+            ^ ((value & 1u) != 0u ? 0xEDB88320u : 0u);
+      }
+      table[index] = value;
+    }
+    return table;
+  }();
+
+  const auto* bytes = static_cast<const uint8_t*>(data);
+  uint32_t crc = 0xFFFFFFFFu;
+  for (size_t index = 0u; index < size; ++index) {
+    crc = TABLE[(crc ^ bytes[index]) & 0xFFu] ^ (crc >> 8u);
+  }
+  return crc ^ 0xFFFFFFFFu;
+}
+
+const char* DX9AutoUnclampKindName(DX9AutoUnclampPatchKind kind) {
+  switch (kind) {
+    case DX9AutoUnclampPatchKind::SQRT_OUTPUT:
+      return "terminal sqrt RGB";
+    case DX9AutoUnclampPatchKind::DIRECT_OUTPUT:
+      return "direct final RGB";
+    default:
+      return "none";
+  }
+}
+
+bool OnCreatePipelineDX9AutoOutputUnclamp(
+    reshade::api::device* device,
+    reshade::api::pipeline_layout layout,
+    uint32_t subobject_count,
+    const reshade::api::pipeline_subobject* subobjects) {
+  (void)layout;
+
+  if (device == nullptr
+      || device->get_api() != reshade::api::device_api::d3d9
+      || subobjects == nullptr) {
+    return false;
+  }
+
+  const uint32_t mode = std::clamp(
+      static_cast<uint32_t>(std::lround(dx9_auto_output_unclamp_mode)),
+      DX9_AUTO_UNCLAMP_OFF,
+      DX9_AUTO_UNCLAMP_HEURISTIC_ALL);
+  if (mode == DX9_AUTO_UNCLAMP_OFF) return false;
+
+  bool modified = false;
+
+  for (uint32_t subobject_index = 0u;
+       subobject_index < subobject_count;
+       ++subobject_index) {
+    const auto& subobject = subobjects[subobject_index];
+    if (subobject.type != reshade::api::pipeline_subobject_type::pixel_shader
+        || subobject.count != 1u
+        || subobject.data == nullptr) {
+      continue;
+    }
+
+    auto* shader_desc =
+        static_cast<reshade::api::shader_desc*>(subobject.data);
+    if (shader_desc->code == nullptr
+        || shader_desc->code_size < sizeof(uint32_t) * 2u
+        || (shader_desc->code_size % sizeof(uint32_t)) != 0u) {
+      continue;
+    }
+
+    const auto* source_tokens =
+        static_cast<const uint32_t*>(shader_desc->code);
+    const size_t token_count =
+        shader_desc->code_size / sizeof(uint32_t);
+    if (source_tokens[0] != DX9_PS_3_0_VERSION) continue;
+
+    const uint32_t source_crc32 =
+        DX9CRC32(shader_desc->code, shader_desc->code_size);
+    if (!DX9AutoUnclampModeAllowsHash(mode, source_crc32)) continue;
+
+    std::vector<DX9InstructionInfo> instructions;
+    if (!DX9ParseShader(source_tokens, token_count, instructions)) continue;
+
+    const DX9AutoUnclampPlan plan =
+        DX9BuildAutoUnclampPlan(source_tokens, instructions, mode);
+    if (plan.kind == DX9AutoUnclampPatchKind::NONE) continue;
+
+    std::vector<uint32_t> patched_tokens;
+    if (!DX9ApplyAutoUnclampPlan(
+            source_tokens,
+            token_count,
+            instructions,
+            plan,
+            patched_tokens)) {
+      continue;
+    }
+
+    // Parse the rebuilt stream once more before passing it to D3D9. This catches
+    // malformed token lengths locally and leaves the original shader untouched.
+    std::vector<DX9InstructionInfo> validation_instructions;
+    if (!DX9ParseShader(
+            patched_tokens.data(),
+            patched_tokens.size(),
+            validation_instructions)) {
+      continue;
+    }
+
+    const uint64_t cache_key =
+        (static_cast<uint64_t>(source_crc32) << 32u)
+        | static_cast<uint32_t>(shader_desc->code_size);
+
+    std::scoped_lock lock(g_dx9_auto_unclamp_mutex);
+    auto [cache_it, inserted] = g_dx9_auto_unclamp_cache.try_emplace(
+        cache_key,
+        DX9CachedAutoUnclampShader{
+            .source_crc32 = source_crc32,
+            .source_size = shader_desc->code_size,
+            .kind = plan.kind,
+            .bytecode = std::move(patched_tokens),
+        });
+
+    // A CRC/size collision is extremely unlikely, but never reuse a cache entry
+    // whose recorded source metadata does not match this shader.
+    if (!inserted
+        && (cache_it->second.source_crc32 != source_crc32
+            || cache_it->second.source_size != shader_desc->code_size)) {
+      continue;
+    }
+
+    shader_desc->code = cache_it->second.bytecode.data();
+    shader_desc->code_size =
+        cache_it->second.bytecode.size() * sizeof(uint32_t);
+    modified = true;
+
+    if (inserted) {
+      if (plan.kind == DX9AutoUnclampPatchKind::SQRT_OUTPUT) {
+        ++g_dx9_auto_unclamp_sqrt_count;
+      } else if (plan.kind == DX9AutoUnclampPatchKind::DIRECT_OUTPUT) {
+        ++g_dx9_auto_unclamp_direct_count;
+      }
+
+      if (g_dx9_auto_unclamp_log_count < 64u) {
+        ++g_dx9_auto_unclamp_log_count;
+        std::stringstream stream;
+        stream << "[RenoDX DX9 Auto Unclamp] Patched 0x";
+        stream << std::uppercase << std::hex << std::setw(8)
+               << std::setfill('0') << source_crc32;
+        stream << std::dec << " (";
+        stream << DX9AutoUnclampKindName(plan.kind);
+        stream << ", mode=" << mode;
+        stream << ", totals: sqrt=" << g_dx9_auto_unclamp_sqrt_count;
+        stream << ", direct=" << g_dx9_auto_unclamp_direct_count;
+        stream << ")";
+        reshade::log::message(
+            reshade::log::level::info,
+            stream.str().c_str());
+      }
+    }
+  }
+
+  return modified;
+}
+
+void ClearDX9AutoOutputUnclampCache() {
+  std::scoped_lock lock(g_dx9_auto_unclamp_mutex);
+  g_dx9_auto_unclamp_cache.clear();
 }
 
 // ============================================================================
@@ -867,6 +1696,30 @@ renodx::utils::settings::Settings settings = {
         .is_global = true,
     },
     new renodx::utils::settings::Setting{
+        .key = "DX9AutoOutputUnclamp",
+        .binding = &dx9_auto_output_unclamp_mode,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 2.f,
+        .can_reset = true,
+        .label = "Automatic Output Unclamp",
+        .section = "HDR Pipeline",
+        .tooltip = "Default patches only allowlisted post-process and sky/cloud "
+                   "shaders. Model/material lighting is experimental because "
+                   "the same terminal clamp pattern is also used by special or "
+                   "intermediate passes. Heuristic modes may break characters, "
+                   "weapons, shadows, and textures. Requires a game restart "
+                   "after changing.",
+        .labels = {
+            "Off",
+            "Curated post + sky",
+            "Curated + model lighting (experimental)",
+            "Heuristic sqrt outputs (unsafe)",
+            "Heuristic sqrt + direct (unsafe)",
+        },
+        .is_global = true,
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -1532,6 +2385,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::create_pipeline>(
+          OnCreatePipelineDX9AutoOutputUnclamp);
+      ClearDX9AutoOutputUnclampCache();
       reshade::unregister_event<reshade::addon_event::resolve_texture_region>(
           OnDX9ResolveTextureRegion);
       reshade::unregister_event<reshade::addon_event::copy_texture_region>(
@@ -1546,6 +2402,13 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+
+  // Register after RenoDX's shader module so hash-based embedded replacements
+  // are resolved first and this patcher only sees the final ps_3_0 bytecode.
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    reshade::register_event<reshade::addon_event::create_pipeline>(
+        OnCreatePipelineDX9AutoOutputUnclamp);
+  }
 
   return TRUE;
 }
