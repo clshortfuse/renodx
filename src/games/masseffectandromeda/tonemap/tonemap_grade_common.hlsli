@@ -60,9 +60,8 @@ float ApplyVignette(float2 uv) {
   float vignette = dot(vignette_uv, vignette_uv);
   vignette = saturate(1.f - vignette * cbData[11].w);
   vignette = exp(log(max(vignette, 0.000001f)) * cbData[10].z);
-  const bool full = IsVanillaPlus();
   // max() guards the >50 range: lerp extrapolates past 1.0 and could drive corners to a negative multiplier.
-  return full ? max(0.f, lerp(1.f, vignette, injectedData.fxVignette)) : vignette;
+  return IsVanillaPlus() ? max(0.f, lerp(1.f, vignette, injectedData.fxVignette)) : vignette;
 }
 
 #if MEA_TONEMAP_DISTORTION
