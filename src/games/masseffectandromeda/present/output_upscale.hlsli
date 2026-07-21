@@ -1,11 +1,7 @@
-#include "./shared.h"
-#include "./lilium_rcas.hlsli"
-#include "./present_core.hlsli"
-#include "./bicubic_upscale.hlsli"
-
-// Upscaling HDR present (Resolution Scale < 100%; game swaps 0xF5B0DBFA -> this). Like 0xF5B0DBFA but
-// the scene is a 16-tap bicubic fetch; tail is the shared PresentScene.
-// Binding quirk: s1 = scene taps AND LUT, s2 = UI, no s0. cbData[0].xy = source res, .zw = texel (1/res).
+// Upscaling HDR present row (Resolution Scale < 100%): 16-tap bicubic scene fetch, shared tail.
+// Binding quirk: s1 = scene taps AND LUT, s2 = UI, no s0. cbData[0].xy = source res, .zw = texel.
+// Requires shared.h + linearize.hlsli + lilium_rcas.hlsli + present_core.hlsli + bicubic_upscale.hlsli.
+// Per-gamut wrapper hashes share this body unchanged: see FinalizeToPQ in shared.h.
 
 Texture2D<float4> sceneTexture : register(t0);
 Texture2D<float4> uiTexture : register(t1);

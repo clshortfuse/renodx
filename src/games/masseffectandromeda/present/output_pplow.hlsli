@@ -1,12 +1,8 @@
-#include "./shared.h"
-#include "./lilium_rcas.hlsli"
-#include "./present_core.hlsli"
-
-// HDR present permutation used at Post Process Quality = Low (the game swaps 0xF5B0DBFA -> this).
-// Tail is byte-identical to 0xF5B0DBFA's (scene -> scale -> 1D LUT linearize -> UI composite ->
-// 709->2020 -> PQ), but it single-taps the scene with a bilinear upscale rather than 1:1.
-// Binding quirk (like 0xAFFFA4AB): s1 = scene + LUT sampler, s2 = UI, no s0.
-// isUpscale = true: the scene is smaller than the output (bilinear upscale), so RCAS is skipped.
+// Post Process Quality = Low HDR present row (single bilinear-upscale tap). Tail is byte-identical to
+// the main row's, but the scene is smaller than the output, so RCAS is skipped (isUpscale = true).
+// Binding quirk (like the upscale row): s1 = scene + LUT sampler, s2 = UI, no s0.
+// Requires shared.h + linearize.hlsli + lilium_rcas.hlsli + present_core.hlsli first.
+// Per-gamut wrapper hashes share this body unchanged: see FinalizeToPQ in shared.h.
 
 Texture2D<float4> sceneTexture : register(t0);
 Texture2D<float4> uiTexture : register(t1);
