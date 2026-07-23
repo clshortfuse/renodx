@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 
 Texture2D<float4> FILL_COLOR : register(t0, space2);
 

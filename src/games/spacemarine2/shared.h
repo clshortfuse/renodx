@@ -17,6 +17,8 @@
 #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE    color::convert::COLOR_SPACE_BT2020
 #define CUSTOM_FILM_GRAIN_STRENGTH           30.f * 0.01f
 #define CUSTOM_RANDOM                        shader_injection.custom_random
+#define CUSTOM_SWAPCHAIN_DEBUG_SOURCE        shader_injection.swapchain_debug_source
+#define RENODX_INTERMEDIATE_ENCODING         ENCODING_PQ
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -34,6 +36,7 @@ struct ShaderInjectData {
   float tone_map_blowout;
   float tone_map_flare;
   float custom_random;
+  float swapchain_debug_source;
 };
 
 #ifndef __cplusplus
