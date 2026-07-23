@@ -1,4 +1,7 @@
+#include "../shared.h"
+
 Texture2D<float4> FILL_COLOR : register(t0, space2);
+RWTexture2D<float4> RENODX_OUTPUT_TEXTURE : register(u0, space50);
 
 cbuffer CB_COMMON : register(b0) {
   float CB_COMMON_041x : packoffset(c041.x);
@@ -13,10 +16,10 @@ cbuffer CB_PS_PASS_FILL : register(b4) {
 
 SamplerState PS_SAMPLERS[12] : register(s0, space1);
 
-float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float2 TEXCOORD : TEXCOORD
-) : SV_Target {
+// This shader seems to run at all times, final output shader
+float4 main(noperspective float4 SV_Position : SV_Position,
+            linear float2 TEXCOORD : TEXCOORD)
+    : SV_Target {
   float4 SV_Target;
   float _9 = (CB_PS_PASS_FILL_002x) * (TEXCOORD.x);
   float _10 = (CB_PS_PASS_FILL_002y) * (TEXCOORD.y);
@@ -47,6 +50,7 @@ float4 main(
   float _35 = _32 / (CB_PS_PASS_FILL_002x);
   float _36 = _34 / (CB_PS_PASS_FILL_002y);
   float4 _38 = FILL_COLOR.Sample(PS_SAMPLERS[4], float2(_35, _36));
+  _38.rgb = renodx::draw::InvertIntermediatePass(_38.rgb);
   float _47 = log2((_38.x));
   float _48 = log2((_38.y));
   float _49 = log2((_38.z));
@@ -68,5 +72,11 @@ float4 main(
   SV_Target.w = (_38.w);
 
   SV_Target = _38;
+  SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
+  RENODX_OUTPUT_TEXTURE[uint2(SV_Position.xy)] = float4(SV_Target.rgb, 0.f);
+
+  SV_Target.rgb = float3(0.f, 0.f, 0.f);
+
+  SV_Target.a = saturate(SV_Target.a);
   return SV_Target;
 }

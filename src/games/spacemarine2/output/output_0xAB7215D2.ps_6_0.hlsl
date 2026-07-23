@@ -1,10 +1,11 @@
-#include "./common.hlsl"
+#include "../common.hlsl"
 
 Texture2D<float4> HDR_TEX1 : register(t0, space2);
 
 Texture2D<float4> HDR_TEX2 : register(t1, space2);
 
 Texture3D<float4> HDR_TEX_TONEMAP_LUT : register(t7, space2);
+RWTexture2D<float4> RENODX_OUTPUT_TEXTURE : register(u0, space50);
 
 cbuffer CB_PASS_HDR : register(b4) {
   float CB_PASS_HDR_000y : packoffset(c000.y);
@@ -61,6 +62,9 @@ float4 main(
   SV_Target.y = (_116 + (_96.y));
   SV_Target.z = (_116 + (_96.z));
   SV_Target.rgb = LutToneMap(untonemapped, SV_Target.rgb);
+  SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
+
+  RENODX_OUTPUT_TEXTURE[uint2(SV_Position.xy)] = float4(SV_Target.rgb, 0.f);
 
   SV_Target.w = 0.0f;
 

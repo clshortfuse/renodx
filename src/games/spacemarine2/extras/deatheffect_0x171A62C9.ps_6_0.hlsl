@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "../shared.h"
 
 Texture2D<float4> SCREEN_FX_BACKBUFFER : register(t0, space2);
 
