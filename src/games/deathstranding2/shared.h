@@ -1,6 +1,9 @@
 #ifndef SRC_DEATHSTRANDING2_SHARED_H_
 #define SRC_DEATHSTRANDING2_SHARED_H_
 
+#define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION 4
+#define RENODX_COLOR_GRADE_SHADOWS_VERSION    4
+
 // // Must be 32bit aligned
 // // Should be 4x32
 struct ShaderInjectData {

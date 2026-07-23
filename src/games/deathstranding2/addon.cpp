@@ -183,7 +183,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
         .binding = &shader_injection.tone_map_highlight_saturation,
-        .default_value = 51.f,
+        .default_value = 50.f,
         .label = "Highlight Saturation",
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
@@ -261,9 +261,8 @@ renodx::utils::settings::Settings settings = {
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
-              {"ColorGradeShadows", 75.f},
-              {"ColorGradeAdaptationContrast", 60.f},
-              {"ColorGradeSaturation", 55.f},
+              {"ColorGradeHighlightContrast", 55.f},
+              {"ColorGradeAdaptationContrast", 58.f},
           });
         },
     },

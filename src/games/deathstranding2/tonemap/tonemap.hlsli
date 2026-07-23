@@ -75,26 +75,15 @@ float3 SampleGamma2LUTWithScaling(
     if (lut_black_y > 0.f) {
       float3 lut_mid = SampleGamma2LUT(lut_black_y, _29, lut_sampler, _40_m0_10u_z, _40_m0_10u_w);
 
-      if (RENODX_GAMMA_CORRECTION != 0.f) {  // account for EOTF emulation in inputs
-        color_output = renodx::color::correct::GammaSafe(color_output);
-        lut_black = renodx::color::correct::GammaSafe(lut_black);
-        lut_mid = renodx::color::correct::GammaSafe(lut_mid);
-        // color_input = renodx::color::correct::GammaSafe(color_input);
-      }
-
       float3 unclamped_gamma = Unclamp(
-          renodx::color::srgb::EncodeSafe(color_output),
-          renodx::color::srgb::EncodeSafe(lut_black),
-          renodx::color::srgb::EncodeSafe(lut_mid),
-          renodx::color::srgb::EncodeSafe(color_input));
+          sqrt(color_output),
+          sqrt(lut_black),
+          sqrt(lut_mid),
+          sqrt(color_input));
 
-      float3 unclamped_linear = renodx::color::srgb::DecodeSafe(unclamped_gamma);
+      float3 unclamped_linear = unclamped_gamma * unclamped_gamma;
 
-      if (RENODX_GAMMA_CORRECTION != 0.f) {  // inverse EOTF emulation
-        unclamped_linear = renodx::color::correct::GammaSafe(unclamped_linear, true);
-      }
-
-      color_output = color_output_original * lerp(1.f, renodx::math::DivideSafe(renodx::color::yf::from::BT709(unclamped_linear), renodx::color::yf::from::BT709(color_output_original), 1.f), RENODX_COLOR_GRADE_SCALING);
+      color_output = renodx::lut::RecolorUnclamped(color_output_original, unclamped_linear, RENODX_COLOR_GRADE_SCALING);
     }
   }
 
@@ -294,12 +283,9 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
 
     float3 untonemapped_bt2020 = renodx::color::bt2020::from::BT709(untonemapped_bt709);
 
-    float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-
     renodx_custom::tonemap::psycho::config17::Config psycho17_config =
         renodx_custom::tonemap::psycho::config17::Create();
     psycho17_config.peak_value = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-    psycho17_config.clip_point = 100.f;
     psycho17_config.exposure = RENODX_TONE_MAP_EXPOSURE;
     psycho17_config.gamma = RENODX_TONE_MAP_GAMMA;
     psycho17_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
@@ -312,15 +298,20 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
     psycho17_config.purity_highlights = -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f);
     psycho17_config.dechroma = 0.f;
     psycho17_config.adaptation_contrast = RENODX_TONE_MAP_ADAPTATION_CONTRAST;
-    psycho17_config.bleaching_intensity = 0.f;
+    psycho17_config.bleaching_intensity = 1.f;
     psycho17_config.hue_emulation = RENODX_TONE_MAP_HUE_EMULATION;
     psycho17_config.pre_gamut_compress = false;
-    psycho17_config.post_gamut_compress = true;
+    psycho17_config.post_gamut_compress = false;
     psycho17_config.apply_tonemap = true;
 
     float3 hue_shift_source_bt2020 = untonemapped_bt2020;
     if (psycho17_config.hue_emulation != 0.f) {
-      hue_shift_source_bt2020 = renodx::color::bt2020::from::BT709(renodx::tonemap::ReinhardPiecewise(untonemapped_bt709, 4.f, psycho17_config.mid_gray));
+      hue_shift_source_bt2020 = renodx::color::bt2020::from::BT709(
+          psycho17_config.peak_value
+          * renodx_custom::tonemap::psycho::psycho24_ComputePeakCompressionRolloff(
+              untonemapped_bt709,
+              psycho17_config.mid_gray.xxx,
+              psycho17_config.peak_value.xxx));
     }
     float3 tonemapped_bt2020 = renodx_custom::tonemap::psycho::ApplyTest17BT2020(untonemapped_bt2020, hue_shift_source_bt2020, psycho17_config);
 
