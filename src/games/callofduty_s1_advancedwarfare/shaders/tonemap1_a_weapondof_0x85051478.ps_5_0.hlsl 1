@@ -1,0 +1,124 @@
+// ---- Created with 3Dmigoto v1.3.16 on Tue Aug 19 22:10:55 2025
+#include "./common.hlsl"
+
+Texture2D<float4> t5 : register(t5);
+
+Texture2D<float4> t4 : register(t4);
+
+Texture2D<float4> t3 : register(t3);
+
+Texture2D<float4> t2 : register(t2);
+
+SamplerState s4_s : register(s4);
+
+SamplerState s3_s : register(s3);
+
+SamplerState s2_s : register(s2);
+
+SamplerState s0_s : register(s0);
+
+cbuffer cb2 : register(b2)
+{
+  float4 cb2[30];
+}
+
+
+
+
+// 3Dmigoto declarations
+#define cmp -
+
+
+void main(
+  float4 v0 : SV_POSITION0,
+  float2 v1 : TEXCOORD0,
+  out float4 o0 : SV_TARGET0)
+{
+  //declare
+  float4 r0,r1,r2,r3,r4;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  float3 colorUntonemapped, colorTonemapped, colorSDRNeutral;
+
+  //color
+  r0.xyzw = cb2[29].zwzw * float4(0.5,-1.5,-1.5,-0.5) + v1.xyxy;
+  r1.xyz = t4.Sample(s4_s, r0.xy).xyz;
+  r0.xyz = t4.Sample(s4_s, r0.zw).xyz;
+  r1.xyz = float3(0.235294119,0.235294119,0.235294119) * r1.xyz;
+  r2.xyz = t4.Sample(s4_s, v1.xy).xyz;
+  r1.xyz = r2.xyz * float3(0.0588235296,0.0588235296,0.0588235296) + r1.xyz;
+  r0.xyz = r0.xyz * float3(0.235294119,0.235294119,0.235294119) + r1.xyz;
+
+  r1.xyzw = cb2[29].zwzw * float4(-0.5,1.5,1.5,0.5) + v1.xyxy;
+  r3.xyz = t4.Sample(s4_s, r1.xy).xyz;
+  r1.xyz = t4.Sample(s4_s, r1.zw).xyz;
+  r0.xyz = r3.xyz * float3(0.235294119,0.235294119,0.235294119) + r0.xyz;
+  r0.xyz = r1.xyz * float3(0.235294119,0.235294119,0.235294119) + r0.xyz;
+
+  //colorUntonemapped
+  colorUntonemapped = r0.xyz;
+
+  //recover r0 from Tonemap0
+  Tonemap_RecoverYFromW(r0);
+
+  //idk, some overlay?
+  r0.w = t5.SampleLevel(s3_s, v1.xy, 0).x;
+  r1.x = saturate(cb2[1].y * r0.w + cb2[1].w);
+  r0.w = -0.984375 + r0.w;
+  r3.xyzw = t2.Sample(s0_s, v1.xy).xyzw;
+  r1.x = max(r3.w, r1.x);
+  r1.y = cmp(0 < r0.w);
+  r0.w = saturate(cb2[2].x * r0.w + cb2[2].z);
+  r0.w = r1.y ? r0.w : r1.x;
+  r1.xyzw = saturate(r0.wwww * cb2[3].xyzw + cb2[4].xyzw);
+  r4.xy = float2(1,1) + -r1.xy;
+  r1.yz = min(r4.xy, r1.yz);
+  r0.xyz = r1.yyy * r0.xyz;
+  r0.xyz = r2.xyz * r1.xxx + r0.xyz;
+  r0.xyz = r3.xyz * r1.zzz + r0.xyz;
+  r1.xyz = t3.Sample(s2_s, v1.xy).xyz;
+  r0.xyz = r1.xyz * r1.www + r0.xyz;
+  r0.xyz = saturate(r0.xyz);
+
+  //colorSDRNeutral
+  colorSDRNeutral = r0.xyz;
+
+  //to srgb 
+  r0.xyz = renodx::color::srgb::EncodeSafe(r0.xyz);
+  // {
+  //   r1.xyz = log2(r0.xyz);
+  //   r1.xyz = float3(0.416666657,0.416666657,0.416666657) * r1.xyz;
+  //   r1.xyz = exp2(r1.xyz);
+  //   r1.xyz = r1.xyz * float3(1.05499995,1.05499995,1.05499995) + float3(-0.0549999997,-0.0549999997,-0.0549999997);
+  //   r2.xyz = cmp(float3(0.00313080009,0.00313080009,0.00313080009) >= r0.xyz);
+  //   r0.xyz = float3(12.9200001,12.9200001,12.9200001) * r0.xyz;
+  //   r0.xyz = r2.xyz ? r0.xyz : r1.xyz;
+  // }
+
+  //NO LUT
+
+  //r0.w
+  r0.w = dot(r0.xyz, float3(0.298999995,0.587000012,0.114));
+
+  //More color correct tied to Game Brightness
+  r1.x = cb2[9].w * r0.w + cb2[8].w;
+  r0.w = saturate(r0.w);
+  r1.yzw = r0.www + -r0.xyz;
+  r0.xyz = r1.xxx * r1.yzw + r0.xyz;
+
+  r1.xyz = cb2[10].xyz * r0.www + cb2[9].xyz;
+  r1.xyz = r1.xyz * r0.www + cb2[8].xyz;
+  r0.xyz = r0.xyz * r1.xyz + cb2[11].xyz;
+
+  //colorTonemapped
+  colorTonemapped = r0.xyz;
+
+  //ToneMapPass
+  Tonemap_Do(r0, colorUntonemapped, colorTonemapped, colorSDRNeutral, v1, t4);
+
+  //out
+  o0.xyz = r0.xyz;
+  o0.w = 1;
+  return;
+}
