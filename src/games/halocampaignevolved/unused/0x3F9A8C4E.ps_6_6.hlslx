@@ -1,0 +1,86 @@
+Texture2D<float4> t0 : register(t0);
+
+cbuffer cb0 : register(b0) {
+  float cb0_001x : packoffset(c001.x);
+  float cb0_001y : packoffset(c001.y);
+  float cb0_001z : packoffset(c001.z);
+  float cb0_001w : packoffset(c001.w);
+  float cb0_002x : packoffset(c002.x);
+  float cb0_002y : packoffset(c002.y);
+  float cb0_002z : packoffset(c002.z);
+  float cb0_002w : packoffset(c002.w);
+};
+
+SamplerState s0 : register(s0);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+
+struct OutputSignature {
+  float4 SV_Target : SV_Target;
+  float4 SV_Target_1 : SV_Target1;
+};
+
+OutputSignature main(
+  noperspective float4 TEXCOORD : TEXCOORD
+) {
+  float4 SV_Target;
+  float4 SV_Target_1;
+  float4 _17;
+  float _25;
+  float _26;
+  float _27;
+  float _28;
+  float _31;
+  float _38;
+  float _41;
+  float _46;
+  float _47;
+  float _50;
+  float _51;
+  float _63;
+  float _66;
+  float _69;
+  float _70;
+  float _82;
+  float _89;
+  float _94;
+  float _101;
+  float _114;
+  float _115;
+  float _116;
+  _17 = t0.Sample(s0, float2(TEXCOORD.x, TEXCOORD.y));
+  _25 = TEXCOORD.x / cb0_001z;
+  _26 = TEXCOORD.y / cb0_001w;
+  _27 = cb0_001x * 0.5f;
+  _28 = cb0_001y * 0.5f;
+  _31 = select((_25 > 0.5f), 0.0f, 1.0f);
+  _38 = (_31 * (cb0_002w - cb0_002z)) + cb0_002z;
+  _41 = ((((_31 * (cb0_002x - cb0_002y)) + cb0_002y) - _38) * select((_26 > 0.5f), 0.0f, 1.0f)) + _38;
+  _46 = abs((_25 + -0.5f) * cb0_001x);
+  _47 = abs((_26 + -0.5f) * cb0_001y);
+  _50 = _46 - (_27 - _41);
+  _51 = _47 - (_28 - _41);
+  _63 = sqrt((_50 * _50) + (_51 * _51)) - _41;
+  _66 = max(_41, 0.0f);
+  _69 = _46 - (_27 - _66);
+  _70 = _47 - (_28 - _66);
+  _82 = sqrt((_70 * _70) + (_69 * _69)) - _66;
+  _89 = saturate(((_63 + -1.0f) + (((float)((bool)((uint)((_50 <= 0.0f) || (_51 <= 0.0f))))) * (max((_50 - _41), (_51 - _41)) - _63))) * -0.5f);
+  _94 = saturate(-0.0f - ((_82 + (((float)((bool)((uint)((_69 <= 0.0f) || (_70 <= 0.0f))))) * (max((_69 - _66), (_70 - _66)) - _82))) + -0.5f));
+  _101 = ((_89 * _89) * _17.w) * (3.0f - (_89 * 2.0f));
+  _114 = exp2(log2(_17.x * 0.00800000037997961f) * 0.1593017578125f);
+  _115 = exp2(log2(_17.y * 0.00800000037997961f) * 0.1593017578125f);
+  _116 = exp2(log2(_17.z * 0.00800000037997961f) * 0.1593017578125f);
+  SV_Target_1.x = 0.0f;
+  SV_Target_1.y = 0.0f;
+  SV_Target_1.z = 0.0f;
+  SV_Target_1.w = 0.0f;
+  SV_Target.x = exp2(log2((1.0f / ((_114 * 18.6875f) + 1.0f)) * ((_114 * 18.8515625f) + 0.8359375f)) * 78.84375f);
+  SV_Target.y = exp2(log2((1.0f / ((_115 * 18.6875f) + 1.0f)) * ((_115 * 18.8515625f) + 0.8359375f)) * 78.84375f);
+  SV_Target.z = exp2(log2((1.0f / ((_116 * 18.6875f) + 1.0f)) * ((_116 * 18.8515625f) + 0.8359375f)) * 78.84375f);
+  SV_Target.w = ((((_94 * _94) * (3.0f - (_94 * 2.0f))) * (_17.w - _101)) + _101);
+  OutputSignature output_signature = { SV_Target, SV_Target_1 };
+  return output_signature;
+}
