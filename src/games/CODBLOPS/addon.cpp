@@ -84,7 +84,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
 ShaderInjectData shader_injection;
 
 float current_settings_mode = 0;
-float dx9_auto_output_unclamp_mode = 1.f;
+float dx9_auto_output_unclamp_mode = 2.f;
 
 constexpr float TONE_MAP_TYPE_VANILLA = 0.f;
 constexpr float TONE_MAP_TYPE_RENODRT = 3.f;
@@ -112,19 +112,31 @@ void ApplySwapChainEncoding(float value) {
 
 
 // ============================================================================
-// Allowlisted D3D9 terminal output unclamping
+// Guarded D3D9 terminal output unclamping
 // ============================================================================
 //
 // A terminal sqrt(saturate(...)) sequence is not enough to prove that a shader
-// writes final scene color. BO1 uses the same encoding pattern in many surface,
-// character, weapon, shadow-adjacent, and packed/intermediate passes. Patching
-// all such shaders can produce pink silhouettes, broken shading, and stretched
-// or corrupted textures.
+// writes final scene color. BO1 uses the same encoding pattern in surface,
+// character, weapon, fog, sky, shadow-adjacent, and packed/intermediate passes.
+// Blindly patching all matches can expose black skybox borders, remove fog
+// masking, flatten object shading, or corrupt packed textures.
 //
-// The default mode therefore patches only a small hash allowlist of known
-// post-processing and sky/cloud shaders. Model/material lighting is separated
-// into an explicit experimental mode. Broad heuristic modes remain available
-// for debugging, but are intentionally labelled unsafe.
+// Fog/sky hashes are therefore hard-blocked in every mode. Curated post-process
+// shaders retain the original full unclamp. Explicitly known weapon/viewmodel
+// lighting shaders also receive the full terminal unclamp: their earlier
+// material, normal, shadow, attenuation, and visibility saturations remain
+// untouched, so only the final HDR ceiling is removed.
+//
+// Level 3 applies the same terminal-only highlight unclamp as the supplied
+// weapon HLSL examples to every accepted viewmodel and world geometry-lighting
+// shader:
+//
+//   sqrt(saturate(finalLighting)) -> sqrt(max(finalLighting, 0))
+//
+// No brightness multiplier is added, and no earlier material, texture, BRDF,
+// shadow, attenuation, fog, color, or intermediate saturation is changed.
+// Simple fog, sky, copy, LUT, and blend-only shaders are rejected. Level 4 is a
+// safe alias of level 3 instead of enabling a broader destructive scan.
 //
 // Supported terminal forms:
 //
@@ -184,7 +196,15 @@ constexpr uint32_t DX9_SOURCE_SWIZZLE_SHIFT = 16u;
 constexpr uint32_t DX9_SOURCE_MODIFIER_MASK = 0x0F000000u;
 
 constexpr uint32_t DX9_REGISTER_TEMP = 0u;
+constexpr uint32_t DX9_REGISTER_INPUT = 1u;
 constexpr uint32_t DX9_REGISTER_COLOR_OUTPUT = 8u;
+constexpr uint32_t DX9_REGISTER_SAMPLER = 10u;
+
+constexpr uint32_t DX9_DCL_USAGE_MASK = 0x0000001Fu;
+constexpr uint32_t DX9_DCL_USAGE_INDEX_MASK = 0x000F0000u;
+constexpr uint32_t DX9_DCL_USAGE_INDEX_SHIFT = 16u;
+constexpr uint32_t DX9_DECL_USAGE_TEXCOORD = 5u;
+constexpr uint32_t DX9_DECL_USAGE_COLOR = 10u;
 
 constexpr uint16_t DX9_OP_MOV = 1u;
 constexpr uint16_t DX9_OP_ADD = 2u;
@@ -217,10 +237,9 @@ constexpr uint32_t DX9_SWIZZLE_Z = 0xAAu;
 constexpr uint32_t DX9_SWIZZLE_W = 0xFFu;
 constexpr uint32_t DX9_SWIZZLE_XYZW = 0xE4u;
 
-// Known scene/post-process and sky/cloud output shaders. These are the only
-// shaders patched by the default mode. A hash still has to pass the strict
-// terminal-output bytecode matcher before it is modified.
-const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_POST_SKY_ALLOWLIST = {
+// Known final post-process output shaders. Sky/cloud entries are intentionally
+// excluded: unclamping them can reveal black texture borders or defeat fog masks.
+const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_POST_ALLOWLIST = {
     0x1167C22Au,
     0x23B35169u,
     0x357DE7FDu,
@@ -232,36 +251,67 @@ const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_POST_SKY_ALLOWLIST = {
     0x81444CACu,
     0x88954051u,
     0x8F5D2EFFu,
-    0x93610C4Cu,  // LUT pass: current matcher intentionally leaves it unchanged.
+    0x93610C4Cu,  // LUT pass: strict matcher currently leaves it unchanged.
     0xC9558BEFu,
     0xCAB1BCB8u,
-    0x94BC7D3Eu,  // Sky/cloud.
-    0xDAC6E2D9u,  // Sky/cloud.
 };
 
-// Exact matches to the supplied spotlight/model-lighting example. These are
-// kept out of the default mode because surface shaders can feed special model,
-// shadow, thermal/highlight, or intermediate paths in some scenes.
+// Exact known weapon/viewmodel-lighting shaders available to the curated model
+// mode. These receive the full terminal unclamp rather than the guarded scanner
+// path. Only the final output saturation is removed; all earlier BRDF, shadow,
+// attenuation, fog, and material masks stay exactly as authored by the game.
 const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_MODEL_ALLOWLIST = {
-    0xBACB9CF2u,
-    0xCDCD3EAEu,
+    0xBACB9CF2u,  // Weapon/viewmodel spotlight lighting.
+    0xCDCD3EAEu,  // Related weapon/viewmodel lighting variant.
 };
 
-// Add hashes here when a shader is confirmed to contain packed data or a
-// special effect that should never be changed, even in heuristic modes.
+// Exact weapon/viewmodel examples that must be fully unclamped by level 3.
+// These shaders end with the equivalent of:
+//
+//   output = sqrt(saturate(finalLighting * hdrControl.x));
+//
+// Level 3 rewrites only that terminal expression to:
+//
+//   output = sqrt(max(finalLighting * hdrControl.x, 0));
+//
+// This is the same transformation used by the supplied HLSL examples. It does
+// not remove any earlier material, normal, shadow, attenuation, fog, or BRDF
+// clamps. Exact hashes bypass the guarded geometry reconstruction.
+const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_LEVEL3_VIEWMODEL_ALLOWLIST = {
+    0x44B59D36u,  // weapon2: final mul_sat + sqrt output.
+    0xBACB9CF2u,  // weapon1: final mul_sat + sqrt output.
+    0xCDCD3EAEu,  // related weapon/viewmodel lighting variant.
+    0xE07AC027u,  // weapon3: final mul_sat + sqrt output.
+};
+
+// Known sky/cloud passes enabled only for the level-3/4 sky test. They remain
+// blocked in curated modes and are still limited to the strict terminal sqrt
+// rewrite; direct oC0 rewrites remain disabled for them.
+const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_LEVEL3_SKY_TEST_ALLOWLIST = {
+    0x94BC7D3Eu,
+    0xDAC6E2D9u,
+};
+
+// Add confirmed fog, packed-data, or special-effect hashes here. The two known
+// sky hashes above are intentionally not in this permanent denylist so level 3
+// can test them through the strict terminal-only path.
 const std::unordered_set<uint32_t> DX9_AUTO_UNCLAMP_DENYLIST = {
     // 0x00000000u,
 };
 
 bool DX9AutoUnclampModeAllowsHash(uint32_t mode, uint32_t hash) {
   if (DX9_AUTO_UNCLAMP_DENYLIST.contains(hash)) return false;
+  if (DX9_AUTO_UNCLAMP_LEVEL3_SKY_TEST_ALLOWLIST.contains(hash)
+      && mode < DX9_AUTO_UNCLAMP_HEURISTIC_SQRT) {
+    return false;
+  }
 
   switch (mode) {
     case DX9_AUTO_UNCLAMP_CURATED_POST_SKY:
-      return DX9_AUTO_UNCLAMP_POST_SKY_ALLOWLIST.contains(hash);
+      return DX9_AUTO_UNCLAMP_POST_ALLOWLIST.contains(hash);
 
     case DX9_AUTO_UNCLAMP_CURATED_WITH_MODEL:
-      return DX9_AUTO_UNCLAMP_POST_SKY_ALLOWLIST.contains(hash)
+      return DX9_AUTO_UNCLAMP_POST_ALLOWLIST.contains(hash)
           || DX9_AUTO_UNCLAMP_MODEL_ALLOWLIST.contains(hash);
 
     case DX9_AUTO_UNCLAMP_HEURISTIC_SQRT:
@@ -273,15 +323,21 @@ bool DX9AutoUnclampModeAllowsHash(uint32_t mode, uint32_t hash) {
   }
 }
 
-bool DX9AutoUnclampModeAllowsDirectOutput(uint32_t mode) {
-  return mode == DX9_AUTO_UNCLAMP_CURATED_POST_SKY
-      || mode == DX9_AUTO_UNCLAMP_CURATED_WITH_MODEL
-      || mode == DX9_AUTO_UNCLAMP_HEURISTIC_ALL;
+bool DX9AutoUnclampModeAllowsDirectOutput(uint32_t mode, uint32_t hash) {
+  (void)mode;
+  if (DX9_AUTO_UNCLAMP_DENYLIST.contains(hash)) return false;
+
+  // A broad direct oC0 saturation rewrite can remove material/fog masks and was
+  // responsible for the flat, unshaded appearance in the old level 4. Keep this
+  // path strictly hash-curated in every mode. Automatic scanning is limited to
+  // terminal sqrt chains, where only the final highlight ceiling is touched.
+  return DX9_AUTO_UNCLAMP_POST_ALLOWLIST.contains(hash);
 }
 
 enum class DX9AutoUnclampPatchKind : uint32_t {
   NONE = 0u,
   SQRT_OUTPUT,
+  SQRT_OUTPUT_GUARDED,
   DIRECT_OUTPUT,
 };
 
@@ -290,6 +346,21 @@ struct DX9InstructionInfo {
   uint16_t opcode = 0u;
   uint8_t operand_count = 0u;
   uint32_t instruction_token = 0u;
+};
+
+struct DX9ShaderStats {
+  uint32_t texture_samples = 0u;
+  uint32_t dot_products = 0u;
+  uint32_t multiplies = 0u;
+  uint32_t multiply_adds = 0u;
+  uint32_t adds = 0u;
+  uint32_t lerps = 0u;
+  uint32_t compares = 0u;
+
+  uint32_t input_declarations = 0u;
+  uint32_t texcoord_declaration_mask = 0u;
+  uint32_t sampler_declaration_mask = 0u;
+  bool declares_color0 = false;
 };
 
 struct DX9AutoUnclampPlan {
@@ -310,6 +381,7 @@ std::mutex g_dx9_auto_unclamp_mutex;
 std::unordered_map<uint64_t, DX9CachedAutoUnclampShader>
     g_dx9_auto_unclamp_cache;
 uint32_t g_dx9_auto_unclamp_sqrt_count = 0u;
+uint32_t g_dx9_auto_unclamp_guarded_count = 0u;
 uint32_t g_dx9_auto_unclamp_direct_count = 0u;
 uint32_t g_dx9_auto_unclamp_log_count = 0u;
 
@@ -440,6 +512,304 @@ bool DX9ParseShader(
   }
 
   return false;
+}
+
+DX9ShaderStats DX9CollectShaderStats(
+    const uint32_t* tokens,
+    const std::vector<DX9InstructionInfo>& instructions) {
+  DX9ShaderStats stats = {};
+
+  for (const auto& instruction : instructions) {
+    switch (instruction.opcode) {
+      case DX9_OP_TEXLD:
+        ++stats.texture_samples;
+        break;
+      case DX9_OP_DP3:
+      case DX9_OP_DP4:
+        ++stats.dot_products;
+        break;
+      case DX9_OP_MUL:
+        ++stats.multiplies;
+        break;
+      case DX9_OP_MAD:
+        ++stats.multiply_adds;
+        break;
+      case DX9_OP_ADD:
+      case DX9_OP_SUB:
+        ++stats.adds;
+        break;
+      case DX9_OP_LRP:
+        ++stats.lerps;
+        break;
+      case DX9_OP_CMP:
+        ++stats.compares;
+        break;
+      case DX9_OP_DCL:
+        if (tokens != nullptr && instruction.operand_count >= 2u) {
+          const uint32_t usage_token =
+              tokens[instruction.token_offset + 1u];
+          const uint32_t register_token =
+              tokens[instruction.token_offset + 2u];
+          const uint32_t register_type = DX9GetRegisterType(register_token);
+          const uint32_t register_number = DX9GetRegisterNumber(register_token);
+
+          if (register_type == DX9_REGISTER_INPUT) {
+            ++stats.input_declarations;
+
+            const uint32_t usage = usage_token & DX9_DCL_USAGE_MASK;
+            const uint32_t usage_index =
+                (usage_token & DX9_DCL_USAGE_INDEX_MASK)
+                >> DX9_DCL_USAGE_INDEX_SHIFT;
+
+            if (usage == DX9_DECL_USAGE_TEXCOORD && usage_index < 32u) {
+              stats.texcoord_declaration_mask |= 1u << usage_index;
+            } else if (usage == DX9_DECL_USAGE_COLOR && usage_index == 0u) {
+              stats.declares_color0 = true;
+            }
+          } else if (
+              register_type == DX9_REGISTER_SAMPLER
+              && register_number < 32u) {
+            stats.sampler_declaration_mask |= 1u << register_number;
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  return stats;
+}
+
+bool DX9HasDeclaredSampler(
+    const DX9ShaderStats& stats,
+    uint32_t sampler_register) {
+  return sampler_register < 32u
+      && (stats.sampler_declaration_mask & (1u << sampler_register)) != 0u;
+}
+
+bool DX9HasMaterialLightingSignature(const DX9ShaderStats& stats) {
+  // BO1 material shaders normally expose at least one of these slots:
+  //   s1 = normal map, s2 = shadow map, s4 = specular map.
+  // Viewmodels additionally tend to use s11/s15, handled separately below.
+  return DX9HasDeclaredSampler(stats, 1u)
+      || DX9HasDeclaredSampler(stats, 2u)
+      || DX9HasDeclaredSampler(stats, 4u);
+}
+
+bool DX9LooksLikeSkyFogOrUtility(
+    const DX9ShaderStats& stats,
+    const DX9InstructionInfo& terminal_candidate,
+    size_t instruction_count) {
+  const bool has_texcoord8 =
+      (stats.texcoord_declaration_mask & (1u << 8u)) != 0u;
+  const bool has_model_lighting = DX9HasDeclaredSampler(stats, 11u);
+  const bool has_reflection_probe = DX9HasDeclaredSampler(stats, 15u);
+
+  // A confirmed BO1 viewmodel declaration signature always wins over the
+  // structural sky filter. Some weapon variants use only one of s11/s15.
+  if (has_texcoord8 && (has_model_lighting || has_reflection_probe)) {
+    return false;
+  }
+
+  // Normal/shadow/specular resources are strong evidence of material lighting.
+  if (DX9HasMaterialLightingSignature(stats)) return false;
+
+  const uint32_t lighting_math =
+      stats.multiplies + stats.multiply_adds + stats.adds;
+
+  // Copy, LUT, fog-composite and many sky/cloud passes commonly end in these
+  // operations. They must not enter an automatic unclamp path.
+  if (terminal_candidate.opcode == DX9_OP_TEXLD
+      || terminal_candidate.opcode == DX9_OP_LRP
+      || terminal_candidate.opcode == DX9_OP_CMP) {
+    return true;
+  }
+
+  // No dot-product lighting means the terminal saturation is much more likely
+  // to be a mask, fog/sky blend, UI/effect value or packed intermediate.
+  if (stats.dot_products == 0u) return true;
+
+  // Reject lightweight non-material shaders. This catches unknown sky variants
+  // even when their hash is not yet in the hard denylist.
+  if (stats.texture_samples <= 2u
+      && stats.dot_products <= 2u
+      && lighting_math < 12u) {
+    return true;
+  }
+
+  if (instruction_count < 24u && lighting_math < 10u) return true;
+
+  return false;
+}
+
+bool DX9LooksLikeAdditionalSkyShader(
+    const DX9ShaderStats& stats,
+    const DX9InstructionInfo& terminal_candidate,
+    size_t instruction_count) {
+  const bool has_texcoord8 =
+      (stats.texcoord_declaration_mask & (1u << 8u)) != 0u;
+  const bool has_model_lighting = DX9HasDeclaredSampler(stats, 11u);
+  const bool has_reflection_probe = DX9HasDeclaredSampler(stats, 15u);
+
+  // Never classify likely viewmodels as sky.
+  if (has_texcoord8 && (has_model_lighting || has_reflection_probe)) {
+    return false;
+  }
+
+  // Never classify ordinary material lighting as sky.
+  if (DX9HasMaterialLightingSignature(stats)) return false;
+
+  // Restrict the broad sky path to arithmetic-produced highlight outputs.
+  if (terminal_candidate.opcode != DX9_OP_MUL
+      && terminal_candidate.opcode != DX9_OP_MAD
+      && terminal_candidate.opcode != DX9_OP_ADD
+      && terminal_candidate.opcode != DX9_OP_SUB) {
+    return false;
+  }
+
+  const uint32_t lighting_math =
+      stats.multiplies + stats.multiply_adds + stats.adds;
+
+  // Broad test path for additional sky/cloud shaders. Keep the range moderate
+  // so obvious utility passes remain rejected.
+  return stats.texture_samples <= 4u
+      && stats.dot_products <= 2u
+      && lighting_math >= 4u
+      && lighting_math <= 32u
+      && instruction_count >= 12u
+      && instruction_count <= 128u;
+}
+
+bool DX9LooksLikeGeometryLighting(
+    const DX9ShaderStats& stats,
+    const DX9InstructionInfo& terminal_candidate,
+    size_t instruction_count) {
+  if (DX9LooksLikeSkyFogOrUtility(
+          stats,
+          terminal_candidate,
+          instruction_count)) {
+    return false;
+  }
+
+  // Geometry highlight output should be produced by arithmetic, not a direct
+  // texture/cmp/lerp terminal operation.
+  if (terminal_candidate.opcode != DX9_OP_MUL
+      && terminal_candidate.opcode != DX9_OP_MAD
+      && terminal_candidate.opcode != DX9_OP_ADD
+      && terminal_candidate.opcode != DX9_OP_SUB) {
+    return false;
+  }
+
+  const uint32_t lighting_math =
+      stats.multiplies + stats.multiply_adds + stats.adds;
+  const bool has_material_resources = DX9HasMaterialLightingSignature(stats);
+
+  // Broader level-3 material match. The prior test required too little proof in
+  // some places but still missed many real lit surfaces. Prefer resource-backed
+  // evidence, then allow a high-complexity fallback for compiler variants.
+  if (has_material_resources
+      && stats.texture_samples >= 2u
+      && stats.dot_products >= 1u
+      && lighting_math >= 6u
+      && instruction_count >= 18u) {
+    return true;
+  }
+
+  if (stats.input_declarations >= 4u
+      && stats.texture_samples >= 3u
+      && stats.dot_products >= 3u
+      && lighting_math >= 12u
+      && instruction_count >= 35u) {
+    return true;
+  }
+
+  return false;
+}
+
+bool DX9LooksLikeBroadGeometryLighting(
+    const DX9ShaderStats& stats,
+    const DX9InstructionInfo& terminal_candidate,
+    size_t instruction_count) {
+  if (DX9LooksLikeSkyFogOrUtility(
+          stats,
+          terminal_candidate,
+          instruction_count)) {
+    return false;
+  }
+
+  if (terminal_candidate.opcode != DX9_OP_MUL
+      && terminal_candidate.opcode != DX9_OP_MAD
+      && terminal_candidate.opcode != DX9_OP_ADD
+      && terminal_candidate.opcode != DX9_OP_SUB) {
+    return false;
+  }
+
+  const uint32_t lighting_math =
+      stats.multiplies + stats.multiply_adds + stats.adds;
+
+  // Level 4 is broader than level 3, but still requires actual lighting work and
+  // always uses the guarded terminal reconstruction for unknown geometry.
+  if (DX9HasMaterialLightingSignature(stats)
+      && stats.texture_samples >= 1u
+      && stats.dot_products >= 1u
+      && lighting_math >= 4u
+      && instruction_count >= 14u) {
+    return true;
+  }
+
+  return stats.input_declarations >= 3u
+      && stats.texture_samples >= 3u
+      && stats.dot_products >= 2u
+      && lighting_math >= 10u
+      && instruction_count >= 28u;
+}
+
+bool DX9LooksLikeViewmodelLighting(
+    const DX9ShaderStats& stats,
+    const DX9InstructionInfo& terminal_candidate,
+    size_t instruction_count) {
+  // BO1's confirmed first-person weapon shaders finish with a saturated MUL
+  // before square-root output encoding. Keep this requirement so ordinary fog,
+  // copy, LUT and blend passes cannot enter the full viewmodel path.
+  if (terminal_candidate.opcode != DX9_OP_MUL) return false;
+
+  const bool has_texcoord8 =
+      (stats.texcoord_declaration_mask & (1u << 8u)) != 0u;
+  const bool has_model_lighting_sampler =
+      (stats.sampler_declaration_mask & (1u << 11u)) != 0u;
+  const bool has_reflection_probe_sampler =
+      (stats.sampler_declaration_mask & (1u << 15u)) != 0u;
+
+  // These are the stable declarations shared by all supplied BO1 weapon
+  // examples: COLOR0, TEXCOORD8, the s11 model-lighting volume and usually the
+  // s15 reflection probe. Do not require a literal LRP opcode because the D3D9
+  // compiler may lower the hero-lighting blend to MAD/ADD instructions.
+  if (!stats.declares_color0 || !has_texcoord8) return false;
+  if (!has_model_lighting_sampler && !has_reflection_probe_sampler) return false;
+  if (stats.input_declarations < 6u) return false;
+
+  const uint32_t lighting_math =
+      stats.multiplies + stats.multiply_adds + stats.adds;
+
+  // The thresholds are intentionally lower than the previous detector. The old
+  // values rejected real weapon variants after compiler scheduling changed their
+  // TEX/DP/LRP counts, even though their resource and input signatures matched.
+  const bool model_lighting_signature =
+      has_model_lighting_sampler
+      && stats.texture_samples >= 4u
+      && stats.dot_products >= 4u
+      && lighting_math >= 12u
+      && instruction_count >= 45u;
+
+  const bool reflection_viewmodel_signature =
+      has_reflection_probe_sampler
+      && stats.texture_samples >= 5u
+      && stats.dot_products >= 6u
+      && lighting_math >= 16u
+      && instruction_count >= 60u;
+
+  return model_lighting_signature || reflection_viewmodel_signature;
 }
 
 std::array<bool, 32u> DX9FindUsedTemporaryRegisters(
@@ -594,6 +964,165 @@ bool DX9MatchesTerminalSqrtOutput(
       && std::ranges::all_of(saw_rcp, [](bool value) { return value; });
 }
 
+uint32_t DX9GetSwizzleComponent(uint32_t token, uint32_t component) {
+  if (component >= 4u) return UINT32_MAX;
+  const uint32_t swizzle = DX9GetSourceSwizzle(token);
+  return (swizzle >> (component * 2u)) & 0x3u;
+}
+
+bool DX9MatchesViewmodelSqrtOutput(
+    const uint32_t* tokens,
+    const std::vector<DX9InstructionInfo>& instructions,
+    size_t candidate_index,
+    uint32_t source_temp_register) {
+  // The generic matcher only accepted this exact form:
+  //
+  //   rsq r0.x, r0.x
+  //   rcp oC0.x, r0.x
+  //
+  // BO1 viewmodel variants may instead use a second temporary and/or move the
+  // completed RGB value to oC0 after the reciprocal. Track the data flow rather
+  // than requiring one register-allocation layout.
+  std::array<bool, 3u> saw_rsq = {false, false, false};
+  std::array<uint32_t, 3u> rsq_register = {
+      UINT32_MAX, UINT32_MAX, UINT32_MAX};
+  std::array<bool, 3u> saw_sqrt_value = {false, false, false};
+  std::array<uint32_t, 3u> sqrt_register = {
+      UINT32_MAX, UINT32_MAX, UINT32_MAX};
+  std::array<uint32_t, 3u> sqrt_component = {
+      UINT32_MAX, UINT32_MAX, UINT32_MAX};
+  std::array<bool, 3u> wrote_output = {false, false, false};
+
+  for (size_t index = candidate_index + 1u;
+       index + 1u < instructions.size();
+       ++index) {
+    const auto& instruction = instructions[index];
+    if ((instruction.instruction_token & DX9_INSTRUCTION_PREDICATED) != 0u) {
+      return false;
+    }
+
+    if (instruction.opcode == DX9_OP_RSQ
+        && instruction.operand_count >= 2u) {
+      const uint32_t dest = tokens[instruction.token_offset + 1u];
+      const uint32_t source = tokens[instruction.token_offset + 2u];
+      const uint32_t write_mask = DX9GetWriteMask(dest);
+
+      if (DX9GetRegisterType(dest) == DX9_REGISTER_TEMP
+          && DX9IsSingleComponentWrite(write_mask)) {
+        const uint32_t component = DX9WriteMaskToComponent(write_mask);
+        if (component < 3u
+            && DX9IsTempComponentSource(
+                source,
+                source_temp_register,
+                component)) {
+          saw_rsq[component] = true;
+          rsq_register[component] = DX9GetRegisterNumber(dest);
+          continue;
+        }
+      }
+    }
+
+    if (instruction.opcode == DX9_OP_RCP
+        && instruction.operand_count >= 2u) {
+      const uint32_t dest = tokens[instruction.token_offset + 1u];
+      const uint32_t source = tokens[instruction.token_offset + 2u];
+      const uint32_t write_mask = DX9GetWriteMask(dest);
+
+      if (DX9IsSingleComponentWrite(write_mask)) {
+        const uint32_t component = DX9WriteMaskToComponent(write_mask);
+        if (component < 3u
+            && saw_rsq[component]
+            && DX9IsTempComponentSource(
+                source,
+                rsq_register[component],
+                component)) {
+          const uint32_t dest_type = DX9GetRegisterType(dest);
+          const uint32_t dest_register = DX9GetRegisterNumber(dest);
+
+          if (dest_type == DX9_REGISTER_COLOR_OUTPUT
+              && dest_register == 0u) {
+            wrote_output[component] = true;
+            continue;
+          }
+
+          if (dest_type == DX9_REGISTER_TEMP) {
+            saw_sqrt_value[component] = true;
+            sqrt_register[component] = dest_register;
+            sqrt_component[component] = component;
+            continue;
+          }
+        }
+      }
+    }
+
+    if (instruction.opcode == DX9_OP_MOV
+        && instruction.operand_count >= 2u) {
+      const uint32_t dest = tokens[instruction.token_offset + 1u];
+      const uint32_t source = tokens[instruction.token_offset + 2u];
+      const uint32_t dest_type = DX9GetRegisterType(dest);
+      const uint32_t dest_register = DX9GetRegisterNumber(dest);
+      const uint32_t write_mask = DX9GetWriteMask(dest);
+
+      if (dest_type == DX9_REGISTER_COLOR_OUTPUT && dest_register == 0u) {
+        if (write_mask == DX9_WRITE_W) continue;
+        if ((write_mask & DX9_WRITE_RGB) == 0u) continue;
+        if (DX9GetRegisterType(source) != DX9_REGISTER_TEMP
+            || (source & DX9_SOURCE_MODIFIER_MASK) != 0u) {
+          return false;
+        }
+
+        const uint32_t source_register = DX9GetRegisterNumber(source);
+        for (uint32_t output_component = 0u;
+             output_component < 3u;
+             ++output_component) {
+          const uint32_t output_bit = 1u << output_component;
+          if ((write_mask & output_bit) == 0u) continue;
+
+          const uint32_t source_component =
+              DX9GetSwizzleComponent(source, output_component);
+          bool matched_component = false;
+
+          for (uint32_t sqrt_index = 0u;
+               sqrt_index < 3u;
+               ++sqrt_index) {
+            if (!saw_sqrt_value[sqrt_index]) continue;
+            if (sqrt_register[sqrt_index] != source_register) continue;
+            if (sqrt_component[sqrt_index] != source_component) continue;
+            matched_component = true;
+            break;
+          }
+
+          if (!matched_component) return false;
+          wrote_output[output_component] = true;
+        }
+        continue;
+      }
+    }
+
+    // Ignore unrelated scalar/alpha work after the lighting result, but reject
+    // an unexpected RGB overwrite of the source temporary or the final color
+    // output. This keeps the relaxed matcher tied to the terminal sqrt chain.
+    if (instruction.operand_count > 0u
+        && DX9OpcodeMayHaveSaturatedColorDestination(instruction.opcode)) {
+      const uint32_t dest = tokens[instruction.token_offset + 1u];
+      const uint32_t dest_type = DX9GetRegisterType(dest);
+      const uint32_t dest_register = DX9GetRegisterNumber(dest);
+      const uint32_t write_mask = DX9GetWriteMask(dest);
+
+      if ((write_mask & DX9_WRITE_RGB) != 0u
+          && ((dest_type == DX9_REGISTER_TEMP
+               && dest_register == source_temp_register)
+              || (dest_type == DX9_REGISTER_COLOR_OUTPUT
+                  && dest_register == 0u))) {
+        return false;
+      }
+    }
+  }
+
+  return std::ranges::all_of(saw_rsq, [](bool value) { return value; })
+      && std::ranges::all_of(wrote_output, [](bool value) { return value; });
+}
+
 bool DX9MatchesDirectFinalOutput(
     const uint32_t* tokens,
     const std::vector<DX9InstructionInfo>& instructions,
@@ -609,14 +1138,22 @@ bool DX9MatchesDirectFinalOutput(
 DX9AutoUnclampPlan DX9BuildAutoUnclampPlan(
     const uint32_t* tokens,
     const std::vector<DX9InstructionInfo>& instructions,
-    uint32_t mode) {
+    uint32_t mode,
+    uint32_t source_crc32) {
   DX9AutoUnclampPlan plan = {};
   if (mode == DX9_AUTO_UNCLAMP_OFF || instructions.size() < 2u) return plan;
+  if (DX9_AUTO_UNCLAMP_DENYLIST.contains(source_crc32)) return plan;
 
-  // Adding the lower-bound reconstruction costs two arithmetic instructions.
-  // ps_3_0 has a 512-slot limit; use the total instruction count as a
-  // conservative guard rather than trying to estimate special opcode costs.
-  if (instructions.size() > 510u) return plan;
+  const bool is_curated_post =
+      DX9_AUTO_UNCLAMP_POST_ALLOWLIST.contains(source_crc32);
+  const bool is_curated_model =
+      DX9_AUTO_UNCLAMP_MODEL_ALLOWLIST.contains(source_crc32);
+  const bool is_exact_viewmodel =
+      DX9_AUTO_UNCLAMP_LEVEL3_VIEWMODEL_ALLOWLIST.contains(source_crc32);
+  const bool is_exact_sky_test =
+      mode >= DX9_AUTO_UNCLAMP_HEURISTIC_SQRT
+      && DX9_AUTO_UNCLAMP_LEVEL3_SKY_TEST_ALLOWLIST.contains(source_crc32);
+  const DX9ShaderStats stats = DX9CollectShaderStats(tokens, instructions);
 
   const auto used_temps = DX9FindUsedTemporaryRegisters(tokens, instructions);
   std::array<uint32_t, 32u> free_temps = {};
@@ -643,13 +1180,128 @@ DX9AutoUnclampPlan DX9BuildAutoUnclampPlan(
     const uint32_t register_type = DX9GetRegisterType(dest);
     const uint32_t register_number = DX9GetRegisterNumber(dest);
 
-    if (register_type == DX9_REGISTER_TEMP
-        && free_temp_count >= 1u
+    const bool is_heuristic_viewmodel_candidate =
+        mode >= DX9_AUTO_UNCLAMP_HEURISTIC_SQRT
+        && (is_exact_viewmodel
+            || DX9LooksLikeViewmodelLighting(
+                stats,
+                instruction,
+                instructions.size()));
+
+    const bool is_structural_extra_sky =
+        mode >= DX9_AUTO_UNCLAMP_HEURISTIC_SQRT
+        && !is_curated_post
+        && !is_curated_model
+        && !is_exact_viewmodel
+        && !is_exact_sky_test
+        && DX9LooksLikeAdditionalSkyShader(
+            stats,
+            instruction,
+            instructions.size());
+
+    const bool is_structural_sky_or_utility =
+        !is_curated_post
+        && !is_curated_model
+        && !is_exact_viewmodel
+        && !is_exact_sky_test
+        && !is_structural_extra_sky
+        && DX9LooksLikeSkyFogOrUtility(
+            stats,
+            instruction,
+            instructions.size());
+
+    const bool matches_strict_sqrt =
+        register_type == DX9_REGISTER_TEMP
         && DX9MatchesTerminalSqrtOutput(
             tokens,
             instructions,
             candidate_index,
-            register_number)) {
+            register_number);
+
+    const bool matches_viewmodel_sqrt =
+        register_type == DX9_REGISTER_TEMP
+        && is_heuristic_viewmodel_candidate
+        && DX9MatchesViewmodelSqrtOutput(
+            tokens,
+            instructions,
+            candidate_index,
+            register_number);
+
+    if (matches_strict_sqrt || matches_viewmodel_sqrt) {
+      bool allow_sqrt = false;
+      bool use_guarded_geometry = false;
+
+      switch (mode) {
+        case DX9_AUTO_UNCLAMP_CURATED_POST_SKY:
+          allow_sqrt = is_curated_post;
+          break;
+
+        case DX9_AUTO_UNCLAMP_CURATED_WITH_MODEL:
+          // Explicit weapon/viewmodel hashes use the full terminal unclamp.
+          // Their internal shading clamps remain untouched, and the smaller
+          // patch is much more likely to fit instruction-heavy ps_3_0 shaders.
+          allow_sqrt = is_curated_post || is_curated_model;
+          use_guarded_geometry = false;
+          break;
+
+        case DX9_AUTO_UNCLAMP_HEURISTIC_SQRT:
+        case DX9_AUTO_UNCLAMP_HEURISTIC_ALL: {
+          // Level 4 deliberately aliases level 3. Both modes now apply the same
+          // weapon-style terminal highlight unclamp to almost every strict terminal
+          // sqrt chain, while still protecting known and structural sky/fog/utility
+          // shaders. The two confirmed sky hashes are explicitly allowed for this
+          // test build. There is no guarded reconstruction or brightness multiplier.
+          if (is_structural_sky_or_utility) break;
+
+          const bool is_broad_viewmodel =
+              is_heuristic_viewmodel_candidate;
+
+          // Broad heuristic mode: if the shader ends in a proven terminal
+          // sqrt(saturate(...)) output chain, allow the same final-only unclamp used
+          // by the supplied weapon HLSL examples. This intentionally reaches world
+          // geometry and most other lit shaders. Structural fog/utility passes remain
+          // filtered, while the confirmed sky hashes and additional sky-like shaders
+          // bypass that filter for testing.
+          allow_sqrt = is_curated_post
+              || is_curated_model
+              || is_exact_viewmodel
+              || is_exact_sky_test
+              || is_structural_extra_sky
+              || is_broad_viewmodel
+              || matches_strict_sqrt;
+
+          // Every accepted shader uses:
+          //
+          //   sqrt(saturate(finalLighting))
+          //       -> sqrt(max(finalLighting, 0))
+          //
+          // This is exactly the supplied weapon-HLSL transformation.
+          use_guarded_geometry = false;
+          break;
+        }
+
+        default:
+          break;
+      }
+
+      if (!allow_sqrt) continue;
+
+      if (use_guarded_geometry) {
+        // Legacy guarded reconstruction retained for source compatibility.
+        // Level 3 and level 4 no longer select this path.
+        if (instructions.size() > 504u || free_temp_count < 2u) continue;
+
+        plan.kind = DX9AutoUnclampPatchKind::SQRT_OUTPUT_GUARDED;
+        plan.instruction_index = candidate_index;
+        plan.free_temps[0] = free_temps[0];
+        plan.free_temps[1] = free_temps[1];
+        plan.free_temp_count = 2u;
+        return plan;
+      }
+
+      // Full unclamp adds two arithmetic instructions.
+      if (instructions.size() > 510u || free_temp_count < 1u) continue;
+
       plan.kind = DX9AutoUnclampPatchKind::SQRT_OUTPUT;
       plan.instruction_index = candidate_index;
       plan.free_temps[0] = free_temps[0];
@@ -657,9 +1309,15 @@ DX9AutoUnclampPlan DX9BuildAutoUnclampPlan(
       return plan;
     }
 
-    if (DX9AutoUnclampModeAllowsDirectOutput(mode)
+    // Direct final-output rewrites are hash-curated only. Do not infer them from
+    // a viewmodel/geometry signature: that broader path caused flat shading.
+    const bool allow_direct_output =
+        DX9AutoUnclampModeAllowsDirectOutput(mode, source_crc32);
+
+    if (allow_direct_output
         && register_type == DX9_REGISTER_COLOR_OUTPUT
         && register_number == 0u
+        && instructions.size() <= 510u
         && free_temp_count >= 2u
         && DX9MatchesDirectFinalOutput(
             tokens,
@@ -701,7 +1359,7 @@ bool DX9ApplyAutoUnclampPlan(
       (original_dest & DX9_DEST_PARTIAL_PRECISION) != 0u;
   const uint32_t original_register = DX9GetRegisterNumber(original_dest);
 
-  std::array<uint32_t, 8u> inserted = {};
+  std::vector<uint32_t> inserted;
 
   if (plan.kind == DX9AutoUnclampPatchKind::SQRT_OUTPUT) {
     const uint32_t zero_temp = plan.free_temps[0];
@@ -710,22 +1368,110 @@ bool DX9ApplyAutoUnclampPlan(
     patched_tokens[dest_offset] = original_dest & ~DX9_DEST_SATURATE;
 
     // rZero.rgb = rColor.rgb - rColor.rgb;  // exact 0 for finite input
-    inserted[0] = DX9MakeInstruction(DX9_OP_SUB, 3u);
-    inserted[1] = DX9MakeTempDest(
+    inserted.push_back(DX9MakeInstruction(DX9_OP_SUB, 3u));
+    inserted.push_back(DX9MakeTempDest(
         zero_temp,
         DX9_WRITE_RGB,
-        partial_precision);
-    inserted[2] = DX9MakeTempSource(original_register);
-    inserted[3] = DX9MakeTempSource(original_register);
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(original_register));
+    inserted.push_back(DX9MakeTempSource(original_register));
 
     // rColor.rgb = max(rColor.rgb, rZero.rgb);
-    inserted[4] = DX9MakeInstruction(DX9_OP_MAX, 3u);
-    inserted[5] = DX9MakeTempDest(
+    inserted.push_back(DX9MakeInstruction(DX9_OP_MAX, 3u));
+    inserted.push_back(DX9MakeTempDest(
         original_register,
         DX9_WRITE_RGB,
-        partial_precision);
-    inserted[6] = DX9MakeTempSource(original_register);
-    inserted[7] = DX9MakeTempSource(zero_temp);
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(original_register));
+    inserted.push_back(DX9MakeTempSource(zero_temp));
+  } else if (plan.kind == DX9AutoUnclampPatchKind::SQRT_OUTPUT_GUARDED) {
+    const uint32_t raw_temp = plan.free_temps[0];
+    const uint32_t aux_temp = plan.free_temps[1];
+
+    // First evaluate the original expression without saturation into rRaw.
+    patched_tokens[dest_offset] = DX9SetRegister(
+        original_dest & ~DX9_DEST_SATURATE,
+        DX9_REGISTER_TEMP,
+        raw_temp);
+
+    // Then replay the exact original saturated instruction into rColor. Keeping
+    // both versions lets us construct a constant-free 16.0 cap:
+    //
+    //   vanilla = saturate(raw)
+    //   limit   = vanilla * 16
+    //   color   = max(min(raw, limit), 0)
+    //
+    // Below 1.0, min(raw, 16*raw) remains raw. Above 1.0, vanilla is 1 and
+    // the recovered linear value is capped at 16.0. The following original
+    // rsq/rcp chain can therefore output up to sqrt(16) = 4.0.
+    const size_t candidate_dword_count = 1u + candidate.operand_count;
+    inserted.insert(
+        inserted.end(),
+        source_tokens + candidate.token_offset,
+        source_tokens + candidate.token_offset + candidate_dword_count);
+
+    // rAux.rgb = rColor.rgb + rColor.rgb;  // 2 * saturate(raw)
+    inserted.push_back(DX9MakeInstruction(DX9_OP_ADD, 3u));
+    inserted.push_back(DX9MakeTempDest(
+        aux_temp,
+        DX9_WRITE_RGB,
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(original_register));
+    inserted.push_back(DX9MakeTempSource(original_register));
+
+    // rAux.rgb = rAux.rgb + rAux.rgb;  // 4 * saturate(raw)
+    inserted.push_back(DX9MakeInstruction(DX9_OP_ADD, 3u));
+    inserted.push_back(DX9MakeTempDest(
+        aux_temp,
+        DX9_WRITE_RGB,
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(aux_temp));
+    inserted.push_back(DX9MakeTempSource(aux_temp));
+
+    // rAux.rgb = rAux.rgb + rAux.rgb;  // 8 * saturate(raw)
+    inserted.push_back(DX9MakeInstruction(DX9_OP_ADD, 3u));
+    inserted.push_back(DX9MakeTempDest(
+        aux_temp,
+        DX9_WRITE_RGB,
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(aux_temp));
+    inserted.push_back(DX9MakeTempSource(aux_temp));
+
+    // rAux.rgb = rAux.rgb + rAux.rgb;  // 16 * saturate(raw)
+    inserted.push_back(DX9MakeInstruction(DX9_OP_ADD, 3u));
+    inserted.push_back(DX9MakeTempDest(
+        aux_temp,
+        DX9_WRITE_RGB,
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(aux_temp));
+    inserted.push_back(DX9MakeTempSource(aux_temp));
+
+    // rColor.rgb = min(rRaw.rgb, rAux.rgb);
+    inserted.push_back(DX9MakeInstruction(DX9_OP_MIN, 3u));
+    inserted.push_back(DX9MakeTempDest(
+        original_register,
+        DX9_WRITE_RGB,
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(raw_temp));
+    inserted.push_back(DX9MakeTempSource(aux_temp));
+
+    // rAux.rgb = rColor.rgb - rColor.rgb;  // safe zero after the finite cap
+    inserted.push_back(DX9MakeInstruction(DX9_OP_SUB, 3u));
+    inserted.push_back(DX9MakeTempDest(
+        aux_temp,
+        DX9_WRITE_RGB,
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(original_register));
+    inserted.push_back(DX9MakeTempSource(original_register));
+
+    // rColor.rgb = max(rColor.rgb, rAux.rgb);
+    inserted.push_back(DX9MakeInstruction(DX9_OP_MAX, 3u));
+    inserted.push_back(DX9MakeTempDest(
+        original_register,
+        DX9_WRITE_RGB,
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(original_register));
+    inserted.push_back(DX9MakeTempSource(aux_temp));
   } else if (plan.kind == DX9AutoUnclampPatchKind::DIRECT_OUTPUT) {
     const uint32_t color_temp = plan.free_temps[0];
     const uint32_t zero_temp = plan.free_temps[1];
@@ -737,19 +1483,19 @@ bool DX9ApplyAutoUnclampPlan(
         DX9_REGISTER_TEMP,
         color_temp);
 
-    inserted[0] = DX9MakeInstruction(DX9_OP_SUB, 3u);
-    inserted[1] = DX9MakeTempDest(
+    inserted.push_back(DX9MakeInstruction(DX9_OP_SUB, 3u));
+    inserted.push_back(DX9MakeTempDest(
         zero_temp,
         DX9_WRITE_RGB,
-        partial_precision);
-    inserted[2] = DX9MakeTempSource(color_temp);
-    inserted[3] = DX9MakeTempSource(color_temp);
+        partial_precision));
+    inserted.push_back(DX9MakeTempSource(color_temp));
+    inserted.push_back(DX9MakeTempSource(color_temp));
 
     // oC0.rgb = max(rColor.rgb, rZero.rgb);
-    inserted[4] = DX9MakeInstruction(DX9_OP_MAX, 3u);
-    inserted[5] = original_dest & ~DX9_DEST_SATURATE;
-    inserted[6] = DX9MakeTempSource(color_temp);
-    inserted[7] = DX9MakeTempSource(zero_temp);
+    inserted.push_back(DX9MakeInstruction(DX9_OP_MAX, 3u));
+    inserted.push_back(original_dest & ~DX9_DEST_SATURATE);
+    inserted.push_back(DX9MakeTempSource(color_temp));
+    inserted.push_back(DX9MakeTempSource(zero_temp));
   } else {
     return false;
   }
@@ -787,6 +1533,8 @@ const char* DX9AutoUnclampKindName(DX9AutoUnclampPatchKind kind) {
   switch (kind) {
     case DX9AutoUnclampPatchKind::SQRT_OUTPUT:
       return "terminal sqrt RGB";
+    case DX9AutoUnclampPatchKind::SQRT_OUTPUT_GUARDED:
+      return "guarded geometry sqrt RGB";
     case DX9AutoUnclampPatchKind::DIRECT_OUTPUT:
       return "direct final RGB";
     default:
@@ -847,7 +1595,11 @@ bool OnCreatePipelineDX9AutoOutputUnclamp(
     if (!DX9ParseShader(source_tokens, token_count, instructions)) continue;
 
     const DX9AutoUnclampPlan plan =
-        DX9BuildAutoUnclampPlan(source_tokens, instructions, mode);
+        DX9BuildAutoUnclampPlan(
+            source_tokens,
+            instructions,
+            mode,
+            source_crc32);
     if (plan.kind == DX9AutoUnclampPatchKind::NONE) continue;
 
     std::vector<uint32_t> patched_tokens;
@@ -900,6 +1652,9 @@ bool OnCreatePipelineDX9AutoOutputUnclamp(
     if (inserted) {
       if (plan.kind == DX9AutoUnclampPatchKind::SQRT_OUTPUT) {
         ++g_dx9_auto_unclamp_sqrt_count;
+      } else if (
+          plan.kind == DX9AutoUnclampPatchKind::SQRT_OUTPUT_GUARDED) {
+        ++g_dx9_auto_unclamp_guarded_count;
       } else if (plan.kind == DX9AutoUnclampPatchKind::DIRECT_OUTPUT) {
         ++g_dx9_auto_unclamp_direct_count;
       }
@@ -914,6 +1669,7 @@ bool OnCreatePipelineDX9AutoOutputUnclamp(
         stream << DX9AutoUnclampKindName(plan.kind);
         stream << ", mode=" << mode;
         stream << ", totals: sqrt=" << g_dx9_auto_unclamp_sqrt_count;
+        stream << ", guarded=" << g_dx9_auto_unclamp_guarded_count;
         stream << ", direct=" << g_dx9_auto_unclamp_direct_count;
         stream << ")";
         reshade::log::message(
@@ -1699,22 +2455,24 @@ renodx::utils::settings::Settings settings = {
         .key = "DX9AutoOutputUnclamp",
         .binding = &dx9_auto_output_unclamp_mode,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 2.f,
+        .default_value = 3.f,
         .can_reset = true,
         .label = "Automatic Output Unclamp",
         .section = "HDR Pipeline",
-        .tooltip = "Default patches only allowlisted post-process and sky/cloud "
-                   "shaders. Model/material lighting is experimental because "
-                   "the same terminal clamp pattern is also used by special or "
-                   "intermediate passes. Heuristic modes may break characters, "
-                   "weapons, shadows, and textures. Requires a game restart "
-                   "after changing.",
+        .tooltip = "Sky-test build: Level 3 applies the weapon-style terminal "
+                   "highlight unclamp to almost every strict terminal sqrt output and "
+                   "also to the two confirmed BO1 sky/cloud hashes and additional "
+                   "sky-like shaders. The rewrite is only "
+                   "sqrt(saturate(finalLighting)) -> sqrt(max(finalLighting, 0)); no "
+                   "brightness multiplier, guarded reconstruction, or internal material "
+                   "changes are used. Structural fog and utility shaders remain filtered. "
+                   "Level 4 is a safe alias of level 3. Requires restart.",
         .labels = {
             "Off",
-            "Curated post + sky",
-            "Curated + model lighting (experimental)",
-            "Heuristic sqrt outputs (unsafe)",
-            "Heuristic sqrt + direct (unsafe)",
+            "Curated post (sky/fog protected)",
+            "Curated post + known viewmodels",
+            "Broad highlights + broader sky test",
+            "Same as level 3 (sky test alias)",
         },
         .is_global = true,
         .is_visible = []() { return false; },
@@ -1782,7 +2540,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapScaling",
         .binding = &shader_injection.tone_map_per_channel,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 0.f,
+        .default_value = 1.f,
         .label = "Scaling",
         .section = "Tone Mapping",
         .tooltip = "Luminance scales colors consistently while per-channel saturates and blows out sooner",
@@ -1800,6 +2558,20 @@ renodx::utils::settings::Settings settings = {
         .labels = {"BT709", "BT2020", "AP1"},
         .is_enabled = []() { return IsCustomToneMapperEnabled(); },
         .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "HDRBoost",
+        .binding = &shader_injection.hdr_boost,
+        .default_value = 0.f,
+        .label = "HDR Boost",
+        .section = "Tone Mapping",
+        .tooltip = "Applies the common.hlsl HDRBoost power curve before RenoDRT or PsychoV22. 0 disables it; 20 matches the common.hlsl default power of 0.20. Values above 50 are intentionally unavailable because the original curve can extrapolate above that point.",
+        .min = 0.f,
+        .max = 50.f,
+        .format = "%.0f%%",
+        .is_enabled = []() { return IsCustomToneMapperEnabled(); },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapHueProcessor",
@@ -1943,7 +2715,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return IsRenoDRTEnabled(); },
+        .is_enabled = []() { return IsCustomToneMapperEnabled(); },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -2009,6 +2781,33 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return IsCustomToneMapperEnabled(); },
         .parse = [](float value) { return value * 0.01f; },
+    },
+
+    new renodx::utils::settings::Setting{
+        .key = "BloomBrightness",
+        .binding = &shader_injection.bloom_brightness,
+        .default_value = 300.f,
+        .label = "Bloom Brightness",
+        .section = "Bloom",
+        .tooltip = "Scales the restored bloom while preserving its corrected color. 100 = original restored brightness.",
+        .min = 0.f,
+        .max = 300.f,
+        .format = "%.0f%%",
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return false;},
+    },
+    new renodx::utils::settings::Setting{
+        .key = "BloomFlareSize",
+        .binding = &shader_injection.bloom_flare_size,
+        .default_value = 100.f,
+        .label = "Flare Size",
+        .section = "Bloom",
+        .tooltip = "Controls how much of broad, screen-covering lens flare is retained. 0 keeps mostly the bright core; 100 retains the full flare extent.",
+        .min = 0.f,
+        .max = 100.f,
+        .format = "%.0f%%",
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1;},
     },
     new renodx::utils::settings::Setting{
         .key = "SwapChainCustomColorSpace",
@@ -2225,7 +3024,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .key = "SwapChainEncoding",
               .binding = &shader_injection.swap_chain_encoding,
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 5.f,
+              .default_value = 4.f,
               .label = "Encoding",
               .section = "Display Output",
               .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},

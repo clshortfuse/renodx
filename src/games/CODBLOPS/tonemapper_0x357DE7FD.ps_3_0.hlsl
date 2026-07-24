@@ -54,6 +54,45 @@
 
 
 // ============================================================================
+// common.hlsl HDR Boost configuration
+// ============================================================================
+
+// Dedicated RenoDX slider value. The normal shared.h definition maps this to
+// c59.w. The fallback keeps the shader buildable without the modified shared.h.
+#ifndef RENODX_HDR_BOOST
+#define RENODX_HDR_BOOST 0.0f
+#endif
+
+// This matches the normalization point used by the supplied common.hlsl.
+#ifndef RENODX_HDR_BOOST_NORMALIZATION_POINT
+#define RENODX_HDR_BOOST_NORMALIZATION_POINT 0.02f
+#endif
+
+
+// ============================================================================
+// common.hlsl tonemapping pipeline configuration
+// ============================================================================
+
+// Scene middle gray used by the luminance-based pre-tonemap controls.
+#ifndef RENODX_COMMON_MID_GRAY
+#define RENODX_COMMON_MID_GRAY 0.18f
+#endif
+
+// Maximum scene-light value supplied to the common Hermite display mapper.
+// This is not an output clamp; the output peak still comes from the RenoDX
+// Peak Brightness and Game Brightness settings.
+#ifndef RENODX_COMMON_WHITE_CLIP
+#define RENODX_COMMON_WHITE_CLIP 100.0f
+#endif
+
+// 1 = use the common gamma-domain gamut compression/decompression wrapper
+// around the RenoDRT/Common Hermite display mapper.
+#ifndef RENODX_COMMON_GAMUT_COMPRESSION
+#define RENODX_COMMON_GAMUT_COMPRESSION 1
+#endif
+
+
+// ============================================================================
 // Shared white-clip configuration
 // ============================================================================
 
@@ -73,6 +112,38 @@
 // PsychoV22 also has its own internal clip point. Lower is stronger.
 #ifndef RENODX_PSYCHOV22_CLIP_POINT
 #define RENODX_PSYCHOV22_CLIP_POINT 8.0f
+#endif
+
+
+// ============================================================================
+// Controlled HDR highlight restoration
+// ============================================================================
+
+// Restores part of the pre-tonemap HDR signal after RenoDRT or PsychoV22.
+// Shadows, midtones, and Vanilla mode remain unchanged.
+//
+// 0.00 = normal tonemapper output
+// 0.25 = moderate additional HDR brightness
+// 0.50 = strong restoration
+// 1.00 = approach the pre-tonemap signal in fully selected highlights
+#ifndef RENODX_HDR_HIGHLIGHT_RESTORE
+#define RENODX_HDR_HIGHLIGHT_RESTORE 0.35f
+#endif
+
+// Pre-tonemap peak where restoration begins.
+#ifndef RENODX_HDR_HIGHLIGHT_START
+#define RENODX_HDR_HIGHLIGHT_START 1.00f
+#endif
+
+// Pre-tonemap peak where the selected restoration strength becomes fully active.
+#ifndef RENODX_HDR_HIGHLIGHT_FULL
+#define RENODX_HDR_HIGHLIGHT_FULL 4.00f
+#endif
+
+// 1 = keep the restoration target at or below the configured display peak.
+// 0 = allow restored values above the configured display peak.
+#ifndef RENODX_HDR_RESTORE_LIMIT_TO_DISPLAY
+#define RENODX_HDR_RESTORE_LIMIT_TO_DISPLAY 1
 #endif
 
 
@@ -143,6 +214,554 @@ float3 SafePositive(float3 color)
         SafeFinitePositive1(color.r),
         SafeFinitePositive1(color.g),
         SafeFinitePositive1(color.b)
+    );
+}
+
+
+float MaxRGB(float3 color)
+{
+    return max(
+        color.r,
+        max(
+            color.g,
+            color.b
+        )
+    );
+}
+
+
+float SmoothCubic01(float value)
+{
+    value = saturate(value);
+
+    return value
+        * value
+        * (3.0f - 2.0f * value);
+}
+
+
+// common.hlsl HDRBoost curve, adapted with finite-value protection.
+//
+// The slider is the original `power` parameter:
+//   0.00 = disabled
+//   0.20 = common.hlsl default
+//   0.50 = maximum exposed by the addon slider
+//
+// Keeping power at or below 0.50 also keeps the original per-channel lerp
+// factor from asymptotically exceeding 1.0.
+float3 ApplyCommonHDRBoost(
+    float3 color,
+    float power,
+    float normalizationPoint
+)
+{
+    color = SafePositive(color);
+
+    power = clamp(
+        power,
+        0.0f,
+        0.50f
+    );
+
+    if (power <= 0.000001f)
+    {
+        return color;
+    }
+
+    normalizationPoint = max(
+        normalizationPoint,
+        0.000001f
+    );
+
+    float smoothing = max(
+        power * 2.0f,
+        0.000001f
+    );
+
+    float3 normalizedColor =
+        color / normalizationPoint;
+
+    float3 poweredColor =
+        normalizationPoint
+        * pow(
+            normalizedColor,
+            (1.0f + power).xxx
+        );
+
+    // This is the same adaptive blend factor used by common.hlsl. It gives
+    // progressively more boost to highlights while leaving dark values close
+    // to their original level.
+    float3 blendAmount =
+        color
+        / (
+            color / smoothing
+            + 1.0f
+        );
+
+    float3 boostedColor = lerp(
+        color,
+        poweredColor,
+        blendAmount
+    );
+
+    // The original function never reduces a channel.
+    boostedColor = max(
+        color,
+        boostedColor
+    );
+
+    return SafePositive(boostedColor);
+}
+
+
+// ============================================================================
+// common.hlsl reusable tone-mapping helpers
+// ============================================================================
+
+// Compress out-of-gamut color in gamma space before the display mapper, then
+// restore it afterward. This keeps saturated HDR highlights from shifting hue
+// as aggressively during luminance or per-channel rolloff.
+void CommonGamutCompression(
+    inout float3 color,
+    out float compressionScale
+)
+{
+    color = SafePositive(color);
+
+    float3 gammaColor =
+        renodx::color::gamma::EncodeSafe(color);
+
+    float grayscale =
+        renodx::color::y::from::BT709(gammaColor);
+
+    compressionScale =
+        renodx::color::correct::ComputeGamutCompressionScale(
+            gammaColor,
+            grayscale
+        );
+
+    gammaColor =
+        renodx::color::correct::GamutCompress(
+            gammaColor,
+            grayscale,
+            compressionScale
+        );
+
+    color =
+        renodx::color::gamma::DecodeSafe(gammaColor);
+
+    color =
+        renodx::color::bt709::clamp::BT709(color);
+
+    color = SafePositive(color);
+}
+
+
+void CommonGamutDecompression(
+    inout float3 color,
+    float compressionScale
+)
+{
+    color = SafePositive(color);
+
+    float3 gammaColor =
+        renodx::color::gamma::EncodeSafe(color);
+
+    gammaColor =
+        renodx::color::correct::GamutDecompress(
+            gammaColor,
+            compressionScale
+        );
+
+    color =
+        renodx::color::gamma::DecodeSafe(gammaColor);
+
+    color = SafePositive(color);
+}
+
+
+// Applies Exposure, Contrast, Flare, Highlights, and Shadows using luminance.
+// RGB is scaled uniformly, avoiding the per-channel hue shifts that occur when
+// those controls are applied independently to red, green, and blue.
+float3 CommonApplyPreTonemapControlsByLuminance(
+    float3 untonemapped,
+    float luminance,
+    renodx::color::grade::Config config,
+    float midGray
+)
+{
+    untonemapped = SafePositive(untonemapped);
+    midGray = max(midGray, 0.000001f);
+
+    if (
+        config.exposure == 1.0f
+        && config.shadows == 1.0f
+        && config.highlights == 1.0f
+        && config.contrast == 1.0f
+        && config.flare == 0.0f
+    )
+    {
+        return untonemapped;
+    }
+
+    float3 color =
+        untonemapped * config.exposure;
+
+    // Exposure changes luminance by the same amount.
+    float exposedLuminance =
+        max(luminance * config.exposure, 0.0f);
+
+    float normalizedY =
+        exposedLuminance / midGray;
+
+    float highlightMask =
+        1.0f / midGray;
+
+    float shadowMask =
+        midGray;
+
+    float flare =
+        renodx::math::DivideSafe(
+            normalizedY + config.flare,
+            normalizedY,
+            1.0f
+        );
+
+    float exponent =
+        config.contrast * flare;
+
+    float contrastedY =
+        pow(
+            max(normalizedY, 0.0f),
+            exponent
+        );
+
+    float highlightedY =
+        pow(
+            max(contrastedY, 0.0f),
+            config.highlights
+        );
+
+    highlightedY =
+        lerp(
+            contrastedY,
+            highlightedY,
+            saturate(contrastedY / highlightMask)
+        );
+
+    float shadowedY =
+        pow(
+            max(highlightedY, 0.0f),
+            -1.0f * (config.shadows - 2.0f)
+        );
+
+    shadowedY =
+        lerp(
+            shadowedY,
+            highlightedY,
+            saturate(highlightedY / shadowMask)
+        );
+
+    float finalY =
+        shadowedY * midGray;
+
+    color *=
+        exposedLuminance > 0.0f
+        ? finalY / exposedLuminance
+        : 0.0f;
+
+    return SafePositive(color);
+}
+
+
+// Applies Saturation, Blowout/dechroma, and Highlight Saturation after the
+// display mapper in OkLab, matching the common.hlsl ordering.
+float3 CommonApplyPostTonemapControls(
+    float3 tonemapped,
+    float luminance,
+    renodx::color::grade::Config config
+)
+{
+    float3 color = SafePositive(tonemapped);
+
+    if (
+        config.saturation != 1.0f
+        || config.dechroma != 0.0f
+        || config.blowout != 0.0f
+    )
+    {
+        float3 perceptual =
+            renodx::color::oklab::from::BT709(color);
+
+        if (config.dechroma != 0.0f)
+        {
+            float highlightAmount =
+                saturate(
+                    pow(
+                        max(luminance / 100.0f, 0.0f),
+                        1.0f - config.dechroma
+                    )
+                );
+
+            perceptual.yz *=
+                lerp(
+                    1.0f,
+                    0.0f,
+                    highlightAmount
+                );
+        }
+
+        if (config.blowout != 0.0f)
+        {
+            float percentMax =
+                saturate(luminance / 100.0f);
+
+            float blowoutChange =
+                pow(
+                    1.0f - percentMax,
+                    100.0f * abs(config.blowout)
+                );
+
+            if (config.blowout < 0.0f)
+            {
+                blowoutChange =
+                    2.0f - blowoutChange;
+            }
+
+            perceptual.yz *=
+                blowoutChange;
+        }
+
+        perceptual.yz *=
+            config.saturation;
+
+        color =
+            renodx::color::bt709::from::OkLab(perceptual);
+
+        color =
+            renodx::color::bt709::clamp::AP1(color);
+    }
+
+    return SafePositive(color);
+}
+
+
+float3 ApplyCommonPreTonemapPipeline(float3 untonemapped)
+{
+    untonemapped = SafePositive(untonemapped);
+
+    // Match the supplied common.hlsl ordering: HDR Boost first, then the
+    // luminance-based pre-tonemap grading controls.
+    untonemapped =
+        ApplyCommonHDRBoost(
+            untonemapped,
+            RENODX_HDR_BOOST,
+            RENODX_HDR_BOOST_NORMALIZATION_POINT
+        );
+
+    renodx::color::grade::Config config =
+        renodx::color::grade::config::Create();
+
+    config.exposure =
+        RENODX_TONE_MAP_EXPOSURE;
+
+    config.contrast =
+        RENODX_TONE_MAP_CONTRAST;
+
+    config.flare =
+        RENODX_TONE_MAP_FLARE;
+
+    config.shadows =
+        RENODX_TONE_MAP_SHADOWS;
+
+    config.highlights =
+        RENODX_TONE_MAP_HIGHLIGHTS;
+
+    float luminance =
+        renodx::color::y::from::BT709(untonemapped);
+
+    return CommonApplyPreTonemapControlsByLuminance(
+        untonemapped,
+        luminance,
+        config,
+        RENODX_COMMON_MID_GRAY
+    );
+}
+
+
+float3 ApplyCommonPostTonemapPipeline(float3 hdrColor)
+{
+    hdrColor = SafePositive(hdrColor);
+
+    renodx::color::grade::Config config =
+        renodx::color::grade::config::Create();
+
+    config.saturation =
+        RENODX_TONE_MAP_SATURATION;
+
+    // Common.hlsl maps Blowout to highlight dechroma.
+    config.dechroma =
+        RENODX_TONE_MAP_BLOWOUT;
+
+    // Highlight Saturation is represented as a signed blowout adjustment:
+    // 1.0 is neutral, below 1.0 removes highlight chroma, above 1.0 retains it.
+    config.blowout =
+        -1.0f
+        * (
+            RENODX_TONE_MAP_HIGHLIGHT_SATURATION
+            - 1.0f
+        );
+
+    float luminance =
+        renodx::color::y::from::BT709(hdrColor);
+
+    return CommonApplyPostTonemapControls(
+        hdrColor,
+        luminance,
+        config
+    );
+}
+
+
+// Common Hermite HDR display mapper. Peak output is determined by the ratio of
+// RenoDX Peak Brightness to Game Brightness. Luminance mode preserves hue;
+// Per Channel mode intentionally rolls individual channels toward white.
+float3 ApplyCommonHDRDisplayMap(float3 color)
+{
+    color = SafePositive(color);
+
+    float peakTonemap = max(
+        RENODX_PEAK_WHITE_NITS
+        / max(
+            RENODX_DIFFUSE_WHITE_NITS,
+            1.0f
+        ),
+        1.0f
+    );
+
+    color =
+        renodx::color::bt709::clamp::AP1(color);
+
+    float compressionScale = 1.0f;
+
+#if RENODX_COMMON_GAMUT_COMPRESSION
+
+    CommonGamutCompression(
+        color,
+        compressionScale
+    );
+
+#endif
+
+    float whiteClip = max(
+        RENODX_COMMON_WHITE_CLIP,
+        peakTonemap + 0.000001f
+    );
+
+    float3 outputColor;
+
+    if (RENODX_TONE_MAP_PER_CHANNEL < 0.5f)
+    {
+        outputColor =
+            renodx::tonemap::HermiteSplineLuminanceRolloff(
+                color,
+                peakTonemap,
+                whiteClip
+            );
+    }
+    else
+    {
+        outputColor =
+            renodx::tonemap::HermiteSplinePerChannelRolloff(
+                color,
+                peakTonemap,
+                whiteClip
+            );
+    }
+
+#if RENODX_COMMON_GAMUT_COMPRESSION
+
+    CommonGamutDecompression(
+        outputColor,
+        compressionScale
+    );
+
+#endif
+
+    return SafePositive(outputColor);
+}
+
+
+// Blend selected pre-tonemap HDR energy back into the tonemapped result.
+// The restoration mask is based on pre-tonemap peak brightness, and RGB is
+// scaled uniformly when limiting to the display peak so highlight hue is kept.
+float3 RestoreHDRHighlights(
+    float3 toneMappedColor,
+    float3 preTonemapColor
+)
+{
+    toneMappedColor =
+        SafePositive(toneMappedColor);
+
+    preTonemapColor =
+        SafePositive(preTonemapColor);
+
+    float preTonemapPeak =
+        MaxRGB(preTonemapColor);
+
+    float restoreRange = max(
+        RENODX_HDR_HIGHLIGHT_FULL
+        - RENODX_HDR_HIGHLIGHT_START,
+        0.000001f
+    );
+
+    float restoreMask = saturate(
+        (
+            preTonemapPeak
+            - RENODX_HDR_HIGHLIGHT_START
+        )
+        / restoreRange
+    );
+
+    restoreMask =
+        SmoothCubic01(restoreMask);
+
+    restoreMask *=
+        saturate(RENODX_HDR_HIGHLIGHT_RESTORE);
+
+    float3 restorationTarget =
+        preTonemapColor;
+
+#if RENODX_HDR_RESTORE_LIMIT_TO_DISPLAY
+
+    // HDR values are relative to diffuse white.
+    float displayPeak = max(
+        RENODX_PEAK_WHITE_NITS
+        / max(
+            RENODX_DIFFUSE_WHITE_NITS,
+            1.0f
+        ),
+        1.0f
+    );
+
+    if (preTonemapPeak > displayPeak)
+    {
+        restorationTarget *=
+            displayPeak
+            / max(
+                preTonemapPeak,
+                0.000001f
+            );
+    }
+
+#endif
+
+    return SafePositive(
+        lerp(
+            toneMappedColor,
+            restorationTarget,
+            restoreMask
+        )
     );
 }
 
@@ -278,12 +897,13 @@ float3 ApplyPsychoV22Tonemap(float3 linearColor)
             // Display peak relative to diffuse white.
             peakValue,
 
-            // RenoDX tone-map controls.
-            RENODX_TONE_MAP_EXPOSURE,
-            RENODX_TONE_MAP_HIGHLIGHTS,
-            RENODX_TONE_MAP_SHADOWS,
-            RENODX_TONE_MAP_CONTRAST,
-            RENODX_TONE_MAP_SATURATION,
+            // Standard grading controls are applied by the common pre/post
+            // stages. Keep them neutral here to prevent double-processing.
+            1.0f,  // exposure
+            1.0f,  // highlights
+            1.0f,  // shadows
+            1.0f,  // contrast
+            1.0f,  // saturation
 
             // PsychoV22 controls.
             1.0f,                            // bleaching_intensity
@@ -313,7 +933,7 @@ float3 ApplyPsychoV22Tonemap(float3 linearColor)
 
 
 // ============================================================================
-// RenoDX tonemapper
+// Selected HDR display mapper
 // ============================================================================
 
 float3 ApplyRenoDXTonemap(float3 linearColor)
@@ -321,30 +941,20 @@ float3 ApplyRenoDXTonemap(float3 linearColor)
     linearColor =
         SafePositive(linearColor);
 
-    // Apply the same stronger white shoulder before both RenoDRT and
-    // PsychoV22. This keeps the comparison between the two modes consistent.
-
-
     if (IsPsychoV22Mode())
     {
+        // PsychoV22 retains its own display mapping and gamut model, while the
+        // common pre/post grading stages surround it.
         return ApplyPsychoV22Tonemap(
             linearColor
         );
     }
 
-    renodx::draw::Config config =
-        renodx::draw::BuildConfig();
-
-    config.reno_drt_tone_map_method =
-        renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE;
-
-    linearColor =
-        renodx::draw::ToneMapPass(
-            linearColor,
-            config
-        );
-
-    return SafePositive(linearColor);
+    // RenoDRT mode now uses the common.hlsl Hermite display mapper, including
+    // luminance/per-channel selection and gamut compression/decompression.
+    return ApplyCommonHDRDisplayMap(
+        linearColor
+    );
 }
 
 
@@ -632,11 +1242,31 @@ float4 main(PS_INPUT input) : COLOR0
     }
     else
     {
-        // The shared stronger white shoulder is applied inside
-        // ApplyRenoDXTonemap before either RenoDRT or PsychoV22.
+        // common.hlsl ordering:
+        //   1. HDR Boost
+        //   2. Luminance-based Exposure/Contrast/Flare/Highlights/Shadows
+        //   3. Selected display mapper
+        //   4. Controlled HDR highlight restoration
+        //   5. OkLab Saturation/Blowout/Highlight Saturation
+        float3 commonPreTonemapColor =
+            ApplyCommonPreTonemapPipeline(
+                toneMapInput
+            );
+
         toneMappedColor =
             ApplyRenoDXTonemap(
-                toneMapInput
+                commonPreTonemapColor
+            );
+
+        toneMappedColor =
+            RestoreHDRHighlights(
+                toneMappedColor,
+                commonPreTonemapColor
+            );
+
+        toneMappedColor =
+            ApplyCommonPostTonemapPipeline(
+                toneMappedColor
             );
     }
 

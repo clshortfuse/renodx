@@ -63,11 +63,11 @@ struct ShaderInjectData {
   float psychov22_gamut_compression;
   float psychov22_gamut_mode;
 
-  // c59.x
-  float psychov22_cone_response;
-  float padding3;
-  float padding4;
-  float padding5;
+  // c59
+  float psychov22_cone_response;  // x
+  float bloom_brightness;         // y
+  float bloom_flare_size;         // z
+  float hdr_boost;                // w
 };
 
 #ifndef __cplusplus
@@ -77,7 +77,7 @@ struct ShaderInjectData {
 // DX9/SM3 path.
 // c50-c57 preserve the original layout.
 // c58 adds custom_flip_uv_y plus the first PsychoV22 controls.
-// c59 adds PsychoV22 cone response.
+// c59 adds PsychoV22 cone response, bloom controls, and HDR Boost.
 float4 shader_injection[10] : register(c50);
 
 #define RENODX_PEAK_WHITE_NITS                 shader_injection[0][0]
@@ -123,6 +123,9 @@ float4 shader_injection[10] : register(c50);
 #define RENODX_PSYCHOV22_GAMUT_COMPRESSION     shader_injection[8][2]
 #define RENODX_PSYCHOV22_GAMUT_MODE            shader_injection[8][3]
 #define RENODX_PSYCHOV22_CONE_RESPONSE         shader_injection[9][0]
+#define RENODX_BLOOM_BRIGHTNESS                 shader_injection[9][1]
+#define RENODX_BLOOM_FLARE_SIZE                 shader_injection[9][2]
+#define RENODX_HDR_BOOST                        shader_injection[9][3]
 
 #else
 
@@ -182,6 +185,9 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_PSYCHOV22_GAMUT_COMPRESSION     shader_injection.psychov22_gamut_compression
 #define RENODX_PSYCHOV22_GAMUT_MODE            shader_injection.psychov22_gamut_mode
 #define RENODX_PSYCHOV22_CONE_RESPONSE         shader_injection.psychov22_cone_response
+#define RENODX_BLOOM_BRIGHTNESS                 shader_injection.bloom_brightness
+#define RENODX_BLOOM_FLARE_SIZE                 shader_injection.bloom_flare_size
+#define RENODX_HDR_BOOST                        shader_injection.hdr_boost
 
 #endif
 

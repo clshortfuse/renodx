@@ -4,8 +4,13 @@
  */
 #include <include/reshade_api_resource.hpp>
 #include <Windows.h>
+#include <d3d9.h>
+
+#include <cstdint>
+#include <cstring>
 #include <sstream>
 #include <unordered_map>
+#include <vector>
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
@@ -22,6 +27,415 @@
 #include "./shared.h"
 
 namespace {
+
+// -----------------------------------------------------------------------------
+// Resident Evil 6 display-mode crash fix
+// -----------------------------------------------------------------------------
+// Adapted from x0reaxeax/RE6CrashFix (MIT license):
+// https://github.com/x0reaxeax/RE6CrashFix
+//
+// RE6 stores enumerated D3D9 display modes in a fixed 256-entry array without
+// properly checking the upper bound. Modern drivers can expose more than 256
+// modes, causing the game to overwrite memory and crash during startup.
+//
+// The standalone fix is a d3d9.dll proxy. RenoDX/ReShade already occupies that
+// proxy position, so this addon patches the game's Direct3DCreate9 import. The
+// returned IDirect3D9 object is then hooked before RE6 asks it for display modes.
+// Only modes matching the adapter's current desktop resolution are exposed, and
+// the final list is capped at 256 entries.
+//
+// Original RE6CrashFix copyright (c) 2026 x0reaxeax.
+// Used and adapted under the MIT License.
+
+using RE6Direct3DCreate9 = IDirect3D9*(WINAPI*)(UINT sdk_version);
+using RE6GetAdapterModeCount = UINT(STDMETHODCALLTYPE*)(
+    IDirect3D9* d3d9,
+    UINT adapter,
+    D3DFORMAT format);
+using RE6EnumAdapterModes = HRESULT(STDMETHODCALLTYPE*)(
+    IDirect3D9* d3d9,
+    UINT adapter,
+    D3DFORMAT format,
+    UINT mode,
+    D3DDISPLAYMODE* display_mode);
+
+constexpr size_t RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX = 6;
+constexpr size_t RE6_D3D9_ENUM_ADAPTER_MODES_INDEX = 7;
+constexpr size_t RE6_MAX_DISPLAY_MODES = 256;
+
+RE6Direct3DCreate9 re6_original_direct3d_create9 = nullptr;
+RE6GetAdapterModeCount re6_original_get_adapter_mode_count = nullptr;
+RE6EnumAdapterModes re6_original_enum_adapter_modes = nullptr;
+
+void** re6_direct3d_create9_iat_slot = nullptr;
+void** re6_hooked_d3d9_vtable = nullptr;
+
+std::vector<D3DDISPLAYMODE> re6_filtered_display_modes;
+UINT re6_filtered_adapter = D3DADAPTER_DEFAULT;
+D3DFORMAT re6_filtered_format = D3DFMT_UNKNOWN;
+
+void RE6Log(reshade::log::level level, const std::string& message) {
+  reshade::log::message(level, ("[RE6 Crash Fix] " + message).c_str());
+}
+
+bool RE6GetCurrentAdapterResolution(
+    IDirect3D9* d3d9,
+    UINT adapter,
+    UINT& width,
+    UINT& height) {
+  if (d3d9 == nullptr) return false;
+
+  D3DDISPLAYMODE current_mode = {};
+  if (SUCCEEDED(d3d9->GetAdapterDisplayMode(adapter, &current_mode)) &&
+      current_mode.Width != 0 && current_mode.Height != 0) {
+    width = current_mode.Width;
+    height = current_mode.Height;
+    return true;
+  }
+
+  DEVMODEW desktop_mode = {};
+  desktop_mode.dmSize = sizeof(desktop_mode);
+  if (EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &desktop_mode) &&
+      desktop_mode.dmPelsWidth != 0 && desktop_mode.dmPelsHeight != 0) {
+    width = desktop_mode.dmPelsWidth;
+    height = desktop_mode.dmPelsHeight;
+    return true;
+  }
+
+  return false;
+}
+
+HRESULT STDMETHODCALLTYPE RE6HookEnumAdapterModes(
+    IDirect3D9* d3d9,
+    UINT adapter,
+    D3DFORMAT format,
+    UINT mode,
+    D3DDISPLAYMODE* display_mode);
+
+UINT STDMETHODCALLTYPE RE6HookGetAdapterModeCount(
+    IDirect3D9* d3d9,
+    UINT adapter,
+    D3DFORMAT format) {
+  if (re6_original_get_adapter_mode_count == nullptr ||
+      re6_original_enum_adapter_modes == nullptr) {
+    return 0;
+  }
+
+  const UINT original_count =
+      re6_original_get_adapter_mode_count(d3d9, adapter, format);
+
+  // RE6 normally asks for D3DFMT_X8R8G8B8. Leave unrelated formats untouched
+  // so the hook does not interfere with another component using the same D3D9
+  // object.
+  if (format != D3DFMT_X8R8G8B8) {
+    return original_count;
+  }
+
+  UINT target_width = 0;
+  UINT target_height = 0;
+  if (!RE6GetCurrentAdapterResolution(
+          d3d9, adapter, target_width, target_height)) {
+    // The hard cap still prevents the RE6 array overflow if desktop resolution
+    // detection unexpectedly fails.
+    return (original_count > RE6_MAX_DISPLAY_MODES)
+               ? static_cast<UINT>(RE6_MAX_DISPLAY_MODES)
+               : original_count;
+  }
+
+  re6_filtered_display_modes.clear();
+  re6_filtered_display_modes.reserve(
+      (original_count < RE6_MAX_DISPLAY_MODES)
+          ? original_count
+          : RE6_MAX_DISPLAY_MODES);
+
+  for (UINT index = 0;
+       index < original_count &&
+       re6_filtered_display_modes.size() < RE6_MAX_DISPLAY_MODES;
+       ++index) {
+    D3DDISPLAYMODE candidate = {};
+    const HRESULT result = re6_original_enum_adapter_modes(
+        d3d9, adapter, format, index, &candidate);
+    if (FAILED(result)) continue;
+
+    if (candidate.Width != target_width ||
+        candidate.Height != target_height) {
+      continue;
+    }
+
+    re6_filtered_display_modes.push_back(candidate);
+  }
+
+  // A driver should expose at least one mode for its active resolution. If it
+  // does not, keep the first 256 original entries rather than returning zero.
+  if (re6_filtered_display_modes.empty()) {
+    for (UINT index = 0;
+         index < original_count &&
+         re6_filtered_display_modes.size() < RE6_MAX_DISPLAY_MODES;
+         ++index) {
+      D3DDISPLAYMODE candidate = {};
+      if (SUCCEEDED(re6_original_enum_adapter_modes(
+              d3d9, adapter, format, index, &candidate))) {
+        re6_filtered_display_modes.push_back(candidate);
+      }
+    }
+  }
+
+  re6_filtered_adapter = adapter;
+  re6_filtered_format = format;
+
+  std::stringstream message;
+  message << "Filtered " << original_count << " display modes to "
+          << re6_filtered_display_modes.size() << " mode(s) at "
+          << target_width << 'x' << target_height << '.';
+  RE6Log(reshade::log::level::info, message.str());
+
+  return static_cast<UINT>(re6_filtered_display_modes.size());
+}
+
+HRESULT STDMETHODCALLTYPE RE6HookEnumAdapterModes(
+    IDirect3D9* d3d9,
+    UINT adapter,
+    D3DFORMAT format,
+    UINT mode,
+    D3DDISPLAYMODE* display_mode) {
+  if (display_mode == nullptr) return D3DERR_INVALIDCALL;
+
+  // Forward unrelated formats. This is important because the hooked vtable is
+  // shared by every caller using this IDirect3D9 implementation.
+  if (format != D3DFMT_X8R8G8B8) {
+    if (re6_original_enum_adapter_modes == nullptr) return D3DERR_INVALIDCALL;
+    return re6_original_enum_adapter_modes(
+        d3d9, adapter, format, mode, display_mode);
+  }
+
+  if (adapter != re6_filtered_adapter ||
+      format != re6_filtered_format ||
+      mode >= re6_filtered_display_modes.size()) {
+    return D3DERR_INVALIDCALL;
+  }
+
+  *display_mode = re6_filtered_display_modes[mode];
+  return D3D_OK;
+}
+
+bool RE6HookD3D9Object(IDirect3D9* d3d9) {
+  if (d3d9 == nullptr) return false;
+
+  void*** object_vtable = reinterpret_cast<void***>(d3d9);
+  if (object_vtable == nullptr || *object_vtable == nullptr) return false;
+
+  void** vtable = *object_vtable;
+
+  if (vtable[RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX] ==
+          reinterpret_cast<void*>(&RE6HookGetAdapterModeCount) &&
+      vtable[RE6_D3D9_ENUM_ADAPTER_MODES_INDEX] ==
+          reinterpret_cast<void*>(&RE6HookEnumAdapterModes)) {
+    return true;
+  }
+
+  DWORD old_protection = 0;
+  if (!VirtualProtect(
+          &vtable[RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX],
+          sizeof(void*) * 2,
+          PAGE_EXECUTE_READWRITE,
+          &old_protection)) {
+    RE6Log(reshade::log::level::error,
+           "VirtualProtect failed while installing IDirect3D9 hooks.");
+    return false;
+  }
+
+  re6_original_get_adapter_mode_count =
+      reinterpret_cast<RE6GetAdapterModeCount>(
+          vtable[RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX]);
+  re6_original_enum_adapter_modes =
+      reinterpret_cast<RE6EnumAdapterModes>(
+          vtable[RE6_D3D9_ENUM_ADAPTER_MODES_INDEX]);
+
+  vtable[RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX] =
+      reinterpret_cast<void*>(&RE6HookGetAdapterModeCount);
+  vtable[RE6_D3D9_ENUM_ADAPTER_MODES_INDEX] =
+      reinterpret_cast<void*>(&RE6HookEnumAdapterModes);
+
+  DWORD ignored_protection = 0;
+  VirtualProtect(
+      &vtable[RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX],
+      sizeof(void*) * 2,
+      old_protection,
+      &ignored_protection);
+
+  FlushInstructionCache(
+      GetCurrentProcess(),
+      &vtable[RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX],
+      sizeof(void*) * 2);
+
+  re6_hooked_d3d9_vtable = vtable;
+  RE6Log(reshade::log::level::info,
+         "Installed IDirect3D9 display-mode hooks.");
+  return true;
+}
+
+IDirect3D9* WINAPI RE6HookDirect3DCreate9(UINT sdk_version) {
+  if (re6_original_direct3d_create9 == nullptr) return nullptr;
+
+  IDirect3D9* d3d9 = re6_original_direct3d_create9(sdk_version);
+  if (d3d9 != nullptr && !RE6HookD3D9Object(d3d9)) {
+    RE6Log(reshade::log::level::warning,
+           "Direct3DCreate9 succeeded, but the display-mode hook failed.");
+  }
+
+  return d3d9;
+}
+
+bool RE6PatchImportAddressTable() {
+  HMODULE executable = GetModuleHandleW(nullptr);
+  if (executable == nullptr) return false;
+
+  auto* image_base = reinterpret_cast<std::uint8_t*>(executable);
+  auto* dos_header = reinterpret_cast<IMAGE_DOS_HEADER*>(image_base);
+  if (dos_header->e_magic != IMAGE_DOS_SIGNATURE) return false;
+
+  auto* nt_headers = reinterpret_cast<IMAGE_NT_HEADERS*>(
+      image_base + dos_header->e_lfanew);
+  if (nt_headers->Signature != IMAGE_NT_SIGNATURE) return false;
+
+  const IMAGE_DATA_DIRECTORY& import_directory =
+      nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+  if (import_directory.VirtualAddress == 0 || import_directory.Size == 0) {
+    return false;
+  }
+
+  auto* import_descriptor = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(
+      image_base + import_directory.VirtualAddress);
+
+  for (; import_descriptor->Name != 0; ++import_descriptor) {
+    const char* module_name = reinterpret_cast<const char*>(
+        image_base + import_descriptor->Name);
+    if (module_name == nullptr || _stricmp(module_name, "d3d9.dll") != 0) {
+      continue;
+    }
+
+    auto* import_thunk = reinterpret_cast<IMAGE_THUNK_DATA*>(
+        image_base + import_descriptor->FirstThunk);
+    auto* name_thunk = import_descriptor->OriginalFirstThunk != 0
+                           ? reinterpret_cast<IMAGE_THUNK_DATA*>(
+                                 image_base +
+                                 import_descriptor->OriginalFirstThunk)
+                           : import_thunk;
+
+    for (; name_thunk->u1.AddressOfData != 0;
+         ++name_thunk, ++import_thunk) {
+      if (IMAGE_SNAP_BY_ORDINAL(name_thunk->u1.Ordinal)) continue;
+
+      auto* import_name = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(
+          image_base + name_thunk->u1.AddressOfData);
+      if (import_name == nullptr ||
+          std::strcmp(
+              reinterpret_cast<const char*>(import_name->Name),
+              "Direct3DCreate9") != 0) {
+        continue;
+      }
+
+      void** iat_slot = reinterpret_cast<void**>(&import_thunk->u1.Function);
+      void* current_target = *iat_slot;
+
+      if (current_target == reinterpret_cast<void*>(&RE6HookDirect3DCreate9)) {
+        return true;
+      }
+
+      re6_original_direct3d_create9 =
+          reinterpret_cast<RE6Direct3DCreate9>(current_target);
+
+      DWORD old_protection = 0;
+      if (!VirtualProtect(
+              iat_slot,
+              sizeof(void*),
+              PAGE_READWRITE,
+              &old_protection)) {
+        return false;
+      }
+
+      *iat_slot = reinterpret_cast<void*>(&RE6HookDirect3DCreate9);
+
+      DWORD ignored_protection = 0;
+      VirtualProtect(
+          iat_slot,
+          sizeof(void*),
+          old_protection,
+          &ignored_protection);
+
+      re6_direct3d_create9_iat_slot = iat_slot;
+      RE6Log(reshade::log::level::info,
+             "Patched the game's Direct3DCreate9 import.");
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void RE6RemoveCrashFixHooks() {
+  if (re6_direct3d_create9_iat_slot != nullptr &&
+      re6_original_direct3d_create9 != nullptr &&
+      *re6_direct3d_create9_iat_slot ==
+          reinterpret_cast<void*>(&RE6HookDirect3DCreate9)) {
+    DWORD old_protection = 0;
+    if (VirtualProtect(
+            re6_direct3d_create9_iat_slot,
+            sizeof(void*),
+            PAGE_READWRITE,
+            &old_protection)) {
+      *re6_direct3d_create9_iat_slot =
+          reinterpret_cast<void*>(re6_original_direct3d_create9);
+
+      DWORD ignored_protection = 0;
+      VirtualProtect(
+          re6_direct3d_create9_iat_slot,
+          sizeof(void*),
+          old_protection,
+          &ignored_protection);
+    }
+  }
+
+  if (re6_hooked_d3d9_vtable != nullptr &&
+      re6_original_get_adapter_mode_count != nullptr &&
+      re6_original_enum_adapter_modes != nullptr) {
+    DWORD old_protection = 0;
+    if (VirtualProtect(
+            &re6_hooked_d3d9_vtable[
+                RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX],
+            sizeof(void*) * 2,
+            PAGE_EXECUTE_READWRITE,
+            &old_protection)) {
+      if (re6_hooked_d3d9_vtable[
+              RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX] ==
+          reinterpret_cast<void*>(&RE6HookGetAdapterModeCount)) {
+        re6_hooked_d3d9_vtable[
+            RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX] =
+            reinterpret_cast<void*>(re6_original_get_adapter_mode_count);
+      }
+
+      if (re6_hooked_d3d9_vtable[
+              RE6_D3D9_ENUM_ADAPTER_MODES_INDEX] ==
+          reinterpret_cast<void*>(&RE6HookEnumAdapterModes)) {
+        re6_hooked_d3d9_vtable[
+            RE6_D3D9_ENUM_ADAPTER_MODES_INDEX] =
+            reinterpret_cast<void*>(re6_original_enum_adapter_modes);
+      }
+
+      DWORD ignored_protection = 0;
+      VirtualProtect(
+          &re6_hooked_d3d9_vtable[
+              RE6_D3D9_GET_ADAPTER_MODE_COUNT_INDEX],
+          sizeof(void*) * 2,
+          old_protection,
+          &ignored_protection);
+    }
+  }
+
+  re6_direct3d_create9_iat_slot = nullptr;
+  re6_hooked_d3d9_vtable = nullptr;
+  re6_filtered_display_modes.clear();
+}
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     __ALL_CUSTOM_SHADERS,
@@ -687,6 +1101,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
 
+      // Install this before the game calls Direct3DCreate9. The IAT target is
+      // ReShade's existing D3D9 proxy, so no second d3d9.dll is required.
+      if (!RE6PatchImportAddressTable()) {
+        RE6Log(reshade::log::level::warning,
+               "Could not locate the game's Direct3DCreate9 import. "
+               "The addon will continue without the startup crash fix.");
+      }
+
       if (!initialized) {
         renodx::mods::shader::force_pipeline_cloning = true;
         renodx::mods::shader::expected_constant_buffer_space = 50;
@@ -937,6 +1359,7 @@ renodx::mods::swapchain::resource_upgrade_infos.push_back({
 });
       break;
     case DLL_PROCESS_DETACH:
+      RE6RemoveCrashFixHooks();
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
