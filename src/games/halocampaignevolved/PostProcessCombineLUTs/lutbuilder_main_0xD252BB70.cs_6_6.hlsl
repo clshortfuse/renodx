@@ -703,16 +703,8 @@ void main(
   _144 = mad((WorkingColorSpace_128[0].z), _129, mad((WorkingColorSpace_128[0].y), _128, ((WorkingColorSpace_128[0].x) * _127)));
   _147 = mad((WorkingColorSpace_128[1].z), _129, mad((WorkingColorSpace_128[1].y), _128, ((WorkingColorSpace_128[1].x) * _127)));
   _150 = mad((WorkingColorSpace_128[2].z), _129, mad((WorkingColorSpace_128[2].y), _128, ((WorkingColorSpace_128[2].x) * _127)));
-  _151 = dot(float3(_144, _147, _150), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
-  _155 = (_144 / _151) + -1.0f;
-  _156 = (_147 / _151) + -1.0f;
-  _157 = (_150 / _151) + -1.0f;
-  _169 = (1.0f - exp2(((_151 * _151) * -4.0f) * cb0_036w)) * (1.0f - exp2(dot(float3(_155, _156, _157), float3(_155, _156, _157)) * -4.0f));
-  _185 = ((mad(-0.06368321925401688f, _150, mad(-0.3292922377586365f, _147, (_144 * 1.3704125881195068f))) - _144) * _169) + _144;
-  _186 = ((mad(-0.010861365124583244f, _150, mad(1.0970927476882935f, _147, (_144 * -0.08343357592821121f))) - _147) * _169) + _147;
-  _187 = ((mad(1.2036951780319214f, _150, mad(-0.09862580895423889f, _147, (_144 * -0.02579331398010254f))) - _150) * _169) + _150;
 
-  // Custom LUT-builder seam. The helper currently falls through to the vanilla path.
+  // Custom LUT-builder seam before the vanilla gamut expansion.
   if (RENODX_TONE_MAP_TYPE != 0.f) {
     unrealengine::lutbuilder::Config custom_config = unrealengine::lutbuilder::config::Create();
     custom_config.color_correction.global.saturation = float4(cb0_015x, cb0_015y, cb0_015z, cb0_015w);
@@ -761,11 +753,20 @@ void main(
     custom_config.output.working_is_srgb = WorkingColorSpace_320;
 
     float4 output;
-    if (unrealengine::lutbuilder::TryApplyCustomLUTBuilder(float3(_185, _186, _187), custom_config, output)) {
+    if (unrealengine::lutbuilder::TryApplyCustomLUTBuilder(float3(_144, _147, _150), custom_config, output)) {
       u0[SV_DispatchThreadID] = output;
       return;
     }
   }
+
+  _151 = dot(float3(_144, _147, _150), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
+  _155 = (_144 / _151) + -1.0f;
+  _156 = (_147 / _151) + -1.0f;
+  _157 = (_150 / _151) + -1.0f;
+  _169 = (1.0f - exp2(((_151 * _151) * -4.0f) * cb0_036w)) * (1.0f - exp2(dot(float3(_155, _156, _157), float3(_155, _156, _157)) * -4.0f));
+  _185 = ((mad(-0.06368321925401688f, _150, mad(-0.3292922377586365f, _147, (_144 * 1.3704125881195068f))) - _144) * _169) + _144;
+  _186 = ((mad(-0.010861365124583244f, _150, mad(1.0970927476882935f, _147, (_144 * -0.08343357592821121f))) - _147) * _169) + _147;
+  _187 = ((mad(1.2036951780319214f, _150, mad(-0.09862580895423889f, _147, (_144 * -0.02579331398010254f))) - _150) * _169) + _150;
 
   // Begin inlined ColorCorrectAll(), including three ColorCorrect() calls and SMH weighting.
   _188 = dot(float3(_185, _186, _187), float3(0.2722287178039551f, 0.6740817427635193f, 0.053689517080783844f));
