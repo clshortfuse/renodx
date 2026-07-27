@@ -94,9 +94,11 @@ float3 ApplyPostToneMapDesaturation(float3 tonemapped_blue_corrected_ap1) {
 // output: white-normalized LMS linear
 float3 ApplyPostToneMapDesaturationLMS(float3 tonemapped_lms_normalized) {
   float y_white = renodx::color::xyz::from::LMS(RENODX_BT709_LMS_WHITE).y;
-  float y = renodx::color::xyz::from::LMS(
-      tonemapped_lms_normalized * RENODX_BT709_LMS_WHITE).y;
+
+  float y = renodx::color::xyz::from::LMS(tonemapped_lms_normalized * RENODX_BT709_LMS_WHITE).y;
+
   float grayscale = renodx::math::DivideSafe(y, y_white, 0.f);
+
   return max(0.f, lerp(grayscale, tonemapped_lms_normalized, 0.93f));
 }
 
@@ -121,7 +123,7 @@ float3 PrepareFilmicInputAP1Path(float3 untonemapped_ap1, UECbufferConfig cb_con
   renodx::color::grade::Config cg_config = CreateColorGradingConfig();
   return ApplyAnchoredContrast(
       ApplyBlueCorrectionPre(
-      untonemapped_ap1,
+          untonemapped_ap1,
           cb_config.ue_bluecorrection)
           * cg_config.exposure,
       cg_config);
@@ -144,6 +146,8 @@ void ApplyFilmicToneMap(
     float3 untonemapped_ap1,
     inout float3 tonemapped_ap1,
     UECbufferConfig cb_config) {
+  untonemapped_ap1 = max(0.f, untonemapped_ap1);  // Clamp input from lutbuilder just to be safe / potentially catch NaNs
+
   if (RENODX_TONE_MAP_TYPE == 1.f && RENODX_TONE_MAP_SCALING == 2.f) {
     float3 untonemapped_lms_normalized = PrepareFilmicInputLMSPath(untonemapped_ap1);
     float filmic_black_clip = cb_config.ue_filmblackclip;
@@ -188,7 +192,7 @@ void ApplyFilmicToneMap(
         unrealengine::filmtonemap::ApplyToneCurve(untonemapped_rrt_blue_corrected_ap1, cb_config.ue_filmslope, cb_config.ue_filmtoe, cb_config.ue_filmshoulder, cb_config.ue_filmblackclip, cb_config.ue_filmwhiteclip);
   } else if (RENODX_TONE_MAP_TYPE == 1.f) {
     tonemapped_blue_corrected_ap1 =
-      ApplyToneCurveExtendedWithHermite(untonemapped_rrt_blue_corrected_ap1, cb_config.ue_bluecorrection, cb_config.ue_filmslope, cb_config.ue_filmtoe, cb_config.ue_filmshoulder, cb_config.ue_filmblackclip, cb_config.ue_filmwhiteclip);
+        ApplyToneCurveExtendedWithHermite(untonemapped_rrt_blue_corrected_ap1, cb_config.ue_bluecorrection, cb_config.ue_filmslope, cb_config.ue_filmtoe, cb_config.ue_filmshoulder, cb_config.ue_filmblackclip, cb_config.ue_filmwhiteclip);
   }
 
   tonemapped_blue_corrected_ap1 = ApplyPostToneMapDesaturation(tonemapped_blue_corrected_ap1);

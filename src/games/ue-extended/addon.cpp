@@ -118,7 +118,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Emulates a 2.2 EOTF",
         .labels = {"Off", "2.2"},
     },
-      new renodx::utils::settings::Setting{
+    new renodx::utils::settings::Setting{
         .key = "ToneMapGammaCorrectionWorkingSpace",
         .binding = &shader_injection.gamma_correction_working_space,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -126,11 +126,11 @@ renodx::utils::settings::Settings settings = {
         .label = "SDR EOTF Scaling",
         .section = "Tone Mapping",
         .tooltip = "Display Emulation: Matches the behavior of the display in SDR\n"
-               "Match Tone Map Scaling: Performs the correction in the working space of the selected tone map scaling. May have a preferrable look.",
+                   "Match Tone Map Scaling: Performs the correction in the working space of the selected tone map scaling. May have a preferrable look.",
         .labels = {"Display Emulation", "Match Tone Map Scaling"},
         .is_enabled = []() { return shader_injection.gamma_correction != 0.f; },
         .is_visible = []() { return current_settings_mode >= 2.f; },
-      },
+    },
 
     new renodx::utils::settings::Setting{
         .key = "BlendFactor",
