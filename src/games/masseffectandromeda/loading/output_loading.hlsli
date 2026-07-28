@@ -6,7 +6,6 @@
 //                              decode, matching vanilla; requires bicubic_upscale.hlsli first,
 //                              cbData[0].xy = source res, .zw = texel
 // Requires shared.h + loading_core.hlsli first.
-// Per-gamut wrapper hashes share this body unchanged: see FinalizeToPQ in shared.h.
 
 #ifndef MEA_LOADING_SCENE_SAMPLER
 #define MEA_LOADING_SCENE_SAMPLER s0

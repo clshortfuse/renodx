@@ -6,30 +6,30 @@
 
 // Must be 32-bit aligned.
 struct ShaderInjectData {
-  float toneMapType;       // 0 = Vanilla, 1 = Vanilla+ (faithful), 2 = Vanilla+ (Neutwo), 3 = Vanilla+ (Psycho v24)
-  float toneMapPeakNits;   // display peak the roll-off pins highlights to (Vanilla+)
-  float toneMapGameNits;   // diffuse-white (paper white) nits; Vanilla pins 100
-  float toneMapUINits;     // UI/HUD white nits; Vanilla pins 100
-  float colorGradeExposure;    // pre-tonemap exposure scale (1.0 = vanilla)
-  float colorGradeHighlights;  // 1.0 = vanilla
-  float colorGradeShadows;     // 1.0 = vanilla
-  float colorGradeContrast;    // 1.0 = vanilla
-  float colorGradeSaturation;  // 1.0 = vanilla; test24 routes this through purity_scale instead
+  float toneMapType;                    // 0 = Vanilla, 1 = Vanilla+ (faithful), 2 = Vanilla+ (Neutwo), 3 = Vanilla+ (Psycho v24)
+  float toneMapPeakNits;                // display peak the roll-off pins highlights to (Vanilla+)
+  float toneMapGameNits;                // diffuse-white (paper white) nits; Vanilla pins 100
+  float toneMapUINits;                  // UI/HUD white nits; Vanilla pins 100
+  float colorGradeExposure;             // pre-tonemap exposure scale (1.0 = vanilla)
+  float colorGradeHighlights;           // 1.0 = vanilla
+  float colorGradeShadows;              // 1.0 = vanilla
+  float colorGradeContrast;             // 1.0 = vanilla
+  float colorGradeSaturation;           // 1.0 = vanilla; test24 routes this through purity_scale instead
   float colorGradeHighlightSaturation;  // 1.0 = vanilla; >1 boosts highlight color, <1 blows out to white
-  float colorGradeFlare;     // flare/glare compensation (0 = vanilla/off)
-  float colorGradeHueShift;  // 0 = keep BioWare hue, >0 = blend highlights toward per-channel hue
-  float gammaCorrection;   // 0 = Off, 1 = 2.2, 2 = BT.1886 (2.4); RenoDX per-channel gamma correction
-  float fxBloom;           // additive bloom scale (1.0 = vanilla)
-  float fxVignette;             // vignette strength (1.0 = vanilla, 0 = off)
-  float fxChromaticAberration;  // chromatic aberration strength (1.0 = vanilla, 0 = off)
-  float fxFilmGrain;       // perceptual film grain strength (0 = off)
-  float fxFilmGrainType;   // 0 = Vanilla (game grain), 1 = Monochrome (luminance), 2 = Colored (per-channel)
-  float fxHDRVideos;       // 0 = Off, 1 = BT.2446a (FMV inverse tone map)
-  float fxVideoActive;     // runtime flag: an FMV decode pass ran this frame
-  float fxSharpness;       // Lilium HDR RCAS strength (0 = off), Vanilla+ only
-  float fxSwapchainPresent;  // runtime flag: 1 when the present draw targets the swapchain (RCAS gate)
-  float customRandom;      // per-frame random seed for perceptual grain
-  float customLutTetrahedral;  // 0 = Trilinear (vanilla), 1 = Tetrahedral (higher-quality native LUT sampling)
+  float colorGradeFlare;                // flare/glare compensation (0 = vanilla/off)
+  float colorGradeHueShift;             // 0 = keep BioWare hue, >0 = blend highlights toward per-channel hue
+  float gammaCorrection;                // 0 = Off, 1 = 2.2, 2 = BT.1886 (2.4); RenoDX per-channel gamma correction
+  float fxBloom;                        // additive bloom scale (1.0 = vanilla)
+  float fxVignette;                     // vignette strength (1.0 = vanilla, 0 = off)
+  float fxChromaticAberration;          // chromatic aberration strength (1.0 = vanilla, 0 = off)
+  float fxFilmGrain;                    // perceptual film grain strength (0 = off)
+  float fxFilmGrainType;                // 0 = Vanilla (game grain), 1 = Monochrome (luminance), 2 = Colored (per-channel)
+  float fxHDRVideos;                    // 0 = Off, 1 = BT.2446a (FMV inverse tone map)
+  float fxVideoActive;                  // runtime flag: an FMV decode pass ran this frame
+  float fxSharpness;                    // Lilium HDR RCAS strength (0 = off), Vanilla+ only
+  float fxSwapchainPresent;             // runtime flag: 1 when the present draw targets the swapchain (RCAS gate)
+  float customRandom;                   // per-frame random seed for perceptual grain
+  float customLutTetrahedral;           // 0 = Trilinear (vanilla), 1 = Tetrahedral (higher-quality native LUT sampling)
 };
 
 #ifndef __cplusplus
@@ -37,13 +37,13 @@ cbuffer shader_injection : register(b13) {
   ShaderInjectData injectedData : packoffset(c0);
 }
 
-#define TONE_MAP_VANILLA 0.f
-#define TONE_MAP_VANILLA_PLUS 1.f         // faithful log2 highlight roll-off; the fall-through mode (never compared)
+#define TONE_MAP_VANILLA             0.f
+#define TONE_MAP_VANILLA_PLUS        1.f  // faithful log2 highlight roll-off; the fall-through mode (never compared)
 #define TONE_MAP_VANILLA_PLUS_NEUTWO 2.f  // knee-free Neutwo highlight curve (continuous, no identity segment)
 #define TONE_MAP_VANILLA_PLUS_TEST24 3.f  // PsychoV test24 perceptual observer-model curve (experimental)
 
-#define FILM_GRAIN_VANILLA 0.f
-#define FILM_GRAIN_LUMINANCE 1.f
+#define FILM_GRAIN_VANILLA     0.f
+#define FILM_GRAIN_LUMINANCE   1.f
 #define FILM_GRAIN_PER_CHANNEL 2.f
 
 #define CUSTOM_SHARPNESS injectedData.fxSharpness
@@ -154,23 +154,23 @@ float3 ApplyVanillaPlus(float3 color, float exposure, float paperWhite) {
     float peakT24 = peak;
     const float gamma = EotfGamma();
     if (gamma != 0.f) peakT24 = renodx::color::correct::GammaSafe(peakT24, true, gamma);
-    float3 t24 = renodx::tonemap::psychov::psychotm_test24(
-        color,        // BT.709 linear, graded (no EOTF on the input)
-        peakT24,      // display headroom ratio, inverse-gamma'd
-        1.f,          // exposure (applied upstream)
-        1.f, 1.f, 1.f,               // highlights / shadows / contrast (neutral: graded upstream)
+    float3 t24 = renodx_custom::tonemap::psycho24::psychotm_test24(
+        color,                              // BT.709 linear, graded (no EOTF on the input)
+        peakT24,                            // display headroom ratio, inverse-gamma'd
+        1.f,                                // exposure (applied upstream)
+        1.f, 1.f, 1.f,                      // highlights / shadows / contrast (neutral: graded upstream)
         injectedData.colorGradeSaturation,  // purity_scale = Saturation slider (test24's saturation lever)
-        1.f, 100.f, 1.f, 1.f,  // bleaching / clip / hue_restore / adaptation_contrast (defaults)
-        0,            // white_curve_mode
-        1.f,          // cone_response_exponent
-        0.18f.xxx,    // adaptive state (mid grey)
-        0.18f.xxx,    // background state (mid grey)
-        1.f,          // gamut compression strength
-        1,            // gamut compression bound = BT.2020 (forced HDR10 output)
-        1.f,          // adaptive_normalization
-        0.f,          // compression = auto (shoulder from display headroom)
-        1.f,          // highlight_saturation (unused by test24)
-        0.f);         // gamut_hue_restore off
+        1.f, 100.f, 1.f, 1.f,               // bleaching / clip / hue_restore / adaptation_contrast (defaults)
+        0,                                  // white_curve_mode
+        1.f,                                // cone_response_exponent
+        0.18f.xxx,                          // adaptive state (mid grey)
+        0.18f.xxx,                          // background state (mid grey)
+        1.f,                                // gamut compression strength
+        1,                                  // gamut compression bound = BT.2020 (forced HDR10 output)
+        1.f,                                // adaptive_normalization
+        0.f,                                // compression = auto (shoulder from display headroom)
+        1.f,                                // highlight_saturation (unused by test24)
+        0.f);                               // gamut_hue_restore off
     // Forward EOTF gamma on the output = the same GammaSafe the other modes apply, undoing the peak
     // inverse so the peak is preserved and the mids are darkened.
     return ApplyEotfEmulation(t24);

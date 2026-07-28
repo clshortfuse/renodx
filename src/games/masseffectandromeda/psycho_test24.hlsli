@@ -1,5 +1,7 @@
-// Game-scoped include guard: if upstream ever ships test24 in src/shaders/tonemap/psychov, its
-// RENODX_SHADERS_* guard must not collide with this local import.
+// Local import of an experimental PsychoV tone mapper, kept verbatim so it stays diffable against
+// upstream. The include guard below does NOT protect against the library shipping its own test24:
+// that file would carry a different guard, so both would be included. The game-local namespace is
+// what keeps the two apart — do not move these declarations under renodx::.
 #ifndef SRC_GAMES_MASSEFFECTANDROMEDA_PSYCHO_TEST24_HLSLI_
 #define SRC_GAMES_MASSEFFECTANDROMEDA_PSYCHO_TEST24_HLSLI_
 
@@ -10,9 +12,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-namespace renodx {
+namespace renodx_custom {
 namespace tonemap {
-namespace psychov {
+namespace psycho24 {
 
 static const float PSYCHO24_EPSILON = 1e-6f;
 static const float PSYCHO24_TWO_PI = 6.2831853071795864769f;
@@ -549,8 +551,8 @@ float3 psychotm_test24(float3 bt709_linear_input, float peak_value = 1000.f / 20
   return final_bt709;
 }
 
-}  // namespace psychov
+}  // namespace psycho24
 }  // namespace tonemap
-}  // namespace renodx
+}  // namespace renodx_custom
 
 #endif  // SRC_GAMES_MASSEFFECTANDROMEDA_PSYCHO_TEST24_HLSLI_

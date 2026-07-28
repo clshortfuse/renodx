@@ -1,6 +1,5 @@
 // Main HDR present row (1:1, single tap). Requires shared.h + linearize.hlsli + lilium_rcas.hlsli +
 // present_core.hlsli first. outputLut (t2) linearizes the PQ graded buffer to scene-linear.
-// Per-gamut wrapper hashes share this body unchanged: see FinalizeToPQ in shared.h.
 
 Texture2D<float4> sceneTexture : register(t0);
 Texture2D<float4> uiTexture : register(t1);
