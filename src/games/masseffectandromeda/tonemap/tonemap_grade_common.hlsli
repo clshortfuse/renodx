@@ -5,23 +5,28 @@
 // Twelve perms = the three axes below and nothing else: unlike the present and loading families, this
 // pass writes the graded buffer rather than the display output, so it has no output-gamut variants and
 // there is no P3 / no-matrix twin to look for.
-// NOTE: these three axes default to 0 instead of being #error-guarded like the present and loading
-// families, so a wrapper that omits one still compiles - as the off variant. Only MEA_TONEMAP_DISTORTION
-// is actually left to the default today; CA and T4 are spelled out on every wrapper.
+// What a missing axis costs here: a distortion row built at 0 never reads cb0[4] at all, so the game's
+// radial warp coefficients are silently ignored and the whole frame renders unwarped.
 //   MEA_TONEMAP_CA          0 = distortion-offset warp; 1 = chromatic aberration (per-channel split on cb0[12])
-//   MEA_TONEMAP_DISTORTION  1 = radial lens warp on cb0[4] applied to the base UV
+//   MEA_TONEMAP_DISTORTION  0 = base UV untouched; 1 = radial lens warp on cb0[4] applied to the base UV
 //   MEA_TONEMAP_T4          t4 role: 0 = unused; 1 = additive film grain (cb0[1]); 2 = RGBA overlay
 //                           composited over the graded output (scanner/screen effects)
 // Vanilla+ user controls (neutral at vanilla): fxBloom, colorGradeExposure, fxVignette, fxChromaticAberration.
 
 #ifndef MEA_TONEMAP_CA
-#define MEA_TONEMAP_CA 0
+#error "Define MEA_TONEMAP_CA (0 = distortion-offset warp, 1 = chromatic aberration) before including tonemap_grade_common.hlsli."
 #endif
 #ifndef MEA_TONEMAP_DISTORTION
-#define MEA_TONEMAP_DISTORTION 0
+#error "Define MEA_TONEMAP_DISTORTION (0 = no radial warp, 1 = radial lens warp on cb0[4]) before including tonemap_grade_common.hlsli."
 #endif
 #ifndef MEA_TONEMAP_T4
-#define MEA_TONEMAP_T4 0
+#error "Define MEA_TONEMAP_T4 (0 = t4 unused, 1 = additive film grain, 2 = RGBA overlay) before including tonemap_grade_common.hlsli."
+#endif
+// Only T4 needs a range check: it is the one axis the body compares by value (#if == 1 / #elif == 2), so
+// an out-of-range 3 would quietly select neither and behave as 0. CA and DISTORTION are read with a bare
+// #if, where every nonzero value already means on.
+#if MEA_TONEMAP_T4 != 0 && MEA_TONEMAP_T4 != 1 && MEA_TONEMAP_T4 != 2
+#error "MEA_TONEMAP_T4 must be 0 (unused), 1 (film grain) or 2 (RGBA overlay)."
 #endif
 
 Texture2D<float4> sceneTexture : register(t0);
