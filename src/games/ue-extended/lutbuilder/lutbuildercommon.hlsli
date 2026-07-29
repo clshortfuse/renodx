@@ -229,10 +229,10 @@ float ComputeSaturationScale(float yf, float yf_peak, renodx::color::grade::Conf
 // input: BT.709 linear
 // output: BT.709 linear
 float3 ApplySaturationMaxChannel(float3 color_bt709, float peak, renodx::color::grade::Config config) {
-  float3 perceptual = renodx::color::oklab::from::BT709(max(0.f, color_bt709));
+  float3 perceptual = renodx::color::oklab::from::BT709(color_bt709);
   float yf = renodx::color::yf::from::BT709(color_bt709);
   perceptual.yz *= ComputeSaturationScale(yf, renodx::color::yf::from::BT709(peak.xxx), config);
-  return max(0.f, renodx::color::bt709::from::OkLab(perceptual));
+  return renodx::color::bt709::from::OkLab(perceptual);
 }
 
 // input: blue-corrected AP1 linear
@@ -275,7 +275,7 @@ float3 RestorePsychoHueAndCompressLMS(
                          - mb_neutral;
   float3 reference_white_relative_weighted =
       renodx::tonemap::psychov::psycho22_ToAdaptiveRelativeWeightedLMS(
-        RENODX_BT709_LMS_WHITE,
+          RENODX_BT709_LMS_WHITE,
           adaptive_state_lms);
   float reference_white_y =
       reference_white_relative_weighted.x + reference_white_relative_weighted.y;
