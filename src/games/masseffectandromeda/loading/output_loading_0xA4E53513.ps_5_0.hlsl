@@ -1,4 +1,4 @@
 // No-matrix output-gamut hash.
-#include "../shared.h"
-#include "./loading_core.hlsli"
+#define MEA_LOADING_SCENE_SAMPLER s0
+#define MEA_LOADING_FILTER 0
 #include "./output_loading.hlsli"

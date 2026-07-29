@@ -1,6 +1,5 @@
 // BT.2020 output-gamut hash.
-#include "../../shared.h"
-#include "../linearize.hlsli"
-#include "../lilium_rcas.hlsli"
-#include "../present_core.hlsli"
-#include "../output_main.hlsli"
+#define MEA_PRESENT_LUT3D 0
+#define MEA_PRESENT_SCALED 0
+#define MEA_PRESENT_FILTER 0
+#include "../output_present.hlsli"

@@ -1,7 +1,7 @@
 // FMV YUV->RGB decode. Faithful 1:1 vanilla reconstruction (BT.601 limited-range), sRGB-encoded into
 // the r8g8b8a8 video buffer. Registered via callback only to flag fxVideoActive; decode is unchanged.
-
-#include "../shared.h"
+// Deliberately includes nothing: the decode is self-contained, so this row does not read injectedData
+// and has no reason to pull the contract header (let alone the display map behind it).
 
 Texture2D<float4> lumaTexture : register(t0);    // Y
 Texture2D<float4> crTexture : register(t1);      // Cr

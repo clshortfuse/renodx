@@ -25,8 +25,12 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-// Vanilla+ gate shared by every non-Vanilla control (Vanilla disables the whole panel).
-bool IsVanillaPlus() { return shader_injection.toneMapType >= 1.f; }
+// Settings-panel mode: 0 = Simple, 1 = Advanced
+float current_settings_mode = 0;
+
+bool IsVanillaPlus() { return shader_injection.toneMapType != TONE_MAP_VANILLA; }
+
+bool IsAdvanced() { return current_settings_mode >= 1.f; }
 
 // RCAS swapchain gate: flag the swapchain draw so in-shader RCAS runs once on the visible frame
 // (each HDR present also draws an offscreen sibling). Set before the draw; reset in OnPresent.
@@ -55,7 +59,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     // taps: Post Process = Low (single tap), Y-only cubic, B-spline, 16-tap cubic — each with a 32^3
     // calibration-LUT twin (lut3d) and in three runtime gamut variants (BT.2020 / DCI-P3 /
     // no-matrix, display-dependent); every variant normalizes to the forced HDR10/BT.2020 output.
-    // Only the main row carries the RCAS-gate callback: every scaled row passes isUpscale = true,
+    // Only the main row carries the RCAS-gate callback: every scaled row passes isScaled = true,
     // which hard-skips RCAS, so the flag is never read there.
     // Not hooked: the same rows' Dolby Vision siblings (which quantize the PQ output and bit-pack it
     // into 8-bit channels — replacing those would corrupt the DV tunnel format) and their SDR/scRGB
@@ -107,8 +111,6 @@ renodx::mods::shader::CustomShaders custom_shaders = {
       return true;
     }),
 };
-
-float current_settings_mode = 0;
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -178,7 +180,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
         .is_enabled = IsVanillaPlus,
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -191,7 +193,7 @@ renodx::utils::settings::Settings settings = {
         .max = 4.f,
         .format = "%.2f",
         .is_enabled = IsVanillaPlus,
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
@@ -203,7 +205,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
@@ -215,7 +217,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
@@ -227,7 +229,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
@@ -239,7 +241,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
@@ -251,7 +253,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
@@ -263,7 +265,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHueShift",
@@ -274,9 +276,9 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Shifts highlight hue toward the per-channel (SDR-display) look. 0 = vanilla.",
         .max = 100.f,
         // Vanilla+ (faithful) only: the Neutwo tone mapper is hue-stable, so Hue Shift is a no-op there.
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType == TONE_MAP_VANILLA_PLUS; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTSampling",
@@ -288,7 +290,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Interpolation of the game's native grade LUT. Tetrahedral reduces banding; Trilinear = vanilla.",
         .labels = {"Trilinear", "Tetrahedral"},
         .is_enabled = IsVanillaPlus,
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
@@ -300,7 +302,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxVignette",
@@ -312,7 +314,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxChromaticAberration",
@@ -324,7 +326,7 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxSharpness",
@@ -337,7 +339,7 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = IsVanillaPlus,
         // Deliberate linear map: slider% goes straight to CUSTOM_SHARPNESS, not an exp2 curve.
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrainType",
@@ -350,7 +352,7 @@ renodx::utils::settings::Settings settings = {
                    "(reduces banding).",
         .labels = {"Vanilla", "Monochrome", "Colored"},
         .is_enabled = IsVanillaPlus,
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
@@ -360,9 +362,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Film grain strength. Reduces banding.",
         .max = 100.f,
-        .is_enabled = []() { return IsVanillaPlus() && shader_injection.fxFilmGrainType != 0.f; },
+        .is_enabled = []() { return IsVanillaPlus() && shader_injection.fxFilmGrainType != FILM_GRAIN_VANILLA; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxHDRVideos",
@@ -374,7 +376,20 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Inverse tonemaps SDR videos (BT.2446a)",
         .labels = {"Off", "On"},
         .is_enabled = IsVanillaPlus,
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxVideoNits",
+        .binding = &shader_injection.fxVideoNits,
+        .default_value = 500.f,
+        .can_reset = true,
+        .label = "Video Brightness",
+        .section = "Effects",
+        .tooltip = "Sets the peak brightness for video content in nits",
+        .min = 100.f,
+        .max = 1000.f,
+        .is_enabled = []() { return IsVanillaPlus() && shader_injection.fxHDRVideos != 0.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -427,7 +442,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "- Vanilla+: set the in-game Peak Brightness to MAX; the addon's Peak Brightness sets your display peak.",
+        .label = "- Vanilla+: set the in-game Graphics -> Screen Calibration -> Peak Brightness to MAX; the addon's Peak Brightness sets your display peak.",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -443,7 +458,6 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-  // "Off" preset = pure native HDR passthrough (Vanilla); nothing else applies.
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
       {"ToneMapPeakNits", 1000.f},
@@ -466,16 +480,15 @@ void OnPresetOff() {
       {"FxFilmGrainType", 0.f},
       {"FxFilmGrain", 50.f},
       {"FxHDRVideos", 1.f},
+      {"FxVideoNits", 500.f},
   });
 }
 
 bool fired_on_init_swapchain = false;
 
-// Seed the Peak Brightness default from the display's HDR metadata.
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
-  // Latch only on a successful read: the transient 1280x720 boot swapchain may have no metadata,
-  // and we must not pin the default to 1000 and block re-seeding from the real HDR swapchain.
+
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (!peak.has_value()) return;
   auto* peak_setting = renodx::utils::settings::FindSetting("ToneMapPeakNits");
@@ -528,8 +541,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::force_borderless = true;
         renodx::mods::swapchain::prevent_full_screen = true;
         renodx::mods::swapchain::use_resource_cloning = true;
-        // Clone the graded buffer to fp16. render_target filter keeps the same-format 33^3 3D LUT
-        // out of the clone path (a 2D view on the cloned 3D resource -> DXGI_ERROR_DEVICE_REMOVED).
+        // Clone the graded buffer to fp16
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r10g10b10a2_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,

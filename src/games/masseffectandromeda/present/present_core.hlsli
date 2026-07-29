@@ -1,29 +1,35 @@
 #ifndef SRC_GAMES_MASSEFFECTANDROMEDA_PRESENT_CORE_HLSLI_
 #define SRC_GAMES_MASSEFFECTANDROMEDA_PRESENT_CORE_HLSLI_
 
-// Shared HDR present tail for both 1:1 (0xF5B0DBFA) and upscale (0xAFFFA4AB) presents -> HDR10 PQ.
-// Caller supplies the scene fetch (single tap vs bicubic) and bindings.
+#include "../shared.h"
+#include "../display_map.hlsli"
+#include "./linearize.hlsli"
+#include "./lilium_rcas.hlsli"
+
+// Shared HDR present tail for every present row -> HDR10 PQ. The sole caller is
+// output_present.hlsli, which supplies the scene fetch, the bindings, and the row's geometry.
 // scene: rgb = pre-scale graded buffer, a = layer alpha. cb2 = cbData[2]: .x scene scale,
-// .y UI gate, .z UI alpha factor. Requires shared.h + linearize.hlsli + lilium_rcas.hlsli first.
+// .y UI gate, .z UI alpha factor.
 
 float4 PresentScene(
     float4 scene, float2 texcoord, float4 cb2,
     Texture2D<float4> sceneTexture, SamplerState sceneSampler,
     Texture2D<float4> uiTexture, SamplerState uiSampler,
     Texture1D<float4> outputLut, SamplerState lutSampler,
-    bool isUpscale) {
+    // Compile-time literal at the call site; fxc folds the RCAS gate below out entirely. Kept a
+    // parameter so this file stays a pure function of its arguments with no config coupling.
+    bool isScaled) {
   scene *= cb2.x;
 
   float3 color = max(0.f, LinearizeScene(outputLut, lutSampler, scene.rgb));
 
-  // Vanilla = pure native passthrough (diffuse 100 nits, nothing applied).
-  // Vanilla+ = paper white + highlight roll-off (pins peak) + grade + EOTF + effects.
   const PresentParams p = GetPresentParams();
 
   if (p.full) {
     // RCAS (no-op at 0), before grade + UI composite so the HUD stays crisp. Swapchain-only (gate).
-    // Skipped on upscale: bicubic center vs source-res point neighbors = asymmetric; 1:1 only.
-    if (injectedData.fxSwapchainPresent != 0.f && !isUpscale) {
+    // Skipped when the scene is scaled: resampled center vs source-res point neighbors is
+    // asymmetric, so the taps are only coherent on the 1:1 row.
+    if (injectedData.fxSwapchainPresent != 0.f && !isScaled) {
       color = ApplyRCAS(color, texcoord, sceneTexture, sceneSampler, outputLut, lutSampler, cb2.x);
     }
 
