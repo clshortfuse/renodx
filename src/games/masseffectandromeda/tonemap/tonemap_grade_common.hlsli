@@ -1,7 +1,13 @@
 #include "../shared.h"
 
 // Faithful Frostbite scene tonemap+grade pass (VS 0xCD03DB44), shared by all twelve perms.
-// Builds linear scene -> *0.01 -> ST.2084 PQ -> 33^3 LUT (PQ space), as vanilla. Parametrized by:
+// Builds linear scene -> *0.01 -> ST.2084 PQ -> 33^3 LUT (PQ space), as vanilla.
+// Twelve perms = the three axes below and nothing else: unlike the present and loading families, this
+// pass writes the graded buffer rather than the display output, so it has no output-gamut variants and
+// there is no P3 / no-matrix twin to look for.
+// NOTE: these three axes default to 0 instead of being #error-guarded like the present and loading
+// families, so a wrapper that omits one still compiles - as the off variant. Only MEA_TONEMAP_DISTORTION
+// is actually left to the default today; CA and T4 are spelled out on every wrapper.
 //   MEA_TONEMAP_CA          0 = distortion-offset warp; 1 = chromatic aberration (per-channel split on cb0[12])
 //   MEA_TONEMAP_DISTORTION  1 = radial lens warp on cb0[4] applied to the base UV
 //   MEA_TONEMAP_T4          t4 role: 0 = unused; 1 = additive film grain (cb0[1]); 2 = RGBA overlay
