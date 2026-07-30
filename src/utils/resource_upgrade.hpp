@@ -310,6 +310,8 @@ inline reshade::api::resource CloneResource(
   if (resource_info->device == nullptr || resource_info->clone_target == nullptr) {
     return {0u};
   }
+  const bool is_vulkan = resource_info->device->get_api() == reshade::api::device_api::vulkan;
+  if (is_buffer && !is_vulkan) return {0u};
 
   auto new_desc = resource_info->desc;
   if (is_buffer) {
@@ -332,7 +334,7 @@ inline reshade::api::resource CloneResource(
         | (resource_info->clone_target->usage_set & ~resource_info->clone_target->usage_unset));
   }
   if (new_desc.heap == reshade::api::memory_heap::custom
-      || new_desc.heap == reshade::api::memory_heap::unknown) {
+      || (is_vulkan && new_desc.heap == reshade::api::memory_heap::unknown)) {
     new_desc.heap = reshade::api::memory_heap::gpu_only;
   }
 
@@ -1529,8 +1531,7 @@ inline bool OnCopyBufferToTexture(
     uint32_t dest_subresource,
     const reshade::api::subresource_box* dest_box) {
   const bool is_vulkan = cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan;
-  // NOTE(Ritsu): DX12 shouldn't be limited to resource cloning, but that's a breaking change.
-  if (!(is_vulkan || shared.data->use_resource_cloning)) return false;
+  if (!is_vulkan) return false;
 
   CopyRedirectBuffer source_buffer;
   if (!GetCopyRedirectBuffer(source, &source_buffer)) return false;
@@ -1618,7 +1619,7 @@ inline bool OnCopyTextureToBuffer(
     uint32_t row_length,
     uint32_t slice_height) {
   const bool is_vulkan = cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan;
-  if (!(is_vulkan || shared.data->use_resource_cloning)) return false;
+  if (!is_vulkan) return false;
 
   CopyRedirectTexture source_texture;
   if (!GetCopyRedirectTexture(source, &source_texture)) return false;
