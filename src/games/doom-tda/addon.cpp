@@ -26,8 +26,8 @@ namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     DOOM_TDA_CUSTOM_SHADER_ENTRY(DOOM_TDA_ACES_TONEMAP_LUTBUILDER_HASH),  // ACES ToneMap LUTbuilder
-  CustomVulkanShader(0xBB506303),                                       // Color Grading LUTs + Sample TM
-  CustomVulkanShader(0x38FAEACF),                                       // Scene + UI Composite
+    CustomVulkanShader(0xBB506303),                                       // Color Grading LUTs + Sample TM
+    CustomVulkanShader(0x38FAEACF),                                       // Scene + UI Composite
 };
 
 #if USE_SHADER_TOGGLE
