@@ -8,7 +8,7 @@ RenoDX is an engine for modifying DirectX games. Recommended configuration:
 * [llvm](https://github.com/llvm/llvm-project/releases/) - Used for compiling, linting and formatting
 * [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) - For faster building
 * [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) - Used to build addons and compile HLSL. Minimum supported version: `10.0.26100.0`
-* [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) - Provides `glslangValidator.exe` and SPIR-V tooling used by Vulkan shader builds. The setup script can install it via winget when missing.
+* [glslang](https://github.com/KhronosGroup/glslang/releases) - Compiles explicitly tagged `.gl.glsl` and `.vk.glsl` files to OpenGL- and Vulkan-targeted SPIR-V. CMake accepts the current `glslang.exe` standalone tool or the legacy `glslangValidator.exe` name, checking `bin` before the Vulkan SDK or `PATH` fallbacks.
 * [DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler/releases/) - Provides `dxc.exe` and `dxcompiler.dll` for Shader Model 6.x compilation and devkit tooling. DXC-based decompilation is also used by devkit where supported. Some releases also include `dxil.dll`, but it is not required for the RenoDX MCP workflow.
 * [cmd_decompiler.exe](https://github.com/bo3b/3Dmigoto/releases/tag/1.3.16) - Decompiles upto Shader Model 5.0 to HLSL
 * [slangc.exe](https://github.com/shader-slang/slang/releases) - Compiles .slang files for DXBC, DXIL, and SPIR-V
@@ -32,8 +32,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-dev-env.ps1 -Install
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-dev-env.ps1 -Bin .\bin -Install
 ```
 
-- The default invocation is a preview. It does not change files. Instead it reports the Windows SDK and Vulkan SDK versions it found and the current versus configured versions for the managed toolchain components.
-- `-Install` creates `.\bin` when needed, applies managed tool installs or updates, attempts Windows SDK and Vulkan SDK installation when either SDK is missing, and copies `fxc.exe` into `.\bin` when the Windows SDK is already installed.
+- The default invocation is a preview. It does not change files. Instead it reports the Windows SDK version it found and the current versus configured versions for the managed toolchain components.
+- `-Install` creates `.\bin` when needed, applies managed tool installs or updates, attempts Windows SDK installation when the SDK is missing, and copies `fxc.exe` into `.\bin` when the SDK is already installed.
 - Use `-Bin` when running the script outside the repo root. The default `bin` path is relative to the current working directory, not the script directory.
 - `-Update` re-runs the same version-aware checks and applies managed tool installs or updates without attempting Windows SDK installation. If the SDK is already installed, it can still copy `fxc.exe` into `.\bin`.
 - The script will not downgrade a newer local managed tool install. It updates only when the configured package is newer than the installed one. It does not currently force-refresh same-version cached tool archives.
@@ -43,25 +43,28 @@ Manual tool setup is still supported if you prefer to manage `.\bin` yourself.
 
 * `mkdir bin`
 * `curl -L -o dxc.zip https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2602/dxc_2026_02_20.zip`
-* `curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2025.16.1/slang-2025.16.1-windows-x86_64.zip`
+* `curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2026.14.1/slang-2026.14.1-windows-x86_64.zip`
+* `curl -L -o glslang.zip https://github.com/KhronosGroup/glslang/releases/download/main-tot/glslang-main-windows-x86_64-release.zip`
 * `curl -L -o cmd_Decompiler-1.3.16.zip https://github.com/bo3b/3Dmigoto/releases/download/1.3.16/cmd_Decompiler-1.3.16.zip`
 * `powershell -Command "Expand-Archive -Path dxc.zip -DestinationPath dxc_temp -Force; Copy-Item dxc_temp\bin\x64\* .\bin -Force; Remove-Item dxc_temp -Recurse -Force"`
 * `powershell -Command "Expand-Archive -Path slang.zip -DestinationPath slang_temp -Force; Copy-Item slang_temp\bin\* .\bin -Force; Remove-Item slang_temp -Recurse -Force"`
+* `powershell -Command "Expand-Archive -Path glslang.zip -DestinationPath glslang_temp -Force; Copy-Item glslang_temp\bin\glslang.exe .\bin -Force; Remove-Item glslang_temp -Recurse -Force"`
 * `powershell -Command "Expand-Archive -Path cmd_Decompiler-1.3.16.zip -DestinationPath 3dmigoto_temp -Force; Copy-Item (Get-ChildItem 3dmigoto_temp -Recurse -Filter cmd_Decompiler.exe | Select-Object -First 1).FullName .\bin\cmd_Decompiler.exe -Force; Remove-Item 3dmigoto_temp -Recurse -Force"`
 * `del dxc.zip`
 * `del slang.zip`
+* `del glslang.zip`
 * `del cmd_Decompiler-1.3.16.zip`
 
 Install the Windows SDK if it is not already present. The setup script will attempt this automatically when run with `-Install`, or you can do it manually:
 
 * `winget install --id Microsoft.WindowsSDK -e --silent`
 
-Install the Vulkan SDK if it is not already present. The setup script will attempt this automatically when run with `-Install`, or you can do it manually:
+The setup script currently downloads the official `main-tot` glslang archive, whose compiler reports version `16.4.0`. This is temporary until Khronos regenerates the `16.4.0` release with versioned binary assets; then the archive URL can be pinned to that release. Install the Vulkan SDK only as an optional fallback if `glslang.exe` or `glslangValidator.exe` is unavailable in `.\bin` or on `PATH`:
 
 * `winget install --id KhronosGroup.VulkanSDK -e --silent --force --accept-package-agreements --accept-source-agreements`
 
 Use Windows SDK `10.0.26100.0` or newer. `fxc.exe` comes from the Windows SDK. CMake can find it in the SDK install path, and the setup script will also copy it into `.\bin` when it can. The DXC package should provide `dxc.exe` together with `dxcompiler.dll`; some DXC releases also ship `dxil.dll`, which is fine to keep alongside them in `.\bin` but is not required by the current devkit MCP path. `slangc.exe` and `cmd_Decompiler.exe` are also expected there unless you have an equivalent toolchain arrangement of your own.
-The Vulkan SDK should provide `glslangValidator.exe` and set `VULKAN_SDK`; open a new terminal after installing it so CMake can find the updated environment.
+The Vulkan SDK can provide glslang and optional `spirv-dis.exe` as fallback compiler tools; shader compilation does not require Vulkan headers or loader linkage. Open a new terminal after installing the SDK so CMake can find its updated `VULKAN_SDK` environment variable.
 
 Update the submodules
 

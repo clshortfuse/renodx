@@ -31,12 +31,17 @@
 
 namespace renodx::utils::shader::compiler::vulkan {
 
+enum class GlslTargetEnvironment {
+  OPENGL,
+  VULKAN,
+};
+
 namespace internal {
 
 static std::shared_mutex mutex_slangc_path;
 static std::filesystem::path cached_slangc_path;
-static std::shared_mutex mutex_glslangvalidator_path;
-static std::filesystem::path cached_glslangvalidator_path;
+static std::shared_mutex mutex_glslang_path;
+static std::filesystem::path cached_glslang_path;
 static std::shared_mutex mutex_spirv_dis_path;
 static std::optional<std::filesystem::path> cached_spirv_dis;
 static std::shared_mutex mutex_spirv_cross_path;
@@ -174,28 +179,30 @@ inline std::filesystem::path FindSlangcPath() {
   throw std::exception("Could not locate slangc.exe. Place it next to the executable or install the Vulkan SDK.");
 }
 
-inline std::filesystem::path FindGlslangValidatorPath() {
+inline std::filesystem::path FindGlslangPath() {
   {
-    std::shared_lock lock(mutex_glslangvalidator_path);
-    if (!cached_glslangvalidator_path.empty()) return cached_glslangvalidator_path;
+    std::shared_lock lock(mutex_glslang_path);
+    if (!cached_glslang_path.empty()) return cached_glslang_path;
   }
 
-  std::unique_lock lock(mutex_glslangvalidator_path);
-  if (!cached_glslangvalidator_path.empty()) return cached_glslangvalidator_path;
+  std::unique_lock lock(mutex_glslang_path);
+  if (!cached_glslang_path.empty()) return cached_glslang_path;
 
   auto try_candidate = [&](const std::filesystem::path& candidate) {
     if (!candidate.empty() && std::filesystem::exists(candidate)) {
-      cached_glslangvalidator_path = candidate;
+      cached_glslang_path = candidate;
       return true;
     }
     return false;
   };
 
-  if (TryExecutableAdjacentPaths(L"glslangValidator.exe", try_candidate)) return cached_glslangvalidator_path;
-  if (TryVulkanSdkPath(L"glslangValidator.exe", try_candidate)) return cached_glslangvalidator_path;
+  if (TryExecutableAdjacentPaths(L"glslang.exe", try_candidate)) return cached_glslang_path;
+  if (TryExecutableAdjacentPaths(L"glslangValidator.exe", try_candidate)) return cached_glslang_path;
+  if (TryVulkanSdkPath(L"glslang.exe", try_candidate)) return cached_glslang_path;
+  if (TryVulkanSdkPath(L"glslangValidator.exe", try_candidate)) return cached_glslang_path;
 
   throw std::exception(
-      "Could not locate glslangValidator.exe. Place it next to the executable or install the Vulkan SDK.");
+      "Could not locate glslang.exe or glslangValidator.exe. Place one next to the executable or install the Vulkan SDK.");
 }
 
 inline std::filesystem::path GetTempOutputPath(const std::wstring& extension) {
@@ -225,12 +232,6 @@ inline std::string ToLower(std::string input) {
 
 inline void AppendDefaultFlags(std::vector<std::wstring>& args) {
   args.emplace_back(L"-O0");
-}
-
-inline void AppendGlslangValidatorDefaultFlags(std::vector<std::wstring>& args) {
-  args.emplace_back(L"-V");
-  args.emplace_back(L"--target-env");
-  args.emplace_back(L"vulkan1.3");
 }
 
 inline std::optional<std::filesystem::path> FindSpirvDisPath() {
@@ -530,6 +531,7 @@ inline std::vector<ShaderCompileResult> CompileShadersFromFiles(
 inline std::vector<uint8_t> CompileGlslFromFile(
     LPCWSTR file_path,
     LPCSTR shader_target,
+    GlslTargetEnvironment target_environment,
     const std::vector<std::pair<std::string, std::string>>& defines = {}) {
   if (file_path == nullptr || shader_target == nullptr) {
     throw std::exception("Missing GLSL compile arguments.");
@@ -555,7 +557,13 @@ inline std::vector<uint8_t> CompileGlslFromFile(
   auto output_path = internal::GetTempOutputPath(L".spv");
 
   std::vector<std::wstring> args;
-  internal::AppendGlslangValidatorDefaultFlags(args);
+  if (target_environment == GlslTargetEnvironment::OPENGL) {
+    args.emplace_back(L"-G");
+  } else {
+    args.emplace_back(L"-V");
+    args.emplace_back(L"--target-env");
+    args.emplace_back(L"vulkan1.3");
+  }
   args.emplace_back(L"-S");
   args.emplace_back(stage);
 
@@ -578,20 +586,20 @@ inline std::vector<uint8_t> CompileGlslFromFile(
   args.emplace_back(output_path.wstring());
   args.emplace_back(source_path.wstring());
 
-  const auto glslangvalidator_path = internal::FindGlslangValidatorPath();
-  const std::wstring command_line = internal::QuoteArg(glslangvalidator_path.wstring()) + L" " + internal::JoinArgs(args);
+  const auto glslang_path = internal::FindGlslangPath();
+  const std::wstring command_line = internal::QuoteArg(glslang_path.wstring()) + L" " + internal::JoinArgs(args);
   const auto result = internal::RunProcess(command_line, source_path.parent_path());
 
   if (result.exit_code != 0) {
     if (result.output.empty()) {
-      throw std::exception("glslangValidator failed.");
+      throw std::exception("glslang failed.");
     }
     throw std::exception(result.output.c_str());
   }
 
   auto output_data = renodx::utils::path::ReadBinaryFile(output_path);
   if (output_data.empty()) {
-    throw std::exception("glslangValidator did not produce output.");
+    throw std::exception("glslang did not produce output.");
   }
   std::filesystem::remove(output_path);
   return output_data;

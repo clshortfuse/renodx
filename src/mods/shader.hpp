@@ -65,6 +65,13 @@ struct CustomShader {
   std::vector<ViewBinding> views = {};
 };
 
+inline std::span<const std::uint8_t> GetCodeForDevice(
+    const CustomShader& shader,
+    reshade::api::device_api device_api) {
+  const auto device_code = shader.code_by_device.find(device_api);
+  return device_code == shader.code_by_device.end() ? shader.code : device_code->second;
+}
+
 using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
 
 template <std::size_t N>
@@ -140,6 +147,16 @@ inline CustomShader CreateDirectXShader(
   return shader;
 }
 
+inline CustomShader CreateApiShader(
+    std::uint32_t crc32,
+    reshade::api::device_api device_api,
+    std::span<const std::uint8_t> code) {
+  CustomShader shader = {};
+  shader.crc32 = crc32;
+  shader.code_by_device = {{device_api, code}};
+  return shader;
+}
+
 inline CustomShader CreateOpenGLVulkanShader(
     std::uint32_t crc32,
     std::span<const std::uint8_t> gl_code,
@@ -161,6 +178,18 @@ inline CustomShader CreateOpenGLVulkanShader(
 #define CustomShaderEntryCallback(crc32, callback) {crc32, renodx::mods::shader::CreateCallbackShader(crc32, __##crc32, callback)}
 // clang-format on
 #define RENODX_JOIN_MACRO(x, y) x##y
+#define CustomOpenGLShader(__crc32__)                   \
+  {                                                     \
+      __crc32__, renodx::mods::shader::CreateApiShader( \
+                     __crc32__,                         \
+                     reshade::api::device_api::opengl,  \
+                     RENODX_JOIN_MACRO(__##__crc32__, _gl))}
+#define CustomVulkanShader(__crc32__)                   \
+  {                                                     \
+      __crc32__, renodx::mods::shader::CreateApiShader( \
+                     __crc32__,                         \
+                     reshade::api::device_api::vulkan,  \
+                     RENODX_JOIN_MACRO(__##__crc32__, _vk))}
 #define CustomDirectXShaders(__crc32__)                       \
   {                                                           \
       __crc32__, renodx::mods::shader::CreateDirectXShader(   \

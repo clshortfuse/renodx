@@ -19,12 +19,12 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // CustomShaderEntry(0x94CF25A1),  // post process + ACEScc LUT + ACES ToneMap
+  // CustomVulkanShader(0x94CF25A1),  // post process + ACEScc LUT + ACES ToneMap
     // CustomShaderEntry(0x0FB3C8A5),  // post process + ACES ToneMap
 
 
-    CustomShaderEntry(0xF99C5E4E),  // ACES ToneMap LUTbuilder
-    CustomShaderEntry(0x1ECA9E9E),  // Composite Scene + UI
+  CustomVulkanShader(0xF99C5E4E),  // ACES ToneMap LUTbuilder
+  CustomVulkanShader(0x1ECA9E9E),  // Composite Scene + UI
 };
 
 namespace shader_toggle {
@@ -53,7 +53,10 @@ void OnPresent(
 
     if (g_use_shaders != 0.f) {
       for (const auto& [hash, shader] : custom_shaders) {
-        renodx::utils::shader::AddRuntimeReplacement(device, hash, shader.code);
+        const auto code = renodx::mods::shader::GetCodeForDevice(shader, device->get_api());
+        if (!code.empty()) {
+          renodx::utils::shader::AddRuntimeReplacement(device, hash, code);
+        }
       }
       reshade::log::message(
           reshade::log::level::info,

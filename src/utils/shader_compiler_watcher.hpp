@@ -93,8 +93,8 @@ struct CustomShader {
       if (auto suffix_pos = filename.rfind(".glsl"); suffix_pos != std::string::npos) {
         filename.erase(suffix_pos);
       }
-      if (filename.ends_with(".spv")) {
-        filename.erase(filename.size() - 4);
+      if (filename.ends_with(".gl") || filename.ends_with(".vk")) {
+        filename.erase(filename.size() - 3);
       }
       if (filename.ends_with(".frag") || filename.ends_with(".vert") || filename.ends_with(".comp")) {
         if (auto target_pos = filename.rfind('.'); target_pos != std::string::npos) {
@@ -369,6 +369,8 @@ static bool CompileCustomShaders() {
       auto basename = entry_path.stem().string();
       std::string hash_string;
       std::string shader_target;
+      bool compile_glsl_to_spirv = false;
+      auto glsl_device_api = reshade::api::device_api::opengl;
       if (is_hlsl) {
         auto length = basename.length();
         if (length < strlen("0x12345678.xx_x_x")) continue;
@@ -383,9 +385,30 @@ static bool CompileCustomShaders() {
       } else if (is_slang) {
         if (!parse_stage_target_and_hash(entry_path, ".slang", shader_target, hash_string)) continue;
       } else if (is_glsl) {
-        const bool has_stage_suffix = parse_stage_target_and_hash(entry_path, ".spv.glsl", shader_target, hash_string)
-                                      || parse_stage_target_and_hash(entry_path, ".glsl", shader_target, hash_string);
+        const auto filename = entry_path.filename().string();
+        const bool is_opengl_spirv = filename.ends_with(".gl.glsl");
+        const bool is_vulkan_spirv = filename.ends_with(".vk.glsl");
+        bool has_stage_suffix = false;
+        if (is_opengl_spirv) {
+          has_stage_suffix = parse_stage_target_and_hash(entry_path, ".gl.glsl", shader_target, hash_string);
+          compile_glsl_to_spirv = true;
+        } else if (is_vulkan_spirv) {
+          has_stage_suffix = parse_stage_target_and_hash(entry_path, ".vk.glsl", shader_target, hash_string);
+          compile_glsl_to_spirv = true;
+          glsl_device_api = reshade::api::device_api::vulkan;
+        } else {
+          has_stage_suffix = parse_stage_target_and_hash(entry_path, ".glsl", shader_target, hash_string);
+        }
+        if (glsl_device_api != local_device_api) continue;
         if (!has_stage_suffix) {
+          if (is_opengl_spirv || is_vulkan_spirv) {
+            std::stringstream s;
+            s << "CompileCustomShaders(Invalid tagged GLSL file format: ";
+            s << filename;
+            s << ")";
+            reshade::log::message(reshade::log::level::warning, s.str().c_str());
+            continue;
+          }
           if (basename.size() < 10 || !HasHexPrefix(basename, 0u)) {
             std::stringstream s;
             s << "CompileCustomShaders(Invalid file format: ";
@@ -496,13 +519,16 @@ static bool CompileCustomShaders() {
             throw std::exception("Slang compiler produced no result.");
           }
           custom_shader.compilation = results.front().compilation;
-        } else if (is_glsl && local_device_api == reshade::api::device_api::vulkan) {
+        } else if (is_glsl && compile_glsl_to_spirv) {
           if (shader_target.empty()) {
-            throw std::exception("Invalid GLSL shader stage. Expected '.frag.glsl', '.vert.glsl', or '.comp.glsl'.");
+            throw std::exception("Invalid GLSL shader stage. Expected frag, vert, or comp before the backend tag.");
           }
           custom_shader.compilation = renodx::utils::shader::compiler::vulkan::CompileGlslFromFile(
               entry_path.c_str(),
               shader_target.c_str(),
+              glsl_device_api == reshade::api::device_api::vulkan
+                  ? renodx::utils::shader::compiler::vulkan::GlslTargetEnvironment::VULKAN
+                  : renodx::utils::shader::compiler::vulkan::GlslTargetEnvironment::OPENGL,
               shared_shader_defines);
         } else if (is_slang) {
           throw std::exception("Slang source shaders require Vulkan API.");
