@@ -7380,8 +7380,9 @@ void RenderResourcesPane(reshade::api::device* device, DeviceData* data) {
     usage_by_resource = &data->resource_usage_by_handle;
   }
 
-  const bool api_blocked = device->get_api() == reshade::api::device_api::d3d12
-                           || device->get_api() == reshade::api::device_api::vulkan;
+  const bool api_blocked =
+      device->get_api() == reshade::api::device_api::d3d12
+      || device->get_api() == reshade::api::device_api::vulkan;
   if (api_blocked) {
     ImGui::TextDisabled("Enable/Disable is blocked for this API (DX12/Vulkan).");
   }

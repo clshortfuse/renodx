@@ -664,7 +664,7 @@ inline reshade::api::resource GetResourceFromView(
 
   switch (device->get_api()) {
     case reshade::api::device_api::vulkan:
-    case reshade::api::device_api::d3d12:  {
+    case reshade::api::device_api::d3d12: {
       reshade::api::resource resource = {0u};
       bool destroyed = true;
       const auto found = GetResourceViewInfo(view, [&resource, &destroyed](const ResourceViewInfo& resource_view_info) {

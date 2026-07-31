@@ -62,10 +62,9 @@ struct ShaderInjectData {
 #define PUSH_CONSTANTS_OFFSET 0
 #endif
 
-struct PushData
-{
-    [[vk::offset(PUSH_CONSTANTS_OFFSET)]]
-    ShaderInjectData shader_injection;
+struct PushData {
+  [[vk::offset(PUSH_CONSTANTS_OFFSET)]]
+  ShaderInjectData shader_injection;
 };
 
 [[vk::push_constant]]
