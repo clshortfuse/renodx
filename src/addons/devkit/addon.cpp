@@ -7854,6 +7854,7 @@ struct SettingsDeviceOption {
     if (ImGui::InputText("Tools Path", tools_temp, 256)) {
       auto temp_string = devkit_tools_path::TrimTrailingWhitespace(tools_temp);
       renodx::utils::shader::compiler::directx::SetToolsPath(temp_string);
+      renodx::utils::shader::compiler::vulkan::SetToolsPath(temp_string);
       reshade::set_config_value(nullptr, "renodx-dev", "ToolsPath", temp_string.c_str());
       tools_path_status = devkit_tools_path::GetStatus();
     }
@@ -8839,7 +8840,9 @@ void InitializeUserSettings() {
     char temp[256] = "";
     size_t size = 256;
     if (reshade::get_config_value(nullptr, "renodx-dev", "ToolsPath", temp, &size)) {
-      renodx::utils::shader::compiler::directx::SetToolsPath(devkit_tools_path::TrimTrailingWhitespace(std::string(temp)));
+      const auto tools_path = devkit_tools_path::TrimTrailingWhitespace(std::string(temp));
+      renodx::utils::shader::compiler::directx::SetToolsPath(tools_path);
+      renodx::utils::shader::compiler::vulkan::SetToolsPath(tools_path);
     }
   }
   {

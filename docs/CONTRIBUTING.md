@@ -8,7 +8,7 @@ RenoDX is an engine for modifying DirectX games. Recommended configuration:
 * [llvm](https://github.com/llvm/llvm-project/releases/) - Used for compiling, linting and formatting
 * [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) - For faster building
 * [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) - Used to build addons and compile HLSL. Minimum supported version: `10.0.26100.0`
-* [glslang](https://github.com/KhronosGroup/glslang/releases) - Compiles explicitly tagged `.gl.glsl` and `.vk.glsl` files to OpenGL- and Vulkan-targeted SPIR-V. CMake accepts the current `glslang.exe` standalone tool or the legacy `glslangValidator.exe` name, checking `bin` before the Vulkan SDK or `PATH` fallbacks.
+* [glslang](https://github.com/KhronosGroup/glslang/releases) - Compiles explicitly tagged `.gl.glsl` and `.vk.glsl` files to OpenGL- and Vulkan-targeted SPIR-V. CMake accepts the current `glslang.exe` standalone tool or the legacy `glslangValidator.exe` name, checking `bin` before optional fallback locations.
 * [DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler/releases/) - Provides `dxc.exe` and `dxcompiler.dll` for Shader Model 6.x compilation and devkit tooling. DXC-based decompilation is also used by devkit where supported. Some releases also include `dxil.dll`, but it is not required for the RenoDX MCP workflow.
 * [cmd_decompiler.exe](https://github.com/bo3b/3Dmigoto/releases/tag/1.3.16) - Decompiles upto Shader Model 5.0 to HLSL
 * [slangc.exe](https://github.com/shader-slang/slang/releases) - Compiles .slang files for DXBC, DXIL, and SPIR-V
@@ -59,12 +59,10 @@ Install the Windows SDK if it is not already present. The setup script will atte
 
 * `winget install --id Microsoft.WindowsSDK -e --silent`
 
-The setup script currently downloads the official `main-tot` glslang archive, whose compiler reports version `16.4.0`. This is temporary until Khronos regenerates the `16.4.0` release with versioned binary assets; then the archive URL can be pinned to that release. Install the Vulkan SDK only as an optional fallback if `glslang.exe` or `glslangValidator.exe` is unavailable in `.\bin` or on `PATH`:
-
-* `winget install --id KhronosGroup.VulkanSDK -e --silent --force --accept-package-agreements --accept-source-agreements`
+The setup script currently downloads the official `main-tot` glslang archive, whose compiler reports version `16.4.0`. This is temporary until Khronos regenerates the `16.4.0` release with versioned binary assets; then the archive URL can be pinned to that release. The standalone compiler in `.\bin` is sufficient for GLSL builds.
 
 Use Windows SDK `10.0.26100.0` or newer. `fxc.exe` comes from the Windows SDK. CMake can find it in the SDK install path, and the setup script will also copy it into `.\bin` when it can. The DXC package should provide `dxc.exe` together with `dxcompiler.dll`; some DXC releases also ship `dxil.dll`, which is fine to keep alongside them in `.\bin` but is not required by the current devkit MCP path. `slangc.exe` and `cmd_Decompiler.exe` are also expected there unless you have an equivalent toolchain arrangement of your own.
-The Vulkan SDK can provide glslang and optional `spirv-dis.exe` as fallback compiler tools; shader compilation does not require Vulkan headers or loader linkage. Open a new terminal after installing the SDK so CMake can find its updated `VULKAN_SDK` environment variable.
+An existing Vulkan SDK remains an optional fallback source for glslang and `spirv-dis.exe`; shader compilation does not require Vulkan headers or loader linkage.
 
 Update the submodules
 
