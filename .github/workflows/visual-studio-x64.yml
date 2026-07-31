@@ -41,7 +41,7 @@ jobs:
           arch: amd64
 
       - name: Configure CMake (x64)
-        run: cmake --preset vs-x64 -DRENODX_ENABLE_SPIRV_DISASSEMBLY=OFF
+        run: cmake --preset vs-x64
 
       - name: Build (x64)
         run: cmake --build --preset vs-x64-release --verbose
