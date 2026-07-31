@@ -76,15 +76,6 @@ if(GLSL_SPIRV_SOURCES)
   message("GLSLANG_BIN: " ${GLSLANG_BIN})
 endif()
 
-option(RENODX_ENABLE_SPIRV_DISASSEMBLY "Generate SPIR-V assembly listings with spirv-dis" ON)
-
-if(RENODX_ENABLE_SPIRV_DISASSEMBLY)
-  find_shader_tool(SPIRV_DIS_BIN spirv-dis.exe)
-else()
-  set(SPIRV_DIS_BIN "")
-endif()
-message("SPIRV_DIS_BIN: " ${SPIRV_DIS_BIN})
-
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 set(SHADER_NDEBUG_FLAG "")
@@ -232,7 +223,6 @@ endfunction()
 function(build_shader_target ADDON ADDON_PATH)
   set(EMBED_FOLDER ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/embed)
   unset(SHADER_BINARIES)
-  unset(SHADER_AUX_OUTPUTS)
   macro(add_stage_spirv_shader OUTPUT_STEM)
     list(FIND SHADER_BINARIES ${EMBED_FOLDER}/${OUTPUT_STEM}.spv SHADER_BINARY_INDEX)
     if(SHADER_BINARY_INDEX EQUAL -1)
@@ -245,14 +235,6 @@ function(build_shader_target ADDON ADDON_PATH)
         DEPFILE ${DEPFILE_SPV}
       )
       list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${OUTPUT_STEM}.spv)
-      if(SPIRV_DIS_BIN)
-        add_custom_command(
-          OUTPUT ${EMBED_FOLDER}/${OUTPUT_STEM}.spvasm
-          COMMAND "${SPIRV_DIS_BIN}" "${EMBED_FOLDER}/${OUTPUT_STEM}.spv" -o "${EMBED_FOLDER}/${OUTPUT_STEM}.spvasm"
-          DEPENDS ${EMBED_FOLDER}/${OUTPUT_STEM}.spv
-        )
-        list(APPEND SHADER_AUX_OUTPUTS ${EMBED_FOLDER}/${OUTPUT_STEM}.spvasm)
-      endif()
     endif()
   endmacro()
   file(GLOB_RECURSE SHADER_HLSL_SOURCES CONFIGURE_DEPENDS ${ADDON_PATH}/*.hlsl)
@@ -592,14 +574,6 @@ function(build_shader_target ADDON ADDON_PATH)
       DEPENDS ${FILE}
     )
     list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spv)
-    if(SPIRV_DIS_BIN)
-      add_custom_command(
-        OUTPUT ${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spvasm
-        COMMAND "${SPIRV_DIS_BIN}" "${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spv" -o "${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spvasm"
-        DEPENDS ${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spv
-      )
-      list(APPEND SHADER_AUX_OUTPUTS ${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spvasm)
-    endif()
   endforeach()
 
   list(REMOVE_DUPLICATES SHADER_BINARIES)
@@ -703,7 +677,7 @@ function(build_shader_target ADDON ADDON_PATH)
   set(SHADERS_H_FILE ${EMBED_FOLDER}/shaders.h)
   file(GENERATE OUTPUT ${SHADERS_H_FILE} CONTENT "${SHADERS_H_OUTPUT}")
 
-  add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES} ${SHADER_AUX_OUTPUTS})
+  add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
 
 endfunction()
 

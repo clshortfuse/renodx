@@ -52,7 +52,7 @@ jobs:
           arch: amd64
 
       - name: Configure CMake (x64)
-        run: cmake --preset clang-x64 -DRENODX_ENABLE_SPIRV_DISASSEMBLY=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+        run: cmake --preset clang-x64 -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build (x64)
         run: cmake --build --preset clang-x64-release --verbose
@@ -69,7 +69,7 @@ jobs:
           arch: amd64_x86
 
       - name: Configure CMake (x86)
-        run: cmake --preset clang-x86 -DRENODX_ENABLE_SPIRV_DISASSEMBLY=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+        run: cmake --preset clang-x86 -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
       - name: Build (x86)
         run: cmake --build --preset clang-x86-release --verbose
