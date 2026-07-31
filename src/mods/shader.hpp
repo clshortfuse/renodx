@@ -65,13 +65,6 @@ struct CustomShader {
   std::vector<ViewBinding> views = {};
 };
 
-inline std::span<const std::uint8_t> GetCodeForDevice(
-    const CustomShader& shader,
-    reshade::api::device_api device_api) {
-  const auto device_code = shader.code_by_device.find(device_api);
-  return device_code == shader.code_by_device.end() ? shader.code : device_code->second;
-}
-
 using CustomShaders = std::unordered_map<uint32_t, CustomShader>;
 
 template <std::size_t N>
@@ -147,29 +140,6 @@ inline CustomShader CreateDirectXShader(
   return shader;
 }
 
-inline CustomShader CreateApiShader(
-    std::uint32_t crc32,
-    reshade::api::device_api device_api,
-    std::span<const std::uint8_t> code) {
-  CustomShader shader = {};
-  shader.crc32 = crc32;
-  shader.code_by_device = {{device_api, code}};
-  return shader;
-}
-
-inline CustomShader CreateOpenGLVulkanShader(
-    std::uint32_t crc32,
-    std::span<const std::uint8_t> gl_code,
-    std::span<const std::uint8_t> vk_code) {
-  CustomShader shader = {};
-  shader.crc32 = crc32;
-  shader.code_by_device = {
-      {reshade::api::device_api::opengl, gl_code},
-      {reshade::api::device_api::vulkan, vk_code},
-  };
-  return shader;
-}
-
 // clang-format off
 #define BypassShaderEntry(__crc32__)               {__crc32__, renodx::mods::shader::CreateBypassShader(__crc32__)}
 #define CustomShaderEntry(crc32)                   {crc32, renodx::mods::shader::CreateCustomShader(crc32, __##crc32)}
@@ -178,30 +148,12 @@ inline CustomShader CreateOpenGLVulkanShader(
 #define CustomShaderEntryCallback(crc32, callback) {crc32, renodx::mods::shader::CreateCallbackShader(crc32, __##crc32, callback)}
 // clang-format on
 #define RENODX_JOIN_MACRO(x, y) x##y
-#define CustomOpenGLShader(__crc32__)                   \
-  {                                                     \
-      __crc32__, renodx::mods::shader::CreateApiShader( \
-                     __crc32__,                         \
-                     reshade::api::device_api::opengl,  \
-                     RENODX_JOIN_MACRO(__##__crc32__, _gl))}
-#define CustomVulkanShader(__crc32__)                   \
-  {                                                     \
-      __crc32__, renodx::mods::shader::CreateApiShader( \
-                     __crc32__,                         \
-                     reshade::api::device_api::vulkan,  \
-                     RENODX_JOIN_MACRO(__##__crc32__, _vk))}
 #define CustomDirectXShaders(__crc32__)                       \
   {                                                           \
       __crc32__, renodx::mods::shader::CreateDirectXShader(   \
                      __crc32__,                               \
                      RENODX_JOIN_MACRO(__##__crc32__, _dx11), \
                      RENODX_JOIN_MACRO(__##__crc32__, _dx12))}
-#define CustomOpenGLVulkanShaders(__crc32__)                     \
-  {                                                              \
-      __crc32__, renodx::mods::shader::CreateOpenGLVulkanShader( \
-                     __crc32__,                                  \
-                     RENODX_JOIN_MACRO(__##__crc32__, _gl),      \
-                     RENODX_JOIN_MACRO(__##__crc32__, _vk))}
 
 static thread_local std::vector<reshade::api::pipeline_layout_param*> created_params;
 static thread_local std::unordered_map<uint32_t, reshade::api::pipeline_layout_param*> rebuilt_params;
