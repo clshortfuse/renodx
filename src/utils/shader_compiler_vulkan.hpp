@@ -38,15 +38,22 @@ enum class GlslTargetEnvironment {
 
 namespace internal {
 
-static std::shared_mutex mutex_slangc_path;
-static std::filesystem::path cached_slangc_path;
-static std::shared_mutex mutex_glslang_path;
-static std::filesystem::path cached_glslang_path;
-static std::shared_mutex mutex_spirv_dis_path;
-static std::optional<std::filesystem::path> cached_spirv_dis;
-static std::shared_mutex mutex_spirv_cross_path;
-static std::optional<std::filesystem::path> cached_spirv_cross;
-static std::atomic_uint32_t compile_counter = 0;
+inline std::shared_mutex mutex_tools_path;
+inline std::filesystem::path tools_path;
+inline std::shared_mutex mutex_slangc_path;
+inline std::filesystem::path cached_slangc_path;
+inline std::shared_mutex mutex_glslang_path;
+inline std::filesystem::path cached_glslang_path;
+inline std::shared_mutex mutex_spirv_dis_path;
+inline std::optional<std::filesystem::path> cached_spirv_dis;
+inline std::shared_mutex mutex_spirv_cross_path;
+inline std::optional<std::filesystem::path> cached_spirv_cross;
+inline std::atomic_uint32_t compile_counter = 0;
+
+inline bool TryConfiguredToolsPath(const wchar_t* file_name, const auto& try_candidate) {
+  std::shared_lock lock(mutex_tools_path);
+  return !tools_path.empty() && try_candidate(tools_path / file_name);
+}
 
 inline bool TryExecutableAdjacentPaths(const wchar_t* file_name, const auto& try_candidate) {
   std::array<wchar_t, MAX_PATH> module_path{};
@@ -173,10 +180,12 @@ inline std::filesystem::path FindSlangcPath() {
     return false;
   };
 
+  if (TryConfiguredToolsPath(L"slangc.exe", try_candidate)) return cached_slangc_path;
   if (TryExecutableAdjacentPaths(L"slangc.exe", try_candidate)) return cached_slangc_path;
   if (TryVulkanSdkPath(L"slangc.exe", try_candidate)) return cached_slangc_path;
 
-  throw std::exception("Could not locate slangc.exe. Place it next to the executable or install the Vulkan SDK.");
+  throw std::exception(
+      "Could not locate slangc.exe in the configured tools directory, next to the executable, or through the Vulkan SDK fallback.");
 }
 
 inline std::filesystem::path FindGlslangPath() {
@@ -196,13 +205,15 @@ inline std::filesystem::path FindGlslangPath() {
     return false;
   };
 
+  if (TryConfiguredToolsPath(L"glslang.exe", try_candidate)) return cached_glslang_path;
+  if (TryConfiguredToolsPath(L"glslangValidator.exe", try_candidate)) return cached_glslang_path;
   if (TryExecutableAdjacentPaths(L"glslang.exe", try_candidate)) return cached_glslang_path;
   if (TryExecutableAdjacentPaths(L"glslangValidator.exe", try_candidate)) return cached_glslang_path;
   if (TryVulkanSdkPath(L"glslang.exe", try_candidate)) return cached_glslang_path;
   if (TryVulkanSdkPath(L"glslangValidator.exe", try_candidate)) return cached_glslang_path;
 
   throw std::exception(
-      "Could not locate glslang.exe or glslangValidator.exe. Place one next to the executable or install the Vulkan SDK.");
+      "Could not locate glslang.exe or glslangValidator.exe in the configured tools directory, next to the executable, or through the Vulkan SDK fallback.");
 }
 
 inline std::filesystem::path GetTempOutputPath(const std::wstring& extension) {
@@ -251,6 +262,7 @@ inline std::optional<std::filesystem::path> FindSpirvDisPath() {
     return false;
   };
 
+  if (TryConfiguredToolsPath(L"spirv-dis.exe", try_candidate)) return cached_spirv_dis;
   if (TryExecutableAdjacentPaths(L"spirv-dis.exe", try_candidate)) return cached_spirv_dis;
   if (TryVulkanSdkPath(L"spirv-dis.exe", try_candidate)) return cached_spirv_dis;
 
@@ -274,6 +286,7 @@ inline std::optional<std::filesystem::path> FindSpirvCrossPath() {
     return false;
   };
 
+  if (TryConfiguredToolsPath(L"spirv-cross.exe", try_candidate)) return cached_spirv_cross;
   if (TryExecutableAdjacentPaths(L"spirv-cross.exe", try_candidate)) return cached_spirv_cross;
   if (TryVulkanSdkPath(L"spirv-cross.exe", try_candidate)) return cached_spirv_cross;
 
@@ -281,6 +294,38 @@ inline std::optional<std::filesystem::path> FindSpirvCrossPath() {
 }
 
 }  // namespace internal
+
+inline void SetToolsPath(const std::filesystem::path& path) {
+  const auto normalized_path = path.empty() ? std::filesystem::path() : path.lexically_normal();
+  {
+    std::unique_lock lock(internal::mutex_tools_path);
+    if (internal::tools_path == normalized_path) {
+      return;
+    }
+    internal::tools_path = normalized_path;
+  }
+  {
+    std::unique_lock lock(internal::mutex_slangc_path);
+    internal::cached_slangc_path.clear();
+  }
+  {
+    std::unique_lock lock(internal::mutex_glslang_path);
+    internal::cached_glslang_path.clear();
+  }
+  {
+    std::unique_lock lock(internal::mutex_spirv_dis_path);
+    internal::cached_spirv_dis.reset();
+  }
+  {
+    std::unique_lock lock(internal::mutex_spirv_cross_path);
+    internal::cached_spirv_cross.reset();
+  }
+}
+
+inline std::filesystem::path GetToolsPath() {
+  std::shared_lock lock(internal::mutex_tools_path);
+  return internal::tools_path;
+}
 
 inline void AppendSpirvCrossFlags(std::vector<std::wstring>& args) {
   args.emplace_back(L"--version");
