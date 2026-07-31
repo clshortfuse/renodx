@@ -20,14 +20,14 @@
 #include "./shared.h"
 
 #define DOOM_TDA_ACES_TONEMAP_LUTBUILDER_HASH 0xBDE5CFDD
-#define DOOM_TDA_CUSTOM_SHADER_ENTRY(crc32)   CustomShaderEntry(crc32)
+#define DOOM_TDA_CUSTOM_SHADER_ENTRY(crc32)   CustomVulkanShader(crc32)
 
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     DOOM_TDA_CUSTOM_SHADER_ENTRY(DOOM_TDA_ACES_TONEMAP_LUTBUILDER_HASH),  // ACES ToneMap LUTbuilder
-    CustomShaderEntry(0xBB506303),                                        // Color Grading LUTs + Sample TM
-    CustomShaderEntry(0x38FAEACF),                                        // Scene + UI Composite
+  CustomVulkanShader(0xBB506303),                                       // Color Grading LUTs + Sample TM
+  CustomVulkanShader(0x38FAEACF),                                       // Scene + UI Composite
 };
 
 #if USE_SHADER_TOGGLE
@@ -62,7 +62,10 @@ void OnPresent(
 
     if (g_use_shaders != 0.f) {
       for (const auto& [hash, shader] : custom_shaders) {
-        renodx::utils::shader::AddRuntimeReplacement(device, hash, shader.code);
+        const auto code = renodx::mods::shader::GetCodeForDevice(shader, device->get_api());
+        if (!code.empty()) {
+          renodx::utils::shader::AddRuntimeReplacement(device, hash, code);
+        }
       }
       reshade::log::message(
           reshade::log::level::info,

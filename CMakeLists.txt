@@ -23,79 +23,67 @@ find_program(DXC_BIN dxc.exe
 message("DXC_BIN: " ${DXC_BIN})
 
 if(DEFINED ENV{VULKAN_SDK})
-  set(VULKAN_SDK_PATH "$ENV{VULKAN_SDK}")
+  set(VULKAN_SDK_BIN "$ENV{VULKAN_SDK}/Bin")
 endif()
 
-find_program(SLANGC_BIN_SDK slangc.exe
-  HINTS
-  ${VULKAN_SDK_PATH}/Bin
-  NO_DEFAULT_PATH)
-if(SLANGC_BIN_SDK)
-  set(SLANGC_BIN ${SLANGC_BIN_SDK} CACHE FILEPATH "Path to slangc.exe" FORCE)
-else()
-  find_program(SLANGC_BIN slangc.exe
-    HINTS
-    ${CMAKE_CURRENT_SOURCE_DIR}/bin/
-    REQUIRED)
+function(find_shader_tool VARIABLE)
+  find_program(REPOSITORY_TOOL
+    NAMES ${ARGN}
+    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/bin
+    NO_DEFAULT_PATH
+    NO_CACHE)
+  if(REPOSITORY_TOOL)
+    set(${VARIABLE} "${REPOSITORY_TOOL}" PARENT_SCOPE)
+    return()
+  endif()
+
+  if(DEFINED ${VARIABLE} AND EXISTS "${${VARIABLE}}")
+    set(${VARIABLE} "${${VARIABLE}}" PARENT_SCOPE)
+    return()
+  endif()
+
+  if(VULKAN_SDK_BIN)
+    find_program(SDK_TOOL
+      NAMES ${ARGN}
+      PATHS ${VULKAN_SDK_BIN}
+      NO_DEFAULT_PATH
+      NO_CACHE)
+    if(SDK_TOOL)
+      set(${VARIABLE} "${SDK_TOOL}" PARENT_SCOPE)
+      return()
+    endif()
+  endif()
+
+  find_program(PATH_TOOL NAMES ${ARGN} NO_CACHE)
+  set(${VARIABLE} "${PATH_TOOL}" PARENT_SCOPE)
+endfunction()
+
+find_shader_tool(SLANGC_BIN slangc.exe)
+if(NOT SLANGC_BIN)
+  message(FATAL_ERROR "slangc.exe was not found in bin, the Vulkan SDK, or PATH")
 endif()
 message("SLANGC_BIN: " ${SLANGC_BIN})
 set(SLANGC_FLAGS_LIST -O1 -g0 -entry main -Wno-30056 -Wno-15205)
-list(JOIN SLANGC_FLAGS_LIST " " SLANGC_FLAGS_STR)
-file(TO_CMAKE_PATH "${SLANGC_BIN}" SLANGC_BIN_CMAKE_PATH)
 
-find_program(GLSLANGVALIDATOR_BIN_SDK glslangValidator.exe
-  HINTS
-  ${VULKAN_SDK_PATH}/Bin
-  NO_DEFAULT_PATH)
-if(GLSLANGVALIDATOR_BIN_SDK)
-  set(GLSLANGVALIDATOR_BIN ${GLSLANGVALIDATOR_BIN_SDK} CACHE FILEPATH "Path to glslangValidator.exe" FORCE)
-else()
-  find_program(GLSLANGVALIDATOR_BIN glslangValidator.exe
-    HINTS
-    ${CMAKE_CURRENT_SOURCE_DIR}/bin/
-    REQUIRED)
+file(GLOB_RECURSE GLSL_SPIRV_SOURCES CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/*.gl.glsl
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/*.vk.glsl)
+if(GLSL_SPIRV_SOURCES)
+  find_shader_tool(GLSLANG_BIN glslang.exe glslangValidator.exe)
+  if(NOT GLSLANG_BIN)
+    message(FATAL_ERROR "glslang.exe or glslangValidator.exe is required by .gl.glsl or .vk.glsl shaders, but was not found in bin, the Vulkan SDK, or PATH")
+  endif()
+  message("GLSLANG_BIN: " ${GLSLANG_BIN})
 endif()
-message("GLSLANGVALIDATOR_BIN: " ${GLSLANGVALIDATOR_BIN})
-set(GLSLANGVALIDATOR_FLAGS_LIST -V --target-env vulkan1.3)
-list(JOIN GLSLANGVALIDATOR_FLAGS_LIST " " GLSLANGVALIDATOR_FLAGS_STR)
-file(TO_CMAKE_PATH "${GLSLANGVALIDATOR_BIN}" GLSLANGVALIDATOR_BIN_CMAKE_PATH)
 
 option(RENODX_ENABLE_SPIRV_DISASSEMBLY "Generate SPIR-V assembly listings with spirv-dis" ON)
 
-set(SPIRV_CROSS_FLAGS_LIST --version 450 --vulkan-semantics --no-es)
-list(JOIN SPIRV_CROSS_FLAGS_LIST " " SPIRV_CROSS_FLAGS_STR)
-
 if(RENODX_ENABLE_SPIRV_DISASSEMBLY)
-  find_program(SPIRV_DIS_BIN_SDK spirv-dis.exe
-    HINTS
-    ${VULKAN_SDK_PATH}/Bin
-    NO_DEFAULT_PATH)
-  if(SPIRV_DIS_BIN_SDK)
-    set(SPIRV_DIS_BIN ${SPIRV_DIS_BIN_SDK} CACHE FILEPATH "Path to spirv-dis.exe" FORCE)
-  else()
-    find_program(SPIRV_DIS_BIN spirv-dis.exe
-      HINTS
-      ${CMAKE_CURRENT_SOURCE_DIR}/bin/)
-  endif()
+  find_shader_tool(SPIRV_DIS_BIN spirv-dis.exe)
 else()
-  set(SPIRV_DIS_BIN "" CACHE FILEPATH "Path to spirv-dis.exe" FORCE)
+  set(SPIRV_DIS_BIN "")
 endif()
 message("SPIRV_DIS_BIN: " ${SPIRV_DIS_BIN})
-
-find_program(SPIRV_CROSS_BIN_SDK spirv-cross.exe
-  HINTS
-  ${VULKAN_SDK_PATH}/Bin
-  NO_DEFAULT_PATH)
-if(SPIRV_CROSS_BIN_SDK)
-  set(SPIRV_CROSS_BIN ${SPIRV_CROSS_BIN_SDK} CACHE FILEPATH "Path to spirv-cross.exe" FORCE)
-else()
-  find_program(SPIRV_CROSS_BIN spirv-cross.exe
-    HINTS
-    ${CMAKE_CURRENT_SOURCE_DIR}/bin/)
-endif()
-message("SPIRV_CROSS_BIN: " ${SPIRV_CROSS_BIN})
-
-file(TO_CMAKE_PATH "${SPIRV_CROSS_BIN}" SPIRV_CROSS_BIN_CMAKE_PATH)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
@@ -107,8 +95,6 @@ elseif(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 project(renodx VERSION 0.1.0 LANGUAGES CXX)
-
-find_package(Vulkan REQUIRED)
 
 include(CTest)
 enable_testing()
@@ -269,26 +255,6 @@ function(build_shader_target ADDON ADDON_PATH)
       endif()
     endif()
   endmacro()
-  macro(add_gl_vk_spirv_alias OUTPUT_STEM)
-    list(FIND SHADER_BINARIES ${EMBED_FOLDER}/${OUTPUT_STEM}_gl.spv SHADER_BINARY_INDEX)
-    if(SHADER_BINARY_INDEX EQUAL -1)
-      add_custom_command(
-        OUTPUT ${EMBED_FOLDER}/${OUTPUT_STEM}_gl.spv
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EMBED_FOLDER}/${OUTPUT_STEM}_vk.spv ${EMBED_FOLDER}/${OUTPUT_STEM}_gl.spv
-        DEPENDS ${EMBED_FOLDER}/${OUTPUT_STEM}_vk.spv
-      )
-      list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${OUTPUT_STEM}_gl.spv)
-    endif()
-    if(SPIRV_DIS_BIN)
-      add_custom_command(
-        OUTPUT ${EMBED_FOLDER}/${OUTPUT_STEM}_gl.spvasm
-        COMMAND "${SPIRV_DIS_BIN}" "${EMBED_FOLDER}/${OUTPUT_STEM}_gl.spv" -o "${EMBED_FOLDER}/${OUTPUT_STEM}_gl.spvasm"
-        DEPENDS ${EMBED_FOLDER}/${OUTPUT_STEM}_gl.spv
-      )
-      list(APPEND SHADER_AUX_OUTPUTS ${EMBED_FOLDER}/${OUTPUT_STEM}_gl.spvasm)
-    endif()
-  endmacro()
-
   file(GLOB_RECURSE SHADER_HLSL_SOURCES CONFIGURE_DEPENDS ${ADDON_PATH}/*.hlsl)
   foreach(FILE ${SHADER_HLSL_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
@@ -565,6 +531,8 @@ function(build_shader_target ADDON ADDON_PATH)
   endforeach()
 
   file(GLOB_RECURSE SHADER_GLSL_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.glsl)
+  unset(OPENGL_GLSL_OUTPUT_STEMS)
+  unset(VULKAN_GLSL_OUTPUT_STEMS)
   foreach(FILE ${SHADER_GLSL_FILES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
@@ -574,13 +542,16 @@ function(build_shader_target ADDON ADDON_PATH)
       continue()
     endif()
 
-    set(DUAL_SPV_GLSL OFF)
-    string(REGEX MATCH "(.*)\\.(frag|vert|comp)\\.spv\\.glsl$" _ ${FILENAME})
+    unset(SHADER_NAME)
+    unset(SHADER_TARGET)
+    unset(SHADER_HASH)
+    unset(GLSL_BACKEND)
+    unset(GLSL_OUTPUT_STEM)
+    string(REGEX MATCH "(.*)\\.(frag|vert|comp)\\.(gl|vk)\\.glsl$" _ ${FILENAME})
     set(SHADER_NAME ${CMAKE_MATCH_1})
     set(SHADER_TARGET ${CMAKE_MATCH_2})
-    if(SHADER_TARGET)
-      set(DUAL_SPV_GLSL ON)
-    else()
+    set(GLSL_BACKEND ${CMAKE_MATCH_3})
+    if(NOT SHADER_TARGET)
       string(REGEX MATCH "(.*)\\.(frag|vert|comp)\\.glsl$" _ ${FILENAME})
       set(SHADER_NAME ${CMAKE_MATCH_1})
       set(SHADER_TARGET ${CMAKE_MATCH_2})
@@ -590,10 +561,6 @@ function(build_shader_target ADDON ADDON_PATH)
       set(SHADER_HASH ${CMAKE_MATCH_1})
     endif()
 
-    #GLSL
-    set(SHADER_COMPILER ${GLSLANGVALIDATOR_BIN})
-    unset(SHADER_FLAGS)
-    set(SHADER_FLAGS ${GLSLANGVALIDATOR_FLAGS_LIST})
     unset(SHADER_STAGE)
     if(SHADER_TARGET STREQUAL "frag")
       set(SHADER_STAGE "frag")
@@ -602,31 +569,41 @@ function(build_shader_target ADDON ADDON_PATH)
     elseif(SHADER_TARGET STREQUAL "comp")
       set(SHADER_STAGE "comp")
     endif()
-    set(SHADER_DEPENDS ${FILE})
+    if(SHADER_HASH)
+      set(GLSL_OUTPUT_STEM ${SHADER_HASH})
+    else()
+      set(GLSL_OUTPUT_STEM ${SHADER_NAME})
+    endif()
 
-    if(SHADER_STAGE AND SHADER_HASH)
-      set(SPIRV_COMPILE_COMMAND
-        ${SHADER_COMPILER} ${SHADER_FLAGS} -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${SHADER_HASH}.spv ${FILE})
-      if(DUAL_SPV_GLSL)
-        set(SPIRV_COMPILE_COMMAND
-          ${SHADER_COMPILER} ${SHADER_FLAGS} -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${SHADER_HASH}_vk.spv ${FILE})
-        set(SHADER_DEPENDS ${FILE})
-        add_stage_spirv_shader(${SHADER_HASH}_vk)
-        add_gl_vk_spirv_alias(${SHADER_HASH})
-      else()
-        add_stage_spirv_shader(${SHADER_HASH})
+    if(NOT SHADER_STAGE OR NOT GLSL_OUTPUT_STEM)
+      continue()
+    endif()
+
+    if(GLSL_BACKEND STREQUAL "vk")
+      list(FIND VULKAN_GLSL_OUTPUT_STEMS ${GLSL_OUTPUT_STEM} GLSL_OUTPUT_INDEX)
+      if(NOT GLSL_OUTPUT_INDEX EQUAL -1)
+        message(FATAL_ERROR "Multiple Vulkan GLSL implementations found for ${GLSL_OUTPUT_STEM} in ${ADDON}")
       endif()
-    elseif(SHADER_STAGE AND SHADER_NAME)
+      list(APPEND VULKAN_GLSL_OUTPUT_STEMS ${GLSL_OUTPUT_STEM})
+      set(SHADER_DEPENDS ${FILE})
       set(SPIRV_COMPILE_COMMAND
-        ${SHADER_COMPILER} ${SHADER_FLAGS} -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${SHADER_NAME}.spv ${FILE})
-      if(DUAL_SPV_GLSL)
-        set(SPIRV_COMPILE_COMMAND
-          ${SHADER_COMPILER} ${SHADER_FLAGS} -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${SHADER_NAME}_vk.spv ${FILE})
+        ${GLSLANG_BIN} -V --target-env vulkan1.3 -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}_vk.spv ${FILE})
+      add_stage_spirv_shader(${GLSL_OUTPUT_STEM}_vk)
+    else()
+      list(FIND OPENGL_GLSL_OUTPUT_STEMS ${GLSL_OUTPUT_STEM} GLSL_OUTPUT_INDEX)
+      if(NOT GLSL_OUTPUT_INDEX EQUAL -1)
+        message(FATAL_ERROR "Multiple OpenGL GLSL implementations found for ${GLSL_OUTPUT_STEM} in ${ADDON}")
+      endif()
+      list(APPEND OPENGL_GLSL_OUTPUT_STEMS ${GLSL_OUTPUT_STEM})
+
+      if(GLSL_BACKEND STREQUAL "gl")
         set(SHADER_DEPENDS ${FILE})
-        add_stage_spirv_shader(${SHADER_NAME}_vk)
-        add_gl_vk_spirv_alias(${SHADER_NAME})
+        set(SPIRV_COMPILE_COMMAND
+          ${GLSLANG_BIN} -G -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}_gl.spv ${FILE})
+        add_stage_spirv_shader(${GLSL_OUTPUT_STEM}_gl)
       else()
-        add_stage_spirv_shader(${SHADER_NAME})
+        configure_file(${FILE} ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}_gl.glsl COPYONLY)
+        list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}_gl.glsl)
       endif()
     endif()
   endforeach()
@@ -712,11 +689,23 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
 
     set(GL_VK_INTERSECT)
+    set(GL_ONLY_SHADERS)
     foreach(FILENAME ${GL_SHADERS})
       string(REGEX REPLACE "_gl$" "" BASE_NAME ${FILENAME})
       list(FIND VK_SHADERS "${BASE_NAME}_vk" IDX)
       if(NOT IDX EQUAL -1)
         list(APPEND GL_VK_INTERSECT ${BASE_NAME})
+      else()
+        list(APPEND GL_ONLY_SHADERS ${BASE_NAME})
+      endif()
+    endforeach()
+
+    set(VK_ONLY_SHADERS)
+    foreach(FILENAME ${VK_SHADERS})
+      string(REGEX REPLACE "_vk$" "" BASE_NAME ${FILENAME})
+      list(FIND GL_SHADERS "${BASE_NAME}_gl" IDX)
+      if(IDX EQUAL -1)
+        list(APPEND VK_ONLY_SHADERS ${BASE_NAME})
       endif()
     endforeach()
 
@@ -734,7 +723,35 @@ function(build_shader_target ADDON ADDON_PATH)
       endforeach()
     endif()
 
-    if(ANY_VERSION_SHADERS_LENGTH GREATER 0 OR DX11_DX12_INTERSECT_LENGTH GREATER 0 OR GL_VK_INTERSECT_LENGTH GREATER 0)
+    list(LENGTH GL_ONLY_SHADERS GL_ONLY_SHADERS_LENGTH)
+    if(GL_ONLY_SHADERS_LENGTH GREATER 0)
+      string(APPEND SHADERS_H_OUTPUT "#define __CUSTOM_OPENGL_SHADERS \\\n")
+      math(EXPR LAST_INDEX "${GL_ONLY_SHADERS_LENGTH} - 1")
+      foreach(INDEX RANGE 0 ${LAST_INDEX})
+        list(GET GL_ONLY_SHADERS ${INDEX} BASE_NAME)
+        if(INDEX EQUAL LAST_INDEX)
+          string(APPEND SHADERS_H_OUTPUT "  CustomOpenGLShader(${BASE_NAME})\n")
+        else()
+          string(APPEND SHADERS_H_OUTPUT "  CustomOpenGLShader(${BASE_NAME}), \\\n")
+        endif()
+      endforeach()
+    endif()
+
+    list(LENGTH VK_ONLY_SHADERS VK_ONLY_SHADERS_LENGTH)
+    if(VK_ONLY_SHADERS_LENGTH GREATER 0)
+      string(APPEND SHADERS_H_OUTPUT "#define __CUSTOM_VULKAN_SHADERS \\\n")
+      math(EXPR LAST_INDEX "${VK_ONLY_SHADERS_LENGTH} - 1")
+      foreach(INDEX RANGE 0 ${LAST_INDEX})
+        list(GET VK_ONLY_SHADERS ${INDEX} BASE_NAME)
+        if(INDEX EQUAL LAST_INDEX)
+          string(APPEND SHADERS_H_OUTPUT "  CustomVulkanShader(${BASE_NAME})\n")
+        else()
+          string(APPEND SHADERS_H_OUTPUT "  CustomVulkanShader(${BASE_NAME}), \\\n")
+        endif()
+      endforeach()
+    endif()
+
+    if(ANY_VERSION_SHADERS_LENGTH GREATER 0 OR DX11_DX12_INTERSECT_LENGTH GREATER 0 OR GL_VK_INTERSECT_LENGTH GREATER 0 OR GL_ONLY_SHADERS_LENGTH GREATER 0 OR VK_ONLY_SHADERS_LENGTH GREATER 0)
       string(APPEND SHADERS_H_OUTPUT "#define __ALL_CUSTOM_SHADERS \\\n")
       set(ALL_CUSTOM_SHADER_GROUPS)
       if(ANY_VERSION_SHADERS_LENGTH GREATER 0)
@@ -745,6 +762,12 @@ function(build_shader_target ADDON ADDON_PATH)
       endif()
       if(GL_VK_INTERSECT_LENGTH GREATER 0)
         list(APPEND ALL_CUSTOM_SHADER_GROUPS "__CUSTOM_OPENGL_VULKAN_SHADERS")
+      endif()
+      if(GL_ONLY_SHADERS_LENGTH GREATER 0)
+        list(APPEND ALL_CUSTOM_SHADER_GROUPS "__CUSTOM_OPENGL_SHADERS")
+      endif()
+      if(VK_ONLY_SHADERS_LENGTH GREATER 0)
+        list(APPEND ALL_CUSTOM_SHADER_GROUPS "__CUSTOM_VULKAN_SHADERS")
       endif()
       list(LENGTH ALL_CUSTOM_SHADER_GROUPS ALL_CUSTOM_SHADER_GROUPS_LENGTH)
       math(EXPR ALL_CUSTOM_SHADER_GROUPS_LAST_INDEX "${ALL_CUSTOM_SHADER_GROUPS_LENGTH} - 1")
@@ -825,7 +848,6 @@ foreach(FILE ${ADDON_FILES})
   add_dependencies(${ADDON} ${ADDON}-shaders)
   add_dependencies(${ADDON} detours)
   target_link_libraries(${ADDON} PRIVATE detours)
-  target_link_libraries(${ADDON} PRIVATE Vulkan::Vulkan)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/Detours/include)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/json/include)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/frozen/include)
