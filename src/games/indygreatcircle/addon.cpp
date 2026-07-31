@@ -19,12 +19,11 @@
 namespace {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
-  // CustomVulkanShader(0x94CF25A1),  // post process + ACEScc LUT + ACES ToneMap
+    // CustomVulkanShader(0x94CF25A1),  // post process + ACEScc LUT + ACES ToneMap
     // CustomShaderEntry(0x0FB3C8A5),  // post process + ACES ToneMap
 
-
-  CustomVulkanShader(0xF99C5E4E),  // ACES ToneMap LUTbuilder
-  CustomVulkanShader(0x1ECA9E9E),  // Composite Scene + UI
+    CustomVulkanShader(0xF99C5E4E),  // ACES ToneMap LUTbuilder
+    CustomVulkanShader(0x1ECA9E9E),  // Composite Scene + UI
 };
 
 namespace shader_toggle {
