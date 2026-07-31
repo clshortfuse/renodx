@@ -60,7 +60,22 @@ static const float3x3 IPT_SCALE_MAT = float3x3(
     SCALE_FACTOR, SCALE_FACTOR, SCALE_FACTOR,
     1.0f, 1.0f, 1.0f);
 
+#ifdef __SLANG__
+[__readNone]
+float3x3 BuildPLMSToICtCpMatrix(
+    float3x3 rotation_matrix,
+    float3x3 optimized_matrix,
+    float3x3 scale_matrix) {
+  return mul(rotation_matrix, optimized_matrix) * scale_matrix;
+}
+
+static const float3x3 PLMS_TO_ICTCP_MAT = BuildPLMSToICtCpMatrix(
+    IPT_ROTATION_MAT,
+    PLMS_TO_IPT_OPTIMIZED_MAT,
+    IPT_SCALE_MAT);
+#else
 static const float3x3 PLMS_TO_ICTCP_MAT = mul(IPT_ROTATION_MAT, PLMS_TO_IPT_OPTIMIZED_MAT) * IPT_SCALE_MAT;
+#endif
 
 namespace from {
 float3 BT709(float3 bt709_color, float scaling = 100.f) {
