@@ -1,6 +1,6 @@
 #include "../shared.h"
 
-// Faithful Frostbite scene tonemap+grade pass (VS 0xCD03DB44), shared by all twelve perms.
+// Frostbite scene tonemap+grade pass (VS 0xCD03DB44), shared by all twelve perms.
 // Builds linear scene -> *0.01 -> ST.2084 PQ -> 33^3 LUT (PQ space), as vanilla.
 // Twelve perms = the three axes below and nothing else: unlike the present and loading families, this
 // pass writes the graded buffer rather than the display output, so it has no output-gamut variants and
@@ -11,7 +11,6 @@
 //   MEA_TONEMAP_DISTORTION  0 = base UV untouched; 1 = radial lens warp on cb0[4] applied to the base UV
 //   MEA_TONEMAP_T4          t4 role: 0 = unused; 1 = additive film grain (cb0[1]); 2 = RGBA overlay
 //                           composited over the graded output (scanner/screen effects)
-// Vanilla+ user controls (neutral at vanilla): fxBloom, colorGradeExposure, fxVignette, fxChromaticAberration.
 
 #ifndef MEA_TONEMAP_CA
 #error "Define MEA_TONEMAP_CA (0 = distortion-offset warp, 1 = chromatic aberration) before including tonemap_grade_common.hlsli."

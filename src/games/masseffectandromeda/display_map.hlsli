@@ -19,46 +19,47 @@ float3 ApplyEotfEmulation(float3 color) {
 // Per-present tone-map params, shared by the present and loading tails. Vanilla pins diffuse/UI to
 // 100 nits and disables EOTF; Vanilla+ follows the Game/UI Brightness sliders and the EOTF selector.
 struct PresentParams {
-  bool full;
   float paperWhite;
   float uiNits;
   float uiGamma;  // 0 = sRGB decode (Vanilla / EOTF off), else re-interpret the UI with this gamma
 };
 PresentParams GetPresentParams() {
+  const bool full = IsVanillaPlus();
   PresentParams p;
-  p.full = IsVanillaPlus();
-  p.paperWhite = p.full ? max(injectedData.toneMapGameNits, 1.f) : 100.f;
-  p.uiNits = p.full ? max(injectedData.toneMapUINits, 1.f) : 100.f;
-  p.uiGamma = p.full ? EotfGamma() : 0.f;
+  p.paperWhite = full ? max(injectedData.toneMapGameNits, 1.f) : 100.f;
+  p.uiNits = full ? max(injectedData.toneMapUINits, 1.f) : 100.f;
+  p.uiGamma = full ? EotfGamma() : 0.f;
   return p;
 }
 
 // Final HDR10 output, shared by the present and loading tails: BT.709 nits -> BT.2020 -> ST.2084 PQ.
-// Caller supplies the alpha.
-// The game runtime-selects an output gamut per display (BT.2020 / DCI-P3 / no-matrix — separate
-// hashes); every variant lands here on the forced HDR10/BT.2020 swapchain, which is why the
-// per-gamut wrappers share their row bodies unchanged.
+// Caller supplies the alpha. Vanilla+ clips per channel at Peak Brightness: the display maps bound
+// luminance or the LMS cones, not the BT.2020 channels, and the input arrives post-composite.
 float3 FinalizeToPQ(float3 scene_nits) {
-  return renodx::color::pq::EncodeSafe(renodx::color::bt2020::from::BT709(scene_nits), 1.f);
+  float3 bt2020_nits = renodx::color::bt2020::from::BT709(scene_nits);
+  if (IsVanillaPlus()) {
+    bt2020_nits = min(bt2020_nits, injectedData.toneMapPeakNits);
+  }
+  return renodx::color::pq::EncodeSafe(bt2020_nits, 1.f);
 }
 
-// UI/video over-scene alpha composite
-void CompositeUI(inout float3 scene_nits, inout float scene_a, float ui_alpha_src, float4 cb2, float3 ui_term_nits) {
-  const float t = max(0.f, 1.f - ui_alpha_src * cb2.z);
+// UI/video over-scene alpha composite.
+void CompositeUI(inout float3 scene_nits, inout float scene_a, float ui_alpha_src, float ui_alpha_factor, float3 ui_term_nits) {
+  const float t = max(0.f, 1.f - ui_alpha_src * ui_alpha_factor);
   const float uiAlpha = 1.f - t * t;
   const float sceneAlpha = 1.f - uiAlpha;
   scene_nits = scene_nits * sceneAlpha + ui_term_nits;
   scene_a = scene_a * sceneAlpha + uiAlpha;
 }
 
-float3 ApplyVanillaPlus(float3 color, float exposure, float paperWhite) {
+float3 ApplyVanillaPlus(float3 color, float exposure) {
+  const float paperWhite = GetPresentParams().paperWhite;
   const bool satViaPurity = injectedData.toneMapType == TONE_MAP_VANILLA_PLUS_TEST24;
 
-  // Highlight roll-off pins the peak to Peak Brightness so paper white only moves diffuse/mids
-  // (not the peak). Requires the in-game Peak Brightness at MAX. peak = display HDR headroom ratio.
+  // Display HDR headroom ratio: the roll-off asymptote in paper-white-relative units, so paper white
+  // moves diffuse and mids without moving the peak.
   const float peak = max(injectedData.toneMapPeakNits / paperWhite, 1.f + 1e-3f);
 
-  // User color grading
   renodx::color::grade::Config cg = renodx::color::grade::config::Create(
       exposure,
       injectedData.colorGradeHighlights,
@@ -98,14 +99,7 @@ float3 ApplyVanillaPlus(float3 color, float exposure, float paperWhite) {
     return ApplyEotfEmulation(t24);
   }
 
-  // SDR EOTF emulation (selected gamma).
   color = ApplyEotfEmulation(color);
-
-  if (injectedData.toneMapType == TONE_MAP_VANILLA_PLUS_NEUTWO) {
-    color *= renodx::tonemap::neutwo::ComputeMaxChannelScale(
-        renodx::color::bt2020::from::BT709(color), peak);
-    return color;
-  }
 
   // Vanilla+ (faithful): luminance-preserving log2 roll-off (keeps hue) + optional Hue Shift.
   const float rolloffStart = min(1.f, peak * 0.5f);

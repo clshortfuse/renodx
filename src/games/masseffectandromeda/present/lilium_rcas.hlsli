@@ -11,7 +11,7 @@
 // silently disables sharpening). Caller gates to Vanilla+ AND the swapchain present.
 
 #define MEA_RCAS_LIMIT 0.1875f  // FSR_RCAS_LIMIT: limit of natural-looking sharpening
-#define MEA_RCAS_EPS 1e-6f      // denominator guard (black / flat neighborhoods -> 0 * rcp(0) = NaN)
+#define MEA_RCAS_EPS   1e-6f    // denominator guard (black / flat neighborhoods -> 0 * rcp(0) = NaN)
 
 // One RCAS tap: scene sample -> scene_scale -> shared LinearizeScene -> BT.709 luma (same path as
 // the present center, so they can't drift).

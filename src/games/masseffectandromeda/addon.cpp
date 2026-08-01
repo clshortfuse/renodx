@@ -7,8 +7,6 @@
 
 #define DEBUG_LEVEL_0
 
-#include <random>
-
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
@@ -16,8 +14,8 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -25,92 +23,33 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-// Settings-panel mode: 0 = Simple, 1 = Advanced
-float current_settings_mode = 0;
+float current_settings_mode = 0;  // 0 = Simple, 1 = Advanced.
 
 bool IsVanillaPlus() { return shader_injection.toneMapType != TONE_MAP_VANILLA; }
 
 bool IsAdvanced() { return current_settings_mode >= 1.f; }
 
-// RCAS swapchain gate: flag the swapchain draw so in-shader RCAS runs once on the visible frame
-// (each HDR present also draws an offscreen sibling). Set before the draw; reset in OnPresent.
 bool SetSwapchainPresentFlag(reshade::api::command_list* cmd_list) {
   shader_injection.fxSwapchainPresent = renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list) ? 1.f : 0.f;
   return true;
 }
 
+bool SetVideoActiveFlag(reshade::api::command_list*) {
+  shader_injection.fxVideoActive = 1.f;
+  return true;
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
-    // Scene tonemap + grade (bloom / vignette / exposure). Twelve permutations on three axes —
-    // {warp | chromatic aberration} x {radial lens distortion} x {t4: none | grain | overlay} —
-    // all share one core (tonemap/).
-    CustomShaderEntry(0xB6A91712),  // warp / no grain
-    CustomShaderEntry(0x376C116B),  // warp / grain
-    CustomShaderEntry(0xEB91AB31),  // CA   / no grain
-    CustomShaderEntry(0xE3D57A10),  // CA   / grain
-    CustomShaderEntry(0xA42A680A),  // warp / overlay (scanner/screen effects)
-    CustomShaderEntry(0x62D3752D),  // CA   / overlay
-    CustomShaderEntry(0x71562FF9),  // warp / distortion / no t4
-    CustomShaderEntry(0x339025EE),  // CA   / distortion / no t4
-    CustomShaderEntry(0x66BE1F36),  // warp / distortion / grain
-    CustomShaderEntry(0x18AC2B1A),  // CA   / distortion / grain
-    CustomShaderEntry(0xF8A12BF4),  // warp / distortion / overlay
-    CustomShaderEntry(0x18F31608),  // CA   / distortion / overlay
-    // HDR presents (present/). Five rows — main 1:1, then a scene-fetch cost ladder of 1 / 4 / 4 / 16
-    // taps: Post Process = Low (single tap), Y-only cubic, B-spline, 16-tap cubic — each with a 32^3
-    // calibration-LUT twin (lut3d) and in three runtime gamut variants (BT.2020 / DCI-P3 /
-    // no-matrix, display-dependent); every variant normalizes to the forced HDR10/BT.2020 output.
-    // Only the main row carries the RCAS-gate callback: every scaled row passes isScaled = true,
-    // which hard-skips RCAS, so the flag is never read there.
-    // Not hooked: the same rows' Dolby Vision siblings (which quantize the PQ output and bit-pack it
-    // into 8-bit channels — replacing those would corrupt the DV tunnel format) and their SDR/scRGB
-    // siblings.
-    CustomShaderEntryCallback(0xF5B0DBFA, SetSwapchainPresentFlag),  // main (BT.2020), RCAS gate
+    // RCAS gate, main 1:1 present rows.
+    CustomShaderEntryCallback(0xF5B0DBFA, SetSwapchainPresentFlag),  // main (BT.2020)
     CustomShaderEntryCallback(0xBE69B105, SetSwapchainPresentFlag),  // main lut3d (BT.2020)
     CustomShaderEntryCallback(0x9FCE7944, SetSwapchainPresentFlag),  // main (P3)
     CustomShaderEntryCallback(0x3196D1D2, SetSwapchainPresentFlag),  // main lut3d (P3)
     CustomShaderEntryCallback(0xD0200425, SetSwapchainPresentFlag),  // main (no-matrix)
     CustomShaderEntryCallback(0xFED81CFB, SetSwapchainPresentFlag),  // main lut3d (no-matrix)
-    CustomShaderEntry(0x8498DBD5),                                   // PP-Low (BT.2020)
-    CustomShaderEntry(0x20EE9B0F),                                   // PP-Low lut3d (BT.2020)
-    CustomShaderEntry(0xA550FC99),                                   // PP-Low (P3)
-    CustomShaderEntry(0xA888DCF8),                                   // PP-Low lut3d (P3)
-    CustomShaderEntry(0x950D3AE4),                                   // PP-Low (no-matrix)
-    CustomShaderEntry(0x6BDFE71C),                                   // PP-Low lut3d (no-matrix)
-    CustomShaderEntry(0xAFFFA4AB),                                   // upscale (BT.2020)
-    CustomShaderEntry(0xA1B754F2),                                   // upscale lut3d (BT.2020)
-    CustomShaderEntry(0x6A9767E9),                                   // upscale (P3)
-    CustomShaderEntry(0x0BF0C1CA),                                   // upscale lut3d (P3)
-    CustomShaderEntry(0x8FD42D7C),                                   // upscale (no-matrix)
-    CustomShaderEntry(0x22179331),                                   // upscale lut3d (no-matrix)
-    CustomShaderEntry(0xEE044AAF),                                   // Y-cubic upscale (BT.2020)
-    CustomShaderEntry(0x6F7FC946),                                   // Y-cubic upscale lut3d (BT.2020)
-    CustomShaderEntry(0xA04BFC23),                                   // Y-cubic upscale (P3)
-    CustomShaderEntry(0x9E9044E7),                                   // Y-cubic upscale lut3d (P3)
-    CustomShaderEntry(0xE1CF4FA8),                                   // Y-cubic upscale (no-matrix)
-    CustomShaderEntry(0x66868010),                                   // Y-cubic upscale lut3d (no-matrix)
-    CustomShaderEntry(0x4BCF53E3),                                   // B-spline upscale (BT.2020)
-    CustomShaderEntry(0xACA466A8),                                   // B-spline upscale lut3d (BT.2020)
-    CustomShaderEntry(0x0BF80A15),                                   // B-spline upscale (P3)
-    CustomShaderEntry(0x7D79A746),                                   // B-spline upscale lut3d (P3)
-    CustomShaderEntry(0xD30EB54B),                                   // B-spline upscale (no-matrix)
-    CustomShaderEntry(0x9201B072),                                   // B-spline upscale lut3d (no-matrix)
-    // Loading-screen / video presents (loading/). Rows: 1:1 (scene sampler s0), 1:1 (s1),
-    // upscaling — same three gamut variants each.
-    CustomShaderEntry(0xF5B7A93D),  // 1:1 s0 (BT.2020)
-    CustomShaderEntry(0xB78EE6A9),  // 1:1 s0 (P3)
-    CustomShaderEntry(0xA4E53513),  // 1:1 s0 (no-matrix)
-    CustomShaderEntry(0x182C8867),  // 1:1 s1 (BT.2020)
-    CustomShaderEntry(0x70888904),  // 1:1 s1 (P3)
-    CustomShaderEntry(0xBF998050),  // 1:1 s1 (no-matrix)
-    CustomShaderEntry(0x667C56AF),  // upscale (BT.2020)
-    CustomShaderEntry(0x48E0CE55),  // upscale (P3)
-    CustomShaderEntry(0x4ACE2324),  // upscale (no-matrix)
-    // FMV YUV->RGB decode: flags fxVideoActive so the present treats the layer as video, not UI.
-    CustomShaderEntryCallback(0x7ED07F45, [](reshade::api::command_list* cmd_list) {
-      shader_injection.fxVideoActive = 1.f;
-      return true;
-    }),
-};
+    // FMV YUV->RGB decode. No replacement code; the entry only raises fxVideoActive.
+    {0x7ED07F45, {.crc32 = 0x7ED07F45, .on_draw = SetVideoActiveFlag}},
+    __ALL_CUSTOM_SHADERS};
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -132,7 +71,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "Vanilla+", "Vanilla+ (Neutwo)", "Vanilla+ (PsychoV-24)"},
+        .labels = {"Vanilla", "Vanilla+", "PsychoV-24"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -275,7 +214,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Shifts highlight hue toward the per-channel (SDR-display) look. 0 = vanilla.",
         .max = 100.f,
-        // Vanilla+ (faithful) only: the Neutwo tone mapper is hue-stable, so Hue Shift is a no-op there.
         .is_enabled = []() { return shader_injection.toneMapType == TONE_MAP_VANILLA_PLUS; },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = IsAdvanced,
@@ -337,7 +275,6 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Adds RCAS, as implemented by Lilium for HDR. Disable other sharpening (DLAA / ReShade) to avoid double-sharpening.",
         .max = 100.f,
         .is_enabled = IsVanillaPlus,
-        // Deliberate linear map: slider% goes straight to CUSTOM_SHARPNESS, not an exp2 curve.
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = IsAdvanced,
     },
@@ -458,29 +395,10 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
+  renodx::utils::settings::ResetSettings();
   renodx::utils::settings::UpdateSettings({
-      {"ToneMapType", 0.f},
-      {"ToneMapPeakNits", 1000.f},
-      {"ToneMapGameNits", 203.f},
-      {"ToneMapUINits", 203.f},
-      {"ColorGradeExposure", 1.f},
-      {"ColorGradeHighlights", 50.f},
-      {"ColorGradeShadows", 50.f},
-      {"ColorGradeContrast", 50.f},
-      {"ColorGradeFlare", 0.f},
-      {"ColorGradeSaturation", 50.f},
-      {"ColorGradeHighlightSaturation", 50.f},
-      {"ColorGradeHueShift", 0.f},
-      {"ColorGradeLUTSampling", 0.f},
-      {"GammaCorrection", 1.f},
-      {"FxBloom", 50.f},
-      {"FxVignette", 50.f},
-      {"FxChromaticAberration", 100.f},
-      {"FxSharpness", 0.f},
-      {"FxFilmGrainType", 0.f},
-      {"FxFilmGrain", 50.f},
-      {"FxHDRVideos", 1.f},
-      {"FxVideoNits", 500.f},
+      {"ToneMapType", 0.f},            // Vanilla: the game's own bytecode runs.
+      {"ColorGradeLUTSampling", 0.f},  // Trilinear: the vanilla sampling mode.
   });
 }
 
@@ -498,7 +416,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
 }
 
-// Feed a fresh per-frame random seed for the perceptual film grain.
 void OnPresent(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
@@ -506,15 +423,8 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  static std::mt19937 random_generator(std::random_device{}());
-  static const auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-  shader_injection.customRandom = static_cast<float>(random_generator() - std::mt19937::min()) / random_range;
-
-  // Reset the FMV flag each frame; the 0x7ED07F45 callback re-sets it when video decodes.
-  shader_injection.fxVideoActive = 0.f;
-  // RCAS gate safe default: set per present draw by SetSwapchainPresentFlag; reset here so a present
-  // without it falls back to 0 (RCAS off), not a stale 1.
-  shader_injection.fxSwapchainPresent = 0.f;
+  shader_injection.fxVideoActive = 0.f;       // Re-set by the 0x7ED07F45 callback when video decodes.
+  shader_injection.fxSwapchainPresent = 0.f;  // Re-set by SetSwapchainPresentFlag per present draw.
 }
 
 bool initialized = false;
@@ -563,6 +473,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
+  renodx::utils::random::Use(fdw_reason, {&shader_injection.customRandom,
+                                          &shader_injection.customRandom2,
+                                          &shader_injection.customRandom3});
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);

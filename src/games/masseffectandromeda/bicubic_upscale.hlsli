@@ -21,8 +21,8 @@ float4 BicubicWeights(float t) {
 }
 
 float3 SampleSceneBicubic(Texture2D<float4> tex, SamplerState smp, float2 uv, float4 cb0_0) {
-  const float2 res = cb0_0.xy;     // source resolution (px)
-  const float2 texel = cb0_0.zw;   // source texel size (1/res)
+  const float2 res = cb0_0.xy;    // source resolution (px)
+  const float2 texel = cb0_0.zw;  // source texel size (1/res)
 
   // Sub-texel fraction at the resolved sample (texel-centered).
   const float2 f = frac(uv * res - 0.5f);
@@ -36,12 +36,11 @@ float3 SampleSceneBicubic(Texture2D<float4> tex, SamplerState smp, float2 uv, fl
   const float4 wy = BicubicWeights(f.y);
 
   float3 result = 0.f;
-  [unroll]
-  for (int j = 0; j < 4; ++j) {
+  [unroll] for (int j = 0; j < 4; ++j) {
     float3 row = wx.x * tex.SampleLevel(smp, float2(xs.x, ys[j]), 0.f).rgb
-               + wx.y * tex.SampleLevel(smp, float2(xs.y, ys[j]), 0.f).rgb
-               + wx.z * tex.SampleLevel(smp, float2(xs.z, ys[j]), 0.f).rgb
-               + wx.w * tex.SampleLevel(smp, float2(xs.w, ys[j]), 0.f).rgb;
+                 + wx.y * tex.SampleLevel(smp, float2(xs.y, ys[j]), 0.f).rgb
+                 + wx.z * tex.SampleLevel(smp, float2(xs.z, ys[j]), 0.f).rgb
+                 + wx.w * tex.SampleLevel(smp, float2(xs.w, ys[j]), 0.f).rgb;
     result += wy[j] * row;
   }
   return max(0.f, result);
@@ -58,9 +57,9 @@ float3 SampleSceneCubicY(Texture2D<float4> tex, SamplerState smp, float2 uv, flo
   const float4 w = BicubicWeights(f);
 
   float3 result = w.x * tex.SampleLevel(smp, float2(uv.x, base), 0.f).rgb
-                + w.y * tex.SampleLevel(smp, float2(uv.x, base + texel_y), 0.f).rgb
-                + w.z * tex.SampleLevel(smp, float2(uv.x, base + 2.f * texel_y), 0.f).rgb
-                + w.w * tex.SampleLevel(smp, float2(uv.x, base + 3.f * texel_y), 0.f).rgb;
+                  + w.y * tex.SampleLevel(smp, float2(uv.x, base + texel_y), 0.f).rgb
+                  + w.z * tex.SampleLevel(smp, float2(uv.x, base + 2.f * texel_y), 0.f).rgb
+                  + w.w * tex.SampleLevel(smp, float2(uv.x, base + 3.f * texel_y), 0.f).rgb;
   return max(0.f, result);
 }
 
