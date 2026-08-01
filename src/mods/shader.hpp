@@ -167,7 +167,6 @@ static bool force_pipeline_cloning = false;
 static bool allow_multiple_push_constants = false;
 static bool push_injections_on_present = false;
 static bool revert_constant_buffer_ranges = false;
-// static bool force_align_constant_buffers_to_16 = false; // Might need it in the future
 static float* resource_tag_float = nullptr;
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
@@ -261,79 +260,82 @@ static void OnInitDevice(reshade::api::device* device) {
         }
       }
     }
-  } else {
-    std::vector<reshade::api::descriptor_range> ranges;
-    for (const auto& [shader_hash, custom_shader] : custom_shaders) {
-      (void)shader_hash;
-      for (const auto& view_binding : custom_shader.views) {
-        assert(view_binding.get_view != nullptr);
+    data->use_pipeline_layout_cloning = use_pipeline_layout_cloning;
+    data->expected_constant_buffer_space = expected_constant_buffer_space;
+    return;
+  }
 
-        auto range_it = std::ranges::find_if(
-            ranges,
-            [&](const reshade::api::descriptor_range& range) {
-              return range.type == view_binding.type
-                     && range.dx_register_space == view_binding.space;
-            });
+  std::vector<reshade::api::descriptor_range> ranges;
+  for (const auto& [shader_hash, custom_shader] : custom_shaders) {
+    (void)shader_hash;
+    for (const auto& view_binding : custom_shader.views) {
+      assert(view_binding.get_view != nullptr);
 
-        if (range_it == ranges.end()) {
-          ranges.push_back({
-              .binding = 0u,
-              .dx_register_index = view_binding.slot,
-              .dx_register_space = view_binding.space,
-              .count = 1u,
-              .visibility = reshade::api::shader_stage::all,
-              .array_size = 1u,
-              .type = view_binding.type,
+      auto range_it = std::ranges::find_if(
+          ranges,
+          [&](const reshade::api::descriptor_range& range) {
+            return range.type == view_binding.type
+                   && range.dx_register_space == view_binding.space;
           });
-          continue;
-        }
 
-        const uint32_t min_slot = std::min(range_it->dx_register_index, view_binding.slot);
-        const uint32_t max_slot = std::max(
-            range_it->dx_register_index + range_it->count - 1u,
-            view_binding.slot);
-        range_it->dx_register_index = min_slot;
-        range_it->count = max_slot - min_slot + 1u;
-      }
-    }
-
-    std::ranges::sort(
-        ranges,
-        [](const reshade::api::descriptor_range& lhs, const reshade::api::descriptor_range& rhs) {
-          if (lhs.type != rhs.type) return lhs.type < rhs.type;
-          if (lhs.dx_register_space != rhs.dx_register_space) return lhs.dx_register_space < rhs.dx_register_space;
-          return lhs.dx_register_index < rhs.dx_register_index;
+      if (range_it == ranges.end()) {
+        ranges.push_back({
+            .binding = 0u,
+            .dx_register_index = view_binding.slot,
+            .dx_register_space = view_binding.space,
+            .count = 1u,
+            .visibility = reshade::api::shader_stage::all,
+            .array_size = 1u,
+            .type = view_binding.type,
         });
-
-    uint32_t binding = 0u;
-    for (auto& range : ranges) {
-      range.binding = binding;
-      binding += range.count;  // Vulkan first range gets binding 0, second one gets binding 2
-    }
-
-    if (!ranges.empty()) {
-      if (ranges.size() > 1u) {
-        reshade::api::pipeline_layout_param descriptor_param = {};
-        descriptor_param.type = reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges;
-        descriptor_param.descriptor_table.count = static_cast<uint32_t>(ranges.size());
-        descriptor_param.descriptor_table.ranges = ranges.data();
-        data->injected_descriptor_range_groups.resize(1);
-        data->injected_descriptor_range_groups[0] = ranges;
-        data->injected_descriptor_params.emplace_back(descriptor_param);
-      } else {
-        data->injected_descriptor_range_groups.resize(1);
-        data->injected_descriptor_range_groups[0] = ranges;
-        data->injected_descriptor_params.emplace_back(reshade::api::pipeline_layout_param(
-            reshade::api::descriptor_range{
-                .binding = 0,
-                .dx_register_index = ranges.front().dx_register_index,
-                .dx_register_space = ranges.front().dx_register_space,
-                .count = binding,
-                .visibility = reshade::api::shader_stage::all,
-                .array_size = 1,
-                .type = ranges.front().type,
-            }));
+        continue;
       }
+
+      const uint32_t min_slot = std::min(range_it->dx_register_index, view_binding.slot);
+      const uint32_t max_slot = std::max(
+          range_it->dx_register_index + range_it->count - 1u,
+          view_binding.slot);
+      range_it->dx_register_index = min_slot;
+      range_it->count = max_slot - min_slot + 1u;
+    }
+  }
+
+  std::ranges::sort(
+      ranges,
+      [](const reshade::api::descriptor_range& lhs, const reshade::api::descriptor_range& rhs) {
+        if (lhs.type != rhs.type) return lhs.type < rhs.type;
+        if (lhs.dx_register_space != rhs.dx_register_space) return lhs.dx_register_space < rhs.dx_register_space;
+        return lhs.dx_register_index < rhs.dx_register_index;
+      });
+
+  uint32_t binding = 0u;
+  for (auto& range : ranges) {
+    range.binding = binding;
+    binding += range.count;
+  }
+
+  if (!ranges.empty()) {
+    if (ranges.size() > 1u) {
+      reshade::api::pipeline_layout_param descriptor_param = {};
+      descriptor_param.type = reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges;
+      descriptor_param.descriptor_table.count = static_cast<uint32_t>(ranges.size());
+      descriptor_param.descriptor_table.ranges = ranges.data();
+      data->injected_descriptor_range_groups.resize(1);
+      data->injected_descriptor_range_groups[0] = ranges;
+      data->injected_descriptor_params.emplace_back(descriptor_param);
+    } else {
+      data->injected_descriptor_range_groups.resize(1);
+      data->injected_descriptor_range_groups[0] = ranges;
+      data->injected_descriptor_params.emplace_back(reshade::api::pipeline_layout_param(
+          reshade::api::descriptor_range{
+              .binding = 0,
+              .dx_register_index = ranges.front().dx_register_index,
+              .dx_register_space = ranges.front().dx_register_space,
+              .count = binding,
+              .visibility = reshade::api::shader_stage::all,
+              .array_size = 1,
+              .type = ranges.front().type,
+          }));
     }
   }
   switch (device->get_api()) {
@@ -1087,8 +1089,7 @@ static void OnInitPipelineLayout(
       injection_index = 0;
     }
 
-  } else if (device_api == reshade::api::device_api::d3d12
-             || device_api == reshade::api::device_api::vulkan) {
+  } else if (device_api == reshade::api::device_api::d3d12 || device_api == reshade::api::device_api::vulkan) {
     if (data->use_pipeline_layout_cloning) {
       const uint32_t old_count = param_count;
       uint32_t new_count = old_count;
@@ -1430,28 +1431,10 @@ static void OnInitPipelineLayout(
       pipeline_data.injection_register_index = cbv_index;
       pipeline_data.injection_constant_buffer_offset = injection_constant_buffer_offset;
       pipeline_data.descriptor_push_locations.clear();
-      if (has_descriptor_injection && (is_vulkan || descriptor_injection_index != -1)) {
-        if (is_vulkan) {
-          for (uint32_t set_index = 0u; set_index < data->injected_descriptor_range_groups.size(); ++set_index) {
-            const auto& ranges = data->injected_descriptor_range_groups[set_index];
-            for (const auto& range : ranges) {
-              for (uint32_t offset = 0u; offset < range.count; ++offset) {
-                pipeline_data.descriptor_push_locations.insert_or_assign(
-                    {
-                        range.type,
-                        range.dx_register_index + offset,
-                        range.dx_register_space,
-                    },
-                    utils::pipeline_layout::DescriptorPushLocation{
-                        set_index,
-                        range.binding + offset,
-                    });
-              }
-            }
-          }
-        } else {
-          // For DX: Track locations for the single set (set 0)
-          for (const auto& range : data->injected_descriptor_range_groups[0]) {
+      if (has_descriptor_injection && is_vulkan) {
+        for (uint32_t set_index = 0u; set_index < data->injected_descriptor_range_groups.size(); ++set_index) {
+          const auto& ranges = data->injected_descriptor_range_groups[set_index];
+          for (const auto& range : ranges) {
             for (uint32_t offset = 0u; offset < range.count; ++offset) {
               pipeline_data.descriptor_push_locations.insert_or_assign(
                   {
@@ -1460,10 +1443,26 @@ static void OnInitPipelineLayout(
                       range.dx_register_space,
                   },
                   utils::pipeline_layout::DescriptorPushLocation{
-                      static_cast<uint32_t>(descriptor_injection_index),
+                      set_index,
                       range.binding + offset,
                   });
             }
+          }
+        }
+      }
+      if (has_descriptor_injection && !is_vulkan && descriptor_injection_index != -1) {
+        for (const auto& range : data->injected_descriptor_range_groups[0]) {
+          for (uint32_t offset = 0u; offset < range.count; ++offset) {
+            pipeline_data.descriptor_push_locations.insert_or_assign(
+                {
+                    range.type,
+                    range.dx_register_index + offset,
+                    range.dx_register_space,
+                },
+                utils::pipeline_layout::DescriptorPushLocation{
+                    static_cast<uint32_t>(descriptor_injection_index),
+                    range.binding + offset,
+                });
           }
         }
       }
@@ -1482,9 +1481,9 @@ static void OnInitPipelineLayout(
     s << ", injection offset: " << injection_constant_buffer_offset;
   }
   if (is_dx) {
-    s << ", cbvIndex: " << cbv_index;
+    s << ", cbvIndex:" << cbv_index;
   }
-  s << ")";
+  s << " )";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 }
 
