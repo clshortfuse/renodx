@@ -3624,8 +3624,8 @@ static void Use(DWORD fdw_reason) {
             on_render_pass_command,
             {
                 .command_types = renodx::utils::command_action::COMMAND_TYPE_DIRECT_DRAW
-                                 | renodx::utils::command_action::COMMAND_TYPE_DISPATCH_MESH
-                                 | renodx::utils::command_action::COMMAND_TYPE_INDIRECT,
+                       | renodx::utils::command_action::COMMAND_TYPE_DISPATCH_MESH
+                       | renodx::utils::command_action::COMMAND_TYPE_INDIRECT,
             });
         renodx::utils::command_action::Use(fdw_reason);
       }
@@ -3650,7 +3650,7 @@ static void Use(DWORD fdw_reason) {
 
       shared.UnregisterEvent<reshade::addon_event::init_swapchain>(OnInitSwapchain);
 
-      // reshade::unregister_event<reshade::addon_event::create_pipeline>(OnCreatePipeline);
+      // reshade::register_event<reshade::addon_event::create_pipeline>(on_create_pipeline);
 
       shared.UnregisterEvent<reshade::addon_event::create_resource>(OnCreateResource);
       shared.UnregisterEvent<reshade::addon_event::create_resource_view>(OnCreateResourceView);

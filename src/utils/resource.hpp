@@ -1120,8 +1120,8 @@ inline reshade::api::resource_view_desc PopulateUnknownResourceViewDesc(
       return new_desc;
     case reshade::api::device_api::d3d10:
     case reshade::api::device_api::d3d11:
-    // Set this parameter to NULL to create a view that accesses the entire
-    // resource (using the format the resource was created with).
+      // Set this parameter to NULL to create a view that accesses the entire
+      // resource (using the format the resource was created with).
     case reshade::api::device_api::vulkan:
     case reshade::api::device_api::d3d12:
       // A null pDesc is used to initialize a default descriptor, if possible.
