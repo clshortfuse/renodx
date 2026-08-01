@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.27)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS ON) # <--- Add this line
 
 if(NOT CMAKE_WINDOWS_KITS_10_DIR)
   set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10")
@@ -22,59 +21,11 @@ find_program(DXC_BIN dxc.exe
   REQUIRED)
 message("DXC_BIN: " ${DXC_BIN})
 
-if(DEFINED ENV{VULKAN_SDK})
-  set(VULKAN_SDK_BIN "$ENV{VULKAN_SDK}/Bin")
-endif()
-
-function(find_shader_tool VARIABLE)
-  find_program(REPOSITORY_TOOL
-    NAMES ${ARGN}
-    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/bin
-    NO_DEFAULT_PATH
-    NO_CACHE)
-  if(REPOSITORY_TOOL)
-    set(${VARIABLE} "${REPOSITORY_TOOL}" PARENT_SCOPE)
-    return()
-  endif()
-
-  if(DEFINED ${VARIABLE} AND EXISTS "${${VARIABLE}}")
-    set(${VARIABLE} "${${VARIABLE}}" PARENT_SCOPE)
-    return()
-  endif()
-
-  if(VULKAN_SDK_BIN)
-    find_program(SDK_TOOL
-      NAMES ${ARGN}
-      PATHS ${VULKAN_SDK_BIN}
-      NO_DEFAULT_PATH
-      NO_CACHE)
-    if(SDK_TOOL)
-      set(${VARIABLE} "${SDK_TOOL}" PARENT_SCOPE)
-      return()
-    endif()
-  endif()
-
-  find_program(PATH_TOOL NAMES ${ARGN} NO_CACHE)
-  set(${VARIABLE} "${PATH_TOOL}" PARENT_SCOPE)
-endfunction()
-
-find_shader_tool(SLANGC_BIN slangc.exe)
-if(NOT SLANGC_BIN)
-  message(FATAL_ERROR "slangc.exe was not found in bin, the Vulkan SDK, or PATH")
-endif()
+find_program(SLANGC_BIN slangc.exe
+  HINTS
+  ${CMAKE_CURRENT_SOURCE_DIR}/bin/
+  REQUIRED)
 message("SLANGC_BIN: " ${SLANGC_BIN})
-set(SLANGC_FLAGS_LIST -O1 -g0 -entry main -Wno-30056 -Wno-15205)
-
-file(GLOB_RECURSE GLSL_SPIRV_SOURCES CONFIGURE_DEPENDS
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/*.gl.glsl
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/*.vk.glsl)
-if(GLSL_SPIRV_SOURCES)
-  find_shader_tool(GLSLANG_BIN glslang.exe glslangValidator.exe)
-  if(NOT GLSLANG_BIN)
-    message(FATAL_ERROR "glslang.exe or glslangValidator.exe is required by .gl.glsl or .vk.glsl shaders, but was not found in bin, the Vulkan SDK, or PATH")
-  endif()
-  message("GLSLANG_BIN: " ${GLSLANG_BIN})
-endif()
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
@@ -92,7 +43,7 @@ enable_testing()
 
 # Use executable to convert resources to .h files for embedding
 add_executable(embed_file src/embed_file.cpp)
-# Helper executable that analyzes HLSL #include dependencies and outputs .d files
+# Helper executable that analyzes shader #include dependencies and outputs .d files
 add_executable(analyze_shader_deps src/analyze_shader_deps.cpp)
 add_executable(decomp ./src/decompiler/cli.cpp)
 add_executable(mcp_bridge src/apps/mcp_bridge/main.cpp)
@@ -390,12 +341,6 @@ function(build_shader_target ADDON ADDON_PATH)
   foreach(FILE ${SHADER_SLANG_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
-    cmake_path(GET TARGET_PATH FILENAME FOLDER_NAME)
-    # If the folder name starts with a dot, skip
-    if(FOLDER_NAME MATCHES "^\\.")
-      continue()
-    endif()
-
     string(REGEX MATCH "(.*)\\.([^.]+)\\.slang$" _ ${FILENAME})
     set(SHADER_NAME ${CMAKE_MATCH_1})
     set(SHADER_TARGET ${CMAKE_MATCH_2})
@@ -405,10 +350,13 @@ function(build_shader_target ADDON ADDON_PATH)
       set(SHADER_HASH ${CMAKE_MATCH_1})
     endif()
 
-    #SLANG
     set(SHADER_COMPILER ${SLANGC_BIN})
     unset(SHADER_FLAGS)
-    set(SHADER_FLAGS ${SLANGC_FLAGS_LIST})
+    set(SHADER_FLAGS ${SHADER_FLAGS} -O3)
+    set(SHADER_FLAGS ${SHADER_FLAGS} -g0)
+    set(SHADER_FLAGS ${SHADER_FLAGS} -entry main)
+    set(SHADER_FLAGS ${SHADER_FLAGS} -Wno-30056)
+    set(SHADER_FLAGS ${SHADER_FLAGS} -Wno-15205)
 
     if(SHADER_TARGET AND (SHADER_HASH OR SHADER_NAME))
       if(SHADER_TARGET STREQUAL "frag" OR SHADER_TARGET STREQUAL "vert" OR SHADER_TARGET STREQUAL "comp")
@@ -439,7 +387,76 @@ function(build_shader_target ADDON ADDON_PATH)
           add_stage_spirv_shader(${SHADER_NAME})
         endif()
       else()
-        message(WARNING "Skipping slang file (only stage targets are supported: frag/vert/comp): ${FILE}")
+        string(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
+        string(SUBSTRING ${SHADER_TARGET} 5 1 SHADER_TARGET_MINOR)
+        if(SHADER_TARGET_MAJOR STREQUAL "5" AND SHADER_TARGET_MINOR STREQUAL "x")
+
+          string(SUBSTRING ${SHADER_TARGET} 0 2 SHADER_TARGET_TYPE)
+
+          # Add dependencies
+          unset(HLSL_DEPENDENCIES)
+          unset(HLSL_CHILD_DEPENDENCIES)
+          list(APPEND HLSL_DEPENDENCIES ${FILE})
+          inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
+          list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
+
+          if(SHADER_HASH)
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso)
+          else()
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso)
+          endif()
+
+          if(SHADER_HASH)
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso)
+          else()
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso)
+          endif()
+
+        else()
+          # Add dependencies
+          unset(HLSL_DEPENDENCIES)
+          unset(HLSL_CHILD_DEPENDENCIES)
+          list(APPEND HLSL_DEPENDENCIES ${FILE})
+          inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
+          list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
+
+          if(SHADER_HASH)
+            # message("Registering: " ${FILE} " => " ${EMBED_FOLDER}/${SHADER_HASH}.cso)
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET} ${SHADER_FLAGS} -target dxil -o ${EMBED_FOLDER}/${SHADER_HASH}.cso
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.cso)
+          else()
+            add_custom_command(
+              OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.cso
+              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET} ${SHADER_FLAGS} -target dxil -o ${EMBED_FOLDER}/${SHADER_NAME}.cso
+              DEPENDS ${HLSL_DEPENDENCIES}
+            )
+            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.cso)
+          endif()
+        endif()
       endif()
     else()
       #message(WARNING "Skipping shader file: " ${FILE} " - Invalid target or name.")
@@ -520,6 +537,16 @@ function(build_shader_target ADDON ADDON_PATH)
       message(FATAL_ERROR "Multiple GLSL implementations found for ${GLSL_OUTPUT_STEM} in ${ADDON}")
     endif()
     list(APPEND GLSL_OUTPUT_STEMS ${GLSL_OUTPUT_STEM})
+
+    if(GLSL_BACKEND AND NOT GLSLANG_BIN)
+      find_program(GLSLANG_BIN
+        NAMES glslang.exe glslangValidator.exe
+        HINTS
+        ${CMAKE_CURRENT_SOURCE_DIR}/bin/
+        $ENV{VULKAN_SDK}/Bin
+        REQUIRED)
+      message("GLSLANG_BIN: " ${GLSLANG_BIN})
+    endif()
 
     if(GLSL_BACKEND STREQUAL "vk")
       set(SHADER_DEPENDS ${FILE})
@@ -652,23 +679,13 @@ function(build_shader_target ADDON ADDON_PATH)
 
     if(ANY_VERSION_SHADERS_LENGTH GREATER 0 OR DX11_DX12_INTERSECT_LENGTH GREATER 0)
       string(APPEND SHADERS_H_OUTPUT "#define __ALL_CUSTOM_SHADERS \\\n")
-      set(ALL_CUSTOM_SHADER_GROUPS)
-      if(ANY_VERSION_SHADERS_LENGTH GREATER 0)
-        list(APPEND ALL_CUSTOM_SHADER_GROUPS "__CUSTOM_SHADER_ENTRIES")
+      if(ANY_VERSION_SHADERS_LENGTH GREATER 0 AND DX11_DX12_INTERSECT_LENGTH GREATER 0)
+        string(APPEND SHADERS_H_OUTPUT "  __CUSTOM_SHADER_ENTRIES, \\\n  __CUSTOM_DIRECTX_SHADERS\n")
+      elseif(ANY_VERSION_SHADERS_LENGTH GREATER 0)
+        string(APPEND SHADERS_H_OUTPUT "  __CUSTOM_SHADER_ENTRIES\n")
+      elseif(DX11_DX12_INTERSECT_LENGTH GREATER 0)
+        string(APPEND SHADERS_H_OUTPUT "  __CUSTOM_DIRECTX_SHADERS\n")
       endif()
-      if(DX11_DX12_INTERSECT_LENGTH GREATER 0)
-        list(APPEND ALL_CUSTOM_SHADER_GROUPS "__CUSTOM_DIRECTX_SHADERS")
-      endif()
-      list(LENGTH ALL_CUSTOM_SHADER_GROUPS ALL_CUSTOM_SHADER_GROUPS_LENGTH)
-      math(EXPR ALL_CUSTOM_SHADER_GROUPS_LAST_INDEX "${ALL_CUSTOM_SHADER_GROUPS_LENGTH} - 1")
-      foreach(INDEX RANGE 0 ${ALL_CUSTOM_SHADER_GROUPS_LAST_INDEX})
-        list(GET ALL_CUSTOM_SHADER_GROUPS ${INDEX} GROUP_NAME)
-        if(INDEX EQUAL ALL_CUSTOM_SHADER_GROUPS_LAST_INDEX)
-          string(APPEND SHADERS_H_OUTPUT "  ${GROUP_NAME}\n")
-        else()
-          string(APPEND SHADERS_H_OUTPUT "  ${GROUP_NAME}, \\\n")
-        endif()
-      endforeach()
     endif()
 
   endif()
