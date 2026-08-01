@@ -15,6 +15,11 @@ layout(set = 0, binding = 2, std140) uniform invResolution
 
 layout(set = 2, binding = 1) uniform sampler2D inputImg;
 layout(set = 2, binding = 3) uniform sampler2D samplerBlend;
+// CUSTOM: This remains rgba8 to match Ryubing's SMAA pipeline layout. Binding an
+// R16G16B16A16_FLOAT view conflicts with the SPIR-V Rgba8 storage image format,
+// while keeping this view RGBA8 clips RGB values outside its normalized range.
+// This pass therefore cannot preserve the HDR intermediate until Ryubing's
+// storage image and downstream resource chain are upgraded together.
 layout(set = 3, binding = 0, rgba8) uniform writeonly image2D imgOutput;
 
 void SMAANeighborhoodBlendingVS(vec2 texcoord, out vec4 offset)
