@@ -129,7 +129,7 @@ renodx::utils::settings::Settings settings = {
                    "Match Tone Map Scaling: Performs the correction in the working space of the selected tone map scaling. May have a preferrable look.",
         .labels = {"Display Emulation", "Match Tone Map Scaling"},
         .is_enabled = []() { return shader_injection.gamma_correction != 0.f; },
-        .is_visible = []() { return current_settings_mode >= 2.f; },
+        .is_visible = []() { return current_settings_mode >= 1.f; },
     },
 
     new renodx::utils::settings::Setting{
