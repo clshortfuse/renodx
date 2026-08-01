@@ -14,11 +14,6 @@
 
 namespace fs = std::filesystem;
 
-struct DependencyPath {
-  fs::path path;
-  bool exists = false;
-};
-
 fs::path NormalizePath(const fs::path& path) {
   std::error_code error_code;
   auto normalized_path = fs::weakly_canonical(path, error_code);
@@ -70,7 +65,7 @@ std::set<fs::path> ParseIncludes(const fs::path& source_file) {
 
 void CollectIncludedDependencies(
     const fs::path& source_file,
-    std::vector<DependencyPath>& dependencies) {
+  std::vector<fs::path>& dependencies) {
   std::set<fs::path> visited;
   std::vector<fs::path> pending = {NormalizePath(source_file)};
 
@@ -89,10 +84,7 @@ void CollectIncludedDependencies(
         continue;
       }
 
-      dependencies.push_back(DependencyPath{
-          .path = include_path,
-          .exists = valid_dependency,
-      });
+      dependencies.push_back(include_path);
       if (valid_dependency) {
         pending.push_back(include_path);
       }
@@ -100,23 +92,17 @@ void CollectIncludedDependencies(
   }
 }
 
-std::vector<DependencyPath> CollectDependencies(const fs::path& source_file) {
+std::vector<fs::path> CollectDependencies(const fs::path& source_file) {
   const auto normalized = NormalizePath(source_file);
-  std::error_code error_code;
-  std::vector<DependencyPath> dependencies = {
-      DependencyPath{
-          .path = normalized,
-          .exists = fs::exists(normalized, error_code) && !error_code,
-      },
-  };
+  std::vector<fs::path> dependencies = {normalized};
 
   CollectIncludedDependencies(normalized, dependencies);
 
   std::set<fs::path> seen;
-  std::vector<DependencyPath> unique_dependencies;
+  std::vector<fs::path> unique_dependencies;
   unique_dependencies.reserve(dependencies.size());
   for (const auto& dependency : dependencies) {
-    if (seen.emplace(dependency.path).second) {
+    if (seen.emplace(dependency).second) {
       unique_dependencies.push_back(dependency);
     }
   }
@@ -128,7 +114,7 @@ std::vector<DependencyPath> CollectDependencies(const fs::path& source_file) {
 void WriteDependencyFile(
     const fs::path& depfile_path,
     const fs::path& target_file,
-    const std::vector<DependencyPath>& dependencies) {
+  const std::vector<fs::path>& dependencies) {
   // Create parent directory if it doesn't exist
   auto parent_dir = depfile_path.parent_path();
   if (!parent_dir.empty() && !fs::exists(parent_dir)) {
@@ -162,7 +148,7 @@ void WriteDependencyFile(
   depfile << escape_path(target_file) << ":";
 
   for (const auto& dep : dependencies) {
-    depfile << " " << escape_path(dep.path);
+    depfile << " " << escape_path(dep);
   }
 
   depfile << '\n';
