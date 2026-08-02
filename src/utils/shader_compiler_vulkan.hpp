@@ -26,7 +26,6 @@
 #include <variant>
 #include <vector>
 
-
 #include "./path.hpp"
 
 namespace renodx::utils::shader::compiler::vulkan {
@@ -185,7 +184,7 @@ inline std::filesystem::path FindSlangcPath() {
   if (TryVulkanSdkPath(L"slangc.exe", try_candidate)) return cached_slangc_path;
 
   throw std::exception(
-      "Could not locate slangc.exe in the configured tools directory, next to the executable, or through the Vulkan SDK fallback.");
+      "Could not locate slangc.exe. Configure the tools directory or place it next to the executable.");
 }
 
 inline std::filesystem::path FindGlslangPath() {
@@ -213,7 +212,7 @@ inline std::filesystem::path FindGlslangPath() {
   if (TryVulkanSdkPath(L"glslangValidator.exe", try_candidate)) return cached_glslang_path;
 
   throw std::exception(
-      "Could not locate glslang.exe or glslangValidator.exe in the configured tools directory, next to the executable, or through the Vulkan SDK fallback.");
+      "Could not locate glslang.exe or glslangValidator.exe. Configure the tools directory or place one next to the executable.");
 }
 
 inline std::filesystem::path GetTempOutputPath(const std::wstring& extension) {

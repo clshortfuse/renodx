@@ -62,7 +62,6 @@ Install the Windows SDK if it is not already present. The setup script will atte
 The setup script currently downloads the official `main-tot` glslang archive, whose compiler reports version `16.4.0`. This is temporary until Khronos regenerates the `16.4.0` release with versioned binary assets; then the archive URL can be pinned to that release. The standalone compiler in `.\bin` is sufficient for GLSL builds.
 
 Use Windows SDK `10.0.26100.0` or newer. `fxc.exe` comes from the Windows SDK. CMake can find it in the SDK install path, and the setup script will also copy it into `.\bin` when it can. The DXC package should provide `dxc.exe` together with `dxcompiler.dll`; some DXC releases also ship `dxil.dll`, which is fine to keep alongside them in `.\bin` but is not required by the current devkit MCP path. `slangc.exe` and `cmd_Decompiler.exe` are also expected there unless you have an equivalent toolchain arrangement of your own.
-An existing Vulkan SDK remains an optional fallback source for glslang and `spirv-dis.exe`; shader compilation does not require Vulkan headers or loader linkage.
 
 Update the submodules
 
