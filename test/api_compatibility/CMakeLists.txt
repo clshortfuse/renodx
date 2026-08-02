@@ -1,0 +1,7 @@
+add_renodx_runtime_executable(api_compatibility_tests tests.cpp)
+add_dependencies(renodx_test_suites api_compatibility_tests)
+
+add_test(NAME api_compatibility COMMAND api_compatibility_tests)
+set_tests_properties(api_compatibility PROPERTIES
+  LABELS "compatibility;main;initial_pr"
+)
