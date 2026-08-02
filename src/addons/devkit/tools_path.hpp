@@ -88,7 +88,7 @@ inline void to_json(json& j, const Status& status) {
   const auto status = GetStatus();
   if (status.configured_path.empty()) {
     return ToolResult{
-        .text = "No devkit tools directory is configured. DXC will use the process DLL search path, and Vulkan tools will use executable-adjacent or Vulkan SDK fallbacks.",
+        .text = "No devkit tools directory is configured. DXC will use the process DLL search path, and Vulkan tools will be auto-discovered.",
         .structured_content = status,
     };
   }
