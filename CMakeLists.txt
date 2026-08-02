@@ -38,8 +38,11 @@ endif()
 
 project(renodx VERSION 0.1.0 LANGUAGES CXX)
 
-include(CTest)
-enable_testing()
+option(RENODX_BUILD_TESTS "Build D3D12 regression tests" OFF)
+if(RENODX_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(test)
+endif()
 
 # Use executable to convert resources to .h files for embedding
 add_executable(embed_file src/embed_file.cpp)
@@ -592,6 +595,11 @@ function(build_shader_target ADDON ADDON_PATH)
   add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
 
 endfunction()
+
+if(RENODX_BUILD_TESTS)
+  build_shader_target(shader_source_compatibility ${CMAKE_CURRENT_SOURCE_DIR}/test/shader_source_compatibility)
+  add_dependencies(shader_source_compatibility_tests shader_source_compatibility-shaders)
+endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(STATUS "Detected 64-bit build")
