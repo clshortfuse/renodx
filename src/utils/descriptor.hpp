@@ -470,6 +470,8 @@ static void FreeAllocatedDescriptorTables(
     return false;
   }
 
+  reshade::api::descriptor_table cached_table = table;
+  bool published_table = false;
   shared.data->allocated_descriptor_tables_by_layout.lazy_emplace_l(
       cache_layout.handle,
       [&](auto& pair) {
@@ -477,16 +479,25 @@ static void FreeAllocatedDescriptorTables(
         if (pair.second.tables.size() <= layout_param) {
           pair.second.tables.resize(layout_param + 1u);
         }
-        pair.second.tables[layout_param] = table;
+        if (pair.second.tables[layout_param].handle != 0u) {
+          cached_table = pair.second.tables[layout_param];
+        } else {
+          pair.second.tables[layout_param] = table;
+          published_table = true;
+        }
       },
       [&](const auto& ctor) {
         AllocatedLayoutDescriptorTables data = {.device = device};
         data.tables.resize(layout_param + 1u);
         data.tables[layout_param] = table;
         ctor(cache_layout.handle, std::move(data));
+        published_table = true;
       });
 
-  *out_table = table;
+  if (!published_table) {
+    device->free_descriptor_tables(1u, &table);
+  }
+  *out_table = cached_table;
   return true;
 }
 
