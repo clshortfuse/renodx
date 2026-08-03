@@ -75,6 +75,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, LPVOID) {
   switch (reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+      if (GetEnvironmentVariableW(L"RENODX_TRANSFER_DIRECT_UPGRADE", nullptr, 0u) != 0u) {
+        for (auto& upgrade_info : UPGRADE_INFOS) {
+          upgrade_info.use_resource_view_cloning = false;
+        }
+      }
+      if (GetEnvironmentVariableW(L"RENODX_TRANSFER_PRESERVE_COPY_USAGE", nullptr, 0u) != 0u) {
+        renodx::utils::resource::upgrade::use_vulkan_copy_usage = false;
+      }
       renodx::utils::resource::upgrade::use_resource_cloning = true;
       renodx::utils::resource::upgrade::Use(reason);
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
