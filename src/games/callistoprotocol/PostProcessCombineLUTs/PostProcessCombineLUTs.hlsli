@@ -123,6 +123,20 @@ float3 ColorCorrectAll(float3 ungraded, const uint4 cb0_m[70]) {
   return lerp(ungraded, graded, RENODX_COLOR_GRADE_STRENGTH);
 }
 
+float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
+  const float3 added_gamma = black_gamma;
+
+  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
+
+  // Remove from 0 to mid-gray
+  const float shadow_length = mid_gray_average;
+  const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
+  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
+
+  const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
+  return unclamped_gamma;
+}
+
 static const float3x3 CALLISTO_AP1_TO_BT2020_MAT = float3x3(
     1.025799274444580078125f, -0.02005250938236713409423828125f, -0.005771367810666561126708984375f,
     -0.00223502493463456630706787109375f, 1.0045826435089111328125f, -0.00235231337137520313262939453125f,
@@ -209,6 +223,51 @@ float3 ApplyColorGradingLUTs(
       lut_2, sampler_2
 #endif
   );
+
+  if (RENODX_COLOR_GRADE_SCALING != 0.f) {
+    float3 lut_black = SampleColorGradingLUTs(
+        0.f,
+        lut_weights
+#if CALLISTO_LUT_COUNT >= 1
+        ,
+        lut_1, sampler_1
+#endif
+#if CALLISTO_LUT_COUNT >= 2
+        ,
+        lut_2, sampler_2
+#endif
+    );
+
+    float lut_black_yf = renodx::color::yf::from::BT2020(lut_black);
+    if (lut_black_yf > 0.f) {
+      float3 lut_mid = SampleColorGradingLUTs(
+          max(lut_black_yf, 0.0035f),
+          lut_weights
+#if CALLISTO_LUT_COUNT >= 1
+          ,
+          lut_1, sampler_1
+#endif
+#if CALLISTO_LUT_COUNT >= 2
+          ,
+          lut_2, sampler_2
+#endif
+      );
+
+      float3 unclamped_gamma = Unclamp(
+          sqrt(max(graded_bt2020, 0.f)),
+          sqrt(max(lut_black, 0.f)),
+          sqrt(max(lut_mid, 0.f)),
+          sqrt(color_bt2020));
+      float3 unclamped_bt2020 = unclamped_gamma * unclamped_gamma;
+
+      graded_bt2020 = renodx::color::bt2020::from::BT709(
+          renodx::lut::RecolorUnclamped(
+              renodx::color::bt709::from::BT2020(graded_bt2020),
+              renodx::color::bt709::from::BT2020(unclamped_bt2020),
+              RENODX_COLOR_GRADE_SCALING));
+    }
+  }
+
   float3 output_ap1 = max(mul(CALLISTO_BT2020_TO_AP1_MAT, graded_bt2020), 0.f);
 
   return lerp(color_ap1, output_ap1, RENODX_COLOR_GRADE_STRENGTH);
