@@ -199,9 +199,9 @@ renodx::utils::settings::Settings settings = {
         .label = "FilmGrain",
         .section = "Effects",
         .max = 100.f,
+        .is_enabled = []() { return shader_injection.custom_film_grain_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
-
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
@@ -213,6 +213,21 @@ renodx::utils::settings::Settings settings = {
             if (!setting->can_reset) continue;
             renodx::utils::settings::UpdateSetting(setting->key, setting->default_value);
           }
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Purist",
+        .section = "Options",
+        .group = "button-line-1",
+        .tooltip = "Follows the original artistic intent more closely.",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ToneMapWorkingColorSpace", 0.f},
+              {"ColorGradeLUTScaling", 0.f},
+              {"FxFilmGrainType", 0.f},
+          });
         },
     },
     new renodx::utils::settings::Setting{
