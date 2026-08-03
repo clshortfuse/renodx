@@ -322,6 +322,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
       };
 
+      const renodx::utils::resource::ResourceUpgradeInfo::Dimensions dimensions = {
+          .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+          .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+          .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+      };
+
       /*
         If expand_existing_constant_buffer is set to false renoDX will add new cbuffer range (instead of reusing the game's).
         This behaviour is overridden if renoDX finds a cbuffer that targets all shader_stages in minimum_constant_buffer_stages.
@@ -372,7 +378,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r10g10b10a2_typeless,
             .new_format = target_format,
-            .ignore_size = true,  // risky...?
+            .dimensions = dimensions,
             .min_dimensions = min_dimensions,
         });
       }
