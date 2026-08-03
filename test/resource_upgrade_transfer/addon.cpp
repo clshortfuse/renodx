@@ -9,6 +9,7 @@
 #include <include/reshade.hpp>
 
 #include "src/utils/resource_upgrade.hpp"
+#include "common.hpp"
 
 namespace {
 
@@ -35,6 +36,41 @@ void OnInitDevice(reshade::api::device* device) {
   renodx::utils::resource::upgrade::SetUpgradeInfos(device, UPGRADE_INFOS);
 }
 
+bool OnInspectCopyTextureToBuffer(
+    reshade::api::command_list* cmd_list,
+    reshade::api::resource,
+    uint32_t,
+    const reshade::api::subresource_box*,
+    reshade::api::resource dest,
+    uint64_t dest_offset,
+    uint32_t,
+    uint32_t) {
+  if (GetEnvironmentVariableW(L"RENODX_TRANSFER_INSPECT_UPGRADED", nullptr, 0u) == 0u) return false;
+
+  renodx::utils::resource::upgrade::CopyRedirectBuffer dest_buffer;
+  if (!renodx::utils::resource::upgrade::GetCopyRedirectBuffer(dest, &dest_buffer)
+      || dest_buffer.clone.handle == 0u) {
+    return false;
+  }
+
+  cmd_list->barrier(
+      dest_buffer.clone,
+      reshade::api::resource_usage::copy_dest,
+      reshade::api::resource_usage::copy_source);
+  cmd_list->copy_buffer_region(
+      dest_buffer.clone,
+      dest_offset,
+      dest,
+      dest_offset,
+      renodx::test::resource_upgrade_transfer::WIDTH
+          * renodx::test::resource_upgrade_transfer::HEIGHT
+          * 4u * sizeof(uint16_t));
+  reshade::log::message(
+      reshade::log::level::info,
+      "Copied upgraded transfer clone into the application buffer for test inspection.");
+  return false;
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX Resource Upgrade Transfer Test";
@@ -47,8 +83,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, LPVOID) {
       renodx::utils::resource::upgrade::use_resource_cloning = true;
       renodx::utils::resource::upgrade::Use(reason);
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
+      reshade::register_event<reshade::addon_event::copy_texture_to_buffer>(OnInspectCopyTextureToBuffer);
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::copy_texture_to_buffer>(OnInspectCopyTextureToBuffer);
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       renodx::utils::resource::upgrade::Use(reason);
       reshade::unregister_addon(h_module);
