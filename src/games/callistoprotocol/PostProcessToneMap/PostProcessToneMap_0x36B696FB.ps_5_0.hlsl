@@ -1,3 +1,5 @@
+#include "./PostProcessToneMap.hlsli"
+
 cbuffer cb0_buf : register(b0) {
   uint4 cb0_m[72] : packoffset(c0);
 };
@@ -126,19 +128,23 @@ void frag_main() {
   float _565 = mad(mad(-_555, _545, 1.0f), _545 - 1.0f, 1.0f);
   float _566 = mad(_544 - 1.0f, mad(-_555, _544, 1.0f), 1.0f);
   float _567 = mad(_543 - 1.0f, mad(-_555, _543, 1.0f), 1.0f);
-  float _578 = frac(asfloat(cb1_m[142u].z));
-  float _592 = asfloat(cb0_m[65u].y);
-  float _598 = dp3_f32(float3(_565, _566, _567), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
-  float _599 = 1.0f - _598;
-  float _609 = clamp(_598 * 20.0f, 0.0f, 1.0f);
-  float _616 = asfloat(cb0_m[65u].z);
-  float _633 = mad(((_616 + ((_609 <= 0.0f) ? 0.0f : (exp2(log2(_609) * 0.25f) * (1.0f - _616)))) * ((_599 <= 0.0f) ? 0.0f : exp2(log2(_599) * asfloat(cb0_m[65u].x)))) * asfloat(cb0_m[64u].w), t2.Sample(s2, float2((floor(_578 * 25.0f) * 0.20000000298023223876953125f) + ((TEXCOORD4.x / (asfloat(cb0_m[54u].w) * asfloat(cb0_m[55u].x))) * _592), (TEXCOORD4.y * _592) + (floor(_578 * 5.0f) * 0.20000000298023223876953125f))).x - 0.5f, 0.5f);
-  float _634 = 1.0f - _633;
-  float _638 = _634 + _634;
-  float _645 = _633 + _633;
-  SV_Target.x = max((_565 >= 0.5f) ? mad(-(1.0f - _565), _638, 1.0f) : (_565 * _645), 0.0f);
-  SV_Target.y = max((_566 >= 0.5f) ? mad(-(1.0f - _566), _638, 1.0f) : (_566 * _645), 0.0f);
-  SV_Target.z = max((_567 >= 0.5f) ? mad(-(1.0f - _567), _638, 1.0f) : (_567 * _645), 0.0f);
+  if (CUSTOM_GRAIN_TYPE == 0.f) {
+    float _578 = frac(asfloat(cb1_m[142u].z));
+    float _592 = asfloat(cb0_m[65u].y);
+    float _598 = dp3_f32(float3(_565, _566, _567), float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+    float _599 = 1.0f - _598;
+    float _609 = clamp(_598 * 20.0f, 0.0f, 1.0f);
+    float _616 = asfloat(cb0_m[65u].z);
+    float _633 = mad(((_616 + ((_609 <= 0.0f) ? 0.0f : (exp2(log2(_609) * 0.25f) * (1.0f - _616)))) * ((_599 <= 0.0f) ? 0.0f : exp2(log2(_599) * asfloat(cb0_m[65u].x)))) * asfloat(cb0_m[64u].w), t2.Sample(s2, float2((floor(_578 * 25.0f) * 0.20000000298023223876953125f) + ((TEXCOORD4.x / (asfloat(cb0_m[54u].w) * asfloat(cb0_m[55u].x))) * _592), (TEXCOORD4.y * _592) + (floor(_578 * 5.0f) * 0.20000000298023223876953125f))).x - 0.5f, 0.5f);
+    float _634 = 1.0f - _633;
+    float _638 = _634 + _634;
+    float _645 = _633 + _633;
+    SV_Target.x = max((_565 >= 0.5f) ? mad(-(1.0f - _565), _638, 1.0f) : (_565 * _645), 0.0f);
+    SV_Target.y = max((_566 >= 0.5f) ? mad(-(1.0f - _566), _638, 1.0f) : (_566 * _645), 0.0f);
+    SV_Target.z = max((_567 >= 0.5f) ? mad(-(1.0f - _567), _638, 1.0f) : (_567 * _645), 0.0f);
+  } else {
+    SV_Target.rgb = ApplyPerceptualFilmGrainBT709(float3(_565, _566, _567), TEXCOORD.xy, cb0_m[66u].x != 0u);
+  }
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) {
