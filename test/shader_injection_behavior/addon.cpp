@@ -11,6 +11,7 @@
 #include <fstream>
 #include <span>
 #include <string>
+#include <string_view>
 
 #include <include/reshade.hpp>
 
@@ -45,17 +46,22 @@ bool g_overflow_rejected = false;
 bool g_overflow_mapping_seen = false;
 bool g_overflow_mapping_absent = false;
 bool g_overflow_destroyed = false;
+bool g_descriptor_ranges_seen = false;
+bool g_descriptor_ranges_owned = false;
+bool g_descriptor_ownership_mode = false;
 reshade::api::pipeline_layout g_near_limit_layout = {};
 reshade::api::pipeline_layout g_overflow_layout = {};
 
 void WriteResultIfReady() {
   if (g_result_written
-      || !g_near_limit_seen
-      || !g_near_limit_mapping_seen
-      || !g_near_limit_destroyed
-      || !g_overflow_seen
-      || !g_overflow_mapping_seen
-      || !g_overflow_destroyed) {
+      || (g_descriptor_ownership_mode && !g_descriptor_ranges_seen)
+      || (!g_descriptor_ownership_mode
+          && (!g_near_limit_seen
+              || !g_near_limit_mapping_seen
+              || !g_near_limit_destroyed
+              || !g_overflow_seen
+              || !g_overflow_mapping_seen
+              || !g_overflow_destroyed))) {
     return;
   }
 
@@ -66,11 +72,13 @@ void WriteResultIfReady() {
     return;
   }
 
-  const bool passed = g_near_limit_passed
-                      && g_near_limit_mapping_passed
-                      && g_overflow_rejected
-                      && g_overflow_mapping_absent
-                      && g_legacy_default_space_preserved;
+  const bool passed = g_descriptor_ownership_mode
+                          ? g_descriptor_ranges_owned
+                          : g_near_limit_passed
+                                && g_near_limit_mapping_passed
+                                && g_overflow_rejected
+                                && g_overflow_mapping_absent
+                                && g_legacy_default_space_preserved;
   std::ofstream output(std::filesystem::path(result_path), std::ios::binary);
   std::free(result_path);
   output << (passed ? "PASS\n" : "FAIL\n");
@@ -84,6 +92,8 @@ void WriteResultIfReady() {
   output << "overflow_mapping_seen=" << g_overflow_mapping_seen << '\n';
   output << "overflow_mapping_absent=" << g_overflow_mapping_absent << '\n';
   output << "overflow_destroyed=" << g_overflow_destroyed << '\n';
+  output << "descriptor_ranges_seen=" << g_descriptor_ranges_seen << '\n';
+  output << "descriptor_ranges_owned=" << g_descriptor_ranges_owned << '\n';
   output << "legacy_default_space_preserved=" << g_legacy_default_space_preserved << '\n';
   g_result_written = true;
 }
@@ -109,6 +119,8 @@ uint32_t GetD3D12RootCost(const reshade::api::pipeline_layout_param& param) {
         default:
           return 1u;
       }
+    case reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges:
+      return param.descriptor_table.count != 0u ? 1u : 0u;
     case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
     case reshade::api::pipeline_layout_param_type::push_descriptors_with_static_samplers: {
       if (param.descriptor_table_with_static_samplers.count == 0u) return 0u;
@@ -135,6 +147,29 @@ uint32_t GetD3D12RootCost(const reshade::api::pipeline_layout_param& param) {
     default:
       return 0u;
   }
+}
+
+bool OnInspectCreatePipelineLayout(
+    reshade::api::device* device,
+    uint32_t& param_count,
+    reshade::api::pipeline_layout_param*& params) {
+  if (device->get_api() != reshade::api::device_api::d3d12) return false;
+
+  auto* data = renodx::utils::data::Get<shader::DeviceData>(device);
+  if (data == nullptr || data->injected_descriptor_range_groups.empty()) return false;
+
+  for (uint32_t index = 0u; index < param_count; ++index) {
+    const auto& param = params[index];
+    if (param.type != reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges
+        || param.descriptor_table.count != 2u) {
+      continue;
+    }
+    g_descriptor_ranges_seen = true;
+    g_descriptor_ranges_owned = param.descriptor_table.ranges
+                                == data->injected_descriptor_range_groups[0].data();
+    WriteResultIfReady();
+  }
+  return false;
 }
 
 bool OnInitPipelineLayout(
@@ -241,16 +276,40 @@ void OnDestroyTestPipelineLayout(
   WriteResultIfReady();
 }
 
-const std::array<renodx::mods::shader::CustomShader, 1> CUSTOM_SHADERS = {{
+const std::array<renodx::mods::shader::CustomShader, 1> ROOT_SIGNATURE_CUSTOM_SHADERS = {{
+  {
+    .crc32 = 0x564D5832u,
+    .views = {
+      {
+        .type = reshade::api::descriptor_type::texture_shader_resource_view,
+        .slot = 3u,
+        .get_view = [](reshade::api::command_list*) {
+          return reshade::api::resource_view{};
+        },
+      },
+    },
+  },
+}};
+
+const std::array<renodx::mods::shader::CustomShader, 1> DESCRIPTOR_OWNERSHIP_CUSTOM_SHADERS = {{
     {
         .crc32 = 0x564D5832u,
-        .views = {{
-            .type = reshade::api::descriptor_type::texture_shader_resource_view,
-            .slot = 3u,
-            .get_view = [](reshade::api::command_list*) {
-              return reshade::api::resource_view{};
+        .views = {
+            {
+                .type = reshade::api::descriptor_type::texture_shader_resource_view,
+                .slot = 3u,
+                .get_view = [](reshade::api::command_list*) {
+                  return reshade::api::resource_view{};
+                },
             },
-        }},
+            {
+                .type = reshade::api::descriptor_type::texture_unordered_access_view,
+                .slot = 4u,
+                .get_view = [](reshade::api::command_list*) {
+                  return reshade::api::resource_view{};
+                },
+            },
+        },
     },
 }};
 
@@ -263,18 +322,40 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, LPVOID) {
   switch (reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
+      {
+        char* test_mode = nullptr;
+        size_t test_mode_size = 0u;
+        if (_dupenv_s(
+                &test_mode,
+                &test_mode_size,
+                "RENODX_SHADER_INJECTION_TEST_MODE") == 0
+            && test_mode != nullptr) {
+          g_descriptor_ownership_mode = std::string_view(test_mode) == "descriptor-ownership";
+        }
+        std::free(test_mode);
+      }
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::shader::expected_constant_buffer_index = 13;
       renodx::mods::shader::expected_constant_buffer_space = 50u;
       renodx::mods::shader::on_init_pipeline_layout = OnInitPipelineLayout;
-      renodx::mods::shader::Use(reason, CUSTOM_SHADERS, &g_injection);
+      if (g_descriptor_ownership_mode) {
+        renodx::mods::shader::Use(reason, DESCRIPTOR_OWNERSHIP_CUSTOM_SHADERS, &g_injection);
+      } else {
+        renodx::mods::shader::Use(reason, ROOT_SIGNATURE_CUSTOM_SHADERS, &g_injection);
+      }
+      reshade::register_event<reshade::addon_event::create_pipeline_layout>(OnInspectCreatePipelineLayout);
       reshade::register_event<reshade::addon_event::init_pipeline_layout>(OnAfterInitPipelineLayout);
       reshade::register_event<reshade::addon_event::destroy_pipeline_layout>(OnDestroyTestPipelineLayout);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::destroy_pipeline_layout>(OnDestroyTestPipelineLayout);
       reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(OnAfterInitPipelineLayout);
-      renodx::mods::shader::Use(reason, CUSTOM_SHADERS, &g_injection);
+      reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(OnInspectCreatePipelineLayout);
+      if (g_descriptor_ownership_mode) {
+        renodx::mods::shader::Use(reason, DESCRIPTOR_OWNERSHIP_CUSTOM_SHADERS, &g_injection);
+      } else {
+        renodx::mods::shader::Use(reason, ROOT_SIGNATURE_CUSTOM_SHADERS, &g_injection);
+      }
       renodx::mods::shader::on_init_pipeline_layout = nullptr;
       reshade::unregister_addon(h_module);
       break;

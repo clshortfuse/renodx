@@ -353,12 +353,12 @@ static void OnInitDevice(reshade::api::device* device) {
 
   if (!ranges.empty()) {
     if (ranges.size() > 1u) {
+      data->injected_descriptor_range_groups.resize(1);
+      data->injected_descriptor_range_groups[0] = ranges;
       reshade::api::pipeline_layout_param descriptor_param = {};
       descriptor_param.type = reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges;
       descriptor_param.descriptor_table.count = static_cast<uint32_t>(ranges.size());
-      descriptor_param.descriptor_table.ranges = ranges.data();
-      data->injected_descriptor_range_groups.resize(1);
-      data->injected_descriptor_range_groups[0] = ranges;
+      descriptor_param.descriptor_table.ranges = data->injected_descriptor_range_groups[0].data();
       data->injected_descriptor_params.emplace_back(descriptor_param);
     } else {
       data->injected_descriptor_range_groups.resize(1);

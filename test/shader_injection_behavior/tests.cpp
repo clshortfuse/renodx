@@ -24,14 +24,20 @@ bool Copy(const fs::path& source, const fs::path& destination) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc != 4) {
-    std::cerr << "usage: shader_injection_behavior_tests <app> <addon> <reshade-dir>\n";
+  if (argc != 5) {
+    std::cerr << "usage: shader_injection_behavior_tests <mode> <app> <addon> <reshade-dir>\n";
     return 2;
   }
 
-  const fs::path app_source = fs::absolute(argv[1]);
-  const fs::path addon_source = fs::absolute(argv[2]);
-  const fs::path reshade_dir = fs::absolute(argv[3]);
+  const std::string mode = argv[1];
+  if (mode != "root-signature" && mode != "descriptor-ownership") {
+    std::cerr << "unknown test mode: " << mode << '\n';
+    return 2;
+  }
+
+  const fs::path app_source = fs::absolute(argv[2]);
+  const fs::path addon_source = fs::absolute(argv[3]);
+  const fs::path reshade_dir = fs::absolute(argv[4]);
   const fs::path runtime = fs::temp_directory_path()
                            / ("renodx_shader_injection_" + std::to_string(GetCurrentProcessId()));
   std::error_code error;
@@ -54,6 +60,7 @@ int main(int argc, char** argv) {
 
   const fs::path result_path = runtime / "result.txt";
   SetEnvironmentVariableW(L"RENODX_ROOT_SIGNATURE_RESULT", result_path.c_str());
+  SetEnvironmentVariableA("RENODX_SHADER_INJECTION_TEST_MODE", mode.c_str());
 
   STARTUPINFOW startup_info = {};
   startup_info.cb = sizeof(startup_info);
