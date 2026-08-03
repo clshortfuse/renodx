@@ -11,7 +11,6 @@ bool ComposeUIAndSceneSCRGB(float3 scene_color, float4 ui_color_gamma, inout flo
   }
 
   // defer display mapping to compositing shader as PostProcessToneMap applies adjustments after tonemap
-  scene_color = ApplyAnchoredAdaptationContrast(scene_color, RENODX_TONE_MAP_CONTRAST, 0.18f, 0.18f, RENODX_TONE_MAP_FLARE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS);
   scene_color = renodx::tonemap::neutwo::PerChannel(scene_color, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
 
   // The game stores scene color with 1.0 representing 250 nits.
