@@ -10,8 +10,17 @@ bool ComposeUIAndSceneSCRGB(float3 scene_color, float4 ui_color_gamma, inout flo
     ui_color_gamma.rgb = renodx::color::gamma::Encode(renodx::color::srgb::Decode(ui_color_gamma.rgb));
   }
 
-  // defer display mapping to compositing shader as PostProcessToneMap applies adjustments after tonemap
-  scene_color = renodx::tonemap::neutwo::PerChannel(scene_color, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+  // Defer display mapping to compositing because PostProcessToneMap applies adjustments after tonemapping.
+  float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  if (RENODX_TONE_MAP_WORKING_COLOR_SPACE == 0.f) {  // BT.709
+    scene_color = renodx::tonemap::neutwo::PerChannel(scene_color, peak_ratio);
+  } else {  // LMS
+    float3 scene_lms = renodx::color::lms::from::BT709(scene_color);
+    scene_lms = renodx::tonemap::neutwo::PerChannel(
+        scene_lms,
+        renodx::color::lms::from::BT2020(peak_ratio.xxx));
+    scene_color = renodx::color::bt709::from::LMS(scene_lms);
+  }
 
   // The game stores scene color with 1.0 representing 250 nits.
   // Rescale that reference so 1.0 represents the configured diffuse white.

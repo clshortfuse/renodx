@@ -307,6 +307,40 @@ float3 ApplyAnchoredAdaptationContrast(
   return (contrasted_normalized * anchor_out);
 }
 
+float3 ApplyAdaptiveMBPurity(float3 lms_input, float3 adaptive_neutral_lms, float purity_scale) {
+  if (abs(purity_scale - 1.f) <= 1e-5f) return lms_input;
+
+  float3 relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(lms_input, adaptive_neutral_lms);
+  float3 mb = renodx::color::macleod_boynton::from::WeightedLMS(relative_weighted);
+  float3 mb_neutral = renodx::color::macleod_boynton::from::LMS(1.f.xxx);
+  float2 mb_scaled_xy = lerp(mb_neutral.xy, mb.xy, purity_scale);
+  float3 relative_weighted_out = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(float3(mb_scaled_xy, mb.z));
+
+  return renodx::color::macleod_boynton::UnweighLMS(
+      renodx::tonemap::psychov::psycho17_FromAdaptiveRelativeWeightedLMS(relative_weighted_out, adaptive_neutral_lms));
+}
+
+float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float highlight_saturation, float3 adaptive_neutral_lms) {
+  if (purity_scale == 1.f && highlight_saturation == 1.f) return color_lms;
+
+  if (highlight_saturation != 1.f) {
+    // Roll purity off over log luminance from the adaptation point to 10,000 nits.
+    // Smootherstep keeps the transition monotonic and C2 continuous at both ends.
+    float luminance = max(0.f, renodx::color::yf::from::LMS(color_lms));
+    float neutral_luminance = renodx::color::yf::from::LMS(adaptive_neutral_lms);
+    const float highlight_saturation_peak_nits = 10000.f;
+    float luminance_from_neutral = max(luminance, neutral_luminance) / neutral_luminance;
+    float peak_from_neutral = highlight_saturation_peak_nits / (neutral_luminance * RENODX_DIFFUSE_WHITE_NITS);
+    float rolloff_position = saturate(log2(luminance_from_neutral) / log2(max(peak_from_neutral, 1.f + 1e-7f)));
+    float rolloff = rolloff_position * rolloff_position * rolloff_position
+                    * (rolloff_position * (rolloff_position * 6.f - 15.f) + 10.f);
+    float highlight_desaturation = 1.f - highlight_saturation;
+    purity_scale *= 1.f - rolloff * highlight_desaturation;
+  }
+
+  return ApplyAdaptiveMBPurity(color_lms, adaptive_neutral_lms, purity_scale);
+}
+
 // GT/Uchimura without its asymptotic shoulder. The original toe is preserved,
 // while the middle linear segment continues indefinitely with slope `a`.
 #define GT_TONEMAP_UNCAPPED_GENERATOR(T)                           \
@@ -330,8 +364,43 @@ float3 ApplyGTToneMap(float3 untonemapped, float P, float a, float m, float l, f
   if (RENODX_TONE_MAP_TYPE == 0.f) {  // Vanilla
     tonemapped = renodx::tonemap::GTTonemap(untonemapped, P, a, m, l, c);
   } else {  // Vanilla+
-    tonemapped = GTTonemapUncapped(untonemapped, a, m, c);
-    tonemapped = ApplyAnchoredAdaptationContrast(tonemapped, RENODX_TONE_MAP_CONTRAST, 0.18f, 0.18f, RENODX_TONE_MAP_FLARE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS);
+    float grading_anchor = max(m + l * 0.5f, 1e-7f);
+    if (RENODX_TONE_MAP_WORKING_COLOR_SPACE == 0.f) {  // BT.709
+      tonemapped = GTTonemapUncapped(untonemapped, a, m, c);
+      tonemapped = ApplyAnchoredAdaptationContrast(
+          tonemapped,
+          RENODX_TONE_MAP_CONTRAST,
+          grading_anchor, grading_anchor,
+          0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+          RENODX_TONE_MAP_HIGHLIGHTS,
+          RENODX_TONE_MAP_SHADOWS);
+      float3 grading_anchor_lms = renodx::color::lms::from::BT709(grading_anchor.xxx);
+      float3 graded_lms = ApplyPurityGradingLMS(
+          max(renodx::color::lms::from::BT709(tonemapped), 1e-7f),
+          RENODX_TONE_MAP_SATURATION,
+          RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
+          grading_anchor_lms);
+      tonemapped = renodx::color::bt709::from::LMS(max(graded_lms, 1e-7f));
+    } else {  // LMS
+      float3 bt709_white_lms = renodx::color::lms::from::BT709(1.f.xxx);
+      float3 untonemapped_lms_normalized = renodx::color::lms::from::BT709(untonemapped) / bt709_white_lms;
+      float3 tonemapped_lms = GTTonemapUncapped(max(untonemapped_lms_normalized, 0.f), a, m, c) * bt709_white_lms;
+      float3 grading_anchor_lms = renodx::color::lms::from::BT709(grading_anchor.xxx);
+      float3 graded_lms = ApplyAnchoredAdaptationContrast(
+          max(tonemapped_lms, 1e-7f),
+          RENODX_TONE_MAP_CONTRAST,
+          grading_anchor_lms, grading_anchor_lms,
+          0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+          RENODX_TONE_MAP_HIGHLIGHTS,
+          RENODX_TONE_MAP_SHADOWS);
+      graded_lms = max(graded_lms, 1e-7f);
+      graded_lms = ApplyPurityGradingLMS(
+          graded_lms,
+          RENODX_TONE_MAP_SATURATION,
+          RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
+          grading_anchor_lms);
+      tonemapped = renodx::color::bt709::from::LMS(max(graded_lms, 1e-7f));
+    }
     tonemapped = renodx::color::bt709::clamp::BT2020(tonemapped);
   }
 
