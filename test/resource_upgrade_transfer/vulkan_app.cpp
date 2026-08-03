@@ -214,7 +214,10 @@ int main() {
       .arrayLayers = 1u,
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .tiling = VK_IMAGE_TILING_OPTIMAL,
-      .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+      .usage = static_cast<VkImageUsageFlags>(
+          GetEnvironmentVariableW(L"RENODX_TRANSFER_LIMITED_USAGE", nullptr, 0u) != 0u
+              ? VK_IMAGE_USAGE_TRANSFER_DST_BIT
+              : VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT),
       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
   };

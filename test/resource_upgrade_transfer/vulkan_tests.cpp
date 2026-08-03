@@ -29,12 +29,17 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  const std::string requested_format = argv[1];
-  const bool enable_addon = !requested_format.starts_with("baseline-");
-  const bool inspect_upgraded = requested_format.starts_with("inspect-");
-  const std::string format = !enable_addon ? requested_format.substr(9u)
-                             : inspect_upgraded ? requested_format.substr(8u)
-                                               : requested_format;
+  std::string format = argv[1];
+  const bool enable_addon = !format.starts_with("baseline-");
+  if (!enable_addon) format.erase(0u, 9u);
+  const bool inspect_upgraded = format.starts_with("inspect-");
+  if (inspect_upgraded) format.erase(0u, 8u);
+  const bool preserve_copy_usage = format.starts_with("preserve-");
+  if (preserve_copy_usage) format.erase(0u, 9u);
+  const bool direct_upgrade = format.starts_with("direct-");
+  if (direct_upgrade) format.erase(0u, 7u);
+  const bool limited_usage = format.starts_with("limited-");
+  if (limited_usage) format.erase(0u, 8u);
   const fs::path app_source = fs::absolute(argv[2]);
   const fs::path addon_source = fs::absolute(argv[3]);
   const fs::path reshade_dir = fs::absolute(argv[4]);
@@ -88,6 +93,9 @@ int main(int argc, char** argv) {
   SetEnvironmentVariableW(L"DISABLE_VK_LAYER_reshade_1", L"1");
   SetEnvironmentVariableW(L"RESHADE_DISABLE_LOADING_CHECK", L"1");
   SetEnvironmentVariableW(L"RENODX_TRANSFER_INSPECT_UPGRADED", inspect_upgraded ? L"1" : nullptr);
+  SetEnvironmentVariableW(L"RENODX_TRANSFER_PRESERVE_COPY_USAGE", preserve_copy_usage ? L"1" : nullptr);
+  SetEnvironmentVariableW(L"RENODX_TRANSFER_DIRECT_UPGRADE", direct_upgrade ? L"1" : nullptr);
+  SetEnvironmentVariableW(L"RENODX_TRANSFER_LIMITED_USAGE", limited_usage ? L"1" : nullptr);
 
   STARTUPINFOW startup_info = {};
   startup_info.cb = sizeof(startup_info);
@@ -123,17 +131,23 @@ int main(int argc, char** argv) {
                               || log.find("Initialized.") != std::string::npos;
   const bool addon_loaded = log.find(addon.filename().string()) != std::string::npos
                             || log.find("RenoDX Resource Upgrade Transfer Test") != std::string::npos;
+  const bool bridge_created = log.find("created old-format transfer bridge") != std::string::npos;
+  const bool bridge_expected = enable_addon
+                               && (direct_upgrade || (limited_usage && preserve_copy_usage));
   const bool passed = wait_result == WAIT_OBJECT_0
                       && exit_code == 0u
                       && result.starts_with("PASS\n")
                       && reshade_loaded
-                      && addon_loaded == enable_addon;
+                      && addon_loaded == enable_addon
+                      && bridge_created == bridge_expected;
   std::cout << "runtime=" << runtime << '\n'
             << result;
   if (!passed) {
     std::cerr << "wait_result=" << wait_result << " app_exit=" << exit_code
               << " reshade_loaded=" << reshade_loaded
               << " addon_loaded=" << addon_loaded
+              << " bridge_created=" << bridge_created
+              << " bridge_expected=" << bridge_expected
               << "\nReShade.log:\n"
               << log << '\n';
   }

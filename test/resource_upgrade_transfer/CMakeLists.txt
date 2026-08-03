@@ -83,5 +83,44 @@ if(Vulkan_FOUND)
       LABELS "resource_upgrade;transfer;runtime;vulkan;upgraded_texels"
       TIMEOUT 60
     )
+
+    add_test(
+      NAME resource_upgrade_transfer_vulkan_bridge_fallback_${format}
+      COMMAND resource_upgrade_transfer_vulkan_tests
+        direct-${format}
+        $<TARGET_FILE:resource_upgrade_transfer_vulkan_app>
+        $<TARGET_FILE:resource_upgrade_transfer_addon>
+        ${RENODX_TEST_RESHADE_DIR}
+    )
+    set_tests_properties(resource_upgrade_transfer_vulkan_bridge_fallback_${format} PROPERTIES
+      LABELS "resource_upgrade;transfer;runtime;vulkan;bridge_fallback"
+      TIMEOUT 60
+    )
+
+    add_test(
+      NAME resource_upgrade_transfer_vulkan_clone_copy_usage_${format}
+      COMMAND resource_upgrade_transfer_vulkan_tests
+        limited-${format}
+        $<TARGET_FILE:resource_upgrade_transfer_vulkan_app>
+        $<TARGET_FILE:resource_upgrade_transfer_addon>
+        ${RENODX_TEST_RESHADE_DIR}
+    )
+    set_tests_properties(resource_upgrade_transfer_vulkan_clone_copy_usage_${format} PROPERTIES
+      LABELS "resource_upgrade;transfer;runtime;vulkan;copy_usage;limited_usage"
+      TIMEOUT 60
+    )
+
+    add_test(
+      NAME resource_upgrade_transfer_vulkan_clone_bridge_fallback_${format}
+      COMMAND resource_upgrade_transfer_vulkan_tests
+        preserve-limited-${format}
+        $<TARGET_FILE:resource_upgrade_transfer_vulkan_app>
+        $<TARGET_FILE:resource_upgrade_transfer_addon>
+        ${RENODX_TEST_RESHADE_DIR}
+    )
+    set_tests_properties(resource_upgrade_transfer_vulkan_clone_bridge_fallback_${format} PROPERTIES
+      LABELS "resource_upgrade;transfer;runtime;vulkan;bridge_fallback;limited_usage"
+      TIMEOUT 60
+    )
   endforeach()
 endif()
