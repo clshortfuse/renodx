@@ -1,4 +1,4 @@
-# D3D12 runtime tests
+# Runtime tests
 
 Configure with `RENODX_BUILD_TESTS=ON`, build the `renodx_test_suites` target,
 then run the registered CTest tests.
@@ -14,10 +14,10 @@ then run the registered CTest tests.
 - On Vulkan, the legacy omitted `ViewBinding::space` value resolves to
   descriptor set 0. Explicit non-default descriptor sets remain unchanged.
 
-The runtime tests use native D3D12 helpers and ReShade addon callbacks or GPU
-readback. ReShade 6.7.3 is pinned by SHA-256. A matching `bin/ReShade64.dll` is
-used when available; otherwise the official addon package is downloaded and
-extracted when the test suite is built.
+The runtime tests use native D3D12 or Vulkan helpers and ReShade addon callbacks
+or GPU readback. ReShade 6.7.3 is pinned by SHA-256. A matching
+`bin/ReShade64.dll` is used when available; otherwise the official addon
+package is downloaded and extracted when the test suite is built.
 
 - `api_compatibility` compile-checks the public `main` configuration fields and
   the shader factory and macro exposed by the initial PR, then verifies
@@ -28,7 +28,9 @@ extracted when the test suite is built.
 - `render_pass_behavior` verifies automatic, legacy mutable, and caller-owned
   descriptor-table paths with deterministic GPU readback.
 - `resource_upgrade_transfer` verifies RGBA8 and RGB10A2 upload/readback through
-  cloned RGBA16F resources without D3D12 resource-state errors.
+  cloned RGBA16F resources. Vulkan controls first verify native packed transfer
+  behavior, then independently validate application-visible readback and the
+  normalized half-float texels stored by the upgraded transfer path.
 - `shader_injection_behavior` verifies exact 64-DWORD root-signature injection,
   no-budget rejection, the exact `main` register-space 50 default across
   Direct3D and OpenGL, the safe Vulkan descriptor-set 0 interpretation,

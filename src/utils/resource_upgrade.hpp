@@ -1771,8 +1771,53 @@ inline bool OnCopyTextureToBuffer(
       source_texture.upgrade_target,
       source_texture.clone_target);
 
-  const bool dest_may_redirect = BufferMayRedirect(dest_buffer, buffer_target);
   const bool source_may_redirect = TextureMayRedirect(source_texture);
+  auto source_final = source;
+  if (source_may_redirect) {
+    const auto source_clone = ResolveTextureCloneRedirect(source, source_texture);
+    if (source_clone.handle != 0u) {
+      source_final = source_clone;
+    }
+  }
+
+  if (buffer_target != nullptr
+      && buffer_target->old_format != buffer_target->new_format
+      && (source_final.handle != source.handle || source_texture.upgrade_target != nullptr)) {
+    const auto transfer_bridge = ResolveTextureTransferBridge(
+        cmd_list->get_device(),
+        source,
+        source_texture,
+        buffer_target);
+    if (transfer_bridge.handle == 0u) return false;
+
+    cmd_list->copy_texture_region(
+        source_final,
+        source_subresource,
+        source_box,
+        transfer_bridge,
+        source_subresource,
+        source_box,
+        reshade::api::filter_mode::min_mag_mip_point);
+    cmd_list->barrier(
+        transfer_bridge,
+        reshade::api::resource_usage::copy_dest,
+        reshade::api::resource_usage::copy_source);
+    cmd_list->copy_texture_to_buffer(
+        transfer_bridge,
+        source_subresource,
+        source_box,
+        dest,
+        dest_offset,
+        row_length,
+        slice_height);
+    cmd_list->barrier(
+        transfer_bridge,
+        reshade::api::resource_usage::copy_source,
+        reshade::api::resource_usage::copy_dest);
+    return true;
+  }
+
+  const bool dest_may_redirect = BufferMayRedirect(dest_buffer, buffer_target);
   if (!source_may_redirect && !dest_may_redirect) return false;
 
   auto dest_final = dest;
@@ -1791,14 +1836,6 @@ inline bool OnCopyTextureToBuffer(
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
       }
 #endif
-    }
-  }
-
-  auto source_final = source;
-  if (source_may_redirect) {
-    const auto source_clone = ResolveTextureCloneRedirect(source, source_texture);
-    if (source_clone.handle != 0u) {
-      source_final = source_clone;
     }
   }
 
