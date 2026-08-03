@@ -48,6 +48,9 @@ struct HeapDescriptorInfo {
 };
 
 struct __declspec(uuid("72c2182f-dbf5-42b6-a4d5-ee8de408402d")) DeviceData {
+  explicit DeviceData(const bool supports_vulkan_blit)
+      : supports_vulkan_blit(supports_vulkan_blit) {}
+
   std::shared_mutex mutex;
   std::vector<renodx::utils::resource::ResourceUpgradeInfo> upgrade_infos;
   std::vector<std::atomic<uint32_t>> upgrade_counts;
@@ -55,6 +58,10 @@ struct __declspec(uuid("72c2182f-dbf5-42b6-a4d5-ee8de408402d")) DeviceData {
   reshade::api::resource_desc back_buffer_desc;
   std::atomic<bool> resource_upgrade_finished = false;
   std::unordered_map<uint64_t, std::unordered_map<uint32_t, HeapDescriptorInfo*>> heap_descriptor_infos;
+  const bool supports_vulkan_blit;
+  // Keyed by original application texture resource handle; values are old-format transfer images.
+  cross_addon::parallel_node_hash_map<uint64_t, reshade::api::resource, std::shared_mutex>
+      texture_transfer_bridges;
 };
 
 struct __declspec(uuid("0a2b51ad-ef13-4010-81a4-37a4a0f857a6")) CommandListData {
@@ -74,16 +81,6 @@ struct __declspec(uuid("1d1ad3fa-98f4-4496-9a3d-1da0104d62ab")) SharedData {
   };
 };
 
-struct TextureTransferBridge {
-  reshade::api::device* device = nullptr;
-  reshade::api::resource resource = {0u};
-};
-
-struct __declspec(uuid("f28e2262-7955-4e7c-9c78-7dce84c071de")) TransferBridgeSharedData {
-  cross_addon::parallel_node_hash_map<uint64_t, TextureTransferBridge, std::shared_mutex>
-      texture_bridges;
-};
-
 struct ResourceCloneOptions {
   bool require_enabled = true;
   bool allow_create = true;
@@ -93,7 +90,6 @@ struct ResourceCloneOptions {
 using ResourceViewCloneOptions = ResourceCloneOptions;
 
 static cross_addon::Shared<SharedData> shared;
-static cross_addon::Shared<TransferBridgeSharedData> transfer_bridge_shared;
 
 static bool use_resource_cloning = false;
 static bool use_resource_cloning_dx12_only = false;
@@ -914,7 +910,10 @@ static bool SetUpgradeInfos(reshade::api::device* device, std::span<renodx::util
 // Hooks
 
 static void OnInitDevice(reshade::api::device* device) {
-  renodx::utils::data::Create<DeviceData>(device);
+  renodx::utils::data::Create<DeviceData>(
+      device,
+      device->get_api() == reshade::api::device_api::vulkan
+          && device->check_capability(reshade::api::device_caps::blit));
 
 #ifdef DEBUG_LEVEL_0
   std::stringstream s;
@@ -927,20 +926,17 @@ static void OnInitDevice(reshade::api::device* device) {
 };
 
 static void OnDestroyDevice(reshade::api::device* device) {
-  cross_addon::vector<uint64_t> bridge_keys;
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr) return;
+
   cross_addon::vector<reshade::api::resource> bridges;
-  transfer_bridge_shared.data->texture_bridges.for_each([&](const auto& pair) {
-    if (pair.second.device != device) return;
-    bridge_keys.push_back(pair.first);
-    bridges.push_back(pair.second.resource);
+  data->texture_transfer_bridges.for_each([&](const auto& pair) {
+    bridges.push_back(pair.second);
   });
-  for (const auto bridge_key : bridge_keys) {
-    transfer_bridge_shared.data->texture_bridges.erase(bridge_key);
-  }
   for (const auto bridge : bridges) {
     device->destroy_resource(bridge);
   }
-  renodx::utils::data::Delete<DeviceData>(device);
+  renodx::utils::data::Delete(device, data);
 
 #ifdef DEBUG_LEVEL_0
   std::stringstream s;
@@ -1388,18 +1384,18 @@ inline void OnInitResourceInfo(renodx::utils::resource::ResourceInfo* resource_i
 inline void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
   if (!shared.IsEventHandler()) return;
 
-  TextureTransferBridge transfer_bridge;
-  bool found_transfer_bridge = false;
-  transfer_bridge_shared.data->texture_bridges.erase_if(info->resource.handle, [&](const auto& pair) {
-    transfer_bridge = pair.second;
-    found_transfer_bridge = true;
-    return true;
-  });
-  if (found_transfer_bridge) {
-    pending_resource_destroys.insert({
-        .device = transfer_bridge.device,
-        .resource = transfer_bridge.resource,
+  if (auto* data = renodx::utils::data::Get<DeviceData>(info->device); data != nullptr) {
+    reshade::api::resource transfer_bridge;
+    const bool found_transfer_bridge = data->texture_transfer_bridges.erase_if(info->resource.handle, [&](const auto& pair) {
+      transfer_bridge = pair.second;
+      return true;
     });
+    if (found_transfer_bridge) {
+      pending_resource_destroys.insert({
+          .device = info->device,
+          .resource = transfer_bridge,
+      });
+    }
   }
 
   for (const auto view_handle : info->resource_view_handles) {
@@ -1456,6 +1452,11 @@ inline void OnDestroyResourceInfo(utils::resource::ResourceInfo* info) {
 }
 
 struct CopyRedirectBuffer {
+  CopyRedirectBuffer() = default;
+
+  explicit CopyRedirectBuffer(const utils::resource::ResourceInfo& info)
+      : desc(info.desc), clone(info.clone), device(info.device), initial_state(info.initial_state) {}
+
   reshade::api::resource_desc desc;
   reshade::api::resource clone = {0u};
   reshade::api::device* device = nullptr;
@@ -1471,6 +1472,20 @@ struct CopyRedirectTexture {
   utils::resource::ResourceUpgradeInfo* clone_target = nullptr;
 };
 
+struct CopyRedirectTextureRouting {
+  explicit CopyRedirectTextureRouting(const utils::resource::ResourceInfo& info)
+      : clone_enabled(info.clone_enabled),
+        clone(info.clone),
+        upgrade_target(info.upgrade_target),
+        clone_target(info.clone_target) {}
+
+  bool clone_enabled;
+  reshade::api::resource clone;
+  utils::resource::ResourceUpgradeInfo* upgrade_target;
+  utils::resource::ResourceUpgradeInfo* clone_target;
+};
+
+// Retained for downstream source compatibility; transfer callbacks use direct snapshot construction below.
 inline bool GetCopyRedirectBuffer(
     const reshade::api::resource& resource,
     CopyRedirectBuffer* buffer) {
@@ -1482,6 +1497,16 @@ inline bool GetCopyRedirectBuffer(
   });
 }
 
+inline std::optional<CopyRedirectBuffer> GetCopyRedirectBufferSnapshot(
+    const reshade::api::resource& resource) {
+  std::optional<CopyRedirectBuffer> buffer;
+  utils::resource::GetResourceInfo(resource, [&buffer](const utils::resource::ResourceInfo& info) {
+    buffer.emplace(info);
+  });
+  return buffer;
+}
+
+// Retained for downstream source compatibility; transfer callbacks use the routing-only snapshot below.
 inline bool GetCopyRedirectTexture(
     const reshade::api::resource& resource,
     CopyRedirectTexture* texture) {
@@ -1493,6 +1518,15 @@ inline bool GetCopyRedirectTexture(
     texture->upgrade_target = info.upgrade_target;
     texture->clone_target = info.clone_target;
   });
+}
+
+inline std::optional<CopyRedirectTextureRouting> GetCopyRedirectTextureRouting(
+    const reshade::api::resource& resource) {
+  std::optional<CopyRedirectTextureRouting> texture;
+  utils::resource::GetResourceInfo(resource, [&texture](const utils::resource::ResourceInfo& info) {
+    texture.emplace(info);
+  });
+  return texture;
 }
 
 inline utils::resource::ResourceUpgradeInfo* ResolveBufferUpgradeTarget(
@@ -1535,55 +1569,79 @@ inline reshade::api::resource ResolveTextureCloneRedirect(
   return clone;
 }
 
+inline bool TextureMayRedirect(const CopyRedirectTextureRouting& texture) {
+  return texture.clone_enabled;
+}
+
+inline reshade::api::resource ResolveTextureCloneRedirect(
+    const reshade::api::resource& resource,
+    const CopyRedirectTextureRouting& texture) {
+  if (!TextureMayRedirect(texture)) {
+    return {0u};
+  }
+
+  auto clone = texture.clone;
+  if (clone.handle == 0u) {
+    clone = CloneResource(resource);
+  }
+  return clone;
+}
+
 inline reshade::api::resource ResolveTextureTransferBridge(
     reshade::api::device* device,
     const reshade::api::resource& texture_resource,
-    const CopyRedirectTexture& texture,
     const utils::resource::ResourceUpgradeInfo* target) {
   if (device == nullptr
       || texture_resource.handle == 0u
       || target == nullptr
-      || target->old_format == target->new_format
-      || !device->check_capability(reshade::api::device_caps::blit)) {
+      || target->old_format == target->new_format) {
     return {0u};
   }
 
-  reshade::api::resource bridge = {0u};
-  transfer_bridge_shared.data->texture_bridges.if_contains(texture_resource.handle, [&](const auto& pair) {
-    bridge = pair.second.resource;
+  auto* data = renodx::utils::data::Get<DeviceData>(device);
+  if (data == nullptr || !data->supports_vulkan_blit) return {0u};
+
+  reshade::api::resource bridge;
+  if (data->texture_transfer_bridges.if_contains(texture_resource.handle, [&](const auto& pair) {
+        bridge = pair.second;
+      })) {
+    return bridge;
+  }
+
+  std::optional<reshade::api::resource_desc> bridge_desc;
+  utils::resource::GetResourceInfo(texture_resource, [&bridge_desc](const utils::resource::ResourceInfo& info) {
+    // Direct upgrades replaced desc and need the application fallback; clone upgrades retain desc.
+    if (info.upgrade_target != nullptr) {
+      bridge_desc.emplace(info.fallback_desc);
+    } else {
+      bridge_desc.emplace(info.desc);
+    }
   });
-  if (bridge.handle != 0u) return bridge;
+  if (!bridge_desc.has_value()) return {0u};
+  bridge_desc->texture.format = target->old_format;
+  bridge_desc->heap = reshade::api::memory_heap::gpu_only;
+  bridge_desc->usage = reshade::api::resource_usage::copy_source
+                       | reshade::api::resource_usage::copy_dest;
+  bridge_desc->flags = reshade::api::resource_flags::none;
 
-  auto bridge_desc = texture.upgrade_target != nullptr ? texture.fallback_desc : texture.desc;
-  bridge_desc.texture.format = target->old_format;
-  bridge_desc.heap = reshade::api::memory_heap::gpu_only;
-  bridge_desc.usage = reshade::api::resource_usage::copy_source
-                      | reshade::api::resource_usage::copy_dest;
-  bridge_desc.flags = reshade::api::resource_flags::none;
-
-  reshade::api::resource created_bridge = {0u};
+  reshade::api::resource created_bridge;
   local_creating_texture_transfer_bridge = true;
   const bool created = device->create_resource(
-      bridge_desc,
+      bridge_desc.value(),
       nullptr,
       reshade::api::resource_usage::copy_dest,
       &created_bridge);
   local_creating_texture_transfer_bridge = false;
   if (!created || created_bridge.handle == 0u) return {0u};
 
-  bool published_bridge = false;
-  transfer_bridge_shared.data->texture_bridges.lazy_emplace_l(
+  const bool published_bridge = data->texture_transfer_bridges.lazy_emplace_l(
       texture_resource.handle,
       [&](const auto& pair) {
-        bridge = pair.second.resource;
+        bridge = pair.second;
       },
       [&](const auto& ctor) {
-        ctor(texture_resource.handle, TextureTransferBridge{
-                                          .device = device,
-                                          .resource = created_bridge,
-                                      });
+        ctor(texture_resource.handle, created_bridge);
         bridge = created_bridge;
-        published_bridge = true;
       });
   if (!published_bridge) {
     device->destroy_resource(created_bridge);
@@ -1634,20 +1692,20 @@ inline bool OnCopyBufferToTexture(
   const bool is_vulkan = cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan;
   if (!is_vulkan) return false;
 
-  CopyRedirectBuffer source_buffer;
-  if (!GetCopyRedirectBuffer(source, &source_buffer)) return false;
+  auto source_buffer = GetCopyRedirectBufferSnapshot(source);
+  if (!source_buffer.has_value()) return false;
 
-  CopyRedirectTexture dest_texture;
-  if (!GetCopyRedirectTexture(dest, &dest_texture)) return false;
+  auto dest_texture = GetCopyRedirectTextureRouting(dest);
+  if (!dest_texture.has_value()) return false;
 
   utils::resource::ResourceUpgradeInfo* buffer_target = ResolveBufferUpgradeTarget(
       is_vulkan,
-      dest_texture.upgrade_target,
-      dest_texture.clone_target);
+      dest_texture->upgrade_target,
+      dest_texture->clone_target);
 
   auto dest_final = dest;
-  if (TextureMayRedirect(dest_texture)) {
-    const auto dest_clone = ResolveTextureCloneRedirect(dest, dest_texture);
+  if (TextureMayRedirect(dest_texture.value())) {
+    const auto dest_clone = ResolveTextureCloneRedirect(dest, dest_texture.value());
     if (dest_clone.handle != 0u) {
       dest_final = dest_clone;
     }
@@ -1655,11 +1713,10 @@ inline bool OnCopyBufferToTexture(
 
   if (buffer_target != nullptr
       && buffer_target->old_format != buffer_target->new_format
-      && (dest_final.handle != dest.handle || dest_texture.upgrade_target != nullptr)) {
+      && (dest_final.handle != dest.handle || dest_texture->upgrade_target != nullptr)) {
     const auto transfer_bridge = ResolveTextureTransferBridge(
         cmd_list->get_device(),
         dest,
-        dest_texture,
         buffer_target);
     if (transfer_bridge.handle != 0u) {
       cmd_list->copy_buffer_to_texture(
@@ -1691,13 +1748,13 @@ inline bool OnCopyBufferToTexture(
     return false;
   }
 
-  const bool source_may_redirect = BufferMayRedirect(source_buffer, buffer_target);
-  const bool dest_may_redirect = TextureMayRedirect(dest_texture);
+  const bool source_may_redirect = BufferMayRedirect(source_buffer.value(), buffer_target);
+  const bool dest_may_redirect = TextureMayRedirect(dest_texture.value());
   if (!source_may_redirect && !dest_may_redirect) return false;
 
   auto source_final = source;
   if (source_may_redirect) {
-    const auto source_clone = ResolveBufferCloneRedirect(source, source_buffer, buffer_target, cmd_list);
+    const auto source_clone = ResolveBufferCloneRedirect(source, source_buffer.value(), buffer_target, cmd_list);
     if (source_clone.handle != 0u) {
       source_final = source_clone;
 #ifdef DEBUG_LEVEL_0
@@ -1760,21 +1817,21 @@ inline bool OnCopyTextureToBuffer(
   const bool is_vulkan = cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan;
   if (!is_vulkan) return false;
 
-  CopyRedirectTexture source_texture;
-  if (!GetCopyRedirectTexture(source, &source_texture)) return false;
+  auto source_texture = GetCopyRedirectTextureRouting(source);
+  if (!source_texture.has_value()) return false;
 
-  CopyRedirectBuffer dest_buffer;
-  if (!GetCopyRedirectBuffer(dest, &dest_buffer)) return false;
+  auto dest_buffer = GetCopyRedirectBufferSnapshot(dest);
+  if (!dest_buffer.has_value()) return false;
 
   utils::resource::ResourceUpgradeInfo* buffer_target = ResolveBufferUpgradeTarget(
       is_vulkan,
-      source_texture.upgrade_target,
-      source_texture.clone_target);
+      source_texture->upgrade_target,
+      source_texture->clone_target);
 
-  const bool source_may_redirect = TextureMayRedirect(source_texture);
+  const bool source_may_redirect = TextureMayRedirect(source_texture.value());
   auto source_final = source;
   if (source_may_redirect) {
-    const auto source_clone = ResolveTextureCloneRedirect(source, source_texture);
+    const auto source_clone = ResolveTextureCloneRedirect(source, source_texture.value());
     if (source_clone.handle != 0u) {
       source_final = source_clone;
     }
@@ -1782,11 +1839,10 @@ inline bool OnCopyTextureToBuffer(
 
   if (buffer_target != nullptr
       && buffer_target->old_format != buffer_target->new_format
-      && (source_final.handle != source.handle || source_texture.upgrade_target != nullptr)) {
+      && (source_final.handle != source.handle || source_texture->upgrade_target != nullptr)) {
     const auto transfer_bridge = ResolveTextureTransferBridge(
         cmd_list->get_device(),
         source,
-        source_texture,
         buffer_target);
     if (transfer_bridge.handle == 0u) return false;
 
@@ -1817,12 +1873,12 @@ inline bool OnCopyTextureToBuffer(
     return true;
   }
 
-  const bool dest_may_redirect = BufferMayRedirect(dest_buffer, buffer_target);
+  const bool dest_may_redirect = BufferMayRedirect(dest_buffer.value(), buffer_target);
   if (!source_may_redirect && !dest_may_redirect) return false;
 
   auto dest_final = dest;
   if (dest_may_redirect) {
-    const auto dest_clone = ResolveBufferCloneRedirect(dest, dest_buffer, buffer_target);
+    const auto dest_clone = ResolveBufferCloneRedirect(dest, dest_buffer.value(), buffer_target);
     if (dest_clone.handle != 0u) {
       dest_final = dest_clone;
 #ifdef DEBUG_LEVEL_0
@@ -3752,7 +3808,6 @@ static void Use(DWORD fdw_reason) {
 
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
-      transfer_bridge_shared.RegisterModule([](TransferBridgeSharedData&) {});
       if (shared.RegisterModule([](SharedData& data) {
             data.use_resource_cloning = data.use_resource_cloning || use_resource_cloning || use_resource_cloning_dx12_only;
             data.use_auto_cloning = data.use_auto_cloning || use_auto_cloning;
@@ -3872,7 +3927,6 @@ static void Use(DWORD fdw_reason) {
         reshade::log::message(reshade::log::level::info, "ResourceUtil detached.");
 #endif
       }
-  transfer_bridge_shared.UnregisterModule();
 
       break;
   }
