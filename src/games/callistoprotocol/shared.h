@@ -8,9 +8,6 @@
 
 #define RENODX_GAMMA_CORRECTION    1.f
 #define RENODX_GAMMA_CORRECTION_UI 1.f
-#define RENODX_TONE_MAP_HUE_SHIFT  1.f
-#define RENODX_TONE_MAP_BLOWOUT    0.f
-#define RENODX_TONE_MAP_WHITE_CLIP 100.f
 
 #define RENODX_TONE_MAP_EXPOSURE             1.f
 #define RENODX_TONE_MAP_HIGHLIGHTS           1.f
@@ -22,10 +19,6 @@
 #define RENODX_TONE_MAP_FLARE                0.f
 #define RENODX_COLOR_GRADE_STRENGTH          1.f
 #define RENODX_COLOR_GRADE_SCALING           1.f
-#define LUT_SAMPLING_METHOD                  1.f
-
-#define CUSTOM_BLOOM      1.f
-#define CUSTOM_LENS_FLARE 1.f
 
 #ifndef __cplusplus
 
