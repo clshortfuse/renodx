@@ -257,9 +257,10 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
       {"ToneMapPeakNits", 1000.f},
-      {"ToneMapGameNits", 150.f},
-      {"ToneMapUINits", 150.f},
-      {"UIGammaCorrection", 1.f},
+      {"ToneMapGameNits", 250.f},
+      {"ToneMapWorkingColorSpace", 0.f},
+      {"ToneMapUINits", 250.f},
+      {"UIGammaCorrection", 0.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 50.f},
