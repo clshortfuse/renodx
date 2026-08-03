@@ -778,7 +778,10 @@ static std::string GetLivePath() {
 }
 
 static void SetDeviceApi(reshade::api::device_api device_api) {
-  internal::shared_device_api.store(static_cast<int>(device_api));
+  if (internal::shared_device_api.exchange(static_cast<int>(device_api))
+      != static_cast<int>(device_api)) {
+    internal::shared_compile_pending = true;
+  }
 }
 
 static void SetLivePath(const std::string& live_path) {
