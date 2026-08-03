@@ -671,6 +671,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   }
 
   bool changed = (old_format != desc.back_buffer.texture.format)
+                 || (old_buffer_count != desc.back_buffer_count)
                  || (old_present_mode != desc.present_mode)
                  || (old_present_flags != desc.present_flags)
                  || (old_fullscreen_state != desc.fullscreen_state)
