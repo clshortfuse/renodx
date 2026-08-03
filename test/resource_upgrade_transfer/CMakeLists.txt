@@ -46,6 +46,19 @@ if(Vulkan_FOUND)
 
   foreach(format IN ITEMS rgba8 rgb10a2)
     add_test(
+      NAME resource_upgrade_transfer_vulkan_${format}
+      COMMAND resource_upgrade_transfer_vulkan_tests
+        ${format}
+        $<TARGET_FILE:resource_upgrade_transfer_vulkan_app>
+        $<TARGET_FILE:resource_upgrade_transfer_addon>
+        ${RENODX_TEST_RESHADE_DIR}
+    )
+    set_tests_properties(resource_upgrade_transfer_vulkan_${format} PROPERTIES
+      LABELS "resource_upgrade;transfer;runtime;vulkan"
+      TIMEOUT 60
+    )
+
+    add_test(
       NAME resource_upgrade_transfer_vulkan_baseline_${format}
       COMMAND resource_upgrade_transfer_vulkan_tests
         baseline-${format}
