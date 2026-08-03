@@ -20,6 +20,10 @@ struct ShaderInjectData {
   float tone_map_flare;
   float color_grade_strength;
   float color_grade_scaling;
+
+  float custom_film_grain_type;
+  float custom_grain_strength;
+  float custom_random;
 };
 
 #ifndef __cplusplus
@@ -45,6 +49,10 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
 #define RENODX_COLOR_GRADE_SCALING           shader_injection.color_grade_scaling
+
+#define CUSTOM_GRAIN_TYPE     shader_injection.custom_film_grain_type
+#define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
+#define CUSTOM_RANDOM         shader_injection.custom_random
 
 #include "../../shaders/renodx.hlsl"
 
