@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.27)
 
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/tool-versions.cmake)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -20,12 +22,20 @@ find_program(DXC_BIN dxc.exe
   ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_SYSTEM_VERSION}/x64/
   REQUIRED)
 message("DXC_BIN: " ${DXC_BIN})
+renodx_check_minimum_tool_version(
+  "DirectX Shader Compiler" "${DXC_BIN}" "${RENODX_DXC_MIN_VERSION}"
+  "${RENODX_DXC_VERSION_REGEX}"
+  --version)
 
 find_program(SLANGC_BIN slangc.exe
   HINTS
   ${CMAKE_CURRENT_SOURCE_DIR}/bin/
   REQUIRED)
 message("SLANGC_BIN: " ${SLANGC_BIN})
+renodx_check_minimum_tool_version(
+  "Slang" "${SLANGC_BIN}" "${RENODX_SLANG_MIN_VERSION}"
+  "${RENODX_SLANG_VERSION_REGEX}"
+  -version)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
@@ -446,6 +456,10 @@ function(build_shader_target ADDON ADDON_PATH)
         $ENV{VULKAN_SDK}/Bin
         REQUIRED)
       message("GLSLANG_BIN: " ${GLSLANG_BIN})
+      renodx_check_minimum_tool_version(
+        "glslang" "${GLSLANG_BIN}" "${RENODX_GLSLANG_MIN_VERSION}"
+        "${RENODX_GLSLANG_VERSION_REGEX}"
+        --version)
     endif()
 
     if(GLSL_BACKEND STREQUAL "vk")
