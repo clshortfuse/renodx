@@ -17,11 +17,25 @@ add_dependencies(renodx_test_suites shader_injection_behavior_tests)
 add_test(
   NAME shader_injection_behavior_d3d12
   COMMAND shader_injection_behavior_tests
+    root-signature
     $<TARGET_FILE:shader_injection_behavior_dx12_app>
     $<TARGET_FILE:shader_injection_behavior_addon>
     ${RENODX_TEST_RESHADE_DIR}
 )
 set_tests_properties(shader_injection_behavior_d3d12 PROPERTIES
   LABELS "shader_injection;root_signature;runtime;d3d12"
+  TIMEOUT 60
+)
+
+add_test(
+  NAME descriptor_range_ownership_d3d12
+  COMMAND shader_injection_behavior_tests
+    descriptor-ownership
+    $<TARGET_FILE:shader_injection_behavior_dx12_app>
+    $<TARGET_FILE:shader_injection_behavior_addon>
+    ${RENODX_TEST_RESHADE_DIR}
+)
+set_tests_properties(descriptor_range_ownership_d3d12 PROPERTIES
+  LABELS "shader_injection;descriptor;ownership;runtime;d3d12"
   TIMEOUT 60
 )
