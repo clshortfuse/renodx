@@ -24,16 +24,9 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Download Slang binaries
-        run: |
-          curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2026.14.1/slang-2026.14.1-windows-x86_64.zip
-          powershell -Command "Expand-Archive -Path slang.zip -DestinationPath slang_temp -Force; if (!(Test-Path -Path .\bin)) { New-Item -ItemType Directory -Path .\bin }; Copy-Item slang_temp\bin\* .\bin -Force; Remove-Item slang_temp -Recurse -Force"
-
-      # Temporary until Khronos regenerates the 16.4.0 release assets.
-      - name: Download glslang binaries (main-tot)
-        run: |
-          curl -L -o glslang.zip https://github.com/KhronosGroup/glslang/releases/download/main-tot/glslang-main-windows-x86_64-release.zip
-          powershell -Command "Expand-Archive -Path glslang.zip -DestinationPath glslang_temp -Force; Copy-Item glslang_temp\bin\glslang.exe .\bin -Force; Remove-Item glslang_temp -Recurse -Force"
+      - name: Set up shader tools
+        shell: pwsh
+        run: .\scripts\setup-dev-env.ps1 -Update -Tools dxc,slang,glslang
 
       - name: Configure build for amd64
         uses: ilammy/msvc-dev-cmd@v1
