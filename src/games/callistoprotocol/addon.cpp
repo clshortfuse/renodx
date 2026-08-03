@@ -28,7 +28,8 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "- Requires HDR on in game\n"
-                 "- Requires DX12",
+                 "- Requires DX12\n"
+                 "- Keep in game brightness and black point sliders at default",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
