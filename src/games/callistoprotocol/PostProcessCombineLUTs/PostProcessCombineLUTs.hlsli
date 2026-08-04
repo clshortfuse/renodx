@@ -126,18 +126,20 @@ float3 ColorCorrectAll(float3 ungraded, const uint4 cb0_m[70]) {
 float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
   const float3 added_gamma = black_gamma;
 
-  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
-
   // Remove from 0 to mid-gray
-  const float shadow_length = mid_gray_average;
+  const float shadow_length = renodx::math::Min(mid_gray_gamma);
   const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
-  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
+  const float3 floor_remove = added_gamma * renodx::math::DivideSafe(max(0, shadow_length - shadow_stop), shadow_length, 0.f);
 
   const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
   return unclamped_gamma;
 }
 
-float3 RecolorUnclampedLMS(float3 original_lms, float3 unclamped_lms, float strength) {
+float3 RecolorUnclampedLMS(
+    float3 original_lms,
+    float3 unclamped_lms,
+    float strength,
+    float hue_restore = 0.5f) {
   float3 original_mb = renodx::color::macleod_boynton::from::LMS(original_lms);
   float3 unclamped_mb = renodx::color::macleod_boynton::from::LMS(unclamped_lms);
   float2 mb_white = renodx::color::macleod_boynton::from::D65XY();
@@ -148,9 +150,12 @@ float3 RecolorUnclampedLMS(float3 original_lms, float3 unclamped_lms, float stre
   float unclamped_radius = sqrt(unclamped_radius_squared);
   float2 original_direction = original_offset * rsqrt(max(original_radius_squared, 1e-14f));
   float2 unclamped_direction = unclamped_offset * rsqrt(max(unclamped_radius_squared, 1e-14f));
+  float2 restored_direction = lerp(unclamped_direction, original_direction, hue_restore);
+  float restored_radius_squared = dot(restored_direction, restored_direction);
+  restored_direction *= rsqrt(max(restored_radius_squared, 1e-14f));
   float2 hue_direction = renodx::math::Select(
-      original_mb.z > 1e-7f && original_radius_squared > 1e-14f,
-      original_direction,
+      original_mb.z > 1e-7f && original_radius_squared > 1e-14f && restored_radius_squared > 1e-14f,
+      restored_direction,
       unclamped_direction);
   float3 recolored_lms = renodx::color::lms::from::MacLeodBoynton(
       float3(mb_white + hue_direction * unclamped_radius, unclamped_mb.z));
@@ -262,7 +267,7 @@ float3 ApplyColorGradingLUTs(
     float lut_black_yf = renodx::color::yf::from::BT2020(lut_black);
     if (lut_black_yf > 0.f) {
       float3 lut_mid = SampleColorGradingLUTs(
-          lerp(lut_black_yf, 0.18f, 0.01f),
+          lerp(lut_black_yf, 0.18f, 0.1f),
           lut_weights
 #if CALLISTO_LUT_COUNT >= 1
           ,
@@ -275,16 +280,14 @@ float3 ApplyColorGradingLUTs(
       );
 
       float3 graded_lms = renodx::color::lms::from::BT2020(graded_bt2020);
-      float3 unclamped_gamma_lms = Unclamp(
-          sqrt(max(graded_lms, 0.f)),
-          sqrt(max(renodx::color::lms::from::BT2020(lut_black), 0.f)),
-          sqrt(max(renodx::color::lms::from::BT2020(lut_mid), 0.f)),
-          sqrt(max(renodx::color::lms::from::BT2020(color_bt2020), 0.f)));
+      float3 unclamped_gamma_lms = max(0, Unclamp(
+                                              sqrt(max(graded_lms, 0.f)),
+                                              sqrt(max(renodx::color::lms::from::BT2020(lut_black), 0.f)),
+                                              sqrt(max(renodx::color::lms::from::BT2020(lut_mid), 0.f)),
+                                              sqrt(max(renodx::color::lms::from::BT2020(color_bt2020), 0.f))));
       float3 unclamped_lms = unclamped_gamma_lms * unclamped_gamma_lms;
-      float3 recolored_lms = RecolorUnclampedLMS(
-          graded_lms,
-          unclamped_lms,
-          RENODX_COLOR_GRADE_SCALING);
+
+      float3 recolored_lms = RecolorUnclampedLMS(graded_lms, unclamped_lms, RENODX_COLOR_GRADE_SCALING * 0.99f);
       graded_bt2020 = max(renodx::color::bt2020::from::LMS(recolored_lms), 0.f);
     }
   }
