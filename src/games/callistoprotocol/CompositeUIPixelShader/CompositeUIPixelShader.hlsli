@@ -1,149 +1,79 @@
 #include "../common.hlsli"
 
-// Derives power from anchor-to-peak range, fading to Reinhard power 1 for narrow ranges.
-float ComputeNakaRushtonCompressionPower(float anchor_y, float peak_y) {
-  static const float REFERENCE_ONE_SIDE_RANGE_STOPS = 3.7f * 0.5f * log2(10.f);
-  static const float TRANSITION_START_RANGE_STOPS = log2(4.f / 0.18f);
-  static const float TRANSITION_END_RANGE_STOPS = log2(1.f / 0.18f);
-
-  float range_stops = log2(peak_y / anchor_y);
-  float hdr_power = max(REFERENCE_ONE_SIDE_RANGE_STOPS / range_stops, 1.f);
-  [branch]
-  if (range_stops < TRANSITION_START_RANGE_STOPS) {
-    float hdr_weight = saturate((range_stops - TRANSITION_END_RANGE_STOPS) * 0.5f);
-    hdr_weight *= hdr_weight * mad(-2.f, hdr_weight, 3.f);
-    hdr_power = mad(hdr_weight, hdr_power - 1.f, 1.f);
+/// Identity through anchor; generalized Naka-Rushton above it.
+/// Monotonic and C2 at the anchor for valid ranges and power > 1.
+#define APPLYNAKARUSHTON_GENERATOR(T)                                               \
+  T ApplyNakaRushton(T color, T peak, T anchor, float compression_power) {          \
+    T shoulder_range = peak - anchor;                                               \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                           \
+    T position = distance_from_anchor / shoulder_range;                             \
+    T response_scale = pow(                                                         \
+        (T)1.f + pow(position, compression_power),                                  \
+        -rcp(compression_power));                                                   \
+    return mad(distance_from_anchor, response_scale, color - distance_from_anchor); \
   }
 
-  return hdr_power;
-}
+/// Maps white_clip to peak and remains flat above it.
+/// Monotonic and C2 at the anchor and clip for valid ranges and power > 1.
+#define APPLYNAKARUSHTON_CLIP_GENERATOR(T)                                               \
+  T ApplyNakaRushton(T color, T peak, T anchor, float compression_power, T white_clip) { \
+    T shoulder_range = peak - anchor;                                                    \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                \
+    T input_range = white_clip - anchor;                                                 \
+    T clipped_distance = min(distance_from_anchor, input_range);                         \
+    T clip_position = clipped_distance / input_range;                                    \
+    T position = clipped_distance / shoulder_range;                                      \
+    T warp_base = (T)1.f - clip_position * clip_position * clip_position;                \
+    T response_scale = pow(                                                              \
+        warp_base * warp_base * warp_base + pow(position, compression_power),            \
+        -rcp(compression_power));                                                        \
+    return mad(clipped_distance, response_scale, color - distance_from_anchor);          \
+  }
 
-// Exact cone response through anchor_in; generalized Naka-Rushton above anchor_out.
-// Monotonic and C2 at the anchor for positive anchors, peak > anchor_out, and power > 1.
-float ApplyNakaRushtonToneCurve(
-    float color,
-    float peak,
-    float anchor_in,
-    float anchor_out,
-    float cone_response_exponent,
-    float compression_power) {
-  float cone_response = anchor_out * pow(max(color / anchor_in, 0.f), cone_response_exponent);
-  float shoulder_range = peak - anchor_out;
-  float distance_from_anchor = max(cone_response - anchor_out, 0.f);
-  float position = distance_from_anchor / shoulder_range;
-  float response_scale = pow(1.f + pow(position, compression_power), -rcp(compression_power));
+APPLYNAKARUSHTON_GENERATOR(float)
+APPLYNAKARUSHTON_GENERATOR(float3)
+APPLYNAKARUSHTON_CLIP_GENERATOR(float)
+APPLYNAKARUSHTON_CLIP_GENERATOR(float3)
+#undef APPLYNAKARUSHTON_GENERATOR
+#undef APPLYNAKARUSHTON_CLIP_GENERATOR
 
-  return mad(distance_from_anchor, response_scale, cone_response - distance_from_anchor);
-}
+/// Identity through anchor; then approaches peak monotonically and concave down.
+/// The anchor join is C2 continuous. Requires anchor < peak.
+#define APPLYANCHOREDCUBICSHOULDER_GENERATOR(T)                                            \
+  T ApplyAnchoredCubicShoulder(T color, T anchor, T peak) {                                \
+    T shoulder_range = peak - anchor;                                                      \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                  \
+    T response_numerator = distance_from_anchor * (shoulder_range + distance_from_anchor); \
+    T response_denominator = mad(shoulder_range, shoulder_range, response_numerator);      \
+    return mad(shoulder_range, response_numerator / response_denominator,                  \
+               color - distance_from_anchor);                                              \
+  }
 
-float ApplyNakaRushtonToneCurve(float color, float peak, float anchor) {
-  return ApplyNakaRushtonToneCurve(color, peak, anchor, anchor, 1.f, 2.f);
-}
+/// Identity through anchor; reaches peak at clip, then remains flat.
+/// Monotonic, concave down, and C2 at both joins. Requires anchor < peak < clip.
+#define APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(T)                                            \
+  T ApplyAnchoredCubicShoulder(T color, T anchor, T peak, T clip) {                             \
+    T shoulder_range = peak - anchor;                                                           \
+    T input_range = clip - anchor;                                                              \
+    T position = saturate((color - anchor) / input_range);                                      \
+    T range_ratio = input_range / shoulder_range;                                               \
+    T linear_coefficient = range_ratio - (T)3.f;                                                \
+    T mixed_coefficient = range_ratio * linear_coefficient;                                     \
+    T response_denominator = mad(                                                               \
+        position,                                                                               \
+        mad(mixed_coefficient + (T)3.f, position, linear_coefficient),                          \
+        (T)1.f);                                                                                \
+    T response_numerator = position * mad(position, position + mixed_coefficient, range_ratio); \
+    return mad(shoulder_range, response_numerator / response_denominator,                       \
+               min(color, anchor));                                                             \
+  }
 
-// Maps white_clip to peak and remains flat above it; C2 at the anchor and clip.
-float ApplyNakaRushtonToneCurve(
-    float color,
-    float peak,
-    float anchor_in,
-    float anchor_out,
-    float cone_response_exponent,
-    float compression_power,
-    float white_clip) {
-  float cone_response = anchor_out * pow(max(color / anchor_in, 0.f), cone_response_exponent);
-  float white_cone_response = anchor_out * pow(white_clip / anchor_in, cone_response_exponent);
-  float shoulder_range = peak - anchor_out;
-  float distance_from_anchor = max(cone_response - anchor_out, 0.f);
-  float input_range = white_cone_response - anchor_out;
-  float clipped_distance = min(distance_from_anchor, input_range);
-  float clip_position = clipped_distance / input_range;
-  float position = clipped_distance / shoulder_range;
-  float warp_base = 1.f - clip_position * clip_position * clip_position;
-  float response_scale = pow(
-      warp_base * warp_base * warp_base + pow(position, compression_power),
-      -rcp(compression_power));
-
-  return mad(clipped_distance, response_scale, cone_response - distance_from_anchor);
-}
-
-float3 ApplyNakaRushtonToneCurve(
-    float3 color,
-    float3 peak,
-    float3 anchor_in,
-    float3 anchor_out,
-    float cone_response_exponent,
-    float compression_power) {
-  float3 cone_response = anchor_out * pow(max(color / anchor_in, 0.f), cone_response_exponent);
-  float3 shoulder_range = peak - anchor_out;
-  float3 distance_from_anchor = max(cone_response - anchor_out, 0.f);
-  float3 position = distance_from_anchor / shoulder_range;
-  float3 response_scale = pow(1.f + pow(position, compression_power), -rcp(compression_power));
-
-  return mad(distance_from_anchor, response_scale, cone_response - distance_from_anchor);
-}
-
-float3 ApplyNakaRushtonToneCurve(float3 color, float3 peak, float3 anchor) {
-  return ApplyNakaRushtonToneCurve(color, peak, anchor, anchor, 1.f, 2.f);
-}
-
-float3 ApplyNakaRushtonToneCurve(
-    float3 color,
-    float3 peak,
-    float3 anchor_in,
-    float3 anchor_out,
-    float3 cone_response_exponent,
-    float3 compression_power,
-    float3 white_clip) {
-  float3 cone_response = anchor_out * pow(max(color / anchor_in, 0.f), cone_response_exponent);
-  float3 white_cone_response = anchor_out * pow(white_clip / anchor_in, cone_response_exponent);
-  float3 shoulder_range = peak - anchor_out;
-  float3 distance_from_anchor = max(cone_response - anchor_out, 0.f);
-  float3 input_range = white_cone_response - anchor_out;
-  float3 clipped_distance = min(distance_from_anchor, input_range);
-  float3 clip_position = clipped_distance / input_range;
-  float3 position = clipped_distance / shoulder_range;
-  float3 warp_base = 1.f - clip_position * clip_position * clip_position;
-  float3 response_scale = pow(
-      warp_base * warp_base * warp_base + pow(position, compression_power),
-      -rcp(compression_power));
-
-  return mad(clipped_distance, response_scale, cone_response - distance_from_anchor);
-}
-
-// Identity through anchor; then monotonic and concave down, approaching peak asymptotically.
-// The anchor join is C2 continuous. Requires anchor < peak.
-float3 ApplyAnchoredCubicShoulder(
-    float3 color,
-    float3 anchor,
-    float3 peak) {
-  float3 shoulder_range = peak - anchor;
-  float3 distance_from_anchor = max(color - anchor, 0.f);
-  float3 response_numerator = distance_from_anchor * (shoulder_range + distance_from_anchor);
-  float3 response_denominator = mad(shoulder_range, shoulder_range, response_numerator);
-
-  return mad(shoulder_range, response_numerator / response_denominator, color - distance_from_anchor);
-}
-
-// Identity through anchor; reaches peak at clip, then remains flat.
-// Monotonic, concave down, and C2 at both joins. Requires anchor < peak < clip.
-float3 ApplyAnchoredCubicShoulder(
-    float3 color,
-    float3 anchor,
-    float3 peak,
-    float3 clip) {
-  float3 shoulder_range = peak - anchor;
-  float3 input_range = clip - anchor;
-  float3 position = saturate((color - anchor) / input_range);
-  float3 range_ratio = input_range / shoulder_range;
-  float3 linear_coefficient = range_ratio - 3.f;
-  float3 mixed_coefficient = range_ratio * linear_coefficient;
-  float3 response_denominator = mad(
-      position,
-      mad(mixed_coefficient + 3.f, position, linear_coefficient),
-      1.f);
-  float3 response_numerator = position * mad(position, position + mixed_coefficient, range_ratio);
-
-  return mad(shoulder_range, response_numerator / response_denominator, min(color, anchor));
-}
+APPLYANCHOREDCUBICSHOULDER_GENERATOR(float)
+APPLYANCHOREDCUBICSHOULDER_GENERATOR(float3)
+APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(float)
+APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(float3)
+#undef APPLYANCHOREDCUBICSHOULDER_GENERATOR
+#undef APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR
 
 bool ComposeUIAndSceneSCRGB(float3 scene_color, float4 ui_color_gamma, inout float4 output_color, float2 position) {
   if (RENODX_TONE_MAP_TYPE == 0.f) return false;
@@ -156,30 +86,19 @@ bool ComposeUIAndSceneSCRGB(float3 scene_color, float4 ui_color_gamma, inout flo
   }
 
   // Defer display mapping to compositing because PostProcessToneMap applies adjustments after tonemapping.
-  static const float MID_GRAY = 0.18f;
-  float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-  float compression_power = ComputeNakaRushtonCompressionPower(MID_GRAY, peak_ratio);
+  const float MID_GRAY = 0.18f;
+  const float PEAK_RATIO = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
+  const float COMPRESSION_POWER = 1.5f;
+  const float CLIP = 100.f;
   if (RENODX_TONE_MAP_WORKING_COLOR_SPACE == 0.f) {  // BT.709
-    scene_color = ApplyNakaRushtonToneCurve(
-        scene_color,
-        peak_ratio.xxx,
-        MID_GRAY.xxx,
-        MID_GRAY.xxx,
-        1.f,
-        compression_power,
-        100.f.xxx);
+    scene_color = ApplyNakaRushton(scene_color, PEAK_RATIO, MID_GRAY, COMPRESSION_POWER, CLIP);
   } else {  // LMS
     float3 scene_lms = renodx::color::lms::from::BT709(scene_color);
-    float3 anchor_lms = renodx::color::lms::from::BT2020(MID_GRAY.xxx);
-    float3 peak_lms = renodx::color::lms::from::BT2020(peak_ratio.xxx);
-    scene_lms = ApplyNakaRushtonToneCurve(
-        scene_lms,
-        peak_lms,
-        anchor_lms,
-        anchor_lms,
-        1.f,
-        compression_power,
-        renodx::color::lms::from::BT2020(100.f));
+    const float3 ANCHOR_LMS = renodx::color::lms::from::BT2020(MID_GRAY);
+    const float3 PEAK_LMS = renodx::color::lms::from::BT2020(PEAK_RATIO);
+    const float3 CLIP_LMS = renodx::color::lms::from::BT2020(CLIP);
+    scene_lms = ApplyNakaRushton(scene_lms, PEAK_LMS, ANCHOR_LMS, COMPRESSION_POWER, CLIP_LMS);
+
     scene_color = renodx::color::bt709::from::LMS(scene_lms);
   }
 
