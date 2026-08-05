@@ -1167,11 +1167,12 @@ void comp_main() {
     _4022 = _4019;
     _4023 = _4020;
   }
-  float _4026 = asfloat(cb0_m[44u].x);
-  float _4030 = _4026 + 1.0f;
-  float _4034 = max((_4026 + _4023) / _4030, 0.0f);
-  float _4035 = max((_4026 + _4022) / _4030, 0.0f);
-  float _4036 = max((_4026 + _4021) / _4030, 0.0f);
+  float3 _4034_4036 = ApplyBlackPointCorrection(
+      float3(_4023, _4022, _4021),
+      asfloat(cb0_m[44u].x));
+  float _4034 = _4034_4036.x;
+  float _4035 = _4034_4036.y;
+  float _4036 = _4034_4036.z;
   float _4080;
   float _4081;
   float _4082;

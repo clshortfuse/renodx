@@ -8,6 +8,12 @@
 #define CALLISTO_LUT_EXPLICIT_LOD 0
 #endif
 
+float3 ApplyBlackPointCorrection(float3 color, float correction) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) return color;
+
+  return max((color + correction) / (correction + 1.f), 0.f);
+}
+
 // Reconstructed from the decompiled per-channel arithmetic. The master and
 // tonal-band values are combined exactly where the original shader uses them.
 float3 ApplyColorGradeBand(
@@ -267,7 +273,7 @@ float3 ApplyColorGradingLUTs(
     float lut_black_yf = renodx::color::yf::from::BT2020(lut_black);
     if (lut_black_yf > 0.f) {
       float3 lut_mid = SampleColorGradingLUTs(
-          lerp(lut_black_yf, 0.18f, 0.1f),
+          lerp(lut_black_yf, 0.18f, 0.08f),
           lut_weights
 #if CALLISTO_LUT_COUNT >= 1
           ,
@@ -287,7 +293,7 @@ float3 ApplyColorGradingLUTs(
                                               sqrt(max(renodx::color::lms::from::BT2020(color_bt2020), 0.f))));
       float3 unclamped_lms = unclamped_gamma_lms * unclamped_gamma_lms;
 
-      float3 recolored_lms = RecolorUnclampedLMS(graded_lms, unclamped_lms, RENODX_COLOR_GRADE_SCALING * 0.99f);
+      float3 recolored_lms = RecolorUnclampedLMS(graded_lms, unclamped_lms, RENODX_COLOR_GRADE_SCALING * 0.98f, 0.5f);
       graded_bt2020 = max(renodx::color::bt2020::from::LMS(recolored_lms), 0.f);
     }
   }
