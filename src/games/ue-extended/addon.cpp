@@ -33,6 +33,115 @@ ShaderInjectData shader_injection;
 
 float current_settings_mode = 0;
 
+// --- Preset Keybind State ---
+
+struct ParsedKeybind {
+  int vk = 0;
+  bool ctrl = false;
+  bool alt = false;
+  bool shift = false;
+};
+
+static int KeyNameToVK(const std::string& name) {
+  if (name.size() >= 2 && (name[0] == 'F' || name[0] == 'f') && isdigit(name[1])) {
+    int fnum = atoi(name.c_str() + 1);
+    if (fnum >= 1 && fnum <= 24) return VK_F1 + fnum - 1;
+  }
+  if (name.size() == 1 && isalpha(name[0])) return toupper(name[0]);
+  if (name.size() == 1 && isdigit(name[0])) return name[0];
+  if (_stricmp(name.c_str(), "Space") == 0)        return VK_SPACE;
+  if (_stricmp(name.c_str(), "Tab") == 0)          return VK_TAB;
+  if (_stricmp(name.c_str(), "Enter") == 0)        return VK_RETURN;
+  if (_stricmp(name.c_str(), "Escape") == 0)       return VK_ESCAPE;
+  if (_stricmp(name.c_str(), "Backspace") == 0)    return VK_BACK;
+  if (_stricmp(name.c_str(), "Delete") == 0)       return VK_DELETE;
+  if (_stricmp(name.c_str(), "Insert") == 0)       return VK_INSERT;
+  if (_stricmp(name.c_str(), "Home") == 0)         return VK_HOME;
+  if (_stricmp(name.c_str(), "End") == 0)          return VK_END;
+  if (_stricmp(name.c_str(), "PageUp") == 0)       return VK_PRIOR;
+  if (_stricmp(name.c_str(), "PageDown") == 0)     return VK_NEXT;
+  if (_stricmp(name.c_str(), "Pause") == 0)        return VK_PAUSE;
+  if (_stricmp(name.c_str(), "ScrollLock") == 0)   return VK_SCROLL;
+  if (_stricmp(name.c_str(), "PrintScreen") == 0)  return VK_SNAPSHOT;
+  if (_stricmp(name.c_str(), "LeftBracket") == 0)  return VK_OEM_4;
+  if (_stricmp(name.c_str(), "RightBracket") == 0) return VK_OEM_6;
+  if (_stricmp(name.c_str(), "Backslash") == 0)    return VK_OEM_5;
+  if (_stricmp(name.c_str(), "Semicolon") == 0)    return VK_OEM_1;
+  if (_stricmp(name.c_str(), "Apostrophe") == 0)   return VK_OEM_7;
+  if (_stricmp(name.c_str(), "Comma") == 0)        return VK_OEM_COMMA;
+  if (_stricmp(name.c_str(), "Period") == 0)       return VK_OEM_PERIOD;
+  if (_stricmp(name.c_str(), "Slash") == 0)        return VK_OEM_2;
+  if (_stricmp(name.c_str(), "GraveAccent") == 0)  return VK_OEM_3;
+  if (_stricmp(name.c_str(), "Minus") == 0)        return VK_OEM_MINUS;
+  if (_stricmp(name.c_str(), "Equal") == 0)        return VK_OEM_PLUS;
+  if (_stricmp(name.c_str(), "UpArrow") == 0)      return VK_UP;
+  if (_stricmp(name.c_str(), "DownArrow") == 0)    return VK_DOWN;
+  if (_stricmp(name.c_str(), "LeftArrow") == 0)    return VK_LEFT;
+  if (_stricmp(name.c_str(), "RightArrow") == 0)   return VK_RIGHT;
+  if (_stricmp(name.c_str(), "NumLock") == 0)      return VK_NUMLOCK;
+  if (_stricmp(name.c_str(), "CapsLock") == 0)     return VK_CAPITAL;
+  if (_stricmp(name.c_str(), "Keypad0") == 0) return VK_NUMPAD0;
+  if (_stricmp(name.c_str(), "Keypad1") == 0) return VK_NUMPAD1;
+  if (_stricmp(name.c_str(), "Keypad2") == 0) return VK_NUMPAD2;
+  if (_stricmp(name.c_str(), "Keypad3") == 0) return VK_NUMPAD3;
+  if (_stricmp(name.c_str(), "Keypad4") == 0) return VK_NUMPAD4;
+  if (_stricmp(name.c_str(), "Keypad5") == 0) return VK_NUMPAD5;
+  if (_stricmp(name.c_str(), "Keypad6") == 0) return VK_NUMPAD6;
+  if (_stricmp(name.c_str(), "Keypad7") == 0) return VK_NUMPAD7;
+  if (_stricmp(name.c_str(), "Keypad8") == 0) return VK_NUMPAD8;
+  if (_stricmp(name.c_str(), "Keypad9") == 0) return VK_NUMPAD9;
+  if (name.size() >= 3 && name[0] == '0' && (name[1] == 'x' || name[1] == 'X'))
+    return static_cast<int>(strtol(name.c_str(), nullptr, 16));
+  return 0;
+}
+
+static ParsedKeybind ParseKeybind(const std::string& str) {
+  ParsedKeybind kb;
+  if (str.empty()) return kb;
+  std::string s = str;
+  auto consume = [&](const char* prefix) -> bool {
+    size_t len = strlen(prefix);
+    if (s.size() > len && _strnicmp(s.c_str(), prefix, len) == 0) {
+      s = s.substr(len);
+      return true;
+    }
+    return false;
+  };
+  while (true) {
+    if (consume("Ctrl+"))  { kb.ctrl  = true; continue; }
+    if (consume("Alt+"))   { kb.alt   = true; continue; }
+    if (consume("Shift+")) { kb.shift = true; continue; }
+    break;
+  }
+  kb.vk = KeyNameToVK(s);
+  return kb;
+}
+
+static std::string ReadPresetKeybind(int preset_num) {
+  const std::string section = renodx::utils::settings::global_name + "-preset" + std::to_string(preset_num);
+  char buf[128] = "";
+  size_t size = sizeof(buf);
+  if (reshade::get_config_value(nullptr, section.c_str(), "PresetKeybind", buf, &size)) {
+    return std::string(buf);
+  }
+  return "";
+}
+
+static void WritePresetKeybind(int preset_num, const std::string& value) {
+  const std::string section = renodx::utils::settings::global_name + "-preset" + std::to_string(preset_num);
+  reshade::set_config_value(nullptr, section.c_str(), "PresetKeybind", value.c_str());
+}
+
+static void SwitchPreset(int target_preset) {
+  renodx::utils::settings::preset_index = target_preset;
+  const std::string section = renodx::utils::settings::global_name + "-preset" + std::to_string(target_preset);
+  renodx::utils::settings::LoadSettings(section);
+  for (auto& cb : renodx::utils::settings::on_preset_changed_callbacks) cb();
+}
+
+static bool s_capturing[4] = {false, false, false, false};
+static bool s_prev_pressed[4] = {false, false, false, false};
+
 // bool is_hdr_path = (shader_injection.processing_path == 0.f);
 
 renodx::utils::settings::Settings settings = {
@@ -621,6 +730,63 @@ renodx::utils::settings::Settings info_settings = {
     },
 
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
+        .label = "Preset Keys",
+        .section = "Options",
+        .on_draw = []() -> bool {
+          const float spacing = ImGui::GetStyle().ItemSpacing.x;
+          for (int P = 1; P <= 3; P++) {
+            if (P > 1) ImGui::SameLine(0, spacing * 2.f);
+            ImGui::PushID(P);
+
+            // "P#N:" label
+            char plabel[8];
+            snprintf(plabel, sizeof(plabel), "#%d:", P);
+            ImGui::TextUnformatted(plabel);
+            ImGui::SameLine(0, spacing);
+
+            if (s_capturing[P]) {
+              ImGui::TextColored(ImVec4(1, 1, 0.3f, 1), "...");
+              if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) s_capturing[P] = false;
+              for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; k++) {
+                ImGuiKey key = static_cast<ImGuiKey>(k);
+                if (key == ImGuiKey_Escape) continue;
+                if (key == ImGuiKey_LeftCtrl || key == ImGuiKey_RightCtrl) continue;
+                if (key == ImGuiKey_LeftShift || key == ImGuiKey_RightShift) continue;
+                if (key == ImGuiKey_LeftAlt || key == ImGuiKey_RightAlt) continue;
+                if (key == ImGuiKey_LeftSuper || key == ImGuiKey_RightSuper) continue;
+                if (key >= ImGuiKey_MouseLeft && key <= ImGuiKey_MouseWheelY) continue;
+                const char* kn = ImGui::GetKeyName(key);
+                if (kn && kn[0] == 'M' && kn[1] == 'o' && kn[2] == 'd') continue;
+                if (ImGui::IsKeyPressed(key, false)) {
+                  std::string name;
+                  if (ImGui::IsKeyDown(ImGuiMod_Ctrl))  name += "Ctrl+";
+                  if (ImGui::IsKeyDown(ImGuiMod_Alt))   name += "Alt+";
+                  if (ImGui::IsKeyDown(ImGuiMod_Shift)) name += "Shift+";
+                  name += ImGui::GetKeyName(key);
+                  WritePresetKeybind(P, name);
+                  s_capturing[P] = false;
+                  break;
+                }
+              }
+            } else {
+              std::string cur = ReadPresetKeybind(P);
+              const char* btn_label = cur.empty() ? "Bind" : cur.c_str();
+              if (ImGui::Button(btn_label)) s_capturing[P] = true;
+              if (!cur.empty()) {
+                if (!cur.empty()) ImGui::SetItemTooltip("Click to rebind. Current: %s", cur.c_str());
+                ImGui::SameLine(0, 2.f);
+                if (ImGui::Button("x")) WritePresetKeybind(P, "");
+              }
+            }
+            ImGui::PopID();
+          }
+          return false;
+        },
+        .is_visible = []() { return current_settings_mode >= 0.f; },
+    },
+
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Discord",
         .section = "Links",
@@ -727,6 +893,38 @@ void OnPresetOff() {
 }
 
 bool fired_on_init_swapchain = false;
+
+void OnPresent(reshade::api::command_queue* /*queue*/, reshade::api::swapchain* /*swapchain*/,
+               const reshade::api::rect* /*source_rect*/, const reshade::api::rect* /*dest_rect*/,
+               uint32_t /*dirty_rect_count*/, const reshade::api::rect* /*dirty_rects*/) {
+  if (s_capturing[1] || s_capturing[2] || s_capturing[3]) return;
+
+  for (int P = 1; P <= 3; P++) {
+    std::string bind = ReadPresetKeybind(P);
+    if (bind.empty()) continue;
+    ParsedKeybind kb = ParseKeybind(bind);
+    if (kb.vk == 0) continue;
+
+    bool key_down = (GetAsyncKeyState(kb.vk) & 0x8000) != 0;
+    bool ctrl_held  = (GetAsyncKeyState(VK_LCONTROL) & 0x8000) || (GetAsyncKeyState(VK_RCONTROL) & 0x8000);
+    bool alt_held   = (GetAsyncKeyState(VK_LMENU) & 0x8000)    || (GetAsyncKeyState(VK_RMENU) & 0x8000);
+    bool shift_held = (GetAsyncKeyState(VK_LSHIFT) & 0x8000)   || (GetAsyncKeyState(VK_RSHIFT) & 0x8000);
+
+    bool mods_ok = true;
+    if (kb.ctrl  && !ctrl_held)  mods_ok = false;
+    if (kb.alt   && !alt_held)   mods_ok = false;
+    if (kb.shift && !shift_held) mods_ok = false;
+    if (!kb.ctrl  && ctrl_held)  mods_ok = false;
+    if (!kb.alt   && alt_held)   mods_ok = false;
+    if (!kb.shift && shift_held) mods_ok = false;
+
+    bool pressed = key_down && mods_ok;
+    if (pressed && !s_prev_pressed[P]) {
+      SwitchPreset(P);
+    }
+    s_prev_pressed[P] = pressed;
+  }
+}
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
@@ -2028,6 +2226,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
         return (params.size() < 20);
@@ -2085,6 +2284,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::swapchain::Use(fdw_reason);
       renodx::utils::resource::Use(fdw_reason);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }
@@ -2093,6 +2293,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
     lut_dump::Use(fdw_reason);
   }
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
+
+  if (fdw_reason == DLL_PROCESS_ATTACH) {
+    int last_preset = 1;
+    reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "SelectedProfile", last_preset);
+    if (last_preset >= 1 && last_preset <= 3 && last_preset != 1) {
+      renodx::utils::settings::preset_index = last_preset;
+      renodx::utils::settings::LoadSettings(
+          renodx::utils::settings::global_name + "-preset" + std::to_string(last_preset));
+    }
+    renodx::utils::settings::on_preset_changed_callbacks.emplace_back([]() {
+      reshade::set_config_value(nullptr, renodx::utils::settings::global_name.c_str(),
+                                "SelectedProfile", renodx::utils::settings::preset_index);
+    });
+  }
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   //
   if (g_path != 0.f) {
