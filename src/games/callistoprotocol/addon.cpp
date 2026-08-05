@@ -29,8 +29,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = "- Requires HDR on in game\n"
-                 "- Requires DX12\n"
-                 "- Keep in game brightness slider at default",
+                 "- Requires DX12\n",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -169,7 +168,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ColorGradeLUTStrength",
         .binding = &shader_injection.color_grade_strength,
         .default_value = 100.f,
-        .label = "LUT Strength",
+        .label = "Color Grade Strength",
         .section = "Color Grading",
         .max = 100.f,
         .parse = [](float value) { return value * 0.01f; },
@@ -178,7 +177,7 @@ renodx::utils::settings::Settings settings = {
         .key = "ColorGradeLUTScaling",
         .binding = &shader_injection.color_grade_scaling,
         .default_value = 100.f,
-        .label = "LUT Scaling",
+        .label = "Color Grade Scaling",
         .section = "Color Grading",
         .tooltip = "Scales the color grade LUT to full range when size is clamped.",
         .max = 100.f,
