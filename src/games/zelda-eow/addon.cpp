@@ -278,17 +278,25 @@ int ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
           .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
       };
 
+const renodx::utils::resource::ResourceUpgradeInfo::Dimensions DIMENSIONS = {
+    .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+    .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+    .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+};
+
 void OnInitDevice(reshade::api::device* device) {
   int vendor_id;
   auto retrieved = device->get_property(reshade::api::device_properties::vendor_id, &vendor_id);
   if (retrieved && vendor_id == 0x10de) {  // Nvidia vendor ID
-    // Bugs out AMD GPUs
-      renodx::mods::swapchain::resource_upgrade_infos.push_back({
-          .old_format = reshade::api::format::r11g11b10_float,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-          .ignore_reset = true,
-          .min_dimensions = MIN_DIMENSIONS,
-      });
+                                           // Bugs out AMD GPUs
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = reshade::api::format::r11g11b10_float,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .ignore_reset = true,
+        .use_resource_view_cloning = true,
+        .dimensions = DIMENSIONS,
+        .min_dimensions = MIN_DIMENSIONS,
+    });
   }
 }
 
@@ -353,6 +361,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             .new_format = target_format,
             .index = i,
             .ignore_reset = true,
+            .dimensions = DIMENSIONS,
             .min_dimensions = MIN_DIMENSIONS,
         });
       }
