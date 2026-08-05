@@ -47,6 +47,7 @@ endfunction()
 
 add_subdirectory(render_pass_behavior)
 add_subdirectory(resource_upgrade_transfer)
+add_subdirectory(resource_analysis_readback_strategy)
 add_subdirectory(shader_injection_behavior)
 add_subdirectory(descriptor_cache_race)
 add_subdirectory(shader_compiler_watcher_api_change)
