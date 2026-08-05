@@ -33,7 +33,7 @@ ShaderInjectData shader_injection;
 
 float current_settings_mode = 0;
 
-// --- Preset Keybind State ---
+// start keybind code
 
 struct ParsedKeybind {
   int vk = 0;
@@ -141,6 +141,8 @@ static void SwitchPreset(int target_preset) {
 
 static bool s_capturing[4] = {false, false, false, false};
 static bool s_prev_pressed[4] = {false, false, false, false};
+
+// end keybind code
 
 // bool is_hdr_path = (shader_injection.processing_path == 0.f);
 
@@ -729,6 +731,7 @@ renodx::utils::settings::Settings info_settings = {
         .is_visible = []() { return current_settings_mode >= 0.f; },
     },
 
+    // start keybind code
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
         .label = "Preset Keys",
@@ -785,6 +788,8 @@ renodx::utils::settings::Settings info_settings = {
         },
         .is_visible = []() { return current_settings_mode >= 0.f; },
     },
+
+    // end keybind code
 
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -894,9 +899,8 @@ void OnPresetOff() {
 
 bool fired_on_init_swapchain = false;
 
-void OnPresent(reshade::api::command_queue* /*queue*/, reshade::api::swapchain* /*swapchain*/,
-               const reshade::api::rect* /*source_rect*/, const reshade::api::rect* /*dest_rect*/,
-               uint32_t /*dirty_rect_count*/, const reshade::api::rect* /*dirty_rects*/) {
+// start keybind code
+void OnOverlay(reshade::api::effect_runtime* /*runtime*/) {
   if (s_capturing[1] || s_capturing[2] || s_capturing[3]) return;
 
   for (int P = 1; P <= 3; P++) {
@@ -919,12 +923,11 @@ void OnPresent(reshade::api::command_queue* /*queue*/, reshade::api::swapchain* 
     if (!kb.shift && shift_held) mods_ok = false;
 
     bool pressed = key_down && mods_ok;
-    if (pressed && !s_prev_pressed[P]) {
-      SwitchPreset(P);
-    }
+    if (pressed && !s_prev_pressed[P]) SwitchPreset(P);
     s_prev_pressed[P] = pressed;
   }
 }
+// end keybind code
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
@@ -2226,7 +2229,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       if (!reshade::register_addon(h_module)) return FALSE;
 
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
+      // start keybind code
+      reshade::register_event<reshade::addon_event::reshade_overlay>(OnOverlay);
+      // end keybind code
 
       renodx::mods::shader::on_create_pipeline_layout = [](auto, auto params) {
         return (params.size() < 20);
@@ -2284,7 +2289,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::swapchain::Use(fdw_reason);
       renodx::utils::resource::Use(fdw_reason);
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+      // start keybind code
+      reshade::unregister_event<reshade::addon_event::reshade_overlay>(OnOverlay);
+      // end keybind code
       reshade::unregister_addon(h_module);
       break;
   }
@@ -2294,6 +2301,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
   }
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
 
+  // start last preset code
   if (fdw_reason == DLL_PROCESS_ATTACH) {
     int last_preset = 1;
     reshade::get_config_value(nullptr, renodx::utils::settings::global_name.c_str(), "SelectedProfile", last_preset);
@@ -2307,6 +2315,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
                                 "SelectedProfile", renodx::utils::settings::preset_index);
     });
   }
+  // end last preset code
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   //
   if (g_path != 0.f) {
