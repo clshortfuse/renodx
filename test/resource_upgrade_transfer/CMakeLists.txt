@@ -123,4 +123,17 @@ if(Vulkan_FOUND)
       TIMEOUT 60
     )
   endforeach()
+
+  add_test(
+    NAME resource_lifecycle_vulkan_unbound_buffer_destroy
+    COMMAND resource_upgrade_transfer_vulkan_tests
+      untracked-rgba8
+      $<TARGET_FILE:resource_upgrade_transfer_vulkan_app>
+      $<TARGET_FILE:resource_upgrade_transfer_addon>
+      ${RENODX_TEST_RESHADE_DIR}
+  )
+  set_tests_properties(resource_lifecycle_vulkan_unbound_buffer_destroy PROPERTIES
+    LABELS "resource;runtime;vulkan;lifecycle"
+    TIMEOUT 60
+  )
 endif()

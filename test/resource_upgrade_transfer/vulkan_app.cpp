@@ -159,6 +159,26 @@ int main() {
     return transfer::Finish(false, "vkCreateDevice failed");
   }
 
+  if (GetEnvironmentVariableW(L"RENODX_TRANSFER_DESTROY_UNTRACKED", nullptr, 0u) != 0u) {
+    const VkBufferCreateInfo untracked_buffer_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = 256u,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    VkBuffer untracked_buffer = VK_NULL_HANDLE;
+    const VkResult untracked_buffer_result =
+        vkCreateBuffer(device, &untracked_buffer_info, nullptr, &untracked_buffer);
+    if (untracked_buffer_result != VK_SUCCESS) {
+      vkDestroyDevice(device, nullptr);
+      vkDestroyInstance(instance, nullptr);
+      return transfer::Finish(
+          false,
+          "untracked Vulkan buffer creation failed: " + std::to_string(untracked_buffer_result));
+    }
+    vkDestroyBuffer(device, untracked_buffer, nullptr);
+  }
+
   VkPhysicalDeviceMemoryProperties memory_properties = {};
   vkGetPhysicalDeviceMemoryProperties(physical_device, &memory_properties);
   VkBuffer upload = VK_NULL_HANDLE;

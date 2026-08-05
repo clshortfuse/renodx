@@ -1097,6 +1097,11 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
     should_run_after_destroy_callbacks = true;
   });
   if (!found) {
+    if (device != nullptr && device->get_api() == reshade::api::device_api::vulkan) {
+      log::w("utils::resource::OnDestroyResource(Ignoring untracked Vulkan resource: ",
+             log::AsPtr(resource.handle), ")");
+      return;
+    }
     log::e("utils::resource::OnDestroyResource(Resource not found for handle: ",
            log::AsPtr(resource.handle), ")");
     assert(found);
