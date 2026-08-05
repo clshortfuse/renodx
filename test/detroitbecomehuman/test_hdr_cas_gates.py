@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""Regression tests for Detroit's production HDR/output-mode/CAS gates."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import random
+import re
+import struct
+import sys
+import unittest
+
+
+OUTPUT_MODE_AUTO = 0.0
+OUTPUT_MODE_SDR = 1.0
+OUTPUT_MODE_HDR10 = 2.0
+
+CAS_MODE_VANILLA = 0.0
+CAS_MODE_OFF = 1.0
+CAS_MODE_RENODX = 2.0
+
+
+def _parse_arguments() -> Path:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--source-dir", type=Path, required=True)
+    args, remaining = parser.parse_known_args()
+    sys.argv = [sys.argv[0], *remaining]
+    return args.source_dir.resolve()
+
+
+SOURCE_DIR = _parse_arguments()
+
+
+def float32(value: float) -> float:
+    return struct.unpack("<f", struct.pack("<f", float(value)))[0]
+
+
+def float32_bits(value: float) -> bytes:
+    return struct.pack("<f", float32(value))
+
+
+def custom_hdr_active(output_mode: float, output_is_hdr: float) -> bool:
+    """Literal model of CUSTOM_HDR_ACTIVE in production shared.h."""
+    return output_is_hdr >= 0.5 and output_mode != OUTPUT_MODE_SDR
+
+
+def use_hdr_safe_cas(
+    output_mode: float, output_is_hdr: float, cas_mode: float
+) -> bool:
+    return custom_hdr_active(output_mode, output_is_hdr) and cas_mode >= 0.5
+
+
+def effective_sharpness(
+    native_sharpness: float,
+    output_mode: float,
+    output_is_hdr: float,
+    cas_mode: float,
+    cas_strength: float,
+) -> float:
+    """Model only the production branch that may alter native CAS strength."""
+    native = float32(native_sharpness)
+    if not use_hdr_safe_cas(output_mode, output_is_hdr, cas_mode):
+        return native
+    if cas_mode < 1.5:
+        return float32(0.0)
+    strength = min(max(float32(cas_strength), 0.0), 1.0)
+    return float32(native * strength)
+
+
+def display_peak_cap(
+    rgb: tuple[float, float, float], peak_nits: float, active: bool
+) -> tuple[float, float, float]:
+    """Model the single-scalar cap applied to Detroit's linear display light."""
+    if not active:
+        return rgb
+    configured_peak = max(float32(peak_nits), 0.0) / 300.0
+    output_peak = max(rgb)
+    if output_peak <= configured_peak:
+        return rgb
+    scale = configured_peak / max(output_peak, 1.0e-6)
+    return tuple(float32(channel * scale) for channel in rgb)
+
+
+def pq_encode(normalized_10000_nits: float) -> float:
+    m1 = 2610.0 / 16384.0
+    m2 = 2523.0 / 32.0
+    c1 = 3424.0 / 4096.0
+    c2 = 2413.0 / 128.0
+    c3 = 2392.0 / 128.0
+    powered = max(normalized_10000_nits, 0.0) ** m1
+    return ((c1 + c2 * powered) / (1.0 + c3 * powered)) ** m2
+
+
+class HDRAndCASGateTests(unittest.TestCase):
+    native_sharpness = float32(-0.125)
+
+    def assert_native_bypass(
+        self, output_mode: float, output_is_hdr: float, cas_mode: float
+    ) -> None:
+        actual = effective_sharpness(
+            self.native_sharpness,
+            output_mode,
+            output_is_hdr,
+            cas_mode,
+            0.37,
+        )
+        self.assertEqual(float32_bits(actual), float32_bits(self.native_sharpness))
+
+    def test_hdr10_mode_cannot_force_hdr_math_on_an_sdr_swapchain(self):
+        for cas_mode in (CAS_MODE_VANILLA, CAS_MODE_OFF, CAS_MODE_RENODX):
+            with self.subTest(cas_mode=cas_mode):
+                self.assertFalse(
+                    use_hdr_safe_cas(OUTPUT_MODE_HDR10, 0.0, cas_mode)
+                )
+                self.assert_native_bypass(OUTPUT_MODE_HDR10, 0.0, cas_mode)
+
+    def test_sdr_mode_bypasses_custom_cas_on_an_hdr_swapchain(self):
+        for cas_mode in (CAS_MODE_VANILLA, CAS_MODE_OFF, CAS_MODE_RENODX):
+            with self.subTest(cas_mode=cas_mode):
+                self.assertFalse(use_hdr_safe_cas(OUTPUT_MODE_SDR, 1.0, cas_mode))
+                self.assert_native_bypass(OUTPUT_MODE_SDR, 1.0, cas_mode)
+
+    def test_auto_follows_the_measured_swapchain(self):
+        self.assertFalse(custom_hdr_active(OUTPUT_MODE_AUTO, 0.0))
+        self.assertTrue(custom_hdr_active(OUTPUT_MODE_AUTO, 1.0))
+
+    def test_vanilla_is_an_exact_bypass_on_hdr(self):
+        for output_mode in (OUTPUT_MODE_AUTO, OUTPUT_MODE_HDR10):
+            with self.subTest(output_mode=output_mode):
+                self.assert_native_bypass(output_mode, 1.0, CAS_MODE_VANILLA)
+
+    def test_off_and_renodx_strength_apply_only_on_measured_hdr(self):
+        for output_mode in (OUTPUT_MODE_AUTO, OUTPUT_MODE_HDR10):
+            with self.subTest(output_mode=output_mode):
+                self.assertEqual(
+                    float32_bits(
+                        effective_sharpness(
+                            self.native_sharpness,
+                            output_mode,
+                            1.0,
+                            CAS_MODE_OFF,
+                            1.0,
+                        )
+                    ),
+                    float32_bits(0.0),
+                )
+                half = effective_sharpness(
+                    self.native_sharpness,
+                    output_mode,
+                    1.0,
+                    CAS_MODE_RENODX,
+                    0.5,
+                )
+                self.assertEqual(
+                    float32_bits(half),
+                    float32_bits(self.native_sharpness * 0.5),
+                )
+
+    def test_renodx_strength_is_clamped(self):
+        low = effective_sharpness(
+            self.native_sharpness,
+            OUTPUT_MODE_AUTO,
+            1.0,
+            CAS_MODE_RENODX,
+            -10.0,
+        )
+        high = effective_sharpness(
+            self.native_sharpness,
+            OUTPUT_MODE_AUTO,
+            1.0,
+            CAS_MODE_RENODX,
+            10.0,
+        )
+        # Multiplying Detroit's negative native lobe by a clamped zero may
+        # retain the IEEE-754 sign bit; numerically it is still disabled.
+        self.assertEqual(low, 0.0)
+        self.assertEqual(float32_bits(high), float32_bits(self.native_sharpness))
+
+    def test_peak_cap_has_exact_gate_bypasses(self):
+        rgb = tuple(float32(value) for value in (3.0, 2.0, 1.0))
+        inactive_cases = (
+            (OUTPUT_MODE_AUTO, 1.0, CAS_MODE_VANILLA),
+            (OUTPUT_MODE_SDR, 1.0, CAS_MODE_RENODX),
+            (OUTPUT_MODE_HDR10, 0.0, CAS_MODE_RENODX),
+        )
+        for output_mode, output_is_hdr, cas_mode in inactive_cases:
+            with self.subTest(
+                output_mode=output_mode,
+                output_is_hdr=output_is_hdr,
+                cas_mode=cas_mode,
+            ):
+                result = display_peak_cap(
+                    rgb,
+                    600.0,
+                    use_hdr_safe_cas(output_mode, output_is_hdr, cas_mode),
+                )
+                for actual, expected in zip(result, rgb):
+                    self.assertEqual(float32_bits(actual), float32_bits(expected))
+
+    def test_peak_cap_is_identity_below_the_selected_peak(self):
+        rgb = tuple(float32(value) for value in (2.5, 1.25, 0.5))
+        result = display_peak_cap(rgb, 1000.0, True)
+        for actual, expected in zip(result, rgb):
+            self.assertEqual(float32_bits(actual), float32_bits(expected))
+
+    def test_peak_cap_preserves_color_ratios_with_one_scalar(self):
+        samples = [(3.0, 2.0, 1.0), (3.0, 0.5, 0.5)]
+        rng = random.Random(0x94F97DCF)
+        samples.extend(
+            tuple(rng.uniform(0.01, 8.0) for _ in range(3))
+            for _ in range(32)
+        )
+        for rgb in samples:
+            with self.subTest(rgb=rgb):
+                result = display_peak_cap(rgb, 203.0, True)
+                self.assertLessEqual(max(result), (203.0 / 300.0) + 1.0e-6)
+                scales = [result[i] / rgb[i] for i in range(3)]
+                self.assertAlmostEqual(scales[0], scales[1], places=6)
+                self.assertAlmostEqual(scales[1], scales[2], places=6)
+
+    def test_peak_cap_matches_the_native_pq_tail_at_1000_nits(self):
+        capped = display_peak_cap((8.0, 8.0, 8.0), 1000.0, True)
+        # Detroit multiplies _6250 by 0.03 before its unchanged ST.2084 tail.
+        encoded = pq_encode(capped[0] * 0.03)
+        self.assertAlmostEqual(encoded, 0.751827096, places=8)
+        self.assertEqual(round(encoded * 1023.0), 769)
+
+    def test_peak_cap_is_monotonic_for_supported_display_points(self):
+        encoded_values = []
+        for peak_nits in (203.0, 600.0, 1000.0, 4000.0):
+            capped = display_peak_cap((20.0, 20.0, 20.0), peak_nits, True)
+            self.assertLessEqual(max(capped), (peak_nits / 300.0) + 1.0e-6)
+            encoded_values.append(pq_encode(capped[0] * 0.03))
+        self.assertTrue(
+            all(lhs < rhs for lhs, rhs in zip(encoded_values, encoded_values[1:]))
+        )
+
+    def test_production_sources_keep_the_same_gate_contract(self):
+        shared = (SOURCE_DIR / "shared.h").read_text(encoding="utf-8")
+        shader = (SOURCE_DIR / "oetf_hdr_cas_0x94F97DCF.frag.slang").read_text(
+            encoding="utf-8"
+        )
+        addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
+
+        expected_constants = {
+            "OUTPUT_MODE_AUTO": "0.f",
+            "OUTPUT_MODE_SDR": "1.f",
+            "OUTPUT_MODE_HDR10": "2.f",
+            "CAS_MODE_VANILLA": "0.f",
+            "CAS_MODE_OFF": "1.f",
+            "CAS_MODE_RENODX": "2.f",
+        }
+        for name, value in expected_constants.items():
+            self.assertRegex(
+                addon,
+                rf"constexpr\s+float\s+{name}\s*=\s*{re.escape(value)}\s*;",
+            )
+
+        compact_shared = re.sub(r"\\\s*\n\s*", " ", shared)
+        self.assertRegex(
+            compact_shared,
+            r"#define\s+CUSTOM_HDR_ACTIVE\s+"
+            r"\(shader_injection\.output_is_hdr\s*>=\s*0\.5f\s*&&\s*"
+            r"shader_injection\.output_mode\s*!=\s*1\.f\)",
+        )
+        self.assertRegex(
+            shader,
+            r"bool\s+use_hdr_safe_path\s*=\s*CUSTOM_HDR_ACTIVE\s*&&\s*"
+            r"shader_injection\.cas_mode\s*>=\s*0\.5\s*;",
+        )
+        self.assertRegex(
+            shader,
+            r"float\s+sharpening_strength\s*=\s*"
+            r"shader_injection\.cas_mode\s*<\s*1\.5\s*\?\s*0\.0\s*:\s*"
+            r"clamp\(shader_injection\.cas_strength,\s*0\.0,\s*1\.0\)\s*;",
+        )
+
+        cap_start = shader.index("vec3 _6250 =")
+        cap_end = shader.index("vec3 _6297 =", cap_start)
+        cap_source = shader[cap_start:cap_end]
+        self.assertIn("configured_display_peak", cap_source)
+        self.assertIn("shader_injection.peak_white_nits", cap_source)
+        self.assertIn("_6250 *=", cap_source)
+        self.assertNotIn("min(_6112", shader)
+
+        for color_space in (
+            "hdr10_st2084",
+            "hdr10_hlg",
+            "extended_srgb_linear",
+        ):
+            self.assertIn(color_space, addon)
+        self.assertRegex(
+            addon,
+            r"shader_injection\.output_is_hdr\s*=\s*"
+            r"color_space\s*==[\s\S]*?\?\s*1\.f\s*:\s*0\.f\s*;",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

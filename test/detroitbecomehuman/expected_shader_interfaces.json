@@ -1,0 +1,106 @@
+{
+  "push_constant": {
+    "block_name": "ShaderInjectData_std140",
+    "size": 80,
+    "members": [
+      { "name": "peak_white_nits", "type": "float", "offset": 0 },
+      { "name": "diffuse_white_nits", "type": "float", "offset": 4 },
+      { "name": "graphics_white_nits", "type": "float", "offset": 8 },
+      { "name": "tone_map_type", "type": "float", "offset": 12 },
+      { "name": "output_mode", "type": "float", "offset": 16 },
+      { "name": "output_is_hdr", "type": "float", "offset": 20 },
+      { "name": "tone_map_exposure", "type": "float", "offset": 24 },
+      { "name": "tone_map_highlights", "type": "float", "offset": 28 },
+      { "name": "tone_map_shadows", "type": "float", "offset": 32 },
+      { "name": "tone_map_contrast", "type": "float", "offset": 36 },
+      { "name": "tone_map_saturation", "type": "float", "offset": 40 },
+      { "name": "tone_map_highlight_saturation", "type": "float", "offset": 44 },
+      { "name": "tone_map_blowout", "type": "float", "offset": 48 },
+      { "name": "tone_map_flare", "type": "float", "offset": 52 },
+      { "name": "color_grade_strength", "type": "float", "offset": 56 },
+      { "name": "cas_mode", "type": "float", "offset": 60 },
+      { "name": "cas_strength", "type": "float", "offset": 64 },
+      { "name": "scene_path_active", "type": "float", "offset": 68 },
+      { "name": "ui_path_active", "type": "float", "offset": 72 },
+      { "name": "reserved", "type": "float", "offset": 76 }
+    ]
+  },
+  "shaders": {
+    "0x2892BFCA": {
+      "stage": "frag",
+      "entry_point": "main",
+      "inputs": [
+        { "location": 0, "type": "vec4" },
+        { "location": 1, "type": "vec4" },
+        { "location": 2, "type": "vec4" },
+        { "location": 3, "type": "vec4" }
+      ],
+      "outputs": [
+        { "location": 0, "type": "vec4" }
+      ],
+      "descriptors": []
+    },
+    "0x8808E4CC": {
+      "stage": "frag",
+      "entry_point": "main",
+      "inputs": [
+        { "location": 0, "type": "vec2" },
+        { "location": 1, "type": "vec4" }
+      ],
+      "outputs": [
+        { "location": 0, "type": "vec4" }
+      ],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" }
+      ]
+    },
+    "0x94F97DCF": {
+      "stage": "frag",
+      "entry_point": "main",
+      "inputs": [
+        { "location": 8, "type": "vec4" }
+      ],
+      "outputs": [
+        { "location": 0, "type": "vec4" }
+      ],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 0, "type": "sampler2D" },
+        { "kind": "ubos", "set": 0, "binding": 53, "block_size": 16 },
+        { "kind": "ubos", "set": 0, "binding": 54, "block_size": 48 }
+      ]
+    },
+    "0x9827B559": {
+      "stage": "frag",
+      "entry_point": "main",
+      "inputs": [
+        { "location": 0, "type": "vec4" },
+        { "location": 1, "type": "vec4" },
+        { "location": 2, "type": "vec4" },
+        { "location": 3, "type": "vec2" }
+      ],
+      "outputs": [
+        { "location": 0, "type": "vec4" }
+      ],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" }
+      ]
+    },
+    "0xEBFBDDB1": {
+      "stage": "comp",
+      "entry_point": "main",
+      "workgroup_size": [8, 8, 1],
+      "inputs": [],
+      "outputs": [],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 0, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 1, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 3, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 4, "type": "sampler2D" },
+        { "kind": "images", "set": 0, "binding": 16, "type": "image2D", "format": "rgba16f", "writeonly": true },
+        { "kind": "ubos", "set": 0, "binding": 52, "block_size": 144 },
+        { "kind": "ubos", "set": 0, "binding": 53, "block_size": 144 }
+      ]
+    }
+  }
+}

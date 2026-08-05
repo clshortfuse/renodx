@@ -1,0 +1,14 @@
+Detroit: Become Human RenoDX RC — удаление
+
+1. Закройте Detroit: Become Human.
+2. Удалите из папки игры только этот файл:
+   renodx-detroitbecomehuman.addon64
+3. Не удаляйте ReShade64.dll, ReShade.ini, ReShadePreset.ini и папку
+   reshade-shaders, если они нужны другому аддону или эффекту ReShade.
+4. Чтобы вернуть конфигурацию и shader cache, сохранённые до разработки,
+   скопируйте нужные файлы обратно из:
+   C:\Users\DECODED\Documents\Codex\detroit-renodx-backup-20260806-0020
+
+Аддон не заменяет архивы игры. Его настройки находятся в ReShade.ini в
+секциях [renodx] и [renodx-preset1]. После удаления аддона Auto HDR / RTX HDR
+можно снова включить.

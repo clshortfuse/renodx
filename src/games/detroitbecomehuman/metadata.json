@@ -1,0 +1,40 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "detroitbecomehuman",
+  "title": "Detroit: Become Human",
+  "summary": "Experimental RenoDX Vulkan HDR correction for Detroit: Become Human.",
+  "tags": [
+    "HDR",
+    "HDR10",
+    "Vulkan"
+  ],
+  "status": "experimental",
+  "version": "0.1.0-rc.1",
+  "notes": [
+    "Supports Steam Build ID 12158144 only.",
+    "Supported DetroitBecomeHuman.exe SHA-256: ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF.",
+    "Vulkan base pinned to RenoDX PR #564 commit 92d6d79ec8103b1aaea44c0085c3a88db723e6d5.",
+    "Requires ReShade 6.8.0 Full Add-On and the game's native Vulkan renderer.",
+    "Auto HDR and NVIDIA RTX HDR must be disabled. Late chapters remain user-validation for this experimental RC."
+  ],
+  "urls": [
+    {
+      "url": "https://github.com/clshortfuse/renodx/pull/564",
+      "kind": "vulkan-base"
+    }
+  ],
+  "deploy": {
+    "reshade_version_range": ">=6.8.0 <6.9.0",
+    "game_exe": "DetroitBecomeHuman.exe",
+    "process_name": "DetroitBecomeHuman.exe",
+    "api": "vulkan",
+    "steam_appid": 1222140,
+    "architecture": [
+      "x64"
+    ],
+    "platform": "steam",
+    "detection": {
+      "probe_process_by_name": true
+    }
+  }
+}
