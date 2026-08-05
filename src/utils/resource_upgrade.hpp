@@ -2221,7 +2221,13 @@ inline bool OnCreateResourceView(
 
   reshade::api::resource_view_desc new_desc = current_desc;
   const auto typeless_resource_format = utils::resource::FormatToTypeless(resource_desc.texture.format);
-  const auto typeless_view_format = utils::resource::FormatToTypeless(current_desc.format);
+  // Vulkan represents an alpha-only view as VK_FORMAT_R8_UNORM with an alpha
+  // component swizzle, so ReShade reports it as a8_unorm even though the image
+  // resource itself is reported as r8_unorm.
+  const auto typeless_view_format =
+      is_vulkan && current_desc.format == reshade::api::format::a8_unorm
+          ? reshade::api::format::r8_typeless
+          : utils::resource::FormatToTypeless(current_desc.format);
   bool forced_native_format = false;
 
   const auto log_unexpected_create_resource_view = [&](const char* reason, bool will_assert) {

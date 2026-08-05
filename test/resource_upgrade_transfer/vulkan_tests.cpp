@@ -42,6 +42,8 @@ int main(int argc, char** argv) {
   if (limited_usage) format.erase(0u, 8u);
   const bool destroy_untracked = format.starts_with("untracked-");
   if (destroy_untracked) format.erase(0u, 10u);
+  const bool alpha_swizzle_view = format.starts_with("alpha-view-");
+  if (alpha_swizzle_view) format.erase(0u, 11u);
   const fs::path app_source = fs::absolute(argv[2]);
   const fs::path addon_source = fs::absolute(argv[3]);
   const fs::path reshade_dir = fs::absolute(argv[4]);
@@ -99,6 +101,7 @@ int main(int argc, char** argv) {
   SetEnvironmentVariableW(L"RENODX_TRANSFER_DIRECT_UPGRADE", direct_upgrade ? L"1" : nullptr);
   SetEnvironmentVariableW(L"RENODX_TRANSFER_LIMITED_USAGE", limited_usage ? L"1" : nullptr);
   SetEnvironmentVariableW(L"RENODX_TRANSFER_DESTROY_UNTRACKED", destroy_untracked ? L"1" : nullptr);
+  SetEnvironmentVariableW(L"RENODX_TRANSFER_ALPHA_SWIZZLE_VIEW", alpha_swizzle_view ? L"1" : nullptr);
 
   STARTUPINFOW startup_info = {};
   startup_info.cb = sizeof(startup_info);
@@ -141,6 +144,10 @@ int main(int argc, char** argv) {
       log.find("Ignoring untracked Vulkan resource") != std::string::npos;
   const bool untracked_error =
       log.find("Resource not found for handle") != std::string::npos;
+  const bool invalid_typed_view_mismatch =
+      log.find("invalid typed view/resource format mismatch") != std::string::npos;
+  const bool alpha_swizzle_view_preserved =
+      log.find("Observed preserved Vulkan alpha-swizzle view descriptor") != std::string::npos;
   const bool untracked_warning_expected = enable_addon && destroy_untracked;
   const bool passed = wait_result == WAIT_OBJECT_0
                       && exit_code == 0u
@@ -149,7 +156,8 @@ int main(int argc, char** argv) {
                       && addon_loaded == enable_addon
                       && bridge_created == bridge_expected
                       && (!untracked_warning_expected || untracked_warning)
-                      && (!destroy_untracked || !untracked_error);
+                      && (!destroy_untracked || !untracked_error)
+                      && (!alpha_swizzle_view || (!invalid_typed_view_mismatch && alpha_swizzle_view_preserved));
   std::cout << "runtime=" << runtime << '\n'
             << result;
   if (!passed) {
@@ -161,6 +169,8 @@ int main(int argc, char** argv) {
               << " untracked_warning=" << untracked_warning
               << " untracked_error=" << untracked_error
               << " untracked_warning_expected=" << untracked_warning_expected
+              << " invalid_typed_view_mismatch=" << invalid_typed_view_mismatch
+              << " alpha_swizzle_view_preserved=" << alpha_swizzle_view_preserved
               << "\nReShade.log:\n"
               << log << '\n';
   }
