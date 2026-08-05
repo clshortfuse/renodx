@@ -8,6 +8,10 @@
 #define CALLISTO_LUT_EXPLICIT_LOD 0
 #endif
 
+float ResolveLUTInputBrightnessScale(float game_brightness_scale) {
+  return RENODX_TONE_MAP_TYPE == 0.f ? game_brightness_scale : 1.f;
+}
+
 float3 ApplyBlackPointCorrection(float3 color, float correction) {
   if (RENODX_TONE_MAP_TYPE != 0.f) return color;
 
