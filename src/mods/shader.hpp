@@ -46,20 +46,10 @@ inline bool OnBypassShaderDraw(reshade::api::command_list* cmd_list) { return fa
 struct ViewBinding {
   reshade::api::descriptor_type type = static_cast<reshade::api::descriptor_type>(0u);
   uint32_t slot = 0u;
+  // Maps directly to the register space on DirectX and descriptor set on Vulkan.
   uint32_t space = 50u;
   std::function<reshade::api::resource_view(reshade::api::command_list*)> get_view = nullptr;
 };
-
-namespace internal {
-inline constexpr uint32_t ResolveViewBindingSpace(
-    uint32_t view_binding_space,
-    reshade::api::device_api device_api) {
-  // Preserve main's register-space 50 default on D3D/OpenGL while treating the
-  // same omitted value as descriptor set 0 for Vulkan.
-  if (device_api == reshade::api::device_api::vulkan && view_binding_space == 50u) return 0u;
-  return view_binding_space;
-}
-}  // namespace internal
 
 struct CustomShader {
   std::uint32_t crc32;
@@ -247,16 +237,15 @@ static void OnInitDevice(reshade::api::device* device) {
       (void)shader_hash;
       for (const auto& view_binding : custom_shader.views) {
         assert(view_binding.get_view != nullptr);
-        const auto view_binding_space = internal::ResolveViewBindingSpace(view_binding.space, device_api);
 
-        const auto key = std::make_pair(view_binding_space, view_binding.slot);
+        const auto key = std::make_pair(view_binding.space, view_binding.slot);
         auto range_it = descriptor_ranges_by_binding.find(key);
 
         if (range_it == descriptor_ranges_by_binding.end()) {
           descriptor_ranges_by_binding[key] = {
               .binding = view_binding.slot,
               .dx_register_index = view_binding.slot,
-              .dx_register_space = view_binding_space,
+              .dx_register_space = view_binding.space,
               .count = 1u,
               .visibility = reshade::api::shader_stage::all,
               .array_size = 1u,
@@ -265,7 +254,7 @@ static void OnInitDevice(reshade::api::device* device) {
         } else if (range_it->second.type != view_binding.type) {
           std::stringstream error;
           error << "mods::shader::OnInitDevice(";
-          error << "Conflicting Vulkan descriptor types at set " << view_binding_space;
+          error << "Conflicting Vulkan descriptor types at set " << view_binding.space;
           error << ", binding " << view_binding.slot;
           error << ")";
           reshade::log::message(reshade::log::level::error, error.str().c_str());
@@ -274,7 +263,7 @@ static void OnInitDevice(reshade::api::device* device) {
           return;
         }
 
-        max_space = std::max(max_space, view_binding_space);
+        max_space = std::max(max_space, view_binding.space);
       }
     }
 
@@ -306,20 +295,19 @@ static void OnInitDevice(reshade::api::device* device) {
     (void)shader_hash;
     for (const auto& view_binding : custom_shader.views) {
       assert(view_binding.get_view != nullptr);
-      const auto view_binding_space = internal::ResolveViewBindingSpace(view_binding.space, device_api);
 
       auto range_it = std::ranges::find_if(
           ranges,
           [&](const reshade::api::descriptor_range& range) {
             return range.type == view_binding.type
-                   && range.dx_register_space == view_binding_space;
+                   && range.dx_register_space == view_binding.space;
           });
 
       if (range_it == ranges.end()) {
         ranges.push_back({
             .binding = 0u,
             .dx_register_index = view_binding.slot,
-            .dx_register_space = view_binding_space,
+            .dx_register_space = view_binding.space,
             .count = 1u,
             .visibility = reshade::api::shader_stage::all,
             .array_size = 1u,
@@ -1900,11 +1888,8 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
 
         bool has_missing_view = false;
         for (const auto& view_binding : custom_shader_info->views) {
-          const auto view_binding_space = internal::ResolveViewBindingSpace(
-              view_binding.space,
-              context.cmd_list->get_device()->get_api());
           const auto location_it = state.pipeline_details->descriptor_push_locations
-                                       .find({view_binding.type, view_binding.slot, view_binding_space});
+                                       .find({view_binding.type, view_binding.slot, view_binding.space});
           if (location_it == state.pipeline_details->descriptor_push_locations.end()) {
             assert(false && "custom shader view binding location is missing");
 #ifdef DEBUG_LEVEL_0
@@ -1914,7 +1899,7 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
             s << PRINT_CRC32(custom_shader_info->crc32);
             s << ": type=" << view_binding.type;
             s << ", slot=" << view_binding.slot;
-            s << ", space=" << view_binding_space;
+            s << ", space=" << view_binding.space;
             s << ")";
             reshade::log::message(reshade::log::level::warning, s.str().c_str());
 #endif
@@ -1932,7 +1917,7 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
             s << "view binding returned null for shader ";
             s << PRINT_CRC32(custom_shader_info->crc32);
             s << ", slot=" << view_binding.slot;
-            s << ", space=" << view_binding_space;
+            s << ", space=" << view_binding.space;
             s << ")";
             reshade::log::message(reshade::log::level::warning, s.str().c_str());
 #endif

@@ -25,14 +25,6 @@ struct InjectionData {
 
 namespace shader = renodx::mods::shader;
 
-static_assert(shader::internal::ResolveViewBindingSpace(50u, reshade::api::device_api::d3d9) == 50u);
-static_assert(shader::internal::ResolveViewBindingSpace(50u, reshade::api::device_api::d3d10) == 50u);
-static_assert(shader::internal::ResolveViewBindingSpace(50u, reshade::api::device_api::d3d11) == 50u);
-static_assert(shader::internal::ResolveViewBindingSpace(50u, reshade::api::device_api::d3d12) == 50u);
-static_assert(shader::internal::ResolveViewBindingSpace(50u, reshade::api::device_api::opengl) == 50u);
-static_assert(shader::internal::ResolveViewBindingSpace(50u, reshade::api::device_api::vulkan) == 0u);
-static_assert(shader::internal::ResolveViewBindingSpace(3u, reshade::api::device_api::vulkan) == 3u);
-
 InjectionData g_injection;
 const bool g_legacy_default_space_preserved = shader::ViewBinding{}.space == 50u;
 bool g_result_written = false;

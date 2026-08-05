@@ -47,9 +47,6 @@ const std::unordered_map<std::uint32_t, shader::CustomShader> g_initial_pr_shade
 int main() {
   const shader::ViewBinding binding;
   if (binding.space != 50u) return 1;
-  if (shader::internal::ResolveViewBindingSpace(binding.space, reshade::api::device_api::d3d12) != 50u) return 1;
-  if (shader::internal::ResolveViewBindingSpace(binding.space, reshade::api::device_api::opengl) != 50u) return 1;
-  if (shader::internal::ResolveViewBindingSpace(binding.space, reshade::api::device_api::vulkan) != 0u) return 1;
   if (g_initial_pr_shader_registration.at(0xC0C0C0C0).code_by_device.size() != 2u) return 1;
   return 0;
 }
