@@ -277,7 +277,7 @@ float3 ApplyColorGradingLUTs(
     float lut_black_yf = renodx::color::yf::from::BT2020(lut_black);
     if (lut_black_yf > 0.f) {
       float3 lut_mid = SampleColorGradingLUTs(
-          lerp(lut_black_yf, 0.18f, 0.08f),
+          0.18f,
           lut_weights
 #if CALLISTO_LUT_COUNT >= 1
           ,
@@ -290,14 +290,13 @@ float3 ApplyColorGradingLUTs(
       );
 
       float3 graded_lms = renodx::color::lms::from::BT2020(graded_bt2020);
-      float3 unclamped_gamma_lms = max(0, Unclamp(
-                                              sqrt(max(graded_lms, 0.f)),
-                                              sqrt(max(renodx::color::lms::from::BT2020(lut_black), 0.f)),
-                                              sqrt(max(renodx::color::lms::from::BT2020(lut_mid), 0.f)),
-                                              sqrt(max(renodx::color::lms::from::BT2020(color_bt2020), 0.f))));
-      float3 unclamped_lms = unclamped_gamma_lms * unclamped_gamma_lms;
+      float3 unclamped_lms = Unclamp(
+          max(graded_lms, 0.f),
+          max(renodx::color::lms::from::BT2020(lut_black), 0.f),
+          max(renodx::color::lms::from::BT2020(lut_mid), 0.f),
+          max(renodx::color::lms::from::BT2020(color_bt2020), 0.f));
 
-      float3 recolored_lms = RecolorUnclampedLMS(graded_lms, unclamped_lms, RENODX_COLOR_GRADE_SCALING * 0.98f, 0.5f);
+      float3 recolored_lms = RecolorUnclampedLMS(graded_lms, unclamped_lms, RENODX_COLOR_GRADE_SCALING * 0.97, 0.5f);
       graded_bt2020 = max(renodx::color::bt2020::from::LMS(recolored_lms), 0.f);
     }
   }
