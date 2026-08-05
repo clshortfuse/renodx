@@ -1211,11 +1211,12 @@ void frag_main() {
     _4236 = _4233;
     _4237 = _4234;
   }
-  float _4240 = asfloat(cb0_m[44u].x);
-  float _4244 = _4240 + 1.0f;
-  float _4248 = max((_4240 + _4237) / _4244, 0.0f);
-  float _4249 = max((_4236 + _4240) / _4244, 0.0f);
-  float _4250 = max((_4240 + _4235) / _4244, 0.0f);
+  float3 _4248_4250 = ApplyBlackPointCorrection(
+      float3(_4237, _4236, _4235),
+      asfloat(cb0_m[44u].x));
+  float _4248 = _4248_4250.x;
+  float _4249 = _4248_4250.y;
+  float _4250 = _4248_4250.z;
   float _4294;
   float _4295;
   float _4296;
