@@ -411,9 +411,11 @@ static bool MergeVulkanDescriptorParameters(
            injected_range_index < injected_param.descriptor_table.count;
            ++injected_range_index) {
         const auto& injected_range = injected_param.descriptor_table.ranges[injected_range_index];
+        assert(injected_range.count == 1u && injected_range.array_size == 1u);
         if (injected_range.count != 1u || injected_range.array_size != 1u) return false;
 
         bool binding_exists = false;
+        bool binding_conflict = false;
         for (auto& original_range : merged_ranges) {
           if (original_range.count == 0u) continue;
           const auto original_last_binding = original_range.count == UINT32_MAX
@@ -425,9 +427,20 @@ static bool MergeVulkanDescriptorParameters(
               || injected_range.binding > original_last_binding) {
             continue;
           }
-          if (original_range.type != injected_range.type) return false;
+          if (original_range.type != injected_range.type) {
+            binding_conflict = true;
+            break;
+          }
           original_range.visibility |= injected_range.visibility;
           binding_exists = true;
+          break;
+        }
+
+        if (binding_conflict) {
+          // Descriptor requirements are shared by all custom shaders, so an unrelated shader may
+          // conflict with the current pipeline layout. Preserve the game's set and continue with
+          // later sets instead of making descriptor injection depend on pipeline layout order.
+          merged_ranges.clear();
           break;
         }
 
@@ -435,6 +448,8 @@ static bool MergeVulkanDescriptorParameters(
           merged_ranges.push_back(injected_range);
         }
       }
+
+      if (merged_ranges.empty()) continue;
 
       std::ranges::sort(
           merged_ranges,
@@ -444,7 +459,7 @@ static bool MergeVulkanDescriptorParameters(
       continue;
     }
 
-    return false;
+    // Preserve the known-working RenoVK behavior for incompatible parameter types too.
   }
   return true;
 }

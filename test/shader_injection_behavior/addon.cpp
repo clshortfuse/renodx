@@ -12,6 +12,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <include/reshade.hpp>
 
@@ -40,6 +41,7 @@ bool g_overflow_mapping_absent = false;
 bool g_overflow_destroyed = false;
 bool g_descriptor_ranges_seen = false;
 bool g_descriptor_ranges_owned = false;
+bool g_vulkan_descriptor_conflict_nonfatal = false;
 bool g_descriptor_ownership_mode = false;
 reshade::api::pipeline_layout g_near_limit_layout = {};
 reshade::api::pipeline_layout g_overflow_layout = {};
@@ -66,6 +68,7 @@ void WriteResultIfReady() {
 
   const bool passed = g_descriptor_ownership_mode
                           ? g_descriptor_ranges_owned
+                                && g_vulkan_descriptor_conflict_nonfatal
                           : g_near_limit_passed
                                 && g_near_limit_mapping_passed
                                 && g_overflow_rejected
@@ -86,8 +89,67 @@ void WriteResultIfReady() {
   output << "overflow_destroyed=" << g_overflow_destroyed << '\n';
   output << "descriptor_ranges_seen=" << g_descriptor_ranges_seen << '\n';
   output << "descriptor_ranges_owned=" << g_descriptor_ranges_owned << '\n';
+  output << "vulkan_descriptor_conflict_nonfatal=" << g_vulkan_descriptor_conflict_nonfatal << '\n';
   output << "legacy_default_space_preserved=" << g_legacy_default_space_preserved << '\n';
   g_result_written = true;
+}
+
+bool TestVulkanDescriptorConflictIsNonfatal() {
+  const std::array original_ranges = {
+      reshade::api::descriptor_range{
+          .binding = 0u,
+          .count = 1u,
+          .visibility = reshade::api::shader_stage::compute,
+          .array_size = 1u,
+          .type = reshade::api::descriptor_type::texture_shader_resource_view,
+      },
+      reshade::api::descriptor_range{
+          .binding = 5u,
+          .count = 1u,
+          .visibility = reshade::api::shader_stage::compute,
+          .array_size = 1u,
+          .type = reshade::api::descriptor_type::texture_shader_resource_view,
+      },
+  };
+  const std::array injected_ranges = {
+      reshade::api::descriptor_range{
+          .binding = 0u,
+          .count = 1u,
+          .visibility = reshade::api::shader_stage::all,
+          .array_size = 1u,
+          .type = reshade::api::descriptor_type::texture_unordered_access_view,
+      },
+      reshade::api::descriptor_range{
+          .binding = 0u,
+          .count = 1u,
+          .visibility = reshade::api::shader_stage::all,
+          .array_size = 1u,
+          .type = reshade::api::descriptor_type::texture_unordered_access_view,
+      },
+  };
+  std::vector<reshade::api::pipeline_layout_param> params = {
+      reshade::api::pipeline_layout_param(1u, original_ranges.data()),
+      reshade::api::pipeline_layout_param(1u, original_ranges.data() + 1u),
+  };
+  const std::vector<reshade::api::pipeline_layout_param> injected_params = {
+      reshade::api::pipeline_layout_param(1u, injected_ranges.data()),
+      reshade::api::pipeline_layout_param(1u, injected_ranges.data() + 1u),
+  };
+  std::vector<std::vector<reshade::api::descriptor_range>> merged_ranges(params.size());
+
+  const bool merged = shader::MergeVulkanDescriptorParameters(
+      injected_params,
+      {0u, 1u},
+      params,
+      merged_ranges);
+
+  return merged
+         && params[0].descriptor_table.ranges == original_ranges.data()
+         && merged_ranges[0].empty()
+         && params[1].descriptor_table.ranges == merged_ranges[1].data()
+         && merged_ranges[1].size() == 2u
+         && merged_ranges[1][0].binding == 0u
+         && merged_ranges[1][1].binding == 5u;
 }
 
 uint32_t GetD3D12RootCost(const reshade::api::pipeline_layout_param& param) {
@@ -331,6 +393,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, LPVOID) {
       renodx::mods::shader::expected_constant_buffer_space = 50u;
       renodx::mods::shader::on_init_pipeline_layout = OnInitPipelineLayout;
       if (g_descriptor_ownership_mode) {
+        g_vulkan_descriptor_conflict_nonfatal = TestVulkanDescriptorConflictIsNonfatal();
         renodx::mods::shader::Use(reason, DESCRIPTOR_OWNERSHIP_CUSTOM_SHADERS, &g_injection);
       } else {
         renodx::mods::shader::Use(reason, ROOT_SIGNATURE_CUSTOM_SHADERS, &g_injection);
