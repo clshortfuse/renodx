@@ -1029,6 +1029,12 @@ const std::unordered_map<
                 {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
+        {
+            "Frostpunk2-Win64-Shipping.exe",  // Product name is empty
+            {
+                {"Upgrade_R10G10B10A2_UNORM", UPGRADE_TYPE_OUTPUT_SIZE},
+            },
+        },
         // Native HDR on games (Path off)
         {
             "Hell is Us",
