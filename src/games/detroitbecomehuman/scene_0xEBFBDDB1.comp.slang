@@ -1,7 +1,6 @@
 #version 450
 #extension GL_EXT_samplerless_texture_functions : require
 #include "shared.h"
-#include "tone_mappers.slang"
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 struct sCB
@@ -269,7 +268,7 @@ void main()
         }
         const bool renodx_custom_active =
             CUSTOM_HDR_ACTIVE &&
-            (CUSTOM_TONE_MAP_TYPE != DETROIT_TONE_MAP_TYPE_VANILLA ||
+            (RENODX_TONE_MAP_TYPE != 0.0 ||
             RENODX_COLOR_GRADE_STRENGTH != 1.0 ||
             RENODX_TONE_MAP_EXPOSURE != 1.0 ||
             RENODX_TONE_MAP_HIGHLIGHTS != 1.0 ||
@@ -283,40 +282,9 @@ void main()
         {
             const vec3 renodx_untonemapped = max(_2631, vec3(0.0));
             const vec3 renodx_vanilla_graded_linear = _2647;
-            vec3 renodx_tonemapped;
-            if (CUSTOM_TONE_MAP_IS_EXTENDED)
-            {
-                const vec3 renodx_untonemapped_graded =
-                    renodx::draw::ComputeUntonemappedGraded(
-                        renodx_untonemapped,
-                        renodx_vanilla_graded_linear);
-                const vec3 renodx_user_graded =
-                    renodx::color::grade::UserColorGrading(
-                        renodx_untonemapped_graded,
-                        RENODX_TONE_MAP_EXPOSURE,
-                        RENODX_TONE_MAP_HIGHLIGHTS,
-                        RENODX_TONE_MAP_SHADOWS,
-                        RENODX_TONE_MAP_CONTRAST,
-                        RENODX_TONE_MAP_SATURATION);
-                const vec3 renodx_tonemapped_linear =
-                    detroit::tone_map::Apply(
-                        renodx_user_graded,
-                        CUSTOM_TONE_MAP_TYPE,
-                        RENODX_PEAK_WHITE_NITS,
-                        RENODX_DIFFUSE_WHITE_NITS,
-                        RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
-                        RENODX_TONE_MAP_BLOWOUT,
-                        RENODX_TONE_MAP_FLARE);
-                renodx_tonemapped = pow(
-                    max(renodx_tonemapped_linear, vec3(0.0)),
-                    vec3(1.0 / 2.2));
-            }
-            else
-            {
-                renodx_tonemapped = renodx::draw::ToneMapPass(
-                    renodx_untonemapped,
-                    renodx_vanilla_graded_linear);
-            }
+            const vec3 renodx_tonemapped = renodx::draw::ToneMapPass(
+                renodx_untonemapped,
+                renodx_vanilla_graded_linear);
             // ToneMapPass emits a gamma-2.2 intermediate where 1.0 represents
             // Game Brightness. Detroit's native OETF instead maps 1.0 to
             // 300 nits, so adapt in display-light space before the unchanged
