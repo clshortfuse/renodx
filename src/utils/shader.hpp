@@ -783,13 +783,13 @@ static void OnInitDevice(reshade::api::device* device) {
                             ShaderBytecodeMap& dest,
                             const std::string& type = "") {
     for (const auto& [shader_hash, replacement] : source) {
-      auto [iterator, is_new] = dest.emplace(std::pair<reshade::api::device*, uint32_t>({device, shader_hash}), replacement);
+      const auto [iterator, is_new] = dest.insert_or_assign(DeviceShaderKey{device, shader_hash}, replacement);
       std::stringstream s;
       s << "utils::shader::OnInitDevice(";
       if (is_new) {
         s << "Registered ";
       } else {
-        s << "Ovewriting ";
+        s << "Overwriting ";
       }
       s << type;
       s << " replacement: ";
@@ -830,6 +830,24 @@ static void OnDestroyDevice(reshade::api::device* device) {
   for (const auto& pipeline_handle : pipeline_handles) {
     shared.data->pipeline_shader_details.erase(pipeline_handle);
   }
+
+  auto erase_device_entries = [device](auto& map) {
+    std::vector<DeviceShaderKey> keys;
+    map.for_each([&](const auto& pair) {
+      if (pair.first.first == device) {
+        keys.emplace_back(pair.first);
+      }
+    });
+    for (const auto& key : keys) {
+      map.erase(key);
+    }
+  };
+  erase_device_entries(shared.data->compile_time_replacements);
+  erase_device_entries(shared.data->runtime_replacements);
+  erase_device_entries(shared.data->shader_replacements);
+  erase_device_entries(shared.data->shader_replacements_inverse);
+  erase_device_entries(shared.data->shader_pipeline_handles);
+  runtime_replacement_count = shared.data->runtime_replacements.size();
 }
 
 inline void OnInitCommandList(reshade::api::command_list* cmd_list) {
