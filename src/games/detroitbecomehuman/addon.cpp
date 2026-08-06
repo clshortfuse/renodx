@@ -6,6 +6,7 @@
 #define DEBUG_LEVEL_0
 
 #include <atomic>
+#include <cmath>
 
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
@@ -26,6 +27,16 @@ constexpr float OUTPUT_MODE_HDR10 = 2.f;
 constexpr float CAS_MODE_VANILLA = 0.f;
 constexpr float CAS_MODE_OFF = 1.f;
 constexpr float CAS_MODE_RENODX = 2.f;
+
+float ParseToneMapType(float value) {
+  if (!std::isfinite(value)) return DETROIT_TONE_MAP_TYPE_RENO_DRT;
+  const float rounded = std::round(value);
+  if (rounded < DETROIT_TONE_MAP_TYPE_VANILLA
+      || rounded > DETROIT_TONE_MAP_TYPE_MAX) {
+    return DETROIT_TONE_MAP_TYPE_RENO_DRT;
+  }
+  return rounded;
+}
 
 ShaderInjectData shader_injection;
 std::atomic_bool scene_path_seen = false;
@@ -69,29 +80,38 @@ renodx::utils::settings::Settings settings =
             {"ToneMapType",
              {
                  .binding = &shader_injection.tone_map_type,
-                 .default_value = 2.f,
-                 .labels = {"Vanilla", "Reinhard", "RenoDRT"},
-                 .parse = [](float value) { return value; },
-             }},
-            {"ToneMapPeakNits",
-             {
-                 .binding = &shader_injection.peak_white_nits,
-                 .default_value = 1000.f,
-                 .can_reset = false,
-             }},
-            {"ToneMapGameNits",
-             {
-                 .binding = &shader_injection.diffuse_white_nits,
-                 .default_value = 203.f,
-             }},
-            {"ToneMapUINits",
-             {
-                 .binding = &shader_injection.graphics_white_nits,
-                 .default_value = 203.f,
-                 .is_visible = []() {
-                   return shader_injection.ui_path_active != 0.f;
+                 .default_value = DETROIT_TONE_MAP_TYPE_RENO_DRT,
+                 .tooltip = "AgX, ACES Fitted, Lottes, Hable and PBR Neutral are adapted to Detroit's scene-linear HDR range. PsychoV-22 matches the selected Cyberpunk 2077 RenoDX operator.",
+                 .labels = {
+                     "Vanilla",
+                     "Reinhard",
+                     "RenoDRT",
+                     "AgX (HDR Adapted)",
+                     "ACES Fitted (HDR Adapted)",
+                     "Lottes (HDR Adapted)",
+                     "Hable / Uncharted 2 (HDR Adapted)",
+                     "Khronos PBR Neutral (HDR Adapted)",
+                     "PsychoV-22 (Cyberpunk 2077)",
+                     "Detroit DRT",
                  },
+                 .parse = &ParseToneMapType,
              }},
+            {"ToneMapPeakNits", {
+                                    .binding = &shader_injection.peak_white_nits,
+                                    .default_value = 1000.f,
+                                    .can_reset = false,
+                                }},
+            {"ToneMapGameNits", {
+                                    .binding = &shader_injection.diffuse_white_nits,
+                                    .default_value = 203.f,
+                                }},
+            {"ToneMapUINits", {
+                                  .binding = &shader_injection.graphics_white_nits,
+                                  .default_value = 203.f,
+                                  .is_visible = []() {
+                                    return shader_injection.ui_path_active != 0.f;
+                                  },
+                              }},
             {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure}},
             {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights}},
             {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows}},
@@ -100,15 +120,14 @@ renodx::utils::settings::Settings settings =
             {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation}},
             {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout}},
             {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare}},
-            {"SceneGradeStrength",
-             {
-                 .binding = &shader_injection.color_grade_strength,
-                 .default_value = 100.f,
-                 .label = "Scene Grading",
-                 .section = "Color Grading",
-                 .tooltip = "Strength of Detroit's original scene color grading.",
-                 .parse = [](float value) { return value * 0.01f; },
-             }},
+            {"SceneGradeStrength", {
+                                       .binding = &shader_injection.color_grade_strength,
+                                       .default_value = 100.f,
+                                       .label = "Scene Grading",
+                                       .section = "Color Grading",
+                                       .tooltip = "Strength of Detroit's original scene color grading.",
+                                       .parse = [](float value) { return value * 0.01f; },
+                                   }},
         }),
         renodx::templates::settings::CreateSettings({
             {{
@@ -148,9 +167,7 @@ renodx::utils::settings::Settings settings =
                 .max = 100.f,
                 .is_enabled = []() { return shader_injection.cas_mode == CAS_MODE_RENODX; },
                 .parse = [](float value) { return value * 0.01f; },
-                .is_visible = []() {
-                  return renodx::templates::settings::current_settings_mode >= 1.f;
-                },
+                .is_visible = []() { return renodx::templates::settings::current_settings_mode >= 1.f; },
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -176,7 +193,7 @@ renodx::utils::settings::Settings settings =
 void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"OutputMode", OUTPUT_MODE_AUTO},
-      {"ToneMapType", 0.f},
+      {"ToneMapType", DETROIT_TONE_MAP_TYPE_VANILLA},
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 300.f},
@@ -204,10 +221,10 @@ void OnPresent(
   const auto color_space = swapchain->get_color_space();
   shader_injection.output_is_hdr =
       color_space == reshade::api::color_space::hdr10_st2084
-          || color_space == reshade::api::color_space::hdr10_hlg
-          || color_space == reshade::api::color_space::extended_srgb_linear
-      ? 1.f
-      : 0.f;
+              || color_space == reshade::api::color_space::hdr10_hlg
+              || color_space == reshade::api::color_space::extended_srgb_linear
+          ? 1.f
+          : 0.f;
   shader_injection.scene_path_active =
       scene_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
   shader_injection.ui_path_active =

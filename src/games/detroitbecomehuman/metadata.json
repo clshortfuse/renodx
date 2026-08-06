@@ -9,12 +9,13 @@
     "Vulkan"
   ],
   "status": "experimental",
-  "version": "0.1.0-rc.1",
+  "version": "0.2.0-rc.1",
   "notes": [
     "Supports Steam Build ID 12158144 only.",
     "Supported DetroitBecomeHuman.exe SHA-256: ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF.",
     "Vulkan base pinned to RenoDX PR #564 commit 92d6d79ec8103b1aaea44c0085c3a88db723e6d5.",
     "Requires ReShade 6.8.0 Full Add-On and the game's native Vulkan renderer.",
+    "Adds HDR-adapted AgX, ACES Fitted, Lottes, Hable, Khronos PBR Neutral, PsychoV-22 and Detroit DRT tone mappers while preserving the native HDR10 OETF.",
     "Auto HDR and NVIDIA RTX HDR must be disabled. Late chapters remain user-validation for this experimental RC."
   ],
   "urls": [
