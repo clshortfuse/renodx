@@ -786,7 +786,7 @@ renodx::utils::settings::Settings info_settings = {
           }
           return false;
         },
-        .is_visible = []() { return current_settings_mode >= 0.f; },
+        .is_visible = []() { return current_settings_mode >= 1.f; },
     },
 
     // end keybind code
