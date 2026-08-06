@@ -33,6 +33,7 @@
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./dlss_scale_transition.hpp"
+#include "./gtao_runtime.hpp"
 #include "./resolution_scaling_win32.hpp"
 #include "./shared.h"
 #include "./temporal_capture.hpp"
@@ -66,6 +67,8 @@ namespace resolution_scaling =
     renodx::games::detroitbecomehuman::resolution_scaling;
 namespace dlss_scale_transition =
     renodx::games::detroitbecomehuman::dlss_scale_transition;
+namespace gtao_runtime =
+    renodx::games::detroitbecomehuman::gtao_runtime;
 
 constexpr std::size_t ASPECT_PATCH_INDEX = 0u;
 constexpr std::size_t UI_PATCH_INDEX = 1u;
@@ -920,34 +923,58 @@ bool OnFinalCasDraw(reshade::api::command_list* command_list) {
 }
 
 void SetGtaoEnabled(float mode) {
-  gtao_enabled.store(
-      mode >= AMBIENT_OCCLUSION_MODE_XEGTAO,
-      std::memory_order_relaxed);
+  const bool enabled = mode >= AMBIENT_OCCLUSION_MODE_XEGTAO;
+  gtao_enabled.store(enabled, std::memory_order_relaxed);
+  gtao_runtime::SetEnabled(enabled);
 }
 
 void OnAmbientOcclusionModeChanged() {
   SetGtaoEnabled(ambient_occlusion_mode);
 }
 
-bool ShouldUseGtao(reshade::api::command_list*) {
-  return gtao_enabled.load(std::memory_order_relaxed);
+bool ShouldUseGtaoMain(reshade::api::command_list* command_list) {
+  return gtao_enabled.load(std::memory_order_relaxed)
+         && gtao_runtime::IsMainPrepared(command_list);
+}
+
+bool ShouldUseGtaoDenoise(reshade::api::command_list* command_list) {
+  return gtao_enabled.load(std::memory_order_relaxed)
+         && gtao_runtime::IsDenoisePrepared(command_list);
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     {0x2D2071B2, {
                      .crc32 = 0x2D2071B2,
                      .code = __0x2D2071B2,
-                     .on_replace = &ShouldUseGtao,
+                     .on_replace = &ShouldUseGtaoMain,
+                     .views = {
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 0u, 1u, &gtao_runtime::GetMotionView},
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 1u, 1u, &gtao_runtime::GetPreviousAoView},
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 2u, 1u, &gtao_runtime::GetPreviousDepthView},
+                         {reshade::api::descriptor_type::texture_unordered_access_view, 16u, 1u, &gtao_runtime::GetCurrentAoUav},
+                         {reshade::api::descriptor_type::texture_unordered_access_view, 17u, 1u, &gtao_runtime::GetCurrentDepthUav},
+                     },
                  }},
     {0xBC7B6738, {
                      .crc32 = 0xBC7B6738,
                      .code = __0x2D2071B2,
-                     .on_replace = &ShouldUseGtao,
+                     .on_replace = &ShouldUseGtaoMain,
+                     .views = {
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 0u, 1u, &gtao_runtime::GetMotionView},
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 1u, 1u, &gtao_runtime::GetPreviousAoView},
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 2u, 1u, &gtao_runtime::GetPreviousDepthView},
+                         {reshade::api::descriptor_type::texture_unordered_access_view, 16u, 1u, &gtao_runtime::GetCurrentAoUav},
+                         {reshade::api::descriptor_type::texture_unordered_access_view, 17u, 1u, &gtao_runtime::GetCurrentDepthUav},
+                     },
                  }},
     {0xE9DF0773, {
                      .crc32 = 0xE9DF0773,
                      .code = __0xE9DF0773,
-                     .on_replace = &ShouldUseGtao,
+                     .on_replace = &ShouldUseGtaoDenoise,
+                     .views = {
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 1u, 1u, &gtao_runtime::GetResolvedAoView},
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 2u, 1u, &gtao_runtime::GetResolvedDepthView},
+                     },
                  }},
     {0xEBFBDDB1, {
                      .crc32 = 0xEBFBDDB1,
@@ -1031,8 +1058,8 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Ambient Occlusion",
                 .section = "Ambient Occlusion",
-                .tooltip = "Vanilla restores Detroit's original HBAO generation and grainy blur. XeGTAO High is an experimental screen-space path with 3 slices, 18 depth taps per pixel and a 5x5 depth-aware denoise; it cannot use off-screen geometry.",
-                .labels = {"Vanilla HBAO", "XeGTAO High (Experimental)"},
+                .tooltip = "Vanilla restores Detroit's original HBAO. XeGTAO High uses full-resolution view-space normals, 3 slices / 18 horizon taps, full-precision AO, a 5x5 depth-aware denoise, persistent history, motion-vector reprojection and disocclusion rejection. It remains screen-space and cannot use off-screen geometry.",
+                .labels = {"Vanilla HBAO", "XeGTAO High + Temporal"},
                 .on_change_value = [](float, float current) {
                   SetGtaoEnabled(current);
                 },
@@ -1262,6 +1289,7 @@ bool UpdateUltrawideFromSwapchain(reshade::api::swapchain* swapchain) {
   const auto height = static_cast<std::uint32_t>(description.texture.height);
   const auto previous_width = output_width.exchange(width, std::memory_order_relaxed);
   const auto previous_height = output_height.exchange(height, std::memory_order_relaxed);
+  gtao_runtime::SetOutputExtent(width, height);
   if (width == previous_width && height == previous_height) return true;
 
   RefreshUltrawideValues();
@@ -1388,6 +1416,7 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   // A resize destroys the old output contract. Restore the user's serialized
   // scale before any replacement swapchain can establish a new DLSS session.
   ShutdownDlssRenderScale();
+  if (resize) gtao_runtime::InvalidateHistory();
   if (!resize) {
     RestoreUltrawidePatch();
     ultrawide_install_attempted.store(false, std::memory_order_release);
@@ -1402,6 +1431,7 @@ void OnDestroyDevice(reshade::api::device* device) {
       swapchain != nullptr && swapchain->get_device() != device) {
     return;
   }
+  gtao_runtime::Destroy(device);
   ShutdownDlssRenderScale();
 }
 
@@ -1475,6 +1505,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
     OnDlssModeChanged();
     OnAmbientOcclusionModeChanged();
   }
+  gtao_runtime::Use(fdw_reason);
   temporal_capture::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   return TRUE;

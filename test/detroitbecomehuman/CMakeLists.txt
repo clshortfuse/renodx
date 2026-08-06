@@ -136,6 +136,24 @@ set_tests_properties(detroitbecomehuman_taa_contract PROPERTIES
 )
 
 add_renodx_runtime_executable(
+  detroitbecomehuman_gtao_temporal_contract_tests
+  gtao_temporal_contract_tests.cpp
+)
+add_dependencies(
+  renodx_test_suites
+  detroitbecomehuman_gtao_temporal_contract_tests
+)
+
+add_test(
+  NAME detroitbecomehuman_gtao_temporal_contract
+  COMMAND detroitbecomehuman_gtao_temporal_contract_tests
+)
+set_tests_properties(
+  detroitbecomehuman_gtao_temporal_contract
+  PROPERTIES LABELS "detroitbecomehuman;unit;cpu;gtao;temporal;contract"
+)
+
+add_renodx_runtime_executable(
   detroitbecomehuman_rgb9e5_adapter_tests
   rgb9e5_adapter_tests.cpp
 )
@@ -225,6 +243,7 @@ add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/expected_taa_interface.json
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_bridge_contract_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/feature_lifetime_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/gtao_temporal_contract_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_policy_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_scale_transition_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/rgb9e5_adapter_tests.cpp

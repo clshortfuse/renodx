@@ -70,6 +70,15 @@ layout(set = 0, binding = 3) uniform sampler2D sBlueNoise;
 layout(set = 0, binding = 16, r16ui) uniform writeonly uimage2D PackedDepthAndAO;
 layout(set = 0, binding = 17, r8ui) uniform writeonly uimage2D OutputTileTexture;
 
+// Private set injected by the add-on. These resources remove Detroit's
+// three-bit AO intermediary from temporal accumulation while preserving the
+// native packed output for downstream compatibility and safe fallback.
+layout(set = 1, binding = 0) Texture2D<float2> GtaoMotionVectors;
+layout(set = 1, binding = 1) Texture2D<float> PreviousAoHistory;
+layout(set = 1, binding = 2) Texture2D<float> PreviousDepthHistory;
+layout(set = 1, binding = 16, r16f) uniform writeonly image2D CurrentAoHistory;
+layout(set = 1, binding = 17, r32f) uniform writeonly image2D CurrentDepthHistory;
+
 // Detroit's resolve uses this as a coarse background/geometry mask. Preserve
 // that contract independently from the actual (possibly quantized-to-zero) AO.
 shared uint tile_has_geometry;
@@ -322,6 +331,107 @@ float EvaluateGtao(vec2 uv, ivec2 source_pixel, out float center_view_depth)
     return clamp(1.0 - visibility, 0.0, 1.0);
 }
 
+float LoadPreviousAoBilinear(vec2 previous_uv, ivec2 history_size)
+{
+    vec2 position = previous_uv * vec2(history_size) - vec2(0.5);
+    ivec2 base = ivec2(floor(position));
+    vec2 fraction = fract(position);
+    ivec2 maximum = history_size - ivec2(1);
+    ivec2 p00 = clamp(base, ivec2(0), maximum);
+    ivec2 p10 = clamp(base + ivec2(1, 0), ivec2(0), maximum);
+    ivec2 p01 = clamp(base + ivec2(0, 1), ivec2(0), maximum);
+    ivec2 p11 = clamp(base + ivec2(1, 1), ivec2(0), maximum);
+    float row0 = mix(
+        PreviousAoHistory.Load(int3(p00, 0)),
+        PreviousAoHistory.Load(int3(p10, 0)),
+        fraction.x);
+    float row1 = mix(
+        PreviousAoHistory.Load(int3(p01, 0)),
+        PreviousAoHistory.Load(int3(p11, 0)),
+        fraction.x);
+    return mix(row0, row1, fraction.y);
+}
+
+float ResolveTemporalOcclusion(
+    ivec2 pixel,
+    ivec2 output_size,
+    float current_depth,
+    float current_occlusion)
+{
+    uint history_width;
+    uint history_height;
+    uint depth_history_width;
+    uint depth_history_height;
+    uint motion_width;
+    uint motion_height;
+    PreviousAoHistory.GetDimensions(history_width, history_height);
+    PreviousDepthHistory.GetDimensions(
+        depth_history_width, depth_history_height);
+    GtaoMotionVectors.GetDimensions(motion_width, motion_height);
+    ivec2 history_size = ivec2(history_width, history_height);
+    ivec2 depth_history_size = ivec2(
+        depth_history_width, depth_history_height);
+    ivec2 motion_size = ivec2(motion_width, motion_height);
+    if (any(notEqual(history_size, output_size))
+        || any(notEqual(depth_history_size, output_size))
+        || any(lessThanEqual(motion_size, ivec2(0))))
+        return current_occlusion;
+
+    vec2 current_uv = (vec2(pixel) + vec2(0.5)) / vec2(output_size);
+    ivec2 motion_pixel = clamp(
+        ivec2(current_uv * vec2(motion_size)),
+        ivec2(0),
+        motion_size - ivec2(1));
+    vec2 motion = GtaoMotionVectors.Load(int3(motion_pixel, 0));
+    if (any(isnan(motion)) || any(isinf(motion)))
+        return current_occlusion;
+
+    // Exact Detroit TAA contract: previous_uv = current_uv - motion.xy.
+    vec2 previous_uv = current_uv - motion;
+    if (any(lessThanEqual(previous_uv, vec2(0.0)))
+        || any(greaterThanEqual(previous_uv, vec2(1.0))))
+        return current_occlusion;
+
+    ivec2 previous_pixel = clamp(
+        ivec2(previous_uv * vec2(output_size)),
+        ivec2(0),
+        output_size - ivec2(1));
+    float previous_depth = PreviousDepthHistory.Load(
+        int3(previous_pixel, 0));
+    if (isnan(previous_depth) || isinf(previous_depth)
+        || abs(previous_depth) < 1.0e-5)
+        return current_occlusion;
+
+    float depth_threshold = max(0.002, abs(current_depth) * 0.02);
+    float depth_error = abs(previous_depth - current_depth);
+    if (depth_error >= depth_threshold)
+        return current_occlusion;
+
+    float history_occlusion = LoadPreviousAoBilinear(
+        previous_uv, history_size);
+    if (isnan(history_occlusion) || isinf(history_occlusion))
+        return current_occlusion;
+
+    // Neighborhood clipping without an extra pass: limit history to a narrow
+    // interval around the current physically evaluated sample. This rejects
+    // trails while retaining static sub-pixel contact shadows.
+    float clip_radius = mix(
+        0.10,
+        0.22,
+        clamp(length(motion * vec2(output_size)) / 16.0, 0.0, 1.0));
+    history_occlusion = clamp(
+        history_occlusion,
+        max(0.0, current_occlusion - clip_radius),
+        min(1.0, current_occlusion + clip_radius));
+
+    float motion_pixels = length(motion * vec2(output_size));
+    float motion_factor = clamp(motion_pixels / 16.0, 0.0, 1.0);
+    float history_weight = mix(0.92, 0.72, motion_factor);
+    history_weight *= 1.0 - smoothstep(
+        0.0, depth_threshold, depth_error);
+    return mix(current_occlusion, history_occlusion, history_weight);
+}
+
 uint PackDepthAndOcclusion(float view_depth, float occlusion, float dither)
 {
     uint depth_code = (packHalf2x16(vec2(view_depth * -6.5, 0.0)) >> 2u)
@@ -354,6 +464,22 @@ void main()
             + vec2(quad_offset) * _gtao.g_cbHBAO._vfDefAOInvResolution;
         float view_depth;
         float occlusion = EvaluateGtao(uv, source_pixel, view_depth);
+        bool history_extent_matches =
+            all(equal(imageSize(CurrentAoHistory), output_size))
+            && all(equal(imageSize(CurrentDepthHistory), output_size));
+        if (history_extent_matches)
+        {
+            occlusion = ResolveTemporalOcclusion(
+                output_pixel, output_size, view_depth, occlusion);
+            imageStore(
+                CurrentAoHistory,
+                output_pixel,
+                vec4(occlusion, 0.0, 0.0, 0.0));
+            imageStore(
+                CurrentDepthHistory,
+                output_pixel,
+                vec4(view_depth, 0.0, 0.0, 0.0));
+        }
         float quantization_noise = fract(
             LoadNoise(source_pixel, ivec2(11, 3))
             + _gtao.g_cbHBAO._fFrameIndex * 0.754877666);

@@ -39,7 +39,12 @@
         { "kind": "textures", "set": 0, "binding": 3, "type": "sampler2D" },
         { "kind": "images", "set": 0, "binding": 16, "type": "uimage2D", "format": "r16ui", "writeonly": true },
         { "kind": "images", "set": 0, "binding": 17, "type": "uimage2D", "format": "r8ui", "writeonly": true },
-        { "kind": "ubos", "set": 0, "binding": 52, "block_size": 192 }
+        { "kind": "ubos", "set": 0, "binding": 52, "block_size": 192 },
+        { "kind": "separate_images", "set": 1, "binding": 0, "type": "texture2D" },
+        { "kind": "separate_images", "set": 1, "binding": 1, "type": "texture2D" },
+        { "kind": "separate_images", "set": 1, "binding": 2, "type": "texture2D" },
+        { "kind": "images", "set": 1, "binding": 16, "type": "image2D", "format": "r16f", "writeonly": true },
+        { "kind": "images", "set": 1, "binding": 17, "type": "image2D", "format": "r32f", "writeonly": true }
       ]
     },
     "0x2892BFCA": {
@@ -113,7 +118,9 @@
         { "kind": "textures", "set": 0, "binding": 1, "type": "usampler2D" },
         { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" },
         { "kind": "images", "set": 0, "binding": 16, "type": "image2D", "format": "r8", "writeonly": true },
-        { "kind": "ubos", "set": 0, "binding": 52, "block_size": 32 }
+        { "kind": "ubos", "set": 0, "binding": 52, "block_size": 32 },
+        { "kind": "separate_images", "set": 1, "binding": 1, "type": "texture2D" },
+        { "kind": "separate_images", "set": 1, "binding": 2, "type": "texture2D" }
       ]
     },
     "0xEBFBDDB1": {

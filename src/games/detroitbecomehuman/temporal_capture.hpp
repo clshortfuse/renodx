@@ -121,6 +121,20 @@ struct CapturedImage {
   bool valid = false;
 };
 
+// XeGTAO executes before the native temporal pass, so it consumes the most
+// recently proven persistent motion-vector view. The GTAO shader validates
+// bounds and reprojected view depth per pixel; a runtime A/B capture is still
+// required to establish the exact within-frame producer order in every scene.
+struct GtaoTemporalInput {
+  reshade::api::resource_view view = {0u};
+  reshade::api::resource resource = {0u};
+  std::uint32_t width = 0u;
+  std::uint32_t height = 0u;
+  std::uint64_t serial = 0u;
+  bool reset = true;
+  bool valid = false;
+};
+
 struct ImageShape {
   std::uint32_t format = 0u;
   std::uint32_t width = 0u;
@@ -154,6 +168,8 @@ inline std::atomic_uint64_t evaluation_serial = 0u;
 inline std::atomic_uint64_t sr_preflight_serial = 0u;
 static_assert(std::atomic_uint64_t::is_always_lock_free);
 inline std::mutex contract_mutex;
+inline std::mutex gtao_temporal_input_mutex;
+inline GtaoTemporalInput latest_gtao_temporal_input = {};
 inline ContractShape last_contract_shape = {};
 inline bool has_logged_contract = false;
 inline bool has_logged_native_snapshot_failure = false;
@@ -163,6 +179,28 @@ inline std::atomic_uint64_t last_logged_dlss_success_key =
     kUnloggedTelemetryKey;
 inline std::atomic_uint64_t last_logged_evaluation_key =
     kUnloggedTelemetryKey;
+
+[[nodiscard]] inline GtaoTemporalInput GetLatestGtaoTemporalInput(
+    reshade::api::device* device) {
+  if (device == nullptr) return {};
+  std::scoped_lock lock(gtao_temporal_input_mutex);
+  auto result = latest_gtao_temporal_input;
+  if (!result.valid || result.view.handle == 0u
+      || result.resource.handle == 0u) {
+    return {};
+  }
+  const auto observed_resource = device->get_resource_from_view(result.view);
+  if (observed_resource.handle == 0u
+      || observed_resource.handle != result.resource.handle) {
+    return {};
+  }
+  return result;
+}
+
+inline void ClearLatestGtaoTemporalInput() {
+  std::scoped_lock lock(gtao_temporal_input_mutex);
+  latest_gtao_temporal_input = {};
+}
 
 [[nodiscard]] inline std::uint64_t MixTelemetryKey(
     std::uint64_t key,
@@ -809,6 +847,20 @@ inline void AfterNativeTemporalDispatch(
   const bool native_history_resources_available =
       sampled[0u].valid && sampled[2u].valid && sampled[7u].valid;
 
+  {
+    std::scoped_lock lock(gtao_temporal_input_mutex);
+    latest_gtao_temporal_input = {
+        .view = reshade::api::resource_view{sampled[4u].image_view},
+        .resource = reshade::api::resource{sampled[4u].image},
+        .width = sampled[4u].width,
+        .height = sampled[4u].height,
+        .serial = dispatch_serial,
+        .reset = frame_parameters.reset || !native_history_resources_available,
+        .valid = exact_resource_formats && exact_descriptor_layouts
+                 && exact_resource_extents && sampled[4u].valid,
+    };
+  }
+
   DetroitDlssTemporalFrameInputs inputs = {
       .struct_size = sizeof(DetroitDlssTemporalFrameInputs),
       .abi_version = DETROIT_DLSS_ABI_VERSION,
@@ -970,6 +1022,7 @@ inline void Use(DWORD fdw_reason) {
       std::scoped_lock lock(dlss_output_mutex);
       dlss_output_by_command_list.clear();
     }
+      ClearLatestGtaoTemporalInput();
       last_logged_dlss_success_key.store(
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);
@@ -997,6 +1050,7 @@ inline void Use(DWORD fdw_reason) {
         std::scoped_lock lock(dlss_output_mutex);
         dlss_output_by_command_list.clear();
       }
+      ClearLatestGtaoTemporalInput();
       break;
   }
 }
