@@ -296,6 +296,17 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"color_space\s*==[\s\S]*?\?\s*1\.f\s*:\s*0\.f\s*;",
         )
 
+    def test_preset_off_keeps_ultrawide_compatibility_independent(self):
+        addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
+        preset_off = re.search(
+            r"void\s+OnPresetOff\(\)\s*\{(?P<body>[\s\S]*?)\n\}",
+            addon,
+        )
+        self.assertIsNotNone(preset_off)
+        body = preset_off.group("body")
+        self.assertNotIn('"AspectRatioMode"', body)
+        self.assertIn("OnAspectRatioModeChanged();", body)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

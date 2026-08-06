@@ -2,25 +2,34 @@
   "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "detroitbecomehuman",
   "title": "Detroit: Become Human",
-  "summary": "Experimental RenoDX Vulkan HDR correction for Detroit: Become Human.",
+  "summary": "Experimental RenoDX Vulkan HDR correction and ultrawide support for Detroit: Become Human.",
   "tags": [
     "HDR",
     "HDR10",
-    "Vulkan"
+    "Vulkan",
+    "Ultrawide"
   ],
   "status": "experimental",
-  "version": "0.1.0-rc.1",
+  "version": "0.2.0-rc.2",
   "notes": [
     "Supports Steam Build ID 12158144 only.",
     "Supported DetroitBecomeHuman.exe SHA-256: ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF.",
     "Vulkan base pinned to RenoDX PR #564 commit 92d6d79ec8103b1aaea44c0085c3a88db723e6d5.",
     "Requires ReShade 6.8.0 Full Add-On and the game's native Vulkan renderer.",
+    "Adds an automatic, reversible aspect-ratio override and isolated Scaleform UI compensation for displays wider than 16:9; 3440x1440 uses its exact 43:18 ratio.",
+    "RenoDX Preset Off disables HDR look changes but keeps ultrawide compatibility active; select Aspect Ratio: Vanilla 16:9 to disable the geometry override.",
+    "Ultrawide signatures and scaling were independently reimplemented from research published by Rose / PCGamingWiki; no trainer binary or Cheat Engine payload is included.",
+    "Fully restart the game after adding, replacing, or removing the addon; live addon unload/reload is not supported.",
     "Auto HDR and NVIDIA RTX HDR must be disabled. Late chapters remain user-validation for this experimental RC."
   ],
   "urls": [
     {
       "url": "https://github.com/clshortfuse/renodx/pull/564",
       "kind": "vulkan-base"
+    },
+    {
+      "url": "https://community.pcgamingwiki.com/files/file/1721-detroit-become-human-ultrawide-multimonitor-mod/",
+      "kind": "ultrawide-reference"
     }
   ],
   "deploy": {
