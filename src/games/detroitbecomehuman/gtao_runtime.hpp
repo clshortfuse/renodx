@@ -66,7 +66,8 @@ inline std::atomic_bool enabled = true;
 inline std::atomic_uint32_t output_width = 0u;
 inline std::atomic_uint32_t output_height = 0u;
 inline std::atomic_uint64_t last_failure_key = 0u;
-inline std::atomic_uint64_t last_ready_key = 0u;
+inline std::atomic_uint64_t last_ready_extent_key = 0u;
+inline std::atomic_uint32_t ready_log_flags = 0u;
 
 inline void Log(reshade::log::level level, const std::string& message) {
   reshade::log::message(level, ("Detroit XeGTAO: " + message).c_str());
@@ -230,9 +231,15 @@ inline void ClearHistoryLocked(reshade::api::command_list* command_list) {
 }
 
 inline void SetEnabled(bool value) {
-  enabled.store(value, std::memory_order_release);
+  const bool previous = enabled.exchange(value, std::memory_order_acq_rel);
+  if (previous == value) return;
+  last_ready_extent_key.store(0u, std::memory_order_release);
+  ready_log_flags.store(0u, std::memory_order_release);
+  Log(
+      reshade::log::level::info,
+      value ? "mode switched to XeGTAO High + Temporal."
+            : "mode switched to Vanilla HBAO.");
   if (value) return;
-  last_ready_key.store(0u, std::memory_order_release);
   std::scoped_lock lock(resource_mutex);
   resources.history_valid = false;
   ++resources.generation;
@@ -242,6 +249,14 @@ inline void SetOutputExtent(std::uint32_t width, std::uint32_t height) {
   const auto previous_width = output_width.exchange(width, std::memory_order_acq_rel);
   const auto previous_height = output_height.exchange(height, std::memory_order_acq_rel);
   if (width == previous_width && height == previous_height) return;
+  Log(
+      reshade::log::level::info,
+      std::format(
+          "output extent changed from {}x{} to {}x{}; temporal history reset.",
+          previous_width,
+          previous_height,
+          width,
+          height));
   std::scoped_lock lock(resource_mutex);
   resources.history_valid = false;
   resources.cleared = false;
@@ -249,6 +264,9 @@ inline void SetOutputExtent(std::uint32_t width, std::uint32_t height) {
 }
 
 inline void InvalidateHistory() {
+  Log(
+      reshade::log::level::info,
+      "swapchain recreation invalidated temporal history.");
   std::scoped_lock lock(resource_mutex);
   resources.history_valid = false;
   resources.cleared = false;
@@ -376,11 +394,16 @@ inline void FinishMainDispatch(
 
   resources.latest_index = state.write_index;
   resources.history_valid = true;
-  const std::uint64_t ready_key =
-      ((static_cast<std::uint64_t>(state.width) << 32u) | state.height)
-      ^ (state.history_valid ? UINT64_C(0x8000000000000000) : 0u);
-  if (last_ready_key.exchange(ready_key, std::memory_order_acq_rel)
-      != ready_key) {
+  const std::uint64_t extent_key =
+      (static_cast<std::uint64_t>(state.width) << 32u) | state.height;
+  if (last_ready_extent_key.exchange(extent_key, std::memory_order_acq_rel)
+      != extent_key) {
+    ready_log_flags.store(0u, std::memory_order_release);
+  }
+  const std::uint32_t ready_flag = state.history_valid ? 2u : 1u;
+  if ((ready_log_flags.fetch_or(ready_flag, std::memory_order_acq_rel)
+       & ready_flag)
+      == 0u) {
     Log(
         reshade::log::level::info,
         std::format(

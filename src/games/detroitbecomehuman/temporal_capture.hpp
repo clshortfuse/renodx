@@ -31,6 +31,7 @@
 #include "../../utils/shader.hpp"
 #include "../../utils/state.hpp"
 #include "dlss_bridge_client.hpp"
+#include "gtao_temporal_contract.hpp"
 #include "supported_build.hpp"
 #include "taa_contract.hpp"
 
@@ -846,8 +847,22 @@ inline void AfterNativeTemporalDispatch(
 
   const bool native_history_resources_available =
       sampled[0u].valid && sampled[2u].valid && sampled[7u].valid;
+  // GTAO owns independent full-precision AO/depth history. It only needs the
+  // native history descriptors as a scene-recreation boundary, not as inputs.
+  // Some valid Detroit passes omit sampler metadata for b0/b2/b7, so using the
+  // stricter DLSS `.valid` bit here caused a false GTAO reset every frame.
+  const bool gtao_previous_depth_present =
+      sampled[0u].image != 0u && sampled[0u].image_view != 0u;
+  const bool gtao_previous_color_present =
+      sampled[2u].image != 0u && sampled[2u].image_view != 0u;
+  const bool gtao_previous_speed_flags_present =
+      sampled[7u].image != 0u && sampled[7u].image_view != 0u;
+  const bool gtao_temporal_input_valid =
+      exact_resource_formats && exact_descriptor_layouts
+      && exact_resource_extents && sampled[4u].valid
+      && frame_parameters.constants_valid;
 
-  {
+  if (gtao_temporal_input_valid) {
     std::scoped_lock lock(gtao_temporal_input_mutex);
     latest_gtao_temporal_input = {
         .view = reshade::api::resource_view{sampled[4u].image_view},
@@ -855,9 +870,12 @@ inline void AfterNativeTemporalDispatch(
         .width = sampled[4u].width,
         .height = sampled[4u].height,
         .serial = dispatch_serial,
-        .reset = frame_parameters.reset || !native_history_resources_available,
-        .valid = exact_resource_formats && exact_descriptor_layouts
-                 && exact_resource_extents && sampled[4u].valid,
+        .reset = gtao_temporal_contract::ShouldResetHistory(
+            frame_parameters.reset,
+            gtao_previous_depth_present,
+            gtao_previous_color_present,
+            gtao_previous_speed_flags_present),
+        .valid = true,
     };
   }
 

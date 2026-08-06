@@ -43,6 +43,11 @@ int main() {
   static_assert(
       contract::SelectHistoryExtent(10u, 5u, {}, {})
       == contract::Extent{160u, 80u});
+  static_assert(!contract::ShouldResetHistory(false, true, true, true));
+  static_assert(contract::ShouldResetHistory(true, true, true, true));
+  static_assert(contract::ShouldResetHistory(false, false, true, true));
+  static_assert(contract::ShouldResetHistory(false, true, false, true));
+  static_assert(contract::ShouldResetHistory(false, true, true, false));
 
   ok &= Expect(
       std::abs(contract::DepthDisocclusionThreshold(-10.f) - 0.2f)

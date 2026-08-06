@@ -83,4 +83,16 @@ struct Extent {
   return base_weight * (1.f - std::clamp(relative_depth_error, 0.f, 1.f));
 }
 
+[[nodiscard]] constexpr bool ShouldResetHistory(
+    bool camera_reset,
+    bool previous_depth_present,
+    bool previous_color_present,
+    bool previous_speed_flags_present) noexcept {
+  // GTAO owns its AO/depth history. Native TAA history is only a reliable
+  // resource-recreation boundary when the actual image handles disappear;
+  // incomplete sampler metadata must not reset independent AO accumulation.
+  return camera_reset || !previous_depth_present || !previous_color_present
+         || !previous_speed_flags_present;
+}
+
 }  // namespace renodx::games::detroitbecomehuman::gtao_temporal_contract
