@@ -1,0 +1,11 @@
+{
+  "file_format_version": "1.2.0",
+  "layer": {
+    "name": "VK_LAYER_RENODX_detroit_dlss",
+    "type": "GLOBAL",
+    "library_path": ".\\renodx-detroit-dlss-layer.dll",
+    "api_version": "1.4.0",
+    "implementation_version": "1",
+    "description": "RenoDX Detroit DLSS Vulkan bootstrap"
+  }
+}

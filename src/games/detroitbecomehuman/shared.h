@@ -47,7 +47,7 @@ static_assert(sizeof(ShaderInjectData) == 80u);
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
-#define RENODX_RENO_DRT_TONE_MAP_METHOD      (shader_injection.tone_map_type == 1.f \
+#define RENODX_RENO_DRT_TONE_MAP_METHOD      (shader_injection.tone_map_type == 1.f                             \
                                                   ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD \
                                                   : renodx::tonemap::renodrt::config::tone_map_method::DANIELE)
 
@@ -57,6 +57,8 @@ static_assert(sizeof(ShaderInjectData) == 80u);
 #define CUSTOM_CAS_STRENGTH      shader_injection.cas_strength
 #define CUSTOM_SCENE_PATH_ACTIVE shader_injection.scene_path_active
 #define CUSTOM_UI_PATH_ACTIVE    shader_injection.ui_path_active
+#define CUSTOM_DLSS_ACTIVE       (shader_injection.reserved >= 0.5f)
+#define CUSTOM_DLAA_SHARPENING   clamp(shader_injection.reserved - 1.f, 0.f, 1.f)
 #define CUSTOM_HDR_ACTIVE        (shader_injection.output_is_hdr >= 0.5f \
                                   && shader_injection.output_mode != 1.f)
 

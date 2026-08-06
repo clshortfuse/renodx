@@ -1,0 +1,249 @@
+/*
+ * SPDX-License-Identifier: MIT
+ */
+
+#include <cstdint>
+#include <iostream>
+#include <vector>
+
+#include "../../src/games/detroitbecomehuman/dlss/feature_lifetime.hpp"
+
+namespace dlss = renodx::games::detroitbecomehuman::dlss;
+
+namespace {
+
+bool Expect(bool condition, const char* message) {
+  if (!condition) std::cerr << "FAIL: " << message << '\n';
+  return condition;
+}
+
+bool TestRecordedReferenceSurvivesSubmitAndIdle() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(10u, false);
+  tracker.RecordFeatureUse(10u, 1u);
+  const auto submission = tracker.CaptureSubmission({10u});
+  tracker.CommitSuccessfulSubmit(20u, submission);
+
+  bool passed = true;
+  passed &= Expect(
+      tracker.RecordedReferenceCount(1u) == 1u,
+      "reusable command buffer must retain its recorded feature reference");
+  passed &= Expect(
+      tracker.InFlightReferenceCount(1u) == 1u,
+      "successful submit must add an in-flight feature reference");
+  tracker.CompleteQueue(20u);
+  passed &= Expect(
+      tracker.RecordedReferenceCount(1u) == 1u
+          && tracker.InFlightReferenceCount(1u) == 0u,
+      "queue idle must complete work without invalidating a reusable recording");
+  tracker.DiscardCommandBuffer(10u);
+  passed &= Expect(
+      !tracker.IsReferenced(1u),
+      "successful reset/free boundary must release the final recorded reference");
+  return passed;
+}
+
+bool TestUnsubmittedRecordingBlocksRelease() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(11u, false);
+  tracker.RecordFeatureUse(11u, 2u);
+  tracker.CompleteDevice();
+
+  bool passed = true;
+  passed &= Expect(
+      tracker.IsReferenced(2u),
+      "device idle must not erase an unsubmitted executable recording");
+  tracker.BeginCommandBuffer(11u, false);
+  passed &= Expect(
+      !tracker.IsReferenced(2u),
+      "a successful new begin must invalidate the old recording");
+  return passed;
+}
+
+bool TestFailedSubmitDoesNotAddInFlightReference() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(12u, false);
+  tracker.RecordFeatureUse(12u, 3u);
+  (void)tracker.CaptureSubmission({12u});
+
+  bool passed = true;
+  passed &= Expect(
+      tracker.InFlightReferenceCount(3u) == 0u,
+      "capturing a failed submit must not create an in-flight reference");
+  tracker.DiscardCommandBuffer(12u);
+  passed &= Expect(
+      !tracker.IsReferenced(3u),
+      "failed submit recording may retire after a reset/free boundary");
+  return passed;
+}
+
+bool TestOneTimeRecordingCompletesAtIdle() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(13u, true);
+  tracker.RecordFeatureUse(13u, 4u);
+  const auto submission = tracker.CaptureSubmission({13u});
+  tracker.CommitSuccessfulSubmit(21u, submission);
+  tracker.CompleteQueue(21u);
+
+  return Expect(
+      !tracker.IsReferenced(4u),
+      "one-time recording must become invalid after its successful submit completes");
+}
+
+bool TestSimultaneousOneTimeSubmissionsWaitForEveryQueue() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(14u, true);
+  tracker.RecordFeatureUse(14u, 5u);
+  const auto submission = tracker.CaptureSubmission({14u});
+  tracker.CommitSuccessfulSubmit(22u, submission);
+  tracker.CommitSuccessfulSubmit(23u, submission);
+
+  bool passed = true;
+  tracker.CompleteQueue(22u);
+  passed &= Expect(
+      tracker.IsReferenced(5u)
+          && tracker.InFlightReferenceCount(5u) == 1u,
+      "one-time recording must survive while another queue submission is pending");
+  tracker.CompleteQueue(23u);
+  passed &= Expect(
+      !tracker.IsReferenced(5u),
+      "last queue completion must invalidate the one-time recording");
+  return passed;
+}
+
+bool TestResetProvesConservativeSubmissionComplete() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(15u, false);
+  tracker.RecordFeatureUse(15u, 6u);
+  const auto submission = tracker.CaptureSubmission({15u});
+  tracker.CommitSuccessfulSubmit(24u, submission);
+  tracker.DiscardCommandBuffer(15u);
+
+  bool passed = true;
+  passed &= Expect(
+      !tracker.IsReferenced(6u),
+      "successful reset/free must clear conservative submitted references");
+  tracker.CompleteQueue(24u);
+  passed &= Expect(
+      !tracker.IsReferenced(6u),
+      "a later queue idle must not underflow a discarded submission");
+  return passed;
+}
+
+bool TestMultipleGenerationsInOneRecording() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(16u, false);
+  tracker.RecordFeatureUse(16u, 7u);
+  tracker.RecordFeatureUse(16u, 8u);
+  tracker.RecordFeatureUse(16u, 7u);
+
+  bool passed = true;
+  passed &= Expect(
+      tracker.RecordedReferenceCount(7u) == 1u
+          && tracker.RecordedReferenceCount(8u) == 1u,
+      "one recording must hold one reference per distinct generation");
+  tracker.DiscardAllCommandBuffers();
+  passed &= Expect(
+      !tracker.IsReferenced(7u) && !tracker.IsReferenced(8u),
+      "device destruction must discard every remaining recording");
+  return passed;
+}
+
+bool TestCreationGateRejectsOtherRecordingBeforeSubmit() {
+  dlss::FeatureCreationGate gate = {
+      .command_buffer = 17u,
+  };
+
+  bool passed = true;
+  passed &= Expect(
+      gate.AllowsUseFrom(17u),
+      "feature creation command buffer may evaluate the new feature in order");
+  passed &= Expect(
+      !gate.AllowsUseFrom(18u),
+      "another command buffer must wait for successful feature creation submit");
+  passed &= Expect(
+      gate.InvalidatedByDiscard(17u),
+      "discarding an unsubmitted creation recording must invalidate the feature");
+  passed &= Expect(
+      !gate.InvalidatedByDiscard(18u),
+      "discarding an unrelated recording must not invalidate the feature");
+  return passed;
+}
+
+bool TestCreationGateOpensOnlyForCommittedCreationSubmission() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(19u, false);
+  tracker.RecordFeatureUse(19u, 9u);
+  const auto captured = tracker.CaptureSubmission({19u});
+  const auto committed = tracker.CommitSuccessfulSubmit(25u, captured);
+
+  dlss::FeatureCreationGate gate = {
+      .command_buffer = 19u,
+  };
+  if (dlss::FeatureLifetimeTracker::SubmissionContains(
+          committed, gate.command_buffer, 9u)) {
+    gate.MarkSubmitted();
+  }
+
+  bool passed = true;
+  passed &= Expect(
+      gate.AllowsUseFrom(20u),
+      "successful creation submission must open the feature to later recordings");
+  passed &= Expect(
+      !gate.InvalidatedByDiscard(19u),
+      "discarding the old creation recording must preserve a submitted feature");
+  passed &= Expect(
+      !dlss::FeatureLifetimeTracker::SubmissionContains(
+          committed, 20u, 9u),
+      "submission matching must include the exact creation command buffer");
+  passed &= Expect(
+      !dlss::FeatureLifetimeTracker::SubmissionContains(
+          committed, 19u, 10u),
+      "submission matching must include the exact feature generation");
+  return passed;
+}
+
+bool TestStaleCreationSnapshotDoesNotOpenGate() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(21u, false);
+  tracker.RecordFeatureUse(21u, 11u);
+  const auto stale = tracker.CaptureSubmission({21u});
+  tracker.BeginCommandBuffer(21u, false);
+  tracker.RecordFeatureUse(21u, 11u);
+  const auto committed = tracker.CommitSuccessfulSubmit(26u, stale);
+
+  dlss::FeatureCreationGate gate = {
+      .command_buffer = 21u,
+  };
+  if (dlss::FeatureLifetimeTracker::SubmissionContains(
+          committed, gate.command_buffer, 11u)) {
+    gate.MarkSubmitted();
+  }
+
+  bool passed = true;
+  passed &= Expect(
+      committed.Empty(),
+      "a stale recording epoch must not be accepted as a successful submission");
+  passed &= Expect(
+      !gate.AllowsUseFrom(22u),
+      "a stale creation snapshot must not open the feature to another recording");
+  return passed;
+}
+
+}  // namespace
+
+int main() {
+  bool passed = true;
+  passed &= TestRecordedReferenceSurvivesSubmitAndIdle();
+  passed &= TestUnsubmittedRecordingBlocksRelease();
+  passed &= TestFailedSubmitDoesNotAddInFlightReference();
+  passed &= TestOneTimeRecordingCompletesAtIdle();
+  passed &= TestSimultaneousOneTimeSubmissionsWaitForEveryQueue();
+  passed &= TestResetProvesConservativeSubmissionComplete();
+  passed &= TestMultipleGenerationsInOneRecording();
+  passed &= TestCreationGateRejectsOtherRecordingBeforeSubmit();
+  passed &= TestCreationGateOpensOnlyForCommittedCreationSubmission();
+  passed &= TestStaleCreationSnapshotDoesNotOpenGate();
+  std::cerr << (passed ? "PASS\n" : "FAIL\n");
+  return passed ? 0 : 1;
+}

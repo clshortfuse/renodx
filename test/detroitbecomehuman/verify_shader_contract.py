@@ -92,6 +92,12 @@ def validate_push_constant(shader_id, reflection, expected):
         )
 
 
+def validate_no_push_constants(shader_id, reflection):
+    push_constants = reflection.get("push_constants", [])
+    if push_constants:
+        fail(f"{shader_id}: expected no push constants, got {len(push_constants)}")
+
+
 def validate_embed_header(shader_id, spv_path):
     header_path = spv_path.with_suffix(".h")
     if not header_path.is_file():
@@ -147,7 +153,10 @@ def validate_shader(shader_id, expected, push_expected, embed_dir, spirv_val, sp
             f"actual:   {normalize_descriptors(reflection)}"
         )
 
-    validate_push_constant(shader_id, reflection, push_expected)
+    if expected.get("injected_push_constant", True):
+        validate_push_constant(shader_id, reflection, push_expected)
+    else:
+        validate_no_push_constants(shader_id, reflection)
     validate_embed_header(shader_id, spv_path)
 
 

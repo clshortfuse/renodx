@@ -2,20 +2,25 @@
   "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "detroitbecomehuman",
   "title": "Detroit: Become Human",
-  "summary": "Experimental RenoDX Vulkan HDR correction and ultrawide support for Detroit: Become Human.",
+  "summary": "Experimental RenoDX Vulkan HDR, ultrawide, DLAA, and switchable XeGTAO support for Detroit: Become Human.",
   "tags": [
     "HDR",
     "HDR10",
     "Vulkan",
-    "Ultrawide"
+    "Ultrawide",
+    "DLAA",
+    "XeGTAO"
   ],
   "status": "experimental",
-  "version": "0.2.0-rc.2",
+  "version": "0.3.0-dev.1",
   "notes": [
     "Supports Steam Build ID 12158144 only.",
     "Supported DetroitBecomeHuman.exe SHA-256: ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF.",
     "Vulkan base pinned to RenoDX PR #564 commit 92d6d79ec8103b1aaea44c0085c3a88db723e6d5.",
     "Requires ReShade 6.8.0 Full Add-On and the game's native Vulkan renderer.",
+    "Adds NVIDIA NGX DLAA at native resolution with a separate HDR-safe sharpening control; rejected frames fall back to native TAA.",
+    "Adds a runtime-selectable Vanilla HBAO / XeGTAO High path with a depth-aware 5x5 denoise.",
+    "The local Vulkan layer, launcher, NGX binary, super-resolution experiments, and diagnostic capture hooks remain experimental development components.",
     "Adds an automatic, reversible aspect-ratio override and isolated Scaleform UI compensation for displays wider than 16:9; 3440x1440 uses its exact 43:18 ratio.",
     "RenoDX Preset Off disables HDR look changes but keeps ultrawide compatibility active; select Aspect Ratio: Vanilla 16:9 to disable the geometry override.",
     "Ultrawide signatures and scaling were independently reimplemented from research published by Rose / PCGamingWiki; no trainer binary or Cheat Engine payload is included.",

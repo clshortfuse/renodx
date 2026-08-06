@@ -55,7 +55,8 @@ void main()
     vec4 _5214 = texelFetch(InputTex, ivec2(uvec2(_3653 + ivec2(1, 2))), 0);
 
     bool use_hdr_safe_path =
-        CUSTOM_HDR_ACTIVE && shader_injection.cas_mode >= 0.5;
+        CUSTOM_HDR_ACTIVE
+        && (shader_injection.cas_mode >= 0.5 || CUSTOM_DLSS_ACTIVE);
     float input_scale = 1.0;
     if (use_hdr_safe_path)
     {
@@ -138,7 +139,14 @@ void main()
     float _5462 = min(min(_3798, min(_3837, _3850)), min(_3863, _3902));
     float _5498 = max(max(_3798, max(_3837, _3850)), max(_3863, _3902));
     float _4359 = uintBitsToFloat(_2697.g_cbCAS.vC1.x);
-    if (use_hdr_safe_path)
+    if (CUSTOM_DLSS_ACTIVE)
+    {
+        // The addon sets this payload only after a valid DLAA output on the
+        // exact command list. Zero preserves the unsharpened reconstruction;
+        // one restores Detroit's full adaptive CAS coefficient.
+        _4359 *= CUSTOM_DLAA_SHARPENING;
+    }
+    else if (use_hdr_safe_path)
     {
         // Off retains Detroit's adaptive 12-tap resampling but removes the
         // negative sharpening lobes. RenoDX scales the native CAS constant;

@@ -692,6 +692,10 @@ if(RENODX_BUILD_TESTS AND TARGET detroitbecomehuman-shaders)
   add_dependencies(renodx_test_suites detroitbecomehuman-shaders)
 endif()
 
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  add_subdirectory(src/games/detroitbecomehuman/dlss)
+endif()
+
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
 

@@ -10,7 +10,7 @@ set(DETROIT_SPIRV_CROSS
     "${RENODX_TEST_REPO_ROOT}/bin/spirv-cross.exe")
 
 set(DETROIT_BECOME_HUMAN_EXE "" CACHE FILEPATH
-    "Optional DetroitBecomeHuman.exe Build 12158144 for ultrawide signature validation")
+    "Optional DetroitBecomeHuman.exe Build 12158144 for executable contract validation")
 
 foreach(DETROIT_SPIRV_TOOL IN ITEMS DETROIT_SPIRV_VAL DETROIT_SPIRV_CROSS)
   if(NOT EXISTS "${${DETROIT_SPIRV_TOOL}}")
@@ -53,6 +53,116 @@ set_tests_properties(detroitbecomehuman_ultrawide_patch PROPERTIES
   LABELS "detroitbecomehuman;unit;cpu;ultrawide"
 )
 
+add_renodx_runtime_executable(
+  detroitbecomehuman_dlss_bridge_contract_tests
+  dlss_bridge_contract_tests.cpp
+)
+add_dependencies(
+  renodx_test_suites
+  detroitbecomehuman_dlss_bridge_contract_tests
+)
+
+add_test(
+  NAME detroitbecomehuman_dlss_bridge_contract
+  COMMAND detroitbecomehuman_dlss_bridge_contract_tests
+)
+set_tests_properties(detroitbecomehuman_dlss_bridge_contract PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dlss;abi"
+)
+
+add_renodx_runtime_executable(
+  detroitbecomehuman_dlss_policy_tests
+  dlss_policy_tests.cpp
+)
+add_dependencies(
+  renodx_test_suites
+  detroitbecomehuman_dlss_policy_tests
+)
+
+add_test(
+  NAME detroitbecomehuman_dlss_policy
+  COMMAND detroitbecomehuman_dlss_policy_tests
+)
+set_tests_properties(detroitbecomehuman_dlss_policy PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dlss;policy;fallback"
+)
+
+add_renodx_runtime_executable(
+  detroitbecomehuman_dlss_scale_transition_tests
+  dlss_scale_transition_tests.cpp
+)
+add_dependencies(
+  renodx_test_suites
+  detroitbecomehuman_dlss_scale_transition_tests
+)
+
+add_test(
+  NAME detroitbecomehuman_dlss_scale_transition
+  COMMAND detroitbecomehuman_dlss_scale_transition_tests
+)
+set_tests_properties(detroitbecomehuman_dlss_scale_transition PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dlss;resolution_scaling;fallback"
+)
+
+add_renodx_runtime_executable(
+  detroitbecomehuman_feature_lifetime_tests
+  feature_lifetime_tests.cpp
+)
+add_dependencies(
+  renodx_test_suites
+  detroitbecomehuman_feature_lifetime_tests
+)
+
+add_test(
+  NAME detroitbecomehuman_feature_lifetime
+  COMMAND detroitbecomehuman_feature_lifetime_tests
+)
+set_tests_properties(detroitbecomehuman_feature_lifetime PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dlss;vulkan;lifetime"
+)
+
+add_renodx_runtime_executable(
+  detroitbecomehuman_taa_contract_tests
+  taa_contract_tests.cpp
+)
+add_dependencies(renodx_test_suites detroitbecomehuman_taa_contract_tests)
+
+add_test(
+  NAME detroitbecomehuman_taa_contract
+  COMMAND detroitbecomehuman_taa_contract_tests
+)
+set_tests_properties(detroitbecomehuman_taa_contract PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;taa;spirv;contract"
+)
+
+add_renodx_runtime_executable(
+  detroitbecomehuman_rgb9e5_adapter_tests
+  rgb9e5_adapter_tests.cpp
+)
+add_dependencies(renodx_test_suites detroitbecomehuman_rgb9e5_adapter_tests)
+
+add_test(
+  NAME detroitbecomehuman_rgb9e5_adapter
+  COMMAND detroitbecomehuman_rgb9e5_adapter_tests
+)
+set_tests_properties(detroitbecomehuman_rgb9e5_adapter PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dlss;shader;rgb9e5"
+)
+
+add_renodx_runtime_executable(
+  detroitbecomehuman_resolution_scaling_tests
+  resolution_scaling_tests.cpp
+)
+add_dependencies(renodx_test_suites detroitbecomehuman_resolution_scaling_tests)
+
+add_test(
+  NAME detroitbecomehuman_resolution_scaling
+  COMMAND detroitbecomehuman_resolution_scaling_tests
+)
+set_tests_properties(detroitbecomehuman_resolution_scaling PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dlss;resolution_scaling"
+)
+
 if(DETROIT_BECOME_HUMAN_EXE)
   add_test(
     NAME detroitbecomehuman_ultrawide_production_contract
@@ -72,6 +182,28 @@ if(DETROIT_BECOME_HUMAN_EXE)
   set_tests_properties(detroitbecomehuman_ultrawide_exe_contract PROPERTIES
     LABELS "detroitbecomehuman;contract;exe;ultrawide"
   )
+
+  add_test(
+    NAME detroitbecomehuman_taa_exe_contract
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/verify_taa_exe.py
+            --exe ${DETROIT_BECOME_HUMAN_EXE}
+            --expected ${CMAKE_CURRENT_SOURCE_DIR}/expected_taa_interface.json
+            --spirv-cross ${DETROIT_SPIRV_CROSS}
+  )
+  set_tests_properties(detroitbecomehuman_taa_exe_contract PROPERTIES
+    LABELS "detroitbecomehuman;contract;exe;dlss;taa;spirv"
+  )
+
+  add_test(
+    NAME detroitbecomehuman_resolution_scaling_exe_contract
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/verify_resolution_scaling_exe.py
+            --exe ${DETROIT_BECOME_HUMAN_EXE}
+  )
+  set_tests_properties(detroitbecomehuman_resolution_scaling_exe_contract PROPERTIES
+    LABELS "detroitbecomehuman;contract;exe;dlss;resolution_scaling"
+  )
 endif()
 
 add_test(
@@ -90,10 +222,20 @@ set_tests_properties(detroitbecomehuman_shader_contract PROPERTIES
 
 add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/expected_shader_interfaces.json
+  ${CMAKE_CURRENT_SOURCE_DIR}/expected_taa_interface.json
+  ${CMAKE_CURRENT_SOURCE_DIR}/dlss_bridge_contract_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/feature_lifetime_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dlss_policy_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dlss_scale_transition_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/rgb9e5_adapter_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/resolution_scaling_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/taa_contract_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_hdr_cas_gates.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_ui_brightness_gates.py
   ${CMAKE_CURRENT_SOURCE_DIR}/ultrawide_patch_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/verify_ultrawide_exe.py
   ${CMAKE_CURRENT_SOURCE_DIR}/verify_shader_contract.py
+  ${CMAKE_CURRENT_SOURCE_DIR}/verify_resolution_scaling_exe.py
+  ${CMAKE_CURRENT_SOURCE_DIR}/verify_taa_exe.py
 )
 add_dependencies(renodx_test_suites detroitbecomehuman_test_sources)

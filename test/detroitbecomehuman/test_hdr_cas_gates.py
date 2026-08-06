@@ -45,10 +45,23 @@ def custom_hdr_active(output_mode: float, output_is_hdr: float) -> bool:
     return output_is_hdr >= 0.5 and output_mode != OUTPUT_MODE_SDR
 
 
+def custom_dlss_active(dlss_payload: float) -> bool:
+    return dlss_payload >= 0.5
+
+
+def custom_dlaa_sharpening(dlss_payload: float) -> float:
+    return min(max(float32(dlss_payload) - 1.0, 0.0), 1.0)
+
+
 def use_hdr_safe_cas(
-    output_mode: float, output_is_hdr: float, cas_mode: float
+    output_mode: float,
+    output_is_hdr: float,
+    cas_mode: float,
+    dlss_payload: float = 0.0,
 ) -> bool:
-    return custom_hdr_active(output_mode, output_is_hdr) and cas_mode >= 0.5
+    return custom_hdr_active(output_mode, output_is_hdr) and (
+        cas_mode >= 0.5 or custom_dlss_active(dlss_payload)
+    )
 
 
 def effective_sharpness(
@@ -57,10 +70,15 @@ def effective_sharpness(
     output_is_hdr: float,
     cas_mode: float,
     cas_strength: float,
+    dlss_payload: float = 0.0,
 ) -> float:
     """Model only the production branch that may alter native CAS strength."""
     native = float32(native_sharpness)
-    if not use_hdr_safe_cas(output_mode, output_is_hdr, cas_mode):
+    if custom_dlss_active(dlss_payload):
+        return float32(native * custom_dlaa_sharpening(dlss_payload))
+    if not use_hdr_safe_cas(
+        output_mode, output_is_hdr, cas_mode, dlss_payload
+    ):
         return native
     if cas_mode < 1.5:
         return float32(0.0)
@@ -177,6 +195,67 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertEqual(low, 0.0)
         self.assertEqual(float32_bits(high), float32_bits(self.native_sharpness))
 
+    def test_dlaa_sharpening_is_independent_and_clamped(self):
+        for output_mode, output_is_hdr, cas_mode in (
+            (OUTPUT_MODE_SDR, 0.0, CAS_MODE_VANILLA),
+            (OUTPUT_MODE_AUTO, 1.0, CAS_MODE_OFF),
+            (OUTPUT_MODE_HDR10, 1.0, CAS_MODE_RENODX),
+        ):
+            with self.subTest(
+                output_mode=output_mode,
+                output_is_hdr=output_is_hdr,
+                cas_mode=cas_mode,
+            ):
+                disabled = effective_sharpness(
+                    self.native_sharpness,
+                    output_mode,
+                    output_is_hdr,
+                    cas_mode,
+                    1.0,
+                    dlss_payload=1.0,
+                )
+                half = effective_sharpness(
+                    self.native_sharpness,
+                    output_mode,
+                    output_is_hdr,
+                    cas_mode,
+                    0.0,
+                    dlss_payload=1.5,
+                )
+                full = effective_sharpness(
+                    self.native_sharpness,
+                    output_mode,
+                    output_is_hdr,
+                    cas_mode,
+                    0.0,
+                    dlss_payload=9.0,
+                )
+                self.assertEqual(disabled, 0.0)
+                self.assertEqual(
+                    float32_bits(half),
+                    float32_bits(self.native_sharpness * 0.5),
+                )
+                self.assertEqual(
+                    float32_bits(full), float32_bits(self.native_sharpness)
+                )
+
+        self.assertFalse(
+            use_hdr_safe_cas(
+                OUTPUT_MODE_SDR,
+                1.0,
+                CAS_MODE_VANILLA,
+                dlss_payload=1.5,
+            )
+        )
+        self.assertTrue(
+            use_hdr_safe_cas(
+                OUTPUT_MODE_AUTO,
+                1.0,
+                CAS_MODE_VANILLA,
+                dlss_payload=1.5,
+            )
+        )
+
     def test_peak_cap_has_exact_gate_bypasses(self):
         rgb = tuple(float32(value) for value in (3.0, 2.0, 1.0))
         inactive_cases = (
@@ -265,15 +344,39 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"shader_injection\.output_mode\s*!=\s*1\.f\)",
         )
         self.assertRegex(
+            compact_shared,
+            r"#define\s+CUSTOM_DLSS_ACTIVE\s+"
+            r"\(shader_injection\.reserved\s*>=\s*0\.5f\)",
+        )
+        self.assertRegex(
+            compact_shared,
+            r"#define\s+CUSTOM_DLAA_SHARPENING\s+"
+            r"clamp\(shader_injection\.reserved\s*-\s*1\.f,\s*"
+            r"0\.f,\s*1\.f\)",
+        )
+        self.assertRegex(
             shader,
             r"bool\s+use_hdr_safe_path\s*=\s*CUSTOM_HDR_ACTIVE\s*&&\s*"
-            r"shader_injection\.cas_mode\s*>=\s*0\.5\s*;",
+            r"\(shader_injection\.cas_mode\s*>=\s*0\.5\s*\|\|\s*"
+            r"CUSTOM_DLSS_ACTIVE\)\s*;",
         )
         self.assertRegex(
             shader,
             r"float\s+sharpening_strength\s*=\s*"
             r"shader_injection\.cas_mode\s*<\s*1\.5\s*\?\s*0\.0\s*:\s*"
             r"clamp\(shader_injection\.cas_strength,\s*0\.0,\s*1\.0\)\s*;",
+        )
+        self.assertRegex(
+            shader,
+            r"if\s*\(CUSTOM_DLSS_ACTIVE\)[\s\S]*?"
+            r"_4359\s*\*=\s*CUSTOM_DLAA_SHARPENING\s*;",
+        )
+        self.assertIn('.key = "DLAASharpening"', addon)
+        self.assertIn('.labels = {"Native TAA", "DLAA"}', addon)
+        self.assertRegex(
+            addon,
+            r"shader_injection\.reserved\s*=\s*"
+            r"dlss_output_valid\s*\?\s*1\.f\s*\+\s*sharpening\s*:\s*0\.f\s*;",
         )
 
         cap_start = shader.index("vec3 _6250 =")
@@ -306,6 +409,33 @@ class HDRAndCASGateTests(unittest.TestCase):
         body = preset_off.group("body")
         self.assertNotIn('"AspectRatioMode"', body)
         self.assertIn("OnAspectRatioModeChanged();", body)
+
+    def test_runtime_switches_apply_the_post_write_setting_value(self):
+        addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
+
+        dlss_setting = re.search(
+            r'\.key\s*=\s*"DLSSMode"(?P<body>[\s\S]*?)\n\s*\}\},',
+            addon,
+        )
+        self.assertIsNotNone(dlss_setting)
+        self.assertNotIn(".on_change =", dlss_setting.group("body"))
+        self.assertRegex(
+            dlss_setting.group("body"),
+            r"\.on_change_value\s*=\s*\[\]\(float,\s*float\s+current\)\s*"
+            r"\{\s*ApplyDlssMode\(current\);\s*\}",
+        )
+
+        aspect_setting = re.search(
+            r'\.key\s*=\s*"AspectRatioMode"(?P<body>[\s\S]*?)\n\s*\}\},',
+            addon,
+        )
+        self.assertIsNotNone(aspect_setting)
+        self.assertNotIn(".on_change =", aspect_setting.group("body"))
+        self.assertRegex(
+            aspect_setting.group("body"),
+            r"\.on_change_value\s*=\s*\[\]\(float,\s*float\s+current\)\s*"
+            r"\{\s*ApplyAspectRatioMode\(current\);\s*\}",
+        )
 
 
 if __name__ == "__main__":

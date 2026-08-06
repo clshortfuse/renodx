@@ -5,15 +5,21 @@
 #define ImTextureID ImU64
 #define DEBUG_LEVEL_0
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <bit>
+#include <charconv>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <limits>
 #include <mutex>
 #include <span>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <Windows.h>
@@ -26,7 +32,10 @@
 #include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "./dlss_scale_transition.hpp"
+#include "./resolution_scaling_win32.hpp"
 #include "./shared.h"
+#include "./temporal_capture.hpp"
 #include "./ultrawide.hpp"
 
 namespace {
@@ -39,7 +48,24 @@ constexpr float CAS_MODE_VANILLA = 0.f;
 constexpr float CAS_MODE_OFF = 1.f;
 constexpr float CAS_MODE_RENODX = 2.f;
 
+constexpr float AMBIENT_OCCLUSION_MODE_VANILLA = 0.f;
+constexpr float AMBIENT_OCCLUSION_MODE_XEGTAO = 1.f;
+
+constexpr char RESHADE_CAPTURE_ENVIRONMENT[] =
+    "RENODX_DETROIT_RESHADE_CAPTURE";
+constexpr char RESHADE_CAPTURE_DELAY_ENVIRONMENT[] =
+    "RENODX_DETROIT_RESHADE_CAPTURE_DELAY_SECONDS";
+constexpr std::uint32_t RESHADE_CAPTURE_STABLE_FRAMES = 90u;
+constexpr std::uint32_t RESHADE_CAPTURE_DEFAULT_DELAY_SECONDS = 30u;
+constexpr std::uint32_t RESHADE_CAPTURE_MAX_DELAY_SECONDS = 600u;
+
 namespace ultrawide = renodx::games::detroitbecomehuman::ultrawide;
+namespace temporal_capture =
+    renodx::games::detroitbecomehuman::temporal_capture;
+namespace resolution_scaling =
+    renodx::games::detroitbecomehuman::resolution_scaling;
+namespace dlss_scale_transition =
+    renodx::games::detroitbecomehuman::dlss_scale_transition;
 
 constexpr std::size_t ASPECT_PATCH_INDEX = 0u;
 constexpr std::size_t UI_PATCH_INDEX = 1u;
@@ -65,13 +91,341 @@ std::atomic_bool ultrawide_installed = false;
 std::atomic_bool ultrawide_install_attempted = false;
 std::atomic_bool ultrawide_force_vanilla = false;
 std::atomic<reshade::api::swapchain*> tracked_swapchain = nullptr;
+std::atomic<reshade::api::effect_runtime*> tracked_effect_runtime = nullptr;
 float aspect_ratio_mode = 1.f;
+float dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
+float dlaa_sharpening = 0.f;
+float ambient_occlusion_mode = AMBIENT_OCCLUSION_MODE_XEGTAO;
 std::atomic_bool aspect_ratio_enabled = true;
+std::atomic_bool gtao_enabled = true;
 std::atomic_uint32_t output_width = 0u;
 std::atomic_uint32_t output_height = 0u;
+resolution_scaling::RuntimeController resolution_scale_controller;
+dlss_scale_transition::Controller dlss_scale_transition_controller;
+std::mutex resolution_scale_mutex;
+DetroitDlssModeSettings cached_dlss_scale_settings = {};
+DetroitDlssMode cached_dlss_scale_mode = DETROIT_DLSS_MODE_NATIVE;
+std::uint32_t cached_dlss_scale_output_width = 0u;
+std::uint32_t cached_dlss_scale_output_height = 0u;
+bool cached_dlss_scale_settings_valid = false;
+bool dlss_scale_session_valid = false;
+float cached_dlss_target_scale = 1.f;
+std::uint32_t last_scale_log_key = std::numeric_limits<std::uint32_t>::max();
+
+struct ReShadeCaptureState {
+  bool initialized = false;
+  bool enabled = false;
+  bool captured = false;
+  bool automatic_postfix = true;
+  DetroitDlssMode observed_mode = DETROIT_DLSS_MODE_NATIVE;
+  std::uint64_t last_evaluation_serial = 0u;
+  std::uint32_t stable_frames = 0u;
+  std::uint32_t delay_seconds = RESHADE_CAPTURE_DEFAULT_DELAY_SECONDS;
+  std::chrono::steady_clock::time_point stable_since = {};
+  bool stable_since_valid = false;
+  std::string postfix;
+};
+
+std::mutex reshade_capture_mutex;
+ReShadeCaptureState reshade_capture;
 
 void LogUltrawide(reshade::log::level level, const std::string& message) {
   reshade::log::message(level, ("Detroit ultrawide: " + message).c_str());
+}
+
+void LogDlssScale(reshade::log::level level, const std::string& message) {
+  reshade::log::message(level, ("Detroit DLSS scale: " + message).c_str());
+}
+
+void LogReShadeCapture(reshade::log::level level, const std::string& message) {
+  reshade::log::message(level, ("Detroit ReShade capture: " + message).c_str());
+}
+
+std::string GetDlssModePostfix(DetroitDlssMode mode) {
+  switch (mode) {
+    case DETROIT_DLSS_MODE_NATIVE:
+      return "Native-TAA";
+    case DETROIT_DLSS_MODE_DLAA:
+      return "DLAA";
+    case DETROIT_DLSS_MODE_QUALITY:
+      return "DLSS-Quality";
+    case DETROIT_DLSS_MODE_BALANCED:
+      return "DLSS-Balanced";
+    case DETROIT_DLSS_MODE_PERFORMANCE:
+      return "DLSS-Performance";
+    default:
+      return "Unknown-Mode";
+  }
+}
+
+void InitializeReShadeCaptureRequest() {
+  std::scoped_lock lock(reshade_capture_mutex);
+  if (reshade_capture.initialized) return;
+  reshade_capture.initialized = true;
+
+  std::array<char, 96u> value = {};
+  const DWORD length = GetEnvironmentVariableA(
+      RESHADE_CAPTURE_ENVIRONMENT,
+      value.data(),
+      static_cast<DWORD>(value.size()));
+  if (length == 0u || length >= value.size()) return;
+
+  const std::string_view requested(value.data(), length);
+  reshade_capture.enabled = true;
+  reshade_capture.automatic_postfix = requested == "1" || requested == "auto";
+  if (!reshade_capture.automatic_postfix) {
+    reshade_capture.postfix.reserve(requested.size());
+    for (const unsigned char character : requested) {
+      const bool allowed = (character >= 'a' && character <= 'z')
+                           || (character >= 'A' && character <= 'Z')
+                           || (character >= '0' && character <= '9')
+                           || character == '-' || character == '_';
+      reshade_capture.postfix.push_back(allowed ? static_cast<char>(character)
+                                                : '-');
+    }
+    if (reshade_capture.postfix.empty()) {
+      reshade_capture.automatic_postfix = true;
+    }
+  }
+
+  std::array<char, 16u> delay_value = {};
+  const DWORD delay_length = GetEnvironmentVariableA(
+      RESHADE_CAPTURE_DELAY_ENVIRONMENT,
+      delay_value.data(),
+      static_cast<DWORD>(delay_value.size()));
+  if (delay_length != 0u && delay_length < delay_value.size()) {
+    std::uint32_t requested_delay = 0u;
+    const auto* begin = delay_value.data();
+    const auto* end = begin + delay_length;
+    const auto parse_result = std::from_chars(begin, end, requested_delay);
+    if (parse_result.ec == std::errc{} && parse_result.ptr == end
+        && requested_delay <= RESHADE_CAPTURE_MAX_DELAY_SECONDS) {
+      reshade_capture.delay_seconds = requested_delay;
+    } else {
+      LogReShadeCapture(
+          reshade::log::level::warning,
+          std::format(
+              "ignored invalid {} value '{}'; expected 0-{} seconds.",
+              RESHADE_CAPTURE_DELAY_ENVIRONMENT,
+              std::string_view(begin, delay_length),
+              RESHADE_CAPTURE_MAX_DELAY_SECONDS));
+    }
+  }
+
+  LogReShadeCapture(
+      reshade::log::level::info,
+      std::format(
+          "one clean internal screenshot requested after {} stable frames and "
+          "{} stable seconds.",
+          RESHADE_CAPTURE_STABLE_FRAMES,
+          reshade_capture.delay_seconds));
+}
+
+void InvalidateDlssScaleSettings() {
+  std::scoped_lock lock(resolution_scale_mutex);
+  cached_dlss_scale_settings_valid = false;
+  dlss_scale_session_valid = false;
+  last_scale_log_key = std::numeric_limits<std::uint32_t>::max();
+}
+
+void LogScaleResultOnce(
+    DetroitDlssMode mode,
+    resolution_scaling::ControllerResult result,
+    float target_scale) {
+  const auto result_code = static_cast<std::uint32_t>(result);
+  const std::uint32_t key =
+      (static_cast<std::uint32_t>(mode) << 28u)
+      ^ (result_code << 20u) ^ std::bit_cast<std::uint32_t>(target_scale);
+  if (last_scale_log_key == key) return;
+  last_scale_log_key = key;
+  const bool accepted = result == resolution_scaling::ControllerResult::kSuccess
+                        || result == resolution_scaling::ControllerResult::kNoChange;
+  LogDlssScale(
+      accepted ? reshade::log::level::info : reshade::log::level::warning,
+      std::format(
+          "mode {} requested scale {:.6f}; controller result {}{}.",
+          mode,
+          target_scale,
+          result_code,
+          accepted ? "" : "; native TAA remains the safe fallback"));
+}
+
+void UpdateDlssRenderScale() {
+  const auto mode = temporal_capture::GetMode();
+  std::scoped_lock lock(resolution_scale_mutex);
+
+  auto snapshot = resolution_scale_controller.GetSnapshot();
+  if (!renodx::games::detroitbecomehuman::dlss_policy::IsDlssMode(mode)) {
+    dlss_scale_transition_controller.SetIdle();
+    dlss_scale_session_valid = false;
+    cached_dlss_scale_settings_valid = false;
+    if (!snapshot.armed) return;
+    const auto result = resolution_scale_controller.Shutdown(
+        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
+    LogScaleResultOnce(mode, result, snapshot.serialized_scale);
+    return;
+  }
+
+  const auto width = output_width.load(std::memory_order_relaxed);
+  const auto height = output_height.load(std::memory_order_relaxed);
+  if (width == 0u || height == 0u) return;
+
+  const bool session_changed = !dlss_scale_session_valid
+                               || cached_dlss_scale_mode != mode
+                               || cached_dlss_scale_output_width != width
+                               || cached_dlss_scale_output_height != height;
+  if (session_changed) {
+    // Never carry a reduced extent into a new mode or output-resolution
+    // session. Shutdown restores Detroit's dimensions from the unchanged
+    // serialized scale before detaching the old hook.
+    if (snapshot.armed) {
+      const auto shutdown_result = resolution_scale_controller.Shutdown(
+          resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
+      if (shutdown_result != resolution_scaling::ControllerResult::kSuccess
+          && shutdown_result
+                 != resolution_scaling::ControllerResult::kNoChange) {
+        dlss_scale_transition_controller.LatchFallback();
+        LogScaleResultOnce(mode, shutdown_result, snapshot.serialized_scale);
+        return;
+      }
+    }
+    cached_dlss_scale_mode = mode;
+    cached_dlss_scale_output_width = width;
+    cached_dlss_scale_output_height = height;
+    cached_dlss_scale_settings_valid = false;
+    dlss_scale_session_valid = true;
+    cached_dlss_target_scale = 1.f;
+    dlss_scale_transition_controller.Reset(
+        temporal_capture::GetSrPreflightSerial(),
+        temporal_capture::GetEvaluationSerial());
+    snapshot = resolution_scale_controller.GetSnapshot();
+  }
+
+  if (dlss_scale_transition_controller.GetPhase()
+      == dlss_scale_transition::Phase::kFallbackLatched) {
+    if (!snapshot.armed) return;
+    const auto result = resolution_scale_controller.Shutdown(
+        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
+    LogScaleResultOnce(mode, result, snapshot.serialized_scale);
+    return;
+  }
+
+  if (!cached_dlss_scale_settings_valid) {
+    DetroitDlssModeSettings settings = {};
+    if (!renodx::games::detroitbecomehuman::dlss_bridge_client::client
+             .QueryModeSettings(mode, width, height, &settings)) {
+      LogScaleResultOnce(
+          mode,
+          resolution_scaling::ControllerResult::kNotArmed,
+          1.f);
+      return;
+    }
+    const auto exact_scale =
+        resolution_scaling::SelectScaleForExactTruncatedExtent(
+            {width, height},
+            {
+                settings.render_width,
+                settings.render_height,
+            });
+    if (!exact_scale.has_value()) {
+      dlss_scale_transition_controller.LatchFallback();
+      LogScaleResultOnce(
+          mode,
+          resolution_scaling::ControllerResult::kScaleRejected,
+          1.f);
+      return;
+    }
+
+    // QueryModeSettings can succeed only through the layer's independent
+    // executable SHA-256 gate. The controller additionally validates the
+    // loaded PE identity and exact code slices before installing its hook.
+    const resolution_scaling::ExecutableIdentity identity = {
+        .file_size = renodx::games::detroitbecomehuman::supported_build::kExecutableSize,
+        .sha256 = renodx::games::detroitbecomehuman::supported_build::kExecutableSha256,
+    };
+    const auto arm_result = resolution_scale_controller.Arm(
+        GetModuleHandleW(nullptr), identity);
+    if (arm_result != resolution_scaling::ControllerResult::kSuccess
+        && arm_result != resolution_scaling::ControllerResult::kAlreadyArmed) {
+      dlss_scale_transition_controller.LatchFallback();
+      LogScaleResultOnce(mode, arm_result, 1.f);
+      return;
+    }
+
+    cached_dlss_scale_settings = settings;
+    cached_dlss_target_scale = exact_scale.value();
+    cached_dlss_scale_settings_valid = true;
+    (void)dlss_scale_transition_controller.MarkSettingsReady();
+    if (mode == DETROIT_DLSS_MODE_DLAA) {
+      const auto native_scale_result = resolution_scale_controller.Apply(
+          1.f,
+          resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
+      if (native_scale_result == resolution_scaling::ControllerResult::kSuccess
+          || native_scale_result
+                 == resolution_scaling::ControllerResult::kNoChange) {
+        (void)dlss_scale_transition_controller.MarkTargetScaleApplied();
+      } else {
+        dlss_scale_transition_controller.LatchFallback();
+        LogScaleResultOnce(mode, native_scale_result, 1.f);
+        return;
+      }
+    }
+  }
+
+  snapshot = resolution_scale_controller.GetSnapshot();
+  const bool target_extent_observed =
+      snapshot.last_base_extent
+          == resolution_scaling::PixelExtent{width, height}
+      && snapshot.last_render_extent
+             == resolution_scaling::PixelExtent{
+                 cached_dlss_scale_settings.render_width,
+                 cached_dlss_scale_settings.render_height,
+             };
+  const auto action = dlss_scale_transition_controller.Observe({
+      .preflight_serial = temporal_capture::GetSrPreflightSerial(),
+      .evaluation_serial = temporal_capture::GetEvaluationSerial(),
+      .target_extent_observed = target_extent_observed,
+      .dlss_output_valid = temporal_capture::GetStatus()
+                           == temporal_capture::RuntimeStatus::kDlssActive,
+  });
+
+  if (action == dlss_scale_transition::Action::kApplyTargetScale) {
+    const auto result = resolution_scale_controller.Apply(
+        cached_dlss_target_scale,
+        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
+    if (result == resolution_scaling::ControllerResult::kSuccess
+        || result == resolution_scaling::ControllerResult::kNoChange) {
+      (void)dlss_scale_transition_controller.MarkTargetScaleApplied();
+    } else {
+      dlss_scale_transition_controller.LatchFallback();
+    }
+    LogScaleResultOnce(mode, result, cached_dlss_target_scale);
+    return;
+  }
+
+  if (action == dlss_scale_transition::Action::kRestoreNativeScale) {
+    snapshot = resolution_scale_controller.GetSnapshot();
+    if (!snapshot.armed) return;
+    const auto result = resolution_scale_controller.Shutdown(
+        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
+    LogScaleResultOnce(mode, result, snapshot.serialized_scale);
+  }
+}
+
+void ShutdownDlssRenderScale() {
+  std::scoped_lock lock(resolution_scale_mutex);
+  const auto snapshot = resolution_scale_controller.GetSnapshot();
+  if (snapshot.armed) {
+    const auto result = resolution_scale_controller.Shutdown(
+        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
+    LogScaleResultOnce(
+        DETROIT_DLSS_MODE_NATIVE,
+        result,
+        snapshot.serialized_scale);
+  }
+  cached_dlss_scale_settings_valid = false;
+  dlss_scale_session_valid = false;
+  dlss_scale_transition_controller.SetIdle();
 }
 
 void StoreRuntimeFloat(volatile LONG* destination, float value) {
@@ -102,8 +456,9 @@ void ForceUltrawideRuntimeVanilla() {
   }
 }
 
-void OnAspectRatioModeChanged() {
-  const bool enabled = aspect_ratio_mode >= 0.5f;
+void ApplyAspectRatioMode(float selected_mode) {
+  const bool enabled = selected_mode >= 0.5f;
+  aspect_ratio_mode = enabled ? 1.f : 0.f;
   aspect_ratio_enabled.store(enabled, std::memory_order_relaxed);
   RefreshUltrawideValues();
 
@@ -124,6 +479,26 @@ void OnAspectRatioModeChanged() {
             values.ui_scale,
             enabled ? "Auto" : "Vanilla 16:9"));
   }
+}
+
+void OnAspectRatioModeChanged() {
+  ApplyAspectRatioMode(aspect_ratio_mode);
+}
+
+void ApplyDlssMode(float selected_mode) {
+  auto next_mode = static_cast<DetroitDlssMode>(selected_mode);
+  if (next_mode != DETROIT_DLSS_MODE_NATIVE
+      && next_mode != DETROIT_DLSS_MODE_DLAA) {
+    next_mode = DETROIT_DLSS_MODE_DLAA;
+  }
+  dlss_mode = static_cast<float>(next_mode);
+  const auto previous_mode = temporal_capture::GetMode();
+  temporal_capture::SetMode(next_mode);
+  if (next_mode != previous_mode) InvalidateDlssScaleSettings();
+}
+
+void OnDlssModeChanged() {
+  ApplyDlssMode(dlss_mode);
 }
 
 ultrawide::PatchOperationResult AtomicWriteRipDisplacement(
@@ -526,7 +901,54 @@ void OnUiDrawn(reshade::api::command_list*) {
   ui_path_seen.store(true, std::memory_order_relaxed);
 }
 
+bool OnFinalCasDraw(reshade::api::command_list* command_list) {
+  // Consume only the DLSS result recorded on this exact Vulkan command list.
+  // This keeps the plain shader payload write serialized while preventing one
+  // in-flight frame from changing sharpening in another. A value of 1 marks a
+  // valid DLSS result; the fractional excess carries DLAA sharpening [0, 1].
+  const bool dlss_output_valid = command_list != nullptr
+                                 && temporal_capture::ConsumeDlssOutputForCommandList(
+                                     command_list->get_native());
+  const float sharpening =
+      dlss_output_valid
+              && temporal_capture::GetMode() == DETROIT_DLSS_MODE_DLAA
+          ? std::clamp(dlaa_sharpening, 0.f, 1.f)
+          : 0.f;
+  shader_injection.reserved =
+      dlss_output_valid ? 1.f + sharpening : 0.f;
+  return true;
+}
+
+void SetGtaoEnabled(float mode) {
+  gtao_enabled.store(
+      mode >= AMBIENT_OCCLUSION_MODE_XEGTAO,
+      std::memory_order_relaxed);
+}
+
+void OnAmbientOcclusionModeChanged() {
+  SetGtaoEnabled(ambient_occlusion_mode);
+}
+
+bool ShouldUseGtao(reshade::api::command_list*) {
+  return gtao_enabled.load(std::memory_order_relaxed);
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
+    {0x2D2071B2, {
+                     .crc32 = 0x2D2071B2,
+                     .code = __0x2D2071B2,
+                     .on_replace = &ShouldUseGtao,
+                 }},
+    {0xBC7B6738, {
+                     .crc32 = 0xBC7B6738,
+                     .code = __0x2D2071B2,
+                     .on_replace = &ShouldUseGtao,
+                 }},
+    {0xE9DF0773, {
+                     .crc32 = 0xE9DF0773,
+                     .code = __0xE9DF0773,
+                     .on_replace = &ShouldUseGtao,
+                 }},
     {0xEBFBDDB1, {
                      .crc32 = 0xEBFBDDB1,
                      .code = __0xEBFBDDB1,
@@ -547,7 +969,11 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                      .code = __0x9827B559,
                      .on_drawn = &OnUiDrawn,
                  }},
-    CustomShaderEntry(0x94F97DCF),
+    {0x94F97DCF, {
+                     .crc32 = 0x94F97DCF,
+                     .code = __0x94F97DCF,
+                     .on_draw = &OnFinalCasDraw,
+                 }},
 };
 
 renodx::utils::settings::Settings settings =
@@ -598,6 +1024,110 @@ renodx::utils::settings::Settings settings =
         }),
         renodx::templates::settings::CreateSettings({
             {{
+                .key = "AmbientOcclusionMode",
+                .binding = &ambient_occlusion_mode,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = AMBIENT_OCCLUSION_MODE_XEGTAO,
+                .can_reset = true,
+                .label = "Ambient Occlusion",
+                .section = "Ambient Occlusion",
+                .tooltip = "Vanilla restores Detroit's original HBAO generation and grainy blur. XeGTAO High uses 3 slices, 18 depth taps per pixel and a 5x5 depth-aware denoise.",
+                .labels = {"Vanilla HBAO", "XeGTAO High"},
+                .on_change_value = [](float, float current) {
+                  SetGtaoEnabled(current);
+                },
+            }},
+            {{
+                .key = "DLSSMode",
+                .binding = &dlss_mode,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = static_cast<float>(DETROIT_DLSS_MODE_NATIVE),
+                .can_reset = true,
+                .label = "Temporal Anti-Aliasing",
+                .section = "DLSS",
+                .tooltip = "DLAA runs NVIDIA NGX anti-aliasing at native resolution. Rejected frames fall back safely to Detroit's native TAA.",
+                .labels = {"Native TAA", "DLAA"},
+                .on_change_value = [](float, float current) {
+                  ApplyDlssMode(current);
+                },
+            }},
+            {{
+                .key = "DLAASharpening",
+                .binding = &dlaa_sharpening,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "DLAA Sharpening",
+                .section = "DLSS",
+                .tooltip = "HDR-safe post-DLAA CAS sharpening. Zero preserves the unsharpened DLAA result.",
+                .min = 0.f,
+                .max = 100.f,
+                .is_enabled = []() { return temporal_capture::GetMode() == DETROIT_DLSS_MODE_DLAA; },
+                .parse = [](float value) { return value * 0.01f; },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Native TAA is active. The TAA runtime contract is still captured for diagnostics.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return temporal_capture::GetStatus()
+                         == temporal_capture::RuntimeStatus::kNative;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "A DLSS mode is selected; waiting for a complete verified TAA dispatch. Native TAA fallback is active.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return temporal_capture::GetStatus()
+                         == temporal_capture::RuntimeStatus::kWaitingForDispatch;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "The TAA descriptor snapshot is incomplete. Native TAA fallback is active.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return temporal_capture::GetStatus()
+                         == temporal_capture::RuntimeStatus::kDescriptorContractIncomplete;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "TAA resources were captured, but current-frame b52/jitter, depth, motion-vector, exposure, history and UI-free-color proofs are incomplete. NGX is fail-closed and Native TAA remains active.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return temporal_capture::GetStatus()
+                         == temporal_capture::RuntimeStatus::kTemporalContractUnverified;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "DLSS Super Resolution is waiting for or was rejected by the exact-build runtime scale controller. Native TAA fallback is active.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return temporal_capture::GetStatus()
+                         == temporal_capture::RuntimeStatus::kSuperResolutionScaleUnavailable;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "The local DLSS bridge is unavailable or rejected this frame. Native TAA fallback is active.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return temporal_capture::GetStatus()
+                         == temporal_capture::RuntimeStatus::kBridgeFallback;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "DLAA produced a valid result for this frame. Sharpening is controlled by DLAA Sharpening.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return temporal_capture::GetStatus()
+                         == temporal_capture::RuntimeStatus::kDlssActive;
+                },
+            }},
+            {{
                 .key = "AspectRatioMode",
                 .binding = &aspect_ratio_mode,
                 .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -607,7 +1137,9 @@ renodx::utils::settings::Settings settings =
                 .section = "Ultrawide",
                 .tooltip = "Auto replaces Detroit's isolated 16:9 aspect getter with the Vulkan swapchain ratio and compensates Scaleform UI size. It does not stretch the final image.",
                 .labels = {"Vanilla 16:9", "Auto (Ultrawide)"},
-                .on_change = &OnAspectRatioModeChanged,
+                .on_change_value = [](float, float current) {
+                  ApplyAspectRatioMode(current);
+                },
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -690,10 +1222,14 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"SceneGradeStrength", 100.f},
+      {"AmbientOcclusionMode", AMBIENT_OCCLUSION_MODE_VANILLA},
+      {"DLSSMode", static_cast<float>(DETROIT_DLSS_MODE_NATIVE)},
+      {"DLAASharpening", 0.f},
       {"CASMode", CAS_MODE_VANILLA},
       {"CASStrength", 100.f},
   });
   OnAspectRatioModeChanged();
+  OnAmbientOcclusionModeChanged();
 }
 
 bool TryTrackGameSwapchain(reshade::api::swapchain* swapchain) {
@@ -753,6 +1289,95 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool) {
   }
 }
 
+void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
+  if (runtime == nullptr) return;
+  if (auto* window = static_cast<HWND>(runtime->get_hwnd()); window != nullptr) {
+    DWORD process_id = 0u;
+    GetWindowThreadProcessId(window, &process_id);
+    if (process_id != GetCurrentProcessId()) return;
+  }
+
+  auto* expected = static_cast<reshade::api::effect_runtime*>(nullptr);
+  if (tracked_effect_runtime.compare_exchange_strong(
+          expected, runtime, std::memory_order_acq_rel)
+      || expected == runtime) {
+    InitializeReShadeCaptureRequest();
+  }
+}
+
+void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
+  auto* expected = runtime;
+  tracked_effect_runtime.compare_exchange_strong(
+      expected, nullptr, std::memory_order_acq_rel);
+}
+
+void TrySaveRequestedReShadeScreenshot(reshade::api::swapchain* swapchain) {
+  auto* runtime = tracked_effect_runtime.load(std::memory_order_acquire);
+  if (runtime == nullptr || swapchain == nullptr
+      || runtime->get_device() != swapchain->get_device()) {
+    return;
+  }
+  if (runtime->get_hwnd() != nullptr && swapchain->get_hwnd() != nullptr
+      && runtime->get_hwnd() != swapchain->get_hwnd()) {
+    return;
+  }
+
+  std::string postfix;
+  {
+    std::scoped_lock lock(reshade_capture_mutex);
+    if (!reshade_capture.enabled || reshade_capture.captured) return;
+
+    const auto mode = temporal_capture::GetMode();
+    const auto status = temporal_capture::GetStatus();
+    const auto evaluation_serial = temporal_capture::GetEvaluationSerial();
+    const bool valid_output =
+        mode == DETROIT_DLSS_MODE_NATIVE
+            ? status == temporal_capture::RuntimeStatus::kNative
+            : status == temporal_capture::RuntimeStatus::kDlssActive;
+    if (!valid_output || evaluation_serial == 0u) {
+      reshade_capture.observed_mode = mode;
+      reshade_capture.last_evaluation_serial = evaluation_serial;
+      reshade_capture.stable_frames = 0u;
+      reshade_capture.stable_since_valid = false;
+      return;
+    }
+    if (mode != reshade_capture.observed_mode) {
+      reshade_capture.observed_mode = mode;
+      reshade_capture.last_evaluation_serial = evaluation_serial;
+      reshade_capture.stable_frames = 0u;
+      reshade_capture.stable_since_valid = false;
+      return;
+    }
+    if (evaluation_serial == reshade_capture.last_evaluation_serial) return;
+
+    reshade_capture.last_evaluation_serial = evaluation_serial;
+    const auto now = std::chrono::steady_clock::now();
+    if (!reshade_capture.stable_since_valid) {
+      reshade_capture.stable_since = now;
+      reshade_capture.stable_since_valid = true;
+    }
+    ++reshade_capture.stable_frames;
+    if (reshade_capture.stable_frames < RESHADE_CAPTURE_STABLE_FRAMES) return;
+    if (now - reshade_capture.stable_since
+        < std::chrono::seconds(reshade_capture.delay_seconds)) {
+      return;
+    }
+
+    postfix = reshade_capture.automatic_postfix
+                  ? GetDlssModePostfix(mode)
+                  : reshade_capture.postfix;
+    reshade_capture.captured = true;
+  }
+
+  // The generic present event runs immediately before ReShade's own present
+  // processing. Calling the public runtime API here captures the game buffer
+  // without the ReShade overlay or any Windows desktop composition.
+  runtime->save_screenshot(postfix.c_str());
+  LogReShadeCapture(
+      reshade::log::level::info,
+      std::format("saved internal screenshot with postfix '{}'.", postfix));
+}
+
 void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   auto* expected = swapchain;
   if (!tracked_swapchain.compare_exchange_strong(
@@ -760,10 +1385,24 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
     return;
   }
 
+  // A resize destroys the old output contract. Restore the user's serialized
+  // scale before any replacement swapchain can establish a new DLSS session.
+  ShutdownDlssRenderScale();
   if (!resize) {
     RestoreUltrawidePatch();
     ultrawide_install_attempted.store(false, std::memory_order_release);
   }
+}
+
+void OnDestroyDevice(reshade::api::device* device) {
+  // This callback runs outside the Windows loader lock and precedes addon
+  // unload. It is the final safe point for removing the executable detour if
+  // the swapchain teardown path did not already do so.
+  if (auto* swapchain = tracked_swapchain.load(std::memory_order_acquire);
+      swapchain != nullptr && swapchain->get_device() != device) {
+    return;
+  }
+  ShutdownDlssRenderScale();
 }
 
 void OnPresent(
@@ -777,6 +1416,7 @@ void OnPresent(
       && !ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
     InstallUltrawidePatch();
   }
+  UpdateDlssRenderScale();
   const auto color_space = swapchain->get_color_space();
   shader_injection.output_is_hdr =
       color_space == reshade::api::color_space::hdr10_st2084
@@ -788,6 +1428,8 @@ void OnPresent(
       scene_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
   shader_injection.ui_path_active =
       ui_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
+  TrySaveRequestedReShadeScreenshot(swapchain);
+  temporal_capture::BeginNextFrame();
 }
 
 }  // namespace
@@ -804,13 +1446,23 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
       renodx::mods::shader::force_pipeline_cloning = true;
       renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
           &OnAspectRatioModeChanged);
+      renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+          &OnDlssModeChanged);
+      renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+          &OnAmbientOcclusionModeChanged);
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+      reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
+      reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
+      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+      reshade::unregister_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
+      reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       ForceUltrawideRuntimeVanilla();
       reshade::unregister_addon(h_module);
@@ -820,7 +1472,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   if (fdw_reason == DLL_PROCESS_ATTACH) {
     OnAspectRatioModeChanged();
+    OnDlssModeChanged();
+    OnAmbientOcclusionModeChanged();
   }
+  temporal_capture::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   return TRUE;
 }
