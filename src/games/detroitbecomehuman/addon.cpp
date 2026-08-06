@@ -1031,8 +1031,8 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Ambient Occlusion",
                 .section = "Ambient Occlusion",
-                .tooltip = "Vanilla restores Detroit's original HBAO generation and grainy blur. XeGTAO High uses 3 slices, 18 depth taps per pixel and a 5x5 depth-aware denoise.",
-                .labels = {"Vanilla HBAO", "XeGTAO High"},
+                .tooltip = "Vanilla restores Detroit's original HBAO generation and grainy blur. XeGTAO High is an experimental screen-space path with 3 slices, 18 depth taps per pixel and a 5x5 depth-aware denoise; it cannot use off-screen geometry.",
+                .labels = {"Vanilla HBAO", "XeGTAO High (Experimental)"},
                 .on_change_value = [](float, float current) {
                   SetGtaoEnabled(current);
                 },

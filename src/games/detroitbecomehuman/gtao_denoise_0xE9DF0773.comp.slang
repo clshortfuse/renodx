@@ -34,20 +34,11 @@ float SpatialKernelWeight(int offset)
     return distance == 0 ? 6.0 : (distance == 1 ? 4.0 : 1.0);
 }
 
-bool HasActiveNeighbourTile(ivec2 pixel)
+bool HasActiveTile(ivec2 pixel)
 {
     ivec2 tile_size = max(textureSize(sTileTexture, 0), ivec2(1));
-    ivec2 center_tile = clamp(pixel >> 4, ivec2(0), tile_size - ivec2(1));
-    for (int y = -1; y <= 1; ++y)
-    {
-        for (int x = -1; x <= 1; ++x)
-        {
-            ivec2 tile = clamp(center_tile + ivec2(x, y), ivec2(0), tile_size - ivec2(1));
-            if (texelFetch(sTileTexture, tile, 0).x != 0.0)
-                return true;
-        }
-    }
-    return false;
+    ivec2 tile = clamp(pixel >> 4, ivec2(0), tile_size - ivec2(1));
+    return texelFetch(sTileTexture, tile, 0).x != 0.0;
 }
 
 void main()
@@ -58,7 +49,7 @@ void main()
     if (any(greaterThanEqual(pixel, viewport_size)))
         return;
 
-    if (!HasActiveNeighbourTile(pixel))
+    if (!HasActiveTile(pixel))
     {
         imageStore(OutOcclusion, pixel, vec4(0.0));
         return;
@@ -67,6 +58,12 @@ void main()
     ivec2 input_size = max(textureSize(sPackedAOAndDepth, 0), ivec2(1));
     uint center_packed = texelFetch(sPackedAOAndDepth, pixel, 0).x;
     int center_depth = int(center_packed & 8191u);
+    if (center_depth == 0)
+    {
+        imageStore(OutOcclusion, pixel, vec4(0.0));
+        return;
+    }
+
     float weighted_occlusion = 0.0;
     float total_weight = 0.0;
 
@@ -78,7 +75,9 @@ void main()
             ivec2 sample_pixel = clamp(pixel + ivec2(x, y), ivec2(0), input_size - ivec2(1));
             uint packed = texelFetch(sPackedAOAndDepth, sample_pixel, 0).x;
             int depth_delta = abs(int(packed & 8191u) - center_depth);
-            if (depth_delta > 4)
+            // Detroit's native resolve only accepts packed-depth deltas below
+            // three codes. A wider gate bleeds AO across silhouettes.
+            if (depth_delta >= 3)
                 continue;
 
             float spatial_weight = SpatialKernelWeight(x) * weight_y;

@@ -311,12 +311,15 @@ float EvaluateGtao(vec2 uv, ivec2 source_pixel, out float center_view_depth)
             cos_normal
             + 2.0 * horizon_1 * sin(normal_angle)
             - cos(2.0 * horizon_1 - normal_angle)) * 0.25;
-        visibility += clamp(projected_length * (integral_0 + integral_1), 0.0, 1.0);
+        // XeGTAO intentionally lets the per-slice visibility overshoot 1.0.
+        // The overshoot compensates darker slices before the final average;
+        // clamping here creates a systematic dark bias on open surfaces.
+        visibility += projected_length * (integral_0 + integral_1);
     }
 
-    visibility = clamp(visibility / float(GTAO_SLICE_COUNT), 0.0, 1.0);
+    visibility = max(visibility / float(GTAO_SLICE_COUNT), 0.0);
     visibility = max(0.03, pow(visibility, GTAO_FINAL_VALUE_POWER));
-    return 1.0 - visibility;
+    return clamp(1.0 - visibility, 0.0, 1.0);
 }
 
 uint PackDepthAndOcclusion(float view_depth, float occlusion, float dither)
