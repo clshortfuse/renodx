@@ -2043,6 +2043,18 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
                 first_view_push.layout_param,
                 1u,
                 &table);
+          } else if (descriptor_stages == reshade::api::shader_stage::all_graphics
+                     && context.cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12
+                     && first_view_push.type == reshade::api::descriptor_type::buffer_unordered_access_view
+                     && first_view_push.binding == 0u
+                     && descriptor_view_count == 1u) {
+            // ReShade binds D3D12 graphics buffer UAV root descriptors as SRVs.
+            // Bypass that setter for this root-descriptor case instead of issuing
+            // an invalid graphics SRV bind before the native UAV bind.
+            std::bit_cast<ID3D12GraphicsCommandList*>(context.cmd_list->get_native())
+                ->SetGraphicsRootUnorderedAccessView(
+                    first_view_push.layout_param,
+                    context.cmd_list->get_device()->get_resource_view_gpu_address(descriptor_views[0]));
           } else {
             context.cmd_list->push_descriptors(
                 descriptor_stages,
