@@ -566,11 +566,14 @@ static bool OnCreateSwapchain(reshade::api::device_api device_api, reshade::api:
 static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   reshade::api::device_api device_api = reshade::api::device_api::d3d11;
 #endif
+  bool changed_color_space = false;
   bool resize = local_swapchain_resize;
   if (resize) {
     local_swapchain_resize = false;
   }
+#ifdef DEBUG_LEVEL_0
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnCreateSwapchain()");
+#endif
   original_swapchain_desc = desc;
   upgraded_swapchain_desc.reset();
 
@@ -598,11 +601,13 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   }
 
   if (!ShouldModifySwapchain(static_cast<HWND>(hwnd), device_api)) {
+#ifdef DEBUG_LEVEL_0
     std::stringstream s;
     s << "mods::swapchain::OnCreateSwapchain(Abort from ShouldModifySwapchain: ";
     s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
+#endif
     return false;
   }
 
@@ -649,13 +654,25 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
         }
       }
     }
-  }
+  } else if (is_vulkan && set_color_space) {
 #if RESHADE_API_VERSION >= 20
-  else if (is_vulkan) {
     desc.color_space = target_color_space;
-  }
+    changed_color_space = true;
+#else
+    // Reshade API Version 20 introduced `color_space` in `reshade::api::swapchain_desc`, but older versions do not have this member.
+    // Check for API Version 20+ DXGIDisableVBlankVirtualization and set it manually
+    if (auto* reshade_module = reshade::internal::get_reshade_module_handle();
+        reshade_module != nullptr && GetProcAddress(reshade_module, "DXGIDisableVBlankVirtualization") != nullptr) {
+      reshade::log::message(reshade::log::level::info, "mods::swapchain::OnCreateSwapchain(Detected Reshade API Version 20 or above, setting color_space to target_color_space)");
+      *reinterpret_cast<reshade::api::color_space*>(
+          reinterpret_cast<std::byte*>(&desc) + sizeof(desc)) =
+          target_color_space;
+      changed_color_space = true;
+    } else {
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnCreateSwapchain(Failed to set color_space on Vulkan)");
+    }
 #endif
-  else if (device_api == reshade::api::device_api::d3d9) {
+  } else if (device_api == reshade::api::device_api::d3d9) {
     if (prevent_full_screen || utils::device_proxy::UseProxyRequested()) {
       desc.present_flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
       // desc.present_mode |= D3DSWAPEFFECT_FLIPEX;
@@ -675,7 +692,8 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
                  || (old_present_mode != desc.present_mode)
                  || (old_present_flags != desc.present_flags)
                  || (old_fullscreen_state != desc.fullscreen_state)
-                 || (old_fullscreen_refresh_rate != desc.fullscreen_refresh_rate);
+                 || (old_fullscreen_refresh_rate != desc.fullscreen_refresh_rate)
+                 || changed_color_space;
 
   if (!resize
       && prevent_multiple_flip_swapchains_per_window
@@ -691,14 +709,17 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   }
 
   if (!changed) {
+#ifdef DEBUG_LEVEL_0
     std::stringstream s;
     s << "mods::swapchain::OnCreateSwapchain(Abort from unchanged desc: ";
     s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
+#endif
     return false;
   }
 
+#ifdef DEBUG_LEVEL_0
   std::stringstream s;
   s << "mods::swapchain::OnCreateSwapchain(";
   s << "swap: " << old_format << " => " << desc.back_buffer.texture.format;
@@ -752,6 +773,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   s << ", height: " << desc.back_buffer.texture.height;
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
+#endif
 
   upgraded_swapchain_desc = desc;
 
