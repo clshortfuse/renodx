@@ -31,6 +31,10 @@ package is downloaded and extracted when the test suite is built.
   cloned RGBA16F resources. Vulkan controls first verify native packed transfer
   behavior, then independently validate application-visible readback and the
   normalized half-float texels stored by the upgraded transfer path.
+- `swapchain_proxy_barrier_states` runs the production compatibility copy and
+  `RenderPass` draw for 12 frames in Vulkan SDK `vkcube` with ReShade and the
+  Khronos validation layer, covering image-layout and descriptor-set lifetime
+  regressions.
 - `shader_injection_behavior` verifies exact 64-DWORD root-signature injection,
   no-budget rejection, the exact `main` register-space 50 default across
   Direct3D and OpenGL, the safe Vulkan descriptor-set 0 interpretation,

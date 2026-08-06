@@ -139,6 +139,7 @@ struct SwapchainProxyPass {
     if (swapchain_clone_override != nullptr && swapchain_clone_override->handle != 0u) {
       swapchain_clone = *swapchain_clone_override;
     } else if (use_compatibility_mode) {
+      const bool clone_created = existing_clone.handle == 0u;
       swapchain_clone = (existing_clone.handle != 0u)
                             ? existing_clone
                             : renodx::utils::resource::upgrade::CloneResource(current_back_buffer);
@@ -162,12 +163,24 @@ struct SwapchainProxyPass {
       }
 #endif
       if (uses_explicit_resource_barriers) {
-        static constexpr std::array PRE_COPY_OLD_STATES = {
+        static constexpr std::array VULKAN_NEW_CLONE_PRE_COPY_OLD_STATES = {
+            reshade::api::resource_usage::present,
+            reshade::api::resource_usage::general};
+        static constexpr std::array VULKAN_EXISTING_CLONE_PRE_COPY_OLD_STATES = {
+            reshade::api::resource_usage::present,
+            reshade::api::resource_usage::shader_resource};
+        static constexpr std::array D3D12_PRE_COPY_OLD_STATES = {
             reshade::api::resource_usage::present
                 | reshade::api::resource_usage::render_target
                 | reshade::api::resource_usage::general,
             reshade::api::resource_usage::general
                 | reshade::api::resource_usage::shader_resource};
+        const auto* pre_copy_old_states = &D3D12_PRE_COPY_OLD_STATES;
+        if (device_api == reshade::api::device_api::vulkan) {
+          pre_copy_old_states = clone_created
+                                    ? &VULKAN_NEW_CLONE_PRE_COPY_OLD_STATES
+                                    : &VULKAN_EXISTING_CLONE_PRE_COPY_OLD_STATES;
+        }
         static constexpr std::array PRE_COPY_NEW_STATES = {
             reshade::api::resource_usage::copy_source,
             reshade::api::resource_usage::copy_dest};
@@ -175,7 +188,7 @@ struct SwapchainProxyPass {
         cmd_list->barrier(
             static_cast<uint32_t>(pre_copy_resources.size()),
             pre_copy_resources.data(),
-            PRE_COPY_OLD_STATES.data(),
+            pre_copy_old_states->data(),
             PRE_COPY_NEW_STATES.data());
       }
       cmd_list->copy_resource(current_back_buffer, swapchain_clone);
