@@ -43,6 +43,7 @@
         { "kind": "separate_images", "set": 1, "binding": 0, "type": "texture2D" },
         { "kind": "separate_images", "set": 1, "binding": 1, "type": "texture2D" },
         { "kind": "separate_images", "set": 1, "binding": 2, "type": "texture2D" },
+        { "kind": "separate_images", "set": 1, "binding": 3, "type": "utexture2D" },
         { "kind": "images", "set": 1, "binding": 16, "type": "image2D", "format": "r16f", "writeonly": true },
         { "kind": "images", "set": 1, "binding": 17, "type": "image2D", "format": "r32f", "writeonly": true }
       ]

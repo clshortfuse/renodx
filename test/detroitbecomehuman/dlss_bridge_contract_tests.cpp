@@ -28,6 +28,8 @@ static_assert(std::is_standard_layout_v<DetroitDlssTemporalConstantsSnapshot>);
 static_assert(std::is_trivially_copyable_v<DetroitDlssTemporalConstantsSnapshot>);
 static_assert(std::is_standard_layout_v<DetroitDlssImageBindingSnapshot>);
 static_assert(std::is_trivially_copyable_v<DetroitDlssImageBindingSnapshot>);
+static_assert(std::is_standard_layout_v<DetroitGtaoNormalSnapshot>);
+static_assert(std::is_trivially_copyable_v<DetroitGtaoNormalSnapshot>);
 static_assert(std::is_standard_layout_v<DetroitDlssTemporalConstantsDiagnostics>);
 static_assert(std::is_trivially_copyable_v<DetroitDlssTemporalConstantsDiagnostics>);
 static_assert(std::is_standard_layout_v<DetroitDlssTemporalDescriptorSnapshot>);
@@ -96,6 +98,14 @@ static_assert(offsetof(DetroitDlssImageBindingSnapshot, image_create_flags) == 1
 static_assert(offsetof(DetroitDlssImageBindingSnapshot, valid_flags) == 136u);
 static_assert(offsetof(DetroitDlssImageBindingSnapshot, source_flags) == 144u);
 static_assert(offsetof(DetroitDlssImageBindingSnapshot, update_serial) == 152u);
+
+static_assert(sizeof(DetroitGtaoNormalSnapshot) == 200u);
+static_assert(alignof(DetroitGtaoNormalSnapshot) == 8u);
+static_assert(offsetof(DetroitGtaoNormalSnapshot, command_buffer) == 8u);
+static_assert(offsetof(DetroitGtaoNormalSnapshot, descriptor_set) == 16u);
+static_assert(offsetof(DetroitGtaoNormalSnapshot, pipeline_layout) == 24u);
+static_assert(offsetof(DetroitGtaoNormalSnapshot, capture_serial) == 32u);
+static_assert(offsetof(DetroitGtaoNormalSnapshot, normal) == 40u);
 
 static_assert(sizeof(DetroitDlssTemporalConstantsDiagnostics) == 80u);
 static_assert(alignof(DetroitDlssTemporalConstantsDiagnostics) == 8u);
@@ -465,6 +475,9 @@ bool TestFixedValuesAndBindings() {
   passed &= Expect(storage == expected_storage, "storage binding contract changed");
   passed &= Expect(DETROIT_DLSS_TAA_CONSTANT_BINDING_52 == 52u, "b52 contract changed");
   passed &= Expect(DETROIT_DLSS_TAA_DESCRIPTOR_SET == 0u, "descriptor set contract changed");
+  passed &= Expect(
+      DETROIT_GTAO_NORMAL_BINDING == 1u,
+      "native SSR normal binding changed");
   return passed;
 }
 
@@ -545,6 +558,46 @@ bool TestTemporalResetGate() {
           UINT64_C(0x5001),
           image),
       "a complete required DLSS input must pass snapshot validation");
+
+  DetroitGtaoNormalSnapshot normal_snapshot = {
+      .struct_size = sizeof(DetroitGtaoNormalSnapshot),
+      .abi_version = DETROIT_DLSS_ABI_VERSION,
+      .command_buffer = UINT64_C(0xABCDEF),
+      .descriptor_set = UINT64_C(0x8001),
+      .pipeline_layout = UINT64_C(0x8002),
+      .capture_serial = 7u,
+      .normal = {
+          .struct_size = sizeof(DetroitDlssImageBindingSnapshot),
+          .binding = DETROIT_GTAO_NORMAL_BINDING,
+          .descriptor_set = UINT64_C(0x8001),
+          .resource = {
+              .image = UINT64_C(0x9001),
+              .image_view = UINT64_C(0x9002),
+              .format = dlss_bridge_client::kVkFormatR32Uint,
+              .width = 3440u,
+              .height = 1440u,
+          },
+          .image_type = dlss_bridge_client::kVkImageType2D,
+          .view_type = dlss_bridge_client::kVkImageViewType2D,
+          .sample_count = dlss_bridge_client::kVkSampleCount1,
+          .valid_flags = DETROIT_DLSS_IMAGE_MANDATORY_MASK,
+      },
+  };
+  passed &= Expect(
+      dlss_bridge_client::IsGtaoNormalSnapshotAccepted(
+          UINT64_C(0xABCDEF), 3440u, 1440u, normal_snapshot),
+      "a complete R32_UINT native normal snapshot must pass validation");
+  normal_snapshot.normal.resource.format = 97u;
+  passed &= Expect(
+      !dlss_bridge_client::IsGtaoNormalSnapshotAccepted(
+          UINT64_C(0xABCDEF), 3440u, 1440u, normal_snapshot),
+      "a non-R32_UINT resource must not be accepted as Detroit normals");
+  normal_snapshot.normal.resource.format = dlss_bridge_client::kVkFormatR32Uint;
+  normal_snapshot.normal.resource.width = 2560u;
+  passed &= Expect(
+      !dlss_bridge_client::IsGtaoNormalSnapshotAccepted(
+          UINT64_C(0xABCDEF), 3440u, 1440u, normal_snapshot),
+      "a mismatched normal extent must fail closed");
   return passed;
 }
 

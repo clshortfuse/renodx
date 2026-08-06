@@ -63,6 +63,7 @@ constexpr std::size_t kMaximumCachedExtensionListBytes = 16u * 1024u;
 constexpr std::size_t kMaximumCachedExtensionCount = 64u;
 constexpr std::uint64_t kMaximumTemporalConstantsShadowSize = 64u * 1024u;
 constexpr std::size_t kTemporalDescriptorSetBloomWordCount = 64u;
+constexpr std::size_t kGtaoNormalDescriptorSetBloomWordCount = 64u;
 constexpr std::array<std::uint32_t, DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT>
     kTemporalImageBindings = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 9u, 16u, 17u, 18u, 19u};
 
@@ -328,6 +329,7 @@ struct DescriptorLayoutBinding {
 struct DescriptorSetLayoutState {
   std::vector<DescriptorLayoutBinding> bindings;
   bool temporal_candidate = false;
+  bool gtao_normal_candidate = false;
 };
 
 struct PipelineLayoutState {
@@ -410,6 +412,12 @@ struct ComputeCommandRestoreState {
   std::uint32_t first_set = 0u;
   std::vector<VkDescriptorSet> descriptor_sets;
   std::vector<std::uint32_t> dynamic_offsets;
+};
+
+struct GtaoNormalCaptureState {
+  VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+  VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+  std::uint64_t serial = 0u;
 };
 
 struct CommandPoolState {
@@ -501,8 +509,12 @@ struct DeviceState {
   std::unordered_map<std::uint64_t, std::uint64_t> command_buffer_pools;
   std::unordered_map<std::uint64_t, VkCommandBufferLevel> command_buffer_levels;
   std::uint64_t descriptor_update_serial = 0u;
+  std::uint64_t gtao_normal_capture_serial = 0u;
+  GtaoNormalCaptureState latest_gtao_normal = {};
   std::array<std::atomic<std::uint64_t>, kTemporalDescriptorSetBloomWordCount>
       temporal_descriptor_set_bloom = {};
+  std::array<std::atomic<std::uint64_t>, kGtaoNormalDescriptorSetBloomWordCount>
+      gtao_normal_descriptor_set_bloom = {};
 };
 
 BridgeDetail MakeAdapterBridgeDetail(
@@ -704,6 +716,38 @@ bool IsTemporalDescriptorSetLayout(const DescriptorSetLayoutState& layout) {
          && constants->descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 }
 
+bool IsGtaoNormalDescriptorSetLayout(const DescriptorSetLayoutState& layout) {
+  // Stable intersection of Detroit's native SSR variants B23F0E73, B94550D9,
+  // 982B3578, 7A9A5276, 588D3181, D712A47E, 2783907F, 7768F5C6 and BDD97306.
+  // Binding 1 is NormalSSRSampler. The R32_UINT format is verified again when
+  // the snapshot is exported, which prevents a merely similar layout from
+  // being accepted as a normal source.
+  constexpr std::array<std::uint32_t, 7u> kRequiredSampledBindings = {
+      0u, 1u, 2u, 3u, 5u, 6u, 10u};
+  for (const std::uint32_t binding : kRequiredSampledBindings) {
+    const auto* reflected = FindLayoutBinding(layout, binding);
+    if (reflected == nullptr || reflected->descriptor_count != 1u
+        || !IsSampledImageDescriptorType(reflected->descriptor_type)) {
+      return false;
+    }
+  }
+  // Binding 4 exists in the unrelated temporal layout but not in the native
+  // SSR family. Keep it as a negative discriminator.
+  if (FindLayoutBinding(layout, 4u) != nullptr) return false;
+
+  const auto* output = FindLayoutBinding(layout, 17u);
+  if (output == nullptr || output->descriptor_count != 1u
+      || output->descriptor_type != VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) {
+    return false;
+  }
+  const auto* constants =
+      FindLayoutBinding(layout, DETROIT_DLSS_TAA_CONSTANT_BINDING_52);
+  return constants != nullptr && constants->descriptor_count == 1u
+         && (constants->descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+             || constants->descriptor_type
+                    == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC);
+}
+
 std::size_t TemporalDescriptorSetBloomBit(std::uint64_t descriptor_set) {
   descriptor_set ^= descriptor_set >> 33u;
   descriptor_set *= UINT64_C(0xFF51AFD7ED558CCD);
@@ -723,6 +767,33 @@ bool MayBeTemporalDescriptorSet(
   if (descriptor_set == VK_NULL_HANDLE) return false;
   const std::size_t bit = TemporalDescriptorSetBloomBit(ToOpaque(descriptor_set));
   return (state.temporal_descriptor_set_bloom[bit / 64u].load(
+              std::memory_order_acquire)
+          & (UINT64_C(1) << (bit % 64u)))
+         != 0u;
+}
+
+std::size_t GtaoNormalDescriptorSetBloomBit(std::uint64_t descriptor_set) {
+  descriptor_set ^= descriptor_set >> 33u;
+  descriptor_set *= UINT64_C(0xC4CEB9FE1A85EC53);
+  descriptor_set ^= descriptor_set >> 33u;
+  return static_cast<std::size_t>(
+      descriptor_set % (kGtaoNormalDescriptorSetBloomWordCount * 64u));
+}
+
+void MarkGtaoNormalDescriptorSet(
+    DeviceState* state, VkDescriptorSet descriptor_set) {
+  const std::size_t bit =
+      GtaoNormalDescriptorSetBloomBit(ToOpaque(descriptor_set));
+  state->gtao_normal_descriptor_set_bloom[bit / 64u].fetch_or(
+      UINT64_C(1) << (bit % 64u), std::memory_order_release);
+}
+
+bool MayBeGtaoNormalDescriptorSet(
+    const DeviceState& state, VkDescriptorSet descriptor_set) {
+  if (descriptor_set == VK_NULL_HANDLE) return false;
+  const std::size_t bit =
+      GtaoNormalDescriptorSetBloomBit(ToOpaque(descriptor_set));
+  return (state.gtao_normal_descriptor_set_bloom[bit / 64u].load(
               std::memory_order_acquire)
           & (UINT64_C(1) << (bit % 64u)))
          != 0u;
@@ -1638,6 +1709,70 @@ bool FillImageBindingLocked(
          == DETROIT_DLSS_IMAGE_MANDATORY_MASK;
 }
 
+DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetGtaoNormalSnapshot(
+    std::uint64_t command_buffer,
+    DetroitGtaoNormalSnapshot* snapshot) {
+  if (snapshot == nullptr || snapshot->struct_size < sizeof(*snapshot)
+      || snapshot->abi_version != DETROIT_DLSS_ABI_VERSION
+      || command_buffer == 0u) {
+    return DETROIT_DLSS_RESULT_ERROR;
+  }
+
+  const auto struct_size = snapshot->struct_size;
+  *snapshot = {};
+  snapshot->struct_size = struct_size;
+  snapshot->abi_version = DETROIT_DLSS_ABI_VERSION;
+  snapshot->command_buffer = command_buffer;
+
+  const auto state = FindDevice(FromOpaque<VkCommandBuffer>(command_buffer));
+  if (state == nullptr || !state->supported_executable
+      || state->destroying.load(std::memory_order_acquire)) {
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+
+  const std::lock_guard lock(state->tracking_mutex);
+  const auto& captured = state->latest_gtao_normal;
+  if (captured.descriptor_set == VK_NULL_HANDLE
+      || captured.pipeline_layout == VK_NULL_HANDLE
+      || captured.serial == 0u) {
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+  snapshot->descriptor_set = ToOpaque(captured.descriptor_set);
+  snapshot->pipeline_layout = ToOpaque(captured.pipeline_layout);
+  snapshot->capture_serial = captured.serial;
+
+  const auto descriptor_set =
+      state->descriptor_sets.find(snapshot->descriptor_set);
+  if (descriptor_set == state->descriptor_sets.end()) {
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+  const auto descriptor_layout = state->descriptor_set_layouts.find(
+      ToOpaque(descriptor_set->second.layout));
+  if (descriptor_layout == state->descriptor_set_layouts.end()
+      || !descriptor_layout->second.gtao_normal_candidate) {
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+
+  const bool complete = FillImageBindingLocked(
+      *state,
+      descriptor_set->second,
+      captured.descriptor_set,
+      DETROIT_GTAO_NORMAL_BINDING,
+      &snapshot->normal);
+  if (!complete
+      || snapshot->normal.resource.format
+             != static_cast<std::uint32_t>(VK_FORMAT_R32_UINT)
+      || snapshot->normal.image_type
+             != static_cast<std::uint32_t>(VK_IMAGE_TYPE_2D)
+      || snapshot->normal.view_type
+             != static_cast<std::uint32_t>(VK_IMAGE_VIEW_TYPE_2D)
+      || snapshot->normal.sample_count
+             != static_cast<std::uint32_t>(VK_SAMPLE_COUNT_1_BIT)) {
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+  return DETROIT_DLSS_RESULT_SUCCESS;
+}
+
 DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
     std::uint64_t command_buffer,
     std::uint32_t descriptor_set_index,
@@ -2342,6 +2477,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerCreateDescriptorSetLayout(
         return left.binding < right.binding;
       });
   tracked.temporal_candidate = IsTemporalDescriptorSetLayout(tracked);
+  tracked.gtao_normal_candidate = IsGtaoNormalDescriptorSetLayout(tracked);
   const std::lock_guard lock(state->tracking_mutex);
   state->descriptor_set_layouts[ToOpaque(*layout)] = std::move(tracked);
   return result;
@@ -2411,12 +2547,18 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerAllocateDescriptorSets(
     const auto layout =
         state->descriptor_set_layouts.find(ToOpaque(allocate_info->pSetLayouts[index]));
     if (layout == state->descriptor_set_layouts.end()
-        || !layout->second.temporal_candidate) {
+        || (!layout->second.temporal_candidate
+            && !layout->second.gtao_normal_candidate)) {
       continue;
     }
     state->descriptor_sets[ToOpaque(descriptor_sets[index])] = {
         allocate_info->descriptorPool, allocate_info->pSetLayouts[index], {}};
-    MarkTemporalDescriptorSet(state.get(), descriptor_sets[index]);
+    if (layout->second.temporal_candidate) {
+      MarkTemporalDescriptorSet(state.get(), descriptor_sets[index]);
+    }
+    if (layout->second.gtao_normal_candidate) {
+      MarkGtaoNormalDescriptorSet(state.get(), descriptor_sets[index]);
+    }
   }
   return result;
 }
@@ -2436,6 +2578,9 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerFreeDescriptorSets(
 
   const std::lock_guard lock(state->tracking_mutex);
   for (std::uint32_t index = 0u; index < descriptor_set_count; ++index) {
+    if (state->latest_gtao_normal.descriptor_set == descriptor_sets[index]) {
+      state->latest_gtao_normal = {};
+    }
     state->descriptor_sets.erase(ToOpaque(descriptor_sets[index]));
   }
   return result;
@@ -2445,6 +2590,10 @@ void EraseDescriptorPoolSets(DeviceState* state, VkDescriptorPool pool) {
   for (auto descriptor_set = state->descriptor_sets.begin();
        descriptor_set != state->descriptor_sets.end();) {
     if (descriptor_set->second.pool == pool) {
+      if (state->latest_gtao_normal.descriptor_set
+          == FromOpaque<VkDescriptorSet>(descriptor_set->first)) {
+        state->latest_gtao_normal = {};
+      }
       descriptor_set = state->descriptor_sets.erase(descriptor_set);
     } else {
       ++descriptor_set;
@@ -2497,21 +2646,27 @@ VKAPI_ATTR void VKAPI_CALL LayerUpdateDescriptorSets(
       descriptor_copy_count,
       descriptor_copies);
 
-  bool may_touch_temporal_set = false;
+  bool may_touch_tracked_set = false;
   if (descriptor_writes != nullptr) {
     for (std::uint32_t index = 0u; index < descriptor_write_count; ++index) {
-      may_touch_temporal_set |=
-          MayBeTemporalDescriptorSet(*state, descriptor_writes[index].dstSet);
+      may_touch_tracked_set |=
+          MayBeTemporalDescriptorSet(*state, descriptor_writes[index].dstSet)
+          || MayBeGtaoNormalDescriptorSet(
+              *state, descriptor_writes[index].dstSet);
     }
   }
-  if (!may_touch_temporal_set && descriptor_copies != nullptr) {
+  if (!may_touch_tracked_set && descriptor_copies != nullptr) {
     for (std::uint32_t index = 0u; index < descriptor_copy_count; ++index) {
-      may_touch_temporal_set |=
+      may_touch_tracked_set |=
           MayBeTemporalDescriptorSet(*state, descriptor_copies[index].srcSet)
-          || MayBeTemporalDescriptorSet(*state, descriptor_copies[index].dstSet);
+          || MayBeTemporalDescriptorSet(*state, descriptor_copies[index].dstSet)
+          || MayBeGtaoNormalDescriptorSet(
+              *state, descriptor_copies[index].srcSet)
+          || MayBeGtaoNormalDescriptorSet(
+              *state, descriptor_copies[index].dstSet);
     }
   }
-  if (!may_touch_temporal_set) return;
+  if (!may_touch_tracked_set) return;
 
   const std::lock_guard lock(state->tracking_mutex);
   for (std::uint32_t write_index = 0u; write_index < descriptor_write_count; ++write_index) {
@@ -3360,6 +3515,42 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(
 
   const std::uint64_t command_buffer_handle = ToOpaque(command_buffer);
   auto& local = GetThreadComputeCommandStates()[command_buffer_handle];
+  const bool updates_set_zero = first_set == 0u && descriptor_set_count != 0u;
+  if (updates_set_zero
+      && MayBeGtaoNormalDescriptorSet(*state, descriptor_sets[0u])) {
+    const std::lock_guard lock(state->tracking_mutex);
+    const auto descriptor_set =
+        state->descriptor_sets.find(ToOpaque(descriptor_sets[0u]));
+    if (descriptor_set != state->descriptor_sets.end()) {
+      const auto descriptor_layout = state->descriptor_set_layouts.find(
+          ToOpaque(descriptor_set->second.layout));
+      if (descriptor_layout != state->descriptor_set_layouts.end()
+          && descriptor_layout->second.gtao_normal_candidate) {
+        DetroitDlssImageBindingSnapshot normal = {};
+        const bool complete = FillImageBindingLocked(
+            *state,
+            descriptor_set->second,
+            descriptor_sets[0u],
+            DETROIT_GTAO_NORMAL_BINDING,
+            &normal);
+        if (complete
+            && normal.resource.format
+                   == static_cast<std::uint32_t>(VK_FORMAT_R32_UINT)
+            && normal.image_type
+                   == static_cast<std::uint32_t>(VK_IMAGE_TYPE_2D)
+            && normal.view_type
+                   == static_cast<std::uint32_t>(VK_IMAGE_VIEW_TYPE_2D)
+            && normal.sample_count
+                   == static_cast<std::uint32_t>(VK_SAMPLE_COUNT_1_BIT)) {
+          state->latest_gtao_normal = {
+              .descriptor_set = descriptor_sets[0u],
+              .pipeline_layout = layout,
+              .serial = ++state->gtao_normal_capture_serial,
+          };
+        }
+      }
+    }
+  }
   const bool updates_temporal_set = first_set == DETROIT_DLSS_TAA_DESCRIPTOR_SET
                                     && descriptor_set_count != 0u;
   if (!updates_temporal_set) return;
@@ -3577,6 +3768,13 @@ DetroitDlssGetApi(std::uint32_t requested_version, DetroitDlssApiV2* api) {
   api->evaluate = &BridgeEvaluate;
   api->shutdown = &BridgeShutdown;
   return DETROIT_DLSS_RESULT_SUCCESS;
+}
+
+extern "C" __declspec(dllexport) DetroitDlssResultCode DETROIT_DLSS_CALL
+DetroitGtaoGetNormalSnapshot(
+    std::uint64_t command_buffer,
+    DetroitGtaoNormalSnapshot* snapshot) {
+  return BridgeGetGtaoNormalSnapshot(command_buffer, snapshot);
 }
 
 extern "C" __declspec(dllexport) VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL

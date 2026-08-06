@@ -937,11 +937,6 @@ bool ShouldUseGtaoMain(reshade::api::command_list* command_list) {
          && gtao_runtime::IsMainPrepared(command_list);
 }
 
-bool ShouldUseGtaoDenoise(reshade::api::command_list* command_list) {
-  return gtao_enabled.load(std::memory_order_relaxed)
-         && gtao_runtime::IsDenoisePrepared(command_list);
-}
-
 renodx::mods::shader::CustomShaders custom_shaders = {
     {0x2D2071B2, {
                      .crc32 = 0x2D2071B2,
@@ -951,6 +946,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                          {reshade::api::descriptor_type::texture_shader_resource_view, 0u, 1u, &gtao_runtime::GetMotionView},
                          {reshade::api::descriptor_type::texture_shader_resource_view, 1u, 1u, &gtao_runtime::GetPreviousAoView},
                          {reshade::api::descriptor_type::texture_shader_resource_view, 2u, 1u, &gtao_runtime::GetPreviousDepthView},
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 3u, 1u, &gtao_runtime::GetNormalView},
                          {reshade::api::descriptor_type::texture_unordered_access_view, 16u, 1u, &gtao_runtime::GetCurrentAoUav},
                          {reshade::api::descriptor_type::texture_unordered_access_view, 17u, 1u, &gtao_runtime::GetCurrentDepthUav},
                      },
@@ -963,19 +959,14 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                          {reshade::api::descriptor_type::texture_shader_resource_view, 0u, 1u, &gtao_runtime::GetMotionView},
                          {reshade::api::descriptor_type::texture_shader_resource_view, 1u, 1u, &gtao_runtime::GetPreviousAoView},
                          {reshade::api::descriptor_type::texture_shader_resource_view, 2u, 1u, &gtao_runtime::GetPreviousDepthView},
+                         {reshade::api::descriptor_type::texture_shader_resource_view, 3u, 1u, &gtao_runtime::GetNormalView},
                          {reshade::api::descriptor_type::texture_unordered_access_view, 16u, 1u, &gtao_runtime::GetCurrentAoUav},
                          {reshade::api::descriptor_type::texture_unordered_access_view, 17u, 1u, &gtao_runtime::GetCurrentDepthUav},
                      },
                  }},
-    {0xE9DF0773, {
-                     .crc32 = 0xE9DF0773,
-                     .code = __0xE9DF0773,
-                     .on_replace = &ShouldUseGtaoDenoise,
-                     .views = {
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 1u, 1u, &gtao_runtime::GetResolvedAoView},
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 2u, 1u, &gtao_runtime::GetResolvedDepthView},
-                     },
-                 }},
+    // E9DF0773 intentionally remains native. Like the Dishonored 2 GTAO
+    // integration, the replacement writes the game's original AO contract and
+    // lets the engine's proven depth-aware denoiser consume it.
     {0xEBFBDDB1, {
                      .crc32 = 0xEBFBDDB1,
                      .code = __0xEBFBDDB1,
@@ -1058,7 +1049,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Ambient Occlusion",
                 .section = "Ambient Occlusion",
-                .tooltip = "Vanilla restores Detroit's original HBAO. XeGTAO High uses full-resolution view-space normals, 3 slices / 18 horizon taps, full-precision AO, a 5x5 depth-aware denoise, persistent history, motion-vector reprojection and disocclusion rejection. It remains screen-space and cannot use off-screen geometry.",
+                .tooltip = "Vanilla restores Detroit's original HBAO. XeGTAO High runs at Detroit's native AO point with the game's R32_UINT view-space normals, prefiltered view-depth mips, scene-tuned radius, 3 slices / 18 horizon taps, thin-occluder compensation, persistent full-precision history, motion reprojection and native depth-aware denoise. It remains screen-space and cannot use off-screen geometry.",
                 .labels = {"Vanilla HBAO", "XeGTAO High + Temporal"},
                 .on_change_value = [](float, float current) {
                   SetGtaoEnabled(current);

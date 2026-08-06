@@ -20,6 +20,12 @@ namespace renodx::games::detroitbecomehuman::dlss_bridge_client {
 
 inline constexpr wchar_t kBridgeModuleName[] = L"renodx-detroit-dlss-layer.dll";
 inline constexpr char kGetApiExportName[] = "DetroitDlssGetApi";
+inline constexpr char kGetGtaoNormalExportName[] =
+    "DetroitGtaoGetNormalSnapshot";
+inline constexpr std::uint32_t kVkFormatR32Uint = 98u;
+inline constexpr std::uint32_t kVkImageType2D = 1u;
+inline constexpr std::uint32_t kVkImageViewType2D = 1u;
+inline constexpr std::uint32_t kVkSampleCount1 = 1u;
 
 struct Evaluation {
   DetroitDlssResultCode status = DETROIT_DLSS_RESULT_FALLBACK;
@@ -63,6 +69,35 @@ class TemporalResetGate {
          && image.descriptor_set == descriptor_set
          && image.resource.image != 0u
          && image.resource.image_view != 0u;
+}
+
+[[nodiscard]] constexpr bool IsGtaoNormalSnapshotAccepted(
+    std::uint64_t command_buffer,
+    std::uint32_t expected_width,
+    std::uint32_t expected_height,
+    const DetroitGtaoNormalSnapshot& snapshot) noexcept {
+  const auto& normal = snapshot.normal;
+  return snapshot.struct_size >= sizeof(DetroitGtaoNormalSnapshot)
+         && snapshot.abi_version == DETROIT_DLSS_ABI_VERSION
+         && snapshot.command_buffer == command_buffer
+         && snapshot.descriptor_set != 0u
+         && snapshot.pipeline_layout != 0u
+         && snapshot.capture_serial != 0u
+         && normal.struct_size >= sizeof(DetroitDlssImageBindingSnapshot)
+         && normal.binding == DETROIT_GTAO_NORMAL_BINDING
+         && normal.descriptor_set == snapshot.descriptor_set
+         && (normal.valid_flags & DETROIT_DLSS_IMAGE_MANDATORY_MASK)
+                == DETROIT_DLSS_IMAGE_MANDATORY_MASK
+         && normal.resource.image != 0u
+         && normal.resource.image_view != 0u
+         && normal.resource.format == kVkFormatR32Uint
+         && normal.image_type == kVkImageType2D
+         && normal.view_type == kVkImageViewType2D
+         && normal.sample_count == kVkSampleCount1
+         && normal.resource.mip_level == 0u
+         && normal.resource.array_layer == 0u
+         && normal.resource.width == expected_width
+         && normal.resource.height == expected_height;
 }
 
 class Client {
@@ -170,6 +205,38 @@ class Client {
       }
     }
 
+    *snapshot = candidate;
+    return true;
+  }
+
+  [[nodiscard]] bool CaptureGtaoNormalSnapshot(
+      std::uint64_t command_buffer,
+      std::uint32_t expected_width,
+      std::uint32_t expected_height,
+      DetroitGtaoNormalSnapshot* snapshot) {
+    if (snapshot == nullptr || command_buffer == 0u || expected_width == 0u
+        || expected_height == 0u) {
+      return false;
+    }
+
+    std::scoped_lock lock(mutex_);
+    if (!Connect() || get_gtao_normal_snapshot_ == nullptr) return false;
+
+    DetroitGtaoNormalSnapshot candidate = {
+        .struct_size = sizeof(DetroitGtaoNormalSnapshot),
+        .abi_version = DETROIT_DLSS_ABI_VERSION,
+        .command_buffer = command_buffer,
+    };
+    const auto status =
+        get_gtao_normal_snapshot_(command_buffer, &candidate);
+    if (status != DETROIT_DLSS_RESULT_SUCCESS
+        || !IsGtaoNormalSnapshotAccepted(
+            command_buffer,
+            expected_width,
+            expected_height,
+            candidate)) {
+      return false;
+    }
     *snapshot = candidate;
     return true;
   }
@@ -434,6 +501,9 @@ class Client {
     }
 
     api_ = candidate;
+    get_gtao_normal_snapshot_ =
+        reinterpret_cast<DetroitGtaoGetNormalSnapshotFn>(
+            GetProcAddress(module_, kGetGtaoNormalExportName));
     connected_ = true;
     return true;
   }
@@ -507,6 +577,7 @@ class Client {
   std::mutex mutex_;
   HMODULE module_ = nullptr;
   DetroitDlssApiV2 api_ = {};
+  DetroitGtaoGetNormalSnapshotFn get_gtao_normal_snapshot_ = nullptr;
   DetroitDlssBootstrapContext context_ = {};
   DetroitDlssModeSettings configured_settings_ = {};
   TemporalResetGate reset_gate_ = {};

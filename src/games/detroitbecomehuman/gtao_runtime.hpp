@@ -16,6 +16,7 @@
 #include <include/reshade.hpp>
 
 #include "../../utils/command_action.hpp"
+#include "./dlss_bridge_client.hpp"
 #include "./gtao_temporal_contract.hpp"
 #include "./supported_build.hpp"
 #include "./temporal_capture.hpp"
@@ -26,7 +27,6 @@ namespace contract = gtao_temporal_contract;
 
 inline constexpr std::uint32_t kGtaoMainShaderCrc = 0x2D2071B2u;
 inline constexpr std::uint32_t kGtaoAlternateMainShaderCrc = 0xBC7B6738u;
-inline constexpr std::uint32_t kGtaoDenoiseShaderCrc = 0xE9DF0773u;
 
 struct Texture {
   reshade::api::resource resource = {0u};
@@ -41,6 +41,8 @@ struct DispatchState {
   std::uint32_t height = 0u;
   std::uint64_t generation = 0u;
   reshade::api::resource_view motion_view = {0u};
+  reshade::api::resource_view normal_view = {0u};
+  std::uint64_t normal_capture_serial = 0u;
   bool history_valid = false;
 };
 
@@ -56,7 +58,6 @@ struct Resources {
   bool cleared = false;
   std::uint64_t generation = 1u;
   std::unordered_map<std::uint64_t, DispatchState> active_main;
-  std::unordered_map<std::uint64_t, DispatchState> completed_main;
 };
 
 inline std::mutex resource_mutex;
@@ -231,9 +232,9 @@ inline void ClearHistoryLocked(reshade::api::command_list* command_list) {
 inline void SetEnabled(bool value) {
   enabled.store(value, std::memory_order_release);
   if (value) return;
+  last_ready_key.store(0u, std::memory_order_release);
   std::scoped_lock lock(resource_mutex);
   resources.history_valid = false;
-  resources.completed_main.clear();
   ++resources.generation;
 }
 
@@ -244,7 +245,6 @@ inline void SetOutputExtent(std::uint32_t width, std::uint32_t height) {
   std::scoped_lock lock(resource_mutex);
   resources.history_valid = false;
   resources.cleared = false;
-  resources.completed_main.clear();
   ++resources.generation;
 }
 
@@ -252,7 +252,6 @@ inline void InvalidateHistory() {
   std::scoped_lock lock(resource_mutex);
   resources.history_valid = false;
   resources.cleared = false;
-  resources.completed_main.clear();
   ++resources.generation;
 }
 
@@ -279,6 +278,35 @@ inline void InvalidateHistory() {
       dispatch.group_count_y,
       temporal_extent,
       swapchain_extent);
+
+  auto* device = command_list->get_device();
+  DetroitGtaoNormalSnapshot normal_snapshot = {};
+  const bool has_normal_snapshot =
+      dlss_bridge_client::client.CaptureGtaoNormalSnapshot(
+          command_list->get_native(),
+          extent.width,
+          extent.height,
+          &normal_snapshot);
+  const reshade::api::resource_view normal_view = has_normal_snapshot
+                                                      ? reshade::api::resource_view{
+                                                            normal_snapshot.normal.resource.image_view}
+                                                      : reshade::api::resource_view{0u};
+  const auto normal_resource =
+      device != nullptr && normal_view.handle != 0u
+          ? device->get_resource_from_view(normal_view)
+          : reshade::api::resource{0u};
+  if (!has_normal_snapshot || normal_resource.handle == 0u
+      || normal_resource.handle != normal_snapshot.normal.resource.image) {
+    std::scoped_lock lock(resource_mutex);
+    resources.history_valid = false;
+    resources.cleared = false;
+    ++resources.generation;
+    LogFailureOnce(
+        UINT64_C(0x4E4F524D414C0001),
+        "native R32_UINT view-space normals are not available yet; vanilla HBAO is used until the SSR descriptor contract is captured.");
+    return false;
+  }
+  last_failure_key.store(0u, std::memory_order_release);
 
   std::scoped_lock lock(resource_mutex);
   if (!EnsureResourcesLocked(command_list, extent)) return false;
@@ -310,6 +338,8 @@ inline void InvalidateHistory() {
       .generation = resources.generation,
       .motion_view = motion_matches ? temporal_input.view
                                     : resources.zero_texture.srv,
+      .normal_view = normal_view,
+      .normal_capture_serial = normal_snapshot.capture_serial,
       .history_valid = can_reproject,
   };
   return true;
@@ -346,17 +376,18 @@ inline void FinishMainDispatch(
 
   resources.latest_index = state.write_index;
   resources.history_valid = true;
-  resources.completed_main[command_buffer] = state;
   const std::uint64_t ready_key =
-      (static_cast<std::uint64_t>(state.width) << 32u) | state.height;
+      ((static_cast<std::uint64_t>(state.width) << 32u) | state.height)
+      ^ (state.history_valid ? UINT64_C(0x8000000000000000) : 0u);
   if (last_ready_key.exchange(ready_key, std::memory_order_acq_rel)
       != ready_key) {
     Log(
         reshade::log::level::info,
         std::format(
-            "temporal history active at {}x{} (full-precision AO + view depth, motion reprojection {}).",
+            "geometry-aware temporal history active at {}x{} (native view-space normals serial {}, full-precision AO + view depth, motion reprojection {}).",
             state.width,
             state.height,
+            state.normal_capture_serial,
             state.history_valid ? "enabled" : "warming up"));
   }
 }
@@ -368,17 +399,6 @@ inline void FinishMainDispatch(
   }
   std::scoped_lock lock(resource_mutex);
   return resources.active_main.contains(command_list->get_native());
-}
-
-[[nodiscard]] inline bool IsDenoisePrepared(
-    reshade::api::command_list* command_list) {
-  if (!enabled.load(std::memory_order_acquire) || command_list == nullptr) {
-    return false;
-  }
-  std::scoped_lock lock(resource_mutex);
-  const auto found = resources.completed_main.find(command_list->get_native());
-  return found != resources.completed_main.end()
-         && found->second.generation == resources.generation;
 }
 
 template <typename Selector>
@@ -400,6 +420,13 @@ inline reshade::api::resource_view GetMotionView(
   return GetActiveMainView(
       command_list,
       [](const DispatchState& state) { return state.motion_view; });
+}
+
+inline reshade::api::resource_view GetNormalView(
+    reshade::api::command_list* command_list) {
+  return GetActiveMainView(
+      command_list,
+      [](const DispatchState& state) { return state.normal_view; });
 }
 
 inline reshade::api::resource_view GetPreviousAoView(
@@ -429,34 +456,6 @@ inline reshade::api::resource_view GetCurrentDepthUav(
     reshade::api::command_list* command_list) {
   return GetActiveMainView(command_list, [](const DispatchState& state) {
     return resources.depth_history[state.write_index].uav;
-  });
-}
-
-template <typename Selector>
-[[nodiscard]] inline reshade::api::resource_view GetCompletedMainView(
-    reshade::api::command_list* command_list,
-    Selector&& selector) {
-  if (command_list == nullptr) return {0u};
-  std::scoped_lock lock(resource_mutex);
-  const auto found = resources.completed_main.find(command_list->get_native());
-  if (found == resources.completed_main.end()
-      || found->second.generation != resources.generation) {
-    return {0u};
-  }
-  return selector(found->second);
-}
-
-inline reshade::api::resource_view GetResolvedAoView(
-    reshade::api::command_list* command_list) {
-  return GetCompletedMainView(command_list, [](const DispatchState& state) {
-    return resources.ao_history[state.write_index].srv;
-  });
-}
-
-inline reshade::api::resource_view GetResolvedDepthView(
-    reshade::api::command_list* command_list) {
-  return GetCompletedMainView(command_list, [](const DispatchState& state) {
-    return resources.depth_history[state.write_index].srv;
   });
 }
 

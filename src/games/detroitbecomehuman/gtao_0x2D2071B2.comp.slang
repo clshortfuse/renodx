@@ -12,10 +12,17 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 const float GTAO_PI = 3.14159265358979323846;
 const float GTAO_HALF_PI = 1.57079632679489661923;
-const float GTAO_RADIUS_MULTIPLIER = 1.457;
+// Detroit already supplies its scene-tuned world-space HBAO radius. Applying
+// XeGTAO's independently auto-tuned 1.457 multiplier a second time produces
+// broad, screen-like darkening, so preserve the engine radius here.
+const float GTAO_RADIUS_MULTIPLIER = 1.0;
 const float GTAO_FALLOFF_RANGE = 0.615;
 const float GTAO_SAMPLE_DISTRIBUTION_POWER = 2.0;
-const float GTAO_FINAL_VALUE_POWER = 2.2;
+// The native lighting pass is authored around an occlusion amount, not the
+// standalone XeGTAO sample's display curve. Keep the physically integrated
+// visibility linear before converting it to Detroit's 0=open AO convention.
+const float GTAO_FINAL_VALUE_POWER = 1.0;
+const float GTAO_THIN_OCCLUDER_COMPENSATION = 0.25;
 const float GTAO_GOLDEN_RATIO = 0.6180339887498948482;
 const int GTAO_SLICE_COUNT = 3;
 const int GTAO_STEPS_PER_SLICE = 3; // Paired +/- samples: 3 * 3 * 2 = 18 taps.
@@ -76,6 +83,7 @@ layout(set = 0, binding = 17, r8ui) uniform writeonly uimage2D OutputTileTexture
 layout(set = 1, binding = 0) Texture2D<float2> GtaoMotionVectors;
 layout(set = 1, binding = 1) Texture2D<float> PreviousAoHistory;
 layout(set = 1, binding = 2) Texture2D<float> PreviousDepthHistory;
+layout(set = 1, binding = 3) Texture2D<uint> GtaoNormalRoughness;
 layout(set = 1, binding = 16, r16f) uniform writeonly image2D CurrentAoHistory;
 layout(set = 1, binding = 17, r32f) uniform writeonly image2D CurrentDepthHistory;
 
@@ -106,9 +114,13 @@ float LoadFullResolutionViewDepth(vec2 uv)
 float LoadSampleViewDepth(vec2 uv, float pixel_distance_squared)
 {
     uv = ClampDepthUv(uv);
+    // Dishonored 2 explicitly builds a view-depth mip chain before GTAO.
+    // Detroit already exposes its native prefiltered linear view depth at b2;
+    // preserve the exact HBAO thresholds and scale for distant horizon taps.
     if (pixel_distance_squared >= _gtao.g_cbHBAO._fMaxRadiusMip0Squared)
     {
-        float mip = pixel_distance_squared >= _gtao.g_cbHBAO._fMaxRadiusMip1Squared
+        float mip = pixel_distance_squared
+                >= _gtao.g_cbHBAO._fMaxRadiusMip1Squared
             ? 1.0
             : 0.0;
         return textureLod(sDepthBufferLowRes, uv, mip).x
@@ -124,35 +136,107 @@ vec3 ReconstructViewPosition(vec2 uv, float view_depth)
     return vec3(xy, view_depth);
 }
 
-vec3 ReconstructViewNormal(vec2 uv, vec3 center_position)
+vec4 CalculateDepthEdges(
+    float center_depth,
+    float left_depth,
+    float right_depth,
+    float top_depth,
+    float bottom_depth)
+{
+    vec4 edges = vec4(
+        left_depth,
+        right_depth,
+        top_depth,
+        bottom_depth) - vec4(center_depth);
+    float slope_lr = (edges.y - edges.x) * 0.5;
+    float slope_tb = (edges.w - edges.z) * 0.5;
+    vec4 slope_adjusted = edges
+        + vec4(slope_lr, -slope_lr, slope_tb, -slope_tb);
+    edges = min(abs(edges), abs(slope_adjusted));
+    float scale_depth = max(abs(center_depth), 1.0e-4);
+    return clamp(vec4(1.25) - edges / (scale_depth * 0.011), 0.0, 1.0);
+}
+
+vec3 ReconstructViewNormalFromDepth(vec2 uv, vec3 center_position)
 {
     vec2 texel = _gtao.g_cbHBAO._vfDefInvResolution;
+    float left_depth = LoadFullResolutionViewDepth(uv - vec2(texel.x, 0.0));
+    float right_depth = LoadFullResolutionViewDepth(uv + vec2(texel.x, 0.0));
+    float top_depth = LoadFullResolutionViewDepth(uv - vec2(0.0, texel.y));
+    float bottom_depth = LoadFullResolutionViewDepth(uv + vec2(0.0, texel.y));
     vec3 left = ReconstructViewPosition(
         uv - vec2(texel.x, 0.0),
-        LoadFullResolutionViewDepth(uv - vec2(texel.x, 0.0)));
+        left_depth);
     vec3 right = ReconstructViewPosition(
         uv + vec2(texel.x, 0.0),
-        LoadFullResolutionViewDepth(uv + vec2(texel.x, 0.0)));
+        right_depth);
     vec3 top = ReconstructViewPosition(
         uv - vec2(0.0, texel.y),
-        LoadFullResolutionViewDepth(uv - vec2(0.0, texel.y)));
+        top_depth);
     vec3 bottom = ReconstructViewPosition(
         uv + vec2(0.0, texel.y),
-        LoadFullResolutionViewDepth(uv + vec2(0.0, texel.y)));
+        bottom_depth);
 
-    vec3 dx_forward = right - center_position;
-    vec3 dx_backward = center_position - left;
-    vec3 dy_forward = bottom - center_position;
-    vec3 dy_backward = center_position - top;
-    vec3 dx = dot(dx_forward, dx_forward) < dot(dx_backward, dx_backward)
-        ? dx_forward
-        : dx_backward;
-    vec3 dy = dot(dy_forward, dy_forward) < dot(dy_backward, dy_backward)
-        ? dy_forward
-        : dy_backward;
-    vec3 normal = normalize(cross(dx, dy));
+    vec4 edges = CalculateDepthEdges(
+        center_position.z,
+        left_depth,
+        right_depth,
+        top_depth,
+        bottom_depth);
+    vec4 weights = max(
+        vec4(
+            edges.x * edges.z,
+            edges.z * edges.y,
+            edges.y * edges.w,
+            edges.w * edges.x),
+        vec4(1.0e-6));
+    vec3 delta_left = normalize(left - center_position);
+    vec3 delta_right = normalize(right - center_position);
+    vec3 delta_top = normalize(top - center_position);
+    vec3 delta_bottom = normalize(bottom - center_position);
+    vec3 normal_sum =
+        weights.x * cross(delta_left, delta_top)
+        + weights.y * cross(delta_top, delta_right)
+        + weights.z * cross(delta_right, delta_bottom)
+        + weights.w * cross(delta_bottom, delta_left);
     vec3 view_vector = normalize(-center_position);
+    float normal_length_squared = dot(normal_sum, normal_sum);
+    if (normal_length_squared < 1.0e-10
+        || isnan(normal_length_squared)
+        || isinf(normal_length_squared))
+        return view_vector;
+    vec3 normal = normal_sum * inversesqrt(normal_length_squared);
     return dot(normal, view_vector) < 0.0 ? -normal : normal;
+}
+
+bool LoadNativeViewNormal(vec2 uv, out vec3 view_normal)
+{
+    view_normal = vec3(0.0, 0.0, 1.0);
+    uint normal_width;
+    uint normal_height;
+    GtaoNormalRoughness.GetDimensions(normal_width, normal_height);
+    ivec2 normal_size = ivec2(normal_width, normal_height);
+    if (any(lessThanEqual(normal_size, ivec2(0))))
+        return false;
+
+    ivec2 normal_pixel = clamp(
+        ivec2(uv * vec2(normal_size)),
+        ivec2(0),
+        normal_size - ivec2(1));
+    uint packed = GtaoNormalRoughness.Load(int3(normal_pixel, 0));
+    if ((packed & 0xC0000000u) == 0u)
+        return false;
+
+    vec2 encoded = vec2(
+        float((packed >> 0u) & 32767u),
+        float((packed >> 15u) & 32767u));
+    encoded = encoded * (1.0 / 32767.0) * 3.5554 - vec2(1.7777);
+    vec3 sphere = vec3(encoded, 1.0);
+    float inverse_length = 2.0 / max(dot(sphere, sphere), 1.0e-8);
+    view_normal = normalize(vec3(
+        sphere.xy * inverse_length,
+        inverse_length - 1.0));
+    return !any(isnan(view_normal)) && !any(isinf(view_normal));
 }
 
 float LoadNoise(ivec2 pixel, ivec2 offset)
@@ -171,7 +255,9 @@ float EvaluateGtao(vec2 uv, ivec2 source_pixel, out float center_view_depth)
         return 0.0;
 
     vec3 unbiased_center = ReconstructViewPosition(uv, center_view_depth);
-    vec3 view_normal = ReconstructViewNormal(uv, unbiased_center);
+    vec3 view_normal;
+    if (!LoadNativeViewNormal(uv, view_normal))
+        view_normal = ReconstructViewNormalFromDepth(uv, unbiased_center);
     // Bias only the horizon-search origin. The unmodified depth must remain in
     // center_view_depth because Detroit's following pass decodes it from the
     // lower 13 bits of PackedDepthAndAO.
@@ -279,8 +365,12 @@ float EvaluateGtao(vec2 uv, ivec2 source_pixel, out float center_view_depth)
 
             if (sample_distance_0 > 1.0e-5)
             {
+                float falloff_distance_0 = length(vec3(
+                    sample_delta_0.xy,
+                    sample_delta_0.z
+                        * (1.0 + GTAO_THIN_OCCLUDER_COMPENSATION)));
                 float weight_0 = clamp(
-                    sample_distance_0 * falloff_mul + falloff_add,
+                    falloff_distance_0 * falloff_mul + falloff_add,
                     0.0,
                     1.0);
                 float sample_horizon_0 = dot(
@@ -294,8 +384,12 @@ float EvaluateGtao(vec2 uv, ivec2 source_pixel, out float center_view_depth)
             }
             if (sample_distance_1 > 1.0e-5)
             {
+                float falloff_distance_1 = length(vec3(
+                    sample_delta_1.xy,
+                    sample_delta_1.z
+                        * (1.0 + GTAO_THIN_OCCLUDER_COMPENSATION)));
                 float weight_1 = clamp(
-                    sample_distance_1 * falloff_mul + falloff_add,
+                    falloff_distance_1 * falloff_mul + falloff_add,
                     0.0,
                     1.0);
                 float sample_horizon_1 = dot(

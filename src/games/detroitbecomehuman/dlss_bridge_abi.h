@@ -116,6 +116,7 @@ typedef uint64_t DetroitDlssEvaluateFlags;
 #define DETROIT_DLSS_TAA_DESCRIPTOR_SET          0u
 #define DETROIT_DLSS_TEMPORAL_CONSTANTS_CAPACITY 1024u
 #define DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT     13u
+#define DETROIT_GTAO_NORMAL_BINDING              1u
 /*
  * The native shader declares b0-b7 and b16-b19. Its pipeline layout also has
  * the inactive b9 slot, which the snapshot keeps for diagnostics. DLSS with
@@ -291,6 +292,29 @@ typedef struct DetroitDlssImageBindingSnapshot {
   DetroitDlssDescriptorSourceFlags source_flags;
   uint64_t update_serial;
 } DetroitDlssImageBindingSnapshot;
+
+/*
+ * Latest normal/roughness input proven by one of Detroit's native SSR
+ * descriptor layouts. The R32_UINT texel stores a view-space normal in two
+ * 15-bit channels; bits 30-31 carry the native validity flags.
+ *
+ * This optional export is deliberately separate from DetroitDlssApiV2 so an
+ * older DLSS bootstrap remains ABI-compatible and GTAO can fall back to the
+ * original HBAO until the normal source is available.
+ */
+typedef struct DetroitGtaoNormalSnapshot {
+  uint32_t struct_size;
+  uint32_t abi_version;
+  uint64_t command_buffer;
+  uint64_t descriptor_set;
+  uint64_t pipeline_layout;
+  uint64_t capture_serial;
+  DetroitDlssImageBindingSnapshot normal;
+} DetroitGtaoNormalSnapshot;
+
+typedef DetroitDlssResultCode(DETROIT_DLSS_CALL* DetroitGtaoGetNormalSnapshotFn)(
+    uint64_t command_buffer,
+    DetroitGtaoNormalSnapshot* snapshot);
 
 typedef struct DetroitDlssTemporalConstantsDiagnostics {
   uint32_t struct_size;
