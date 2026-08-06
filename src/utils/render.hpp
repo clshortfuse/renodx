@@ -725,6 +725,10 @@ class RenderPass {
         assert(descriptor_table_count == 1u && "Vulkan should always allocate exactly 1 descriptor table.");
       }
 #endif
+      // Vulkan descriptor sets may still be referenced by pending command
+      // buffers. RenderPass bindings remain stable until the table is destroyed,
+      // so initialize a Vulkan table only when it is newly allocated.
+      bool descriptor_table_update_required = !is_vulkan;
       if (this->descriptor_tables.size() != descriptor_table_count) {
         this->DestroyDescriptorTables(device);
         this->descriptor_tables.assign(descriptor_table_count, reshade::api::descriptor_table{});
@@ -736,18 +740,16 @@ class RenderPass {
           }
         }
         this->generated_descriptor_tables = true;
+        descriptor_table_update_required = true;
       }
 
-      std::vector<reshade::api::descriptor_table_update> table_updates = this->descriptor_table_updates;
-      for (size_t i = 0; i < table_updates.size(); ++i) {
-#ifdef DEBUG_LEVEL_1
-        if (is_vulkan) {
-          assert(i == 0 || "Vulkan should only have one descriptor table update entry pointing to set 0.");
+      if (descriptor_table_update_required) {
+        std::vector<reshade::api::descriptor_table_update> table_updates = this->descriptor_table_updates;
+        for (size_t i = 0; i < table_updates.size(); ++i) {
+          table_updates[i].table = is_vulkan ? this->descriptor_tables[0] : this->descriptor_tables[i];
         }
-#endif
-        table_updates[i].table = is_vulkan ? this->descriptor_tables[0] : this->descriptor_tables[i];
+        device->update_descriptor_tables(static_cast<uint32_t>(table_updates.size()), table_updates.data());
       }
-      device->update_descriptor_tables(static_cast<uint32_t>(table_updates.size()), table_updates.data());
       return true;
     };
 
