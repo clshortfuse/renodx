@@ -15,8 +15,8 @@ Detroit: Become Human RenoDX experimental package - uninstall
    RenoDX values remain in ReShade.ini under [renodx] and [renodx-presetN]
    and may be removed manually after uninstalling the add-on.
 6. Runtime snapshots are stored outside Git in the game directory under
-   RenoDX-Detroit-DLSS.backup and RenoDX-Detroit-GTAO.backup. Restore a
-   snapshot only when its purpose and game build are known.
+   RenoDX-Detroit-DLSS.backup. Restore a snapshot only when its purpose and
+   game build are known.
 
 After uninstalling RenoDX, Auto HDR or NVIDIA RTX HDR may be enabled again if
 desired. Do not run either HDR injector together with this package.

@@ -34,7 +34,6 @@
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./dlss_scale_transition.hpp"
-#include "./gtao_runtime.hpp"
 #include "./resolution_scaling_win32.hpp"
 #include "./shared.h"
 #include "./temporal_capture.hpp"
@@ -49,9 +48,6 @@ constexpr float OUTPUT_MODE_HDR10 = 2.f;
 constexpr float CAS_MODE_VANILLA = 0.f;
 constexpr float CAS_MODE_OFF = 1.f;
 constexpr float CAS_MODE_RENODX = 2.f;
-
-constexpr float AMBIENT_OCCLUSION_MODE_VANILLA = 0.f;
-constexpr float AMBIENT_OCCLUSION_MODE_XEGTAO = 1.f;
 
 constexpr char RESHADE_CAPTURE_ENVIRONMENT[] =
     "RENODX_DETROIT_RESHADE_CAPTURE";
@@ -68,9 +64,6 @@ namespace resolution_scaling =
     renodx::games::detroitbecomehuman::resolution_scaling;
 namespace dlss_scale_transition =
     renodx::games::detroitbecomehuman::dlss_scale_transition;
-namespace gtao_runtime =
-    renodx::games::detroitbecomehuman::gtao_runtime;
-
 constexpr std::size_t ASPECT_PATCH_INDEX = 0u;
 constexpr std::size_t UI_PATCH_INDEX = 1u;
 
@@ -99,9 +92,7 @@ std::atomic<reshade::api::effect_runtime*> tracked_effect_runtime = nullptr;
 float aspect_ratio_mode = 1.f;
 float dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
 float dlaa_sharpening = 0.f;
-float ambient_occlusion_mode = AMBIENT_OCCLUSION_MODE_XEGTAO;
 std::atomic_bool aspect_ratio_enabled = true;
-std::atomic_bool gtao_enabled = true;
 std::atomic_uint32_t output_width = 0u;
 std::atomic_uint32_t output_height = 0u;
 resolution_scaling::RuntimeController resolution_scale_controller;
@@ -993,59 +984,7 @@ bool OnFinalCasDraw(reshade::api::command_list* command_list) {
   return true;
 }
 
-void SetGtaoEnabled(float mode) {
-  const bool enabled = mode >= AMBIENT_OCCLUSION_MODE_XEGTAO;
-  gtao_enabled.store(enabled, std::memory_order_relaxed);
-  gtao_runtime::SetEnabled(enabled);
-}
-
-void OnAmbientOcclusionModeChanged() {
-  SetGtaoEnabled(ambient_occlusion_mode);
-}
-
-bool ShouldUseGtaoMain(reshade::api::command_list* command_list) {
-  return gtao_enabled.load(std::memory_order_relaxed)
-         && gtao_runtime::IsMainPrepared(command_list);
-}
-
 renodx::mods::shader::CustomShaders custom_shaders = {
-    {0xD82A21F2, {
-                     .crc32 = 0xD82A21F2,
-                     .code = __0xD82A21F2,
-                 }},
-    {0xE9907978, {
-                     .crc32 = 0xE9907978,
-                     .code = __0xE9907978,
-                 }},
-    {0x2D2071B2, {
-                     .crc32 = 0x2D2071B2,
-                     .code = __0x2D2071B2,
-                     .on_replace = &ShouldUseGtaoMain,
-                     .views = {
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 0u, 1u, &gtao_runtime::GetMotionView},
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 1u, 1u, &gtao_runtime::GetPreviousAoView},
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 2u, 1u, &gtao_runtime::GetPreviousDepthView},
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 3u, 1u, &gtao_runtime::GetNormalView},
-                         {reshade::api::descriptor_type::texture_unordered_access_view, 16u, 1u, &gtao_runtime::GetCurrentAoUav},
-                         {reshade::api::descriptor_type::texture_unordered_access_view, 17u, 1u, &gtao_runtime::GetCurrentDepthUav},
-                     },
-                 }},
-    {0xBC7B6738, {
-                     .crc32 = 0xBC7B6738,
-                     .code = __0x2D2071B2,
-                     .on_replace = &ShouldUseGtaoMain,
-                     .views = {
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 0u, 1u, &gtao_runtime::GetMotionView},
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 1u, 1u, &gtao_runtime::GetPreviousAoView},
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 2u, 1u, &gtao_runtime::GetPreviousDepthView},
-                         {reshade::api::descriptor_type::texture_shader_resource_view, 3u, 1u, &gtao_runtime::GetNormalView},
-                         {reshade::api::descriptor_type::texture_unordered_access_view, 16u, 1u, &gtao_runtime::GetCurrentAoUav},
-                         {reshade::api::descriptor_type::texture_unordered_access_view, 17u, 1u, &gtao_runtime::GetCurrentDepthUav},
-                     },
-                 }},
-    // E9DF0773 intentionally remains native. Like the Dishonored 2 GTAO
-    // integration, the replacement writes the game's original AO contract and
-    // lets the engine's proven depth-aware denoiser consume it.
     {0xEBFBDDB1, {
                      .crc32 = 0xEBFBDDB1,
                      .code = __0xEBFBDDB1,
@@ -1121,59 +1060,6 @@ renodx::utils::settings::Settings settings =
                                    }},
         }),
         renodx::templates::settings::CreateSettings({
-            {{
-                .key = "AmbientOcclusionMode",
-                .binding = &ambient_occlusion_mode,
-                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-                .default_value = AMBIENT_OCCLUSION_MODE_XEGTAO,
-                .can_reset = true,
-                .label = "Ambient Occlusion",
-                .section = "Ambient Occlusion",
-                .tooltip = "Vanilla restores Detroit's original HBAO. XeGTAO High runs at Detroit's native AO point with the game's R32_UINT view-space normals, prefiltered view-depth mips, scene-tuned radius, 3 slices / 18 horizon taps, thin-occluder compensation, persistent full-precision history, motion reprojection and native depth-aware denoise. It remains screen-space and cannot use off-screen geometry.",
-                .labels = {"Vanilla HBAO", "XeGTAO High + Temporal"},
-                .on_change_value = [](float, float current) {
-                  SetGtaoEnabled(current);
-                },
-            }},
-            {{
-                .key = "DofFixMode",
-                .binding = &shader_injection.dof_mode,
-                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-                .default_value = 2.f,
-                .can_reset = true,
-                .label = "CoC Edge Correction",
-                .section = "Depth of Field",
-                .tooltip = "Vanilla restores Detroit's original tile CoC. Edge Refinement uses local depth samples at mixed-depth tiles. Smooth Tile Edges also softens the native 3x3 CoC expansion.",
-                .labels = {"Vanilla", "Edge Refinement", "Smooth Tile Edges"},
-            }},
-            {{
-                .key = "DofCoCEdgeThreshold",
-                .binding = &shader_injection.dof_edge_threshold,
-                .default_value = 0.001f,
-                .can_reset = true,
-                .label = "Edge Refinement Threshold",
-                .section = "Depth of Field",
-                .tooltip = "CoC difference needed before local depth samples are used. Lower values refine more hair/foliage edges. Detroit's original threshold is 1.563%.",
-                .min = 0.f,
-                .max = 2.f,
-                .format = "%.3f%%",
-                .is_enabled = []() { return shader_injection.dof_mode >= 1.f; },
-                .parse = [](float value) { return value * 0.01f; },
-            }},
-            {{
-                .key = "DofCoCDilation",
-                .binding = &shader_injection.dof_dilation_amount,
-                .default_value = 35.f,
-                .can_reset = true,
-                .label = "CoC Dilation",
-                .section = "Depth of Field",
-                .tooltip = "Strength of Detroit's native 3x3 CoC dilation. 100% exactly restores vanilla; lower values reduce tile-shaped focus steps.",
-                .min = 0.f,
-                .max = 100.f,
-                .format = "%.0f%%",
-                .is_enabled = []() { return shader_injection.dof_mode >= 2.f; },
-                .parse = [](float value) { return value * 0.01f; },
-            }},
             {{
                 .key = "DLSSMode",
                 .binding = &dlss_mode,
@@ -1359,17 +1245,12 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"SceneGradeStrength", 100.f},
-      {"AmbientOcclusionMode", AMBIENT_OCCLUSION_MODE_VANILLA},
-      {"DofFixMode", 0.f},
-      {"DofCoCEdgeThreshold", 1.563f},
-      {"DofCoCDilation", 100.f},
       {"DLSSMode", static_cast<float>(DETROIT_DLSS_MODE_NATIVE)},
       {"DLAASharpening", 0.f},
       {"CASMode", CAS_MODE_VANILLA},
       {"CASStrength", 100.f},
   });
   OnAspectRatioModeChanged();
-  OnAmbientOcclusionModeChanged();
 }
 
 bool TryTrackGameSwapchain(reshade::api::swapchain* swapchain) {
@@ -1402,7 +1283,6 @@ bool UpdateUltrawideFromSwapchain(reshade::api::swapchain* swapchain) {
   const auto height = static_cast<std::uint32_t>(description.texture.height);
   const auto previous_width = output_width.exchange(width, std::memory_order_relaxed);
   const auto previous_height = output_height.exchange(height, std::memory_order_relaxed);
-  gtao_runtime::SetOutputExtent(width, height);
   if (width == previous_width && height == previous_height) return true;
 
   RefreshUltrawideValues();
@@ -1529,7 +1409,6 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   // A resize destroys the old output contract. Restore the user's serialized
   // scale before any replacement swapchain can establish a new DLSS session.
   ShutdownDlssRenderScale();
-  if (resize) gtao_runtime::InvalidateHistory();
   if (!resize) {
     RestoreUltrawidePatch();
     ultrawide_install_attempted.store(false, std::memory_order_release);
@@ -1544,7 +1423,6 @@ void OnDestroyDevice(reshade::api::device* device) {
       swapchain != nullptr && swapchain->get_device() != device) {
     return;
   }
-  gtao_runtime::Destroy(device);
   ShutdownDlssRenderScale();
 }
 
@@ -1591,8 +1469,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
           &OnAspectRatioModeChanged);
       renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
           &OnDlssModeChanged);
-      renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
-          &OnAmbientOcclusionModeChanged);
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
       reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
@@ -1616,9 +1492,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
   if (fdw_reason == DLL_PROCESS_ATTACH) {
     OnAspectRatioModeChanged();
     OnDlssModeChanged();
-    OnAmbientOcclusionModeChanged();
   }
-  gtao_runtime::Use(fdw_reason);
   temporal_capture::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
   return TRUE;

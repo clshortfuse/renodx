@@ -32,7 +32,6 @@
 #include "../../utils/shader.hpp"
 #include "../../utils/state.hpp"
 #include "dlss_bridge_client.hpp"
-#include "gtao_temporal_contract.hpp"
 #include "supported_build.hpp"
 #include "taa_contract.hpp"
 
@@ -123,20 +122,6 @@ struct CapturedImage {
   bool valid = false;
 };
 
-// XeGTAO executes before the native temporal pass, so it consumes the most
-// recently proven persistent motion-vector view. The GTAO shader validates
-// bounds and reprojected view depth per pixel; a runtime A/B capture is still
-// required to establish the exact within-frame producer order in every scene.
-struct GtaoTemporalInput {
-  reshade::api::resource_view view = {0u};
-  reshade::api::resource resource = {0u};
-  std::uint32_t width = 0u;
-  std::uint32_t height = 0u;
-  std::uint64_t serial = 0u;
-  bool reset = true;
-  bool valid = false;
-};
-
 struct ImageShape {
   std::uint32_t format = 0u;
   std::uint32_t width = 0u;
@@ -179,8 +164,6 @@ inline std::atomic_uint64_t evaluation_serial = 0u;
 inline std::atomic_uint64_t sr_preflight_serial = 0u;
 static_assert(std::atomic_uint64_t::is_always_lock_free);
 inline std::mutex contract_mutex;
-inline std::mutex gtao_temporal_input_mutex;
-inline GtaoTemporalInput latest_gtao_temporal_input = {};
 inline ContractShape last_contract_shape = {};
 inline bool has_logged_contract = false;
 inline bool has_logged_native_snapshot_failure = false;
@@ -190,28 +173,6 @@ inline std::atomic_uint64_t last_logged_dlss_success_key =
     kUnloggedTelemetryKey;
 inline std::atomic_uint64_t last_logged_evaluation_key =
     kUnloggedTelemetryKey;
-
-[[nodiscard]] inline GtaoTemporalInput GetLatestGtaoTemporalInput(
-    reshade::api::device* device) {
-  if (device == nullptr) return {};
-  std::scoped_lock lock(gtao_temporal_input_mutex);
-  auto result = latest_gtao_temporal_input;
-  if (!result.valid || result.view.handle == 0u
-      || result.resource.handle == 0u) {
-    return {};
-  }
-  const auto observed_resource = device->get_resource_from_view(result.view);
-  if (observed_resource.handle == 0u
-      || observed_resource.handle != result.resource.handle) {
-    return {};
-  }
-  return result;
-}
-
-inline void ClearLatestGtaoTemporalInput() {
-  std::scoped_lock lock(gtao_temporal_input_mutex);
-  latest_gtao_temporal_input = {};
-}
 
 [[nodiscard]] inline std::uint64_t MixTelemetryKey(
     std::uint64_t key,
@@ -897,39 +858,8 @@ inline void AfterNativeTemporalDispatch(
 
   const bool native_history_resources_available =
       sampled[0u].valid && sampled[2u].valid && sampled[7u].valid;
-  // GTAO owns independent full-precision AO/depth history. It only needs the
-  // native history descriptors as a scene-recreation boundary, not as inputs.
-  // Some valid Detroit passes omit sampler metadata for b0/b2/b7, so using the
-  // stricter DLSS `.valid` bit here caused a false GTAO reset every frame.
-  const bool gtao_previous_depth_present =
-      sampled[0u].image != 0u && sampled[0u].image_view != 0u;
-  const bool gtao_previous_color_present =
-      sampled[2u].image != 0u && sampled[2u].image_view != 0u;
-  const bool gtao_previous_speed_flags_present =
-      sampled[7u].image != 0u && sampled[7u].image_view != 0u;
-  const bool gtao_temporal_input_valid =
-      exact_resource_formats && exact_descriptor_layouts
-      && exact_resource_extents && sampled[4u].valid
-      && frame_parameters.constants_valid;
   const bool is_main_temporal_command_list =
       IsMainTemporalCommandList(context.cmd_list->get_native());
-
-  if (gtao_temporal_input_valid && is_main_temporal_command_list) {
-    std::scoped_lock lock(gtao_temporal_input_mutex);
-    latest_gtao_temporal_input = {
-        .view = reshade::api::resource_view{sampled[4u].image_view},
-        .resource = reshade::api::resource{sampled[4u].image},
-        .width = sampled[4u].width,
-        .height = sampled[4u].height,
-        .serial = dispatch_serial,
-        .reset = gtao_temporal_contract::ShouldResetHistory(
-            frame_parameters.reset,
-            gtao_previous_depth_present,
-            gtao_previous_color_present,
-            gtao_previous_speed_flags_present),
-        .valid = true,
-    };
-  }
 
   // The exact main-view command lists are learned from the later verified
   // scene composite. A newly seen list gets one native warm-up recording and
@@ -1113,7 +1043,6 @@ inline void Use(DWORD fdw_reason) {
         std::unique_lock lock(main_temporal_command_list_mutex);
         main_temporal_command_lists.clear();
       }
-      ClearLatestGtaoTemporalInput();
       last_logged_dlss_success_key.store(
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);
@@ -1146,7 +1075,6 @@ inline void Use(DWORD fdw_reason) {
         std::unique_lock lock(main_temporal_command_list_mutex);
         main_temporal_command_lists.clear();
       }
-      ClearLatestGtaoTemporalInput();
       break;
   }
 }

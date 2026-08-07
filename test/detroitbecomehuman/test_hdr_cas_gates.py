@@ -430,11 +430,6 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertIn("ObserveTemporalCommandList(", temporal_capture)
         self.assertRegex(
             temporal_capture,
-            r"if\s*\(gtao_temporal_input_valid\s*&&\s*"
-            r"is_main_temporal_command_list\)\s*\{",
-        )
-        self.assertRegex(
-            temporal_capture,
             r"if\s*\(mode\s*!=\s*DETROIT_DLSS_MODE_NATIVE\s*&&\s*"
             r"!is_main_temporal_command_list\)"
             r"\s*\{[\s\S]*?RuntimeStatus::kWaitingForDispatch[\s\S]*?return;",
