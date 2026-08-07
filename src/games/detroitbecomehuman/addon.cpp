@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <format>
 #include <limits>
 #include <mutex>
@@ -34,6 +35,7 @@
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "./dlss_scale_transition.hpp"
+#include "./dlss/embedded_bootstrap.hpp"
 #include "./resolution_scaling_win32.hpp"
 #include "./shared.h"
 #include "./temporal_capture.hpp"
@@ -64,6 +66,8 @@ namespace resolution_scaling =
     renodx::games::detroitbecomehuman::resolution_scaling;
 namespace dlss_scale_transition =
     renodx::games::detroitbecomehuman::dlss_scale_transition;
+namespace embedded_dlss =
+    renodx::games::detroitbecomehuman::dlss::embedded;
 constexpr std::size_t ASPECT_PATCH_INDEX = 0u;
 constexpr std::size_t UI_PATCH_INDEX = 1u;
 
@@ -106,6 +110,107 @@ bool cached_dlss_scale_settings_valid = false;
 bool dlss_scale_session_valid = false;
 float cached_dlss_target_scale = 1.f;
 std::uint32_t last_scale_log_key = std::numeric_limits<std::uint32_t>::max();
+HMODULE addon_module = nullptr;
+std::atomic_bool addon_attached = false;
+std::atomic_bool bootstrap_setup_attempted = false;
+embedded_dlss::ExtensionCache initial_extension_cache;
+
+std::filesystem::path GetModulePath(HMODULE module) {
+  std::vector<wchar_t> path(1024u);
+  for (;;) {
+    const DWORD length = GetModuleFileNameW(
+        module, path.data(), static_cast<DWORD>(path.size()));
+    if (length == 0u) return {};
+    if (length < path.size() - 1u) {
+      return std::filesystem::path(std::wstring(path.data(), length));
+    }
+    path.resize(path.size() * 2u);
+  }
+}
+
+std::string ReadConfigString(const char* section, const char* key) {
+  std::size_t size = 0u;
+  if (!reshade::get_config_value(nullptr, section, key, nullptr, &size) || size == 0u) {
+    return {};
+  }
+  std::string value(size, '\0');
+  if (!reshade::get_config_value(nullptr, section, key, value.data(), &size)) return {};
+  value.resize(std::min(size, value.size()));
+  while (!value.empty() && value.back() == '\0') value.pop_back();
+  return value;
+}
+
+std::vector<std::string> ReadConfigArray(const char* section, const char* key) {
+  std::size_t size = 0u;
+  if (!reshade::get_config_value(nullptr, section, key, nullptr, &size) || size == 0u) {
+    return {};
+  }
+  std::string raw(size, '\0');
+  if (!reshade::get_config_value(nullptr, section, key, raw.data(), &size)) return {};
+  std::vector<std::string> values;
+  for (std::size_t offset = 0u; offset < raw.size();) {
+    const std::size_t length = std::strlen(raw.c_str() + offset);
+    if (length == 0u) break;
+    values.emplace_back(raw.c_str() + offset, length);
+    offset += length + 1u;
+  }
+  return values;
+}
+
+bool EnsureLoadFromDllMainEntry() {
+  const auto filename = GetModulePath(addon_module).filename().string();
+  if (filename.empty()) return false;
+  auto values = ReadConfigArray("ADDON", "LoadFromDllMain");
+  if (!embedded_dlss::MergeLoadFromDllMainEntry(&values, filename)) return true;
+  std::string serialized;
+  for (const auto& value : values) {
+    serialized.append(value);
+    serialized.push_back('\0');
+  }
+  reshade::set_config_value(
+      nullptr, "ADDON", "LoadFromDllMain", serialized.data(), serialized.size());
+  reshade::log::message(
+      reshade::log::level::warning,
+      "Detroit DLSS: added addon to ADDON.LoadFromDllMain; restart required.");
+  return true;
+}
+
+embedded_dlss::ExtensionCache ReadExtensionCache() {
+  embedded_dlss::ExtensionCache cache;
+  int schema = 0;
+  bool ready = false;
+  (void)reshade::get_config_value(
+      nullptr, "RENODX_DETROIT_DLSS", "BootstrapVersion", schema);
+  (void)reshade::get_config_value(
+      nullptr, "RENODX_DETROIT_DLSS", "BootstrapReady", ready);
+  cache.schema_version = schema > 0 ? static_cast<std::uint32_t>(schema) : 0u;
+  cache.ready = ready;
+  cache.executable_sha256 =
+      ReadConfigString("RENODX_DETROIT_DLSS", "ExecutableSha256");
+  cache.instance_extensions =
+      ReadConfigString("RENODX_DETROIT_DLSS", "InstanceExtensions");
+  cache.device_extensions =
+      ReadConfigString("RENODX_DETROIT_DLSS", "DeviceExtensions");
+  return cache;
+}
+
+void WriteExtensionCache(const embedded_dlss::ExtensionCache& cache) {
+  reshade::set_config_value(
+      nullptr, "RENODX_DETROIT_DLSS", "BootstrapReady", false);
+  reshade::set_config_value(
+      nullptr,
+      "RENODX_DETROIT_DLSS",
+      "BootstrapVersion",
+      static_cast<int>(cache.schema_version));
+  reshade::set_config_value(
+      nullptr, "RENODX_DETROIT_DLSS", "ExecutableSha256", cache.executable_sha256.c_str());
+  reshade::set_config_value(
+      nullptr, "RENODX_DETROIT_DLSS", "InstanceExtensions", cache.instance_extensions.c_str());
+  reshade::set_config_value(
+      nullptr, "RENODX_DETROIT_DLSS", "DeviceExtensions", cache.device_extensions.c_str());
+  reshade::set_config_value(
+      nullptr, "RENODX_DETROIT_DLSS", "BootstrapReady", cache.ready);
+}
 
 struct ReShadeCaptureState {
   bool initialized = false;
@@ -1088,6 +1193,12 @@ renodx::utils::settings::Settings settings =
                 .parse = [](float value) { return value * 0.01f; },
             }},
             {{
+                .key = "DLSSBootstrapStatus",
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "First-run setup",
+                .section = "DLSS",
+            }},
+            {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
                 .label = "Native TAA is active. The TAA runtime contract is still captured for diagnostics.",
                 .section = "DLSS",
@@ -1433,6 +1544,30 @@ void OnPresent(
     const reshade::api::rect*,
     uint32_t,
     const reshade::api::rect*) {
+  if (!bootstrap_setup_attempted.exchange(true, std::memory_order_acq_rel)) {
+    (void)EnsureLoadFromDllMainEntry();
+    embedded_dlss::RefreshDeferredStatus();
+    const bool cache_valid = embedded_dlss::IsValidCache(initial_extension_cache);
+    if (!cache_valid || !embedded_dlss::WasLoadedEarly()) {
+      const auto ngx_path = GetModulePath(addon_module).parent_path() / L"nvngx_dlss.dll";
+      if (std::filesystem::is_regular_file(ngx_path)) {
+        embedded_dlss::ExtensionCache refreshed;
+        if (embedded_dlss::QueryRequiredExtensions(&refreshed)) {
+          WriteExtensionCache(refreshed);
+          initial_extension_cache = std::move(refreshed);
+        }
+      } else {
+        embedded_dlss::SetNativeFallback("nvngx_dlss.dll is missing");
+        reshade::log::message(
+            reshade::log::level::error,
+            "Detroit DLSS: nvngx_dlss.dll is missing; Native TAA fallback is active.");
+      }
+    }
+  }
+  if (auto* status = renodx::utils::settings::FindSetting("DLSSBootstrapStatus");
+      status != nullptr) {
+    status->label = embedded_dlss::GetStatusText();
+  }
   if (TryTrackGameSwapchain(swapchain) && UpdateUltrawideFromSwapchain(swapchain)
       && !ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
     InstallUltrawidePatch();
@@ -1459,41 +1594,63 @@ extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION =
     "RenoDX for Detroit: Become Human (Vulkan, experimental)";
 
-BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
-  switch (fdw_reason) {
-    case DLL_PROCESS_ATTACH:
-      if (!reshade::register_addon(h_module)) return FALSE;
-      renodx::mods::shader::allow_multiple_push_constants = true;
-      renodx::mods::shader::force_pipeline_cloning = true;
-      renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
-          &OnAspectRatioModeChanged);
-      renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
-          &OnDlssModeChanged);
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
-      reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
-      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::register_event<reshade::addon_event::present>(OnPresent);
-      break;
-    case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-      reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-      reshade::unregister_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
-      reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
-      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
-      ForceUltrawideRuntimeVanilla();
-      reshade::unregister_addon(h_module);
-      break;
-  }
+bool AttachAddon(HMODULE h_module) {
+  if (addon_attached.exchange(true, std::memory_order_acq_rel)) return true;
+  addon_module = h_module;
+  DisableThreadLibraryCalls(h_module);
+  initial_extension_cache = ReadExtensionCache();
+  (void)embedded_dlss::AttachEarlyHooks(h_module, initial_extension_cache);
 
-  renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
-  if (fdw_reason == DLL_PROCESS_ATTACH) {
-    OnAspectRatioModeChanged();
-    OnDlssModeChanged();
+  if (!reshade::register_addon(h_module)) {
+    embedded_dlss::DetachEarlyHooks(true);
+    addon_attached.store(false, std::memory_order_release);
+    return false;
   }
-  temporal_capture::Use(fdw_reason);
-  renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
+  renodx::games::detroitbecomehuman::dlss_bridge_client::client.SetApiProvider(
+      &embedded_dlss::GetApi);
+  HMODULE pinned_module = nullptr;
+  (void)GetModuleHandleExW(
+      GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+      reinterpret_cast<LPCWSTR>(&AttachAddon),
+      &pinned_module);
+  renodx::mods::shader::allow_multiple_push_constants = true;
+  renodx::mods::shader::force_pipeline_cloning = true;
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &OnAspectRatioModeChanged);
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &OnDlssModeChanged);
+  reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+  reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+  reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
+  reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
+  reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+  reshade::register_event<reshade::addon_event::present>(OnPresent);
+  renodx::utils::settings::Use(DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
+  temporal_capture::Use(DLL_PROCESS_ATTACH);
+  renodx::mods::shader::Use(DLL_PROCESS_ATTACH, custom_shaders, &shader_injection);
+  OnAspectRatioModeChanged();
+  OnDlssModeChanged();
+  return true;
+}
+
+void DetachAddon(HMODULE h_module, bool process_terminating) {
+  if (!process_terminating || !addon_attached.exchange(false, std::memory_order_acq_rel)) return;
+  reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+  reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+  reshade::unregister_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
+  reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
+  reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+  reshade::unregister_event<reshade::addon_event::present>(OnPresent);
+  ForceUltrawideRuntimeVanilla();
+  renodx::utils::settings::Use(DLL_PROCESS_DETACH, &settings, &OnPresetOff);
+  temporal_capture::Use(DLL_PROCESS_DETACH);
+  renodx::mods::shader::Use(DLL_PROCESS_DETACH, custom_shaders, &shader_injection);
+  embedded_dlss::DetachEarlyHooks(true);
+  reshade::unregister_addon(h_module);
+}
+
+BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, LPVOID reserved) {
+  if (reason == DLL_PROCESS_ATTACH) return AttachAddon(h_module) ? TRUE : FALSE;
+  if (reason == DLL_PROCESS_DETACH) DetachAddon(h_module, reserved != nullptr);
   return TRUE;
 }

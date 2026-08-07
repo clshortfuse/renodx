@@ -11,14 +11,16 @@
     "DLAA"
   ],
   "status": "experimental",
-  "version": "0.3.0-dev.1",
+  "version": "0.4.0-dev.1",
   "notes": [
     "Supports Steam Build ID 12158144 only.",
     "Supported DetroitBecomeHuman.exe SHA-256: ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF.",
     "Vulkan base pinned to RenoDX PR #564 commit 92d6d79ec8103b1aaea44c0085c3a88db723e6d5.",
     "Requires ReShade 6.8.0 Full Add-On and the game's native Vulkan renderer.",
     "Adds NVIDIA NGX DLAA at native resolution with a separate HDR-safe sharpening control; rejected frames fall back to native TAA.",
-    "The local Vulkan layer, launcher, NGX binary, super-resolution experiments, and diagnostic capture hooks remain experimental development components.",
+    "The addon now embeds the Vulkan/NGX bootstrap. No launcher, separate Vulkan layer, global registration, or Steam launch option is required.",
+    "The first launch configures ADDON.LoadFromDllMain and caches verified NGX Vulkan extension requirements; restart once before enabling DLAA.",
+    "The release package contains renodx-detroitbecomehuman.addon64 and the official nvngx_dlss.dll. DLSS Super Resolution, Frame Generation and Streamline are not included.",
     "Adds an automatic, reversible aspect-ratio override and isolated Scaleform UI compensation for displays wider than 16:9; 3440x1440 uses its exact 43:18 ratio.",
     "RenoDX Preset Off disables HDR look changes but keeps ultrawide compatibility active; select Aspect Ratio: Vanilla 16:9 to disable the geometry override.",
     "Ultrawide signatures and scaling were independently reimplemented from research published by Rose / PCGamingWiki; no trainer binary or Cheat Engine payload is included.",

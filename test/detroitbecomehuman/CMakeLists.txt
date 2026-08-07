@@ -66,6 +66,29 @@ add_test(
   NAME detroitbecomehuman_dlss_bridge_contract
   COMMAND detroitbecomehuman_dlss_bridge_contract_tests
 )
+
+add_renodx_runtime_executable(
+  detroitbecomehuman_embedded_bootstrap_tests
+  embedded_bootstrap_tests.cpp
+)
+add_dependencies(renodx_test_suites detroitbecomehuman_embedded_bootstrap_tests)
+add_test(
+  NAME detroitbecomehuman_embedded_bootstrap
+  COMMAND detroitbecomehuman_embedded_bootstrap_tests
+)
+set_tests_properties(detroitbecomehuman_embedded_bootstrap PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dlss;bootstrap;fallback"
+)
+
+add_test(
+  NAME detroitbecomehuman_embedded_hook_contract
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/test_embedded_hook_contract.py
+          --source-dir ${DETROIT_TEST_SOURCE_DIR}
+)
+set_tests_properties(detroitbecomehuman_embedded_hook_contract PROPERTIES
+  LABELS "detroitbecomehuman;contract;cpu;dlss;vulkan;hook"
+)
 set_tests_properties(detroitbecomehuman_dlss_bridge_contract PROPERTIES
   LABELS "detroitbecomehuman;unit;cpu;dlss;abi"
 )
@@ -224,6 +247,7 @@ add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/expected_shader_interfaces.json
   ${CMAKE_CURRENT_SOURCE_DIR}/expected_taa_interface.json
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_bridge_contract_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/embedded_bootstrap_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/feature_lifetime_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_policy_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_scale_transition_tests.cpp
@@ -231,6 +255,7 @@ add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/resolution_scaling_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/taa_contract_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_hdr_cas_gates.py
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_embedded_hook_contract.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_ui_brightness_gates.py
   ${CMAKE_CURRENT_SOURCE_DIR}/ultrawide_patch_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/verify_ultrawide_exe.py

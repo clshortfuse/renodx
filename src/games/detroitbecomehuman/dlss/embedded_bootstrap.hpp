@@ -1,0 +1,113 @@
+/*
+ * SPDX-License-Identifier: MIT
+ */
+
+#pragma once
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include <Windows.h>
+
+#include "../dlss_bridge_abi.h"
+
+namespace renodx::games::detroitbecomehuman::dlss::embedded {
+
+inline constexpr std::uint32_t kCacheSchemaVersion = 1u;
+inline constexpr std::string_view kSupportedExecutableSha256 =
+    "ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF";
+
+enum class BootstrapStatus : std::uint32_t {
+  kFirstRunSetup = 0u,
+  kRestartRequired,
+  kEarlyHookActive,
+  kDlaaReady,
+  kNativeFallback,
+};
+
+struct ExtensionCache {
+  std::uint32_t schema_version = 0u;
+  bool ready = false;
+  std::string executable_sha256;
+  std::string instance_extensions;
+  std::string device_extensions;
+};
+
+[[nodiscard]] inline bool EqualsInsensitiveAscii(
+    std::string_view left, std::string_view right) {
+  return left.size() == right.size()
+         && std::equal(left.begin(), left.end(), right.begin(), [](char a, char b) {
+              return std::tolower(static_cast<unsigned char>(a))
+                     == std::tolower(static_cast<unsigned char>(b));
+            });
+}
+
+[[nodiscard]] inline std::string_view FileName(std::string_view path) {
+  const auto separator = path.find_last_of("/\\");
+  return separator == std::string_view::npos ? path : path.substr(separator + 1u);
+}
+
+[[nodiscard]] inline bool IsValidExtensionList(std::string_view serialized) {
+  if (serialized.size() >= 16u * 1024u) return false;
+  if (serialized.empty()) return true;
+  std::vector<std::string_view> names;
+  for (std::size_t start = 0u; start <= serialized.size();) {
+    const auto end = serialized.find(';', start);
+    const auto name = serialized.substr(
+        start, end == std::string_view::npos ? serialized.size() - start : end - start);
+    if (name.empty() || name.size() >= 256u
+        || std::find(names.begin(), names.end(), name) != names.end()) {
+      return false;
+    }
+    names.push_back(name);
+    if (names.size() > 64u || end == std::string_view::npos) break;
+    start = end + 1u;
+  }
+  return names.size() <= 64u;
+}
+
+[[nodiscard]] inline bool IsValidCache(const ExtensionCache& cache) {
+  return cache.ready && cache.schema_version == kCacheSchemaVersion
+         && EqualsInsensitiveAscii(cache.executable_sha256, kSupportedExecutableSha256)
+         && IsValidExtensionList(cache.instance_extensions)
+         && IsValidExtensionList(cache.device_extensions);
+}
+
+[[nodiscard]] inline bool MergeLoadFromDllMainEntry(
+    std::vector<std::string>* entries, std::string_view addon_filename) {
+  if (entries == nullptr || addon_filename.empty()) return false;
+  if (std::any_of(entries->begin(), entries->end(), [&](const std::string& entry) {
+        return EqualsInsensitiveAscii(FileName(entry), addon_filename);
+      })) {
+    return false;
+  }
+  entries->emplace_back(addon_filename);
+  return true;
+}
+
+// Loader-lock entry point. This only consumes a previously validated cache and
+// attaches Detours to the already-loaded ReShade Vulkan layer.
+bool AttachEarlyHooks(HMODULE addon_module, const ExtensionCache& cache);
+void DetachEarlyHooks(bool process_terminating);
+
+// Deferred work. These functions must only be called after device creation and
+// outside DllMain/the Vulkan loader lock.
+bool VerifySupportedExecutable();
+bool QueryRequiredExtensions(ExtensionCache* cache);
+void RefreshDeferredStatus();
+void SetNativeFallback(const char* reason);
+
+BootstrapStatus GetStatus();
+const char* GetStatusText();
+bool WasLoadedEarly();
+bool IsBridgeReady();
+
+DetroitDlssResultCode DETROIT_DLSS_CALL GetApi(
+    std::uint32_t requested_version,
+    DetroitDlssApiV2* api);
+
+}  // namespace renodx::games::detroitbecomehuman::dlss::embedded

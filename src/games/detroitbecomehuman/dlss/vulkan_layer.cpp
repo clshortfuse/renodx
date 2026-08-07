@@ -14,8 +14,8 @@
 #include <Windows.h>
 
 #include <bcrypt.h>
+#include <detours.h>
 
-#include <vulkan/vk_layer.h>
 #include <vulkan/vulkan.h>
 
 #include <nvsdk_ngx_helpers.h>
@@ -42,6 +42,7 @@
 #include "../dlss_bridge_abi.h"
 #include "../supported_build.hpp"
 #include "adapter_runtime.hpp"
+#include "embedded_bootstrap.hpp"
 #include "feature_lifetime.hpp"
 
 namespace {
@@ -51,12 +52,6 @@ constexpr char kEngineVersion[] = "Build12158144";
 constexpr std::uint64_t kInstanceExtensionsEnabled = UINT64_C(1) << 0u;
 constexpr std::uint64_t kDeviceExtensionsEnabled = UINT64_C(1) << 1u;
 constexpr std::uint64_t kReflectedTemporalConstantsSize = 496u;
-constexpr char kCachedDeviceExtensionsReadyEnvironment[] =
-    "RENODX_DETROIT_NGX_DEVICE_EXTENSIONS_READY";
-constexpr char kCachedInstanceExtensionsEnvironment[] =
-    "RENODX_DETROIT_NGX_INSTANCE_EXTENSIONS";
-constexpr char kCachedDeviceExtensionsEnvironment[] =
-    "RENODX_DETROIT_NGX_DEVICE_EXTENSIONS";
 constexpr char kDiagnosticOutputEnvironment[] =
     "RENODX_DETROIT_DLSS_DIAGNOSTIC_OUTPUT";
 constexpr std::size_t kMaximumCachedExtensionListBytes = 16u * 1024u;
@@ -65,6 +60,25 @@ constexpr std::uint64_t kMaximumTemporalConstantsShadowSize = 64u * 1024u;
 constexpr std::size_t kTemporalDescriptorSetBloomWordCount = 64u;
 constexpr std::array<std::uint32_t, DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT>
     kTemporalImageBindings = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 9u, 16u, 17u, 18u, 19u};
+
+using BootstrapStatus =
+    renodx::games::detroitbecomehuman::dlss::embedded::BootstrapStatus;
+
+std::mutex bootstrap_mutex;
+std::string cached_instance_extensions;
+std::string cached_device_extensions;
+std::atomic<BootstrapStatus> bootstrap_status = BootstrapStatus::kFirstRunSetup;
+std::atomic<bool> executable_verified = false;
+std::atomic<bool> hooks_attached = false;
+std::atomic<bool> loaded_early = false;
+std::atomic<bool> cached_extensions_ready = false;
+
+PFN_vkCreateInstance reshade_create_instance = nullptr;
+PFN_vkCreateDevice reshade_create_device = nullptr;
+PFN_vkGetInstanceProcAddr reshade_get_instance_proc_addr = nullptr;
+PFN_vkGetDeviceProcAddr reshade_get_device_proc_addr = nullptr;
+
+void SetBootstrapStatus(BootstrapStatus status, std::string detail);
 
 enum class BridgeDetail : std::uint32_t {
   kNone = 0u,
@@ -569,19 +583,6 @@ std::weak_ptr<DeviceState> active_device;
 std::atomic<std::uint64_t> device_registry_generation = 1u;
 std::atomic<std::uint64_t> next_device_identity = 1u;
 
-template <typename LayerCreateInfo>
-LayerCreateInfo* FindLayerCreateInfo(const void* chain, VkStructureType type) {
-  auto* current = reinterpret_cast<const VkBaseInStructure*>(chain);
-  while (current != nullptr) {
-    if (current->sType == type) {
-      auto* layer_info = const_cast<LayerCreateInfo*>(reinterpret_cast<const LayerCreateInfo*>(current));
-      if (layer_info->function == VK_LAYER_LINK_INFO) return layer_info;
-    }
-    current = current->pNext;
-  }
-  return nullptr;
-}
-
 std::shared_ptr<InstanceState> FindInstance(VkInstance instance) {
   const std::lock_guard lock(state_mutex);
   const auto found = instances.find(DispatchKey(instance));
@@ -783,27 +784,20 @@ bool IsActiveDevice(const std::shared_ptr<DeviceState>& state) {
 }
 
 bool ReadCachedNgxExtensions(
-    const char* environment_name,
+    bool instance_extensions,
     std::vector<std::string>* required_extensions) {
-  if (environment_name == nullptr || required_extensions == nullptr) return false;
-  std::array<char, 8u> ready = {};
-  const DWORD ready_size = GetEnvironmentVariableA(
-      kCachedDeviceExtensionsReadyEnvironment,
-      ready.data(),
-      static_cast<DWORD>(ready.size()));
-  if (ready_size != 1u || ready[0] != '1') return false;
+  if (required_extensions == nullptr) return false;
+  std::string serialized;
+  {
+    const std::lock_guard lock(bootstrap_mutex);
+    serialized = instance_extensions
+                     ? cached_instance_extensions
+                     : cached_device_extensions;
+  }
+  if (serialized.size() >= kMaximumCachedExtensionListBytes) return false;
+  if (serialized.empty()) return true;
 
-  const DWORD required_size = GetEnvironmentVariableA(environment_name, nullptr, 0u);
-  if (required_size == 0u) return true;
-  if (required_size > kMaximumCachedExtensionListBytes) return false;
-  std::vector<char> buffer(required_size, '\0');
-  const DWORD written = GetEnvironmentVariableA(
-      environment_name,
-      buffer.data(),
-      required_size);
-  if (written == 0u || written >= required_size) return false;
-
-  std::string_view list(buffer.data(), written);
+  std::string_view list(serialized);
   std::size_t start = 0u;
   while (start <= list.size()) {
     const auto end = list.find(';', start);
@@ -1329,6 +1323,9 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetContext(DetroitDlssBootstrapCon
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
   const bool ngx_available = EnsureNgxInitialized(state.get());
+  SetBootstrapStatus(
+      ngx_available ? BootstrapStatus::kDlaaReady : BootstrapStatus::kNativeFallback,
+      ngx_available ? "DLAA ready" : "NGX initialization or capability check failed");
 
   const auto struct_size = context->struct_size;
   *context = {};
@@ -3724,63 +3721,49 @@ void DETROIT_DLSS_CALL BridgeShutdown() {
   if (state != nullptr) RequestNgxShutdown(state.get());
 }
 
-}  // namespace
+std::mutex bootstrap_detail_mutex;
+std::string bootstrap_detail = "First-run setup";
 
-extern "C" __declspec(dllexport) DetroitDlssResultCode DETROIT_DLSS_CALL
-DetroitDlssGetApi(std::uint32_t requested_version, DetroitDlssApiV2* api) {
-  if (api == nullptr || api->struct_size < sizeof(*api)
-      || requested_version != DETROIT_DLSS_ABI_VERSION) {
-    return DETROIT_DLSS_RESULT_ERROR;
+void SetBootstrapStatus(BootstrapStatus status, std::string detail) {
+  {
+    const std::lock_guard lock(bootstrap_detail_mutex);
+    bootstrap_detail = std::move(detail);
   }
-  const auto struct_size = api->struct_size;
-  *api = {};
-  api->struct_size = struct_size;
-  api->abi_version = DETROIT_DLSS_ABI_VERSION;
-  api->get_context = &BridgeGetContext;
-  api->get_temporal_constants = &BridgeGetTemporalConstants;
-  api->get_temporal_snapshot = &BridgeGetTemporalSnapshot;
-  api->query_mode = &BridgeQueryMode;
-  api->configure = &BridgeConfigure;
-  api->evaluate = &BridgeEvaluate;
-  api->shutdown = &BridgeShutdown;
-  return DETROIT_DLSS_RESULT_SUCCESS;
+  bootstrap_status.store(status, std::memory_order_release);
 }
 
-extern "C" __declspec(dllexport) VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-vkGetDeviceProcAddr(VkDevice device, const char* name);
-extern "C" __declspec(dllexport) VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-vkGetInstanceProcAddr(VkInstance instance, const char* name);
+std::shared_ptr<InstanceState> EnsureInstanceState(VkInstance instance) {
+  if (instance == VK_NULL_HANDLE || reshade_get_instance_proc_addr == nullptr) return nullptr;
+  if (const auto existing = FindInstance(instance); existing != nullptr) return existing;
+  auto state = std::make_shared<InstanceState>();
+  state->instance = instance;
+  state->next_get_instance_proc_addr = reshade_get_instance_proc_addr;
+  state->ngx_extensions_enabled = false;
+  const std::lock_guard lock(state_mutex);
+  const auto [iterator, inserted] = instances.emplace(DispatchKey(instance), state);
+  return inserted ? state : iterator->second;
+}
 
-extern "C" __declspec(dllexport) VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance(
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL HookGetDeviceProcAddr(
+    VkDevice device, const char* name);
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL HookGetInstanceProcAddr(
+    VkInstance instance, const char* name);
+
+VKAPI_ATTR VkResult VKAPI_CALL HookCreateInstance(
     const VkInstanceCreateInfo* create_info,
     const VkAllocationCallbacks* allocator,
     VkInstance* instance) {
-  Trace("vkCreateInstance: enter");
+  Trace("HookCreateInstance: enter");
   if (create_info == nullptr || instance == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
-  auto* link_info = FindLayerCreateInfo<VkLayerInstanceCreateInfo>(
-      create_info->pNext, VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO);
-  if (link_info == nullptr || link_info->u.pLayerInfo == nullptr) {
-    Trace("vkCreateInstance: missing loader link info");
-    return VK_ERROR_INITIALIZATION_FAILED;
-  }
+  if (reshade_create_instance == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
 
-  const auto next_get_instance_proc_addr =
-      link_info->u.pLayerInfo->pfnNextGetInstanceProcAddr;
-  const auto trampoline = reinterpret_cast<PFN_vkCreateInstance>(
-      next_get_instance_proc_addr(VK_NULL_HANDLE, "vkCreateInstance"));
-  link_info->u.pLayerInfo = link_info->u.pLayerInfo->pNext;
-  if (trampoline == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
-
-  const bool supported_executable = IsSupportedHostExecutable();
   bool ngx_extensions_enabled = false;
   std::vector<std::string> extension_storage;
   std::vector<const char*> enabled_extensions;
   VkInstanceCreateInfo amended_create_info = *create_info;
-  if (supported_executable) {
-    Trace("vkCreateInstance: read launcher-cached NGX instance extensions");
+  if (cached_extensions_ready.load(std::memory_order_acquire)) {
     std::vector<std::string> required;
-    ngx_extensions_enabled = ReadCachedNgxExtensions(
-                                 kCachedInstanceExtensionsEnvironment, &required)
+    ngx_extensions_enabled = ReadCachedNgxExtensions(true, &required)
                              && BuildCachedExtensionList(
                                  create_info->enabledExtensionCount,
                                  create_info->ppEnabledExtensionNames,
@@ -3792,19 +3775,16 @@ extern "C" __declspec(dllexport) VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance
           static_cast<std::uint32_t>(enabled_extensions.size());
       amended_create_info.ppEnabledExtensionNames = enabled_extensions.data();
     }
-    Trace(ngx_extensions_enabled
-              ? "vkCreateInstance: NGX instance extensions appended"
-              : "vkCreateInstance: NGX instance extensions unavailable; native fallback");
+    Trace(ngx_extensions_enabled ? "HookCreateInstance: NGX extensions appended"
+                                 : "HookCreateInstance: invalid cache; native fallback");
   }
 
-  Trace("vkCreateInstance: call next layer");
-  const VkResult result = trampoline(&amended_create_info, allocator, instance);
-  Trace(result == VK_SUCCESS ? "vkCreateInstance: next layer succeeded"
-                             : "vkCreateInstance: next layer failed");
+  loaded_early.store(true, std::memory_order_release);
+  const VkResult result = reshade_create_instance(&amended_create_info, allocator, instance);
   if (result == VK_SUCCESS) {
     auto state = std::make_shared<InstanceState>();
     state->instance = *instance;
-    state->next_get_instance_proc_addr = next_get_instance_proc_addr;
+    state->next_get_instance_proc_addr = reshade_get_instance_proc_addr;
     state->ngx_extensions_enabled = ngx_extensions_enabled;
     const std::lock_guard lock(state_mutex);
     instances[DispatchKey(*instance)] = std::move(state);
@@ -3812,7 +3792,7 @@ extern "C" __declspec(dllexport) VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance
   return result;
 }
 
-extern "C" __declspec(dllexport) VKAPI_ATTR void VKAPI_CALL vkDestroyInstance(
+VKAPI_ATTR void VKAPI_CALL HookDestroyInstance(
     VkInstance instance,
     const VkAllocationCallbacks* allocator) {
   const auto state = FindInstance(instance);
@@ -3826,40 +3806,31 @@ extern "C" __declspec(dllexport) VKAPI_ATTR void VKAPI_CALL vkDestroyInstance(
   if (trampoline != nullptr) trampoline(instance, allocator);
 }
 
-extern "C" __declspec(dllexport) VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(
+VKAPI_ATTR VkResult VKAPI_CALL HookCreateDevice(
     VkPhysicalDevice physical_device,
     const VkDeviceCreateInfo* create_info,
     const VkAllocationCallbacks* allocator,
     VkDevice* device) {
-  Trace("vkCreateDevice: enter");
+  Trace("HookCreateDevice: enter");
   if (create_info == nullptr || device == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
-  auto* link_info = FindLayerCreateInfo<VkLayerDeviceCreateInfo>(
-      create_info->pNext, VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO);
   const auto instance_state = FindInstance(physical_device);
-  if (link_info == nullptr || link_info->u.pLayerInfo == nullptr || instance_state == nullptr) {
-    Trace("vkCreateDevice: missing loader link or instance state");
-    return VK_ERROR_INITIALIZATION_FAILED;
+  if (instance_state == nullptr || reshade_create_device == nullptr
+      || reshade_get_instance_proc_addr == nullptr || reshade_get_device_proc_addr == nullptr) {
+    Trace("HookCreateDevice: bootstrap state unavailable");
+    return reshade_create_device != nullptr
+               ? reshade_create_device(physical_device, create_info, allocator, device)
+               : VK_ERROR_INITIALIZATION_FAILED;
   }
-
-  const auto next_get_instance_proc_addr =
-      link_info->u.pLayerInfo->pfnNextGetInstanceProcAddr;
-  const auto next_get_device_proc_addr = link_info->u.pLayerInfo->pfnNextGetDeviceProcAddr;
-  const auto trampoline = reinterpret_cast<PFN_vkCreateDevice>(
-      next_get_instance_proc_addr(instance_state->instance, "vkCreateDevice"));
-  link_info->u.pLayerInfo = link_info->u.pLayerInfo->pNext;
-  if (trampoline == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
 
   bool ngx_extensions_enabled = false;
   std::vector<std::string> extension_storage;
   std::vector<const char*> enabled_extensions;
   VkDeviceCreateInfo amended_create_info = *create_info;
   if (instance_state->ngx_extensions_enabled) {
-    Trace("vkCreateDevice: read launcher-cached NGX device extensions");
     std::vector<std::string> required;
-    ngx_extensions_enabled = ReadCachedNgxExtensions(
-                                 kCachedDeviceExtensionsEnvironment, &required)
+    ngx_extensions_enabled = ReadCachedNgxExtensions(false, &required)
                              && PhysicalDeviceSupportsRequiredExtensions(
-                                 next_get_instance_proc_addr,
+                                 reshade_get_instance_proc_addr,
                                  instance_state->instance,
                                  physical_device,
                                  required)
@@ -3879,79 +3850,77 @@ extern "C" __declspec(dllexport) VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(
               : "vkCreateDevice: NGX device extensions unavailable; native fallback");
   }
 
-  Trace("vkCreateDevice: call next layer");
-  const VkResult result = trampoline(physical_device, &amended_create_info, allocator, device);
-  Trace(result == VK_SUCCESS ? "vkCreateDevice: next layer succeeded"
-                             : "vkCreateDevice: next layer failed");
+  const VkResult result =
+      reshade_create_device(physical_device, &amended_create_info, allocator, device);
   if (result != VK_SUCCESS) return result;
 
   auto state = std::make_shared<DeviceState>();
   state->instance = instance_state->instance;
   state->physical_device = physical_device;
   state->device = *device;
-  state->next_get_instance_proc_addr = next_get_instance_proc_addr;
-  state->next_get_device_proc_addr = next_get_device_proc_addr;
+  state->next_get_instance_proc_addr = reshade_get_instance_proc_addr;
+  state->next_get_device_proc_addr = reshade_get_device_proc_addr;
   state->next_update_descriptor_sets =
       reinterpret_cast<PFN_vkUpdateDescriptorSets>(
-          next_get_device_proc_addr(*device, "vkUpdateDescriptorSets"));
+          reshade_get_device_proc_addr(*device, "vkUpdateDescriptorSets"));
   state->next_map_memory = reinterpret_cast<PFN_vkMapMemory>(
-      next_get_device_proc_addr(*device, "vkMapMemory"));
+      reshade_get_device_proc_addr(*device, "vkMapMemory"));
   state->next_unmap_memory = reinterpret_cast<PFN_vkUnmapMemory>(
-      next_get_device_proc_addr(*device, "vkUnmapMemory"));
+      reshade_get_device_proc_addr(*device, "vkUnmapMemory"));
   state->next_begin_command_buffer =
       reinterpret_cast<PFN_vkBeginCommandBuffer>(
-          next_get_device_proc_addr(*device, "vkBeginCommandBuffer"));
+          reshade_get_device_proc_addr(*device, "vkBeginCommandBuffer"));
   state->next_reset_command_buffer =
       reinterpret_cast<PFN_vkResetCommandBuffer>(
-          next_get_device_proc_addr(*device, "vkResetCommandBuffer"));
+          reshade_get_device_proc_addr(*device, "vkResetCommandBuffer"));
   state->next_queue_submit = reinterpret_cast<PFN_vkQueueSubmit>(
-      next_get_device_proc_addr(*device, "vkQueueSubmit"));
+      reshade_get_device_proc_addr(*device, "vkQueueSubmit"));
 #if defined(VK_VERSION_1_3)
   state->next_queue_submit2 = reinterpret_cast<PFN_vkQueueSubmit2>(
-      next_get_device_proc_addr(*device, "vkQueueSubmit2"));
+      reshade_get_device_proc_addr(*device, "vkQueueSubmit2"));
 #endif
 #if defined(VK_KHR_synchronization2)
   state->next_queue_submit2_khr = reinterpret_cast<PFN_vkQueueSubmit2KHR>(
-      next_get_device_proc_addr(*device, "vkQueueSubmit2KHR"));
+      reshade_get_device_proc_addr(*device, "vkQueueSubmit2KHR"));
 #endif
   state->next_queue_wait_idle = reinterpret_cast<PFN_vkQueueWaitIdle>(
-      next_get_device_proc_addr(*device, "vkQueueWaitIdle"));
+      reshade_get_device_proc_addr(*device, "vkQueueWaitIdle"));
   state->next_device_wait_idle = reinterpret_cast<PFN_vkDeviceWaitIdle>(
-      next_get_device_proc_addr(*device, "vkDeviceWaitIdle"));
+      reshade_get_device_proc_addr(*device, "vkDeviceWaitIdle"));
   state->next_wait_for_fences = reinterpret_cast<PFN_vkWaitForFences>(
-      next_get_device_proc_addr(*device, "vkWaitForFences"));
+      reshade_get_device_proc_addr(*device, "vkWaitForFences"));
   state->next_get_fence_status = reinterpret_cast<PFN_vkGetFenceStatus>(
-      next_get_device_proc_addr(*device, "vkGetFenceStatus"));
+      reshade_get_device_proc_addr(*device, "vkGetFenceStatus"));
   state->next_reset_fences = reinterpret_cast<PFN_vkResetFences>(
-      next_get_device_proc_addr(*device, "vkResetFences"));
+      reshade_get_device_proc_addr(*device, "vkResetFences"));
   state->next_destroy_fence = reinterpret_cast<PFN_vkDestroyFence>(
-      next_get_device_proc_addr(*device, "vkDestroyFence"));
+      reshade_get_device_proc_addr(*device, "vkDestroyFence"));
   state->next_create_command_pool = reinterpret_cast<PFN_vkCreateCommandPool>(
-      next_get_device_proc_addr(*device, "vkCreateCommandPool"));
+      reshade_get_device_proc_addr(*device, "vkCreateCommandPool"));
   state->next_allocate_command_buffers =
       reinterpret_cast<PFN_vkAllocateCommandBuffers>(
-          next_get_device_proc_addr(*device, "vkAllocateCommandBuffers"));
+          reshade_get_device_proc_addr(*device, "vkAllocateCommandBuffers"));
   state->next_free_command_buffers =
       reinterpret_cast<PFN_vkFreeCommandBuffers>(
-          next_get_device_proc_addr(*device, "vkFreeCommandBuffers"));
+          reshade_get_device_proc_addr(*device, "vkFreeCommandBuffers"));
   state->next_reset_command_pool =
       reinterpret_cast<PFN_vkResetCommandPool>(
-          next_get_device_proc_addr(*device, "vkResetCommandPool"));
+          reshade_get_device_proc_addr(*device, "vkResetCommandPool"));
   state->next_destroy_command_pool =
       reinterpret_cast<PFN_vkDestroyCommandPool>(
-          next_get_device_proc_addr(*device, "vkDestroyCommandPool"));
+          reshade_get_device_proc_addr(*device, "vkDestroyCommandPool"));
   state->next_cmd_bind_pipeline = reinterpret_cast<PFN_vkCmdBindPipeline>(
-      next_get_device_proc_addr(*device, "vkCmdBindPipeline"));
+      reshade_get_device_proc_addr(*device, "vkCmdBindPipeline"));
   state->next_cmd_bind_descriptor_sets =
       reinterpret_cast<PFN_vkCmdBindDescriptorSets>(
-          next_get_device_proc_addr(*device, "vkCmdBindDescriptorSets"));
-  state->supported_executable = IsSupportedHostExecutable();
+          reshade_get_device_proc_addr(*device, "vkCmdBindDescriptorSets"));
+  state->supported_executable = executable_verified.load(std::memory_order_acquire);
   state->ngx_extensions_enabled = ngx_extensions_enabled;
   state->identity = next_device_identity.fetch_add(1u, std::memory_order_relaxed);
 
   const auto get_memory_properties =
       reinterpret_cast<PFN_vkGetPhysicalDeviceMemoryProperties>(
-          next_get_instance_proc_addr(
+          reshade_get_instance_proc_addr(
               instance_state->instance, "vkGetPhysicalDeviceMemoryProperties"));
   if (get_memory_properties != nullptr) {
     Trace("vkCreateDevice: query memory properties");
@@ -3960,7 +3929,7 @@ extern "C" __declspec(dllexport) VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(
 
   const auto get_queue_family_properties =
       reinterpret_cast<PFN_vkGetPhysicalDeviceQueueFamilyProperties>(
-          next_get_instance_proc_addr(
+          reshade_get_instance_proc_addr(
               instance_state->instance, "vkGetPhysicalDeviceQueueFamilyProperties"));
   if (get_queue_family_properties != nullptr) {
     Trace("vkCreateDevice: query queue families");
@@ -3981,7 +3950,7 @@ extern "C" __declspec(dllexport) VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(
   if (state->graphics_queue_family != std::numeric_limits<std::uint32_t>::max()) {
     Trace("vkCreateDevice: resolve graphics queue");
     const auto get_device_queue = reinterpret_cast<PFN_vkGetDeviceQueue>(
-        next_get_device_proc_addr(*device, "vkGetDeviceQueue"));
+        reshade_get_device_proc_addr(*device, "vkGetDeviceQueue"));
     if (get_device_queue != nullptr) {
       get_device_queue(
           *device,
@@ -4008,8 +3977,7 @@ extern "C" __declspec(dllexport) VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(
   {
     const std::lock_guard lock(state_mutex);
     devices[DispatchKey(*device)] = state;
-    if (state->supported_executable && state->graphics_queue != VK_NULL_HANDLE
-        && active_device.expired()) {
+    if (state->graphics_queue != VK_NULL_HANDLE && active_device.expired()) {
       active_device = state;
     }
     device_registry_generation.fetch_add(1u, std::memory_order_release);
@@ -4018,7 +3986,7 @@ extern "C" __declspec(dllexport) VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(
   return VK_SUCCESS;
 }
 
-extern "C" __declspec(dllexport) VKAPI_ATTR void VKAPI_CALL vkDestroyDevice(
+VKAPI_ATTR void VKAPI_CALL HookDestroyDevice(
     VkDevice device,
     const VkAllocationCallbacks* allocator) {
   const auto state = FindDevice(device);
@@ -4044,64 +4012,280 @@ extern "C" __declspec(dllexport) VKAPI_ATTR void VKAPI_CALL vkDestroyDevice(
   if (trampoline != nullptr) trampoline(device, allocator);
 }
 
-extern "C" __declspec(dllexport) VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-vkGetDeviceProcAddr(VkDevice device, const char* name) {
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL HookGetDeviceProcAddr(
+    VkDevice device, const char* name) {
   if (name == nullptr) return nullptr;
   if (std::strcmp(name, "vkGetDeviceProcAddr") == 0) {
-    return reinterpret_cast<PFN_vkVoidFunction>(&vkGetDeviceProcAddr);
+    return reinterpret_cast<PFN_vkVoidFunction>(&HookGetDeviceProcAddr);
   }
-  if (device == VK_NULL_HANDLE) return nullptr;
+  if (reshade_get_device_proc_addr == nullptr) return nullptr;
+  const auto downstream = reshade_get_device_proc_addr(device, name);
+  if (device == VK_NULL_HANDLE) return downstream;
   const auto state = FindDevice(device);
-  if (state == nullptr) return nullptr;
-  const auto downstream = state->next_get_device_proc_addr(device, name);
+  if (state == nullptr) return downstream;
   if (downstream == nullptr) return nullptr;
   if (std::strcmp(name, "vkDestroyDevice") == 0) {
-    return reinterpret_cast<PFN_vkVoidFunction>(&vkDestroyDevice);
+    return reinterpret_cast<PFN_vkVoidFunction>(&HookDestroyDevice);
   }
   if (const auto tracked = FindTrackedDeviceFunction(name); tracked != nullptr) return tracked;
   return downstream;
 }
 
-extern "C" __declspec(dllexport) VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
-vkGetInstanceProcAddr(VkInstance instance, const char* name) {
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL HookGetInstanceProcAddr(
+    VkInstance instance, const char* name) {
   if (name == nullptr) return nullptr;
   if (std::strcmp(name, "vkGetInstanceProcAddr") == 0) {
-    return reinterpret_cast<PFN_vkVoidFunction>(&vkGetInstanceProcAddr);
+    return reinterpret_cast<PFN_vkVoidFunction>(&HookGetInstanceProcAddr);
+  }
+  if (std::strcmp(name, "vkGetDeviceProcAddr") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(&HookGetDeviceProcAddr);
   }
   if (std::strcmp(name, "vkCreateInstance") == 0) {
-    return reinterpret_cast<PFN_vkVoidFunction>(&vkCreateInstance);
+    return reinterpret_cast<PFN_vkVoidFunction>(&HookCreateInstance);
   }
-  if (std::strcmp(name, "vkCreateDevice") == 0) {
-    return reinterpret_cast<PFN_vkVoidFunction>(&vkCreateDevice);
+  if (reshade_get_instance_proc_addr == nullptr) return nullptr;
+  const auto downstream = reshade_get_instance_proc_addr(instance, name);
+  if (std::strcmp(name, "vkCreateDevice") == 0 && downstream != nullptr) {
+    reshade_create_device = reinterpret_cast<PFN_vkCreateDevice>(downstream);
+    (void)EnsureInstanceState(instance);
+    return reinterpret_cast<PFN_vkVoidFunction>(&HookCreateDevice);
   }
-  if (instance == VK_NULL_HANDLE) return nullptr;
-  const auto state = FindInstance(instance);
-  if (state == nullptr) return nullptr;
-  const auto downstream = state->next_get_instance_proc_addr(instance, name);
+  if (instance == VK_NULL_HANDLE) return downstream;
+  const auto state = EnsureInstanceState(instance);
+  if (state == nullptr) return downstream;
   if (downstream == nullptr) return nullptr;
   if (std::strcmp(name, "vkDestroyInstance") == 0) {
-    return reinterpret_cast<PFN_vkVoidFunction>(&vkDestroyInstance);
+    return reinterpret_cast<PFN_vkVoidFunction>(&HookDestroyInstance);
   }
   if (std::strcmp(name, "vkDestroyDevice") == 0) {
-    return reinterpret_cast<PFN_vkVoidFunction>(&vkDestroyDevice);
+    return reinterpret_cast<PFN_vkVoidFunction>(&HookDestroyDevice);
   }
   if (const auto tracked = FindTrackedDeviceFunction(name); tracked != nullptr) return tracked;
   return downstream;
 }
 
-extern "C" VKAPI_ATTR VkResult VKAPI_CALL
-vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* version) {
-  if (version == nullptr || version->sType != LAYER_NEGOTIATE_INTERFACE_STRUCT) {
-    return VK_ERROR_INITIALIZATION_FAILED;
+bool SerializeExtensions(
+    const VkExtensionProperties* properties,
+    std::uint32_t count,
+    std::string* serialized) {
+  if (serialized == nullptr || (count != 0u && properties == nullptr)
+      || count > kMaximumCachedExtensionCount) {
+    return false;
   }
-  version->loaderLayerInterfaceVersion = std::min(version->loaderLayerInterfaceVersion, 2u);
-  version->pfnGetInstanceProcAddr = &vkGetInstanceProcAddr;
-  version->pfnGetDeviceProcAddr = &vkGetDeviceProcAddr;
-  version->pfnGetPhysicalDeviceProcAddr = nullptr;
-  return VK_SUCCESS;
+  serialized->clear();
+  std::vector<std::string_view> seen;
+  for (std::uint32_t index = 0u; index < count; ++index) {
+    const std::string_view name(properties[index].extensionName);
+    if (name.empty() || name.size() >= VK_MAX_EXTENSION_NAME_SIZE
+        || name.find(';') != std::string_view::npos) return false;
+    if (std::find(seen.begin(), seen.end(), name) != seen.end()) continue;
+    if (!serialized->empty()) serialized->push_back(';');
+    serialized->append(name);
+    seen.push_back(name);
+  }
+  return serialized->size() < kMaximumCachedExtensionListBytes;
 }
 
-BOOL WINAPI DllMain(HINSTANCE module, DWORD reason, LPVOID) {
-  if (reason == DLL_PROCESS_ATTACH) layer_module = module;
-  return TRUE;
+}  // namespace
+
+namespace renodx::games::detroitbecomehuman::dlss::embedded {
+
+bool AttachEarlyHooks(HMODULE addon_module, const ExtensionCache& cache) {
+  layer_module = addon_module;
+  if (hooks_attached.load(std::memory_order_acquire)) return true;
+  const bool cache_valid = IsValidCache(cache);
+  {
+    const std::lock_guard lock(bootstrap_mutex);
+    cached_extensions_ready.store(cache_valid, std::memory_order_release);
+    cached_instance_extensions = cache_valid ? cache.instance_extensions : std::string();
+    cached_device_extensions = cache_valid ? cache.device_extensions : std::string();
+  }
+
+  const HMODULE reshade = GetModuleHandleW(L"ReShade64.dll");
+  if (reshade == nullptr) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "ReShade64.dll is not loaded");
+    return false;
+  }
+  reshade_create_instance = reinterpret_cast<PFN_vkCreateInstance>(
+      GetProcAddress(reshade, "vkCreateInstance"));
+  reshade_get_instance_proc_addr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(
+      GetProcAddress(reshade, "vkGetInstanceProcAddr"));
+  reshade_get_device_proc_addr = reinterpret_cast<PFN_vkGetDeviceProcAddr>(
+      GetProcAddress(reshade, "vkGetDeviceProcAddr"));
+  if (reshade_create_instance == nullptr || reshade_get_instance_proc_addr == nullptr
+      || reshade_get_device_proc_addr == nullptr) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "ReShade Vulkan exports are missing");
+    return false;
+  }
+
+  if (DetourTransactionBegin() != NO_ERROR
+      || DetourUpdateThread(GetCurrentThread()) != NO_ERROR
+      || DetourAttach(
+             reinterpret_cast<PVOID*>(&reshade_create_instance),
+             reinterpret_cast<PVOID>(&HookCreateInstance))
+             != NO_ERROR
+      || DetourAttach(
+             reinterpret_cast<PVOID*>(&reshade_get_instance_proc_addr),
+             reinterpret_cast<PVOID>(&HookGetInstanceProcAddr))
+             != NO_ERROR
+      || DetourAttach(
+             reinterpret_cast<PVOID*>(&reshade_get_device_proc_addr),
+             reinterpret_cast<PVOID>(&HookGetDeviceProcAddr))
+             != NO_ERROR
+      || DetourTransactionCommit() != NO_ERROR) {
+    (void)DetourTransactionAbort();
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "Failed to attach ReShade Vulkan hooks");
+    return false;
+  }
+  hooks_attached.store(true, std::memory_order_release);
+  SetBootstrapStatus(
+      cache_valid ? BootstrapStatus::kEarlyHookActive : BootstrapStatus::kFirstRunSetup,
+      cache_valid ? "Early hook active" : "First-run setup");
+  return true;
 }
+
+void DetachEarlyHooks(bool process_terminating) {
+  if (!process_terminating || !hooks_attached.exchange(false)) return;
+  if (DetourTransactionBegin() != NO_ERROR) return;
+  (void)DetourUpdateThread(GetCurrentThread());
+  (void)DetourDetach(
+      reinterpret_cast<PVOID*>(&reshade_create_instance),
+      reinterpret_cast<PVOID>(&HookCreateInstance));
+  (void)DetourDetach(
+      reinterpret_cast<PVOID*>(&reshade_get_instance_proc_addr),
+      reinterpret_cast<PVOID>(&HookGetInstanceProcAddr));
+  (void)DetourDetach(
+      reinterpret_cast<PVOID*>(&reshade_get_device_proc_addr),
+      reinterpret_cast<PVOID>(&HookGetDeviceProcAddr));
+  (void)DetourTransactionCommit();
+}
+
+bool VerifySupportedExecutable() {
+  const bool supported = IsSupportedHostExecutable();
+  executable_verified.store(supported, std::memory_order_release);
+  {
+    const std::lock_guard lock(state_mutex);
+    for (const auto& [_, state] : devices) state->supported_executable = supported;
+  }
+  if (!supported) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "Unsupported Detroit executable");
+  }
+  return supported;
+}
+
+bool QueryRequiredExtensions(ExtensionCache* cache) {
+  if (cache == nullptr || !VerifySupportedExecutable()) return false;
+  const auto state = GetActiveDevice();
+  if (state == nullptr || state->instance == VK_NULL_HANDLE
+      || state->physical_device == VK_NULL_HANDLE) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "Vulkan device is not available");
+    return false;
+  }
+
+  NgxDiscovery discovery;
+  std::uint32_t instance_count = 0u;
+  VkExtensionProperties* instance_properties = nullptr;
+  if (NVSDK_NGX_FAILED(NVSDK_NGX_VULKAN_GetFeatureInstanceExtensionRequirements(
+          &discovery.discovery_info, &instance_count, &instance_properties))
+      || (instance_count != 0u && instance_properties == nullptr)) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "NGX instance requirements failed");
+    return false;
+  }
+  NVSDK_NGX_FeatureRequirement requirements = {};
+  if (NVSDK_NGX_FAILED(NVSDK_NGX_VULKAN_GetFeatureRequirements(
+          state->instance, state->physical_device, &discovery.discovery_info, &requirements))
+      || requirements.FeatureSupported != NVSDK_NGX_FeatureSupportResult_Supported) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "DLSS is unsupported on this GPU");
+    return false;
+  }
+  std::uint32_t device_count = 0u;
+  VkExtensionProperties* device_properties = nullptr;
+  if (NVSDK_NGX_FAILED(NVSDK_NGX_VULKAN_GetFeatureDeviceExtensionRequirements(
+          state->instance,
+          state->physical_device,
+          &discovery.discovery_info,
+          &device_count,
+          &device_properties))
+      || (device_count != 0u && device_properties == nullptr)) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "NGX device requirements failed");
+    return false;
+  }
+  std::vector<std::string> required_device_extensions;
+  required_device_extensions.reserve(device_count);
+  for (std::uint32_t index = 0u; index < device_count; ++index) {
+    required_device_extensions.emplace_back(device_properties[index].extensionName);
+  }
+  if (!PhysicalDeviceSupportsRequiredExtensions(
+          state->next_get_instance_proc_addr,
+          state->instance,
+          state->physical_device,
+          required_device_extensions)
+      || !SerializeExtensions(instance_properties, instance_count, &cache->instance_extensions)
+      || !SerializeExtensions(device_properties, device_count, &cache->device_extensions)) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "Required Vulkan extensions are unavailable");
+    return false;
+  }
+  cache->schema_version = kCacheSchemaVersion;
+  cache->executable_sha256 = std::string(kSupportedExecutableSha256);
+  cache->ready = true;
+  SetBootstrapStatus(BootstrapStatus::kRestartRequired, "Restart required");
+  return true;
+}
+
+void RefreshDeferredStatus() {
+  if (!VerifySupportedExecutable()) return;
+  const auto state = GetActiveDevice();
+  if (state == nullptr) {
+    SetBootstrapStatus(BootstrapStatus::kFirstRunSetup, "Waiting for Vulkan device");
+  } else if (!loaded_early.load(std::memory_order_acquire)) {
+    SetBootstrapStatus(BootstrapStatus::kRestartRequired, "Restart required");
+  } else if (!state->ngx_extensions_enabled) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "NGX extension cache was not applied");
+  } else {
+    SetBootstrapStatus(BootstrapStatus::kEarlyHookActive, "Early hook active; checking NGX");
+  }
+}
+
+void SetNativeFallback(const char* reason) {
+  SetBootstrapStatus(
+      BootstrapStatus::kNativeFallback,
+      reason != nullptr && reason[0] != '\0' ? reason : "Native TAA fallback");
+}
+
+BootstrapStatus GetStatus() { return bootstrap_status.load(std::memory_order_acquire); }
+
+const char* GetStatusText() {
+  thread_local std::string copy;
+  const std::lock_guard lock(bootstrap_detail_mutex);
+  copy = bootstrap_detail;
+  return copy.c_str();
+}
+
+bool WasLoadedEarly() { return loaded_early.load(std::memory_order_acquire); }
+
+bool IsBridgeReady() {
+  return GetStatus() == BootstrapStatus::kDlaaReady && GetActiveDevice() != nullptr;
+}
+
+DetroitDlssResultCode DETROIT_DLSS_CALL GetApi(
+    std::uint32_t requested_version, DetroitDlssApiV2* api) {
+  if (api == nullptr || api->struct_size < sizeof(*api)
+      || requested_version != DETROIT_DLSS_ABI_VERSION
+      || !executable_verified.load(std::memory_order_acquire)) {
+    return DETROIT_DLSS_RESULT_ERROR;
+  }
+  const auto struct_size = api->struct_size;
+  *api = {};
+  api->struct_size = struct_size;
+  api->abi_version = DETROIT_DLSS_ABI_VERSION;
+  api->get_context = &BridgeGetContext;
+  api->get_temporal_constants = &BridgeGetTemporalConstants;
+  api->get_temporal_snapshot = &BridgeGetTemporalSnapshot;
+  api->query_mode = &BridgeQueryMode;
+  api->configure = &BridgeConfigure;
+  api->evaluate = &BridgeEvaluate;
+  api->shutdown = &BridgeShutdown;
+  return DETROIT_DLSS_RESULT_SUCCESS;
+}
+
+}  // namespace renodx::games::detroitbecomehuman::dlss::embedded

@@ -56,3 +56,4 @@ __pycache__/
 .test/
 .venv-analysis/
 tmp/*
+dist/**

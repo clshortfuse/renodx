@@ -11,15 +11,10 @@
 #include <limits>
 #include <mutex>
 
-#include <Windows.h>
-
 #include "dlss_bridge_abi.h"
 #include "dlss_policy.hpp"
 
 namespace renodx::games::detroitbecomehuman::dlss_bridge_client {
-
-inline constexpr wchar_t kBridgeModuleName[] = L"renodx-detroit-dlss-layer.dll";
-inline constexpr char kGetApiExportName[] = "DetroitDlssGetApi";
 
 struct Evaluation {
   DetroitDlssResultCode status = DETROIT_DLSS_RESULT_FALLBACK;
@@ -86,6 +81,19 @@ class TemporalResetGate {
 
 class Client {
  public:
+  void SetApiProvider(DetroitDlssGetApiFn provider) {
+    std::scoped_lock lock(mutex_);
+    if (provider_ == provider) return;
+    if (connected_ && api_.shutdown != nullptr) api_.shutdown();
+    provider_ = provider;
+    api_ = {};
+    context_ = {};
+    configured_settings_ = {};
+    connected_ = false;
+    configured_ = false;
+    reset_gate_.RequireReset();
+  }
+
   // Release an existing NGX feature as soon as the UI selects Native. A later
   // Native TAA dispatch repeats the transition with live dimensions if this
   // immediate path could not reach the bridge.
@@ -432,19 +440,13 @@ class Client {
 
   [[nodiscard]] bool Connect() {
     if (connected_) return true;
-
-    module_ = GetModuleHandleW(kBridgeModuleName);
-    if (module_ == nullptr) return false;
-
-    const auto get_api = reinterpret_cast<DetroitDlssGetApiFn>(
-        GetProcAddress(module_, kGetApiExportName));
-    if (get_api == nullptr) return false;
+    if (provider_ == nullptr) return false;
 
     DetroitDlssApiV2 candidate = {
         .struct_size = sizeof(DetroitDlssApiV2),
         .abi_version = DETROIT_DLSS_ABI_VERSION,
     };
-    if (get_api(DETROIT_DLSS_ABI_VERSION, &candidate)
+    if (provider_(DETROIT_DLSS_ABI_VERSION, &candidate)
             != DETROIT_DLSS_RESULT_SUCCESS
         || candidate.struct_size < sizeof(DetroitDlssApiV2)
         || candidate.abi_version != DETROIT_DLSS_ABI_VERSION
@@ -529,7 +531,7 @@ class Client {
   }
 
   std::mutex mutex_;
-  HMODULE module_ = nullptr;
+  DetroitDlssGetApiFn provider_ = nullptr;
   DetroitDlssApiV2 api_ = {};
   DetroitDlssBootstrapContext context_ = {};
   DetroitDlssModeSettings configured_settings_ = {};

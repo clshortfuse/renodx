@@ -199,7 +199,9 @@ DetroitDlssResultCode DETROIT_DLSS_CALL FakeGetContext(
   context->vk_physical_device = UINT64_C(0x2222222222222222);
   context->vk_device = UINT64_C(0x3333333333333333);
   context->vk_graphics_queue = UINT64_C(0x4444444444444444);
-  context->capability_flags = DETROIT_DLSS_CAPABILITY_SUPER_RESOLUTION
+  context->capability_flags = DETROIT_DLSS_CAPABILITY_SUPPORTED_EXECUTABLE
+                              | DETROIT_DLSS_CAPABILITY_TEMPORAL_INPUTS_VERIFIED
+                              | DETROIT_DLSS_CAPABILITY_SUPER_RESOLUTION
                               | DETROIT_DLSS_CAPABILITY_DLAA;
   return DETROIT_DLSS_RESULT_SUCCESS;
 }
@@ -765,6 +767,46 @@ bool TestFunctionTableContract() {
   return passed;
 }
 
+DetroitDlssResultCode DETROIT_DLSS_CALL FakeGetApi(
+    std::uint32_t requested_version,
+    DetroitDlssApiV2* api) {
+  if (requested_version != DETROIT_DLSS_ABI_VERSION || api == nullptr
+      || api->struct_size < sizeof(DetroitDlssApiV2)) {
+    return DETROIT_DLSS_RESULT_ERROR;
+  }
+  const auto struct_size = api->struct_size;
+  *api = {
+      .struct_size = struct_size,
+      .abi_version = DETROIT_DLSS_ABI_VERSION,
+      .get_context = &FakeGetContext,
+      .get_temporal_constants = &FakeGetTemporalConstants,
+      .get_temporal_snapshot = &FakeGetTemporalSnapshot,
+      .query_mode = &FakeQueryMode,
+      .configure = &FakeConfigure,
+      .evaluate = &FakeEvaluate,
+      .shutdown = &FakeShutdown,
+  };
+  return DETROIT_DLSS_RESULT_SUCCESS;
+}
+
+bool TestDirectProviderContract() {
+  dlss_bridge_client::Client client;
+  DetroitDlssModeSettings settings = {};
+  bool passed = Expect(
+      !client.QueryModeSettings(DETROIT_DLSS_MODE_DLAA, 3440u, 1440u, &settings),
+      "client without an in-process provider must fail closed");
+  client.SetApiProvider(&FakeGetApi);
+  passed &= Expect(
+      client.QueryModeSettings(DETROIT_DLSS_MODE_DLAA, 3440u, 1440u, &settings)
+          && settings.render_width == 3440u && settings.render_height == 1440u,
+      "direct in-process bridge provider did not return DLAA settings");
+  client.SetApiProvider(nullptr);
+  passed &= Expect(
+      !client.QueryModeSettings(DETROIT_DLSS_MODE_DLAA, 3440u, 1440u, &settings),
+      "removing the direct provider must restore native fallback");
+  return passed;
+}
+
 }  // namespace
 
 int main() {
@@ -774,6 +816,7 @@ int main() {
   passed &= TestTemporalResetGate();
   passed &= TestModeSettingsCachePolicy();
   passed &= TestFunctionTableContract();
+  passed &= TestDirectProviderContract();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
   return passed ? 0 : 1;
 }
