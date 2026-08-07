@@ -601,6 +601,44 @@ bool TestTemporalResetGate() {
   return passed;
 }
 
+bool TestModeSettingsCachePolicy() {
+  const DetroitDlssModeSettings dlaa = {
+      .struct_size = sizeof(DetroitDlssModeSettings),
+      .abi_version = DETROIT_DLSS_ABI_VERSION,
+      .mode = DETROIT_DLSS_MODE_DLAA,
+      .output_width = 3440u,
+      .output_height = 1440u,
+      .render_width = 3440u,
+      .render_height = 1440u,
+      .min_render_width = 3440u,
+      .min_render_height = 1440u,
+      .max_render_width = 3440u,
+      .max_render_height = 1440u,
+  };
+
+  bool passed = true;
+  passed &= Expect(
+      dlss_bridge_client::IsModeSettingsCacheReusable(
+          dlaa, DETROIT_DLSS_MODE_DLAA, 3440u, 1440u),
+      "stable DLAA mode/output settings must bypass a repeated NGX query");
+  passed &= Expect(
+      !dlss_bridge_client::IsModeSettingsCacheReusable(
+          dlaa, DETROIT_DLSS_MODE_QUALITY, 3440u, 1440u),
+      "a quality-mode transition must invalidate cached NGX settings");
+  passed &= Expect(
+      !dlss_bridge_client::IsModeSettingsCacheReusable(
+          dlaa, DETROIT_DLSS_MODE_DLAA, 2560u, 1440u),
+      "an output-extent transition must invalidate cached NGX settings");
+
+  auto invalid = dlaa;
+  invalid.max_render_width = 0u;
+  passed &= Expect(
+      !dlss_bridge_client::IsModeSettingsCacheReusable(
+          invalid, DETROIT_DLSS_MODE_DLAA, 3440u, 1440u),
+      "an incomplete NGX settings response must never enter the hot-path cache");
+  return passed;
+}
+
 bool TestFunctionTableContract() {
   bool passed = true;
   DetroitDlssApiV2 api = {
@@ -786,6 +824,7 @@ int main() {
   passed &= TestFixedValuesAndBindings();
   passed &= TestSupportedBuildIdentity();
   passed &= TestTemporalResetGate();
+  passed &= TestModeSettingsCachePolicy();
   passed &= TestFunctionTableContract();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
   return passed ? 0 : 1;

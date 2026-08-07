@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <Windows.h>
@@ -164,6 +165,15 @@ inline std::atomic<RuntimeStatus> runtime_status = RuntimeStatus::kNative;
 // a process-global frame boolean can suppress CAS on the wrong in-flight frame.
 inline std::mutex dlss_output_mutex;
 inline std::unordered_map<std::uint64_t, bool> dlss_output_by_command_list;
+// Detroit records the main view and auxiliary full-resolution temporal passes
+// into different Vulkan command buffers. Applying NGX to every matching TAA
+// dispatch permanently pins one ~100 MiB scratch bundle to each reusable
+// command buffer. Learn the command buffers that also record the verified
+// scene composite, and run DLSS only on that main-view set.
+inline std::shared_mutex main_temporal_command_list_mutex;
+inline std::unordered_set<std::uint64_t> main_temporal_command_lists;
+inline thread_local std::uint64_t latest_temporal_command_list = 0u;
+inline thread_local std::uint64_t latest_temporal_dispatch_serial = 0u;
 inline std::atomic_uint64_t frame_counter = 0u;
 inline std::atomic_uint64_t evaluation_serial = 0u;
 inline std::atomic_uint64_t sr_preflight_serial = 0u;
@@ -226,6 +236,44 @@ template <typename... Values>
 
 inline void Log(reshade::log::level level, const std::string& message) {
   reshade::log::message(level, ("Detroit DLSS capture: " + message).c_str());
+}
+
+inline void ObserveTemporalCommandList(
+    std::uint64_t command_list, std::uint64_t dispatch_serial) noexcept {
+  latest_temporal_command_list = command_list;
+  latest_temporal_dispatch_serial = dispatch_serial;
+}
+
+inline void MarkMainTemporalCommandList(std::uint64_t command_list) {
+  if (command_list == 0u || latest_temporal_command_list != command_list
+      || latest_temporal_dispatch_serial == 0u) {
+    return;
+  }
+  latest_temporal_command_list = 0u;
+  latest_temporal_dispatch_serial = 0u;
+
+  bool inserted = false;
+  std::size_t learned_count = 0u;
+  {
+    std::unique_lock lock(main_temporal_command_list_mutex);
+    inserted = main_temporal_command_lists.insert(command_list).second;
+    learned_count = main_temporal_command_lists.size();
+  }
+  if (inserted) {
+    Log(
+        reshade::log::level::info,
+        std::format(
+            "learned main-view temporal command list 0x{:X} ({} total); auxiliary TAA command lists remain native.",
+            command_list,
+            learned_count));
+  }
+}
+
+[[nodiscard]] inline bool IsMainTemporalCommandList(
+    std::uint64_t command_list) {
+  if (command_list == 0u) return false;
+  std::shared_lock lock(main_temporal_command_list_mutex);
+  return main_temporal_command_lists.contains(command_list);
 }
 
 [[nodiscard]] inline RuntimeStatus GetStatus() {
@@ -650,6 +698,8 @@ inline void AfterNativeTemporalDispatch(
   if (context.cmd_list == nullptr) return;
   const auto dispatch_serial =
       evaluation_serial.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+  ObserveTemporalCommandList(
+      context.cmd_list->get_native(), dispatch_serial);
   // A later temporal dispatch in the same presented frame supersedes an
   // earlier result. Re-arm CAS until this dispatch independently succeeds.
   RecordDlssOutputForCommandList(context.cmd_list->get_native(), false);
@@ -861,8 +911,10 @@ inline void AfterNativeTemporalDispatch(
       exact_resource_formats && exact_descriptor_layouts
       && exact_resource_extents && sampled[4u].valid
       && frame_parameters.constants_valid;
+  const bool is_main_temporal_command_list =
+      IsMainTemporalCommandList(context.cmd_list->get_native());
 
-  if (gtao_temporal_input_valid) {
+  if (gtao_temporal_input_valid && is_main_temporal_command_list) {
     std::scoped_lock lock(gtao_temporal_input_mutex);
     latest_gtao_temporal_input = {
         .view = reshade::api::resource_view{sampled[4u].image_view},
@@ -877,6 +929,22 @@ inline void AfterNativeTemporalDispatch(
             gtao_previous_speed_flags_present),
         .valid = true,
     };
+  }
+
+  // The exact main-view command lists are learned from the later verified
+  // scene composite. A newly seen list gets one native warm-up recording and
+  // becomes eligible the next time Detroit records it. Auxiliary temporal
+  // passes keep their native output and no longer consume persistent NGX
+  // adapter scratch bundles.
+  if (mode != DETROIT_DLSS_MODE_NATIVE
+      && !is_main_temporal_command_list) {
+    if (runtime_status.load(std::memory_order_relaxed)
+        != RuntimeStatus::kDlssActive) {
+      runtime_status.store(
+          RuntimeStatus::kWaitingForDispatch,
+          std::memory_order_relaxed);
+    }
+    return;
   }
 
   DetroitDlssTemporalFrameInputs inputs = {
@@ -1037,9 +1105,14 @@ inline constexpr TemporalDispatchCallback kTemporalDispatchCallback;
 inline void Use(DWORD fdw_reason) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
-      std::scoped_lock lock(dlss_output_mutex);
-      dlss_output_by_command_list.clear();
-    }
+      {
+        std::scoped_lock lock(dlss_output_mutex);
+        dlss_output_by_command_list.clear();
+      }
+      {
+        std::unique_lock lock(main_temporal_command_list_mutex);
+        main_temporal_command_lists.clear();
+      }
       ClearLatestGtaoTemporalInput();
       last_logged_dlss_success_key.store(
           kUnloggedTelemetryKey,
@@ -1060,6 +1133,7 @@ inline void Use(DWORD fdw_reason) {
                   renodx::utils::command_action::COMMAND_TYPE_DISPATCH,
           });
       break;
+    }
     case DLL_PROCESS_DETACH:
       renodx::utils::command_action::Unregister(kTemporalDispatchCallback);
       // The Vulkan layer owns NGX/Vulkan teardown at vkDestroyDevice. Do not
@@ -1067,6 +1141,10 @@ inline void Use(DWORD fdw_reason) {
       {
         std::scoped_lock lock(dlss_output_mutex);
         dlss_output_by_command_list.clear();
+      }
+      {
+        std::unique_lock lock(main_temporal_command_list_mutex);
+        main_temporal_command_lists.clear();
       }
       ClearLatestGtaoTemporalInput();
       break;

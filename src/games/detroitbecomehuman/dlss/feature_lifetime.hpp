@@ -38,10 +38,11 @@ struct FeatureCreationGate final {
  * references owned by successful queue submissions. A feature generation may
  * be destroyed only after both kinds of references have disappeared.
  *
- * Fence completion is intentionally not inferred. Reusable command buffers
- * retain their recorded reference until an operation that invalidates the
- * recording succeeds. This can delay destruction, but it cannot release an
- * NGX feature while a command buffer can still be submitted.
+ * Fence completion is consumed only when the Vulkan layer observes it
+ * explicitly. Reusable command buffers retain their recorded reference until
+ * an operation that invalidates the recording succeeds. One-time command
+ * buffers may release their recording and private scratch resources after the
+ * last matching submission has completed.
  */
 class FeatureLifetimeTracker final {
  public:
@@ -143,15 +144,42 @@ class FeatureLifetimeTracker final {
     return false;
   }
 
-  void CompleteQueue(Handle queue) {
+  [[nodiscard]] std::vector<Handle> CompleteSubmission(
+      Handle queue, const SubmissionSnapshot& snapshot) {
+    std::vector<SubmittedCommand> completed;
+    if (queue == 0u || snapshot.Empty()) return {};
     const auto found = queue_submissions_.find(queue);
-    if (found == queue_submissions_.end()) return;
-    auto submissions = std::move(found->second);
-    queue_submissions_.erase(found);
-    CompleteSubmissions(submissions);
+    if (found == queue_submissions_.end()) return {};
+
+    auto& queued = found->second;
+    completed.reserve(snapshot.commands.size());
+    for (const auto& command : snapshot.commands) {
+      const auto submitted = std::find_if(
+          queued.begin(),
+          queued.end(),
+          [&command](const SubmittedCommand& candidate) {
+            return candidate.command_buffer == command.command_buffer
+                   && candidate.recording_epoch == command.recording_epoch
+                   && candidate.one_time_submit == command.one_time_submit
+                   && candidate.generations == command.generations;
+          });
+      if (submitted == queued.end()) continue;
+      completed.push_back(std::move(*submitted));
+      queued.erase(submitted);
+    }
+    if (queued.empty()) queue_submissions_.erase(found);
+    return CompleteSubmissions(completed);
   }
 
-  void CompleteDevice() {
+  [[nodiscard]] std::vector<Handle> CompleteQueue(Handle queue) {
+    const auto found = queue_submissions_.find(queue);
+    if (found == queue_submissions_.end()) return {};
+    auto submissions = std::move(found->second);
+    queue_submissions_.erase(found);
+    return CompleteSubmissions(submissions);
+  }
+
+  [[nodiscard]] std::vector<Handle> CompleteDevice() {
     std::vector<SubmittedCommand> submissions;
     for (auto& [queue, queued] : queue_submissions_) {
       submissions.insert(
@@ -160,7 +188,7 @@ class FeatureLifetimeTracker final {
           std::make_move_iterator(queued.end()));
     }
     queue_submissions_.clear();
-    CompleteSubmissions(submissions);
+    return CompleteSubmissions(submissions);
   }
 
   void DiscardCommandBuffer(Handle command_buffer) {
@@ -242,7 +270,8 @@ class FeatureLifetimeTracker final {
     return epoch;
   }
 
-  void CompleteSubmissions(const std::vector<SubmittedCommand>& submissions) {
+  [[nodiscard]] std::vector<Handle> CompleteSubmissions(
+      const std::vector<SubmittedCommand>& submissions) {
     std::vector<std::pair<Handle, std::uint64_t>> completed_one_time_recordings;
     completed_one_time_recordings.reserve(submissions.size());
     for (const auto& submission : submissions) {
@@ -262,6 +291,8 @@ class FeatureLifetimeTracker final {
       }
     }
 
+    std::vector<Handle> completed_one_time_command_buffers;
+    completed_one_time_command_buffers.reserve(completed_one_time_recordings.size());
     for (const auto& [command_buffer, epoch] : completed_one_time_recordings) {
       const auto recording = command_recordings_.find(command_buffer);
       if (recording == command_recordings_.end()
@@ -271,7 +302,9 @@ class FeatureLifetimeTracker final {
       }
       DecrementRecorded(recording->second.generations);
       command_recordings_.erase(recording);
+      completed_one_time_command_buffers.push_back(command_buffer);
     }
+    return completed_one_time_command_buffers;
   }
 
   void DecrementInFlight(const SubmittedCommand& submission) {

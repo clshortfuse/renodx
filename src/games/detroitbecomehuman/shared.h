@@ -28,10 +28,15 @@ struct ShaderInjectData {
   float scene_path_active;
   float ui_path_active;
   float reserved;
+
+  float dof_edge_threshold;
+  float dof_dilation_amount;
+  float dof_mode;
+  float dof_reserved1;
 };
 
 #ifdef __cplusplus
-static_assert(sizeof(ShaderInjectData) == 80u);
+static_assert(sizeof(ShaderInjectData) == 96u);
 #endif
 
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
@@ -59,6 +64,9 @@ static_assert(sizeof(ShaderInjectData) == 80u);
 #define CUSTOM_UI_PATH_ACTIVE    shader_injection.ui_path_active
 #define CUSTOM_DLSS_ACTIVE       (shader_injection.reserved >= 0.5f)
 #define CUSTOM_DLAA_SHARPENING   clamp(shader_injection.reserved - 1.f, 0.f, 1.f)
+#define CUSTOM_DOF_EDGE_THRESHOLD shader_injection.dof_edge_threshold
+#define CUSTOM_DOF_DILATION_AMOUNT shader_injection.dof_dilation_amount
+#define CUSTOM_DOF_MODE           shader_injection.dof_mode
 #define CUSTOM_HDR_ACTIVE        (shader_injection.output_is_hdr >= 0.5f \
                                   && shader_injection.output_mode != 1.f)
 

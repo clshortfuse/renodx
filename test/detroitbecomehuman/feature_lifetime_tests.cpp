@@ -31,11 +31,14 @@ bool TestRecordedReferenceSurvivesSubmitAndIdle() {
   passed &= Expect(
       tracker.InFlightReferenceCount(1u) == 1u,
       "successful submit must add an in-flight feature reference");
-  tracker.CompleteQueue(20u);
+  const auto completed = tracker.CompleteQueue(20u);
   passed &= Expect(
       tracker.RecordedReferenceCount(1u) == 1u
           && tracker.InFlightReferenceCount(1u) == 0u,
       "queue idle must complete work without invalidating a reusable recording");
+  passed &= Expect(
+      completed.empty(),
+      "a reusable recording must not expose its resources for scratch recycling");
   tracker.DiscardCommandBuffer(10u);
   passed &= Expect(
       !tracker.IsReferenced(1u),
@@ -47,7 +50,7 @@ bool TestUnsubmittedRecordingBlocksRelease() {
   dlss::FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(11u, false);
   tracker.RecordFeatureUse(11u, 2u);
-  tracker.CompleteDevice();
+  (void)tracker.CompleteDevice();
 
   bool passed = true;
   passed &= Expect(
@@ -83,11 +86,37 @@ bool TestOneTimeRecordingCompletesAtIdle() {
   tracker.RecordFeatureUse(13u, 4u);
   const auto submission = tracker.CaptureSubmission({13u});
   tracker.CommitSuccessfulSubmit(21u, submission);
-  tracker.CompleteQueue(21u);
+  const auto completed = tracker.CompleteQueue(21u);
 
-  return Expect(
+  bool passed = true;
+  passed &= Expect(
       !tracker.IsReferenced(4u),
       "one-time recording must become invalid after its successful submit completes");
+  passed &= Expect(
+      completed == std::vector<dlss::FeatureLifetimeTracker::Handle>{13u},
+      "queue completion must identify the one-time command buffer for scratch recycling");
+  return passed;
+}
+
+bool TestOneTimeRecordingCompletesAtFence() {
+  dlss::FeatureLifetimeTracker tracker;
+  tracker.BeginCommandBuffer(27u, true);
+  tracker.RecordFeatureUse(27u, 12u);
+  const auto captured = tracker.CaptureSubmission({27u});
+  const auto committed = tracker.CommitSuccessfulSubmit(28u, captured);
+
+  const auto completed = tracker.CompleteSubmission(28u, committed);
+  bool passed = true;
+  passed &= Expect(
+      completed == std::vector<dlss::FeatureLifetimeTracker::Handle>{27u},
+      "a signaled fence must identify its completed one-time command buffer");
+  passed &= Expect(
+      !tracker.IsReferenced(12u),
+      "fence completion must release recorded and in-flight one-time references");
+  passed &= Expect(
+      tracker.CompleteSubmission(28u, committed).empty(),
+      "observing the same fence twice must be idempotent");
+  return passed;
 }
 
 bool TestSimultaneousOneTimeSubmissionsWaitForEveryQueue() {
@@ -99,15 +128,21 @@ bool TestSimultaneousOneTimeSubmissionsWaitForEveryQueue() {
   tracker.CommitSuccessfulSubmit(23u, submission);
 
   bool passed = true;
-  tracker.CompleteQueue(22u);
+  const auto first_completed = tracker.CompleteQueue(22u);
   passed &= Expect(
       tracker.IsReferenced(5u)
           && tracker.InFlightReferenceCount(5u) == 1u,
       "one-time recording must survive while another queue submission is pending");
-  tracker.CompleteQueue(23u);
+  passed &= Expect(
+      first_completed.empty(),
+      "the first of multiple submissions must not recycle shared scratch resources");
+  const auto last_completed = tracker.CompleteQueue(23u);
   passed &= Expect(
       !tracker.IsReferenced(5u),
       "last queue completion must invalidate the one-time recording");
+  passed &= Expect(
+      last_completed == std::vector<dlss::FeatureLifetimeTracker::Handle>{14u},
+      "the final submission completion must expose the one-time command buffer");
   return passed;
 }
 
@@ -123,7 +158,7 @@ bool TestResetProvesConservativeSubmissionComplete() {
   passed &= Expect(
       !tracker.IsReferenced(6u),
       "successful reset/free must clear conservative submitted references");
-  tracker.CompleteQueue(24u);
+  (void)tracker.CompleteQueue(24u);
   passed &= Expect(
       !tracker.IsReferenced(6u),
       "a later queue idle must not underflow a discarded submission");
@@ -238,6 +273,7 @@ int main() {
   passed &= TestUnsubmittedRecordingBlocksRelease();
   passed &= TestFailedSubmitDoesNotAddInFlightReference();
   passed &= TestOneTimeRecordingCompletesAtIdle();
+  passed &= TestOneTimeRecordingCompletesAtFence();
   passed &= TestSimultaneousOneTimeSubmissionsWaitForEveryQueue();
   passed &= TestResetProvesConservativeSubmissionComplete();
   passed &= TestMultipleGenerationsInOneRecording();

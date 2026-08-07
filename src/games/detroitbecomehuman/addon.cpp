@@ -943,11 +943,14 @@ void ApplyDlaaSharpeningPayload(
   if (gate.active && strength_percent != 0u && strength_percent != 100u) {
     return;
   }
+  // The temporal pass can legitimately report fallback and success for
+  // different command lists recorded in the same frame. Neither that runtime
+  // status nor the exact-list diagnostic changes the sharpening payload. Keep
+  // them out of the deduplication key so the render thread cannot turn an
+  // expected 5 <-> 6 transition into synchronous per-frame log I/O.
   const auto log_key = temporal_capture::MakeTelemetryKey(
       static_cast<std::uint32_t>(temporal_capture::GetMode()),
-      static_cast<std::uint32_t>(temporal_capture::GetStatus()),
       gate.active,
-      gate.exact_command_list_match,
       strength_percent);
   if (last_dlaa_sharpening_log_key.exchange(
           log_key,
@@ -968,6 +971,9 @@ void ApplyDlaaSharpeningPayload(
 }
 
 bool OnSceneDraw(reshade::api::command_list* command_list) {
+  if (command_list != nullptr) {
+    temporal_capture::MarkMainTemporalCommandList(command_list->get_native());
+  }
   ApplyDlaaSharpeningPayload(command_list, "scene RCAS", true);
   return true;
 }
@@ -1003,6 +1009,14 @@ bool ShouldUseGtaoMain(reshade::api::command_list* command_list) {
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    {0xD82A21F2, {
+                     .crc32 = 0xD82A21F2,
+                     .code = __0xD82A21F2,
+                 }},
+    {0xE9907978, {
+                     .crc32 = 0xE9907978,
+                     .code = __0xE9907978,
+                 }},
     {0x2D2071B2, {
                      .crc32 = 0x2D2071B2,
                      .code = __0x2D2071B2,
@@ -1120,6 +1134,45 @@ renodx::utils::settings::Settings settings =
                 .on_change_value = [](float, float current) {
                   SetGtaoEnabled(current);
                 },
+            }},
+            {{
+                .key = "DofFixMode",
+                .binding = &shader_injection.dof_mode,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 2.f,
+                .can_reset = true,
+                .label = "CoC Edge Correction",
+                .section = "Depth of Field",
+                .tooltip = "Vanilla restores Detroit's original tile CoC. Edge Refinement uses local depth samples at mixed-depth tiles. Smooth Tile Edges also softens the native 3x3 CoC expansion.",
+                .labels = {"Vanilla", "Edge Refinement", "Smooth Tile Edges"},
+            }},
+            {{
+                .key = "DofCoCEdgeThreshold",
+                .binding = &shader_injection.dof_edge_threshold,
+                .default_value = 0.001f,
+                .can_reset = true,
+                .label = "Edge Refinement Threshold",
+                .section = "Depth of Field",
+                .tooltip = "CoC difference needed before local depth samples are used. Lower values refine more hair/foliage edges. Detroit's original threshold is 1.563%.",
+                .min = 0.f,
+                .max = 2.f,
+                .format = "%.3f%%",
+                .is_enabled = []() { return shader_injection.dof_mode >= 1.f; },
+                .parse = [](float value) { return value * 0.01f; },
+            }},
+            {{
+                .key = "DofCoCDilation",
+                .binding = &shader_injection.dof_dilation_amount,
+                .default_value = 35.f,
+                .can_reset = true,
+                .label = "CoC Dilation",
+                .section = "Depth of Field",
+                .tooltip = "Strength of Detroit's native 3x3 CoC dilation. 100% exactly restores vanilla; lower values reduce tile-shaped focus steps.",
+                .min = 0.f,
+                .max = 100.f,
+                .format = "%.0f%%",
+                .is_enabled = []() { return shader_injection.dof_mode >= 2.f; },
+                .parse = [](float value) { return value * 0.01f; },
             }},
             {{
                 .key = "DLSSMode",
@@ -1307,6 +1360,9 @@ void OnPresetOff() {
       {"ColorGradeFlare", 0.f},
       {"SceneGradeStrength", 100.f},
       {"AmbientOcclusionMode", AMBIENT_OCCLUSION_MODE_VANILLA},
+      {"DofFixMode", 0.f},
+      {"DofCoCEdgeThreshold", 1.563f},
+      {"DofCoCDilation", 100.f},
       {"DLSSMode", static_cast<float>(DETROIT_DLSS_MODE_NATIVE)},
       {"DLAASharpening", 0.f},
       {"CASMode", CAS_MODE_VANILLA},

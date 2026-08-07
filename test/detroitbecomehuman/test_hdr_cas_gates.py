@@ -324,6 +324,9 @@ class HDRAndCASGateTests(unittest.TestCase):
             encoding="utf-8"
         )
         addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
+        temporal_capture = (SOURCE_DIR / "temporal_capture.hpp").read_text(
+            encoding="utf-8"
+        )
 
         expected_constants = {
             "OUTPUT_MODE_AUTO": "0.f",
@@ -402,6 +405,39 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"const\s+bool\s+active\s*=\s*"
             r"temporal_capture::GetMode\(\)\s*==\s*"
             r"DETROIT_DLSS_MODE_DLAA\s*;",
+        )
+        sharpening_log_key_start = addon.index(
+            "const auto log_key = temporal_capture::MakeTelemetryKey(",
+            addon.index("void ApplyDlaaSharpeningPayload("),
+        )
+        sharpening_log_key_end = addon.index(
+            "if (last_dlaa_sharpening_log_key.exchange(",
+            sharpening_log_key_start,
+        )
+        sharpening_log_key = addon[
+            sharpening_log_key_start:sharpening_log_key_end
+        ]
+        self.assertIn("temporal_capture::GetMode()", sharpening_log_key)
+        self.assertIn("strength_percent", sharpening_log_key)
+        self.assertNotIn("temporal_capture::GetStatus()", sharpening_log_key)
+        self.assertNotIn("exact_command_list_match", sharpening_log_key)
+        self.assertRegex(
+            addon,
+            r"bool\s+OnSceneDraw\([^)]*\)\s*\{[\s\S]*?"
+            r"MarkMainTemporalCommandList\(command_list->get_native\(\)\)"
+            r";[\s\S]*?ApplyDlaaSharpeningPayload\(",
+        )
+        self.assertIn("ObserveTemporalCommandList(", temporal_capture)
+        self.assertRegex(
+            temporal_capture,
+            r"if\s*\(gtao_temporal_input_valid\s*&&\s*"
+            r"is_main_temporal_command_list\)\s*\{",
+        )
+        self.assertRegex(
+            temporal_capture,
+            r"if\s*\(mode\s*!=\s*DETROIT_DLSS_MODE_NATIVE\s*&&\s*"
+            r"!is_main_temporal_command_list\)"
+            r"\s*\{[\s\S]*?RuntimeStatus::kWaitingForDispatch[\s\S]*?return;",
         )
 
         cap_start = shader.index("vec3 _6250 =")

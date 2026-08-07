@@ -100,6 +100,25 @@ class TemporalResetGate {
          && normal.resource.height == expected_height;
 }
 
+// NGX optimal settings depend on the selected quality mode and output extent,
+// not on per-frame jitter/history values. Re-running the vendor callback for
+// every temporal dispatch adds avoidable CPU/driver work on the render thread.
+// A context identity change clears configured_settings_, so a reusable entry is
+// always tied to the same live Vulkan device and NGX capability context.
+[[nodiscard]] constexpr bool IsModeSettingsCacheReusable(
+    const DetroitDlssModeSettings& settings,
+    DetroitDlssMode mode,
+    std::uint32_t output_width,
+    std::uint32_t output_height) noexcept {
+  return settings.struct_size >= sizeof(DetroitDlssModeSettings)
+         && settings.abi_version == DETROIT_DLSS_ABI_VERSION
+         && settings.mode == mode && settings.output_width == output_width
+         && settings.output_height == output_height && settings.render_width != 0u
+         && settings.render_height != 0u && settings.min_render_width != 0u
+         && settings.min_render_height != 0u && settings.max_render_width != 0u
+         && settings.max_render_height != 0u;
+}
+
 class Client {
  public:
   // Release an existing NGX feature as soon as the UI selects Native. A later
@@ -345,20 +364,25 @@ class Client {
     const auto availability = dlss_policy::CheckModeAvailability(mode, support);
     if (!availability.available) return reject({.reason = availability.reason});
 
-    DetroitDlssModeSettings settings = {
-        .struct_size = sizeof(DetroitDlssModeSettings),
-        .abi_version = DETROIT_DLSS_ABI_VERSION,
-        .mode = mode,
-    };
-    const auto query_status = api_.query_mode(
-        mode, inputs.output_width, inputs.output_height, &settings);
-    if (query_status != DETROIT_DLSS_RESULT_SUCCESS) {
-      return reject({
-          .status = query_status,
-          .reason = query_status == DETROIT_DLSS_RESULT_ERROR
-                        ? dlss_policy::FallbackReason::kEvaluateError
-                        : dlss_policy::FallbackReason::kModeUnsupported,
-      });
+    DetroitDlssModeSettings settings = configured_settings_;
+    if (!configured_
+        || !IsModeSettingsCacheReusable(
+            settings, mode, inputs.output_width, inputs.output_height)) {
+      settings = {
+          .struct_size = sizeof(DetroitDlssModeSettings),
+          .abi_version = DETROIT_DLSS_ABI_VERSION,
+          .mode = mode,
+      };
+      const auto query_status = api_.query_mode(
+          mode, inputs.output_width, inputs.output_height, &settings);
+      if (query_status != DETROIT_DLSS_RESULT_SUCCESS) {
+        return reject({
+            .status = query_status,
+            .reason = query_status == DETROIT_DLSS_RESULT_ERROR
+                          ? dlss_policy::FallbackReason::kEvaluateError
+                          : dlss_policy::FallbackReason::kModeUnsupported,
+        });
+      }
     }
 
     const std::uint64_t scaled_width =
