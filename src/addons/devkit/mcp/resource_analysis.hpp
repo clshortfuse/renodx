@@ -28,8 +28,8 @@
 #include <include/reshade.hpp>
 
 #include "../../../utils/exr.hpp"
-#include "../../../utils/mcp/types.hpp"
 #include "../../../utils/mcp/arguments.hpp"
+#include "../../../utils/mcp/types.hpp"
 #include "../../../utils/png.hpp"
 #include "../../../utils/resource.hpp"
 #include "resource_handle.hpp"
@@ -733,8 +733,8 @@ inline void EncodePreviewPixel(
                     ? "Failed to create a GPU-to-CPU Vulkan swapchain readback buffer."
                     : "Failed to create a GPU-to-CPU readback resource.",
         .structured_content = json{{"error", readback_plan.use_buffer
-                                                ? "Failed to create a GPU-to-CPU Vulkan swapchain readback buffer."
-                                                : "Failed to create a GPU-to-CPU readback resource."}},
+                                                 ? "Failed to create a GPU-to-CPU Vulkan swapchain readback buffer."
+                                                 : "Failed to create a GPU-to-CPU readback resource."}},
         .is_error = true,
     };
   }

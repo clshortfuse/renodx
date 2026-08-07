@@ -2423,7 +2423,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerAllocateDescriptorSets(
     const auto layout =
         state->descriptor_set_layouts.find(ToOpaque(allocate_info->pSetLayouts[index]));
     if (layout == state->descriptor_set_layouts.end()
-         || !layout->second.temporal_candidate) {
+        || !layout->second.temporal_candidate) {
       continue;
     }
     state->descriptor_sets[ToOpaque(descriptor_sets[index])] = {

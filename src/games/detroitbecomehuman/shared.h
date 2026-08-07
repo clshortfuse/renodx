@@ -28,7 +28,6 @@ struct ShaderInjectData {
   float scene_path_active;
   float ui_path_active;
   float reserved;
-
 };
 
 #ifdef __cplusplus

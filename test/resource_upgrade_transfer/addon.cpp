@@ -37,32 +37,32 @@ void OnInitDevice(reshade::api::device* device) {
 
 bool OnInspectCopyTextureToBuffer(
     reshade::api::command_list* cmd_list,
-  reshade::api::resource source,
-  uint32_t source_subresource,
-  const reshade::api::subresource_box* source_box,
+    reshade::api::resource source,
+    uint32_t source_subresource,
+    const reshade::api::subresource_box* source_box,
     reshade::api::resource dest,
     uint64_t dest_offset,
-  uint32_t row_length,
-  uint32_t slice_height) {
+    uint32_t row_length,
+    uint32_t slice_height) {
   if (GetEnvironmentVariableW(L"RENODX_TRANSFER_INSPECT_UPGRADED", nullptr, 0u) == 0u) return false;
 
   renodx::utils::resource::upgrade::CopyRedirectTexture source_texture;
   if (!renodx::utils::resource::upgrade::GetCopyRedirectTexture(source, &source_texture)
-    || source_texture.clone.handle == 0u) {
+      || source_texture.clone.handle == 0u) {
     return false;
   }
 
   cmd_list->copy_texture_to_buffer(
-    source_texture.clone,
-    source_subresource,
-    source_box,
+      source_texture.clone,
+      source_subresource,
+      source_box,
       dest,
       dest_offset,
-    row_length,
-    slice_height);
+      row_length,
+      slice_height);
   reshade::log::message(
       reshade::log::level::info,
-    "Copied upgraded texture into the application buffer for test inspection.");
+      "Copied upgraded texture into the application buffer for test inspection.");
   return false;
 }
 
