@@ -1,6 +1,10 @@
 #include "../common.hlsli"
 #include "./test24.hlsli"
 
+static const float MID_GRAY_IN = 0.119121851127f;
+static const float MID_GRAY_OUT = 0.163979921774f;
+static const float MID_GRAY_SLOPE = 1.95752308422f;
+
 float3 ApplyAdaptiveMBPurity(float3 lms_input, float3 adaptive_neutral_lms, float purity_scale) {
   if (abs(purity_scale - 1.f) <= 1e-5f) return lms_input;
 
@@ -159,34 +163,50 @@ float3 ApplyAnchoredPowerContrast(
   return renodx::math::CopySign(contrasted_normalized * anchor_out, color);
 }
 
-float psycho24_AutoCompressionFromCenteredReferenceRange(
-    float anchor_out_yf,
-    float peak_yf) {
-  static const float PSYCHO24_REFERENCE_CENTERED_RANGE_SIDE_COUNT = 2.f;
-  static const float PSYCHO24_REFERENCE_SIMULTANEOUS_RANGE_LOG10 = 3.7f;
-  static const float PSYCHO24_MIN_AUTO_COMPRESSION = 1.f;
+/// Identity through anchor; then approaches peak monotonically and concave down.
+/// The anchor join is C2 continuous. Requires anchor < peak and compression_strength >= 1.
+#define APPLYANCHOREDCUBICSHOULDER_GENERATOR(T)                                                          \
+  T ApplyAnchoredCubicShoulder(T color, T peak, T anchor, float compression_strength) {                  \
+    T shoulder_range = peak - anchor;                                                                    \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                                \
+    T weighted_distance = compression_strength * distance_from_anchor;                                   \
+    T response_numerator = distance_from_anchor * (shoulder_range + weighted_distance);                  \
+    T response_denominator = mad(                                                                        \
+        shoulder_range, shoulder_range, weighted_distance * (shoulder_range + distance_from_anchor));    \
+    return mad(shoulder_range, response_numerator / response_denominator, color - distance_from_anchor); \
+  }
 
-  float peak_over_anchor = peak_yf / anchor_out_yf;
-  float reference_one_side_range_log10 = PSYCHO24_REFERENCE_SIMULTANEOUS_RANGE_LOG10 / PSYCHO24_REFERENCE_CENTERED_RANGE_SIDE_COUNT;
-  float actual_above_adaptation_range_log10 = log10(peak_over_anchor);
-  return max(reference_one_side_range_log10 / actual_above_adaptation_range_log10, PSYCHO24_MIN_AUTO_COMPRESSION);
-}
+/// Identity through anchor; reaches peak at clip, then remains flat.
+/// Monotonic, concave down, and C2 when clip meets the calculated minimum.
+#define APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(T)                                                                        \
+  T ApplyAnchoredCubicShoulder(                                                                                             \
+      T color, T peak, T anchor, float compression_strength, T clip) {                                                      \
+    T shoulder_range = peak - anchor;                                                                                       \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                                                   \
+    T input_range = clip - anchor;                                                                                          \
+    T clipped_distance = min(distance_from_anchor, input_range);                                                            \
+    T clip_position = clipped_distance / input_range;                                                                       \
+    T clip_position_squared = clip_position * clip_position;                                                                \
+    T clip_position_cubed = clip_position_squared * clip_position;                                                          \
+    T residual_weight = (T)1.f - clip_position_cubed * mad(clip_position, mad((T)6.f, clip_position, (T) - 15.f), (T)10.f); \
+    T weighted_distance = compression_strength * clipped_distance;                                                          \
+    T response_numerator = clipped_distance * (shoulder_range + weighted_distance);                                         \
+    T remaining_distance = shoulder_range * mad(compression_strength - 1.f, clipped_distance, shoulder_range);              \
+    T response_denominator = mad(residual_weight, remaining_distance, response_numerator);                                  \
+    return mad(shoulder_range, response_numerator / response_denominator, color - distance_from_anchor);                    \
+  }
 
-float3 ComputePeakCompressionRolloff(
-    float3 color_lms,
-    float3 anchor_lms,
-    float3 peak_lms) {
-  float compression_power = psycho24_AutoCompressionFromCenteredReferenceRange(renodx::color::yf::from::LMS(anchor_lms),
-                                                                               renodx::color::yf::from::LMS(peak_lms));
+APPLYANCHOREDCUBICSHOULDER_GENERATOR(float)
+APPLYANCHOREDCUBICSHOULDER_GENERATOR(float3)
+APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(float)
+APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(float3)
+#undef APPLYANCHOREDCUBICSHOULDER_GENERATOR
+#undef APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR
 
-  float3 anchor_over_peak = anchor_lms / peak_lms;
-  float3 compression_slope_norm = 1.f - pow(anchor_over_peak, compression_power);
-
-  float3 compression_input = pow(max(color_lms / anchor_lms, 0.f), compression_power / compression_slope_norm);
-
-  float3 compression_white_offset = pow(peak_lms / anchor_lms, compression_power) - 1.f;
-
-  return pow(compression_input / (compression_input + compression_white_offset), rcp(compression_power));
+float ComputeAnchoredCubicShoulderMaxChannelScale(float3 color, float peak, float anchor, float compression_strength) {
+  float max_channel = renodx::math::Max(abs(color));
+  float compressed_max = ApplyAnchoredCubicShoulder(max_channel, peak, anchor, compression_strength);
+  return renodx::math::DivideSafe(compressed_max, max_channel, 1.f);
 }
 
 /// Elite Dangerous vanilla SDR tonemapper.
@@ -264,7 +284,11 @@ float3 ApplyLUT(float3 lut_input_gamma, Texture3D<float4> lut_texture, SamplerSt
 
   float maxch_scale = 1.f;
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    maxch_scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(lut_input_linear);
+    if (RENODX_TONE_MAP_TYPE == 1.f) {  // Vanilla+
+      maxch_scale = ComputeAnchoredCubicShoulderMaxChannelScale(lut_input_linear, 1.f, MID_GRAY_OUT, 1.f);
+    } else {  // Custom
+      maxch_scale = ComputeAnchoredCubicShoulderMaxChannelScale(lut_input_linear, 1.f, MID_GRAY_IN, 1.f);
+    }
     lut_input_linear *= maxch_scale;
     lut_input_gamma = renodx::color::gamma::Encode(lut_input_linear, 2.2f);
   }
@@ -287,10 +311,6 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
 
   float3 untonemapped = renodx::color::gamma::DecodeSafe(untonemapped_gamma, 2.2f);
 
-  const float MID_GRAY_IN = 0.119121851127f;
-  const float MID_GRAY_OUT = 0.163979921774f;
-  const float MID_GRAY_SLOPE = 1.95752308422f;
-
   float3 tonemapped;
   if (RENODX_TONE_MAP_TYPE == 1.f) {  // Vanilla+
     untonemapped = max(0, renodx::color::bt2020::from::BT709(untonemapped));
@@ -309,7 +329,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
                                             RENODX_TONE_MAP_DECHROMA);
     untonemapped = max(untonemapped, 1e-7f);
 
-    tonemapped = renodx::tonemap::neutwo::PerChannel(untonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    tonemapped = ApplyAnchoredCubicShoulder(untonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, MID_GRAY_OUT, 1.f);
     tonemapped = renodx::color::bt709::from::BT2020(tonemapped);
   } else {  // Custom
     float3 untonemapped_lms = max(0, renodx::color::lms::from::BT709(untonemapped));
@@ -352,21 +372,28 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
                                        desired_background_state_lms);
     graded_lms = max(graded_lms, 1e-7f);
 
-    // Apply Test24 peak compression with compression = 0 auto behavior.
-    float3 compression_rolloff = ComputePeakCompressionRolloff(graded_lms, desired_background_state_lms, peak_lms);
-    float3 compressed_lms = peak_lms * compression_rolloff;
-
-    // Test24 authored adaptive MacLeod-Boynton hue-direction restoration.
-    float to_white_progress = max(compression_rolloff.x, max(compression_rolloff.y, compression_rolloff.z));
-    float3 hue_restored_lms = renodx_custom::tonemap::psychov::psycho24_ApplyManualHueDirection(
-        compressed_lms,
+#if 1
+    // Restore the pre-contrast adaptive-MB hue direction before compression,
+    // using input midgray rather than peak as full to-white progress.
+    float to_white_progress = renodx::math::DivideSafe(
+        renodx::color::yf::from::LMS(untonemapped_lms),
+        renodx::color::yf::from::LMS(current_adaptive_state_lms),
+        1.f);
+    float3 hue_corrected_lms = renodx_custom::tonemap::psychov::psycho24_ApplyManualHueDirection(
         graded_lms,
-        desired_background_state_lms,
+        untonemapped_lms,
+        current_adaptive_state_lms,
         to_white_progress);
+    float3 shoulder_input_lms = lerp(graded_lms, hue_corrected_lms, 0.3f);
+#else
+    float3 shoulder_input_lms = graded_lms;
+#endif
+
+    float3 compressed_lms = ApplyAnchoredCubicShoulder(shoulder_input_lms, peak_lms, desired_background_state_lms, 1.5f, renodx::color::lms::from::BT2020(100.f));
 
     // Test24 adaptive weighted-LMS compression against the BT.2020 boundary.
     float3 display_scaled_relative_weighted = renodx_custom::tonemap::psychov::psycho24_ToAdaptiveRelativeWeightedLMS(
-        hue_restored_lms,
+        compressed_lms,
         desired_background_state_lms);
     display_scaled_relative_weighted = renodx::color::gamut::GamutCompressWeightedLMSCoreRGBBoundFromAdaptiveWeightedInput(
         display_scaled_relative_weighted,
