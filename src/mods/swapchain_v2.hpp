@@ -475,6 +475,7 @@ static void DestroySwapchainProxyItems(reshade::api::device* device, DeviceData*
   for (auto& [handle, pass] : data->swapchain_proxy_passes) {
     assert(pass != nullptr);
     pass->Destroy(device);
+    delete pass;
   }
   data->swapchain_proxy_passes.clear();
 }
@@ -1251,6 +1252,7 @@ inline void OnPresent(
 
   if (!proxy_pass->Render(swapchain, queue)) {
     proxy_pass->Destroy(device);
+    delete proxy_pass;
     data->swapchain_proxy_passes.erase(back_buffer_handle);
   }
 }
