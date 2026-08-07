@@ -141,10 +141,10 @@ void main()
     float _4359 = uintBitsToFloat(_2697.g_cbCAS.vC1.x);
     if (CUSTOM_DLSS_ACTIVE)
     {
-        // The addon sets this payload only after a valid DLAA output on the
-        // exact command list. Zero preserves the unsharpened reconstruction;
-        // one restores Detroit's full adaptive CAS coefficient.
-        _4359 *= CUSTOM_DLAA_SHARPENING;
+        // DLAA sharpening now runs as scene-linear RCAS in the always-present
+        // EBFBDDB1 compute pass. If this optional native CAS variant is used,
+        // suppress its lobe to avoid sharpening the same frame twice.
+        _4359 = 0.0;
     }
     else if (use_hdr_safe_path)
     {

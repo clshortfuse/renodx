@@ -11,6 +11,7 @@
 #include <bit>
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <format>
@@ -895,6 +896,81 @@ void RestoreUltrawidePatch() {
 ShaderInjectData shader_injection;
 std::atomic_bool scene_path_seen = false;
 std::atomic_bool ui_path_seen = false;
+std::atomic_uint64_t last_dlaa_sharpening_log_key =
+    std::numeric_limits<std::uint64_t>::max();
+
+struct DlaaSharpeningGate {
+  bool active = false;
+  bool exact_command_list_match = false;
+  float strength = 0.f;
+};
+
+DlaaSharpeningGate GetDlaaSharpeningGate(
+    reshade::api::command_list* command_list) {
+  const bool exact_command_list_match =
+      command_list != nullptr
+      && temporal_capture::QueryDlssOutputForCommandList(
+          command_list->get_native());
+  // Detroit's main menu and some transition frames execute the scene
+  // composite without recording the temporal TAA pass at all. Keep the
+  // selected post-AA sharpening deterministic there; in gameplay the same
+  // pass runs immediately after the verified DLAA output. Runtime status still
+  // reports whether the reconstruction itself is DLAA or native fallback.
+  const bool active =
+      temporal_capture::GetMode() == DETROIT_DLSS_MODE_DLAA;
+  return {
+      .active = active,
+      .exact_command_list_match = exact_command_list_match,
+      .strength = active ? std::clamp(dlaa_sharpening, 0.f, 1.f) : 0.f,
+  };
+}
+
+void ApplyDlaaSharpeningPayload(
+    reshade::api::command_list* command_list,
+    std::string_view pass_name,
+    bool log_gate) {
+  const auto gate = GetDlaaSharpeningGate(command_list);
+  // One marks the selected DLAA post-AA path; the fractional excess carries
+  // the independent scene-linear RCAS strength [0, 1]. The push constants are
+  // copied into this dispatch, so later in-flight frames cannot alter it.
+  shader_injection.reserved = gate.active ? 1.f + gate.strength : 0.f;
+
+  if (!log_gate) return;
+  const auto strength_percent = static_cast<std::uint32_t>(
+      std::lround(gate.strength * 100.f));
+  // Dragging an ImGui slider can otherwise emit one line per rendered frame.
+  // Endpoint telemetry is enough to prove both passthrough and full RCAS.
+  if (gate.active && strength_percent != 0u && strength_percent != 100u) {
+    return;
+  }
+  const auto log_key = temporal_capture::MakeTelemetryKey(
+      static_cast<std::uint32_t>(temporal_capture::GetMode()),
+      static_cast<std::uint32_t>(temporal_capture::GetStatus()),
+      gate.active,
+      gate.exact_command_list_match,
+      strength_percent);
+  if (last_dlaa_sharpening_log_key.exchange(
+          log_key,
+          std::memory_order_acq_rel)
+      == log_key) {
+    return;
+  }
+  reshade::log::message(
+      reshade::log::level::info,
+      std::format(
+          "Detroit DLAA sharpening: {} gate {}, strength {}%, exact command-list match {}, runtime status {}.",
+          pass_name,
+          gate.active ? "active" : "inactive",
+          strength_percent,
+          gate.exact_command_list_match ? "yes" : "no",
+          static_cast<std::uint32_t>(temporal_capture::GetStatus()))
+          .c_str());
+}
+
+bool OnSceneDraw(reshade::api::command_list* command_list) {
+  ApplyDlaaSharpeningPayload(command_list, "scene RCAS", true);
+  return true;
+}
 
 void OnSceneDrawn(reshade::api::command_list*) {
   scene_path_seen.store(true, std::memory_order_relaxed);
@@ -905,20 +981,9 @@ void OnUiDrawn(reshade::api::command_list*) {
 }
 
 bool OnFinalCasDraw(reshade::api::command_list* command_list) {
-  // Consume only the DLSS result recorded on this exact Vulkan command list.
-  // This keeps the plain shader payload write serialized while preventing one
-  // in-flight frame from changing sharpening in another. A value of 1 marks a
-  // valid DLSS result; the fractional excess carries DLAA sharpening [0, 1].
-  const bool dlss_output_valid = command_list != nullptr
-                                 && temporal_capture::ConsumeDlssOutputForCommandList(
-                                     command_list->get_native());
-  const float sharpening =
-      dlss_output_valid
-              && temporal_capture::GetMode() == DETROIT_DLSS_MODE_DLAA
-          ? std::clamp(dlaa_sharpening, 0.f, 1.f)
-          : 0.f;
-  shader_injection.reserved =
-      dlss_output_valid ? 1.f + sharpening : 0.f;
+  // Scene RCAS owns DLAA sharpening. This optional native CAS variant only
+  // needs the same mode marker so its own lobe can be disabled.
+  ApplyDlaaSharpeningPayload(command_list, "native CAS suppression", false);
   return true;
 }
 
@@ -970,6 +1035,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     {0xEBFBDDB1, {
                      .crc32 = 0xEBFBDDB1,
                      .code = __0xEBFBDDB1,
+                     .on_draw = &OnSceneDraw,
                      .on_drawn = &OnSceneDrawn,
                  }},
     {0x2892BFCA, {
@@ -1076,7 +1142,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "DLAA Sharpening",
                 .section = "DLSS",
-                .tooltip = "HDR-safe post-DLAA CAS sharpening. Zero preserves the unsharpened DLAA result.",
+                .tooltip = "Scene-linear post-AA RCAS before film grain/UI. It sharpens verified DLAA gameplay frames and remains testable in menu/non-temporal passes; zero is an exact passthrough.",
                 .min = 0.f,
                 .max = 100.f,
                 .is_enabled = []() { return temporal_capture::GetMode() == DETROIT_DLSS_MODE_DLAA; },

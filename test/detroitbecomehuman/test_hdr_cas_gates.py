@@ -75,7 +75,9 @@ def effective_sharpness(
     """Model only the production branch that may alter native CAS strength."""
     native = float32(native_sharpness)
     if custom_dlss_active(dlss_payload):
-        return float32(native * custom_dlaa_sharpening(dlss_payload))
+        # Scene-linear RCAS owns DLAA sharpening; the optional native CAS pass
+        # is disabled to prevent double sharpening.
+        return float32(0.0)
     if not use_hdr_safe_cas(
         output_mode, output_is_hdr, cas_mode, dlss_payload
     ):
@@ -214,7 +216,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                     1.0,
                     dlss_payload=1.0,
                 )
-                half = effective_sharpness(
+                half_native_cas = effective_sharpness(
                     self.native_sharpness,
                     output_mode,
                     output_is_hdr,
@@ -222,7 +224,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                     0.0,
                     dlss_payload=1.5,
                 )
-                full = effective_sharpness(
+                full_native_cas = effective_sharpness(
                     self.native_sharpness,
                     output_mode,
                     output_is_hdr,
@@ -231,13 +233,11 @@ class HDRAndCASGateTests(unittest.TestCase):
                     dlss_payload=9.0,
                 )
                 self.assertEqual(disabled, 0.0)
-                self.assertEqual(
-                    float32_bits(half),
-                    float32_bits(self.native_sharpness * 0.5),
-                )
-                self.assertEqual(
-                    float32_bits(full), float32_bits(self.native_sharpness)
-                )
+                self.assertEqual(half_native_cas, 0.0)
+                self.assertEqual(full_native_cas, 0.0)
+                self.assertEqual(custom_dlaa_sharpening(1.0), 0.0)
+                self.assertEqual(custom_dlaa_sharpening(1.5), 0.5)
+                self.assertEqual(custom_dlaa_sharpening(9.0), 1.0)
 
         self.assertFalse(
             use_hdr_safe_cas(
@@ -320,6 +320,9 @@ class HDRAndCASGateTests(unittest.TestCase):
         shader = (SOURCE_DIR / "oetf_hdr_cas_0x94F97DCF.frag.slang").read_text(
             encoding="utf-8"
         )
+        scene_shader = (SOURCE_DIR / "scene_0xEBFBDDB1.comp.slang").read_text(
+            encoding="utf-8"
+        )
         addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
 
         expected_constants = {
@@ -369,14 +372,36 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertRegex(
             shader,
             r"if\s*\(CUSTOM_DLSS_ACTIVE\)[\s\S]*?"
+            r"_4359\s*=\s*0\.0\s*;",
+        )
+        self.assertNotRegex(
+            shader,
             r"_4359\s*\*=\s*CUSTOM_DLAA_SHARPENING\s*;",
+        )
+        self.assertIn("vec3 ApplyDlaaRcas(", scene_shader)
+        self.assertRegex(
+            scene_shader,
+            r"if\s*\(CUSTOM_DLSS_ACTIVE[\s\S]*?"
+            r"CUSTOM_DLAA_SHARPENING\s*>\s*0\.0[\s\S]*?"
+            r"_2630\s*=\s*ApplyDlaaRcas\(",
         )
         self.assertIn('.key = "DLAASharpening"', addon)
         self.assertIn('.labels = {"Native TAA", "DLAA"}', addon)
         self.assertRegex(
             addon,
             r"shader_injection\.reserved\s*=\s*"
-            r"dlss_output_valid\s*\?\s*1\.f\s*\+\s*sharpening\s*:\s*0\.f\s*;",
+            r"gate\.active\s*\?\s*1\.f\s*\+\s*gate\.strength\s*:\s*0\.f\s*;",
+        )
+        self.assertRegex(
+            addon,
+            r"\.crc32\s*=\s*0xEBFBDDB1,[\s\S]*?"
+            r"\.on_draw\s*=\s*&OnSceneDraw,",
+        )
+        self.assertRegex(
+            addon,
+            r"const\s+bool\s+active\s*=\s*"
+            r"temporal_capture::GetMode\(\)\s*==\s*"
+            r"DETROIT_DLSS_MODE_DLAA\s*;",
         )
 
         cap_start = shader.index("vec3 _6250 =")
