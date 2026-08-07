@@ -1,0 +1,9 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "dishonored2",
+  "title": "Dishonored 2",
+  "status": "beta",
+  "deploy": {
+    "steam_appid": 403640
+  }
+}
