@@ -1598,14 +1598,14 @@ bool AttachAddon(HMODULE h_module) {
   if (addon_attached.exchange(true, std::memory_order_acq_rel)) return true;
   addon_module = h_module;
   DisableThreadLibraryCalls(h_module);
-  initial_extension_cache = ReadExtensionCache();
-  (void)embedded_dlss::AttachEarlyHooks(h_module, initial_extension_cache);
-
   if (!reshade::register_addon(h_module)) {
-    embedded_dlss::DetachEarlyHooks(true);
     addon_attached.store(false, std::memory_order_release);
     return false;
   }
+  // register_addon initializes ReShade's cached handle for this module. No
+  // other ReShade API (including config access) is valid before this point.
+  initial_extension_cache = ReadExtensionCache();
+  (void)embedded_dlss::AttachEarlyHooks(h_module, initial_extension_cache);
   renodx::games::detroitbecomehuman::dlss_bridge_client::client.SetApiProvider(
       &embedded_dlss::GetApi);
   HMODULE pinned_module = nullptr;

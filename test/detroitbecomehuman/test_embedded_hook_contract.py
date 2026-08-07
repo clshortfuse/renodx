@@ -14,6 +14,7 @@ def main() -> None:
     parser.add_argument("--source-dir", type=Path, required=True)
     args = parser.parse_args()
     source = (args.source_dir / "dlss" / "vulkan_layer.cpp").read_text(encoding="utf-8")
+    addon = (args.source_dir / "addon.cpp").read_text(encoding="utf-8")
     cmake = (args.source_dir / "dlss" / "CMakeLists.txt").read_text(encoding="utf-8")
     bridge = (args.source_dir / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
 
@@ -29,6 +30,17 @@ def main() -> None:
     require(source, "return downstream;")
     require(bridge, "DetroitDlssGetApiFn provider_")
     require(bridge, "provider_(DETROIT_DLSS_ABI_VERSION, &candidate)")
+
+    attach_start = addon.index("bool AttachAddon(HMODULE h_module)")
+    attach_end = addon.index("void DetachAddon", attach_start)
+    attach = addon[attach_start:attach_end]
+    register_index = attach.index("reshade::register_addon(h_module)")
+    cache_index = attach.index("ReadExtensionCache()")
+    hooks_index = attach.index("embedded_dlss::AttachEarlyHooks")
+    if not register_index < cache_index < hooks_index:
+        raise AssertionError(
+            "ReShade registration must precede config access and early hook attachment"
+        )
 
     forbidden = (
         "vkNegotiateLoaderLayerInterfaceVersion",
