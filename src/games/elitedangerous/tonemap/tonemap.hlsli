@@ -44,7 +44,7 @@ float Shadows(float x, float shadows, float mid_gray = 0.18f) {
 #define CONTRAST_AND_FLARE_GENERATOR(T)                                                                       \
   T ContrastAndFlare(T x, float contrast, float flare, T mid_gray_in = (T)0.18f, T mid_gray_out = (T)0.18f) { \
     T x_normalized = x / mid_gray_in;                                                                         \
-    T flare_ratio = renodx::math::DivideSafe(x_normalized + flare, x_normalized, (T)1.f);                     \
+    T flare_ratio = (T)1.f + renodx::math::DivideSafe(flare, x_normalized + flare, (T)0.f);                   \
     return pow(x_normalized, contrast * flare_ratio) * mid_gray_out;                                          \
   }
 
@@ -108,10 +108,7 @@ float3 ApplyAnchoredAdaptationContrast(
     float shadows = 1.f) {
   float3 ax = abs(color);
   float3 normalized = ax / anchor_in;
-  float3 flare_ratio = renodx::math::DivideSafe(
-      normalized + flare,
-      normalized,
-      1.f);
+  float3 flare_ratio = 1.f + renodx::math::DivideSafe(flare, normalized + flare, 0.f);
   float3 exponent = contrast * flare_ratio;
 
   float3 ax_n = pow(ax, exponent);
@@ -145,7 +142,7 @@ float3 ApplyAnchoredPowerContrast(
     float shadows = 1.f) {
   float3 ax = abs(color);
   float3 normalized = ax / anchor_in;
-  float3 flare_ratio = renodx::math::DivideSafe(normalized + flare, normalized, 1.f);
+  float3 flare_ratio = 1.f + renodx::math::DivideSafe(flare, normalized + flare, 0.f);
 
   float3 contrasted_normalized = pow(normalized, contrast * flare_ratio);
 
@@ -324,7 +321,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
     float3 graded_lms = ApplyAnchoredAdaptationContrast(untonemapped_lms,
                                                         (1.71f) * RENODX_TONE_MAP_CONTRAST,
                                                         current_adaptive_state_lms, desired_background_state_lms,
-                                                        0.004f + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                                        0.10f * pow(0.77f, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
                                                         RENODX_TONE_MAP_HIGHLIGHTS,
                                                         RENODX_TONE_MAP_SHADOWS);
     // float3 graded_lms = ApplyAnchoredPowerContrast(untonemapped_lms, MID_GRAY_SLOPE * MID_GRAY_IN / MID_GRAY_OUT * RENODX_TONE_MAP_CONTRAST, current_adaptive_state_lms, desired_background_state_lms, 0.004f + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS);
@@ -338,7 +335,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
                                  1.71f * RENODX_TONE_MAP_CONTRAST,
                                  current_adaptive_state_yf.xxx,
                                  desired_background_state_yf.xxx,
-                                 0.004f + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                 0.10f * pow(0.77f, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
                                  RENODX_TONE_MAP_HIGHLIGHTS,
                                  RENODX_TONE_MAP_SHADOWS)
                                  .x;
