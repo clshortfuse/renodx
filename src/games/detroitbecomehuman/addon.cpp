@@ -1232,11 +1232,10 @@ renodx::utils::settings::Settings settings =
                 .key = "PsychoVGamut",
                 .binding = &shader_injection.psychov_gamut_mode,
                 .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-                // PsychoV receives and returns linear BT.709 in Detroit's
-                // compositing pass. The pass does not perform a matching
-                // BT.2020 conversion afterwards, so BT.709 is the safe
-                // display-boundary default here.
-                .default_value = 0.f,
+                // Detroit converts the BT.709 working representation to
+                // Rec.2020 before PQ. Use that HDR display hull by default;
+                // BT.709 remains available as the narrower opt-in boundary.
+                .default_value = 1.f,
                 .label = "Gamut",
                 .section = "PsychoV",
                 .tooltip = "Target gamut used by PsychoV compression.",
@@ -1478,7 +1477,7 @@ void OnPresetOff() {
       {"PsychoVInputAdaptation", 18.f},
       {"PsychoVOutputAdaptation", 18.f},
       {"PsychoVGamutCompression", 100.f},
-      {"PsychoVGamut", 0.f},
+      {"PsychoVGamut", 1.f},
       {"PsychoV17Bleaching", 100.f},
       {"PsychoV17HueRestore", 100.f},
       {"PsychoV22Compression", 1.f},

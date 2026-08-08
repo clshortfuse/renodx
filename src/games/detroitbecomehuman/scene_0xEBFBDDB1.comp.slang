@@ -435,9 +435,14 @@ void main()
                         vec3(RENODX_PSYCHOV_OUTPUT_ADAPTATION),
                         RENODX_PSYCHOV_GAMUT_COMPRESSION,
                         int(RENODX_PSYCHOV_GAMUT_MODE));
-                renodx_tonemapped = pow(
-                    max(renodx_psychov_linear, vec3(0.0)),
-                    vec3(1.0 / 2.2));
+                // PsychoV and ToneMapPass both return the numeric BT.709
+                // working values consumed by Detroit's gamma-2.2
+                // intermediate. Encoding PsychoV here a second time lifts
+                // shadows, compresses HDR values above 1.0 and changes RGB
+                // ratios before the common display-light scaling below.
+                renodx_tonemapped = max(
+                    renodx_psychov_linear,
+                    vec3(0.0));
             }
             else if (CUSTOM_PSYCHOV22_ACTIVE)
             {
@@ -462,9 +467,9 @@ void main()
                         int(RENODX_PSYCHOV_GAMUT_MODE),
                         1.0,
                         RENODX_PSYCHOV22_COMPRESSION);
-                renodx_tonemapped = pow(
-                    max(renodx_psychov_linear, vec3(0.0)),
-                    vec3(1.0 / 2.2));
+                renodx_tonemapped = max(
+                    renodx_psychov_linear,
+                    vec3(0.0));
             }
             else
             {
@@ -472,12 +477,11 @@ void main()
                     renodx_untonemapped,
                     renodx_vanilla_graded_linear);
             }
-            // ToneMapPass emits a gamma-2.2 intermediate where 1.0 represents
-            // Game Brightness; the PsychoV branches are encoded to that same
-            // intermediate. Detroit's native OETF instead maps 1.0 to 300 nits,
-            // so adapt in display-light space before the unchanged native
-            // Rec.2020/PQ path. This maps both 203-nit diffuse white and the
-            // configured peak to their actual output luminance.
+            // ToneMapPass and PsychoV now share Detroit's gamma-2.2
+            // intermediate contract. Detroit's native OETF maps 1.0 to
+            // 300 nits, so adapt in display-light space before the unchanged
+            // Rec.2020/PQ path. This maps both diffuse white and the configured
+            // peak through the same path for every custom tone mapper.
             const float renodx_game_scale =
                 max(RENODX_DIFFUSE_WHITE_NITS, 0.0) / 300.0;
             _2647 = pow(

@@ -39,6 +39,16 @@ set_tests_properties(detroitbecomehuman_ui_brightness_gates PROPERTIES
   LABELS "detroitbecomehuman;unit;cpu;hdr;ui"
 )
 
+add_test(
+  NAME detroitbecomehuman_psychov_contract
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/test_psychov_contract.py
+          --source-dir ${DETROIT_TEST_SOURCE_DIR}
+)
+set_tests_properties(detroitbecomehuman_psychov_contract PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;hdr;psychov"
+)
+
 add_renodx_runtime_executable(
   detroitbecomehuman_ultrawide_patch_tests
   ultrawide_patch_tests.cpp
@@ -256,6 +266,7 @@ add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/taa_contract_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_hdr_cas_gates.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_embedded_hook_contract.py
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_psychov_contract.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_ui_brightness_gates.py
   ${CMAKE_CURRENT_SOURCE_DIR}/ultrawide_patch_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/verify_ultrawide_exe.py
