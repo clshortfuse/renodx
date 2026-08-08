@@ -233,6 +233,12 @@ vec3 ResolveFullResolutionFar(
     out float farSupport,
     vec3 fallbackColor)
 {
+    // Optimization idea for a future Balanced path: fixed Gaussian taps can
+    // be paired with hardware linear sampling to reduce texture reads. Do not
+    // apply that reduction to High or directly to DOF color/alpha layers:
+    // Detroit's authored aperture shape and the per-sample depth/CoC rejection
+    // require independent weights to avoid silhouette halos and background
+    // leakage across depth discontinuities.
     int sampleCount = highQuality ? 49 : 4;
     float centerCocHalfResolution = centerCoc * 0.5;
     float centerWeight = highQuality
