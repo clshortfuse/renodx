@@ -405,6 +405,12 @@ void main()
         {
             const vec3 renodx_untonemapped = max(_2631, vec3(0.0));
             const vec3 renodx_vanilla_graded_linear = _2647;
+            // PsychoV owns the display transform, but must preserve the same
+            // scene-grade upgrade that ToneMapPass applies for the other modes.
+            const vec3 renodx_psychov_input =
+                renodx::draw::ComputeUntonemappedGraded(
+                    renodx_untonemapped,
+                    renodx_vanilla_graded_linear);
             const float renodx_psychov_peak =
                 RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1e-6);
             vec3 renodx_tonemapped;
@@ -412,7 +418,7 @@ void main()
             {
                 const vec3 renodx_psychov_linear =
                     renodx::tonemap::psychov::psychotm_test17(
-                        renodx_untonemapped,
+                        renodx_psychov_input,
                         renodx_psychov_peak,
                         RENODX_TONE_MAP_EXPOSURE,
                         RENODX_TONE_MAP_HIGHLIGHTS,
@@ -437,7 +443,7 @@ void main()
             {
                 const vec3 renodx_psychov_linear =
                     renodx::tonemap::psychov::psychotm_test22(
-                        renodx_untonemapped,
+                        renodx_psychov_input,
                         renodx_psychov_peak,
                         RENODX_TONE_MAP_EXPOSURE,
                         RENODX_TONE_MAP_HIGHLIGHTS,
