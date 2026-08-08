@@ -357,18 +357,23 @@ float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float highlig
   if (purity_scale == 1.f && highlight_saturation == 1.f) return color_lms;
 
   if (highlight_saturation != 1.f) {
-    // Roll purity off over log luminance from the adaptation point to 10,000 nits.
-    // Smootherstep keeps the transition monotonic and C2 continuous at both ends.
-    float luminance = max(0.f, renodx::color::yf::from::LMS(color_lms));
     float neutral_luminance = renodx::color::yf::from::LMS(adaptive_neutral_lms);
-    const float highlight_saturation_peak_nits = 10000.f;
-    float luminance_from_neutral = max(luminance, neutral_luminance) / neutral_luminance;
-    float peak_from_neutral = highlight_saturation_peak_nits / (neutral_luminance * RENODX_DIFFUSE_WHITE_NITS);
-    float rolloff_position = saturate(log2(luminance_from_neutral) / log2(max(peak_from_neutral, 1.f + 1e-7f)));
-    float rolloff = rolloff_position * rolloff_position * rolloff_position
-                    * (rolloff_position * (rolloff_position * 6.f - 15.f) + 10.f);
-    float highlight_desaturation = 1.f - highlight_saturation;
-    purity_scale *= 1.f - rolloff * highlight_desaturation;
+
+    // Ramp highlight purity over 2.75 decades above the adaptive neutral.
+    static const float INVERSE_HIGHLIGHT_RANGE_STOPS = 1.f / (2.75f * log2(10.f));
+    static const float HIGHLIGHT_ROLLOFF_CUBIC_BLEND = 0.5f;
+    static const float HIGHLIGHT_PURITY_STRENGTH = 2.f / 3.f;
+
+    float luminance_from_neutral = max(renodx::color::yf::from::LMS(color_lms), neutral_luminance) / neutral_luminance;
+
+    float rolloff_position = saturate(log2(luminance_from_neutral) * INVERSE_HIGHLIGHT_RANGE_STOPS);
+
+    float rolloff_position_squared = rolloff_position * rolloff_position;
+    float rolloff = rolloff_position_squared * rolloff_position * mad(rolloff_position, mad(6.f, rolloff_position, -15.f), 10.f);
+    // Blend smootherstep squared and cubed for an earlier, gentler C2 progression.
+    rolloff = rolloff * rolloff * mad(HIGHLIGHT_ROLLOFF_CUBIC_BLEND, rolloff, 1.f - HIGHLIGHT_ROLLOFF_CUBIC_BLEND);
+
+    purity_scale *= mad(highlight_saturation - 1.f, rolloff * HIGHLIGHT_PURITY_STRENGTH, 1.f);
   }
 
   return ApplyAdaptiveMBPurity(color_lms, adaptive_neutral_lms, purity_scale);
