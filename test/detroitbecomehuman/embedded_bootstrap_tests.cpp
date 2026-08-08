@@ -46,8 +46,14 @@ int main() {
       .device_extensions = "VK_KHR_buffer_device_address;VK_EXT_buffer_device_address",
   };
   Expect(embedded::IsValidCache(cache), "known-good extension cache must validate");
+  Expect(
+      embedded::CanAttachEarlyHooks(cache),
+      "only a known-good cache may enable early Vulkan hooks");
   cache.ready = false;
   Expect(!embedded::IsValidCache(cache), "ready flag is the cache commit marker");
+  Expect(
+      !embedded::CanAttachEarlyHooks(cache),
+      "first-run setup must not attach Vulkan hooks without a committed cache");
   cache.ready = true;
   cache.schema_version += 1u;
   Expect(!embedded::IsValidCache(cache), "unknown cache schema must fail closed");

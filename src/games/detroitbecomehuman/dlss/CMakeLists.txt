@@ -16,6 +16,7 @@ endforeach()
 
 target_sources(detroitbecomehuman PRIVATE
   vulkan_layer.cpp
+  extension_probe.cpp
   embedded_bootstrap.hpp
   adapter_runtime.cpp
   adapter_runtime.hpp

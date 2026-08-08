@@ -77,6 +77,10 @@ struct ExtensionCache {
          && IsValidExtensionList(cache.device_extensions);
 }
 
+[[nodiscard]] inline bool CanAttachEarlyHooks(const ExtensionCache& cache) {
+  return IsValidCache(cache);
+}
+
 [[nodiscard]] inline bool MergeLoadFromDllMainEntry(
     std::vector<std::string>* entries, std::string_view addon_filename) {
   if (entries == nullptr || addon_filename.empty()) return false;
@@ -93,11 +97,14 @@ struct ExtensionCache {
 // attaches Detours to the already-loaded ReShade Vulkan layer.
 bool AttachEarlyHooks(HMODULE addon_module, const ExtensionCache& cache);
 void DetachEarlyHooks(bool process_terminating);
+bool IsExtensionProbeHost();
 
 // Deferred work. These functions must only be called after device creation and
 // outside DllMain/the Vulkan loader lock.
 bool VerifySupportedExecutable();
 bool QueryRequiredExtensions(ExtensionCache* cache);
+bool QueryRequiredExtensionsIsolated(HMODULE addon_module, ExtensionCache* cache);
+void SetRestartRequired();
 void RefreshDeferredStatus();
 void SetNativeFallback(const char* reason);
 

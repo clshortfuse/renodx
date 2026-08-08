@@ -1552,9 +1552,10 @@ void OnPresent(
       const auto ngx_path = GetModulePath(addon_module).parent_path() / L"nvngx_dlss.dll";
       if (std::filesystem::is_regular_file(ngx_path)) {
         embedded_dlss::ExtensionCache refreshed;
-        if (embedded_dlss::QueryRequiredExtensions(&refreshed)) {
+        if (embedded_dlss::QueryRequiredExtensionsIsolated(addon_module, &refreshed)) {
           WriteExtensionCache(refreshed);
           initial_extension_cache = std::move(refreshed);
+          embedded_dlss::SetRestartRequired();
         }
       } else {
         embedded_dlss::SetNativeFallback("nvngx_dlss.dll is missing");
@@ -1650,7 +1651,13 @@ void DetachAddon(HMODULE h_module, bool process_terminating) {
 }
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, LPVOID reserved) {
-  if (reason == DLL_PROCESS_ATTACH) return AttachAddon(h_module) ? TRUE : FALSE;
+  if (reason == DLL_PROCESS_ATTACH) {
+    if (embedded_dlss::IsExtensionProbeHost()) {
+      DisableThreadLibraryCalls(h_module);
+      return TRUE;
+    }
+    return AttachAddon(h_module) ? TRUE : FALSE;
+  }
   if (reason == DLL_PROCESS_DETACH) DetachAddon(h_module, reserved != nullptr);
   return TRUE;
 }

@@ -4093,12 +4093,16 @@ namespace renodx::games::detroitbecomehuman::dlss::embedded {
 bool AttachEarlyHooks(HMODULE addon_module, const ExtensionCache& cache) {
   layer_module = addon_module;
   if (hooks_attached.load(std::memory_order_acquire)) return true;
-  const bool cache_valid = IsValidCache(cache);
+  const bool cache_valid = CanAttachEarlyHooks(cache);
   {
     const std::lock_guard lock(bootstrap_mutex);
     cached_extensions_ready.store(cache_valid, std::memory_order_release);
     cached_instance_extensions = cache_valid ? cache.instance_extensions : std::string();
     cached_device_extensions = cache_valid ? cache.device_extensions : std::string();
+  }
+  if (!cache_valid) {
+    SetBootstrapStatus(BootstrapStatus::kFirstRunSetup, "First-run setup");
+    return false;
   }
 
   const HMODULE reshade = GetModuleHandleW(L"ReShade64.dll");
@@ -4250,6 +4254,10 @@ void SetNativeFallback(const char* reason) {
   SetBootstrapStatus(
       BootstrapStatus::kNativeFallback,
       reason != nullptr && reason[0] != '\0' ? reason : "Native TAA fallback");
+}
+
+void SetRestartRequired() {
+  SetBootstrapStatus(BootstrapStatus::kRestartRequired, "Restart required");
 }
 
 BootstrapStatus GetStatus() { return bootstrap_status.load(std::memory_order_acquire); }

@@ -28,6 +28,11 @@ def main() -> None:
     require(source, "const auto downstream = reshade_get_device_proc_addr(device, name);")
     require(source, "if (const auto tracked = FindTrackedDeviceFunction(name); tracked != nullptr)")
     require(source, "return downstream;")
+    gate_index = source.index("if (!cache_valid)")
+    detour_index = source.index("DetourTransactionBegin()", gate_index)
+    if not gate_index < detour_index:
+        raise AssertionError("invalid extension cache must fail closed before Detours")
+    require(addon, "QueryRequiredExtensionsIsolated(addon_module, &refreshed)")
     require(bridge, "DetroitDlssGetApiFn provider_")
     require(bridge, "provider_(DETROIT_DLSS_ABI_VERSION, &candidate)")
 
