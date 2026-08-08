@@ -71,34 +71,46 @@ float3 ApplyLuminanceGradingBT2020(float3 color_bt2020, float exposure, float hi
   return renodx::color::bt2020::from::LMS(color_lms);
 }
 
-float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float purity_highlights, float dechroma, float3 mid_gray_lms = 0.18f) {
-  if (purity_scale == 1.f && purity_highlights == 0.f && dechroma == 0.f) return color_lms;
+float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float highlight_saturation, float dechroma, float3 adaptive_neutral_lms = 0.18f) {
+  if (purity_scale == 1.f && highlight_saturation == 1.f && dechroma == 0.f) return color_lms;
 
-  float lum_target = max(0.f, renodx::color::yf::from::LMS(color_lms));
+  if (dechroma != 0.f || highlight_saturation != 1.f) {
+    float luminance = renodx::color::yf::from::LMS(color_lms);
+    float neutral_luminance = renodx::color::yf::from::LMS(adaptive_neutral_lms);
 
-  if (dechroma != 0.f) {
-    purity_scale *= lerp(1.f, 0.f, saturate(pow(lum_target / (10000.f / 100.f), 1.f - dechroma)));
-  }
+    // Ramp purity grading over 2.75 decades above the adaptive neutral.
+    static const float INVERSE_HIGHLIGHT_RANGE_STOPS = 1.f / (2.75f * log2(10.f));
+    static const float HIGHLIGHT_ROLLOFF_CUBIC_BLEND = 0.5f;
+    static const float HIGHLIGHT_PURITY_STRENGTH = 2.f / 3.f;
 
-  if (purity_highlights != 0.f) {
-    float percent_max = saturate(lum_target * 100.f / 10000.f);
-    float blowout_change = pow(1.f - percent_max, 100.f * abs(purity_highlights));
-    if (purity_highlights < 0.f) {
-      blowout_change = 2.f - blowout_change;
+    float luminance_from_neutral = max(luminance, neutral_luminance) / neutral_luminance;
+    float rolloff_position = saturate(log2(luminance_from_neutral) * INVERSE_HIGHLIGHT_RANGE_STOPS);
+
+    float rolloff_position_squared = rolloff_position * rolloff_position;
+    float rolloff = rolloff_position_squared * rolloff_position * mad(rolloff_position, mad(6.f, rolloff_position, -15.f), 10.f);
+
+    // Base smootherstep brings dechroma into the midtones while remaining monotonic and C2.
+    if (dechroma != 0.f) {
+      purity_scale *= mad(-dechroma, rolloff, 1.f);
     }
-    purity_scale *= blowout_change;
+
+    if (highlight_saturation != 1.f) {
+      // Blend smootherstep squared and cubed for a later, gentler C2 progression.
+      float highlight_rolloff = rolloff * rolloff * mad(HIGHLIGHT_ROLLOFF_CUBIC_BLEND, rolloff, 1.f - HIGHLIGHT_ROLLOFF_CUBIC_BLEND);
+      purity_scale *= mad(highlight_saturation - 1.f, highlight_rolloff * HIGHLIGHT_PURITY_STRENGTH, 1.f);
+    }
   }
 
   if (purity_scale != 1.f) {
-    color_lms = ApplyAdaptiveMBPurity(color_lms, mid_gray_lms, purity_scale);
+    color_lms = ApplyAdaptiveMBPurity(color_lms, adaptive_neutral_lms, purity_scale);
   }
 
   return color_lms;
 }
 
-float3 ApplyPurityGradingBT2020(float3 color_bt2020, float purity_scale, float purity_highlights, float dechroma) {
+float3 ApplyPurityGradingBT2020(float3 color_bt2020, float purity_scale, float highlight_saturation, float dechroma) {
   float3 color_lms = renodx::color::lms::from::BT2020(color_bt2020);
-  color_lms = ApplyPurityGradingLMS(color_lms, purity_scale, purity_highlights, dechroma, renodx::color::lms::from::BT2020(0.18f.xxx));
+  color_lms = ApplyPurityGradingLMS(color_lms, purity_scale, highlight_saturation, dechroma, renodx::color::lms::from::BT2020(0.18f.xxx));
   return renodx::color::bt2020::from::LMS(color_lms);
 }
 
@@ -325,7 +337,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
                                                MID_GRAY_OUT);
     untonemapped = ApplyPurityGradingBT2020(untonemapped,
                                             RENODX_TONE_MAP_SATURATION,
-                                            -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
+                                            RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
                                             RENODX_TONE_MAP_DECHROMA);
     untonemapped = max(untonemapped, 1e-7f);
 
@@ -367,7 +379,7 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
     // Apply LMS luminance and purity grading.
     graded_lms = ApplyPurityGradingLMS(graded_lms,
                                        RENODX_TONE_MAP_SATURATION,
-                                       -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
+                                       RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
                                        RENODX_TONE_MAP_DECHROMA,
                                        desired_background_state_lms);
     graded_lms = max(graded_lms, 1e-7f);
