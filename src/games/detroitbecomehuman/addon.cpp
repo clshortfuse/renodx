@@ -1125,7 +1125,7 @@ renodx::utils::settings::Settings settings =
              {
                  .binding = &shader_injection.tone_map_type,
                  .default_value = 2.f,
-                 .labels = {"Vanilla", "Reinhard", "RenoDRT"},
+                 .labels = {"Vanilla", "Reinhard", "RenoDRT", "PsychoV-17", "PsychoV-22"},
                  .parse = [](float value) { return value; },
              }},
             {"ToneMapPeakNits",
@@ -1152,9 +1152,27 @@ renodx::utils::settings::Settings settings =
             {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows}},
             {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast}},
             {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation}},
-            {"ColorGradeHighlightSaturation", {.binding = &shader_injection.tone_map_highlight_saturation}},
-            {"ColorGradeBlowout", {.binding = &shader_injection.tone_map_blowout}},
-            {"ColorGradeFlare", {.binding = &shader_injection.tone_map_flare}},
+            {"ColorGradeHighlightSaturation", {
+                                                  .binding = &shader_injection.tone_map_highlight_saturation,
+                                                  .is_visible = []() {
+                                                    return renodx::templates::settings::current_settings_mode >= 1.f
+                                                        && shader_injection.tone_map_type < 3.f;
+                                                  },
+                                              }},
+            {"ColorGradeBlowout", {
+                                       .binding = &shader_injection.tone_map_blowout,
+                                       .is_visible = []() {
+                                         return renodx::templates::settings::current_settings_mode >= 1.f
+                                             && shader_injection.tone_map_type < 3.f;
+                                       },
+                                   }},
+            {"ColorGradeFlare", {
+                                     .binding = &shader_injection.tone_map_flare,
+                                     .is_visible = []() {
+                                       return renodx::templates::settings::current_settings_mode >= 1.f
+                                           && shader_injection.tone_map_type < 3.f;
+                                     },
+                                 }},
             {"SceneGradeStrength", {
                                        .binding = &shader_injection.color_grade_strength,
                                        .default_value = 100.f,
@@ -1163,6 +1181,112 @@ renodx::utils::settings::Settings settings =
                                        .tooltip = "Strength of Detroit's original scene color grading.",
                                        .parse = [](float value) { return value * 0.01f; },
                                    }},
+        }),
+        renodx::templates::settings::CreateSettings({
+            {{
+                .key = "PsychoVInputAdaptation",
+                .binding = &shader_injection.psychov_input_adaptation,
+                .default_value = 18.f,
+                .label = "Input Adaptation",
+                .section = "PsychoV",
+                .tooltip = "Scene-linear input adaptation anchor. 18% is neutral middle gray.",
+                .min = 1.f,
+                .max = 200.f,
+                .parse = [](float value) { return value * 0.01f; },
+                .is_visible = []() {
+                  return renodx::templates::settings::current_settings_mode >= 2.f
+                      && shader_injection.tone_map_type >= 3.f;
+                },
+            }},
+            {{
+                .key = "PsychoVOutputAdaptation",
+                .binding = &shader_injection.psychov_output_adaptation,
+                .default_value = 18.f,
+                .label = "Output Adaptation",
+                .section = "PsychoV",
+                .tooltip = "Scene-linear output adaptation anchor. 18% is neutral middle gray.",
+                .min = 1.f,
+                .max = 200.f,
+                .parse = [](float value) { return value * 0.01f; },
+                .is_visible = []() {
+                  return renodx::templates::settings::current_settings_mode >= 2.f
+                      && shader_injection.tone_map_type >= 3.f;
+                },
+            }},
+            {{
+                .key = "PsychoVGamutCompression",
+                .binding = &shader_injection.psychov_gamut_compression,
+                .default_value = 100.f,
+                .label = "Gamut Compression",
+                .section = "PsychoV",
+                .tooltip = "Strength of PsychoV gamut compression.",
+                .min = 0.f,
+                .max = 100.f,
+                .parse = [](float value) { return value * 0.01f; },
+                .is_visible = []() {
+                  return renodx::templates::settings::current_settings_mode >= 2.f
+                      && shader_injection.tone_map_type >= 3.f;
+                },
+            }},
+            {{
+                .key = "PsychoVGamut",
+                .binding = &shader_injection.psychov_gamut_mode,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 1.f,
+                .label = "Gamut",
+                .section = "PsychoV",
+                .tooltip = "Target gamut used by PsychoV compression.",
+                .labels = {"BT.709", "BT.2020"},
+                .is_visible = []() {
+                  return renodx::templates::settings::current_settings_mode >= 2.f
+                      && shader_injection.tone_map_type >= 3.f;
+                },
+            }},
+            {{
+                .key = "PsychoV17Bleaching",
+                .binding = &shader_injection.psychov17_bleaching,
+                .default_value = 100.f,
+                .label = "Bleaching",
+                .section = "PsychoV-17",
+                .tooltip = "Per-cone high-light bleaching strength.",
+                .min = 0.f,
+                .max = 100.f,
+                .parse = [](float value) { return value * 0.01f; },
+                .is_visible = []() {
+                  return renodx::templates::settings::current_settings_mode >= 2.f
+                      && shader_injection.tone_map_type == 3.f;
+                },
+            }},
+            {{
+                .key = "PsychoV17HueRestore",
+                .binding = &shader_injection.psychov17_hue_restore,
+                .default_value = 100.f,
+                .label = "Hue Restore",
+                .section = "PsychoV-17",
+                .tooltip = "Hue restoration strength after PsychoV-17 compression.",
+                .min = 0.f,
+                .max = 100.f,
+                .parse = [](float value) { return value * 0.01f; },
+                .is_visible = []() {
+                  return renodx::templates::settings::current_settings_mode >= 2.f
+                      && shader_injection.tone_map_type == 3.f;
+                },
+            }},
+            {{
+                .key = "PsychoV22Compression",
+                .binding = &shader_injection.psychov22_compression,
+                .default_value = 1.f,
+                .label = "Compression",
+                .section = "PsychoV-22",
+                .tooltip = "Shoulder compression; zero uses PsychoV-22 automatic compression.",
+                .min = 0.f,
+                .max = 4.f,
+                .format = "%.2f",
+                .is_visible = []() {
+                  return renodx::templates::settings::current_settings_mode >= 2.f
+                      && shader_injection.tone_map_type == 4.f;
+                },
+            }},
         }),
         renodx::templates::settings::CreateSettings({
             {{
@@ -1347,6 +1471,13 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 300.f},
+      {"PsychoVInputAdaptation", 18.f},
+      {"PsychoVOutputAdaptation", 18.f},
+      {"PsychoVGamutCompression", 100.f},
+      {"PsychoVGamut", 1.f},
+      {"PsychoV17Bleaching", 100.f},
+      {"PsychoV17HueRestore", 100.f},
+      {"PsychoV22Compression", 1.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},

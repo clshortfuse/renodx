@@ -1,7 +1,7 @@
 {
   "push_constant": {
     "block_name": "ShaderInjectData_std140",
-    "size": 80,
+    "size": 112,
     "members": [
       { "name": "peak_white_nits", "type": "float", "offset": 0 },
       { "name": "diffuse_white_nits", "type": "float", "offset": 4 },
@@ -22,7 +22,15 @@
       { "name": "cas_strength", "type": "float", "offset": 64 },
       { "name": "scene_path_active", "type": "float", "offset": 68 },
       { "name": "ui_path_active", "type": "float", "offset": 72 },
-      { "name": "reserved", "type": "float", "offset": 76 }
+      { "name": "reserved", "type": "float", "offset": 76 },
+      { "name": "psychov_input_adaptation", "type": "float", "offset": 80 },
+      { "name": "psychov_output_adaptation", "type": "float", "offset": 84 },
+      { "name": "psychov_gamut_compression", "type": "float", "offset": 88 },
+      { "name": "psychov_gamut_mode", "type": "float", "offset": 92 },
+      { "name": "psychov17_bleaching", "type": "float", "offset": 96 },
+      { "name": "psychov17_hue_restore", "type": "float", "offset": 100 },
+      { "name": "psychov22_compression", "type": "float", "offset": 104 },
+      { "name": "psychov_padding", "type": "float", "offset": 108 }
     ]
   },
   "shaders": {

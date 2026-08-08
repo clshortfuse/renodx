@@ -28,10 +28,20 @@ struct ShaderInjectData {
   float scene_path_active;
   float ui_path_active;
   float reserved;
+
+  float psychov_input_adaptation;
+  float psychov_output_adaptation;
+  float psychov_gamut_compression;
+  float psychov_gamut_mode;
+
+  float psychov17_bleaching;
+  float psychov17_hue_restore;
+  float psychov22_compression;
+  float psychov_padding;
 };
 
 #ifdef __cplusplus
-static_assert(sizeof(ShaderInjectData) == 80u);
+static_assert(sizeof(ShaderInjectData) == 112u);
 #endif
 
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
@@ -47,6 +57,13 @@ static_assert(sizeof(ShaderInjectData) == 80u);
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
+#define RENODX_PSYCHOV_INPUT_ADAPTATION      shader_injection.psychov_input_adaptation
+#define RENODX_PSYCHOV_OUTPUT_ADAPTATION     shader_injection.psychov_output_adaptation
+#define RENODX_PSYCHOV_GAMUT_COMPRESSION     shader_injection.psychov_gamut_compression
+#define RENODX_PSYCHOV_GAMUT_MODE            shader_injection.psychov_gamut_mode
+#define RENODX_PSYCHOV17_BLEACHING           shader_injection.psychov17_bleaching
+#define RENODX_PSYCHOV17_HUE_RESTORE         shader_injection.psychov17_hue_restore
+#define RENODX_PSYCHOV22_COMPRESSION         shader_injection.psychov22_compression
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      (shader_injection.tone_map_type == 1.f                             \
                                                   ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD \
                                                   : renodx::tonemap::renodrt::config::tone_map_method::DANIELE)
@@ -59,6 +76,8 @@ static_assert(sizeof(ShaderInjectData) == 80u);
 #define CUSTOM_UI_PATH_ACTIVE    shader_injection.ui_path_active
 #define CUSTOM_DLSS_ACTIVE       (shader_injection.reserved >= 0.5f)
 #define CUSTOM_DLAA_SHARPENING   clamp(shader_injection.reserved - 1.f, 0.f, 1.f)
+#define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 3.f)
+#define CUSTOM_PSYCHOV22_ACTIVE  (shader_injection.tone_map_type == 4.f)
 #define CUSTOM_HDR_ACTIVE        (shader_injection.output_is_hdr >= 0.5f \
                                   && shader_injection.output_mode != 1.f)
 

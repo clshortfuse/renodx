@@ -405,14 +405,73 @@ void main()
         {
             const vec3 renodx_untonemapped = max(_2631, vec3(0.0));
             const vec3 renodx_vanilla_graded_linear = _2647;
-            const vec3 renodx_tonemapped = renodx::draw::ToneMapPass(
-                renodx_untonemapped,
-                renodx_vanilla_graded_linear);
+            const float renodx_psychov_peak =
+                RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1e-6);
+            vec3 renodx_tonemapped;
+            if (CUSTOM_PSYCHOV17_ACTIVE)
+            {
+                const vec3 renodx_psychov_linear =
+                    renodx::tonemap::psychov::psychotm_test17(
+                        renodx_untonemapped,
+                        renodx_psychov_peak,
+                        RENODX_TONE_MAP_EXPOSURE,
+                        RENODX_TONE_MAP_HIGHLIGHTS,
+                        RENODX_TONE_MAP_SHADOWS,
+                        RENODX_TONE_MAP_CONTRAST,
+                        RENODX_TONE_MAP_SATURATION,
+                        RENODX_PSYCHOV17_BLEACHING,
+                        100.0,
+                        RENODX_PSYCHOV17_HUE_RESTORE,
+                        1.0,
+                        0,
+                        1.0,
+                        vec3(RENODX_PSYCHOV_INPUT_ADAPTATION),
+                        vec3(RENODX_PSYCHOV_OUTPUT_ADAPTATION),
+                        RENODX_PSYCHOV_GAMUT_COMPRESSION,
+                        int(RENODX_PSYCHOV_GAMUT_MODE));
+                renodx_tonemapped = pow(
+                    max(renodx_psychov_linear, vec3(0.0)),
+                    vec3(1.0 / 2.2));
+            }
+            else if (CUSTOM_PSYCHOV22_ACTIVE)
+            {
+                const vec3 renodx_psychov_linear =
+                    renodx::tonemap::psychov::psychotm_test22(
+                        renodx_untonemapped,
+                        renodx_psychov_peak,
+                        RENODX_TONE_MAP_EXPOSURE,
+                        RENODX_TONE_MAP_HIGHLIGHTS,
+                        RENODX_TONE_MAP_SHADOWS,
+                        RENODX_TONE_MAP_CONTRAST,
+                        RENODX_TONE_MAP_SATURATION,
+                        1.0,
+                        100.0,
+                        1.0,
+                        1.0,
+                        0,
+                        1.0,
+                        vec3(RENODX_PSYCHOV_INPUT_ADAPTATION),
+                        vec3(RENODX_PSYCHOV_OUTPUT_ADAPTATION),
+                        RENODX_PSYCHOV_GAMUT_COMPRESSION,
+                        int(RENODX_PSYCHOV_GAMUT_MODE),
+                        1.0,
+                        RENODX_PSYCHOV22_COMPRESSION);
+                renodx_tonemapped = pow(
+                    max(renodx_psychov_linear, vec3(0.0)),
+                    vec3(1.0 / 2.2));
+            }
+            else
+            {
+                renodx_tonemapped = renodx::draw::ToneMapPass(
+                    renodx_untonemapped,
+                    renodx_vanilla_graded_linear);
+            }
             // ToneMapPass emits a gamma-2.2 intermediate where 1.0 represents
-            // Game Brightness. Detroit's native OETF instead maps 1.0 to
-            // 300 nits, so adapt in display-light space before the unchanged
-            // native Rec.2020/PQ path. This maps both 203-nit diffuse white and
-            // the configured peak to their actual output luminance.
+            // Game Brightness; the PsychoV branches are encoded to that same
+            // intermediate. Detroit's native OETF instead maps 1.0 to 300 nits,
+            // so adapt in display-light space before the unchanged native
+            // Rec.2020/PQ path. This maps both 203-nit diffuse white and the
+            // configured peak to their actual output luminance.
             const float renodx_game_scale =
                 max(RENODX_DIFFUSE_WHITE_NITS, 0.0) / 300.0;
             _2647 = pow(
