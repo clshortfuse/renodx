@@ -49,6 +49,16 @@ set_tests_properties(detroitbecomehuman_psychov_contract PROPERTIES
   LABELS "detroitbecomehuman;unit;cpu;hdr;psychov"
 )
 
+add_test(
+  NAME detroitbecomehuman_dof_contract
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/test_dof_contract.py
+          --source-dir ${DETROIT_TEST_SOURCE_DIR}
+)
+set_tests_properties(detroitbecomehuman_dof_contract PROPERTIES
+  LABELS "detroitbecomehuman;contract;cpu;dof;vulkan"
+)
+
 add_renodx_runtime_executable(
   detroitbecomehuman_ultrawide_patch_tests
   ultrawide_patch_tests.cpp
@@ -118,6 +128,20 @@ add_test(
 )
 set_tests_properties(detroitbecomehuman_dlss_policy PROPERTIES
   LABELS "detroitbecomehuman;unit;cpu;dlss;policy;fallback"
+)
+
+add_renodx_runtime_executable(
+  detroitbecomehuman_dof_runtime_tests
+  dof_runtime_tests.cpp
+)
+add_dependencies(renodx_test_suites detroitbecomehuman_dof_runtime_tests)
+
+add_test(
+  NAME detroitbecomehuman_dof_runtime
+  COMMAND detroitbecomehuman_dof_runtime_tests
+)
+set_tests_properties(detroitbecomehuman_dof_runtime PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dof;fallback"
 )
 
 add_renodx_runtime_executable(
@@ -260,11 +284,13 @@ add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/embedded_bootstrap_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/feature_lifetime_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_policy_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/dof_runtime_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_scale_transition_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/rgb9e5_adapter_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/resolution_scaling_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/taa_contract_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_hdr_cas_gates.py
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_dof_contract.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_embedded_hook_contract.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_psychov_contract.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_ui_brightness_gates.py

@@ -37,7 +37,7 @@ struct ShaderInjectData {
   float psychov17_bleaching;
   float psychov17_hue_restore;
   float psychov22_compression;
-  float psychov_padding;
+  float dof_runtime_mode;
 };
 
 #ifdef __cplusplus
@@ -75,6 +75,33 @@ static_assert(sizeof(ShaderInjectData) == 112u);
 #define CUSTOM_SCENE_PATH_ACTIVE shader_injection.scene_path_active
 #define CUSTOM_UI_PATH_ACTIVE    shader_injection.ui_path_active
 #define CUSTOM_DLSS_ACTIVE       (shader_injection.reserved >= 0.5f)
+#ifndef __cplusplus
+float DecodeDofPackedScale(uint code, uint neutral, uint maximum)
+{
+  return code <= neutral
+      ? float(code) / float(neutral)
+      : 1.0 + float(code - neutral) / float(maximum - neutral);
+}
+#endif
+#define CUSTOM_DOF_PACKED_BITS \
+  floatBitsToUint(shader_injection.dof_runtime_mode)
+#define CUSTOM_DOF_RUNTIME_MODE \
+  float(CUSTOM_DOF_PACKED_BITS & 0x7u)
+#define CUSTOM_DOF_FOCUS_SCALE \
+  DecodeDofPackedScale( \
+      (CUSTOM_DOF_PACKED_BITS >> 3u) & 0x7Fu, 64u, 0x7Fu)
+#define CUSTOM_DOF_RADIUS_SCALE \
+  DecodeDofPackedScale( \
+      (CUSTOM_DOF_PACKED_BITS >> 10u) & 0x3Fu, 32u, 0x3Fu)
+#define CUSTOM_DOF_NEAR_STRENGTH \
+  DecodeDofPackedScale( \
+      (CUSTOM_DOF_PACKED_BITS >> 16u) & 0x1Fu, 16u, 0x1Fu)
+#define CUSTOM_DOF_FAR_STRENGTH \
+  DecodeDofPackedScale( \
+      (CUSTOM_DOF_PACKED_BITS >> 21u) & 0x1Fu, 16u, 0x1Fu)
+#define CUSTOM_DOF_EDGE_BOKEH_SCALE \
+  DecodeDofPackedScale( \
+      (CUSTOM_DOF_PACKED_BITS >> 26u) & 0xFu, 8u, 0xFu)
 #define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 3.f)
 #define CUSTOM_PSYCHOV22_ACTIVE  (shader_injection.tone_map_type == 4.f)
 #define CUSTOM_HDR_ACTIVE        (shader_injection.output_is_hdr >= 0.5f \

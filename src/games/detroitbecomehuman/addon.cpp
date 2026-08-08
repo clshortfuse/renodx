@@ -36,6 +36,7 @@
 #include "../../utils/settings.hpp"
 #include "./dlss_scale_transition.hpp"
 #include "./dlss/embedded_bootstrap.hpp"
+#include "./dof_runtime.hpp"
 #include "./resolution_scaling_win32.hpp"
 #include "./shared.h"
 #include "./temporal_capture.hpp"
@@ -70,6 +71,7 @@ namespace dlss_scale_transition =
     renodx::games::detroitbecomehuman::dlss_scale_transition;
 namespace embedded_dlss =
     renodx::games::detroitbecomehuman::dlss::embedded;
+namespace dof = renodx::games::detroitbecomehuman::dof;
 constexpr std::size_t ASPECT_PATCH_INDEX = 0u;
 constexpr std::size_t UI_PATCH_INDEX = 1u;
 
@@ -98,6 +100,17 @@ std::atomic<reshade::api::effect_runtime*> tracked_effect_runtime = nullptr;
 float aspect_ratio_mode = 1.f;
 float dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
 float dlaa_sharpening = 0.f;
+float dof_mode = 0.f;
+float dof_quality = 1.f;
+float dof_focus_distance = 100.f;
+float dof_blur_radius = 100.f;
+float dof_near_strength = 100.f;
+float dof_far_strength = 100.f;
+float dof_edge_bokeh = 100.f;
+dof::RuntimeController dof_runtime_controller;
+std::once_flag dof_build_verification_once;
+std::atomic_bool dof_supported_executable = false;
+std::atomic_bool dof_device_reset_logged = false;
 std::atomic_bool aspect_ratio_enabled = true;
 std::atomic_uint32_t output_width = 0u;
 std::atomic_uint32_t output_height = 0u;
@@ -996,6 +1009,106 @@ std::atomic_bool scene_path_seen = false;
 std::atomic_bool ui_path_seen = false;
 std::atomic_uint64_t last_dlaa_sharpening_log_key =
     std::numeric_limits<std::uint64_t>::max();
+std::atomic_uint64_t last_dof_log_key =
+    std::numeric_limits<std::uint64_t>::max();
+
+std::string_view GetDofStatusText(dof::RuntimeStatus status) {
+  switch (status) {
+    case dof::RuntimeStatus::kVanilla:
+      return "Vanilla";
+    case dof::RuntimeStatus::kWaitingForChain:
+      return "waiting for complete chain";
+    case dof::RuntimeStatus::kIncompleteChain:
+      return "incomplete chain fallback";
+    case dof::RuntimeStatus::kActiveCleanBalanced:
+      return "Clean Balanced";
+    case dof::RuntimeStatus::kActiveCleanHigh:
+      return "Clean High";
+    case dof::RuntimeStatus::kActiveCinematicBalanced:
+      return "Cinematic Balanced";
+    case dof::RuntimeStatus::kActiveCinematicHigh:
+      return "Cinematic High";
+    case dof::RuntimeStatus::kUnsupportedBuild:
+      return "unsupported build fallback";
+  }
+  return "unknown";
+}
+
+void LogDofStatus(const dof::FrameResult& result) {
+  const auto log_key =
+      (static_cast<std::uint64_t>(result.status) << 32u)
+      | static_cast<std::uint64_t>(result.mode);
+  if (last_dof_log_key.exchange(log_key, std::memory_order_acq_rel)
+      == log_key) {
+    return;
+  }
+  reshade::log::message(
+      result.status == dof::RuntimeStatus::kIncompleteChain
+              || result.status == dof::RuntimeStatus::kUnsupportedBuild
+          ? reshade::log::level::warning
+          : reshade::log::level::info,
+      std::format(
+          "Detroit DOF: {}, effective mode {}, observed pass mask 0x{:02X}.",
+          GetDofStatusText(result.status),
+          static_cast<std::uint32_t>(result.mode),
+          result.observed_pass_mask)
+          .c_str());
+}
+
+bool IsDofSupportedBuild() {
+  std::call_once(dof_build_verification_once, []() {
+    dof_supported_executable.store(
+        embedded_dlss::VerifySupportedExecutable(),
+        std::memory_order_release);
+  });
+  return dof_supported_executable.load(std::memory_order_acquire)
+      && supported_build::kDofInputsEmpiricallyVerified;
+}
+
+void UpdateDofRuntimeMode() {
+  const auto requested_style = dof_mode >= 1.5f
+                                   ? dof::RuntimeStyle::kCinematic
+                               : dof_mode >= 0.5f
+                                   ? dof::RuntimeStyle::kClean
+                                   : dof::RuntimeStyle::kVanilla;
+  const auto result = dof_runtime_controller.FinishFrame(
+      requested_style,
+      dof_quality >= 0.5f,
+      IsDofSupportedBuild());
+  shader_injection.dof_runtime_mode = dof::PackRuntimePayload(
+      result.mode,
+      {
+          .focus_distance_percent = dof_focus_distance,
+          .blur_radius_percent = dof_blur_radius,
+          .near_strength_percent = dof_near_strength,
+          .far_strength_percent = dof_far_strength,
+          .edge_bokeh_percent = dof_edge_bokeh,
+      });
+  LogDofStatus(result);
+}
+
+void OnDofSettingsChanged() {
+  if (dof_mode >= 0.5f) return;
+  dof_runtime_controller.Reset();
+  shader_injection.dof_runtime_mode =
+      static_cast<float>(dof::RuntimeMode::kVanilla);
+}
+
+void OnDofSplitDrawn(reshade::api::command_list*) {
+  dof_runtime_controller.Observe(dof::Pass::kSplit);
+}
+
+void OnDofGatherDrawn(reshade::api::command_list*) {
+  dof_runtime_controller.Observe(dof::Pass::kGather);
+}
+
+void OnDofFillDrawn(reshade::api::command_list*) {
+  dof_runtime_controller.Observe(dof::Pass::kFill);
+}
+
+void OnDofCompositeDrawn(reshade::api::command_list*) {
+  dof_runtime_controller.Observe(dof::Pass::kComposite);
+}
 
 struct DlaaSharpeningGate {
   bool active = false;
@@ -1104,6 +1217,30 @@ bool OnTemporalAuxiliaryReplace(reshade::api::command_list* command_list) {
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    {supported_build::kDofSplitShaderCrc, {
+                                                .crc32 =
+                                                    supported_build::kDofSplitShaderCrc,
+                                                .code = __0xE9907978,
+                                                .on_drawn = &OnDofSplitDrawn,
+                                            }},
+    {supported_build::kDofGatherShaderCrc, {
+                                                 .crc32 =
+                                                     supported_build::kDofGatherShaderCrc,
+                                                 .code = __0x747E19D2,
+                                                 .on_drawn = &OnDofGatherDrawn,
+                                             }},
+    {supported_build::kDofFillShaderCrc, {
+                                               .crc32 =
+                                                   supported_build::kDofFillShaderCrc,
+                                               .code = __0x508514FB,
+                                               .on_drawn = &OnDofFillDrawn,
+                                           }},
+    {supported_build::kDofCompositeShaderCrc, {
+                                                    .crc32 =
+                                                        supported_build::kDofCompositeShaderCrc,
+                                                    .code = __0xAC7A8193,
+                                                    .on_drawn = &OnDofCompositeDrawn,
+                                                }},
     {supported_build::kTemporalAaShaderCrc, {
                                                 .crc32 =
                                                     supported_build::kTemporalAaShaderCrc,
@@ -1314,6 +1451,168 @@ renodx::utils::settings::Settings settings =
         }),
         renodx::templates::settings::CreateSettings({
             {{
+                .key = "DepthOfFieldMode",
+                .binding = &dof_mode,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "Depth of Field",
+                .section = "Depth of Field",
+                .tooltip = "Clean keeps full-resolution depth boundaries and excludes low-resolution artistic layers. Cinematic restores Detroit's authored deep and foreground bokeh while retaining the full-resolution transition resolve. Vanilla is the exact reference path.",
+                .labels = {"Vanilla", "Clean", "Cinematic"},
+                .on_change_value = [](float, float current) {
+                  dof_mode = current;
+                  OnDofSettingsChanged();
+                },
+            }},
+            {{
+                .key = "DepthOfFieldQuality",
+                .binding = &dof_quality,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 1.f,
+                .can_reset = true,
+                .label = "DOF Quality",
+                .section = "Depth of Field",
+                .tooltip = "High uses the complete authored 49-tap aperture kernel with depth-aware subpixel interpolation. Balanced uses four aperture taps for slower GPUs.",
+                .labels = {"Balanced", "High"},
+                .is_enabled = []() { return dof_mode >= 0.5f; },
+                .on_change_value = [](float, float current) {
+                  dof_quality = current;
+                },
+            }},
+            {{
+                .key = "DepthOfFieldFocusDistance",
+                .binding = &dof_focus_distance,
+                .default_value = 100.f,
+                .can_reset = true,
+                .label = "Focus Distance",
+                .section = "Depth of Field",
+                .tooltip = "Scales Detroit's authored focal distance. It is ignored by Vanilla.",
+                .min = 0.f,
+                .max = 200.f,
+                .format = "%.0f%%",
+                .is_enabled = []() { return dof_mode >= 0.5f; },
+            }},
+            {{
+                .key = "DepthOfFieldBlurRadius",
+                .binding = &dof_blur_radius,
+                .default_value = 100.f,
+                .can_reset = true,
+                .label = "Blur Radius",
+                .section = "Depth of Field",
+                .tooltip = "Scales the full-resolution Circle of Confusion radius. It is ignored by Vanilla.",
+                .min = 0.f,
+                .max = 200.f,
+                .format = "%.0f%%",
+                .is_enabled = []() { return dof_mode >= 0.5f; },
+            }},
+            {{
+                .key = "DepthOfFieldNearStrength",
+                .binding = &dof_near_strength,
+                .default_value = 100.f,
+                .can_reset = true,
+                .label = "Foreground Bokeh",
+                .section = "Depth of Field",
+                .tooltip = "Scales authored near-layer coverage in Cinematic. Clean and Vanilla do not use this layer.",
+                .min = 0.f,
+                .max = 200.f,
+                .format = "%.0f%%",
+                .is_enabled = []() { return dof_mode >= 1.5f; },
+            }},
+            {{
+                .key = "DepthOfFieldFarStrength",
+                .binding = &dof_far_strength,
+                .default_value = 100.f,
+                .can_reset = true,
+                .label = "Background Bokeh",
+                .section = "Depth of Field",
+                .tooltip = "Scales far-layer blur coverage without changing its focal boundary. It is ignored by Vanilla.",
+                .min = 0.f,
+                .max = 200.f,
+                .format = "%.0f%%",
+                .is_enabled = []() { return dof_mode >= 0.5f; },
+            }},
+            {{
+                .key = "DepthOfFieldEdgeBokeh",
+                .binding = &dof_edge_bokeh,
+                .default_value = 100.f,
+                .can_reset = true,
+                .label = "Edge Bokeh",
+                .section = "Depth of Field",
+                .tooltip = "Controls Cinematic's full-resolution aperture expansion near depth discontinuities. Clean and Vanilla keep it disabled.",
+                .min = 0.f,
+                .max = 200.f,
+                .format = "%.0f%%",
+                .is_enabled = []() { return dof_mode >= 1.5f; },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Vanilla DOF is active.",
+                .section = "Depth of Field",
+                .is_visible = []() { return dof_mode < 0.5f; },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "The selected DOF style is waiting for all four supported passes. Vanilla fallback is active.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  const auto status = dof_runtime_controller.GetStatus();
+                  return dof_mode >= 0.5f
+                      && (status == dof::RuntimeStatus::kWaitingForChain
+                          || status == dof::RuntimeStatus::kIncompleteChain);
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Clean Balanced is active on the complete supported DOF chain.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  return dof_mode >= 0.5f
+                      && dof_runtime_controller.GetStatus()
+                         == dof::RuntimeStatus::kActiveCleanBalanced;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Clean High is active on the complete supported DOF chain.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  return dof_mode >= 0.5f
+                      && dof_runtime_controller.GetStatus()
+                         == dof::RuntimeStatus::kActiveCleanHigh;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Cinematic Balanced is active with authored deep and foreground bokeh.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  return dof_mode >= 0.5f
+                      && dof_runtime_controller.GetStatus()
+                         == dof::RuntimeStatus::kActiveCinematicBalanced;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Cinematic High is active with authored deep and foreground bokeh.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  return dof_mode >= 0.5f
+                      && dof_runtime_controller.GetStatus()
+                         == dof::RuntimeStatus::kActiveCinematicHigh;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "This executable or DOF shader revision is unsupported. Vanilla fallback is active.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  return dof_mode >= 0.5f
+                      && dof_runtime_controller.GetStatus()
+                         == dof::RuntimeStatus::kUnsupportedBuild;
+                },
+            }},
+            {{
                 .key = "DLSSMode",
                 .binding = &dlss_mode,
                 .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -1489,6 +1788,7 @@ renodx::utils::settings::Settings settings =
     });
 
 void OnPresetOff() {
+  const bool dof_was_enhanced = dof_mode >= 0.5f;
   renodx::utils::settings::UpdateSettings({
       {"OutputMode", OUTPUT_MODE_AUTO},
       {"ToneMapType", 0.f},
@@ -1511,11 +1811,24 @@ void OnPresetOff() {
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
       {"SceneGradeStrength", 100.f},
+      {"DepthOfFieldMode", 0.f},
+      {"DepthOfFieldQuality", 1.f},
+      {"DepthOfFieldFocusDistance", 100.f},
+      {"DepthOfFieldBlurRadius", 100.f},
+      {"DepthOfFieldNearStrength", 100.f},
+      {"DepthOfFieldFarStrength", 100.f},
+      {"DepthOfFieldEdgeBokeh", 100.f},
       {"DLSSMode", static_cast<float>(DETROIT_DLSS_MODE_NATIVE)},
       {"DLAASharpening", 0.f},
       {"CASMode", CAS_MODE_VANILLA},
       {"CASStrength", 100.f},
   });
+  OnDofSettingsChanged();
+  if (dof_was_enhanced) {
+    reshade::log::message(
+        reshade::log::level::warning,
+        "Detroit DOF: Preset Off forced the Vanilla fallback.");
+  }
   OnAspectRatioModeChanged();
 }
 
@@ -1689,6 +2002,14 @@ void OnDestroyDevice(reshade::api::device* device) {
       swapchain != nullptr && swapchain->get_device() != device) {
     return;
   }
+  dof_runtime_controller.Reset();
+  shader_injection.dof_runtime_mode =
+      static_cast<float>(dof::RuntimeMode::kVanilla);
+  if (!dof_device_reset_logged.exchange(true, std::memory_order_acq_rel)) {
+    reshade::log::message(
+        reshade::log::level::warning,
+        "Detroit DOF: Vulkan device recreation forced the Vanilla fallback.");
+  }
   ShutdownDlssRenderScale();
 }
 
@@ -1740,6 +2061,7 @@ void OnPresent(
       scene_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
   shader_injection.ui_path_active =
       ui_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
+  UpdateDofRuntimeMode();
   SyncDlaaSharpening();
   TrySaveRequestedReShadeScreenshot(swapchain);
   temporal_capture::BeginNextFrame();
@@ -1776,6 +2098,8 @@ bool AttachAddon(HMODULE h_module) {
       &OnAspectRatioModeChanged);
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &OnDlssModeChanged);
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &OnDofSettingsChanged);
   reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
   reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
   reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
@@ -1787,6 +2111,7 @@ bool AttachAddon(HMODULE h_module) {
   renodx::mods::shader::Use(DLL_PROCESS_ATTACH, custom_shaders, &shader_injection);
   OnAspectRatioModeChanged();
   OnDlssModeChanged();
+  OnDofSettingsChanged();
   SyncDlaaSharpening();
   return true;
 }
@@ -1800,6 +2125,9 @@ void DetachAddon(HMODULE h_module, bool process_terminating) {
   reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
   reshade::unregister_event<reshade::addon_event::present>(OnPresent);
   ForceUltrawideRuntimeVanilla();
+  dof_runtime_controller.Reset();
+  shader_injection.dof_runtime_mode =
+      static_cast<float>(dof::RuntimeMode::kVanilla);
   renodx::utils::settings::Use(DLL_PROCESS_DETACH, &settings, &OnPresetOff);
   temporal_capture::Use(DLL_PROCESS_DETACH);
   renodx::mods::shader::Use(DLL_PROCESS_DETACH, custom_shaders, &shader_injection);
