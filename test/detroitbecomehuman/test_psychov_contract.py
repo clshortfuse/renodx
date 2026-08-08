@@ -76,6 +76,25 @@ class PsychoVContractTests(unittest.TestCase):
             r"psychotm_test22\(\s*renodx_psychov_input\s*,",
         )
 
+    def test_scene_graded_input_is_clamped_before_lms_conversion(self):
+        self.assertRegex(
+            self.scene,
+            re.compile(
+                r"renodx_psychov_input\s*=\s*max\(\s*"
+                r"renodx::draw::ComputeUntonemappedGraded\(.*?"
+                r"\)\s*,\s*vec3\(0\.0\)\s*\)\s*;",
+                re.DOTALL,
+            ),
+        )
+
+    def test_peak_uses_detroit_gamma_intermediate_representation(self):
+        self.assertRegex(
+            self.scene,
+            r"renodx_psychov_peak\s*=\s*"
+            r"renodx::color::correct::GammaSafe\(\s*"
+            r"renodx_psychov_peak_linear\s*,\s*true\s*,\s*2\.2\s*\)",
+        )
+
     def test_hdr_gamut_boundary_is_the_default(self):
         setting = re.search(
             r'\.key\s*=\s*"PsychoVGamut"(?P<body>.*?)'

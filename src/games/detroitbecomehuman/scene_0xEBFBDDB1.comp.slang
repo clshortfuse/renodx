@@ -407,12 +407,20 @@ void main()
             const vec3 renodx_vanilla_graded_linear = _2647;
             // PsychoV owns the display transform, but must preserve the same
             // scene-grade upgrade that ToneMapPass applies for the other modes.
-            const vec3 renodx_psychov_input =
+            const vec3 renodx_psychov_input = max(
                 renodx::draw::ComputeUntonemappedGraded(
                     renodx_untonemapped,
-                    renodx_vanilla_graded_linear);
-            const float renodx_psychov_peak =
+                    renodx_vanilla_graded_linear),
+                vec3(0.0));
+            const float renodx_psychov_peak_linear =
                 RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1e-6);
+            // Match ToneMapPass/RenoDRT's peak representation for Detroit's
+            // gamma-2.2 intermediate while PsychoV itself remains scene-linear.
+            const float renodx_psychov_peak =
+                renodx::color::correct::GammaSafe(
+                    renodx_psychov_peak_linear,
+                    true,
+                    2.2);
             vec3 renodx_tonemapped;
             if (CUSTOM_PSYCHOV17_ACTIVE)
             {
