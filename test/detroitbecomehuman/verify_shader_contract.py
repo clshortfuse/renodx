@@ -172,6 +172,94 @@ def validate_registry(embed_dir, shader_ids):
     if len(registrations) != len(shader_ids) or set(registrations) != shader_ids:
         fail(f"shaders.h registrations do not match expected CRC shaders: {registrations}")
 
+    if '#include "./temporal_aux.h"' not in text:
+        fail("optimized temporal auxiliary shader is missing from shaders.h")
+
+
+def validate_temporal_auxiliary(embed_dir, spirv_val, spirv_cross):
+    shader_id = "temporal_aux"
+    spv_path = embed_dir / f"{shader_id}.spv"
+    if not spv_path.is_file() or spv_path.stat().st_size > 10_000:
+        fail("temporal_aux was not optimized to the bounded history-only SPIR-V")
+    run_checked(
+        [str(spirv_val), "--target-env", "vulkan1.3", str(spv_path)],
+        "temporal_aux spirv-val",
+    )
+    reflection = json.loads(
+        run_checked(
+            [str(spirv_cross), str(spv_path), "--reflect"],
+            "temporal_aux reflection",
+        )
+    )
+    entry_points = reflection.get("entryPoints", [])
+    if len(entry_points) != 1 or entry_points[0].get("mode") != "comp":
+        fail("temporal_aux is not a single compute entry point")
+    if entry_points[0].get("workgroup_size") != [8, 8, 1]:
+        fail("temporal_aux workgroup size changed")
+    descriptors = normalize_descriptors(reflection)
+    expected_bindings = {
+        ("textures", 0),
+        ("textures", 3),
+        ("textures", 4),
+        ("textures", 6),
+        ("images", 17),
+        ("images", 18),
+        ("images", 19),
+        ("ubos", 52),
+    }
+    actual_bindings = {(item["kind"], item["binding"]) for item in descriptors}
+    if actual_bindings != expected_bindings:
+        fail(
+            "temporal_aux must retain only b17-b19 history dependencies; "
+            f"got {sorted(actual_bindings)}"
+        )
+    if any(item["binding"] == 16 for item in descriptors):
+        fail("temporal_aux must never expose or write the native color output b16")
+    validate_no_push_constants(shader_id, reflection)
+    validate_embed_header(shader_id, spv_path)
+
+
+def validate_dlaa_pack_shader(embed_dir, spirv_val, spirv_cross):
+    shader_id = "detroit_dlss_pack_color"
+    spv_path = embed_dir / f"{shader_id}.spv"
+    if not spv_path.is_file():
+        fail("DLAA output pack SPIR-V is missing")
+    run_checked(
+        [str(spirv_val), "--target-env", "vulkan1.3", str(spv_path)],
+        "DLAA pack spirv-val",
+    )
+    reflection = json.loads(
+        run_checked(
+            [str(spirv_cross), str(spv_path), "--reflect"],
+            "DLAA pack reflection",
+        )
+    )
+    entry_points = reflection.get("entryPoints", [])
+    if len(entry_points) != 1 or entry_points[0].get("mode") != "comp":
+        fail("DLAA output pack is not a single compute entry point")
+    if entry_points[0].get("workgroup_size") != [8, 8, 1]:
+        fail("DLAA output pack workgroup size changed")
+    descriptors = normalize_descriptors(reflection)
+    actual_bindings = {
+        (item["kind"], item["set"], item["binding"])
+        for item in descriptors
+    }
+    expected_bindings = {
+        ("textures", 0, 0),
+        ("images", 0, 1),
+        ("ubos", 0, 2),
+    }
+    if actual_bindings != expected_bindings:
+        fail(
+            "DLAA output pack must sample NGX color, write native b16 and "
+            f"read bundle-local sharpening constants; got {sorted(actual_bindings)}"
+        )
+    uniform = reflection.get("ubos", [])
+    if len(uniform) != 1 or uniform[0].get("block_size") != 16:
+        fail("DLAA output pack constants block must remain 16 bytes")
+    validate_no_push_constants(shader_id, reflection)
+    validate_embed_header(shader_id, spv_path)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -215,6 +303,8 @@ def main():
             tools[1],
         )
     validate_registry(embed_dir, shader_ids)
+    validate_temporal_auxiliary(embed_dir, tools[0], tools[1])
+    validate_dlaa_pack_shader(embed_dir, tools[0], tools[1])
 
     print(f"PASS: validated {len(shader_ids)} Detroit production SPIR-V shader contracts")
     return 0

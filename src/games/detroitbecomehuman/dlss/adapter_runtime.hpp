@@ -67,6 +67,8 @@ struct AdapterPrepareInfo {
   std::uint32_t render_height = 0u;
   std::uint32_t output_width = 0u;
   std::uint32_t output_height = 0u;
+  float dlaa_sharpening = 0.f;
+  float dlaa_sharpening_normalization = 1.f;
   // Test-only path selected by the Vulkan layer through a process-scoped
   // environment variable. It preserves the exact render-scale/resources but
   // spatially expands CurrColor instead of evaluating NGX, which isolates an

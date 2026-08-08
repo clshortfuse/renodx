@@ -58,6 +58,7 @@ constexpr std::size_t kMaximumCachedExtensionListBytes = 16u * 1024u;
 constexpr std::size_t kMaximumCachedExtensionCount = 64u;
 constexpr std::uint64_t kMaximumTemporalConstantsShadowSize = 64u * 1024u;
 constexpr std::size_t kTemporalDescriptorSetBloomWordCount = 64u;
+constexpr std::size_t kMaximumInternalFeatureFencePoolSize = 8u;
 constexpr std::array<std::uint32_t, DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT>
     kTemporalImageBindings = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 9u, 16u, 17u, 18u, 19u};
 
@@ -444,6 +445,7 @@ struct FencedFeatureSubmission {
   std::uint64_t queue = 0u;
   renodx::games::detroitbecomehuman::dlss::FeatureLifetimeTracker::
       SubmissionSnapshot snapshot;
+  bool owned_by_layer = false;
 };
 
 struct DeviceState {
@@ -472,7 +474,9 @@ struct DeviceState {
   PFN_vkWaitForFences next_wait_for_fences = nullptr;
   PFN_vkGetFenceStatus next_get_fence_status = nullptr;
   PFN_vkResetFences next_reset_fences = nullptr;
+  PFN_vkCreateFence next_create_fence = nullptr;
   PFN_vkDestroyFence next_destroy_fence = nullptr;
+  PFN_vkCmdPipelineBarrier next_cmd_pipeline_barrier = nullptr;
   PFN_vkCreateCommandPool next_create_command_pool = nullptr;
   PFN_vkAllocateCommandBuffers next_allocate_command_buffers = nullptr;
   PFN_vkFreeCommandBuffers next_free_command_buffers = nullptr;
@@ -500,6 +504,9 @@ struct DeviceState {
       feature_lifetime;
   std::unordered_map<std::uint64_t, FencedFeatureSubmission>
       fenced_feature_submissions;
+  std::vector<VkFence> available_internal_feature_fences;
+  bool logged_one_time_feature_submission = false;
+  bool logged_reusable_feature_submission = false;
   bool ngx_shutdown_requested = false;
   renodx::games::detroitbecomehuman::dlss::AdapterRuntime adapter_runtime;
   std::atomic<std::uint64_t> last_adapter_failure = 0u;
@@ -1966,6 +1973,8 @@ bool CanRestoreComputeCommandState(
          && !restore.descriptor_sets.empty();
 }
 
+void PollCompletedInternalFeatureFences(DeviceState* state);
+
 DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     const DetroitDlssTemporalFrameInputs* inputs,
     DetroitDlssEvaluateResult* result) {
@@ -2005,6 +2014,12 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
         frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
+
+  // Detroit submits its transient temporal command buffers without always
+  // supplying an application fence. Poll the private fences attached by the
+  // layer before reserving another full-resolution scratch bundle. This is a
+  // non-blocking status query and never stalls the recording thread.
+  PollCompletedInternalFeatureFences(state.get());
 
   const std::lock_guard lock(state->mutex);
   if (state->destroying.load(std::memory_order_acquire)
@@ -2213,6 +2228,9 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
           .render_height = inputs->render_height,
           .output_width = inputs->output_width,
           .output_height = inputs->output_height,
+          .dlaa_sharpening = inputs->dlaa_sharpening,
+          .dlaa_sharpening_normalization =
+              inputs->dlaa_sharpening_normalization,
           .diagnostic_spatial_output = diagnostic_spatial_output,
       },
       &prepared_frame);
@@ -2943,17 +2961,35 @@ void RecycleCompletedCommandBuffers(
   }
 }
 
+void RecycleInternalFeatureFence(DeviceState* state, VkFence fence);
+void DestroyInternalFeatureFencePool(DeviceState* state);
+
 void CommitFeatureSubmission(
     DeviceState* state,
     VkQueue queue,
     VkFence fence,
+    bool fence_owned_by_layer,
     const FeatureSubmissionSnapshot& snapshot) {
   if (snapshot.Empty()) return;
   std::vector<std::uint64_t> completed_command_buffers;
+  std::vector<VkFence> stale_internal_fences;
+  bool log_one_time_submission = false;
+  bool log_reusable_submission = false;
   {
     const std::lock_guard lock(state->mutex);
     const auto committed =
         state->feature_lifetime.CommitSuccessfulSubmit(ToOpaque(queue), snapshot);
+    for (const auto& command : committed.commands) {
+      if (command.one_time_submit
+          && !state->logged_one_time_feature_submission) {
+        state->logged_one_time_feature_submission = true;
+        log_one_time_submission = true;
+      } else if (!command.one_time_submit
+                 && !state->logged_reusable_feature_submission) {
+        state->logged_reusable_feature_submission = true;
+        log_reusable_submission = true;
+      }
+    }
     for (auto& [generation, feature] : state->feature_generations) {
       if (!feature.creation.submitted
           && renodx::games::detroitbecomehuman::dlss::FeatureLifetimeTracker::
@@ -2974,6 +3010,9 @@ void CommitFeatureSubmission(
             previous->second.queue, previous->second.snapshot);
         completed_command_buffers.insert(
             completed_command_buffers.end(), stale.begin(), stale.end());
+        if (previous->second.owned_by_layer) {
+          stale_internal_fences.push_back(fence);
+        }
         state->fenced_feature_submissions.erase(previous);
       }
       state->fenced_feature_submissions.emplace(
@@ -2981,54 +3020,181 @@ void CommitFeatureSubmission(
           FencedFeatureSubmission{
               .queue = ToOpaque(queue),
               .snapshot = committed,
+              .owned_by_layer = fence_owned_by_layer,
           });
     }
     CollectRetiredFeaturesLocked(state);
   }
+  if (log_one_time_submission) {
+    Trace("DLAA feature submissions use ONE_TIME_SUBMIT; private scratch can recycle at fence completion");
+  }
+  if (log_reusable_submission) {
+    Trace("DLAA feature submission is reusable; its private scratch remains pinned until command-buffer reset");
+  }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
+  for (const VkFence stale_fence : stale_internal_fences) {
+    RecycleInternalFeatureFence(state, stale_fence);
+  }
 }
 
 void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
   std::vector<std::uint64_t> completed_command_buffers;
+  std::vector<VkFence> completed_internal_fences;
   {
     const std::lock_guard lock(state->mutex);
     const auto queue_key = ToOpaque(queue);
     completed_command_buffers = state->feature_lifetime.CompleteQueue(queue_key);
-    std::erase_if(
-        state->fenced_feature_submissions,
-        [queue_key](const auto& entry) {
-          return entry.second.queue == queue_key;
-        });
+    for (auto submission = state->fenced_feature_submissions.begin();
+         submission != state->fenced_feature_submissions.end();) {
+      if (submission->second.queue != queue_key) {
+        ++submission;
+        continue;
+      }
+      if (submission->second.owned_by_layer) {
+        completed_internal_fences.push_back(
+            FromOpaque<VkFence>(submission->first));
+      }
+      submission = state->fenced_feature_submissions.erase(submission);
+    }
     CollectRetiredFeaturesLocked(state);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
+  for (const VkFence fence : completed_internal_fences) {
+    RecycleInternalFeatureFence(state, fence);
+  }
 }
 
 void CompleteFeatureDevice(DeviceState* state) {
   std::vector<std::uint64_t> completed_command_buffers;
+  std::vector<VkFence> completed_internal_fences;
   {
     const std::lock_guard lock(state->mutex);
     completed_command_buffers = state->feature_lifetime.CompleteDevice();
+    for (const auto& [fence, submission] : state->fenced_feature_submissions) {
+      if (submission.owned_by_layer) {
+        completed_internal_fences.push_back(FromOpaque<VkFence>(fence));
+      }
+    }
     state->fenced_feature_submissions.clear();
     CollectRetiredFeaturesLocked(state);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
+  for (const VkFence fence : completed_internal_fences) {
+    RecycleInternalFeatureFence(state, fence);
+  }
 }
 
 void CompleteFeatureFence(DeviceState* state, VkFence fence) {
   if (state == nullptr || fence == VK_NULL_HANDLE) return;
   std::vector<std::uint64_t> completed_command_buffers;
+  bool destroy_internal_fence = false;
   {
     const std::lock_guard lock(state->mutex);
     const auto found = state->fenced_feature_submissions.find(ToOpaque(fence));
     if (found == state->fenced_feature_submissions.end()) return;
     auto submission = std::move(found->second);
     state->fenced_feature_submissions.erase(found);
+    destroy_internal_fence = submission.owned_by_layer;
     completed_command_buffers = state->feature_lifetime.CompleteSubmission(
         submission.queue, submission.snapshot);
     CollectRetiredFeaturesLocked(state);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
+  if (destroy_internal_fence) {
+    RecycleInternalFeatureFence(state, fence);
+  }
+}
+
+void PollCompletedInternalFeatureFences(DeviceState* state) {
+  if (state == nullptr || state->next_get_fence_status == nullptr) return;
+
+  std::vector<std::uint64_t> completed_command_buffers;
+  std::vector<VkFence> completed_fences;
+  {
+    const std::lock_guard lock(state->mutex);
+    for (auto submission = state->fenced_feature_submissions.begin();
+         submission != state->fenced_feature_submissions.end();) {
+      if (!submission->second.owned_by_layer) {
+        ++submission;
+        continue;
+      }
+      const auto fence = FromOpaque<VkFence>(submission->first);
+      if (state->next_get_fence_status(state->device, fence) != VK_SUCCESS) {
+        ++submission;
+        continue;
+      }
+      auto completed = state->feature_lifetime.CompleteSubmission(
+          submission->second.queue, submission->second.snapshot);
+      completed_command_buffers.insert(
+          completed_command_buffers.end(), completed.begin(), completed.end());
+      completed_fences.push_back(fence);
+      submission = state->fenced_feature_submissions.erase(submission);
+    }
+    CollectRetiredFeaturesLocked(state);
+  }
+  RecycleCompletedCommandBuffers(state, completed_command_buffers);
+  for (const VkFence fence : completed_fences) {
+    RecycleInternalFeatureFence(state, fence);
+  }
+}
+
+void RecycleInternalFeatureFence(DeviceState* state, VkFence fence) {
+  if (state == nullptr || fence == VK_NULL_HANDLE) return;
+  bool pooled = false;
+  if (!state->destroying.load(std::memory_order_acquire)
+      && state->next_reset_fences != nullptr
+      && state->next_reset_fences(state->device, 1u, &fence) == VK_SUCCESS) {
+    const std::lock_guard lock(state->mutex);
+    if (!state->destroying.load(std::memory_order_relaxed)
+        && state->available_internal_feature_fences.size()
+               < kMaximumInternalFeatureFencePoolSize) {
+      state->available_internal_feature_fences.push_back(fence);
+      pooled = true;
+    }
+  }
+  if (!pooled && state->next_destroy_fence != nullptr) {
+    state->next_destroy_fence(state->device, fence, nullptr);
+  }
+}
+
+void DestroyInternalFeatureFencePool(DeviceState* state) {
+  if (state == nullptr) return;
+  std::vector<VkFence> fences;
+  {
+    const std::lock_guard lock(state->mutex);
+    fences.swap(state->available_internal_feature_fences);
+  }
+  if (state->next_destroy_fence != nullptr) {
+    for (const VkFence fence : fences) {
+      state->next_destroy_fence(state->device, fence, nullptr);
+    }
+  }
+}
+
+VkFence CreateInternalFeatureFence(
+    DeviceState* state, const FeatureSubmissionSnapshot& snapshot) {
+  if (state == nullptr || snapshot.Empty() || state->next_create_fence == nullptr
+      || state->next_destroy_fence == nullptr) {
+    return VK_NULL_HANDLE;
+  }
+  {
+    const std::lock_guard lock(state->mutex);
+    if (!state->available_internal_feature_fences.empty()) {
+      const VkFence fence = state->available_internal_feature_fences.back();
+      state->available_internal_feature_fences.pop_back();
+      return fence;
+    }
+  }
+  const VkFenceCreateInfo create_info = {
+      VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+      nullptr,
+      0u,
+  };
+  VkFence fence = VK_NULL_HANDLE;
+  return state->next_create_fence(state->device, &create_info, nullptr, &fence)
+                 == VK_SUCCESS
+             ? fence
+             : VK_NULL_HANDLE;
 }
 
 VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
@@ -3056,10 +3222,23 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
     }
   }
   const auto snapshot = CaptureFeatureSubmission(state, command_buffers);
+  const bool needs_internal_fence = fence == VK_NULL_HANDLE && !snapshot.Empty();
+  const VkFence internal_fence =
+      needs_internal_fence ? CreateInternalFeatureFence(state, snapshot)
+                           : VK_NULL_HANDLE;
+  const VkFence tracked_fence =
+      internal_fence != VK_NULL_HANDLE ? internal_fence : fence;
   const VkResult result =
-      state->next_queue_submit(queue, submit_count, submits, fence);
+      state->next_queue_submit(queue, submit_count, submits, tracked_fence);
   if (result == VK_SUCCESS) {
-    CommitFeatureSubmission(state, queue, fence, snapshot);
+    CommitFeatureSubmission(
+        state,
+        queue,
+        tracked_fence,
+        internal_fence != VK_NULL_HANDLE,
+        snapshot);
+  } else if (internal_fence != VK_NULL_HANDLE) {
+    RecycleInternalFeatureFence(state, internal_fence);
   }
   return result;
 }
@@ -3092,10 +3271,23 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
     }
   }
   const auto snapshot = CaptureFeatureSubmission(state, command_buffers);
+  const bool needs_internal_fence = fence == VK_NULL_HANDLE && !snapshot.Empty();
+  const VkFence internal_fence =
+      needs_internal_fence ? CreateInternalFeatureFence(state, snapshot)
+                           : VK_NULL_HANDLE;
+  const VkFence tracked_fence =
+      internal_fence != VK_NULL_HANDLE ? internal_fence : fence;
   const VkResult result =
-      state->next_queue_submit2(queue, submit_count, submits, fence);
+      state->next_queue_submit2(queue, submit_count, submits, tracked_fence);
   if (result == VK_SUCCESS) {
-    CommitFeatureSubmission(state, queue, fence, snapshot);
+    CommitFeatureSubmission(
+        state,
+        queue,
+        tracked_fence,
+        internal_fence != VK_NULL_HANDLE,
+        snapshot);
+  } else if (internal_fence != VK_NULL_HANDLE) {
+    RecycleInternalFeatureFence(state, internal_fence);
   }
   return result;
 }
@@ -3129,10 +3321,23 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
     }
   }
   const auto snapshot = CaptureFeatureSubmission(state, command_buffers);
+  const bool needs_internal_fence = fence == VK_NULL_HANDLE && !snapshot.Empty();
+  const VkFence internal_fence =
+      needs_internal_fence ? CreateInternalFeatureFence(state, snapshot)
+                           : VK_NULL_HANDLE;
+  const VkFence tracked_fence =
+      internal_fence != VK_NULL_HANDLE ? internal_fence : fence;
   const VkResult result =
-      state->next_queue_submit2_khr(queue, submit_count, submits, fence);
+      state->next_queue_submit2_khr(queue, submit_count, submits, tracked_fence);
   if (result == VK_SUCCESS) {
-    CommitFeatureSubmission(state, queue, fence, snapshot);
+    CommitFeatureSubmission(
+        state,
+        queue,
+        tracked_fence,
+        internal_fence != VK_NULL_HANDLE,
+        snapshot);
+  } else if (internal_fence != VK_NULL_HANDLE) {
+    RecycleInternalFeatureFence(state, internal_fence);
   }
   return result;
 }
@@ -3893,8 +4098,12 @@ VKAPI_ATTR VkResult VKAPI_CALL HookCreateDevice(
       reshade_get_device_proc_addr(*device, "vkGetFenceStatus"));
   state->next_reset_fences = reinterpret_cast<PFN_vkResetFences>(
       reshade_get_device_proc_addr(*device, "vkResetFences"));
+  state->next_create_fence = reinterpret_cast<PFN_vkCreateFence>(
+      reshade_get_device_proc_addr(*device, "vkCreateFence"));
   state->next_destroy_fence = reinterpret_cast<PFN_vkDestroyFence>(
       reshade_get_device_proc_addr(*device, "vkDestroyFence"));
+  state->next_cmd_pipeline_barrier = reinterpret_cast<PFN_vkCmdPipelineBarrier>(
+      reshade_get_device_proc_addr(*device, "vkCmdPipelineBarrier"));
   state->next_create_command_pool = reinterpret_cast<PFN_vkCreateCommandPool>(
       reshade_get_device_proc_addr(*device, "vkCreateCommandPool"));
   state->next_allocate_command_buffers =
@@ -4000,9 +4209,11 @@ VKAPI_ATTR void VKAPI_CALL HookDestroyDevice(
     devices.erase(DispatchKey(device));
     device_registry_generation.fetch_add(1u, std::memory_order_release);
   }
-  if (state->next_device_wait_idle != nullptr) {
-    (void)state->next_device_wait_idle(device);
+  if (state->next_device_wait_idle != nullptr
+      && state->next_device_wait_idle(device) == VK_SUCCESS) {
+    CompleteFeatureDevice(state.get());
   }
+  DestroyInternalFeatureFencePool(state.get());
   // vkDestroyDevice is the terminal boundary: no recorded command buffer can
   // be submitted after this call. A device-lost idle result does not change
   // that guarantee, so all deferred generations can now be released.
@@ -4273,6 +4484,40 @@ bool WasLoadedEarly() { return loaded_early.load(std::memory_order_acquire); }
 
 bool IsBridgeReady() {
   return GetStatus() == BootstrapStatus::kDlaaReady && GetActiveDevice() != nullptr;
+}
+
+bool CanInsertComputeWriteBarrier() {
+  const auto state = GetActiveDevice();
+  return state != nullptr
+         && !state->destroying.load(std::memory_order_acquire)
+         && state->next_cmd_pipeline_barrier != nullptr;
+}
+
+bool InsertComputeWriteBarrier(std::uint64_t command_buffer) {
+  const auto state = GetActiveDevice();
+  if (state == nullptr || command_buffer == 0u
+      || state->destroying.load(std::memory_order_acquire)
+      || state->next_cmd_pipeline_barrier == nullptr) {
+    return false;
+  }
+  const VkMemoryBarrier barrier = {
+      VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+      nullptr,
+      VK_ACCESS_SHADER_WRITE_BIT,
+      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+  };
+  state->next_cmd_pipeline_barrier(
+      FromOpaque<VkCommandBuffer>(command_buffer),
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      0u,
+      1u,
+      &barrier,
+      0u,
+      nullptr,
+      0u,
+      nullptr);
+  return true;
 }
 
 DetroitDlssResultCode DETROIT_DLSS_CALL GetApi(

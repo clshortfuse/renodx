@@ -112,6 +112,8 @@ BootstrapStatus GetStatus();
 const char* GetStatusText();
 bool WasLoadedEarly();
 bool IsBridgeReady();
+bool CanInsertComputeWriteBarrier();
+bool InsertComputeWriteBarrier(std::uint64_t command_buffer);
 
 DetroitDlssResultCode DETROIT_DLSS_CALL GetApi(
     std::uint32_t requested_version,

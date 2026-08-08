@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <limits>
 #include <mutex>
 #include <span>
@@ -24,7 +25,6 @@ constexpr VkFormat kNativeMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT;
 constexpr VkFormat kNativeDepthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
 constexpr VkFormat kNativeOutputFormat = VK_FORMAT_R32_UINT;
 constexpr VkFormat kAdaptedColorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-constexpr VkFormat kAdaptedMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT;
 constexpr std::uint32_t kMaximumScratchBundlesHardLimit = 8u;
 
 template <typename Handle>
@@ -112,6 +112,10 @@ struct AdapterRuntime::Impl {
     PFN_vkDestroyDescriptorPool destroy_descriptor_pool = nullptr;
     PFN_vkAllocateDescriptorSets allocate_descriptor_sets = nullptr;
     PFN_vkUpdateDescriptorSets update_descriptor_sets = nullptr;
+    PFN_vkCreateBuffer create_buffer = nullptr;
+    PFN_vkDestroyBuffer destroy_buffer = nullptr;
+    PFN_vkGetBufferMemoryRequirements get_buffer_memory_requirements = nullptr;
+    PFN_vkBindBufferMemory bind_buffer_memory = nullptr;
     PFN_vkCreateImage create_image = nullptr;
     PFN_vkDestroyImage destroy_image = nullptr;
     PFN_vkGetImageMemoryRequirements get_image_memory_requirements = nullptr;
@@ -123,6 +127,7 @@ struct AdapterRuntime::Impl {
     PFN_vkCmdPipelineBarrier cmd_pipeline_barrier = nullptr;
     PFN_vkCmdBindPipeline cmd_bind_pipeline = nullptr;
     PFN_vkCmdBindDescriptorSets cmd_bind_descriptor_sets = nullptr;
+    PFN_vkCmdUpdateBuffer cmd_update_buffer = nullptr;
     PFN_vkCmdDispatch cmd_dispatch = nullptr;
     PFN_vkDeviceWaitIdle device_wait_idle = nullptr;
   } procedures;
@@ -136,18 +141,34 @@ struct AdapterRuntime::Impl {
     VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
   };
 
+  struct BufferAllocation {
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkDeviceSize size = 0u;
+  };
+
+  struct alignas(16) PackConstants {
+    float sharpening = 0.f;
+    float normalization = 1.f;
+    float reserved_0 = 0.f;
+    float reserved_1 = 0.f;
+  };
+  static_assert(sizeof(PackConstants) == 16u);
+
   struct ScratchBundle {
     VkCommandBuffer command_buffer = VK_NULL_HANDLE;
     ImageAllocation color;
-    ImageAllocation motion_vectors;
     ImageAllocation dlss_output;
+    BufferAllocation pack_constants_buffer;
     VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
     VkDescriptorSet prepare_descriptor_set = VK_NULL_HANDLE;
     VkDescriptorSet pack_descriptor_set = VK_NULL_HANDLE;
+    DetroitDlssResource native_motion_vectors = {};
     DetroitDlssResource native_output = {};
     std::uint64_t token = 0u;
     std::uint64_t recording_generation = 1u;
     std::uint64_t prepared_generation = 0u;
+    PackConstants pack_constants = {};
     bool diagnostic_spatial_output = false;
     bool active = false;
     bool tainted = false;
@@ -227,6 +248,14 @@ struct AdapterRuntime::Impl {
            && LoadDeviceProcedure(
                &procedures.update_descriptor_sets,
                "vkUpdateDescriptorSets")
+           && LoadDeviceProcedure(&procedures.create_buffer, "vkCreateBuffer")
+           && LoadDeviceProcedure(&procedures.destroy_buffer, "vkDestroyBuffer")
+           && LoadDeviceProcedure(
+               &procedures.get_buffer_memory_requirements,
+               "vkGetBufferMemoryRequirements")
+           && LoadDeviceProcedure(
+               &procedures.bind_buffer_memory,
+               "vkBindBufferMemory")
            && LoadDeviceProcedure(&procedures.create_image, "vkCreateImage")
            && LoadDeviceProcedure(&procedures.destroy_image, "vkDestroyImage")
            && LoadDeviceProcedure(
@@ -244,6 +273,9 @@ struct AdapterRuntime::Impl {
            && LoadDeviceProcedure(
                &procedures.cmd_bind_descriptor_sets,
                "vkCmdBindDescriptorSets")
+           && LoadDeviceProcedure(
+               &procedures.cmd_update_buffer,
+               "vkCmdUpdateBuffer")
            && LoadDeviceProcedure(&procedures.cmd_dispatch, "vkCmdDispatch")
            && LoadDeviceProcedure(&procedures.device_wait_idle, "vkDeviceWaitIdle");
   }
@@ -265,8 +297,7 @@ struct AdapterRuntime::Impl {
            && SupportsOptimalFormat(kNativeMotionVectorFormat, kSampled)
            && SupportsOptimalFormat(kNativeDepthFormat, kSampled)
            && SupportsOptimalFormat(kNativeOutputFormat, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT)
-           && SupportsOptimalFormat(kAdaptedColorFormat, kSampledStorage)
-           && SupportsOptimalFormat(kAdaptedMotionVectorFormat, kSampledStorage);
+           && SupportsOptimalFormat(kAdaptedColorFormat, kSampledStorage);
   }
 
   AdapterResult CreateComputePipeline(
@@ -356,7 +387,7 @@ struct AdapterRuntime::Impl {
     VkResult result = procedures.create_sampler(device, &sampler_info, nullptr, &sampler);
     if (result != VK_SUCCESS) return VulkanError(result);
 
-    const std::array<VkDescriptorSetLayoutBinding, 4u> prepare_bindings = {{
+    const std::array<VkDescriptorSetLayoutBinding, 2u> prepare_bindings = {{
         {
             adapter_shaders::PrepareColorMotionBindings::kCurrentColor,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -365,21 +396,7 @@ struct AdapterRuntime::Impl {
             nullptr,
         },
         {
-            adapter_shaders::PrepareColorMotionBindings::kMotionVectors,
-            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            1u,
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            nullptr,
-        },
-        {
             adapter_shaders::PrepareColorMotionBindings::kOutputColor,
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            1u,
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            nullptr,
-        },
-        {
-            adapter_shaders::PrepareColorMotionBindings::kOutputMotionVectors,
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             1u,
             VK_SHADER_STAGE_COMPUTE_BIT,
@@ -400,7 +417,7 @@ struct AdapterRuntime::Impl {
         &prepare_descriptor_set_layout);
     if (result != VK_SUCCESS) return VulkanError(result);
 
-    const std::array<VkDescriptorSetLayoutBinding, 2u> pack_bindings = {{
+    const std::array<VkDescriptorSetLayoutBinding, 3u> pack_bindings = {{
         {
             adapter_shaders::PackColorBindings::kDlssColor,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -411,6 +428,13 @@ struct AdapterRuntime::Impl {
         {
             adapter_shaders::PackColorBindings::kOutputColorPass,
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            1u,
+            VK_SHADER_STAGE_COMPUTE_BIT,
+            nullptr,
+        },
+        {
+            adapter_shaders::PackColorBindings::kConstants,
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             1u,
             VK_SHADER_STAGE_COMPUTE_BIT,
             nullptr,
@@ -487,13 +511,24 @@ struct AdapterRuntime::Impl {
     *allocation = {};
   }
 
+  void DestroyBuffer(BufferAllocation* allocation) const {
+    if (allocation == nullptr) return;
+    if (allocation->buffer != VK_NULL_HANDLE) {
+      procedures.destroy_buffer(device, allocation->buffer, nullptr);
+    }
+    if (allocation->memory != VK_NULL_HANDLE) {
+      procedures.free_memory(device, allocation->memory, nullptr);
+    }
+    *allocation = {};
+  }
+
   void DestroyBundle(ScratchBundle* bundle) const {
     if (bundle == nullptr) return;
     if (bundle->descriptor_pool != VK_NULL_HANDLE) {
       procedures.destroy_descriptor_pool(device, bundle->descriptor_pool, nullptr);
     }
+    DestroyBuffer(&bundle->pack_constants_buffer);
     DestroyImage(&bundle->dlss_output);
-    DestroyImage(&bundle->motion_vectors);
     DestroyImage(&bundle->color);
     *bundle = {};
   }
@@ -637,6 +672,74 @@ struct AdapterRuntime::Impl {
     return Success();
   }
 
+  AdapterResult CreateBuffer(
+      VkDeviceSize size,
+      VkBufferUsageFlags usage,
+      BufferAllocation* allocation) const {
+    if (allocation == nullptr || size == 0u) {
+      return Fallback(AdapterDetail::kInvalidArgument);
+    }
+
+    BufferAllocation created = {};
+    created.size = size;
+    const VkBufferCreateInfo buffer_info = {
+        VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        nullptr,
+        0u,
+        size,
+        usage,
+        VK_SHARING_MODE_EXCLUSIVE,
+        0u,
+        nullptr,
+    };
+    VkResult result = procedures.create_buffer(
+        device,
+        &buffer_info,
+        nullptr,
+        &created.buffer);
+    if (result != VK_SUCCESS) return VulkanError(result);
+
+    VkMemoryRequirements memory_requirements = {};
+    procedures.get_buffer_memory_requirements(
+        device,
+        created.buffer,
+        &memory_requirements);
+    const auto memory_type = FindDeviceLocalMemoryType(
+        memory_requirements.memoryTypeBits);
+    if (memory_type == std::numeric_limits<std::uint32_t>::max()) {
+      DestroyBuffer(&created);
+      return Fallback(AdapterDetail::kUnsupportedFormat);
+    }
+
+    const VkMemoryAllocateInfo memory_info = {
+        VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        nullptr,
+        memory_requirements.size,
+        memory_type,
+    };
+    result = procedures.allocate_memory(
+        device,
+        &memory_info,
+        nullptr,
+        &created.memory);
+    if (result != VK_SUCCESS) {
+      DestroyBuffer(&created);
+      return VulkanError(result);
+    }
+    result = procedures.bind_buffer_memory(
+        device,
+        created.buffer,
+        created.memory,
+        0u);
+    if (result != VK_SUCCESS) {
+      DestroyBuffer(&created);
+      return VulkanError(result);
+    }
+
+    *allocation = created;
+    return Success();
+  }
+
   AdapterResult CreateBundle(
       VkCommandBuffer command_buffer,
       std::uint32_t render_width,
@@ -656,14 +759,6 @@ struct AdapterRuntime::Impl {
       return result;
     }
     result = CreateImage(
-        kAdaptedMotionVectorFormat,
-        {render_width, render_height},
-        &created.motion_vectors);
-    if (!result.Succeeded()) {
-      DestroyBundle(&created);
-      return result;
-    }
-    result = CreateImage(
         kAdaptedColorFormat,
         {output_width, output_height},
         &created.dlss_output);
@@ -672,9 +767,20 @@ struct AdapterRuntime::Impl {
       return result;
     }
 
-    const std::array<VkDescriptorPoolSize, 2u> pool_sizes = {{
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3u},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3u},
+    result = CreateBuffer(
+        sizeof(PackConstants),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
+            | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        &created.pack_constants_buffer);
+    if (!result.Succeeded()) {
+      DestroyBundle(&created);
+      return result;
+    }
+
+    const std::array<VkDescriptorPoolSize, 3u> pool_sizes = {{
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2u},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2u},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u},
     }};
     const VkDescriptorPoolCreateInfo pool_info = {
         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -722,8 +828,6 @@ struct AdapterRuntime::Impl {
       const AdapterPrepareInfo& prepare_info) {
     return bundle.color.extent.width == prepare_info.render_width
            && bundle.color.extent.height == prepare_info.render_height
-           && bundle.motion_vectors.extent.width == prepare_info.render_width
-           && bundle.motion_vectors.extent.height == prepare_info.render_height
            && bundle.dlss_output.extent.width == prepare_info.output_width
            && bundle.dlss_output.extent.height == prepare_info.output_height;
   }
@@ -733,10 +837,12 @@ struct AdapterRuntime::Impl {
       VkCommandBuffer command_buffer) {
     if (bundle == nullptr) return;
     bundle->command_buffer = command_buffer;
+    bundle->native_motion_vectors = {};
     bundle->native_output = {};
     bundle->token = 0u;
     bundle->recording_generation = 1u;
     bundle->prepared_generation = 0u;
+    bundle->pack_constants = {};
     bundle->diagnostic_spatial_output = false;
     bundle->active = false;
     bundle->tainted = false;
@@ -747,7 +853,6 @@ struct AdapterRuntime::Impl {
     // use, so UNDEFINED safely discards its prior contents without requiring
     // knowledge of a partially recorded NGX layout sequence.
     bundle->color.layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    bundle->motion_vectors.layout = VK_IMAGE_LAYOUT_UNDEFINED;
     bundle->dlss_output.layout = VK_IMAGE_LAYOUT_UNDEFINED;
   }
 
@@ -822,25 +927,24 @@ struct AdapterRuntime::Impl {
            && output.width >= prepare_info.output_width
            && output.height >= prepare_info.output_height
            && output.layout == VK_IMAGE_LAYOUT_GENERAL
+           && std::isfinite(prepare_info.dlaa_sharpening)
+           && prepare_info.dlaa_sharpening >= 0.f
+           && prepare_info.dlaa_sharpening <= 1.f
+           && std::isfinite(prepare_info.dlaa_sharpening_normalization)
+           && prepare_info.dlaa_sharpening_normalization >= 1.f
            && ValidateDispatchDimensions(prepare_info);
   }
 
   void UpdateDescriptors(
       ScratchBundle* bundle,
       const AdapterPrepareInfo& prepare_info) const {
-    const std::array<VkDescriptorImageInfo, 6u> images = {{
+    const std::array<VkDescriptorImageInfo, 4u> images = {{
         {
             sampler,
             FromOpaque<VkImageView>(prepare_info.current_color.image_view),
             static_cast<VkImageLayout>(prepare_info.current_color.layout),
         },
-        {
-            sampler,
-            FromOpaque<VkImageView>(prepare_info.motion_vectors.image_view),
-            static_cast<VkImageLayout>(prepare_info.motion_vectors.layout),
-        },
         {VK_NULL_HANDLE, bundle->color.view, VK_IMAGE_LAYOUT_GENERAL},
-        {VK_NULL_HANDLE, bundle->motion_vectors.view, VK_IMAGE_LAYOUT_GENERAL},
         {
             sampler,
             prepare_info.diagnostic_spatial_output ? bundle->color.view
@@ -853,7 +957,12 @@ struct AdapterRuntime::Impl {
             VK_IMAGE_LAYOUT_GENERAL,
         },
     }};
-    const std::array<VkWriteDescriptorSet, 6u> writes = {{
+    const VkDescriptorBufferInfo constants = {
+        bundle->pack_constants_buffer.buffer,
+        0u,
+        sizeof(PackConstants),
+    };
+    const std::array<VkWriteDescriptorSet, 5u> writes = {{
         {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             nullptr,
@@ -870,35 +979,11 @@ struct AdapterRuntime::Impl {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             nullptr,
             bundle->prepare_descriptor_set,
-            adapter_shaders::PrepareColorMotionBindings::kMotionVectors,
-            0u,
-            1u,
-            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            &images[1u],
-            nullptr,
-            nullptr,
-        },
-        {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            nullptr,
-            bundle->prepare_descriptor_set,
             adapter_shaders::PrepareColorMotionBindings::kOutputColor,
             0u,
             1u,
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            &images[2u],
-            nullptr,
-            nullptr,
-        },
-        {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            nullptr,
-            bundle->prepare_descriptor_set,
-            adapter_shaders::PrepareColorMotionBindings::kOutputMotionVectors,
-            0u,
-            1u,
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            &images[3u],
+            &images[1u],
             nullptr,
             nullptr,
         },
@@ -910,7 +995,7 @@ struct AdapterRuntime::Impl {
             0u,
             1u,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            &images[4u],
+            &images[2u],
             nullptr,
             nullptr,
         },
@@ -922,8 +1007,20 @@ struct AdapterRuntime::Impl {
             0u,
             1u,
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            &images[5u],
+            &images[3u],
             nullptr,
+            nullptr,
+        },
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            nullptr,
+            bundle->pack_descriptor_set,
+            adapter_shaders::PackColorBindings::kConstants,
+            0u,
+            1u,
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            nullptr,
+            &constants,
             nullptr,
         },
     }};
@@ -975,18 +1072,11 @@ struct AdapterRuntime::Impl {
   void RecordPrepare(
       ScratchBundle* bundle,
       const AdapterPrepareInfo& prepare_info) const {
-    std::array<VkImageMemoryBarrier, 3u> before_prepare = {
+    std::array<VkImageMemoryBarrier, 2u> before_prepare = {
         ScratchBarrier(
             bundle->color,
             VK_IMAGE_LAYOUT_GENERAL,
             bundle->color.layout == VK_IMAGE_LAYOUT_UNDEFINED
-                ? 0u
-                : VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-            VK_ACCESS_SHADER_WRITE_BIT),
-        ScratchBarrier(
-            bundle->motion_vectors,
-            VK_IMAGE_LAYOUT_GENERAL,
-            bundle->motion_vectors.layout == VK_IMAGE_LAYOUT_UNDEFINED
                 ? 0u
                 : VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
             VK_ACCESS_SHADER_WRITE_BIT),
@@ -1010,7 +1100,6 @@ struct AdapterRuntime::Impl {
         static_cast<std::uint32_t>(before_prepare.size()),
         before_prepare.data());
     bundle->color.layout = VK_IMAGE_LAYOUT_GENERAL;
-    bundle->motion_vectors.layout = VK_IMAGE_LAYOUT_GENERAL;
     bundle->dlss_output.layout = VK_IMAGE_LAYOUT_GENERAL;
 
     procedures.cmd_bind_pipeline(
@@ -1032,14 +1121,9 @@ struct AdapterRuntime::Impl {
         DispatchCount(prepare_info.render_height, adapter_shaders::kWorkgroupSize[1u]),
         1u);
 
-    const std::array<VkImageMemoryBarrier, 2u> after_prepare = {
+    const std::array<VkImageMemoryBarrier, 1u> after_prepare = {
         ScratchBarrier(
             bundle->color,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_ACCESS_SHADER_WRITE_BIT,
-            VK_ACCESS_SHADER_READ_BIT),
-        ScratchBarrier(
-            bundle->motion_vectors,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_ACCESS_SHADER_WRITE_BIT,
             VK_ACCESS_SHADER_READ_BIT),
@@ -1056,13 +1140,29 @@ struct AdapterRuntime::Impl {
         static_cast<std::uint32_t>(after_prepare.size()),
         after_prepare.data());
     bundle->color.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    bundle->motion_vectors.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   }
 
   void RecordPack(ScratchBundle* bundle) const {
     auto& pack_source = bundle->diagnostic_spatial_output
                             ? bundle->color
                             : bundle->dlss_output;
+    procedures.cmd_update_buffer(
+        bundle->command_buffer,
+        bundle->pack_constants_buffer.buffer,
+        0u,
+        sizeof(bundle->pack_constants),
+        &bundle->pack_constants);
+    const VkBufferMemoryBarrier constants_barrier = {
+        VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        nullptr,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_ACCESS_UNIFORM_READ_BIT,
+        VK_QUEUE_FAMILY_IGNORED,
+        VK_QUEUE_FAMILY_IGNORED,
+        bundle->pack_constants_buffer.buffer,
+        0u,
+        sizeof(bundle->pack_constants),
+    };
     const std::array<VkImageMemoryBarrier, 2u> before_pack = {
         ScratchBarrier(
             pack_source,
@@ -1085,8 +1185,8 @@ struct AdapterRuntime::Impl {
         0u,
         0u,
         nullptr,
-        0u,
-        nullptr,
+        1u,
+        &constants_barrier,
         static_cast<std::uint32_t>(before_pack.size()),
         before_pack.data());
     pack_source.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1281,8 +1381,15 @@ AdapterResult AdapterRuntime::Prepare(
 
   impl_->UpdateDescriptors(&bundle, prepare_info);
   impl_->RecordPrepare(&bundle, prepare_info);
+  bundle.native_motion_vectors = prepare_info.motion_vectors;
   bundle.native_output = prepare_info.output_color_pass;
   bundle.diagnostic_spatial_output = prepare_info.diagnostic_spatial_output;
+  bundle.pack_constants = {
+      .sharpening = prepare_info.diagnostic_spatial_output
+                        ? 0.f
+                        : prepare_info.dlaa_sharpening,
+      .normalization = prepare_info.dlaa_sharpening_normalization,
+  };
   bundle.active = true;
   bundle.prepared_generation = bundle.recording_generation;
   bundle.token = impl_->next_token++;
@@ -1292,7 +1399,7 @@ AdapterResult AdapterRuntime::Prepare(
   prepared_frame->command_buffer = prepare_info.command_buffer;
   prepared_frame->color = Impl::MakeScratchResource(bundle.color);
   prepared_frame->depth = prepare_info.depth;
-  prepared_frame->motion_vectors = Impl::MakeScratchResource(bundle.motion_vectors);
+  prepared_frame->motion_vectors = bundle.native_motion_vectors;
   prepared_frame->output = Impl::MakeScratchResource(bundle.dlss_output);
   prepared_frame->render_width = prepare_info.render_width;
   prepared_frame->render_height = prepare_info.render_height;
@@ -1325,15 +1432,17 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
   }
 
   const auto expected_color = Impl::MakeScratchResource(bundle.color);
-  const auto expected_motion = Impl::MakeScratchResource(bundle.motion_vectors);
   const auto expected_output = Impl::MakeScratchResource(bundle.dlss_output);
   const bool prepared_resources_match =
       !prepared_frame.diagnostic_spatial_output
       && !bundle.diagnostic_spatial_output
       && prepared_frame.color.image == expected_color.image
       && prepared_frame.color.image_view == expected_color.image_view
-      && prepared_frame.motion_vectors.image == expected_motion.image
-      && prepared_frame.motion_vectors.image_view == expected_motion.image_view
+      && prepared_frame.motion_vectors.image == bundle.native_motion_vectors.image
+      && prepared_frame.motion_vectors.image_view
+             == bundle.native_motion_vectors.image_view
+      && prepared_frame.motion_vectors.layout == bundle.native_motion_vectors.layout
+      && prepared_frame.motion_vectors.format == bundle.native_motion_vectors.format
       && prepared_frame.output.image == expected_output.image
       && prepared_frame.output.image_view == expected_output.image_view
       && prepared_frame.output_width == bundle.dlss_output.extent.width
@@ -1361,15 +1470,17 @@ AdapterResult AdapterRuntime::CommitSpatialDiagnostic(
 
   auto& bundle = found->second;
   const auto expected_color = Impl::MakeScratchResource(bundle.color);
-  const auto expected_motion = Impl::MakeScratchResource(bundle.motion_vectors);
   const auto expected_output = Impl::MakeScratchResource(bundle.dlss_output);
   const bool prepared_resources_match =
       prepared_frame.diagnostic_spatial_output
       && bundle.diagnostic_spatial_output
       && prepared_frame.color.image == expected_color.image
       && prepared_frame.color.image_view == expected_color.image_view
-      && prepared_frame.motion_vectors.image == expected_motion.image
-      && prepared_frame.motion_vectors.image_view == expected_motion.image_view
+      && prepared_frame.motion_vectors.image == bundle.native_motion_vectors.image
+      && prepared_frame.motion_vectors.image_view
+             == bundle.native_motion_vectors.image_view
+      && prepared_frame.motion_vectors.layout == bundle.native_motion_vectors.layout
+      && prepared_frame.motion_vectors.format == bundle.native_motion_vectors.format
       && prepared_frame.output.image == expected_output.image
       && prepared_frame.output.image_view == expected_output.image_view
       && prepared_frame.output_width == bundle.dlss_output.extent.width

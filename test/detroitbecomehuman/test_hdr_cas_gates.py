@@ -49,8 +49,8 @@ def custom_dlss_active(dlss_payload: float) -> bool:
     return dlss_payload >= 0.5
 
 
-def custom_dlaa_sharpening(dlss_payload: float) -> float:
-    return min(max(float32(dlss_payload) - 1.0, 0.0), 1.0)
+def custom_dlaa_sharpening(strength: float) -> float:
+    return min(max(float32(strength), 0.0), 1.0)
 
 
 def use_hdr_safe_cas(
@@ -75,8 +75,8 @@ def effective_sharpness(
     """Model only the production branch that may alter native CAS strength."""
     native = float32(native_sharpness)
     if custom_dlss_active(dlss_payload):
-        # Scene-linear RCAS owns DLAA sharpening; the optional native CAS pass
-        # is disabled to prevent double sharpening.
+        # The pre-DOF adapter pack owns DLAA sharpening; the optional late
+        # native CAS pass is disabled to prevent double sharpening.
         return float32(0.0)
     if not use_hdr_safe_cas(
         output_mode, output_is_hdr, cas_mode, dlss_payload
@@ -222,7 +222,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                     output_is_hdr,
                     cas_mode,
                     0.0,
-                    dlss_payload=1.5,
+                    dlss_payload=1.0,
                 )
                 full_native_cas = effective_sharpness(
                     self.native_sharpness,
@@ -230,13 +230,13 @@ class HDRAndCASGateTests(unittest.TestCase):
                     output_is_hdr,
                     cas_mode,
                     0.0,
-                    dlss_payload=9.0,
+                    dlss_payload=1.0,
                 )
                 self.assertEqual(disabled, 0.0)
                 self.assertEqual(half_native_cas, 0.0)
                 self.assertEqual(full_native_cas, 0.0)
-                self.assertEqual(custom_dlaa_sharpening(1.0), 0.0)
-                self.assertEqual(custom_dlaa_sharpening(1.5), 0.5)
+                self.assertEqual(custom_dlaa_sharpening(-1.0), 0.0)
+                self.assertEqual(custom_dlaa_sharpening(0.5), 0.5)
                 self.assertEqual(custom_dlaa_sharpening(9.0), 1.0)
 
         self.assertFalse(
@@ -244,7 +244,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                 OUTPUT_MODE_SDR,
                 1.0,
                 CAS_MODE_VANILLA,
-                dlss_payload=1.5,
+                dlss_payload=1.0,
             )
         )
         self.assertTrue(
@@ -252,7 +252,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                 OUTPUT_MODE_AUTO,
                 1.0,
                 CAS_MODE_VANILLA,
-                dlss_payload=1.5,
+                dlss_payload=1.0,
             )
         )
 
@@ -327,6 +327,21 @@ class HDRAndCASGateTests(unittest.TestCase):
         temporal_capture = (SOURCE_DIR / "temporal_capture.hpp").read_text(
             encoding="utf-8"
         )
+        pack_shader = (
+            SOURCE_DIR
+            / "dlss"
+            / "shaders"
+            / "detroit_dlss_pack_color.comp.slang"
+        ).read_text(encoding="utf-8")
+        adapter_runtime = (
+            SOURCE_DIR / "dlss" / "adapter_runtime.cpp"
+        ).read_text(encoding="utf-8")
+        vulkan_layer = (
+            SOURCE_DIR / "dlss" / "vulkan_layer.cpp"
+        ).read_text(encoding="utf-8")
+        bridge_abi = (SOURCE_DIR / "dlss_bridge_abi.h").read_text(
+            encoding="utf-8"
+        )
 
         expected_constants = {
             "OUTPUT_MODE_AUTO": "0.f",
@@ -354,12 +369,7 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"#define\s+CUSTOM_DLSS_ACTIVE\s+"
             r"\(shader_injection\.reserved\s*>=\s*0\.5f\)",
         )
-        self.assertRegex(
-            compact_shared,
-            r"#define\s+CUSTOM_DLAA_SHARPENING\s+"
-            r"clamp\(shader_injection\.reserved\s*-\s*1\.f,\s*"
-            r"0\.f,\s*1\.f\)",
-        )
+        self.assertNotIn("CUSTOM_DLAA_SHARPENING", compact_shared)
         self.assertRegex(
             shader,
             r"bool\s+use_hdr_safe_path\s*=\s*CUSTOM_HDR_ACTIVE\s*&&\s*"
@@ -381,20 +391,31 @@ class HDRAndCASGateTests(unittest.TestCase):
             shader,
             r"_4359\s*\*=\s*CUSTOM_DLAA_SHARPENING\s*;",
         )
-        self.assertIn("vec3 ApplyDlaaRcas(", scene_shader)
+        self.assertNotIn("ApplyDlaaRcas", scene_shader)
+        self.assertNotIn("CUSTOM_DLSS_ACTIVE", scene_shader)
+        self.assertIn("vec3 ApplyDlaaRcas(", pack_shader)
+        self.assertIn("layout(set = 0, binding = 2, std140)", pack_shader)
         self.assertRegex(
-            scene_shader,
-            r"if\s*\(CUSTOM_DLSS_ACTIVE[\s\S]*?"
-            r"CUSTOM_DLAA_SHARPENING\s*>\s*0\.0[\s\S]*?"
-            r"_2630\s*=\s*ApplyDlaaRcas\(",
+            pack_shader,
+            r"if\s*\(sharpening\s*>\s*0\.0\)[\s\S]*?"
+            r"color\s*=\s*ApplyDlaaRcas\(",
         )
         self.assertIn('.key = "DLAASharpening"', addon)
         self.assertIn('.labels = {"Native TAA", "DLAA"}', addon)
         self.assertRegex(
             addon,
             r"shader_injection\.reserved\s*=\s*"
-            r"gate\.active\s*\?\s*1\.f\s*\+\s*gate\.strength\s*:\s*0\.f\s*;",
+            r"gate\.active\s*\?\s*1\.f\s*:\s*0\.f\s*;",
         )
+        self.assertIn("temporal_capture::SetDlaaSharpening(", addon)
+        self.assertIn("before Detroit's DOF", addon)
+        self.assertIn("float dlaa_sharpening;", bridge_abi)
+        self.assertIn("float dlaa_sharpening_normalization;", bridge_abi)
+        self.assertIn(".dlaa_sharpening = inputs->dlaa_sharpening,", vulkan_layer)
+        self.assertIn("VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER", adapter_runtime)
+        self.assertIn("procedures.cmd_update_buffer(", adapter_runtime)
+        self.assertIn("VK_ACCESS_TRANSFER_WRITE_BIT", adapter_runtime)
+        self.assertIn("VK_ACCESS_UNIFORM_READ_BIT", adapter_runtime)
         self.assertRegex(
             addon,
             r"\.crc32\s*=\s*0xEBFBDDB1,[\s\S]*?"
@@ -408,7 +429,7 @@ class HDRAndCASGateTests(unittest.TestCase):
         )
         sharpening_log_key_start = addon.index(
             "const auto log_key = temporal_capture::MakeTelemetryKey(",
-            addon.index("void ApplyDlaaSharpeningPayload("),
+            addon.index("void ApplyDlssOutputMarker("),
         )
         sharpening_log_key_end = addon.index(
             "if (last_dlaa_sharpening_log_key.exchange(",
@@ -425,7 +446,7 @@ class HDRAndCASGateTests(unittest.TestCase):
             addon,
             r"bool\s+OnSceneDraw\([^)]*\)\s*\{[\s\S]*?"
             r"MarkMainTemporalCommandList\(command_list->get_native\(\)\)"
-            r";[\s\S]*?ApplyDlaaSharpeningPayload\(",
+            r";[\s\S]*?ApplyDlssOutputMarker\(",
         )
         self.assertIn("ObserveTemporalCommandList(", temporal_capture)
         self.assertRegex(
@@ -434,6 +455,61 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"!is_main_temporal_command_list\)"
             r"\s*\{[\s\S]*?RuntimeStatus::kWaitingForDispatch[\s\S]*?return;",
         )
+
+        self.assertIn("RequestAuxiliaryTemporalReplacement", temporal_capture)
+        self.assertRegex(
+            temporal_capture,
+            r"native_temporal_pipeline\.handle\s*!=\s*0u\s*&&\s*"
+            r"dlss::embedded::CanInsertComputeWriteBarrier\(\)\s*&&\s*"
+            r"IsMainTemporalCommandList\(native_command_list\)\s*&&\s*"
+            r"QueryDlssOutputForCommandList\(native_command_list\)",
+        )
+        self.assertIn("struct NativeTemporalFallbackGuard", temporal_capture)
+        self.assertRegex(
+            temporal_capture,
+            r"~NativeTemporalFallbackGuard\(\)[\s\S]*?"
+            r"bind_pipeline\([\s\S]*?native_pipeline\)[\s\S]*?"
+            r"dispatch\(",
+        )
+        self.assertIn("native_fallback.Disarm();", temporal_capture)
+        self.assertIn("InsertComputeWriteBarrier(", temporal_capture)
+        self.assertRegex(
+            addon,
+            r"kTemporalAaShaderCrc,[\s\S]*?\.code\s*=\s*__temporal_aux,[\s\S]*?"
+            r"\.on_replace\s*=\s*&OnTemporalAuxiliaryReplace,",
+        )
+
+        auxiliary_shader = (SOURCE_DIR / "temporal_aux.comp.vk.glsl").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("imageStore(OutColorPass", auxiliary_shader)
+        for history_output in (
+            "imageStore(OutAADepth",
+            "imageStore(OutPrevSpeedAndFlagsTex",
+            "imageStore(HalfResContours",
+        ):
+            self.assertIn(history_output, auxiliary_shader)
+
+        adapter_runtime = (
+            SOURCE_DIR / "dlss" / "adapter_runtime.cpp"
+        ).read_text(encoding="utf-8")
+        prepare_shader = (
+            SOURCE_DIR
+            / "dlss"
+            / "shaders"
+            / "detroit_dlss_prepare_color_motion.comp.slang"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "bundle.native_motion_vectors = prepare_info.motion_vectors;",
+            adapter_runtime,
+        )
+        self.assertIn(
+            "prepared_frame->motion_vectors = bundle.native_motion_vectors;",
+            adapter_runtime,
+        )
+        self.assertNotIn("ImageAllocation motion_vectors", adapter_runtime)
+        self.assertNotIn("MotionVectorTex", prepare_shader)
+        self.assertNotIn("OutMotionVectors", prepare_shader)
 
         cap_start = shader.index("vec3 _6250 =")
         cap_end = shader.index("vec3 _6297 =", cap_start)

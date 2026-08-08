@@ -226,9 +226,14 @@ struct FrameEligibility {
       || !std::isfinite(inputs.motion_vector_scale_x)
       || !std::isfinite(inputs.motion_vector_scale_y)
       || !std::isfinite(inputs.pre_exposure)
+      || !std::isfinite(inputs.dlaa_sharpening)
+      || !std::isfinite(inputs.dlaa_sharpening_normalization)
       || inputs.motion_vector_scale_x == 0.f
       || inputs.motion_vector_scale_y == 0.f
-      || inputs.pre_exposure <= 0.f) {
+      || inputs.pre_exposure <= 0.f
+      || inputs.dlaa_sharpening < 0.f
+      || inputs.dlaa_sharpening > 1.f
+      || inputs.dlaa_sharpening_normalization < 1.f) {
     return {.reason = FallbackReason::kInvalidTemporalConstants};
   }
 

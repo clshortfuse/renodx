@@ -119,6 +119,36 @@ bool TestOneTimeRecordingCompletesAtFence() {
   return passed;
 }
 
+bool TestFenceTrackedOneTimeChurnDoesNotAccumulate() {
+  dlss::FeatureLifetimeTracker tracker;
+  constexpr std::uint64_t queue = 29u;
+  constexpr std::uint64_t generation = 13u;
+  bool passed = true;
+
+  // Detroit rotates through many transient primary command buffers and may
+  // submit them without an application fence. The layer attaches a private
+  // fence to each such submit and feeds the committed snapshot back here when
+  // that fence signals. Completed recordings must therefore remain bounded by
+  // actual GPU concurrency, not the lifetime count of command-buffer handles.
+  for (std::uint64_t command_buffer = 100u; command_buffer < 132u;
+       ++command_buffer) {
+    tracker.BeginCommandBuffer(command_buffer, true);
+    tracker.RecordFeatureUse(command_buffer, generation);
+    const auto captured = tracker.CaptureSubmission({command_buffer});
+    const auto committed = tracker.CommitSuccessfulSubmit(queue, captured);
+    const auto completed = tracker.CompleteSubmission(queue, committed);
+    passed &= Expect(
+        completed
+            == std::vector<dlss::FeatureLifetimeTracker::Handle>{command_buffer},
+        "each signaled private fence must release its one-time command buffer");
+    passed &= Expect(
+        tracker.RecordedReferenceCount(generation) == 0u
+            && tracker.InFlightReferenceCount(generation) == 0u,
+        "completed fence-tracked churn must not accumulate feature references");
+  }
+  return passed;
+}
+
 bool TestSimultaneousOneTimeSubmissionsWaitForEveryQueue() {
   dlss::FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(14u, true);
@@ -274,6 +304,7 @@ int main() {
   passed &= TestFailedSubmitDoesNotAddInFlightReference();
   passed &= TestOneTimeRecordingCompletesAtIdle();
   passed &= TestOneTimeRecordingCompletesAtFence();
+  passed &= TestFenceTrackedOneTimeChurnDoesNotAccumulate();
   passed &= TestSimultaneousOneTimeSubmissionsWaitForEveryQueue();
   passed &= TestResetProvesConservativeSubmissionComplete();
   passed &= TestMultipleGenerationsInOneRecording();

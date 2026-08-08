@@ -102,7 +102,8 @@ DetroitDlssTemporalFrameInputs MakeInputs(const DetroitDlssModeSettings& setting
       .frame_id = 42u,
       .flags = DETROIT_DLSS_FRAME_NATIVE_TAA_COMPLETED,
       .verification_flags = DETROIT_DLSS_VERIFY_MANDATORY_MASK,
-      .reserved = 0u,
+      .dlaa_sharpening = 0.f,
+      .dlaa_sharpening_normalization = 1.f,
   };
 }
 
@@ -431,13 +432,20 @@ bool TestTemporalConstantsAndModeSettings() {
   auto settings = MakeSettings(DETROIT_DLSS_MODE_DLAA);
   const auto baseline = MakeInputs(settings);
 
-  for (std::uint32_t variant = 0u; variant < 5u; ++variant) {
+  for (std::uint32_t variant = 0u; variant < 9u; ++variant) {
     auto inputs = baseline;
     if (variant == 0u) inputs.jitter_x = std::numeric_limits<float>::quiet_NaN();
     if (variant == 1u) inputs.jitter_y = std::numeric_limits<float>::infinity();
     if (variant == 2u) inputs.motion_vector_scale_x = 0.f;
     if (variant == 3u) inputs.motion_vector_scale_y = -std::numeric_limits<float>::infinity();
     if (variant == 4u) inputs.pre_exposure = 0.f;
+    if (variant == 5u) inputs.dlaa_sharpening = -0.01f;
+    if (variant == 6u) inputs.dlaa_sharpening = 1.01f;
+    if (variant == 7u) {
+      inputs.dlaa_sharpening_normalization =
+          std::numeric_limits<float>::quiet_NaN();
+    }
+    if (variant == 8u) inputs.dlaa_sharpening_normalization = 0.99f;
     passed &= ExpectReason(
         Check(settings.mode, support, settings, inputs),
         policy::FallbackReason::kInvalidTemporalConstants,

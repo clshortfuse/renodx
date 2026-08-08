@@ -62,6 +62,8 @@ constexpr std::uint32_t RESHADE_CAPTURE_MAX_DELAY_SECONDS = 600u;
 namespace ultrawide = renodx::games::detroitbecomehuman::ultrawide;
 namespace temporal_capture =
     renodx::games::detroitbecomehuman::temporal_capture;
+namespace supported_build =
+    renodx::games::detroitbecomehuman::supported_build;
 namespace resolution_scaling =
     renodx::games::detroitbecomehuman::resolution_scaling;
 namespace dlss_scale_transition =
@@ -1008,10 +1010,9 @@ DlaaSharpeningGate GetDlaaSharpeningGate(
       && temporal_capture::QueryDlssOutputForCommandList(
           command_list->get_native());
   // Detroit's main menu and some transition frames execute the scene
-  // composite without recording the temporal TAA pass at all. Keep the
-  // selected post-AA sharpening deterministic there; in gameplay the same
-  // pass runs immediately after the verified DLAA output. Runtime status still
-  // reports whether the reconstruction itself is DLAA or native fallback.
+  // composite without recording the temporal TAA pass at all. Keep the mode
+  // marker deterministic there; the exact command-list match remains useful
+  // telemetry for the successful gameplay output path.
   const bool active =
       temporal_capture::GetMode() == DETROIT_DLSS_MODE_DLAA;
   return {
@@ -1021,15 +1022,24 @@ DlaaSharpeningGate GetDlaaSharpeningGate(
   };
 }
 
-void ApplyDlaaSharpeningPayload(
+void SyncDlaaSharpening() {
+  temporal_capture::SetDlaaSharpening(
+      std::clamp(dlaa_sharpening, 0.f, 1.f),
+      std::max(
+          shader_injection.peak_white_nits
+              / std::max(shader_injection.diffuse_white_nits, 1.f),
+          1.f));
+}
+
+void ApplyDlssOutputMarker(
     reshade::api::command_list* command_list,
     std::string_view pass_name,
     bool log_gate) {
   const auto gate = GetDlaaSharpeningGate(command_list);
-  // One marks the selected DLAA post-AA path; the fractional excess carries
-  // the independent scene-linear RCAS strength [0, 1]. The push constants are
-  // copied into this dispatch, so later in-flight frames cannot alter it.
-  shader_injection.reserved = gate.active ? 1.f + gate.strength : 0.f;
+  // The late scene/OETF shaders only need a boolean marker to suppress
+  // Detroit's optional native CAS. Sharpening strength is transferred through
+  // TemporalFrameInputs and consumed by the pre-DOF adapter pack instead.
+  shader_injection.reserved = gate.active ? 1.f : 0.f;
 
   if (!log_gate) return;
   const auto strength_percent = static_cast<std::uint32_t>(
@@ -1041,7 +1051,7 @@ void ApplyDlaaSharpeningPayload(
   }
   // The temporal pass can legitimately report fallback and success for
   // different command lists recorded in the same frame. Neither that runtime
-  // status nor the exact-list diagnostic changes the sharpening payload. Keep
+  // status nor the exact-list diagnostic changes the configured strength. Keep
   // them out of the deduplication key so the render thread cannot turn an
   // expected 5 <-> 6 transition into synchronous per-frame log I/O.
   const auto log_key = temporal_capture::MakeTelemetryKey(
@@ -1057,10 +1067,10 @@ void ApplyDlaaSharpeningPayload(
   reshade::log::message(
       reshade::log::level::info,
       std::format(
-          "Detroit DLAA sharpening: {} gate {}, strength {}%, exact command-list match {}, runtime status {}.",
+          "Detroit DLAA sharpening: pre-DOF adapter RCAS configured at {}%, {} marker {}, exact command-list match {}, runtime status {}.",
+          strength_percent,
           pass_name,
           gate.active ? "active" : "inactive",
-          strength_percent,
           gate.exact_command_list_match ? "yes" : "no",
           static_cast<std::uint32_t>(temporal_capture::GetStatus()))
           .c_str());
@@ -1070,7 +1080,7 @@ bool OnSceneDraw(reshade::api::command_list* command_list) {
   if (command_list != nullptr) {
     temporal_capture::MarkMainTemporalCommandList(command_list->get_native());
   }
-  ApplyDlaaSharpeningPayload(command_list, "scene RCAS", true);
+  ApplyDlssOutputMarker(command_list, "scene composite", true);
   return true;
 }
 
@@ -1083,13 +1093,24 @@ void OnUiDrawn(reshade::api::command_list*) {
 }
 
 bool OnFinalCasDraw(reshade::api::command_list* command_list) {
-  // Scene RCAS owns DLAA sharpening. This optional native CAS variant only
-  // needs the same mode marker so its own lobe can be disabled.
-  ApplyDlaaSharpeningPayload(command_list, "native CAS suppression", false);
+  // The adapter pack owns DLAA sharpening. This optional native CAS variant
+  // only needs the same mode marker so its own late lobe can be disabled.
+  ApplyDlssOutputMarker(command_list, "native CAS suppression", false);
   return true;
 }
 
+bool OnTemporalAuxiliaryReplace(reshade::api::command_list* command_list) {
+  return temporal_capture::RequestAuxiliaryTemporalReplacement(command_list);
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
+    {supported_build::kTemporalAaShaderCrc, {
+                                                .crc32 =
+                                                    supported_build::kTemporalAaShaderCrc,
+                                                .code = __temporal_aux,
+                                                .on_replace =
+                                                    &OnTemporalAuxiliaryReplace,
+                                            }},
     {0xEBFBDDB1, {
                      .crc32 = 0xEBFBDDB1,
                      .code = __0xEBFBDDB1,
@@ -1313,7 +1334,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "DLAA Sharpening",
                 .section = "DLSS",
-                .tooltip = "Scene-linear post-AA RCAS before film grain/UI. It sharpens verified DLAA gameplay frames and remains testable in menu/non-temporal passes; zero is an exact passthrough.",
+                .tooltip = "Scene-linear RCAS applied to the successful NGX output before Detroit's DOF. Zero is an exact passthrough.",
                 .min = 0.f,
                 .max = 100.f,
                 .is_enabled = []() { return temporal_capture::GetMode() == DETROIT_DLSS_MODE_DLAA; },
@@ -1719,6 +1740,7 @@ void OnPresent(
       scene_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
   shader_injection.ui_path_active =
       ui_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
+  SyncDlaaSharpening();
   TrySaveRequestedReShadeScreenshot(swapchain);
   temporal_capture::BeginNextFrame();
 }
@@ -1765,6 +1787,7 @@ bool AttachAddon(HMODULE h_module) {
   renodx::mods::shader::Use(DLL_PROCESS_ATTACH, custom_shaders, &shader_injection);
   OnAspectRatioModeChanged();
   OnDlssModeChanged();
+  SyncDlaaSharpening();
   return true;
 }
 

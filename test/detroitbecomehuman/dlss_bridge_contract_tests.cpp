@@ -154,6 +154,12 @@ static_assert(offsetof(DetroitDlssTemporalFrameInputs, render_width) == 304u);
 static_assert(offsetof(DetroitDlssTemporalFrameInputs, jitter_x) == 320u);
 static_assert(offsetof(DetroitDlssTemporalFrameInputs, frame_id) == 344u);
 static_assert(offsetof(DetroitDlssTemporalFrameInputs, verification_flags) == 360u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, dlaa_sharpening) == 368u);
+static_assert(
+    offsetof(
+        DetroitDlssTemporalFrameInputs,
+        dlaa_sharpening_normalization)
+    == 372u);
 
 static_assert(sizeof(DetroitDlssEvaluateResult) == 32u);
 static_assert(alignof(DetroitDlssEvaluateResult) == 8u);

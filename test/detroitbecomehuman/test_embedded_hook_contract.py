@@ -28,6 +28,24 @@ def main() -> None:
     require(source, "const auto downstream = reshade_get_device_proc_addr(device, name);")
     require(source, "if (const auto tracked = FindTrackedDeviceFunction(name); tracked != nullptr)")
     require(source, "return downstream;")
+    require(source, "CreateInternalFeatureFence(state, snapshot)")
+    require(source, "fence == VK_NULL_HANDLE && !snapshot.Empty()")
+    require(source, "PollCompletedInternalFeatureFences(state.get())")
+    require(source, "state->next_get_fence_status(state->device, fence)")
+    require(source, "submission->second.owned_by_layer")
+    require(source, "CompleteFeatureDevice(state.get());")
+    require(source, "available_internal_feature_fences")
+    require(source, "RecycleInternalFeatureFence(state, fence)")
+    require(source, "DestroyInternalFeatureFencePool(state.get())")
+    require(source, "VK_ACCESS_SHADER_WRITE_BIT")
+    require(source, "VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT")
+    if "PollCompletedInternalFeatureFences" not in source:
+        raise AssertionError("private DLAA submission fences are not polled")
+    poll_start = source.index("void PollCompletedInternalFeatureFences")
+    poll_end = source.index("VkFence CreateInternalFeatureFence", poll_start)
+    poll = source[poll_start:poll_end]
+    if "wait_for_fences" in poll or "device_wait_idle" in poll:
+        raise AssertionError("DLAA scratch recycling must remain non-blocking")
     gate_index = source.index("if (!cache_valid)")
     detour_index = source.index("DetourTransactionBegin()", gate_index)
     if not gate_index < detour_index:

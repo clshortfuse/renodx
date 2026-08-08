@@ -71,102 +71,6 @@ vec3 DecodeSceneInput(vec3 color, bool encoded_srgb)
         greaterThan(color, vec3(0.040449999272823333740234375)));
 }
 
-float SceneLuma(vec3 color)
-{
-    return dot(max(color, vec3(0.0)),
-               vec3(0.2125999927520751953125,
-                    0.715200006961822509765625,
-                    0.072200000286102294921875));
-}
-
-vec3 ApplyDlaaRcas(
-    ivec2 coordinate,
-    vec3 center,
-    bool encoded_srgb,
-    float sharpening)
-{
-    const ivec2 maximum_coordinate =
-        max(textureSize(Image, 0) - ivec2(1), ivec2(0));
-    const ivec2 north_coordinate =
-        clamp(coordinate + ivec2(0, -1), ivec2(0), maximum_coordinate);
-    const ivec2 west_coordinate =
-        clamp(coordinate + ivec2(-1, 0), ivec2(0), maximum_coordinate);
-    const ivec2 east_coordinate =
-        clamp(coordinate + ivec2(1, 0), ivec2(0), maximum_coordinate);
-    const ivec2 south_coordinate =
-        clamp(coordinate + ivec2(0, 1), ivec2(0), maximum_coordinate);
-
-    const vec3 north = DecodeSceneInput(
-        texelFetch(Image, north_coordinate, 0).xyz, encoded_srgb);
-    const vec3 west = DecodeSceneInput(
-        texelFetch(Image, west_coordinate, 0).xyz, encoded_srgb);
-    const vec3 east = DecodeSceneInput(
-        texelFetch(Image, east_coordinate, 0).xyz, encoded_srgb);
-    const vec3 south = DecodeSceneInput(
-        texelFetch(Image, south_coordinate, 0).xyz, encoded_srgb);
-
-    // RCAS is scale-covariant, but its limiter expects approximately [0, 1]
-    // luma. Normalize only the luma math by the configured HDR headroom and
-    // apply the resulting ratio to the original center to preserve hue.
-    const float normalization = max(
-        RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0),
-        1.0);
-    const float inverse_normalization = 1.0 / normalization;
-    const float north_luma = SceneLuma(north) * inverse_normalization;
-    const float west_luma = SceneLuma(west) * inverse_normalization;
-    const float center_luma = SceneLuma(center) * inverse_normalization;
-    const float east_luma = SceneLuma(east) * inverse_normalization;
-    const float south_luma = SceneLuma(south) * inverse_normalization;
-
-    const float minimum_ring_luma =
-        min(min(north_luma, west_luma), min(east_luma, south_luma));
-    const float maximum_ring_luma =
-        max(max(north_luma, west_luma), max(east_luma, south_luma));
-    const float limited_maximum_luma = min(maximum_ring_luma, 0.99);
-    const float epsilon = 1.0e-6;
-    const float hit_minimum = minimum_ring_luma
-        / max(4.0 * limited_maximum_luma, epsilon);
-    float hit_maximum_denominator = 4.0 * minimum_ring_luma - 4.0;
-    if (abs(hit_maximum_denominator) < epsilon)
-    {
-        hit_maximum_denominator =
-            hit_maximum_denominator < 0.0 ? -epsilon : epsilon;
-    }
-    const float hit_maximum =
-        (1.0 - limited_maximum_luma) / hit_maximum_denominator;
-    float lobe = max(
-        -0.1875,
-        min(max(-hit_minimum, hit_maximum), 0.0));
-    lobe *= clamp(sharpening, 0.0, 1.0);
-
-    // Noise removal prevents film grain and other one-pixel outliers from
-    // receiving the full sharpening lobe.
-    float noise =
-        0.25 * (north_luma + west_luma + east_luma + south_luma)
-        - center_luma;
-    const float maximum_luma = max(
-        max(max(north_luma, west_luma), max(center_luma, east_luma)),
-        south_luma);
-    const float minimum_luma = min(
-        min(min(north_luma, west_luma), min(center_luma, east_luma)),
-        south_luma);
-    noise = clamp(
-        abs(noise) / max(maximum_luma - minimum_luma, epsilon),
-        0.0,
-        1.0);
-    lobe *= 1.0 - 0.5 * noise;
-
-    const float reciprocal_weight = 1.0 / (4.0 * lobe + 1.0);
-    const float sharpened_luma =
-        ((north_luma + west_luma + east_luma + south_luma) * lobe
-         + center_luma)
-        * reciprocal_weight;
-    const float luma_ratio = center_luma > epsilon
-        ? sharpened_luma / center_luma
-        : 1.0;
-    return max(center * clamp(luma_ratio, 0.0, 4.0), vec3(0.0));
-}
-
 void main()
 {
     for (;;)
@@ -230,16 +134,6 @@ void main()
         else
         {
             _2630 = _1066.xyz;
-        }
-        if (CUSTOM_DLSS_ACTIVE
-            && CUSTOM_DLAA_SHARPENING > 0.0
-            && _541.g_cbComposite._viMireSrgb.x == 0)
-        {
-            _2630 = ApplyDlaaRcas(
-                _1043,
-                _2630,
-                _541.g_cbComposite._viMireSrgb.y == 1,
-                CUSTOM_DLAA_SHARPENING);
         }
         vec2 _1228 = vec2(_1043) * _541.g_cbComposite._vfGrainIrregularityU.w;
         vec4 _1240 = vec4(_1228 / vec2(_541.g_cbComposite._vfGrainSize.x), _541.g_cbComposite._vfGrainIrregularityU.x, _541.g_cbComposite._vfGrainIrregularityV.x);

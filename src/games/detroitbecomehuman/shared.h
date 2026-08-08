@@ -75,7 +75,6 @@ static_assert(sizeof(ShaderInjectData) == 112u);
 #define CUSTOM_SCENE_PATH_ACTIVE shader_injection.scene_path_active
 #define CUSTOM_UI_PATH_ACTIVE    shader_injection.ui_path_active
 #define CUSTOM_DLSS_ACTIVE       (shader_injection.reserved >= 0.5f)
-#define CUSTOM_DLAA_SHARPENING   clamp(shader_injection.reserved - 1.f, 0.f, 1.f)
 #define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 3.f)
 #define CUSTOM_PSYCHOV22_ACTIVE  (shader_injection.tone_map_type == 4.f)
 #define CUSTOM_HDR_ACTIVE        (shader_injection.output_is_hdr >= 0.5f \

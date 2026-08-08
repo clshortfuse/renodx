@@ -141,9 +141,9 @@ void main()
     float _4359 = uintBitsToFloat(_2697.g_cbCAS.vC1.x);
     if (CUSTOM_DLSS_ACTIVE)
     {
-        // DLAA sharpening now runs as scene-linear RCAS in the always-present
-        // EBFBDDB1 compute pass. If this optional native CAS variant is used,
-        // suppress its lobe to avoid sharpening the same frame twice.
+        // DLAA sharpening runs while packing the successful NGX output, before
+        // Detroit's DOF chain. Suppress this optional late native CAS lobe so
+        // post-DOF pixels are never sharpened a second time.
         _4359 = 0.0;
     }
     else if (use_hdr_safe_path)

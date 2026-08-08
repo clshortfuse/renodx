@@ -21,11 +21,10 @@ namespace adapter_shaders =
 
 static_assert(adapter_shaders::kWorkgroupSize == std::array<std::uint32_t, 3u>{8u, 8u, 1u});
 static_assert(adapter_shaders::PrepareColorMotionBindings::kCurrentColor == 0u);
-static_assert(adapter_shaders::PrepareColorMotionBindings::kMotionVectors == 1u);
-static_assert(adapter_shaders::PrepareColorMotionBindings::kOutputColor == 2u);
-static_assert(adapter_shaders::PrepareColorMotionBindings::kOutputMotionVectors == 3u);
+static_assert(adapter_shaders::PrepareColorMotionBindings::kOutputColor == 1u);
 static_assert(adapter_shaders::PackColorBindings::kDlssColor == 0u);
 static_assert(adapter_shaders::PackColorBindings::kOutputColorPass == 1u);
+static_assert(adapter_shaders::PackColorBindings::kConstants == 2u);
 
 bool Expect(bool condition, std::string_view description) {
   if (condition) return true;

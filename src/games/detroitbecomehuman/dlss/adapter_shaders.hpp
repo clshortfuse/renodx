@@ -20,14 +20,13 @@ inline constexpr std::array<std::uint32_t, 3u> kWorkgroupSize = {8u, 8u, 1u};
 
 struct PrepareColorMotionBindings {
   static constexpr std::uint32_t kCurrentColor = 0u;
-  static constexpr std::uint32_t kMotionVectors = 1u;
-  static constexpr std::uint32_t kOutputColor = 2u;
-  static constexpr std::uint32_t kOutputMotionVectors = 3u;
+  static constexpr std::uint32_t kOutputColor = 1u;
 };
 
 struct PackColorBindings {
   static constexpr std::uint32_t kDlssColor = 0u;
   static constexpr std::uint32_t kOutputColorPass = 1u;
+  static constexpr std::uint32_t kConstants = 2u;
 };
 
 // SPIR-V is materialized as aligned words instead of casting the generated

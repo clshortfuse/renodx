@@ -463,8 +463,12 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
 
     if(GLSL_BACKEND STREQUAL "vk")
+      unset(GLSL_OPTIMIZATION_ARGS)
+      if(ADDON STREQUAL "detroitbecomehuman" AND GLSL_OUTPUT_STEM STREQUAL "temporal_aux")
+        set(GLSL_OPTIMIZATION_ARGS -Os)
+      endif()
       set(SPIRV_COMPILE_COMMAND
-        ${GLSLANG_BIN} -V --target-env vulkan1.3 -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}.spv ${FILE})
+        ${GLSLANG_BIN} -V --target-env vulkan1.3 ${GLSL_OPTIMIZATION_ARGS} -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}.spv ${FILE})
       add_stage_spirv_shader(${GLSL_OUTPUT_STEM})
     else()
       if(GLSL_BACKEND STREQUAL "gl")

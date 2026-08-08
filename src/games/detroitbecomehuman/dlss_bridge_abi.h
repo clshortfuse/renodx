@@ -372,7 +372,8 @@ typedef struct DetroitDlssTemporalFrameInputs {
   uint64_t frame_id;
   DetroitDlssFrameFlags flags;
   DetroitDlssVerificationFlags verification_flags;
-  uint64_t reserved;
+  float dlaa_sharpening;
+  float dlaa_sharpening_normalization;
 } DetroitDlssTemporalFrameInputs;
 
 typedef struct DetroitDlssEvaluateResult {
