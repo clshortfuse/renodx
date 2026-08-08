@@ -1,6 +1,7 @@
 #version 450
 
 #include "shared.h"
+#include "render_debug_common.slang"
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -79,6 +80,23 @@ float ComputeFarCoc16(float viewDepth)
             / (_125._DOF._vfLensParam.x + viewDepth)))
         - 1.2999999853491317480802536010742e-05)
         * _125._DOF._vfLensParam.w, 0.0, 1.0) * 16.0;
+}
+
+float ComputeNearCoc16(float viewDepth)
+{
+    float focusDepth = _125._DOF._vfLensParam.y;
+    float radiusScale = 1.0;
+    if (CUSTOM_DOF_RUNTIME_MODE >= 0.5)
+    {
+        focusDepth *= CUSTOM_DOF_FOCUS_SCALE;
+        radiusScale = CUSTOM_DOF_RADIUS_SCALE;
+    }
+    float coc = clamp(((_125._DOF._vfLensParam.z
+        * ((focusDepth - viewDepth)
+            / (_125._DOF._vfLensParam.x + viewDepth)))
+        - 1.2999999853491317480802536010742e-05)
+        * _125._DOF._vfLensParam.w, 0.0, 1.0);
+    return coc * radiusScale * 16.0;
 }
 
 float FarCocAtDofPixel(ivec2 dofPixel)
@@ -220,6 +238,29 @@ vec4 ResolveNearHigh(vec2 dofPosition, vec3 fallbackColor)
             colorSum / vec3(validWeight),
             clamp(alphaSum / spatialWeightSum, 0.0, 1.0))
         : vec4(fallbackColor, 0.0);
+}
+
+vec2 ResolveGatherFillCoverage(vec2 dofPosition)
+{
+    ivec2 basePixel = ivec2(dofPosition);
+    float fx = fract(dofPosition.x);
+    float fy = fract(dofPosition.y);
+    float weights[4] = float[](
+        (1.0 - fy) * (1.0 - fx),
+        (1.0 - fy) * fx,
+        fy * (1.0 - fx),
+        fy * fx);
+    vec2 coverage = vec2(0.0);
+    for (int i = 0; i < 4; ++i)
+    {
+        ivec2 samplePixel = ClampDofPixel(
+            basePixel + kBilinearOffsets[i]);
+        coverage.x += texelFetch(NearDofMap, samplePixel, 0).w
+            * weights[i];
+        coverage.y += texelFetch(FarDofMap, samplePixel, 0).w
+            * weights[i];
+    }
+    return clamp(coverage, vec2(0.0), vec2(1.0));
 }
 
 vec3 ResolveFullResolutionFar(
@@ -421,11 +462,14 @@ vec3 CompositeEnhanced(
     vec2 dofPosition = pixelF / _125._DOF._vScaleFactor;
     float farCoc = ComputeFarCoc16(LinearizeDepth(
         texelFetch(depthMap, pixel, 0).x));
-    bool cinematic = CUSTOM_DOF_RUNTIME_MODE >= 2.5;
-    bool highQuality =
-        (CUSTOM_DOF_RUNTIME_MODE >= 1.5
-            && CUSTOM_DOF_RUNTIME_MODE < 2.5)
-        || CUSTOM_DOF_RUNTIME_MODE >= 3.5;
+    uint runtimeMode = uint(CUSTOM_DOF_RUNTIME_MODE + 0.5);
+    bool cinematic = runtimeMode == 3u
+        || runtimeMode == 4u
+        || runtimeMode == 5u
+        || runtimeMode == 6u;
+    bool highQuality = runtimeMode == 2u
+        || runtimeMode == 4u
+        || runtimeMode == 6u;
     vec3 farResult = sharpColor;
     if (farCoc > 0.0)
     {
@@ -521,8 +565,18 @@ void main()
     vec3 sharpColor = texelFetch(accumBufferMap, pixel, 0).xyz
         * vec3(exposure);
 
+    uint debugSource = RenderDebugActive()
+        ? RenderDebugSourceAtPixel(pixel, _125._DOF._viViewportSize)
+        : RENDER_DEBUG_SOURCE_NONE;
+
     vec3 outputColor;
-    if (CUSTOM_DOF_RUNTIME_MODE < 0.5)
+    if (RenderDebugPreserveAtPass(debugSource, RENDER_DEBUG_PASS_DOF))
+    {
+        // A temporal panel already contains its diagnostic color. Bypass DOF
+        // for that panel so it reaches the final scene composite unchanged.
+        outputColor = sharpColor;
+    }
+    else if (CUSTOM_DOF_RUNTIME_MODE < 0.5)
     {
         vec4 coarse = texelFetch(
             dofPrepassCocMap,
@@ -534,6 +588,46 @@ void main()
     {
         outputColor = CompositeEnhanced(
             pixel, pixelF, sharpColor, exposure);
+    }
+
+    if (RenderDebugGenerateAtPass(debugSource, RENDER_DEBUG_PASS_DOF))
+    {
+        vec4 debugValue = vec4(0.0);
+        if (debugSource == RENDER_DEBUG_SOURCE_DOF_COARSE_COC)
+        {
+            debugValue = texelFetch(
+                dofPrepassCocMap,
+                ivec2(pixelF / _125._DOF._vCoCScaleFactor.zw),
+                0);
+        }
+        else if (debugSource == RENDER_DEBUG_SOURCE_DOF_FULL_COC)
+        {
+            float viewDepth = LinearizeDepth(
+                texelFetch(depthMap, pixel, 0).x);
+            debugValue.x = ComputeFarCoc16(viewDepth)
+                - ComputeNearCoc16(viewDepth);
+        }
+        else
+        {
+            vec2 coverage = ResolveGatherFillCoverage(
+                pixelF / _125._DOF._vScaleFactor);
+            if (debugSource == RENDER_DEBUG_SOURCE_DOF_NEAR)
+            {
+                debugValue.w = coverage.x;
+            }
+            else if (debugSource == RENDER_DEBUG_SOURCE_DOF_FAR)
+            {
+                debugValue.w = coverage.y;
+            }
+            else if (debugSource
+                == RENDER_DEBUG_SOURCE_DOF_GATHER_FILL)
+            {
+                debugValue.xy = coverage;
+            }
+        }
+        outputColor = RenderDebugBlend(
+            outputColor,
+            RenderDebugMap(debugValue, debugSource));
     }
     imageStore(OutputTex, pixel, vec4(outputColor, 1.0));
 }

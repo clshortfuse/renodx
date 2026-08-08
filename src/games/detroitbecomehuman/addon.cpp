@@ -37,6 +37,8 @@
 #include "./dlss_scale_transition.hpp"
 #include "./dlss/embedded_bootstrap.hpp"
 #include "./dof_runtime.hpp"
+#include "./render_debug.hpp"
+#include "./retinal_capture.hpp"
 #include "./resolution_scaling_win32.hpp"
 #include "./shared.h"
 #include "./temporal_capture.hpp"
@@ -72,6 +74,11 @@ namespace dlss_scale_transition =
 namespace embedded_dlss =
     renodx::games::detroitbecomehuman::dlss::embedded;
 namespace dof = renodx::games::detroitbecomehuman::dof;
+namespace render_debug =
+    renodx::games::detroitbecomehuman::render_debug;
+namespace retinal = renodx::games::detroitbecomehuman::retinal;
+namespace retinal_capture =
+    renodx::games::detroitbecomehuman::retinal_capture;
 constexpr std::size_t ASPECT_PATCH_INDEX = 0u;
 constexpr std::size_t UI_PATCH_INDEX = 1u;
 
@@ -108,6 +115,53 @@ float dof_near_strength = 100.f;
 float dof_far_strength = 100.f;
 float dof_edge_bokeh = 100.f;
 dof::RuntimeController dof_runtime_controller;
+float retinal_fixation_x = 50.f;
+float retinal_fixation_y = 50.f;
+float retinal_strength = 100.f;
+float retinal_horizontal_fov =
+    retinal::kDefaultHorizontalScreenAngleDegrees;
+float retinal_maximum_sigma = retinal::kMaximumSigmaPixels;
+retinal::Runtime retinal_runtime;
+std::atomic<retinal::RunResult> retinal_last_result =
+    retinal::RunResult::kNotRetinalMode;
+std::atomic_bool retinal_force_disabled = false;
+std::atomic_bool retinal_restore_failure_logged = false;
+float render_debug_mode = 0.f;
+float render_debug_dashboard = 0.f;
+float render_debug_single_source =
+    static_cast<float>(render_debug::Source::kDofFullResolutionCoc);
+float render_debug_custom_slot_1 =
+    static_cast<float>(render_debug::Source::kDofFullResolutionCoc);
+float render_debug_custom_slot_2 =
+    static_cast<float>(render_debug::Source::kTemporalDepth);
+float render_debug_custom_slot_3 =
+    static_cast<float>(render_debug::Source::kSceneBeforeGrade);
+float render_debug_channel = 0.f;
+float render_debug_mapping = 0.f;
+float render_debug_opacity = 100.f;
+render_debug::RuntimeController render_debug_runtime_controller;
+std::atomic_bool render_debug_temporal_replacement_active = false;
+const std::vector<std::string> render_debug_source_labels = {
+    "None",
+    "DOF Coarse CoC",
+    "DOF Full-resolution CoC",
+    "DOF Near Alpha",
+    "DOF Far Alpha",
+    "DOF Gather/Fill Near + Far",
+    "TAA Depth",
+    "TAA Motion Vectors",
+    "TAA History",
+    "Scene Before Grade",
+    "Scene After Grade",
+    "Scene Luminance",
+    "GTAO (Unavailable)",
+    "Diffuse Lighting (Unavailable)",
+    "Specular Lighting (Unavailable)",
+    "Retinal Fixation (Unavailable)",
+    "Retinal Eccentricity (Unavailable)",
+    "Retinal Nyquist (Unavailable)",
+    "Retinal Radius (Unavailable)",
+};
 std::once_flag dof_build_verification_once;
 std::atomic_bool dof_supported_executable = false;
 std::atomic_bool dof_device_reset_logged = false;
@@ -1028,6 +1082,10 @@ std::string_view GetDofStatusText(dof::RuntimeStatus status) {
       return "Cinematic Balanced";
     case dof::RuntimeStatus::kActiveCinematicHigh:
       return "Cinematic High";
+    case dof::RuntimeStatus::kActiveRetinalBalanced:
+      return "Retinal Balanced";
+    case dof::RuntimeStatus::kActiveRetinalHigh:
+      return "Retinal High";
     case dof::RuntimeStatus::kUnsupportedBuild:
       return "unsupported build fallback";
   }
@@ -1066,7 +1124,9 @@ bool IsDofSupportedBuild() {
 }
 
 void UpdateDofRuntimeMode() {
-  const auto requested_style = dof_mode >= 1.5f
+  const auto requested_style = dof_mode >= 2.5f
+                                   ? dof::RuntimeStyle::kRetinal
+                               : dof_mode >= 1.5f
                                    ? dof::RuntimeStyle::kCinematic
                                : dof_mode >= 0.5f
                                    ? dof::RuntimeStyle::kClean
@@ -1094,6 +1154,65 @@ void OnDofSettingsChanged() {
       static_cast<float>(dof::RuntimeMode::kVanilla);
 }
 
+render_debug::Source GetRenderDebugSource(float value) {
+  const auto source = static_cast<std::uint32_t>(std::clamp(
+      std::lround(value),
+      0l,
+      static_cast<long>(render_debug::Source::kRetinalRadius)));
+  return static_cast<render_debug::Source>(source);
+}
+
+render_debug::Config GetRenderDebugConfig() {
+  return {
+      .mode = static_cast<render_debug::OverlayMode>(std::clamp(
+          std::lround(render_debug_mode), 0l, 2l)),
+      .dashboard = static_cast<render_debug::DashboardPreset>(std::clamp(
+          std::lround(render_debug_dashboard), 0l, 5l)),
+      .single_source = GetRenderDebugSource(render_debug_single_source),
+      .custom_slots = {
+          GetRenderDebugSource(render_debug_custom_slot_1),
+          GetRenderDebugSource(render_debug_custom_slot_2),
+          GetRenderDebugSource(render_debug_custom_slot_3),
+      },
+      .channel = static_cast<render_debug::Channel>(std::clamp(
+          std::lround(render_debug_channel), 0l, 7l)),
+      .mapping = static_cast<render_debug::Mapping>(std::clamp(
+          std::lround(render_debug_mapping), 0l, 3l)),
+      .opacity = std::clamp(render_debug_opacity * 0.01f, 0.f, 1.f),
+      .temporal_source_unavailable =
+          temporal_capture::GetMode() != DETROIT_DLSS_MODE_NATIVE,
+  };
+}
+
+void OnRenderDebugSettingsChanged() {
+  const auto config = GetRenderDebugConfig();
+  render_debug_runtime_controller.SetConfig(config);
+  if (config.mode != render_debug::OverlayMode::kOff) return;
+  render_debug_runtime_controller.ResetDevice();
+  render_debug_temporal_replacement_active.store(
+      false, std::memory_order_release);
+  shader_injection.scene_path_active = 0.f;
+}
+
+void UpdateRenderDebugRuntime() {
+  render_debug_runtime_controller.SetConfig(GetRenderDebugConfig());
+  const auto result = render_debug_runtime_controller.FinishFrame(
+      IsDofSupportedBuild());
+  shader_injection.scene_path_active = result.payload;
+  render_debug_temporal_replacement_active.store(
+      std::bit_cast<std::uint32_t>(result.payload) != 0u
+          && (result.required_pass_mask
+              & static_cast<std::uint32_t>(
+                  render_debug::ProducerPass::kTemporal))
+                 != 0u,
+      std::memory_order_release);
+}
+
+bool RenderDebugSelectionUnavailable() {
+  return render_debug::HasUnavailableSource(
+      render_debug::Resolve(GetRenderDebugConfig()));
+}
+
 void OnDofSplitDrawn(reshade::api::command_list*) {
   dof_runtime_controller.Observe(dof::Pass::kSplit);
 }
@@ -1106,8 +1225,97 @@ void OnDofFillDrawn(reshade::api::command_list*) {
   dof_runtime_controller.Observe(dof::Pass::kFill);
 }
 
-void OnDofCompositeDrawn(reshade::api::command_list*) {
+void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
+  const auto effective_mode = dof_runtime_controller.GetMode();
+  if (!dof::IsRetinalMode(effective_mode)) {
+    retinal_last_result.store(
+        retinal::RunResult::kNotRetinalMode, std::memory_order_release);
+    return;
+  }
+  if (std::bit_cast<std::uint32_t>(shader_injection.scene_path_active) != 0u) {
+    // Diagnostics must show the producer data itself, not a subsequently
+    // blurred visualization of it.
+    retinal_last_result.store(
+        retinal::RunResult::kDebugOverlayActive, std::memory_order_release);
+    return;
+  }
+  if (command_list == nullptr
+      || retinal_force_disabled.load(std::memory_order_acquire)
+      || !embedded_dlss::CanInsertComputeWriteBarrier(
+          command_list->get_native())) {
+    retinal_last_result.store(
+        retinal::RunResult::kBarrierUnavailable, std::memory_order_release);
+    return;
+  }
+
+  const auto capture = retinal_capture::CaptureCompositeOutput(command_list);
+  if (!capture.valid) {
+    if (capture.release_failed) {
+      retinal_force_disabled.store(true, std::memory_order_release);
+      if (!retinal_restore_failure_logged.exchange(
+              true, std::memory_order_acq_rel)) {
+        reshade::log::message(
+            reshade::log::level::error,
+            "Detroit Retinal DOF: Vulkan snapshot release failed; the post-filter is disabled until device recreation.");
+      }
+      retinal_last_result.store(
+          retinal::RunResult::kStateRestoreFailed,
+          std::memory_order_release);
+      return;
+    }
+    retinal_last_result.store(
+        retinal::RunResult::kMissingCompositeCapture,
+        std::memory_order_release);
+    return;
+  }
+
+  auto result = retinal_runtime.Run(
+      command_list,
+      {
+          .output = capture.output,
+          .effective_mode = effective_mode,
+          .fixation_uv = {
+              std::clamp(retinal_fixation_x * 0.01f, 0.f, 1.f),
+              std::clamp(retinal_fixation_y * 0.01f, 0.f, 1.f),
+          },
+          .fixation_blend =
+              std::clamp(retinal_strength * 0.01f, 0.f, 1.f),
+          .horizontal_screen_angle_degrees = retinal_horizontal_fov,
+          .maximum_sigma_pixels = retinal_maximum_sigma,
+      });
+  bool barrier_restored = true;
+  if (result == retinal::RunResult::kDispatched) {
+    barrier_restored = embedded_dlss::InsertComputeWriteBarrier(
+        command_list->get_native());
+    if (!barrier_restored) {
+      result = retinal::RunResult::kBarrierUnavailable;
+    }
+  }
+  const bool state_restored = result == retinal::RunResult::kDispatched
+      || result == retinal::RunResult::kBarrierUnavailable
+      ? retinal_capture::RestoreCompositeState(
+          capture, &shader_injection, sizeof(shader_injection))
+      : retinal_capture::ReleaseCompositeState(capture);
+  if (!state_restored) {
+    result = retinal::RunResult::kStateRestoreFailed;
+  }
+  if (!barrier_restored || !state_restored) {
+    retinal_force_disabled.store(true, std::memory_order_release);
+    if (!retinal_restore_failure_logged.exchange(
+            true, std::memory_order_acq_rel)) {
+      reshade::log::message(
+          reshade::log::level::error,
+          "Detroit Retinal DOF: Vulkan barrier/state restore failed; the post-filter is disabled until device recreation.");
+    }
+  }
+  retinal_last_result.store(result, std::memory_order_release);
+}
+
+void OnDofCompositeDrawn(reshade::api::command_list* command_list) {
   dof_runtime_controller.Observe(dof::Pass::kComposite);
+  render_debug_runtime_controller.Observe(
+      render_debug::ProducerPass::kDofComposite);
+  ApplyRetinalDofFilter(command_list);
 }
 
 struct DlaaSharpeningGate {
@@ -1199,6 +1407,8 @@ bool OnSceneDraw(reshade::api::command_list* command_list) {
 
 void OnSceneDrawn(reshade::api::command_list*) {
   scene_path_seen.store(true, std::memory_order_relaxed);
+  render_debug_runtime_controller.Observe(
+      render_debug::ProducerPass::kSceneComposite);
 }
 
 void OnUiDrawn(reshade::api::command_list*) {
@@ -1213,7 +1423,18 @@ bool OnFinalCasDraw(reshade::api::command_list* command_list) {
 }
 
 bool OnTemporalAuxiliaryReplace(reshade::api::command_list* command_list) {
-  return temporal_capture::RequestAuxiliaryTemporalReplacement(command_list);
+  if (temporal_capture::RequestAuxiliaryTemporalReplacement(command_list)) {
+    return true;
+  }
+  return command_list != nullptr
+      && temporal_capture::GetMode() == DETROIT_DLSS_MODE_NATIVE
+      && render_debug_temporal_replacement_active.load(
+          std::memory_order_acquire);
+}
+
+void OnTemporalDrawn(reshade::api::command_list*) {
+  render_debug_runtime_controller.Observe(
+      render_debug::ProducerPass::kTemporal);
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
@@ -1247,6 +1468,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                                                 .code = __temporal_aux,
                                                 .on_replace =
                                                     &OnTemporalAuxiliaryReplace,
+                                                .on_drawn = &OnTemporalDrawn,
                                             }},
     {0xEBFBDDB1, {
                      .crc32 = 0xEBFBDDB1,
@@ -1458,8 +1680,8 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Depth of Field",
                 .section = "Depth of Field",
-                .tooltip = "Clean keeps full-resolution depth boundaries and excludes low-resolution artistic layers. Cinematic restores Detroit's authored deep and foreground bokeh while retaining the full-resolution transition resolve. Vanilla is the exact reference path.",
-                .labels = {"Vanilla", "Clean", "Cinematic"},
+                .tooltip = "Vanilla is the exact reference path. Clean fixes focus transitions. Cinematic restores Detroit's authored bokeh. Retinal keeps the Cinematic base and applies a full-resolution Watson acuity filter around a configurable fixation point.",
+                .labels = {"Vanilla", "Clean", "Cinematic", "Retinal"},
                 .on_change_value = [](float, float current) {
                   dof_mode = current;
                   OnDofSettingsChanged();
@@ -1473,7 +1695,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "DOF Quality",
                 .section = "Depth of Field",
-                .tooltip = "High uses the complete authored 49-tap aperture kernel with depth-aware subpixel interpolation. Balanced uses four aperture taps for slower GPUs.",
+                .tooltip = "High uses the complete authored 49-tap aperture resolve; Retinal High also uses a full 4-sigma Gaussian kernel. Balanced uses the reduced aperture resolve and paired hardware-linear Gaussian taps.",
                 .labels = {"Balanced", "High"},
                 .is_enabled = []() { return dof_mode >= 0.5f; },
                 .on_change_value = [](float, float current) {
@@ -1546,6 +1768,71 @@ renodx::utils::settings::Settings settings =
                 .is_enabled = []() { return dof_mode >= 1.5f; },
             }},
             {{
+                .key = "RetinalFixationX",
+                .binding = &retinal_fixation_x,
+                .default_value = 50.f,
+                .can_reset = true,
+                .label = "Fixation X",
+                .section = "Retinal DOF",
+                .tooltip = "Horizontal fixation point. Center is the safe default because Detroit's world-space autofocus target has no verified screen projection contract.",
+                .min = 0.f,
+                .max = 100.f,
+                .format = "%.0f%%",
+                .is_visible = []() { return dof_mode >= 2.5f; },
+            }},
+            {{
+                .key = "RetinalFixationY",
+                .binding = &retinal_fixation_y,
+                .default_value = 50.f,
+                .can_reset = true,
+                .label = "Fixation Y",
+                .section = "Retinal DOF",
+                .tooltip = "Vertical fixation point in screen space.",
+                .min = 0.f,
+                .max = 100.f,
+                .format = "%.0f%%",
+                .is_visible = []() { return dof_mode >= 2.5f; },
+            }},
+            {{
+                .key = "RetinalStrength",
+                .binding = &retinal_strength,
+                .default_value = 100.f,
+                .can_reset = true,
+                .label = "Retinal Strength",
+                .section = "Retinal DOF",
+                .tooltip = "Blends the additional Watson retinal-acuity variance. It does not change Detroit's authored CoC or focus distance.",
+                .min = 0.f,
+                .max = 100.f,
+                .format = "%.0f%%",
+                .is_visible = []() { return dof_mode >= 2.5f; },
+            }},
+            {{
+                .key = "RetinalHorizontalFov",
+                .binding = &retinal_horizontal_fov,
+                .default_value = retinal::kDefaultHorizontalScreenAngleDegrees,
+                .can_reset = true,
+                .label = "Horizontal View Angle",
+                .section = "Retinal DOF",
+                .tooltip = "Physical horizontal viewing angle used to convert screen pixels to visual degrees.",
+                .min = retinal::kMinimumHorizontalScreenAngleDegrees,
+                .max = retinal::kMaximumHorizontalScreenAngleDegrees,
+                .format = "%.0f deg",
+                .is_visible = []() { return dof_mode >= 2.5f; },
+            }},
+            {{
+                .key = "RetinalMaximumSigma",
+                .binding = &retinal_maximum_sigma,
+                .default_value = retinal::kMaximumSigmaPixels,
+                .can_reset = true,
+                .label = "Maximum Peripheral Sigma",
+                .section = "Retinal DOF",
+                .tooltip = "Safety ceiling for the full-resolution peripheral Gaussian radius.",
+                .min = 0.f,
+                .max = retinal::kMaximumSigmaPixels,
+                .format = "%.1f px",
+                .is_visible = []() { return dof_mode >= 2.5f; },
+            }},
+            {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
                 .label = "Vanilla DOF is active.",
                 .section = "Depth of Field",
@@ -1604,12 +1891,214 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Retinal DOF is active: Cinematic depth plus the full-resolution Watson acuity filter.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  const auto status = dof_runtime_controller.GetStatus();
+                  return (status == dof::RuntimeStatus::kActiveRetinalBalanced
+                          || status == dof::RuntimeStatus::kActiveRetinalHigh)
+                      && retinal_last_result.load(std::memory_order_acquire)
+                          == retinal::RunResult::kDispatched;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Retinal post-filter is suspended while Render Debug is visible; Cinematic depth remains active.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  return dof_mode >= 2.5f
+                      && retinal_last_result.load(std::memory_order_acquire)
+                          == retinal::RunResult::kDebugOverlayActive;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Retinal post-filter could not validate its Vulkan composite contract; Cinematic depth remains active.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  const auto status = dof_runtime_controller.GetStatus();
+                  const auto result = retinal_last_result.load(
+                      std::memory_order_acquire);
+                  return (status == dof::RuntimeStatus::kActiveRetinalBalanced
+                          || status == dof::RuntimeStatus::kActiveRetinalHigh)
+                      && result != retinal::RunResult::kDispatched
+                      && result != retinal::RunResult::kDebugOverlayActive;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
                 .label = "This executable or DOF shader revision is unsupported. Vanilla fallback is active.",
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
                       && dof_runtime_controller.GetStatus()
-                         == dof::RuntimeStatus::kUnsupportedBuild;
+                          == dof::RuntimeStatus::kUnsupportedBuild;
+                },
+            }},
+            {{
+                .key = "RenderDebugMode",
+                .binding = &render_debug_mode,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "Render Debug Inspector",
+                .section = "Render Debug",
+                .tooltip = "Inline false-color inspection of verified Detroit render inputs. Off is a literal zero payload and adds no dispatches.",
+                .labels = {"Off", "Single", "Dashboard"},
+                .on_change_value = [](float, float current) {
+                  render_debug_mode = current;
+                  OnRenderDebugSettingsChanged();
+                },
+            }},
+            {{
+                .key = "RenderDebugDashboard",
+                .binding = &render_debug_dashboard,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "Dashboard",
+                .section = "Render Debug",
+                .tooltip = "DOF shows coarse CoC, full-resolution depth-derived CoC, and the gather/fill near/far layers that actually reach composite.",
+                .labels = {
+                    "Depth of Field",
+                    "Temporal AA",
+                    "Scene",
+                    "Lighting (Unavailable)",
+                    "Retinal (Unavailable)",
+                    "Custom",
+                },
+                .is_visible = []() { return render_debug_mode >= 1.5f; },
+            }},
+            {{
+                .key = "RenderDebugSource",
+                .binding = &render_debug_single_source,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = static_cast<float>(
+                    render_debug::Source::kDofFullResolutionCoc),
+                .can_reset = true,
+                .label = "Source",
+                .section = "Render Debug",
+                .labels = render_debug_source_labels,
+                .is_visible = []() {
+                  return render_debug_mode >= 0.5f
+                      && render_debug_mode < 1.5f;
+                },
+            }},
+            {{
+                .key = "RenderDebugCustomSlot1",
+                .binding = &render_debug_custom_slot_1,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = static_cast<float>(
+                    render_debug::Source::kDofFullResolutionCoc),
+                .can_reset = true,
+                .label = "Custom Left",
+                .section = "Render Debug",
+                .labels = render_debug_source_labels,
+                .is_visible = []() {
+                  return render_debug_mode >= 1.5f
+                      && render_debug_dashboard >= 4.5f;
+                },
+            }},
+            {{
+                .key = "RenderDebugCustomSlot2",
+                .binding = &render_debug_custom_slot_2,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = static_cast<float>(
+                    render_debug::Source::kTemporalDepth),
+                .can_reset = true,
+                .label = "Custom Center",
+                .section = "Render Debug",
+                .labels = render_debug_source_labels,
+                .is_visible = []() {
+                  return render_debug_mode >= 1.5f
+                      && render_debug_dashboard >= 4.5f;
+                },
+            }},
+            {{
+                .key = "RenderDebugCustomSlot3",
+                .binding = &render_debug_custom_slot_3,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = static_cast<float>(
+                    render_debug::Source::kSceneBeforeGrade),
+                .can_reset = true,
+                .label = "Custom Right",
+                .section = "Render Debug",
+                .labels = render_debug_source_labels,
+                .is_visible = []() {
+                  return render_debug_mode >= 1.5f
+                      && render_debug_dashboard >= 4.5f;
+                },
+            }},
+            {{
+                .key = "RenderDebugChannel",
+                .binding = &render_debug_channel,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "Channel",
+                .section = "Render Debug",
+                .labels = {
+                    "Auto", "RGB", "R", "G", "B", "Alpha", "Luminance", "Vector"},
+                .is_enabled = []() { return render_debug_mode >= 0.5f; },
+            }},
+            {{
+                .key = "RenderDebugMapping",
+                .binding = &render_debug_mapping,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "False-color Mapping",
+                .section = "Render Debug",
+                .labels = {"Auto", "Linear", "Signed", "Log2"},
+                .is_enabled = []() { return render_debug_mode >= 0.5f; },
+            }},
+            {{
+                .key = "RenderDebugOpacity",
+                .binding = &render_debug_opacity,
+                .default_value = 100.f,
+                .can_reset = true,
+                .label = "Opacity",
+                .section = "Render Debug",
+                .min = 0.f,
+                .max = 100.f,
+                .format = "%.0f%%",
+                .is_enabled = []() { return render_debug_mode >= 0.5f; },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Waiting for every required inline producer in one frame; the normal image remains active.",
+                .section = "Render Debug",
+                .is_visible = []() {
+                  return render_debug_mode >= 0.5f
+                      && render_debug_runtime_controller.GetStatus()
+                          == render_debug::RuntimeStatus::kWaitingForPasses;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "The selected source is not verified for this path. Magenta checkerboard marks it as unavailable.",
+                .section = "Render Debug",
+                .is_visible = []() {
+                  return render_debug_mode >= 0.5f
+                      && RenderDebugSelectionUnavailable();
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "This executable revision is unsupported; Render Debug remains Off.",
+                .section = "Render Debug",
+                .is_visible = []() {
+                  return render_debug_mode >= 0.5f
+                      && render_debug_runtime_controller.GetStatus()
+                          == render_debug::RuntimeStatus::kUnsupportedBuild;
                 },
             }},
             {{
@@ -1818,12 +2307,31 @@ void OnPresetOff() {
       {"DepthOfFieldNearStrength", 100.f},
       {"DepthOfFieldFarStrength", 100.f},
       {"DepthOfFieldEdgeBokeh", 100.f},
+      {"RetinalFixationX", 50.f},
+      {"RetinalFixationY", 50.f},
+      {"RetinalStrength", 100.f},
+      {"RetinalHorizontalFov", retinal::kDefaultHorizontalScreenAngleDegrees},
+      {"RetinalMaximumSigma", retinal::kMaximumSigmaPixels},
+      {"RenderDebugMode", 0.f},
+      {"RenderDebugDashboard", 0.f},
+      {"RenderDebugSource", static_cast<float>(
+                                render_debug::Source::kDofFullResolutionCoc)},
+      {"RenderDebugCustomSlot1", static_cast<float>(
+                                     render_debug::Source::kDofFullResolutionCoc)},
+      {"RenderDebugCustomSlot2", static_cast<float>(
+                                     render_debug::Source::kTemporalDepth)},
+      {"RenderDebugCustomSlot3", static_cast<float>(
+                                     render_debug::Source::kSceneBeforeGrade)},
+      {"RenderDebugChannel", 0.f},
+      {"RenderDebugMapping", 0.f},
+      {"RenderDebugOpacity", 100.f},
       {"DLSSMode", static_cast<float>(DETROIT_DLSS_MODE_NATIVE)},
       {"DLAASharpening", 0.f},
       {"CASMode", CAS_MODE_VANILLA},
       {"CASStrength", 100.f},
   });
   OnDofSettingsChanged();
+  OnRenderDebugSettingsChanged();
   if (dof_was_enhanced) {
     reshade::log::message(
         reshade::log::level::warning,
@@ -1994,6 +2502,12 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   }
 }
 
+void OnDestroyResource(
+    reshade::api::device* device,
+    reshade::api::resource resource) {
+  retinal_runtime.OnDestroyResource(device, resource);
+}
+
 void OnDestroyDevice(reshade::api::device* device) {
   // This callback runs outside the Windows loader lock and precedes addon
   // unload. It is the final safe point for removing the executable detour if
@@ -2005,6 +2519,15 @@ void OnDestroyDevice(reshade::api::device* device) {
   dof_runtime_controller.Reset();
   shader_injection.dof_runtime_mode =
       static_cast<float>(dof::RuntimeMode::kVanilla);
+  render_debug_runtime_controller.ResetDevice();
+  render_debug_temporal_replacement_active.store(
+      false, std::memory_order_release);
+  shader_injection.scene_path_active = 0.f;
+  retinal_runtime.Destroy(device);
+  retinal_last_result.store(
+      retinal::RunResult::kNotRetinalMode, std::memory_order_release);
+  retinal_force_disabled.store(false, std::memory_order_release);
+  retinal_restore_failure_logged.store(false, std::memory_order_release);
   if (!dof_device_reset_logged.exchange(true, std::memory_order_acq_rel)) {
     reshade::log::message(
         reshade::log::level::warning,
@@ -2057,8 +2580,7 @@ void OnPresent(
               || color_space == reshade::api::color_space::extended_srgb_linear
           ? 1.f
           : 0.f;
-  shader_injection.scene_path_active =
-      scene_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
+  UpdateRenderDebugRuntime();
   shader_injection.ui_path_active =
       ui_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
   UpdateDofRuntimeMode();
@@ -2100,10 +2622,13 @@ bool AttachAddon(HMODULE h_module) {
       &OnDlssModeChanged);
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &OnDofSettingsChanged);
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &OnRenderDebugSettingsChanged);
   reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
   reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
   reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
   reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
+  reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
   reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
   reshade::register_event<reshade::addon_event::present>(OnPresent);
   renodx::utils::settings::Use(DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
@@ -2112,6 +2637,7 @@ bool AttachAddon(HMODULE h_module) {
   OnAspectRatioModeChanged();
   OnDlssModeChanged();
   OnDofSettingsChanged();
+  OnRenderDebugSettingsChanged();
   SyncDlaaSharpening();
   return true;
 }
@@ -2122,12 +2648,17 @@ void DetachAddon(HMODULE h_module, bool process_terminating) {
   reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
   reshade::unregister_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
   reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
+  reshade::unregister_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
   reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
   reshade::unregister_event<reshade::addon_event::present>(OnPresent);
   ForceUltrawideRuntimeVanilla();
   dof_runtime_controller.Reset();
   shader_injection.dof_runtime_mode =
       static_cast<float>(dof::RuntimeMode::kVanilla);
+  render_debug_runtime_controller.ResetDevice();
+  render_debug_temporal_replacement_active.store(
+      false, std::memory_order_release);
+  shader_injection.scene_path_active = 0.f;
   renodx::utils::settings::Use(DLL_PROCESS_DETACH, &settings, &OnPresetOff);
   temporal_capture::Use(DLL_PROCESS_DETACH);
   renodx::mods::shader::Use(DLL_PROCESS_DETACH, custom_shaders, &shader_injection);

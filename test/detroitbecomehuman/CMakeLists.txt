@@ -145,6 +145,42 @@ set_tests_properties(detroitbecomehuman_dof_runtime PROPERTIES
 )
 
 add_renodx_runtime_executable(
+  detroitbecomehuman_render_debug_tests
+  render_debug_tests.cpp
+)
+add_dependencies(renodx_test_suites detroitbecomehuman_render_debug_tests)
+
+add_test(
+  NAME detroitbecomehuman_render_debug
+  COMMAND detroitbecomehuman_render_debug_tests
+)
+set_tests_properties(detroitbecomehuman_render_debug PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;render_debug;vulkan"
+)
+
+add_renodx_runtime_executable(
+  detroitbecomehuman_retinal_capture_tests
+  retinal_capture_tests.cpp
+)
+target_include_directories(
+  detroitbecomehuman_retinal_capture_tests
+  PRIVATE ${CMAKE_BINARY_DIR}/detroitbecomehuman.include
+)
+add_dependencies(
+  detroitbecomehuman_retinal_capture_tests
+  detroitbecomehuman-shaders
+)
+add_dependencies(renodx_test_suites detroitbecomehuman_retinal_capture_tests)
+
+add_test(
+  NAME detroitbecomehuman_retinal_capture
+  COMMAND detroitbecomehuman_retinal_capture_tests
+)
+set_tests_properties(detroitbecomehuman_retinal_capture PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dof;retinal;vulkan"
+)
+
+add_renodx_runtime_executable(
   detroitbecomehuman_dlss_scale_transition_tests
   dlss_scale_transition_tests.cpp
 )
@@ -285,6 +321,8 @@ add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/feature_lifetime_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_policy_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dof_runtime_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/render_debug_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/retinal_capture_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_scale_transition_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/rgb9e5_adapter_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/resolution_scaling_tests.cpp

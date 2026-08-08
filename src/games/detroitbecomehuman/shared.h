@@ -25,6 +25,7 @@ struct ShaderInjectData {
   float cas_mode;
 
   float cas_strength;
+  // Packed Render Debug state. Off is the literal 0.0f payload.
   float scene_path_active;
   float ui_path_active;
   float reserved;
@@ -73,6 +74,7 @@ static_assert(sizeof(ShaderInjectData) == 112u);
 #define CUSTOM_CAS_MODE          shader_injection.cas_mode
 #define CUSTOM_CAS_STRENGTH      shader_injection.cas_strength
 #define CUSTOM_SCENE_PATH_ACTIVE shader_injection.scene_path_active
+#define CUSTOM_RENDER_DEBUG_PAYLOAD shader_injection.scene_path_active
 #define CUSTOM_UI_PATH_ACTIVE    shader_injection.ui_path_active
 #define CUSTOM_DLSS_ACTIVE       (shader_injection.reserved >= 0.5f)
 #ifndef __cplusplus

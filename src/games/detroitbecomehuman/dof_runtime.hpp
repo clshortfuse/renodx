@@ -31,13 +31,56 @@ enum class RuntimeMode : std::uint32_t {
   kCleanHigh = 2u,
   kCinematicBalanced = 3u,
   kCinematicHigh = 4u,
+  kRetinalBalanced = 5u,
+  kRetinalHigh = 6u,
 };
 
 enum class RuntimeStyle : std::uint32_t {
   kVanilla = 0u,
   kClean = 1u,
   kCinematic = 2u,
+  kRetinal = 3u,
 };
+
+[[nodiscard]] inline constexpr bool IsKnownRuntimeStyle(
+    RuntimeStyle style) noexcept {
+  return static_cast<std::uint32_t>(style)
+         <= static_cast<std::uint32_t>(RuntimeStyle::kRetinal);
+}
+
+[[nodiscard]] inline constexpr bool IsKnownRuntimeMode(RuntimeMode mode) noexcept {
+  return static_cast<std::uint32_t>(mode)
+         <= static_cast<std::uint32_t>(RuntimeMode::kRetinalHigh);
+}
+
+[[nodiscard]] inline constexpr bool IsEnhancedMode(RuntimeMode mode) noexcept {
+  return IsKnownRuntimeMode(mode) && mode != RuntimeMode::kVanilla;
+}
+
+[[nodiscard]] inline constexpr bool UsesCinematicBase(RuntimeMode mode) noexcept {
+  return mode == RuntimeMode::kCinematicBalanced
+         || mode == RuntimeMode::kCinematicHigh
+         || mode == RuntimeMode::kRetinalBalanced
+         || mode == RuntimeMode::kRetinalHigh;
+}
+
+[[nodiscard]] inline constexpr bool IsHighQualityMode(RuntimeMode mode) noexcept {
+  return mode == RuntimeMode::kCleanHigh
+         || mode == RuntimeMode::kCinematicHigh
+         || mode == RuntimeMode::kRetinalHigh;
+}
+
+[[nodiscard]] inline constexpr bool IsBalancedQualityMode(
+    RuntimeMode mode) noexcept {
+  return mode == RuntimeMode::kCleanBalanced
+         || mode == RuntimeMode::kCinematicBalanced
+         || mode == RuntimeMode::kRetinalBalanced;
+}
+
+[[nodiscard]] inline constexpr bool IsRetinalMode(RuntimeMode mode) noexcept {
+  return mode == RuntimeMode::kRetinalBalanced
+         || mode == RuntimeMode::kRetinalHigh;
+}
 
 enum class RuntimeStatus : std::uint32_t {
   kVanilla = 0u,
@@ -47,6 +90,8 @@ enum class RuntimeStatus : std::uint32_t {
   kActiveCleanHigh,
   kActiveCinematicBalanced,
   kActiveCinematicHigh,
+  kActiveRetinalBalanced,
+  kActiveRetinalHigh,
   kUnsupportedBuild,
 };
 
@@ -91,30 +136,28 @@ inline constexpr std::uint32_t kEdgeNeutral = 8u;
     return static_cast<std::uint32_t>(std::lround(
         scale * static_cast<float>(neutral)));
   }
-  return neutral + static_cast<std::uint32_t>(std::lround(
-                       (scale - 1.f)
-                       * static_cast<float>(mask - neutral)));
+  return neutral + static_cast<std::uint32_t>(std::lround((scale - 1.f) * static_cast<float>(mask - neutral)));
 }
 
 [[nodiscard]] inline std::uint32_t PackRuntimeBits(
     RuntimeMode mode,
     const RuntimeControls& controls) noexcept {
   return (static_cast<std::uint32_t>(mode) & kModeMask)
-      | (QuantizePercentScale(
-             controls.focus_distance_percent, kFocusNeutral, kFocusMask)
-         << kFocusShift)
-      | (QuantizePercentScale(
-             controls.blur_radius_percent, kRadiusNeutral, kRadiusMask)
-         << kRadiusShift)
-      | (QuantizePercentScale(
-             controls.near_strength_percent, kNearNeutral, kNearMask)
-         << kNearShift)
-      | (QuantizePercentScale(
-             controls.far_strength_percent, kFarNeutral, kFarMask)
-         << kFarShift)
-      | (QuantizePercentScale(
-             controls.edge_bokeh_percent, kEdgeNeutral, kEdgeMask)
-         << kEdgeShift);
+         | (QuantizePercentScale(
+                controls.focus_distance_percent, kFocusNeutral, kFocusMask)
+            << kFocusShift)
+         | (QuantizePercentScale(
+                controls.blur_radius_percent, kRadiusNeutral, kRadiusMask)
+            << kRadiusShift)
+         | (QuantizePercentScale(
+                controls.near_strength_percent, kNearNeutral, kNearMask)
+            << kNearShift)
+         | (QuantizePercentScale(
+                controls.far_strength_percent, kFarNeutral, kFarMask)
+            << kFarShift)
+         | (QuantizePercentScale(
+                controls.edge_bokeh_percent, kEdgeNeutral, kEdgeMask)
+            << kEdgeShift);
 }
 
 [[nodiscard]] inline float PackRuntimePayload(
@@ -122,7 +165,7 @@ inline constexpr std::uint32_t kEdgeNeutral = 8u;
     const RuntimeControls& controls) noexcept {
   // Keep Vanilla byte-for-byte neutral. The replacement shaders branch on
   // mode zero before decoding or applying any of the packed controls.
-  if (mode == RuntimeMode::kVanilla) return 0.f;
+  if (!IsEnhancedMode(mode)) return 0.f;
   return std::bit_cast<float>(PackRuntimeBits(mode, controls));
 }
 
@@ -139,8 +182,7 @@ inline constexpr std::uint32_t kEdgeNeutral = 8u;
   if (code <= neutral) {
     return static_cast<float>(code) / static_cast<float>(neutral);
   }
-  return 1.f + static_cast<float>(code - neutral)
-      / static_cast<float>(mask - neutral);
+  return 1.f + static_cast<float>(code - neutral) / static_cast<float>(mask - neutral);
 }
 
 class RuntimeController {
@@ -168,6 +210,10 @@ class RuntimeController {
       Store(result);
       return result;
     }
+    if (!IsKnownRuntimeStyle(requested_style)) {
+      Store(result);
+      return result;
+    }
     if (!supported_build) {
       result.status = RuntimeStatus::kUnsupportedBuild;
       Store(result);
@@ -181,14 +227,21 @@ class RuntimeController {
       return result;
     }
 
-    if (requested_style == RuntimeStyle::kCinematic) {
+    if (requested_style == RuntimeStyle::kRetinal) {
+      result.mode = high_quality_requested
+                        ? RuntimeMode::kRetinalHigh
+                        : RuntimeMode::kRetinalBalanced;
+      result.status = high_quality_requested
+                          ? RuntimeStatus::kActiveRetinalHigh
+                          : RuntimeStatus::kActiveRetinalBalanced;
+    } else if (requested_style == RuntimeStyle::kCinematic) {
       result.mode = high_quality_requested
                         ? RuntimeMode::kCinematicHigh
                         : RuntimeMode::kCinematicBalanced;
       result.status = high_quality_requested
                           ? RuntimeStatus::kActiveCinematicHigh
                           : RuntimeStatus::kActiveCinematicBalanced;
-    } else {
+    } else if (requested_style == RuntimeStyle::kClean) {
       result.mode = high_quality_requested
                         ? RuntimeMode::kCleanHigh
                         : RuntimeMode::kCleanBalanced;

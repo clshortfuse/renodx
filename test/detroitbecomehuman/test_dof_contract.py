@@ -46,8 +46,8 @@ def main():
         raise AssertionError("DOF mode must not toggle replacement pipelines with on_replace")
     require(
         addon,
-        r'\.key\s*=\s*"DepthOfFieldMode"[\s\S]*?\.default_value\s*=\s*0\.f[\s\S]*?\.labels\s*=\s*\{"Vanilla",\s*"Clean",\s*"Cinematic"\}',
-        "DepthOfFieldMode must expose Vanilla, Clean, and Cinematic with Vanilla as default",
+        r'\.key\s*=\s*"DepthOfFieldMode"[\s\S]*?\.default_value\s*=\s*0\.f[\s\S]*?\.labels\s*=\s*\{"Vanilla",\s*"Clean",\s*"Cinematic",\s*"Retinal"\}',
+        "DepthOfFieldMode must expose Vanilla, Clean, Cinematic, and Retinal with Vanilla as default",
     )
     require(
         addon,
@@ -76,6 +76,14 @@ def main():
             rf'\.key\s*=\s*"{key}"[\s\S]*?\.default_value\s*=\s*100\.f',
             f"{key} must exist with a neutral default",
         )
+    for key in (
+        "RetinalFixationX",
+        "RetinalFixationY",
+        "RetinalStrength",
+        "RetinalHorizontalFov",
+        "RetinalMaximumSigma",
+    ):
+        require(addon, rf'\.key\s*=\s*"{key}"', f"{key} must be exposed")
 
     sources = {}
     for shader_hash, filename in DOF_SHADERS.items():
@@ -112,8 +120,8 @@ def main():
     )
     require(
         sources["0xAC7A8193"],
-        r"cinematic\s*=\s*CUSTOM_DOF_RUNTIME_MODE\s*>=\s*2\.5[\s\S]*?if\s*\(!cinematic\)[\s\S]*?return\s+farResult[\s\S]*?ResolveNearBalanced[\s\S]*?nearLayer\.w",
-        "Clean must exclude low-resolution near coverage while Cinematic restores it",
+        r"runtimeMode\s*=\s*uint\(CUSTOM_DOF_RUNTIME_MODE\s*\+\s*0\.5\)[\s\S]*?cinematic\s*=\s*runtimeMode\s*==\s*3u[\s\S]*?runtimeMode\s*==\s*6u[\s\S]*?highQuality\s*=\s*runtimeMode\s*==\s*2u[\s\S]*?runtimeMode\s*==\s*6u[\s\S]*?if\s*\(!cinematic\)[\s\S]*?return\s+farResult[\s\S]*?ResolveNearBalanced[\s\S]*?nearLayer\.w",
+        "Clean must exclude low-resolution near coverage while Cinematic and Retinal restore it with explicit quality predicates",
     )
     require(
         sources["0xAC7A8193"],
@@ -132,6 +140,56 @@ def main():
     )
     if "farLayer.w" in sources["0xAC7A8193"]:
         raise AssertionError("Cinematic must not restore the low-resolution far alpha mask")
+
+    for filename in (
+        "retinal_horizontal.comp.slang",
+        "retinal_vertical.comp.slang",
+    ):
+        retinal_shader = (source_dir / filename).read_text(encoding="utf-8")
+        require(
+            retinal_shader,
+            r'#include\s+"retinal_filter_common\.slang"',
+            f"{filename} must use the shared Watson filter",
+        )
+    retinal_common = (source_dir / "retinal_filter_common.slang").read_text(
+        encoding="utf-8"
+    )
+    require(
+        retinal_common,
+        r"local_size_x\s*=\s*8[\s\S]*?local_size_y\s*=\s*8[\s\S]*?ComputeRetinalNyquist[\s\S]*?FilterBalanced[\s\S]*?FilterHigh",
+        "Retinal shaders must retain 8x8 Watson Balanced and High paths",
+    )
+
+    capture = (source_dir / "retinal_capture.hpp").read_text(encoding="utf-8")
+    require(
+        capture,
+        r"push_constant_size\s*==\s*kShaderInjectDataSize[\s\S]*?"
+        r"ReleaseDofCompositeImageSnapshot[\s\S]*?"
+        r"RestoreDofCompositeComputeState",
+        "Retinal capture must validate and restore the native push payload",
+    )
+    runtime = (source_dir / "retinal_runtime.hpp").read_text(encoding="utf-8")
+    require(
+        runtime,
+        r"owner_device_\s*!=\s*nullptr[\s\S]*?owner_device_\s*!=\s*device[\s\S]*?"
+        r"std::recursive_mutex\s+mutex_",
+        "Retinal GPU resources must remain owned by one Vulkan device",
+    )
+    vulkan_layer = (source_dir / "dlss" / "vulkan_layer.cpp").read_text(
+        encoding="utf-8"
+    )
+    require(
+        vulkan_layer,
+        r"next_cmd_push_constants\([\s\S]*?snapshot\.push_constant_size[\s\S]*?"
+        r"push_constant_data\)",
+        "native restore must repush the complete ShaderInjectData payload",
+    )
+    require(
+        vulkan_layer,
+        r"InsertComputeWriteBarrier\(std::uint64_t\s+command_buffer\)[\s\S]*?"
+        r"FindDevice\(vk_command_buffer\)",
+        "Retinal barriers must resolve the device from the exact command buffer",
+    )
 
     print("PASS: Detroit native DOF v2 source contract")
     return 0
