@@ -316,7 +316,7 @@ float3 ApplyAnchoredAdaptationContrast(
     float shadows = 1.f) {
   float3 ax = max(0, color);
   float3 normalized = ax / anchor_in;
-  float3 flare_ratio = renodx::math::DivideSafe(normalized + flare, normalized, 1.f);
+  float3 flare_ratio = 1.f + renodx::math::DivideSafe(flare, normalized + flare, 0.f);
   float3 exponent = contrast * flare_ratio;
 
   float3 ax_n = pow(ax, exponent);
