@@ -30,10 +30,12 @@ struct ShaderInjectData {
   float ui_path_active;
   float reserved;
 
+  // Working gamut is fixed to BT.709; the fourth PsychoV slot now carries
+  // PsychoV-22 highlight chroma restoration while preserving the 112-byte ABI.
   float psychov_input_adaptation;
   float psychov_output_adaptation;
   float psychov_gamut_compression;
-  float psychov_gamut_mode;
+  float psychov22_highlight_color_restore;
 
   float psychov17_bleaching;
   float psychov17_hue_restore;
@@ -61,10 +63,9 @@ static_assert(sizeof(ShaderInjectData) == 112u);
 #define RENODX_PSYCHOV_INPUT_ADAPTATION      shader_injection.psychov_input_adaptation
 #define RENODX_PSYCHOV_OUTPUT_ADAPTATION     shader_injection.psychov_output_adaptation
 #define RENODX_PSYCHOV_GAMUT_COMPRESSION     shader_injection.psychov_gamut_compression
-#define RENODX_PSYCHOV_GAMUT_MODE            shader_injection.psychov_gamut_mode
+#define RENODX_PSYCHOV22_HIGHLIGHT_COLOR_RESTORE shader_injection.psychov22_highlight_color_restore
 #define RENODX_PSYCHOV17_BLEACHING           shader_injection.psychov17_bleaching
 #define RENODX_PSYCHOV17_HUE_RESTORE         shader_injection.psychov17_hue_restore
-#define RENODX_PSYCHOV_HIGHLIGHT_COLOR_RESTORE shader_injection.psychov17_hue_restore
 #define RENODX_PSYCHOV22_COMPRESSION         shader_injection.psychov22_compression
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      (shader_injection.tone_map_type == 1.f                             \
                                                   ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD \

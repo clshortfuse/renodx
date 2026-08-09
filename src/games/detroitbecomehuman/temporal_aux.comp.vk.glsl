@@ -32,7 +32,7 @@ struct ShaderInjectData_std140
     float psychov_input_adaptation;
     float psychov_output_adaptation;
     float psychov_gamut_compression;
-    float psychov_gamut_mode;
+    float psychov22_highlight_color_restore;
     float psychov17_bleaching;
     float psychov17_hue_restore;
     float psychov22_compression;
@@ -94,8 +94,8 @@ bool RenderDebugPushPayloadFinite()
         && !isinf(shader_injection.psychov_output_adaptation)
         && !isnan(shader_injection.psychov_gamut_compression)
         && !isinf(shader_injection.psychov_gamut_compression)
-        && !isnan(shader_injection.psychov_gamut_mode)
-        && !isinf(shader_injection.psychov_gamut_mode)
+        && !isnan(shader_injection.psychov22_highlight_color_restore)
+        && !isinf(shader_injection.psychov22_highlight_color_restore)
         && !isnan(shader_injection.psychov17_bleaching)
         && !isinf(shader_injection.psychov17_bleaching)
         && !isnan(shader_injection.psychov17_hue_restore)

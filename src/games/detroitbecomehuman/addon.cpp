@@ -1934,20 +1934,18 @@ renodx::utils::settings::Settings settings =
                 },
             }},
             {{
-                .key = "PsychoVGamut",
-                .binding = &shader_injection.psychov_gamut_mode,
-                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-                // Detroit converts the BT.709 working representation to
-                // Rec.2020 before PQ. Use that HDR display hull by default;
-                // BT.709 remains available as the narrower opt-in boundary.
-                .default_value = 1.f,
-                .label = "Gamut",
-                .section = "PsychoV",
-                .tooltip = "Target gamut used by PsychoV compression.",
-                .labels = {"BT.709", "BT.2020"},
+                .key = "PsychoV22HighlightColorRestore",
+                .binding = &shader_injection.psychov22_highlight_color_restore,
+                .default_value = 0.f,
+                .label = "Highlight Color Restore",
+                .section = "PsychoV-22",
+                .tooltip = "Optional post-gamut source-color blend for PsychoV-22 highlights. It can override some Gamut Compression chroma and is active only at neutral Highlights, Shadows, Contrast, and Saturation.",
+                .min = 0.f,
+                .max = 100.f,
+                .parse = [](float value) { return value * 0.01f; },
                 .is_visible = []() {
                   return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type >= 3.f;
+                      && shader_injection.tone_map_type == 4.f;
                 },
             }},
             {{
@@ -1969,15 +1967,15 @@ renodx::utils::settings::Settings settings =
                 .key = "PsychoV17HueRestore",
                 .binding = &shader_injection.psychov17_hue_restore,
                 .default_value = 100.f,
-                .label = "Highlight Color Restore",
-                .section = "PsychoV",
-                .tooltip = "Restores hue and bounded chroma lost in PsychoV high-light compression without changing the peak target.",
+                .label = "Hue Restore",
+                .section = "PsychoV-17",
+                .tooltip = "Hue restoration strength inside PsychoV-17 before its final gamut projection.",
                 .min = 0.f,
                 .max = 100.f,
                 .parse = [](float value) { return value * 0.01f; },
                 .is_visible = []() {
                   return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type >= 3.f;
+                      && shader_injection.tone_map_type == 3.f;
                 },
             }},
             {{
@@ -2645,7 +2643,7 @@ void OnPresetOff() {
       {"PsychoVInputAdaptation", 18.f},
       {"PsychoVOutputAdaptation", 18.f},
       {"PsychoVGamutCompression", 100.f},
-      {"PsychoVGamut", 1.f},
+      {"PsychoV22HighlightColorRestore", 0.f},
       {"PsychoV17Bleaching", 100.f},
       {"PsychoV17HueRestore", 100.f},
       {"PsychoV22Compression", 1.f},
