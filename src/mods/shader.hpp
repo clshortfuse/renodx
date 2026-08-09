@@ -2051,10 +2051,10 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
             // ReShade binds D3D12 graphics buffer UAV root descriptors as SRVs.
             // Bypass that setter for this root-descriptor case instead of issuing
             // an invalid graphics SRV bind before the native UAV bind.
-            std::bit_cast<ID3D12GraphicsCommandList*>(context.cmd_list->get_native())
-                ->SetGraphicsRootUnorderedAccessView(
-                    first_view_push.layout_param,
-                    context.cmd_list->get_device()->get_resource_view_gpu_address(descriptor_views[0]));
+            auto* native_cmd_list = reinterpret_cast<ID3D12GraphicsCommandList*>(context.cmd_list->get_native());
+            native_cmd_list->SetGraphicsRootUnorderedAccessView(
+                first_view_push.layout_param,
+                context.cmd_list->get_device()->get_resource_view_gpu_address(descriptor_views[0]));
           } else {
             context.cmd_list->push_descriptors(
                 descriptor_stages,
