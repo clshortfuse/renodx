@@ -1106,9 +1106,9 @@ void SetRuntimeFlag(std::uint32_t flag, bool enabled) {
 }
 
 bool ShouldWritePsychoVBt2020Intermediate() {
-  const bool psychov_active = shader_injection.tone_map_type == 3.f
-      || shader_injection.tone_map_type == 4.f
-      || shader_injection.tone_map_type == 5.f;
+  const bool psychov_active = shader_injection.tone_map_type == 2.f
+      || shader_injection.tone_map_type == 3.f
+      || shader_injection.tone_map_type == 4.f;
   return shader_injection.output_is_hdr >= 0.5f
       && shader_injection.output_mode != OUTPUT_MODE_SDR
       && psychov_active
@@ -1885,6 +1885,49 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                  }},
 };
 
+constexpr int MigrateLegacyToneMapType(int legacy_value) {
+  switch (legacy_value) {
+    case 0:  // Vanilla
+      return 0;
+    case 1:  // Removed Reinhard
+    case 2:  // RenoDRT
+      return 1;
+    case 3:  // PsychoV-17
+      return 2;
+    case 4:  // PsychoV-22
+      return 3;
+    case 5:  // PsychoV-24
+      return 4;
+    default:
+      return 1;
+  }
+}
+
+void MigrateToneMapTypeSettings() {
+  for (const char* section : {
+           "renodx-preset1",
+           "renodx-preset2",
+           "renodx-preset3",
+       }) {
+    int current_value = 0;
+    if (reshade::get_config_value(
+            nullptr, section, "ToneMapTypeV2", current_value)) {
+      continue;
+    }
+
+    int legacy_value = 0;
+    if (!reshade::get_config_value(
+            nullptr, section, "ToneMapType", legacy_value)) {
+      continue;
+    }
+    reshade::set_config_value(
+        nullptr,
+        section,
+        "ToneMapTypeV2",
+        MigrateLegacyToneMapType(legacy_value));
+  }
+}
+
 renodx::utils::settings::Settings settings =
     renodx::templates::settings::JoinSettings({
         []() {
@@ -1892,9 +1935,10 @@ renodx::utils::settings::Settings settings =
               renodx::templates::settings::CreateDefaultSettings({
             {"ToneMapType",
              {
+                 .key = "ToneMapTypeV2",
                  .binding = &shader_injection.tone_map_type,
-                 .default_value = 2.f,
-                 .labels = {"Vanilla", "Reinhard", "RenoDRT", "PsychoV-17", "PsychoV-22", "PsychoV-24"},
+                 .default_value = 1.f,
+                 .labels = {"Vanilla", "RenoDRT", "PsychoV-17", "PsychoV-22", "PsychoV-24"},
                  .parse = [](float value) { return value; },
              }},
             {"ToneMapPeakNits",
@@ -1935,21 +1979,21 @@ renodx::utils::settings::Settings settings =
                                                   .binding = &shader_injection.tone_map_highlight_saturation,
                                                   .is_visible = []() {
                                                     return renodx::templates::settings::current_settings_mode >= 1.f
-                                                        && shader_injection.tone_map_type < 3.f;
+                                                        && shader_injection.tone_map_type < 2.f;
                                                   },
                                               }},
             {"ColorGradeBlowout", {
                                        .binding = &shader_injection.tone_map_blowout,
                                        .is_visible = []() {
                                          return renodx::templates::settings::current_settings_mode >= 1.f
-                                             && shader_injection.tone_map_type < 3.f;
+                                             && shader_injection.tone_map_type < 2.f;
                                        },
                                    }},
             {"ColorGradeFlare", {
                                      .binding = &shader_injection.tone_map_flare,
                                      .is_visible = []() {
                                        return renodx::templates::settings::current_settings_mode >= 1.f
-                                           && shader_injection.tone_map_type < 3.f;
+                                           && shader_injection.tone_map_type < 2.f;
                                      },
                                  }},
             {"SceneGradeStrength", {
@@ -2002,7 +2046,7 @@ renodx::utils::settings::Settings settings =
                 .max = 100.f,
                 .parse = [](float value) { return value * 0.02f; },
                 .is_visible = []() {
-                  return shader_injection.tone_map_type >= 3.f;
+                  return shader_injection.tone_map_type >= 2.f;
                 },
             }},
             {{
@@ -2014,7 +2058,7 @@ renodx::utils::settings::Settings settings =
                 .section = "Color Grading",
                 .tooltip = "Matches PsychoV's 18% gray anchor to Detroit's neutral scene-grading output.",
                 .is_visible = []() {
-                  return shader_injection.tone_map_type >= 3.f;
+                  return shader_injection.tone_map_type >= 2.f;
                 },
             }},
             {{
@@ -2028,7 +2072,7 @@ renodx::utils::settings::Settings settings =
                 .max = 100.f,
                 .parse = [](float value) { return value * 0.01f; },
                 .is_visible = []() {
-                  return shader_injection.tone_map_type >= 3.f;
+                  return shader_injection.tone_map_type >= 2.f;
                 },
             }},
         }),
@@ -2673,7 +2717,7 @@ void OnPresetOff() {
   const bool dof_was_enhanced = dof_mode >= 0.5f;
   renodx::utils::settings::UpdateSettings({
       {"OutputMode", OUTPUT_MODE_AUTO},
-      {"ToneMapType", 0.f},
+      {"ToneMapTypeV2", 0.f},
       {"PeakBrightnessSource", 0.f},
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
@@ -3040,6 +3084,7 @@ bool AttachAddon(HMODULE h_module) {
   reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
   reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
   reshade::register_event<reshade::addon_event::present>(OnPresent);
+  MigrateToneMapTypeSettings();
   renodx::utils::settings::Use(DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
   temporal_capture::Use(DLL_PROCESS_ATTACH);
   // Target-aware UI replacement queries the command list's current render

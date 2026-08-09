@@ -286,15 +286,50 @@ class PsychoVContractTests(unittest.TestCase):
             r"float\s+peak_value\s*=\s*1000\.f\s*/\s*203\.f",
         )
         self.assertIn(
-            '.labels = {"Vanilla", "Reinhard", "RenoDRT", '
-            '"PsychoV-17", "PsychoV-22", "PsychoV-24"}',
+            '.labels = {"Vanilla", "RenoDRT", "PsychoV-17", '
+            '"PsychoV-22", "PsychoV-24"}',
             self.addon,
+        )
+        self.assertNotIn('"Reinhard"', self.addon)
+        self.assertIn('.key = "ToneMapTypeV2"', self.addon)
+        self.assertRegex(
+            self.addon,
+            r'\.key\s*=\s*"ToneMapTypeV2"[\s\S]*?'
+            r'\.default_value\s*=\s*1\.f',
         )
         self.assertIn(
             "#define CUSTOM_PSYCHOV24_ACTIVE  "
-            "(shader_injection.tone_map_type == 5.f)",
+            "(shader_injection.tone_map_type == 4.f)",
             self.shared,
         )
+
+    def test_removed_reinhard_modes_migrate_without_changing_psychov(self):
+        expected_cases = {
+            0: 0,
+            1: 1,
+            2: 1,
+            3: 2,
+            4: 3,
+            5: 4,
+        }
+        migration = self.addon[
+            self.addon.index("constexpr int MigrateLegacyToneMapType") :
+            self.addon.index("void MigrateToneMapTypeSettings")
+        ]
+        for legacy, current in expected_cases.items():
+            with self.subTest(legacy=legacy):
+                self.assertRegex(
+                    migration,
+                    rf"case\s+{legacy}\s*:[\s\S]*?return\s+{current}\s*;",
+                )
+        self.assertIn('"ToneMapType"', self.addon)
+        self.assertIn('"ToneMapTypeV2"', self.addon)
+        self.assertLess(
+            self.addon.index("MigrateToneMapTypeSettings();"),
+            self.addon.index("renodx::utils::settings::Use("),
+        )
+        self.assertNotIn("tone_map_method::REINHARD", self.shared)
+        self.assertIn("tone_map_method::DANIELE", self.shared)
 
     def test_all_versions_convert_wide_output_then_encode_once(self):
         test17 = self.scene[
@@ -1016,7 +1051,7 @@ class PsychoVContractTests(unittest.TestCase):
             r"\.parse\s*=\s*\[\]\(float value\)\s*"
             r"\{\s*return value \* 0\.02f;\s*\}",
         )
-        self.assertRegex(cone, r"tone_map_type\s*>=\s*3\.f")
+        self.assertRegex(cone, r"tone_map_type\s*>=\s*2\.f")
 
         exposure_match = extract_setting(
             self.addon, "ToneMapPsychoVExposureMatch"
@@ -1029,7 +1064,7 @@ class PsychoVContractTests(unittest.TestCase):
         self.assertIn('.label = "Exposure Match"', exposure_match)
         self.assertIn('.section = "Color Grading"', exposure_match)
         self.assertRegex(exposure_match, r"\.default_value\s*=\s*1\.f")
-        self.assertRegex(exposure_match, r"tone_map_type\s*>=\s*3\.f")
+        self.assertRegex(exposure_match, r"tone_map_type\s*>=\s*2\.f")
 
         slope = extract_setting(
             self.addon, "ToneMapPsychoVVanillaHDRSlope"
@@ -1047,7 +1082,7 @@ class PsychoVContractTests(unittest.TestCase):
             r"\.parse\s*=\s*\[\]\(float value\)\s*"
             r"\{\s*return value \* 0\.01f;\s*\}",
         )
-        self.assertRegex(slope, r"tone_map_type\s*>=\s*3\.f")
+        self.assertRegex(slope, r"tone_map_type\s*>=\s*2\.f")
 
         for key, value in (
             ("ColorGradeConeResponse", "50.f"),

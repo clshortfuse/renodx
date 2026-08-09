@@ -70,9 +70,7 @@ static_assert(sizeof(ShaderInjectData) == 112u);
 #define RENODX_PSYCHOV17_BLEACHING           shader_injection.psychov17_bleaching
 #define RENODX_PSYCHOV17_HUE_RESTORE         shader_injection.psychov17_hue_restore
 #define RENODX_PSYCHOV22_COMPRESSION         shader_injection.psychov22_compression
-#define RENODX_RENO_DRT_TONE_MAP_METHOD      (shader_injection.tone_map_type == 1.f                             \
-                                                  ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD \
-                                                  : renodx::tonemap::renodrt::config::tone_map_method::DANIELE)
+#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::DANIELE
 
 #define CUSTOM_OUTPUT_MODE       shader_injection.output_mode
 #define CUSTOM_OUTPUT_IS_HDR     shader_injection.output_is_hdr
@@ -108,9 +106,9 @@ float DecodeDofPackedScale(uint code, uint neutral, uint maximum)
       (CUSTOM_DOF_PACKED_BITS >> 21u) & 0x1Fu, 16u, 0x1Fu)
 #define CUSTOM_HDR_ACTIVE        (shader_injection.output_is_hdr >= 0.5f \
                                   && shader_injection.output_mode != 1.f)
-#define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 3.f)
-#define CUSTOM_PSYCHOV22_ACTIVE  (shader_injection.tone_map_type == 4.f)
-#define CUSTOM_PSYCHOV24_ACTIVE  (shader_injection.tone_map_type == 5.f)
+#define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 2.f)
+#define CUSTOM_PSYCHOV22_ACTIVE  (shader_injection.tone_map_type == 3.f)
+#define CUSTOM_PSYCHOV24_ACTIVE  (shader_injection.tone_map_type == 4.f)
 // This bit describes the basis actually written by the scene pass in the
 // current frame. It is intentionally authoritative at the UI and final OETF:
 // a settings-only gate would reinterpret native BT.709 video/loading frames
