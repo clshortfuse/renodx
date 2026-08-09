@@ -1,5 +1,5 @@
-#ifndef SRC_GAMES_INDYGREATCIRCLE_INCLUDE_FILMGRAIN_GLSL_
-#define SRC_GAMES_INDYGREATCIRCLE_INCLUDE_FILMGRAIN_GLSL_
+#ifndef SRC_GAMES_RDR2VK_INCLUDE_FILMGRAIN_GLSL_
+#define SRC_GAMES_RDR2VK_INCLUDE_FILMGRAIN_GLSL_
 
 float GetLuminanceBT2020(vec3 color) {
   return dot(color, vec3(0.2627002120, 0.6779980715, 0.0593017165));
@@ -65,4 +65,4 @@ vec3 ApplyFilmGrainBT2020(vec3 color, vec2 xy, float seed, float strength) {
   return ApplyFilmGrainBT2020(color, xy, seed, strength, 1.0, false);
 }
 
-#endif  // SRC_GAMES_INDYGREATCIRCLE_INCLUDE_FILMGRAIN_GLSL_
+#endif  // SRC_GAMES_RDR2VK_INCLUDE_FILMGRAIN_GLSL_
