@@ -1,0 +1,86 @@
+#include "../tonemap.hlsl"
+
+RWTexture3D<float4> u0 : register(u0);
+cbuffer cb0 : register(b0){
+  float4 cb0[13];
+}
+
+[numthreads(4, 4, 4)] void main(uint3 vThreadID: SV_DispatchThreadID) {
+  float4 r0,r1,r2,r3;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  r0.xyz = (uint3)vThreadID.xyz;
+  r0.xyz = r0.xyz * cb0[0].xxx + cb0[0].yyy;
+  r0.xyz = lutShaper(r0.xyz, true);
+  r1.x = dot(float3(0.390404999,0.549941003,0.00892631989), r0.xyz);
+  r1.y = dot(float3(0.070841603,0.963172019,0.00135775004), r0.xyz);
+  r1.z = dot(float3(0.0231081992,0.128021002,0.936245024), r0.xyz);
+  r0.xyz = cb0[1].xyz * r1.xyz;
+  r1.x = dot(float3(2.85846996,-1.62879002,-0.0248910002), r0.xyz);
+  r1.y = dot(float3(-0.210181996,1.15820003,0.000324280991), r0.xyz);
+  r1.z = dot(float3(-0.0418119989,-0.118169002,1.06867003), r0.xyz);
+  r0.xyz = renodx::color::arri::logc::c1000::Encode(r1.xyz, false);
+  r0.xyz = r0.xyz * cb0[12].zzz + cb0[12].www;
+  r0.xyz = renodx::color::arri::logc::c1000::Decode(r0.xyz, false);
+  r1.x = dot(cb0[2].xyz, r0.xyz);
+  r1.y = dot(cb0[3].xyz, r0.xyz);
+  r1.z = dot(cb0[4].xyz, r0.xyz);
+  r0.x = dot(r1.xyz, float3(0.212672904,0.715152204,0.0721750036));
+  r0.xy = -cb0[5].xz + r0.xx;
+  r0.zw = cb0[5].yw + -cb0[5].xz;
+  r0.zw = float2(1,1) / r0.zw;
+  r0.xy = saturate(r0.xy * r0.zw);
+  r0.zw = r0.xy * float2(-2,-2) + float2(3,3);
+  r0.xy = r0.xy * r0.xy;
+  r0.x = -r0.z * r0.x + 1;
+  r0.z = 1 + -r0.x;
+  r2.xyz = cb0[6].xyz * r0.xxx;
+  r0.x = -r0.w * r0.y + r0.z;
+  r0.y = r0.w * r0.y;
+  r0.yzw = cb0[8].xyz * r0.yyy;
+  r3.xyz = cb0[7].xyz * r0.xxx;
+  r3.xyz = r3.xyz * r1.xyz;
+  r2.xyz = r1.xyz * r2.xyz + r3.xyz;
+  r0.xyz = r1.xyz * r0.yzw + r2.xyz;
+  float3 preLGG = r0.xyz;
+  r0.xyz = r0.xyz * cb0[11].xyz + cb0[9].xyz;
+  r2.xyw = sign(r0.xyz) * pow(abs(r0.xyz), cb0[10].xyz);
+  r2.xyw = liftGammaGainScaling(r2.xyw, preLGG, cb0[9].xyz, cb0[10].xyz, cb0[11].xyz);
+  r3.xy = r2.yx;
+  r0.xy = r2.xy + -r3.xy;
+  r1.x = step(r2.y, r3.y);
+  r3.zw = float2(-1.0, 2.0 / 3.0);
+  r0.zw = float2(1,-1);
+  r0.xyzw = r1.xxxx * r0.xyzw + r3.xyzw;
+  r1.x = step(r0.x, r2.w);
+  r2.xyz = r0.xyw;
+  r0.xyw = r2.wyx;
+  r0.xyzw = r0.xyzw + -r2.xyzw;
+  r0.xyzw = r1.xxxx * r0.xyzw + r2.xyzw;
+  r1.x = min(r0.w, r0.y);
+  r1.x = -r1.x + r0.x;
+  r1.y = r1.x * 6.0 + 0.0001;
+  r0.y = r0.w + -r0.y;
+  r0.y = r0.y / r1.y;
+  r0.y = r0.z + r0.y;
+  r0.y = -cb0[12].x + abs(r0.y);
+  r1.yz = float2(1,-1) + r0.yy;
+  r0.z = r0.y > 1 ? r1.z : r0.y;
+  r0.y = r0.y < 0 ? r1.y : r0.z;
+  r0.yzw = float3(1.0, 2.0 / 3.0, 1.0 / 3.0) + r0.yyy;
+  r0.yzw = frac(r0.yzw);
+  r0.yzw = r0.yzw * float3(6,6,6) + float3(-3,-3,-3);
+  r0.yzw = saturate(float3(-1,-1,-1) + abs(r0.yzw));
+  r0.yzw = float3(-1,-1,-1) + r0.yzw;
+  r1.y = 0.0001 + r0.x;
+  r1.x = r1.x / r1.y;
+  r0.yzw = r1.xxx * r0.yzw + float3(1,1,1);
+  r1.xyz = r0.xxx * r0.yzw;
+  r1.x = dot(r1.xyz, float3(0.212672904,0.715152204,0.0721750036));
+  r0.xyz = r0.xxx * r0.yzw + -r1.xxx;
+  r0.xyz = r0.xyz * cb0[12].yyy + r1.xxx;
+  r0.w = 0;
+  u0[vThreadID] = r0;
+  return;
+}

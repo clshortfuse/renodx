@@ -1,0 +1,107 @@
+// ---- Created with 3Dmigoto v1.4.1 on Wed Aug 13 23:30:35 2025
+Texture2D<float4> t0 : register(t0);
+
+SamplerState s0_s : register(s0);
+
+cbuffer cb0 : register(b0)
+{
+  float4 cb0[9];
+}
+
+
+
+
+// 3Dmigoto declarations
+#define cmp -
+
+
+void main(
+  float4 v0 : SV_Position0,
+  float4 v1 : TEXCOORD0,
+  float4 v2 : TEXCOORD1,
+  out float4 o0 : SV_Target0)
+{
+  float4 r0,r1,r2,r3;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+		// A * W + B
+  r0.x = cb0[7].x * cb0[8].z + cb0[7].y;
+		// D * E, D * F
+  r0.yz = cb0[8].xy * cb0[7].ww;
+		// W * (A * W + B) + D * F
+  r0.x = cb0[8].z * r0.x + r0.z;
+  r0.x = max(0.00100000005, r0.x);
+		// C * B
+  r0.w = cb0[7].z * cb0[7].y;
+		// A * W + C * B
+  r1.x = cb0[7].x * cb0[8].z + r0.w;
+		// W * (A * W + C * B) + D * E
+  r1.x = cb0[8].z * r1.x + r0.y;
+		// (W * (A * W + C * B) + D * E) / (W * (A * W + B) + D * F)
+  r0.x = r1.x / r0.x;
+		// E / F
+  r1.x = cb0[8].x / cb0[8].y;
+		// y from cbuffer
+  r1.y = dot(cb0[2].xyz, float3(0.212599993,0.715200007,0.0722000003));
+		// something with Y
+  r1.z = cb0[8].w * cb0[2].w;
+  r1.y = r1.z / r1.y;
+		// untonemapped
+  r2.xyzw = t0.SampleLevel(s0_s, v2.xy, v2.w).xyzw;
+  float3 untonemapped = r2.xyz;
+  r2.xyz = max(float3(9.99999975e-06,9.99999975e-06,9.99999975e-06), r2.xyz);
+  r3.y = dot(r2.xyz, float3(0.323878586,0.670234263,0.122817799));
+  r1.y = r3.y * r1.y;
+		// A * r1.y + C * B
+  r0.w = cb0[7].x * r1.y + r0.w;
+		// r1.y * (A * r1.y + C * B) + D * E
+  r0.y = r1.y * r0.w + r0.y;
+		// A * r1.y + B
+  r0.w = cb0[7].x * r1.y + cb0[7].y;
+		// r1.y * (A * r1.y + B) + D * F
+  r0.z = r1.y * r0.w + r0.z;
+  r0.z = max(0.00100000005, r0.z);
+		// (r1.y * (A * r1.y + C * B) + D * E) / (r1.y * (A * r1.y + B) + D * F)
+  r0.y = r0.y / r0.z;
+		// both results - (E / F)
+  r0.xy = -r1.xx + r0.xy;
+		// result2 / result1
+  r0.x = r0.y / r0.x;
+  r0.x = log2(r0.x);
+  r0.x = cb0[3].x * r0.x;
+  r0.y = exp2(r0.x);
+  r3.x = dot(r2.xyz, float3(0.514136374,0.265067995,0.0241187997));
+  r0.w = dot(r2.xyz, float3(0.160363764,0.0640915707,0.844426632));
+  r1.x = r3.x + r3.y;
+  r0.w = r1.x + r0.w;
+  r1.xy = r3.xy / r0.ww;
+  r0.w = 1 + -r1.x;
+  r0.w = r0.w + -r1.y;
+  r0.w = r0.w * r0.y;
+  r0.z = r0.w / r1.y;
+  r0.w = r1.x * r0.y;
+  r0.x = r0.w / r1.y;
+  r1.x = dot(r0.xyz, float3(2.56509995,-1.02170002,0.0753000006));
+  r1.y = dot(r0.xyz, float3(-1.16649997,1.9777,-0.254299998));
+  r1.z = dot(r0.xyz, float3(-0.398600012,0.0439000018,1.18920004));
+  r0.x = -cb0[4].x + r0.y;
+  r0.yzw = max(float3(0,0,0), r1.xyz);
+  r1.x = max(cb0[2].x, cb0[2].y);
+  r1.x = max(cb0[2].z, r1.x);
+  r1.x = max(0.00999999978, r1.x);
+  r1.xyz = cb0[2].xyz / r1.xxx;
+  o0.xyz = r1.xyz * r0.yzw;
+  o0.xyz = untonemapped;
+  r0.y = cb0[4].y + -cb0[4].x;
+  r0.y = 1 / r0.y;
+  r0.x = saturate(r0.x * r0.y);
+  r0.y = r0.x * -2 + 3;
+  r0.x = r0.x * r0.x;
+  r0.z = r0.y * r0.x;
+  r0.w = max(r0.z, r2.w);
+  r0.x = -r0.y * r0.x + r0.w;
+  r0.x = cb0[3].z * r0.x + r0.z;
+  r0.x = r0.x + -r2.w;
+  o0.w = cb0[3].y * r0.x + r2.w;
+  return;
+}

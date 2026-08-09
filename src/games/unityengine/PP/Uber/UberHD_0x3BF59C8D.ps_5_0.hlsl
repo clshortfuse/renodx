@@ -1,0 +1,279 @@
+#include "../../common.hlsl"
+
+Texture2D<float4> t5 : register(t5);
+Texture3D<float4> t4 : register(t4);
+Texture2D<float4> t3 : register(t3);
+Texture2D<float4> t2 : register(t2);
+Texture2D<float4> t1 : register(t1);
+Texture2D<float4> t0 : register(t0);
+SamplerState s5_s : register(s5);
+SamplerState s4_s : register(s4);
+SamplerState s3_s : register(s3);
+SamplerState s2_s : register(s2);
+SamplerState s1_s : register(s1);
+SamplerState s0_s : register(s0);
+cbuffer cb0 : register(b0){
+  float4 cb0[53];
+}
+
+#define cmp -
+
+void main(
+  float4 v0 : SV_POSITION0,
+  float2 v1 : TEXCOORD0,
+  float2 w1 : TEXCOORD1,
+  out float4 o0 : SV_Target0)
+{
+  float4 r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  r0.xyzw = t1.Sample(s1_s, v1.xy).xyzw;
+  r1.xyzw = float4(1,1,-1,0) * cb0[44].xyxy;
+  r2.xyzw = saturate(-r1.xywy * cb0[46].xxxx + v1.xyxy);
+  r2.xyzw = cb0[26].xxxx * r2.xyzw;
+  r3.xyzw = t2.Sample(s2_s, r2.xy).xyzw;
+  r2.xyzw = t2.Sample(s2_s, r2.zw).xyzw;
+  r2.xyzw = r2.xyzw * float4(2,2,2,2) + r3.xyzw;
+  r3.xy = saturate(-r1.zy * cb0[46].xx + v1.xy);
+  r3.xy = cb0[26].xx * r3.xy;
+  r3.xyzw = t2.Sample(s2_s, r3.xy).xyzw;
+  r2.xyzw = r3.xyzw + r2.xyzw;
+  r3.xyzw = saturate(r1.zwxw * cb0[46].xxxx + v1.xyxy);
+  r3.xyzw = cb0[26].xxxx * r3.xyzw;
+  r4.xyzw = t2.Sample(s2_s, r3.xy).xyzw;
+  r2.xyzw = r4.xyzw * float4(2,2,2,2) + r2.xyzw;
+  r3.xy = saturate(v1.xy);
+  r3.xy = cb0[26].xx * r3.xy;
+  r4.xyzw = t2.Sample(s2_s, r3.xy).xyzw;
+  r2.xyzw = r4.xyzw * float4(4,4,4,4) + r2.xyzw;
+  r3.xyzw = t2.Sample(s2_s, r3.zw).xyzw;
+  r2.xyzw = r3.xyzw * float4(2,2,2,2) + r2.xyzw;
+  r3.xyzw = saturate(r1.zywy * cb0[46].xxxx + v1.xyxy);
+  r3.xyzw = cb0[26].xxxx * r3.xyzw;
+  r4.xyzw = t2.Sample(s2_s, r3.xy).xyzw;
+  r2.xyzw = r4.xyzw + r2.xyzw;
+  r3.xyzw = t2.Sample(s2_s, r3.zw).xyzw;
+  r2.xyzw = r3.xyzw * float4(2,2,2,2) + r2.xyzw;
+  r1.xy = saturate(r1.xy * cb0[46].xx + v1.xy);
+  r1.xy = cb0[26].xx * r1.xy;
+  r1.xyzw = t2.Sample(s2_s, r1.xy).xyzw;
+  r1.xyzw = r2.xyzw + r1.xyzw;
+  r1.xyzw = cb0[46].yyyy * r1.xyzw * injectedData.fxBloom;
+  r2.xy = v1.xy * cb0[45].xy + cb0[45].zw;
+  r2.xyz = t3.Sample(s3_s, r2.xy).xyz;
+  r3.xyzw = float4(0.0625,0.0625,0.0625,0.0625) * r1.xyzw;
+  r2.xyz = cb0[46].zzz * r2.xyz * injectedData.fxLens;
+  r2.w = 0;
+  r1.xyzw = float4(0.0625,0.0625,0.0625,1) * r1.xyzw;
+  r4.xyz = cb0[47].xyz * r1.xyz;
+  r4.w = 0.0625 * r1.w;
+  r0.xyzw = r4.xyzw + r0.xyzw;
+  r0.xyzw = r2.xyzw * r3.xyzw + r0.xyzw;
+  if (cb0[52].y < 0.5) {
+    r1.xy = -cb0[50].xy + v1.xy;
+    r1.yz = cb0[51].xx * abs(r1.yx) * min(1.f, injectedData.fxVignette);
+    r1.w = cb0[22].x / cb0[22].y;
+    r1.w = -1 + r1.w;
+    r1.w = cb0[51].w * r1.w + 1;
+    r1.x = r1.z * r1.w;
+    r1.xy = saturate(r1.xy);
+    r1.xy = log2(r1.xy);
+    r1.xy = cb0[51].zz * r1.xy;
+    r1.xy = exp2(r1.xy);
+    r1.x = dot(r1.xy, r1.xy);
+    r1.x = 1 + -r1.x;
+    r1.x = max(0, r1.x);
+    r1.x = log2(r1.x);
+    r1.x = cb0[51].y * r1.x * max(1.f, injectedData.fxVignette);
+    r1.x = exp2(r1.x);
+    r1.yzw = float3(1,1,1) + -cb0[49].xyz;
+    r1.xyz = r1.xxx * r1.yzw + cb0[49].xyz;
+    r0.xyz = r1.xyz * r0.xyz;
+  } else {
+    r1.x = t5.Sample(s5_s, v1.xy).w;
+    r1.x = renodx::color::srgb::DecodeSafe(r1.x);
+    r1.yzw = float3(1,1,1) + -cb0[49].xyz;
+    r1.yzw = r1.xxx * r1.yzw + cb0[49].xyz;
+    r1.yzw = r0.xyz * r1.yzw + -r0.xyz;
+    r0.xyz = cb0[52].xxx * r1.yzw + r0.xyz;
+    r1.y = -1 + r0.w;
+    r0.w = r1.x * r1.y + 1;
+  }
+  r0.xyzw = cb0[48].zzzz * r0.xyzw;
+  r1.xyz = lutShaper(r0.xyz);
+  if(injectedData.colorGradeLUTSampling == 0.f){
+  r1.xyz = cb0[48].yyy * r1.xyz;
+  r1.w = 0.5 * cb0[48].x;
+  r1.xyz = r1.xyz * cb0[48].xxx + r1.www;
+  r1.xyz = t4.Sample(s4_s, r1.xyz).xyz;
+  } else {
+    r1.xyz = renodx::lut::SampleTetrahedral(t4, r1.xyz, 1 / cb0[48].x);
+  }
+  r1.w = t0.Sample(s0_s, v1.xy).x;
+  r2.xyz = asint(cb0[41].yyy) & int3(2,1,4);
+  r2.x = cmp((int)r2.x != 0);
+  r2.w = -0.0001 + r1.w;
+  r2.w = cmp(r2.w < 0);
+  r2.x = r2.x ? r2.w : 0;
+  if (r2.x != 0) discard;
+  r2.x = v1.x * 2 + -1;
+  r2.w = -v1.y * 2 + 1;
+  r3.xyzw = cb0[33].xyzw * r2.wwww;
+  r3.xyzw = cb0[32].xyzw * r2.xxxx + r3.xyzw;
+  r3.xyzw = cb0[34].xyzw * r1.wwww + r3.xyzw;
+  r3.xyzw = cb0[35].xyzw + r3.xyzw;
+  r3.xyz = r3.xyz / r3.www;
+  r3.xyz = -cb0[36].xyz + r3.xyz;
+  r1.w = dot(r3.xyz, r3.xyz);
+  r1.w = sqrt(r1.w);
+  r3.xyz = r3.xyz / r1.www;
+  r1.w = min(1000, r1.w);
+  r2.x = cb0[41].z + cb0[41].w;
+  r2.w = r2.x * 0.800000012 + -cb0[36].y;
+  r2.w = r2.w / r3.y;
+  r3.w = cmp(r2.w >= 0);
+  r4.x = min(r2.w, r1.w);
+  r3.w = r3.w ? r4.x : r1.w;
+  r1.w = r2.y ? r1.w : r3.w;
+  r2.y = min(r1.w, r2.w);
+  r4.xyzw = r2.yyyy * r3.xzxz + cb0[36].xzxz;
+  r5.xyzw = float4(0.04,0.02,0.04,0.02) * cb0[23].yyyy;
+  r4.xyzw = r4.xyzw * float4(0.03,0.06,0.03,0.06) + r5.xyzw;
+  r2.yw = float2(0,0);
+  while (true) {
+    r3.w = cmp((int)r2.w >= 3);
+    if (r3.w != 0) break;
+    r3.w = (int)-r2.w;
+    r3.w = exp2(r3.w);
+    r5.x = (int)r2.w;
+    r5.x = exp2(r5.x);
+    r5.yz = r5.xx * r4.zw;
+    r6.xy = floor(r5.yz);
+    r5.yz = r5.xx * r4.zw + -r6.xy;
+    r7.xyzw = float4(0,0,1,1) + r6.xyxy;
+    r6.zw = float2(1,1) + r6.xy;
+    r6.xyzw = r5.xxxx * r4.xyzw + -r6.xyzw;
+    r5.xw = r5.yz * r5.yz;
+    r5.yz = -r5.yz * float2(2,2) + float2(3,3);
+    r8.xy = r5.xw * r5.yz;
+    r9.xyz = float3(0.1031,0.103,0.0973) * r7.xyx;
+    r9.xyz = frac(r9.xyz);
+    r10.xyz = float3(19.19,19.19,19.19) + r9.yzx;
+    r9.w = dot(r9.xyz, r10.xyz);
+    r9.xyz = r9.xyz + r9.www;
+    r9.xw = r9.xx + r9.yz;
+    r9.xy = r9.xw * r9.zy;
+    r9.xy = frac(r9.xy);
+    r10.xyz = float3(0.1031,0.103,0.0973) * r7.xwx;
+    r10.xyz = frac(r10.xyz);
+    r11.xyz = float3(19.19,19.19,19.19) + r10.yzx;
+    r7.x = dot(r10.xyz, r11.xyz);
+    r10.xyz = r10.xyz + r7.xxx;
+    r9.zw = r10.xx + r10.yz;
+    r9.zw = r9.zw * r10.zy;
+    r9.zw = frac(r9.zw);
+    r9.xyzw = float4(-0.5,-0.5,-0.5,-0.5) + r9.xyzw;
+    r10.xyz = float3(0.1031,0.103,0.0973) * r7.zyz;
+    r10.xyz = frac(r10.xyz);
+    r11.xyz = float3(19.19,19.19,19.19) + r10.yzx;
+    r7.x = dot(r10.xyz, r11.xyz);
+    r10.xyz = r10.xyz + r7.xxx;
+    r7.xy = r10.xx + r10.yz;
+    r7.xy = r7.xy * r10.zy;
+    r7.xy = frac(r7.xy);
+    r10.xyz = float3(0.1031,0.103,0.0973) * r7.zwz;
+    r10.xyz = frac(r10.xyz);
+    r11.xyz = float3(19.19,19.19,19.19) + r10.yzx;
+    r7.z = dot(r10.xyz, r11.xyz);
+    r10.xyz = r10.xyz + r7.zzz;
+    r7.zw = r10.xx + r10.yz;
+    r7.zw = r7.zw * r10.zy;
+    r7.zw = frac(r7.zw);
+    r7.xyzw = float4(-0.5,-0.5,-0.5,-0.5) + r7.xyzw;
+    r10.x = dot(r9.xy, r6.xy);
+    r10.y = dot(r9.zw, r6.xw);
+    r10.z = dot(r7.yx, r6.yz);
+    r10.w = dot(r7.zw, r6.zw);
+    r8.zw = -r5.wx * r5.zy + float2(1,1);
+    r5.xyzw = r8.zyzy * r8.wwxx;
+    r5.x = dot(r10.xyzw, r5.xyzw);
+    r3.w = r5.x * r3.w;
+    r2.y = r3.w * 1.41421354 + r2.y;
+    r2.w = (int)r2.w + 1;
+  }
+  r2.y = cb0[38].z * r2.y;
+  r1.w = r2.y * 100 + r1.w;
+  r2.y = cb0[40].w * 7 + 1;
+  r2.w = saturate(dot(r3.xyz, -cb0[37].xyz));
+  r2.w = log2(r2.w);
+  r2.y = r2.y * r2.w;
+  r2.y = exp2(r2.y);
+  r3.xzw = cb0[40].xyz + -cb0[39].xyz;
+  r3.xzw = r2.yyy * r3.xzw + cb0[39].xyz;
+  r2.y = 0.1 * r1.w;
+  r2.y = ceil(r2.y);
+  r2.y = (uint)r2.y;
+  r2.w = (uint)r2.y;
+  r1.w = r1.w / r2.w;
+  r2.w = 1 / cb0[41].x;
+  r4.x = -r2.w * r3.y;
+  r4.y = r2.w * r3.y;
+  r5.xy = float2(0,0);
+  r5.z = cb0[36].y;
+  r4.z = 0;
+  while (true) {
+    r4.w = cmp((uint)r4.z >= (uint)r2.y);
+    if (r4.w != 0) break;
+    r4.w = -r2.x * 0.8 + r5.z;
+    r5.w = r4.w * r2.w;
+    r5.w = r4.x * r1.w + -r5.w;
+    r5.w = 1.44269502 * r5.w;
+    r5.w = exp2(r5.w);
+    r4.w = r4.w * -r2.w;
+    r4.w = 1.44269502 * r4.w;
+    r4.w = exp2(r4.w);
+    r4.w = -r5.w + r4.w;
+    r4.w = r4.w / r4.y;
+    r5.w = cb0[38].y * -r5.x;
+    r5.w = 1.44269502 * r5.w;
+    r5.w = exp2(r5.w);
+    r5.y = r5.w * r4.w + r5.y;
+    r5.x = r5.x + r4.w;
+    r5.z = r3.y * r1.w + r5.z;
+    r4.z = (int)r4.z + 1;
+  }
+  r1.w = cb0[38].y * -r5.x;
+  r1.w = 1.44269502 * r1.w;
+  r1.w = exp2(r1.w);
+  r2.x = cb0[38].x * r5.y;
+  r2.xyw = r2.xxx * r3.xzw;
+  r2.xyw = r1.xyz * r1.www + r2.xyw;
+  r1.w = -0.2 + v1.y;
+  r1.w = saturate(1.25 * r1.w);
+  r3.x = r1.w * -2 + 3;
+  r1.w = r1.w * r1.w;
+  r1.w = r3.x * r1.w;
+  r1.w = r1.w * 0.9 + 0.1;
+  r3.xyz = r2.xyw + -r1.xyz;
+  r1.xyz = r1.www * r3.xyz + r1.xyz;
+  r1.xyz = r2.zzz ? r2.xyw : r1.xyz;
+  r0.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
+  r1.xyzw = float4(0.0973,0.103,0.1099,0.1031) * v0.xyyx;
+  r1.xyzw = frac(r1.xyzw);
+  r2.xyzw = float4(19.19,19.19,19.19,19.19) + r1.zxwy;
+  r2.x = dot(r1.wyxz, r2.xyzw);
+  r1.xyzw = r2.xxxx + r1.xyzw;
+  r2.xyzw = r1.wwyx + r1.yxxz;
+  r1.xyzw = r2.xyzw * r1.xyzw;
+  r1.xyzw = frac(r1.xyzw);
+  r0.xyzw = r1.xyzw * (1.0 / 255.0) * injectedData.fxNoise + r0.xyzw;
+  r1.yzw = renodx::color::srgb::DecodeSafe(r0.xyz);
+  if (injectedData.countOld == injectedData.countNew) {
+    r0.xyz = asint(cb0[42].y) == 1 ? PostToneMapScale(r1.yzw) : PostToneMapScale(r1.yzw, true);
+  } else {
+    r0.xyz = asint(cb0[42].y) == 1 ? r1.yzw : r0.xyz;
+  }
+  o0.xyzw = r0.xyzw;
+  return;
+}
