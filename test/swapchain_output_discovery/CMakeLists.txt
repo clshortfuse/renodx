@@ -1,0 +1,8 @@
+add_renodx_runtime_executable(swapchain_output_discovery_tests tests.cpp version)
+add_dependencies(renodx_test_suites swapchain_output_discovery_tests)
+
+add_test(NAME swapchain_output_discovery COMMAND swapchain_output_discovery_tests)
+set_tests_properties(swapchain_output_discovery PROPERTIES
+  LABELS "swapchain;output_discovery;unit;hdr"
+  TIMEOUT 30
+)
