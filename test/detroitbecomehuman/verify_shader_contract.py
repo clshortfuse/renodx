@@ -304,14 +304,14 @@ def validate_retinal_shader(shader_id, embed_dir, spirv_val, spirv_cross):
         },
         {
             "kind": "separate_images",
-            "set": 1,
-            "binding": 0,
+            "set": 0,
+            "binding": 1,
             "type": "texture2D",
         },
         {
             "kind": "images",
-            "set": 2,
-            "binding": 0,
+            "set": 0,
+            "binding": 2,
             "type": "image2D",
             "format": "rgba16f",
             "writeonly": True,
@@ -342,10 +342,13 @@ def validate_retinal_shader(shader_id, embed_dir, spirv_val, spirv_cross):
         ("fixationUv", "vec2", 0),
         ("inverseOutputSize", "vec2", 8),
         ("outputSize", "vec2", 16),
-        ("horizontalScreenAngleDegrees", "float", 24),
-        ("fixationBlend", "float", 28),
-        ("maximumSigmaPixels", "float", 32),
-        ("highQuality", "float", 36),
+        ("tanHalfHorizontal", "float", 24),
+        ("tanHalfVertical", "float", 28),
+        ("horizontalPixelsPerDegree", "float", 32),
+        ("verticalPixelsPerDegree", "float", 36),
+        ("fixationBlend", "float", 40),
+        ("maximumSigmaPixels", "float", 44),
+        ("highQuality", "float", 48),
     ]
     actual_members = [
         (member.get("name"), member.get("type"), member.get("offset"))
@@ -357,8 +360,8 @@ def validate_retinal_shader(shader_id, embed_dir, spirv_val, spirv_cross):
         member["offset"] + (8 if member["type"] == "vec2" else 4)
         for member in members
     )
-    if reflected_size != 40:
-        fail(f"{shader_id}: expected 40-byte push constants, got {reflected_size}")
+    if reflected_size != 52:
+        fail(f"{shader_id}: expected 52-byte push constants, got {reflected_size}")
     validate_embed_header(shader_id, spv_path)
 
 

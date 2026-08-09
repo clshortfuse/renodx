@@ -95,15 +95,11 @@ float DecodeDofPackedScale(uint code, uint neutral, uint maximum)
 #define CUSTOM_DOF_RADIUS_SCALE \
   DecodeDofPackedScale( \
       (CUSTOM_DOF_PACKED_BITS >> 10u) & 0x3Fu, 32u, 0x3Fu)
-#define CUSTOM_DOF_NEAR_STRENGTH \
-  DecodeDofPackedScale( \
-      (CUSTOM_DOF_PACKED_BITS >> 16u) & 0x1Fu, 16u, 0x1Fu)
+#define CUSTOM_DOF_EDGE_WIDTH_PIXELS \
+  float((CUSTOM_DOF_PACKED_BITS >> 16u) & 0x1Fu)
 #define CUSTOM_DOF_FAR_STRENGTH \
   DecodeDofPackedScale( \
       (CUSTOM_DOF_PACKED_BITS >> 21u) & 0x1Fu, 16u, 0x1Fu)
-#define CUSTOM_DOF_EDGE_BOKEH_SCALE \
-  DecodeDofPackedScale( \
-      (CUSTOM_DOF_PACKED_BITS >> 26u) & 0xFu, 8u, 0xFu)
 #define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 3.f)
 #define CUSTOM_PSYCHOV22_ACTIVE  (shader_injection.tone_map_type == 4.f)
 #define CUSTOM_HDR_ACTIVE        (shader_injection.output_is_hdr >= 0.5f \

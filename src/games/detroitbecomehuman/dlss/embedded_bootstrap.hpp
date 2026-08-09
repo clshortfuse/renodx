@@ -119,6 +119,28 @@ bool InsertComputeWriteBarrier(std::uint64_t command_buffer);
 // Vulkan layer records only descriptor sets whose exact layout matches the
 // verified Detroit DOF composite contract; this deliberately avoids enabling
 // RenoDX's process-wide descriptor tracing slow path.
+enum class DofCompositeCaptureDetail : std::uint32_t {
+  kNotAttempted = 0u,
+  kSuccess,
+  kInvalidArgument,
+  kDeviceStateUnavailable,
+  kUnsupportedExecutable,
+  kDeviceDestroying,
+  kPushConstantsUnavailable,
+  kCommandStateMissing,
+  kCommandStateIncomplete,
+  kDescriptorSetMissing,
+  kDescriptorSetLayoutMissing,
+  kDescriptorSetLayoutMismatch,
+  kPipelineLayoutMissing,
+  kPipelineLayoutMismatch,
+  kOutputBindingUnavailable,
+  kDepthBindingUnavailable,
+  kOutputDescriptorTypeMismatch,
+  kOutputLayoutMismatch,
+  kDepthDescriptorTypeMismatch,
+};
+
 struct DofCompositeImageSnapshot {
   std::uint64_t command_buffer = 0u;
   std::uint64_t descriptor_set = 0u;
@@ -137,7 +159,8 @@ struct DofCompositeImageSnapshot {
 
 [[nodiscard]] bool CaptureDofCompositeImageSnapshot(
     std::uint64_t command_buffer,
-    DofCompositeImageSnapshot* snapshot);
+    DofCompositeImageSnapshot* snapshot,
+    DofCompositeCaptureDetail* detail = nullptr);
 
 // Releases the temporary tracking freeze when no private commands were
 // recorded after capture. This does not emit Vulkan commands or alter GPU

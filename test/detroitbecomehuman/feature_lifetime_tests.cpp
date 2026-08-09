@@ -125,11 +125,9 @@ bool TestFenceTrackedOneTimeChurnDoesNotAccumulate() {
   constexpr std::uint64_t generation = 13u;
   bool passed = true;
 
-  // Detroit rotates through many transient primary command buffers and may
-  // submit them without an application fence. The layer attaches a private
-  // fence to each such submit and feeds the committed snapshot back here when
-  // that fence signals. Completed recordings must therefore remain bounded by
-  // actual GPU concurrency, not the lifetime count of command-buffer handles.
+  // The opt-in compatibility path can still attach a private fence to each
+  // no-fence submit. Completed recordings must remain bounded by actual GPU
+  // concurrency, not the lifetime count of command-buffer handles.
   for (std::uint64_t command_buffer = 100u; command_buffer < 132u;
        ++command_buffer) {
     tracker.BeginCommandBuffer(command_buffer, true);
@@ -146,6 +144,36 @@ bool TestFenceTrackedOneTimeChurnDoesNotAccumulate() {
             && tracker.InFlightReferenceCount(generation) == 0u,
         "completed fence-tracked churn must not accumulate feature references");
   }
+  return passed;
+}
+
+bool TestFencelessFrameRotationRemainsBounded() {
+  dlss::FeatureLifetimeTracker tracker;
+  constexpr std::uint64_t queue = 30u;
+  constexpr std::uint64_t generation = 14u;
+  constexpr std::uint64_t frame_slots = 3u;
+  bool passed = true;
+
+  // The default path does not inject a VkFence. A successful begin/reset of a
+  // reused frame command buffer is itself the Vulkan proof that its prior
+  // submission is no longer pending, so conservative references and private
+  // scratch ownership must stay bounded by the frame rotation.
+  for (std::uint64_t frame = 0u; frame < 96u; ++frame) {
+    const std::uint64_t command_buffer = 200u + frame % frame_slots;
+    tracker.BeginCommandBuffer(command_buffer, true);
+    tracker.RecordFeatureUse(command_buffer, generation);
+    const auto captured = tracker.CaptureSubmission({command_buffer});
+    (void)tracker.CommitSuccessfulSubmit(queue, captured);
+    passed &= Expect(
+        tracker.RecordedReferenceCount(generation) <= frame_slots
+            && tracker.InFlightReferenceCount(generation) <= frame_slots,
+        "fenceless frame rotation must remain bounded by reused command buffers");
+  }
+
+  tracker.DiscardCommandBuffers({200u, 201u, 202u});
+  passed &= Expect(
+      !tracker.IsReferenced(generation),
+      "reset/free of every fenceless frame slot must release all references");
   return passed;
 }
 
@@ -305,6 +333,7 @@ int main() {
   passed &= TestOneTimeRecordingCompletesAtIdle();
   passed &= TestOneTimeRecordingCompletesAtFence();
   passed &= TestFenceTrackedOneTimeChurnDoesNotAccumulate();
+  passed &= TestFencelessFrameRotationRemainsBounded();
   passed &= TestSimultaneousOneTimeSubmissionsWaitForEveryQueue();
   passed &= TestResetProvesConservativeSubmissionComplete();
   passed &= TestMultipleGenerationsInOneRecording();

@@ -116,16 +116,18 @@ void main()
     }
     barrier();
     memoryBarrierShared();
-    float fillRadiusScale = CUSTOM_DOF_RUNTIME_MODE >= 0.5
+    float farFillRadiusScale = CUSTOM_DOF_RUNTIME_MODE >= 0.5
         ? CUSTOM_DOF_RADIUS_SCALE
         : 1.0;
 
+    // Preserve Detroit's authored foreground fill and alpha in every mode.
+    // Enhanced radius controls apply only to the independently modified far
+    // layer, so cut-scene near bokeh remains identical in strength to Vanilla.
     vec3 nearCenter = texelFetch(dofColorMapNear, pixel, 0).xyz;
     vec3 nearColor = nearCenter;
-    if ((sNativePrepassCoc.x * fillRadiusScale * 8.0) > 3.0)
+    if ((sNativePrepassCoc.x * 8.0) > 3.0)
     {
-        nearColor = FilterNear(
-            uv, sNativePrepassCoc.x * fillRadiusScale);
+        nearColor = FilterNear(uv, sNativePrepassCoc.x);
     }
     imageStore(
         OutColorNear,
@@ -134,10 +136,10 @@ void main()
 
     vec3 farCenter = texelFetch(dofColorMapFar, pixel, 0).xyz;
     vec3 farColor = farCenter;
-    if ((sNativePrepassCoc.y * fillRadiusScale * 8.0) > 3.0)
+    if ((sNativePrepassCoc.y * farFillRadiusScale * 8.0) > 3.0)
     {
         farColor = FilterFar(
-            uv, sNativePrepassCoc.y * fillRadiusScale);
+            uv, sNativePrepassCoc.y * farFillRadiusScale);
     }
     imageStore(
         OutColorFar,

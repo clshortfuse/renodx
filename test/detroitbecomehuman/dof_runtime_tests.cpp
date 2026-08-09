@@ -145,9 +145,8 @@ bool TestPackedControls() {
           {
               .focus_distance_percent = 200.f,
               .blur_radius_percent = 0.f,
-              .near_strength_percent = 200.f,
               .far_strength_percent = 0.f,
-              .edge_bokeh_percent = 200.f,
+              .edge_bokeh_width_pixels = 16.f,
           }))
           == 0u,
       "Vanilla must ignore every custom control and keep a zero payload");
@@ -169,22 +168,19 @@ bool TestPackedControls() {
                  dof::kRadiusNeutral)
                  == 1.f
           && dof::UnpackPercentScale(
-                 bits, dof::kNearShift, dof::kNearMask, dof::kNearNeutral)
-                 == 1.f
-          && dof::UnpackPercentScale(
                  bits, dof::kFarShift, dof::kFarMask, dof::kFarNeutral)
                  == 1.f
-          && dof::UnpackPercentScale(
-                 bits, dof::kEdgeShift, dof::kEdgeMask, dof::kEdgeNeutral)
-                 == 1.f,
-      "neutral controls must decode to exact 1.0 scales");
+          && dof::UnpackEdgeWidthPixels(bits) == 8u
+          && ((bits >> dof::kReservedEdgeShift)
+                  & dof::kReservedEdgeMask)
+                 == 0u,
+      "neutral controls must decode exact scales, an 8 px Edge width, and zero reserved bits");
 
   const dof::RuntimeControls maximum = {
       .focus_distance_percent = 200.f,
       .blur_radius_percent = 200.f,
-      .near_strength_percent = 200.f,
       .far_strength_percent = 200.f,
-      .edge_bokeh_percent = 200.f,
+      .edge_bokeh_width_pixels = 16.f,
   };
   const std::uint32_t maximum_bits = dof::PackRuntimeBits(
       dof::RuntimeMode::kCinematicHigh, maximum);
@@ -195,13 +191,45 @@ bool TestPackedControls() {
           dof::kFocusMask,
           dof::kFocusNeutral)
               == 2.f
-          && dof::UnpackPercentScale(
-                 maximum_bits,
-                 dof::kEdgeShift,
-                 dof::kEdgeMask,
-                 dof::kEdgeNeutral)
-                 == 2.f,
-      "maximum controls must decode to exact 2.0 scales");
+          && dof::UnpackEdgeWidthPixels(maximum_bits) == 16u
+          && ((maximum_bits >> dof::kReservedEdgeShift)
+                  & dof::kReservedEdgeMask)
+                 == 0u,
+      "maximum controls must decode a 16 px Edge width while old Edge bits stay zero");
+
+  const dof::RuntimeControls no_edge = {
+      .focus_distance_percent = 100.f,
+      .blur_radius_percent = 100.f,
+      .far_strength_percent = 100.f,
+      .edge_bokeh_width_pixels = 0.f,
+  };
+  const std::uint32_t no_edge_bits = dof::PackRuntimeBits(
+      dof::RuntimeMode::kCinematicHigh, no_edge);
+  passed &= Expect(
+      dof::UnpackEdgeWidthPixels(no_edge_bits) == 0u,
+      "Edge Bokeh zero must decode to an exact post-resolve bypass");
+
+  for (std::uint32_t width = 0u;
+       width <= dof::kEdgeWidthMaximum;
+       ++width) {
+    const auto exact_bits = dof::PackRuntimeBits(
+        dof::RuntimeMode::kCinematicHigh,
+        {
+            .edge_bokeh_width_pixels = static_cast<float>(width),
+        });
+    passed &= Expect(
+        dof::UnpackEdgeWidthPixels(exact_bits) == width,
+        "every exposed Edge Bokeh pixel width must round-trip exactly");
+  }
+  passed &= Expect(
+      dof::QuantizeEdgeWidthPixels(-10.f) == 0u
+          && dof::QuantizeEdgeWidthPixels(99.f) == 16u
+          && dof::QuantizeEdgeWidthPixels(1.49f) == 1u
+          && dof::QuantizeEdgeWidthPixels(1.5f) == 2u
+          && dof::QuantizeEdgeWidthPixels(
+                 std::numeric_limits<float>::quiet_NaN())
+                 == dof::kEdgeWidthDefault,
+      "Edge Bokeh pixel encoding must clamp, round, and sanitize deterministically");
 
   const std::uint32_t retinal_bits = dof::PackRuntimeBits(
       dof::RuntimeMode::kRetinalHigh, neutral);

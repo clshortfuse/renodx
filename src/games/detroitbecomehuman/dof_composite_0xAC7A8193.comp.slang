@@ -14,6 +14,48 @@ const ivec2 kBilinearOffsets[4] = ivec2[](
 const int kTransitionBalancedKernelIndices[4] = int[](
     8, 12, 36, 40);
 
+// Sixteen equal-angle directions keep High isotropic while the fixed maximum
+// radial step bounds the widened Edge search independently of resolution.
+const vec2 kFarEdgeUnitDirections[16] = vec2[](
+    vec2(1.0, 0.0),
+    vec2(0.92387953251, 0.38268343237),
+    vec2(0.70710678119, 0.70710678119),
+    vec2(0.38268343237, 0.92387953251),
+    vec2(0.0, 1.0),
+    vec2(-0.38268343237, 0.92387953251),
+    vec2(-0.70710678119, 0.70710678119),
+    vec2(-0.92387953251, 0.38268343237),
+    vec2(-1.0, 0.0),
+    vec2(-0.92387953251, -0.38268343237),
+    vec2(-0.70710678119, -0.70710678119),
+    vec2(-0.38268343237, -0.92387953251),
+    vec2(0.0, -1.0),
+    vec2(0.38268343237, -0.92387953251),
+    vec2(0.70710678119, -0.70710678119),
+    vec2(0.92387953251, -0.38268343237));
+
+const int kFarEdgeMaximumRadialSteps = 16;
+// Relative depth change per full-resolution pixel that is still considered a
+// continuous curved surface rather than a new occluding layer.
+const float kFarEdgeSurfaceDiscontinuity = 0.01;
+// A material CoC jump can reveal a nearby blurred background even when its
+// depth discontinuity is smaller than the geometric threshold.
+const float kFarEdgeCocDiscontinuity = 0.5;
+// TAA can spread a strong Far CoC transition over several pixels so neither
+// individual depth nor CoC steps cross the hard-boundary thresholds. Confirm
+// that ramp only from two neighboring positive samples. The second sample
+// must own at least one full-resolution pixel of blur; this also saturates the
+// existing Far activation and prevents numerical CoC drift from creating a
+// foreground halo.
+const float kFarEdgeRampStartCoc = 0.0625;
+const float kFarEdgeRampConfirmCoc = 1.0;
+// A confirmed ramp must gain enough Far radius per full-resolution pixel to
+// represent a filtered silhouette rather than gradual depth across a curved
+// focused surface.
+const float kFarEdgeRampMinimumCocSlope = 0.25;
+const float kFarEdgeRampDepthBacktrackTolerance = 0.001;
+const float kFarEdgeRampCocBacktrackTolerance = 0.0625;
+
 struct POST_PROCESS_DOF_CONSTANT_BUFFER
 {
     vec4 _vfProjSetup;
@@ -145,36 +187,6 @@ vec4 ResolveFarBalanced(vec2 dofPosition, float centerCoc, vec3 sharpColor)
         : vec4(sharpColor, 0.0);
 }
 
-vec4 ResolveNearBalanced(vec2 dofPosition, vec3 fallbackColor)
-{
-    ivec2 basePixel = ivec2(dofPosition);
-    float fx = fract(dofPosition.x);
-    float fy = fract(dofPosition.y);
-    float weights[4] = float[](
-        (1.0 - fy) * (1.0 - fx),
-        (1.0 - fy) * fx,
-        fy * (1.0 - fx),
-        fy * fx);
-    vec3 colorSum = vec3(0.0);
-    float validWeight = 0.0;
-    float alphaSum = 0.0;
-    for (int i = 0; i < 4; ++i)
-    {
-        vec4 sampleValue = texelFetch(
-            NearDofMap,
-            ClampDofPixel(basePixel + kBilinearOffsets[i]),
-            0);
-        float valid = float(sampleValue.w > 0.0);
-        float colorWeight = weights[i] * valid;
-        colorSum += sampleValue.xyz * colorWeight;
-        validWeight += colorWeight;
-        alphaSum += sampleValue.w * weights[i];
-    }
-    return validWeight > 0.0
-        ? vec4(colorSum / vec3(validWeight), clamp(alphaSum, 0.0, 1.0))
-        : vec4(fallbackColor, 0.0);
-}
-
 vec4 ResolveFarHigh(vec2 dofPosition, float centerCoc, vec3 sharpColor)
 {
     ivec2 centerPixel = ivec2(floor(dofPosition));
@@ -207,37 +219,6 @@ vec4 ResolveFarHigh(vec2 dofPosition, float centerCoc, vec3 sharpColor)
             colorSum / vec3(validWeight),
             clamp(alphaSum / spatialWeightSum, 0.0, 1.0))
         : vec4(sharpColor, 0.0);
-}
-
-vec4 ResolveNearHigh(vec2 dofPosition, vec3 fallbackColor)
-{
-    ivec2 centerPixel = ivec2(floor(dofPosition));
-    vec3 colorSum = vec3(0.0);
-    float validWeight = 0.0;
-    float alphaSum = 0.0;
-    float spatialWeightSum = 0.0;
-    for (int y = -1; y <= 1; ++y)
-    {
-        for (int x = -1; x <= 1; ++x)
-        {
-            ivec2 samplePixel = ClampDofPixel(
-                centerPixel + ivec2(x, y));
-            vec2 delta = (vec2(samplePixel) + vec2(0.5)) - dofPosition;
-            float spatialWeight = exp(-0.5 * dot(delta, delta));
-            vec4 sampleValue = texelFetch(NearDofMap, samplePixel, 0);
-            float valid = float(sampleValue.w > 0.0);
-            float colorWeight = spatialWeight * valid;
-            colorSum += sampleValue.xyz * colorWeight;
-            validWeight += colorWeight;
-            alphaSum += sampleValue.w * spatialWeight;
-            spatialWeightSum += spatialWeight;
-        }
-    }
-    return validWeight > 0.0 && spatialWeightSum > 0.0
-        ? vec4(
-            colorSum / vec3(validWeight),
-            clamp(alphaSum / spatialWeightSum, 0.0, 1.0))
-        : vec4(fallbackColor, 0.0);
 }
 
 vec2 ResolveGatherFillCoverage(vec2 dofPosition)
@@ -358,6 +339,393 @@ vec3 ResolveFullResolutionFar(
         : fallbackColor;
 }
 
+bool CoarseFarMayReach(ivec2 pixel, float searchRadius)
+{
+    ivec2 coarseSize = textureSize(dofPrepassCocMap, 0);
+    vec2 coarseScale = max(
+        _125._DOF._vCoCScaleFactor.zw,
+        vec2(1.0));
+    ivec2 minimumTile = clamp(
+        ivec2(floor(
+            (vec2(pixel) - vec2(searchRadius)) / coarseScale)),
+        ivec2(0),
+        coarseSize - ivec2(1));
+    ivec2 maximumTile = clamp(
+        ivec2(floor(
+            (vec2(pixel) + vec2(searchRadius)) / coarseScale)),
+        ivec2(0),
+        coarseSize - ivec2(1));
+    for (int y = minimumTile.y; y <= maximumTile.y; ++y)
+    {
+        for (int x = minimumTile.x; x <= maximumTile.x; ++x)
+        {
+            // Coarse far CoC is deliberately boolean here. It may reject a
+            // footprint that contains no far background, but never controls
+            // final radius, color, coverage or layer visibility.
+            if (texelFetch(dofPrepassCocMap, ivec2(x, y), 0).y > 0.0)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int ClassifyFarEdgeSector(ivec2 offset)
+{
+    ivec2 magnitude = abs(offset);
+    const float kTanHalfSector = 0.41421356237;
+    if (float(magnitude.y) <= float(magnitude.x) * kTanHalfSector)
+    {
+        return offset.x > 0 ? 0 : 4;
+    }
+    if (float(magnitude.x) <= float(magnitude.y) * kTanHalfSector)
+    {
+        return offset.y > 0 ? 2 : 6;
+    }
+    if (offset.x > 0)
+    {
+        return offset.y > 0 ? 1 : 7;
+    }
+    return offset.y > 0 ? 3 : 5;
+}
+
+vec3 ResolveFarEdgeFallbackColor(
+    ivec2 sourcePixel,
+    float sourceCoc,
+    float exposure,
+    bool highQuality)
+{
+    vec3 colorSum = vec3(0.0);
+    float weightSum = 0.0;
+    for (int offsetY = -1; offsetY <= 1; ++offsetY)
+    {
+        for (int offsetX = -1; offsetX <= 1; ++offsetX)
+        {
+            ivec2 offset = ivec2(offsetX, offsetY);
+            if (!highQuality && abs(offsetX) + abs(offsetY) > 1)
+            {
+                continue;
+            }
+            ivec2 samplePixel = sourcePixel + offset;
+            if (any(lessThan(samplePixel, ivec2(0)))
+                || any(greaterThanEqual(
+                    samplePixel, _125._DOF._viViewportSize)))
+            {
+                continue;
+            }
+            float sampleDepth = LinearizeDepth(
+                texelFetch(depthMap, samplePixel, 0).x);
+            float sampleFarCoc = ComputeFarCoc16(sampleDepth);
+            float cocWeight = CocCompatibility(sourceCoc, sampleFarCoc)
+                * smoothstep(0.25, 1.5, sampleFarCoc);
+            float spatialWeight = highQuality
+                ? exp(-0.5 * dot(vec2(offset), vec2(offset)))
+                : (all(equal(offset, ivec2(0))) ? 1.0 : 0.5);
+            float weight = cocWeight * spatialWeight;
+            colorSum += texelFetch(
+                accumBufferMap, samplePixel, 0).xyz
+                * vec3(exposure * weight);
+            weightSum += weight;
+        }
+    }
+    return weightSum > 0.0
+        ? colorSum / vec3(weightSum)
+        : texelFetch(accumBufferMap, sourcePixel, 0).xyz * vec3(exposure);
+}
+
+float ComputeFarEdgeCandidateCoverage(
+    float sampleDistance,
+    float sampleFarCoc,
+    float edgeWidthPixels)
+{
+    // The ordered ray already proved a real farther discontinuity. Keep depth
+    // as a validity test rather than attenuating the artistic coverage again.
+    float farActivation = clamp(sampleFarCoc, 0.0, 1.0);
+
+    // Edge Bokeh Width is an exact full-resolution reach. Far CoC proves that
+    // the sampled surface owns background bokeh and selects its authored color,
+    // but must not silently shrink a user-requested pixel width.
+    float localEdgeWidth = edgeWidthPixels;
+    // Convert center-to-center distance into pixel-footprint distance: width N
+    // reaches radial step N, while step N+1 remains zero. Fade over the whole
+    // requested width so the result behaves like a distance field instead of
+    // a flat morphological band followed by a short outer ramp.
+    float effectiveDistance = max(sampleDistance - 0.5, 0.0);
+    float normalizedDistance = clamp(
+        effectiveDistance / max(localEdgeWidth, 1.0), 0.0, 1.0);
+    float radialCoverage = 1.0 - smoothstep(
+        0.0, 1.0, normalizedDistance);
+    return farActivation * radialCoverage;
+}
+
+vec4 ResolveFarEdgeIntrusion(
+    ivec2 pixel,
+    float centerDepth,
+    float centerFarCoc,
+    float edgeWidthPixels,
+    float exposure,
+    bool highQuality)
+{
+    // The user value is the exact full-resolution maximum. Far CoC still gates
+    // candidate validity and authored color, but does not reduce this reach.
+    float maximumSearchRadius = edgeWidthPixels;
+    if (maximumSearchRadius < 1.0)
+    {
+        return vec4(0.0);
+    }
+
+    // Native coarse CoC was classified with the authored focus distance.
+    // It is conservative only while the enhanced focus scale is neutral;
+    // otherwise the adjusted full-resolution CoC must remain authoritative.
+    bool nativeFocusClassification =
+        abs(CUSTOM_DOF_FOCUS_SCALE - 1.0) <= 1.0e-5;
+    if (nativeFocusClassification
+        && !CoarseFarMayReach(pixel, maximumSearchRadius))
+    {
+        return vec4(0.0);
+    }
+
+    float bestCoverage[8];
+    ivec2 bestPixel[8];
+    float bestFarCoc[8];
+    float bestDistance[8];
+    for (int sector = 0; sector < 8; ++sector)
+    {
+        bestCoverage[sector] = 0.0;
+        bestPixel[sector] = pixel;
+        bestFarCoc[sector] = 0.0;
+        bestDistance[sector] = 1.0e20;
+    }
+
+    // Walk every integer distance so the first real surface discontinuity along
+    // each ray owns the result. The first step of the eight Balanced directions
+    // already covers every adjacent pixel; ordered rays avoid tunnelling through
+    // a nearer or in-focus layer. Balanced evaluates at most 128 depth probes
+    // and High at most 256, independently of screen resolution.
+    int maximumRadialStep = min(
+        int(ceil(maximumSearchRadius)),
+        kFarEdgeMaximumRadialSteps);
+    for (int directionIndex = 0; directionIndex < 16; ++directionIndex)
+    {
+        if (!highQuality && (directionIndex & 1) != 0)
+        {
+            continue;
+        }
+        ivec2 previousOffset = ivec2(0);
+        float previousDepth = centerDepth;
+        float previousFarCoc = centerFarCoc;
+        bool previousRampValid = false;
+        float previousRampDistance = 0.0;
+        float previousRampCoc = 0.0;
+        for (int radialStep = 1;
+             radialStep <= kFarEdgeMaximumRadialSteps;
+             ++radialStep)
+        {
+            if (radialStep > maximumRadialStep)
+            {
+                break;
+            }
+            ivec2 offset = ivec2(round(
+                kFarEdgeUnitDirections[directionIndex]
+                    * float(radialStep)));
+            if (all(equal(offset, ivec2(0)))
+                || all(equal(offset, previousOffset)))
+            {
+                continue;
+            }
+            float localStepDistance = max(
+                length(vec2(offset - previousOffset)), 1.0);
+            previousOffset = offset;
+            float sampleDistance = length(vec2(offset));
+            ivec2 samplePixel = pixel + offset;
+            if (any(lessThan(samplePixel, ivec2(0)))
+                || any(greaterThanEqual(
+                    samplePixel, _125._DOF._viViewportSize)))
+            {
+                break;
+            }
+            float sampleDepth = LinearizeDepth(
+                texelFetch(depthMap, samplePixel, 0).x);
+            float localDepthGap = (sampleDepth - previousDepth)
+                / (max(max(abs(sampleDepth), abs(previousDepth)), 1.0e-4)
+                    * localStepDistance);
+            float cumulativeCenterDepthGap = (sampleDepth - centerDepth)
+                / max(max(abs(sampleDepth), abs(centerDepth)), 1.0e-4);
+            if (localDepthGap < -kFarEdgeSurfaceDiscontinuity)
+            {
+                // A nearer surface occludes every farther point on this ray.
+                break;
+            }
+            if (cumulativeCenterDepthGap <= 0.0025)
+            {
+                // Still inside the center surface's depth tolerance.
+                previousRampValid = false;
+                previousDepth = sampleDepth;
+                previousFarCoc = ComputeFarCoc16(sampleDepth);
+                continue;
+            }
+
+            float sampleFarCoc = ComputeFarCoc16(sampleDepth);
+            float farCocJump = sampleFarCoc - previousFarCoc;
+            bool depthBoundary =
+                localDepthGap > kFarEdgeSurfaceDiscontinuity;
+            bool cocBoundary = localDepthGap > 0.0
+                && farCocJump >= kFarEdgeCocDiscontinuity;
+            if (depthBoundary || cocBoundary)
+            {
+                // A true depth or CoC discontinuity owns the ray. Positive Far
+                // CoC contributes background bokeh; an in-focus layer blocks
+                // everything behind it.
+                if (sampleFarCoc <= 0.0)
+                {
+                    break;
+                }
+                float candidateCoverage = ComputeFarEdgeCandidateCoverage(
+                    sampleDistance,
+                    sampleFarCoc,
+                    edgeWidthPixels);
+                int sector = ClassifyFarEdgeSector(offset);
+                bool closerCandidate = sampleDistance + 1.0e-4
+                    < bestDistance[sector];
+                bool strongerAtSameDistance = abs(
+                    sampleDistance - bestDistance[sector]) <= 1.0e-4
+                    && candidateCoverage > bestCoverage[sector];
+                if (candidateCoverage > 0.0
+                    && (closerCandidate || strongerAtSameDistance))
+                {
+                    bestCoverage[sector] = candidateCoverage;
+                    bestPixel[sector] = samplePixel;
+                    bestFarCoc[sector] = sampleFarCoc;
+                    bestDistance[sector] = sampleDistance;
+                }
+                break;
+            }
+
+            // A temporally antialiased silhouette can form a monotonic Far CoC
+            // ramp without any single material jump. Require two neighboring
+            // positive samples and a one-pixel confirmed Far radius. The first
+            // sample supplies only the geometric boundary distance; color and
+            // CoC always come from the second, confirmed background sample.
+            bool rampPositive = sampleFarCoc >= kFarEdgeRampStartCoc;
+            bool rampNotNearer =
+                localDepthGap >= -kFarEdgeRampDepthBacktrackTolerance;
+            bool rampCocMonotonic = sampleFarCoc
+                + kFarEdgeRampCocBacktrackTolerance >= previousRampCoc;
+            bool rampCocSteep = sampleFarCoc - centerFarCoc
+                >= kFarEdgeRampMinimumCocSlope * sampleDistance;
+            bool confirmedRamp = previousRampValid
+                && rampPositive
+                && rampNotNearer
+                && rampCocMonotonic
+                && rampCocSteep
+                && sampleFarCoc >= kFarEdgeRampConfirmCoc;
+            if (confirmedRamp)
+            {
+                float candidateDistance = previousRampDistance;
+                float candidateCoverage = ComputeFarEdgeCandidateCoverage(
+                    candidateDistance,
+                    sampleFarCoc,
+                    edgeWidthPixels);
+                int sector = ClassifyFarEdgeSector(offset);
+                bool closerCandidate = candidateDistance + 1.0e-4
+                    < bestDistance[sector];
+                bool strongerAtSameDistance = abs(
+                    candidateDistance - bestDistance[sector]) <= 1.0e-4
+                    && candidateCoverage > bestCoverage[sector];
+                if (candidateCoverage > 0.0
+                    && (closerCandidate || strongerAtSameDistance))
+                {
+                    bestCoverage[sector] = candidateCoverage;
+                    bestPixel[sector] = samplePixel;
+                    bestFarCoc[sector] = sampleFarCoc;
+                    bestDistance[sector] = candidateDistance;
+                }
+                break;
+            }
+
+            // Keep only the immediately preceding eligible sample. Sliding the
+            // seed prevents a long, shallow CoC drift across a curved focused
+            // surface from moving the inferred silhouette deep into it.
+            previousRampValid = rampPositive && rampNotNearer;
+            previousRampDistance = sampleDistance;
+            previousRampCoc = sampleFarCoc;
+
+            // Smooth foreground curvature and gradual CoC drift remain the same
+            // surface; neither may create a false one-pixel silhouette gap.
+            previousDepth = sampleDepth;
+            previousFarCoc = sampleFarCoc;
+        }
+    }
+
+    vec3 farColorSum = vec3(0.0);
+    float farColorWeight = 0.0;
+    float nearestCoverage = 0.0;
+    for (int sector = 0; sector < 8; ++sector)
+    {
+        // Compare the selected background radius with this exact center. This
+        // keeps equally defocused background pixels unchanged while allowing a
+        // filtered silhouette pixel with nonzero CoC to receive farther bokeh.
+        float relativeCocSupport = clamp(
+            (bestFarCoc[sector] - centerFarCoc)
+                / max(bestFarCoc[sector], 1.0),
+            0.0,
+            1.0);
+        float sectorCoverage = bestCoverage[sector] * relativeCocSupport;
+        if (sectorCoverage <= 0.0)
+        {
+            continue;
+        }
+
+        vec3 backgroundSharpColor = texelFetch(
+            accumBufferMap, bestPixel[sector], 0).xyz * vec3(exposure);
+        vec2 bestDofPosition = vec2(bestPixel[sector])
+            / _125._DOF._vScaleFactor;
+        vec4 authoredFar = highQuality
+            ? ResolveFarHigh(
+                bestDofPosition,
+                bestFarCoc[sector],
+                backgroundSharpColor)
+            : ResolveFarBalanced(
+                bestDofPosition,
+                bestFarCoc[sector],
+                backgroundSharpColor);
+        vec3 directionColor = authoredFar.xyz;
+        if (authoredFar.w <= 0.0)
+        {
+            // Missing half-resolution color must never disable geometric
+            // coverage. Use one bounded full-resolution fallback per sector;
+            // never repeat the complete 49x4 aperture resolve here.
+            directionColor = ResolveFarEdgeFallbackColor(
+                bestPixel[sector],
+                bestFarCoc[sector],
+                exposure,
+                highQuality);
+        }
+        farColorSum += directionColor * vec3(sectorCoverage);
+        farColorWeight += sectorCoverage;
+        nearestCoverage = max(nearestCoverage, sectorCoverage);
+    }
+
+    if (farColorWeight <= 0.0)
+    {
+        return vec4(0.0);
+    }
+
+    // Width controls geometry only. Keep the authored default coverage fixed
+    // so a small nonzero pixel width does not become visually inert.
+    const float edgeOpacity = 0.60;
+    vec3 edgeColor = farColorSum / vec3(farColorWeight);
+
+    // One depth-validated sector is sufficient to establish the signed
+    // distance to visible background. Sector count must not make curved or
+    // nearly axis-aligned silhouettes weaker than straight edges.
+    float directionalSupport = clamp(nearestCoverage, 0.0, 1.0);
+    return vec4(
+        edgeColor,
+        directionalSupport * edgeOpacity);
+}
+
 vec3 CompositeVanilla(ivec2 pixel, vec2 pixelF, vec4 coarse, vec3 sharpColor)
 {
     vec3 farResult = sharpColor;
@@ -457,11 +825,14 @@ vec3 CompositeEnhanced(
     ivec2 pixel,
     vec2 pixelF,
     vec3 sharpColor,
-    float exposure)
+    float exposure,
+    out float finalEdgeCoverage)
 {
+    finalEdgeCoverage = 0.0;
     vec2 dofPosition = pixelF / _125._DOF._vScaleFactor;
-    float farCoc = ComputeFarCoc16(LinearizeDepth(
-        texelFetch(depthMap, pixel, 0).x));
+    float centerDepth = LinearizeDepth(
+        texelFetch(depthMap, pixel, 0).x);
+    float farCoc = ComputeFarCoc16(centerDepth);
     uint runtimeMode = uint(CUSTOM_DOF_RUNTIME_MODE + 0.5);
     bool cinematic = runtimeMode == 3u
         || runtimeMode == 4u
@@ -470,11 +841,15 @@ vec3 CompositeEnhanced(
     bool highQuality = runtimeMode == 2u
         || runtimeMode == 4u
         || runtimeMode == 6u;
+    float edgeWidthPixels = clamp(
+        CUSTOM_DOF_EDGE_WIDTH_PIXELS, 0.0, 16.0);
     vec3 farResult = sharpColor;
     if (farCoc > 0.0)
     {
         vec4 farLayer = cinematic
-            ? ResolveFarBalanced(dofPosition, farCoc, sharpColor)
+            ? (highQuality
+                ? ResolveFarHigh(dofPosition, farCoc, sharpColor)
+                : ResolveFarBalanced(dofPosition, farCoc, sharpColor))
             : vec4(sharpColor, 0.0);
         float farSupport;
         vec3 transitionBlur = ResolveFullResolutionFar(
@@ -487,27 +862,6 @@ vec3 CompositeEnhanced(
             farLayer.xyz,
             farSupport,
             sharpColor);
-        float edgeFactor = cinematic
-            ? 1.0 - smoothstep(0.75, 0.98, farSupport)
-            : 0.0;
-        if (edgeFactor > 0.0)
-        {
-            float expandedSupport;
-            vec3 expandedEdgeBlur = ResolveFullResolutionFar(
-                pixelF,
-                farCoc,
-                exposure,
-                highQuality,
-                1.0 + 0.5 * edgeFactor * CUSTOM_DOF_EDGE_BOKEH_SCALE,
-                true,
-                farLayer.xyz,
-                expandedSupport,
-                sharpColor);
-            transitionBlur = mix(
-                transitionBlur,
-                expandedEdgeBlur,
-                vec3(edgeFactor));
-        }
         vec3 transitionResult = mix(
             sharpColor,
             transitionBlur,
@@ -538,21 +892,77 @@ vec3 CompositeEnhanced(
         }
     }
 
-    if (!cinematic)
+    // Apply Edge Bokeh after the depth-aware far resolve. Candidate-relative
+    // Far CoC inside the ordered search protects already defocused background
+    // while allowing filtered silhouette pixels to receive farther bokeh.
+    if (cinematic && edgeWidthPixels > 0.0)
+    {
+        vec4 edgeIntrusion = ResolveFarEdgeIntrusion(
+            pixel,
+            centerDepth,
+            farCoc,
+            edgeWidthPixels,
+            exposure,
+            highQuality);
+        float farCoverage = clamp(
+            edgeIntrusion.w * CUSTOM_DOF_FAR_STRENGTH,
+            0.0,
+            1.0);
+        finalEdgeCoverage = farCoverage;
+        farResult = mix(
+            farResult,
+            edgeIntrusion.xyz,
+            vec3(farCoverage));
+    }
+
+    // Foreground bokeh is an authored cut-scene layer. Composite it with the
+    // same color, R8 alpha, bilinear weights and ordering as Vanilla, without
+    // applying Enhanced focus/radius/strength controls or a depth rejection.
+    vec4 coarse = texelFetch(
+        dofPrepassCocMap,
+        ivec2(pixelF / _125._DOF._vCoCScaleFactor.zw),
+        0);
+    if (coarse.x <= 0.0)
     {
         return farResult;
     }
 
-    // Cinematic restores authored foreground bokeh through its own alpha.
-    // Clean intentionally excludes this low-resolution artistic layer.
-    vec4 nearLayer = ResolveNearBalanced(dofPosition, farResult);
-    return mix(
-        farResult,
-        nearLayer.xyz,
-        vec3(clamp(
-            nearLayer.w * CUSTOM_DOF_NEAR_STRENGTH,
-            0.0,
-            1.0)));
+    ivec2 basePixel = ivec2(dofPosition);
+    vec4 nearSamples[4];
+    for (int i = 0; i < 4; ++i)
+    {
+        nearSamples[i] = texelFetch(
+            NearDofMap,
+            ClampDofPixel(basePixel + kBilinearOffsets[i]),
+            0);
+    }
+    float fx = fract(dofPosition.x);
+    float fy = fract(dofPosition.y);
+    float nearWeights[4] = float[](
+        (1.0 - fy) * (1.0 - fx),
+        (1.0 - fy) * fx,
+        fy * (1.0 - fx),
+        fy * fx);
+    vec4 nearSum = vec4(0.0);
+    float nearValidWeight = 0.0;
+    for (int i = 0; i < 4; ++i)
+    {
+        float weight = nearWeights[i] * float(nearSamples[i].w > 0.0);
+        nearSum += nearSamples[i] * weight;
+        nearValidWeight += weight;
+    }
+    vec4 resolvedNear;
+    if (nearValidWeight > 0.0)
+    {
+        resolvedNear = vec4(
+            nearSum.xyz / vec3(nearValidWeight),
+            nearSum.w);
+    }
+    else
+    {
+        resolvedNear = vec4(farResult, nearSum.w);
+    }
+    return mix(farResult, resolvedNear.xyz, vec3(resolvedNear.w));
 }
 
 void main()
@@ -569,6 +979,7 @@ void main()
         ? RenderDebugSourceAtPixel(pixel, _125._DOF._viViewportSize)
         : RENDER_DEBUG_SOURCE_NONE;
 
+    float finalEdgeCoverage = 0.0;
     vec3 outputColor;
     if (RenderDebugPreserveAtPass(debugSource, RENDER_DEBUG_PASS_DOF))
     {
@@ -587,7 +998,7 @@ void main()
     else
     {
         outputColor = CompositeEnhanced(
-            pixel, pixelF, sharpColor, exposure);
+            pixel, pixelF, sharpColor, exposure, finalEdgeCoverage);
     }
 
     if (RenderDebugGenerateAtPass(debugSource, RENDER_DEBUG_PASS_DOF))
@@ -606,6 +1017,19 @@ void main()
                 texelFetch(depthMap, pixel, 0).x);
             debugValue.x = ComputeFarCoc16(viewDepth)
                 - ComputeNearCoc16(viewDepth);
+        }
+        else if (debugSource == RENDER_DEBUG_SOURCE_DOF_EDGE_CONTROL)
+        {
+            // Show the value decoded by this exact composite shader. This
+            // distinguishes a stale UI/payload route from weak edge coverage.
+            debugValue.x = clamp(
+                CUSTOM_DOF_EDGE_WIDTH_PIXELS, 0.0, 16.0);
+        }
+        else if (debugSource == RENDER_DEBUG_SOURCE_DOF_EDGE_COVERAGE)
+        {
+            // This is the final post-resolve mix weight after focused-center
+            // protection and Background Bokeh strength, not native R8 alpha.
+            debugValue.x = finalEdgeCoverage;
         }
         else
         {

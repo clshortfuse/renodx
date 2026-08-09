@@ -68,6 +68,15 @@ float ComputeNearCoc(float viewDepth)
         * _115._DOF._vfLensParam.w, 0.0, 1.0);
 }
 
+float ComputeNativeNearCoc(float viewDepth)
+{
+    return clamp(((_115._DOF._vfLensParam.z
+        * ((_115._DOF._vfLensParam.y - viewDepth)
+            / (_115._DOF._vfLensParam.x + viewDepth)))
+        - 1.2999999853491317480802536010742e-05)
+        * _115._DOF._vfLensParam.w, 0.0, 1.0);
+}
+
 float ComputeFarCoc(float viewDepth)
 {
     if (CUSTOM_DOF_RUNTIME_MODE >= 0.5)
@@ -135,8 +144,7 @@ void main()
     float coarseNearMax = sPrepassCoc.x * 8.0;
     float coarseFarMin = sPrepassCoc.w * 8.0;
     float coarseFarMax = sPrepassCoc.y * 8.0;
-    bool refineNear = enhanced
-        || (coarseNearMax - coarseNearMin) > 0.125;
+    bool refineNear = (coarseNearMax - coarseNearMin) > 0.125;
     if (!refineNear)
     {
         refineNear = coarseNearMin == 0.0 && coarseNearMax != 0.0;
@@ -183,12 +191,16 @@ void main()
     float nearCocSum = 0.0;
     vec3 nearColorSum = vec3(0.0);
     float nearCount = 0.0;
-    if (coarseNear || enhanced)
+    // Foreground bokeh remains authored by Detroit in every mode. Enhanced
+    // far controls must not retune the native near CoC used by cut-scenes.
+    if (coarseNear)
     {
         for (int i = 0; i < 4; ++i)
         {
             float coc = refineNear
-                ? ComputeNearCoc(depths[i])
+                ? (enhanced
+                    ? ComputeNativeNearCoc(depths[i])
+                    : ComputeNearCoc(depths[i]))
                 : sPrepassCoc.x;
             float valid = float(coc > 0.0);
             nearCocSum += coc;

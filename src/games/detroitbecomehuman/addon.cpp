@@ -39,6 +39,7 @@
 #include "./dof_runtime.hpp"
 #include "./render_debug.hpp"
 #include "./retinal_capture.hpp"
+#include "./retinal_observability.hpp"
 #include "./resolution_scaling_win32.hpp"
 #include "./shared.h"
 #include "./temporal_capture.hpp"
@@ -79,6 +80,8 @@ namespace render_debug =
 namespace retinal = renodx::games::detroitbecomehuman::retinal;
 namespace retinal_capture =
     renodx::games::detroitbecomehuman::retinal_capture;
+namespace retinal_observability =
+    renodx::games::detroitbecomehuman::retinal_observability;
 constexpr std::size_t ASPECT_PATCH_INDEX = 0u;
 constexpr std::size_t UI_PATCH_INDEX = 1u;
 
@@ -111,9 +114,8 @@ float dof_mode = 0.f;
 float dof_quality = 1.f;
 float dof_focus_distance = 100.f;
 float dof_blur_radius = 100.f;
-float dof_near_strength = 100.f;
 float dof_far_strength = 100.f;
-float dof_edge_bokeh = 100.f;
+float dof_edge_bokeh_width = 8.f;
 dof::RuntimeController dof_runtime_controller;
 float retinal_fixation_x = 50.f;
 float retinal_fixation_y = 50.f;
@@ -122,8 +124,9 @@ float retinal_horizontal_fov =
     retinal::kDefaultHorizontalScreenAngleDegrees;
 float retinal_maximum_sigma = retinal::kMaximumSigmaPixels;
 retinal::Runtime retinal_runtime;
-std::atomic<retinal::RunResult> retinal_last_result =
-    retinal::RunResult::kNotRetinalMode;
+retinal_observability::RunResultState retinal_run_result_state(
+    retinal::RunResult::kNotRetinalMode);
+retinal_observability::CaptureDiagnosticState retinal_capture_diagnostic_state;
 std::atomic_bool retinal_force_disabled = false;
 std::atomic_bool retinal_restore_failure_logged = false;
 float render_debug_mode = 0.f;
@@ -161,6 +164,8 @@ const std::vector<std::string> render_debug_source_labels = {
     "Retinal Eccentricity (Unavailable)",
     "Retinal Nyquist (Unavailable)",
     "Retinal Radius (Unavailable)",
+    "DOF Edge Bokeh Width (px)",
+    "DOF Final Edge Coverage",
 };
 std::once_flag dof_build_verification_once;
 std::atomic_bool dof_supported_executable = false;
@@ -1092,6 +1097,61 @@ std::string_view GetDofStatusText(dof::RuntimeStatus status) {
   return "unknown";
 }
 
+retinal::RunResult GetRetinalRunResult() noexcept {
+  return retinal_run_result_state.Get();
+}
+
+retinal_observability::CaptureDiagnostic GetRetinalCaptureDiagnostic() noexcept {
+  return retinal_capture_diagnostic_state.Get();
+}
+
+reshade::log::level GetRetinalLogLevel(
+    retinal_observability::LogClass log_class) noexcept {
+  switch (log_class) {
+    case retinal_observability::LogClass::kInfo:
+      return reshade::log::level::info;
+    case retinal_observability::LogClass::kWarning:
+      return reshade::log::level::warning;
+    case retinal_observability::LogClass::kError:
+      return reshade::log::level::error;
+  }
+  return reshade::log::level::warning;
+}
+
+void SetRetinalRunResult(retinal::RunResult result) {
+  const auto transition = retinal_run_result_state.Update(result);
+  if (!transition.changed) return;
+
+  reshade::log::message(
+      GetRetinalLogLevel(retinal_observability::GetLogClass(result)),
+      std::format(
+          "Detroit Retinal DOF: RunResult {} -> {}.",
+          retinal_observability::GetRunResultText(transition.previous),
+          retinal_observability::GetRunResultText(transition.current))
+          .c_str());
+}
+
+void SetRetinalCaptureDiagnostic(
+    retinal_observability::CaptureDiagnostic diagnostic) {
+  const auto transition = retinal_capture_diagnostic_state.Update(diagnostic);
+  if (!transition.changed) return;
+
+  reshade::log::message(
+      GetRetinalLogLevel(
+          retinal_observability::GetLogClass(diagnostic.result)),
+      std::format(
+          "Detroit Retinal DOF: CaptureResult {} / {} -> {} / {}.",
+          retinal_observability::GetCaptureResultText(
+              transition.previous.result),
+          retinal_observability::GetEmbeddedCaptureDetailText(
+              transition.previous.embedded_detail),
+          retinal_observability::GetCaptureResultText(
+              transition.current.result),
+          retinal_observability::GetEmbeddedCaptureDetailText(
+              transition.current.embedded_detail))
+          .c_str());
+}
+
 void LogDofStatus(const dof::FrameResult& result) {
   const auto log_key =
       (static_cast<std::uint64_t>(result.status) << 32u)
@@ -1140,9 +1200,8 @@ void UpdateDofRuntimeMode() {
       {
           .focus_distance_percent = dof_focus_distance,
           .blur_radius_percent = dof_blur_radius,
-          .near_strength_percent = dof_near_strength,
           .far_strength_percent = dof_far_strength,
-          .edge_bokeh_percent = dof_edge_bokeh,
+          .edge_bokeh_width_pixels = dof_edge_bokeh_width,
       });
   LogDofStatus(result);
 }
@@ -1158,7 +1217,7 @@ render_debug::Source GetRenderDebugSource(float value) {
   const auto source = static_cast<std::uint32_t>(std::clamp(
       std::lround(value),
       0l,
-      static_cast<long>(render_debug::Source::kRetinalRadius)));
+      static_cast<long>(render_debug::Source::kDofEdgeCoverage)));
   return static_cast<render_debug::Source>(source);
 }
 
@@ -1167,7 +1226,7 @@ render_debug::Config GetRenderDebugConfig() {
       .mode = static_cast<render_debug::OverlayMode>(std::clamp(
           std::lround(render_debug_mode), 0l, 2l)),
       .dashboard = static_cast<render_debug::DashboardPreset>(std::clamp(
-          std::lround(render_debug_dashboard), 0l, 5l)),
+          std::lround(render_debug_dashboard), 0l, 6l)),
       .single_source = GetRenderDebugSource(render_debug_single_source),
       .custom_slots = {
           GetRenderDebugSource(render_debug_custom_slot_1),
@@ -1228,29 +1287,51 @@ void OnDofFillDrawn(reshade::api::command_list*) {
 void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
   const auto effective_mode = dof_runtime_controller.GetMode();
   if (!dof::IsRetinalMode(effective_mode)) {
-    retinal_last_result.store(
-        retinal::RunResult::kNotRetinalMode, std::memory_order_release);
+    SetRetinalCaptureDiagnostic({});
+    SetRetinalRunResult(retinal::RunResult::kNotRetinalMode);
     return;
   }
   if (std::bit_cast<std::uint32_t>(shader_injection.scene_path_active) != 0u) {
     // Diagnostics must show the producer data itself, not a subsequently
     // blurred visualization of it.
-    retinal_last_result.store(
-        retinal::RunResult::kDebugOverlayActive, std::memory_order_release);
+    SetRetinalCaptureDiagnostic({});
+    SetRetinalRunResult(retinal::RunResult::kDebugOverlayActive);
+    return;
+  }
+  const float retinal_effect_strength =
+      std::isfinite(retinal_strength)
+          ? std::clamp(retinal_strength * 0.01f, 0.f, 1.f)
+          : 0.f;
+  const float retinal_sigma =
+      std::isfinite(retinal_maximum_sigma)
+          ? std::clamp(
+                retinal_maximum_sigma, 0.f, retinal::kMaximumSigmaPixels)
+          : 0.f;
+  if (retinal_effect_strength <= 0.f || retinal_sigma <= 0.f) {
+    // A disabled retinal filter must be genuinely free: do not capture the
+    // composite state, create resources, emit barriers or dispatch either
+    // separable pass.
+    SetRetinalCaptureDiagnostic({});
+    SetRetinalRunResult(retinal::RunResult::kBypassedZeroEffect);
     return;
   }
   if (command_list == nullptr
       || retinal_force_disabled.load(std::memory_order_acquire)
       || !embedded_dlss::CanInsertComputeWriteBarrier(
           command_list->get_native())) {
-    retinal_last_result.store(
-        retinal::RunResult::kBarrierUnavailable, std::memory_order_release);
+    SetRetinalCaptureDiagnostic({});
+    SetRetinalRunResult(retinal::RunResult::kBarrierUnavailable);
     return;
   }
 
   const auto capture = retinal_capture::CaptureCompositeOutput(command_list);
-  if (!capture.valid) {
-    if (capture.release_failed) {
+  SetRetinalCaptureDiagnostic({
+      .result = capture.result,
+      .embedded_detail = capture.embedded_detail,
+  });
+  if (!capture.IsValid()) {
+    if (capture.result
+        == retinal_capture::CaptureResult::kSnapshotReleaseFailed) {
       retinal_force_disabled.store(true, std::memory_order_release);
       if (!retinal_restore_failure_logged.exchange(
               true, std::memory_order_acq_rel)) {
@@ -1258,14 +1339,10 @@ void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
             reshade::log::level::error,
             "Detroit Retinal DOF: Vulkan snapshot release failed; the post-filter is disabled until device recreation.");
       }
-      retinal_last_result.store(
-          retinal::RunResult::kStateRestoreFailed,
-          std::memory_order_release);
+      SetRetinalRunResult(retinal::RunResult::kStateRestoreFailed);
       return;
     }
-    retinal_last_result.store(
-        retinal::RunResult::kMissingCompositeCapture,
-        std::memory_order_release);
+    SetRetinalRunResult(retinal::RunResult::kMissingCompositeCapture);
     return;
   }
 
@@ -1278,10 +1355,9 @@ void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
               std::clamp(retinal_fixation_x * 0.01f, 0.f, 1.f),
               std::clamp(retinal_fixation_y * 0.01f, 0.f, 1.f),
           },
-          .fixation_blend =
-              std::clamp(retinal_strength * 0.01f, 0.f, 1.f),
+          .fixation_blend = retinal_effect_strength,
           .horizontal_screen_angle_degrees = retinal_horizontal_fov,
-          .maximum_sigma_pixels = retinal_maximum_sigma,
+          .maximum_sigma_pixels = retinal_sigma,
       });
   bool barrier_restored = true;
   if (result == retinal::RunResult::kDispatched) {
@@ -1308,7 +1384,7 @@ void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
           "Detroit Retinal DOF: Vulkan barrier/state restore failed; the post-filter is disabled until device recreation.");
     }
   }
-  retinal_last_result.store(result, std::memory_order_release);
+  SetRetinalRunResult(result);
 }
 
 void OnDofCompositeDrawn(reshade::api::command_list* command_list) {
@@ -1680,7 +1756,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Depth of Field",
                 .section = "Depth of Field",
-                .tooltip = "Vanilla is the exact reference path. Clean fixes focus transitions. Cinematic restores Detroit's authored bokeh. Retinal keeps the Cinematic base and applies a full-resolution Watson acuity filter around a configurable fixation point.",
+                .tooltip = "Vanilla is the exact reference path. Every Enhanced style preserves Detroit's authored foreground bokeh at Vanilla strength. Clean fixes far-focus transitions, Cinematic restores authored deep background bokeh, and Retinal adds a full-resolution Watson acuity filter around a configurable fixation point.",
                 .labels = {"Vanilla", "Clean", "Cinematic", "Retinal"},
                 .on_change_value = [](float, float current) {
                   dof_mode = current;
@@ -1695,7 +1771,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "DOF Quality",
                 .section = "Depth of Field",
-                .tooltip = "High uses the complete authored 49-tap aperture resolve; Retinal High also uses a full 4-sigma Gaussian kernel. Balanced uses the reduced aperture resolve and paired hardware-linear Gaussian taps.",
+                .tooltip = "High uses the complete authored 49-tap aperture resolve; Balanced uses the reduced aperture resolve. Retinal uses paired hardware-linear Gaussian taps for its full-resolution acuity filter.",
                 .labels = {"Balanced", "High"},
                 .is_enabled = []() { return dof_mode >= 0.5f; },
                 .on_change_value = [](float, float current) {
@@ -1729,19 +1805,6 @@ renodx::utils::settings::Settings settings =
                 .is_enabled = []() { return dof_mode >= 0.5f; },
             }},
             {{
-                .key = "DepthOfFieldNearStrength",
-                .binding = &dof_near_strength,
-                .default_value = 100.f,
-                .can_reset = true,
-                .label = "Foreground Bokeh",
-                .section = "Depth of Field",
-                .tooltip = "Scales authored near-layer coverage in Cinematic. Clean and Vanilla do not use this layer.",
-                .min = 0.f,
-                .max = 200.f,
-                .format = "%.0f%%",
-                .is_enabled = []() { return dof_mode >= 1.5f; },
-            }},
-            {{
                 .key = "DepthOfFieldFarStrength",
                 .binding = &dof_far_strength,
                 .default_value = 100.f,
@@ -1755,16 +1818,18 @@ renodx::utils::settings::Settings settings =
                 .is_enabled = []() { return dof_mode >= 0.5f; },
             }},
             {{
-                .key = "DepthOfFieldEdgeBokeh",
-                .binding = &dof_edge_bokeh,
-                .default_value = 100.f,
+                .key = "DepthOfFieldEdgeBokehWidth",
+                .binding = &dof_edge_bokeh_width,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 8.f,
                 .can_reset = true,
-                .label = "Edge Bokeh",
+                .label = "Edge Bokeh Width",
                 .section = "Depth of Field",
-                .tooltip = "Controls Cinematic's full-resolution aperture expansion near depth discontinuities. Clean and Vanilla keep it disabled.",
+                .tooltip = "Sets the maximum full-resolution reach of farther background bokeh onto a nearer silhouette. Zero disables it; 8 px is the default. Depth and Far CoC validate the background source but do not shrink the requested width. Clean and Vanilla ignore it.",
                 .min = 0.f,
-                .max = 200.f,
-                .format = "%.0f%%",
+                .max = 16.f,
+                .format = "%.0f px",
                 .is_enabled = []() { return dof_mode >= 1.5f; },
             }},
             {{
@@ -1871,7 +1936,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Cinematic Balanced is active with authored deep and foreground bokeh.",
+                .label = "Cinematic Balanced is active with authored foreground bokeh at Vanilla strength and deep background bokeh.",
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
@@ -1881,7 +1946,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Cinematic High is active with authored deep and foreground bokeh.",
+                .label = "Cinematic High is active with authored foreground bokeh at Vanilla strength and deep background bokeh.",
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
@@ -1897,8 +1962,8 @@ renodx::utils::settings::Settings settings =
                   const auto status = dof_runtime_controller.GetStatus();
                   return (status == dof::RuntimeStatus::kActiveRetinalBalanced
                           || status == dof::RuntimeStatus::kActiveRetinalHigh)
-                      && retinal_last_result.load(std::memory_order_acquire)
-                          == retinal::RunResult::kDispatched;
+                      && GetRetinalRunResult()
+                             == retinal::RunResult::kDispatched;
                 },
             }},
             {{
@@ -1907,8 +1972,18 @@ renodx::utils::settings::Settings settings =
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 2.5f
-                      && retinal_last_result.load(std::memory_order_acquire)
-                          == retinal::RunResult::kDebugOverlayActive;
+                      && GetRetinalRunResult()
+                             == retinal::RunResult::kDebugOverlayActive;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Retinal post-filter is bypassed at zero strength or sigma; Cinematic depth remains active.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  return dof_mode >= 2.5f
+                      && GetRetinalRunResult()
+                             == retinal::RunResult::kBypassedZeroEffect;
                 },
             }},
             {{
@@ -1917,13 +1992,42 @@ renodx::utils::settings::Settings settings =
                 .section = "Depth of Field",
                 .is_visible = []() {
                   const auto status = dof_runtime_controller.GetStatus();
-                  const auto result = retinal_last_result.load(
-                      std::memory_order_acquire);
+                  const auto result = GetRetinalRunResult();
                   return (status == dof::RuntimeStatus::kActiveRetinalBalanced
                           || status == dof::RuntimeStatus::kActiveRetinalHigh)
                       && result != retinal::RunResult::kDispatched
-                      && result != retinal::RunResult::kDebugOverlayActive;
+                      && result != retinal::RunResult::kDebugOverlayActive
+                      && result != retinal::RunResult::kBypassedZeroEffect;
                 },
+            }},
+            {{
+                .value_type =
+                    renodx::utils::settings::SettingValueType::CUSTOM,
+                .label = "Retinal Runtime Result",
+                .section = "Depth of Field",
+                .on_draw = []() {
+                  const auto run_text = retinal_observability::GetRunResultText(
+                      GetRetinalRunResult());
+                  const auto capture = GetRetinalCaptureDiagnostic();
+                  const auto capture_text =
+                      retinal_observability::GetCaptureResultText(
+                          capture.result);
+                  const auto embedded_text =
+                      retinal_observability::GetEmbeddedCaptureDetailText(
+                          capture.embedded_detail);
+                  ImGui::TextWrapped(
+                      "Retinal RunResult: %.*s",
+                      static_cast<int>(run_text.size()),
+                      run_text.data());
+                  ImGui::TextWrapped(
+                      "Retinal CaptureResult: %.*s / %.*s",
+                      static_cast<int>(capture_text.size()),
+                      capture_text.data(),
+                      static_cast<int>(embedded_text.size()),
+                      embedded_text.data());
+                  return false;
+                },
+                .is_visible = []() { return dof_mode >= 2.5f; },
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
@@ -1960,7 +2064,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Dashboard",
                 .section = "Render Debug",
-                .tooltip = "DOF shows coarse CoC, full-resolution depth-derived CoC, and the gather/fill near/far layers that actually reach composite.",
+                .tooltip = "Depth of Field shows the established CoC/layer diagnostic. DOF Edge Bokeh shows full-resolution CoC, the decoded width in pixels, and the final post-resolve silhouette coverage.",
                 .labels = {
                     "Depth of Field",
                     "Temporal AA",
@@ -1968,6 +2072,7 @@ renodx::utils::settings::Settings settings =
                     "Lighting (Unavailable)",
                     "Retinal (Unavailable)",
                     "Custom",
+                    "DOF Edge Bokeh",
                 },
                 .is_visible = []() { return render_debug_mode >= 1.5f; },
             }},
@@ -2000,7 +2105,8 @@ renodx::utils::settings::Settings settings =
                 .labels = render_debug_source_labels,
                 .is_visible = []() {
                   return render_debug_mode >= 1.5f
-                      && render_debug_dashboard >= 4.5f;
+                      && render_debug_dashboard >= 4.5f
+                      && render_debug_dashboard < 5.5f;
                 },
             }},
             {{
@@ -2016,7 +2122,8 @@ renodx::utils::settings::Settings settings =
                 .labels = render_debug_source_labels,
                 .is_visible = []() {
                   return render_debug_mode >= 1.5f
-                      && render_debug_dashboard >= 4.5f;
+                      && render_debug_dashboard >= 4.5f
+                      && render_debug_dashboard < 5.5f;
                 },
             }},
             {{
@@ -2032,7 +2139,8 @@ renodx::utils::settings::Settings settings =
                 .labels = render_debug_source_labels,
                 .is_visible = []() {
                   return render_debug_mode >= 1.5f
-                      && render_debug_dashboard >= 4.5f;
+                      && render_debug_dashboard >= 4.5f
+                      && render_debug_dashboard < 5.5f;
                 },
             }},
             {{
@@ -2304,9 +2412,8 @@ void OnPresetOff() {
       {"DepthOfFieldQuality", 1.f},
       {"DepthOfFieldFocusDistance", 100.f},
       {"DepthOfFieldBlurRadius", 100.f},
-      {"DepthOfFieldNearStrength", 100.f},
       {"DepthOfFieldFarStrength", 100.f},
-      {"DepthOfFieldEdgeBokeh", 100.f},
+      {"DepthOfFieldEdgeBokehWidth", 8.f},
       {"RetinalFixationX", 50.f},
       {"RetinalFixationY", 50.f},
       {"RetinalStrength", 100.f},
@@ -2524,8 +2631,8 @@ void OnDestroyDevice(reshade::api::device* device) {
       false, std::memory_order_release);
   shader_injection.scene_path_active = 0.f;
   retinal_runtime.Destroy(device);
-  retinal_last_result.store(
-      retinal::RunResult::kNotRetinalMode, std::memory_order_release);
+  SetRetinalCaptureDiagnostic({});
+  SetRetinalRunResult(retinal::RunResult::kNotRetinalMode);
   retinal_force_disabled.store(false, std::memory_order_release);
   retinal_restore_failure_logged.store(false, std::memory_order_release);
   if (!dof_device_reset_logged.exchange(true, std::memory_order_acq_rel)) {
@@ -2596,6 +2703,17 @@ extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION =
     "RenoDX for Detroit: Become Human (Vulkan, experimental)";
 
 bool AttachAddon(HMODULE h_module) {
+  // The embedded Vulkan hooks must remain resident until process teardown.
+  // Pin before registering callbacks or installing hooks so DllMain never has
+  // to perform a complex explicit-unload teardown under the loader lock.
+  HMODULE pinned_module = nullptr;
+  if (!GetModuleHandleExW(
+          GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+              | GET_MODULE_HANDLE_EX_FLAG_PIN,
+          reinterpret_cast<LPCWSTR>(&AttachAddon),
+          &pinned_module)) {
+    return false;
+  }
   if (addon_attached.exchange(true, std::memory_order_acq_rel)) return true;
   addon_module = h_module;
   DisableThreadLibraryCalls(h_module);
@@ -2609,11 +2727,6 @@ bool AttachAddon(HMODULE h_module) {
   (void)embedded_dlss::AttachEarlyHooks(h_module, initial_extension_cache);
   renodx::games::detroitbecomehuman::dlss_bridge_client::client.SetApiProvider(
       &embedded_dlss::GetApi);
-  HMODULE pinned_module = nullptr;
-  (void)GetModuleHandleExW(
-      GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
-      reinterpret_cast<LPCWSTR>(&AttachAddon),
-      &pinned_module);
   renodx::mods::shader::allow_multiple_push_constants = true;
   renodx::mods::shader::force_pipeline_cloning = true;
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
@@ -2643,27 +2756,12 @@ bool AttachAddon(HMODULE h_module) {
 }
 
 void DetachAddon(HMODULE h_module, bool process_terminating) {
-  if (!process_terminating || !addon_attached.exchange(false, std::memory_order_acq_rel)) return;
-  reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
-  reshade::unregister_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
-  reshade::unregister_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
-  reshade::unregister_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
-  reshade::unregister_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
-  reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
-  reshade::unregister_event<reshade::addon_event::present>(OnPresent);
-  ForceUltrawideRuntimeVanilla();
-  dof_runtime_controller.Reset();
-  shader_injection.dof_runtime_mode =
-      static_cast<float>(dof::RuntimeMode::kVanilla);
-  render_debug_runtime_controller.ResetDevice();
-  render_debug_temporal_replacement_active.store(
-      false, std::memory_order_release);
-  shader_injection.scene_path_active = 0.f;
-  renodx::utils::settings::Use(DLL_PROCESS_DETACH, &settings, &OnPresetOff);
-  temporal_capture::Use(DLL_PROCESS_DETACH);
-  renodx::mods::shader::Use(DLL_PROCESS_DETACH, custom_shaders, &shader_injection);
-  embedded_dlss::DetachEarlyHooks(true);
-  reshade::unregister_addon(h_module);
+  (void)h_module;
+  (void)process_terminating;
+  // AttachAddon guarantees that the module is pinned before any registration.
+  // DllMain therefore only records terminal state. Vulkan/ReShade/settings and
+  // Detours teardown must never run while the Windows loader lock is held.
+  addon_attached.store(false, std::memory_order_release);
 }
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, LPVOID reserved) {

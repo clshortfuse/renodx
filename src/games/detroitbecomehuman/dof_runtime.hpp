@@ -104,9 +104,8 @@ struct FrameResult {
 struct RuntimeControls {
   float focus_distance_percent = 100.f;
   float blur_radius_percent = 100.f;
-  float near_strength_percent = 100.f;
   float far_strength_percent = 100.f;
-  float edge_bokeh_percent = 100.f;
+  float edge_bokeh_width_pixels = 8.f;
 };
 
 inline constexpr std::uint32_t kModeMask = 0x7u;
@@ -116,15 +115,21 @@ inline constexpr std::uint32_t kFocusNeutral = 64u;
 inline constexpr std::uint32_t kRadiusShift = 10u;
 inline constexpr std::uint32_t kRadiusMask = 0x3Fu;
 inline constexpr std::uint32_t kRadiusNeutral = 32u;
-inline constexpr std::uint32_t kNearShift = 16u;
-inline constexpr std::uint32_t kNearMask = 0x1Fu;
-inline constexpr std::uint32_t kNearNeutral = 16u;
+// Foreground bokeh always uses Detroit's authored Vanilla strength and needs
+// no runtime control. Its former five bits carry an exact full-resolution
+// Edge Bokeh width. The shader's Far CoC is capped at 16 px; exposing a larger
+// value would add probes without reach.
+inline constexpr std::uint32_t kEdgeWidthShift = 16u;
+inline constexpr std::uint32_t kEdgeWidthMask = 0x1Fu;
+inline constexpr std::uint32_t kEdgeWidthDefault = 8u;
+inline constexpr std::uint32_t kEdgeWidthMaximum = 16u;
 inline constexpr std::uint32_t kFarShift = 21u;
 inline constexpr std::uint32_t kFarMask = 0x1Fu;
 inline constexpr std::uint32_t kFarNeutral = 16u;
-inline constexpr std::uint32_t kEdgeShift = 26u;
-inline constexpr std::uint32_t kEdgeMask = 0xFu;
-inline constexpr std::uint32_t kEdgeNeutral = 8u;
+// Former percentage Edge Bokeh bits stay zero and reserved. Bits 30..31 also
+// remain zero, so every packed payload is a finite positive float.
+inline constexpr std::uint32_t kReservedEdgeShift = 26u;
+inline constexpr std::uint32_t kReservedEdgeMask = 0xFu;
 
 [[nodiscard]] inline std::uint32_t QuantizePercentScale(
     float percent,
@@ -139,6 +144,15 @@ inline constexpr std::uint32_t kEdgeNeutral = 8u;
   return neutral + static_cast<std::uint32_t>(std::lround((scale - 1.f) * static_cast<float>(mask - neutral)));
 }
 
+[[nodiscard]] inline std::uint32_t QuantizeEdgeWidthPixels(
+    float pixels) noexcept {
+  if (!std::isfinite(pixels)) {
+    return kEdgeWidthDefault;
+  }
+  return static_cast<std::uint32_t>(std::lround(std::clamp(
+      pixels, 0.f, static_cast<float>(kEdgeWidthMaximum))));
+}
+
 [[nodiscard]] inline std::uint32_t PackRuntimeBits(
     RuntimeMode mode,
     const RuntimeControls& controls) noexcept {
@@ -149,15 +163,11 @@ inline constexpr std::uint32_t kEdgeNeutral = 8u;
          | (QuantizePercentScale(
                 controls.blur_radius_percent, kRadiusNeutral, kRadiusMask)
             << kRadiusShift)
-         | (QuantizePercentScale(
-                controls.near_strength_percent, kNearNeutral, kNearMask)
-            << kNearShift)
+         | (QuantizeEdgeWidthPixels(controls.edge_bokeh_width_pixels)
+            << kEdgeWidthShift)
          | (QuantizePercentScale(
                 controls.far_strength_percent, kFarNeutral, kFarMask)
-            << kFarShift)
-         | (QuantizePercentScale(
-                controls.edge_bokeh_percent, kEdgeNeutral, kEdgeMask)
-            << kEdgeShift);
+            << kFarShift);
 }
 
 [[nodiscard]] inline float PackRuntimePayload(
@@ -183,6 +193,11 @@ inline constexpr std::uint32_t kEdgeNeutral = 8u;
     return static_cast<float>(code) / static_cast<float>(neutral);
   }
   return 1.f + static_cast<float>(code - neutral) / static_cast<float>(mask - neutral);
+}
+
+[[nodiscard]] inline std::uint32_t UnpackEdgeWidthPixels(
+    std::uint32_t bits) noexcept {
+  return (bits >> kEdgeWidthShift) & kEdgeWidthMask;
 }
 
 class RuntimeController {

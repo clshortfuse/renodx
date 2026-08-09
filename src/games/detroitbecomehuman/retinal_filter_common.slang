@@ -8,16 +8,21 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
+// Vulkan permits at most one push-descriptor set in a pipeline layout. Keep
+// every Retinal descriptor in that one set and use distinct bindings.
 layout(set = 0, binding = 0) uniform SamplerState LinearClampSampler;
-layout(set = 1, binding = 0) uniform texture2D SourceTexture;
-layout(set = 2, binding = 0, rgba16f) uniform writeonly image2D OutputTexture;
+layout(set = 0, binding = 1) uniform texture2D SourceTexture;
+layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D OutputTexture;
 
 layout(push_constant) uniform RetinalFilterConstantsBlock
 {
     vec2 fixationUv;
     vec2 inverseOutputSize;
     vec2 outputSize;
-    float horizontalScreenAngleDegrees;
+    float tanHalfHorizontal;
+    float tanHalfVertical;
+    float horizontalPixelsPerDegree;
+    float verticalPixelsPerDegree;
     float fixationBlend;
     float maximumSigmaPixels;
     float highQuality;
@@ -25,12 +30,12 @@ layout(push_constant) uniform RetinalFilterConstantsBlock
 
 const float kPi = 3.14159265358979323846;
 const float kRadiansToDegrees = 57.2957795130823208768;
-const float kDegreesToRadians = 0.01745329251994329577;
 const float kSqrtTwo = 1.4142135623730950488;
 const float kSqrtThree = 1.7320508075688772935;
 const float kGaussianHalfMtfScale = 0.18739062512927757;
 const float kPeakConeDensity = 14804.6;
 const float kMidgetFractionScaleDegrees = 41.03;
+const float kMaximumSigmaPixels = 8.0;
 const int kMaximumKernelRadius = 32;
 
 float FiniteOr(float value, float fallbackValue)
@@ -176,27 +181,22 @@ float ComputeAdditionalSigma(
     return clamp(FiniteOr(sigma, 0.0), 0.0, sigmaLimit);
 }
 
-float ComputeAxisSigma(vec2 uv)
+vec2 ComputeAxisSigmas(vec2 uv)
 {
-    vec2 size = max(
-        vec2(
-            FiniteOr(RetinalConstants.outputSize.x, 1.0),
-            FiniteOr(RetinalConstants.outputSize.y, 1.0)),
-        vec2(1.0));
-    float aspect = size.x / size.y;
-    float horizontalAngle = clamp(
-        FiniteOr(RetinalConstants.horizontalScreenAngleDegrees, 70.0),
-        30.0,
-        120.0);
-    float tanHalfHorizontal = tan(horizontalAngle * kDegreesToRadians * 0.5);
+    float tanHalfHorizontal = max(
+        FiniteOr(RetinalConstants.tanHalfHorizontal, 0.7002075),
+        1.0e-6);
+    float tanHalfVertical = max(
+        FiniteOr(RetinalConstants.tanHalfVertical, tanHalfHorizontal),
+        1.0e-6);
     vec2 fixationUv = SanitizeUv(RetinalConstants.fixationUv);
     vec3 samplePlane = vec3(
         (uv.x * 2.0 - 1.0) * tanHalfHorizontal,
-        (1.0 - uv.y * 2.0) * tanHalfHorizontal / aspect,
+        (1.0 - uv.y * 2.0) * tanHalfVertical,
         1.0);
     vec3 fixationPlane = vec3(
         (fixationUv.x * 2.0 - 1.0) * tanHalfHorizontal,
-        (1.0 - fixationUv.y * 2.0) * tanHalfHorizontal / aspect,
+        (1.0 - fixationUv.y * 2.0) * tanHalfVertical,
         1.0);
     vec3 sampleRay = normalize(samplePlane);
     vec3 fixationRay = normalize(fixationPlane);
@@ -211,26 +211,15 @@ float ComputeAxisSigma(vec2 uv)
         ? eccentricity * planeDelta / planeDistance
         : vec2(0.0);
     float retinalNyquist = ComputeRetinalNyquist(eccentricityPosition);
-
-#if RETINAL_FILTER_HORIZONTAL
-    float pixelsPerDegree = size.x / horizontalAngle;
-#else
-    float verticalAngle = 2.0 * atan(tanHalfHorizontal / aspect)
-        * kRadiansToDegrees;
-    float pixelsPerDegree = size.y / max(verticalAngle, 1.0e-6);
-#endif
-    return ComputeAdditionalSigma(retinalNyquist, pixelsPerDegree);
-}
-
-float GaussianWeight(float offsetPixels, float sigmaPixels)
-{
-    if (sigmaPixels <= 1.0e-6)
-    {
-        return abs(offsetPixels) <= 1.0e-6 ? 1.0 : 0.0;
-    }
-    return exp(
-        -(offsetPixels * offsetPixels)
-        / (2.0 * sigmaPixels * sigmaPixels));
+    float horizontalPixelsPerDegree = max(
+        FiniteOr(RetinalConstants.horizontalPixelsPerDegree, 0.0),
+        0.0);
+    float verticalPixelsPerDegree = max(
+        FiniteOr(RetinalConstants.verticalPixelsPerDegree, 0.0),
+        0.0);
+    return vec2(
+        ComputeAdditionalSigma(retinalNyquist, horizontalPixelsPerDegree),
+        ComputeAdditionalSigma(retinalNyquist, verticalPixelsPerDegree));
 }
 
 ivec2 ClampSourcePixel(ivec2 pixel)
@@ -260,66 +249,82 @@ vec4 SampleSource(ivec2 centerPixel, float signedOffset)
     return SourceTexture.SampleLevel(LinearClampSampler, uv, 0.0);
 }
 
-vec4 FilterHigh(ivec2 pixel, float sigmaPixels)
+vec3 FilterLinearGaussian(
+    ivec2 pixel,
+    vec3 centerColor,
+    float sigmaPixels,
+    float radiusScale)
 {
-    int radius = min(int(ceil(sigmaPixels * 4.0)), kMaximumKernelRadius);
-    vec4 sum = vec4(0.0);
-    float weightSum = 0.0;
-    for (int offset = -kMaximumKernelRadius;
-         offset <= kMaximumKernelRadius;
-         ++offset)
-    {
-        if (abs(offset) > radius)
-        {
-            continue;
-        }
-        float weight = GaussianWeight(float(offset), sigmaPixels);
-#if RETINAL_FILTER_HORIZONTAL
-        ivec2 samplePixel = pixel + ivec2(offset, 0);
-#else
-        ivec2 samplePixel = pixel + ivec2(0, offset);
-#endif
-        sum += LoadSource(samplePixel) * weight;
-        weightSum += weight;
-    }
-    return weightSum > 0.0 ? sum / weightSum : LoadSource(pixel);
-}
+    int radius = min(
+        int(ceil(sigmaPixels * radiusScale)),
+        kMaximumKernelRadius);
+    vec3 sum = centerColor;
+    float weightSum = 1.0;
 
-vec4 FilterBalanced(ivec2 pixel, float sigmaPixels)
-{
-    int radius = min(int(ceil(sigmaPixels * 3.0)), kMaximumKernelRadius);
-    float centerWeight = GaussianWeight(0.0, sigmaPixels);
-    vec4 sum = LoadSource(pixel) * centerWeight;
-    float weightSum = centerWeight;
+    // For g(n) = exp(-n^2 / (2*sigma^2)), the multiplier from g(n) to
+    // g(n+1) itself changes by the constant exp(-1/sigma^2). This recurrence
+    // evaluates exactly the same discrete Gaussian weights with two exp()
+    // operations per pixel instead of one per tap.
+    float inverseVariance = 1.0 / (sigmaPixels * sigmaPixels);
+    float weightStep = exp(-0.5 * inverseVariance);
+    float weightStepRatio = exp(-inverseVariance);
+    float previousWeight = 1.0;
 
-    // Adjacent fixed Gaussian taps are combined into one hardware-linear
-    // sample. The weighted sub-texel offset preserves the original 1D kernel.
+    // RasterGrid pairing: two adjacent fixed Gaussian taps are represented by
+    // one hardware-linear sample at their weighted sub-texel position. Both
+    // signs remain independent, so the symmetric separable kernel, cutoff,
+    // normalization, RGB and edge-clamp behavior are unchanged.
     for (int firstOffset = 1;
          firstOffset <= kMaximumKernelRadius;
          firstOffset += 2)
     {
         if (firstOffset > radius)
         {
-            continue;
+            break;
         }
+
+        float firstWeight = previousWeight * weightStep;
+        weightStep *= weightStepRatio;
+
         int secondOffset = firstOffset + 1;
-        float firstWeight = GaussianWeight(float(firstOffset), sigmaPixels);
-        float secondWeight = secondOffset <= radius
-            ? GaussianWeight(float(secondOffset), sigmaPixels)
-            : 0.0;
+        float secondWeight = 0.0;
+        if (secondOffset <= radius)
+        {
+            secondWeight = firstWeight * weightStep;
+            weightStep *= weightStepRatio;
+            previousWeight = secondWeight;
+        }
+        else
+        {
+            previousWeight = firstWeight;
+        }
+
         float pairWeight = firstWeight + secondWeight;
         if (pairWeight <= 0.0)
         {
-            continue;
+            // Very small sigma can flush every non-center weight to zero.
+            // All later Gaussian weights are smaller, so the center-only
+            // result is already complete and avoids a 0/0 paired offset.
+            break;
         }
         float pairedOffset = (
             float(firstOffset) * firstWeight
             + float(secondOffset) * secondWeight) / pairWeight;
-        sum += (SampleSource(pixel, pairedOffset)
-            + SampleSource(pixel, -pairedOffset)) * pairWeight;
+        sum += (SampleSource(pixel, pairedOffset).xyz
+            + SampleSource(pixel, -pairedOffset).xyz) * pairWeight;
         weightSum += 2.0 * pairWeight;
     }
-    return weightSum > 0.0 ? sum / weightSum : LoadSource(pixel);
+    return sum / weightSum;
+}
+
+vec3 FilterBalanced(ivec2 pixel, vec3 centerColor, float sigmaPixels)
+{
+    return FilterLinearGaussian(pixel, centerColor, sigmaPixels, 3.0);
+}
+
+vec3 FilterHigh(ivec2 pixel, vec3 centerColor, float sigmaPixels)
+{
+    return FilterLinearGaussian(pixel, centerColor, sigmaPixels, 4.0);
 }
 
 void main()
@@ -332,21 +337,41 @@ void main()
         return;
     }
 
+    vec4 centerSource = LoadSource(pixel);
+#if RETINAL_FILTER_HORIZONTAL
     vec2 uv = (vec2(pixel) + vec2(0.5))
         * RetinalConstants.inverseOutputSize;
-    float sigmaPixels = ComputeAxisSigma(uv);
-    vec4 result;
+    vec2 axisSigmas = ComputeAxisSigmas(uv);
+    float sigmaPixels = axisSigmas.x;
+#else
+    // Detroit's exact composite writes alpha=1. The private RGBA16F scratch
+    // may therefore carry the per-pixel vertical sigma produced horizontally;
+    // the final pass restores the native alpha contract below.
+    float sigmaLimit = clamp(
+        FiniteOr(RetinalConstants.maximumSigmaPixels, kMaximumSigmaPixels),
+        0.0,
+        kMaximumSigmaPixels);
+    float sigmaPixels = clamp(
+        FiniteOr(centerSource.w, 0.0),
+        0.0,
+        sigmaLimit);
+#endif
+    vec3 result;
     if (sigmaPixels <= 1.0e-4)
     {
-        result = LoadSource(pixel);
+        result = centerSource.xyz;
     }
     else if (RetinalConstants.highQuality >= 0.5)
     {
-        result = FilterHigh(pixel, sigmaPixels);
+        result = FilterHigh(pixel, centerSource.xyz, sigmaPixels);
     }
     else
     {
-        result = FilterBalanced(pixel, sigmaPixels);
+        result = FilterBalanced(pixel, centerSource.xyz, sigmaPixels);
     }
-    imageStore(OutputTexture, pixel, result);
+#if RETINAL_FILTER_HORIZONTAL
+    imageStore(OutputTexture, pixel, vec4(result, axisSigmas.y));
+#else
+    imageStore(OutputTexture, pixel, vec4(result, 1.0));
+#endif
 }

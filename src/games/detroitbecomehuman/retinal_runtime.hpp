@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <mutex>
 #include <type_traits>
@@ -55,6 +56,7 @@ enum class RunResult : std::uint32_t {
   kResourceCreationFailed,
   kPipelineCreationFailed,
   kDebugOverlayActive,
+  kBypassedZeroEffect,
   kBarrierUnavailable,
   kStateRestoreFailed,
 };
@@ -114,17 +116,29 @@ class Runtime {
         FiniteOr(input.maximum_sigma_pixels, kMaximumSigmaPixels),
         0.f,
         kMaximumSigmaPixels);
+    const float output_width = static_cast<float>(validated.width);
+    const float output_height = static_cast<float>(validated.height);
+    const float tan_half_horizontal = std::tan(
+        screen_angle * kDegreesToRadians * 0.5f);
+    const float aspect = output_width / output_height;
+    const float tan_half_vertical = tan_half_horizontal / aspect;
+    const float vertical_angle = 2.f * std::atan(tan_half_vertical)
+                                 * kRadiansToDegrees;
     const FilterConstants constants = {
         .fixation_uv = fixation_uv,
         .inverse_output_size = {
-            1.f / static_cast<float>(validated.width),
-            1.f / static_cast<float>(validated.height),
+            1.f / output_width,
+            1.f / output_height,
         },
         .output_size = {
-            static_cast<float>(validated.width),
-            static_cast<float>(validated.height),
+            output_width,
+            output_height,
         },
-        .horizontal_screen_angle_degrees = screen_angle,
+        .tan_half_horizontal = tan_half_horizontal,
+        .tan_half_vertical = tan_half_vertical,
+        .horizontal_pixels_per_degree = output_width / screen_angle,
+        .vertical_pixels_per_degree = output_height
+                                      / std::max(vertical_angle, 1.0e-6f),
         .fixation_blend = SanitizeFixationBlend(input.fixation_blend),
         .maximum_sigma_pixels = maximum_sigma,
         .high_quality = dof::IsHighQualityMode(input.effective_mode) ? 1.f : 0.f,
@@ -206,12 +220,15 @@ class Runtime {
     Float2 fixation_uv;
     Float2 inverse_output_size;
     Float2 output_size;
-    float horizontal_screen_angle_degrees;
+    float tan_half_horizontal;
+    float tan_half_vertical;
+    float horizontal_pixels_per_degree;
+    float vertical_pixels_per_degree;
     float fixation_blend;
     float maximum_sigma_pixels;
     float high_quality;
   };
-  static_assert(sizeof(FilterConstants) == 10u * sizeof(float));
+  static_assert(sizeof(FilterConstants) == 13u * sizeof(float));
 
   struct ValidatedOutput {
     reshade::api::resource resource = {0};
@@ -315,35 +332,52 @@ class Runtime {
     owner_device_ = device;
     DestroyPipelines(device);
 
-    std::array<reshade::api::pipeline_layout_param, 4u> params = {};
+    // VK_KHR_push_descriptor permits only one push-descriptor set per pipeline
+    // layout. A separate layout parameter for sampler/SRV/UAV creates three
+    // push sets and makes vkCreatePipelineLayout fail. Describe all three
+    // bindings as ranges in a single set instead.
+    const std::array<reshade::api::descriptor_range, 3u> ranges = {{
+        {
+            .binding = 0u,
+            .dx_register_index = 0u,
+            .dx_register_space = 0u,
+            .count = 1u,
+            .visibility = reshade::api::shader_stage::compute,
+            .array_size = 1u,
+            .type = reshade::api::descriptor_type::sampler,
+        },
+        {
+            .binding = 1u,
+            .dx_register_index = 1u,
+            .dx_register_space = 0u,
+            .count = 1u,
+            .visibility = reshade::api::shader_stage::compute,
+            .array_size = 1u,
+            .type =
+                reshade::api::descriptor_type::texture_shader_resource_view,
+        },
+        {
+            .binding = 2u,
+            .dx_register_index = 2u,
+            .dx_register_space = 0u,
+            .count = 1u,
+            .visibility = reshade::api::shader_stage::compute,
+            .array_size = 1u,
+            .type = reshade::api::descriptor_type::texture_unordered_access_view,
+        },
+    }};
+    std::array<reshade::api::pipeline_layout_param, 2u> params = {};
     params[0].type =
-        reshade::api::pipeline_layout_param_type::push_descriptors;
-    params[0].push_descriptors.count = 1u;
-    params[0].push_descriptors.type = reshade::api::descriptor_type::sampler;
-    params[0].push_descriptors.dx_register_index = 0u;
-    params[0].push_descriptors.dx_register_space = 0u;
+        reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges;
+    params[0].descriptor_table.count =
+        static_cast<std::uint32_t>(ranges.size());
+    params[0].descriptor_table.ranges = ranges.data();
 
-    params[1].type =
-        reshade::api::pipeline_layout_param_type::push_descriptors;
-    params[1].push_descriptors.count = 1u;
-    params[1].push_descriptors.type =
-        reshade::api::descriptor_type::texture_shader_resource_view;
-    params[1].push_descriptors.dx_register_index = 0u;
-    params[1].push_descriptors.dx_register_space = 0u;
-
-    params[2].type =
-        reshade::api::pipeline_layout_param_type::push_descriptors;
-    params[2].push_descriptors.count = 1u;
-    params[2].push_descriptors.type =
-        reshade::api::descriptor_type::texture_unordered_access_view;
-    params[2].push_descriptors.dx_register_index = 0u;
-    params[2].push_descriptors.dx_register_space = 0u;
-
-    params[3].type = reshade::api::pipeline_layout_param_type::push_constants;
-    params[3].push_constants.count = sizeof(FilterConstants) / sizeof(float);
-    params[3].push_constants.dx_register_index = 0u;
-    params[3].push_constants.dx_register_space = 0u;
-    params[3].push_constants.visibility = reshade::api::shader_stage::compute;
+    params[1].type = reshade::api::pipeline_layout_param_type::push_constants;
+    params[1].push_constants.count = sizeof(FilterConstants) / sizeof(float);
+    params[1].push_constants.dx_register_index = 0u;
+    params[1].push_constants.dx_register_space = 0u;
+    params[1].push_constants.visibility = reshade::api::shader_stage::compute;
 
     if (!device->create_pipeline_layout(
             static_cast<std::uint32_t>(params.size()),
@@ -502,7 +536,7 @@ class Runtime {
     };
     const reshade::api::descriptor_table_update source_update = {
         .table = {},
-        .binding = 0u,
+        .binding = 1u,
         .array_offset = 0u,
         .count = 1u,
         .type = reshade::api::descriptor_type::texture_shader_resource_view,
@@ -510,7 +544,7 @@ class Runtime {
     };
     const reshade::api::descriptor_table_update destination_update = {
         .table = {},
-        .binding = 0u,
+        .binding = 2u,
         .array_offset = 0u,
         .count = 1u,
         .type = reshade::api::descriptor_type::texture_unordered_access_view,
@@ -524,17 +558,17 @@ class Runtime {
     command_list->push_descriptors(
         reshade::api::shader_stage::all_compute,
         pipeline_layout_,
-        1u,
+        0u,
         source_update);
     command_list->push_descriptors(
         reshade::api::shader_stage::all_compute,
         pipeline_layout_,
-        2u,
+        0u,
         destination_update);
     command_list->push_constants(
         reshade::api::shader_stage::all_compute,
         pipeline_layout_,
-        3u,
+        1u,
         0u,
         sizeof(FilterConstants) / sizeof(float),
         &constants);

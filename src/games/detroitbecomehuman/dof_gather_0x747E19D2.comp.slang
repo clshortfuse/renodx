@@ -93,7 +93,6 @@ void main()
     memoryBarrierShared();
 
     bool enhanced = CUSTOM_DOF_RUNTIME_MODE >= 0.5;
-    float localNearCoc = texelFetch(dofCocMapNear, pixel, 0).x;
     float localFarCoc = texelFetch(dofCocMapFar, pixel, 0).x;
     if (!enhanced && !sPrepassFlags.x && !sPrepassFlags.y)
     {
@@ -108,12 +107,8 @@ void main()
         nativeRadiusCoc.x = sNativeNearMaxCoc;
     }
 
-    float nearRadiusCoc = enhanced
-        ? localNearCoc
-        : nativeRadiusCoc.x;
-    bool hasNear = enhanced
-        ? localNearCoc > 0.0
-        : sPrepassFlags.x;
+    float nearRadiusCoc = nativeRadiusCoc.x;
+    bool hasNear = sPrepassFlags.x;
     bool hasFar = enhanced
         ? localFarCoc > 0.0
         : sPrepassFlags.y;
@@ -138,7 +133,7 @@ void main()
                             1.0 / _123._DOF._vfFull_DOFSize.w));
                 vec3 sampleColor = textureLod(
                     dofColorMapNear, sampleUv, 0.0).xyz;
-                float sampleCoc = enhanced || sPrepassFlags.z
+                float sampleCoc = sPrepassFlags.z
                     ? textureLod(dofCocMapNear, sampleUv, 0.0).x
                     : nativeRadiusCoc.x;
                 colors[column] = vec4(sampleColor, sampleCoc);

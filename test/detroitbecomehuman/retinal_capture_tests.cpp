@@ -79,38 +79,113 @@ bool TestExactContract() {
   auto snapshot = MakeExactSnapshot();
   bool passed = true;
   passed &= Expect(
-      capture::IsExactCompositeOutput(snapshot),
+      capture::ValidateCompositeOutput(snapshot)
+              == capture::CaptureResult::kSuccess
+          && capture::IsExactCompositeOutput(snapshot),
       "the verified full-resolution b16 contract must pass");
 
   snapshot.dynamic_offset_count = 0u;
   passed &= Expect(
-      !capture::IsExactCompositeOutput(snapshot),
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kPipelineContractMismatch,
       "missing b52 dynamic offset metadata must fail closed");
   snapshot = MakeExactSnapshot();
   snapshot.push_constant_size = 40u;
   passed &= Expect(
-      !capture::IsExactCompositeOutput(snapshot),
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kPushConstantContractMismatch,
       "the native 112-byte push payload must be restorable");
   snapshot = MakeExactSnapshot();
   snapshot.image.resource.format = 109u;
   passed &= Expect(
-      !capture::IsExactCompositeOutput(snapshot),
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kOutputFormatMismatch,
       "a non-RGBA16F view must fail closed");
   snapshot = MakeExactSnapshot();
   snapshot.image.image_usage &= ~capture::kVkImageUsageSampled;
   passed &= Expect(
-      !capture::IsExactCompositeOutput(snapshot),
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kOutputUsageMismatch,
       "an output that cannot be sampled must fail closed");
   snapshot = MakeExactSnapshot();
   snapshot.image.binding = 15u;
   passed &= Expect(
-      !capture::IsExactCompositeOutput(snapshot),
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kOutputDescriptorContractMismatch,
       "only the verified composite b16 may be filtered");
   snapshot = MakeExactSnapshot();
   snapshot.depth.resource.width = 1720u;
   passed &= Expect(
-      !capture::IsExactCompositeOutput(snapshot),
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kDepthExtentMismatch,
       "b16 must be full-resolution relative to composite depth b3");
+
+  snapshot = MakeExactSnapshot();
+  snapshot.command_buffer = 0u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kCommandStateInvalid,
+      "missing native command state must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.image.valid_flags = 0u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kOutputMetadataIncomplete,
+      "incomplete b16 metadata must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.image.resource.image_view = 0u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kOutputResourceMissing,
+      "a missing b16 view must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.image.resource.layout = 0u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kOutputLayoutMismatch,
+      "a non-General b16 layout must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.image.resource.width = 0u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kOutputExtentInvalid,
+      "an empty b16 extent must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.image.resource.mip_level = 1u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kOutputSubresourceMismatch,
+      "a non-base b16 subresource must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.image.image_type = 0u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kOutputImageContractMismatch,
+      "a non-2D b16 image must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.depth.binding = 4u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kDepthDescriptorContractMismatch,
+      "the wrong depth binding must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.depth.valid_flags = 0u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kDepthMetadataIncomplete,
+      "incomplete depth metadata must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.depth.resource.image_view = 0u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kDepthResourceMissing,
+      "a missing depth view must report its exact reason");
+  snapshot = MakeExactSnapshot();
+  snapshot.depth.resource.mip_level = 1u;
+  passed &= Expect(
+      capture::ValidateCompositeOutput(snapshot)
+          == capture::CaptureResult::kDepthSubresourceMismatch,
+      "a non-base depth subresource must report its exact reason");
   return passed;
 }
 
