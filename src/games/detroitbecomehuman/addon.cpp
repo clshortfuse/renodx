@@ -1969,15 +1969,15 @@ renodx::utils::settings::Settings settings =
                 .key = "PsychoV17HueRestore",
                 .binding = &shader_injection.psychov17_hue_restore,
                 .default_value = 100.f,
-                .label = "Hue Restore",
-                .section = "PsychoV-17",
-                .tooltip = "Hue restoration strength after PsychoV-17 compression.",
+                .label = "Highlight Color Restore",
+                .section = "PsychoV",
+                .tooltip = "Restores hue and bounded chroma lost in PsychoV high-light compression without changing the peak target.",
                 .min = 0.f,
                 .max = 100.f,
                 .parse = [](float value) { return value * 0.01f; },
                 .is_visible = []() {
                   return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type == 3.f;
+                      && shader_injection.tone_map_type >= 3.f;
                 },
             }},
             {{

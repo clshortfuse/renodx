@@ -64,6 +64,7 @@ static_assert(sizeof(ShaderInjectData) == 112u);
 #define RENODX_PSYCHOV_GAMUT_MODE            shader_injection.psychov_gamut_mode
 #define RENODX_PSYCHOV17_BLEACHING           shader_injection.psychov17_bleaching
 #define RENODX_PSYCHOV17_HUE_RESTORE         shader_injection.psychov17_hue_restore
+#define RENODX_PSYCHOV_HIGHLIGHT_COLOR_RESTORE shader_injection.psychov17_hue_restore
 #define RENODX_PSYCHOV22_COMPRESSION         shader_injection.psychov22_compression
 #define RENODX_RENO_DRT_TONE_MAP_METHOD      (shader_injection.tone_map_type == 1.f                             \
                                                   ? renodx::tonemap::renodrt::config::tone_map_method::REINHARD \

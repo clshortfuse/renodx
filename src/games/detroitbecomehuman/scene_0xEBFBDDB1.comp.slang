@@ -72,6 +72,54 @@ vec3 DecodeSceneInput(vec3 color, bool encoded_srgb)
         greaterThan(color, vec3(0.040449999272823333740234375)));
 }
 
+vec3 RestorePsychoVHighlightColor(
+    vec3 scene_linear_bt709,
+    vec3 psychov_bt709,
+    float psychov_peak)
+{
+    const float restore_strength =
+        clamp(RENODX_PSYCHOV_HIGHLIGHT_COLOR_RESTORE, 0.0, 1.0);
+    const float highlight_signal = max(
+        psychov_bt709.x,
+        max(psychov_bt709.y, psychov_bt709.z));
+    const float source_luminance = dot(
+        scene_linear_bt709,
+        vec3(0.2126, 0.7152, 0.0722));
+
+    // Keep shadows, midtones and a disabled control bit-identical. PsychoV's
+    // LMS shoulder converges all cones toward the display white point, so its
+    // own hue restoration cannot recover chroma once the target radius has
+    // collapsed. RenoDX's per-channel correction restores source hue and
+    // clamps chroma loss while retaining PsychoV's mapped intensity.
+    if (restore_strength <= 0.0 ||
+        highlight_signal <= 1.0 ||
+        source_luminance <= 1e-6)
+    {
+        return psychov_bt709;
+    }
+
+    const float highlight_weight = smoothstep(
+        1.0,
+        max(psychov_peak, 1.0001),
+        highlight_signal);
+    const vec3 restored =
+        renodx::draw::ApplyPerChannelCorrection(
+            scene_linear_bt709,
+            psychov_bt709,
+            0.5,
+            1.0,
+            1.0,
+            0.0);
+    const vec3 display_safe = max(
+        renodx::color::bt709::clamp::BT2020(restored),
+        vec3(0.0));
+
+    return mix(
+        psychov_bt709,
+        display_safe,
+        vec3(restore_strength * highlight_weight));
+}
+
 void main()
 {
     for (;;)
@@ -307,14 +355,20 @@ void main()
                     renodx_untonemapped,
                     renodx_vanilla_graded_linear),
                 vec3(0.0));
-            // PsychoV consumes a scene-linear peak ratio. Detroit's
-            // diffuse-white control is the scene-linear 1.0 anchor.
-            const float renodx_psychov_peak =
+            const float renodx_psychov_peak_linear =
                 RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1e-6);
+            // PsychoV must target the same numeric peak representation as
+            // ToneMapPass in Detroit's gamma-2.2 intermediate. Its input and
+            // observer math remain scene-linear BT.709.
+            const float renodx_psychov_peak =
+                renodx::color::correct::GammaSafe(
+                    renodx_psychov_peak_linear,
+                    true,
+                    2.2);
             vec3 renodx_tonemapped;
             if (CUSTOM_PSYCHOV17_ACTIVE)
             {
-                const vec3 renodx_psychov_linear =
+                const vec3 renodx_psychov_output =
                     renodx::tonemap::psychov::psychotm_test17(
                         renodx_psychov_input,
                         renodx_psychov_peak,
@@ -333,15 +387,17 @@ void main()
                         vec3(RENODX_PSYCHOV_OUTPUT_ADAPTATION),
                         RENODX_PSYCHOV_GAMUT_COMPRESSION,
                         int(RENODX_PSYCHOV_GAMUT_MODE));
-                // PsychoV returns scene-linear BT.709. Encode exactly once to
-                // Detroit's gamma-2.2 intermediate before the common scaling.
-                renodx_tonemapped = pow(
-                    max(renodx_psychov_linear, vec3(0.0)),
-                    vec3(1.0 / 2.2));
+                // PsychoV and ToneMapPass both produce the numeric BT.709
+                // working values consumed by Detroit's gamma-2.2
+                // intermediate. Encoding PsychoV here again lifts shadows,
+                // compresses HDR headroom and reduces RGB separation.
+                renodx_tonemapped = max(
+                    renodx_psychov_output,
+                    vec3(0.0));
             }
             else if (CUSTOM_PSYCHOV22_ACTIVE)
             {
-                const vec3 renodx_psychov_linear =
+                const vec3 renodx_psychov_output =
                     renodx::tonemap::psychov::psychotm_test22(
                         renodx_psychov_input,
                         renodx_psychov_peak,
@@ -362,9 +418,9 @@ void main()
                         int(RENODX_PSYCHOV_GAMUT_MODE),
                         1.0,
                         RENODX_PSYCHOV22_COMPRESSION);
-                renodx_tonemapped = pow(
-                    max(renodx_psychov_linear, vec3(0.0)),
-                    vec3(1.0 / 2.2));
+                renodx_tonemapped = max(
+                    renodx_psychov_output,
+                    vec3(0.0));
             }
             else
             {
@@ -372,8 +428,15 @@ void main()
                     renodx_untonemapped,
                     renodx_vanilla_graded_linear);
             }
-            // ToneMapPass already returns Detroit's gamma-2.2 intermediate;
-            // PsychoV is encoded to the same contract above. The native OETF maps 1.0 to
+            if (CUSTOM_PSYCHOV17_ACTIVE || CUSTOM_PSYCHOV22_ACTIVE)
+            {
+                renodx_tonemapped = RestorePsychoVHighlightColor(
+                    renodx_psychov_input,
+                    renodx_tonemapped,
+                    renodx_psychov_peak);
+            }
+            // ToneMapPass and PsychoV share Detroit's gamma-2.2 intermediate
+            // contract. The native OETF maps 1.0 to
             // 300 nits, so adapt in display-light space before the unchanged
             // Rec.2020/PQ path. This maps both diffuse white and the configured
             // peak through the same path for every custom tone mapper.

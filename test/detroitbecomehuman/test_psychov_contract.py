@@ -67,19 +67,15 @@ def pq_decode(encoded: float) -> float:
 
 
 def full_detroit_round_trip(
-    psychov_linear_bt709: tuple[float, float, float], game_nits: float
+    psychov_bt709: tuple[float, float, float], game_nits: float
 ) -> tuple[
     tuple[float, float, float],
     tuple[float, float, float],
 ]:
-    """Model PsychoV gamma encode, Detroit scale, Rec.2020 and PQ."""
-    gamma_22 = tuple(
-        max(channel, 0.0) ** (1.0 / 2.2)
-        for channel in psychov_linear_bt709
-    )
+    """Model PsychoV's direct Detroit intermediate, Rec.2020 and PQ."""
     display_bt709 = tuple(
-        max(channel, 0.0) ** 2.2 * game_nits / 300.0
-        for channel in gamma_22
+        detroit_display_light_scale(channel, game_nits)
+        for channel in psychov_bt709
     )
     display_bt2020 = multiply_matrix(BT709_TO_BT2020, display_bt709)
     pq = tuple(pq_encode(channel * 300.0 / 10000.0) for channel in display_bt2020)
@@ -88,44 +84,54 @@ def full_detroit_round_trip(
     return pq, decoded_bt709
 
 
+def detroit_display_light_scale(value: float, game_nits: float) -> float:
+    """Literal model of Detroit's common gamma-2.2 scale."""
+    return (
+        max(value, 0.0) ** 2.2 * max(game_nits, 0.0) / 300.0
+    ) ** (1.0 / 2.2)
+
+
 class PsychoVContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.scene = SCENE_SOURCE.read_text(encoding="utf-8")
         cls.addon = ADDON_SOURCE.read_text(encoding="utf-8")
 
-    def test_both_psychov_modes_encode_linear_output_exactly_once(self):
+    def test_both_psychov_modes_feed_common_intermediate_directly(self):
         assignments = re.findall(
-            r"renodx_tonemapped\s*=\s*pow\(\s*"
-            r"max\(\s*renodx_psychov_linear\s*,\s*vec3\(0\.0\)\s*\)\s*,\s*"
-            r"vec3\(1\.0\s*/\s*2\.2\)\s*\)\s*;",
+            r"renodx_tonemapped\s*=\s*max\(\s*"
+            r"renodx_psychov_output\s*,\s*vec3\(0\.0\)\s*\)\s*;",
             self.scene,
         )
         self.assertEqual(len(assignments), 2)
-        self.assertEqual(
-            self.scene.count("max(renodx_psychov_linear, vec3(0.0))"), 2
+        self.assertNotRegex(
+            self.scene,
+            r"pow\(\s*max\(\s*renodx_psychov_output",
         )
 
-    def test_peak_ratio_is_passed_to_psychov_in_scene_linear(self):
+    def test_peak_matches_detroit_gamma_intermediate_representation(self):
         self.assertRegex(
             self.scene,
-            r"renodx_psychov_peak\s*=\s*"
+            r"renodx_psychov_peak_linear\s*=\s*"
             r"RENODX_PEAK_WHITE_NITS\s*/\s*"
             r"max\(RENODX_DIFFUSE_WHITE_NITS,\s*1e-6\)",
         )
-        self.assertNotIn("renodx_psychov_peak_linear", self.scene)
-        self.assertNotRegex(
+        self.assertRegex(
             self.scene,
-            r"GammaSafe\([\s\S]*?renodx_psychov_peak",
+            r"renodx_psychov_peak\s*=\s*"
+            r"renodx::color::correct::GammaSafe\(\s*"
+            r"renodx_psychov_peak_linear\s*,\s*true\s*,\s*2\.2\s*\)",
         )
 
-    def test_linear_peak_maps_to_configured_display_peak(self):
-        peak_nits = 1033.0
+    def test_extra_gamma_encoding_collapses_headroom(self):
+        peak_nits = 1068.0
         game_nits = 203.0
         psychov_peak = peak_nits / game_nits
-        gamma_22 = psychov_peak ** (1.0 / 2.2)
-        display_light = gamma_22**2.2 * game_nits / 300.0
-        self.assertAlmostEqual(display_light * 300.0, peak_nits, places=9)
+        direct = detroit_display_light_scale(psychov_peak, game_nits)
+        extra_gamma = detroit_display_light_scale(
+            psychov_peak ** (1.0 / 2.2), game_nits
+        )
+        self.assertLess(extra_gamma, direct * 0.55)
 
     def test_scene_grading_still_precedes_both_psychov_calls(self):
         grade = self.scene.index("ComputeUntonemappedGraded")
@@ -165,37 +171,79 @@ class PsychoVContractTests(unittest.TestCase):
             self.assertIn("int(RENODX_PSYCHOV_GAMUT_MODE)", call)
         self.assertIn("RENODX_PSYCHOV22_COMPRESSION", test22)
 
+    def test_both_versions_share_highlight_color_restoration(self):
+        helper = self.scene[
+            self.scene.index("vec3 RestorePsychoVHighlightColor") :
+            self.scene.index("void main()")
+        ]
+        self.assertIn("renodx::draw::ApplyPerChannelCorrection", helper)
+        self.assertRegex(
+            helper,
+            r"ApplyPerChannelCorrection\(\s*"
+            r"scene_linear_bt709\s*,\s*psychov_bt709\s*,\s*"
+            r"0\.5\s*,\s*1\.0\s*,\s*1\.0\s*,\s*0\.0\s*\)",
+        )
+        self.assertIn("renodx::color::bt709::clamp::BT2020", helper)
+        self.assertRegex(
+            helper,
+            r"highlight_signal\s*<=\s*1\.0",
+        )
+
+        call = self.scene.index("RestorePsychoVHighlightColor(", self.scene.index("void main()"))
+        test22 = self.scene.index("psychotm_test22")
+        scale = self.scene.index("renodx_game_scale", test22)
+        self.assertLess(test22, call)
+        self.assertLess(call, scale)
+        self.assertRegex(
+            self.scene[test22:scale],
+            r"CUSTOM_PSYCHOV17_ACTIVE\s*\|\|\s*CUSTOM_PSYCHOV22_ACTIVE",
+        )
+
+    def test_highlight_color_restore_control_is_common_to_both_modes(self):
+        setting = re.search(
+            r'\.key\s*=\s*"PsychoV17HueRestore"(?P<body>.*?)'
+            r'\.key\s*=\s*"PsychoV22Compression"',
+            self.addon,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(setting)
+        body = setting.group("body")
+        self.assertIn('.label = "Highlight Color Restore"', body)
+        self.assertIn('.section = "PsychoV"', body)
+        self.assertRegex(body, r"tone_map_type\s*>=\s*3\.f")
+        self.assertRegex(body, r"\.default_value\s*=\s*100\.f")
+
     def test_blue_and_cyan_round_trip_preserves_chromaticity(self):
         swatches = {
             "blue": (0.10, 0.40, 2.00),
             "cyan": (0.05, 1.20, 1.50),
         }
-        for version in (17, 22):
-            for gamut_mode in (0, 1):
-                for compression in (0.0, 0.5, 1.0):
-                    for name, swatch in swatches.items():
-                        with self.subTest(
-                            version=version,
-                            gamut=gamut_mode,
-                            compression=compression,
-                            swatch=name,
-                        ):
-                            pq, decoded = full_detroit_round_trip(swatch, 203.0)
-                            self.assertTrue(all(math.isfinite(value) for value in pq))
-                            self.assertTrue(
-                                all(math.isfinite(value) for value in decoded)
-                            )
-                            self.assertGreater(decoded[2], decoded[1])
-                            self.assertGreater(decoded[1], decoded[0])
-                            self.assertGreater(max(decoded) - min(decoded), 0.25)
-                            expected_sum = sum(swatch)
-                            actual_sum = sum(decoded)
-                            for expected, actual in zip(swatch, decoded):
-                                self.assertAlmostEqual(
-                                    actual / actual_sum,
-                                    expected / expected_sum,
-                                    delta=5.0e-5,
-                                )
+        for name, swatch in swatches.items():
+            with self.subTest(swatch=name):
+                pq, decoded = full_detroit_round_trip(swatch, 203.0)
+                self.assertTrue(all(math.isfinite(value) for value in pq))
+                self.assertTrue(all(math.isfinite(value) for value in decoded))
+                self.assertGreater(decoded[2], decoded[1])
+                self.assertGreater(decoded[1], decoded[0])
+                self.assertGreater(max(decoded) - min(decoded), 0.25)
+                expected_sum = sum(swatch)
+                actual_sum = sum(decoded)
+                for expected, actual in zip(swatch, decoded):
+                    self.assertAlmostEqual(
+                        actual / actual_sum,
+                        expected / expected_sum,
+                        delta=5.0e-5,
+                    )
+
+    def test_extra_gamma_encoding_compresses_cool_tint_channel_ratios(self):
+        swatch = (0.05, 1.20, 1.50)
+        direct = tuple(detroit_display_light_scale(value, 203.0) for value in swatch)
+        extra_gamma = tuple(
+            detroit_display_light_scale(value ** (1.0 / 2.2), 203.0)
+            for value in swatch
+        )
+        self.assertGreater(direct[2] / direct[1], extra_gamma[2] / extra_gamma[1])
+        self.assertGreater(direct[1] / direct[0], extra_gamma[1] / extra_gamma[0])
 
     def test_hdr_gamut_boundary_is_the_default(self):
         setting = re.search(
