@@ -61,10 +61,17 @@ vec3 Neutwo_Inverse(vec3 x, float peak, float clip) {
   return numerator * inversesqrt(denominator_squared);
 }
 
-vec3 ApplyAnchoredAdaptationContrast(vec3 color, float contrast, vec3 anchor_in, vec3 anchor_out, float flare) {
+vec3 ApplyAnchoredAdaptationContrast(
+    vec3 color,
+    float contrast,
+    vec3 anchor_in,
+    vec3 anchor_out,
+    float flare,
+    float highlights,
+    float shadows) {
   vec3 ax = abs(color);
   vec3 normalized = ax / anchor_in;
-  vec3 flare_ratio = DivideSafe(normalized + flare, normalized, vec3(1.0));
+  vec3 flare_ratio = vec3(1.0) + DivideSafe(vec3(flare), normalized + flare, vec3(0.0));
   vec3 exponent = contrast * flare_ratio;
 
   vec3 ax_n = pow(ax, exponent);
@@ -73,7 +80,131 @@ vec3 ApplyAnchoredAdaptationContrast(vec3 color, float contrast, vec3 anchor_in,
   vec3 response_baseline = ax / (ax + anchor_in);
   vec3 gain = DivideSafe(response_target, response_baseline, vec3(0.0));
 
-  return sign(color) * ax * gain * (anchor_out / anchor_in);
+  vec3 contrasted_normalized = ax * gain / anchor_in;
+
+  if (highlights != 1.0) {
+    vec3 highlight_distance = max(contrasted_normalized - 1.0, vec3(0.0));
+    contrasted_normalized += highlight_distance * (pow(vec3(1.0) + highlight_distance * highlight_distance, vec3((highlights - 1.0) / 2.0)) - 1.0);
+  }
+
+  if (shadows != 1.0) {
+    vec3 shadow_distance = max(vec3(1.0) - contrasted_normalized, vec3(0.0));
+    contrasted_normalized *= pow(vec3(1.0) + shadow_distance * shadow_distance * shadow_distance, vec3(shadows - 1.0));
+  }
+
+  return sign(color) * contrasted_normalized * anchor_out;
+}
+
+// Exact power contrast through the anchor to every derivative, with C-infinity
+// flare and grading joins, then smoothly bounds highlight displacement to one stop.
+float ApplyAnchoredCInfinityBoundedPowerContrast(
+    float color,
+    float contrast,
+    float anchor_in,
+    float anchor_out,
+    float flare,
+    float highlights,
+    float shadows) {
+  float ax = abs(color);
+  float normalized = ax / anchor_in;
+  float exponent = contrast;
+
+  if (flare > 0.0) {
+    float shadow_distance = clamp(1.0 - normalized, 0.0, 1.0);
+    float flat_shadow_weight = exp2(-normalized / shadow_distance);
+    exponent *= fma(flat_shadow_weight, flare / (normalized + flare), 1.0);
+  }
+
+  float input_stops = log2(normalized);
+  float highlight_stops = max(input_stops, 0.0);
+  float contrast_displacement = (contrast - 1.0) * highlight_stops;
+  float displacement_magnitude = abs(contrast_displacement);
+  float bounded_displacement = contrast_displacement / fma(displacement_magnitude, exp2(-1.0 / displacement_magnitude), 1.0);
+  float output_stops = fma(exponent, min(input_stops, 0.0), highlight_stops + bounded_displacement);
+  float contrasted_normalized = exp2(output_stops);
+
+  if (highlights != 1.0) {
+    float highlight_distance = max(contrasted_normalized - 1.0, 0.0);
+    float highlight_distance_squared = highlight_distance * highlight_distance;
+    float flat_highlight_distance = (1.0 + highlight_distance_squared) * exp2(-1.0 / highlight_distance_squared);
+    contrasted_normalized += highlight_distance * (pow(1.0 + flat_highlight_distance, (highlights - 1.0) / 2.0) - 1.0);
+  }
+
+  if (shadows != 1.0) {
+    float shadow_distance = clamp(1.0 - contrasted_normalized, 0.0, 1.0);
+    float shadow_distance_squared = shadow_distance * shadow_distance;
+    float flat_shadow_distance = shadow_distance_squared * shadow_distance * exp2(1.0 - 1.0 / shadow_distance_squared);
+    contrasted_normalized *= pow(1.0 + flat_shadow_distance, shadows - 1.0);
+  }
+
+  return sign(color) * contrasted_normalized * anchor_out;
+}
+
+vec3 ApplyAnchoredCInfinityBoundedPowerContrast(
+    vec3 color,
+    float contrast,
+    vec3 anchor_in,
+    vec3 anchor_out,
+    float flare,
+    float highlights,
+    float shadows) {
+  vec3 ax = abs(color);
+  vec3 normalized = ax / anchor_in;
+  vec3 exponent = vec3(contrast);
+
+  if (flare > 0.0) {
+    vec3 shadow_distance = clamp(vec3(1.0) - normalized, vec3(0.0), vec3(1.0));
+    vec3 flat_shadow_weight = exp2(-normalized / shadow_distance);
+    exponent *= fma(flat_shadow_weight, vec3(flare) / (normalized + flare), vec3(1.0));
+  }
+
+  vec3 input_stops = log2(normalized);
+  vec3 highlight_stops = max(input_stops, vec3(0.0));
+  vec3 contrast_displacement = (contrast - 1.0) * highlight_stops;
+  vec3 displacement_magnitude = abs(contrast_displacement);
+  vec3 bounded_displacement = contrast_displacement / fma(displacement_magnitude, exp2(-vec3(1.0) / displacement_magnitude), vec3(1.0));
+  vec3 output_stops = fma(exponent, min(input_stops, vec3(0.0)), highlight_stops + bounded_displacement);
+  vec3 contrasted_normalized = exp2(output_stops);
+
+  if (highlights != 1.0) {
+    vec3 highlight_distance = max(contrasted_normalized - 1.0, vec3(0.0));
+    vec3 highlight_distance_squared = highlight_distance * highlight_distance;
+    vec3 flat_highlight_distance = (vec3(1.0) + highlight_distance_squared) * exp2(-vec3(1.0) / highlight_distance_squared);
+    contrasted_normalized += highlight_distance * (pow(vec3(1.0) + flat_highlight_distance, vec3((highlights - 1.0) / 2.0)) - 1.0);
+  }
+
+  if (shadows != 1.0) {
+    vec3 shadow_distance = clamp(vec3(1.0) - contrasted_normalized, vec3(0.0), vec3(1.0));
+    vec3 shadow_distance_squared = shadow_distance * shadow_distance;
+    vec3 flat_shadow_distance = shadow_distance_squared * shadow_distance * exp2(vec3(1.0) - vec3(1.0) / shadow_distance_squared);
+    contrasted_normalized *= pow(vec3(1.0) + flat_shadow_distance, vec3(shadows - 1.0));
+  }
+
+  return sign(color) * contrasted_normalized * anchor_out;
+}
+
+// Identity through anchor to every derivative; then approaches peak
+// monotonically and concave down. Requires anchor < peak and compression_strength >= 1.
+float ApplyAnchoredCInfinityShoulder(float color, float peak, float anchor, float compression_strength) {
+  float shoulder_range = peak - anchor;
+  float distance_from_anchor = max(color - anchor, 0.0);
+  float flat_weight = exp2(-shoulder_range / (compression_strength * distance_from_anchor));
+  float response_denominator = fma(distance_from_anchor, flat_weight, shoulder_range);
+  return fma(shoulder_range, distance_from_anchor / response_denominator, color - distance_from_anchor);
+}
+
+vec3 ApplyAnchoredCInfinityShoulder(vec3 color, vec3 peak, vec3 anchor, float compression_strength) {
+  vec3 shoulder_range = peak - anchor;
+  vec3 distance_from_anchor = max(color - anchor, vec3(0.0));
+  vec3 flat_weight = exp2(-shoulder_range / (compression_strength * distance_from_anchor));
+  vec3 response_denominator = fma(distance_from_anchor, flat_weight, shoulder_range);
+  return fma(shoulder_range, distance_from_anchor / response_denominator, color - distance_from_anchor);
+}
+
+float ApplyAnchoredCInfinityShoulderMaxChannelScale(vec3 color, float peak, float anchor, float compression_strength) {
+  float max_channel = max(max(abs(color.r), abs(color.g)), abs(color.b));
+  float compressed_max = ApplyAnchoredCInfinityShoulder(max_channel, peak, anchor, compression_strength);
+  return DivideSafe(compressed_max, max_channel, 1.0);
 }
 
 vec3 ApplyToneMap(vec3 _676, bool _679, float _638, float _m6, uint _m4, float _m10, vec3 _488, vec4 _489) {
@@ -108,15 +239,15 @@ vec3 ApplyToneMap(vec3 _676, bool _679, float _638, float _m6, uint _m4, float _
       untonemapped = renodx_tonemap_psycho22_StockmanLMSFromBT709(untonemapped);
 
       float anchor_out = rdr2_tonemap_Apply(pivot_point, A, B, C, D, E, F, white_precompute);
+      vec3 anchor_out_lms = renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(anchor_out));
       float pivot_slope = rdr2_tonemap_Derivative(pivot_point, A, B, C, D, E, F) * white_precompute;
-      float contrast = 2.0 * pivot_slope * pivot_point / anchor_out - 1.0;
-      tonemapped = ApplyAnchoredAdaptationContrast(untonemapped / bt709_white_lms, contrast * 1.22f, vec3(pivot_point), vec3(anchor_out), 0.f) * bt709_white_lms;
+      tonemapped = ApplyAnchoredAdaptationContrast(untonemapped, (2.0 * pivot_slope * pivot_point / anchor_out - 1.0) * 1.22, renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(pivot_point)), anchor_out_lms, 0.10f * pow(0.72f, 10.f), 1.f, 1.f);
+      // tonemapped = ApplyAnchoredCInfinityBoundedPowerContrast(untonemapped, (pivot_slope * pivot_point / anchor_out), renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(pivot_point)), anchor_out_lms, 0.10f * pow(0.72f, 10.f), 1.f, 1.f);
 
       vec3 precompression_lms = tonemapped;
       float precompression_yf = renodx_color_yf_from_LMS(precompression_lms);
-      float peak_ratio = RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS;
-      vec3 peak_white_lms = renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(peak_ratio));
-      vec3 compressed_lms = Neutwo(precompression_lms, peak_white_lms);
+      vec3 peak_white_lms = renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS));
+      vec3 compressed_lms = ApplyAnchoredCInfinityShoulder(precompression_lms, peak_white_lms, anchor_out_lms, 2.f);
 
       tonemapped = renodx_tonemap_psycho23_ApplySignedOpponentRetentionAndGamutCompressionLMS(
           precompression_lms,
@@ -126,10 +257,7 @@ vec3 ApplyToneMap(vec3 _676, bool _679, float _638, float _m6, uint _m4, float _
           peak_white_lms,
           1.0,
           1.0);
-      tonemapped *= DivideSafe(
-          precompression_yf,
-          renodx_color_yf_from_LMS(tonemapped),
-          1.0);
+      tonemapped *= DivideSafe(precompression_yf, renodx_color_yf_from_LMS(tonemapped), 1.0);
       tonemapped = renodx_tonemap_psycho22_BT709FromStockmanLMS(tonemapped);
     } else {  // Vanilla+
       vec3 base = rdr2_tonemap_Apply(untonemapped, A, B, C, D, E, F, white_precompute);
@@ -138,7 +266,7 @@ vec3 ApplyToneMap(vec3 _676, bool _679, float _638, float _m6, uint _m4, float _
 
       float uncompressed_yf = renodx_color_yf_from_BT709(tonemapped);
 
-      tonemapped = Neutwo(tonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+      tonemapped = ApplyAnchoredCInfinityShoulder(tonemapped, vec3(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS), vec3(rdr2_tonemap_Apply(pivot_point, A, B, C, D, E, F, white_precompute)), 2.f);
       float compressed_yf = renodx_color_yf_from_BT709(tonemapped);
 
       tonemapped *= DivideSafe(uncompressed_yf, compressed_yf, 1.0);
@@ -192,14 +320,14 @@ vec3 DecodeLUTInput(vec3 lut_output, vec3 lut_input) {
 
 float ComputeMaxChannelScale(vec3 color) {
   float max_channel = max(max(abs(color.r), abs(color.g)), abs(color.b));
-  float new_max = Neutwo(max_channel);
+  float new_max = ApplyAnchoredCInfinityShoulder(max_channel, 1.f, 0.18f, 2.f);
   float scale = (max_channel != 0.0) ? (new_max / max_channel) : 1.0;
   return scale;
 }
 
 float ComputeMaxChannelScale(vec3 color, float peak) {
   float max_channel = max(max(abs(color.r), abs(color.g)), abs(color.b));
-  float new_max = Neutwo(max_channel, peak);
+  float new_max = ApplyAnchoredCInfinityShoulder(max_channel, peak, 0.18f, 2.f);
   float scale = (max_channel != 0.0) ? (new_max / max_channel) : 1.0;
   return scale;
 }

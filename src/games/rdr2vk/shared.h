@@ -42,7 +42,7 @@ layout(push_constant) uniform PushData {
 #define RENODX_DIFFUSE_WHITE_NITS      shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS     shader_injection.graphics_white_nits
 #define RENODX_SDR_EOTF_EMULATION      shader_injection.sdr_eotf_emulation
-#define RENODX_TONE_MAP_BLEND_STRENGTH 0.5f
+#define RENODX_TONE_MAP_BLEND_STRENGTH 0.25f
 
 #define RENODX_TONE_MAP_GAMMA                shader_injection.tone_map_gamma
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
