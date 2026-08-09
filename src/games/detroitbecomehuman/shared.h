@@ -28,14 +28,17 @@ struct ShaderInjectData {
   // Packed Render Debug state. Off is the literal 0.0f payload.
   float scene_path_active;
   float ui_path_active;
-  float reserved;
+  // Numeric bit mask: bit 0 = DLSS output, bit 1 = this frame carries a
+  // PsychoV BT.2020 intermediate. Integer values 0..3 remain exactly
+  // representable while preserving the reflected 112-byte ABI.
+  float runtime_flags;
 
-  // Working gamut is fixed to BT.709; the fourth PsychoV slot now carries
-  // PsychoV-22 highlight chroma restoration while preserving the 112-byte ABI.
-  float psychov_input_adaptation;
-  float psychov_output_adaptation;
-  float psychov_gamut_compression;
-  float psychov22_highlight_color_restore;
+  // CP2077-style PsychoV controls. Keep all four values in this order to
+  // preserve the reflected 112-byte Vulkan push-constant ABI.
+  float psychov_cone_response;
+  float psychov_exposure_match;
+  float psychov_vanilla_slope;
+  float psychov_gamut_mode;
 
   float psychov17_bleaching;
   float psychov17_hue_restore;
@@ -60,10 +63,10 @@ static_assert(sizeof(ShaderInjectData) == 112u);
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
-#define RENODX_PSYCHOV_INPUT_ADAPTATION      shader_injection.psychov_input_adaptation
-#define RENODX_PSYCHOV_OUTPUT_ADAPTATION     shader_injection.psychov_output_adaptation
-#define RENODX_PSYCHOV_GAMUT_COMPRESSION     shader_injection.psychov_gamut_compression
-#define RENODX_PSYCHOV22_HIGHLIGHT_COLOR_RESTORE shader_injection.psychov22_highlight_color_restore
+#define RENODX_PSYCHOV_CONE_RESPONSE         shader_injection.psychov_cone_response
+#define RENODX_PSYCHOV_EXPOSURE_MATCH        shader_injection.psychov_exposure_match
+#define RENODX_PSYCHOV_VANILLA_SLOPE         shader_injection.psychov_vanilla_slope
+#define RENODX_PSYCHOV_GAMUT_MODE            shader_injection.psychov_gamut_mode
 #define RENODX_PSYCHOV17_BLEACHING           shader_injection.psychov17_bleaching
 #define RENODX_PSYCHOV17_HUE_RESTORE         shader_injection.psychov17_hue_restore
 #define RENODX_PSYCHOV22_COMPRESSION         shader_injection.psychov22_compression
@@ -78,7 +81,8 @@ static_assert(sizeof(ShaderInjectData) == 112u);
 #define CUSTOM_SCENE_PATH_ACTIVE shader_injection.scene_path_active
 #define CUSTOM_RENDER_DEBUG_PAYLOAD shader_injection.scene_path_active
 #define CUSTOM_UI_PATH_ACTIVE    shader_injection.ui_path_active
-#define CUSTOM_DLSS_ACTIVE       (shader_injection.reserved >= 0.5f)
+#define CUSTOM_RUNTIME_FLAGS     uint(max(shader_injection.runtime_flags, 0.f))
+#define CUSTOM_DLSS_ACTIVE       ((CUSTOM_RUNTIME_FLAGS & 0x1u) != 0u)
 #ifndef __cplusplus
 float DecodeDofPackedScale(uint code, uint neutral, uint maximum)
 {
@@ -102,10 +106,16 @@ float DecodeDofPackedScale(uint code, uint neutral, uint maximum)
 #define CUSTOM_DOF_FAR_STRENGTH \
   DecodeDofPackedScale( \
       (CUSTOM_DOF_PACKED_BITS >> 21u) & 0x1Fu, 16u, 0x1Fu)
-#define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 3.f)
-#define CUSTOM_PSYCHOV22_ACTIVE  (shader_injection.tone_map_type == 4.f)
 #define CUSTOM_HDR_ACTIVE        (shader_injection.output_is_hdr >= 0.5f \
                                   && shader_injection.output_mode != 1.f)
+#define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 3.f)
+#define CUSTOM_PSYCHOV22_ACTIVE  (shader_injection.tone_map_type == 4.f)
+// This bit describes the basis actually written by the scene pass in the
+// current frame. It is intentionally authoritative at the UI and final OETF:
+// a settings-only gate would reinterpret native BT.709 video/loading frames
+// as BT.2020 when the scene composite did not execute.
+#define CUSTOM_PSYCHOV_BT2020_ACTIVE \
+  ((CUSTOM_RUNTIME_FLAGS & 0x2u) != 0u)
 
 #ifndef __cplusplus
 #ifdef __SLANG__

@@ -19,7 +19,7 @@ void main()
     fcolor.w *= factor.w;
 
     // RGB-only adjustment after the original color transform and clamp.
-    if (DetroitShouldScaleUi())
+    if (DetroitShouldTransformUi())
     {
         fcolor.xyz = DetroitScaleUiRgb(fcolor.xyz);
     }

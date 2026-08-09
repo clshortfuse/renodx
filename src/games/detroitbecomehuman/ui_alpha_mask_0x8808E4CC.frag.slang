@@ -17,7 +17,7 @@ void main()
     fcolor = c;
 
     // RGB-only adjustment after the original alpha-mask evaluation.
-    if (DetroitShouldScaleUi())
+    if (DetroitShouldTransformUi())
     {
         fcolor.xyz = DetroitScaleUiRgb(fcolor.xyz);
     }

@@ -1086,6 +1086,73 @@ std::atomic_uint64_t last_dlaa_sharpening_log_key =
 std::atomic_uint64_t last_dof_log_key =
     std::numeric_limits<std::uint64_t>::max();
 
+constexpr std::uint32_t RUNTIME_FLAG_DLSS_OUTPUT = 1u << 0u;
+constexpr std::uint32_t RUNTIME_FLAG_PSYCHOV_BT2020 = 1u << 1u;
+constexpr std::uint32_t RUNTIME_FLAG_MASK =
+    RUNTIME_FLAG_DLSS_OUTPUT | RUNTIME_FLAG_PSYCHOV_BT2020;
+
+std::uint32_t GetRuntimeFlags() {
+  if (!std::isfinite(shader_injection.runtime_flags)) return 0u;
+  return static_cast<std::uint32_t>(std::clamp(
+      std::lround(shader_injection.runtime_flags),
+      0l,
+      static_cast<long>(RUNTIME_FLAG_MASK)));
+}
+
+void SetRuntimeFlag(std::uint32_t flag, bool enabled) {
+  auto flags = GetRuntimeFlags();
+  flags = enabled ? (flags | flag) : (flags & ~flag);
+  shader_injection.runtime_flags = static_cast<float>(flags);
+}
+
+bool ShouldWritePsychoVBt2020Intermediate() {
+  const bool psychov_active = shader_injection.tone_map_type == 3.f
+      || shader_injection.tone_map_type == 4.f;
+  return shader_injection.output_is_hdr >= 0.5f
+      && shader_injection.output_mode != OUTPUT_MODE_SDR
+      && psychov_active
+      && std::bit_cast<std::uint32_t>(
+             shader_injection.scene_path_active)
+          == 0u;
+}
+
+bool IsSharedHdrIntermediateTarget(
+    reshade::api::command_list* command_list) {
+  if (command_list == nullptr) return false;
+  const auto& render_targets =
+      renodx::utils::swapchain::GetRenderTargets(command_list);
+  if (render_targets.empty() || render_targets.front().handle == 0u) {
+    return false;
+  }
+
+  auto* device = command_list->get_device();
+  const auto resource =
+      device->get_resource_from_view(render_targets.front());
+  if (resource.handle == 0u) return false;
+  const auto description = device->get_resource_desc(resource);
+  if (description.type != reshade::api::resource_type::texture_2d
+      || description.texture.format
+          != reshade::api::format::r16g16b16a16_float) {
+    return false;
+  }
+
+  const auto expected_width =
+      output_width.load(std::memory_order_relaxed);
+  const auto expected_height =
+      output_height.load(std::memory_order_relaxed);
+  return (expected_width == 0u
+          || description.texture.width == expected_width)
+      && (expected_height == 0u
+          || description.texture.height == expected_height);
+}
+
+bool OnSharedHdrUiReplace(reshade::api::command_list* command_list) {
+  // Several Scaleform CRCs are also used for small RGBA8 offscreen textures.
+  // Keep those draws native; the final compositor performs the single UI
+  // brightness/primaries transform when it writes the shared HDR target.
+  return IsSharedHdrIntermediateTarget(command_list);
+}
+
 std::string_view GetDofStatusText(dof::RuntimeStatus status) {
   switch (status) {
     case dof::RuntimeStatus::kVanilla:
@@ -1451,7 +1518,7 @@ void ApplyDlssOutputMarker(
   // The late scene/OETF shaders only need a boolean marker to suppress
   // Detroit's optional native CAS. Sharpening strength is transferred through
   // TemporalFrameInputs and consumed by the pre-DOF adapter pack instead.
-  shader_injection.reserved = gate.active ? 1.f : 0.f;
+  SetRuntimeFlag(RUNTIME_FLAG_DLSS_OUTPUT, gate.active);
 
   if (!log_gate) return;
   const auto strength_percent = static_cast<std::uint32_t>(
@@ -1493,6 +1560,9 @@ bool OnSceneDraw(reshade::api::command_list* command_list) {
     temporal_capture::MarkMainTemporalCommandList(command_list->get_native());
   }
   ApplyDlssOutputMarker(command_list, "scene composite", true);
+  SetRuntimeFlag(
+      RUNTIME_FLAG_PSYCHOV_BT2020,
+      ShouldWritePsychoVBt2020Intermediate());
   return true;
 }
 
@@ -1502,8 +1572,13 @@ void OnSceneDrawn(reshade::api::command_list*) {
       render_debug::ProducerPass::kSceneComposite);
 }
 
-void OnUiDrawn(reshade::api::command_list*) {
-  ui_path_seen.store(true, std::memory_order_relaxed);
+void OnUiDrawn(reshade::api::command_list* command_list) {
+  // on_drawn is scheduled before on_replace is evaluated by the shared shader
+  // dispatcher, so rejected offscreen instances can still reach this callback.
+  // Only advertise the UI path after a draw on the confirmed shared HDR target.
+  if (IsSharedHdrIntermediateTarget(command_list)) {
+    ui_path_seen.store(true, std::memory_order_relaxed);
+  }
 }
 
 bool OnFinalCasDraw(reshade::api::command_list* command_list) {
@@ -1759,16 +1834,43 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     {0x2892BFCA, {
                      .crc32 = 0x2892BFCA,
                      .code = __0x2892BFCA,
+                     .on_replace = &OnSharedHdrUiReplace,
                      .on_drawn = &OnUiDrawn,
                  }},
     {0x8808E4CC, {
                      .crc32 = 0x8808E4CC,
                      .code = __0x8808E4CC,
+                     .on_replace = &OnSharedHdrUiReplace,
                      .on_drawn = &OnUiDrawn,
                  }},
     {0x9827B559, {
                      .crc32 = 0x9827B559,
                      .code = __0x9827B559,
+                     .on_replace = &OnSharedHdrUiReplace,
+                     .on_drawn = &OnUiDrawn,
+                 }},
+    {0x11C1C2C5, {
+                     .crc32 = 0x11C1C2C5,
+                     .code = __0x11C1C2C5,
+                     .on_replace = &OnSharedHdrUiReplace,
+                     .on_drawn = &OnUiDrawn,
+                 }},
+    {0x97874322, {
+                     .crc32 = 0x97874322,
+                     .code = __0x97874322,
+                     .on_replace = &OnSharedHdrUiReplace,
+                     .on_drawn = &OnUiDrawn,
+                 }},
+    {0xC5B9F7FA, {
+                     .crc32 = 0xC5B9F7FA,
+                     .code = __0xC5B9F7FA,
+                     .on_replace = &OnSharedHdrUiReplace,
+                     .on_drawn = &OnUiDrawn,
+                 }},
+    {0xEF606BCD, {
+                     .crc32 = 0xEF606BCD,
+                     .code = __0xEF606BCD,
+                     .on_replace = &OnSharedHdrUiReplace,
                      .on_drawn = &OnUiDrawn,
                  }},
     {0x94F97DCF, {
@@ -1889,108 +1991,43 @@ renodx::utils::settings::Settings settings =
         }(),
         renodx::templates::settings::CreateSettings({
             {{
-                .key = "PsychoVInputAdaptation",
-                .binding = &shader_injection.psychov_input_adaptation,
-                .default_value = 18.f,
-                .label = "Input Adaptation",
-                .section = "PsychoV",
-                .tooltip = "Scene-linear input adaptation anchor. 18% is neutral middle gray.",
-                .min = 1.f,
-                .max = 200.f,
-                .parse = [](float value) { return value * 0.01f; },
-                .is_visible = []() {
-                  return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type >= 3.f;
-                },
-            }},
-            {{
-                .key = "PsychoVOutputAdaptation",
-                .binding = &shader_injection.psychov_output_adaptation,
-                .default_value = 18.f,
-                .label = "Output Adaptation",
-                .section = "PsychoV",
-                .tooltip = "Scene-linear output adaptation anchor. 18% is neutral middle gray.",
-                .min = 1.f,
-                .max = 200.f,
-                .parse = [](float value) { return value * 0.01f; },
-                .is_visible = []() {
-                  return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type >= 3.f;
-                },
-            }},
-            {{
-                .key = "PsychoVGamutCompression",
-                .binding = &shader_injection.psychov_gamut_compression,
-                .default_value = 100.f,
-                .label = "Gamut Compression",
-                .section = "PsychoV",
-                .tooltip = "Strength of PsychoV gamut compression.",
+                .key = "ColorGradeConeResponse",
+                .binding = &shader_injection.psychov_cone_response,
+                .default_value = 50.f,
+                .label = "Cone Response",
+                .section = "Color Grading",
+                .tooltip = "Controls the PsychoV cone response shaping.",
                 .min = 0.f,
                 .max = 100.f,
-                .parse = [](float value) { return value * 0.01f; },
+                .parse = [](float value) { return value * 0.02f; },
                 .is_visible = []() {
-                  return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type >= 3.f;
+                  return shader_injection.tone_map_type >= 3.f;
                 },
             }},
             {{
-                .key = "PsychoV22HighlightColorRestore",
-                .binding = &shader_injection.psychov22_highlight_color_restore,
-                .default_value = 0.f,
-                .label = "Highlight Color Restore",
-                .section = "PsychoV-22",
-                .tooltip = "Optional post-gamut source-color blend for PsychoV-22 highlights. It can override some Gamut Compression chroma and is active only at neutral Highlights, Shadows, Contrast, and Saturation.",
-                .min = 0.f,
-                .max = 100.f,
-                .parse = [](float value) { return value * 0.01f; },
-                .is_visible = []() {
-                  return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type == 4.f;
-                },
-            }},
-            {{
-                .key = "PsychoV17Bleaching",
-                .binding = &shader_injection.psychov17_bleaching,
-                .default_value = 100.f,
-                .label = "Bleaching",
-                .section = "PsychoV-17",
-                .tooltip = "Per-cone high-light bleaching strength.",
-                .min = 0.f,
-                .max = 100.f,
-                .parse = [](float value) { return value * 0.01f; },
-                .is_visible = []() {
-                  return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type == 3.f;
-                },
-            }},
-            {{
-                .key = "PsychoV17HueRestore",
-                .binding = &shader_injection.psychov17_hue_restore,
-                .default_value = 100.f,
-                .label = "Hue Restore",
-                .section = "PsychoV-17",
-                .tooltip = "Hue restoration strength inside PsychoV-17 before its final gamut projection.",
-                .min = 0.f,
-                .max = 100.f,
-                .parse = [](float value) { return value * 0.01f; },
-                .is_visible = []() {
-                  return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type == 3.f;
-                },
-            }},
-            {{
-                .key = "PsychoV22Compression",
-                .binding = &shader_injection.psychov22_compression,
+                .key = "ToneMapPsychoVExposureMatch",
+                .binding = &shader_injection.psychov_exposure_match,
+                .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
                 .default_value = 1.f,
-                .label = "Compression",
-                .section = "PsychoV-22",
-                .tooltip = "Shoulder compression; zero uses PsychoV-22 automatic compression.",
-                .min = 0.f,
-                .max = 4.f,
-                .format = "%.2f",
+                .label = "Exposure Match",
+                .section = "Color Grading",
+                .tooltip = "Matches PsychoV's 18% gray anchor to Detroit's neutral scene-grading output.",
                 .is_visible = []() {
-                  return renodx::templates::settings::current_settings_mode >= 2.f
-                      && shader_injection.tone_map_type == 4.f;
+                  return shader_injection.tone_map_type >= 3.f;
+                },
+            }},
+            {{
+                .key = "ToneMapPsychoVVanillaHDRSlope",
+                .binding = &shader_injection.psychov_vanilla_slope,
+                .default_value = 100.f,
+                .label = "Vanilla HDR Slope",
+                .section = "Color Grading",
+                .tooltip = "Blends PsychoV cone response from native to Detroit's neutral scene-grading slope.",
+                .min = 0.f,
+                .max = 100.f,
+                .parse = [](float value) { return value * 0.01f; },
+                .is_visible = []() {
+                  return shader_injection.tone_map_type >= 3.f;
                 },
             }},
         }),
@@ -2640,13 +2677,9 @@ void OnPresetOff() {
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 300.f},
-      {"PsychoVInputAdaptation", 18.f},
-      {"PsychoVOutputAdaptation", 18.f},
-      {"PsychoVGamutCompression", 100.f},
-      {"PsychoV22HighlightColorRestore", 0.f},
-      {"PsychoV17Bleaching", 100.f},
-      {"PsychoV17HueRestore", 100.f},
-      {"PsychoV22Compression", 1.f},
+      {"ColorGradeConeResponse", 50.f},
+      {"ToneMapPsychoVExposureMatch", 1.f},
+      {"ToneMapPsychoVVanillaHDRSlope", 100.f},
       {"ColorGradeExposure", 1.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
@@ -2950,6 +2983,10 @@ void OnPresent(
   SyncDlaaSharpening();
   TrySaveRequestedReShadeScreenshot(swapchain);
   temporal_capture::BeginNextFrame();
+  // The carrier bit describes the frame that just finished. Clear all
+  // transient flags so a video/loading frame without the scene composite
+  // falls back to Detroit's native BT.709 intermediate.
+  shader_injection.runtime_flags = 0.f;
 }
 
 }  // namespace
@@ -3004,6 +3041,11 @@ bool AttachAddon(HMODULE h_module) {
   reshade::register_event<reshade::addon_event::present>(OnPresent);
   renodx::utils::settings::Use(DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
   temporal_capture::Use(DLL_PROCESS_ATTACH);
+  // Target-aware UI replacement queries the command list's current render
+  // targets. Attach the swapchain utility explicitly before any custom shader
+  // callback can call GetRenderTargets(). The add-on is pinned, so teardown is
+  // intentionally deferred to process termination with the rest of RenoDX.
+  renodx::utils::swapchain::Use(DLL_PROCESS_ATTACH);
   renodx::mods::shader::Use(DLL_PROCESS_ATTACH, custom_shaders, &shader_injection);
   OnAspectRatioModeChanged();
   OnDlssModeChanged();

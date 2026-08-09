@@ -1,6 +1,7 @@
 #version 450
 #extension GL_EXT_samplerless_texture_functions : require
 #include "shared.h"
+#include "hdr_intermediate.hlsli"
 #include "render_debug_common.slang"
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -55,6 +56,181 @@ layout(set = 0, binding = 3) uniform sampler2D ColorGradingLUTB;
 layout(set = 0, binding = 0) uniform sampler2D Image;
 layout(set = 0, binding = 16, rgba16f) uniform writeonly image2D OutputTexture;
 
+// The native neutral reference is uniform for the whole dispatch. Resolve it
+// once per 8x8 workgroup instead of repeating the LUT inversion for every
+// pixel. x/y are the PsychoV input/output anchors; z is the native log-log
+// slope (x * V'(x) / V(x)).
+shared vec3 sPsychoVVanillaReference;
+
+float DetroitApplyNativeHighlightShoulder(float value)
+{
+    if (_541.g_cbComposite._viMireSrgb.z != 1 || value <= 0.5)
+    {
+        return value;
+    }
+    if (value >= 1.89999997615814208984375)
+    {
+        return (0.044551424682140350341796875 * value)
+            + 0.84530413150787353515625;
+    }
+    return 0.949999988079071044921875
+        - (0.449999988079071044921875
+            * exp((0.5 - value) * 2.22222232818603515625));
+}
+
+float DetroitEvalVanillaNeutral(float scene_linear)
+{
+    // ColorSpace == 2 uses ColorGradingLUTR as Detroit's scalar luminance
+    // curve. Use the same authoritative curve for the neutral reference so
+    // creative per-channel grading is not mistaken for tonemapper contrast.
+    // As in CP2077, Scene Grading strength affects the actual PsychoV input,
+    // not this borrowed native neutral response.
+    const float safe_input = max(scene_linear, 0.0);
+    const float lut_address = log((safe_input * 10.0) + 1.0)
+        * 0.1447438895702362060546875;
+    float output_value = textureLod(
+        ColorGradingLUTR,
+        vec2(lut_address, 0.0),
+        0.0).x;
+    if (isnan(output_value) || isinf(output_value))
+    {
+        return 0.0;
+    }
+    output_value = DetroitApplyNativeHighlightShoulder(
+        max(output_value, 0.0));
+
+    // The sampled value is Detroit's gamma-shaped carrier, not scene-linear
+    // light. Convert it through the same neutral native transfer as the final
+    // OETF and express the result relative to 100 nits. CP2077 performs its
+    // reference solve in this V100 domain as well: V100 == 0.18 means 18 nits.
+    const float display_light_300 =
+        renodx::color::correct::GammaSafe(
+            output_value,
+            false,
+            2.2);
+    return max(display_light_300 * 3.0, 0.0);
+}
+
+float DetroitResolvePsychoVNeutralAnchor()
+{
+    // CP2077 keeps the unmatched PsychoV anchor at the neutral value produced
+    // by the same user grading controls as the scene. Detroit has no separate
+    // dynamic-exposure control here, so evaluate the common scalar controls at
+    // 18% gray. Saturation cannot move a neutral value.
+    const float neutral = 0.18;
+    float graded = neutral * max(RENODX_TONE_MAP_EXPOSURE, 0.0);
+    if (RENODX_TONE_MAP_HIGHLIGHTS != 1.0)
+    {
+        graded = renodx::color::grade::Highlights(
+            graded,
+            RENODX_TONE_MAP_HIGHLIGHTS,
+            neutral);
+    }
+    if (RENODX_TONE_MAP_SHADOWS != 1.0)
+    {
+        graded = renodx::color::grade::Shadows(
+            graded,
+            RENODX_TONE_MAP_SHADOWS,
+            neutral);
+    }
+    if (RENODX_TONE_MAP_CONTRAST != 1.0)
+    {
+        graded = renodx::color::grade::ContrastSafe(
+            graded,
+            RENODX_TONE_MAP_CONTRAST,
+            neutral);
+    }
+    if (isnan(graded) || isinf(graded))
+    {
+        return neutral;
+    }
+    return max(graded, 1.0e-6);
+}
+
+vec3 DetroitResolvePsychoVVanillaReference()
+{
+    const float neutral = 0.18;
+    const float unmatched_anchor = DetroitResolvePsychoVNeutralAnchor();
+    float anchor_input = unmatched_anchor;
+    float anchor_output = unmatched_anchor;
+    float reference_input = neutral;
+    float reference_output = DetroitEvalVanillaNeutral(reference_input);
+
+    if (RENODX_PSYCHOV_EXPOSURE_MATCH >= 0.5
+        || RENODX_PSYCHOV_VANILLA_SLOPE > 0.0)
+    {
+        // Match CP2077's sampled-curve inverse: seed the upper bound from the
+        // graded neutral anchor, expand it at most eight times, then perform
+        // sixteen linear-domain bisections.
+        float lower_input = 0.0;
+        float upper_input = max(max(unmatched_anchor, neutral), 1.0e-4);
+        float upper_output = DetroitEvalVanillaNeutral(upper_input);
+        for (int expansion = 0;
+             expansion < 8 && upper_output < neutral;
+             ++expansion)
+        {
+            upper_input *= 2.0;
+            upper_output = DetroitEvalVanillaNeutral(upper_input);
+        }
+        for (int iteration = 0; iteration < 16; ++iteration)
+        {
+            const float middle_input =
+                (lower_input + upper_input) * 0.5;
+            const float middle_output =
+                DetroitEvalVanillaNeutral(middle_input);
+            if (middle_output < neutral)
+            {
+                lower_input = middle_input;
+            }
+            else
+            {
+                upper_input = middle_input;
+            }
+        }
+        // CP2077 uses the final upper bound rather than the last midpoint.
+        reference_input = upper_input;
+        reference_output = DetroitEvalVanillaNeutral(reference_input);
+        if (RENODX_PSYCHOV_EXPOSURE_MATCH >= 0.5)
+        {
+            anchor_input = reference_input;
+            // PsychoV output is later scaled by Game Brightness, whereas
+            // the solved native reference is normalized to 100 nits.
+            // Convert V100 back to PsychoV's scene-linear output domain so
+            // the final displayed anchor remains the same 18-nit target.
+            anchor_output = reference_output * 100.0
+                / max(RENODX_DIFFUSE_WHITE_NITS, 1.0e-6);
+        }
+    }
+
+    float vanilla_contrast = 1.0;
+    if (RENODX_PSYCHOV_VANILLA_SLOPE > 0.0)
+    {
+        // Match RenoDX's established stable finite-difference step for
+        // sampled/exp-log curves. Convert the linear derivative to the
+        // sensitometric log slope expected by PsychoV.
+        const float delta = max(0.005, reference_input * 0.01);
+        const float lower_input = max(0.0, reference_input - delta);
+        const float upper_input = reference_input + delta;
+        const float lower_output = DetroitEvalVanillaNeutral(lower_input);
+        const float upper_output = DetroitEvalVanillaNeutral(upper_input);
+        const float input_span = upper_input - lower_input;
+        const float linear_slope = input_span == 0.0
+            ? 0.0
+            : max((upper_output - lower_output) / input_span, 0.0);
+        const float candidate = reference_output == 0.0
+            ? 1.0
+            : max(
+                (reference_input * linear_slope) / reference_output,
+                0.0);
+        if (!(isnan(candidate) || isinf(candidate)))
+        {
+            vanilla_contrast = candidate;
+        }
+    }
+
+    return vec3(anchor_input, anchor_output, vanilla_contrast);
+}
+
 vec3 DecodeSceneInput(vec3 color, bool encoded_srgb)
 {
     if (!encoded_srgb)
@@ -89,71 +265,20 @@ vec3 SanitizePsychoVDisplay(vec3 color, float psychov_peak)
     return display;
 }
 
-vec3 RestorePsychoVHighlightColor(
-    vec3 scene_linear_bt709,
-    vec3 psychov_display_bt709,
-    float psychov_peak)
-{
-    const float restore_strength =
-        clamp(RENODX_PSYCHOV22_HIGHLIGHT_COLOR_RESTORE, 0.0, 1.0);
-    const bool neutral_color_controls =
-        abs(RENODX_TONE_MAP_HIGHLIGHTS - 1.0) <= 1.0e-6 &&
-        abs(RENODX_TONE_MAP_SHADOWS - 1.0) <= 1.0e-6 &&
-        abs(RENODX_TONE_MAP_CONTRAST - 1.0) <= 1.0e-6 &&
-        abs(RENODX_TONE_MAP_SATURATION - 1.0) <= 1.0e-6;
-    if (restore_strength <= 0.0 || !neutral_color_controls)
-    {
-        return psychov_display_bt709;
-    }
-
-    vec3 source = max(
-        renodx::math::ZeroNaN(scene_linear_bt709),
-        vec3(0.0));
-    if (any(isinf(source)))
-    {
-        return psychov_display_bt709;
-    }
-    const float source_peak = max(source.x, max(source.y, source.z));
-    const float mapped_peak = max(
-        psychov_display_bt709.x,
-        max(psychov_display_bt709.y, psychov_display_bt709.z));
-    if (source_peak <= 1.0e-6 || mapped_peak <= 1.0e-6)
-    {
-        return psychov_display_bt709;
-    }
-
-    // This opt-in post-gamut override rebuilds chroma that PsychoV's shoulder
-    // lost. The candidate and mapped color are both non-negative BT.709 and
-    // share the same maximum channel, so their convex blend cannot exceed
-    // PsychoV's peak, leave the working gamut, or generate the negative PQ
-    // inputs that broke the former ICtCp reconstruction. Because it runs after
-    // PsychoV's gamut compression it is disabled by default and deliberately
-    // takes precedence over some of that compression when enabled.
-    const vec3 source_at_mapped_peak = source * (mapped_peak / source_peak);
-    const float source_purity =
-        (source_peak - min(source.x, min(source.y, source.z))) / source_peak;
-    const float mapped_purity =
-        (mapped_peak - min(
-            psychov_display_bt709.x,
-            min(psychov_display_bt709.y, psychov_display_bt709.z))) /
-        mapped_peak;
-    const float purity_loss = clamp(
-        (source_purity - mapped_purity) / max(source_purity, 1.0e-6),
-        0.0,
-        1.0);
-    const float highlight_weight = smoothstep(
-        1.0,
-        max(psychov_peak, 1.0001),
-        mapped_peak);
-
-    return mix(
-        psychov_display_bt709,
-        source_at_mapped_peak,
-        vec3(restore_strength * purity_loss * highlight_weight));
-}
-
 void main()
 {
+    if (CUSTOM_HDR_ACTIVE
+        && (CUSTOM_PSYCHOV17_ACTIVE || CUSTOM_PSYCHOV22_ACTIVE))
+    {
+        if (gl_LocalInvocationIndex == 0u)
+        {
+            sPsychoVVanillaReference =
+                DetroitResolvePsychoVVanillaReference();
+        }
+        barrier();
+        memoryBarrierShared();
+    }
+
     for (;;)
     {
         ivec2 _1043 = ivec2(gl_GlobalInvocationID.xy);
@@ -387,16 +512,24 @@ void main()
                     renodx_untonemapped,
                     renodx_vanilla_graded_linear),
                 vec3(0.0));
-            const float renodx_psychov_peak =
-                RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1e-6);
-            // Detroit's shared scene/UI/post intermediate is BT.709 and cannot
-            // preserve the negative BT.709 components required to carry a
-            // wider BT.2020 hull. Keep PsychoV inside the proven working gamut;
-            // the final OETF still converts display light to Rec.2020 for PQ.
-            const int renodx_psychov_gamut_mode = 0;
+            const float renodx_psychov_peak = max(
+                RENODX_PEAK_WHITE_NITS
+                    / max(RENODX_DIFFUSE_WHITE_NITS, 1.0),
+                1.0);
+            // Match CP2077's authored BT.2020 hull whenever Detroit can carry
+            // it end to end. Render Debug deliberately falls back to BT.709 so
+            // its native BT.709 overlays never mix bases with a wide carrier.
+            const int renodx_psychov_gamut_mode =
+                CUSTOM_PSYCHOV_BT2020_ACTIVE ? 1 : 0;
             vec3 renodx_tonemapped;
             if (CUSTOM_PSYCHOV17_ACTIVE)
             {
+                const float renodx_psychov_cone_response =
+                    max(RENODX_PSYCHOV_CONE_RESPONSE, 0.0)
+                    * mix(
+                        1.0,
+                        sPsychoVVanillaReference.z,
+                        clamp(RENODX_PSYCHOV_VANILLA_SLOPE, 0.0, 1.0));
                 const vec3 renodx_psychov_output =
                     renodx::tonemap::psychov::psychotm_test17(
                         renodx_psychov_input,
@@ -406,23 +539,26 @@ void main()
                         RENODX_TONE_MAP_SHADOWS,
                         RENODX_TONE_MAP_CONTRAST,
                         RENODX_TONE_MAP_SATURATION,
-                        RENODX_PSYCHOV17_BLEACHING,
+                        1.0,
                         100.0,
-                        RENODX_PSYCHOV17_HUE_RESTORE,
+                        1.0,
                         1.0,
                         0,
+                        renodx_psychov_cone_response,
+                        vec3(sPsychoVVanillaReference.x),
+                        vec3(sPsychoVVanillaReference.y),
                         1.0,
-                        vec3(RENODX_PSYCHOV_INPUT_ADAPTATION),
-                        vec3(RENODX_PSYCHOV_OUTPUT_ADAPTATION),
-                        RENODX_PSYCHOV_GAMUT_COMPRESSION,
                         renodx_psychov_gamut_mode,
                         1.0);
-                // PsychoV returns display-linear BT.709. Encode it once with
-                // the exact inverse of Detroit's native sRGB/gamma-2.2
-                // transfer, not a simple pow(1 / 2.2).
+                // A BT.2020 hull is returned as a signed BT.709 representation.
+                // Convert it to positive display-linear BT.2020 before the
+                // shared intermediate can discard its negative components.
                 const vec3 renodx_psychov_display =
                     SanitizePsychoVDisplay(
-                        renodx_psychov_output,
+                        CUSTOM_PSYCHOV_BT2020_ACTIVE
+                            ? renodx::color::bt2020::from::BT709(
+                                renodx_psychov_output)
+                            : renodx_psychov_output,
                         renodx_psychov_peak);
                 renodx_tonemapped =
                     renodx::color::correct::GammaSafe(
@@ -432,6 +568,12 @@ void main()
             }
             else if (CUSTOM_PSYCHOV22_ACTIVE)
             {
+                const float renodx_psychov_cone_response =
+                    max(RENODX_PSYCHOV_CONE_RESPONSE, 0.0)
+                    * mix(
+                        1.0,
+                        sPsychoVVanillaReference.z,
+                        clamp(RENODX_PSYCHOV_VANILLA_SLOPE, 0.0, 1.0));
                 const vec3 renodx_psychov_output =
                     renodx::tonemap::psychov::psychotm_test22(
                         renodx_psychov_input,
@@ -446,25 +588,23 @@ void main()
                         1.0,
                         1.0,
                         0,
+                        renodx_psychov_cone_response,
+                        vec3(sPsychoVVanillaReference.x),
+                        vec3(sPsychoVVanillaReference.y),
                         1.0,
-                        vec3(RENODX_PSYCHOV_INPUT_ADAPTATION),
-                        vec3(RENODX_PSYCHOV_OUTPUT_ADAPTATION),
-                        RENODX_PSYCHOV_GAMUT_COMPRESSION,
                         renodx_psychov_gamut_mode,
                         1.0,
-                        RENODX_PSYCHOV22_COMPRESSION);
+                        1.0);
                 const vec3 renodx_psychov_display =
                     SanitizePsychoVDisplay(
-                        renodx_psychov_output,
-                        renodx_psychov_peak);
-                const vec3 renodx_psychov_restored =
-                    RestorePsychoVHighlightColor(
-                        renodx_psychov_input,
-                        renodx_psychov_display,
+                        CUSTOM_PSYCHOV_BT2020_ACTIVE
+                            ? renodx::color::bt2020::from::BT709(
+                                renodx_psychov_output)
+                            : renodx_psychov_output,
                         renodx_psychov_peak);
                 renodx_tonemapped =
                     renodx::color::correct::GammaSafe(
-                        renodx_psychov_restored,
+                        renodx_psychov_display,
                         true,
                         2.2);
             }
@@ -870,6 +1010,17 @@ void main()
         else
         {
             _2706 = _2677;
+        }
+
+        if (CUSTOM_PSYCHOV_BT2020_ACTIVE
+            && _541.g_cbComposite._viMireSrgb.x != 0)
+        {
+            // Mire/test-pattern paths intentionally bypass the custom tone
+            // mapper and therefore still produce Detroit's native BT.709
+            // code values. The frame flag is authoritative at the final OETF,
+            // so convert these patterns into the same BT.2020 carrier before
+            // storing them in the shared intermediate.
+            _2706 = DetroitBt709CodeToBt2020Code(_2706);
         }
 
         if (RenderDebugActive())

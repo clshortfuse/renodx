@@ -28,11 +28,11 @@ struct ShaderInjectData_std140
     float cas_strength;
     float scene_path_active;
     float ui_path_active;
-    float reserved;
-    float psychov_input_adaptation;
-    float psychov_output_adaptation;
-    float psychov_gamut_compression;
-    float psychov22_highlight_color_restore;
+    float runtime_flags;
+    float psychov_cone_response;
+    float psychov_exposure_match;
+    float psychov_vanilla_slope;
+    float psychov_gamut_mode;
     float psychov17_bleaching;
     float psychov17_hue_restore;
     float psychov22_compression;
@@ -86,16 +86,16 @@ bool RenderDebugPushPayloadFinite()
         && !isinf(shader_injection.scene_path_active)
         && !isnan(shader_injection.ui_path_active)
         && !isinf(shader_injection.ui_path_active)
-        && !isnan(shader_injection.reserved)
-        && !isinf(shader_injection.reserved)
-        && !isnan(shader_injection.psychov_input_adaptation)
-        && !isinf(shader_injection.psychov_input_adaptation)
-        && !isnan(shader_injection.psychov_output_adaptation)
-        && !isinf(shader_injection.psychov_output_adaptation)
-        && !isnan(shader_injection.psychov_gamut_compression)
-        && !isinf(shader_injection.psychov_gamut_compression)
-        && !isnan(shader_injection.psychov22_highlight_color_restore)
-        && !isinf(shader_injection.psychov22_highlight_color_restore)
+        && !isnan(shader_injection.runtime_flags)
+        && !isinf(shader_injection.runtime_flags)
+        && !isnan(shader_injection.psychov_cone_response)
+        && !isinf(shader_injection.psychov_cone_response)
+        && !isnan(shader_injection.psychov_exposure_match)
+        && !isinf(shader_injection.psychov_exposure_match)
+        && !isnan(shader_injection.psychov_vanilla_slope)
+        && !isinf(shader_injection.psychov_vanilla_slope)
+        && !isnan(shader_injection.psychov_gamut_mode)
+        && !isinf(shader_injection.psychov_gamut_mode)
         && !isnan(shader_injection.psychov17_bleaching)
         && !isinf(shader_injection.psychov17_bleaching)
         && !isnan(shader_injection.psychov17_hue_restore)

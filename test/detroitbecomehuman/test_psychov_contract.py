@@ -23,6 +23,8 @@ SOURCE_DIR = _parse_arguments()
 SCENE_SOURCE = SOURCE_DIR / "scene_0xEBFBDDB1.comp.slang"
 ADDON_SOURCE = SOURCE_DIR / "addon.cpp"
 SHARED_SOURCE = SOURCE_DIR / "shared.h"
+TEMPORAL_AUX_SOURCE = SOURCE_DIR / "temporal_aux.comp.vk.glsl"
+HDR_INTERMEDIATE_SOURCE = SOURCE_DIR / "hdr_intermediate.hlsli"
 
 
 BT709_TO_BT2020 = (
@@ -105,15 +107,6 @@ def detroit_gamma_only_scale(value: float, game_nits: float) -> float:
     ) ** (1.0 / 2.2)
 
 
-def _clamp(value: float, minimum: float, maximum: float) -> float:
-    return min(max(value, minimum), maximum)
-
-
-def _smoothstep(edge0: float, edge1: float, value: float) -> float:
-    position = _clamp((value - edge0) / (edge1 - edge0), 0.0, 1.0)
-    return position * position * (3.0 - 2.0 * position)
-
-
 def extract_call_arguments(source: str, function_name: str) -> tuple[str, ...]:
     """Split one HLSL call at top-level commas, preserving nested calls."""
     marker = f"{function_name}("
@@ -136,6 +129,65 @@ def extract_call_arguments(source: str, function_name: str) -> tuple[str, ...]:
     raise ValueError(f"Unterminated call to {function_name}")
 
 
+def strip_shader_comments(source: str) -> str:
+    """Remove comments without changing executable token order."""
+    source = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
+    return re.sub(r"//[^\n]*", " ", source)
+
+
+def extract_setting(source: str, key: str) -> str:
+    """Return one C++ setting body up to the next setting key."""
+    marker = f'.key = "{key}"'
+    start = source.index(marker)
+    next_key = source.find('.key = "', start + len(marker))
+    return source[start:] if next_key < 0 else source[start:next_key]
+
+
+def solve_psychov_neutral_reference(
+    evaluate,
+    unmatched_anchor: float,
+) -> tuple[float, float]:
+    """Model CP2077's bounded linear-domain sampled-curve inverse."""
+    neutral = 0.18
+    lower_input = 0.0
+    upper_input = max(unmatched_anchor, neutral, 1.0e-4)
+    upper_output = evaluate(upper_input)
+    for _ in range(8):
+        if upper_output >= neutral:
+            break
+        upper_input *= 2.0
+        upper_output = evaluate(upper_input)
+
+    for _ in range(16):
+        middle_input = (lower_input + upper_input) * 0.5
+        middle_output = evaluate(middle_input)
+        if middle_output < neutral:
+            lower_input = middle_input
+        else:
+            upper_input = middle_input
+    return upper_input, evaluate(upper_input)
+
+
+def psychov_log_slope(
+    reference_input: float,
+    reference_output: float,
+    lower_input: float,
+    lower_output: float,
+    upper_input: float,
+    upper_output: float,
+) -> float:
+    """Model CP2077's exact finite-difference zero handling."""
+    input_span = upper_input - lower_input
+    linear_slope = (
+        0.0
+        if input_span == 0.0
+        else max((upper_output - lower_output) / input_span, 0.0)
+    )
+    if reference_output == 0.0:
+        return 1.0
+    return max(reference_input * linear_slope / reference_output, 0.0)
+
+
 def sanitize_psychov_display(
     color: tuple[float, float, float], peak: float
 ) -> tuple[float, float, float]:
@@ -155,85 +207,53 @@ def sanitize_psychov_display(
     return display
 
 
-def restore_psychov_highlight_color(
-    scene_linear_bt709: tuple[float, float, float],
-    psychov_display_bt709: tuple[float, float, float],
+def psychov_raw_to_intermediate(
+    psychov_raw_bt709: tuple[float, float, float],
     psychov_peak: float,
-    restore_strength: float,
-    highlights: float = 1.0,
-    shadows: float = 1.0,
-    contrast: float = 1.0,
-    saturation: float = 1.0,
+    wide_gamut: bool,
 ) -> tuple[float, float, float]:
-    """Numeric model of Detroit's finite, peak-safe highlight blend."""
-    strength = _clamp(restore_strength, 0.0, 1.0)
-    neutral_color_controls = all(
-        abs(control - 1.0) <= 1.0e-6
-        for control in (highlights, shadows, contrast, saturation)
-    )
-    if strength <= 0.0 or not neutral_color_controls:
-        return psychov_display_bt709
-
-    source = tuple(
-        max(0.0 if math.isnan(channel) else channel, 0.0)
-        for channel in scene_linear_bt709
-    )
-    if any(math.isinf(channel) for channel in source):
-        return psychov_display_bt709
-
-    source_peak = max(source)
-    mapped_peak = max(psychov_display_bt709)
-    if source_peak <= 1.0e-6 or mapped_peak <= 1.0e-6:
-        return psychov_display_bt709
-
-    source_at_mapped_peak = tuple(
-        channel * mapped_peak / source_peak for channel in source
-    )
-    source_purity = (source_peak - min(source)) / source_peak
-    mapped_purity = (
-        mapped_peak - min(psychov_display_bt709)
-    ) / mapped_peak
-    purity_loss = _clamp(
-        (source_purity - mapped_purity) / max(source_purity, 1.0e-6),
-        0.0,
-        1.0,
-    )
-    highlight_weight = _smoothstep(
-        1.0, max(psychov_peak, 1.0001), mapped_peak
-    )
-    blend = strength * purity_loss * highlight_weight
-    return tuple(
-        mapped + (source_value - mapped) * blend
-        for mapped, source_value in zip(
-            psychov_display_bt709, source_at_mapped_peak
+    """Model the required conversion before PsychoV's nonnegative sanitize."""
+    display_intermediate = psychov_raw_bt709
+    if wide_gamut:
+        display_intermediate = multiply_matrix(
+            BT709_TO_BT2020, display_intermediate
         )
-    )
+    return sanitize_psychov_display(display_intermediate, psychov_peak)
 
 
 def full_detroit_round_trip(
-    psychov_display_bt709: tuple[float, float, float], game_nits: float
+    psychov_raw_bt709: tuple[float, float, float],
+    game_nits: float,
+    psychov_peak: float,
+    wide_gamut: bool,
 ) -> tuple[
     tuple[float, float, float],
     tuple[float, float, float],
 ]:
-    """Model PsychoV display light -> Detroit native -> Rec.2020/PQ."""
-    psychov_native_bt709 = tuple(
+    """Model raw PsychoV output through Detroit's intermediate and PQ tail."""
+    psychov_display_intermediate = psychov_raw_to_intermediate(
+        psychov_raw_bt709, psychov_peak, wide_gamut
+    )
+    psychov_native_intermediate = tuple(
         detroit_display_to_native(channel)
-        for channel in psychov_display_bt709
+        for channel in psychov_display_intermediate
     )
-    scaled_native_bt709 = tuple(
+    scaled_native_intermediate = tuple(
         detroit_exact_display_light_scale(channel, game_nits)
-        for channel in psychov_native_bt709
+        for channel in psychov_native_intermediate
     )
-    display_bt709 = tuple(
+    display_intermediate = tuple(
         detroit_native_to_display(channel)
-        for channel in scaled_native_bt709
+        for channel in scaled_native_intermediate
     )
-    display_bt2020 = multiply_matrix(BT709_TO_BT2020, display_bt709)
+    display_bt2020 = (
+        display_intermediate
+        if wide_gamut
+        else multiply_matrix(BT709_TO_BT2020, display_intermediate)
+    )
     pq = tuple(pq_encode(channel * 300.0 / 10000.0) for channel in display_bt2020)
     decoded_bt2020 = tuple(pq_decode(channel) * 10000.0 / 300.0 for channel in pq)
-    decoded_bt709 = multiply_matrix(BT2020_TO_BT709, decoded_bt2020)
-    return pq, decoded_bt709
+    return pq, decoded_bt2020
 
 
 class PsychoVContractTests(unittest.TestCase):
@@ -242,8 +262,12 @@ class PsychoVContractTests(unittest.TestCase):
         cls.scene = SCENE_SOURCE.read_text(encoding="utf-8")
         cls.addon = ADDON_SOURCE.read_text(encoding="utf-8")
         cls.shared = SHARED_SOURCE.read_text(encoding="utf-8")
+        cls.temporal_aux = TEMPORAL_AUX_SOURCE.read_text(encoding="utf-8")
+        cls.hdr_intermediate = HDR_INTERMEDIATE_SOURCE.read_text(
+            encoding="utf-8"
+        )
 
-    def test_p17_direct_and_p22_restored_are_each_encoded_once(self):
+    def test_both_versions_convert_wide_output_then_encode_once(self):
         test17 = self.scene[
             self.scene.index("if (CUSTOM_PSYCHOV17_ACTIVE)") :
             self.scene.index("else if (CUSTOM_PSYCHOV22_ACTIVE)")
@@ -261,41 +285,40 @@ class PsychoVContractTests(unittest.TestCase):
             r"renodx_psychov_display\s*,\s*"
             r"true\s*,\s*2\.2\s*\)\s*;",
         )
-        self.assertNotIn("RestorePsychoVHighlightColor", test17)
-        self.assertEqual(
-            len(re.findall(r"SanitizePsychoVDisplay\(", test17)),
-            1,
-        )
         self.assertRegex(
             test22,
             r"renodx_tonemapped\s*=\s*"
             r"renodx::color::correct::GammaSafe\(\s*"
-            r"renodx_psychov_restored\s*,\s*"
+            r"renodx_psychov_display\s*,\s*"
             r"true\s*,\s*2\.2\s*\)\s*;",
         )
-        self.assertEqual(
-            len(re.findall(r"RestorePsychoVHighlightColor\(", test22)),
-            1,
+        conversion_before_sanitize = re.compile(
+            r"SanitizePsychoVDisplay\(\s*"
+            r"CUSTOM_PSYCHOV_BT2020_ACTIVE\s*\?\s*"
+            r"renodx::color::bt2020::from::BT709\(\s*"
+            r"renodx_psychov_output\s*\)\s*:\s*"
+            r"renodx_psychov_output\s*,\s*"
+            r"renodx_psychov_peak\s*\)",
+            re.DOTALL,
         )
+        for name, branch in (("PsychoV-17", test17), ("PsychoV-22", test22)):
+            with self.subTest(mode=name):
+                self.assertEqual(
+                    len(re.findall(r"SanitizePsychoVDisplay\(", branch)), 1
+                )
+                self.assertRegex(branch, conversion_before_sanitize)
+        self.assertNotIn("RestorePsychoVHighlightColor", self.scene)
         self.assertEqual(
-            len(re.findall(r"SanitizePsychoVDisplay\(", test22)),
-            1,
-        )
-        self.assertEqual(
-            len(re.findall(r"RestorePsychoVHighlightColor\(", self.scene)),
-            2,
-        )
-        self.assertEqual(
-            len(re.findall(r"SanitizePsychoVDisplay\(", self.scene)),
-            3,
+            len(re.findall(r"SanitizePsychoVDisplay\(", self.scene)), 3
         )
 
     def test_peak_passed_to_psychov_is_display_linear(self):
         self.assertRegex(
             self.scene,
-            r"renodx_psychov_peak\s*=\s*"
-            r"RENODX_PEAK_WHITE_NITS\s*/\s*"
-            r"max\(RENODX_DIFFUSE_WHITE_NITS,\s*1e-6\)",
+            r"renodx_psychov_peak\s*=\s*max\(\s*"
+            r"RENODX_PEAK_WHITE_NITS\s*"
+            r"/\s*max\(RENODX_DIFFUSE_WHITE_NITS,\s*1\.0\),\s*"
+            r"1\.0\s*\)",
         )
         peak = self.scene.index("const float renodx_psychov_peak")
         gamut = self.scene.index("const int renodx_psychov_gamut_mode", peak)
@@ -373,6 +396,218 @@ class PsychoVContractTests(unittest.TestCase):
             ),
         )
 
+    def test_vanilla_reference_is_evaluated_in_exact_v100_light(self):
+        evaluator = self.scene[
+            self.scene.index("float DetroitEvalVanillaNeutral") :
+            self.scene.index("float DetroitResolvePsychoVNeutralAnchor")
+        ]
+        self.assertRegex(
+            evaluator,
+            r"output_value\s*=\s*DetroitApplyNativeHighlightShoulder\(\s*"
+            r"max\(output_value,\s*0\.0\)\s*\)\s*;",
+        )
+        self.assertRegex(
+            evaluator,
+            r"const float display_light_300\s*=\s*"
+            r"renodx::color::correct::GammaSafe\(\s*"
+            r"output_value,\s*false,\s*2\.2\s*\)\s*;\s*"
+            r"return max\(display_light_300\s*\*\s*3\.0,\s*0\.0\)\s*;",
+        )
+
+    def test_neutral_reference_matches_cp2077_contract(self):
+        neutral_helper = self.scene[
+            self.scene.index("float DetroitResolvePsychoVNeutralAnchor") :
+            self.scene.index("vec3 DetroitResolvePsychoVVanillaReference")
+        ]
+        self.assertRegex(
+            neutral_helper,
+            re.compile(
+                r"const float neutral\s*=\s*0\.18\s*;.*?"
+                r"graded\s*=\s*neutral\s*\*\s*"
+                r"max\(RENODX_TONE_MAP_EXPOSURE,\s*0\.0\)",
+                re.DOTALL,
+            ),
+        )
+        highlights = neutral_helper.index("renodx::color::grade::Highlights")
+        shadows = neutral_helper.index("renodx::color::grade::Shadows")
+        contrast = neutral_helper.index("renodx::color::grade::ContrastSafe")
+        self.assertLess(highlights, shadows)
+        self.assertLess(shadows, contrast)
+        self.assertNotIn("RENODX_TONE_MAP_SATURATION", neutral_helper)
+
+        resolver = self.scene[
+            self.scene.index("vec3 DetroitResolvePsychoVVanillaReference") :
+            self.scene.index("vec3 DecodeSceneInput")
+        ]
+        resolver_executable = strip_shader_comments(resolver)
+        self.assertRegex(
+            resolver,
+            r"const float unmatched_anchor\s*=\s*"
+            r"DetroitResolvePsychoVNeutralAnchor\(\)\s*;\s*"
+            r"float anchor_input\s*=\s*unmatched_anchor\s*;\s*"
+            r"float anchor_output\s*=\s*unmatched_anchor\s*;",
+        )
+        self.assertRegex(
+            resolver,
+            r"if\s*\(RENODX_PSYCHOV_EXPOSURE_MATCH\s*>=\s*0\.5\s*"
+            r"\|\|\s*RENODX_PSYCHOV_VANILLA_SLOPE\s*>\s*0\.0\)",
+        )
+        self.assertRegex(
+            resolver,
+            r"float lower_input\s*=\s*0\.0\s*;\s*"
+            r"float upper_input\s*=\s*"
+            r"max\(max\(unmatched_anchor,\s*neutral\),\s*1\.0e-4\)\s*;",
+        )
+        self.assertRegex(
+            resolver,
+            r"for\s*\(int expansion\s*=\s*0;\s*"
+            r"expansion\s*<\s*8\s*&&\s*"
+            r"upper_output\s*<\s*neutral;\s*\+\+expansion\)\s*"
+            r"\{\s*upper_input\s*\*=\s*2\.0\s*;\s*"
+            r"upper_output\s*=\s*"
+            r"DetroitEvalVanillaNeutral\(upper_input\)\s*;",
+        )
+        self.assertRegex(
+            resolver,
+            r"for\s*\(int iteration\s*=\s*0;\s*"
+            r"iteration\s*<\s*16;\s*\+\+iteration\)\s*"
+            r"\{\s*const float middle_input\s*=\s*"
+            r"\(lower_input\s*\+\s*upper_input\)\s*\*\s*0\.5\s*;\s*"
+            r"const float middle_output\s*=\s*"
+            r"DetroitEvalVanillaNeutral\(middle_input\)\s*;",
+        )
+        self.assertRegex(
+            resolver,
+            r"reference_input\s*=\s*upper_input\s*;\s*"
+            r"reference_output\s*=\s*"
+            r"DetroitEvalVanillaNeutral\(reference_input\)\s*;",
+        )
+        self.assertRegex(
+            resolver,
+            r"anchor_output\s*=\s*reference_output\s*\*\s*100\.0\s*"
+            r"/\s*max\(RENODX_DIFFUSE_WHITE_NITS,\s*1\.0e-6\)\s*;",
+        )
+        self.assertNotIn("bracketed", resolver)
+        self.assertNotIn("lower_log2", resolver)
+        self.assertNotIn("upper_log2", resolver)
+        self.assertNotIn("exp2(", resolver)
+        self.assertRegex(
+            resolver,
+            r"if\s*\(middle_output\s*<\s*neutral\)",
+        )
+        self.assertRegex(
+            resolver_executable,
+            r"if\s*\(RENODX_PSYCHOV_EXPOSURE_MATCH\s*>=\s*0\.5\)"
+            r"\s*\{\s*anchor_input\s*=\s*reference_input\s*;\s*"
+            r"anchor_output\s*=\s*reference_output\s*\*\s*100\.0\s*"
+            r"/\s*max\(RENODX_DIFFUSE_WHITE_NITS,\s*1\.0e-6\)\s*;",
+        )
+        self.assertRegex(
+            resolver,
+            r"const float delta\s*=\s*"
+            r"max\(0\.005,\s*reference_input\s*\*\s*0\.01\)\s*;",
+        )
+        self.assertRegex(
+            resolver,
+            r"const float input_span\s*=\s*"
+            r"upper_input\s*-\s*lower_input\s*;\s*"
+            r"const float linear_slope\s*=\s*input_span\s*==\s*0\.0\s*"
+            r"\?\s*0\.0\s*:\s*max\(\s*"
+            r"\(upper_output\s*-\s*lower_output\)\s*/\s*input_span,\s*"
+            r"0\.0\s*\)\s*;",
+        )
+        self.assertRegex(
+            resolver,
+            r"const float candidate\s*=\s*reference_output\s*==\s*0\.0\s*"
+            r"\?\s*1\.0\s*:\s*max\(\s*"
+            r"\(reference_input\s*\*\s*linear_slope\)\s*"
+            r"/\s*reference_output,\s*0\.0\s*\)\s*;",
+        )
+
+    def test_cp2077_linear_solver_oracle_expands_and_converges(self):
+        reference_input, reference_output = (
+            solve_psychov_neutral_reference(
+                lambda value: value * 0.01,
+                unmatched_anchor=0.18,
+            )
+        )
+        self.assertAlmostEqual(reference_input, 18.0, delta=4.0e-4)
+        self.assertAlmostEqual(reference_output, 0.18, delta=4.0e-6)
+        self.assertGreaterEqual(reference_output, 0.18)
+
+        identity_input, identity_output = (
+            solve_psychov_neutral_reference(
+                lambda value: value,
+                unmatched_anchor=0.75,
+            )
+        )
+        self.assertAlmostEqual(identity_input, 0.18, delta=1.2e-5)
+        self.assertAlmostEqual(identity_output, 0.18, delta=1.2e-5)
+        self.assertGreaterEqual(identity_output, 0.18)
+
+        unbracketed_input, unbracketed_output = (
+            solve_psychov_neutral_reference(
+                lambda value: 0.0,
+                unmatched_anchor=0.18,
+            )
+        )
+        self.assertAlmostEqual(unbracketed_input, 0.18 * 256.0)
+        self.assertEqual(unbracketed_output, 0.0)
+
+    def test_cp2077_log_slope_oracle_preserves_exact_zero_cases(self):
+        self.assertEqual(
+            psychov_log_slope(0.18, 0.18, 0.18, 0.1, 0.18, 0.2),
+            0.0,
+        )
+        self.assertEqual(
+            psychov_log_slope(0.18, 0.0, 0.17, 0.0, 0.19, 0.1),
+            1.0,
+        )
+
+    def test_cone_response_is_defined_inside_each_psychov_branch(self):
+        executable = strip_shader_comments(self.scene)
+        main = executable.index("void main()")
+        shared_reference = executable.index(
+            "sPsychoVVanillaReference =", main
+        )
+        barrier = executable.index("barrier();", shared_reference)
+        memory_barrier = executable.index("memoryBarrierShared();", barrier)
+        tone_output = executable.index("vec3 renodx_tonemapped", memory_barrier)
+        branch17 = executable[
+            executable.index("if (CUSTOM_PSYCHOV17_ACTIVE)", tone_output) :
+            executable.index("else if (CUSTOM_PSYCHOV22_ACTIVE)", tone_output)
+        ]
+        branch22_start = executable.index(
+            "else if (CUSTOM_PSYCHOV22_ACTIVE)", tone_output
+        )
+        branch22 = executable[
+            branch22_start : executable.index("else", branch22_start + 8)
+        ]
+        cone_pattern = re.compile(
+            r"const float renodx_psychov_cone_response\s*=\s*"
+            r"max\(RENODX_PSYCHOV_CONE_RESPONSE,\s*0\.0\)\s*"
+            r"\*\s*mix\(\s*1\.0,\s*"
+            r"sPsychoVVanillaReference\.z,\s*"
+            r"clamp\(RENODX_PSYCHOV_VANILLA_SLOPE,\s*0\.0,\s*1\.0\)\)\s*;"
+        )
+
+        self.assertLess(shared_reference, barrier)
+        self.assertLess(barrier, memory_barrier)
+        self.assertNotIn(
+            "renodx_psychov_cone_response",
+            executable[memory_barrier:tone_output],
+        )
+        for name, branch, call in (
+            ("PsychoV-17", branch17, "psychotm_test17"),
+            ("PsychoV-22", branch22, "psychotm_test22"),
+        ):
+            with self.subTest(mode=name):
+                self.assertEqual(len(cone_pattern.findall(branch)), 1)
+                self.assertLess(
+                    branch.index("renodx_psychov_cone_response"),
+                    branch.index(call),
+                )
+
     def test_both_versions_use_strict_psychov_argument_contract(self):
         test17_arguments = extract_call_arguments(
             self.scene,
@@ -388,15 +623,15 @@ class PsychoVContractTests(unittest.TestCase):
                 "RENODX_TONE_MAP_SHADOWS",
                 "RENODX_TONE_MAP_CONTRAST",
                 "RENODX_TONE_MAP_SATURATION",
-                "RENODX_PSYCHOV17_BLEACHING",
+                "1.0",
                 "100.0",
-                "RENODX_PSYCHOV17_HUE_RESTORE",
+                "1.0",
                 "1.0",
                 "0",
+                "renodx_psychov_cone_response",
+                "vec3(sPsychoVVanillaReference.x)",
+                "vec3(sPsychoVVanillaReference.y)",
                 "1.0",
-                "vec3(RENODX_PSYCHOV_INPUT_ADAPTATION)",
-                "vec3(RENODX_PSYCHOV_OUTPUT_ADAPTATION)",
-                "RENODX_PSYCHOV_GAMUT_COMPRESSION",
                 "renodx_psychov_gamut_mode",
                 "1.0",
             ),
@@ -421,25 +656,89 @@ class PsychoVContractTests(unittest.TestCase):
                 "1.0",
                 "1.0",
                 "0",
+                "renodx_psychov_cone_response",
+                "vec3(sPsychoVVanillaReference.x)",
+                "vec3(sPsychoVVanillaReference.y)",
                 "1.0",
-                "vec3(RENODX_PSYCHOV_INPUT_ADAPTATION)",
-                "vec3(RENODX_PSYCHOV_OUTPUT_ADAPTATION)",
-                "RENODX_PSYCHOV_GAMUT_COMPRESSION",
                 "renodx_psychov_gamut_mode",
                 "1.0",
-                "RENODX_PSYCHOV22_COMPRESSION",
+                "1.0",
             ),
         )
         self.assertRegex(
             self.scene,
-            r"const int renodx_psychov_gamut_mode\s*=\s*0\s*;",
+            r"const int renodx_psychov_gamut_mode\s*=\s*"
+            r"CUSTOM_PSYCHOV_BT2020_ACTIVE\s*\?\s*1\s*:\s*0\s*;",
         )
-        self.assertNotIn("RENODX_PSYCHOV_GAMUT_MODE", self.scene)
+        self.assertNotRegex(
+            self.scene,
+            r"const int renodx_psychov_gamut_mode\s*=\s*1\s*;",
+        )
+        for obsolete_parameter in (
+            "RENODX_PSYCHOV_INPUT_ADAPTATION",
+            "RENODX_PSYCHOV_OUTPUT_ADAPTATION",
+            "RENODX_PSYCHOV_GAMUT_COMPRESSION",
+            "RENODX_PSYCHOV17_BLEACHING",
+            "RENODX_PSYCHOV17_HUE_RESTORE",
+            "RENODX_PSYCHOV22_COMPRESSION",
+        ):
+            with self.subTest(obsolete_parameter=obsolete_parameter):
+                self.assertNotIn(obsolete_parameter, test17_arguments)
+                self.assertNotIn(obsolete_parameter, test22_arguments)
 
-    def test_sanitize_and_safe_restore_use_peak_preserving_bt709_math(self):
+    def test_psychov_operations_keep_the_required_order(self):
+        executable = strip_shader_comments(self.scene)
+        reference = executable.index(
+            "sPsychoVVanillaReference =", executable.index("void main()")
+        )
+        barrier = executable.index("barrier();", reference)
+        grade = executable.index("ComputeUntonemappedGraded", barrier)
+        peak = executable.index("const float renodx_psychov_peak", grade)
+        fixed_gamut = executable.index(
+            "const int renodx_psychov_gamut_mode =", peak
+        )
+        cone = executable.index(
+            "const float renodx_psychov_cone_response", fixed_gamut
+        )
+        test17 = executable.index("psychotm_test17", cone)
+        convert17 = executable.index(
+            "renodx::color::bt2020::from::BT709", test17
+        )
+        sanitize17 = executable.rfind(
+            "SanitizePsychoVDisplay", test17, convert17
+        )
+        gamma17 = executable.index("GammaSafe", convert17)
+        test22 = executable.index("psychotm_test22", gamma17)
+        convert22 = executable.index(
+            "renodx::color::bt2020::from::BT709", test22
+        )
+        sanitize22 = executable.rfind(
+            "SanitizePsychoVDisplay", test22, convert22
+        )
+        gamma22 = executable.index("GammaSafe", convert22)
+        scale = executable.index("const float renodx_game_scale", gamma22)
+
+        self.assertLess(reference, barrier)
+        self.assertLess(barrier, grade)
+        self.assertLess(grade, peak)
+        self.assertLess(peak, fixed_gamut)
+        self.assertLess(fixed_gamut, cone)
+        self.assertLess(cone, test17)
+        self.assertGreaterEqual(sanitize17, 0)
+        self.assertLess(test17, sanitize17)
+        self.assertLess(sanitize17, convert17)
+        self.assertLess(convert17, gamma17)
+        self.assertLess(gamma17, test22)
+        self.assertGreaterEqual(sanitize22, 0)
+        self.assertLess(test22, sanitize22)
+        self.assertLess(sanitize22, convert22)
+        self.assertLess(convert22, gamma22)
+        self.assertLess(gamma22, scale)
+
+    def test_sanitize_is_finite_nonnegative_and_peak_preserving(self):
         sanitizer = self.scene[
             self.scene.index("vec3 SanitizePsychoVDisplay") :
-            self.scene.index("vec3 RestorePsychoVHighlightColor")
+            self.scene.index("void main()")
         ]
         self.assertIn("renodx::math::ZeroNaN(color)", sanitizer)
         self.assertRegex(
@@ -453,185 +752,350 @@ class PsychoVContractTests(unittest.TestCase):
         )
         self.assertNotIn("min(", sanitizer)
 
-        helper = self.scene[
-            self.scene.index("vec3 RestorePsychoVHighlightColor") :
-            self.scene.index("void main()")
-        ]
-        self.assertIn("renodx::math::ZeroNaN(scene_linear_bt709)", helper)
-        for control in ("HIGHLIGHTS", "SHADOWS", "CONTRAST", "SATURATION"):
-            self.assertRegex(
-                helper,
-                rf"abs\(RENODX_TONE_MAP_{control}\s*-\s*1\.0\)\s*"
-                rf"<=\s*1\.0e-6",
-            )
-        self.assertRegex(
-            helper,
-            r"restore_strength\s*<=\s*0\.0\s*\|\|\s*"
-            r"!neutral_color_controls",
-        )
-        self.assertRegex(
-            helper,
-            r"source_at_mapped_peak\s*=\s*"
-            r"source\s*\*\s*\(mapped_peak\s*/\s*source_peak\)",
-        )
-        self.assertRegex(
-            helper,
-            r"return mix\(\s*psychov_display_bt709\s*,\s*"
-            r"source_at_mapped_peak\s*,",
-        )
-        executable = "\n".join(
-            line for line in helper.splitlines()
-            if not line.lstrip().startswith("//")
-        )
-        self.assertNotIn("ApplyPerChannelCorrection", executable)
-        self.assertNotRegex(executable.lower(), r"ictcp|\bpq::")
-
     def test_no_unsafe_post_psychov_color_correction(self):
         psychov_path = self.scene[self.scene.index("psychotm_test17") :]
+        self.assertNotIn("RestorePsychoVHighlightColor", psychov_path)
         self.assertNotIn("ApplyPerChannelCorrection", psychov_path)
         self.assertNotRegex(psychov_path.lower(), r"ictcp|\bpq::")
 
-    def test_restore_payload_reuses_retired_gamut_slot(self):
+    def test_current_frame_carrier_bit_is_the_authoritative_wide_gate(self):
+        compact_shared = re.sub(r"\\\s*\n\s*", " ", self.shared)
         self.assertRegex(
-            self.shared,
+            compact_shared,
+            r"#define\s+CUSTOM_RUNTIME_FLAGS\s+"
+            r"uint\(max\(shader_injection\.runtime_flags,\s*0\.f\)\)",
+        )
+        self.assertRegex(
+            compact_shared,
+            r"#define\s+CUSTOM_PSYCHOV_BT2020_ACTIVE\s+"
+            r"\(\(CUSTOM_RUNTIME_FLAGS\s*&\s*0x2u\)\s*!=\s*0u\)",
+        )
+        carrier_macro = re.search(
+            r"#define\s+CUSTOM_PSYCHOV_BT2020_ACTIVE\s+([^\n]+)",
+            compact_shared,
+        )
+        self.assertIsNotNone(carrier_macro)
+        self.assertNotIn("CUSTOM_HDR_ACTIVE", carrier_macro.group(1))
+        self.assertNotIn("RENODX_PSYCHOV_GAMUT_MODE", carrier_macro.group(1))
+        self.assertNotIn("CUSTOM_RENDER_DEBUG_PAYLOAD", carrier_macro.group(1))
+
+        self.assertRegex(
+            self.scene,
+            r"const int renodx_psychov_gamut_mode\s*=\s*"
+            r"CUSTOM_PSYCHOV_BT2020_ACTIVE\s*\?\s*1\s*:\s*0\s*;",
+        )
+        for function_name in ("psychotm_test17", "psychotm_test22"):
+            with self.subTest(function=function_name):
+                arguments = extract_call_arguments(
+                    self.scene,
+                    f"renodx::tonemap::psychov::{function_name}",
+                )
+                self.assertEqual(arguments[16], "renodx_psychov_gamut_mode")
+
+    def test_native_mire_patterns_join_the_active_bt2020_carrier(self):
+        self.assertIn(
+            '#include "hdr_intermediate.hlsli"',
+            self.scene,
+        )
+        executable_scene = strip_shader_comments(self.scene)
+        self.assertRegex(
+            executable_scene,
             re.compile(
-                r"float psychov_input_adaptation;\s*"
-                r"float psychov_output_adaptation;\s*"
-                r"float psychov_gamut_compression;\s*"
-                r"float psychov22_highlight_color_restore;",
+                r"if\s*\(CUSTOM_PSYCHOV_BT2020_ACTIVE\s*"
+                r"&&\s*_541\.g_cbComposite\._viMireSrgb\.x\s*!=\s*0\)"
+                r"\s*\{\s*_2706\s*=\s*"
+                r"DetroitBt709CodeToBt2020Code\(_2706\)\s*;",
                 re.DOTALL,
             ),
         )
-        self.assertNotIn("psychov_gamut_mode", self.shared)
-        self.assertIn(
-            "#define RENODX_PSYCHOV22_HIGHLIGHT_COLOR_RESTORE",
+        self.assertRegex(
+            self.hdr_intermediate,
+            re.compile(
+                r"DetroitBt709CodeToBt2020Code\(vec3 bt709_code\).*?"
+                r"DetroitDisplayLightToIntermediateCode\(\s*"
+                r"DetroitBt709ToBt2020\(\s*"
+                r"DetroitIntermediateCodeToDisplayLight\(bt709_code\)\s*"
+                r"\)\s*\)",
+                re.DOTALL,
+            ),
+        )
+
+        # Saturated native test-pattern code must be converted in display
+        # light, not multiplied directly in its gamma-shaped carrier.
+        native_blue = (0.0, 0.0, 1.0)
+        display_blue = tuple(channel**2.2 for channel in native_blue)
+        wide_display = multiply_matrix(BT709_TO_BT2020, display_blue)
+        wide_code = tuple(max(channel, 0.0) ** (1.0 / 2.2)
+                          for channel in wide_display)
+        decoded = tuple(channel**2.2 for channel in wide_code)
+        for actual, expected in zip(decoded, wide_display):
+            self.assertAlmostEqual(actual, expected, places=12)
+
+    def test_cp2077_controls_reuse_the_existing_psychov_abi_slots(self):
+        self.assertRegex(
             self.shared,
+            re.compile(
+                r"float psychov_cone_response;\s*"
+                r"float psychov_exposure_match;\s*"
+                r"float psychov_vanilla_slope;\s*"
+                r"float psychov_gamut_mode;",
+                re.DOTALL,
+            ),
         )
-
-    def test_highlight_color_restore_control_is_psychov22_only(self):
-        setting = re.search(
-            r'\.key\s*=\s*"PsychoV22HighlightColorRestore"(?P<body>.*?)'
-            r'\.key\s*=\s*"PsychoV17Bleaching"',
-            self.addon,
-            re.DOTALL,
+        self.assertIn("#define RENODX_PSYCHOV_CONE_RESPONSE", self.shared)
+        self.assertIn("#define RENODX_PSYCHOV_EXPOSURE_MATCH", self.shared)
+        self.assertIn("#define RENODX_PSYCHOV_VANILLA_SLOPE", self.shared)
+        self.assertRegex(
+            self.temporal_aux,
+            re.compile(
+                r"float psychov_cone_response;\s*"
+                r"float psychov_exposure_match;\s*"
+                r"float psychov_vanilla_slope;\s*"
+                r"float psychov_gamut_mode;\s*"
+                r"float psychov17_bleaching;",
+                re.DOTALL,
+            ),
         )
-        self.assertIsNotNone(setting)
-        body = setting.group("body")
-        self.assertIn('.label = "Highlight Color Restore"', body)
-        self.assertIn('.section = "PsychoV-22"', body)
-        self.assertRegex(body, r"tone_map_type\s*==\s*4\.f")
-        self.assertRegex(body, r"\.default_value\s*=\s*0\.f")
-        self.assertIn("override some Gamut Compression chroma", body)
-        self.assertIn(
-            '{"PsychoV22HighlightColorRestore", 0.f}', self.addon
-        )
-
-    def test_hue_restore_control_remains_internal_to_psychov17(self):
-        setting = re.search(
-            r'\.key\s*=\s*"PsychoV17HueRestore"(?P<body>.*?)'
-            r'\.key\s*=\s*"PsychoV22Compression"',
-            self.addon,
-            re.DOTALL,
-        )
-        self.assertIsNotNone(setting)
-        body = setting.group("body")
-        self.assertIn('.label = "Hue Restore"', body)
-        self.assertIn('.section = "PsychoV-17"', body)
-        self.assertRegex(body, r"tone_map_type\s*==\s*3\.f")
-        self.assertRegex(body, r"\.default_value\s*=\s*100\.f")
-
-    def test_blue_and_cyan_round_trip_preserves_chromaticity(self):
-        swatches = {
-            "blue": (0.10, 0.40, 2.00),
-            "cyan": (0.05, 1.20, 1.50),
-        }
-        for name, swatch in swatches.items():
-            with self.subTest(swatch=name):
-                pq, decoded = full_detroit_round_trip(swatch, 203.0)
-                self.assertTrue(all(math.isfinite(value) for value in pq))
-                self.assertTrue(all(math.isfinite(value) for value in decoded))
-                self.assertGreater(decoded[2], decoded[1])
-                self.assertGreater(decoded[1], decoded[0])
-                self.assertGreater(max(decoded) - min(decoded), 0.25)
-                expected_display = tuple(
-                    value * 203.0 / 300.0
-                    for value in swatch
+        for field in (
+            "psychov_cone_response",
+            "psychov_exposure_match",
+            "psychov_vanilla_slope",
+        ):
+            with self.subTest(field=field):
+                self.assertIn(
+                    f"!isnan(shader_injection.{field})", self.temporal_aux
                 )
-                expected_sum = sum(expected_display)
-                actual_sum = sum(decoded)
-                for expected, actual in zip(expected_display, decoded):
+                self.assertIn(
+                    f"!isinf(shader_injection.{field})", self.temporal_aux
+                )
+
+    def test_runtime_flags_reuse_offset_76_without_changing_the_112_byte_abi(self):
+        expected_slice = (
+            "runtime_flags",
+            "psychov_cone_response",
+            "psychov_exposure_match",
+            "psychov_vanilla_slope",
+        )
+        for name, source in (
+            ("shared", self.shared),
+            ("temporal auxiliary", self.temporal_aux),
+        ):
+            with self.subTest(source=name):
+                struct_body = re.search(
+                    r"struct\s+ShaderInjectData(?:_std140)?\s*"
+                    r"\{(?P<body>.*?)\};",
+                    source,
+                    re.DOTALL,
+                )
+                self.assertIsNotNone(struct_body)
+                fields = tuple(
+                    re.findall(r"\bfloat\s+([A-Za-z0-9_]+)\s*;", struct_body.group("body"))
+                )
+                self.assertEqual(fields[19:23], expected_slice)
+                self.assertEqual(fields.index("runtime_flags") * 4, 76)
+                self.assertEqual(fields.index("psychov_cone_response") * 4, 80)
+                self.assertEqual(fields.index("psychov_exposure_match") * 4, 84)
+                self.assertEqual(fields.index("psychov_vanilla_slope") * 4, 88)
+                self.assertEqual(len(fields) * 4, 112)
+        self.assertIn("static_assert(sizeof(ShaderInjectData) == 112u);", self.shared)
+        self.assertIn(
+            "!isnan(shader_injection.runtime_flags)", self.temporal_aux
+        )
+        self.assertIn(
+            "!isinf(shader_injection.runtime_flags)", self.temporal_aux
+        )
+        self.assertNotRegex(self.shared, r"\bfloat\s+reserved\s*;")
+        self.assertNotRegex(self.temporal_aux, r"\bfloat\s+reserved\s*;")
+
+    def test_cp2077_psychov_settings_have_exact_defaults_and_parses(self):
+        cone = extract_setting(self.addon, "ColorGradeConeResponse")
+        self.assertIn(
+            ".binding = &shader_injection.psychov_cone_response", cone
+        )
+        self.assertIn('.label = "Cone Response"', cone)
+        self.assertIn('.section = "Color Grading"', cone)
+        self.assertRegex(cone, r"\.default_value\s*=\s*50\.f")
+        self.assertRegex(cone, r"\.min\s*=\s*0\.f")
+        self.assertRegex(cone, r"\.max\s*=\s*100\.f")
+        self.assertRegex(
+            cone,
+            r"\.parse\s*=\s*\[\]\(float value\)\s*"
+            r"\{\s*return value \* 0\.02f;\s*\}",
+        )
+        self.assertRegex(cone, r"tone_map_type\s*>=\s*3\.f")
+
+        exposure_match = extract_setting(
+            self.addon, "ToneMapPsychoVExposureMatch"
+        )
+        self.assertIn(
+            ".binding = &shader_injection.psychov_exposure_match",
+            exposure_match,
+        )
+        self.assertIn("SettingValueType::BOOLEAN", exposure_match)
+        self.assertIn('.label = "Exposure Match"', exposure_match)
+        self.assertIn('.section = "Color Grading"', exposure_match)
+        self.assertRegex(exposure_match, r"\.default_value\s*=\s*1\.f")
+        self.assertRegex(exposure_match, r"tone_map_type\s*>=\s*3\.f")
+
+        slope = extract_setting(
+            self.addon, "ToneMapPsychoVVanillaHDRSlope"
+        )
+        self.assertIn(
+            ".binding = &shader_injection.psychov_vanilla_slope", slope
+        )
+        self.assertIn('.label = "Vanilla HDR Slope"', slope)
+        self.assertIn('.section = "Color Grading"', slope)
+        self.assertRegex(slope, r"\.default_value\s*=\s*100\.f")
+        self.assertRegex(slope, r"\.min\s*=\s*0\.f")
+        self.assertRegex(slope, r"\.max\s*=\s*100\.f")
+        self.assertRegex(
+            slope,
+            r"\.parse\s*=\s*\[\]\(float value\)\s*"
+            r"\{\s*return value \* 0\.01f;\s*\}",
+        )
+        self.assertRegex(slope, r"tone_map_type\s*>=\s*3\.f")
+
+        for key, value in (
+            ("ColorGradeConeResponse", "50.f"),
+            ("ToneMapPsychoVExposureMatch", "1.f"),
+            ("ToneMapPsychoVVanillaHDRSlope", "100.f"),
+        ):
+            with self.subTest(reset_key=key):
+                self.assertIn(f'{{"{key}", {value}}}', self.addon)
+
+    def test_old_manual_psychov_settings_are_absent(self):
+        for key in (
+            "PsychoVInputAdaptation",
+            "PsychoVOutputAdaptation",
+            "PsychoVGamutCompression",
+            "PsychoVGamut",
+            "PsychoV17Bleaching",
+            "PsychoV17HueRestore",
+            "PsychoV22Compression",
+            "PsychoV22HighlightColorRestore",
+        ):
+            with self.subTest(key=key):
+                self.assertNotIn(f'"{key}"', self.addon)
+
+    def test_bt2020_signed_representatives_convert_before_sanitize(self):
+        representatives = {
+            "red": (1.6604910021, -0.1245504745, -0.0181507634),
+            "green": (-0.5876411388, 1.1328998971, -0.1005788980),
+            "blue": (-0.0728498633, -0.0083494226, 1.1187296614),
+        }
+        for index, (name, representative) in enumerate(
+            representatives.items()
+        ):
+            with self.subTest(primary=name):
+                converted = psychov_raw_to_intermediate(
+                    representative, 1.0, True
+                )
+                expected = tuple(
+                    1.0 if channel == index else 0.0
+                    for channel in range(3)
+                )
+                for actual, target in zip(converted, expected):
+                    self.assertAlmostEqual(actual, target, delta=6.0e-5)
+
+                clipped_first = sanitize_psychov_display(
+                    representative, 1.0
+                )
+                wrong_order = multiply_matrix(
+                    BT709_TO_BT2020, clipped_first
+                )
+                self.assertGreater(
+                    max(
+                        abs(actual - target)
+                        for actual, target in zip(wrong_order, expected)
+                    ),
+                    0.05,
+                )
+
+    def test_p3_and_bt2020_chromaticity_survive_the_wide_round_trip(self):
+        bt2020_to_p3 = (
+            (1.34357821, -0.282179683, -0.0613985806),
+            (-0.0652974545, 1.07578790, -0.0104904631),
+            (0.00282178726, -0.0195984952, 1.01677668),
+        )
+        swatches_bt2020 = {
+            "p3_red": (0.80, 0.10, 0.02),
+            "bt2020_blue": (0.02, 0.10, 1.00),
+        }
+        p3_as_p3 = multiply_matrix(
+            bt2020_to_p3, swatches_bt2020["p3_red"]
+        )
+        p3_as_bt709 = multiply_matrix(
+            BT2020_TO_BT709, swatches_bt2020["p3_red"]
+        )
+        outer_as_p3 = multiply_matrix(
+            bt2020_to_p3, swatches_bt2020["bt2020_blue"]
+        )
+        self.assertTrue(all(channel >= 0.0 for channel in p3_as_p3))
+        self.assertTrue(any(channel < 0.0 for channel in p3_as_bt709))
+        self.assertTrue(any(channel < 0.0 for channel in outer_as_p3))
+
+        game_nits = 203.0
+        for name, display_bt2020 in swatches_bt2020.items():
+            with self.subTest(swatch=name):
+                raw_bt709 = multiply_matrix(BT2020_TO_BT709, display_bt2020)
+                pq, decoded_bt2020 = full_detroit_round_trip(
+                    raw_bt709,
+                    game_nits,
+                    psychov_peak=2.0,
+                    wide_gamut=True,
+                )
+                self.assertTrue(all(math.isfinite(value) for value in pq))
+                self.assertTrue(
+                    all(math.isfinite(value) for value in decoded_bt2020)
+                )
+                expected = tuple(
+                    channel * game_nits / 300.0
+                    for channel in display_bt2020
+                )
+                expected_sum = sum(expected)
+                decoded_sum = sum(decoded_bt2020)
+                for target, actual in zip(expected, decoded_bt2020):
                     self.assertAlmostEqual(
-                        actual / actual_sum,
-                        expected / expected_sum,
+                        actual / decoded_sum,
+                        target / expected_sum,
                         delta=5.0e-5,
                     )
 
-    def test_bt709_hull_is_hardcoded_not_user_selectable(self):
-        self.assertNotIn('.key = "PsychoVGamut"', self.addon)
-        self.assertNotIn('{"PsychoVGamut",', self.addon)
-
-    def test_safe_restore_bypasses_zero_strength_and_non_neutral_controls(self):
-        mapped = (3.7, 3.6, 4.0)
-        zero_strength = restore_psychov_highlight_color(
-            (0.1, 4.0, 5.0), mapped, 5.0, 0.0
-        )
-        self.assertEqual(zero_strength, mapped)
-
-        non_neutral_controls = (
-            ("highlights", {"highlights": 0.5}),
-            ("shadows", {"shadows": 0.0}),
-            ("contrast", {"contrast": 1.5}),
-            ("saturation_zero", {"saturation": 0.0}),
-            ("saturation_half", {"saturation": 0.5}),
-        )
-        for name, controls in non_neutral_controls:
-            with self.subTest(control=name):
-                bypassed = restore_psychov_highlight_color(
-                    (0.1, 4.0, 5.0),
-                    mapped,
-                    5.0,
-                    1.0,
-                    **controls,
+    def test_wide_round_trip_preserves_luminance_and_configured_peak(self):
+        bt2020_luma = (0.2627002, 0.6779981, 0.0593017)
+        game_nits = 203.0
+        for peak_nits in (600.0, 1000.0, 1033.0, 1068.0):
+            with self.subTest(peak_nits=peak_nits):
+                psychov_peak = peak_nits / game_nits
+                display_bt2020 = (0.12, 0.35, psychov_peak)
+                raw_bt709 = multiply_matrix(BT2020_TO_BT709, display_bt2020)
+                transported_bt2020 = psychov_raw_to_intermediate(
+                    raw_bt709, psychov_peak, True
                 )
-                self.assertEqual(bypassed, mapped)
-
-        # Gamut Compression is already baked into PsychoV's mapped endpoint.
-        # The default-zero post-gamut override must preserve every selection;
-        # an explicit opt-in may change chroma but must retain the safety bounds.
-        gamut_compression_endpoints = {
-            0.0: (4.0, 3.0, 0.5),
-            0.5: (4.0, 3.4, 1.7),
-            1.0: (4.0, 3.8, 3.0),
-        }
-        source = (5.0, 4.5, 0.1)
-        for compression, compressed_mapped in (
-            gamut_compression_endpoints.items()
-        ):
-            with self.subTest(
-                gamut_compression=compression,
-                restore="default_off",
-            ):
-                default_result = restore_psychov_highlight_color(
-                    source, compressed_mapped, 5.0, 0.0
+                _, decoded_bt2020 = full_detroit_round_trip(
+                    raw_bt709,
+                    game_nits,
+                    psychov_peak,
+                    wide_gamut=True,
                 )
-                self.assertEqual(default_result, compressed_mapped)
-
-            with self.subTest(
-                gamut_compression=compression,
-                restore="explicit_on",
-            ):
-                opted_in = restore_psychov_highlight_color(
-                    source, compressed_mapped, 5.0, 1.0
+                self.assertAlmostEqual(
+                    max(decoded_bt2020) * 300.0, peak_nits, places=6
                 )
-                self.assertTrue(
-                    all(math.isfinite(channel) for channel in opted_in)
+                expected_luminance = sum(
+                    weight * channel * game_nits
+                    for weight, channel in zip(
+                        bt2020_luma, transported_bt2020
+                    )
                 )
-                self.assertTrue(all(channel >= 0.0 for channel in opted_in))
-                self.assertLessEqual(
-                    max(opted_in), max(compressed_mapped) + 1.0e-12
+                actual_luminance = sum(
+                    weight * channel * 300.0
+                    for weight, channel in zip(bt2020_luma, decoded_bt2020)
+                )
+                self.assertAlmostEqual(
+                    actual_luminance, expected_luminance, places=6
                 )
 
-    def test_sanitize_and_restore_are_finite_nonnegative_and_peak_bounded(self):
+    def test_sanitize_is_finite_nonnegative_and_peak_bounded(self):
         scaled = sanitize_psychov_display((10.0, 5.0, 2.0), 5.0)
         self.assertEqual(scaled, (5.0, 2.5, 1.0))
         self.assertAlmostEqual(scaled[0] / scaled[1], 2.0)
@@ -641,59 +1105,6 @@ class PsychoVContractTests(unittest.TestCase):
             (math.inf, 2.0, 1.0), 5.0
         )
         self.assertEqual(inf_replaced, (5.0, 2.0, 1.0))
-
-        cases = (
-            ((5.0, 4.0, 0.1), (4.0, 3.7, 3.0)),
-            ((0.2, 0.5, 6.0), (3.0, 3.1, 4.0)),
-            ((math.nan, 5.0, 2.0), (math.nan, -1.0, math.inf)),
-            ((math.inf, 1.0, 0.0), (1.5, 1.2, 2.0)),
-            ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),
-        )
-        peak = 5.0
-        for scene, raw_mapped in cases:
-            mapped = sanitize_psychov_display(raw_mapped, peak)
-            for strength in (-1.0, 0.0, 0.5, 1.0, 2.0):
-                with self.subTest(
-                    scene=scene, mapped=mapped, strength=strength
-                ):
-                    restored = restore_psychov_highlight_color(
-                        scene, mapped, peak, strength
-                    )
-                    self.assertTrue(
-                        all(math.isfinite(channel) for channel in restored)
-                    )
-                    self.assertTrue(
-                        all(channel >= 0.0 for channel in restored)
-                    )
-                    self.assertLessEqual(
-                        max(restored), max(mapped) + 1.0e-12
-                    )
-
-    def test_safe_restore_recovers_lost_purity_only_in_highlights(self):
-        swatches = {
-            "yellow": ((5.0, 4.5, 0.1), (4.0, 3.7, 3.0)),
-            "blue": ((0.2, 0.5, 6.0), (3.0, 3.1, 4.0)),
-            "cyan": ((0.1, 5.0, 6.0), (2.8, 3.8, 4.0)),
-        }
-        peak = 5.0
-        for name, (source, mapped) in swatches.items():
-            with self.subTest(swatch=name, range="highlight"):
-                restored = restore_psychov_highlight_color(
-                    source, mapped, peak, 1.0
-                )
-                mapped_purity = (max(mapped) - min(mapped)) / max(mapped)
-                restored_purity = (
-                    max(restored) - min(restored)
-                ) / max(restored)
-                self.assertGreater(restored_purity, mapped_purity)
-                self.assertLessEqual(max(restored), max(mapped) + 1.0e-12)
-
-            midtone = tuple(channel * 0.2 for channel in mapped)
-            with self.subTest(swatch=name, range="midtone"):
-                restored_midtone = restore_psychov_highlight_color(
-                    source, midtone, peak, 1.0
-                )
-                self.assertEqual(restored_midtone, midtone)
 
 
 if __name__ == "__main__":

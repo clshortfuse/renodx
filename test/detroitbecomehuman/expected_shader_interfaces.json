@@ -22,11 +22,11 @@
       { "name": "cas_strength", "type": "float", "offset": 64 },
       { "name": "scene_path_active", "type": "float", "offset": 68 },
       { "name": "ui_path_active", "type": "float", "offset": 72 },
-      { "name": "reserved", "type": "float", "offset": 76 },
-      { "name": "psychov_input_adaptation", "type": "float", "offset": 80 },
-      { "name": "psychov_output_adaptation", "type": "float", "offset": 84 },
-      { "name": "psychov_gamut_compression", "type": "float", "offset": 88 },
-      { "name": "psychov22_highlight_color_restore", "type": "float", "offset": 92 },
+      { "name": "runtime_flags", "type": "float", "offset": 76 },
+      { "name": "psychov_cone_response", "type": "float", "offset": 80 },
+      { "name": "psychov_exposure_match", "type": "float", "offset": 84 },
+      { "name": "psychov_vanilla_slope", "type": "float", "offset": 88 },
+      { "name": "psychov_gamut_mode", "type": "float", "offset": 92 },
       { "name": "psychov17_bleaching", "type": "float", "offset": 96 },
       { "name": "psychov17_hue_restore", "type": "float", "offset": 100 },
       { "name": "psychov22_compression", "type": "float", "offset": 104 },
@@ -34,6 +34,23 @@
     ]
   },
   "shaders": {
+    "0x11C1C2C5": {
+      "stage": "frag",
+      "entry_point": "main",
+      "inputs": [
+        { "location": 0, "type": "vec4" },
+        { "location": 1, "type": "vec2" },
+        { "location": 2, "type": "vec4" }
+      ],
+      "outputs": [
+        { "location": 0, "type": "vec4" }
+      ],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 3, "type": "sampler2D" },
+        { "kind": "ubos", "set": 0, "binding": 1, "block_size": 16 }
+      ]
+    },
     "0x2892BFCA": {
       "stage": "frag",
       "entry_point": "main",
@@ -107,6 +124,43 @@
         { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" }
       ]
     },
+    "0x97874322": {
+      "stage": "frag",
+      "entry_point": "main",
+      "inputs": [
+        { "location": 0, "type": "vec4" },
+        { "location": 1, "type": "vec4" },
+        { "location": 2, "type": "vec4" },
+        { "location": 3, "type": "vec4" },
+        { "location": 4, "type": "vec2" }
+      ],
+      "outputs": [
+        { "location": 0, "type": "vec4" }
+      ],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 3, "type": "sampler2D" },
+        { "kind": "ubos", "set": 0, "binding": 1, "block_size": 16 }
+      ]
+    },
+    "0xC5B9F7FA": {
+      "stage": "frag",
+      "entry_point": "main",
+      "inputs": [
+        { "location": 0, "type": "vec4" },
+        { "location": 1, "type": "vec4" },
+        { "location": 2, "type": "vec4" },
+        { "location": 3, "type": "vec4" },
+        { "location": 4, "type": "vec4" }
+      ],
+      "outputs": [
+        { "location": 0, "type": "vec4" }
+      ],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" },
+        { "kind": "ubos", "set": 0, "binding": 1, "block_size": 16 }
+      ]
+    },
     "0xEBFBDDB1": {
       "stage": "comp",
       "entry_point": "main",
@@ -122,6 +176,23 @@
         { "kind": "images", "set": 0, "binding": 16, "type": "image2D", "format": "rgba16f", "writeonly": true },
         { "kind": "ubos", "set": 0, "binding": 52, "block_size": 144 },
         { "kind": "ubos", "set": 0, "binding": 53, "block_size": 144 }
+      ]
+    },
+    "0xEF606BCD": {
+      "stage": "frag",
+      "entry_point": "main",
+      "inputs": [
+        { "location": 0, "type": "vec4" },
+        { "location": 1, "type": "vec4" },
+        { "location": 2, "type": "vec2" }
+      ],
+      "outputs": [
+        { "location": 0, "type": "vec4" }
+      ],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 3, "type": "sampler2D" },
+        { "kind": "ubos", "set": 0, "binding": 1, "block_size": 80 }
       ]
     },
     "0xE9907978": {

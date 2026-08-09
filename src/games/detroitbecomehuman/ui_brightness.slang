@@ -1,14 +1,13 @@
 #ifndef SRC_DETROITBECOMEHUMAN_UI_BRIGHTNESS_SLANG_
 #define SRC_DETROITBECOMEHUMAN_UI_BRIGHTNESS_SLANG_
 
+#include "./hdr_intermediate.hlsli"
+
 // Detroit's native HDR output maps a neutral UI code value to display light as
 // pow(code, 2.2) * 300 nits when the in-game gamma is neutral (1.0). Scale in
 // that display-light domain, then apply the inverse. A direct code-value
 // multiply would not target the requested nit level.
 const float DETROIT_NATIVE_UI_WHITE_NITS = 300.0;
-const float DETROIT_PRE_PQ_GAMMA = 2.2000000476837158203125;
-const float DETROIT_INV_PRE_PQ_GAMMA =
-    0.454545438289642333984375;
 
 bool DetroitUsesHdrOutput()
 {
@@ -27,30 +26,36 @@ bool DetroitShouldScaleUi()
            (RENODX_GRAPHICS_WHITE_NITS != DETROIT_NATIVE_UI_WHITE_NITS);
 }
 
+bool DetroitShouldTransformUi()
+{
+    return DetroitShouldScaleUi() || CUSTOM_PSYCHOV_BT2020_ACTIVE;
+}
+
 vec3 DetroitUiCodeToDisplayLight(vec3 code_value)
 {
-    return pow(max(code_value, vec3(0.0)),
-               vec3(DETROIT_PRE_PQ_GAMMA));
+    return DetroitIntermediateCodeToDisplayLight(code_value);
 }
 
 vec3 DetroitDisplayLightToUiCode(vec3 display_light)
 {
-    return pow(max(display_light, vec3(0.0)),
-               vec3(DETROIT_INV_PRE_PQ_GAMMA));
+    return DetroitDisplayLightToIntermediateCode(display_light);
 }
 
 vec3 DetroitScaleUiRgb(vec3 vanilla_rgb)
 {
     float light_scale = max(RENODX_GRAPHICS_WHITE_NITS, 0.0) /
                         DETROIT_NATIVE_UI_WHITE_NITS;
-    vec3 scaled_rgb = DetroitDisplayLightToUiCode(
-        DetroitUiCodeToDisplayLight(vanilla_rgb) * light_scale);
-
-    // The confirmed Scaleform paths normally produce non-negative RGB. The
-    // alpha-mask path has no native clamp, so preserve any negative component
-    // rather than feeding it to a fractional power or silently clamping it.
-    return mix(vanilla_rgb, scaled_rgb,
-               greaterThanEqual(vanilla_rgb, vec3(0.0)));
+    vec3 display_light =
+        DetroitUiCodeToDisplayLight(vanilla_rgb) * light_scale;
+    if (CUSTOM_PSYCHOV_BT2020_ACTIVE)
+    {
+        // The scene intermediate changes primaries in PsychoV BT.2020 mode.
+        // Convert UI in display light before alpha blending into that target.
+        display_light = DetroitBt709ToBt2020(display_light);
+    }
+    // A transformed HDR intermediate must stay non-negative: both native
+    // OETF variants apply fractional powers before PQ encoding.
+    return DetroitDisplayLightToUiCode(display_light);
 }
 
 #endif  // SRC_DETROITBECOMEHUMAN_UI_BRIGHTNESS_SLANG_

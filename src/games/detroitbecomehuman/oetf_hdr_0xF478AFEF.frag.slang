@@ -2,6 +2,7 @@
 
 #include "shared.h"
 #include "display_peak_limiter.hlsli"
+#include "hdr_intermediate.hlsli"
 
 struct OETF_CONSTANT_BUFFER
 {
@@ -63,22 +64,15 @@ void main()
     const vec3 gamma_adjusted = pow(
         decoded, vec3(1.0 / _444.g_cbOETF._vfGamma.x));
     const vec3 srgb_encoded = EncodeSrgb(gamma_adjusted);
-    vec3 display_light_bt709 = pow(
+    vec3 display_light_intermediate = pow(
         srgb_encoded, vec3(2.2000000476837158203125));
-    display_light_bt709 = LimitDisplayLightPeak(display_light_bt709);
-
-    const mat3 bt709_to_bt2020 = mat3(
-        vec3(0.627399981021881103515625,
-             0.069099999964237213134765625,
-             0.01640000008046627044677734375),
-        vec3(0.329299986362457275390625,
-             0.91949999332427978515625,
-             0.087999999523162841796875),
-        vec3(0.0432999990880489349365234375,
-             0.011400000192224979400634765625,
-             0.895600020885467529296875));
+    display_light_intermediate =
+        LimitDisplayLightPeak(display_light_intermediate);
+    const vec3 display_light_bt2020 =
+        DetroitIntermediateDisplayLightToBt2020(
+            display_light_intermediate);
     const vec3 normalized_bt2020 =
-        (bt709_to_bt2020 * ((display_light_bt709 * 3.0) * 100.0)) *
+        ((display_light_bt2020 * 3.0) * 100.0) *
         9.9999997473787516355514526367188e-05;
     const vec3 pq_power = pow(
         normalized_bt2020, vec3(0.1593017578125));

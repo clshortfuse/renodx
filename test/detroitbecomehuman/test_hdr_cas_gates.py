@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 import random
 import re
@@ -19,6 +20,10 @@ OUTPUT_MODE_HDR10 = 2.0
 CAS_MODE_VANILLA = 0.0
 CAS_MODE_OFF = 1.0
 CAS_MODE_RENODX = 2.0
+
+RUNTIME_FLAG_DLSS_OUTPUT = 1 << 0
+RUNTIME_FLAG_PSYCHOV_BT2020 = 1 << 1
+RUNTIME_FLAG_MASK = RUNTIME_FLAG_DLSS_OUTPUT | RUNTIME_FLAG_PSYCHOV_BT2020
 
 
 def _parse_arguments() -> Path:
@@ -45,8 +50,40 @@ def custom_hdr_active(output_mode: float, output_is_hdr: float) -> bool:
     return output_is_hdr >= 0.5 and output_mode != OUTPUT_MODE_SDR
 
 
-def custom_dlss_active(dlss_payload: float) -> bool:
-    return dlss_payload >= 0.5
+def normalize_runtime_flags(runtime_flags: float | int) -> int:
+    if not math.isfinite(float(runtime_flags)):
+        return 0
+    return min(max(round(float(runtime_flags)), 0), RUNTIME_FLAG_MASK)
+
+
+def set_runtime_flag(runtime_flags: int, flag: int, enabled: bool) -> int:
+    flags = normalize_runtime_flags(runtime_flags)
+    return (flags | flag) if enabled else (flags & ~flag)
+
+
+def custom_dlss_active(runtime_flags: float | int) -> bool:
+    return (
+        normalize_runtime_flags(runtime_flags) & RUNTIME_FLAG_DLSS_OUTPUT
+    ) != 0
+
+
+def custom_psychov_bt2020_active(runtime_flags: float | int) -> bool:
+    return (
+        normalize_runtime_flags(runtime_flags) & RUNTIME_FLAG_PSYCHOV_BT2020
+    ) != 0
+
+
+def should_write_psychov_bt2020_intermediate(
+    output_mode: float,
+    output_is_hdr: float,
+    tone_map_type: float,
+    render_debug_payload: float,
+) -> bool:
+    return (
+        custom_hdr_active(output_mode, output_is_hdr)
+        and tone_map_type in (3.0, 4.0)
+        and float32_bits(render_debug_payload) == b"\0\0\0\0"
+    )
 
 
 def custom_dlaa_sharpening(strength: float) -> float:
@@ -57,10 +94,10 @@ def use_hdr_safe_cas(
     output_mode: float,
     output_is_hdr: float,
     cas_mode: float,
-    dlss_payload: float = 0.0,
+    runtime_flags: float = 0.0,
 ) -> bool:
     return custom_hdr_active(output_mode, output_is_hdr) and (
-        cas_mode >= 0.5 or custom_dlss_active(dlss_payload)
+        cas_mode >= 0.5 or custom_dlss_active(runtime_flags)
     )
 
 
@@ -76,16 +113,16 @@ def effective_sharpness(
     output_is_hdr: float,
     cas_mode: float,
     cas_strength: float,
-    dlss_payload: float = 0.0,
+    runtime_flags: float = 0.0,
 ) -> float:
     """Model only the production branch that may alter native CAS strength."""
     native = float32(native_sharpness)
-    if custom_dlss_active(dlss_payload):
+    if custom_dlss_active(runtime_flags):
         # The pre-DOF adapter pack owns DLAA sharpening; the optional late
         # native CAS pass is disabled to prevent double sharpening.
         return float32(0.0)
     if not use_hdr_safe_cas(
-        output_mode, output_is_hdr, cas_mode, dlss_payload
+        output_mode, output_is_hdr, cas_mode, runtime_flags
     ):
         return native
     if cas_mode < 1.5:
@@ -161,6 +198,83 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertFalse(custom_hdr_active(OUTPUT_MODE_AUTO, 0.0))
         self.assertTrue(custom_hdr_active(OUTPUT_MODE_AUTO, 1.0))
 
+    def test_scene_draw_sets_wide_carrier_only_for_the_actual_wide_path(self):
+        for tone_map_type in (3.0, 4.0):
+            with self.subTest(tone_map_type=tone_map_type):
+                self.assertTrue(
+                    should_write_psychov_bt2020_intermediate(
+                        OUTPUT_MODE_AUTO,
+                        1.0,
+                        tone_map_type,
+                        0.0,
+                    )
+                )
+
+        blocked_cases = (
+            (OUTPUT_MODE_SDR, 1.0, 4.0, 0.0, "forced SDR"),
+            (OUTPUT_MODE_HDR10, 0.0, 4.0, 0.0, "SDR swapchain"),
+            (OUTPUT_MODE_AUTO, 1.0, 2.0, 0.0, "RenoDRT"),
+            (OUTPUT_MODE_AUTO, 1.0, 4.0, 1.0, "debug view"),
+            (OUTPUT_MODE_AUTO, 1.0, 4.0, -0.0, "packed debug"),
+        )
+        for (
+            output_mode,
+            output_is_hdr,
+            tone_map_type,
+            debug_payload,
+            reason,
+        ) in blocked_cases:
+            with self.subTest(reason=reason):
+                self.assertFalse(
+                    should_write_psychov_bt2020_intermediate(
+                        output_mode,
+                        output_is_hdr,
+                        tone_map_type,
+                        debug_payload,
+                    )
+                )
+
+    def test_no_scene_video_or_loading_frame_falls_back_to_bt709(self):
+        previous_frame_flags = (
+            RUNTIME_FLAG_DLSS_OUTPUT | RUNTIME_FLAG_PSYCHOV_BT2020
+        )
+        # OnPresent clears transient state. Settings alone cannot reactivate the
+        # carrier when the following video/loading frame has no scene draw.
+        next_frame_flags = 0
+        self.assertTrue(custom_psychov_bt2020_active(previous_frame_flags))
+        self.assertTrue(
+            should_write_psychov_bt2020_intermediate(
+                OUTPUT_MODE_AUTO, 1.0, 4.0, 0.0
+            )
+        )
+        self.assertFalse(custom_psychov_bt2020_active(next_frame_flags))
+
+    def test_runtime_flag_updates_preserve_dlss_and_wide_carrier_bits(self):
+        flags = set_runtime_flag(0, RUNTIME_FLAG_PSYCHOV_BT2020, True)
+        flags = set_runtime_flag(flags, RUNTIME_FLAG_DLSS_OUTPUT, True)
+        self.assertEqual(flags, RUNTIME_FLAG_MASK)
+        self.assertTrue(custom_dlss_active(flags))
+        self.assertTrue(custom_psychov_bt2020_active(flags))
+
+        flags = set_runtime_flag(flags, RUNTIME_FLAG_DLSS_OUTPUT, False)
+        self.assertEqual(flags, RUNTIME_FLAG_PSYCHOV_BT2020)
+        self.assertFalse(custom_dlss_active(flags))
+        self.assertTrue(custom_psychov_bt2020_active(flags))
+
+        flags = set_runtime_flag(flags, RUNTIME_FLAG_DLSS_OUTPUT, True)
+        flags = set_runtime_flag(flags, RUNTIME_FLAG_PSYCHOV_BT2020, False)
+        self.assertEqual(flags, RUNTIME_FLAG_DLSS_OUTPUT)
+        self.assertTrue(custom_dlss_active(flags))
+        self.assertFalse(custom_psychov_bt2020_active(flags))
+
+    def test_final_basis_gate_uses_the_actual_carrier_bit(self):
+        self.assertFalse(custom_psychov_bt2020_active(0))
+        self.assertFalse(custom_psychov_bt2020_active(RUNTIME_FLAG_DLSS_OUTPUT))
+        self.assertTrue(
+            custom_psychov_bt2020_active(RUNTIME_FLAG_PSYCHOV_BT2020)
+        )
+        self.assertTrue(custom_psychov_bt2020_active(RUNTIME_FLAG_MASK))
+
     def test_vanilla_is_an_exact_bypass_on_hdr(self):
         for output_mode in (OUTPUT_MODE_AUTO, OUTPUT_MODE_HDR10):
             with self.subTest(output_mode=output_mode):
@@ -230,7 +344,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                     output_is_hdr,
                     cas_mode,
                     1.0,
-                    dlss_payload=1.0,
+                    runtime_flags=RUNTIME_FLAG_DLSS_OUTPUT,
                 )
                 half_native_cas = effective_sharpness(
                     self.native_sharpness,
@@ -238,7 +352,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                     output_is_hdr,
                     cas_mode,
                     0.0,
-                    dlss_payload=1.0,
+                    runtime_flags=RUNTIME_FLAG_DLSS_OUTPUT,
                 )
                 full_native_cas = effective_sharpness(
                     self.native_sharpness,
@@ -246,7 +360,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                     output_is_hdr,
                     cas_mode,
                     0.0,
-                    dlss_payload=1.0,
+                    runtime_flags=RUNTIME_FLAG_DLSS_OUTPUT,
                 )
                 self.assertEqual(disabled, 0.0)
                 self.assertEqual(half_native_cas, 0.0)
@@ -260,7 +374,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                 OUTPUT_MODE_SDR,
                 1.0,
                 CAS_MODE_VANILLA,
-                dlss_payload=1.0,
+                runtime_flags=RUNTIME_FLAG_DLSS_OUTPUT,
             )
         )
         self.assertTrue(
@@ -268,7 +382,7 @@ class HDRAndCASGateTests(unittest.TestCase):
                 OUTPUT_MODE_AUTO,
                 1.0,
                 CAS_MODE_VANILLA,
-                dlss_payload=1.0,
+                runtime_flags=RUNTIME_FLAG_DLSS_OUTPUT,
             )
         )
 
@@ -362,6 +476,9 @@ class HDRAndCASGateTests(unittest.TestCase):
         peak_limiter = (SOURCE_DIR / "display_peak_limiter.hlsli").read_text(
             encoding="utf-8"
         )
+        hdr_intermediate = (SOURCE_DIR / "hdr_intermediate.hlsli").read_text(
+            encoding="utf-8"
+        )
         scene_shader = (SOURCE_DIR / "scene_0xEBFBDDB1.comp.slang").read_text(
             encoding="utf-8"
         )
@@ -399,6 +516,48 @@ class HDRAndCASGateTests(unittest.TestCase):
                 rf"constexpr\s+float\s+{name}\s*=\s*{re.escape(value)}\s*;",
             )
 
+        runtime_helpers = addon[
+            addon.index("constexpr std::uint32_t RUNTIME_FLAG_DLSS_OUTPUT") :
+            addon.index("bool IsSharedHdrIntermediateTarget(")
+        ]
+        self.assertRegex(
+            runtime_helpers,
+            r"RUNTIME_FLAG_DLSS_OUTPUT\s*=\s*1u\s*<<\s*0u\s*;",
+        )
+        self.assertRegex(
+            runtime_helpers,
+            r"RUNTIME_FLAG_PSYCHOV_BT2020\s*=\s*1u\s*<<\s*1u\s*;",
+        )
+        self.assertRegex(
+            runtime_helpers,
+            r"flags\s*=\s*enabled\s*\?\s*"
+            r"\(flags\s*\|\s*flag\)\s*:\s*"
+            r"\(flags\s*&\s*~flag\)\s*;",
+        )
+        self.assertIn(
+            "shader_injection.runtime_flags = static_cast<float>(flags);",
+            runtime_helpers,
+        )
+        should_write = runtime_helpers[
+            runtime_helpers.index("bool ShouldWritePsychoVBt2020Intermediate()") :
+        ]
+        for required_gate in (
+            "shader_injection.output_is_hdr >= 0.5f",
+            "shader_injection.output_mode != OUTPUT_MODE_SDR",
+            "shader_injection.scene_path_active",
+        ):
+            self.assertIn(required_gate, should_write)
+        self.assertRegex(
+            should_write,
+            r"shader_injection\.tone_map_type\s*==\s*3\.f\s*"
+            r"\|\|\s*shader_injection\.tone_map_type\s*==\s*4\.f",
+        )
+        self.assertRegex(
+            should_write,
+            r"std::bit_cast<std::uint32_t>\(\s*"
+            r"shader_injection\.scene_path_active\s*\)\s*==\s*0u",
+        )
+
         peak_setting = re.search(
             r'\{"ToneMapPeakNits",\s*\{(?P<body>[\s\S]*?)\}\},',
             addon,
@@ -431,8 +590,18 @@ class HDRAndCASGateTests(unittest.TestCase):
         )
         self.assertRegex(
             compact_shared,
+            r"#define\s+CUSTOM_RUNTIME_FLAGS\s+"
+            r"uint\(max\(shader_injection\.runtime_flags,\s*0\.f\)\)",
+        )
+        self.assertRegex(
+            compact_shared,
+            r"#define\s+CUSTOM_PSYCHOV_BT2020_ACTIVE\s+"
+            r"\(\(CUSTOM_RUNTIME_FLAGS\s*&\s*0x2u\)\s*!=\s*0u\)",
+        )
+        self.assertRegex(
+            compact_shared,
             r"#define\s+CUSTOM_DLSS_ACTIVE\s+"
-            r"\(shader_injection\.reserved\s*>=\s*0\.5f\)",
+            r"\(\(CUSTOM_RUNTIME_FLAGS\s*&\s*0x1u\)\s*!=\s*0u\)",
         )
         self.assertNotIn("CUSTOM_DLAA_SHARPENING", compact_shared)
         self.assertRegex(
@@ -449,8 +618,34 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertNotIn("cas_mode", peak_limiter)
         self.assertIn("LimitDisplayLightPeak(_6250)", shader)
         self.assertIn(
-            "LimitDisplayLightPeak(display_light_bt709)", final_shader
+            "LimitDisplayLightPeak(display_light_intermediate)", final_shader
         )
+        self.assertRegex(
+            hdr_intermediate,
+            r"if\s*\(CUSTOM_PSYCHOV_BT2020_ACTIVE\)\s*"
+            r"\{[\s\S]*?return\s+display_light_intermediate\s*;\s*\}",
+        )
+        self.assertIn(
+            "return bt709_to_bt2020 * display_light_intermediate;",
+            hdr_intermediate,
+        )
+        for name, output_shader, limited_value in (
+            ("final", final_shader, "display_light_intermediate"),
+            ("cas", shader, "_6250"),
+        ):
+            with self.subTest(output_path=name):
+                limiter = output_shader.index(
+                    f"LimitDisplayLightPeak({limited_value})"
+                )
+                conversion = output_shader.index(
+                    "DetroitIntermediateDisplayLightToBt2020(", limiter
+                )
+                pq_tail = output_shader.index("vec3 pq_power", conversion) \
+                    if name == "final" else output_shader.index(
+                        "vec3 _6297", conversion
+                    )
+                self.assertLess(limiter, conversion)
+                self.assertLess(conversion, pq_tail)
         self.assertRegex(
             addon,
             r"\{0xF478AFEF,\s*\{[\s\S]*?\.code\s*=\s*__0xF478AFEF",
@@ -483,8 +678,8 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertIn('.labels = {"Native TAA", "DLAA"}', addon)
         self.assertRegex(
             addon,
-            r"shader_injection\.reserved\s*=\s*"
-            r"gate\.active\s*\?\s*1\.f\s*:\s*0\.f\s*;",
+            r"SetRuntimeFlag\(\s*RUNTIME_FLAG_DLSS_OUTPUT\s*,\s*"
+            r"gate\.active\s*\)\s*;",
         )
         self.assertIn("temporal_capture::SetDlaaSharpening(", addon)
         self.assertIn("before Detroit's DOF", addon)
@@ -499,6 +694,36 @@ class HDRAndCASGateTests(unittest.TestCase):
             addon,
             r"\.crc32\s*=\s*0xEBFBDDB1,[\s\S]*?"
             r"\.on_draw\s*=\s*&OnSceneDraw,",
+        )
+        on_scene_draw = addon[
+            addon.index("bool OnSceneDraw(") :
+            addon.index("void OnSceneDrawn(")
+        ]
+        dlss_update = on_scene_draw.index("ApplyDlssOutputMarker(")
+        wide_update = on_scene_draw.index(
+            "SetRuntimeFlag(\n"
+            "      RUNTIME_FLAG_PSYCHOV_BT2020,"
+        )
+        self.assertLess(dlss_update, wide_update)
+        self.assertIn(
+            "ShouldWritePsychoVBt2020Intermediate()",
+            on_scene_draw[wide_update:],
+        )
+
+        on_present = addon[
+            addon.index("void OnPresent(") :
+            addon.index("}  // namespace", addon.index("void OnPresent("))
+        ]
+        begin_next_frame = on_present.index(
+            "temporal_capture::BeginNextFrame();"
+        )
+        clear_runtime_flags = on_present.index(
+            "shader_injection.runtime_flags = 0.f;"
+        )
+        self.assertLess(begin_next_frame, clear_runtime_flags)
+        self.assertIn(
+            "video/loading frame without the scene composite",
+            on_present[begin_next_frame:clear_runtime_flags],
         )
         self.assertRegex(
             addon,
@@ -606,7 +831,7 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertIn("_6250 = LimitDisplayLightPeak(_6250);", cap_source)
         self.assertIn("configured_display_peak", peak_limiter)
         self.assertIn("shader_injection.peak_white_nits", peak_limiter)
-        self.assertIn("display_light_bt709 *=", peak_limiter)
+        self.assertIn("display_light_intermediate *=", peak_limiter)
         self.assertNotIn("min(_6112", shader)
 
         for color_space in (
