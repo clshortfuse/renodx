@@ -110,6 +110,7 @@ float DecodeDofPackedScale(uint code, uint neutral, uint maximum)
                                   && shader_injection.output_mode != 1.f)
 #define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 3.f)
 #define CUSTOM_PSYCHOV22_ACTIVE  (shader_injection.tone_map_type == 4.f)
+#define CUSTOM_PSYCHOV24_ACTIVE  (shader_injection.tone_map_type == 5.f)
 // This bit describes the basis actually written by the scene pass in the
 // current frame. It is intentionally authoritative at the UI and final OETF:
 // a settings-only gate would reinterpret native BT.709 video/loading frames

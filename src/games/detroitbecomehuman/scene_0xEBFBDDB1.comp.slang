@@ -268,7 +268,9 @@ vec3 SanitizePsychoVDisplay(vec3 color, float psychov_peak)
 void main()
 {
     if (CUSTOM_HDR_ACTIVE
-        && (CUSTOM_PSYCHOV17_ACTIVE || CUSTOM_PSYCHOV22_ACTIVE))
+        && (CUSTOM_PSYCHOV17_ACTIVE
+            || CUSTOM_PSYCHOV22_ACTIVE
+            || CUSTOM_PSYCHOV24_ACTIVE))
     {
         if (gl_LocalInvocationIndex == 0u)
         {
@@ -595,6 +597,50 @@ void main()
                         renodx_psychov_gamut_mode,
                         1.0,
                         1.0);
+                const vec3 renodx_psychov_display =
+                    SanitizePsychoVDisplay(
+                        CUSTOM_PSYCHOV_BT2020_ACTIVE
+                            ? renodx::color::bt2020::from::BT709(
+                                renodx_psychov_output)
+                            : renodx_psychov_output,
+                        renodx_psychov_peak);
+                renodx_tonemapped =
+                    renodx::color::correct::GammaSafe(
+                        renodx_psychov_display,
+                        true,
+                        2.2);
+            }
+            else if (CUSTOM_PSYCHOV24_ACTIVE)
+            {
+                const float renodx_psychov_cone_response =
+                    max(RENODX_PSYCHOV_CONE_RESPONSE, 0.0)
+                    * mix(
+                        1.0,
+                        sPsychoVVanillaReference.z,
+                        clamp(RENODX_PSYCHOV_VANILLA_SLOPE, 0.0, 1.0));
+                const vec3 renodx_psychov_output =
+                    renodx::tonemap::psychov::psychotm_test24(
+                        renodx_psychov_input,
+                        renodx_psychov_peak,
+                        RENODX_TONE_MAP_EXPOSURE,
+                        RENODX_TONE_MAP_HIGHLIGHTS,
+                        RENODX_TONE_MAP_SHADOWS,
+                        RENODX_TONE_MAP_CONTRAST,
+                        RENODX_TONE_MAP_SATURATION,
+                        1.0,
+                        100.0,
+                        1.0,
+                        1.0,
+                        0,
+                        renodx_psychov_cone_response,
+                        vec3(sPsychoVVanillaReference.x),
+                        vec3(sPsychoVVanillaReference.y),
+                        1.0,
+                        renodx_psychov_gamut_mode,
+                        1.0,
+                        1.0,
+                        1.0,
+                        0.0);
                 const vec3 renodx_psychov_display =
                     SanitizePsychoVDisplay(
                         CUSTOM_PSYCHOV_BT2020_ACTIVE

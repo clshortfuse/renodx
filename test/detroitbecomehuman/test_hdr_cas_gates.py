@@ -81,7 +81,7 @@ def should_write_psychov_bt2020_intermediate(
 ) -> bool:
     return (
         custom_hdr_active(output_mode, output_is_hdr)
-        and tone_map_type in (3.0, 4.0)
+        and tone_map_type in (3.0, 4.0, 5.0)
         and float32_bits(render_debug_payload) == b"\0\0\0\0"
     )
 
@@ -199,7 +199,7 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertTrue(custom_hdr_active(OUTPUT_MODE_AUTO, 1.0))
 
     def test_scene_draw_sets_wide_carrier_only_for_the_actual_wide_path(self):
-        for tone_map_type in (3.0, 4.0):
+        for tone_map_type in (3.0, 4.0, 5.0):
             with self.subTest(tone_map_type=tone_map_type):
                 self.assertTrue(
                     should_write_psychov_bt2020_intermediate(
@@ -550,7 +550,8 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertRegex(
             should_write,
             r"shader_injection\.tone_map_type\s*==\s*3\.f\s*"
-            r"\|\|\s*shader_injection\.tone_map_type\s*==\s*4\.f",
+            r"\|\|\s*shader_injection\.tone_map_type\s*==\s*4\.f\s*"
+            r"\|\|\s*shader_injection\.tone_map_type\s*==\s*5\.f",
         )
         self.assertRegex(
             should_write,

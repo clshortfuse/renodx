@@ -1107,7 +1107,8 @@ void SetRuntimeFlag(std::uint32_t flag, bool enabled) {
 
 bool ShouldWritePsychoVBt2020Intermediate() {
   const bool psychov_active = shader_injection.tone_map_type == 3.f
-      || shader_injection.tone_map_type == 4.f;
+      || shader_injection.tone_map_type == 4.f
+      || shader_injection.tone_map_type == 5.f;
   return shader_injection.output_is_hdr >= 0.5f
       && shader_injection.output_mode != OUTPUT_MODE_SDR
       && psychov_active
@@ -1893,7 +1894,7 @@ renodx::utils::settings::Settings settings =
              {
                  .binding = &shader_injection.tone_map_type,
                  .default_value = 2.f,
-                 .labels = {"Vanilla", "Reinhard", "RenoDRT", "PsychoV-17", "PsychoV-22"},
+                 .labels = {"Vanilla", "Reinhard", "RenoDRT", "PsychoV-17", "PsychoV-22", "PsychoV-24"},
                  .parse = [](float value) { return value; },
              }},
             {"ToneMapPeakNits",

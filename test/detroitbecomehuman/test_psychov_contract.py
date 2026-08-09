@@ -25,6 +25,10 @@ ADDON_SOURCE = SOURCE_DIR / "addon.cpp"
 SHARED_SOURCE = SOURCE_DIR / "shared.h"
 TEMPORAL_AUX_SOURCE = SOURCE_DIR / "temporal_aux.comp.vk.glsl"
 HDR_INTERMEDIATE_SOURCE = SOURCE_DIR / "hdr_intermediate.hlsli"
+PSYCHOV24_SOURCE = (
+    SOURCE_DIR.parents[1] / "shaders" / "tonemap" / "psychov" / "test24.hlsl"
+)
+PSYCHOV_HEADER_SOURCE = SOURCE_DIR.parents[1] / "shaders" / "tonemap" / "psychov.hlsl"
 
 
 BT709_TO_BT2020 = (
@@ -266,31 +270,52 @@ class PsychoVContractTests(unittest.TestCase):
         cls.hdr_intermediate = HDR_INTERMEDIATE_SOURCE.read_text(
             encoding="utf-8"
         )
+        cls.psychov24 = PSYCHOV24_SOURCE.read_text(encoding="utf-8")
+        cls.psychov_header = PSYCHOV_HEADER_SOURCE.read_text(encoding="utf-8")
 
-    def test_both_versions_convert_wide_output_then_encode_once(self):
+    def test_psychov24_library_and_mode_are_registered(self):
+        self.assertIn('#include "./psychov/test24.hlsl"', self.psychov_header)
+        self.assertIn(
+            "RENODX_SHADERS_TONEMAP_PSYCHOV_TEST24_HLSL_",
+            self.psychov24,
+        )
+        self.assertRegex(
+            self.psychov24,
+            r"float3\s+psychotm_test24\s*\(\s*"
+            r"float3\s+bt709_linear_input\s*,\s*"
+            r"float\s+peak_value\s*=\s*1000\.f\s*/\s*203\.f",
+        )
+        self.assertIn(
+            '.labels = {"Vanilla", "Reinhard", "RenoDRT", '
+            '"PsychoV-17", "PsychoV-22", "PsychoV-24"}',
+            self.addon,
+        )
+        self.assertIn(
+            "#define CUSTOM_PSYCHOV24_ACTIVE  "
+            "(shader_injection.tone_map_type == 5.f)",
+            self.shared,
+        )
+
+    def test_all_versions_convert_wide_output_then_encode_once(self):
         test17 = self.scene[
             self.scene.index("if (CUSTOM_PSYCHOV17_ACTIVE)") :
             self.scene.index("else if (CUSTOM_PSYCHOV22_ACTIVE)")
         ]
         test22 = self.scene[
             self.scene.index("else if (CUSTOM_PSYCHOV22_ACTIVE)") :
+            self.scene.index("else if (CUSTOM_PSYCHOV24_ACTIVE)")
+        ]
+        test24 = self.scene[
+            self.scene.index("else if (CUSTOM_PSYCHOV24_ACTIVE)") :
             self.scene.index("else\n            {", self.scene.index(
-                "else if (CUSTOM_PSYCHOV22_ACTIVE)"
+                "else if (CUSTOM_PSYCHOV24_ACTIVE)"
             ))
         ]
-        self.assertRegex(
-            test17,
+        encoded_once = (
             r"renodx_tonemapped\s*=\s*"
             r"renodx::color::correct::GammaSafe\(\s*"
             r"renodx_psychov_display\s*,\s*"
-            r"true\s*,\s*2\.2\s*\)\s*;",
-        )
-        self.assertRegex(
-            test22,
-            r"renodx_tonemapped\s*=\s*"
-            r"renodx::color::correct::GammaSafe\(\s*"
-            r"renodx_psychov_display\s*,\s*"
-            r"true\s*,\s*2\.2\s*\)\s*;",
+            r"true\s*,\s*2\.2\s*\)\s*;"
         )
         conversion_before_sanitize = re.compile(
             r"SanitizePsychoVDisplay\(\s*"
@@ -301,15 +326,20 @@ class PsychoVContractTests(unittest.TestCase):
             r"renodx_psychov_peak\s*\)",
             re.DOTALL,
         )
-        for name, branch in (("PsychoV-17", test17), ("PsychoV-22", test22)):
+        for name, branch in (
+            ("PsychoV-17", test17),
+            ("PsychoV-22", test22),
+            ("PsychoV-24", test24),
+        ):
             with self.subTest(mode=name):
+                self.assertRegex(branch, encoded_once)
                 self.assertEqual(
                     len(re.findall(r"SanitizePsychoVDisplay\(", branch)), 1
                 )
                 self.assertRegex(branch, conversion_before_sanitize)
         self.assertNotIn("RestorePsychoVHighlightColor", self.scene)
         self.assertEqual(
-            len(re.findall(r"SanitizePsychoVDisplay\(", self.scene)), 3
+            len(re.findall(r"SanitizePsychoVDisplay\(", self.scene)), 4
         )
 
     def test_peak_passed_to_psychov_is_display_linear(self):
@@ -370,12 +400,14 @@ class PsychoVContractTests(unittest.TestCase):
         old_final_nits = detroit_native_to_display(old_scaled) * 300.0
         self.assertGreater(old_final_nits, peak_nits * 1.2)
 
-    def test_scene_grading_still_precedes_both_psychov_calls(self):
+    def test_scene_grading_still_precedes_all_psychov_calls(self):
         grade = self.scene.index("ComputeUntonemappedGraded")
         test17 = self.scene.index("psychotm_test17", grade)
         test22 = self.scene.index("psychotm_test22", test17)
+        test24 = self.scene.index("psychotm_test24", test22)
         self.assertLess(grade, test17)
         self.assertLess(test17, test22)
+        self.assertLess(test22, test24)
         self.assertRegex(
             self.scene[grade:test22],
             r"psychotm_test17\(\s*renodx_psychov_input\s*,",
@@ -383,6 +415,10 @@ class PsychoVContractTests(unittest.TestCase):
         self.assertRegex(
             self.scene[test22 : test22 + 512],
             r"psychotm_test22\(\s*renodx_psychov_input\s*,",
+        )
+        self.assertRegex(
+            self.scene[test24 : test24 + 512],
+            r"psychotm_test24\(\s*renodx_psychov_input\s*,",
         )
 
     def test_scene_graded_input_is_clamped_before_lms_conversion(self):
@@ -581,7 +617,15 @@ class PsychoVContractTests(unittest.TestCase):
             "else if (CUSTOM_PSYCHOV22_ACTIVE)", tone_output
         )
         branch22 = executable[
-            branch22_start : executable.index("else", branch22_start + 8)
+            branch22_start : executable.index(
+                "else if (CUSTOM_PSYCHOV24_ACTIVE)", branch22_start
+            )
+        ]
+        branch24_start = executable.index(
+            "else if (CUSTOM_PSYCHOV24_ACTIVE)", tone_output
+        )
+        branch24 = executable[
+            branch24_start : executable.index("else", branch24_start + 8)
         ]
         cone_pattern = re.compile(
             r"const float renodx_psychov_cone_response\s*=\s*"
@@ -600,6 +644,7 @@ class PsychoVContractTests(unittest.TestCase):
         for name, branch, call in (
             ("PsychoV-17", branch17, "psychotm_test17"),
             ("PsychoV-22", branch22, "psychotm_test22"),
+            ("PsychoV-24", branch24, "psychotm_test24"),
         ):
             with self.subTest(mode=name):
                 self.assertEqual(len(cone_pattern.findall(branch)), 1)
@@ -608,7 +653,7 @@ class PsychoVContractTests(unittest.TestCase):
                     branch.index(call),
                 )
 
-    def test_both_versions_use_strict_psychov_argument_contract(self):
+    def test_all_versions_use_strict_psychov_argument_contract(self):
         test17_arguments = extract_call_arguments(
             self.scene,
             "renodx::tonemap::psychov::psychotm_test17",
@@ -665,6 +710,37 @@ class PsychoVContractTests(unittest.TestCase):
                 "1.0",
             ),
         )
+
+        test24_arguments = extract_call_arguments(
+            self.scene,
+            "renodx::tonemap::psychov::psychotm_test24",
+        )
+        self.assertEqual(
+            test24_arguments,
+            (
+                "renodx_psychov_input",
+                "renodx_psychov_peak",
+                "RENODX_TONE_MAP_EXPOSURE",
+                "RENODX_TONE_MAP_HIGHLIGHTS",
+                "RENODX_TONE_MAP_SHADOWS",
+                "RENODX_TONE_MAP_CONTRAST",
+                "RENODX_TONE_MAP_SATURATION",
+                "1.0",
+                "100.0",
+                "1.0",
+                "1.0",
+                "0",
+                "renodx_psychov_cone_response",
+                "vec3(sPsychoVVanillaReference.x)",
+                "vec3(sPsychoVVanillaReference.y)",
+                "1.0",
+                "renodx_psychov_gamut_mode",
+                "1.0",
+                "1.0",
+                "1.0",
+                "0.0",
+            ),
+        )
         self.assertRegex(
             self.scene,
             r"const int renodx_psychov_gamut_mode\s*=\s*"
@@ -685,6 +761,7 @@ class PsychoVContractTests(unittest.TestCase):
             with self.subTest(obsolete_parameter=obsolete_parameter):
                 self.assertNotIn(obsolete_parameter, test17_arguments)
                 self.assertNotIn(obsolete_parameter, test22_arguments)
+                self.assertNotIn(obsolete_parameter, test24_arguments)
 
     def test_psychov_operations_keep_the_required_order(self):
         executable = strip_shader_comments(self.scene)
@@ -716,7 +793,15 @@ class PsychoVContractTests(unittest.TestCase):
             "SanitizePsychoVDisplay", test22, convert22
         )
         gamma22 = executable.index("GammaSafe", convert22)
-        scale = executable.index("const float renodx_game_scale", gamma22)
+        test24 = executable.index("psychotm_test24", gamma22)
+        convert24 = executable.index(
+            "renodx::color::bt2020::from::BT709", test24
+        )
+        sanitize24 = executable.rfind(
+            "SanitizePsychoVDisplay", test24, convert24
+        )
+        gamma24 = executable.index("GammaSafe", convert24)
+        scale = executable.index("const float renodx_game_scale", gamma24)
 
         self.assertLess(reference, barrier)
         self.assertLess(barrier, grade)
@@ -733,7 +818,12 @@ class PsychoVContractTests(unittest.TestCase):
         self.assertLess(test22, sanitize22)
         self.assertLess(sanitize22, convert22)
         self.assertLess(convert22, gamma22)
-        self.assertLess(gamma22, scale)
+        self.assertLess(gamma22, test24)
+        self.assertGreaterEqual(sanitize24, 0)
+        self.assertLess(test24, sanitize24)
+        self.assertLess(sanitize24, convert24)
+        self.assertLess(convert24, gamma24)
+        self.assertLess(gamma24, scale)
 
     def test_sanitize_is_finite_nonnegative_and_peak_preserving(self):
         sanitizer = self.scene[
@@ -784,7 +874,11 @@ class PsychoVContractTests(unittest.TestCase):
             r"const int renodx_psychov_gamut_mode\s*=\s*"
             r"CUSTOM_PSYCHOV_BT2020_ACTIVE\s*\?\s*1\s*:\s*0\s*;",
         )
-        for function_name in ("psychotm_test17", "psychotm_test22"):
+        for function_name in (
+            "psychotm_test17",
+            "psychotm_test22",
+            "psychotm_test24",
+        ):
             with self.subTest(function=function_name):
                 arguments = extract_call_arguments(
                     self.scene,
