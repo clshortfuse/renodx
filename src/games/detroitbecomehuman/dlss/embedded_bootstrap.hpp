@@ -21,6 +21,12 @@ inline constexpr std::uint32_t kCacheSchemaVersion = 1u;
 inline constexpr std::string_view kSupportedExecutableSha256 =
     "ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF";
 
+// Placeholder: keep the DLAA implementation available for later profiling,
+// but do not load its process-wide Vulkan command hooks in production builds.
+// Retinal DOF still opts into the embedded layer because it needs the same
+// descriptor and command-state capture path.
+inline constexpr bool kDlaaRuntimeEnabled = false;
+
 enum class BootstrapStatus : std::uint32_t {
   kFirstRunSetup = 0u,
   kRestartRequired,
@@ -115,12 +121,13 @@ bool IsBridgeReady();
 
 [[nodiscard]] inline constexpr bool NeedsRuntimeCommandTracking(
     DetroitDlssMode mode, bool retinal_dof_requested) noexcept {
-  return mode != DETROIT_DLSS_MODE_NATIVE || retinal_dof_requested;
+  return (kDlaaRuntimeEnabled && mode == DETROIT_DLSS_MODE_DLAA)
+      || retinal_dof_requested;
 }
 
-// Resource and descriptor metadata stay warm so DLAA or Retinal DOF can still
-// be enabled at runtime. This gate removes per-command-buffer state capture
-// while neither feature needs the embedded Vulkan bridge.
+// Resource and descriptor metadata stay warm for Retinal DOF and a future
+// lower-overhead DLAA re-enable. This gate removes per-command-buffer state
+// capture while no enabled feature needs the embedded Vulkan bridge.
 void SetRuntimeCommandTracking(bool enabled);
 
 bool CanInsertComputeWriteBarrier(std::uint64_t command_buffer);

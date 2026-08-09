@@ -46,6 +46,9 @@ def main() -> None:
     require(source, "VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT")
     require(source, "runtime_command_tracking_enabled")
     require(source, "void SetRuntimeCommandTracking(bool enabled)")
+    require(addon, '"DLAA (Temporarily Disabled)"')
+    require(addon, "if (!embedded_dlss::kDlaaRuntimeEnabled")
+    require(addon, '"DLSSMode",\n        static_cast<float>(DETROIT_DLSS_MODE_NATIVE)')
 
     bind_pipeline_start = source.index("LayerCmdBindPipeline(")
     bind_pipeline_end = source.index("LayerCmdBindDescriptorSets(", bind_pipeline_start)

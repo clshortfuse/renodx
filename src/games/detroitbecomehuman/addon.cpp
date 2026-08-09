@@ -205,6 +205,7 @@ std::atomic_bool bootstrap_setup_attempted = false;
 bool embedded_hooks_requested_at_startup = false;
 std::atomic_bool embedded_hooks_active = false;
 std::atomic_int embedded_hooks_restart_notice = 0;
+std::atomic_bool dlaa_disabled_notice_logged = false;
 embedded_dlss::ExtensionCache initial_extension_cache;
 
 std::filesystem::path GetModulePath(HMODULE module) {
@@ -716,7 +717,26 @@ void ApplyDlssMode(float selected_mode) {
   auto next_mode = static_cast<DetroitDlssMode>(selected_mode);
   if (next_mode != DETROIT_DLSS_MODE_NATIVE
       && next_mode != DETROIT_DLSS_MODE_DLAA) {
-    next_mode = DETROIT_DLSS_MODE_DLAA;
+    next_mode = DETROIT_DLSS_MODE_NATIVE;
+  }
+  if (!embedded_dlss::kDlaaRuntimeEnabled
+      && next_mode == DETROIT_DLSS_MODE_DLAA) {
+    next_mode = DETROIT_DLSS_MODE_NATIVE;
+    if (auto* setting = renodx::utils::settings::FindSetting("DLSSMode");
+        setting != nullptr) {
+      setting->Set(static_cast<float>(DETROIT_DLSS_MODE_NATIVE))->Write();
+    }
+    reshade::set_config_value(
+        nullptr,
+        "renodx-preset1",
+        "DLSSMode",
+        static_cast<float>(DETROIT_DLSS_MODE_NATIVE));
+    if (!dlaa_disabled_notice_logged.exchange(
+            true, std::memory_order_acq_rel)) {
+      reshade::log::message(
+          reshade::log::level::warning,
+          "Detroit DLAA: temporarily disabled because its Vulkan command hooks cause a significant performance regression; Native TAA remains active.");
+    }
   }
   dlss_mode = static_cast<float>(next_mode);
   const auto previous_mode = temporal_capture::GetMode();
@@ -2586,8 +2606,8 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Temporal Anti-Aliasing",
                 .section = "DLSS",
-                .tooltip = "DLAA runs NVIDIA NGX anti-aliasing at native resolution. Rejected frames fall back safely to Detroit's native TAA.",
-                .labels = {"Native TAA", "DLAA"},
+                .tooltip = "DLAA is retained as a development placeholder but is temporarily disabled because its Vulkan command hooks cause a significant performance regression.",
+                .labels = {"Native TAA", "DLAA (Temporarily Disabled)"},
                 .on_change_value = [](float, float current) {
                   ApplyDlssMode(current);
                 },
@@ -2602,8 +2622,20 @@ renodx::utils::settings::Settings settings =
                 .tooltip = "Scene-linear RCAS applied to the successful NGX output before Detroit's DOF. Zero is an exact passthrough.",
                 .min = 0.f,
                 .max = 100.f,
-                .is_enabled = []() { return temporal_capture::GetMode() == DETROIT_DLSS_MODE_DLAA; },
+                .is_enabled = []() {
+                  return embedded_dlss::kDlaaRuntimeEnabled
+                      && temporal_capture::GetMode()
+                          == DETROIT_DLSS_MODE_DLAA;
+                },
                 .parse = [](float value) { return value * 0.01f; },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "DLAA placeholder: temporarily disabled while its process-wide Vulkan command hooks are redesigned for lower CPU overhead.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return !embedded_dlss::kDlaaRuntimeEnabled;
+                },
             }},
             {{
                 .key = "DLSSBootstrapStatus",

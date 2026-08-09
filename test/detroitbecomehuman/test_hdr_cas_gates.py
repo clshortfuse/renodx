@@ -676,7 +676,11 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"color\s*=\s*ApplyDlaaRcas\(",
         )
         self.assertIn('.key = "DLAASharpening"', addon)
-        self.assertIn('.labels = {"Native TAA", "DLAA"}', addon)
+        self.assertIn(
+            '.labels = {"Native TAA", "DLAA (Temporarily Disabled)"}',
+            addon,
+        )
+        self.assertIn("!embedded_dlss::kDlaaRuntimeEnabled", addon)
         self.assertRegex(
             addon,
             r"SetRuntimeFlag\(\s*RUNTIME_FLAG_DLSS_OUTPUT\s*,\s*"
