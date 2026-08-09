@@ -54,12 +54,35 @@ inline constexpr std::array<std::uint8_t, 32u> kExecutableSha256 = {
 inline constexpr std::uint32_t kTemporalAaShaderCrc = 0xB5506A45u;
 inline constexpr std::uint32_t kObservedTemporalAaModuleSize = 37'236u;
 
+inline constexpr std::uint32_t kDofSplitShaderCrc = 0xE9907978u;
+inline constexpr std::uint32_t kDofGatherShaderCrc = 0x747E19D2u;
+inline constexpr std::uint32_t kDofFillShaderCrc = 0x508514FBu;
+inline constexpr std::uint32_t kDofCompositeShaderCrc = 0xAC7A8193u;
+inline constexpr std::array<std::uint32_t, 4u> kDofShaderCrcs = {
+    kDofSplitShaderCrc,
+    kDofGatherShaderCrc,
+    kDofFillShaderCrc,
+    kDofCompositeShaderCrc,
+};
+inline constexpr std::array<std::uint32_t, 4u> kObservedDofModuleSizes = {
+    9'236u,
+    11'180u,
+    7'908u,
+    8'004u,
+};
+
 // Explicit, build-scoped runtime evidence gate. This is enabled only for the
 // executable identity above after the live b52/resource capture and render
 // ordering audit were completed. Any executable/shader revision must introduce
 // a new evidence revision and starts with this gate disabled.
 inline constexpr std::uint32_t kTemporalInputEvidenceRevision = 1u;
 inline constexpr bool kTemporalInputsEmpiricallyVerified = true;
+
+// The complete seven-dispatch chain and these four replacement targets were
+// observed together on the executable identity above. A new game or shader
+// revision must start fail-closed with a new evidence revision.
+inline constexpr std::uint32_t kDofInputEvidenceRevision = 1u;
+inline constexpr bool kDofInputsEmpiricallyVerified = true;
 
 [[nodiscard]] constexpr bool MatchesExecutableIdentity(
     std::uint64_t size,

@@ -1249,9 +1249,11 @@ struct AdapterRuntime::Impl {
 
 AdapterRuntime::AdapterRuntime() : impl_(std::make_unique<Impl>()) {}
 
-AdapterRuntime::~AdapterRuntime() {
-  Shutdown();
-}
+// Vulkan teardown is explicit in HookDestroyDevice. A global DeviceState may
+// otherwise reach this destructor during CRT process detach under the Windows
+// loader lock, where waiting on or calling into the driver can deadlock exit.
+// The OS reclaims any remaining process resources on that exceptional path.
+AdapterRuntime::~AdapterRuntime() = default;
 
 AdapterResult AdapterRuntime::Initialize(const AdapterRuntimeCreateInfo& create_info) {
   const std::lock_guard lock(impl_->mutex);
@@ -1534,10 +1536,12 @@ AdapterResult AdapterRuntime::RetireCommandBuffer(VkCommandBuffer command_buffer
   return Success();
 }
 
-void AdapterRuntime::Shutdown() noexcept {
+void AdapterRuntime::Shutdown(bool wait_for_idle) noexcept {
   const std::lock_guard lock(impl_->mutex);
   if (!impl_->initialized) return;
-  (void)impl_->procedures.device_wait_idle(impl_->device);
+  if (wait_for_idle) {
+    (void)impl_->procedures.device_wait_idle(impl_->device);
+  }
   impl_->DestroySharedObjects();
   impl_->procedures = {};
   impl_->physical_device_properties = {};

@@ -1,6 +1,7 @@
 #version 450
 #extension GL_EXT_samplerless_texture_functions : require
 #include "shared.h"
+#include "render_debug_common.slang"
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 struct sCB
@@ -769,6 +770,60 @@ void main()
         else
         {
             _2706 = _2677;
+        }
+
+        if (RenderDebugActive())
+        {
+            ivec2 debugOutputSize =
+                _541.g_cbComposite._viViewportOffsetSize.zw;
+            uint debugSource = RenderDebugSourceAtPixel(
+                _1043, debugOutputSize);
+            bool temporalUnavailable = RenderDebugTemporalUnavailable()
+                && RenderDebugProducerPass(debugSource)
+                    == RENDER_DEBUG_PASS_TEMPORAL;
+            if (temporalUnavailable
+                || RenderDebugShowUnavailableAtScene(
+                    debugSource, RENDER_DEBUG_PASS_SCENE))
+            {
+                _2706 = RenderDebugBlend(
+                    _2706, RenderDebugUnavailable(_1043));
+            }
+            else if (RenderDebugPreserveAtPass(
+                debugSource, RENDER_DEBUG_PASS_SCENE))
+            {
+                // Earlier inline passes already blended the selected false
+                // color. Bypass film grain and grading for this panel.
+                _2706 = _2630;
+            }
+            else if (RenderDebugGenerateAtPass(
+                debugSource, RENDER_DEBUG_PASS_SCENE))
+            {
+                vec4 debugValue = vec4(0.0);
+                if (debugSource
+                    == RENDER_DEBUG_SOURCE_SCENE_BEFORE_GRADE)
+                {
+                    debugValue = vec4(_2630, 1.0);
+                }
+                else if (debugSource
+                    == RENDER_DEBUG_SOURCE_SCENE_AFTER_GRADE)
+                {
+                    debugValue = vec4(_2706, 1.0);
+                }
+                else if (debugSource
+                    == RENDER_DEBUG_SOURCE_SCENE_LUMINANCE)
+                {
+                    float luminance = RenderDebugLuminance(
+                        max(_2630, vec3(0.0)));
+                    debugValue = vec4(vec3(luminance), 1.0);
+                }
+                _2706 = RenderDebugBlend(
+                    _2706,
+                    RenderDebugMap(debugValue, debugSource));
+            }
+            if (RenderDebugSeparatorPixel(_1043, debugOutputSize))
+            {
+                _2706 = vec3(1.0);
+            }
         }
         imageStore(OutputTexture, _1043 + _541.g_cbComposite._viViewportOffsetSize.xy, vec4(_2706, 1.0));
         break;

@@ -2,22 +2,24 @@
   "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
   "id": "detroitbecomehuman",
   "title": "Detroit: Become Human",
-  "summary": "Experimental RenoDX Vulkan HDR, ultrawide, and DLAA support for Detroit: Become Human.",
+  "summary": "Experimental RenoDX Vulkan HDR, ultrawide, DLAA, and native DOF v2 support for Detroit: Become Human.",
   "tags": [
     "HDR",
     "HDR10",
     "Vulkan",
     "Ultrawide",
-    "DLAA"
+    "DLAA",
+    "Depth of Field"
   ],
   "status": "experimental",
-  "version": "0.4.0-dev.1",
+  "version": "0.5.0-dev.1",
   "notes": [
     "Supports Steam Build ID 12158144 only.",
     "Supported DetroitBecomeHuman.exe SHA-256: ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF.",
     "Vulkan base pinned to RenoDX PR #564 commit 92d6d79ec8103b1aaea44c0085c3a88db723e6d5.",
     "Requires ReShade 6.8.0 Full Add-On and the game's native Vulkan renderer.",
     "Adds NVIDIA NGX DLAA at native resolution with a separate HDR-safe sharpening control; rejected frames fall back to native TAA.",
+    "Adds opt-in native DOF v2 with Clean, Cinematic, and Retinal styles. Enhanced styles use full-resolution far-focus boundaries while preserving Detroit's authored foreground bokeh at the exact Vanilla strength; Cinematic retains authored deep background bokeh, while Retinal adds a full-resolution Watson acuity filter with paired hardware-linear Gaussian taps. Vanilla remains the exact default path, and unsupported or incomplete shader chains fail closed.",
     "The addon now embeds the Vulkan/NGX bootstrap. No launcher, separate Vulkan layer, global registration, or Steam launch option is required.",
     "The first launch configures ADDON.LoadFromDllMain and caches verified NGX Vulkan extension requirements; restart once before enabling DLAA.",
     "The release package contains renodx-detroitbecomehuman.addon64 and the official nvngx_dlss.dll. DLSS Super Resolution, Frame Generation and Streamline are not included.",

@@ -161,10 +161,13 @@ class AdapterRuntime final {
   [[nodiscard]] AdapterResult RetireCommandBuffer(VkCommandBuffer command_buffer);
 
   /*
-   * Shutdown waits for the device to become idle before destroying shared
-   * Vulkan objects. It must run before the VkDevice is destroyed.
+   * Shutdown normally waits for the device to become idle before destroying
+   * shared Vulkan objects. The vkDestroyDevice interception may pass false:
+   * Vulkan already requires the application to complete every submission
+   * before that terminal call, so another layer-owned wait is redundant and
+   * can deadlock a driver shutdown path.
    */
-  void Shutdown() noexcept;
+  void Shutdown(bool wait_for_idle = true) noexcept;
 
   [[nodiscard]] bool IsInitialized() const noexcept;
 

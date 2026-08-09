@@ -460,7 +460,8 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertRegex(
             temporal_capture,
             r"native_temporal_pipeline\.handle\s*!=\s*0u\s*&&\s*"
-            r"dlss::embedded::CanInsertComputeWriteBarrier\(\)\s*&&\s*"
+            r"dlss::embedded::CanInsertComputeWriteBarrier\(native_command_list\)"
+            r"\s*&&\s*"
             r"IsMainTemporalCommandList\(native_command_list\)\s*&&\s*"
             r"QueryDlssOutputForCommandList\(native_command_list\)",
         )
@@ -482,7 +483,12 @@ class HDRAndCASGateTests(unittest.TestCase):
         auxiliary_shader = (SOURCE_DIR / "temporal_aux.comp.vk.glsl").read_text(
             encoding="utf-8"
         )
-        self.assertNotIn("imageStore(OutColorPass", auxiliary_shader)
+        self.assertIn(
+            "RenderDebugAnySourceAtPass(RENDER_DEBUG_PASS_TEMPORAL)",
+            auxiliary_shader,
+        )
+        self.assertIn("!RenderDebugTemporalUnavailable()", auxiliary_shader)
+        self.assertIn("imageStore(\n                OutColorPass", auxiliary_shader)
         for history_output in (
             "imageStore(OutAADepth",
             "imageStore(OutPrevSpeedAndFlagsTex",

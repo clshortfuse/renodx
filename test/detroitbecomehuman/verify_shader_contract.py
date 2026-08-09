@@ -174,13 +174,18 @@ def validate_registry(embed_dir, shader_ids):
 
     if '#include "./temporal_aux.h"' not in text:
         fail("optimized temporal auxiliary shader is missing from shaders.h")
+    for shader_id in ("retinal_horizontal", "retinal_vertical"):
+        if f'#include "./{shader_id}.h"' not in text:
+            fail(f"{shader_id} is missing from shaders.h")
 
 
-def validate_temporal_auxiliary(embed_dir, spirv_val, spirv_cross):
+def validate_temporal_auxiliary(
+    embed_dir, spirv_val, spirv_cross, push_expected
+):
     shader_id = "temporal_aux"
     spv_path = embed_dir / f"{shader_id}.spv"
-    if not spv_path.is_file() or spv_path.stat().st_size > 10_000:
-        fail("temporal_aux was not optimized to the bounded history-only SPIR-V")
+    if not spv_path.is_file() or spv_path.stat().st_size > 60_000:
+        fail("temporal_aux debug-capable SPIR-V is missing or unexpectedly large")
     run_checked(
         [str(spirv_val), "--target-env", "vulkan1.3", str(spv_path)],
         "temporal_aux spirv-val",
@@ -199,9 +204,14 @@ def validate_temporal_auxiliary(embed_dir, spirv_val, spirv_cross):
     descriptors = normalize_descriptors(reflection)
     expected_bindings = {
         ("textures", 0),
+        ("textures", 1),
+        ("textures", 2),
         ("textures", 3),
         ("textures", 4),
+        ("textures", 5),
         ("textures", 6),
+        ("textures", 7),
+        ("images", 16),
         ("images", 17),
         ("images", 18),
         ("images", 19),
@@ -210,12 +220,10 @@ def validate_temporal_auxiliary(embed_dir, spirv_val, spirv_cross):
     actual_bindings = {(item["kind"], item["binding"]) for item in descriptors}
     if actual_bindings != expected_bindings:
         fail(
-            "temporal_aux must retain only b17-b19 history dependencies; "
+            "temporal_aux must retain native TAA debug and history bindings; "
             f"got {sorted(actual_bindings)}"
         )
-    if any(item["binding"] == 16 for item in descriptors):
-        fail("temporal_aux must never expose or write the native color output b16")
-    validate_no_push_constants(shader_id, reflection)
+    validate_push_constant(shader_id, reflection, push_expected)
     validate_embed_header(shader_id, spv_path)
 
 
@@ -261,6 +269,102 @@ def validate_dlaa_pack_shader(embed_dir, spirv_val, spirv_cross):
     validate_embed_header(shader_id, spv_path)
 
 
+def validate_retinal_shader(shader_id, embed_dir, spirv_val, spirv_cross):
+    spv_path = embed_dir / f"{shader_id}.spv"
+    if not spv_path.is_file():
+        fail(f"{shader_id}: SPIR-V is missing")
+    run_checked(
+        [str(spirv_val), "--target-env", "vulkan1.3", str(spv_path)],
+        f"{shader_id} spirv-val",
+    )
+    reflection = json.loads(
+        run_checked(
+            [str(spirv_cross), str(spv_path), "--reflect"],
+            f"{shader_id} reflection",
+        )
+    )
+    entry_points = reflection.get("entryPoints", [])
+    if (
+        len(entry_points) != 1
+        or entry_points[0].get("name") != "main"
+        or entry_points[0].get("mode") != "comp"
+    ):
+        fail(f"{shader_id}: expected one compute entry point")
+    if entry_points[0].get("workgroup_size") != [8, 8, 1]:
+        fail(f"{shader_id}: workgroup size changed")
+    if reflection.get("inputs", []) or reflection.get("outputs", []):
+        fail(f"{shader_id}: unexpected stage inputs or outputs")
+
+    expected_descriptors = [
+        {
+            "kind": "separate_samplers",
+            "set": 0,
+            "binding": 0,
+            "type": "sampler",
+        },
+        {
+            "kind": "separate_images",
+            "set": 0,
+            "binding": 1,
+            "type": "texture2D",
+        },
+        {
+            "kind": "images",
+            "set": 0,
+            "binding": 2,
+            "type": "image2D",
+            "format": "rgba16f",
+            "writeonly": True,
+        },
+    ]
+    descriptors = normalize_descriptors(reflection)
+    if descriptors != expected_descriptors:
+        fail(
+            f"{shader_id}: descriptor interface changed; "
+            f"got {descriptors}"
+        )
+    output_images = reflection.get("images", [])
+    if (
+        len(output_images) != 1
+        or output_images[0].get("format") != "rgba16f"
+        or not output_images[0].get("writeonly")
+    ):
+        fail(f"{shader_id}: output must remain a write-only rgba16f image")
+
+    push_constants = reflection.get("push_constants", [])
+    if len(push_constants) != 1:
+        fail(f"{shader_id}: expected one push-constant block")
+    push_type = reflection.get("types", {}).get(push_constants[0].get("type"))
+    if push_type is None:
+        fail(f"{shader_id}: reflected push-constant type is missing")
+    members = push_type.get("members", [])
+    expected_members = [
+        ("fixationUv", "vec2", 0),
+        ("inverseOutputSize", "vec2", 8),
+        ("outputSize", "vec2", 16),
+        ("tanHalfHorizontal", "float", 24),
+        ("tanHalfVertical", "float", 28),
+        ("horizontalPixelsPerDegree", "float", 32),
+        ("verticalPixelsPerDegree", "float", 36),
+        ("fixationBlend", "float", 40),
+        ("maximumSigmaPixels", "float", 44),
+        ("highQuality", "float", 48),
+    ]
+    actual_members = [
+        (member.get("name"), member.get("type"), member.get("offset"))
+        for member in members
+    ]
+    if actual_members != expected_members:
+        fail(f"{shader_id}: push-constant member contract changed")
+    reflected_size = max(
+        member["offset"] + (8 if member["type"] == "vec2" else 4)
+        for member in members
+    )
+    if reflected_size != 52:
+        fail(f"{shader_id}: expected 52-byte push constants, got {reflected_size}")
+    validate_embed_header(shader_id, spv_path)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", required=True, type=Path)
@@ -303,10 +407,17 @@ def main():
             tools[1],
         )
     validate_registry(embed_dir, shader_ids)
-    validate_temporal_auxiliary(embed_dir, tools[0], tools[1])
+    validate_temporal_auxiliary(
+        embed_dir, tools[0], tools[1], fixture["push_constant"]
+    )
     validate_dlaa_pack_shader(embed_dir, tools[0], tools[1])
+    for shader_id in ("retinal_horizontal", "retinal_vertical"):
+        validate_retinal_shader(shader_id, embed_dir, tools[0], tools[1])
 
-    print(f"PASS: validated {len(shader_ids)} Detroit production SPIR-V shader contracts")
+    print(
+        f"PASS: validated {len(shader_ids)} Detroit production SPIR-V shader "
+        "contracts plus temporal, DLAA pack, and Retinal filters"
+    )
     return 0
 
 

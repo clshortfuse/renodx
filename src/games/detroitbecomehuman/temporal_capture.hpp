@@ -336,7 +336,7 @@ inline void RecordDlssOutputForCommandList(
   // the original pipeline by NativeTemporalFallbackGuard below.
   auxiliary_temporal_replacement_requested =
       native_temporal_pipeline.handle != 0u
-      && dlss::embedded::CanInsertComputeWriteBarrier()
+      && dlss::embedded::CanInsertComputeWriteBarrier(native_command_list)
       && IsMainTemporalCommandList(native_command_list)
       && QueryDlssOutputForCommandList(native_command_list);
   return auxiliary_temporal_replacement_requested;

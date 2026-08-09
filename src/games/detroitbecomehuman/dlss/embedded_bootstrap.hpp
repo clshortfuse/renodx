@@ -112,8 +112,70 @@ BootstrapStatus GetStatus();
 const char* GetStatusText();
 bool WasLoadedEarly();
 bool IsBridgeReady();
-bool CanInsertComputeWriteBarrier();
+bool CanInsertComputeWriteBarrier(std::uint64_t command_buffer);
 bool InsertComputeWriteBarrier(std::uint64_t command_buffer);
+
+// Narrow, production-only snapshot used by the Retinal DOF post-filter. The
+// Vulkan layer records only descriptor sets whose exact layout matches the
+// verified Detroit DOF composite contract; this deliberately avoids enabling
+// RenoDX's process-wide descriptor tracing slow path.
+enum class DofCompositeCaptureDetail : std::uint32_t {
+  kNotAttempted = 0u,
+  kSuccess,
+  kInvalidArgument,
+  kDeviceStateUnavailable,
+  kUnsupportedExecutable,
+  kDeviceDestroying,
+  kPushConstantsUnavailable,
+  kCommandStateMissing,
+  kCommandStateIncomplete,
+  kDescriptorSetMissing,
+  kDescriptorSetLayoutMissing,
+  kDescriptorSetLayoutMismatch,
+  kPipelineLayoutMissing,
+  kPipelineLayoutMismatch,
+  kOutputBindingUnavailable,
+  kDepthBindingUnavailable,
+  kOutputDescriptorTypeMismatch,
+  kOutputLayoutMismatch,
+  kDepthDescriptorTypeMismatch,
+};
+
+struct DofCompositeImageSnapshot {
+  std::uint64_t command_buffer = 0u;
+  std::uint64_t descriptor_set = 0u;
+  std::uint64_t pipeline_layout = 0u;
+  std::uint64_t compute_pipeline = 0u;
+  std::uint32_t descriptor_set_index = 0u;
+  std::uint32_t binding = 16u;
+  std::uint32_t dynamic_offset_count = 0u;
+  std::uint32_t dynamic_offset = 0u;
+  std::uint32_t push_constant_stage_flags = 0u;
+  std::uint32_t push_constant_offset = 0u;
+  std::uint32_t push_constant_size = 0u;
+  DetroitDlssImageBindingSnapshot image = {};
+  DetroitDlssImageBindingSnapshot depth = {};
+};
+
+[[nodiscard]] bool CaptureDofCompositeImageSnapshot(
+    std::uint64_t command_buffer,
+    DofCompositeImageSnapshot* snapshot,
+    DofCompositeCaptureDetail* detail = nullptr);
+
+// Releases the temporary tracking freeze when no private commands were
+// recorded after capture. This does not emit Vulkan commands or alter GPU
+// state.
+[[nodiscard]] bool ReleaseDofCompositeImageSnapshot(
+    const DofCompositeImageSnapshot& snapshot);
+
+// Restores the exact native compute state captured above, including the
+// dynamic offset required by Detroit's b52 UBO and the current 112-byte
+// ShaderInjectData push payload. ReShade's generic descriptor-table restore
+// cannot represent the dynamic offset on Vulkan.
+[[nodiscard]] bool RestoreDofCompositeComputeState(
+    const DofCompositeImageSnapshot& snapshot,
+    const void* push_constant_data,
+    std::uint32_t push_constant_size);
 
 DetroitDlssResultCode DETROIT_DLSS_CALL GetApi(
     std::uint32_t requested_version,

@@ -3,8 +3,108 @@
 // evaluation must replay the original shader before the frame continues.
 #version 450
 #extension GL_EXT_samplerless_texture_functions : require
+#extension GL_GOOGLE_include_directive : require
 #extension GL_KHR_shader_subgroup_shuffle : require
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+struct ShaderInjectData_std140
+{
+    float peak_white_nits;
+    float diffuse_white_nits;
+    float graphics_white_nits;
+    float tone_map_type;
+    float output_mode;
+    float output_is_hdr;
+    float tone_map_exposure;
+    float tone_map_highlights;
+    float tone_map_shadows;
+    float tone_map_contrast;
+    float tone_map_saturation;
+    float tone_map_highlight_saturation;
+    float tone_map_blowout;
+    float tone_map_flare;
+    float color_grade_strength;
+    float cas_mode;
+    float cas_strength;
+    float scene_path_active;
+    float ui_path_active;
+    float reserved;
+    float psychov_input_adaptation;
+    float psychov_output_adaptation;
+    float psychov_gamut_compression;
+    float psychov_gamut_mode;
+    float psychov17_bleaching;
+    float psychov17_hue_restore;
+    float psychov22_compression;
+    float dof_runtime_mode;
+};
+
+layout(push_constant) uniform PushData
+{
+    ShaderInjectData_std140 shader_injection;
+};
+
+#include "render_debug_common.slang"
+
+bool RenderDebugPushPayloadFinite()
+{
+    return !isnan(shader_injection.peak_white_nits)
+        && !isinf(shader_injection.peak_white_nits)
+        && !isnan(shader_injection.diffuse_white_nits)
+        && !isinf(shader_injection.diffuse_white_nits)
+        && !isnan(shader_injection.graphics_white_nits)
+        && !isinf(shader_injection.graphics_white_nits)
+        && !isnan(shader_injection.tone_map_type)
+        && !isinf(shader_injection.tone_map_type)
+        && !isnan(shader_injection.output_mode)
+        && !isinf(shader_injection.output_mode)
+        && !isnan(shader_injection.output_is_hdr)
+        && !isinf(shader_injection.output_is_hdr)
+        && !isnan(shader_injection.tone_map_exposure)
+        && !isinf(shader_injection.tone_map_exposure)
+        && !isnan(shader_injection.tone_map_highlights)
+        && !isinf(shader_injection.tone_map_highlights)
+        && !isnan(shader_injection.tone_map_shadows)
+        && !isinf(shader_injection.tone_map_shadows)
+        && !isnan(shader_injection.tone_map_contrast)
+        && !isinf(shader_injection.tone_map_contrast)
+        && !isnan(shader_injection.tone_map_saturation)
+        && !isinf(shader_injection.tone_map_saturation)
+        && !isnan(shader_injection.tone_map_highlight_saturation)
+        && !isinf(shader_injection.tone_map_highlight_saturation)
+        && !isnan(shader_injection.tone_map_blowout)
+        && !isinf(shader_injection.tone_map_blowout)
+        && !isnan(shader_injection.tone_map_flare)
+        && !isinf(shader_injection.tone_map_flare)
+        && !isnan(shader_injection.color_grade_strength)
+        && !isinf(shader_injection.color_grade_strength)
+        && !isnan(shader_injection.cas_mode)
+        && !isinf(shader_injection.cas_mode)
+        && !isnan(shader_injection.cas_strength)
+        && !isinf(shader_injection.cas_strength)
+        && !isnan(shader_injection.scene_path_active)
+        && !isinf(shader_injection.scene_path_active)
+        && !isnan(shader_injection.ui_path_active)
+        && !isinf(shader_injection.ui_path_active)
+        && !isnan(shader_injection.reserved)
+        && !isinf(shader_injection.reserved)
+        && !isnan(shader_injection.psychov_input_adaptation)
+        && !isinf(shader_injection.psychov_input_adaptation)
+        && !isnan(shader_injection.psychov_output_adaptation)
+        && !isinf(shader_injection.psychov_output_adaptation)
+        && !isnan(shader_injection.psychov_gamut_compression)
+        && !isinf(shader_injection.psychov_gamut_compression)
+        && !isnan(shader_injection.psychov_gamut_mode)
+        && !isinf(shader_injection.psychov_gamut_mode)
+        && !isnan(shader_injection.psychov17_bleaching)
+        && !isinf(shader_injection.psychov17_bleaching)
+        && !isnan(shader_injection.psychov17_hue_restore)
+        && !isinf(shader_injection.psychov17_hue_restore)
+        && !isnan(shader_injection.psychov22_compression)
+        && !isinf(shader_injection.psychov22_compression)
+        && !isnan(shader_injection.dof_runtime_mode)
+        && !isinf(shader_injection.dof_runtime_mode);
+}
 
 struct TAA_SPACE_CONV_MATRICES
 {
@@ -71,6 +171,34 @@ layout(set = 0, binding = 19, r8ui) uniform writeonly uimage2D HalfResContours;
 
 shared float sharedDepth[64];
 shared vec2 sharedMotionVec[64];
+
+float SanitizeRenderDebugChannel(float value)
+{
+    return isnan(value) || isinf(value)
+        ? 0.0
+        : clamp(value, 0.0, 65408.0);
+}
+
+uint PackRenderDebugRgb9e5(vec3 value)
+{
+    vec3 color = vec3(
+        SanitizeRenderDebugChannel(value.r),
+        SanitizeRenderDebugChannel(value.g),
+        SanitizeRenderDebugChannel(value.b));
+    uint exponent = max(
+        0x37800000u,
+        floatBitsToUint(max(color.r, max(color.g, color.b)))
+            & 0x7F800000u);
+    float bias = uintBitsToFloat(exponent + 0x07800000u);
+    uint red = floatBitsToUint(
+        uintBitsToFloat(floatBitsToUint(color.r) & 0xFFFF8000u) + bias);
+    uint green = floatBitsToUint(
+        uintBitsToFloat(floatBitsToUint(color.g) & 0xFFFF8000u) + bias);
+    uint blue = floatBitsToUint(
+        uintBitsToFloat(floatBitsToUint(color.b) & 0xFFFF8000u) + bias);
+    return (((red | (green << 9u)) & 0x0003FFFFu) | (blue << 18u))
+        | ((exponent - 0x37800000u) << 4u);
+}
 
 void main()
 {
@@ -1123,7 +1251,47 @@ void main()
         float _5290 = _5283.z;
         int _5296 = max(931135488, (floatBitsToInt(max(max(_5285, _5287), _5290)) & 2139095040));
         float _5301 = uintBitsToFloat(uint(_5296 + 125829120));
-        // DLAA replaces b16 after this auxiliary history pass.
+        // Native Render Debug uses this exact TAA output as the normal image
+        // outside temporal panels. In DLSS modes b16 is still owned by the
+        // later adapter pack, and the scene pass reports temporal panels as
+        // unavailable instead of interfering with that output.
+        if (!RenderDebugTemporalUnavailable()
+            && RenderDebugAnySourceAtPass(RENDER_DEBUG_PASS_TEMPORAL)
+            && RenderDebugPushPayloadFinite())
+        {
+            ivec2 debugPixel = _1477;
+            ivec2 debugSize = _415._TAA._viViewportOrigin_Size.zw;
+            uint debugSource = RenderDebugSourceAtPixel(
+                debugPixel, debugSize);
+            vec3 debugOutput = _5266;
+            if (RenderDebugGenerateAtPass(
+                debugSource, RENDER_DEBUG_PASS_TEMPORAL))
+            {
+                vec4 debugValue = vec4(0.0);
+                if (debugSource == RENDER_DEBUG_SOURCE_TAA_DEPTH)
+                {
+                    debugValue = vec4(vec3(_2532), 1.0);
+                }
+                else if (debugSource == RENDER_DEBUG_SOURCE_TAA_MOTION)
+                {
+                    debugValue = vec4(_1717 / vec2(32.0), 0.0, 1.0);
+                }
+                else if (debugSource == RENDER_DEBUG_SOURCE_TAA_HISTORY)
+                {
+                    debugValue = vec4(
+                        textureLod(PrevColorTex, _1740, 0.0).xyz
+                            * _415._TAA._fPreviousFrameExposureCompensation,
+                        1.0);
+                }
+                debugOutput = RenderDebugBlend(
+                    _5266,
+                    RenderDebugMap(debugValue, debugSource));
+            }
+            imageStore(
+                OutColorPass,
+                _1571,
+                uvec4(PackRenderDebugRgb9e5(debugOutput), 0u, 0u, 0u));
+        }
     }
     if (_1980)
     {
