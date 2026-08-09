@@ -13,12 +13,15 @@
 #include "src/games/detroitbecomehuman/dlss_bridge_abi.h"
 #include "src/games/detroitbecomehuman/dlss_bridge_client.hpp"
 #include "src/games/detroitbecomehuman/supported_build.hpp"
+#include "src/games/detroitbecomehuman/temporal_mode_state.hpp"
 
 namespace {
 
 namespace supported_build = renodx::games::detroitbecomehuman::supported_build;
 namespace dlss_bridge_client =
     renodx::games::detroitbecomehuman::dlss_bridge_client;
+namespace temporal_mode_state =
+    renodx::games::detroitbecomehuman::temporal_mode_state;
 
 static_assert(std::is_standard_layout_v<DetroitDlssBootstrapContext>);
 static_assert(std::is_trivially_copyable_v<DetroitDlssBootstrapContext>);
@@ -813,6 +816,54 @@ bool TestDirectProviderContract() {
   return passed;
 }
 
+bool TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization() {
+  temporal_mode_state::Tracker tracker;
+  constexpr std::uint64_t kCommandList = UINT64_C(0x12345678);
+
+  bool passed = true;
+  const auto enter_dlaa = tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
+  const auto first_dlaa = tracker.GetSnapshot();
+  passed &= Expect(
+      enter_dlaa.changed && first_dlaa.mode == DETROIT_DLSS_MODE_DLAA,
+      "entering DLAA must start a distinct temporal-mode generation");
+  passed &= Expect(
+      tracker.Record(kCommandList, first_dlaa, true)
+          && tracker.QueryAuthorization(kCommandList).authorized,
+      "a valid current-generation DLAA output must authorize its command list");
+
+  const auto enter_native = tracker.SetMode(DETROIT_DLSS_MODE_NATIVE);
+  passed &= Expect(
+      enter_native.changed
+          && !tracker.QueryAuthorization(kCommandList).authorized,
+      "switching to native TAA must revoke all DLAA command-list authorization");
+
+  const auto reenter_dlaa = tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
+  const auto second_dlaa = tracker.GetSnapshot();
+  passed &= Expect(
+      reenter_dlaa.changed
+          && second_dlaa.generation != first_dlaa.generation
+          && !tracker.QueryAuthorization(kCommandList).authorized,
+      "a later DLAA session must warm up independently");
+  passed &= Expect(
+      !tracker.Record(kCommandList, first_dlaa, true)
+          && !tracker.QueryAuthorization(kCommandList).authorized,
+      "a late output from an older temporal-mode generation must fail closed");
+  passed &= Expect(
+      tracker.Record(kCommandList, second_dlaa, true)
+          && tracker.QueryAuthorization(kCommandList).authorized,
+      "the current DLAA generation must become authorized after a valid output");
+
+  const auto same_mode = tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
+  passed &= Expect(
+      !same_mode.changed && tracker.QueryAuthorization(kCommandList).authorized,
+      "per-frame same-mode refresh must preserve current authorization");
+  passed &= Expect(
+      !tracker.Record(kCommandList, second_dlaa, false)
+          && !tracker.QueryAuthorization(kCommandList).authorized,
+      "a current-generation fallback must revoke authorization");
+  return passed;
+}
+
 }  // namespace
 
 int main() {
@@ -823,6 +874,7 @@ int main() {
   passed &= TestModeSettingsCachePolicy();
   passed &= TestFunctionTableContract();
   passed &= TestDirectProviderContract();
+  passed &= TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
   return passed ? 0 : 1;
 }

@@ -463,7 +463,11 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"dlss::embedded::CanInsertComputeWriteBarrier\(native_command_list\)"
             r"\s*&&\s*"
             r"IsMainTemporalCommandList\(native_command_list\)\s*&&\s*"
-            r"QueryDlssOutputForCommandList\(native_command_list\)",
+            r"authorization\.authorized",
+        )
+        self.assertIn("authorization.snapshot.generation", temporal_capture)
+        self.assertIn(
+            "replacement_generation != mode_snapshot.generation", temporal_capture
         )
         self.assertIn("struct NativeTemporalFallbackGuard", temporal_capture)
         self.assertRegex(

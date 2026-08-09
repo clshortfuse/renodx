@@ -18,7 +18,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -36,6 +35,7 @@
 #include "dlss/embedded_bootstrap.hpp"
 #include "supported_build.hpp"
 #include "taa_contract.hpp"
+#include "temporal_mode_state.hpp"
 
 namespace renodx::games::detroitbecomehuman::temporal_capture {
 
@@ -145,15 +145,13 @@ struct ContractShape {
   bool operator==(const ContractShape&) const = default;
 };
 
-inline std::atomic<DetroitDlssMode> selected_mode = DETROIT_DLSS_MODE_NATIVE;
+inline temporal_mode_state::Tracker mode_state;
 inline std::atomic<RuntimeStatus> runtime_status = RuntimeStatus::kNative;
 inline std::atomic<float> dlaa_sharpening = 0.f;
 inline std::atomic<float> dlaa_sharpening_normalization = 1.f;
 // Multiple Vulkan frames may be recorded concurrently. Associate the valid
 // DLSS result with the exact native command list that later records final CAS;
 // a process-global frame boolean can suppress CAS on the wrong in-flight frame.
-inline std::mutex dlss_output_mutex;
-inline std::unordered_map<std::uint64_t, bool> dlss_output_by_command_list;
 // Detroit records the main view and auxiliary full-resolution temporal passes
 // into different Vulkan command buffers. Applying NGX to every matching TAA
 // dispatch permanently pins one ~100 MiB scratch bundle to each reusable
@@ -165,6 +163,7 @@ inline thread_local std::uint64_t latest_temporal_command_list = 0u;
 inline thread_local std::uint64_t latest_temporal_dispatch_serial = 0u;
 inline thread_local reshade::api::pipeline native_temporal_pipeline = {0u};
 inline thread_local bool auxiliary_temporal_replacement_requested = false;
+inline thread_local std::uint64_t auxiliary_temporal_replacement_generation = 0u;
 inline std::atomic_uint64_t frame_counter = 0u;
 inline std::atomic_uint64_t evaluation_serial = 0u;
 inline std::atomic_uint64_t sr_preflight_serial = 0u;
@@ -250,7 +249,7 @@ inline void MarkMainTemporalCommandList(std::uint64_t command_list) {
 }
 
 [[nodiscard]] inline DetroitDlssMode GetMode() {
-  return selected_mode.load(std::memory_order_relaxed);
+  return mode_state.GetMode();
 }
 
 [[nodiscard]] inline std::uint64_t GetEvaluationSerial() {
@@ -276,9 +275,10 @@ inline void SetDlaaSharpening(
 
 inline void SetMode(DetroitDlssMode mode) {
   if (mode > DETROIT_DLSS_MODE_PERFORMANCE) mode = DETROIT_DLSS_MODE_NATIVE;
-  const auto previous = selected_mode.exchange(mode, std::memory_order_acq_rel);
+  const auto transition = mode_state.SetMode(mode);
+  const auto previous = transition.previous;
   if (mode == DETROIT_DLSS_MODE_NATIVE
-      && previous != DETROIT_DLSS_MODE_NATIVE) {
+      && transition.changed && previous != DETROIT_DLSS_MODE_NATIVE) {
     (void)dlss_bridge_client::client.TransitionToNative();
   }
   if (mode == DETROIT_DLSS_MODE_NATIVE) {
@@ -293,43 +293,36 @@ inline void SetMode(DetroitDlssMode mode) {
 }
 
 inline void BeginNextFrame() {
-  SetMode(selected_mode.load(std::memory_order_relaxed));
+  SetMode(mode_state.GetMode());
 }
 
-inline void RecordDlssOutputForCommandList(
+[[nodiscard]] inline bool RecordDlssOutputForCommandList(
     std::uint64_t command_list,
+    const temporal_mode_state::Snapshot& mode_snapshot,
     bool output_valid) {
-  if (command_list == 0u) return;
-  std::scoped_lock lock(dlss_output_mutex);
-  if (output_valid) {
-    dlss_output_by_command_list[command_list] = true;
-  } else {
-    dlss_output_by_command_list.erase(command_list);
-  }
+  return mode_state.Record(command_list, mode_snapshot, output_valid);
 }
 
 [[nodiscard]] inline bool QueryDlssOutputForCommandList(
     std::uint64_t command_list) {
-  if (command_list == 0u) return false;
-  std::scoped_lock lock(dlss_output_mutex);
-  const auto found = dlss_output_by_command_list.find(command_list);
-  if (found == dlss_output_by_command_list.end()) return false;
-  return found->second;
+  return mode_state.QueryAuthorization(command_list).authorized;
 }
 
 [[nodiscard]] inline bool RequestAuxiliaryTemporalReplacement(
     reshade::api::command_list* command_list) {
   auxiliary_temporal_replacement_requested = false;
+  auxiliary_temporal_replacement_generation = 0u;
   if (command_list == nullptr
       || command_list->get_device() == nullptr
       || command_list->get_device()->get_api()
-             != reshade::api::device_api::vulkan
-      || selected_mode.load(std::memory_order_relaxed)
-             == DETROIT_DLSS_MODE_NATIVE) {
+             != reshade::api::device_api::vulkan) {
     return false;
   }
 
   const auto native_command_list = command_list->get_native();
+  const auto authorization =
+      mode_state.QueryAuthorization(native_command_list);
+  if (authorization.snapshot.mode == DETROIT_DLSS_MODE_NATIVE) return false;
   // Require a successful evaluation on this exact reusable command buffer
   // before replacing its full native TAA. The first eligible recording stays
   // native and proves the complete NGX path. Any later failure is replayed with
@@ -338,7 +331,11 @@ inline void RecordDlssOutputForCommandList(
       native_temporal_pipeline.handle != 0u
       && dlss::embedded::CanInsertComputeWriteBarrier(native_command_list)
       && IsMainTemporalCommandList(native_command_list)
-      && QueryDlssOutputForCommandList(native_command_list);
+      && authorization.authorized;
+  if (auxiliary_temporal_replacement_requested) {
+    auxiliary_temporal_replacement_generation =
+        authorization.snapshot.generation;
+  }
   return auxiliary_temporal_replacement_requested;
 }
 
@@ -705,14 +702,17 @@ struct NativeTemporalFallbackGuard {
   Context* context = nullptr;
   reshade::api::pipeline native_pipeline = {0u};
   bool armed = false;
+  temporal_mode_state::Snapshot mode_snapshot = {};
 
   NativeTemporalFallbackGuard(
       Context& dispatch_context,
       reshade::api::pipeline pipeline,
-      bool auxiliary_replacement_used)
+      bool auxiliary_replacement_used,
+      temporal_mode_state::Snapshot snapshot)
       : context(&dispatch_context),
         native_pipeline(pipeline),
-        armed(auxiliary_replacement_used && pipeline.handle != 0u) {}
+        armed(auxiliary_replacement_used && pipeline.handle != 0u),
+        mode_snapshot(snapshot) {}
 
   NativeTemporalFallbackGuard(const NativeTemporalFallbackGuard&) = delete;
   NativeTemporalFallbackGuard& operator=(const NativeTemporalFallbackGuard&) = delete;
@@ -733,7 +733,8 @@ struct NativeTemporalFallbackGuard {
         context->arguments.group_count_x,
         context->arguments.group_count_y,
         context->arguments.group_count_z);
-    RecordDlssOutputForCommandList(context->cmd_list->get_native(), false);
+    (void)RecordDlssOutputForCommandList(
+        context->cmd_list->get_native(), mode_snapshot, false);
     if (!has_logged_auxiliary_fallback_replay.exchange(
             true, std::memory_order_acq_rel)) {
       Log(
@@ -752,11 +753,16 @@ inline void AfterNativeTemporalDispatch(
   if (context.cmd_list == nullptr) return;
   const bool auxiliary_replacement_used =
       auxiliary_temporal_replacement_requested;
+  const auto replacement_generation =
+      auxiliary_temporal_replacement_generation;
   auxiliary_temporal_replacement_requested = false;
+  auxiliary_temporal_replacement_generation = 0u;
+  const auto mode_snapshot = mode_state.GetSnapshot();
   NativeTemporalFallbackGuard native_fallback(
       context,
       native_temporal_pipeline,
-      auxiliary_replacement_used);
+      auxiliary_replacement_used,
+      mode_snapshot);
   native_temporal_pipeline = {0u};
   const auto dispatch_serial =
       evaluation_serial.fetch_add(1u, std::memory_order_acq_rel) + 1u;
@@ -764,7 +770,17 @@ inline void AfterNativeTemporalDispatch(
       context.cmd_list->get_native(), dispatch_serial);
   // A later temporal dispatch in the same presented frame supersedes an
   // earlier result. Re-arm CAS until this dispatch independently succeeds.
-  RecordDlssOutputForCommandList(context.cmd_list->get_native(), false);
+  (void)RecordDlssOutputForCommandList(
+      context.cmd_list->get_native(), mode_snapshot, false);
+  if (auxiliary_replacement_used
+      && replacement_generation != mode_snapshot.generation) {
+    runtime_status.store(
+        mode_snapshot.mode == DETROIT_DLSS_MODE_NATIVE
+            ? RuntimeStatus::kNative
+            : RuntimeStatus::kWaitingForDispatch,
+        std::memory_order_relaxed);
+    return;
+  }
   auto* device = context.cmd_list->get_device();
   if (device == nullptr || device->get_api() != reshade::api::device_api::vulkan) {
     return;
@@ -890,7 +906,7 @@ inline void AfterNativeTemporalDispatch(
     }
   }
 
-  const auto mode = selected_mode.load(std::memory_order_relaxed);
+  const auto mode = mode_snapshot.mode;
   std::optional<taa_contract::DecodedConstants> decoded_constants;
   if ((constants_snapshot.valid_flags & DETROIT_DLSS_CONSTANTS_PAYLOAD_VALID) != 0u
       && constants_snapshot.bytes_written >= taa_contract::kConstantsSize) {
@@ -1045,10 +1061,12 @@ inline void AfterNativeTemporalDispatch(
   // The final CAS gate follows the latest temporal dispatch in this frame.
   // Never retain a successful earlier dispatch if a later one fell back to
   // Detroit's native b16 output.
-  RecordDlssOutputForCommandList(
+  const bool output_authorized = RecordDlssOutputForCommandList(
       inputs.command_buffer,
+      mode_snapshot,
       evaluation.output_valid && evaluation.suppress_final_cas);
-  if (evaluation.output_valid && evaluation.suppress_final_cas) {
+  if (evaluation.output_valid && evaluation.suppress_final_cas
+      && output_authorized) {
     native_fallback.Disarm();
     if (auxiliary_replacement_used
         && !has_logged_auxiliary_active.exchange(true, std::memory_order_acq_rel)) {
@@ -1079,6 +1097,13 @@ inline void AfterNativeTemporalDispatch(
               inputs.output_height,
               inputs.frame_id));
     }
+  } else if (evaluation.output_valid && evaluation.suppress_final_cas) {
+    const auto current_mode = mode_state.GetMode();
+    runtime_status.store(
+        current_mode == DETROIT_DLSS_MODE_NATIVE
+            ? RuntimeStatus::kNative
+            : RuntimeStatus::kWaitingForDispatch,
+        std::memory_order_relaxed);
   } else if (mode == DETROIT_DLSS_MODE_NATIVE) {
     runtime_status.store(RuntimeStatus::kNative, std::memory_order_relaxed);
   } else if (evaluation.reason
@@ -1137,6 +1162,7 @@ struct TemporalDispatchCallback {
   operator()(renodx::utils::command_action::CommandContext<
              renodx::utils::command_action::DispatchArguments>& context) const {
     auxiliary_temporal_replacement_requested = false;
+    auxiliary_temporal_replacement_generation = 0u;
     native_temporal_pipeline = {0u};
     auto* shader_state = renodx::utils::command_action::GetShaderState(&context);
     if (shader_state != nullptr) {
@@ -1159,10 +1185,7 @@ inline constexpr TemporalDispatchCallback kTemporalDispatchCallback;
 inline void Use(DWORD fdw_reason) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
-      {
-        std::scoped_lock lock(dlss_output_mutex);
-        dlss_output_by_command_list.clear();
-      }
+      mode_state.Reset();
       {
         std::unique_lock lock(main_temporal_command_list_mutex);
         main_temporal_command_lists.clear();
@@ -1191,10 +1214,7 @@ inline void Use(DWORD fdw_reason) {
       renodx::utils::command_action::Unregister(kTemporalDispatchCallback);
       // The Vulkan layer owns NGX/Vulkan teardown at vkDestroyDevice. Do not
       // call its ABI while the Windows loader lock is held here.
-      {
-        std::scoped_lock lock(dlss_output_mutex);
-        dlss_output_by_command_list.clear();
-      }
+      mode_state.Reset();
       {
         std::unique_lock lock(main_temporal_command_list_mutex);
         main_temporal_command_lists.clear();
