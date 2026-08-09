@@ -781,6 +781,10 @@ inline void AfterNativeTemporalDispatch(
         std::memory_order_relaxed);
     return;
   }
+  if (mode_snapshot.mode == DETROIT_DLSS_MODE_NATIVE) {
+    runtime_status.store(RuntimeStatus::kNative, std::memory_order_relaxed);
+    return;
+  }
   auto* device = context.cmd_list->get_device();
   if (device == nullptr || device->get_api() != reshade::api::device_api::vulkan) {
     return;

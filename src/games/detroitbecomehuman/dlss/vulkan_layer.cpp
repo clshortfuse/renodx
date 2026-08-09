@@ -75,6 +75,7 @@ std::atomic<bool> executable_verified = false;
 std::atomic<bool> hooks_attached = false;
 std::atomic<bool> loaded_early = false;
 std::atomic<bool> cached_extensions_ready = false;
+std::atomic<bool> runtime_command_tracking_enabled = false;
 
 PFN_vkCreateInstance reshade_create_instance = nullptr;
 PFN_vkCreateDevice reshade_create_device = nullptr;
@@ -3883,6 +3884,7 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindPipeline(
   if (trampoline == nullptr) return;
   trampoline(command_buffer, pipeline_bind_point, pipeline);
   if (pipeline_bind_point != VK_PIPELINE_BIND_POINT_COMPUTE) return;
+  if (!runtime_command_tracking_enabled.load(std::memory_order_acquire)) return;
 
   const std::uint64_t command_buffer_handle = ToOpaque(command_buffer);
   auto& local = GetThreadComputeCommandStates()[command_buffer_handle];
@@ -3931,6 +3933,7 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(
       dynamic_offset_count,
       dynamic_offsets);
   if (pipeline_bind_point != VK_PIPELINE_BIND_POINT_COMPUTE || descriptor_sets == nullptr) return;
+  if (!runtime_command_tracking_enabled.load(std::memory_order_acquire)) return;
 
   const std::uint64_t command_buffer_handle = ToOpaque(command_buffer);
   auto& local = GetThreadComputeCommandStates()[command_buffer_handle];
@@ -4578,6 +4581,10 @@ bool SerializeExtensions(
 }  // namespace
 
 namespace renodx::games::detroitbecomehuman::dlss::embedded {
+
+void SetRuntimeCommandTracking(bool enabled) {
+  runtime_command_tracking_enabled.store(enabled, std::memory_order_release);
+}
 
 bool AttachEarlyHooks(HMODULE addon_module, const ExtensionCache& cache) {
   layer_module = addon_module;

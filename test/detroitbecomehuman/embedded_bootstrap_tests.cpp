@@ -23,6 +23,16 @@ void Expect(bool condition, const char* message) {
 }  // namespace
 
 int main() {
+  Expect(
+      !embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_NATIVE, false),
+      "Native TAA with non-Retinal DOF must use the command-tracking fast path");
+  Expect(
+      embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_DLAA, false),
+      "DLAA must enable runtime command tracking");
+  Expect(
+      embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_NATIVE, true),
+      "Retinal DOF must enable runtime command tracking in Native TAA mode");
+
   std::vector<std::string> entries = {
       "third-party.addon64",
       "subdir\\another.addon64",

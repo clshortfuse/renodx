@@ -17,6 +17,7 @@ def main() -> None:
     addon = (args.source_dir / "addon.cpp").read_text(encoding="utf-8")
     cmake = (args.source_dir / "dlss" / "CMakeLists.txt").read_text(encoding="utf-8")
     bridge = (args.source_dir / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
+    temporal = (args.source_dir / "temporal_capture.hpp").read_text(encoding="utf-8")
 
     for hook in (
         "HookCreateInstance",
@@ -43,6 +44,28 @@ def main() -> None:
     require(source, "DestroyInternalFeatureFencePool(state.get())")
     require(source, "VK_ACCESS_SHADER_WRITE_BIT")
     require(source, "VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT")
+    require(source, "runtime_command_tracking_enabled")
+    require(source, "void SetRuntimeCommandTracking(bool enabled)")
+
+    bind_pipeline_start = source.index("LayerCmdBindPipeline(")
+    bind_pipeline_end = source.index("LayerCmdBindDescriptorSets(", bind_pipeline_start)
+    bind_pipeline = source[bind_pipeline_start:bind_pipeline_end]
+    pipeline_gate = bind_pipeline.index("runtime_command_tracking_enabled.load")
+    pipeline_state = bind_pipeline.index("GetThreadComputeCommandStates()")
+    if pipeline_gate > pipeline_state:
+        raise AssertionError(
+            "inactive runtime tracking must bypass pipeline command-state capture"
+        )
+
+    bind_descriptors_start = bind_pipeline_end
+    bind_descriptors_end = source.index("FindTrackedDeviceFunction(", bind_descriptors_start)
+    bind_descriptors = source[bind_descriptors_start:bind_descriptors_end]
+    descriptor_gate = bind_descriptors.index("runtime_command_tracking_enabled.load")
+    descriptor_state = bind_descriptors.index("GetThreadComputeCommandStates()")
+    if descriptor_gate > descriptor_state:
+        raise AssertionError(
+            "inactive runtime tracking must bypass descriptor command-state capture"
+        )
 
     layout_start = source.index("LayerCreatePipelineLayout(")
     layout_end = source.index("LayerDestroyPipelineLayout(", layout_start)
@@ -149,6 +172,30 @@ def main() -> None:
     if not gate_index < detour_index:
         raise AssertionError("invalid extension cache must fail closed before Detours")
     require(addon, "QueryRequiredExtensionsIsolated(addon_module, &refreshed)")
+    tracking_refresh_start = addon.index("void RefreshEmbeddedCommandTracking()")
+    tracking_refresh_end = addon.index("void ApplyDlssMode(", tracking_refresh_start)
+    tracking_refresh = addon[tracking_refresh_start:tracking_refresh_end]
+    require(tracking_refresh, "embedded_dlss::SetRuntimeCommandTracking(")
+    require(tracking_refresh, "embedded_dlss::NeedsRuntimeCommandTracking(")
+    require(tracking_refresh, "temporal_capture::GetMode()")
+    require(tracking_refresh, "dof_mode >= 2.5f")
+    apply_mode_start = tracking_refresh_end
+    apply_mode_end = addon.index("void OnDlssModeChanged()", apply_mode_start)
+    require(addon[apply_mode_start:apply_mode_end], "RefreshEmbeddedCommandTracking()")
+    dof_settings_start = addon.index("void OnDofSettingsChanged()")
+    dof_settings_end = addon.index("render_debug::Source", dof_settings_start)
+    require(addon[dof_settings_start:dof_settings_end], "RefreshEmbeddedCommandTracking()")
+    temporal_dispatch_start = temporal.index("inline void AfterNativeTemporalDispatch(")
+    temporal_dispatch_end = temporal.index("inline void Use(", temporal_dispatch_start)
+    temporal_dispatch = temporal[temporal_dispatch_start:temporal_dispatch_end]
+    native_fast_path = temporal_dispatch.index(
+        "if (mode_snapshot.mode == DETROIT_DLSS_MODE_NATIVE)"
+    )
+    snapshot_capture = temporal_dispatch.index("CaptureTemporalSnapshot(")
+    if native_fast_path > snapshot_capture:
+        raise AssertionError(
+            "Native TAA must bypass temporal snapshot capture before bridge work"
+        )
     require(bridge, "DetroitDlssGetApiFn provider_")
     require(bridge, "provider_(DETROIT_DLSS_ABI_VERSION, &candidate)")
 

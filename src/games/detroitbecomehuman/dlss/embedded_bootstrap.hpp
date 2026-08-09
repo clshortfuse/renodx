@@ -112,6 +112,17 @@ BootstrapStatus GetStatus();
 const char* GetStatusText();
 bool WasLoadedEarly();
 bool IsBridgeReady();
+
+[[nodiscard]] inline constexpr bool NeedsRuntimeCommandTracking(
+    DetroitDlssMode mode, bool retinal_dof_requested) noexcept {
+  return mode != DETROIT_DLSS_MODE_NATIVE || retinal_dof_requested;
+}
+
+// Resource and descriptor metadata stay warm so DLAA or Retinal DOF can still
+// be enabled at runtime. This gate removes per-command-buffer state capture
+// while neither feature needs the embedded Vulkan bridge.
+void SetRuntimeCommandTracking(bool enabled);
+
 bool CanInsertComputeWriteBarrier(std::uint64_t command_buffer);
 bool InsertComputeWriteBarrier(std::uint64_t command_buffer);
 

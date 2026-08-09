@@ -674,6 +674,12 @@ void OnAspectRatioModeChanged() {
   ApplyAspectRatioMode(aspect_ratio_mode);
 }
 
+void RefreshEmbeddedCommandTracking() {
+  embedded_dlss::SetRuntimeCommandTracking(
+      embedded_dlss::NeedsRuntimeCommandTracking(
+          temporal_capture::GetMode(), dof_mode >= 2.5f));
+}
+
 void ApplyDlssMode(float selected_mode) {
   auto next_mode = static_cast<DetroitDlssMode>(selected_mode);
   if (next_mode != DETROIT_DLSS_MODE_NATIVE
@@ -683,6 +689,7 @@ void ApplyDlssMode(float selected_mode) {
   dlss_mode = static_cast<float>(next_mode);
   const auto previous_mode = temporal_capture::GetMode();
   temporal_capture::SetMode(next_mode);
+  RefreshEmbeddedCommandTracking();
   if (next_mode != previous_mode) InvalidateDlssScaleSettings();
 }
 
@@ -1290,6 +1297,7 @@ void UpdateDofRuntimeMode() {
 }
 
 void OnDofSettingsChanged() {
+  RefreshEmbeddedCommandTracking();
   if (dof_mode >= 0.5f) return;
   dof_runtime_controller.Reset();
   shader_injection.dof_runtime_mode =
@@ -2573,7 +2581,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Native TAA is active. The TAA runtime contract is still captured for diagnostics.",
+                .label = "Native TAA is active. DLSS command tracking is paused unless Retinal DOF needs it.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
