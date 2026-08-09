@@ -18,10 +18,12 @@
 #include <format>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include <Windows.h>
@@ -34,9 +36,11 @@
 #include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
+#include "../../utils/swapchain.hpp"
 #include "./dlss_scale_transition.hpp"
 #include "./dlss/embedded_bootstrap.hpp"
 #include "./dof_runtime.hpp"
+#include "./peak_brightness.hpp"
 #include "./render_debug.hpp"
 #include "./retinal_capture.hpp"
 #include "./retinal_observability.hpp"
@@ -75,6 +79,8 @@ namespace dlss_scale_transition =
 namespace embedded_dlss =
     renodx::games::detroitbecomehuman::dlss::embedded;
 namespace dof = renodx::games::detroitbecomehuman::dof;
+namespace peak_brightness =
+    renodx::games::detroitbecomehuman::peak_brightness;
 namespace render_debug =
     renodx::games::detroitbecomehuman::render_debug;
 namespace retinal = renodx::games::detroitbecomehuman::retinal;
@@ -107,6 +113,15 @@ std::atomic_bool ultrawide_install_attempted = false;
 std::atomic_bool ultrawide_force_vanilla = false;
 std::atomic<reshade::api::swapchain*> tracked_swapchain = nullptr;
 std::atomic<reshade::api::effect_runtime*> tracked_effect_runtime = nullptr;
+float peak_brightness_source =
+    static_cast<float>(peak_brightness::Source::kAutomatic);
+float manual_peak_nits = peak_brightness::kFallbackPeakNits;
+peak_brightness::RefreshController peak_brightness_refresh;
+std::optional<DXGI_OUTPUT_DESC1> detected_output_desc = std::nullopt;
+std::optional<float> detected_peak_nits = std::nullopt;
+std::atomic_bool peak_brightness_refresh_requested = true;
+std::string peak_brightness_status =
+    "Auto: waiting for the Vulkan swapchain; effective peak is 1000 nits fallback.";
 float aspect_ratio_mode = 1.f;
 float dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
 float dlaa_sharpening = 0.f;
@@ -1513,6 +1528,195 @@ void OnTemporalDrawn(reshade::api::command_list*) {
       render_debug::ProducerPass::kTemporal);
 }
 
+bool IsHdrOutputColorSpace(reshade::api::color_space color_space) {
+  return color_space == reshade::api::color_space::hdr10_st2084
+      || color_space == reshade::api::color_space::hdr10_hlg
+      || color_space == reshade::api::color_space::extended_srgb_linear;
+}
+
+std::string WideStringToUtf8(const wchar_t* value) {
+  if (value == nullptr || *value == L'\0') return {};
+  const int required_size = WideCharToMultiByte(
+      CP_UTF8, 0, value, -1, nullptr, 0, nullptr, nullptr);
+  if (required_size <= 1) return {};
+
+  std::string result(static_cast<std::size_t>(required_size), '\0');
+  if (WideCharToMultiByte(
+          CP_UTF8,
+          0,
+          value,
+          -1,
+          result.data(),
+          required_size,
+          nullptr,
+          nullptr)
+      <= 0) {
+    return {};
+  }
+  result.pop_back();
+  return result;
+}
+
+std::string GetDisplayName(const DXGI_OUTPUT_DESC1& output_desc) {
+  DISPLAY_DEVICEW display_device = {};
+  display_device.cb = sizeof(display_device);
+  if (EnumDisplayDevicesW(
+          output_desc.DeviceName, 0u, &display_device, 0u)) {
+    if (auto name = WideStringToUtf8(display_device.DeviceString);
+        !name.empty()) {
+      return name;
+    }
+  }
+  if (auto name = WideStringToUtf8(output_desc.DeviceName); !name.empty()) {
+    return name;
+  }
+  return "unknown display";
+}
+
+void SetPeakBrightnessStatus(
+    std::string status_text,
+    reshade::log::level log_level,
+    bool log_change) {
+  const bool changed = status_text != peak_brightness_status;
+  peak_brightness_status = std::move(status_text);
+  if (auto* status =
+          renodx::utils::settings::FindSetting("PeakBrightnessStatus");
+      status != nullptr) {
+    status->label = peak_brightness_status;
+  }
+  if (changed && log_change) {
+    reshade::log::message(log_level, peak_brightness_status.c_str());
+  }
+}
+
+void ApplyPeakBrightness(
+    const peak_brightness::Resolution& resolution,
+    std::string status_text,
+    reshade::log::level log_level,
+    bool log_change) {
+  if (shader_injection.peak_white_nits
+      != resolution.effective_peak_nits) {
+    shader_injection.peak_white_nits = resolution.effective_peak_nits;
+    SyncDlaaSharpening();
+  }
+  SetPeakBrightnessStatus(
+      std::move(status_text), log_level, log_change);
+}
+
+void UpdatePeakBrightness(
+    reshade::api::swapchain* swapchain,
+    bool force_refresh) {
+  const auto source =
+      peak_brightness::ParseSource(peak_brightness_source);
+  if (source == peak_brightness::Source::kManual) {
+    const auto resolution = peak_brightness::Resolve(
+        source, manual_peak_nits, detected_peak_nits);
+    ApplyPeakBrightness(
+        resolution,
+        std::format(
+            "Manual: {:.0f} nits effective (saved ToneMapPeakNits; DXGI polling is disabled).",
+            resolution.effective_peak_nits),
+        reshade::log::level::info,
+        false);
+    return;
+  }
+
+  if (swapchain == nullptr) {
+    detected_output_desc.reset();
+    detected_peak_nits.reset();
+    const auto resolution = peak_brightness::Resolve(
+        source, manual_peak_nits, detected_peak_nits);
+    ApplyPeakBrightness(
+        resolution,
+        "Auto: waiting for the Vulkan swapchain; effective peak is 1000 nits fallback.",
+        reshade::log::level::info,
+        false);
+    return;
+  }
+
+  const auto window = static_cast<HWND>(swapchain->get_hwnd());
+  const HMONITOR monitor = window == nullptr
+      ? nullptr
+      : MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+  const bool output_is_hdr =
+      IsHdrOutputColorSpace(swapchain->get_color_space());
+  const bool refresh_requested =
+      peak_brightness_refresh_requested.exchange(
+          false, std::memory_order_acq_rel);
+  if (!peak_brightness_refresh.ShouldRefresh(
+          source,
+          reinterpret_cast<std::uintptr_t>(monitor),
+          output_is_hdr,
+          peak_brightness::RefreshController::Clock::now(),
+          force_refresh || refresh_requested)) {
+    return;
+  }
+
+  detected_output_desc =
+      renodx::utils::swapchain::GetDirectXOutputDesc1(window);
+  detected_peak_nits = detected_output_desc.has_value()
+      ? renodx::utils::swapchain::GetPeakNits(*detected_output_desc)
+      : std::nullopt;
+  const auto resolution = peak_brightness::Resolve(
+      source, manual_peak_nits, detected_peak_nits);
+
+  if (!detected_output_desc.has_value()) {
+    ApplyPeakBrightness(
+        resolution,
+        "Auto detection failed: no DXGI output matched the Vulkan HWND/HMONITOR; effective peak is 1000 nits fallback.",
+        reshade::log::level::warning,
+        true);
+    return;
+  }
+
+  const auto& output_desc = *detected_output_desc;
+  const auto display_name = GetDisplayName(output_desc);
+  if (!detected_peak_nits.has_value()) {
+    ApplyPeakBrightness(
+        resolution,
+        std::format(
+            "Auto detection failed on {}: DXGI MaxLuminance {:.2f} nits, color space {}; effective peak is 1000 nits fallback.",
+            display_name,
+            output_desc.MaxLuminance,
+            static_cast<int>(output_desc.ColorSpace)),
+        reshade::log::level::warning,
+        true);
+    return;
+  }
+
+  ApplyPeakBrightness(
+      resolution,
+      std::format(
+          "Auto: {:.0f} nits effective from DXGI MaxLuminance on {} (min {:.4f}, full-frame {:.0f} nits).",
+          resolution.effective_peak_nits,
+          display_name,
+          output_desc.MinLuminance,
+          output_desc.MaxFullFrameLuminance),
+      reshade::log::level::info,
+      true);
+}
+
+void OnPeakBrightnessSettingsChanged() {
+  peak_brightness_refresh_requested.store(true, std::memory_order_release);
+  const auto source =
+      peak_brightness::ParseSource(peak_brightness_source);
+  if (source == peak_brightness::Source::kManual) {
+    UpdatePeakBrightness(nullptr, false);
+    return;
+  }
+
+  const auto resolution = peak_brightness::Resolve(
+      source, manual_peak_nits, detected_peak_nits);
+  ApplyPeakBrightness(
+      resolution,
+      std::format(
+          "Auto: refreshing DXGI display metadata; current effective peak is {:.0f} nits{}.",
+          resolution.effective_peak_nits,
+          resolution.used_fallback ? " fallback" : ""),
+      reshade::log::level::info,
+      false);
+}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     {supported_build::kDofSplitShaderCrc, {
                                                 .crc32 =
@@ -1572,11 +1776,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                      .code = __0x94F97DCF,
                      .on_draw = &OnFinalCasDraw,
                  }},
+    {0xF478AFEF, {
+                     .crc32 = 0xF478AFEF,
+                     .code = __0xF478AFEF,
+                 }},
 };
 
 renodx::utils::settings::Settings settings =
     renodx::templates::settings::JoinSettings({
-        renodx::templates::settings::CreateDefaultSettings({
+        []() {
+          auto default_settings =
+              renodx::templates::settings::CreateDefaultSettings({
             {"ToneMapType",
              {
                  .binding = &shader_injection.tone_map_type,
@@ -1586,9 +1796,19 @@ renodx::utils::settings::Settings settings =
              }},
             {"ToneMapPeakNits",
              {
-                 .binding = &shader_injection.peak_white_nits,
+                 .binding = &manual_peak_nits,
                  .default_value = 1000.f,
                  .can_reset = false,
+                 .label = "Manual Peak Brightness",
+                 .tooltip = "Saved manual peak in nits. Auto detection never overwrites this value.",
+                 .is_enabled = []() {
+                   return peak_brightness::ParseSource(
+                              peak_brightness_source)
+                       == peak_brightness::Source::kManual;
+                 },
+                 .on_change_value = [](float, float) {
+                   OnPeakBrightnessSettingsChanged();
+                 },
              }},
             {"ToneMapGameNits",
              {
@@ -1635,9 +1855,38 @@ renodx::utils::settings::Settings settings =
                                        .label = "Scene Grading",
                                        .section = "Color Grading",
                                        .tooltip = "Strength of Detroit's original scene color grading.",
-                                       .parse = [](float value) { return value * 0.01f; },
-                                   }},
-        }),
+                                        .parse = [](float value) { return value * 0.01f; },
+                                    }},
+              });
+          default_settings.insert(
+              default_settings.begin() + 2,
+              renodx::templates::settings::CreateSetting({
+                  .key = "PeakBrightnessSource",
+                  .binding = &peak_brightness_source,
+                  .value_type =
+                      renodx::utils::settings::SettingValueType::INTEGER,
+                  .default_value = 0.f,
+                  .can_reset = true,
+                  .label = "Peak Brightness Source",
+                  .section = "Tone Mapping",
+                  .tooltip = "Auto reads DXGI MaxLuminance for the monitor containing Detroit's Vulkan window.",
+                  .labels = {"Auto", "Manual"},
+                  .on_change_value = [](float, float) {
+                    OnPeakBrightnessSettingsChanged();
+                  },
+              }));
+          default_settings.insert(
+              default_settings.begin() + 4,
+              renodx::templates::settings::CreateSetting({
+                  .key = "PeakBrightnessStatus",
+                  .value_type =
+                      renodx::utils::settings::SettingValueType::TEXT,
+                  .can_reset = false,
+                  .label = peak_brightness_status,
+                  .section = "Tone Mapping",
+              }));
+          return default_settings;
+        }(),
         renodx::templates::settings::CreateSettings({
             {{
                 .key = "PsychoVInputAdaptation",
@@ -2389,6 +2638,7 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"OutputMode", OUTPUT_MODE_AUTO},
       {"ToneMapType", 0.f},
+      {"PeakBrightnessSource", 0.f},
       {"ToneMapPeakNits", 1000.f},
       {"ToneMapGameNits", 203.f},
       {"ToneMapUINits", 300.f},
@@ -2439,6 +2689,7 @@ void OnPresetOff() {
   });
   OnDofSettingsChanged();
   OnRenderDebugSettingsChanged();
+  OnPeakBrightnessSettingsChanged();
   if (dof_was_enhanced) {
     reshade::log::message(
         reshade::log::level::warning,
@@ -2498,7 +2749,11 @@ bool UpdateUltrawideFromSwapchain(reshade::api::swapchain* swapchain) {
 }
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool) {
-  if (!TryTrackGameSwapchain(swapchain) || !UpdateUltrawideFromSwapchain(swapchain)) return;
+  if (!TryTrackGameSwapchain(swapchain)) return;
+  shader_injection.output_is_hdr =
+      IsHdrOutputColorSpace(swapchain->get_color_space()) ? 1.f : 0.f;
+  UpdatePeakBrightness(swapchain, true);
+  if (!UpdateUltrawideFromSwapchain(swapchain)) return;
   if (!ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
     InstallUltrawidePatch();
   }
@@ -2600,6 +2855,12 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
     return;
   }
 
+  peak_brightness_refresh.Reset();
+  detected_output_desc.reset();
+  detected_peak_nits.reset();
+  peak_brightness_refresh_requested.store(true, std::memory_order_release);
+  UpdatePeakBrightness(nullptr, false);
+
   // A resize destroys the old output contract. Restore the user's serialized
   // scale before any replacement swapchain can establish a new DLSS session.
   ShutdownDlssRenderScale();
@@ -2682,11 +2943,8 @@ void OnPresent(
   UpdateDlssRenderScale();
   const auto color_space = swapchain->get_color_space();
   shader_injection.output_is_hdr =
-      color_space == reshade::api::color_space::hdr10_st2084
-              || color_space == reshade::api::color_space::hdr10_hlg
-              || color_space == reshade::api::color_space::extended_srgb_linear
-          ? 1.f
-          : 0.f;
+      IsHdrOutputColorSpace(color_space) ? 1.f : 0.f;
+  UpdatePeakBrightness(swapchain, false);
   UpdateRenderDebugRuntime();
   shader_injection.ui_path_active =
       ui_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
@@ -2737,6 +2995,8 @@ bool AttachAddon(HMODULE h_module) {
       &OnDofSettingsChanged);
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &OnRenderDebugSettingsChanged);
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &OnPeakBrightnessSettingsChanged);
   reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
   reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
   reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
@@ -2751,6 +3011,7 @@ bool AttachAddon(HMODULE h_module) {
   OnDlssModeChanged();
   OnDofSettingsChanged();
   OnRenderDebugSettingsChanged();
+  OnPeakBrightnessSettingsChanged();
   SyncDlaaSharpening();
   return true;
 }

@@ -74,6 +74,20 @@ set_tests_properties(detroitbecomehuman_ultrawide_patch PROPERTIES
 )
 
 add_renodx_runtime_executable(
+  detroitbecomehuman_peak_brightness_tests
+  peak_brightness_tests.cpp
+)
+add_dependencies(renodx_test_suites detroitbecomehuman_peak_brightness_tests)
+
+add_test(
+  NAME detroitbecomehuman_peak_brightness
+  COMMAND detroitbecomehuman_peak_brightness_tests
+)
+set_tests_properties(detroitbecomehuman_peak_brightness PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;hdr;peak_brightness"
+)
+
+add_renodx_runtime_executable(
   detroitbecomehuman_dlss_bridge_contract_tests
   dlss_bridge_contract_tests.cpp
 )
@@ -341,6 +355,7 @@ set_tests_properties(detroitbecomehuman_shader_contract PROPERTIES
 add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/expected_shader_interfaces.json
   ${CMAKE_CURRENT_SOURCE_DIR}/expected_taa_interface.json
+  ${CMAKE_CURRENT_SOURCE_DIR}/peak_brightness_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_bridge_contract_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/embedded_bootstrap_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/feature_lifetime_tests.cpp

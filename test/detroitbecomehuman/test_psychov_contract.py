@@ -24,12 +24,68 @@ SCENE_SOURCE = SOURCE_DIR / "scene_0xEBFBDDB1.comp.slang"
 ADDON_SOURCE = SOURCE_DIR / "addon.cpp"
 
 
-def detroit_display_light_scale(value: float, game_nits: float) -> float:
-    """Literal model of the common scale after all tone-map branches."""
-    return math.pow(
-        math.pow(max(value, 0.0), 2.2) * max(game_nits, 0.0) / 300.0,
-        1.0 / 2.2,
+BT709_TO_BT2020 = (
+    (0.6273999810, 0.3292999864, 0.0432999991),
+    (0.0690999999, 0.9194999933, 0.0114000002),
+    (0.0164000001, 0.0879999995, 0.8956000209),
+)
+BT2020_TO_BT709 = (
+    (1.6604910021, -0.5876411388, -0.0728498633),
+    (-0.1245504745, 1.1328998971, -0.0083494226),
+    (-0.0181507634, -0.1005788980, 1.1187296614),
+)
+
+
+def multiply_matrix(
+    matrix: tuple[tuple[float, float, float], ...],
+    color: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return tuple(
+        sum(row[column] * color[column] for column in range(3))
+        for row in matrix
     )
+
+
+def pq_encode(normalized_10000_nits: float) -> float:
+    m1 = 2610.0 / 16384.0
+    m2 = 2523.0 / 32.0
+    c1 = 3424.0 / 4096.0
+    c2 = 2413.0 / 128.0
+    c3 = 2392.0 / 128.0
+    powered = max(normalized_10000_nits, 0.0) ** m1
+    return ((c1 + c2 * powered) / (1.0 + c3 * powered)) ** m2
+
+
+def pq_decode(encoded: float) -> float:
+    m1 = 2610.0 / 16384.0
+    m2 = 2523.0 / 32.0
+    c1 = 3424.0 / 4096.0
+    c2 = 2413.0 / 128.0
+    c3 = 2392.0 / 128.0
+    powered = max(encoded, 0.0) ** (1.0 / m2)
+    return (max(powered - c1, 0.0) / (c2 - c3 * powered)) ** (1.0 / m1)
+
+
+def full_detroit_round_trip(
+    psychov_linear_bt709: tuple[float, float, float], game_nits: float
+) -> tuple[
+    tuple[float, float, float],
+    tuple[float, float, float],
+]:
+    """Model PsychoV gamma encode, Detroit scale, Rec.2020 and PQ."""
+    gamma_22 = tuple(
+        max(channel, 0.0) ** (1.0 / 2.2)
+        for channel in psychov_linear_bt709
+    )
+    display_bt709 = tuple(
+        max(channel, 0.0) ** 2.2 * game_nits / 300.0
+        for channel in gamma_22
+    )
+    display_bt2020 = multiply_matrix(BT709_TO_BT2020, display_bt709)
+    pq = tuple(pq_encode(channel * 300.0 / 10000.0) for channel in display_bt2020)
+    decoded_bt2020 = tuple(pq_decode(channel) * 10000.0 / 300.0 for channel in pq)
+    decoded_bt709 = multiply_matrix(BT2020_TO_BT709, decoded_bt2020)
+    return pq, decoded_bt709
 
 
 class PsychoVContractTests(unittest.TestCase):
@@ -38,28 +94,38 @@ class PsychoVContractTests(unittest.TestCase):
         cls.scene = SCENE_SOURCE.read_text(encoding="utf-8")
         cls.addon = ADDON_SOURCE.read_text(encoding="utf-8")
 
-    def test_both_psychov_modes_feed_the_common_intermediate_directly(self):
+    def test_both_psychov_modes_encode_linear_output_exactly_once(self):
         assignments = re.findall(
-            r"renodx_tonemapped\s*=\s*max\(\s*"
-            r"renodx_psychov_linear\s*,\s*vec3\(0\.0\)\s*\)\s*;",
+            r"renodx_tonemapped\s*=\s*pow\(\s*"
+            r"max\(\s*renodx_psychov_linear\s*,\s*vec3\(0\.0\)\s*\)\s*,\s*"
+            r"vec3\(1\.0\s*/\s*2\.2\)\s*\)\s*;",
             self.scene,
         )
         self.assertEqual(len(assignments), 2)
+        self.assertEqual(
+            self.scene.count("max(renodx_psychov_linear, vec3(0.0))"), 2
+        )
 
-    def test_psychov_is_not_gamma_encoded_before_common_scaling(self):
+    def test_peak_ratio_is_passed_to_psychov_in_scene_linear(self):
+        self.assertRegex(
+            self.scene,
+            r"renodx_psychov_peak\s*=\s*"
+            r"RENODX_PEAK_WHITE_NITS\s*/\s*"
+            r"max\(RENODX_DIFFUSE_WHITE_NITS,\s*1e-6\)",
+        )
+        self.assertNotIn("renodx_psychov_peak_linear", self.scene)
         self.assertNotRegex(
             self.scene,
-            r"pow\(\s*max\(\s*renodx_psychov_linear",
+            r"GammaSafe\([\s\S]*?renodx_psychov_peak",
         )
 
-    def test_extra_gamma_encoding_would_collapse_hdr_headroom(self):
-        peak_ratio = 1082.0 / 203.0
-        correct = detroit_display_light_scale(peak_ratio, 203.0)
-        double_encoded = detroit_display_light_scale(
-            math.pow(peak_ratio, 1.0 / 2.2),
-            203.0,
-        )
-        self.assertLess(double_encoded, correct * 0.55)
+    def test_linear_peak_maps_to_configured_display_peak(self):
+        peak_nits = 1033.0
+        game_nits = 203.0
+        psychov_peak = peak_nits / game_nits
+        gamma_22 = psychov_peak ** (1.0 / 2.2)
+        display_light = gamma_22**2.2 * game_nits / 300.0
+        self.assertAlmostEqual(display_light * 300.0, peak_nits, places=9)
 
     def test_scene_grading_still_precedes_both_psychov_calls(self):
         grade = self.scene.index("ComputeUntonemappedGraded")
@@ -87,13 +153,49 @@ class PsychoVContractTests(unittest.TestCase):
             ),
         )
 
-    def test_peak_uses_detroit_gamma_intermediate_representation(self):
-        self.assertRegex(
-            self.scene,
-            r"renodx_psychov_peak\s*=\s*"
-            r"renodx::color::correct::GammaSafe\(\s*"
-            r"renodx_psychov_peak_linear\s*,\s*true\s*,\s*2\.2\s*\)",
-        )
+    def test_both_versions_keep_user_gamut_and_compression_parameters(self):
+        test17 = self.scene[
+            self.scene.index("psychotm_test17") : self.scene.index(
+                "psychotm_test22"
+            )
+        ]
+        test22 = self.scene[self.scene.index("psychotm_test22") :]
+        for call in (test17, test22):
+            self.assertIn("RENODX_PSYCHOV_GAMUT_COMPRESSION", call)
+            self.assertIn("int(RENODX_PSYCHOV_GAMUT_MODE)", call)
+        self.assertIn("RENODX_PSYCHOV22_COMPRESSION", test22)
+
+    def test_blue_and_cyan_round_trip_preserves_chromaticity(self):
+        swatches = {
+            "blue": (0.10, 0.40, 2.00),
+            "cyan": (0.05, 1.20, 1.50),
+        }
+        for version in (17, 22):
+            for gamut_mode in (0, 1):
+                for compression in (0.0, 0.5, 1.0):
+                    for name, swatch in swatches.items():
+                        with self.subTest(
+                            version=version,
+                            gamut=gamut_mode,
+                            compression=compression,
+                            swatch=name,
+                        ):
+                            pq, decoded = full_detroit_round_trip(swatch, 203.0)
+                            self.assertTrue(all(math.isfinite(value) for value in pq))
+                            self.assertTrue(
+                                all(math.isfinite(value) for value in decoded)
+                            )
+                            self.assertGreater(decoded[2], decoded[1])
+                            self.assertGreater(decoded[1], decoded[0])
+                            self.assertGreater(max(decoded) - min(decoded), 0.25)
+                            expected_sum = sum(swatch)
+                            actual_sum = sum(decoded)
+                            for expected, actual in zip(swatch, decoded):
+                                self.assertAlmostEqual(
+                                    actual / actual_sum,
+                                    expected / expected_sum,
+                                    delta=5.0e-5,
+                                )
 
     def test_hdr_gamut_boundary_is_the_default(self):
         setting = re.search(

@@ -2,6 +2,7 @@
 #extension GL_EXT_samplerless_texture_functions : require
 
 #include "shared.h"
+#include "display_peak_limiter.hlsli"
 
 // cas_mode values supplied by addon.cpp.
 const float CAS_MODE_VANILLA = 0.0;
@@ -54,11 +55,11 @@ void main()
     vec4 _5207 = texelFetch(InputTex, ivec2(uvec2(_3653 + ivec2(2, 1))), 0);
     vec4 _5214 = texelFetch(InputTex, ivec2(uvec2(_3653 + ivec2(1, 2))), 0);
 
-    bool use_hdr_safe_path =
+    bool use_hdr_safe_cas_path =
         CUSTOM_HDR_ACTIVE
         && (shader_injection.cas_mode >= 0.5 || CUSTOM_DLSS_ACTIVE);
     float input_scale = 1.0;
-    if (use_hdr_safe_path)
+    if (use_hdr_safe_cas_path)
     {
         // Native CAS is defined over [0, 1] and clamps each output channel to
         // that range. Normalize the entire 12-tap RGB neighborhood by one
@@ -146,7 +147,7 @@ void main()
         // post-DOF pixels are never sharpened a second time.
         _4359 = 0.0;
     }
-    else if (use_hdr_safe_path)
+    else if (use_hdr_safe_cas_path)
     {
         // Off retains Detroit's adaptive 12-tap resampling but removes the
         // negative sharpening lobes. RenoDX scales the native CAS constant;
@@ -246,21 +247,7 @@ void main()
         _6661 = _6198.z;
     }
     vec3 _6250 = pow(vec3(_6652, _6659, _6661), vec3(2.2000000476837158203125));
-    if (use_hdr_safe_path)
-    {
-        // _6250 is linear display light in Detroit's Rec.709 working gamut;
-        // 1.0 maps to 300 nits before the unchanged Rec.709-to-Rec.2020/PQ tail.
-        // A single scale preserves highlight chromaticity at the display peak.
-        const float configured_display_peak =
-            max(shader_injection.peak_white_nits, 0.0) / 300.0;
-        const float output_display_peak =
-            max(max(_6250.x, _6250.y), _6250.z);
-        if (output_display_peak > configured_display_peak)
-        {
-            _6250 *= configured_display_peak /
-                     max(output_display_peak, 1.0e-6);
-        }
-    }
+    _6250 = LimitDisplayLightPeak(_6250);
     vec3 _6297 = pow((mat3(vec3(0.627399981021881103515625, 0.069099999964237213134765625, 0.01640000008046627044677734375), vec3(0.329299986362457275390625, 0.91949999332427978515625, 0.087999999523162841796875), vec3(0.0432999990880489349365234375, 0.011400000192224979400634765625, 0.895600020885467529296875)) * ((_6250 * 3.0) * 100.0)) * 9.9999997473787516355514526367188e-05, vec3(0.1593017578125));
     outColor = vec4(pow((vec3(0.8359375) + (_6297 * 18.8515625)) / (vec3(1.0) + (_6297 * 18.6875)), vec3(78.84375)), 1.0);
 }

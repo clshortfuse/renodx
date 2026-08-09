@@ -307,15 +307,10 @@ void main()
                     renodx_untonemapped,
                     renodx_vanilla_graded_linear),
                 vec3(0.0));
-            const float renodx_psychov_peak_linear =
-                RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1e-6);
-            // Match ToneMapPass/RenoDRT's peak representation for Detroit's
-            // gamma-2.2 intermediate while PsychoV itself remains scene-linear.
+            // PsychoV consumes a scene-linear peak ratio. Detroit's
+            // diffuse-white control is the scene-linear 1.0 anchor.
             const float renodx_psychov_peak =
-                renodx::color::correct::GammaSafe(
-                    renodx_psychov_peak_linear,
-                    true,
-                    2.2);
+                RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1e-6);
             vec3 renodx_tonemapped;
             if (CUSTOM_PSYCHOV17_ACTIVE)
             {
@@ -338,14 +333,11 @@ void main()
                         vec3(RENODX_PSYCHOV_OUTPUT_ADAPTATION),
                         RENODX_PSYCHOV_GAMUT_COMPRESSION,
                         int(RENODX_PSYCHOV_GAMUT_MODE));
-                // PsychoV and ToneMapPass both return the numeric BT.709
-                // working values consumed by Detroit's gamma-2.2
-                // intermediate. Encoding PsychoV here a second time lifts
-                // shadows, compresses HDR values above 1.0 and changes RGB
-                // ratios before the common display-light scaling below.
-                renodx_tonemapped = max(
-                    renodx_psychov_linear,
-                    vec3(0.0));
+                // PsychoV returns scene-linear BT.709. Encode exactly once to
+                // Detroit's gamma-2.2 intermediate before the common scaling.
+                renodx_tonemapped = pow(
+                    max(renodx_psychov_linear, vec3(0.0)),
+                    vec3(1.0 / 2.2));
             }
             else if (CUSTOM_PSYCHOV22_ACTIVE)
             {
@@ -370,9 +362,9 @@ void main()
                         int(RENODX_PSYCHOV_GAMUT_MODE),
                         1.0,
                         RENODX_PSYCHOV22_COMPRESSION);
-                renodx_tonemapped = max(
-                    renodx_psychov_linear,
-                    vec3(0.0));
+                renodx_tonemapped = pow(
+                    max(renodx_psychov_linear, vec3(0.0)),
+                    vec3(1.0 / 2.2));
             }
             else
             {
@@ -380,8 +372,8 @@ void main()
                     renodx_untonemapped,
                     renodx_vanilla_graded_linear);
             }
-            // ToneMapPass and PsychoV now share Detroit's gamma-2.2
-            // intermediate contract. Detroit's native OETF maps 1.0 to
+            // ToneMapPass already returns Detroit's gamma-2.2 intermediate;
+            // PsychoV is encoded to the same contract above. The native OETF maps 1.0 to
             // 300 nits, so adapt in display-light space before the unchanged
             // Rec.2020/PQ path. This maps both diffuse white and the configured
             // peak through the same path for every custom tone mapper.

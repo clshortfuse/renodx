@@ -64,6 +64,12 @@ def use_hdr_safe_cas(
     )
 
 
+def use_display_peak_limit(
+    output_mode: float, output_is_hdr: float, tone_map_type: float
+) -> bool:
+    return custom_hdr_active(output_mode, output_is_hdr) and tone_map_type != 0.0
+
+
 def effective_sharpness(
     native_sharpness: float,
     output_mode: float,
@@ -110,6 +116,16 @@ def pq_encode(normalized_10000_nits: float) -> float:
     c3 = 2392.0 / 128.0
     powered = max(normalized_10000_nits, 0.0) ** m1
     return ((c1 + c2 * powered) / (1.0 + c3 * powered)) ** m2
+
+
+def pq_decode(encoded: float) -> float:
+    m1 = 2610.0 / 16384.0
+    m2 = 2523.0 / 32.0
+    c1 = 3424.0 / 4096.0
+    c2 = 2413.0 / 128.0
+    c3 = 2392.0 / 128.0
+    powered = max(encoded, 0.0) ** (1.0 / m2)
+    return (max(powered - c1, 0.0) / (c2 - c3 * powered)) ** (1.0 / m1)
 
 
 class HDRAndCASGateTests(unittest.TestCase):
@@ -259,23 +275,36 @@ class HDRAndCASGateTests(unittest.TestCase):
     def test_peak_cap_has_exact_gate_bypasses(self):
         rgb = tuple(float32(value) for value in (3.0, 2.0, 1.0))
         inactive_cases = (
-            (OUTPUT_MODE_AUTO, 1.0, CAS_MODE_VANILLA),
-            (OUTPUT_MODE_SDR, 1.0, CAS_MODE_RENODX),
-            (OUTPUT_MODE_HDR10, 0.0, CAS_MODE_RENODX),
+            (OUTPUT_MODE_AUTO, 1.0, 0.0),
+            (OUTPUT_MODE_SDR, 1.0, 2.0),
+            (OUTPUT_MODE_HDR10, 0.0, 2.0),
         )
-        for output_mode, output_is_hdr, cas_mode in inactive_cases:
+        for output_mode, output_is_hdr, tone_map_type in inactive_cases:
             with self.subTest(
                 output_mode=output_mode,
                 output_is_hdr=output_is_hdr,
-                cas_mode=cas_mode,
+                tone_map_type=tone_map_type,
             ):
                 result = display_peak_cap(
                     rgb,
                     600.0,
-                    use_hdr_safe_cas(output_mode, output_is_hdr, cas_mode),
+                    use_display_peak_limit(
+                        output_mode, output_is_hdr, tone_map_type
+                    ),
                 )
                 for actual, expected in zip(result, rgb):
                     self.assertEqual(float32_bits(actual), float32_bits(expected))
+
+    def test_peak_cap_is_independent_of_cas_mode(self):
+        rgb = (8.0, 4.0, 2.0)
+        expected = display_peak_cap(rgb, 600.0, True)
+        for cas_mode in (CAS_MODE_VANILLA, CAS_MODE_OFF, CAS_MODE_RENODX):
+            with self.subTest(cas_mode=cas_mode):
+                active = use_display_peak_limit(
+                    OUTPUT_MODE_AUTO, 1.0, tone_map_type=2.0
+                )
+                self.assertTrue(active)
+                self.assertEqual(display_peak_cap(rgb, 600.0, active), expected)
 
     def test_peak_cap_is_identity_below_the_selected_peak(self):
         rgb = tuple(float32(value) for value in (2.5, 1.25, 0.5))
@@ -305,6 +334,13 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertAlmostEqual(encoded, 0.751827096, places=8)
         self.assertEqual(round(encoded * 1023.0), 769)
 
+    def test_1033_nit_cap_stays_within_the_next_r10_pq_level(self):
+        capped = display_peak_cap((20.0, 20.0, 20.0), 1033.0, True)
+        encoded = pq_encode(capped[0] * 0.03)
+        quantized = round(encoded * 1023.0) / 1023.0
+        decoded_nits = pq_decode(quantized) * 10000.0
+        self.assertLessEqual(decoded_nits, 1036.0)
+
     def test_peak_cap_is_monotonic_for_supported_display_points(self):
         encoded_values = []
         for peak_nits in (203.0, 600.0, 1000.0, 4000.0):
@@ -318,6 +354,12 @@ class HDRAndCASGateTests(unittest.TestCase):
     def test_production_sources_keep_the_same_gate_contract(self):
         shared = (SOURCE_DIR / "shared.h").read_text(encoding="utf-8")
         shader = (SOURCE_DIR / "oetf_hdr_cas_0x94F97DCF.frag.slang").read_text(
+            encoding="utf-8"
+        )
+        final_shader = (SOURCE_DIR / "oetf_hdr_0xF478AFEF.frag.slang").read_text(
+            encoding="utf-8"
+        )
+        peak_limiter = (SOURCE_DIR / "display_peak_limiter.hlsli").read_text(
             encoding="utf-8"
         )
         scene_shader = (SOURCE_DIR / "scene_0xEBFBDDB1.comp.slang").read_text(
@@ -357,6 +399,29 @@ class HDRAndCASGateTests(unittest.TestCase):
                 rf"constexpr\s+float\s+{name}\s*=\s*{re.escape(value)}\s*;",
             )
 
+        peak_setting = re.search(
+            r'\{"ToneMapPeakNits",\s*\{(?P<body>[\s\S]*?)\}\},',
+            addon,
+        )
+        self.assertIsNotNone(peak_setting)
+        self.assertIn(".binding = &manual_peak_nits", peak_setting.group("body"))
+        self.assertNotIn("shader_injection", peak_setting.group("body"))
+        self.assertIn('.key = "PeakBrightnessSource"', addon)
+        self.assertIn('.labels = {"Auto", "Manual"}', addon)
+        self.assertRegex(
+            addon,
+            r'\.key\s*=\s*"PeakBrightnessSource"[\s\S]*?'
+            r"\.default_value\s*=\s*0\.f",
+        )
+        self.assertIn(
+            "shader_injection.peak_white_nits = resolution.effective_peak_nits",
+            addon,
+        )
+        self.assertIn(
+            "renodx::utils::swapchain::GetDirectXOutputDesc1(window)", addon
+        )
+        self.assertIn("output_desc.MaxFullFrameLuminance", addon)
+
         compact_shared = re.sub(r"\\\s*\n\s*", " ", shared)
         self.assertRegex(
             compact_shared,
@@ -372,9 +437,23 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertNotIn("CUSTOM_DLAA_SHARPENING", compact_shared)
         self.assertRegex(
             shader,
-            r"bool\s+use_hdr_safe_path\s*=\s*CUSTOM_HDR_ACTIVE\s*&&\s*"
+            r"bool\s+use_hdr_safe_cas_path\s*=\s*CUSTOM_HDR_ACTIVE\s*&&\s*"
             r"\(shader_injection\.cas_mode\s*>=\s*0\.5\s*\|\|\s*"
             r"CUSTOM_DLSS_ACTIVE\)\s*;",
+        )
+        self.assertRegex(
+            peak_limiter,
+            r"if\s*\(\s*!CUSTOM_HDR_ACTIVE\s*\|\|\s*"
+            r"shader_injection\.tone_map_type\s*==\s*0\.0\s*\)",
+        )
+        self.assertNotIn("cas_mode", peak_limiter)
+        self.assertIn("LimitDisplayLightPeak(_6250)", shader)
+        self.assertIn(
+            "LimitDisplayLightPeak(display_light_bt709)", final_shader
+        )
+        self.assertRegex(
+            addon,
+            r"\{0xF478AFEF,\s*\{[\s\S]*?\.code\s*=\s*__0xF478AFEF",
         )
         self.assertRegex(
             shader,
@@ -524,9 +603,10 @@ class HDRAndCASGateTests(unittest.TestCase):
         cap_start = shader.index("vec3 _6250 =")
         cap_end = shader.index("vec3 _6297 =", cap_start)
         cap_source = shader[cap_start:cap_end]
-        self.assertIn("configured_display_peak", cap_source)
-        self.assertIn("shader_injection.peak_white_nits", cap_source)
-        self.assertIn("_6250 *=", cap_source)
+        self.assertIn("_6250 = LimitDisplayLightPeak(_6250);", cap_source)
+        self.assertIn("configured_display_peak", peak_limiter)
+        self.assertIn("shader_injection.peak_white_nits", peak_limiter)
+        self.assertIn("display_light_bt709 *=", peak_limiter)
         self.assertNotIn("min(_6112", shader)
 
         for color_space in (
@@ -538,7 +618,8 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertRegex(
             addon,
             r"shader_injection\.output_is_hdr\s*=\s*"
-            r"color_space\s*==[\s\S]*?\?\s*1\.f\s*:\s*0\.f\s*;",
+            r"IsHdrOutputColorSpace\(color_space\)\s*"
+            r"\?\s*1\.f\s*:\s*0\.f\s*;",
         )
 
     def test_preset_off_keeps_ultrawide_compatibility_independent(self):

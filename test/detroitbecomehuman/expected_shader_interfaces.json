@@ -77,6 +77,20 @@
         { "kind": "ubos", "set": 0, "binding": 54, "block_size": 48 }
       ]
     },
+    "0xF478AFEF": {
+      "stage": "frag",
+      "entry_point": "main",
+      "inputs": [
+        { "location": 8, "type": "vec4" }
+      ],
+      "outputs": [
+        { "location": 0, "type": "vec4" }
+      ],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 0, "type": "sampler2D" },
+        { "kind": "ubos", "set": 0, "binding": 53, "block_size": 16 }
+      ]
+    },
     "0x9827B559": {
       "stage": "frag",
       "entry_point": "main",
