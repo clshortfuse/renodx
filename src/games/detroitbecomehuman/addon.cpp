@@ -202,6 +202,9 @@ std::uint32_t last_scale_log_key = std::numeric_limits<std::uint32_t>::max();
 HMODULE addon_module = nullptr;
 std::atomic_bool addon_attached = false;
 std::atomic_bool bootstrap_setup_attempted = false;
+bool embedded_hooks_requested_at_startup = false;
+std::atomic_bool embedded_hooks_active = false;
+std::atomic_int embedded_hooks_restart_notice = 0;
 embedded_dlss::ExtensionCache initial_extension_cache;
 
 std::filesystem::path GetModulePath(HMODULE module) {
@@ -281,6 +284,18 @@ embedded_dlss::ExtensionCache ReadExtensionCache() {
   cache.device_extensions =
       ReadConfigString("RENODX_DETROIT_DLSS", "DeviceExtensions");
   return cache;
+}
+
+bool ReadStartupEmbeddedHookRequest() {
+  float startup_dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
+  float startup_dof_mode = 0.f;
+  (void)reshade::get_config_value(
+      nullptr, "renodx-preset1", "DLSSMode", startup_dlss_mode);
+  (void)reshade::get_config_value(
+      nullptr, "renodx-preset1", "DepthOfFieldMode", startup_dof_mode);
+  return embedded_dlss::NeedsRuntimeCommandTracking(
+      static_cast<DetroitDlssMode>(startup_dlss_mode),
+      startup_dof_mode >= 2.5f);
 }
 
 void WriteExtensionCache(const embedded_dlss::ExtensionCache& cache) {
@@ -675,9 +690,26 @@ void OnAspectRatioModeChanged() {
 }
 
 void RefreshEmbeddedCommandTracking() {
-  embedded_dlss::SetRuntimeCommandTracking(
-      embedded_dlss::NeedsRuntimeCommandTracking(
-          temporal_capture::GetMode(), dof_mode >= 2.5f));
+  const bool requested = embedded_dlss::NeedsRuntimeCommandTracking(
+      temporal_capture::GetMode(), dof_mode >= 2.5f);
+  const bool active = embedded_hooks_active.load(std::memory_order_acquire);
+  embedded_dlss::SetRuntimeCommandTracking(active && requested);
+
+  const int notice = requested == active ? 0 : (requested ? 1 : 2);
+  if (embedded_hooks_restart_notice.exchange(
+          notice, std::memory_order_acq_rel)
+      == notice) {
+    return;
+  }
+  if (notice == 1) {
+    reshade::log::message(
+        reshade::log::level::warning,
+        "Detroit DLSS/Retinal: restart the game to load the experimental Vulkan command hooks.");
+  } else if (notice == 2) {
+    reshade::log::message(
+        reshade::log::level::warning,
+        "Detroit DLSS/Retinal: restart the game to unload the experimental Vulkan command hooks and restore the Native TAA fast path.");
+  }
 }
 
 void ApplyDlssMode(float selected_mode) {
@@ -2581,11 +2613,22 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Native TAA is active. DLSS command tracking is paused unless Retinal DOF needs it.",
+                .label = "Native TAA fast path is active. Experimental DLSS/Retinal Vulkan command hooks were not loaded for this launch.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
-                         == temporal_capture::RuntimeStatus::kNative;
+                             == temporal_capture::RuntimeStatus::kNative
+                      && !embedded_hooks_active.load(std::memory_order_acquire);
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Native TAA is active, but experimental Vulkan command hooks remain loaded. Restart the game to unload them and restore maximum CPU performance.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return temporal_capture::GetStatus()
+                             == temporal_capture::RuntimeStatus::kNative
+                      && embedded_hooks_active.load(std::memory_order_acquire);
                 },
             }},
             {{
@@ -2995,7 +3038,8 @@ void OnPresent(
     const reshade::api::rect*,
     uint32_t,
     const reshade::api::rect*) {
-  if (!bootstrap_setup_attempted.exchange(true, std::memory_order_acq_rel)) {
+  if (embedded_hooks_requested_at_startup
+      && !bootstrap_setup_attempted.exchange(true, std::memory_order_acq_rel)) {
     (void)EnsureLoadFromDllMainEntry();
     embedded_dlss::RefreshDeferredStatus();
     const bool cache_valid = embedded_dlss::IsValidCache(initial_extension_cache);
@@ -3018,7 +3062,9 @@ void OnPresent(
   }
   if (auto* status = renodx::utils::settings::FindSetting("DLSSBootstrapStatus");
       status != nullptr) {
-    status->label = embedded_dlss::GetStatusText();
+    status->label = embedded_hooks_requested_at_startup
+        ? embedded_dlss::GetStatusText()
+        : "Native TAA fast path: experimental Vulkan hooks not loaded.";
   }
   if (TryTrackGameSwapchain(swapchain) && UpdateUltrawideFromSwapchain(swapchain)
       && !ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
@@ -3070,7 +3116,16 @@ bool AttachAddon(HMODULE h_module) {
   // register_addon initializes ReShade's cached handle for this module. No
   // other ReShade API (including config access) is valid before this point.
   initial_extension_cache = ReadExtensionCache();
-  (void)embedded_dlss::AttachEarlyHooks(h_module, initial_extension_cache);
+  embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest();
+  if (embedded_hooks_requested_at_startup) {
+    embedded_hooks_active.store(
+        embedded_dlss::AttachEarlyHooks(h_module, initial_extension_cache),
+        std::memory_order_release);
+  } else {
+    reshade::log::message(
+        reshade::log::level::info,
+        "Detroit DLSS/Retinal: Native TAA fast path selected; experimental Vulkan command hooks are not loaded.");
+  }
   renodx::games::detroitbecomehuman::dlss_bridge_client::client.SetApiProvider(
       &embedded_dlss::GetApi);
   renodx::mods::shader::allow_multiple_push_constants = true;

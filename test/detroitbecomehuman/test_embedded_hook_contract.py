@@ -172,6 +172,13 @@ def main() -> None:
     if not gate_index < detour_index:
         raise AssertionError("invalid extension cache must fail closed before Detours")
     require(addon, "QueryRequiredExtensionsIsolated(addon_module, &refreshed)")
+    require(addon, "bool ReadStartupEmbeddedHookRequest()")
+    require(addon, '"renodx-preset1", "DLSSMode"')
+    require(addon, '"renodx-preset1", "DepthOfFieldMode"')
+    require(addon, "embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest()")
+    require(addon, "if (embedded_hooks_requested_at_startup)")
+    require(addon, "embedded_hooks_active.store(")
+    require(addon, "embedded_hooks_requested_at_startup\n      && !bootstrap_setup_attempted.exchange")
     tracking_refresh_start = addon.index("void RefreshEmbeddedCommandTracking()")
     tracking_refresh_end = addon.index("void ApplyDlssMode(", tracking_refresh_start)
     tracking_refresh = addon[tracking_refresh_start:tracking_refresh_end]
@@ -205,11 +212,12 @@ def main() -> None:
     pin_index = attach.index("GET_MODULE_HANDLE_EX_FLAG_PIN")
     register_index = attach.index("reshade::register_addon(h_module)")
     cache_index = attach.index("ReadExtensionCache()")
+    request_index = attach.index("embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest()")
     hooks_index = attach.index("embedded_dlss::AttachEarlyHooks")
-    if not pin_index < register_index < cache_index < hooks_index:
+    if not pin_index < register_index < cache_index < request_index < hooks_index:
         raise AssertionError(
             "the addon must be pinned before ReShade registration, config access, "
-            "and early hook attachment"
+            "startup feature selection, and conditional early hook attachment"
         )
 
     detach_start = addon.index("void DetachAddon(HMODULE h_module")
