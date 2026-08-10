@@ -46,6 +46,7 @@
 #include "adapter_runtime.hpp"
 #include "embedded_bootstrap.hpp"
 #include "feature_lifetime.hpp"
+#include "utils/dlss/ngx_vulkan.hpp"
 
 namespace {
 
@@ -501,6 +502,7 @@ struct ComputeCommandRestoreState {
   std::uint32_t first_set = 0u;
   std::vector<VkDescriptorSet> descriptor_sets;
   std::vector<std::uint32_t> dynamic_offsets;
+  bool one_time_submit = false;
 };
 
 struct DofCompositeCommandState {
@@ -514,15 +516,6 @@ struct DofCompositeCommandState {
 struct CommandPoolState {
   std::uint32_t queue_family_index = std::numeric_limits<std::uint32_t>::max();
   VkCommandPoolCreateFlags flags = 0u;
-};
-
-struct FeatureGenerationState {
-  std::uint64_t generation = 0u;
-  NVSDK_NGX_Parameter* parameters = nullptr;
-  NVSDK_NGX_Handle* feature = nullptr;
-  std::uint32_t create_flags = 0u;
-  renodx::games::detroitbecomehuman::dlss::FeatureCreationGate creation;
-  bool retired = false;
 };
 
 struct FencedFeatureSubmission {
@@ -545,6 +538,7 @@ struct DeviceState {
   PFN_vkMapMemory next_map_memory = nullptr;
   PFN_vkUnmapMemory next_unmap_memory = nullptr;
   PFN_vkBeginCommandBuffer next_begin_command_buffer = nullptr;
+  PFN_vkEndCommandBuffer next_end_command_buffer = nullptr;
   PFN_vkResetCommandBuffer next_reset_command_buffer = nullptr;
   PFN_vkQueueSubmit next_queue_submit = nullptr;
 #if defined(VK_VERSION_1_3)
@@ -571,8 +565,6 @@ struct DeviceState {
   PFN_vkCmdPushConstants next_cmd_push_constants = nullptr;
   bool supported_executable = false;
   bool ngx_extensions_enabled = false;
-  bool ngx_initialized = false;
-  bool ngx_available = false;
   bool adapter_available = false;
   bool configured = false;
   std::uint64_t identity = 0u;
@@ -580,17 +572,13 @@ struct DeviceState {
   std::uint64_t configured_identity = 0u;
   std::atomic<bool> destroying = false;
   DetroitDlssModeSettings settings = {};
-  NVSDK_NGX_Parameter* capability_parameters = nullptr;
-  std::uint64_t active_feature_generation = 0u;
-  std::uint64_t next_feature_generation = 1u;
-  std::unordered_map<std::uint64_t, FeatureGenerationState> feature_generations;
+  std::unique_ptr<NgxDiscovery> ngx_discovery;
+  std::unique_ptr<renodx::utils::dlss::vulkan::NgxContext> ngx_context;
   std::atomic<bool> feature_submission_tracking_active = false;
   // False-positive-only filter for command buffers that have ever recorded
   // NGX work. A missing bit proves an arbitrary submission cannot reference a
   // feature and keeps that hot path allocation- and lock-free.
   std::atomic<std::uint64_t> feature_command_buffer_bloom = 0u;
-  renodx::games::detroitbecomehuman::dlss::FeatureLifetimeTracker
-      feature_lifetime;
   std::unordered_map<std::uint64_t, FencedFeatureSubmission>
       fenced_feature_submissions;
   std::vector<VkFence> available_internal_feature_fences;
@@ -601,6 +589,7 @@ struct DeviceState {
   std::atomic<std::uint64_t> last_adapter_failure = 0u;
   std::atomic<std::uint64_t> last_ngx_failure = 0u;
   std::mutex mutex;
+  std::mutex queue_mutex;
 
   VkPhysicalDeviceMemoryProperties memory_properties = {};
   VkDeviceSize min_uniform_buffer_offset_alignment = 1u;
@@ -625,6 +614,8 @@ struct DeviceState {
   std::unordered_map<std::uint64_t, CommandPoolState> command_pools;
   std::unordered_map<std::uint64_t, std::uint64_t> command_buffer_pools;
   std::unordered_map<std::uint64_t, VkCommandBufferLevel> command_buffer_levels;
+  std::unordered_map<std::uint64_t, VkCommandBufferUsageFlags>
+      command_buffer_usage_flags;
   std::uint64_t descriptor_update_serial = 0u;
   std::array<std::atomic<std::uint64_t>, kTemporalDescriptorSetBloomWordCount>
       temporal_descriptor_set_bloom = {};
@@ -1073,25 +1064,6 @@ std::uint32_t ToNgxCreateFlags(DetroitDlssCreateFlags flags) {
   return ngx_flags;
 }
 
-FeatureGenerationState* GetActiveFeatureLocked(DeviceState* state) {
-  if (state == nullptr || state->active_feature_generation == 0u) return nullptr;
-  const auto found =
-      state->feature_generations.find(state->active_feature_generation);
-  return found == state->feature_generations.end() ? nullptr : &found->second;
-}
-
-std::uint64_t AllocateFeatureGenerationLocked(DeviceState* state) {
-  for (;;) {
-    const std::uint64_t generation = state->next_feature_generation++;
-    if (state->next_feature_generation == 0u) {
-      state->next_feature_generation = 1u;
-    }
-    if (generation != 0u && !state->feature_generations.contains(generation)) {
-      return generation;
-    }
-  }
-}
-
 std::uint64_t FeatureCommandBufferBloomBit(std::uint64_t command_buffer) {
   command_buffer ^= command_buffer >> 33u;
   command_buffer *= UINT64_C(0xff51afd7ed558ccd);
@@ -1099,119 +1071,372 @@ std::uint64_t FeatureCommandBufferBloomBit(std::uint64_t command_buffer) {
   return UINT64_C(1) << (command_buffer & 63u);
 }
 
-void RecordFeatureUseLocked(
-    DeviceState* state,
-    VkCommandBuffer command_buffer,
-    std::uint64_t generation) {
+void MarkFeatureRecordingCandidate(
+    DeviceState* state, VkCommandBuffer command_buffer) {
   const auto handle = ToOpaque(command_buffer);
   state->feature_command_buffer_bloom.fetch_or(
       FeatureCommandBufferBloomBit(handle), std::memory_order_release);
-  state->feature_lifetime.RecordFeatureUse(handle, generation);
 }
 
-void DestroyFeatureGenerationLocked(
-    DeviceState* state, std::uint64_t generation) {
-  const auto found = state->feature_generations.find(generation);
-  if (found == state->feature_generations.end()) return;
-  // NGX was initialized with next_get_*_proc_addr, not this layer's exported
-  // dispatch functions. Keeping the device mutex held therefore serializes
-  // NGX create/evaluate/release without re-entering the tracked Vulkan hooks.
-  if (found->second.feature != nullptr) {
-    const auto result = NVSDK_NGX_VULKAN_ReleaseFeature(found->second.feature);
-    if (NVSDK_NGX_FAILED(result)) {
-      TraceNgxFailureOnce(state, 3u, "feature release", result);
+NVSDK_NGX_Result CoreInitializeProject(
+    void*,
+    const char* project_id,
+    NVSDK_NGX_EngineType engine_type,
+    const char* engine_version,
+    const wchar_t* application_data_path,
+    VkInstance instance,
+    VkPhysicalDevice physical_device,
+    VkDevice device,
+    PFN_vkGetInstanceProcAddr get_instance_proc_addr,
+    PFN_vkGetDeviceProcAddr get_device_proc_addr,
+    const NVSDK_NGX_FeatureCommonInfo* feature_info,
+    NVSDK_NGX_Version sdk_version) {
+  return NVSDK_NGX_VULKAN_Init_with_ProjectID(
+      project_id,
+      engine_type,
+      engine_version,
+      application_data_path,
+      instance,
+      physical_device,
+      device,
+      get_instance_proc_addr,
+      get_device_proc_addr,
+      feature_info,
+      sdk_version);
+}
+
+NVSDK_NGX_Result CoreGetCapabilityParameters(
+    void*, NVSDK_NGX_Parameter** parameters) {
+  return NVSDK_NGX_VULKAN_GetCapabilityParameters(parameters);
+}
+
+NVSDK_NGX_Result CoreGetParameterI(
+    void*, NVSDK_NGX_Parameter* parameters, const char* name, int* value) {
+  return NVSDK_NGX_Parameter_GetI(parameters, name, value);
+}
+
+NVSDK_NGX_Result CoreQueryMode(
+    void*,
+    NVSDK_NGX_Parameter* parameters,
+    const renodx::utils::dlss::vulkan::ModeQuery* query,
+    renodx::utils::dlss::vulkan::ModeSettings* settings) {
+  return NGX_DLSS_GET_OPTIMAL_SETTINGS(
+      parameters,
+      query->output_width,
+      query->output_height,
+      query->mode,
+      &settings->optimal_width,
+      &settings->optimal_height,
+      &settings->maximum_width,
+      &settings->maximum_height,
+      &settings->minimum_width,
+      &settings->minimum_height,
+      &settings->sharpness);
+}
+
+NVSDK_NGX_Result CoreAllocateParameters(
+    void*, NVSDK_NGX_Parameter** parameters) {
+  return NVSDK_NGX_VULKAN_AllocateParameters(parameters);
+}
+
+NVSDK_NGX_Result CoreDestroyParameters(
+    void*, NVSDK_NGX_Parameter* parameters) {
+  return NVSDK_NGX_VULKAN_DestroyParameters(parameters);
+}
+
+NVSDK_NGX_Result CoreCreateFeature(
+    void*,
+    VkDevice device,
+    VkCommandBuffer command_buffer,
+    NVSDK_NGX_Handle** feature,
+    NVSDK_NGX_Parameter* parameters,
+    const renodx::utils::dlss::vulkan::FeatureConfig* config) {
+  static constexpr std::array<const char*, 6u> kPresetParameters = {
+      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_DLAA,
+      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Quality,
+      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Balanced,
+      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Performance,
+      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraPerformance,
+      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraQuality,
+  };
+  for (std::size_t index = 0u; index < config->presets.size(); ++index) {
+    if (config->presets[index] == NVSDK_NGX_DLSS_Hint_Render_Preset_Default) {
+      continue;
     }
+    NVSDK_NGX_Parameter_SetI(
+        parameters,
+        kPresetParameters[index],
+        static_cast<int>(config->presets[index]));
   }
-  if (found->second.parameters != nullptr) {
-    NVSDK_NGX_VULKAN_DestroyParameters(found->second.parameters);
-  }
-  state->feature_generations.erase(found);
-  if (state->feature_generations.empty()) {
-    state->feature_submission_tracking_active.store(
-        false, std::memory_order_release);
+
+  NVSDK_NGX_DLSS_Create_Params create_parameters = {};
+  create_parameters.Feature.InWidth = config->render_width;
+  create_parameters.Feature.InHeight = config->render_height;
+  create_parameters.Feature.InTargetWidth = config->output_width;
+  create_parameters.Feature.InTargetHeight = config->output_height;
+  create_parameters.Feature.InPerfQualityValue = config->mode;
+  create_parameters.InFeatureCreateFlags = static_cast<int>(config->create_flags);
+  return NGX_VULKAN_CREATE_DLSS_EXT1(
+      device,
+      command_buffer,
+      1u,
+      1u,
+      feature,
+      parameters,
+      &create_parameters);
+}
+
+NVSDK_NGX_Result CoreEvaluateFeature(
+    void*,
+    VkCommandBuffer command_buffer,
+    NVSDK_NGX_Handle* feature,
+    NVSDK_NGX_Parameter* parameters,
+    const renodx::utils::dlss::vulkan::EvaluateInfo* info) {
+  auto* color = const_cast<NVSDK_NGX_Resource_VK*>(&info->color->ngx);
+  auto* depth = const_cast<NVSDK_NGX_Resource_VK*>(&info->depth->ngx);
+  auto* motion_vectors =
+      const_cast<NVSDK_NGX_Resource_VK*>(&info->motion_vectors->ngx);
+  auto* output = const_cast<NVSDK_NGX_Resource_VK*>(&info->output->ngx);
+  auto* exposure = info->exposure == nullptr
+                       ? nullptr
+                       : const_cast<NVSDK_NGX_Resource_VK*>(&info->exposure->ngx);
+  NVSDK_NGX_VK_DLSS_Eval_Params evaluation = {};
+  evaluation.Feature.pInColor = color;
+  evaluation.Feature.pInOutput = output;
+  evaluation.pInDepth = depth;
+  evaluation.pInMotionVectors = motion_vectors;
+  evaluation.pInExposureTexture = exposure;
+  evaluation.InJitterOffsetX = info->jitter_x;
+  evaluation.InJitterOffsetY = info->jitter_y;
+  evaluation.InRenderSubrectDimensions = {
+      info->render_width, info->render_height};
+  evaluation.InReset = info->reset;
+  evaluation.InMVScaleX = info->motion_vector_scale_x;
+  evaluation.InMVScaleY = info->motion_vector_scale_y;
+  evaluation.InPreExposure = info->pre_exposure;
+  evaluation.InExposureScale = info->exposure_scale;
+  return NGX_VULKAN_EVALUATE_DLSS_EXT(
+      command_buffer, feature, parameters, &evaluation);
+}
+
+NVSDK_NGX_Result CoreReleaseFeature(void*, NVSDK_NGX_Handle* feature) {
+  return NVSDK_NGX_VULKAN_ReleaseFeature(feature);
+}
+
+NVSDK_NGX_Result CoreShutdown(void*, VkDevice device) {
+  return NVSDK_NGX_VULKAN_Shutdown1(device);
+}
+
+VkResult CoreCreateCommandPool(
+    void* context,
+    VkDevice device,
+    const VkCommandPoolCreateInfo* create_info,
+    const VkAllocationCallbacks* allocator,
+    VkCommandPool* command_pool) {
+  auto* state = static_cast<DeviceState*>(context);
+  return state->next_create_command_pool(
+      device, create_info, allocator, command_pool);
+}
+
+void CoreDestroyCommandPool(
+    void* context,
+    VkDevice device,
+    VkCommandPool command_pool,
+    const VkAllocationCallbacks* allocator) {
+  static_cast<DeviceState*>(context)->next_destroy_command_pool(
+      device, command_pool, allocator);
+}
+
+VkResult CoreAllocateCommandBuffers(
+    void* context,
+    VkDevice device,
+    const VkCommandBufferAllocateInfo* allocate_info,
+    VkCommandBuffer* command_buffers) {
+  return static_cast<DeviceState*>(context)->next_allocate_command_buffers(
+      device, allocate_info, command_buffers);
+}
+
+void CoreFreeCommandBuffers(
+    void* context,
+    VkDevice device,
+    VkCommandPool command_pool,
+    std::uint32_t command_buffer_count,
+    const VkCommandBuffer* command_buffers) {
+  static_cast<DeviceState*>(context)->next_free_command_buffers(
+      device, command_pool, command_buffer_count, command_buffers);
+}
+
+VkResult CoreBeginCommandBuffer(
+    void* context,
+    VkCommandBuffer command_buffer,
+    const VkCommandBufferBeginInfo* begin_info) {
+  return static_cast<DeviceState*>(context)->next_begin_command_buffer(
+      command_buffer, begin_info);
+}
+
+VkResult CoreEndCommandBuffer(void* context, VkCommandBuffer command_buffer) {
+  return static_cast<DeviceState*>(context)->next_end_command_buffer(
+      command_buffer);
+}
+
+VkResult CoreCreateFence(
+    void* context,
+    VkDevice device,
+    const VkFenceCreateInfo* create_info,
+    const VkAllocationCallbacks* allocator,
+    VkFence* fence) {
+  return static_cast<DeviceState*>(context)->next_create_fence(
+      device, create_info, allocator, fence);
+}
+
+void CoreDestroyFence(
+    void* context,
+    VkDevice device,
+    VkFence fence,
+    const VkAllocationCallbacks* allocator) {
+  static_cast<DeviceState*>(context)->next_destroy_fence(
+      device, fence, allocator);
+}
+
+VkResult CoreWaitForFences(
+    void* context,
+    VkDevice device,
+    std::uint32_t fence_count,
+    const VkFence* fences,
+    VkBool32 wait_all,
+    std::uint64_t timeout) {
+  return static_cast<DeviceState*>(context)->next_wait_for_fences(
+      device, fence_count, fences, wait_all, timeout);
+}
+
+VkResult CoreSubmit(
+    void* context,
+    VkQueue queue,
+    std::uint32_t submit_count,
+    const VkSubmitInfo* submits,
+    VkFence fence) {
+  auto* state = static_cast<DeviceState*>(context);
+  const std::lock_guard queue_lock(state->queue_mutex);
+  return state->next_queue_submit(queue, submit_count, submits, fence);
+}
+
+void UpdateFeatureTrackingStateLocked(DeviceState* state) {
+  const bool has_features =
+      state->ngx_context != nullptr && state->ngx_context->HasFeatures();
+  state->feature_submission_tracking_active.store(
+      has_features, std::memory_order_release);
+  if (state->ngx_shutdown_requested && !has_features
+      && state->ngx_context != nullptr) {
+    state->ngx_context->Shutdown();
+    state->ngx_context.reset();
+    state->ngx_discovery.reset();
+    state->ngx_shutdown_requested = false;
   }
 }
 
-void FinishNgxShutdownLocked(DeviceState* state) {
-  if (!state->ngx_shutdown_requested || !state->feature_generations.empty()) return;
-  if (state->capability_parameters != nullptr) {
-    NVSDK_NGX_VULKAN_DestroyParameters(state->capability_parameters);
-    state->capability_parameters = nullptr;
+bool EnsureNgxInitialized(DeviceState* state) {
+  if (state == nullptr || state->destroying.load(std::memory_order_acquire)) {
+    return false;
   }
-  if (state->ngx_initialized) {
-    const auto result = NVSDK_NGX_VULKAN_Shutdown1(state->device);
-    if (NVSDK_NGX_FAILED(result)) {
-      TraceNgxFailureOnce(state, 4u, "shutdown", result);
-    }
+  if (state->ngx_context != nullptr) return state->ngx_context->IsAvailable();
+  if (!state->supported_executable || !state->ngx_extensions_enabled
+      || state->graphics_queue == VK_NULL_HANDLE
+      || state->graphics_queue_family == std::numeric_limits<std::uint32_t>::max()
+      || state->next_queue_submit == nullptr
+      || state->next_create_command_pool == nullptr
+      || state->next_destroy_command_pool == nullptr
+      || state->next_allocate_command_buffers == nullptr
+      || state->next_free_command_buffers == nullptr
+      || state->next_begin_command_buffer == nullptr
+      || state->next_end_command_buffer == nullptr
+      || state->next_create_fence == nullptr
+      || state->next_destroy_fence == nullptr
+      || state->next_wait_for_fences == nullptr) {
+    return false;
   }
-  state->ngx_initialized = false;
-  state->ngx_available = false;
+
+  state->ngx_discovery = std::make_unique<NgxDiscovery>();
   state->ngx_shutdown_requested = false;
-}
-
-void CollectRetiredFeaturesLocked(DeviceState* state) {
-  std::vector<std::uint64_t> releasable;
-  releasable.reserve(state->feature_generations.size());
-  for (const auto& [generation, feature] : state->feature_generations) {
-    if (feature.retired && !state->feature_lifetime.IsReferenced(generation)) {
-      releasable.push_back(generation);
-    }
+  renodx::utils::dlss::vulkan::DeviceCreateInfo create_info = {
+      .instance = state->instance,
+      .physical_device = state->physical_device,
+      .device = state->device,
+      .graphics_queue = state->graphics_queue,
+      .graphics_queue_family = state->graphics_queue_family,
+      .get_instance_proc_addr = state->next_get_instance_proc_addr,
+      .get_device_proc_addr = state->next_get_device_proc_addr,
+      .project_id = kProjectId,
+      .engine_version = kEngineVersion,
+      .application_data_path = state->ngx_discovery->data_path,
+      .feature_info = &state->ngx_discovery->feature_info,
+      .sdk_version = NVSDK_NGX_Version_API,
+      .ngx = {
+          .context = state,
+          .initialize_project = &CoreInitializeProject,
+          .get_capability_parameters = &CoreGetCapabilityParameters,
+          .get_parameter_i = &CoreGetParameterI,
+          .query_mode = &CoreQueryMode,
+          .allocate_parameters = &CoreAllocateParameters,
+          .destroy_parameters = &CoreDestroyParameters,
+          .create_feature = &CoreCreateFeature,
+          .evaluate_feature = &CoreEvaluateFeature,
+          .release_feature = &CoreReleaseFeature,
+          .shutdown = &CoreShutdown,
+      },
+      .vulkan = {
+          .context = state,
+          .create_command_pool = &CoreCreateCommandPool,
+          .destroy_command_pool = &CoreDestroyCommandPool,
+          .allocate_command_buffers = &CoreAllocateCommandBuffers,
+          .free_command_buffers = &CoreFreeCommandBuffers,
+          .begin_command_buffer = &CoreBeginCommandBuffer,
+          .end_command_buffer = &CoreEndCommandBuffer,
+          .create_fence = &CoreCreateFence,
+          .destroy_fence = &CoreDestroyFence,
+          .wait_for_fences = &CoreWaitForFences,
+      },
+      .submit_context = state,
+      .submit = &CoreSubmit,
+  };
+  state->ngx_context =
+      std::make_unique<renodx::utils::dlss::vulkan::NgxContext>(
+          std::move(create_info));
+  const auto result = state->ngx_context->Initialize();
+  if (!result.Succeeded()) {
+    TraceNgxFailureOnce(state, 0u, "initialization", result.ngx_result);
+    state->ngx_context.reset();
+    state->ngx_discovery.reset();
+    return false;
   }
-  for (const std::uint64_t generation : releasable) {
-    DestroyFeatureGenerationLocked(state, generation);
-  }
-  FinishNgxShutdownLocked(state);
+  return true;
 }
 
 void RetireActiveFeatureLocked(DeviceState* state) {
-  if (auto* feature = GetActiveFeatureLocked(state); feature != nullptr) {
-    feature->retired = true;
+  if (state->ngx_context != nullptr) {
+    state->ngx_context->RetireActive();
   }
-  state->active_feature_generation = 0u;
-  CollectRetiredFeaturesLocked(state);
-}
-
-void InvalidateUnsubmittedFeatureCreationsLocked(
-    DeviceState* state, const std::vector<std::uint64_t>& command_buffers) {
-  if (state == nullptr || command_buffers.empty()) return;
-  for (auto& [generation, feature] : state->feature_generations) {
-    if (feature.creation.submitted) continue;
-    const bool invalidated = std::any_of(
-        command_buffers.begin(),
-        command_buffers.end(),
-        [&feature](std::uint64_t command_buffer) {
-          return feature.creation.InvalidatedByDiscard(command_buffer);
-        });
-    if (!invalidated) continue;
-    feature.retired = true;
-    if (state->active_feature_generation == generation) {
-      state->active_feature_generation = 0u;
-    }
-  }
+  UpdateFeatureTrackingStateLocked(state);
 }
 
 void RequestNgxShutdown(DeviceState* state) {
   const std::lock_guard lock(state->mutex);
+  state->ngx_shutdown_requested = true;
   RetireActiveFeatureLocked(state);
   state->configured = false;
   state->context_identity = 0u;
   state->configured_identity = 0u;
-  state->ngx_shutdown_requested = true;
-  CollectRetiredFeaturesLocked(state);
 }
 
 void ForceShutdownNgxForDeviceDestroy(DeviceState* state) {
   const std::lock_guard lock(state->mutex);
-  state->feature_lifetime.DiscardAllCommandBuffers();
-  if (auto* feature = GetActiveFeatureLocked(state); feature != nullptr) {
-    feature->retired = true;
+  if (state->ngx_context != nullptr) {
+    state->ngx_context->DiscardAllRecordings();
+    state->ngx_context->Shutdown();
+    state->ngx_context.reset();
   }
-  state->active_feature_generation = 0u;
-  for (auto& [generation, feature] : state->feature_generations) {
-    feature.retired = true;
-  }
-  state->ngx_shutdown_requested = true;
-  CollectRetiredFeaturesLocked(state);
+  state->ngx_discovery.reset();
+  state->ngx_shutdown_requested = false;
+  state->feature_submission_tracking_active.store(false, std::memory_order_release);
   state->configured = false;
   state->context_identity = 0u;
   state->configured_identity = 0u;
@@ -1226,76 +1451,20 @@ void DiscardFeatureCommandBuffers(
     handles.push_back(ToOpaque(command_buffer));
   }
   const std::lock_guard lock(state->mutex);
-  InvalidateUnsubmittedFeatureCreationsLocked(state, handles);
-  state->feature_lifetime.DiscardCommandBuffers(handles);
-  CollectRetiredFeaturesLocked(state);
+  if (state->ngx_context != nullptr) {
+    state->ngx_context->DiscardRecordings(handles);
+  }
+  UpdateFeatureTrackingStateLocked(state);
 }
 
 void DiscardFeatureCommandBuffer(
     DeviceState* state, VkCommandBuffer command_buffer) {
   if (state == nullptr || command_buffer == VK_NULL_HANDLE) return;
   const std::lock_guard lock(state->mutex);
-  const std::uint64_t handle = ToOpaque(command_buffer);
-  InvalidateUnsubmittedFeatureCreationsLocked(state, {handle});
-  state->feature_lifetime.DiscardCommandBuffer(handle);
-  CollectRetiredFeaturesLocked(state);
-}
-
-bool EnsureNgxInitialized(DeviceState* state) {
-  if (state == nullptr || state->destroying.load(std::memory_order_acquire)) return false;
-  if (state->ngx_initialized) {
-    // A later non-Native configuration may reuse the initialized NGX context
-    // while retired generations wait for their recorded command buffers to be
-    // reset or freed.
-    state->ngx_shutdown_requested = false;
-    return state->ngx_available;
+  if (state->ngx_context != nullptr) {
+    state->ngx_context->DiscardRecording(ToOpaque(command_buffer));
   }
-  if (!state->supported_executable || !state->ngx_extensions_enabled) return false;
-
-  state->ngx_shutdown_requested = false;
-
-  NgxDiscovery discovery;
-  const auto init_result = NVSDK_NGX_VULKAN_Init_with_ProjectID(
-      kProjectId,
-      NVSDK_NGX_ENGINE_TYPE_CUSTOM,
-      kEngineVersion,
-      discovery.data_path.c_str(),
-      state->instance,
-      state->physical_device,
-      state->device,
-      state->next_get_instance_proc_addr,
-      state->next_get_device_proc_addr,
-      &discovery.feature_info,
-      NVSDK_NGX_Version_API);
-  if (NVSDK_NGX_FAILED(init_result)) return false;
-  state->ngx_initialized = true;
-
-  if (NVSDK_NGX_FAILED(
-          NVSDK_NGX_VULKAN_GetCapabilityParameters(&state->capability_parameters))) {
-    if (state->capability_parameters != nullptr) {
-      NVSDK_NGX_VULKAN_DestroyParameters(state->capability_parameters);
-      state->capability_parameters = nullptr;
-    }
-    NVSDK_NGX_VULKAN_Shutdown1(state->device);
-    state->ngx_initialized = false;
-    return false;
-  }
-
-  int available = 0;
-  if (NVSDK_NGX_FAILED(NVSDK_NGX_Parameter_GetI(
-          state->capability_parameters,
-          NVSDK_NGX_Parameter_SuperSampling_Available,
-          &available))
-      || available == 0) {
-    NVSDK_NGX_VULKAN_DestroyParameters(state->capability_parameters);
-    state->capability_parameters = nullptr;
-    NVSDK_NGX_VULKAN_Shutdown1(state->device);
-    state->ngx_initialized = false;
-    return false;
-  }
-
-  state->ngx_available = true;
-  return true;
+  UpdateFeatureTrackingStateLocked(state);
 }
 
 bool IsValidResource(const DetroitDlssResource& resource, std::uint32_t width, std::uint32_t height) {
@@ -1324,6 +1493,37 @@ NVSDK_NGX_Resource_VK MakeNgxResource(
       resource.width,
       resource.height,
       read_write);
+}
+
+renodx::utils::dlss::vulkan::ImageResource MakeCoreImageResource(
+    const DetroitDlssResource& resource,
+    VkImageAspectFlags aspect,
+    bool read_write,
+    VkImageUsageFlags usage,
+    VkAccessFlags access) {
+  return {
+      .ngx = MakeNgxResource(resource, aspect, read_write),
+      .state = {
+          .image = FromOpaque<VkImage>(resource.image),
+          .image_view = FromOpaque<VkImageView>(resource.image_view),
+          .range = {
+              .aspectMask = aspect,
+              .baseMipLevel = resource.mip_level,
+              .levelCount = 1u,
+              .baseArrayLayer = resource.array_layer,
+              .layerCount = 1u,
+          },
+          .format = static_cast<VkFormat>(resource.format),
+          .usage = usage,
+          .layout = static_cast<VkImageLayout>(resource.layout),
+          .stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+          .access = access,
+          .queue_family = VK_QUEUE_FAMILY_IGNORED,
+          .contents_valid = true,
+      },
+      .width = resource.width,
+      .height = resource.height,
+  };
 }
 
 void SetEvaluationResult(
@@ -2344,21 +2544,22 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode(
   }
   if (!EnsureNgxInitialized(state.get())) return DETROIT_DLSS_RESULT_FALLBACK;
 
-  float sharpness = 0.f;
-  const auto query_result = NGX_DLSS_GET_OPTIMAL_SETTINGS(
-      state->capability_parameters,
-      output_width,
-      output_height,
-      ToNgxQuality(mode),
-      &settings->render_width,
-      &settings->render_height,
-      &settings->max_render_width,
-      &settings->max_render_height,
-      &settings->min_render_width,
-      &settings->min_render_height,
-      &sharpness);
-  return NVSDK_NGX_SUCCEED(query_result) ? DETROIT_DLSS_RESULT_SUCCESS
-                                         : DETROIT_DLSS_RESULT_FALLBACK;
+  renodx::utils::dlss::vulkan::ModeSettings queried = {};
+  const auto query_result = state->ngx_context->QueryMode(
+      {
+          .mode = ToNgxQuality(mode),
+          .output_width = output_width,
+          .output_height = output_height,
+      },
+      &queried);
+  if (!query_result.Succeeded()) return DETROIT_DLSS_RESULT_FALLBACK;
+  settings->render_width = queried.optimal_width;
+  settings->render_height = queried.optimal_height;
+  settings->max_render_width = queried.maximum_width;
+  settings->max_render_height = queried.maximum_height;
+  settings->min_render_width = queried.minimum_width;
+  settings->min_render_height = queried.minimum_height;
+  return DETROIT_DLSS_RESULT_SUCCESS;
 }
 
 DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
@@ -2406,6 +2607,8 @@ std::optional<ComputeCommandRestoreState> CaptureComputeRestoreState(
   const std::lock_guard lock(state->tracking_mutex);
   const auto command_pool = state->command_buffer_pools.find(inputs.command_buffer);
   const auto command_level = state->command_buffer_levels.find(inputs.command_buffer);
+  const auto command_usage =
+      state->command_buffer_usage_flags.find(inputs.command_buffer);
   if (command_pool == state->command_buffer_pools.end()
       || command_level == state->command_buffer_levels.end()
       || command_level->second != VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
@@ -2481,6 +2684,11 @@ std::optional<ComputeCommandRestoreState> CaptureComputeRestoreState(
       .descriptor_sets = {FromOpaque<VkDescriptorSet>(inputs.descriptor_set)},
       .dynamic_offsets = {
           static_cast<std::uint32_t>(inputs.constants_dynamic_offset)},
+      .one_time_submit =
+          command_usage != state->command_buffer_usage_flags.end()
+          && (command_usage->second
+              & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
+                 != 0u,
   };
   return targeted;
 }
@@ -2665,7 +2873,6 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       diagnostic_output_mode != DiagnosticOutputMode::kNgx;
   const bool diagnostic_direct_output =
       diagnostic_output_mode == DiagnosticOutputMode::kSpatialDirect;
-  FeatureGenerationState* active_feature = nullptr;
   if (!diagnostic_spatial_output) {
     if (!EnsureNgxInitialized(state.get())) {
       SetEvaluationResult(
@@ -2677,101 +2884,33 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     }
 
     const std::uint32_t create_flags = ToNgxCreateFlags(state->settings.create_flags);
-    active_feature = GetActiveFeatureLocked(state.get());
-    if (active_feature != nullptr && active_feature->create_flags != create_flags) {
-      RetireActiveFeatureLocked(state.get());
-      active_feature = nullptr;
-    }
-    if (active_feature == nullptr) {
-      NVSDK_NGX_Parameter* feature_parameters = nullptr;
-      const auto allocate_result =
-          NVSDK_NGX_VULKAN_AllocateParameters(&feature_parameters);
-      if (NVSDK_NGX_FAILED(allocate_result) || feature_parameters == nullptr) {
-        if (feature_parameters != nullptr) {
-          NVSDK_NGX_VULKAN_DestroyParameters(feature_parameters);
-        }
-        SetEvaluationResult(
-            result,
-            DETROIT_DLSS_RESULT_FALLBACK,
-            BridgeDetail::kFeatureCreationFailed,
-            frame_id);
-        return DETROIT_DLSS_RESULT_FALLBACK;
-      }
-
-      NVSDK_NGX_DLSS_Create_Params create_parameters = {};
-      create_parameters.Feature.InWidth = state->settings.render_width;
-      create_parameters.Feature.InHeight = state->settings.render_height;
-      create_parameters.Feature.InTargetWidth = state->settings.output_width;
-      create_parameters.Feature.InTargetHeight = state->settings.output_height;
-      create_parameters.Feature.InPerfQualityValue = ToNgxQuality(state->settings.mode);
-      create_parameters.InFeatureCreateFlags = static_cast<int>(create_flags);
-      NVSDK_NGX_Handle* feature = nullptr;
-      const auto create_result = NGX_VULKAN_CREATE_DLSS_EXT1(
-          state->device,
-          command_buffer,
+    const auto configure_result = state->ngx_context->ConfigureFeature({
+        .mode = ToNgxQuality(state->settings.mode),
+        .render_width = state->settings.render_width,
+        .render_height = state->settings.render_height,
+        .output_width = state->settings.output_width,
+        .output_height = state->settings.output_height,
+        .create_flags = create_flags,
+    });
+    UpdateFeatureTrackingStateLocked(state.get());
+    if (!configure_result.Succeeded()) {
+      TraceNgxFailureOnce(
+          state.get(),
           1u,
-          1u,
-          &feature,
-          feature_parameters,
-          &create_parameters);
-      if (NVSDK_NGX_FAILED(create_result) || feature == nullptr) {
-        if (NVSDK_NGX_FAILED(create_result)) {
-          TraceNgxFailureOnce(state.get(), 1u, "feature creation", create_result);
-        } else {
-          Trace("DLSS NGX feature creation returned a null handle");
-        }
-        (void)RestoreComputeCommandState(state.get(), command_buffer, *restore_state);
-        if (feature != nullptr) {
-          const std::uint64_t generation =
-              AllocateFeatureGenerationLocked(state.get());
-          state->feature_generations.emplace(
-              generation,
-              FeatureGenerationState{
-                  .generation = generation,
-                  .parameters = feature_parameters,
-                  .feature = feature,
-                  .create_flags = create_flags,
-                  .creation = {.command_buffer = ToOpaque(command_buffer)},
-                  .retired = true,
-              });
-          // A failed NGX call may still have recorded work. Conservatively retain
-          // any returned handle until this command buffer is invalidated.
-          RecordFeatureUseLocked(state.get(), command_buffer, generation);
-          state->feature_submission_tracking_active.store(
-              true, std::memory_order_release);
-        } else {
-          NVSDK_NGX_VULKAN_DestroyParameters(feature_parameters);
-        }
-        CollectRetiredFeaturesLocked(state.get());
-        SetEvaluationResult(
-            result,
-            DETROIT_DLSS_RESULT_FALLBACK,
-            BridgeDetail::kFeatureCreationFailed,
-            frame_id);
-        return DETROIT_DLSS_RESULT_FALLBACK;
-      }
-      const std::uint64_t generation =
-          AllocateFeatureGenerationLocked(state.get());
-      auto [created, inserted] = state->feature_generations.emplace(
-          generation,
-          FeatureGenerationState{
-              .generation = generation,
-              .parameters = feature_parameters,
-              .feature = feature,
-              .create_flags = create_flags,
-              .creation = {.command_buffer = ToOpaque(command_buffer)},
-          });
-      (void)inserted;
-      state->active_feature_generation = generation;
-      active_feature = &created->second;
-      // Feature creation itself is command-buffer based and therefore owns a
-      // recorded reference even if later adapter preparation fails.
-      RecordFeatureUseLocked(state.get(), command_buffer, generation);
-      state->feature_submission_tracking_active.store(
-          true, std::memory_order_release);
+          "feature creation",
+          configure_result.ngx_result);
+      SetEvaluationResult(
+          result,
+          DETROIT_DLSS_RESULT_FALLBACK,
+          BridgeDetail::kFeatureCreationFailed,
+          frame_id);
+      return DETROIT_DLSS_RESULT_FALLBACK;
     }
-
-    if (!active_feature->creation.AllowsUseFrom(ToOpaque(command_buffer))) {
+    // NVIDIA's Vulkan create call records GPU work. The reusable core records
+    // it on a private primary command buffer, submits it with a private fence,
+    // and waits for that fence. This first Detroit frame still replays native
+    // TAA; NGX Evaluate starts on the next frame with reset forced by the core.
+    if (configure_result.feature_created) {
       SetEvaluationResult(
           result,
           DETROIT_DLSS_RESULT_FALLBACK,
@@ -2853,50 +2992,73 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     return DETROIT_DLSS_RESULT_SUCCESS;
   }
 
-  auto color = MakeNgxResource(prepared_frame.color, VK_IMAGE_ASPECT_COLOR_BIT, false);
-  auto depth = MakeNgxResource(prepared_frame.depth, VK_IMAGE_ASPECT_DEPTH_BIT, false);
-  auto motion_vectors =
-      MakeNgxResource(prepared_frame.motion_vectors, VK_IMAGE_ASPECT_COLOR_BIT, false);
-  auto output = MakeNgxResource(prepared_frame.output, VK_IMAGE_ASPECT_COLOR_BIT, true);
-  auto exposure = auto_exposure
-                      ? NVSDK_NGX_Resource_VK{}
-                      : MakeNgxResource(inputs->exposure, VK_IMAGE_ASPECT_COLOR_BIT, false);
+  auto color = MakeCoreImageResource(
+      prepared_frame.color,
+      VK_IMAGE_ASPECT_COLOR_BIT,
+      false,
+      VK_IMAGE_USAGE_SAMPLED_BIT,
+      VK_ACCESS_SHADER_READ_BIT);
+  auto depth = MakeCoreImageResource(
+      prepared_frame.depth,
+      VK_IMAGE_ASPECT_DEPTH_BIT,
+      false,
+      VK_IMAGE_USAGE_SAMPLED_BIT,
+      VK_ACCESS_SHADER_READ_BIT);
+  auto motion_vectors = MakeCoreImageResource(
+      prepared_frame.motion_vectors,
+      VK_IMAGE_ASPECT_COLOR_BIT,
+      false,
+      VK_IMAGE_USAGE_SAMPLED_BIT,
+      VK_ACCESS_SHADER_READ_BIT);
+  auto output = MakeCoreImageResource(
+      prepared_frame.output,
+      VK_IMAGE_ASPECT_COLOR_BIT,
+      true,
+      VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      VK_ACCESS_SHADER_WRITE_BIT);
+  auto exposure = MakeCoreImageResource(
+      inputs->exposure,
+      VK_IMAGE_ASPECT_COLOR_BIT,
+      false,
+      VK_IMAGE_USAGE_SAMPLED_BIT,
+      VK_ACCESS_SHADER_READ_BIT);
 
-  NVSDK_NGX_VK_DLSS_Eval_Params evaluation = {};
-  evaluation.Feature.pInColor = &color;
-  evaluation.Feature.pInOutput = &output;
-  evaluation.pInDepth = &depth;
-  evaluation.pInMotionVectors = &motion_vectors;
-  evaluation.pInExposureTexture = auto_exposure ? nullptr : &exposure;
-  evaluation.InJitterOffsetX = inputs->jitter_x;
-  evaluation.InJitterOffsetY = inputs->jitter_y;
-  evaluation.InRenderSubrectDimensions = {inputs->render_width, inputs->render_height};
-  evaluation.InReset = inputs->reset != 0u
-                       || (inputs->flags
-                           & (DETROIT_DLSS_FRAME_CAMERA_CUT
-                              | DETROIT_DLSS_FRAME_SCENE_LOADED))
-                              != 0u;
-  evaluation.InMVScaleX = inputs->motion_vector_scale_x;
-  evaluation.InMVScaleY = inputs->motion_vector_scale_y;
-  evaluation.InPreExposure = inputs->pre_exposure;
-  evaluation.InExposureScale = 1.f;
-
-  RecordFeatureUseLocked(
-      state.get(), command_buffer, active_feature->generation);
-  const auto evaluate_result = NGX_VULKAN_EVALUATE_DLSS_EXT(
-      command_buffer,
-      active_feature->feature,
-      active_feature->parameters,
-      &evaluation);
-  const bool ngx_succeeded = NVSDK_NGX_SUCCEED(evaluate_result);
+  MarkFeatureRecordingCandidate(state.get(), command_buffer);
+  const auto evaluate_result = state->ngx_context->Evaluate({
+      .recording_key = ToOpaque(command_buffer),
+      .command_buffer = command_buffer,
+      .color = &color,
+      .depth = &depth,
+      .motion_vectors = &motion_vectors,
+      .output = &output,
+      .exposure = auto_exposure ? nullptr : &exposure,
+      .jitter_x = inputs->jitter_x,
+      .jitter_y = inputs->jitter_y,
+      .motion_vector_scale_x = inputs->motion_vector_scale_x,
+      .motion_vector_scale_y = inputs->motion_vector_scale_y,
+      .pre_exposure = inputs->pre_exposure,
+      .exposure_scale = 1.f,
+      .render_width = inputs->render_width,
+      .render_height = inputs->render_height,
+      .one_time_submit = restore_state->one_time_submit,
+      .reset = inputs->reset != 0u
+               || (inputs->flags
+                   & (DETROIT_DLSS_FRAME_CAMERA_CUT
+                      | DETROIT_DLSS_FRAME_SCENE_LOADED))
+                      != 0u,
+  });
+  UpdateFeatureTrackingStateLocked(state.get());
+  const bool ngx_succeeded = evaluate_result.Succeeded()
+                             && evaluate_result.output_valid;
   const auto commit_result =
       state->adapter_runtime.CommitAfterNgx(prepared_frame, ngx_succeeded);
   // Commit may write b16, so no fallible decision is allowed after this point.
   // The restore contract was proved before any adapter/NGX commands were
   // recorded and these Vulkan bind calls have no failure return.
   (void)RestoreComputeCommandState(state.get(), command_buffer, *restore_state);
-  if (NVSDK_NGX_FAILED(evaluate_result)) {
-    TraceNgxFailureOnce(state.get(), 2u, "evaluation", evaluate_result);
+  if (!evaluate_result.Succeeded()) {
+    TraceNgxFailureOnce(
+        state.get(), 2u, "evaluation", evaluate_result.ngx_result);
     SetEvaluationResult(
         result, DETROIT_DLSS_RESULT_FALLBACK, BridgeDetail::kEvaluationFailed, frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
@@ -3561,7 +3723,9 @@ FeatureSubmissionSnapshot CaptureFeatureSubmission(
     DeviceState* state,
     const std::vector<std::uint64_t>& command_buffers) {
   const std::lock_guard lock(state->mutex);
-  return state->feature_lifetime.CaptureSubmission(command_buffers);
+  return state->ngx_context != nullptr
+             ? state->ngx_context->CaptureSubmission(command_buffers)
+             : FeatureSubmissionSnapshot{};
 }
 
 void AppendFeatureSubmissionCandidate(
@@ -3615,8 +3779,10 @@ void CommitFeatureSubmission(
   bool log_reusable_submission = false;
   {
     const std::lock_guard lock(state->mutex);
-    const auto committed =
-        state->feature_lifetime.CommitSuccessfulSubmit(ToOpaque(queue), snapshot);
+    const auto committed = state->ngx_context != nullptr
+                               ? state->ngx_context->NotifySubmitted(
+                                     ToOpaque(queue), snapshot)
+                               : FeatureSubmissionSnapshot{};
     for (const auto& command : committed.commands) {
       if (command.one_time_submit
           && !state->logged_one_time_feature_submission) {
@@ -3628,15 +3794,6 @@ void CommitFeatureSubmission(
         log_reusable_submission = true;
       }
     }
-    for (auto& [generation, feature] : state->feature_generations) {
-      if (!feature.creation.submitted
-          && renodx::games::detroitbecomehuman::dlss::FeatureLifetimeTracker::
-              SubmissionContains(
-                  committed, feature.creation.command_buffer, generation)) {
-        feature.creation.MarkSubmitted();
-      }
-    }
-
     if (fence != VK_NULL_HANDLE && !committed.Empty()) {
       const auto fence_key = ToOpaque(fence);
       const auto previous = state->fenced_feature_submissions.find(fence_key);
@@ -3644,8 +3801,11 @@ void CommitFeatureSubmission(
         // Valid Vulkan fence reuse requires the previous submission to have
         // completed and the fence to have been reset. Complete defensively in
         // case the reset was reached through an untracked dispatch path.
-        auto stale = state->feature_lifetime.CompleteSubmission(
-            previous->second.queue, previous->second.snapshot);
+        auto stale = state->ngx_context != nullptr
+                         ? state->ngx_context->NotifySubmissionCompleted(
+                               previous->second.queue,
+                               previous->second.snapshot)
+                         : std::vector<std::uint64_t>{};
         completed_command_buffers.insert(
             completed_command_buffers.end(), stale.begin(), stale.end());
         if (previous->second.owned_by_layer) {
@@ -3661,7 +3821,7 @@ void CommitFeatureSubmission(
               .owned_by_layer = fence_owned_by_layer,
           });
     }
-    CollectRetiredFeaturesLocked(state);
+    UpdateFeatureTrackingStateLocked(state);
   }
   if (log_one_time_submission) {
     Trace("DLAA feature submissions use ONE_TIME_SUBMIT; private scratch can recycle at fence completion");
@@ -3681,7 +3841,10 @@ void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
   {
     const std::lock_guard lock(state->mutex);
     const auto queue_key = ToOpaque(queue);
-    completed_command_buffers = state->feature_lifetime.CompleteQueue(queue_key);
+    if (state->ngx_context != nullptr) {
+      completed_command_buffers =
+          state->ngx_context->NotifyQueueCompleted(queue_key);
+    }
     for (auto submission = state->fenced_feature_submissions.begin();
          submission != state->fenced_feature_submissions.end();) {
       if (submission->second.queue != queue_key) {
@@ -3694,7 +3857,7 @@ void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
       }
       submission = state->fenced_feature_submissions.erase(submission);
     }
-    CollectRetiredFeaturesLocked(state);
+    UpdateFeatureTrackingStateLocked(state);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
   for (const VkFence fence : completed_internal_fences) {
@@ -3707,14 +3870,16 @@ void CompleteFeatureDevice(DeviceState* state) {
   std::vector<VkFence> completed_internal_fences;
   {
     const std::lock_guard lock(state->mutex);
-    completed_command_buffers = state->feature_lifetime.CompleteDevice();
+    if (state->ngx_context != nullptr) {
+      completed_command_buffers = state->ngx_context->NotifyDeviceCompleted();
+    }
     for (const auto& [fence, submission] : state->fenced_feature_submissions) {
       if (submission.owned_by_layer) {
         completed_internal_fences.push_back(FromOpaque<VkFence>(fence));
       }
     }
     state->fenced_feature_submissions.clear();
-    CollectRetiredFeaturesLocked(state);
+    UpdateFeatureTrackingStateLocked(state);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
   for (const VkFence fence : completed_internal_fences) {
@@ -3733,9 +3898,12 @@ void CompleteFeatureFence(DeviceState* state, VkFence fence) {
     auto submission = std::move(found->second);
     state->fenced_feature_submissions.erase(found);
     destroy_internal_fence = submission.owned_by_layer;
-    completed_command_buffers = state->feature_lifetime.CompleteSubmission(
-        submission.queue, submission.snapshot);
-    CollectRetiredFeaturesLocked(state);
+    if (state->ngx_context != nullptr) {
+      completed_command_buffers =
+          state->ngx_context->NotifySubmissionCompleted(
+              submission.queue, submission.snapshot);
+    }
+    UpdateFeatureTrackingStateLocked(state);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
   if (destroy_internal_fence) {
@@ -3764,14 +3932,17 @@ void PollCompletedInternalFeatureFences(DeviceState* state) {
         ++submission;
         continue;
       }
-      auto completed = state->feature_lifetime.CompleteSubmission(
-          submission->second.queue, submission->second.snapshot);
+      auto completed = state->ngx_context != nullptr
+                           ? state->ngx_context->NotifySubmissionCompleted(
+                                 submission->second.queue,
+                                 submission->second.snapshot)
+                           : std::vector<std::uint64_t>{};
       completed_command_buffers.insert(
           completed_command_buffers.end(), completed.begin(), completed.end());
       completed_fences.push_back(fence);
       submission = state->fenced_feature_submissions.erase(submission);
     }
-    CollectRetiredFeaturesLocked(state);
+    UpdateFeatureTrackingStateLocked(state);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
   for (const VkFence fence : completed_fences) {
@@ -3838,6 +4009,40 @@ VkFence CreateInternalFeatureFence(
              : VK_NULL_HANDLE;
 }
 
+VkResult SubmitQueueLocked(
+    DeviceState* state,
+    VkQueue queue,
+    std::uint32_t submit_count,
+    const VkSubmitInfo* submits,
+    VkFence fence) {
+  const std::lock_guard queue_lock(state->queue_mutex);
+  return state->next_queue_submit(queue, submit_count, submits, fence);
+}
+
+#if defined(VK_VERSION_1_3)
+VkResult SubmitQueue2Locked(
+    DeviceState* state,
+    VkQueue queue,
+    std::uint32_t submit_count,
+    const VkSubmitInfo2* submits,
+    VkFence fence) {
+  const std::lock_guard queue_lock(state->queue_mutex);
+  return state->next_queue_submit2(queue, submit_count, submits, fence);
+}
+#endif
+
+#if defined(VK_KHR_synchronization2)
+VkResult SubmitQueue2KhrLocked(
+    DeviceState* state,
+    VkQueue queue,
+    std::uint32_t submit_count,
+    const VkSubmitInfo2KHR* submits,
+    VkFence fence) {
+  const std::lock_guard queue_lock(state->queue_mutex);
+  return state->next_queue_submit2_khr(queue, submit_count, submits, fence);
+}
+#endif
+
 VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
     VkQueue queue,
     std::uint32_t submit_count,
@@ -3848,7 +4053,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
     return VK_ERROR_INITIALIZATION_FAILED;
   }
   if (!state->feature_submission_tracking_active.load(std::memory_order_acquire)) {
-    return state->next_queue_submit(queue, submit_count, submits, fence);
+    return SubmitQueueLocked(state, queue, submit_count, submits, fence);
   }
 
   const auto feature_bloom = state->feature_command_buffer_bloom.load(
@@ -3870,7 +4075,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
     }
   }
   if (command_buffers.empty()) {
-    return state->next_queue_submit(queue, submit_count, submits, fence);
+    return SubmitQueueLocked(state, queue, submit_count, submits, fence);
   }
   const auto snapshot = CaptureFeatureSubmission(state, command_buffers);
   const bool needs_internal_fence = fence == VK_NULL_HANDLE && !snapshot.Empty()
@@ -3881,8 +4086,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
   const VkFence tracked_fence =
       internal_fence != VK_NULL_HANDLE ? internal_fence : fence;
   LogFencelessFeatureSubmissionOnce(fence, internal_fence, snapshot);
-  const VkResult result =
-      state->next_queue_submit(queue, submit_count, submits, tracked_fence);
+  const VkResult result = SubmitQueueLocked(
+      state, queue, submit_count, submits, tracked_fence);
   if (result == VK_SUCCESS) {
     CommitFeatureSubmission(
         state,
@@ -3907,7 +4112,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
     return VK_ERROR_INITIALIZATION_FAILED;
   }
   if (!state->feature_submission_tracking_active.load(std::memory_order_acquire)) {
-    return state->next_queue_submit2(queue, submit_count, submits, fence);
+    return SubmitQueue2Locked(state, queue, submit_count, submits, fence);
   }
 
   const auto feature_bloom = state->feature_command_buffer_bloom.load(
@@ -3929,7 +4134,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
     }
   }
   if (command_buffers.empty()) {
-    return state->next_queue_submit2(queue, submit_count, submits, fence);
+    return SubmitQueue2Locked(state, queue, submit_count, submits, fence);
   }
   const auto snapshot = CaptureFeatureSubmission(state, command_buffers);
   const bool needs_internal_fence = fence == VK_NULL_HANDLE && !snapshot.Empty()
@@ -3940,8 +4145,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
   const VkFence tracked_fence =
       internal_fence != VK_NULL_HANDLE ? internal_fence : fence;
   LogFencelessFeatureSubmissionOnce(fence, internal_fence, snapshot);
-  const VkResult result =
-      state->next_queue_submit2(queue, submit_count, submits, tracked_fence);
+  const VkResult result = SubmitQueue2Locked(
+      state, queue, submit_count, submits, tracked_fence);
   if (result == VK_SUCCESS) {
     CommitFeatureSubmission(
         state,
@@ -3967,7 +4172,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
     return VK_ERROR_INITIALIZATION_FAILED;
   }
   if (!state->feature_submission_tracking_active.load(std::memory_order_acquire)) {
-    return state->next_queue_submit2_khr(queue, submit_count, submits, fence);
+    return SubmitQueue2KhrLocked(state, queue, submit_count, submits, fence);
   }
 
   const auto feature_bloom = state->feature_command_buffer_bloom.load(
@@ -3989,7 +4194,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
     }
   }
   if (command_buffers.empty()) {
-    return state->next_queue_submit2_khr(queue, submit_count, submits, fence);
+    return SubmitQueue2KhrLocked(state, queue, submit_count, submits, fence);
   }
   const auto snapshot = CaptureFeatureSubmission(state, command_buffers);
   const bool needs_internal_fence = fence == VK_NULL_HANDLE && !snapshot.Empty()
@@ -4000,8 +4205,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
   const VkFence tracked_fence =
       internal_fence != VK_NULL_HANDLE ? internal_fence : fence;
   LogFencelessFeatureSubmissionOnce(fence, internal_fence, snapshot);
-  const VkResult result =
-      state->next_queue_submit2_khr(queue, submit_count, submits, tracked_fence);
+  const VkResult result = SubmitQueue2KhrLocked(
+      state, queue, submit_count, submits, tracked_fence);
   if (result == VK_SUCCESS) {
     CommitFeatureSubmission(
         state,
@@ -4021,7 +4226,11 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueWaitIdle(VkQueue queue) {
   if (state == nullptr || state->next_queue_wait_idle == nullptr) {
     return VK_ERROR_INITIALIZATION_FAILED;
   }
-  const VkResult result = state->next_queue_wait_idle(queue);
+  VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+  {
+    const std::lock_guard queue_lock(state->queue_mutex);
+    result = state->next_queue_wait_idle(queue);
+  }
   if (result == VK_SUCCESS) CompleteFeatureQueue(state, queue);
   return result;
 }
@@ -4115,6 +4324,7 @@ void RemoveCommandBufferPoolMappingLocked(
     VkCommandBuffer command_buffer) {
   const auto command_buffer_key = ToOpaque(command_buffer);
   state->command_buffer_levels.erase(command_buffer_key);
+  state->command_buffer_usage_flags.erase(command_buffer_key);
   const auto mapped_pool = state->command_buffer_pools.find(command_buffer_key);
   if (mapped_pool == state->command_buffer_pools.end()) return;
   const auto pool_key = mapped_pool->second;
@@ -4173,6 +4383,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerAllocateCommandBuffers(
       state->command_buffer_pools[ToOpaque(command_buffers[index])] = pool_key;
       state->command_buffer_levels[ToOpaque(command_buffers[index])] =
           allocate_info->level;
+      state->command_buffer_usage_flags.erase(ToOpaque(command_buffers[index]));
       pool_buffers.push_back(command_buffers[index]);
     }
   }
@@ -4244,6 +4455,7 @@ VKAPI_ATTR void VKAPI_CALL LayerDestroyCommandPool(
       const auto key = ToOpaque(command_buffer);
       state->command_buffer_pools.erase(key);
       state->command_buffer_levels.erase(key);
+      state->command_buffer_usage_flags.erase(key);
       state->command_buffer_descriptors.erase(key);
       state->command_buffer_restore_states.erase(key);
       state->command_buffer_dof_composite_states.erase(key);
@@ -4274,17 +4486,20 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(
       state->command_buffer_descriptors.erase(ToOpaque(command_buffer));
       state->command_buffer_restore_states.erase(ToOpaque(command_buffer));
       state->command_buffer_dof_composite_states.erase(ToOpaque(command_buffer));
+      state->command_buffer_usage_flags[ToOpaque(command_buffer)] =
+          begin_info != nullptr ? begin_info->flags : 0u;
     }
     {
       const std::lock_guard lock(state->mutex);
-      InvalidateUnsubmittedFeatureCreationsLocked(
-          state, {ToOpaque(command_buffer)});
-      state->feature_lifetime.BeginCommandBuffer(
-          ToOpaque(command_buffer),
-          begin_info != nullptr
-              && (begin_info->flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
-                     != 0u);
-      CollectRetiredFeaturesLocked(state);
+      if (state->ngx_context != nullptr) {
+        state->ngx_context->BeginRecording(
+            ToOpaque(command_buffer),
+            begin_info != nullptr
+                && (begin_info->flags
+                    & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
+                       != 0u);
+      }
+      UpdateFeatureTrackingStateLocked(state);
     }
   }
   return result;
@@ -4305,6 +4520,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerResetCommandBuffer(
       state->command_buffer_descriptors.erase(ToOpaque(command_buffer));
       state->command_buffer_restore_states.erase(ToOpaque(command_buffer));
       state->command_buffer_dof_composite_states.erase(ToOpaque(command_buffer));
+      state->command_buffer_usage_flags.erase(ToOpaque(command_buffer));
     }
     DiscardFeatureCommandBuffer(state, command_buffer);
   }
@@ -4339,6 +4555,7 @@ VKAPI_ATTR void VKAPI_CALL LayerFreeCommandBuffers(
       state->command_buffer_restore_states.erase(ToOpaque(command_buffers[index]));
       state->command_buffer_dof_composite_states.erase(
           ToOpaque(command_buffers[index]));
+      state->command_buffer_usage_flags.erase(ToOpaque(command_buffers[index]));
     }
   }
   DiscardFeatureCommandBuffers(
@@ -4476,6 +4693,12 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(
   restore.first_set = first_set;
   restore.descriptor_sets.assign(descriptor_sets, descriptor_sets + descriptor_set_count);
   restore.dynamic_offsets.clear();
+  const auto command_usage =
+      state->command_buffer_usage_flags.find(command_buffer_handle);
+  restore.one_time_submit =
+      command_usage != state->command_buffer_usage_flags.end()
+      && (command_usage->second & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
+             != 0u;
   if (dynamic_offsets != nullptr && dynamic_offset_count != 0u) {
     restore.dynamic_offsets.assign(dynamic_offsets, dynamic_offsets + dynamic_offset_count);
   }
@@ -4795,6 +5018,8 @@ VKAPI_ATTR VkResult VKAPI_CALL HookCreateDevice(
   state->next_begin_command_buffer =
       reinterpret_cast<PFN_vkBeginCommandBuffer>(
           reshade_get_device_proc_addr(*device, "vkBeginCommandBuffer"));
+  state->next_end_command_buffer = reinterpret_cast<PFN_vkEndCommandBuffer>(
+      reshade_get_device_proc_addr(*device, "vkEndCommandBuffer"));
   state->next_reset_command_buffer =
       reinterpret_cast<PFN_vkResetCommandBuffer>(
           reshade_get_device_proc_addr(*device, "vkResetCommandBuffer"));

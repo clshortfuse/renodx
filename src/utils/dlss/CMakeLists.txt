@@ -12,7 +12,7 @@ add_library(renodx_dlss_vulkan STATIC
   feature_lifetime.hpp
 )
 target_compile_features(renodx_dlss_vulkan PUBLIC cxx_std_20)
-target_compile_definitions(renodx_dlss_vulkan PUBLIC VK_NO_PROTOTYPES)
+target_compile_definitions(renodx_dlss_vulkan PRIVATE VK_NO_PROTOTYPES)
 target_include_directories(renodx_dlss_vulkan
   PUBLIC
     "${PROJECT_SOURCE_DIR}/src"

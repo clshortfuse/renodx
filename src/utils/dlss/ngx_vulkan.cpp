@@ -528,6 +528,8 @@ OperationResult NgxContext::Evaluate(const EvaluateInfo& info) {
 
   EvaluateInfo evaluation = info;
   evaluation.reset = evaluation.reset || active->second.reset_pending;
+  impl_->lifetime.EnsureCommandBuffer(
+      evaluation.recording_key, evaluation.one_time_submit);
   impl_->lifetime.RecordFeatureUse(
       evaluation.recording_key, active->second.generation);
   const NVSDK_NGX_Result result = impl_->create_info.ngx.evaluate_feature(
@@ -632,6 +634,11 @@ bool NgxContext::IsInitialized() const noexcept {
 bool NgxContext::IsAvailable() const noexcept {
   const std::lock_guard lock(impl_->mutex);
   return impl_->available;
+}
+
+bool NgxContext::HasFeatures() const noexcept {
+  const std::lock_guard lock(impl_->mutex);
+  return !impl_->features.empty();
 }
 
 std::uint64_t NgxContext::ActiveFeatureGeneration() const noexcept {

@@ -46,6 +46,16 @@ class FeatureLifetimeTracker final {
     };
   }
 
+  void EnsureCommandBuffer(Handle command_buffer, bool one_time_submit) {
+    if (command_buffer == 0u || command_recordings_.contains(command_buffer)) {
+      return;
+    }
+    command_recordings_[command_buffer] = {
+        .epoch = NextEpoch(),
+        .one_time_submit = one_time_submit,
+    };
+  }
+
   void RecordFeatureUse(Handle command_buffer, Generation generation) {
     if (command_buffer == 0u || generation == 0u) return;
     auto [recording, inserted] = command_recordings_.try_emplace(command_buffer);

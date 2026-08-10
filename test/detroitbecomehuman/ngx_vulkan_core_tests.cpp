@@ -422,9 +422,10 @@ bool TestOneTimeRetirementCompletesWithSubmission() {
   bool passed = true;
   passed &= Expect(context.ConfigureFeature(MakeFeatureConfig()).Succeeded(),
                    "first feature must configure");
-  context.BeginRecording(40u, true);
-  passed &= Expect(context.Evaluate(MakeEvaluateInfo(40u)).Succeeded(),
-                   "one-time recording must evaluate");
+  auto evaluate = MakeEvaluateInfo(40u);
+  evaluate.one_time_submit = true;
+  passed &= Expect(context.Evaluate(evaluate).Succeeded(),
+                   "one-time recording discovered at Evaluate must be tracked");
   const auto captured = context.CaptureSubmission({40u});
   const auto committed = context.NotifySubmitted(50u, captured);
   passed &= Expect(context.ConfigureFeature(MakeFeatureConfig(1280u)).Succeeded(),

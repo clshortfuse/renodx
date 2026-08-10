@@ -102,6 +102,7 @@ struct EvaluateInfo final {
   float exposure_scale = 1.f;
   std::uint32_t render_width = 0u;
   std::uint32_t render_height = 0u;
+  bool one_time_submit = false;
   bool reset = false;
 };
 
@@ -265,6 +266,7 @@ class NgxContext final {
 
   [[nodiscard]] bool IsInitialized() const noexcept;
   [[nodiscard]] bool IsAvailable() const noexcept;
+  [[nodiscard]] bool HasFeatures() const noexcept;
   [[nodiscard]] std::uint64_t ActiveFeatureGeneration() const noexcept;
   [[nodiscard]] std::uint64_t RecordedReferenceCount(
       std::uint64_t generation) const;

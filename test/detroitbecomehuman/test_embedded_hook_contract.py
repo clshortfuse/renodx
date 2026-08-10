@@ -232,7 +232,7 @@ def main() -> None:
         raise AssertionError("DLAA scratch recycling must remain non-blocking")
 
     spatial_start = source.index("if (diagnostic_spatial_output) {")
-    spatial_end = source.index("auto color = MakeNgxResource", spatial_start)
+    spatial_end = source.index("auto color = MakeCoreImageResource", spatial_start)
     spatial = source[spatial_start:spatial_end]
     require(spatial, "CommitSpatialDiagnostic(prepared_frame)")
     require(spatial, "without NGX initialization, feature ")
@@ -281,7 +281,9 @@ def main() -> None:
     ngx_gate_end = source.index("using renodx::games::detroitbecomehuman::dlss::AdapterPreparedFrame", ngx_gate_start)
     ngx_gate = source[ngx_gate_start:ngx_gate_end]
     require(ngx_gate, "EnsureNgxInitialized(state.get())")
-    require(ngx_gate, "NGX_VULKAN_CREATE_DLSS_EXT1(")
+    require(ngx_gate, "state->ngx_context->ConfigureFeature({")
+    require(ngx_gate, "if (configure_result.feature_created)")
+    require(source, "return NGX_VULKAN_CREATE_DLSS_EXT1(")
     gate_index = source.index("if (!cache_valid)")
     detour_index = source.index("DetourTransactionBegin()", gate_index)
     if not gate_index < detour_index:
