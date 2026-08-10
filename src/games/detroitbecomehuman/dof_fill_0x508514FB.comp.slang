@@ -116,6 +116,10 @@ void main()
     }
     barrier();
     memoryBarrierShared();
+    uint runtimeMode = uint(CUSTOM_DOF_RUNTIME_MODE + 0.5);
+    bool highQuality = runtimeMode == 2u
+        || runtimeMode == 4u
+        || runtimeMode == 6u;
     float farFillRadiusScale = CUSTOM_DOF_RUNTIME_MODE >= 0.5
         ? CUSTOM_DOF_RADIUS_SCALE
         : 1.0;
@@ -136,7 +140,50 @@ void main()
 
     vec3 farCenter = texelFetch(dofColorMapFar, pixel, 0).xyz;
     vec3 farColor = farCenter;
-    if ((sNativePrepassCoc.y * farFillRadiusScale * 8.0) > 3.0)
+    if (highQuality)
+    {
+        // Fill has no depth or local far-CoC binding. Reconstruct its existing
+        // coarse radius continuously per DOF pixel instead of switching the
+        // whole 8x8 workgroup at once. This affects hidden-background RGB only;
+        // authored Gather alpha below remains untouched.
+        vec2 prepassPosition = (pixelF + vec2(0.5))
+            / _91._DOF._vCoCScaleFactor.xy - vec2(0.5);
+        ivec2 prepassBase = ivec2(floor(prepassPosition));
+        vec2 prepassFraction = fract(prepassPosition);
+        ivec2 prepassMaximum = max(
+            _91._DOF._viPrepassTexSize - ivec2(1),
+            ivec2(0));
+        float farCoc00 = texelFetch(
+            dofPrepassCocMap,
+            clamp(prepassBase, ivec2(0), prepassMaximum),
+            0).y;
+        float farCoc10 = texelFetch(
+            dofPrepassCocMap,
+            clamp(prepassBase + ivec2(1, 0), ivec2(0), prepassMaximum),
+            0).y;
+        float farCoc01 = texelFetch(
+            dofPrepassCocMap,
+            clamp(prepassBase + ivec2(0, 1), ivec2(0), prepassMaximum),
+            0).y;
+        float farCoc11 = texelFetch(
+            dofPrepassCocMap,
+            clamp(prepassBase + ivec2(1), ivec2(0), prepassMaximum),
+            0).y;
+        float interpolatedFarCoc = mix(
+            mix(farCoc00, farCoc10, prepassFraction.x),
+            mix(farCoc01, farCoc11, prepassFraction.x),
+            prepassFraction.y) * farFillRadiusScale;
+        float fillWeight = smoothstep(
+            2.0,
+            4.0,
+            interpolatedFarCoc * 8.0);
+        if (fillWeight > 0.0)
+        {
+            vec3 filledFarColor = FilterFar(uv, interpolatedFarCoc);
+            farColor = mix(farCenter, filledFarColor, vec3(fillWeight));
+        }
+    }
+    else if ((sNativePrepassCoc.y * farFillRadiusScale * 8.0) > 3.0)
     {
         farColor = FilterFar(
             uv, sNativePrepassCoc.y * farFillRadiusScale);

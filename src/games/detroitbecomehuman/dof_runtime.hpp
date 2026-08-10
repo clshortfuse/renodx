@@ -116,8 +116,8 @@ inline constexpr std::uint32_t kRadiusShift = 10u;
 inline constexpr std::uint32_t kRadiusMask = 0x3Fu;
 inline constexpr std::uint32_t kRadiusNeutral = 32u;
 // Foreground bokeh always uses Detroit's authored Vanilla strength and needs
-// no runtime control. These five bits blend the filtered Vanilla-like far
-// transition back into Cinematic before the confirmed deep layer takes over.
+// no runtime control. These five bits blend Detroit's authored far coverage
+// into Cinematic through the smooth full-resolution small-CoC handoff.
 inline constexpr std::uint32_t kVanillaTransitionShift = 16u;
 inline constexpr std::uint32_t kVanillaTransitionMask = 0x1Fu;
 inline constexpr std::uint32_t kVanillaTransitionDefault =

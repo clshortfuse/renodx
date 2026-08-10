@@ -11,9 +11,6 @@ const ivec2 kBilinearOffsets[4] = ivec2[](
     ivec2(0, 1),
     ivec2(1));
 
-const int kTransitionBalancedKernelIndices[4] = int[](
-    8, 12, 36, 40);
-
 struct POST_PROCESS_DOF_CONSTANT_BUFFER
 {
     vec4 _vfProjSetup;
@@ -99,22 +96,7 @@ float ComputeNearCoc16(float viewDepth)
     return coc * radiusScale * 16.0;
 }
 
-float FarCocAtDofPixel(ivec2 dofPixel)
-{
-    vec2 fullPosition = (vec2(ClampDofPixel(dofPixel)) + vec2(0.5))
-        * _125._DOF._vScaleFactor;
-    ivec2 fullPixel = ClampFullPixel(ivec2(fullPosition));
-    return ComputeFarCoc16(LinearizeDepth(
-        texelFetch(depthMap, fullPixel, 0).x));
-}
-
-float CocCompatibility(float centerCoc, float sampleCoc)
-{
-    float scale = max(max(centerCoc, sampleCoc), 1.0);
-    return clamp(1.0 - abs(sampleCoc - centerCoc) / scale, 0.0, 1.0);
-}
-
-vec4 ResolveFarBalanced(vec2 dofPosition, float centerCoc, vec3 sharpColor)
+vec4 ResolveFarBalanced(vec2 dofPosition, vec3 sharpColor)
 {
     ivec2 basePixel = ivec2(dofPosition);
     float fx = fract(dofPosition.x);
@@ -131,143 +113,55 @@ vec4 ResolveFarBalanced(vec2 dofPosition, float centerCoc, vec3 sharpColor)
     {
         ivec2 samplePixel = ClampDofPixel(basePixel + kBilinearOffsets[i]);
         vec4 sampleValue = texelFetch(FarDofMap, samplePixel, 0);
-        float depthWeight = CocCompatibility(
-            centerCoc, FarCocAtDofPixel(samplePixel));
-        float spatialDepthWeight = weights[i] * depthWeight;
-        float valid = float(sampleValue.w > 0.0);
-        float colorWeight = spatialDepthWeight * valid;
+        float authoredCoverage = clamp(sampleValue.w, 0.0, 1.0);
+        float colorWeight = weights[i] * float(authoredCoverage > 0.0);
         colorSum += sampleValue.xyz * colorWeight;
         validWeight += colorWeight;
-        alphaSum += sampleValue.w * spatialDepthWeight;
+        alphaSum += authoredCoverage * weights[i];
     }
     return validWeight > 0.0
         ? vec4(colorSum / vec3(validWeight), clamp(alphaSum, 0.0, 1.0))
         : vec4(sharpColor, 0.0);
 }
 
-vec4 ResolveFarHigh(vec2 dofPosition, float centerCoc, vec3 sharpColor)
+vec3 ResolveFullResolutionSmallCoc(
+    ivec2 pixel,
+    float centerFarCoc,
+    float exposure)
 {
-    ivec2 centerPixel = ivec2(floor(dofPosition));
+    // Bridge small CoC from Detroit's full-resolution source instead of
+    // exposing the reduced-resolution bokeh grid. This is deliberately a
+    // compact bridge, not a second full-screen DOF system in Composite.
+    const float cornerWeight = 0.5453;
+    const float sideWeight = 0.9717;
     vec3 colorSum = vec3(0.0);
-    float validWeight = 0.0;
-    float alphaSum = 0.0;
-    float spatialWeightSum = 0.0;
+    float weightSum = 0.0;
     for (int y = -1; y <= 1; ++y)
     {
         for (int x = -1; x <= 1; ++x)
         {
-            ivec2 samplePixel = ClampDofPixel(
-                centerPixel + ivec2(x, y));
-            vec2 delta = (vec2(samplePixel) + vec2(0.5)) - dofPosition;
-            float spatialWeight = exp(-0.5 * dot(delta, delta));
-            float depthWeight = CocCompatibility(
-                centerCoc, FarCocAtDofPixel(samplePixel));
-            vec4 sampleValue = texelFetch(FarDofMap, samplePixel, 0);
-            float combinedWeight = spatialWeight * depthWeight;
-            float valid = float(sampleValue.w > 0.0);
-            float colorWeight = combinedWeight * valid;
-            colorSum += sampleValue.xyz * colorWeight;
-            validWeight += colorWeight;
-            alphaSum += sampleValue.w * combinedWeight;
-            spatialWeightSum += spatialWeight;
-        }
-    }
-    return validWeight > 0.0 && spatialWeightSum > 0.0
-        ? vec4(
-            colorSum / vec3(validWeight),
-            clamp(alphaSum / spatialWeightSum, 0.0, 1.0))
-        : vec4(sharpColor, 0.0);
-}
-
-vec3 ResolveSmoothedVanillaFarTransition(
-    vec2 pixelF,
-    float farCoc,
-    vec3 sharpColor,
-    bool highQuality,
-    out float transitionSupport)
-{
-    transitionSupport = 0.0;
-    ivec2 centerFullPixel = ClampFullPixel(ivec2(pixelF));
-    int fullRadius = highQuality ? 3 : 2;
-    float maximumFullSigma = highQuality ? 1.75 : 1.25;
-    float cocSigmaStrength = smoothstep(0.5, 8.0, farCoc);
-    float fullSigma = mix(0.65, maximumFullSigma, cocSigmaStrength);
-    float filteredCocSum = 0.0;
-    float fullSpatialWeightSum = 0.0;
-    for (int y = -3; y <= 3; ++y)
-    {
-        for (int x = -3; x <= 3; ++x)
-        {
-            if (abs(x) > fullRadius || abs(y) > fullRadius)
-            {
-                continue;
-            }
             ivec2 offset = ivec2(x, y);
-            ivec2 sampleFullPixel = ClampFullPixel(
-                centerFullPixel + offset);
-            float spatialWeight = exp(
-                -0.5 * dot(vec2(offset), vec2(offset))
-                    / (fullSigma * fullSigma));
-            float sampleFarCoc = ComputeFarCoc16(LinearizeDepth(
-                texelFetch(depthMap, sampleFullPixel, 0).x));
-            filteredCocSum += sampleFarCoc * spatialWeight;
-            fullSpatialWeightSum += spatialWeight;
+            ivec2 samplePixel = ClampFullPixel(pixel + offset);
+            float sampleDepth = LinearizeDepth(
+                texelFetch(depthMap, samplePixel, 0).x);
+            float sampleFarCoc = ComputeFarCoc16(sampleDepth);
+            float sameFarLayer = smoothstep(0.0, 0.25, sampleFarCoc);
+            float cocCompatibility = 1.0 - smoothstep(
+                0.5,
+                1.5,
+                abs(sampleFarCoc - centerFarCoc));
+            float spatialWeight = x == 0 && y == 0
+                ? 1.0
+                : (x != 0 && y != 0 ? cornerWeight : sideWeight);
+            float weight = spatialWeight * sameFarLayer * cocCompatibility;
+            colorSum += texelFetch(accumBufferMap, samplePixel, 0).xyz
+                * vec3(exposure * weight);
+            weightSum += weight;
         }
     }
-    float filteredFullResolutionCoc = fullSpatialWeightSum > 0.0
-        ? filteredCocSum / fullSpatialWeightSum
-        : farCoc;
-    float fullResolutionFarGradient = clamp(
-        (farCoc - filteredFullResolutionCoc) / max(farCoc, 1.0),
-        0.0,
-        1.0);
-    float backgroundBlurStrength = smoothstep(0.5, 4.0, farCoc);
-
-    vec2 dofPosition = pixelF / _125._DOF._vScaleFactor;
-    ivec2 centerPixel = ivec2(floor(dofPosition));
-    int colorRadius = highQuality ? 3 : 2;
-    float maximumColorSigma = highQuality ? 1.75 : 1.25;
-    float colorSigma = mix(
-        0.65,
-        maximumColorSigma,
-        cocSigmaStrength);
-    vec3 colorSum = vec3(0.0);
-    float colorWeightSum = 0.0;
-    for (int y = -3; y <= 3; ++y)
-    {
-        for (int x = -3; x <= 3; ++x)
-        {
-            if (abs(x) > colorRadius || abs(y) > colorRadius)
-            {
-                continue;
-            }
-            ivec2 samplePixel = ClampDofPixel(
-                centerPixel + ivec2(x, y));
-            vec2 delta = (vec2(samplePixel) + vec2(0.5)) - dofPosition;
-            float spatialWeight = exp(
-                -0.5 * dot(delta, delta)
-                    / (colorSigma * colorSigma));
-            vec4 sampleValue = texelFetch(FarDofMap, samplePixel, 0);
-            float alpha = clamp(sampleValue.w, 0.0, 1.0);
-            float colorWeight = spatialWeight * alpha;
-            colorSum += sampleValue.xyz * vec3(colorWeight);
-            colorWeightSum += colorWeight;
-        }
-    }
-    vec3 resolvedColor = colorWeightSum > 0.0
-        ? colorSum / vec3(colorWeightSum)
-        : sharpColor;
-    float fullResolutionCoverage = clamp(farCoc, 0.0, 1.0);
-    // FarDofMap alpha only validates authored color samples. Visibility comes
-    // from a full-resolution Gaussian CoC gradient, so the half-resolution R8
-    // grid cannot become a moving silhouette mask.
-    transitionSupport = fullResolutionFarGradient
-        * backgroundBlurStrength
-        * (1.0 - smoothstep(4.0, 8.0, farCoc));
-    return mix(
-        sharpColor,
-        resolvedColor,
-        vec3(fullResolutionCoverage));
+    return weightSum > 0.0
+        ? colorSum / vec3(weightSum)
+        : texelFetch(accumBufferMap, pixel, 0).xyz * vec3(exposure);
 }
 
 vec2 ResolveGatherFillCoverage(vec2 dofPosition)
@@ -291,101 +185,6 @@ vec2 ResolveGatherFillCoverage(vec2 dofPosition)
             * weights[i];
     }
     return clamp(coverage, vec2(0.0), vec2(1.0));
-}
-
-vec3 ResolveFullResolutionFar(
-    vec2 pixelF,
-    float centerCoc,
-    float exposure,
-    bool highQuality,
-    float apertureRadiusScale,
-    bool fillOccludedSamples,
-    vec3 occludedFallbackColor,
-    out float farSupport,
-    vec3 fallbackColor)
-{
-    // Optimization idea for a future Balanced path: fixed Gaussian taps can
-    // be paired with hardware linear sampling to reduce texture reads. Do not
-    // apply that reduction to High or directly to DOF color/alpha layers:
-    // Detroit's authored aperture shape and the per-sample depth/CoC rejection
-    // require independent weights to avoid silhouette halos and background
-    // leakage across depth discontinuities.
-    int sampleCount = highQuality ? 49 : 4;
-    float centerCocHalfResolution = centerCoc * 0.5;
-    float centerWeight = highQuality
-        ? 0.0
-        : max(centerCocHalfResolution, 0.0625);
-    vec3 colorSum = fallbackColor * centerWeight;
-    float weightSum = centerWeight;
-    float supportedApertureWeight = 0.0;
-    float apertureWeight = 0.0;
-    for (int i = 0; i < sampleCount; ++i)
-    {
-        int kernelIndex = highQuality
-            ? i
-            : kTransitionBalancedKernelIndices[i];
-        vec4 kernel = _125._DOF._avfKernel[kernelIndex];
-        vec2 samplePosition = pixelF
-            + kernel.xy * centerCoc * apertureRadiusScale;
-        ivec2 basePixel = highQuality
-            ? ivec2(floor(samplePosition))
-            : ivec2(floor(samplePosition + vec2(0.5)));
-        vec2 fraction = fract(samplePosition);
-        float interpolationWeights[4] = float[](
-            (1.0 - fraction.y) * (1.0 - fraction.x),
-            (1.0 - fraction.y) * fraction.x,
-            fraction.y * (1.0 - fraction.x),
-            fraction.y * fraction.x);
-        int interpolationCount = highQuality ? 4 : 1;
-        for (int j = 0; j < interpolationCount; ++j)
-        {
-            ivec2 samplePixel = ClampFullPixel(
-                basePixel + (highQuality ? kBilinearOffsets[j] : ivec2(0)));
-            float interpolationWeight = highQuality
-                ? interpolationWeights[j]
-                : 1.0;
-            float sampleCoc = ComputeFarCoc16(LinearizeDepth(
-                texelFetch(depthMap, samplePixel, 0).x));
-            float sampleCocHalfResolution = sampleCoc * 0.5;
-            bool hasFarSample = sampleCoc > 0.0;
-            apertureWeight += interpolationWeight;
-            supportedApertureWeight += interpolationWeight
-                * float(hasFarSample);
-            if (!hasFarSample && !fillOccludedSamples)
-            {
-                continue;
-            }
-            float coverage = hasFarSample
-                ? 1.0 - clamp(
-                    kernel.z * centerCocHalfResolution
-                        - sampleCocHalfResolution,
-                    0.0,
-                    1.0)
-                : 1.0;
-            float radiusWeight = hasFarSample
-                ? max(sampleCocHalfResolution, 0.0625)
-                : max(centerCocHalfResolution, 0.0625);
-            float compatibility = hasFarSample
-                ? CocCompatibility(centerCoc, sampleCoc)
-                : 1.0;
-            float weight = interpolationWeight
-                * coverage
-                * radiusWeight
-                * compatibility;
-            vec3 sampleColor = hasFarSample
-                ? texelFetch(accumBufferMap, samplePixel, 0).xyz
-                    * vec3(exposure)
-                : occludedFallbackColor;
-            colorSum += sampleColor * vec3(weight);
-            weightSum += weight;
-        }
-    }
-    farSupport = apertureWeight > 0.0
-        ? supportedApertureWeight / apertureWeight
-        : 1.0;
-    return weightSum > 0.0
-        ? colorSum / vec3(weightSum)
-        : fallbackColor;
 }
 
 vec3 CompositeVanilla(ivec2 pixel, vec2 pixelF, vec4 coarse, vec3 sharpColor)
@@ -507,74 +306,80 @@ vec3 CompositeEnhanced(
     bool highQuality = runtimeMode == 2u
         || runtimeMode == 4u
         || runtimeMode == 6u;
+    float vanillaTransitionControl = cinematic
+        ? clamp(CUSTOM_DOF_VANILLA_TRANSITION, 0.0, 1.0)
+        : 0.0;
     vec3 farResult = sharpColor;
     if (farCoc > 0.0)
     {
-        vec4 farLayer = cinematic
-            ? (highQuality
-                ? ResolveFarHigh(dofPosition, farCoc, sharpColor)
-                : ResolveFarBalanced(dofPosition, farCoc, sharpColor))
-            : vec4(sharpColor, 0.0);
-        float farSupport;
-        vec3 transitionBlur = ResolveFullResolutionFar(
-            pixelF,
-            farCoc,
-            exposure,
-            highQuality,
-            1.0,
-            cinematic,
-            farLayer.xyz,
-            farSupport,
-            sharpColor);
-        float transitionCoverage = clamp(
+        // Resolve the authored layer unconditionally inside the full-resolution
+        // far gate. High controls contribution with a smooth CoC weight below;
+        // conditionally creating the layer at 1.5 px exposed the algorithm
+        // handoff as an isocontour on curved, high-frequency surfaces.
+        vec4 farLayer = ResolveFarBalanced(dofPosition, sharpColor);
+        float cleanCoverage = clamp(
             clamp(farCoc, 0.0, 1.0) * CUSTOM_DOF_FAR_STRENGTH,
             0.0,
             1.0);
-        vec3 transitionResult = mix(
-            sharpColor,
-            transitionBlur,
-            vec3(transitionCoverage));
-        float vanillaTransitionControl = cinematic
-            ? clamp(CUSTOM_DOF_VANILLA_TRANSITION, 0.0, 1.0)
-            : 0.0;
-        float vanillaTransitionBlend = 0.0;
+        float transitionCoverage = cleanCoverage;
+        float authoredTransitionCoverage = cleanCoverage;
         if (vanillaTransitionControl > 0.0)
         {
-            float vanillaTransitionSupport;
-            vec3 vanillaTransition = ResolveSmoothedVanillaFarTransition(
-                pixelF,
-                farCoc,
-                sharpColor,
-                highQuality,
-                vanillaTransitionSupport);
-            vanillaTransitionBlend = vanillaTransitionControl
-                * vanillaTransitionSupport;
-            transitionResult = mix(
-                transitionResult,
-                vanillaTransition,
-                vec3(vanillaTransitionBlend));
+            authoredTransitionCoverage = farCoc > 1.0
+                ? clamp(
+                    farLayer.w * CUSTOM_DOF_FAR_STRENGTH,
+                    0.0,
+                    1.0)
+                : cleanCoverage;
+            transitionCoverage = mix(
+                cleanCoverage,
+                authoredTransitionCoverage,
+                vanillaTransitionControl);
         }
-        finalVanillaTransition = vanillaTransitionBlend;
-        farResult = transitionResult;
-        if (cinematic)
+        if (highQuality)
         {
-            // Native far/fill supplies authored color and hidden background,
-            // but its R8 alpha never becomes a visibility mask.
-            vec3 nativeFarResult = mix(
+            float smallCocWeight = clamp(
+                smoothstep(0.35, 1.5, farCoc)
+                    * CUSTOM_DOF_FAR_STRENGTH,
+                0.0,
+                1.0);
+            float reducedResolutionProgress = smoothstep(
+                1.0,
+                2.5,
+                farCoc);
+            vec3 smallCocColor = sharpColor;
+            if (reducedResolutionProgress < 1.0)
+            {
+                smallCocColor = ResolveFullResolutionSmallCoc(
+                    pixel, farCoc, exposure);
+            }
+            vec3 smallCocResult = mix(
+                sharpColor,
+                smallCocColor,
+                vec3(smallCocWeight));
+            // Handoff between two complete composites. Applying coverage to
+            // the outer interpolation leaves the uncovered portion on the
+            // fixed 3x3 bridge and exposes that residual as a CoC isocontour.
+            vec3 authoredFarResult = mix(
                 sharpColor,
                 farLayer.xyz,
-                vec3(clamp(
-                    clamp(farCoc, 0.0, 1.0)
-                        * CUSTOM_DOF_FAR_STRENGTH,
-                    0.0,
-                    1.0)));
-            float deepLayerWeight = smoothstep(5.0, 8.0, farCoc)
-                * smoothstep(0.75, 0.98, farSupport);
+                vec3(transitionCoverage));
             farResult = mix(
-                transitionResult,
-                nativeFarResult,
-                vec3(deepLayerWeight));
-            finalVanillaTransition *= 1.0 - deepLayerWeight;
+                smallCocResult,
+                authoredFarResult,
+                vec3(reducedResolutionProgress));
+            finalVanillaTransition = vanillaTransitionControl
+                * authoredTransitionCoverage
+                * reducedResolutionProgress;
+        }
+        else
+        {
+            farResult = mix(
+                sharpColor,
+                farLayer.xyz,
+                vec3(transitionCoverage));
+            finalVanillaTransition = vanillaTransitionControl
+                * authoredTransitionCoverage;
         }
     }
 
@@ -688,8 +493,8 @@ void main()
         else if (debugSource
             == RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTRIBUTION)
         {
-            // This is the final filtered Vanilla-transition contribution after
-            // confirmed deep-layer replacement, not its R8 alpha value.
+            // This is the final contribution of authored Gather/Fill coverage
+            // after the full-resolution small-CoC bridge, not raw R8 alpha.
             debugValue.x = finalVanillaTransition;
         }
         else

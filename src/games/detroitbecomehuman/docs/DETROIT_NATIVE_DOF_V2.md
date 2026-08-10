@@ -33,8 +33,8 @@ DOF v2 оставляет нативные half-resolution слои для гл�
 | --- | --- | --- |
 | `0xE9907978` | Split | Рассчитывает локальный far CoC из depth и сохраняет authored native near CoC/color. |
 | `0x747E19D2` | Gather | Берёт far-радиус из локального CoC и выполняет near gather с нативным CoC/радиусом. |
-| `0x508514FB` | Fill | Масштабирует только far fill, сохраняя нативные near color и alpha. |
-| `0xAC7A8193` | Composite | Выполняет depth/CoC-aware full-resolution far resolve, затем композитит authored near-слой по Vanilla alpha. |
+| `0x508514FB` | Fill | В High попиксельно реконструирует coarse far CoC для hidden-background RGB; нативные near color и Gather alpha остаются неизменными. |
+| `0xAC7A8193` | Composite | Восстанавливает готовые Gather/Fill RGB и coverage, ограничивает far-слой full-resolution CoC текущего пикселя и затем композитит authored near-слой по Vanilla alpha. |
 
 Остальные нативные reduction-проходы остаются в игре. Их coarse-данные не
 являются итоговым источником радиуса или видимости в Clean/Cinematic/Retinal.
@@ -42,50 +42,79 @@ DOF v2 оставляет нативные half-resolution слои для гл�
 ### Как работает исправление
 
 ```text
-Full-resolution depth
-        |
-        +--> local near/far CoC --> depth-aware full-resolution resolve
-        |                                 |
-        |                                 +--> плавные границы фокуса
-        |
-        +--> continuous coverage --------> filtered Vanilla-like transition
-        |
-Native half-resolution DOF
-        |
-        +--> authored deep far bokeh --> Cinematic / Retinal base
+Custom focus/radius --> Split --> local near/far CoC and separated color
+                              |
+                              v
+                  authored 49-tap Gather
+                              |
+                 RGB + fractional coverage
+                              |
+                              v
+             Fill extends hidden-background RGB only
+                  and preserves coverage unchanged
+                              |
+                              v
+Full-resolution color/depth --> small-CoC 3x3 bridge --> High
+                              |
+Authored Gather/Fill RGB+alpha --> Composite --> Clean / Cinematic / Retinal
 
 Native foreground layer --> preserved at exact Vanilla strength
 ```
 
-В `High` используются все 49 authoring aperture taps. Для каждого tap
-выполняется до четырёх depth-aware bilinear-подвыборок, поэтому переход
-размытия не восстанавливается из R8 alpha-карты. В `Balanced` используются
-четыре aperture taps для меньшей нагрузки на GPU.
+Оригинальный 49-tap aperture kernel остаётся в Gather во всех enhanced-режимах.
+`Balanced` использует оригинальный четырёхточечный resolve готового FarDofMap.
+`High` не использует reduced-resolution RGB в диапазоне малого CoC. Вместо
+этого он применяет к исходному full-resolution цвету круговой 3x3 kernel из
+FidelityFX DOF с custom-CoC rejection, поэтому foreground и глубокий background
+не протекают друг в друга. Bridge плавно включается между `0.35` и `1.5 px`,
+а authored FarDofMap перекрывается с ним по S-кривой между `1.0` и `2.5 px`.
+Так смена двух разных blur-kernel не образует изолинию на волосах или коже.
+Gather/Fill alpha пространственно не размывается.
 
-В Cinematic и Retinal переход реконструируется из нативных authored far-color
-и alpha без depth rejection. Блочный `coarse.y` gate не используется. Вместо
-него Gaussian-градиент строится только из full-resolution Far CoC: `Balanced`
-использует окно `5×5`, `High` — `7×7`. Положительная разность между локальным
-CoC и его Gaussian low-pass формирует переход только на far/background стороне.
-В однородной области разность равна нулю, а sigma и сила непрерывно следуют
-фактической степени размытия фона.
-Half-resolution `FarDofMap.w` теперь только подтверждает валидность authored
-цвета и не управляет видимостью. Поэтому его R8-сетка не может превращаться в
-движущийся контур. Authored far-color смешивается по full-resolution CoC;
-градиент набирает силу между `0.5–4 px`, его ширина продолжает расти до `8 px`,
-а вклад уступает native deep far-bokeh между `4–8 px`.
-`Vanilla Transition Blend` задаёт долю реконструкции относительно него; при
-`0%` дополнительный фильтр вообще не запускается.
-Глубокий фон по-прежнему проходит через проверку `farSupport` и постепенно
-заменяет переходную область нативным deep far-bokeh.
+Cinematic и Retinal не строят второй DOF внутри Composite. Split уже отделяет
+far color по локальной depth, Gather уже вычисляет source-CoC aperture coverage,
+а Fill расширяет только hidden-background RGB и сохраняет alpha неизменной.
+Composite доверяет authored coverage как Vanilla для большого CoC. В High малый
+CoC строится из full-resolution цвета — именно там сетка reduced-resolution RGB
+заметнее всего. Пиксель с `farCoc == 0` не получает ни один far-путь. В
+Split/Composite CoC текущего пикселя остаётся authoritative; в High Fill coarse
+CoC используется только как вход непрерывной локальной реконструкции RGB, а не
+как один switch для всей группы `8x8`. Готовый Gather/Fill слой не проходит
+повторный depth rejection.
+
+#### Почему последнее исправление находится в Fill
+
+Debug overlay показал точное пространственное совпадение грубых стыков на
+лице/волосах с `DOF Coarse CoC`. Диагностическое отключение far Fill только в
+High почти полностью убрало стыки, но создало силуэтную маску. Это подтвердило
+сразу две разные семантики:
+
+- одно shared coarse-решение Fill на группу `8x8` становилось видимым RGB;
+- сам Fill необходим как источник hidden-background RGB, тогда как Gather alpha
+  продолжает отдельно задавать authored aperture coverage.
+
+Split уже уточняет enhanced far CoC локально, но его shared-данные не переживают
+границу dispatch и не доступны Fill. В интерфейсе Fill также нет full-resolution
+depth или локальной far-CoC текстуры. Поэтому High теперь вручную билинейно
+реконструирует CoC из четырёх соседних texel `dofPrepassCocMap` для каждого
+DOF-пикселя, плавно включает `FilterFar` через
+`smoothstep(2.0, 4.0, interpolatedFarCoc * 8.0)` и смешивает только RGB.
+Итоговая alpha по-прежнему копируется непосредственно из
+`dofAlphaMapFar`.
+
+Практическое правило Detroit: если coarse-grid впервые становится видимым в
+Fill, сначала реконструировать coarse decision локально в Fill. Не переносить
+решение в Split и не увеличивать физически engine-owned CoC texture, пока не
+доказано отсутствие данных, а не только их слишком грубое downstream-
+использование.
 
 ### Режимы
 
 | Режим | Поведение |
 | --- | --- |
 | **Vanilla** | Точная референсная ветвь портов. Custom payload равен нулю, ползунки не применяются. |
-| **Clean** | Full-resolution far-границы без deep far-слоя; authored foreground bokeh сохраняется с силой Vanilla. Минимум banding, более нейтральный фон. |
-| **Cinematic** | Границы из Clean плюс авторское deep far-bokeh Detroit; foreground bokeh сохраняется с силой Vanilla. |
+| **Clean** | Готовый authored far RGB композитится по точному full-resolution CoC; authored foreground bokeh сохраняется с силой Vanilla. |
+| **Cinematic** | Плавно заменяет точную Clean visibility authored aperture coverage из Gather/Fill, сохраняя foreground bokeh с силой Vanilla. |
 | **Retinal** | База Cinematic плюс full-resolution модель пространственной остроты зрения Watson вокруг настраиваемой точки фиксации. |
 
 `Vanilla` — значение по умолчанию. Все четыре замены зарегистрированы всегда,
@@ -100,16 +129,16 @@ Watson — в разделе **Retinal DOF**.
 | Настройка | Диапазон | Назначение |
 | --- | --- | --- |
 | `Depth of Field` | Vanilla / Clean / Cinematic / Retinal | Выбор архитектуры DOF. |
-| `DOF Quality` | Balanced / High | Качество full-resolution aperture resolve и поддержка Retinal Gaussian. |
+| `DOF Quality` | Balanced / High | Оригинальный reduced-resolution resolve или CoC-aware full-resolution 3x3 bridge для малого размытия; также управляет Retinal Gaussian. |
 | `Focus Distance` | 0–200% | Масштаб авторской дистанции фокуса. |
 | `Blur Radius` | 0–200% | Масштаб CoC и радиуса размытия. |
 | `Background Bokeh` | 0–200% | Сила дальнего боке. |
-| `Vanilla Transition Blend` | 0–100% | Доля пространственно сглаженной реконструкции authored far-color/coverage относительно depth-aware перехода. |
+| `Vanilla Transition Blend` | 0–100% | Доля authored Gather coverage относительно точной Clean visibility. |
 
 Значение `100%` используется по умолчанию. В Vanilla все ползунки и настройка качества
 отключены и не влияют на картинку. Во всех enhanced-режимах near/foreground
 слой сохраняет нативные CoC, радиус, цвет и alpha с точной силой Vanilla;
-отдельного ползунка для него нет. `Vanilla Transition Blend` применяется к Cinematic и Retinal; `0%` оставляет только depth-aware resolve.
+отдельного ползунка для него нет. `Vanilla Transition Blend` применяется к Cinematic и Retinal; `0%` оставляет Clean visibility, `100%` восстанавливает authored aperture coverage.
 
 | Настройка Retinal | Диапазон | Назначение |
 | --- | --- | --- |
@@ -185,14 +214,21 @@ Enhanced-режим включается только после того, ка�
 
 ### Проверка и ограничения
 
-Проверены Debug и Release-сборки, SPIR-V reflection, workgroup `8x8`, исходные
-set/binding и форматы ресурсов. RenoDX DevKit подтвердил реальные dispatch
-четырёх встроенных шейдеров без loose/live-замен.
+Текущие четыре исходника напрямую скомпилированы в SPIR-V и прошли `spirv-val`;
+проверены workgroup `8x8`, исходные set/binding и форматы ресурсов. RenoDX
+DevKit подтвердил их live dispatch в порядке Split → Gather → Fill → Composite
+и полный pass mask `0x0F`.
 
-Исправление визуально подтверждено в выбранной проблемной сцене. Это не
-означает численно доказанную идентичность Vanilla для каждого пикселя или
-полную совместимость DOF во всех главах: Vulkan readback промежуточных ресурсов
-и 120-кадровое измерение GPU-времени в этой среде не были доступны.
+В проблемной сцене live/file replacement с локальной реконструкцией High Fill
+заметно ослабил coarse-стыки и был оценён как «намного лучше». После этой
+проверки собраны Debug и Release target `detroitbecomehuman`, прямой DOF
+contract прошёл, а Release CTest с label `detroitbecomehuman` завершился
+`25/25`. Release-аддон установлен локально, но его загрузка и embedded-source
+после следующего запуска игры ещё не проверены.
+
+Одна визуально проверенная сцена не является численным доказательством
+попиксельной идентичности Vanilla или полной совместимости во всех главах;
+120-кадровое измерение GPU-времени также ещё не выполнено.
 
 ---
 
@@ -230,8 +266,8 @@ for deep bokeh while restoring accurate boundaries where they are visible.
 | --- | --- | --- |
 | `0xE9907978` | Split | Computes local far CoC from depth while retaining authored native near CoC/color. |
 | `0x747E19D2` | Gather | Uses local far CoC for the far radius and native CoC/radius for foreground gather. |
-| `0x508514FB` | Fill | Scales only far fill while preserving native near color and alpha. |
-| `0xAC7A8193` | Composite | Performs the depth/CoC-aware full-resolution far resolve, then composites authored near bokeh with Vanilla alpha. |
+| `0x508514FB` | Fill | In High, reconstructs coarse far CoC per pixel for hidden-background RGB while preserving native near color and Gather alpha. |
+| `0xAC7A8193` | Composite | Resolves the finished Gather/Fill RGB and coverage, confines the far layer with the current pixel's full-resolution CoC, then composites authored near bokeh with Vanilla alpha. |
 
 The game's other reduction passes remain native. Their coarse results are not
 the final source of blur radius or visibility in Clean, Cinematic, or Retinal.
@@ -239,49 +275,77 @@ the final source of blur radius or visibility in Clean, Cinematic, or Retinal.
 ### How the fix works
 
 ```text
-Full-resolution depth
-        |
-        +--> local near/far CoC --> depth-aware full-resolution resolve
-        |                                 |
-        |                                 +--> smooth focus boundaries
-        |
-        +--> continuous coverage --------> filtered Vanilla-like transition
-        |
-Native half-resolution DOF
-        |
-        +--> authored deep far bokeh --> Cinematic / Retinal base
+Custom focus/radius --> Split --> local near/far CoC and separated color
+                              |
+                              v
+                  authored 49-tap Gather
+                              |
+                 RGB + fractional coverage
+                              |
+                              v
+             Fill extends hidden-background RGB only
+                  and preserves coverage unchanged
+                              |
+                              v
+Full-resolution color/depth --> small-CoC 3x3 bridge --> High
+                              |
+Authored Gather/Fill RGB+alpha --> Composite --> Clean / Cinematic / Retinal
 
 Native foreground layer --> preserved at exact Vanilla strength
 ```
 
-`High` uses all 49 authored aperture taps. Each tap can use four depth-aware
-bilinear subsamples, so the transition is not reconstructed from an R8 alpha
-map. `Balanced` uses four aperture taps to reduce GPU cost.
+The original 49-tap aperture kernel remains in Gather for every enhanced mode.
+`Balanced` uses the original four-point resolve of the finished FarDofMap.
+`High` avoids using reduced-resolution RGB in the small-CoC interval. It applies
+the FidelityFX DOF circle-coverage 3x3 kernel to Detroit's original
+full-resolution color, with custom-CoC rejection so foreground and deep
+background cannot leak into each other. The bridge fades in smoothly between
+`0.35` and `1.5 px`, while the authored FarDofMap overlaps it through an
+S-curve between `1.0` and `2.5 px`. This prevents the two different blur
+kernels from forming an isocontour on hair or skin. Gather/Fill alpha is not
+spatially blurred.
 
-Cinematic and Retinal reconstruct the transition from native authored far
-color and alpha without depth rejection. The blocky `coarse.y` gate is not
-used. The Gaussian gradient is instead derived only from full-resolution Far
-CoC: Balanced uses a `5x5` window and High uses `7x7`. The positive difference
-between local CoC and its Gaussian low-pass forms a transition only on the
-far/background side. Uniform CoC cancels to zero, while sigma and strength
-continuously follow the actual background blur.
-Half-resolution `FarDofMap.w` now only validates authored color and never
-controls visibility, so its R8 grid cannot become a moving silhouette. Authored
-far color is blended by full-resolution CoC; the gradient gains strength from
-`0.5–4 px`, its reach keeps growing to `8 px`, and it yields to native deep
-far-bokeh between `4–8 px`.
-`Vanilla Transition Blend` controls the share of this
-reconstruction, and at `0%` the additional filter is not evaluated. Deep background
-still passes the `farSupport` check and gradually replaces the transition with
-native deep far-bokeh.
+Cinematic and Retinal do not build a second DOF inside Composite. Split already
+separates far color from local depth, Gather already computes source-CoC aperture
+coverage, and Fill extends hidden-background RGB while preserving alpha.
+Composite trusts authored coverage like Vanilla for large CoC. In High, small
+CoC is reconstructed from full-resolution color, where the reduced-resolution
+RGB grid is most visible. A pixel with zero far CoC receives neither far path.
+The current-pixel CoC remains authoritative in Split/Composite; High Fill uses
+coarse CoC only as the input to a continuous local RGB reconstruction, not as
+one switch for the entire `8x8` group. The completed Gather/Fill layer does not
+undergo a second depth rejection.
+
+#### Why the latest fix belongs in Fill
+
+The debug overlay showed an exact spatial match between the rough face/hair
+seams and `DOF Coarse CoC`. A High-only far-Fill bypass made those seams nearly
+disappear but created a silhouette matte. This proved two separate semantics:
+
+- one shared coarse Fill decision per `8x8` group was becoming visible in RGB;
+- Fill itself is required for hidden-background RGB, while Gather alpha
+  independently retains authored aperture coverage.
+
+Split already refines enhanced far CoC locally, but its shared data cannot
+survive the dispatch boundary into Fill. Fill also has no full-resolution depth
+or local far-CoC texture binding. High therefore bilinearly reconstructs CoC
+from four neighboring `dofPrepassCocMap` texels for each DOF pixel, fades
+`FilterFar` in with
+`smoothstep(2.0, 4.0, interpolatedFarCoc * 8.0)`, and blends RGB only. Final
+alpha is still copied directly from `dofAlphaMapFar`.
+
+Detroit rule: when a coarse grid first becomes visible in Fill, reconstruct the
+coarse decision locally in Fill. Do not move the decision into Split or
+physically resize the engine-owned CoC texture until evidence proves missing
+information rather than merely over-uniform downstream reuse.
 
 ### Modes
 
 | Mode | Behavior |
 | --- | --- |
 | **Vanilla** | Reference branch of the exact ports. The custom payload is zero and no control is applied. |
-| **Clean** | Full-resolution far boundaries without the deep far layer; authored foreground bokeh remains at Vanilla strength. It minimizes banding and keeps the background more neutral. |
-| **Cinematic** | Clean boundaries plus Detroit's authored deep far-bokeh and the native foreground layer at exact Vanilla strength. |
+| **Clean** | Finished authored far RGB is composited by precise full-resolution CoC; authored foreground bokeh remains at Vanilla strength. |
+| **Cinematic** | Smoothly replaces precise Clean visibility with authored aperture coverage from Gather/Fill while preserving foreground bokeh at Vanilla strength. |
 | **Retinal** | The Cinematic base plus a full-resolution Watson spatial-acuity model around a configurable fixation point. |
 
 `Vanilla` is the default. All four replacements are always registered and the
@@ -295,17 +359,17 @@ Core controls are in **Depth of Field**; Watson-model controls are in
 | Control | Range | Purpose |
 | --- | --- | --- |
 | `Depth of Field` | Vanilla / Clean / Cinematic / Retinal | Selects the DOF architecture. |
-| `DOF Quality` | Balanced / High | Full-resolution aperture-resolve quality and Retinal Gaussian support. |
+| `DOF Quality` | Balanced / High | Original reduced-resolution resolve or a CoC-aware full-resolution 3x3 bridge for small blur; also controls Retinal Gaussian support. |
 | `Focus Distance` | 0–200% | Scales the authored focus distance. |
 | `Blur Radius` | 0–200% | Scales CoC and blur radius. |
 | `Background Bokeh` | 0–200% | Far-bokeh strength. |
-| `Vanilla Transition Blend` | 0–100% | Share of the spatially filtered authored far-color/coverage reconstruction relative to the depth-aware transition. |
+| `Vanilla Transition Blend` | 0–100% | Share of authored Gather coverage relative to precise Clean visibility. |
 
 `100%` is the default. In Vanilla, quality and all sliders are disabled and have no
 effect. Every enhanced mode preserves native near CoC, radius, color, and
 alpha at exact Vanilla strength; foreground bokeh has no custom strength control.
-`Vanilla Transition Blend` applies to Cinematic and Retinal; `0%` leaves only the
-depth-aware resolve.
+`Vanilla Transition Blend` applies to Cinematic and Retinal; `0%` leaves Clean
+visibility and `100%` restores authored aperture coverage.
 
 | Retinal control | Range | Purpose |
 | --- | --- | --- |
@@ -382,11 +446,18 @@ preserved.
 
 ### Validation and limits
 
-Debug and Release builds, SPIR-V reflection, `8x8` workgroups, original
-set/binding layouts, and resource formats were checked. RenoDX DevKit confirmed
-the live dispatch of all four embedded shaders with no loose/live replacements.
+All four current sources were compiled directly to SPIR-V and passed
+`spirv-val`; their `8x8` workgroups, original set/binding layouts, and resource
+formats were checked. RenoDX DevKit confirmed live dispatch in Split → Gather →
+Fill → Composite order with the complete `0x0F` pass mask.
 
-The fix was visually confirmed in the selected problem scene. This is not a
-numeric proof of per-pixel Vanilla identity or complete DOF compatibility across
-every chapter: Vulkan intermediate-resource readback and a 120-frame GPU timing
-measurement were unavailable in this environment.
+In the problem scene, the live/file replacement with local High-Fill
+reconstruction substantially reduced the coarse seams and was judged “much
+better.” The `detroitbecomehuman` Debug and Release targets were then built,
+the direct DOF contract passed, and the Release CTest set labeled
+`detroitbecomehuman` passed `25/25`. The Release addon was installed locally,
+but its next-start load and embedded source have not yet been verified.
+
+One visually checked scene is not numeric proof of per-pixel Vanilla identity
+or complete compatibility across every chapter; a 120-frame GPU timing
+measurement also remains outstanding.

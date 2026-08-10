@@ -75,61 +75,102 @@ def validate_retinal_linear_gaussian_math():
         raise AssertionError("maximum paired Retinal fetch count must remain 33")
 
 
-def validate_vanilla_transition_filter_math():
+def validate_vanilla_transition_blend_math():
+    def transition_coverage(far_coc, authored_coverage, control, strength=1.0):
+        clean = min(max(far_coc, 0.0), 1.0) * strength
+        authored = authored_coverage * strength if far_coc > 1.0 else clean
+        return clean + (authored - clean) * control
+
+    for control in (0.0, 0.25, 0.5, 1.0):
+        expected = 1.0 + (0.2 - 1.0) * control
+        if not math.isclose(
+            transition_coverage(4.0, 0.2, control),
+            expected,
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        ):
+            raise AssertionError("Vanilla transition blend must remain linear in the control")
+
+    for control in (0.0, 0.5, 1.0):
+        if transition_coverage(0.0, 1.0, control) != 0.0:
+            raise AssertionError("zero full-resolution far CoC must remain sharp")
+        if transition_coverage(0.5, 0.0, control) != 0.5:
+            raise AssertionError("sub-pixel far CoC must use the original continuous CoC blend")
+
+    if transition_coverage(4.0, 0.25, 0.0) != 1.0:
+        raise AssertionError("Clean must retain its precise full-resolution coverage")
+    if transition_coverage(4.0, 0.25, 1.0) != 0.25:
+        raise AssertionError("Cinematic must recover Gather's authored aperture coverage")
+
     def smoothstep(minimum, maximum, value):
         t = min(max((value - minimum) / (maximum - minimum), 0.0), 1.0)
         return t * t * (3.0 - 2.0 * t)
 
-    for radius, sigma in ((2, 1.25), (3, 1.75)):
-        weights = []
-        for y in range(-radius, radius + 1):
-            for x in range(-radius, radius + 1):
-                weights.append(
-                    math.exp(-0.5 * (x * x + y * y) / (sigma * sigma))
-                )
-        normalized = [weight / sum(weights) for weight in weights]
-        if not math.isclose(sum(normalized), 1.0, abs_tol=1.0e-12):
-            raise AssertionError("Vanilla transition filter must preserve constant coverage")
-        if max(normalized) >= 1.0 or min(normalized) <= 0.0:
-            raise AssertionError("Vanilla transition filter must distribute every sample")
+    def small_coc_weight(far_coc, strength=1.0):
+        return min(max(smoothstep(0.35, 1.5, far_coc) * strength, 0.0), 1.0)
 
-    for strength in (0.0, 0.25, 0.5, 1.0):
-        clean = 0.2
-        reconstructed_vanilla = 0.8
-        contribution = clean * (1.0 - strength) + reconstructed_vanilla * strength
-        if not math.isclose(
-            contribution, clean + (reconstructed_vanilla - clean) * strength,
-            rel_tol=0.0, abs_tol=1.0e-12,
-        ):
-            raise AssertionError("Vanilla transition blend must remain linear in the control")
+    def reduced_resolution_progress(far_coc):
+        return smoothstep(1.0, 2.5, far_coc)
 
-    def transition_support(far_coc, filtered_coc):
-        far_gradient = max(
-            min((far_coc - filtered_coc) / max(far_coc, 1.0), 1.0),
-            0.0,
-        )
-        background_blur = smoothstep(0.5, 4.0, far_coc)
-        return (
-            far_gradient
-            * background_blur
-            * (1.0 - smoothstep(4.0, 8.0, far_coc))
-        )
+    if small_coc_weight(0.35) != 0.0 or small_coc_weight(1.5) != 1.0:
+        raise AssertionError("full-resolution small-CoC blur must bridge 0.35..1.5 px")
+    if (
+        reduced_resolution_progress(1.0) != 0.0
+        or reduced_resolution_progress(2.5) != 1.0
+    ):
+        raise AssertionError("reduced-resolution bokeh must take over across 1.0..2.5 px")
 
-    for uniform_coc in (0.0, 2.0, 8.0):
-        if transition_support(uniform_coc, uniform_coc) != 0.0:
-            raise AssertionError("uniform full-resolution CoC must not blur gameplay")
-    if not math.isclose(transition_support(4.0, 2.0), 0.5, abs_tol=1.0e-12):
-        raise AssertionError(
-            "the full-resolution far-side gradient must retain the Vanilla-like transition"
-        )
-    if transition_support(2.0, 1.0) >= transition_support(4.0, 2.0):
-        raise AssertionError("transition support must grow with actual background blur")
-    if transition_support(0.0, 4.0) != 0.0:
-        raise AssertionError("the foreground side must not create a symmetric outline")
-    if transition_support(0.5, 0.25) != 0.0:
-        raise AssertionError("an almost-focused background must not create a fixed halo")
-    if transition_support(8.0, 4.0) != 0.0:
-        raise AssertionError("deep Far CoC must return to the depth-aware Cinematic path")
+    epsilon = 1.0e-5
+    if small_coc_weight(0.35 + epsilon) > 1.0e-8:
+        raise AssertionError("small-CoC bridge must start with a zero-slope endpoint")
+    if reduced_resolution_progress(1.0 + epsilon) > 1.0e-8:
+        raise AssertionError("FarDofMap handoff must start with a zero-slope endpoint")
+    if 1.0 - reduced_resolution_progress(2.5 - epsilon) > 1.0e-8:
+        raise AssertionError("FarDofMap handoff must end with a zero-slope endpoint")
+
+    corner_weight = 0.5453
+    side_weight = 0.9717
+    circle_kernel_sum = 1.0 + 4.0 * corner_weight + 4.0 * side_weight
+    if not math.isclose(circle_kernel_sum, 7.068, rel_tol=0.0, abs_tol=1.0e-6):
+        raise AssertionError("full-resolution 3x3 circle kernel changed")
+
+    def coc_compatibility(center_coc, sample_coc):
+        return 1.0 - smoothstep(0.5, 1.5, abs(sample_coc - center_coc))
+
+    def same_far_layer(sample_coc):
+        return smoothstep(0.0, 0.25, sample_coc)
+
+    if coc_compatibility(1.0, 1.0) != 1.0:
+        raise AssertionError("small-CoC bridge must retain same-layer samples")
+    if coc_compatibility(1.0, 8.0) != 0.0:
+        raise AssertionError("small-CoC bridge must reject deep-background leakage")
+    if same_far_layer(0.0) != 0.0 or same_far_layer(0.25) != 1.0:
+        raise AssertionError("small-CoC far-layer membership must feather across 0..0.25 px")
+    if not 0.0 < same_far_layer(0.125) < 1.0:
+        raise AssertionError("small-CoC far-layer membership must not be binary")
+
+    def high_output(far_coc, sharp, small_blur, far_layer, layer_coverage):
+        small_result = sharp + (small_blur - sharp) * small_coc_weight(far_coc)
+        authored_result = sharp + (far_layer - sharp) * layer_coverage
+        reduced_progress = reduced_resolution_progress(far_coc)
+        return small_result + (authored_result - small_result) * reduced_progress
+
+    for far_coc in (0.0, 0.35, 0.5, 1.0):
+        a = high_output(far_coc, 0.2, 0.4, 0.0, 1.0)
+        b = high_output(far_coc, 0.2, 0.4, 1.0, 1.0)
+        if a != b:
+            raise AssertionError("FarDofMap RGB leaked into the small-CoC bridge")
+    if high_output(1.5, 0.2, 0.4, 0.0, 1.0) == high_output(
+        1.5, 0.2, 0.4, 1.0, 1.0
+    ):
+        raise AssertionError("FarDofMap must overlap the full-resolution bridge")
+
+    for boundary in (0.35, 1.0, 1.5, 2.5):
+        epsilon = 1.0e-6
+        left = high_output(boundary - epsilon, 0.2, 0.4, 0.8, 0.35)
+        right = high_output(boundary + epsilon, 0.2, 0.4, 0.8, 0.35)
+        if abs(left - right) > 2.0e-6:
+            raise AssertionError("small-CoC to FarDofMap handoff is discontinuous")
 
 
 def main():
@@ -216,11 +257,11 @@ def main():
     require(
         addon,
         r'\.key\s*=\s*"DepthOfFieldVanillaTransition"'
-        r"[\s\S]*?full-resolution Gaussian CoC gradient"
-        r"[\s\S]*?Half-resolution far alpha only validates color samples"
-        r"[\s\S]*?never controls visibility"
-        r"[\s\S]*?actual background CoC controls reach and strength",
-        "Vanilla Transition tooltip must identify the reconstructed authored transition boundary",
+        r"[\s\S]*?authored Gather coverage"
+        r"[\s\S]*?fractional R8 alpha preserved by Fill"
+        r"[\s\S]*?full-resolution 3x3"
+        r"[\s\S]*?full-resolution CoC keeps focused foreground pixels outside the far layer",
+        "Vanilla Transition tooltip must describe authored coverage and the small-CoC bridge",
     )
     if re.search(r'\.key\s*=\s*"DepthOfFieldEdgeBokeh"\s*,', addon):
         raise AssertionError("legacy percentage Edge Bokeh key must not remain active")
@@ -278,9 +319,30 @@ def main():
     )
     require(
         sources["0x508514FB"],
-        r"farFillRadiusScale\s*=\s*CUSTOM_DOF_RUNTIME_MODE\s*>=\s*0\.5[\s\S]*?sNativePrepassCoc\.x\s*\*\s*8\.0\)\s*>\s*3\.0[\s\S]*?FilterNear\(uv,\s*sNativePrepassCoc\.x\)[\s\S]*?texelFetch\(dofAlphaMapNear[\s\S]*?sNativePrepassCoc\.y\s*\*\s*farFillRadiusScale\s*\*\s*8\.0\)\s*>\s*3\.0",
-        "fill must preserve native near radius/alpha while scaling only Enhanced far fill",
+        r"farFillRadiusScale\s*=\s*CUSTOM_DOF_RUNTIME_MODE\s*>=\s*0\.5"
+        r"[\s\S]*?sNativePrepassCoc\.x\s*\*\s*8\.0\)\s*>\s*3\.0"
+        r"[\s\S]*?FilterNear\(uv,\s*sNativePrepassCoc\.x\)"
+        r"[\s\S]*?texelFetch\(dofAlphaMapNear"
+        r"[\s\S]*?if\s*\(highQuality\)"
+        r"[\s\S]*?prepassPosition\s*=\s*\(pixelF\s*\+\s*vec2\(0\.5\)\)"
+        r"[\s\S]*?_vCoCScaleFactor\.xy\s*-\s*vec2\(0\.5\)"
+        r"[\s\S]*?farCoc00\s*=\s*texelFetch\("
+        r"[\s\S]*?farCoc10\s*=\s*texelFetch\("
+        r"[\s\S]*?farCoc01\s*=\s*texelFetch\("
+        r"[\s\S]*?farCoc11\s*=\s*texelFetch\("
+        r"[\s\S]*?fillWeight\s*=\s*smoothstep\(\s*2\.0,\s*4\.0,"
+        r"[\s\S]*?filledFarColor\s*=\s*FilterFar\(uv,\s*interpolatedFarCoc\)"
+        r"[\s\S]*?farColor\s*=\s*mix\(farCenter,\s*filledFarColor,\s*vec3\(fillWeight\)\)"
+        r"[\s\S]*?else\s+if\s*\(\(sNativePrepassCoc\.y\s*\*\s*farFillRadiusScale\s*\*\s*8\.0\)\s*>\s*3\.0\)"
+        r"[\s\S]*?vec4\(farColor,\s*texelFetch\(dofAlphaMapFar",
+        "High fill must reconstruct coarse radius per pixel while preserving native near and authored alpha",
     )
+    for forbidden in (
+        "kDiagnosticAuthoredFarOnly",
+        "Temporary High-quality isolation",
+    ):
+        if forbidden in sources["0x508514FB"] or forbidden in sources["0xAC7A8193"]:
+            raise AssertionError(f"temporary DOF diagnostic must be removed: {forbidden}")
     require(
         sources["0xAC7A8193"],
         r"runtimeMode\s*=\s*uint\(CUSTOM_DOF_RUNTIME_MODE\s*\+\s*0\.5\)[\s\S]*?cinematic\s*=\s*runtimeMode\s*==\s*3u[\s\S]*?runtimeMode\s*==\s*6u[\s\S]*?highQuality\s*=\s*runtimeMode\s*==\s*2u[\s\S]*?runtimeMode\s*==\s*6u[\s\S]*?NearDofMap[\s\S]*?nearSamples\[i\]\.w\s*>\s*0\.0[\s\S]*?return\s+mix\(farResult,\s*resolvedNear\.xyz,\s*vec3\(resolvedNear\.w\)\)",
@@ -302,68 +364,67 @@ def main():
     )
     require(
         sources["0xAC7A8193"],
-        r"ResolveFullResolutionFar\([\s\S]*?fillOccludedSamples[\s\S]*?occludedFallbackColor[\s\S]*?texelFetch\(depthMap[\s\S]*?texelFetch\(accumBufferMap",
-        "Clean and Cinematic must resolve far CoC from full-resolution depth",
+        r"ResolveFarBalanced\([\s\S]*?authoredCoverage\s*=\s*clamp\(sampleValue\.w,\s*0\.0,\s*1\.0\)"
+        r"[\s\S]*?colorWeight\s*=\s*weights\[i\]\s*\*\s*float\(authoredCoverage\s*>\s*0\.0\)"
+        r"[\s\S]*?alphaSum\s*\+=\s*authoredCoverage\s*\*\s*weights\[i\]",
+        "enhanced resolve must retain Vanilla RGB normalization and fractional alpha",
     )
     require(
         sources["0xAC7A8193"],
-        r"sampleCount\s*=\s*highQuality\s*\?\s*49\s*:\s*4[\s\S]*?interpolationCount\s*=\s*highQuality\s*\?\s*4\s*:\s*1",
-        "High must use the complete 49-tap aperture kernel with depth-aware subpixel interpolation",
+        r"ResolveFullResolutionSmallCoc\([\s\S]*?cornerWeight\s*=\s*0\.5453"
+        r"[\s\S]*?sideWeight\s*=\s*0\.9717"
+        r"[\s\S]*?sampleDepth\s*=\s*LinearizeDepth"
+        r"[\s\S]*?sampleFarCoc\s*=\s*ComputeFarCoc16"
+        r"[\s\S]*?sameFarLayer\s*=\s*smoothstep\(\s*0\.0,\s*0\.25,\s*sampleFarCoc\s*\)"
+        r"[\s\S]*?smoothstep\(\s*0\.5,\s*1\.5,"
+        r"[\s\S]*?texelFetch\(accumBufferMap,\s*samplePixel,\s*0\)\.xyz",
+        "High must reconstruct small CoC from full-resolution color with CoC rejection",
     )
-    require(
-        sources["0xAC7A8193"],
-        r"farLayer\.xyz[\s\S]*?farSupport[\s\S]*?smoothstep\(5\.0,\s*8\.0,\s*farCoc\)",
-        "Cinematic must restore authored hidden-background and deep-bokeh color",
-    )
-    require(
-        sources["0xAC7A8193"],
-        r"ResolveSmoothedVanillaFarTransition\([\s\S]*?fullRadius\s*=\s*highQuality\s*\?\s*3\s*:\s*2"
-        r"[\s\S]*?cocSigmaStrength\s*=\s*smoothstep\(0\.5,\s*8\.0,\s*farCoc\)"
-        r"[\s\S]*?fullSigma\s*=\s*mix\(0\.65,\s*maximumFullSigma,\s*cocSigmaStrength\)"
-        r"[\s\S]*?texelFetch\(depthMap,\s*sampleFullPixel,\s*0\)"
-        r"[\s\S]*?filteredFullResolutionCoc\s*=\s*fullSpatialWeightSum\s*>\s*0\.0"
-        r"[\s\S]*?fullResolutionFarGradient\s*=\s*clamp\("
-        r"[\s\S]*?farCoc\s*-\s*filteredFullResolutionCoc"
-        r"[\s\S]*?backgroundBlurStrength\s*=\s*smoothstep\(0\.5,\s*4\.0,\s*farCoc\)"
-        r"[\s\S]*?colorRadius\s*=\s*highQuality\s*\?\s*3\s*:\s*2"
-        r"[\s\S]*?FarDofMap[\s\S]*?sampleValue\.w"
-        r"[\s\S]*?colorWeight\s*=\s*spatialWeight\s*\*\s*alpha"
-        r"[\s\S]*?fullResolutionCoverage\s*=\s*clamp\(farCoc,\s*0\.0,\s*1\.0\)"
-        r"[\s\S]*?transitionSupport\s*=\s*fullResolutionFarGradient"
-        r"[\s\S]*?smoothstep\(4\.0,\s*8\.0,\s*farCoc\)",
-        "Cinematic must derive a temporally stable transition from full-resolution CoC",
-    )
-    transition_match = re.search(
-        r"vec3\s+ResolveSmoothedVanillaFarTransition\([\s\S]*?\n\}"
-        r"(?=\n\nvec2\s+ResolveGatherFillCoverage)",
-        sources["0xAC7A8193"],
-    )
-    if transition_match is None:
-        raise AssertionError("filtered Vanilla transition helper is missing")
+    small_coc_start = composite_source.index("vec3 ResolveFullResolutionSmallCoc")
+    small_coc_end = composite_source.index("vec2 ResolveGatherFillCoverage", small_coc_start)
+    if "FarDofMap" in composite_source[small_coc_start:small_coc_end]:
+        raise AssertionError("small-CoC bridge must not sample reduced-resolution FarDofMap")
     for forbidden in (
-        "coarse",
+        "ResolveApertureFarTransition",
         "CocCompatibility",
-        "SampleFarCoverageBilinear",
-        "filteredAlpha",
-        "authoredFarGradient",
+        "FarCocAtDofPixel",
+        "filteredCoarseFarCoc",
+        "transitionCoc",
+        "coarsePosition",
+        "ResolveFarCoverageHigh",
     ):
-        if forbidden in transition_match.group(0):
+        if forbidden in sources["0xAC7A8193"]:
             raise AssertionError(
-                f"filtered Vanilla transition must not restore a block or depth gate: {forbidden}"
+                f"Cinematic transition must not spread coarse CoC onto foreground: {forbidden}"
             )
     require(
         sources["0xAC7A8193"],
         r"vanillaTransitionControl\s*=\s*cinematic"
         r"[\s\S]*?CUSTOM_DOF_VANILLA_TRANSITION"
+        r"[\s\S]*?if\s*\(farCoc\s*>\s*0\.0\)"
+        r"[\s\S]*?farLayer\s*=\s*ResolveFarBalanced\(dofPosition,\s*sharpColor\)"
+        r"[\s\S]*?cleanCoverage\s*=\s*clamp\("
         r"[\s\S]*?if\s*\(vanillaTransitionControl\s*>\s*0\.0\)"
-        r"[\s\S]*?ResolveSmoothedVanillaFarTransition\("
-        r"[\s\S]*?vanillaTransitionControl\s*\*\s*vanillaTransitionSupport"
-        r"[\s\S]*?transitionResult\s*=\s*mix\("
-        r"[\s\S]*?finalVanillaTransition\s*=\s*vanillaTransitionBlend"
-        r"[\s\S]*?deepLayerWeight"
-        r"[\s\S]*?finalVanillaTransition\s*\*=\s*1\.0\s*-\s*deepLayerWeight",
-        "Cinematic must skip disabled transition work and blend the filtered result over Clean before the deep layer",
+        r"[\s\S]*?authoredTransitionCoverage\s*=\s*farCoc\s*>\s*1\.0"
+        r"[\s\S]*?farLayer\.w\s*\*\s*CUSTOM_DOF_FAR_STRENGTH"
+        r"[\s\S]*?transitionCoverage\s*=\s*mix\("
+        r"[\s\S]*?if\s*\(highQuality\)"
+        r"[\s\S]*?smoothstep\(\s*0\.35,\s*1\.5,\s*farCoc\s*\)"
+        r"[\s\S]*?smoothstep\(\s*1\.0,\s*2\.5,\s*farCoc\s*\)"
+        r"[\s\S]*?if\s*\(reducedResolutionProgress\s*<\s*1\.0\)"
+        r"[\s\S]*?smallCocColor\s*=\s*ResolveFullResolutionSmallCoc"
+        r"[\s\S]*?authoredFarResult\s*=\s*mix\("
+        r"[\s\S]*?sharpColor"
+        r"[\s\S]*?farLayer\.xyz"
+        r"[\s\S]*?vec3\(transitionCoverage\)"
+        r"[\s\S]*?farResult\s*=\s*mix\("
+        r"[\s\S]*?smallCocResult"
+        r"[\s\S]*?authoredFarResult"
+        r"[\s\S]*?vec3\(reducedResolutionProgress\)",
+        "High must hand off between complete small-CoC and authored far composites",
     )
+    if "if (!highQuality || farCoc > 1.5)" in sources["0xAC7A8193"]:
+        raise AssertionError("High must not conditionally create FarDofMap at the handoff")
     require(
         sources["0xAC7A8193"],
         r"RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTROL"
@@ -383,9 +444,7 @@ def main():
             raise AssertionError(
                 f"geometric Edge Bokeh must not remain in Cinematic: {forbidden}"
             )
-    validate_vanilla_transition_filter_math()
-    if "farLayer.w" in sources["0xAC7A8193"]:
-        raise AssertionError("Cinematic must not restore the low-resolution far alpha mask")
+    validate_vanilla_transition_blend_math()
 
     for filename in (
         "retinal_horizontal.comp.slang",

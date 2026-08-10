@@ -2160,7 +2160,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Depth of Field",
                 .section = "Depth of Field",
-                .tooltip = "Vanilla is the exact reference path. Every Enhanced style preserves Detroit's authored foreground bokeh at Vanilla strength. Clean uses depth-aware far transitions, Cinematic reconstructs a spatially filtered Vanilla-like far transition before its confirmed deep background layer, and Retinal adds a full-resolution Watson acuity filter around a configurable fixation point.",
+                .tooltip = "Vanilla is the exact reference path. Enhanced styles apply custom focus and radius before Detroit's authored Split/Gather/Fill chain. Clean uses precise full-resolution CoC visibility, Cinematic restores authored far coverage, High reconstructs small CoC from full-resolution color, and Retinal adds a Watson acuity filter around a configurable fixation point.",
                 .labels = {"Vanilla", "Clean", "Cinematic", "Retinal"},
                 .on_change_value = [](float, float current) {
                   dof_mode = current;
@@ -2175,7 +2175,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "DOF Quality",
                 .section = "Depth of Field",
-                .tooltip = "High uses the complete authored 49-tap aperture resolve; Balanced uses the reduced aperture resolve. Retinal uses paired hardware-linear Gaussian taps for its full-resolution acuity filter.",
+                .tooltip = "Detroit's Gather keeps its complete authored 49-tap aperture kernel in both modes. Balanced keeps the original reduced-resolution resolve. High adds a depth/CoC-aware full-resolution 3x3 color bridge and overlaps it smoothly with the authored FarDofMap across small blur radii. Retinal additionally uses paired hardware-linear Gaussian taps.",
                 .labels = {"Balanced", "High"},
                 .is_enabled = []() { return dof_mode >= 0.5f; },
                 .on_change_value = [](float, float current) {
@@ -2228,7 +2228,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Vanilla Transition Blend",
                 .section = "Depth of Field",
-                .tooltip = "Blends Vanilla's authored far color through a full-resolution Gaussian CoC gradient. Half-resolution far alpha only validates color samples and never controls visibility, preventing its R8 grid from drawing a moving silhouette; actual background CoC controls reach and strength. Clean and Vanilla ignore it.",
+                .tooltip = "Blends from Clean's precise full-resolution visibility to Detroit's authored Gather coverage. The fractional R8 alpha preserved by Fill is used without spatial blur; High separately uses a full-resolution 3x3 color bridge for small CoC, while full-resolution CoC keeps focused foreground pixels outside the far layer. Clean and Vanilla ignore it.",
                 .min = 0.f,
                 .max = 100.f,
                 .format = "%.0f%%",
@@ -2328,7 +2328,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Clean High is active on the complete supported DOF chain.",
+                .label = "Clean High is active with the full-resolution small-CoC bridge on the complete supported DOF chain.",
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
@@ -2338,7 +2338,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Cinematic Balanced is active with the filtered Vanilla-like transition, foreground bokeh at Vanilla strength, and confirmed deep background bokeh.",
+                .label = "Cinematic Balanced is active with authored Gather/Fill coverage and foreground bokeh at Vanilla strength.",
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
@@ -2348,7 +2348,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Cinematic High is active with the filtered Vanilla-like transition, foreground bokeh at Vanilla strength, and confirmed deep background bokeh.",
+                .label = "Cinematic High is active with the full-resolution small-CoC bridge, authored Gather/Fill coverage, and foreground bokeh at Vanilla strength.",
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
@@ -2486,7 +2486,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Dashboard",
                 .section = "Render Debug",
-                .tooltip = "Depth of Field shows the established CoC/layer diagnostic. DOF Vanilla Transition shows full-resolution CoC, the decoded blend strength, and its final contribution before the deep layer.",
+                .tooltip = "Depth of Field shows the established CoC/layer diagnostic. DOF Vanilla Transition shows full-resolution CoC, the decoded blend strength, and the final authored Gather-coverage contribution.",
                 .labels = {
                     "Depth of Field",
                     "Temporal AA",
