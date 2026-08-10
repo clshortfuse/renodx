@@ -469,6 +469,8 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
       tonemapped_bt709 = renodx::color::bt709::from::LMS(tonemapped_lms);
     }
 
+    tonemapped_bt709 = renodx::color::bt709::clamp::BT2020(tonemapped_bt709);
+
     if (use_scaling) {
       tonemapped_bt709 *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     }
