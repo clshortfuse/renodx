@@ -446,7 +446,7 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
       float3 untonemapped_graded_lms = ApplyPurityGradingLMS(
           renodx::color::lms::from::BT709(untonemapped_graded_bt709),
           RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, 0.f, anchor_lms);
-      untonemapped_graded_bt709 = renodx::color::bt709::from::LMS(untonemapped_graded_lms);
+      untonemapped_graded_bt709 = renodx::color::bt709::from::LMS(max(0, untonemapped_graded_lms));
 
       tonemapped_bt709 = renodx::math::CopySign(
           ApplyAnchoredCInfinityShoulder(abs(untonemapped_graded_bt709), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.18f, 1.5f),
@@ -464,7 +464,7 @@ float3 ApplyUserGradingAndToneMapAndScale(float3 untonemapped_bt709,
       untonemapped_graded_lms = ApplyPurityGradingLMS(untonemapped_graded_lms, RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, 0.f, anchor_lms);
 
       const float3 peak_lms = renodx::color::lms::from::BT2020(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-      float3 tonemapped_lms = ApplyAnchoredCInfinityShoulder(untonemapped_graded_lms, peak_lms, anchor_lms, 1.5f);
+      float3 tonemapped_lms = ApplyAnchoredCInfinityShoulder(max(0, untonemapped_graded_lms), peak_lms, anchor_lms, 1.5f);
 
       tonemapped_bt709 = renodx::color::bt709::from::LMS(tonemapped_lms);
     }
