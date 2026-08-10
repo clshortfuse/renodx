@@ -272,16 +272,27 @@ def main() -> None:
     require(source, "FirstThreeAttemptWindow")
     require(source, "TraceEvaluationTerminal(")
     require(source, "TraceFeatureSubmissionResult(")
+    require(source, "TracePostCompletionResubmissionResult(")
     require(source, "TraceFeatureCompletion(")
     require(source, "submission_trace_tracker")
     require(evaluation_trace, "kAttemptLimit = 3u")
+    require(evaluation_trace, "Arm()")
     require(evaluation_trace, "compare_exchange_weak(")
     require(evaluation_trace, "class SubmissionTraceTracker final")
     require(evaluation_trace, "MarkSubmitted(")
+    require(evaluation_trace, "MarkPostCompletionResubmitted(")
     require(evaluation_trace, "NeedsCompletion(")
-    require(evaluation_trace, "submit_logged")
+    require(evaluation_trace, "kSubmitLogLimit = 4u")
+    require(evaluation_trace, "submit_count")
+    require(evaluation_trace, "completion_logged")
     require(evaluation_trace, "recording_generation")
     require(evaluation_trace, "recording_epoch")
+    require(source, "event=post_completion_resubmit")
+    require(source, "core_snapshot=false")
+    if source.count("TracePostCompletionResubmissionResult(") != 4:
+        raise AssertionError(
+            "post-completion replay detection must cover all three queue-submit entry points"
+        )
     require(source, "SubmissionNeedsInternalFeatureFence(")
     if "unclassified_terminal" in evaluation_trace or "unclassified_terminal" in source:
         raise AssertionError("every bounded evaluation attempt must have a terminal class")

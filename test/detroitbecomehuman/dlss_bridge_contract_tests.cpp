@@ -935,6 +935,8 @@ bool TestTemporalModeTransactionSerializesCommit() {
 
 bool TestBoundedEvaluationTraceWindow() {
   dlss_evaluation_trace::FirstThreeAttemptWindow window;
+  const auto unarmed = window.Begin();
+  const auto first_window = window.Arm();
   const auto first = window.Begin();
   const auto second = window.Begin();
   const auto third = window.Begin();
@@ -943,11 +945,22 @@ bool TestBoundedEvaluationTraceWindow() {
 
   bool passed = true;
   passed &= Expect(
-      first == 1u && second == 2u && third == 3u,
+      !unarmed.has_value() && first_window == 1u && window.Window() == 1u
+          && first.has_value() && first->window == 1u && first->attempt == 1u
+          && second.has_value() && second->window == 1u
+          && second->attempt == 2u && third.has_value()
+          && third->window == 1u && third->attempt == 3u,
       "bounded observability must assign exactly attempts one through three");
   passed &= Expect(
       !fourth.has_value() && !fifth.has_value() && window.Count() == 3u,
       "bounded observability must remain saturated after the third attempt");
+  const auto second_window = window.Arm();
+  const auto rearmed = window.Begin();
+  passed &= Expect(
+      second_window == 2u && window.Window() == 2u && window.Count() == 1u
+          && rearmed.has_value() && rearmed->window == 2u
+          && rearmed->attempt == 1u,
+      "a real mode transition must re-arm a distinct first-three window");
 
   constexpr std::array terminals = {
       dlss_evaluation_trace::EvaluationTerminal::kNgxInitializationFailed,
@@ -972,37 +985,45 @@ bool TestBoundedEvaluationTraceWindow() {
 bool TestBoundedEvaluationSubmissionTrace() {
   dlss_evaluation_trace::SubmissionTraceTracker tracker;
   constexpr std::uint64_t kCommandBuffer = UINT64_C(0xCAFE);
+  constexpr std::uint32_t kTraceWindow = 7u;
   constexpr std::uint64_t kRecordingGeneration = 17u;
   constexpr std::uint64_t kRecordingEpoch = 41u;
 
-  tracker.Associate(0u, 1u, kRecordingGeneration);
-  tracker.Associate(kCommandBuffer, 0u, kRecordingGeneration);
+  tracker.Associate(0u, kTraceWindow, 1u, kRecordingGeneration, true);
+  tracker.Associate(kCommandBuffer, 0u, 1u, kRecordingGeneration, true);
+  tracker.Associate(kCommandBuffer, kTraceWindow, 0u, kRecordingGeneration, true);
   bool passed = true;
   passed &= Expect(
       tracker.Size() == 0u,
       "zero handles and zero attempts must not create trace associations");
 
-  tracker.Associate(kCommandBuffer, 2u, kRecordingGeneration);
+  tracker.Associate(
+      kCommandBuffer, kTraceWindow, 2u, kRecordingGeneration, true);
   passed &= Expect(
       tracker.Size() == 1u
           && tracker.NeedsCompletion(kCommandBuffer, kRecordingEpoch)
-          && !tracker.MarkSubmitted(kCommandBuffer, 0u).has_value(),
+          && !tracker.MarkSubmitted(kCommandBuffer, 0u, true).has_value(),
       "a trace association must wait for a concrete recording epoch");
 
-  const auto submitted = tracker.MarkSubmitted(kCommandBuffer, kRecordingEpoch);
+  const auto submitted =
+      tracker.MarkSubmitted(kCommandBuffer, kRecordingEpoch, true);
   passed &= Expect(
-      submitted.has_value() && submitted->attempt == 2u
+      submitted.has_value() && submitted->window == kTraceWindow
+          && submitted->attempt == 2u && submitted->submit_count == 1u
           && submitted->recording_generation == kRecordingGeneration
           && submitted->recording_epoch == kRecordingEpoch
-          && submitted->submit_logged,
+          && submitted->one_time_submit && !submitted->completion_logged,
       "the first submit must bind the attempt to both recording identities");
   passed &= Expect(
       tracker.NeedsCompletion(kCommandBuffer, kRecordingEpoch)
           && !tracker.NeedsCompletion(kCommandBuffer, kRecordingEpoch + 1u),
       "only the associated recording may request a diagnostic completion fence");
+  const auto repeated_before_completion =
+      tracker.MarkSubmitted(kCommandBuffer, kRecordingEpoch, true);
   passed &= Expect(
-      !tracker.MarkSubmitted(kCommandBuffer, kRecordingEpoch).has_value(),
-      "a command-buffer submission must be logged at most once per attempt");
+      repeated_before_completion.has_value()
+          && repeated_before_completion->submit_count == 2u,
+      "a repeated live recording submit must increment the bounded counter");
   passed &= Expect(
       !tracker.Complete(kCommandBuffer, kRecordingEpoch + 1u).has_value()
           && tracker.Size() == 1u,
@@ -1011,23 +1032,68 @@ bool TestBoundedEvaluationSubmissionTrace() {
   const auto completed = tracker.Complete(kCommandBuffer, kRecordingEpoch);
   passed &= Expect(
       completed.has_value() && completed->attempt == 2u
-          && tracker.Size() == 0u,
-      "the matching completion must consume exactly one submitted attempt");
+          && completed->completion_logged && completed->submit_count == 2u
+          && tracker.Size() == 1u
+          && !tracker.NeedsCompletion(kCommandBuffer, kRecordingEpoch)
+          && !tracker.Complete(kCommandBuffer, kRecordingEpoch).has_value(),
+      "completion must leave one non-fencing tombstone until lifecycle cleanup");
 
-  tracker.Associate(kCommandBuffer, 3u, kRecordingGeneration + 1u);
+  passed &= Expect(
+      !tracker
+           .MarkPostCompletionResubmitted(
+               kCommandBuffer, kRecordingGeneration + 1u)
+           .has_value(),
+      "a reused handle with a different layer recording must not look replayed");
+  const auto post_completion_replay =
+      tracker.MarkPostCompletionResubmitted(
+          kCommandBuffer, kRecordingGeneration);
+  const auto final_logged_replay = tracker.MarkPostCompletionResubmitted(
+      kCommandBuffer, kRecordingGeneration);
+  const auto capped_replay = tracker.MarkPostCompletionResubmitted(
+      kCommandBuffer, kRecordingGeneration);
+  passed &= Expect(
+      post_completion_replay.has_value()
+          && post_completion_replay->submit_count == 3u
+          && final_logged_replay.has_value()
+          && final_logged_replay->submit_count
+                 == dlss_evaluation_trace::SubmissionTraceTracker::
+                        kSubmitLogLimit
+          && !capped_replay.has_value(),
+      "post-completion replay logging must be visible and strictly capped");
+  passed &= Expect(
+      tracker.Discard(kCommandBuffer) && tracker.Size() == 0u,
+      "begin/reset/free lifecycle must erase the completed trace tombstone");
+
+  tracker.Associate(
+      kCommandBuffer,
+      kTraceWindow,
+      3u,
+      kRecordingGeneration + 1u,
+      false);
   passed &= Expect(
       !tracker.Complete(kCommandBuffer).has_value()
           && tracker.Discard(kCommandBuffer) && tracker.Size() == 0u,
       "an unsubmitted recording must be discarded rather than classified complete");
 
-  tracker.Associate(kCommandBuffer, 3u, kRecordingGeneration + 2u);
-  (void)tracker.MarkSubmitted(kCommandBuffer, kRecordingEpoch + 2u);
+  tracker.Associate(
+      kCommandBuffer,
+      kTraceWindow,
+      3u,
+      kRecordingGeneration + 2u,
+      false);
+  (void)tracker.MarkSubmitted(
+      kCommandBuffer, kRecordingEpoch + 2u, false);
   passed &= Expect(
       !tracker.Discard(kCommandBuffer, kRecordingEpoch + 3u)
           && tracker.Discard(kCommandBuffer, kRecordingEpoch + 2u),
       "recording lifecycle cleanup must reject stale epochs and remove the match");
 
-  tracker.Associate(kCommandBuffer, 3u, kRecordingGeneration + 3u);
+  tracker.Associate(
+      kCommandBuffer,
+      kTraceWindow,
+      3u,
+      kRecordingGeneration + 3u,
+      false);
   tracker.Clear();
   passed &= Expect(
       tracker.Size() == 0u,

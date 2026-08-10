@@ -253,6 +253,7 @@ constexpr std::string_view TraceNgxCallName(TraceNgxCall call) noexcept {
 }
 
 struct EvaluationTraceRecord final {
+  std::uint32_t trace_window = 0u;
   std::uint32_t attempt = 0u;
   std::uint64_t frame = 0u;
   DetroitDlssMode mode = DETROIT_DLSS_MODE_NATIVE;
@@ -278,12 +279,14 @@ void TraceEvaluationTerminal(
   if (record.attempt == 0u) return;
   try {
     Trace(std::format(
-        "DLSS attempt={} terminal={} ngx_call={} ngx_called={} frame={} mode={} "
+        "DLSS trace_window={} attempt={} terminal={} ngx_call={} ngx_called={} "
+        "frame={} mode={} "
         "recording_generation={} feature_generation={} ngx_result={} vk_result={} "
         "prepare_called={} prepare_status={} prepare_detail={} prepare_vk={} "
         "commit_called={} commit_status={} commit_detail={} commit_vk={} "
         "command_buffer=0x{:X} consumer_binding=b16 consumer_image=0x{:X} "
         "consumer_view=0x{:X} readback_requested={}",
+        record.trace_window,
         record.attempt,
         renodx::games::detroitbecomehuman::dlss::EvaluationTerminalName(terminal),
         TraceNgxCallName(record.ngx_call),
@@ -2758,12 +2761,35 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
-  if (state->configured
-      && std::memcmp(&state->settings, settings, sizeof(*settings)) != 0) {
+  const bool settings_changed =
+      !state->configured
+      || std::memcmp(&state->settings, settings, sizeof(*settings)) != 0;
+  if (state->configured && settings_changed) {
     RetireActiveFeatureLocked(state.get());
   }
   if (settings->mode == DETROIT_DLSS_MODE_NATIVE) {
     RetireActiveFeatureLocked(state.get());
+  }
+  if (settings_changed && GetEvaluationTraceConfiguration().first_three) {
+    // A process-wide counter can be exhausted while the user is still in a
+    // different AA mode. Start a fresh bounded window on the actual non-native
+    // configuration transition and discard only old diagnostic tombstones.
+    state->submission_trace_tracker.Clear();
+    if (settings->mode != DETROIT_DLSS_MODE_NATIVE) {
+      const auto trace_window = state->evaluation_trace_window.Arm();
+      try {
+        Trace(std::format(
+            "DLSS trace_window={} event=armed mode={} render={}x{} output={}x{}",
+            trace_window,
+            static_cast<std::uint32_t>(settings->mode),
+            settings->render_width,
+            settings->render_height,
+            settings->output_width,
+            settings->output_height));
+      } catch (...) {
+        // Diagnostic formatting must not affect a mode transition.
+      }
+    }
   }
   state->settings = *settings;
   state->configured = true;
@@ -3034,8 +3060,11 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       .readback_requested = GetEvaluationTraceConfiguration().readback,
   };
   if (GetEvaluationTraceConfiguration().first_three) {
-    trace_record.attempt =
-        state->evaluation_trace_window.Begin().value_or(0u);
+    const auto attempt = state->evaluation_trace_window.Begin();
+    if (attempt.has_value()) {
+      trace_record.trace_window = attempt->window;
+      trace_record.attempt = attempt->attempt;
+    }
   }
 
   const auto native_output_state =
@@ -3244,8 +3273,10 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
   if (trace_record.attempt != 0u) {
     state->submission_trace_tracker.Associate(
         inputs->command_buffer,
+        trace_record.trace_window,
         trace_record.attempt,
-        trace_record.recording_generation);
+        trace_record.recording_generation,
+        restore_state->one_time_submit);
   }
   const bool ngx_succeeded = evaluate_result.Succeeded()
                               && evaluate_result.output_valid;
@@ -3931,6 +3962,33 @@ VKAPI_ATTR void VKAPI_CALL LayerUnmapMemory(VkDevice device, VkDeviceMemory memo
 using FeatureSubmissionSnapshot =
     renodx::games::detroitbecomehuman::dlss::FeatureLifetimeTracker::SubmissionSnapshot;
 
+struct TraceSubmissionCandidate final {
+  std::uint64_t command_buffer = 0u;
+  std::uint64_t recording_generation = 0u;
+};
+
+void CaptureTraceSubmissionCandidates(
+    DeviceState* state,
+    const std::vector<std::uint64_t>& command_buffers,
+    std::vector<TraceSubmissionCandidate>* candidates) {
+  if (state == nullptr || candidates == nullptr || command_buffers.empty()
+      || !GetEvaluationTraceConfiguration().first_three) {
+    return;
+  }
+  const std::lock_guard lock(state->tracking_mutex);
+  for (const auto command_buffer : command_buffers) {
+    const auto generation =
+        state->command_buffer_recording_generations.find(command_buffer);
+    if (generation != state->command_buffer_recording_generations.end()
+        && generation->second != 0u) {
+      candidates->push_back({
+          .command_buffer = command_buffer,
+          .recording_generation = generation->second,
+      });
+    }
+  }
+}
+
 FeatureSubmissionSnapshot CaptureFeatureSubmission(
     DeviceState* state,
     const std::vector<std::uint64_t>& command_buffers) {
@@ -3995,19 +4053,21 @@ void TraceFeatureSubmissionResult(
   }
   try {
     struct TracedSubmit final {
+      std::uint64_t command_buffer = 0u;
       renodx::games::detroitbecomehuman::dlss::SubmissionTraceRecord record;
-      bool one_time_submit = false;
     };
     std::vector<TracedSubmit> traced;
     {
       const std::lock_guard lock(state->mutex);
       for (const auto& command : snapshot.commands) {
         const auto record = state->submission_trace_tracker.MarkSubmitted(
-            command.command_buffer, command.recording_epoch);
+            command.command_buffer,
+            command.recording_epoch,
+            command.one_time_submit);
         if (record.has_value()) {
           traced.push_back({
+              .command_buffer = command.command_buffer,
               .record = *record,
-              .one_time_submit = command.one_time_submit,
           });
           if (result != VK_SUCCESS) {
             (void)state->submission_trace_tracker.Discard(
@@ -4018,18 +4078,92 @@ void TraceFeatureSubmissionResult(
     }
     for (const auto& command : traced) {
       Trace(std::format(
-          "DLSS attempt={} event=submit vk_result={} queue=0x{:X} fence=0x{:X} "
+          "DLSS trace_window={} attempt={} event=submit command_buffer=0x{:X} "
+          "submit_count={} vk_result={} queue=0x{:X} fence=0x{:X} "
           "recording_generation={} recording_epoch={} one_time={}",
+          command.record.window,
           command.record.attempt,
+          command.command_buffer,
+          command.record.submit_count,
           static_cast<std::int32_t>(result),
           ToOpaque(queue),
           ToOpaque(fence),
           command.record.recording_generation,
           command.record.recording_epoch,
-          command.one_time_submit));
+          command.record.one_time_submit));
     }
   } catch (...) {
     // Trace formatting must not affect queue submission.
+  }
+}
+
+bool SubmissionContainsCommandBuffer(
+    const FeatureSubmissionSnapshot& snapshot,
+    std::uint64_t command_buffer) noexcept {
+  return std::ranges::any_of(
+      snapshot.commands,
+      [command_buffer](const auto& command) {
+        return command.command_buffer == command_buffer;
+      });
+}
+
+void TracePostCompletionResubmissionResult(
+    DeviceState* state,
+    const std::vector<TraceSubmissionCandidate>& candidates,
+    const FeatureSubmissionSnapshot& snapshot,
+    VkQueue queue,
+    VkFence fence,
+    VkResult result) noexcept {
+  if (state == nullptr || candidates.empty()
+      || !GetEvaluationTraceConfiguration().first_three) {
+    return;
+  }
+  try {
+    struct TracedResubmit final {
+      std::uint64_t command_buffer = 0u;
+      renodx::games::detroitbecomehuman::dlss::SubmissionTraceRecord record;
+    };
+    std::vector<TracedResubmit> traced;
+    {
+      const std::lock_guard lock(state->mutex);
+      for (const auto& candidate : candidates) {
+        // A live core snapshot is handled by TraceFeatureSubmissionResult,
+        // including repeated submits before completion. This path exists only
+        // for the post-completion tombstone that the core intentionally drops.
+        if (SubmissionContainsCommandBuffer(
+                snapshot, candidate.command_buffer)) {
+          continue;
+        }
+        const auto record =
+            state->submission_trace_tracker.MarkPostCompletionResubmitted(
+                candidate.command_buffer, candidate.recording_generation);
+        if (record.has_value()) {
+          traced.push_back({
+              .command_buffer = candidate.command_buffer,
+              .record = *record,
+          });
+        }
+      }
+    }
+    for (const auto& command : traced) {
+      Trace(std::format(
+          "DLSS trace_window={} attempt={} event=post_completion_resubmit "
+          "command_buffer=0x{:X} submit_count={} core_snapshot=false "
+          "vk_result={} queue=0x{:X} fence=0x{:X} recording_generation={} "
+          "recording_epoch={} one_time={}",
+          command.record.window,
+          command.record.attempt,
+          command.command_buffer,
+          command.record.submit_count,
+          static_cast<std::int32_t>(result),
+          ToOpaque(queue),
+          ToOpaque(fence),
+          command.record.recording_generation,
+          command.record.recording_epoch,
+          command.record.one_time_submit));
+    }
+  } catch (...) {
+    // A bounded replay diagnostic must not affect queue submission.
   }
 }
 
@@ -4072,10 +4206,13 @@ void TraceFeatureCompletion(
   try {
     if (!readback.has_value()) {
       Trace(std::format(
-          "DLSS attempt={} event=completion command_buffer=0x{:X} "
-          "recording_generation={} recording_epoch={} readback=none",
+          "DLSS trace_window={} attempt={} event=completion "
+          "command_buffer=0x{:X} submit_count={} recording_generation={} "
+          "recording_epoch={} readback=none",
+          trace_record->window,
           trace_record->attempt,
           command_buffer,
+          trace_record->submit_count,
           trace_record->recording_generation,
           trace_record->recording_epoch));
       return;
@@ -4087,11 +4224,14 @@ void TraceFeatureCompletion(
       hashes[tile] = HashTraceReadbackTile(*readback, tile);
     }
     Trace(std::format(
-        "DLSS attempt={} event=completion command_buffer=0x{:X} "
-        "recording_generation={} recording_epoch={} "
+        "DLSS trace_window={} attempt={} event=completion "
+        "command_buffer=0x{:X} submit_count={} recording_generation={} "
+        "recording_epoch={} "
         "readback=host_scratch tiles={:016X},{:016X},{:016X},{:016X},{:016X}",
+        trace_record->window,
         trace_record->attempt,
         command_buffer,
+        trace_record->submit_count,
         trace_record->recording_generation,
         trace_record->recording_epoch,
         hashes[0u],
@@ -4487,6 +4627,10 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
   if (command_buffers.empty()) {
     return SubmitQueueLocked(state, queue, submit_count, submits, fence);
   }
+  thread_local std::vector<TraceSubmissionCandidate> trace_candidates;
+  trace_candidates.clear();
+  CaptureTraceSubmissionCandidates(
+      state, command_buffers, &trace_candidates);
   const auto snapshot = CaptureFeatureSubmission(state, command_buffers);
   const bool needs_internal_fence = fence == VK_NULL_HANDLE && !snapshot.Empty()
                                     && SubmissionNeedsInternalFeatureFence(
@@ -4501,6 +4645,13 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
       state, queue, submit_count, submits, tracked_fence);
   TraceFeatureSubmissionResult(
       state, snapshot, queue, tracked_fence, result);
+  TracePostCompletionResubmissionResult(
+      state,
+      trace_candidates,
+      snapshot,
+      queue,
+      tracked_fence,
+      result);
   if (result == VK_SUCCESS) {
     CommitFeatureSubmission(
         state,
@@ -4549,6 +4700,10 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
   if (command_buffers.empty()) {
     return SubmitQueue2Locked(state, queue, submit_count, submits, fence);
   }
+  thread_local std::vector<TraceSubmissionCandidate> trace_candidates;
+  trace_candidates.clear();
+  CaptureTraceSubmissionCandidates(
+      state, command_buffers, &trace_candidates);
   const auto snapshot = CaptureFeatureSubmission(state, command_buffers);
   const bool needs_internal_fence = fence == VK_NULL_HANDLE && !snapshot.Empty()
                                     && SubmissionNeedsInternalFeatureFence(
@@ -4563,6 +4718,13 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
       state, queue, submit_count, submits, tracked_fence);
   TraceFeatureSubmissionResult(
       state, snapshot, queue, tracked_fence, result);
+  TracePostCompletionResubmissionResult(
+      state,
+      trace_candidates,
+      snapshot,
+      queue,
+      tracked_fence,
+      result);
   if (result == VK_SUCCESS) {
     CommitFeatureSubmission(
         state,
@@ -4612,6 +4774,10 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
   if (command_buffers.empty()) {
     return SubmitQueue2KhrLocked(state, queue, submit_count, submits, fence);
   }
+  thread_local std::vector<TraceSubmissionCandidate> trace_candidates;
+  trace_candidates.clear();
+  CaptureTraceSubmissionCandidates(
+      state, command_buffers, &trace_candidates);
   const auto snapshot = CaptureFeatureSubmission(state, command_buffers);
   const bool needs_internal_fence = fence == VK_NULL_HANDLE && !snapshot.Empty()
                                     && SubmissionNeedsInternalFeatureFence(
@@ -4626,6 +4792,13 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
       state, queue, submit_count, submits, tracked_fence);
   TraceFeatureSubmissionResult(
       state, snapshot, queue, tracked_fence, result);
+  TracePostCompletionResubmissionResult(
+      state,
+      trace_candidates,
+      snapshot,
+      queue,
+      tracked_fence,
+      result);
   if (result == VK_SUCCESS) {
     CommitFeatureSubmission(
         state,
