@@ -14,10 +14,3 @@ vec3 PQEncodeUI(vec3 x) {
   x = ClampMaxChannel(x);
   return EncodePQ(max(vec3(0.0), x), 1.f);
 }
-
-vec3 PQEncodeGame(vec3 x) {
-  x *= vec3(RENODX_DIFFUSE_WHITE_NITS);
-  x = ClampMaxChannel(x);
-  return EncodePQ(max(vec3(0.0), x), 1.f);
-}
-
