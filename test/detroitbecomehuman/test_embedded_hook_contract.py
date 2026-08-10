@@ -273,9 +273,16 @@ def main() -> None:
     require(source, "TraceEvaluationTerminal(")
     require(source, "TraceFeatureSubmissionResult(")
     require(source, "TraceFeatureCompletion(")
-    require(source, "trace_attempt_by_command_buffer")
+    require(source, "submission_trace_tracker")
     require(evaluation_trace, "kAttemptLimit = 3u")
     require(evaluation_trace, "compare_exchange_weak(")
+    require(evaluation_trace, "class SubmissionTraceTracker final")
+    require(evaluation_trace, "MarkSubmitted(")
+    require(evaluation_trace, "NeedsCompletion(")
+    require(evaluation_trace, "submit_logged")
+    require(evaluation_trace, "recording_generation")
+    require(evaluation_trace, "recording_epoch")
+    require(source, "SubmissionNeedsInternalFeatureFence(")
     if "unclassified_terminal" in evaluation_trace or "unclassified_terminal" in source:
         raise AssertionError("every bounded evaluation attempt must have a terminal class")
 

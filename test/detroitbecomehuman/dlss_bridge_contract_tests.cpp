@@ -13,9 +13,9 @@
 #include <thread>
 #include <type_traits>
 
+#include "src/games/detroitbecomehuman/dlss/evaluation_trace.hpp"
 #include "src/games/detroitbecomehuman/dlss_bridge_abi.h"
 #include "src/games/detroitbecomehuman/dlss_bridge_client.hpp"
-#include "src/games/detroitbecomehuman/dlss/evaluation_trace.hpp"
 #include "src/games/detroitbecomehuman/supported_build.hpp"
 #include "src/games/detroitbecomehuman/temporal_mode_state.hpp"
 
@@ -969,6 +969,72 @@ bool TestBoundedEvaluationTraceWindow() {
   return passed;
 }
 
+bool TestBoundedEvaluationSubmissionTrace() {
+  dlss_evaluation_trace::SubmissionTraceTracker tracker;
+  constexpr std::uint64_t kCommandBuffer = UINT64_C(0xCAFE);
+  constexpr std::uint64_t kRecordingGeneration = 17u;
+  constexpr std::uint64_t kRecordingEpoch = 41u;
+
+  tracker.Associate(0u, 1u, kRecordingGeneration);
+  tracker.Associate(kCommandBuffer, 0u, kRecordingGeneration);
+  bool passed = true;
+  passed &= Expect(
+      tracker.Size() == 0u,
+      "zero handles and zero attempts must not create trace associations");
+
+  tracker.Associate(kCommandBuffer, 2u, kRecordingGeneration);
+  passed &= Expect(
+      tracker.Size() == 1u
+          && tracker.NeedsCompletion(kCommandBuffer, kRecordingEpoch)
+          && !tracker.MarkSubmitted(kCommandBuffer, 0u).has_value(),
+      "a trace association must wait for a concrete recording epoch");
+
+  const auto submitted = tracker.MarkSubmitted(kCommandBuffer, kRecordingEpoch);
+  passed &= Expect(
+      submitted.has_value() && submitted->attempt == 2u
+          && submitted->recording_generation == kRecordingGeneration
+          && submitted->recording_epoch == kRecordingEpoch
+          && submitted->submit_logged,
+      "the first submit must bind the attempt to both recording identities");
+  passed &= Expect(
+      tracker.NeedsCompletion(kCommandBuffer, kRecordingEpoch)
+          && !tracker.NeedsCompletion(kCommandBuffer, kRecordingEpoch + 1u),
+      "only the associated recording may request a diagnostic completion fence");
+  passed &= Expect(
+      !tracker.MarkSubmitted(kCommandBuffer, kRecordingEpoch).has_value(),
+      "a command-buffer submission must be logged at most once per attempt");
+  passed &= Expect(
+      !tracker.Complete(kCommandBuffer, kRecordingEpoch + 1u).has_value()
+          && tracker.Size() == 1u,
+      "a stale completion must not consume a newer recording association");
+
+  const auto completed = tracker.Complete(kCommandBuffer, kRecordingEpoch);
+  passed &= Expect(
+      completed.has_value() && completed->attempt == 2u
+          && tracker.Size() == 0u,
+      "the matching completion must consume exactly one submitted attempt");
+
+  tracker.Associate(kCommandBuffer, 3u, kRecordingGeneration + 1u);
+  passed &= Expect(
+      !tracker.Complete(kCommandBuffer).has_value()
+          && tracker.Discard(kCommandBuffer) && tracker.Size() == 0u,
+      "an unsubmitted recording must be discarded rather than classified complete");
+
+  tracker.Associate(kCommandBuffer, 3u, kRecordingGeneration + 2u);
+  (void)tracker.MarkSubmitted(kCommandBuffer, kRecordingEpoch + 2u);
+  passed &= Expect(
+      !tracker.Discard(kCommandBuffer, kRecordingEpoch + 3u)
+          && tracker.Discard(kCommandBuffer, kRecordingEpoch + 2u),
+      "recording lifecycle cleanup must reject stale epochs and remove the match");
+
+  tracker.Associate(kCommandBuffer, 3u, kRecordingGeneration + 3u);
+  tracker.Clear();
+  passed &= Expect(
+      tracker.Size() == 0u,
+      "device shutdown must clear any remaining bounded trace association");
+  return passed;
+}
+
 }  // namespace
 
 int main() {
@@ -982,6 +1048,7 @@ int main() {
   passed &= TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization();
   passed &= TestTemporalModeTransactionSerializesCommit();
   passed &= TestBoundedEvaluationTraceWindow();
+  passed &= TestBoundedEvaluationSubmissionTrace();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
   return passed ? 0 : 1;
 }
