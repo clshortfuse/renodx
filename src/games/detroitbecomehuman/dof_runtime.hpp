@@ -106,6 +106,9 @@ struct RuntimeControls {
   float blur_radius_percent = 100.f;
   float far_strength_percent = 100.f;
   float vanilla_transition_percent = 100.f;
+  bool fill_edge_aware_coc = false;
+  bool fill_adaptive_transition = false;
+  bool fill_dense_rgb = false;
 };
 
 inline constexpr std::uint32_t kModeMask = 0x7u;
@@ -125,10 +128,15 @@ inline constexpr std::uint32_t kVanillaTransitionDefault =
 inline constexpr std::uint32_t kFarShift = 21u;
 inline constexpr std::uint32_t kFarMask = 0x1Fu;
 inline constexpr std::uint32_t kFarNeutral = 16u;
-// Former extra Edge Bokeh bits stay zero and reserved. Bits 30..31 also
-// remain zero, so every packed payload is a finite positive float.
-inline constexpr std::uint32_t kReservedEdgeShift = 26u;
-inline constexpr std::uint32_t kReservedEdgeMask = 0xFu;
+// Former Edge Bokeh bits now select optional High Fill reconstruction paths.
+// Zero retains the currently validated Bilinear + Fixed 2-4 + 3x3 behavior,
+// so existing presets remain compatible. Bit 29 and bits 30..31 stay zero;
+// every packed payload therefore remains a finite positive float.
+inline constexpr std::uint32_t kFillEdgeAwareCocShift = 26u;
+inline constexpr std::uint32_t kFillAdaptiveTransitionShift = 27u;
+inline constexpr std::uint32_t kFillDenseRgbShift = 28u;
+inline constexpr std::uint32_t kReservedHighShift = 29u;
+inline constexpr std::uint32_t kReservedHighMask = 0x7u;
 
 [[nodiscard]] inline std::uint32_t QuantizePercentScale(
     float percent,
@@ -165,7 +173,13 @@ inline constexpr std::uint32_t kReservedEdgeMask = 0xFu;
             << kVanillaTransitionShift)
          | (QuantizePercentScale(
                 controls.far_strength_percent, kFarNeutral, kFarMask)
-            << kFarShift);
+            << kFarShift)
+         | (static_cast<std::uint32_t>(controls.fill_edge_aware_coc)
+            << kFillEdgeAwareCocShift)
+         | (static_cast<std::uint32_t>(controls.fill_adaptive_transition)
+            << kFillAdaptiveTransitionShift)
+         | (static_cast<std::uint32_t>(controls.fill_dense_rgb)
+            << kFillDenseRgbShift);
 }
 
 [[nodiscard]] inline float PackRuntimePayload(

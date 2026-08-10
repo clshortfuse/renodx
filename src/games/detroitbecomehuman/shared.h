@@ -107,6 +107,12 @@ float DecodeDofPackedScale(uint code, uint neutral, uint maximum)
 #define CUSTOM_DOF_FAR_STRENGTH \
   DecodeDofPackedScale( \
       (CUSTOM_DOF_PACKED_BITS >> 21u) & 0x1Fu, 16u, 0x1Fu)
+#define CUSTOM_DOF_FILL_EDGE_AWARE_COC \
+  (((CUSTOM_DOF_PACKED_BITS >> 26u) & 0x1u) != 0u)
+#define CUSTOM_DOF_FILL_ADAPTIVE_TRANSITION \
+  (((CUSTOM_DOF_PACKED_BITS >> 27u) & 0x1u) != 0u)
+#define CUSTOM_DOF_FILL_DENSE_RGB \
+  (((CUSTOM_DOF_PACKED_BITS >> 28u) & 0x1u) != 0u)
 #define CUSTOM_HDR_ACTIVE        (shader_injection.output_is_hdr >= 0.5f \
                                   && shader_injection.output_mode != 1.f)
 #define CUSTOM_PSYCHOV17_ACTIVE  (shader_injection.tone_map_type == 2.f)

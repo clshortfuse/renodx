@@ -171,19 +171,26 @@ bool TestPackedControls() {
                  bits, dof::kFarShift, dof::kFarMask, dof::kFarNeutral)
                  == 1.f
           && dof::UnpackVanillaTransition(bits) == 1.f
-          && ((bits >> dof::kReservedEdgeShift)
-              & dof::kReservedEdgeMask)
+          && ((bits >> dof::kFillEdgeAwareCocShift) & 0x1u) == 0u
+          && ((bits >> dof::kFillAdaptiveTransitionShift) & 0x1u) == 0u
+          && ((bits >> dof::kFillDenseRgbShift) & 0x1u) == 0u
+          && ((bits >> dof::kReservedHighShift)
+              & dof::kReservedHighMask)
                  == 0u,
-      "neutral controls must decode exact scales, full Vanilla transition, and zero reserved bits");
+      "neutral controls must decode exact scales and retain the current Fill methods");
 
   const dof::RuntimeControls maximum = {
       .focus_distance_percent = 200.f,
       .blur_radius_percent = 200.f,
       .far_strength_percent = 200.f,
       .vanilla_transition_percent = 100.f,
+      .fill_edge_aware_coc = true,
+      .fill_adaptive_transition = true,
+      .fill_dense_rgb = true,
   };
-  const std::uint32_t maximum_bits = dof::PackRuntimeBits(
+  const float maximum_payload = dof::PackRuntimePayload(
       dof::RuntimeMode::kCinematicHigh, maximum);
+  const std::uint32_t maximum_bits = dof::UnpackRuntimeBits(maximum_payload);
   passed &= Expect(
       dof::UnpackPercentScale(
           maximum_bits,
@@ -192,10 +199,15 @@ bool TestPackedControls() {
           dof::kFocusNeutral)
               == 2.f
           && dof::UnpackVanillaTransition(maximum_bits) == 1.f
-          && ((maximum_bits >> dof::kReservedEdgeShift)
-              & dof::kReservedEdgeMask)
-                 == 0u,
-      "maximum controls must retain the full Vanilla transition while old Edge bits stay zero");
+          && ((maximum_bits >> dof::kFillEdgeAwareCocShift) & 0x1u) == 1u
+          && ((maximum_bits >> dof::kFillAdaptiveTransitionShift) & 0x1u)
+                 == 1u
+          && ((maximum_bits >> dof::kFillDenseRgbShift) & 0x1u) == 1u
+          && ((maximum_bits >> dof::kReservedHighShift)
+              & dof::kReservedHighMask)
+                 == 0u
+          && std::isfinite(maximum_payload),
+      "optional Fill quality flags must pack independently while reserved high bits stay finite");
 
   const dof::RuntimeControls no_overlap = {
       .focus_distance_percent = 100.f,

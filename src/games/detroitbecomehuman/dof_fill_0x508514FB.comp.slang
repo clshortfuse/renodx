@@ -96,6 +96,38 @@ vec3 FilterFar(vec2 uv, float coc)
     return weightSum > 0.0 ? colorSum / vec3(weightSum) : centerColor;
 }
 
+vec3 FilterFarDense5x5(vec2 uv, float coc)
+{
+    // Double the sampling density without expanding Detroit's original
+    // 3x3 Fill footprint: two half-radius steps reach the same outer extent
+    // as one native step. Only background-valid RGB contributes.
+    vec2 sampleStep = vec2(coc * 0.666666686534881591796875)
+        / _91._DOF._vfFull_DOFSize.zw;
+    vec2 maxUv = (vec2(_91._DOF._viDOFViewportSize)
+        / _91._DOF._vfFull_DOFSize.zw)
+        - (vec2(0.5) / _91._DOF._vfFull_DOFSize.zw);
+    vec3 centerColor = textureLod(
+        dofColorMapFar, clamp(uv, vec2(0.0), maxUv), 0.0).xyz;
+    const float spatialWeights[5] = float[](1.0, 4.0, 6.0, 4.0, 1.0);
+    vec3 colorSum = vec3(0.0);
+    float weightSum = 0.0;
+    for (int x = 0; x < 5; ++x)
+    {
+        for (int y = 0; y < 5; ++y)
+        {
+            vec2 sampleUv = uv
+                + vec2(float(x - 2), float(y - 2)) * sampleStep;
+            sampleUv = clamp(sampleUv, vec2(0.0), maxUv);
+            float weight = AlphaOccupancy(dofAlphaMapFar, sampleUv)
+                * spatialWeights[x] * spatialWeights[y];
+            colorSum += textureLod(
+                dofColorMapFar, sampleUv, 0.0).xyz * weight;
+            weightSum += weight;
+        }
+    }
+    return weightSum > 0.0 ? colorSum / vec3(weightSum) : centerColor;
+}
+
 void main()
 {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
@@ -173,13 +205,99 @@ void main()
             mix(farCoc00, farCoc10, prepassFraction.x),
             mix(farCoc01, farCoc11, prepassFraction.x),
             prepassFraction.y) * farFillRadiusScale;
+
+        float scaledFarCoc00 = farCoc00 * farFillRadiusScale;
+        float scaledFarCoc10 = farCoc10 * farFillRadiusScale;
+        float scaledFarCoc01 = farCoc01 * farFillRadiusScale;
+        float scaledFarCoc11 = farCoc11 * farFillRadiusScale;
+        if (CUSTOM_DOF_FILL_EDGE_AWARE_COC)
+        {
+            // The bilinear value is a stable local anchor. Nine neighboring
+            // coarse samples may refine it only when their CoC is compatible,
+            // and the result is clamped to the four-corner monotonic range.
+            // This reconstructs Fill radius; it never becomes visibility.
+            float localMinimum = min(
+                min(scaledFarCoc00, scaledFarCoc10),
+                min(scaledFarCoc01, scaledFarCoc11));
+            float localMaximum = max(
+                max(scaledFarCoc00, scaledFarCoc10),
+                max(scaledFarCoc01, scaledFarCoc11));
+            float compatibilityScale = max(farFillRadiusScale, 0.25);
+            float compatibilityStart = 0.0625 * compatibilityScale;
+            float compatibilityEnd = clamp(
+                (localMaximum - localMinimum) + compatibilityStart,
+                0.125 * compatibilityScale,
+                0.25 * compatibilityScale);
+            ivec2 prepassCenter = ivec2(floor(
+                prepassPosition + vec2(0.5)));
+            float cocSum = interpolatedFarCoc * 2.0;
+            float weightSum = 2.0;
+            for (int x = -1; x <= 1; ++x)
+            {
+                for (int y = -1; y <= 1; ++y)
+                {
+                    ivec2 samplePosition = prepassCenter + ivec2(x, y);
+                    ivec2 samplePixel = clamp(
+                        samplePosition, ivec2(0), prepassMaximum);
+                    float sampleFarCoc = texelFetch(
+                        dofPrepassCocMap, samplePixel, 0).y
+                        * farFillRadiusScale;
+                    vec2 spatialOffset = vec2(samplePosition)
+                        - prepassPosition;
+                    float spatialWeight = 1.0
+                        / (1.0 + dot(spatialOffset, spatialOffset) * 1.5);
+                    float compatibility = 1.0 - smoothstep(
+                        compatibilityStart,
+                        compatibilityEnd,
+                        abs(sampleFarCoc - interpolatedFarCoc));
+                    float weight = spatialWeight * compatibility;
+                    cocSum += sampleFarCoc * weight;
+                    weightSum += weight;
+                }
+            }
+            interpolatedFarCoc = clamp(
+                cocSum / weightSum,
+                localMinimum,
+                localMaximum);
+        }
+
+        float fillStart = 2.0;
+        float fillEnd = 4.0;
+        if (CUSTOM_DOF_FILL_ADAPTIVE_TRANSITION)
+        {
+            float horizontalGradient = mix(
+                abs(scaledFarCoc10 - scaledFarCoc00),
+                abs(scaledFarCoc11 - scaledFarCoc01),
+                prepassFraction.y);
+            float verticalGradient = mix(
+                abs(scaledFarCoc01 - scaledFarCoc00),
+                abs(scaledFarCoc11 - scaledFarCoc10),
+                prepassFraction.x);
+            float gradientPixels = max(
+                horizontalGradient, verticalGradient) * 8.0;
+            float halfWidth = mix(
+                0.75,
+                2.0,
+                smoothstep(0.25, 2.0, gradientPixels));
+            fillStart = 3.0 - halfWidth;
+            fillEnd = 3.0 + halfWidth;
+        }
         float fillWeight = smoothstep(
-            2.0,
-            4.0,
+            fillStart,
+            fillEnd,
             interpolatedFarCoc * 8.0);
         if (fillWeight > 0.0)
         {
-            vec3 filledFarColor = FilterFar(uv, interpolatedFarCoc);
+            vec3 filledFarColor;
+            if (CUSTOM_DOF_FILL_DENSE_RGB)
+            {
+                filledFarColor = FilterFarDense5x5(
+                    uv, interpolatedFarCoc);
+            }
+            else
+            {
+                filledFarColor = FilterFar(uv, interpolatedFarCoc);
+            }
             farColor = mix(farCenter, filledFarColor, vec3(fillWeight));
         }
     }

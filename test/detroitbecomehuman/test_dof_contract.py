@@ -191,6 +191,13 @@ def main():
         r"CUSTOM_DOF_PACKED_BITS[\s\S]*?floatBitsToUint\(shader_injection\.dof_runtime_mode\)[\s\S]*?CUSTOM_DOF_RUNTIME_MODE[\s\S]*?0x7u",
         "packed DOF runtime/control decoder is missing",
     )
+    require(
+        shared,
+        r"CUSTOM_DOF_FILL_EDGE_AWARE_COC[\s\S]*?>>\s*26u[\s\S]*?"
+        r"CUSTOM_DOF_FILL_ADAPTIVE_TRANSITION[\s\S]*?>>\s*27u[\s\S]*?"
+        r"CUSTOM_DOF_FILL_DENSE_RGB[\s\S]*?>>\s*28u",
+        "optional High Fill quality flags are not decoded from the packed payload",
+    )
 
     addon = (source_dir / "addon.cpp").read_text(encoding="utf-8")
     dof_runtime = (source_dir / "dof_runtime.hpp").read_text(encoding="utf-8")
@@ -219,7 +226,8 @@ def main():
     )
     require(
         addon,
-        r"PackRuntimePayload\([\s\S]*?focus_distance_percent[\s\S]*?blur_radius_percent[\s\S]*?far_strength_percent[\s\S]*?vanilla_transition_percent",
+        r"PackRuntimePayload\([\s\S]*?focus_distance_percent[\s\S]*?blur_radius_percent[\s\S]*?far_strength_percent[\s\S]*?vanilla_transition_percent"
+        r"[\s\S]*?fill_edge_aware_coc[\s\S]*?fill_adaptive_transition[\s\S]*?fill_dense_rgb",
         "remaining DOF controls must be packed into the existing 112-byte payload",
     )
     if "near_strength_percent" in dof_runtime or "near_strength_percent" in addon:
@@ -230,10 +238,14 @@ def main():
         dof_runtime,
         r"kVanillaTransitionShift\s*=\s*16u[\s\S]*?kVanillaTransitionMask\s*=\s*0x1Fu"
         r"[\s\S]*?kVanillaTransitionDefault\s*=[\s\S]*?kVanillaTransitionMask"
-        r"[\s\S]*?kReservedEdgeShift\s*=\s*26u[\s\S]*?kReservedEdgeMask\s*=\s*0xFu"
+        r"[\s\S]*?kFillEdgeAwareCocShift\s*=\s*26u"
+        r"[\s\S]*?kFillAdaptiveTransitionShift\s*=\s*27u"
+        r"[\s\S]*?kFillDenseRgbShift\s*=\s*28u"
+        r"[\s\S]*?kReservedHighShift\s*=\s*29u[\s\S]*?kReservedHighMask\s*=\s*0x7u"
         r"[\s\S]*?QuantizeVanillaTransition\(controls\.vanilla_transition_percent\)"
-        r"[\s\S]*?<<\s*kVanillaTransitionShift",
-        "former foreground-control bits must encode the Vanilla transition while old Edge bits remain reserved",
+        r"[\s\S]*?<<\s*kVanillaTransitionShift"
+        r"[\s\S]*?fill_edge_aware_coc[\s\S]*?fill_adaptive_transition[\s\S]*?fill_dense_rgb",
+        "DOF payload must retain Vanilla transition and pack three optional Fill quality flags",
     )
     for key in (
         "DepthOfFieldFocusDistance",
@@ -267,6 +279,26 @@ def main():
         raise AssertionError("legacy percentage Edge Bokeh key must not remain active")
     if "DepthOfFieldEdgeBokehWidth" in addon:
         raise AssertionError("geometric Edge Bokeh Width must not remain active")
+    for key, current_label, enhanced_label in (
+        (
+            "DepthOfFieldFillCocReconstruction",
+            "Bilinear (Current)",
+            "Edge-aware 3x3",
+        ),
+        ("DepthOfFieldFillTransition", "Fixed 2-4 (Current)", "Adaptive"),
+        (
+            "DepthOfFieldFillRgbReconstruction",
+            "3x3 (Current)",
+            "Dense 5x5",
+        ),
+    ):
+        require(
+            addon,
+            rf'\.key\s*=\s*"{key}"[\s\S]*?\.default_value\s*=\s*0\.f'
+            rf'[\s\S]*?"{re.escape(current_label)}"[\s\S]*?"{re.escape(enhanced_label)}"'
+            r"[\s\S]*?dof_quality\s*>=\s*0\.5f",
+            f"{key} must preserve the current High Fill method as its default",
+        )
     for key in (
         "RetinalFixationX",
         "RetinalFixationY",
@@ -330,12 +362,19 @@ def main():
         r"[\s\S]*?farCoc10\s*=\s*texelFetch\("
         r"[\s\S]*?farCoc01\s*=\s*texelFetch\("
         r"[\s\S]*?farCoc11\s*=\s*texelFetch\("
-        r"[\s\S]*?fillWeight\s*=\s*smoothstep\(\s*2\.0,\s*4\.0,"
-        r"[\s\S]*?filledFarColor\s*=\s*FilterFar\(uv,\s*interpolatedFarCoc\)"
+        r"[\s\S]*?CUSTOM_DOF_FILL_EDGE_AWARE_COC"
+        r"[\s\S]*?cocSum\s*=\s*interpolatedFarCoc\s*\*\s*2\.0"
+        r"[\s\S]*?smoothstep\([\s\S]*?abs\(sampleFarCoc\s*-\s*interpolatedFarCoc\)"
+        r"[\s\S]*?clamp\([\s\S]*?localMinimum[\s\S]*?localMaximum"
+        r"[\s\S]*?CUSTOM_DOF_FILL_ADAPTIVE_TRANSITION"
+        r"[\s\S]*?fillWeight\s*=\s*smoothstep\(\s*fillStart,\s*fillEnd,"
+        r"[\s\S]*?CUSTOM_DOF_FILL_DENSE_RGB"
+        r"[\s\S]*?FilterFarDense5x5\(\s*uv,\s*interpolatedFarCoc\)"
+        r"[\s\S]*?FilterFar\(uv,\s*interpolatedFarCoc\)"
         r"[\s\S]*?farColor\s*=\s*mix\(farCenter,\s*filledFarColor,\s*vec3\(fillWeight\)\)"
         r"[\s\S]*?else\s+if\s*\(\(sNativePrepassCoc\.y\s*\*\s*farFillRadiusScale\s*\*\s*8\.0\)\s*>\s*3\.0\)"
         r"[\s\S]*?vec4\(farColor,\s*texelFetch\(dofAlphaMapFar",
-        "High fill must reconstruct coarse radius per pixel while preserving native near and authored alpha",
+        "High Fill must expose current and optional quality paths while preserving native near and authored alpha",
     )
     for forbidden in (
         "kDiagnosticAuthoredFarOnly",

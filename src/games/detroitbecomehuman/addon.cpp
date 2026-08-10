@@ -37,14 +37,14 @@
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
-#include "./dlss_scale_transition.hpp"
 #include "./dlss/embedded_bootstrap.hpp"
+#include "./dlss_scale_transition.hpp"
 #include "./dof_runtime.hpp"
 #include "./peak_brightness.hpp"
 #include "./render_debug.hpp"
+#include "./resolution_scaling_win32.hpp"
 #include "./retinal_capture.hpp"
 #include "./retinal_observability.hpp"
-#include "./resolution_scaling_win32.hpp"
 #include "./shared.h"
 #include "./temporal_capture.hpp"
 #include "./ultrawide.hpp"
@@ -131,6 +131,9 @@ float dof_focus_distance = 100.f;
 float dof_blur_radius = 100.f;
 float dof_far_strength = 100.f;
 float dof_vanilla_transition = 100.f;
+float dof_fill_coc_reconstruction = 0.f;
+float dof_fill_transition = 0.f;
+float dof_fill_rgb_reconstruction = 0.f;
 float experimental_motion_blur = 0.f;
 dof::RuntimeController dof_runtime_controller;
 float retinal_fixation_x = 50.f;
@@ -1175,14 +1178,14 @@ void OnExperimentalMotionBlurSettingsChanged() {
 
 bool ShouldWritePsychoVBt2020Intermediate() {
   const bool psychov_active = shader_injection.tone_map_type == 2.f
-      || shader_injection.tone_map_type == 3.f
-      || shader_injection.tone_map_type == 4.f;
+                              || shader_injection.tone_map_type == 3.f
+                              || shader_injection.tone_map_type == 4.f;
   return shader_injection.output_is_hdr >= 0.5f
-      && shader_injection.output_mode != OUTPUT_MODE_SDR
-      && psychov_active
-      && std::bit_cast<std::uint32_t>(
-             shader_injection.scene_path_active)
-          == 0u;
+         && shader_injection.output_mode != OUTPUT_MODE_SDR
+         && psychov_active
+         && std::bit_cast<std::uint32_t>(
+                shader_injection.scene_path_active)
+                == 0u;
 }
 
 bool IsSharedHdrIntermediateTarget(
@@ -1201,7 +1204,7 @@ bool IsSharedHdrIntermediateTarget(
   const auto description = device->get_resource_desc(resource);
   if (description.type != reshade::api::resource_type::texture_2d
       || description.texture.format
-          != reshade::api::format::r16g16b16a16_float) {
+             != reshade::api::format::r16g16b16a16_float) {
     return false;
   }
 
@@ -1211,8 +1214,8 @@ bool IsSharedHdrIntermediateTarget(
       output_height.load(std::memory_order_relaxed);
   return (expected_width == 0u
           || description.texture.width == expected_width)
-      && (expected_height == 0u
-          || description.texture.height == expected_height);
+         && (expected_height == 0u
+             || description.texture.height == expected_height);
 }
 
 bool OnSharedHdrUiReplace(reshade::api::command_list* command_list) {
@@ -1331,7 +1334,7 @@ bool IsDofSupportedBuild() {
         std::memory_order_release);
   });
   return dof_supported_executable.load(std::memory_order_acquire)
-      && supported_build::kDofInputsEmpiricallyVerified;
+         && supported_build::kDofInputsEmpiricallyVerified;
 }
 
 void UpdateDofRuntimeMode() {
@@ -1353,6 +1356,9 @@ void UpdateDofRuntimeMode() {
           .blur_radius_percent = dof_blur_radius,
           .far_strength_percent = dof_far_strength,
           .vanilla_transition_percent = dof_vanilla_transition,
+          .fill_edge_aware_coc = dof_fill_coc_reconstruction >= 0.5f,
+          .fill_adaptive_transition = dof_fill_transition >= 0.5f,
+          .fill_dense_rgb = dof_fill_rgb_reconstruction >= 0.5f,
       });
   LogDofStatus(result);
 }
@@ -1386,13 +1392,10 @@ render_debug::Config GetRenderDebugConfig() {
           GetRenderDebugSource(render_debug_custom_slot_2),
           GetRenderDebugSource(render_debug_custom_slot_3),
       },
-      .channel = static_cast<render_debug::Channel>(std::clamp(
-          std::lround(render_debug_channel), 0l, 7l)),
-      .mapping = static_cast<render_debug::Mapping>(std::clamp(
-          std::lround(render_debug_mapping), 0l, 3l)),
+      .channel = static_cast<render_debug::Channel>(std::clamp(std::lround(render_debug_channel), 0l, 7l)),
+      .mapping = static_cast<render_debug::Mapping>(std::clamp(std::lround(render_debug_mapping), 0l, 3l)),
       .opacity = std::clamp(render_debug_opacity * 0.01f, 0.f, 1.f),
-      .temporal_source_unavailable =
-          temporal_capture::GetMode() != DETROIT_DLSS_MODE_NATIVE,
+      .temporal_source_unavailable = temporal_capture::GetMode() != DETROIT_DLSS_MODE_NATIVE,
   };
 }
 
@@ -1521,10 +1524,10 @@ void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
     }
   }
   const bool state_restored = result == retinal::RunResult::kDispatched
-      || result == retinal::RunResult::kBarrierUnavailable
-      ? retinal_capture::RestoreCompositeState(
-          capture, &shader_injection, sizeof(shader_injection))
-      : retinal_capture::ReleaseCompositeState(capture);
+                                      || result == retinal::RunResult::kBarrierUnavailable
+                                  ? retinal_capture::RestoreCompositeState(
+                                        capture, &shader_injection, sizeof(shader_injection))
+                                  : retinal_capture::ReleaseCompositeState(capture);
   if (!state_restored) {
     result = retinal::RunResult::kStateRestoreFailed;
   }
@@ -1664,9 +1667,9 @@ bool OnTemporalAuxiliaryReplace(reshade::api::command_list* command_list) {
     return true;
   }
   return command_list != nullptr
-      && temporal_capture::GetMode() == DETROIT_DLSS_MODE_NATIVE
-      && render_debug_temporal_replacement_active.load(
-          std::memory_order_acquire);
+         && temporal_capture::GetMode() == DETROIT_DLSS_MODE_NATIVE
+         && render_debug_temporal_replacement_active.load(
+             std::memory_order_acquire);
 }
 
 void OnTemporalDrawn(reshade::api::command_list*) {
@@ -1676,8 +1679,8 @@ void OnTemporalDrawn(reshade::api::command_list*) {
 
 bool IsHdrOutputColorSpace(reshade::api::color_space color_space) {
   return color_space == reshade::api::color_space::hdr10_st2084
-      || color_space == reshade::api::color_space::hdr10_hlg
-      || color_space == reshade::api::color_space::extended_srgb_linear;
+         || color_space == reshade::api::color_space::hdr10_hlg
+         || color_space == reshade::api::color_space::extended_srgb_linear;
 }
 
 std::string WideStringToUtf8(const wchar_t* value) {
@@ -1782,8 +1785,8 @@ void UpdatePeakBrightness(
 
   const auto window = static_cast<HWND>(swapchain->get_hwnd());
   const HMONITOR monitor = window == nullptr
-      ? nullptr
-      : MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+                               ? nullptr
+                               : MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
   const bool output_is_hdr =
       IsHdrOutputColorSpace(swapchain->get_color_space());
   const bool refresh_requested =
@@ -1801,8 +1804,8 @@ void UpdatePeakBrightness(
   detected_output_desc =
       renodx::utils::swapchain::GetDirectXOutputDesc1(window);
   detected_peak_nits = detected_output_desc.has_value()
-      ? renodx::utils::swapchain::GetPeakNits(*detected_output_desc)
-      : std::nullopt;
+                           ? renodx::utils::swapchain::GetPeakNits(*detected_output_desc)
+                           : std::nullopt;
   const auto resolution = peak_brightness::Resolve(
       source, manual_peak_nits, detected_peak_nits);
 
@@ -1865,40 +1868,33 @@ void OnPeakBrightnessSettingsChanged() {
 
 renodx::mods::shader::CustomShaders custom_shaders = {
     {supported_build::kMotionBlurShaderCrc, {
-                                                  .crc32 =
-                                                      supported_build::kMotionBlurShaderCrc,
-                                                  .code = __0xC03380A0,
-                                              }},
-    {supported_build::kDofSplitShaderCrc, {
-                                                .crc32 =
-                                                    supported_build::kDofSplitShaderCrc,
-                                                .code = __0xE9907978,
-                                                .on_drawn = &OnDofSplitDrawn,
+                                                .crc32 = supported_build::kMotionBlurShaderCrc,
+                                                .code = __0xC03380A0,
                                             }},
+    {supported_build::kDofSplitShaderCrc, {
+                                              .crc32 = supported_build::kDofSplitShaderCrc,
+                                              .code = __0xE9907978,
+                                              .on_drawn = &OnDofSplitDrawn,
+                                          }},
     {supported_build::kDofGatherShaderCrc, {
-                                                 .crc32 =
-                                                     supported_build::kDofGatherShaderCrc,
-                                                 .code = __0x747E19D2,
-                                                 .on_drawn = &OnDofGatherDrawn,
-                                             }},
-    {supported_build::kDofFillShaderCrc, {
-                                               .crc32 =
-                                                   supported_build::kDofFillShaderCrc,
-                                               .code = __0x508514FB,
-                                               .on_drawn = &OnDofFillDrawn,
+                                               .crc32 = supported_build::kDofGatherShaderCrc,
+                                               .code = __0x747E19D2,
+                                               .on_drawn = &OnDofGatherDrawn,
                                            }},
+    {supported_build::kDofFillShaderCrc, {
+                                             .crc32 = supported_build::kDofFillShaderCrc,
+                                             .code = __0x508514FB,
+                                             .on_drawn = &OnDofFillDrawn,
+                                         }},
     {supported_build::kDofCompositeShaderCrc, {
-                                                    .crc32 =
-                                                        supported_build::kDofCompositeShaderCrc,
-                                                    .code = __0xAC7A8193,
-                                                    .on_drawn = &OnDofCompositeDrawn,
-                                                }},
+                                                  .crc32 = supported_build::kDofCompositeShaderCrc,
+                                                  .code = __0xAC7A8193,
+                                                  .on_drawn = &OnDofCompositeDrawn,
+                                              }},
     {supported_build::kTemporalAaShaderCrc, {
-                                                .crc32 =
-                                                    supported_build::kTemporalAaShaderCrc,
+                                                .crc32 = supported_build::kTemporalAaShaderCrc,
                                                 .code = __temporal_aux,
-                                                .on_replace =
-                                                    &OnTemporalAuxiliaryReplace,
+                                                .on_replace = &OnTemporalAuxiliaryReplace,
                                                 .on_drawn = &OnTemporalDrawn,
                                             }},
     {0xEBFBDDB1, {
@@ -2008,77 +2004,73 @@ renodx::utils::settings::Settings settings =
         []() {
           auto default_settings =
               renodx::templates::settings::CreateDefaultSettings({
-            {"ToneMapType",
-             {
-                 .key = "ToneMapTypeV2",
-                 .binding = &shader_injection.tone_map_type,
-                 .default_value = 1.f,
-                 .labels = {"Vanilla", "RenoDRT", "PsychoV-17", "PsychoV-22", "PsychoV-24"},
-                 .parse = [](float value) { return value; },
-             }},
-            {"ToneMapPeakNits",
-             {
-                 .binding = &manual_peak_nits,
-                 .default_value = 1000.f,
-                 .can_reset = false,
-                 .label = "Manual Peak Brightness",
-                 .tooltip = "Saved manual peak in nits. Auto detection never overwrites this value.",
-                 .is_enabled = []() {
-                   return peak_brightness::ParseSource(
-                              peak_brightness_source)
-                       == peak_brightness::Source::kManual;
-                 },
-                 .on_change_value = [](float, float) {
-                   OnPeakBrightnessSettingsChanged();
-                 },
-             }},
-            {"ToneMapGameNits",
-             {
-                 .binding = &shader_injection.diffuse_white_nits,
-                 .default_value = 203.f,
-             }},
-            {"ToneMapUINits",
-             {
-                 .binding = &shader_injection.graphics_white_nits,
-                 .default_value = 203.f,
-                 .is_visible = []() {
-                   return shader_injection.ui_path_active != 0.f;
-                 },
-             }},
-            {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure}},
-            {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights}},
-            {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows}},
-            {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast}},
-            {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation}},
-            {"ColorGradeHighlightSaturation", {
-                                                  .binding = &shader_injection.tone_map_highlight_saturation,
-                                                  .is_visible = []() {
-                                                    return renodx::templates::settings::current_settings_mode >= 1.f
-                                                        && shader_injection.tone_map_type < 2.f;
-                                                  },
-                                              }},
-            {"ColorGradeBlowout", {
-                                       .binding = &shader_injection.tone_map_blowout,
-                                       .is_visible = []() {
-                                         return renodx::templates::settings::current_settings_mode >= 1.f
-                                             && shader_injection.tone_map_type < 2.f;
-                                       },
-                                   }},
-            {"ColorGradeFlare", {
-                                     .binding = &shader_injection.tone_map_flare,
-                                     .is_visible = []() {
-                                       return renodx::templates::settings::current_settings_mode >= 1.f
-                                           && shader_injection.tone_map_type < 2.f;
-                                     },
-                                 }},
-            {"SceneGradeStrength", {
-                                       .binding = &shader_injection.color_grade_strength,
-                                       .default_value = 100.f,
-                                       .label = "Scene Grading",
-                                       .section = "Color Grading",
-                                       .tooltip = "Strength of Detroit's original scene color grading.",
-                                        .parse = [](float value) { return value * 0.01f; },
-                                    }},
+                  {"ToneMapType",
+                   {
+                       .key = "ToneMapTypeV2",
+                       .binding = &shader_injection.tone_map_type,
+                       .default_value = 1.f,
+                       .labels = {"Vanilla", "RenoDRT", "PsychoV-17", "PsychoV-22", "PsychoV-24"},
+                       .parse = [](float value) { return value; },
+                   }},
+                  {"ToneMapPeakNits",
+                   {
+                       .binding = &manual_peak_nits,
+                       .default_value = 1000.f,
+                       .can_reset = false,
+                       .label = "Manual Peak Brightness",
+                       .tooltip = "Saved manual peak in nits. Auto detection never overwrites this value.",
+                       .is_enabled = []() { return peak_brightness::ParseSource(
+                                                       peak_brightness_source)
+                                                   == peak_brightness::Source::kManual; },
+                       .on_change_value = [](float, float) { OnPeakBrightnessSettingsChanged(); },
+                   }},
+                  {"ToneMapGameNits",
+                   {
+                       .binding = &shader_injection.diffuse_white_nits,
+                       .default_value = 203.f,
+                   }},
+                  {"ToneMapUINits",
+                   {
+                       .binding = &shader_injection.graphics_white_nits,
+                       .default_value = 203.f,
+                       .is_visible = []() {
+                         return shader_injection.ui_path_active != 0.f;
+                       },
+                   }},
+                  {"ColorGradeExposure", {.binding = &shader_injection.tone_map_exposure}},
+                  {"ColorGradeHighlights", {.binding = &shader_injection.tone_map_highlights}},
+                  {"ColorGradeShadows", {.binding = &shader_injection.tone_map_shadows}},
+                  {"ColorGradeContrast", {.binding = &shader_injection.tone_map_contrast}},
+                  {"ColorGradeSaturation", {.binding = &shader_injection.tone_map_saturation}},
+                  {"ColorGradeHighlightSaturation", {
+                                                        .binding = &shader_injection.tone_map_highlight_saturation,
+                                                        .is_visible = []() {
+                                                          return renodx::templates::settings::current_settings_mode >= 1.f
+                                                                 && shader_injection.tone_map_type < 2.f;
+                                                        },
+                                                    }},
+                  {"ColorGradeBlowout", {
+                                            .binding = &shader_injection.tone_map_blowout,
+                                            .is_visible = []() {
+                                              return renodx::templates::settings::current_settings_mode >= 1.f
+                                                     && shader_injection.tone_map_type < 2.f;
+                                            },
+                                        }},
+                  {"ColorGradeFlare", {
+                                          .binding = &shader_injection.tone_map_flare,
+                                          .is_visible = []() {
+                                            return renodx::templates::settings::current_settings_mode >= 1.f
+                                                   && shader_injection.tone_map_type < 2.f;
+                                          },
+                                      }},
+                  {"SceneGradeStrength", {
+                                             .binding = &shader_injection.color_grade_strength,
+                                             .default_value = 100.f,
+                                             .label = "Scene Grading",
+                                             .section = "Color Grading",
+                                             .tooltip = "Strength of Detroit's original scene color grading.",
+                                             .parse = [](float value) { return value * 0.01f; },
+                                         }},
               });
           default_settings.insert(
               default_settings.begin() + 2,
@@ -2120,9 +2112,7 @@ renodx::utils::settings::Settings settings =
                 .min = 0.f,
                 .max = 100.f,
                 .parse = [](float value) { return value * 0.02f; },
-                .is_visible = []() {
-                  return shader_injection.tone_map_type >= 2.f;
-                },
+                .is_visible = []() { return shader_injection.tone_map_type >= 2.f; },
             }},
             {{
                 .key = "ToneMapPsychoVExposureMatch",
@@ -2146,9 +2136,7 @@ renodx::utils::settings::Settings settings =
                 .min = 0.f,
                 .max = 100.f,
                 .parse = [](float value) { return value * 0.01f; },
-                .is_visible = []() {
-                  return shader_injection.tone_map_type >= 2.f;
-                },
+                .is_visible = []() { return shader_injection.tone_map_type >= 2.f; },
             }},
         }),
         renodx::templates::settings::CreateSettings({
@@ -2178,9 +2166,7 @@ renodx::utils::settings::Settings settings =
                 .tooltip = "Detroit's Gather keeps its complete authored 49-tap aperture kernel in both modes. Balanced keeps the original reduced-resolution resolve. High adds a depth/CoC-aware full-resolution 3x3 color bridge and overlaps it smoothly with the authored FarDofMap across small blur radii. Retinal additionally uses paired hardware-linear Gaussian taps.",
                 .labels = {"Balanced", "High"},
                 .is_enabled = []() { return dof_mode >= 0.5f; },
-                .on_change_value = [](float, float current) {
-                  dof_quality = current;
-                },
+                .on_change_value = [](float, float current) { dof_quality = current; },
             }},
             {{
                 .key = "DepthOfFieldFocusDistance",
@@ -2233,6 +2219,48 @@ renodx::utils::settings::Settings settings =
                 .max = 100.f,
                 .format = "%.0f%%",
                 .is_enabled = []() { return dof_mode >= 1.5f; },
+            }},
+            {{
+                .key = "DepthOfFieldFillCocReconstruction",
+                .binding = &dof_fill_coc_reconstruction,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "Fill CoC Reconstruction",
+                .section = "Depth of Field - Fill Quality",
+                .tooltip = "Bilinear (Current) reconstructs High Fill from four coarse CoC texels. Edge-aware 3x3 adds a monotonic nine-tap reconstruction and rejects incompatible coarse values. Fill has no full-resolution depth binding, so this changes hidden-background RGB radius only and never authored Gather alpha.",
+                .labels = {"Bilinear (Current)", "Edge-aware 3x3"},
+                .is_enabled = []() {
+                  return dof_mode >= 0.5f && dof_quality >= 0.5f;
+                },
+            }},
+            {{
+                .key = "DepthOfFieldFillTransition",
+                .binding = &dof_fill_transition,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "Fill Transition",
+                .section = "Depth of Field - Fill Quality",
+                .tooltip = "Fixed 2-4 (Current) keeps the validated smoothstep range. Adaptive narrows it on smooth coarse CoC and widens it at strong gradients. It blends hidden-background RGB only; authored aperture coverage remains unchanged.",
+                .labels = {"Fixed 2-4 (Current)", "Adaptive"},
+                .is_enabled = []() {
+                  return dof_mode >= 0.5f && dof_quality >= 0.5f;
+                },
+            }},
+            {{
+                .key = "DepthOfFieldFillRgbReconstruction",
+                .binding = &dof_fill_rgb_reconstruction,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "Fill RGB Reconstruction",
+                .section = "Depth of Field - Fill Quality",
+                .tooltip = "3x3 (Current) keeps Detroit's validated Fill sampling. Dense 5x5 uses 25 background-valid RGB samples inside the same maximum footprint for a smoother hidden-background estimate. It costs more GPU time and does not modify Gather alpha.",
+                .labels = {"3x3 (Current)", "Dense 5x5"},
+                .is_enabled = []() {
+                  return dof_mode >= 0.5f && dof_quality >= 0.5f;
+                },
             }},
             {{
                 .key = "RetinalFixationX",
@@ -2312,8 +2340,8 @@ renodx::utils::settings::Settings settings =
                 .is_visible = []() {
                   const auto status = dof_runtime_controller.GetStatus();
                   return dof_mode >= 0.5f
-                      && (status == dof::RuntimeStatus::kWaitingForChain
-                          || status == dof::RuntimeStatus::kIncompleteChain);
+                         && (status == dof::RuntimeStatus::kWaitingForChain
+                             || status == dof::RuntimeStatus::kIncompleteChain);
                 },
             }},
             {{
@@ -2322,8 +2350,8 @@ renodx::utils::settings::Settings settings =
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
-                      && dof_runtime_controller.GetStatus()
-                         == dof::RuntimeStatus::kActiveCleanBalanced;
+                         && dof_runtime_controller.GetStatus()
+                                == dof::RuntimeStatus::kActiveCleanBalanced;
                 },
             }},
             {{
@@ -2332,8 +2360,8 @@ renodx::utils::settings::Settings settings =
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
-                      && dof_runtime_controller.GetStatus()
-                         == dof::RuntimeStatus::kActiveCleanHigh;
+                         && dof_runtime_controller.GetStatus()
+                                == dof::RuntimeStatus::kActiveCleanHigh;
                 },
             }},
             {{
@@ -2342,8 +2370,8 @@ renodx::utils::settings::Settings settings =
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
-                      && dof_runtime_controller.GetStatus()
-                         == dof::RuntimeStatus::kActiveCinematicBalanced;
+                         && dof_runtime_controller.GetStatus()
+                                == dof::RuntimeStatus::kActiveCinematicBalanced;
                 },
             }},
             {{
@@ -2352,8 +2380,8 @@ renodx::utils::settings::Settings settings =
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
-                      && dof_runtime_controller.GetStatus()
-                         == dof::RuntimeStatus::kActiveCinematicHigh;
+                         && dof_runtime_controller.GetStatus()
+                                == dof::RuntimeStatus::kActiveCinematicHigh;
                 },
             }},
             {{
@@ -2364,8 +2392,8 @@ renodx::utils::settings::Settings settings =
                   const auto status = dof_runtime_controller.GetStatus();
                   return (status == dof::RuntimeStatus::kActiveRetinalBalanced
                           || status == dof::RuntimeStatus::kActiveRetinalHigh)
-                      && GetRetinalRunResult()
-                             == retinal::RunResult::kDispatched;
+                         && GetRetinalRunResult()
+                                == retinal::RunResult::kDispatched;
                 },
             }},
             {{
@@ -2374,8 +2402,8 @@ renodx::utils::settings::Settings settings =
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 2.5f
-                      && GetRetinalRunResult()
-                             == retinal::RunResult::kDebugOverlayActive;
+                         && GetRetinalRunResult()
+                                == retinal::RunResult::kDebugOverlayActive;
                 },
             }},
             {{
@@ -2384,8 +2412,8 @@ renodx::utils::settings::Settings settings =
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 2.5f
-                      && GetRetinalRunResult()
-                             == retinal::RunResult::kBypassedZeroEffect;
+                         && GetRetinalRunResult()
+                                == retinal::RunResult::kBypassedZeroEffect;
                 },
             }},
             {{
@@ -2397,14 +2425,13 @@ renodx::utils::settings::Settings settings =
                   const auto result = GetRetinalRunResult();
                   return (status == dof::RuntimeStatus::kActiveRetinalBalanced
                           || status == dof::RuntimeStatus::kActiveRetinalHigh)
-                      && result != retinal::RunResult::kDispatched
-                      && result != retinal::RunResult::kDebugOverlayActive
-                      && result != retinal::RunResult::kBypassedZeroEffect;
+                         && result != retinal::RunResult::kDispatched
+                         && result != retinal::RunResult::kDebugOverlayActive
+                         && result != retinal::RunResult::kBypassedZeroEffect;
                 },
             }},
             {{
-                .value_type =
-                    renodx::utils::settings::SettingValueType::CUSTOM,
+                .value_type = renodx::utils::settings::SettingValueType::CUSTOM,
                 .label = "Retinal Runtime Result",
                 .section = "Depth of Field",
                 .on_draw = []() {
@@ -2427,8 +2454,7 @@ renodx::utils::settings::Settings settings =
                       capture_text.data(),
                       static_cast<int>(embedded_text.size()),
                       embedded_text.data());
-                  return false;
-                },
+                  return false; },
                 .is_visible = []() { return dof_mode >= 2.5f; },
             }},
             {{
@@ -2437,15 +2463,14 @@ renodx::utils::settings::Settings settings =
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
-                      && dof_runtime_controller.GetStatus()
-                          == dof::RuntimeStatus::kUnsupportedBuild;
+                         && dof_runtime_controller.GetStatus()
+                                == dof::RuntimeStatus::kUnsupportedBuild;
                 },
             }},
             {{
                 .key = "ExperimentalMotionBlur",
                 .binding = &experimental_motion_blur,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::BOOLEAN,
+                .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
                 .default_value = 0.f,
                 .can_reset = true,
                 .label = "Camera Motion Blur Edge Feather",
@@ -2464,8 +2489,7 @@ renodx::utils::settings::Settings settings =
             {{
                 .key = "RenderDebugMode",
                 .binding = &render_debug_mode,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::INTEGER,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
                 .default_value = 0.f,
                 .can_reset = true,
                 .label = "Render Debug Inspector",
@@ -2480,8 +2504,7 @@ renodx::utils::settings::Settings settings =
             {{
                 .key = "RenderDebugDashboard",
                 .binding = &render_debug_dashboard,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::INTEGER,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
                 .default_value = 0.f,
                 .can_reset = true,
                 .label = "Dashboard",
@@ -2501,88 +2524,77 @@ renodx::utils::settings::Settings settings =
             {{
                 .key = "RenderDebugSource",
                 .binding = &render_debug_single_source,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::INTEGER,
-                .default_value = static_cast<float>(
-                    render_debug::Source::kDofFullResolutionCoc),
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = static_cast<float>(render_debug::Source::kDofFullResolutionCoc),
                 .can_reset = true,
                 .label = "Source",
                 .section = "Render Debug",
                 .labels = render_debug_source_labels,
                 .is_visible = []() {
                   return render_debug_mode >= 0.5f
-                      && render_debug_mode < 1.5f;
+                         && render_debug_mode < 1.5f;
                 },
             }},
             {{
                 .key = "RenderDebugCustomSlot1",
                 .binding = &render_debug_custom_slot_1,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::INTEGER,
-                .default_value = static_cast<float>(
-                    render_debug::Source::kDofFullResolutionCoc),
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = static_cast<float>(render_debug::Source::kDofFullResolutionCoc),
                 .can_reset = true,
                 .label = "Custom Left",
                 .section = "Render Debug",
                 .labels = render_debug_source_labels,
                 .is_visible = []() {
                   return render_debug_mode >= 1.5f
-                      && render_debug_dashboard >= 4.5f
-                      && render_debug_dashboard < 5.5f;
+                         && render_debug_dashboard >= 4.5f
+                         && render_debug_dashboard < 5.5f;
                 },
             }},
             {{
                 .key = "RenderDebugCustomSlot2",
                 .binding = &render_debug_custom_slot_2,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::INTEGER,
-                .default_value = static_cast<float>(
-                    render_debug::Source::kTemporalDepth),
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = static_cast<float>(render_debug::Source::kTemporalDepth),
                 .can_reset = true,
                 .label = "Custom Center",
                 .section = "Render Debug",
                 .labels = render_debug_source_labels,
                 .is_visible = []() {
                   return render_debug_mode >= 1.5f
-                      && render_debug_dashboard >= 4.5f
-                      && render_debug_dashboard < 5.5f;
+                         && render_debug_dashboard >= 4.5f
+                         && render_debug_dashboard < 5.5f;
                 },
             }},
             {{
                 .key = "RenderDebugCustomSlot3",
                 .binding = &render_debug_custom_slot_3,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::INTEGER,
-                .default_value = static_cast<float>(
-                    render_debug::Source::kSceneBeforeGrade),
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+                .default_value = static_cast<float>(render_debug::Source::kSceneBeforeGrade),
                 .can_reset = true,
                 .label = "Custom Right",
                 .section = "Render Debug",
                 .labels = render_debug_source_labels,
                 .is_visible = []() {
                   return render_debug_mode >= 1.5f
-                      && render_debug_dashboard >= 4.5f
-                      && render_debug_dashboard < 5.5f;
+                         && render_debug_dashboard >= 4.5f
+                         && render_debug_dashboard < 5.5f;
                 },
             }},
             {{
                 .key = "RenderDebugChannel",
                 .binding = &render_debug_channel,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::INTEGER,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
                 .default_value = 0.f,
                 .can_reset = true,
                 .label = "Channel",
                 .section = "Render Debug",
-                .labels = {
-                    "Auto", "RGB", "R", "G", "B", "Alpha", "Luminance", "Vector"},
+                .labels = {"Auto", "RGB", "R", "G", "B", "Alpha", "Luminance", "Vector"},
                 .is_enabled = []() { return render_debug_mode >= 0.5f; },
             }},
             {{
                 .key = "RenderDebugMapping",
                 .binding = &render_debug_mapping,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::INTEGER,
+                .value_type = renodx::utils::settings::SettingValueType::INTEGER,
                 .default_value = 0.f,
                 .can_reset = true,
                 .label = "False-color Mapping",
@@ -2608,8 +2620,8 @@ renodx::utils::settings::Settings settings =
                 .section = "Render Debug",
                 .is_visible = []() {
                   return render_debug_mode >= 0.5f
-                      && render_debug_runtime_controller.GetStatus()
-                          == render_debug::RuntimeStatus::kWaitingForPasses;
+                         && render_debug_runtime_controller.GetStatus()
+                                == render_debug::RuntimeStatus::kWaitingForPasses;
                 },
             }},
             {{
@@ -2618,7 +2630,7 @@ renodx::utils::settings::Settings settings =
                 .section = "Render Debug",
                 .is_visible = []() {
                   return render_debug_mode >= 0.5f
-                      && RenderDebugSelectionUnavailable();
+                         && RenderDebugSelectionUnavailable();
                 },
             }},
             {{
@@ -2627,8 +2639,8 @@ renodx::utils::settings::Settings settings =
                 .section = "Render Debug",
                 .is_visible = []() {
                   return render_debug_mode >= 0.5f
-                      && render_debug_runtime_controller.GetStatus()
-                          == render_debug::RuntimeStatus::kUnsupportedBuild;
+                         && render_debug_runtime_controller.GetStatus()
+                                == render_debug::RuntimeStatus::kUnsupportedBuild;
                 },
             }},
             {{
@@ -2655,11 +2667,9 @@ renodx::utils::settings::Settings settings =
                 .tooltip = "Scene-linear RCAS applied to the successful NGX output before Detroit's DOF. Zero is an exact passthrough.",
                 .min = 0.f,
                 .max = 100.f,
-                .is_enabled = []() {
-                  return embedded_dlss::kDlaaRuntimeEnabled
-                      && temporal_capture::GetMode()
-                          == DETROIT_DLSS_MODE_DLAA;
-                },
+                .is_enabled = []() { return embedded_dlss::kDlaaRuntimeEnabled
+                                            && temporal_capture::GetMode()
+                                                   == DETROIT_DLSS_MODE_DLAA; },
                 .parse = [](float value) { return value * 0.01f; },
             }},
             {{
@@ -2683,7 +2693,7 @@ renodx::utils::settings::Settings settings =
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
                              == temporal_capture::RuntimeStatus::kNative
-                      && !embedded_hooks_active.load(std::memory_order_acquire);
+                         && !embedded_hooks_active.load(std::memory_order_acquire);
                 },
             }},
             {{
@@ -2693,7 +2703,7 @@ renodx::utils::settings::Settings settings =
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
                              == temporal_capture::RuntimeStatus::kNative
-                      && embedded_hooks_active.load(std::memory_order_acquire);
+                         && embedded_hooks_active.load(std::memory_order_acquire);
                 },
             }},
             {{
@@ -2856,6 +2866,9 @@ void OnPresetOff() {
       {"DepthOfFieldBlurRadius", 100.f},
       {"DepthOfFieldFarStrength", 100.f},
       {"DepthOfFieldVanillaTransition", 100.f},
+      {"DepthOfFieldFillCocReconstruction", 0.f},
+      {"DepthOfFieldFillTransition", 0.f},
+      {"DepthOfFieldFillRgbReconstruction", 0.f},
       {"ExperimentalMotionBlur", 0.f},
       {"RetinalFixationX", 50.f},
       {"RetinalFixationY", 50.f},
@@ -3130,8 +3143,8 @@ void OnPresent(
   if (auto* status = renodx::utils::settings::FindSetting("DLSSBootstrapStatus");
       status != nullptr) {
     status->label = embedded_hooks_requested_at_startup
-        ? embedded_dlss::GetStatusText()
-        : "Native TAA fast path: experimental Vulkan hooks not loaded.";
+                        ? embedded_dlss::GetStatusText()
+                        : "Native TAA fast path: experimental Vulkan hooks not loaded.";
   }
   if (TryTrackGameSwapchain(swapchain) && UpdateUltrawideFromSwapchain(swapchain)
       && !ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {

@@ -134,11 +134,22 @@ Watson — в разделе **Retinal DOF**.
 | `Blur Radius` | 0–200% | Масштаб CoC и радиуса размытия. |
 | `Background Bokeh` | 0–200% | Сила дальнего боке. |
 | `Vanilla Transition Blend` | 0–100% | Доля authored Gather coverage относительно точной Clean visibility. |
+| `Fill CoC Reconstruction` | Bilinear (Current) / Edge-aware 3x3 | Текущая четырёхточечная реконструкция либо монотонная 9-tap реконструкция с CoC rejection. |
+| `Fill Transition` | Fixed 2-4 (Current) / Adaptive | Текущий фиксированный переход либо ширина, зависящая от локального coarse-CoC gradient. |
+| `Fill RGB Reconstruction` | 3x3 (Current) / Dense 5x5 | Текущий Fill либо 25 RGB-проб в том же максимальном footprint. |
 
 Значение `100%` используется по умолчанию. В Vanilla все ползунки и настройка качества
 отключены и не влияют на картинку. Во всех enhanced-режимах near/foreground
 слой сохраняет нативные CoC, радиус, цвет и alpha с точной силой Vanilla;
 отдельного ползунка для него нет. `Vanilla Transition Blend` применяется к Cinematic и Retinal; `0%` оставляет Clean visibility, `100%` восстанавливает authored aperture coverage.
+
+Три настройки **Depth of Field - Fill Quality** активны только для `High`.
+Их значение `Current` (`0` в preset) сохраняет уже проверенную реализацию:
+билинейный coarse CoC, фиксированный `smoothstep(2, 4)` и 3x3 RGB Fill.
+Улучшенные варианты влияют только на hidden-background RGB. Они не меняют
+Gather alpha и не создают новую silhouette coverage mask. Поскольку в Fill нет
+full-resolution depth, `Edge-aware 3x3` использует только совместимость coarse
+CoC и монотонное ограничение; это не точная depth-реконструкция.
 
 | Настройка Retinal | Диапазон | Назначение |
 | --- | --- | --- |
@@ -164,6 +175,9 @@ DepthOfFieldFocusDistance=100
 DepthOfFieldBlurRadius=100
 DepthOfFieldFarStrength=100
 DepthOfFieldVanillaTransition=100
+DepthOfFieldFillCocReconstruction=0
+DepthOfFieldFillTransition=0
+DepthOfFieldFillRgbReconstruction=0
 ```
 
 Это `Cinematic High` с нейтральными параметрами.
@@ -208,8 +222,9 @@ Enhanced-режим включается только после того, ка�
 поле `psychov_padding` переименовано в `dof_runtime_mode`; в нём компактно
 упакованы режим, три процентные настройки и сила Vanilla Transition Blend `0..100%`
 в бывших битах настройки near strength `16..20`. Foreground использует фиксированную
-нативную силу и не нуждается в payload; прежние дополнительные edge-биты `26..29` зарезервированы
-с нулевым значением. Это сохраняет исходный интерфейс ресурсов
+нативную силу и не нуждается в payload. Биты `26`, `27` и `28` выбирают три
+опциональных High Fill-метода; нулевые значения сохраняют текущую реализацию.
+Бит `29` и биты `30..31` остаются нулевыми, поэтому packed float конечен. Это сохраняет исходный интерфейс ресурсов
 и push payload.
 
 ### Проверка и ограничения
@@ -364,12 +379,23 @@ Core controls are in **Depth of Field**; Watson-model controls are in
 | `Blur Radius` | 0–200% | Scales CoC and blur radius. |
 | `Background Bokeh` | 0–200% | Far-bokeh strength. |
 | `Vanilla Transition Blend` | 0–100% | Share of authored Gather coverage relative to precise Clean visibility. |
+| `Fill CoC Reconstruction` | Bilinear (Current) / Edge-aware 3x3 | Current four-point reconstruction or monotonic nine-tap reconstruction with CoC rejection. |
+| `Fill Transition` | Fixed 2-4 (Current) / Adaptive | Current fixed transition or a width derived from the local coarse-CoC gradient. |
+| `Fill RGB Reconstruction` | 3x3 (Current) / Dense 5x5 | Current Fill or 25 RGB samples inside the same maximum footprint. |
 
 `100%` is the default. In Vanilla, quality and all sliders are disabled and have no
 effect. Every enhanced mode preserves native near CoC, radius, color, and
 alpha at exact Vanilla strength; foreground bokeh has no custom strength control.
 `Vanilla Transition Blend` applies to Cinematic and Retinal; `0%` leaves Clean
 visibility and `100%` restores authored aperture coverage.
+
+The three **Depth of Field - Fill Quality** controls apply only to `High`.
+Their `Current` value (`0` in the preset) preserves the visually validated
+implementation: bilinear coarse CoC, fixed `smoothstep(2, 4)`, and 3x3 RGB
+Fill. Optional modes affect hidden-background RGB only. They neither modify
+Gather alpha nor create a new silhouette coverage mask. Fill has no
+full-resolution depth binding, so `Edge-aware 3x3` uses coarse-CoC
+compatibility and monotonic clamping rather than claiming exact depth recovery.
 
 | Retinal control | Range | Purpose |
 | --- | --- | --- |
@@ -395,6 +421,9 @@ DepthOfFieldFocusDistance=100
 DepthOfFieldBlurRadius=100
 DepthOfFieldFarStrength=100
 DepthOfFieldVanillaTransition=100
+DepthOfFieldFillCocReconstruction=0
+DepthOfFieldFillTransition=0
+DepthOfFieldFillRgbReconstruction=0
 ```
 
 This is `Cinematic High` with neutral controls.
@@ -440,7 +469,9 @@ chain frame is always Vanilla. The addon returns to Vanilla on:
 `psychov_padding` field was renamed to `dof_runtime_mode` and compactly packs
 the mode, three percentage controls, and `0..100%` Vanilla Transition Blend
 in the former near-strength bits `16..20`. Foreground uses fixed native strength
-and needs no payload control; former extra Edge bits `26..29` stay reserved at zero.
+and needs no payload control. Bits `26`, `27`, and `28` select the three optional
+High Fill methods; zero preserves the current implementation. Bit `29` and bits
+`30..31` remain zero so the packed float stays finite.
 The original resource interface and push payload size are
 preserved.
 
