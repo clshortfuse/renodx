@@ -10,6 +10,7 @@ add_library(renodx_dlss_vulkan STATIC
   ngx_vulkan.cpp
   ngx_vulkan.hpp
   feature_lifetime.hpp
+  vulkan_barriers.hpp
 )
 target_compile_features(renodx_dlss_vulkan PUBLIC cxx_std_20)
 target_compile_definitions(renodx_dlss_vulkan PRIVATE VK_NO_PROTOTYPES)

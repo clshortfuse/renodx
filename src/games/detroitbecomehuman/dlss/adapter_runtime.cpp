@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "adapter_shaders.hpp"
+#include "utils/dlss/vulkan_barriers.hpp"
 
 namespace renodx::games::detroitbecomehuman::dlss {
 namespace {
@@ -82,16 +83,6 @@ VkImageSubresourceRange ColorSubresourceRange() {
   };
 }
 
-VkImageSubresourceRange NativeColorSubresourceRange(const DetroitDlssResource& resource) {
-  return {
-      VK_IMAGE_ASPECT_COLOR_BIT,
-      resource.mip_level,
-      1u,
-      resource.array_layer,
-      1u,
-  };
-}
-
 }  // namespace
 
 struct AdapterRuntime::Impl {
@@ -138,7 +129,7 @@ struct AdapterRuntime::Impl {
     VkImageView view = VK_NULL_HANDLE;
     VkFormat format = VK_FORMAT_UNDEFINED;
     VkExtent2D extent = {};
-    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    renodx::utils::dlss::vulkan::TrackedImageState state = {};
   };
 
   struct BufferAllocation {
@@ -165,6 +156,7 @@ struct AdapterRuntime::Impl {
     VkDescriptorSet pack_descriptor_set = VK_NULL_HANDLE;
     DetroitDlssResource native_motion_vectors = {};
     DetroitDlssResource native_output = {};
+    renodx::utils::dlss::vulkan::TrackedImageState native_output_state = {};
     std::uint64_t token = 0u;
     std::uint64_t recording_generation = 1u;
     std::uint64_t prepared_generation = 0u;
@@ -669,6 +661,19 @@ struct AdapterRuntime::Impl {
       return VulkanError(result);
     }
 
+    created.state = {
+        .image = created.image,
+        .image_view = created.view,
+        .range = ColorSubresourceRange(),
+        .format = format,
+        .usage = image_info.usage,
+        .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        .access = 0u,
+        .queue_family = VK_QUEUE_FAMILY_IGNORED,
+        .contents_valid = false,
+    };
+
     *allocation = created;
     return Success();
   }
@@ -840,6 +845,7 @@ struct AdapterRuntime::Impl {
     bundle->command_buffer = command_buffer;
     bundle->native_motion_vectors = {};
     bundle->native_output = {};
+    bundle->native_output_state = {};
     bundle->token = 0u;
     bundle->recording_generation = 1u;
     bundle->prepared_generation = 0u;
@@ -854,8 +860,12 @@ struct AdapterRuntime::Impl {
     // longer pending. Every private image is fully overwritten on its next
     // use, so UNDEFINED safely discards its prior contents without requiring
     // knowledge of a partially recorded NGX layout sequence.
-    bundle->color.layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    bundle->dlss_output.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    for (auto* allocation : {&bundle->color, &bundle->dlss_output}) {
+      allocation->state.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+      allocation->state.stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+      allocation->state.access = 0u;
+      allocation->state.contents_valid = false;
+    }
   }
 
   void RecycleBundle(VkCommandBuffer command_buffer) {
@@ -909,6 +919,25 @@ struct AdapterRuntime::Impl {
     const auto& depth = prepare_info.depth;
     const auto& motion = prepare_info.motion_vectors;
     const auto& output = prepare_info.output_color_pass;
+    const auto& output_state = prepare_info.output_color_pass_state;
+    const VkAccessFlags output_access =
+        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    const bool exact_output_state =
+        output_state.image == FromOpaque<VkImage>(output.image)
+        && output_state.image_view == FromOpaque<VkImageView>(output.image_view)
+        && output_state.range.aspectMask == VK_IMAGE_ASPECT_COLOR_BIT
+        && output_state.range.baseMipLevel == output.mip_level
+        && output_state.range.levelCount == 1u
+        && output_state.range.baseArrayLayer == output.array_layer
+        && output_state.range.layerCount == 1u
+        && output_state.format == kNativeOutputFormat
+        && (output_state.usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0u
+        && output_state.layout == VK_IMAGE_LAYOUT_GENERAL
+        && output_state.stage == VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+        && (output_state.access & output_access) != 0u
+        && (output_state.access & ~output_access) == 0u
+        && output_state.queue_family == VK_QUEUE_FAMILY_IGNORED
+        && output_state.contents_valid;
     return color.image != 0u && color.image_view != 0u
            && color.format == kNativeCurrentColorFormat
            && color.width >= prepare_info.render_width
@@ -929,6 +958,7 @@ struct AdapterRuntime::Impl {
            && output.width >= prepare_info.output_width
            && output.height >= prepare_info.output_height
            && output.layout == VK_IMAGE_LAYOUT_GENERAL
+           && exact_output_state
            && std::isfinite(prepare_info.dlaa_sharpening)
            && prepare_info.dlaa_sharpening >= 0.f
            && prepare_info.dlaa_sharpening <= 1.f
@@ -1038,66 +1068,23 @@ struct AdapterRuntime::Impl {
         nullptr);
   }
 
-  static VkImageMemoryBarrier ScratchBarrier(
-      const ImageAllocation& allocation,
-      VkImageLayout new_layout,
-      VkAccessFlags source_access,
-      VkAccessFlags destination_access) {
-    return {
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        nullptr,
-        source_access,
-        destination_access,
-        allocation.layout,
-        new_layout,
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        allocation.image,
-        ColorSubresourceRange(),
-    };
-  }
-
-  static VkImageMemoryBarrier NativeOutputBarrier(
-      const DetroitDlssResource& output,
-      VkAccessFlags source_access,
-      VkAccessFlags destination_access) {
-    return {
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        nullptr,
-        source_access,
-        destination_access,
-        static_cast<VkImageLayout>(output.layout),
-        static_cast<VkImageLayout>(output.layout),
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        FromOpaque<VkImage>(output.image),
-        NativeColorSubresourceRange(output),
-    };
-  }
-
   void RecordPrepare(
       ScratchBundle* bundle,
       const AdapterPrepareInfo& prepare_info) const {
-    std::array<VkImageMemoryBarrier, 2u> before_prepare = {
-        ScratchBarrier(
-            bundle->color,
-            VK_IMAGE_LAYOUT_GENERAL,
-            bundle->color.layout == VK_IMAGE_LAYOUT_UNDEFINED
-                ? 0u
-                : VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-            VK_ACCESS_SHADER_WRITE_BIT),
-        ScratchBarrier(
-            bundle->dlss_output,
-            VK_IMAGE_LAYOUT_GENERAL,
-            bundle->dlss_output.layout == VK_IMAGE_LAYOUT_UNDEFINED
-                ? 0u
-                : VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-            VK_ACCESS_SHADER_WRITE_BIT),
+    const std::array before_prepare_plans = {
+        renodx::utils::dlss::vulkan::PlanScratchStorageWrite(bundle->color.state),
+        renodx::utils::dlss::vulkan::PlanScratchStorageWrite(
+            bundle->dlss_output.state),
+    };
+    const std::array before_prepare = {
+        before_prepare_plans[0u].barrier,
+        before_prepare_plans[1u].barrier,
     };
     procedures.cmd_pipeline_barrier(
         prepare_info.command_buffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        before_prepare_plans[0u].source_stage
+            | before_prepare_plans[1u].source_stage,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         0u,
         0u,
         nullptr,
@@ -1105,8 +1092,11 @@ struct AdapterRuntime::Impl {
         nullptr,
         static_cast<std::uint32_t>(before_prepare.size()),
         before_prepare.data());
-    bundle->color.layout = VK_IMAGE_LAYOUT_GENERAL;
-    bundle->dlss_output.layout = VK_IMAGE_LAYOUT_GENERAL;
+    for (auto* state : {&bundle->color.state, &bundle->dlss_output.state}) {
+      state->layout = VK_IMAGE_LAYOUT_GENERAL;
+      state->stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      state->access = VK_ACCESS_SHADER_WRITE_BIT;
+    }
 
     procedures.cmd_bind_pipeline(
         prepare_info.command_buffer,
@@ -1126,18 +1116,19 @@ struct AdapterRuntime::Impl {
         DispatchCount(prepare_info.render_width, adapter_shaders::kWorkgroupSize[0u]),
         DispatchCount(prepare_info.render_height, adapter_shaders::kWorkgroupSize[1u]),
         1u);
+    bundle->color.state.contents_valid = true;
+    // Prepare does not write the NGX output, but its transition established the
+    // exact GENERAL/storage state that Evaluate will consume and overwrite.
+    bundle->dlss_output.state.contents_valid = false;
 
-    const std::array<VkImageMemoryBarrier, 1u> after_prepare = {
-        ScratchBarrier(
-            bundle->color,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_ACCESS_SHADER_WRITE_BIT,
-            VK_ACCESS_SHADER_READ_BIT),
-    };
+    const auto after_prepare_plan =
+        renodx::utils::dlss::vulkan::PlanPreparedColorSampledRead(
+            bundle->color.state);
+    const std::array after_prepare = {after_prepare_plan.barrier};
     procedures.cmd_pipeline_barrier(
         prepare_info.command_buffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        after_prepare_plan.source_stage,
+        after_prepare_plan.destination_stage,
         0u,
         0u,
         nullptr,
@@ -1145,7 +1136,9 @@ struct AdapterRuntime::Impl {
         nullptr,
         static_cast<std::uint32_t>(after_prepare.size()),
         after_prepare.data());
-    bundle->color.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    bundle->color.state.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    bundle->color.state.stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    bundle->color.state.access = VK_ACCESS_SHADER_READ_BIT;
   }
 
   void RecordPack(ScratchBundle* bundle) const {
@@ -1169,33 +1162,54 @@ struct AdapterRuntime::Impl {
         0u,
         sizeof(bundle->pack_constants),
     };
-    const std::array<VkImageMemoryBarrier, 2u> before_pack = {
-        ScratchBarrier(
-            pack_source,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            // NGX is opaque to the adapter, while the diagnostic source was
-            // written by Prepare. Conservatively expose the relevant writes
-            // before the common pack shader samples either source.
-            bundle->diagnostic_spatial_output ? VK_ACCESS_SHADER_WRITE_BIT
-                                              : VK_ACCESS_MEMORY_WRITE_BIT,
-            VK_ACCESS_SHADER_READ_BIT),
-        NativeOutputBarrier(
-            bundle->native_output,
-            VK_ACCESS_SHADER_WRITE_BIT,
-            VK_ACCESS_SHADER_WRITE_BIT),
-    };
     procedures.cmd_pipeline_barrier(
         bundle->command_buffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         0u,
         0u,
         nullptr,
         1u,
         &constants_barrier,
-        static_cast<std::uint32_t>(before_pack.size()),
+        0u,
+        nullptr);
+
+    std::array<VkImageMemoryBarrier, 2u> before_pack = {};
+    std::uint32_t before_pack_count = 0u;
+    if (!bundle->diagnostic_direct_output) {
+      const auto source_plan = bundle->diagnostic_spatial_output
+                                   ? renodx::utils::dlss::vulkan::MakeImageBarrierPlan(
+                                         pack_source.state,
+                                         pack_source.state.stage,
+                                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                         pack_source.state.access,
+                                         VK_ACCESS_SHADER_READ_BIT,
+                                         pack_source.state.layout,
+                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                                   : renodx::utils::dlss::vulkan::PlanNgxOutputSampledRead(
+                                         pack_source.state);
+      before_pack[before_pack_count++] = source_plan.barrier;
+    }
+    const auto native_output_plan =
+        renodx::utils::dlss::vulkan::PlanNativeOutputPackWrite(
+            bundle->native_output_state);
+    before_pack[before_pack_count++] = native_output_plan.barrier;
+    procedures.cmd_pipeline_barrier(
+        bundle->command_buffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0u,
+        0u,
+        nullptr,
+        0u,
+        nullptr,
+        before_pack_count,
         before_pack.data());
-    pack_source.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    if (!bundle->diagnostic_direct_output) {
+      pack_source.state.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      pack_source.state.stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      pack_source.state.access = VK_ACCESS_SHADER_READ_BIT;
+    }
 
     procedures.cmd_bind_pipeline(
         bundle->command_buffer,
@@ -1219,22 +1233,27 @@ struct AdapterRuntime::Impl {
             bundle->dlss_output.extent.height,
             adapter_shaders::kWorkgroupSize[1u]),
         1u);
+    bundle->native_output_state.stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    bundle->native_output_state.access = VK_ACCESS_SHADER_WRITE_BIT;
+    bundle->native_output_state.layout = VK_IMAGE_LAYOUT_GENERAL;
+    bundle->native_output_state.contents_valid = true;
 
-    const auto after_pack = NativeOutputBarrier(
-        bundle->native_output,
-        VK_ACCESS_SHADER_WRITE_BIT,
-        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+    const auto after_pack =
+        renodx::utils::dlss::vulkan::PlanPackedOutputDownstream(
+            bundle->native_output_state);
     procedures.cmd_pipeline_barrier(
         bundle->command_buffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        after_pack.source_stage,
+        after_pack.destination_stage,
         0u,
         0u,
         nullptr,
         0u,
         nullptr,
         1u,
-        &after_pack);
+        &after_pack.barrier);
+    bundle->native_output_state.access =
+        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
   }
 
   static DetroitDlssResource MakeScratchResource(const ImageAllocation& allocation) {
@@ -1242,7 +1261,7 @@ struct AdapterRuntime::Impl {
         ToOpaque(allocation.image),
         ToOpaque(allocation.view),
         static_cast<std::uint32_t>(allocation.format),
-        static_cast<std::uint32_t>(allocation.layout),
+        static_cast<std::uint32_t>(allocation.state.layout),
         allocation.extent.width,
         allocation.extent.height,
         0u,
@@ -1391,6 +1410,7 @@ AdapterResult AdapterRuntime::Prepare(
   impl_->RecordPrepare(&bundle, prepare_info);
   bundle.native_motion_vectors = prepare_info.motion_vectors;
   bundle.native_output = prepare_info.output_color_pass;
+  bundle.native_output_state = prepare_info.output_color_pass_state;
   bundle.diagnostic_spatial_output = prepare_info.diagnostic_spatial_output;
   bundle.diagnostic_direct_output = prepare_info.diagnostic_direct_output;
   bundle.pack_constants = {
@@ -1410,6 +1430,9 @@ AdapterResult AdapterRuntime::Prepare(
   prepared_frame->depth = prepare_info.depth;
   prepared_frame->motion_vectors = bundle.native_motion_vectors;
   prepared_frame->output = Impl::MakeScratchResource(bundle.dlss_output);
+  prepared_frame->color_state = bundle.color.state;
+  prepared_frame->output_state = bundle.dlss_output.state;
+  prepared_frame->native_output_state = bundle.native_output_state;
   prepared_frame->render_width = prepare_info.render_width;
   prepared_frame->render_height = prepare_info.render_height;
   prepared_frame->output_width = prepare_info.output_width;
@@ -1458,6 +1481,9 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
       && prepared_frame.motion_vectors.format == bundle.native_motion_vectors.format
       && prepared_frame.output.image == expected_output.image
       && prepared_frame.output.image_view == expected_output.image_view
+      && prepared_frame.color_state == bundle.color.state
+      && prepared_frame.output_state == bundle.dlss_output.state
+      && prepared_frame.native_output_state == bundle.native_output_state
       && prepared_frame.output_width == bundle.dlss_output.extent.width
       && prepared_frame.output_height == bundle.dlss_output.extent.height;
   if (!prepared_resources_match) {
@@ -1465,6 +1491,12 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
     return Fallback(AdapterDetail::kStalePreparedFrame);
   }
 
+  // A successful NGX Evaluate recorded a compute storage write to this private
+  // output. This is the only point where its contents become valid.
+  bundle.dlss_output.state.layout = VK_IMAGE_LAYOUT_GENERAL;
+  bundle.dlss_output.state.stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+  bundle.dlss_output.state.access = VK_ACCESS_SHADER_WRITE_BIT;
+  bundle.dlss_output.state.contents_valid = true;
   impl_->RecordPack(&bundle);
   bundle.active = false;
   return Success();
@@ -1498,6 +1530,9 @@ AdapterResult AdapterRuntime::CommitSpatialDiagnostic(
       && prepared_frame.motion_vectors.format == bundle.native_motion_vectors.format
       && prepared_frame.output.image == expected_output.image
       && prepared_frame.output.image_view == expected_output.image_view
+      && prepared_frame.color_state == bundle.color.state
+      && prepared_frame.output_state == bundle.dlss_output.state
+      && prepared_frame.native_output_state == bundle.native_output_state
       && prepared_frame.output_width == bundle.dlss_output.extent.width
       && prepared_frame.output_height == bundle.dlss_output.extent.height;
   if (!prepared_resources_match) {

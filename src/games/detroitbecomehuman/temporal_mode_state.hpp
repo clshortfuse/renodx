@@ -34,6 +34,37 @@ struct Authorization {
 // auxiliary-only recording in a later DLAA session.
 class Tracker {
  public:
+  class Transaction final {
+   public:
+    Transaction(Transaction&&) = delete;
+    Transaction& operator=(Transaction&&) = delete;
+    Transaction(const Transaction&) = delete;
+    Transaction& operator=(const Transaction&) = delete;
+
+    [[nodiscard]] const Snapshot& GetSnapshot() const noexcept {
+      return snapshot_;
+    }
+
+    [[nodiscard]] bool Record(
+        std::uint64_t command_list, bool output_valid) {
+      return owner_ != nullptr
+             && owner_->RecordLocked(command_list, snapshot_, output_valid);
+    }
+
+   private:
+    friend class Tracker;
+
+    explicit Transaction(Tracker* owner)
+        : owner_(owner), lock_(owner->mutex_), snapshot_({
+                                                   .mode = owner->mode_.load(std::memory_order_relaxed),
+                                                   .generation = owner->generation_,
+                                               }) {}
+
+    Tracker* owner_ = nullptr;
+    std::unique_lock<std::mutex> lock_;
+    Snapshot snapshot_ = {};
+  };
+
   [[nodiscard]] DetroitDlssMode GetMode() const noexcept {
     return mode_.load(std::memory_order_acquire);
   }
@@ -44,6 +75,10 @@ class Tracker {
         .mode = mode_.load(std::memory_order_relaxed),
         .generation = generation_,
     };
+  }
+
+  [[nodiscard]] Transaction BeginTransaction() {
+    return Transaction(this);
   }
 
   [[nodiscard]] SetModeResult SetMode(DetroitDlssMode mode) {
@@ -87,6 +122,15 @@ class Tracker {
       bool output_valid) {
     if (command_list == 0u) return false;
     std::scoped_lock lock(mutex_);
+    return RecordLocked(command_list, snapshot, output_valid);
+  }
+
+ private:
+  [[nodiscard]] bool RecordLocked(
+      std::uint64_t command_list,
+      const Snapshot& snapshot,
+      bool output_valid) {
+    if (command_list == 0u) return false;
     if (snapshot.generation != generation_
         || snapshot.mode != mode_.load(std::memory_order_relaxed)) {
       return false;
@@ -98,8 +142,6 @@ class Tracker {
     authorized_generation_by_command_list_[command_list] = snapshot.generation;
     return true;
   }
-
- private:
   void AdvanceGenerationLocked() noexcept {
     ++generation_;
     if (generation_ == 0u) generation_ = 1u;

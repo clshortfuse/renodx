@@ -1526,6 +1526,69 @@ renodx::utils::dlss::vulkan::ImageResource MakeCoreImageResource(
   };
 }
 
+std::optional<renodx::utils::dlss::vulkan::TrackedImageState>
+CaptureNativeOutputTrackedState(
+    DeviceState* state,
+    const DetroitDlssResource& resource) {
+  if (state == nullptr || resource.image == 0u || resource.image_view == 0u
+      || resource.layout != VK_IMAGE_LAYOUT_GENERAL) {
+    return std::nullopt;
+  }
+
+  const std::lock_guard lock(state->tracking_mutex);
+  const auto image = state->images.find(resource.image);
+  const auto view = state->image_views.find(resource.image_view);
+  if (image == state->images.end() || view == state->image_views.end()) {
+    return std::nullopt;
+  }
+
+  const auto native_image = FromOpaque<VkImage>(resource.image);
+  const auto native_view = FromOpaque<VkImageView>(resource.image_view);
+  const VkImageSubresourceRange expected_range = {
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .baseMipLevel = resource.mip_level,
+      .levelCount = 1u,
+      .baseArrayLayer = resource.array_layer,
+      .layerCount = 1u,
+  };
+  const auto& tracked_image = image->second;
+  const auto& tracked_view = view->second;
+  const bool exact_view =
+      tracked_view.image == native_image
+      && tracked_view.type == VK_IMAGE_VIEW_TYPE_2D
+      && tracked_view.format == static_cast<VkFormat>(resource.format)
+      && tracked_view.subresource_range.aspectMask == expected_range.aspectMask
+      && tracked_view.subresource_range.baseMipLevel
+             == expected_range.baseMipLevel
+      && tracked_view.subresource_range.levelCount == expected_range.levelCount
+      && tracked_view.subresource_range.baseArrayLayer
+             == expected_range.baseArrayLayer
+      && tracked_view.subresource_range.layerCount == expected_range.layerCount;
+  const bool exact_image =
+      tracked_image.type == VK_IMAGE_TYPE_2D
+      && tracked_image.format == static_cast<VkFormat>(resource.format)
+      && tracked_image.samples == VK_SAMPLE_COUNT_1_BIT
+      && resource.mip_level < tracked_image.mip_levels
+      && resource.array_layer < tracked_image.array_layers
+      && (tracked_image.usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0u;
+  if (!exact_view || !exact_image) return std::nullopt;
+
+  return renodx::utils::dlss::vulkan::TrackedImageState{
+      .image = native_image,
+      .image_view = native_view,
+      .range = expected_range,
+      .format = tracked_image.format,
+      .usage = tracked_image.usage,
+      .layout = VK_IMAGE_LAYOUT_GENERAL,
+      // b16 is captured at Detroit's temporal compute pass. The adapter is
+      // allowed to replace only this exact compute read/write dependency.
+      .stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      .access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+      .queue_family = VK_QUEUE_FAMILY_IGNORED,
+      .contents_valid = true,
+  };
+}
+
 void SetEvaluationResult(
     DetroitDlssEvaluateResult* result,
     DetroitDlssResultCode status,
@@ -2920,6 +2983,17 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     }
   }
 
+  const auto native_output_state =
+      CaptureNativeOutputTrackedState(state.get(), inputs->output);
+  if (!native_output_state.has_value()) {
+    SetEvaluationResult(
+        result,
+        DETROIT_DLSS_RESULT_FALLBACK,
+        BridgeDetail::kInvalidFrame,
+        frame_id);
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+
   using renodx::games::detroitbecomehuman::dlss::AdapterPreparedFrame;
   using renodx::games::detroitbecomehuman::dlss::AdapterPrepareInfo;
   AdapterPreparedFrame prepared_frame = {};
@@ -2930,6 +3004,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
           .depth = inputs->depth,
           .motion_vectors = inputs->motion_vectors,
           .output_color_pass = inputs->output,
+          .output_color_pass_state = *native_output_state,
           .render_width = inputs->render_width,
           .render_height = inputs->render_height,
           .output_width = inputs->output_width,
@@ -2998,6 +3073,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       false,
       VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_ACCESS_SHADER_READ_BIT);
+  color.state = prepared_frame.color_state;
   auto depth = MakeCoreImageResource(
       prepared_frame.depth,
       VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -3016,6 +3092,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       true,
       VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_ACCESS_SHADER_WRITE_BIT);
+  output.state = prepared_frame.output_state;
   auto exposure = MakeCoreImageResource(
       inputs->exposure,
       VK_IMAGE_ASPECT_COLOR_BIT,

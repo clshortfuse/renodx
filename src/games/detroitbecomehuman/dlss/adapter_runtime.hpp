@@ -13,6 +13,7 @@
 #include <memory>
 
 #include "../dlss_bridge_abi.h"
+#include "utils/dlss/ngx_vulkan.hpp"
 
 namespace renodx::games::detroitbecomehuman::dlss {
 
@@ -63,6 +64,7 @@ struct AdapterPrepareInfo {
   DetroitDlssResource depth = {};
   DetroitDlssResource motion_vectors = {};
   DetroitDlssResource output_color_pass = {};
+  renodx::utils::dlss::vulkan::TrackedImageState output_color_pass_state = {};
   std::uint32_t render_width = 0u;
   std::uint32_t render_height = 0u;
   std::uint32_t output_width = 0u;
@@ -103,6 +105,9 @@ struct AdapterPreparedFrame {
   DetroitDlssResource depth = {};
   DetroitDlssResource motion_vectors = {};
   DetroitDlssResource output = {};
+  renodx::utils::dlss::vulkan::TrackedImageState color_state = {};
+  renodx::utils::dlss::vulkan::TrackedImageState output_state = {};
+  renodx::utils::dlss::vulkan::TrackedImageState native_output_state = {};
   std::uint32_t render_width = 0u;
   std::uint32_t render_height = 0u;
   std::uint32_t output_width = 0u;

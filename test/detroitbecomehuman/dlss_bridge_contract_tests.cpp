@@ -3,11 +3,14 @@
  */
 
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <limits>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 
 #include "src/games/detroitbecomehuman/dlss_bridge_abi.h"
@@ -890,6 +893,43 @@ bool TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization() {
   return passed;
 }
 
+bool TestTemporalModeTransactionSerializesCommit() {
+  temporal_mode_state::Tracker tracker;
+  constexpr std::uint64_t kCommandList = UINT64_C(0xCAFEBABE);
+  (void)tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
+
+  std::atomic_bool attempting_transition = false;
+  std::atomic_bool transition_completed = false;
+  std::thread transition;
+  bool passed = true;
+  {
+    auto transaction = tracker.BeginTransaction();
+    transition = std::thread([&] {
+      attempting_transition.store(true, std::memory_order_release);
+      (void)tracker.SetMode(DETROIT_DLSS_MODE_NATIVE);
+      transition_completed.store(true, std::memory_order_release);
+    });
+    while (!attempting_transition.load(std::memory_order_acquire)) {
+      std::this_thread::yield();
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    passed &= Expect(
+        !transition_completed.load(std::memory_order_acquire),
+        "mode transition must wait while temporal output commit owns its lease");
+    passed &= Expect(
+        transaction.GetSnapshot().mode == DETROIT_DLSS_MODE_DLAA
+            && transaction.Record(kCommandList, true),
+        "leased generation must authorize output without a fallible recheck");
+  }
+  transition.join();
+  passed &= Expect(
+      transition_completed.load(std::memory_order_acquire)
+          && tracker.GetMode() == DETROIT_DLSS_MODE_NATIVE
+          && !tracker.QueryAuthorization(kCommandList).authorized,
+      "blocked mode transition must complete and revoke authorization after commit");
+  return passed;
+}
+
 }  // namespace
 
 int main() {
@@ -901,6 +941,7 @@ int main() {
   passed &= TestFunctionTableContract();
   passed &= TestDirectProviderContract();
   passed &= TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization();
+  passed &= TestTemporalModeTransactionSerializesCommit();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
   return passed ? 0 : 1;
 }

@@ -714,17 +714,17 @@ struct NativeTemporalFallbackGuard {
   Context* context = nullptr;
   reshade::api::pipeline native_pipeline = {0u};
   bool armed = false;
-  temporal_mode_state::Snapshot mode_snapshot = {};
+  temporal_mode_state::Tracker::Transaction* transaction = nullptr;
 
   NativeTemporalFallbackGuard(
       Context& dispatch_context,
       reshade::api::pipeline pipeline,
       bool auxiliary_replacement_used,
-      temporal_mode_state::Snapshot snapshot)
+      temporal_mode_state::Tracker::Transaction& mode_transaction)
       : context(&dispatch_context),
         native_pipeline(pipeline),
         armed(auxiliary_replacement_used && pipeline.handle != 0u),
-        mode_snapshot(snapshot) {}
+        transaction(&mode_transaction) {}
 
   NativeTemporalFallbackGuard(const NativeTemporalFallbackGuard&) = delete;
   NativeTemporalFallbackGuard& operator=(const NativeTemporalFallbackGuard&) = delete;
@@ -745,8 +745,7 @@ struct NativeTemporalFallbackGuard {
         context->arguments.group_count_x,
         context->arguments.group_count_y,
         context->arguments.group_count_z);
-    (void)RecordDlssOutputForCommandList(
-        context->cmd_list->get_native(), mode_snapshot, false);
+    (void)transaction->Record(context->cmd_list->get_native(), false);
     if (!has_logged_auxiliary_fallback_replay.exchange(
             true, std::memory_order_acq_rel)) {
       Log(
@@ -769,12 +768,13 @@ inline void AfterNativeTemporalDispatch(
       auxiliary_temporal_replacement_generation;
   auxiliary_temporal_replacement_requested = false;
   auxiliary_temporal_replacement_generation = 0u;
-  const auto mode_snapshot = mode_state.GetSnapshot();
+  auto mode_transaction = mode_state.BeginTransaction();
+  const auto mode_snapshot = mode_transaction.GetSnapshot();
   NativeTemporalFallbackGuard native_fallback(
       context,
       native_temporal_pipeline,
       auxiliary_replacement_used,
-      mode_snapshot);
+      mode_transaction);
   const auto temporal_pipeline = native_temporal_pipeline;
   const auto temporal_pipeline_layout = native_temporal_pipeline_layout;
   native_temporal_pipeline = {0u};
@@ -785,8 +785,7 @@ inline void AfterNativeTemporalDispatch(
       context.cmd_list->get_native(), dispatch_serial);
   // A later temporal dispatch in the same presented frame supersedes an
   // earlier result. Re-arm CAS until this dispatch independently succeeds.
-  (void)RecordDlssOutputForCommandList(
-      context.cmd_list->get_native(), mode_snapshot, false);
+  (void)mode_transaction.Record(context.cmd_list->get_native(), false);
   if (auxiliary_replacement_used
       && replacement_generation != mode_snapshot.generation) {
     runtime_status.store(
@@ -1123,9 +1122,8 @@ inline void AfterNativeTemporalDispatch(
   // Detroit's native b16 output.
   const bool auxiliary_replacement_allowed =
       evaluation.bridge_detail != kDiagnosticPostNativeDirectDetail;
-  const bool output_authorized = RecordDlssOutputForCommandList(
+  const bool output_authorized = mode_transaction.Record(
       inputs.command_buffer,
-      mode_snapshot,
       evaluation.output_valid && evaluation.suppress_final_cas
           && auxiliary_replacement_allowed);
   if (evaluation.output_valid && evaluation.suppress_final_cas

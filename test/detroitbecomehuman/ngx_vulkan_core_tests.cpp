@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "utils/dlss/ngx_vulkan.hpp"
+#include "utils/dlss/vulkan_barriers.hpp"
 
 namespace dlss = renodx::utils::dlss::vulkan;
 
@@ -438,6 +439,72 @@ bool TestOneTimeRetirementCompletesWithSubmission() {
   return passed;
 }
 
+bool TestExactComputeBarrierPlans() {
+  dlss::TrackedImageState image = {
+      .image = FakeHandle<VkImage>(0x7000u),
+      .image_view = FakeHandle<VkImageView>(0x7001u),
+      .range = {
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .baseMipLevel = 2u,
+          .levelCount = 1u,
+          .baseArrayLayer = 3u,
+          .layerCount = 1u,
+      },
+      .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+      .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+      .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .queue_family = VK_QUEUE_FAMILY_IGNORED,
+      .contents_valid = false,
+  };
+  bool passed = true;
+  const auto fresh = dlss::PlanScratchStorageWrite(image);
+  passed &= Expect(
+      fresh.source_stage == VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT
+          && fresh.destination_stage == VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+          && fresh.barrier.srcAccessMask == 0u
+          && fresh.barrier.dstAccessMask == VK_ACCESS_SHADER_WRITE_BIT
+          && fresh.barrier.oldLayout == VK_IMAGE_LAYOUT_UNDEFINED
+          && fresh.barrier.newLayout == VK_IMAGE_LAYOUT_GENERAL,
+      "fresh scratch must discard contents into a compute storage write");
+
+  image.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  image.stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+  image.access = VK_ACCESS_SHADER_READ_BIT;
+  image.contents_valid = true;
+  const auto reused = dlss::PlanScratchStorageWrite(image);
+  const auto prepared = dlss::PlanPreparedColorSampledRead(image);
+  const auto ngx_output = dlss::PlanNgxOutputSampledRead(image);
+  const auto native_output = dlss::PlanNativeOutputPackWrite(image);
+  const auto downstream = dlss::PlanPackedOutputDownstream(image);
+  passed &= Expect(
+      reused.source_stage == VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+          && reused.barrier.srcAccessMask == VK_ACCESS_SHADER_READ_BIT,
+      "reused scratch must depend on its proven compute access");
+  passed &= Expect(
+      prepared.barrier.srcAccessMask == VK_ACCESS_SHADER_WRITE_BIT
+          && prepared.barrier.dstAccessMask == VK_ACCESS_SHADER_READ_BIT
+          && ngx_output.barrier.srcAccessMask == VK_ACCESS_SHADER_WRITE_BIT
+          && ngx_output.barrier.dstAccessMask == VK_ACCESS_SHADER_READ_BIT,
+      "prepared and NGX color must expose compute writes to sampled reads");
+  passed &= Expect(
+      native_output.barrier.srcAccessMask
+              == (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT)
+          && native_output.barrier.dstAccessMask == VK_ACCESS_SHADER_WRITE_BIT
+          && downstream.barrier.srcAccessMask == VK_ACCESS_SHADER_WRITE_BIT
+          && downstream.barrier.dstAccessMask
+                 == (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT),
+      "b16 pack dependencies must include prior and downstream compute access");
+  for (const auto& plan : {fresh, reused, prepared, ngx_output, native_output, downstream}) {
+    passed &= Expect(
+        (plan.source_stage & VK_PIPELINE_STAGE_ALL_COMMANDS_BIT) == 0u
+            && (plan.destination_stage & VK_PIPELINE_STAGE_ALL_COMMANDS_BIT) == 0u
+            && (plan.barrier.srcAccessMask & VK_ACCESS_MEMORY_WRITE_BIT) == 0u
+            && (plan.barrier.dstAccessMask & VK_ACCESS_MEMORY_WRITE_BIT) == 0u,
+        "DLSS barrier plans must not use broad ALL_COMMANDS or MEMORY_WRITE masks");
+  }
+  return passed;
+}
+
 }  // namespace
 
 int main() {
@@ -447,6 +514,7 @@ int main() {
   passed &= TestDedicatedFeatureCreationAndFirstReset();
   passed &= TestRetirementWaitsForReusableRecordingInvalidation();
   passed &= TestOneTimeRetirementCompletesWithSubmission();
+  passed &= TestExactComputeBarrierPlans();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
   return passed ? 0 : 1;
 }
