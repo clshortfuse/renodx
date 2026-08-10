@@ -69,6 +69,8 @@ constexpr std::array<std::uint32_t, DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT>
 
 using BootstrapStatus =
     renodx::games::detroitbecomehuman::dlss::embedded::BootstrapStatus;
+using renodx::games::detroitbecomehuman::dlss::embedded::
+    RestoreVulkanLayerDispatchPointer;
 
 std::mutex bootstrap_mutex;
 std::string cached_instance_extensions;
@@ -1324,8 +1326,27 @@ VkResult CoreAllocateCommandBuffers(
     VkDevice device,
     const VkCommandBufferAllocateInfo* allocate_info,
     VkCommandBuffer* command_buffers) {
-  return static_cast<DeviceState*>(context)->next_allocate_command_buffers(
+  auto* const state = static_cast<DeviceState*>(context);
+  const VkResult result = state->next_allocate_command_buffers(
       device, allocate_info, command_buffers);
+  if (result != VK_SUCCESS || allocate_info == nullptr
+      || command_buffers == nullptr) {
+    return result;
+  }
+
+  // This callback invokes ReShade's layer trampoline internally rather than
+  // returning through the Vulkan loader. ReShade registers each command buffer
+  // during allocation, but the loader therefore never replaces the downstream
+  // dispatch pointer with ReShade's device dispatch pointer. Without this fix,
+  // ReShade's vkBeginCommandBuffer cannot resolve its device and dereferences a
+  // null device_impl before NGX feature creation reaches Evaluate.
+  for (std::uint32_t index = 0u; index < allocate_info->commandBufferCount;
+       ++index) {
+    if (!RestoreVulkanLayerDispatchPointer(device, command_buffers[index])) {
+      return VK_ERROR_INITIALIZATION_FAILED;
+    }
+  }
+  return result;
 }
 
 void CoreFreeCommandBuffers(

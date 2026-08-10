@@ -23,6 +23,29 @@ void Expect(bool condition, const char* message) {
 }  // namespace
 
 int main() {
+  struct FakeDispatchable {
+    void* dispatch = nullptr;
+    std::uintptr_t payload = 0u;
+  };
+  int parent_dispatch = 1;
+  int downstream_dispatch = 2;
+  FakeDispatchable parent = {&parent_dispatch, 0x1234u};
+  FakeDispatchable child = {&downstream_dispatch, 0x5678u};
+  Expect(
+      embedded::RestoreVulkanLayerDispatchPointer(&parent, &child),
+      "private Vulkan command buffer dispatch repair must succeed");
+  Expect(
+      child.dispatch == parent.dispatch && child.payload == 0x5678u,
+      "dispatch repair must copy only the parent layer dispatch pointer");
+  Expect(
+      !embedded::RestoreVulkanLayerDispatchPointer(nullptr, &child)
+          && !embedded::RestoreVulkanLayerDispatchPointer(&parent, nullptr),
+      "dispatch repair must fail closed for null handles");
+  parent.dispatch = nullptr;
+  Expect(
+      !embedded::RestoreVulkanLayerDispatchPointer(&parent, &child),
+      "dispatch repair must reject a null parent dispatch table");
+
   Expect(
       !embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_NATIVE, false),
       "Native TAA with non-Retinal DOF must use the command-tracking fast path");

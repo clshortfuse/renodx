@@ -135,6 +135,20 @@ bool IsBridgeReady();
   return kDlssRuntimeEnabled || retinal_dof_requested;
 }
 
+// Calling a Vulkan layer's vkAllocateCommandBuffers trampoline directly skips
+// the loader step that installs the current layer dispatch pointer on returned
+// dispatchable objects. Copying it from the parent device makes the private
+// command buffer safe to pass back through that same layer.
+[[nodiscard]] inline bool RestoreVulkanLayerDispatchPointer(
+    void* parent_dispatchable, void* child_dispatchable) noexcept {
+  if (parent_dispatchable == nullptr || child_dispatchable == nullptr) return false;
+  void* const layer_dispatch =
+      *reinterpret_cast<void* const*>(parent_dispatchable);
+  if (layer_dispatch == nullptr) return false;
+  *reinterpret_cast<void**>(child_dispatchable) = layer_dispatch;
+  return true;
+}
+
 // Targeted DLSS/DLAA keeps only resource and descriptor metadata warm. This
 // separate gate enables per-command-buffer bind state solely for Retinal DOF.
 void SetRuntimeCommandTracking(bool enabled);
