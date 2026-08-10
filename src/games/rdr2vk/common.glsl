@@ -1,3 +1,6 @@
+#ifndef SRC_GAMES_RDR2VK_COMMON_GLSL_
+#define SRC_GAMES_RDR2VK_COMMON_GLSL_
+
 #include "./perceptual_color.glsl"
 #include "./shared.h"
 
@@ -179,3 +182,5 @@ vec3 DivideSafe(vec3 a, vec3 b, vec3 fallback) {
 }
 
 // END INCLUDES
+
+#endif  // SRC_GAMES_RDR2VK_COMMON_GLSL_
