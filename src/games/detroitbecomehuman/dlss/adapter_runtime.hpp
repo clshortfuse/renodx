@@ -74,6 +74,10 @@ struct AdapterPrepareInfo {
   // spatially expands CurrColor instead of evaluating NGX, which isolates an
   // input/viewport composition fault from an NGX integration fault.
   bool diagnostic_spatial_output = false;
+  // Samples the native CurrColor view directly in the pack shader. This keeps
+  // the b16 write path but removes the private color scratch image as the
+  // sampled source, isolating scratch reuse from presentation/output faults.
+  bool diagnostic_direct_output = false;
 };
 
 /*
@@ -104,6 +108,7 @@ struct AdapterPreparedFrame {
   std::uint32_t output_width = 0u;
   std::uint32_t output_height = 0u;
   bool diagnostic_spatial_output = false;
+  bool diagnostic_direct_output = false;
 };
 
 class AdapterRuntime final {

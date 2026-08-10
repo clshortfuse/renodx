@@ -181,6 +181,17 @@ inline std::atomic_uint64_t last_logged_evaluation_key =
     kUnloggedTelemetryKey;
 inline std::atomic_bool has_logged_auxiliary_fallback_replay = false;
 inline std::atomic_bool has_logged_auxiliary_active = false;
+// Temporary bounded capture for diagnosing temporal doubling. Keep this small
+// enough to avoid permanent per-frame logging and remove it after the jitter/MV
+// contract has been proven from a live sequence.
+inline constexpr std::uint32_t kTemporalDiagnosticFrameCount = 120u;
+inline std::atomic_uint32_t temporal_diagnostic_frame_count = 0u;
+// The direct A/B deliberately records its pack after Detroit's original TAA.
+// Do not authorize __temporal_aux for that diagnostic or the two remaining
+// suspects (native-TAA suppression versus adapter pack/state restore) cannot
+// be separated. This value mirrors BridgeDetail::kDiagnosticPostNativeDirect
+// in the embedded layer and is removed with the temporary A/B modes.
+inline constexpr std::uint32_t kDiagnosticPostNativeDirectDetail = 0xD1550014u;
 
 [[nodiscard]] inline std::uint64_t MixTelemetryKey(
     std::uint64_t key,
@@ -1073,13 +1084,50 @@ inline void AfterNativeTemporalDispatch(
   }
 
   const auto evaluation = dlss_bridge_client::client.Evaluate(mode, inputs);
+  const auto diagnostic_frame =
+      temporal_diagnostic_frame_count.fetch_add(1u, std::memory_order_relaxed);
+  if (diagnostic_frame < kTemporalDiagnosticFrameCount) {
+    Log(
+        reshade::log::level::info,
+        std::format(
+            "temporal telemetry sample {}: dispatch {}, frame {}, cmd 0x{:X}, "
+            "aux {}, jitter {:.9f},{:.9f}, MV scale {:.3f},{:.3f}, "
+            "requested reset {}, effective reset {}, "
+            "color 0x{:X}, depth 0x{:X}, MV 0x{:X}, output 0x{:X}, "
+            "verification 0x{:X}, eval status {}, reason {}, detail 0x{:X}, "
+            "output valid {}, CAS suppress {}.",
+            diagnostic_frame,
+            dispatch_serial,
+            inputs.frame_id,
+            inputs.command_buffer,
+            auxiliary_replacement_used,
+            inputs.jitter_x,
+            inputs.jitter_y,
+            inputs.motion_vector_scale_x,
+            inputs.motion_vector_scale_y,
+            inputs.reset,
+            evaluation.effective_reset,
+            inputs.current_color.image,
+            inputs.depth.image,
+            inputs.motion_vectors.image,
+            inputs.output.image,
+            inputs.verification_flags,
+            static_cast<std::uint32_t>(evaluation.status),
+            static_cast<std::uint32_t>(evaluation.reason),
+            evaluation.bridge_detail,
+            evaluation.output_valid,
+            evaluation.suppress_final_cas));
+  }
   // The final CAS gate follows the latest temporal dispatch in this frame.
   // Never retain a successful earlier dispatch if a later one fell back to
   // Detroit's native b16 output.
+  const bool auxiliary_replacement_allowed =
+      evaluation.bridge_detail != kDiagnosticPostNativeDirectDetail;
   const bool output_authorized = RecordDlssOutputForCommandList(
       inputs.command_buffer,
       mode_snapshot,
-      evaluation.output_valid && evaluation.suppress_final_cas);
+      evaluation.output_valid && evaluation.suppress_final_cas
+          && auxiliary_replacement_allowed);
   if (evaluation.output_valid && evaluation.suppress_final_cas
       && output_authorized) {
     native_fallback.Disarm();
@@ -1218,6 +1266,7 @@ inline void Use(DWORD fdw_reason) {
       last_logged_evaluation_key.store(
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);
+      temporal_diagnostic_frame_count.store(0u, std::memory_order_relaxed);
       // The Vulkan layer already owns the authoritative descriptor snapshot.
       // Enabling RenoDX's global descriptor-table trace here makes every
       // descriptor update in the game take the diagnostic slow path.

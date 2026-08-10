@@ -10,6 +10,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <span>
 #include <type_traits>
@@ -256,8 +257,35 @@ inline bool RunCallbacks(CommandContext<Arguments> context) {
     std::optional<renodx::utils::shader::ShaderStageIndex> matched_shader_stage = std::nullopt;
   };
 
-  static thread_local std::vector<PendingPostResult> pending_post_results;
+  // A callback or replayed command may record another command of the same
+  // type, recursively entering RunCallbacks on this thread. Give every active
+  // invocation its own cached vector: sharing one vector lets the nested call
+  // clear/reallocate the outer call's post-callback iterator and triggers an
+  // MSVC fail-fast. deque keeps references to existing frame vectors stable
+  // when a deeper recursion level is first created.
+  static thread_local std::deque<std::vector<PendingPostResult>>
+      pending_post_result_frames;
+  static thread_local std::size_t pending_post_result_depth = 0u;
+  const std::size_t pending_post_result_frame = pending_post_result_depth;
+  if (pending_post_result_frame == pending_post_result_frames.size()) {
+    pending_post_result_frames.emplace_back();
+  }
+  auto& pending_post_results =
+      pending_post_result_frames[pending_post_result_frame];
   pending_post_results.clear();
+  ++pending_post_result_depth;
+  struct PendingPostResultFrameGuard {
+    std::vector<PendingPostResult>* results;
+    std::size_t* depth;
+
+    ~PendingPostResultFrameGuard() {
+      results->clear();
+      --*depth;
+    }
+  } pending_post_result_frame_guard{
+      &pending_post_results,
+      &pending_post_result_depth,
+  };
 
   bool ran_callback = false;
   bool should_replay = false;

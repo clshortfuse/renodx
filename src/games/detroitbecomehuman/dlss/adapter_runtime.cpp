@@ -170,6 +170,7 @@ struct AdapterRuntime::Impl {
     std::uint64_t prepared_generation = 0u;
     PackConstants pack_constants = {};
     bool diagnostic_spatial_output = false;
+    bool diagnostic_direct_output = false;
     bool active = false;
     bool tainted = false;
   };
@@ -844,6 +845,7 @@ struct AdapterRuntime::Impl {
     bundle->prepared_generation = 0u;
     bundle->pack_constants = {};
     bundle->diagnostic_spatial_output = false;
+    bundle->diagnostic_direct_output = false;
     bundle->active = false;
     bundle->tainted = false;
 
@@ -947,9 +949,13 @@ struct AdapterRuntime::Impl {
         {VK_NULL_HANDLE, bundle->color.view, VK_IMAGE_LAYOUT_GENERAL},
         {
             sampler,
-            prepare_info.diagnostic_spatial_output ? bundle->color.view
-                                                   : bundle->dlss_output.view,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            prepare_info.diagnostic_direct_output
+                ? FromOpaque<VkImageView>(prepare_info.current_color.image_view)
+                : (prepare_info.diagnostic_spatial_output ? bundle->color.view
+                                                          : bundle->dlss_output.view),
+            prepare_info.diagnostic_direct_output
+                ? static_cast<VkImageLayout>(prepare_info.current_color.layout)
+                : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         },
         {
             VK_NULL_HANDLE,
@@ -1386,6 +1392,7 @@ AdapterResult AdapterRuntime::Prepare(
   bundle.native_motion_vectors = prepare_info.motion_vectors;
   bundle.native_output = prepare_info.output_color_pass;
   bundle.diagnostic_spatial_output = prepare_info.diagnostic_spatial_output;
+  bundle.diagnostic_direct_output = prepare_info.diagnostic_direct_output;
   bundle.pack_constants = {
       .sharpening = prepare_info.diagnostic_spatial_output
                         ? 0.f
@@ -1409,6 +1416,8 @@ AdapterResult AdapterRuntime::Prepare(
   prepared_frame->output_height = prepare_info.output_height;
   prepared_frame->diagnostic_spatial_output =
       prepare_info.diagnostic_spatial_output;
+  prepared_frame->diagnostic_direct_output =
+      prepare_info.diagnostic_direct_output;
   return Success();
 }
 
@@ -1438,6 +1447,8 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
   const bool prepared_resources_match =
       !prepared_frame.diagnostic_spatial_output
       && !bundle.diagnostic_spatial_output
+      && !prepared_frame.diagnostic_direct_output
+      && !bundle.diagnostic_direct_output
       && prepared_frame.color.image == expected_color.image
       && prepared_frame.color.image_view == expected_color.image_view
       && prepared_frame.motion_vectors.image == bundle.native_motion_vectors.image
@@ -1476,6 +1487,8 @@ AdapterResult AdapterRuntime::CommitSpatialDiagnostic(
   const bool prepared_resources_match =
       prepared_frame.diagnostic_spatial_output
       && bundle.diagnostic_spatial_output
+      && prepared_frame.diagnostic_direct_output
+             == bundle.diagnostic_direct_output
       && prepared_frame.color.image == expected_color.image
       && prepared_frame.color.image_view == expected_color.image_view
       && prepared_frame.motion_vectors.image == bundle.native_motion_vectors.image

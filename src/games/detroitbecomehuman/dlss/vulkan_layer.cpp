@@ -107,6 +107,8 @@ enum class BridgeDetail : std::uint32_t {
   kAdapterCommitFailed = 0xD1550010u,
   kDeviceIdentityMismatch = 0xD1550011u,
   kFeatureCreationPending = 0xD1550012u,
+  kDiagnosticNativeReplay = 0xD1550013u,
+  kDiagnosticPostNativeDirect = 0xD1550014u,
 };
 
 constexpr std::uint32_t kAdapterPrepareDetailBase = 0xD1551000u;
@@ -115,6 +117,7 @@ constexpr std::uint32_t kAdapterCommitDetailBase = 0xD1552000u;
 HMODULE layer_module = nullptr;
 std::mutex trace_mutex;
 std::atomic_bool spatial_diagnostic_logged = false;
+std::atomic_bool native_replay_diagnostic_logged = false;
 std::atomic_bool fenceless_submission_logged = false;
 
 template <typename Handle>
@@ -182,17 +185,63 @@ void Trace(std::string_view message) {
   CloseHandle(file);
 }
 
-bool UseSpatialDiagnosticOutput() {
-  static const bool enabled = [] {
+enum class DiagnosticOutputMode : std::uint8_t {
+  kNgx = 0u,
+  kSpatialScratch,
+  kSpatialDirect,
+  kNativeReplay,
+};
+
+DiagnosticOutputMode GetDiagnosticOutputMode() {
+  static const DiagnosticOutputMode mode = [] {
     std::array<char, 32u> value = {};
     const DWORD length = GetEnvironmentVariableA(
         kDiagnosticOutputEnvironment,
         value.data(),
         static_cast<DWORD>(value.size()));
-    return length != 0u && length < value.size()
-           && _stricmp(value.data(), "spatial") == 0;
+    if (length != 0u && length < value.size()) {
+      if (_stricmp(value.data(), "spatial") == 0) {
+        return DiagnosticOutputMode::kSpatialScratch;
+      }
+      if (_stricmp(value.data(), "direct") == 0) {
+        return DiagnosticOutputMode::kSpatialDirect;
+      }
+      if (_stricmp(value.data(), "native-replay") == 0) {
+        return DiagnosticOutputMode::kNativeReplay;
+      }
+    }
+
+    // Detroit is normally spawned by the already-running Steam process, so a
+    // temporary environment inherited by a launcher process never reaches the
+    // game. Keep the environment override for direct launches, but also accept
+    // a development-only value from the same ReShade.ini that owns the add-on
+    // settings. This is read once, off the per-frame hot path.
+    const auto module_path = std::filesystem::path(GetModulePath(layer_module));
+    if (module_path.empty()) return DiagnosticOutputMode::kNgx;
+    const auto ini_path = module_path.parent_path() / L"ReShade.ini";
+    std::array<wchar_t, 32u> ini_value = {};
+    const DWORD ini_length = GetPrivateProfileStringW(
+        L"renodx-dev",
+        L"DetroitDLSSDiagnosticOutput",
+        L"",
+        ini_value.data(),
+        static_cast<DWORD>(ini_value.size()),
+        ini_path.c_str());
+    if (ini_length == 0u || ini_length >= ini_value.size()) {
+      return DiagnosticOutputMode::kNgx;
+    }
+    if (_wcsicmp(ini_value.data(), L"spatial") == 0) {
+      return DiagnosticOutputMode::kSpatialScratch;
+    }
+    if (_wcsicmp(ini_value.data(), L"direct") == 0) {
+      return DiagnosticOutputMode::kSpatialDirect;
+    }
+    if (_wcsicmp(ini_value.data(), L"native-replay") == 0) {
+      return DiagnosticOutputMode::kNativeReplay;
+    }
+    return DiagnosticOutputMode::kNgx;
   }();
-  return enabled;
+  return mode;
 }
 
 bool UseInternalFeatureFences() {
@@ -2256,9 +2305,33 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode(
     return DETROIT_DLSS_RESULT_SUCCESS;
   }
 
+  // Diagnostic DLAA paths intentionally avoid every NGX entry point. Native
+  // resolution is the complete DLAA extent contract, so no optimal-settings
+  // query is needed for these A/B modes.
+  if (mode == DETROIT_DLSS_MODE_DLAA
+      && GetDiagnosticOutputMode() != DiagnosticOutputMode::kNgx) {
+    settings->render_width = output_width;
+    settings->render_height = output_height;
+    settings->min_render_width = output_width;
+    settings->min_render_height = output_height;
+    settings->max_render_width = output_width;
+    settings->max_render_height = output_height;
+    settings->create_flags = DETROIT_DLSS_CREATE_HDR
+                             | DETROIT_DLSS_CREATE_MOTION_VECTORS_LOW_RESOLUTION
+                             | DETROIT_DLSS_CREATE_DEPTH_INVERTED
+                             | DETROIT_DLSS_CREATE_MOTION_VECTORS_JITTERED
+                             | DETROIT_DLSS_CREATE_AUTO_EXPOSURE;
+    return DETROIT_DLSS_RESULT_SUCCESS;
+  }
+
+  // The exact native TAA computes history UV as current_uv - MotionVectorTex
+  // and never applies its b52 jitter coordinates to that lookup. Therefore b4
+  // already includes the inter-frame jitter displacement; tell NGX explicitly
+  // so it does not apply a second jitter correction to those motion vectors.
   settings->create_flags = DETROIT_DLSS_CREATE_HDR
                            | DETROIT_DLSS_CREATE_MOTION_VECTORS_LOW_RESOLUTION
                            | DETROIT_DLSS_CREATE_DEPTH_INVERTED
+                           | DETROIT_DLSS_CREATE_MOTION_VECTORS_JITTERED
                            | DETROIT_DLSS_CREATE_AUTO_EXPOSURE;
 
   const auto state = GetActiveDevice();
@@ -2308,7 +2381,10 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
       || state->context_identity != state->identity) {
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
-  if (settings->mode != DETROIT_DLSS_MODE_NATIVE && !EnsureNgxInitialized(state.get())) {
+  const bool diagnostic_bypasses_ngx =
+      GetDiagnosticOutputMode() != DiagnosticOutputMode::kNgx;
+  if (settings->mode != DETROIT_DLSS_MODE_NATIVE
+      && !diagnostic_bypasses_ngx && !EnsureNgxInitialized(state.get())) {
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
@@ -2316,7 +2392,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
       && std::memcmp(&state->settings, settings, sizeof(*settings)) != 0) {
     RetireActiveFeatureLocked(state.get());
   }
-  if (settings->mode == DETROIT_DLSS_MODE_NATIVE) {
+  if (settings->mode == DETROIT_DLSS_MODE_NATIVE || diagnostic_bypasses_ngx) {
     RetireActiveFeatureLocked(state.get());
   }
   state->settings = *settings;
@@ -2559,6 +2635,22 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
+  const auto diagnostic_output_mode = GetDiagnosticOutputMode();
+  if (diagnostic_output_mode == DiagnosticOutputMode::kNativeReplay) {
+    if (!native_replay_diagnostic_logged.exchange(
+            true, std::memory_order_acq_rel)) {
+      Trace(
+          "Diagnostic native replay is active: NGX and adapter recording are "
+          "skipped so the callback guard replays Detroit's original TAA");
+    }
+    SetEvaluationResult(
+        result,
+        DETROIT_DLSS_RESULT_FALLBACK,
+        BridgeDetail::kDiagnosticNativeReplay,
+        frame_id);
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+
   const auto restore_state = CaptureComputeRestoreState(state.get(), *inputs);
   if (!restore_state.has_value()
       || !CanRestoreComputeCommandState(state.get(), *restore_state)) {
@@ -2569,123 +2661,129 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
         frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
-  if (!EnsureNgxInitialized(state.get())) {
-    SetEvaluationResult(
-        result,
-        DETROIT_DLSS_RESULT_FALLBACK,
-        BridgeDetail::kNgxInitializationFailed,
-        frame_id);
-    return DETROIT_DLSS_RESULT_FALLBACK;
-  }
-
-  const std::uint32_t create_flags = ToNgxCreateFlags(state->settings.create_flags);
-  auto* active_feature = GetActiveFeatureLocked(state.get());
-  if (active_feature != nullptr && active_feature->create_flags != create_flags) {
-    RetireActiveFeatureLocked(state.get());
-    active_feature = nullptr;
-  }
-  if (active_feature == nullptr) {
-    NVSDK_NGX_Parameter* feature_parameters = nullptr;
-    const auto allocate_result =
-        NVSDK_NGX_VULKAN_AllocateParameters(&feature_parameters);
-    if (NVSDK_NGX_FAILED(allocate_result) || feature_parameters == nullptr) {
-      if (feature_parameters != nullptr) {
-        NVSDK_NGX_VULKAN_DestroyParameters(feature_parameters);
-      }
+  const bool diagnostic_spatial_output =
+      diagnostic_output_mode != DiagnosticOutputMode::kNgx;
+  const bool diagnostic_direct_output =
+      diagnostic_output_mode == DiagnosticOutputMode::kSpatialDirect;
+  FeatureGenerationState* active_feature = nullptr;
+  if (!diagnostic_spatial_output) {
+    if (!EnsureNgxInitialized(state.get())) {
       SetEvaluationResult(
           result,
           DETROIT_DLSS_RESULT_FALLBACK,
-          BridgeDetail::kFeatureCreationFailed,
+          BridgeDetail::kNgxInitializationFailed,
           frame_id);
       return DETROIT_DLSS_RESULT_FALLBACK;
     }
 
-    NVSDK_NGX_DLSS_Create_Params create_parameters = {};
-    create_parameters.Feature.InWidth = state->settings.render_width;
-    create_parameters.Feature.InHeight = state->settings.render_height;
-    create_parameters.Feature.InTargetWidth = state->settings.output_width;
-    create_parameters.Feature.InTargetHeight = state->settings.output_height;
-    create_parameters.Feature.InPerfQualityValue = ToNgxQuality(state->settings.mode);
-    create_parameters.InFeatureCreateFlags = static_cast<int>(create_flags);
-    NVSDK_NGX_Handle* feature = nullptr;
-    const auto create_result = NGX_VULKAN_CREATE_DLSS_EXT1(
-        state->device,
-        command_buffer,
-        1u,
-        1u,
-        &feature,
-        feature_parameters,
-        &create_parameters);
-    if (NVSDK_NGX_FAILED(create_result) || feature == nullptr) {
-      if (NVSDK_NGX_FAILED(create_result)) {
-        TraceNgxFailureOnce(state.get(), 1u, "feature creation", create_result);
-      } else {
-        Trace("DLSS NGX feature creation returned a null handle");
+    const std::uint32_t create_flags = ToNgxCreateFlags(state->settings.create_flags);
+    active_feature = GetActiveFeatureLocked(state.get());
+    if (active_feature != nullptr && active_feature->create_flags != create_flags) {
+      RetireActiveFeatureLocked(state.get());
+      active_feature = nullptr;
+    }
+    if (active_feature == nullptr) {
+      NVSDK_NGX_Parameter* feature_parameters = nullptr;
+      const auto allocate_result =
+          NVSDK_NGX_VULKAN_AllocateParameters(&feature_parameters);
+      if (NVSDK_NGX_FAILED(allocate_result) || feature_parameters == nullptr) {
+        if (feature_parameters != nullptr) {
+          NVSDK_NGX_VULKAN_DestroyParameters(feature_parameters);
+        }
+        SetEvaluationResult(
+            result,
+            DETROIT_DLSS_RESULT_FALLBACK,
+            BridgeDetail::kFeatureCreationFailed,
+            frame_id);
+        return DETROIT_DLSS_RESULT_FALLBACK;
       }
-      (void)RestoreComputeCommandState(state.get(), command_buffer, *restore_state);
-      if (feature != nullptr) {
-        const std::uint64_t generation =
-            AllocateFeatureGenerationLocked(state.get());
-        state->feature_generations.emplace(
-            generation,
-            FeatureGenerationState{
-                .generation = generation,
-                .parameters = feature_parameters,
-                .feature = feature,
-                .create_flags = create_flags,
-                .creation = {.command_buffer = ToOpaque(command_buffer)},
-                .retired = true,
-            });
-        // A failed NGX call may still have recorded work. Conservatively retain
-        // any returned handle until this command buffer is invalidated.
-        RecordFeatureUseLocked(state.get(), command_buffer, generation);
-        state->feature_submission_tracking_active.store(
-            true, std::memory_order_release);
-      } else {
-        NVSDK_NGX_VULKAN_DestroyParameters(feature_parameters);
+
+      NVSDK_NGX_DLSS_Create_Params create_parameters = {};
+      create_parameters.Feature.InWidth = state->settings.render_width;
+      create_parameters.Feature.InHeight = state->settings.render_height;
+      create_parameters.Feature.InTargetWidth = state->settings.output_width;
+      create_parameters.Feature.InTargetHeight = state->settings.output_height;
+      create_parameters.Feature.InPerfQualityValue = ToNgxQuality(state->settings.mode);
+      create_parameters.InFeatureCreateFlags = static_cast<int>(create_flags);
+      NVSDK_NGX_Handle* feature = nullptr;
+      const auto create_result = NGX_VULKAN_CREATE_DLSS_EXT1(
+          state->device,
+          command_buffer,
+          1u,
+          1u,
+          &feature,
+          feature_parameters,
+          &create_parameters);
+      if (NVSDK_NGX_FAILED(create_result) || feature == nullptr) {
+        if (NVSDK_NGX_FAILED(create_result)) {
+          TraceNgxFailureOnce(state.get(), 1u, "feature creation", create_result);
+        } else {
+          Trace("DLSS NGX feature creation returned a null handle");
+        }
+        (void)RestoreComputeCommandState(state.get(), command_buffer, *restore_state);
+        if (feature != nullptr) {
+          const std::uint64_t generation =
+              AllocateFeatureGenerationLocked(state.get());
+          state->feature_generations.emplace(
+              generation,
+              FeatureGenerationState{
+                  .generation = generation,
+                  .parameters = feature_parameters,
+                  .feature = feature,
+                  .create_flags = create_flags,
+                  .creation = {.command_buffer = ToOpaque(command_buffer)},
+                  .retired = true,
+              });
+          // A failed NGX call may still have recorded work. Conservatively retain
+          // any returned handle until this command buffer is invalidated.
+          RecordFeatureUseLocked(state.get(), command_buffer, generation);
+          state->feature_submission_tracking_active.store(
+              true, std::memory_order_release);
+        } else {
+          NVSDK_NGX_VULKAN_DestroyParameters(feature_parameters);
+        }
+        CollectRetiredFeaturesLocked(state.get());
+        SetEvaluationResult(
+            result,
+            DETROIT_DLSS_RESULT_FALLBACK,
+            BridgeDetail::kFeatureCreationFailed,
+            frame_id);
+        return DETROIT_DLSS_RESULT_FALLBACK;
       }
-      CollectRetiredFeaturesLocked(state.get());
+      const std::uint64_t generation =
+          AllocateFeatureGenerationLocked(state.get());
+      auto [created, inserted] = state->feature_generations.emplace(
+          generation,
+          FeatureGenerationState{
+              .generation = generation,
+              .parameters = feature_parameters,
+              .feature = feature,
+              .create_flags = create_flags,
+              .creation = {.command_buffer = ToOpaque(command_buffer)},
+          });
+      (void)inserted;
+      state->active_feature_generation = generation;
+      active_feature = &created->second;
+      // Feature creation itself is command-buffer based and therefore owns a
+      // recorded reference even if later adapter preparation fails.
+      RecordFeatureUseLocked(state.get(), command_buffer, generation);
+      state->feature_submission_tracking_active.store(
+          true, std::memory_order_release);
+    }
+
+    if (!active_feature->creation.AllowsUseFrom(ToOpaque(command_buffer))) {
       SetEvaluationResult(
           result,
           DETROIT_DLSS_RESULT_FALLBACK,
-          BridgeDetail::kFeatureCreationFailed,
+          BridgeDetail::kFeatureCreationPending,
           frame_id);
       return DETROIT_DLSS_RESULT_FALLBACK;
     }
-    const std::uint64_t generation =
-        AllocateFeatureGenerationLocked(state.get());
-    auto [created, inserted] = state->feature_generations.emplace(
-        generation,
-        FeatureGenerationState{
-            .generation = generation,
-            .parameters = feature_parameters,
-            .feature = feature,
-            .create_flags = create_flags,
-            .creation = {.command_buffer = ToOpaque(command_buffer)},
-        });
-    (void)inserted;
-    state->active_feature_generation = generation;
-    active_feature = &created->second;
-    // Feature creation itself is command-buffer based and therefore owns a
-    // recorded reference even if later adapter preparation fails.
-    RecordFeatureUseLocked(state.get(), command_buffer, generation);
-    state->feature_submission_tracking_active.store(
-        true, std::memory_order_release);
-  }
-
-  if (!active_feature->creation.AllowsUseFrom(ToOpaque(command_buffer))) {
-    SetEvaluationResult(
-        result,
-        DETROIT_DLSS_RESULT_FALLBACK,
-        BridgeDetail::kFeatureCreationPending,
-        frame_id);
-    return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
   using renodx::games::detroitbecomehuman::dlss::AdapterPreparedFrame;
   using renodx::games::detroitbecomehuman::dlss::AdapterPrepareInfo;
   AdapterPreparedFrame prepared_frame = {};
-  const bool diagnostic_spatial_output = UseSpatialDiagnosticOutput();
   const auto prepare_result = state->adapter_runtime.Prepare(
       AdapterPrepareInfo{
           .command_buffer = command_buffer,
@@ -2701,6 +2799,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
           .dlaa_sharpening_normalization =
               inputs->dlaa_sharpening_normalization,
           .diagnostic_spatial_output = diagnostic_spatial_output,
+          .diagnostic_direct_output = diagnostic_direct_output,
       },
       &prepared_frame);
   if (!prepare_result.Succeeded()) {
@@ -2718,13 +2817,9 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
   }
 
   if (diagnostic_spatial_output) {
-    // Keep the submission/lifetime path active while omitting NGX recording.
-    // This makes RENODX_DETROIT_DLSS_DIAGNOSTIC_OUTPUT=spatial a useful A/B:
-    // any CPU cost that remains belongs to the adapter and tracked queue
-    // submission path, while the NGX evaluation call below is absent. The
-    // tracker deduplicates a generation already recorded by feature creation.
-    RecordFeatureUseLocked(
-        state.get(), command_buffer, active_feature->generation);
+    // This path intentionally omits NGX initialization, feature creation,
+    // evaluation and queue-lifetime tracking. Only adapter prepare/pack and the
+    // targeted compute-state restore remain, making it a strict Vulkan A/B.
     const auto commit_result =
         state->adapter_runtime.CommitSpatialDiagnostic(prepared_frame);
     (void)RestoreComputeCommandState(state.get(), command_buffer, *restore_state);
@@ -2739,14 +2834,20 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     }
     if (!spatial_diagnostic_logged.exchange(true, std::memory_order_acq_rel)) {
       Trace(
-          "Diagnostic spatial output is active: prepared CurrColor is being "
-          "scaled into b16 without NGX evaluation; feature submission and "
-          "fence tracking remain active");
+          diagnostic_direct_output
+              ? "Diagnostic post-native direct output is active: Detroit's "
+                "original TAA remains recorded and native CurrColor is then "
+                "sampled directly into b16 without private color scratch or NGX"
+              : "Diagnostic spatial output is active: prepared CurrColor is "
+                "being scaled into b16 without NGX initialization, feature "
+                "creation or evaluation");
     }
     SetEvaluationResult(
         result,
         DETROIT_DLSS_RESULT_SUCCESS,
-        BridgeDetail::kNone,
+        diagnostic_direct_output
+            ? BridgeDetail::kDiagnosticPostNativeDirect
+            : BridgeDetail::kNone,
         frame_id,
         DETROIT_DLSS_EVALUATE_OUTPUT_VALID);
     return DETROIT_DLSS_RESULT_SUCCESS;
@@ -4981,7 +5082,7 @@ bool AttachEarlyHooks(
   Trace(
       install_native_command_hooks
           ? "Retinal startup requested native Vulkan command-bind hooks"
-          : "Targeted DLAA backend active without native Vulkan command-bind hooks");
+          : "Targeted DLSS/DLAA backend active without native Vulkan command-bind hooks");
   if (hooks_attached.load(std::memory_order_acquire)) return true;
   const bool cache_valid = CanAttachEarlyHooks(cache);
   {

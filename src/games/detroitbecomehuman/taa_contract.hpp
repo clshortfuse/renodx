@@ -40,6 +40,15 @@ struct Float2 {
   bool operator==(const Float2&) const = default;
 };
 
+// Detroit b52 stores the current projection jitter in pixel space. Keep the
+// captured convention unchanged while temporal reset/lifecycle is tested in
+// isolation.
+[[nodiscard]] constexpr Float2 GetNgxJitterOffset(
+    float detroit_jitter_x,
+    float detroit_jitter_y) noexcept {
+  return {detroit_jitter_x, detroit_jitter_y};
+}
+
 [[nodiscard]] constexpr Float2 GetNgxMotionVectorScale(
     std::uint32_t render_width,
     std::uint32_t render_height) noexcept {
@@ -253,9 +262,11 @@ struct NgxFrameParameters {
     std::uint32_t render_height,
     std::uint32_t output_width,
     std::uint32_t output_height) noexcept {
+  const auto ngx_jitter =
+      GetNgxJitterOffset(constants.jitter_x, constants.jitter_y);
   NgxFrameParameters result = {
-      .jitter_x = constants.jitter_x,
-      .jitter_y = constants.jitter_y,
+      .jitter_x = ngx_jitter.x,
+      .jitter_y = ngx_jitter.y,
       .motion_vector_scale = GetNgxMotionVectorScale(render_width, render_height),
       .pre_exposure = 1.f,
   };

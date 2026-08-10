@@ -22,6 +22,7 @@ struct Evaluation {
   dlss_policy::FallbackReason reason = dlss_policy::FallbackReason::kBridgeUnavailable;
   bool output_valid = false;
   bool suppress_final_cas = false;
+  bool effective_reset = false;
 };
 
 // The bridge is temporal even when the native TAA fallback remains visible.
@@ -416,6 +417,7 @@ class Client {
         .reason = outcome.reason,
         .output_valid = outcome.use_dlss_output,
         .suppress_final_cas = outcome.suppress_final_cas,
+        .effective_reset = effective_inputs.reset != 0u,
     };
   }
 

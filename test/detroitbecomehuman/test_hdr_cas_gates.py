@@ -706,10 +706,14 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"color\s*=\s*ApplyDlaaRcas\(",
         )
         self.assertIn('.key = "DLAASharpening"', addon)
-        self.assertIn(
-            '.labels = {"Native TAA", "DLAA"}',
-            addon,
-        )
+        for label in (
+            '"Native TAA"',
+            '"DLAA"',
+            '"DLSS Quality"',
+            '"DLSS Balanced"',
+            '"DLSS Performance"',
+        ):
+            self.assertIn(label, addon)
         self.assertRegex(
             addon,
             r"SetRuntimeFlag\(\s*RUNTIME_FLAG_DLSS_OUTPUT\s*,\s*"
@@ -821,7 +825,7 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertIn("InsertComputeWriteBarrier(", temporal_capture)
         self.assertRegex(
             addon,
-            r"kTemporalAaShaderCrc,[\s\S]*?\.code\s*=\s*__temporal_aux,[\s\S]*?"
+            r"kTemporalAaShaderCrc,[\s\S]*?\.code\s*=\s*__temporal_aux_exact,[\s\S]*?"
             r"\.on_replace\s*=\s*&OnTemporalAuxiliaryReplace,",
         )
 

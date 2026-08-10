@@ -30,6 +30,7 @@
 
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
+#include <embed/temporal_aux_exact.h>
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
@@ -733,10 +734,10 @@ void RefreshEmbeddedCommandTracking() {
 void ApplyDlssMode(float selected_mode) {
   auto next_mode = static_cast<DetroitDlssMode>(selected_mode);
   if (next_mode != DETROIT_DLSS_MODE_NATIVE
-      && next_mode != DETROIT_DLSS_MODE_DLAA) {
+      && !renodx::games::detroitbecomehuman::dlss_policy::IsDlssMode(next_mode)) {
     next_mode = DETROIT_DLSS_MODE_NATIVE;
   }
-  if (!embedded_dlss::kDlaaRuntimeEnabled) {
+  if (!embedded_dlss::kDlssRuntimeEnabled) {
     next_mode = DETROIT_DLSS_MODE_NATIVE;
   }
   dlss_mode = static_cast<float>(next_mode);
@@ -1890,7 +1891,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                                               }},
     {supported_build::kTemporalAaShaderCrc, {
                                                 .crc32 = supported_build::kTemporalAaShaderCrc,
-                                                .code = __temporal_aux,
+                                                .code = __temporal_aux_exact,
                                                 .on_replace = &OnTemporalAuxiliaryReplace,
                                                 .on_drawn = &OnTemporalDrawn,
                                             }},
@@ -2648,10 +2649,16 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Temporal Anti-Aliasing",
                 .section = "DLSS",
-                .tooltip = "DLAA is temporarily disabled while its NGX command-buffer integration is redesigned. Native TAA remains active.",
-                .labels = {"Native TAA", "DLAA"},
+                .tooltip = "DLAA replaces Detroit's native TAA at output resolution. DLSS Quality, Balanced and Performance use NGX-selected internal resolutions through the exact-build scale controller. Global Vulkan command-bind tracking remains disabled.",
+                .labels = {
+                    "Native TAA",
+                    "DLAA",
+                    "DLSS Quality",
+                    "DLSS Balanced",
+                    "DLSS Performance",
+                },
                 .is_enabled = []() {
-                  return embedded_dlss::kDlaaRuntimeEnabled;
+                  return embedded_dlss::kDlssRuntimeEnabled;
                 },
                 .on_change_value = [](float, float current) {
                   ApplyDlssMode(current);
@@ -2667,7 +2674,7 @@ renodx::utils::settings::Settings settings =
                 .tooltip = "Scene-linear RCAS applied to the successful NGX output before Detroit's DOF. Zero is an exact passthrough.",
                 .min = 0.f,
                 .max = 100.f,
-                .is_enabled = []() { return embedded_dlss::kDlaaRuntimeEnabled
+                .is_enabled = []() { return embedded_dlss::kDlssRuntimeEnabled
                                             && temporal_capture::GetMode()
                                                    == DETROIT_DLSS_MODE_DLAA; },
                 .parse = [](float value) { return value * 0.01f; },
@@ -2680,7 +2687,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Native TAA is active. DLAA is temporarily disabled; its targeted no-bind-hook implementation remains preserved for redesign.",
+                .label = "DLAA uses targeted descriptor/resource tracking; global Vulkan command-bind hooks remain disabled unless Retinal DOF needs them.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -2690,7 +2697,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Native TAA is active. The lightweight DLAA backend remains ready for live mode switching; global command-bind hooks are disabled unless Retinal DOF requested them at startup.",
+                .label = "Native TAA is active. The targeted DLSS/DLAA backend remains ready for live mode switching; global command-bind hooks are disabled unless Retinal DOF requested them at startup.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -2745,7 +2752,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "DLAA produced a valid result for this frame. Sharpening is controlled by DLAA Sharpening.",
+                .label = "DLSS/DLAA produced a valid result for this frame.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -3136,7 +3143,7 @@ void OnPresent(
       status != nullptr) {
     status->label = embedded_hooks_requested_at_startup
                         ? embedded_dlss::GetStatusText()
-                        : "Native TAA fallback: lightweight DLAA backend not loaded.";
+                        : "Native TAA fallback: targeted DLSS/DLAA backend not loaded.";
   }
   if (TryTrackGameSwapchain(swapchain) && UpdateUltrawideFromSwapchain(swapchain)
       && !ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {

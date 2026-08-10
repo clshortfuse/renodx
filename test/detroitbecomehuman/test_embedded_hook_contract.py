@@ -24,6 +24,9 @@ def main() -> None:
     temporal_shader = (args.source_dir / "temporal_aux.comp.vk.glsl").read_text(
         encoding="utf-8"
     )
+    command_action = (
+        args.source_dir.parent.parent / "utils" / "command_action.hpp"
+    ).read_text(encoding="utf-8")
 
     for hook in (
         "HookCreateInstance",
@@ -52,18 +55,41 @@ def main() -> None:
     require(source, "VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT")
     require(source, "runtime_command_tracking_enabled")
     require(source, "void SetRuntimeCommandTracking(bool enabled)")
-    require(bootstrap, "inline constexpr bool kDlaaRuntimeEnabled = false;")
-    require(bootstrap, "return kDlaaRuntimeEnabled || retinal_dof_requested;")
+    require(command_action, "std::deque<std::vector<PendingPostResult>>")
+    require(command_action, "pending_post_result_frames")
+    require(command_action, "pending_post_result_depth")
+    require(command_action, "PendingPostResultFrameGuard")
+    if "static thread_local std::vector<PendingPostResult> pending_post_results" in command_action:
+        raise AssertionError(
+            "post callbacks must not share one vector across reentrant commands"
+        )
+    require(bootstrap, "inline constexpr bool kDlssRuntimeEnabled = true;")
+    require(bootstrap, "return kDlssRuntimeEnabled || retinal_dof_requested;")
     require(bootstrap, "return retinal_dof_requested;")
     require(
         source,
-        "Targeted DLAA backend active without native Vulkan command-bind hooks",
+        "Targeted DLSS/DLAA backend active without native Vulkan command-bind hooks",
     )
-    require(addon, '.labels = {"Native TAA", "DLAA"}')
-    require(addon, "if (!embedded_dlss::kDlaaRuntimeEnabled)")
+    for label in (
+        '"Native TAA"',
+        '"DLAA"',
+        '"DLSS Quality"',
+        '"DLSS Balanced"',
+        '"DLSS Performance"',
+    ):
+        require(addon, label)
+    require(addon, "dlss_policy::IsDlssMode(next_mode)")
+    require(addon, "if (!embedded_dlss::kDlssRuntimeEnabled)")
     require(temporal_shader, "imageStore(OutAADepth")
     require(temporal_shader, "imageStore(OutPrevSpeedAndFlagsTex")
     require(temporal_shader, "imageStore(HalfResContours")
+    require(temporal_shader, "vec2 _1740 = _1589 - _1705;")
+    if temporal_shader.count("_fJitterCoordX") != 1 or temporal_shader.count(
+        "_fJitterCoordY"
+    ) != 1:
+        raise AssertionError(
+            "native TAA history lookup must not apply b52 jitter separately from b4"
+        )
     if "DlssTemporalReplacementActive" in temporal_shader:
         raise AssertionError("DLAA must retain Detroit's b17-b19 history outputs")
 
@@ -83,6 +109,10 @@ def main() -> None:
     require(snapshot_capture, "ResolveLatestTemporalDescriptorUpdateLocked(")
     require(snapshot_capture, "ResolveChangedTemporalConstantsSlotLocked(")
     require(snapshot_capture, "FillTemporalConstantsForBindingLocked(")
+    query_mode_start = snapshot_end
+    query_mode_end = source.index("BridgeConfigure(", query_mode_start)
+    query_mode = source[query_mode_start:query_mode_end]
+    require(query_mode, "DETROIT_DLSS_CREATE_MOTION_VECTORS_JITTERED")
     require(source, "pipeline_layout->second.set_layouts.size() != 1u")
     if "InstallTargetedTemporalCommandStateLocked" in source:
         raise AssertionError(
@@ -204,19 +234,54 @@ def main() -> None:
     spatial_start = source.index("if (diagnostic_spatial_output) {")
     spatial_end = source.index("auto color = MakeNgxResource", spatial_start)
     spatial = source[spatial_start:spatial_end]
-    require(spatial, "RecordFeatureUseLocked(")
     require(spatial, "CommitSpatialDiagnostic(prepared_frame)")
-    require(spatial, "without NGX evaluation; feature submission and")
-    if "NGX_VULKAN_EVALUATE_DLSS_EXT" in spatial:
+    require(spatial, "without NGX initialization, feature ")
+    require(spatial, "creation or evaluation")
+    require(spatial, "native CurrColor is ")
+    require(spatial, "sampled directly into b16")
+    require(spatial, "BridgeDetail::kDiagnosticPostNativeDirect")
+    require(
+        source,
+        "Diagnostic post-native direct output is active",
+    )
+    require(spatial, "original TAA remains recorded")
+    require(spatial, "without private color scratch or NGX")
+    if "RecordFeatureUseLocked(" in spatial or "NGX_VULKAN_EVALUATE_DLSS_EXT" in spatial:
         raise AssertionError(
-            "spatial diagnostic must retain fence tracking without recording NGX"
+            "spatial diagnostic must not record NGX work or feature lifetime"
         )
-    if spatial.index("RecordFeatureUseLocked(") > spatial.index(
-        "CommitSpatialDiagnostic(prepared_frame)"
-    ):
+    native_replay_start = source.index(
+        "if (diagnostic_output_mode == DiagnosticOutputMode::kNativeReplay)"
+    )
+    native_replay_end = source.index(
+        "const auto restore_state = CaptureComputeRestoreState", native_replay_start
+    )
+    native_replay = source[native_replay_start:native_replay_end]
+    require(native_replay, "BridgeDetail::kDiagnosticNativeReplay")
+    require(native_replay, "DETROIT_DLSS_RESULT_FALLBACK")
+    require(native_replay, "replays Detroit's original TAA")
+    if "adapter_runtime.Prepare" in native_replay or "EnsureNgxInitialized" in native_replay:
         raise AssertionError(
-            "spatial diagnostic must mark feature lifetime before its commands commit"
+            "native replay diagnostic must return before NGX or adapter recording"
         )
+    require(source, 'L"DetroitDLSSDiagnosticOutput"')
+    require(source, "GetPrivateProfileStringW(")
+    require(source, "module_path.parent_path() / L\"ReShade.ini\"")
+    query_mode_start = source.index("DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode")
+    configure_start = source.index("DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure")
+    query_mode = source[query_mode_start:configure_start]
+    require(query_mode, "DiagnosticOutputMode::kNgx")
+    require(query_mode, "mode == DETROIT_DLSS_MODE_DLAA")
+    require(query_mode, "settings->render_width = output_width")
+    evaluate_start = source.index("DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate")
+    configure = source[configure_start:evaluate_start]
+    require(configure, "diagnostic_bypasses_ngx")
+    require(configure, "!diagnostic_bypasses_ngx && !EnsureNgxInitialized")
+    ngx_gate_start = source.index("if (!diagnostic_spatial_output) {")
+    ngx_gate_end = source.index("using renodx::games::detroitbecomehuman::dlss::AdapterPreparedFrame", ngx_gate_start)
+    ngx_gate = source[ngx_gate_start:ngx_gate_end]
+    require(ngx_gate, "EnsureNgxInitialized(state.get())")
+    require(ngx_gate, "NGX_VULKAN_CREATE_DLSS_EXT1(")
     gate_index = source.index("if (!cache_valid)")
     detour_index = source.index("DetourTransactionBegin()", gate_index)
     if not gate_index < detour_index:

@@ -35,6 +35,9 @@ static_assert(
 static_assert(taa_contract::kExposureTextureChannel == 1u);
 static_assert(taa_contract::kDepthIsInverted);
 static_assert(
+    taa_contract::GetNgxJitterOffset(0.125f, -0.375f)
+    == taa_contract::Float2{0.125f, -0.375f});
+static_assert(
     taa_contract::GetNgxMotionVectorScale(3440u, 1440u)
     == taa_contract::Float2{-3440.f, -1440.f});
 static_assert(std::is_same_v<
@@ -378,6 +381,9 @@ bool TestLiveNgxFrameParameterPolicy() {
   passed &= Expect(
       live.motion_vector_scale == taa_contract::Float2{-3440.f, -1440.f},
       "validated frame must use normalized current-minus-previous conversion");
+  passed &= Expect(
+      live.jitter_x == constants.jitter_x && live.jitter_y == constants.jitter_y,
+      "validated frame must preserve Detroit pixel-space jitter at the NGX boundary");
   passed &= Expect(live.reset == 0u, "stable 0.9 history must not reset DLSS");
 
   constants.render_target_size_inv = {
