@@ -18,6 +18,12 @@ def main() -> None:
     cmake = (args.source_dir / "dlss" / "CMakeLists.txt").read_text(encoding="utf-8")
     bridge = (args.source_dir / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
     temporal = (args.source_dir / "temporal_capture.hpp").read_text(encoding="utf-8")
+    bootstrap = (args.source_dir / "dlss" / "embedded_bootstrap.hpp").read_text(
+        encoding="utf-8"
+    )
+    temporal_shader = (args.source_dir / "temporal_aux.comp.vk.glsl").read_text(
+        encoding="utf-8"
+    )
 
     for hook in (
         "HookCreateInstance",
@@ -46,9 +52,42 @@ def main() -> None:
     require(source, "VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT")
     require(source, "runtime_command_tracking_enabled")
     require(source, "void SetRuntimeCommandTracking(bool enabled)")
-    require(addon, '"DLAA (Temporarily Disabled)"')
-    require(addon, "if (!embedded_dlss::kDlaaRuntimeEnabled")
-    require(addon, '"DLSSMode",\n        static_cast<float>(DETROIT_DLSS_MODE_NATIVE)')
+    require(bootstrap, "inline constexpr bool kDlaaRuntimeEnabled = false;")
+    require(bootstrap, "return kDlaaRuntimeEnabled || retinal_dof_requested;")
+    require(bootstrap, "return retinal_dof_requested;")
+    require(
+        source,
+        "Targeted DLAA backend active without native Vulkan command-bind hooks",
+    )
+    require(addon, '.labels = {"Native TAA", "DLAA"}')
+    require(addon, "if (!embedded_dlss::kDlaaRuntimeEnabled)")
+    require(temporal_shader, "imageStore(OutAADepth")
+    require(temporal_shader, "imageStore(OutPrevSpeedAndFlagsTex")
+    require(temporal_shader, "imageStore(HalfResContours")
+    if "DlssTemporalReplacementActive" in temporal_shader:
+        raise AssertionError("DLAA must retain Detroit's b17-b19 history outputs")
+
+    tracked_function_start = source.index("PFN_vkVoidFunction FindTrackedDeviceFunction(")
+    tracked_function_end = source.index("void DETROIT_DLSS_CALL BridgeShutdown", tracked_function_start)
+    tracked_function = source[tracked_function_start:tracked_function_end]
+    for command_bind in ("vkCmdBindPipeline", "vkCmdBindDescriptorSets"):
+        require(
+            tracked_function,
+            'native_command_hooks_installed.load(std::memory_order_acquire)\n'
+            f'      && std::strcmp(name, "{command_bind}") == 0',
+        )
+
+    snapshot_start = source.index("BridgeGetTemporalSnapshot(")
+    snapshot_end = source.index("BridgeQueryMode(", snapshot_start)
+    snapshot_capture = source[snapshot_start:snapshot_end]
+    require(snapshot_capture, "ResolveLatestTemporalDescriptorUpdateLocked(")
+    require(snapshot_capture, "ResolveChangedTemporalConstantsSlotLocked(")
+    require(snapshot_capture, "FillTemporalConstantsForBindingLocked(")
+    require(source, "pipeline_layout->second.set_layouts.size() != 1u")
+    if "InstallTargetedTemporalCommandStateLocked" in source:
+        raise AssertionError(
+            "targeted snapshots must not persist a rotating b52 offset as command state"
+        )
 
     bind_pipeline_start = source.index("LayerCmdBindPipeline(")
     bind_pipeline_end = source.index("LayerCmdBindDescriptorSets(", bind_pipeline_start)
@@ -120,6 +159,14 @@ def main() -> None:
     adapter_runtime = (args.source_dir / "dlss" / "adapter_runtime.cpp").read_text(
         encoding="utf-8"
     )
+    for lifecycle_call in (
+        "adapter_runtime.NotifyCommandBufferBegin(command_buffer)",
+        "adapter_runtime.RecycleCommandBuffer(command_buffer)",
+        "adapter_runtime.RetireCommandBuffer(command_buffers[index])",
+    ):
+        require(source, lifecycle_call)
+    require(adapter_runtime, "impl_->RecycleBundle(command_buffer);")
+    require(adapter_runtime, "impl_->idle_bundles")
     destructor_start = adapter_runtime.index("AdapterRuntime::~AdapterRuntime()")
     destructor_end = adapter_runtime.index(
         "AdapterResult AdapterRuntime::Initialize", destructor_start

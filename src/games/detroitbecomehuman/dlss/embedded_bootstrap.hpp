@@ -21,10 +21,11 @@ inline constexpr std::uint32_t kCacheSchemaVersion = 1u;
 inline constexpr std::string_view kSupportedExecutableSha256 =
     "ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF";
 
-// Placeholder: keep the DLAA implementation available for later profiling,
-// but do not load its process-wide Vulkan command hooks in production builds.
-// Retinal DOF still opts into the embedded layer because it needs the same
-// descriptor and command-state capture path.
+// Production safety gate. The targeted descriptor-update implementation below
+// is intentionally preserved as the redesign placeholder, but NGX evaluation
+// stays disabled until its command-buffer/state-restore path no longer exits
+// Detroit immediately after the first valid b16 output. Keeping this false also
+// prevents the process-wide Vulkan hooks that caused the original FPS loss.
 inline constexpr bool kDlaaRuntimeEnabled = false;
 
 enum class BootstrapStatus : std::uint32_t {
@@ -101,7 +102,10 @@ struct ExtensionCache {
 
 // Loader-lock entry point. This only consumes a previously validated cache and
 // attaches Detours to the already-loaded ReShade Vulkan layer.
-bool AttachEarlyHooks(HMODULE addon_module, const ExtensionCache& cache);
+bool AttachEarlyHooks(
+    HMODULE addon_module,
+    const ExtensionCache& cache,
+    bool install_native_command_hooks);
 void DetachEarlyHooks(bool process_terminating);
 bool IsExtensionProbeHost();
 
@@ -121,13 +125,21 @@ bool IsBridgeReady();
 
 [[nodiscard]] inline constexpr bool NeedsRuntimeCommandTracking(
     DetroitDlssMode mode, bool retinal_dof_requested) noexcept {
-  return (kDlaaRuntimeEnabled && mode == DETROIT_DLSS_MODE_DLAA)
-      || retinal_dof_requested;
+  (void)mode;
+  return retinal_dof_requested;
 }
 
-// Resource and descriptor metadata stay warm for Retinal DOF and a future
-// lower-overhead DLAA re-enable. This gate removes per-command-buffer state
-// capture while no enabled feature needs the embedded Vulkan bridge.
+[[nodiscard]] inline constexpr bool NeedsEmbeddedBridge(
+    DetroitDlssMode mode, bool retinal_dof_requested) noexcept {
+  (void)mode;
+  // When the safety gate is re-enabled, NGX extensions and targeted
+  // descriptor/resource tracking must be present from device creation. The
+  // disabled production path loads no DLAA bridge at all.
+  return kDlaaRuntimeEnabled || retinal_dof_requested;
+}
+
+// Targeted DLAA keeps only resource and descriptor metadata warm. This
+// separate gate enables per-command-buffer bind state solely for Retinal DOF.
 void SetRuntimeCommandTracking(bool enabled);
 
 bool CanInsertComputeWriteBarrier(std::uint64_t command_buffer);

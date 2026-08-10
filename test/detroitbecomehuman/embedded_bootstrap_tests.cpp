@@ -28,10 +28,14 @@ int main() {
       "Native TAA with non-Retinal DOF must use the command-tracking fast path");
   Expect(
       !embedded::kDlaaRuntimeEnabled,
-      "DLAA must remain disabled until its Vulkan hook overhead is redesigned");
+      "unstable targeted DLAA runtime must remain production-disabled");
   Expect(
       !embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_DLAA, false),
-      "disabled DLAA must not enable runtime command tracking");
+      "DLAA must not enable global command-bind tracking");
+  Expect(
+      !embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_NATIVE, false)
+          && !embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_DLAA, false),
+      "disabled DLAA must not load the embedded Vulkan bridge");
   Expect(
       embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_NATIVE, true),
       "Retinal DOF must enable runtime command tracking in Native TAA mode");

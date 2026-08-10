@@ -81,9 +81,11 @@ DetroitDlssTemporalFrameInputs MakeInputs(const DetroitDlssModeSettings& setting
       .command_buffer = UINT64_C(0x10000001),
       .descriptor_set = UINT64_C(0x10000002),
       .pipeline_layout = UINT64_C(0x10000003),
+      .compute_pipeline = UINT64_C(0x10000005),
       .constants_buffer = UINT64_C(0x10000004),
       .constants_offset = 0u,
       .constants_size = 496u,
+      .constants_dynamic_offset = 512u,
       .current_color = MakeResource(0x2001u, settings.render_width, settings.render_height),
       .depth = MakeResource(0x2002u, settings.render_width, settings.render_height),
       .motion_vectors = MakeResource(0x2003u, settings.render_width, settings.render_height),
@@ -100,7 +102,7 @@ DetroitDlssTemporalFrameInputs MakeInputs(const DetroitDlssModeSettings& setting
       .pre_exposure = 1.f,
       .reset = 0u,
       .frame_id = 42u,
-      .flags = DETROIT_DLSS_FRAME_NATIVE_TAA_COMPLETED,
+      .flags = DETROIT_DLSS_FRAME_TEMPORAL_INPUTS_READY,
       .verification_flags = DETROIT_DLSS_VERIFY_MANDATORY_MASK,
       .dlaa_sharpening = 0.f,
       .dlaa_sharpening_normalization = 1.f,
@@ -317,11 +319,11 @@ bool TestFrameIdentityAndSnapshots() {
       policy::FallbackReason::kShaderMismatch,
       "wrong temporal shader CRC must fail closed");
   inputs = baseline;
-  inputs.flags &= ~DETROIT_DLSS_FRAME_NATIVE_TAA_COMPLETED;
+  inputs.flags &= ~DETROIT_DLSS_FRAME_TEMPORAL_INPUTS_READY;
   passed &= ExpectReason(
       Check(settings.mode, support, settings, inputs),
-      policy::FallbackReason::kNativeTaaNotCompleted,
-      "safe prototype requires native TAA completion");
+      policy::FallbackReason::kTemporalInputsNotReady,
+      "DLSS requires validated inputs at the temporal replacement point");
   inputs = baseline;
   inputs.command_buffer = 0u;
   passed &= ExpectReason(

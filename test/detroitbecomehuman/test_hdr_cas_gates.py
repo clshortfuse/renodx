@@ -707,10 +707,9 @@ class HDRAndCASGateTests(unittest.TestCase):
         )
         self.assertIn('.key = "DLAASharpening"', addon)
         self.assertIn(
-            '.labels = {"Native TAA", "DLAA (Temporarily Disabled)"}',
+            '.labels = {"Native TAA", "DLAA"}',
             addon,
         )
-        self.assertIn("!embedded_dlss::kDlaaRuntimeEnabled", addon)
         self.assertRegex(
             addon,
             r"SetRuntimeFlag\(\s*RUNTIME_FLAG_DLSS_OUTPUT\s*,\s*"
@@ -790,9 +789,12 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertIn("ObserveTemporalCommandList(", temporal_capture)
         self.assertRegex(
             temporal_capture,
-            r"if\s*\(mode\s*!=\s*DETROIT_DLSS_MODE_NATIVE\s*&&\s*"
-            r"!is_main_temporal_command_list\)"
+            r"if\s*\(!IsMainTemporalCommandList\(native_command_list\)\)"
             r"\s*\{[\s\S]*?RuntimeStatus::kWaitingForDispatch[\s\S]*?return;",
+        )
+        self.assertLess(
+            temporal_capture.index("if (!IsMainTemporalCommandList(native_command_list))"),
+            temporal_capture.index("CaptureTemporalSnapshot("),
         )
 
         self.assertIn("RequestAuxiliaryTemporalReplacement", temporal_capture)

@@ -162,6 +162,7 @@ inline std::unordered_set<std::uint64_t> main_temporal_command_lists;
 inline thread_local std::uint64_t latest_temporal_command_list = 0u;
 inline thread_local std::uint64_t latest_temporal_dispatch_serial = 0u;
 inline thread_local reshade::api::pipeline native_temporal_pipeline = {0u};
+inline thread_local reshade::api::pipeline_layout native_temporal_pipeline_layout = {0u};
 inline thread_local bool auxiliary_temporal_replacement_requested = false;
 inline thread_local std::uint64_t auxiliary_temporal_replacement_generation = 0u;
 inline std::atomic_uint64_t frame_counter = 0u;
@@ -324,7 +325,7 @@ inline void BeginNextFrame() {
       mode_state.QueryAuthorization(native_command_list);
   if (authorization.snapshot.mode == DETROIT_DLSS_MODE_NATIVE) return false;
   // Require a successful evaluation on this exact reusable command buffer
-  // before replacing its full native TAA. The first eligible recording stays
+  // before replacing its native b16 output. The first eligible recording stays
   // native and proves the complete NGX path. Any later failure is replayed with
   // the original pipeline by NativeTemporalFallbackGuard below.
   auxiliary_temporal_replacement_requested =
@@ -692,7 +693,7 @@ inline void LogContract(
   Log(reshade::log::level::info, storage_text);
   Log(
       reshade::log::level::info,
-      "native TAA was preserved for its auxiliary history outputs; the current frame still has to pass every DLSS contract check before b16 may be replaced.");
+      "the transitional DLAA pass preserves Detroit's b17-b19 history outputs while NGX owns b16; later failures replay the original pipeline.");
 }
 
 struct NativeTemporalFallbackGuard {
@@ -763,7 +764,10 @@ inline void AfterNativeTemporalDispatch(
       native_temporal_pipeline,
       auxiliary_replacement_used,
       mode_snapshot);
+  const auto temporal_pipeline = native_temporal_pipeline;
+  const auto temporal_pipeline_layout = native_temporal_pipeline_layout;
   native_temporal_pipeline = {0u};
+  native_temporal_pipeline_layout = {0u};
   const auto dispatch_serial =
       evaluation_serial.fetch_add(1u, std::memory_order_acq_rel) + 1u;
   ObserveTemporalCommandList(
@@ -785,6 +789,19 @@ inline void AfterNativeTemporalDispatch(
     runtime_status.store(RuntimeStatus::kNative, std::memory_order_relaxed);
     return;
   }
+  const auto native_command_list = context.cmd_list->get_native();
+  // Resolve the rotating b52 constants slot only for a command list already
+  // proven to feed the later scene composite. An auxiliary TAA callback must
+  // not consume the one changed ring-buffer slot before the main-view callback.
+  if (!IsMainTemporalCommandList(native_command_list)) {
+    if (runtime_status.load(std::memory_order_relaxed)
+        != RuntimeStatus::kDlssActive) {
+      runtime_status.store(
+          RuntimeStatus::kWaitingForDispatch,
+          std::memory_order_relaxed);
+    }
+    return;
+  }
   auto* device = context.cmd_list->get_device();
   if (device == nullptr || device->get_api() != reshade::api::device_api::vulkan) {
     return;
@@ -795,28 +812,34 @@ inline void AfterNativeTemporalDispatch(
       dlss_bridge_client::client.CaptureTemporalSnapshot(
           context.cmd_list->get_native(),
           0u,
-          0u,
+          temporal_pipeline_layout.handle,
           &temporal_snapshot);
   const bool has_temporal_diagnostics =
       temporal_snapshot.struct_size >= sizeof(temporal_snapshot)
       && temporal_snapshot.abi_version == DETROIT_DLSS_ABI_VERSION
       && temporal_snapshot.command_buffer == context.cmd_list->get_native()
       && temporal_snapshot.image_binding_count == DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT;
-  constexpr DetroitDlssTemporalSnapshotFlags kNativeImageSnapshotFlags =
-      DETROIT_DLSS_SNAPSHOT_COMMAND_TRACKED
-      | DETROIT_DLSS_SNAPSHOT_SET_BOUND
-      | DETROIT_DLSS_SNAPSHOT_EXPECTED_SET_MATCH
+  constexpr DetroitDlssTemporalSnapshotFlags kCommonImageSnapshotFlags =
+      DETROIT_DLSS_SNAPSHOT_EXPECTED_SET_MATCH
       | DETROIT_DLSS_SNAPSHOT_EXPECTED_PIPELINE_LAYOUT_MATCH
       | DETROIT_DLSS_SNAPSHOT_DESCRIPTOR_SET_TRACKED
       | DETROIT_DLSS_SNAPSHOT_PIPELINE_LAYOUT_TRACKED
       | DETROIT_DLSS_SNAPSHOT_REQUIRED_IMAGES_COMPLETE;
+  const bool command_acquired =
+      (temporal_snapshot.snapshot_flags
+       & DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK)
+          == DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK
+      || (temporal_snapshot.snapshot_flags
+          & DETROIT_DLSS_SNAPSHOT_TARGETED_UPDATE_RESOLVED)
+             != 0u;
   bool native_images_match = has_temporal_snapshot
                              && has_temporal_diagnostics
                              && temporal_snapshot.descriptor_set != 0u
-                             && temporal_snapshot.pipeline_layout != 0u
-                             && (temporal_snapshot.snapshot_flags
-                                 & kNativeImageSnapshotFlags)
-                                    == kNativeImageSnapshotFlags
+                              && temporal_snapshot.pipeline_layout != 0u
+                              && command_acquired
+                              && (temporal_snapshot.snapshot_flags
+                                  & kCommonImageSnapshotFlags)
+                                     == kCommonImageSnapshotFlags
                              && (temporal_snapshot.complete_image_mask
                                  & DETROIT_DLSS_TAA_REQUIRED_IMAGE_MASK)
                                     == DETROIT_DLSS_TAA_REQUIRED_IMAGE_MASK;
@@ -979,25 +1002,6 @@ inline void AfterNativeTemporalDispatch(
 
   const bool native_history_resources_available =
       sampled[0u].valid && sampled[2u].valid && sampled[7u].valid;
-  const bool is_main_temporal_command_list =
-      IsMainTemporalCommandList(context.cmd_list->get_native());
-
-  // The exact main-view command lists are learned from the later verified
-  // scene composite. A newly seen list gets one native warm-up recording and
-  // becomes eligible the next time Detroit records it. Auxiliary temporal
-  // passes keep their native output and no longer consume persistent NGX
-  // adapter scratch bundles.
-  if (mode != DETROIT_DLSS_MODE_NATIVE
-      && !is_main_temporal_command_list) {
-    if (runtime_status.load(std::memory_order_relaxed)
-        != RuntimeStatus::kDlssActive) {
-      runtime_status.store(
-          RuntimeStatus::kWaitingForDispatch,
-          std::memory_order_relaxed);
-    }
-    return;
-  }
-
   DetroitDlssTemporalFrameInputs inputs = {
       .struct_size = sizeof(DetroitDlssTemporalFrameInputs),
       .abi_version = DETROIT_DLSS_ABI_VERSION,
@@ -1006,6 +1010,7 @@ inline void AfterNativeTemporalDispatch(
       .command_buffer = context.cmd_list->get_native(),
       .descriptor_set = descriptor_set,
       .pipeline_layout = pipeline_layout,
+      .compute_pipeline = temporal_pipeline.handle,
       .constants_buffer = has_constants_snapshot ? constants_snapshot.buffer : 0u,
       .constants_offset = has_constants_snapshot
                               ? constants_snapshot.effective_offset
@@ -1013,6 +1018,9 @@ inline void AfterNativeTemporalDispatch(
       .constants_size = has_constants_snapshot
                             ? constants_snapshot.descriptor_range
                             : 0u,
+      .constants_dynamic_offset = has_constants_snapshot
+                                      ? constants_snapshot.dynamic_offset
+                                      : 0u,
       .current_color = ToResource(sampled[1u]),
       .depth = ToResource(sampled[3u]),
       .motion_vectors = ToResource(sampled[4u]),
@@ -1033,8 +1041,11 @@ inline void AfterNativeTemporalDispatch(
       // history scalar on that first frame.
       .reset = frame_parameters.reset || !native_history_resources_available,
       .frame_id = frame_counter.fetch_add(1u, std::memory_order_relaxed) + 1u,
-      .flags = DETROIT_DLSS_FRAME_NATIVE_TAA_COMPLETED
-               | DETROIT_DLSS_FRAME_ALLOW_AUTO_EXPOSURE,
+      .flags = DETROIT_DLSS_FRAME_TEMPORAL_INPUTS_READY
+               | DETROIT_DLSS_FRAME_ALLOW_AUTO_EXPOSURE
+               | (auxiliary_replacement_used
+                      ? 0u
+                      : DETROIT_DLSS_FRAME_NATIVE_TAA_COMPLETED),
       .verification_flags = verification_flags,
       .dlaa_sharpening = mode == DETROIT_DLSS_MODE_DLAA
                              ? dlaa_sharpening.load(std::memory_order_acquire)
@@ -1076,7 +1087,7 @@ inline void AfterNativeTemporalDispatch(
         && !has_logged_auxiliary_active.exchange(true, std::memory_order_acq_rel)) {
       Log(
           reshade::log::level::info,
-          "DLAA auxiliary history pass active; the full native TAA color path is bypassed.");
+          "DLAA auxiliary history pass active; NGX owns b16 while Detroit retains b17-b19.");
     }
     runtime_status.store(RuntimeStatus::kDlssActive, std::memory_order_relaxed);
     const auto success_key = MakeTelemetryKey(
@@ -1168,6 +1179,7 @@ struct TemporalDispatchCallback {
     auxiliary_temporal_replacement_requested = false;
     auxiliary_temporal_replacement_generation = 0u;
     native_temporal_pipeline = {0u};
+    native_temporal_pipeline_layout = {0u};
     auto* shader_state = renodx::utils::command_action::GetShaderState(&context);
     if (shader_state != nullptr) {
       auto& compute_state =
@@ -1176,6 +1188,10 @@ struct TemporalDispatchCallback {
       native_temporal_pipeline = compute_state.pipeline_details != nullptr
                                      ? compute_state.pipeline_details->pipeline
                                      : compute_state.pipeline;
+      native_temporal_pipeline_layout =
+          compute_state.pipeline_details != nullptr
+              ? compute_state.pipeline_details->layout
+              : reshade::api::pipeline_layout{0u};
     }
     return {
         .post_callback = &AfterNativeTemporalDispatch,

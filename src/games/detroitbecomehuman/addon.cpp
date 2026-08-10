@@ -207,9 +207,9 @@ HMODULE addon_module = nullptr;
 std::atomic_bool addon_attached = false;
 std::atomic_bool bootstrap_setup_attempted = false;
 bool embedded_hooks_requested_at_startup = false;
+bool native_command_hooks_requested_at_startup = false;
 std::atomic_bool embedded_hooks_active = false;
 std::atomic_int embedded_hooks_restart_notice = 0;
-std::atomic_bool dlaa_disabled_notice_logged = false;
 embedded_dlss::ExtensionCache initial_extension_cache;
 
 std::filesystem::path GetModulePath(HMODULE module) {
@@ -292,6 +292,18 @@ embedded_dlss::ExtensionCache ReadExtensionCache() {
 }
 
 bool ReadStartupEmbeddedHookRequest() {
+  float startup_dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
+  float startup_dof_mode = 0.f;
+  (void)reshade::get_config_value(
+      nullptr, "renodx-preset1", "DLSSMode", startup_dlss_mode);
+  (void)reshade::get_config_value(
+      nullptr, "renodx-preset1", "DepthOfFieldMode", startup_dof_mode);
+  return embedded_dlss::NeedsEmbeddedBridge(
+      static_cast<DetroitDlssMode>(startup_dlss_mode),
+      startup_dof_mode >= 2.5f);
+}
+
+bool ReadStartupNativeCommandHookRequest() {
   float startup_dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
   float startup_dof_mode = 0.f;
   (void)reshade::get_config_value(
@@ -697,7 +709,8 @@ void OnAspectRatioModeChanged() {
 void RefreshEmbeddedCommandTracking() {
   const bool requested = embedded_dlss::NeedsRuntimeCommandTracking(
       temporal_capture::GetMode(), dof_mode >= 2.5f);
-  const bool active = embedded_hooks_active.load(std::memory_order_acquire);
+  const bool active = embedded_hooks_active.load(std::memory_order_acquire)
+                      && native_command_hooks_requested_at_startup;
   embedded_dlss::SetRuntimeCommandTracking(active && requested);
 
   const int notice = requested == active ? 0 : (requested ? 1 : 2);
@@ -709,11 +722,11 @@ void RefreshEmbeddedCommandTracking() {
   if (notice == 1) {
     reshade::log::message(
         reshade::log::level::warning,
-        "Detroit DLSS/Retinal: restart the game to load the experimental Vulkan command hooks.");
+        "Detroit Retinal DOF: restart the game to load its Vulkan command-bind hooks.");
   } else if (notice == 2) {
     reshade::log::message(
         reshade::log::level::warning,
-        "Detroit DLSS/Retinal: restart the game to unload the experimental Vulkan command hooks and restore the Native TAA fast path.");
+        "Detroit Retinal DOF: restart the game to unload its Vulkan command-bind hooks.");
   }
 }
 
@@ -723,24 +736,8 @@ void ApplyDlssMode(float selected_mode) {
       && next_mode != DETROIT_DLSS_MODE_DLAA) {
     next_mode = DETROIT_DLSS_MODE_NATIVE;
   }
-  if (!embedded_dlss::kDlaaRuntimeEnabled
-      && next_mode == DETROIT_DLSS_MODE_DLAA) {
+  if (!embedded_dlss::kDlaaRuntimeEnabled) {
     next_mode = DETROIT_DLSS_MODE_NATIVE;
-    if (auto* setting = renodx::utils::settings::FindSetting("DLSSMode");
-        setting != nullptr) {
-      setting->Set(static_cast<float>(DETROIT_DLSS_MODE_NATIVE))->Write();
-    }
-    reshade::set_config_value(
-        nullptr,
-        "renodx-preset1",
-        "DLSSMode",
-        static_cast<float>(DETROIT_DLSS_MODE_NATIVE));
-    if (!dlaa_disabled_notice_logged.exchange(
-            true, std::memory_order_acq_rel)) {
-      reshade::log::message(
-          reshade::log::level::warning,
-          "Detroit DLAA: temporarily disabled because its Vulkan command hooks cause a significant performance regression; Native TAA remains active.");
-    }
   }
   dlss_mode = static_cast<float>(next_mode);
   const auto previous_mode = temporal_capture::GetMode();
@@ -2651,8 +2648,11 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Temporal Anti-Aliasing",
                 .section = "DLSS",
-                .tooltip = "DLAA is retained as a development placeholder but is temporarily disabled because its Vulkan command hooks cause a significant performance regression.",
-                .labels = {"Native TAA", "DLAA (Temporarily Disabled)"},
+                .tooltip = "DLAA is temporarily disabled while its NGX command-buffer integration is redesigned. Native TAA remains active.",
+                .labels = {"Native TAA", "DLAA"},
+                .is_enabled = []() {
+                  return embedded_dlss::kDlaaRuntimeEnabled;
+                },
                 .on_change_value = [](float, float current) {
                   ApplyDlssMode(current);
                 },
@@ -2673,14 +2673,6 @@ renodx::utils::settings::Settings settings =
                 .parse = [](float value) { return value * 0.01f; },
             }},
             {{
-                .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "DLAA placeholder: temporarily disabled while its process-wide Vulkan command hooks are redesigned for lower CPU overhead.",
-                .section = "DLSS",
-                .is_visible = []() {
-                  return !embedded_dlss::kDlaaRuntimeEnabled;
-                },
-            }},
-            {{
                 .key = "DLSSBootstrapStatus",
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
                 .label = "First-run setup",
@@ -2688,7 +2680,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Native TAA fast path is active. Experimental DLSS/Retinal Vulkan command hooks were not loaded for this launch.",
+                .label = "Native TAA is active. DLAA is temporarily disabled; its targeted no-bind-hook implementation remains preserved for redesign.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -2698,7 +2690,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Native TAA is active, but experimental Vulkan command hooks remain loaded. Restart the game to unload them and restore maximum CPU performance.",
+                .label = "Native TAA is active. The lightweight DLAA backend remains ready for live mode switching; global command-bind hooks are disabled unless Retinal DOF requested them at startup.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -3144,7 +3136,7 @@ void OnPresent(
       status != nullptr) {
     status->label = embedded_hooks_requested_at_startup
                         ? embedded_dlss::GetStatusText()
-                        : "Native TAA fast path: experimental Vulkan hooks not loaded.";
+                        : "Native TAA fallback: lightweight DLAA backend not loaded.";
   }
   if (TryTrackGameSwapchain(swapchain) && UpdateUltrawideFromSwapchain(swapchain)
       && !ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
@@ -3197,14 +3189,19 @@ bool AttachAddon(HMODULE h_module) {
   // other ReShade API (including config access) is valid before this point.
   initial_extension_cache = ReadExtensionCache();
   embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest();
+  native_command_hooks_requested_at_startup =
+      ReadStartupNativeCommandHookRequest();
   if (embedded_hooks_requested_at_startup) {
     embedded_hooks_active.store(
-        embedded_dlss::AttachEarlyHooks(h_module, initial_extension_cache),
+        embedded_dlss::AttachEarlyHooks(
+            h_module,
+            initial_extension_cache,
+            native_command_hooks_requested_at_startup),
         std::memory_order_release);
   } else {
     reshade::log::message(
         reshade::log::level::info,
-        "Detroit DLSS/Retinal: Native TAA fast path selected; experimental Vulkan command hooks are not loaded.");
+        "Detroit DLSS/Retinal: lightweight Vulkan backend is not loaded; Native TAA remains active.");
   }
   renodx::games::detroitbecomehuman::dlss_bridge_client::client.SetApiProvider(
       &embedded_dlss::GetApi);

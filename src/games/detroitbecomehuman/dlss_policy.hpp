@@ -26,7 +26,7 @@ enum class FallbackReason : std::uint32_t {
   kFrameAbiMismatch,
   kVerificationIncomplete,
   kShaderMismatch,
-  kNativeTaaNotCompleted,
+  kTemporalInputsNotReady,
   kInvalidCommandBuffer,
   kInvalidDescriptorSnapshot,
   kInvalidConstantsSnapshot,
@@ -161,15 +161,17 @@ struct FrameEligibility {
   if (inputs.shader_crc != supported_build::kTemporalAaShaderCrc) {
     return {.reason = FallbackReason::kShaderMismatch};
   }
-  if (!HasFrameFlag(inputs, DETROIT_DLSS_FRAME_NATIVE_TAA_COMPLETED)) {
-    return {.reason = FallbackReason::kNativeTaaNotCompleted};
+  if (!HasFrameFlag(
+          inputs, DETROIT_DLSS_FRAME_TEMPORAL_INPUTS_READY)) {
+    return {.reason = FallbackReason::kTemporalInputsNotReady};
   }
   if (inputs.command_buffer == 0u) {
     return {.reason = FallbackReason::kInvalidCommandBuffer};
   }
   if (inputs.descriptor_set_index != DETROIT_DLSS_TAA_DESCRIPTOR_SET
       || inputs.descriptor_set == 0u
-      || inputs.pipeline_layout == 0u) {
+      || inputs.pipeline_layout == 0u
+      || inputs.compute_pipeline == 0u) {
     return {.reason = FallbackReason::kInvalidDescriptorSnapshot};
   }
   if (inputs.constants_buffer == 0u || inputs.constants_size == 0u) {

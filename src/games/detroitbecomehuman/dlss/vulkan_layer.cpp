@@ -32,6 +32,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -41,6 +42,7 @@
 
 #include "../dlss_bridge_abi.h"
 #include "../supported_build.hpp"
+#include "../taa_contract.hpp"
 #include "adapter_runtime.hpp"
 #include "embedded_bootstrap.hpp"
 #include "feature_lifetime.hpp"
@@ -76,6 +78,7 @@ std::atomic<bool> hooks_attached = false;
 std::atomic<bool> loaded_early = false;
 std::atomic<bool> cached_extensions_ready = false;
 std::atomic<bool> runtime_command_tracking_enabled = false;
+std::atomic<bool> native_command_hooks_installed = false;
 
 PFN_vkCreateInstance reshade_create_instance = nullptr;
 PFN_vkCreateDevice reshade_create_device = nullptr;
@@ -390,6 +393,7 @@ struct ImageDescriptorState {
 struct DescriptorSetState {
   VkDescriptorPool pool = VK_NULL_HANDLE;
   VkDescriptorSetLayout layout = VK_NULL_HANDLE;
+  DWORD last_update_thread_id = 0u;
   std::unordered_map<std::uint64_t, BufferDescriptorState> buffer_descriptors;
   std::unordered_map<std::uint64_t, ImageDescriptorState> image_descriptors;
 };
@@ -402,6 +406,9 @@ struct BufferState {
   bool temporal_constants_candidate = false;
   std::vector<std::uint8_t> shadow_bytes;
   std::vector<std::uint8_t> shadow_valid_bytes;
+  std::vector<VkDeviceSize> temporal_slot_offsets;
+  std::vector<std::uint64_t> temporal_slot_hashes;
+  bool temporal_slot_hashes_primed = false;
 };
 
 struct ImageState {
@@ -547,6 +554,7 @@ struct DeviceState {
   std::mutex mutex;
 
   VkPhysicalDeviceMemoryProperties memory_properties = {};
+  VkDeviceSize min_uniform_buffer_offset_alignment = 1u;
   std::mutex tracking_mutex;
   std::unordered_map<std::uint64_t, DescriptorSetLayoutState> descriptor_set_layouts;
   std::unordered_map<std::uint64_t, PipelineLayoutState> pipeline_layouts;
@@ -1360,6 +1368,9 @@ void TrackBufferMemoryBindingLocked(
         tracked->second.shadow_valid_bytes.begin(),
         tracked->second.shadow_valid_bytes.end(),
         std::uint8_t{0u});
+    tracked->second.temporal_slot_offsets.clear();
+    tracked->second.temporal_slot_hashes.clear();
+    tracked->second.temporal_slot_hashes_primed = false;
   }
   if (tracked->second.temporal_constants_candidate) {
     RegisterTemporalConstantsBufferLocked(state, ToOpaque(buffer));
@@ -1467,11 +1478,15 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetContext(DetroitDlssBootstrapCon
   return ngx_available ? DETROIT_DLSS_RESULT_SUCCESS : DETROIT_DLSS_RESULT_FALLBACK;
 }
 
-DetroitDlssResultCode FillTemporalConstantsLocked(
+DetroitDlssResultCode FillTemporalConstantsForBindingLocked(
     const DeviceState& state,
     std::uint64_t command_buffer,
     std::uint32_t descriptor_set_index,
     std::uint32_t binding,
+    std::uint64_t descriptor_set_handle,
+    std::uint64_t pipeline_layout_handle,
+    VkDeviceSize dynamic_offset,
+    bool dynamic_offset_valid,
     DetroitDlssTemporalConstantsSnapshot* snapshot,
     DetroitDlssTemporalConstantsDiagnostics* diagnostics) {
   const auto set_detail = [&](DetroitDlssTemporalConstantsDetail detail) {
@@ -1480,21 +1495,10 @@ DetroitDlssResultCode FillTemporalConstantsLocked(
     }
   };
 
-  const auto command = state.command_buffer_descriptors.find(command_buffer);
-  if (command == state.command_buffer_descriptors.end()) {
-    set_detail(DETROIT_DLSS_CONSTANTS_DETAIL_BINDING_UNTRACKED);
-    return DETROIT_DLSS_RESULT_FALLBACK;
-  }
-  const auto bound = command->second.find(CommandDescriptorKey(descriptor_set_index, binding));
-  if (bound == command->second.end()) {
-    set_detail(DETROIT_DLSS_CONSTANTS_DETAIL_BINDING_UNTRACKED);
-    return DETROIT_DLSS_RESULT_FALLBACK;
-  }
-
-  snapshot->descriptor_set = ToOpaque(bound->second.descriptor_set);
-  snapshot->pipeline_layout = ToOpaque(bound->second.pipeline_layout);
-  snapshot->dynamic_offset = bound->second.dynamic_offset;
-  if (!bound->second.dynamic_offset_valid) {
+  snapshot->descriptor_set = descriptor_set_handle;
+  snapshot->pipeline_layout = pipeline_layout_handle;
+  snapshot->dynamic_offset = dynamic_offset;
+  if (!dynamic_offset_valid) {
     set_detail(DETROIT_DLSS_CONSTANTS_DETAIL_DYNAMIC_OFFSET_INVALID);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
@@ -1640,6 +1644,40 @@ DetroitDlssResultCode FillTemporalConstantsLocked(
   return DETROIT_DLSS_RESULT_SUCCESS;
 }
 
+DetroitDlssResultCode FillTemporalConstantsLocked(
+    const DeviceState& state,
+    std::uint64_t command_buffer,
+    std::uint32_t descriptor_set_index,
+    std::uint32_t binding,
+    DetroitDlssTemporalConstantsSnapshot* snapshot,
+    DetroitDlssTemporalConstantsDiagnostics* diagnostics) {
+  const auto command = state.command_buffer_descriptors.find(command_buffer);
+  if (command == state.command_buffer_descriptors.end()) {
+    if (diagnostics != nullptr) {
+      diagnostics->detail_code = DETROIT_DLSS_CONSTANTS_DETAIL_BINDING_UNTRACKED;
+    }
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+  const auto bound = command->second.find(CommandDescriptorKey(descriptor_set_index, binding));
+  if (bound == command->second.end()) {
+    if (diagnostics != nullptr) {
+      diagnostics->detail_code = DETROIT_DLSS_CONSTANTS_DETAIL_BINDING_UNTRACKED;
+    }
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+  return FillTemporalConstantsForBindingLocked(
+      state,
+      command_buffer,
+      descriptor_set_index,
+      binding,
+      ToOpaque(bound->second.descriptor_set),
+      ToOpaque(bound->second.pipeline_layout),
+      bound->second.dynamic_offset,
+      bound->second.dynamic_offset_valid,
+      snapshot,
+      diagnostics);
+}
+
 DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalConstants(
     std::uint64_t command_buffer,
     std::uint32_t descriptor_set_index,
@@ -1755,6 +1793,235 @@ bool FillImageBindingLocked(
          == DETROIT_DLSS_IMAGE_MANDATORY_MASK;
 }
 
+std::uint64_t GetDescriptorSetUpdateSerial(
+    const DescriptorSetState& descriptor_set) {
+  std::uint64_t serial = 0u;
+  for (const auto& [_, descriptor] : descriptor_set.buffer_descriptors) {
+    serial = std::max(serial, descriptor.update_serial);
+  }
+  for (const auto& [_, descriptor] : descriptor_set.image_descriptors) {
+    serial = std::max(serial, descriptor.update_serial);
+  }
+  return serial;
+}
+
+bool HasRequiredTemporalDescriptors(const DescriptorSetState& descriptor_set) {
+  for (const std::uint32_t binding : kTemporalImageBindings) {
+    if ((BindingMask(binding) & DETROIT_DLSS_TAA_REQUIRED_IMAGE_MASK) == 0u) {
+      continue;
+    }
+    const auto image = descriptor_set.image_descriptors.find(
+        DescriptorSlotKey(binding, 0u));
+    if (image == descriptor_set.image_descriptors.end()
+        || !IsImageDescriptorType(image->second.descriptor_type)
+        || image->second.image_view == VK_NULL_HANDLE) {
+      return false;
+    }
+  }
+  const auto constants = descriptor_set.buffer_descriptors.find(
+      DescriptorSlotKey(DETROIT_DLSS_TAA_CONSTANT_BINDING_52, 0u));
+  return constants != descriptor_set.buffer_descriptors.end()
+         && IsDynamicBufferDescriptorType(constants->second.descriptor_type)
+         && constants->second.buffer != VK_NULL_HANDLE;
+}
+
+std::optional<std::pair<VkDescriptorSet, DescriptorSetState*>>
+ResolveLatestTemporalDescriptorUpdateLocked(
+    DeviceState* state,
+    std::uint32_t descriptor_set_index,
+    VkPipelineLayout expected_pipeline_layout) {
+  const auto pipeline_layout =
+      state->pipeline_layouts.find(ToOpaque(expected_pipeline_layout));
+  if (pipeline_layout == state->pipeline_layouts.end()
+      || descriptor_set_index >= pipeline_layout->second.set_layouts.size()) {
+    return std::nullopt;
+  }
+  const VkDescriptorSetLayout expected_set_layout =
+      pipeline_layout->second.set_layouts[descriptor_set_index];
+  const auto layout =
+      state->descriptor_set_layouts.find(ToOpaque(expected_set_layout));
+  if (layout == state->descriptor_set_layouts.end()
+      || !layout->second.temporal_candidate) {
+    return std::nullopt;
+  }
+
+  const DWORD current_thread_id = GetCurrentThreadId();
+  std::uint64_t newest_serial = 0u;
+  VkDescriptorSet newest_handle = VK_NULL_HANDLE;
+  DescriptorSetState* newest_state = nullptr;
+  bool newest_is_unique = true;
+  for (auto& [handle, descriptor_set] : state->descriptor_sets) {
+    if (descriptor_set.layout != expected_set_layout
+        || descriptor_set.last_update_thread_id != current_thread_id
+        || !HasRequiredTemporalDescriptors(descriptor_set)) {
+      continue;
+    }
+    const std::uint64_t serial = GetDescriptorSetUpdateSerial(descriptor_set);
+    if (serial > newest_serial) {
+      newest_serial = serial;
+      newest_handle = FromOpaque<VkDescriptorSet>(handle);
+      newest_state = &descriptor_set;
+      newest_is_unique = true;
+    } else if (serial == newest_serial && serial != 0u) {
+      newest_is_unique = false;
+    }
+  }
+  if (newest_state == nullptr || newest_serial == 0u || !newest_is_unique) {
+    return std::nullopt;
+  }
+  return std::pair{newest_handle, newest_state};
+}
+
+std::uint64_t HashTemporalConstants(std::span<const std::uint8_t> bytes) {
+  std::uint64_t hash = UINT64_C(14695981039346656037);
+  for (const std::uint8_t byte : bytes) {
+    hash ^= byte;
+    hash *= UINT64_C(1099511628211);
+  }
+  return hash;
+}
+
+bool ReadTemporalConstantsBytesLocked(
+    const DeviceState& state,
+    const BufferState& buffer,
+    VkDeviceSize effective_offset,
+    std::array<std::uint8_t, kReflectedTemporalConstantsSize>* bytes) {
+  if (bytes == nullptr || buffer.memory == VK_NULL_HANDLE
+      || effective_offset > buffer.size
+      || kReflectedTemporalConstantsSize > buffer.size - effective_offset) {
+    return false;
+  }
+  const auto memory = state.memories.find(ToOpaque(buffer.memory));
+  if (memory == state.memories.end()) return false;
+  std::uint64_t absolute_offset = 0u;
+  if (!AddWithoutOverflow(
+          buffer.memory_offset, effective_offset, &absolute_offset)) {
+    return false;
+  }
+  if (memory->second.mapped_pointer != nullptr) {
+    if (absolute_offset < memory->second.mapped_offset) return false;
+    const std::uint64_t relative =
+        absolute_offset - memory->second.mapped_offset;
+    if (relative > memory->second.mapped_size
+        || kReflectedTemporalConstantsSize
+               > memory->second.mapped_size - relative) {
+      return false;
+    }
+    std::memcpy(
+        bytes->data(),
+        static_cast<const std::uint8_t*>(memory->second.mapped_pointer)
+            + relative,
+        bytes->size());
+    return true;
+  }
+  const auto offset = static_cast<std::size_t>(effective_offset);
+  if (offset > buffer.shadow_bytes.size()
+      || bytes->size() > buffer.shadow_bytes.size() - offset
+      || buffer.shadow_valid_bytes.size() != buffer.shadow_bytes.size()
+      || !std::all_of(
+          buffer.shadow_valid_bytes.begin() + offset,
+          buffer.shadow_valid_bytes.begin() + offset + bytes->size(),
+          [](std::uint8_t valid) { return valid != 0u; })) {
+    return false;
+  }
+  std::memcpy(bytes->data(), buffer.shadow_bytes.data() + offset, bytes->size());
+  return true;
+}
+
+std::optional<VkDeviceSize> ResolveChangedTemporalConstantsSlotLocked(
+    DeviceState* state,
+    DescriptorSetState* descriptor_set,
+    const DetroitDlssTemporalDescriptorSnapshot& snapshot) {
+  const auto descriptor = descriptor_set->buffer_descriptors.find(
+      DescriptorSlotKey(DETROIT_DLSS_TAA_CONSTANT_BINDING_52, 0u));
+  if (descriptor == descriptor_set->buffer_descriptors.end()
+      || !IsDynamicBufferDescriptorType(descriptor->second.descriptor_type)) {
+    return std::nullopt;
+  }
+  const auto tracked_buffer =
+      state->buffers.find(ToOpaque(descriptor->second.buffer));
+  if (tracked_buffer == state->buffers.end()) return std::nullopt;
+  auto& buffer = tracked_buffer->second;
+  const VkDeviceSize alignment =
+      std::max<VkDeviceSize>(state->min_uniform_buffer_offset_alignment, 1u);
+  if (alignment > std::numeric_limits<VkDeviceSize>::max()
+                      - (kReflectedTemporalConstantsSize - 1u)) {
+    return std::nullopt;
+  }
+  const VkDeviceSize stride =
+      ((kReflectedTemporalConstantsSize + alignment - 1u) / alignment)
+      * alignment;
+  if (stride == 0u || descriptor->second.offset > buffer.size) {
+    return std::nullopt;
+  }
+
+  std::vector<VkDeviceSize> offsets;
+  std::vector<std::uint64_t> hashes;
+  std::vector<bool> frame_valid;
+  const std::uint32_t render_width = snapshot.images[1u].resource.width;
+  const std::uint32_t render_height = snapshot.images[1u].resource.height;
+  const std::uint32_t output_width = snapshot.images[9u].resource.width;
+  const std::uint32_t output_height = snapshot.images[9u].resource.height;
+  for (VkDeviceSize dynamic_offset = 0u;;) {
+    std::uint64_t effective_offset = 0u;
+    if (!AddWithoutOverflow(
+            descriptor->second.offset, dynamic_offset, &effective_offset)
+        || effective_offset > buffer.size
+        || kReflectedTemporalConstantsSize > buffer.size - effective_offset) {
+      break;
+    }
+    std::array<std::uint8_t, kReflectedTemporalConstantsSize> bytes = {};
+    if (!ReadTemporalConstantsBytesLocked(
+            *state, buffer, effective_offset, &bytes)) {
+      return std::nullopt;
+    }
+    offsets.push_back(dynamic_offset);
+    hashes.push_back(HashTemporalConstants(bytes));
+    const auto decoded =
+        renodx::games::detroitbecomehuman::taa_contract::DecodeConstants(
+            std::as_bytes(std::span(bytes)));
+    frame_valid.push_back(
+        decoded.has_value()
+        && renodx::games::detroitbecomehuman::taa_contract::
+               BuildNgxFrameParameters(
+                   decoded->raw,
+                   render_width,
+                   render_height,
+                   output_width,
+                   output_height)
+                   .IsValid());
+    if (dynamic_offset > std::numeric_limits<VkDeviceSize>::max() - stride) {
+      break;
+    }
+    dynamic_offset += stride;
+  }
+  if (offsets.empty()) return std::nullopt;
+
+  const bool topology_changed = buffer.temporal_slot_offsets != offsets
+                                || buffer.temporal_slot_hashes.size()
+                                       != hashes.size();
+  if (!buffer.temporal_slot_hashes_primed || topology_changed) {
+    buffer.temporal_slot_offsets = std::move(offsets);
+    buffer.temporal_slot_hashes = std::move(hashes);
+    buffer.temporal_slot_hashes_primed = true;
+    return std::nullopt;
+  }
+
+  std::optional<VkDeviceSize> changed_slot;
+  bool ambiguous = false;
+  for (std::size_t index = 0u; index < hashes.size(); ++index) {
+    if (hashes[index] == buffer.temporal_slot_hashes[index]) continue;
+    if (!frame_valid[index] || changed_slot.has_value()) {
+      ambiguous = true;
+    } else {
+      changed_slot = offsets[index];
+    }
+  }
+  buffer.temporal_slot_offsets = std::move(offsets);
+  buffer.temporal_slot_hashes = std::move(hashes);
+  return !ambiguous ? changed_slot : std::nullopt;
+}
+
 DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
     std::uint64_t command_buffer,
     std::uint32_t descriptor_set_index,
@@ -1797,26 +2064,47 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
   }
 
   const std::lock_guard lock(state->tracking_mutex);
+  VkDescriptorSet resolved_descriptor_set = VK_NULL_HANDLE;
+  DescriptorSetState* resolved_descriptor_state = nullptr;
+  bool targeted_update_resolved = false;
+  std::optional<VkDeviceSize> targeted_constants_dynamic_offset;
   const auto command = state->command_buffer_descriptors.find(command_buffer);
-  if (command == state->command_buffer_descriptors.end()) {
-    set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_COMMAND_UNTRACKED);
-    return DETROIT_DLSS_RESULT_FALLBACK;
+  if (command != state->command_buffer_descriptors.end()) {
+    snapshot->snapshot_flags |= DETROIT_DLSS_SNAPSHOT_COMMAND_TRACKED;
+    const auto anchor_bound = command->second.find(CommandDescriptorKey(
+        descriptor_set_index, DETROIT_DLSS_TAA_SAMPLED_BINDING_1));
+    if (anchor_bound == command->second.end()) {
+      set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_SET_UNBOUND);
+      return DETROIT_DLSS_RESULT_FALLBACK;
+    }
+    snapshot->snapshot_flags |= DETROIT_DLSS_SNAPSHOT_SET_BOUND;
+    resolved_descriptor_set = anchor_bound->second.descriptor_set;
+    snapshot->pipeline_layout = ToOpaque(anchor_bound->second.pipeline_layout);
+    const auto restore = state->command_buffer_restore_states.find(command_buffer);
+    if (restore != state->command_buffer_restore_states.end()) {
+      snapshot->compute_pipeline = ToOpaque(restore->second.pipeline);
+    }
+  } else {
+    if (expected_pipeline_layout == 0u) {
+      set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_COMMAND_UNTRACKED);
+      return DETROIT_DLSS_RESULT_FALLBACK;
+    }
+    const auto targeted = ResolveLatestTemporalDescriptorUpdateLocked(
+        state.get(),
+        descriptor_set_index,
+        FromOpaque<VkPipelineLayout>(expected_pipeline_layout));
+    if (!targeted.has_value()) {
+      set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_TARGETED_SET_UNAVAILABLE);
+      return DETROIT_DLSS_RESULT_FALLBACK;
+    }
+    resolved_descriptor_set = targeted->first;
+    resolved_descriptor_state = targeted->second;
+    snapshot->pipeline_layout = expected_pipeline_layout;
+    snapshot->snapshot_flags |=
+        DETROIT_DLSS_SNAPSHOT_TARGETED_UPDATE_RESOLVED;
+    targeted_update_resolved = true;
   }
-  snapshot->snapshot_flags |= DETROIT_DLSS_SNAPSHOT_COMMAND_TRACKED;
-
-  const auto anchor_bound = command->second.find(CommandDescriptorKey(
-      descriptor_set_index, DETROIT_DLSS_TAA_SAMPLED_BINDING_1));
-  if (anchor_bound == command->second.end()) {
-    set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_SET_UNBOUND);
-    return DETROIT_DLSS_RESULT_FALLBACK;
-  }
-  snapshot->snapshot_flags |= DETROIT_DLSS_SNAPSHOT_SET_BOUND;
-  snapshot->descriptor_set = ToOpaque(anchor_bound->second.descriptor_set);
-  snapshot->pipeline_layout = ToOpaque(anchor_bound->second.pipeline_layout);
-  const auto restore = state->command_buffer_restore_states.find(command_buffer);
-  if (restore != state->command_buffer_restore_states.end()) {
-    snapshot->compute_pipeline = ToOpaque(restore->second.pipeline);
-  }
+  snapshot->descriptor_set = ToOpaque(resolved_descriptor_set);
 
   if (expected_descriptor_set == 0u || snapshot->descriptor_set == expected_descriptor_set) {
     snapshot->snapshot_flags |= DETROIT_DLSS_SNAPSHOT_EXPECTED_SET_MATCH;
@@ -1836,6 +2124,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
     set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_DESCRIPTOR_SET_UNTRACKED);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
+  resolved_descriptor_state = &descriptor_set->second;
   snapshot->snapshot_flags |= DETROIT_DLSS_SNAPSHOT_DESCRIPTOR_SET_TRACKED;
 
   const auto pipeline_layout = state->pipeline_layouts.find(snapshot->pipeline_layout);
@@ -1855,8 +2144,8 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
     auto& image_snapshot = snapshot->images[index];
     const bool complete = FillImageBindingLocked(
         *state,
-        descriptor_set->second,
-        anchor_bound->second.descriptor_set,
+         *resolved_descriptor_state,
+         resolved_descriptor_set,
         binding,
         &image_snapshot);
     if ((image_snapshot.valid_flags & DETROIT_DLSS_IMAGE_DESCRIPTOR_VALID) != 0u) {
@@ -1885,13 +2174,34 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
     set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_REQUIRED_IMAGES_INCOMPLETE);
   }
 
-  const auto constants_status = FillTemporalConstantsLocked(
-      *state,
-      command_buffer,
-      descriptor_set_index,
-      DETROIT_DLSS_TAA_CONSTANT_BINDING_52,
-      &snapshot->constants,
-      &snapshot->constants_diagnostics);
+  if (targeted_update_resolved) {
+    targeted_constants_dynamic_offset = ResolveChangedTemporalConstantsSlotLocked(
+        state.get(), resolved_descriptor_state, *snapshot);
+    if (!targeted_constants_dynamic_offset.has_value()) {
+      set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_CONSTANTS_SLOT_AMBIGUOUS);
+      return DETROIT_DLSS_RESULT_FALLBACK;
+    }
+  }
+
+  const auto constants_status = targeted_update_resolved
+      ? FillTemporalConstantsForBindingLocked(
+            *state,
+            command_buffer,
+            descriptor_set_index,
+            DETROIT_DLSS_TAA_CONSTANT_BINDING_52,
+            snapshot->descriptor_set,
+            snapshot->pipeline_layout,
+            *targeted_constants_dynamic_offset,
+            true,
+            &snapshot->constants,
+            &snapshot->constants_diagnostics)
+      : FillTemporalConstantsLocked(
+            *state,
+            command_buffer,
+            descriptor_set_index,
+            DETROIT_DLSS_TAA_CONSTANT_BINDING_52,
+            &snapshot->constants,
+            &snapshot->constants_diagnostics);
   if ((snapshot->constants.valid_flags & DETROIT_DLSS_CONSTANTS_DESCRIPTOR_VALID) != 0u) {
     snapshot->snapshot_flags |= DETROIT_DLSS_SNAPSHOT_CONSTANTS_DESCRIPTOR_VALID;
   }
@@ -1902,9 +2212,18 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
     set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_CONSTANTS_UNAVAILABLE);
   }
 
+  const bool command_acquired =
+      (snapshot->snapshot_flags
+       & DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK)
+          == DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK
+      || (snapshot->snapshot_flags
+          & DETROIT_DLSS_SNAPSHOT_TARGETED_UPDATE_RESOLVED)
+             != 0u;
   return snapshot->detail_code == DETROIT_DLSS_SNAPSHOT_DETAIL_NONE
-                 && (snapshot->snapshot_flags & DETROIT_DLSS_SNAPSHOT_MANDATORY_MASK)
-                        == DETROIT_DLSS_SNAPSHOT_MANDATORY_MASK
+                 && command_acquired
+                 && (snapshot->snapshot_flags
+                     & DETROIT_DLSS_SNAPSHOT_COMMON_MANDATORY_MASK)
+                        == DETROIT_DLSS_SNAPSHOT_COMMON_MANDATORY_MASK
              ? DETROIT_DLSS_RESULT_SUCCESS
              : DETROIT_DLSS_RESULT_FALLBACK;
 }
@@ -2023,21 +2342,71 @@ std::optional<ComputeCommandRestoreState> CaptureComputeRestoreState(
     return std::nullopt;
   }
   const auto found = state->command_buffer_restore_states.find(inputs.command_buffer);
-  if (found == state->command_buffer_restore_states.end()
-      || found->second.pipeline == VK_NULL_HANDLE
-      || found->second.descriptor_layout == VK_NULL_HANDLE
-      || found->second.descriptor_sets.empty()
-      || ToOpaque(found->second.descriptor_layout) != inputs.pipeline_layout
-      || inputs.descriptor_set_index < found->second.first_set) {
+  if (found != state->command_buffer_restore_states.end()) {
+    if (found->second.pipeline == VK_NULL_HANDLE
+        || found->second.descriptor_layout == VK_NULL_HANDLE
+        || found->second.descriptor_sets.empty()
+        || ToOpaque(found->second.descriptor_layout) != inputs.pipeline_layout
+        || inputs.descriptor_set_index < found->second.first_set) {
+      return std::nullopt;
+    }
+    const std::uint64_t relative_set =
+        static_cast<std::uint64_t>(inputs.descriptor_set_index)
+        - found->second.first_set;
+    if (relative_set >= found->second.descriptor_sets.size()
+        || ToOpaque(found->second.descriptor_sets[relative_set])
+               != inputs.descriptor_set) {
+      return std::nullopt;
+    }
+    return found->second;
+  }
+
+  if (inputs.compute_pipeline == 0u || inputs.pipeline_layout == 0u
+      || inputs.descriptor_set == 0u
+      || inputs.constants_dynamic_offset
+             > std::numeric_limits<std::uint32_t>::max()) {
     return std::nullopt;
   }
-  const std::uint64_t relative_set =
-      static_cast<std::uint64_t>(inputs.descriptor_set_index) - found->second.first_set;
-  if (relative_set >= found->second.descriptor_sets.size()
-      || ToOpaque(found->second.descriptor_sets[relative_set]) != inputs.descriptor_set) {
+  const auto pipeline_layout =
+      state->pipeline_layouts.find(inputs.pipeline_layout);
+  const auto descriptor_set = state->descriptor_sets.find(inputs.descriptor_set);
+  if (pipeline_layout == state->pipeline_layouts.end()
+      || descriptor_set == state->descriptor_sets.end()
+      || inputs.descriptor_set_index != DETROIT_DLSS_TAA_DESCRIPTOR_SET
+      || pipeline_layout->second.set_layouts.size() != 1u
+      || inputs.descriptor_set_index
+             >= pipeline_layout->second.set_layouts.size()
+      || pipeline_layout->second.set_layouts[inputs.descriptor_set_index]
+             != descriptor_set->second.layout) {
     return std::nullopt;
   }
-  return found->second;
+  const auto descriptor_layout = state->descriptor_set_layouts.find(
+      ToOpaque(descriptor_set->second.layout));
+  if (descriptor_layout == state->descriptor_set_layouts.end()) {
+    return std::nullopt;
+  }
+  std::uint64_t dynamic_descriptor_count = 0u;
+  bool constants_is_only_dynamic_descriptor = false;
+  for (const auto& binding : descriptor_layout->second.bindings) {
+    if (!IsDynamicBufferDescriptorType(binding.descriptor_type)) continue;
+    dynamic_descriptor_count += binding.descriptor_count;
+    constants_is_only_dynamic_descriptor =
+        binding.binding == DETROIT_DLSS_TAA_CONSTANT_BINDING_52
+        && binding.descriptor_count == 1u;
+  }
+  if (dynamic_descriptor_count != 1u
+      || !constants_is_only_dynamic_descriptor) {
+    return std::nullopt;
+  }
+  ComputeCommandRestoreState targeted = {
+      .pipeline = FromOpaque<VkPipeline>(inputs.compute_pipeline),
+      .descriptor_layout = FromOpaque<VkPipelineLayout>(inputs.pipeline_layout),
+      .first_set = inputs.descriptor_set_index,
+      .descriptor_sets = {FromOpaque<VkDescriptorSet>(inputs.descriptor_set)},
+      .dynamic_offsets = {
+          static_cast<std::uint32_t>(inputs.constants_dynamic_offset)},
+  };
+  return targeted;
 }
 
 bool RestoreComputeCommandState(
@@ -2165,9 +2534,10 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       inputs->shader_crc == DETROIT_DLSS_TEMPORAL_AA_SHADER_CRC
       && inputs->descriptor_set_index == DETROIT_DLSS_TAA_DESCRIPTOR_SET
       && inputs->command_buffer != 0u && inputs->descriptor_set != 0u
-      && inputs->pipeline_layout != 0u && inputs->constants_buffer != 0u
+      && inputs->pipeline_layout != 0u && inputs->compute_pipeline != 0u
+      && inputs->constants_buffer != 0u
       && inputs->constants_size != 0u
-      && (inputs->flags & DETROIT_DLSS_FRAME_NATIVE_TAA_COMPLETED) != 0u
+      && (inputs->flags & DETROIT_DLSS_FRAME_TEMPORAL_INPUTS_READY) != 0u
       && inputs->render_width == state->settings.render_width
       && inputs->render_height == state->settings.render_height
       && inputs->output_width == state->settings.output_width
@@ -2699,6 +3069,7 @@ VKAPI_ATTR void VKAPI_CALL LayerUpdateDescriptorSets(
     if (set == state->descriptor_sets.end()) continue;
     const auto layout = state->descriptor_set_layouts.find(ToOpaque(set->second.layout));
     if (layout == state->descriptor_set_layouts.end()) continue;
+    set->second.last_update_thread_id = GetCurrentThreadId();
     const auto slots = EnumerateDescriptorSlots(
         layout->second,
         write.dstBinding,
@@ -2746,6 +3117,7 @@ VKAPI_ATTR void VKAPI_CALL LayerUpdateDescriptorSets(
         || destination_set == state->descriptor_sets.end()) {
       continue;
     }
+    destination_set->second.last_update_thread_id = GetCurrentThreadId();
     const auto source_layout =
         state->descriptor_set_layouts.find(ToOpaque(source_set->second.layout));
     const auto destination_layout =
@@ -4157,10 +4529,12 @@ PFN_vkVoidFunction FindTrackedDeviceFunction(const char* name) {
   if (std::strcmp(name, "vkDestroyCommandPool") == 0) {
     return reinterpret_cast<PFN_vkVoidFunction>(&LayerDestroyCommandPool);
   }
-  if (std::strcmp(name, "vkCmdBindDescriptorSets") == 0) {
+  if (native_command_hooks_installed.load(std::memory_order_acquire)
+      && std::strcmp(name, "vkCmdBindDescriptorSets") == 0) {
     return reinterpret_cast<PFN_vkVoidFunction>(&LayerCmdBindDescriptorSets);
   }
-  if (std::strcmp(name, "vkCmdBindPipeline") == 0) {
+  if (native_command_hooks_installed.load(std::memory_order_acquire)
+      && std::strcmp(name, "vkCmdBindPipeline") == 0) {
     return reinterpret_cast<PFN_vkVoidFunction>(&LayerCmdBindPipeline);
   }
   return nullptr;
@@ -4383,6 +4757,17 @@ VKAPI_ATTR VkResult VKAPI_CALL HookCreateDevice(
     get_memory_properties(physical_device, &state->memory_properties);
   }
 
+  const auto get_physical_device_properties =
+      reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(
+          reshade_get_instance_proc_addr(
+              instance_state->instance, "vkGetPhysicalDeviceProperties"));
+  if (get_physical_device_properties != nullptr) {
+    VkPhysicalDeviceProperties properties = {};
+    get_physical_device_properties(physical_device, &properties);
+    state->min_uniform_buffer_offset_alignment = std::max<VkDeviceSize>(
+        properties.limits.minUniformBufferOffsetAlignment, 1u);
+  }
+
   const auto get_queue_family_properties =
       reinterpret_cast<PFN_vkGetPhysicalDeviceQueueFamilyProperties>(
           reshade_get_instance_proc_addr(
@@ -4586,8 +4971,17 @@ void SetRuntimeCommandTracking(bool enabled) {
   runtime_command_tracking_enabled.store(enabled, std::memory_order_release);
 }
 
-bool AttachEarlyHooks(HMODULE addon_module, const ExtensionCache& cache) {
+bool AttachEarlyHooks(
+    HMODULE addon_module,
+    const ExtensionCache& cache,
+    bool install_native_command_hooks) {
   layer_module = addon_module;
+  native_command_hooks_installed.store(
+      install_native_command_hooks, std::memory_order_release);
+  Trace(
+      install_native_command_hooks
+          ? "Retinal startup requested native Vulkan command-bind hooks"
+          : "Targeted DLAA backend active without native Vulkan command-bind hooks");
   if (hooks_attached.load(std::memory_order_acquire)) return true;
   const bool cache_valid = CanAttachEarlyHooks(cache);
   {

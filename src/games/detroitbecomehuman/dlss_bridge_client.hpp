@@ -166,6 +166,13 @@ class Client {
         && candidate.abi_version == DETROIT_DLSS_ABI_VERSION
         && candidate.command_buffer == command_buffer
         && candidate.descriptor_set_index == DETROIT_DLSS_TAA_DESCRIPTOR_SET;
+    const bool acquisition_valid =
+        (candidate.snapshot_flags
+         & DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK)
+            == DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK
+        || (candidate.snapshot_flags
+            & DETROIT_DLSS_SNAPSHOT_TARGETED_UPDATE_RESOLVED)
+               != 0u;
     if (basic_identity_valid) *snapshot = candidate;
 
     if (capture_status != DETROIT_DLSS_RESULT_SUCCESS
@@ -177,8 +184,10 @@ class Client {
         || candidate.required_image_mask != DETROIT_DLSS_TAA_REQUIRED_IMAGE_MASK
         || (candidate.complete_image_mask & candidate.required_image_mask)
                != candidate.required_image_mask
-        || (candidate.snapshot_flags & DETROIT_DLSS_SNAPSHOT_MANDATORY_MASK)
-               != DETROIT_DLSS_SNAPSHOT_MANDATORY_MASK
+        || (candidate.snapshot_flags
+            & DETROIT_DLSS_SNAPSHOT_COMMON_MANDATORY_MASK)
+               != DETROIT_DLSS_SNAPSHOT_COMMON_MANDATORY_MASK
+        || !acquisition_valid
         || (candidate.constants.valid_flags & DETROIT_DLSS_CONSTANTS_MANDATORY_MASK)
                != DETROIT_DLSS_CONSTANTS_MANDATORY_MASK) {
       return false;

@@ -142,27 +142,29 @@ static_assert(offsetof(DetroitDlssModeSettings, create_flags) == 12u);
 static_assert(offsetof(DetroitDlssModeSettings, render_width) == 24u);
 static_assert(offsetof(DetroitDlssModeSettings, max_render_height) == 44u);
 
-static_assert(sizeof(DetroitDlssTemporalFrameInputs) == 376u);
+static_assert(sizeof(DetroitDlssTemporalFrameInputs) == 392u);
 static_assert(alignof(DetroitDlssTemporalFrameInputs) == 8u);
 static_assert(offsetof(DetroitDlssTemporalFrameInputs, shader_crc) == 8u);
 static_assert(offsetof(DetroitDlssTemporalFrameInputs, command_buffer) == 16u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, constants_buffer) == 40u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, constants_size) == 56u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, current_color) == 64u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, depth) == 112u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, motion_vectors) == 160u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, exposure) == 208u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, output) == 256u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, render_width) == 304u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, jitter_x) == 320u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, frame_id) == 344u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, verification_flags) == 360u);
-static_assert(offsetof(DetroitDlssTemporalFrameInputs, dlaa_sharpening) == 368u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, compute_pipeline) == 40u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, constants_buffer) == 48u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, constants_size) == 64u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, constants_dynamic_offset) == 72u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, current_color) == 80u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, depth) == 128u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, motion_vectors) == 176u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, exposure) == 224u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, output) == 272u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, render_width) == 320u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, jitter_x) == 336u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, frame_id) == 360u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, verification_flags) == 376u);
+static_assert(offsetof(DetroitDlssTemporalFrameInputs, dlaa_sharpening) == 384u);
 static_assert(
     offsetof(
         DetroitDlssTemporalFrameInputs,
         dlaa_sharpening_normalization)
-    == 372u);
+    == 388u);
 
 static_assert(sizeof(DetroitDlssEvaluateResult) == 32u);
 static_assert(alignof(DetroitDlssEvaluateResult) == 8u);
@@ -191,6 +193,7 @@ bool Expect(bool condition, std::string_view description) {
 bool g_context_queried = false;
 bool g_constants_queried = false;
 bool g_snapshot_queried = false;
+bool g_use_targeted_snapshot = false;
 bool g_mode_queried = false;
 bool g_configured = false;
 bool g_evaluated = false;
@@ -305,7 +308,10 @@ DetroitDlssResultCode DETROIT_DLSS_CALL FakeGetTemporalSnapshot(
   snapshot->present_image_mask = DETROIT_DLSS_TAA_REQUIRED_IMAGE_MASK
                                  | DETROIT_DLSS_TAA_OPTIONAL_IMAGE_MASK;
   snapshot->complete_image_mask = DETROIT_DLSS_TAA_REQUIRED_IMAGE_MASK;
-  snapshot->snapshot_flags = DETROIT_DLSS_SNAPSHOT_MANDATORY_MASK;
+  snapshot->snapshot_flags = DETROIT_DLSS_SNAPSHOT_COMMON_MANDATORY_MASK
+                             | (g_use_targeted_snapshot
+                                    ? DETROIT_DLSS_SNAPSHOT_TARGETED_UPDATE_RESOLVED
+                                    : DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK);
 
   constexpr std::array<std::uint32_t, DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT>
       bindings = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 9u, 16u, 17u, 18u, 19u};
@@ -397,7 +403,7 @@ void DETROIT_DLSS_CALL FakeShutdown() {
 
 bool TestFixedValuesAndBindings() {
   bool passed = true;
-  passed &= Expect(DETROIT_DLSS_ABI_VERSION == 2u, "ABI version must be v2");
+  passed &= Expect(DETROIT_DLSS_ABI_VERSION == 3u, "ABI version must be v3");
   passed &= Expect(DETROIT_DLSS_MODE_NATIVE == 0u, "Native mode value changed");
   passed &= Expect(DETROIT_DLSS_MODE_DLAA == 1u, "DLAA mode value changed");
   passed &= Expect(DETROIT_DLSS_MODE_QUALITY == 2u, "Quality mode value changed");
@@ -440,8 +446,10 @@ bool TestFixedValuesAndBindings() {
       DETROIT_DLSS_IMAGE_MANDATORY_MASK == UINT64_C(0x7F),
       "native image completeness mask changed");
   passed &= Expect(
-      DETROIT_DLSS_SNAPSHOT_MANDATORY_MASK == UINT64_C(0x1FF),
-      "atomic snapshot completeness mask changed");
+      DETROIT_DLSS_SNAPSHOT_COMMON_MANDATORY_MASK == UINT64_C(0x1FC)
+          && DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK == UINT64_C(0x3)
+          && DETROIT_DLSS_SNAPSHOT_TARGETED_UPDATE_RESOLVED == UINT64_C(0x200),
+      "targeted and legacy snapshot acquisition masks changed");
 
   constexpr std::array<std::uint32_t, 9u> sampled = {
       DETROIT_DLSS_TAA_SAMPLED_BINDING_0,
@@ -701,8 +709,11 @@ bool TestFunctionTableContract() {
               & DETROIT_DLSS_TAA_OPTIONAL_IMAGE_MASK)
                  == 0u
           && (temporal_snapshot.snapshot_flags
-              & DETROIT_DLSS_SNAPSHOT_MANDATORY_MASK)
-                 == DETROIT_DLSS_SNAPSHOT_MANDATORY_MASK
+              & DETROIT_DLSS_SNAPSHOT_COMMON_MANDATORY_MASK)
+                 == DETROIT_DLSS_SNAPSHOT_COMMON_MANDATORY_MASK
+          && (temporal_snapshot.snapshot_flags
+              & DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK)
+                 == DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK
           && temporal_snapshot.images[0].valid_flags == UINT64_C(0x3F)
           && temporal_snapshot.images[8].binding == 9u
           && temporal_snapshot.images[9].binding == 16u
@@ -809,6 +820,21 @@ bool TestDirectProviderContract() {
       client.QueryModeSettings(DETROIT_DLSS_MODE_DLAA, 3440u, 1440u, &settings)
           && settings.render_width == 3440u && settings.render_height == 1440u,
       "direct in-process bridge provider did not return DLAA settings");
+  DetroitDlssTemporalDescriptorSnapshot snapshot = {};
+  passed &= Expect(
+      client.CaptureTemporalSnapshot(
+          UINT64_C(0xABCDEF), UINT64_C(0x5001), UINT64_C(0x5002), &snapshot),
+      "legacy command-tracked snapshot must remain accepted for Retinal diagnostics");
+  g_use_targeted_snapshot = true;
+  snapshot = {};
+  passed &= Expect(
+      client.CaptureTemporalSnapshot(
+          UINT64_C(0xABCDEF), UINT64_C(0x5001), UINT64_C(0x5002), &snapshot)
+          && (snapshot.snapshot_flags
+              & DETROIT_DLSS_SNAPSHOT_TARGETED_UPDATE_RESOLVED)
+                 != 0u,
+      "targeted descriptor-update snapshot must be accepted without command binds");
+  g_use_targeted_snapshot = false;
   client.SetApiProvider(nullptr);
   passed &= Expect(
       !client.QueryModeSettings(DETROIT_DLSS_MODE_DLAA, 3440u, 1440u, &settings),

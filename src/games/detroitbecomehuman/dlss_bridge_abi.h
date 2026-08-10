@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-#define DETROIT_DLSS_ABI_VERSION            2u
+#define DETROIT_DLSS_ABI_VERSION            3u
 #define DETROIT_DLSS_TEMPORAL_AA_SHADER_CRC 0xB5506A45u
 
 typedef uint32_t DetroitDlssMode;
@@ -50,6 +50,7 @@ typedef uint64_t DetroitDlssFrameFlags;
 #define DETROIT_DLSS_FRAME_ALLOW_AUTO_EXPOSURE  (UINT64_C(1) << 1u)
 #define DETROIT_DLSS_FRAME_CAMERA_CUT           (UINT64_C(1) << 2u)
 #define DETROIT_DLSS_FRAME_SCENE_LOADED         (UINT64_C(1) << 3u)
+#define DETROIT_DLSS_FRAME_TEMPORAL_INPUTS_READY      (UINT64_C(1) << 4u)
 
 typedef uint32_t DetroitDlssCreateFlags;
 #define DETROIT_DLSS_CREATE_HDR                           (UINT32_C(1) << 0u)
@@ -223,16 +224,17 @@ typedef uint64_t DetroitDlssTemporalSnapshotFlags;
 #define DETROIT_DLSS_SNAPSHOT_REQUIRED_IMAGES_COMPLETE       (UINT64_C(1) << 6u)
 #define DETROIT_DLSS_SNAPSHOT_CONSTANTS_DESCRIPTOR_VALID     (UINT64_C(1) << 7u)
 #define DETROIT_DLSS_SNAPSHOT_CONSTANTS_PAYLOAD_VALID        (UINT64_C(1) << 8u)
-#define DETROIT_DLSS_SNAPSHOT_MANDATORY_MASK              \
-  (DETROIT_DLSS_SNAPSHOT_COMMAND_TRACKED                  \
-   | DETROIT_DLSS_SNAPSHOT_SET_BOUND                      \
-   | DETROIT_DLSS_SNAPSHOT_EXPECTED_SET_MATCH             \
+#define DETROIT_DLSS_SNAPSHOT_TARGETED_UPDATE_RESOLVED       (UINT64_C(1) << 9u)
+#define DETROIT_DLSS_SNAPSHOT_COMMON_MANDATORY_MASK       \
+  (DETROIT_DLSS_SNAPSHOT_EXPECTED_SET_MATCH              \
    | DETROIT_DLSS_SNAPSHOT_EXPECTED_PIPELINE_LAYOUT_MATCH \
    | DETROIT_DLSS_SNAPSHOT_DESCRIPTOR_SET_TRACKED         \
    | DETROIT_DLSS_SNAPSHOT_PIPELINE_LAYOUT_TRACKED        \
    | DETROIT_DLSS_SNAPSHOT_REQUIRED_IMAGES_COMPLETE       \
    | DETROIT_DLSS_SNAPSHOT_CONSTANTS_DESCRIPTOR_VALID     \
    | DETROIT_DLSS_SNAPSHOT_CONSTANTS_PAYLOAD_VALID)
+#define DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK \
+  (DETROIT_DLSS_SNAPSHOT_COMMAND_TRACKED | DETROIT_DLSS_SNAPSHOT_SET_BOUND)
 
 typedef uint32_t DetroitDlssTemporalSnapshotDetail;
 #define DETROIT_DLSS_SNAPSHOT_DETAIL_NONE                       0u
@@ -249,6 +251,8 @@ typedef uint32_t DetroitDlssTemporalSnapshotDetail;
 #define DETROIT_DLSS_SNAPSHOT_DETAIL_IMAGE_METADATA_INCOMPLETE  11u
 #define DETROIT_DLSS_SNAPSHOT_DETAIL_REQUIRED_IMAGES_INCOMPLETE 12u
 #define DETROIT_DLSS_SNAPSHOT_DETAIL_CONSTANTS_UNAVAILABLE      13u
+#define DETROIT_DLSS_SNAPSHOT_DETAIL_TARGETED_SET_UNAVAILABLE   14u
+#define DETROIT_DLSS_SNAPSHOT_DETAIL_CONSTANTS_SLOT_AMBIGUOUS   15u
 
 typedef uint32_t DetroitDlssTemporalConstantsDetail;
 #define DETROIT_DLSS_CONSTANTS_DETAIL_NONE                     0u
@@ -351,9 +355,11 @@ typedef struct DetroitDlssTemporalFrameInputs {
   uint64_t command_buffer;
   uint64_t descriptor_set;
   uint64_t pipeline_layout;
+  uint64_t compute_pipeline;
   uint64_t constants_buffer;
   uint64_t constants_offset;
   uint64_t constants_size;
+  uint64_t constants_dynamic_offset;
   DetroitDlssResource current_color;
   DetroitDlssResource depth;
   DetroitDlssResource motion_vectors;

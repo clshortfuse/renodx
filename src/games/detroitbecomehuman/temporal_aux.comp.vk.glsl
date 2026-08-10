@@ -1,6 +1,7 @@
-// Auxiliary-only variant derived from the exact Build 12158144 shader 0xB5506A45.
-// It preserves b17-b19 history outputs while DLAA owns b16. A failed DLAA
-// evaluation must replay the original shader before the frame continues.
+// Transitional replacement derived from the exact Build 12158144 shader
+// 0xB5506A45. DLAA owns b16, while Detroit's b17-b19 history outputs remain
+// live until their downstream consumers are fully mapped. A failed DLAA
+// evaluation replays the original shader so b16 also falls back natively.
 #version 450
 #extension GL_EXT_samplerless_texture_functions : require
 #extension GL_GOOGLE_include_directive : require
