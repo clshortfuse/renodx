@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -45,6 +46,7 @@
 #include "../taa_contract.hpp"
 #include "adapter_runtime.hpp"
 #include "embedded_bootstrap.hpp"
+#include "evaluation_trace.hpp"
 #include "feature_lifetime.hpp"
 #include "utils/dlss/ngx_vulkan.hpp"
 
@@ -55,8 +57,6 @@ constexpr char kEngineVersion[] = "Build12158144";
 constexpr std::uint64_t kInstanceExtensionsEnabled = UINT64_C(1) << 0u;
 constexpr std::uint64_t kDeviceExtensionsEnabled = UINT64_C(1) << 1u;
 constexpr std::uint64_t kReflectedTemporalConstantsSize = 496u;
-constexpr char kDiagnosticOutputEnvironment[] =
-    "RENODX_DETROIT_DLSS_DIAGNOSTIC_OUTPUT";
 constexpr char kInternalFenceEnvironment[] =
     "RENODX_DETROIT_DLSS_INTERNAL_SUBMISSION_FENCES";
 constexpr std::size_t kMaximumCachedExtensionListBytes = 16u * 1024u;
@@ -80,6 +80,12 @@ std::atomic<bool> loaded_early = false;
 std::atomic<bool> cached_extensions_ready = false;
 std::atomic<bool> runtime_command_tracking_enabled = false;
 std::atomic<bool> native_command_hooks_installed = false;
+std::atomic<std::uintptr_t> fast_command_dispatch_key = 0u;
+std::atomic<PFN_vkCmdBindPipeline> fast_cmd_bind_pipeline = nullptr;
+std::atomic<PFN_vkCmdBindDescriptorSets> fast_cmd_bind_descriptor_sets = nullptr;
+
+static_assert(std::atomic<PFN_vkCmdBindPipeline>::is_always_lock_free);
+static_assert(std::atomic<PFN_vkCmdBindDescriptorSets>::is_always_lock_free);
 
 PFN_vkCreateInstance reshade_create_instance = nullptr;
 PFN_vkCreateDevice reshade_create_device = nullptr;
@@ -108,8 +114,6 @@ enum class BridgeDetail : std::uint32_t {
   kAdapterCommitFailed = 0xD1550010u,
   kDeviceIdentityMismatch = 0xD1550011u,
   kFeatureCreationPending = 0xD1550012u,
-  kDiagnosticNativeReplay = 0xD1550013u,
-  kDiagnosticPostNativeDirect = 0xD1550014u,
 };
 
 constexpr std::uint32_t kAdapterPrepareDetailBase = 0xD1551000u;
@@ -117,8 +121,7 @@ constexpr std::uint32_t kAdapterCommitDetailBase = 0xD1552000u;
 
 HMODULE layer_module = nullptr;
 std::mutex trace_mutex;
-std::atomic_bool spatial_diagnostic_logged = false;
-std::atomic_bool native_replay_diagnostic_logged = false;
+HANDLE trace_file = INVALID_HANDLE_VALUE;
 std::atomic_bool fenceless_submission_logged = false;
 
 template <typename Handle>
@@ -165,84 +168,145 @@ void Trace(std::string_view message) {
   if (directory.empty()) return;
   const auto path = std::filesystem::path(directory) / L"DetroitDLSSBootstrap.log";
   const std::lock_guard lock(trace_mutex);
-  const HANDLE file = CreateFileW(
-      path.c_str(),
-      FILE_APPEND_DATA,
-      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-      nullptr,
-      OPEN_ALWAYS,
-      FILE_ATTRIBUTE_NORMAL,
-      nullptr);
-  if (file == INVALID_HANDLE_VALUE) return;
+  if (trace_file == INVALID_HANDLE_VALUE) {
+    trace_file = CreateFileW(
+        path.c_str(),
+        FILE_APPEND_DATA,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr,
+        OPEN_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+  }
+  if (trace_file == INVALID_HANDLE_VALUE) return;
   DWORD written = 0u;
   (void)WriteFile(
-      file,
+      trace_file,
       message.data(),
       static_cast<DWORD>(std::min<std::size_t>(message.size(), MAXDWORD)),
       &written,
       nullptr);
   static constexpr char newline[] = "\r\n";
-  (void)WriteFile(file, newline, 2u, &written, nullptr);
-  CloseHandle(file);
+  (void)WriteFile(trace_file, newline, 2u, &written, nullptr);
 }
 
-enum class DiagnosticOutputMode : std::uint8_t {
-  kNgx = 0u,
-  kSpatialScratch,
-  kSpatialDirect,
-  kNativeReplay,
+void CloseTraceFile() {
+  const std::lock_guard lock(trace_mutex);
+  if (trace_file == INVALID_HANDLE_VALUE) return;
+  (void)FlushFileBuffers(trace_file);
+  CloseHandle(trace_file);
+  trace_file = INVALID_HANDLE_VALUE;
+}
+
+struct EvaluationTraceConfiguration final {
+  bool first_three = false;
+  bool readback = false;
 };
 
-DiagnosticOutputMode GetDiagnosticOutputMode() {
-  static const DiagnosticOutputMode mode = [] {
-    std::array<char, 32u> value = {};
-    const DWORD length = GetEnvironmentVariableA(
-        kDiagnosticOutputEnvironment,
-        value.data(),
-        static_cast<DWORD>(value.size()));
-    if (length != 0u && length < value.size()) {
-      if (_stricmp(value.data(), "spatial") == 0) {
-        return DiagnosticOutputMode::kSpatialScratch;
-      }
-      if (_stricmp(value.data(), "direct") == 0) {
-        return DiagnosticOutputMode::kSpatialDirect;
-      }
-      if (_stricmp(value.data(), "native-replay") == 0) {
-        return DiagnosticOutputMode::kNativeReplay;
-      }
-    }
-
-    // Detroit is normally spawned by the already-running Steam process, so a
-    // temporary environment inherited by a launcher process never reaches the
-    // game. Keep the environment override for direct launches, but also accept
-    // a development-only value from the same ReShade.ini that owns the add-on
-    // settings. This is read once, off the per-frame hot path.
+const EvaluationTraceConfiguration& GetEvaluationTraceConfiguration() {
+  static const EvaluationTraceConfiguration configuration = [] {
     const auto module_path = std::filesystem::path(GetModulePath(layer_module));
-    if (module_path.empty()) return DiagnosticOutputMode::kNgx;
+    if (module_path.empty()) return EvaluationTraceConfiguration{};
     const auto ini_path = module_path.parent_path() / L"ReShade.ini";
-    std::array<wchar_t, 32u> ini_value = {};
-    const DWORD ini_length = GetPrivateProfileStringW(
-        L"renodx-dev",
-        L"DetroitDLSSDiagnosticOutput",
-        L"",
-        ini_value.data(),
-        static_cast<DWORD>(ini_value.size()),
-        ini_path.c_str());
-    if (ini_length == 0u || ini_length >= ini_value.size()) {
-      return DiagnosticOutputMode::kNgx;
-    }
-    if (_wcsicmp(ini_value.data(), L"spatial") == 0) {
-      return DiagnosticOutputMode::kSpatialScratch;
-    }
-    if (_wcsicmp(ini_value.data(), L"direct") == 0) {
-      return DiagnosticOutputMode::kSpatialDirect;
-    }
-    if (_wcsicmp(ini_value.data(), L"native-replay") == 0) {
-      return DiagnosticOutputMode::kNativeReplay;
-    }
-    return DiagnosticOutputMode::kNgx;
+    const bool first_three = GetPrivateProfileIntW(
+                                 L"renodx-dev",
+                                 L"DetroitDLSSTraceFirstThree",
+                                 0,
+                                 ini_path.c_str())
+                             == 1;
+    const bool readback = first_three
+                          && GetPrivateProfileIntW(
+                                 L"renodx-dev",
+                                 L"DetroitDLSSTraceReadback",
+                                 0,
+                                 ini_path.c_str())
+                                 == 1;
+    return EvaluationTraceConfiguration{
+        .first_three = first_three,
+        .readback = readback,
+    };
   }();
-  return mode;
+  return configuration;
+}
+
+enum class TraceNgxCall : std::uint8_t {
+  kNone,
+  kInitialize,
+  kCreate,
+  kEvaluate,
+};
+
+constexpr std::string_view TraceNgxCallName(TraceNgxCall call) noexcept {
+  switch (call) {
+    case TraceNgxCall::kNone:
+      return "none";
+    case TraceNgxCall::kInitialize:
+      return "initialize";
+    case TraceNgxCall::kCreate:
+      return "create";
+    case TraceNgxCall::kEvaluate:
+      return "evaluate";
+  }
+  return "invalid_call";
+}
+
+struct EvaluationTraceRecord final {
+  std::uint32_t attempt = 0u;
+  std::uint64_t frame = 0u;
+  DetroitDlssMode mode = DETROIT_DLSS_MODE_NATIVE;
+  std::uint64_t recording_generation = 0u;
+  std::uint64_t feature_generation = 0u;
+  TraceNgxCall ngx_call = TraceNgxCall::kNone;
+  NVSDK_NGX_Result ngx_result = NVSDK_NGX_Result_Success;
+  VkResult vk_result = VK_SUCCESS;
+  renodx::games::detroitbecomehuman::dlss::AdapterResult prepare = {};
+  renodx::games::detroitbecomehuman::dlss::AdapterResult commit = {};
+  std::uint64_t command_buffer = 0u;
+  std::uint64_t consumer_image = 0u;
+  std::uint64_t consumer_view = 0u;
+  bool ngx_called = false;
+  bool prepare_called = false;
+  bool commit_called = false;
+  bool readback_requested = false;
+};
+
+void TraceEvaluationTerminal(
+    const EvaluationTraceRecord& record,
+    renodx::games::detroitbecomehuman::dlss::EvaluationTerminal terminal) noexcept {
+  if (record.attempt == 0u) return;
+  try {
+    Trace(std::format(
+        "DLSS attempt={} terminal={} ngx_call={} ngx_called={} frame={} mode={} "
+        "recording_generation={} feature_generation={} ngx_result={} vk_result={} "
+        "prepare_called={} prepare_status={} prepare_detail={} prepare_vk={} "
+        "commit_called={} commit_status={} commit_detail={} commit_vk={} "
+        "command_buffer=0x{:X} consumer_binding=b16 consumer_image=0x{:X} "
+        "consumer_view=0x{:X} readback_requested={}",
+        record.attempt,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminalName(terminal),
+        TraceNgxCallName(record.ngx_call),
+        record.ngx_called,
+        record.frame,
+        static_cast<std::uint32_t>(record.mode),
+        record.recording_generation,
+        record.feature_generation,
+        static_cast<std::int32_t>(record.ngx_result),
+        static_cast<std::int32_t>(record.vk_result),
+        record.prepare_called,
+        static_cast<std::uint32_t>(record.prepare.status),
+        static_cast<std::uint32_t>(record.prepare.detail),
+        static_cast<std::int32_t>(record.prepare.vk_result),
+        record.commit_called,
+        static_cast<std::uint32_t>(record.commit.status),
+        static_cast<std::uint32_t>(record.commit.detail),
+        static_cast<std::int32_t>(record.commit.vk_result),
+        record.command_buffer,
+        record.consumer_image,
+        record.consumer_view,
+        record.readback_requested));
+  } catch (...) {
+    // Observability must never alter the post-pack success classification.
+  }
 }
 
 bool UseInternalFeatureFences() {
@@ -256,7 +320,7 @@ bool UseInternalFeatureFences() {
     return _stricmp(value.data(), "1") == 0
            || _stricmp(value.data(), "true") == 0;
   }();
-  return enabled;
+  return enabled || GetEvaluationTraceConfiguration().readback;
 }
 
 std::wstring GetNgxDataDirectory() {
@@ -574,6 +638,7 @@ struct DeviceState {
   DetroitDlssModeSettings settings = {};
   std::unique_ptr<NgxDiscovery> ngx_discovery;
   std::unique_ptr<renodx::utils::dlss::vulkan::NgxContext> ngx_context;
+  renodx::utils::dlss::vulkan::OperationResult last_ngx_initialization = {};
   std::atomic<bool> feature_submission_tracking_active = false;
   // False-positive-only filter for command buffers that have ever recorded
   // NGX work. A missing bit proves an arbitrary submission cannot reference a
@@ -588,6 +653,10 @@ struct DeviceState {
   renodx::games::detroitbecomehuman::dlss::AdapterRuntime adapter_runtime;
   std::atomic<std::uint64_t> last_adapter_failure = 0u;
   std::atomic<std::uint64_t> last_ngx_failure = 0u;
+  renodx::games::detroitbecomehuman::dlss::FirstThreeAttemptWindow
+      evaluation_trace_window;
+  std::unordered_map<std::uint64_t, std::uint32_t>
+      trace_attempt_by_command_buffer;
   std::mutex mutex;
   std::mutex queue_mutex;
 
@@ -616,6 +685,9 @@ struct DeviceState {
   std::unordered_map<std::uint64_t, VkCommandBufferLevel> command_buffer_levels;
   std::unordered_map<std::uint64_t, VkCommandBufferUsageFlags>
       command_buffer_usage_flags;
+  std::unordered_map<std::uint64_t, std::uint64_t>
+      command_buffer_recording_generations;
+  std::uint64_t next_recording_generation = 1u;
   std::uint64_t descriptor_update_serial = 0u;
   std::array<std::atomic<std::uint64_t>, kTemporalDescriptorSetBloomWordCount>
       temporal_descriptor_set_bloom = {};
@@ -1338,7 +1410,15 @@ bool EnsureNgxInitialized(DeviceState* state) {
   if (state == nullptr || state->destroying.load(std::memory_order_acquire)) {
     return false;
   }
-  if (state->ngx_context != nullptr) return state->ngx_context->IsAvailable();
+  if (state->ngx_context != nullptr) {
+    state->last_ngx_initialization = {
+        .stage = renodx::utils::dlss::vulkan::OperationStage::kInitialize,
+        .ngx_result = state->ngx_context->IsAvailable()
+                          ? NVSDK_NGX_Result_Success
+                          : NVSDK_NGX_Result_FAIL_NotInitialized,
+    };
+    return state->ngx_context->IsAvailable();
+  }
   if (!state->supported_executable || !state->ngx_extensions_enabled
       || state->graphics_queue == VK_NULL_HANDLE
       || state->graphics_queue_family == std::numeric_limits<std::uint32_t>::max()
@@ -1352,6 +1432,10 @@ bool EnsureNgxInitialized(DeviceState* state) {
       || state->next_create_fence == nullptr
       || state->next_destroy_fence == nullptr
       || state->next_wait_for_fences == nullptr) {
+    state->last_ngx_initialization = {
+        .stage = renodx::utils::dlss::vulkan::OperationStage::kInitialize,
+        .ngx_result = NVSDK_NGX_Result_FAIL_InvalidParameter,
+    };
     return false;
   }
 
@@ -1402,6 +1486,7 @@ bool EnsureNgxInitialized(DeviceState* state) {
       std::make_unique<renodx::utils::dlss::vulkan::NgxContext>(
           std::move(create_info));
   const auto result = state->ngx_context->Initialize();
+  state->last_ngx_initialization = result;
   if (!result.Succeeded()) {
     TraceNgxFailureOnce(state, 0u, "initialization", result.ngx_result);
     state->ngx_context.reset();
@@ -1587,6 +1672,17 @@ CaptureNativeOutputTrackedState(
       .queue_family = VK_QUEUE_FAMILY_IGNORED,
       .contents_valid = true,
   };
+}
+
+std::uint64_t GetCommandBufferRecordingGeneration(
+    DeviceState* state, std::uint64_t command_buffer) {
+  if (state == nullptr || command_buffer == 0u) return 0u;
+  const std::lock_guard lock(state->tracking_mutex);
+  const auto found =
+      state->command_buffer_recording_generations.find(command_buffer);
+  return found == state->command_buffer_recording_generations.end()
+             ? 0u
+             : found->second;
 }
 
 void SetEvaluationResult(
@@ -2568,25 +2664,6 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode(
     return DETROIT_DLSS_RESULT_SUCCESS;
   }
 
-  // Diagnostic DLAA paths intentionally avoid every NGX entry point. Native
-  // resolution is the complete DLAA extent contract, so no optimal-settings
-  // query is needed for these A/B modes.
-  if (mode == DETROIT_DLSS_MODE_DLAA
-      && GetDiagnosticOutputMode() != DiagnosticOutputMode::kNgx) {
-    settings->render_width = output_width;
-    settings->render_height = output_height;
-    settings->min_render_width = output_width;
-    settings->min_render_height = output_height;
-    settings->max_render_width = output_width;
-    settings->max_render_height = output_height;
-    settings->create_flags = DETROIT_DLSS_CREATE_HDR
-                             | DETROIT_DLSS_CREATE_MOTION_VECTORS_LOW_RESOLUTION
-                             | DETROIT_DLSS_CREATE_DEPTH_INVERTED
-                             | DETROIT_DLSS_CREATE_MOTION_VECTORS_JITTERED
-                             | DETROIT_DLSS_CREATE_AUTO_EXPOSURE;
-    return DETROIT_DLSS_RESULT_SUCCESS;
-  }
-
   // The exact native TAA computes history UV as current_uv - MotionVectorTex
   // and never applies its b52 jitter coordinates to that lookup. Therefore b4
   // already includes the inter-frame jitter displacement; tell NGX explicitly
@@ -2645,10 +2722,8 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
       || state->context_identity != state->identity) {
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
-  const bool diagnostic_bypasses_ngx =
-      GetDiagnosticOutputMode() != DiagnosticOutputMode::kNgx;
   if (settings->mode != DETROIT_DLSS_MODE_NATIVE
-      && !diagnostic_bypasses_ngx && !EnsureNgxInitialized(state.get())) {
+      && !EnsureNgxInitialized(state.get())) {
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
@@ -2656,7 +2731,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
       && std::memcmp(&state->settings, settings, sizeof(*settings)) != 0) {
     RetireActiveFeatureLocked(state.get());
   }
-  if (settings->mode == DETROIT_DLSS_MODE_NATIVE || diagnostic_bypasses_ngx) {
+  if (settings->mode == DETROIT_DLSS_MODE_NATIVE) {
     RetireActiveFeatureLocked(state.get());
   }
   state->settings = *settings;
@@ -2906,22 +2981,6 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
-  const auto diagnostic_output_mode = GetDiagnosticOutputMode();
-  if (diagnostic_output_mode == DiagnosticOutputMode::kNativeReplay) {
-    if (!native_replay_diagnostic_logged.exchange(
-            true, std::memory_order_acq_rel)) {
-      Trace(
-          "Diagnostic native replay is active: NGX and adapter recording are "
-          "skipped so the callback guard replays Detroit's original TAA");
-    }
-    SetEvaluationResult(
-        result,
-        DETROIT_DLSS_RESULT_FALLBACK,
-        BridgeDetail::kDiagnosticNativeReplay,
-        frame_id);
-    return DETROIT_DLSS_RESULT_FALLBACK;
-  }
-
   const auto restore_state = CaptureComputeRestoreState(state.get(), *inputs);
   if (!restore_state.has_value()
       || !CanRestoreComputeCommandState(state.get(), *restore_state)) {
@@ -2932,64 +2991,115 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
         frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
-  const bool diagnostic_spatial_output =
-      diagnostic_output_mode != DiagnosticOutputMode::kNgx;
-  const bool diagnostic_direct_output =
-      diagnostic_output_mode == DiagnosticOutputMode::kSpatialDirect;
-  if (!diagnostic_spatial_output) {
-    if (!EnsureNgxInitialized(state.get())) {
-      SetEvaluationResult(
-          result,
-          DETROIT_DLSS_RESULT_FALLBACK,
-          BridgeDetail::kNgxInitializationFailed,
-          frame_id);
-      return DETROIT_DLSS_RESULT_FALLBACK;
-    }
 
-    const std::uint32_t create_flags = ToNgxCreateFlags(state->settings.create_flags);
-    const auto configure_result = state->ngx_context->ConfigureFeature({
-        .mode = ToNgxQuality(state->settings.mode),
-        .render_width = state->settings.render_width,
-        .render_height = state->settings.render_height,
-        .output_width = state->settings.output_width,
-        .output_height = state->settings.output_height,
-        .create_flags = create_flags,
-    });
-    UpdateFeatureTrackingStateLocked(state.get());
-    if (!configure_result.Succeeded()) {
-      TraceNgxFailureOnce(
-          state.get(),
-          1u,
-          "feature creation",
-          configure_result.ngx_result);
-      SetEvaluationResult(
-          result,
-          DETROIT_DLSS_RESULT_FALLBACK,
-          BridgeDetail::kFeatureCreationFailed,
-          frame_id);
-      return DETROIT_DLSS_RESULT_FALLBACK;
-    }
-    // NVIDIA's Vulkan create call records GPU work. The reusable core records
-    // it on a private primary command buffer, submits it with a private fence,
-    // and waits for that fence. This first Detroit frame still replays native
-    // TAA; NGX Evaluate starts on the next frame with reset forced by the core.
-    if (configure_result.feature_created) {
-      SetEvaluationResult(
-          result,
-          DETROIT_DLSS_RESULT_FALLBACK,
-          BridgeDetail::kFeatureCreationPending,
-          frame_id);
-      return DETROIT_DLSS_RESULT_FALLBACK;
-    }
+  EvaluationTraceRecord trace_record = {
+      .frame = frame_id,
+      .mode = state->settings.mode,
+      .recording_generation = GetCommandBufferRecordingGeneration(
+          state.get(), inputs->command_buffer),
+      .command_buffer = inputs->command_buffer,
+      .consumer_image = inputs->output.image,
+      .consumer_view = inputs->output.image_view,
+      .readback_requested = GetEvaluationTraceConfiguration().readback,
+  };
+  if (GetEvaluationTraceConfiguration().first_three) {
+    trace_record.attempt =
+        state->evaluation_trace_window.Begin().value_or(0u);
   }
 
   const auto native_output_state =
       CaptureNativeOutputTrackedState(state.get(), inputs->output);
   if (!native_output_state.has_value()) {
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kResourceRejected);
     SetEvaluationResult(
         result,
         DETROIT_DLSS_RESULT_FALLBACK,
         BridgeDetail::kInvalidFrame,
+        frame_id);
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+
+  const bool initializes_ngx = state->ngx_context == nullptr;
+  if (!EnsureNgxInitialized(state.get())) {
+    trace_record.ngx_call = TraceNgxCall::kInitialize;
+    trace_record.ngx_called = initializes_ngx;
+    trace_record.ngx_result = state->last_ngx_initialization.ngx_result;
+    trace_record.vk_result = state->last_ngx_initialization.vk_result;
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kNgxInitializationFailed);
+    SetEvaluationResult(
+        result,
+        DETROIT_DLSS_RESULT_FALLBACK,
+        BridgeDetail::kNgxInitializationFailed,
+        frame_id);
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+
+  const std::uint32_t create_flags = ToNgxCreateFlags(state->settings.create_flags);
+  const auto configure_result = state->ngx_context->ConfigureFeature({
+      .mode = ToNgxQuality(state->settings.mode),
+      .render_width = state->settings.render_width,
+      .render_height = state->settings.render_height,
+      .output_width = state->settings.output_width,
+      .output_height = state->settings.output_height,
+      .create_flags = create_flags,
+  });
+  UpdateFeatureTrackingStateLocked(state.get());
+  trace_record.feature_generation = configure_result.feature_generation;
+  trace_record.ngx_result = configure_result.ngx_result;
+  trace_record.vk_result = configure_result.vk_result;
+  const auto configure_stage = configure_result.stage;
+  const bool create_called =
+      configure_result.feature_created
+      || configure_stage
+             == renodx::utils::dlss::vulkan::OperationStage::kCreateFeature
+      || configure_stage
+             == renodx::utils::dlss::vulkan::OperationStage::kEndCommandBuffer
+      || configure_stage
+             == renodx::utils::dlss::vulkan::OperationStage::kCreateFence
+      || configure_stage
+             == renodx::utils::dlss::vulkan::OperationStage::kSubmitFeature
+      || configure_stage
+             == renodx::utils::dlss::vulkan::OperationStage::kWaitFeature;
+  if (create_called) {
+    trace_record.ngx_call = TraceNgxCall::kCreate;
+    trace_record.ngx_called = true;
+  }
+  if (!configure_result.Succeeded()) {
+    TraceNgxFailureOnce(
+        state.get(),
+        1u,
+        "feature creation",
+        configure_result.ngx_result);
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kFeatureCreationFailed);
+    SetEvaluationResult(
+        result,
+        DETROIT_DLSS_RESULT_FALLBACK,
+        BridgeDetail::kFeatureCreationFailed,
+        frame_id);
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+  // NVIDIA's Vulkan create call records GPU work. The reusable core records
+  // it on a private primary command buffer, submits it with a private fence,
+  // and waits for that fence. This first Detroit frame still replays native
+  // TAA; NGX Evaluate starts on the next frame with reset forced by the core.
+  if (configure_result.feature_created) {
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kFeatureCreationPending);
+    SetEvaluationResult(
+        result,
+        DETROIT_DLSS_RESULT_FALLBACK,
+        BridgeDetail::kFeatureCreationPending,
         frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
@@ -3012,59 +3122,29 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
           .dlaa_sharpening = inputs->dlaa_sharpening,
           .dlaa_sharpening_normalization =
               inputs->dlaa_sharpening_normalization,
-          .diagnostic_spatial_output = diagnostic_spatial_output,
-          .diagnostic_direct_output = diagnostic_direct_output,
+          .trace_readback = trace_record.attempt != 0u
+                            && GetEvaluationTraceConfiguration().readback,
+          .trace_attempt = trace_record.attempt,
       },
       &prepared_frame);
+  trace_record.prepare_called = true;
+  trace_record.prepare = prepare_result;
   if (!prepare_result.Succeeded()) {
     TraceAdapterFailureOnce(state.get(), true, prepare_result);
     // The complete restore contract was validated before Prepare. Both Vulkan
     // bind commands are void, so recording this restoration cannot fail after
     // the adapter has changed command state.
     (void)RestoreComputeCommandState(state.get(), command_buffer, *restore_state);
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kPrepareFailed);
     SetEvaluationResult(
         result,
         DETROIT_DLSS_RESULT_FALLBACK,
         MakeAdapterBridgeDetail(true, prepare_result.detail),
         frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
-  }
-
-  if (diagnostic_spatial_output) {
-    // This path intentionally omits NGX initialization, feature creation,
-    // evaluation and queue-lifetime tracking. Only adapter prepare/pack and the
-    // targeted compute-state restore remain, making it a strict Vulkan A/B.
-    const auto commit_result =
-        state->adapter_runtime.CommitSpatialDiagnostic(prepared_frame);
-    (void)RestoreComputeCommandState(state.get(), command_buffer, *restore_state);
-    if (!commit_result.Succeeded()) {
-      TraceAdapterFailureOnce(state.get(), false, commit_result);
-      SetEvaluationResult(
-          result,
-          DETROIT_DLSS_RESULT_FALLBACK,
-          MakeAdapterBridgeDetail(false, commit_result.detail),
-          frame_id);
-      return DETROIT_DLSS_RESULT_FALLBACK;
-    }
-    if (!spatial_diagnostic_logged.exchange(true, std::memory_order_acq_rel)) {
-      Trace(
-          diagnostic_direct_output
-              ? "Diagnostic post-native direct output is active: Detroit's "
-                "original TAA remains recorded and native CurrColor is then "
-                "sampled directly into b16 without private color scratch or NGX"
-              : "Diagnostic spatial output is active: prepared CurrColor is "
-                "being scaled into b16 without NGX initialization, feature "
-                "creation or evaluation");
-    }
-    SetEvaluationResult(
-        result,
-        DETROIT_DLSS_RESULT_SUCCESS,
-        diagnostic_direct_output
-            ? BridgeDetail::kDiagnosticPostNativeDirect
-            : BridgeDetail::kNone,
-        frame_id,
-        DETROIT_DLSS_EVALUATE_OUTPUT_VALID);
-    return DETROIT_DLSS_RESULT_SUCCESS;
   }
 
   auto color = MakeCoreImageResource(
@@ -3125,10 +3205,21 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
                       != 0u,
   });
   UpdateFeatureTrackingStateLocked(state.get());
+  trace_record.ngx_call = TraceNgxCall::kEvaluate;
+  trace_record.ngx_called = true;
+  trace_record.ngx_result = evaluate_result.ngx_result;
+  trace_record.vk_result = evaluate_result.vk_result;
+  trace_record.feature_generation = evaluate_result.feature_generation;
+  if (trace_record.attempt != 0u) {
+    state->trace_attempt_by_command_buffer[inputs->command_buffer] =
+        trace_record.attempt;
+  }
   const bool ngx_succeeded = evaluate_result.Succeeded()
-                             && evaluate_result.output_valid;
+                              && evaluate_result.output_valid;
   const auto commit_result =
       state->adapter_runtime.CommitAfterNgx(prepared_frame, ngx_succeeded);
+  trace_record.commit_called = true;
+  trace_record.commit = commit_result;
   // Commit may write b16, so no fallible decision is allowed after this point.
   // The restore contract was proved before any adapter/NGX commands were
   // recorded and these Vulkan bind calls have no failure return.
@@ -3136,12 +3227,20 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
   if (!evaluate_result.Succeeded()) {
     TraceNgxFailureOnce(
         state.get(), 2u, "evaluation", evaluate_result.ngx_result);
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kEvaluateFailed);
     SetEvaluationResult(
         result, DETROIT_DLSS_RESULT_FALLBACK, BridgeDetail::kEvaluationFailed, frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
   if (!commit_result.Succeeded()) {
     TraceAdapterFailureOnce(state.get(), false, commit_result);
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kCommitFailed);
     SetEvaluationResult(
         result,
         DETROIT_DLSS_RESULT_FALLBACK,
@@ -3150,6 +3249,9 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
+  TraceEvaluationTerminal(
+      trace_record,
+      renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::kSuccess);
   SetEvaluationResult(
       result,
       DETROIT_DLSS_RESULT_SUCCESS,
@@ -3831,10 +3933,143 @@ void LogFencelessFeatureSubmissionOnce(
       "without private VkFence injection");
 }
 
+void TraceFeatureSubmissionResult(
+    DeviceState* state,
+    const FeatureSubmissionSnapshot& snapshot,
+    VkQueue queue,
+    VkFence fence,
+    VkResult result) noexcept {
+  if (state == nullptr || snapshot.Empty()
+      || !GetEvaluationTraceConfiguration().first_three) {
+    return;
+  }
+  try {
+    struct TracedSubmit final {
+      std::uint32_t attempt = 0u;
+      std::uint64_t recording_epoch = 0u;
+      bool one_time_submit = false;
+    };
+    std::vector<TracedSubmit> traced;
+    {
+      const std::lock_guard lock(state->mutex);
+      for (const auto& command : snapshot.commands) {
+        const auto attempt =
+            state->trace_attempt_by_command_buffer.find(command.command_buffer);
+        if (attempt != state->trace_attempt_by_command_buffer.end()) {
+          traced.push_back({
+              .attempt = attempt->second,
+              .recording_epoch = command.recording_epoch,
+              .one_time_submit = command.one_time_submit,
+          });
+        }
+      }
+    }
+    for (const auto& command : traced) {
+      Trace(std::format(
+          "DLSS attempt={} event=submit vk_result={} queue=0x{:X} fence=0x{:X} "
+          "recording_epoch={} one_time={}",
+          command.attempt,
+          static_cast<std::int32_t>(result),
+          ToOpaque(queue),
+          ToOpaque(fence),
+          command.recording_epoch,
+          command.one_time_submit));
+    }
+  } catch (...) {
+    // Trace formatting must not affect queue submission.
+  }
+}
+
+std::uint64_t HashTraceReadbackTile(
+    const renodx::games::detroitbecomehuman::dlss::AdapterTraceReadback& readback,
+    std::uint32_t tile) noexcept {
+  constexpr std::size_t kWordsPerTile =
+      renodx::games::detroitbecomehuman::dlss::kTraceReadbackTileWidth
+      * renodx::games::detroitbecomehuman::dlss::kTraceReadbackTileHeight
+      * renodx::games::detroitbecomehuman::dlss::kTraceReadbackWordsPerPixel;
+  std::uint64_t hash = UINT64_C(14695981039346656037);
+  const std::size_t first = static_cast<std::size_t>(tile) * kWordsPerTile;
+  for (std::size_t index = 0u; index < kWordsPerTile; ++index) {
+    std::uint32_t word = readback.words[first + index];
+    for (std::uint32_t byte = 0u; byte < sizeof(word); ++byte) {
+      hash ^= word & 0xFFu;
+      hash *= UINT64_C(1099511628211);
+      word >>= 8u;
+    }
+  }
+  return hash;
+}
+
+void TraceFeatureCompletion(
+    DeviceState* state, std::uint64_t command_buffer) noexcept {
+  if (state == nullptr || command_buffer == 0u) return;
+  std::uint32_t attempt = 0u;
+  {
+    const std::lock_guard lock(state->mutex);
+    const auto found =
+        state->trace_attempt_by_command_buffer.find(command_buffer);
+    if (found != state->trace_attempt_by_command_buffer.end()) {
+      attempt = found->second;
+      state->trace_attempt_by_command_buffer.erase(found);
+    }
+  }
+  const auto readback = state->adapter_runtime.TakeCompletedTraceReadback(
+      FromOpaque<VkCommandBuffer>(command_buffer));
+  if (attempt == 0u && !readback.has_value()) return;
+  if (attempt == 0u) attempt = readback->attempt;
+  try {
+    if (!readback.has_value()) {
+      Trace(std::format(
+          "DLSS attempt={} event=completion command_buffer=0x{:X} readback=none",
+          attempt,
+          command_buffer));
+      return;
+    }
+    constexpr auto kTileCount =
+        renodx::games::detroitbecomehuman::dlss::kTraceReadbackTileCount;
+    std::array<std::uint64_t, kTileCount> hashes = {};
+    for (std::uint32_t tile = 0u; tile < hashes.size(); ++tile) {
+      hashes[tile] = HashTraceReadbackTile(*readback, tile);
+    }
+    Trace(std::format(
+        "DLSS attempt={} event=completion command_buffer=0x{:X} "
+        "readback=host_scratch tiles={:016X},{:016X},{:016X},{:016X},{:016X}",
+        attempt,
+        command_buffer,
+        hashes[0u],
+        hashes[1u],
+        hashes[2u],
+        hashes[3u],
+        hashes[4u]));
+  } catch (...) {
+    // Readback logging happens only after completion and cannot affect output.
+  }
+}
+
+void TraceFeatureSubmissionCompletion(
+    DeviceState* state, const FeatureSubmissionSnapshot& snapshot) noexcept {
+  for (const auto& command : snapshot.commands) {
+    TraceFeatureCompletion(state, command.command_buffer);
+  }
+}
+
+void AppendTraceCompletionCandidates(
+    const FeatureSubmissionSnapshot& snapshot,
+    std::vector<std::uint64_t>* command_buffers) {
+  if (command_buffers == nullptr
+      || !GetEvaluationTraceConfiguration().first_three) {
+    return;
+  }
+  for (const auto& command : snapshot.commands) {
+    command_buffers->push_back(command.command_buffer);
+  }
+}
+
 void RecycleCompletedCommandBuffers(
     DeviceState* state, const std::vector<std::uint64_t>& command_buffers) {
   if (state == nullptr) return;
   for (const std::uint64_t command_buffer : command_buffers) {
+    TraceFeatureCompletion(state, command_buffer);
     state->adapter_runtime.RecycleCommandBuffer(
         FromOpaque<VkCommandBuffer>(command_buffer));
   }
@@ -3852,6 +4087,7 @@ void CommitFeatureSubmission(
   if (snapshot.Empty()) return;
   std::vector<std::uint64_t> completed_command_buffers;
   std::vector<VkFence> stale_internal_fences;
+  std::vector<std::uint64_t> trace_completed_command_buffers;
   bool log_one_time_submission = false;
   bool log_reusable_submission = false;
   {
@@ -3888,6 +4124,8 @@ void CommitFeatureSubmission(
         if (previous->second.owned_by_layer) {
           stale_internal_fences.push_back(fence);
         }
+        AppendTraceCompletionCandidates(
+            previous->second.snapshot, &trace_completed_command_buffers);
         state->fenced_feature_submissions.erase(previous);
       }
       state->fenced_feature_submissions.emplace(
@@ -3906,6 +4144,9 @@ void CommitFeatureSubmission(
   if (log_reusable_submission) {
     Trace("DLAA feature submission is reusable; its private scratch remains pinned until command-buffer reset");
   }
+  for (const auto command_buffer : trace_completed_command_buffers) {
+    TraceFeatureCompletion(state, command_buffer);
+  }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
   for (const VkFence stale_fence : stale_internal_fences) {
     RecycleInternalFeatureFence(state, stale_fence);
@@ -3915,6 +4156,7 @@ void CommitFeatureSubmission(
 void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
   std::vector<std::uint64_t> completed_command_buffers;
   std::vector<VkFence> completed_internal_fences;
+  std::vector<std::uint64_t> trace_completed_command_buffers;
   {
     const std::lock_guard lock(state->mutex);
     const auto queue_key = ToOpaque(queue);
@@ -3932,9 +4174,14 @@ void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
         completed_internal_fences.push_back(
             FromOpaque<VkFence>(submission->first));
       }
+      AppendTraceCompletionCandidates(
+          submission->second.snapshot, &trace_completed_command_buffers);
       submission = state->fenced_feature_submissions.erase(submission);
     }
     UpdateFeatureTrackingStateLocked(state);
+  }
+  for (const auto command_buffer : trace_completed_command_buffers) {
+    TraceFeatureCompletion(state, command_buffer);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
   for (const VkFence fence : completed_internal_fences) {
@@ -3945,6 +4192,7 @@ void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
 void CompleteFeatureDevice(DeviceState* state) {
   std::vector<std::uint64_t> completed_command_buffers;
   std::vector<VkFence> completed_internal_fences;
+  std::vector<std::uint64_t> trace_completed_command_buffers;
   {
     const std::lock_guard lock(state->mutex);
     if (state->ngx_context != nullptr) {
@@ -3954,9 +4202,14 @@ void CompleteFeatureDevice(DeviceState* state) {
       if (submission.owned_by_layer) {
         completed_internal_fences.push_back(FromOpaque<VkFence>(fence));
       }
+      AppendTraceCompletionCandidates(
+          submission.snapshot, &trace_completed_command_buffers);
     }
     state->fenced_feature_submissions.clear();
     UpdateFeatureTrackingStateLocked(state);
+  }
+  for (const auto command_buffer : trace_completed_command_buffers) {
+    TraceFeatureCompletion(state, command_buffer);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
   for (const VkFence fence : completed_internal_fences) {
@@ -3968,6 +4221,7 @@ void CompleteFeatureFence(DeviceState* state, VkFence fence) {
   if (state == nullptr || fence == VK_NULL_HANDLE) return;
   std::vector<std::uint64_t> completed_command_buffers;
   bool destroy_internal_fence = false;
+  FeatureSubmissionSnapshot trace_completed_submission;
   {
     const std::lock_guard lock(state->mutex);
     const auto found = state->fenced_feature_submissions.find(ToOpaque(fence));
@@ -3980,8 +4234,12 @@ void CompleteFeatureFence(DeviceState* state, VkFence fence) {
           state->ngx_context->NotifySubmissionCompleted(
               submission.queue, submission.snapshot);
     }
+    if (GetEvaluationTraceConfiguration().first_three) {
+      trace_completed_submission = std::move(submission.snapshot);
+    }
     UpdateFeatureTrackingStateLocked(state);
   }
+  TraceFeatureSubmissionCompletion(state, trace_completed_submission);
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
   if (destroy_internal_fence) {
     RecycleInternalFeatureFence(state, fence);
@@ -3996,14 +4254,11 @@ void PollCompletedInternalFeatureFences(DeviceState* state) {
 
   std::vector<std::uint64_t> completed_command_buffers;
   std::vector<VkFence> completed_fences;
+  std::vector<std::uint64_t> trace_completed_command_buffers;
   {
     const std::lock_guard lock(state->mutex);
     for (auto submission = state->fenced_feature_submissions.begin();
          submission != state->fenced_feature_submissions.end();) {
-      if (!submission->second.owned_by_layer) {
-        ++submission;
-        continue;
-      }
       const auto fence = FromOpaque<VkFence>(submission->first);
       if (state->next_get_fence_status(state->device, fence) != VK_SUCCESS) {
         ++submission;
@@ -4016,10 +4271,17 @@ void PollCompletedInternalFeatureFences(DeviceState* state) {
                            : std::vector<std::uint64_t>{};
       completed_command_buffers.insert(
           completed_command_buffers.end(), completed.begin(), completed.end());
-      completed_fences.push_back(fence);
+      if (submission->second.owned_by_layer) {
+        completed_fences.push_back(fence);
+      }
+      AppendTraceCompletionCandidates(
+          submission->second.snapshot, &trace_completed_command_buffers);
       submission = state->fenced_feature_submissions.erase(submission);
     }
     UpdateFeatureTrackingStateLocked(state);
+  }
+  for (const auto command_buffer : trace_completed_command_buffers) {
+    TraceFeatureCompletion(state, command_buffer);
   }
   RecycleCompletedCommandBuffers(state, completed_command_buffers);
   for (const VkFence fence : completed_fences) {
@@ -4165,6 +4427,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
   LogFencelessFeatureSubmissionOnce(fence, internal_fence, snapshot);
   const VkResult result = SubmitQueueLocked(
       state, queue, submit_count, submits, tracked_fence);
+  TraceFeatureSubmissionResult(
+      state, snapshot, queue, tracked_fence, result);
   if (result == VK_SUCCESS) {
     CommitFeatureSubmission(
         state,
@@ -4224,6 +4488,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
   LogFencelessFeatureSubmissionOnce(fence, internal_fence, snapshot);
   const VkResult result = SubmitQueue2Locked(
       state, queue, submit_count, submits, tracked_fence);
+  TraceFeatureSubmissionResult(
+      state, snapshot, queue, tracked_fence, result);
   if (result == VK_SUCCESS) {
     CommitFeatureSubmission(
         state,
@@ -4284,6 +4550,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
   LogFencelessFeatureSubmissionOnce(fence, internal_fence, snapshot);
   const VkResult result = SubmitQueue2KhrLocked(
       state, queue, submit_count, submits, tracked_fence);
+  TraceFeatureSubmissionResult(
+      state, snapshot, queue, tracked_fence, result);
   if (result == VK_SUCCESS) {
     CommitFeatureSubmission(
         state,
@@ -4402,6 +4670,7 @@ void RemoveCommandBufferPoolMappingLocked(
   const auto command_buffer_key = ToOpaque(command_buffer);
   state->command_buffer_levels.erase(command_buffer_key);
   state->command_buffer_usage_flags.erase(command_buffer_key);
+  state->command_buffer_recording_generations.erase(command_buffer_key);
   const auto mapped_pool = state->command_buffer_pools.find(command_buffer_key);
   if (mapped_pool == state->command_buffer_pools.end()) return;
   const auto pool_key = mapped_pool->second;
@@ -4461,6 +4730,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerAllocateCommandBuffers(
       state->command_buffer_levels[ToOpaque(command_buffers[index])] =
           allocate_info->level;
       state->command_buffer_usage_flags.erase(ToOpaque(command_buffers[index]));
+      state->command_buffer_recording_generations.erase(
+          ToOpaque(command_buffers[index]));
       pool_buffers.push_back(command_buffers[index]);
     }
   }
@@ -4495,12 +4766,14 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerResetCommandPool(
       state->command_buffer_descriptors.erase(key);
       state->command_buffer_restore_states.erase(key);
       state->command_buffer_dof_composite_states.erase(key);
+      state->command_buffer_recording_generations.erase(key);
     }
   }
 
   // A successful pool reset guarantees that none of its command buffers are
   // pending and invalidates all their old recordings. Do not hold the layer
   // tracking mutex while taking the adapter mutex.
+  PollCompletedInternalFeatureFences(state);
   auto& thread_states = GetThreadComputeCommandStates();
   for (const auto command_buffer : command_buffers) {
     state->adapter_runtime.RecycleCommandBuffer(command_buffer);
@@ -4536,9 +4809,11 @@ VKAPI_ATTR void VKAPI_CALL LayerDestroyCommandPool(
       state->command_buffer_descriptors.erase(key);
       state->command_buffer_restore_states.erase(key);
       state->command_buffer_dof_composite_states.erase(key);
+      state->command_buffer_recording_generations.erase(key);
     }
     state->command_pools.erase(pool_key);
   }
+  PollCompletedInternalFeatureFences(state);
   auto& thread_states = GetThreadComputeCommandStates();
   for (const auto command_buffer : command_buffers) {
     (void)state->adapter_runtime.RetireCommandBuffer(command_buffer);
@@ -4556,6 +4831,10 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(
   if (trampoline == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
   const VkResult result = trampoline(command_buffer, begin_info);
   if (result == VK_SUCCESS) {
+    // Successful begin/reset boundaries prove the previous recording is no
+    // longer pending. Collect an optional private-scratch readback before the
+    // adapter returns that bundle to its idle pool.
+    PollCompletedInternalFeatureFences(state);
     state->adapter_runtime.NotifyCommandBufferBegin(command_buffer);
     GetThreadComputeCommandStates().erase(ToOpaque(command_buffer));
     {
@@ -4565,6 +4844,12 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(
       state->command_buffer_dof_composite_states.erase(ToOpaque(command_buffer));
       state->command_buffer_usage_flags[ToOpaque(command_buffer)] =
           begin_info != nullptr ? begin_info->flags : 0u;
+      auto generation = state->next_recording_generation++;
+      if (generation == 0u) {
+        generation = state->next_recording_generation++;
+      }
+      state->command_buffer_recording_generations[ToOpaque(command_buffer)] =
+          generation;
     }
     {
       const std::lock_guard lock(state->mutex);
@@ -4590,6 +4875,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerResetCommandBuffer(
   if (trampoline == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
   const VkResult result = trampoline(command_buffer, flags);
   if (result == VK_SUCCESS) {
+    PollCompletedInternalFeatureFences(state);
     state->adapter_runtime.RecycleCommandBuffer(command_buffer);
     GetThreadComputeCommandStates().erase(ToOpaque(command_buffer));
     {
@@ -4598,6 +4884,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerResetCommandBuffer(
       state->command_buffer_restore_states.erase(ToOpaque(command_buffer));
       state->command_buffer_dof_composite_states.erase(ToOpaque(command_buffer));
       state->command_buffer_usage_flags.erase(ToOpaque(command_buffer));
+      state->command_buffer_recording_generations.erase(ToOpaque(command_buffer));
     }
     DiscardFeatureCommandBuffer(state, command_buffer);
   }
@@ -4613,6 +4900,9 @@ VKAPI_ATTR void VKAPI_CALL LayerFreeCommandBuffers(
   if (state == nullptr) return;
   const auto trampoline = state->next_free_command_buffers;
   if (trampoline == nullptr) return;
+  // Freeing command buffers while pending is invalid, so any layer-owned
+  // completion fence for this valid call is ready to be observed first.
+  PollCompletedInternalFeatureFences(state);
   if (command_buffers != nullptr) {
     for (std::uint32_t index = 0u; index < command_buffer_count; ++index) {
       (void)state->adapter_runtime.RetireCommandBuffer(command_buffers[index]);
@@ -4633,6 +4923,8 @@ VKAPI_ATTR void VKAPI_CALL LayerFreeCommandBuffers(
       state->command_buffer_dof_composite_states.erase(
           ToOpaque(command_buffers[index]));
       state->command_buffer_usage_flags.erase(ToOpaque(command_buffers[index]));
+      state->command_buffer_recording_generations.erase(
+          ToOpaque(command_buffers[index]));
     }
   }
   DiscardFeatureCommandBuffers(
@@ -4645,13 +4937,25 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindPipeline(
     VkCommandBuffer command_buffer,
     VkPipelineBindPoint pipeline_bind_point,
     VkPipeline pipeline) {
+  const bool tracking_enabled =
+      runtime_command_tracking_enabled.load(std::memory_order_acquire);
+  if (!tracking_enabled
+      && fast_command_dispatch_key.load(std::memory_order_acquire)
+             == DispatchKey(command_buffer)) {
+    const auto trampoline =
+        fast_cmd_bind_pipeline.load(std::memory_order_relaxed);
+    if (trampoline != nullptr) {
+      trampoline(command_buffer, pipeline_bind_point, pipeline);
+      return;
+    }
+  }
   auto* state = FindDeviceFast(command_buffer);
   if (state == nullptr) return;
   const auto trampoline = state->next_cmd_bind_pipeline;
   if (trampoline == nullptr) return;
   trampoline(command_buffer, pipeline_bind_point, pipeline);
   if (pipeline_bind_point != VK_PIPELINE_BIND_POINT_COMPUTE) return;
-  if (!runtime_command_tracking_enabled.load(std::memory_order_acquire)) return;
+  if (!tracking_enabled) return;
 
   const std::uint64_t command_buffer_handle = ToOpaque(command_buffer);
   auto& local = GetThreadComputeCommandStates()[command_buffer_handle];
@@ -4686,6 +4990,26 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(
     const VkDescriptorSet* descriptor_sets,
     std::uint32_t dynamic_offset_count,
     const std::uint32_t* dynamic_offsets) {
+  const bool tracking_enabled =
+      runtime_command_tracking_enabled.load(std::memory_order_acquire);
+  if (!tracking_enabled
+      && fast_command_dispatch_key.load(std::memory_order_acquire)
+             == DispatchKey(command_buffer)) {
+    const auto trampoline =
+        fast_cmd_bind_descriptor_sets.load(std::memory_order_relaxed);
+    if (trampoline != nullptr) {
+      trampoline(
+          command_buffer,
+          pipeline_bind_point,
+          layout,
+          first_set,
+          descriptor_set_count,
+          descriptor_sets,
+          dynamic_offset_count,
+          dynamic_offsets);
+      return;
+    }
+  }
   auto* state = FindDeviceFast(command_buffer);
   if (state == nullptr) return;
   const auto trampoline = state->next_cmd_bind_descriptor_sets;
@@ -4700,7 +5024,7 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(
       dynamic_offset_count,
       dynamic_offsets);
   if (pipeline_bind_point != VK_PIPELINE_BIND_POINT_COMPUTE || descriptor_sets == nullptr) return;
-  if (!runtime_command_tracking_enabled.load(std::memory_order_acquire)) return;
+  if (!tracking_enabled) return;
 
   const std::uint64_t command_buffer_handle = ToOpaque(command_buffer);
   auto& local = GetThreadComputeCommandStates()[command_buffer_handle];
@@ -5218,13 +5542,24 @@ VKAPI_ATTR VkResult VKAPI_CALL HookCreateDevice(
             ? "vkCreateDevice: DLSS format adapter initialized"
             : "vkCreateDevice: DLSS format adapter unavailable; native fallback");
 
+  bool installed_as_fast_device = false;
+  const auto device_dispatch_key = DispatchKey(*device);
   {
     const std::lock_guard lock(state_mutex);
-    devices[DispatchKey(*device)] = state;
+    devices[device_dispatch_key] = state;
     if (state->graphics_queue != VK_NULL_HANDLE && active_device.expired()) {
       active_device = state;
+      installed_as_fast_device = true;
     }
     device_registry_generation.fetch_add(1u, std::memory_order_release);
+  }
+  if (installed_as_fast_device) {
+    fast_cmd_bind_pipeline.store(
+        state->next_cmd_bind_pipeline, std::memory_order_relaxed);
+    fast_cmd_bind_descriptor_sets.store(
+        state->next_cmd_bind_descriptor_sets, std::memory_order_relaxed);
+    fast_command_dispatch_key.store(
+        device_dispatch_key, std::memory_order_release);
   }
   Trace("vkCreateDevice: state installed; return success");
   return VK_SUCCESS;
@@ -5262,6 +5597,16 @@ VKAPI_ATTR void VKAPI_CALL HookDestroyDevice(
     return;
   }
   state->destroying.store(true, std::memory_order_release);
+  const auto device_dispatch_key = DispatchKey(device);
+  auto expected_fast_key = device_dispatch_key;
+  if (fast_command_dispatch_key.compare_exchange_strong(
+          expected_fast_key,
+          0u,
+          std::memory_order_acq_rel,
+          std::memory_order_acquire)) {
+    fast_cmd_bind_pipeline.store(nullptr, std::memory_order_relaxed);
+    fast_cmd_bind_descriptor_sets.store(nullptr, std::memory_order_relaxed);
+  }
   {
     const std::lock_guard lock(state_mutex);
     if (active_device.lock() == state) active_device.reset();
@@ -5290,6 +5635,7 @@ VKAPI_ATTR void VKAPI_CALL HookDestroyDevice(
   Trace("vkDestroyDevice: forwarding terminal destroy");
   trampoline(device, allocator);
   Trace("vkDestroyDevice: complete");
+  CloseTraceFile();
 }
 
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL HookGetDeviceProcAddr(

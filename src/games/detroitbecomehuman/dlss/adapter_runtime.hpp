@@ -9,8 +9,11 @@
 #endif
 #include <vulkan/vulkan.h>
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 #include "../dlss_bridge_abi.h"
 #include "utils/dlss/ngx_vulkan.hpp"
@@ -71,15 +74,8 @@ struct AdapterPrepareInfo {
   std::uint32_t output_height = 0u;
   float dlaa_sharpening = 0.f;
   float dlaa_sharpening_normalization = 1.f;
-  // Test-only path selected by the Vulkan layer through a process-scoped
-  // environment variable. It preserves the exact render-scale/resources but
-  // spatially expands CurrColor instead of evaluating NGX, which isolates an
-  // input/viewport composition fault from an NGX integration fault.
-  bool diagnostic_spatial_output = false;
-  // Samples the native CurrColor view directly in the pack shader. This keeps
-  // the b16 write path but removes the private color scratch image as the
-  // sampled source, isolating scratch reuse from presentation/output faults.
-  bool diagnostic_direct_output = false;
+  bool trace_readback = false;
+  std::uint32_t trace_attempt = 0u;
 };
 
 /*
@@ -112,8 +108,21 @@ struct AdapterPreparedFrame {
   std::uint32_t render_height = 0u;
   std::uint32_t output_width = 0u;
   std::uint32_t output_height = 0u;
-  bool diagnostic_spatial_output = false;
-  bool diagnostic_direct_output = false;
+  bool trace_readback_requested = false;
+  std::uint32_t trace_attempt = 0u;
+};
+
+inline constexpr std::uint32_t kTraceReadbackTileCount = 5u;
+inline constexpr std::uint32_t kTraceReadbackTileWidth = 4u;
+inline constexpr std::uint32_t kTraceReadbackTileHeight = 4u;
+inline constexpr std::uint32_t kTraceReadbackWordsPerPixel = 2u;
+inline constexpr std::size_t kTraceReadbackWordCount =
+    kTraceReadbackTileCount * kTraceReadbackTileWidth
+    * kTraceReadbackTileHeight * kTraceReadbackWordsPerPixel;
+
+struct AdapterTraceReadback final {
+  std::uint32_t attempt = 0u;
+  std::array<std::uint32_t, kTraceReadbackWordCount> words = {};
 };
 
 class AdapterRuntime final {
@@ -140,16 +149,11 @@ class AdapterRuntime final {
       const AdapterPreparedFrame& prepared_frame,
       bool ngx_succeeded);
 
-  /*
-   * Diagnostic-only commit which samples the prepared low-resolution color
-   * into the native full-resolution b16 output. It never invokes NGX and is
-   * unavailable unless Prepare was explicitly called with the matching flag.
-   */
-  [[nodiscard]] AdapterResult CommitSpatialDiagnostic(
-      const AdapterPreparedFrame& prepared_frame);
-
   /* Marks a prepared frame abandoned without accessing the native output. */
   [[nodiscard]] AdapterResult Discard(const AdapterPreparedFrame& prepared_frame);
+
+  [[nodiscard]] std::optional<AdapterTraceReadback> TakeCompletedTraceReadback(
+      VkCommandBuffer command_buffer);
 
   /*
    * Call after a successful vkBeginCommandBuffer. This is the safe boundary

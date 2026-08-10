@@ -15,6 +15,7 @@
 
 #include "src/games/detroitbecomehuman/dlss_bridge_abi.h"
 #include "src/games/detroitbecomehuman/dlss_bridge_client.hpp"
+#include "src/games/detroitbecomehuman/dlss/evaluation_trace.hpp"
 #include "src/games/detroitbecomehuman/supported_build.hpp"
 #include "src/games/detroitbecomehuman/temporal_mode_state.hpp"
 
@@ -23,6 +24,8 @@ namespace {
 namespace supported_build = renodx::games::detroitbecomehuman::supported_build;
 namespace dlss_bridge_client =
     renodx::games::detroitbecomehuman::dlss_bridge_client;
+namespace dlss_evaluation_trace =
+    renodx::games::detroitbecomehuman::dlss;
 namespace temporal_mode_state =
     renodx::games::detroitbecomehuman::temporal_mode_state;
 
@@ -930,6 +933,42 @@ bool TestTemporalModeTransactionSerializesCommit() {
   return passed;
 }
 
+bool TestBoundedEvaluationTraceWindow() {
+  dlss_evaluation_trace::FirstThreeAttemptWindow window;
+  const auto first = window.Begin();
+  const auto second = window.Begin();
+  const auto third = window.Begin();
+  const auto fourth = window.Begin();
+  const auto fifth = window.Begin();
+
+  bool passed = true;
+  passed &= Expect(
+      first == 1u && second == 2u && third == 3u,
+      "bounded observability must assign exactly attempts one through three");
+  passed &= Expect(
+      !fourth.has_value() && !fifth.has_value() && window.Count() == 3u,
+      "bounded observability must remain saturated after the third attempt");
+
+  constexpr std::array terminals = {
+      dlss_evaluation_trace::EvaluationTerminal::kNgxInitializationFailed,
+      dlss_evaluation_trace::EvaluationTerminal::kFeatureCreationPending,
+      dlss_evaluation_trace::EvaluationTerminal::kFeatureCreationFailed,
+      dlss_evaluation_trace::EvaluationTerminal::kResourceRejected,
+      dlss_evaluation_trace::EvaluationTerminal::kPrepareFailed,
+      dlss_evaluation_trace::EvaluationTerminal::kEvaluateFailed,
+      dlss_evaluation_trace::EvaluationTerminal::kCommitFailed,
+      dlss_evaluation_trace::EvaluationTerminal::kSuccess,
+  };
+  for (const auto terminal : terminals) {
+    const auto name = dlss_evaluation_trace::EvaluationTerminalName(terminal);
+    passed &= Expect(
+        !name.empty() && name != "invalid_terminal"
+            && name != "unclassified_terminal",
+        "every bounded evaluation path must have an explicit terminal class");
+  }
+  return passed;
+}
+
 }  // namespace
 
 int main() {
@@ -942,6 +981,7 @@ int main() {
   passed &= TestDirectProviderContract();
   passed &= TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization();
   passed &= TestTemporalModeTransactionSerializesCommit();
+  passed &= TestBoundedEvaluationTraceWindow();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
   return passed ? 0 : 1;
 }

@@ -115,7 +115,10 @@ struct AdapterRuntime::Impl {
     PFN_vkBindImageMemory bind_image_memory = nullptr;
     PFN_vkCreateImageView create_image_view = nullptr;
     PFN_vkDestroyImageView destroy_image_view = nullptr;
+    PFN_vkMapMemory map_memory = nullptr;
+    PFN_vkUnmapMemory unmap_memory = nullptr;
     PFN_vkCmdPipelineBarrier cmd_pipeline_barrier = nullptr;
+    PFN_vkCmdCopyImageToBuffer cmd_copy_image_to_buffer = nullptr;
     PFN_vkCmdBindPipeline cmd_bind_pipeline = nullptr;
     PFN_vkCmdBindDescriptorSets cmd_bind_descriptor_sets = nullptr;
     PFN_vkCmdUpdateBuffer cmd_update_buffer = nullptr;
@@ -136,6 +139,8 @@ struct AdapterRuntime::Impl {
     VkBuffer buffer = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
     VkDeviceSize size = 0u;
+    void* mapped = nullptr;
+    bool contents_valid = false;
   };
 
   struct alignas(16) PackConstants {
@@ -151,6 +156,7 @@ struct AdapterRuntime::Impl {
     ImageAllocation color;
     ImageAllocation dlss_output;
     BufferAllocation pack_constants_buffer;
+    BufferAllocation trace_readback_buffer;
     VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
     VkDescriptorSet prepare_descriptor_set = VK_NULL_HANDLE;
     VkDescriptorSet pack_descriptor_set = VK_NULL_HANDLE;
@@ -161,8 +167,9 @@ struct AdapterRuntime::Impl {
     std::uint64_t recording_generation = 1u;
     std::uint64_t prepared_generation = 0u;
     PackConstants pack_constants = {};
-    bool diagnostic_spatial_output = false;
-    bool diagnostic_direct_output = false;
+    std::uint32_t trace_attempt = 0u;
+    bool trace_readback_requested = false;
+    bool trace_readback_pending = false;
     bool active = false;
     bool tainted = false;
   };
@@ -259,9 +266,14 @@ struct AdapterRuntime::Impl {
            && LoadDeviceProcedure(&procedures.bind_image_memory, "vkBindImageMemory")
            && LoadDeviceProcedure(&procedures.create_image_view, "vkCreateImageView")
            && LoadDeviceProcedure(&procedures.destroy_image_view, "vkDestroyImageView")
+           && LoadDeviceProcedure(&procedures.map_memory, "vkMapMemory")
+           && LoadDeviceProcedure(&procedures.unmap_memory, "vkUnmapMemory")
            && LoadDeviceProcedure(
                &procedures.cmd_pipeline_barrier,
                "vkCmdPipelineBarrier")
+           && LoadDeviceProcedure(
+               &procedures.cmd_copy_image_to_buffer,
+               "vkCmdCopyImageToBuffer")
            && LoadDeviceProcedure(&procedures.cmd_bind_pipeline, "vkCmdBindPipeline")
            && LoadDeviceProcedure(
                &procedures.cmd_bind_descriptor_sets,
@@ -506,6 +518,10 @@ struct AdapterRuntime::Impl {
 
   void DestroyBuffer(BufferAllocation* allocation) const {
     if (allocation == nullptr) return;
+    if (allocation->mapped != nullptr && allocation->memory != VK_NULL_HANDLE) {
+      procedures.unmap_memory(device, allocation->memory);
+      allocation->mapped = nullptr;
+    }
     if (allocation->buffer != VK_NULL_HANDLE) {
       procedures.destroy_buffer(device, allocation->buffer, nullptr);
     }
@@ -521,6 +537,7 @@ struct AdapterRuntime::Impl {
       procedures.destroy_descriptor_pool(device, bundle->descriptor_pool, nullptr);
     }
     DestroyBuffer(&bundle->pack_constants_buffer);
+    DestroyBuffer(&bundle->trace_readback_buffer);
     DestroyImage(&bundle->dlss_output);
     DestroyImage(&bundle->color);
     *bundle = {};
@@ -572,11 +589,13 @@ struct AdapterRuntime::Impl {
     }
   }
 
-  std::uint32_t FindDeviceLocalMemoryType(std::uint32_t memory_type_bits) const {
+  std::uint32_t FindMemoryType(
+      std::uint32_t memory_type_bits,
+      VkMemoryPropertyFlags required_flags) const {
     for (std::uint32_t index = 0u; index < memory_properties.memoryTypeCount; ++index) {
       const bool allowed = (memory_type_bits & (UINT32_C(1) << index)) != 0u;
       const auto flags = memory_properties.memoryTypes[index].propertyFlags;
-      if (allowed && (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0u) return index;
+      if (allowed && (flags & required_flags) == required_flags) return index;
     }
     return std::numeric_limits<std::uint32_t>::max();
   }
@@ -603,7 +622,8 @@ struct AdapterRuntime::Impl {
         1u,
         VK_SAMPLE_COUNT_1_BIT,
         VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT
+            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         VK_SHARING_MODE_EXCLUSIVE,
         0u,
         nullptr,
@@ -617,7 +637,9 @@ struct AdapterRuntime::Impl {
         device,
         created.image,
         &memory_requirements);
-    const auto memory_type = FindDeviceLocalMemoryType(memory_requirements.memoryTypeBits);
+    const auto memory_type = FindMemoryType(
+        memory_requirements.memoryTypeBits,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     if (memory_type == std::numeric_limits<std::uint32_t>::max()) {
       DestroyImage(&created);
       return Fallback(AdapterDetail::kUnsupportedFormat);
@@ -681,6 +703,8 @@ struct AdapterRuntime::Impl {
   AdapterResult CreateBuffer(
       VkDeviceSize size,
       VkBufferUsageFlags usage,
+      VkMemoryPropertyFlags memory_flags,
+      bool persistently_map,
       BufferAllocation* allocation) const {
     if (allocation == nullptr || size == 0u) {
       return Fallback(AdapterDetail::kInvalidArgument);
@@ -710,8 +734,8 @@ struct AdapterRuntime::Impl {
         device,
         created.buffer,
         &memory_requirements);
-    const auto memory_type = FindDeviceLocalMemoryType(
-        memory_requirements.memoryTypeBits);
+    const auto memory_type =
+        FindMemoryType(memory_requirements.memoryTypeBits, memory_flags);
     if (memory_type == std::numeric_limits<std::uint32_t>::max()) {
       DestroyBuffer(&created);
       return Fallback(AdapterDetail::kUnsupportedFormat);
@@ -742,8 +766,166 @@ struct AdapterRuntime::Impl {
       return VulkanError(result);
     }
 
+    if (persistently_map) {
+      result = procedures.map_memory(
+          device,
+          created.memory,
+          0u,
+          created.size,
+          0u,
+          &created.mapped);
+      if (result != VK_SUCCESS || created.mapped == nullptr) {
+        DestroyBuffer(&created);
+        return result != VK_SUCCESS ? VulkanError(result)
+                                    : Fallback(AdapterDetail::kVulkanFailure);
+      }
+    }
+
     *allocation = created;
     return Success();
+  }
+
+  AdapterResult EnsureTraceReadbackBuffer(ScratchBundle* bundle) const {
+    if (bundle == nullptr) return Fallback(AdapterDetail::kInvalidArgument);
+    if (bundle->trace_readback_buffer.buffer != VK_NULL_HANDLE) return Success();
+    return CreateBuffer(
+        sizeof(std::uint32_t) * kTraceReadbackWordCount,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        true,
+        &bundle->trace_readback_buffer);
+  }
+
+  bool RecordTraceReadback(ScratchBundle* bundle) const {
+    if (bundle == nullptr || !bundle->trace_readback_requested
+        || bundle->trace_attempt == 0u
+        || bundle->trace_readback_buffer.buffer == VK_NULL_HANDLE
+        || bundle->trace_readback_buffer.mapped == nullptr
+        || bundle->dlss_output.extent.width < kTraceReadbackTileWidth
+        || bundle->dlss_output.extent.height < kTraceReadbackTileHeight) {
+      return false;
+    }
+
+    const auto& source_state = bundle->dlss_output.state;
+    const auto source_to_transfer =
+        renodx::utils::dlss::vulkan::MakeImageBarrierPlan(
+            source_state,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_ACCESS_SHADER_READ_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    const VkBufferMemoryBarrier before_buffer = {
+        VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        nullptr,
+        bundle->trace_readback_buffer.contents_valid ? VK_ACCESS_HOST_READ_BIT : 0u,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_QUEUE_FAMILY_IGNORED,
+        VK_QUEUE_FAMILY_IGNORED,
+        bundle->trace_readback_buffer.buffer,
+        0u,
+        bundle->trace_readback_buffer.size,
+    };
+    procedures.cmd_pipeline_barrier(
+        bundle->command_buffer,
+        source_to_transfer.source_stage
+            | (bundle->trace_readback_buffer.contents_valid
+                   ? VK_PIPELINE_STAGE_HOST_BIT
+                   : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0u,
+        0u,
+        nullptr,
+        1u,
+        &before_buffer,
+        1u,
+        &source_to_transfer.barrier);
+
+    constexpr VkDeviceSize kTileBytes =
+        kTraceReadbackTileWidth * kTraceReadbackTileHeight
+        * kTraceReadbackWordsPerPixel * sizeof(std::uint32_t);
+    const std::uint32_t maximum_x =
+        bundle->dlss_output.extent.width - kTraceReadbackTileWidth;
+    const std::uint32_t maximum_y =
+        bundle->dlss_output.extent.height - kTraceReadbackTileHeight;
+    const std::array<VkOffset3D, kTraceReadbackTileCount> offsets = {{
+        {0, 0, 0},
+        {static_cast<std::int32_t>(maximum_x), 0, 0},
+        {
+            static_cast<std::int32_t>(maximum_x / 2u),
+            static_cast<std::int32_t>(maximum_y / 2u),
+            0,
+        },
+        {0, static_cast<std::int32_t>(maximum_y), 0},
+        {
+            static_cast<std::int32_t>(maximum_x),
+            static_cast<std::int32_t>(maximum_y),
+            0,
+        },
+    }};
+    std::array<VkBufferImageCopy, kTraceReadbackTileCount> regions = {};
+    for (std::uint32_t index = 0u; index < regions.size(); ++index) {
+      regions[index] = {
+          .bufferOffset = index * kTileBytes,
+          .bufferRowLength = 0u,
+          .bufferImageHeight = 0u,
+          .imageSubresource = {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .mipLevel = 0u,
+              .baseArrayLayer = 0u,
+              .layerCount = 1u,
+          },
+          .imageOffset = offsets[index],
+          .imageExtent = {
+              kTraceReadbackTileWidth,
+              kTraceReadbackTileHeight,
+              1u,
+          },
+      };
+    }
+    procedures.cmd_copy_image_to_buffer(
+        bundle->command_buffer,
+        bundle->dlss_output.image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        bundle->trace_readback_buffer.buffer,
+        static_cast<std::uint32_t>(regions.size()),
+        regions.data());
+
+    const auto transfer_to_source =
+        renodx::utils::dlss::vulkan::MakeImageBarrierPlan(
+            source_state,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_ACCESS_SHADER_READ_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    const VkBufferMemoryBarrier after_buffer = {
+        VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        nullptr,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_ACCESS_HOST_READ_BIT,
+        VK_QUEUE_FAMILY_IGNORED,
+        VK_QUEUE_FAMILY_IGNORED,
+        bundle->trace_readback_buffer.buffer,
+        0u,
+        bundle->trace_readback_buffer.size,
+    };
+    procedures.cmd_pipeline_barrier(
+        bundle->command_buffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+        0u,
+        0u,
+        nullptr,
+        1u,
+        &after_buffer,
+        1u,
+        &transfer_to_source.barrier);
+    bundle->trace_readback_buffer.contents_valid = true;
+    bundle->trace_readback_pending = true;
+    return true;
   }
 
   AdapterResult CreateBundle(
@@ -777,6 +959,8 @@ struct AdapterRuntime::Impl {
         sizeof(PackConstants),
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
             | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        false,
         &created.pack_constants_buffer);
     if (!result.Succeeded()) {
       DestroyBundle(&created);
@@ -850,8 +1034,9 @@ struct AdapterRuntime::Impl {
     bundle->recording_generation = 1u;
     bundle->prepared_generation = 0u;
     bundle->pack_constants = {};
-    bundle->diagnostic_spatial_output = false;
-    bundle->diagnostic_direct_output = false;
+    bundle->trace_attempt = 0u;
+    bundle->trace_readback_requested = false;
+    bundle->trace_readback_pending = false;
     bundle->active = false;
     bundle->tainted = false;
 
@@ -979,13 +1164,8 @@ struct AdapterRuntime::Impl {
         {VK_NULL_HANDLE, bundle->color.view, VK_IMAGE_LAYOUT_GENERAL},
         {
             sampler,
-            prepare_info.diagnostic_direct_output
-                ? FromOpaque<VkImageView>(prepare_info.current_color.image_view)
-                : (prepare_info.diagnostic_spatial_output ? bundle->color.view
-                                                          : bundle->dlss_output.view),
-            prepare_info.diagnostic_direct_output
-                ? static_cast<VkImageLayout>(prepare_info.current_color.layout)
-                : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            bundle->dlss_output.view,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         },
         {
             VK_NULL_HANDLE,
@@ -1142,9 +1322,7 @@ struct AdapterRuntime::Impl {
   }
 
   void RecordPack(ScratchBundle* bundle) const {
-    auto& pack_source = bundle->diagnostic_spatial_output
-                            ? bundle->color
-                            : bundle->dlss_output;
+    auto& pack_source = bundle->dlss_output;
     procedures.cmd_update_buffer(
         bundle->command_buffer,
         bundle->pack_constants_buffer.buffer,
@@ -1174,26 +1352,16 @@ struct AdapterRuntime::Impl {
         0u,
         nullptr);
 
-    std::array<VkImageMemoryBarrier, 2u> before_pack = {};
-    std::uint32_t before_pack_count = 0u;
-    if (!bundle->diagnostic_direct_output) {
-      const auto source_plan = bundle->diagnostic_spatial_output
-                                   ? renodx::utils::dlss::vulkan::MakeImageBarrierPlan(
-                                         pack_source.state,
-                                         pack_source.state.stage,
-                                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                         pack_source.state.access,
-                                         VK_ACCESS_SHADER_READ_BIT,
-                                         pack_source.state.layout,
-                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                                   : renodx::utils::dlss::vulkan::PlanNgxOutputSampledRead(
-                                         pack_source.state);
-      before_pack[before_pack_count++] = source_plan.barrier;
-    }
+    const auto source_plan =
+        renodx::utils::dlss::vulkan::PlanNgxOutputSampledRead(
+            pack_source.state);
     const auto native_output_plan =
         renodx::utils::dlss::vulkan::PlanNativeOutputPackWrite(
             bundle->native_output_state);
-    before_pack[before_pack_count++] = native_output_plan.barrier;
+    const std::array before_pack = {
+        source_plan.barrier,
+        native_output_plan.barrier,
+    };
     procedures.cmd_pipeline_barrier(
         bundle->command_buffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1203,13 +1371,11 @@ struct AdapterRuntime::Impl {
         nullptr,
         0u,
         nullptr,
-        before_pack_count,
+        static_cast<std::uint32_t>(before_pack.size()),
         before_pack.data());
-    if (!bundle->diagnostic_direct_output) {
-      pack_source.state.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-      pack_source.state.stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-      pack_source.state.access = VK_ACCESS_SHADER_READ_BIT;
-    }
+    pack_source.state.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    pack_source.state.stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    pack_source.state.access = VK_ACCESS_SHADER_READ_BIT;
 
     procedures.cmd_bind_pipeline(
         bundle->command_buffer,
@@ -1254,6 +1420,7 @@ struct AdapterRuntime::Impl {
         &after_pack.barrier);
     bundle->native_output_state.access =
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    (void)RecordTraceReadback(bundle);
   }
 
   static DetroitDlssResource MakeScratchResource(const ImageAllocation& allocation) {
@@ -1406,19 +1573,21 @@ AdapterResult AdapterRuntime::Prepare(
     bundle.recording_generation = recording_generation;
   }
 
+  const bool trace_readback_available =
+      prepare_info.trace_readback && prepare_info.trace_attempt != 0u
+      && !bundle.trace_readback_pending
+      && impl_->EnsureTraceReadbackBuffer(&bundle).Succeeded();
   impl_->UpdateDescriptors(&bundle, prepare_info);
   impl_->RecordPrepare(&bundle, prepare_info);
   bundle.native_motion_vectors = prepare_info.motion_vectors;
   bundle.native_output = prepare_info.output_color_pass;
   bundle.native_output_state = prepare_info.output_color_pass_state;
-  bundle.diagnostic_spatial_output = prepare_info.diagnostic_spatial_output;
-  bundle.diagnostic_direct_output = prepare_info.diagnostic_direct_output;
   bundle.pack_constants = {
-      .sharpening = prepare_info.diagnostic_spatial_output
-                        ? 0.f
-                        : prepare_info.dlaa_sharpening,
+      .sharpening = prepare_info.dlaa_sharpening,
       .normalization = prepare_info.dlaa_sharpening_normalization,
   };
+  bundle.trace_attempt = trace_readback_available ? prepare_info.trace_attempt : 0u;
+  bundle.trace_readback_requested = trace_readback_available;
   bundle.active = true;
   bundle.prepared_generation = bundle.recording_generation;
   bundle.token = impl_->next_token++;
@@ -1437,10 +1606,8 @@ AdapterResult AdapterRuntime::Prepare(
   prepared_frame->render_height = prepare_info.render_height;
   prepared_frame->output_width = prepare_info.output_width;
   prepared_frame->output_height = prepare_info.output_height;
-  prepared_frame->diagnostic_spatial_output =
-      prepare_info.diagnostic_spatial_output;
-  prepared_frame->diagnostic_direct_output =
-      prepare_info.diagnostic_direct_output;
+  prepared_frame->trace_readback_requested = trace_readback_available;
+  prepared_frame->trace_attempt = bundle.trace_attempt;
   return Success();
 }
 
@@ -1468,11 +1635,7 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
   const auto expected_color = Impl::MakeScratchResource(bundle.color);
   const auto expected_output = Impl::MakeScratchResource(bundle.dlss_output);
   const bool prepared_resources_match =
-      !prepared_frame.diagnostic_spatial_output
-      && !bundle.diagnostic_spatial_output
-      && !prepared_frame.diagnostic_direct_output
-      && !bundle.diagnostic_direct_output
-      && prepared_frame.color.image == expected_color.image
+      prepared_frame.color.image == expected_color.image
       && prepared_frame.color.image_view == expected_color.image_view
       && prepared_frame.motion_vectors.image == bundle.native_motion_vectors.image
       && prepared_frame.motion_vectors.image_view
@@ -1502,51 +1665,31 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
   return Success();
 }
 
-AdapterResult AdapterRuntime::CommitSpatialDiagnostic(
-    const AdapterPreparedFrame& prepared_frame) {
-  const std::lock_guard lock(impl_->mutex);
-  if (!impl_->initialized) return Fallback(AdapterDetail::kNotInitialized);
-  const auto found = impl_->bundles.find(prepared_frame.command_buffer);
-  if (found == impl_->bundles.end() || !found->second.active
-      || found->second.token != prepared_frame.token
-      || prepared_frame.token == 0u) {
-    return Fallback(AdapterDetail::kStalePreparedFrame);
-  }
-
-  auto& bundle = found->second;
-  const auto expected_color = Impl::MakeScratchResource(bundle.color);
-  const auto expected_output = Impl::MakeScratchResource(bundle.dlss_output);
-  const bool prepared_resources_match =
-      prepared_frame.diagnostic_spatial_output
-      && bundle.diagnostic_spatial_output
-      && prepared_frame.diagnostic_direct_output
-             == bundle.diagnostic_direct_output
-      && prepared_frame.color.image == expected_color.image
-      && prepared_frame.color.image_view == expected_color.image_view
-      && prepared_frame.motion_vectors.image == bundle.native_motion_vectors.image
-      && prepared_frame.motion_vectors.image_view
-             == bundle.native_motion_vectors.image_view
-      && prepared_frame.motion_vectors.layout == bundle.native_motion_vectors.layout
-      && prepared_frame.motion_vectors.format == bundle.native_motion_vectors.format
-      && prepared_frame.output.image == expected_output.image
-      && prepared_frame.output.image_view == expected_output.image_view
-      && prepared_frame.color_state == bundle.color.state
-      && prepared_frame.output_state == bundle.dlss_output.state
-      && prepared_frame.native_output_state == bundle.native_output_state
-      && prepared_frame.output_width == bundle.dlss_output.extent.width
-      && prepared_frame.output_height == bundle.dlss_output.extent.height;
-  if (!prepared_resources_match) {
-    bundle.active = false;
-    return Fallback(AdapterDetail::kStalePreparedFrame);
-  }
-
-  impl_->RecordPack(&bundle);
-  bundle.active = false;
-  return Success();
-}
-
 AdapterResult AdapterRuntime::Discard(const AdapterPreparedFrame& prepared_frame) {
   return CommitAfterNgx(prepared_frame, false);
+}
+
+std::optional<AdapterTraceReadback> AdapterRuntime::TakeCompletedTraceReadback(
+    VkCommandBuffer command_buffer) {
+  if (command_buffer == VK_NULL_HANDLE) return std::nullopt;
+  const std::lock_guard lock(impl_->mutex);
+  if (!impl_->initialized) return std::nullopt;
+  const auto found = impl_->bundles.find(command_buffer);
+  if (found == impl_->bundles.end()) return std::nullopt;
+  auto& bundle = found->second;
+  if (!bundle.trace_readback_pending || bundle.trace_attempt == 0u
+      || bundle.trace_readback_buffer.mapped == nullptr) {
+    return std::nullopt;
+  }
+
+  AdapterTraceReadback readback = {.attempt = bundle.trace_attempt};
+  std::memcpy(
+      readback.words.data(),
+      bundle.trace_readback_buffer.mapped,
+      sizeof(readback.words));
+  bundle.trace_readback_pending = false;
+  bundle.trace_readback_requested = false;
+  return readback;
 }
 
 void AdapterRuntime::NotifyCommandBufferBegin(VkCommandBuffer command_buffer) noexcept {

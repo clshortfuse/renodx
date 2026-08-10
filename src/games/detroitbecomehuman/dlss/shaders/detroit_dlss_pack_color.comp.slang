@@ -152,29 +152,21 @@ void main()
 
     ivec2 output_size = imageSize(OutColorPass);
     ivec2 source_size = textureSize(DlssColor, 0);
-    vec3 color;
-    if (all(equal(source_size, output_size)))
+    if (!all(equal(source_size, output_size)))
     {
-        // The production DLSS output is already output-sized. Preserve the
-        // exact one-texel mapping used by the original adapter.
-        color = SanitizeColor(texelFetch(DlssColor, pixel, 0).rgb);
-        const float sharpening = clamp(PackConstants.values.x, 0.0, 1.0);
-        if (sharpening > 0.0)
-        {
-            color = ApplyDlaaRcas(
-                pixel,
-                color,
-                sharpening,
-                max(PackConstants.values.y, 1.0));
-        }
+        return;
     }
-    else
+    // Production NGX output is always output-sized. Preserve its exact
+    // one-texel mapping when encoding Detroit's native RGB9E5 storage image.
+    vec3 color = SanitizeColor(texelFetch(DlssColor, pixel, 0).rgb);
+    const float sharpening = clamp(PackConstants.values.x, 0.0, 1.0);
+    if (sharpening > 0.0)
     {
-        // Test-only spatial path: expose the complete prepared current-color
-        // image at output resolution without involving NGX. This distinguishes
-        // an upstream viewport/composition fault from a DLSS evaluation fault.
-        vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(output_size);
-        color = SanitizeColor(textureLod(DlssColor, uv, 0.0).rgb);
+        color = ApplyDlaaRcas(
+            pixel,
+            color,
+            sharpening,
+            max(PackConstants.values.y, 1.0));
     }
     imageStore(OutColorPass, pixel, uvec4(PackDetroitRgb9e5(color), 0u, 0u, 0u));
 }

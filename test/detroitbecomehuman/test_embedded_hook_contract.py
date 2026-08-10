@@ -123,21 +123,33 @@ def main() -> None:
     bind_pipeline_end = source.index("LayerCmdBindDescriptorSets(", bind_pipeline_start)
     bind_pipeline = source[bind_pipeline_start:bind_pipeline_end]
     pipeline_gate = bind_pipeline.index("runtime_command_tracking_enabled.load")
+    pipeline_lookup = bind_pipeline.index("FindDeviceFast(command_buffer)")
     pipeline_state = bind_pipeline.index("GetThreadComputeCommandStates()")
-    if pipeline_gate > pipeline_state:
+    if pipeline_gate > pipeline_lookup or pipeline_gate > pipeline_state:
         raise AssertionError(
-            "inactive runtime tracking must bypass pipeline command-state capture"
+            "inactive runtime tracking must bypass pipeline lookup and command-state capture"
         )
+    pipeline_fast_path = bind_pipeline[pipeline_gate:pipeline_lookup]
+    require(pipeline_fast_path, "fast_command_dispatch_key.load")
+    require(pipeline_fast_path, "fast_cmd_bind_pipeline.load")
+    if "state_mutex" in pipeline_fast_path or "tracking_mutex" in pipeline_fast_path:
+        raise AssertionError("inactive pipeline bind fast path must not take a mutex")
 
     bind_descriptors_start = bind_pipeline_end
     bind_descriptors_end = source.index("FindTrackedDeviceFunction(", bind_descriptors_start)
     bind_descriptors = source[bind_descriptors_start:bind_descriptors_end]
     descriptor_gate = bind_descriptors.index("runtime_command_tracking_enabled.load")
+    descriptor_lookup = bind_descriptors.index("FindDeviceFast(command_buffer)")
     descriptor_state = bind_descriptors.index("GetThreadComputeCommandStates()")
-    if descriptor_gate > descriptor_state:
+    if descriptor_gate > descriptor_lookup or descriptor_gate > descriptor_state:
         raise AssertionError(
-            "inactive runtime tracking must bypass descriptor command-state capture"
+            "inactive runtime tracking must bypass descriptor lookup and command-state capture"
         )
+    descriptor_fast_path = bind_descriptors[descriptor_gate:descriptor_lookup]
+    require(descriptor_fast_path, "fast_command_dispatch_key.load")
+    require(descriptor_fast_path, "fast_cmd_bind_descriptor_sets.load")
+    if "state_mutex" in descriptor_fast_path or "tracking_mutex" in descriptor_fast_path:
+        raise AssertionError("inactive descriptor bind fast path must not take a mutex")
 
     layout_start = source.index("LayerCreatePipelineLayout(")
     layout_end = source.index("LayerDestroyPipelineLayout(", layout_start)
@@ -189,6 +201,12 @@ def main() -> None:
     adapter_runtime = (args.source_dir / "dlss" / "adapter_runtime.cpp").read_text(
         encoding="utf-8"
     )
+    adapter_header = (args.source_dir / "dlss" / "adapter_runtime.hpp").read_text(
+        encoding="utf-8"
+    )
+    evaluation_trace = (args.source_dir / "dlss" / "evaluation_trace.hpp").read_text(
+        encoding="utf-8"
+    )
     for lifecycle_call in (
         "adapter_runtime.NotifyCommandBufferBegin(command_buffer)",
         "adapter_runtime.RecycleCommandBuffer(command_buffer)",
@@ -231,58 +249,74 @@ def main() -> None:
     if "wait_for_fences" in poll or "device_wait_idle" in poll:
         raise AssertionError("DLAA scratch recycling must remain non-blocking")
 
-    spatial_start = source.index("if (diagnostic_spatial_output) {")
-    spatial_end = source.index("auto color = MakeCoreImageResource", spatial_start)
-    spatial = source[spatial_start:spatial_end]
-    require(spatial, "CommitSpatialDiagnostic(prepared_frame)")
-    require(spatial, "without NGX initialization, feature ")
-    require(spatial, "creation or evaluation")
-    require(spatial, "native CurrColor is ")
-    require(spatial, "sampled directly into b16")
-    require(spatial, "BridgeDetail::kDiagnosticPostNativeDirect")
-    require(
-        source,
-        "Diagnostic post-native direct output is active",
+    removed_diagnostics = (
+        "DiagnosticOutputMode",
+        "DetroitDLSSDiagnosticOutput",
+        "CommitSpatialDiagnostic",
+        "diagnostic_spatial_output",
+        "diagnostic_direct_output",
+        "kDiagnosticPostNativeDirect",
+        "kDiagnosticNativeReplay",
+        "RENODX_DETROIT_DLSS_DIAGNOSTIC_OUTPUT",
     )
-    require(spatial, "original TAA remains recorded")
-    require(spatial, "without private color scratch or NGX")
-    if "RecordFeatureUseLocked(" in spatial or "NGX_VULKAN_EVALUATE_DLSS_EXT" in spatial:
-        raise AssertionError(
-            "spatial diagnostic must not record NGX work or feature lifetime"
-        )
-    native_replay_start = source.index(
-        "if (diagnostic_output_mode == DiagnosticOutputMode::kNativeReplay)"
-    )
-    native_replay_end = source.index(
-        "const auto restore_state = CaptureComputeRestoreState", native_replay_start
-    )
-    native_replay = source[native_replay_start:native_replay_end]
-    require(native_replay, "BridgeDetail::kDiagnosticNativeReplay")
-    require(native_replay, "DETROIT_DLSS_RESULT_FALLBACK")
-    require(native_replay, "replays Detroit's original TAA")
-    if "adapter_runtime.Prepare" in native_replay or "EnsureNgxInitialized" in native_replay:
-        raise AssertionError(
-            "native replay diagnostic must return before NGX or adapter recording"
-        )
-    require(source, 'L"DetroitDLSSDiagnosticOutput"')
-    require(source, "GetPrivateProfileStringW(")
+    diagnostic_sources = source + adapter_runtime + adapter_header + temporal
+    for removed in removed_diagnostics:
+        if removed in diagnostic_sources:
+            raise AssertionError(f"temporary DLSS A/B diagnostic remains: {removed}")
+
+    require(source, 'L"renodx-dev"')
+    require(source, 'L"DetroitDLSSTraceFirstThree"')
+    require(source, 'L"DetroitDLSSTraceReadback"')
+    require(source, "GetPrivateProfileIntW(")
     require(source, "module_path.parent_path() / L\"ReShade.ini\"")
-    query_mode_start = source.index("DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode")
-    configure_start = source.index("DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure")
-    query_mode = source[query_mode_start:configure_start]
-    require(query_mode, "DiagnosticOutputMode::kNgx")
-    require(query_mode, "mode == DETROIT_DLSS_MODE_DLAA")
-    require(query_mode, "settings->render_width = output_width")
+    require(source, "FirstThreeAttemptWindow")
+    require(source, "TraceEvaluationTerminal(")
+    require(source, "TraceFeatureSubmissionResult(")
+    require(source, "TraceFeatureCompletion(")
+    require(source, "trace_attempt_by_command_buffer")
+    require(evaluation_trace, "kAttemptLimit = 3u")
+    require(evaluation_trace, "compare_exchange_weak(")
+    if "unclassified_terminal" in evaluation_trace or "unclassified_terminal" in source:
+        raise AssertionError("every bounded evaluation attempt must have a terminal class")
+
+    trace_start = source.index("void Trace(std::string_view message)")
+    trace_end = source.index("void CloseTraceFile()", trace_start)
+    trace_body = source[trace_start:trace_end]
+    require(trace_body, "if (trace_file == INVALID_HANDLE_VALUE)")
+    require(trace_body, "trace_file = CreateFileW(")
+    if "CloseHandle(" in trace_body:
+        raise AssertionError("the bounded trace file must not reopen for every line")
+
+    readback_start = adapter_runtime.index("bool RecordTraceReadback(")
+    readback_end = adapter_runtime.index("AdapterResult CreateBundle(", readback_start)
+    readback = adapter_runtime[readback_start:readback_end]
+    require(readback, "kTraceReadbackTileCount")
+    require(readback, "bundle->dlss_output.image")
+    require(readback, "cmd_copy_image_to_buffer(")
+    if "native_output.image" in readback or "output_color_pass" in readback:
+        raise AssertionError("trace readback must never copy Detroit-owned b16")
+    require(adapter_header, "kTraceReadbackTileCount = 5u")
+    require(adapter_header, "TakeCompletedTraceReadback(")
+
+    completion_start = source.index("void TraceFeatureCompletion(")
+    completion_end = source.index("void RecycleCompletedCommandBuffers(", completion_start)
+    completion = source[completion_start:completion_end]
+    require(completion, "TakeCompletedTraceReadback(")
+    recycle_start = completion_end
+    recycle_end = source.index("void RecycleInternalFeatureFence(", recycle_start)
+    recycle = source[recycle_start:recycle_end]
+    completion_call = recycle.index("TraceFeatureCompletion(state, command_buffer)")
+    recycle_call = recycle.index("adapter_runtime.RecycleCommandBuffer(")
+    if completion_call > recycle_call:
+        raise AssertionError("private readback must be consumed before scratch recycle")
+
     evaluate_start = source.index("DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate")
-    configure = source[configure_start:evaluate_start]
-    require(configure, "diagnostic_bypasses_ngx")
-    require(configure, "!diagnostic_bypasses_ngx && !EnsureNgxInitialized")
-    ngx_gate_start = source.index("if (!diagnostic_spatial_output) {")
-    ngx_gate_end = source.index("using renodx::games::detroitbecomehuman::dlss::AdapterPreparedFrame", ngx_gate_start)
-    ngx_gate = source[ngx_gate_start:ngx_gate_end]
-    require(ngx_gate, "EnsureNgxInitialized(state.get())")
-    require(ngx_gate, "state->ngx_context->ConfigureFeature({")
-    require(ngx_gate, "if (configure_result.feature_created)")
+    evaluate_end = source.index("LayerCreateDescriptorSetLayout(", evaluate_start)
+    evaluate = source[evaluate_start:evaluate_end]
+    require(evaluate, "EnsureNgxInitialized(state.get())")
+    require(evaluate, "state->ngx_context->ConfigureFeature({")
+    require(evaluate, "if (configure_result.feature_created)")
+    require(evaluate, "state->ngx_context->Evaluate({")
     require(source, "return NGX_VULKAN_CREATE_DLSS_EXT1(")
     gate_index = source.index("if (!cache_valid)")
     detour_index = source.index("DetourTransactionBegin()", gate_index)
