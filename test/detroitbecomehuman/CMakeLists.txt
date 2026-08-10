@@ -264,6 +264,24 @@ set_tests_properties(detroitbecomehuman_feature_lifetime PROPERTIES
 )
 
 add_renodx_runtime_executable(
+  detroitbecomehuman_ngx_vulkan_core_tests
+  ngx_vulkan_core_tests.cpp
+  renodx_dlss_vulkan
+)
+add_dependencies(
+  renodx_test_suites
+  detroitbecomehuman_ngx_vulkan_core_tests
+)
+
+add_test(
+  NAME detroitbecomehuman_ngx_vulkan_core
+  COMMAND detroitbecomehuman_ngx_vulkan_core_tests
+)
+set_tests_properties(detroitbecomehuman_ngx_vulkan_core PROPERTIES
+  LABELS "detroitbecomehuman;unit;cpu;dlss;vulkan;core;lifetime"
+)
+
+add_renodx_runtime_executable(
   detroitbecomehuman_taa_contract_tests
   taa_contract_tests.cpp
 )
@@ -369,6 +387,7 @@ add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_bridge_contract_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/embedded_bootstrap_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/feature_lifetime_tests.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/ngx_vulkan_core_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dlss_policy_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dof_runtime_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/render_debug_tests.cpp

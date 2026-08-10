@@ -48,6 +48,10 @@ endif()
 
 project(renodx VERSION 0.1.0 LANGUAGES CXX)
 
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  add_subdirectory(src/utils/dlss)
+endif()
+
 option(RENODX_BUILD_TESTS "Build D3D12 regression tests" OFF)
 if(RENODX_BUILD_TESTS)
   enable_testing()

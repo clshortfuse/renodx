@@ -40,6 +40,7 @@ target_include_directories(detroitbecomehuman PRIVATE
   "${CMAKE_CURRENT_BINARY_DIR}/detroitbecomehuman_dlss_embedded.include"
 )
 target_link_libraries(detroitbecomehuman PRIVATE
+  renodx_dlss_vulkan
   Vulkan::Vulkan
   bcrypt
   "$<$<CONFIG:Debug>:${DETROIT_DLSS_NGX_LIB_DIR}/nvsdk_ngx_khr_s_dbg.lib>"
