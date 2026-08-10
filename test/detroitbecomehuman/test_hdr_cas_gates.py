@@ -23,7 +23,12 @@ CAS_MODE_RENODX = 2.0
 
 RUNTIME_FLAG_DLSS_OUTPUT = 1 << 0
 RUNTIME_FLAG_PSYCHOV_BT2020 = 1 << 1
-RUNTIME_FLAG_MASK = RUNTIME_FLAG_DLSS_OUTPUT | RUNTIME_FLAG_PSYCHOV_BT2020
+RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR = 1 << 2
+RUNTIME_FLAG_MASK = (
+    RUNTIME_FLAG_DLSS_OUTPUT
+    | RUNTIME_FLAG_PSYCHOV_BT2020
+    | RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR
+)
 
 
 def _parse_arguments() -> Path:
@@ -252,20 +257,36 @@ class HDRAndCASGateTests(unittest.TestCase):
     def test_runtime_flag_updates_preserve_dlss_and_wide_carrier_bits(self):
         flags = set_runtime_flag(0, RUNTIME_FLAG_PSYCHOV_BT2020, True)
         flags = set_runtime_flag(flags, RUNTIME_FLAG_DLSS_OUTPUT, True)
+        flags = set_runtime_flag(
+            flags, RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR, True
+        )
         self.assertEqual(flags, RUNTIME_FLAG_MASK)
         self.assertTrue(custom_dlss_active(flags))
         self.assertTrue(custom_psychov_bt2020_active(flags))
 
         flags = set_runtime_flag(flags, RUNTIME_FLAG_DLSS_OUTPUT, False)
-        self.assertEqual(flags, RUNTIME_FLAG_PSYCHOV_BT2020)
+        self.assertEqual(
+            flags,
+            RUNTIME_FLAG_PSYCHOV_BT2020
+            | RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR,
+        )
         self.assertFalse(custom_dlss_active(flags))
         self.assertTrue(custom_psychov_bt2020_active(flags))
 
         flags = set_runtime_flag(flags, RUNTIME_FLAG_DLSS_OUTPUT, True)
         flags = set_runtime_flag(flags, RUNTIME_FLAG_PSYCHOV_BT2020, False)
-        self.assertEqual(flags, RUNTIME_FLAG_DLSS_OUTPUT)
+        self.assertEqual(
+            flags,
+            RUNTIME_FLAG_DLSS_OUTPUT
+            | RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR,
+        )
         self.assertTrue(custom_dlss_active(flags))
         self.assertFalse(custom_psychov_bt2020_active(flags))
+
+        flags = set_runtime_flag(
+            flags, RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR, False
+        )
+        self.assertEqual(flags, RUNTIME_FLAG_DLSS_OUTPUT)
 
     def test_final_basis_gate_uses_the_actual_carrier_bit(self):
         self.assertFalse(custom_psychov_bt2020_active(0))
@@ -530,6 +551,10 @@ class HDRAndCASGateTests(unittest.TestCase):
         )
         self.assertRegex(
             runtime_helpers,
+            r"RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR\s*=\s*1u\s*<<\s*2u\s*;",
+        )
+        self.assertRegex(
+            runtime_helpers,
             r"flags\s*=\s*enabled\s*\?\s*"
             r"\(flags\s*\|\s*flag\)\s*:\s*"
             r"\(flags\s*&\s*~flag\)\s*;",
@@ -603,6 +628,11 @@ class HDRAndCASGateTests(unittest.TestCase):
             compact_shared,
             r"#define\s+CUSTOM_DLSS_ACTIVE\s+"
             r"\(\(CUSTOM_RUNTIME_FLAGS\s*&\s*0x1u\)\s*!=\s*0u\)",
+        )
+        self.assertRegex(
+            compact_shared,
+            r"#define\s+CUSTOM_EXPERIMENTAL_MOTION_BLUR\s+"
+            r"\(\(CUSTOM_RUNTIME_FLAGS\s*&\s*0x4u\)\s*!=\s*0u\)",
         )
         self.assertNotIn("CUSTOM_DLAA_SHARPENING", compact_shared)
         self.assertRegex(

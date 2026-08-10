@@ -29,7 +29,8 @@ struct ShaderInjectData {
   float scene_path_active;
   float ui_path_active;
   // Numeric bit mask: bit 0 = DLSS output, bit 1 = this frame carries a
-  // PsychoV BT.2020 intermediate. Integer values 0..3 remain exactly
+  // PsychoV BT.2020 intermediate, bit 2 = experimental motion-blur feather.
+  // Integer values 0..7 remain exactly
   // representable while preserving the reflected 112-byte ABI.
   float runtime_flags;
 
@@ -81,6 +82,8 @@ static_assert(sizeof(ShaderInjectData) == 112u);
 #define CUSTOM_UI_PATH_ACTIVE    shader_injection.ui_path_active
 #define CUSTOM_RUNTIME_FLAGS     uint(max(shader_injection.runtime_flags, 0.f))
 #define CUSTOM_DLSS_ACTIVE       ((CUSTOM_RUNTIME_FLAGS & 0x1u) != 0u)
+#define CUSTOM_EXPERIMENTAL_MOTION_BLUR \
+  ((CUSTOM_RUNTIME_FLAGS & 0x4u) != 0u)
 #ifndef __cplusplus
 float DecodeDofPackedScale(uint code, uint neutral, uint maximum)
 {
@@ -99,8 +102,8 @@ float DecodeDofPackedScale(uint code, uint neutral, uint maximum)
 #define CUSTOM_DOF_RADIUS_SCALE \
   DecodeDofPackedScale( \
       (CUSTOM_DOF_PACKED_BITS >> 10u) & 0x3Fu, 32u, 0x3Fu)
-#define CUSTOM_DOF_EDGE_WIDTH_PIXELS \
-  float((CUSTOM_DOF_PACKED_BITS >> 16u) & 0x1Fu)
+#define CUSTOM_DOF_VANILLA_TRANSITION \
+  (float((CUSTOM_DOF_PACKED_BITS >> 16u) & 0x1Fu) / 31.f)
 #define CUSTOM_DOF_FAR_STRENGTH \
   DecodeDofPackedScale( \
       (CUSTOM_DOF_PACKED_BITS >> 21u) & 0x1Fu, 16u, 0x1Fu)

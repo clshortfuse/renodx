@@ -75,340 +75,61 @@ def validate_retinal_linear_gaussian_math():
         raise AssertionError("maximum paired Retinal fetch count must remain 33")
 
 
-def validate_edge_bokeh_mapping_math():
-    def mapping(width_pixels, far_coc=16.0):
-        radius = width_pixels
-        # Positive Far CoC gates candidate validity and authored color only;
-        # the pixel control itself is an exact geometric reach.
-        local_width = width_pixels if far_coc > 0.0 else 0.0
-        opacity = 0.0 if width_pixels <= 0.0 else 0.60
-        coverage = min(max(far_coc, 0.0), 1.0) * opacity
-        return radius, local_width, coverage
+def validate_vanilla_transition_filter_math():
+    def smoothstep(minimum, maximum, value):
+        t = min(max((value - minimum) / (maximum - minimum), 0.0), 1.0)
+        return t * t * (3.0 - 2.0 * t)
 
-    expected = {
-        0.0: (0.0, 0.0, 0.0),
-        8.0: (8.0, 8.0, 0.60),
-        16.0: (16.0, 16.0, 0.60),
-    }
-    for width_pixels, values in expected.items():
-        actual = mapping(width_pixels)
-        if any(
-            not math.isclose(value, target, rel_tol=0.0, abs_tol=1.0e-12)
-            for value, target in zip(actual, values)
-        ):
-            raise AssertionError("Edge Bokeh 0/8/16 px mapping changed")
-
-    previous = mapping(0.0)
-    for width_pixels in range(1, 17):
-        current = mapping(float(width_pixels))
-        if any(value < prior for value, prior in zip(current, previous)):
-            raise AssertionError("Edge Bokeh mapping must remain monotonic")
-        previous = current
-
-    for far_coc in (0.25, 1.0, 4.0, 8.0, 16.0, 32.0):
-        default_width = mapping(8.0, far_coc)[1]
-        maximum_width = mapping(16.0, far_coc)[1]
-        if not math.isclose(default_width, 8.0):
-            raise AssertionError("default Edge width must remain exactly 8 px")
-        if not math.isclose(maximum_width, 16.0):
-            raise AssertionError("maximum Edge width must remain exactly 16 px")
-
-    def radial_coverage(width_pixels, sample_distance):
-        effective_distance = max(sample_distance - 0.5, 0.0)
-        t = min(
-            max(
-                effective_distance / max(width_pixels, 1.0),
-                0.0,
-            ),
-            1.0,
-        )
-        smooth = t * t * (3.0 - 2.0 * t)
-        return 1.0 - smooth
-
-    for width_pixels in (1.0, 8.0):
-        if radial_coverage(width_pixels, width_pixels) <= 0.0:
-            raise AssertionError("Edge width must reach its final pixel-center ring")
-        if radial_coverage(width_pixels, width_pixels + 1.0) != 0.0:
-            raise AssertionError("Edge width must stop before the next pixel ring")
-
-    # Sixteen equal-angle directions cover the circle at 22.5-degree steps.
-    directions = [
-        (math.cos(index * math.tau / 16.0), math.sin(index * math.tau / 16.0))
-        for index in range(16)
-    ]
-    for index, direction in enumerate(directions):
-        opposite = directions[(index + 8) % 16]
-        if not math.isclose(math.hypot(*direction), 1.0, abs_tol=1.0e-12):
-            raise AssertionError("Edge Bokeh directions must stay normalized")
-        if not (
-            math.isclose(direction[0], -opposite[0], abs_tol=1.0e-12)
-            and math.isclose(direction[1], -opposite[1], abs_tol=1.0e-12)
-        ):
-            raise AssertionError("Edge Bokeh directions must stay isotropic")
-
-    balanced_neighbors = {
-        (round(direction[0]), round(direction[1]))
-        for index, direction in enumerate(directions)
-        if index % 2 == 0
-    }
-    expected_neighbors = {
-        (x, y)
-        for x in (-1, 0, 1)
-        for y in (-1, 0, 1)
-        if x != 0 or y != 0
-    }
-    if balanced_neighbors != expected_neighbors:
-        raise AssertionError(
-            "Balanced Edge rays must cover all eight adjacent pixels at step one"
-        )
-
-    balanced_candidate_bound = 8 * 16
-    high_candidate_bound = 16 * 16
-    if balanced_candidate_bound != 128 or high_candidate_bound != 256:
-        raise AssertionError("Edge Bokeh candidate bounds changed")
-
-    def trace_edge_ray(
-        center_depth,
-        samples,
-        center_far_coc=0.0,
-        threshold=0.01,
-        coc_threshold=0.5,
-        ramp_start_coc=0.0625,
-        ramp_confirm_coc=1.0,
-        ramp_minimum_coc_slope=0.25,
-        ramp_depth_backtrack=0.001,
-        ramp_coc_backtrack=0.0625,
-    ):
-        previous_depth = center_depth
-        previous_far_coc = center_far_coc
-        previous_ramp_valid = False
-        previous_ramp_distance = 0.0
-        previous_ramp_coc = 0.0
-        sample_distance = 0.0
-        for sample_index, (
-            sample_depth,
-            sample_far_coc,
-            step_distance,
-        ) in enumerate(samples):
-            sample_distance += max(step_distance, 1.0)
-            local_gradient = (sample_depth - previous_depth) / (
-                max(abs(sample_depth), abs(previous_depth), 1.0e-4)
-                * max(step_distance, 1.0)
-            )
-            cumulative_gap = (sample_depth - center_depth) / max(
-                abs(sample_depth), abs(center_depth), 1.0e-4
-            )
-            if local_gradient < -threshold:
-                return "nearer-occluder", sample_index, sample_distance, False
-            if cumulative_gap <= 0.0025:
-                previous_ramp_valid = False
-                previous_depth = sample_depth
-                previous_far_coc = sample_far_coc
-                continue
-            far_coc_jump = sample_far_coc - previous_far_coc
-            depth_boundary = local_gradient > threshold
-            coc_boundary = (
-                local_gradient > 0.0 and far_coc_jump >= coc_threshold
-            )
-            if depth_boundary or coc_boundary:
-                return (
-                    (
-                        "far-background"
-                        if sample_far_coc > 0.0
-                        else "midground-block"
-                    ),
-                    sample_index,
-                    sample_distance,
-                    False,
+    for radius, sigma in ((2, 1.25), (3, 1.75)):
+        weights = []
+        for y in range(-radius, radius + 1):
+            for x in range(-radius, radius + 1):
+                weights.append(
+                    math.exp(-0.5 * (x * x + y * y) / (sigma * sigma))
                 )
-            ramp_positive = sample_far_coc >= ramp_start_coc
-            ramp_not_nearer = local_gradient >= -ramp_depth_backtrack
-            ramp_coc_monotonic = (
-                sample_far_coc + ramp_coc_backtrack >= previous_ramp_coc
-            )
-            ramp_coc_steep = (
-                sample_far_coc - center_far_coc
-                >= ramp_minimum_coc_slope * sample_distance
-            )
-            confirmed_ramp = (
-                previous_ramp_valid
-                and ramp_positive
-                and ramp_not_nearer
-                and ramp_coc_monotonic
-                and ramp_coc_steep
-                and sample_far_coc >= ramp_confirm_coc
-            )
-            if confirmed_ramp:
-                return (
-                    "far-background",
-                    sample_index,
-                    previous_ramp_distance,
-                    True,
-                )
-            previous_ramp_valid = ramp_positive and ramp_not_nearer
-            previous_ramp_distance = sample_distance
-            previous_ramp_coc = sample_far_coc
-            previous_depth = sample_depth
-            previous_far_coc = sample_far_coc
-        return "no-discontinuity", None, None, False
+        normalized = [weight / sum(weights) for weight in weights]
+        if not math.isclose(sum(normalized), 1.0, abs_tol=1.0e-12):
+            raise AssertionError("Vanilla transition filter must preserve constant coverage")
+        if max(normalized) >= 1.0 or min(normalized) <= 0.0:
+            raise AssertionError("Vanilla transition filter must distribute every sample")
 
-    curved_foreground = [
-        (1.004, 0.0, 1.0),
-        (1.009, 0.0, 1.0),
-        (1.015, 0.0, 1.0),
-        (2.0, 8.0, 1.0),
-    ]
-    if trace_edge_ray(1.0, curved_foreground)[0] != "far-background":
-        raise AssertionError(
-            "smooth curved foreground must not hide the farther DOF background"
-        )
+    for strength in (0.0, 0.25, 0.5, 1.0):
+        clean = 0.2
+        reconstructed_vanilla = 0.8
+        contribution = clean * (1.0 - strength) + reconstructed_vanilla * strength
+        if not math.isclose(
+            contribution, clean + (reconstructed_vanilla - clean) * strength,
+            rel_tol=0.0, abs_tol=1.0e-12,
+        ):
+            raise AssertionError("Vanilla transition blend must remain linear in the control")
 
-    diagonal_curved_foreground = [
-        (1.011, 0.0, math.sqrt(2.0)),
-        (1.022, 0.0, math.sqrt(2.0)),
-        (2.0, 8.0, 1.0),
-    ]
-    if trace_edge_ray(1.0, diagonal_curved_foreground)[0] != "far-background":
-        raise AssertionError(
-            "diagonal ray spacing must not turn smooth curvature into a layer"
-        )
-
-    close_positive_background = [
-        (1.002, 0.0, 1.0),
-        (1.008, 1.0, 1.0),
-    ]
-    if trace_edge_ray(1.0, close_positive_background)[0] != "far-background":
-        raise AssertionError(
-            "a material Far CoC jump must reveal a close blurred background"
-        )
-
-    gradual_coc_drift = [
-        (1.004, 0.0, 1.0),
-        (1.009, 0.2, 1.0),
-        (1.015, 0.4, 1.0),
-        (1.022, 0.6, 1.0),
-    ]
-    if trace_edge_ray(1.0, gradual_coc_drift)[0] != "no-discontinuity":
-        raise AssertionError(
-            "gradual CoC drift on a curved surface must not become a silhouette"
-        )
-
-    in_focus_midground = [
-        (1.004, 0.0, 1.0),
-        (1.009, 0.0, 1.0),
-        (1.20, 0.0, 1.0),
-        (2.0, 8.0, 1.0),
-    ]
-    if trace_edge_ray(1.0, in_focus_midground)[0] != "midground-block":
-        raise AssertionError(
-            "real in-focus midground discontinuity must block deeper bokeh"
-        )
-
-    confirmed_temporal_ramp = [
-        (1.004, 0.1, 1.0),
-        (1.009, 0.4, 1.0),
-        (1.015, 0.8, 1.0),
-        (1.022, 1.05, 1.0),
-    ]
-    ramp_result = trace_edge_ray(1.0, confirmed_temporal_ramp)
-    if ramp_result != ("far-background", 3, 3.0, True):
-        raise AssertionError(
-            "a confirmed temporal Far CoC ramp must use the preceding boundary distance"
-        )
-
-    isolated_positive = [
-        (1.004, 0.2, 1.0),
-        (1.004, 0.0, 1.0),
-        (1.004, 1.2, 1.0),
-    ]
-    if trace_edge_ray(1.0, isolated_positive)[0] != "no-discontinuity":
-        raise AssertionError(
-            "an isolated positive Far CoC sample must not establish an edge"
-        )
-
-    nearer_occluder = [
-        (0.98, 0.0, 1.0),
-        (2.0, 8.0, 1.0),
-    ]
-    if trace_edge_ray(1.0, nearer_occluder)[0] != "nearer-occluder":
-        raise AssertionError("a nearer surface must stop the temporal ramp search")
-
-    hard_far_boundary = [(1.20, 8.0, 1.0)]
-    if trace_edge_ray(1.0, hard_far_boundary) != (
-        "far-background",
-        0,
-        1.0,
-        False,
-    ):
-        raise AssertionError("a hard Far boundary must remain an immediate result")
-
-    coc_regression = [
-        (1.004, 0.2, 1.0),
-        (1.009, 0.6, 1.0),
-        (1.014, 0.4, 1.0),
-        (1.019, 0.85, 1.0),
-        (1.024, 1.3, 1.0),
-    ]
-    regression_result = trace_edge_ray(1.0, coc_regression)
-    if regression_result != ("far-background", 4, 4.0, True):
-        raise AssertionError(
-            "a CoC regression must discard the old ramp and start a new adjacent pair"
-        )
-
-    long_shallow_drift = [
-        (1.004, 0.1, 1.0),
-        (1.009, 0.2, 1.0),
-        (1.014, 0.3, 1.0),
-        (1.019, 0.4, 1.0),
-        (1.024, 0.8, 1.0),
-        (1.029, 1.05, 1.0),
-    ]
-    drift_result = trace_edge_ray(1.0, long_shallow_drift)
-    if drift_result[0] != "no-discontinuity":
-        raise AssertionError(
-            "a long shallow CoC drift across a curved surface must not become a silhouette"
-        )
-
-    def relative_edge_support(center_far_coc, background_far_coc):
-        return max(
+    def transition_support(far_coc, filtered_coc):
+        far_gradient = max(
+            min((far_coc - filtered_coc) / max(far_coc, 1.0), 1.0),
             0.0,
-            min(
-                1.0,
-                (background_far_coc - center_far_coc)
-                / max(background_far_coc, 1.0),
-            ),
+        )
+        background_blur = smoothstep(0.5, 4.0, far_coc)
+        return (
+            far_gradient
+            * background_blur
+            * (1.0 - smoothstep(4.0, 8.0, far_coc))
         )
 
-    relative_support_cases = (
-        (0.0, 16.0, 1.0),
-        (1.0, 16.0, 0.9375),
-        (8.0, 16.0, 0.5),
-        (16.0, 16.0, 0.0),
-        (8.0, 4.0, 0.0),
-    )
-    for center_far_coc, background_far_coc, expected in relative_support_cases:
-        actual = relative_edge_support(center_far_coc, background_far_coc)
-        if not math.isclose(actual, expected, rel_tol=0.0, abs_tol=1.0e-12):
-            raise AssertionError(
-                "candidate-relative Edge support no longer protects equally "
-                "defocused background"
-            )
-
-    # Sector count and additional radial probes must not change opacity after
-    # the nearest validated background establishes the distance field.
-    for width_pixels in (8.0, 16.0):
-        expected_coverage = mapping(width_pixels)[2]
-        for supported_sector_count in (1, 2, 4, 8):
-            actual_coverage = max([1.0] * supported_sector_count) * 0.60
-            if not math.isclose(
-                actual_coverage,
-                expected_coverage,
-                rel_tol=0.0,
-                abs_tol=1.0e-12,
-            ):
-                raise AssertionError(
-                    "Edge Bokeh sectors and rings must not multiply opacity"
-                )
+    for uniform_coc in (0.0, 2.0, 8.0):
+        if transition_support(uniform_coc, uniform_coc) != 0.0:
+            raise AssertionError("uniform full-resolution CoC must not blur gameplay")
+    if not math.isclose(transition_support(4.0, 2.0), 0.5, abs_tol=1.0e-12):
+        raise AssertionError(
+            "the full-resolution far-side gradient must retain the Vanilla-like transition"
+        )
+    if transition_support(2.0, 1.0) >= transition_support(4.0, 2.0):
+        raise AssertionError("transition support must grow with actual background blur")
+    if transition_support(0.0, 4.0) != 0.0:
+        raise AssertionError("the foreground side must not create a symmetric outline")
+    if transition_support(0.5, 0.25) != 0.0:
+        raise AssertionError("an almost-focused background must not create a fixed halo")
+    if transition_support(8.0, 4.0) != 0.0:
+        raise AssertionError("deep Far CoC must return to the depth-aware Cinematic path")
 
 
 def main():
@@ -457,7 +178,7 @@ def main():
     )
     require(
         addon,
-        r"PackRuntimePayload\([\s\S]*?focus_distance_percent[\s\S]*?blur_radius_percent[\s\S]*?far_strength_percent[\s\S]*?edge_bokeh_width_pixels",
+        r"PackRuntimePayload\([\s\S]*?focus_distance_percent[\s\S]*?blur_radius_percent[\s\S]*?far_strength_percent[\s\S]*?vanilla_transition_percent",
         "remaining DOF controls must be packed into the existing 112-byte payload",
     )
     if "near_strength_percent" in dof_runtime or "near_strength_percent" in addon:
@@ -466,12 +187,12 @@ def main():
         raise AssertionError("Foreground Bokeh must not be exposed in RenoDX settings")
     require(
         dof_runtime,
-        r"kEdgeWidthShift\s*=\s*16u[\s\S]*?kEdgeWidthMask\s*=\s*0x1Fu"
-        r"[\s\S]*?kEdgeWidthDefault\s*=\s*8u[\s\S]*?kEdgeWidthMaximum\s*=\s*16u"
+        r"kVanillaTransitionShift\s*=\s*16u[\s\S]*?kVanillaTransitionMask\s*=\s*0x1Fu"
+        r"[\s\S]*?kVanillaTransitionDefault\s*=[\s\S]*?kVanillaTransitionMask"
         r"[\s\S]*?kReservedEdgeShift\s*=\s*26u[\s\S]*?kReservedEdgeMask\s*=\s*0xFu"
-        r"[\s\S]*?QuantizeEdgeWidthPixels\(controls\.edge_bokeh_width_pixels\)"
-        r"[\s\S]*?<<\s*kEdgeWidthShift",
-        "former foreground-control bits must encode exact Edge pixels while old Edge bits remain reserved",
+        r"[\s\S]*?QuantizeVanillaTransition\(controls\.vanilla_transition_percent\)"
+        r"[\s\S]*?<<\s*kVanillaTransitionShift",
+        "former foreground-control bits must encode the Vanilla transition while old Edge bits remain reserved",
     )
     for key in (
         "DepthOfFieldFocusDistance",
@@ -485,22 +206,26 @@ def main():
         )
     require(
         addon,
-        r'\.key\s*=\s*"DepthOfFieldEdgeBokehWidth"'
-        r"[\s\S]*?SettingValueType::INTEGER"
-        r"[\s\S]*?\.default_value\s*=\s*8\.f"
-        r"[\s\S]*?\.min\s*=\s*0\.f[\s\S]*?\.max\s*=\s*16\.f"
-        r"[\s\S]*?\.format\s*=\s*\"%\.0f px\""
+        r'\.key\s*=\s*"DepthOfFieldVanillaTransition"'
+        r"[\s\S]*?\.default_value\s*=\s*100\.f"
+        r"[\s\S]*?\.min\s*=\s*0\.f[\s\S]*?\.max\s*=\s*100\.f"
+        r"[\s\S]*?\.format\s*=\s*\"%\.0f%%\""
         r"[\s\S]*?\.is_enabled\s*=\s*\[\]\(\)\s*\{\s*return\s+dof_mode\s*>=\s*1\.5f",
-        "Edge Bokeh Width UI must expose exact 0..16 px with an 8 px default",
+        "Vanilla Transition Blend UI must expose 0..100 percent with a neutral default",
     )
     require(
         addon,
-        r'\.key\s*=\s*"DepthOfFieldEdgeBokehWidth"'
-        r"[\s\S]*?maximum full-resolution reach",
-        "Edge Bokeh tooltip must identify the full-resolution pixel reach",
+        r'\.key\s*=\s*"DepthOfFieldVanillaTransition"'
+        r"[\s\S]*?full-resolution Gaussian CoC gradient"
+        r"[\s\S]*?Half-resolution far alpha only validates color samples"
+        r"[\s\S]*?never controls visibility"
+        r"[\s\S]*?actual background CoC controls reach and strength",
+        "Vanilla Transition tooltip must identify the reconstructed authored transition boundary",
     )
     if re.search(r'\.key\s*=\s*"DepthOfFieldEdgeBokeh"\s*,', addon):
         raise AssertionError("legacy percentage Edge Bokeh key must not remain active")
+    if "DepthOfFieldEdgeBokehWidth" in addon:
+        raise AssertionError("geometric Edge Bokeh Width must not remain active")
     for key in (
         "RetinalFixationX",
         "RetinalFixationY",
@@ -590,239 +315,75 @@ def main():
         r"farLayer\.xyz[\s\S]*?farSupport[\s\S]*?smoothstep\(5\.0,\s*8\.0,\s*farCoc\)",
         "Cinematic must restore authored hidden-background and deep-bokeh color",
     )
-    if "expandedEdgeBlur" in sources["0xAC7A8193"] or re.search(
-        r"1\.0\s*\+\s*0\.5\s*\*\s*edgeFactor\s*\*\s*edgeScale",
+    require(
         sources["0xAC7A8193"],
+        r"ResolveSmoothedVanillaFarTransition\([\s\S]*?fullRadius\s*=\s*highQuality\s*\?\s*3\s*:\s*2"
+        r"[\s\S]*?cocSigmaStrength\s*=\s*smoothstep\(0\.5,\s*8\.0,\s*farCoc\)"
+        r"[\s\S]*?fullSigma\s*=\s*mix\(0\.65,\s*maximumFullSigma,\s*cocSigmaStrength\)"
+        r"[\s\S]*?texelFetch\(depthMap,\s*sampleFullPixel,\s*0\)"
+        r"[\s\S]*?filteredFullResolutionCoc\s*=\s*fullSpatialWeightSum\s*>\s*0\.0"
+        r"[\s\S]*?fullResolutionFarGradient\s*=\s*clamp\("
+        r"[\s\S]*?farCoc\s*-\s*filteredFullResolutionCoc"
+        r"[\s\S]*?backgroundBlurStrength\s*=\s*smoothstep\(0\.5,\s*4\.0,\s*farCoc\)"
+        r"[\s\S]*?colorRadius\s*=\s*highQuality\s*\?\s*3\s*:\s*2"
+        r"[\s\S]*?FarDofMap[\s\S]*?sampleValue\.w"
+        r"[\s\S]*?colorWeight\s*=\s*spatialWeight\s*\*\s*alpha"
+        r"[\s\S]*?fullResolutionCoverage\s*=\s*clamp\(farCoc,\s*0\.0,\s*1\.0\)"
+        r"[\s\S]*?transitionSupport\s*=\s*fullResolutionFarGradient"
+        r"[\s\S]*?smoothstep\(4\.0,\s*8\.0,\s*farCoc\)",
+        "Cinematic must derive a temporally stable transition from full-resolution CoC",
+    )
+    transition_match = re.search(
+        r"vec3\s+ResolveSmoothedVanillaFarTransition\([\s\S]*?\n\}"
+        r"(?=\n\nvec2\s+ResolveGatherFillCoverage)",
+        sources["0xAC7A8193"],
+    )
+    if transition_match is None:
+        raise AssertionError("filtered Vanilla transition helper is missing")
+    for forbidden in (
+        "coarse",
+        "CocCompatibility",
+        "SampleFarCoverageBilinear",
+        "filteredAlpha",
+        "authoredFarGradient",
     ):
-        raise AssertionError(
-            "Edge Bokeh must alter final coverage, not rerun or resize the aperture"
-        )
+        if forbidden in transition_match.group(0):
+            raise AssertionError(
+                f"filtered Vanilla transition must not restore a block or depth gate: {forbidden}"
+            )
     require(
         sources["0xAC7A8193"],
-        r"ResolveFarEdgeIntrusion\([\s\S]*?float\s+centerFarCoc"
-        r"[\s\S]*?previousDepth\s*=\s*centerDepth"
-        r"[\s\S]*?previousFarCoc\s*=\s*centerFarCoc"
-        r"[\s\S]*?length\(vec2\(offset\)\)"
-        r"[\s\S]*?sampleDepth\s*-\s*previousDepth"
-        r"[\s\S]*?localDepthGap\s*<\s*-kFarEdgeSurfaceDiscontinuity"
-        r"[\s\S]*?break"
-        r"[\s\S]*?cumulativeCenterDepthGap\s*<=\s*0\.0025"
-        r"[\s\S]*?previousDepth\s*=\s*sampleDepth"
-        r"[\s\S]*?continue"
-        r"[\s\S]*?ComputeFarCoc16\(sampleDepth\)"
-        r"[\s\S]*?farCocJump\s*=\s*sampleFarCoc\s*-\s*previousFarCoc"
-        r"[\s\S]*?if\s*\(depthBoundary\s*\|\|\s*cocBoundary\)"
-        r"[\s\S]*?sampleFarCoc\s*<=\s*0\.0"
-        r"[\s\S]*?break"
-        r"[\s\S]*?ComputeFarEdgeCandidateCoverage\("
-        r"[\s\S]*?ClassifyFarEdgeSector\(offset\)"
-        r"[\s\S]*?sampleDistance\s*\+\s*1\.0e-4"
-        r"[\s\S]*?<\s*bestDistance\[sector\]"
-        r"[\s\S]*?authoredFar\.w\s*<=\s*0\.0"
-        r"[\s\S]*?ResolveFarEdgeFallbackColor\("
-        r"[\s\S]*?farColorWeight\s*\+=\s*sectorCoverage"
-        r"[\s\S]*?nearestCoverage\s*=\s*max\(nearestCoverage,\s*sectorCoverage\)"
-        r"[\s\S]*?directionalSupport\s*=\s*clamp\(nearestCoverage",
-        "Edge Bokeh rays must cross smooth curvature locally, stop at real occluders, and use the nearest farther sample per sector",
+        r"vanillaTransitionControl\s*=\s*cinematic"
+        r"[\s\S]*?CUSTOM_DOF_VANILLA_TRANSITION"
+        r"[\s\S]*?if\s*\(vanillaTransitionControl\s*>\s*0\.0\)"
+        r"[\s\S]*?ResolveSmoothedVanillaFarTransition\("
+        r"[\s\S]*?vanillaTransitionControl\s*\*\s*vanillaTransitionSupport"
+        r"[\s\S]*?transitionResult\s*=\s*mix\("
+        r"[\s\S]*?finalVanillaTransition\s*=\s*vanillaTransitionBlend"
+        r"[\s\S]*?deepLayerWeight"
+        r"[\s\S]*?finalVanillaTransition\s*\*=\s*1\.0\s*-\s*deepLayerWeight",
+        "Cinematic must skip disabled transition work and blend the filtered result over Clean before the deep layer",
     )
     require(
         sources["0xAC7A8193"],
-        r"CoarseFarMayReach\([\s\S]*?dofPrepassCocMap"
-        r"[\s\S]*?\.y\s*>\s*0\.0[\s\S]*?return\s+true"
-        r"[\s\S]*?!CoarseFarMayReach",
-        "coarse Far CoC may only provide a conservative Edge Bokeh early-out",
-    )
-    require(
-        sources["0xAC7A8193"],
-        r"nativeFocusClassification\s*=\s*"
-        r"[\s\S]*?CUSTOM_DOF_FOCUS_SCALE\s*-\s*1\.0"
-        r"[\s\S]*?if\s*\(nativeFocusClassification"
-        r"[\s\S]*?&&\s*!CoarseFarMayReach",
-        "native coarse CoC may reject Edge Bokeh only at the authored focus distance",
-    )
-    require(
-        sources["0xAC7A8193"],
-        r"ComputeFarEdgeCandidateCoverage\([\s\S]*?farActivation\s*=\s*clamp\(sampleFarCoc,\s*0\.0,\s*1\.0\)"
-        r"[\s\S]*?localEdgeWidth\s*=\s*edgeWidthPixels"
-        r"[\s\S]*?effectiveDistance\s*=\s*max\(sampleDistance\s*-\s*0\.5,\s*0\.0\)"
-        r"[\s\S]*?normalizedDistance\s*=\s*clamp\("
-        r"[\s\S]*?effectiveDistance\s*/\s*max\(localEdgeWidth,\s*1\.0\)"
-        r"[\s\S]*?radialCoverage\s*=\s*1\.0\s*-\s*smoothstep\("
-        r"[\s\S]*?return\s+farActivation\s*\*\s*radialCoverage"
-        r"[\s\S]*?maximumSearchRadius\s*=\s*edgeWidthPixels"
-        r"[\s\S]*?const\s+float\s+edgeOpacity\s*=\s*0\.60",
-        "Edge Bokeh Width must use nearest-background coverage with a full-width smooth fade",
+        r"RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTROL"
+        r"[\s\S]*?CUSTOM_DOF_VANILLA_TRANSITION"
+        r"[\s\S]*?RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTRIBUTION"
+        r"[\s\S]*?debugValue\.x\s*=\s*finalVanillaTransition",
+        "Render Debug must expose the decoded Vanilla transition and its final contribution",
     )
     for forbidden in (
-        "kFarEdgeDenseNearRadius",
-        "kFarEdgeDenseNearSearchRadius",
+        "ResolveFarEdgeIntrusion",
+        "ComputeFarEdgeCandidateCoverage",
+        "kFarEdge",
+        "edgeWidthPixels",
+        "CUSTOM_DOF_EDGE_WIDTH_PIXELS",
     ):
         if forbidden in sources["0xAC7A8193"]:
             raise AssertionError(
-                "unordered dense Edge dilation must not bypass first-surface occlusion"
+                f"geometric Edge Bokeh must not remain in Cinematic: {forbidden}"
             )
-    require(
-        sources["0xAC7A8193"],
-        r"kFarEdgeUnitDirections\[16\]"
-        r"[\s\S]*?kFarEdgeMaximumRadialSteps\s*=\s*16"
-        r"[\s\S]*?directionIndex\s*=\s*0"
-        r"[\s\S]*?directionIndex\s*<\s*16"
-        r"[\s\S]*?!highQuality\s*&&\s*\(directionIndex\s*&\s*1\)"
-        r"[\s\S]*?radialStep\s*=\s*1"
-        r"[\s\S]*?radialStep\s*<=\s*kFarEdgeMaximumRadialSteps",
-        "Edge Bokeh search must remain bounded to 128 Balanced or 256 High ordered probes",
-    )
-    require(
-        sources["0xAC7A8193"],
-        r"kFarEdgeSurfaceDiscontinuity\s*=\s*0\.01"
-        r"[\s\S]*?kFarEdgeCocDiscontinuity\s*=\s*0\.5"
-        r"[\s\S]*?localStepDistance\s*=\s*max\("
-        r"[\s\S]*?length\(vec2\(offset\s*-\s*previousOffset\)\),\s*1\.0\)"
-        r"[\s\S]*?localDepthGap\s*=\s*\(sampleDepth\s*-\s*previousDepth\)"
-        r"[\s\S]*?\*\s*localStepDistance"
-        r"[\s\S]*?cumulativeCenterDepthGap\s*=\s*\(sampleDepth\s*-\s*centerDepth\)"
-        r"[\s\S]*?cumulativeCenterDepthGap\s*<=\s*0\.0025"
-        r"[\s\S]*?sampleFarCoc\s*=\s*ComputeFarCoc16\(sampleDepth\)"
-        r"[\s\S]*?farCocJump\s*=\s*sampleFarCoc\s*-\s*previousFarCoc"
-        r"[\s\S]*?depthBoundary\s*="
-        r"[\s\S]*?localDepthGap\s*>\s*kFarEdgeSurfaceDiscontinuity"
-        r"[\s\S]*?cocBoundary\s*=\s*localDepthGap\s*>\s*0\.0"
-        r"[\s\S]*?farCocJump\s*>=\s*kFarEdgeCocDiscontinuity"
-        r"[\s\S]*?if\s*\(depthBoundary\s*\|\|\s*cocBoundary\)"
-        r"[\s\S]*?previousDepth\s*=\s*sampleDepth"
-        r"[\s\S]*?previousFarCoc\s*=\s*sampleFarCoc",
-        "Edge rays must cross smooth depth and CoC drift while detecting real discontinuities",
-    )
-    require(
-        sources["0xAC7A8193"],
-        r"if\s*\(depthBoundary\s*\|\|\s*cocBoundary\)"
-        r"[\s\S]*?if\s*\(sampleFarCoc\s*<=\s*0\.0\)"
-        r"[\s\S]*?break;"
-        r"[\s\S]*?candidateCoverage\s*>\s*0\.0"
-        r"[\s\S]*?bestCoverage\[sector\]"
-        r"[\s\S]*?\}\s*break;",
-        "each real Edge discontinuity must stop at its first in-focus or blurred surface",
-    )
-    require(
-        sources["0xAC7A8193"],
-        r"kFarEdgeRampStartCoc\s*=\s*0\.0625"
-        r"[\s\S]*?kFarEdgeRampConfirmCoc\s*=\s*1\.0"
-        r"[\s\S]*?kFarEdgeRampMinimumCocSlope\s*=\s*0\.25"
-        r"[\s\S]*?kFarEdgeRampDepthBacktrackTolerance\s*=\s*0\.001"
-        r"[\s\S]*?kFarEdgeRampCocBacktrackTolerance\s*=\s*0\.0625"
-        r"[\s\S]*?previousRampValid\s*=\s*false"
-        r"[\s\S]*?cumulativeCenterDepthGap\s*<=\s*0\.0025"
-        r"[\s\S]*?previousRampValid\s*=\s*false"
-        r"[\s\S]*?if\s*\(depthBoundary\s*\|\|\s*cocBoundary\)"
-        r"[\s\S]*?bool\s+rampPositive\s*=\s*sampleFarCoc\s*>=\s*kFarEdgeRampStartCoc"
-        r"[\s\S]*?localDepthGap\s*>=\s*-kFarEdgeRampDepthBacktrackTolerance"
-        r"[\s\S]*?sampleFarCoc[\s\S]*?\+\s*kFarEdgeRampCocBacktrackTolerance\s*>=\s*previousRampCoc"
-        r"[\s\S]*?rampCocSteep\s*=\s*sampleFarCoc\s*-\s*centerFarCoc"
-        r"[\s\S]*?>=\s*kFarEdgeRampMinimumCocSlope\s*\*\s*sampleDistance"
-        r"[\s\S]*?previousRampValid[\s\S]*?rampCocSteep"
-        r"[\s\S]*?sampleFarCoc\s*>=\s*kFarEdgeRampConfirmCoc"
-        r"[\s\S]*?candidateDistance\s*=\s*previousRampDistance"
-        r"[\s\S]*?bestPixel\[sector\]\s*=\s*samplePixel"
-        r"[\s\S]*?bestFarCoc\[sector\]\s*=\s*sampleFarCoc"
-        r"[\s\S]*?bestDistance\[sector\]\s*=\s*candidateDistance"
-        r"[\s\S]*?previousRampValid\s*=\s*rampPositive\s*&&\s*rampNotNearer",
-        "TAA-smoothed Far ramps must use a bounded sliding two-sample confirmation",
-    )
-    require(
-        sources["0xAC7A8193"],
-        r"if\s*\(cinematic\s*&&\s*edgeWidthPixels\s*>\s*0\.0\)"
-        r"[\s\S]*?ResolveFarEdgeIntrusion\("
-        r"[\s\S]*?centerDepth,\s*farCoc,\s*edgeWidthPixels"
-        r"[\s\S]*?farCoverage\s*=\s*clamp"
-        r"[\s\S]*?edgeIntrusion\.w\s*\*\s*CUSTOM_DOF_FAR_STRENGTH"
-        r"[\s\S]*?farResult\s*=\s*mix",
-        "Cinematic must apply far-only Edge Bokeh to final coverage after its depth-aware resolve",
-    )
-    if "focusedCenter" in sources["0xAC7A8193"]:
-        raise AssertionError(
-            "absolute center CoC must not detach Edge Bokeh from a filtered silhouette"
-        )
-    require(
-        sources["0xAC7A8193"],
-        r"relativeCocSupport\s*=\s*clamp\("
-        r"[\s\S]*?bestFarCoc\[sector\]\s*-\s*centerFarCoc"
-        r"[\s\S]*?/\s*max\(bestFarCoc\[sector\],\s*1\.0\)"
-        r"[\s\S]*?sectorCoverage\s*=\s*bestCoverage\[sector\]\s*\*\s*relativeCocSupport"
-        r"[\s\S]*?nearestCoverage\s*=\s*max\(nearestCoverage,\s*sectorCoverage\)",
-        "Edge Bokeh must suppress equal-depth background per selected Far candidate",
-    )
-    require(
-        sources["0xAC7A8193"],
-        r"farLayer\s*=\s*cinematic\s*\?\s*\(highQuality"
-        r"[\s\S]*?ResolveFarHigh\(dofPosition,\s*farCoc,\s*sharpColor\)"
-        r"[\s\S]*?:\s*ResolveFarBalanced\(dofPosition,\s*farCoc,\s*sharpColor\)",
-        "Cinematic High must use the High far-layer resolve",
-    )
-    if "directionCoverageSum" in sources["0xAC7A8193"]:
-        raise AssertionError(
-            "Edge coverage must not depend on the number of visible sectors"
-        )
-    if "centerNearCoc" in sources["0xAC7A8193"]:
-        raise AssertionError("near CoC must not suppress farther Edge Bokeh intrusion")
-    require(
-        sources["0xAC7A8193"],
-        r"out\s+float\s+finalEdgeCoverage"
-        r"[\s\S]*?finalEdgeCoverage\s*=\s*0\.0"
-        r"[\s\S]*?farCoverage\s*=\s*clamp"
-        r"[\s\S]*?finalEdgeCoverage\s*=\s*farCoverage"
-        r"[\s\S]*?RENDER_DEBUG_SOURCE_DOF_EDGE_CONTROL"
-        r"[\s\S]*?CUSTOM_DOF_EDGE_WIDTH_PIXELS"
-        r"[\s\S]*?RENDER_DEBUG_SOURCE_DOF_EDGE_COVERAGE"
-        r"[\s\S]*?debugValue\.x\s*=\s*finalEdgeCoverage",
-        "Render Debug must expose decoded Edge Bokeh and the exact final mix coverage without recomputing it",
-    )
-    require(
-        sources["0xAC7A8193"],
-        r"authoredFar\s*=\s*highQuality"
-        r"[\s\S]*?ResolveFarHigh\([\s\S]*?:\s*ResolveFarBalanced\("
-        r"[\s\S]*?farColorSum\s*\+=\s*directionColor",
-        "Edge Bokeh must stably combine every supported direction with the selected depth-aware upsample",
-    )
-    for forbidden in ("strongestPixel", "farCoverageSum"):
-        if forbidden in sources["0xAC7A8193"]:
-            raise AssertionError(
-                f"Edge Bokeh must not use winner-take-all or ring-count coverage: {forbidden}"
-            )
-    edge_start = sources["0xAC7A8193"].index("vec4 ResolveFarEdgeIntrusion")
-    edge_end = sources["0xAC7A8193"].index("vec3 CompositeVanilla", edge_start)
-    edge_source = sources["0xAC7A8193"][edge_start:edge_end]
-    hard_boundary_index = edge_source.index("if (depthBoundary || cocBoundary)")
-    ramp_fallback_index = edge_source.index("bool confirmedRamp")
-    if hard_boundary_index >= ramp_fallback_index:
-        raise AssertionError(
-            "hard first-surface occlusion must run before the temporal ramp fallback"
-        )
-    if edge_source.count("texelFetch(depthMap, samplePixel, 0)") != 1:
-        raise AssertionError(
-            "temporal ramp confirmation must not add another depth texture fetch"
-        )
-    if "farSample.w" in edge_source:
-        raise AssertionError(
-            "Edge coverage must not depend on R8 availability"
-        )
-    selection_end = edge_source.index("vec3 farColorSum")
-    if ".w" in edge_source[:selection_end]:
-        raise AssertionError(
-            "Edge candidate selection and coverage must not read any layer alpha"
-        )
-    if "ResolveFullResolutionFar" in edge_source:
-        raise AssertionError(
-            "Edge color fallback must not repeat the full 49x4 aperture resolve per sector"
-        )
-    require(
-        sources["0xAC7A8193"],
-        r"ClassifyFarEdgeSector\([\s\S]*?kTanHalfSector\s*=\s*0\.41421356237"
-        r"[\s\S]*?ResolveFarEdgeFallbackColor\("
-        r"[\s\S]*?offsetY\s*=\s*-1[\s\S]*?offsetY\s*<=\s*1"
-        r"[\s\S]*?CocCompatibility\(sourceCoc,\s*sampleFarCoc\)",
-        "Edge sectors must have equal angular width and a bounded 3x3 full-resolution fallback",
-    )
-    validate_edge_bokeh_mapping_math()
+    validate_vanilla_transition_filter_math()
     if "farLayer.w" in sources["0xAC7A8193"]:
         raise AssertionError("Cinematic must not restore the low-resolution far alpha mask")
 

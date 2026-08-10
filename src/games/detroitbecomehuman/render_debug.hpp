@@ -29,7 +29,7 @@ enum class DashboardPreset : std::uint32_t {
   kRetinal,
   kCustom,
   // Appended so saved values for every established dashboard stay stable.
-  kDofEdge,
+  kDofVanillaTransition,
 };
 
 // Keep source values within five bits. These values are mirrored by
@@ -54,8 +54,8 @@ enum class Source : std::uint32_t {
   kRetinalEccentricity = 16u,
   kRetinalNyquist = 17u,
   kRetinalRadius = 18u,
-  kDofEdgeControl = 19u,
-  kDofEdgeCoverage = 20u,
+  kDofVanillaTransitionControl = 19u,
+  kDofVanillaTransitionContribution = 20u,
 };
 
 enum class Channel : std::uint32_t {
@@ -159,8 +159,8 @@ inline constexpr std::array<SourceContract, 21u> kSourceContracts = {{
     {Source::kRetinalEccentricity, "Retinal Eccentricity (Unavailable)", ProducerPass::kSceneComposite, Access::kUnavailable, Decoder::kUnavailable, Channel::kAuto, Mapping::kAuto, 0.f, 1.f, {}},
     {Source::kRetinalNyquist, "Retinal Nyquist (Unavailable)", ProducerPass::kSceneComposite, Access::kUnavailable, Decoder::kUnavailable, Channel::kAuto, Mapping::kAuto, 0.f, 1.f, {}},
     {Source::kRetinalRadius, "Retinal Radius (Unavailable)", ProducerPass::kSceneComposite, Access::kUnavailable, Decoder::kUnavailable, Channel::kAuto, Mapping::kAuto, 0.f, 1.f, {}},
-    {Source::kDofEdgeControl, "DOF Edge Bokeh Width (px)", ProducerPass::kDofComposite, Access::kDerivedInline, Decoder::kScalar, Channel::kRed, Mapping::kLinear, 0.f, 16.f, {kDofCompositeShaderCrc, 0u, 52u}},
-    {Source::kDofEdgeCoverage, "DOF Final Edge Coverage", ProducerPass::kDofComposite, Access::kDerivedInline, Decoder::kScalar, Channel::kRed, Mapping::kLinear, 0.f, 1.f, {kDofCompositeShaderCrc, 0u, 3u}},
+    {Source::kDofVanillaTransitionControl, "DOF Vanilla Transition Control", ProducerPass::kDofComposite, Access::kDerivedInline, Decoder::kScalar, Channel::kRed, Mapping::kLinear, 0.f, 1.f, {kDofCompositeShaderCrc, 0u, 52u}},
+    {Source::kDofVanillaTransitionContribution, "DOF Final Vanilla Transition", ProducerPass::kDofComposite, Access::kDerivedInline, Decoder::kScalar, Channel::kRed, Mapping::kLinear, 0.f, 1.f, {kDofCompositeShaderCrc, 0u, 3u}},
 }};
 
 [[nodiscard]] constexpr const SourceContract& GetSourceContract(
@@ -227,10 +227,10 @@ struct ResolvedOverlay {
               Source::kRetinalRadius};
     case DashboardPreset::kCustom:
       return custom_slots;
-    case DashboardPreset::kDofEdge:
+    case DashboardPreset::kDofVanillaTransition:
       return {Source::kDofFullResolutionCoc,
-              Source::kDofEdgeControl,
-              Source::kDofEdgeCoverage};
+              Source::kDofVanillaTransitionControl,
+              Source::kDofVanillaTransitionContribution};
   }
   return {};
 }

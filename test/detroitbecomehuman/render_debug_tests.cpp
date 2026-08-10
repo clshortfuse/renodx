@@ -43,14 +43,16 @@ bool TestPresetResolution() {
 
   resolved = debug::Resolve({
       .mode = debug::OverlayMode::kDashboard,
-      .dashboard = debug::DashboardPreset::kDofEdge,
+      .dashboard = debug::DashboardPreset::kDofVanillaTransition,
   });
   passed &= Expect(
       resolved.slot_count == 3u
           && resolved.slots[0u] == debug::Source::kDofFullResolutionCoc
-          && resolved.slots[1u] == debug::Source::kDofEdgeControl
-          && resolved.slots[2u] == debug::Source::kDofEdgeCoverage,
-      "Edge dashboard must expose CoC, decoded control, and final coverage");
+          && resolved.slots[1u]
+                 == debug::Source::kDofVanillaTransitionControl
+          && resolved.slots[2u]
+                 == debug::Source::kDofVanillaTransitionContribution,
+      "Vanilla-transition dashboard must expose CoC, decoded control, and final contribution");
 
   const std::array custom = {
       debug::Source::kSceneLuminance,
@@ -129,26 +131,27 @@ bool TestSourceContracts() {
       far.binding.shader_crc == debug::kDofCompositeShaderCrc
           && far.binding.binding == 5u,
       "DOF far gather/fill layer must retain composite binding 5");
-  const auto& edge_control = debug::GetSourceContract(
-      debug::Source::kDofEdgeControl);
-  const auto& edge_coverage = debug::GetSourceContract(
-      debug::Source::kDofEdgeCoverage);
+  const auto& transition_control = debug::GetSourceContract(
+      debug::Source::kDofVanillaTransitionControl);
+  const auto& transition_contribution = debug::GetSourceContract(
+      debug::Source::kDofVanillaTransitionContribution);
   passed &= Expect(
-      edge_control.IsAvailable()
-          && edge_control.access == debug::Access::kDerivedInline
-          && edge_control.decoder == debug::Decoder::kScalar
-          && edge_control.default_channel == debug::Channel::kRed
-          && edge_control.range_min == 0.f
-          && edge_control.range_max == 16.f,
-      "Edge control must expose the shader-decoded 0..16 px width");
+      transition_control.IsAvailable()
+          && transition_control.access == debug::Access::kDerivedInline
+          && transition_control.decoder == debug::Decoder::kScalar
+          && transition_control.default_channel == debug::Channel::kRed
+          && transition_control.range_min == 0.f
+          && transition_control.range_max == 1.f,
+      "Vanilla-transition control must expose the shader-decoded 0..1 strength");
   passed &= Expect(
-      edge_coverage.IsAvailable()
-          && edge_coverage.producer == debug::ProducerPass::kDofComposite
-          && edge_coverage.access == debug::Access::kDerivedInline
-          && edge_coverage.decoder == debug::Decoder::kScalar
-          && edge_coverage.range_min == 0.f
-          && edge_coverage.range_max == 1.f,
-      "Edge coverage must expose the final post-resolve 0..1 mix weight");
+      transition_contribution.IsAvailable()
+          && transition_contribution.producer
+                 == debug::ProducerPass::kDofComposite
+          && transition_contribution.access == debug::Access::kDerivedInline
+          && transition_contribution.decoder == debug::Decoder::kScalar
+          && transition_contribution.range_min == 0.f
+          && transition_contribution.range_max == 1.f,
+      "Vanilla transition must expose the final post-resolve 0..1 contribution");
   passed &= Expect(
       !debug::GetSourceContract(debug::Source::kGtao).IsAvailable()
           && !debug::GetSourceContract(

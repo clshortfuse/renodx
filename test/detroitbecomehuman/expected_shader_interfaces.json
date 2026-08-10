@@ -161,6 +161,24 @@
         { "kind": "ubos", "set": 0, "binding": 1, "block_size": 16 }
       ]
     },
+    "0xC03380A0": {
+      "stage": "comp",
+      "entry_point": "main",
+      "workgroup_size": [8, 8, 1],
+      "inputs": [],
+      "outputs": [],
+      "descriptors": [
+        { "kind": "textures", "set": 0, "binding": 0, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 1, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 2, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 3, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 4, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 5, "type": "sampler2D" },
+        { "kind": "textures", "set": 0, "binding": 6, "type": "sampler2D" },
+        { "kind": "images", "set": 0, "binding": 16, "type": "image2D", "format": "rgba16f", "writeonly": true },
+        { "kind": "ubos", "set": 0, "binding": 52, "block_size": 112 }
+      ]
+    },
     "0xEBFBDDB1": {
       "stage": "comp",
       "entry_point": "main",

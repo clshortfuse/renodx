@@ -59,6 +59,16 @@ set_tests_properties(detroitbecomehuman_dof_contract PROPERTIES
   LABELS "detroitbecomehuman;contract;cpu;dof;vulkan"
 )
 
+add_test(
+  NAME detroitbecomehuman_motion_blur_contract
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/test_motion_blur_contract.py
+          --source-dir ${DETROIT_TEST_SOURCE_DIR}
+)
+set_tests_properties(detroitbecomehuman_motion_blur_contract PROPERTIES
+  LABELS "detroitbecomehuman;contract;cpu;motion_blur;dof;vulkan"
+)
+
 add_renodx_runtime_executable(
   detroitbecomehuman_ultrawide_patch_tests
   ultrawide_patch_tests.cpp
@@ -370,6 +380,7 @@ add_custom_target(detroitbecomehuman_test_sources SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/taa_contract_tests.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_hdr_cas_gates.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_dof_contract.py
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_motion_blur_contract.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_embedded_hook_contract.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_psychov_contract.py
   ${CMAKE_CURRENT_SOURCE_DIR}/test_ui_brightness_gates.py

@@ -54,6 +54,9 @@ inline constexpr std::array<std::uint8_t, 32u> kExecutableSha256 = {
 inline constexpr std::uint32_t kTemporalAaShaderCrc = 0xB5506A45u;
 inline constexpr std::uint32_t kObservedTemporalAaModuleSize = 37'236u;
 
+inline constexpr std::uint32_t kMotionBlurShaderCrc = 0xC03380A0u;
+inline constexpr std::uint32_t kObservedMotionBlurModuleSize = 9'112u;
+
 inline constexpr std::uint32_t kDofSplitShaderCrc = 0xE9907978u;
 inline constexpr std::uint32_t kDofGatherShaderCrc = 0x747E19D2u;
 inline constexpr std::uint32_t kDofFillShaderCrc = 0x508514FBu;

@@ -48,6 +48,8 @@ Full-resolution depth
         |                                 |
         |                                 +--> плавные границы фокуса
         |
+        +--> continuous coverage --------> filtered Vanilla-like transition
+        |
 Native half-resolution DOF
         |
         +--> authored deep far bokeh --> Cinematic / Retinal base
@@ -60,24 +62,22 @@ Native foreground layer --> preserved at exact Vanilla strength
 размытия не восстанавливается из R8 alpha-карты. В `Balanced` используются
 четыре aperture taps для меньшей нагрузки на GPU.
 
-На границе глубины Cinematic после основного resolve проверяет полноразмерные
-лучи и в каждом из восьми секторов использует только первую видимую дальнюю
-поверхность с положительным Far CoC.
-`Edge Bokeh Width` задаёт максимальную ширину проникновения готового far-color:
-`0 px` отключает эффект, `8 px` используется по умолчанию, максимум — `16 px`.
-Полноразмерные depth и Far CoC подтверждают допустимый источник фона, но не
-уменьшают выбранную ширину. На крупных изогнутых силуэтах поиск отслеживает
-локальный градиент глубины, чтобы плавная поверхность лица не принималась за
-отдельный слой. При нативной дистанции фокуса coarse CoC служит только булевым
-early-out; при изменённой дистанции он вообще не может отбрасывать пиксели.
-Итоговая маска берётся по ближайшему подтверждённому фону, а не по количеству
-секторов, и плавно затухает на всей выбранной ширине. Поэтому кривой силуэт не
-становится слабее прямого края. Максимальная авторская сила равна `60%` при
-`Background Bokeh = 100%`; существующий ползунок фонового боке масштабирует её.
-Нативная R8 alpha выбирает между готовым authored far-color и ограниченным
-полноразмерным depth/CoC-aware fallback, но никогда не отключает coverage. Финальную visibility
-определяют исключительно полноразмерные depth и CoC. Это сохраняет мягкость
-Vanilla без квадратной маски и одинаковую ширину на диагональных границах.
+В Cinematic и Retinal переход реконструируется из нативных authored far-color
+и alpha без depth rejection. Блочный `coarse.y` gate не используется. Вместо
+него Gaussian-градиент строится только из full-resolution Far CoC: `Balanced`
+использует окно `5×5`, `High` — `7×7`. Положительная разность между локальным
+CoC и его Gaussian low-pass формирует переход только на far/background стороне.
+В однородной области разность равна нулю, а sigma и сила непрерывно следуют
+фактической степени размытия фона.
+Half-resolution `FarDofMap.w` теперь только подтверждает валидность authored
+цвета и не управляет видимостью. Поэтому его R8-сетка не может превращаться в
+движущийся контур. Authored far-color смешивается по full-resolution CoC;
+градиент набирает силу между `0.5–4 px`, его ширина продолжает расти до `8 px`,
+а вклад уступает native deep far-bokeh между `4–8 px`.
+`Vanilla Transition Blend` задаёт долю реконструкции относительно него; при
+`0%` дополнительный фильтр вообще не запускается.
+Глубокий фон по-прежнему проходит через проверку `farSupport` и постепенно
+заменяет переходную область нативным deep far-bokeh.
 
 ### Режимы
 
@@ -104,12 +104,12 @@ Watson — в разделе **Retinal DOF**.
 | `Focus Distance` | 0–200% | Масштаб авторской дистанции фокуса. |
 | `Blur Radius` | 0–200% | Масштаб CoC и радиуса размытия. |
 | `Background Bokeh` | 0–200% | Сила дальнего боке. |
-| `Edge Bokeh Width` | 0–16 px | Полноразмерная ширина проникновения дальнего боке на ближний силуэт; depth и Far CoC проверяют источник, но не уменьшают заданную ширину. |
+| `Vanilla Transition Blend` | 0–100% | Доля пространственно сглаженной реконструкции authored far-color/coverage относительно depth-aware перехода. |
 
-Значение `8 px` используется по умолчанию. В Vanilla все ползунки и настройка качества
+Значение `100%` используется по умолчанию. В Vanilla все ползунки и настройка качества
 отключены и не влияют на картинку. Во всех enhanced-режимах near/foreground
 слой сохраняет нативные CoC, радиус, цвет и alpha с точной силой Vanilla;
-отдельного ползунка для него нет. `Edge Bokeh Width` применяется к Cinematic и Retinal; `0 px` полностью отключает эффект.
+отдельного ползунка для него нет. `Vanilla Transition Blend` применяется к Cinematic и Retinal; `0%` оставляет только depth-aware resolve.
 
 | Настройка Retinal | Диапазон | Назначение |
 | --- | --- | --- |
@@ -134,7 +134,7 @@ DepthOfFieldQuality=1
 DepthOfFieldFocusDistance=100
 DepthOfFieldBlurRadius=100
 DepthOfFieldFarStrength=100
-DepthOfFieldEdgeBokehWidth=8
+DepthOfFieldVanillaTransition=100
 ```
 
 Это `Cinematic High` с нейтральными параметрами.
@@ -158,7 +158,7 @@ DepthOfFieldMode=2
 DepthOfFieldQuality=1
 DepthOfFieldBlurRadius=125
 DepthOfFieldFarStrength=130
-DepthOfFieldEdgeBokehWidth=8
+DepthOfFieldVanillaTransition=100
 ```
 
 Начинайте с шагов в `5–10%`: большие значения специально допускаются, но могут
@@ -177,9 +177,9 @@ Enhanced-режим включается только после того, ка�
 
 Размер `ShaderInjectData` сохранён равным 112 байтам. Бывшее неиспользуемое
 поле `psychov_padding` переименовано в `dof_runtime_mode`; в нём компактно
-упакованы режим, три процентные настройки и точная ширина Edge Bokeh `0..16 px`
+упакованы режим, три процентные настройки и сила Vanilla Transition Blend `0..100%`
 в бывших битах настройки near strength `16..20`. Foreground использует фиксированную
-нативную силу и не нуждается в payload; прежние edge-биты `26..29` зарезервированы
+нативную силу и не нуждается в payload; прежние дополнительные edge-биты `26..29` зарезервированы
 с нулевым значением. Это сохраняет исходный интерфейс ресурсов
 и push payload.
 
@@ -245,6 +245,8 @@ Full-resolution depth
         |                                 |
         |                                 +--> smooth focus boundaries
         |
+        +--> continuous coverage --------> filtered Vanilla-like transition
+        |
 Native half-resolution DOF
         |
         +--> authored deep far bokeh --> Cinematic / Retinal base
@@ -256,22 +258,22 @@ Native foreground layer --> preserved at exact Vanilla strength
 bilinear subsamples, so the transition is not reconstructed from an R8 alpha
 map. `Balanced` uses four aperture taps to reduce GPU cost.
 
-After the main resolve, Cinematic walks full-resolution rays and uses only the
-first visible farther surface with positive Far CoC in each of eight sectors.
-`Edge Bokeh Width` sets the maximum reach of resolved far color onto the nearer
-silhouette: `0 px` disables it, `8 px` is the default, and `16 px` is the maximum.
-Full-resolution depth and Far CoC validate the background source without
-shrinking the requested width. On large curved silhouettes, the search follows
-the local depth gradient so smooth facial curvature is not mistaken for a
-separate layer. At the authored
-focus distance coarse CoC is only a boolean early-out; once focus distance is
-adjusted, it cannot reject pixels at all. Native R8 alpha selects between the
-authored far color and a bounded full-resolution depth/CoC-aware fallback, but never disables
-coverage; full-resolution depth and CoC exclusively determine final visibility.
-Final coverage follows the nearest validated background rather than the number
-of visible sectors and fades across the entire selected width, so curved edges
-are not weaker than straight ones. Authored strength tops out at `60%` when
-`Background Bokeh = 100%`; the existing background control scales that value.
+Cinematic and Retinal reconstruct the transition from native authored far
+color and alpha without depth rejection. The blocky `coarse.y` gate is not
+used. The Gaussian gradient is instead derived only from full-resolution Far
+CoC: Balanced uses a `5x5` window and High uses `7x7`. The positive difference
+between local CoC and its Gaussian low-pass forms a transition only on the
+far/background side. Uniform CoC cancels to zero, while sigma and strength
+continuously follow the actual background blur.
+Half-resolution `FarDofMap.w` now only validates authored color and never
+controls visibility, so its R8 grid cannot become a moving silhouette. Authored
+far color is blended by full-resolution CoC; the gradient gains strength from
+`0.5–4 px`, its reach keeps growing to `8 px`, and it yields to native deep
+far-bokeh between `4–8 px`.
+`Vanilla Transition Blend` controls the share of this
+reconstruction, and at `0%` the additional filter is not evaluated. Deep background
+still passes the `farSupport` check and gradually replaces the transition with
+native deep far-bokeh.
 
 ### Modes
 
@@ -297,12 +299,13 @@ Core controls are in **Depth of Field**; Watson-model controls are in
 | `Focus Distance` | 0–200% | Scales the authored focus distance. |
 | `Blur Radius` | 0–200% | Scales CoC and blur radius. |
 | `Background Bokeh` | 0–200% | Far-bokeh strength. |
-| `Edge Bokeh Width` | 0–16 px | Full-resolution reach of farther background bokeh onto a nearer silhouette; depth and Far CoC validate the source without shrinking the requested width. |
+| `Vanilla Transition Blend` | 0–100% | Share of the spatially filtered authored far-color/coverage reconstruction relative to the depth-aware transition. |
 
-`8 px` is the default. In Vanilla, quality and all sliders are disabled and have no
+`100%` is the default. In Vanilla, quality and all sliders are disabled and have no
 effect. Every enhanced mode preserves native near CoC, radius, color, and
 alpha at exact Vanilla strength; foreground bokeh has no custom strength control.
-`Edge Bokeh Width` applies to Cinematic and Retinal; `0 px` disables it exactly.
+`Vanilla Transition Blend` applies to Cinematic and Retinal; `0%` leaves only the
+depth-aware resolve.
 
 | Retinal control | Range | Purpose |
 | --- | --- | --- |
@@ -327,7 +330,7 @@ DepthOfFieldQuality=1
 DepthOfFieldFocusDistance=100
 DepthOfFieldBlurRadius=100
 DepthOfFieldFarStrength=100
-DepthOfFieldEdgeBokehWidth=8
+DepthOfFieldVanillaTransition=100
 ```
 
 This is `Cinematic High` with neutral controls.
@@ -352,7 +355,7 @@ DepthOfFieldMode=2
 DepthOfFieldQuality=1
 DepthOfFieldBlurRadius=125
 DepthOfFieldFarStrength=130
-DepthOfFieldEdgeBokehWidth=8
+DepthOfFieldVanillaTransition=100
 ```
 
 Start in `5–10%` increments. Larger values are intentionally available, but
@@ -371,9 +374,9 @@ chain frame is always Vanilla. The addon returns to Vanilla on:
 
 `ShaderInjectData` remains 112 bytes. The previously unused
 `psychov_padding` field was renamed to `dof_runtime_mode` and compactly packs
-the mode, three percentage controls, and an exact `0..16 px` Edge Bokeh width
+the mode, three percentage controls, and `0..100%` Vanilla Transition Blend
 in the former near-strength bits `16..20`. Foreground uses fixed native strength
-and needs no payload control; former Edge bits `26..29` stay reserved at zero.
+and needs no payload control; former extra Edge bits `26..29` stay reserved at zero.
 The original resource interface and push payload size are
 preserved.
 

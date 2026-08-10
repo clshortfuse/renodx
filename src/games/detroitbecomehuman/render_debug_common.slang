@@ -25,8 +25,8 @@ const uint RENDER_DEBUG_SOURCE_RETINAL_FIXATION = 15u;
 const uint RENDER_DEBUG_SOURCE_RETINAL_ECCENTRICITY = 16u;
 const uint RENDER_DEBUG_SOURCE_RETINAL_NYQUIST = 17u;
 const uint RENDER_DEBUG_SOURCE_RETINAL_RADIUS = 18u;
-const uint RENDER_DEBUG_SOURCE_DOF_EDGE_CONTROL = 19u;
-const uint RENDER_DEBUG_SOURCE_DOF_EDGE_COVERAGE = 20u;
+const uint RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTROL = 19u;
+const uint RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTRIBUTION = 20u;
 
 const uint RENDER_DEBUG_CHANNEL_AUTO = 0u;
 const uint RENDER_DEBUG_CHANNEL_RGB = 1u;
@@ -122,8 +122,8 @@ uint RenderDebugProducerPass(uint source)
     }
     if ((source >= RENDER_DEBUG_SOURCE_DOF_COARSE_COC
          && source <= RENDER_DEBUG_SOURCE_DOF_GATHER_FILL)
-        || source == RENDER_DEBUG_SOURCE_DOF_EDGE_CONTROL
-        || source == RENDER_DEBUG_SOURCE_DOF_EDGE_COVERAGE)
+        || source == RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTROL
+        || source == RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTRIBUTION)
     {
         return RENDER_DEBUG_PASS_DOF;
     }
@@ -134,8 +134,8 @@ bool RenderDebugSourceAvailable(uint source)
 {
     return (source >= RENDER_DEBUG_SOURCE_DOF_COARSE_COC
             && source <= RENDER_DEBUG_SOURCE_SCENE_LUMINANCE)
-        || source == RENDER_DEBUG_SOURCE_DOF_EDGE_CONTROL
-        || source == RENDER_DEBUG_SOURCE_DOF_EDGE_COVERAGE;
+        || source == RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTROL
+        || source == RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTRIBUTION;
 }
 
 bool RenderDebugGenerateAtPass(uint source, uint pass)
@@ -192,8 +192,8 @@ uint RenderDebugDefaultChannel(uint source)
     {
         return RENDER_DEBUG_CHANNEL_RED;
     }
-    if (source == RENDER_DEBUG_SOURCE_DOF_EDGE_CONTROL
-        || source == RENDER_DEBUG_SOURCE_DOF_EDGE_COVERAGE)
+    if (source == RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTROL
+        || source == RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTRIBUTION)
     {
         return RENDER_DEBUG_CHANNEL_RED;
     }
@@ -251,9 +251,9 @@ vec2 RenderDebugDefaultRange(uint source)
     {
         return vec2(-10.0, 6.0);
     }
-    if (source == RENDER_DEBUG_SOURCE_DOF_EDGE_CONTROL)
+    if (source == RENDER_DEBUG_SOURCE_DOF_VANILLA_TRANSITION_CONTROL)
     {
-        return vec2(0.0, 16.0);
+        return vec2(0.0, 1.0);
     }
     return vec2(0.0, 1.0);
 }

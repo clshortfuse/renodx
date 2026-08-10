@@ -105,7 +105,7 @@ struct RuntimeControls {
   float focus_distance_percent = 100.f;
   float blur_radius_percent = 100.f;
   float far_strength_percent = 100.f;
-  float edge_bokeh_width_pixels = 8.f;
+  float vanilla_transition_percent = 100.f;
 };
 
 inline constexpr std::uint32_t kModeMask = 0x7u;
@@ -116,17 +116,16 @@ inline constexpr std::uint32_t kRadiusShift = 10u;
 inline constexpr std::uint32_t kRadiusMask = 0x3Fu;
 inline constexpr std::uint32_t kRadiusNeutral = 32u;
 // Foreground bokeh always uses Detroit's authored Vanilla strength and needs
-// no runtime control. Its former five bits carry an exact full-resolution
-// Edge Bokeh width. The shader's Far CoC is capped at 16 px; exposing a larger
-// value would add probes without reach.
-inline constexpr std::uint32_t kEdgeWidthShift = 16u;
-inline constexpr std::uint32_t kEdgeWidthMask = 0x1Fu;
-inline constexpr std::uint32_t kEdgeWidthDefault = 8u;
-inline constexpr std::uint32_t kEdgeWidthMaximum = 16u;
+// no runtime control. These five bits blend the filtered Vanilla-like far
+// transition back into Cinematic before the confirmed deep layer takes over.
+inline constexpr std::uint32_t kVanillaTransitionShift = 16u;
+inline constexpr std::uint32_t kVanillaTransitionMask = 0x1Fu;
+inline constexpr std::uint32_t kVanillaTransitionDefault =
+    kVanillaTransitionMask;
 inline constexpr std::uint32_t kFarShift = 21u;
 inline constexpr std::uint32_t kFarMask = 0x1Fu;
 inline constexpr std::uint32_t kFarNeutral = 16u;
-// Former percentage Edge Bokeh bits stay zero and reserved. Bits 30..31 also
+// Former extra Edge Bokeh bits stay zero and reserved. Bits 30..31 also
 // remain zero, so every packed payload is a finite positive float.
 inline constexpr std::uint32_t kReservedEdgeShift = 26u;
 inline constexpr std::uint32_t kReservedEdgeMask = 0xFu;
@@ -144,13 +143,12 @@ inline constexpr std::uint32_t kReservedEdgeMask = 0xFu;
   return neutral + static_cast<std::uint32_t>(std::lround((scale - 1.f) * static_cast<float>(mask - neutral)));
 }
 
-[[nodiscard]] inline std::uint32_t QuantizeEdgeWidthPixels(
-    float pixels) noexcept {
-  if (!std::isfinite(pixels)) {
-    return kEdgeWidthDefault;
-  }
-  return static_cast<std::uint32_t>(std::lround(std::clamp(
-      pixels, 0.f, static_cast<float>(kEdgeWidthMaximum))));
+[[nodiscard]] inline std::uint32_t QuantizeVanillaTransition(
+    float percent) noexcept {
+  if (!std::isfinite(percent)) percent = 100.f;
+  return static_cast<std::uint32_t>(std::lround(
+      std::clamp(percent, 0.f, 100.f)
+      * static_cast<float>(kVanillaTransitionMask) / 100.f));
 }
 
 [[nodiscard]] inline std::uint32_t PackRuntimeBits(
@@ -163,8 +161,8 @@ inline constexpr std::uint32_t kReservedEdgeMask = 0xFu;
          | (QuantizePercentScale(
                 controls.blur_radius_percent, kRadiusNeutral, kRadiusMask)
             << kRadiusShift)
-         | (QuantizeEdgeWidthPixels(controls.edge_bokeh_width_pixels)
-            << kEdgeWidthShift)
+         | (QuantizeVanillaTransition(controls.vanilla_transition_percent)
+            << kVanillaTransitionShift)
          | (QuantizePercentScale(
                 controls.far_strength_percent, kFarNeutral, kFarMask)
             << kFarShift);
@@ -195,9 +193,11 @@ inline constexpr std::uint32_t kReservedEdgeMask = 0xFu;
   return 1.f + static_cast<float>(code - neutral) / static_cast<float>(mask - neutral);
 }
 
-[[nodiscard]] inline std::uint32_t UnpackEdgeWidthPixels(
+[[nodiscard]] inline float UnpackVanillaTransition(
     std::uint32_t bits) noexcept {
-  return (bits >> kEdgeWidthShift) & kEdgeWidthMask;
+  return static_cast<float>(
+             (bits >> kVanillaTransitionShift) & kVanillaTransitionMask)
+         / static_cast<float>(kVanillaTransitionMask);
 }
 
 class RuntimeController {

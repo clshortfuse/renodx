@@ -146,7 +146,7 @@ bool TestPackedControls() {
               .focus_distance_percent = 200.f,
               .blur_radius_percent = 0.f,
               .far_strength_percent = 0.f,
-              .edge_bokeh_width_pixels = 16.f,
+              .vanilla_transition_percent = 0.f,
           }))
           == 0u,
       "Vanilla must ignore every custom control and keep a zero payload");
@@ -170,17 +170,17 @@ bool TestPackedControls() {
           && dof::UnpackPercentScale(
                  bits, dof::kFarShift, dof::kFarMask, dof::kFarNeutral)
                  == 1.f
-          && dof::UnpackEdgeWidthPixels(bits) == 8u
+          && dof::UnpackVanillaTransition(bits) == 1.f
           && ((bits >> dof::kReservedEdgeShift)
-                  & dof::kReservedEdgeMask)
+              & dof::kReservedEdgeMask)
                  == 0u,
-      "neutral controls must decode exact scales, an 8 px Edge width, and zero reserved bits");
+      "neutral controls must decode exact scales, full Vanilla transition, and zero reserved bits");
 
   const dof::RuntimeControls maximum = {
       .focus_distance_percent = 200.f,
       .blur_radius_percent = 200.f,
       .far_strength_percent = 200.f,
-      .edge_bokeh_width_pixels = 16.f,
+      .vanilla_transition_percent = 100.f,
   };
   const std::uint32_t maximum_bits = dof::PackRuntimeBits(
       dof::RuntimeMode::kCinematicHigh, maximum);
@@ -191,45 +191,49 @@ bool TestPackedControls() {
           dof::kFocusMask,
           dof::kFocusNeutral)
               == 2.f
-          && dof::UnpackEdgeWidthPixels(maximum_bits) == 16u
+          && dof::UnpackVanillaTransition(maximum_bits) == 1.f
           && ((maximum_bits >> dof::kReservedEdgeShift)
-                  & dof::kReservedEdgeMask)
+              & dof::kReservedEdgeMask)
                  == 0u,
-      "maximum controls must decode a 16 px Edge width while old Edge bits stay zero");
+      "maximum controls must retain the full Vanilla transition while old Edge bits stay zero");
 
-  const dof::RuntimeControls no_edge = {
+  const dof::RuntimeControls no_overlap = {
       .focus_distance_percent = 100.f,
       .blur_radius_percent = 100.f,
       .far_strength_percent = 100.f,
-      .edge_bokeh_width_pixels = 0.f,
+      .vanilla_transition_percent = 0.f,
   };
-  const std::uint32_t no_edge_bits = dof::PackRuntimeBits(
-      dof::RuntimeMode::kCinematicHigh, no_edge);
+  const std::uint32_t no_overlap_bits = dof::PackRuntimeBits(
+      dof::RuntimeMode::kCinematicHigh, no_overlap);
   passed &= Expect(
-      dof::UnpackEdgeWidthPixels(no_edge_bits) == 0u,
-      "Edge Bokeh zero must decode to an exact post-resolve bypass");
+      dof::UnpackVanillaTransition(no_overlap_bits) == 0.f,
+      "zero Vanilla transition must decode to an exact transition bypass");
 
-  for (std::uint32_t width = 0u;
-       width <= dof::kEdgeWidthMaximum;
-       ++width) {
+  for (std::uint32_t code = 0u;
+       code <= dof::kVanillaTransitionMask;
+       ++code) {
     const auto exact_bits = dof::PackRuntimeBits(
         dof::RuntimeMode::kCinematicHigh,
         {
-            .edge_bokeh_width_pixels = static_cast<float>(width),
+            .vanilla_transition_percent =
+                static_cast<float>(code) * 100.f
+                / static_cast<float>(dof::kVanillaTransitionMask),
         });
     passed &= Expect(
-        dof::UnpackEdgeWidthPixels(exact_bits) == width,
-        "every exposed Edge Bokeh pixel width must round-trip exactly");
+        ((exact_bits >> dof::kVanillaTransitionShift)
+         & dof::kVanillaTransitionMask)
+            == code,
+        "every Vanilla transition code must round-trip exactly");
   }
   passed &= Expect(
-      dof::QuantizeEdgeWidthPixels(-10.f) == 0u
-          && dof::QuantizeEdgeWidthPixels(99.f) == 16u
-          && dof::QuantizeEdgeWidthPixels(1.49f) == 1u
-          && dof::QuantizeEdgeWidthPixels(1.5f) == 2u
-          && dof::QuantizeEdgeWidthPixels(
+      dof::QuantizeVanillaTransition(-10.f) == 0u
+          && dof::QuantizeVanillaTransition(200.f) == 31u
+          && dof::QuantizeVanillaTransition(49.f) == 15u
+          && dof::QuantizeVanillaTransition(50.f) == 16u
+          && dof::QuantizeVanillaTransition(
                  std::numeric_limits<float>::quiet_NaN())
-                 == dof::kEdgeWidthDefault,
-      "Edge Bokeh pixel encoding must clamp, round, and sanitize deterministically");
+                 == dof::kVanillaTransitionDefault,
+      "Vanilla transition encoding must clamp, round, and sanitize deterministically");
 
   const std::uint32_t retinal_bits = dof::PackRuntimeBits(
       dof::RuntimeMode::kRetinalHigh, neutral);

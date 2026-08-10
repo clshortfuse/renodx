@@ -130,7 +130,8 @@ float dof_quality = 1.f;
 float dof_focus_distance = 100.f;
 float dof_blur_radius = 100.f;
 float dof_far_strength = 100.f;
-float dof_edge_bokeh_width = 8.f;
+float dof_vanilla_transition = 100.f;
+float experimental_motion_blur = 0.f;
 dof::RuntimeController dof_runtime_controller;
 float retinal_fixation_x = 50.f;
 float retinal_fixation_y = 50.f;
@@ -179,8 +180,8 @@ const std::vector<std::string> render_debug_source_labels = {
     "Retinal Eccentricity (Unavailable)",
     "Retinal Nyquist (Unavailable)",
     "Retinal Radius (Unavailable)",
-    "DOF Edge Bokeh Width (px)",
-    "DOF Final Edge Coverage",
+    "DOF Vanilla Transition Control",
+    "DOF Final Vanilla Transition",
 };
 std::once_flag dof_build_verification_once;
 std::atomic_bool dof_supported_executable = false;
@@ -1147,8 +1148,10 @@ std::atomic_uint64_t last_dof_log_key =
 
 constexpr std::uint32_t RUNTIME_FLAG_DLSS_OUTPUT = 1u << 0u;
 constexpr std::uint32_t RUNTIME_FLAG_PSYCHOV_BT2020 = 1u << 1u;
+constexpr std::uint32_t RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR = 1u << 2u;
 constexpr std::uint32_t RUNTIME_FLAG_MASK =
-    RUNTIME_FLAG_DLSS_OUTPUT | RUNTIME_FLAG_PSYCHOV_BT2020;
+    RUNTIME_FLAG_DLSS_OUTPUT | RUNTIME_FLAG_PSYCHOV_BT2020
+    | RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR;
 
 std::uint32_t GetRuntimeFlags() {
   if (!std::isfinite(shader_injection.runtime_flags)) return 0u;
@@ -1162,6 +1165,12 @@ void SetRuntimeFlag(std::uint32_t flag, bool enabled) {
   auto flags = GetRuntimeFlags();
   flags = enabled ? (flags | flag) : (flags & ~flag);
   shader_injection.runtime_flags = static_cast<float>(flags);
+}
+
+void OnExperimentalMotionBlurSettingsChanged() {
+  SetRuntimeFlag(
+      RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR,
+      experimental_motion_blur >= 0.5f);
 }
 
 bool ShouldWritePsychoVBt2020Intermediate() {
@@ -1343,7 +1352,7 @@ void UpdateDofRuntimeMode() {
           .focus_distance_percent = dof_focus_distance,
           .blur_radius_percent = dof_blur_radius,
           .far_strength_percent = dof_far_strength,
-          .edge_bokeh_width_pixels = dof_edge_bokeh_width,
+          .vanilla_transition_percent = dof_vanilla_transition,
       });
   LogDofStatus(result);
 }
@@ -1360,7 +1369,8 @@ render_debug::Source GetRenderDebugSource(float value) {
   const auto source = static_cast<std::uint32_t>(std::clamp(
       std::lround(value),
       0l,
-      static_cast<long>(render_debug::Source::kDofEdgeCoverage)));
+      static_cast<long>(
+          render_debug::Source::kDofVanillaTransitionContribution)));
   return static_cast<render_debug::Source>(source);
 }
 
@@ -1854,6 +1864,11 @@ void OnPeakBrightnessSettingsChanged() {
 }
 
 renodx::mods::shader::CustomShaders custom_shaders = {
+    {supported_build::kMotionBlurShaderCrc, {
+                                                  .crc32 =
+                                                      supported_build::kMotionBlurShaderCrc,
+                                                  .code = __0xC03380A0,
+                                              }},
     {supported_build::kDofSplitShaderCrc, {
                                                 .crc32 =
                                                     supported_build::kDofSplitShaderCrc,
@@ -2145,7 +2160,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Depth of Field",
                 .section = "Depth of Field",
-                .tooltip = "Vanilla is the exact reference path. Every Enhanced style preserves Detroit's authored foreground bokeh at Vanilla strength. Clean fixes far-focus transitions, Cinematic restores authored deep background bokeh, and Retinal adds a full-resolution Watson acuity filter around a configurable fixation point.",
+                .tooltip = "Vanilla is the exact reference path. Every Enhanced style preserves Detroit's authored foreground bokeh at Vanilla strength. Clean uses depth-aware far transitions, Cinematic reconstructs a spatially filtered Vanilla-like far transition before its confirmed deep background layer, and Retinal adds a full-resolution Watson acuity filter around a configurable fixation point.",
                 .labels = {"Vanilla", "Clean", "Cinematic", "Retinal"},
                 .on_change_value = [](float, float current) {
                   dof_mode = current;
@@ -2207,18 +2222,16 @@ renodx::utils::settings::Settings settings =
                 .is_enabled = []() { return dof_mode >= 0.5f; },
             }},
             {{
-                .key = "DepthOfFieldEdgeBokehWidth",
-                .binding = &dof_edge_bokeh_width,
-                .value_type =
-                    renodx::utils::settings::SettingValueType::INTEGER,
-                .default_value = 8.f,
+                .key = "DepthOfFieldVanillaTransition",
+                .binding = &dof_vanilla_transition,
+                .default_value = 100.f,
                 .can_reset = true,
-                .label = "Edge Bokeh Width",
+                .label = "Vanilla Transition Blend",
                 .section = "Depth of Field",
-                .tooltip = "Sets the maximum full-resolution reach of farther background bokeh onto a nearer silhouette. Zero disables it; 8 px is the default. Depth and Far CoC validate the background source but do not shrink the requested width. Clean and Vanilla ignore it.",
+                .tooltip = "Blends Vanilla's authored far color through a full-resolution Gaussian CoC gradient. Half-resolution far alpha only validates color samples and never controls visibility, preventing its R8 grid from drawing a moving silhouette; actual background CoC controls reach and strength. Clean and Vanilla ignore it.",
                 .min = 0.f,
-                .max = 16.f,
-                .format = "%.0f px",
+                .max = 100.f,
+                .format = "%.0f%%",
                 .is_enabled = []() { return dof_mode >= 1.5f; },
             }},
             {{
@@ -2325,7 +2338,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Cinematic Balanced is active with authored foreground bokeh at Vanilla strength and deep background bokeh.",
+                .label = "Cinematic Balanced is active with the filtered Vanilla-like transition, foreground bokeh at Vanilla strength, and confirmed deep background bokeh.",
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
@@ -2335,7 +2348,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Cinematic High is active with authored foreground bokeh at Vanilla strength and deep background bokeh.",
+                .label = "Cinematic High is active with the filtered Vanilla-like transition, foreground bokeh at Vanilla strength, and confirmed deep background bokeh.",
                 .section = "Depth of Field",
                 .is_visible = []() {
                   return dof_mode >= 0.5f
@@ -2429,6 +2442,26 @@ renodx::utils::settings::Settings settings =
                 },
             }},
             {{
+                .key = "ExperimentalMotionBlur",
+                .binding = &experimental_motion_blur,
+                .value_type =
+                    renodx::utils::settings::SettingValueType::BOOLEAN,
+                .default_value = 0.f,
+                .can_reset = true,
+                .label = "Camera Motion Blur Edge Feather",
+                .section = "Experimental",
+                .tooltip = "Experimental depth-aware feathering for character silhouettes during fast camera motion. It is disabled by default because the effect was subtle during controller gameplay and has not been validated across the full game.",
+                .on_change_value = [](float, float current) {
+                  experimental_motion_blur = current;
+                  OnExperimentalMotionBlurSettingsChanged();
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Experimental features are optional, disabled by default, and may vary by scene.",
+                .section = "Experimental",
+            }},
+            {{
                 .key = "RenderDebugMode",
                 .binding = &render_debug_mode,
                 .value_type =
@@ -2453,7 +2486,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Dashboard",
                 .section = "Render Debug",
-                .tooltip = "Depth of Field shows the established CoC/layer diagnostic. DOF Edge Bokeh shows full-resolution CoC, the decoded width in pixels, and the final post-resolve silhouette coverage.",
+                .tooltip = "Depth of Field shows the established CoC/layer diagnostic. DOF Vanilla Transition shows full-resolution CoC, the decoded blend strength, and its final contribution before the deep layer.",
                 .labels = {
                     "Depth of Field",
                     "Temporal AA",
@@ -2461,7 +2494,7 @@ renodx::utils::settings::Settings settings =
                     "Lighting (Unavailable)",
                     "Retinal (Unavailable)",
                     "Custom",
-                    "DOF Edge Bokeh",
+                    "DOF Vanilla Transition",
                 },
                 .is_visible = []() { return render_debug_mode >= 1.5f; },
             }},
@@ -2822,7 +2855,8 @@ void OnPresetOff() {
       {"DepthOfFieldFocusDistance", 100.f},
       {"DepthOfFieldBlurRadius", 100.f},
       {"DepthOfFieldFarStrength", 100.f},
-      {"DepthOfFieldEdgeBokehWidth", 8.f},
+      {"DepthOfFieldVanillaTransition", 100.f},
+      {"ExperimentalMotionBlur", 0.f},
       {"RetinalFixationX", 50.f},
       {"RetinalFixationY", 50.f},
       {"RetinalStrength", 100.f},
@@ -2847,6 +2881,7 @@ void OnPresetOff() {
       {"CASStrength", 100.f},
   });
   OnDofSettingsChanged();
+  OnExperimentalMotionBlurSettingsChanged();
   OnRenderDebugSettingsChanged();
   OnPeakBrightnessSettingsChanged();
   if (dof_was_enhanced) {
@@ -3169,6 +3204,8 @@ bool AttachAddon(HMODULE h_module) {
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &OnDofSettingsChanged);
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &OnExperimentalMotionBlurSettingsChanged);
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &OnRenderDebugSettingsChanged);
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &OnPeakBrightnessSettingsChanged);
@@ -3191,6 +3228,7 @@ bool AttachAddon(HMODULE h_module) {
   OnAspectRatioModeChanged();
   OnDlssModeChanged();
   OnDofSettingsChanged();
+  OnExperimentalMotionBlurSettingsChanged();
   OnRenderDebugSettingsChanged();
   OnPeakBrightnessSettingsChanged();
   SyncDlaaSharpening();
