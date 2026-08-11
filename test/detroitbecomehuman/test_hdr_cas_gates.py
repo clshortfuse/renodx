@@ -748,7 +748,7 @@ class HDRAndCASGateTests(unittest.TestCase):
         )
         on_scene_draw = addon[
             addon.index("bool OnSceneDraw(") :
-            addon.index("void OnSceneDrawn(")
+            addon.index("bool OnFinalCasDraw(")
         ]
         dlss_update = on_scene_draw.index("ApplyDlssOutputMarker(")
         wide_update = on_scene_draw.index(
@@ -760,12 +760,16 @@ class HDRAndCASGateTests(unittest.TestCase):
             "ShouldWritePsychoVBt2020Intermediate()",
             on_scene_draw[wide_update:],
         )
+        self.assertIn("render_debug_runtime_controller.Observe(", on_scene_draw)
+        self.assertNotIn("OnSceneDrawn", addon)
+        self.assertNotIn("OnTemporalDrawn", addon)
 
         on_present = addon[
             addon.index("void OnPresent(") :
             addon.index("}  // namespace", addon.index("void OnPresent("))
         ]
         self.assertNotIn("temporal_capture::BeginNextFrame();", on_present)
+        self.assertNotIn("SyncDlaaSharpening();", on_present)
         clear_runtime_flags = on_present.index("shader_injection.runtime_flags = 0.f;")
         self.assertIn(
             "video/loading frame without the scene composite",
@@ -811,6 +815,15 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"bool\s+OnSceneDraw\([^)]*\)\s*\{[\s\S]*?"
             r"MarkMainTemporalCommandList\(command_list->get_native\(\)\)"
             r";[\s\S]*?ApplyDlssOutputMarker\(",
+        )
+        mark_start = temporal_capture.index("inline void MarkMainTemporalCommandList(")
+        mark_end = temporal_capture.index(
+            "inline bool IsMainTemporalCommandList(", mark_start
+        )
+        mark_callback = temporal_capture[mark_start:mark_end]
+        self.assertLess(
+            mark_callback.index("CanUseNativeModeFastPath(mode_state.GetMode())"),
+            mark_callback.index("std::unique_lock lock"),
         )
         self.assertIn("ObserveTemporalCommandList(", temporal_capture)
         temporal_post_dispatch = temporal_capture[
@@ -913,6 +926,39 @@ class HDRAndCASGateTests(unittest.TestCase):
             pipeline_native_gate,
             temporal_callback.index("PopulateStageState(&compute_state)"),
         )
+        native_observe = temporal_callback.index(
+            "ObserveTemporalCommandList(", pipeline_native_gate
+        )
+        native_return = temporal_callback.index("return {};", native_observe)
+        self.assertLess(pipeline_native_gate, native_observe)
+        self.assertLess(native_observe, native_return)
+        self.assertLess(native_return, temporal_callback.index("GetShaderState(&context)"))
+        self.assertIn("NextTemporalDispatchSerial()", temporal_callback)
+        self.assertIn("SetEvaluationSerialTracking(true);", addon)
+        self.assertRegex(
+            addon,
+            r'\.key\s*=\s*"DLAASharpening",[\s\S]*?'
+            r"\.on_change_value\s*=\s*\[\]\(float, float\)\s*"
+            r"\{\s*SyncDlaaSharpening\(\);\s*\}",
+        )
+        self.assertRegex(
+            addon,
+            r'"ToneMapGameNits",[\s\S]*?'
+            r"\.on_change_value\s*=\s*\[\]\(float, float\)\s*"
+            r"\{\s*SyncDlaaSharpening\(\);\s*\}",
+        )
+        self.assertRegex(
+            addon,
+            r"on_preset_changed_callbacks\.emplace_back\(\s*"
+            r"&SyncDlaaSharpening\s*\);",
+        )
+        for callback in ("OnDofSplitDraw", "OnDofGatherDraw", "OnDofFillDraw"):
+            self.assertRegex(
+                addon,
+                rf"bool\s+{callback}\([^)]*\)\s*\{{[\s\S]*?return true;",
+            )
+            self.assertRegex(addon, rf"\.on_draw\s*=\s*&{callback},")
+            self.assertNotIn(f".on_drawn = &{callback}", addon)
         self.assertRegex(
             addon,
             r"kTemporalAaShaderCrc,[\s\S]*?\.code\s*=\s*__temporal_aux_exact,[\s\S]*?"

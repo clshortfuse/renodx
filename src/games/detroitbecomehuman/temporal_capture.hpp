@@ -166,6 +166,7 @@ inline thread_local bool auxiliary_temporal_replacement_requested = false;
 inline thread_local std::uint64_t auxiliary_temporal_replacement_generation = 0u;
 inline std::atomic_uint64_t frame_counter = 0u;
 inline std::atomic_uint64_t evaluation_serial = 0u;
+inline std::atomic_bool evaluation_serial_tracking_enabled = false;
 static_assert(std::atomic_uint64_t::is_always_lock_free);
 inline std::mutex contract_mutex;
 inline ContractShape last_contract_shape = {};
@@ -306,6 +307,9 @@ inline void MarkMainTemporalCommandList(std::uint64_t command_list) {
   }
   latest_temporal_command_list = 0u;
   latest_temporal_dispatch_serial = 0u;
+  if (temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
+    return;
+  }
 
   bool inserted = false;
   std::size_t learned_count = 0u;
@@ -341,6 +345,17 @@ inline void MarkMainTemporalCommandList(std::uint64_t command_list) {
 
 [[nodiscard]] inline std::uint64_t GetEvaluationSerial() {
   return evaluation_serial.load(std::memory_order_acquire);
+}
+
+inline void SetEvaluationSerialTracking(bool enabled) noexcept {
+  evaluation_serial_tracking_enabled.store(enabled, std::memory_order_release);
+}
+
+[[nodiscard]] inline std::uint64_t NextTemporalDispatchSerial() noexcept {
+  if (!evaluation_serial_tracking_enabled.load(std::memory_order_acquire)) {
+    return 1u;
+  }
+  return evaluation_serial.fetch_add(1u, std::memory_order_acq_rel) + 1u;
 }
 
 inline void SetDlaaSharpening(
@@ -854,8 +869,7 @@ inline void AfterNativeTemporalDispatch(
   const auto temporal_pipeline_layout = native_temporal_pipeline_layout;
   native_temporal_pipeline = {0u};
   native_temporal_pipeline_layout = {0u};
-  const auto dispatch_serial =
-      evaluation_serial.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+  const auto dispatch_serial = NextTemporalDispatchSerial();
   ObserveTemporalCommandList(
       context.cmd_list->get_native(), dispatch_serial);
   if (temporal_mode_state::CanUseNativePostDispatchFastPath(
@@ -1253,21 +1267,26 @@ struct TemporalDispatchCallback {
     auxiliary_temporal_replacement_generation = 0u;
     native_temporal_pipeline = {0u};
     native_temporal_pipeline_layout = {0u};
-    if (!temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
-      auto* shader_state =
-          renodx::utils::command_action::GetShaderState(&context);
-      if (shader_state != nullptr) {
-        auto& compute_state =
-            shader_state->stage_states[renodx::utils::shader::COMPUTE_INDEX];
-        renodx::utils::shader::PopulateStageState(&compute_state);
-        native_temporal_pipeline = compute_state.pipeline_details != nullptr
-                                       ? compute_state.pipeline_details->pipeline
-                                       : compute_state.pipeline;
-        native_temporal_pipeline_layout =
-            compute_state.pipeline_details != nullptr
-                ? compute_state.pipeline_details->layout
-                : reshade::api::pipeline_layout{0u};
+    if (temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
+      if (context.cmd_list != nullptr) {
+        ObserveTemporalCommandList(
+            context.cmd_list->get_native(), NextTemporalDispatchSerial());
       }
+      return {};
+    }
+    auto* shader_state =
+        renodx::utils::command_action::GetShaderState(&context);
+    if (shader_state != nullptr) {
+      auto& compute_state =
+          shader_state->stage_states[renodx::utils::shader::COMPUTE_INDEX];
+      renodx::utils::shader::PopulateStageState(&compute_state);
+      native_temporal_pipeline = compute_state.pipeline_details != nullptr
+                                     ? compute_state.pipeline_details->pipeline
+                                     : compute_state.pipeline;
+      native_temporal_pipeline_layout =
+          compute_state.pipeline_details != nullptr
+              ? compute_state.pipeline_details->layout
+              : reshade::api::pipeline_layout{0u};
     }
     return {
         .post_callback = &AfterNativeTemporalDispatch,
@@ -1292,6 +1311,7 @@ inline void Use(DWORD fdw_reason) {
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);
       evaluation_serial.store(0u, std::memory_order_relaxed);
+      evaluation_serial_tracking_enabled.store(false, std::memory_order_relaxed);
       last_logged_evaluation_key.store(
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);

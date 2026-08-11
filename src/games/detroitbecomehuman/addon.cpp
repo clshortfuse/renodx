@@ -347,9 +347,9 @@ std::string GetDlssModePostfix(DetroitDlssMode mode) {
   }
 }
 
-void InitializeReShadeCaptureRequest() {
+bool InitializeReShadeCaptureRequest() {
   std::scoped_lock lock(reshade_capture_mutex);
-  if (reshade_capture.initialized) return;
+  if (reshade_capture.initialized) return reshade_capture.enabled;
   reshade_capture.initialized = true;
 
   std::array<char, 96u> value = {};
@@ -357,7 +357,7 @@ void InitializeReShadeCaptureRequest() {
       RESHADE_CAPTURE_ENVIRONMENT,
       value.data(),
       static_cast<DWORD>(value.size()));
-  if (length == 0u || length >= value.size()) return;
+  if (length == 0u || length >= value.size()) return false;
 
   const std::string_view requested(value.data(), length);
   reshade_capture.enabled = true;
@@ -408,6 +408,8 @@ void InitializeReShadeCaptureRequest() {
           "{} stable seconds.",
           RESHADE_CAPTURE_STABLE_FRAMES,
           reshade_capture.delay_seconds));
+  temporal_capture::SetEvaluationSerialTracking(true);
+  return true;
 }
 
 
@@ -897,7 +899,6 @@ void RestoreUltrawidePatch() {
 }
 
 ShaderInjectData shader_injection;
-std::atomic_bool scene_path_seen = false;
 std::atomic_bool ui_path_seen = false;
 std::atomic_uint64_t last_dlaa_sharpening_log_key =
     std::numeric_limits<std::uint64_t>::max();
@@ -977,7 +978,9 @@ bool OnSharedHdrUiReplace(reshade::api::command_list* command_list) {
   // Several Scaleform CRCs are also used for small RGBA8 offscreen textures.
   // Keep those draws native; the final compositor performs the single UI
   // brightness/primaries transform when it writes the shared HDR target.
-  return IsSharedHdrIntermediateTarget(command_list);
+  const bool replace = IsSharedHdrIntermediateTarget(command_list);
+  if (replace) ui_path_seen.store(true, std::memory_order_relaxed);
+  return replace;
 }
 
 std::string_view GetDofStatusText(dof::RuntimeStatus status) {
@@ -1157,14 +1160,15 @@ render_debug::Config GetRenderDebugConfig() {
 void OnRenderDebugSettingsChanged() {
   const auto config = GetRenderDebugConfig();
   render_debug_runtime_controller.SetConfig(config);
-  if (config.mode != render_debug::OverlayMode::kOff) return;
   render_debug_runtime_controller.ResetDevice();
+  if (config.mode != render_debug::OverlayMode::kOff) return;
   render_debug_temporal_replacement_active.store(
       false, std::memory_order_release);
   shader_injection.scene_path_active = 0.f;
 }
 
 void UpdateRenderDebugRuntime() {
+  if (render_debug_mode < 0.5f) return;
   render_debug_runtime_controller.SetConfig(GetRenderDebugConfig());
   const auto result = render_debug_runtime_controller.FinishFrame(
       IsDofSupportedBuild());
@@ -1183,16 +1187,19 @@ bool RenderDebugSelectionUnavailable() {
       render_debug::Resolve(GetRenderDebugConfig()));
 }
 
-void OnDofSplitDrawn(reshade::api::command_list*) {
+bool OnDofSplitDraw(reshade::api::command_list*) {
   dof_runtime_controller.Observe(dof::Pass::kSplit);
+  return true;
 }
 
-void OnDofGatherDrawn(reshade::api::command_list*) {
+bool OnDofGatherDraw(reshade::api::command_list*) {
   dof_runtime_controller.Observe(dof::Pass::kGather);
+  return true;
 }
 
-void OnDofFillDrawn(reshade::api::command_list*) {
+bool OnDofFillDraw(reshade::api::command_list*) {
   dof_runtime_controller.Observe(dof::Pass::kFill);
+  return true;
 }
 
 void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
@@ -1300,8 +1307,10 @@ void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
 
 void OnDofCompositeDrawn(reshade::api::command_list* command_list) {
   dof_runtime_controller.Observe(dof::Pass::kComposite);
-  render_debug_runtime_controller.Observe(
-      render_debug::ProducerPass::kDofComposite);
+  if (render_debug_mode >= 0.5f) {
+    render_debug_runtime_controller.Observe(
+        render_debug::ProducerPass::kDofComposite);
+  }
   ApplyRetinalDofFilter(command_list);
 }
 
@@ -1395,26 +1404,15 @@ bool OnSceneDraw(reshade::api::command_list* command_list) {
   if (command_list != nullptr) {
     temporal_capture::MarkMainTemporalCommandList(command_list->get_native());
   }
+  if (render_debug_mode >= 0.5f) {
+    render_debug_runtime_controller.Observe(
+        render_debug::ProducerPass::kSceneComposite);
+  }
   ApplyDlssOutputMarker(command_list, "scene composite", true);
   SetRuntimeFlag(
       RUNTIME_FLAG_PSYCHOV_BT2020,
       ShouldWritePsychoVBt2020Intermediate());
   return true;
-}
-
-void OnSceneDrawn(reshade::api::command_list*) {
-  scene_path_seen.store(true, std::memory_order_relaxed);
-  render_debug_runtime_controller.Observe(
-      render_debug::ProducerPass::kSceneComposite);
-}
-
-void OnUiDrawn(reshade::api::command_list* command_list) {
-  // on_drawn is scheduled before on_replace is evaluated by the shared shader
-  // dispatcher, so rejected offscreen instances can still reach this callback.
-  // Only advertise the UI path after a draw on the confirmed shared HDR target.
-  if (IsSharedHdrIntermediateTarget(command_list)) {
-    ui_path_seen.store(true, std::memory_order_relaxed);
-  }
 }
 
 bool OnFinalCasDraw(reshade::api::command_list* command_list) {
@@ -1425,6 +1423,10 @@ bool OnFinalCasDraw(reshade::api::command_list* command_list) {
 }
 
 bool OnTemporalAuxiliaryReplace(reshade::api::command_list* command_list) {
+  if (render_debug_mode >= 0.5f) {
+    render_debug_runtime_controller.Observe(
+        render_debug::ProducerPass::kTemporal);
+  }
   if (temporal_capture::RequestAuxiliaryTemporalReplacement(command_list)) {
     return true;
   }
@@ -1432,11 +1434,6 @@ bool OnTemporalAuxiliaryReplace(reshade::api::command_list* command_list) {
          && temporal_capture::GetMode() == DETROIT_DLSS_MODE_NATIVE
          && render_debug_temporal_replacement_active.load(
              std::memory_order_acquire);
-}
-
-void OnTemporalDrawn(reshade::api::command_list*) {
-  render_debug_runtime_controller.Observe(
-      render_debug::ProducerPass::kTemporal);
 }
 
 bool IsHdrOutputColorSpace(reshade::api::color_space color_space) {
@@ -1636,17 +1633,17 @@ renodx::mods::shader::CustomShaders custom_shaders = {
     {supported_build::kDofSplitShaderCrc, {
                                               .crc32 = supported_build::kDofSplitShaderCrc,
                                               .code = __0xE9907978,
-                                              .on_drawn = &OnDofSplitDrawn,
+                                              .on_draw = &OnDofSplitDraw,
                                           }},
     {supported_build::kDofGatherShaderCrc, {
                                                .crc32 = supported_build::kDofGatherShaderCrc,
                                                .code = __0x747E19D2,
-                                               .on_drawn = &OnDofGatherDrawn,
+                                               .on_draw = &OnDofGatherDraw,
                                            }},
     {supported_build::kDofFillShaderCrc, {
                                              .crc32 = supported_build::kDofFillShaderCrc,
                                              .code = __0x508514FB,
-                                             .on_drawn = &OnDofFillDrawn,
+                                             .on_draw = &OnDofFillDraw,
                                          }},
     {supported_build::kDofCompositeShaderCrc, {
                                                   .crc32 = supported_build::kDofCompositeShaderCrc,
@@ -1657,55 +1654,46 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                                                 .crc32 = supported_build::kTemporalAaShaderCrc,
                                                 .code = __temporal_aux_exact,
                                                 .on_replace = &OnTemporalAuxiliaryReplace,
-                                                .on_drawn = &OnTemporalDrawn,
                                             }},
     {0xEBFBDDB1, {
                      .crc32 = 0xEBFBDDB1,
                      .code = __0xEBFBDDB1,
                      .on_draw = &OnSceneDraw,
-                     .on_drawn = &OnSceneDrawn,
                  }},
     {0x2892BFCA, {
                      .crc32 = 0x2892BFCA,
                      .code = __0x2892BFCA,
                      .on_replace = &OnSharedHdrUiReplace,
-                     .on_drawn = &OnUiDrawn,
                  }},
     {0x8808E4CC, {
                      .crc32 = 0x8808E4CC,
                      .code = __0x8808E4CC,
                      .on_replace = &OnSharedHdrUiReplace,
-                     .on_drawn = &OnUiDrawn,
                  }},
     {0x9827B559, {
                      .crc32 = 0x9827B559,
                      .code = __0x9827B559,
                      .on_replace = &OnSharedHdrUiReplace,
-                     .on_drawn = &OnUiDrawn,
                  }},
     {0x11C1C2C5, {
                      .crc32 = 0x11C1C2C5,
                      .code = __0x11C1C2C5,
                      .on_replace = &OnSharedHdrUiReplace,
-                     .on_drawn = &OnUiDrawn,
                  }},
     {0x97874322, {
                      .crc32 = 0x97874322,
                      .code = __0x97874322,
                      .on_replace = &OnSharedHdrUiReplace,
-                     .on_drawn = &OnUiDrawn,
                  }},
     {0xC5B9F7FA, {
                      .crc32 = 0xC5B9F7FA,
                      .code = __0xC5B9F7FA,
                      .on_replace = &OnSharedHdrUiReplace,
-                     .on_drawn = &OnUiDrawn,
                  }},
     {0xEF606BCD, {
                      .crc32 = 0xEF606BCD,
                      .code = __0xEF606BCD,
                      .on_replace = &OnSharedHdrUiReplace,
-                     .on_drawn = &OnUiDrawn,
                  }},
     {0x94F97DCF, {
                      .crc32 = 0x94F97DCF,
@@ -1790,6 +1778,7 @@ renodx::utils::settings::Settings settings =
                    {
                        .binding = &shader_injection.diffuse_white_nits,
                        .default_value = 203.f,
+                       .on_change_value = [](float, float) { SyncDlaaSharpening(); },
                    }},
                   {"ToneMapUINits",
                    {
@@ -2436,6 +2425,7 @@ renodx::utils::settings::Settings settings =
                                             && temporal_capture::GetMode()
                                                    == DETROIT_DLSS_MODE_DLAA; },
                 .parse = [](float value) { return value * 0.01f; },
+                .on_change_value = [](float, float) { SyncDlaaSharpening(); },
             }},
             {{
                 .key = "DLSSBootstrapStatus",
@@ -2722,12 +2712,10 @@ void OnInitEffectRuntime(reshade::api::effect_runtime* runtime) {
     if (process_id != GetCurrentProcessId()) return;
   }
 
+  if (!InitializeReShadeCaptureRequest()) return;
   auto* expected = static_cast<reshade::api::effect_runtime*>(nullptr);
-  if (tracked_effect_runtime.compare_exchange_strong(
-          expected, runtime, std::memory_order_acq_rel)
-      || expected == runtime) {
-    InitializeReShadeCaptureRequest();
-  }
+  (void)tracked_effect_runtime.compare_exchange_strong(
+      expected, runtime, std::memory_order_acq_rel);
 }
 
 void OnDestroyEffectRuntime(reshade::api::effect_runtime* runtime) {
@@ -2880,6 +2868,7 @@ void OnPresent(
     uint32_t,
     const reshade::api::rect*) {
   if (embedded_hooks_requested_at_startup
+      && !bootstrap_setup_attempted.load(std::memory_order_acquire)
       && !bootstrap_setup_attempted.exchange(true, std::memory_order_acq_rel)) {
     (void)EnsureLoadFromDllMainEntry();
     embedded_dlss::RefreshDeferredStatus();
@@ -2901,25 +2890,35 @@ void OnPresent(
       }
     }
   }
-  if (auto* status = renodx::utils::settings::FindSetting("DLSSBootstrapStatus");
-      status != nullptr) {
-    status->label = embedded_hooks_requested_at_startup
-                        ? embedded_dlss::GetStatusText()
-                        : "Native TAA fallback: targeted DLAA backend not loaded.";
+  static thread_local std::uint64_t displayed_bootstrap_revision = 0u;
+  const auto bootstrap_revision = embedded_dlss::GetStatusRevision();
+  if (displayed_bootstrap_revision != bootstrap_revision) {
+    if (auto* status =
+            renodx::utils::settings::FindSetting("DLSSBootstrapStatus");
+        status != nullptr) {
+      status->label = embedded_hooks_requested_at_startup
+                          ? embedded_dlss::GetStatusText()
+                          : "Native TAA fallback: targeted DLAA backend not loaded.";
+    }
+    displayed_bootstrap_revision = bootstrap_revision;
   }
-  if (TryTrackGameSwapchain(swapchain) && UpdateUltrawideFromSwapchain(swapchain)
+  if (!ultrawide_install_attempted.load(std::memory_order_acquire)
+      && TryTrackGameSwapchain(swapchain)
+      && UpdateUltrawideFromSwapchain(swapchain)
       && !ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
     InstallUltrawidePatch();
   }
   const auto color_space = swapchain->get_color_space();
   shader_injection.output_is_hdr =
       IsHdrOutputColorSpace(color_space) ? 1.f : 0.f;
-  UpdatePeakBrightness(swapchain, false);
+  if (peak_brightness::ParseSource(peak_brightness_source)
+      != peak_brightness::Source::kManual) {
+    UpdatePeakBrightness(swapchain, false);
+  }
   UpdateRenderDebugRuntime();
   shader_injection.ui_path_active =
       ui_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
   UpdateDofRuntimeMode();
-  SyncDlaaSharpening();
   TrySaveRequestedReShadeScreenshot(swapchain);
   // The carrier bit describes the frame that just finished. Clear all
   // transient flags so a video/loading frame without the scene composite
@@ -2986,6 +2985,8 @@ bool AttachAddon(HMODULE h_module) {
       &OnRenderDebugSettingsChanged);
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &OnPeakBrightnessSettingsChanged);
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &SyncDlaaSharpening);
   reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
   reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
   reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);

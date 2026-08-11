@@ -91,6 +91,8 @@ def main() -> None:
     require(source, "VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT")
     require(source, "runtime_command_tracking_enabled")
     require(source, "void SetRuntimeCommandTracking(bool enabled)")
+    require(source, "bootstrap_status_revision.fetch_add")
+    require(bootstrap, "std::uint64_t GetStatusRevision();")
     require(command_action, "std::deque<std::vector<PendingPostResult>>")
     require(command_action, "pending_post_result_frames")
     require(command_action, "pending_post_result_depth")
@@ -297,6 +299,7 @@ def main() -> None:
     begin_start = source.index("LayerBeginCommandBuffer(")
     begin_end = source.index("LayerResetCommandBuffer(", begin_start)
     begin_command_buffer = source[begin_start:begin_end]
+    require(begin_command_buffer, "if (result == VK_SUCCESS)")
     require(begin_command_buffer, "MayBeFeatureRecordingCandidate(")
     feature_gate = begin_command_buffer.index("if (may_have_feature_recording)")
     adapter_begin = begin_command_buffer.index(
@@ -717,7 +720,12 @@ def main() -> None:
     require(addon, "embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest()")
     require(addon, "if (embedded_hooks_requested_at_startup)")
     require(addon, "embedded_hooks_active.store(")
-    require(addon, "embedded_hooks_requested_at_startup\n      && !bootstrap_setup_attempted.exchange")
+    require(
+        addon,
+        "embedded_hooks_requested_at_startup\n"
+        "      && !bootstrap_setup_attempted.load(std::memory_order_acquire)\n"
+        "      && !bootstrap_setup_attempted.exchange",
+    )
     tracking_refresh_start = addon.index("void RefreshEmbeddedCommandTracking()")
     tracking_refresh_end = addon.index("void ApplyDlssMode(", tracking_refresh_start)
     tracking_refresh = addon[tracking_refresh_start:tracking_refresh_end]

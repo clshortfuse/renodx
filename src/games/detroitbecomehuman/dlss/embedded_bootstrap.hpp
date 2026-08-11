@@ -117,6 +117,7 @@ void RefreshDeferredStatus();
 void SetNativeFallback(const char* reason);
 
 BootstrapStatus GetStatus();
+std::uint64_t GetStatusRevision();
 const char* GetStatusText();
 bool WasLoadedEarly();
 bool IsBridgeReady();

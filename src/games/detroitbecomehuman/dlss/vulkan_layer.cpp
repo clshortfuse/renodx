@@ -92,6 +92,7 @@ std::atomic<bool> executable_verified = false;
 std::atomic<bool> hooks_attached = false;
 std::atomic<bool> loaded_early = false;
 std::atomic<bool> cached_extensions_ready = false;
+std::atomic_uint64_t bootstrap_status_revision = 1u;
 std::atomic<bool> runtime_command_tracking_enabled = false;
 std::atomic<bool> native_command_hooks_installed = false;
 std::atomic<std::uintptr_t> fast_command_dispatch_key = 0u;
@@ -4548,6 +4549,11 @@ void CommitFeatureSubmission(
 }
 
 void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
+  if (state == nullptr
+      || !state->feature_lifecycle_tracking_active.load(
+          std::memory_order_acquire)) {
+    return;
+  }
   std::vector<CompletedFeatureRecording> completed_command_buffers;
   std::vector<VkFence> completed_internal_fences;
   std::vector<TraceCompletionCandidate> trace_completed_command_buffers;
@@ -4585,6 +4591,11 @@ void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
 }
 
 void CompleteFeatureDevice(DeviceState* state) {
+  if (state == nullptr
+      || !state->feature_lifecycle_tracking_active.load(
+          std::memory_order_acquire)) {
+    return;
+  }
   std::vector<CompletedFeatureRecording> completed_command_buffers;
   std::vector<VkFence> completed_internal_fences;
   std::vector<TraceCompletionCandidate> trace_completed_command_buffers;
@@ -4614,7 +4625,11 @@ void CompleteFeatureDevice(DeviceState* state) {
 }
 
 void CompleteFeatureFence(DeviceState* state, VkFence fence) {
-  if (state == nullptr || fence == VK_NULL_HANDLE) return;
+  if (state == nullptr || fence == VK_NULL_HANDLE
+      || !state->feature_lifecycle_tracking_active.load(
+          std::memory_order_acquire)) {
+    return;
+  }
   std::vector<CompletedFeatureRecording> completed_command_buffers;
   bool destroy_internal_fence = false;
   FeatureSubmissionSnapshot trace_completed_submission;
@@ -5791,11 +5806,14 @@ std::mutex bootstrap_detail_mutex;
 std::string bootstrap_detail = "First-run setup";
 
 void SetBootstrapStatus(BootstrapStatus status, std::string detail) {
-  {
-    const std::lock_guard lock(bootstrap_detail_mutex);
-    bootstrap_detail = std::move(detail);
+  const std::lock_guard lock(bootstrap_detail_mutex);
+  if (bootstrap_status.load(std::memory_order_relaxed) == status
+      && bootstrap_detail == detail) {
+    return;
   }
+  bootstrap_detail = std::move(detail);
   bootstrap_status.store(status, std::memory_order_release);
+  bootstrap_status_revision.fetch_add(1u, std::memory_order_release);
 }
 
 std::shared_ptr<InstanceState> EnsureInstanceState(VkInstance instance) {
@@ -6422,6 +6440,10 @@ void SetRestartRequired() {
 }
 
 BootstrapStatus GetStatus() { return bootstrap_status.load(std::memory_order_acquire); }
+
+std::uint64_t GetStatusRevision() {
+  return bootstrap_status_revision.load(std::memory_order_acquire);
+}
 
 const char* GetStatusText() {
   thread_local std::string copy;

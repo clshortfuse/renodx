@@ -366,7 +366,7 @@ class UIBrightnessGateTests(unittest.TestCase):
                 self.assertIn(
                     ".on_replace = &OnSharedHdrUiReplace", registration
                 )
-                self.assertIn(".on_drawn = &OnUiDrawn", registration)
+                self.assertNotIn(".on_drawn", registration)
 
         gate_start = addon.index("bool IsSharedHdrIntermediateTarget(")
         gate_end = addon.index("bool OnSharedHdrUiReplace(", gate_start)
@@ -386,7 +386,12 @@ class UIBrightnessGateTests(unittest.TestCase):
         callback_end = addon.index("std::string_view", callback_start)
         callback = addon[callback_start:callback_end]
         self.assertIn(
-            "return IsSharedHdrIntermediateTarget(command_list);", callback
+            "const bool replace = IsSharedHdrIntermediateTarget(command_list);",
+            callback,
+        )
+        self.assertIn(
+            "if (replace) ui_path_seen.store(true, std::memory_order_relaxed);",
+            callback,
         )
         self.assertIn("RGBA8 offscreen textures", callback)
 
@@ -397,17 +402,13 @@ class UIBrightnessGateTests(unittest.TestCase):
             r'\{"ToneMapUINits",[\s\S]*?\.is_visible\s*=\s*\[\]\(\)\s*\{\s*'
             r"return\s+shader_injection\.ui_path_active\s*!=\s*0\.f\s*;",
         )
-        self.assertIn(".on_drawn = &OnUiDrawn", addon)
-        drawn_start = addon.index("void OnUiDrawn(")
-        drawn_end = addon.index("bool OnFinalCasDraw(", drawn_start)
-        drawn_callback = addon[drawn_start:drawn_end]
-        self.assertIn(
-            "if (IsSharedHdrIntermediateTarget(command_list))",
-            drawn_callback,
-        )
+        self.assertNotIn("OnUiDrawn", addon)
+        replace_start = addon.index("bool OnSharedHdrUiReplace(")
+        replace_end = addon.index("std::string_view", replace_start)
+        replace_callback = addon[replace_start:replace_end]
         self.assertIn(
             "ui_path_seen.store(true, std::memory_order_relaxed);",
-            drawn_callback,
+            replace_callback,
         )
         self.assertRegex(
             addon,
