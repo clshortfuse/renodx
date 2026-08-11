@@ -18,7 +18,6 @@
 #include "src/games/detroitbecomehuman/dlss_bridge_abi.h"
 #include "src/games/detroitbecomehuman/dlss_bridge_client.hpp"
 #include "src/games/detroitbecomehuman/supported_build.hpp"
-#include "src/games/detroitbecomehuman/temporal_descriptor_binding.hpp"
 #include "src/games/detroitbecomehuman/temporal_mode_state.hpp"
 
 namespace {
@@ -31,9 +30,6 @@ namespace dlss_evaluation_trace =
     renodx::games::detroitbecomehuman::dlss;
 namespace temporal_mode_state =
     renodx::games::detroitbecomehuman::temporal_mode_state;
-namespace temporal_descriptor_binding =
-    renodx::games::detroitbecomehuman::temporal_descriptor_binding;
-
 static_assert(std::is_standard_layout_v<DetroitDlssBootstrapContext>);
 static_assert(std::is_trivially_copyable_v<DetroitDlssBootstrapContext>);
 static_assert(std::is_standard_layout_v<DetroitDlssResource>);
@@ -888,70 +884,6 @@ bool TestDirectProviderContract() {
   return passed;
 }
 
-bool TestTemporalDescriptorBindingPingPong() {
-  temporal_descriptor_binding::Tracker tracker;
-  constexpr std::uint64_t kFirstTrackingEpoch = UINT64_C(11);
-  constexpr std::uint64_t kSecondTrackingEpoch = UINT64_C(12);
-  constexpr std::uint64_t kTemporalLayout = UINT64_C(0x7000);
-  constexpr std::uint64_t kOtherLayout = UINT64_C(0x7001);
-  constexpr std::uint64_t kFirstTemporalSet = UINT64_C(0x8000);
-  constexpr std::uint64_t kSecondTemporalSet = UINT64_C(0x8001);
-
-  bool passed = true;
-  passed &= Expect(
-      !tracker.Resolve(kFirstTrackingEpoch, kTemporalLayout).IsValid(),
-      "an unbound temporal descriptor set must fail closed");
-
-  tracker.ObserveComputeBind(
-      kFirstTrackingEpoch, kTemporalLayout, 0u, 1u, kFirstTemporalSet);
-  auto snapshot = tracker.Resolve(kFirstTrackingEpoch, kTemporalLayout);
-  passed &= Expect(
-      snapshot.IsValid() && snapshot.descriptor_set == kFirstTemporalSet,
-      "the first bound temporal ping-pong set was not preserved");
-
-  tracker.ObserveComputeBind(
-      kFirstTrackingEpoch, kTemporalLayout, 1u, 1u, UINT64_C(0x9000));
-  snapshot = tracker.Resolve(kFirstTrackingEpoch, kTemporalLayout);
-  passed &= Expect(
-      snapshot.IsValid() && snapshot.descriptor_set == kFirstTemporalSet,
-      "binding a later set must not overwrite compute set zero");
-
-  tracker.ObserveComputeBind(
-      kFirstTrackingEpoch, kTemporalLayout, 0u, 1u, kSecondTemporalSet);
-  snapshot = tracker.Resolve(kFirstTrackingEpoch, kTemporalLayout);
-  passed &= Expect(
-      snapshot.IsValid() && snapshot.descriptor_set == kSecondTemporalSet,
-      "the current temporal ping-pong set must supersede update recency");
-
-  tracker.ObserveComputeBind(
-      kFirstTrackingEpoch, kOtherLayout, 1u, 1u, UINT64_C(0x9001));
-  passed &= Expect(
-      !tracker.Resolve(kFirstTrackingEpoch, kTemporalLayout).IsValid()
-          && !tracker.Resolve(kFirstTrackingEpoch, kOtherLayout).IsValid(),
-      "a pipeline-layout transition must invalidate an unbound set zero");
-
-  tracker.ObserveComputeBind(
-      kFirstTrackingEpoch, kTemporalLayout, 0u, 1u, kFirstTemporalSet);
-  passed &= Expect(
-      !tracker.Resolve(kSecondTrackingEpoch, kTemporalLayout).IsValid(),
-      "a later DLSS session must reject the previous session's descriptor set");
-  tracker.ObserveComputeBind(
-      kSecondTrackingEpoch, kTemporalLayout, 0u, 1u, kSecondTemporalSet);
-  snapshot = tracker.Resolve(kSecondTrackingEpoch, kTemporalLayout);
-  passed &= Expect(
-      snapshot.IsValid() && snapshot.descriptor_set == kSecondTemporalSet,
-      "the first bind in a new DLSS session must establish a fresh descriptor set");
-  passed &= Expect(
-      !tracker.Resolve(0u, kTemporalLayout).IsValid(),
-      "Native TAA must reject descriptor tracking without touching stored state");
-
-  tracker.Reset();
-  passed &= Expect(
-      !tracker.Resolve(kSecondTrackingEpoch, kTemporalLayout).IsValid(),
-      "command-buffer reset must revoke the temporal binding");
-  return passed;
-}
-
 bool TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization() {
   temporal_mode_state::Tracker tracker;
   constexpr std::uint64_t kCommandList = UINT64_C(0x12345678);
@@ -1324,7 +1256,6 @@ int main() {
   passed &= TestModeSettingsCachePolicy();
   passed &= TestFunctionTableContract();
   passed &= TestDirectProviderContract();
-  passed &= TestTemporalDescriptorBindingPingPong();
   passed &= TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization();
   passed &= TestTemporalModeRejectsLegacySrValues();
   passed &= TestNativePostDispatchFastPathFailsClosed();

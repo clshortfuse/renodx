@@ -238,9 +238,7 @@ HMODULE addon_module = nullptr;
 std::atomic_bool addon_attached = false;
 std::atomic_bool bootstrap_setup_attempted = false;
 bool embedded_hooks_requested_at_startup = false;
-bool native_command_hooks_requested_at_startup = false;
 std::atomic_bool embedded_hooks_active = false;
-std::atomic_int embedded_hooks_restart_notice = 0;
 embedded_dlss::ExtensionCache initial_extension_cache;
 
 std::filesystem::path GetModulePath(HMODULE module) {
@@ -327,15 +325,6 @@ bool ReadStartupEmbeddedHookRequest() {
   (void)reshade::get_config_value(
       nullptr, "renodx-preset1", "DepthOfFieldMode", startup_dof_mode);
   return embedded_dlss::NeedsEmbeddedBridge(
-      DETROIT_DLSS_MODE_NATIVE,
-      startup_dof_mode >= 2.5f);
-}
-
-bool ReadStartupNativeCommandHookRequest() {
-  float startup_dof_mode = 0.f;
-  (void)reshade::get_config_value(
-      nullptr, "renodx-preset1", "DepthOfFieldMode", startup_dof_mode);
-  return embedded_dlss::NeedsRuntimeCommandTracking(
       DETROIT_DLSS_MODE_NATIVE,
       startup_dof_mode >= 2.5f);
 }
@@ -520,25 +509,8 @@ void OnAspectRatioModeChanged() {
 void RefreshEmbeddedCommandTracking() {
   const bool requested = embedded_dlss::NeedsRuntimeCommandTracking(
       temporal_capture::GetMode(), dof_mode >= 2.5f);
-  const bool active = embedded_hooks_active.load(std::memory_order_acquire)
-                      && native_command_hooks_requested_at_startup;
-  embedded_dlss::SetRuntimeCommandTracking(active && requested);
-
-  const int notice = requested == active ? 0 : (requested ? 1 : 2);
-  if (embedded_hooks_restart_notice.exchange(
-          notice, std::memory_order_acq_rel)
-      == notice) {
-    return;
-  }
-  if (notice == 1) {
-    reshade::log::message(
-        reshade::log::level::warning,
-        "Detroit Retinal DOF: restart the game to load its Vulkan command-bind hooks.");
-  } else if (notice == 2) {
-    reshade::log::message(
-        reshade::log::level::warning,
-        "Detroit Retinal DOF: restart the game to unload its Vulkan command-bind hooks.");
-  }
+  embedded_dlss::SetRuntimeCommandTracking(
+      requested && embedded_hooks_active.load(std::memory_order_acquire));
 }
 
 void ApplyDlssMode(float selected_mode) {
@@ -2565,7 +2537,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "DLAA uses targeted descriptor/resource tracking; global Vulkan command-bind hooks remain disabled unless Retinal DOF needs them.",
+                .label = "The targeted DLAA Vulkan backend is unavailable; Native TAA remains active.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -2575,7 +2547,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Native TAA is active. The targeted DLAA backend remains ready for live mode switching; global command-bind hooks are disabled unless Retinal DOF requested them at startup.",
+                .label = "Native TAA is active. Targeted Vulkan command hooks use their direct lock-free trampoline until DLAA or Retinal DOF requests exact binding state.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -3120,14 +3092,12 @@ bool AttachAddon(HMODULE h_module) {
 #ifdef DETROIT_EFFECTS_ADDON
   initial_extension_cache = ReadExtensionCache();
   embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest();
-  native_command_hooks_requested_at_startup =
-      ReadStartupNativeCommandHookRequest();
   if (embedded_hooks_requested_at_startup) {
     embedded_hooks_active.store(
         embedded_dlss::AttachEarlyHooks(
             h_module,
             initial_extension_cache,
-            native_command_hooks_requested_at_startup),
+            true),
         std::memory_order_release);
   } else {
     reshade::log::message(

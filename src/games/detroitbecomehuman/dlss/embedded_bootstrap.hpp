@@ -124,8 +124,7 @@ bool IsBridgeReady();
 
 [[nodiscard]] inline constexpr bool NeedsRuntimeCommandTracking(
     DetroitDlssMode mode, bool retinal_dof_requested) noexcept {
-  (void)mode;
-  return retinal_dof_requested;
+  return mode != DETROIT_DLSS_MODE_NATIVE || retinal_dof_requested;
 }
 
 [[nodiscard]] inline constexpr bool NeedsEmbeddedBridge(
@@ -150,8 +149,8 @@ bool IsBridgeReady();
   return true;
 }
 
-// Targeted DLAA keeps only resource and descriptor metadata warm. This
-// separate gate enables per-command-buffer bind state solely for Retinal DOF.
+// Native TAA uses the direct command-hook trampoline. DLAA and Retinal DOF
+// enable exact per-command-buffer bind state only while they need it.
 void SetRuntimeCommandTracking(bool enabled);
 
 bool CanInsertComputeWriteBarrier(std::uint64_t command_buffer);

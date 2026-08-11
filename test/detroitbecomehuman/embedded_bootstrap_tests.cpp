@@ -53,12 +53,12 @@ int main() {
       embedded::kDlssRuntimeEnabled,
       "targeted DLAA runtime must be enabled");
   Expect(
-      !embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_DLAA, false),
-      "DLAA must not enable global command-bind tracking");
+      embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_DLAA, false),
+      "DLAA must enable targeted command-bind tracking");
   Expect(
       embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_NATIVE, false)
           && embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_DLAA, false),
-      "Native TAA and DLAA must load the embedded Vulkan bridge without bind tracking");
+      "Native TAA and DLAA must load the embedded Vulkan bridge");
   Expect(
       embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_NATIVE, true),
       "Retinal DOF must enable runtime command tracking in Native TAA mode");

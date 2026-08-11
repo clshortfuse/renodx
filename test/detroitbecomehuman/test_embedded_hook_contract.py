@@ -110,10 +110,13 @@ def main() -> None:
         )
     require(bootstrap, "inline constexpr bool kDlssRuntimeEnabled = true;")
     require(bootstrap, "return kDlssRuntimeEnabled || retinal_dof_requested;")
-    require(bootstrap, "return retinal_dof_requested;")
+    require(
+        bootstrap,
+        "return mode != DETROIT_DLSS_MODE_NATIVE || retinal_dof_requested;",
+    )
     require(
         source,
-        "Targeted DLAA backend active without native Vulkan command-bind hooks",
+        "Targeted Vulkan command hooks installed with mode-gated tracking",
     )
     if re.search(
         r'\.labels\s*=\s*\{\s*"Native TAA"\s*,\s*"DLAA"\s*\}',
@@ -174,7 +177,15 @@ def main() -> None:
     snapshot_end = source.index("BridgeQueryMode(", snapshot_start)
     snapshot_capture = source[snapshot_start:snapshot_end]
     require(snapshot_capture, "ResolveExpectedTemporalDescriptorSetLocked(")
-    require(snapshot_capture, "ResolveLatestTemporalDescriptorUpdateLocked(")
+    if "ResolveLatestTemporalDescriptorUpdateLocked(" in source:
+        raise AssertionError(
+            "temporal capture must not substitute descriptor-update recency for "
+            "the exact command-buffer binding"
+        )
+    require(
+        snapshot_capture,
+        "if (expected_descriptor_set == 0u || expected_pipeline_layout == 0u)",
+    )
     require(snapshot_capture, "ResolveChangedTemporalConstantsSlotLocked(")
     require(snapshot_capture, "FillTemporalConstantsForBindingLocked(")
     slot_scan_start = source.index("ResolveChangedTemporalConstantsSlotLocked(")
@@ -194,46 +205,36 @@ def main() -> None:
         )
     if "std::vector<bool>" in slot_scan:
         raise AssertionError("temporal slot scan must reuse persistent scratch storage")
-    require(temporal, "GetTemporalDescriptorBinding(")
-    require(temporal, "temporal_binding.descriptor_set")
-    require(temporal, "addon_event::bind_descriptor_tables")
-    bind_callback_start = temporal.index("OnBindTemporalDescriptorTables(")
-    bind_callback_end = temporal.index(
-        "GetTemporalDescriptorBinding(", bind_callback_start
+    require(
+        temporal,
+        "CaptureTemporalSnapshot(\n"
+        "          context.cmd_list->get_native(),\n"
+        "          0u,",
     )
-    bind_callback = temporal[bind_callback_start:bind_callback_end]
-    native_fast_gate = bind_callback.index(
-        "temporal_descriptor_binding_tracking_epoch.load"
-    )
-    private_data_lookup = bind_callback.index(
-        "renodx::utils::data::Get<TemporalDescriptorBindingData>"
-    )
-    if native_fast_gate >= private_data_lookup:
-        raise AssertionError(
-            "Native TAA descriptor-bind fast path must return before private-data lookup"
-        )
+    for removed_global_bind_path in (
+        "OnBindTemporalDescriptorTables(",
+        "addon_event::bind_descriptor_tables",
+        "GetTemporalDescriptorBinding(",
+        "temporal_descriptor_binding_tracking_epoch",
+    ):
+        if removed_global_bind_path in temporal:
+            raise AssertionError(
+                "Native TAA must not retain the global ReShade descriptor-bind path: "
+                + removed_global_bind_path
+            )
     reset_callback_start = temporal.index("OnResetTemporalCommandList(")
     reset_callback_end = temporal.index(
-        "OnBindTemporalDescriptorTables(", reset_callback_start
+        "MixTelemetryKey(", reset_callback_start
     )
     reset_callback = temporal[reset_callback_start:reset_callback_end]
     reset_native_gate = reset_callback.index(
-        "temporal_descriptor_binding_tracking_epoch.load"
+        "temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())"
     )
     reset_authorization = reset_callback.index("mode_state.BeginRecording(")
-    reset_private_data = reset_callback.index(
-        "renodx::utils::data::Get<TemporalDescriptorBindingData>"
-    )
-    if not reset_native_gate < reset_authorization < reset_private_data:
+    if not reset_native_gate < reset_authorization:
         raise AssertionError(
-            "DLAA recording authorization must reset after the Native fast gate "
-            "and before descriptor private-data work"
+            "DLAA recording authorization must reset after the Native fast gate"
         )
-    require(
-        temporal,
-        "temporal_descriptor_binding_tracking_epoch.store(\n"
-        "        0u, std::memory_order_release);",
-    )
     context_start = source.index("BridgeGetContext(")
     context_end = source.index("BridgeGetTemporalConstants(", context_start)
     context = source[context_start:context_end]
@@ -797,10 +798,19 @@ def main() -> None:
         raise AssertionError("invalid extension cache must fail closed before Detours")
     require(addon, "QueryRequiredExtensionsIsolated(addon_module, &refreshed)")
     require(addon, "bool ReadStartupEmbeddedHookRequest()")
+    if "ReadStartupNativeCommandHookRequest" in addon:
+        raise AssertionError("command hooks must follow the embedded bridge lifecycle")
     require(addon, '"renodx-preset1", "DepthOfFieldMode"')
     require(addon, "embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest()")
     require(addon, "if (embedded_hooks_requested_at_startup)")
     require(addon, "embedded_hooks_active.store(")
+    require(
+        addon,
+        "embedded_dlss::AttachEarlyHooks(\n"
+        "            h_module,\n"
+        "            initial_extension_cache,\n"
+        "            true)",
+    )
     if not re.search(
         r"embedded_hooks_requested_at_startup\s*"
         r"&& !bootstrap_setup_attempted\.load\(std::memory_order_acquire\)\s*"

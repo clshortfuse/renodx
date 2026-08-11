@@ -525,7 +525,6 @@ struct ImageDescriptorState {
 struct DescriptorSetState {
   VkDescriptorPool pool = VK_NULL_HANDLE;
   VkDescriptorSetLayout layout = VK_NULL_HANDLE;
-  DWORD last_update_thread_id = 0u;
   std::unordered_map<std::uint64_t, BufferDescriptorState> buffer_descriptors;
   std::unordered_map<std::uint64_t, ImageDescriptorState> image_descriptors;
 };
@@ -2410,18 +2409,6 @@ bool FillImageBindingLocked(
          == DETROIT_DLSS_IMAGE_MANDATORY_MASK;
 }
 
-std::uint64_t GetDescriptorSetUpdateSerial(
-    const DescriptorSetState& descriptor_set) {
-  std::uint64_t serial = 0u;
-  for (const auto& [_, descriptor] : descriptor_set.buffer_descriptors) {
-    serial = std::max(serial, descriptor.update_serial);
-  }
-  for (const auto& [_, descriptor] : descriptor_set.image_descriptors) {
-    serial = std::max(serial, descriptor.update_serial);
-  }
-  return serial;
-}
-
 bool HasRequiredTemporalDescriptors(const DescriptorSetState& descriptor_set) {
   for (const std::uint32_t binding : kTemporalImageBindings) {
     if ((BindingMask(binding) & DETROIT_DLSS_TAA_REQUIRED_IMAGE_MASK) == 0u) {
@@ -2440,53 +2427,6 @@ bool HasRequiredTemporalDescriptors(const DescriptorSetState& descriptor_set) {
   return constants != descriptor_set.buffer_descriptors.end()
          && IsDynamicBufferDescriptorType(constants->second.descriptor_type)
          && constants->second.buffer != VK_NULL_HANDLE;
-}
-
-std::optional<std::pair<VkDescriptorSet, DescriptorSetState*>>
-ResolveLatestTemporalDescriptorUpdateLocked(
-    DeviceState* state,
-    std::uint32_t descriptor_set_index,
-    VkPipelineLayout expected_pipeline_layout) {
-  const auto pipeline_layout =
-      state->pipeline_layouts.find(ToOpaque(expected_pipeline_layout));
-  if (pipeline_layout == state->pipeline_layouts.end()
-      || descriptor_set_index >= pipeline_layout->second.set_layouts.size()) {
-    return std::nullopt;
-  }
-  const VkDescriptorSetLayout expected_set_layout =
-      pipeline_layout->second.set_layouts[descriptor_set_index];
-  const auto layout =
-      state->descriptor_set_layouts.find(ToOpaque(expected_set_layout));
-  if (layout == state->descriptor_set_layouts.end()
-      || !layout->second.temporal_candidate) {
-    return std::nullopt;
-  }
-
-  const DWORD current_thread_id = GetCurrentThreadId();
-  std::uint64_t newest_serial = 0u;
-  VkDescriptorSet newest_handle = VK_NULL_HANDLE;
-  DescriptorSetState* newest_state = nullptr;
-  bool newest_is_unique = true;
-  for (auto& [handle, descriptor_set] : state->descriptor_sets) {
-    if (descriptor_set.layout != expected_set_layout
-        || descriptor_set.last_update_thread_id != current_thread_id
-        || !HasRequiredTemporalDescriptors(descriptor_set)) {
-      continue;
-    }
-    const std::uint64_t serial = GetDescriptorSetUpdateSerial(descriptor_set);
-    if (serial > newest_serial) {
-      newest_serial = serial;
-      newest_handle = FromOpaque<VkDescriptorSet>(handle);
-      newest_state = &descriptor_set;
-      newest_is_unique = true;
-    } else if (serial == newest_serial && serial != 0u) {
-      newest_is_unique = false;
-    }
-  }
-  if (newest_state == nullptr || newest_serial == 0u || !newest_is_unique) {
-    return std::nullopt;
-  }
-  return std::pair{newest_handle, newest_state};
 }
 
 std::optional<std::pair<VkDescriptorSet, DescriptorSetState*>>
@@ -2739,20 +2679,15 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
       snapshot->compute_pipeline = ToOpaque(restore->second.pipeline);
     }
   } else {
-    if (expected_pipeline_layout == 0u) {
+    if (expected_descriptor_set == 0u || expected_pipeline_layout == 0u) {
       set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_COMMAND_UNTRACKED);
       return DETROIT_DLSS_RESULT_FALLBACK;
     }
-    const auto targeted = expected_descriptor_set != 0u
-        ? ResolveExpectedTemporalDescriptorSetLocked(
-              state.get(),
-              descriptor_set_index,
-              FromOpaque<VkDescriptorSet>(expected_descriptor_set),
-              FromOpaque<VkPipelineLayout>(expected_pipeline_layout))
-        : ResolveLatestTemporalDescriptorUpdateLocked(
-              state.get(),
-              descriptor_set_index,
-              FromOpaque<VkPipelineLayout>(expected_pipeline_layout));
+    const auto targeted = ResolveExpectedTemporalDescriptorSetLocked(
+        state.get(),
+        descriptor_set_index,
+        FromOpaque<VkDescriptorSet>(expected_descriptor_set),
+        FromOpaque<VkPipelineLayout>(expected_pipeline_layout));
     if (!targeted.has_value()) {
       set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_TARGETED_SET_UNAVAILABLE);
       return DETROIT_DLSS_RESULT_FALLBACK;
@@ -3844,7 +3779,6 @@ VKAPI_ATTR void VKAPI_CALL LayerUpdateDescriptorSets(
     if (set == state->descriptor_sets.end()) continue;
     const auto layout = state->descriptor_set_layouts.find(ToOpaque(set->second.layout));
     if (layout == state->descriptor_set_layouts.end()) continue;
-    set->second.last_update_thread_id = GetCurrentThreadId();
     const auto slots = EnumerateDescriptorSlots(
         layout->second,
         write.dstBinding,
@@ -3892,7 +3826,6 @@ VKAPI_ATTR void VKAPI_CALL LayerUpdateDescriptorSets(
         || destination_set == state->descriptor_sets.end()) {
       continue;
     }
-    destination_set->second.last_update_thread_id = GetCurrentThreadId();
     const auto source_layout =
         state->descriptor_set_layouts.find(ToOpaque(source_set->second.layout));
     const auto destination_layout =
@@ -6368,8 +6301,8 @@ bool AttachEarlyHooks(
       install_native_command_hooks, std::memory_order_release);
   Trace(
       install_native_command_hooks
-          ? "Retinal startup requested native Vulkan command-bind hooks"
-          : "Targeted DLAA backend active without native Vulkan command-bind hooks");
+          ? "Targeted Vulkan command hooks installed with mode-gated tracking"
+          : "Targeted Vulkan command hooks disabled");
   if (hooks_attached.load(std::memory_order_acquire)) return true;
   const bool cache_valid = CanAttachEarlyHooks(cache);
   {
