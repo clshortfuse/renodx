@@ -2852,6 +2852,26 @@ void OnDestroyDevice(reshade::api::device* device) {
   }
 }
 
+void MigrateDlssModeSettings() {
+  for (const char* section : {
+           "renodx-preset1",
+           "renodx-preset2",
+           "renodx-preset3",
+       }) {
+    float persisted = 0.f;
+    if (!reshade::get_config_value(
+            nullptr, section, "DLSSMode", persisted)) {
+      continue;
+    }
+    const auto canonical =
+        renodx::games::detroitbecomehuman::dlss_policy::ParsePersistedDlssMode(
+            persisted);
+    if (persisted == static_cast<float>(canonical)) continue;
+    reshade::set_config_value(
+        nullptr, section, "DLSSMode", static_cast<int>(canonical));
+  }
+}
+
 void OnPresent(
     reshade::api::command_queue*,
     reshade::api::swapchain* swapchain,
@@ -2973,6 +2993,7 @@ bool AttachAddon(HMODULE h_module) {
   reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
   reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
   reshade::register_event<reshade::addon_event::present>(OnPresent);
+  MigrateDlssModeSettings();
   MigrateToneMapTypeSettings();
   renodx::utils::settings::Use(DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
   temporal_capture::Use(DLL_PROCESS_ATTACH);

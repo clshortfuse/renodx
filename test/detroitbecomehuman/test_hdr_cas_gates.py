@@ -826,8 +826,25 @@ class HDRAndCASGateTests(unittest.TestCase):
         )
         self.assertLess(
             native_fast_path,
-            temporal_post_dispatch.index("mode_state.BeginTransaction()"),
+            temporal_post_dispatch.index(
+                "std::scoped_lock transition_lock(mode_transition_mutex)"
+            ),
         )
+        transition_lock = temporal_post_dispatch.index(
+            "std::scoped_lock transition_lock(mode_transition_mutex)"
+        )
+        mode_snapshot = temporal_post_dispatch.index(
+            "const auto mode_snapshot = mode_state.GetSnapshot()"
+        )
+        evaluation = temporal_post_dispatch.index("client.Evaluate(")
+        output_commit = temporal_post_dispatch.index(
+            "mode_state.Record(", evaluation
+        )
+        self.assertLess(transition_lock, mode_snapshot)
+        self.assertLess(mode_snapshot, evaluation)
+        self.assertLess(evaluation, output_commit)
+        self.assertNotIn("BeginTransaction", temporal_post_dispatch)
+        self.assertNotIn("Tracker::Transaction", temporal_capture)
         native_fast_path_end = temporal_post_dispatch.index("}", native_fast_path)
         native_fast_path_body = temporal_post_dispatch[
             native_fast_path:native_fast_path_end
@@ -993,6 +1010,20 @@ class HDRAndCASGateTests(unittest.TestCase):
             dlss_setting.group("body"),
             r"\.on_change_value\s*=\s*\[\]\(float,\s*float\s+current\)\s*"
             r"\{\s*ApplyDlssMode\(current\);\s*\}",
+        )
+
+        migration_start = addon.index("void MigrateDlssModeSettings()")
+        migration = addon[
+            migration_start : addon.index("void OnPresent(", migration_start)
+        ]
+        self.assertIn('"DLSSMode"', migration)
+        self.assertIn("float persisted = 0.f;", migration)
+        self.assertIn("dlss_policy::ParsePersistedDlssMode(", migration)
+        self.assertIn("reshade::set_config_value(", migration)
+        attach = addon[addon.index("bool AttachAddon(") :]
+        self.assertLess(
+            attach.index("MigrateDlssModeSettings();"),
+            attach.index("renodx::utils::settings::Use("),
         )
 
         aspect_setting = re.search(

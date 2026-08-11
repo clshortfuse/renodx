@@ -179,9 +179,9 @@ inline std::atomic_uint64_t last_logged_evaluation_key =
     kUnloggedTelemetryKey;
 inline std::atomic_bool has_logged_auxiliary_fallback_replay = false;
 inline std::atomic_bool has_logged_auxiliary_active = false;
-// Serialize mode publication with its bridge/tracking side effects. OnPresent
-// may overlap a preset callback; without this lease, a stale frame-start read
-// can overwrite a newer UI transition or publish its old tracking epoch.
+// Serialize mode publication with one temporal evaluation. The tracker mutex
+// itself must not cross ReShade/Vulkan calls: private command-buffer creation
+// synchronously re-enters the command-list lifecycle callbacks below.
 inline std::mutex mode_transition_mutex;
 // ReShade 6.7.3 stores add-on callbacks in an unsynchronized vector, so the
 // bind callback cannot be safely registered/unregistered during live mode
@@ -794,18 +794,18 @@ struct NativeTemporalFallbackGuard {
 
   Context* context = nullptr;
   reshade::api::pipeline native_pipeline = {0u};
+  temporal_mode_state::Snapshot mode_snapshot = {};
   bool armed = false;
-  temporal_mode_state::Tracker::Transaction* transaction = nullptr;
 
   NativeTemporalFallbackGuard(
       Context& dispatch_context,
       reshade::api::pipeline pipeline,
       bool auxiliary_replacement_used,
-      temporal_mode_state::Tracker::Transaction& mode_transaction)
+      temporal_mode_state::Snapshot snapshot)
       : context(&dispatch_context),
         native_pipeline(pipeline),
-        armed(auxiliary_replacement_used && pipeline.handle != 0u),
-        transaction(&mode_transaction) {}
+        mode_snapshot(snapshot),
+        armed(auxiliary_replacement_used && pipeline.handle != 0u) {}
 
   NativeTemporalFallbackGuard(const NativeTemporalFallbackGuard&) = delete;
   NativeTemporalFallbackGuard& operator=(const NativeTemporalFallbackGuard&) = delete;
@@ -826,7 +826,8 @@ struct NativeTemporalFallbackGuard {
         context->arguments.group_count_x,
         context->arguments.group_count_y,
         context->arguments.group_count_z);
-    (void)transaction->Record(context->cmd_list->get_native(), false);
+    (void)mode_state.Record(
+        context->cmd_list->get_native(), mode_snapshot, false);
     if (!has_logged_auxiliary_fallback_replay.exchange(
             true, std::memory_order_acq_rel)) {
       Log(
@@ -861,16 +862,17 @@ inline void AfterNativeTemporalDispatch(
           mode_state.GetMode(), auxiliary_replacement_used)) {
     return;
   }
-  auto mode_transaction = mode_state.BeginTransaction();
-  const auto mode_snapshot = mode_transaction.GetSnapshot();
+  std::scoped_lock transition_lock(mode_transition_mutex);
+  const auto mode_snapshot = mode_state.GetSnapshot();
   NativeTemporalFallbackGuard native_fallback(
       context,
       temporal_pipeline,
       auxiliary_replacement_used,
-      mode_transaction);
+      mode_snapshot);
   // A later temporal dispatch in the same presented frame supersedes an
   // earlier result. Re-arm CAS until this dispatch independently succeeds.
-  (void)mode_transaction.Record(context.cmd_list->get_native(), false);
+  (void)mode_state.Record(
+      context.cmd_list->get_native(), mode_snapshot, false);
   if (auxiliary_replacement_used
       && replacement_generation != mode_snapshot.generation) {
     runtime_status.store(
@@ -1156,8 +1158,9 @@ inline void AfterNativeTemporalDispatch(
   // The final CAS gate follows the latest temporal dispatch in this frame.
   // Never retain a successful earlier dispatch if a later one fell back to
   // Detroit's native b16 output.
-  const bool output_authorized = mode_transaction.Record(
+  const bool output_authorized = mode_state.Record(
       inputs.command_buffer,
+      mode_snapshot,
       evaluation.output_valid && evaluation.suppress_final_cas);
   if (evaluation.output_valid && evaluation.suppress_final_cas
       && output_authorized) {

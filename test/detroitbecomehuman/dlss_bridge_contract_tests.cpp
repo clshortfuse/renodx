@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <mutex>
 #include <string_view>
 #include <thread>
 #include <type_traits>
@@ -1102,8 +1103,9 @@ bool TestNativePostDispatchFastPathFailsClosed() {
   return passed;
 }
 
-bool TestTemporalModeTransactionSerializesCommit() {
+bool TestTemporalModeTransitionLeaseAllowsLifecycleReentry() {
   temporal_mode_state::Tracker tracker;
+  std::mutex transition_mutex;
   constexpr std::uint64_t kCommandList = UINT64_C(0xCAFEBABE);
   (void)tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
 
@@ -1112,9 +1114,13 @@ bool TestTemporalModeTransactionSerializesCommit() {
   std::thread transition;
   bool passed = true;
   {
-    auto transaction = tracker.BeginTransaction();
+    std::scoped_lock transition_lock(transition_mutex);
+    const auto snapshot = tracker.GetSnapshot();
+    tracker.BeginRecording(kCommandList);
+    tracker.DiscardCommandList(UINT64_C(0xDEADBEEF));
     transition = std::thread([&] {
       attempting_transition.store(true, std::memory_order_release);
+      std::scoped_lock lock(transition_mutex);
       (void)tracker.SetMode(DETROIT_DLSS_MODE_NATIVE);
       transition_completed.store(true, std::memory_order_release);
     });
@@ -1126,9 +1132,10 @@ bool TestTemporalModeTransactionSerializesCommit() {
         !transition_completed.load(std::memory_order_acquire),
         "mode transition must wait while temporal output commit owns its lease");
     passed &= Expect(
-        transaction.GetSnapshot().mode == DETROIT_DLSS_MODE_DLAA
-            && transaction.Record(kCommandList, true),
-        "leased generation must authorize output without a fallible recheck");
+        snapshot.mode == DETROIT_DLSS_MODE_DLAA
+            && tracker.Record(kCommandList, snapshot, true),
+        "lifecycle callbacks and output commit must lock the tracker "
+        "independently inside the transition lease");
   }
   transition.join();
   passed &= Expect(
@@ -1321,7 +1328,7 @@ int main() {
   passed &= TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization();
   passed &= TestTemporalModeRejectsLegacySrValues();
   passed &= TestNativePostDispatchFastPathFailsClosed();
-  passed &= TestTemporalModeTransactionSerializesCommit();
+  passed &= TestTemporalModeTransitionLeaseAllowsLifecycleReentry();
   passed &= TestBoundedEvaluationTraceWindow();
   passed &= TestBoundedEvaluationSubmissionTrace();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
