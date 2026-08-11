@@ -627,7 +627,6 @@ APPLY_VANILLA_TONEMAP_GENERATOR(float3)
         distance_from_inflection * distance_from_inflection,                                \
         (T) - renodx::math::FLT_MAX);                                                       \
     T release_weight = exp2(release_exponent);                                              \
-    release_weight = renodx::math::Select(x > (T)INFLECTION_X, release_weight, (T)0.f);     \
                                                                                             \
     return max((T)0.f, lerp(vanilla_linear, tangent_linear, release_weight));               \
   }
