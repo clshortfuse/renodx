@@ -608,23 +608,28 @@ APPLY_VANILLA_TONEMAP_GENERATOR(float)
 APPLY_VANILLA_TONEMAP_GENERATOR(float3)
 #undef APPLY_VANILLA_TONEMAP_GENERATOR
 
-#define APPLY_EXTENDED_VANILLA_TONEMAP_GENERATOR(T)                                            \
-  T ApplyExtendedVanillaTonemap(T x, float sdr_blend_strength = 0.f) {                         \
-    const float INFLECTION_X = 0.119121851127f;                                                \
-    const float INFLECTION_Y = 0.163979921774f;                                                \
-    const float INFLECTION_SLOPE = 1.95752308422f;                                             \
-                                                                                               \
-    /* N4 = 0 removes the black clip. */                                                       \
-    T vanilla_gamma = ApplyVanillaTonemap(x, 0.f);                                             \
-    T vanilla_linear = pow(vanilla_gamma, 2.2f);                                               \
-                                                                                               \
-    T extended_linear = INFLECTION_Y + INFLECTION_SLOPE * (x - INFLECTION_X);                  \
-                                                                                               \
-    T restored_linear = lerp(extended_linear, vanilla_linear, sdr_blend_strength);             \
-                                                                                               \
-    T output_linear = renodx::math::Select(x > INFLECTION_X, restored_linear, vanilla_linear); \
-                                                                                               \
-    return max((T)0.f, output_linear);                                                         \
+#define APPLY_EXTENDED_VANILLA_TONEMAP_GENERATOR(T)                                         \
+  T ApplyExtendedVanillaTonemap(T x) {                                                      \
+    const float INFLECTION_X = 0.119121851127f;                                             \
+    const float INFLECTION_Y = 0.163979921774f;                                             \
+    const float INFLECTION_SLOPE = 1.95752308422f;                                          \
+    /* r^2 * log2(e), where r = sqrt(2 * V'(x0) / abs(V'''(x0))). */                        \
+    const float NATURAL_RELEASE_EXP2_NUMERATOR = 0.0386582117104f;                          \
+                                                                                            \
+    /* Vanilla+ uses N4 = 0 to remove the original black clip. */                           \
+    T vanilla_gamma = ApplyVanillaTonemap(x, 0.f);                                          \
+    T vanilla_linear = pow(vanilla_gamma, 2.2f);                                            \
+                                                                                            \
+    T distance_from_inflection = max(x - (T)INFLECTION_X, (T)0.f);                          \
+    T tangent_linear = mad((T)INFLECTION_SLOPE, distance_from_inflection, (T)INFLECTION_Y); \
+    T release_exponent = renodx::math::DivideSafe(                                          \
+        (T) - NATURAL_RELEASE_EXP2_NUMERATOR,                                               \
+        distance_from_inflection * distance_from_inflection,                                \
+        (T) - renodx::math::FLT_MAX);                                                       \
+    T release_weight = exp2(release_exponent);                                              \
+    release_weight = renodx::math::Select(x > (T)INFLECTION_X, release_weight, (T)0.f);     \
+                                                                                            \
+    return max((T)0.f, lerp(vanilla_linear, tangent_linear, release_weight));               \
   }
 
 APPLY_EXTENDED_VANILLA_TONEMAP_GENERATOR(float)
@@ -636,11 +641,10 @@ float3 ApplyPreLUTToneMapAndGammaEncode(float3 untonemapped) {
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     tonemapped_gamma = ApplyVanillaTonemap(untonemapped);
   } else if (RENODX_TONE_MAP_TYPE == 1.f) {
-    float sdr_blend_strength = 0.f;
-    float3 tonemapped = ApplyExtendedVanillaTonemap(untonemapped, sdr_blend_strength);
+    float3 tonemapped = ApplyExtendedVanillaTonemap(untonemapped);
     if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
       float perch_yf = renodx::color::yf::from::BT709(tonemapped);
-      float lum_yf = ApplyExtendedVanillaTonemap(renodx::color::yf::from::BT709(untonemapped), sdr_blend_strength);
+      float lum_yf = ApplyExtendedVanillaTonemap(renodx::color::yf::from::BT709(untonemapped));
       tonemapped = renodx::color::correct::Luminance(tonemapped, perch_yf, lum_yf);
     }
     tonemapped_gamma = renodx::color::gamma::Encode(tonemapped, 2.2f);
@@ -701,10 +705,12 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
                                             RENODX_TONE_MAP_SATURATION,
                                             RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
                                             RENODX_TONE_MAP_DECHROMA);
-    untonemapped = max(untonemapped, 1e-7f);
+    // untonemapped = max(untonemapped, 1e-7f);
 
-    tonemapped = ApplyAnchoredCInfinityShoulder(untonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, MID_GRAY_OUT, 1.5f);
-    tonemapped = renodx::color::bt709::from::BT2020(tonemapped);
+    untonemapped = renodx::color::bt709::from::BT2020(untonemapped);
+    tonemapped = renodx::math::CopySign(
+        ApplyAnchoredCInfinityShoulder(abs(untonemapped), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, MID_GRAY_OUT, 1.5f),
+        untonemapped);
   } else {  // Custom
 
     tonemapped = ApplyCustomPsychoV25ToneMap(
