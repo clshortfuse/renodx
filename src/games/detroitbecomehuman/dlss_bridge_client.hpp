@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -74,10 +73,8 @@ class TemporalResetGate {
   return settings.struct_size >= sizeof(DetroitDlssModeSettings)
          && settings.abi_version == DETROIT_DLSS_ABI_VERSION
          && settings.mode == mode && settings.output_width == output_width
-         && settings.output_height == output_height && settings.render_width != 0u
-         && settings.render_height != 0u && settings.min_render_width != 0u
-         && settings.min_render_height != 0u && settings.max_render_width != 0u
-         && settings.max_render_height != 0u;
+         && settings.output_height == output_height
+         && dlss_policy::HasFixedNativeExtent(settings);
 }
 
 class Client {
@@ -113,7 +110,8 @@ class Client {
       std::uint32_t output_height,
       DetroitDlssModeSettings* settings) {
     if (settings == nullptr || output_width == 0u || output_height == 0u
-        || mode > DETROIT_DLSS_MODE_PERFORMANCE) {
+        || (mode != DETROIT_DLSS_MODE_NATIVE
+            && mode != DETROIT_DLSS_MODE_DLAA)) {
       return false;
     }
     std::scoped_lock lock(mutex_);
@@ -131,7 +129,7 @@ class Client {
             != DETROIT_DLSS_RESULT_SUCCESS
         || candidate.output_width != output_width
         || candidate.output_height != output_height
-        || candidate.render_width == 0u || candidate.render_height == 0u) {
+        || !dlss_policy::HasFixedNativeExtent(candidate)) {
       return false;
     }
     *settings = candidate;
@@ -336,27 +334,6 @@ class Client {
       }
     }
 
-    const std::uint64_t scaled_width =
-        static_cast<std::uint64_t>(inputs.render_width) * inputs.output_height;
-    const std::uint64_t scaled_height =
-        static_cast<std::uint64_t>(inputs.render_height) * inputs.output_width;
-    const std::uint64_t aspect_delta = scaled_width >= scaled_height
-                                           ? scaled_width - scaled_height
-                                           : scaled_height - scaled_width;
-    const bool scalar_aspect_matches =
-        aspect_delta <= std::max(scaled_width, scaled_height) / 100u + 1u;
-    if (dlss_policy::IsSuperResolutionMode(mode) && scalar_aspect_matches
-        && inputs.render_width >= settings.min_render_width
-        && inputs.render_height >= settings.min_render_height
-        && inputs.render_width <= settings.max_render_width
-        && inputs.render_height <= settings.max_render_height) {
-      // The game applies a scalar and rounds each axis independently. Accept
-      // the actual in-range extent reported by the live resources instead of
-      // requiring NGX's recommended dimensions bit-for-bit.
-      settings.render_width = inputs.render_width;
-      settings.render_height = inputs.render_height;
-    }
-
     const auto eligibility =
         dlss_policy::CheckFrameEligibility(mode, support, settings, inputs);
     if (!eligibility.evaluate_dlss) {
@@ -515,10 +492,6 @@ class Client {
         .temporal_interface_verified =
             has_capability(DETROIT_DLSS_CAPABILITY_TEMPORAL_INPUTS_VERIFIED),
         .dlaa_available = has_capability(DETROIT_DLSS_CAPABILITY_DLAA),
-        .super_resolution_available =
-            has_capability(DETROIT_DLSS_CAPABILITY_SUPER_RESOLUTION),
-        .render_scale_control_available =
-            has_capability(DETROIT_DLSS_CAPABILITY_RENDER_SCALE_CONTROL),
         .auto_exposure_available =
             has_capability(DETROIT_DLSS_CAPABILITY_AUTO_EXPOSURE),
         .bridge_abi_version = api_.abi_version,

@@ -1253,7 +1253,7 @@ void main()
         int _5296 = max(931135488, (floatBitsToInt(max(max(_5285, _5287), _5290)) & 2139095040));
         float _5301 = uintBitsToFloat(uint(_5296 + 125829120));
         // Native Render Debug uses this exact TAA output as the normal image
-        // outside temporal panels. In DLSS modes b16 is still owned by the
+        // outside temporal panels. In DLAA mode b16 is still owned by the
         // later adapter pack, and the scene pass reports temporal panels as
         // unavailable instead of interfering with that output.
         if (!RenderDebugTemporalUnavailable()

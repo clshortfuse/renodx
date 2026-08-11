@@ -417,25 +417,42 @@ bool TestRetirementWaitsForReusableRecordingInvalidation() {
   return passed;
 }
 
-bool TestOneTimeRetirementCompletesWithSubmission() {
+bool TestOneTimeNativeRetirementCompletesWithSubmission() {
   FakeState fake;
   dlss::NgxContext context(MakeCreateInfo(&fake));
   bool passed = true;
   passed &= Expect(context.ConfigureFeature(MakeFeatureConfig()).Succeeded(),
                    "first feature must configure");
+  passed &= Expect(context.HasFeatures(),
+                   "configured DLAA must publish an active feature");
   auto evaluate = MakeEvaluateInfo(40u);
   evaluate.one_time_submit = true;
-  passed &= Expect(context.Evaluate(evaluate).Succeeded(),
-                   "one-time recording discovered at Evaluate must be tracked");
+  const auto evaluated = context.Evaluate(evaluate);
+  passed &= Expect(evaluated.Succeeded(),
+                    "one-time recording discovered at Evaluate must be tracked");
   const auto captured = context.CaptureSubmission({40u});
+  passed &= Expect(
+      !captured.Empty()
+          && evaluated.recording_epoch
+                 == captured.commands.front().recording_epoch
+          && evaluated.one_time_submit,
+      "Evaluate must expose the authoritative recording epoch");
   const auto committed = context.NotifySubmitted(50u, captured);
-  passed &= Expect(context.ConfigureFeature(MakeFeatureConfig(1280u)).Succeeded(),
-                   "replacement feature must configure");
+  context.RetireActive();
+  passed &= Expect(context.ActiveFeatureGeneration() == 0u
+                       && context.HasFeatures()
+                       && fake.release_feature_calls == 0u,
+                   "Native transition must retire but preserve pending DLAA work");
   const auto completed = context.NotifySubmissionCompleted(50u, committed);
-  passed &= Expect(completed == std::vector<std::uint64_t>{40u},
-                   "one-time completion must expose its recyclable recording key");
-  passed &= Expect(fake.release_feature_calls == 1u,
-                   "one-time completion must release the retired generation");
+  passed &= Expect(
+      completed
+          == std::vector<dlss::NgxContext::CompletedRecording>{{
+              .command_buffer = 40u,
+              .recording_epoch = committed.commands.front().recording_epoch,
+          }},
+                    "one-time completion must expose its recyclable recording key");
+  passed &= Expect(!context.HasFeatures() && fake.release_feature_calls == 1u,
+                   "one-time completion must fully release Native-retired DLAA");
   return passed;
 }
 
@@ -513,7 +530,7 @@ int main() {
   passed &= TestUnavailableCapabilityCleanup();
   passed &= TestDedicatedFeatureCreationAndFirstReset();
   passed &= TestRetirementWaitsForReusableRecordingInvalidation();
-  passed &= TestOneTimeRetirementCompletesWithSubmission();
+  passed &= TestOneTimeNativeRetirementCompletesWithSubmission();
   passed &= TestExactComputeBarrierPlans();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
   return passed ? 0 : 1;

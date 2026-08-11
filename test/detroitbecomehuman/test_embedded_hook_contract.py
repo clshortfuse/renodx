@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+import re
 
 
 def require(source: str, text: str) -> None:
@@ -17,10 +18,14 @@ def main() -> None:
     addon = (args.source_dir / "addon.cpp").read_text(encoding="utf-8")
     cmake = (args.source_dir / "dlss" / "CMakeLists.txt").read_text(encoding="utf-8")
     bridge = (args.source_dir / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
+    policy = (args.source_dir / "dlss_policy.hpp").read_text(encoding="utf-8")
     temporal = (args.source_dir / "temporal_capture.hpp").read_text(encoding="utf-8")
     bootstrap = (args.source_dir / "dlss" / "embedded_bootstrap.hpp").read_text(
         encoding="utf-8"
     )
+    feature_registry = (
+        args.source_dir / "dlss" / "feature_recording_registry.hpp"
+    ).read_text(encoding="utf-8")
     temporal_shader = (args.source_dir / "temporal_aux.comp.vk.glsl").read_text(
         encoding="utf-8"
     )
@@ -39,8 +44,27 @@ def main() -> None:
     require(source, "if (const auto tracked = FindTrackedDeviceFunction(name); tracked != nullptr)")
     require(source, "return downstream;")
     require(source, "CreateInternalFeatureFence(state, snapshot)")
-    require(source, "UseInternalFeatureFences()")
     require(source, "feature_command_buffer_bloom")
+    require(source, "feature_recording_candidates")
+    require(source, "feature_evaluation_active")
+    require(source, "feature_submission_tracking_active")
+    require(source, "feature_lifecycle_tracking_active")
+    require(feature_registry, "class FeatureRecordingRegistry final")
+    require(feature_registry, "std::array<Slot, Capacity>")
+    require(feature_registry, "recording_epoch")
+    require(feature_registry, "bool Matches(")
+    require(feature_registry, "bool EraseIfMatches(")
+    require(feature_registry, "bool MarkSubmittedIfMatches(")
+    require(feature_registry, "bool AnyRequiresSubmissionTracking()")
+    require(feature_registry, "overflowed_.store(true, std::memory_order_release)")
+    require(source, "kMaximumAdapterScratchBundles = 8u")
+    require(
+        source,
+        "kMaximumFeatureRecordingCandidates =\n"
+        "    kMaximumAdapterScratchBundles * 2u",
+    )
+    require(source, ".maximum_scratch_bundles = static_cast<std::uint32_t>(\n"
+                    "          kMaximumAdapterScratchBundles)")
     require(source, "tracked_descriptor_set_bloom")
     if "temporal_descriptor_set_bloom" in source or "dof_composite_descriptor_set_bloom" in source:
         raise AssertionError(
@@ -55,7 +79,6 @@ def main() -> None:
     if "state_mutex" in active_check:
         raise AssertionError("per-frame active-device check must remain lock-free")
     require(source, "AppendFeatureSubmissionCandidate(")
-    require(source, "command-buffer lifecycle tracking")
     require(source, "fence == VK_NULL_HANDLE && !snapshot.Empty()")
     require(source, "PollCompletedInternalFeatureFences(state.get())")
     require(source, "state->next_get_fence_status(state->device, fence)")
@@ -81,17 +104,39 @@ def main() -> None:
     require(bootstrap, "return retinal_dof_requested;")
     require(
         source,
-        "Targeted DLSS/DLAA backend active without native Vulkan command-bind hooks",
+        "Targeted DLAA backend active without native Vulkan command-bind hooks",
     )
-    for label in (
-        '"Native TAA"',
-        '"DLAA"',
+    if re.search(
+        r'\.labels\s*=\s*\{\s*"Native TAA"\s*,\s*"DLAA"\s*\}',
+        addon,
+    ) is None:
+        raise AssertionError("AA mode UI must expose exactly Native TAA and DLAA")
+    for removed_label in (
         '"DLSS Quality"',
         '"DLSS Balanced"',
         '"DLSS Performance"',
     ):
-        require(addon, label)
-    require(addon, "dlss_policy::IsDlssMode(next_mode)")
+        if removed_label in addon:
+            raise AssertionError(
+                f"legacy SR option must not be exposed in the UI: {removed_label}"
+            )
+    for removed_scale_contract in (
+        "IsSuperResolutionMode",
+        "resolution_scale_controller",
+        "dlss_scale_transition_controller",
+        "ApplyDlssRenderScale",
+        "RestoreNativeRenderScale",
+        '"DLSSRenderScale"',
+        '"DLSSRenderScaleStatus"',
+    ):
+        if removed_scale_contract in addon or removed_scale_contract in temporal:
+            raise AssertionError(
+                "DLAA-only runtime retained an SR/scale contract: "
+                + removed_scale_contract
+            )
+    require(policy, "NormalizeDlssMode(")
+    require(policy, "ParsePersistedDlssMode(")
+    require(addon, "dlss_policy::ParsePersistedDlssMode(")
     require(addon, "if (!embedded_dlss::kDlssRuntimeEnabled)")
     require(temporal_shader, "imageStore(OutAADepth")
     require(temporal_shader, "imageStore(OutPrevSpeedAndFlagsTex")
@@ -158,15 +203,76 @@ def main() -> None:
         raise AssertionError(
             "Native TAA descriptor-bind fast path must return before private-data lookup"
         )
+    reset_callback_start = temporal.index("OnResetTemporalCommandList(")
+    reset_callback_end = temporal.index(
+        "OnBindTemporalDescriptorTables(", reset_callback_start
+    )
+    reset_callback = temporal[reset_callback_start:reset_callback_end]
+    reset_native_gate = reset_callback.index(
+        "temporal_descriptor_binding_tracking_epoch.load"
+    )
+    reset_authorization = reset_callback.index("mode_state.BeginRecording(")
+    reset_private_data = reset_callback.index(
+        "renodx::utils::data::Get<TemporalDescriptorBindingData>"
+    )
+    if not reset_native_gate < reset_authorization < reset_private_data:
+        raise AssertionError(
+            "DLAA recording authorization must reset after the Native fast gate "
+            "and before descriptor private-data work"
+        )
     require(
         temporal,
         "temporal_descriptor_binding_tracking_epoch.store(\n"
         "        0u, std::memory_order_release);",
     )
+    context_start = source.index("BridgeGetContext(")
+    context_end = source.index("BridgeGetTemporalConstants(", context_start)
+    context = source[context_start:context_end]
+    require(context, "DETROIT_DLSS_CAPABILITY_DLAA")
+    for removed_capability in (
+        "DETROIT_DLSS_CAPABILITY_SUPER_RESOLUTION",
+        "DETROIT_DLSS_CAPABILITY_RENDER_SCALE_CONTROL",
+    ):
+        if removed_capability in context:
+            raise AssertionError(
+                "DLAA-only bridge must not advertise " + removed_capability
+            )
     query_mode_start = snapshot_end
     query_mode_end = source.index("BridgeConfigure(", query_mode_start)
     query_mode = source[query_mode_start:query_mode_end]
     require(query_mode, "DETROIT_DLSS_CREATE_MOTION_VECTORS_JITTERED")
+    exact_query_gate = (
+        "if (mode != DETROIT_DLSS_MODE_NATIVE\n"
+        "      && mode != DETROIT_DLSS_MODE_DLAA)"
+    )
+    require(query_mode, exact_query_gate)
+    legacy_query_gate = query_mode.index(exact_query_gate)
+    query_device_lookup = query_mode.index("const auto state = GetActiveDevice()")
+    query_ngx = query_mode.index("EnsureNgxInitialized(state.get())")
+    if not legacy_query_gate < query_device_lookup < query_ngx:
+        raise AssertionError(
+            "legacy SR mode queries must fail before device and NGX work"
+        )
+    configure_start = query_mode_end
+    configure_end = source.index(
+        "DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate",
+        configure_start,
+    )
+    configure = source[configure_start:configure_end]
+    exact_configure_gate = (
+        "if (settings->mode != DETROIT_DLSS_MODE_NATIVE\n"
+        "      && settings->mode != DETROIT_DLSS_MODE_DLAA)"
+    )
+    require(configure, exact_configure_gate)
+    legacy_configure_gate = configure.index(exact_configure_gate)
+    legacy_configure = configure[legacy_configure_gate:]
+    retire_feature = legacy_configure.index("RetireActiveFeatureLocked(state.get())")
+    clear_configured = legacy_configure.index("state->configured = false")
+    return_fallback = legacy_configure.index("return DETROIT_DLSS_RESULT_FALLBACK")
+    if not retire_feature < clear_configured < return_fallback:
+        raise AssertionError(
+            "legacy SR configure must retire the feature and clear state before fallback"
+        )
     require(source, "pipeline_layout->second.set_layouts.size() != 1u")
     if "InstallTargetedTemporalCommandStateLocked" in source:
         raise AssertionError(
@@ -201,6 +307,136 @@ def main() -> None:
         raise AssertionError(
             "non-feature command buffers must bypass adapter and NGX lifecycle locks"
         )
+    unmark_begin = begin_command_buffer.index(
+        "UnmarkFeatureRecordingCandidateLocked("
+    )
+    if adapter_begin >= unmark_begin or ngx_begin >= unmark_begin:
+        raise AssertionError(
+            "a successful begin must release adapter/NGX ownership before "
+            "removing the exact feature candidate"
+        )
+
+    mark_candidate_start = source.index("void MarkFeatureRecordingCandidateLocked(")
+    candidate_start = source.index("bool MayBeFeatureRecordingCandidate(")
+    mark_candidate = source[mark_candidate_start:candidate_start]
+    exact_insert = mark_candidate.index("feature_recording_candidates.Insert(")
+    bloom_publish = mark_candidate.index("feature_command_buffer_bloom.fetch_or(")
+    if exact_insert >= bloom_publish or "return" in mark_candidate[exact_insert:bloom_publish]:
+        raise AssertionError(
+            "registry overflow must still publish the candidate Bloom bit"
+        )
+    candidate_end = source.index(
+        "void UnmarkFeatureRecordingCandidateLocked(", candidate_start
+    )
+    candidate_filter = source[candidate_start:candidate_end]
+    lifecycle_gate = candidate_filter.index(
+        "feature_lifecycle_tracking_active.load"
+    )
+    bloom_miss = candidate_filter.index("FeatureCommandBufferBloomBit(handle)")
+    exact_lookup = candidate_filter.index(
+        "feature_recording_candidates.Contains(handle)"
+    )
+    if not lifecycle_gate < bloom_miss < exact_lookup:
+        raise AssertionError(
+            "lifecycle inactivity and Bloom misses must precede exact registry lookup"
+        )
+    require(candidate_filter, "feature_recording_candidates.Overflowed()")
+
+    tracking_state_start = source.index("void UpdateFeatureTrackingStateLocked(")
+    tracking_state_end = source.index("bool EnsureNgxInitialized(", tracking_state_start)
+    tracking_state = source[tracking_state_start:tracking_state_end]
+    require(tracking_state, "ActiveFeatureGeneration() != 0u")
+    require(tracking_state, ".AnyRequiresSubmissionTracking()")
+    require(
+        tracking_state,
+        "feature_submission_tracking_active.store(\n"
+        "      requires_submission_tracking, std::memory_order_release)",
+    )
+    require(
+        tracking_state,
+        "feature_lifecycle_tracking_active.store(\n"
+        "      has_lifecycle_candidates, std::memory_order_release)",
+    )
+    if "feature_submission_tracking_active.store(\n      has_features" in tracking_state:
+        raise AssertionError(
+            "retired NGX features must not keep every queue submit on the tracking path"
+        )
+
+    commit_start = source.index("void CommitFeatureSubmission(")
+    commit_end = source.index("void CompleteFeatureQueue(", commit_start)
+    commit = source[commit_start:commit_end]
+    submitted_match = commit.index(
+        "feature_recording_candidates.MarkSubmittedIfMatches("
+    )
+    refresh_tracking = commit.index("UpdateFeatureTrackingStateLocked(state)")
+    if submitted_match >= refresh_tracking:
+        raise AssertionError(
+            "successful submission must clear exact pending-submit state before "
+            "refreshing the fast-path gate"
+        )
+
+    retired_poll_start = source.index("void PollRetiredFeatureFencesOnQueueSubmit(")
+    retired_poll_end = source.index("void RecycleInternalFeatureFence(", retired_poll_start)
+    retired_poll = source[retired_poll_start:retired_poll_end]
+    require(retired_poll, "feature_evaluation_active.load(")
+    require(retired_poll, "internal_feature_fences_pending.load(")
+    require(retired_poll, "retired_feature_fence_poll_serial.fetch_add(")
+    require(retired_poll, "PollCompletedInternalFeatureFences(state)")
+    if retired_poll.index("internal_feature_fences_pending.load(") >= retired_poll.index(
+        "feature_evaluation_active.load("
+    ):
+        raise AssertionError(
+            "stable Native queue submission must stop after one pending-fence atomic load"
+        )
+    if source.count("PollRetiredFeatureFencesOnQueueSubmit(") != 4:
+        raise AssertionError(
+            "retired one-time fences must drain through every queue-submit entry point"
+        )
+    unfenced_fallback_start = source.index(
+        "void CompleteUnfencedFeatureSubmissionFallback("
+    )
+    unfenced_fallback_end = source.index(
+        "void RecycleInternalFeatureFence(", unfenced_fallback_start
+    )
+    unfenced_fallback = source[unfenced_fallback_start:unfenced_fallback_end]
+    required_gate = unfenced_fallback.index("!internal_fence_required")
+    missing_fence_gate = unfenced_fallback.index(
+        "internal_fence != VK_NULL_HANDLE"
+    )
+    successful_submit_gate = unfenced_fallback.index(
+        "submit_result != VK_SUCCESS"
+    )
+    queue_wait = unfenced_fallback.index("state->next_queue_wait_idle(queue)")
+    complete_queue = unfenced_fallback.index("CompleteFeatureQueue(state, queue)")
+    if not (
+        required_gate
+        < missing_fence_gate
+        < successful_submit_gate
+        < queue_wait
+        < complete_queue
+    ):
+        raise AssertionError(
+            "missing private fences must synchronously retire only successful "
+            "required submissions"
+        )
+    if source.count("CompleteUnfencedFeatureSubmissionFallback(") != 4:
+        raise AssertionError(
+            "all three queue-submit entry points must cover private-fence creation failure"
+        )
+    for submit_hook, submit_end in (
+        ("LayerQueueSubmit(", "LayerQueueSubmit2("),
+        ("LayerQueueSubmit2(", "LayerQueueSubmit2KHR("),
+        ("LayerQueueSubmit2KHR(", "LayerQueueWaitIdle("),
+    ):
+        hook_start = source.index(submit_hook, retired_poll_end)
+        hook_end = source.index(submit_end, hook_start)
+        hook = source[hook_start:hook_end]
+        retired_cleanup = hook.index("PollRetiredFeatureFencesOnQueueSubmit(state)")
+        active_gate = hook.index("feature_submission_tracking_active.load")
+        if retired_cleanup >= active_gate:
+            raise AssertionError(
+                "retired fence cleanup must be able to restore the immediate submit fast path"
+            )
 
     submit_lock_start = source.index("VkResult SubmitQueueLocked(")
     submit_lock_end = source.index("LayerQueueSubmit(", submit_lock_start)
@@ -344,7 +580,7 @@ def main() -> None:
     poll_start = source.index("void PollCompletedInternalFeatureFences")
     poll_end = source.index("VkFence CreateInternalFeatureFence", poll_start)
     poll = source[poll_start:poll_end]
-    require(poll, "if (!UseInternalFeatureFences()")
+    require(poll, "internal_feature_fences_pending.load(")
     if "wait_for_fences" in poll or "device_wait_idle" in poll:
         raise AssertionError("DLAA scratch recycling must remain non-blocking")
 
@@ -393,6 +629,19 @@ def main() -> None:
             "post-completion replay detection must cover all three queue-submit entry points"
         )
     require(source, "SubmissionNeedsInternalFeatureFence(")
+    fence_policy_start = source.index("bool SubmissionNeedsInternalFeatureFence(")
+    fence_policy_end = source.index(
+        "void TraceFeatureSubmissionResult(", fence_policy_start
+    )
+    fence_policy = source[fence_policy_start:fence_policy_end]
+    one_time_gate = fence_policy.index("if (command.one_time_submit) return true;")
+    trace_gate = fence_policy.index(
+        "!GetEvaluationTraceConfiguration().readback"
+    )
+    if one_time_gate >= trace_gate:
+        raise AssertionError(
+            "one-time scratch completion fences must not depend on trace/readback"
+        )
     if "unclassified_terminal" in evaluation_trace or "unclassified_terminal" in source:
         raise AssertionError("every bounded evaluation attempt must have a terminal class")
 
@@ -419,13 +668,24 @@ def main() -> None:
     completion_end = source.index("void RecycleCompletedCommandBuffers(", completion_start)
     completion = source[completion_start:completion_end]
     require(completion, "TakeCompletedTraceReadback(")
+    completion_lock = completion.index("const std::lock_guard lock(state->mutex)")
+    completion_record = completion.index("submission_trace_tracker.Complete(")
+    completion_readback = completion.index("TakeCompletedTraceReadback(")
+    if not completion_lock < completion_record < completion_readback:
+        raise AssertionError(
+            "trace record and adapter readback must share one generation-safe lock"
+        )
     recycle_start = completion_end
     recycle_end = source.index("void RecycleInternalFeatureFence(", recycle_start)
     recycle = source[recycle_start:recycle_end]
-    completion_call = recycle.index("TraceFeatureCompletion(state, command_buffer)")
+    recycle_lock = recycle.index("const std::lock_guard lock(state->mutex)")
+    epoch_match = recycle.index("feature_recording_candidates.Matches(")
     recycle_call = recycle.index("adapter_runtime.RecycleCommandBuffer(")
-    if completion_call > recycle_call:
-        raise AssertionError("private readback must be consumed before scratch recycle")
+    epoch_erase = recycle.index("feature_recording_candidates.EraseIfMatches(")
+    if not recycle_lock < epoch_match < recycle_call < epoch_erase:
+        raise AssertionError(
+            "completion cleanup must match, recycle, and erase one exact recording epoch"
+        )
 
     evaluate_start = source.index("DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate")
     evaluate_end = source.index("LayerCreateDescriptorSetLayout(", evaluate_start)
@@ -434,6 +694,18 @@ def main() -> None:
     require(evaluate, "state->ngx_context->ConfigureFeature({")
     require(evaluate, "if (configure_result.feature_created)")
     require(evaluate, "state->ngx_context->Evaluate({")
+    dlaa_mode_gate = evaluate.index(
+        "state->settings.mode != DETROIT_DLSS_MODE_DLAA"
+    )
+    prepare_call = evaluate.index("state->adapter_runtime.Prepare(")
+    candidate_mark = evaluate.index("MarkFeatureRecordingCandidateLocked(")
+    ngx_evaluate = evaluate.index("state->ngx_context->Evaluate({")
+    if not dlaa_mode_gate < prepare_call < ngx_evaluate < candidate_mark:
+        raise AssertionError(
+            "Evaluate must reject non-DLAA state before adapter/NGX work and use "
+            "the authoritative NGX recording epoch"
+        )
+    require(evaluate[candidate_mark:], "evaluate_result.recording_epoch")
     require(source, "return NGX_VULKAN_CREATE_DLSS_EXT1(")
     gate_index = source.index("if (!cache_valid)")
     detour_index = source.index("DetourTransactionBegin()", gate_index)
@@ -441,7 +713,6 @@ def main() -> None:
         raise AssertionError("invalid extension cache must fail closed before Detours")
     require(addon, "QueryRequiredExtensionsIsolated(addon_module, &refreshed)")
     require(addon, "bool ReadStartupEmbeddedHookRequest()")
-    require(addon, '"renodx-preset1", "DLSSMode"')
     require(addon, '"renodx-preset1", "DepthOfFieldMode"')
     require(addon, "embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest()")
     require(addon, "if (embedded_hooks_requested_at_startup)")

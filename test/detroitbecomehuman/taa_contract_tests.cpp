@@ -175,11 +175,6 @@ bool TestNgxInputConventions() {
           && std::signbit(zero_scale.x)
           && std::signbit(zero_scale.y),
       "zero extent must remain signed negative zero without unsigned underflow");
-  passed &= Expect(
-      taa_contract::IsNativeScaleExtent(3440u, 1440u, 3440u, 1440u)
-          && !taa_contract::IsNativeScaleExtent(1720u, 720u, 3440u, 1440u)
-          && !taa_contract::IsNativeScaleExtent(0u, 0u, 0u, 0u),
-      "SR preflight must accept only a nonzero exact 1:1 extent");
   return passed;
 }
 

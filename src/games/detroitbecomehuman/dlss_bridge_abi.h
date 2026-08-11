@@ -28,6 +28,7 @@ extern "C" {
 typedef uint32_t DetroitDlssMode;
 #define DETROIT_DLSS_MODE_NATIVE      0u
 #define DETROIT_DLSS_MODE_DLAA        1u
+/* Reserved legacy persisted values. ABI v3 Detroit rejects them to Native. */
 #define DETROIT_DLSS_MODE_QUALITY     2u
 #define DETROIT_DLSS_MODE_BALANCED    3u
 #define DETROIT_DLSS_MODE_PERFORMANCE 4u
@@ -38,6 +39,7 @@ typedef uint32_t DetroitDlssResultCode;
 #define DETROIT_DLSS_RESULT_ERROR    2u
 
 typedef uint64_t DetroitDlssCapabilityFlags;
+/* Reserved ABI bits: the DLAA-only Detroit bridge never advertises them. */
 #define DETROIT_DLSS_CAPABILITY_SUPER_RESOLUTION         (UINT64_C(1) << 0u)
 #define DETROIT_DLSS_CAPABILITY_DLAA                     (UINT64_C(1) << 1u)
 #define DETROIT_DLSS_CAPABILITY_AUTO_EXPOSURE            (UINT64_C(1) << 2u)

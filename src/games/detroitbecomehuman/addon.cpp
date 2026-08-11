@@ -39,11 +39,9 @@
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./dlss/embedded_bootstrap.hpp"
-#include "./dlss_scale_transition.hpp"
 #include "./dof_runtime.hpp"
 #include "./peak_brightness.hpp"
 #include "./render_debug.hpp"
-#include "./resolution_scaling_win32.hpp"
 #include "./retinal_capture.hpp"
 #include "./retinal_observability.hpp"
 #include "./shared.h"
@@ -73,10 +71,6 @@ namespace temporal_capture =
     renodx::games::detroitbecomehuman::temporal_capture;
 namespace supported_build =
     renodx::games::detroitbecomehuman::supported_build;
-namespace resolution_scaling =
-    renodx::games::detroitbecomehuman::resolution_scaling;
-namespace dlss_scale_transition =
-    renodx::games::detroitbecomehuman::dlss_scale_transition;
 namespace embedded_dlss =
     renodx::games::detroitbecomehuman::dlss::embedded;
 namespace dof = renodx::games::detroitbecomehuman::dof;
@@ -193,17 +187,6 @@ std::atomic_bool dof_device_reset_logged = false;
 std::atomic_bool aspect_ratio_enabled = true;
 std::atomic_uint32_t output_width = 0u;
 std::atomic_uint32_t output_height = 0u;
-resolution_scaling::RuntimeController resolution_scale_controller;
-dlss_scale_transition::Controller dlss_scale_transition_controller;
-std::mutex resolution_scale_mutex;
-DetroitDlssModeSettings cached_dlss_scale_settings = {};
-DetroitDlssMode cached_dlss_scale_mode = DETROIT_DLSS_MODE_NATIVE;
-std::uint32_t cached_dlss_scale_output_width = 0u;
-std::uint32_t cached_dlss_scale_output_height = 0u;
-bool cached_dlss_scale_settings_valid = false;
-bool dlss_scale_session_valid = false;
-float cached_dlss_target_scale = 1.f;
-std::uint32_t last_scale_log_key = std::numeric_limits<std::uint32_t>::max();
 HMODULE addon_module = nullptr;
 std::atomic_bool addon_attached = false;
 std::atomic_bool bootstrap_setup_attempted = false;
@@ -293,26 +276,20 @@ embedded_dlss::ExtensionCache ReadExtensionCache() {
 }
 
 bool ReadStartupEmbeddedHookRequest() {
-  float startup_dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
   float startup_dof_mode = 0.f;
-  (void)reshade::get_config_value(
-      nullptr, "renodx-preset1", "DLSSMode", startup_dlss_mode);
   (void)reshade::get_config_value(
       nullptr, "renodx-preset1", "DepthOfFieldMode", startup_dof_mode);
   return embedded_dlss::NeedsEmbeddedBridge(
-      static_cast<DetroitDlssMode>(startup_dlss_mode),
+      DETROIT_DLSS_MODE_NATIVE,
       startup_dof_mode >= 2.5f);
 }
 
 bool ReadStartupNativeCommandHookRequest() {
-  float startup_dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
   float startup_dof_mode = 0.f;
-  (void)reshade::get_config_value(
-      nullptr, "renodx-preset1", "DLSSMode", startup_dlss_mode);
   (void)reshade::get_config_value(
       nullptr, "renodx-preset1", "DepthOfFieldMode", startup_dof_mode);
   return embedded_dlss::NeedsRuntimeCommandTracking(
-      static_cast<DetroitDlssMode>(startup_dlss_mode),
+      DETROIT_DLSS_MODE_NATIVE,
       startup_dof_mode >= 2.5f);
 }
 
@@ -355,10 +332,6 @@ void LogUltrawide(reshade::log::level level, const std::string& message) {
   reshade::log::message(level, ("Detroit ultrawide: " + message).c_str());
 }
 
-void LogDlssScale(reshade::log::level level, const std::string& message) {
-  reshade::log::message(level, ("Detroit DLSS scale: " + message).c_str());
-}
-
 void LogReShadeCapture(reshade::log::level level, const std::string& message) {
   reshade::log::message(level, ("Detroit ReShade capture: " + message).c_str());
 }
@@ -369,12 +342,6 @@ std::string GetDlssModePostfix(DetroitDlssMode mode) {
       return "Native-TAA";
     case DETROIT_DLSS_MODE_DLAA:
       return "DLAA";
-    case DETROIT_DLSS_MODE_QUALITY:
-      return "DLSS-Quality";
-    case DETROIT_DLSS_MODE_BALANCED:
-      return "DLSS-Balanced";
-    case DETROIT_DLSS_MODE_PERFORMANCE:
-      return "DLSS-Performance";
     default:
       return "Unknown-Mode";
   }
@@ -443,212 +410,6 @@ void InitializeReShadeCaptureRequest() {
           reshade_capture.delay_seconds));
 }
 
-void InvalidateDlssScaleSettings() {
-  std::scoped_lock lock(resolution_scale_mutex);
-  cached_dlss_scale_settings_valid = false;
-  dlss_scale_session_valid = false;
-  last_scale_log_key = std::numeric_limits<std::uint32_t>::max();
-}
-
-void LogScaleResultOnce(
-    DetroitDlssMode mode,
-    resolution_scaling::ControllerResult result,
-    float target_scale) {
-  const auto result_code = static_cast<std::uint32_t>(result);
-  const std::uint32_t key =
-      (static_cast<std::uint32_t>(mode) << 28u)
-      ^ (result_code << 20u) ^ std::bit_cast<std::uint32_t>(target_scale);
-  if (last_scale_log_key == key) return;
-  last_scale_log_key = key;
-  const bool accepted = result == resolution_scaling::ControllerResult::kSuccess
-                        || result == resolution_scaling::ControllerResult::kNoChange;
-  LogDlssScale(
-      accepted ? reshade::log::level::info : reshade::log::level::warning,
-      std::format(
-          "mode {} requested scale {:.6f}; controller result {}{}.",
-          mode,
-          target_scale,
-          result_code,
-          accepted ? "" : "; native TAA remains the safe fallback"));
-}
-
-void UpdateDlssRenderScale() {
-  const auto mode = temporal_capture::GetMode();
-  std::scoped_lock lock(resolution_scale_mutex);
-
-  auto snapshot = resolution_scale_controller.GetSnapshot();
-  if (!renodx::games::detroitbecomehuman::dlss_policy::IsDlssMode(mode)) {
-    dlss_scale_transition_controller.SetIdle();
-    dlss_scale_session_valid = false;
-    cached_dlss_scale_settings_valid = false;
-    if (!snapshot.armed) return;
-    const auto result = resolution_scale_controller.Shutdown(
-        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
-    LogScaleResultOnce(mode, result, snapshot.serialized_scale);
-    return;
-  }
-
-  const auto width = output_width.load(std::memory_order_relaxed);
-  const auto height = output_height.load(std::memory_order_relaxed);
-  if (width == 0u || height == 0u) return;
-
-  const bool session_changed = !dlss_scale_session_valid
-                               || cached_dlss_scale_mode != mode
-                               || cached_dlss_scale_output_width != width
-                               || cached_dlss_scale_output_height != height;
-  if (session_changed) {
-    // Never carry a reduced extent into a new mode or output-resolution
-    // session. Shutdown restores Detroit's dimensions from the unchanged
-    // serialized scale before detaching the old hook.
-    if (snapshot.armed) {
-      const auto shutdown_result = resolution_scale_controller.Shutdown(
-          resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
-      if (shutdown_result != resolution_scaling::ControllerResult::kSuccess
-          && shutdown_result
-                 != resolution_scaling::ControllerResult::kNoChange) {
-        dlss_scale_transition_controller.LatchFallback();
-        LogScaleResultOnce(mode, shutdown_result, snapshot.serialized_scale);
-        return;
-      }
-    }
-    cached_dlss_scale_mode = mode;
-    cached_dlss_scale_output_width = width;
-    cached_dlss_scale_output_height = height;
-    cached_dlss_scale_settings_valid = false;
-    dlss_scale_session_valid = true;
-    cached_dlss_target_scale = 1.f;
-    dlss_scale_transition_controller.Reset(
-        temporal_capture::GetSrPreflightSerial(),
-        temporal_capture::GetEvaluationSerial());
-    snapshot = resolution_scale_controller.GetSnapshot();
-  }
-
-  if (dlss_scale_transition_controller.GetPhase()
-      == dlss_scale_transition::Phase::kFallbackLatched) {
-    if (!snapshot.armed) return;
-    const auto result = resolution_scale_controller.Shutdown(
-        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
-    LogScaleResultOnce(mode, result, snapshot.serialized_scale);
-    return;
-  }
-
-  if (!cached_dlss_scale_settings_valid) {
-    DetroitDlssModeSettings settings = {};
-    if (!renodx::games::detroitbecomehuman::dlss_bridge_client::client
-             .QueryModeSettings(mode, width, height, &settings)) {
-      LogScaleResultOnce(
-          mode,
-          resolution_scaling::ControllerResult::kNotArmed,
-          1.f);
-      return;
-    }
-    const auto exact_scale =
-        resolution_scaling::SelectScaleForExactTruncatedExtent(
-            {width, height},
-            {
-                settings.render_width,
-                settings.render_height,
-            });
-    if (!exact_scale.has_value()) {
-      dlss_scale_transition_controller.LatchFallback();
-      LogScaleResultOnce(
-          mode,
-          resolution_scaling::ControllerResult::kScaleRejected,
-          1.f);
-      return;
-    }
-
-    // QueryModeSettings can succeed only through the layer's independent
-    // executable SHA-256 gate. The controller additionally validates the
-    // loaded PE identity and exact code slices before installing its hook.
-    const resolution_scaling::ExecutableIdentity identity = {
-        .file_size = renodx::games::detroitbecomehuman::supported_build::kExecutableSize,
-        .sha256 = renodx::games::detroitbecomehuman::supported_build::kExecutableSha256,
-    };
-    const auto arm_result = resolution_scale_controller.Arm(
-        GetModuleHandleW(nullptr), identity);
-    if (arm_result != resolution_scaling::ControllerResult::kSuccess
-        && arm_result != resolution_scaling::ControllerResult::kAlreadyArmed) {
-      dlss_scale_transition_controller.LatchFallback();
-      LogScaleResultOnce(mode, arm_result, 1.f);
-      return;
-    }
-
-    cached_dlss_scale_settings = settings;
-    cached_dlss_target_scale = exact_scale.value();
-    cached_dlss_scale_settings_valid = true;
-    (void)dlss_scale_transition_controller.MarkSettingsReady();
-    if (mode == DETROIT_DLSS_MODE_DLAA) {
-      const auto native_scale_result = resolution_scale_controller.Apply(
-          1.f,
-          resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
-      if (native_scale_result == resolution_scaling::ControllerResult::kSuccess
-          || native_scale_result
-                 == resolution_scaling::ControllerResult::kNoChange) {
-        (void)dlss_scale_transition_controller.MarkTargetScaleApplied();
-      } else {
-        dlss_scale_transition_controller.LatchFallback();
-        LogScaleResultOnce(mode, native_scale_result, 1.f);
-        return;
-      }
-    }
-  }
-
-  snapshot = resolution_scale_controller.GetSnapshot();
-  const bool target_extent_observed =
-      snapshot.last_base_extent
-          == resolution_scaling::PixelExtent{width, height}
-      && snapshot.last_render_extent
-             == resolution_scaling::PixelExtent{
-                 cached_dlss_scale_settings.render_width,
-                 cached_dlss_scale_settings.render_height,
-             };
-  const auto action = dlss_scale_transition_controller.Observe({
-      .preflight_serial = temporal_capture::GetSrPreflightSerial(),
-      .evaluation_serial = temporal_capture::GetEvaluationSerial(),
-      .target_extent_observed = target_extent_observed,
-      .dlss_output_valid = temporal_capture::GetStatus()
-                           == temporal_capture::RuntimeStatus::kDlssActive,
-  });
-
-  if (action == dlss_scale_transition::Action::kApplyTargetScale) {
-    const auto result = resolution_scale_controller.Apply(
-        cached_dlss_target_scale,
-        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
-    if (result == resolution_scaling::ControllerResult::kSuccess
-        || result == resolution_scaling::ControllerResult::kNoChange) {
-      (void)dlss_scale_transition_controller.MarkTargetScaleApplied();
-    } else {
-      dlss_scale_transition_controller.LatchFallback();
-    }
-    LogScaleResultOnce(mode, result, cached_dlss_target_scale);
-    return;
-  }
-
-  if (action == dlss_scale_transition::Action::kRestoreNativeScale) {
-    snapshot = resolution_scale_controller.GetSnapshot();
-    if (!snapshot.armed) return;
-    const auto result = resolution_scale_controller.Shutdown(
-        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
-    LogScaleResultOnce(mode, result, snapshot.serialized_scale);
-  }
-}
-
-void ShutdownDlssRenderScale() {
-  std::scoped_lock lock(resolution_scale_mutex);
-  const auto snapshot = resolution_scale_controller.GetSnapshot();
-  if (snapshot.armed) {
-    const auto result = resolution_scale_controller.Shutdown(
-        resolution_scaling::RuntimeCallContext::kOutsideLoaderLock);
-    LogScaleResultOnce(
-        DETROIT_DLSS_MODE_NATIVE,
-        result,
-        snapshot.serialized_scale);
-  }
-  cached_dlss_scale_settings_valid = false;
-  dlss_scale_session_valid = false;
-  dlss_scale_transition_controller.SetIdle();
-}
 
 void StoreRuntimeFloat(volatile LONG* destination, float value) {
   const auto bits = std::bit_cast<std::uint32_t>(value);
@@ -732,19 +493,15 @@ void RefreshEmbeddedCommandTracking() {
 }
 
 void ApplyDlssMode(float selected_mode) {
-  auto next_mode = static_cast<DetroitDlssMode>(selected_mode);
-  if (next_mode != DETROIT_DLSS_MODE_NATIVE
-      && !renodx::games::detroitbecomehuman::dlss_policy::IsDlssMode(next_mode)) {
-    next_mode = DETROIT_DLSS_MODE_NATIVE;
-  }
+  auto next_mode =
+      renodx::games::detroitbecomehuman::dlss_policy::ParsePersistedDlssMode(
+          selected_mode);
   if (!embedded_dlss::kDlssRuntimeEnabled) {
     next_mode = DETROIT_DLSS_MODE_NATIVE;
   }
   dlss_mode = static_cast<float>(next_mode);
-  const auto previous_mode = temporal_capture::GetMode();
   temporal_capture::SetMode(next_mode);
   RefreshEmbeddedCommandTracking();
-  if (next_mode != previous_mode) InvalidateDlssScaleSettings();
 }
 
 void OnDlssModeChanged() {
@@ -1549,6 +1306,7 @@ void OnDofCompositeDrawn(reshade::api::command_list* command_list) {
 }
 
 struct DlaaSharpeningGate {
+  DetroitDlssMode mode = DETROIT_DLSS_MODE_NATIVE;
   bool active = false;
   bool exact_command_list_match = false;
   float strength = 0.f;
@@ -1556,17 +1314,23 @@ struct DlaaSharpeningGate {
 
 DlaaSharpeningGate GetDlaaSharpeningGate(
     reshade::api::command_list* command_list) {
-  const bool exact_command_list_match =
-      command_list != nullptr
-      && temporal_capture::QueryDlssOutputForCommandList(
-          command_list->get_native());
-  // Detroit's main menu and some transition frames execute the scene
-  // composite without recording the temporal TAA pass at all. Keep the mode
-  // marker deterministic there; the exact command-list match remains useful
-  // telemetry for the successful gameplay output path.
+  const auto mode = temporal_capture::GetMode();
+  if (renodx::games::detroitbecomehuman::temporal_mode_state::
+          CanUseNativeModeFastPath(mode)) {
+    return {.mode = mode};
+  }
+  const auto authorization =
+      temporal_capture::QueryDlssOutputAuthorizationForCommandList(
+          command_list != nullptr ? command_list->get_native() : 0u);
+  const bool exact_command_list_match = authorization.authorized;
+  // Suppress native CAS only when this exact command list owns a valid output
+  // from the current DLAA generation. A selected UI mode can still fall back to
+  // native TAA while feature creation or adapter scratch is unavailable.
   const bool active =
-      temporal_capture::GetMode() == DETROIT_DLSS_MODE_DLAA;
+      authorization.snapshot.mode == DETROIT_DLSS_MODE_DLAA
+      && exact_command_list_match;
   return {
+      .mode = authorization.snapshot.mode,
       .active = active,
       .exact_command_list_match = exact_command_list_match,
       .strength = active ? std::clamp(dlaa_sharpening, 0.f, 1.f) : 0.f,
@@ -1606,7 +1370,7 @@ void ApplyDlssOutputMarker(
   // them out of the deduplication key so the render thread cannot turn an
   // expected 5 <-> 6 transition into synchronous per-frame log I/O.
   const auto log_key = temporal_capture::MakeTelemetryKey(
-      static_cast<std::uint32_t>(temporal_capture::GetMode()),
+      static_cast<std::uint32_t>(gate.mode),
       gate.active,
       strength_percent);
   if (last_dlaa_sharpening_log_key.exchange(
@@ -2649,14 +2413,8 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Temporal Anti-Aliasing",
                 .section = "DLSS",
-                .tooltip = "DLAA replaces Detroit's native TAA at output resolution. DLSS Quality, Balanced and Performance use NGX-selected internal resolutions through the exact-build scale controller. Global Vulkan command-bind tracking remains disabled.",
-                .labels = {
-                    "Native TAA",
-                    "DLAA",
-                    "DLSS Quality",
-                    "DLSS Balanced",
-                    "DLSS Performance",
-                },
+                .tooltip = "DLAA replaces Detroit's native TAA at output resolution. The game Resolution Scaling setting must be 100%; reduced render extents fail closed to Native TAA. DLSS Super Resolution is not included.",
+                .labels = {"Native TAA", "DLAA"},
                 .is_enabled = []() {
                   return embedded_dlss::kDlssRuntimeEnabled;
                 },
@@ -2697,7 +2455,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Native TAA is active. The targeted DLSS/DLAA backend remains ready for live mode switching; global command-bind hooks are disabled unless Retinal DOF requested them at startup.",
+                .label = "Native TAA is active. The targeted DLAA backend remains ready for live mode switching; global command-bind hooks are disabled unless Retinal DOF requested them at startup.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -2707,7 +2465,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "A DLSS mode is selected; waiting for a complete verified TAA dispatch. Native TAA fallback is active.",
+                .label = "DLAA is selected; waiting for a complete verified TAA dispatch. Native TAA fallback is active.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -2734,15 +2492,6 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "DLSS Super Resolution is waiting for or was rejected by the exact-build runtime scale controller. Native TAA fallback is active.",
-                .section = "DLSS",
-                .is_visible = []() {
-                  return temporal_capture::GetStatus()
-                         == temporal_capture::RuntimeStatus::kSuperResolutionScaleUnavailable;
-                },
-            }},
-            {{
-                .value_type = renodx::utils::settings::SettingValueType::TEXT,
                 .label = "The local DLSS bridge is unavailable or rejected this frame. Native TAA fallback is active.",
                 .section = "DLSS",
                 .is_visible = []() {
@@ -2752,7 +2501,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "DLSS/DLAA produced a valid result for this frame.",
+                .label = "DLAA produced a valid result for this frame.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -3067,9 +2816,6 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
   peak_brightness_refresh_requested.store(true, std::memory_order_release);
   UpdatePeakBrightness(nullptr, false);
 
-  // A resize destroys the old output contract. Restore the user's serialized
-  // scale before any replacement swapchain can establish a new DLSS session.
-  ShutdownDlssRenderScale();
   if (!resize) {
     RestoreUltrawidePatch();
     ultrawide_install_attempted.store(false, std::memory_order_release);
@@ -3083,9 +2829,6 @@ void OnDestroyResource(
 }
 
 void OnDestroyDevice(reshade::api::device* device) {
-  // This callback runs outside the Windows loader lock and precedes addon
-  // unload. It is the final safe point for removing the executable detour if
-  // the swapchain teardown path did not already do so.
   if (auto* swapchain = tracked_swapchain.load(std::memory_order_acquire);
       swapchain != nullptr && swapchain->get_device() != device) {
     return;
@@ -3107,7 +2850,6 @@ void OnDestroyDevice(reshade::api::device* device) {
         reshade::log::level::warning,
         "Detroit DOF: Vulkan device recreation forced the Vanilla fallback.");
   }
-  ShutdownDlssRenderScale();
 }
 
 void OnPresent(
@@ -3143,13 +2885,12 @@ void OnPresent(
       status != nullptr) {
     status->label = embedded_hooks_requested_at_startup
                         ? embedded_dlss::GetStatusText()
-                        : "Native TAA fallback: targeted DLSS/DLAA backend not loaded.";
+                        : "Native TAA fallback: targeted DLAA backend not loaded.";
   }
   if (TryTrackGameSwapchain(swapchain) && UpdateUltrawideFromSwapchain(swapchain)
       && !ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
     InstallUltrawidePatch();
   }
-  UpdateDlssRenderScale();
   const auto color_space = swapchain->get_color_space();
   shader_injection.output_is_hdr =
       IsHdrOutputColorSpace(color_space) ? 1.f : 0.f;
@@ -3160,7 +2901,6 @@ void OnPresent(
   UpdateDofRuntimeMode();
   SyncDlaaSharpening();
   TrySaveRequestedReShadeScreenshot(swapchain);
-  temporal_capture::BeginNextFrame();
   // The carrier bit describes the frame that just finished. Clear all
   // transient flags so a video/loading frame without the scene composite
   // falls back to Detroit's native BT.709 intermediate.
@@ -3208,7 +2948,7 @@ bool AttachAddon(HMODULE h_module) {
   } else {
     reshade::log::message(
         reshade::log::level::info,
-        "Detroit DLSS/Retinal: lightweight Vulkan backend is not loaded; Native TAA remains active.");
+        "Detroit DLAA/Retinal: lightweight Vulkan backend is not loaded; Native TAA remains active.");
   }
   renodx::games::detroitbecomehuman::dlss_bridge_client::client.SetApiProvider(
       &embedded_dlss::GetApi);

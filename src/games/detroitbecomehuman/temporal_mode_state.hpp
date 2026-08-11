@@ -9,7 +9,7 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "dlss_bridge_abi.h"
+#include "dlss_policy.hpp"
 
 namespace renodx::games::detroitbecomehuman::temporal_mode_state {
 
@@ -20,13 +20,25 @@ struct Snapshot {
 
 struct SetModeResult {
   DetroitDlssMode previous = DETROIT_DLSS_MODE_NATIVE;
+  Snapshot current = {};
   bool changed = false;
 };
 
 struct Authorization {
   Snapshot snapshot = {};
+  bool replacement_eligible = false;
   bool authorized = false;
 };
+
+[[nodiscard]] constexpr bool CanUseNativeModeFastPath(
+    DetroitDlssMode mode) noexcept {
+  return mode == DETROIT_DLSS_MODE_NATIVE;
+}
+
+[[nodiscard]] constexpr bool CanUseNativePostDispatchFastPath(
+    DetroitDlssMode mode, bool auxiliary_replacement_used) noexcept {
+  return CanUseNativeModeFastPath(mode) && !auxiliary_replacement_used;
+}
 
 // A reusable Vulkan command buffer may retain its identity across several
 // temporal-mode sessions. Tag every successful DLSS output with the mode
@@ -82,38 +94,60 @@ class Tracker {
   }
 
   [[nodiscard]] SetModeResult SetMode(DetroitDlssMode mode) {
+    mode = dlss_policy::NormalizeDlssMode(mode);
     std::scoped_lock lock(mutex_);
     const auto previous = mode_.load(std::memory_order_relaxed);
-    if (previous == mode) return {.previous = previous};
+    if (previous == mode) {
+      return {
+          .previous = previous,
+          .current = {
+              .mode = previous,
+              .generation = generation_,
+          },
+      };
+    }
     AdvanceGenerationLocked();
-    authorized_generation_by_command_list_.clear();
+    authorization_by_command_list_.clear();
     mode_.store(mode, std::memory_order_release);
-    return {.previous = previous, .changed = true};
+    return {
+        .previous = previous,
+        .current = {
+            .mode = mode,
+            .generation = generation_,
+        },
+        .changed = true,
+    };
   }
 
   void Reset(DetroitDlssMode mode = DETROIT_DLSS_MODE_NATIVE) {
+    mode = dlss_policy::NormalizeDlssMode(mode);
     std::scoped_lock lock(mutex_);
     AdvanceGenerationLocked();
-    authorized_generation_by_command_list_.clear();
+    authorization_by_command_list_.clear();
     mode_.store(mode, std::memory_order_release);
+  }
+
+  // A new command-buffer recording must prove its own DLSS output before CAS
+  // suppression is authorized. Keep the previous successful generation only
+  // for the pre-dispatch auxiliary-replacement decision.
+  void BeginRecording(std::uint64_t command_list) {
+    if (command_list == 0u) return;
+    std::scoped_lock lock(mutex_);
+    const auto found = authorization_by_command_list_.find(command_list);
+    if (found != authorization_by_command_list_.end()) {
+      found->second.current_recording_generation = 0u;
+    }
+  }
+
+  void DiscardCommandList(std::uint64_t command_list) {
+    if (command_list == 0u) return;
+    std::scoped_lock lock(mutex_);
+    authorization_by_command_list_.erase(command_list);
   }
 
   [[nodiscard]] Authorization QueryAuthorization(
       std::uint64_t command_list) const {
-    std::scoped_lock lock(mutex_);
-    const Snapshot snapshot = {
-        .mode = mode_.load(std::memory_order_relaxed),
-        .generation = generation_,
-    };
-    if (command_list == 0u || snapshot.mode == DETROIT_DLSS_MODE_NATIVE) {
-      return {.snapshot = snapshot};
-    }
-    const auto found = authorized_generation_by_command_list_.find(command_list);
-    return {
-        .snapshot = snapshot,
-        .authorized = found != authorized_generation_by_command_list_.end()
-                      && found->second == snapshot.generation,
-    };
+    return QueryAuthorizationFields(command_list);
   }
 
   [[nodiscard]] bool Record(
@@ -126,6 +160,32 @@ class Tracker {
   }
 
  private:
+  [[nodiscard]] Authorization QueryAuthorizationFields(
+      std::uint64_t command_list) const {
+    std::scoped_lock lock(mutex_);
+    const Snapshot snapshot = {
+        .mode = mode_.load(std::memory_order_relaxed),
+        .generation = generation_,
+    };
+    if (command_list == 0u || snapshot.mode == DETROIT_DLSS_MODE_NATIVE) {
+      return {.snapshot = snapshot};
+    }
+    const auto found = authorization_by_command_list_.find(command_list);
+    const auto replacement_generation =
+        found == authorization_by_command_list_.end()
+            ? 0u
+            : found->second.replacement_generation;
+    const auto authorized_generation =
+        found == authorization_by_command_list_.end()
+            ? 0u
+            : found->second.current_recording_generation;
+    return {
+        .snapshot = snapshot,
+        .replacement_eligible =
+            replacement_generation == snapshot.generation,
+        .authorized = authorized_generation == snapshot.generation,
+    };
+  }
   [[nodiscard]] bool RecordLocked(
       std::uint64_t command_list,
       const Snapshot& snapshot,
@@ -136,10 +196,13 @@ class Tracker {
       return false;
     }
     if (!output_valid || snapshot.mode == DETROIT_DLSS_MODE_NATIVE) {
-      authorized_generation_by_command_list_.erase(command_list);
+      authorization_by_command_list_.erase(command_list);
       return false;
     }
-    authorized_generation_by_command_list_[command_list] = snapshot.generation;
+    authorization_by_command_list_[command_list] = {
+        .replacement_generation = snapshot.generation,
+        .current_recording_generation = snapshot.generation,
+    };
     return true;
   }
   void AdvanceGenerationLocked() noexcept {
@@ -150,8 +213,12 @@ class Tracker {
   mutable std::mutex mutex_;
   std::atomic<DetroitDlssMode> mode_ = DETROIT_DLSS_MODE_NATIVE;
   std::uint64_t generation_ = 1u;
-  std::unordered_map<std::uint64_t, std::uint64_t>
-      authorized_generation_by_command_list_;
+  struct CommandAuthorization final {
+    std::uint64_t replacement_generation = 0u;
+    std::uint64_t current_recording_generation = 0u;
+  };
+  std::unordered_map<std::uint64_t, CommandAuthorization>
+      authorization_by_command_list_;
 };
 
 }  // namespace renodx::games::detroitbecomehuman::temporal_mode_state

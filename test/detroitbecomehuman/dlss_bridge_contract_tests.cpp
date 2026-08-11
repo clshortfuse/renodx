@@ -25,6 +25,7 @@ namespace {
 namespace supported_build = renodx::games::detroitbecomehuman::supported_build;
 namespace dlss_bridge_client =
     renodx::games::detroitbecomehuman::dlss_bridge_client;
+namespace dlss_policy = renodx::games::detroitbecomehuman::dlss_policy;
 namespace dlss_evaluation_trace =
     renodx::games::detroitbecomehuman::dlss;
 namespace temporal_mode_state =
@@ -222,7 +223,6 @@ DetroitDlssResultCode DETROIT_DLSS_CALL FakeGetContext(
   context->vk_graphics_queue = UINT64_C(0x4444444444444444);
   context->capability_flags = DETROIT_DLSS_CAPABILITY_SUPPORTED_EXECUTABLE
                               | DETROIT_DLSS_CAPABILITY_TEMPORAL_INPUTS_VERIFIED
-                              | DETROIT_DLSS_CAPABILITY_SUPER_RESOLUTION
                               | DETROIT_DLSS_CAPABILITY_DLAA;
   return DETROIT_DLSS_RESULT_SUCCESS;
 }
@@ -244,6 +244,10 @@ DetroitDlssResultCode DETROIT_DLSS_CALL FakeQueryMode(
   settings->output_height = output_height;
   settings->render_width = output_width;
   settings->render_height = output_height;
+  settings->min_render_width = output_width;
+  settings->min_render_height = output_height;
+  settings->max_render_width = output_width;
+  settings->max_render_height = output_height;
   return DETROIT_DLSS_RESULT_SUCCESS;
 }
 
@@ -415,9 +419,15 @@ bool TestFixedValuesAndBindings() {
   passed &= Expect(DETROIT_DLSS_ABI_VERSION == 3u, "ABI version must be v3");
   passed &= Expect(DETROIT_DLSS_MODE_NATIVE == 0u, "Native mode value changed");
   passed &= Expect(DETROIT_DLSS_MODE_DLAA == 1u, "DLAA mode value changed");
-  passed &= Expect(DETROIT_DLSS_MODE_QUALITY == 2u, "Quality mode value changed");
-  passed &= Expect(DETROIT_DLSS_MODE_BALANCED == 3u, "Balanced mode value changed");
-  passed &= Expect(DETROIT_DLSS_MODE_PERFORMANCE == 4u, "Performance mode value changed");
+  passed &= Expect(
+      DETROIT_DLSS_MODE_QUALITY == 2u,
+      "reserved legacy Quality wire value changed");
+  passed &= Expect(
+      DETROIT_DLSS_MODE_BALANCED == 3u,
+      "reserved legacy Balanced wire value changed");
+  passed &= Expect(
+      DETROIT_DLSS_MODE_PERFORMANCE == 4u,
+      "reserved legacy Performance wire value changed");
   passed &= Expect(DETROIT_DLSS_RESULT_SUCCESS == 0u, "Success result value changed");
   passed &= Expect(DETROIT_DLSS_RESULT_FALLBACK == 1u, "Fallback result value changed");
   passed &= Expect(DETROIT_DLSS_RESULT_ERROR == 2u, "Error result value changed");
@@ -597,10 +607,16 @@ bool TestModeSettingsCachePolicy() {
       dlss_bridge_client::IsModeSettingsCacheReusable(
           dlaa, DETROIT_DLSS_MODE_DLAA, 3440u, 1440u),
       "stable DLAA mode/output settings must bypass a repeated NGX query");
-  passed &= Expect(
-      !dlss_bridge_client::IsModeSettingsCacheReusable(
-          dlaa, DETROIT_DLSS_MODE_QUALITY, 3440u, 1440u),
-      "a quality-mode transition must invalidate cached NGX settings");
+  for (const auto legacy_mode : {
+           DETROIT_DLSS_MODE_QUALITY,
+           DETROIT_DLSS_MODE_BALANCED,
+           DETROIT_DLSS_MODE_PERFORMANCE,
+       }) {
+    passed &= Expect(
+        !dlss_bridge_client::IsModeSettingsCacheReusable(
+            dlaa, legacy_mode, 3440u, 1440u),
+        "a legacy SR value must never reuse cached DLAA settings");
+  }
   passed &= Expect(
       !dlss_bridge_client::IsModeSettingsCacheReusable(
           dlaa, DETROIT_DLSS_MODE_DLAA, 2560u, 1440u),
@@ -829,6 +845,26 @@ bool TestDirectProviderContract() {
       client.QueryModeSettings(DETROIT_DLSS_MODE_DLAA, 3440u, 1440u, &settings)
           && settings.render_width == 3440u && settings.render_height == 1440u,
       "direct in-process bridge provider did not return DLAA settings");
+  for (const auto legacy_mode : {
+           DETROIT_DLSS_MODE_QUALITY,
+           DETROIT_DLSS_MODE_BALANCED,
+           DETROIT_DLSS_MODE_PERFORMANCE,
+       }) {
+    g_mode_queried = false;
+    g_configured = false;
+    g_evaluated = false;
+    passed &= Expect(
+        !client.QueryModeSettings(legacy_mode, 3440u, 1440u, &settings)
+            && !g_mode_queried,
+        "legacy SR values must fail before reaching the bridge mode query");
+    const auto evaluation = client.Evaluate(legacy_mode, {});
+    passed &= Expect(
+        evaluation.status == DETROIT_DLSS_RESULT_FALLBACK
+            && evaluation.reason == dlss_policy::FallbackReason::kUnknownMode
+            && !evaluation.output_valid && !evaluation.suppress_final_cas
+            && !g_mode_queried && !g_configured && !g_evaluated,
+        "legacy SR values must fail closed before configuration or evaluation");
+  }
   DetroitDlssTemporalDescriptorSnapshot snapshot = {};
   passed &= Expect(
       client.CaptureTemporalSnapshot(
@@ -923,25 +959,41 @@ bool TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization() {
   const auto enter_dlaa = tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
   const auto first_dlaa = tracker.GetSnapshot();
   passed &= Expect(
-      enter_dlaa.changed && first_dlaa.mode == DETROIT_DLSS_MODE_DLAA,
-      "entering DLAA must start a distinct temporal-mode generation");
+      enter_dlaa.changed
+          && enter_dlaa.current.mode == DETROIT_DLSS_MODE_DLAA
+          && enter_dlaa.current.generation == first_dlaa.generation,
+      "mode publication must return its exact resulting DLAA generation");
   passed &= Expect(
-      tracker.Record(kCommandList, first_dlaa, true)
-          && tracker.QueryAuthorization(kCommandList).authorized,
+      tracker.Record(kCommandList, first_dlaa, true),
       "a valid current-generation DLAA output must authorize its command list");
+  const auto first_authorization = tracker.QueryAuthorization(kCommandList);
+  passed &= Expect(
+      first_authorization.snapshot.mode == DETROIT_DLSS_MODE_DLAA
+          && first_authorization.snapshot.generation == first_dlaa.generation
+          && first_authorization.replacement_eligible
+          && first_authorization.authorized,
+      "authorization must return one coherent current-generation snapshot");
 
   const auto enter_native = tracker.SetMode(DETROIT_DLSS_MODE_NATIVE);
   passed &= Expect(
       enter_native.changed
+          && enter_native.current.mode == DETROIT_DLSS_MODE_NATIVE
           && !tracker.QueryAuthorization(kCommandList).authorized,
       "switching to native TAA must revoke all DLAA command-list authorization");
 
   const auto reenter_dlaa = tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
   const auto second_dlaa = tracker.GetSnapshot();
+  const auto cold_second_authorization =
+      tracker.QueryAuthorization(kCommandList);
   passed &= Expect(
       reenter_dlaa.changed
           && second_dlaa.generation != first_dlaa.generation
-          && !tracker.QueryAuthorization(kCommandList).authorized,
+          && cold_second_authorization.snapshot.mode
+                 == DETROIT_DLSS_MODE_DLAA
+          && cold_second_authorization.snapshot.generation
+                 == second_dlaa.generation
+          && !cold_second_authorization.replacement_eligible
+          && !cold_second_authorization.authorized,
       "a later DLAA session must warm up independently");
   passed &= Expect(
       !tracker.Record(kCommandList, first_dlaa, true)
@@ -952,14 +1004,101 @@ bool TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization() {
           && tracker.QueryAuthorization(kCommandList).authorized,
       "the current DLAA generation must become authorized after a valid output");
 
+  const auto first_cas = tracker.QueryAuthorization(kCommandList);
+  const auto second_cas = tracker.QueryAuthorization(kCommandList);
+  passed &= Expect(
+      first_cas.authorized && second_cas.authorized,
+      "multiple CAS dispatches in one recording must remain authorized");
+  tracker.BeginRecording(kCommandList);
+  const auto next_recording = tracker.QueryAuthorization(kCommandList);
+  passed &= Expect(
+      next_recording.replacement_eligible && !next_recording.authorized,
+      "a new recording may replace temporal history but must re-prove CAS output");
+  passed &= Expect(
+      tracker.Record(kCommandList, second_dlaa, true)
+          && tracker.QueryAuthorization(kCommandList).authorized,
+      "a successful new recording must restore CAS authorization");
+
   const auto same_mode = tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
   passed &= Expect(
-      !same_mode.changed && tracker.QueryAuthorization(kCommandList).authorized,
-      "per-frame same-mode refresh must preserve current authorization");
+      !same_mode.changed
+          && same_mode.current.mode == DETROIT_DLSS_MODE_DLAA
+          && same_mode.current.generation == second_dlaa.generation
+          && tracker.QueryAuthorization(kCommandList).authorized,
+      "same-mode publication must preserve current authorization");
   passed &= Expect(
       !tracker.Record(kCommandList, second_dlaa, false)
+          && !tracker.QueryAuthorization(kCommandList).replacement_eligible
           && !tracker.QueryAuthorization(kCommandList).authorized,
       "a current-generation fallback must revoke authorization");
+  return passed;
+}
+
+bool TestTemporalModeRejectsLegacySrValues() {
+  constexpr std::uint64_t kCommandList = UINT64_C(0x87654321);
+  bool passed = true;
+  for (const auto legacy_mode : {
+           DETROIT_DLSS_MODE_QUALITY,
+           DETROIT_DLSS_MODE_BALANCED,
+           DETROIT_DLSS_MODE_PERFORMANCE,
+       }) {
+    temporal_mode_state::Tracker tracker;
+    const auto enter_dlaa = tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
+    const auto dlaa = tracker.GetSnapshot();
+    passed &= Expect(
+        enter_dlaa.changed && tracker.Record(kCommandList, dlaa, true)
+            && tracker.QueryAuthorization(kCommandList).authorized,
+        "test setup must establish current-generation DLAA authorization");
+
+    const auto fail_closed = tracker.SetMode(legacy_mode);
+    const auto snapshot = tracker.GetSnapshot();
+    passed &= Expect(
+        fail_closed.changed && snapshot.mode == DETROIT_DLSS_MODE_NATIVE
+            && !tracker.QueryAuthorization(kCommandList).replacement_eligible
+            && !tracker.QueryAuthorization(kCommandList).authorized,
+        "legacy SR transitions must normalize to Native and revoke authorization");
+
+    tracker.Reset(legacy_mode);
+    passed &= Expect(
+        tracker.GetMode() == DETROIT_DLSS_MODE_NATIVE,
+        "reset must not persist a legacy SR mode in temporal state");
+  }
+  return passed;
+}
+
+bool TestNativePostDispatchFastPathFailsClosed() {
+  bool passed = true;
+  passed &= Expect(
+      temporal_mode_state::CanUseNativeModeFastPath(
+          DETROIT_DLSS_MODE_NATIVE),
+      "an exact Native observation may bypass read-only DLAA bookkeeping");
+  passed &= Expect(
+      !temporal_mode_state::CanUseNativeModeFastPath(
+          DETROIT_DLSS_MODE_DLAA),
+      "a DLAA observation must retain generation-checked bookkeeping");
+  passed &= Expect(
+      temporal_mode_state::CanUseNativePostDispatchFastPath(
+          DETROIT_DLSS_MODE_NATIVE, false),
+      "an ordinary Native dispatch must bypass transactional output bookkeeping");
+  passed &= Expect(
+      !temporal_mode_state::CanUseNativePostDispatchFastPath(
+          DETROIT_DLSS_MODE_NATIVE, true),
+      "an auxiliary replacement must retain the Native fallback guard after a mode switch");
+  passed &= Expect(
+      !temporal_mode_state::CanUseNativePostDispatchFastPath(
+          DETROIT_DLSS_MODE_DLAA, false),
+      "DLAA must retain generation-checked output bookkeeping");
+  for (const auto legacy_mode : {
+           DETROIT_DLSS_MODE_QUALITY,
+           DETROIT_DLSS_MODE_BALANCED,
+           DETROIT_DLSS_MODE_PERFORMANCE,
+       }) {
+    passed &= Expect(
+        !temporal_mode_state::CanUseNativeModeFastPath(legacy_mode)
+            && !temporal_mode_state::CanUseNativePostDispatchFastPath(
+                legacy_mode, false),
+        "an unexpected legacy mode must fail closed instead of bypassing bookkeeping");
+  }
   return passed;
 }
 
@@ -1180,6 +1319,8 @@ int main() {
   passed &= TestDirectProviderContract();
   passed &= TestTemporalDescriptorBindingPingPong();
   passed &= TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization();
+  passed &= TestTemporalModeRejectsLegacySrValues();
+  passed &= TestNativePostDispatchFastPathFailsClosed();
   passed &= TestTemporalModeTransactionSerializesCommit();
   passed &= TestBoundedEvaluationTraceWindow();
   passed &= TestBoundedEvaluationSubmissionTrace();

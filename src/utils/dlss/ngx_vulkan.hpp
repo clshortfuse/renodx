@@ -131,6 +131,8 @@ struct OperationResult final {
   NVSDK_NGX_Result ngx_result = NVSDK_NGX_Result_Success;
   VkResult vk_result = VK_SUCCESS;
   std::uint64_t feature_generation = 0u;
+  std::uint64_t recording_epoch = 0u;
+  bool one_time_submit = false;
   bool feature_created = false;
   bool output_valid = false;
 
@@ -236,6 +238,7 @@ struct DeviceCreateInfo final {
 class NgxContext final {
  public:
   using SubmissionSnapshot = FeatureLifetimeTracker::SubmissionSnapshot;
+  using CompletedRecording = FeatureLifetimeTracker::CompletedRecording;
 
   explicit NgxContext(DeviceCreateInfo create_info);
   ~NgxContext();
@@ -255,10 +258,11 @@ class NgxContext final {
       const std::vector<std::uint64_t>& recording_keys) const;
   SubmissionSnapshot NotifySubmitted(
       std::uint64_t queue_key, const SubmissionSnapshot& snapshot);
-  std::vector<std::uint64_t> NotifySubmissionCompleted(
+  std::vector<CompletedRecording> NotifySubmissionCompleted(
       std::uint64_t queue_key, const SubmissionSnapshot& snapshot);
-  std::vector<std::uint64_t> NotifyQueueCompleted(std::uint64_t queue_key);
-  std::vector<std::uint64_t> NotifyDeviceCompleted();
+  std::vector<CompletedRecording> NotifyQueueCompleted(
+      std::uint64_t queue_key);
+  std::vector<CompletedRecording> NotifyDeviceCompleted();
 
   void RetireActive();
   void RetireCompleted();

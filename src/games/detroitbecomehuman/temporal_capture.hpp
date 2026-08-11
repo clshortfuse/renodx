@@ -91,7 +91,6 @@ enum class RuntimeStatus : std::uint32_t {
   kWaitingForDispatch,
   kDescriptorContractIncomplete,
   kTemporalContractUnverified,
-  kSuperResolutionScaleUnavailable,
   kBridgeFallback,
   kDlssActive,
 };
@@ -167,7 +166,6 @@ inline thread_local bool auxiliary_temporal_replacement_requested = false;
 inline thread_local std::uint64_t auxiliary_temporal_replacement_generation = 0u;
 inline std::atomic_uint64_t frame_counter = 0u;
 inline std::atomic_uint64_t evaluation_serial = 0u;
-inline std::atomic_uint64_t sr_preflight_serial = 0u;
 static_assert(std::atomic_uint64_t::is_always_lock_free);
 inline std::mutex contract_mutex;
 inline ContractShape last_contract_shape = {};
@@ -181,6 +179,10 @@ inline std::atomic_uint64_t last_logged_evaluation_key =
     kUnloggedTelemetryKey;
 inline std::atomic_bool has_logged_auxiliary_fallback_replay = false;
 inline std::atomic_bool has_logged_auxiliary_active = false;
+// Serialize mode publication with its bridge/tracking side effects. OnPresent
+// may overlap a preset callback; without this lease, a stale frame-start read
+// can overwrite a newer UI transition or publish its old tracking epoch.
+inline std::mutex mode_transition_mutex;
 // ReShade 6.7.3 stores add-on callbacks in an unsynchronized vector, so the
 // bind callback cannot be safely registered/unregistered during live mode
 // switches. Keep it installed, but make Native TAA a single lock-free atomic
@@ -195,10 +197,20 @@ struct __declspec(uuid("7a35d182-8df1-4e1b-b79b-a57b3c9a72f0"))
 };
 
 inline void OnInitTemporalCommandList(reshade::api::command_list* cmd_list) {
+  if (temporal_descriptor_binding_tracking_epoch.load(
+          std::memory_order_relaxed)
+      != 0u) {
+    mode_state.DiscardCommandList(cmd_list->get_native());
+  }
   renodx::utils::data::Create<TemporalDescriptorBindingData>(cmd_list);
 }
 
 inline void OnDestroyTemporalCommandList(reshade::api::command_list* cmd_list) {
+  if (temporal_descriptor_binding_tracking_epoch.load(
+          std::memory_order_relaxed)
+      != 0u) {
+    mode_state.DiscardCommandList(cmd_list->get_native());
+  }
   renodx::utils::data::Delete<TemporalDescriptorBindingData>(cmd_list);
 }
 
@@ -208,6 +220,7 @@ inline void OnResetTemporalCommandList(reshade::api::command_list* cmd_list) {
       == 0u) {
     return;
   }
+  mode_state.BeginRecording(cmd_list->get_native());
   auto* data =
       renodx::utils::data::Get<TemporalDescriptorBindingData>(cmd_list);
   if (data != nullptr) data->tracker.Reset();
@@ -330,10 +343,6 @@ inline void MarkMainTemporalCommandList(std::uint64_t command_list) {
   return evaluation_serial.load(std::memory_order_acquire);
 }
 
-[[nodiscard]] inline std::uint64_t GetSrPreflightSerial() {
-  return sr_preflight_serial.load(std::memory_order_acquire);
-}
-
 inline void SetDlaaSharpening(
     float strength,
     float normalization) noexcept {
@@ -348,34 +357,28 @@ inline void SetDlaaSharpening(
 }
 
 inline void SetMode(DetroitDlssMode mode) {
-  if (mode > DETROIT_DLSS_MODE_PERFORMANCE) mode = DETROIT_DLSS_MODE_NATIVE;
+  mode = dlss_policy::NormalizeDlssMode(mode);
+  std::scoped_lock transition_lock(mode_transition_mutex);
   const auto transition = mode_state.SetMode(mode);
-  if (mode == DETROIT_DLSS_MODE_NATIVE) {
+  const auto current = transition.current;
+  if (current.mode == DETROIT_DLSS_MODE_NATIVE) {
     temporal_descriptor_binding_tracking_epoch.store(
         0u, std::memory_order_release);
   } else if (transition.changed) {
     temporal_descriptor_binding_tracking_epoch.store(
-        mode_state.GetSnapshot().generation,
+        current.generation,
         std::memory_order_release);
   }
   const auto previous = transition.previous;
-  if (mode == DETROIT_DLSS_MODE_NATIVE
+  if (current.mode == DETROIT_DLSS_MODE_NATIVE
       && transition.changed && previous != DETROIT_DLSS_MODE_NATIVE) {
     (void)dlss_bridge_client::client.TransitionToNative();
   }
-  if (mode == DETROIT_DLSS_MODE_NATIVE) {
+  if (current.mode == DETROIT_DLSS_MODE_NATIVE) {
     runtime_status.store(RuntimeStatus::kNative, std::memory_order_relaxed);
-  } else if (dlss_policy::IsSuperResolutionMode(mode)) {
-    runtime_status.store(
-        RuntimeStatus::kSuperResolutionScaleUnavailable,
-        std::memory_order_relaxed);
   } else {
     runtime_status.store(RuntimeStatus::kWaitingForDispatch, std::memory_order_relaxed);
   }
-}
-
-inline void BeginNextFrame() {
-  SetMode(mode_state.GetMode());
 }
 
 [[nodiscard]] inline bool RecordDlssOutputForCommandList(
@@ -390,10 +393,18 @@ inline void BeginNextFrame() {
   return mode_state.QueryAuthorization(command_list).authorized;
 }
 
+[[nodiscard]] inline temporal_mode_state::Authorization
+QueryDlssOutputAuthorizationForCommandList(std::uint64_t command_list) {
+  return mode_state.QueryAuthorization(command_list);
+}
+
 [[nodiscard]] inline bool RequestAuxiliaryTemporalReplacement(
     reshade::api::command_list* command_list) {
   auxiliary_temporal_replacement_requested = false;
   auxiliary_temporal_replacement_generation = 0u;
+  if (temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
+    return false;
+  }
   if (command_list == nullptr
       || command_list->get_device() == nullptr
       || command_list->get_device()->get_api()
@@ -413,7 +424,7 @@ inline void BeginNextFrame() {
       native_temporal_pipeline.handle != 0u
       && dlss::embedded::CanInsertComputeWriteBarrier(native_command_list)
       && IsMainTemporalCommandList(native_command_list)
-      && authorization.authorized;
+      && authorization.replacement_eligible;
   if (auxiliary_temporal_replacement_requested) {
     auxiliary_temporal_replacement_generation =
         authorization.snapshot.generation;
@@ -838,13 +849,6 @@ inline void AfterNativeTemporalDispatch(
       auxiliary_temporal_replacement_generation;
   auxiliary_temporal_replacement_requested = false;
   auxiliary_temporal_replacement_generation = 0u;
-  auto mode_transaction = mode_state.BeginTransaction();
-  const auto mode_snapshot = mode_transaction.GetSnapshot();
-  NativeTemporalFallbackGuard native_fallback(
-      context,
-      native_temporal_pipeline,
-      auxiliary_replacement_used,
-      mode_transaction);
   const auto temporal_pipeline = native_temporal_pipeline;
   const auto temporal_pipeline_layout = native_temporal_pipeline_layout;
   native_temporal_pipeline = {0u};
@@ -853,6 +857,17 @@ inline void AfterNativeTemporalDispatch(
       evaluation_serial.fetch_add(1u, std::memory_order_acq_rel) + 1u;
   ObserveTemporalCommandList(
       context.cmd_list->get_native(), dispatch_serial);
+  if (temporal_mode_state::CanUseNativePostDispatchFastPath(
+          mode_state.GetMode(), auxiliary_replacement_used)) {
+    return;
+  }
+  auto mode_transaction = mode_state.BeginTransaction();
+  const auto mode_snapshot = mode_transaction.GetSnapshot();
+  NativeTemporalFallbackGuard native_fallback(
+      context,
+      temporal_pipeline,
+      auxiliary_replacement_used,
+      mode_transaction);
   // A later temporal dispatch in the same presented frame supersedes an
   // earlier result. Re-arm CAS until this dispatch independently succeeds.
   (void)mode_transaction.Record(context.cmd_list->get_native(), false);
@@ -1137,24 +1152,6 @@ inline void AfterNativeTemporalDispatch(
           dlaa_sharpening_normalization.load(std::memory_order_acquire),
   };
 
-  // This signal proves that the native-scale temporal pass is safe to use as
-  // an SR scale-transition anchor. It intentionally precedes Evaluate: NGX's
-  // queried SR extent is expected not to match while the game is still 1:1.
-  const bool native_scale_preflight =
-      taa_contract::IsNativeScaleExtent(
-          inputs.render_width,
-          inputs.render_height,
-          inputs.output_width,
-          inputs.output_height);
-  if (dlss_policy::IsSuperResolutionMode(mode) && native_scale_preflight
-      && (verification_flags & DETROIT_DLSS_VERIFY_MANDATORY_MASK)
-             == DETROIT_DLSS_VERIFY_MANDATORY_MASK
-      // IsValid also proves b52 render_target_size against the output extent
-      // and src_texture_size/viewport against this 1:1 render extent.
-      && frame_parameters.IsValid()) {
-    sr_preflight_serial.store(dispatch_serial, std::memory_order_release);
-  }
-
   const auto evaluation = dlss_bridge_client::client.Evaluate(mode, inputs);
   // The final CAS gate follows the latest temporal dispatch in this frame.
   // Never retain a successful earlier dispatch if a later one fell back to
@@ -1208,15 +1205,6 @@ inline void AfterNativeTemporalDispatch(
     runtime_status.store(
         RuntimeStatus::kTemporalContractUnverified,
         std::memory_order_relaxed);
-  } else if (dlss_policy::IsSuperResolutionMode(mode)
-             && (evaluation.reason
-                     == dlss_policy::FallbackReason::kRenderScaleUnavailable
-                 || evaluation.reason
-                        == dlss_policy::FallbackReason::kInvalidModeSettings
-                 || evaluation.reason == dlss_policy::FallbackReason::kExtentMismatch)) {
-    runtime_status.store(
-        RuntimeStatus::kSuperResolutionScaleUnavailable,
-        std::memory_order_relaxed);
   } else {
     runtime_status.store(RuntimeStatus::kBridgeFallback, std::memory_order_relaxed);
   }
@@ -1262,18 +1250,21 @@ struct TemporalDispatchCallback {
     auxiliary_temporal_replacement_generation = 0u;
     native_temporal_pipeline = {0u};
     native_temporal_pipeline_layout = {0u};
-    auto* shader_state = renodx::utils::command_action::GetShaderState(&context);
-    if (shader_state != nullptr) {
-      auto& compute_state =
-          shader_state->stage_states[renodx::utils::shader::COMPUTE_INDEX];
-      renodx::utils::shader::PopulateStageState(&compute_state);
-      native_temporal_pipeline = compute_state.pipeline_details != nullptr
-                                     ? compute_state.pipeline_details->pipeline
-                                     : compute_state.pipeline;
-      native_temporal_pipeline_layout =
-          compute_state.pipeline_details != nullptr
-              ? compute_state.pipeline_details->layout
-              : reshade::api::pipeline_layout{0u};
+    if (!temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
+      auto* shader_state =
+          renodx::utils::command_action::GetShaderState(&context);
+      if (shader_state != nullptr) {
+        auto& compute_state =
+            shader_state->stage_states[renodx::utils::shader::COMPUTE_INDEX];
+        renodx::utils::shader::PopulateStageState(&compute_state);
+        native_temporal_pipeline = compute_state.pipeline_details != nullptr
+                                       ? compute_state.pipeline_details->pipeline
+                                       : compute_state.pipeline;
+        native_temporal_pipeline_layout =
+            compute_state.pipeline_details != nullptr
+                ? compute_state.pipeline_details->layout
+                : reshade::api::pipeline_layout{0u};
+      }
     }
     return {
         .post_callback = &AfterNativeTemporalDispatch,
@@ -1298,7 +1289,6 @@ inline void Use(DWORD fdw_reason) {
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);
       evaluation_serial.store(0u, std::memory_order_relaxed);
-      sr_preflight_serial.store(0u, std::memory_order_relaxed);
       last_logged_evaluation_key.store(
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);

@@ -706,14 +706,27 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"color\s*=\s*ApplyDlaaRcas\(",
         )
         self.assertIn('.key = "DLAASharpening"', addon)
-        for label in (
-            '"Native TAA"',
-            '"DLAA"',
+        self.assertRegex(
+            addon,
+            r'\.labels\s*=\s*\{\s*"Native TAA"\s*,\s*"DLAA"\s*\}',
+        )
+        for removed_label in (
             '"DLSS Quality"',
             '"DLSS Balanced"',
             '"DLSS Performance"',
         ):
-            self.assertIn(label, addon)
+            self.assertNotIn(removed_label, addon)
+        for removed_scale_contract in (
+            "IsSuperResolutionMode",
+            "resolution_scale_controller",
+            "dlss_scale_transition_controller",
+            "ApplyDlssRenderScale",
+            "RestoreNativeRenderScale",
+            '"DLSSRenderScale"',
+            '"DLSSRenderScaleStatus"',
+        ):
+            self.assertNotIn(removed_scale_contract, addon)
+            self.assertNotIn(removed_scale_contract, temporal_capture)
         self.assertRegex(
             addon,
             r"SetRuntimeFlag\(\s*RUNTIME_FLAG_DLSS_OUTPUT\s*,\s*"
@@ -752,23 +765,32 @@ class HDRAndCASGateTests(unittest.TestCase):
             addon.index("void OnPresent(") :
             addon.index("}  // namespace", addon.index("void OnPresent("))
         ]
-        begin_next_frame = on_present.index(
-            "temporal_capture::BeginNextFrame();"
-        )
-        clear_runtime_flags = on_present.index(
-            "shader_injection.runtime_flags = 0.f;"
-        )
-        self.assertLess(begin_next_frame, clear_runtime_flags)
+        self.assertNotIn("temporal_capture::BeginNextFrame();", on_present)
+        clear_runtime_flags = on_present.index("shader_injection.runtime_flags = 0.f;")
         self.assertIn(
             "video/loading frame without the scene composite",
-            on_present[begin_next_frame:clear_runtime_flags],
+            on_present[:clear_runtime_flags],
         )
-        self.assertRegex(
-            addon,
-            r"const\s+bool\s+active\s*=\s*"
-            r"temporal_capture::GetMode\(\)\s*==\s*"
-            r"DETROIT_DLSS_MODE_DLAA\s*;",
+        sharpening_gate = addon[
+            addon.index("DlaaSharpeningGate GetDlaaSharpeningGate(") :
+            addon.index("void SyncDlaaSharpening()")
+        ]
+        self.assertEqual(
+            sharpening_gate.count(
+                "QueryDlssOutputAuthorizationForCommandList("
+            ),
+            1,
         )
+        self.assertIn("authorization.snapshot.mode", sharpening_gate)
+        self.assertIn("authorization.authorized", sharpening_gate)
+        native_gate = sharpening_gate.index("temporal_capture::GetMode()")
+        exact_gate = sharpening_gate.index("CanUseNativeModeFastPath(mode)")
+        authorization_gate = sharpening_gate.index(
+            "QueryDlssOutputAuthorizationForCommandList("
+        )
+        self.assertLess(native_gate, exact_gate)
+        self.assertLess(exact_gate, authorization_gate)
+        self.assertNotIn("QueryDlssOutputForCommandList(", sharpening_gate)
         sharpening_log_key_start = addon.index(
             "const auto log_key = temporal_capture::MakeTelemetryKey(",
             addon.index("void ApplyDlssOutputMarker("),
@@ -780,7 +802,7 @@ class HDRAndCASGateTests(unittest.TestCase):
         sharpening_log_key = addon[
             sharpening_log_key_start:sharpening_log_key_end
         ]
-        self.assertIn("temporal_capture::GetMode()", sharpening_log_key)
+        self.assertIn("gate.mode", sharpening_log_key)
         self.assertIn("strength_percent", sharpening_log_key)
         self.assertNotIn("temporal_capture::GetStatus()", sharpening_log_key)
         self.assertNotIn("exact_command_list_match", sharpening_log_key)
@@ -791,6 +813,27 @@ class HDRAndCASGateTests(unittest.TestCase):
             r";[\s\S]*?ApplyDlssOutputMarker\(",
         )
         self.assertIn("ObserveTemporalCommandList(", temporal_capture)
+        temporal_post_dispatch = temporal_capture[
+            temporal_capture.index("inline void AfterNativeTemporalDispatch(") :
+            temporal_capture.index("struct TemporalDispatchCallback")
+        ]
+        native_fast_path = temporal_post_dispatch.index(
+            "temporal_mode_state::CanUseNativePostDispatchFastPath("
+        )
+        self.assertLess(
+            temporal_post_dispatch.index("ObserveTemporalCommandList("),
+            native_fast_path,
+        )
+        self.assertLess(
+            native_fast_path,
+            temporal_post_dispatch.index("mode_state.BeginTransaction()"),
+        )
+        native_fast_path_end = temporal_post_dispatch.index("}", native_fast_path)
+        native_fast_path_body = temporal_post_dispatch[
+            native_fast_path:native_fast_path_end
+        ]
+        self.assertIn("auxiliary_replacement_used", native_fast_path_body)
+        self.assertNotIn("runtime_status.store", native_fast_path_body)
         self.assertRegex(
             temporal_capture,
             r"if\s*\(!IsMainTemporalCommandList\(native_command_list\)\)"
@@ -802,13 +845,28 @@ class HDRAndCASGateTests(unittest.TestCase):
         )
 
         self.assertIn("RequestAuxiliaryTemporalReplacement", temporal_capture)
+        auxiliary_request = temporal_capture[
+            temporal_capture.index(
+                "[[nodiscard]] inline bool RequestAuxiliaryTemporalReplacement("
+            ) :
+            temporal_capture.index(
+                "[[nodiscard]] inline bool ConsumeDlssOutputForCommandList("
+            )
+        ]
+        auxiliary_native_gate = auxiliary_request.index(
+            "CanUseNativeModeFastPath(mode_state.GetMode())"
+        )
+        self.assertLess(
+            auxiliary_native_gate,
+            auxiliary_request.index("mode_state.QueryAuthorization("),
+        )
         self.assertRegex(
             temporal_capture,
             r"native_temporal_pipeline\.handle\s*!=\s*0u\s*&&\s*"
             r"dlss::embedded::CanInsertComputeWriteBarrier\(native_command_list\)"
             r"\s*&&\s*"
             r"IsMainTemporalCommandList\(native_command_list\)\s*&&\s*"
-            r"authorization\.authorized",
+            r"authorization\.replacement_eligible",
         )
         self.assertIn("authorization.snapshot.generation", temporal_capture)
         self.assertIn(
@@ -823,6 +881,21 @@ class HDRAndCASGateTests(unittest.TestCase):
         )
         self.assertIn("native_fallback.Disarm();", temporal_capture)
         self.assertIn("InsertComputeWriteBarrier(", temporal_capture)
+        temporal_callback = temporal_capture[
+            temporal_capture.index("struct TemporalDispatchCallback") :
+            temporal_capture.index("inline constexpr TemporalDispatchCallback")
+        ]
+        pipeline_native_gate = temporal_callback.index(
+            "CanUseNativeModeFastPath(mode_state.GetMode())"
+        )
+        self.assertLess(
+            pipeline_native_gate,
+            temporal_callback.index("GetShaderState(&context)"),
+        )
+        self.assertLess(
+            pipeline_native_gate,
+            temporal_callback.index("PopulateStageState(&compute_state)"),
+        )
         self.assertRegex(
             addon,
             r"kTemporalAaShaderCrc,[\s\S]*?\.code\s*=\s*__temporal_aux_exact,[\s\S]*?"
@@ -901,6 +974,14 @@ class HDRAndCASGateTests(unittest.TestCase):
 
     def test_runtime_switches_apply_the_post_write_setting_value(self):
         addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
+
+        apply_mode = addon[
+            addon.index("void ApplyDlssMode(") :
+            addon.index("void OnDlssModeChanged()")
+        ]
+        self.assertIn("dlss_policy::ParsePersistedDlssMode(", apply_mode)
+        self.assertIn("dlss_mode = static_cast<float>(next_mode);", apply_mode)
+        self.assertNotIn("static_cast<DetroitDlssMode>(selected_mode)", apply_mode)
 
         dlss_setting = re.search(
             r'\.key\s*=\s*"DLSSMode"(?P<body>[\s\S]*?)\n\s*\}\},',

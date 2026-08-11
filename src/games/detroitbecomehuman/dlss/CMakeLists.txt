@@ -23,6 +23,7 @@ target_sources(detroitbecomehuman PRIVATE
   adapter_runtime.hpp
   adapter_shaders.cpp
   adapter_shaders.hpp
+  feature_recording_registry.hpp
   rgb9e5_adapter.hpp
 )
 build_shader_target(

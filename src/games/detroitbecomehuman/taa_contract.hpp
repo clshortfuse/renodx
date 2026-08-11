@@ -243,15 +243,6 @@ struct NgxFrameParameters {
   return std::abs(observed - expected) <= relative_tolerance * scale;
 }
 
-[[nodiscard]] constexpr bool IsNativeScaleExtent(
-    std::uint32_t render_width,
-    std::uint32_t render_height,
-    std::uint32_t output_width,
-    std::uint32_t output_height) noexcept {
-  return render_width != 0u && render_height != 0u
-         && render_width == output_width && render_height == output_height;
-}
-
 // Converts only the fields whose offsets and meanings are established by the
 // exact 0xB5506A45 SPIR-V and the live Build 12158144 b52 capture. Raw matrix
 // words and debug/padding words are intentionally excluded: their bit patterns

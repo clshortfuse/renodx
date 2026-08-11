@@ -31,6 +31,13 @@ class FeatureLifetimeTracker final {
     bool operator==(const SubmittedCommand&) const = default;
   };
 
+  struct CompletedRecording {
+    Handle command_buffer = 0u;
+    std::uint64_t recording_epoch = 0u;
+
+    bool operator==(const CompletedRecording&) const = default;
+  };
+
   struct SubmissionSnapshot {
     std::vector<SubmittedCommand> commands;
 
@@ -56,17 +63,24 @@ class FeatureLifetimeTracker final {
     };
   }
 
-  void RecordFeatureUse(Handle command_buffer, Generation generation) {
-    if (command_buffer == 0u || generation == 0u) return;
+  std::uint64_t RecordFeatureUse(
+      Handle command_buffer,
+      Generation generation,
+      bool one_time_submit = false) {
+    if (command_buffer == 0u || generation == 0u) return 0u;
     auto [recording, inserted] = command_recordings_.try_emplace(command_buffer);
-    if (inserted) recording->second.epoch = NextEpoch();
+    if (inserted) {
+      recording->second.epoch = NextEpoch();
+      recording->second.one_time_submit = one_time_submit;
+    }
     auto& generations = recording->second.generations;
     if (std::find(generations.begin(), generations.end(), generation)
         != generations.end()) {
-      return;
+      return recording->second.epoch;
     }
     generations.push_back(generation);
     ++reference_counts_[generation].recorded;
+    return recording->second.epoch;
   }
 
   [[nodiscard]] SubmissionSnapshot CaptureSubmission(
@@ -129,7 +143,7 @@ class FeatureLifetimeTracker final {
     return false;
   }
 
-  [[nodiscard]] std::vector<Handle> CompleteSubmission(
+  [[nodiscard]] std::vector<CompletedRecording> CompleteSubmission(
       Handle queue, const SubmissionSnapshot& snapshot) {
     std::vector<SubmittedCommand> completed;
     if (queue == 0u || snapshot.Empty()) return {};
@@ -148,7 +162,7 @@ class FeatureLifetimeTracker final {
     return CompleteSubmissions(completed);
   }
 
-  [[nodiscard]] std::vector<Handle> CompleteQueue(Handle queue) {
+  [[nodiscard]] std::vector<CompletedRecording> CompleteQueue(Handle queue) {
     const auto found = queue_submissions_.find(queue);
     if (found == queue_submissions_.end()) return {};
     auto submissions = std::move(found->second);
@@ -156,7 +170,7 @@ class FeatureLifetimeTracker final {
     return CompleteSubmissions(submissions);
   }
 
-  [[nodiscard]] std::vector<Handle> CompleteDevice() {
+  [[nodiscard]] std::vector<CompletedRecording> CompleteDevice() {
     std::vector<SubmittedCommand> submissions;
     for (auto& [queue, queued] : queue_submissions_) {
       submissions.insert(
@@ -246,7 +260,7 @@ class FeatureLifetimeTracker final {
     return epoch;
   }
 
-  [[nodiscard]] std::vector<Handle> CompleteSubmissions(
+  [[nodiscard]] std::vector<CompletedRecording> CompleteSubmissions(
       const std::vector<SubmittedCommand>& submissions) {
     std::vector<std::pair<Handle, std::uint64_t>> completed_one_time_recordings;
     completed_one_time_recordings.reserve(submissions.size());
@@ -267,8 +281,9 @@ class FeatureLifetimeTracker final {
       }
     }
 
-    std::vector<Handle> completed_one_time_command_buffers;
-    completed_one_time_command_buffers.reserve(completed_one_time_recordings.size());
+    std::vector<CompletedRecording> completed_one_time_command_buffers;
+    completed_one_time_command_buffers.reserve(
+        completed_one_time_recordings.size());
     for (const auto& [command_buffer, epoch] : completed_one_time_recordings) {
       const auto recording = command_recordings_.find(command_buffer);
       if (recording == command_recordings_.end()
@@ -278,7 +293,10 @@ class FeatureLifetimeTracker final {
       }
       DecrementRecorded(recording->second.generations);
       command_recordings_.erase(recording);
-      completed_one_time_command_buffers.push_back(command_buffer);
+      completed_one_time_command_buffers.push_back({
+          .command_buffer = command_buffer,
+          .recording_epoch = epoch,
+      });
     }
     return completed_one_time_command_buffers;
   }

@@ -528,10 +528,11 @@ OperationResult NgxContext::Evaluate(const EvaluateInfo& info) {
 
   EvaluateInfo evaluation = info;
   evaluation.reset = evaluation.reset || active->second.reset_pending;
-  impl_->lifetime.EnsureCommandBuffer(
-      evaluation.recording_key, evaluation.one_time_submit);
-  impl_->lifetime.RecordFeatureUse(
-      evaluation.recording_key, active->second.generation);
+  const auto recording_epoch =
+      impl_->lifetime.RecordFeatureUse(
+          evaluation.recording_key,
+          active->second.generation,
+          evaluation.one_time_submit);
   const NVSDK_NGX_Result result = impl_->create_info.ngx.evaluate_feature(
       impl_->create_info.ngx.context,
       evaluation.command_buffer,
@@ -543,6 +544,8 @@ OperationResult NgxContext::Evaluate(const EvaluateInfo& info) {
       .stage = OperationStage::kEvaluate,
       .ngx_result = result,
       .feature_generation = active->second.generation,
+      .recording_epoch = recording_epoch,
+      .one_time_submit = evaluation.one_time_submit,
       .output_valid = NVSDK_NGX_SUCCEED(result),
   };
 }
@@ -587,7 +590,8 @@ NgxContext::SubmissionSnapshot NgxContext::NotifySubmitted(
   return committed;
 }
 
-std::vector<std::uint64_t> NgxContext::NotifySubmissionCompleted(
+std::vector<NgxContext::CompletedRecording>
+NgxContext::NotifySubmissionCompleted(
     std::uint64_t queue_key, const SubmissionSnapshot& snapshot) {
   const std::lock_guard lock(impl_->mutex);
   auto completed = impl_->lifetime.CompleteSubmission(queue_key, snapshot);
@@ -595,7 +599,7 @@ std::vector<std::uint64_t> NgxContext::NotifySubmissionCompleted(
   return completed;
 }
 
-std::vector<std::uint64_t> NgxContext::NotifyQueueCompleted(
+std::vector<NgxContext::CompletedRecording> NgxContext::NotifyQueueCompleted(
     std::uint64_t queue_key) {
   const std::lock_guard lock(impl_->mutex);
   auto completed = impl_->lifetime.CompleteQueue(queue_key);
@@ -603,7 +607,7 @@ std::vector<std::uint64_t> NgxContext::NotifyQueueCompleted(
   return completed;
 }
 
-std::vector<std::uint64_t> NgxContext::NotifyDeviceCompleted() {
+std::vector<NgxContext::CompletedRecording> NgxContext::NotifyDeviceCompleted() {
   const std::lock_guard lock(impl_->mutex);
   auto completed = impl_->lifetime.CompleteDevice();
   impl_->RetireCompletedLocked();

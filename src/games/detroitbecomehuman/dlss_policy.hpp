@@ -22,7 +22,6 @@ enum class FallbackReason : std::uint32_t {
   kNgxUnavailable,
   kTemporalInterfaceUnverified,
   kModeUnsupported,
-  kRenderScaleUnavailable,
   kFrameAbiMismatch,
   kVerificationIncomplete,
   kShaderMismatch,
@@ -51,8 +50,6 @@ struct RuntimeSupport {
   bool ngx_initialized = false;
   bool temporal_interface_verified = false;
   bool dlaa_available = false;
-  bool super_resolution_available = false;
-  bool render_scale_control_available = false;
   bool auto_exposure_available = false;
   std::uint32_t bridge_abi_version = 0u;
 };
@@ -62,17 +59,23 @@ struct ModeAvailability {
   FallbackReason reason = FallbackReason::kUnknownMode;
 };
 
-[[nodiscard]] constexpr bool IsDlssMode(DetroitDlssMode mode) noexcept {
-  return mode == DETROIT_DLSS_MODE_DLAA
-         || mode == DETROIT_DLSS_MODE_QUALITY
-         || mode == DETROIT_DLSS_MODE_BALANCED
-         || mode == DETROIT_DLSS_MODE_PERFORMANCE;
+[[nodiscard]] constexpr DetroitDlssMode NormalizeDlssMode(
+    DetroitDlssMode mode) noexcept {
+  return mode == DETROIT_DLSS_MODE_DLAA ? DETROIT_DLSS_MODE_DLAA
+                                        : DETROIT_DLSS_MODE_NATIVE;
 }
 
-[[nodiscard]] constexpr bool IsSuperResolutionMode(DetroitDlssMode mode) noexcept {
-  return mode == DETROIT_DLSS_MODE_QUALITY
-         || mode == DETROIT_DLSS_MODE_BALANCED
-         || mode == DETROIT_DLSS_MODE_PERFORMANCE;
+// ReShade persists integer settings as floats. Accept only the exact DLAA
+// wire value so legacy SR values, fractions, NaN and infinities fail closed.
+[[nodiscard]] constexpr DetroitDlssMode ParsePersistedDlssMode(
+    float value) noexcept {
+  return value == static_cast<float>(DETROIT_DLSS_MODE_DLAA)
+             ? DETROIT_DLSS_MODE_DLAA
+             : DETROIT_DLSS_MODE_NATIVE;
+}
+
+[[nodiscard]] constexpr bool IsDlssMode(DetroitDlssMode mode) noexcept {
+  return mode == DETROIT_DLSS_MODE_DLAA;
 }
 
 [[nodiscard]] constexpr ModeAvailability CheckModeAvailability(
@@ -99,14 +102,8 @@ struct ModeAvailability {
   if (!support.temporal_interface_verified) {
     return {.available = false, .reason = FallbackReason::kTemporalInterfaceUnverified};
   }
-  if (mode == DETROIT_DLSS_MODE_DLAA && !support.dlaa_available) {
+  if (!support.dlaa_available) {
     return {.available = false, .reason = FallbackReason::kModeUnsupported};
-  }
-  if (IsSuperResolutionMode(mode) && !support.super_resolution_available) {
-    return {.available = false, .reason = FallbackReason::kModeUnsupported};
-  }
-  if (IsSuperResolutionMode(mode) && !support.render_scale_control_available) {
-    return {.available = false, .reason = FallbackReason::kRenderScaleUnavailable};
   }
   return {.available = true, .reason = FallbackReason::kNone};
 }
@@ -131,6 +128,17 @@ struct ModeAvailability {
     std::uint32_t width,
     std::uint32_t height) noexcept {
   return resource.width == width && resource.height == height;
+}
+
+[[nodiscard]] constexpr bool HasFixedNativeExtent(
+    const DetroitDlssModeSettings& settings) noexcept {
+  return settings.output_width != 0u && settings.output_height != 0u
+         && settings.render_width == settings.output_width
+         && settings.render_height == settings.output_height
+         && settings.min_render_width == settings.output_width
+         && settings.min_render_height == settings.output_height
+         && settings.max_render_width == settings.output_width
+         && settings.max_render_height == settings.output_height;
 }
 
 struct FrameEligibility {
@@ -257,15 +265,9 @@ struct FrameEligibility {
     return {.reason = FallbackReason::kInvalidModeSettings};
   }
 
-  if (mode == DETROIT_DLSS_MODE_DLAA) {
-    if (inputs.render_width != inputs.output_width
-        || inputs.render_height != inputs.output_height) {
-      return {.reason = FallbackReason::kInvalidModeSettings};
-    }
-  } else if (inputs.render_width > inputs.output_width
-             || inputs.render_height > inputs.output_height
-             || (inputs.render_width == inputs.output_width
-                 && inputs.render_height == inputs.output_height)) {
+  if (inputs.render_width != inputs.output_width
+      || inputs.render_height != inputs.output_height
+      || !HasFixedNativeExtent(settings)) {
     return {.reason = FallbackReason::kInvalidModeSettings};
   }
 
@@ -335,7 +337,7 @@ struct FeatureLifecycleDecision {
     DetroitDlssMode mode,
     const ModeAvailability& availability,
     const FeatureTransition& transition) noexcept {
-  if (mode == DETROIT_DLSS_MODE_NATIVE || !availability.available) {
+  if (!IsDlssMode(mode) || !availability.available) {
     return {.release_feature = transition.feature_exists};
   }
   if (!transition.feature_exists) {

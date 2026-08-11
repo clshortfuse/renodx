@@ -28,8 +28,6 @@ policy::RuntimeSupport MakeSupport() {
       .ngx_initialized = true,
       .temporal_interface_verified = true,
       .dlaa_available = true,
-      .super_resolution_available = true,
-      .render_scale_control_available = true,
       .auto_exposure_available = true,
       .bridge_abi_version = DETROIT_DLSS_ABI_VERSION,
   };
@@ -54,7 +52,6 @@ DetroitDlssResource MakeResource(
 }
 
 DetroitDlssModeSettings MakeSettings(DetroitDlssMode mode) {
-  const bool dlaa = mode == DETROIT_DLSS_MODE_DLAA;
   return {
       .struct_size = sizeof(DetroitDlssModeSettings),
       .abi_version = DETROIT_DLSS_ABI_VERSION,
@@ -63,12 +60,12 @@ DetroitDlssModeSettings MakeSettings(DetroitDlssMode mode) {
                       | DETROIT_DLSS_CREATE_MOTION_VECTORS_LOW_RESOLUTION,
       .output_width = 3440u,
       .output_height = 1440u,
-      .render_width = dlaa ? 3440u : 2293u,
-      .render_height = dlaa ? 1440u : 960u,
-      .min_render_width = 0u,
-      .min_render_height = 0u,
-      .max_render_width = 0u,
-      .max_render_height = 0u,
+      .render_width = 3440u,
+      .render_height = 1440u,
+      .min_render_width = 3440u,
+      .min_render_height = 1440u,
+      .max_render_width = 3440u,
+      .max_render_height = 1440u,
   };
 }
 
@@ -128,6 +125,54 @@ bool ExpectReason(
       description);
 }
 
+bool TestModeNormalizationAndPersistedValues() {
+  bool passed = true;
+  passed &= Expect(
+      policy::NormalizeDlssMode(DETROIT_DLSS_MODE_NATIVE)
+          == DETROIT_DLSS_MODE_NATIVE,
+      "Native mode must remain Native after normalization");
+  passed &= Expect(
+      policy::NormalizeDlssMode(DETROIT_DLSS_MODE_DLAA)
+          == DETROIT_DLSS_MODE_DLAA,
+      "DLAA mode must remain DLAA after normalization");
+  passed &= Expect(
+      policy::ParsePersistedDlssMode(0.f) == DETROIT_DLSS_MODE_NATIVE
+          && policy::ParsePersistedDlssMode(1.f) == DETROIT_DLSS_MODE_DLAA,
+      "only the exact persisted Native and DLAA values may be restored");
+
+  constexpr std::array<DetroitDlssMode, 3u> legacy_sr_modes = {{
+      DETROIT_DLSS_MODE_QUALITY,
+      DETROIT_DLSS_MODE_BALANCED,
+      DETROIT_DLSS_MODE_PERFORMANCE,
+  }};
+  for (const auto mode : legacy_sr_modes) {
+    passed &= Expect(
+        policy::NormalizeDlssMode(mode) == DETROIT_DLSS_MODE_NATIVE,
+        "legacy SR enum values must normalize to Native");
+    passed &= Expect(
+        policy::ParsePersistedDlssMode(static_cast<float>(mode))
+            == DETROIT_DLSS_MODE_NATIVE,
+        "persisted legacy SR values must fail closed to Native");
+  }
+
+  constexpr std::array<float, 3u> invalid_finite_values = {{-1.f, 0.5f, 1.5f}};
+  for (const float value : invalid_finite_values) {
+    passed &= Expect(
+        policy::ParsePersistedDlssMode(value) == DETROIT_DLSS_MODE_NATIVE,
+        "fractional and out-of-range persisted values must fail closed to Native");
+  }
+  for (const float value : {
+           std::numeric_limits<float>::quiet_NaN(),
+           std::numeric_limits<float>::infinity(),
+           -std::numeric_limits<float>::infinity(),
+       }) {
+    passed &= Expect(
+        policy::ParsePersistedDlssMode(value) == DETROIT_DLSS_MODE_NATIVE,
+        "non-finite persisted values must fail closed to Native");
+  }
+  return passed;
+}
+
 bool TestModeAvailability() {
   bool passed = true;
   const auto full = MakeSupport();
@@ -136,16 +181,20 @@ bool TestModeAvailability() {
   passed &= Expect(
       native.available && native.reason == policy::FallbackReason::kNativeMode,
       "Native mode must remain available without DLSS support");
-  for (DetroitDlssMode mode : {
-           DETROIT_DLSS_MODE_DLAA,
+  const auto dlaa = policy::CheckModeAvailability(DETROIT_DLSS_MODE_DLAA, full);
+  passed &= Expect(
+      dlaa.available && dlaa.reason == policy::FallbackReason::kNone,
+      "fully supported DLAA mode must be available");
+  for (const auto mode : {
            DETROIT_DLSS_MODE_QUALITY,
            DETROIT_DLSS_MODE_BALANCED,
            DETROIT_DLSS_MODE_PERFORMANCE,
        }) {
-    const auto availability = policy::CheckModeAvailability(mode, full);
     passed &= Expect(
-        availability.available && availability.reason == policy::FallbackReason::kNone,
-        "fully supported DLSS mode must be available");
+        !policy::CheckModeAvailability(mode, full).available
+            && policy::CheckModeAvailability(mode, full).reason
+                   == policy::FallbackReason::kUnknownMode,
+        "legacy SR modes must fail closed as unknown modes");
   }
   passed &= Expect(
       policy::CheckModeAvailability(99u, full).reason == policy::FallbackReason::kUnknownMode,
@@ -187,21 +236,6 @@ bool TestModeAvailability() {
       policy::CheckModeAvailability(DETROIT_DLSS_MODE_DLAA, support).reason
           == policy::FallbackReason::kModeUnsupported,
       "missing DLAA capability must fail closed");
-  support = full;
-  support.super_resolution_available = false;
-  passed &= Expect(
-      policy::CheckModeAvailability(DETROIT_DLSS_MODE_QUALITY, support).reason
-          == policy::FallbackReason::kModeUnsupported,
-      "missing SR capability must fail closed");
-  support = full;
-  support.render_scale_control_available = false;
-  passed &= Expect(
-      policy::CheckModeAvailability(DETROIT_DLSS_MODE_QUALITY, support).reason
-          == policy::FallbackReason::kRenderScaleUnavailable,
-      "SR without safe render-scale control must fail closed");
-  passed &= Expect(
-      policy::CheckModeAvailability(DETROIT_DLSS_MODE_DLAA, support).available,
-      "DLAA must not require render-scale control");
   return passed;
 }
 
@@ -214,17 +248,16 @@ bool TestValidFramesAndMandatoryEvidence() {
       policy::FallbackReason::kNativeMode,
       "Native mode must bypass every DLSS frame requirement");
 
-  for (DetroitDlssMode mode : {DETROIT_DLSS_MODE_DLAA, DETROIT_DLSS_MODE_QUALITY}) {
-    auto settings = MakeSettings(mode);
-    auto inputs = MakeInputs(settings);
-    const auto eligibility = Check(mode, support, settings, inputs);
-    passed &= Expect(
-        eligibility.evaluate_dlss
-            && eligibility.preserve_native_taa
-            && !eligibility.use_auto_exposure
-            && eligibility.reason == policy::FallbackReason::kNone,
-        "complete DLSS frame must be eligible while retaining native TAA");
-  }
+  const auto valid_settings = MakeSettings(DETROIT_DLSS_MODE_DLAA);
+  const auto valid_inputs = MakeInputs(valid_settings);
+  const auto eligibility =
+      Check(DETROIT_DLSS_MODE_DLAA, support, valid_settings, valid_inputs);
+  passed &= Expect(
+      eligibility.evaluate_dlss
+          && eligibility.preserve_native_taa
+          && !eligibility.use_auto_exposure
+          && eligibility.reason == policy::FallbackReason::kNone,
+      "complete DLAA frame must be eligible while retaining native TAA");
 
   constexpr std::array<DetroitDlssVerificationFlags, 11u> required_bits = {{
       DETROIT_DLSS_VERIFY_RESOURCE_SEMANTICS,
@@ -497,32 +530,6 @@ bool TestTemporalConstantsAndModeSettings() {
       policy::FallbackReason::kInvalidModeSettings,
       "DLAA must remain 1:1");
 
-  auto sr_settings = MakeSettings(DETROIT_DLSS_MODE_QUALITY);
-  auto sr_inputs = MakeInputs(sr_settings);
-  sr_settings.render_width = sr_settings.output_width;
-  sr_settings.render_height = sr_settings.output_height;
-  sr_inputs = MakeInputs(sr_settings);
-  passed &= ExpectReason(
-      Check(DETROIT_DLSS_MODE_QUALITY, support, sr_settings, sr_inputs),
-      policy::FallbackReason::kInvalidModeSettings,
-      "SR must use a smaller render extent");
-
-  sr_settings = MakeSettings(DETROIT_DLSS_MODE_QUALITY);
-  sr_settings.min_render_width = sr_settings.render_width + 1u;
-  sr_settings.min_render_height = sr_settings.render_height + 1u;
-  sr_inputs = MakeInputs(sr_settings);
-  passed &= ExpectReason(
-      Check(DETROIT_DLSS_MODE_QUALITY, support, sr_settings, sr_inputs),
-      policy::FallbackReason::kInvalidModeSettings,
-      "render extent below queried minimum must fail closed");
-  sr_settings = MakeSettings(DETROIT_DLSS_MODE_QUALITY);
-  sr_settings.max_render_width = sr_settings.render_width - 1u;
-  sr_settings.max_render_height = sr_settings.render_height - 1u;
-  sr_inputs = MakeInputs(sr_settings);
-  passed &= ExpectReason(
-      Check(DETROIT_DLSS_MODE_QUALITY, support, sr_settings, sr_inputs),
-      policy::FallbackReason::kInvalidModeSettings,
-      "render extent above queried maximum must fail closed");
   return passed;
 }
 
@@ -625,11 +632,25 @@ bool TestFeatureLifecycle() {
   passed &= Expect(
       decision.release_feature && !decision.create_feature && !decision.recreate_feature,
       "Native mode must release an existing DLSS feature");
+  for (const auto legacy_mode : {
+           DETROIT_DLSS_MODE_QUALITY,
+           DETROIT_DLSS_MODE_BALANCED,
+           DETROIT_DLSS_MODE_PERFORMANCE,
+       }) {
+    decision = policy::PlanFeatureLifecycle(
+        legacy_mode,
+        available,
+        {.feature_exists = true});
+    passed &= Expect(
+        decision.release_feature && !decision.create_feature
+            && !decision.recreate_feature,
+        "legacy SR modes must retire an existing feature and fail closed");
+  }
   decision = policy::PlanFeatureLifecycle(
       DETROIT_DLSS_MODE_DLAA,
       unavailable,
       {.feature_exists = true});
-  passed &= Expect(decision.release_feature, "unavailable DLSS mode must release its feature");
+  passed &= Expect(decision.release_feature, "unavailable AA mode must release its DLAA feature");
   decision = policy::PlanFeatureLifecycle(
       DETROIT_DLSS_MODE_DLAA,
       available,
@@ -678,6 +699,7 @@ bool TestFeatureLifecycle() {
 
 int main() {
   bool passed = true;
+  passed &= TestModeNormalizationAndPersistedValues();
   passed &= TestModeAvailability();
   passed &= TestValidFramesAndMandatoryEvidence();
   passed &= TestFrameIdentityAndSnapshots();

@@ -21,7 +21,7 @@ inline constexpr std::uint32_t kCacheSchemaVersion = 1u;
 inline constexpr std::string_view kSupportedExecutableSha256 =
     "ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF";
 
-// Targeted descriptor/resource tracking is active for DLSS/DLAA. It intentionally
+// Targeted descriptor/resource tracking is active for DLAA. It intentionally
 // does not install the global vkCmdBindPipeline/vkCmdBindDescriptorSets hooks
 // that caused the original CPU/FPS regression; those remain Retinal-DOF-only.
 inline constexpr bool kDlssRuntimeEnabled = true;
@@ -149,7 +149,7 @@ bool IsBridgeReady();
   return true;
 }
 
-// Targeted DLSS/DLAA keeps only resource and descriptor metadata warm. This
+// Targeted DLAA keeps only resource and descriptor metadata warm. This
 // separate gate enables per-command-buffer bind state solely for Retinal DOF.
 void SetRuntimeCommandTracking(bool enabled);
 

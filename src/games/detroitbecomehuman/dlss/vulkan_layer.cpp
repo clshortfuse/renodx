@@ -48,6 +48,7 @@
 #include "embedded_bootstrap.hpp"
 #include "evaluation_trace.hpp"
 #include "feature_lifetime.hpp"
+#include "feature_recording_registry.hpp"
 #include "utils/dlss/ngx_vulkan.hpp"
 
 namespace {
@@ -64,6 +65,17 @@ constexpr std::size_t kMaximumCachedExtensionCount = 64u;
 constexpr std::uint64_t kMaximumTemporalConstantsShadowSize = 64u * 1024u;
 constexpr std::size_t kTrackedDescriptorSetBloomWordCount = 64u;
 constexpr std::size_t kMaximumInternalFeatureFencePoolSize = 8u;
+constexpr std::size_t kMaximumAdapterScratchBundles = 8u;
+// Lifecycle cleanup can make all eight bundles reusable before its stale
+// exact-registry entries are removed. Keep room for both the retiring and the
+// newly assigned owners without increasing the actual GPU scratch allocation.
+constexpr std::size_t kMaximumFeatureRecordingCandidates =
+    kMaximumAdapterScratchBundles * 2u;
+constexpr std::uint32_t kRetiredFeatureFencePollSubmitInterval = 8u;
+static_assert(
+    (kRetiredFeatureFencePollSubmitInterval
+     & (kRetiredFeatureFencePollSubmitInterval - 1u))
+    == 0u);
 constexpr std::array<std::uint32_t, DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT>
     kTemporalImageBindings = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 9u, 16u, 17u, 18u, 19u};
 
@@ -326,11 +338,6 @@ bool ForceInternalFeatureFences() {
            || _stricmp(value.data(), "true") == 0;
   }();
   return enabled;
-}
-
-bool UseInternalFeatureFences() {
-  return ForceInternalFeatureFences()
-         || GetEvaluationTraceConfiguration().readback;
 }
 
 std::wstring GetNgxDataDirectory() {
@@ -651,11 +658,18 @@ struct DeviceState {
   std::unique_ptr<NgxDiscovery> ngx_discovery;
   std::unique_ptr<renodx::utils::dlss::vulkan::NgxContext> ngx_context;
   renodx::utils::dlss::vulkan::OperationResult last_ngx_initialization = {};
+  std::atomic<bool> feature_evaluation_active = false;
   std::atomic<bool> feature_submission_tracking_active = false;
+  std::atomic<bool> feature_lifecycle_tracking_active = false;
+  std::atomic<bool> internal_feature_fences_pending = false;
+  std::atomic<std::uint32_t> retired_feature_fence_poll_serial = 0u;
   // False-positive-only filter for command buffers that have ever recorded
   // NGX work. A missing bit proves an arbitrary submission cannot reference a
   // feature and keeps that hot path allocation- and lock-free.
   std::atomic<std::uint64_t> feature_command_buffer_bloom = 0u;
+  renodx::games::detroitbecomehuman::dlss::FeatureRecordingRegistry<
+      kMaximumFeatureRecordingCandidates>
+      feature_recording_candidates;
   std::unordered_map<std::uint64_t, FencedFeatureSubmission>
       fenced_feature_submissions;
   std::vector<VkFence> available_internal_feature_fences;
@@ -1133,19 +1147,8 @@ bool PhysicalDeviceSupportsRequiredExtensions(
   });
 }
 
-NVSDK_NGX_PerfQuality_Value ToNgxQuality(DetroitDlssMode mode) {
-  switch (mode) {
-    case DETROIT_DLSS_MODE_DLAA:
-      return NVSDK_NGX_PerfQuality_Value_DLAA;
-    case DETROIT_DLSS_MODE_QUALITY:
-      return NVSDK_NGX_PerfQuality_Value_MaxQuality;
-    case DETROIT_DLSS_MODE_BALANCED:
-      return NVSDK_NGX_PerfQuality_Value_Balanced;
-    case DETROIT_DLSS_MODE_PERFORMANCE:
-      return NVSDK_NGX_PerfQuality_Value_MaxPerf;
-    default:
-      return NVSDK_NGX_PerfQuality_Value_MaxQuality;
-  }
+NVSDK_NGX_PerfQuality_Value ToNgxQuality() {
+  return NVSDK_NGX_PerfQuality_Value_DLAA;
 }
 
 std::uint32_t ToNgxCreateFlags(DetroitDlssCreateFlags flags) {
@@ -1175,19 +1178,43 @@ std::uint64_t FeatureCommandBufferBloomBit(std::uint64_t command_buffer) {
   return UINT64_C(1) << (command_buffer & 63u);
 }
 
-void MarkFeatureRecordingCandidate(
-    DeviceState* state, VkCommandBuffer command_buffer) {
+void MarkFeatureRecordingCandidateLocked(
+    DeviceState* state,
+    VkCommandBuffer command_buffer,
+    std::uint64_t recording_epoch,
+    bool requires_submission_tracking) {
   const auto handle = ToOpaque(command_buffer);
+  (void)state->feature_recording_candidates.Insert(
+      handle, recording_epoch, requires_submission_tracking);
+  // Overflow intentionally falls back to Bloom-only matching, so even the
+  // candidate that exhausted the exact registry must publish its bit.
   state->feature_command_buffer_bloom.fetch_or(
       FeatureCommandBufferBloomBit(handle), std::memory_order_release);
 }
 
 bool MayBeFeatureRecordingCandidate(
     const DeviceState& state, VkCommandBuffer command_buffer) {
-  if (command_buffer == VK_NULL_HANDLE) return false;
+  if (command_buffer == VK_NULL_HANDLE
+      || !state.feature_lifecycle_tracking_active.load(
+          std::memory_order_acquire)) {
+    return false;
+  }
   const auto bloom = state.feature_command_buffer_bloom.load(
       std::memory_order_acquire);
-  return (bloom & FeatureCommandBufferBloomBit(ToOpaque(command_buffer))) != 0u;
+  const auto handle = ToOpaque(command_buffer);
+  if ((bloom & FeatureCommandBufferBloomBit(handle)) == 0u) return false;
+  return state.feature_recording_candidates.Overflowed()
+         || state.feature_recording_candidates.Contains(handle);
+}
+
+void UnmarkFeatureRecordingCandidateLocked(
+    DeviceState* state, std::uint64_t command_buffer) {
+  if (state == nullptr || command_buffer == 0u) return;
+  (void)state->feature_recording_candidates.Erase(command_buffer);
+  if (!state->feature_recording_candidates.Overflowed()
+      && state->feature_recording_candidates.Empty()) {
+    state->feature_command_buffer_bloom.store(0u, std::memory_order_release);
+  }
 }
 
 NVSDK_NGX_Result CoreInitializeProject(
@@ -1263,24 +1290,6 @@ NVSDK_NGX_Result CoreCreateFeature(
     NVSDK_NGX_Handle** feature,
     NVSDK_NGX_Parameter* parameters,
     const renodx::utils::dlss::vulkan::FeatureConfig* config) {
-  static constexpr std::array<const char*, 6u> kPresetParameters = {
-      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_DLAA,
-      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Quality,
-      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Balanced,
-      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Performance,
-      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraPerformance,
-      NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraQuality,
-  };
-  for (std::size_t index = 0u; index < config->presets.size(); ++index) {
-    if (config->presets[index] == NVSDK_NGX_DLSS_Hint_Render_Preset_Default) {
-      continue;
-    }
-    NVSDK_NGX_Parameter_SetI(
-        parameters,
-        kPresetParameters[index],
-        static_cast<int>(config->presets[index]));
-  }
-
   NVSDK_NGX_DLSS_Create_Params create_parameters = {};
   create_parameters.Feature.InWidth = config->render_width;
   create_parameters.Feature.InHeight = config->render_height;
@@ -1454,8 +1463,34 @@ VkResult CoreSubmit(
 void UpdateFeatureTrackingStateLocked(DeviceState* state) {
   const bool has_features =
       state->ngx_context != nullptr && state->ngx_context->HasFeatures();
+  const bool has_active_feature =
+      state->ngx_context != nullptr
+      && state->ngx_context->ActiveFeatureGeneration() != 0u;
+  const bool has_lifecycle_candidates =
+      has_features
+      || state->feature_recording_candidates.HasLifecycleCandidates();
+  const bool requires_submission_tracking =
+      has_active_feature
+      || (state->feature_recording_candidates.Overflowed()
+              ? has_features
+              : state->feature_recording_candidates
+                    .AnyRequiresSubmissionTracking());
+  state->feature_evaluation_active.store(
+      has_active_feature, std::memory_order_release);
   state->feature_submission_tracking_active.store(
-      has_features, std::memory_order_release);
+      requires_submission_tracking, std::memory_order_release);
+  state->feature_lifecycle_tracking_active.store(
+      has_lifecycle_candidates, std::memory_order_release);
+  const bool has_internal_feature_fences = std::any_of(
+      state->fenced_feature_submissions.begin(),
+      state->fenced_feature_submissions.end(),
+      [](const auto& submission) { return submission.second.owned_by_layer; });
+  state->internal_feature_fences_pending.store(
+      has_internal_feature_fences, std::memory_order_release);
+  if (!has_internal_feature_fences) {
+    state->retired_feature_fence_poll_serial.store(
+        0u, std::memory_order_relaxed);
+  }
   if (state->ngx_shutdown_requested && !has_features
       && state->ngx_context != nullptr) {
     state->ngx_context->Shutdown();
@@ -1580,7 +1615,13 @@ void ForceShutdownNgxForDeviceDestroy(DeviceState* state) {
   }
   state->ngx_discovery.reset();
   state->ngx_shutdown_requested = false;
+  state->feature_evaluation_active.store(false, std::memory_order_release);
   state->feature_submission_tracking_active.store(false, std::memory_order_release);
+  state->feature_lifecycle_tracking_active.store(false, std::memory_order_release);
+  state->internal_feature_fences_pending.store(false, std::memory_order_release);
+  state->retired_feature_fence_poll_serial.store(0u, std::memory_order_relaxed);
+  state->feature_recording_candidates.Clear();
+  state->feature_command_buffer_bloom.store(0u, std::memory_order_release);
   state->submission_trace_tracker.Clear();
   state->configured = false;
   state->context_identity = 0u;
@@ -1590,14 +1631,11 @@ void ForceShutdownNgxForDeviceDestroy(DeviceState* state) {
 void DiscardFeatureCommandBuffers(
     DeviceState* state, const std::vector<VkCommandBuffer>& command_buffers) {
   if (state == nullptr || command_buffers.empty()) return;
-  const auto bloom = state->feature_command_buffer_bloom.load(
-      std::memory_order_acquire);
   std::vector<std::uint64_t> handles;
   handles.reserve(command_buffers.size());
   for (const VkCommandBuffer command_buffer : command_buffers) {
-    const auto handle = ToOpaque(command_buffer);
-    if ((bloom & FeatureCommandBufferBloomBit(handle)) != 0u) {
-      handles.push_back(handle);
+    if (MayBeFeatureRecordingCandidate(*state, command_buffer)) {
+      handles.push_back(ToOpaque(command_buffer));
     }
   }
   if (handles.empty()) return;
@@ -1607,6 +1645,7 @@ void DiscardFeatureCommandBuffers(
   }
   for (const std::uint64_t handle : handles) {
     (void)state->submission_trace_tracker.Discard(handle);
+    UnmarkFeatureRecordingCandidateLocked(state, handle);
   }
   UpdateFeatureTrackingStateLocked(state);
 }
@@ -1620,7 +1659,9 @@ void DiscardFeatureCommandBuffer(
   if (state->ngx_context != nullptr) {
     state->ngx_context->DiscardRecording(ToOpaque(command_buffer));
   }
-  (void)state->submission_trace_tracker.Discard(ToOpaque(command_buffer));
+  const auto handle = ToOpaque(command_buffer);
+  (void)state->submission_trace_tracker.Discard(handle);
+  UnmarkFeatureRecordingCandidateLocked(state, handle);
   UpdateFeatureTrackingStateLocked(state);
 }
 
@@ -1944,10 +1985,8 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetContext(DetroitDlssBootstrapCon
   if (ngx_available && state->adapter_available
       && renodx::games::detroitbecomehuman::supported_build::
           kTemporalInputsEmpiricallyVerified) {
-    context->capability_flags |= DETROIT_DLSS_CAPABILITY_SUPER_RESOLUTION
-                                 | DETROIT_DLSS_CAPABILITY_DLAA
+    context->capability_flags |= DETROIT_DLSS_CAPABILITY_DLAA
                                  | DETROIT_DLSS_CAPABILITY_AUTO_EXPOSURE
-                                 | DETROIT_DLSS_CAPABILITY_RENDER_SCALE_CONTROL
                                  | DETROIT_DLSS_CAPABILITY_TEMPORAL_INPUTS_VERIFIED;
   }
   if (state->ngx_extensions_enabled) {
@@ -2752,7 +2791,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode(
     DetroitDlssModeSettings* settings) {
   if (settings == nullptr || settings->struct_size < sizeof(*settings)
       || settings->abi_version != DETROIT_DLSS_ABI_VERSION || output_width == 0u
-      || output_height == 0u || mode > DETROIT_DLSS_MODE_PERFORMANCE) {
+      || output_height == 0u) {
     return DETROIT_DLSS_RESULT_ERROR;
   }
 
@@ -2763,6 +2802,10 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode(
   settings->mode = mode;
   settings->output_width = output_width;
   settings->output_height = output_height;
+  if (mode != DETROIT_DLSS_MODE_NATIVE
+      && mode != DETROIT_DLSS_MODE_DLAA) {
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
   if (mode == DETROIT_DLSS_MODE_NATIVE) {
     settings->render_width = output_width;
     settings->render_height = output_height;
@@ -2796,18 +2839,25 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode(
   renodx::utils::dlss::vulkan::ModeSettings queried = {};
   const auto query_result = state->ngx_context->QueryMode(
       {
-          .mode = ToNgxQuality(mode),
+          .mode = ToNgxQuality(),
           .output_width = output_width,
           .output_height = output_height,
       },
       &queried);
-  if (!query_result.Succeeded()) return DETROIT_DLSS_RESULT_FALLBACK;
-  settings->render_width = queried.optimal_width;
-  settings->render_height = queried.optimal_height;
-  settings->max_render_width = queried.maximum_width;
-  settings->max_render_height = queried.maximum_height;
-  settings->min_render_width = queried.minimum_width;
-  settings->min_render_height = queried.minimum_height;
+  if (!query_result.Succeeded()
+      || queried.optimal_width == 0u || queried.optimal_height == 0u
+      || queried.optimal_width != output_width
+      || queried.optimal_height != output_height) {
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+  // This Detroit integration is DLAA-only. Query NGX to prove support, but
+  // never publish a reduced internal render extent.
+  settings->render_width = output_width;
+  settings->render_height = output_height;
+  settings->max_render_width = output_width;
+  settings->max_render_height = output_height;
+  settings->min_render_width = output_width;
+  settings->min_render_height = output_height;
   return DETROIT_DLSS_RESULT_SUCCESS;
 }
 
@@ -2815,7 +2865,6 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
     const DetroitDlssModeSettings* settings) {
   if (settings == nullptr || settings->struct_size < sizeof(*settings)
       || settings->abi_version != DETROIT_DLSS_ABI_VERSION
-      || settings->mode > DETROIT_DLSS_MODE_PERFORMANCE
       || (settings->create_flags & ~DETROIT_DLSS_CREATE_KNOWN_MASK) != 0u
       || settings->output_width == 0u || settings->output_height == 0u
       || settings->render_width == 0u || settings->render_height == 0u) {
@@ -2829,6 +2878,24 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
   const std::lock_guard lock(state->mutex);
   if (state->destroying.load(std::memory_order_acquire)
       || state->context_identity != state->identity) {
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+  if (settings->mode != DETROIT_DLSS_MODE_NATIVE
+      && settings->mode != DETROIT_DLSS_MODE_DLAA) {
+    RetireActiveFeatureLocked(state.get());
+    state->configured = false;
+    return DETROIT_DLSS_RESULT_FALLBACK;
+  }
+  const bool fixed_native_extent =
+      settings->render_width == settings->output_width
+      && settings->render_height == settings->output_height
+      && settings->min_render_width == settings->output_width
+      && settings->min_render_height == settings->output_height
+      && settings->max_render_width == settings->output_width
+      && settings->max_render_height == settings->output_height;
+  if (!fixed_native_extent) {
+    RetireActiveFeatureLocked(state.get());
+    state->configured = false;
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
   if (settings->mode != DETROIT_DLSS_MODE_NATIVE
@@ -3052,10 +3119,11 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
-  // The default path recycles scratch at command-buffer begin/reset/free.
-  // When the compatibility environment enables private submission fences,
-  // poll them before reserving another full-resolution scratch bundle. This
-  // status query is non-blocking and never stalls the recording thread.
+  // Poll pooled completion fences before reserving another full-resolution
+  // scratch bundle. ONE_TIME_SUBMIT recordings use this path because Detroit
+  // does not promptly begin/reset every rotated command buffer; reusable
+  // recordings still recycle at their explicit lifecycle boundary. The status
+  // query is non-blocking and never stalls the recording thread.
   PollCompletedInternalFeatureFences(state.get());
 
   const std::lock_guard lock(state->mutex);
@@ -3081,7 +3149,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
         frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
-  if (state->settings.mode == DETROIT_DLSS_MODE_NATIVE) {
+  if (state->settings.mode != DETROIT_DLSS_MODE_DLAA) {
     SetEvaluationResult(
         result, DETROIT_DLSS_RESULT_FALLBACK, BridgeDetail::kNativeMode, frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
@@ -3190,7 +3258,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
 
   const std::uint32_t create_flags = ToNgxCreateFlags(state->settings.create_flags);
   const auto configure_result = state->ngx_context->ConfigureFeature({
-      .mode = ToNgxQuality(state->settings.mode),
+      .mode = ToNgxQuality(),
       .render_width = state->settings.render_width,
       .render_height = state->settings.render_height,
       .output_width = state->settings.output_width,
@@ -3328,7 +3396,6 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_ACCESS_SHADER_READ_BIT);
 
-  MarkFeatureRecordingCandidate(state.get(), command_buffer);
   const auto evaluate_result = state->ngx_context->Evaluate({
       .recording_key = ToOpaque(command_buffer),
       .command_buffer = command_buffer,
@@ -3352,6 +3419,11 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
                       | DETROIT_DLSS_FRAME_SCENE_LOADED))
                       != 0u,
   });
+  MarkFeatureRecordingCandidateLocked(
+      state.get(),
+      command_buffer,
+      evaluate_result.recording_epoch,
+      evaluate_result.one_time_submit);
   UpdateFeatureTrackingStateLocked(state.get());
   trace_record.ngx_call = TraceNgxCall::kEvaluate;
   trace_record.ngx_called = true;
@@ -4043,6 +4115,8 @@ VKAPI_ATTR void VKAPI_CALL LayerUnmapMemory(VkDevice device, VkDeviceMemory memo
 
 using FeatureSubmissionSnapshot =
     renodx::games::detroitbecomehuman::dlss::FeatureLifetimeTracker::SubmissionSnapshot;
+using CompletedFeatureRecording =
+    renodx::games::detroitbecomehuman::dlss::FeatureLifetimeTracker::CompletedRecording;
 
 struct TraceSubmissionCandidate final {
   std::uint64_t command_buffer = 0u;
@@ -4081,12 +4155,15 @@ FeatureSubmissionSnapshot CaptureFeatureSubmission(
 }
 
 void AppendFeatureSubmissionCandidate(
+    const DeviceState& state,
     VkCommandBuffer command_buffer,
     std::uint64_t bloom,
     std::vector<std::uint64_t>* candidates) {
   if (command_buffer == VK_NULL_HANDLE || candidates == nullptr) return;
   const auto handle = ToOpaque(command_buffer);
-  if ((bloom & FeatureCommandBufferBloomBit(handle)) != 0u) {
+  if ((bloom & FeatureCommandBufferBloomBit(handle)) != 0u
+      && (state.feature_recording_candidates.Overflowed()
+          || state.feature_recording_candidates.Contains(handle))) {
     candidates->push_back(handle);
   }
 }
@@ -4102,17 +4179,22 @@ void LogFencelessFeatureSubmissionOnce(
     return;
   }
   Trace(
-      "DLAA feature submissions use command-buffer lifecycle tracking "
-      "without private VkFence injection");
+      "DLAA private VkFence creation failed; a synchronous queue-idle "
+      "completion fallback will protect adapter scratch lifetime");
 }
 
 bool SubmissionNeedsInternalFeatureFence(
     DeviceState* state, const FeatureSubmissionSnapshot& snapshot) {
-  if (ForceInternalFeatureFences()) return !snapshot.Empty();
-  if (state == nullptr || snapshot.Empty()
-      || !GetEvaluationTraceConfiguration().readback) {
-    return false;
+  if (snapshot.Empty()) return false;
+  if (ForceInternalFeatureFences()) return true;
+  // Detroit rotates one-time primary command buffers without immediately
+  // beginning or resetting them again. Track their completion explicitly so
+  // the bounded adapter scratch pool cannot fill permanently after eight
+  // successful evaluations.
+  for (const auto& command : snapshot.commands) {
+    if (command.one_time_submit) return true;
   }
+  if (state == nullptr || !GetEvaluationTraceConfiguration().readback) return false;
   const std::lock_guard lock(state->mutex);
   for (const auto& command : snapshot.commands) {
     if (state->submission_trace_tracker.NeedsCompletion(
@@ -4277,14 +4359,22 @@ void TraceFeatureCompletion(
   std::optional<
       renodx::games::detroitbecomehuman::dlss::SubmissionTraceRecord>
       trace_record;
+  std::optional<renodx::games::detroitbecomehuman::dlss::AdapterTraceReadback>
+      readback;
   {
     const std::lock_guard lock(state->mutex);
     trace_record = state->submission_trace_tracker.Complete(
         command_buffer, recording_epoch);
+    if (trace_record.has_value()) {
+      // Keep the exact trace record and its command-buffer scratch generation
+      // in one state->adapter critical section. A completed old epoch must not
+      // consume readback belonging to a freshly begun recording of the same
+      // Vulkan handle.
+      readback = state->adapter_runtime.TakeCompletedTraceReadback(
+          FromOpaque<VkCommandBuffer>(command_buffer));
+    }
   }
   if (!trace_record.has_value()) return;
-  const auto readback = state->adapter_runtime.TakeCompletedTraceReadback(
-      FromOpaque<VkCommandBuffer>(command_buffer));
   try {
     if (!readback.has_value()) {
       Trace(std::format(
@@ -4355,13 +4445,25 @@ void AppendTraceCompletionCandidates(
 }
 
 void RecycleCompletedCommandBuffers(
-    DeviceState* state, const std::vector<std::uint64_t>& command_buffers) {
-  if (state == nullptr) return;
-  for (const std::uint64_t command_buffer : command_buffers) {
-    TraceFeatureCompletion(state, command_buffer);
+    DeviceState* state,
+    const std::vector<CompletedFeatureRecording>& command_buffers) {
+  if (state == nullptr || command_buffers.empty()) return;
+  const std::lock_guard lock(state->mutex);
+  for (const auto& command : command_buffers) {
+    if (!state->feature_recording_candidates.Matches(
+            command.command_buffer, command.recording_epoch)) {
+      continue;
+    }
     state->adapter_runtime.RecycleCommandBuffer(
-        FromOpaque<VkCommandBuffer>(command_buffer));
+        FromOpaque<VkCommandBuffer>(command.command_buffer));
+    (void)state->feature_recording_candidates.EraseIfMatches(
+        command.command_buffer, command.recording_epoch);
   }
+  if (!state->feature_recording_candidates.Overflowed()
+      && state->feature_recording_candidates.Empty()) {
+    state->feature_command_buffer_bloom.store(0u, std::memory_order_release);
+  }
+  UpdateFeatureTrackingStateLocked(state);
 }
 
 void RecycleInternalFeatureFence(DeviceState* state, VkFence fence);
@@ -4374,7 +4476,7 @@ void CommitFeatureSubmission(
     bool fence_owned_by_layer,
     const FeatureSubmissionSnapshot& snapshot) {
   if (snapshot.Empty()) return;
-  std::vector<std::uint64_t> completed_command_buffers;
+  std::vector<CompletedFeatureRecording> completed_command_buffers;
   std::vector<VkFence> stale_internal_fences;
   std::vector<TraceCompletionCandidate> trace_completed_command_buffers;
   bool log_one_time_submission = false;
@@ -4386,6 +4488,8 @@ void CommitFeatureSubmission(
                                      ToOpaque(queue), snapshot)
                                : FeatureSubmissionSnapshot{};
     for (const auto& command : committed.commands) {
+      (void)state->feature_recording_candidates.MarkSubmittedIfMatches(
+          command.command_buffer, command.recording_epoch);
       if (command.one_time_submit
           && !state->logged_one_time_feature_submission) {
         state->logged_one_time_feature_submission = true;
@@ -4407,7 +4511,7 @@ void CommitFeatureSubmission(
                          ? state->ngx_context->NotifySubmissionCompleted(
                                previous->second.queue,
                                previous->second.snapshot)
-                         : std::vector<std::uint64_t>{};
+                         : std::vector<CompletedFeatureRecording>{};
         completed_command_buffers.insert(
             completed_command_buffers.end(), stale.begin(), stale.end());
         if (previous->second.owned_by_layer) {
@@ -4444,7 +4548,7 @@ void CommitFeatureSubmission(
 }
 
 void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
-  std::vector<std::uint64_t> completed_command_buffers;
+  std::vector<CompletedFeatureRecording> completed_command_buffers;
   std::vector<VkFence> completed_internal_fences;
   std::vector<TraceCompletionCandidate> trace_completed_command_buffers;
   {
@@ -4481,7 +4585,7 @@ void CompleteFeatureQueue(DeviceState* state, VkQueue queue) {
 }
 
 void CompleteFeatureDevice(DeviceState* state) {
-  std::vector<std::uint64_t> completed_command_buffers;
+  std::vector<CompletedFeatureRecording> completed_command_buffers;
   std::vector<VkFence> completed_internal_fences;
   std::vector<TraceCompletionCandidate> trace_completed_command_buffers;
   {
@@ -4511,7 +4615,7 @@ void CompleteFeatureDevice(DeviceState* state) {
 
 void CompleteFeatureFence(DeviceState* state, VkFence fence) {
   if (state == nullptr || fence == VK_NULL_HANDLE) return;
-  std::vector<std::uint64_t> completed_command_buffers;
+  std::vector<CompletedFeatureRecording> completed_command_buffers;
   bool destroy_internal_fence = false;
   FeatureSubmissionSnapshot trace_completed_submission;
   {
@@ -4539,12 +4643,13 @@ void CompleteFeatureFence(DeviceState* state, VkFence fence) {
 }
 
 void PollCompletedInternalFeatureFences(DeviceState* state) {
-  if (!UseInternalFeatureFences() || state == nullptr
-      || state->next_get_fence_status == nullptr) {
+  if (state == nullptr || state->next_get_fence_status == nullptr
+      || !state->internal_feature_fences_pending.load(
+          std::memory_order_acquire)) {
     return;
   }
 
-  std::vector<std::uint64_t> completed_command_buffers;
+  std::vector<CompletedFeatureRecording> completed_command_buffers;
   std::vector<VkFence> completed_fences;
   std::vector<TraceCompletionCandidate> trace_completed_command_buffers;
   {
@@ -4560,7 +4665,7 @@ void PollCompletedInternalFeatureFences(DeviceState* state) {
                            ? state->ngx_context->NotifySubmissionCompleted(
                                  submission->second.queue,
                                  submission->second.snapshot)
-                           : std::vector<std::uint64_t>{};
+                           : std::vector<CompletedFeatureRecording>{};
       completed_command_buffers.insert(
           completed_command_buffers.end(), completed.begin(), completed.end());
       if (submission->second.owned_by_layer) {
@@ -4580,6 +4685,38 @@ void PollCompletedInternalFeatureFences(DeviceState* state) {
   for (const VkFence fence : completed_fences) {
     RecycleInternalFeatureFence(state, fence);
   }
+}
+
+void PollRetiredFeatureFencesOnQueueSubmit(DeviceState* state) {
+  if (state == nullptr
+      || !state->internal_feature_fences_pending.load(
+          std::memory_order_acquire)
+      || state->feature_evaluation_active.load(std::memory_order_acquire)) {
+    return;
+  }
+  const auto serial = state->retired_feature_fence_poll_serial.fetch_add(
+      1u, std::memory_order_relaxed);
+  if ((serial & (kRetiredFeatureFencePollSubmitInterval - 1u)) != 0u) return;
+  PollCompletedInternalFeatureFences(state);
+}
+
+void CompleteUnfencedFeatureSubmissionFallback(
+    DeviceState* state,
+    VkQueue queue,
+    bool internal_fence_required,
+    VkFence internal_fence,
+    VkResult submit_result) {
+  if (state == nullptr || !internal_fence_required
+      || internal_fence != VK_NULL_HANDLE || submit_result != VK_SUCCESS
+      || state->next_queue_wait_idle == nullptr) {
+    return;
+  }
+  VkResult wait_result = VK_ERROR_INITIALIZATION_FAILED;
+  {
+    const std::lock_guard queue_lock(state->queue_mutex);
+    wait_result = state->next_queue_wait_idle(queue);
+  }
+  if (wait_result == VK_SUCCESS) CompleteFeatureQueue(state, queue);
 }
 
 void RecycleInternalFeatureFence(DeviceState* state, VkFence fence) {
@@ -4693,6 +4830,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
   if (state == nullptr || state->next_queue_submit == nullptr) {
     return VK_ERROR_INITIALIZATION_FAILED;
   }
+  PollRetiredFeatureFencesOnQueueSubmit(state);
   if (!state->feature_submission_tracking_active.load(std::memory_order_acquire)) {
     return SubmitQueueLocked(state, queue, submit_count, submits, fence);
   }
@@ -4709,6 +4847,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
            command_index < submit.commandBufferCount;
            ++command_index) {
         AppendFeatureSubmissionCandidate(
+            *state,
             submit.pCommandBuffers[command_index],
             feature_bloom,
             &command_buffers);
@@ -4750,6 +4889,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(
         tracked_fence,
         internal_fence != VK_NULL_HANDLE,
         snapshot);
+    CompleteUnfencedFeatureSubmissionFallback(
+        state, queue, needs_internal_fence, internal_fence, result);
   } else if (internal_fence != VK_NULL_HANDLE) {
     RecycleInternalFeatureFence(state, internal_fence);
   }
@@ -4766,6 +4907,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
   if (state == nullptr || state->next_queue_submit2 == nullptr) {
     return VK_ERROR_INITIALIZATION_FAILED;
   }
+  PollRetiredFeatureFencesOnQueueSubmit(state);
   if (!state->feature_submission_tracking_active.load(std::memory_order_acquire)) {
     return SubmitQueue2Locked(state, queue, submit_count, submits, fence);
   }
@@ -4782,6 +4924,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
            command_index < submit.commandBufferInfoCount;
            ++command_index) {
         AppendFeatureSubmissionCandidate(
+            *state,
             submit.pCommandBufferInfos[command_index].commandBuffer,
             feature_bloom,
             &command_buffers);
@@ -4823,6 +4966,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2(
         tracked_fence,
         internal_fence != VK_NULL_HANDLE,
         snapshot);
+    CompleteUnfencedFeatureSubmissionFallback(
+        state, queue, needs_internal_fence, internal_fence, result);
   } else if (internal_fence != VK_NULL_HANDLE) {
     RecycleInternalFeatureFence(state, internal_fence);
   }
@@ -4840,6 +4985,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
   if (state == nullptr || state->next_queue_submit2_khr == nullptr) {
     return VK_ERROR_INITIALIZATION_FAILED;
   }
+  PollRetiredFeatureFencesOnQueueSubmit(state);
   if (!state->feature_submission_tracking_active.load(std::memory_order_acquire)) {
     return SubmitQueue2KhrLocked(state, queue, submit_count, submits, fence);
   }
@@ -4856,6 +5002,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
            command_index < submit.commandBufferInfoCount;
            ++command_index) {
         AppendFeatureSubmissionCandidate(
+            *state,
             submit.pCommandBufferInfos[command_index].commandBuffer,
             feature_bloom,
             &command_buffers);
@@ -4897,6 +5044,8 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit2KHR(
         tracked_fence,
         internal_fence != VK_NULL_HANDLE,
         snapshot);
+    CompleteUnfencedFeatureSubmissionFallback(
+        state, queue, needs_internal_fence, internal_fence, result);
   } else if (internal_fence != VK_NULL_HANDLE) {
     RecycleInternalFeatureFence(state, internal_fence);
   }
@@ -5216,8 +5365,10 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(
             begin_info != nullptr
                 && (begin_info->flags
                     & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
-                       != 0u);
+                        != 0u);
       }
+      UnmarkFeatureRecordingCandidateLocked(
+          state, ToOpaque(command_buffer));
       UpdateFeatureTrackingStateLocked(state);
     }
   }
@@ -5901,7 +6052,8 @@ VKAPI_ATTR VkResult VKAPI_CALL HookCreateDevice(
       .get_instance_proc_addr = state->next_get_instance_proc_addr,
       .get_device_proc_addr = state->next_get_device_proc_addr,
       .memory_properties = state->memory_properties,
-      .maximum_scratch_bundles = 8u,
+      .maximum_scratch_bundles = static_cast<std::uint32_t>(
+          kMaximumAdapterScratchBundles),
   });
   state->adapter_available = adapter_result.Succeeded();
   Trace(state->adapter_available
@@ -6100,7 +6252,7 @@ bool AttachEarlyHooks(
   Trace(
       install_native_command_hooks
           ? "Retinal startup requested native Vulkan command-bind hooks"
-          : "Targeted DLSS/DLAA backend active without native Vulkan command-bind hooks");
+          : "Targeted DLAA backend active without native Vulkan command-bind hooks");
   if (hooks_attached.load(std::memory_order_acquire)) return true;
   const bool cache_valid = CanAttachEarlyHooks(cache);
   {

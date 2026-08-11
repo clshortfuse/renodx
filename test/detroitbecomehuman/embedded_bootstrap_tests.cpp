@@ -51,24 +51,14 @@ int main() {
       "Native TAA with non-Retinal DOF must use the command-tracking fast path");
   Expect(
       embedded::kDlssRuntimeEnabled,
-      "targeted DLSS/DLAA runtime must be enabled");
+      "targeted DLAA runtime must be enabled");
   Expect(
       !embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_DLAA, false),
       "DLAA must not enable global command-bind tracking");
   Expect(
-      !embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_QUALITY, false)
-          && !embedded::NeedsRuntimeCommandTracking(
-              DETROIT_DLSS_MODE_BALANCED, false)
-          && !embedded::NeedsRuntimeCommandTracking(
-              DETROIT_DLSS_MODE_PERFORMANCE, false),
-      "DLSS Super Resolution must not enable global command-bind tracking");
-  Expect(
       embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_NATIVE, false)
-          && embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_DLAA, false)
-          && embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_QUALITY, false)
-          && embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_BALANCED, false)
-          && embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_PERFORMANCE, false),
-      "targeted DLSS/DLAA must load the embedded Vulkan bridge without bind tracking");
+          && embedded::NeedsEmbeddedBridge(DETROIT_DLSS_MODE_DLAA, false),
+      "Native TAA and DLAA must load the embedded Vulkan bridge without bind tracking");
   Expect(
       embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_NATIVE, true),
       "Retinal DOF must enable runtime command tracking in Native TAA mode");
