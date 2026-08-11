@@ -17,6 +17,7 @@
 #include "src/games/detroitbecomehuman/dlss_bridge_abi.h"
 #include "src/games/detroitbecomehuman/dlss_bridge_client.hpp"
 #include "src/games/detroitbecomehuman/supported_build.hpp"
+#include "src/games/detroitbecomehuman/temporal_descriptor_binding.hpp"
 #include "src/games/detroitbecomehuman/temporal_mode_state.hpp"
 
 namespace {
@@ -28,6 +29,8 @@ namespace dlss_evaluation_trace =
     renodx::games::detroitbecomehuman::dlss;
 namespace temporal_mode_state =
     renodx::games::detroitbecomehuman::temporal_mode_state;
+namespace temporal_descriptor_binding =
+    renodx::games::detroitbecomehuman::temporal_descriptor_binding;
 
 static_assert(std::is_standard_layout_v<DetroitDlssBootstrapContext>);
 static_assert(std::is_trivially_copyable_v<DetroitDlssBootstrapContext>);
@@ -848,6 +851,49 @@ bool TestDirectProviderContract() {
   return passed;
 }
 
+bool TestTemporalDescriptorBindingPingPong() {
+  temporal_descriptor_binding::Tracker tracker;
+  constexpr std::uint64_t kTemporalLayout = UINT64_C(0x7000);
+  constexpr std::uint64_t kOtherLayout = UINT64_C(0x7001);
+  constexpr std::uint64_t kFirstTemporalSet = UINT64_C(0x8000);
+  constexpr std::uint64_t kSecondTemporalSet = UINT64_C(0x8001);
+
+  bool passed = true;
+  passed &= Expect(
+      !tracker.Resolve(kTemporalLayout).IsValid(),
+      "an unbound temporal descriptor set must fail closed");
+
+  tracker.ObserveComputeBind(kTemporalLayout, 0u, 1u, kFirstTemporalSet);
+  auto snapshot = tracker.Resolve(kTemporalLayout);
+  passed &= Expect(
+      snapshot.IsValid() && snapshot.descriptor_set == kFirstTemporalSet,
+      "the first bound temporal ping-pong set was not preserved");
+
+  tracker.ObserveComputeBind(kTemporalLayout, 1u, 1u, UINT64_C(0x9000));
+  snapshot = tracker.Resolve(kTemporalLayout);
+  passed &= Expect(
+      snapshot.IsValid() && snapshot.descriptor_set == kFirstTemporalSet,
+      "binding a later set must not overwrite compute set zero");
+
+  tracker.ObserveComputeBind(kTemporalLayout, 0u, 1u, kSecondTemporalSet);
+  snapshot = tracker.Resolve(kTemporalLayout);
+  passed &= Expect(
+      snapshot.IsValid() && snapshot.descriptor_set == kSecondTemporalSet,
+      "the current temporal ping-pong set must supersede update recency");
+
+  tracker.ObserveComputeBind(kOtherLayout, 1u, 1u, UINT64_C(0x9001));
+  passed &= Expect(
+      !tracker.Resolve(kTemporalLayout).IsValid()
+          && !tracker.Resolve(kOtherLayout).IsValid(),
+      "a pipeline-layout transition must invalidate an unbound set zero");
+
+  tracker.Reset();
+  passed &= Expect(
+      !tracker.Resolve(kTemporalLayout).IsValid(),
+      "command-buffer reset must revoke the temporal binding");
+  return passed;
+}
+
 bool TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization() {
   temporal_mode_state::Tracker tracker;
   constexpr std::uint64_t kCommandList = UINT64_C(0x12345678);
@@ -1111,6 +1157,7 @@ int main() {
   passed &= TestModeSettingsCachePolicy();
   passed &= TestFunctionTableContract();
   passed &= TestDirectProviderContract();
+  passed &= TestTemporalDescriptorBindingPingPong();
   passed &= TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization();
   passed &= TestTemporalModeTransactionSerializesCommit();
   passed &= TestBoundedEvaluationTraceWindow();

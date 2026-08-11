@@ -30,11 +30,11 @@
 #include "../../utils/descriptor.hpp"
 #include "../../utils/pipeline_layout.hpp"
 #include "../../utils/shader.hpp"
-#include "../../utils/state.hpp"
 #include "dlss_bridge_client.hpp"
 #include "dlss/embedded_bootstrap.hpp"
 #include "supported_build.hpp"
 #include "taa_contract.hpp"
+#include "temporal_descriptor_binding.hpp"
 #include "temporal_mode_state.hpp"
 
 namespace renodx::games::detroitbecomehuman::temporal_capture {
@@ -181,6 +181,59 @@ inline std::atomic_uint64_t last_logged_evaluation_key =
     kUnloggedTelemetryKey;
 inline std::atomic_bool has_logged_auxiliary_fallback_replay = false;
 inline std::atomic_bool has_logged_auxiliary_active = false;
+
+struct __declspec(uuid("7a35d182-8df1-4e1b-b79b-a57b3c9a72f0"))
+    TemporalDescriptorBindingData {
+  temporal_descriptor_binding::Tracker tracker;
+};
+
+inline void OnInitTemporalCommandList(reshade::api::command_list* cmd_list) {
+  renodx::utils::data::Create<TemporalDescriptorBindingData>(cmd_list);
+}
+
+inline void OnDestroyTemporalCommandList(reshade::api::command_list* cmd_list) {
+  renodx::utils::data::Delete<TemporalDescriptorBindingData>(cmd_list);
+}
+
+inline void OnResetTemporalCommandList(reshade::api::command_list* cmd_list) {
+  auto* data =
+      renodx::utils::data::Get<TemporalDescriptorBindingData>(cmd_list);
+  if (data != nullptr) data->tracker.Reset();
+}
+
+inline void OnBindTemporalDescriptorTables(
+    reshade::api::command_list* cmd_list,
+    reshade::api::shader_stage stages,
+    reshade::api::pipeline_layout layout,
+    std::uint32_t first,
+    std::uint32_t count,
+    const reshade::api::descriptor_table* tables) {
+  if ((stages & reshade::api::shader_stage::compute)
+      == static_cast<reshade::api::shader_stage>(0u)) {
+    return;
+  }
+  auto* data =
+      renodx::utils::data::Get<TemporalDescriptorBindingData>(cmd_list);
+  if (data == nullptr) return;
+  data->tracker.ObserveComputeBind(
+      layout.handle,
+      first,
+      count,
+      first == 0u && count != 0u && tables != nullptr
+          ? tables[0u].handle
+          : 0u);
+}
+
+[[nodiscard]] inline temporal_descriptor_binding::Snapshot
+GetTemporalDescriptorBinding(
+    reshade::api::command_list* cmd_list,
+    std::uint64_t expected_pipeline_layout) {
+  const auto* data =
+      renodx::utils::data::Get<TemporalDescriptorBindingData>(cmd_list);
+  return data != nullptr
+             ? data->tracker.Resolve(expected_pipeline_layout)
+             : temporal_descriptor_binding::Snapshot{};
+}
 
 [[nodiscard]] inline std::uint64_t MixTelemetryKey(
     std::uint64_t key,
@@ -806,11 +859,14 @@ inline void AfterNativeTemporalDispatch(
     return;
   }
 
+  const auto temporal_binding = GetTemporalDescriptorBinding(
+      context.cmd_list, temporal_pipeline_layout.handle);
   DetroitDlssTemporalDescriptorSnapshot temporal_snapshot = {};
   const bool has_temporal_snapshot =
-      dlss_bridge_client::client.CaptureTemporalSnapshot(
+      temporal_binding.IsValid()
+      && dlss_bridge_client::client.CaptureTemporalSnapshot(
           context.cmd_list->get_native(),
-          0u,
+          temporal_binding.descriptor_set,
           temporal_pipeline_layout.handle,
           &temporal_snapshot);
   const bool has_temporal_diagnostics =
@@ -1226,9 +1282,28 @@ inline void Use(DWORD fdw_reason) {
               .command_types =
                   renodx::utils::command_action::COMMAND_TYPE_DISPATCH,
           });
+      // ReShade already intercepts vkCmdBindDescriptorSets. This callback adds
+      // a constant-size set-0 identity tracker and avoids restoring the costly
+      // Detroit native command-bind detours that previously reduced FPS.
+      reshade::register_event<reshade::addon_event::init_command_list>(
+          OnInitTemporalCommandList);
+      reshade::register_event<reshade::addon_event::destroy_command_list>(
+          OnDestroyTemporalCommandList);
+      reshade::register_event<reshade::addon_event::reset_command_list>(
+          OnResetTemporalCommandList);
+      reshade::register_event<reshade::addon_event::bind_descriptor_tables>(
+          OnBindTemporalDescriptorTables);
       break;
     }
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::bind_descriptor_tables>(
+          OnBindTemporalDescriptorTables);
+      reshade::unregister_event<reshade::addon_event::reset_command_list>(
+          OnResetTemporalCommandList);
+      reshade::unregister_event<reshade::addon_event::destroy_command_list>(
+          OnDestroyTemporalCommandList);
+      reshade::unregister_event<reshade::addon_event::init_command_list>(
+          OnInitTemporalCommandList);
       renodx::utils::command_action::Unregister(kTemporalDispatchCallback);
       // The Vulkan layer owns NGX/Vulkan teardown at vkDestroyDevice. Do not
       // call its ABI while the Windows loader lock is held here.

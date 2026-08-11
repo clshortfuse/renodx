@@ -2314,6 +2314,30 @@ ResolveLatestTemporalDescriptorUpdateLocked(
   return std::pair{newest_handle, newest_state};
 }
 
+std::optional<std::pair<VkDescriptorSet, DescriptorSetState*>>
+ResolveExpectedTemporalDescriptorSetLocked(
+    DeviceState* state,
+    std::uint32_t descriptor_set_index,
+    VkDescriptorSet expected_descriptor_set,
+    VkPipelineLayout expected_pipeline_layout) {
+  if (expected_descriptor_set == VK_NULL_HANDLE) return std::nullopt;
+  const auto pipeline_layout =
+      state->pipeline_layouts.find(ToOpaque(expected_pipeline_layout));
+  if (pipeline_layout == state->pipeline_layouts.end()
+      || descriptor_set_index >= pipeline_layout->second.set_layouts.size()) {
+    return std::nullopt;
+  }
+  const auto descriptor_set =
+      state->descriptor_sets.find(ToOpaque(expected_descriptor_set));
+  if (descriptor_set == state->descriptor_sets.end()
+      || descriptor_set->second.layout
+             != pipeline_layout->second.set_layouts[descriptor_set_index]
+      || !HasRequiredTemporalDescriptors(descriptor_set->second)) {
+    return std::nullopt;
+  }
+  return std::pair{expected_descriptor_set, &descriptor_set->second};
+}
+
 std::uint64_t HashTemporalConstants(std::span<const std::uint8_t> bytes) {
   std::uint64_t hash = UINT64_C(14695981039346656037);
   for (const std::uint8_t byte : bytes) {
@@ -2531,10 +2555,16 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
       set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_COMMAND_UNTRACKED);
       return DETROIT_DLSS_RESULT_FALLBACK;
     }
-    const auto targeted = ResolveLatestTemporalDescriptorUpdateLocked(
-        state.get(),
-        descriptor_set_index,
-        FromOpaque<VkPipelineLayout>(expected_pipeline_layout));
+    const auto targeted = expected_descriptor_set != 0u
+        ? ResolveExpectedTemporalDescriptorSetLocked(
+              state.get(),
+              descriptor_set_index,
+              FromOpaque<VkDescriptorSet>(expected_descriptor_set),
+              FromOpaque<VkPipelineLayout>(expected_pipeline_layout))
+        : ResolveLatestTemporalDescriptorUpdateLocked(
+              state.get(),
+              descriptor_set_index,
+              FromOpaque<VkPipelineLayout>(expected_pipeline_layout));
     if (!targeted.has_value()) {
       set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_TARGETED_SET_UNAVAILABLE);
       return DETROIT_DLSS_RESULT_FALLBACK;

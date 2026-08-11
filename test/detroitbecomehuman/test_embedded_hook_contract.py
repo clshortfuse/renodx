@@ -106,9 +106,13 @@ def main() -> None:
     snapshot_start = source.index("BridgeGetTemporalSnapshot(")
     snapshot_end = source.index("BridgeQueryMode(", snapshot_start)
     snapshot_capture = source[snapshot_start:snapshot_end]
+    require(snapshot_capture, "ResolveExpectedTemporalDescriptorSetLocked(")
     require(snapshot_capture, "ResolveLatestTemporalDescriptorUpdateLocked(")
     require(snapshot_capture, "ResolveChangedTemporalConstantsSlotLocked(")
     require(snapshot_capture, "FillTemporalConstantsForBindingLocked(")
+    require(temporal, "GetTemporalDescriptorBinding(")
+    require(temporal, "temporal_binding.descriptor_set")
+    require(temporal, "addon_event::bind_descriptor_tables")
     query_mode_start = snapshot_end
     query_mode_end = source.index("BridgeConfigure(", query_mode_start)
     query_mode = source[query_mode_start:query_mode_end]
