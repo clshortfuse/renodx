@@ -35,6 +35,7 @@
 
 #include "../../mods/shader.hpp"
 #include "../../templates/settings.hpp"
+#include "../../utils/cross_addon.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
@@ -48,7 +49,43 @@
 #include "./temporal_capture.hpp"
 #include "./ultrawide.hpp"
 
+#ifndef DETROIT_EFFECTS_ADDON
+namespace renodx::games::detroitbecomehuman::dlss::embedded {
+
+void SetRuntimeCommandTracking(bool) {}
+bool CanInsertComputeWriteBarrier(std::uint64_t) { return false; }
+bool InsertComputeWriteBarrier(std::uint64_t) { return false; }
+
+bool CaptureDofCompositeImageSnapshot(
+    std::uint64_t,
+    DofCompositeImageSnapshot* snapshot,
+    DofCompositeCaptureDetail* detail) {
+  if (snapshot != nullptr) *snapshot = {};
+  if (detail != nullptr) *detail = DofCompositeCaptureDetail::kNotAttempted;
+  return false;
+}
+
+bool ReleaseDofCompositeImageSnapshot(const DofCompositeImageSnapshot&) {
+  return false;
+}
+
+bool RestoreDofCompositeComputeState(
+    const DofCompositeImageSnapshot&,
+    const void*,
+    std::uint32_t) {
+  return false;
+}
+
+}  // namespace renodx::games::detroitbecomehuman::dlss::embedded
+#endif
+
 namespace {
+
+#ifdef DETROIT_EFFECTS_ADDON
+constexpr bool kEffectsAddon = true;
+#else
+constexpr bool kEffectsAddon = false;
+#endif
 
 constexpr float OUTPUT_MODE_AUTO = 0.f;
 constexpr float OUTPUT_MODE_SDR = 1.f;
@@ -83,6 +120,16 @@ namespace retinal_capture =
     renodx::games::detroitbecomehuman::retinal_capture;
 namespace retinal_observability =
     renodx::games::detroitbecomehuman::retinal_observability;
+
+struct EffectsApi;
+
+struct __declspec(uuid("d920d9be-4d54-4d28-90ec-e306386a7b52")) AddonSharedState {
+  std::atomic<const EffectsApi*> effects_api = nullptr;
+  std::atomic_uint32_t hdr_sharpening_normalization =
+      std::bit_cast<std::uint32_t>(1.f);
+};
+
+renodx::utils::cross_addon::Shared<AddonSharedState> addon_shared;
 constexpr std::size_t ASPECT_PATCH_INDEX = 0u;
 constexpr std::size_t UI_PATCH_INDEX = 1u;
 
@@ -912,18 +959,27 @@ constexpr std::uint32_t RUNTIME_FLAG_MASK =
     RUNTIME_FLAG_DLSS_OUTPUT | RUNTIME_FLAG_PSYCHOV_BT2020
     | RUNTIME_FLAG_EXPERIMENTAL_MOTION_BLUR;
 
-std::uint32_t GetRuntimeFlags() {
-  if (!std::isfinite(shader_injection.runtime_flags)) return 0u;
+std::uint32_t GetRuntimeFlags(const ShaderInjectData& injection) {
+  if (!std::isfinite(injection.runtime_flags)) return 0u;
   return static_cast<std::uint32_t>(std::clamp(
-      std::lround(shader_injection.runtime_flags),
+      std::lround(injection.runtime_flags),
       0l,
       static_cast<long>(RUNTIME_FLAG_MASK)));
 }
 
-void SetRuntimeFlag(std::uint32_t flag, bool enabled) {
-  auto flags = GetRuntimeFlags();
+std::uint32_t GetRuntimeFlags() { return GetRuntimeFlags(shader_injection); }
+
+void SetRuntimeFlag(
+    ShaderInjectData& injection,
+    std::uint32_t flag,
+    bool enabled) {
+  auto flags = GetRuntimeFlags(injection);
   flags = enabled ? (flags | flag) : (flags & ~flag);
-  shader_injection.runtime_flags = static_cast<float>(flags);
+  injection.runtime_flags = static_cast<float>(flags);
+}
+
+void SetRuntimeFlag(std::uint32_t flag, bool enabled) {
+  SetRuntimeFlag(shader_injection, flag, enabled);
 }
 
 void OnExperimentalMotionBlurSettingsChanged() {
@@ -1321,8 +1377,15 @@ struct DlaaSharpeningGate {
   float strength = 0.f;
 };
 
-DlaaSharpeningGate GetDlaaSharpeningGate(
-    reshade::api::command_list* command_list) {
+struct EffectsApi {
+  void (*sync_shader_injection)(
+      std::uint64_t command_list,
+      bool scene_composite,
+      ShaderInjectData* destination);
+  void (*sync_dlaa_sharpening)();
+};
+
+DlaaSharpeningGate GetDlaaSharpeningGate(std::uint64_t command_list) {
   const auto mode = temporal_capture::GetMode();
   if (renodx::games::detroitbecomehuman::temporal_mode_state::
           CanUseNativeModeFastPath(mode)) {
@@ -1330,7 +1393,7 @@ DlaaSharpeningGate GetDlaaSharpeningGate(
   }
   const auto authorization =
       temporal_capture::QueryDlssOutputAuthorizationForCommandList(
-          command_list != nullptr ? command_list->get_native() : 0u);
+          command_list);
   const bool exact_command_list_match = authorization.authorized;
   // Suppress native CAS only when this exact command list owns a valid output
   // from the current DLAA generation. A selected UI mode can still fall back to
@@ -1347,23 +1410,48 @@ DlaaSharpeningGate GetDlaaSharpeningGate(
 }
 
 void SyncDlaaSharpening() {
+  if constexpr (!kEffectsAddon) {
+    if (addon_shared.data == nullptr) return;
+    const float normalization = std::max(
+        shader_injection.peak_white_nits
+            / std::max(shader_injection.diffuse_white_nits, 1.f),
+        1.f);
+    addon_shared.data->hdr_sharpening_normalization.store(
+        std::bit_cast<std::uint32_t>(normalization),
+        std::memory_order_release);
+    if (const auto* api = addon_shared.data->effects_api.load(
+            std::memory_order_acquire);
+        api != nullptr) {
+      api->sync_dlaa_sharpening();
+    }
+    return;
+  }
+
+  const float normalization = addon_shared.data == nullptr
+                                  ? 1.f
+                                  : std::bit_cast<float>(
+                                        addon_shared.data
+                                            ->hdr_sharpening_normalization.load(
+                                                std::memory_order_acquire));
   temporal_capture::SetDlaaSharpening(
       std::clamp(dlaa_sharpening, 0.f, 1.f),
-      std::max(
-          shader_injection.peak_white_nits
-              / std::max(shader_injection.diffuse_white_nits, 1.f),
-          1.f));
+      std::max(normalization, 1.f));
 }
 
+#ifdef DETROIT_EFFECTS_ADDON
 void ApplyDlssOutputMarker(
-    reshade::api::command_list* command_list,
+    std::uint64_t command_list,
     std::string_view pass_name,
-    bool log_gate) {
+    bool log_gate,
+    ShaderInjectData* destination) {
   const auto gate = GetDlaaSharpeningGate(command_list);
   // The late scene/OETF shaders only need a boolean marker to suppress
   // Detroit's optional native CAS. Sharpening strength is transferred through
   // TemporalFrameInputs and consumed by the pre-DOF adapter pack instead.
   SetRuntimeFlag(RUNTIME_FLAG_DLSS_OUTPUT, gate.active);
+  if (destination != nullptr && destination != &shader_injection) {
+    SetRuntimeFlag(*destination, RUNTIME_FLAG_DLSS_OUTPUT, gate.active);
+  }
 
   if (!log_gate) return;
   const auto strength_percent = static_cast<std::uint32_t>(
@@ -1400,15 +1488,52 @@ void ApplyDlssOutputMarker(
           .c_str());
 }
 
+void SyncEffectsForHdr(
+    std::uint64_t command_list,
+    bool scene_composite,
+    ShaderInjectData* destination) {
+  if (destination == nullptr) return;
+  if (scene_composite) {
+    if (command_list != 0u) {
+      temporal_capture::MarkMainTemporalCommandList(command_list);
+    }
+    if (render_debug_mode >= 0.5f) {
+      render_debug_runtime_controller.Observe(
+          render_debug::ProducerPass::kSceneComposite);
+    }
+    destination->scene_path_active = shader_injection.scene_path_active;
+  }
+  ApplyDlssOutputMarker(
+      command_list,
+      scene_composite ? "scene composite" : "native CAS suppression",
+      scene_composite,
+      destination);
+}
+
+const EffectsApi effects_api = {
+    .sync_shader_injection = &SyncEffectsForHdr,
+    .sync_dlaa_sharpening = &SyncDlaaSharpening,
+};
+
+#else
+void SyncHdrShaderInjection(
+    reshade::api::command_list* command_list,
+    bool scene_composite) {
+  const auto native = command_list != nullptr ? command_list->get_native() : 0u;
+  if (addon_shared.data != nullptr) {
+    if (const auto* api = addon_shared.data->effects_api.load(
+            std::memory_order_acquire);
+        api != nullptr) {
+      api->sync_shader_injection(native, scene_composite, &shader_injection);
+      return;
+    }
+  }
+  SetRuntimeFlag(RUNTIME_FLAG_DLSS_OUTPUT, false);
+  if (scene_composite) shader_injection.scene_path_active = 0.f;
+}
+
 bool OnSceneDraw(reshade::api::command_list* command_list) {
-  if (command_list != nullptr) {
-    temporal_capture::MarkMainTemporalCommandList(command_list->get_native());
-  }
-  if (render_debug_mode >= 0.5f) {
-    render_debug_runtime_controller.Observe(
-        render_debug::ProducerPass::kSceneComposite);
-  }
-  ApplyDlssOutputMarker(command_list, "scene composite", true);
+  SyncHdrShaderInjection(command_list, true);
   SetRuntimeFlag(
       RUNTIME_FLAG_PSYCHOV_BT2020,
       ShouldWritePsychoVBt2020Intermediate());
@@ -1418,9 +1543,10 @@ bool OnSceneDraw(reshade::api::command_list* command_list) {
 bool OnFinalCasDraw(reshade::api::command_list* command_list) {
   // The adapter pack owns DLAA sharpening. This optional native CAS variant
   // only needs the same mode marker so its own late lobe can be disabled.
-  ApplyDlssOutputMarker(command_list, "native CAS suppression", false);
+  SyncHdrShaderInjection(command_list, false);
   return true;
 }
+#endif
 
 bool OnTemporalAuxiliaryReplace(reshade::api::command_list* command_list) {
   if (render_debug_mode >= 0.5f) {
@@ -1625,7 +1751,8 @@ void OnPeakBrightnessSettingsChanged() {
       false);
 }
 
-renodx::mods::shader::CustomShaders custom_shaders = {
+#ifdef DETROIT_EFFECTS_ADDON
+renodx::mods::shader::CustomShaders effect_shaders = {
     {supported_build::kMotionBlurShaderCrc, {
                                                 .crc32 = supported_build::kMotionBlurShaderCrc,
                                                 .code = __0xC03380A0,
@@ -1655,6 +1782,9 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                                                 .code = __temporal_aux_exact,
                                                 .on_replace = &OnTemporalAuxiliaryReplace,
                                             }},
+};
+#else
+renodx::mods::shader::CustomShaders hdr_shaders = {
     {0xEBFBDDB1, {
                      .crc32 = 0xEBFBDDB1,
                      .code = __0xEBFBDDB1,
@@ -1705,6 +1835,7 @@ renodx::mods::shader::CustomShaders custom_shaders = {
                      .code = __0xF478AFEF,
                  }},
 };
+#endif
 
 constexpr int MigrateLegacyToneMapType(int legacy_value) {
   switch (legacy_value) {
@@ -1751,6 +1882,7 @@ void MigrateToneMapTypeSettings() {
 
 renodx::utils::settings::Settings settings =
     renodx::templates::settings::JoinSettings({
+#ifndef DETROIT_EFFECTS_ADDON
         []() {
           auto default_settings =
               renodx::templates::settings::CreateDefaultSettings({
@@ -1890,7 +2022,9 @@ renodx::utils::settings::Settings settings =
                 .is_visible = []() { return shader_injection.tone_map_type >= 2.f; },
             }},
         }),
+#endif
         renodx::templates::settings::CreateSettings({
+#ifdef DETROIT_EFFECTS_ADDON
             {{
                 .key = "DepthOfFieldMode",
                 .binding = &dof_mode,
@@ -2404,12 +2538,8 @@ renodx::utils::settings::Settings settings =
                 .section = "DLSS",
                 .tooltip = "DLAA replaces Detroit's native TAA at output resolution. The game Resolution Scaling setting must be 100%; reduced render extents fail closed to Native TAA. DLSS Super Resolution is not included.",
                 .labels = {"Native TAA", "DLAA"},
-                .is_enabled = []() {
-                  return embedded_dlss::kDlssRuntimeEnabled;
-                },
-                .on_change_value = [](float, float current) {
-                  ApplyDlssMode(current);
-                },
+                .is_enabled = []() { return embedded_dlss::kDlssRuntimeEnabled; },
+                .on_change_value = [](float, float current) { ApplyDlssMode(current); },
             }},
             {{
                 .key = "DLAASharpening",
@@ -2517,6 +2647,7 @@ renodx::utils::settings::Settings settings =
                 .label = "Ultrawide is signature-gated to Steam Build 12158144. Auto uses 43:18 at 3440x1440 and keeps 16:9 unchanged.",
                 .section = "Ultrawide",
             }},
+#else
             {{
                 .key = "OutputMode",
                 .binding = &shader_injection.output_mode,
@@ -2566,7 +2697,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Experimental HDR + ultrawide RC for Steam Build 12158144 (Vulkan x64). Late chapters require user validation.",
+                .label = "Experimental HDR core for Steam Build 12158144 (Vulkan x64). Optional DLSS, DOF, motion blur, debug, and ultrawide logic lives in RenoDX Detroit Effects.",
                 .section = "About",
             }},
             {{
@@ -2574,30 +2705,14 @@ renodx::utils::settings::Settings settings =
                 .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
                 .section = "About",
             }},
+#endif
         }),
     });
 
 void OnPresetOff() {
+#ifdef DETROIT_EFFECTS_ADDON
   const bool dof_was_enhanced = dof_mode >= 0.5f;
   renodx::utils::settings::UpdateSettings({
-      {"OutputMode", OUTPUT_MODE_AUTO},
-      {"ToneMapTypeV2", 0.f},
-      {"PeakBrightnessSource", 0.f},
-      {"ToneMapPeakNits", 1000.f},
-      {"ToneMapGameNits", 203.f},
-      {"ToneMapUINits", 300.f},
-      {"ColorGradeConeResponse", 50.f},
-      {"ToneMapPsychoVExposureMatch", 1.f},
-      {"ToneMapPsychoVVanillaHDRSlope", 100.f},
-      {"ColorGradeExposure", 1.f},
-      {"ColorGradeHighlights", 50.f},
-      {"ColorGradeShadows", 50.f},
-      {"ColorGradeContrast", 50.f},
-      {"ColorGradeSaturation", 50.f},
-      {"ColorGradeHighlightSaturation", 50.f},
-      {"ColorGradeBlowout", 0.f},
-      {"ColorGradeFlare", 0.f},
-      {"SceneGradeStrength", 100.f},
       {"DepthOfFieldMode", 0.f},
       {"DepthOfFieldQuality", 1.f},
       {"DepthOfFieldFocusDistance", 100.f},
@@ -2628,19 +2743,41 @@ void OnPresetOff() {
       {"RenderDebugOpacity", 100.f},
       {"DLSSMode", static_cast<float>(DETROIT_DLSS_MODE_NATIVE)},
       {"DLAASharpening", 0.f},
-      {"CASMode", CAS_MODE_VANILLA},
-      {"CASStrength", 100.f},
   });
   OnDofSettingsChanged();
   OnExperimentalMotionBlurSettingsChanged();
   OnRenderDebugSettingsChanged();
-  OnPeakBrightnessSettingsChanged();
   if (dof_was_enhanced) {
     reshade::log::message(
         reshade::log::level::warning,
         "Detroit DOF: Preset Off forced the Vanilla fallback.");
   }
   OnAspectRatioModeChanged();
+#else
+  renodx::utils::settings::UpdateSettings({
+      {"OutputMode", OUTPUT_MODE_AUTO},
+      {"ToneMapTypeV2", 0.f},
+      {"PeakBrightnessSource", 0.f},
+      {"ToneMapPeakNits", 1000.f},
+      {"ToneMapGameNits", 203.f},
+      {"ToneMapUINits", 300.f},
+      {"ColorGradeConeResponse", 50.f},
+      {"ToneMapPsychoVExposureMatch", 1.f},
+      {"ToneMapPsychoVVanillaHDRSlope", 100.f},
+      {"ColorGradeExposure", 1.f},
+      {"ColorGradeHighlights", 50.f},
+      {"ColorGradeShadows", 50.f},
+      {"ColorGradeContrast", 50.f},
+      {"ColorGradeSaturation", 50.f},
+      {"ColorGradeHighlightSaturation", 50.f},
+      {"ColorGradeBlowout", 0.f},
+      {"ColorGradeFlare", 0.f},
+      {"SceneGradeStrength", 100.f},
+      {"CASMode", CAS_MODE_VANILLA},
+      {"CASStrength", 100.f},
+  });
+  OnPeakBrightnessSettingsChanged();
+#endif
 }
 
 bool TryTrackGameSwapchain(reshade::api::swapchain* swapchain) {
@@ -2674,6 +2811,7 @@ bool UpdateUltrawideFromSwapchain(reshade::api::swapchain* swapchain) {
   const auto previous_width = output_width.exchange(width, std::memory_order_relaxed);
   const auto previous_height = output_height.exchange(height, std::memory_order_relaxed);
   if (width == previous_width && height == previous_height) return true;
+  if constexpr (!kEffectsAddon) return true;
 
   RefreshUltrawideValues();
   if (ultrawide_installed.load(std::memory_order_acquire)) {
@@ -2695,10 +2833,13 @@ bool UpdateUltrawideFromSwapchain(reshade::api::swapchain* swapchain) {
 
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool) {
   if (!TryTrackGameSwapchain(swapchain)) return;
-  shader_injection.output_is_hdr =
-      IsHdrOutputColorSpace(swapchain->get_color_space()) ? 1.f : 0.f;
-  UpdatePeakBrightness(swapchain, true);
+  if constexpr (!kEffectsAddon) {
+    shader_injection.output_is_hdr =
+        IsHdrOutputColorSpace(swapchain->get_color_space()) ? 1.f : 0.f;
+    UpdatePeakBrightness(swapchain, true);
+  }
   if (!UpdateUltrawideFromSwapchain(swapchain)) return;
+  if constexpr (!kEffectsAddon) return;
   if (!ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
     InstallUltrawidePatch();
   }
@@ -2798,13 +2939,13 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
     return;
   }
 
-  peak_brightness_refresh.Reset();
-  detected_output_desc.reset();
-  detected_peak_nits.reset();
-  peak_brightness_refresh_requested.store(true, std::memory_order_release);
-  UpdatePeakBrightness(nullptr, false);
-
-  if (!resize) {
+  if constexpr (!kEffectsAddon) {
+    peak_brightness_refresh.Reset();
+    detected_output_desc.reset();
+    detected_peak_nits.reset();
+    peak_brightness_refresh_requested.store(true, std::memory_order_release);
+    UpdatePeakBrightness(nullptr, false);
+  } else if (!resize) {
     RestoreUltrawidePatch();
     ultrawide_install_attempted.store(false, std::memory_order_release);
   }
@@ -2867,59 +3008,68 @@ void OnPresent(
     const reshade::api::rect*,
     uint32_t,
     const reshade::api::rect*) {
-  if (embedded_hooks_requested_at_startup
-      && !bootstrap_setup_attempted.load(std::memory_order_acquire)
-      && !bootstrap_setup_attempted.exchange(true, std::memory_order_acq_rel)) {
-    (void)EnsureLoadFromDllMainEntry();
-    embedded_dlss::RefreshDeferredStatus();
-    const bool cache_valid = embedded_dlss::IsValidCache(initial_extension_cache);
-    if (!cache_valid || !embedded_dlss::WasLoadedEarly()) {
-      const auto ngx_path = GetModulePath(addon_module).parent_path() / L"nvngx_dlss.dll";
-      if (std::filesystem::is_regular_file(ngx_path)) {
-        embedded_dlss::ExtensionCache refreshed;
-        if (embedded_dlss::QueryRequiredExtensionsIsolated(addon_module, &refreshed)) {
-          WriteExtensionCache(refreshed);
-          initial_extension_cache = std::move(refreshed);
-          embedded_dlss::SetRestartRequired();
+  if constexpr (kEffectsAddon) {
+    if (embedded_hooks_requested_at_startup
+        && !bootstrap_setup_attempted.load(std::memory_order_acquire)
+        && !bootstrap_setup_attempted.exchange(true, std::memory_order_acq_rel)) {
+      (void)EnsureLoadFromDllMainEntry();
+      embedded_dlss::RefreshDeferredStatus();
+      const bool cache_valid =
+          embedded_dlss::IsValidCache(initial_extension_cache);
+      if (!cache_valid || !embedded_dlss::WasLoadedEarly()) {
+        const auto ngx_path =
+            GetModulePath(addon_module).parent_path() / L"nvngx_dlss.dll";
+        if (std::filesystem::is_regular_file(ngx_path)) {
+          embedded_dlss::ExtensionCache refreshed;
+          if (embedded_dlss::QueryRequiredExtensionsIsolated(addon_module, &refreshed)) {
+            WriteExtensionCache(refreshed);
+            initial_extension_cache = std::move(refreshed);
+            embedded_dlss::SetRestartRequired();
+          }
+        } else {
+          embedded_dlss::SetNativeFallback("nvngx_dlss.dll is missing");
+          reshade::log::message(
+              reshade::log::level::error,
+              "Detroit DLSS: nvngx_dlss.dll is missing; Native TAA fallback is active.");
         }
-      } else {
-        embedded_dlss::SetNativeFallback("nvngx_dlss.dll is missing");
-        reshade::log::message(
-            reshade::log::level::error,
-            "Detroit DLSS: nvngx_dlss.dll is missing; Native TAA fallback is active.");
       }
     }
-  }
-  static thread_local std::uint64_t displayed_bootstrap_revision = 0u;
-  const auto bootstrap_revision = embedded_dlss::GetStatusRevision();
-  if (displayed_bootstrap_revision != bootstrap_revision) {
-    if (auto* status =
-            renodx::utils::settings::FindSetting("DLSSBootstrapStatus");
-        status != nullptr) {
-      status->label = embedded_hooks_requested_at_startup
-                          ? embedded_dlss::GetStatusText()
-                          : "Native TAA fallback: targeted DLAA backend not loaded.";
+    static thread_local std::uint64_t displayed_bootstrap_revision = 0u;
+    const auto bootstrap_revision = embedded_dlss::GetStatusRevision();
+    if (displayed_bootstrap_revision != bootstrap_revision) {
+      if (auto* status =
+              renodx::utils::settings::FindSetting("DLSSBootstrapStatus");
+          status != nullptr) {
+        status->label = embedded_hooks_requested_at_startup
+                            ? embedded_dlss::GetStatusText()
+                            : "Native TAA fallback: targeted DLAA backend not loaded.";
+      }
+      displayed_bootstrap_revision = bootstrap_revision;
     }
-    displayed_bootstrap_revision = bootstrap_revision;
+    if (!ultrawide_install_attempted.load(std::memory_order_acquire)
+        && TryTrackGameSwapchain(swapchain)
+        && UpdateUltrawideFromSwapchain(swapchain)
+        && !ultrawide_install_attempted.exchange(
+            true, std::memory_order_acq_rel)) {
+      InstallUltrawidePatch();
+    }
+    UpdateRenderDebugRuntime();
+    UpdateDofRuntimeMode();
+    TrySaveRequestedReShadeScreenshot(swapchain);
+  } else {
+    if (TryTrackGameSwapchain(swapchain)) {
+      (void)UpdateUltrawideFromSwapchain(swapchain);
+    }
+    const auto color_space = swapchain->get_color_space();
+    shader_injection.output_is_hdr =
+        IsHdrOutputColorSpace(color_space) ? 1.f : 0.f;
+    if (peak_brightness::ParseSource(peak_brightness_source)
+        != peak_brightness::Source::kManual) {
+      UpdatePeakBrightness(swapchain, false);
+    }
+    shader_injection.ui_path_active =
+        ui_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
   }
-  if (!ultrawide_install_attempted.load(std::memory_order_acquire)
-      && TryTrackGameSwapchain(swapchain)
-      && UpdateUltrawideFromSwapchain(swapchain)
-      && !ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
-    InstallUltrawidePatch();
-  }
-  const auto color_space = swapchain->get_color_space();
-  shader_injection.output_is_hdr =
-      IsHdrOutputColorSpace(color_space) ? 1.f : 0.f;
-  if (peak_brightness::ParseSource(peak_brightness_source)
-      != peak_brightness::Source::kManual) {
-    UpdatePeakBrightness(swapchain, false);
-  }
-  UpdateRenderDebugRuntime();
-  shader_injection.ui_path_active =
-      ui_path_seen.load(std::memory_order_relaxed) ? 1.f : 0.f;
-  UpdateDofRuntimeMode();
-  TrySaveRequestedReShadeScreenshot(swapchain);
   // The carrier bit describes the frame that just finished. Clear all
   // transient flags so a video/loading frame without the scene composite
   // falls back to Detroit's native BT.709 intermediate.
@@ -2928,14 +3078,20 @@ void OnPresent(
 
 }  // namespace
 
+#ifdef DETROIT_EFFECTS_ADDON
+extern "C" __declspec(dllexport) constexpr const char* NAME =
+    "RenoDX Detroit Effects";
+extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION =
+    "Optional non-HDR effects for RenoDX Detroit (Vulkan, experimental)";
+#else
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION =
-    "RenoDX for Detroit: Become Human (Vulkan, experimental)";
+    "RenoDX HDR for Detroit: Become Human (Vulkan, experimental)";
+#endif
 
 bool AttachAddon(HMODULE h_module) {
-  // The embedded Vulkan hooks must remain resident until process teardown.
-  // Pin before registering callbacks or installing hooks so DllMain never has
-  // to perform a complex explicit-unload teardown under the loader lock.
+  // Both modules publish callback addresses that remain valid until process
+  // teardown. Pin before registering either add-on with ReShade.
   HMODULE pinned_module = nullptr;
   if (!GetModuleHandleExW(
           GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
@@ -2953,6 +3109,15 @@ bool AttachAddon(HMODULE h_module) {
   }
   // register_addon initializes ReShade's cached handle for this module. No
   // other ReShade API (including config access) is valid before this point.
+  (void)addon_shared.RegisterModule();
+  if (addon_shared.data == nullptr) {
+    addon_attached.store(false, std::memory_order_release);
+    return false;
+  }
+  renodx::mods::shader::allow_multiple_push_constants = true;
+  renodx::mods::shader::force_pipeline_cloning = true;
+
+#ifdef DETROIT_EFFECTS_ADDON
   initial_extension_cache = ReadExtensionCache();
   embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest();
   native_command_hooks_requested_at_startup =
@@ -2971,8 +3136,6 @@ bool AttachAddon(HMODULE h_module) {
   }
   renodx::games::detroitbecomehuman::dlss_bridge_client::client.SetApiProvider(
       &embedded_dlss::GetApi);
-  renodx::mods::shader::allow_multiple_push_constants = true;
-  renodx::mods::shader::force_pipeline_cloning = true;
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &OnAspectRatioModeChanged);
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
@@ -2984,8 +3147,6 @@ bool AttachAddon(HMODULE h_module) {
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &OnRenderDebugSettingsChanged);
   renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
-      &OnPeakBrightnessSettingsChanged);
-  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
       &SyncDlaaSharpening);
   reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
   reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
@@ -2995,22 +3156,37 @@ bool AttachAddon(HMODULE h_module) {
   reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
   reshade::register_event<reshade::addon_event::present>(OnPresent);
   MigrateDlssModeSettings();
-  MigrateToneMapTypeSettings();
-  renodx::utils::settings::Use(DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
+  renodx::utils::settings::Use(
+      DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
   temporal_capture::Use(DLL_PROCESS_ATTACH);
-  // Target-aware UI replacement queries the command list's current render
-  // targets. Attach the swapchain utility explicitly before any custom shader
-  // callback can call GetRenderTargets(). The add-on is pinned, so teardown is
-  // intentionally deferred to process termination with the rest of RenoDX.
-  renodx::utils::swapchain::Use(DLL_PROCESS_ATTACH);
-  renodx::mods::shader::Use(DLL_PROCESS_ATTACH, custom_shaders, &shader_injection);
+  renodx::mods::shader::use_shared_pipeline_injection = true;
+  renodx::mods::shader::Use(
+      DLL_PROCESS_ATTACH, effect_shaders, &shader_injection);
   OnAspectRatioModeChanged();
   OnDlssModeChanged();
   OnDofSettingsChanged();
   OnExperimentalMotionBlurSettingsChanged();
   OnRenderDebugSettingsChanged();
+  addon_shared.data->effects_api.store(&effects_api, std::memory_order_release);
+  SyncDlaaSharpening();
+#else
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &OnPeakBrightnessSettingsChanged);
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &SyncDlaaSharpening);
+  reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+  reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
+  reshade::register_event<reshade::addon_event::present>(OnPresent);
+  MigrateToneMapTypeSettings();
+  renodx::utils::settings::Use(
+      DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
+  // HDR UI replacement queries the active render targets.
+  renodx::utils::swapchain::Use(DLL_PROCESS_ATTACH);
+  renodx::mods::shader::Use(
+      DLL_PROCESS_ATTACH, hdr_shaders, &shader_injection);
   OnPeakBrightnessSettingsChanged();
   SyncDlaaSharpening();
+#endif
   return true;
 }
 
@@ -3025,10 +3201,12 @@ void DetachAddon(HMODULE h_module, bool process_terminating) {
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, LPVOID reserved) {
   if (reason == DLL_PROCESS_ATTACH) {
+#ifdef DETROIT_EFFECTS_ADDON
     if (embedded_dlss::IsExtensionProbeHost()) {
       DisableThreadLibraryCalls(h_module);
       return TRUE;
     }
+#endif
     return AttachAddon(h_module) ? TRUE : FALSE;
   }
   if (reason == DLL_PROCESS_DETACH) DetachAddon(h_module, reserved != nullptr);

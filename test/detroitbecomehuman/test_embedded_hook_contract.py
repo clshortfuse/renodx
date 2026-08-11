@@ -16,6 +16,9 @@ def main() -> None:
     args = parser.parse_args()
     source = (args.source_dir / "dlss" / "vulkan_layer.cpp").read_text(encoding="utf-8")
     addon = (args.source_dir / "addon.cpp").read_text(encoding="utf-8")
+    effects_addon = (
+        args.source_dir.parent / "detroitbecomehuman-effects" / "addon.cpp"
+    ).read_text(encoding="utf-8")
     cmake = (args.source_dir / "dlss" / "CMakeLists.txt").read_text(encoding="utf-8")
     bridge = (args.source_dir / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
     policy = (args.source_dir / "dlss_policy.hpp").read_text(encoding="utf-8")
@@ -31,6 +34,9 @@ def main() -> None:
     )
     command_action = (
         args.source_dir.parent.parent / "utils" / "command_action.hpp"
+    ).read_text(encoding="utf-8")
+    shader_mod = (
+        args.source_dir.parent.parent / "mods" / "shader.hpp"
     ).read_text(encoding="utf-8")
 
     for hook in (
@@ -720,12 +726,13 @@ def main() -> None:
     require(addon, "embedded_hooks_requested_at_startup = ReadStartupEmbeddedHookRequest()")
     require(addon, "if (embedded_hooks_requested_at_startup)")
     require(addon, "embedded_hooks_active.store(")
-    require(
+    if not re.search(
+        r"embedded_hooks_requested_at_startup\s*"
+        r"&& !bootstrap_setup_attempted\.load\(std::memory_order_acquire\)\s*"
+        r"&& !bootstrap_setup_attempted\.exchange",
         addon,
-        "embedded_hooks_requested_at_startup\n"
-        "      && !bootstrap_setup_attempted.load(std::memory_order_acquire)\n"
-        "      && !bootstrap_setup_attempted.exchange",
-    )
+    ):
+        raise AssertionError("deferred bootstrap must remain single-shot")
     tracking_refresh_start = addon.index("void RefreshEmbeddedCommandTracking()")
     tracking_refresh_end = addon.index("void ApplyDlssMode(", tracking_refresh_start)
     tracking_refresh = addon[tracking_refresh_start:tracking_refresh_end]
@@ -766,6 +773,47 @@ def main() -> None:
             "the addon must be pinned before ReShade registration, config access, "
             "startup feature selection, and conditional early hook attachment"
         )
+
+    require(effects_addon, "#define DETROIT_EFFECTS_ADDON")
+    require(effects_addon, '#include "../detroitbecomehuman/addon.cpp"')
+    require(cmake, "target_sources(detroitbecomehuman-effects PRIVATE")
+    if "target_sources(detroitbecomehuman PRIVATE" in cmake:
+        raise AssertionError("HDR core must not link the Vulkan DLSS backend")
+    require(
+        addon,
+        "#ifndef DETROIT_EFFECTS_ADDON\n"
+        "namespace renodx::games::detroitbecomehuman::dlss::embedded",
+    )
+    effects_start = attach.index("#ifdef DETROIT_EFFECTS_ADDON")
+    hdr_start = attach.index("#else", effects_start)
+    split_end = attach.index("#endif", hdr_start)
+    effects_attach = attach[effects_start:hdr_start]
+    hdr_attach = attach[hdr_start:split_end]
+    for effect_registration in (
+        "embedded_dlss::AttachEarlyHooks",
+        "temporal_capture::Use(DLL_PROCESS_ATTACH)",
+        "effect_shaders",
+        "OnInitEffectRuntime",
+        "OnDestroyResource",
+    ):
+        require(effects_attach, effect_registration)
+        if effect_registration in hdr_attach:
+            raise AssertionError(
+                "HDR core must not register optional effect logic: "
+                + effect_registration
+            )
+    require(hdr_attach, "hdr_shaders")
+    require(
+        effects_attach,
+        "renodx::mods::shader::use_shared_pipeline_injection = true;",
+    )
+    if "use_shared_pipeline_injection" in hdr_attach:
+        raise AssertionError("HDR core must own the shared pipeline injection")
+    require(
+        shader_mod,
+        "if (!use_shared_pipeline_injection\n"
+        "          && (mods::shader::use_pipeline_layout_cloning",
+    )
 
     detach_start = addon.index("void DetachAddon(HMODULE h_module")
     detach_end = addon.index("BOOL APIENTRY DllMain", detach_start)

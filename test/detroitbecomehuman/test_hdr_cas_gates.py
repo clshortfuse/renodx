@@ -560,7 +560,7 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"\(flags\s*&\s*~flag\)\s*;",
         )
         self.assertIn(
-            "shader_injection.runtime_flags = static_cast<float>(flags);",
+            "injection.runtime_flags = static_cast<float>(flags);",
             runtime_helpers,
         )
         should_write = runtime_helpers[
@@ -750,7 +750,7 @@ class HDRAndCASGateTests(unittest.TestCase):
             addon.index("bool OnSceneDraw(") :
             addon.index("bool OnFinalCasDraw(")
         ]
-        dlss_update = on_scene_draw.index("ApplyDlssOutputMarker(")
+        dlss_update = on_scene_draw.index("SyncHdrShaderInjection(")
         wide_update = on_scene_draw.index(
             "SetRuntimeFlag(\n"
             "      RUNTIME_FLAG_PSYCHOV_BT2020,"
@@ -760,7 +760,17 @@ class HDRAndCASGateTests(unittest.TestCase):
             "ShouldWritePsychoVBt2020Intermediate()",
             on_scene_draw[wide_update:],
         )
-        self.assertIn("render_debug_runtime_controller.Observe(", on_scene_draw)
+        effects_sync = addon[
+            addon.index("void SyncEffectsForHdr(") :
+            addon.index("const EffectsApi effects_api", addon.index("void SyncEffectsForHdr("))
+        ]
+        self.assertIn("temporal_capture::MarkMainTemporalCommandList", effects_sync)
+        self.assertIn("render_debug_runtime_controller.Observe(", effects_sync)
+        self.assertIn(
+            "destination->scene_path_active = shader_injection.scene_path_active;",
+            effects_sync,
+        )
+        self.assertIn("ApplyDlssOutputMarker(", effects_sync)
         self.assertNotIn("OnSceneDrawn", addon)
         self.assertNotIn("OnTemporalDrawn", addon)
 
@@ -813,8 +823,11 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertRegex(
             addon,
             r"bool\s+OnSceneDraw\([^)]*\)\s*\{[\s\S]*?"
-            r"MarkMainTemporalCommandList\(command_list->get_native\(\)\)"
-            r";[\s\S]*?ApplyDlssOutputMarker\(",
+            r"SyncHdrShaderInjection\(command_list, true\)",
+        )
+        self.assertIn(
+            "api->sync_shader_injection(native, scene_composite, &shader_injection);",
+            addon,
         )
         mark_start = temporal_capture.index("inline void MarkMainTemporalCommandList(")
         mark_end = temporal_capture.index(

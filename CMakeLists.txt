@@ -672,7 +672,7 @@ file(GLOB ADDON_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/**/**/ad
 foreach(FILE ${ADDON_FILES})
   cmake_path(GET FILE PARENT_PATH ADDON_PATH)
   cmake_path(GET ADDON_PATH FILENAME ADDON) # treat as filename
-  if(ADDON STREQUAL "detroitbecomehuman" AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+  if(ADDON MATCHES "^detroitbecomehuman" AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(STATUS "Skipping ${ADDON}: 64-bit only")
     continue()
   endif()

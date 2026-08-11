@@ -324,9 +324,14 @@ class PsychoVContractTests(unittest.TestCase):
                 )
         self.assertIn('"ToneMapType"', self.addon)
         self.assertIn('"ToneMapTypeV2"', self.addon)
+        attach = self.addon[self.addon.index("bool AttachAddon(") :]
+        effects_start = attach.index("#ifdef DETROIT_EFFECTS_ADDON")
+        hdr_start = attach.index("#else", effects_start)
+        hdr_end = attach.index("#endif", hdr_start)
+        hdr_attach = attach[hdr_start:hdr_end]
         self.assertLess(
-            self.addon.index("MigrateToneMapTypeSettings();"),
-            self.addon.index("renodx::utils::settings::Use("),
+            hdr_attach.index("MigrateToneMapTypeSettings();"),
+            hdr_attach.index("renodx::utils::settings::Use("),
         )
         self.assertNotIn("tone_map_method::REINHARD", self.shared)
         self.assertIn("tone_map_method::DANIELE", self.shared)

@@ -14,7 +14,15 @@ foreach(DETROIT_DLSS_REQUIRED_FILE IN ITEMS
   endif()
 endforeach()
 
-target_sources(detroitbecomehuman PRIVATE
+build_shader_target(
+  detroitbecomehuman_dlss_embedded
+  "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+)
+if(TARGET renodx_test_suites)
+  add_dependencies(renodx_test_suites detroitbecomehuman_dlss_embedded-shaders)
+endif()
+
+target_sources(detroitbecomehuman-effects PRIVATE
   vulkan_layer.cpp
   extension_probe.cpp
   embedded_bootstrap.hpp
@@ -26,34 +34,40 @@ target_sources(detroitbecomehuman PRIVATE
   feature_recording_registry.hpp
   rgb9e5_adapter.hpp
 )
-build_shader_target(
-  detroitbecomehuman_dlss_embedded
-  "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+add_dependencies(
+  detroitbecomehuman-effects
+  detroitbecomehuman_dlss_embedded-shaders
 )
-add_dependencies(detroitbecomehuman detroitbecomehuman_dlss_embedded-shaders)
-if(TARGET renodx_test_suites)
-  add_dependencies(renodx_test_suites detroitbecomehuman_dlss_embedded-shaders)
-endif()
-
-target_compile_definitions(detroitbecomehuman PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_include_directories(detroitbecomehuman PRIVATE
+target_compile_definitions(
+  detroitbecomehuman-effects PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
+)
+target_include_directories(detroitbecomehuman-effects PRIVATE
   "${DETROIT_DLSS_SDK_ROOT}/include"
   "${CMAKE_CURRENT_SOURCE_DIR}/.."
   "${CMAKE_CURRENT_BINARY_DIR}/detroitbecomehuman_dlss_embedded.include"
 )
-target_link_libraries(detroitbecomehuman PRIVATE
+target_link_libraries(detroitbecomehuman-effects PRIVATE
   renodx_dlss_vulkan
   Vulkan::Vulkan
   bcrypt
   "$<$<CONFIG:Debug>:${DETROIT_DLSS_NGX_LIB_DIR}/nvsdk_ngx_khr_s_dbg.lib>"
   "$<$<NOT:$<CONFIG:Debug>>:${DETROIT_DLSS_NGX_LIB_DIR}/nvsdk_ngx_khr_s.lib>"
 )
+
+target_include_directories(detroitbecomehuman-effects BEFORE PRIVATE
+  "${CMAKE_BINARY_DIR}/detroitbecomehuman.include"
+)
+add_dependencies(detroitbecomehuman-effects detroitbecomehuman-shaders)
+
 add_custom_target(detroitbecomehuman_dlss_runtime_copy
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${DETROIT_DLSS_NGX_DLL}"
-    "$<TARGET_FILE_DIR:detroitbecomehuman>/nvngx_dlss.dll"
+    "$<TARGET_FILE_DIR:detroitbecomehuman-effects>/nvngx_dlss.dll"
 )
-add_dependencies(detroitbecomehuman detroitbecomehuman_dlss_runtime_copy)
+add_dependencies(
+  detroitbecomehuman-effects
+  detroitbecomehuman_dlss_runtime_copy
+)
 
 if(TARGET detroitbecomehuman_rgb9e5_adapter_tests)
   target_sources(detroitbecomehuman_rgb9e5_adapter_tests PRIVATE adapter_shaders.cpp)
