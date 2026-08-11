@@ -49,6 +49,19 @@ def main() -> None:
     require(source, "const auto downstream = reshade_get_device_proc_addr(device, name);")
     require(source, "if (const auto tracked = FindTrackedDeviceFunction(name); tracked != nullptr)")
     require(source, "return downstream;")
+    require(source, "constexpr bool kBootstrapOnlyDiagnostic = true;")
+    require(source, '"Bootstrap-only diagnostic"')
+    for bootstrap_hook in (
+        "HookCreateDevice",
+        "HookDestroyInstance",
+        "HookDestroyDevice",
+    ):
+        require(
+            source,
+            f"return reinterpret_cast<PFN_vkVoidFunction>(&{bootstrap_hook});",
+        )
+    require(source, "enabled && !kBootstrapOnlyDiagnostic")
+    require(source, "install_native_command_hooks && !kBootstrapOnlyDiagnostic")
     require(source, "CreateInternalFeatureFence(state, snapshot)")
     require(source, "feature_command_buffer_bloom")
     require(source, "published_command_buffer_bloom")
@@ -166,6 +179,14 @@ def main() -> None:
     tracked_function_start = source.index("PFN_vkVoidFunction FindTrackedDeviceFunction(")
     tracked_function_end = source.index("void DETROIT_DLSS_CALL BridgeShutdown", tracked_function_start)
     tracked_function = source[tracked_function_start:tracked_function_end]
+    diagnostic_bypass = tracked_function.index(
+        "if constexpr (kBootstrapOnlyDiagnostic) return nullptr;"
+    )
+    first_runtime_wrapper = tracked_function.index("std::strcmp")
+    if diagnostic_bypass >= first_runtime_wrapper:
+        raise AssertionError(
+            "bootstrap-only diagnostic must bypass every Vulkan runtime wrapper"
+        )
     for command_bind in ("vkCmdBindPipeline", "vkCmdBindDescriptorSets"):
         require(
             tracked_function,
@@ -239,6 +260,14 @@ def main() -> None:
     context_end = source.index("BridgeGetTemporalConstants(", context_start)
     context = source[context_start:context_end]
     require(context, "DETROIT_DLSS_CAPABILITY_DLAA")
+    require(
+        context,
+        "if (!kBootstrapOnlyDiagnostic && ngx_available && state->adapter_available",
+    )
+    require(
+        context,
+        "!kBootstrapOnlyDiagnostic && EnsureNgxInitialized(state.get())",
+    )
     for removed_capability in (
         "DETROIT_DLSS_CAPABILITY_SUPER_RESOLUTION",
         "DETROIT_DLSS_CAPABILITY_RENDER_SCALE_CONTROL",

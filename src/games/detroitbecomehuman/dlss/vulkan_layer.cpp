@@ -55,6 +55,8 @@ namespace {
 
 constexpr char kProjectId[] = "910b88f3-e60e-4c9d-a959-9a46b3e7dcc3";
 constexpr char kEngineVersion[] = "Build12158144";
+// ponytail: temporary A/B gate; remove after the FPS verdict.
+constexpr bool kBootstrapOnlyDiagnostic = true;
 constexpr std::uint64_t kInstanceExtensionsEnabled = UINT64_C(1) << 0u;
 constexpr std::uint64_t kDeviceExtensionsEnabled = UINT64_C(1) << 1u;
 constexpr std::uint64_t kReflectedTemporalConstantsSize = 496u;
@@ -2058,10 +2060,15 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetContext(DetroitDlssBootstrapCon
   if (state->destroying.load(std::memory_order_acquire)) {
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
-  const bool ngx_available = EnsureNgxInitialized(state.get());
-  SetBootstrapStatus(
-      ngx_available ? BootstrapStatus::kDlaaReady : BootstrapStatus::kNativeFallback,
-      ngx_available ? "DLAA ready" : "NGX initialization or capability check failed");
+  const bool ngx_available =
+      !kBootstrapOnlyDiagnostic && EnsureNgxInitialized(state.get());
+  if constexpr (kBootstrapOnlyDiagnostic) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "Bootstrap-only diagnostic");
+  } else {
+    SetBootstrapStatus(
+        ngx_available ? BootstrapStatus::kDlaaReady : BootstrapStatus::kNativeFallback,
+        ngx_available ? "DLAA ready" : "NGX initialization or capability check failed");
+  }
 
   const auto struct_size = context->struct_size;
   *context = {};
@@ -2078,7 +2085,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetContext(DetroitDlssBootstrapCon
   if (state->supported_executable) {
     context->capability_flags |= DETROIT_DLSS_CAPABILITY_SUPPORTED_EXECUTABLE;
   }
-  if (ngx_available && state->adapter_available
+  if (!kBootstrapOnlyDiagnostic && ngx_available && state->adapter_available
       && renodx::games::detroitbecomehuman::supported_build::
           kTemporalInputsEmpiricallyVerified) {
     context->capability_flags |= DETROIT_DLSS_CAPABILITY_DLAA
@@ -5702,6 +5709,7 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(
 }
 
 PFN_vkVoidFunction FindTrackedDeviceFunction(const char* name) {
+  if constexpr (kBootstrapOnlyDiagnostic) return nullptr;
   if (std::strcmp(name, "vkCreateDescriptorSetLayout") == 0) {
     return reinterpret_cast<PFN_vkVoidFunction>(&LayerCreateDescriptorSetLayout);
   }
@@ -6289,7 +6297,8 @@ bool SerializeExtensions(
 namespace renodx::games::detroitbecomehuman::dlss::embedded {
 
 void SetRuntimeCommandTracking(bool enabled) {
-  runtime_command_tracking_enabled.store(enabled, std::memory_order_release);
+  runtime_command_tracking_enabled.store(
+      enabled && !kBootstrapOnlyDiagnostic, std::memory_order_release);
 }
 
 bool AttachEarlyHooks(
@@ -6297,12 +6306,16 @@ bool AttachEarlyHooks(
     const ExtensionCache& cache,
     bool install_native_command_hooks) {
   layer_module = addon_module;
+  const bool runtime_hooks_enabled =
+      install_native_command_hooks && !kBootstrapOnlyDiagnostic;
   native_command_hooks_installed.store(
-      install_native_command_hooks, std::memory_order_release);
+      runtime_hooks_enabled, std::memory_order_release);
   Trace(
-      install_native_command_hooks
-          ? "Targeted Vulkan command hooks installed with mode-gated tracking"
-          : "Targeted Vulkan command hooks disabled");
+      kBootstrapOnlyDiagnostic
+          ? "Bootstrap-only diagnostic"
+          : runtime_hooks_enabled
+                ? "Targeted Vulkan command hooks installed with mode-gated tracking"
+                : "Targeted Vulkan command hooks disabled");
   if (hooks_attached.load(std::memory_order_acquire)) return true;
   const bool cache_valid = CanAttachEarlyHooks(cache);
   {
@@ -6353,9 +6366,13 @@ bool AttachEarlyHooks(
     return false;
   }
   hooks_attached.store(true, std::memory_order_release);
-  SetBootstrapStatus(
-      cache_valid ? BootstrapStatus::kEarlyHookActive : BootstrapStatus::kFirstRunSetup,
-      cache_valid ? "Early hook active" : "First-run setup");
+  if constexpr (kBootstrapOnlyDiagnostic) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "Bootstrap-only diagnostic");
+  } else {
+    SetBootstrapStatus(
+        cache_valid ? BootstrapStatus::kEarlyHookActive : BootstrapStatus::kFirstRunSetup,
+        cache_valid ? "Early hook active" : "First-run setup");
+  }
   return true;
 }
 
@@ -6449,6 +6466,10 @@ bool QueryRequiredExtensions(ExtensionCache* cache) {
 
 void RefreshDeferredStatus() {
   if (!VerifySupportedExecutable()) return;
+  if constexpr (kBootstrapOnlyDiagnostic) {
+    SetBootstrapStatus(BootstrapStatus::kNativeFallback, "Bootstrap-only diagnostic");
+    return;
+  }
   const auto state = GetActiveDevice();
   if (state == nullptr) {
     SetBootstrapStatus(BootstrapStatus::kFirstRunSetup, "Waiting for Vulkan device");
