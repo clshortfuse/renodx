@@ -113,6 +113,26 @@ def main() -> None:
     require(temporal, "GetTemporalDescriptorBinding(")
     require(temporal, "temporal_binding.descriptor_set")
     require(temporal, "addon_event::bind_descriptor_tables")
+    bind_callback_start = temporal.index("OnBindTemporalDescriptorTables(")
+    bind_callback_end = temporal.index(
+        "GetTemporalDescriptorBinding(", bind_callback_start
+    )
+    bind_callback = temporal[bind_callback_start:bind_callback_end]
+    native_fast_gate = bind_callback.index(
+        "temporal_descriptor_binding_tracking_epoch.load"
+    )
+    private_data_lookup = bind_callback.index(
+        "renodx::utils::data::Get<TemporalDescriptorBindingData>"
+    )
+    if native_fast_gate >= private_data_lookup:
+        raise AssertionError(
+            "Native TAA descriptor-bind fast path must return before private-data lookup"
+        )
+    require(
+        temporal,
+        "temporal_descriptor_binding_tracking_epoch.store(\n"
+        "        0u, std::memory_order_release);",
+    )
     query_mode_start = snapshot_end
     query_mode_end = source.index("BridgeConfigure(", query_mode_start)
     query_mode = source[query_mode_start:query_mode_end]

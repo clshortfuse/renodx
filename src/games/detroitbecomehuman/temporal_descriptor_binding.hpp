@@ -23,15 +23,25 @@ struct Snapshot {
 class Tracker final {
  public:
   void Reset() noexcept {
+    tracking_epoch_ = 0u;
     pipeline_layout_ = 0u;
     descriptor_set_ = 0u;
   }
 
   void ObserveComputeBind(
+      std::uint64_t tracking_epoch,
       std::uint64_t pipeline_layout,
       std::uint32_t first_set,
       std::uint32_t descriptor_set_count,
       std::uint64_t first_descriptor_set) noexcept {
+    if (tracking_epoch == 0u) {
+      Reset();
+      return;
+    }
+    if (tracking_epoch_ != tracking_epoch) {
+      Reset();
+      tracking_epoch_ = tracking_epoch;
+    }
     if (pipeline_layout_ != pipeline_layout) {
       descriptor_set_ = 0u;
     }
@@ -47,8 +57,11 @@ class Tracker final {
   }
 
   [[nodiscard]] Snapshot Resolve(
+      std::uint64_t tracking_epoch,
       std::uint64_t expected_pipeline_layout) const noexcept {
-    if (expected_pipeline_layout == 0u
+    if (tracking_epoch == 0u
+        || tracking_epoch_ != tracking_epoch
+        || expected_pipeline_layout == 0u
         || pipeline_layout_ != expected_pipeline_layout
         || descriptor_set_ == 0u) {
       return {};
@@ -60,6 +73,7 @@ class Tracker final {
   }
 
  private:
+  std::uint64_t tracking_epoch_ = 0u;
   std::uint64_t pipeline_layout_ = 0u;
   std::uint64_t descriptor_set_ = 0u;
 };
