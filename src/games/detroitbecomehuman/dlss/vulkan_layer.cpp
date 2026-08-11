@@ -97,11 +97,13 @@ std::atomic<bool> runtime_command_tracking_enabled = false;
 std::atomic<bool> native_command_hooks_installed = false;
 std::atomic<std::uintptr_t> fast_command_dispatch_key = 0u;
 std::atomic<PFN_vkBeginCommandBuffer> fast_begin_command_buffer = nullptr;
+std::atomic<PFN_vkUpdateDescriptorSets> fast_update_descriptor_sets = nullptr;
 [[maybe_unused]] std::atomic<PFN_vkCmdBindPipeline>
     fast_cmd_bind_pipeline = nullptr;
 std::atomic<PFN_vkCmdBindDescriptorSets> fast_cmd_bind_descriptor_sets = nullptr;
 
 static_assert(std::atomic<PFN_vkBeginCommandBuffer>::is_always_lock_free);
+static_assert(std::atomic<PFN_vkUpdateDescriptorSets>::is_always_lock_free);
 static_assert(std::atomic<PFN_vkCmdBindDescriptorSets>::is_always_lock_free);
 
 PFN_vkCreateInstance reshade_create_instance = nullptr;
@@ -850,6 +852,17 @@ struct ThreadComputeCommandState {
   bool temporal_descriptor_set_bound = false;
   bool dof_composite_descriptor_set_bound = false;
 };
+
+struct ThreadDynamicDescriptorUpdateScope {
+  VkDevice device = VK_NULL_HANDLE;
+  std::uint32_t write_count = 0u;
+  const VkWriteDescriptorSet* writes = nullptr;
+};
+
+ThreadDynamicDescriptorUpdateScope& GetCurrentDynamicDescriptorUpdateScope() {
+  thread_local ThreadDynamicDescriptorUpdateScope scope;
+  return scope;
+}
 
 ThreadComputeCommandState& GetCurrentThreadComputeCommandState() {
   thread_local ThreadComputeCommandState state;
@@ -5497,6 +5510,39 @@ VKAPI_ATTR void VKAPI_CALL LayerDestroyCommandPool(
   DiscardFeatureCommandBuffers(state, command_buffers);
 }
 
+VKAPI_ATTR void VKAPI_CALL LayerUpdateDynamicConstantBufferDescriptorSets(
+    VkDevice device,
+    std::uint32_t descriptor_write_count,
+    const VkWriteDescriptorSet* descriptor_writes,
+    std::uint32_t descriptor_copy_count,
+    const VkCopyDescriptorSet* descriptor_copies) {
+  PFN_vkUpdateDescriptorSets trampoline = nullptr;
+  if (fast_command_dispatch_key.load(std::memory_order_acquire)
+      == DispatchKey(device)) {
+    trampoline = fast_update_descriptor_sets.load(std::memory_order_relaxed);
+  }
+  if (trampoline == nullptr) {
+    auto* state = FindDeviceFast(device);
+    if (state != nullptr) trampoline = state->next_update_descriptor_sets;
+  }
+  if (trampoline == nullptr) return;
+
+  auto& current = GetCurrentDynamicDescriptorUpdateScope();
+  const auto previous = current;
+  current = {
+      .device = device,
+      .write_count = descriptor_write_count,
+      .writes = descriptor_writes,
+  };
+  trampoline(
+      device,
+      descriptor_write_count,
+      descriptor_writes,
+      descriptor_copy_count,
+      descriptor_copies);
+  current = previous;
+}
+
 VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(
     VkCommandBuffer command_buffer, const VkCommandBufferBeginInfo* begin_info) {
   PFN_vkBeginCommandBuffer trampoline = nullptr;
@@ -5991,6 +6037,10 @@ PFN_vkVoidFunction FindTrackedDeviceFunction(const char* name) {
   if (std::strcmp(name, "vkCmdBindDescriptorSets") == 0) {
     return reinterpret_cast<PFN_vkVoidFunction>(&LayerCmdBindDescriptorSets);
   }
+  if (std::strcmp(name, "vkUpdateDescriptorSets") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(
+        &LayerUpdateDynamicConstantBufferDescriptorSets);
+  }
   return nullptr;
 }
 
@@ -6290,6 +6340,8 @@ VKAPI_ATTR VkResult VKAPI_CALL HookCreateDevice(
   if (installed_as_fast_device) {
     fast_begin_command_buffer.store(
         state->next_begin_command_buffer, std::memory_order_relaxed);
+    fast_update_descriptor_sets.store(
+        state->next_update_descriptor_sets, std::memory_order_relaxed);
     fast_cmd_bind_descriptor_sets.store(
         state->next_cmd_bind_descriptor_sets, std::memory_order_relaxed);
     fast_command_dispatch_key.store(
@@ -6339,6 +6391,7 @@ VKAPI_ATTR void VKAPI_CALL HookDestroyDevice(
           std::memory_order_acq_rel,
           std::memory_order_acquire)) {
     fast_begin_command_buffer.store(nullptr, std::memory_order_relaxed);
+    fast_update_descriptor_sets.store(nullptr, std::memory_order_relaxed);
     fast_cmd_bind_descriptor_sets.store(nullptr, std::memory_order_relaxed);
   }
   {
@@ -6460,6 +6513,41 @@ bool GetCommandRecordingMetadata(
       descriptor_set,
       false,
       metadata);
+}
+
+bool GetCurrentDynamicConstantBufferBinding(
+    std::uint64_t device,
+    std::uint64_t descriptor_set,
+    DynamicConstantBufferBinding* binding) {
+  if (binding == nullptr) return false;
+  *binding = {};
+  const auto& current = GetCurrentDynamicDescriptorUpdateScope();
+  if (device == 0u || descriptor_set == 0u
+      || ToOpaque(current.device) != device || current.write_count == 0u
+      || current.writes == nullptr) {
+    return false;
+  }
+
+  bool found = false;
+  for (std::uint32_t index = 0u; index < current.write_count; ++index) {
+    const auto& write = current.writes[index];
+    if (ToOpaque(write.dstSet) != descriptor_set
+        || write.dstBinding != DETROIT_DLSS_TAA_CONSTANT_BINDING_52
+        || write.dstArrayElement != 0u || write.descriptorCount != 1u
+        || write.descriptorType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+        || write.pBufferInfo == nullptr
+        || write.pBufferInfo[0u].buffer == VK_NULL_HANDLE) {
+      continue;
+    }
+    *binding = {
+        .buffer = ToOpaque(write.pBufferInfo[0u].buffer),
+        .offset = write.pBufferInfo[0u].offset,
+        .range = write.pBufferInfo[0u].range,
+        .descriptor_type = static_cast<std::uint32_t>(write.descriptorType),
+    };
+    found = true;
+  }
+  return found;
 }
 
 bool ClaimCommandRecordingEvaluation(

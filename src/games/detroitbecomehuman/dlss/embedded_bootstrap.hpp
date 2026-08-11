@@ -167,6 +167,21 @@ struct CommandRecordingMetadata {
   bool evaluation_claimed = false;
 };
 
+struct DynamicConstantBufferBinding {
+  std::uint64_t buffer = 0u;
+  std::uint64_t offset = 0u;
+  std::uint64_t range = 0u;
+  std::uint32_t descriptor_type = 0u;
+};
+
+// ReShade invokes descriptor-table events synchronously from
+// vkUpdateDescriptorSets. This exposes only the b52 write active on that same
+// thread, so no process-wide descriptor registry is needed.
+[[nodiscard]] bool GetCurrentDynamicConstantBufferBinding(
+    std::uint64_t device,
+    std::uint64_t descriptor_set,
+    DynamicConstantBufferBinding* binding);
+
 // These calls read only the current recording thread's TLS. A mismatch is a
 // safe Native TAA fallback, never a search through shared Vulkan state.
 [[nodiscard]] bool GetCommandRecordingMetadata(

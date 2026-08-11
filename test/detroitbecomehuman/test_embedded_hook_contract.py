@@ -51,14 +51,18 @@ def main() -> None:
     require(bootstrap, "inline constexpr bool kDlssRuntimeEnabled = true;")
     require(bootstrap, "return kDlssRuntimeEnabled;")
 
-    # Ordinary Vulkan dispatch exposes only the two narrow DLAA hooks.
+    # Ordinary Vulkan dispatch exposes only the three narrow DLAA hooks.
     tracked = section(
         source,
         "PFN_vkVoidFunction FindTrackedDeviceFunction(",
         "void DETROIT_DLSS_CALL BridgeShutdown",
     )
     tracked_names = re.findall(r'std::strcmp\(name, "([^"]+)"\)', tracked)
-    if tracked_names != ["vkBeginCommandBuffer", "vkCmdBindDescriptorSets"]:
+    if tracked_names != [
+        "vkBeginCommandBuffer",
+        "vkCmdBindDescriptorSets",
+        "vkUpdateDescriptorSets",
+    ]:
         raise AssertionError(f"unexpected production Vulkan wrappers: {tracked_names}")
     for forbidden in (
         "vkQueueSubmit",
@@ -68,7 +72,6 @@ def main() -> None:
         "vkWaitForFences",
         "vkGetFenceStatus",
         "vkResetCommandBuffer",
-        "vkUpdateDescriptorSets",
         "vkMapMemory",
         "vkUnmapMemory",
         "vkCreateImage",
@@ -103,6 +106,34 @@ def main() -> None:
         if forbidden in bind:
             raise AssertionError(f"descriptor bind hot path must stay TLS-only: {forbidden}")
 
+    update = section(
+        source,
+        "VKAPI_ATTR void VKAPI_CALL LayerUpdateDynamicConstantBufferDescriptorSets(",
+        "VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(",
+    )
+    require(update, "fast_update_descriptor_sets.load")
+    require(update, "GetCurrentDynamicDescriptorUpdateScope()")
+    require(update, "const auto previous = current")
+    require(update, "current = previous")
+    for forbidden in ("tracking_mutex", "state->mutex", "unordered_map"):
+        if forbidden in update:
+            raise AssertionError(f"descriptor update hot path must stay TLS-only: {forbidden}")
+
+    dynamic_binding = section(
+        source,
+        "bool GetCurrentDynamicConstantBufferBinding(",
+        "bool ClaimCommandRecordingEvaluation(",
+    )
+    for validation in (
+        "ToOpaque(current.device) != device",
+        "ToOpaque(write.dstSet) != descriptor_set",
+        "write.dstBinding != DETROIT_DLSS_TAA_CONSTANT_BINDING_52",
+        "write.dstArrayElement != 0u",
+        "write.descriptorCount != 1u",
+        "write.descriptorType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC",
+    ):
+        require(dynamic_binding, validation)
+
     metadata = section(source, "bool ReadCommandRecordingMetadata(", "class ThreadComputeCommandStates")
     for validation in (
         "!local.recording_active",
@@ -128,6 +159,7 @@ def main() -> None:
     require(temporal, "kSparseBindings = {\n    1u, 3u, 4u, 5u, 7u, 16u, 52u}")
     require(temporal, "renodx::utils::state::GetCurrentState(context.cmd_list)")
     require(temporal, "ResolveSparseBindings(")
+    require(temporal, "GetCurrentDynamicConstantBufferBinding(")
     require(temporal, "GetCommandRecordingMetadata(")
     require(temporal, "device->map_buffer_region(")
     require(temporal, "reshade::api::map_access::read_only")

@@ -409,13 +409,29 @@ QueryDlssOutputAuthorizationForCommandList(std::uint64_t command_list) {
 }
 
 [[nodiscard]] inline SparseDescriptorSlot ReadSparseDescriptor(
+    reshade::api::device* device,
     const reshade::api::descriptor_table_update& update) {
-  if (update.count == 0u || update.array_offset != 0u
-      || update.descriptors == nullptr) {
+  if (update.array_offset != 0u) {
     return {};
   }
 
   SparseDescriptorSlot slot = {.type = update.type};
+  if (update.count == 0u || update.descriptors == nullptr) {
+    dlss::embedded::DynamicConstantBufferBinding binding = {};
+    if (device != nullptr
+        && update.binding == DETROIT_DLSS_TAA_CONSTANT_BINDING_52
+        && static_cast<std::uint32_t>(update.type) == 8u
+        && dlss::embedded::GetCurrentDynamicConstantBufferBinding(
+            device->get_native(), update.table.handle, &binding)) {
+      slot.buffer = {
+          .buffer = reshade::api::resource{binding.buffer},
+          .offset = binding.offset,
+          .size = binding.range,
+      };
+      slot.valid = binding.buffer != 0u;
+    }
+    return slot;
+  }
   switch (update.type) {
     case reshade::api::descriptor_type::sampler_with_resource_view:
       slot.view = static_cast<const reshade::api::sampler_with_resource_view*>(
@@ -484,7 +500,7 @@ inline bool OnUpdateSparseDescriptorTables(
       table = {};
       table.epoch = epoch;
     }
-    table.slots[*slot_index] = ReadSparseDescriptor(update);
+    table.slots[*slot_index] = ReadSparseDescriptor(device, update);
   }
   return false;
 }
