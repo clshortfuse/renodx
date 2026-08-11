@@ -51,6 +51,7 @@ def main() -> None:
     require(source, "return downstream;")
     require(source, "CreateInternalFeatureFence(state, snapshot)")
     require(source, "feature_command_buffer_bloom")
+    require(source, "published_command_buffer_bloom")
     require(source, "feature_recording_candidates")
     require(source, "feature_evaluation_active")
     require(source, "feature_submission_tracking_active")
@@ -293,7 +294,34 @@ def main() -> None:
     require(restore_capture, "ComputeCommandRestoreState* restore")
     require(restore_capture, "restore->descriptor_sets.assign(")
     require(restore_capture, "restore->dynamic_offsets.assign(")
+    require(restore_capture, "command_usage == state->command_buffer_usage_flags.end()")
+    require(restore_capture, "command_generation->second == 0u")
     require(source, "ComputeCommandRestoreState evaluation_restore_state;")
+
+    publish_start = source.index("bool PublishThreadCommandRecordingLocked(")
+    publish_end = source.index("void MarkFeatureRecordingCandidateLocked(", publish_start)
+    publish_recording = source[publish_start:publish_end]
+    for publication_step in (
+        "!local->recording_active",
+        "state->next_recording_generation++",
+        "state->command_buffer_usage_flags[command_buffer] = local->begin_flags",
+        "state->command_buffer_recording_generations[command_buffer] =",
+        "state->published_command_buffer_bloom.fetch_or(",
+    ):
+        require(publish_recording, publication_step)
+
+    snapshot_start = source.index("BridgeGetTemporalSnapshot(")
+    snapshot_end = source.index("BridgeQueryMode(", snapshot_start)
+    temporal_snapshot = source[snapshot_start:snapshot_end]
+    local_recording = temporal_snapshot.index("GetThreadComputeCommandStates().Find(")
+    snapshot_lock = temporal_snapshot.index("state->tracking_mutex")
+    publish_snapshot = temporal_snapshot.index("PublishThreadCommandRecordingLocked(")
+    if not local_recording < snapshot_lock < publish_snapshot:
+        raise AssertionError(
+            "temporal snapshots must fail before the shared lock and publish only "
+            "the selected command buffer under that lock"
+        )
+    require(temporal_snapshot, "DETROIT_DLSS_SNAPSHOT_DETAIL_COMMAND_UNTRACKED")
 
     descriptor_update_start = source.index("LayerUpdateDescriptorSets(")
     descriptor_update_end = source.index("LayerCreateImage(", descriptor_update_start)
@@ -307,6 +335,22 @@ def main() -> None:
     begin_command_buffer = source[begin_start:begin_end]
     require(begin_command_buffer, "if (result == VK_SUCCESS)")
     require(begin_command_buffer, "MayBeFeatureRecordingCandidate(")
+    require(begin_command_buffer, "GetThreadComputeCommandStates().BeginRecording(")
+    published_begin_gate = begin_command_buffer.index(
+        "if (MayHavePublishedCommandBufferState("
+    )
+    begin_tracking_lock = begin_command_buffer.index("state->tracking_mutex")
+    if published_begin_gate >= begin_tracking_lock:
+        raise AssertionError(
+            "ordinary command-buffer begin must bypass the shared tracking mutex"
+        )
+    if (
+        "state->command_buffer_usage_flags[" in begin_command_buffer
+        or "state->next_recording_generation++" in begin_command_buffer
+    ):
+        raise AssertionError(
+            "ordinary begin metadata must stay thread-local until a temporal/DOF selection"
+        )
     feature_gate = begin_command_buffer.index("if (may_have_feature_recording)")
     adapter_begin = begin_command_buffer.index(
         "state->adapter_runtime.NotifyCommandBufferBegin(command_buffer)"
@@ -341,7 +385,7 @@ def main() -> None:
     lifecycle_gate = candidate_filter.index(
         "feature_lifecycle_tracking_active.load"
     )
-    bloom_miss = candidate_filter.index("FeatureCommandBufferBloomBit(handle)")
+    bloom_miss = candidate_filter.index("CommandBufferBloomBit(handle)")
     exact_lookup = candidate_filter.index(
         "feature_recording_candidates.Contains(handle)"
     )
@@ -494,6 +538,37 @@ def main() -> None:
     require(descriptor_fast_path, "fast_cmd_bind_descriptor_sets.load")
     if "state_mutex" in descriptor_fast_path or "tracking_mutex" in descriptor_fast_path:
         raise AssertionError("inactive descriptor bind fast path must not take a mutex")
+    publish_descriptor = bind_descriptors.index("PublishThreadCommandRecordingLocked(")
+    dof_store = bind_descriptors.index(
+        "state->command_buffer_dof_composite_states[command_buffer_handle]"
+    )
+    if publish_descriptor >= dof_store:
+        raise AssertionError(
+            "Retinal DOF command state must publish the matching begin metadata first"
+        )
+
+    reset_start = source.index("LayerResetCommandBuffer(")
+    reset_end = source.index("LayerFreeCommandBuffers(", reset_start)
+    reset_command_buffer = source[reset_start:reset_end]
+    published_reset_gate = reset_command_buffer.index(
+        "if (MayHavePublishedCommandBufferState("
+    )
+    reset_tracking_lock = reset_command_buffer.index("state->tracking_mutex")
+    if published_reset_gate >= reset_tracking_lock:
+        raise AssertionError(
+            "ordinary command-buffer reset must bypass the shared tracking mutex"
+        )
+    require(reset_command_buffer, "GetThreadComputeCommandStates().ResetRecording(")
+    require(reset_command_buffer, "ErasePublishedCommandBufferStateLocked(")
+
+    reset_pool_start = source.index("LayerResetCommandPool(")
+    reset_pool_end = source.index("LayerDestroyCommandPool(", reset_pool_start)
+    reset_pool = source[reset_pool_start:reset_pool_end]
+    require(reset_pool, "thread_states.ResetRecording(")
+    if "thread_states.erase(" in reset_pool:
+        raise AssertionError(
+            "pool reset must retain TLS nodes instead of reallocating them next frame"
+        )
 
     layout_start = source.index("LayerCreatePipelineLayout(")
     layout_end = source.index("LayerDestroyPipelineLayout(", layout_start)
