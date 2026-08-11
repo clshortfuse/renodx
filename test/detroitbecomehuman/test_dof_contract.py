@@ -567,8 +567,8 @@ def main():
     require(
         vulkan_layer,
         r"InsertComputeWriteBarrier\(std::uint64_t\s+command_buffer\)[\s\S]*?"
-        r"FindDevice\(vk_command_buffer\)",
-        "Retinal barriers must resolve the device from the exact command buffer",
+        r"FindDeviceSharedFast\(vk_command_buffer\)",
+        "Retinal barriers must retain the device resolved from the exact command buffer",
     )
 
     print("PASS: Detroit native DOF v2 source contract")

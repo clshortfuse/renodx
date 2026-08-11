@@ -62,7 +62,7 @@ constexpr char kInternalFenceEnvironment[] =
 constexpr std::size_t kMaximumCachedExtensionListBytes = 16u * 1024u;
 constexpr std::size_t kMaximumCachedExtensionCount = 64u;
 constexpr std::uint64_t kMaximumTemporalConstantsShadowSize = 64u * 1024u;
-constexpr std::size_t kTemporalDescriptorSetBloomWordCount = 64u;
+constexpr std::size_t kTrackedDescriptorSetBloomWordCount = 64u;
 constexpr std::size_t kMaximumInternalFeatureFencePoolSize = 8u;
 constexpr std::array<std::uint32_t, DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT>
     kTemporalImageBindings = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 9u, 16u, 17u, 18u, 19u};
@@ -532,6 +532,8 @@ struct BufferState {
   std::vector<std::uint8_t> shadow_valid_bytes;
   std::vector<VkDeviceSize> temporal_slot_offsets;
   std::vector<std::uint64_t> temporal_slot_hashes;
+  std::vector<VkDeviceSize> temporal_slot_scratch_offsets;
+  std::vector<std::uint64_t> temporal_slot_scratch_hashes;
   bool temporal_slot_hashes_primed = false;
 };
 
@@ -667,6 +669,10 @@ struct DeviceState {
       evaluation_trace_window;
   renodx::games::detroitbecomehuman::dlss::SubmissionTraceTracker
       submission_trace_tracker;
+  // BridgeEvaluate holds mutex while this reusable snapshot is populated and
+  // consumed, so steady-state evaluation does not allocate copies of the
+  // command buffer's descriptor and dynamic-offset vectors every frame.
+  ComputeCommandRestoreState evaluation_restore_state;
   std::mutex mutex;
   std::mutex queue_mutex;
 
@@ -699,10 +705,10 @@ struct DeviceState {
       command_buffer_recording_generations;
   std::uint64_t next_recording_generation = 1u;
   std::uint64_t descriptor_update_serial = 0u;
-  std::array<std::atomic<std::uint64_t>, kTemporalDescriptorSetBloomWordCount>
-      temporal_descriptor_set_bloom = {};
-  std::array<std::atomic<std::uint64_t>, kTemporalDescriptorSetBloomWordCount>
-      dof_composite_descriptor_set_bloom = {};
+  // False-positive-only union of temporal and DOF descriptor-set candidates.
+  // The exact layout is still checked under tracking_mutex on a filter hit.
+  std::array<std::atomic<std::uint64_t>, kTrackedDescriptorSetBloomWordCount>
+      tracked_descriptor_set_bloom = {};
 };
 
 BridgeDetail MakeAdapterBridgeDetail(
@@ -754,6 +760,7 @@ std::mutex state_mutex;
 std::unordered_map<std::uintptr_t, std::shared_ptr<InstanceState>> instances;
 std::unordered_map<std::uintptr_t, std::shared_ptr<DeviceState>> devices;
 std::weak_ptr<DeviceState> active_device;
+std::atomic<std::uint64_t> active_device_identity = 0u;
 std::atomic<std::uint64_t> device_registry_generation = 1u;
 std::atomic<std::uint64_t> next_device_identity = 1u;
 
@@ -775,14 +782,8 @@ std::shared_ptr<DeviceState> FindDevice(VkDevice device) {
   return found == devices.end() ? nullptr : found->second;
 }
 
-std::shared_ptr<DeviceState> FindDevice(VkCommandBuffer command_buffer) {
-  const std::lock_guard lock(state_mutex);
-  const auto found = devices.find(DispatchKey(command_buffer));
-  return found == devices.end() ? nullptr : found->second;
-}
-
 template <typename Dispatchable>
-DeviceState* FindDeviceFast(Dispatchable handle) {
+const std::shared_ptr<DeviceState>& FindDeviceCached(Dispatchable handle) {
   struct ThreadCache {
     std::uintptr_t dispatch_key = 0u;
     std::uint64_t generation = 0u;
@@ -794,7 +795,7 @@ DeviceState* FindDeviceFast(Dispatchable handle) {
   const std::uint64_t generation =
       device_registry_generation.load(std::memory_order_acquire);
   if (cache.dispatch_key == dispatch_key && cache.generation == generation) {
-    return cache.state.get();
+    return cache.state;
   }
 
   const std::lock_guard lock(state_mutex);
@@ -802,7 +803,17 @@ DeviceState* FindDeviceFast(Dispatchable handle) {
   cache.dispatch_key = dispatch_key;
   cache.generation = device_registry_generation.load(std::memory_order_relaxed);
   cache.state = found == devices.end() ? nullptr : found->second;
-  return cache.state.get();
+  return cache.state;
+}
+
+template <typename Dispatchable>
+DeviceState* FindDeviceFast(Dispatchable handle) {
+  return FindDeviceCached(handle).get();
+}
+
+template <typename Dispatchable>
+std::shared_ptr<DeviceState> FindDeviceSharedFast(Dispatchable handle) {
+  return FindDeviceCached(handle);
 }
 
 struct ThreadComputeCommandState {
@@ -811,9 +822,37 @@ struct ThreadComputeCommandState {
   bool dof_composite_descriptor_set_bound = false;
 };
 
-std::unordered_map<std::uint64_t, ThreadComputeCommandState>&
-GetThreadComputeCommandStates() {
-  thread_local std::unordered_map<std::uint64_t, ThreadComputeCommandState> states;
+class ThreadComputeCommandStates final {
+ public:
+  ThreadComputeCommandState& operator[](std::uint64_t command_buffer) {
+    if (cached_command_buffer_ == command_buffer && cached_state_ != nullptr) {
+      return *cached_state_;
+    }
+    auto [entry, inserted] = states_.try_emplace(command_buffer);
+    (void)inserted;
+    cached_command_buffer_ = command_buffer;
+    // Rehash invalidates iterators, but unordered_map keeps references and
+    // pointers to elements valid. Erase explicitly invalidates this cache.
+    cached_state_ = &entry->second;
+    return *cached_state_;
+  }
+
+  std::size_t erase(std::uint64_t command_buffer) {
+    if (cached_command_buffer_ == command_buffer) {
+      cached_command_buffer_ = 0u;
+      cached_state_ = nullptr;
+    }
+    return states_.erase(command_buffer);
+  }
+
+ private:
+  std::unordered_map<std::uint64_t, ThreadComputeCommandState> states_;
+  std::uint64_t cached_command_buffer_ = 0u;
+  ThreadComputeCommandState* cached_state_ = nullptr;
+};
+
+ThreadComputeCommandStates& GetThreadComputeCommandStates() {
+  thread_local ThreadComputeCommandStates states;
   return states;
 }
 
@@ -921,42 +960,25 @@ bool HasDofCompositePushConstantRange(const PipelineLayoutState& layout) {
       && (range.stageFlags & VK_SHADER_STAGE_COMPUTE_BIT) != 0u;
 }
 
-std::size_t TemporalDescriptorSetBloomBit(std::uint64_t descriptor_set) {
+std::size_t TrackedDescriptorSetBloomBit(std::uint64_t descriptor_set) {
   descriptor_set ^= descriptor_set >> 33u;
   descriptor_set *= UINT64_C(0xFF51AFD7ED558CCD);
   descriptor_set ^= descriptor_set >> 33u;
   return static_cast<std::size_t>(
-      descriptor_set % (kTemporalDescriptorSetBloomWordCount * 64u));
+      descriptor_set % (kTrackedDescriptorSetBloomWordCount * 64u));
 }
 
-void MarkTemporalDescriptorSet(DeviceState* state, VkDescriptorSet descriptor_set) {
-  const std::size_t bit = TemporalDescriptorSetBloomBit(ToOpaque(descriptor_set));
-  state->temporal_descriptor_set_bloom[bit / 64u].fetch_or(
+void MarkTrackedDescriptorSet(DeviceState* state, VkDescriptorSet descriptor_set) {
+  const std::size_t bit = TrackedDescriptorSetBloomBit(ToOpaque(descriptor_set));
+  state->tracked_descriptor_set_bloom[bit / 64u].fetch_or(
       UINT64_C(1) << (bit % 64u), std::memory_order_release);
 }
 
-bool MayBeTemporalDescriptorSet(
+bool MayBeTrackedDescriptorSet(
     const DeviceState& state, VkDescriptorSet descriptor_set) {
   if (descriptor_set == VK_NULL_HANDLE) return false;
-  const std::size_t bit = TemporalDescriptorSetBloomBit(ToOpaque(descriptor_set));
-  return (state.temporal_descriptor_set_bloom[bit / 64u].load(
-              std::memory_order_acquire)
-          & (UINT64_C(1) << (bit % 64u)))
-         != 0u;
-}
-
-void MarkDofCompositeDescriptorSet(
-    DeviceState* state, VkDescriptorSet descriptor_set) {
-  const std::size_t bit = TemporalDescriptorSetBloomBit(ToOpaque(descriptor_set));
-  state->dof_composite_descriptor_set_bloom[bit / 64u].fetch_or(
-      UINT64_C(1) << (bit % 64u), std::memory_order_release);
-}
-
-bool MayBeDofCompositeDescriptorSet(
-    const DeviceState& state, VkDescriptorSet descriptor_set) {
-  if (descriptor_set == VK_NULL_HANDLE) return false;
-  const std::size_t bit = TemporalDescriptorSetBloomBit(ToOpaque(descriptor_set));
-  return (state.dof_composite_descriptor_set_bloom[bit / 64u].load(
+  const std::size_t bit = TrackedDescriptorSetBloomBit(ToOpaque(descriptor_set));
+  return (state.tracked_descriptor_set_bloom[bit / 64u].load(
               std::memory_order_acquire)
           & (UINT64_C(1) << (bit % 64u)))
          != 0u;
@@ -999,9 +1021,9 @@ std::shared_ptr<DeviceState> GetActiveDevice() {
 }
 
 bool IsActiveDevice(const std::shared_ptr<DeviceState>& state) {
-  if (state == nullptr) return false;
-  const std::lock_guard lock(state_mutex);
-  return active_device.lock() == state;
+  return state != nullptr && state->identity != 0u
+         && active_device_identity.load(std::memory_order_acquire)
+                == state->identity;
 }
 
 bool ReadCachedNgxExtensions(
@@ -1158,6 +1180,14 @@ void MarkFeatureRecordingCandidate(
   const auto handle = ToOpaque(command_buffer);
   state->feature_command_buffer_bloom.fetch_or(
       FeatureCommandBufferBloomBit(handle), std::memory_order_release);
+}
+
+bool MayBeFeatureRecordingCandidate(
+    const DeviceState& state, VkCommandBuffer command_buffer) {
+  if (command_buffer == VK_NULL_HANDLE) return false;
+  const auto bloom = state.feature_command_buffer_bloom.load(
+      std::memory_order_acquire);
+  return (bloom & FeatureCommandBufferBloomBit(ToOpaque(command_buffer))) != 0u;
 }
 
 NVSDK_NGX_Result CoreInitializeProject(
@@ -1560,11 +1590,17 @@ void ForceShutdownNgxForDeviceDestroy(DeviceState* state) {
 void DiscardFeatureCommandBuffers(
     DeviceState* state, const std::vector<VkCommandBuffer>& command_buffers) {
   if (state == nullptr || command_buffers.empty()) return;
+  const auto bloom = state->feature_command_buffer_bloom.load(
+      std::memory_order_acquire);
   std::vector<std::uint64_t> handles;
   handles.reserve(command_buffers.size());
   for (const VkCommandBuffer command_buffer : command_buffers) {
-    handles.push_back(ToOpaque(command_buffer));
+    const auto handle = ToOpaque(command_buffer);
+    if ((bloom & FeatureCommandBufferBloomBit(handle)) != 0u) {
+      handles.push_back(handle);
+    }
   }
+  if (handles.empty()) return;
   const std::lock_guard lock(state->mutex);
   if (state->ngx_context != nullptr) {
     state->ngx_context->DiscardRecordings(handles);
@@ -1577,7 +1613,9 @@ void DiscardFeatureCommandBuffers(
 
 void DiscardFeatureCommandBuffer(
     DeviceState* state, VkCommandBuffer command_buffer) {
-  if (state == nullptr || command_buffer == VK_NULL_HANDLE) return;
+  if (state == nullptr || !MayBeFeatureRecordingCandidate(*state, command_buffer)) {
+    return;
+  }
   const std::lock_guard lock(state->mutex);
   if (state->ngx_context != nullptr) {
     state->ngx_context->DiscardRecording(ToOpaque(command_buffer));
@@ -2138,7 +2176,8 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalConstants(
   snapshot->binding = binding;
   snapshot->command_buffer = command_buffer;
 
-  const auto state = FindDevice(FromOpaque<VkCommandBuffer>(command_buffer));
+  const auto state =
+      FindDeviceSharedFast(FromOpaque<VkCommandBuffer>(command_buffer));
   if (state == nullptr || !state->supported_executable
       || state->destroying.load(std::memory_order_acquire)) {
     return DETROIT_DLSS_RESULT_FALLBACK;
@@ -2421,9 +2460,15 @@ std::optional<VkDeviceSize> ResolveChangedTemporalConstantsSlotLocked(
     return std::nullopt;
   }
 
-  std::vector<VkDeviceSize> offsets;
-  std::vector<std::uint64_t> hashes;
-  std::vector<bool> frame_valid;
+  auto& offsets = buffer.temporal_slot_scratch_offsets;
+  auto& hashes = buffer.temporal_slot_scratch_hashes;
+  offsets.clear();
+  hashes.clear();
+  offsets.reserve(buffer.temporal_slot_offsets.size());
+  hashes.reserve(buffer.temporal_slot_hashes.size());
+  bool topology_changed = !buffer.temporal_slot_hashes_primed;
+  std::optional<VkDeviceSize> changed_slot;
+  bool ambiguous = false;
   const std::uint32_t render_width = snapshot.images[1u].resource.width;
   const std::uint32_t render_height = snapshot.images[1u].resource.height;
   const std::uint32_t output_width = snapshot.images[9u].resource.width;
@@ -2441,21 +2486,36 @@ std::optional<VkDeviceSize> ResolveChangedTemporalConstantsSlotLocked(
             *state, buffer, effective_offset, &bytes)) {
       return std::nullopt;
     }
+    const std::size_t slot_index = offsets.size();
+    const std::uint64_t hash = HashTemporalConstants(bytes);
     offsets.push_back(dynamic_offset);
-    hashes.push_back(HashTemporalConstants(bytes));
-    const auto decoded =
-        renodx::games::detroitbecomehuman::taa_contract::DecodeConstants(
-            std::as_bytes(std::span(bytes)));
-    frame_valid.push_back(
-        decoded.has_value()
-        && renodx::games::detroitbecomehuman::taa_contract::
-               BuildNgxFrameParameters(
-                   decoded->raw,
-                   render_width,
-                   render_height,
-                   output_width,
-                   output_height)
-                   .IsValid());
+    hashes.push_back(hash);
+    if (!topology_changed) {
+      if (slot_index >= buffer.temporal_slot_offsets.size()
+          || slot_index >= buffer.temporal_slot_hashes.size()
+          || buffer.temporal_slot_offsets[slot_index] != dynamic_offset) {
+        topology_changed = true;
+      } else if (hash != buffer.temporal_slot_hashes[slot_index]) {
+        const auto decoded =
+            renodx::games::detroitbecomehuman::taa_contract::DecodeConstants(
+                std::as_bytes(std::span(bytes)));
+        const bool frame_valid =
+            decoded.has_value()
+            && renodx::games::detroitbecomehuman::taa_contract::
+                   BuildNgxFrameParameters(
+                       decoded->raw,
+                       render_width,
+                       render_height,
+                       output_width,
+                       output_height)
+                       .IsValid();
+        if (!frame_valid || changed_slot.has_value()) {
+          ambiguous = true;
+        } else {
+          changed_slot = dynamic_offset;
+        }
+      }
+    }
     if (dynamic_offset > std::numeric_limits<VkDeviceSize>::max() - stride) {
       break;
     }
@@ -2463,28 +2523,12 @@ std::optional<VkDeviceSize> ResolveChangedTemporalConstantsSlotLocked(
   }
   if (offsets.empty()) return std::nullopt;
 
-  const bool topology_changed = buffer.temporal_slot_offsets != offsets
-                                || buffer.temporal_slot_hashes.size()
-                                       != hashes.size();
-  if (!buffer.temporal_slot_hashes_primed || topology_changed) {
-    buffer.temporal_slot_offsets = std::move(offsets);
-    buffer.temporal_slot_hashes = std::move(hashes);
-    buffer.temporal_slot_hashes_primed = true;
-    return std::nullopt;
-  }
-
-  std::optional<VkDeviceSize> changed_slot;
-  bool ambiguous = false;
-  for (std::size_t index = 0u; index < hashes.size(); ++index) {
-    if (hashes[index] == buffer.temporal_slot_hashes[index]) continue;
-    if (!frame_valid[index] || changed_slot.has_value()) {
-      ambiguous = true;
-    } else {
-      changed_slot = offsets[index];
-    }
-  }
-  buffer.temporal_slot_offsets = std::move(offsets);
-  buffer.temporal_slot_hashes = std::move(hashes);
+  topology_changed |= buffer.temporal_slot_offsets.size() != offsets.size()
+                      || buffer.temporal_slot_hashes.size() != hashes.size();
+  buffer.temporal_slot_offsets.swap(offsets);
+  buffer.temporal_slot_hashes.swap(hashes);
+  buffer.temporal_slot_hashes_primed = true;
+  if (topology_changed) return std::nullopt;
   return !ambiguous ? changed_slot : std::nullopt;
 }
 
@@ -2522,7 +2566,8 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeGetTemporalSnapshot(
       snapshot->detail_code = detail;
     }
   };
-  const auto state = FindDevice(FromOpaque<VkCommandBuffer>(command_buffer));
+  const auto state =
+      FindDeviceSharedFast(FromOpaque<VkCommandBuffer>(command_buffer));
   if (state == nullptr || !state->supported_executable
       || state->destroying.load(std::memory_order_acquire)) {
     set_detail(DETROIT_DLSS_SNAPSHOT_DETAIL_DEVICE_UNAVAILABLE);
@@ -2827,8 +2872,11 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
   return DETROIT_DLSS_RESULT_SUCCESS;
 }
 
-std::optional<ComputeCommandRestoreState> CaptureComputeRestoreState(
-    DeviceState* state, const DetroitDlssTemporalFrameInputs& inputs) {
+bool CaptureComputeRestoreState(
+    DeviceState* state,
+    const DetroitDlssTemporalFrameInputs& inputs,
+    ComputeCommandRestoreState* restore) {
+  if (state == nullptr || restore == nullptr) return false;
   const std::lock_guard lock(state->tracking_mutex);
   const auto command_pool = state->command_buffer_pools.find(inputs.command_buffer);
   const auto command_level = state->command_buffer_levels.find(inputs.command_buffer);
@@ -2837,13 +2885,13 @@ std::optional<ComputeCommandRestoreState> CaptureComputeRestoreState(
   if (command_pool == state->command_buffer_pools.end()
       || command_level == state->command_buffer_levels.end()
       || command_level->second != VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    return std::nullopt;
+    return false;
   }
   const auto pool = state->command_pools.find(command_pool->second);
   if (pool == state->command_pools.end()
       || pool->second.queue_family_index != state->graphics_queue_family
       || (pool->second.flags & VK_COMMAND_POOL_CREATE_PROTECTED_BIT) != 0u) {
-    return std::nullopt;
+    return false;
   }
   const auto found = state->command_buffer_restore_states.find(inputs.command_buffer);
   if (found != state->command_buffer_restore_states.end()) {
@@ -2852,7 +2900,7 @@ std::optional<ComputeCommandRestoreState> CaptureComputeRestoreState(
         || found->second.descriptor_sets.empty()
         || ToOpaque(found->second.descriptor_layout) != inputs.pipeline_layout
         || inputs.descriptor_set_index < found->second.first_set) {
-      return std::nullopt;
+      return false;
     }
     const std::uint64_t relative_set =
         static_cast<std::uint64_t>(inputs.descriptor_set_index)
@@ -2860,16 +2908,25 @@ std::optional<ComputeCommandRestoreState> CaptureComputeRestoreState(
     if (relative_set >= found->second.descriptor_sets.size()
         || ToOpaque(found->second.descriptor_sets[relative_set])
                != inputs.descriptor_set) {
-      return std::nullopt;
+      return false;
     }
-    return found->second;
+    restore->pipeline = found->second.pipeline;
+    restore->descriptor_layout = found->second.descriptor_layout;
+    restore->first_set = found->second.first_set;
+    restore->descriptor_sets.assign(
+        found->second.descriptor_sets.begin(),
+        found->second.descriptor_sets.end());
+    restore->dynamic_offsets.assign(
+        found->second.dynamic_offsets.begin(), found->second.dynamic_offsets.end());
+    restore->one_time_submit = found->second.one_time_submit;
+    return true;
   }
 
   if (inputs.compute_pipeline == 0u || inputs.pipeline_layout == 0u
       || inputs.descriptor_set == 0u
       || inputs.constants_dynamic_offset
              > std::numeric_limits<std::uint32_t>::max()) {
-    return std::nullopt;
+    return false;
   }
   const auto pipeline_layout =
       state->pipeline_layouts.find(inputs.pipeline_layout);
@@ -2882,12 +2939,12 @@ std::optional<ComputeCommandRestoreState> CaptureComputeRestoreState(
              >= pipeline_layout->second.set_layouts.size()
       || pipeline_layout->second.set_layouts[inputs.descriptor_set_index]
              != descriptor_set->second.layout) {
-    return std::nullopt;
+    return false;
   }
   const auto descriptor_layout = state->descriptor_set_layouts.find(
       ToOpaque(descriptor_set->second.layout));
   if (descriptor_layout == state->descriptor_set_layouts.end()) {
-    return std::nullopt;
+    return false;
   }
   std::uint64_t dynamic_descriptor_count = 0u;
   bool constants_is_only_dynamic_descriptor = false;
@@ -2900,22 +2957,21 @@ std::optional<ComputeCommandRestoreState> CaptureComputeRestoreState(
   }
   if (dynamic_descriptor_count != 1u
       || !constants_is_only_dynamic_descriptor) {
-    return std::nullopt;
+    return false;
   }
-  ComputeCommandRestoreState targeted = {
-      .pipeline = FromOpaque<VkPipeline>(inputs.compute_pipeline),
-      .descriptor_layout = FromOpaque<VkPipelineLayout>(inputs.pipeline_layout),
-      .first_set = inputs.descriptor_set_index,
-      .descriptor_sets = {FromOpaque<VkDescriptorSet>(inputs.descriptor_set)},
-      .dynamic_offsets = {
-          static_cast<std::uint32_t>(inputs.constants_dynamic_offset)},
-      .one_time_submit =
-          command_usage != state->command_buffer_usage_flags.end()
-          && (command_usage->second
-              & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
-                 != 0u,
-  };
-  return targeted;
+  restore->pipeline = FromOpaque<VkPipeline>(inputs.compute_pipeline);
+  restore->descriptor_layout =
+      FromOpaque<VkPipelineLayout>(inputs.pipeline_layout);
+  restore->first_set = inputs.descriptor_set_index;
+  restore->descriptor_sets.assign(
+      1u, FromOpaque<VkDescriptorSet>(inputs.descriptor_set));
+  restore->dynamic_offsets.assign(
+      1u, static_cast<std::uint32_t>(inputs.constants_dynamic_offset));
+  restore->one_time_submit =
+      command_usage != state->command_buffer_usage_flags.end()
+      && (command_usage->second & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
+             != 0u;
+  return true;
 }
 
 bool RestoreComputeCommandState(
@@ -2979,7 +3035,9 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
   }
 
   const auto command_buffer = FromOpaque<VkCommandBuffer>(inputs->command_buffer);
-  const auto state = inputs->command_buffer == 0u ? nullptr : FindDevice(command_buffer);
+  const auto state = inputs->command_buffer == 0u
+                         ? nullptr
+                         : FindDeviceSharedFast(command_buffer);
   if (state == nullptr) {
     SetEvaluationResult(
         result, DETROIT_DLSS_RESULT_FALLBACK, BridgeDetail::kNoActiveDevice, frame_id);
@@ -3068,9 +3126,9 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
-  const auto restore_state = CaptureComputeRestoreState(state.get(), *inputs);
-  if (!restore_state.has_value()
-      || !CanRestoreComputeCommandState(state.get(), *restore_state)) {
+  auto& restore_state = state->evaluation_restore_state;
+  if (!CaptureComputeRestoreState(state.get(), *inputs, &restore_state)
+      || !CanRestoreComputeCommandState(state.get(), restore_state)) {
     SetEvaluationResult(
         result,
         DETROIT_DLSS_RESULT_FALLBACK,
@@ -3224,7 +3282,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     // The complete restore contract was validated before Prepare. Both Vulkan
     // bind commands are void, so recording this restoration cannot fail after
     // the adapter has changed command state.
-    (void)RestoreComputeCommandState(state.get(), command_buffer, *restore_state);
+    (void)RestoreComputeCommandState(state.get(), command_buffer, restore_state);
     TraceEvaluationTerminal(
         trace_record,
         renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
@@ -3287,7 +3345,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       .exposure_scale = 1.f,
       .render_width = inputs->render_width,
       .render_height = inputs->render_height,
-      .one_time_submit = restore_state->one_time_submit,
+      .one_time_submit = restore_state.one_time_submit,
       .reset = inputs->reset != 0u
                || (inputs->flags
                    & (DETROIT_DLSS_FRAME_CAMERA_CUT
@@ -3306,7 +3364,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
         trace_record.trace_window,
         trace_record.attempt,
         trace_record.recording_generation,
-        restore_state->one_time_submit);
+        restore_state.one_time_submit);
   }
   const bool ngx_succeeded = evaluate_result.Succeeded()
                               && evaluate_result.output_valid;
@@ -3317,7 +3375,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
   // Commit may write b16, so no fallible decision is allowed after this point.
   // The restore contract was proved before any adapter/NGX commands were
   // recorded and these Vulkan bind calls have no failure return.
-  (void)RestoreComputeCommandState(state.get(), command_buffer, *restore_state);
+  (void)RestoreComputeCommandState(state.get(), command_buffer, restore_state);
   if (!evaluate_result.Succeeded()) {
     TraceNgxFailureOnce(
         state.get(), 2u, "evaluation", evaluate_result.ngx_result);
@@ -3483,12 +3541,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerAllocateDescriptorSets(
     }
     state->descriptor_sets[ToOpaque(descriptor_sets[index])] = {
         allocate_info->descriptorPool, allocate_info->pSetLayouts[index], {}};
-    if (layout->second.temporal_candidate) {
-      MarkTemporalDescriptorSet(state.get(), descriptor_sets[index]);
-    }
-    if (layout->second.dof_composite_candidate) {
-      MarkDofCompositeDescriptorSet(state.get(), descriptor_sets[index]);
-    }
+    MarkTrackedDescriptorSet(state.get(), descriptor_sets[index]);
   }
   return result;
 }
@@ -3572,21 +3625,20 @@ VKAPI_ATTR void VKAPI_CALL LayerUpdateDescriptorSets(
   bool may_touch_tracked_set = false;
   if (descriptor_writes != nullptr) {
     for (std::uint32_t index = 0u; index < descriptor_write_count; ++index) {
-      may_touch_tracked_set |=
-          MayBeTemporalDescriptorSet(*state, descriptor_writes[index].dstSet)
-          || MayBeDofCompositeDescriptorSet(
-              *state, descriptor_writes[index].dstSet);
+      if (MayBeTrackedDescriptorSet(*state, descriptor_writes[index].dstSet)) {
+        may_touch_tracked_set = true;
+        break;
+      }
     }
   }
   if (!may_touch_tracked_set && descriptor_copies != nullptr) {
     for (std::uint32_t index = 0u; index < descriptor_copy_count; ++index) {
-      may_touch_tracked_set |=
-          MayBeTemporalDescriptorSet(*state, descriptor_copies[index].srcSet)
-          || MayBeTemporalDescriptorSet(*state, descriptor_copies[index].dstSet)
-          || MayBeDofCompositeDescriptorSet(
-              *state, descriptor_copies[index].srcSet)
-          || MayBeDofCompositeDescriptorSet(
-              *state, descriptor_copies[index].dstSet);
+      if (MayBeTrackedDescriptorSet(*state, descriptor_copies[index].srcSet)
+          || MayBeTrackedDescriptorSet(
+              *state, descriptor_copies[index].dstSet)) {
+        may_touch_tracked_set = true;
+        break;
+      }
     }
   }
   if (!may_touch_tracked_set) return;
@@ -4595,6 +4647,9 @@ VkResult SubmitQueueLocked(
     std::uint32_t submit_count,
     const VkSubmitInfo* submits,
     VkFence fence) {
+  if (queue != state->graphics_queue) {
+    return state->next_queue_submit(queue, submit_count, submits, fence);
+  }
   const std::lock_guard queue_lock(state->queue_mutex);
   return state->next_queue_submit(queue, submit_count, submits, fence);
 }
@@ -4606,6 +4661,9 @@ VkResult SubmitQueue2Locked(
     std::uint32_t submit_count,
     const VkSubmitInfo2* submits,
     VkFence fence) {
+  if (queue != state->graphics_queue) {
+    return state->next_queue_submit2(queue, submit_count, submits, fence);
+  }
   const std::lock_guard queue_lock(state->queue_mutex);
   return state->next_queue_submit2(queue, submit_count, submits, fence);
 }
@@ -4618,6 +4676,9 @@ VkResult SubmitQueue2KhrLocked(
     std::uint32_t submit_count,
     const VkSubmitInfo2KHR* submits,
     VkFence fence) {
+  if (queue != state->graphics_queue) {
+    return state->next_queue_submit2_khr(queue, submit_count, submits, fence);
+  }
   const std::lock_guard queue_lock(state->queue_mutex);
   return state->next_queue_submit2_khr(queue, submit_count, submits, fence);
 }
@@ -5053,10 +5114,12 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerResetCommandPool(
   PollCompletedInternalFeatureFences(state);
   auto& thread_states = GetThreadComputeCommandStates();
   for (const auto command_buffer : command_buffers) {
-    if (GetEvaluationTraceConfiguration().first_three) {
-      TraceFeatureCompletion(state, ToOpaque(command_buffer));
+    if (MayBeFeatureRecordingCandidate(*state, command_buffer)) {
+      if (GetEvaluationTraceConfiguration().first_three) {
+        TraceFeatureCompletion(state, ToOpaque(command_buffer));
+      }
+      state->adapter_runtime.RecycleCommandBuffer(command_buffer);
     }
-    state->adapter_runtime.RecycleCommandBuffer(command_buffer);
     thread_states.erase(ToOpaque(command_buffer));
   }
   DiscardFeatureCommandBuffers(state, command_buffers);
@@ -5096,10 +5159,12 @@ VKAPI_ATTR void VKAPI_CALL LayerDestroyCommandPool(
   PollCompletedInternalFeatureFences(state);
   auto& thread_states = GetThreadComputeCommandStates();
   for (const auto command_buffer : command_buffers) {
-    if (GetEvaluationTraceConfiguration().first_three) {
-      TraceFeatureCompletion(state, ToOpaque(command_buffer));
+    if (MayBeFeatureRecordingCandidate(*state, command_buffer)) {
+      if (GetEvaluationTraceConfiguration().first_three) {
+        TraceFeatureCompletion(state, ToOpaque(command_buffer));
+      }
+      (void)state->adapter_runtime.RetireCommandBuffer(command_buffer);
     }
-    (void)state->adapter_runtime.RetireCommandBuffer(command_buffer);
     thread_states.erase(ToOpaque(command_buffer));
   }
   trampoline(device, command_pool, allocator);
@@ -5114,14 +5179,18 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(
   if (trampoline == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
   const VkResult result = trampoline(command_buffer, begin_info);
   if (result == VK_SUCCESS) {
+    const bool may_have_feature_recording =
+        MayBeFeatureRecordingCandidate(*state, command_buffer);
     // Successful begin/reset boundaries prove the previous recording is no
     // longer pending. Collect an optional private-scratch readback before the
     // adapter returns that bundle to its idle pool.
-    PollCompletedInternalFeatureFences(state);
-    if (GetEvaluationTraceConfiguration().first_three) {
-      TraceFeatureCompletion(state, ToOpaque(command_buffer));
+    if (may_have_feature_recording) {
+      PollCompletedInternalFeatureFences(state);
+      if (GetEvaluationTraceConfiguration().first_three) {
+        TraceFeatureCompletion(state, ToOpaque(command_buffer));
+      }
+      state->adapter_runtime.NotifyCommandBufferBegin(command_buffer);
     }
-    state->adapter_runtime.NotifyCommandBufferBegin(command_buffer);
     GetThreadComputeCommandStates().erase(ToOpaque(command_buffer));
     {
       const std::lock_guard lock(state->tracking_mutex);
@@ -5137,7 +5206,7 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(
       state->command_buffer_recording_generations[ToOpaque(command_buffer)] =
           generation;
     }
-    {
+    if (may_have_feature_recording) {
       const std::lock_guard lock(state->mutex);
       (void)state->submission_trace_tracker.Discard(
           ToOpaque(command_buffer));
@@ -5163,11 +5232,13 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerResetCommandBuffer(
   if (trampoline == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
   const VkResult result = trampoline(command_buffer, flags);
   if (result == VK_SUCCESS) {
-    PollCompletedInternalFeatureFences(state);
-    if (GetEvaluationTraceConfiguration().first_three) {
-      TraceFeatureCompletion(state, ToOpaque(command_buffer));
+    if (MayBeFeatureRecordingCandidate(*state, command_buffer)) {
+      PollCompletedInternalFeatureFences(state);
+      if (GetEvaluationTraceConfiguration().first_three) {
+        TraceFeatureCompletion(state, ToOpaque(command_buffer));
+      }
+      state->adapter_runtime.RecycleCommandBuffer(command_buffer);
     }
-    state->adapter_runtime.RecycleCommandBuffer(command_buffer);
     GetThreadComputeCommandStates().erase(ToOpaque(command_buffer));
     {
       const std::lock_guard lock(state->tracking_mutex);
@@ -5196,11 +5267,13 @@ VKAPI_ATTR void VKAPI_CALL LayerFreeCommandBuffers(
   PollCompletedInternalFeatureFences(state);
   if (command_buffers != nullptr) {
     for (std::uint32_t index = 0u; index < command_buffer_count; ++index) {
-      if (GetEvaluationTraceConfiguration().first_three) {
-        TraceFeatureCompletion(
-            state, ToOpaque(command_buffers[index]));
+      if (MayBeFeatureRecordingCandidate(*state, command_buffers[index])) {
+        if (GetEvaluationTraceConfiguration().first_three) {
+          TraceFeatureCompletion(
+              state, ToOpaque(command_buffers[index]));
+        }
+        (void)state->adapter_runtime.RetireCommandBuffer(command_buffers[index]);
       }
-      (void)state->adapter_runtime.RetireCommandBuffer(command_buffers[index]);
     }
   }
   trampoline(device, command_pool, command_buffer_count, command_buffers);
@@ -5327,11 +5400,9 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(
                                    && descriptor_set_count != 0u;
   if (!updates_tracked_set) return;
 
-  const bool may_bind_temporal_set =
-      MayBeTemporalDescriptorSet(*state, descriptor_sets[0u]);
-  const bool may_bind_dof_composite_set =
-      MayBeDofCompositeDescriptorSet(*state, descriptor_sets[0u]);
-  if (!may_bind_temporal_set && !may_bind_dof_composite_set
+  const bool may_bind_tracked_set =
+      MayBeTrackedDescriptorSet(*state, descriptor_sets[0u]);
+  if (!may_bind_tracked_set
       && !local.temporal_descriptor_set_bound
       && !local.dof_composite_descriptor_set_bound) {
     return;
@@ -5348,11 +5419,11 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(
   const auto pipeline_layout =
       state->pipeline_layouts.find(ToOpaque(layout));
   const bool temporal_candidate =
-      may_bind_temporal_set
+      may_bind_tracked_set
       && descriptor_layout != state->descriptor_set_layouts.end()
       && descriptor_layout->second.temporal_candidate;
   const bool dof_composite_candidate =
-      may_bind_dof_composite_set
+      may_bind_tracked_set
       && descriptor_layout != state->descriptor_set_layouts.end()
       && descriptor_layout->second.dof_composite_candidate
       && descriptor_set_count == 1u
@@ -5844,6 +5915,7 @@ VKAPI_ATTR VkResult VKAPI_CALL HookCreateDevice(
     devices[device_dispatch_key] = state;
     if (state->graphics_queue != VK_NULL_HANDLE && active_device.expired()) {
       active_device = state;
+      active_device_identity.store(state->identity, std::memory_order_release);
       installed_as_fast_device = true;
     }
     device_registry_generation.fetch_add(1u, std::memory_order_release);
@@ -5904,7 +5976,10 @@ VKAPI_ATTR void VKAPI_CALL HookDestroyDevice(
   }
   {
     const std::lock_guard lock(state_mutex);
-    if (active_device.lock() == state) active_device.reset();
+    if (active_device.lock() == state) {
+      active_device.reset();
+      active_device_identity.store(0u, std::memory_order_release);
+    }
     devices.erase(DispatchKey(device));
     device_registry_generation.fetch_add(1u, std::memory_order_release);
   }
@@ -6211,7 +6286,8 @@ bool IsBridgeReady() {
 
 bool CanInsertComputeWriteBarrier(std::uint64_t command_buffer) {
   if (command_buffer == 0u) return false;
-  const auto state = FindDevice(FromOpaque<VkCommandBuffer>(command_buffer));
+  const auto state =
+      FindDeviceSharedFast(FromOpaque<VkCommandBuffer>(command_buffer));
   return state != nullptr
          && !state->destroying.load(std::memory_order_acquire)
          && state->next_cmd_pipeline_barrier != nullptr;
@@ -6232,7 +6308,8 @@ bool CaptureDofCompositeImageSnapshot(
     return fail(DofCompositeCaptureDetail::kInvalidArgument);
   }
   *snapshot = {};
-  const auto state = FindDevice(FromOpaque<VkCommandBuffer>(command_buffer));
+  const auto state =
+      FindDeviceSharedFast(FromOpaque<VkCommandBuffer>(command_buffer));
   if (state == nullptr) {
     return fail(DofCompositeCaptureDetail::kDeviceStateUnavailable);
   }
@@ -6344,7 +6421,7 @@ bool ReleaseDofCompositeImageSnapshot(
       || snapshot.dynamic_offset_count != 1u) {
     return false;
   }
-  const auto state = FindDevice(
+  const auto state = FindDeviceSharedFast(
       FromOpaque<VkCommandBuffer>(snapshot.command_buffer));
   if (state == nullptr || state->destroying.load(std::memory_order_acquire)) {
     return false;
@@ -6391,7 +6468,7 @@ bool RestoreDofCompositeComputeState(
   }
   const auto command_buffer =
       FromOpaque<VkCommandBuffer>(snapshot.command_buffer);
-  const auto state = FindDevice(command_buffer);
+  const auto state = FindDeviceSharedFast(command_buffer);
   if (state == nullptr || state->destroying.load(std::memory_order_acquire)
       || state->next_cmd_bind_pipeline == nullptr
       || state->next_cmd_bind_descriptor_sets == nullptr
@@ -6471,7 +6548,7 @@ bool InsertComputeWriteBarrier(std::uint64_t command_buffer) {
   if (command_buffer == 0u) return false;
   const auto vk_command_buffer =
       FromOpaque<VkCommandBuffer>(command_buffer);
-  const auto state = FindDevice(vk_command_buffer);
+  const auto state = FindDeviceSharedFast(vk_command_buffer);
   if (state == nullptr
       || state->destroying.load(std::memory_order_acquire)
       || state->next_cmd_pipeline_barrier == nullptr) {

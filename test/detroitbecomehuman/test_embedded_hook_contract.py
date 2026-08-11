@@ -41,6 +41,19 @@ def main() -> None:
     require(source, "CreateInternalFeatureFence(state, snapshot)")
     require(source, "UseInternalFeatureFences()")
     require(source, "feature_command_buffer_bloom")
+    require(source, "tracked_descriptor_set_bloom")
+    if "temporal_descriptor_set_bloom" in source or "dof_composite_descriptor_set_bloom" in source:
+        raise AssertionError(
+            "descriptor hot path must use one false-positive-only candidate filter"
+        )
+    require(source, "FindDeviceSharedFast(")
+    require(source, "active_device_identity")
+    active_check_start = source.index("bool IsActiveDevice(")
+    active_check_end = source.index("bool ReadCachedNgxExtensions(", active_check_start)
+    active_check = source[active_check_start:active_check_end]
+    require(active_check, "active_device_identity.load(std::memory_order_acquire)")
+    if "state_mutex" in active_check:
+        raise AssertionError("per-frame active-device check must remain lock-free")
     require(source, "AppendFeatureSubmissionCandidate(")
     require(source, "command-buffer lifecycle tracking")
     require(source, "fence == VK_NULL_HANDLE && !snapshot.Empty()")
@@ -110,6 +123,23 @@ def main() -> None:
     require(snapshot_capture, "ResolveLatestTemporalDescriptorUpdateLocked(")
     require(snapshot_capture, "ResolveChangedTemporalConstantsSlotLocked(")
     require(snapshot_capture, "FillTemporalConstantsForBindingLocked(")
+    slot_scan_start = source.index("ResolveChangedTemporalConstantsSlotLocked(")
+    slot_scan_end = snapshot_start
+    slot_scan = source[slot_scan_start:slot_scan_end]
+    require(slot_scan, "temporal_slot_scratch_offsets")
+    require(slot_scan, "temporal_slot_scratch_hashes")
+    require(slot_scan, "buffer.temporal_slot_offsets.swap(offsets)")
+    require(slot_scan, "buffer.temporal_slot_hashes.swap(hashes)")
+    changed_hash_gate = slot_scan.index(
+        "else if (hash != buffer.temporal_slot_hashes[slot_index])"
+    )
+    decode_constants = slot_scan.index("DecodeConstants(")
+    if changed_hash_gate >= decode_constants:
+        raise AssertionError(
+            "unchanged temporal slots must bypass constants decode and validation"
+        )
+    if "std::vector<bool>" in slot_scan:
+        raise AssertionError("temporal slot scan must reuse persistent scratch storage")
     require(temporal, "GetTemporalDescriptorBinding(")
     require(temporal, "temporal_binding.descriptor_set")
     require(temporal, "addon_event::bind_descriptor_tables")
@@ -141,6 +171,51 @@ def main() -> None:
     if "InstallTargetedTemporalCommandStateLocked" in source:
         raise AssertionError(
             "targeted snapshots must not persist a rotating b52 offset as command state"
+        )
+
+    restore_capture_start = source.index("CaptureComputeRestoreState(")
+    restore_capture_end = source.index("RestoreComputeCommandState(", restore_capture_start)
+    restore_capture = source[restore_capture_start:restore_capture_end]
+    require(restore_capture, "ComputeCommandRestoreState* restore")
+    require(restore_capture, "restore->descriptor_sets.assign(")
+    require(restore_capture, "restore->dynamic_offsets.assign(")
+    require(source, "ComputeCommandRestoreState evaluation_restore_state;")
+
+    descriptor_update_start = source.index("LayerUpdateDescriptorSets(")
+    descriptor_update_end = source.index("LayerCreateImage(", descriptor_update_start)
+    descriptor_update = source[descriptor_update_start:descriptor_update_end]
+    require(descriptor_update, "MayBeTrackedDescriptorSet(")
+    require(descriptor_update, "may_touch_tracked_set = true;")
+    require(descriptor_update, "break;")
+
+    begin_start = source.index("LayerBeginCommandBuffer(")
+    begin_end = source.index("LayerResetCommandBuffer(", begin_start)
+    begin_command_buffer = source[begin_start:begin_end]
+    require(begin_command_buffer, "MayBeFeatureRecordingCandidate(")
+    feature_gate = begin_command_buffer.index("if (may_have_feature_recording)")
+    adapter_begin = begin_command_buffer.index(
+        "state->adapter_runtime.NotifyCommandBufferBegin(command_buffer)"
+    )
+    ngx_begin = begin_command_buffer.index("state->ngx_context->BeginRecording(")
+    if feature_gate >= adapter_begin or feature_gate >= ngx_begin:
+        raise AssertionError(
+            "non-feature command buffers must bypass adapter and NGX lifecycle locks"
+        )
+
+    submit_lock_start = source.index("VkResult SubmitQueueLocked(")
+    submit_lock_end = source.index("LayerQueueSubmit(", submit_lock_start)
+    submit_locks = source[submit_lock_start:submit_lock_end]
+    for submit_name in (
+        "state->next_queue_submit",
+        "state->next_queue_submit2",
+        "state->next_queue_submit2_khr",
+    ):
+        require(submit_locks, submit_name)
+    non_graphics_gate = submit_locks.index("queue != state->graphics_queue")
+    queue_mutex = submit_locks.index("state->queue_mutex")
+    if non_graphics_gate >= queue_mutex:
+        raise AssertionError(
+            "queues unused by private NGX submit must bypass the graphics queue mutex"
         )
 
     bind_pipeline_start = source.index("LayerCmdBindPipeline(")
