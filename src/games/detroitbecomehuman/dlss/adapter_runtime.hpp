@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 
 #include "../dlss_bridge_abi.h"
 #include "utils/dlss/ngx_vulkan.hpp"
@@ -74,6 +75,7 @@ struct AdapterPrepareInfo {
   std::uint32_t output_height = 0u;
   float dlaa_sharpening = 0.f;
   float dlaa_sharpening_normalization = 1.f;
+  bool one_time_submit = false;
   bool trace_readback = false;
   std::uint32_t trace_attempt = 0u;
 };
@@ -156,12 +158,12 @@ class AdapterRuntime final {
       VkCommandBuffer command_buffer);
 
   /*
-   * Call after a successful vkBeginCommandBuffer. This is the safe boundary
-   * for reusing that command buffer's descriptor sets and scratch images.
-   * All scratch images are fully overwritten, so their CPU-tracked layouts
-   * are reset to VK_IMAGE_LAYOUT_UNDEFINED for the new recording generation.
+   * Non-blocking completion check for ONE_TIME_SUBMIT recordings. A bundle is
+   * recycled only after its post-pack VkEvent is signaled. Returns the exact
+   * command buffers whose NGX recording lifetime can be discarded.
    */
-  void NotifyCommandBufferBegin(VkCommandBuffer command_buffer) noexcept;
+  [[nodiscard]] std::size_t PollCompletedOneTimeCommandBuffers(
+      std::span<VkCommandBuffer> completed) noexcept;
 
   /*
    * Call only after vkResetCommandBuffer or vkResetCommandPool succeeded.

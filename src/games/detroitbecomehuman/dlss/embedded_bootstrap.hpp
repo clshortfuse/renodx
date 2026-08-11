@@ -21,9 +21,8 @@ inline constexpr std::uint32_t kCacheSchemaVersion = 1u;
 inline constexpr std::string_view kSupportedExecutableSha256 =
     "ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF";
 
-// Targeted descriptor/resource tracking is active for DLAA. It intentionally
-// does not install the global vkCmdBindPipeline/vkCmdBindDescriptorSets hooks
-// that caused the original CPU/FPS regression; those remain Retinal-DOF-only.
+// DLAA needs the early extension bootstrap plus two narrow command hooks. The
+// descriptor/resource snapshot itself is captured by ReShade events.
 inline constexpr bool kDlssRuntimeEnabled = true;
 
 enum class BootstrapStatus : std::uint32_t {
@@ -124,7 +123,11 @@ bool IsBridgeReady();
 
 [[nodiscard]] inline constexpr bool NeedsRuntimeCommandTracking(
     DetroitDlssMode mode, bool retinal_dof_requested) noexcept {
-  return mode != DETROIT_DLSS_MODE_NATIVE || retinal_dof_requested;
+  (void)mode;
+  (void)retinal_dof_requested;
+  // Live Native TAA <-> DLAA switching requires begin/b52 metadata to already
+  // exist on the first DLAA recording.
+  return kDlssRuntimeEnabled;
 }
 
 [[nodiscard]] inline constexpr bool NeedsEmbeddedBridge(
@@ -149,9 +152,38 @@ bool IsBridgeReady();
   return true;
 }
 
-// Native TAA uses the direct command-hook trampoline. DLAA and Retinal DOF
-// enable exact per-command-buffer bind state only while they need it.
+// Kept for the existing add-on call site. The two production hooks stay active
+// for live switching and never enable the removed global tracking path.
 void SetRuntimeCommandTracking(bool enabled);
+
+struct CommandRecordingMetadata {
+  std::uint64_t command_buffer = 0u;
+  std::uint64_t pipeline_layout = 0u;
+  std::uint64_t descriptor_set = 0u;
+  std::uint64_t recording_generation = 0u;
+  std::uint32_t begin_flags = 0u;
+  std::uint32_t constants_dynamic_offset = 0u;
+  bool descriptor_bound_after_begin = false;
+  bool evaluation_claimed = false;
+};
+
+// These calls read only the current recording thread's TLS. A mismatch is a
+// safe Native TAA fallback, never a search through shared Vulkan state.
+[[nodiscard]] bool GetCommandRecordingMetadata(
+    std::uint64_t command_buffer,
+    std::uint64_t pipeline_layout,
+    std::uint64_t descriptor_set,
+    CommandRecordingMetadata* metadata);
+[[nodiscard]] bool ClaimCommandRecordingEvaluation(
+    std::uint64_t command_buffer,
+    std::uint64_t pipeline_layout,
+    std::uint64_t descriptor_set,
+    CommandRecordingMetadata* metadata);
+
+// ReShade command-list lifecycle callbacks call these. Their layer-side bloom
+// makes ordinary command buffers return without taking a mutex.
+void RecycleFeatureCommandBuffer(std::uint64_t command_buffer);
+void RetireFeatureCommandBuffer(std::uint64_t command_buffer);
 
 bool CanInsertComputeWriteBarrier(std::uint64_t command_buffer);
 bool InsertComputeWriteBarrier(std::uint64_t command_buffer);

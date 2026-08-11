@@ -123,6 +123,11 @@ struct AdapterRuntime::Impl {
     PFN_vkCmdBindDescriptorSets cmd_bind_descriptor_sets = nullptr;
     PFN_vkCmdUpdateBuffer cmd_update_buffer = nullptr;
     PFN_vkCmdDispatch cmd_dispatch = nullptr;
+    PFN_vkCreateEvent create_event = nullptr;
+    PFN_vkDestroyEvent destroy_event = nullptr;
+    PFN_vkGetEventStatus get_event_status = nullptr;
+    PFN_vkResetEvent reset_event = nullptr;
+    PFN_vkCmdSetEvent cmd_set_event = nullptr;
     PFN_vkDeviceWaitIdle device_wait_idle = nullptr;
   } procedures;
 
@@ -160,6 +165,7 @@ struct AdapterRuntime::Impl {
     VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
     VkDescriptorSet prepare_descriptor_set = VK_NULL_HANDLE;
     VkDescriptorSet pack_descriptor_set = VK_NULL_HANDLE;
+    VkEvent completion_event = VK_NULL_HANDLE;
     DetroitDlssResource native_motion_vectors = {};
     DetroitDlssResource native_output = {};
     renodx::utils::dlss::vulkan::TrackedImageState native_output_state = {};
@@ -172,6 +178,8 @@ struct AdapterRuntime::Impl {
     bool trace_readback_pending = false;
     bool active = false;
     bool tainted = false;
+    bool completion_pending = false;
+    bool one_time_submit = false;
   };
 
   mutable std::mutex mutex;
@@ -279,9 +287,14 @@ struct AdapterRuntime::Impl {
                &procedures.cmd_bind_descriptor_sets,
                "vkCmdBindDescriptorSets")
            && LoadDeviceProcedure(
-               &procedures.cmd_update_buffer,
-               "vkCmdUpdateBuffer")
+                &procedures.cmd_update_buffer,
+                "vkCmdUpdateBuffer")
            && LoadDeviceProcedure(&procedures.cmd_dispatch, "vkCmdDispatch")
+           && LoadDeviceProcedure(&procedures.create_event, "vkCreateEvent")
+           && LoadDeviceProcedure(&procedures.destroy_event, "vkDestroyEvent")
+           && LoadDeviceProcedure(&procedures.get_event_status, "vkGetEventStatus")
+           && LoadDeviceProcedure(&procedures.reset_event, "vkResetEvent")
+           && LoadDeviceProcedure(&procedures.cmd_set_event, "vkCmdSetEvent")
            && LoadDeviceProcedure(&procedures.device_wait_idle, "vkDeviceWaitIdle");
   }
 
@@ -533,6 +546,9 @@ struct AdapterRuntime::Impl {
 
   void DestroyBundle(ScratchBundle* bundle) const {
     if (bundle == nullptr) return;
+    if (bundle->completion_event != VK_NULL_HANDLE) {
+      procedures.destroy_event(device, bundle->completion_event, nullptr);
+    }
     if (bundle->descriptor_pool != VK_NULL_HANDLE) {
       procedures.destroy_descriptor_pool(device, bundle->descriptor_pool, nullptr);
     }
@@ -938,6 +954,17 @@ struct AdapterRuntime::Impl {
     if (bundle == nullptr) return Fallback(AdapterDetail::kInvalidArgument);
     ScratchBundle created = {};
     created.command_buffer = command_buffer;
+    const VkEventCreateInfo event_info = {
+        VK_STRUCTURE_TYPE_EVENT_CREATE_INFO,
+        nullptr,
+        0u,
+    };
+    VkResult vk_result = procedures.create_event(
+        device, &event_info, nullptr, &created.completion_event);
+    if (vk_result != VK_SUCCESS) {
+      DestroyBundle(&created);
+      return VulkanError(vk_result);
+    }
     auto result = CreateImage(
         kAdaptedColorFormat,
         {render_width, render_height},
@@ -980,7 +1007,7 @@ struct AdapterRuntime::Impl {
         static_cast<std::uint32_t>(pool_sizes.size()),
         pool_sizes.data(),
     };
-    VkResult vk_result = procedures.create_descriptor_pool(
+    vk_result = procedures.create_descriptor_pool(
         device,
         &pool_info,
         nullptr,
@@ -1039,12 +1066,13 @@ struct AdapterRuntime::Impl {
     bundle->trace_readback_pending = false;
     bundle->active = false;
     bundle->tainted = false;
+    bundle->completion_pending = false;
+    bundle->one_time_submit = false;
 
-    // A successful command-buffer/pool reset (and a successful Begin for an
-    // existing command buffer) invalidates the old recording after it is no
-    // longer pending. Every private image is fully overwritten on its next
-    // use, so UNDEFINED safely discards its prior contents without requiring
-    // knowledge of a partially recorded NGX layout sequence.
+    // An explicit command-buffer reset or a signaled one-time completion event
+    // invalidates the old recording. Every private image is fully overwritten
+    // on its next use, so UNDEFINED safely discards its prior contents without
+    // requiring knowledge of a partially recorded NGX layout sequence.
     for (auto* allocation : {&bundle->color, &bundle->dlss_output}) {
       allocation->state.layout = VK_IMAGE_LAYOUT_UNDEFINED;
       allocation->state.stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -1059,11 +1087,26 @@ struct AdapterRuntime::Impl {
 
     ScratchBundle bundle = std::move(found->second);
     bundles.erase(found);
+    if (bundle.completion_event != VK_NULL_HANDLE
+        && procedures.reset_event(device, bundle.completion_event)
+               != VK_SUCCESS) {
+      DestroyBundle(&bundle);
+      return;
+    }
     ResetBundleForDiscardedRecording(&bundle, VK_NULL_HANDLE);
     // Initialize reserves maximum_scratch_bundles entries, and mapped + idle
     // can never exceed that limit. This push therefore performs no allocation
     // on a command-buffer reset hot path.
     idle_bundles.push_back(std::move(bundle));
+  }
+
+  void RecordCompletion(ScratchBundle* bundle) const {
+    if (bundle == nullptr || bundle->completion_event == VK_NULL_HANDLE) return;
+    procedures.cmd_set_event(
+        bundle->command_buffer,
+        bundle->completion_event,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+    bundle->completion_pending = true;
   }
 
   bool ValidateDispatchDimensions(const AdapterPrepareInfo& prepare_info) const {
@@ -1588,6 +1631,7 @@ AdapterResult AdapterRuntime::Prepare(
   };
   bundle.trace_attempt = trace_readback_available ? prepare_info.trace_attempt : 0u;
   bundle.trace_readback_requested = trace_readback_available;
+  bundle.one_time_submit = prepare_info.one_time_submit;
   bundle.active = true;
   bundle.prepared_generation = bundle.recording_generation;
   bundle.token = impl_->next_token++;
@@ -1629,6 +1673,7 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
     // guess which layout it left the private images in; discard its tracked
     // layouts at the next safe command-buffer recording boundary.
     bundle.tainted = true;
+    impl_->RecordCompletion(&bundle);
     return Fallback(AdapterDetail::kNgxEvaluationFailed);
   }
 
@@ -1651,6 +1696,8 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
       && prepared_frame.output_height == bundle.dlss_output.extent.height;
   if (!prepared_resources_match) {
     bundle.active = false;
+    bundle.tainted = true;
+    impl_->RecordCompletion(&bundle);
     return Fallback(AdapterDetail::kStalePreparedFrame);
   }
 
@@ -1661,6 +1708,7 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
   bundle.dlss_output.state.access = VK_ACCESS_SHADER_WRITE_BIT;
   bundle.dlss_output.state.contents_valid = true;
   impl_->RecordPack(&bundle);
+  impl_->RecordCompletion(&bundle);
   bundle.active = false;
   return Success();
 }
@@ -1692,17 +1740,36 @@ std::optional<AdapterTraceReadback> AdapterRuntime::TakeCompletedTraceReadback(
   return readback;
 }
 
-void AdapterRuntime::NotifyCommandBufferBegin(VkCommandBuffer command_buffer) noexcept {
-  if (command_buffer == VK_NULL_HANDLE) return;
+std::size_t AdapterRuntime::PollCompletedOneTimeCommandBuffers(
+    std::span<VkCommandBuffer> completed) noexcept {
   const std::lock_guard lock(impl_->mutex);
-  if (!impl_->initialized) return;
-  // A successful Begin proves the previous recording is no longer pending.
-  // Return its images to the extent-keyed idle pool instead of permanently
-  // pinning one large output-sized bundle to every command-buffer handle.
-  // Prepare will safely reacquire a matching idle bundle for this new
-  // recording, keeping the cap proportional to concurrent frames rather than
-  // the total number of command buffers Detroit has created.
-  impl_->RecycleBundle(command_buffer);
+  if (!impl_->initialized || completed.empty()) return 0u;
+
+  std::size_t count = 0u;
+  for (auto bundle = impl_->bundles.begin();
+       bundle != impl_->bundles.end() && count < completed.size();) {
+    auto& state = bundle->second;
+    if (!state.one_time_submit || !state.completion_pending
+        || impl_->procedures.get_event_status(
+               impl_->device, state.completion_event)
+               != VK_EVENT_SET) {
+      ++bundle;
+      continue;
+    }
+    if (impl_->procedures.reset_event(
+            impl_->device, state.completion_event)
+        != VK_SUCCESS) {
+      ++bundle;
+      continue;
+    }
+
+    completed[count++] = bundle->first;
+    auto recycled = std::move(state);
+    bundle = impl_->bundles.erase(bundle);
+    Impl::ResetBundleForDiscardedRecording(&recycled, VK_NULL_HANDLE);
+    impl_->idle_bundles.push_back(std::move(recycled));
+  }
+  return count;
 }
 
 void AdapterRuntime::RecycleCommandBuffer(VkCommandBuffer command_buffer) noexcept {

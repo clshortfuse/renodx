@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <format>
 #include <limits>
 #include <mutex>
@@ -18,6 +19,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -27,9 +29,8 @@
 
 #include "../../utils/command_action.hpp"
 #include "../../utils/data.hpp"
-#include "../../utils/descriptor.hpp"
-#include "../../utils/pipeline_layout.hpp"
 #include "../../utils/shader.hpp"
+#include "../../utils/state.hpp"
 #include "dlss_bridge_client.hpp"
 #include "dlss/embedded_bootstrap.hpp"
 #include "supported_build.hpp"
@@ -42,6 +43,8 @@ inline constexpr std::array<std::uint32_t, DETROIT_DLSS_TAA_SAMPLED_BINDING_COUN
     kSampledBindings = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 9u};
 inline constexpr std::array<std::uint32_t, DETROIT_DLSS_TAA_STORAGE_BINDING_COUNT>
     kStorageBindings = {16u, 17u, 18u, 19u};
+inline constexpr std::array<std::uint32_t, 7u> kSparseBindings = {
+    1u, 3u, 4u, 5u, 7u, 16u, 52u};
 inline constexpr std::array<std::string_view, kSampledBindings.size()>
     kSampledLabels = {
         "PrevAADepth",
@@ -108,6 +111,25 @@ struct ResolvedBindings {
   std::array<ResolvedSlot, kStorageBindings.size()> storage = {};
   ResolvedSlot constants = {};
   std::uint32_t constants_descriptor_type = 0u;
+};
+
+struct SparseDescriptorSlot {
+  reshade::api::descriptor_type type = reshade::api::descriptor_type::sampler;
+  reshade::api::resource_view view = {0u};
+  reshade::api::buffer_range buffer = {};
+  bool valid = false;
+};
+
+struct SparseDescriptorTable {
+  std::uint64_t epoch = 0u;
+  std::array<SparseDescriptorSlot, kSparseBindings.size()> slots = {};
+};
+
+struct __declspec(uuid("95bf0125-a20e-4db7-89ad-7d2a1fd73662"))
+    SparseDescriptorDeviceData {
+  std::shared_mutex mutex;
+  std::unordered_map<std::uint64_t, SparseDescriptorTable> tables;
+  std::uint64_t next_epoch = 1u;
 };
 
 struct CapturedImage {
@@ -184,12 +206,16 @@ inline std::atomic_bool has_logged_auxiliary_active = false;
 // synchronously re-enters the command-list lifecycle callbacks below.
 inline std::mutex mode_transition_mutex;
 inline void OnDestroyTemporalCommandList(reshade::api::command_list* cmd_list) {
+  if (cmd_list == nullptr) return;
+  dlss::embedded::RetireFeatureCommandBuffer(cmd_list->get_native());
   if (!temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
     mode_state.DiscardCommandList(cmd_list->get_native());
   }
 }
 
 inline void OnResetTemporalCommandList(reshade::api::command_list* cmd_list) {
+  if (cmd_list == nullptr) return;
+  dlss::embedded::RecycleFeatureCommandBuffer(cmd_list->get_native());
   if (temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
     return;
   }
@@ -374,194 +400,318 @@ QueryDlssOutputAuthorizationForCommandList(std::uint64_t command_list) {
   return QueryDlssOutputForCommandList(command_list);
 }
 
-[[nodiscard]] inline bool RangeContainsBinding(
-    const reshade::api::descriptor_range& range,
+[[nodiscard]] inline std::optional<std::size_t> GetSparseBindingIndex(
     std::uint32_t binding) {
-  if (binding < range.binding || range.count == 0u) return false;
-  const auto relative_binding = binding - range.binding;
-  return range.count == std::numeric_limits<std::uint32_t>::max()
-         || relative_binding < range.count;
+  const auto found = std::find(
+      kSparseBindings.begin(), kSparseBindings.end(), binding);
+  if (found == kSparseBindings.end()) return std::nullopt;
+  return static_cast<std::size_t>(found - kSparseBindings.begin());
 }
 
-inline void ResolveRange(
-    reshade::api::device* device,
-    renodx::utils::descriptor::DeviceData* descriptor_data,
-    const reshade::api::descriptor_table table,
-    std::uint32_t set_index,
-    const reshade::api::descriptor_range& range,
-    ResolvedBindings* output) {
-  if (table.handle == 0u || range.count == 0u) return;
-  if ((static_cast<std::uint32_t>(range.visibility)
-       & static_cast<std::uint32_t>(reshade::api::shader_stage::compute))
-      == 0u) {
-    return;
+[[nodiscard]] inline SparseDescriptorSlot ReadSparseDescriptor(
+    const reshade::api::descriptor_table_update& update) {
+  if (update.count == 0u || update.array_offset != 0u
+      || update.descriptors == nullptr) {
+    return {};
   }
 
-  const auto resolve = [&](std::uint32_t binding, ResolvedSlot* destination) {
-    if (destination->found || !RangeContainsBinding(range, binding)) return;
-
-    reshade::api::descriptor_heap heap = {0u};
-    std::uint32_t offset = 0u;
-    device->get_descriptor_heap_offset(table, binding, 0u, &heap, &offset);
-    if (heap.handle == 0u) return;
-
-    const std::shared_lock descriptor_lock(descriptor_data->mutex);
-    const auto heap_it = descriptor_data->heaps.find(heap.handle);
-    if (heap_it == descriptor_data->heaps.end() || offset >= heap_it->second.size()) {
-      return;
-    }
-    const auto& slot = heap_it->second[offset];
-    destination->type = slot.type;
-    destination->table = table;
-    destination->set_index = set_index;
-    const auto range_type = static_cast<std::uint32_t>(range.type);
-    if (range_type == static_cast<std::uint32_t>(reshade::api::descriptor_type::constant_buffer)
-        || range_type == 8u) {
-      if (static_cast<std::uint32_t>(slot.type) != range_type
-          || slot.buffer_range.buffer.handle == 0u) {
-        return;
+  SparseDescriptorSlot slot = {.type = update.type};
+  switch (update.type) {
+    case reshade::api::descriptor_type::sampler_with_resource_view:
+      slot.view = static_cast<const reshade::api::sampler_with_resource_view*>(
+                      update.descriptors)[0u]
+                      .view;
+      slot.valid = slot.view.handle != 0u;
+      break;
+    case reshade::api::descriptor_type::shader_resource_view:
+    case reshade::api::descriptor_type::unordered_access_view:
+    case reshade::api::descriptor_type::buffer_shader_resource_view:
+    case reshade::api::descriptor_type::buffer_unordered_access_view:
+      slot.view = static_cast<const reshade::api::resource_view*>(
+          update.descriptors)[0u];
+      slot.valid = slot.view.handle != 0u;
+      break;
+    case reshade::api::descriptor_type::constant_buffer:
+      slot.buffer = static_cast<const reshade::api::buffer_range*>(
+          update.descriptors)[0u];
+      slot.valid = slot.buffer.buffer.handle != 0u;
+      break;
+    default:
+      // ReShade API 20 represents Vulkan dynamic constant buffers as type 8.
+      if (static_cast<std::uint32_t>(update.type) == 8u) {
+        slot.buffer = static_cast<const reshade::api::buffer_range*>(
+            update.descriptors)[0u];
+        slot.valid = slot.buffer.buffer.handle != 0u;
       }
-      destination->buffer = slot.buffer_range;
-    } else {
-      if (!slot.HasResourceView() || slot.resource_view.handle == 0u) return;
-      destination->view = slot.resource_view;
-    }
-    destination->found = true;
-  };
-
-  if (range.type == reshade::api::descriptor_type::shader_resource_view
-      || range.type == reshade::api::descriptor_type::sampler_with_resource_view) {
-    for (std::size_t index = 0u; index < kSampledBindings.size(); ++index) {
-      resolve(kSampledBindings[index], &output->sampled[index]);
-    }
-  } else if (range.type == reshade::api::descriptor_type::unordered_access_view) {
-    for (std::size_t index = 0u; index < kStorageBindings.size(); ++index) {
-      resolve(kStorageBindings[index], &output->storage[index]);
-    }
-  } else if (static_cast<std::uint32_t>(range.type)
-                 == static_cast<std::uint32_t>(
-                     reshade::api::descriptor_type::constant_buffer)
-             || static_cast<std::uint32_t>(range.type) == 8u) {
-    if (RangeContainsBinding(
-            range, DETROIT_DLSS_TAA_CONSTANT_BINDING_52)) {
-      output->constants_descriptor_type =
-          static_cast<std::uint32_t>(range.type);
-    }
-    resolve(DETROIT_DLSS_TAA_CONSTANT_BINDING_52, &output->constants);
+      break;
   }
+  return slot;
 }
 
-[[nodiscard]] inline bool ResolveObservedBindings(
+inline void OnInitSparseDescriptorDevice(reshade::api::device* device) {
+  renodx::utils::data::Create<SparseDescriptorDeviceData>(device);
+}
+
+inline void OnDestroySparseDescriptorDevice(reshade::api::device* device) {
+  renodx::utils::data::Delete<SparseDescriptorDeviceData>(device);
+}
+
+inline bool OnUpdateSparseDescriptorTables(
     reshade::api::device* device,
-    const reshade::api::pipeline_layout layout,
-    const std::vector<reshade::api::descriptor_table>& bound_tables,
-    ResolvedBindings* output) {
-  auto* descriptor_data =
-      renodx::utils::data::Get<renodx::utils::descriptor::DeviceData>(device);
-  if (descriptor_data == nullptr) return false;
+    std::uint32_t count,
+    const reshade::api::descriptor_table_update* updates) {
+  if (device == nullptr || count == 0u || updates == nullptr) return false;
+  bool relevant = false;
+  for (std::uint32_t index = 0u; index < count; ++index) {
+    relevant |= updates[index].array_offset == 0u
+                && GetSparseBindingIndex(updates[index].binding).has_value();
+  }
+  if (!relevant) return false;
 
-  return renodx::utils::pipeline_layout::GetPipelineLayoutData(
-      layout,
-      [&](const renodx::utils::pipeline_layout::PipelineLayoutData* layout_data) {
-        const auto set_index = DETROIT_DLSS_TAA_DESCRIPTOR_SET;
-        if (set_index >= layout_data->params.size()
-            || set_index >= bound_tables.size()) {
-          return;
-        }
+  auto* data = renodx::utils::data::Get<SparseDescriptorDeviceData>(device);
+  if (data == nullptr) return false;
+  const std::unique_lock lock(data->mutex);
+  auto epoch = data->next_epoch++;
+  if (epoch == 0u) epoch = data->next_epoch++;
+  for (std::uint32_t index = 0u; index < count; ++index) {
+    const auto& update = updates[index];
+    const auto slot_index = update.array_offset == 0u
+                                ? GetSparseBindingIndex(update.binding)
+                                : std::nullopt;
+    if (!slot_index.has_value() || update.table.handle == 0u) continue;
+    auto& table = data->tables[update.table.handle];
+    if (table.epoch != epoch) {
+      table = {};
+      table.epoch = epoch;
+    }
+    table.slots[*slot_index] = ReadSparseDescriptor(update);
+  }
+  return false;
+}
 
-        const auto& param = layout_data->params[set_index];
-        const auto table = bound_tables[set_index];
-        switch (param.type) {
-          case reshade::api::pipeline_layout_param_type::descriptor_table:
-            for (std::uint32_t index = 0u;
-                 index < param.descriptor_table.count;
-                 ++index) {
-              ResolveRange(
-                  device,
-                  descriptor_data,
-                  table,
-                  set_index,
-                  param.descriptor_table.ranges[index],
-                  output);
-            }
-            break;
-          case reshade::api::pipeline_layout_param_type::descriptor_table_with_static_samplers:
-            for (std::uint32_t index = 0u;
-                 index < param.descriptor_table_with_static_samplers.count;
-                 ++index) {
-              ResolveRange(
-                  device,
-                  descriptor_data,
-                  table,
-                  set_index,
-                  param.descriptor_table_with_static_samplers.ranges[index],
-                  output);
-            }
-            break;
-          default:
-            break;
-        }
-      });
+inline bool OnCopySparseDescriptorTables(
+    reshade::api::device* device,
+    std::uint32_t count,
+    const reshade::api::descriptor_table_copy* copies) {
+  if (device == nullptr || count == 0u || copies == nullptr) return false;
+  struct CopyOperation {
+    std::uint64_t destination = 0u;
+    std::size_t destination_index = 0u;
+    SparseDescriptorSlot slot = {};
+  };
+  std::vector<CopyOperation> operations;
+  operations.reserve(count);
+
+  auto* data = renodx::utils::data::Get<SparseDescriptorDeviceData>(device);
+  if (data == nullptr) return false;
+  const std::unique_lock lock(data->mutex);
+  for (std::uint32_t index = 0u; index < count; ++index) {
+    const auto& copy = copies[index];
+    if (copy.source_array_offset != 0u || copy.dest_array_offset != 0u
+        || copy.count == 0u) {
+      continue;
+    }
+    const auto source_index = GetSparseBindingIndex(copy.source_binding);
+    const auto destination_index = GetSparseBindingIndex(copy.dest_binding);
+    if (!source_index.has_value() || !destination_index.has_value()
+        || copy.source_table.handle == 0u || copy.dest_table.handle == 0u) {
+      continue;
+    }
+    const auto source = data->tables.find(copy.source_table.handle);
+    operations.push_back({
+        .destination = copy.dest_table.handle,
+        .destination_index = *destination_index,
+        .slot = source != data->tables.end()
+                    ? source->second.slots[*source_index]
+                    : SparseDescriptorSlot{},
+    });
+  }
+  if (operations.empty()) return false;
+
+  auto epoch = data->next_epoch++;
+  if (epoch == 0u) epoch = data->next_epoch++;
+  for (const auto& operation : operations) {
+    auto& table = data->tables[operation.destination];
+    if (table.epoch != epoch) {
+      table = {};
+      table.epoch = epoch;
+    }
+    table.slots[operation.destination_index] = operation.slot;
+  }
+  return false;
+}
+
+[[nodiscard]] inline bool ResolveSparseBindings(
+    reshade::api::device* device,
+    reshade::api::descriptor_table table,
+    ResolvedBindings* output,
+    std::uint64_t* epoch = nullptr) {
+  if (device == nullptr || table.handle == 0u || output == nullptr) return false;
+  auto* data = renodx::utils::data::Get<SparseDescriptorDeviceData>(device);
+  if (data == nullptr) return false;
+
+  SparseDescriptorTable snapshot = {};
+  {
+    const std::shared_lock lock(data->mutex);
+    const auto found = data->tables.find(table.handle);
+    if (found == data->tables.end()) return false;
+    snapshot = found->second;
+  }
+  if (snapshot.epoch == 0u
+      || std::any_of(
+          snapshot.slots.begin(),
+          snapshot.slots.end(),
+          [](const SparseDescriptorSlot& slot) { return !slot.valid; })) {
+    return false;
+  }
+
+  const auto assign = [&](std::uint32_t binding, ResolvedSlot* destination) {
+    const auto sparse_index = GetSparseBindingIndex(binding);
+    if (!sparse_index.has_value() || destination == nullptr) return;
+    const auto& source = snapshot.slots[*sparse_index];
+    destination->type = source.type;
+    destination->view = source.view;
+    destination->buffer = source.buffer;
+    destination->table = table;
+    destination->set_index = DETROIT_DLSS_TAA_DESCRIPTOR_SET;
+    destination->found = source.valid;
+  };
+  assign(1u, &output->sampled[1u]);
+  assign(3u, &output->sampled[3u]);
+  assign(4u, &output->sampled[4u]);
+  assign(5u, &output->sampled[5u]);
+  assign(7u, &output->sampled[7u]);
+  assign(16u, &output->storage[0u]);
+  assign(52u, &output->constants);
+  output->constants_descriptor_type =
+      static_cast<std::uint32_t>(output->constants.type);
+  if (epoch != nullptr) *epoch = snapshot.epoch;
+  return true;
+}
+
+[[nodiscard]] inline std::uint32_t ToVulkanFormat(
+    reshade::api::format format) noexcept {
+  switch (format) {
+    case reshade::api::format::r16g16_float:
+      return kVkFormatRg16Float;
+    case reshade::api::format::r16g16b16a16_float:
+      return kVkFormatRgba16Float;
+    case reshade::api::format::r32_uint:
+      return kVkFormatR32Uint;
+    case reshade::api::format::r9g9b9e5:
+      return kVkFormatRgb9e5;
+    case reshade::api::format::d32_float_s8_uint:
+      return kVkFormatD32FloatS8Uint;
+    default:
+      return 0u;
+  }
 }
 
 [[nodiscard]] inline CapturedImage CaptureImage(
     reshade::api::device* device,
-    const ResolvedSlot& slot) {
-  if (!slot.found || slot.view.handle == 0u) return {};
+    const ResolvedSlot& slot,
+    std::uint32_t layout) {
+  if (device == nullptr || !slot.found || slot.view.handle == 0u) return {};
 
   const auto resource = device->get_resource_from_view(slot.view);
   if (resource.handle == 0u) return {};
+  const auto resource_desc = device->get_resource_desc(resource);
+  const auto view_desc = device->get_resource_view_desc(slot.view);
+  if (resource_desc.type != reshade::api::resource_type::texture_2d
+      || view_desc.type != reshade::api::resource_view_type::texture_2d
+      || resource_desc.texture.width == 0u || resource_desc.texture.height == 0u
+      || view_desc.texture.first_level >= resource_desc.texture.levels
+      || view_desc.texture.first_layer >= resource_desc.texture.depth_or_layers) {
+    return {};
+  }
+  const auto reshade_format =
+      view_desc.format != reshade::api::format::unknown
+          ? view_desc.format
+          : reshade::api::format_to_default_typed(resource_desc.texture.format);
+  const auto format = ToVulkanFormat(reshade_format);
+  if (format == 0u) return {};
+  const auto mip = std::min(view_desc.texture.first_level, 31u);
 
   return {
       .image = resource.handle,
       .image_view = slot.view.handle,
+      .format = format,
+      .width = std::max(resource_desc.texture.width >> mip, 1u),
+      .height = std::max(resource_desc.texture.height >> mip, 1u),
+      .mip_level = view_desc.texture.first_level,
+      .array_layer = view_desc.texture.first_layer,
+      .layout = layout,
       .valid = true,
   };
 }
 
-[[nodiscard]] inline const DetroitDlssImageBindingSnapshot* FindNativeImage(
-    const DetroitDlssTemporalDescriptorSnapshot& snapshot,
-    std::uint32_t binding) {
-  for (std::uint32_t index = 0u;
-       index < snapshot.image_binding_count
-       && index < DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT;
-       ++index) {
-    if (snapshot.images[index].binding == binding) return &snapshot.images[index];
-  }
-  return nullptr;
-}
-
-[[nodiscard]] inline bool ApplyNativeImage(
-    const DetroitDlssTemporalDescriptorSnapshot& snapshot,
-    std::uint32_t binding,
-    CapturedImage* image) {
-  const auto* native = FindNativeImage(snapshot, binding);
-  if (native == nullptr || image == nullptr) return false;
-  const bool reshade_binding_present = image->image != 0u || image->image_view != 0u;
-  if (reshade_binding_present
-      && (image->image != native->resource.image
-          || image->image_view != native->resource.image_view)) {
+[[nodiscard]] inline bool CaptureTemporalConstants(
+    reshade::api::device* device,
+    const ResolvedSlot& slot,
+    const dlss::embedded::CommandRecordingMetadata& metadata,
+    DetroitDlssTemporalConstantsSnapshot* snapshot) {
+  static_assert(
+      kReflectedTemporalConstantsSize
+      <= DETROIT_DLSS_TEMPORAL_CONSTANTS_CAPACITY);
+  if (device == nullptr || snapshot == nullptr || !slot.found
+      || slot.buffer.buffer.handle == 0u
+      || (slot.type != reshade::api::descriptor_type::constant_buffer
+          && static_cast<std::uint32_t>(slot.type) != 8u)) {
     return false;
   }
-  if ((native->valid_flags & DETROIT_DLSS_IMAGE_MANDATORY_MASK)
-          != DETROIT_DLSS_IMAGE_MANDATORY_MASK
-      || native->resource.image == 0u
-      || native->resource.image_view == 0u) {
-    return !reshade_binding_present
-           && (DETROIT_DLSS_TAA_OPTIONAL_IMAGE_MASK & (UINT64_C(1) << binding)) != 0u;
+  const auto desc = device->get_resource_desc(slot.buffer.buffer);
+  if (desc.type != reshade::api::resource_type::buffer
+      || slot.buffer.offset > desc.buffer.size
+      || metadata.constants_dynamic_offset
+             > desc.buffer.size - slot.buffer.offset) {
+    return false;
   }
+  const auto effective_offset =
+      slot.buffer.offset + metadata.constants_dynamic_offset;
+  const auto available = desc.buffer.size - effective_offset;
+  const auto range = slot.buffer.size == UINT64_MAX
+                         ? available
+                         : slot.buffer.size;
+  if (range < kReflectedTemporalConstantsSize || range > available) return false;
 
-  *image = {
-      .image = native->resource.image,
-      .image_view = native->resource.image_view,
-      .format = native->resource.format,
-      .width = native->resource.width,
-      .height = native->resource.height,
-      .mip_level = native->resource.mip_level,
-      .array_layer = native->resource.array_layer,
-      .layout = native->resource.layout,
-      .valid = true,
+  *snapshot = {
+      .struct_size = sizeof(*snapshot),
+      .abi_version = DETROIT_DLSS_ABI_VERSION,
+      .descriptor_set_index = DETROIT_DLSS_TAA_DESCRIPTOR_SET,
+      .binding = DETROIT_DLSS_TAA_CONSTANT_BINDING_52,
+      .command_buffer = metadata.command_buffer,
+      .descriptor_set = metadata.descriptor_set,
+      .pipeline_layout = metadata.pipeline_layout,
+      .buffer = slot.buffer.buffer.handle,
+      .descriptor_offset = slot.buffer.offset,
+      .dynamic_offset = metadata.constants_dynamic_offset,
+      .effective_offset = effective_offset,
+      .descriptor_range = range,
+      .descriptor_type = static_cast<std::uint32_t>(slot.type),
+      .valid_flags = DETROIT_DLSS_CONSTANTS_DESCRIPTOR_VALID
+                     | DETROIT_DLSS_CONSTANTS_DYNAMIC_OFFSET_VALID
+                     | DETROIT_DLSS_CONSTANTS_EFFECTIVE_OFFSET_VALID
+                     | DETROIT_DLSS_CONSTANTS_RANGE_VALID,
   };
+  void* mapped = nullptr;
+  if (!device->map_buffer_region(
+          slot.buffer.buffer,
+          effective_offset,
+          kReflectedTemporalConstantsSize,
+          reshade::api::map_access::read_only,
+          &mapped)
+      || mapped == nullptr) {
+    return false;
+  }
+  std::memcpy(
+      snapshot->constants,
+      mapped,
+      static_cast<std::size_t>(kReflectedTemporalConstantsSize));
+  device->unmap_buffer_region(slot.buffer.buffer);
+  snapshot->bytes_written =
+      static_cast<std::uint32_t>(kReflectedTemporalConstantsSize);
+  snapshot->valid_flags |= DETROIT_DLSS_CONSTANTS_PAYLOAD_VALID;
+  snapshot->source_flags = DETROIT_DLSS_CONSTANTS_SOURCE_MAPPED_MEMORY;
   return true;
 }
 
@@ -837,77 +987,67 @@ inline void AfterNativeTemporalDispatch(
     return;
   }
 
-  DetroitDlssTemporalDescriptorSnapshot temporal_snapshot = {};
-  const bool has_temporal_snapshot =
-      dlss_bridge_client::client.CaptureTemporalSnapshot(
-          context.cmd_list->get_native(),
-          0u,
-          temporal_pipeline_layout.handle,
-          &temporal_snapshot);
-  const bool has_temporal_diagnostics =
-      temporal_snapshot.struct_size >= sizeof(temporal_snapshot)
-      && temporal_snapshot.abi_version == DETROIT_DLSS_ABI_VERSION
-      && temporal_snapshot.command_buffer == context.cmd_list->get_native()
-      && temporal_snapshot.image_binding_count == DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT;
-  constexpr DetroitDlssTemporalSnapshotFlags kCommonImageSnapshotFlags =
-      DETROIT_DLSS_SNAPSHOT_EXPECTED_SET_MATCH
-      | DETROIT_DLSS_SNAPSHOT_EXPECTED_PIPELINE_LAYOUT_MATCH
-      | DETROIT_DLSS_SNAPSHOT_DESCRIPTOR_SET_TRACKED
-      | DETROIT_DLSS_SNAPSHOT_PIPELINE_LAYOUT_TRACKED
-      | DETROIT_DLSS_SNAPSHOT_REQUIRED_IMAGES_COMPLETE;
-  const bool command_acquired =
-      (temporal_snapshot.snapshot_flags
-       & DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK)
-          == DETROIT_DLSS_SNAPSHOT_COMMAND_ACQUISITION_MASK
-      || (temporal_snapshot.snapshot_flags
-          & DETROIT_DLSS_SNAPSHOT_TARGETED_UPDATE_RESOLVED)
-             != 0u;
-  bool native_images_match = has_temporal_snapshot
-                             && has_temporal_diagnostics
-                             && temporal_snapshot.descriptor_set != 0u
-                              && temporal_snapshot.pipeline_layout != 0u
-                              && command_acquired
-                              && (temporal_snapshot.snapshot_flags
-                                  & kCommonImageSnapshotFlags)
-                                     == kCommonImageSnapshotFlags
-                             && (temporal_snapshot.complete_image_mask
-                                 & DETROIT_DLSS_TAA_REQUIRED_IMAGE_MASK)
-                                    == DETROIT_DLSS_TAA_REQUIRED_IMAGE_MASK;
+  const auto* command_state = renodx::utils::state::GetCurrentState(context.cmd_list);
+  const auto pipeline_layout = command_state != nullptr
+                                   ? command_state->compute_pipeline_layout
+                                   : reshade::api::pipeline_layout{0u};
+  const auto descriptor_set =
+      command_state != nullptr
+              && DETROIT_DLSS_TAA_DESCRIPTOR_SET
+                     < command_state->compute_descriptor_tables.size()
+          ? command_state->compute_descriptor_tables[
+                DETROIT_DLSS_TAA_DESCRIPTOR_SET]
+          : reshade::api::descriptor_table{0u};
+  ResolvedBindings bindings = {};
+  std::uint64_t descriptor_epoch = 0u;
+  dlss::embedded::CommandRecordingMetadata recording = {};
+  bool snapshot_complete =
+      pipeline_layout.handle != 0u && descriptor_set.handle != 0u
+      && (temporal_pipeline_layout.handle == 0u
+          || temporal_pipeline_layout == pipeline_layout)
+      && ResolveSparseBindings(
+          device, descriptor_set, &bindings, &descriptor_epoch)
+      && dlss::embedded::GetCommandRecordingMetadata(
+          native_command_list,
+          pipeline_layout.handle,
+          descriptor_set.handle,
+          &recording);
   std::array<CapturedImage, kSampledBindings.size()> sampled = {};
   std::array<CapturedImage, kStorageBindings.size()> storage = {};
-  if (native_images_match) {
-    for (std::size_t index = 0u; index < sampled.size(); ++index) {
-      native_images_match &= ApplyNativeImage(
-          temporal_snapshot, kSampledBindings[index], &sampled[index]);
-    }
-    for (std::size_t index = 0u; index < storage.size(); ++index) {
-      native_images_match &= ApplyNativeImage(
-          temporal_snapshot, kStorageBindings[index], &storage[index]);
-    }
+  DetroitDlssTemporalConstantsSnapshot constants_snapshot = {};
+  if (snapshot_complete) {
+    sampled[1u] = CaptureImage(
+        device, bindings.sampled[1u], kVkImageLayoutShaderReadOnly);
+    sampled[3u] = CaptureImage(
+        device, bindings.sampled[3u], kVkImageLayoutShaderReadOnly);
+    sampled[4u] = CaptureImage(
+        device, bindings.sampled[4u], kVkImageLayoutShaderReadOnly);
+    sampled[5u] = CaptureImage(
+        device, bindings.sampled[5u], kVkImageLayoutShaderReadOnly);
+    sampled[7u] = CaptureImage(
+        device, bindings.sampled[7u], kVkImageLayoutShaderReadOnly);
+    storage[0u] = CaptureImage(
+        device, bindings.storage[0u], kVkImageLayoutGeneral);
+    snapshot_complete = sampled[1u].valid && sampled[3u].valid
+                        && sampled[4u].valid && sampled[5u].valid
+                        && sampled[7u].valid && storage[0u].valid
+                        && CaptureTemporalConstants(
+                            device,
+                            bindings.constants,
+                            recording,
+                            &constants_snapshot);
   }
-  if (!native_images_match) {
+  if (!snapshot_complete) {
     std::scoped_lock lock(contract_mutex);
     if (!has_logged_native_snapshot_failure) {
-      std::string image_flags;
-      for (std::uint32_t index = 0u;
-           index < temporal_snapshot.image_binding_count
-           && index < DETROIT_DLSS_TAA_IMAGE_BINDING_COUNT;
-           ++index) {
-        image_flags += std::format(
-            " b{}=0x{:X}",
-            temporal_snapshot.images[index].binding,
-            temporal_snapshot.images[index].valid_flags);
-      }
       Log(
           reshade::log::level::warning,
           std::format(
-              "native descriptor snapshot incomplete (detail {}, flags 0x{:X}, present 0x{:X}, complete 0x{:X}, required 0x{:X}, valid:{}); native TAA remains active.",
-              temporal_snapshot.detail_code,
-              temporal_snapshot.snapshot_flags,
-              temporal_snapshot.present_image_mask,
-              temporal_snapshot.complete_image_mask,
-              temporal_snapshot.required_image_mask,
-              image_flags));
+              "current TAA descriptor epoch is incomplete or begin/b52 metadata is stale (epoch {}, command 0x{:X}, layout 0x{:X}, set0 0x{:X}); native TAA remains active.",
+              descriptor_epoch,
+              native_command_list,
+              pipeline_layout.handle,
+              descriptor_set.handle));
       has_logged_native_snapshot_failure = true;
     }
     runtime_status.store(
@@ -916,24 +1056,11 @@ inline void AfterNativeTemporalDispatch(
     return;
   }
 
-  const auto& constants_snapshot = temporal_snapshot.constants;
-  const bool has_constants_snapshot = has_temporal_snapshot;
-  const bool has_constants_diagnostics =
-      constants_snapshot.struct_size >= sizeof(constants_snapshot)
-      && constants_snapshot.abi_version == DETROIT_DLSS_ABI_VERSION
-      && constants_snapshot.command_buffer == context.cmd_list->get_native();
-  const auto constants_size = has_constants_snapshot
-                                  ? constants_snapshot.descriptor_range
-                                  : 0u;
-  const auto constants_descriptor_type = has_constants_snapshot
-                                             ? constants_snapshot.descriptor_type
-                                             : 0u;
-
-  const auto descriptor_set = temporal_snapshot.descriptor_set;
-  const auto pipeline_layout = temporal_snapshot.pipeline_layout;
+  const auto constants_size = constants_snapshot.descriptor_range;
+  const auto constants_descriptor_type = constants_snapshot.descriptor_type;
 
   ContractShape shape = {
-      .pipeline_layout = pipeline_layout,
+      .pipeline_layout = pipeline_layout.handle,
       .constants_size = constants_size,
       .constants_descriptor_type = constants_descriptor_type,
   };
@@ -949,14 +1076,12 @@ inline void AfterNativeTemporalDispatch(
     if (!has_logged_contract || shape != last_contract_shape) {
       LogContract(
           context.arguments,
-          pipeline_layout,
-          descriptor_set,
+          pipeline_layout.handle,
+          descriptor_set.handle,
           sampled,
           storage,
-          has_constants_diagnostics ? &constants_snapshot : nullptr,
-          has_temporal_diagnostics
-              ? &temporal_snapshot.constants_diagnostics
-              : nullptr,
+          &constants_snapshot,
+          nullptr,
           constants_descriptor_type);
       last_contract_shape = shape;
       has_logged_contract = true;
@@ -1030,27 +1155,20 @@ inline void AfterNativeTemporalDispatch(
     verification_flags |= DETROIT_DLSS_VERIFY_HISTORY;
   }
 
-  const bool native_history_resources_available =
-      sampled[0u].valid && sampled[2u].valid && sampled[7u].valid;
+  const bool native_history_resources_available = sampled[7u].valid;
   DetroitDlssTemporalFrameInputs inputs = {
       .struct_size = sizeof(DetroitDlssTemporalFrameInputs),
       .abi_version = DETROIT_DLSS_ABI_VERSION,
       .shader_crc = supported_build::kTemporalAaShaderCrc,
       .descriptor_set_index = DETROIT_DLSS_TAA_DESCRIPTOR_SET,
       .command_buffer = context.cmd_list->get_native(),
-      .descriptor_set = descriptor_set,
-      .pipeline_layout = pipeline_layout,
+      .descriptor_set = descriptor_set.handle,
+      .pipeline_layout = pipeline_layout.handle,
       .compute_pipeline = temporal_pipeline.handle,
-      .constants_buffer = has_constants_snapshot ? constants_snapshot.buffer : 0u,
-      .constants_offset = has_constants_snapshot
-                              ? constants_snapshot.effective_offset
-                              : 0u,
-      .constants_size = has_constants_snapshot
-                            ? constants_snapshot.descriptor_range
-                            : 0u,
-      .constants_dynamic_offset = has_constants_snapshot
-                                      ? constants_snapshot.dynamic_offset
-                                      : 0u,
+      .constants_buffer = constants_snapshot.buffer,
+      .constants_offset = constants_snapshot.effective_offset,
+      .constants_size = constants_snapshot.descriptor_range,
+      .constants_dynamic_offset = constants_snapshot.dynamic_offset,
       .current_color = ToResource(sampled[1u]),
       .depth = ToResource(sampled[3u]),
       .motion_vectors = ToResource(sampled[4u]),
@@ -1229,9 +1347,15 @@ inline void Use(DWORD fdw_reason) {
       last_logged_evaluation_key.store(
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);
-      // The Vulkan layer already owns the authoritative descriptor snapshot.
-      // Enabling RenoDX's global descriptor-table trace here makes every
-      // descriptor update in the game take the diagnostic slow path.
+      renodx::utils::state::Use(DLL_PROCESS_ATTACH);
+      reshade::register_event<reshade::addon_event::init_device>(
+          OnInitSparseDescriptorDevice);
+      reshade::register_event<reshade::addon_event::destroy_device>(
+          OnDestroySparseDescriptorDevice);
+      reshade::register_event<reshade::addon_event::update_descriptor_tables>(
+          OnUpdateSparseDescriptorTables);
+      reshade::register_event<reshade::addon_event::copy_descriptor_tables>(
+          OnCopySparseDescriptorTables);
       renodx::utils::command_action::Register(
           kTemporalDispatchCallback,
           {
@@ -1251,6 +1375,15 @@ inline void Use(DWORD fdw_reason) {
       reshade::unregister_event<reshade::addon_event::destroy_command_list>(
           OnDestroyTemporalCommandList);
       renodx::utils::command_action::Unregister(kTemporalDispatchCallback);
+      reshade::unregister_event<reshade::addon_event::copy_descriptor_tables>(
+          OnCopySparseDescriptorTables);
+      reshade::unregister_event<reshade::addon_event::update_descriptor_tables>(
+          OnUpdateSparseDescriptorTables);
+      reshade::unregister_event<reshade::addon_event::destroy_device>(
+          OnDestroySparseDescriptorDevice);
+      reshade::unregister_event<reshade::addon_event::init_device>(
+          OnInitSparseDescriptorDevice);
+      renodx::utils::state::Use(DLL_PROCESS_DETACH);
       // The Vulkan layer owns NGX/Vulkan teardown at vkDestroyDevice. Do not
       // call its ABI while the Windows loader lock is held here.
       mode_state.Reset();

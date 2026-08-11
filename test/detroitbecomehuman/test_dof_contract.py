@@ -211,8 +211,13 @@ def main():
         raise AssertionError("DOF mode must not toggle replacement pipelines with on_replace")
     require(
         addon,
-        r'\.key\s*=\s*"DepthOfFieldMode"[\s\S]*?\.default_value\s*=\s*0\.f[\s\S]*?\.labels\s*=\s*\{"Vanilla",\s*"Clean",\s*"Cinematic",\s*"Retinal"\}',
-        "DepthOfFieldMode must expose Vanilla, Clean, Cinematic, and Retinal with Vanilla as default",
+        r'\.key\s*=\s*"DepthOfFieldMode"[\s\S]*?\.default_value\s*=\s*0\.f[\s\S]*?\.labels\s*=\s*\{"Vanilla",\s*"Clean",\s*"Cinematic"\}',
+        "DepthOfFieldMode must expose Vanilla, Clean, and Cinematic with Vanilla as default",
+    )
+    require(
+        addon,
+        r"if\s*\(dof_mode\s*>=\s*2\.5f\)[\s\S]*?dof_mode\s*=\s*2\.f[\s\S]*?temporarily unavailable without global Vulkan interposition; using Cinematic",
+        "saved Retinal mode must explicitly downgrade to Cinematic",
     )
     require(
         addon,

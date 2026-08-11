@@ -168,6 +168,7 @@ float aspect_ratio_mode = 1.f;
 float dlss_mode = static_cast<float>(DETROIT_DLSS_MODE_NATIVE);
 float dlaa_sharpening = 0.f;
 float dof_mode = 0.f;
+std::atomic_bool retinal_mode_downgraded = false;
 float dof_quality = 1.f;
 float dof_focus_distance = 100.f;
 float dof_blur_radius = 100.f;
@@ -1150,6 +1151,13 @@ void UpdateDofRuntimeMode() {
 }
 
 void OnDofSettingsChanged() {
+  if (dof_mode >= 2.5f) {
+    dof_mode = 2.f;
+    retinal_mode_downgraded.store(true, std::memory_order_release);
+    reshade::log::message(
+        reshade::log::level::warning,
+        "Detroit Retinal DOF: temporarily unavailable without global Vulkan interposition; using Cinematic.");
+  }
   RefreshEmbeddedCommandTracking();
   if (dof_mode >= 0.5f) return;
   dof_runtime_controller.Reset();
@@ -2005,11 +2013,19 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Depth of Field",
                 .section = "Depth of Field",
-                .tooltip = "Vanilla is the exact reference path. Enhanced styles apply custom focus and radius before Detroit's authored Split/Gather/Fill chain. Clean uses precise full-resolution CoC visibility, Cinematic restores authored far coverage, High reconstructs small CoC from full-resolution color, and Retinal adds a Watson acuity filter around a configurable fixation point.",
-                .labels = {"Vanilla", "Clean", "Cinematic", "Retinal"},
+                .tooltip = "Vanilla is the exact reference path. Enhanced styles apply custom focus and radius before Detroit's authored Split/Gather/Fill chain. Clean uses precise full-resolution CoC visibility, Cinematic restores authored far coverage, and High reconstructs small CoC from full-resolution color.",
+                .labels = {"Vanilla", "Clean", "Cinematic"},
                 .on_change_value = [](float, float current) {
                   dof_mode = current;
                   OnDofSettingsChanged();
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Saved Retinal DOF was changed to Cinematic. Retinal remains preserved for a later targeted redesign.",
+                .section = "Depth of Field",
+                .is_visible = []() {
+                  return retinal_mode_downgraded.load(std::memory_order_acquire);
                 },
             }},
             {{
@@ -2547,7 +2563,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Native TAA is active. Targeted Vulkan command hooks use their direct lock-free trampoline until DLAA or Retinal DOF requests exact binding state.",
+                .label = "Native TAA is active. The two targeted Vulkan command hooks use direct lock-free trampolines.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
@@ -2973,6 +2989,29 @@ void MigrateDlssModeSettings() {
   }
 }
 
+void MigrateRetinalDofSettings() {
+  bool migrated = false;
+  for (const char* section : {
+           "renodx-preset1",
+           "renodx-preset2",
+           "renodx-preset3",
+       }) {
+    float persisted = 0.f;
+    if (!reshade::get_config_value(
+            nullptr, section, "DepthOfFieldMode", persisted)
+        || persisted < 2.5f) {
+      continue;
+    }
+    reshade::set_config_value(nullptr, section, "DepthOfFieldMode", 2);
+    migrated = true;
+  }
+  if (!migrated) return;
+  retinal_mode_downgraded.store(true, std::memory_order_release);
+  reshade::log::message(
+      reshade::log::level::warning,
+      "Detroit Retinal DOF: temporarily unavailable without global Vulkan interposition; using Cinematic.");
+}
+
 void OnPresent(
     reshade::api::command_queue*,
     reshade::api::swapchain* swapchain,
@@ -3126,6 +3165,7 @@ bool AttachAddon(HMODULE h_module) {
   reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
   reshade::register_event<reshade::addon_event::present>(OnPresent);
   MigrateDlssModeSettings();
+  MigrateRetinalDofSettings();
   renodx::utils::settings::Use(
       DLL_PROCESS_ATTACH, &settings, &OnPresetOff);
   temporal_capture::Use(DLL_PROCESS_ATTACH);
