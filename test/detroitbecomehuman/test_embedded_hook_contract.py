@@ -227,6 +227,9 @@ def main() -> None:
     require(temporal, "kStopBeforeBridgeEvaluateForDiagnostic = true")
     require(temporal, "RuntimeStatus::kBridgeInputReadyDiagnostic")
     require(temporal, "bridge_input_ready_diagnostic_reached")
+    require(temporal, "kMaximumSnapshotDiagnosticLogs = 16u")
+    require(temporal, "TAA snapshot state {}:")
+    require(temporal, "bridge boundary reached before Configure/Evaluate")
     require(temporal, "GetCommandRecordingMetadata(")
     require(temporal, "device->map_buffer_region(")
     require(temporal, "reshade::api::map_access::read_only")
@@ -241,6 +244,17 @@ def main() -> None:
         "device->map_buffer_region("
     ):
         raise AssertionError("persistent b52 mapping must be tried before a temporary remap")
+    sparse_resolution = section(
+        temporal,
+        "[[nodiscard]] inline bool ResolveSparseBindings(",
+        "[[nodiscard]] inline std::uint32_t ToVulkanFormat(",
+    )
+    if sparse_resolution.index("if (epoch != nullptr) *epoch = snapshot.epoch") > sparse_resolution.index(
+        "return complete"
+    ):
+        raise AssertionError("incomplete sparse snapshots must expose their epoch for diagnostics")
+    if sparse_resolution.index("assign(52u, &output->constants)") > sparse_resolution.index("return complete"):
+        raise AssertionError("incomplete sparse snapshots must expose their slot mask for diagnostics")
     after_temporal_dispatch = temporal[temporal.index("inline void AfterNativeTemporalDispatch(") :]
     diagnostic_gate = section(
         after_temporal_dispatch,
@@ -275,6 +289,13 @@ def main() -> None:
     fallback_body = temporal_dispatch[fallback:evaluate]
     require(fallback_body, "RuntimeStatus::kDescriptorContractIncomplete")
     require(fallback_body, "return;")
+    snapshot_failure = section(
+        temporal_dispatch,
+        "if (!snapshot_complete)",
+        "const auto constants_size = constants_snapshot.descriptor_range",
+    )
+    if "contract_mutex" in snapshot_failure:
+        raise AssertionError("snapshot diagnostic fallback must not take the contract mutex")
 
     # Scratch retirement is tied to the feature-bearing command buffer only.
     require(adapter_header, "PollCompletedOneTimeCommandBuffers(")

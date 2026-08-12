@@ -195,9 +195,13 @@ static_assert(std::atomic_uint64_t::is_always_lock_free);
 inline std::mutex contract_mutex;
 inline ContractShape last_contract_shape = {};
 inline bool has_logged_contract = false;
-inline bool has_logged_native_snapshot_failure = false;
 inline constexpr std::uint64_t kUnloggedTelemetryKey =
     std::numeric_limits<std::uint64_t>::max();
+inline constexpr std::uint32_t kMaximumSnapshotDiagnosticLogs = 16u;
+inline std::atomic_uint64_t last_logged_snapshot_diagnostic_key =
+    kUnloggedTelemetryKey;
+inline std::atomic_uint32_t snapshot_diagnostic_log_count = 0u;
+inline std::atomic_bool has_logged_bridge_input_ready = false;
 inline std::atomic_uint64_t last_logged_dlss_success_key =
     kUnloggedTelemetryKey;
 inline std::atomic_uint64_t last_logged_evaluation_key =
@@ -340,6 +344,11 @@ inline void SetMode(DetroitDlssMode mode) {
   const auto previous = transition.previous;
   if (transition.changed) {
     bridge_input_ready_diagnostic_reached.store(false, std::memory_order_relaxed);
+    last_logged_snapshot_diagnostic_key.store(
+        kUnloggedTelemetryKey,
+        std::memory_order_relaxed);
+    snapshot_diagnostic_log_count.store(0u, std::memory_order_relaxed);
+    has_logged_bridge_input_ready.store(false, std::memory_order_relaxed);
   }
   if (current.mode == DETROIT_DLSS_MODE_NATIVE
       && transition.changed && previous != DETROIT_DLSS_MODE_NATIVE) {
@@ -584,13 +593,13 @@ inline bool OnCopySparseDescriptorTables(
     if (found == data->tables.end()) return false;
     snapshot = found->second;
   }
-  if (snapshot.epoch == 0u
-      || std::any_of(
+  const bool complete =
+      snapshot.epoch != 0u
+      && std::all_of(
           snapshot.slots.begin(),
           snapshot.slots.end(),
-          [](const SparseDescriptorSlot& slot) { return !slot.valid; })) {
-    return false;
-  }
+          [](const SparseDescriptorSlot& slot) { return slot.valid; });
+  if (epoch != nullptr) *epoch = snapshot.epoch;
 
   const auto assign = [&](std::uint32_t binding, ResolvedSlot* destination) {
     const auto sparse_index = GetSparseBindingIndex(binding);
@@ -612,8 +621,7 @@ inline bool OnCopySparseDescriptorTables(
   assign(52u, &output->constants);
   output->constants_descriptor_type =
       static_cast<std::uint32_t>(output->constants.type);
-  if (epoch != nullptr) *epoch = snapshot.epoch;
-  return true;
+  return complete;
 }
 
 [[nodiscard]] inline std::uint32_t ToVulkanFormat(
@@ -1035,20 +1043,27 @@ inline void AfterNativeTemporalDispatch(
   ResolvedBindings bindings = {};
   std::uint64_t descriptor_epoch = 0u;
   dlss::embedded::CommandRecordingMetadata recording = {};
-  bool snapshot_complete =
-      pipeline_layout.handle != 0u && descriptor_set.handle != 0u
-      && (temporal_pipeline_layout.handle == 0u
-          || temporal_pipeline_layout == pipeline_layout)
+  const bool has_pipeline_layout = pipeline_layout.handle != 0u;
+  const bool has_descriptor_set = descriptor_set.handle != 0u;
+  const bool pipeline_layout_matches =
+      temporal_pipeline_layout.handle == 0u
+      || temporal_pipeline_layout == pipeline_layout;
+  const bool sparse_bindings_complete =
+      has_pipeline_layout && has_descriptor_set && pipeline_layout_matches
       && ResolveSparseBindings(
-          device, descriptor_set, &bindings, &descriptor_epoch)
+          device, descriptor_set, &bindings, &descriptor_epoch);
+  const bool recording_metadata_available =
+      sparse_bindings_complete
       && dlss::embedded::GetCommandRecordingMetadata(
           native_command_list,
           pipeline_layout.handle,
           descriptor_set.handle,
           &recording);
+  bool snapshot_complete = recording_metadata_available;
   std::array<CapturedImage, kSampledBindings.size()> sampled = {};
   std::array<CapturedImage, kStorageBindings.size()> storage = {};
   DetroitDlssTemporalConstantsSnapshot constants_snapshot = {};
+  bool constants_captured = false;
   if (snapshot_complete) {
     sampled[1u] = CaptureImage(
         device, bindings.sampled[1u], kVkImageLayoutShaderReadOnly);
@@ -1062,28 +1077,74 @@ inline void AfterNativeTemporalDispatch(
         device, bindings.sampled[7u], kVkImageLayoutShaderReadOnly);
     storage[0u] = CaptureImage(
         device, bindings.storage[0u], kVkImageLayoutGeneral);
-    snapshot_complete = sampled[1u].valid && sampled[3u].valid
-                        && sampled[4u].valid && sampled[5u].valid
-                        && sampled[7u].valid && storage[0u].valid
-                        && CaptureTemporalConstants(
-                            device,
-                            bindings.constants,
-                            recording,
-                            &constants_snapshot);
+    const bool images_complete =
+        sampled[1u].valid && sampled[3u].valid && sampled[4u].valid
+        && sampled[5u].valid && sampled[7u].valid && storage[0u].valid;
+    constants_captured =
+        images_complete
+        && CaptureTemporalConstants(
+            device,
+            bindings.constants,
+            recording,
+            &constants_snapshot);
+    snapshot_complete = images_complete && constants_captured;
   }
-  if (!snapshot_complete) {
-    std::scoped_lock lock(contract_mutex);
-    if (!has_logged_native_snapshot_failure) {
+
+  const auto slot_mask =
+      (bindings.sampled[1u].found ? 1u << 0u : 0u)
+      | (bindings.sampled[3u].found ? 1u << 1u : 0u)
+      | (bindings.sampled[4u].found ? 1u << 2u : 0u)
+      | (bindings.sampled[5u].found ? 1u << 3u : 0u)
+      | (bindings.sampled[7u].found ? 1u << 4u : 0u)
+      | (bindings.storage[0u].found ? 1u << 5u : 0u)
+      | (bindings.constants.found ? 1u << 6u : 0u);
+  const auto image_mask =
+      (sampled[1u].valid ? 1u << 0u : 0u)
+      | (sampled[3u].valid ? 1u << 1u : 0u)
+      | (sampled[4u].valid ? 1u << 2u : 0u)
+      | (sampled[5u].valid ? 1u << 3u : 0u)
+      | (sampled[7u].valid ? 1u << 4u : 0u)
+      | (storage[0u].valid ? 1u << 5u : 0u);
+  const auto snapshot_diagnostic_key = MakeTelemetryKey(
+      has_pipeline_layout,
+      has_descriptor_set,
+      pipeline_layout_matches,
+      sparse_bindings_complete,
+      recording_metadata_available,
+      slot_mask,
+      image_mask,
+      constants_captured);
+  if (last_logged_snapshot_diagnostic_key.exchange(
+          snapshot_diagnostic_key,
+          std::memory_order_relaxed)
+      != snapshot_diagnostic_key) {
+    const auto log_index =
+        snapshot_diagnostic_log_count.fetch_add(1u, std::memory_order_relaxed);
+    if (log_index < kMaximumSnapshotDiagnosticLogs) {
       Log(
-          reshade::log::level::warning,
+          snapshot_complete ? reshade::log::level::info
+                            : reshade::log::level::warning,
           std::format(
-              "current TAA descriptor epoch is incomplete or begin/b52 metadata is stale (epoch {}, command 0x{:X}, layout 0x{:X}, set0 0x{:X}); native TAA remains active.",
+              "TAA snapshot state {}: layout={}, set0={}, layout_match={}, sparse={}, recording={}, slots=0x{:02X} [b1,b3,b4,b5,b7,b16,b52], images=0x{:02X} [b1,b3,b4,b5,b7,b16], b52_payload={}, epoch={}, command=0x{:X}, layout_handle=0x{:X}, set0_handle=0x{:X}, recording_gen={}, dynamic_offset={}; complete={}.",
+              log_index + 1u,
+              has_pipeline_layout,
+              has_descriptor_set,
+              pipeline_layout_matches,
+              sparse_bindings_complete,
+              recording_metadata_available,
+              slot_mask,
+              image_mask,
+              constants_captured,
               descriptor_epoch,
               native_command_list,
               pipeline_layout.handle,
-              descriptor_set.handle));
-      has_logged_native_snapshot_failure = true;
+              descriptor_set.handle,
+              recording.recording_generation,
+              recording.constants_dynamic_offset,
+              snapshot_complete));
     }
+  }
+  if (!snapshot_complete) {
     runtime_status.store(
         RuntimeStatus::kDescriptorContractIncomplete,
         std::memory_order_relaxed);
@@ -1237,6 +1298,21 @@ inline void AfterNativeTemporalDispatch(
 
   if constexpr (kStopBeforeBridgeEvaluateForDiagnostic) {
     bridge_input_ready_diagnostic_reached.store(true, std::memory_order_relaxed);
+    if (!has_logged_bridge_input_ready.exchange(true, std::memory_order_relaxed)) {
+      Log(
+          reshade::log::level::info,
+          std::format(
+              "bridge boundary reached before Configure/Evaluate (frame {}, epoch {}, command 0x{:X}, recording_gen {}, verification 0x{:X}, render {}x{}, output {}x{}); diagnostic Native TAA fallback remains active.",
+              inputs.frame_id,
+              descriptor_epoch,
+              inputs.command_buffer,
+              recording.recording_generation,
+              inputs.verification_flags,
+              inputs.render_width,
+              inputs.render_height,
+              inputs.output_width,
+              inputs.output_height));
+    }
     runtime_status.store(
         RuntimeStatus::kBridgeInputReadyDiagnostic,
         std::memory_order_relaxed);
@@ -1377,6 +1453,11 @@ inline void Use(DWORD fdw_reason) {
     case DLL_PROCESS_ATTACH: {
       mode_state.Reset();
       bridge_input_ready_diagnostic_reached.store(false, std::memory_order_relaxed);
+      last_logged_snapshot_diagnostic_key.store(
+          kUnloggedTelemetryKey,
+          std::memory_order_relaxed);
+      snapshot_diagnostic_log_count.store(0u, std::memory_order_relaxed);
+      has_logged_bridge_input_ready.store(false, std::memory_order_relaxed);
       {
         std::unique_lock lock(main_temporal_command_list_mutex);
         main_temporal_command_lists.clear();
