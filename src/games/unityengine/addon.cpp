@@ -841,6 +841,8 @@ const ShaderItem INITIAL_SHADERS[] = {
     SneakyBuilder2OnDraw(0x7D343D34),
     SneakyBuilder2OnDraw(0x534F0886),
     ////// HDRP END //////
+    ////// CRP START //////
+    CustomShaderEntryCallback(0xA4DA5EBA, &CountLinearTonemap3),
     ////// URP START //////
       /// Builder Hdr ///
         // No Tonemap
@@ -1037,6 +1039,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberLinearOnDraw(0xBD82D2DB),
     UberLinearOnDraw(0x1695FEB2),
     UberLinearOnDraw(0x13EE3146),
+    UberLinearOnDraw(0x32A94D85),
     UberGammaOnDraw(0x6A501208),
     UberGammaOnDraw(0xE3B6F1F7),
     UberGammaOnDraw(0xA6918C83),
@@ -1136,6 +1139,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberGammaOnDraw(0x08DE4385),
     UberGammaOnDraw(0xDCB65C99),
     UberGammaOnDraw(0x893ACDCC),
+    UberGammaOnDraw(0x351CCD43),
         // Neutral
     UberNeutralLinearOnDraw(0x0B383A2F),
     UberNeutralGammaOnDraw(0x0EA73DAA),
@@ -1209,6 +1213,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberACESLinearOnDraw(0x08331DE7),
     UberACESLinearOnDraw(0xA6AFBE57),
     UberACESLinearOnDraw(0xA9329B7F),
+    UberACESLinearOnDraw(0xAD251165),
     UberACESLinearOnDraw(0xB4323752),
     UberACESLinearOnDraw(0xBB673EBA),
     UberACESLinearOnDraw(0xC9F897D5),
@@ -1218,6 +1223,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberACESLinearOnDraw(0xCD7C2AB8),
     UberACESLinearOnDraw(0xD8C3ADEB),
     UberACESLinearOnDraw(0xE651D798),
+    UberACESLinearOnDraw(0xEB8C3409),
     UberACESLinearOnDraw(0x6FEECA44),
     UberACESLinearOnDraw(0x07AF61F8),
     UberACESLinearOnDraw(0x6F7A89B5),
@@ -1390,6 +1396,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberHDLinearOnDraw(0xC9B217F6),
     UberHDLinearOnDraw(0xC36A912D),
 	  UberHDLinearOnDraw(0xC1639FBF),
+      UberHDLinearOnDraw(0xC7061E2F),
 	  UberHDLinearOnDraw(0xC2976820),
       UberHDLinearOnDraw(0xCA9D46B7),
     UberHDLinearOnDraw(0xCBDCEF29),
@@ -1400,6 +1407,7 @@ const ShaderItem INITIAL_SHADERS[] = {
 	  UberHDLinearOnDraw(0xD4543B6E),
 	  UberHDLinearOnDraw(0xD86170D7),
 	  UberHDLinearOnDraw(0xE0D21C32),
+      UberHDLinearOnDraw(0xE42F2B50),
 	  UberHDLinearOnDraw(0xE76D5295),
 	  UberHDGammaOnDraw(0xE127B526),
 	  UberHDLinearOnDraw(0xE279EC1D),
@@ -2289,6 +2297,8 @@ const ShaderItem INITIAL_SHADERS[] = {
     CustomShaderEntryCallback(0x1EE4CF1C, &CountLinear),
     CustomShaderEntryCallback(0xD90A4513, &CountGamma),
     CustomShaderEntryCallback(0x780BC110, &CountGamma),
+    CustomShaderEntryCallback(0x685DF333, &CountLinear),
+    CustomShaderEntryCallback(0x80C53B73, &CountLinear),
     CustomShaderEntryCallback(0xAEE78EFC, &CountGamma),      // BlitSpace
     CustomShaderEntryCallback(0xFD37FE01, &CountGamma),      // BlitSpace
     CustomShaderEntryCallback(0x4AF45563, &CountLinear),      // BlitSpace
@@ -2469,9 +2479,10 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .tint = 0x38F6FC,
         .min = 48.f,
-        .max = 4000.f,
+        .max = 10000.f,
         .is_enabled = []() { return shader_injection.toneMapType >= 2.f; },
         .is_visible = []() { return shader_injection.tonemapCheck != 0.f; },
+        .is_logarithmic = true,
     },
     new renodx::utils::settings::Setting{
         .key = "toneMapGameNits",

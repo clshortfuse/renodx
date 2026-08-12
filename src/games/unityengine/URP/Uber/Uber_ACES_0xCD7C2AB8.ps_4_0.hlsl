@@ -9,6 +9,8 @@ cbuffer cb0 : register(b0){
   float4 cb0[147];
 }
 
+// PEAK
+
 void main(
   float4 v0 : SV_POSITION0,
   float2 v1 : TEXCOORD0,
@@ -47,7 +49,7 @@ void main(
   r1.xyz = applyUserTonemapACES(r0.xyz, 2);
   if (cb0[138].w > 0) {
     r0.xyz = renodx::color::srgb::EncodeSafe(r1.xyz);
-    r2.xyz = handleUserLUT(r0.xyz, t3, s0_s, cb0[138].xyz);
+    r2.xyz = handleUserLUT(r1.xyz, t3, s0_s, cb0[138].xyz);
     r2.xyz = r2.xyz + -r0.xyz;
     r0.xyz = cb0[138].www * r2.xyz + r0.xyz;
     r1.xyz = renodx::color::srgb::DecodeSafe(r0.xyz);
