@@ -6343,6 +6343,8 @@ VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(
       dynamic_offset_count,
       dynamic_offsets);
 
+  if (!runtime_command_tracking_enabled.load(std::memory_order_acquire)) return;
+
   if (pipeline_bind_point != VK_PIPELINE_BIND_POINT_COMPUTE
       || first_set != DETROIT_DLSS_TAA_DESCRIPTOR_SET
       || descriptor_set_count == 0u || descriptor_sets == nullptr
@@ -7210,7 +7212,7 @@ bool ClaimCommandRecordingEvaluation(
 void RecycleFeatureCommandBuffer(std::uint64_t command_buffer) {
   if (command_buffer == 0u) return;
   const auto native = FromOpaque<VkCommandBuffer>(command_buffer);
-  const auto state = FindDeviceSharedFast(native);
+  auto* state = FindDeviceFast(native);
   if (state == nullptr || !MayBeFeatureRecordingCandidate(*state, native)) {
     return;
   }
@@ -7220,14 +7222,14 @@ void RecycleFeatureCommandBuffer(std::uint64_t command_buffer) {
     state->ngx_context->DiscardRecording(command_buffer);
   }
   (void)state->submission_trace_tracker.Discard(command_buffer);
-  UnmarkFeatureRecordingCandidateLocked(state.get(), command_buffer);
-  UpdateFeatureTrackingStateLocked(state.get());
+  UnmarkFeatureRecordingCandidateLocked(state, command_buffer);
+  UpdateFeatureTrackingStateLocked(state);
 }
 
 void RetireFeatureCommandBuffer(std::uint64_t command_buffer) {
   if (command_buffer == 0u) return;
   const auto native = FromOpaque<VkCommandBuffer>(command_buffer);
-  const auto state = FindDeviceSharedFast(native);
+  auto* state = FindDeviceFast(native);
   if (state == nullptr || !MayBeFeatureRecordingCandidate(*state, native)) {
     return;
   }
@@ -7237,8 +7239,8 @@ void RetireFeatureCommandBuffer(std::uint64_t command_buffer) {
     state->ngx_context->DiscardRecording(command_buffer);
   }
   (void)state->submission_trace_tracker.Discard(command_buffer);
-  UnmarkFeatureRecordingCandidateLocked(state.get(), command_buffer);
-  UpdateFeatureTrackingStateLocked(state.get());
+  UnmarkFeatureRecordingCandidateLocked(state, command_buffer);
+  UpdateFeatureTrackingStateLocked(state);
 }
 
 bool AttachEarlyHooks(

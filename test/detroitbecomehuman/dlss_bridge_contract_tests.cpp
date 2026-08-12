@@ -1007,6 +1007,31 @@ bool TestTemporalModeRejectsLegacySrValues() {
   return passed;
 }
 
+bool TestTemporalModeAuthorizationFilterOverflowFailsSafe() {
+  temporal_mode_state::Tracker tracker;
+  (void)tracker.SetMode(DETROIT_DLSS_MODE_DLAA);
+  const auto snapshot = tracker.GetSnapshot();
+  constexpr std::uint64_t kFirstCommandList = UINT64_C(0x1000);
+  constexpr std::uint64_t kOverflowCommandList = kFirstCommandList + 64u;
+
+  bool passed = true;
+  for (std::uint64_t command_list = kFirstCommandList;
+       command_list <= kOverflowCommandList;
+       ++command_list) {
+    passed &= Expect(
+        tracker.Record(command_list, snapshot, true),
+        "filter overflow must not reject an authoritative DLAA output");
+  }
+  tracker.BeginRecording(kOverflowCommandList);
+  const auto overflow_authorization =
+      tracker.QueryAuthorization(kOverflowCommandList);
+  passed &= Expect(
+      overflow_authorization.replacement_eligible
+          && !overflow_authorization.authorized,
+      "filter overflow must fall back to the mutex and invalidate the new recording");
+  return passed;
+}
+
 bool TestNativePostDispatchFastPathFailsClosed() {
   bool passed = true;
   passed &= Expect(
@@ -1272,6 +1297,7 @@ int main() {
   passed &= TestDirectProviderContract();
   passed &= TestTemporalModeGenerationInvalidatesAuxiliaryAuthorization();
   passed &= TestTemporalModeRejectsLegacySrValues();
+  passed &= TestTemporalModeAuthorizationFilterOverflowFailsSafe();
   passed &= TestNativePostDispatchFastPathFailsClosed();
   passed &= TestTemporalModeTransitionLeaseAllowsLifecycleReentry();
   passed &= TestBoundedEvaluationTraceWindow();

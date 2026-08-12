@@ -9,6 +9,7 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "dlss/feature_recording_registry.hpp"
 #include "dlss_policy.hpp"
 
 namespace renodx::games::detroitbecomehuman::temporal_mode_state {
@@ -73,6 +74,7 @@ class Tracker {
     }
     AdvanceGenerationLocked();
     authorization_by_command_list_.clear();
+    authorization_command_lists_.Clear();
     mode_.store(mode, std::memory_order_release);
     return {
         .previous = previous,
@@ -89,6 +91,7 @@ class Tracker {
     std::scoped_lock lock(mutex_);
     AdvanceGenerationLocked();
     authorization_by_command_list_.clear();
+    authorization_command_lists_.Clear();
     mode_.store(mode, std::memory_order_release);
   }
 
@@ -97,6 +100,10 @@ class Tracker {
   // for the pre-dispatch auxiliary-replacement decision.
   void BeginRecording(std::uint64_t command_list) {
     if (command_list == 0u) return;
+    if (!authorization_command_lists_.Overflowed()
+        && !authorization_command_lists_.Contains(command_list)) {
+      return;
+    }
     std::scoped_lock lock(mutex_);
     const auto found = authorization_by_command_list_.find(command_list);
     if (found != authorization_by_command_list_.end()) {
@@ -108,6 +115,7 @@ class Tracker {
     if (command_list == 0u) return;
     std::scoped_lock lock(mutex_);
     authorization_by_command_list_.erase(command_list);
+    (void)authorization_command_lists_.Erase(command_list);
   }
 
   [[nodiscard]] Authorization QueryAuthorization(
@@ -162,12 +170,15 @@ class Tracker {
     }
     if (!output_valid || snapshot.mode == DETROIT_DLSS_MODE_NATIVE) {
       authorization_by_command_list_.erase(command_list);
+      (void)authorization_command_lists_.Erase(command_list);
       return false;
     }
     authorization_by_command_list_[command_list] = {
         .replacement_generation = snapshot.generation,
         .current_recording_generation = snapshot.generation,
     };
+    (void)authorization_command_lists_.Insert(
+        command_list, snapshot.generation);
     return true;
   }
   void AdvanceGenerationLocked() noexcept {
@@ -184,6 +195,9 @@ class Tracker {
   };
   std::unordered_map<std::uint64_t, CommandAuthorization>
       authorization_by_command_list_;
+  // ponytail: 64 exact slots cover Detroit's observed command-list rotation;
+  // overflow deliberately restores the authoritative mutex path.
+  dlss::FeatureRecordingRegistry<64u> authorization_command_lists_;
 };
 
 }  // namespace renodx::games::detroitbecomehuman::temporal_mode_state

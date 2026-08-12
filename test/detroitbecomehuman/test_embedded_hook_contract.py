@@ -30,6 +30,9 @@ def main() -> None:
         encoding="utf-8"
     )
     temporal = (source_dir / "temporal_capture.hpp").read_text(encoding="utf-8")
+    temporal_mode_state = (source_dir / "temporal_mode_state.hpp").read_text(
+        encoding="utf-8"
+    )
     addon = (source_dir / "addon.cpp").read_text(encoding="utf-8")
     bridge = (source_dir / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
     effects_addon = (
@@ -110,12 +113,45 @@ def main() -> None:
         "[[maybe_unused]] PFN_vkVoidFunction FindLegacyTrackedDeviceFunction(",
     )
     require(bind, "fast_cmd_bind_descriptor_sets.load")
+    require(bind, "runtime_command_tracking_enabled.load")
     require(bind, "dynamic_offset_count != 1u")
     require(bind, "local.constants_dynamic_offset = dynamic_offsets[0u]")
     require(bind, "local.descriptor_bound_after_begin = true")
     for forbidden in ("tracking_mutex", "state->mutex", "unordered_map"):
         if forbidden in bind:
             raise AssertionError(f"descriptor bind hot path must stay TLS-only: {forbidden}")
+    if bind.index("runtime_command_tracking_enabled.load") > bind.index(
+        "GetCurrentThreadComputeCommandState()"
+    ):
+        raise AssertionError("native descriptor bind must return before touching TLS state")
+
+    begin_recording = section(
+        temporal_mode_state,
+        "void BeginRecording(std::uint64_t command_list)",
+        "void DiscardCommandList(std::uint64_t command_list)",
+    )
+    require(begin_recording, "authorization_command_lists_.Contains(command_list)")
+    if begin_recording.index("authorization_command_lists_.Contains") > begin_recording.index(
+        "std::scoped_lock lock(mutex_)"
+    ):
+        raise AssertionError("ordinary command-list reset must bypass the mode-state mutex")
+
+    for lifecycle in (
+        section(
+            source,
+            "void RecycleFeatureCommandBuffer(std::uint64_t command_buffer)",
+            "void RetireFeatureCommandBuffer(std::uint64_t command_buffer)",
+        ),
+        section(
+            source,
+            "void RetireFeatureCommandBuffer(std::uint64_t command_buffer)",
+            "bool AttachEarlyHooks(",
+        ),
+    ):
+        require(lifecycle, "FindDeviceFast(native)")
+        require(lifecycle, "MayBeFeatureRecordingCandidate(*state, native)")
+        if "FindDeviceSharedFast(native)" in lifecycle:
+            raise AssertionError("ordinary lifecycle callbacks must not copy shared ownership")
 
     recording_metadata = section(
         source,
