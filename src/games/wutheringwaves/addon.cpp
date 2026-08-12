@@ -369,9 +369,9 @@ renodx::utils::settings::Settings settings = {
         .tint = tint_scene_grading,
         .min = 0.f,
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
         .is_enabled = []() { return shader_injection.tone_map_type >= 1
                       && shader_injection.tone_map_scaling != 1.f; },
+        .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 1; },
       },
           new renodx::utils::settings::Setting{
@@ -384,8 +384,8 @@ renodx::utils::settings::Settings settings = {
         .tint = tint_scene_grading,
         .min = 0.f,
         .max = 100.f,
-        .parse = [](float value) { return value * 0.01f; },
         .is_enabled = []() { return current_settings_mode >= 1 && shader_injection.tone_map_type >= 1; },
+        .parse = [](float value) { return value * 0.01f; },
     },
       new renodx::utils::settings::Setting{
         .key = "WuWaLUTStrength",
