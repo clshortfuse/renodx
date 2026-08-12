@@ -14,6 +14,12 @@
 namespace renodx::games::detroitbecomehuman::dlss {
 
 enum class EvaluationTerminal : std::uint8_t {
+  kDeviceIdentityMismatch,
+  kNotConfigured,
+  kNativeMode,
+  kAdapterUnavailable,
+  kInvalidFrame,
+  kCommandStateUnrestorable,
   kNgxInitializationFailed,
   kFeatureCreationPending,
   kFeatureCreationFailed,
@@ -27,6 +33,18 @@ enum class EvaluationTerminal : std::uint8_t {
 [[nodiscard]] constexpr std::string_view EvaluationTerminalName(
     EvaluationTerminal terminal) noexcept {
   switch (terminal) {
+    case EvaluationTerminal::kDeviceIdentityMismatch:
+      return "device_identity_mismatch";
+    case EvaluationTerminal::kNotConfigured:
+      return "not_configured";
+    case EvaluationTerminal::kNativeMode:
+      return "native_mode";
+    case EvaluationTerminal::kAdapterUnavailable:
+      return "adapter_unavailable";
+    case EvaluationTerminal::kInvalidFrame:
+      return "invalid_frame";
+    case EvaluationTerminal::kCommandStateUnrestorable:
+      return "command_state_unrestorable";
     case EvaluationTerminal::kNgxInitializationFailed:
       return "ngx_initialization_failed";
     case EvaluationTerminal::kFeatureCreationPending:

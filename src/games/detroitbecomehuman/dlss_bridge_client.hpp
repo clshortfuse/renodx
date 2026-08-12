@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <limits>
 #include <mutex>
+#include <string_view>
 
 #include "dlss_bridge_abi.h"
 #include "dlss_policy.hpp"
@@ -21,6 +22,79 @@ struct Evaluation {
   dlss_policy::FallbackReason reason = dlss_policy::FallbackReason::kBridgeUnavailable;
   bool output_valid = false;
   bool suppress_final_cas = false;
+  bool effective_reset = false;
+};
+
+enum class EvaluationStage : std::uint32_t {
+  kEntry = 0u,
+  kNativeTransition,
+  kConnect,
+  kRefreshContext,
+  kModeAvailability,
+  kQueryMode,
+  kFrameEligibility,
+  kConfigure,
+  kBridgeEvaluate,
+  kFinalize,
+  kSuccess,
+};
+
+[[nodiscard]] constexpr std::string_view EvaluationStageName(
+    EvaluationStage stage) noexcept {
+  switch (stage) {
+    case EvaluationStage::kEntry:
+      return "entry";
+    case EvaluationStage::kNativeTransition:
+      return "native_transition";
+    case EvaluationStage::kConnect:
+      return "connect";
+    case EvaluationStage::kRefreshContext:
+      return "refresh_context";
+    case EvaluationStage::kModeAvailability:
+      return "mode_availability";
+    case EvaluationStage::kQueryMode:
+      return "query_mode";
+    case EvaluationStage::kFrameEligibility:
+      return "frame_eligibility";
+    case EvaluationStage::kConfigure:
+      return "configure";
+    case EvaluationStage::kBridgeEvaluate:
+      return "bridge_evaluate";
+    case EvaluationStage::kFinalize:
+      return "finalize";
+    case EvaluationStage::kSuccess:
+      return "success";
+  }
+  return "invalid";
+}
+
+struct EvaluationDiagnostics {
+  EvaluationStage stage = EvaluationStage::kEntry;
+  DetroitDlssMode mode = DETROIT_DLSS_MODE_NATIVE;
+  std::uint64_t frame_id = 0u;
+  std::uint64_t capability_flags = 0u;
+  std::uint32_t bridge_abi_version = 0u;
+  dlss_policy::FallbackReason reason =
+      dlss_policy::FallbackReason::kBridgeUnavailable;
+  DetroitDlssResultCode query_status = DETROIT_DLSS_RESULT_FALLBACK;
+  DetroitDlssResultCode configure_status = DETROIT_DLSS_RESULT_FALLBACK;
+  DetroitDlssResultCode evaluate_status = DETROIT_DLSS_RESULT_FALLBACK;
+  DetroitDlssModeSettings settings = {};
+  dlss_policy::FrameEligibility eligibility = {};
+  dlss_policy::FrameOutcome outcome = {};
+  std::uint32_t result_struct_size = 0u;
+  std::uint32_t result_abi_version = 0u;
+  DetroitDlssResultCode result_status = DETROIT_DLSS_RESULT_FALLBACK;
+  std::uint32_t result_detail = 0u;
+  std::uint64_t result_frame_id = 0u;
+  std::uint32_t result_flags = 0u;
+  bool connected = false;
+  bool context_refreshed = false;
+  bool settings_cache_reused = false;
+  bool query_called = false;
+  bool configure_called = false;
+  bool feature_reconfigured = false;
+  bool evaluate_called = false;
   bool effective_reset = false;
 };
 
@@ -277,13 +351,43 @@ class Client {
 
   [[nodiscard]] Evaluation Evaluate(
       DetroitDlssMode mode,
-      const DetroitDlssTemporalFrameInputs& inputs) {
+      const DetroitDlssTemporalFrameInputs& inputs,
+      EvaluationDiagnostics* diagnostics = nullptr) {
     std::scoped_lock lock(mutex_);
+
+    if (diagnostics != nullptr) {
+      *diagnostics = {
+          .mode = mode,
+          .frame_id = inputs.frame_id,
+      };
+    }
+    const auto finish = [diagnostics](
+                            EvaluationStage stage,
+                            Evaluation evaluation) {
+      if (diagnostics != nullptr) {
+        diagnostics->stage = stage;
+        diagnostics->reason = evaluation.reason;
+      }
+      return evaluation;
+    };
 
     if (mode == DETROIT_DLSS_MODE_NATIVE) {
       reset_gate_.RequireReset();
-      if (!Connect() || !RefreshContext()) {
-        return {.reason = dlss_policy::FallbackReason::kNativeMode};
+      if (!Connect()) {
+        return finish(
+            EvaluationStage::kConnect,
+            {.reason = dlss_policy::FallbackReason::kNativeMode});
+      }
+      if (diagnostics != nullptr) diagnostics->connected = true;
+      if (!RefreshContext()) {
+        return finish(
+            EvaluationStage::kRefreshContext,
+            {.reason = dlss_policy::FallbackReason::kNativeMode});
+      }
+      if (diagnostics != nullptr) {
+        diagnostics->context_refreshed = true;
+        diagnostics->capability_flags = context_.capability_flags;
+        diagnostics->bridge_abi_version = api_.abi_version;
       }
       const std::uint32_t output_width =
           inputs.output_width != 0u ? inputs.output_width
@@ -293,30 +397,62 @@ class Client {
                                      : configured_settings_.output_height;
       const bool configured_native =
           ConfigureNativeLocked(output_width, output_height);
-      return {
-          .status = configured_native ? DETROIT_DLSS_RESULT_SUCCESS
-                                      : DETROIT_DLSS_RESULT_FALLBACK,
-          .reason = dlss_policy::FallbackReason::kNativeMode,
-      };
+      if (diagnostics != nullptr) {
+        diagnostics->configure_called = true;
+        diagnostics->configure_status =
+            configured_native ? DETROIT_DLSS_RESULT_SUCCESS
+                              : DETROIT_DLSS_RESULT_FALLBACK;
+      }
+      return finish(
+          EvaluationStage::kNativeTransition,
+          {
+              .status = configured_native ? DETROIT_DLSS_RESULT_SUCCESS
+                                          : DETROIT_DLSS_RESULT_FALLBACK,
+              .reason = dlss_policy::FallbackReason::kNativeMode,
+          });
     }
 
-    const auto reject = [this](Evaluation evaluation) {
+    const auto reject = [this, &finish](
+                            EvaluationStage stage,
+                            Evaluation evaluation) {
       reset_gate_.RequireReset();
-      return evaluation;
+      return finish(stage, evaluation);
     };
 
-    if (!Connect() || !RefreshContext()) {
-      return reject({.reason = dlss_policy::FallbackReason::kBridgeUnavailable});
+    if (!Connect()) {
+      return reject(
+          EvaluationStage::kConnect,
+          {.reason = dlss_policy::FallbackReason::kBridgeUnavailable});
+    }
+    if (diagnostics != nullptr) diagnostics->connected = true;
+    if (!RefreshContext()) {
+      return reject(
+          EvaluationStage::kRefreshContext,
+          {.reason = dlss_policy::FallbackReason::kBridgeUnavailable});
+    }
+    if (diagnostics != nullptr) {
+      diagnostics->context_refreshed = true;
+      diagnostics->capability_flags = context_.capability_flags;
+      diagnostics->bridge_abi_version = api_.abi_version;
     }
 
     const auto support = GetRuntimeSupport();
     const auto availability = dlss_policy::CheckModeAvailability(mode, support);
-    if (!availability.available) return reject({.reason = availability.reason});
+    if (!availability.available) {
+      return reject(
+          EvaluationStage::kModeAvailability,
+          {.reason = availability.reason});
+    }
 
     DetroitDlssModeSettings settings = configured_settings_;
-    if (!configured_
-        || !IsModeSettingsCacheReusable(
-            settings, mode, inputs.output_width, inputs.output_height)) {
+    const bool settings_cache_reused =
+        configured_
+        && IsModeSettingsCacheReusable(
+            settings, mode, inputs.output_width, inputs.output_height);
+    if (diagnostics != nullptr) {
+      diagnostics->settings_cache_reused = settings_cache_reused;
+    }
+    if (!settings_cache_reused) {
       settings = {
           .struct_size = sizeof(DetroitDlssModeSettings),
           .abi_version = DETROIT_DLSS_ABI_VERSION,
@@ -324,34 +460,54 @@ class Client {
       };
       const auto query_status = api_.query_mode(
           mode, inputs.output_width, inputs.output_height, &settings);
+      if (diagnostics != nullptr) {
+        diagnostics->query_called = true;
+        diagnostics->query_status = query_status;
+        diagnostics->settings = settings;
+      }
       if (query_status != DETROIT_DLSS_RESULT_SUCCESS) {
-        return reject({
-            .status = query_status,
-            .reason = query_status == DETROIT_DLSS_RESULT_ERROR
-                          ? dlss_policy::FallbackReason::kEvaluateError
-                          : dlss_policy::FallbackReason::kModeUnsupported,
-        });
+        return reject(
+            EvaluationStage::kQueryMode,
+            {
+                .status = query_status,
+                .reason = query_status == DETROIT_DLSS_RESULT_ERROR
+                              ? dlss_policy::FallbackReason::kEvaluateError
+                              : dlss_policy::FallbackReason::kModeUnsupported,
+            });
       }
     }
+    if (diagnostics != nullptr) diagnostics->settings = settings;
 
     const auto eligibility =
         dlss_policy::CheckFrameEligibility(mode, support, settings, inputs);
+    if (diagnostics != nullptr) diagnostics->eligibility = eligibility;
     if (!eligibility.evaluate_dlss) {
-      return reject({.reason = eligibility.reason});
+      return reject(
+          EvaluationStage::kFrameEligibility,
+          {.reason = eligibility.reason});
     }
 
     const bool feature_reconfigured =
         !configured_ || !SettingsEqual(settings, configured_settings_);
+    if (diagnostics != nullptr) {
+      diagnostics->feature_reconfigured = feature_reconfigured;
+    }
     if (feature_reconfigured) {
       const auto configure_status = api_.configure(&settings);
+      if (diagnostics != nullptr) {
+        diagnostics->configure_called = true;
+        diagnostics->configure_status = configure_status;
+      }
       if (configure_status != DETROIT_DLSS_RESULT_SUCCESS) {
         configured_ = false;
-        return reject({
-            .status = configure_status,
-            .reason = configure_status == DETROIT_DLSS_RESULT_ERROR
-                          ? dlss_policy::FallbackReason::kEvaluateError
-                          : dlss_policy::FallbackReason::kEvaluateFallback,
-        });
+        return reject(
+            EvaluationStage::kConfigure,
+            {
+                .status = configure_status,
+                .reason = configure_status == DETROIT_DLSS_RESULT_ERROR
+                              ? dlss_policy::FallbackReason::kEvaluateError
+                              : dlss_policy::FallbackReason::kEvaluateFallback,
+            });
       }
       configured_settings_ = settings;
       configured_ = true;
@@ -360,6 +516,9 @@ class Client {
     DetroitDlssTemporalFrameInputs effective_inputs = inputs;
     effective_inputs.reset =
         reset_gate_.Apply(inputs.reset, feature_reconfigured);
+    if (diagnostics != nullptr) {
+      diagnostics->effective_reset = effective_inputs.reset != 0u;
+    }
 
     DetroitDlssEvaluateResult result = {
         .struct_size = sizeof(DetroitDlssEvaluateResult),
@@ -368,34 +527,51 @@ class Client {
         .frame_id = inputs.frame_id,
     };
     const auto evaluate_status = api_.evaluate(&effective_inputs, &result);
+    if (diagnostics != nullptr) {
+      diagnostics->evaluate_called = true;
+      diagnostics->evaluate_status = evaluate_status;
+      diagnostics->result_struct_size = result.struct_size;
+      diagnostics->result_abi_version = result.abi_version;
+      diagnostics->result_status = result.status;
+      diagnostics->result_detail = result.detail_code;
+      diagnostics->result_frame_id = result.frame_id;
+      diagnostics->result_flags = result.flags;
+    }
     if (evaluate_status != DETROIT_DLSS_RESULT_SUCCESS) {
-      return reject({
-          .status = evaluate_status,
-          .bridge_detail = result.detail_code,
-          .reason = evaluate_status == DETROIT_DLSS_RESULT_ERROR
-                        ? dlss_policy::FallbackReason::kEvaluateError
-                        : dlss_policy::FallbackReason::kEvaluateFallback,
-      });
+      return reject(
+          EvaluationStage::kBridgeEvaluate,
+          {
+              .status = evaluate_status,
+              .bridge_detail = result.detail_code,
+              .reason = evaluate_status == DETROIT_DLSS_RESULT_ERROR
+                            ? dlss_policy::FallbackReason::kEvaluateError
+                            : dlss_policy::FallbackReason::kEvaluateFallback,
+          });
     }
 
     const auto outcome =
         dlss_policy::FinalizeFrame(eligibility, result, inputs.frame_id);
+    if (diagnostics != nullptr) diagnostics->outcome = outcome;
     if (!outcome.use_dlss_output) {
-      return reject({
-          .status = result.status,
-          .bridge_detail = result.detail_code,
-          .reason = outcome.reason,
-      });
+      return reject(
+          EvaluationStage::kFinalize,
+          {
+              .status = result.status,
+              .bridge_detail = result.detail_code,
+              .reason = outcome.reason,
+          });
     }
     reset_gate_.RecordSuccess();
-    return {
-        .status = result.status,
-        .bridge_detail = result.detail_code,
-        .reason = outcome.reason,
-        .output_valid = outcome.use_dlss_output,
-        .suppress_final_cas = outcome.suppress_final_cas,
-        .effective_reset = effective_inputs.reset != 0u,
-    };
+    return finish(
+        EvaluationStage::kSuccess,
+        {
+            .status = result.status,
+            .bridge_detail = result.detail_code,
+            .reason = outcome.reason,
+            .output_valid = outcome.use_dlss_output,
+            .suppress_final_cas = outcome.suppress_final_cas,
+            .effective_reset = effective_inputs.reset != 0u,
+        });
   }
 
  private:

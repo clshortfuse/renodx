@@ -20,6 +20,7 @@
 
 #include <nvsdk_ngx_helpers.h>
 #include <nvsdk_ngx_helpers_vk.h>
+#include <include/reshade.hpp>
 
 #include <algorithm>
 #include <array>
@@ -210,6 +211,19 @@ void Trace(std::string_view message) {
   (void)WriteFile(trace_file, newline, 2u, &written, nullptr);
 }
 
+void TraceEvaluationMessage(
+    std::string_view message,
+    reshade::log::level level = reshade::log::level::info) noexcept {
+  try {
+    Trace(message);
+    const std::string reshade_message =
+        std::string("Detroit DLSS bridge: ") + std::string(message);
+    reshade::log::message(level, reshade_message.c_str());
+  } catch (...) {
+    // Diagnostics must not change bridge control flow.
+  }
+}
+
 void CloseTraceFile() {
   const std::lock_guard lock(trace_mutex);
   if (trace_file == INVALID_HANDLE_VALUE) return;
@@ -228,12 +242,8 @@ const EvaluationTraceConfiguration& GetEvaluationTraceConfiguration() {
     const auto module_path = std::filesystem::path(GetModulePath(layer_module));
     if (module_path.empty()) return EvaluationTraceConfiguration{};
     const auto ini_path = module_path.parent_path() / L"ReShade.ini";
-    const bool first_three = GetPrivateProfileIntW(
-                                 L"renodx-dev",
-                                 L"DetroitDLSSTraceFirstThree",
-                                 0,
-                                 ini_path.c_str())
-                             == 1;
+    // Temporary diagnostic build: always trace exactly three DLAA attempts.
+    const bool first_three = true;
     const bool readback = first_three
                           && GetPrivateProfileIntW(
                                  L"renodx-dev",
@@ -296,7 +306,7 @@ void TraceEvaluationTerminal(
     renodx::games::detroitbecomehuman::dlss::EvaluationTerminal terminal) noexcept {
   if (record.attempt == 0u) return;
   try {
-    Trace(std::format(
+    TraceEvaluationMessage(std::format(
         "DLSS trace_window={} attempt={} terminal={} ngx_call={} ngx_called={} "
         "frame={} mode={} "
         "recording_generation={} feature_generation={} ngx_result={} vk_result={} "
@@ -326,9 +336,93 @@ void TraceEvaluationTerminal(
         record.command_buffer,
         record.consumer_image,
         record.consumer_view,
-        record.readback_requested));
+        record.readback_requested),
+        terminal
+                == renodx::games::detroitbecomehuman::dlss::
+                       EvaluationTerminal::kSuccess
+            ? reshade::log::level::info
+            : reshade::log::level::warning);
   } catch (...) {
     // Observability must never alter the post-pack success classification.
+  }
+}
+
+void TraceEvaluationPhase(
+    const EvaluationTraceRecord& record,
+    std::string_view phase,
+    std::string_view state = "begin") noexcept {
+  if (record.attempt == 0u) return;
+  try {
+    TraceEvaluationMessage(std::format(
+        "DLSS trace_window={} attempt={} event=phase phase={} state={} "
+        "frame={} command_buffer=0x{:X} recording_generation={}",
+        record.trace_window,
+        record.attempt,
+        phase,
+        state,
+        record.frame,
+        record.command_buffer,
+        record.recording_generation));
+  } catch (...) {
+    // Diagnostics must not change bridge control flow.
+  }
+}
+
+void TraceEvaluationInputs(
+    const EvaluationTraceRecord& record,
+    const DetroitDlssTemporalFrameInputs& inputs) noexcept {
+  if (record.attempt == 0u) return;
+  try {
+    TraceEvaluationMessage(std::format(
+        "DLSS trace_window={} attempt={} event=bridge_input frame={} mode={} "
+        "shader=0x{:08X} flags=0x{:X} verification=0x{:X} "
+        "verification_missing=0x{:X} command_buffer=0x{:X} "
+        "descriptor_set=0x{:X} pipeline_layout=0x{:X} pipeline=0x{:X} "
+        "constants_buffer=0x{:X} constants_offset={} constants_size={} "
+        "dynamic_offset={} render={}x{} output={}x{} reset={} "
+        "jitter=({}, {}) mv_scale=({}, {}) pre_exposure={} sharpening={} "
+        "normalization={} color=0x{:X}/0x{:X} depth=0x{:X}/0x{:X} "
+        "mv=0x{:X}/0x{:X} exposure=0x{:X}/0x{:X} output=0x{:X}/0x{:X}",
+        record.trace_window,
+        record.attempt,
+        inputs.frame_id,
+        static_cast<std::uint32_t>(record.mode),
+        inputs.shader_crc,
+        inputs.flags,
+        inputs.verification_flags,
+        DETROIT_DLSS_VERIFY_MANDATORY_MASK & ~inputs.verification_flags,
+        inputs.command_buffer,
+        inputs.descriptor_set,
+        inputs.pipeline_layout,
+        inputs.compute_pipeline,
+        inputs.constants_buffer,
+        inputs.constants_offset,
+        inputs.constants_size,
+        inputs.constants_dynamic_offset,
+        inputs.render_width,
+        inputs.render_height,
+        inputs.output_width,
+        inputs.output_height,
+        inputs.reset,
+        inputs.jitter_x,
+        inputs.jitter_y,
+        inputs.motion_vector_scale_x,
+        inputs.motion_vector_scale_y,
+        inputs.pre_exposure,
+        inputs.dlaa_sharpening,
+        inputs.dlaa_sharpening_normalization,
+        inputs.current_color.image,
+        inputs.current_color.image_view,
+        inputs.depth.image,
+        inputs.depth.image_view,
+        inputs.motion_vectors.image,
+        inputs.motion_vectors.image_view,
+        inputs.exposure.image,
+        inputs.exposure.image_view,
+        inputs.output.image,
+        inputs.output.image_view));
+  } catch (...) {
+    // Diagnostics must not change bridge control flow.
   }
 }
 
@@ -2960,6 +3054,11 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode(
       || output_height == 0u) {
     return DETROIT_DLSS_RESULT_ERROR;
   }
+  TraceEvaluationMessage(std::format(
+      "DLSS event=query_mode_begin mode={} output={}x{}",
+      static_cast<std::uint32_t>(mode),
+      output_width,
+      output_height));
 
   const auto struct_size = settings->struct_size;
   *settings = {};
@@ -3024,6 +3123,14 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeQueryMode(
   settings->max_render_height = output_height;
   settings->min_render_width = output_width;
   settings->min_render_height = output_height;
+  TraceEvaluationMessage(std::format(
+      "DLSS event=query_mode_end status=success mode={} create_flags=0x{:X} render={}x{} output={}x{}",
+      static_cast<std::uint32_t>(mode),
+      settings->create_flags,
+      settings->render_width,
+      settings->render_height,
+      settings->output_width,
+      settings->output_height));
   return DETROIT_DLSS_RESULT_SUCCESS;
 }
 
@@ -3036,6 +3143,14 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
       || settings->render_width == 0u || settings->render_height == 0u) {
     return DETROIT_DLSS_RESULT_ERROR;
   }
+  TraceEvaluationMessage(std::format(
+      "DLSS event=configure_begin mode={} create_flags=0x{:X} render={}x{} output={}x{}",
+      static_cast<std::uint32_t>(settings->mode),
+      settings->create_flags,
+      settings->render_width,
+      settings->render_height,
+      settings->output_width,
+      settings->output_height));
 
   const auto state = GetActiveDevice();
   if (state == nullptr || state->destroying.load(std::memory_order_acquire)) {
@@ -3086,7 +3201,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
     if (settings->mode != DETROIT_DLSS_MODE_NATIVE) {
       const auto trace_window = state->evaluation_trace_window.Arm();
       try {
-        Trace(std::format(
+        TraceEvaluationMessage(std::format(
             "DLSS trace_window={} event=armed mode={} render={}x{} output={}x{}",
             trace_window,
             static_cast<std::uint32_t>(settings->mode),
@@ -3102,6 +3217,11 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeConfigure(
   state->settings = *settings;
   state->configured = true;
   state->configured_identity = state->context_identity;
+  TraceEvaluationMessage(std::format(
+      "DLSS event=configure_end status=success mode={} settings_changed={} identity={}",
+      static_cast<std::uint32_t>(settings->mode),
+      settings_changed,
+      state->configured_identity));
   return DETROIT_DLSS_RESULT_SUCCESS;
 }
 
@@ -3336,8 +3456,28 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
           completed_one_time_command_buffers);
 
   const std::lock_guard lock(state->mutex);
+  EvaluationTraceRecord trace_record = {
+      .frame = frame_id,
+      .mode = state->settings.mode,
+      .command_buffer = inputs->command_buffer,
+      .consumer_image = inputs->output.image,
+      .consumer_view = inputs->output.image_view,
+      .readback_requested = GetEvaluationTraceConfiguration().readback,
+  };
+  if (GetEvaluationTraceConfiguration().first_three) {
+    const auto attempt = state->evaluation_trace_window.Begin();
+    if (attempt.has_value()) {
+      trace_record.trace_window = attempt->window;
+      trace_record.attempt = attempt->attempt;
+      TraceEvaluationInputs(trace_record, *inputs);
+    }
+  }
   if (state->destroying.load(std::memory_order_acquire)
       || state->context_identity != state->identity) {
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kDeviceIdentityMismatch);
     SetEvaluationResult(
         result,
         DETROIT_DLSS_RESULT_FALLBACK,
@@ -3357,11 +3497,19 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     UpdateFeatureTrackingStateLocked(state.get());
   }
   if (!state->configured) {
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kNotConfigured);
     SetEvaluationResult(
         result, DETROIT_DLSS_RESULT_FALLBACK, BridgeDetail::kNotConfigured, frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
   if (state->configured_identity != state->identity) {
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kDeviceIdentityMismatch);
     SetEvaluationResult(
         result,
         DETROIT_DLSS_RESULT_FALLBACK,
@@ -3370,11 +3518,19 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
   if (state->settings.mode != DETROIT_DLSS_MODE_DLAA) {
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kNativeMode);
     SetEvaluationResult(
         result, DETROIT_DLSS_RESULT_FALLBACK, BridgeDetail::kNativeMode, frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
   if (!state->adapter_available) {
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kAdapterUnavailable);
     SetEvaluationResult(
         result,
         DETROIT_DLSS_RESULT_FALLBACK,
@@ -3409,14 +3565,86 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       && std::isfinite(inputs->motion_vector_scale_y) && std::isfinite(inputs->pre_exposure)
       && inputs->pre_exposure > 0.f;
   if (!valid_frame) {
+    if (trace_record.attempt != 0u) {
+      std::uint64_t failed = 0u;
+      const auto mark = [&failed](std::uint32_t bit, bool condition) {
+        if (!condition) failed |= UINT64_C(1) << bit;
+      };
+      mark(0u, inputs->shader_crc == DETROIT_DLSS_TEMPORAL_AA_SHADER_CRC);
+      mark(1u, inputs->descriptor_set_index == DETROIT_DLSS_TAA_DESCRIPTOR_SET);
+      mark(2u, inputs->command_buffer != 0u);
+      mark(3u, inputs->descriptor_set != 0u);
+      mark(4u, inputs->pipeline_layout != 0u);
+      mark(5u, inputs->compute_pipeline != 0u);
+      mark(6u, inputs->constants_buffer != 0u && inputs->constants_size != 0u);
+      mark(
+          7u,
+          (inputs->flags & DETROIT_DLSS_FRAME_TEMPORAL_INPUTS_READY) != 0u);
+      mark(
+          8u,
+          inputs->render_width == state->settings.render_width
+              && inputs->render_height == state->settings.render_height);
+      mark(
+          9u,
+          inputs->output_width == state->settings.output_width
+              && inputs->output_height == state->settings.output_height);
+      mark(
+          10u,
+          IsValidResource(
+              inputs->current_color,
+              inputs->render_width,
+              inputs->render_height));
+      mark(
+          11u,
+          IsValidResource(
+              inputs->depth, inputs->render_width, inputs->render_height));
+      mark(
+          12u,
+          IsValidResource(
+              inputs->motion_vectors,
+              inputs->render_width,
+              inputs->render_height));
+      mark(
+          13u,
+          IsValidResource(
+              inputs->output, inputs->output_width, inputs->output_height));
+      mark(
+          14u,
+          auto_exposure
+              ? (inputs->flags & DETROIT_DLSS_FRAME_ALLOW_AUTO_EXPOSURE) != 0u
+              : IsValidResource(inputs->exposure, 1u, 1u));
+      mark(15u, std::isfinite(inputs->jitter_x));
+      mark(16u, std::isfinite(inputs->jitter_y));
+      mark(17u, std::isfinite(inputs->motion_vector_scale_x));
+      mark(18u, std::isfinite(inputs->motion_vector_scale_y));
+      mark(
+          19u,
+          std::isfinite(inputs->pre_exposure) && inputs->pre_exposure > 0.f);
+      TraceEvaluationMessage(
+          std::format(
+              "DLSS trace_window={} attempt={} event=invalid_frame failed_mask=0x{:X} labels=shader,set,command,descriptor,layout,pipeline,constants,ready,render_extent,output_extent,color,depth,mv,output,exposure,jitter_x,jitter_y,mv_scale_x,mv_scale_y,pre_exposure",
+              trace_record.trace_window,
+              trace_record.attempt,
+              failed),
+          reshade::log::level::warning);
+    }
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kInvalidFrame);
     SetEvaluationResult(
         result, DETROIT_DLSS_RESULT_FALLBACK, BridgeDetail::kInvalidFrame, frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
 
   auto& restore_state = state->evaluation_restore_state;
+  TraceEvaluationPhase(trace_record, "capture_restore_state");
   if (!CaptureComputeRestoreState(state.get(), *inputs, &restore_state)
       || !CanRestoreComputeCommandState(state.get(), restore_state)) {
+    TraceEvaluationTerminal(
+        trace_record,
+        renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
+            kCommandStateUnrestorable);
     SetEvaluationResult(
         result,
         DETROIT_DLSS_RESULT_FALLBACK,
@@ -3424,24 +3652,10 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
         frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
+  trace_record.recording_generation = restore_state.recording_generation;
+  TraceEvaluationPhase(trace_record, "capture_restore_state", "end");
 
-  EvaluationTraceRecord trace_record = {
-      .frame = frame_id,
-      .mode = state->settings.mode,
-      .recording_generation = restore_state.recording_generation,
-      .command_buffer = inputs->command_buffer,
-      .consumer_image = inputs->output.image,
-      .consumer_view = inputs->output.image_view,
-      .readback_requested = GetEvaluationTraceConfiguration().readback,
-  };
-  if (GetEvaluationTraceConfiguration().first_three) {
-    const auto attempt = state->evaluation_trace_window.Begin();
-    if (attempt.has_value()) {
-      trace_record.trace_window = attempt->window;
-      trace_record.attempt = attempt->attempt;
-    }
-  }
-
+  TraceEvaluationPhase(trace_record, "native_output_state");
   const auto native_output_state =
       CaptureNativeOutputTrackedState(inputs->output);
   if (!native_output_state.has_value()) {
@@ -3456,8 +3670,10 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
         frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
+  TraceEvaluationPhase(trace_record, "native_output_state", "end");
 
   const bool initializes_ngx = state->ngx_context == nullptr;
+  TraceEvaluationPhase(trace_record, "ensure_ngx_initialized");
   if (!EnsureNgxInitialized(state.get())) {
     trace_record.ngx_call = TraceNgxCall::kInitialize;
     trace_record.ngx_called = initializes_ngx;
@@ -3474,8 +3690,10 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
         frame_id);
     return DETROIT_DLSS_RESULT_FALLBACK;
   }
+  TraceEvaluationPhase(trace_record, "ensure_ngx_initialized", "end");
 
   const std::uint32_t create_flags = ToNgxCreateFlags(state->settings.create_flags);
+  TraceEvaluationPhase(trace_record, "configure_feature");
   const auto configure_result = state->ngx_context->ConfigureFeature({
       .mode = ToNgxQuality(),
       .render_width = state->settings.render_width,
@@ -3484,6 +3702,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       .output_height = state->settings.output_height,
       .create_flags = create_flags,
   });
+  TraceEvaluationPhase(trace_record, "configure_feature", "end");
   UpdateFeatureTrackingStateLocked(state.get());
   trace_record.feature_generation = configure_result.feature_generation;
   trace_record.ngx_result = configure_result.ngx_result;
@@ -3545,6 +3764,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
   using renodx::games::detroitbecomehuman::dlss::AdapterPreparedFrame;
   using renodx::games::detroitbecomehuman::dlss::AdapterPrepareInfo;
   AdapterPreparedFrame prepared_frame = {};
+  TraceEvaluationPhase(trace_record, "adapter_prepare");
   const auto prepare_result = state->adapter_runtime.Prepare(
       AdapterPrepareInfo{
           .command_buffer = command_buffer,
@@ -3566,6 +3786,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
           .trace_attempt = trace_record.attempt,
       },
       &prepared_frame);
+  TraceEvaluationPhase(trace_record, "adapter_prepare", "end");
   trace_record.prepare_called = true;
   trace_record.prepare = prepare_result;
   if (!prepare_result.Succeeded()) {
@@ -3573,7 +3794,9 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
     // The complete restore contract was validated before Prepare. Both Vulkan
     // bind commands are void, so recording this restoration cannot fail after
     // the adapter has changed command state.
+    TraceEvaluationPhase(trace_record, "restore_compute_state");
     (void)RestoreComputeCommandState(state.get(), command_buffer, restore_state);
+    TraceEvaluationPhase(trace_record, "restore_compute_state", "end");
     TraceEvaluationTerminal(
         trace_record,
         renodx::games::detroitbecomehuman::dlss::EvaluationTerminal::
@@ -3619,6 +3842,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
       VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_ACCESS_SHADER_READ_BIT);
 
+  TraceEvaluationPhase(trace_record, "ngx_evaluate");
   const auto evaluate_result = state->ngx_context->Evaluate({
       .recording_key = ToOpaque(command_buffer),
       .command_buffer = command_buffer,
@@ -3642,6 +3866,7 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
                       | DETROIT_DLSS_FRAME_SCENE_LOADED))
                       != 0u,
   });
+  TraceEvaluationPhase(trace_record, "ngx_evaluate", "end");
   MarkFeatureRecordingCandidateLocked(
       state.get(),
       command_buffer,
@@ -3663,14 +3888,18 @@ DetroitDlssResultCode DETROIT_DLSS_CALL BridgeEvaluate(
   }
   const bool ngx_succeeded = evaluate_result.Succeeded()
                               && evaluate_result.output_valid;
+  TraceEvaluationPhase(trace_record, "adapter_commit");
   const auto commit_result =
       state->adapter_runtime.CommitAfterNgx(prepared_frame, ngx_succeeded);
+  TraceEvaluationPhase(trace_record, "adapter_commit", "end");
   trace_record.commit_called = true;
   trace_record.commit = commit_result;
   // Commit may write b16, so no fallible decision is allowed after this point.
   // The restore contract was proved before any adapter/NGX commands were
   // recorded and these Vulkan bind calls have no failure return.
+  TraceEvaluationPhase(trace_record, "restore_compute_state");
   (void)RestoreComputeCommandState(state.get(), command_buffer, restore_state);
+  TraceEvaluationPhase(trace_record, "restore_compute_state", "end");
   if (!evaluate_result.Succeeded()) {
     TraceNgxFailureOnce(
         state.get(), 2u, "evaluation", evaluate_result.ngx_result);
@@ -4462,7 +4691,7 @@ void TraceFeatureSubmissionResult(
       }
     }
     for (const auto& command : traced) {
-      Trace(std::format(
+      TraceEvaluationMessage(std::format(
           "DLSS trace_window={} attempt={} event=submit command_buffer=0x{:X} "
           "submit_count={} vk_result={} queue=0x{:X} fence=0x{:X} "
           "recording_generation={} recording_epoch={} one_time={}",
@@ -4531,7 +4760,7 @@ void TracePostCompletionResubmissionResult(
       }
     }
     for (const auto& command : traced) {
-      Trace(std::format(
+      TraceEvaluationMessage(std::format(
           "DLSS trace_window={} attempt={} event=post_completion_resubmit "
           "command_buffer=0x{:X} submit_count={} core_snapshot=false "
           "vk_result={} queue=0x{:X} fence=0x{:X} recording_generation={} "
@@ -4598,7 +4827,7 @@ void TraceFeatureCompletion(
   if (!trace_record.has_value()) return;
   try {
     if (!readback.has_value()) {
-      Trace(std::format(
+      TraceEvaluationMessage(std::format(
           "DLSS trace_window={} attempt={} event=completion "
           "command_buffer=0x{:X} submit_count={} recording_generation={} "
           "recording_epoch={} readback=none",
@@ -4616,7 +4845,7 @@ void TraceFeatureCompletion(
     for (std::uint32_t tile = 0u; tile < hashes.size(); ++tile) {
       hashes[tile] = HashTraceReadbackTile(*readback, tile);
     }
-    Trace(std::format(
+    TraceEvaluationMessage(std::format(
         "DLSS trace_window={} attempt={} event=completion "
         "command_buffer=0x{:X} submit_count={} recording_generation={} "
         "recording_epoch={} "

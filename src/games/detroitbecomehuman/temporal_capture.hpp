@@ -87,7 +87,7 @@ inline constexpr std::uint32_t kVkFormatRgb9e5 = 123u;
 inline constexpr std::uint32_t kVkFormatD32FloatS8Uint = 130u;
 inline constexpr std::uint32_t kVkImageLayoutGeneral = 1u;
 inline constexpr std::uint32_t kVkImageLayoutShaderReadOnly = 5u;
-inline constexpr bool kStopBeforeBridgeEvaluateForDiagnostic = true;
+inline constexpr bool kStopBeforeBridgeEvaluateForDiagnostic = false;
 
 enum class RuntimeStatus : std::uint32_t {
   kNative = 0u,
@@ -198,9 +198,11 @@ inline bool has_logged_contract = false;
 inline constexpr std::uint64_t kUnloggedTelemetryKey =
     std::numeric_limits<std::uint64_t>::max();
 inline constexpr std::uint32_t kMaximumSnapshotDiagnosticLogs = 16u;
+inline constexpr std::uint32_t kMaximumBridgeDiagnosticAttempts = 3u;
 inline std::atomic_uint64_t last_logged_snapshot_diagnostic_key =
     kUnloggedTelemetryKey;
 inline std::atomic_uint32_t snapshot_diagnostic_log_count = 0u;
+inline std::atomic_uint32_t bridge_diagnostic_attempt_count = 0u;
 inline std::atomic_bool has_logged_bridge_input_ready = false;
 inline std::atomic_uint64_t last_logged_dlss_success_key =
     kUnloggedTelemetryKey;
@@ -348,6 +350,7 @@ inline void SetMode(DetroitDlssMode mode) {
         kUnloggedTelemetryKey,
         std::memory_order_relaxed);
     snapshot_diagnostic_log_count.store(0u, std::memory_order_relaxed);
+    bridge_diagnostic_attempt_count.store(0u, std::memory_order_relaxed);
     has_logged_bridge_input_ready.store(false, std::memory_order_relaxed);
   }
   if (current.mode == DETROIT_DLSS_MODE_NATIVE
@@ -1291,6 +1294,88 @@ inline void AfterNativeTemporalDispatch(
           dlaa_sharpening_normalization.load(std::memory_order_acquire),
   };
 
+  const auto bridge_diagnostic_attempt =
+      bridge_diagnostic_attempt_count.fetch_add(1u, std::memory_order_relaxed)
+      + 1u;
+  const bool trace_bridge_attempt =
+      bridge_diagnostic_attempt <= kMaximumBridgeDiagnosticAttempts;
+  if (trace_bridge_attempt) {
+    Log(
+        reshade::log::level::info,
+        std::format(
+            "DLSS client trace attempt={} event=input frame={} mode={} mode_generation={} auxiliary={} shader=0x{:08X} flags=0x{:X} verification=0x{:X} verification_missing=0x{:X} command=0x{:X} recording_generation={} begin_flags=0x{:X} pipeline=0x{:X} layout=0x{:X} set0=0x{:X} dispatch={}x{}x{} render={}x{} output={}x{} reset={} jitter=({}, {}) mv_scale=({}, {}) pre_exposure={} sharpening={} normalization={}.",
+            bridge_diagnostic_attempt,
+            inputs.frame_id,
+            mode,
+            mode_snapshot.generation,
+            auxiliary_replacement_used,
+            inputs.shader_crc,
+            inputs.flags,
+            inputs.verification_flags,
+            DETROIT_DLSS_VERIFY_MANDATORY_MASK
+                & ~inputs.verification_flags,
+            inputs.command_buffer,
+            recording.recording_generation,
+            recording.begin_flags,
+            inputs.compute_pipeline,
+            inputs.pipeline_layout,
+            inputs.descriptor_set,
+            context.arguments.group_count_x,
+            context.arguments.group_count_y,
+            context.arguments.group_count_z,
+            inputs.render_width,
+            inputs.render_height,
+            inputs.output_width,
+            inputs.output_height,
+            inputs.reset,
+            inputs.jitter_x,
+            inputs.jitter_y,
+            inputs.motion_vector_scale_x,
+            inputs.motion_vector_scale_y,
+            inputs.pre_exposure,
+            inputs.dlaa_sharpening,
+            inputs.dlaa_sharpening_normalization));
+    const auto log_resource = [&](std::string_view role,
+                                  const DetroitDlssResource& resource) {
+      Log(
+          reshade::log::level::info,
+          std::format(
+              "DLSS client trace attempt={} event=resource role={} image=0x{:X} view=0x{:X} format={} layout={} extent={}x{} mip={} layer={} flags=0x{:X}.",
+              bridge_diagnostic_attempt,
+              role,
+              resource.image,
+              resource.image_view,
+              resource.format,
+              resource.layout,
+              resource.width,
+              resource.height,
+              resource.mip_level,
+              resource.array_layer,
+              resource.flags));
+    };
+    log_resource("current_color_b1", inputs.current_color);
+    log_resource("depth_b3", inputs.depth);
+    log_resource("motion_vectors_b4", inputs.motion_vectors);
+    log_resource("exposure_b5", inputs.exposure);
+    log_resource("native_output_b16", inputs.output);
+    Log(
+        reshade::log::level::info,
+        std::format(
+            "DLSS client trace attempt={} event=constants buffer=0x{:X} descriptor_offset={} dynamic_offset={} effective_offset={} range={} bytes={} descriptor_type={} valid_flags=0x{:X} source_flags=0x{:X} descriptor_epoch={} history_available={}.",
+            bridge_diagnostic_attempt,
+            constants_snapshot.buffer,
+            constants_snapshot.descriptor_offset,
+            constants_snapshot.dynamic_offset,
+            constants_snapshot.effective_offset,
+            constants_snapshot.descriptor_range,
+            constants_snapshot.bytes_written,
+            constants_snapshot.descriptor_type,
+            constants_snapshot.valid_flags,
+            constants_snapshot.source_flags,
+            descriptor_epoch,
+            native_history_resources_available));
+  }
+
   if constexpr (kStopBeforeBridgeEvaluateForDiagnostic) {
     bridge_input_ready_diagnostic_reached.store(true, std::memory_order_relaxed);
     if (!has_logged_bridge_input_ready.exchange(true, std::memory_order_relaxed)) {
@@ -1314,7 +1399,62 @@ inline void AfterNativeTemporalDispatch(
     return;
   }
 
-  const auto evaluation = dlss_bridge_client::client.Evaluate(mode, inputs);
+  std::optional<dlss_bridge_client::EvaluationDiagnostics>
+      evaluation_diagnostics;
+  if (trace_bridge_attempt) evaluation_diagnostics.emplace();
+  const auto evaluation = dlss_bridge_client::client.Evaluate(
+      mode,
+      inputs,
+      evaluation_diagnostics ? &*evaluation_diagnostics : nullptr);
+  if (evaluation_diagnostics) {
+    const auto& diagnostics = *evaluation_diagnostics;
+    Log(
+        evaluation.output_valid ? reshade::log::level::info
+                                : reshade::log::level::warning,
+        std::format(
+            "DLSS client trace attempt={} event=result frame={} stage={} status={} reason={} reason_raw={} bridge_detail=0x{:X} output_valid={} suppress_final_cas={} effective_reset={} connected={} context_refreshed={} capabilities=0x{:X} bridge_abi={} cache_reused={} query_called={} query_status={} configure_called={} configure_status={} feature_reconfigured={} evaluate_called={} evaluate_status={} result_size={} result_abi={} result_status={} result_detail=0x{:X} result_frame={} result_flags=0x{:X} eligibility={} eligibility_reason={} outcome={} outcome_reason={} settings_mode={} create_flags=0x{:X} settings_render={}x{} settings_output={}x{}.",
+            bridge_diagnostic_attempt,
+            inputs.frame_id,
+            dlss_bridge_client::EvaluationStageName(
+                diagnostics.stage),
+            evaluation.status,
+            dlss_policy::FallbackReasonName(evaluation.reason),
+            static_cast<std::uint32_t>(evaluation.reason),
+            evaluation.bridge_detail,
+            evaluation.output_valid,
+            evaluation.suppress_final_cas,
+            evaluation.effective_reset,
+            diagnostics.connected,
+            diagnostics.context_refreshed,
+            diagnostics.capability_flags,
+            diagnostics.bridge_abi_version,
+            diagnostics.settings_cache_reused,
+            diagnostics.query_called,
+            diagnostics.query_status,
+            diagnostics.configure_called,
+            diagnostics.configure_status,
+            diagnostics.feature_reconfigured,
+            diagnostics.evaluate_called,
+            diagnostics.evaluate_status,
+            diagnostics.result_struct_size,
+            diagnostics.result_abi_version,
+            diagnostics.result_status,
+            diagnostics.result_detail,
+            diagnostics.result_frame_id,
+            diagnostics.result_flags,
+            diagnostics.eligibility.evaluate_dlss,
+            dlss_policy::FallbackReasonName(
+                diagnostics.eligibility.reason),
+            diagnostics.outcome.use_dlss_output,
+            dlss_policy::FallbackReasonName(
+                diagnostics.outcome.reason),
+            diagnostics.settings.mode,
+            diagnostics.settings.create_flags,
+            diagnostics.settings.render_width,
+            diagnostics.settings.render_height,
+            diagnostics.settings.output_width,
+            diagnostics.settings.output_height));
+  }
   // The final CAS gate follows the latest temporal dispatch in this frame.
   // Never retain a successful earlier dispatch if a later one fell back to
   // Detroit's native b16 output.
@@ -1452,6 +1592,7 @@ inline void Use(DWORD fdw_reason) {
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);
       snapshot_diagnostic_log_count.store(0u, std::memory_order_relaxed);
+      bridge_diagnostic_attempt_count.store(0u, std::memory_order_relaxed);
       has_logged_bridge_input_ready.store(false, std::memory_order_relaxed);
       {
         std::unique_lock lock(main_temporal_command_list_mutex);

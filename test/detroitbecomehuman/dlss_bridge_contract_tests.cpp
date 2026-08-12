@@ -854,13 +854,21 @@ bool TestDirectProviderContract() {
         !client.QueryModeSettings(legacy_mode, 3440u, 1440u, &settings)
             && !g_mode_queried,
         "legacy SR values must fail before reaching the bridge mode query");
-    const auto evaluation = client.Evaluate(legacy_mode, {});
+    dlss_bridge_client::EvaluationDiagnostics diagnostics = {};
+    const auto evaluation = client.Evaluate(legacy_mode, {}, &diagnostics);
     passed &= Expect(
         evaluation.status == DETROIT_DLSS_RESULT_FALLBACK
             && evaluation.reason == dlss_policy::FallbackReason::kUnknownMode
             && !evaluation.output_valid && !evaluation.suppress_final_cas
+            && diagnostics.stage
+                   == dlss_bridge_client::EvaluationStage::kModeAvailability
+            && diagnostics.reason
+                   == dlss_policy::FallbackReason::kUnknownMode
+            && diagnostics.connected && diagnostics.context_refreshed
+            && !diagnostics.query_called && !diagnostics.configure_called
+            && !diagnostics.evaluate_called
             && !g_mode_queried && !g_configured && !g_evaluated,
-        "legacy SR values must fail closed before configuration or evaluation");
+        "legacy SR values must report the exact pre-query rejection stage");
   }
   DetroitDlssTemporalDescriptorSnapshot snapshot = {};
   passed &= Expect(
@@ -1108,6 +1116,12 @@ bool TestBoundedEvaluationTraceWindow() {
       "a real mode transition must re-arm a distinct first-three window");
 
   constexpr std::array terminals = {
+      dlss_evaluation_trace::EvaluationTerminal::kDeviceIdentityMismatch,
+      dlss_evaluation_trace::EvaluationTerminal::kNotConfigured,
+      dlss_evaluation_trace::EvaluationTerminal::kNativeMode,
+      dlss_evaluation_trace::EvaluationTerminal::kAdapterUnavailable,
+      dlss_evaluation_trace::EvaluationTerminal::kInvalidFrame,
+      dlss_evaluation_trace::EvaluationTerminal::kCommandStateUnrestorable,
       dlss_evaluation_trace::EvaluationTerminal::kNgxInitializationFailed,
       dlss_evaluation_trace::EvaluationTerminal::kFeatureCreationPending,
       dlss_evaluation_trace::EvaluationTerminal::kFeatureCreationFailed,

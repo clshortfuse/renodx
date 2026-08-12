@@ -224,12 +224,35 @@ def main() -> None:
     require(temporal, "ResolveSparseBindings(")
     require(temporal, "GetCurrentDynamicConstantBufferBinding(")
     require(temporal, "ReadPersistentlyMappedBufferRange(")
-    require(temporal, "kStopBeforeBridgeEvaluateForDiagnostic = true")
+    require(temporal, "kStopBeforeBridgeEvaluateForDiagnostic = false")
     require(temporal, "RuntimeStatus::kBridgeInputReadyDiagnostic")
     require(temporal, "bridge_input_ready_diagnostic_reached")
     require(temporal, "kMaximumSnapshotDiagnosticLogs = 16u")
+    require(temporal, "kMaximumBridgeDiagnosticAttempts = 3u")
     require(temporal, "TAA snapshot state {}:")
+    require(temporal, "DLSS client trace attempt={} event=input")
+    require(temporal, "DLSS client trace attempt={} event=resource")
+    require(temporal, "DLSS client trace attempt={} event=constants")
+    require(temporal, "DLSS client trace attempt={} event=result")
     require(temporal, "bridge boundary reached before Configure/Evaluate")
+    require(bridge, "struct EvaluationDiagnostics")
+    require(bridge, "EvaluationStageName(")
+    require(bridge, "EvaluationDiagnostics* diagnostics = nullptr")
+    require(source, "const bool first_three = true;")
+    require(source, "TraceEvaluationMessage(")
+    require(source, "event=bridge_input")
+    require(source, "event=invalid_frame failed_mask=")
+    for phase in (
+        "capture_restore_state",
+        "native_output_state",
+        "ensure_ngx_initialized",
+        "configure_feature",
+        "adapter_prepare",
+        "ngx_evaluate",
+        "adapter_commit",
+        "restore_compute_state",
+    ):
+        require(source, f'TraceEvaluationPhase(trace_record, "{phase}"')
     require(temporal, "GetCommandRecordingMetadata(")
     require(temporal, "device->map_buffer_region(")
     require(temporal, "reshade::api::map_access::read_only")
@@ -275,7 +298,7 @@ def main() -> None:
     diagnostic_gate = section(
         after_temporal_dispatch,
         "if constexpr (kStopBeforeBridgeEvaluateForDiagnostic)",
-        "const auto evaluation = dlss_bridge_client::client.Evaluate(mode, inputs)",
+        "std::optional<dlss_bridge_client::EvaluationDiagnostics>",
     )
     require(diagnostic_gate, "kBridgeInputReadyDiagnostic")
     require(diagnostic_gate, "bridge_input_ready_diagnostic_reached.store(true")

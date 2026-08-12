@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <string_view>
 
 #include "dlss_bridge_abi.h"
 #include "supported_build.hpp"
@@ -43,6 +44,49 @@ enum class FallbackReason : std::uint32_t {
   kEvaluateError,
   kInvalidEvaluateResult,
 };
+
+[[nodiscard]] constexpr std::string_view FallbackReasonName(
+    FallbackReason reason) noexcept {
+  switch (reason) {
+    case FallbackReason::kNone: return "none";
+    case FallbackReason::kNativeMode: return "native_mode";
+    case FallbackReason::kUnknownMode: return "unknown_mode";
+    case FallbackReason::kUnsupportedExecutable: return "unsupported_executable";
+    case FallbackReason::kAbiMismatch: return "abi_mismatch";
+    case FallbackReason::kBridgeUnavailable: return "bridge_unavailable";
+    case FallbackReason::kNgxUnavailable: return "ngx_unavailable";
+    case FallbackReason::kTemporalInterfaceUnverified:
+      return "temporal_interface_unverified";
+    case FallbackReason::kModeUnsupported: return "mode_unsupported";
+    case FallbackReason::kFrameAbiMismatch: return "frame_abi_mismatch";
+    case FallbackReason::kVerificationIncomplete:
+      return "verification_incomplete";
+    case FallbackReason::kShaderMismatch: return "shader_mismatch";
+    case FallbackReason::kTemporalInputsNotReady:
+      return "temporal_inputs_not_ready";
+    case FallbackReason::kInvalidCommandBuffer: return "invalid_command_buffer";
+    case FallbackReason::kInvalidDescriptorSnapshot:
+      return "invalid_descriptor_snapshot";
+    case FallbackReason::kInvalidConstantsSnapshot:
+      return "invalid_constants_snapshot";
+    case FallbackReason::kMissingCurrentColor: return "missing_current_color";
+    case FallbackReason::kMissingDepth: return "missing_depth";
+    case FallbackReason::kMissingMotionVectors: return "missing_motion_vectors";
+    case FallbackReason::kMissingExposure: return "missing_exposure";
+    case FallbackReason::kMissingOutput: return "missing_output";
+    case FallbackReason::kAliasedColorOutput: return "aliased_color_output";
+    case FallbackReason::kInvalidExtent: return "invalid_extent";
+    case FallbackReason::kExtentMismatch: return "extent_mismatch";
+    case FallbackReason::kInvalidTemporalConstants:
+      return "invalid_temporal_constants";
+    case FallbackReason::kInvalidModeSettings: return "invalid_mode_settings";
+    case FallbackReason::kEvaluateFallback: return "evaluate_fallback";
+    case FallbackReason::kEvaluateError: return "evaluate_error";
+    case FallbackReason::kInvalidEvaluateResult:
+      return "invalid_evaluate_result";
+  }
+  return "invalid";
+}
 
 struct RuntimeSupport {
   bool executable_supported = false;
