@@ -10,12 +10,6 @@
 
 namespace renodx::games::detroitbecomehuman::dlss::adapter_shaders {
 
-#if defined(_WIN32)
-#define DETROIT_DLSS_ADAPTER_SHADER_API __declspec(dllexport)
-#else
-#define DETROIT_DLSS_ADAPTER_SHADER_API
-#endif
-
 inline constexpr std::array<std::uint32_t, 3u> kWorkgroupSize = {8u, 8u, 1u};
 
 struct PrepareColorMotionBindings {
@@ -37,14 +31,8 @@ static_assert(
 
 // SPIR-V is materialized as aligned words instead of casting the generated
 // byte-array embed. The returned spans can be assigned directly to
-// VkShaderModuleCreateInfo::{codeSize,pCode}. Exporting these internal C++
-// accessors also prevents the linker from discarding the embedded modules
-// before the Vulkan evaluator starts consuming them.
-[[nodiscard]] DETROIT_DLSS_ADAPTER_SHADER_API std::span<const std::uint32_t>
-GetPrepareColorMotionSpirv() noexcept;
-[[nodiscard]] DETROIT_DLSS_ADAPTER_SHADER_API std::span<const std::uint32_t>
-GetPackColorSpirv() noexcept;
-
-#undef DETROIT_DLSS_ADAPTER_SHADER_API
+// VkShaderModuleCreateInfo::{codeSize,pCode}.
+[[nodiscard]] std::span<const std::uint32_t> GetPrepareColorMotionSpirv() noexcept;
+[[nodiscard]] std::span<const std::uint32_t> GetPackColorSpirv() noexcept;
 
 }  // namespace renodx::games::detroitbecomehuman::dlss::adapter_shaders

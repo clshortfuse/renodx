@@ -9,11 +9,9 @@
 #endif
 #include <vulkan/vulkan.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <span>
 
 #include "../dlss_bridge_abi.h"
@@ -76,8 +74,6 @@ struct AdapterPrepareInfo {
   float dlaa_sharpening = 0.f;
   float dlaa_sharpening_normalization = 1.f;
   bool one_time_submit = false;
-  bool trace_readback = false;
-  std::uint32_t trace_attempt = 0u;
 };
 
 /*
@@ -94,7 +90,7 @@ struct AdapterPrepareInfo {
  *
  * Prepare and CommitAfterNgx bind private compute pipelines and descriptor
  * sets through downstream Vulkan procedures. The layer must capture the game
- * compute state before Prepare and restore it after CommitAfterNgx/Discard.
+ * compute state before Prepare and restore it after CommitAfterNgx.
  */
 struct AdapterPreparedFrame {
   std::uint64_t token = 0u;
@@ -106,25 +102,8 @@ struct AdapterPreparedFrame {
   renodx::utils::dlss::vulkan::TrackedImageState color_state = {};
   renodx::utils::dlss::vulkan::TrackedImageState output_state = {};
   renodx::utils::dlss::vulkan::TrackedImageState native_output_state = {};
-  std::uint32_t render_width = 0u;
-  std::uint32_t render_height = 0u;
   std::uint32_t output_width = 0u;
   std::uint32_t output_height = 0u;
-  bool trace_readback_requested = false;
-  std::uint32_t trace_attempt = 0u;
-};
-
-inline constexpr std::uint32_t kTraceReadbackTileCount = 5u;
-inline constexpr std::uint32_t kTraceReadbackTileWidth = 4u;
-inline constexpr std::uint32_t kTraceReadbackTileHeight = 4u;
-inline constexpr std::uint32_t kTraceReadbackWordsPerPixel = 2u;
-inline constexpr std::size_t kTraceReadbackWordCount =
-    kTraceReadbackTileCount * kTraceReadbackTileWidth
-    * kTraceReadbackTileHeight * kTraceReadbackWordsPerPixel;
-
-struct AdapterTraceReadback final {
-  std::uint32_t attempt = 0u;
-  std::array<std::uint32_t, kTraceReadbackWordCount> words = {};
 };
 
 class AdapterRuntime final {
@@ -150,12 +129,6 @@ class AdapterRuntime final {
   [[nodiscard]] AdapterResult CommitAfterNgx(
       const AdapterPreparedFrame& prepared_frame,
       bool ngx_succeeded);
-
-  /* Marks a prepared frame abandoned without accessing the native output. */
-  [[nodiscard]] AdapterResult Discard(const AdapterPreparedFrame& prepared_frame);
-
-  [[nodiscard]] std::optional<AdapterTraceReadback> TakeCompletedTraceReadback(
-      VkCommandBuffer command_buffer);
 
   /*
    * Non-blocking completion check for ONE_TIME_SUBMIT recordings. A bundle is
@@ -184,8 +157,6 @@ class AdapterRuntime final {
    * can deadlock a driver shutdown path.
    */
   void Shutdown(bool wait_for_idle = true) noexcept;
-
-  [[nodiscard]] bool IsInitialized() const noexcept;
 
  private:
   struct Impl;

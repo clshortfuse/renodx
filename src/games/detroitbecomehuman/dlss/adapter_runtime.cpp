@@ -103,10 +103,6 @@ struct AdapterRuntime::Impl {
     PFN_vkDestroyDescriptorPool destroy_descriptor_pool = nullptr;
     PFN_vkAllocateDescriptorSets allocate_descriptor_sets = nullptr;
     PFN_vkUpdateDescriptorSets update_descriptor_sets = nullptr;
-    PFN_vkCreateBuffer create_buffer = nullptr;
-    PFN_vkDestroyBuffer destroy_buffer = nullptr;
-    PFN_vkGetBufferMemoryRequirements get_buffer_memory_requirements = nullptr;
-    PFN_vkBindBufferMemory bind_buffer_memory = nullptr;
     PFN_vkCreateImage create_image = nullptr;
     PFN_vkDestroyImage destroy_image = nullptr;
     PFN_vkGetImageMemoryRequirements get_image_memory_requirements = nullptr;
@@ -115,10 +111,7 @@ struct AdapterRuntime::Impl {
     PFN_vkBindImageMemory bind_image_memory = nullptr;
     PFN_vkCreateImageView create_image_view = nullptr;
     PFN_vkDestroyImageView destroy_image_view = nullptr;
-    PFN_vkMapMemory map_memory = nullptr;
-    PFN_vkUnmapMemory unmap_memory = nullptr;
     PFN_vkCmdPipelineBarrier cmd_pipeline_barrier = nullptr;
-    PFN_vkCmdCopyImageToBuffer cmd_copy_image_to_buffer = nullptr;
     PFN_vkCmdBindPipeline cmd_bind_pipeline = nullptr;
     PFN_vkCmdBindDescriptorSets cmd_bind_descriptor_sets = nullptr;
     PFN_vkCmdPushConstants cmd_push_constants = nullptr;
@@ -140,14 +133,6 @@ struct AdapterRuntime::Impl {
     renodx::utils::dlss::vulkan::TrackedImageState state = {};
   };
 
-  struct BufferAllocation {
-    VkBuffer buffer = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
-    VkDeviceSize size = 0u;
-    void* mapped = nullptr;
-    bool contents_valid = false;
-  };
-
   struct PackConstants {
     float sharpening = 0.f;
     float normalization = 1.f;
@@ -158,7 +143,6 @@ struct AdapterRuntime::Impl {
     VkCommandBuffer command_buffer = VK_NULL_HANDLE;
     ImageAllocation color;
     ImageAllocation dlss_output;
-    BufferAllocation trace_readback_buffer;
     VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
     VkDescriptorSet prepare_descriptor_set = VK_NULL_HANDLE;
     VkDescriptorSet pack_descriptor_set = VK_NULL_HANDLE;
@@ -170,9 +154,6 @@ struct AdapterRuntime::Impl {
     std::uint64_t recording_generation = 1u;
     std::uint64_t prepared_generation = 0u;
     PackConstants pack_constants = {};
-    std::uint32_t trace_attempt = 0u;
-    bool trace_readback_requested = false;
-    bool trace_readback_pending = false;
     bool active = false;
     bool tainted = false;
     bool completion_pending = false;
@@ -253,14 +234,6 @@ struct AdapterRuntime::Impl {
            && LoadDeviceProcedure(
                &procedures.update_descriptor_sets,
                "vkUpdateDescriptorSets")
-           && LoadDeviceProcedure(&procedures.create_buffer, "vkCreateBuffer")
-           && LoadDeviceProcedure(&procedures.destroy_buffer, "vkDestroyBuffer")
-           && LoadDeviceProcedure(
-               &procedures.get_buffer_memory_requirements,
-               "vkGetBufferMemoryRequirements")
-           && LoadDeviceProcedure(
-               &procedures.bind_buffer_memory,
-               "vkBindBufferMemory")
            && LoadDeviceProcedure(&procedures.create_image, "vkCreateImage")
            && LoadDeviceProcedure(&procedures.destroy_image, "vkDestroyImage")
            && LoadDeviceProcedure(
@@ -271,14 +244,9 @@ struct AdapterRuntime::Impl {
            && LoadDeviceProcedure(&procedures.bind_image_memory, "vkBindImageMemory")
            && LoadDeviceProcedure(&procedures.create_image_view, "vkCreateImageView")
            && LoadDeviceProcedure(&procedures.destroy_image_view, "vkDestroyImageView")
-           && LoadDeviceProcedure(&procedures.map_memory, "vkMapMemory")
-           && LoadDeviceProcedure(&procedures.unmap_memory, "vkUnmapMemory")
            && LoadDeviceProcedure(
                &procedures.cmd_pipeline_barrier,
                "vkCmdPipelineBarrier")
-           && LoadDeviceProcedure(
-               &procedures.cmd_copy_image_to_buffer,
-               "vkCmdCopyImageToBuffer")
            && LoadDeviceProcedure(&procedures.cmd_bind_pipeline, "vkCmdBindPipeline")
            && LoadDeviceProcedure(
                &procedures.cmd_bind_descriptor_sets,
@@ -524,21 +492,6 @@ struct AdapterRuntime::Impl {
     *allocation = {};
   }
 
-  void DestroyBuffer(BufferAllocation* allocation) const {
-    if (allocation == nullptr) return;
-    if (allocation->mapped != nullptr && allocation->memory != VK_NULL_HANDLE) {
-      procedures.unmap_memory(device, allocation->memory);
-      allocation->mapped = nullptr;
-    }
-    if (allocation->buffer != VK_NULL_HANDLE) {
-      procedures.destroy_buffer(device, allocation->buffer, nullptr);
-    }
-    if (allocation->memory != VK_NULL_HANDLE) {
-      procedures.free_memory(device, allocation->memory, nullptr);
-    }
-    *allocation = {};
-  }
-
   void DestroyBundle(ScratchBundle* bundle) const {
     if (bundle == nullptr) return;
     if (bundle->completion_event != VK_NULL_HANDLE) {
@@ -547,7 +500,6 @@ struct AdapterRuntime::Impl {
     if (bundle->descriptor_pool != VK_NULL_HANDLE) {
       procedures.destroy_descriptor_pool(device, bundle->descriptor_pool, nullptr);
     }
-    DestroyBuffer(&bundle->trace_readback_buffer);
     DestroyImage(&bundle->dlss_output);
     DestroyImage(&bundle->color);
     *bundle = {};
@@ -710,234 +662,6 @@ struct AdapterRuntime::Impl {
     return Success();
   }
 
-  AdapterResult CreateBuffer(
-      VkDeviceSize size,
-      VkBufferUsageFlags usage,
-      VkMemoryPropertyFlags memory_flags,
-      bool persistently_map,
-      BufferAllocation* allocation) const {
-    if (allocation == nullptr || size == 0u) {
-      return Fallback(AdapterDetail::kInvalidArgument);
-    }
-
-    BufferAllocation created = {};
-    created.size = size;
-    const VkBufferCreateInfo buffer_info = {
-        VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        nullptr,
-        0u,
-        size,
-        usage,
-        VK_SHARING_MODE_EXCLUSIVE,
-        0u,
-        nullptr,
-    };
-    VkResult result = procedures.create_buffer(
-        device,
-        &buffer_info,
-        nullptr,
-        &created.buffer);
-    if (result != VK_SUCCESS) return VulkanError(result);
-
-    VkMemoryRequirements memory_requirements = {};
-    procedures.get_buffer_memory_requirements(
-        device,
-        created.buffer,
-        &memory_requirements);
-    const auto memory_type =
-        FindMemoryType(memory_requirements.memoryTypeBits, memory_flags);
-    if (memory_type == std::numeric_limits<std::uint32_t>::max()) {
-      DestroyBuffer(&created);
-      return Fallback(AdapterDetail::kUnsupportedFormat);
-    }
-
-    const VkMemoryAllocateInfo memory_info = {
-        VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        nullptr,
-        memory_requirements.size,
-        memory_type,
-    };
-    result = procedures.allocate_memory(
-        device,
-        &memory_info,
-        nullptr,
-        &created.memory);
-    if (result != VK_SUCCESS) {
-      DestroyBuffer(&created);
-      return VulkanError(result);
-    }
-    result = procedures.bind_buffer_memory(
-        device,
-        created.buffer,
-        created.memory,
-        0u);
-    if (result != VK_SUCCESS) {
-      DestroyBuffer(&created);
-      return VulkanError(result);
-    }
-
-    if (persistently_map) {
-      result = procedures.map_memory(
-          device,
-          created.memory,
-          0u,
-          created.size,
-          0u,
-          &created.mapped);
-      if (result != VK_SUCCESS || created.mapped == nullptr) {
-        DestroyBuffer(&created);
-        return result != VK_SUCCESS ? VulkanError(result)
-                                    : Fallback(AdapterDetail::kVulkanFailure);
-      }
-    }
-
-    *allocation = created;
-    return Success();
-  }
-
-  AdapterResult EnsureTraceReadbackBuffer(ScratchBundle* bundle) const {
-    if (bundle == nullptr) return Fallback(AdapterDetail::kInvalidArgument);
-    if (bundle->trace_readback_buffer.buffer != VK_NULL_HANDLE) return Success();
-    return CreateBuffer(
-        sizeof(std::uint32_t) * kTraceReadbackWordCount,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        true,
-        &bundle->trace_readback_buffer);
-  }
-
-  bool RecordTraceReadback(ScratchBundle* bundle) const {
-    if (bundle == nullptr || !bundle->trace_readback_requested
-        || bundle->trace_attempt == 0u
-        || bundle->trace_readback_buffer.buffer == VK_NULL_HANDLE
-        || bundle->trace_readback_buffer.mapped == nullptr
-        || bundle->dlss_output.extent.width < kTraceReadbackTileWidth
-        || bundle->dlss_output.extent.height < kTraceReadbackTileHeight) {
-      return false;
-    }
-
-    const auto& source_state = bundle->dlss_output.state;
-    const auto source_to_transfer =
-        renodx::utils::dlss::vulkan::MakeImageBarrierPlan(
-            source_state,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_ACCESS_SHADER_READ_BIT,
-            VK_ACCESS_TRANSFER_READ_BIT,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-    const VkBufferMemoryBarrier before_buffer = {
-        VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-        nullptr,
-        bundle->trace_readback_buffer.contents_valid ? VK_ACCESS_HOST_READ_BIT : 0u,
-        VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        bundle->trace_readback_buffer.buffer,
-        0u,
-        bundle->trace_readback_buffer.size,
-    };
-    procedures.cmd_pipeline_barrier(
-        bundle->command_buffer,
-        source_to_transfer.source_stage
-            | (bundle->trace_readback_buffer.contents_valid
-                   ? VK_PIPELINE_STAGE_HOST_BIT
-                   : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        0u,
-        0u,
-        nullptr,
-        1u,
-        &before_buffer,
-        1u,
-        &source_to_transfer.barrier);
-
-    constexpr VkDeviceSize kTileBytes =
-        kTraceReadbackTileWidth * kTraceReadbackTileHeight
-        * kTraceReadbackWordsPerPixel * sizeof(std::uint32_t);
-    const std::uint32_t maximum_x =
-        bundle->dlss_output.extent.width - kTraceReadbackTileWidth;
-    const std::uint32_t maximum_y =
-        bundle->dlss_output.extent.height - kTraceReadbackTileHeight;
-    const std::array<VkOffset3D, kTraceReadbackTileCount> offsets = {{
-        {0, 0, 0},
-        {static_cast<std::int32_t>(maximum_x), 0, 0},
-        {
-            static_cast<std::int32_t>(maximum_x / 2u),
-            static_cast<std::int32_t>(maximum_y / 2u),
-            0,
-        },
-        {0, static_cast<std::int32_t>(maximum_y), 0},
-        {
-            static_cast<std::int32_t>(maximum_x),
-            static_cast<std::int32_t>(maximum_y),
-            0,
-        },
-    }};
-    std::array<VkBufferImageCopy, kTraceReadbackTileCount> regions = {};
-    for (std::uint32_t index = 0u; index < regions.size(); ++index) {
-      regions[index] = {
-          .bufferOffset = index * kTileBytes,
-          .bufferRowLength = 0u,
-          .bufferImageHeight = 0u,
-          .imageSubresource = {
-              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .mipLevel = 0u,
-              .baseArrayLayer = 0u,
-              .layerCount = 1u,
-          },
-          .imageOffset = offsets[index],
-          .imageExtent = {
-              kTraceReadbackTileWidth,
-              kTraceReadbackTileHeight,
-              1u,
-          },
-      };
-    }
-    procedures.cmd_copy_image_to_buffer(
-        bundle->command_buffer,
-        bundle->dlss_output.image,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        bundle->trace_readback_buffer.buffer,
-        static_cast<std::uint32_t>(regions.size()),
-        regions.data());
-
-    const auto transfer_to_source =
-        renodx::utils::dlss::vulkan::MakeImageBarrierPlan(
-            source_state,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            VK_ACCESS_TRANSFER_READ_BIT,
-            VK_ACCESS_SHADER_READ_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    const VkBufferMemoryBarrier after_buffer = {
-        VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-        nullptr,
-        VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_ACCESS_HOST_READ_BIT,
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        bundle->trace_readback_buffer.buffer,
-        0u,
-        bundle->trace_readback_buffer.size,
-    };
-    procedures.cmd_pipeline_barrier(
-        bundle->command_buffer,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_HOST_BIT,
-        0u,
-        0u,
-        nullptr,
-        1u,
-        &after_buffer,
-        1u,
-        &transfer_to_source.barrier);
-    bundle->trace_readback_buffer.contents_valid = true;
-    bundle->trace_readback_pending = true;
-    return true;
-  }
-
   void UpdateStableDescriptors(ScratchBundle* bundle) const {
     const std::array<VkDescriptorImageInfo, 2u> images = {{
         {VK_NULL_HANDLE, bundle->color.view, VK_IMAGE_LAYOUT_GENERAL},
@@ -1086,9 +810,6 @@ struct AdapterRuntime::Impl {
     bundle->recording_generation = 1u;
     bundle->prepared_generation = 0u;
     bundle->pack_constants = {};
-    bundle->trace_attempt = 0u;
-    bundle->trace_readback_requested = false;
-    bundle->trace_readback_pending = false;
     bundle->active = false;
     bundle->tainted = false;
     bundle->completion_pending = false;
@@ -1421,7 +1142,6 @@ struct AdapterRuntime::Impl {
         &after_pack.barrier);
     bundle->native_output_state.access =
         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-    (void)RecordTraceReadback(bundle);
   }
 
   static DetroitDlssResource MakeScratchResource(const ImageAllocation& allocation) {
@@ -1574,10 +1294,6 @@ AdapterResult AdapterRuntime::Prepare(
     bundle.recording_generation = recording_generation;
   }
 
-  const bool trace_readback_available =
-      prepare_info.trace_readback && prepare_info.trace_attempt != 0u
-      && !bundle.trace_readback_pending
-      && impl_->EnsureTraceReadbackBuffer(&bundle).Succeeded();
   impl_->UpdateFrameDescriptors(&bundle, prepare_info);
   impl_->RecordPrepare(&bundle, prepare_info);
   bundle.native_motion_vectors = prepare_info.motion_vectors;
@@ -1587,8 +1303,6 @@ AdapterResult AdapterRuntime::Prepare(
       .sharpening = prepare_info.dlaa_sharpening,
       .normalization = prepare_info.dlaa_sharpening_normalization,
   };
-  bundle.trace_attempt = trace_readback_available ? prepare_info.trace_attempt : 0u;
-  bundle.trace_readback_requested = trace_readback_available;
   bundle.one_time_submit = prepare_info.one_time_submit;
   bundle.active = true;
   bundle.prepared_generation = bundle.recording_generation;
@@ -1604,12 +1318,8 @@ AdapterResult AdapterRuntime::Prepare(
   prepared_frame->color_state = bundle.color.state;
   prepared_frame->output_state = bundle.dlss_output.state;
   prepared_frame->native_output_state = bundle.native_output_state;
-  prepared_frame->render_width = prepare_info.render_width;
-  prepared_frame->render_height = prepare_info.render_height;
   prepared_frame->output_width = prepare_info.output_width;
   prepared_frame->output_height = prepare_info.output_height;
-  prepared_frame->trace_readback_requested = trace_readback_available;
-  prepared_frame->trace_attempt = bundle.trace_attempt;
   return Success();
 }
 
@@ -1669,33 +1379,6 @@ AdapterResult AdapterRuntime::CommitAfterNgx(
   impl_->RecordCompletion(&bundle);
   bundle.active = false;
   return Success();
-}
-
-AdapterResult AdapterRuntime::Discard(const AdapterPreparedFrame& prepared_frame) {
-  return CommitAfterNgx(prepared_frame, false);
-}
-
-std::optional<AdapterTraceReadback> AdapterRuntime::TakeCompletedTraceReadback(
-    VkCommandBuffer command_buffer) {
-  if (command_buffer == VK_NULL_HANDLE) return std::nullopt;
-  const std::lock_guard lock(impl_->mutex);
-  if (!impl_->initialized) return std::nullopt;
-  const auto found = impl_->bundles.find(command_buffer);
-  if (found == impl_->bundles.end()) return std::nullopt;
-  auto& bundle = found->second;
-  if (!bundle.trace_readback_pending || bundle.trace_attempt == 0u
-      || bundle.trace_readback_buffer.mapped == nullptr) {
-    return std::nullopt;
-  }
-
-  AdapterTraceReadback readback = {.attempt = bundle.trace_attempt};
-  std::memcpy(
-      readback.words.data(),
-      bundle.trace_readback_buffer.mapped,
-      sizeof(readback.words));
-  bundle.trace_readback_pending = false;
-  bundle.trace_readback_requested = false;
-  return readback;
 }
 
 std::size_t AdapterRuntime::PollCompletedOneTimeCommandBuffers(
@@ -1770,11 +1453,6 @@ void AdapterRuntime::Shutdown(bool wait_for_idle) noexcept {
   impl_->maximum_scratch_bundles = 0u;
   impl_->next_token = 1u;
   impl_->initialized = false;
-}
-
-bool AdapterRuntime::IsInitialized() const noexcept {
-  const std::lock_guard lock(impl_->mutex);
-  return impl_->initialized;
 }
 
 }  // namespace renodx::games::detroitbecomehuman::dlss

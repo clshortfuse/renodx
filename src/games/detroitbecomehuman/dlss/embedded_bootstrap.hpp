@@ -103,25 +103,21 @@ bool AttachEarlyHooks(
     HMODULE addon_module,
     const ExtensionCache& cache,
     bool install_native_command_hooks);
-void DetachEarlyHooks(bool process_terminating);
 bool IsExtensionProbeHost();
 
 // Deferred work. These functions must only be called after device creation and
 // outside DllMain/the Vulkan loader lock.
 bool VerifySupportedExecutable();
-bool QueryRequiredExtensions(ExtensionCache* cache);
 bool QueryRequiredExtensionsIsolated(HMODULE addon_module, ExtensionCache* cache);
 void SetRestartRequired();
 void RefreshDeferredStatus();
 void SetNativeFallback(const char* reason);
 
-BootstrapStatus GetStatus();
 std::uint64_t GetStatusRevision();
 const char* GetStatusText();
 bool WasLoadedEarly();
-bool IsBridgeReady();
 
-[[nodiscard]] inline constexpr bool NeedsRuntimeCommandTracking(
+[[nodiscard]] constexpr bool NeedsRuntimeCommandTracking(
     DetroitDlssMode mode, bool retinal_dof_requested) noexcept {
   (void)mode;
   (void)retinal_dof_requested;
@@ -130,7 +126,7 @@ bool IsBridgeReady();
   return kDlssRuntimeEnabled;
 }
 
-[[nodiscard]] inline constexpr bool NeedsEmbeddedBridge(
+[[nodiscard]] constexpr bool NeedsEmbeddedBridge(
     DetroitDlssMode mode, bool retinal_dof_requested) noexcept {
   (void)mode;
   // NGX extensions and targeted descriptor/resource tracking must be present
@@ -163,8 +159,6 @@ struct CommandRecordingMetadata {
   std::uint64_t recording_generation = 0u;
   std::uint32_t begin_flags = 0u;
   std::uint32_t constants_dynamic_offset = 0u;
-  bool descriptor_bound_after_begin = false;
-  bool evaluation_claimed = false;
 };
 
 struct DynamicConstantBufferBinding {

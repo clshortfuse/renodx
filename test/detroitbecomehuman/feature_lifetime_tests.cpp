@@ -6,10 +6,12 @@
 #include <iostream>
 #include <vector>
 
-#include "../../src/games/detroitbecomehuman/dlss/feature_lifetime.hpp"
 #include "../../src/games/detroitbecomehuman/dlss/feature_recording_registry.hpp"
+#include "../../src/utils/dlss/feature_lifetime.hpp"
 
 namespace dlss = renodx::games::detroitbecomehuman::dlss;
+using FeatureLifetimeTracker =
+    renodx::utils::dlss::vulkan::FeatureLifetimeTracker;
 
 namespace {
 
@@ -26,50 +28,22 @@ bool TestFeatureRecordingRegistryRejectsBloomFalsePositives() {
       registry.Empty() && !registry.Overflowed(),
       "a new exact feature-recording registry must be inactive");
   passed &= Expect(
-      !registry.Insert(0u, 1u) && registry.Empty(),
+      !registry.Insert(0u) && registry.Empty(),
       "the null command-buffer handle must never become a candidate");
   passed &= Expect(
-      registry.Insert(10u, 100u) && registry.Insert(10u, 101u)
+      registry.Insert(10u) && registry.Insert(10u)
           && registry.Contains(10u) && !registry.Contains(11u),
       "candidate insertion must be idempotent and exact");
   passed &= Expect(
-      registry.Insert(10u, 101u, true)
-          && registry.AnyRequiresSubmissionTracking()
-          && !registry.MarkSubmittedIfMatches(10u, 100u)
-          && registry.AnyRequiresSubmissionTracking()
-          && registry.MarkSubmittedIfMatches(10u, 101u)
-          && !registry.AnyRequiresSubmissionTracking(),
-      "only the exact one-time recording may retire submit tracking");
-  passed &= Expect(
-      !registry.Matches(10u, 100u) && registry.Matches(10u, 101u)
-          && !registry.EraseIfMatches(10u, 100u)
-          && registry.Contains(10u),
-      "an old completion epoch must not remove a new recording of the same handle");
-  passed &= Expect(
-      registry.EraseIfMatches(10u, 101u) && registry.Insert(10u, 0u)
-          && registry.Contains(10u) && !registry.Matches(10u, 0u),
-      "an epoch-less adapter owner must remain lifecycle-only");
-  passed &= Expect(
-      registry.Insert(11u, 110u) && !registry.Empty()
+      registry.Insert(11u) && !registry.Empty()
           && !registry.Overflowed(),
       "the fixed registry must accept every live scratch owner");
   passed &= Expect(
-      !registry.Insert(12u, 120u) && registry.Overflowed()
-          && registry.Matches(11u, 110u)
-          && !registry.Matches(12u, 120u),
-      "overflow must preserve known exact epochs while unknown owners fail closed");
+      !registry.Insert(12u) && registry.Overflowed()
+          && registry.Contains(11u) && !registry.Contains(12u),
+      "overflow must preserve known exact handles while unknown owners fail closed");
   passed &= Expect(
-      registry.Insert(11u, 110u, true)
-          && registry.AnyRequiresSubmissionTracking()
-          && registry.MarkSubmittedIfMatches(11u, 110u)
-          && !registry.AnyRequiresSubmissionTracking(),
-      "overflow must not prevent an exact successful submit from clearing its pending state");
-  passed &= Expect(
-      registry.EraseIfMatches(11u, 110u) && !registry.Contains(11u)
-          && !registry.EraseIfMatches(12u, 120u),
-      "overflow completion must recycle only the known exact recording");
-  passed &= Expect(
-      registry.Erase(10u) && registry.Empty()
+      registry.Erase(10u) && registry.Erase(11u) && registry.Empty()
           && registry.HasLifecycleCandidates(),
       "sticky overflow must retain conservative lifecycle tracking after exact slots empty");
   registry.Clear();
@@ -81,7 +55,7 @@ bool TestFeatureRecordingRegistryRejectsBloomFalsePositives() {
 }
 
 bool TestRecordedReferenceSurvivesSubmitAndIdle() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(10u, false);
   tracker.RecordFeatureUse(10u, 1u);
   const auto submission = tracker.CaptureSubmission({10u});
@@ -110,7 +84,7 @@ bool TestRecordedReferenceSurvivesSubmitAndIdle() {
 }
 
 bool TestUnsubmittedRecordingBlocksRelease() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(11u, false);
   tracker.RecordFeatureUse(11u, 2u);
   (void)tracker.CompleteDevice();
@@ -127,7 +101,7 @@ bool TestUnsubmittedRecordingBlocksRelease() {
 }
 
 bool TestFailedSubmitDoesNotAddInFlightReference() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(12u, false);
   tracker.RecordFeatureUse(12u, 3u);
   (void)tracker.CaptureSubmission({12u});
@@ -144,7 +118,7 @@ bool TestFailedSubmitDoesNotAddInFlightReference() {
 }
 
 bool TestOneTimeRecordingCompletesAtIdle() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(13u, true);
   tracker.RecordFeatureUse(13u, 4u);
   const auto submission = tracker.CaptureSubmission({13u});
@@ -157,7 +131,7 @@ bool TestOneTimeRecordingCompletesAtIdle() {
       "one-time recording must become invalid after its successful submit completes");
   passed &= Expect(
       completed
-          == std::vector<dlss::FeatureLifetimeTracker::CompletedRecording>{{
+          == std::vector<FeatureLifetimeTracker::CompletedRecording>{{
               .command_buffer = 13u,
               .recording_epoch = submission.commands.front().recording_epoch,
           }},
@@ -166,7 +140,7 @@ bool TestOneTimeRecordingCompletesAtIdle() {
 }
 
 bool TestOneTimeRecordingCompletesAtFence() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(27u, true);
   tracker.RecordFeatureUse(27u, 12u);
   const auto captured = tracker.CaptureSubmission({27u});
@@ -176,7 +150,7 @@ bool TestOneTimeRecordingCompletesAtFence() {
   bool passed = true;
   passed &= Expect(
       completed
-          == std::vector<dlss::FeatureLifetimeTracker::CompletedRecording>{{
+          == std::vector<FeatureLifetimeTracker::CompletedRecording>{{
               .command_buffer = 27u,
               .recording_epoch = committed.commands.front().recording_epoch,
           }},
@@ -191,7 +165,7 @@ bool TestOneTimeRecordingCompletesAtFence() {
 }
 
 bool TestFenceTrackedOneTimeChurnDoesNotAccumulate() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   constexpr std::uint64_t queue = 29u;
   constexpr std::uint64_t generation = 13u;
   bool passed = true;
@@ -208,7 +182,7 @@ bool TestFenceTrackedOneTimeChurnDoesNotAccumulate() {
     const auto completed = tracker.CompleteSubmission(queue, committed);
     passed &= Expect(
         completed
-            == std::vector<dlss::FeatureLifetimeTracker::CompletedRecording>{{
+            == std::vector<FeatureLifetimeTracker::CompletedRecording>{{
                 .command_buffer = command_buffer,
                 .recording_epoch = committed.commands.front().recording_epoch,
             }},
@@ -222,7 +196,7 @@ bool TestFenceTrackedOneTimeChurnDoesNotAccumulate() {
 }
 
 bool TestLifecycleFallbackFrameRotationRemainsBounded() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   constexpr std::uint64_t queue = 30u;
   constexpr std::uint64_t generation = 14u;
   constexpr std::uint64_t frame_slots = 3u;
@@ -252,7 +226,7 @@ bool TestLifecycleFallbackFrameRotationRemainsBounded() {
 }
 
 bool TestSimultaneousOneTimeSubmissionsWaitForEveryQueue() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(14u, true);
   tracker.RecordFeatureUse(14u, 5u);
   const auto submission = tracker.CaptureSubmission({14u});
@@ -274,7 +248,7 @@ bool TestSimultaneousOneTimeSubmissionsWaitForEveryQueue() {
       "last queue completion must invalidate the one-time recording");
   passed &= Expect(
       last_completed
-          == std::vector<dlss::FeatureLifetimeTracker::CompletedRecording>{{
+          == std::vector<FeatureLifetimeTracker::CompletedRecording>{{
               .command_buffer = 14u,
               .recording_epoch = submission.commands.front().recording_epoch,
           }},
@@ -283,7 +257,7 @@ bool TestSimultaneousOneTimeSubmissionsWaitForEveryQueue() {
 }
 
 bool TestOneTimeCompletionPreservesRecordingEpochAcrossReuse() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   constexpr std::uint64_t kCommandBuffer = 31u;
   constexpr std::uint64_t kQueue = 32u;
 
@@ -312,7 +286,7 @@ bool TestOneTimeCompletionPreservesRecordingEpochAcrossReuse() {
 }
 
 bool TestResetProvesConservativeSubmissionComplete() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(15u, false);
   tracker.RecordFeatureUse(15u, 6u);
   const auto submission = tracker.CaptureSubmission({15u});
@@ -331,7 +305,7 @@ bool TestResetProvesConservativeSubmissionComplete() {
 }
 
 bool TestMultipleGenerationsInOneRecording() {
-  dlss::FeatureLifetimeTracker tracker;
+  FeatureLifetimeTracker tracker;
   tracker.BeginCommandBuffer(16u, false);
   tracker.RecordFeatureUse(16u, 7u);
   tracker.RecordFeatureUse(16u, 8u);
@@ -346,87 +320,6 @@ bool TestMultipleGenerationsInOneRecording() {
   passed &= Expect(
       !tracker.IsReferenced(7u) && !tracker.IsReferenced(8u),
       "device destruction must discard every remaining recording");
-  return passed;
-}
-
-bool TestCreationGateRejectsOtherRecordingBeforeSubmit() {
-  dlss::FeatureCreationGate gate = {
-      .command_buffer = 17u,
-  };
-
-  bool passed = true;
-  passed &= Expect(
-      gate.AllowsUseFrom(17u),
-      "feature creation command buffer may evaluate the new feature in order");
-  passed &= Expect(
-      !gate.AllowsUseFrom(18u),
-      "another command buffer must wait for successful feature creation submit");
-  passed &= Expect(
-      gate.InvalidatedByDiscard(17u),
-      "discarding an unsubmitted creation recording must invalidate the feature");
-  passed &= Expect(
-      !gate.InvalidatedByDiscard(18u),
-      "discarding an unrelated recording must not invalidate the feature");
-  return passed;
-}
-
-bool TestCreationGateOpensOnlyForCommittedCreationSubmission() {
-  dlss::FeatureLifetimeTracker tracker;
-  tracker.BeginCommandBuffer(19u, false);
-  tracker.RecordFeatureUse(19u, 9u);
-  const auto captured = tracker.CaptureSubmission({19u});
-  const auto committed = tracker.CommitSuccessfulSubmit(25u, captured);
-
-  dlss::FeatureCreationGate gate = {
-      .command_buffer = 19u,
-  };
-  if (dlss::FeatureLifetimeTracker::SubmissionContains(
-          committed, gate.command_buffer, 9u)) {
-    gate.MarkSubmitted();
-  }
-
-  bool passed = true;
-  passed &= Expect(
-      gate.AllowsUseFrom(20u),
-      "successful creation submission must open the feature to later recordings");
-  passed &= Expect(
-      !gate.InvalidatedByDiscard(19u),
-      "discarding the old creation recording must preserve a submitted feature");
-  passed &= Expect(
-      !dlss::FeatureLifetimeTracker::SubmissionContains(
-          committed, 20u, 9u),
-      "submission matching must include the exact creation command buffer");
-  passed &= Expect(
-      !dlss::FeatureLifetimeTracker::SubmissionContains(
-          committed, 19u, 10u),
-      "submission matching must include the exact feature generation");
-  return passed;
-}
-
-bool TestStaleCreationSnapshotDoesNotOpenGate() {
-  dlss::FeatureLifetimeTracker tracker;
-  tracker.BeginCommandBuffer(21u, false);
-  tracker.RecordFeatureUse(21u, 11u);
-  const auto stale = tracker.CaptureSubmission({21u});
-  tracker.BeginCommandBuffer(21u, false);
-  tracker.RecordFeatureUse(21u, 11u);
-  const auto committed = tracker.CommitSuccessfulSubmit(26u, stale);
-
-  dlss::FeatureCreationGate gate = {
-      .command_buffer = 21u,
-  };
-  if (dlss::FeatureLifetimeTracker::SubmissionContains(
-          committed, gate.command_buffer, 11u)) {
-    gate.MarkSubmitted();
-  }
-
-  bool passed = true;
-  passed &= Expect(
-      committed.Empty(),
-      "a stale recording epoch must not be accepted as a successful submission");
-  passed &= Expect(
-      !gate.AllowsUseFrom(22u),
-      "a stale creation snapshot must not open the feature to another recording");
   return passed;
 }
 
@@ -446,9 +339,6 @@ int main() {
   passed &= TestOneTimeCompletionPreservesRecordingEpochAcrossReuse();
   passed &= TestResetProvesConservativeSubmissionComplete();
   passed &= TestMultipleGenerationsInOneRecording();
-  passed &= TestCreationGateRejectsOtherRecordingBeforeSubmit();
-  passed &= TestCreationGateOpensOnlyForCommittedCreationSubmission();
-  passed &= TestStaleCreationSnapshotDoesNotOpenGate();
   std::cerr << (passed ? "PASS\n" : "FAIL\n");
   return passed ? 0 : 1;
 }

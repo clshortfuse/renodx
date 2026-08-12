@@ -95,10 +95,22 @@ def main() -> None:
         if forbidden in tracked:
             raise AssertionError(f"global Vulkan wrapper escaped into production: {forbidden}")
 
+    for removed in (
+        "FindLegacyTrackedDeviceFunction",
+        "LegacyCaptureNativeOutputTrackedState",
+        "LegacyCaptureComputeRestoreState",
+        "LegacyLayerCmdBindDescriptorSets",
+        "VKAPI_ATTR VkResult VKAPI_CALL LayerQueueSubmit(",
+        "VKAPI_ATTR VkResult VKAPI_CALL LayerResetCommandBuffer(",
+        "VKAPI_ATTR VkResult VKAPI_CALL LayerCreateCommandPool(",
+    ):
+        if removed in source:
+            raise AssertionError(f"unreachable Vulkan layer path was restored: {removed}")
+
     begin = section(
         source,
         "VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(",
-        "VKAPI_ATTR VkResult VKAPI_CALL LayerResetCommandBuffer(",
+        "VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(",
     )
     require(begin, "fast_begin_command_buffer.load")
     require(begin, "GetCurrentThreadComputeCommandState()")
@@ -110,7 +122,7 @@ def main() -> None:
     bind = section(
         source,
         "VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(",
-        "[[maybe_unused]] PFN_vkVoidFunction FindLegacyTrackedDeviceFunction(",
+        "PFN_vkVoidFunction FindTrackedDeviceFunction(",
     )
     require(bind, "fast_cmd_bind_descriptor_sets.load")
     require(bind, "runtime_command_tracking_enabled.load")

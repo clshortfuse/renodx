@@ -177,8 +177,7 @@ class Tracker {
         .replacement_generation = snapshot.generation,
         .current_recording_generation = snapshot.generation,
     };
-    (void)authorization_command_lists_.Insert(
-        command_list, snapshot.generation);
+    (void)authorization_command_lists_.Insert(command_list);
     return true;
   }
   void AdvanceGenerationLocked() noexcept {
