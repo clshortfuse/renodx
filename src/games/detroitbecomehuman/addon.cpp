@@ -2591,6 +2591,15 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
+                .label = "Diagnostic: TAA descriptor metadata is complete. Resource capture and NGX Evaluate are intentionally disabled.",
+                .section = "DLSS",
+                .is_visible = []() {
+                  return temporal_capture::GetStatus()
+                         == temporal_capture::RuntimeStatus::kDescriptorMetadataReadyDiagnostic;
+                },
+            }},
+            {{
+                .value_type = renodx::utils::settings::SettingValueType::TEXT,
                 .label = "TAA resources were captured, but current-frame b52/jitter, depth, motion-vector, exposure, history and UI-free-color proofs are incomplete. NGX is fail-closed and Native TAA remains active.",
                 .section = "DLSS",
                 .is_visible = []() {

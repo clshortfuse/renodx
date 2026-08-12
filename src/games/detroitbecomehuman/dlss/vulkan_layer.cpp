@@ -33,6 +33,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -613,6 +614,21 @@ struct FencedFeatureSubmission {
   bool owned_by_layer = false;
 };
 
+struct DynamicDescriptorTemplateEntry {
+  std::size_t offset = 0u;
+};
+
+struct NarrowBufferMemoryBinding {
+  VkDeviceMemory memory = VK_NULL_HANDLE;
+  VkDeviceSize offset = 0u;
+};
+
+struct NarrowMappedMemory {
+  const void* pointer = nullptr;
+  VkDeviceSize offset = 0u;
+  VkDeviceSize size = 0u;
+};
+
 struct DeviceState {
   VkInstance instance = VK_NULL_HANDLE;
   VkPhysicalDevice physical_device = VK_NULL_HANDLE;
@@ -623,6 +639,13 @@ struct DeviceState {
   PFN_vkGetInstanceProcAddr next_get_instance_proc_addr = nullptr;
   PFN_vkGetDeviceProcAddr next_get_device_proc_addr = nullptr;
   PFN_vkUpdateDescriptorSets next_update_descriptor_sets = nullptr;
+  PFN_vkCreateDescriptorUpdateTemplate next_create_descriptor_update_template = nullptr;
+  PFN_vkDestroyDescriptorUpdateTemplate next_destroy_descriptor_update_template = nullptr;
+  PFN_vkUpdateDescriptorSetWithTemplate next_update_descriptor_set_with_template = nullptr;
+  PFN_vkBindBufferMemory next_bind_buffer_memory = nullptr;
+  PFN_vkBindBufferMemory2 next_bind_buffer_memory2 = nullptr;
+  PFN_vkDestroyBuffer next_destroy_buffer = nullptr;
+  PFN_vkFreeMemory next_free_memory = nullptr;
   PFN_vkMapMemory next_map_memory = nullptr;
   PFN_vkUnmapMemory next_unmap_memory = nullptr;
   PFN_vkBeginCommandBuffer next_begin_command_buffer = nullptr;
@@ -694,6 +717,14 @@ struct DeviceState {
   ComputeCommandRestoreState evaluation_restore_state;
   std::mutex mutex;
   std::mutex queue_mutex;
+
+  std::shared_mutex descriptor_template_mutex;
+  std::unordered_map<std::uint64_t, DynamicDescriptorTemplateEntry>
+      dynamic_descriptor_templates;
+  std::shared_mutex mapped_buffer_mutex;
+  std::unordered_map<std::uint64_t, NarrowBufferMemoryBinding>
+      narrow_buffer_bindings;
+  std::unordered_map<std::uint64_t, NarrowMappedMemory> narrow_mapped_memories;
 
   VkPhysicalDeviceMemoryProperties memory_properties = {};
   VkDeviceSize min_uniform_buffer_offset_alignment = 1u;
@@ -857,6 +888,9 @@ struct ThreadDynamicDescriptorUpdateScope {
   VkDevice device = VK_NULL_HANDLE;
   std::uint32_t write_count = 0u;
   const VkWriteDescriptorSet* writes = nullptr;
+  VkDescriptorSet template_descriptor_set = VK_NULL_HANDLE;
+  VkDescriptorUpdateTemplate descriptor_update_template = VK_NULL_HANDLE;
+  const void* template_data = nullptr;
 };
 
 ThreadDynamicDescriptorUpdateScope& GetCurrentDynamicDescriptorUpdateScope() {
@@ -5510,6 +5544,192 @@ VKAPI_ATTR void VKAPI_CALL LayerDestroyCommandPool(
   DiscardFeatureCommandBuffers(state, command_buffers);
 }
 
+VKAPI_ATTR VkResult VKAPI_CALL LayerCreateDynamicDescriptorUpdateTemplate(
+    VkDevice device,
+    const VkDescriptorUpdateTemplateCreateInfo* create_info,
+    const VkAllocationCallbacks* allocator,
+    VkDescriptorUpdateTemplate* descriptor_update_template) {
+  auto* state = FindDeviceFast(device);
+  if (state == nullptr || state->next_create_descriptor_update_template == nullptr) {
+    return VK_ERROR_EXTENSION_NOT_PRESENT;
+  }
+  const VkResult result = state->next_create_descriptor_update_template(
+      device, create_info, allocator, descriptor_update_template);
+  if (result != VK_SUCCESS || create_info == nullptr
+      || descriptor_update_template == nullptr) {
+    return result;
+  }
+
+  std::optional<DynamicDescriptorTemplateEntry> dynamic_entry;
+  for (std::uint32_t index = 0u;
+       index < create_info->descriptorUpdateEntryCount;
+       ++index) {
+    const auto& entry = create_info->pDescriptorUpdateEntries[index];
+    if (entry.dstBinding == DETROIT_DLSS_TAA_CONSTANT_BINDING_52
+        && entry.dstArrayElement == 0u && entry.descriptorCount == 1u
+        && entry.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) {
+      dynamic_entry = {.offset = entry.offset};
+    }
+  }
+  const std::unique_lock lock(state->descriptor_template_mutex);
+  const auto key = ToOpaque(*descriptor_update_template);
+  if (dynamic_entry.has_value()) {
+    state->dynamic_descriptor_templates[key] = *dynamic_entry;
+  } else {
+    state->dynamic_descriptor_templates.erase(key);
+  }
+  return result;
+}
+
+VKAPI_ATTR void VKAPI_CALL LayerDestroyDynamicDescriptorUpdateTemplate(
+    VkDevice device,
+    VkDescriptorUpdateTemplate descriptor_update_template,
+    const VkAllocationCallbacks* allocator) {
+  auto* state = FindDeviceFast(device);
+  if (state == nullptr) return;
+  {
+    const std::unique_lock lock(state->descriptor_template_mutex);
+    state->dynamic_descriptor_templates.erase(
+        ToOpaque(descriptor_update_template));
+  }
+  if (state->next_destroy_descriptor_update_template != nullptr) {
+    state->next_destroy_descriptor_update_template(
+        device, descriptor_update_template, allocator);
+  }
+}
+
+VKAPI_ATTR void VKAPI_CALL LayerUpdateDynamicDescriptorSetWithTemplate(
+    VkDevice device,
+    VkDescriptorSet descriptor_set,
+    VkDescriptorUpdateTemplate descriptor_update_template,
+    const void* descriptor_data) {
+  auto* state = FindDeviceFast(device);
+  if (state == nullptr
+      || state->next_update_descriptor_set_with_template == nullptr) {
+    return;
+  }
+
+  auto& current = GetCurrentDynamicDescriptorUpdateScope();
+  const auto previous = current;
+  current = {
+      .device = device,
+      .template_descriptor_set = descriptor_set,
+      .descriptor_update_template = descriptor_update_template,
+      .template_data = descriptor_data,
+  };
+  state->next_update_descriptor_set_with_template(
+      device, descriptor_set, descriptor_update_template, descriptor_data);
+  current = previous;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL LayerObserveBindBufferMemory(
+    VkDevice device,
+    VkBuffer buffer,
+    VkDeviceMemory memory,
+    VkDeviceSize memory_offset) {
+  auto* state = FindDeviceFast(device);
+  if (state == nullptr || state->next_bind_buffer_memory == nullptr) {
+    return VK_ERROR_INITIALIZATION_FAILED;
+  }
+  const VkResult result =
+      state->next_bind_buffer_memory(device, buffer, memory, memory_offset);
+  if (result == VK_SUCCESS) {
+    const std::unique_lock lock(state->mapped_buffer_mutex);
+    state->narrow_buffer_bindings[ToOpaque(buffer)] = {
+        .memory = memory,
+        .offset = memory_offset,
+    };
+  }
+  return result;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL LayerObserveBindBufferMemory2(
+    VkDevice device,
+    std::uint32_t bind_info_count,
+    const VkBindBufferMemoryInfo* bind_infos) {
+  auto* state = FindDeviceFast(device);
+  if (state == nullptr || state->next_bind_buffer_memory2 == nullptr) {
+    return VK_ERROR_EXTENSION_NOT_PRESENT;
+  }
+  const VkResult result =
+      state->next_bind_buffer_memory2(device, bind_info_count, bind_infos);
+  if (result == VK_SUCCESS && bind_infos != nullptr) {
+    const std::unique_lock lock(state->mapped_buffer_mutex);
+    for (std::uint32_t index = 0u; index < bind_info_count; ++index) {
+      state->narrow_buffer_bindings[ToOpaque(bind_infos[index].buffer)] = {
+          .memory = bind_infos[index].memory,
+          .offset = bind_infos[index].memoryOffset,
+      };
+    }
+  }
+  return result;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL LayerObserveMapMemory(
+    VkDevice device,
+    VkDeviceMemory memory,
+    VkDeviceSize offset,
+    VkDeviceSize size,
+    VkMemoryMapFlags flags,
+    void** data) {
+  auto* state = FindDeviceFast(device);
+  if (state == nullptr || state->next_map_memory == nullptr) {
+    return VK_ERROR_INITIALIZATION_FAILED;
+  }
+  const VkResult result =
+      state->next_map_memory(device, memory, offset, size, flags, data);
+  if (result == VK_SUCCESS && data != nullptr && *data != nullptr) {
+    const std::unique_lock lock(state->mapped_buffer_mutex);
+    state->narrow_mapped_memories[ToOpaque(memory)] = {
+        .pointer = *data,
+        .offset = offset,
+        .size = size,
+    };
+  }
+  return result;
+}
+
+VKAPI_ATTR void VKAPI_CALL LayerObserveUnmapMemory(
+    VkDevice device, VkDeviceMemory memory) {
+  auto* state = FindDeviceFast(device);
+  if (state == nullptr) return;
+  {
+    const std::unique_lock lock(state->mapped_buffer_mutex);
+    state->narrow_mapped_memories.erase(ToOpaque(memory));
+  }
+  if (state->next_unmap_memory != nullptr) {
+    state->next_unmap_memory(device, memory);
+  }
+}
+
+VKAPI_ATTR void VKAPI_CALL LayerObserveDestroyBuffer(
+    VkDevice device,
+    VkBuffer buffer,
+    const VkAllocationCallbacks* allocator) {
+  auto* state = FindDeviceFast(device);
+  if (state == nullptr) return;
+  if (state->next_destroy_buffer != nullptr) {
+    state->next_destroy_buffer(device, buffer, allocator);
+  }
+  const std::unique_lock lock(state->mapped_buffer_mutex);
+  state->narrow_buffer_bindings.erase(ToOpaque(buffer));
+}
+
+VKAPI_ATTR void VKAPI_CALL LayerObserveFreeMemory(
+    VkDevice device,
+    VkDeviceMemory memory,
+    const VkAllocationCallbacks* allocator) {
+  auto* state = FindDeviceFast(device);
+  if (state == nullptr) return;
+  {
+    const std::unique_lock lock(state->mapped_buffer_mutex);
+    state->narrow_mapped_memories.erase(ToOpaque(memory));
+  }
+  if (state->next_free_memory != nullptr) {
+    state->next_free_memory(device, memory, allocator);
+  }
+}
+
 VKAPI_ATTR void VKAPI_CALL LayerUpdateDynamicConstantBufferDescriptorSets(
     VkDevice device,
     std::uint32_t descriptor_write_count,
@@ -6041,6 +6261,40 @@ PFN_vkVoidFunction FindTrackedDeviceFunction(const char* name) {
     return reinterpret_cast<PFN_vkVoidFunction>(
         &LayerUpdateDynamicConstantBufferDescriptorSets);
   }
+  if (std::strcmp(name, "vkCreateDescriptorUpdateTemplate") == 0
+      || std::strcmp(name, "vkCreateDescriptorUpdateTemplateKHR") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(
+        &LayerCreateDynamicDescriptorUpdateTemplate);
+  }
+  if (std::strcmp(name, "vkDestroyDescriptorUpdateTemplate") == 0
+      || std::strcmp(name, "vkDestroyDescriptorUpdateTemplateKHR") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(
+        &LayerDestroyDynamicDescriptorUpdateTemplate);
+  }
+  if (std::strcmp(name, "vkUpdateDescriptorSetWithTemplate") == 0
+      || std::strcmp(name, "vkUpdateDescriptorSetWithTemplateKHR") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(
+        &LayerUpdateDynamicDescriptorSetWithTemplate);
+  }
+  if (std::strcmp(name, "vkBindBufferMemory") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(&LayerObserveBindBufferMemory);
+  }
+  if (std::strcmp(name, "vkBindBufferMemory2") == 0
+      || std::strcmp(name, "vkBindBufferMemory2KHR") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(&LayerObserveBindBufferMemory2);
+  }
+  if (std::strcmp(name, "vkMapMemory") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(&LayerObserveMapMemory);
+  }
+  if (std::strcmp(name, "vkUnmapMemory") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(&LayerObserveUnmapMemory);
+  }
+  if (std::strcmp(name, "vkDestroyBuffer") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(&LayerObserveDestroyBuffer);
+  }
+  if (std::strcmp(name, "vkFreeMemory") == 0) {
+    return reinterpret_cast<PFN_vkVoidFunction>(&LayerObserveFreeMemory);
+  }
   return nullptr;
 }
 
@@ -6194,6 +6448,49 @@ VKAPI_ATTR VkResult VKAPI_CALL HookCreateDevice(
   state->next_update_descriptor_sets =
       reinterpret_cast<PFN_vkUpdateDescriptorSets>(
           reshade_get_device_proc_addr(*device, "vkUpdateDescriptorSets"));
+  state->next_create_descriptor_update_template =
+      reinterpret_cast<PFN_vkCreateDescriptorUpdateTemplate>(
+          reshade_get_device_proc_addr(
+              *device, "vkCreateDescriptorUpdateTemplate"));
+  if (state->next_create_descriptor_update_template == nullptr) {
+    state->next_create_descriptor_update_template =
+        reinterpret_cast<PFN_vkCreateDescriptorUpdateTemplate>(
+            reshade_get_device_proc_addr(
+                *device, "vkCreateDescriptorUpdateTemplateKHR"));
+  }
+  state->next_destroy_descriptor_update_template =
+      reinterpret_cast<PFN_vkDestroyDescriptorUpdateTemplate>(
+          reshade_get_device_proc_addr(
+              *device, "vkDestroyDescriptorUpdateTemplate"));
+  if (state->next_destroy_descriptor_update_template == nullptr) {
+    state->next_destroy_descriptor_update_template =
+        reinterpret_cast<PFN_vkDestroyDescriptorUpdateTemplate>(
+            reshade_get_device_proc_addr(
+                *device, "vkDestroyDescriptorUpdateTemplateKHR"));
+  }
+  state->next_update_descriptor_set_with_template =
+      reinterpret_cast<PFN_vkUpdateDescriptorSetWithTemplate>(
+          reshade_get_device_proc_addr(
+              *device, "vkUpdateDescriptorSetWithTemplate"));
+  if (state->next_update_descriptor_set_with_template == nullptr) {
+    state->next_update_descriptor_set_with_template =
+        reinterpret_cast<PFN_vkUpdateDescriptorSetWithTemplate>(
+            reshade_get_device_proc_addr(
+                *device, "vkUpdateDescriptorSetWithTemplateKHR"));
+  }
+  state->next_bind_buffer_memory = reinterpret_cast<PFN_vkBindBufferMemory>(
+      reshade_get_device_proc_addr(*device, "vkBindBufferMemory"));
+  state->next_bind_buffer_memory2 = reinterpret_cast<PFN_vkBindBufferMemory2>(
+      reshade_get_device_proc_addr(*device, "vkBindBufferMemory2"));
+  if (state->next_bind_buffer_memory2 == nullptr) {
+    state->next_bind_buffer_memory2 =
+        reinterpret_cast<PFN_vkBindBufferMemory2>(
+            reshade_get_device_proc_addr(*device, "vkBindBufferMemory2KHR"));
+  }
+  state->next_destroy_buffer = reinterpret_cast<PFN_vkDestroyBuffer>(
+      reshade_get_device_proc_addr(*device, "vkDestroyBuffer"));
+  state->next_free_memory = reinterpret_cast<PFN_vkFreeMemory>(
+      reshade_get_device_proc_addr(*device, "vkFreeMemory"));
   state->next_map_memory = reinterpret_cast<PFN_vkMapMemory>(
       reshade_get_device_proc_addr(*device, "vkMapMemory"));
   state->next_unmap_memory = reinterpret_cast<PFN_vkUnmapMemory>(
@@ -6523,31 +6820,110 @@ bool GetCurrentDynamicConstantBufferBinding(
   *binding = {};
   const auto& current = GetCurrentDynamicDescriptorUpdateScope();
   if (device == 0u || descriptor_set == 0u
-      || ToOpaque(current.device) != device || current.write_count == 0u
-      || current.writes == nullptr) {
+      || ToOpaque(current.device) != device) {
     return false;
   }
 
   bool found = false;
-  for (std::uint32_t index = 0u; index < current.write_count; ++index) {
-    const auto& write = current.writes[index];
-    if (ToOpaque(write.dstSet) != descriptor_set
-        || write.dstBinding != DETROIT_DLSS_TAA_CONSTANT_BINDING_52
-        || write.dstArrayElement != 0u || write.descriptorCount != 1u
-        || write.descriptorType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-        || write.pBufferInfo == nullptr
-        || write.pBufferInfo[0u].buffer == VK_NULL_HANDLE) {
-      continue;
+  if (current.writes != nullptr) {
+    for (std::uint32_t index = 0u; index < current.write_count; ++index) {
+      const auto& write = current.writes[index];
+      if (ToOpaque(write.dstSet) != descriptor_set
+          || write.dstBinding != DETROIT_DLSS_TAA_CONSTANT_BINDING_52
+          || write.dstArrayElement != 0u || write.descriptorCount != 1u
+          || write.descriptorType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+          || write.pBufferInfo == nullptr
+          || write.pBufferInfo[0u].buffer == VK_NULL_HANDLE) {
+        continue;
+      }
+      *binding = {
+          .buffer = ToOpaque(write.pBufferInfo[0u].buffer),
+          .offset = write.pBufferInfo[0u].offset,
+          .range = write.pBufferInfo[0u].range,
+          .descriptor_type = static_cast<std::uint32_t>(write.descriptorType),
+      };
+      found = true;
     }
-    *binding = {
-        .buffer = ToOpaque(write.pBufferInfo[0u].buffer),
-        .offset = write.pBufferInfo[0u].offset,
-        .range = write.pBufferInfo[0u].range,
-        .descriptor_type = static_cast<std::uint32_t>(write.descriptorType),
-    };
-    found = true;
+  }
+  if (current.template_data != nullptr
+      && current.descriptor_update_template != VK_NULL_HANDLE
+      && ToOpaque(current.template_descriptor_set) == descriptor_set) {
+    const auto state = FindDeviceSharedFast(current.device);
+    if (state != nullptr) {
+      const std::shared_lock lock(state->descriptor_template_mutex);
+      const auto entry = state->dynamic_descriptor_templates.find(
+          ToOpaque(current.descriptor_update_template));
+      if (entry != state->dynamic_descriptor_templates.end()) {
+        VkDescriptorBufferInfo buffer_info = {};
+        std::memcpy(
+            &buffer_info,
+            static_cast<const std::uint8_t*>(current.template_data)
+                + entry->second.offset,
+            sizeof(buffer_info));
+        if (buffer_info.buffer != VK_NULL_HANDLE) {
+          *binding = {
+              .buffer = ToOpaque(buffer_info.buffer),
+              .offset = buffer_info.offset,
+              .range = buffer_info.range,
+              .descriptor_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+          };
+          found = true;
+        }
+      }
+    }
   }
   return found;
+}
+
+bool ReadPersistentlyMappedBufferRange(
+    std::uint64_t device,
+    std::uint64_t buffer,
+    std::uint64_t offset,
+    std::uint64_t size,
+    void* destination) {
+  if (device == 0u || buffer == 0u || size == 0u || destination == nullptr) {
+    return false;
+  }
+  const auto state = FindDeviceSharedFast(FromOpaque<VkDevice>(device));
+  if (state == nullptr || state->destroying.load(std::memory_order_acquire)) {
+    return false;
+  }
+
+  const std::shared_lock lock(state->mapped_buffer_mutex);
+  const auto binding = state->narrow_buffer_bindings.find(buffer);
+  if (binding == state->narrow_buffer_bindings.end()
+      || binding->second.memory == VK_NULL_HANDLE) {
+    return false;
+  }
+  const auto mapped = state->narrow_mapped_memories.find(
+      ToOpaque(binding->second.memory));
+  if (mapped == state->narrow_mapped_memories.end()
+      || mapped->second.pointer == nullptr) {
+    return false;
+  }
+
+  std::uint64_t absolute_offset = 0u;
+  if (!AddWithoutOverflow(binding->second.offset, offset, &absolute_offset)
+      || absolute_offset < mapped->second.offset) {
+    return false;
+  }
+  const std::uint64_t relative_offset =
+      absolute_offset - mapped->second.offset;
+  if (mapped->second.size != VK_WHOLE_SIZE
+      && (relative_offset > mapped->second.size
+          || size > mapped->second.size - relative_offset)) {
+    return false;
+  }
+  if (relative_offset > std::numeric_limits<std::size_t>::max()
+      || size > std::numeric_limits<std::size_t>::max()) {
+    return false;
+  }
+  std::memcpy(
+      destination,
+      static_cast<const std::uint8_t*>(mapped->second.pointer)
+          + static_cast<std::size_t>(relative_offset),
+      static_cast<std::size_t>(size));
+  return true;
 }
 
 bool ClaimCommandRecordingEvaluation(

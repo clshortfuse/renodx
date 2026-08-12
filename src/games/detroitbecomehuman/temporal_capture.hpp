@@ -87,11 +87,13 @@ inline constexpr std::uint32_t kVkFormatRgb9e5 = 123u;
 inline constexpr std::uint32_t kVkFormatD32FloatS8Uint = 130u;
 inline constexpr std::uint32_t kVkImageLayoutGeneral = 1u;
 inline constexpr std::uint32_t kVkImageLayoutShaderReadOnly = 5u;
+inline constexpr bool kStopAfterDescriptorMetadataForDiagnostic = true;
 
 enum class RuntimeStatus : std::uint32_t {
   kNative = 0u,
   kWaitingForDispatch,
   kDescriptorContractIncomplete,
+  kDescriptorMetadataReadyDiagnostic,
   kTemporalContractUnverified,
   kBridgeFallback,
   kDlssActive,
@@ -709,21 +711,28 @@ inline bool OnCopySparseDescriptorTables(
                      | DETROIT_DLSS_CONSTANTS_EFFECTIVE_OFFSET_VALID
                      | DETROIT_DLSS_CONSTANTS_RANGE_VALID,
   };
-  void* mapped = nullptr;
-  if (!device->map_buffer_region(
-          slot.buffer.buffer,
+  if (!dlss::embedded::ReadPersistentlyMappedBufferRange(
+          device->get_native(),
+          slot.buffer.buffer.handle,
           effective_offset,
           kReflectedTemporalConstantsSize,
-          reshade::api::map_access::read_only,
-          &mapped)
-      || mapped == nullptr) {
-    return false;
+          snapshot->constants)) {
+    void* mapped = nullptr;
+    if (!device->map_buffer_region(
+            slot.buffer.buffer,
+            effective_offset,
+            kReflectedTemporalConstantsSize,
+            reshade::api::map_access::read_only,
+            &mapped)
+        || mapped == nullptr) {
+      return false;
+    }
+    std::memcpy(
+        snapshot->constants,
+        mapped,
+        static_cast<std::size_t>(kReflectedTemporalConstantsSize));
+    device->unmap_buffer_region(slot.buffer.buffer);
   }
-  std::memcpy(
-      snapshot->constants,
-      mapped,
-      static_cast<std::size_t>(kReflectedTemporalConstantsSize));
-  device->unmap_buffer_region(slot.buffer.buffer);
   snapshot->bytes_written =
       static_cast<std::uint32_t>(kReflectedTemporalConstantsSize);
   snapshot->valid_flags |= DETROIT_DLSS_CONSTANTS_PAYLOAD_VALID;
@@ -1028,6 +1037,14 @@ inline void AfterNativeTemporalDispatch(
           pipeline_layout.handle,
           descriptor_set.handle,
           &recording);
+  if constexpr (kStopAfterDescriptorMetadataForDiagnostic) {
+    if (snapshot_complete) {
+      runtime_status.store(
+          RuntimeStatus::kDescriptorMetadataReadyDiagnostic,
+          std::memory_order_relaxed);
+      return;
+    }
+  }
   std::array<CapturedImage, kSampledBindings.size()> sampled = {};
   std::array<CapturedImage, kStorageBindings.size()> storage = {};
   DetroitDlssTemporalConstantsSnapshot constants_snapshot = {};
