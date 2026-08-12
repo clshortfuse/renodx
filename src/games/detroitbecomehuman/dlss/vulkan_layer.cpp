@@ -242,8 +242,13 @@ const EvaluationTraceConfiguration& GetEvaluationTraceConfiguration() {
     const auto module_path = std::filesystem::path(GetModulePath(layer_module));
     if (module_path.empty()) return EvaluationTraceConfiguration{};
     const auto ini_path = module_path.parent_path() / L"ReShade.ini";
-    // Temporary diagnostic build: always trace exactly three DLAA attempts.
-    const bool first_three = true;
+    const bool first_three =
+        GetPrivateProfileIntW(
+            L"renodx-dev",
+            L"DetroitDLSSTraceFirstThree",
+            0,
+            ini_path.c_str())
+        == 1;
     const bool readback = first_three
                           && GetPrivateProfileIntW(
                                  L"renodx-dev",

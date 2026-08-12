@@ -26,8 +26,14 @@ struct PrepareColorMotionBindings {
 struct PackColorBindings {
   static constexpr std::uint32_t kDlssColor = 0u;
   static constexpr std::uint32_t kOutputColorPass = 1u;
-  static constexpr std::uint32_t kConstants = 2u;
 };
+
+inline constexpr std::uint32_t kPackPushConstantOffset = 120u;
+inline constexpr std::uint32_t kPackPushConstantSize = 8u;
+inline constexpr std::uint32_t kPackPushConstantRangeSize = 128u;
+static_assert(
+    kPackPushConstantOffset + kPackPushConstantSize
+    == kPackPushConstantRangeSize);
 
 // SPIR-V is materialized as aligned words instead of casting the generated
 // byte-array embed. The returned spans can be assigned directly to

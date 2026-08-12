@@ -699,11 +699,19 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertNotIn("ApplyDlaaRcas", scene_shader)
         self.assertNotIn("CUSTOM_DLSS_ACTIVE", scene_shader)
         self.assertIn("vec3 ApplyDlaaRcas(", pack_shader)
-        self.assertIn("layout(set = 0, binding = 2, std140)", pack_shader)
+        self.assertIn("layout(push_constant)", pack_shader)
+        self.assertIn("vec4 reserved[7];", pack_shader)
+        self.assertIn("vec2 reservedTail;", pack_shader)
+        self.assertIn("vec2 values;", pack_shader)
+        self.assertIn(
+            "vec3 color = texelFetch(DlssColor, pixel, 0).rgb;",
+            pack_shader,
+        )
+        self.assertIn("vec3 color = SanitizeColor(value);", pack_shader)
         self.assertRegex(
             pack_shader,
             r"if\s*\(sharpening\s*>\s*0\.0\)[\s\S]*?"
-            r"color\s*=\s*ApplyDlaaRcas\(",
+            r"color\s*=\s*ApplyDlaaRcas\([\s\S]*?SanitizeColor\(color\)",
         )
         self.assertIn('.key = "DLAASharpening"', addon)
         self.assertRegex(
@@ -737,10 +745,49 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertIn("float dlaa_sharpening;", bridge_abi)
         self.assertIn("float dlaa_sharpening_normalization;", bridge_abi)
         self.assertIn(".dlaa_sharpening = inputs->dlaa_sharpening,", vulkan_layer)
-        self.assertIn("VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER", adapter_runtime)
-        self.assertIn("procedures.cmd_update_buffer(", adapter_runtime)
-        self.assertIn("VK_ACCESS_TRANSFER_WRITE_BIT", adapter_runtime)
-        self.assertIn("VK_ACCESS_UNIFORM_READ_BIT", adapter_runtime)
+        self.assertNotIn("pack_constants_buffer", adapter_runtime)
+        self.assertNotIn("procedures.cmd_update_buffer(", adapter_runtime)
+        self.assertIn("procedures.cmd_push_constants(", adapter_runtime)
+        self.assertIn("kPackPushConstantOffset", adapter_runtime)
+        self.assertIn("kPackPushConstantRangeSize", adapter_runtime)
+        self.assertRegex(
+            adapter_runtime,
+            r"VkPushConstantRange\s+pack_push_constant_range\s*=\s*\{\s*"
+            r"VK_SHADER_STAGE_COMPUTE_BIT,\s*0u,\s*"
+            r"adapter_shaders::kPackPushConstantRangeSize,",
+        )
+        self.assertRegex(
+            adapter_runtime,
+            r"procedures\.cmd_push_constants\([\s\S]*?"
+            r"adapter_shaders::kPackPushConstantOffset,\s*"
+            r"adapter_shaders::kPackPushConstantSize,\s*"
+            r"&bundle->pack_constants\);",
+        )
+        stable_descriptors = adapter_runtime[
+            adapter_runtime.index("void UpdateStableDescriptors(") :
+            adapter_runtime.index("AdapterResult CreateBundle(")
+        ]
+        frame_descriptors = adapter_runtime[
+            adapter_runtime.index("void UpdateFrameDescriptors(") :
+            adapter_runtime.index("void RecordPrepare(")
+        ]
+        self.assertEqual(
+            stable_descriptors.count("VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET"),
+            2,
+        )
+        self.assertEqual(
+            frame_descriptors.count("VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET"),
+            2,
+        )
+        self.assertRegex(
+            adapter_runtime,
+            r"created\.pack_descriptor_set\s*=\s*sets\[1u\];\s*"
+            r"UpdateStableDescriptors\(&created\);",
+        )
+        self.assertIn(
+            "impl_->UpdateFrameDescriptors(&bundle, prepare_info);",
+            adapter_runtime,
+        )
         self.assertRegex(
             addon,
             r"\.crc32\s*=\s*0xEBFBDDB1,[\s\S]*?"

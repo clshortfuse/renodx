@@ -47,8 +47,8 @@ int main() {
       "dispatch repair must reject a null parent dispatch table");
 
   Expect(
-      !embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_NATIVE, false),
-      "Native TAA with non-Retinal DOF must use the command-tracking fast path");
+      embedded::NeedsRuntimeCommandTracking(DETROIT_DLSS_MODE_NATIVE, false),
+      "Native TAA must retain targeted command tracking for live DLAA switching");
   Expect(
       embedded::kDlssRuntimeEnabled,
       "targeted DLAA runtime must be enabled");

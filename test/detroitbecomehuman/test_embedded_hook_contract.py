@@ -303,7 +303,10 @@ def main() -> None:
     require(bridge, "struct EvaluationDiagnostics")
     require(bridge, "EvaluationStageName(")
     require(bridge, "EvaluationDiagnostics* diagnostics = nullptr")
-    require(source, "const bool first_three = true;")
+    require(source, 'L"DetroitDLSSTraceFirstThree"')
+    require(source, "const bool first_three =")
+    if "const bool first_three = true;" in source:
+        raise AssertionError("DLSS first-three tracing must remain opt-in")
     require(source, "TraceEvaluationMessage(")
     require(source, "event=bridge_input")
     require(source, "event=invalid_frame failed_mask=")

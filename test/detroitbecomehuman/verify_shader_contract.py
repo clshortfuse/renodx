@@ -255,17 +255,29 @@ def validate_dlaa_pack_shader(embed_dir, spirv_val, spirv_cross):
     expected_bindings = {
         ("textures", 0, 0),
         ("images", 0, 1),
-        ("ubos", 0, 2),
     }
     if actual_bindings != expected_bindings:
         fail(
             "DLAA output pack must sample NGX color, write native b16 and "
-            f"read bundle-local sharpening constants; got {sorted(actual_bindings)}"
+            f"use no descriptor-backed constants; got {sorted(actual_bindings)}"
         )
-    uniform = reflection.get("ubos", [])
-    if len(uniform) != 1 or uniform[0].get("block_size") != 16:
-        fail("DLAA output pack constants block must remain 16 bytes")
-    validate_no_push_constants(shader_id, reflection)
+    push_constants = reflection.get("push_constants", [])
+    if len(push_constants) != 1:
+        fail("DLAA output pack must expose one push-constant block")
+    push_type = reflection.get("types", {}).get(push_constants[0].get("type"))
+    if push_type is None:
+        fail("DLAA output pack push-constant type is missing")
+    members = [
+        (member.get("name"), member.get("type"), member.get("offset"))
+        for member in push_type.get("members", [])
+    ]
+    if members[1:] != [
+        ("reservedTail", "vec2", 112),
+        ("values", "vec2", 120),
+    ] or not members or members[0][0] != "reserved" or members[0][2] != 0:
+        fail(f"DLAA output pack push-constant offsets changed; got {members}")
+    if members[-1][2] + 8 != 128:
+        fail("DLAA output pack push constants must end at byte 128")
     validate_embed_header(shader_id, spv_path)
 
 

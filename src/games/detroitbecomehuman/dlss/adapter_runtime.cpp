@@ -121,7 +121,7 @@ struct AdapterRuntime::Impl {
     PFN_vkCmdCopyImageToBuffer cmd_copy_image_to_buffer = nullptr;
     PFN_vkCmdBindPipeline cmd_bind_pipeline = nullptr;
     PFN_vkCmdBindDescriptorSets cmd_bind_descriptor_sets = nullptr;
-    PFN_vkCmdUpdateBuffer cmd_update_buffer = nullptr;
+    PFN_vkCmdPushConstants cmd_push_constants = nullptr;
     PFN_vkCmdDispatch cmd_dispatch = nullptr;
     PFN_vkCreateEvent create_event = nullptr;
     PFN_vkDestroyEvent destroy_event = nullptr;
@@ -148,19 +148,16 @@ struct AdapterRuntime::Impl {
     bool contents_valid = false;
   };
 
-  struct alignas(16) PackConstants {
+  struct PackConstants {
     float sharpening = 0.f;
     float normalization = 1.f;
-    float reserved_0 = 0.f;
-    float reserved_1 = 0.f;
   };
-  static_assert(sizeof(PackConstants) == 16u);
+  static_assert(sizeof(PackConstants) == adapter_shaders::kPackPushConstantSize);
 
   struct ScratchBundle {
     VkCommandBuffer command_buffer = VK_NULL_HANDLE;
     ImageAllocation color;
     ImageAllocation dlss_output;
-    BufferAllocation pack_constants_buffer;
     BufferAllocation trace_readback_buffer;
     VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
     VkDescriptorSet prepare_descriptor_set = VK_NULL_HANDLE;
@@ -287,8 +284,8 @@ struct AdapterRuntime::Impl {
                &procedures.cmd_bind_descriptor_sets,
                "vkCmdBindDescriptorSets")
            && LoadDeviceProcedure(
-                &procedures.cmd_update_buffer,
-                "vkCmdUpdateBuffer")
+               &procedures.cmd_push_constants,
+               "vkCmdPushConstants")
            && LoadDeviceProcedure(&procedures.cmd_dispatch, "vkCmdDispatch")
            && LoadDeviceProcedure(&procedures.create_event, "vkCreateEvent")
            && LoadDeviceProcedure(&procedures.destroy_event, "vkDestroyEvent")
@@ -435,7 +432,7 @@ struct AdapterRuntime::Impl {
         &prepare_descriptor_set_layout);
     if (result != VK_SUCCESS) return VulkanError(result);
 
-    const std::array<VkDescriptorSetLayoutBinding, 3u> pack_bindings = {{
+    const std::array<VkDescriptorSetLayoutBinding, 2u> pack_bindings = {{
         {
             adapter_shaders::PackColorBindings::kDlssColor,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -446,13 +443,6 @@ struct AdapterRuntime::Impl {
         {
             adapter_shaders::PackColorBindings::kOutputColorPass,
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            1u,
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            nullptr,
-        },
-        {
-            adapter_shaders::PackColorBindings::kConstants,
-            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             1u,
             VK_SHADER_STAGE_COMPUTE_BIT,
             nullptr,
@@ -488,14 +478,19 @@ struct AdapterRuntime::Impl {
         &prepare_pipeline_layout);
     if (result != VK_SUCCESS) return VulkanError(result);
 
+    const VkPushConstantRange pack_push_constant_range = {
+        VK_SHADER_STAGE_COMPUTE_BIT,
+        0u,
+        adapter_shaders::kPackPushConstantRangeSize,
+    };
     const VkPipelineLayoutCreateInfo pack_pipeline_layout_info = {
         VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         nullptr,
         0u,
         1u,
         &pack_descriptor_set_layout,
-        0u,
-        nullptr,
+        1u,
+        &pack_push_constant_range,
     };
     result = procedures.create_pipeline_layout(
         device,
@@ -552,7 +547,6 @@ struct AdapterRuntime::Impl {
     if (bundle->descriptor_pool != VK_NULL_HANDLE) {
       procedures.destroy_descriptor_pool(device, bundle->descriptor_pool, nullptr);
     }
-    DestroyBuffer(&bundle->pack_constants_buffer);
     DestroyBuffer(&bundle->trace_readback_buffer);
     DestroyImage(&bundle->dlss_output);
     DestroyImage(&bundle->color);
@@ -944,6 +938,49 @@ struct AdapterRuntime::Impl {
     return true;
   }
 
+  void UpdateStableDescriptors(ScratchBundle* bundle) const {
+    const std::array<VkDescriptorImageInfo, 2u> images = {{
+        {VK_NULL_HANDLE, bundle->color.view, VK_IMAGE_LAYOUT_GENERAL},
+        {
+            sampler,
+            bundle->dlss_output.view,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        },
+    }};
+    const std::array<VkWriteDescriptorSet, 2u> writes = {{
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            nullptr,
+            bundle->prepare_descriptor_set,
+            adapter_shaders::PrepareColorMotionBindings::kOutputColor,
+            0u,
+            1u,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            &images[0u],
+            nullptr,
+            nullptr,
+        },
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            nullptr,
+            bundle->pack_descriptor_set,
+            adapter_shaders::PackColorBindings::kDlssColor,
+            0u,
+            1u,
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            &images[1u],
+            nullptr,
+            nullptr,
+        },
+    }};
+    procedures.update_descriptor_sets(
+        device,
+        static_cast<std::uint32_t>(writes.size()),
+        writes.data(),
+        0u,
+        nullptr);
+  }
+
   AdapterResult CreateBundle(
       VkCommandBuffer command_buffer,
       std::uint32_t render_width,
@@ -982,22 +1019,9 @@ struct AdapterRuntime::Impl {
       return result;
     }
 
-    result = CreateBuffer(
-        sizeof(PackConstants),
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
-            | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        false,
-        &created.pack_constants_buffer);
-    if (!result.Succeeded()) {
-      DestroyBundle(&created);
-      return result;
-    }
-
-    const std::array<VkDescriptorPoolSize, 3u> pool_sizes = {{
+    const std::array<VkDescriptorPoolSize, 2u> pool_sizes = {{
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2u},
         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2u},
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u},
     }};
     const VkDescriptorPoolCreateInfo pool_info = {
         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -1036,6 +1060,7 @@ struct AdapterRuntime::Impl {
     }
     created.prepare_descriptor_set = sets[0u];
     created.pack_descriptor_set = sets[1u];
+    UpdateStableDescriptors(&created);
     *bundle = created;
     return Success();
   }
@@ -1197,20 +1222,14 @@ struct AdapterRuntime::Impl {
            && ValidateDispatchDimensions(prepare_info);
   }
 
-  void UpdateDescriptors(
+  void UpdateFrameDescriptors(
       ScratchBundle* bundle,
       const AdapterPrepareInfo& prepare_info) const {
-    const std::array<VkDescriptorImageInfo, 4u> images = {{
+    const std::array<VkDescriptorImageInfo, 2u> images = {{
         {
             sampler,
             FromOpaque<VkImageView>(prepare_info.current_color.image_view),
             static_cast<VkImageLayout>(prepare_info.current_color.layout),
-        },
-        {VK_NULL_HANDLE, bundle->color.view, VK_IMAGE_LAYOUT_GENERAL},
-        {
-            sampler,
-            bundle->dlss_output.view,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         },
         {
             VK_NULL_HANDLE,
@@ -1218,12 +1237,7 @@ struct AdapterRuntime::Impl {
             VK_IMAGE_LAYOUT_GENERAL,
         },
     }};
-    const VkDescriptorBufferInfo constants = {
-        bundle->pack_constants_buffer.buffer,
-        0u,
-        sizeof(PackConstants),
-    };
-    const std::array<VkWriteDescriptorSet, 5u> writes = {{
+    const std::array<VkWriteDescriptorSet, 2u> writes = {{
         {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             nullptr,
@@ -1239,49 +1253,13 @@ struct AdapterRuntime::Impl {
         {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             nullptr,
-            bundle->prepare_descriptor_set,
-            adapter_shaders::PrepareColorMotionBindings::kOutputColor,
-            0u,
-            1u,
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            &images[1u],
-            nullptr,
-            nullptr,
-        },
-        {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            nullptr,
-            bundle->pack_descriptor_set,
-            adapter_shaders::PackColorBindings::kDlssColor,
-            0u,
-            1u,
-            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            &images[2u],
-            nullptr,
-            nullptr,
-        },
-        {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            nullptr,
             bundle->pack_descriptor_set,
             adapter_shaders::PackColorBindings::kOutputColorPass,
             0u,
             1u,
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            &images[3u],
+            &images[1u],
             nullptr,
-            nullptr,
-        },
-        {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            nullptr,
-            bundle->pack_descriptor_set,
-            adapter_shaders::PackColorBindings::kConstants,
-            0u,
-            1u,
-            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            nullptr,
-            &constants,
             nullptr,
         },
     }};
@@ -1368,35 +1346,6 @@ struct AdapterRuntime::Impl {
 
   void RecordPack(ScratchBundle* bundle) const {
     auto& pack_source = bundle->dlss_output;
-    procedures.cmd_update_buffer(
-        bundle->command_buffer,
-        bundle->pack_constants_buffer.buffer,
-        0u,
-        sizeof(bundle->pack_constants),
-        &bundle->pack_constants);
-    const VkBufferMemoryBarrier constants_barrier = {
-        VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-        nullptr,
-        VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_ACCESS_UNIFORM_READ_BIT,
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        bundle->pack_constants_buffer.buffer,
-        0u,
-        sizeof(bundle->pack_constants),
-    };
-    procedures.cmd_pipeline_barrier(
-        bundle->command_buffer,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        0u,
-        0u,
-        nullptr,
-        1u,
-        &constants_barrier,
-        0u,
-        nullptr);
-
     const auto source_plan =
         renodx::utils::dlss::vulkan::PlanNgxOutputSampledRead(
             pack_source.state);
@@ -1435,6 +1384,13 @@ struct AdapterRuntime::Impl {
         &bundle->pack_descriptor_set,
         0u,
         nullptr);
+    procedures.cmd_push_constants(
+        bundle->command_buffer,
+        pack_pipeline_layout,
+        VK_SHADER_STAGE_COMPUTE_BIT,
+        adapter_shaders::kPackPushConstantOffset,
+        adapter_shaders::kPackPushConstantSize,
+        &bundle->pack_constants);
     procedures.cmd_dispatch(
         bundle->command_buffer,
         DispatchCount(
@@ -1622,7 +1578,7 @@ AdapterResult AdapterRuntime::Prepare(
       prepare_info.trace_readback && prepare_info.trace_attempt != 0u
       && !bundle.trace_readback_pending
       && impl_->EnsureTraceReadbackBuffer(&bundle).Succeeded();
-  impl_->UpdateDescriptors(&bundle, prepare_info);
+  impl_->UpdateFrameDescriptors(&bundle, prepare_info);
   impl_->RecordPrepare(&bundle, prepare_info);
   bundle.native_motion_vectors = prepare_info.motion_vectors;
   bundle.native_output = prepare_info.output_color_pass;

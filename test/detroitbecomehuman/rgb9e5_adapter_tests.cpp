@@ -24,7 +24,13 @@ static_assert(adapter_shaders::PrepareColorMotionBindings::kCurrentColor == 0u);
 static_assert(adapter_shaders::PrepareColorMotionBindings::kOutputColor == 1u);
 static_assert(adapter_shaders::PackColorBindings::kDlssColor == 0u);
 static_assert(adapter_shaders::PackColorBindings::kOutputColorPass == 1u);
-static_assert(adapter_shaders::PackColorBindings::kConstants == 2u);
+static_assert(adapter_shaders::kPackPushConstantOffset == 120u);
+static_assert(adapter_shaders::kPackPushConstantSize == 8u);
+static_assert(adapter_shaders::kPackPushConstantRangeSize == 128u);
+static_assert(
+    adapter_shaders::kPackPushConstantOffset
+        + adapter_shaders::kPackPushConstantSize
+    == adapter_shaders::kPackPushConstantRangeSize);
 
 bool Expect(bool condition, std::string_view description) {
   if (condition) return true;
