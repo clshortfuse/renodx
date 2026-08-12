@@ -1,65 +1,34 @@
 #include "../common.hlsli"
 
-struct ImmortalsToneMapConfig {
-  float slope;
-  float toe_threshold;
-  float toe_slope;
-  float black_offset;
-  float peak_luminance;
-  float shoulder_start;
-  float shoulder_scale;
-  float shoulder_overage;
-  bool has_toe;
-};
-
-ImmortalsToneMapConfig CreateImmortalsToneMapConfig(
-    float slope,
-    float toe_threshold,
-    float shoulder_start,
-    float toe_slope,
-    float black_offset,
-    float peak_nits) {
-  ImmortalsToneMapConfig config;
-  config.slope = slope;
-  config.toe_threshold = toe_threshold;
-  config.toe_slope = toe_slope;
-  config.black_offset = black_offset;
-  config.peak_luminance = peak_nits * 0.00999999977648258209228515625f;
-  config.has_toe = config.toe_threshold > 9.9999997473787516355514526367188e-06f;
-
-  float toe_to_peak_range = mad(peak_nits, 0.00999999977648258209228515625f, -config.toe_threshold);
-  float shoulder_start_output = mad(toe_to_peak_range, shoulder_start, config.toe_threshold);
-  config.shoulder_start = ((toe_to_peak_range * shoulder_start) / config.slope) + config.toe_threshold;
-  config.shoulder_scale = (config.peak_luminance * config.slope) / mad(peak_nits, 0.00999999977648258209228515625f, -shoulder_start_output);
-  config.shoulder_overage = mad(-peak_nits, 0.00999999977648258209228515625f, shoulder_start_output);
-  return config;
-}
-
-#define IMMORTALS_TONEMAP_GENERATOR(T)                                                                                                                                                                       \
-  T ApplyImmortalsToneMap(T untonemapped_ap1, ImmortalsToneMapConfig config, out T precompression_ap1) {                                                                                                     \
-    T input_scaled = abs(untonemapped_ap1 * 0.00999999977648258209228515625f);                                                                                                                               \
-    T toe_ratio = input_scaled / config.toe_threshold;                                                                                                                                                       \
-    T toe_ratio_sat = saturate(toe_ratio);                                                                                                                                                                   \
-    T toe_ratio_sat_sq = toe_ratio_sat * toe_ratio_sat;                                                                                                                                                      \
-    T toe_smooth = mad(toe_ratio_sat, -2.f, 3.f);                                                                                                                                                            \
-    T in_shoulder = renodx::math::Select(input_scaled > config.shoulder_start, (T)1.f, (T)0.f);                                                                                                              \
-    T toe_curve = renodx::math::Select(config.has_toe, mad(exp2(log2(abs(toe_ratio)) * config.toe_slope), config.toe_threshold, config.black_offset), config.black_offset);                                  \
-    T toe_weight = mad(-toe_smooth, toe_ratio_sat_sq, 1.f);                                                                                                                                                  \
-    T linear_curve = mad(input_scaled - config.toe_threshold, config.slope, config.toe_threshold);                                                                                                           \
-    T linear_weight = mad(toe_smooth, toe_ratio_sat_sq, -1.f) + 1.f;                                                                                                                                         \
-    T precompression_curve = (toe_weight * toe_curve) + (linear_weight * linear_curve);                                                                                                                      \
-    T shoulder_curve = config.peak_luminance + (exp2(((config.shoulder_scale * (input_scaled - config.shoulder_start)) / config.peak_luminance) * (-1.44269502162933349609375f)) * config.shoulder_overage); \
-    precompression_ap1 = precompression_curve * 100.f;                                                                                                                                                       \
-    return lerp(precompression_curve, shoulder_curve, in_shoulder) * 100.f;                                                                                                                                  \
-  }                                                                                                                                                                                                          \
-  T ApplyImmortalsToneMap(T untonemapped_ap1, ImmortalsToneMapConfig config) {                                                                                                                               \
-    T precompression_ap1;                                                                                                                                                                                    \
-    return ApplyImmortalsToneMap(untonemapped_ap1, config, precompression_ap1);                                                                                                                              \
+#define ANVIL_ENGINE_TONEMAP_GENERATOR(T)                                                                                                \
+  T EvaluateAnvilEngineToeAndLinear(T input, float linear_slope, float toe_end, float toe_power, float toe_offset) {                     \
+    T input_abs = abs(input);                                                                                                            \
+    bool toe_enabled = toe_end > 1e-5f;                                                                                                  \
+    T toe_progress_unclamped = input_abs / toe_end;                                                                                      \
+    T toe_progress = saturate(toe_progress_unclamped);                                                                                   \
+    T toe_progress_squared = toe_progress * toe_progress;                                                                                \
+    T smoothstep_factor = mad(toe_progress, -2.f, 3.f);                                                                                  \
+    T toe_output = renodx::math::Select(toe_enabled, mad(pow(abs(toe_progress_unclamped), toe_power), toe_end, toe_offset), toe_offset); \
+    T toe_blend_weight = mad(-smoothstep_factor, toe_progress_squared, 1.f);                                                             \
+    T linear_output = mad(input_abs - toe_end, linear_slope, toe_end);                                                                   \
+    T toe_to_linear_blend = mad(smoothstep_factor, toe_progress_squared, -1.f) + 1.f;                                                    \
+    T toe_linear_output = (toe_blend_weight * toe_output) + (toe_to_linear_blend * linear_output);                                       \
+    return toe_linear_output;                                                                                                            \
+  }                                                                                                                                      \
+  T ApplyAnvilEngineToneMapShoulder(T toe_linear_output, float toe_end, float peak_ratio, float shoulder_start) {                        \
+    float toe_to_peak_output_range = peak_ratio - toe_end;                                                                               \
+    float shoulder_start_output = mad(toe_to_peak_output_range, shoulder_start, toe_end);                                                \
+    return renodx::tonemap::ExponentialRollOff(toe_linear_output, shoulder_start_output, peak_ratio);                                    \
+  }                                                                                                                                      \
+  T ApplyAnvilEngineToneMap(                                                                                                             \
+      T input, float linear_slope, float toe_end, float toe_power, float toe_offset, float peak_ratio, float shoulder_start) {           \
+    return ApplyAnvilEngineToneMapShoulder(                                                                                              \
+        EvaluateAnvilEngineToeAndLinear(input, linear_slope, toe_end, toe_power, toe_offset), toe_end, peak_ratio, shoulder_start);      \
   }
 
-IMMORTALS_TONEMAP_GENERATOR(float)
-IMMORTALS_TONEMAP_GENERATOR(float3)
-#undef IMMORTALS_TONEMAP_GENERATOR
+ANVIL_ENGINE_TONEMAP_GENERATOR(float)
+ANVIL_ENGINE_TONEMAP_GENERATOR(float3)
+#undef ANVIL_ENGINE_TONEMAP_GENERATOR
 
 static const float PSYCHO23_LOCAL_EPSILON = 1e-6f;
 static const float PSYCHO23_LOCAL_REFERENCE_SIMULTANEOUS_RANGE_LOG10 = 3.7f;
@@ -260,7 +229,7 @@ float3 ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
   float output_yf = Psycho23YfFromLMS(compressed_lms);
 
   // Test23 measures white convergence in the compression power domain. Derive
-  // the same progress from the actual Immortals output instead of assuming its
+  // the same progress from the actual Anvil Engine output instead of assuming its
   // shoulder follows PsychoV's analytic compression curve.
   float compression_power = Psycho23AutoCompressionFromCenteredReferenceRange(
       anchor_yf,
@@ -303,6 +272,8 @@ float3 ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
 }
 
 float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float display_peak_nits, bool hdr_enabled) {
+  untonemapped_ap1 /= 100.f;
+
   // The game uses twice the SDR exposure by default when HDR is enabled.
   float diffuse_white_nits = (exposure / 64.f) * 203.f;
   float target_peak_ratio = display_peak_nits / diffuse_white_nits;
@@ -313,35 +284,28 @@ float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float disp
       target_peak_ratio = 1.f;
     }
 #if 1
-    float slope = 1.5f;
+    float linear_slope = 1.5f;
     float shoulder_start = 0.5f;
-    float toe_threshold = 0.05f;
-    float toe_slope = 1.325f;
-    float black_offset = 0.f;
-    ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(
-        slope,
-        toe_threshold,
-        shoulder_start,
-        toe_slope,
-        black_offset,
-        target_peak_ratio * 100.f);
+    float toe_end = 0.05f;
+    float toe_power = 1.325f;
+    float toe_offset = 0.f;
 
     float3 ap1_white_lms = renodx::color::lms::from::AP1(1.f.xxx);
     float3 untonemapped_lms = max(renodx::color::lms::from::AP1(untonemapped_ap1), 0.f);
-    float3 precompression_lms;
-    float3 tonemapped_lms = ApplyImmortalsToneMap(untonemapped_lms / ap1_white_lms, config, precompression_lms) * ap1_white_lms / 100.f;
-    precompression_lms = precompression_lms / 100.f * ap1_white_lms;
+    float3 toe_linear_relative_lms = EvaluateAnvilEngineToeAndLinear(untonemapped_lms / ap1_white_lms, linear_slope, toe_end, toe_power, toe_offset);
+    float3 tonemapped_lms = ApplyAnvilEngineToneMapShoulder(toe_linear_relative_lms, toe_end, target_peak_ratio, shoulder_start) * ap1_white_lms;
+    float3 toe_linear_lms = toe_linear_relative_lms * ap1_white_lms;
 
     // The curve has no isolated inflection between its convex toe and concave shoulder.
     // Fix the output anchor at SDR midgray and solve its input anchor from the linear section.
     const float output_anchor = 0.18f;
-    const float input_adaptive_anchor = 100.f * (toe_threshold + ((output_anchor - toe_threshold) / slope));
+    const float input_adaptive_anchor = toe_end + ((output_anchor - toe_end) / linear_slope);
     float3 input_adaptive_anchor_lms = renodx::color::lms::from::AP1(input_adaptive_anchor.xxx);
     float3 output_anchor_lms = renodx::color::lms::from::AP1(output_anchor.xxx);
     float3 peak_white_lms = target_peak_ratio * ap1_white_lms;
 
     tonemapped_lms = ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
-        precompression_lms,
+        toe_linear_lms,
         tonemapped_lms,
         input_adaptive_anchor_lms,
         output_anchor_lms,
@@ -378,28 +342,21 @@ float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float disp
       target_peak_ratio = renodx::color::correct::GammaSafe(target_peak_ratio, true);
     }
 
-    float slope = 1.5f;
+    float linear_slope = 1.5f;
     float shoulder_start = 0.5f;
-    float toe_threshold = 0.05f;
-    float toe_slope = 1.f;
-    float black_offset = 0.f;
+    float toe_end = 0.05f;
+    float toe_power = 1.f;
+    float toe_offset = 0.f;
     if (!hdr_enabled) {
       target_peak_ratio = 1.f;
     }
 
-    ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(
-        slope,
-        toe_threshold,
-        shoulder_start,
-        toe_slope,
-        black_offset,
-        target_peak_ratio * 100.f);
-    float3 tonemapped_ap1 = ApplyImmortalsToneMap(untonemapped_ap1, config) / 100.f;
+    float3 tonemapped_ap1 = ApplyAnvilEngineToneMap(untonemapped_ap1, linear_slope, toe_end, toe_power, toe_offset, target_peak_ratio, shoulder_start);
     tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
 
     const float output_anchor = 0.18f;
     const float input_adaptive_anchor =
-        100.f * (toe_threshold + ((output_anchor - toe_threshold) / slope));
+        toe_end + ((output_anchor - toe_end) / linear_slope);
     float3 input_adaptive_anchor_lms =
         renodx::color::lms::from::AP1(input_adaptive_anchor.xxx);
     float3 tonemapped_lms = renodx::color::lms::from::BT709(tonemapped_bt709);
