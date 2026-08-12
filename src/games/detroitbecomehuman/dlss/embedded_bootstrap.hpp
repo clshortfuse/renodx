@@ -182,13 +182,6 @@ struct DynamicConstantBufferBinding {
     std::uint64_t descriptor_set,
     DynamicConstantBufferBinding* binding);
 
-[[nodiscard]] bool ReadPersistentlyMappedBufferRange(
-    std::uint64_t device,
-    std::uint64_t buffer,
-    std::uint64_t offset,
-    std::uint64_t size,
-    void* destination);
-
 // These calls read only the current recording thread's TLS. A mismatch is a
 // safe Native TAA fallback, never a search through shared Vulkan state.
 [[nodiscard]] bool GetCommandRecordingMetadata(

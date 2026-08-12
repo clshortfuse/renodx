@@ -709,28 +709,21 @@ inline bool OnCopySparseDescriptorTables(
                      | DETROIT_DLSS_CONSTANTS_EFFECTIVE_OFFSET_VALID
                      | DETROIT_DLSS_CONSTANTS_RANGE_VALID,
   };
-  if (!dlss::embedded::ReadPersistentlyMappedBufferRange(
-          device->get_native(),
-          slot.buffer.buffer.handle,
+  void* mapped = nullptr;
+  if (!device->map_buffer_region(
+          slot.buffer.buffer,
           effective_offset,
           kReflectedTemporalConstantsSize,
-          snapshot->constants)) {
-    void* mapped = nullptr;
-    if (!device->map_buffer_region(
-            slot.buffer.buffer,
-            effective_offset,
-            kReflectedTemporalConstantsSize,
-            reshade::api::map_access::read_only,
-            &mapped)
-        || mapped == nullptr) {
-      return false;
-    }
-    std::memcpy(
-        snapshot->constants,
-        mapped,
-        static_cast<std::size_t>(kReflectedTemporalConstantsSize));
-    device->unmap_buffer_region(slot.buffer.buffer);
+          reshade::api::map_access::read_only,
+          &mapped)
+      || mapped == nullptr) {
+    return false;
   }
+  std::memcpy(
+      snapshot->constants,
+      mapped,
+      static_cast<std::size_t>(kReflectedTemporalConstantsSize));
+  device->unmap_buffer_region(slot.buffer.buffer);
   snapshot->bytes_written =
       static_cast<std::uint32_t>(kReflectedTemporalConstantsSize);
   snapshot->valid_flags |= DETROIT_DLSS_CONSTANTS_PAYLOAD_VALID;
