@@ -314,6 +314,22 @@ def main() -> None:
         '"persistent_mapping" : "temporary_remap"',
     ):
         require(constants_capture, required)
+    required_images = section(
+        temporal,
+        "const bool required_images_complete =",
+        "constants_captured =",
+    )
+    for required in (
+        "sampled[1u].valid",
+        "sampled[3u].valid",
+        "sampled[4u].valid",
+        "storage[0u].valid",
+    ):
+        require(required_images, required)
+    for optional in ("sampled[5u].valid", "sampled[7u].valid"):
+        if optional in required_images:
+            raise AssertionError(f"optional TAA image became a DLSS prerequisite: {optional}")
+    require(temporal, "snapshot_complete = required_images_complete && constants_captured;")
     sparse_resolution = section(
         temporal,
         "[[nodiscard]] inline bool ResolveSparseBindings(",

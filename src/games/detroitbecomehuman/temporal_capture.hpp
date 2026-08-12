@@ -1139,18 +1139,21 @@ inline void AfterNativeTemporalDispatch(
         device, bindings.sampled[7u], kVkImageLayoutShaderReadOnly);
     storage[0u] = CaptureImage(
         device, bindings.storage[0u], kVkImageLayoutGeneral);
-    const bool images_complete =
+    // b5 exposure and b7 native history are optional with NGX auto-exposure.
+    // A missing b7 requests a DLSS history reset below; it must not block the
+    // first valid evaluation after scene/resource recreation.
+    const bool required_images_complete =
         sampled[1u].valid && sampled[3u].valid && sampled[4u].valid
-        && sampled[5u].valid && sampled[7u].valid && storage[0u].valid;
+        && storage[0u].valid;
     constants_captured =
-        images_complete
+        required_images_complete
         && CaptureTemporalConstants(
             device,
             bindings.constants,
             recording,
             &constants_snapshot,
             &constants_diagnostics);
-    snapshot_complete = images_complete && constants_captured;
+    snapshot_complete = required_images_complete && constants_captured;
   }
 
   const auto slot_mask =
