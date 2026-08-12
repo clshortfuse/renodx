@@ -1007,20 +1007,26 @@ bool ReadCommandRecordingMetadata(
   if (metadata == nullptr) return false;
   *metadata = {};
   auto& local = GetCurrentThreadComputeCommandState();
-  if (command_buffer == 0u || pipeline_layout == 0u || descriptor_set == 0u
-      || !local.recording_active || !local.descriptor_bound_after_begin
+  if (command_buffer == 0u || !local.recording_active
+      || !local.descriptor_bound_after_begin
       || local.recording_generation == 0u
       || local.command_buffer != command_buffer
-      || ToOpaque(local.descriptor_layout) != pipeline_layout
-      || ToOpaque(local.descriptor_set) != descriptor_set
+      || local.descriptor_layout == VK_NULL_HANDLE
+      || local.descriptor_set == VK_NULL_HANDLE
+      || (claim_evaluation
+          && (pipeline_layout == 0u || descriptor_set == 0u))
+      || (pipeline_layout != 0u
+          && ToOpaque(local.descriptor_layout) != pipeline_layout)
+      || (descriptor_set != 0u
+          && ToOpaque(local.descriptor_set) != descriptor_set)
       || (claim_evaluation && local.evaluation_claimed)) {
     return false;
   }
   if (claim_evaluation) local.evaluation_claimed = true;
   *metadata = {
       .command_buffer = command_buffer,
-      .pipeline_layout = pipeline_layout,
-      .descriptor_set = descriptor_set,
+      .pipeline_layout = ToOpaque(local.descriptor_layout),
+      .descriptor_set = ToOpaque(local.descriptor_set),
       .recording_generation = local.recording_generation,
       .begin_flags = local.begin_flags,
       .constants_dynamic_offset = local.constants_dynamic_offset,
@@ -7033,13 +7039,11 @@ void SetRuntimeCommandTracking(bool enabled) {
 
 bool GetCommandRecordingMetadata(
     std::uint64_t command_buffer,
-    std::uint64_t pipeline_layout,
-    std::uint64_t descriptor_set,
     CommandRecordingMetadata* metadata) {
   return ReadCommandRecordingMetadata(
       command_buffer,
-      pipeline_layout,
-      descriptor_set,
+      0u,
+      0u,
       false,
       metadata);
 }

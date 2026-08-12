@@ -117,6 +117,39 @@ def main() -> None:
         if forbidden in bind:
             raise AssertionError(f"descriptor bind hot path must stay TLS-only: {forbidden}")
 
+    recording_metadata = section(
+        source,
+        "bool ReadCommandRecordingMetadata(",
+        "class ThreadComputeCommandStates final",
+    )
+    for required in (
+        "local.command_buffer != command_buffer",
+        "local.descriptor_layout == VK_NULL_HANDLE",
+        "local.descriptor_set == VK_NULL_HANDLE",
+        "claim_evaluation",
+        "pipeline_layout == 0u || descriptor_set == 0u",
+        "pipeline_layout != 0u",
+        "descriptor_set != 0u",
+        ".pipeline_layout = ToOpaque(local.descriptor_layout)",
+        ".descriptor_set = ToOpaque(local.descriptor_set)",
+    ):
+        require(recording_metadata, required)
+    metadata_getter = section(
+        source,
+        "bool GetCommandRecordingMetadata(",
+        "bool GetCurrentDynamicConstantBufferBinding(",
+    )
+    require(metadata_getter, "command_buffer,\n      0u,\n      0u,\n      false")
+    metadata_claim = section(
+        source,
+        "bool ClaimCommandRecordingEvaluation(",
+        "void RecycleFeatureCommandBuffer(",
+    )
+    require(
+        metadata_claim,
+        "command_buffer,\n      pipeline_layout,\n      descriptor_set,\n      true",
+    )
+
     update = section(
         source,
         "VKAPI_ATTR void VKAPI_CALL LayerUpdateDynamicConstantBufferDescriptorSets(",
@@ -242,10 +275,18 @@ def main() -> None:
     if "queue_mutex" in core_submit:
         raise AssertionError("private NGX submission must not serialize the game queue")
 
-    # ReShade owns exact pipeline/table state and only seven descriptor bindings are retained.
+    # The narrow Vulkan TLS owns exact pipeline/table identity. ReShade retains
+    # only the seven descriptor bindings needed by the temporal callback.
     require(temporal, "kSparseBindings = {\n    1u, 3u, 4u, 5u, 7u, 16u, 52u}")
-    require(temporal, "renodx::utils::state::GetCurrentState(context.cmd_list)")
+    if "utils::state" in temporal or "state::Use" in temporal:
+        raise AssertionError("Detroit temporal capture must not attach global ReShade state tracking")
+    require(
+        temporal,
+        "using Vulkan TLS command metadata; global ReShade state tracking is disabled.",
+    )
     require(temporal, "ResolveSparseBindings(")
+    require(temporal, "recording.pipeline_layout")
+    require(temporal, "recording.descriptor_set")
     require(temporal, "GetCurrentDynamicConstantBufferBinding(")
     require(temporal, "ReadPersistentlyMappedBufferRange(")
     require(temporal, "kStopBeforeBridgeEvaluateForDiagnostic = false")
@@ -377,11 +418,16 @@ def main() -> None:
         temporal, "inline void AfterNativeTemporalDispatch(", "struct TemporalDispatchCallback"
     )
     main_gate = temporal_dispatch.index("if (!IsMainTemporalCommandList(native_command_list))")
-    state_lookup = temporal_dispatch.index("renodx::utils::state::GetCurrentState")
+    metadata_lookup = temporal_dispatch.index("GetCommandRecordingMetadata(")
+    sparse_lookup = temporal_dispatch.index("ResolveSparseBindings(")
     fallback = temporal_dispatch.index("if (!snapshot_complete)")
     evaluate = temporal_dispatch.index("client.Evaluate(")
-    if not main_gate < state_lookup < fallback < evaluate:
+    if not main_gate < metadata_lookup < sparse_lookup < fallback < evaluate:
         raise AssertionError("incomplete or stale descriptor state must fall back before Evaluate")
+    require(
+        temporal_dispatch,
+        "recording_metadata_available && has_pipeline_layout && has_descriptor_set",
+    )
     fallback_body = temporal_dispatch[fallback:evaluate]
     require(fallback_body, "RuntimeStatus::kDescriptorContractIncomplete")
     require(fallback_body, "return;")

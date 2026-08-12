@@ -884,8 +884,9 @@ class HDRAndCASGateTests(unittest.TestCase):
         )
         self.assertLess(
             temporal_capture.index("if (!IsMainTemporalCommandList(native_command_list))"),
-            temporal_capture.index("renodx::utils::state::GetCurrentState(context.cmd_list)"),
+            temporal_capture.index("GetCommandRecordingMetadata("),
         )
+        self.assertNotIn("utils::state", temporal_capture)
 
         self.assertIn("RequestAuxiliaryTemporalReplacement", temporal_capture)
         auxiliary_request = temporal_capture[

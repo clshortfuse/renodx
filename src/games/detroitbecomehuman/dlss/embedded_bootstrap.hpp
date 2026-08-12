@@ -248,8 +248,6 @@ struct MappedBufferReadDiagnostics {
 // safe Native TAA fallback, never a search through shared Vulkan state.
 [[nodiscard]] bool GetCommandRecordingMetadata(
     std::uint64_t command_buffer,
-    std::uint64_t pipeline_layout,
-    std::uint64_t descriptor_set,
     CommandRecordingMetadata* metadata);
 [[nodiscard]] bool ClaimCommandRecordingEvaluation(
     std::uint64_t command_buffer,

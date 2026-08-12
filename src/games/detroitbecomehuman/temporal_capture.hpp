@@ -30,7 +30,6 @@
 #include "../../utils/command_action.hpp"
 #include "../../utils/data.hpp"
 #include "../../utils/shader.hpp"
-#include "../../utils/state.hpp"
 #include "dlss_bridge_client.hpp"
 #include "dlss/embedded_bootstrap.hpp"
 #include "supported_build.hpp"
@@ -1118,37 +1117,27 @@ inline void AfterNativeTemporalDispatch(
     return;
   }
 
-  const auto* command_state = renodx::utils::state::GetCurrentState(context.cmd_list);
-  const auto pipeline_layout = command_state != nullptr
-                                   ? command_state->compute_pipeline_layout
-                                   : reshade::api::pipeline_layout{0u};
-  const auto descriptor_set =
-      command_state != nullptr
-              && DETROIT_DLSS_TAA_DESCRIPTOR_SET
-                     < command_state->compute_descriptor_tables.size()
-          ? command_state->compute_descriptor_tables[
-                DETROIT_DLSS_TAA_DESCRIPTOR_SET]
-          : reshade::api::descriptor_table{0u};
+  dlss::embedded::CommandRecordingMetadata recording = {};
+  const bool recording_metadata_available =
+      dlss::embedded::GetCommandRecordingMetadata(
+          native_command_list, &recording);
+  const reshade::api::pipeline_layout pipeline_layout = {
+      recording.pipeline_layout};
+  const reshade::api::descriptor_table descriptor_set = {
+      recording.descriptor_set};
   ResolvedBindings bindings = {};
   std::uint64_t descriptor_epoch = 0u;
-  dlss::embedded::CommandRecordingMetadata recording = {};
   const bool has_pipeline_layout = pipeline_layout.handle != 0u;
   const bool has_descriptor_set = descriptor_set.handle != 0u;
   const bool pipeline_layout_matches =
       temporal_pipeline_layout.handle == 0u
       || temporal_pipeline_layout == pipeline_layout;
   const bool sparse_bindings_complete =
-      has_pipeline_layout && has_descriptor_set && pipeline_layout_matches
+      recording_metadata_available && has_pipeline_layout && has_descriptor_set
+      && pipeline_layout_matches
       && ResolveSparseBindings(
           device, descriptor_set, &bindings, &descriptor_epoch);
-  const bool recording_metadata_available =
-      sparse_bindings_complete
-      && dlss::embedded::GetCommandRecordingMetadata(
-          native_command_list,
-          pipeline_layout.handle,
-          descriptor_set.handle,
-          &recording);
-  bool snapshot_complete = recording_metadata_available;
+  bool snapshot_complete = sparse_bindings_complete;
   std::array<CapturedImage, kSampledBindings.size()> sampled = {};
   std::array<CapturedImage, kStorageBindings.size()> storage = {};
   DetroitDlssTemporalConstantsSnapshot constants_snapshot = {};
@@ -1732,7 +1721,9 @@ inline void Use(DWORD fdw_reason) {
       last_logged_evaluation_key.store(
           kUnloggedTelemetryKey,
           std::memory_order_relaxed);
-      renodx::utils::state::Use(DLL_PROCESS_ATTACH);
+      Log(
+          reshade::log::level::info,
+          "using Vulkan TLS command metadata; global ReShade state tracking is disabled.");
       reshade::register_event<reshade::addon_event::init_device>(
           OnInitSparseDescriptorDevice);
       reshade::register_event<reshade::addon_event::destroy_device>(
@@ -1768,7 +1759,6 @@ inline void Use(DWORD fdw_reason) {
           OnDestroySparseDescriptorDevice);
       reshade::unregister_event<reshade::addon_event::init_device>(
           OnInitSparseDescriptorDevice);
-      renodx::utils::state::Use(DLL_PROCESS_DETACH);
       // The Vulkan layer owns NGX/Vulkan teardown at vkDestroyDevice. Do not
       // call its ABI while the Windows loader lock is held here.
       mode_state.Reset();
