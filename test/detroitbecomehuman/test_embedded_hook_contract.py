@@ -330,6 +330,9 @@ def main() -> None:
         if optional in required_images:
             raise AssertionError(f"optional TAA image became a DLSS prerequisite: {optional}")
     require(temporal, "snapshot_complete = required_images_complete && constants_captured;")
+    require(temporal, ".reset = frame_parameters.reset,")
+    if "|| !native_history_resources_available" in temporal:
+        raise AssertionError("missing optional b7 must not reset DLSS history every frame")
     sparse_resolution = section(
         temporal,
         "[[nodiscard]] inline bool ResolveSparseBindings(",

@@ -1375,11 +1375,9 @@ inline void AfterNativeTemporalDispatch(
       .motion_vector_scale_x = frame_parameters.motion_vector_scale.x,
       .motion_vector_scale_y = frame_parameters.motion_vector_scale.y,
       .pre_exposure = frame_parameters.pre_exposure,
-      // NGX owns an independent temporal history, but missing native previous
-      // outputs are a reliable scene-load/resource-recreation boundary. Reset
-      // DLSS instead of seeding a new feature from an apparently stable 0.9
-      // history scalar on that first frame.
-      .reset = frame_parameters.reset || !native_history_resources_available,
+      // NGX owns an independent temporal history. Native b7 is optional and
+      // may be absent on every frame, so only decoded frame state may reset it.
+      .reset = frame_parameters.reset,
       .frame_id = frame_counter.fetch_add(1u, std::memory_order_relaxed) + 1u,
       .flags = DETROIT_DLSS_FRAME_TEMPORAL_INPUTS_READY
                | DETROIT_DLSS_FRAME_ALLOW_AUTO_EXPOSURE
