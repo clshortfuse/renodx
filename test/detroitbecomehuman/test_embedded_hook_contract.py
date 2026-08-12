@@ -224,8 +224,8 @@ def main() -> None:
     require(temporal, "ResolveSparseBindings(")
     require(temporal, "GetCurrentDynamicConstantBufferBinding(")
     require(temporal, "ReadPersistentlyMappedBufferRange(")
-    require(temporal, "kStopAfterDescriptorMetadataForDiagnostic = true")
-    require(temporal, "RuntimeStatus::kDescriptorMetadataReadyDiagnostic")
+    require(temporal, "kStopAfterInputSnapshotForDiagnostic = true")
+    require(temporal, "RuntimeStatus::kInputSnapshotReadyDiagnostic")
     require(temporal, "GetCommandRecordingMetadata(")
     require(temporal, "device->map_buffer_region(")
     require(temporal, "reshade::api::map_access::read_only")
@@ -242,10 +242,14 @@ def main() -> None:
         raise AssertionError("persistent b52 mapping must be tried before a temporary remap")
     diagnostic_gate = section(
         temporal,
-        "if constexpr (kStopAfterDescriptorMetadataForDiagnostic)",
-        "std::array<CapturedImage, kSampledBindings.size()> sampled",
+        "if constexpr (kStopAfterInputSnapshotForDiagnostic)",
+        "const auto constants_size = constants_snapshot.descriptor_range",
     )
-    require(diagnostic_gate, "kDescriptorMetadataReadyDiagnostic")
+    require(diagnostic_gate, "kInputSnapshotReadyDiagnostic")
+    if temporal.index("CaptureTemporalConstants(", temporal.index("AfterNativeTemporalDispatch(")) > temporal.index(
+        "if constexpr (kStopAfterInputSnapshotForDiagnostic)"
+    ):
+        raise AssertionError("input diagnostic gate must run after b52 capture")
     if "CaptureTemporalSnapshot(" in temporal or "trace_descriptor_tables" in temporal:
         raise AssertionError("global descriptor snapshotting must stay disabled")
     for event in (

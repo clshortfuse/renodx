@@ -87,13 +87,13 @@ inline constexpr std::uint32_t kVkFormatRgb9e5 = 123u;
 inline constexpr std::uint32_t kVkFormatD32FloatS8Uint = 130u;
 inline constexpr std::uint32_t kVkImageLayoutGeneral = 1u;
 inline constexpr std::uint32_t kVkImageLayoutShaderReadOnly = 5u;
-inline constexpr bool kStopAfterDescriptorMetadataForDiagnostic = true;
+inline constexpr bool kStopAfterInputSnapshotForDiagnostic = true;
 
 enum class RuntimeStatus : std::uint32_t {
   kNative = 0u,
   kWaitingForDispatch,
   kDescriptorContractIncomplete,
-  kDescriptorMetadataReadyDiagnostic,
+  kInputSnapshotReadyDiagnostic,
   kTemporalContractUnverified,
   kBridgeFallback,
   kDlssActive,
@@ -1037,14 +1037,6 @@ inline void AfterNativeTemporalDispatch(
           pipeline_layout.handle,
           descriptor_set.handle,
           &recording);
-  if constexpr (kStopAfterDescriptorMetadataForDiagnostic) {
-    if (snapshot_complete) {
-      runtime_status.store(
-          RuntimeStatus::kDescriptorMetadataReadyDiagnostic,
-          std::memory_order_relaxed);
-      return;
-    }
-  }
   std::array<CapturedImage, kSampledBindings.size()> sampled = {};
   std::array<CapturedImage, kStorageBindings.size()> storage = {};
   DetroitDlssTemporalConstantsSnapshot constants_snapshot = {};
@@ -1085,6 +1077,12 @@ inline void AfterNativeTemporalDispatch(
     }
     runtime_status.store(
         RuntimeStatus::kDescriptorContractIncomplete,
+        std::memory_order_relaxed);
+    return;
+  }
+  if constexpr (kStopAfterInputSnapshotForDiagnostic) {
+    runtime_status.store(
+        RuntimeStatus::kInputSnapshotReadyDiagnostic,
         std::memory_order_relaxed);
     return;
   }
