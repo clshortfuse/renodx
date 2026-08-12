@@ -1,3 +1,6 @@
+#ifndef RENODX_GAMES_ASSCREEDBLACKFLAGRESYNCED_COMMON_HLSLI_
+#define RENODX_GAMES_ASSCREEDBLACKFLAGRESYNCED_COMMON_HLSLI_
+
 #include "./shared.h"
 
 float ContrastAndFlare(float x, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
@@ -99,3 +102,5 @@ float3 ApplyUserGradingAP1(float3 color_ap1, float mid_gray = 0.18f) {
 
   return color_ap1;
 }
+
+#endif  // RENODX_GAMES_ASSCREEDBLACKFLAGRESYNCED_COMMON_HLSLI_
