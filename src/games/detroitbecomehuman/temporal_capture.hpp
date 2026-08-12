@@ -516,10 +516,8 @@ inline bool OnUpdateSparseDescriptorTables(
                                 : std::nullopt;
     if (!slot_index.has_value() || update.table.handle == 0u) continue;
     auto& table = data->tables[update.table.handle];
-    if (table.epoch != epoch) {
-      table = {};
-      table.epoch = epoch;
-    }
+    // Vulkan descriptor updates preserve bindings not named by the write.
+    table.epoch = epoch;
     table.slots[*slot_index] = ReadSparseDescriptor(device, update);
   }
   return false;
@@ -568,10 +566,7 @@ inline bool OnCopySparseDescriptorTables(
   if (epoch == 0u) epoch = data->next_epoch++;
   for (const auto& operation : operations) {
     auto& table = data->tables[operation.destination];
-    if (table.epoch != epoch) {
-      table = {};
-      table.epoch = epoch;
-    }
+    table.epoch = epoch;
     table.slots[operation.destination_index] = operation.slot;
   }
   return false;

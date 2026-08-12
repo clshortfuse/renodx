@@ -235,6 +235,22 @@ def main() -> None:
     require(temporal, "reshade::api::map_access::read_only")
     if temporal.count("map_buffer_region(") != 2:  # map + unmap spellings
         raise AssertionError("b52 must be mapped only by the targeted temporal callback")
+    sparse_update = section(
+        temporal,
+        "inline bool OnUpdateSparseDescriptorTables(",
+        "inline bool OnCopySparseDescriptorTables(",
+    )
+    sparse_copy = section(
+        temporal,
+        "inline bool OnCopySparseDescriptorTables(",
+        "[[nodiscard]] inline bool ResolveSparseBindings(",
+    )
+    for operation in (sparse_update, sparse_copy):
+        require(operation, "table.epoch = epoch;")
+        if "table = {};" in operation:
+            raise AssertionError(
+                "partial descriptor writes must preserve unchanged sparse bindings"
+            )
     constants_capture = section(
         temporal,
         "[[nodiscard]] inline bool CaptureTemporalConstants(",
