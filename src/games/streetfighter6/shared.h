@@ -19,10 +19,13 @@ struct ShaderInjectData {
   float tone_map_per_channel;
 
   float color_grade_hue_correction;
-  float color_grade_saturation_correction;
   float color_grade_blowout_restoration;
 
   float custom_sharpness;
+  float custom_saturation_correction;
+
+  float sf6_post_process_02;
+  float sf6_post_process_03;
 };
 
 #ifndef __cplusplus
@@ -38,6 +41,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
 #define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
 #define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
+#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE    2.f
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
 #define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
@@ -46,11 +50,17 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
-#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_RENO_DRT_TONE_MAP_METHOD      renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE
 #define RENODX_GAMMA_CORRECTION              GAMMA_CORRECTION_GAMMA_2_2
 #define RENODX_INTERMEDIATE_ENCODING         GAMMA_CORRECTION_NONE
+#define RENODX_SWAP_CHAIN_DECODING           GAMMA_CORRECTION_NONE
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   GAMMA_CORRECTION_GAMMA_2_2
+#define RENODX_SWAP_CHAIN_COMPRESS_COLOR_SPACE 1.f
+#define RENODX_SWAP_CHAIN_OUTPUT_PRESET        1.f
 #define CUSTOM_SHARPNESS                     shader_injection.custom_sharpness
+#define CUSTOM_SATURATION_CORRECTION         shader_injection.custom_saturation_correction
+#define SF6_POST_PROCESS_02                  shader_injection.sf6_post_process_02
+#define SF6_POST_PROCESS_03                  shader_injection.sf6_post_process_03
 
 #include "../../shaders/renodx.hlsl"
 
