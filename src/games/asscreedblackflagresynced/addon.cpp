@@ -381,9 +381,9 @@ void OnPresetOff() {
   renodx::utils::settings::UpdateSettings({
       {"ToneMapType", 0.f},
       {"ToneMapUINits", 203.f},
-      {"LocalExposureStrength", 1.f},
-      {"LocalExposureShoulder", 1.f},
-      {"LocalExposureToe", 1.f},
+      {"LocalExposureStrength", 100.f},
+      {"LocalExposureShoulder", 100.f},
+      {"LocalExposureToe", 100.f},
       {"ColorGradeHighlights", 50.f},
       {"ColorGradeShadows", 50.f},
       {"ColorGradeContrast", 50.f},
