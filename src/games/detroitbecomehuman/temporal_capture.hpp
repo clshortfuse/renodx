@@ -87,13 +87,13 @@ inline constexpr std::uint32_t kVkFormatRgb9e5 = 123u;
 inline constexpr std::uint32_t kVkFormatD32FloatS8Uint = 130u;
 inline constexpr std::uint32_t kVkImageLayoutGeneral = 1u;
 inline constexpr std::uint32_t kVkImageLayoutShaderReadOnly = 5u;
-inline constexpr bool kStopAfterInputSnapshotForDiagnostic = true;
+inline constexpr bool kStopBeforeBridgeEvaluateForDiagnostic = true;
 
 enum class RuntimeStatus : std::uint32_t {
   kNative = 0u,
   kWaitingForDispatch,
   kDescriptorContractIncomplete,
-  kInputSnapshotReadyDiagnostic,
+  kBridgeInputReadyDiagnostic,
   kTemporalContractUnverified,
   kBridgeFallback,
   kDlssActive,
@@ -169,6 +169,7 @@ struct ContractShape {
 
 inline temporal_mode_state::Tracker mode_state;
 inline std::atomic<RuntimeStatus> runtime_status = RuntimeStatus::kNative;
+inline std::atomic_bool bridge_input_ready_diagnostic_reached = false;
 inline std::atomic<float> dlaa_sharpening = 0.f;
 inline std::atomic<float> dlaa_sharpening_normalization = 1.f;
 // Multiple Vulkan frames may be recorded concurrently. Associate the valid
@@ -291,6 +292,11 @@ inline void MarkMainTemporalCommandList(std::uint64_t command_list) {
 }
 
 [[nodiscard]] inline RuntimeStatus GetStatus() {
+  if constexpr (kStopBeforeBridgeEvaluateForDiagnostic) {
+    if (bridge_input_ready_diagnostic_reached.load(std::memory_order_relaxed)) {
+      return RuntimeStatus::kBridgeInputReadyDiagnostic;
+    }
+  }
   return runtime_status.load(std::memory_order_relaxed);
 }
 
@@ -332,6 +338,9 @@ inline void SetMode(DetroitDlssMode mode) {
   const auto transition = mode_state.SetMode(mode);
   const auto current = transition.current;
   const auto previous = transition.previous;
+  if (transition.changed) {
+    bridge_input_ready_diagnostic_reached.store(false, std::memory_order_relaxed);
+  }
   if (current.mode == DETROIT_DLSS_MODE_NATIVE
       && transition.changed && previous != DETROIT_DLSS_MODE_NATIVE) {
     (void)dlss_bridge_client::client.TransitionToNative();
@@ -1080,13 +1089,6 @@ inline void AfterNativeTemporalDispatch(
         std::memory_order_relaxed);
     return;
   }
-  if constexpr (kStopAfterInputSnapshotForDiagnostic) {
-    runtime_status.store(
-        RuntimeStatus::kInputSnapshotReadyDiagnostic,
-        std::memory_order_relaxed);
-    return;
-  }
-
   const auto constants_size = constants_snapshot.descriptor_range;
   const auto constants_descriptor_type = constants_snapshot.descriptor_type;
 
@@ -1233,6 +1235,14 @@ inline void AfterNativeTemporalDispatch(
           dlaa_sharpening_normalization.load(std::memory_order_acquire),
   };
 
+  if constexpr (kStopBeforeBridgeEvaluateForDiagnostic) {
+    bridge_input_ready_diagnostic_reached.store(true, std::memory_order_relaxed);
+    runtime_status.store(
+        RuntimeStatus::kBridgeInputReadyDiagnostic,
+        std::memory_order_relaxed);
+    return;
+  }
+
   const auto evaluation = dlss_bridge_client::client.Evaluate(mode, inputs);
   // The final CAS gate follows the latest temporal dispatch in this frame.
   // Never retain a successful earlier dispatch if a later one fell back to
@@ -1366,6 +1376,7 @@ inline void Use(DWORD fdw_reason) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH: {
       mode_state.Reset();
+      bridge_input_ready_diagnostic_reached.store(false, std::memory_order_relaxed);
       {
         std::unique_lock lock(main_temporal_command_list_mutex);
         main_temporal_command_lists.clear();

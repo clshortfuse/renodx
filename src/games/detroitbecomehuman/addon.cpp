@@ -2591,11 +2591,11 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Diagnostic: TAA resources and b52 payload are complete. Temporal validation and NGX Evaluate are intentionally disabled.",
+                .label = "Diagnostic: a complete DLSS frame reached the bridge boundary. Bridge Configure/Evaluate are intentionally disabled.",
                 .section = "DLSS",
                 .is_visible = []() {
                   return temporal_capture::GetStatus()
-                         == temporal_capture::RuntimeStatus::kInputSnapshotReadyDiagnostic;
+                         == temporal_capture::RuntimeStatus::kBridgeInputReadyDiagnostic;
                 },
             }},
             {{

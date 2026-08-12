@@ -224,8 +224,9 @@ def main() -> None:
     require(temporal, "ResolveSparseBindings(")
     require(temporal, "GetCurrentDynamicConstantBufferBinding(")
     require(temporal, "ReadPersistentlyMappedBufferRange(")
-    require(temporal, "kStopAfterInputSnapshotForDiagnostic = true")
-    require(temporal, "RuntimeStatus::kInputSnapshotReadyDiagnostic")
+    require(temporal, "kStopBeforeBridgeEvaluateForDiagnostic = true")
+    require(temporal, "RuntimeStatus::kBridgeInputReadyDiagnostic")
+    require(temporal, "bridge_input_ready_diagnostic_reached")
     require(temporal, "GetCommandRecordingMetadata(")
     require(temporal, "device->map_buffer_region(")
     require(temporal, "reshade::api::map_access::read_only")
@@ -240,16 +241,18 @@ def main() -> None:
         "device->map_buffer_region("
     ):
         raise AssertionError("persistent b52 mapping must be tried before a temporary remap")
+    after_temporal_dispatch = temporal[temporal.index("inline void AfterNativeTemporalDispatch(") :]
     diagnostic_gate = section(
-        temporal,
-        "if constexpr (kStopAfterInputSnapshotForDiagnostic)",
-        "const auto constants_size = constants_snapshot.descriptor_range",
+        after_temporal_dispatch,
+        "if constexpr (kStopBeforeBridgeEvaluateForDiagnostic)",
+        "const auto evaluation = dlss_bridge_client::client.Evaluate(mode, inputs)",
     )
-    require(diagnostic_gate, "kInputSnapshotReadyDiagnostic")
-    if temporal.index("CaptureTemporalConstants(", temporal.index("AfterNativeTemporalDispatch(")) > temporal.index(
-        "if constexpr (kStopAfterInputSnapshotForDiagnostic)"
+    require(diagnostic_gate, "kBridgeInputReadyDiagnostic")
+    require(diagnostic_gate, "bridge_input_ready_diagnostic_reached.store(true")
+    if after_temporal_dispatch.index("DetroitDlssTemporalFrameInputs inputs") > after_temporal_dispatch.index(
+        "if constexpr (kStopBeforeBridgeEvaluateForDiagnostic)"
     ):
-        raise AssertionError("input diagnostic gate must run after b52 capture")
+        raise AssertionError("bridge diagnostic gate must run after frame input construction")
     if "CaptureTemporalSnapshot(" in temporal or "trace_descriptor_tables" in temporal:
         raise AssertionError("global descriptor snapshotting must stay disabled")
     for event in (
