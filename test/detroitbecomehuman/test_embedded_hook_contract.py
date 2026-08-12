@@ -51,7 +51,7 @@ def main() -> None:
     require(bootstrap, "inline constexpr bool kDlssRuntimeEnabled = true;")
     require(bootstrap, "return kDlssRuntimeEnabled;")
 
-    # Ordinary Vulkan dispatch exposes only the three narrow DLAA hooks.
+    # Ordinary Vulkan dispatch exposes only targeted DLAA/TAA snapshot hooks.
     tracked = section(
         source,
         "PFN_vkVoidFunction FindTrackedDeviceFunction(",
@@ -62,6 +62,19 @@ def main() -> None:
         "vkBeginCommandBuffer",
         "vkCmdBindDescriptorSets",
         "vkUpdateDescriptorSets",
+        "vkCreateDescriptorUpdateTemplate",
+        "vkCreateDescriptorUpdateTemplateKHR",
+        "vkDestroyDescriptorUpdateTemplate",
+        "vkDestroyDescriptorUpdateTemplateKHR",
+        "vkUpdateDescriptorSetWithTemplate",
+        "vkUpdateDescriptorSetWithTemplateKHR",
+        "vkBindBufferMemory",
+        "vkBindBufferMemory2",
+        "vkBindBufferMemory2KHR",
+        "vkMapMemory",
+        "vkUnmapMemory",
+        "vkDestroyBuffer",
+        "vkFreeMemory",
     ]:
         raise AssertionError(f"unexpected production Vulkan wrappers: {tracked_names}")
     for forbidden in (
@@ -72,8 +85,6 @@ def main() -> None:
         "vkWaitForFences",
         "vkGetFenceStatus",
         "vkResetCommandBuffer",
-        "vkMapMemory",
-        "vkUnmapMemory",
         "vkCreateImage",
         "vkCreateBuffer",
         "vkAllocateMemory",
@@ -119,6 +130,53 @@ def main() -> None:
         if forbidden in update:
             raise AssertionError(f"descriptor update hot path must stay TLS-only: {forbidden}")
 
+    descriptor_template = section(
+        source,
+        "VKAPI_ATTR VkResult VKAPI_CALL LayerCreateDynamicDescriptorUpdateTemplate(",
+        "VKAPI_ATTR VkResult VKAPI_CALL LayerObserveBindBufferMemory(",
+    )
+    for required in (
+        "DETROIT_DLSS_TAA_CONSTANT_BINDING_52",
+        "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC",
+        "descriptor_template_mutex",
+        "template_descriptor_set = descriptor_set",
+        ".descriptor_update_template = descriptor_update_template",
+        ".template_data = descriptor_data",
+        "current = previous",
+    ):
+        require(descriptor_template, required)
+    for forbidden in ("tracking_mutex", "state->mutex", "queue_mutex"):
+        if forbidden in descriptor_template:
+            raise AssertionError(f"descriptor template observer is too broad: {forbidden}")
+    template_update = section(
+        source,
+        "VKAPI_ATTR void VKAPI_CALL LayerUpdateDynamicDescriptorSetWithTemplate(",
+        "VKAPI_ATTR VkResult VKAPI_CALL LayerObserveBindBufferMemory(",
+    )
+    for forbidden in (
+        "descriptor_template_mutex",
+        "dynamic_descriptor_templates.find",
+        "tracking_mutex",
+    ):
+        if forbidden in template_update:
+            raise AssertionError(f"non-b52 template update must stay lock-free: {forbidden}")
+
+    mapped_memory = section(
+        source,
+        "VKAPI_ATTR VkResult VKAPI_CALL LayerObserveBindBufferMemory(",
+        "VKAPI_ATTR void VKAPI_CALL LayerUpdateDynamicConstantBufferDescriptorSets(",
+    )
+    for required in (
+        "narrow_buffer_bindings",
+        "narrow_mapped_memories",
+        "mapped_buffer_mutex",
+        "LayerObserveFreeMemory",
+    ):
+        require(mapped_memory, required)
+    for forbidden in ("tracking_mutex", "state->mutex", "queue_mutex"):
+        if forbidden in mapped_memory:
+            raise AssertionError(f"mapped-memory observer is too broad: {forbidden}")
+
     dynamic_binding = section(
         source,
         "bool GetCurrentDynamicConstantBufferBinding(",
@@ -131,6 +189,11 @@ def main() -> None:
         "write.dstArrayElement != 0u",
         "write.descriptorCount != 1u",
         "write.descriptorType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC",
+        "current.template_data != nullptr",
+        "ToOpaque(current.template_descriptor_set) == descriptor_set",
+        "state->dynamic_descriptor_templates.find",
+        "state->narrow_buffer_bindings.find(buffer)",
+        "state->narrow_mapped_memories.find",
     ):
         require(dynamic_binding, validation)
 
@@ -160,11 +223,21 @@ def main() -> None:
     require(temporal, "renodx::utils::state::GetCurrentState(context.cmd_list)")
     require(temporal, "ResolveSparseBindings(")
     require(temporal, "GetCurrentDynamicConstantBufferBinding(")
+    require(temporal, "ReadPersistentlyMappedBufferRange(")
     require(temporal, "GetCommandRecordingMetadata(")
     require(temporal, "device->map_buffer_region(")
     require(temporal, "reshade::api::map_access::read_only")
     if temporal.count("map_buffer_region(") != 2:  # map + unmap spellings
         raise AssertionError("b52 must be mapped only by the targeted temporal callback")
+    constants_capture = section(
+        temporal,
+        "[[nodiscard]] inline bool CaptureTemporalConstants(",
+        "[[nodiscard]] inline ImageShape GetShape(",
+    )
+    if constants_capture.index("ReadPersistentlyMappedBufferRange(") > constants_capture.index(
+        "device->map_buffer_region("
+    ):
+        raise AssertionError("persistent b52 mapping must be tried before a temporary remap")
     if "CaptureTemporalSnapshot(" in temporal or "trace_descriptor_tables" in temporal:
         raise AssertionError("global descriptor snapshotting must stay disabled")
     for event in (
