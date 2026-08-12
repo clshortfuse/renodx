@@ -1105,7 +1105,9 @@ struct AdapterRuntime::Impl {
     procedures.cmd_set_event(
         bundle->command_buffer,
         bundle->completion_event,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+        // NGX owns its internal command sequence, so completion must cover
+        // every earlier stage before its private resources can be recycled.
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
     bundle->completion_pending = true;
   }
 

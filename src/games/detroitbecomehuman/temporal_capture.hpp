@@ -233,21 +233,53 @@ inline std::atomic_bool has_logged_auxiliary_active = false;
 // itself must not cross ReShade/Vulkan calls: private command-buffer creation
 // synchronously re-enters the command-list lifecycle callbacks below.
 inline std::mutex mode_transition_mutex;
+
+inline void Log(reshade::log::level level, const std::string& message) {
+  reshade::log::message(level, ("Detroit DLSS capture: " + message).c_str());
+}
+
+inline void ClearObservedTemporalCommandList(
+    std::uint64_t command_list) noexcept {
+  if (latest_temporal_command_list != command_list) return;
+  latest_temporal_command_list = 0u;
+  latest_temporal_dispatch_serial = 0u;
+}
+
 inline void OnDestroyTemporalCommandList(reshade::api::command_list* cmd_list) {
   if (cmd_list == nullptr) return;
-  dlss::embedded::RetireFeatureCommandBuffer(cmd_list->get_native());
+  const auto command_list = cmd_list->get_native();
+  ClearObservedTemporalCommandList(command_list);
+  dlss::embedded::RetireFeatureCommandBuffer(command_list);
   if (!temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
-    mode_state.DiscardCommandList(cmd_list->get_native());
+    mode_state.DiscardCommandList(command_list);
+  }
+
+  std::size_t remaining = 0u;
+  bool erased = false;
+  {
+    std::unique_lock lock(main_temporal_command_list_mutex);
+    erased = main_temporal_command_lists.erase(command_list) != 0u;
+    remaining = main_temporal_command_lists.size();
+  }
+  if (erased) {
+    Log(
+        reshade::log::level::info,
+        std::format(
+            "retired main-view temporal command list 0x{:X} ({} remain).",
+            command_list,
+            remaining));
   }
 }
 
 inline void OnResetTemporalCommandList(reshade::api::command_list* cmd_list) {
   if (cmd_list == nullptr) return;
-  dlss::embedded::RecycleFeatureCommandBuffer(cmd_list->get_native());
+  const auto command_list = cmd_list->get_native();
+  ClearObservedTemporalCommandList(command_list);
+  dlss::embedded::RecycleFeatureCommandBuffer(command_list);
   if (temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
     return;
   }
-  mode_state.BeginRecording(cmd_list->get_native());
+  mode_state.BeginRecording(command_list);
 }
 
 [[nodiscard]] inline std::uint64_t MixTelemetryKey(
@@ -269,10 +301,6 @@ template <typename... Values>
   std::uint64_t key = 14695981039346656037ull;
   ((key = MixTelemetryKey(key, static_cast<std::uint64_t>(values))), ...);
   return key == kUnloggedTelemetryKey ? key - 1u : key;
-}
-
-inline void Log(reshade::log::level level, const std::string& message) {
-  reshade::log::message(level, ("Detroit DLSS capture: " + message).c_str());
 }
 
 inline void ObserveTemporalCommandList(

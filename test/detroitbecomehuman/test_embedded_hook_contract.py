@@ -403,6 +403,10 @@ def main() -> None:
         "vkCmdSetEvent",
     ):
         require(adapter, procedure)
+    completion = section(adapter, "void RecordCompletion(", "bool ValidateDispatchDimensions(")
+    require(completion, "VK_PIPELINE_STAGE_ALL_COMMANDS_BIT")
+    if "VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT" in completion:
+        raise AssertionError("completion event must cover every stage recorded by NGX")
     poll = section(
         adapter,
         "std::size_t AdapterRuntime::PollCompletedOneTimeCommandBuffers(",
@@ -414,8 +418,22 @@ def main() -> None:
         raise AssertionError("only completed ONE_TIME_SUBMIT bundles may auto-recycle")
     if status >= erase:
         raise AssertionError("scratch was recycled before its completion event signaled")
-    require(temporal, "dlss::embedded::RecycleFeatureCommandBuffer(cmd_list->get_native())")
-    require(temporal, "dlss::embedded::RetireFeatureCommandBuffer(cmd_list->get_native())")
+    require(temporal, "dlss::embedded::RecycleFeatureCommandBuffer(command_list)")
+    require(temporal, "dlss::embedded::RetireFeatureCommandBuffer(command_list)")
+
+    destroy_command_list = section(
+        temporal,
+        "inline void OnDestroyTemporalCommandList(",
+        "inline void OnResetTemporalCommandList(",
+    )
+    require(destroy_command_list, "main_temporal_command_lists.erase(command_list)")
+    require(destroy_command_list, "mode_state.DiscardCommandList(command_list)")
+    reset_command_list = section(
+        temporal,
+        "inline void OnResetTemporalCommandList(",
+        "[[nodiscard]] inline std::uint64_t MixTelemetryKey(",
+    )
+    require(reset_command_list, "ClearObservedTemporalCommandList(command_list)")
 
     destroy = section(
         source,
