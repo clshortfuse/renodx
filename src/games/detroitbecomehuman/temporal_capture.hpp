@@ -146,6 +146,25 @@ struct CapturedImage {
   bool valid = false;
 };
 
+struct TemporalConstantsCaptureDiagnostics {
+  const char* detail = "not_attempted";
+  dlss::embedded::MappedBufferReadDiagnostics persistent_read = {};
+  std::uint64_t buffer = 0u;
+  std::uint64_t resource_size = 0u;
+  std::uint64_t descriptor_offset = 0u;
+  std::uint64_t descriptor_range = 0u;
+  std::uint64_t effective_offset = 0u;
+  std::uint32_t dynamic_offset = 0u;
+  std::uint32_t descriptor_type = 0u;
+  std::uint32_t resource_type = 0u;
+  std::uint32_t heap = 0u;
+  std::uint32_t usage = 0u;
+  bool slot_found = false;
+  bool remap_attempted = false;
+  bool remap_succeeded = false;
+  bool remap_pointer_valid = false;
+};
+
 struct ImageShape {
   std::uint32_t format = 0u;
   std::uint32_t width = 0u;
@@ -682,22 +701,49 @@ inline bool OnCopySparseDescriptorTables(
     reshade::api::device* device,
     const ResolvedSlot& slot,
     const dlss::embedded::CommandRecordingMetadata& metadata,
-    DetroitDlssTemporalConstantsSnapshot* snapshot) {
+    DetroitDlssTemporalConstantsSnapshot* snapshot,
+    TemporalConstantsCaptureDiagnostics* diagnostics) {
   static_assert(
       kReflectedTemporalConstantsSize
       <= DETROIT_DLSS_TEMPORAL_CONSTANTS_CAPACITY);
-  if (device == nullptr || snapshot == nullptr || !slot.found
-      || slot.buffer.buffer.handle == 0u
-      || (slot.type != reshade::api::descriptor_type::constant_buffer
-          && static_cast<std::uint32_t>(slot.type) != 8u)) {
+  if (diagnostics != nullptr) {
+    *diagnostics = {
+        .buffer = slot.buffer.buffer.handle,
+        .descriptor_offset = slot.buffer.offset,
+        .descriptor_range = slot.buffer.size,
+        .dynamic_offset = metadata.constants_dynamic_offset,
+        .descriptor_type = static_cast<std::uint32_t>(slot.type),
+        .slot_found = slot.found,
+    };
+  }
+  const auto fail = [diagnostics](const char* detail) {
+    if (diagnostics != nullptr) diagnostics->detail = detail;
     return false;
+  };
+  if (device == nullptr) return fail("device_missing");
+  if (snapshot == nullptr) return fail("snapshot_missing");
+  if (!slot.found) return fail("slot_missing");
+  if (slot.buffer.buffer.handle == 0u) return fail("buffer_missing");
+  if (slot.type != reshade::api::descriptor_type::constant_buffer
+      && static_cast<std::uint32_t>(slot.type) != 8u) {
+    return fail("descriptor_type_mismatch");
   }
   const auto desc = device->get_resource_desc(slot.buffer.buffer);
-  if (desc.type != reshade::api::resource_type::buffer
-      || slot.buffer.offset > desc.buffer.size
-      || metadata.constants_dynamic_offset
-             > desc.buffer.size - slot.buffer.offset) {
-    return false;
+  if (diagnostics != nullptr) {
+    diagnostics->resource_type = static_cast<std::uint32_t>(desc.type);
+    diagnostics->heap = static_cast<std::uint32_t>(desc.heap);
+    diagnostics->usage = static_cast<std::uint32_t>(desc.usage);
+  }
+  if (desc.type != reshade::api::resource_type::buffer) {
+    return fail("resource_not_buffer");
+  }
+  if (diagnostics != nullptr) diagnostics->resource_size = desc.buffer.size;
+  if (slot.buffer.offset > desc.buffer.size) {
+    return fail("descriptor_offset_out_of_range");
+  }
+  if (metadata.constants_dynamic_offset
+      > desc.buffer.size - slot.buffer.offset) {
+    return fail("dynamic_offset_out_of_range");
   }
   const auto effective_offset =
       slot.buffer.offset + metadata.constants_dynamic_offset;
@@ -705,7 +751,14 @@ inline bool OnCopySparseDescriptorTables(
   const auto range = slot.buffer.size == UINT64_MAX
                          ? available
                          : slot.buffer.size;
-  if (range < kReflectedTemporalConstantsSize || range > available) return false;
+  if (diagnostics != nullptr) {
+    diagnostics->effective_offset = effective_offset;
+    diagnostics->descriptor_range = range;
+  }
+  if (range < kReflectedTemporalConstantsSize) {
+    return fail("descriptor_range_too_small");
+  }
+  if (range > available) return fail("descriptor_range_out_of_range");
 
   *snapshot = {
       .struct_size = sizeof(*snapshot),
@@ -726,22 +779,29 @@ inline bool OnCopySparseDescriptorTables(
                      | DETROIT_DLSS_CONSTANTS_EFFECTIVE_OFFSET_VALID
                      | DETROIT_DLSS_CONSTANTS_RANGE_VALID,
   };
-  if (!dlss::embedded::ReadPersistentlyMappedBufferRange(
+  const bool persistent_read =
+      dlss::embedded::ReadPersistentlyMappedBufferRange(
           device->get_native(),
           slot.buffer.buffer.handle,
           effective_offset,
           kReflectedTemporalConstantsSize,
-          snapshot->constants)) {
+          snapshot->constants,
+          diagnostics != nullptr ? &diagnostics->persistent_read : nullptr);
+  if (!persistent_read) {
     void* mapped = nullptr;
-    if (!device->map_buffer_region(
-            slot.buffer.buffer,
-            effective_offset,
-            kReflectedTemporalConstantsSize,
-            reshade::api::map_access::read_only,
-            &mapped)
-        || mapped == nullptr) {
-      return false;
+    if (diagnostics != nullptr) diagnostics->remap_attempted = true;
+    const bool remap_succeeded = device->map_buffer_region(
+        slot.buffer.buffer,
+        effective_offset,
+        kReflectedTemporalConstantsSize,
+        reshade::api::map_access::read_only,
+        &mapped);
+    if (diagnostics != nullptr) {
+      diagnostics->remap_succeeded = remap_succeeded;
+      diagnostics->remap_pointer_valid = mapped != nullptr;
     }
+    if (!remap_succeeded) return fail("remap_failed");
+    if (mapped == nullptr) return fail("remap_pointer_missing");
     std::memcpy(
         snapshot->constants,
         mapped,
@@ -752,6 +812,9 @@ inline bool OnCopySparseDescriptorTables(
       static_cast<std::uint32_t>(kReflectedTemporalConstantsSize);
   snapshot->valid_flags |= DETROIT_DLSS_CONSTANTS_PAYLOAD_VALID;
   snapshot->source_flags = DETROIT_DLSS_CONSTANTS_SOURCE_MAPPED_MEMORY;
+  if (diagnostics != nullptr) {
+    diagnostics->detail = persistent_read ? "persistent_mapping" : "temporary_remap";
+  }
   return true;
 }
 
@@ -1061,6 +1124,7 @@ inline void AfterNativeTemporalDispatch(
   std::array<CapturedImage, kSampledBindings.size()> sampled = {};
   std::array<CapturedImage, kStorageBindings.size()> storage = {};
   DetroitDlssTemporalConstantsSnapshot constants_snapshot = {};
+  TemporalConstantsCaptureDiagnostics constants_diagnostics = {};
   bool constants_captured = false;
   if (snapshot_complete) {
     sampled[1u] = CaptureImage(
@@ -1084,7 +1148,8 @@ inline void AfterNativeTemporalDispatch(
             device,
             bindings.constants,
             recording,
-            &constants_snapshot);
+            &constants_snapshot,
+            &constants_diagnostics);
     snapshot_complete = images_complete && constants_captured;
   }
 
@@ -1140,6 +1205,38 @@ inline void AfterNativeTemporalDispatch(
               recording.recording_generation,
               recording.constants_dynamic_offset,
               snapshot_complete));
+      Log(
+          constants_captured ? reshade::log::level::info
+                             : reshade::log::level::warning,
+          std::format(
+              "TAA b52 capture {}: detail={}, slot={}, descriptor_type={}, buffer=0x{:X}, resource_type={}, resource_size={}, heap=0x{:X}, usage=0x{:X}, descriptor_offset={}, dynamic_offset={}, effective_offset={}, descriptor_range={}, persistent_detail={}, memory=0x{:X}, binding_offset={}, mapped_offset={}, mapped_size={}, absolute_offset={}, relative_offset={}, tracked_buffers={}, tracked_memories={}, remap_attempted={}, remap_succeeded={}, remap_pointer={}; payload={}.",
+              log_index + 1u,
+              constants_diagnostics.detail,
+              constants_diagnostics.slot_found,
+              constants_diagnostics.descriptor_type,
+              constants_diagnostics.buffer,
+              constants_diagnostics.resource_type,
+              constants_diagnostics.resource_size,
+              constants_diagnostics.heap,
+              constants_diagnostics.usage,
+              constants_diagnostics.descriptor_offset,
+              constants_diagnostics.dynamic_offset,
+              constants_diagnostics.effective_offset,
+              constants_diagnostics.descriptor_range,
+              dlss::embedded::MappedBufferReadDetailName(
+                  constants_diagnostics.persistent_read.detail),
+              constants_diagnostics.persistent_read.memory,
+              constants_diagnostics.persistent_read.binding_offset,
+              constants_diagnostics.persistent_read.mapped_offset,
+              constants_diagnostics.persistent_read.mapped_size,
+              constants_diagnostics.persistent_read.absolute_offset,
+              constants_diagnostics.persistent_read.relative_offset,
+              constants_diagnostics.persistent_read.tracked_buffer_count,
+              constants_diagnostics.persistent_read.tracked_memory_count,
+              constants_diagnostics.remap_attempted,
+              constants_diagnostics.remap_succeeded,
+              constants_diagnostics.remap_pointer_valid,
+              constants_captured));
     }
   }
   if (!snapshot_complete) {

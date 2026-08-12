@@ -176,6 +176,25 @@ def main() -> None:
     for forbidden in ("tracking_mutex", "state->mutex", "queue_mutex"):
         if forbidden in mapped_memory:
             raise AssertionError(f"mapped-memory observer is too broad: {forbidden}")
+    unmap_memory = section(
+        source,
+        "VKAPI_ATTR void VKAPI_CALL LayerObserveUnmapMemory(",
+        "VKAPI_ATTR void VKAPI_CALL LayerObserveDestroyBuffer(",
+    )
+    require(unmap_memory, "mapped->second.pointer = nullptr;")
+    if "narrow_mapped_memories.erase" in unmap_memory:
+        raise AssertionError("unmap must retain a tombstone for bounded b52 diagnostics")
+
+    for required in (
+        "enum class MappedBufferReadDetail",
+        "kBufferBindingMissing",
+        "kMappedMemoryMissing",
+        "kMappedPointerMissing",
+        "kMappedRangeExceeded",
+        "struct MappedBufferReadDiagnostics",
+        "MappedBufferReadDiagnostics* diagnostics = nullptr",
+    ):
+        require(bootstrap, required)
 
     dynamic_binding = section(
         source,
@@ -194,6 +213,11 @@ def main() -> None:
         "state->dynamic_descriptor_templates.find",
         "state->narrow_buffer_bindings.find(buffer)",
         "state->narrow_mapped_memories.find",
+        "diagnostics->tracked_buffer_count",
+        "diagnostics->tracked_memory_count",
+        "MappedBufferReadDetail::kBufferBindingMissing",
+        "MappedBufferReadDetail::kMappedMemoryMissing",
+        "MappedBufferReadDetail::kMappedPointerMissing",
     ):
         require(dynamic_binding, validation)
 
@@ -283,6 +307,13 @@ def main() -> None:
         "device->map_buffer_region("
     ):
         raise AssertionError("persistent b52 mapping must be tried before a temporary remap")
+    for required in (
+        "TemporalConstantsCaptureDiagnostics* diagnostics",
+        'return fail("remap_failed")',
+        'return fail("remap_pointer_missing")',
+        '"persistent_mapping" : "temporary_remap"',
+    ):
+        require(constants_capture, required)
     sparse_resolution = section(
         temporal,
         "[[nodiscard]] inline bool ResolveSparseBindings(",
@@ -295,6 +326,13 @@ def main() -> None:
     if sparse_resolution.index("assign(52u, &output->constants)") > sparse_resolution.index("return complete"):
         raise AssertionError("incomplete sparse snapshots must expose their slot mask for diagnostics")
     after_temporal_dispatch = temporal[temporal.index("inline void AfterNativeTemporalDispatch(") :]
+    snapshot_logging = section(
+        after_temporal_dispatch,
+        "if (last_logged_snapshot_diagnostic_key.exchange(",
+        "if (!snapshot_complete)",
+    )
+    require(snapshot_logging, "if (log_index < kMaximumSnapshotDiagnosticLogs)")
+    require(snapshot_logging, "TAA b52 capture {}:")
     diagnostic_gate = section(
         after_temporal_dispatch,
         "if constexpr (kStopBeforeBridgeEvaluateForDiagnostic)",

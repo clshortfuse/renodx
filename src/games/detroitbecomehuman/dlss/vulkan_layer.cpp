@@ -5924,7 +5924,10 @@ VKAPI_ATTR void VKAPI_CALL LayerObserveUnmapMemory(
   if (state == nullptr) return;
   {
     const std::unique_lock lock(state->mapped_buffer_mutex);
-    state->narrow_mapped_memories.erase(ToOpaque(memory));
+    const auto mapped = state->narrow_mapped_memories.find(ToOpaque(memory));
+    if (mapped != state->narrow_mapped_memories.end()) {
+      mapped->second.pointer = nullptr;
+    }
   }
   if (state->next_unmap_memory != nullptr) {
     state->next_unmap_memory(device, memory);
@@ -7109,49 +7112,76 @@ bool ReadPersistentlyMappedBufferRange(
     std::uint64_t buffer,
     std::uint64_t offset,
     std::uint64_t size,
-    void* destination) {
-  if (device == 0u || buffer == 0u || size == 0u || destination == nullptr) {
+    void* destination,
+    MappedBufferReadDiagnostics* diagnostics) {
+  if (diagnostics != nullptr) *diagnostics = {};
+  const auto fail = [diagnostics](MappedBufferReadDetail detail) {
+    if (diagnostics != nullptr) diagnostics->detail = detail;
     return false;
+  };
+  if (device == 0u || buffer == 0u || size == 0u || destination == nullptr) {
+    return fail(MappedBufferReadDetail::kInvalidArgument);
   }
   const auto state = FindDeviceSharedFast(FromOpaque<VkDevice>(device));
   if (state == nullptr || state->destroying.load(std::memory_order_acquire)) {
-    return false;
+    return fail(MappedBufferReadDetail::kDeviceUnavailable);
   }
 
   const std::shared_lock lock(state->mapped_buffer_mutex);
+  if (diagnostics != nullptr) {
+    diagnostics->tracked_buffer_count = state->narrow_buffer_bindings.size();
+    diagnostics->tracked_memory_count = state->narrow_mapped_memories.size();
+  }
   const auto binding = state->narrow_buffer_bindings.find(buffer);
   if (binding == state->narrow_buffer_bindings.end()
       || binding->second.memory == VK_NULL_HANDLE) {
-    return false;
+    return fail(MappedBufferReadDetail::kBufferBindingMissing);
+  }
+  if (diagnostics != nullptr) {
+    diagnostics->memory = ToOpaque(binding->second.memory);
+    diagnostics->binding_offset = binding->second.offset;
   }
   const auto mapped = state->narrow_mapped_memories.find(
       ToOpaque(binding->second.memory));
-  if (mapped == state->narrow_mapped_memories.end()
-      || mapped->second.pointer == nullptr) {
-    return false;
+  if (mapped == state->narrow_mapped_memories.end()) {
+    return fail(MappedBufferReadDetail::kMappedMemoryMissing);
+  }
+  if (diagnostics != nullptr) {
+    diagnostics->mapped_offset = mapped->second.offset;
+    diagnostics->mapped_size = mapped->second.size;
+  }
+  if (mapped->second.pointer == nullptr) {
+    return fail(MappedBufferReadDetail::kMappedPointerMissing);
   }
 
   std::uint64_t absolute_offset = 0u;
-  if (!AddWithoutOverflow(binding->second.offset, offset, &absolute_offset)
-      || absolute_offset < mapped->second.offset) {
-    return false;
+  if (!AddWithoutOverflow(binding->second.offset, offset, &absolute_offset)) {
+    return fail(MappedBufferReadDetail::kOffsetOverflow);
+  }
+  if (diagnostics != nullptr) diagnostics->absolute_offset = absolute_offset;
+  if (absolute_offset < mapped->second.offset) {
+    return fail(MappedBufferReadDetail::kBeforeMappedRange);
   }
   const std::uint64_t relative_offset =
       absolute_offset - mapped->second.offset;
+  if (diagnostics != nullptr) diagnostics->relative_offset = relative_offset;
   if (mapped->second.size != VK_WHOLE_SIZE
       && (relative_offset > mapped->second.size
           || size > mapped->second.size - relative_offset)) {
-    return false;
+    return fail(MappedBufferReadDetail::kMappedRangeExceeded);
   }
   if (relative_offset > std::numeric_limits<std::size_t>::max()
       || size > std::numeric_limits<std::size_t>::max()) {
-    return false;
+    return fail(MappedBufferReadDetail::kAddressRangeUnsupported);
   }
   std::memcpy(
       destination,
       static_cast<const std::uint8_t*>(mapped->second.pointer)
           + static_cast<std::size_t>(relative_offset),
       static_cast<std::size_t>(size));
+  if (diagnostics != nullptr) {
+    diagnostics->detail = MappedBufferReadDetail::kSuccess;
+  }
   return true;
 }
 

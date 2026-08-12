@@ -174,6 +174,60 @@ struct DynamicConstantBufferBinding {
   std::uint32_t descriptor_type = 0u;
 };
 
+enum class MappedBufferReadDetail : std::uint32_t {
+  kNotAttempted = 0u,
+  kSuccess,
+  kInvalidArgument,
+  kDeviceUnavailable,
+  kBufferBindingMissing,
+  kMappedMemoryMissing,
+  kMappedPointerMissing,
+  kOffsetOverflow,
+  kBeforeMappedRange,
+  kMappedRangeExceeded,
+  kAddressRangeUnsupported,
+};
+
+[[nodiscard]] constexpr std::string_view MappedBufferReadDetailName(
+    MappedBufferReadDetail detail) noexcept {
+  switch (detail) {
+    case MappedBufferReadDetail::kSuccess:
+      return "success";
+    case MappedBufferReadDetail::kInvalidArgument:
+      return "invalid_argument";
+    case MappedBufferReadDetail::kDeviceUnavailable:
+      return "device_unavailable";
+    case MappedBufferReadDetail::kBufferBindingMissing:
+      return "buffer_binding_missing";
+    case MappedBufferReadDetail::kMappedMemoryMissing:
+      return "mapped_memory_missing";
+    case MappedBufferReadDetail::kMappedPointerMissing:
+      return "mapped_pointer_missing";
+    case MappedBufferReadDetail::kOffsetOverflow:
+      return "offset_overflow";
+    case MappedBufferReadDetail::kBeforeMappedRange:
+      return "before_mapped_range";
+    case MappedBufferReadDetail::kMappedRangeExceeded:
+      return "mapped_range_exceeded";
+    case MappedBufferReadDetail::kAddressRangeUnsupported:
+      return "address_range_unsupported";
+    default:
+      return "not_attempted";
+  }
+}
+
+struct MappedBufferReadDiagnostics {
+  MappedBufferReadDetail detail = MappedBufferReadDetail::kNotAttempted;
+  std::uint64_t memory = 0u;
+  std::uint64_t binding_offset = 0u;
+  std::uint64_t mapped_offset = 0u;
+  std::uint64_t mapped_size = 0u;
+  std::uint64_t absolute_offset = 0u;
+  std::uint64_t relative_offset = 0u;
+  std::uint64_t tracked_buffer_count = 0u;
+  std::uint64_t tracked_memory_count = 0u;
+};
+
 // ReShade invokes descriptor-table events synchronously from
 // vkUpdateDescriptorSets. This exposes only the b52 write active on that same
 // thread, so no process-wide descriptor registry is needed.
@@ -187,7 +241,8 @@ struct DynamicConstantBufferBinding {
     std::uint64_t buffer,
     std::uint64_t offset,
     std::uint64_t size,
-    void* destination);
+    void* destination,
+    MappedBufferReadDiagnostics* diagnostics = nullptr);
 
 // These calls read only the current recording thread's TLS. A mismatch is a
 // safe Native TAA fallback, never a search through shared Vulkan state.
