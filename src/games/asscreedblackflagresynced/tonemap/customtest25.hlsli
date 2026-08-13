@@ -23,6 +23,12 @@ static const float PSYCHO25_REFERENCE_SOURCE_DIRECTION_OCCUPANCY = 0.8f;
 static const float PSYCHO25_SOURCE_HUE_SUPPORT_FRACTION = 0.25f;
 static const float PSYCHO25_SOURCE_DIRECTION_BLEND_POWER = 2.f;
 
+static const int PSYCHO25_TARGET_GAMUT_BT709 = 0;
+static const int PSYCHO25_TARGET_GAMUT_BT2020 = 1;
+static const int PSYCHO25_TARGET_GAMUT_DISPLAY_P3 = 3;
+
+static const float3x3 PSYCHO25_LMS_WEIGHTED_TO_DISPLAY_P3_MAT = mul(renodx::color::XYZ_TO_DISPLAYP3_MAT, renodx::color::macleod_boynton::LMS_WEIGHTED_TO_XYZ_MAT);
+
 float psycho25_SignedYfFromLMS(float3 lms) {
   float3 weighted_lms = renodx::color::macleod_boynton::WeighLMS(lms);
   return weighted_lms.x + weighted_lms.y;
@@ -82,9 +88,13 @@ float3 psycho25_ApplyAdaptiveMBPurity(
 }
 
 float3x3 psycho25_WeightedLMSToRGBMatrix(int gamut_mode) {
-  return gamut_mode == 0
-             ? renodx::color::macleod_boynton::LMS_WEIGHTED_TO_BT709_MAT
-             : renodx::color::macleod_boynton::LMS_WEIGHTED_TO_BT2020_MAT;
+  if (gamut_mode == PSYCHO25_TARGET_GAMUT_BT709) {
+    return renodx::color::macleod_boynton::LMS_WEIGHTED_TO_BT709_MAT;
+  }
+  if (gamut_mode == PSYCHO25_TARGET_GAMUT_DISPLAY_P3) {
+    return PSYCHO25_LMS_WEIGHTED_TO_DISPLAY_P3_MAT;
+  }
+  return renodx::color::macleod_boynton::LMS_WEIGHTED_TO_BT2020_MAT;
 }
 
 float3 psycho25_TargetRGBFromLMS(float3 lms, int gamut_mode) {
@@ -358,8 +368,8 @@ APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(float3)
 #undef APPLYANCHOREDCUBICSHOULDER_GENERATOR
 #undef APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR
 
-// Fixed PsychoV25 target-hull path: Fast60 hue guidance, Reference Scale,
-// full BT.2020 lower/upper-plane enforcement, and a black upper-hull pivot.
+// PsychoV25 target-hull path: Fast60 hue guidance, Reference Scale,
+// full target-gamut lower/upper-plane enforcement, and a black upper-hull pivot.
 float3 CompressPsychoV25ReferenceScaleHull(
     float3 desired_lms,
     float3 direction_source_lms,
@@ -369,7 +379,8 @@ float3 CompressPsychoV25ReferenceScaleHull(
     float source_direction_recovery_strength,
     float post_saturation,
     float compression,
-    float peak_value) {
+    float peak_value,
+    int target_gamut_mode) {
   float3 desired_weighted_lms = renodx::color::macleod_boynton::WeighLMS(desired_lms);
   float desired_yf = desired_weighted_lms.x + desired_weighted_lms.y;
   if (desired_yf <= renodx::tonemap::psychov::PSYCHO25_EPSILON) {
@@ -442,7 +453,7 @@ float3 CompressPsychoV25ReferenceScaleHull(
             source_direction,
             adapted_neutral_mb,
             adaptive_state_lms,
-            1);
+            target_gamut_mode);
     float source_direction_support_radius =
         renodx::tonemap::psychov::PSYCHO25_REFERENCE_SOURCE_DIRECTION_OCCUPANCY
         * source_radius_support
@@ -498,7 +509,7 @@ float3 CompressPsychoV25ReferenceScaleHull(
   }
 
   // Discard the trajectory's carried scale, preserving only its authored
-  // adaptive-MB direction and radius before solving the BT.2020 hull.
+  // adaptive-MB direction and radius before solving the target gamut hull.
   float trajectory_yf_for_normalization = authored_mb.z
                                           * (authored_mb.x * safe_adaptive_state_lms.x
                                              + (1.f - authored_mb.x) * safe_adaptive_state_lms.y);
@@ -513,12 +524,12 @@ float3 CompressPsychoV25ReferenceScaleHull(
   float3 neutral_lms = adaptive_state_lms / adaptive_yf;
 
   // Reference Scale lower-plane compression keeps the authored hue ray inside
-  // the nonnegative BT.2020 primary half-spaces without a component clamp.
+  // the nonnegative target-gamut primary half-spaces without a component clamp.
   if (authored_radius > renodx::tonemap::psychov::PSYCHO25_EPSILON) {
     float3 neutral_target_rgb =
-        renodx::tonemap::psychov::psycho25_TargetRGBFromLMS(neutral_lms, 1);
+        renodx::tonemap::psychov::psycho25_TargetRGBFromLMS(neutral_lms, target_gamut_mode);
     float3 current_target_rgb =
-        renodx::tonemap::psychov::psycho25_TargetRGBFromLMS(unit_yf_lms, 1);
+        renodx::tonemap::psychov::psycho25_TargetRGBFromLMS(unit_yf_lms, target_gamut_mode);
     float current_boundary_fraction =
         renodx::tonemap::psychov::psycho25_TargetLowerPlaneBoundaryFraction(
             current_target_rgb,
@@ -539,7 +550,7 @@ float3 CompressPsychoV25ReferenceScaleHull(
         adaptive_state_lms);
     reference_lms /= renodx::tonemap::psychov::psycho25_YfFromLMS(reference_lms);
     float3 reference_target_rgb =
-        renodx::tonemap::psychov::psycho25_TargetRGBFromLMS(reference_lms, 1);
+        renodx::tonemap::psychov::psycho25_TargetRGBFromLMS(reference_lms, target_gamut_mode);
     float reference_boundary_fraction =
         renodx::tonemap::psychov::psycho25_TargetLowerPlaneBoundaryFraction(
             reference_target_rgb,
@@ -563,9 +574,9 @@ float3 CompressPsychoV25ReferenceScaleHull(
     unit_yf_lms = lerp(neutral_lms, unit_yf_lms, radius_scale);
   }
 
-  // Black-pivot upper-plane shoulder along the contained BT.2020 hue ray.
+  // Black-pivot upper-plane shoulder along the contained target-gamut hue ray.
   float3 unit_target_rgb =
-      renodx::tonemap::psychov::psycho25_TargetRGBFromLMS(unit_yf_lms, 1);
+      renodx::tonemap::psychov::psycho25_TargetRGBFromLMS(unit_yf_lms, target_gamut_mode);
   float max_target_channel = max(
       unit_target_rgb.x,
       max(unit_target_rgb.y, unit_target_rgb.z));
@@ -655,7 +666,8 @@ float3 ApplyCustomPsychoV25ToneMap(
       source_direction_recovery_strength,
       1.f,
       compression,
-      peak_value);
+      peak_value,
+      renodx::tonemap::psychov::PSYCHO25_TARGET_GAMUT_BT2020);
   return renodx::color::bt709::from::LMS(output_lms);
 }
 
