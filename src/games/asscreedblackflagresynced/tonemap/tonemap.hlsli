@@ -152,12 +152,12 @@ float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float disp
       target_peak_ratio = 1.f;
     }
 
-    float linear_slope = 1.563f;
-    float shoulder_start = 0.48f;
+    float linear_slope = 1.625f;
+    float shoulder_start = 0.5f;
     float toe_end = 0.05f;
-    float toe_power = 1.31f;
+    float toe_power = 1.15f;
     float toe_offset = 0.f;
-    float toe_flare = 0.1f * pow(0.8f, 10.f);
+    float toe_flare = 0.1f * pow(0.875f, 10.f);
     float post_saturation = 1.f;
 
     float3 tonemapped_ap1 = ApplyCustomAnvilEnginePsychoV25ToneMap(
@@ -190,10 +190,8 @@ float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float disp
     tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
 
     const float output_anchor = 0.18f;
-    const float input_adaptive_anchor =
-        toe_end + ((output_anchor - toe_end) / linear_slope);
-    float3 input_adaptive_anchor_lms =
-        renodx::color::lms::from::AP1(input_adaptive_anchor.xxx);
+    const float input_adaptive_anchor = toe_end + ((output_anchor - toe_end) / linear_slope);
+    float3 input_adaptive_anchor_lms = renodx::color::lms::from::AP1(input_adaptive_anchor.xxx);
     float3 tonemapped_lms = renodx::color::lms::from::BT709(tonemapped_bt709);
     float3 tonemapped_relative_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
         tonemapped_lms,
