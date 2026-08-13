@@ -61,7 +61,8 @@ float3 CompressAnvilEnginePsychoV25ReferenceScaleHull(
     float source_direction_recovery_strength,
     float post_saturation,
     float compression,
-    float peak_value) {
+    float peak_value,
+    int target_gamut_mode = renodx::tonemap::psychov::PSYCHO25_TARGET_GAMUT_BT2020) {
   return CompressPsychoV25ReferenceScaleHull(
       desired_lms,
       direction_source_lms,
@@ -71,7 +72,8 @@ float3 CompressAnvilEnginePsychoV25ReferenceScaleHull(
       source_direction_recovery_strength,
       post_saturation,
       compression,
-      peak_value);
+      peak_value,
+      target_gamut_mode);
 }
 
 float3 ApplyCustomAnvilEnginePsychoV25ToneMap(
@@ -84,32 +86,32 @@ float3 ApplyCustomAnvilEnginePsychoV25ToneMap(
     float toe_flare,
     float post_saturation,
     float shoulder_start,
+    int target_gamut_mode = renodx::tonemap::psychov::PSYCHO25_TARGET_GAMUT_BT2020,
     float source_direction_recovery_strength = 0.f,
     float compression = 1.f) {
   float3 white_lms = renodx::color::lms::from::AP1(1.f.xxx);
   float3 untonemapped_lms = max(renodx::color::lms::from::AP1(untonemapped_ap1), 0.f);
 
-  // The curve has no isolated inflection between its convex toe and concave shoulder.
-  // Anchor adaptation at the input that the linear section maps to SDR midgray,
-  // independently of the supplied C-infinity shoulder start.
-  static const float OUTPUT_ANCHOR = 0.18f;
-  float input_adaptive_anchor = toe_end + ((OUTPUT_ANCHOR - toe_end) / linear_slope);
+  // The shoulder operates on the toe/linear output.
+  // Use its output-domain start as the adaptive output anchor.
+  const float output_anchor = shoulder_start;
+  // Find the input whose toe/linear output reaches the shoulder start.
+  float input_adaptive_anchor = toe_end + ((shoulder_start - toe_end) / linear_slope);
   float3 input_adaptive_anchor_lms = input_adaptive_anchor * white_lms;
   float3 toe_linear_lms = EvaluateCustomAnvilEngineToeAndLinear(untonemapped_lms / white_lms, linear_slope, toe_end, toe_power, toe_offset, toe_flare) * white_lms;
   float3 peak_white_lms = peak_value * white_lms;
-  float toe_to_peak_output_range = peak_value - toe_end;
-  float shoulder_start_output = mad(toe_to_peak_output_range, shoulder_start, toe_end);
 
   return renodx::color::ap1::from::LMS(CompressAnvilEnginePsychoV25ReferenceScaleHull(
       toe_linear_lms,
       untonemapped_lms,
       input_adaptive_anchor_lms,
       peak_white_lms,
-      shoulder_start_output,
+      shoulder_start,
       source_direction_recovery_strength,
       post_saturation,
       compression,
-      peak_value));
+      peak_value,
+      target_gamut_mode));
 }
 
 float3 Psycho23ToAdaptiveRelativeWeightedLMS(
@@ -148,12 +150,14 @@ float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float disp
   float3 tonemapped_bt709;
 
   if (RENODX_TONE_MAP_TYPE == 2.f) {
+    int target_gamut_mode = renodx::tonemap::psychov::PSYCHO25_TARGET_GAMUT_DISPLAY_P3;
     if (!hdr_enabled) {
       target_peak_ratio = 1.f;
+      target_gamut_mode = renodx::tonemap::psychov::PSYCHO25_TARGET_GAMUT_BT709;
     }
 
     float linear_slope = 1.625f;
-    float shoulder_start = 0.5f;
+    float shoulder_start = 0.18f;
     float toe_end = 0.05f;
     float toe_power = 1.15f;
     float toe_offset = 0.f;
@@ -169,7 +173,8 @@ float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float disp
         toe_offset,
         toe_flare,
         post_saturation,
-        shoulder_start);
+        shoulder_start,
+        target_gamut_mode);
     tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
 
   } else {
