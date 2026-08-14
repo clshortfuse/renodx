@@ -58,7 +58,8 @@ float3 CompressAnvilEnginePsychoV25ReferenceScaleHull(
     float3 adaptive_state_lms,
     float3 target_lms_peak,
     float shoulder_start_output,
-    float source_direction_recovery_strength,
+    float pre_shoulder_hue_linearity,
+    float post_shoulder_source_hue_recovery_strength,
     float post_saturation,
     float compression,
     float peak_value,
@@ -69,7 +70,8 @@ float3 CompressAnvilEnginePsychoV25ReferenceScaleHull(
       adaptive_state_lms,
       renodx::color::lms::from::AP1(shoulder_start_output.xxx),
       target_lms_peak,
-      source_direction_recovery_strength,
+      pre_shoulder_hue_linearity,
+      post_shoulder_source_hue_recovery_strength,
       post_saturation,
       compression,
       peak_value,
@@ -86,8 +88,9 @@ float3 ApplyCustomAnvilEnginePsychoV25ToneMap(
     float toe_flare,
     float post_saturation,
     float shoulder_start,
+    float pre_shoulder_hue_linearity = 0.35f,
     int target_gamut_mode = renodx::tonemap::psychov::PSYCHO25_TARGET_GAMUT_BT2020,
-    float source_direction_recovery_strength = 0.f,
+    float post_shoulder_source_hue_recovery_strength = 0.f,
     float compression = 1.f) {
   float3 white_lms = renodx::color::lms::from::AP1(1.f.xxx);
   float3 untonemapped_lms = max(renodx::color::lms::from::AP1(untonemapped_ap1), 0.f);
@@ -107,7 +110,8 @@ float3 ApplyCustomAnvilEnginePsychoV25ToneMap(
       input_adaptive_anchor_lms,
       peak_white_lms,
       shoulder_start,
-      source_direction_recovery_strength,
+      pre_shoulder_hue_linearity,
+      post_shoulder_source_hue_recovery_strength,
       post_saturation,
       compression,
       peak_value,
@@ -174,6 +178,7 @@ float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float disp
         toe_flare,
         post_saturation,
         shoulder_start,
+        0.5f,
         target_gamut_mode);
     tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
 
