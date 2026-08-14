@@ -226,10 +226,12 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
         RENODX_TONE_MAP_SATURATION,
         RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
         RENODX_TONE_MAP_DECHROMA,
-        0.f,
         MID_GRAY_IN,
         MID_GRAY_OUT,
-        1.5f);
+        0.35f,
+        0.3,
+        1.5f,
+        renodx::tonemap::psychov::PSYCHO25_TARGET_GAMUT_DISPLAY_P3);
   }
 
   return renodx::color::gamma::EncodeSafe(tonemapped, 2.2f);
