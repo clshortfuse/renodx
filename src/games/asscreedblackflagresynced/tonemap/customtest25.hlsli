@@ -18,7 +18,6 @@ static const float PSYCHO25_LOWER_PLANE_COMPRESSION_KNEE = 0.9f;
 static const float PSYCHO25_LOWER_PLANE_NEUTRAL_RELEASE_FRACTION = 0.75f;
 static const float PSYCHO25_HULL_SMOOTH_SUPPORT_EPSILON = 1e-5f;
 static const float PSYCHO25_HULL_SUPPORT_INTERSECTION_POWER = 256.f;
-static const float PSYCHO25_HUE_AMPLITUDE = 0.5f;
 static const float PSYCHO25_REFERENCE_SOURCE_DIRECTION_OCCUPANCY = 0.8f;
 static const float PSYCHO25_SOURCE_HUE_SUPPORT_FRACTION = 0.25f;
 static const float PSYCHO25_SOURCE_DIRECTION_BLEND_POWER = 2.f;
@@ -376,7 +375,8 @@ float3 CompressPsychoV25ReferenceScaleHull(
     float3 adaptive_state_lms,
     float3 background_state_lms,
     float3 target_lms_peak,
-    float source_direction_recovery_strength,
+    float pre_shoulder_hue_linearity,
+    float post_shoulder_source_hue_recovery_strength,
     float post_saturation,
     float compression,
     float peak_value,
@@ -390,8 +390,54 @@ float3 CompressPsychoV25ReferenceScaleHull(
   float adaptive_yf = renodx::tonemap::psychov::psycho25_YfFromLMS(adaptive_state_lms);
   float background_yf = renodx::tonemap::psychov::psycho25_YfFromLMS(background_state_lms);
   float target_peak_yf = renodx::tonemap::psychov::psycho25_SignedYfFromLMS(target_lms_peak);
+  float3 safe_adaptive_state_lms = max(
+      adaptive_state_lms,
+      renodx::tonemap::psychov::PSYCHO25_EPSILON.xxx);
+  float2 adapted_neutral_mb = renodx::color::macleod_boynton::from::LMS(1.f.xxx).xy;
+  float3 source_mb = renodx::color::macleod_boynton::from::WeightedLMS(
+      renodx::tonemap::psychov::psycho25_ToAdaptiveRelativeWeightedLMS(
+          direction_source_lms,
+          adaptive_state_lms));
+
+  // Hue linearity authors the shoulder input rather than correcting its
+  // output. Blend the desired adaptive-MB direction toward the source while
+  // retaining the desired radius and Yf, then run the per-cone shoulder.
+  float3 shoulder_input_lms = desired_lms;
+  float3 desired_mb = renodx::color::macleod_boynton::from::WeightedLMS(
+      renodx::tonemap::psychov::psycho25_ToAdaptiveRelativeWeightedLMS(
+          desired_lms,
+          adaptive_state_lms));
+  float2 desired_offset = desired_mb.xy - adapted_neutral_mb;
+  float2 source_offset = source_mb.xy - adapted_neutral_mb;
+  float desired_radius2 = dot(desired_offset, desired_offset);
+  float source_radius2 = dot(source_offset, source_offset);
+  if (pre_shoulder_hue_linearity > 0.f
+      && desired_radius2 > renodx::tonemap::psychov::PSYCHO25_EPSILON
+                               * renodx::tonemap::psychov::PSYCHO25_EPSILON
+      && source_radius2 > renodx::tonemap::psychov::PSYCHO25_EPSILON
+                              * renodx::tonemap::psychov::PSYCHO25_EPSILON) {
+    float2 desired_direction = desired_offset * rsqrt(desired_radius2);
+    float2 source_direction = source_offset * rsqrt(source_radius2);
+    float2 shoulder_input_direction = lerp(
+        desired_direction,
+        source_direction,
+        saturate(pre_shoulder_hue_linearity));
+    shoulder_input_direction *= rsqrt(
+        dot(shoulder_input_direction, shoulder_input_direction));
+    float2 shoulder_input_mb_xy = adapted_neutral_mb
+                                  + shoulder_input_direction * sqrt(desired_radius2);
+    float shoulder_input_mb_scale = renodx::math::DivideSafe(
+        desired_yf,
+        shoulder_input_mb_xy.x * safe_adaptive_state_lms.x
+            + (1.f - shoulder_input_mb_xy.x) * safe_adaptive_state_lms.y,
+        0.f);
+    shoulder_input_lms = renodx::tonemap::psychov::psycho25_LMSFromAdaptiveMB(
+        float3(shoulder_input_mb_xy, shoulder_input_mb_scale),
+        adaptive_state_lms);
+  }
+
   float3 physical_compressed_lms = ApplyAnchoredCInfinityShoulder(
-      desired_lms,
+      shoulder_input_lms,
       target_lms_peak,
       background_state_lms,
       compression);
@@ -400,44 +446,12 @@ float3 CompressPsychoV25ReferenceScaleHull(
     return 0.f.xxx;
   }
 
-  float3 safe_adaptive_state_lms = max(
-      adaptive_state_lms,
-      renodx::tonemap::psychov::PSYCHO25_EPSILON.xxx);
-  float2 adapted_neutral_mb = renodx::color::macleod_boynton::from::LMS(1.f.xxx).xy;
   float3 authored_mb = renodx::color::macleod_boynton::from::WeightedLMS(
       renodx::tonemap::psychov::psycho25_ToAdaptiveRelativeWeightedLMS(
           physical_compressed_lms,
           adaptive_state_lms));
-  float3 source_mb = renodx::color::macleod_boynton::from::WeightedLMS(
-      renodx::tonemap::psychov::psycho25_ToAdaptiveRelativeWeightedLMS(
-          direction_source_lms,
-          adaptive_state_lms));
-
-  // Fast60: retain physical radius and use the angular midpoint between the
-  // source direction and the raw per-cone-compressed direction.
   float2 authored_offset = authored_mb.xy - adapted_neutral_mb;
-  float2 source_offset = source_mb.xy - adapted_neutral_mb;
   float authored_radius2 = dot(authored_offset, authored_offset);
-  float source_radius2 = dot(source_offset, source_offset);
-  if (authored_radius2 > renodx::tonemap::psychov::PSYCHO25_EPSILON
-                             * renodx::tonemap::psychov::PSYCHO25_EPSILON
-      && source_radius2 > renodx::tonemap::psychov::PSYCHO25_EPSILON
-                              * renodx::tonemap::psychov::PSYCHO25_EPSILON) {
-    float2 source_direction = source_offset * rsqrt(source_radius2);
-    float2 compressed_direction = authored_offset * rsqrt(authored_radius2);
-    float2 output_direction = lerp(
-        source_direction,
-        compressed_direction,
-        1.f - renodx::tonemap::psychov::PSYCHO25_HUE_AMPLITUDE);
-    float output_direction2 = dot(output_direction, output_direction);
-    if (output_direction2 > renodx::tonemap::psychov::PSYCHO25_EPSILON
-                                * renodx::tonemap::psychov::PSYCHO25_EPSILON) {
-      authored_mb.xy = adapted_neutral_mb
-                       + output_direction * rsqrt(output_direction2) * sqrt(authored_radius2);
-      authored_offset = authored_mb.xy - adapted_neutral_mb;
-      authored_radius2 = dot(authored_offset, authored_offset);
-    }
-  }
 
   float authored_radius = sqrt(authored_radius2);
   float2 authored_direction = authored_offset * rsqrt(authored_radius2 + renodx::tonemap::psychov::PSYCHO25_EPSILON * renodx::tonemap::psychov::PSYCHO25_EPSILON);
@@ -445,7 +459,7 @@ float3 CompressPsychoV25ReferenceScaleHull(
   // Reference Scale source-direction recovery keeps collapsing saturated
   // highlights from rotating through an unrelated hue on their way to white.
   [branch]
-  if (source_direction_recovery_strength > 0.f) {
+  if (post_shoulder_source_hue_recovery_strength > 0.f) {
     float source_radius = sqrt(source_radius2);
     float2 source_direction = source_offset * rsqrt(source_radius2 + renodx::tonemap::psychov::PSYCHO25_EPSILON * renodx::tonemap::psychov::PSYCHO25_EPSILON);
     float source_radius_support =
@@ -481,7 +495,7 @@ float3 CompressPsychoV25ReferenceScaleHull(
         source_direction_support_weight,
         authored_weight + source_direction_support_weight,
         0.f);
-    float source_direction_weight = source_direction_recovery_strength
+    float source_direction_weight = post_shoulder_source_hue_recovery_strength
                                     * (1.f - (1.f - source_hue_confidence) * (1.f - source_collapse_weight));
     float2 combined_direction = lerp(
         authored_direction,
@@ -601,7 +615,8 @@ float3 ApplyCustomPsychoV25ToneMap(
     float purity_scale,
     float highlight_saturation,
     float dechroma,
-    float source_direction_recovery_strength = 0.f,
+    float pre_shoulder_hue_linearity = 0.35f,
+    float post_shoulder_source_hue_recovery_strength = 0.f,
     float3 current_adaptive_state_bt709 = 0.18f,
     float3 current_background_state_bt709 = 0.18f,
     float compression = 1.5f) {
@@ -663,7 +678,8 @@ float3 ApplyCustomPsychoV25ToneMap(
       current_adaptive_state_lms,
       current_background_state_lms,
       target_lms_peak,
-      source_direction_recovery_strength,
+      pre_shoulder_hue_linearity,
+      post_shoulder_source_hue_recovery_strength,
       1.f,
       compression,
       peak_value,
