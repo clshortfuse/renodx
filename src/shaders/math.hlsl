@@ -124,6 +124,9 @@ float3 Rescale(float3 x, float3 x_min, float3 x_max, bool clamp) {
   return Rescale(x, x_min, x_max, float3(0, 0, 0), float3(1, 1, 1), clamp);
 }
 
+#ifdef __SLANG__
+[__readNone]
+#endif
 float3x3 Invert3x3(float3x3 m) {
   float a = m[0][0], b = m[0][1], c = m[0][2];
   float d = m[1][0], e = m[1][1], f = m[1][2];

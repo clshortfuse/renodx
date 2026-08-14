@@ -1,14 +1,11 @@
 /*
  * Copyright (C) 2026 Hlib Omelchenko
- * Copyright (C) 2026 Carlos Lopez
  * SPDX-License-Identifier: MIT
  */
 
 #define ImTextureID ImU64
 
 #define DEBUG_LEVEL_0
-
-#include <random>
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
@@ -17,8 +14,8 @@
 
 #include "../../mods/shader.hpp"
 #include "../../mods/swapchain.hpp"
-#include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
@@ -26,34 +23,33 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-// RCAS swapchain gate: flag the swapchain draw so in-shader RCAS runs once on the visible frame
-// (each HDR present also draws an offscreen sibling). Set before the draw; reset in OnPresent.
+float current_settings_mode = 0;  // 0 = Simple, 1 = Advanced.
+
+bool IsVanillaPlus() { return shader_injection.toneMapType != TONE_MAP_VANILLA; }
+
+bool IsAdvanced() { return current_settings_mode >= 1.f; }
+
 bool SetSwapchainPresentFlag(reshade::api::command_list* cmd_list) {
   shader_injection.fxSwapchainPresent = renodx::utils::swapchain::HasBackBufferRenderTarget(cmd_list) ? 1.f : 0.f;
   return true;
 }
 
-renodx::mods::shader::CustomShaders custom_shaders = {
-    // Scene tonemap + grade (bloom / vignette / exposure / film grain). Four permutations
-    // selected by the in-game {Chromatic Aberration, Film Grain} toggles — all share one core.
-    CustomShaderEntry(0xB6A91712),  // CA off / grain off
-    CustomShaderEntry(0x376C116B),  // CA off / grain on
-    CustomShaderEntry(0xEB91AB31),  // CA on  / grain off
-    CustomShaderEntry(0xE3D57A10),  // CA on  / grain on
-    CustomShaderEntryCallback(0xF5B0DBFA, SetSwapchainPresentFlag),  // main HDR present (1:1), RCAS gate
-    CustomShaderEntryCallback(0xAFFFA4AB, SetSwapchainPresentFlag),  // upscaling HDR present (res scale < 100%)
-    CustomShaderEntryCallback(0x8498DBD5, SetSwapchainPresentFlag),  // HDR present at Post Process = Low
-    CustomShaderEntry(0xF5B7A93D),  // loading-screen / video present (1:1)
-    CustomShaderEntry(0x667C56AF),  // loading-screen / video present (upscaled)
-    CustomShaderEntry(0x182C8867),  // loading-screen / video present (1:1, scene sampler on s1)
-    // FMV YUV->RGB decode: flags fxVideoActive so the present treats the layer as video, not UI.
-    CustomShaderEntryCallback(0x7ED07F45, [](reshade::api::command_list* cmd_list) {
-      shader_injection.fxVideoActive = 1.f;
-      return true;
-    }),
-};
+bool SetVideoActiveFlag(reshade::api::command_list*) {
+  shader_injection.fxVideoActive = 1.f;
+  return true;
+}
 
-float current_settings_mode = 0;
+renodx::mods::shader::CustomShaders custom_shaders = {
+    // RCAS gate, main 1:1 present rows.
+    CustomShaderEntryCallback(0xF5B0DBFA, SetSwapchainPresentFlag),  // main (BT.2020)
+    CustomShaderEntryCallback(0xBE69B105, SetSwapchainPresentFlag),  // main lut3d (BT.2020)
+    CustomShaderEntryCallback(0x9FCE7944, SetSwapchainPresentFlag),  // main (P3)
+    CustomShaderEntryCallback(0x3196D1D2, SetSwapchainPresentFlag),  // main lut3d (P3)
+    CustomShaderEntryCallback(0xD0200425, SetSwapchainPresentFlag),  // main (no-matrix)
+    CustomShaderEntryCallback(0xFED81CFB, SetSwapchainPresentFlag),  // main lut3d (no-matrix)
+    // FMV YUV->RGB decode. No replacement code; the entry only raises fxVideoActive.
+    {0x7ED07F45, {.crc32 = 0x7ED07F45, .on_draw = SetVideoActiveFlag}},
+    __ALL_CUSTOM_SHADERS};
 
 renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
@@ -74,8 +70,8 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
-        .tooltip = "Vanilla = untouched native HDR. Vanilla+ = paper white, highlight roll-off, color grading and effects.",
-        .labels = {"Vanilla", "Vanilla+"},
+        .tooltip = "Sets the tone mapper type",
+        .labels = {"Vanilla", "Vanilla+", "PsychoV-24"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -87,7 +83,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of peak white in nits",
         .min = 100.f,
         .max = 4000.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -99,7 +95,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the value of 100% white in nits",
         .min = 48.f,
         .max = 500.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },  // Vanilla+
+        .is_enabled = IsVanillaPlus,
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapUINits",
@@ -111,7 +107,7 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Sets the brightness of UI and HUD elements in nits",
         .min = 48.f,
         .max = 500.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },  // Vanilla+
+        .is_enabled = IsVanillaPlus,
     },
     new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
@@ -122,8 +118,8 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates a display EOTF.",
         .labels = {"Off", "2.2", "BT.1886"},
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },  // Vanilla+
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_enabled = IsVanillaPlus,
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeExposure",
@@ -135,8 +131,8 @@ renodx::utils::settings::Settings settings = {
         .min = 0.25f,
         .max = 4.f,
         .format = "%.2f",
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_enabled = IsVanillaPlus,
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
@@ -146,9 +142,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts highlight brightness. 50 = vanilla.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeShadows",
@@ -158,9 +154,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts shadow brightness. 50 = vanilla.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeContrast",
@@ -170,9 +166,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts contrast. 50 = vanilla.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeFlare",
@@ -182,9 +178,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Flare/Glare Compensation",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeSaturation",
@@ -194,9 +190,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adjusts overall saturation. 50 = vanilla.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlightSaturation",
@@ -206,9 +202,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Adds or removes highlight color.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeHueShift",
@@ -218,9 +214,21 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .tooltip = "Shifts highlight hue toward the per-channel (SDR-display) look. 0 = vanilla.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = []() { return shader_injection.toneMapType == TONE_MAP_VANILLA_PLUS; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "ColorGradeLUTSampling",
+        .binding = &shader_injection.customLutTetrahedral,
+        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+        .default_value = 1.f,
+        .label = "LUT Sampling",
+        .section = "Color Grading",
+        .tooltip = "Interpolation of the game's native grade LUT. Tetrahedral reduces banding; Trilinear = vanilla.",
+        .labels = {"Trilinear", "Tetrahedral"},
+        .is_enabled = IsVanillaPlus,
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxBloom",
@@ -230,9 +238,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Scales the game's bloom. 50 = vanilla, 0 = off.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxVignette",
@@ -242,9 +250,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Scales the game's vignette. 50 = vanilla, 0 = off.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.02f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxChromaticAberration",
@@ -254,9 +262,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Scales the game's chromatic aberration. 100 = vanilla, 0 = off (requires the in-game CA setting on).",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxSharpness",
@@ -266,11 +274,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Adds RCAS, as implemented by Lilium for HDR. Disable other sharpening (DLAA / ReShade) to avoid double-sharpening.",
         .max = 100.f,
-        // Deliberate linear response (slider% -> CUSTOM_SHARPNESS directly). Some sibling RCAS sliders
-        // use an exp2 curve, so the same % is not perceptually comparable across mods.
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
+        .is_enabled = IsVanillaPlus,
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrainType",
@@ -282,8 +288,8 @@ renodx::utils::settings::Settings settings = {
         .tooltip = "Vanilla keeps the game's own grain. Monochrome / Colored use RenoDX perceptual grain "
                    "(reduces banding).",
         .labels = {"Vanilla", "Monochrome", "Colored"},
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_enabled = IsVanillaPlus,
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxFilmGrain",
@@ -293,9 +299,9 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Film grain strength. Reduces banding.",
         .max = 100.f,
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f && shader_injection.fxFilmGrainType != 0.f; },
+        .is_enabled = []() { return IsVanillaPlus() && shader_injection.fxFilmGrainType != FILM_GRAIN_VANILLA; },
         .parse = [](float value) { return value * 0.01f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .key = "FxHDRVideos",
@@ -306,8 +312,21 @@ renodx::utils::settings::Settings settings = {
         .section = "Effects",
         .tooltip = "Inverse tonemaps SDR videos (BT.2446a)",
         .labels = {"Off", "On"},
-        .is_enabled = []() { return shader_injection.toneMapType == 1.f; },
-        .is_visible = []() { return current_settings_mode >= 1.f; },
+        .is_enabled = IsVanillaPlus,
+        .is_visible = IsAdvanced,
+    },
+    new renodx::utils::settings::Setting{
+        .key = "FxVideoNits",
+        .binding = &shader_injection.fxVideoNits,
+        .default_value = 500.f,
+        .can_reset = true,
+        .label = "Video Brightness",
+        .section = "Effects",
+        .tooltip = "Sets the peak brightness for video content in nits",
+        .min = 100.f,
+        .max = 1000.f,
+        .is_enabled = []() { return IsVanillaPlus() && shader_injection.fxHDRVideos != 0.f; },
+        .is_visible = IsAdvanced,
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
@@ -360,7 +379,7 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
-        .label = "- Vanilla+: set the in-game Peak Brightness to MAX; the addon's Peak Brightness sets your display peak.",
+        .label = "- Vanilla+: set the in-game Graphics -> Screen Calibration -> Peak Brightness to MAX; the addon's Peak Brightness sets your display peak.",
         .section = "About",
     },
     new renodx::utils::settings::Setting{
@@ -376,38 +395,18 @@ renodx::utils::settings::Settings settings = {
 };
 
 void OnPresetOff() {
-  // "Off" preset = pure native HDR passthrough (Vanilla); nothing else applies.
+  renodx::utils::settings::ResetSettings();
   renodx::utils::settings::UpdateSettings({
-      {"ToneMapType", 0.f},
-      {"ToneMapPeakNits", 1000.f},
-      {"ToneMapGameNits", 203.f},
-      {"ToneMapUINits", 203.f},
-      {"ColorGradeExposure", 1.f},
-      {"ColorGradeHighlights", 50.f},
-      {"ColorGradeShadows", 50.f},
-      {"ColorGradeContrast", 50.f},
-      {"ColorGradeFlare", 0.f},
-      {"ColorGradeSaturation", 50.f},
-      {"ColorGradeHighlightSaturation", 50.f},
-      {"ColorGradeHueShift", 0.f},
-      {"GammaCorrection", 1.f},
-      {"FxBloom", 50.f},
-      {"FxVignette", 50.f},
-      {"FxChromaticAberration", 100.f},
-      {"FxSharpness", 0.f},
-      {"FxFilmGrainType", 0.f},
-      {"FxFilmGrain", 50.f},
-      {"FxHDRVideos", 1.f},
+      {"ToneMapType", 0.f},            // Vanilla: the game's own bytecode runs.
+      {"ColorGradeLUTSampling", 0.f},  // Trilinear: the vanilla sampling mode.
   });
 }
 
 bool fired_on_init_swapchain = false;
 
-// Seed the Peak Brightness default from the display's HDR metadata (RDR1 pattern).
 void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   if (fired_on_init_swapchain) return;
-  // Latch only on a successful read: the transient 1280x720 boot swapchain may have no metadata,
-  // and we must not pin the default to 1000 and block re-seeding from the real HDR swapchain.
+
   auto peak = renodx::utils::swapchain::GetPeakNits(swapchain);
   if (!peak.has_value()) return;
   auto* peak_setting = renodx::utils::settings::FindSetting("ToneMapPeakNits");
@@ -417,7 +416,6 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
   fired_on_init_swapchain = true;
 }
 
-// Feed a fresh per-frame random seed for the perceptual film grain (TW3 pattern).
 void OnPresent(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
@@ -425,15 +423,8 @@ void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
-  static std::mt19937 random_generator(std::random_device{}());
-  static const auto random_range = static_cast<float>(std::mt19937::max() - std::mt19937::min());
-  shader_injection.customRandom = static_cast<float>(random_generator() - std::mt19937::min()) / random_range;
-
-  // Reset the FMV flag each frame; the 0x7ED07F45 callback re-sets it when video decodes.
-  shader_injection.fxVideoActive = 0.f;
-  // RCAS gate safe default: set per present draw by SetSwapchainPresentFlag; reset here so a present
-  // without it falls back to 0 (RCAS off), not a stale 1.
-  shader_injection.fxSwapchainPresent = 0.f;
+  shader_injection.fxVideoActive = 0.f;       // Re-set by the 0x7ED07F45 callback when video decodes.
+  shader_injection.fxSwapchainPresent = 0.f;  // Re-set by SetSwapchainPresentFlag per present draw.
 }
 
 bool initialized = false;
@@ -460,8 +451,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::force_borderless = true;
         renodx::mods::swapchain::prevent_full_screen = true;
         renodx::mods::swapchain::use_resource_cloning = true;
-        // Clone the graded buffer to fp16. render_target filter keeps the same-format 33^3 3D LUT
-        // out of the clone path (a 2D view on the cloned 3D resource -> DXGI_ERROR_DEVICE_REMOVED).
+        // Clone the graded buffer to fp16
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r10g10b10a2_typeless,
             .new_format = reshade::api::format::r16g16b16a16_float,
@@ -472,17 +462,20 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         initialized = true;
       }
 
-      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // seed peak default
-      reshade::register_event<reshade::addon_event::present>(OnPresent);               // per-frame grain seed
+      reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::register_event<reshade::addon_event::present>(OnPresent);
 
       break;
     case DLL_PROCESS_DETACH:
-      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // seed peak default
-      reshade::unregister_event<reshade::addon_event::present>(OnPresent);               // per-frame grain seed
+      reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
+      reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
       break;
   }
 
+  renodx::utils::random::Use(fdw_reason, {&shader_injection.customRandom,
+                                          &shader_injection.customRandom2,
+                                          &shader_injection.customRandom3});
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);

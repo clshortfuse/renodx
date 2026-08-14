@@ -1,0 +1,8 @@
+add_renodx_runtime_executable(swapchain_change_detection_tests tests.cpp version)
+add_dependencies(renodx_test_suites swapchain_change_detection_tests)
+
+add_test(NAME swapchain_change_detection COMMAND swapchain_change_detection_tests)
+set_tests_properties(swapchain_change_detection PROPERTIES
+  LABELS "swapchain;change_detection;unit"
+  TIMEOUT 30
+)

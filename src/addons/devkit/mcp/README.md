@@ -109,7 +109,7 @@ sequenceDiagram
 - `renodx_list_connections` includes `bridgeInfo` so MCP clients can inspect the active bridge version/build.
 - `devkit_status` includes `serverInfo` so MCP clients can inspect the connected devkit backend version/build.
 - Snapshot-backed inspection tools stay empty until a frame snapshot is queued and captured with `devkit_queue_snapshot`.
-- `devkit_set_tools_path` should usually point at the repo `bin` directory when a game ships conflicting shader tool binaries.
+- `devkit_set_tools_path` should usually point at the repo `bin` directory for the DirectX and Vulkan shader tools, especially when a game ships conflicting binaries.
 - Default devkit content folders live under `renodx-dev/`:
   `live/`, `dump/`, and `boot/`.
 - `boot/` contains decoded PNG texture replacements for early upload paths like `create_resource` + `initial_data`.

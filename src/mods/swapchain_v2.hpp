@@ -566,11 +566,14 @@ static bool OnCreateSwapchain(reshade::api::device_api device_api, reshade::api:
 static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   reshade::api::device_api device_api = reshade::api::device_api::d3d11;
 #endif
+  bool changed_color_space = false;
   bool resize = local_swapchain_resize;
   if (resize) {
     local_swapchain_resize = false;
   }
+#ifdef DEBUG_LEVEL_0
   reshade::log::message(reshade::log::level::debug, "mods::swapchain::OnCreateSwapchain()");
+#endif
   original_swapchain_desc = desc;
   upgraded_swapchain_desc.reset();
 
@@ -579,14 +582,18 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   }
 
   bool is_dxgi = false;
+  bool is_vulkan = false;
   switch (device_api) {
     case reshade::api::device_api::d3d10:
     case reshade::api::device_api::d3d11:
     case reshade::api::device_api::d3d12:
       is_dxgi = true;
+      break;
+    case reshade::api::device_api::vulkan:
+      is_vulkan = true;
+      break;
     case reshade::api::device_api::d3d9:
     case reshade::api::device_api::opengl:
-    case reshade::api::device_api::vulkan:
       break;
     default:
       assert(false);
@@ -594,11 +601,13 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   }
 
   if (!ShouldModifySwapchain(static_cast<HWND>(hwnd), device_api)) {
+#ifdef DEBUG_LEVEL_0
     std::stringstream s;
     s << "mods::swapchain::OnCreateSwapchain(Abort from ShouldModifySwapchain: ";
     s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
+#endif
     return false;
   }
 
@@ -609,7 +618,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   auto old_present_flags = desc.present_flags;
   auto old_buffer_count = desc.back_buffer_count;
 
-  if (is_dxgi) {
+  if (is_dxgi || is_vulkan) {
     if (!use_resize_buffer && !utils::device_proxy::UseProxyRequested()) {
       desc.back_buffer.texture.format = target_format;
 
@@ -618,7 +627,9 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
         desc.back_buffer_count = 2;
       }
     }
+  }
 
+  if (is_dxgi) {
     if (!utils::device_proxy::UseProxyRequested()) {
       switch (desc.present_mode) {
         case static_cast<uint32_t>(DXGI_SWAP_EFFECT_SEQUENTIAL):
@@ -628,21 +639,39 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
           desc.present_mode = static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD);
           break;
       }
-    }
 
-    if (!use_resize_buffer) {
-      if (prevent_full_screen) {
-        desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-      }
-      if (force_screen_tearing) {
-        if (desc.present_mode != static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)
-            && desc.present_mode != static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD)) {
-          reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnCreateSwapchain(Force ALLOW_TEARING flag with non-flip present mode)");
-        } else {
-          desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+      if (!use_resize_buffer) {
+        if (prevent_full_screen) {
+          desc.present_flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+        }
+        if (force_screen_tearing) {
+          if (desc.present_mode != static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL)
+              && desc.present_mode != static_cast<uint32_t>(DXGI_SWAP_EFFECT_FLIP_DISCARD)) {
+            reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnCreateSwapchain(Force ALLOW_TEARING flag with non-flip present mode)");
+          } else {
+            desc.present_flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+          }
         }
       }
     }
+  } else if (is_vulkan && set_color_space) {
+#if RESHADE_API_VERSION >= 20
+    desc.color_space = target_color_space;
+    changed_color_space = true;
+#else
+    // Reshade API Version 20 introduced `color_space` in `reshade::api::swapchain_desc`, but older versions do not have this member.
+    // Check for API Version 20+ DXGIDisableVBlankVirtualization and set it manually
+    if (auto* reshade_module = reshade::internal::get_reshade_module_handle();
+        reshade_module != nullptr && GetProcAddress(reshade_module, "DXGIDisableVBlankVirtualization") != nullptr) {
+      reshade::log::message(reshade::log::level::info, "mods::swapchain::OnCreateSwapchain(Detected Reshade API Version 20 or above, setting color_space to target_color_space)");
+      *reinterpret_cast<reshade::api::color_space*>(
+          reinterpret_cast<std::byte*>(&desc) + sizeof(desc)) =
+          target_color_space;
+      changed_color_space = true;
+    } else {
+      reshade::log::message(reshade::log::level::warning, "mods::swapchain::OnCreateSwapchain(Failed to set color_space on Vulkan)");
+    }
+#endif
   } else if (device_api == reshade::api::device_api::d3d9) {
     if (prevent_full_screen || utils::device_proxy::UseProxyRequested()) {
       desc.present_flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
@@ -659,10 +688,12 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   }
 
   bool changed = (old_format != desc.back_buffer.texture.format)
+                 || (old_buffer_count != desc.back_buffer_count)
                  || (old_present_mode != desc.present_mode)
                  || (old_present_flags != desc.present_flags)
                  || (old_fullscreen_state != desc.fullscreen_state)
-                 || (old_fullscreen_refresh_rate != desc.fullscreen_refresh_rate);
+                 || (old_fullscreen_refresh_rate != desc.fullscreen_refresh_rate)
+                 || changed_color_space;
 
   if (!resize
       && prevent_multiple_flip_swapchains_per_window
@@ -678,14 +709,17 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   }
 
   if (!changed) {
+#ifdef DEBUG_LEVEL_0
     std::stringstream s;
     s << "mods::swapchain::OnCreateSwapchain(Abort from unchanged desc: ";
     s << PRINT_PTR(reinterpret_cast<uintptr_t>(hwnd));
     s << ")";
     reshade::log::message(reshade::log::level::info, s.str().c_str());
+#endif
     return false;
   }
 
+#ifdef DEBUG_LEVEL_0
   std::stringstream s;
   s << "mods::swapchain::OnCreateSwapchain(";
   s << "swap: " << old_format << " => " << desc.back_buffer.texture.format;
@@ -710,7 +744,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   {
     bool has_flag = false;
     for (const auto& [flag_value, flag_string] : DXGI_SWAP_CHAIN_FLAG_NAMES) {
-      if (renodx::utils::bitwise::HasFlag(old_present_flags, flag_value)) {
+      if (is_dxgi && renodx::utils::bitwise::HasFlag(old_present_flags, flag_value)) {
         s << (has_flag ? " | " : " (") << flag_string;
         has_flag = true;
       }
@@ -718,10 +752,10 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
     if (has_flag) s << ")";
   }
 
-  s << " => ";
-  s << "0x" << std::hex << desc.present_flags << std::dec;
+  if (is_dxgi) s << " => ";
+  if (is_dxgi) s << "0x" << std::hex << desc.present_flags << std::dec;
 
-  if (old_present_flags != desc.present_flags) {
+  if (is_dxgi && old_present_flags != desc.present_flags) {
     bool has_flag = false;
     for (const auto& [flag_value, flag_string] : DXGI_SWAP_CHAIN_FLAG_NAMES) {
       if (renodx::utils::bitwise::HasFlag(desc.present_flags, flag_value)) {
@@ -739,6 +773,7 @@ static bool OnCreateSwapchain(reshade::api::swapchain_desc& desc, void* hwnd) {
   s << ", height: " << desc.back_buffer.texture.height;
   s << ")";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
+#endif
 
   upgraded_swapchain_desc = desc;
 

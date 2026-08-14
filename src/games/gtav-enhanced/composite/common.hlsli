@@ -209,12 +209,17 @@ struct GTAVTonemapConfig {
   float e_over_f;   // toe_numerator_over_denominator
   float white_scale;
 
+  float fade_to_white;
   float saturation;
   float3 grade_a;
   float3 grade_b;
   float grade_luma_max;
   float blend_range;
 };
+
+GTAVTonemapConfig CreateGTAVTonemapConfig() {
+  return (GTAVTonemapConfig)0;
+}
 
 float3 DrawGTAVHableParamsDebug(float3 color,
                                 float2 screen_position,
@@ -254,6 +259,7 @@ float3 DrawGTAVHableParamsDebug(float3 color,
 }
 
 float3 ApplyPostToneMapGrading(float3 vanilla_color, GTAVTonemapConfig config) {
+  vanilla_color = lerp(vanilla_color, 1.f, config.fade_to_white);
   float vanilla_luma = dot(vanilla_color, float3(0.21250000596046448f, 0.715399980545044f, 0.07209999859333038f));
   float3 post_grade_b = vanilla_luma + (config.saturation * (vanilla_color - vanilla_luma));
   float grade_blend = saturate(vanilla_luma / config.grade_luma_max);
@@ -339,11 +345,11 @@ float4 GenerateGTAVOutput(float3 input_color, float2 position, float2 screen_pos
     if (RENODX_GAMMA_CORRECTION == 1.f) peak_value = renodx::color::correct::GammaSafe(peak_value, true, 2.2f);
     if (RENODX_GAMMA_CORRECTION == 2.f) peak_value = renodx::color::correct::GammaSafe(peak_value, true, 2.4f);
 
-    tonemapped = renodx::tonemap::psychov::psychotm_test17(
+    tonemapped = renodx::tonemap::psychov::psychotm_test22(
         untonemapped, peak_value,
         RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS, RENODX_TONE_MAP_CONTRAST,
         RENODX_TONE_MAP_SATURATION, 1.f, RENODX_RENO_DRT_WHITE_CLIP, 1.f, 1.f, 0,
-        hable_slope * mid_gray_in / mid_gray_out, mid_gray_in, mid_gray_out);
+        hable_slope * mid_gray_in / mid_gray_out, mid_gray_in, mid_gray_out, 1.f, 1, 1.f, 0.f);
 
     float maxch_scale = renodx::tonemap::neutwo::ComputeBT709Scale(tonemapped, 1.f, peak_value);
     float3 post_process_color = ApplyPostToneMapGrading(tonemapped * maxch_scale, config) / maxch_scale;

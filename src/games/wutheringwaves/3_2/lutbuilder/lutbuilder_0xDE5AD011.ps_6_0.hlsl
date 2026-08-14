@@ -888,6 +888,9 @@ float4 main(
   float _1628 = select((_1604 > 0.040449999272823334f), exp2(log2((_1604 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_1604 * 0.07739938050508499f));
 
   wuwa::lut::ApplyInverseSamplingScale(_1626, _1627, _1628, lut_sampling_scale);
+
+  wuwa::lut::PreserveReferenceLightness(_1626, _1627, _1628, float3(_1517, _1518, _1519));
+
   float _1654 = cb0_044y * (((cb0_026y + (cb0_026x * _1626)) * _1626) + cb0_026z);
   float _1655 = cb0_044z * (((cb0_026y + (cb0_026x * _1627)) * _1627) + cb0_026z);
   float _1656 = cb0_044w * (((cb0_026y + (cb0_026x * _1628)) * _1628) + cb0_026z);

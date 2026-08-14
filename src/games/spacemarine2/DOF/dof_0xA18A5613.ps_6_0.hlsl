@@ -1,3 +1,5 @@
+#include "../shared.h"
+
 Texture2D<float4> DOF_BUFFER_0 : register(t0, space2);
 
 Texture2D<float4> DOF_BUFFER_1 : register(t1, space2);
@@ -16,12 +18,12 @@ cbuffer CB_PASS_DOF : register(b4) {
 
 SamplerState PS_SAMPLERS[12] : register(s0, space1);
 
-float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float2 TEXCOORD : TEXCOORD
-) : SV_Target {
+float4 main(noperspective float4 SV_Position : SV_Position,
+            linear float2 TEXCOORD : TEXCOORD)
+    : SV_Target {
   float4 SV_Target;
-  float4 _8 = DOF_BUFFER_1.Sample(PS_SAMPLERS[3], float2((TEXCOORD.x), (TEXCOORD.y)));
+  float4 _8 =
+      DOF_BUFFER_1.Sample(PS_SAMPLERS[3], float2((TEXCOORD.x), (TEXCOORD.y)));
   float _13 = (CB_COMMON_DYN_029x) - (CB_COMMON_DYN_029y);
   float _14 = (CB_COMMON_DYN_029x) / _13;
   float _15 = (CB_COMMON_DYN_029y) * (CB_COMMON_DYN_029x);
@@ -30,7 +32,9 @@ float4 main(
   float _18 = _13 * _17;
   float _19 = _16 / _18;
   float _20 = min(_19, 10000.0f);
-  float4 _25 = DOF_BUFFER_0.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
+  float4 _25 =
+      DOF_BUFFER_0.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
+  _25.rgb = renodx::draw::InvertIntermediatePass(_25.rgb);
   float _30 = (CB_PASS_DOF_001x) + 0.0010000000474974513f;
   bool _31 = (_20 < _30);
   float _39 = 1.0f;
@@ -51,6 +55,9 @@ float4 main(
   SV_Target.z = _45;
   SV_Target.w = _42;
 
-  SV_Target.a = 0.f;
+  SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
+  // SV_Target.a = 0.f;
+  SV_Target.a = saturate(SV_Target.a);
+
   return SV_Target;
 }

@@ -15,6 +15,9 @@
     Re-runs version-aware install checks and updates managed tools when the configured package is newer than the installed one.
     Newer local installs are left in place.
 
+.PARAMETER Tools
+  Limits setup and status checks to the selected managed tools. The default is all managed tools.
+
 .EXAMPLE
     .\setup-dev-env.ps1 -Install
 
@@ -23,7 +26,9 @@
 param(
   [string]$Bin,
   [switch]$Install,
-  [switch]$Update
+  [switch]$Update,
+  [ValidateSet('dxc', 'slang', 'glslang', '3dmigoto')]
+  [string[]]$Tools = @('dxc', 'slang', 'glslang', '3dmigoto')
 )
 
 Set-StrictMode -Version Latest
@@ -53,10 +58,37 @@ $modulePath = Join-Path $PSScriptRoot 'helper-module.psm1'
 # Normalize bin path to an absolute path (variable setup only)
 $binDir = [System.IO.Path]::GetFullPath($binDir)
 
-# Managed tool package versions live here as script-scope constants so they can be bumped in one place.
-$script:DXC_VERSION = '1.9.2602'
-$script:SLANG_VERSION = '2025.16.1'
-$script:THREEDMIGOTO_VERSION = '1.3.16'
+$toolVersionsPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'cmake\tool-versions.cmake'
+if (-not (Test-Path $toolVersionsPath)) {
+  throw "CMake tool version manifest not found: $toolVersionsPath"
+}
+if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+  throw 'CMake is required to read the managed tool versions.'
+}
+
+$toolVersionOutput = @(& cmake -P $toolVersionsPath 2>&1)
+if ($LASTEXITCODE -ne 0) {
+  throw "CMake failed to read the managed tool versions: $($toolVersionOutput -join [Environment]::NewLine)"
+}
+
+$toolVersions = @{}
+foreach ($line in $toolVersionOutput) {
+  if ($line.ToString().Trim() -match '^(RENODX_[A-Z0-9_]+_MIN_VERSION)=([0-9]+(?:\.[0-9]+)+)$') {
+    $toolVersions[$Matches[1]] = $Matches[2]
+  }
+}
+
+foreach ($name in @('DXC', 'SLANG', 'GLSLANG', 'THREEDMIGOTO')) {
+  if (-not $toolVersions.ContainsKey("RENODX_${name}_MIN_VERSION")) {
+    throw "CMake did not export RENODX_${name}_MIN_VERSION from $toolVersionsPath"
+  }
+}
+
+$script:DXC_VERSION = $toolVersions['RENODX_DXC_MIN_VERSION']
+$script:SLANG_VERSION = $toolVersions['RENODX_SLANG_MIN_VERSION']
+$script:GLSLANG_VERSION = $toolVersions['RENODX_GLSLANG_MIN_VERSION']
+$script:THREEDMIGOTO_VERSION = $toolVersions['RENODX_THREEDMIGOTO_MIN_VERSION']
+$selectedTools = @($Tools | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
 
 $script:ResolvedToolDownloads = @{}
 
@@ -70,7 +102,7 @@ $toolDefinitions = @{
     ExpectedFiles  = @('dxc.exe', 'dxcompiler.dll')
     PrimaryFile    = 'dxc.exe'
     VersionCommand = @('--version')
-    VersionPattern = 'dxcompiler\.dll:\s+\d+\.\d+\s+-\s+([0-9]+(?:\.[0-9]+){2,3})'
+    VersionPattern = 'dxcompiler\.dll:.*-\s+([0-9]+(?:\.[0-9]+){2,3})'
   }
   'slang' = @{
     ProductName    = 'Slang'
@@ -80,6 +112,15 @@ $toolDefinitions = @{
     PrimaryFile    = 'slangc.exe'
     VersionCommand = @('-version')
     VersionPattern = '([0-9]+(?:\.[0-9]+){2,3})'
+  }
+  'glslang' = @{
+    ProductName    = 'glslang'
+    DesiredVersion = $script:GLSLANG_VERSION
+    Url            = "https://github.com/KhronosGroup/glslang/releases/download/$($script:GLSLANG_VERSION)/glslang-$($script:GLSLANG_VERSION)-windows-x86_64-release.zip"
+    ExpectedFiles  = @('glslang.exe')
+    PrimaryFile    = 'glslang.exe'
+    VersionCommand = @('--version')
+    VersionPattern = 'Glslang Version:\s+\d+:([0-9]+(?:\.[0-9]+){2,3})'
   }
   '3dmigoto' = @{
     ProductName    = '3Dmigoto cmd_Decompiler'
@@ -414,6 +455,13 @@ function Install-ToolFromArchive {
         Write-Warn "Could not copy slang bin contents: $($_.Exception.Message)"
         return $false
       }
+    } elseif ($Name -eq 'glslang') {
+      try {
+        Copy-Item -Path (Join-Path $temp 'bin\glslang.exe') -Destination $binDir -Force -ErrorAction Stop
+      } catch {
+        Write-Warn "Could not copy glslang.exe: $($_.Exception.Message)"
+        return $false
+      }
     } else {
       # Generic fallback: copy discovered .exe files into bin (best-effort locations)
       Get-ChildItem -Path $temp -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -460,7 +508,7 @@ function Install-Tools {
   $actionCount = 0
 
   # Tools to ensure in bin.
-  foreach ($name in @('dxc', 'slang', '3dmigoto')) {
+  foreach ($name in $selectedTools) {
     $tool = Get-ToolDefinition -Name $name
     if ($null -eq $tool) { continue }
 
@@ -672,19 +720,19 @@ function Install-WindowsSdk {
 
 ### Script root: minimal orchestration
 # Install or report tools
-# Install or report tools
 Import-HelperModule
 Initialize-BinDir
 # Ensure Windows SDK / fxc.exe (needed early for fxc.exe copy)
 [void](Test-WindowsSdk)
 
 function Get-MissingCoreToolFiles {
-  param(
-    [string[]]$Required = @('dxc.exe', 'dxcompiler.dll', 'slangc.exe', 'cmd_Decompiler.exe', 'fxc.exe')
-  )
+  $required = @('fxc.exe')
+  foreach ($name in $selectedTools) {
+    $required += @(Get-ToolExpectedFiles -Name $name)
+  }
 
   $missing = @()
-  foreach ($exe in $Required) {
+  foreach ($exe in @($required | Select-Object -Unique)) {
     if (-not (Test-Path (Join-Path $binDir $exe))) { $missing += $exe }
   }
 
@@ -725,7 +773,7 @@ if ($isDryRun) {
     Write-Info "Windows SDK: missing"
   }
 
-  foreach ($name in @('dxc', 'slang', '3dmigoto')) {
+  foreach ($name in $selectedTools) {
     Write-Info (Get-ToolStatusLine -Name $name)
   }
 
@@ -747,4 +795,5 @@ if ($isDryRun) {
 } elseif (-not $setupComplete -and -not $isDryRun) {
   Write-Warn "Missing core tool files in ${binDir}: $($missingCoreFiles -join ', ')"
   Write-Warn "Dev environment setup incomplete. The script could not provide all required files; review the warnings above for the failing tool or download step."
+  exit 1
 }

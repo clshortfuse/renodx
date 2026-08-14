@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.27)
 
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/tool-versions.cmake)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -20,12 +22,20 @@ find_program(DXC_BIN dxc.exe
   ${CMAKE_WINDOWS_KITS_10_DIR}/bin/${CMAKE_SYSTEM_VERSION}/x64/
   REQUIRED)
 message("DXC_BIN: " ${DXC_BIN})
+renodx_check_minimum_tool_version(
+  "DirectX Shader Compiler" "${DXC_BIN}" "${RENODX_DXC_MIN_VERSION}"
+  "${RENODX_DXC_VERSION_REGEX}"
+  --version)
 
 find_program(SLANGC_BIN slangc.exe
   HINTS
   ${CMAKE_CURRENT_SOURCE_DIR}/bin/
   REQUIRED)
 message("SLANGC_BIN: " ${SLANGC_BIN})
+renodx_check_minimum_tool_version(
+  "Slang" "${SLANGC_BIN}" "${RENODX_SLANG_MIN_VERSION}"
+  "${RENODX_SLANG_VERSION_REGEX}"
+  -version)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
@@ -38,13 +48,16 @@ endif()
 
 project(renodx VERSION 0.1.0 LANGUAGES CXX)
 
-include(CTest)
-enable_testing()
+option(RENODX_BUILD_TESTS "Build D3D12 regression tests" OFF)
+if(RENODX_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(test)
+endif()
 
 # Use executable to convert resources to .h files for embedding
 add_executable(embed_file src/embed_file.cpp)
-# Helper executable that analyzes HLSL #include dependencies and outputs .d files
-add_executable(analyze_hlsl_deps src/analyze_hlsl_deps.cpp)
+# Helper executable that analyzes shader #include dependencies and outputs .d files
+add_executable(analyze_shader_deps src/analyze_shader_deps.cpp)
 add_executable(decomp ./src/decompiler/cli.cpp)
 add_executable(mcp_bridge src/apps/mcp_bridge/main.cpp)
 
@@ -52,61 +65,6 @@ target_include_directories(mcp_bridge SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/
 target_include_directories(mcp_bridge SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
 target_compile_definitions(mcp_bridge PRIVATE NOMINMAX)
 set_target_properties(mcp_bridge PROPERTIES OUTPUT_NAME "renodx-mcp-bridge")
-
-# DEPRECATED: inspect_hlsl_imports is no longer used - dependencies are tracked at build time via DEPFILE
-# Keeping for reference during transition
-function(inspect_hlsl_imports FILE VARIABLE REQUESTING_FILE)
-  unset(CACHE_ENTRY)
-  set(HLSL_CACHE_VAR HLSL_CACHE_${FILE})
-  get_property(CACHE_ENTRY GLOBAL PROPERTY ${HLSL_CACHE_VAR})
-  # message(${FILE} " - Preparing " ${VARIABLE})
-  if(CACHE_ENTRY)
-    # message(${FILE} " - Using cache")
-  else()
-    # message(${FILE} " - Check known zero-dependency " HLSL_CACHE_EMPTY_${FILE})
-    get_property(EMPTY_CACHE_ENTRY GLOBAL PROPERTY HLSL_CACHE_EMPTY_${FILE})
-    unset(CACHE_ENTRY)
-    if(EMPTY_CACHE_ENTRY)
-      # message(${FILE} " - Is zero dependency file")
-    elseif(EXISTS ${FILE})
-      # message(${FILE} " - EMPTY_CACHE_ENTRY Result: " ${EMPTY_CACHE_ENTRY})
-      file(STRINGS ${FILE} HLSL_IMPORTS REGEX "^#include \"([^\"]+)\"")
-      foreach(IMPORT_LINE ${HLSL_IMPORTS})
-        string(REGEX MATCH "^#include \"([^\"]+)\"" _ ${IMPORT_LINE})
-        cmake_path(GET FILE PARENT_PATH FILE_DIRECTORY)
-        cmake_path(ABSOLUTE_PATH CMAKE_MATCH_1 BASE_DIRECTORY ${FILE_DIRECTORY} OUTPUT_VARIABLE HLSL_PATH)
-        cmake_path(NORMAL_PATH HLSL_PATH)
-        # message(${FILE} " - Direct dependency: " ${HLSL_PATH})
-        list(FIND CACHE_ENTRY "${HLSL_PATH}" _found_idx)
-        if(NOT _found_idx EQUAL -1)
-          # message(${FILE} " - Already in list: " ${HLSL_PATH})
-          continue()
-        endif()
-        list(APPEND CACHE_ENTRY ${HLSL_PATH})
-        #message(${FILE} " - Added: " ${HLSL_PATH})
-        # message(${FILE} " - List: " ${CACHE_ENTRY})
-        # recursive
-        inspect_hlsl_imports(${HLSL_PATH} CHILD_DEPENDENCIES ${FILE})
-        # message(${FILE} " - Adding children from " ${HLSL_PATH} ": " ${TEMP_CACHE_ENTRY})
-        list(APPEND CACHE_ENTRY ${CHILD_DEPENDENCIES})
-        # message(${FILE} " - Added children from " ${HLSL_PATH} ": " ${CACHE_ENTRY})
-      endforeach()
-      if(CACHE_ENTRY)
-        set_property(GLOBAL PROPERTY ${HLSL_CACHE_VAR} ${CACHE_ENTRY})
-        # message(${FILE} " - Caching " ${CACHE_ENTRY})
-      else()
-        set_property(GLOBAL PROPERTY HLSL_CACHE_EMPTY_${FILE} "TRUE")
-        # message(${FILE} " -Marking zero dependency")
-      endif()
-    else()
-      message(FATAL_ERROR "Failed to parse " ${REQUESTING_FILE} " " ${FILE} " does not exist.")
-    endif()
-  endif()
-
-  # update in parent scope
-  set(${VARIABLE} ${CACHE_ENTRY} PARENT_SCOPE)
-
-endfunction()
 
 function(generate_resource_rc ADDON)
 
@@ -174,7 +132,31 @@ endfunction()
 function(build_shader_target ADDON ADDON_PATH)
   set(EMBED_FOLDER ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/embed)
   unset(SHADER_BINARIES)
-
+  macro(add_stage_spirv_shader OUTPUT_STEM)
+    list(FIND SHADER_BINARIES ${EMBED_FOLDER}/${OUTPUT_STEM}.spv SHADER_BINARY_INDEX)
+    if(SHADER_BINARY_INDEX EQUAL -1)
+      set(DEPFILE_SPV ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${OUTPUT_STEM}.spv.d)
+      add_custom_command(
+        OUTPUT ${EMBED_FOLDER}/${OUTPUT_STEM}.spv
+        COMMAND $<TARGET_FILE:analyze_shader_deps> ${FILE} ${EMBED_FOLDER}/${OUTPUT_STEM}.spv ${DEPFILE_SPV}
+        COMMAND ${SPIRV_COMPILE_COMMAND}
+        DEPENDS ${FILE} analyze_shader_deps
+        DEPFILE ${DEPFILE_SPV}
+      )
+      list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${OUTPUT_STEM}.spv)
+    endif()
+  endmacro()
+  macro(add_slang_shader OUTPUT_STEM SHADER_PROFILE BINARY_TARGET)
+    set(DEPFILE_SLANG ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${OUTPUT_STEM}.d)
+    add_custom_command(
+      OUTPUT ${EMBED_FOLDER}/${OUTPUT_STEM}.cso
+      COMMAND $<TARGET_FILE:analyze_shader_deps> ${FILE} ${EMBED_FOLDER}/${OUTPUT_STEM}.cso ${DEPFILE_SLANG}
+      COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_PROFILE} ${SHADER_FLAGS} -target ${BINARY_TARGET} -o ${EMBED_FOLDER}/${OUTPUT_STEM}.cso
+      DEPENDS ${FILE} analyze_shader_deps
+      DEPFILE ${DEPFILE_SLANG}
+    )
+    list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${OUTPUT_STEM}.cso)
+  endmacro()
   file(GLOB_RECURSE SHADER_HLSL_SOURCES CONFIGURE_DEPENDS ${ADDON_PATH}/*.hlsl)
   foreach(FILE ${SHADER_HLSL_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
@@ -202,13 +184,6 @@ function(build_shader_target ADDON ADDON_PATH)
 
         string(SUBSTRING ${SHADER_TARGET} 0 2 SHADER_TARGET_TYPE)
 
-        # Add dependencies
-        unset(HLSL_DEPENDENCIES)
-        unset(HLSL_CHILD_DEPENDENCIES)
-        list(APPEND HLSL_DEPENDENCIES ${FILE})
-        inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
-        list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
-
         #DX11
         set(SHADER_COMPILER ${FXC_BIN})
         unset(SHADER_FLAGS)
@@ -223,9 +198,9 @@ function(build_shader_target ADDON ADDON_PATH)
           set(DEPFILE_DX11 ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_HASH}_dx11.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
-            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso ${DEPFILE_DX11}
+            COMMAND $<TARGET_FILE:analyze_shader_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso ${DEPFILE_DX11}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
-            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPENDS ${FILE} analyze_shader_deps
             DEPFILE ${DEPFILE_DX11}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso)
@@ -233,9 +208,9 @@ function(build_shader_target ADDON ADDON_PATH)
           set(DEPFILE_DX11 ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_NAME}_dx11.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
-            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso ${DEPFILE_DX11}
+            COMMAND $<TARGET_FILE:analyze_shader_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso ${DEPFILE_DX11}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
-            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPENDS ${FILE} analyze_shader_deps
             DEPFILE ${DEPFILE_DX11}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso)
@@ -253,9 +228,9 @@ function(build_shader_target ADDON ADDON_PATH)
           set(DEPFILE_DX12 ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_HASH}_dx12.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
-            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso ${DEPFILE_DX12}
+            COMMAND $<TARGET_FILE:analyze_shader_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso ${DEPFILE_DX12}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
-            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPENDS ${FILE} analyze_shader_deps
             DEPFILE ${DEPFILE_DX12}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso)
@@ -263,9 +238,9 @@ function(build_shader_target ADDON ADDON_PATH)
           set(DEPFILE_DX12 ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_NAME}_dx12.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
-            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso ${DEPFILE_DX12}
+            COMMAND $<TARGET_FILE:analyze_shader_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso ${DEPFILE_DX12}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
-            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPENDS ${FILE} analyze_shader_deps
             DEPFILE ${DEPFILE_DX12}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso)
@@ -303,9 +278,9 @@ function(build_shader_target ADDON ADDON_PATH)
           set(DEPFILE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_HASH}.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
-            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.cso ${DEPFILE}
+            COMMAND $<TARGET_FILE:analyze_shader_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.cso ${DEPFILE}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_HASH}.cso
-            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPENDS ${FILE} analyze_shader_deps
             DEPFILE ${DEPFILE}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.cso)
@@ -313,9 +288,9 @@ function(build_shader_target ADDON ADDON_PATH)
           set(DEPFILE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}/${SHADER_NAME}.d)
           add_custom_command(
             OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.cso
-            COMMAND $<TARGET_FILE:analyze_hlsl_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}.cso ${DEPFILE}
+            COMMAND $<TARGET_FILE:analyze_shader_deps> ${FILE} ${EMBED_FOLDER}/${SHADER_NAME}.cso ${DEPFILE}
             COMMAND ${SHADER_COMPILER} ${FILE} -T ${SHADER_TARGET} ${SHADER_FLAGS} /nologo /O3 /Qstrip_reflect -E main -Fo ${EMBED_FOLDER}/${SHADER_NAME}.cso
-            DEPENDS ${FILE} analyze_hlsl_deps
+            DEPENDS ${FILE} analyze_shader_deps
             DEPFILE ${DEPFILE}
           )
           list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.cso)
@@ -347,13 +322,6 @@ function(build_shader_target ADDON ADDON_PATH)
 
     if(SHADER_TARGET AND (SHADER_HASH OR SHADER_NAME))
       if(SHADER_TARGET STREQUAL "frag" OR SHADER_TARGET STREQUAL "vert" OR SHADER_TARGET STREQUAL "comp")
-        # Add dependencies
-        unset(HLSL_DEPENDENCIES)
-        unset(HLSL_CHILD_DEPENDENCIES)
-        list(APPEND HLSL_DEPENDENCIES ${FILE})
-        inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
-        list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
-
         unset(SHADER_STAGE)
         if(SHADER_TARGET STREQUAL "frag")
           set(SHADER_STAGE "fragment")
@@ -362,21 +330,15 @@ function(build_shader_target ADDON ADDON_PATH)
         elseif(SHADER_TARGET STREQUAL "comp")
           set(SHADER_STAGE "compute")
         endif()
+        set(SPIRV_COMPILE_COMMAND
+          ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_HASH}.spv)
 
         if(SHADER_HASH)
-          add_custom_command(
-            OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.spv
-            COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_HASH}.spv
-            DEPENDS ${HLSL_DEPENDENCIES}
-          )
-          list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.spv)
+          add_stage_spirv_shader(${SHADER_HASH})
         else()
-          add_custom_command(
-            OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.spv
-            COMMAND ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_NAME}.spv
-            DEPENDS ${HLSL_DEPENDENCIES}
-          )
-          list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.spv)
+          set(SPIRV_COMPILE_COMMAND
+            ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_NAME}.spv)
+          add_stage_spirv_shader(${SHADER_NAME})
         endif()
       else()
         string(SUBSTRING ${SHADER_TARGET} 3 1 SHADER_TARGET_MAJOR)
@@ -385,68 +347,24 @@ function(build_shader_target ADDON ADDON_PATH)
 
           string(SUBSTRING ${SHADER_TARGET} 0 2 SHADER_TARGET_TYPE)
 
-          # Add dependencies
-          unset(HLSL_DEPENDENCIES)
-          unset(HLSL_CHILD_DEPENDENCIES)
-          list(APPEND HLSL_DEPENDENCIES ${FILE})
-          inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
-          list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
-
           if(SHADER_HASH)
-            add_custom_command(
-              OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso
-              DEPENDS ${HLSL_DEPENDENCIES}
-            )
-            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx11.cso)
+            add_slang_shader(${SHADER_HASH}_dx11 ${SHADER_TARGET_TYPE}_5_0 dxbc)
           else()
-            add_custom_command(
-              OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_0 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso
-              DEPENDS ${HLSL_DEPENDENCIES}
-            )
-            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx11.cso)
+            add_slang_shader(${SHADER_NAME}_dx11 ${SHADER_TARGET_TYPE}_5_0 dxbc)
           endif()
 
           if(SHADER_HASH)
-            add_custom_command(
-              OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso
-              DEPENDS ${HLSL_DEPENDENCIES}
-            )
-            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}_dx12.cso)
+            add_slang_shader(${SHADER_HASH}_dx12 ${SHADER_TARGET_TYPE}_5_1 dxbc)
           else()
-            add_custom_command(
-              OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET_TYPE}_5_1 ${SHADER_FLAGS} -target dxbc -o ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso
-              DEPENDS ${HLSL_DEPENDENCIES}
-            )
-            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}_dx12.cso)
+            add_slang_shader(${SHADER_NAME}_dx12 ${SHADER_TARGET_TYPE}_5_1 dxbc)
           endif()
 
         else()
-          # Add dependencies
-          unset(HLSL_DEPENDENCIES)
-          unset(HLSL_CHILD_DEPENDENCIES)
-          list(APPEND HLSL_DEPENDENCIES ${FILE})
-          inspect_hlsl_imports(${FILE} HLSL_CHILD_DEPENDENCIES ".")
-          list(APPEND HLSL_DEPENDENCIES ${HLSL_CHILD_DEPENDENCIES})
-
           if(SHADER_HASH)
             # message("Registering: " ${FILE} " => " ${EMBED_FOLDER}/${SHADER_HASH}.cso)
-            add_custom_command(
-              OUTPUT ${EMBED_FOLDER}/${SHADER_HASH}.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET} ${SHADER_FLAGS} -target dxil -o ${EMBED_FOLDER}/${SHADER_HASH}.cso
-              DEPENDS ${HLSL_DEPENDENCIES}
-            )
-            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.cso)
+            add_slang_shader(${SHADER_HASH} ${SHADER_TARGET} dxil)
           else()
-            add_custom_command(
-              OUTPUT ${EMBED_FOLDER}/${SHADER_NAME}.cso
-              COMMAND ${SHADER_COMPILER} ${FILE} -profile ${SHADER_TARGET} ${SHADER_FLAGS} -target dxil -o ${EMBED_FOLDER}/${SHADER_NAME}.cso
-              DEPENDS ${HLSL_DEPENDENCIES}
-            )
-            list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.cso)
+            add_slang_shader(${SHADER_NAME} ${SHADER_TARGET} dxil)
           endif()
         endif()
       endif()
@@ -476,28 +394,8 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
   endforeach()
 
-  file(GLOB_RECURSE SHADER_SPV_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.spv)
-  foreach(FILE ${SHADER_SPV_FILES})
-    cmake_path(GET FILE FILENAME FILENAME)
-    cmake_path(GET FILE PARENT_PATH TARGET_PATH)
-    string(REGEX MATCH "(.*)\\.(frag|vert|comp)\\.spv$" _ ${FILENAME})
-    set(SHADER_NAME ${CMAKE_MATCH_1})
-    set(SHADER_TARGET ${CMAKE_MATCH_2})
-    if(SHADER_NAME)
-      string(REGEX MATCH "(0x[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f])$" _ ${SHADER_NAME})
-      set(SHADER_HASH ${CMAKE_MATCH_1})
-    endif()
-
-    if(SHADER_HASH)
-      configure_file(${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.spv COPYONLY)
-      list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.spv)
-    elseif(SHADER_NAME)
-      configure_file(${FILE} ${EMBED_FOLDER}/${SHADER_NAME}.spv COPYONLY)
-      list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.spv)
-    endif()
-  endforeach()
-
   file(GLOB_RECURSE SHADER_GLSL_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.glsl)
+  unset(GLSL_OUTPUT_STEMS)
   foreach(FILE ${SHADER_GLSL_FILES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
@@ -507,7 +405,88 @@ function(build_shader_target ADDON ADDON_PATH)
       continue()
     endif()
 
-    string(REGEX MATCH "(.*)\\.(frag|vert|comp)\\.glsl$" _ ${FILENAME})
+    unset(SHADER_NAME)
+    unset(SHADER_TARGET)
+    unset(SHADER_HASH)
+    unset(GLSL_BACKEND)
+    unset(GLSL_OUTPUT_STEM)
+    string(REGEX MATCH "(.*)\\.(frag|vert|comp)\\.(gl|vk)\\.glsl$" _ ${FILENAME})
+    set(SHADER_NAME ${CMAKE_MATCH_1})
+    set(SHADER_TARGET ${CMAKE_MATCH_2})
+    set(GLSL_BACKEND ${CMAKE_MATCH_3})
+    if(NOT SHADER_TARGET)
+      string(REGEX MATCH "(.*)\\.(frag|vert|comp)\\.glsl$" _ ${FILENAME})
+      set(SHADER_NAME ${CMAKE_MATCH_1})
+      set(SHADER_TARGET ${CMAKE_MATCH_2})
+    endif()
+    if(SHADER_NAME)
+      string(REGEX MATCH "(0x[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f])$" _ ${SHADER_NAME})
+      set(SHADER_HASH ${CMAKE_MATCH_1})
+    endif()
+
+    unset(SHADER_STAGE)
+    if(SHADER_TARGET STREQUAL "frag")
+      set(SHADER_STAGE "frag")
+    elseif(SHADER_TARGET STREQUAL "vert")
+      set(SHADER_STAGE "vert")
+    elseif(SHADER_TARGET STREQUAL "comp")
+      set(SHADER_STAGE "comp")
+    endif()
+    if(SHADER_HASH)
+      set(GLSL_OUTPUT_STEM ${SHADER_HASH})
+    else()
+      set(GLSL_OUTPUT_STEM ${SHADER_NAME})
+    endif()
+
+    if(NOT SHADER_STAGE OR NOT GLSL_OUTPUT_STEM)
+      continue()
+    endif()
+
+    list(FIND GLSL_OUTPUT_STEMS ${GLSL_OUTPUT_STEM} GLSL_OUTPUT_INDEX)
+    if(NOT GLSL_OUTPUT_INDEX EQUAL -1)
+      message(FATAL_ERROR "Multiple GLSL implementations found for ${GLSL_OUTPUT_STEM} in ${ADDON}")
+    endif()
+    list(APPEND GLSL_OUTPUT_STEMS ${GLSL_OUTPUT_STEM})
+
+    if(GLSL_BACKEND AND NOT GLSLANG_BIN)
+      find_program(GLSLANG_BIN
+        NAMES glslang.exe glslangValidator.exe
+        HINTS
+        ${CMAKE_CURRENT_SOURCE_DIR}/bin/
+        $ENV{VULKAN_SDK}/Bin
+        REQUIRED)
+      message("GLSLANG_BIN: " ${GLSLANG_BIN})
+      renodx_check_minimum_tool_version(
+        "glslang" "${GLSLANG_BIN}" "${RENODX_GLSLANG_MIN_VERSION}"
+        "${RENODX_GLSLANG_VERSION_REGEX}"
+        --version)
+    endif()
+
+    if(GLSL_BACKEND STREQUAL "vk")
+      set(SPIRV_COMPILE_COMMAND
+        ${GLSLANG_BIN} -V --target-env vulkan1.3 -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}.spv ${FILE})
+      add_stage_spirv_shader(${GLSL_OUTPUT_STEM})
+    else()
+      if(GLSL_BACKEND STREQUAL "gl")
+        set(SPIRV_COMPILE_COMMAND
+          ${GLSLANG_BIN} -G -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}.spv ${FILE})
+        add_stage_spirv_shader(${GLSL_OUTPUT_STEM})
+      else()
+        configure_file(${FILE} ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}.glsl COPYONLY)
+        list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}.glsl)
+      endif()
+    endif()
+  endforeach()
+
+  file(GLOB_RECURSE SHADER_SPV_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.spv)
+  foreach(FILE ${SHADER_SPV_FILES})
+    cmake_path(GET FILE FILENAME FILENAME)
+    cmake_path(GET FILE PARENT_PATH TARGET_PATH)
+    unset(SHADER_NAME)
+    unset(SHADER_TARGET)
+    unset(SHADER_HASH)
+    unset(SPV_OUTPUT_STEM)
+    string(REGEX MATCH "(.*)\\.(frag|vert|comp)\\.spv$" _ ${FILENAME})
     set(SHADER_NAME ${CMAKE_MATCH_1})
     set(SHADER_TARGET ${CMAKE_MATCH_2})
     if(SHADER_NAME)
@@ -515,13 +494,25 @@ function(build_shader_target ADDON ADDON_PATH)
       set(SHADER_HASH ${CMAKE_MATCH_1})
     endif()
 
-    if(SHADER_TARGET AND SHADER_HASH)
-      configure_file(${FILE} ${EMBED_FOLDER}/${SHADER_HASH}.glsl COPYONLY)
-      list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_HASH}.glsl)
-    elseif(SHADER_TARGET AND SHADER_NAME)
-      configure_file(${FILE} ${EMBED_FOLDER}/${SHADER_NAME}.glsl COPYONLY)
-      list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SHADER_NAME}.glsl)
+    if(SHADER_HASH)
+      set(SPV_OUTPUT_STEM ${SHADER_HASH})
+    elseif(SHADER_NAME)
+      set(SPV_OUTPUT_STEM ${SHADER_NAME})
+    else()
+      continue()
     endif()
+
+    list(FIND SHADER_BINARIES ${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spv SHADER_BINARY_INDEX)
+    if(NOT SHADER_BINARY_INDEX EQUAL -1)
+      continue()
+    endif()
+
+    add_custom_command(
+      OUTPUT ${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spv
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FILE} ${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spv
+      DEPENDS ${FILE}
+    )
+    list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${SPV_OUTPUT_STEM}.spv)
   endforeach()
 
   list(REMOVE_DUPLICATES SHADER_BINARIES)
@@ -619,6 +610,11 @@ function(build_shader_target ADDON ADDON_PATH)
 
 endfunction()
 
+if(RENODX_BUILD_TESTS)
+  build_shader_target(shader_source_compatibility ${CMAKE_CURRENT_SOURCE_DIR}/test/shader_source_compatibility)
+  add_dependencies(shader_source_compatibility_tests shader_source_compatibility-shaders)
+endif()
+
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(STATUS "Detected 64-bit build")
   set(DETOURS_ARCH "X64")
@@ -696,3 +692,4 @@ set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
 
 include(CPack)
+

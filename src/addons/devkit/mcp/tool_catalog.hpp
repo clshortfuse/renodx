@@ -135,7 +135,7 @@ inline const renodx::utils::mcp::ToolCatalog METADATA = {
         "devkit_set_tools_path",
         {
             .title = "Set Tools Path",
-            .description = "Query or change the directory used for dxcompiler.dll and optional repo bin tools.",
+            .description = "Query or change the directory used for DirectX and Vulkan shader tools from the repo bin directory.",
             .input_schema = {
                 .properties = {
                     {"path", {.types = {"string"}}},

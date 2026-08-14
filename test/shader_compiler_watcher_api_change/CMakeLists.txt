@@ -1,0 +1,8 @@
+add_renodx_runtime_executable(shader_compiler_watcher_api_change_tests tests.cpp version)
+add_dependencies(renodx_test_suites shader_compiler_watcher_api_change_tests)
+
+add_test(NAME shader_compiler_watcher_api_change COMMAND shader_compiler_watcher_api_change_tests)
+set_tests_properties(shader_compiler_watcher_api_change PROPERTIES
+  LABELS "shader_compiler;watcher;api_change;unit"
+  TIMEOUT 30
+)
