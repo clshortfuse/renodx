@@ -357,7 +357,7 @@ struct ReShadeCaptureState {
   std::uint64_t last_evaluation_serial = 0u;
   std::uint32_t stable_frames = 0u;
   std::uint32_t delay_seconds = RESHADE_CAPTURE_DEFAULT_DELAY_SECONDS;
-  std::chrono::steady_clock::time_point stable_since = {};
+  std::chrono::steady_clock::time_point stable_since;
   bool stable_since_valid = false;
   std::string postfix;
 };

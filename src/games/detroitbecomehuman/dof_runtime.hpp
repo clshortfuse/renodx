@@ -42,42 +42,42 @@ enum class RuntimeStyle : std::uint32_t {
   kRetinal = 3u,
 };
 
-[[nodiscard]] inline constexpr bool IsKnownRuntimeStyle(
+[[nodiscard]] constexpr bool IsKnownRuntimeStyle(
     RuntimeStyle style) noexcept {
   return static_cast<std::uint32_t>(style)
          <= static_cast<std::uint32_t>(RuntimeStyle::kRetinal);
 }
 
-[[nodiscard]] inline constexpr bool IsKnownRuntimeMode(RuntimeMode mode) noexcept {
+[[nodiscard]] constexpr bool IsKnownRuntimeMode(RuntimeMode mode) noexcept {
   return static_cast<std::uint32_t>(mode)
          <= static_cast<std::uint32_t>(RuntimeMode::kRetinalHigh);
 }
 
-[[nodiscard]] inline constexpr bool IsEnhancedMode(RuntimeMode mode) noexcept {
+[[nodiscard]] constexpr bool IsEnhancedMode(RuntimeMode mode) noexcept {
   return IsKnownRuntimeMode(mode) && mode != RuntimeMode::kVanilla;
 }
 
-[[nodiscard]] inline constexpr bool UsesCinematicBase(RuntimeMode mode) noexcept {
+[[nodiscard]] constexpr bool UsesCinematicBase(RuntimeMode mode) noexcept {
   return mode == RuntimeMode::kCinematicBalanced
          || mode == RuntimeMode::kCinematicHigh
          || mode == RuntimeMode::kRetinalBalanced
          || mode == RuntimeMode::kRetinalHigh;
 }
 
-[[nodiscard]] inline constexpr bool IsHighQualityMode(RuntimeMode mode) noexcept {
+[[nodiscard]] constexpr bool IsHighQualityMode(RuntimeMode mode) noexcept {
   return mode == RuntimeMode::kCleanHigh
          || mode == RuntimeMode::kCinematicHigh
          || mode == RuntimeMode::kRetinalHigh;
 }
 
-[[nodiscard]] inline constexpr bool IsBalancedQualityMode(
+[[nodiscard]] constexpr bool IsBalancedQualityMode(
     RuntimeMode mode) noexcept {
   return mode == RuntimeMode::kCleanBalanced
          || mode == RuntimeMode::kCinematicBalanced
          || mode == RuntimeMode::kRetinalBalanced;
 }
 
-[[nodiscard]] inline constexpr bool IsRetinalMode(RuntimeMode mode) noexcept {
+[[nodiscard]] constexpr bool IsRetinalMode(RuntimeMode mode) noexcept {
   return mode == RuntimeMode::kRetinalBalanced
          || mode == RuntimeMode::kRetinalHigh;
 }

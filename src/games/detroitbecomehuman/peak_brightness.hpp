@@ -107,7 +107,7 @@ class RefreshController {
   bool initialized_ = false;
   std::uintptr_t monitor_token_ = 0u;
   bool output_is_hdr_ = false;
-  Clock::time_point last_refresh_ = {};
+  Clock::time_point last_refresh_;
 };
 
 }  // namespace renodx::games::detroitbecomehuman::peak_brightness

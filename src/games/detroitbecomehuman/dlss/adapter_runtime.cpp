@@ -12,7 +12,6 @@
 #include <span>
 #include <type_traits>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "adapter_shaders.hpp"
@@ -831,7 +830,7 @@ struct AdapterRuntime::Impl {
     const auto found = bundles.find(command_buffer);
     if (found == bundles.end()) return;
 
-    ScratchBundle bundle = std::move(found->second);
+    ScratchBundle bundle = found->second;
     bundles.erase(found);
     if (bundle.completion_event != VK_NULL_HANDLE
         && procedures.reset_event(device, bundle.completion_event)
@@ -843,7 +842,7 @@ struct AdapterRuntime::Impl {
     // Initialize reserves maximum_scratch_bundles entries, and mapped + idle
     // can never exceed that limit. This push therefore performs no allocation
     // on a command-buffer reset hot path.
-    idle_bundles.push_back(std::move(bundle));
+    idle_bundles.push_back(bundle);
   }
 
   void RecordCompletion(ScratchBundle* bundle) const {
@@ -1240,7 +1239,7 @@ AdapterResult AdapterRuntime::Prepare(
                  && Impl::BundleDimensionsMatch(bundle, prepare_info);
         });
     if (matching_idle != impl_->idle_bundles.end()) {
-      created = std::move(*matching_idle);
+      created = *matching_idle;
       impl_->idle_bundles.erase(matching_idle);
       Impl::ResetBundleForDiscardedRecording(
           &created,
@@ -1256,7 +1255,7 @@ AdapterResult AdapterRuntime::Prepare(
         // All mapped bundles may still be referenced by pending work. An idle
         // bundle, however, crossed a successful explicit reset boundary and is
         // safe to rebuild for a new extent without increasing the cap.
-        created = std::move(impl_->idle_bundles.back());
+        created = impl_->idle_bundles.back();
         impl_->idle_bundles.pop_back();
         impl_->DestroyBundle(&created);
       }
@@ -1270,7 +1269,7 @@ AdapterResult AdapterRuntime::Prepare(
           &created);
       if (!create_result.Succeeded()) return create_result;
     }
-    found = impl_->bundles.emplace(prepare_info.command_buffer, std::move(created)).first;
+    found = impl_->bundles.emplace(prepare_info.command_buffer, created).first;
   }
 
   auto& bundle = found->second;
@@ -1405,10 +1404,10 @@ std::size_t AdapterRuntime::PollCompletedOneTimeCommandBuffers(
     }
 
     completed[count++] = bundle->first;
-    auto recycled = std::move(state);
+    auto recycled = state;
     bundle = impl_->bundles.erase(bundle);
     Impl::ResetBundleForDiscardedRecording(&recycled, VK_NULL_HANDLE);
-    impl_->idle_bundles.push_back(std::move(recycled));
+    impl_->idle_bundles.push_back(recycled);
   }
   return count;
 }
