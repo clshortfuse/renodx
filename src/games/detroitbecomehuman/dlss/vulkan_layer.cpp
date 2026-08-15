@@ -3530,6 +3530,10 @@ VKAPI_ATTR VkResult VKAPI_CALL LayerBeginCommandBuffer(
   if (trampoline == nullptr) return VK_ERROR_INITIALIZATION_FAILED;
   const VkResult result = trampoline(command_buffer, begin_info);
   if (result == VK_SUCCESS) {
+    // ReShade emits reset_command_list before its downstream begin call. Only
+    // recycle NGX/scratch state after the driver accepted the new recording.
+    renodx::games::detroitbecomehuman::dlss::embedded::
+        RecycleFeatureCommandBuffer(ToOpaque(command_buffer));
     auto& local = GetCurrentThreadComputeCommandState();
     auto next_generation = local.recording_generation + 1u;
     if (next_generation == 0u) next_generation = 1u;

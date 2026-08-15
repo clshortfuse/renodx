@@ -113,8 +113,15 @@ def main() -> None:
         "VKAPI_ATTR void VKAPI_CALL LayerCmdBindDescriptorSets(",
     )
     require(begin, "fast_begin_command_buffer.load")
+    require(begin, "RecycleFeatureCommandBuffer(ToOpaque(command_buffer))")
     require(begin, "GetCurrentThreadComputeCommandState()")
     require(begin, ".recording_generation = next_generation")
+    if not (
+        begin.index("const VkResult result = trampoline")
+        < begin.index("RecycleFeatureCommandBuffer(ToOpaque(command_buffer))")
+        < begin.index("GetCurrentThreadComputeCommandState()")
+    ):
+        raise AssertionError("feature resources must recycle only after a successful begin")
     for forbidden in ("tracking_mutex", "state->mutex", "adapter_runtime", "ngx_context"):
         if forbidden in begin:
             raise AssertionError(f"begin hot path must stay TLS-only: {forbidden}")
@@ -515,7 +522,6 @@ def main() -> None:
         raise AssertionError("only completed ONE_TIME_SUBMIT bundles may auto-recycle")
     if status >= erase:
         raise AssertionError("scratch was recycled before its completion event signaled")
-    require(temporal, "dlss::embedded::RecycleFeatureCommandBuffer(command_list)")
     require(temporal, "dlss::embedded::RetireFeatureCommandBuffer(command_list)")
 
     destroy_command_list = section(
@@ -531,6 +537,8 @@ def main() -> None:
         "[[nodiscard]] inline std::uint64_t MixTelemetryKey(",
     )
     require(reset_command_list, "ClearObservedTemporalCommandList(command_list)")
+    if "RecycleFeatureCommandBuffer" in reset_command_list:
+        raise AssertionError("ReShade reset callback runs before downstream vkBeginCommandBuffer")
 
     destroy = section(
         source,

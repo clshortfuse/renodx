@@ -274,7 +274,6 @@ inline void OnResetTemporalCommandList(reshade::api::command_list* cmd_list) {
   if (cmd_list == nullptr) return;
   const auto command_list = cmd_list->get_native();
   ClearObservedTemporalCommandList(command_list);
-  dlss::embedded::RecycleFeatureCommandBuffer(command_list);
   if (temporal_mode_state::CanUseNativeModeFastPath(mode_state.GetMode())) {
     return;
   }
