@@ -1,15 +1,15 @@
 #include "./shared.h"
 
-// Put psychov-22.hlsl here:
-//   src/shaders/tonemap/psychov/psychov-22.hlsl
+// Put psychov-24.hlsl here:
+//   src/shaders/tonemap/psychov/psychov-24.hlsl
 //
 // From src/games/residentevil6 this include path should resolve.
-#ifndef RENODX_USE_PSYCHOV22
-#define RENODX_USE_PSYCHOV22 1
+#ifndef RENODX_USE_PSYCHOV24
+#define RENODX_USE_PSYCHOV24 1
 #endif
 
-#if RENODX_USE_PSYCHOV22
-#include "../../shaders/tonemap/psychov/psychov-22.hlsl"
+#if RENODX_USE_PSYCHOV24
+#include "../../shaders/tonemap/psychov/psychov-24.hlsl"
 #endif
 
 sampler2D SSPoint__tBaseMap : register(s0);
@@ -55,20 +55,28 @@ float3 fGamma : register(c1);
 #define RENODX_TONE_MAP_TYPE_RENODRT 3.0f
 #endif
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
-#define RENODX_TONE_MAP_TYPE_PSYCHOV22 22.0f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
+#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_COMPRESSION
-#define RENODX_PSYCHOV22_COMPRESSION 4.0f
+#ifndef RENODX_PSYCHOV24_COMPRESSION
+#define RENODX_PSYCHOV24_COMPRESSION 4.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV22_GAMUT_COMPRESSION 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV24_GAMUT_COMPRESSION 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_MODE
-#define RENODX_PSYCHOV22_GAMUT_MODE 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_MODE
+#define RENODX_PSYCHOV24_GAMUT_MODE 1.0f
+#endif
+
+#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
+#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION 1.0f
+#endif
+
+#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
+#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE 0.0f
 #endif
 
 #ifndef RENODX_PEAK_WHITE_NITS
@@ -141,14 +149,14 @@ bool IsToneMapType(float type_value)
     return abs(RENODX_TONE_MAP_TYPE - type_value) < 0.5f;
 }
 
-bool IsPsychoV22Mode()
+bool IsPsychoV24Mode()
 {
-    return IsToneMapType(RENODX_TONE_MAP_TYPE_PSYCHOV22);
+    return IsToneMapType(RENODX_TONE_MAP_TYPE_PSYCHOV24);
 }
 
-int GetPsychoV22GamutMode()
+int GetPsychoV24GamutMode()
 {
-    return (RENODX_PSYCHOV22_GAMUT_MODE >= 0.5f) ? 1 : 0;
+    return (RENODX_PSYCHOV24_GAMUT_MODE >= 0.5f) ? 1 : 0;
 }
 
 // ------------------------------------------------------------
@@ -314,22 +322,22 @@ float3 ApplyHDRBoost(float3 c)
 }
 
 // ------------------------------------------------------------
-// PsychoV22 HDR branch
+// PsychoV24 HDR branch
 // ------------------------------------------------------------
 
-float3 ApplyPsychoV22HDRTonemap(float3 hdr_color)
+float3 ApplyPsychoV24HDRTonemap(float3 hdr_color)
 {
     hdr_color = SafePositive(hdr_color);
 
-#if RENODX_USE_PSYCHOV22
-    // PsychoV22 expects BT.709 scene-linear input.
+#if RENODX_USE_PSYCHOV24
+    // PsychoV24 expects BT.709 scene-linear input.
     // peak_value is scene-linear where diffuse white is 1.0.
     float peak_value = max(
         RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f),
         1.0f
     );
 
-    hdr_color = renodx::tonemap::psychov::psychotm_test22(
+    hdr_color = renodx::tonemap::psychov::psychotm_test24(
         hdr_color,
         peak_value,
         RENODX_TONE_MAP_EXPOSURE,
@@ -342,13 +350,15 @@ float3 ApplyPsychoV22HDRTonemap(float3 hdr_color)
         RENODX_TONE_MAP_HUE_CORRECTION,
         1.0f,                                  // adaptation_contrast, deprecated
         0,                                     // white_curve_mode, deprecated
-        RENODX_PSYCHOV22_CONE_RESPONSE,        // cone_response_exponent; 1.0 = neutral
+        RENODX_PSYCHOV24_CONE_RESPONSE,        // cone_response_exponent; 1.0 = neutral
         0.18f.xxx,                             // current adaptive state / anchor-in
         0.18f.xxx,                             // desired background state / anchor-out
-        RENODX_PSYCHOV22_GAMUT_COMPRESSION,
-        GetPsychoV22GamutMode(),
+        RENODX_PSYCHOV24_GAMUT_COMPRESSION,
+        GetPsychoV24GamutMode(),
         1.0f,                                  // adaptive_normalization, deprecated
-        RENODX_PSYCHOV22_COMPRESSION           // 0.0 = auto, 4.0 is your bright manual default
+        RENODX_PSYCHOV24_COMPRESSION,          // 0.0 = auto, 4.0 is your bright manual default
+        RENODX_PSYCHOV24_HIGHLIGHT_SATURATION, // Test24 highlight saturation
+        RENODX_PSYCHOV24_GAMUT_HUE_RESTORE     // Test24 gamut hue restoration
     );
 #endif
 
@@ -407,9 +417,9 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
     //   Decode final input -> original fGamma -> HDR boost
     //   -> RenoDX ToneMapPass -> RenderIntermediatePass.
     //
-    // PsychoV22:
+    // PsychoV24:
     //   Decode final input -> original fGamma -> HDR boost
-    //   -> psychotm_test22 -> RenderIntermediatePass.
+    //   -> psychotm_test24 -> RenderIntermediatePass.
     // ------------------------------------------------------------
 
     float3 hdr_color = DecodeFinalInputForHDR(color.rgb);
@@ -420,17 +430,17 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
 
     hdr_color = ApplyHDRBoost(hdr_color);
 
-#if RENODX_USE_PSYCHOV22
-    if (IsPsychoV22Mode())
+#if RENODX_USE_PSYCHOV24
+    if (IsPsychoV24Mode())
     {
-        hdr_color = ApplyPsychoV22HDRTonemap(hdr_color);
+        hdr_color = ApplyPsychoV24HDRTonemap(hdr_color);
     }
     else
     {
         hdr_color = ApplyRenoDXHDRTonemap(hdr_color);
     }
 #else
-    // If PsychoV22 was not compiled in, never leave the HDR path untonemapped.
+    // If PsychoV24 was not compiled in, never leave the HDR path untonemapped.
     hdr_color = ApplyRenoDXHDRTonemap(hdr_color);
 #endif
 

@@ -1,13 +1,13 @@
 #include "./common.hlsl"
 
-// Put psychov-22.hlsl here:
-//   src/shaders/tonemap/psychov/psychov-22.hlsl
-#ifndef RENODX_USE_PSYCHOV22
-#define RENODX_USE_PSYCHOV22 1
+// Put psychov-24.hlsl here:
+//   src/shaders/tonemap/psychov/psychov-24.hlsl
+#ifndef RENODX_USE_PSYCHOV24
+#define RENODX_USE_PSYCHOV24 1
 #endif
 
-#if RENODX_USE_PSYCHOV22
-#include "../../shaders/tonemap/psychov/psychov-22.hlsl"
+#if RENODX_USE_PSYCHOV24
+#include "../../shaders/tonemap/psychov/psychov-24.hlsl"
 #endif
 
 cbuffer _Globals : register(b0)
@@ -29,10 +29,10 @@ SamplerState _sampler_ColorBalanceR_s : register(s5);
 SamplerState _sampler_ColorBalanceG_s : register(s6);
 SamplerState _sampler_ColorBalanceB_s : register(s7);
 
-Texture2D<float4> _texture_FrameBuffer : register(t0);
-Texture2D<float4> _texture_ColorBalanceR : register(t5);
-Texture2D<float4> _texture_ColorBalanceG : register(t6);
-Texture2D<float4> _texture_ColorBalanceB : register(t7);
+Texture2D _texture_FrameBuffer : register(t0);
+Texture2D _texture_ColorBalanceR : register(t5);
+Texture2D _texture_ColorBalanceG : register(t6);
+Texture2D _texture_ColorBalanceB : register(t7);
 
 #define cmp -
 
@@ -52,26 +52,33 @@ Texture2D<float4> _texture_ColorBalanceB : register(t7);
 #define RENODX_METHOD1_HIGHLIGHT_PROTECT 9.0f
 #endif
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
-#define RENODX_TONE_MAP_TYPE_PSYCHOV22 22.0f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
+#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_COMPRESSION
-#define RENODX_PSYCHOV22_COMPRESSION 0.0f
+#ifndef RENODX_PSYCHOV24_COMPRESSION
+#define RENODX_PSYCHOV24_COMPRESSION 0.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV22_GAMUT_COMPRESSION 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV24_GAMUT_COMPRESSION 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_MODE
-#define RENODX_PSYCHOV22_GAMUT_MODE 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_MODE
+#define RENODX_PSYCHOV24_GAMUT_MODE 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_CONE_RESPONSE
-#define RENODX_PSYCHOV22_CONE_RESPONSE 1.0f
+#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
+#define RENODX_PSYCHOV24_CONE_RESPONSE 1.0f
 #endif
 
+#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
+#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION 1.0f
+#endif
+
+#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
+#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE 0.0f
+#endif
 
 float SafeFinite1(float v)
 {
@@ -90,49 +97,49 @@ bool IsRenoDRTMode()
   return abs(RENODX_TONE_MAP_TYPE - renodx::draw::TONE_MAP_TYPE_RENO_DRT) < 0.5f;
 }
 
-bool IsPsychoV22Mode()
+bool IsPsychoV24Mode()
 {
-  return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV22) < 0.5f;
+  return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV24) < 0.5f;
 }
 
 bool IsCustomHDRMode()
 {
-  return IsRenoDRTMode() || IsPsychoV22Mode();
+  return IsRenoDRTMode() || IsPsychoV24Mode();
 }
 
-float3 ApplyPsychoV22HDRTonemap(float3 hdrColor)
+float3 ApplyPsychoV24HDRTonemap(float3 hdrColor)
 {
   hdrColor = SafePositive(hdrColor);
 
-#if RENODX_USE_PSYCHOV22
+#if RENODX_USE_PSYCHOV24
   float peakValue = max(
-    RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f),
-    1.0f
-  );
+      RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f),
+      1.0f);
 
-  int gamutMode = (RENODX_PSYCHOV22_GAMUT_MODE > 0.5f) ? 1 : 0;
+  int gamutMode = (RENODX_PSYCHOV24_GAMUT_MODE > 0.5f) ? 1 : 0;
 
-  hdrColor = renodx::tonemap::psychov::psychotm_test22(
-    hdrColor,
-    peakValue,
-    RENODX_TONE_MAP_EXPOSURE,
-    RENODX_TONE_MAP_HIGHLIGHTS,
-    RENODX_TONE_MAP_SHADOWS,
-    RENODX_TONE_MAP_CONTRAST,
-    RENODX_TONE_MAP_SATURATION,
-    1.0f,                                  // bleaching_intensity, reserved
-    100.0f,                                // clip_point, reserved
-    RENODX_TONE_MAP_HUE_CORRECTION,
-    1.0f,                                  // adaptation_contrast, deprecated
-    0,                                     // white_curve_mode, deprecated
-    RENODX_PSYCHOV22_CONE_RESPONSE,        // cone_response_exponent
-    0.18f.xxx,                             // current adaptive state / anchor-in
-    0.18f.xxx,                             // desired background state / anchor-out
-    RENODX_PSYCHOV22_GAMUT_COMPRESSION,
-    gamutMode,
-    1.0f,                                  // adaptive_normalization, deprecated
-    RENODX_PSYCHOV22_COMPRESSION           // 0.0 = auto
-  );
+  hdrColor = renodx::tonemap::psychov::psychotm_test24(
+      hdrColor,
+      peakValue,
+      RENODX_TONE_MAP_EXPOSURE,
+      RENODX_TONE_MAP_HIGHLIGHTS,
+      RENODX_TONE_MAP_SHADOWS,
+      RENODX_TONE_MAP_CONTRAST,
+      RENODX_TONE_MAP_SATURATION,                 // purity_scale
+      1.0f,                                       // bleaching_intensity, reserved
+      100.0f,                                     // clip_point, reserved
+      RENODX_TONE_MAP_HUE_CORRECTION,             // hue_restore
+      1.0f,                                       // adaptation_contrast, deprecated/legacy scale
+      0,                                          // white_curve_mode, deprecated
+      RENODX_PSYCHOV24_CONE_RESPONSE,             // cone_response_exponent
+      0.18f.xxx,                                  // current adaptive state / anchor-in
+      0.18f.xxx,                                  // desired background state / anchor-out
+      RENODX_PSYCHOV24_GAMUT_COMPRESSION,
+      gamutMode,
+      1.0f,                                       // adaptive_normalization, deprecated
+      RENODX_PSYCHOV24_COMPRESSION,               // 0.0 = auto
+      RENODX_PSYCHOV24_HIGHLIGHT_SATURATION,      // PsychoV24 addition
+      RENODX_PSYCHOV24_GAMUT_HUE_RESTORE);        // PsychoV24 addition
 #endif
 
   return SafePositive(hdrColor);
@@ -229,9 +236,9 @@ float3 ApplyGameLUTAndGradeVanilla(float3 inputGamma)
 }
 
 float3 ApplyMethod1LUTDifference(
-  float3 sdrNoLutLinear,
-  float3 sdrLutGamma,
-  float3 hdrBaseLinear)
+    float3 sdrNoLutLinear,
+    float3 sdrLutGamma,
+    float3 hdrBaseLinear)
 {
   float3 sdrBase = max(sdrNoLutLinear, 0.0f);
   float3 sdrLut = renodx::color::gamma::DecodeSafe(max(sdrLutGamma, 0.0f));
@@ -242,20 +249,18 @@ float3 ApplyMethod1LUTDifference(
 
   float3 rgbRatio = sdrLut / SafeScale3(sdrBase);
   rgbRatio = clamp(
-    rgbRatio,
-    float3(0.25f, 0.25f, 0.25f),
-    float3(4.00f, 4.00f, 4.00f)
-  );
+      rgbRatio,
+      float3(0.25f, 0.25f, 0.25f),
+      float3(4.00f, 4.00f, 4.00f));
 
   float lumaRatio = sdrLutY / SafeScale(sdrBaseY);
   lumaRatio = clamp(lumaRatio, 0.65f, 1.35f);
 
   float3 chromaRatio = rgbRatio / SafeScale(lumaRatio);
   chromaRatio = clamp(
-    chromaRatio,
-    float3(0.50f, 0.50f, 0.50f),
-    float3(2.00f, 2.00f, 2.00f)
-  );
+      chromaRatio,
+      float3(0.50f, 0.50f, 0.50f),
+      float3(2.00f, 2.00f, 2.00f));
 
   float hdrY = SDRLuma(hdrBase);
   float hdrMax = Max3(hdrBase);
@@ -284,9 +289,9 @@ float3 ApplyMethod1LUTDifference(
 }
 
 void main(
-  float4 v0 : SV_Position0,
-  float2 v1 : TEXCOORD0,
-  out float4 o0 : SV_Target0)
+    float4 v0 : SV_Position0,
+    float2 v1 : TEXCOORD0,
+    out float4 o0 : SV_Target0)
 {
   float3 sceneGamma = _texture_FrameBuffer.Sample(_sampler_FrameBuffer_s, v1.xy).xyz;
 
@@ -309,20 +314,18 @@ void main(
   float3 vanillaLutGamma = ApplyGameLUTAndGradeVanilla(lutInputGamma);
 
   float3 hdrBaseColor = CustomGradingEnd(
-    ungradedColor,
-    sdrColor,
-    sdrColor
-  );
+      ungradedColor,
+      sdrColor,
+      sdrColor);
 
   float3 outputColor = ApplyMethod1LUTDifference(
-    sdrColor,
-    vanillaLutGamma,
-    hdrBaseColor
-  );
+      sdrColor,
+      vanillaLutGamma,
+      hdrBaseColor);
 
-  if (IsPsychoV22Mode())
+  if (IsPsychoV24Mode())
   {
-    outputColor = ApplyPsychoV22HDRTonemap(outputColor);
+    outputColor = ApplyPsychoV24HDRTonemap(outputColor);
   }
   else
   {

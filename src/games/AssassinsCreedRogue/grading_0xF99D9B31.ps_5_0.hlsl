@@ -1,13 +1,13 @@
 #include "./common.hlsl"
 
-// Put psychov-22.hlsl here:
-//   src/shaders/tonemap/psychov/psychov-22.hlsl
-#ifndef RENODX_USE_PSYCHOV22
-#define RENODX_USE_PSYCHOV22 1
+// Put psychov-24.hlsl here:
+//   src/shaders/tonemap/psychov/psychov-24.hlsl
+#ifndef RENODX_USE_PSYCHOV24
+#define RENODX_USE_PSYCHOV24 1
 #endif
 
-#if RENODX_USE_PSYCHOV22
-#include "../../shaders/tonemap/psychov/psychov-22.hlsl"
+#if RENODX_USE_PSYCHOV24
+#include "../../shaders/tonemap/psychov/psychov-24.hlsl"
 #endif
 
 Texture2D<float4> t7 : register(t7);
@@ -45,24 +45,32 @@ cbuffer cb0 : register(b0)
 #define RENODX_MID_GREY_RANGE 0.50f
 #endif
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
-#define RENODX_TONE_MAP_TYPE_PSYCHOV22 22.0f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
+#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_COMPRESSION
-#define RENODX_PSYCHOV22_COMPRESSION 4.0f
+#ifndef RENODX_PSYCHOV24_COMPRESSION
+#define RENODX_PSYCHOV24_COMPRESSION 4.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV22_GAMUT_COMPRESSION 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV24_GAMUT_COMPRESSION 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_MODE
-#define RENODX_PSYCHOV22_GAMUT_MODE 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_MODE
+#define RENODX_PSYCHOV24_GAMUT_MODE 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_CONE_RESPONSE
-#define RENODX_PSYCHOV22_CONE_RESPONSE 1.0f
+#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
+#define RENODX_PSYCHOV24_CONE_RESPONSE 1.0f
+#endif
+
+#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
+#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION 1.0f
+#endif
+
+#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
+#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE 0.0f
 #endif
 
 
@@ -83,28 +91,28 @@ bool IsRenoDRTMode()
   return abs(RENODX_TONE_MAP_TYPE - renodx::draw::TONE_MAP_TYPE_RENO_DRT) < 0.5f;
 }
 
-bool IsPsychoV22Mode()
+bool IsPsychoV24Mode()
 {
-  return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV22) < 0.5f;
+  return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV24) < 0.5f;
 }
 
 bool IsCustomHDRMode()
 {
-  return IsRenoDRTMode() || IsPsychoV22Mode();
+  return IsRenoDRTMode() || IsPsychoV24Mode();
 }
 
-float3 ApplyPsychoV22HDRTonemap(float3 hdr_color)
+float3 ApplyPsychoV24HDRTonemap(float3 hdr_color)
 {
   hdr_color = SafePositive(hdr_color);
 
-#if RENODX_USE_PSYCHOV22
+#if RENODX_USE_PSYCHOV24
   float peak_value = max(
       RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f),
       1.0f);
 
-  int gamut_mode = (RENODX_PSYCHOV22_GAMUT_MODE > 0.5f) ? 1 : 0;
+  int gamut_mode = (RENODX_PSYCHOV24_GAMUT_MODE > 0.5f) ? 1 : 0;
 
-  hdr_color = renodx::tonemap::psychov::psychotm_test22(
+  hdr_color = renodx::tonemap::psychov::psychotm_test24(
       hdr_color,
       peak_value,
       RENODX_TONE_MAP_EXPOSURE,
@@ -117,13 +125,15 @@ float3 ApplyPsychoV22HDRTonemap(float3 hdr_color)
       RENODX_TONE_MAP_HUE_CORRECTION,
       1.0f,                                  // adaptation_contrast, deprecated
       0,                                     // white_curve_mode, deprecated
-      RENODX_PSYCHOV22_CONE_RESPONSE,        // cone_response_exponent
+      RENODX_PSYCHOV24_CONE_RESPONSE,        // cone_response_exponent
       0.18f.xxx,                             // current adaptive state / anchor-in
       0.18f.xxx,                             // desired background state / anchor-out
-      RENODX_PSYCHOV22_GAMUT_COMPRESSION,
+      RENODX_PSYCHOV24_GAMUT_COMPRESSION,
       gamut_mode,
       1.0f,                                  // adaptive_normalization, deprecated
-      RENODX_PSYCHOV22_COMPRESSION);
+      RENODX_PSYCHOV24_COMPRESSION,
+      RENODX_PSYCHOV24_HIGHLIGHT_SATURATION,
+      RENODX_PSYCHOV24_GAMUT_HUE_RESTORE);
 #endif
 
   return SafePositive(hdr_color);
@@ -293,9 +303,9 @@ void main(
 
   float3 outputColor = CustomGradingEnd(ungraded_color, sdr_color, graded_color);
 
-  if (IsPsychoV22Mode())
+  if (IsPsychoV24Mode())
   {
-    outputColor = ApplyPsychoV22HDRTonemap(outputColor);
+    outputColor = ApplyPsychoV24HDRTonemap(outputColor);
   }
 
   outputColor = CounteractBlackAndMidGreyRaise(outputColor);

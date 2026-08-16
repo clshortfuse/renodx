@@ -1,5 +1,5 @@
-// Reduced flare/particle sprite replacement for 0x79EF3202.
-// Whiter version.
+// Full-size, lower-coverage flare/particle sprite replacement for 0x79EF3202.
+// Keeps the existing flare RGB brightness while reducing visual solidity.
 //
 // Original:
 //   textureColor *= vertexColor;
@@ -7,9 +7,9 @@
 //   output.a   = textureColor.a;
 //
 // Adjustments:
-//   - ALPHA_POWER suppresses the faint outer halo.
-//   - ALPHA_THRESHOLD removes extremely faint outer pixels.
-//   - FLARE_BRIGHTNESS reduces both the core and halo brightness.
+//   - Original alpha footprint is retained instead of being raised to a high
+//     power for spatial shrinking.
+//   - FLARE_BRIGHTNESS remains unchanged.
 //   - WHITE_BASE_AMOUNT adds a general white bias to the whole flare.
 //   - WHITE_CORE_AMOUNT makes the brighter center even whiter.
 //   - Luminance is preserved after whitening so the flare does not become
@@ -19,7 +19,15 @@
 
 #define FLARE_BRIGHTNESS   0.50f
 #define ALPHA_POWER        5.00f
-#define ALPHA_THRESHOLD    0.0025f
+
+// Density/coverage controls. The RGB core remains unchanged at density 1.0.
+// OUTPUT_ALPHA_COVERAGE changes destination coverage only; it does not multiply
+// the source RGB, which is what allows the flare to look more transparent
+// without lowering the existing FLARE_BRIGHTNESS value.
+#define FLARE_HALO_DENSITY       0.30f
+#define FLARE_CORE_DENSITY       0.30f
+#define FLARE_DENSITY_FULL       0.60f
+#define OUTPUT_ALPHA_COVERAGE    0.40f
 
 #define WHITE_BASE_AMOUNT  0.15f
 #define WHITE_CORE_AMOUNT  1.15f
@@ -66,22 +74,35 @@ float4 main(PS_INPUT input) : COLOR0
     float originalAlpha = textureColor.a * input.color.a;
     originalAlpha = saturate(originalAlpha);
 
-    // Remove only the faintest part of the sprite.
-    float remappedAlpha = saturate(
-        (originalAlpha - ALPHA_THRESHOLD)
-        / max(1.0f - ALPHA_THRESHOLD, 0.000001f)
+    // Preserve the original alpha footprint instead of raising alpha to a high
+    // power, which made the visible flare physically smaller. Use alpha only to
+    // derive a density ramp: faint pixels remain present at a lower density and
+    // the hot center smoothly returns to full density.
+    float densityCoreMask = FlareSmoothRangeMask(
+        originalAlpha,
+        0.0f,
+        FLARE_DENSITY_FULL
     );
 
-    // Compress the low-alpha outer halo much more than the bright center.
-    float shapedAlpha = pow(
-        max(remappedAlpha, 0.0f),
+    float flareDensity = lerp(
+        FLARE_HALO_DENSITY,
+        FLARE_CORE_DENSITY,
+        densityCoreMask
+    );
+
+    float shapedAlpha = originalAlpha;
+
+    // Preserve the previous whitening response without using that response to
+    // shrink the actual flare footprint.
+    float whiteningAlpha = pow(
+        max(originalAlpha, 0.0f),
         ALPHA_POWER
     );
 
     // Make the flare whiter.
     // The whole flare gets some whitening, and the brighter core gets more.
     float coreWhiteMask = FlareSmoothRangeMask(
-        shapedAlpha,
+        whiteningAlpha,
         WHITE_CORE_START,
         WHITE_CORE_FULL
     );
@@ -109,11 +130,19 @@ float4 main(PS_INPUT input) : COLOR0
 
     whitenedFlareColor *= flareBrightness / whitenedBrightness;
 
-    // Preserve the original premultiplied-alpha output structure.
+    // Keep the existing RGB brightness control. Density only shapes the halo;
+    // the core now tops out below 1.0 so the center looks less solid.
     float3 outputColor =
         whitenedFlareColor
         * shapedAlpha
+        * flareDensity
         * FLARE_BRIGHTNESS;
 
-    return float4(outputColor, shapedAlpha);
+    // Lower coverage separately from source RGB. With the game's premultiplied
+    // flare blend this lets more of the scene remain visible through the sprite
+    // without changing FLARE_BRIGHTNESS.
+    float coreAlphaScale = lerp(1.0f, FLARE_CORE_DENSITY, densityCoreMask);
+    float outputAlpha = shapedAlpha * OUTPUT_ALPHA_COVERAGE * coreAlphaScale;
+
+    return float4(outputColor, outputAlpha);
 }

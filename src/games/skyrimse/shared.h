@@ -41,45 +41,57 @@ struct ShaderInjectData {
   float diffuse_white_nits;
   float graphics_white_nits;
   float color_grade_strength;
+
   float tone_map_type;
   float tone_map_exposure;
   float tone_map_highlights;
   float tone_map_shadows;
+
   float tone_map_contrast;
   float tone_map_saturation;
   float tone_map_highlight_saturation;
   float tone_map_blowout;
+
   float tone_map_flare;
   float tone_map_hue_correction;
   float tone_map_hue_shift;
   float tone_map_working_color_space;
+
   float tone_map_clamp_color_space;
   float tone_map_clamp_peak;
   float tone_map_hue_processor;
   float tone_map_per_channel;
+
   float gamma_correction;
   float intermediate_scaling;
   float intermediate_encoding;
   float intermediate_color_space;
+
   float swap_chain_decoding;
   float fxSceneFilter;
   float fxBloom;
   float fxAutoExposure;
+
   float swap_chain_gamma_correction;
-  //  float swap_chain_decoding_color_space;
+  // float swap_chain_decoding_color_space;
   float swap_chain_custom_color_space;
   // float swap_chain_scaling_nits;
   // float swap_chain_clamp_nits;
   float swap_chain_clamp_color_space;
   float swap_chain_encoding;
+
   float swap_chain_encoding_color_space;
   float custom_flip_uv_y;
 
-  // PsychoV22 controls, appended so existing fields stay stable.
-  float psychov22_compression;
-  float psychov22_gamut_compression;
-  float psychov22_gamut_mode;
-  float psychov22_cone_response;
+  // PsychoV24 controls. These replace the old V22 fields and remain appended,
+  // so all existing Skyrim fields retain their original offsets.
+  float psychov24_compression;
+  float psychov24_gamut_compression;
+
+  float psychov24_gamut_mode;
+  float psychov24_cone_response;
+  float psychov24_highlight_saturation;
+  float psychov24_gamut_hue_restore;
 };
 
 #ifndef __cplusplus
@@ -91,61 +103,70 @@ cbuffer shader_injection : register(b13) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
-#define RENODX_TONE_MAP_TYPE                 shader_injection.tone_map_type
-#define RENODX_PEAK_WHITE_NITS               shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS            shader_injection.diffuse_white_nits
-#define RENODX_GRAPHICS_WHITE_NITS           shader_injection.graphics_white_nits
-#define RENODX_GAMMA_CORRECTION              shader_injection.gamma_correction
-#define RENODX_TONE_MAP_PER_CHANNEL          shader_injection.tone_map_per_channel
-#define RENODX_TONE_MAP_WORKING_COLOR_SPACE  shader_injection.tone_map_working_color_space
-#define RENODX_TONE_MAP_HUE_PROCESSOR        shader_injection.tone_map_hue_processor
-#define RENODX_TONE_MAP_HUE_CORRECTION       shader_injection.tone_map_hue_correction
-#define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
-#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE    shader_injection.tone_map_clamp_color_space
-#define RENODX_TONE_MAP_CLAMP_PEAK           shader_injection.tone_map_clamp_peak
-#define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
-#define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights
-#define RENODX_TONE_MAP_SHADOWS              shader_injection.tone_map_shadows
-#define RENODX_TONE_MAP_CONTRAST             shader_injection.tone_map_contrast
-#define RENODX_TONE_MAP_SATURATION           shader_injection.tone_map_saturation
-#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION shader_injection.tone_map_highlight_saturation
-#define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
-#define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
-#define RENODX_TONE_MAP_TYPE_PSYCHOV22       22.f
+#define RENODX_TONE_MAP_TYPE                    shader_injection.tone_map_type
+#define RENODX_PEAK_WHITE_NITS                  shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS               shader_injection.diffuse_white_nits
+#define RENODX_GRAPHICS_WHITE_NITS              shader_injection.graphics_white_nits
+#define RENODX_GAMMA_CORRECTION                 shader_injection.gamma_correction
+#define RENODX_TONE_MAP_PER_CHANNEL             shader_injection.tone_map_per_channel
+#define RENODX_TONE_MAP_WORKING_COLOR_SPACE     shader_injection.tone_map_working_color_space
+#define RENODX_TONE_MAP_HUE_PROCESSOR           shader_injection.tone_map_hue_processor
+#define RENODX_TONE_MAP_HUE_CORRECTION          shader_injection.tone_map_hue_correction
+#define RENODX_TONE_MAP_HUE_SHIFT               shader_injection.tone_map_hue_shift
+#define RENODX_TONE_MAP_CLAMP_COLOR_SPACE       shader_injection.tone_map_clamp_color_space
+#define RENODX_TONE_MAP_CLAMP_PEAK              shader_injection.tone_map_clamp_peak
+#define RENODX_TONE_MAP_EXPOSURE                shader_injection.tone_map_exposure
+#define RENODX_TONE_MAP_HIGHLIGHTS              shader_injection.tone_map_highlights
+#define RENODX_TONE_MAP_SHADOWS                 shader_injection.tone_map_shadows
+#define RENODX_TONE_MAP_CONTRAST                shader_injection.tone_map_contrast
+#define RENODX_TONE_MAP_SATURATION              shader_injection.tone_map_saturation
+#define RENODX_TONE_MAP_HIGHLIGHT_SATURATION    shader_injection.tone_map_highlight_saturation
+#define RENODX_TONE_MAP_BLOWOUT                 shader_injection.tone_map_blowout
+#define RENODX_TONE_MAP_FLARE                   shader_injection.tone_map_flare
+
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
+#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.f
 #endif
 
-#ifndef RENODX_PSYCHOV22_COMPRESSION
-#define RENODX_PSYCHOV22_COMPRESSION         shader_injection.psychov22_compression
+#ifndef RENODX_PSYCHOV24_COMPRESSION
+#define RENODX_PSYCHOV24_COMPRESSION shader_injection.psychov24_compression
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV22_GAMUT_COMPRESSION   shader_injection.psychov22_gamut_compression
+#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV24_GAMUT_COMPRESSION shader_injection.psychov24_gamut_compression
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_MODE
-#define RENODX_PSYCHOV22_GAMUT_MODE          shader_injection.psychov22_gamut_mode
+#ifndef RENODX_PSYCHOV24_GAMUT_MODE
+#define RENODX_PSYCHOV24_GAMUT_MODE shader_injection.psychov24_gamut_mode
 #endif
 
-#ifndef RENODX_PSYCHOV22_CONE_RESPONSE
-#define RENODX_PSYCHOV22_CONE_RESPONSE       shader_injection.psychov22_cone_response
+#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
+#define RENODX_PSYCHOV24_CONE_RESPONSE shader_injection.psychov24_cone_response
 #endif
 
-#define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
-#define RENODX_INTERMEDIATE_ENCODING         shader_injection.intermediate_encoding
-#define RENODX_SWAP_CHAIN_DECODING           shader_injection.swap_chain_decoding
-#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   shader_injection.swap_chain_gamma_correction
+#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
+#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION shader_injection.psychov24_highlight_saturation
+#endif
+
+#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
+#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE shader_injection.psychov24_gamut_hue_restore
+#endif
+
+#define RENODX_COLOR_GRADE_STRENGTH             shader_injection.color_grade_strength
+#define RENODX_INTERMEDIATE_ENCODING            shader_injection.intermediate_encoding
+#define RENODX_SWAP_CHAIN_DECODING              shader_injection.swap_chain_decoding
+#define RENODX_SWAP_CHAIN_GAMMA_CORRECTION      shader_injection.swap_chain_gamma_correction
 // #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE shader_injection.swap_chain_decoding_color_space
-#define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
+#define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE    shader_injection.swap_chain_custom_color_space
 // #define RENODX_SWAP_CHAIN_SCALING_NITS         shader_injection.swap_chain_scaling_nits
 // #define RENODX_SWAP_CHAIN_CLAMP_NITS           shader_injection.swap_chain_clamp_nits
-#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    shader_injection.swap_chain_clamp_color_space
-#define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
-#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
-#define RENODX_RENO_DRT_TONE_MAP_METHOD        renodx::tonemap::renodrt::config::tone_map_method::REINHARD
+#define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE     shader_injection.swap_chain_clamp_color_space
+#define RENODX_SWAP_CHAIN_ENCODING              shader_injection.swap_chain_encoding
+#define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE  shader_injection.swap_chain_encoding_color_space
+#define RENODX_RENO_DRT_TONE_MAP_METHOD         renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
 #include "../../shaders/renodx.hlsl"
 
-#endif
+#endif  // __cplusplus
 
- #endif  // SRC_SKYRIMSE_SHARED_H_
+#endif  // SRC_SKYRIMSE_SHARED_H_

@@ -1,4 +1,4 @@
-// ---- Created with 3Dmigoto v1.3.16 on Sat Jul 04 19:00:43 2026
+// ---- Created with 3Dmigoto v1.3.16 on Tue Jul 28 15:59:42 2026
 
 cbuffer _Globals : register(b0)
 {
@@ -126,11 +126,33 @@ cbuffer _Globals : register(b0)
 
 SamplerState DepthSurface_s : register(s2);
 SamplerState g_PointClampSampler_NG_s : register(s3);
+SamplerState g_WeatherReflectionCubeMap_s : register(s5);
+SamplerState g_WorldLightmapIndirectSampler_s : register(s7);
+SamplerState g_WorldLightMapDirectSampler_s : register(s12);
+SamplerState g_AmbientTexture_s : register(s13);
 Texture2D<float4> g_Albedo_NG : register(t0);
 Texture2D<float4> g_Normals_NG : register(t1);
 Texture2D<float4> DepthSurface : register(t2);
 Texture2D<float4> g_LightingAccumulation_NG : register(t3);
+TextureCube<float4> g_WeatherReflectionCubeMap : register(t5);
+Texture2D<float4> g_WorldLightmapIndirectSampler : register(t7);
+Texture2D<float4> g_WorldLightMapDirectSampler : register(t12);
+Texture2D<float4> g_AmbientTexture : register(t13);
 
+
+// 3Dmigoto declarations
+#define cmp -
+
+#ifndef MANUAL_SRGB_RT_ENCODE
+#define MANUAL_SRGB_RT_ENCODE 1
+#endif
+
+float3 LinearToSRGB(float3 c)
+{
+  float3 lo = c * 12.92;
+  float3 hi = 1.055 * pow(max(c, 0.0), 1.0 / 2.4) - 0.055;
+  return lerp(lo, hi, step(0.0031308, c));
+}
 
 float3 EncodeSRGBOutput(float3 c)
 {
@@ -139,8 +161,6 @@ float3 EncodeSRGBOutput(float3 c)
 #endif
   return c;
 }
-// 3Dmigoto declarations
-#define cmp -
 
 
 void main(
@@ -150,7 +170,7 @@ void main(
   float3 v3 : TEXCOORD2,
   out float4 o0 : SV_Target0)
 {
-  float4 r0,r1,r2,r3,r4;
+  float4 r0,r1,r2,r3,r4,r5,r6,r7;
   uint4 bitmask, uiDest;
   float4 fDest;
 
@@ -166,51 +186,89 @@ void main(
   r2.x = dot(r1.xyzw, g_ViewToWorld._m00_m10_m20_m30);
   r2.y = dot(r1.xyzw, g_ViewToWorld._m01_m11_m21_m31);
   r2.z = dot(r1.xyzw, g_ViewToWorld._m02_m12_m22_m32);
-  r1.xyz = g_EyePosition.xyz + -r2.xyz;
-  r2.xyz = g_DeferredOmniLight.m_PositionFar.xyz + -r2.xyz;
-  r0.z = dot(r1.xyz, r1.xyz);
-  r0.z = rsqrt(r0.z);
-  r0.w = dot(r2.xyz, r2.xyz);
-  r1.w = rsqrt(r0.w);
-  r0.w = sqrt(r0.w);
-  r0.w = g_DeferredOmniLight.m_PositionFar.w * r0.w + 1;
-  r0.w = saturate(g_DeferredOmniLight.m_ColorFade.w * r0.w);
-  r0.w = r0.w * r0.w;
-  r2.xyz = r2.xyz * r1.www;
-  r1.xyz = r1.xyz * r0.zzz + r2.xyz;
+  r1.xyz = g_Normals_NG.Sample(g_PointClampSampler_NG_s, r0.xy).xyz;
+  r1.xyz = r1.xyz * float3(2,2,2) + float3(-1,-1,-1);
   r0.z = dot(r1.xyz, r1.xyz);
   r0.z = rsqrt(r0.z);
   r1.xyz = r1.xyz * r0.zzz;
-  r3.xyzw = g_Normals_NG.Sample(g_PointClampSampler_NG_s, r0.xy).xyzw;
-  r3.xyz = r3.xyz * float3(2,2,2) + float3(-1,-1,-1);
-  r0.z = r3.w + r3.w;
-  r1.w = dot(r3.xyz, r3.xyz);
-  r1.w = rsqrt(r1.w);
-  r4.xyz = r3.xyz * r1.www;
-  r1.w = dot(r2.xyz, r3.xyz);
-  r1.x = saturate(dot(r4.xyz, r1.xyz));
-  r1.x = log2(r1.x);
-  r1.y = g_LightingAccumulation_NG.Sample(g_PointClampSampler_NG_s, r0.xy).w;
-  r2.xyz = g_Albedo_NG.Sample(g_PointClampSampler_NG_s, r0.xy).xyz;
-  r2.xyz = g_DeferredOmniLight.m_ColorFade.xyz * r2.xyz;
-  r2.xyz = r2.xyz * r0.www;
-  r0.x = 8.47996902 * r1.y;
-  o0.w = r1.y;
-  r0.x = exp2(r0.x);
-  r0.y = r0.x * r1.x;
-  r0.x = r0.x * 0.25 + -0.25;
-  r0.y = exp2(r0.y);
-  r1.x = saturate(r1.w);
-  r1.y = 0.300000012 + -r1.w;
-  r0.z = r1.y * r0.z;
+  r0.zw = r1.xy * g_WorldLightMapParameters2.xx + r2.xy;
+  r0.zw = r0.zw * g_WorldLightMapUVParameters.zw + g_WorldLightMapUVParameters.xy;
+  r3.xyzw = g_WorldLightmapIndirectSampler.SampleLevel(g_WorldLightmapIndirectSampler_s, r0.zw, 0).xyzw;
+  r0.z = r3.w * g_WorldLightMapParameters1.x + g_WorldLightMapParameters1.y;
+  r3.xyz = r3.xyz * r3.xyz;
+  r0.z = r0.z + -r2.z;
+  r0.z = r1.z * g_WorldLightMapParameters2.y + r0.z;
+  r0.z = g_WorldLightMapParameters1.z * abs(r0.z);
+  r0.z = -r0.z * r0.z + 1;
   r0.z = max(0, r0.z);
-  r0.z = r1.x + r0.z;
-  r0.y = r1.x * r0.y;
-  r0.x = r0.y * r0.x;
-  r1.xyz = g_DeferredOmniLight.m_ColorFade.xyz * r0.xxx;
-  r0.xyw = r1.xyz * r0.www;
-  r0.xyw = float3(0.0199999996,0.0199999996,0.0199999996) * r0.xyw;
-  o0.xyz = r2.xyz * r0.zzz + r0.xyw;
-    o0.xyz = EncodeSRGBOutput(o0.xyz);
+  r0.z = g_WorldLightMapParameters3.w * r0.z;
+  r3.xyz = r3.xyz * r0.zzz;
+  r4.xyz = g_EyePosition.xyz + -r2.xyz;
+  r0.zw = r2.xy * g_WorldLightMapUVParameters.zw + g_WorldLightMapUVParameters.xy;
+  r5.xyzw = g_WorldLightMapDirectSampler.SampleLevel(g_WorldLightMapDirectSampler_s, r0.zw, 0).xyzw;
+  r2.z = -r2.z;
+  r0.z = dot(r4.xy, r4.xy);
+  r0.z = saturate(-r0.z * g_TurnOnLights + 1);
+  r3.xyz = r3.xyz * r0.zzz;
+  r5.xy = r5.xy * float2(2,2) + float2(-1,-1);
+  r2.xy = g_WorldLightMapParameters1.ww * r5.xy;
+  r5.z = r5.z * g_WorldLightMapParameters1.x + g_WorldLightMapParameters1.y;
+  r5.xy = float2(0,0);
+  r2.xyz = r5.xyz + r2.xyz;
+  r0.w = g_WorldLightMapParameters1.z * abs(r2.z);
+  r0.w = -r0.w * r0.w + 1;
+  r0.w = saturate(r5.w * r0.w);
+  r5.xyz = g_WorldLightMapParameters3.xyz * r0.www;
+  r0.w = dot(r2.xyz, r2.xyz);
+  r0.w = rsqrt(r0.w);
+  r2.xyz = r2.xyz * r0.www;
+  r0.w = saturate(dot(r1.xyz, r2.xyz));
+  r6.xyz = r0.www * r5.xyz;
+  r3.xyz = r6.xyz * r0.zzz + r3.xyz;
+  r1.w = dot(r4.xyz, r4.xyz);
+  r1.w = rsqrt(r1.w);
+  r2.xyz = r4.xyz * r1.www + r2.xyz;
+  r4.xyz = r4.xyz * r1.www;
+  r1.w = dot(r2.xyz, r2.xyz);
+  r1.w = rsqrt(r1.w);
+  r2.xyz = r2.xyz * r1.www;
+  r1.w = saturate(dot(r1.xyz, r2.xyz));
+  r1.w = log2(r1.w);
+  r2.xyzw = g_Albedo_NG.Sample(g_PointClampSampler_NG_s, r0.xy).xyzw;
+  r6.xyzw = g_LightingAccumulation_NG.Sample(g_PointClampSampler_NG_s, r0.xy).xyzw;
+  r7.xyz = g_AmbientTexture.Sample(g_AmbientTexture_s, r0.xy).xyz;
+  r0.x = 1 + -r6.w;
+  r0.x = r2.w * r0.x;
+  r0.y = r0.x * r6.w;
+  r0.x = -r0.x * 0.5 + 1;
+  r2.xyz = r2.xyz * r0.xxx;
+  r0.x = saturate(r0.y * 1.5 + r6.w);
+  r0.y = 8.47996902 * r0.x;
+  r0.y = exp2(r0.y);
+  r1.w = r0.y * r1.w;
+  r0.y = r0.y * 0.25 + -0.25;
+  r1.w = exp2(r1.w);
+  r0.w = r1.w * r0.w;
+  r0.y = r0.w * r0.y;
+  r5.xyz = r0.yyy * r5.xyz;
+  r0.yzw = r5.xyz * r0.zzz;
+  r0.yzw = float3(0.0199999996,0.0199999996,0.0199999996) * r0.yzw;
+  r0.yzw = r3.xyz * r2.xyz + r0.yzw;
+  r2.xyz = saturate(r7.xyz * r2.xyz);
+  r0.yzw = r6.xyz + r0.yzw;
+  r1.w = dot(-r4.xyz, r1.xyz);
+  r1.w = r1.w + r1.w;
+  r1.xyz = r1.xzy * -r1.www + -r4.xzy;
+  r1.w = dot(r1.xyz, r1.xyz);
+  r1.w = rsqrt(r1.w);
+  r1.xyz = r1.xyz * r1.www;
+  r1.w = 1 + -r0.x;
+  o0.w = r0.x;
+  r0.x = 6 * r1.w;
+  r1.xyz = g_WeatherReflectionCubeMap.SampleLevel(g_WeatherReflectionCubeMap_s, r1.xyz, r0.x).xyz;
+  r1.xyz = r1.xyz * float3(2,2,2) + float3(-1,-1,-1);
+  r0.xyz = abs(r1.xyz) * float3(0.25,0.25,0.25) + r0.yzw;
+  o0.xyz = r2.xyz + r0.xyz;
+  o0.xyz = EncodeSRGBOutput(o0.xyz);
   return;
 }

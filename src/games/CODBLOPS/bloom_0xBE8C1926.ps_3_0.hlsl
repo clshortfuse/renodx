@@ -1,7 +1,7 @@
 #include "./shared.h"
 
-// Fullscreen bloom/tonemap pass with RenoDX-controlled bloom brightness
-// and perceived large-flare size.
+// Fullscreen bloom/tonemap pass with RenoDX-controlled bloom brightness.
+// Original bloom footprint is retained while the halo is made less dense.
 //
 // RenoDX sliders:
 //   RENODX_BLOOM_BRIGHTNESS
@@ -9,21 +9,13 @@
 //     1.00 = normal restored bloom
 //     3.00 = three times restored bloom
 //
-//   RENODX_BLOOM_FLARE_SIZE
-//     0.00 = remove the bloom flare completely
-//     0.50 = retain mainly the bright flare core
-//     1.00 = retain a reduced core and reduced halo
-//
 // Changes in this version:
 //   - Bloom halo and core are progressively neutralized toward white instead of
 //     inheriting excessive red/pink color from the underlying scene.
 //   - Scene-color tinting is capped so bloom keeps more of its source color.
-//   - Flare-size classification uses unboosted bloom brightness, so increasing
-//     bloom brightness does not also make the flare spatially enormous.
-//   - The flare-size mask is applied to BOTH the original rational-tonemap bloom
-//     input and the restored HDR bloom. At 0.0 the sampled bloom contribution is
-//     removed completely; 0.5 restores a smaller core and 1.0 restores a
-//     smaller halo without returning to the original oversized blur extent.
+//   - The authored bloom footprint is preserved instead of being clipped by a
+//     flare-size mask. Faint halo pixels use a lower density while the hot core
+//     returns to full strength.
 //   - Bloom RGB channels are still scaled together after color correction.
 //   - No final RGB clamp is applied.
 
@@ -54,13 +46,13 @@
 #define BLOOM_WHITE_CORE_START       0.250f
 #define BLOOM_WHITE_CORE_FULL        0.900f
 
-// Separate brightness masks control the visible radius of the halo and core.
-// Raising these thresholds makes both regions spatially smaller because fewer
-// pixels from the blurred bloom texture survive the soft cutoff.
-#define BLOOM_FLARE_HALO_START       0.100f
-#define BLOOM_FLARE_HALO_FULL        1.200f
-#define BLOOM_FLARE_CORE_START       1.500f
-#define BLOOM_FLARE_CORE_FULL        8.000f
+// Density shaping keeps the full authored bloom footprint instead of cutting
+// the halo away. The faint halo uses BLOOM_TRANSPARENT_HALO_DENSITY, while
+// the hot core smoothly returns to 1.0 so peak/core brightness is unchanged.
+#define BLOOM_TRANSPARENT_HALO_DENSITY  0.30f
+#define BLOOM_TRANSPARENT_CORE_DENSITY  0.30f
+#define BLOOM_DENSITY_CORE_START        0.250f
+#define BLOOM_DENSITY_CORE_FULL         2.000f
 
 sampler2D bloomSampler : register(s0);
 sampler2D colorSampler : register(s1);
@@ -141,7 +133,6 @@ float4 main(PS_INPUT input) : COLOR0
     // RenoDX controls. Sanitize values so an unset or invalid value cannot
     // create negative bloom or an invalid flare mask.
     float bloomBrightnessControl = max(RENODX_BLOOM_BRIGHTNESS, 0.0f);
-    float flareSizeControl = saturate(RENODX_BLOOM_FLARE_SIZE);
 
     // Colorize bloom toward the underlying scene while preserving the bloom's
     // original luminance. The amount is capped below so bloom cannot become
@@ -256,57 +247,24 @@ float4 main(PS_INPUT input) : COLOR0
     // Brightness scales every RGB channel together after color correction.
     coloredBloomHDR *= bloomBrightnessControl;
 
-    // IMPORTANT:
-    // Use unboosted bloom brightness for flare-size classification. Increasing
-    // bloom brightness therefore does not make progressively more of the blurred
-    // halo count as the retained core.
-    float flareBrightnessForSize = rawBloomBrightness;
+    // Keep the original spatial footprint of the sampled bloom. Instead of a
+    // cutoff that physically shrinks the flare, only reduce the density of the
+    // lower-energy halo. The brightest core now tops out at the configurable
+    // core density instead of returning to a fully solid 1.0 contribution.
+    float flareDensityBrightness = rawBloomBrightness;
 
-    // Use separate soft cutoffs for the halo and the bright core. Neither mask
-    // restores the complete original blur, even at Flare Size = 1.0. This makes
-    // both the central hot area and the surrounding halo visibly smaller.
-    float flareHaloMask = BloomSmoothRangeMask(
-        flareBrightnessForSize,
-        BLOOM_FLARE_HALO_START,
-        BLOOM_FLARE_HALO_FULL
+    float flareCoreDensityMask = BloomSmoothRangeMask(
+        flareDensityBrightness,
+        BLOOM_DENSITY_CORE_START,
+        BLOOM_DENSITY_CORE_FULL
     );
 
-    // Stronger nonlinear falloff removes more of the faint outer halo while
-    // retaining a smooth edge.
-    flareHaloMask *= flareHaloMask;
-
-    float flareCoreMask = BloomSmoothRangeMask(
-        flareBrightnessForSize,
-        BLOOM_FLARE_CORE_START,
-        BLOOM_FLARE_CORE_FULL
-    );
-
-    // A cubic response restricts the visible bright core to only the hottest
-    // bloom pixels, reducing its apparent radius without a hard circular cutoff.
-    flareCoreMask =
-        flareCoreMask * flareCoreMask * flareCoreMask;
-
-    // Two-stage size response:
-    //   0.00 -> no sampled bloom
-    //   0.50 -> reduced bright core
-    //   1.00 -> reduced core plus reduced halo
-    //
-    // The maximum setting now restores flareHaloMask rather than 1.0, so the
-    // original oversized halo is never fully restored by this shader.
-    float coreRestoreAmount = BloomSmoothCubic01(
-        saturate(flareSizeControl * 0.5f)
-    );
-
-    float haloRestoreAmount = BloomSmoothCubic01(
-        saturate((flareSizeControl - 0.5f) * 0.5f)
-    );
-
-    float retainedCore = flareCoreMask * coreRestoreAmount;
+    flareCoreDensityMask *= flareCoreDensityMask;
 
     float flareExtentScale = lerp(
-        retainedCore,
-        flareHaloMask,
-        haloRestoreAmount
+        BLOOM_TRANSPARENT_HALO_DENSITY,
+        BLOOM_TRANSPARENT_CORE_DENSITY,
+        flareCoreDensityMask
     );
 
     float3 controlledBloomHDR =

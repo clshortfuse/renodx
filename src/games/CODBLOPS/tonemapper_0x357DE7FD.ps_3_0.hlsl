@@ -2,42 +2,50 @@
 
 
 // ============================================================================
-// PsychoV22 configuration
+// PsychoV24 configuration
 // ============================================================================
 
-#ifndef RENODX_USE_PSYCHOV22
-#define RENODX_USE_PSYCHOV22 1
+#ifndef RENODX_USE_PSYCHOV24
+#define RENODX_USE_PSYCHOV24 1
 #endif
 
 #ifndef RENODX_TONE_MAP_TYPE_VANILLA
 #define RENODX_TONE_MAP_TYPE_VANILLA 0.0f
 #endif
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
-#define RENODX_TONE_MAP_TYPE_PSYCHOV22 22.0f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
+#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.0f
 #endif
 
 // 0.0 = automatic compression.
-#ifndef RENODX_PSYCHOV22_COMPRESSION
-#define RENODX_PSYCHOV22_COMPRESSION 0.0f
+#ifndef RENODX_PSYCHOV24_COMPRESSION
+#define RENODX_PSYCHOV24_COMPRESSION 0.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV22_GAMUT_COMPRESSION 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV24_GAMUT_COMPRESSION 1.0f
 #endif
 
 // 0 = disabled.
 // 1 = enabled.
-#ifndef RENODX_PSYCHOV22_GAMUT_MODE
-#define RENODX_PSYCHOV22_GAMUT_MODE 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_MODE
+#define RENODX_PSYCHOV24_GAMUT_MODE 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_CONE_RESPONSE
-#define RENODX_PSYCHOV22_CONE_RESPONSE 1.0f
+#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
+#define RENODX_PSYCHOV24_CONE_RESPONSE 1.0f
 #endif
 
-#if RENODX_USE_PSYCHOV22
-#include "../../shaders/tonemap/psychov/psychov-22.hlsl"
+
+#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
+#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION 1.0f
+#endif
+
+#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
+#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE 0.0f
+#endif
+#if RENODX_USE_PSYCHOV24
+#include "../../shaders/tonemap/psychov/psychov-24.hlsl"
 #endif
 
 
@@ -97,7 +105,7 @@
 // ============================================================================
 
 // The same hue-preserving white shoulder is applied before both RenoDRT and
-// PsychoV22. It does not affect Vanilla mode.
+// PsychoV24. It does not affect Vanilla mode.
 //
 // Values below START pass through unchanged. Values above START are smoothly
 // compressed toward LIMIT. Lower values create a stronger white clip.
@@ -109,9 +117,9 @@
 #define RENODX_WHITE_CLIP_LIMIT 8.0f
 #endif
 
-// PsychoV22 also has its own internal clip point. Lower is stronger.
-#ifndef RENODX_PSYCHOV22_CLIP_POINT
-#define RENODX_PSYCHOV22_CLIP_POINT 8.0f
+// PsychoV24 also has its own internal clip point. Lower is stronger.
+#ifndef RENODX_PSYCHOV24_CLIP_POINT
+#define RENODX_PSYCHOV24_CLIP_POINT 8.0f
 #endif
 
 
@@ -119,7 +127,7 @@
 // Controlled HDR highlight restoration
 // ============================================================================
 
-// Restores part of the pre-tonemap HDR signal after RenoDRT or PsychoV22.
+// Restores part of the pre-tonemap HDR signal after RenoDRT or PsychoV24.
 // Shadows, midtones, and Vanilla mode remain unchanged.
 //
 // 0.00 = normal tonemapper output
@@ -786,7 +794,7 @@ float3 GammaDecode2(float3 encodedColor)
 }
 
 
-// Hue-preserving soft white clip shared by RenoDRT and PsychoV22.
+// Hue-preserving soft white clip shared by RenoDRT and PsychoV24.
 //
 // The maximum RGB channel is used as the highlight magnitude. All channels
 // are then scaled equally, preserving the original highlight hue.
@@ -856,25 +864,25 @@ bool IsVanillaMode()
 }
 
 
-bool IsPsychoV22Mode()
+bool IsPsychoV24Mode()
 {
     return abs(
         RENODX_TONE_MAP_TYPE
-        - RENODX_TONE_MAP_TYPE_PSYCHOV22
+        - RENODX_TONE_MAP_TYPE_PSYCHOV24
     ) < 0.5f;
 }
 
 
 // ============================================================================
-// PsychoV22 tonemapper
+// PsychoV24 tonemapper
 // ============================================================================
 
-float3 ApplyPsychoV22Tonemap(float3 linearColor)
+float3 ApplyPsychoV24Tonemap(float3 linearColor)
 {
     linearColor =
         SafePositive(linearColor);
 
-#if RENODX_USE_PSYCHOV22
+#if RENODX_USE_PSYCHOV24
 
     float peakValue = max(
         RENODX_PEAK_WHITE_NITS
@@ -886,12 +894,12 @@ float3 ApplyPsychoV22Tonemap(float3 linearColor)
     );
 
     int gamutMode =
-        (RENODX_PSYCHOV22_GAMUT_MODE > 0.5f)
+        (RENODX_PSYCHOV24_GAMUT_MODE > 0.5f)
         ? 1
         : 0;
 
     linearColor =
-        renodx::tonemap::psychov::psychotm_test22(
+        renodx::tonemap::psychov::psychotm_test24(
             linearColor,
 
             // Display peak relative to diffuse white.
@@ -905,25 +913,31 @@ float3 ApplyPsychoV22Tonemap(float3 linearColor)
             1.0f,  // contrast
             1.0f,  // saturation
 
-            // PsychoV22 controls.
+            // PsychoV24 controls.
             1.0f,                            // bleaching_intensity
-            RENODX_PSYCHOV22_CLIP_POINT,       // stronger clip_point
+            RENODX_PSYCHOV24_CLIP_POINT,       // stronger clip_point
 
             RENODX_TONE_MAP_HUE_CORRECTION,
 
             1.0f,                            // adaptation_contrast
             0,                               // white_curve_mode
 
-            RENODX_PSYCHOV22_CONE_RESPONSE,
+            RENODX_PSYCHOV24_CONE_RESPONSE,
 
             0.18f.xxx,                       // current adaptation anchor
             0.18f.xxx,                       // desired adaptation anchor
 
-            RENODX_PSYCHOV22_GAMUT_COMPRESSION,
+            RENODX_PSYCHOV24_GAMUT_COMPRESSION,
             gamutMode,
 
             1.0f,                            // adaptive_normalization
-            RENODX_PSYCHOV22_COMPRESSION
+            RENODX_PSYCHOV24_COMPRESSION,
+
+            // PsychoV24-only tail controls.
+            // BO1 already applies RenoDX Highlight Saturation in the common
+            // post-tonemap stage, so keep PsychoV24's copy neutral here.
+            RENODX_PSYCHOV24_HIGHLIGHT_SATURATION, // highlight_saturation
+            RENODX_PSYCHOV24_GAMUT_HUE_RESTORE     // gamut_hue_restore
         );
 
 #endif
@@ -941,11 +955,11 @@ float3 ApplyRenoDXTonemap(float3 linearColor)
     linearColor =
         SafePositive(linearColor);
 
-    if (IsPsychoV22Mode())
+    if (IsPsychoV24Mode())
     {
-        // PsychoV22 retains its own display mapping and gamut model, while the
+        // PsychoV24 retains its own display mapping and gamut model, while the
         // common pre/post grading stages surround it.
-        return ApplyPsychoV22Tonemap(
+        return ApplyPsychoV24Tonemap(
             linearColor
         );
     }
@@ -1213,7 +1227,7 @@ float4 main(PS_INPUT input) : COLOR0
     // Decode after the original grading in both paths.
     //
     // Vanilla decodes the original SDR-domain graded result.
-    // RenoDRT/PsychoV22 decode the HDR-restored graded result.
+    // RenoDRT/PsychoV24 decode the HDR-restored graded result.
     // No matching gamma encode is performed later.
     vanillaColor =
         GammaDecode2(
@@ -1297,7 +1311,7 @@ float4 main(PS_INPUT input) : COLOR0
     // No gamma encoding is performed.
     // No sRGB conversion.
     // No manual BT.709-to-BT.2020 conversion.
-    // No HDR clamp in RenoDRT or PsychoV22 modes.
+    // No HDR clamp in RenoDRT or PsychoV24 modes.
     return float4(
         intermediateColor,
         sourceColor.a

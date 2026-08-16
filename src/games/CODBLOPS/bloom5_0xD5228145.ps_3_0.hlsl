@@ -15,8 +15,8 @@
 //
 // This replacement:
 //   - compresses HDR luminance before the game's original threshold curve;
-//   - adds a sharper independent soft threshold for visible blob size;
-//   - suppresses low-intensity outer bloom more strongly than the hot center;
+//   - converts the independent soft threshold into a nonzero density ramp;
+//   - keeps low-intensity outer bloom present but less dense than the hot center;
 //   - keeps the original register layout and alpha-as-mask behavior;
 //   - does not apply a final RGB clamp.
 
@@ -32,6 +32,11 @@
 
 // Higher powers suppress the outer region more aggressively.
 #define BLOOM_BLOB_POWER           5.00f
+
+// Nonzero density floor: retains the original spatial footprint instead of
+// deleting the outer bloom. The hot core still reaches 1.0.
+#define BLOOM_BLOB_HALO_DENSITY    0.30f
+#define BLOOM_BLOB_CORE_DENSITY    0.30f
 
 // Reduces the whole contribution without clipping HDR values.
 #define BLOOM_OUTPUT_SCALE         0.05f
@@ -113,6 +118,10 @@ float4 main(PS_INPUT input) : COLOR0
     );
 
     blobMask = pow(max(blobMask, 0.0f), BLOOM_BLOB_POWER);
+
+    // Convert the old size-cutoff mask into a density mask. This keeps the outer
+    // flare present at lower density while also making the hot core less solid.
+    blobMask = lerp(BLOOM_BLOB_HALO_DENSITY, BLOOM_BLOB_CORE_DENSITY, blobMask);
 
     float finalMask = originalMask * blobMask * BLOOM_OUTPUT_SCALE;
 

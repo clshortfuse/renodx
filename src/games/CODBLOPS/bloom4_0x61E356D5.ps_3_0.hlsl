@@ -1,18 +1,14 @@
 // Replacement for BO1 pixel shader 0x79EF3202.
 //
 // Purpose:
-//   Major reduction of oversized bloom flares while preserving the original
-//   weighted blur, color treatment, hdrControl parameters and scene composite.
+//   Preserve the original weighted blur radius and existing bloom brightness,
+//   while making the outer halo lower-density instead of physically smaller.
 //
 // What changes:
-//   1. All vertical sampling offsets are multiplied by BLOOM_RADIUS_SCALE.
-//      This makes the blur kernel physically narrower without altering its
-//      authored weights.
-//   2. A smooth nonlinear mask suppresses the faint outer halo after the blur.
-//   3. The final bloom contribution can be reduced independently with
-//      BLOOM_CONTRIBUTION_SCALE.
-//   4. The final tinted bloom is neutralized toward luminance-matched white,
-//      with stronger whitening in the bright core than in the halo.
+//   1. BLOOM_RADIUS_SCALE is restored to 1.00 (the authored radius).
+//   2. The old halo cutoff becomes a nonzero density ramp.
+//   3. BLOOM_CONTRIBUTION_SCALE is left at its existing value.
+//   4. Existing luminance-preserving whitening is retained.
 //
 // Important:
 //   This shader only offsets samples vertically. A matching horizontal blur
@@ -32,10 +28,12 @@
 //
 // No final RGB clamp is applied.
 
-#define BLOOM_RADIUS_SCALE        0.15f
+#define BLOOM_RADIUS_SCALE        1.00f
 #define BLOOM_HALO_START          0.025f
 #define BLOOM_HALO_FULL           0.350f
 #define BLOOM_HALO_POWER          1.00f
+#define BLOOM_HALO_DENSITY        0.30f
+#define BLOOM_CORE_DENSITY        0.70f
 #define BLOOM_CONTRIBUTION_SCALE  0.85f
 
 // Bloom whitening controls. Whitening happens after hdrControl1.rgb so the
@@ -43,7 +41,7 @@
 // The white target has the same luminance as the colored bloom contribution,
 // so this changes saturation/hue without intentionally raising brightness.
 #define BLOOM_WHITE_BASE_AMOUNT   0.35f
-#define BLOOM_WHITE_CORE_AMOUNT   0.90f
+#define BLOOM_WHITE_CORE_AMOUNT   0.30f
 #define BLOOM_WHITE_CORE_START    0.050f
 #define BLOOM_WHITE_CORE_FULL     0.800f
 
@@ -156,6 +154,11 @@ float4 main(PS_INPUT input) : COLOR0
     );
 
     retainedHalo = pow(max(retainedHalo, 0.0f), BLOOM_HALO_POWER);
+
+    // Never cut the halo to zero. Keeping a nonzero floor preserves the original
+    // blur footprint while making the outer bloom less dense. Bright bloom now
+    // tops out at BLOOM_CORE_DENSITY so the core is less solid.
+    retainedHalo = lerp(BLOOM_HALO_DENSITY, BLOOM_CORE_DENSITY, retainedHalo);
     blurredBloom *= retainedHalo;
 
     // Preserve the original luminance-based desaturation/color interpolation:

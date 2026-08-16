@@ -7,7 +7,7 @@
 
 #define DEBUG_LEVEL_0
 #define RENODX_MODS_SWAPCHAIN_VERSION 2
-#define RENODX_FPS_LIMIT_HR_TIMER
+
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
 
@@ -34,6 +34,10 @@
 #include "../../utils/settings.hpp"
 #include "./shared.h"
 
+#ifndef RENODX_PSYCHOV24_SLIDER_LAYOUT_VERSION
+#error "CODBLOPS: shared.h is outdated. Replace shared.h with the PsychoV24 slider version from the same package."
+#endif
+
 namespace {
 #define UpgradeRTVReplaceShader(value)       \
   {                                          \
@@ -45,7 +49,7 @@ namespace {
             auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                         \
             bool changed = false;                                                                     \
             for (auto rtv : rtvs) {                                                                   \
-              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);   \
+              changed |= renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv);   \
             }                                                                                         \
             if (changed) {                                                                            \
               renodx::mods::swapchain::FlushDescriptors(cmd_list);                                    \
@@ -64,7 +68,7 @@ namespace {
             auto rtvs = renodx::utils::swapchain::GetRenderTargets(cmd_list);                       \
             bool changed = false;                                                                   \
             for (auto rtv : rtvs) {                                                                 \
-              changed = renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv); \
+              changed |= renodx::mods::swapchain::ActivateCloneHotSwap(cmd_list->get_device(), rtv); \
             }                                                                                       \
             if (changed) {                                                                          \
               renodx::mods::swapchain::FlushDescriptors(cmd_list);                                  \
@@ -88,7 +92,7 @@ float dx9_auto_output_unclamp_mode = 2.f;
 
 constexpr float TONE_MAP_TYPE_VANILLA = 0.f;
 constexpr float TONE_MAP_TYPE_RENODRT = 3.f;
-constexpr float TONE_MAP_TYPE_PSYCHOV22 = 22.f;
+constexpr float TONE_MAP_TYPE_PSYCHOV24 = 24.f;
 
 inline bool IsCustomToneMapperEnabled() {
   return shader_injection.tone_map_type != TONE_MAP_TYPE_VANILLA;
@@ -98,8 +102,8 @@ inline bool IsRenoDRTEnabled() {
   return shader_injection.tone_map_type == TONE_MAP_TYPE_RENODRT;
 }
 
-inline bool IsPsychoV22Enabled() {
-  return shader_injection.tone_map_type == TONE_MAP_TYPE_PSYCHOV22;
+inline bool IsPsychoV24Enabled() {
+  return shader_injection.tone_map_type == TONE_MAP_TYPE_PSYCHOV24;
 }
 
 void ApplySwapChainEncoding(float value) {
@@ -1591,6 +1595,26 @@ bool OnCreatePipelineDX9AutoOutputUnclamp(
         DX9CRC32(shader_desc->code, shader_desc->code_size);
     if (!DX9AutoUnclampModeAllowsHash(mode, source_crc32)) continue;
 
+    // PERFORMANCE: most BO1 shaders are created more than once across device/state
+    // rebuilds. Reuse already-patched bytecode before reparsing and rebuilding it.
+    // This preserves the existing cache semantics; it only moves the lookup earlier.
+    const uint64_t early_cache_key =
+        (static_cast<uint64_t>(source_crc32) << 32u)
+        | static_cast<uint32_t>(shader_desc->code_size);
+    {
+      std::scoped_lock lock(g_dx9_auto_unclamp_mutex);
+      const auto cache_it = g_dx9_auto_unclamp_cache.find(early_cache_key);
+      if (cache_it != g_dx9_auto_unclamp_cache.end()
+          && cache_it->second.source_crc32 == source_crc32
+          && cache_it->second.source_size == shader_desc->code_size) {
+        shader_desc->code = cache_it->second.bytecode.data();
+        shader_desc->code_size =
+            cache_it->second.bytecode.size() * sizeof(uint32_t);
+        modified = true;
+        continue;
+      }
+    }
+
     std::vector<DX9InstructionInfo> instructions;
     if (!DX9ParseShader(source_tokens, token_count, instructions)) continue;
 
@@ -1811,7 +1835,20 @@ DX9CopyEndpoint ResolveDX9CopyEndpoint(
 
   // RenoDX generally tracks the parent/original entry. If ReShade gives this
   // callback the clone handle itself, locate the parent whose clone matches it.
-  if (!endpoint.has_clone || endpoint.input_is_clone) {
+  //
+  // PERFORMANCE: the old condition scanned the complete tracked-resource list for
+  // every ordinary non-cloned D3D9 surface because has_clone was false. RenoDX
+  // clones created by these BO1 upgrade rules are R16G16B16A16_FLOAT, so only a
+  // float16 input can plausibly be a clone handle that needs the reverse lookup.
+  // Original B8G8R8A8_UNORM/R16G16B16A16_UNORM resources still use the direct
+  // GetLiveResourceInfo path above and keep the exact same cloning behavior.
+  const bool may_be_clone_handle =
+      endpoint.input_desc.type != reshade::api::resource_type::unknown
+      && endpoint.input_desc.texture.format
+          == reshade::api::format::r16g16b16a16_float;
+
+  if (may_be_clone_handle
+      && (!endpoint.has_clone || endpoint.input_is_clone)) {
     bool found_parent = false;
     renodx::utils::resource::ForEachResourceInfo(
         [&](const renodx::utils::resource::ResourceInfo& info) {
@@ -2265,8 +2302,9 @@ bool OnDX9CopyResource(
   // Then handle GetRenderTargetData. If ReShade supplied the clone handle
   // directly and RenoDX still has a matching original SDR surface, prefer that
   // zero-conversion path before falling back to CPU float16 -> 8-bit conversion.
-  const reshade::api::resource_desc dest_desc =
-      renodx::utils::resource::GetResourceDesc(device, dest);
+  // ResolveDX9CopyEndpoint already queried this descriptor. Reuse it instead of
+  // asking the resource tracker/device for the same description a second time.
+  const reshade::api::resource_desc& dest_desc = dest_endpoint.input_desc;
 
   if (TryRedirectDX9CloneReadbackToOriginal(
           cmd_list,
@@ -2486,11 +2524,11 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDRT", "PsychoV22"},
+        .labels = {"Vanilla", "RenoDRT", "PsychoV24"},
         .parse = [](float value) {
           if (value < 0.5f) return TONE_MAP_TYPE_VANILLA;
           if (value < 1.5f) return TONE_MAP_TYPE_RENODRT;
-          return TONE_MAP_TYPE_PSYCHOV22;
+          return TONE_MAP_TYPE_PSYCHOV24;
         },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -2565,7 +2603,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 0.f,
         .label = "HDR Boost",
         .section = "Tone Mapping",
-        .tooltip = "Applies the common.hlsl HDRBoost power curve before RenoDRT or PsychoV22. 0 disables it; 20 matches the common.hlsl default power of 0.20. Values above 50 are intentionally unavailable because the original curve can extrapolate above that point.",
+        .tooltip = "Applies the common.hlsl HDRBoost power curve before RenoDRT or PsychoV24. 0 disables it; 20 matches the common.hlsl default power of 0.20. Values above 50 are intentionally unavailable because the original curve can extrapolate above that point.",
         .min = 0.f,
         .max = 50.f,
         .format = "%.0f%%",
@@ -2719,56 +2757,84 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "PsychoV22Compression",
-        .binding = &shader_injection.psychov22_compression,
+        .key = "PsychoV24Compression",
+        .binding = &shader_injection.psychov24_compression,
         .default_value = 0.f,
-        .label = "PsychoV22 Compression",
+        .label = "PsychoV24 Compression",
         .section = "Color Grading",
-        .tooltip = "PsychoV22 shoulder curve. 0 = auto compression, 50 = 1.00, 100 = 2.00, 200 = 4.00.",
+        .tooltip = "PsychoV24 shoulder curve. 0 = auto compression, 50 = 1.00, 100 = 2.00, 200 = 4.00.",
         .min = 0.f,
         .max = 400.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV22Enabled(); },
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "PsychoV22ConeResponse",
-        .binding = &shader_injection.psychov22_cone_response,
+        .key = "PsychoV24ConeResponse",
+        .binding = &shader_injection.psychov24_cone_response,
         .default_value = 50.f,
-        .label = "PsychoV22 Cone Response",
+        .label = "PsychoV24 Cone Response",
         .section = "Color Grading",
-        .tooltip = "Scales PsychoV22 cone response. 50 = 1.00 neutral. Higher values increase PsychoV22 contrast/purity response.",
+        .tooltip = "Scales PsychoV24 cone response. 50 = 1.00 neutral. Higher values increase PsychoV24 contrast/purity response.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV22Enabled(); },
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
         .parse = [](float value) { return value * 0.02f; },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
-        .key = "PsychoV22GamutCompression",
-        .binding = &shader_injection.psychov22_gamut_compression,
+        .key = "PsychoV24GamutCompression",
+        .binding = &shader_injection.psychov24_gamut_compression,
         .default_value = 100.f,
-        .label = "PsychoV22 Gamut Compression",
+        .label = "PsychoV24 Gamut Compression",
         .section = "Color Grading",
-        .tooltip = "PsychoV22 gamut compression strength.",
+        .tooltip = "PsychoV24 gamut compression strength.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV22Enabled(); },
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
-        .key = "PsychoV22GamutMode",
-        .binding = &shader_injection.psychov22_gamut_mode,
+        .key = "PsychoV24GamutMode",
+        .binding = &shader_injection.psychov24_gamut_mode,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
-        .label = "PsychoV22 Gamut Mode",
+        .label = "PsychoV24 Gamut Mode",
         .section = "Color Grading",
         .labels = {"BT709", "BT2020"},
-        .is_enabled = []() { return IsPsychoV22Enabled(); },
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .is_visible = []() { return current_settings_mode >= 2; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "PsychoV24HighlightSaturation",
+        .binding = &shader_injection.psychov24_highlight_saturation,
+        .default_value = 100.f,
+        .label = "PsychoV24 Highlight Saturation",
+        .section = "Color Grading",
+        .tooltip = "Controls PsychoV24 highlight saturation inside the tonemapper. 100% is neutral; lower values reduce highlight color and higher values increase it.",
+        .min = 0.f,
+        .max = 200.f,
+        .format = "%.0f%%",
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .parse = [](float value) { return value * 0.01f; },
+        .is_visible = []() { return current_settings_mode >= 1; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "PsychoV24GamutHueRestore",
+        .binding = &shader_injection.psychov24_gamut_hue_restore,
+        .default_value = 0.f,
+        .label = "PsychoV24 Gamut Hue Restore",
+        .section = "Color Grading",
+        .tooltip = "Restores the pre-gamut hue direction after PsychoV24 gamut compression. 0% disables it; 100% applies the full hue restoration.",
+        .min = 0.f,
+        .max = 100.f,
+        .format = "%.0f%%",
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return current_settings_mode >= 2; },
     },
     new renodx::utils::settings::Setting{
@@ -2829,16 +2895,6 @@ renodx::utils::settings::Settings settings = {
             "JPN CRT",
         },
         .is_visible = []() { return current_settings_mode >= 1; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "FPSLimit",
-        .binding = &renodx::utils::swapchain::fps_limit,
-        .default_value = 60.f,
-        .label = "FPS Limit",
-        .section = "FPS Limit",
-        .min = 30.f,
-        .max = 500.f,
-        .parse = [](float value) { return value * 2.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "IntermediateDecoding",
@@ -3024,7 +3080,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
               .key = "SwapChainEncoding",
               .binding = &shader_injection.swap_chain_encoding,
               .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-              .default_value = 4.f,
+              .default_value = 5.f,
               .label = "Encoding",
               .section = "Display Output",
               .labels = {"None", "SRGB", "2.2", "2.4", "HDR10", "scRGB"},
@@ -3139,9 +3195,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // enabled so clears, RTVs and SRV variants continue to reference the same
         // upgraded resource.
        
-        // Keep B8G8R8A8 upgrades restricted to the known 960x540 target.
-        // The old unrestricted B8G8R8A8_UNORM rule matched every UI and overlay
-        // surface and made this size restriction ineffective.
+        // Keep B8G8R8A8_UNORM upgraded by 16:9 aspect ratio. Do not restrict this
+        // rule to one fixed resolution; BO1 can use different 16:9 scene sizes.
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::b8g8r8a8_unorm,
             .new_format = reshade::api::format::r16g16b16a16_float,

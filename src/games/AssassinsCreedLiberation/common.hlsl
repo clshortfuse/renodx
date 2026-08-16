@@ -40,29 +40,27 @@ float3 HDRBoost(float3 color, float power = 0.20f, float normalization_point = 0
 
   float smoothing = power * 2.0f;
   color = max(
-    color,
-    lerp(
       color,
-      normalization_point * pow(max(color / normalization_point, 0.0f), 1.0f + power),
-      color / ((color / smoothing) + 1.0f)
-    )
-  );
+      lerp(
+          color,
+          normalization_point * pow(max(color / normalization_point, 0.0f), 1.0f + power),
+          color / ((color / smoothing) + 1.0f)));
 
   return max(color, 0.0f);
 }
 
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(
-  float3 untonemapped,
-  float y,
-  renodx::color::grade::Config config,
-  float mid_gray = 0.18f)
+    float3 untonemapped,
+    float y,
+    renodx::color::grade::Config config,
+    float mid_gray = 0.18f)
 {
   if (
-    config.exposure == 1.0f &&
-    config.shadows == 1.0f &&
-    config.highlights == 1.0f &&
-    config.contrast == 1.0f &&
-    config.flare == 0.0f)
+      config.exposure == 1.0f &&
+      config.shadows == 1.0f &&
+      config.highlights == 1.0f &&
+      config.contrast == 1.0f &&
+      config.flare == 0.0f)
   {
     return untonemapped;
   }
@@ -94,9 +92,9 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(
 }
 
 float3 ApplySaturationBlowoutHighlightSaturation(
-  float3 tonemapped,
-  float y,
-  renodx::color::grade::Config config)
+    float3 tonemapped,
+    float y,
+    renodx::color::grade::Config config)
 {
   float3 color = max(tonemapped, 0.0f);
 
@@ -107,10 +105,9 @@ float3 ApplySaturationBlowoutHighlightSaturation(
     if (config.dechroma != 0.0f)
     {
       perceptual_new.yz *= lerp(
-        1.0f,
-        0.0f,
-        saturate(pow(y / (10000.0f / 100.0f), 1.0f - config.dechroma))
-      );
+          1.0f,
+          0.0f,
+          saturate(pow(y / (10000.0f / 100.0f), 1.0f - config.dechroma)));
     }
 
     if (config.blowout != 0.0f)
@@ -143,25 +140,22 @@ float3 ApplyPerChannelBlowoutHueShift(float3 untonemapped)
     float calculated_peak = 0.01f * pow(100.0f - CUSTOM_SCENE_GRADE_PER_CHANNEL_BLOWOUT, 2.0f);
 
     float3 graded_color = renodx::tonemap::HermiteSplinePerChannelRolloff(
-      max(untonemapped, 0.0f),
-      calculated_peak,
-      100.0f
-    );
+        max(untonemapped, 0.0f),
+        calculated_peak,
+        100.0f);
 
     float3 color = renodx::color::correct::Chrominance(
-      untonemapped,
-      graded_color,
-      1.0f,
-      0.0f,
-      CUSTOM_SCENE_GRADE_METHOD
-    );
+        untonemapped,
+        graded_color,
+        1.0f,
+        0.0f,
+        CUSTOM_SCENE_GRADE_METHOD);
 
     color = renodx::color::correct::Hue(
-      color,
-      graded_color,
-      CUSTOM_SCENE_GRADE_HUE_SHIFT,
-      CUSTOM_SCENE_GRADE_METHOD
-    );
+        color,
+        graded_color,
+        CUSTOM_SCENE_GRADE_HUE_SHIFT,
+        CUSTOM_SCENE_GRADE_METHOD);
 
     return max(color, 0.0f);
   }
@@ -216,10 +210,9 @@ float3 ToneMapMaxCLL(float3 color, float rolloff_start = 0.375f, float output_ma
 
   float log_peak = log2(peak);
   float log_mapped = renodx::tonemap::ExponentialRollOff(
-    log_peak,
-    log2(rolloff_start),
-    log2(output_max)
-  );
+      log_peak,
+      log2(rolloff_start),
+      log2(output_max));
 
   float scale = exp2(log_mapped - log_peak);
 
@@ -279,11 +272,10 @@ float3 CustomTonemap(float3 untonemapped, float2 coords)
   hdr_color = PostTonemapSliders(hdr_color);
 
   hdr_color = renodx::effects::ApplyFilmGrain(
-    hdr_color,
-    coords,
-    CUSTOM_RANDOM,
-    CUSTOM_FILM_GRAIN_STRENGTH * 0.03f
-  );
+      hdr_color,
+      coords,
+      CUSTOM_RANDOM,
+      CUSTOM_FILM_GRAIN_STRENGTH * 0.03f);
 
   hdr_color = max(hdr_color, 0.0f);
   hdr_color = renodx::color::bt2020::from::BT709(hdr_color);
@@ -311,9 +303,8 @@ float3 CustomGradingEnd(float3 ungraded_color, float3 sdr_color, float3 graded_c
   }
 
   return renodx::tonemap::UpgradeToneMap(
-    max(ungraded_color, 0.0f),
-    max(sdr_color, 0.0f),
-    max(graded_color, 0.0f),
-    CUSTOM_GRADING_STRENGTH
-  );
+      max(ungraded_color, 0.0f),
+      max(sdr_color, 0.0f),
+      max(graded_color, 0.0f),
+      CUSTOM_GRADING_STRENGTH);
 }

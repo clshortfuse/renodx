@@ -1,37 +1,44 @@
 #include "./shared.h"
 
-#ifndef RENODX_USE_PSYCHOV22
-#define RENODX_USE_PSYCHOV22 1
+#ifndef RENODX_USE_PSYCHOV24
+#define RENODX_USE_PSYCHOV24 1
 #endif
 
-#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV22
-#define RENODX_TONE_MAP_TYPE_PSYCHOV22 22.0f
+#ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
+#define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_COMPRESSION
-#define RENODX_PSYCHOV22_COMPRESSION 0.0f
+#ifndef RENODX_PSYCHOV24_COMPRESSION
+#define RENODX_PSYCHOV24_COMPRESSION 0.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_COMPRESSION
-#define RENODX_PSYCHOV22_GAMUT_COMPRESSION 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_COMPRESSION
+#define RENODX_PSYCHOV24_GAMUT_COMPRESSION 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_GAMUT_MODE
-#define RENODX_PSYCHOV22_GAMUT_MODE 1.0f
+#ifndef RENODX_PSYCHOV24_GAMUT_MODE
+#define RENODX_PSYCHOV24_GAMUT_MODE 1.0f
 #endif
 
-#ifndef RENODX_PSYCHOV22_CONE_RESPONSE
-#define RENODX_PSYCHOV22_CONE_RESPONSE 1.0f
+#ifndef RENODX_PSYCHOV24_CONE_RESPONSE
+#define RENODX_PSYCHOV24_CONE_RESPONSE 1.0f
 #endif
 
-#if RENODX_USE_PSYCHOV22
-#include "../../shaders/tonemap/psychov/psychov-22.hlsl"
+#ifndef RENODX_PSYCHOV24_HIGHLIGHT_SATURATION
+#define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION 1.0f
 #endif
 
+#ifndef RENODX_PSYCHOV24_GAMUT_HUE_RESTORE
+#define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE 0.0f
+#endif
 
-Texture2D<float4> t2 : register(t2);
-Texture2D<float4> t1 : register(t1);
-Texture2D<float4> t0 : register(t0);
+#if RENODX_USE_PSYCHOV24
+#include "../../shaders/tonemap/psychov/psychov-24.hlsl"
+#endif
+
+Texture2D t2 : register(t2);
+Texture2D t1 : register(t1);
+Texture2D t0 : register(t0);
 
 SamplerState s2_s : register(s2);
 SamplerState s1_s : register(s1);
@@ -64,28 +71,28 @@ bool IsRenoDRTMode()
   return abs(RENODX_TONE_MAP_TYPE - renodx::draw::TONE_MAP_TYPE_RENO_DRT) < 0.5f;
 }
 
-bool IsPsychoV22Mode()
+bool IsPsychoV24Mode()
 {
-  return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV22) < 0.5f;
+  return abs(RENODX_TONE_MAP_TYPE - RENODX_TONE_MAP_TYPE_PSYCHOV24) < 0.5f;
 }
 
 bool IsCustomHDRMode()
 {
-  return IsRenoDRTMode() || IsPsychoV22Mode();
+  return IsRenoDRTMode() || IsPsychoV24Mode();
 }
 
-float3 ApplyPsychoV22HDRTonemap(float3 hdr_color)
+float3 ApplyPsychoV24HDRTonemap(float3 hdr_color)
 {
   hdr_color = SafePositive(hdr_color);
 
-#if RENODX_USE_PSYCHOV22
+#if RENODX_USE_PSYCHOV24
   float peak_value = max(
       RENODX_PEAK_WHITE_NITS / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f),
       1.0f);
 
-  int gamut_mode = (RENODX_PSYCHOV22_GAMUT_MODE > 0.5f) ? 1 : 0;
+  int gamut_mode = (RENODX_PSYCHOV24_GAMUT_MODE > 0.5f) ? 1 : 0;
 
-  hdr_color = renodx::tonemap::psychov::psychotm_test22(
+  hdr_color = renodx::tonemap::psychov::psychotm_test24(
       hdr_color,
       peak_value,
       RENODX_TONE_MAP_EXPOSURE,
@@ -93,29 +100,30 @@ float3 ApplyPsychoV22HDRTonemap(float3 hdr_color)
       RENODX_TONE_MAP_SHADOWS,
       RENODX_TONE_MAP_CONTRAST,
       RENODX_TONE_MAP_SATURATION,
-      1.0f,                                  // bleaching_intensity, reserved
-      100.0f,                                // clip_point, reserved
+      1.0f,                                      // bleaching_intensity, reserved
+      100.0f,                                    // clip_point, reserved
       RENODX_TONE_MAP_HUE_CORRECTION,
-      1.0f,                                  // adaptation_contrast, deprecated
-      0,                                     // white_curve_mode, deprecated
-      RENODX_PSYCHOV22_CONE_RESPONSE,        // cone_response_exponent
-      0.18f.xxx,                             // current adaptive state / anchor-in
-      0.18f.xxx,                             // desired background state / anchor-out
-      RENODX_PSYCHOV22_GAMUT_COMPRESSION,
+      1.0f,                                      // adaptation_contrast, deprecated
+      0,                                         // white_curve_mode, deprecated
+      RENODX_PSYCHOV24_CONE_RESPONSE,            // cone_response_exponent
+      0.18f.xxx,                                 // current adaptive state / anchor-in
+      0.18f.xxx,                                 // desired background state / anchor-out
+      RENODX_PSYCHOV24_GAMUT_COMPRESSION,
       gamut_mode,
-      1.0f,                                  // adaptive_normalization, deprecated
-      RENODX_PSYCHOV22_COMPRESSION);         // 0 = auto
-
+      1.0f,                                      // adaptive_normalization, deprecated
+      RENODX_PSYCHOV24_COMPRESSION,              // 0 = auto
+      RENODX_PSYCHOV24_HIGHLIGHT_SATURATION,     // V24 parameter
+      RENODX_PSYCHOV24_GAMUT_HUE_RESTORE);       // V24 parameter
 #endif
 
   return SafePositive(hdr_color);
 }
 
-
 void main(
-    float4 v0: SV_POSITION0,
-    float2 v1: TEXCOORD0,
-    out float4 o0: SV_Target0) {
+    float4 v0 : SV_POSITION0,
+    float2 v1 : TEXCOORD0,
+    out float4 o0 : SV_Target0)
+{
   float4 r0, r1, r2, r3;
   uint4 bitmask, uiDest;
   float4 fDest;
@@ -145,7 +153,8 @@ void main(
     // Two tonemap branches selected by cb2[2].z (filmic vs Reinhard)
     float vMapped;
     if (cb2[2].z > 0.5f) {
-      // Filmic (Uncharted/Hable approximation): (x*(6.2x+0.5))/(x*(6.2x+1.7)+0.06), then ^2.2, then * cb2[2].y
+      // Filmic (Uncharted/Hable approximation):
+      // (x*(6.2x+0.5))/(x*(6.2x+1.7)+0.06), then ^2.2, then * cb2[2].y
       float fx = max(0.0f, vLumAdjusted - 0.00400000019f);
       float fNum = fx * (fx * 6.19999981f + 0.5f);
       float fDen = fx * (fx * 6.19999981f + 1.70000005f) + 0.0599999987f;
@@ -197,70 +206,71 @@ void main(
     return;
   }
 
-  // ===== HDR PATH (RenoDRT / ACES / None) =====
+  // ===== HDR PATH (RenoDRT / PsychoV24) =====
   if (IsCustomHDRMode()) {
-  // Eye adaptation
-  float lum = dot(float3(0.212500006, 0.715399981, 0.0720999986), r0.xyz);
-  lum = max(9.99999975e-006, lum);
-  float lumAdjusted = lum * r2.y / r2.x;
-  r0.xyz = r0.xyz * lumAdjusted / lum;
+    // Eye adaptation
+    float lum = dot(float3(0.212500006, 0.715399981, 0.0720999986), r0.xyz);
+    lum = max(9.99999975e-006, lum);
+    float lumAdjusted = lum * r2.y / r2.x;
+    r0.xyz = r0.xyz * lumAdjusted / lum;
 
-  // Bloom
-  const float bloomStrength = 0.0;
-  // Bloom with clamped contribution to prevent black level lift
-  float3 bloomColor = r1.xyz * saturate(cb2[2].x - renodx::color::y::from::BT709(r0.xyz));
-  bloomColor = min(bloomColor, 0.5);  // TUNE: cap bloom so it can't lift blacks too much
-  r0.xyz = bloomColor * bloomStrength + r0.xyz;
+    // Bloom
+    const float bloomStrength = 0.0;
+    // Bloom with clamped contribution to prevent black level lift
+    float3 bloomColor = r1.xyz * saturate(cb2[2].x - renodx::color::y::from::BT709(r0.xyz));
+    bloomColor = min(bloomColor, 0.5);  // TUNE: cap bloom so it can't lift blacks too much
+    r0.xyz = bloomColor * bloomStrength + r0.xyz;
 
-  r0.xyz = max(0, r0.xyz);
+    r0.xyz = max(0, r0.xyz);
 
-  // Tonemap
-  renodx::draw::Config config = renodx::draw::BuildConfig();
-  config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE;
+    // Tonemap
+    renodx::draw::Config config = renodx::draw::BuildConfig();
+    config.reno_drt_tone_map_method = renodx::tonemap::renodrt::config::tone_map_method::HERMITE_SPLINE;
 
-  // Linearize to BT.709 scene-linear for RenoDRT/PsychoV22.
-  r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz);
+    // Linearize to BT.709 scene-linear for RenoDRT/PsychoV24.
+    r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz);
 
-  if (IsPsychoV22Mode()) {
-    r0.xyz = ApplyPsychoV22HDRTonemap(r0.xyz);
-  } else {
-    r0.xyz = renodx::draw::ToneMapPass(r0.xyz, config);
+    if (IsPsychoV24Mode()) {
+      r0.xyz = ApplyPsychoV24HDRTonemap(r0.xyz);
+    } else {
+      r0.xyz = renodx::draw::ToneMapPass(r0.xyz, config);
+    }
+
+    // The vanilla color-grade math below expects gamma-space color.
+    r0.xyz = renodx::color::gamma::Encode(SafePositive(r0.xyz));
+
+    // Color grading
+    r1.x = dot(r0.xyz, float3(0.212500006, 0.715399981, 0.0720999986));
+    r0.w = 1;
+    float3 outputColor = r0.xyz;
+    r0.xyzw = -r1.xxxx + r0.xyzw;
+    r0.xyzw = cb2[3].xxxx * r0.xyzw + r1.xxxx;
+    r1.xyzw = r1.xxxx * cb2[4].xyzw + -r0.xyzw;
+    r0.xyzw = cb2[4].wwww * r1.xyzw + r0.xyzw;
+    r0.xyzw = cb2[3].wwww * r0.xyzw + -r2.xxxx;
+    r0.xyzw = cb2[3].zzzz * r0.xyzw + r2.xxxx;
+    float gradeLuma = renodx::color::y::from::BT709(outputColor);
+    float gradeStrength = RENODX_COLOR_GRADE_STRENGTH * saturate(1.0 - (gradeLuma - 0.8) / 0.5);
+    r0.xyz = lerp(outputColor, r0.xyz, gradeStrength);
+
+    // Linearize and encode
+    r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz);
+    r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);
+    r0.xyz = max(0, r0.xyz);
+
+    // Vanilla fade/tint blend — reduce strength to prevent washout
+    float blendStrength = cb2[5].w * 0;  // TUNE: 0 = disable entirely, 1 = full vanilla
+    float4 preBlend = float4(r0.xyz, r0.w);
+    r1.xyzw = cb2[5].xyzw - preBlend;
+    preBlend = blendStrength * r1.xyzw + preBlend;
+    r0.xyz = preBlend.xyz;
+    r0.w = preBlend.w;
+
+    // Final output
+    r0.xyz = renodx::draw::RenderIntermediatePass(r0.xyz);
+
+    o0.xyz = r0.xyz;
+    o0.w = r0.w;
+    return;
   }
-
-  // The vanilla color-grade math below expects gamma-space color.
-  r0.xyz = renodx::color::gamma::Encode(SafePositive(r0.xyz));
-
-  // Color grading
-  r1.x = dot(r0.xyz, float3(0.212500006, 0.715399981, 0.0720999986));
-  r0.w = 1;
-  float3 outputColor = r0.xyz;
-  r0.xyzw = -r1.xxxx + r0.xyzw;
-  r0.xyzw = cb2[3].xxxx * r0.xyzw + r1.xxxx;
-  r1.xyzw = r1.xxxx * cb2[4].xyzw + -r0.xyzw;
-  r0.xyzw = cb2[4].wwww * r1.xyzw + r0.xyzw;
-  r0.xyzw = cb2[3].wwww * r0.xyzw + -r2.xxxx;
-  r0.xyzw = cb2[3].zzzz * r0.xyzw + r2.xxxx;
-  float gradeLuma = renodx::color::y::from::BT709(outputColor);
-  float gradeStrength = RENODX_COLOR_GRADE_STRENGTH * saturate(1.0 - (gradeLuma - 0.8) / 0.5);
-  r0.xyz = lerp(outputColor, r0.xyz, gradeStrength);
-
-  // Linearize and encode
-  r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz);
-  r0.xyz = renodx::color::bt2020::from::BT709(r0.xyz);
-  r0.xyz = max(0, r0.xyz);
-
-  // Vanilla fade/tint blend — reduce strength to prevent washout
-  float blendStrength = cb2[5].w * 0;  // TUNE: 0 = disable entirely, 1 = full vanilla
-  float4 preBlend = float4(r0.xyz, r0.w);
-  r1.xyzw = cb2[5].xyzw - preBlend;
-  preBlend = blendStrength * r1.xyzw + preBlend;
-  r0.xyz = preBlend.xyz;
-  r0.w = preBlend.w;
-
-  // Final output
-  r0.xyz = renodx::draw::RenderIntermediatePass(r0.xyz);
-
-  o0.xyz = r0.xyz;
-  o0.w = r0.w;
-  return;}
 }

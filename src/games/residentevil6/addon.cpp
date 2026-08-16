@@ -26,6 +26,14 @@
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
 
+#ifndef RENODX_PSYCHOV24_SLIDER_LAYOUT_VERSION
+#error "RESIDENTEVIL6: shared.h is outdated. Replace shared.h with the PsychoV24 slider version from the same package."
+#endif
+
+static_assert(
+    sizeof(ShaderInjectData) == 40 * sizeof(float),
+    "RE6 ShaderInjectData must remain exactly 40 floats / 160 bytes (c50-c59).");
+
 namespace {
 
 // -----------------------------------------------------------------------------
@@ -447,7 +455,7 @@ float force_windowed_borderless = 1.f;
 
 constexpr float TONE_MAP_TYPE_VANILLA = 0.f;
 constexpr float TONE_MAP_TYPE_RENODRT = 3.f;
-constexpr float TONE_MAP_TYPE_PSYCHOV22 = 22.f;
+constexpr float TONE_MAP_TYPE_PSYCHOV24 = 24.f;
 
 inline bool IsAdvancedMode() {
   return current_settings_mode >= 2.f;
@@ -465,8 +473,8 @@ inline bool IsRenoDRTEnabled() {
   return shader_injection.tone_map_type == TONE_MAP_TYPE_RENODRT;
 }
 
-inline bool IsPsychoV22Enabled() {
-  return shader_injection.tone_map_type == TONE_MAP_TYPE_PSYCHOV22;
+inline bool IsPsychoV24Enabled() {
+  return shader_injection.tone_map_type == TONE_MAP_TYPE_PSYCHOV24;
 }
 
 inline bool IsCustomToneMapperEnabled() {
@@ -545,11 +553,11 @@ renodx::utils::settings::Settings settings = {
         .can_reset = true,
         .label = "Tone Mapper",
         .section = "Grading",
-        .tooltip = "Vanilla keeps the original SDR final shader. RenoDRT uses RenoDX ToneMapPass. PsychoV22 calls psychotm_test22.",
-        .labels = {"Vanilla", "RenoDRT", "PsychoV22"},
+        .tooltip = "Vanilla keeps the original SDR final shader. RenoDRT uses RenoDX ToneMapPass. PsychoV24 calls psychotm_test24.",
+        .labels = {"Vanilla", "RenoDRT", "PsychoV24"},
         .parse = [](float value) {
           if (value == 1.f) return TONE_MAP_TYPE_RENODRT;
-          if (value == 2.f) return TONE_MAP_TYPE_PSYCHOV22;
+          if (value == 2.f) return TONE_MAP_TYPE_PSYCHOV24;
           return TONE_MAP_TYPE_VANILLA;
         },
     },
@@ -643,61 +651,89 @@ renodx::utils::settings::Settings settings = {
     },
 
     // ------------------------------------------------------------
-    // PsychoV22
+    // PsychoV24
     // ------------------------------------------------------------
 
     new renodx::utils::settings::Setting{
-        .key = "PsychoV22Compression",
-        .binding = &shader_injection.psychov22_compression,
+        .key = "PsychoV24Compression",
+        .binding = &shader_injection.psychov24_compression,
         .default_value = 0.f,
-        .label = "PsychoV22 Compression",
+        .label = "PsychoV24 Compression",
         .section = "Grading",
-        .tooltip = "PsychoV22 shoulder/curve shape. 0 = auto. 50 = 1.00. 100 = 2.00. 200 = 4.00.",
+        .tooltip = "PsychoV24 shoulder/curve shape. 0 = auto. 50 = 1.00. 100 = 2.00. 200 = 4.00.",
         .min = 0.f,
         .max = 200.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV22Enabled(); },
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "PsychoV22ConeResponse",
-        .binding = &shader_injection.psychov22_cone_response,
+        .key = "PsychoV24ConeResponse",
+        .binding = &shader_injection.psychov24_cone_response,
         .default_value = 50.f,
-        .label = "PsychoV22 Cone Response",
+        .label = "PsychoV24 Cone Response",
         .section = "Grading",
-        .tooltip = "Scales PsychoV22 cone response. 50 = 1.00 neutral. Higher values increase the PsychoV22 contrast/purity response.",
+        .tooltip = "Scales PsychoV24 cone response. 50 = 1.00 neutral. Higher values increase the PsychoV24 contrast/purity response.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV22Enabled(); },
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "PsychoV22GamutCompression",
-        .binding = &shader_injection.psychov22_gamut_compression,
+        .key = "PsychoV24GamutCompression",
+        .binding = &shader_injection.psychov24_gamut_compression,
         .default_value = 100.f,
-        .label = "PsychoV22 Gamut Compression",
+        .label = "PsychoV24 Gamut Compression",
         .section = "Grading",
-        .tooltip = "PsychoV22 LMS/MB gamut compression strength.",
+        .tooltip = "PsychoV24 LMS/MB gamut compression strength.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.2f",
-        .is_enabled = []() { return IsPsychoV22Enabled(); },
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
         .is_visible = []() { return IsAdvancedMode(); },
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
-        .key = "PsychoV22GamutMode",
-        .binding = &shader_injection.psychov22_gamut_mode,
+        .key = "PsychoV24GamutMode",
+        .binding = &shader_injection.psychov24_gamut_mode,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
         .default_value = 1.f,
-        .label = "PsychoV22 Gamut Mode",
+        .label = "PsychoV24 Gamut Mode",
         .section = "Grading",
         .labels = {"BT.709", "BT.2020"},
-        .is_enabled = []() { return IsPsychoV22Enabled(); },
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
         .is_visible = []() { return IsAdvancedMode(); },
     },
 
+    new renodx::utils::settings::Setting{
+        .key = "PsychoV24HighlightSaturation",
+        .binding = &shader_injection.psychov24_highlight_saturation,
+        .default_value = 100.f,
+        .label = "PsychoV24 Highlight Saturation",
+        .section = "Grading",
+        .tooltip = "Controls PsychoV24 highlight saturation inside Test24. 100% is neutral; lower values reduce highlight chroma and higher values increase it.",
+        .min = 0.f,
+        .max = 200.f,
+        .format = "%.0f%%",
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .is_visible = []() { return IsIntermediateMode(); },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "PsychoV24GamutHueRestore",
+        .binding = &shader_injection.psychov24_gamut_hue_restore,
+        .default_value = 0.f,
+        .label = "PsychoV24 Gamut Hue Restore",
+        .section = "Grading",
+        .tooltip = "Restores the pre-gamut hue direction after PsychoV24 gamut compression. 0% disables it; 100% applies full restoration.",
+        .min = 0.f,
+        .max = 100.f,
+        .format = "%.0f%%",
+        .is_enabled = []() { return IsPsychoV24Enabled(); },
+        .is_visible = []() { return IsAdvancedMode(); },
+        .parse = [](float value) { return value * 0.01f; },
+    },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeScene",
         .binding = &shader_injection.color_grade_strength,
@@ -921,17 +957,19 @@ renodx::utils::settings::Settings settings = {
     },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
-        .label = "PsychoV22",
+        .label = "PsychoV24",
         .section = "Options",
         .group = "button-line-1",
         .on_change = []() {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"ToneMapType", 2.f},
-              {"PsychoV22Compression", 200.f},
-              {"PsychoV22ConeResponse", 60.f},
-              {"PsychoV22GamutCompression", 100.f},
-              {"PsychoV22GamutMode", 1.f},
+              {"PsychoV24Compression", 200.f},
+              {"PsychoV24ConeResponse", 60.f},
+              {"PsychoV24GamutCompression", 100.f},
+              {"PsychoV24GamutMode", 1.f},
+              {"PsychoV24HighlightSaturation", 100.f},
+              {"PsychoV24GamutHueRestore", 0.f},
               {"ColorGradeHighlights", 50.f},
               {"ColorGradeShadows", 50.f},
               {"ColorGradeContrast", 50.f},
@@ -998,10 +1036,12 @@ void OnPresetOff() {
       {"ColorGradeHighlightSaturation", 50.f},
       {"ColorGradeBlowout", 0.f},
       {"ColorGradeFlare", 0.f},
-      {"PsychoV22Compression", 200.f},
-      {"PsychoV22ConeResponse", 50.f},
-      {"PsychoV22GamutCompression", 100.f},
-      {"PsychoV22GamutMode", 1.f},
+      {"PsychoV24Compression", 200.f},
+      {"PsychoV24ConeResponse", 50.f},
+      {"PsychoV24GamutCompression", 100.f},
+      {"PsychoV24GamutMode", 1.f},
+      {"PsychoV24HighlightSaturation", 100.f},
+      {"PsychoV24GamutHueRestore", 0.f},
       {"ColorGradeScene", 100.f},
   });
 }
@@ -1117,7 +1157,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
          renodx::mods::shader::constant_buffer_offset = 50 * 4; 
         renodx::mods::swapchain::set_color_space = false; 
         renodx::mods::swapchain::use_device_proxy = true;
-        renodx::mods::swapchain::use_resource_cloning = false;
+        renodx::mods::swapchain::use_resource_cloning = true;
         renodx::mods::swapchain::swap_chain_proxy_shaders = {
             {
                 reshade::api::device_api::d3d11,
