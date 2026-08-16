@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Detroit Build 12158144 before enabling its aspect override."""
+"""Validate Detroit Build 12158144 before enabling its ultrawide redirects."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ SIGNATURES = (
         original_bytes=bytes.fromhex("F3 0F 10 05 80 0C D4 01"),
     ),
     Signature(
-        name="native Scaleform half-extent contract (must remain unpatched)",
+        name="Scaleform UI half-extent redirect source",
         pattern=(
             "48 8B 03 48 8B CB FF 50 10 48 8B 03 48 8B CB "
             "F3 44 0F 10 35 3F B0 2D 01 44 0F 28 C0 F3 45 0F 59 C6"

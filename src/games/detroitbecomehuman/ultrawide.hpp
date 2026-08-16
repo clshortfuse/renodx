@@ -18,8 +18,13 @@ inline constexpr float kVanillaAspect = 16.f / 9.f;
 inline constexpr float kNativeUiHalfExtent = 0.5f;
 inline constexpr float kDefaultTargetAspect = 3440.f / 1440.f;
 
+constexpr float CalculateUiHalfExtent(float aspect_ratio) {
+  return kNativeUiHalfExtent * kVanillaAspect / aspect_ratio;
+}
+
 struct ActiveValues {
   float aspect_ratio;
+  float ui_half_extent;
 };
 
 constexpr ActiveValues CalculateActiveValues(
@@ -36,6 +41,7 @@ constexpr ActiveValues CalculateActiveValues(
                                   : kVanillaAspect;
   return {
       .aspect_ratio = active_aspect,
+      .ui_half_extent = CalculateUiHalfExtent(active_aspect),
   };
 }
 
@@ -98,10 +104,7 @@ inline constexpr PatchSpec<21u, 8u> kAspectGetterPatch = {
     .expected_original_target_rva = 0x1E9D194u,
 };
 
-// Contract only: this load is Detroit's native half-extent multiplier for both
-// Scaleform axes. It must remain pointed at the original 0.5 constant. Scaling
-// it with the display aspect enlarges vertical UI geometry and clips the HUD.
-inline constexpr PatchSpec<33u, 9u> kNativeUiHalfExtentContract = {
+inline constexpr PatchSpec<33u, 9u> kUiHalfExtentPatch = {
     .pattern = {{{0x48},
                  {0x8B},
                  {0x03},
@@ -144,19 +147,23 @@ inline constexpr PatchSpec<33u, 9u> kNativeUiHalfExtentContract = {
 };
 
 static_assert(IsPatchSpecValid(kAspectGetterPatch));
-static_assert(IsPatchSpecValid(kNativeUiHalfExtentContract));
+static_assert(IsPatchSpecValid(kUiHalfExtentPatch));
 
 enum class RuntimePatchId : std::uint8_t {
   kAspectGetter,
+  kUiHalfExtent,
 };
 
 inline constexpr std::array kRuntimePatchPlan = {
     RuntimePatchId::kAspectGetter,
+    RuntimePatchId::kUiHalfExtent,
 };
 inline constexpr std::size_t kAspectPatchIndex = 0u;
+inline constexpr std::size_t kUiPatchIndex = 1u;
 
-static_assert(kRuntimePatchPlan.size() == 1u);
+static_assert(kRuntimePatchPlan.size() == 2u);
 static_assert(kRuntimePatchPlan[kAspectPatchIndex] == RuntimePatchId::kAspectGetter);
+static_assert(kRuntimePatchPlan[kUiPatchIndex] == RuntimePatchId::kUiHalfExtent);
 
 struct PatchOperationResult {
   bool bytes_written = false;

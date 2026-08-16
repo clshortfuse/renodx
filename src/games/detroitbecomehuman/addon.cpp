@@ -133,6 +133,7 @@ renodx::utils::cross_addon::Shared<AddonSharedState> addon_shared;
 
 struct alignas(16) UltrawideRuntimeData {
   volatile LONG aspect_ratio_bits;
+  volatile LONG ui_half_extent_bits;
 };
 
 struct UltrawidePatchState {
@@ -463,6 +464,7 @@ void RefreshUltrawideValues() {
   if (auto* runtime_data = ultrawide_runtime_data.load(std::memory_order_acquire);
       runtime_data != nullptr) {
     StoreRuntimeFloat(&runtime_data->aspect_ratio_bits, values.aspect_ratio);
+    StoreRuntimeFloat(&runtime_data->ui_half_extent_bits, values.ui_half_extent);
   }
 }
 
@@ -471,6 +473,8 @@ void ForceUltrawideRuntimeVanilla() {
   if (auto* runtime_data = ultrawide_runtime_data.load(std::memory_order_acquire);
       runtime_data != nullptr) {
     StoreRuntimeFloat(&runtime_data->aspect_ratio_bits, ultrawide::kVanillaAspect);
+    StoreRuntimeFloat(
+        &runtime_data->ui_half_extent_bits, ultrawide::kNativeUiHalfExtent);
   }
 }
 
@@ -490,11 +494,11 @@ void ApplyAspectRatioMode(float selected_mode) {
     LogUltrawide(
         reshade::log::level::info,
         std::format(
-            "aspect mode changed: swapchain {}x{}, aspect {:.6f}, native UI half-extent {:.1f}, mode {}.",
+            "aspect mode changed: swapchain {}x{}, aspect {:.6f}, UI half-extent {:.6f}, mode {}.",
             width,
             height,
             values.aspect_ratio,
-            ultrawide::kNativeUiHalfExtent,
+            values.ui_half_extent,
             enabled ? "Auto" : "Vanilla 16:9"));
   }
 }
@@ -673,7 +677,8 @@ std::uint8_t* FindUniquePattern(
 
 void* AllocateNearPatchData(
     const MainModuleText& module,
-    std::uintptr_t aspect_next_instruction) {
+    std::uintptr_t aspect_next_instruction,
+    std::uintptr_t ui_next_instruction) {
   SYSTEM_INFO system_info = {};
   GetSystemInfo(&system_info);
   const auto allocation_granularity =
@@ -703,7 +708,10 @@ void* AllocateNearPatchData(
     if (memory_info.State == MEM_FREE) {
       const auto candidate = align_up(region_base);
       if (candidate + page_size <= region_end
-          && ultrawide::CalculateRipDisplacement(aspect_next_instruction, candidate).has_value()) {
+          && ultrawide::CalculateRipDisplacement(aspect_next_instruction, candidate).has_value()
+          && ultrawide::CalculateRipDisplacement(
+                 ui_next_instruction, candidate + sizeof(LONG))
+                 .has_value()) {
         if (auto* allocation = VirtualAlloc(
                 reinterpret_cast<void*>(candidate),
                 page_size,
@@ -724,7 +732,8 @@ void* AllocateNearPatchData(
 bool InstallUltrawidePatch() {
   std::scoped_lock lock(ultrawide_patch_mutex);
   if (ultrawide_installed.load(std::memory_order_acquire)) return true;
-  if (ultrawide_patch.active_patches[ultrawide::kAspectPatchIndex]) {
+  if (ultrawide_patch.active_patches[ultrawide::kAspectPatchIndex]
+      || ultrawide_patch.active_patches[ultrawide::kUiPatchIndex]) {
     LogUltrawide(
         reshade::log::level::error,
         "a previous partial patch is still active; refusing another installation attempt.");
@@ -739,15 +748,24 @@ bool InstallUltrawidePatch() {
 
   auto* aspect_pattern = FindUniquePattern(
       module.value(), ultrawide::kAspectGetterPatch.pattern, "aspect getter");
-  if (aspect_pattern == nullptr) return false;
+  auto* ui_pattern = FindUniquePattern(
+      module.value(), ultrawide::kUiHalfExtentPatch.pattern, "UI half-extent");
+  if (aspect_pattern == nullptr || ui_pattern == nullptr) return false;
 
   auto* aspect_getter =
       aspect_pattern + ultrawide::kAspectGetterPatch.instruction_offset;
+  auto* ui_half_extent_load =
+      ui_pattern + ultrawide::kUiHalfExtentPatch.instruction_offset;
   if (std::memcmp(
           aspect_getter,
           ultrawide::kAspectGetterPatch.instruction.data(),
           ultrawide::kAspectGetterPatch.instruction.size())
-      != 0) {
+          != 0
+      || std::memcmp(
+             ui_half_extent_load,
+             ultrawide::kUiHalfExtentPatch.instruction.data(),
+             ultrawide::kUiHalfExtentPatch.instruction.size())
+             != 0) {
     LogUltrawide(reshade::log::level::error, "instruction validation failed.");
     return false;
   }
@@ -755,18 +773,31 @@ bool InstallUltrawidePatch() {
   UltrawidePatchState candidate;
   candidate.displacement_addresses[ultrawide::kAspectPatchIndex] =
       aspect_getter + ultrawide::kAspectGetterPatch.displacement_offset;
+  candidate.displacement_addresses[ultrawide::kUiPatchIndex] =
+      ui_half_extent_load + ultrawide::kUiHalfExtentPatch.displacement_offset;
   std::memcpy(
       &candidate.original_displacements[ultrawide::kAspectPatchIndex],
       candidate.displacement_addresses[ultrawide::kAspectPatchIndex],
+      sizeof(std::int32_t));
+  std::memcpy(
+      &candidate.original_displacements[ultrawide::kUiPatchIndex],
+      candidate.displacement_addresses[ultrawide::kUiPatchIndex],
       sizeof(std::int32_t));
 
   const auto aspect_original_target = reinterpret_cast<std::uintptr_t>(
                                           aspect_getter
                                           + ultrawide::kAspectGetterPatch.instruction.size())
                                       + candidate.original_displacements[ultrawide::kAspectPatchIndex];
+  const auto ui_original_target = reinterpret_cast<std::uintptr_t>(
+                                      ui_half_extent_load
+                                      + ultrawide::kUiHalfExtentPatch.instruction.size())
+                                  + candidate.original_displacements[ultrawide::kUiPatchIndex];
   if (aspect_original_target
-      != reinterpret_cast<std::uintptr_t>(module->module_base)
-             + ultrawide::kAspectGetterPatch.expected_original_target_rva) {
+          != reinterpret_cast<std::uintptr_t>(module->module_base)
+                 + ultrawide::kAspectGetterPatch.expected_original_target_rva
+      || ui_original_target
+             != reinterpret_cast<std::uintptr_t>(module->module_base)
+                    + ultrawide::kUiHalfExtentPatch.expected_original_target_rva) {
     LogUltrawide(
         reshade::log::level::error,
         "original RIP targets do not match Build 12158144; aspect fix was refused.");
@@ -776,7 +807,9 @@ bool InstallUltrawidePatch() {
   auto* runtime_data = static_cast<UltrawideRuntimeData*>(AllocateNearPatchData(
       module.value(),
       reinterpret_cast<std::uintptr_t>(
-          aspect_getter + ultrawide::kAspectGetterPatch.instruction.size())));
+          aspect_getter + ultrawide::kAspectGetterPatch.instruction.size()),
+      reinterpret_cast<std::uintptr_t>(
+          ui_half_extent_load + ultrawide::kUiHalfExtentPatch.instruction.size())));
   if (runtime_data == nullptr) {
     LogUltrawide(reshade::log::level::error, "could not allocate RIP-relative runtime data.");
     return false;
@@ -790,7 +823,11 @@ bool InstallUltrawidePatch() {
       reinterpret_cast<std::uintptr_t>(
           aspect_getter + ultrawide::kAspectGetterPatch.instruction.size()),
       reinterpret_cast<std::uintptr_t>(&runtime_data->aspect_ratio_bits));
-  if (!aspect_displacement.has_value()) {
+  const auto ui_displacement = ultrawide::CalculateRipDisplacement(
+      reinterpret_cast<std::uintptr_t>(
+          ui_half_extent_load + ultrawide::kUiHalfExtentPatch.instruction.size()),
+      reinterpret_cast<std::uintptr_t>(&runtime_data->ui_half_extent_bits));
+  if (!aspect_displacement.has_value() || !ui_displacement.has_value()) {
     ultrawide_runtime_data.store(nullptr, std::memory_order_release);
     LogUltrawide(reshade::log::level::error, "allocated data is outside RIP-relative range.");
     return false;
@@ -798,6 +835,8 @@ bool InstallUltrawidePatch() {
 
   candidate.redirected_displacements[ultrawide::kAspectPatchIndex] =
       aspect_displacement.value();
+  candidate.redirected_displacements[ultrawide::kUiPatchIndex] =
+      ui_displacement.value();
 
   const auto apply = [&candidate](std::size_t index) {
     return AtomicWriteRipDisplacement(
@@ -816,7 +855,8 @@ bool InstallUltrawidePatch() {
 
   if (!ultrawide::ApplyPatchTransaction(apply, restore, candidate.active_patches)) {
     const bool rollback_complete =
-        !candidate.active_patches[ultrawide::kAspectPatchIndex];
+        !candidate.active_patches[ultrawide::kAspectPatchIndex]
+        && !candidate.active_patches[ultrawide::kUiPatchIndex];
     if (rollback_complete) {
       ultrawide_runtime_data.store(nullptr, std::memory_order_release);
     } else {
@@ -842,18 +882,19 @@ bool InstallUltrawidePatch() {
   LogUltrawide(
       reshade::log::level::info,
       std::format(
-          "automatic override installed for Build 12158144: swapchain {}x{}, aspect {:.6f}, native UI half-extent {:.1f}, mode {}.",
+          "automatic override installed for Build 12158144: swapchain {}x{}, aspect {:.6f}, UI half-extent {:.6f}, mode {}.",
           width,
           height,
           values.aspect_ratio,
-          ultrawide::kNativeUiHalfExtent,
+          values.ui_half_extent,
           aspect_ratio_enabled.load(std::memory_order_relaxed) ? "Auto" : "Vanilla 16:9"));
   return true;
 }
 
 void RestoreUltrawidePatch() {
   std::scoped_lock lock(ultrawide_patch_mutex);
-  if (!ultrawide_patch.active_patches[ultrawide::kAspectPatchIndex]) {
+  if (!ultrawide_patch.active_patches[ultrawide::kAspectPatchIndex]
+      && !ultrawide_patch.active_patches[ultrawide::kUiPatchIndex]) {
     return;
   }
 
@@ -879,7 +920,9 @@ void RestoreUltrawidePatch() {
   ultrawide_runtime_data.store(nullptr, std::memory_order_release);
   ultrawide_force_vanilla.store(false, std::memory_order_release);
   ultrawide_patch = {};
-  LogUltrawide(reshade::log::level::info, "original aspect instruction restored.");
+  LogUltrawide(
+      reshade::log::level::info,
+      "original aspect and UI half-extent instructions restored.");
 }
 
 ShaderInjectData shader_injection;
@@ -2616,7 +2659,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Aspect Ratio",
                 .section = "Ultrawide",
-                .tooltip = "Auto replaces Detroit's isolated 16:9 aspect getter with the Vulkan swapchain ratio. Scaleform keeps its native half-extent, so the HUD remains on screen.",
+                .tooltip = "Auto uses the Vulkan swapchain ratio for the scene and compensates Scaleform so UI keeps its 16:9 visual size.",
                 .labels = {"Vanilla 16:9", "Auto (Ultrawide)"},
                 .on_change_value = [](float, float current) {
                   ApplyAspectRatioMode(current);
@@ -2624,7 +2667,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Ultrawide is signature-gated to Steam Build 12158144. At 3440x1440 Auto uses a 43:18 scene while keeping Detroit's native UI layout.",
+                .label = "Ultrawide is signature-gated to Steam Build 12158144. At 3440x1440 Auto uses a 43:18 scene while preserving the 16:9 UI size.",
                 .section = "Ultrawide",
             }},
 #else
@@ -2815,11 +2858,11 @@ bool UpdateUltrawideFromSwapchain(
     LogUltrawide(
         reshade::log::level::info,
         std::format(
-            "swapchain {}x{} detected (aspect {:.6f}, native UI half-extent {:.1f}).",
+            "swapchain {}x{} detected (aspect {:.6f}, UI half-extent {:.6f}).",
             width,
             height,
             values.aspect_ratio,
-            ultrawide::kNativeUiHalfExtent));
+            values.ui_half_extent));
   }
   return true;
 }
