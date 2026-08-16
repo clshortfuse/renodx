@@ -865,6 +865,9 @@ class HDRAndCASGateTests(unittest.TestCase):
         ]
         self.assertIn("gate.mode", sharpening_log_key)
         self.assertIn("strength_percent", sharpening_log_key)
+        self.assertIn(
+            "last_dlaa_sharpening_log_key.load(", sharpening_log_key
+        )
         self.assertNotIn("temporal_capture::GetStatus()", sharpening_log_key)
         self.assertNotIn("exact_command_list_match", sharpening_log_key)
         self.assertRegex(
@@ -1107,6 +1110,40 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertIn("ultrawide::kRuntimePatchPlan.size()", addon)
         self.assertNotIn("CalculateUiScale", ultrawide)
         self.assertNotIn("ui_scale_bits", addon)
+
+    def test_stable_swapchain_skips_redundant_resource_queries(self):
+        addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
+        self.assertRegex(
+            addon,
+            r"bool TryTrackGameSwapchain[\s\S]*?tracked_swapchain\.load"
+            r"[\s\S]*?return tracked == swapchain;[\s\S]*?get_hwnd\(\)"
+            r"[\s\S]*?compare_exchange_strong",
+        )
+        self.assertRegex(
+            addon,
+            r"bool UpdateUltrawideFromSwapchain\([\s\S]*?bool force_refresh"
+            r"[\s\S]*?if \(!force_refresh[\s\S]*?output_width\.load"
+            r"[\s\S]*?output_height\.load[\s\S]*?return true;"
+            r"[\s\S]*?get_back_buffer_count\(\)[\s\S]*?get_resource_desc",
+        )
+        self.assertRegex(
+            addon,
+            r"void OnInitSwapchain[\s\S]*?UpdateUltrawideFromSwapchain\(swapchain, true\)",
+        )
+
+        present = addon[
+            addon.index("void OnPresent(") :
+            addon.index("}  // namespace", addon.index("void OnPresent("))
+        ]
+        self.assertEqual(
+            present.count("UpdateUltrawideFromSwapchain(swapchain, false)"),
+            2,
+        )
+        self.assertRegex(
+            addon,
+            r"void OnDestroySwapchain[\s\S]*?output_width\.store\(0u"
+            r"[\s\S]*?output_height\.store\(0u",
+        )
 
     def test_runtime_switches_apply_the_post_write_setting_value(self):
         addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")

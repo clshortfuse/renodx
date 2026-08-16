@@ -176,6 +176,7 @@ float dof_fill_transition = 0.f;
 float dof_fill_rgb_reconstruction = 0.f;
 float experimental_motion_blur = 0.f;
 dof::RuntimeController dof_runtime_controller;
+std::atomic_bool dof_tracking_enabled = false;
 float retinal_fixation_x = 50.f;
 float retinal_fixation_y = 50.f;
 float retinal_strength = 100.f;
@@ -1060,6 +1061,7 @@ void LogDofStatus(const dof::FrameResult& result) {
   const auto log_key =
       (static_cast<std::uint64_t>(result.status) << 32u)
       | static_cast<std::uint64_t>(result.mode);
+  if (last_dof_log_key.load(std::memory_order_relaxed) == log_key) return;
   if (last_dof_log_key.exchange(log_key, std::memory_order_acq_rel)
       == log_key) {
     return;
@@ -1087,7 +1089,15 @@ bool IsDofSupportedBuild() {
          && supported_build::kDofInputsEmpiricallyVerified;
 }
 
+void SetDofTrackingEnabled(bool enabled) {
+  if (dof_tracking_enabled.load(std::memory_order_acquire) == enabled) return;
+  dof_tracking_enabled.store(false, std::memory_order_release);
+  dof_runtime_controller.Reset();
+  dof_tracking_enabled.store(enabled, std::memory_order_release);
+}
+
 void UpdateDofRuntimeMode() {
+  if (!dof_tracking_enabled.load(std::memory_order_acquire)) return;
   const auto requested_style = dof_mode >= 2.5f
                                    ? dof::RuntimeStyle::kRetinal
                                : dof_mode >= 1.5f
@@ -1122,10 +1132,12 @@ void OnDofSettingsChanged() {
         "Detroit Retinal DOF: temporarily unavailable without global Vulkan interposition; using Cinematic.");
   }
   RefreshEmbeddedCommandTracking();
-  if (dof_mode >= 0.5f) return;
-  dof_runtime_controller.Reset();
+  const bool tracking_enabled = dof_mode >= 0.5f;
+  SetDofTrackingEnabled(tracking_enabled);
+  if (tracking_enabled) return;
   shader_injection.dof_runtime_mode =
       static_cast<float>(dof::RuntimeMode::kVanilla);
+  LogDofStatus({});
 }
 
 render_debug::Source GetRenderDebugSource(float value) {
@@ -1186,22 +1198,28 @@ bool RenderDebugSelectionUnavailable() {
       render_debug::Resolve(GetRenderDebugConfig()));
 }
 
+void ObserveDofPass(dof::Pass pass) {
+  if (!dof_tracking_enabled.load(std::memory_order_acquire)) return;
+  dof_runtime_controller.Observe(pass);
+}
+
 bool OnDofSplitDraw(reshade::api::command_list*) {
-  dof_runtime_controller.Observe(dof::Pass::kSplit);
+  ObserveDofPass(dof::Pass::kSplit);
   return true;
 }
 
 bool OnDofGatherDraw(reshade::api::command_list*) {
-  dof_runtime_controller.Observe(dof::Pass::kGather);
+  ObserveDofPass(dof::Pass::kGather);
   return true;
 }
 
 bool OnDofFillDraw(reshade::api::command_list*) {
-  dof_runtime_controller.Observe(dof::Pass::kFill);
+  ObserveDofPass(dof::Pass::kFill);
   return true;
 }
 
-void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
+[[maybe_unused]] void ApplyRetinalDofFilter(
+    reshade::api::command_list* command_list) {
   const auto effective_mode = dof_runtime_controller.GetMode();
   if (!dof::IsRetinalMode(effective_mode)) {
     SetRetinalCaptureDiagnostic({});
@@ -1304,13 +1322,12 @@ void ApplyRetinalDofFilter(reshade::api::command_list* command_list) {
   SetRetinalRunResult(result);
 }
 
-void OnDofCompositeDrawn(reshade::api::command_list* command_list) {
-  dof_runtime_controller.Observe(dof::Pass::kComposite);
+void OnDofCompositeDrawn(reshade::api::command_list*) {
+  ObserveDofPass(dof::Pass::kComposite);
   if (render_debug_mode >= 0.5f) {
     render_debug_runtime_controller.Observe(
         render_debug::ProducerPass::kDofComposite);
   }
-  ApplyRetinalDofFilter(command_list);
 }
 
 struct DlaaSharpeningGate {
@@ -1413,6 +1430,9 @@ void ApplyDlssOutputMarker(
       static_cast<std::uint32_t>(gate.mode),
       gate.active,
       strength_percent);
+  if (last_dlaa_sharpening_log_key.load(std::memory_order_relaxed) == log_key) {
+    return;
+  }
   if (last_dlaa_sharpening_log_key.exchange(
           log_key,
           std::memory_order_acq_rel)
@@ -2742,6 +2762,10 @@ void OnPresetOff() {
 
 bool TryTrackGameSwapchain(reshade::api::swapchain* swapchain) {
   if (swapchain == nullptr) return false;
+  if (auto* tracked = tracked_swapchain.load(std::memory_order_acquire);
+      tracked != nullptr) {
+    return tracked == swapchain;
+  }
   if (auto* window = static_cast<HWND>(swapchain->get_hwnd()); window != nullptr) {
     DWORD process_id = 0u;
     GetWindowThreadProcessId(window, &process_id);
@@ -2754,8 +2778,17 @@ bool TryTrackGameSwapchain(reshade::api::swapchain* swapchain) {
          || expected == swapchain;
 }
 
-bool UpdateUltrawideFromSwapchain(reshade::api::swapchain* swapchain) {
-  if (swapchain == nullptr || swapchain->get_back_buffer_count() == 0u) return false;
+bool UpdateUltrawideFromSwapchain(
+    reshade::api::swapchain* swapchain,
+    bool force_refresh) {
+  if (swapchain == nullptr) return false;
+  if (!force_refresh
+      && tracked_swapchain.load(std::memory_order_acquire) == swapchain
+      && output_width.load(std::memory_order_relaxed) != 0u
+      && output_height.load(std::memory_order_relaxed) != 0u) {
+    return true;
+  }
+  if (swapchain->get_back_buffer_count() == 0u) return false;
 
   auto* device = swapchain->get_device();
   const auto back_buffer = swapchain->get_back_buffer(0u);
@@ -2798,7 +2831,7 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool) {
         IsHdrOutputColorSpace(swapchain->get_color_space()) ? 1.f : 0.f;
     UpdatePeakBrightness(swapchain, true);
   }
-  if (!UpdateUltrawideFromSwapchain(swapchain)) return;
+  if (!UpdateUltrawideFromSwapchain(swapchain, true)) return;
   if constexpr (!kEffectsAddon) return;
   if (!ultrawide_install_attempted.exchange(true, std::memory_order_acq_rel)) {
     InstallUltrawidePatch();
@@ -2898,6 +2931,8 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
           expected, nullptr, std::memory_order_acq_rel)) {
     return;
   }
+  output_width.store(0u, std::memory_order_relaxed);
+  output_height.store(0u, std::memory_order_relaxed);
 
   if constexpr (!kEffectsAddon) {
     peak_brightness_refresh.Reset();
@@ -2909,12 +2944,6 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
     RestoreUltrawidePatch();
     ultrawide_install_attempted.store(false, std::memory_order_release);
   }
-}
-
-void OnDestroyResource(
-    reshade::api::device* device,
-    reshade::api::resource resource) {
-  retinal_runtime.OnDestroyResource(device, resource);
 }
 
 void OnDestroyDevice(reshade::api::device* device) {
@@ -3031,7 +3060,7 @@ void OnPresent(
     }
     if (!ultrawide_install_attempted.load(std::memory_order_acquire)
         && TryTrackGameSwapchain(swapchain)
-        && UpdateUltrawideFromSwapchain(swapchain)
+        && UpdateUltrawideFromSwapchain(swapchain, false)
         && !ultrawide_install_attempted.exchange(
             true, std::memory_order_acq_rel)) {
       InstallUltrawidePatch();
@@ -3041,7 +3070,7 @@ void OnPresent(
     TrySaveRequestedReShadeScreenshot(swapchain);
   } else {
     if (TryTrackGameSwapchain(swapchain)) {
-      (void)UpdateUltrawideFromSwapchain(swapchain);
+      (void)UpdateUltrawideFromSwapchain(swapchain, false);
     }
     const auto color_space = swapchain->get_color_space();
     shader_injection.output_is_hdr =
@@ -3133,7 +3162,6 @@ bool AttachAddon(HMODULE h_module) {
   reshade::register_event<reshade::addon_event::destroy_swapchain>(OnDestroySwapchain);
   reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitEffectRuntime);
   reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyEffectRuntime);
-  reshade::register_event<reshade::addon_event::destroy_resource>(OnDestroyResource);
   reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
   reshade::register_event<reshade::addon_event::present>(OnPresent);
   MigrateDlssModeSettings();

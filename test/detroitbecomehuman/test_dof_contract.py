@@ -221,6 +221,75 @@ def main():
     )
     require(
         addon,
+        r"std::atomic_bool\s+dof_tracking_enabled\s*=\s*false\s*;",
+        "DOF pass tracking must have a thread-safe Vanilla fast-path gate",
+    )
+    require(
+        addon,
+        r"void\s+SetDofTrackingEnabled\([^)]*\)[\s\S]*?store\(false,[^)]*\)"
+        r"[\s\S]*?dof_runtime_controller\.Reset\(\)[\s\S]*?store\(enabled,[^)]*\)",
+        "DOF tracking transitions must reset before publishing enable",
+    )
+    require(
+        addon,
+        r"void\s+UpdateDofRuntimeMode\(\)\s*\{\s*if\s*\(!dof_tracking_enabled\.load"
+        r"[\s\S]*?return;[\s\S]*?dof_runtime_controller\.FinishFrame\(",
+        "Vanilla DOF must return before per-frame bookkeeping",
+    )
+    require(
+        addon,
+        r"void\s+ObserveDofPass\([^)]*\)\s*\{\s*if\s*\(!dof_tracking_enabled\.load"
+        r"[\s\S]*?return;[\s\S]*?dof_runtime_controller\.Observe\(pass\)",
+        "Vanilla DOF must return before atomic pass observation",
+    )
+    for callback, dof_pass in (
+        ("OnDofSplitDraw", "kSplit"),
+        ("OnDofGatherDraw", "kGather"),
+        ("OnDofFillDraw", "kFill"),
+    ):
+        require(
+            addon,
+            rf"bool\s+{callback}\([^)]*\)\s*\{{[\s\S]*?ObserveDofPass\(dof::Pass::{dof_pass}\)",
+            f"{callback} must use the shared DOF tracking gate",
+        )
+    composite = addon[
+        addon.index("void OnDofCompositeDrawn(") :
+        addon.index("struct DlaaSharpeningGate")
+    ]
+    if "ObserveDofPass(dof::Pass::kComposite);" not in composite:
+        raise AssertionError("DOF Composite must use the shared pass gate")
+    if "render_debug_runtime_controller.Observe(" not in composite:
+        raise AssertionError("Render Debug Composite observation must remain active")
+    if "ApplyRetinalDofFilter(" in composite:
+        raise AssertionError("unavailable Retinal filtering must not run from Composite")
+
+    effects_attach_start = addon.index(
+        "#ifdef DETROIT_EFFECTS_ADDON", addon.index("bool AttachAddon(")
+    )
+    effects_attach = addon[
+        effects_attach_start : addon.index("#else", effects_attach_start)
+    ]
+    if "addon_event::destroy_resource" in effects_attach:
+        raise AssertionError("unavailable Retinal must not observe every resource destroy")
+    if "addon_event::destroy_device" not in effects_attach:
+        raise AssertionError("Effects device teardown must remain registered")
+    require(
+        addon,
+        r"last_dof_log_key\.load\([\s\S]*?last_dof_log_key\.exchange\(",
+        "stable DOF status must avoid an atomic exchange",
+    )
+    require(
+        addon,
+        r"\[\[maybe_unused\]\]\s+void\s+ApplyRetinalDofFilter[\s\S]*?retinal_runtime\.Run\(",
+        "Retinal implementation must remain preserved for redesign",
+    )
+    require(
+        addon,
+        r"void\s+OnDestroyDevice\([^)]*\)[\s\S]*?retinal_runtime\.Destroy\(device\)",
+        "Retinal device teardown must remain intact",
+    )
+    require(
+        addon,
         r'\.key\s*=\s*"DepthOfFieldQuality"[\s\S]*?\.default_value\s*=\s*1\.f',
         "DepthOfFieldQuality must default to High",
     )
