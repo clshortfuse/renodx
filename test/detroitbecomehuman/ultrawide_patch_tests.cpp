@@ -37,7 +37,7 @@ bool NearlyEqual(float left, float right, float tolerance = 0.000001f) {
 }
 
 template <std::size_t PatternSize, std::size_t InstructionSize>
-bool VerifyPatchSpec(
+bool VerifyPatchContract(
     const ultrawide::PatchSpec<PatternSize, InstructionSize>& spec,
     std::span<const std::uint8_t> image,
     std::string_view name) {
@@ -67,6 +67,16 @@ bool VerifyPatchSpec(
   passed &= Expect(
       decoded_target == static_cast<std::int64_t>(spec.expected_original_target_rva),
       std::string(name).append(" original RIP target must match the supported build"));
+
+  return passed;
+}
+
+template <std::size_t PatternSize, std::size_t InstructionSize>
+bool VerifyRuntimePatchSpec(
+    const ultrawide::PatchSpec<PatternSize, InstructionSize>& spec,
+    std::span<const std::uint8_t> image,
+    std::string_view name) {
+  bool passed = VerifyPatchContract(spec, image, name);
 
   auto redirected = spec.instruction;
   constexpr std::uintptr_t kSyntheticNextInstruction = 0x0000000140200000ull;
@@ -138,54 +148,36 @@ int main(int argc, char** argv) {
       NearlyEqual(ultrawide::kVanillaAspect, 16.f / 9.f),
       "the vanilla projection must remain 16:9");
   passed &= Expect(
-      NearlyEqual(ultrawide::kReferenceUiScale, 0.5f),
-      "the vanilla UI reference scale must remain 0.5");
+      NearlyEqual(ultrawide::kNativeUiHalfExtent, 0.5f),
+      "the native UI half-extent must remain 0.5");
   passed &= Expect(
       NearlyEqual(ultrawide::kDefaultTargetAspect, 3440.f / 1440.f),
       "the default target must use the monitor's exact 3440:1440 ratio");
-
   passed &= Expect(
-      NearlyEqual(
-          ultrawide::CalculateUiScale(ultrawide::kVanillaAspect),
-          ultrawide::kReferenceUiScale),
-      "16:9 must preserve the vanilla UI scale");
-  passed &= Expect(
-      NearlyEqual(ultrawide::CalculateUiScale(2560.f / 1080.f), 2.f / 3.f),
-      "2560x1080 UI scale must match the known 21:9 value");
-  passed &= Expect(
-      NearlyEqual(ultrawide::CalculateUiScale(3440.f / 1440.f), 0.671875f),
-      "3440x1440 UI scale must use exact 43:18 geometry");
-  passed &= Expect(
-      NearlyEqual(ultrawide::CalculateUiScale(32.f / 9.f), 1.f),
-      "32:9 UI scale must match the validated reference");
-  passed &= Expect(
-      NearlyEqual(ultrawide::CalculateUiScale(48.f / 9.f), 1.5f),
-      "48:9 UI scale must match the validated reference");
+      ultrawide::kRuntimePatchPlan.size() == 1u
+          && ultrawide::kRuntimePatchPlan[ultrawide::kAspectPatchIndex]
+                 == ultrawide::RuntimePatchId::kAspectGetter,
+      "the production patch plan must contain only the scene aspect redirect");
 
   const auto auto_3440 = ultrawide::CalculateActiveValues(3440u, 1440u, true);
   passed &= Expect(
-      NearlyEqual(auto_3440.aspect_ratio, 3440.f / 1440.f)
-          && NearlyEqual(auto_3440.ui_scale, 0.671875f),
-      "Auto must use the exact 3440x1440 aspect and UI scale");
+      NearlyEqual(auto_3440.aspect_ratio, 3440.f / 1440.f),
+      "Auto must use the exact 3440x1440 scene aspect");
   const auto off_3440 = ultrawide::CalculateActiveValues(3440u, 1440u, false);
   passed &= Expect(
-      NearlyEqual(off_3440.aspect_ratio, ultrawide::kVanillaAspect)
-          && NearlyEqual(off_3440.ui_scale, ultrawide::kReferenceUiScale),
-      "Off must restore both vanilla aspect and UI scale");
+      NearlyEqual(off_3440.aspect_ratio, ultrawide::kVanillaAspect),
+      "Off must restore the vanilla scene aspect");
   const auto auto_16_9 = ultrawide::CalculateActiveValues(1920u, 1080u, true);
   passed &= Expect(
-      NearlyEqual(auto_16_9.aspect_ratio, ultrawide::kVanillaAspect)
-          && NearlyEqual(auto_16_9.ui_scale, ultrawide::kReferenceUiScale),
+      NearlyEqual(auto_16_9.aspect_ratio, ultrawide::kVanillaAspect),
       "Auto must leave 16:9 unchanged");
   const auto invalid_extent = ultrawide::CalculateActiveValues(0u, 0u, true);
   passed &= Expect(
-      NearlyEqual(invalid_extent.aspect_ratio, ultrawide::kVanillaAspect)
-          && NearlyEqual(invalid_extent.ui_scale, ultrawide::kReferenceUiScale),
+      NearlyEqual(invalid_extent.aspect_ratio, ultrawide::kVanillaAspect),
       "a missing swapchain extent must fall back to vanilla values");
   const auto narrow_extent = ultrawide::CalculateActiveValues(1280u, 1024u, true);
   passed &= Expect(
-      NearlyEqual(narrow_extent.aspect_ratio, ultrawide::kVanillaAspect)
-          && NearlyEqual(narrow_extent.ui_scale, ultrawide::kReferenceUiScale),
+      NearlyEqual(narrow_extent.aspect_ratio, ultrawide::kVanillaAspect),
       "Auto must not crop displays narrower than 16:9");
 
   using ultrawide::PatternByte;
@@ -287,62 +279,54 @@ int main(int argc, char** argv) {
       "an unexpected third-party displacement must be refused");
 
   {
-    std::array<bool, 2u> active = {};
-    std::vector<std::size_t> rollback_order;
+    std::array<bool, ultrawide::kRuntimePatchPlan.size()> active = {};
+    std::size_t rollback_count = 0u;
     std::size_t apply_count = 0u;
     const bool committed = ultrawide::ApplyPatchTransaction(
         [&apply_count](std::size_t) {
           ++apply_count;
           return ultrawide::PatchOperationResult{true, true};
         },
-        [&rollback_order](std::size_t index) {
-          rollback_order.push_back(index);
+        [&rollback_count](std::size_t) {
+          ++rollback_count;
           return ultrawide::PatchOperationResult{true, true};
         },
         active);
     passed &= Expect(
-        committed && active == std::array<bool, 2u>({true, true})
-            && apply_count == 2u && rollback_order.empty(),
-        "a successful two-patch transaction must commit both redirects");
+        committed && active == std::array<bool, 1u>({true})
+            && apply_count == 1u && rollback_count == 0u,
+        "a successful production transaction must commit the aspect redirect");
   }
 
   {
-    std::array<bool, 2u> active = {};
+    std::array<bool, ultrawide::kRuntimePatchPlan.size()> active = {};
     std::vector<std::size_t> rollback_order;
     const bool committed = ultrawide::ApplyPatchTransaction(
-        [](std::size_t index) {
-          return index == 0u
-                     ? ultrawide::PatchOperationResult{true, true}
-                     : ultrawide::PatchOperationResult{true, false};
-        },
+        [](std::size_t) { return ultrawide::PatchOperationResult{true, false}; },
         [&rollback_order](std::size_t index) {
           rollback_order.push_back(index);
           return ultrawide::PatchOperationResult{true, true};
         },
         active);
     passed &= Expect(
-        !committed && active == std::array<bool, 2u>({false, false})
-            && rollback_order == std::vector<std::size_t>({1u, 0u}),
-        "a failed second patch must roll back both writes in reverse order");
+        !committed && active == std::array<bool, 1u>({false})
+            && rollback_order == std::vector<std::size_t>({0u}),
+        "a written aspect redirect with failed protection restore must roll back");
   }
 
   {
-    std::array<bool, 2u> active = {true, true};
+    std::array<bool, ultrawide::kRuntimePatchPlan.size()> active = {true};
     const bool restored = ultrawide::RestorePatchTransaction(
-        [](std::size_t index) {
-          return index == 0u
-                     ? ultrawide::PatchOperationResult{true, false}
-                     : ultrawide::PatchOperationResult{true, true};
-        },
+        [](std::size_t) { return ultrawide::PatchOperationResult{true, false}; },
         active);
     passed &= Expect(
-        !restored && active == std::array<bool, 2u>({true, false}),
+        !restored && active == std::array<bool, 1u>({true}),
         "failed restoration must retain recoverable active state");
     const bool retried = ultrawide::RestorePatchTransaction(
         [](std::size_t) { return ultrawide::PatchOperationResult{true, true}; },
         active);
     passed &= Expect(
-        retried && active == std::array<bool, 2u>({false, false}),
+        retried && active == std::array<bool, 1u>({false}),
         "a later idempotent restoration retry must clear retained state");
   }
 
@@ -354,9 +338,12 @@ int main(int argc, char** argv) {
         std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
     if (!image.empty()) {
       passed &= VerifyPeGate(image);
-      passed &= VerifyPatchSpec(
+      passed &= VerifyRuntimePatchSpec(
           ultrawide::kAspectGetterPatch, image, "aspect getter");
-      passed &= VerifyPatchSpec(ultrawide::kUiScalePatch, image, "UI scale");
+      passed &= VerifyPatchContract(
+          ultrawide::kNativeUiHalfExtentContract,
+          image,
+          "native UI half-extent");
     } else {
       passed = false;
     }

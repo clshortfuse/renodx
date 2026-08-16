@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Detroit Build 12158144 before enabling its ultrawide hooks."""
+"""Validate Detroit Build 12158144 before enabling its aspect override."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ SIGNATURES = (
         original_bytes=bytes.fromhex("F3 0F 10 05 80 0C D4 01"),
     ),
     Signature(
-        name="Scaleform UI scale context",
+        name="native Scaleform half-extent contract (must remain unpatched)",
         pattern=(
             "48 8B 03 48 8B CB FF 50 10 48 8B 03 48 8B CB "
             "F3 44 0F 10 35 3F B0 2D 01 44 0F 28 C0 F3 45 0F 59 C6"
@@ -113,7 +113,7 @@ def validate(exe_path: Path) -> list[str]:
 
     constants = (
         ("vanilla 16:9 aspect", 0x1E9C194, bytes.fromhex("39 8E E3 3F")),
-        ("vanilla UI scale", 0x1E9BF4C, bytes.fromhex("00 00 00 3F")),
+        ("native UI half-extent", 0x1E9BF4C, bytes.fromhex("00 00 00 3F")),
     )
     for name, offset, expected in constants:
         actual = image[offset : offset + len(expected)]

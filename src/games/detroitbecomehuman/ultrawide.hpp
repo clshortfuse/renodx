@@ -15,16 +15,11 @@ inline constexpr std::uint32_t kSupportedExeTimestamp = 0x64DD1BF3u;
 inline constexpr std::uint32_t kSupportedExeImageSize = 0x038C1000u;
 
 inline constexpr float kVanillaAspect = 16.f / 9.f;
-inline constexpr float kReferenceUiScale = 0.5f;
+inline constexpr float kNativeUiHalfExtent = 0.5f;
 inline constexpr float kDefaultTargetAspect = 3440.f / 1440.f;
-
-constexpr float CalculateUiScale(float aspect_ratio) {
-  return aspect_ratio * kReferenceUiScale / kVanillaAspect;
-}
 
 struct ActiveValues {
   float aspect_ratio;
-  float ui_scale;
 };
 
 constexpr ActiveValues CalculateActiveValues(
@@ -41,7 +36,6 @@ constexpr ActiveValues CalculateActiveValues(
                                   : kVanillaAspect;
   return {
       .aspect_ratio = active_aspect,
-      .ui_scale = CalculateUiScale(active_aspect),
   };
 }
 
@@ -104,7 +98,10 @@ inline constexpr PatchSpec<21u, 8u> kAspectGetterPatch = {
     .expected_original_target_rva = 0x1E9D194u,
 };
 
-inline constexpr PatchSpec<33u, 9u> kUiScalePatch = {
+// Contract only: this load is Detroit's native half-extent multiplier for both
+// Scaleform axes. It must remain pointed at the original 0.5 constant. Scaling
+// it with the display aspect enlarges vertical UI geometry and clips the HUD.
+inline constexpr PatchSpec<33u, 9u> kNativeUiHalfExtentContract = {
     .pattern = {{{0x48},
                  {0x8B},
                  {0x03},
@@ -147,7 +144,19 @@ inline constexpr PatchSpec<33u, 9u> kUiScalePatch = {
 };
 
 static_assert(IsPatchSpecValid(kAspectGetterPatch));
-static_assert(IsPatchSpecValid(kUiScalePatch));
+static_assert(IsPatchSpecValid(kNativeUiHalfExtentContract));
+
+enum class RuntimePatchId : std::uint8_t {
+  kAspectGetter,
+};
+
+inline constexpr std::array kRuntimePatchPlan = {
+    RuntimePatchId::kAspectGetter,
+};
+inline constexpr std::size_t kAspectPatchIndex = 0u;
+
+static_assert(kRuntimePatchPlan.size() == 1u);
+static_assert(kRuntimePatchPlan[kAspectPatchIndex] == RuntimePatchId::kAspectGetter);
 
 struct PatchOperationResult {
   bool bytes_written = false;
@@ -173,11 +182,11 @@ constexpr DisplacementWriteAction DecideDisplacementWrite(
   return DisplacementWriteAction::kRefuse;
 }
 
-template <typename Apply, typename Restore>
+template <typename Apply, typename Restore, std::size_t PatchCount>
 bool ApplyPatchTransaction(
     Apply&& apply,
     Restore&& restore,
-    std::array<bool, 2u>& active_patches) {
+    std::array<bool, PatchCount>& active_patches) {
   active_patches = {};
   for (std::size_t index = 0; index < active_patches.size(); ++index) {
     const auto result = apply(index);
@@ -193,10 +202,10 @@ bool ApplyPatchTransaction(
   return true;
 }
 
-template <typename Restore>
+template <typename Restore, std::size_t PatchCount>
 bool RestorePatchTransaction(
     Restore&& restore,
-    std::array<bool, 2u>& active_patches) {
+    std::array<bool, PatchCount>& active_patches) {
   bool restored = true;
   for (std::size_t index = active_patches.size(); index-- > 0u;) {
     if (!active_patches[index]) continue;
