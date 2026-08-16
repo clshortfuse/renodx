@@ -8,7 +8,7 @@
 #include <string_view>
 #include <utility>
 
-#include "src/games/detroitbecomehuman/retinal_observability.hpp"
+#include "src/games/detroitbecomehuman/effects/retinal_observability.hpp"
 
 namespace {
 

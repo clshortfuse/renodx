@@ -1,8 +1,8 @@
 #version 450
 #extension GL_EXT_samplerless_texture_functions : require
-#include "shared.h"
+#include "../shared.h"
 #include "hdr_intermediate.hlsli"
-#include "render_debug_common.slang"
+#include "../debug/render_debug_common.slang"
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 struct sCB

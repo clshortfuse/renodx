@@ -1,7 +1,7 @@
 #version 450
 #extension GL_EXT_samplerless_texture_functions : require
 
-#include "shared.h"
+#include "../shared.h"
 #include "display_peak_limiter.hlsli"
 #include "hdr_intermediate.hlsli"
 

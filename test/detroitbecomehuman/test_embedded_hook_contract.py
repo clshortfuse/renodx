@@ -29,12 +29,12 @@ def main() -> None:
     bootstrap = (source_dir / "dlss" / "embedded_bootstrap.hpp").read_text(
         encoding="utf-8"
     )
-    temporal = (source_dir / "temporal_capture.hpp").read_text(encoding="utf-8")
-    temporal_mode_state = (source_dir / "temporal_mode_state.hpp").read_text(
+    temporal = (source_dir / "dlss" / "temporal_capture.hpp").read_text(encoding="utf-8")
+    temporal_mode_state = (source_dir / "dlss" / "temporal_mode_state.hpp").read_text(
         encoding="utf-8"
     )
     addon = (source_dir / "addon.cpp").read_text(encoding="utf-8")
-    bridge = (source_dir / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
+    bridge = (source_dir / "dlss" / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
     effects_addon = (
         source_dir.parent / "detroitbecomehuman-effects" / "addon.cpp"
     ).read_text(encoding="utf-8")

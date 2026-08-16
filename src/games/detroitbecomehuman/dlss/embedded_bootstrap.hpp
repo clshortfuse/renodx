@@ -13,7 +13,7 @@
 
 #include <Windows.h>
 
-#include "../dlss_bridge_abi.h"
+#include "dlss_bridge_abi.h"
 
 namespace renodx::games::detroitbecomehuman::dlss::embedded {
 

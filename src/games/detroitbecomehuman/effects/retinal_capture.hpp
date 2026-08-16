@@ -8,7 +8,7 @@
 
 #include <include/reshade.hpp>
 
-#include "dlss/embedded_bootstrap.hpp"
+#include "../dlss/embedded_bootstrap.hpp"
 #include "retinal_runtime.hpp"
 
 namespace renodx::games::detroitbecomehuman::retinal_capture {

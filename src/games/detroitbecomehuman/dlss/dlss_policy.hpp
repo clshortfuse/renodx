@@ -9,7 +9,7 @@
 #include <string_view>
 
 #include "dlss_bridge_abi.h"
-#include "supported_build.hpp"
+#include "../supported_build.hpp"
 
 namespace renodx::games::detroitbecomehuman::dlss_policy {
 

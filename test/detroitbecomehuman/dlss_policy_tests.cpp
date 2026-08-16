@@ -9,7 +9,7 @@
 #include <limits>
 #include <string_view>
 
-#include "src/games/detroitbecomehuman/dlss_policy.hpp"
+#include "src/games/detroitbecomehuman/dlss/dlss_policy.hpp"
 
 namespace {
 

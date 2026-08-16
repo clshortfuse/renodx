@@ -1,7 +1,7 @@
 #ifndef SRC_DETROITBECOMEHUMAN_DISPLAY_PEAK_LIMITER_HLSLI_
 #define SRC_DETROITBECOMEHUMAN_DISPLAY_PEAK_LIMITER_HLSLI_
 
-#include "shared.h"
+#include "../shared.h"
 
 vec3 LimitDisplayLightPeak(vec3 display_light_intermediate)
 {

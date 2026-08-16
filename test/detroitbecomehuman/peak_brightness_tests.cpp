@@ -4,7 +4,7 @@
 #include <limits>
 #include <optional>
 
-#include "src/games/detroitbecomehuman/peak_brightness.hpp"
+#include "src/games/detroitbecomehuman/hdr/peak_brightness.hpp"
 
 namespace {
 

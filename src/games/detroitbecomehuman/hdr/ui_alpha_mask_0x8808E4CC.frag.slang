@@ -1,6 +1,6 @@
 #version 450
 
-#include "./shared.h"
+#include "../shared.h"
 #include "./ui_brightness.slang"
 
 layout(set = 0, binding = 2) uniform sampler2D tex;

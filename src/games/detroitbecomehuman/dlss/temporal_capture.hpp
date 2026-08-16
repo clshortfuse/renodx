@@ -27,12 +27,12 @@
 
 #include <include/reshade.hpp>
 
-#include "../../utils/command_action.hpp"
-#include "../../utils/data.hpp"
-#include "../../utils/shader.hpp"
+#include "../../../utils/command_action.hpp"
+#include "../../../utils/data.hpp"
+#include "../../../utils/shader.hpp"
 #include "dlss_bridge_client.hpp"
-#include "dlss/embedded_bootstrap.hpp"
-#include "supported_build.hpp"
+#include "embedded_bootstrap.hpp"
+#include "../supported_build.hpp"
 #include "taa_contract.hpp"
 #include "temporal_mode_state.hpp"
 

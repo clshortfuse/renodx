@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 SHADER_HASH = "0xC03380A0"
-SHADER_FILENAME = "motion_blur_0xC03380A0.comp.slang"
+SHADER_FILENAME = "effects/motion_blur_0xC03380A0.comp.slang"
 VANILLA_DIGEST = "24996e860d86905206a2dbce825894126dc93d27c16c03802e1b8cbd8117520d"
 
 
@@ -27,7 +27,7 @@ def main():
         encoding="utf-8"
     )
 
-    require(shader, r'#include\s+"shared\.h"', "injected runtime payload is missing")
+    require(shader, r'#include\s+"\.\./shared\.h"', "injected runtime payload is missing")
     require(
         shader,
         r"local_size_x\s*=\s*8[\s\S]*?local_size_y\s*=\s*8[\s\S]*?local_size_z\s*=\s*1",

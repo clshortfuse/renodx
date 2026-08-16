@@ -9,7 +9,7 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "dlss/feature_recording_registry.hpp"
+#include "feature_recording_registry.hpp"
 #include "dlss_policy.hpp"
 
 namespace renodx::games::detroitbecomehuman::temporal_mode_state {

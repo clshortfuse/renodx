@@ -45,7 +45,7 @@ layout(push_constant) uniform PushData
     ShaderInjectData_std140 shader_injection;
 };
 
-#include "render_debug_common.slang"
+#include "../debug/render_debug_common.slang"
 
 bool RenderDebugPushPayloadFinite()
 {

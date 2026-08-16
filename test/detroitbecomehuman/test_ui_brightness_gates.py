@@ -417,7 +417,7 @@ class UIBrightnessGateTests(unittest.TestCase):
         )
 
     def test_production_ui_shaders_keep_the_same_gate_contract(self):
-        helper = (SOURCE_DIR / "ui_brightness.slang").read_text(encoding="utf-8")
+        helper = (SOURCE_DIR / "hdr" / "ui_brightness.slang").read_text(encoding="utf-8")
         shared = (SOURCE_DIR / "shared.h").read_text(encoding="utf-8")
         addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
         compact_helper = re.sub(r"\s+", " ", helper)
@@ -491,7 +491,7 @@ class UIBrightnessGateTests(unittest.TestCase):
         }
         for wrapper, native_alpha_marker in straight_alpha_wrappers.items():
             with self.subTest(wrapper=wrapper):
-                source = (SOURCE_DIR / wrapper).read_text(encoding="utf-8")
+                source = (SOURCE_DIR / "hdr" / wrapper).read_text(encoding="utf-8")
                 self.assertEqual(
                     source.count("if (DetroitShouldTransformUi())"), 1
                 )
@@ -516,7 +516,7 @@ class UIBrightnessGateTests(unittest.TestCase):
                 )
 
         compositor = (
-            SOURCE_DIR / "ui_shadow_composite_0xEF606BCD.frag.slang"
+            SOURCE_DIR / "hdr" / "ui_shadow_composite_0xEF606BCD.frag.slang"
         ).read_text(encoding="utf-8")
         compact_compositor = re.sub(r"\s+", " ", compositor)
         native_sequence = (

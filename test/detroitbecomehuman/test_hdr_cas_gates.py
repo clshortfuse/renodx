@@ -488,23 +488,23 @@ class HDRAndCASGateTests(unittest.TestCase):
 
     def test_production_sources_keep_the_same_gate_contract(self):
         shared = (SOURCE_DIR / "shared.h").read_text(encoding="utf-8")
-        shader = (SOURCE_DIR / "oetf_hdr_cas_0x94F97DCF.frag.slang").read_text(
+        shader = (SOURCE_DIR / "hdr" / "oetf_hdr_cas_0x94F97DCF.frag.slang").read_text(
             encoding="utf-8"
         )
-        final_shader = (SOURCE_DIR / "oetf_hdr_0xF478AFEF.frag.slang").read_text(
+        final_shader = (SOURCE_DIR / "hdr" / "oetf_hdr_0xF478AFEF.frag.slang").read_text(
             encoding="utf-8"
         )
-        peak_limiter = (SOURCE_DIR / "display_peak_limiter.hlsli").read_text(
+        peak_limiter = (SOURCE_DIR / "hdr" / "display_peak_limiter.hlsli").read_text(
             encoding="utf-8"
         )
-        hdr_intermediate = (SOURCE_DIR / "hdr_intermediate.hlsli").read_text(
+        hdr_intermediate = (SOURCE_DIR / "hdr" / "hdr_intermediate.hlsli").read_text(
             encoding="utf-8"
         )
-        scene_shader = (SOURCE_DIR / "scene_0xEBFBDDB1.comp.slang").read_text(
+        scene_shader = (SOURCE_DIR / "hdr" / "scene_0xEBFBDDB1.comp.slang").read_text(
             encoding="utf-8"
         )
         addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
-        temporal_capture = (SOURCE_DIR / "temporal_capture.hpp").read_text(
+        temporal_capture = (SOURCE_DIR / "dlss" / "temporal_capture.hpp").read_text(
             encoding="utf-8"
         )
         pack_shader = (
@@ -519,7 +519,7 @@ class HDRAndCASGateTests(unittest.TestCase):
         vulkan_layer = (
             SOURCE_DIR / "dlss" / "vulkan_layer.cpp"
         ).read_text(encoding="utf-8")
-        bridge_abi = (SOURCE_DIR / "dlss_bridge_abi.h").read_text(
+        bridge_abi = (SOURCE_DIR / "dlss" / "dlss_bridge_abi.h").read_text(
             encoding="utf-8"
         )
 
@@ -1026,7 +1026,7 @@ class HDRAndCASGateTests(unittest.TestCase):
             r"\.on_replace\s*=\s*&OnTemporalAuxiliaryReplace,",
         )
 
-        auxiliary_shader = (SOURCE_DIR / "temporal_aux.comp.vk.glsl").read_text(
+        auxiliary_shader = (SOURCE_DIR / "dlss" / "temporal_aux.comp.vk.glsl").read_text(
             encoding="utf-8"
         )
         self.assertIn(

@@ -1,6 +1,6 @@
 #version 450
 
-#include "shared.h"
+#include "../shared.h"
 #include "display_peak_limiter.hlsli"
 #include "hdr_intermediate.hlsli"
 

@@ -1,6 +1,6 @@
 #version 450
 
-#include "./shared.h"
+#include "../shared.h"
 #include "./ui_brightness.slang"
 
 layout(set = 0, binding = 1, std140) uniform FConstants
@@ -8,20 +8,19 @@ layout(set = 0, binding = 1, std140) uniform FConstants
     vec4 fExtra;
 } constants;
 
-layout(set = 0, binding = 3) uniform sampler2D tex;
 layout(set = 0, binding = 2) uniform sampler2D depth;
 
 layout(location = 0) out vec4 fcolor;
-layout(location = 4) in vec2 tc0;
-layout(location = 3) in vec4 fucxmul;
-layout(location = 2) in vec4 fucxadd;
-layout(location = 1) in vec4 factor;
-layout(location = 0) in vec4 cpos;
+layout(location = 0) in vec4 color;
+layout(location = 4) in vec4 fucxmul;
+layout(location = 3) in vec4 fucxadd;
+layout(location = 2) in vec4 factor;
+layout(location = 1) in vec4 cpos;
 
 void main()
 {
-    // Literal native depth-aware textured HUD path.
-    fcolor = texture(tex, tc0);
+    // Literal native depth-aware solid HUD path.
+    fcolor = color;
     fcolor = clamp((fcolor * fucxmul) + fucxadd,
                    vec4(0.0), vec4(1.0));
     fcolor.w *= factor.w;

@@ -7,7 +7,7 @@
 #include <iostream>
 #include <string_view>
 
-#include "src/games/detroitbecomehuman/render_debug.hpp"
+#include "src/games/detroitbecomehuman/debug/render_debug.hpp"
 
 namespace {
 

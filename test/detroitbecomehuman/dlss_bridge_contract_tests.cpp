@@ -15,10 +15,10 @@
 #include <type_traits>
 
 #include "src/games/detroitbecomehuman/dlss/evaluation_trace.hpp"
-#include "src/games/detroitbecomehuman/dlss_bridge_abi.h"
-#include "src/games/detroitbecomehuman/dlss_bridge_client.hpp"
+#include "src/games/detroitbecomehuman/dlss/dlss_bridge_abi.h"
+#include "src/games/detroitbecomehuman/dlss/dlss_bridge_client.hpp"
 #include "src/games/detroitbecomehuman/supported_build.hpp"
-#include "src/games/detroitbecomehuman/temporal_mode_state.hpp"
+#include "src/games/detroitbecomehuman/dlss/temporal_mode_state.hpp"
 
 namespace {
 

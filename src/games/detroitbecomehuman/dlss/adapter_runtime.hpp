@@ -14,7 +14,7 @@
 #include <memory>
 #include <span>
 
-#include "../dlss_bridge_abi.h"
+#include "dlss_bridge_abi.h"
 #include "utils/dlss/ngx_vulkan.hpp"
 
 namespace renodx::games::detroitbecomehuman::dlss {
