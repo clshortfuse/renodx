@@ -374,7 +374,7 @@ float3 ApplyToneMap(float3 untonemapped, float peak_ratio) {
     tonemapped = untonemapped * luminosity_scale;
 
     // use perch purity and use perch hues only on highlights
-    tonemapped = CorrectHueLuminosityGatedAndPurityMB(tonemapped, ch_tonemapped, 1.f, 2.f, 1.025f);
+    tonemapped = CorrectHueLuminosityGatedAndPurityMB(tonemapped, ch_tonemapped, 1.f, 2.f, 0.5f, 1.025f);
   } else {
     tonemapped = untonemapped;
   }
