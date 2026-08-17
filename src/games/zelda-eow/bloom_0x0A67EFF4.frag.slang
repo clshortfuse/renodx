@@ -2,7 +2,7 @@
 
 #version 450
 
-#include "./common.slangi"
+#include "./common.slang"
 
 layout(set = 0, binding = 0, std140) uniform support_buffer {
   uint _m0;
@@ -26,7 +26,7 @@ void main() {
   float _33 = _23.x;
   float _35 = _23.y;
   vec4 _38 = textureLod(fp_t_tcb_A, vec2(_33, _35), 0.0).xyzw;
-  _38 *= CUSTOM_BLOOM;
+  _38;
   float _40 = _38.x;
   float _42 = _38.y;
   float _44 = _38.z;
@@ -48,5 +48,7 @@ void main() {
   _26.y = _60;
   _26.z = _62;
   _26.w = _64;
+
+  _26 *= CUSTOM_BLOOM;
 }
 

@@ -129,20 +129,8 @@ float psycho17_AdaptiveHueSensitivity(float2 mb_xy, float2 mb_anchor) {
       psycho17_RayExitTCIE1702(mb_anchor, direction));
 }
 
-float3 psycho17_ComputeReinhardScale(float3 peak = 1.f, float minimum = 0.f, float3 gray_in = 0.18f, float3 gray_out = 0.18f) {
-  //  s = (p * y - p * m) / (x * p - x * y)
-
-  float3 num = peak * (gray_out - minimum);  // p * (y - m)
-  float3 den = gray_in * (peak - gray_out);  // x * (p - y)
-
-  return num / den;
-}
-
 float3 psycho17_ReinhardPiecewise(float3 x, float3 x_max = 1.f, float3 shoulder = 0.18f) {
-  const float x_min = 0.f;
-  float3 exposure = psycho17_ComputeReinhardScale(x_max, x_min, shoulder, shoulder);
-  float3 tonemapped = mad(x, exposure, x_min) / mad(x, exposure / x_max, 1.f - x_min);
-
+  float3 tonemapped = (x * x_max) / (x + x_max - shoulder);
   return lerp(x, tonemapped, step(shoulder, x));
 }
 
