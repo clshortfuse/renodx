@@ -282,28 +282,28 @@ const std::array<std::vector<uint32_t>, 4> GAME_HASHES = {
 };
 
 const std::array<std::vector<uint32_t>, 4> GAME_NOAA_HASHES = {
-        std::vector<uint32_t>{},
-        std::vector<uint32_t>{
-                0x9E1E992D,
-                0x966EFB35,
-                0x52E067D4,
-                0x8558CF72,
-        },
-        std::vector<uint32_t>{
-                0x91EDF2BE,
-                0x1AF34FA5,
-                0xC946B6A0,
-                0xEB399F26,
-        },
-        std::vector<uint32_t>{},
+    std::vector<uint32_t>{},
+    std::vector<uint32_t>{
+        0x9E1E992D,
+        0x966EFB35,
+        0x52E067D4,
+        0x8558CF72,
+    },
+    std::vector<uint32_t>{
+        0x91EDF2BE,
+        0x1AF34FA5,
+        0xC946B6A0,
+        0xEB399F26,
+    },
+    std::vector<uint32_t>{},
 };
 
 void ConfigureShaderHotSwapTargets() {
   const std::vector<uint32_t>& hashes = GAME_HASHES[static_cast<int>(current_game_type)];
-    const std::vector<uint32_t>& noaa_hashes = GAME_NOAA_HASHES[static_cast<int>(current_game_type)];
+  const std::vector<uint32_t>& noaa_hashes = GAME_NOAA_HASHES[static_cast<int>(current_game_type)];
 
   renodx_custom::utils::shader_hotswap::targets.clear();
-    renodx_custom::utils::shader_hotswap::disable_hashes = noaa_hashes;
+  renodx_custom::utils::shader_hotswap::disable_hashes = noaa_hashes;
   for (uint32_t hash : hashes) {
     for (int i = 0; i < 2; i++) {
       renodx_custom::utils::shader_hotswap::targets.push_back({
@@ -402,6 +402,15 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           .new_format = target_format,
           .index = 0,
           .aspect_ratio = 16.f / 9.f,
+          .aspect_ratio_tolerance = 0.05f,
+          //.usage_include = reshade::api::resource_usage::shader_resource,
+      });
+
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = target_format,
+          .index = 0,
+          .aspect_ratio = 21.5f / 9.f,
           .aspect_ratio_tolerance = 0.05f,
           //.usage_include = reshade::api::resource_usage::shader_resource,
       });

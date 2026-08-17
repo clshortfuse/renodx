@@ -15,6 +15,7 @@
 #include "../../mods/swapchain.hpp"
 #include "../../templates/settings.hpp"
 #include "../../utils/date.hpp"
+#include "../../utils/log.hpp"
 #include "../../utils/random.hpp"
 #include "../../utils/settings.hpp"
 #include "./ryujinxlog.hpp"
@@ -232,11 +233,45 @@ void OnPresetOff() {
 bool initialized = false;
 
 const auto RYUJINX_PROCESS_NAME = std::string_view("Ryujinx.exe");
+const auto CEMU_PROCESS_NAME = std::string_view("Cemu.exe");
 const auto RYUJINX_LOADED_TITLE_MARKER = std::string_view("Application Loaded:");
 const std::array<std::string_view, 2> ACCEPTED_RYUJINX_TITLES = {
     "01007ef00011e000",
     "the legend of zelda: breath of the wild",
 };
+
+constexpr uint64_t BOTW_CEMU_TITLE_ID_USA = 0x00050000101C9400ull;
+constexpr uint64_t BOTW_CEMU_TITLE_ID_EUR = 0x00050000101C9500ull;
+constexpr uint64_t BOTW_CEMU_TITLE_ID_JPN = 0x00050000101C9300ull;
+
+using CemuGetTitleIdFn = uint64_t (*)();
+
+bool IsAcceptedCemuTitleId(uint64_t title_id) {
+  return title_id == BOTW_CEMU_TITLE_ID_USA || title_id == BOTW_CEMU_TITLE_ID_EUR || title_id == BOTW_CEMU_TITLE_ID_JPN;
+}
+
+bool ShouldAttachForCemu() {
+  auto* const process_module = GetModuleHandleW(nullptr);
+  if (process_module == nullptr) {
+    renodx::utils::log::w("GetModuleHandleW(nullptr) failed");
+    return false;
+  }
+
+  auto* get_title_id = reinterpret_cast<CemuGetTitleIdFn>(GetProcAddress(process_module, "gameMeta_getTitleId"));
+  if (get_title_id == nullptr) {
+    renodx::utils::log::w("Export gameMeta_getTitleId not found");
+    return false;
+  }
+
+  const uint64_t title_id = get_title_id();
+  const bool accepted = IsAcceptedCemuTitleId(title_id);
+  renodx::utils::log::i(
+      "(gameMeta_getTitleId=",
+      renodx::utils::log::AsHex(title_id),
+      ", accepted=",
+      accepted ? "true" : "false");
+  return accepted;
+}
 
 bool ShouldAttachForRyujinx(const std::filesystem::path& process_path) {
   const std::array<std::filesystem::path, 2> candidate_log_paths = {
@@ -267,6 +302,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       auto filename = process_path.filename().string();
 
       if (filename == RYUJINX_PROCESS_NAME && !ShouldAttachForRyujinx(process_path)) return FALSE;
+      if (filename == CEMU_PROCESS_NAME && !ShouldAttachForCemu()) return FALSE;
 
       renodx::mods::swapchain::use_resource_cloning = true;
       renodx::mods::swapchain::target_format = target_format;
@@ -283,6 +319,12 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       const renodx::utils::resource::ResourceUpgradeInfo::Dimensions min_dimensions = {
           .width = 1280,
           .height = 720,
+          .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+      };
+
+      const renodx::utils::resource::ResourceUpgradeInfo::Dimensions dimensions = {
+          .width = renodx::utils::resource::ResourceUpgradeInfo::ANY,
+          .height = renodx::utils::resource::ResourceUpgradeInfo::ANY,
           .depth = renodx::utils::resource::ResourceUpgradeInfo::ANY,
       };
 
@@ -336,7 +378,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         renodx::mods::swapchain::resource_upgrade_infos.push_back({
             .old_format = reshade::api::format::r10g10b10a2_typeless,
             .new_format = target_format,
-            .ignore_size = true,  // risky...?
+            .dimensions = dimensions,
             .min_dimensions = min_dimensions,
         });
       }

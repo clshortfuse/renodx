@@ -104,7 +104,16 @@ static const float3x3 psycho17_XYZ_TO_LMS_MAT = float3x3(
     0.2670502842655792, 0.8471990148492798, -0.03470416612462053,
     -0.38706882411220156, 1.165429935890458, 0.10302286696614202,
     0.026727793989083093, -0.02729131667566509, 0.5333267257603284);
+#ifdef __SLANG__
+[__readNone]
+float3x3 psycho17_BuildLMSToXYZMatrix(float3x3 xyz_to_lms_matrix) {
+  return psycho17_Invert3x3(xyz_to_lms_matrix);
+}
+
+static const float3x3 psycho17_LMS_TO_XYZ_MAT = psycho17_BuildLMSToXYZMatrix(psycho17_XYZ_TO_LMS_MAT);
+#else
 static const float3x3 psycho17_LMS_TO_XYZ_MAT = psycho17_Invert3x3(psycho17_XYZ_TO_LMS_MAT);
+#endif
 static const float3x3 psycho17_LMS_TO_LMS_WEIGHTED_MAT = float3x3(
     psycho17_LMS_WEIGHTS.x, 0.f, 0.f,
     0.f, psycho17_LMS_WEIGHTS.y, 0.f,
