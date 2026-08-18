@@ -159,8 +159,93 @@ int main() {
     return transfer::Finish(false, "vkCreateDevice failed");
   }
 
+  if (GetEnvironmentVariableW(L"RENODX_TRANSFER_DESTROY_UNTRACKED", nullptr, 0u) != 0u) {
+    const VkBufferCreateInfo untracked_buffer_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = 256u,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    VkBuffer untracked_buffer = VK_NULL_HANDLE;
+    const VkResult untracked_buffer_result =
+        vkCreateBuffer(device, &untracked_buffer_info, nullptr, &untracked_buffer);
+    if (untracked_buffer_result != VK_SUCCESS) {
+      vkDestroyDevice(device, nullptr);
+      vkDestroyInstance(instance, nullptr);
+      return transfer::Finish(
+          false,
+          "untracked Vulkan buffer creation failed: " + std::to_string(untracked_buffer_result));
+    }
+    vkDestroyBuffer(device, untracked_buffer, nullptr);
+  }
+
   VkPhysicalDeviceMemoryProperties memory_properties = {};
   vkGetPhysicalDeviceMemoryProperties(physical_device, &memory_properties);
+
+  VkImage alpha_swizzle_image = VK_NULL_HANDLE;
+  VkDeviceMemory alpha_swizzle_memory = VK_NULL_HANDLE;
+  VkImageView alpha_swizzle_view = VK_NULL_HANDLE;
+  if (GetEnvironmentVariableW(L"RENODX_TRANSFER_ALPHA_SWIZZLE_VIEW", nullptr, 0u) != 0u) {
+    const VkImageCreateInfo alpha_swizzle_image_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_R8_UNORM,
+        .extent = {3u, 5u, 1u},
+        .mipLevels = 1u,
+        .arrayLayers = 1u,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_SAMPLED_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    if (vkCreateImage(device, &alpha_swizzle_image_info, nullptr, &alpha_swizzle_image) != VK_SUCCESS) {
+      return transfer::Finish(false, "alpha-swizzle Vulkan image creation failed");
+    }
+
+    VkMemoryRequirements alpha_swizzle_requirements = {};
+    vkGetImageMemoryRequirements(device, alpha_swizzle_image, &alpha_swizzle_requirements);
+    const uint32_t alpha_swizzle_memory_type = FindMemoryType(
+        memory_properties,
+        alpha_swizzle_requirements.memoryTypeBits,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (alpha_swizzle_memory_type == UINT32_MAX) {
+      return transfer::Finish(false, "no device-local memory for alpha-swizzle Vulkan image");
+    }
+    const VkMemoryAllocateInfo alpha_swizzle_allocation_info = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = alpha_swizzle_requirements.size,
+        .memoryTypeIndex = alpha_swizzle_memory_type,
+    };
+    if (vkAllocateMemory(device, &alpha_swizzle_allocation_info, nullptr, &alpha_swizzle_memory) != VK_SUCCESS
+        || vkBindImageMemory(device, alpha_swizzle_image, alpha_swizzle_memory, 0u) != VK_SUCCESS) {
+      return transfer::Finish(false, "alpha-swizzle Vulkan image memory allocation failed");
+    }
+
+    const VkImageViewCreateInfo alpha_swizzle_view_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = alpha_swizzle_image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = VK_FORMAT_R8_UNORM,
+        .components = {
+            VK_COMPONENT_SWIZZLE_ZERO,
+            VK_COMPONENT_SWIZZLE_ZERO,
+            VK_COMPONENT_SWIZZLE_ZERO,
+            VK_COMPONENT_SWIZZLE_R,
+        },
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0u,
+            .levelCount = 1u,
+            .baseArrayLayer = 0u,
+            .layerCount = 1u,
+        },
+    };
+    if (vkCreateImageView(device, &alpha_swizzle_view_info, nullptr, &alpha_swizzle_view) != VK_SUCCESS) {
+      return transfer::Finish(false, "alpha-swizzle Vulkan image view creation failed");
+    }
+  }
+
   VkBuffer upload = VK_NULL_HANDLE;
   VkBuffer readback = VK_NULL_HANDLE;
   VkDeviceMemory upload_memory = VK_NULL_HANDLE;
@@ -409,6 +494,9 @@ int main() {
 
   vkDeviceWaitIdle(device);
   vkDestroyCommandPool(device, command_pool, nullptr);
+  if (alpha_swizzle_view != VK_NULL_HANDLE) vkDestroyImageView(device, alpha_swizzle_view, nullptr);
+  if (alpha_swizzle_image != VK_NULL_HANDLE) vkDestroyImage(device, alpha_swizzle_image, nullptr);
+  if (alpha_swizzle_memory != VK_NULL_HANDLE) vkFreeMemory(device, alpha_swizzle_memory, nullptr);
   vkDestroyImage(device, image, nullptr);
   vkFreeMemory(device, image_memory, nullptr);
   vkDestroyBuffer(device, readback, nullptr);

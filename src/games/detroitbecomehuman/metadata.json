@@ -1,0 +1,56 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "detroitbecomehuman",
+  "title": "Detroit: Become Human",
+  "summary": "Experimental RenoDX Vulkan HDR, ultrawide, DLAA, and native DOF v2 support for Detroit: Become Human.",
+  "tags": [
+    "HDR",
+    "HDR10",
+    "Vulkan",
+    "Ultrawide",
+    "DLAA",
+    "Depth of Field"
+  ],
+  "status": "experimental",
+  "version": "0.5.0-dev.1",
+  "notes": [
+    "Supports Steam Build ID 12158144 only.",
+    "Supported DetroitBecomeHuman.exe SHA-256: ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF.",
+    "Vulkan base pinned to RenoDX PR #564 commit 92d6d79ec8103b1aaea44c0085c3a88db723e6d5.",
+    "Requires ReShade 6.8.0 Full Add-On and the game's native Vulkan renderer.",
+    "Adds NVIDIA NGX DLAA at native resolution with a separate HDR-safe sharpening control; the in-game Resolution Scaling setting must be 100%, and reduced render extents fail closed to native TAA.",
+    "Adds opt-in native DOF v2 with Clean, Cinematic, and Retinal styles. Enhanced styles use full-resolution far-focus boundaries while preserving Detroit's authored foreground bokeh at the exact Vanilla strength; Cinematic restores authored far color through a full-resolution Gaussian CoC gradient while half-resolution R8 far alpha is restricted to color validation and never controls visibility, preventing moving silhouette masks and uniform gameplay haze, then restores confirmed deep background bokeh, while Retinal adds a full-resolution Watson acuity filter with paired hardware-linear Gaussian taps. Vanilla remains the exact default path, and unsupported or incomplete shader chains fail closed.",
+    "The addon now embeds the Vulkan/NGX bootstrap. No launcher, separate Vulkan layer, global registration, or Steam launch option is required.",
+    "The first launch configures ADDON.LoadFromDllMain and caches verified NGX Vulkan extension requirements; restart once before enabling DLAA.",
+    "The release package contains renodx-detroitbecomehuman.addon64 and the official nvngx_dlss.dll. DLSS Super Resolution, Frame Generation and Streamline are not included.",
+    "Adds an automatic, reversible aspect-ratio override and isolated Scaleform UI compensation for displays wider than 16:9; 3440x1440 uses its exact 43:18 ratio.",
+    "RenoDX Preset Off disables HDR look changes but keeps ultrawide compatibility active; select Aspect Ratio: Vanilla 16:9 to disable the geometry override.",
+    "Ultrawide signatures and scaling were independently reimplemented from research published by Rose / PCGamingWiki; no trainer binary or Cheat Engine payload is included.",
+    "Fully restart the game after adding, replacing, or removing the addon; live addon unload/reload is not supported.",
+    "Auto HDR and NVIDIA RTX HDR must be disabled. Late chapters remain user-validation for this experimental RC."
+  ],
+  "urls": [
+    {
+      "url": "https://github.com/clshortfuse/renodx/pull/564",
+      "kind": "vulkan-base"
+    },
+    {
+      "url": "https://community.pcgamingwiki.com/files/file/1721-detroit-become-human-ultrawide-multimonitor-mod/",
+      "kind": "ultrawide-reference"
+    }
+  ],
+  "deploy": {
+    "reshade_version_range": ">=6.8.0 <6.9.0",
+    "game_exe": "DetroitBecomeHuman.exe",
+    "process_name": "DetroitBecomeHuman.exe",
+    "api": "vulkan",
+    "steam_appid": 1222140,
+    "architecture": [
+      "x64"
+    ],
+    "platform": "steam",
+    "detection": {
+      "probe_process_by_name": true
+    }
+  }
+}

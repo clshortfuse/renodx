@@ -44,38 +44,33 @@ inline bool NativeFromReShadeProxy(T** reshade_proxy) {
   return false;
 }
 
+static bool InitializeDXGI() {
+  if (pCreateDXGIFactory1 != nullptr && pCreateDXGIFactory2 != nullptr) {
+    return true;
+  }
+
+  HMODULE dxgi_module = GetModuleHandleW(L"dxgi.dll");
+  if (dxgi_module == nullptr) {
+    dxgi_module = LoadLibraryW(L"dxgi.dll");
+  }
+  if (dxgi_module == nullptr) return false;
+
+  if (pCreateDXGIFactory1 == nullptr) {
+    pCreateDXGIFactory1 = reinterpret_cast<decltype(&CreateDXGIFactory1)>(
+        GetProcAddress(dxgi_module, "CreateDXGIFactory1"));
+  }
+  if (pCreateDXGIFactory2 == nullptr) {
+    pCreateDXGIFactory2 = reinterpret_cast<decltype(&CreateDXGIFactory2)>(
+        GetProcAddress(dxgi_module, "CreateDXGIFactory2"));
+  }
+
+  return pCreateDXGIFactory1 != nullptr && pCreateDXGIFactory2 != nullptr;
+}
+
 static bool Initialize() {
   if (internal::initialized) return true;
 
-  if (pCreateDXGIFactory1 == nullptr) {
-    HMODULE dxgi_module = LoadLibraryW(L"dxgi.dll");
-    if (dxgi_module == nullptr) {
-      // reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(dxgi.dll) failed)");
-      return false;
-    }
-
-    pCreateDXGIFactory1 = reinterpret_cast<decltype(&CreateDXGIFactory1)>(
-        GetProcAddress(dxgi_module, "CreateDXGIFactory1"));
-    if (pCreateDXGIFactory1 == nullptr) {
-      // reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(dxgi.dll, CreateDXGIFactory1) failed)");
-      return false;
-    }
-  }
-
-  if (pCreateDXGIFactory2 == nullptr) {
-    HMODULE dxgi_module = LoadLibraryW(L"dxgi.dll");
-    if (dxgi_module == nullptr) {
-      // reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(LoadLibraryW(dxgi.dll) failed)");
-      return false;
-    }
-
-    pCreateDXGIFactory2 = reinterpret_cast<decltype(&CreateDXGIFactory2)>(
-        GetProcAddress(dxgi_module, "CreateDXGIFactory2"));
-    if (pCreateDXGIFactory2 == nullptr) {
-      // reshade::log::message(reshade::log::level::error, "mods::swapchain::LoadDirectXLibraries(GetProcAddress(dxgi.dll, CreateDXGIFactory2) failed)");
-      return false;
-    }
-  }
+  if (!InitializeDXGI()) return false;
 
   if (pD3D11CreateDevice == nullptr) {
     HMODULE d3d11_module = LoadLibraryW(L"d3d11.dll");

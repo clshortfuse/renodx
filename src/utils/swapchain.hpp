@@ -23,6 +23,7 @@
 #include "./cross_addon.hpp"
 #include "./data.hpp"
 #include "./device.hpp"
+#include "./directx.hpp"
 #include "./format.hpp"
 #include "./platform.hpp"
 #include "./resource.hpp"
@@ -131,6 +132,75 @@ static bool IsDirectX(reshade::api::swapchain* swapchain) {
 static bool IsDXGI(reshade::api::swapchain* swapchain) {
   auto* device = swapchain->get_device();
   return device::IsDXGI(device);
+}
+
+static std::optional<DXGI_OUTPUT_DESC1> GetDirectXOutputDesc1(HMONITOR monitor) {
+  if (monitor == nullptr || !directx::InitializeDXGI()) return std::nullopt;
+
+  IDXGIFactory1* factory = nullptr;
+  const HRESULT factory_hr =
+      directx::pCreateDXGIFactory1(IID_PPV_ARGS(&factory));
+  if (FAILED(factory_hr) || factory == nullptr) return std::nullopt;
+
+  std::optional<DXGI_OUTPUT_DESC1> result = std::nullopt;
+  for (UINT adapter_index = 0u; !result.has_value(); ++adapter_index) {
+    IDXGIAdapter1* adapter = nullptr;
+    const HRESULT adapter_hr = factory->EnumAdapters1(adapter_index, &adapter);
+    if (adapter_hr == DXGI_ERROR_NOT_FOUND) break;
+    if (FAILED(adapter_hr) || adapter == nullptr) continue;
+
+    for (UINT output_index = 0u; !result.has_value(); ++output_index) {
+      IDXGIOutput* output = nullptr;
+      const HRESULT output_hr = adapter->EnumOutputs(output_index, &output);
+      if (output_hr == DXGI_ERROR_NOT_FOUND) break;
+      if (FAILED(output_hr) || output == nullptr) continue;
+
+      IDXGIOutput6* output6 = nullptr;
+      const HRESULT output6_hr = output->QueryInterface(IID_PPV_ARGS(&output6));
+      output->Release();
+      if (FAILED(output6_hr) || output6 == nullptr) continue;
+
+      DXGI_OUTPUT_DESC1 output_desc = {};
+      const HRESULT desc_hr = output6->GetDesc1(&output_desc);
+      output6->Release();
+      if (SUCCEEDED(desc_hr) && output_desc.Monitor == monitor) {
+        result = output_desc;
+      }
+    }
+
+    adapter->Release();
+  }
+
+  factory->Release();
+  return result;
+}
+
+static std::optional<DXGI_OUTPUT_DESC1> GetDirectXOutputDesc1(HWND window) {
+  if (window == nullptr) return std::nullopt;
+  const HMONITOR monitor =
+      MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+  return GetDirectXOutputDesc1(monitor);
+}
+
+static bool IsValidPeakNits(float peak_nits) {
+  return std::isfinite(peak_nits)
+         && peak_nits >= 48.f
+         && peak_nits <= 4000.f;
+}
+
+static std::optional<float> GetPeakNits(const DXGI_OUTPUT_DESC1& output_desc) {
+  if (output_desc.ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+      && output_desc.ColorSpace != DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709) {
+    return std::nullopt;
+  }
+  if (!IsValidPeakNits(output_desc.MaxLuminance)) return std::nullopt;
+  return output_desc.MaxLuminance;
+}
+
+static std::optional<float> GetPeakNits(HWND window) {
+  const auto output_desc = GetDirectXOutputDesc1(window);
+  if (!output_desc.has_value()) return std::nullopt;
+  return GetPeakNits(*output_desc);
 }
 
 static std::optional<DXGI_OUTPUT_DESC1> GetDirectXOutputDesc1(reshade::api::swapchain* swapchain) {

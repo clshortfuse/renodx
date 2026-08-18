@@ -1,0 +1,11 @@
+add_renodx_runtime_executable(resource_analysis_readback_strategy_tests tests.cpp)
+add_dependencies(renodx_test_suites resource_analysis_readback_strategy_tests)
+
+add_test(
+  NAME resource_analysis_readback_strategy
+  COMMAND resource_analysis_readback_strategy_tests
+)
+set_tests_properties(resource_analysis_readback_strategy PROPERTIES
+  LABELS "devkit;resource_analysis;unit;vulkan;readback"
+  TIMEOUT 30
+)

@@ -123,4 +123,30 @@ if(Vulkan_FOUND)
       TIMEOUT 60
     )
   endforeach()
+
+  add_test(
+    NAME resource_lifecycle_vulkan_unbound_buffer_destroy
+    COMMAND resource_upgrade_transfer_vulkan_tests
+      untracked-rgba8
+      $<TARGET_FILE:resource_upgrade_transfer_vulkan_app>
+      $<TARGET_FILE:resource_upgrade_transfer_addon>
+      ${RENODX_TEST_RESHADE_DIR}
+  )
+  set_tests_properties(resource_lifecycle_vulkan_unbound_buffer_destroy PROPERTIES
+    LABELS "resource;runtime;vulkan;lifecycle"
+    TIMEOUT 60
+  )
+
+  add_test(
+    NAME resource_view_vulkan_alpha_swizzle_alias
+    COMMAND resource_upgrade_transfer_vulkan_tests
+      alpha-view-rgba8
+      $<TARGET_FILE:resource_upgrade_transfer_vulkan_app>
+      $<TARGET_FILE:resource_upgrade_transfer_addon>
+      ${RENODX_TEST_RESHADE_DIR}
+  )
+  set_tests_properties(resource_view_vulkan_alpha_swizzle_alias PROPERTIES
+    LABELS "resource_upgrade;resource_view;runtime;vulkan"
+    TIMEOUT 60
+  )
 endif()
