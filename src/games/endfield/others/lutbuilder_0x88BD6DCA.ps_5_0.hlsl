@@ -25,7 +25,20 @@ cbuffer cb0 : register(b0) {
 // 3Dmigoto declarations
 #define cmp -
 
-#include "../shared.h"
+#include "../common.hlsl"
+
+static float ACESLikeScalar(float value) {
+  static const float a = 278.5085;
+  static const float b = 10.7772;
+  static const float c = 293.6045;
+  static const float d = 88.7122;
+  static const float e = 80.6889;
+  const float divergence_point = 0.267010625;
+
+  float tonemapped = (value * (a * value + b)) / (value * (c * value + d) + e);
+  float linear_extension = 0.9174704430474515 * value - 0.06355161968502177;
+  return (value < divergence_point) ? tonemapped : linear_extension;
+}
 
 void main(
     float4 v0: SV_Position0,
@@ -233,32 +246,34 @@ void main(
   r0.xyz = r1.xyz * r0.xxx;
 
   // ACES approximation (color * (a*color + b)) / (color * (c*color + d) + e)
-#if 0
-  r1.xyz = r0.xyz * float3(2.93604493, 2.93604493, 2.93604493) + float3(0.887121975, 0.887121975, 0.887121975);
-  r1.xyz = r0.xyz * r1.xyz + float3(0.806888998, 0.806888998, 0.806888998);
-  r1.xyz = float3(1, 1, 1) / r1.xyz;
-  r1.xyz = max(float3(9.99999975e-005, 9.99999975e-005, 9.99999975e-005), r1.xyz);
-  r2.xyz = r0.xyz * float3(2.78508496, 2.78508496, 2.78508496) + float3(0.107772, 0.107772, 0.107772);
-  r2.xyz = r2.xyz * r0.xyz;
-  r0.yzw = r2.xyz * r1.xyz;
-  r0.yzw = min(float3(1, 1, 1), r0.yzw);
-#else
-  float3 untonemapped = r0.rgb;
-  static const float a = 278.5085;
-  static const float b = 10.7772;
-  static const float c = 293.6045;
-  static const float d = 88.7122;
-  static const float e = 80.6889;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    r1.xyz = r0.xyz * float3(2.93604493, 2.93604493, 2.93604493) + float3(0.887121975, 0.887121975, 0.887121975);
+    r1.xyz = r0.xyz * r1.xyz + float3(0.806888998, 0.806888998, 0.806888998);
+    r1.xyz = float3(1, 1, 1) / r1.xyz;
+    r1.xyz = max(float3(9.99999975e-005, 9.99999975e-005, 9.99999975e-005), r1.xyz);
+    r2.xyz = r0.xyz * float3(2.78508496, 2.78508496, 2.78508496) + float3(0.107772, 0.107772, 0.107772);
+    r2.xyz = r2.xyz * r0.xyz;
+    r0.yzw = r2.xyz * r1.xyz;
+    r0.yzw = min(float3(1, 1, 1), r0.yzw);
+  } else {
+    float3 untonemapped = r0.rgb;
+    float3 per_channel_tonemapped = float3(
+        ACESLikeScalar(untonemapped.x),
+        ACESLikeScalar(untonemapped.y),
+        ACESLikeScalar(untonemapped.z));
 
-  float3 tonemapped = (untonemapped * (a * untonemapped + b)) / (untonemapped * (c * untonemapped + d) + e);
+    float luminance_in = renodx::color::y::from::BT709(untonemapped);
+    float luminance_tonemapped = ACESLikeScalar(luminance_in);
+    float3 luminance_tonemapped_color = renodx::color::correct::Luminance(
+        untonemapped,
+        luminance_in,
+        luminance_tonemapped);
 
-  const float divergence_point = 0.267010625;
-  float3 linear_extension = 0.9174704430474515 * untonemapped - 0.06355161968502177;
-
-  tonemapped = renodx::math::Select(untonemapped < divergence_point, tonemapped, linear_extension);
-
-  r0.yzw = tonemapped;
-#endif
+    r0.yzw = ApplyMBLowHueThenHighHueAndPurity(
+        luminance_tonemapped_color,
+        untonemapped,
+        per_channel_tonemapped);
+  }
 
   r0.x = dot(r0.xyz, float3(0.272228986, 0.674081981, 0.0536894985));
   r0.x = -0.5 + r0.x;
@@ -270,14 +285,14 @@ void main(
   r1.x = dot(float3(1.70505154, -0.621790707, -0.083258681), r0.yzw);
   r1.y = dot(float3(-0.130257145, 1.14080286, -0.0105481902), r0.yzw);
   r1.z = dot(float3(-0.0240032692, -0.128968775, 1.15297163), r0.yzw);
-#if 0
-  r0.y = max(r1.x, r1.y);
-  r0.y = max(r0.y, r1.z);
-  r0.y = max(9.99999975e-006, r0.y);
-  r0.yzw = saturate(r1.xyz / r0.yyy);
-#else
-  r0.yzw = r1.xyz;
-#endif
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    r0.y = max(r1.x, r1.y);
+    r0.y = max(r0.y, r1.z);
+    r0.y = max(9.99999975e-006, r0.y);
+    r0.yzw = saturate(r1.xyz / r0.yyy);
+  } else {
+    r0.yzw = r1.xyz;
+  }
   r0.yzw = r0.yzw + -r1.xyz;
   o0.xyz = (r0.xxx * r0.yzw + r1.xyz);
   o0.w = 1;
