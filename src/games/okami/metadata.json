@@ -1,0 +1,16 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "okami",
+  "title": "Okami HD",
+  "maintainers": [
+    "megazeban"
+  ],
+  "status": "beta",
+  "deploy": {
+    "steam_appid": 587620,
+    "game_exe": "okami.exe",
+    "process_name": "okami",
+    "api": "d3d11",
+    "architecture": "x64"
+  }
+}
