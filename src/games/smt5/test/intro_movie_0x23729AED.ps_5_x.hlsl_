@@ -1,0 +1,156 @@
+// ---- Created with 3Dmigoto v1.3.16 on Mon Oct  7 22:38:16 2024
+
+// Tested YUV -> RGB decoding
+
+#include "./common.hlsl"
+
+Texture2D<float4> t2 : register(t2);
+
+Texture2D<float4> t1 : register(t1);
+
+Texture2D<float4> t0 : register(t0);
+
+SamplerState s2_s : register(s2);
+
+SamplerState s1_s : register(s1);
+
+SamplerState s0_s : register(s0);
+
+cbuffer cb1 : register(b1) {
+  float4 cb1[3];
+}
+
+cbuffer cb0 : register(b0) {
+  float4 cb0[4];
+}
+
+// 3Dmigoto declarations
+#define cmp -
+
+float3 YUVtoRGB(float Y, float Cr, float Cb, uint type = 0) {
+  float V = Cr;
+  float U = Cb;
+
+  float3 color = 0.0;
+  // usually in YCbCr the ranges are (in float):
+  // Y:   0.0-1.0
+  // Cb: -0.5-0.5
+  // Cr: -0.5-0.5
+  // but since this is a digital signal (in unsinged 8bit: 0-255) it's now:
+  // Y:  0.0-1.0
+  // Cb: 0.0-1.0
+  // Cr: 0.0-1.0
+  if (type == 0) {  // Rec.709 full range
+    color.r = (Y - 0.790487825870513916015625f) + (Cr * 1.5748f);
+    color.g = (Y + 0.329009473323822021484375f) - (Cr * 0.46812427043914794921875f) - (Cb * 0.18732427060604095458984375f);
+    color.b = (Y - 0.931438446044921875f) + (Cb * 1.8556f);
+  } else if (type == 1) {  // Rec.709 limited range
+    Y *= 1.16438353f;
+    color.r = (Y - 0.972945094f) + (Cr * 1.79274106f);
+    color.g = (Y + 0.301482677f) - (Cr * 0.532909333f) - (Cb * 0.213248610f);
+    color.b = (Y - 1.13340222f) + (Cb * 2.11240172f);
+  } else if (type == 2) {  // Rec.601 full range
+    color += Cr * float3(1.59579468, -0.813476563, 0.0);
+    color += Y * 1.16412354;
+    color += Cb * float3(0, -0.391448975, 2.01782227);
+    color += float3(-0.87065506, 0.529705048, -1.08166885);  // Bias offsets
+    color = color * 0.858823538 + 0.0627451017;              // limited to full range
+  } else {                                                   // Rec.601 limited range
+    Y *= 1.16412353515625f;
+    color.r = (Y - 0.870655059814453125f) + (Cr * 1.595794677734375f);
+    color.g = (Y + 0.529705047607421875f) - (Cr * 0.8134765625f) - (Cb * 0.391448974609375f);
+    color.b = (Y - 1.081668853759765625f) + (Cb * 2.017822265625f);
+  }
+
+  return color;
+}
+
+void main(
+    float4 v0: SV_POSITION0,
+    float4 v1: COLOR0,
+    float4 v2: ORIGINAL_POSITION0,
+    float2 v3: TEXCOORD0,
+    float4 v4: TEXCOORD1,
+    out float4 o0: SV_Target0) {
+  float4 r0, r1, r2, r3;
+  uint4 bitmask, uiDest;
+  float4 fDest;
+
+  if (DEBUG_YUV == 1.f) {  // BT709 Full
+    r0.xy = v4.xy * v4.zw;
+    float y = t0.Sample(s0_s, r0.xy).x;
+    float cb = t1.Sample(s1_s, r0.xy).x;
+    float cr = t2.Sample(s2_s, r0.xy).x;
+    // r0.xyz = renodx::color::bt709::from::YCbCr(float3(y, cb, cr));
+    r0.xyz = YUVtoRGB(y, cr, cb, 0);  // bt709 full
+  } else if (DEBUG_YUV == 2.f) {      // BT709 from YCbCrLimited
+    r0.xy = v4.xy * v4.zw;
+    float y = t0.Sample(s0_s, r0.xy).x;
+    float cb = t1.Sample(s1_s, r0.xy).x;
+    float cr = t2.Sample(s2_s, r0.xy).x;
+    // r0.xyz = renodx::color::bt709::from::YCbCrLimited(float3(y, cb, cr));
+    r0.xyz = YUVtoRGB(y, cr, cb, 1);  // bt709 limited
+  } else if (DEBUG_YUV == 3.f) {
+    r0.xy = v4.xy * v4.zw;
+    float y = t0.Sample(s0_s, r0.xy).x;
+    float cb = t1.Sample(s1_s, r0.xy).x;
+    float cr = t2.Sample(s2_s, r0.xy).x;
+    // r0.xyz = renodx::color::bt601::from::YCbCrLimited(float3(y, cb, cr));
+    r0.xyz = YUVtoRGB(y, cr, cb, 67);  // bt601 limited
+
+  } else {  // BT601 Limited (Vanilla)
+    r0.xy = v4.xy * v4.zw;
+
+    r0.z = t2.Sample(s2_s, r0.xy).x;
+    r0.z = -0.5 + r0.z;
+    r0.zw = float2(1.59602702, -0.812968016) * r0.zz;
+    r1.x = t1.Sample(s1_s, r0.xy).x;
+    r0.x = t0.Sample(s0_s, r0.xy).x;
+    r0.x = -0.0625 + r0.x;
+    r0.y = -0.5 + r1.x;
+    r0.w = r0.y * -0.391761988 + r0.w;
+    r1.x = r0.x * 1.16438305 + r0.z;
+    r0.y = 2.01723194 * r0.y;
+    r1.z = r0.x * 1.16438305 + r0.y;
+    r1.y = r0.x * 1.16438305 + r0.w;
+    r0.xyz = max(float3(6.1040002e-05, 6.1040002e-05, 6.1040002e-05), r1.xyz);
+  }
+  r1.xyz = r0.xyz * float3(0.947867274, 0.947867274, 0.947867274) + float3(0.0521326996, 0.0521326996, 0.0521326996);
+  r1.xyz = log2(r1.xyz);
+  r1.xyz = float3(2.4000001, 2.4000001, 2.4000001) * r1.xyz;
+  r1.xyz = exp2(r1.xyz);
+  r2.xyz = float3(0.0773993805, 0.0773993805, 0.0773993805) * r0.xyz;
+  r0.xyz = cmp(r0.xyz >= float3(0.0404499993, 0.0404499993, 0.0404499993));
+  r0.xyz = r0.xyz ? r1.xyz : r2.xyz;
+  r1.xyz = cb1[1].xyz + -r0.xyz;
+  r0.xyz = cb1[2].xxx * r1.xyz + r0.xyz;
+  r0.xyz = max(float3(0, 0, 0), r0.xyz);
+  r1.xyz = v1.xyz * r0.xyz;
+  r0.w = dot(float3(0.300000012, 0.589999974, 0.109999999), r1.xyz);
+  r0.xyz = -r0.xyz * v1.xyz + r0.www;
+  r0.xyz = r0.xyz * float3(0.800000012, 0.800000012, 0.800000012) + r1.xyz;
+  r2.xyz = float3(-0.100000001, -0.100000001, -0.100000001) + r0.xyz;
+  r0.w = dot(r2.xyz, r2.xyz);
+  r0.w = sqrt(r0.w);
+  r0.w = min(0.800000012, r0.w);
+  r2.xyz = float3(0.100000001, 0.100000001, 0.100000001) + -r0.xyz;
+  r0.xyz = r0.www * r2.xyz + r0.xyz;
+  r0.w = cmp(cb0[3].x != 0.000000);
+  r0.xyz = r0.www ? r0.xyz : r1.xyz;
+  r1.xyz = float3(-0.25, -0.25, -0.25) + r0.xyz;
+  r1.xyz = saturate(r1.xyz * cb0[1].www + float3(0.25, 0.25, 0.25));
+  r2.xy = cmp(cb0[1].wy != float2(1, 1));
+  r0.xyz = r2.xxx ? r1.xyz : r0.xyz;
+  r1.xyz = log2(r0.xyz);
+  r1.xyz = cb0[1].xxx * r1.xyz;
+  r2.xzw = float3(0.416666657, 0.416666657, 0.416666657) * r1.xyz;
+  r1.xyz = exp2(r1.xyz);
+  r2.xzw = exp2(r2.xzw);
+  r2.xzw = r2.xzw * float3(1.05499995, 1.05499995, 1.05499995) + float3(-0.0549999997, -0.0549999997, -0.0549999997);
+  r3.xyz = float3(12.9200001, 12.9200001, 12.9200001) * r1.xyz;
+  r1.xyz = cmp(r1.xyz >= float3(0.00313066994, 0.00313066994, 0.00313066994));
+  r1.xyz = r1.xyz ? r2.xzw : r3.xyz;
+  o0.xyz = r2.yyy ? r1.xyz : r0.xyz;
+  o0.w = v1.w;
+  return;
+}
