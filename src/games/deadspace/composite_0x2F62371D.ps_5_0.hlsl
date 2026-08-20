@@ -271,5 +271,11 @@ void main(
   o0.rgb /= 80.f;
 #endif
 
+#if DEADSPACE_FORCE_HDR10
+  o0.rgb = renodx::color::bt2020::from::BT709(o0.rgb);
+  o0.rgb *= 80.f;
+  o0.rgb = renodx::color::pq::EncodeSafe(o0.rgb, 1.f);
+#endif
+
   return;
 }
