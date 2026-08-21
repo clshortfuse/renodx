@@ -848,7 +848,7 @@ void main(
         const float shaper_input_scale = g_prePostProcessingShaderConst_000.PostProcessingShaderConst_688;
         float scale = 1.f;
         if (RENODX_TONE_MAP_TYPE == 1.f) {
-          scale = ApplyAnchoredCInfinityShoulderLuminanceScale(graded, tm_peak, anchor);
+          scale = ApplyAnchoredCInfinityShoulderLuminanceScale(graded, tm_peak, 0.5f);
         }
         graded *= scale;
 
