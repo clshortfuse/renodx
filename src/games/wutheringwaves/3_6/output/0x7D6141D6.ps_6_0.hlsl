@@ -1,0 +1,1307 @@
+#include "../../common.hlsl"
+Texture2D<float4> t0 : register(t0);
+
+Texture2D<float4> t1 : register(t1);
+
+Texture2D<float4> t2 : register(t2);
+
+Texture2D<float4> t3 : register(t3);
+
+Texture2D<float4> t4 : register(t4);
+
+Texture2D<float4> t5 : register(t5);
+
+Texture2D<float4> t6 : register(t6);
+
+Texture3D<float4> t7 : register(t7);
+
+Texture2D<float4> t8 : register(t8);
+
+Texture3D<float4> t9 : register(t9);
+
+Texture3D<float4> t10 : register(t10);
+
+cbuffer cb0 : register(b0) {
+  float cb0_037y : packoffset(c037.y);
+  float cb0_037z : packoffset(c037.z);
+  float cb0_037w : packoffset(c037.w);
+  float cb0_038x : packoffset(c038.x);
+  float cb0_038y : packoffset(c038.y);
+  float cb0_038z : packoffset(c038.z);
+  float cb0_041x : packoffset(c041.x);
+  float cb0_041y : packoffset(c041.y);
+  float cb0_041z : packoffset(c041.z);
+  float cb0_042y : packoffset(c042.y);
+  float cb0_042z : packoffset(c042.z);
+  float cb0_042w : packoffset(c042.w);
+  float cb0_044z : packoffset(c044.z);
+  float cb0_044w : packoffset(c044.w);
+  float cb0_045x : packoffset(c045.x);
+  float cb0_045y : packoffset(c045.y);
+  float cb0_045z : packoffset(c045.z);
+  float cb0_046x : packoffset(c046.x);
+  float cb0_046y : packoffset(c046.y);
+  float cb0_046z : packoffset(c046.z);
+  float cb0_046w : packoffset(c046.w);
+  float cb0_047z : packoffset(c047.z);
+  float cb0_047w : packoffset(c047.w);
+  float cb0_048x : packoffset(c048.x);
+  float cb0_048y : packoffset(c048.y);
+  float cb0_048z : packoffset(c048.z);
+  float cb0_048w : packoffset(c048.w);
+  float cb0_053x : packoffset(c053.x);
+  float cb0_053y : packoffset(c053.y);
+  float cb0_053z : packoffset(c053.z);
+  float cb0_053w : packoffset(c053.w);
+  float cb0_060x : packoffset(c060.x);
+  float cb0_060y : packoffset(c060.y);
+  float cb0_060z : packoffset(c060.z);
+  float cb0_060w : packoffset(c060.w);
+  float cb0_064y : packoffset(c064.y);
+  float cb0_064z : packoffset(c064.z);
+  float cb0_068x : packoffset(c068.x);
+  float cb0_068y : packoffset(c068.y);
+  float cb0_068z : packoffset(c068.z);
+  float cb0_068w : packoffset(c068.w);
+  float cb0_075x : packoffset(c075.x);
+  float cb0_075y : packoffset(c075.y);
+  float cb0_075z : packoffset(c075.z);
+  float cb0_075w : packoffset(c075.w);
+  float cb0_076x : packoffset(c076.x);
+  float cb0_076y : packoffset(c076.y);
+  float cb0_076z : packoffset(c076.z);
+  float cb0_076w : packoffset(c076.w);
+  float cb0_083x : packoffset(c083.x);
+  float cb0_083y : packoffset(c083.y);
+  float cb0_083z : packoffset(c083.z);
+  float cb0_083w : packoffset(c083.w);
+  float cb0_084x : packoffset(c084.x);
+  float cb0_084y : packoffset(c084.y);
+  float cb0_084z : packoffset(c084.z);
+  float cb0_084w : packoffset(c084.w);
+  int cb0_085x : packoffset(c085.x);
+  int cb0_085y : packoffset(c085.y);
+  int cb0_085z : packoffset(c085.z);
+  float cb0_086x : packoffset(c086.x);
+  float cb0_086y : packoffset(c086.y);
+  float cb0_086z : packoffset(c086.z);
+  float cb0_088x : packoffset(c088.x);
+  float cb0_088z : packoffset(c088.z);
+  float cb0_088w : packoffset(c088.w);
+  float cb0_089x : packoffset(c089.x);
+  float cb0_089y : packoffset(c089.y);
+  float cb0_089z : packoffset(c089.z);
+  float cb0_089w : packoffset(c089.w);
+  float cb0_090x : packoffset(c090.x);
+  float cb0_090y : packoffset(c090.y);
+  float cb0_090z : packoffset(c090.z);
+  float cb0_091x : packoffset(c091.x);
+  float cb0_091z : packoffset(c091.z);
+  float cb0_091w : packoffset(c091.w);
+  float cb0_092x : packoffset(c092.x);
+  float cb0_092y : packoffset(c092.y);
+  float cb0_092z : packoffset(c092.z);
+  float cb0_092w : packoffset(c092.w);
+  float cb0_093x : packoffset(c093.x);
+  float cb0_093y : packoffset(c093.y);
+  float cb0_093z : packoffset(c093.z);
+  float cb0_095x : packoffset(c095.x);
+  float cb0_095y : packoffset(c095.y);
+  float cb0_095z : packoffset(c095.z);
+  float cb0_096x : packoffset(c096.x);
+  float cb0_096y : packoffset(c096.y);
+  float cb0_096z : packoffset(c096.z);
+  float cb0_097x : packoffset(c097.x);
+  float cb0_097y : packoffset(c097.y);
+  float cb0_097z : packoffset(c097.z);
+  float cb0_098x : packoffset(c098.x);
+  float cb0_098y : packoffset(c098.y);
+  float cb0_098z : packoffset(c098.z);
+  float cb0_099x : packoffset(c099.x);
+  float cb0_099y : packoffset(c099.y);
+  float cb0_099z : packoffset(c099.z);
+  float cb0_101x : packoffset(c101.x);
+  float cb0_101y : packoffset(c101.y);
+  float cb0_101z : packoffset(c101.z);
+  float cb0_102x : packoffset(c102.x);
+  float cb0_102y : packoffset(c102.y);
+  float cb0_102z : packoffset(c102.z);
+  float cb0_103x : packoffset(c103.x);
+  float cb0_103y : packoffset(c103.y);
+  float cb0_103z : packoffset(c103.z);
+  float cb0_104x : packoffset(c104.x);
+  float cb0_104y : packoffset(c104.y);
+  float cb0_104z : packoffset(c104.z);
+  float cb0_105x : packoffset(c105.x);
+  int cb0_105w : packoffset(c105.w);
+  float cb0_106x : packoffset(c106.x);
+  float cb0_106z : packoffset(c106.z);
+  int cb0_106w : packoffset(c106.w);
+  int cb0_107x : packoffset(c107.x);
+  int cb0_107y : packoffset(c107.y);
+  int cb0_107z : packoffset(c107.z);
+  int cb0_107w : packoffset(c107.w);
+  float cb0_113x : packoffset(c113.x);
+  float cb0_113y : packoffset(c113.y);
+  float cb0_113z : packoffset(c113.z);
+  float cb0_113w : packoffset(c113.w);
+  float cb0_114x : packoffset(c114.x);
+  float cb0_114y : packoffset(c114.y);
+  float cb0_114z : packoffset(c114.z);
+  float cb0_114w : packoffset(c114.w);
+  float cb0_116x : packoffset(c116.x);
+  float cb0_116y : packoffset(c116.y);
+  float cb0_116z : packoffset(c116.z);
+  float cb0_117x : packoffset(c117.x);
+  float cb0_117y : packoffset(c117.y);
+  float cb0_117z : packoffset(c117.z);
+  float cb0_117w : packoffset(c117.w);
+};
+
+cbuffer cb1 : register(b1) {
+  float4 View_000[4] : packoffset(c000.x);
+  float4 View_064[4] : packoffset(c004.x);
+  float4 View_128[4] : packoffset(c008.x);
+  float4 View_192[4] : packoffset(c012.x);
+  float4 View_256[4] : packoffset(c016.x);
+  float4 View_320[4] : packoffset(c020.x);
+  float4 View_384[4] : packoffset(c024.x);
+  float4 View_448[4] : packoffset(c028.x);
+  float4 View_512[4] : packoffset(c032.x);
+  float4 View_576[4] : packoffset(c036.x);
+  float4 View_640[4] : packoffset(c040.x);
+  float4 View_704[4] : packoffset(c044.x);
+  float4 View_768[4] : packoffset(c048.x);
+  float4 View_832[4] : packoffset(c052.x);
+  float4 View_896[4] : packoffset(c056.x);
+  float3 View_960 : packoffset(c060.x);
+  float View_972 : packoffset(c060.w);
+  float3 View_976 : packoffset(c061.x);
+  float View_988 : packoffset(c061.w);
+  float3 View_992 : packoffset(c062.x);
+  float View_1004 : packoffset(c062.w);
+  float3 View_1008 : packoffset(c063.x);
+  float View_1020 : packoffset(c063.w);
+  float3 View_1024 : packoffset(c064.x);
+  float View_1036 : packoffset(c064.w);
+  float4 View_1040 : packoffset(c065.x);
+  float4 View_1056 : packoffset(c066.x);
+  float3 View_1072 : packoffset(c067.x);
+  float View_1084 : packoffset(c067.w);
+  float3 View_1088 : packoffset(c068.x);
+  float View_1100 : packoffset(c068.w);
+  float3 View_1104 : packoffset(c069.x);
+  float View_1116 : packoffset(c069.w);
+  float3 View_1120 : packoffset(c070.x);
+  float View_1132 : packoffset(c070.w);
+  float4 View_1136[4] : packoffset(c071.x);
+  float4 View_1200[4] : packoffset(c075.x);
+  float4 View_1264[4] : packoffset(c079.x);
+  float4 View_1328[4] : packoffset(c083.x);
+  float4 View_1392[4] : packoffset(c087.x);
+  float4 View_1456[4] : packoffset(c091.x);
+  float4 View_1520[4] : packoffset(c095.x);
+  float4 View_1584[4] : packoffset(c099.x);
+  float4 View_1648[4] : packoffset(c103.x);
+  float4 View_1712[4] : packoffset(c107.x);
+  float4 View_1776[4] : packoffset(c111.x);
+  float3 View_1840 : packoffset(c115.x);
+  float View_1852 : packoffset(c115.w);
+  float3 View_1856 : packoffset(c116.x);
+  float View_1868 : packoffset(c116.w);
+  float3 View_1872 : packoffset(c117.x);
+  float View_1884 : packoffset(c117.w);
+  float4 View_1888[4] : packoffset(c118.x);
+  float4 View_1952[4] : packoffset(c122.x);
+  float4 View_2016 : packoffset(c126.x);
+  float4 View_2032[4] : packoffset(c127.x);
+  float4 View_2096 : packoffset(c131.x);
+  float4 View_2112 : packoffset(c132.x);
+  float2 View_2128 : packoffset(c133.x);
+  float2 View_2136 : packoffset(c133.z);
+  float4 View_2144 : packoffset(c134.x);
+  float4 View_2160 : packoffset(c135.x);
+  int4 View_2176 : packoffset(c136.x);
+  float4 View_2192 : packoffset(c137.x);
+  float4 View_2208 : packoffset(c138.x);
+  float4 View_2224 : packoffset(c139.x);
+  float4 View_2240 : packoffset(c140.x);
+  int View_2256 : packoffset(c141.x);
+  float View_2260 : packoffset(c141.y);
+  float View_2264 : packoffset(c141.z);
+  float View_2268 : packoffset(c141.w);
+  float4 View_2272 : packoffset(c142.x);
+  float4 View_2288 : packoffset(c143.x);
+  float4 View_2304 : packoffset(c144.x);
+  float2 View_2320 : packoffset(c145.x);
+  float View_2328 : packoffset(c145.z);
+  float View_2332 : packoffset(c145.w);
+  float View_2336 : packoffset(c146.x);
+  float View_2340 : packoffset(c146.y);
+  float View_2344 : packoffset(c146.z);
+  float View_2348 : packoffset(c146.w);
+  float3 View_2352 : packoffset(c147.x);
+  float View_2364 : packoffset(c147.w);
+  float View_2368 : packoffset(c148.x);
+  float View_2372 : packoffset(c148.y);
+  float View_2376 : packoffset(c148.z);
+  float View_2380 : packoffset(c148.w);
+  float View_2384 : packoffset(c149.x);
+  float View_2388 : packoffset(c149.y);
+  float View_2392 : packoffset(c149.z);
+  int View_2396 : packoffset(c149.w);
+  int View_2400 : packoffset(c150.x);
+  int View_2404 : packoffset(c150.y);
+  int View_2408 : packoffset(c150.z);
+  int View_2412 : packoffset(c150.w);
+  float View_2416 : packoffset(c151.x);
+  float View_2420 : packoffset(c151.y);
+  float View_2424 : packoffset(c151.z);
+  float View_2428 : packoffset(c151.w);
+  float4 View_2432 : packoffset(c152.x);
+  float3 View_2448 : packoffset(c153.x);
+  float View_2460 : packoffset(c153.w);
+  float4 View_2464[2] : packoffset(c154.x);
+  float4 View_2496[2] : packoffset(c156.x);
+  float4 View_2528 : packoffset(c158.x);
+  float4 View_2544 : packoffset(c159.x);
+  int View_2560 : packoffset(c160.x);
+  float View_2564 : packoffset(c160.y);
+  float View_2568 : packoffset(c160.z);
+  float View_2572 : packoffset(c160.w);
+  float View_2576 : packoffset(c161.x);
+  float View_2580 : packoffset(c161.y);
+  float View_2584 : packoffset(c161.z);
+  float View_2588 : packoffset(c161.w);
+  float View_2592 : packoffset(c162.x);
+  float View_2596 : packoffset(c162.y);
+  float View_2600 : packoffset(c162.z);
+  float View_2604 : packoffset(c162.w);
+  float3 View_2608 : packoffset(c163.x);
+  float View_2620 : packoffset(c163.w);
+  float View_2624 : packoffset(c164.x);
+  float View_2628 : packoffset(c164.y);
+  float View_2632 : packoffset(c164.z);
+  float View_2636 : packoffset(c164.w);
+  float View_2640 : packoffset(c165.x);
+  float View_2644 : packoffset(c165.y);
+  float View_2648 : packoffset(c165.z);
+  float View_2652 : packoffset(c165.w);
+  float View_2656 : packoffset(c166.x);
+  float View_2660 : packoffset(c166.y);
+  float View_2664 : packoffset(c166.z);
+  float View_2668 : packoffset(c166.w);
+  float4 View_2672[2] : packoffset(c167.x);
+  float4 View_2704[2] : packoffset(c169.x);
+  float4 View_2736[2] : packoffset(c171.x);
+  float4 View_2768[2] : packoffset(c173.x);
+  float4 View_2800[2] : packoffset(c175.x);
+  float4 View_2832 : packoffset(c177.x);
+  float3 View_2848 : packoffset(c178.x);
+  float View_2860 : packoffset(c178.w);
+  float4 View_2864 : packoffset(c179.x);
+  float4 View_2880[4] : packoffset(c180.x);
+  float4 View_2944 : packoffset(c184.x);
+  float View_2960 : packoffset(c185.x);
+  float View_2964 : packoffset(c185.y);
+  float View_2968 : packoffset(c185.z);
+  float View_2972 : packoffset(c185.w);
+  float4 View_2976 : packoffset(c186.x);
+  float View_2992 : packoffset(c187.x);
+  float View_2996 : packoffset(c187.y);
+  float View_3000 : packoffset(c187.z);
+  float View_3004 : packoffset(c187.w);
+  float View_3008 : packoffset(c188.x);
+  float View_3012 : packoffset(c188.y);
+  int View_3016 : packoffset(c188.z);
+  int View_3020 : packoffset(c188.w);
+  float3 View_3024 : packoffset(c189.x);
+  float View_3036 : packoffset(c189.w);
+  float View_3040 : packoffset(c190.x);
+  float View_3044 : packoffset(c190.y);
+  float View_3048 : packoffset(c190.z);
+  float View_3052 : packoffset(c190.w);
+  float4 View_3056 : packoffset(c191.x);
+  float View_3072 : packoffset(c192.x);
+  float View_3076 : packoffset(c192.y);
+  float View_3080 : packoffset(c192.z);
+  float View_3084 : packoffset(c192.w);
+  float4 View_3088 : packoffset(c193.x);
+  float View_3104 : packoffset(c194.x);
+  float View_3108 : packoffset(c194.y);
+  float View_3112 : packoffset(c194.z);
+  float View_3116 : packoffset(c194.w);
+  float4 View_3120 : packoffset(c195.x);
+  float4 View_3136 : packoffset(c196.x);
+  float4 View_3152 : packoffset(c197.x);
+  float4 View_3168 : packoffset(c198.x);
+  float View_3184 : packoffset(c199.x);
+  float View_3188 : packoffset(c199.y);
+  float View_3192 : packoffset(c199.z);
+  float View_3196 : packoffset(c199.w);
+  float View_3200 : packoffset(c200.x);
+  float View_3204 : packoffset(c200.y);
+  float View_3208 : packoffset(c200.z);
+  float View_3212 : packoffset(c200.w);
+  float4 View_3216 : packoffset(c201.x);
+  float4 View_3232[7] : packoffset(c202.x);
+  float View_3344 : packoffset(c209.x);
+  float View_3348 : packoffset(c209.y);
+  float View_3352 : packoffset(c209.z);
+  float View_3356 : packoffset(c209.w);
+  int View_3360 : packoffset(c210.x);
+  float View_3364 : packoffset(c210.y);
+  float View_3368 : packoffset(c210.z);
+  float View_3372 : packoffset(c210.w);
+  float3 View_3376 : packoffset(c211.x);
+  int View_3388 : packoffset(c211.w);
+  float4 View_3392[6] : packoffset(c212.x);
+  float4 View_3488[6] : packoffset(c218.x);
+  float4 View_3584[6] : packoffset(c224.x);
+  float4 View_3680[6] : packoffset(c230.x);
+  float View_3776 : packoffset(c236.x);
+  float View_3780 : packoffset(c236.y);
+  int View_3784 : packoffset(c236.z);
+  float View_3788 : packoffset(c236.w);
+  float3 View_3792 : packoffset(c237.x);
+  float View_3804 : packoffset(c237.w);
+  float3 View_3808 : packoffset(c238.x);
+  float View_3820 : packoffset(c238.w);
+  float View_3824 : packoffset(c239.x);
+  float View_3828 : packoffset(c239.y);
+  int View_3832 : packoffset(c239.z);
+  float View_3836 : packoffset(c239.w);
+  float View_3840 : packoffset(c240.x);
+  float View_3844 : packoffset(c240.y);
+  float View_3848 : packoffset(c240.z);
+  float View_3852 : packoffset(c240.w);
+  int2 View_3856 : packoffset(c241.x);
+  float View_3864 : packoffset(c241.z);
+  float View_3868 : packoffset(c241.w);
+  float3 View_3872 : packoffset(c242.x);
+  float View_3884 : packoffset(c242.w);
+  float3 View_3888 : packoffset(c243.x);
+  float View_3900 : packoffset(c243.w);
+  float2 View_3904 : packoffset(c244.x);
+  float2 View_3912 : packoffset(c244.z);
+  float2 View_3920 : packoffset(c245.x);
+  float2 View_3928 : packoffset(c245.z);
+  float2 View_3936 : packoffset(c246.x);
+  float View_3944 : packoffset(c246.z);
+  float View_3948 : packoffset(c246.w);
+  float3 View_3952 : packoffset(c247.x);
+  float View_3964 : packoffset(c247.w);
+  float2 View_3968 : packoffset(c248.x);
+  float2 View_3976 : packoffset(c248.z);
+  float View_3984 : packoffset(c249.x);
+  float View_3988 : packoffset(c249.y);
+  float View_3992 : packoffset(c249.z);
+  float View_3996 : packoffset(c249.w);
+  float3 View_4000 : packoffset(c250.x);
+  float View_4012 : packoffset(c250.w);
+  float3 View_4016 : packoffset(c251.x);
+  float View_4028 : packoffset(c251.w);
+  float3 View_4032 : packoffset(c252.x);
+  float View_4044 : packoffset(c252.w);
+  float3 View_4048 : packoffset(c253.x);
+  float View_4060 : packoffset(c253.w);
+  float View_4064 : packoffset(c254.x);
+  float View_4068 : packoffset(c254.y);
+  float View_4072 : packoffset(c254.z);
+  float View_4076 : packoffset(c254.w);
+  float4 View_4080[4] : packoffset(c255.x);
+  float4 View_4144[2] : packoffset(c259.x);
+  int View_4176 : packoffset(c261.x);
+  int View_4180 : packoffset(c261.y);
+  int View_4184 : packoffset(c261.z);
+  int View_4188 : packoffset(c261.w);
+  int View_4192 : packoffset(c262.x);
+  float View_4196 : packoffset(c262.y);
+  float View_4200 : packoffset(c262.z);
+  float View_4204 : packoffset(c262.w);
+  float4 View_4208 : packoffset(c263.x);
+  float2 View_4224 : packoffset(c264.x);
+  float View_4232 : packoffset(c264.z);
+  float View_4236 : packoffset(c264.w);
+  float4 View_4240 : packoffset(c265.x);
+  int View_4256 : packoffset(c266.x);
+  float View_4260 : packoffset(c266.y);
+  float View_4264 : packoffset(c266.z);
+  float View_4268 : packoffset(c266.w);
+  float4 View_4272 : packoffset(c267.x);
+  int View_4288 : packoffset(c268.x);
+  int View_4292 : packoffset(c268.y);
+  int View_4296 : packoffset(c268.z);
+  float View_4300 : packoffset(c268.w);
+  float View_4304 : packoffset(c269.x);
+  float View_4308 : packoffset(c269.y);
+  float View_4312 : packoffset(c269.z);
+  float View_4316 : packoffset(c269.w);
+  float4 View_4320 : packoffset(c270.x);
+  float4 View_4336 : packoffset(c271.x);
+  float4 View_4352 : packoffset(c272.x);
+  float4 View_4368 : packoffset(c273.x);
+  float4 View_4384 : packoffset(c274.x);
+  float4 View_4400 : packoffset(c275.x);
+  int View_4416 : packoffset(c276.x);
+  float View_4420 : packoffset(c276.y);
+  float View_4424 : packoffset(c276.z);
+  float View_4428 : packoffset(c276.w);
+  float4 View_4432 : packoffset(c277.x);
+  float4 View_4448 : packoffset(c278.x);
+  float View_4464 : packoffset(c279.x);
+  float View_4468 : packoffset(c279.y);
+  float View_4472 : packoffset(c279.z);
+  float View_4476 : packoffset(c279.w);
+  float View_4480 : packoffset(c280.x);
+  int View_4484 : packoffset(c280.y);
+  float View_4488 : packoffset(c280.z);
+  float View_4492 : packoffset(c280.w);
+  float4 View_4496 : packoffset(c281.x);
+  float4 View_4512 : packoffset(c282.x);
+  float View_4528 : packoffset(c283.x);
+  float View_4532 : packoffset(c283.y);
+  float View_4536 : packoffset(c283.z);
+  float View_4540 : packoffset(c283.w);
+  float View_4544 : packoffset(c284.x);
+  float View_4548 : packoffset(c284.y);
+  float View_4552 : packoffset(c284.z);
+  float View_4556 : packoffset(c284.w);
+  float4 View_4560 : packoffset(c285.x);
+  int View_4576 : packoffset(c286.x);
+  int View_4580 : packoffset(c286.y);
+  int View_4584 : packoffset(c286.z);
+  float View_4588 : packoffset(c286.w);
+  float View_4592 : packoffset(c287.x);
+  float View_4596 : packoffset(c287.y);
+  float View_4600 : packoffset(c287.z);
+  float View_4604 : packoffset(c287.w);
+  float4 View_4608 : packoffset(c288.x);
+  float4 View_4624 : packoffset(c289.x);
+  float4 View_4640 : packoffset(c290.x);
+  float4 View_4656 : packoffset(c291.x);
+  float View_4672 : packoffset(c292.x);
+  float View_4676 : packoffset(c292.y);
+  float View_4680 : packoffset(c292.z);
+  float View_4684 : packoffset(c292.w);
+  float4 View_4688 : packoffset(c293.x);
+  float4 View_4704 : packoffset(c294.x);
+  float View_4720 : packoffset(c295.x);
+  float View_4724 : packoffset(c295.y);
+  float View_4728 : packoffset(c295.z);
+  float View_4732 : packoffset(c295.w);
+  float4 View_4736 : packoffset(c296.x);
+  float4 View_4752 : packoffset(c297.x);
+  float4 View_4768 : packoffset(c298.x);
+  float4 View_4784 : packoffset(c299.x);
+  float4 View_4800 : packoffset(c300.x);
+  float View_4816 : packoffset(c301.x);
+  float View_4820 : packoffset(c301.y);
+  float View_4824 : packoffset(c301.z);
+  float View_4828 : packoffset(c301.w);
+  float4 View_4832 : packoffset(c302.x);
+  float4 View_4848 : packoffset(c303.x);
+  float4 View_4864 : packoffset(c304.x);
+  int View_4880 : packoffset(c305.x);
+  float View_4884 : packoffset(c305.y);
+  float View_4888 : packoffset(c305.z);
+  float View_4892 : packoffset(c305.w);
+  float4 View_4896 : packoffset(c306.x);
+  float4 View_4912 : packoffset(c307.x);
+  float View_4928 : packoffset(c308.x);
+  float View_4932 : packoffset(c308.y);
+  float View_4936 : packoffset(c308.z);
+  float View_4940 : packoffset(c308.w);
+  float View_4944 : packoffset(c309.x);
+  float View_4948 : packoffset(c309.y);
+  float View_4952 : packoffset(c309.z);
+  float View_4956 : packoffset(c309.w);
+  float View_4960 : packoffset(c310.x);
+  float View_4964 : packoffset(c310.y);
+  float View_4968 : packoffset(c310.z);
+  float View_4972 : packoffset(c310.w);
+  float View_4976 : packoffset(c311.x);
+  float View_4980 : packoffset(c311.y);
+  float View_4984 : packoffset(c311.z);
+  float View_4988 : packoffset(c311.w);
+  float View_4992 : packoffset(c312.x);
+  float View_4996 : packoffset(c312.y);
+  float View_5000 : packoffset(c312.z);
+  float View_5004 : packoffset(c312.w);
+  float View_5008 : packoffset(c313.x);
+  float View_5012 : packoffset(c313.y);
+  float View_5016 : packoffset(c313.z);
+  float View_5020 : packoffset(c313.w);
+  float View_5024 : packoffset(c314.x);
+  float View_5028 : packoffset(c314.y);
+  float View_5032 : packoffset(c314.z);
+  float View_5036 : packoffset(c314.w);
+  float View_5040 : packoffset(c315.x);
+  float View_5044 : packoffset(c315.y);
+  float View_5048 : packoffset(c315.z);
+  float View_5052 : packoffset(c315.w);
+  float View_5056 : packoffset(c316.x);
+  float View_5060 : packoffset(c316.y);
+  float View_5064 : packoffset(c316.z);
+  float View_5068 : packoffset(c316.w);
+  float View_5072 : packoffset(c317.x);
+  float View_5076 : packoffset(c317.y);
+  float View_5080 : packoffset(c317.z);
+  float View_5084 : packoffset(c317.w);
+  float View_5088 : packoffset(c318.x);
+  float View_5092 : packoffset(c318.y);
+  float View_5096 : packoffset(c318.z);
+  float View_5100 : packoffset(c318.w);
+  float View_5104 : packoffset(c319.x);
+  float View_5108 : packoffset(c319.y);
+  float View_5112 : packoffset(c319.z);
+  float View_5116 : packoffset(c319.w);
+  float View_5120 : packoffset(c320.x);
+  float View_5124 : packoffset(c320.y);
+  float View_5128 : packoffset(c320.z);
+  float View_5132 : packoffset(c320.w);
+  float View_5136 : packoffset(c321.x);
+  float View_5140 : packoffset(c321.y);
+  float View_5144 : packoffset(c321.z);
+  float View_5148 : packoffset(c321.w);
+  float View_5152 : packoffset(c322.x);
+  float View_5156 : packoffset(c322.y);
+  float View_5160 : packoffset(c322.z);
+  float View_5164 : packoffset(c322.w);
+  float View_5168 : packoffset(c323.x);
+  float View_5172 : packoffset(c323.y);
+  float View_5176 : packoffset(c323.z);
+  float View_5180 : packoffset(c323.w);
+  float View_5184 : packoffset(c324.x);
+  float View_5188 : packoffset(c324.y);
+  float View_5192 : packoffset(c324.z);
+  float View_5196 : packoffset(c324.w);
+  float View_5200 : packoffset(c325.x);
+  float View_5204 : packoffset(c325.y);
+  float View_5208 : packoffset(c325.z);
+  float View_5212 : packoffset(c325.w);
+  float View_5216 : packoffset(c326.x);
+  float View_5220 : packoffset(c326.y);
+  float View_5224 : packoffset(c326.z);
+  float View_5228 : packoffset(c326.w);
+  float View_5232 : packoffset(c327.x);
+  float View_5236 : packoffset(c327.y);
+  float View_5240 : packoffset(c327.z);
+  float View_5244 : packoffset(c327.w);
+  float View_5248 : packoffset(c328.x);
+  float View_5252 : packoffset(c328.y);
+  float View_5256 : packoffset(c328.z);
+  float View_5260 : packoffset(c328.w);
+  float View_5264 : packoffset(c329.x);
+  float View_5268 : packoffset(c329.y);
+  float View_5272 : packoffset(c329.z);
+  float View_5276 : packoffset(c329.w);
+  float View_5280 : packoffset(c330.x);
+  float View_5284 : packoffset(c330.y);
+  float View_5288 : packoffset(c330.z);
+  float View_5292 : packoffset(c330.w);
+  float View_5296 : packoffset(c331.x);
+  float View_5300 : packoffset(c331.y);
+  float View_5304 : packoffset(c331.z);
+  float View_5308 : packoffset(c331.w);
+  float View_5312 : packoffset(c332.x);
+  float View_5316 : packoffset(c332.y);
+  float View_5320 : packoffset(c332.z);
+  float View_5324 : packoffset(c332.w);
+  float View_5328 : packoffset(c333.x);
+  float View_5332 : packoffset(c333.y);
+  float View_5336 : packoffset(c333.z);
+  float View_5340 : packoffset(c333.w);
+  float View_5344 : packoffset(c334.x);
+  float View_5348 : packoffset(c334.y);
+  float View_5352 : packoffset(c334.z);
+  float View_5356 : packoffset(c334.w);
+  float View_5360 : packoffset(c335.x);
+  float View_5364 : packoffset(c335.y);
+  float View_5368 : packoffset(c335.z);
+  float View_5372 : packoffset(c335.w);
+  float View_5376 : packoffset(c336.x);
+  float View_5380 : packoffset(c336.y);
+  float View_5384 : packoffset(c336.z);
+  float View_5388 : packoffset(c336.w);
+  float View_5392 : packoffset(c337.x);
+  float View_5396 : packoffset(c337.y);
+  float View_5400 : packoffset(c337.z);
+  float View_5404 : packoffset(c337.w);
+  float View_5408 : packoffset(c338.x);
+  float View_5412 : packoffset(c338.y);
+  float View_5416 : packoffset(c338.z);
+  float View_5420 : packoffset(c338.w);
+  float View_5424 : packoffset(c339.x);
+  float View_5428 : packoffset(c339.y);
+  float View_5432 : packoffset(c339.z);
+  float View_5436 : packoffset(c339.w);
+  float View_5440 : packoffset(c340.x);
+  float View_5444 : packoffset(c340.y);
+  float View_5448 : packoffset(c340.z);
+  float View_5452 : packoffset(c340.w);
+  float View_5456 : packoffset(c341.x);
+  float View_5460 : packoffset(c341.y);
+  float View_5464 : packoffset(c341.z);
+  float View_5468 : packoffset(c341.w);
+  float View_5472 : packoffset(c342.x);
+  float View_5476 : packoffset(c342.y);
+  float View_5480 : packoffset(c342.z);
+  float View_5484 : packoffset(c342.w);
+  float View_5488 : packoffset(c343.x);
+  float View_5492 : packoffset(c343.y);
+  float View_5496 : packoffset(c343.z);
+  float View_5500 : packoffset(c343.w);
+  float View_5504 : packoffset(c344.x);
+  float View_5508 : packoffset(c344.y);
+  float View_5512 : packoffset(c344.z);
+  float View_5516 : packoffset(c344.w);
+  float View_5520 : packoffset(c345.x);
+  float View_5524 : packoffset(c345.y);
+  float View_5528 : packoffset(c345.z);
+  float View_5532 : packoffset(c345.w);
+  float View_5536 : packoffset(c346.x);
+  float View_5540 : packoffset(c346.y);
+  float View_5544 : packoffset(c346.z);
+  float View_5548 : packoffset(c346.w);
+  float View_5552 : packoffset(c347.x);
+  float View_5556 : packoffset(c347.y);
+  float View_5560 : packoffset(c347.z);
+  float View_5564 : packoffset(c347.w);
+  float View_5568 : packoffset(c348.x);
+  float View_5572 : packoffset(c348.y);
+  float View_5576 : packoffset(c348.z);
+  float View_5580 : packoffset(c348.w);
+  float View_5584 : packoffset(c349.x);
+  float View_5588 : packoffset(c349.y);
+  float View_5592 : packoffset(c349.z);
+  float View_5596 : packoffset(c349.w);
+  float4 View_5600 : packoffset(c350.x);
+  float View_5616 : packoffset(c351.x);
+  float View_5620 : packoffset(c351.y);
+  float View_5624 : packoffset(c351.z);
+  float View_5628 : packoffset(c351.w);
+  float4 View_5632 : packoffset(c352.x);
+  float View_5648 : packoffset(c353.x);
+  float View_5652 : packoffset(c353.y);
+  float View_5656 : packoffset(c353.z);
+  float View_5660 : packoffset(c353.w);
+  int View_5664 : packoffset(c354.x);
+  float View_5668 : packoffset(c354.y);
+  float View_5672 : packoffset(c354.z);
+  float View_5676 : packoffset(c354.w);
+  float View_5680 : packoffset(c355.x);
+  float View_5684 : packoffset(c355.y);
+  float View_5688 : packoffset(c355.z);
+  float View_5692 : packoffset(c355.w);
+  float View_5696 : packoffset(c356.x);
+  float View_5700 : packoffset(c356.y);
+  float2 View_5704 : packoffset(c356.z);
+  float3 View_5712 : packoffset(c357.x);
+  float View_5724 : packoffset(c357.w);
+  float3 View_5728 : packoffset(c358.x);
+  float View_5740 : packoffset(c358.w);
+  float3 View_5744 : packoffset(c359.x);
+  float View_5756 : packoffset(c359.w);
+  float View_5760 : packoffset(c360.x);
+  float View_5764 : packoffset(c360.y);
+  float View_5768 : packoffset(c360.z);
+  float View_5772 : packoffset(c360.w);
+  float View_5776 : packoffset(c361.x);
+  float View_5780 : packoffset(c361.y);
+  float View_5784 : packoffset(c361.z);
+  float View_5788 : packoffset(c361.w);
+  float4 View_5792 : packoffset(c362.x);
+  float3 View_5808 : packoffset(c363.x);
+  float View_5820 : packoffset(c363.w);
+  float View_5824 : packoffset(c364.x);
+  float View_5828 : packoffset(c364.y);
+  float View_5832 : packoffset(c364.z);
+  float View_5836 : packoffset(c364.w);
+  float3 View_5840 : packoffset(c365.x);
+  float View_5852 : packoffset(c365.w);
+  float View_5856 : packoffset(c366.x);
+  float View_5860 : packoffset(c366.y);
+  float View_5864 : packoffset(c366.z);
+  float View_5868 : packoffset(c366.w);
+};
+
+SamplerState s0 : register(s0);
+
+SamplerState s1 : register(s1);
+
+SamplerState s2 : register(s2);
+
+SamplerState s3 : register(s3);
+
+SamplerState s4 : register(s4);
+
+SamplerState s5 : register(s5);
+
+SamplerState s6 : register(s6);
+
+SamplerState s7 : register(s7);
+
+SamplerState s8 : register(s8);
+
+SamplerState s9 : register(s9);
+
+SamplerState s10 : register(s10);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+
+float4 main(
+  noperspective float2 TEXCOORD : TEXCOORD,
+  noperspective float2 TEXCOORD_3 : TEXCOORD3,
+  noperspective float4 TEXCOORD_1 : TEXCOORD1,
+  noperspective float4 TEXCOORD_2 : TEXCOORD2,
+  noperspective float2 TEXCOORD_4 : TEXCOORD4,
+  precise noperspective float4 SV_Position : SV_Position
+) : SV_Target {
+  float4 SV_Target;
+  float _40;
+  float _41;
+  float _42;
+  float _113;
+  float _114;
+  float _122;
+  float _123;
+  float _221;
+  float _222;
+  float _223;
+  float _245;
+  float _252;
+  float _259;
+  float _266;
+  float _301;
+  float _302;
+  float _303;
+  float _338;
+  float _339;
+  float _340;
+  float _368;
+  float _369;
+  float _391;
+  float _422;
+  float _423;
+  float _511;
+  float _512;
+  float _603;
+  float _604;
+  float _676;
+  float _677;
+  float _678;
+  float _707;
+  float _708;
+  float _709;
+  float _769;
+  float _837;
+  float _838;
+  float _839;
+  float _851;
+  float _852;
+  float _853;
+  float _997;
+  float _998;
+  float _999;
+  float _1031;
+  float _1032;
+  float _1033;
+  float _1080;
+  float _1081;
+  float _1082;
+  float _1097;
+  float _1098;
+  float _1099;
+  float _1171;
+  float _1172;
+  float _1173;
+  float _1261;
+  float _1262;
+  float _1263;
+  float _47;
+  float _51;
+  float _52;
+  float _53;
+  float _63;
+  float _67;
+  float _72;
+  float _86;
+  float _91;
+  float _93;
+  bool _96;
+  bool _97;
+  bool _98;
+  bool _99;
+  float _107;
+  float _136;
+  float _137;
+  float _150;
+  float _159;
+  float _204;
+  float _209;
+  float _213;
+  bool _229;
+  bool _230;
+  bool _232;
+  bool _234;
+  float _267;
+  float _268;
+  float _269;
+  float _285;
+  float _286;
+  float _287;
+  float _324;
+  float _341;
+  float _345;
+  float _394;
+  float _395;
+  float _400;
+  float _404;
+  float _409;
+  float _415;
+  float _428;
+  float _433;
+  float _434;
+  float _449;
+  float _450;
+  float _460;
+  float _461;
+  bool _462;
+  float _472;
+  float _473;
+  float _484;
+  float _485;
+  float _490;
+  float _491;
+  float _501;
+  float _503;
+  bool _504;
+  float4 _547;
+  float _585;
+  float _589;
+  float _607;
+  float _609;
+  float _620;
+  float _626;
+  float _633;
+  float _634;
+  float _635;
+  float _636;
+  float _646;
+  float _665;
+  float _681;
+  float _682;
+  float _693;
+  float _718;
+  float4 _736;
+  float _743;
+  float _746;
+  float _748;
+  float _754;
+  float _756;
+  bool _757;
+  float4 _799;
+  bool _826;
+  float4 _829;
+  float4 _843;
+  float _854;
+  float _879;
+  float _881;
+  float _884;
+  float _886;
+  float _893;
+  float _894;
+  float _895;
+  float _923;
+  float _925;
+  float _932;
+  float _933;
+  float _934;
+  float _956;
+  float _960;
+  float _964;
+  float _1009;
+  float _1010;
+  float _1011;
+  float _1039;
+  float _1040;
+  float _1041;
+  float _1044;
+  float _1054;
+  float _1065;
+  float _1072;
+  float _1092;
+  float _1120;
+  float _1121;
+  float _1122;
+  float4 _1123;
+  float _1156;
+  float4 _1157;
+  float _1174;
+  float _1175;
+  float _1176;
+  float _1184;
+  float _1185;
+  float _1186;
+  float _1198;
+  float _1199;
+  float _1200;
+  float _1233;
+  float _1234;
+  float _1235;
+  _40 = cb0_064z * cb0_064y;
+  _41 = TEXCOORD_3.x * 0.5f;
+  _42 = TEXCOORD_3.y * 0.5f;
+  if (!(!(cb0_101x != 0.0f))) {
+    _47 = cb0_101x * 2.0f;
+    if (_47 > 0.0f) {
+      _51 = abs(_47) * 0.5f;
+      _52 = tan(_51);
+      _53 = _40 * TEXCOORD_3.x;
+      _63 = rsqrt(dot(float2(_53, TEXCOORD_3.y), float2(_53, TEXCOORD_3.y)));
+      _67 = rsqrt(dot(float2(_40, 1.0f), float2(_40, 1.0f)));
+      _72 = tan((sqrt((_53 * _53) + (TEXCOORD_3.y * TEXCOORD_3.y)) / sqrt((_40 * _40) + 1.0f)) * _51);
+      _113 = (((_72 * ((_63 * _53) / (_67 * _40))) / _52) * 0.5f);
+      _114 = (((_72 * ((_63 * TEXCOORD_3.y) / _67)) / _52) * 0.5f);
+    } else {
+      if (_47 < 0.0f) {
+        _86 = sqrt(((TEXCOORD_3.y * TEXCOORD_3.y) + (TEXCOORD_3.x * TEXCOORD_3.x)) * 0.25f);
+        _91 = (((_86 * _86) * (cb0_101x * 0.699999988079071f)) + 1.0f) * _86;
+        _93 = atan(_41 / _42);
+        _96 = (_42 < 0.0f);
+        _97 = (_42 == 0.0f);
+        _98 = (_41 >= 0.0f);
+        _99 = (_41 < 0.0f);
+        _107 = select((_98 && _97), 1.5707963705062866f, select((_99 && _97), -1.5707963705062866f, select((_99 && _96), (_93 + -3.1415927410125732f), select((_98 && _96), (_93 + 3.1415927410125732f), _93))));
+        _113 = (sin(_107) * _91);
+        _114 = (cos(_107) * _91);
+      } else {
+        _113 = _41;
+        _114 = _42;
+      }
+    }
+    _122 = (((_113 + 0.5f) * 2.0f) + -1.0f);
+    _123 = (((_114 + 0.5f) * 2.0f) + -1.0f);
+  } else {
+    _122 = TEXCOORD_3.x;
+    _123 = TEXCOORD_3.y;
+  }
+  _136 = ((cb0_048x * _122) + cb0_048z) * cb0_047z;
+  _137 = ((cb0_048y * _123) + cb0_048w) * cb0_047w;
+  _150 = ((View_1040.x * (((float4)(t5.SampleLevel(s5, float2(_136, _137), 0.0f))).x)) + View_1040.y) + (1.0f / ((View_1040.z * (((float4)(t5.SampleLevel(s5, float2(_136, _137), 0.0f))).x)) - View_1040.w));
+  _159 = 1.0f / ((View_1040.w + _150) * View_1040.z);
+  if (((bool)(!(cb0_096y == 0.0f))) || ((bool)(((bool)(((bool)(((bool)(((bool)(!(cb0_097y == 0.0f))) || ((bool)(!(cb0_101y == 0.0f))))) || ((bool)(!(cb0_102y == 0.0f))))) || ((bool)(!(cb0_103y == 0.0f))))) || ((bool)(!(cb0_104y == 0.0f)))))) {
+    _204 = 1.5f - (saturate(cb0_097z) * 1.4900000095367432f);
+    _209 = saturate(((sqrt((_123 * _123) + (_122 * _122)) - cb0_097y) - _204) / (-0.0f - _204));
+    _213 = (_209 * _209) * (3.0f - (_209 * 2.0f));
+    _221 = (1.0f - (_213 * max(cb0_096y, cb0_101y)));
+    _222 = (1.0f - (_213 * max(cb0_096y, cb0_102y)));
+    _223 = (1.0f - (_213 * max(cb0_096y, cb0_103y)));
+  } else {
+    _221 = 1.0f;
+    _222 = 1.0f;
+    _223 = 1.0f;
+  }
+  _229 = !(cb0_096z == 0.0f);
+  _230 = !(cb0_101z == 0.0f);
+  _232 = !(cb0_102z == 0.0f);
+  _234 = !(cb0_103z == 0.0f);
+  if (((bool)(((bool)(((bool)(_229 || _230)) || _232)) || _234)) || ((bool)(!(cb0_104z == 0.0f)))) {
+    if (_229) {
+      _245 = exp2(log2(saturate(cb0_096z)) * 3.0f);
+    } else {
+      _245 = cb0_096z;
+    }
+    if (_230) {
+      _252 = exp2(log2(saturate(cb0_101z)) * 3.0f);
+    } else {
+      _252 = cb0_101z;
+    }
+    if (_232) {
+      _259 = exp2(log2(saturate(cb0_102z)) * 3.0f);
+    } else {
+      _259 = cb0_102z;
+    }
+    if (_234) {
+      _266 = exp2(log2(saturate(cb0_103z)) * 3.0f);
+    } else {
+      _266 = cb0_103z;
+    }
+    _267 = max(_245, _252);
+    _268 = max(_245, _259);
+    _269 = max(_245, _266);
+    _285 = saturate((_150 - (_267 * 1000.0f)) / ((_267 * 9999.990234375f) + 0.009999999776482582f));
+    _286 = saturate((_150 - (_268 * 1000.0f)) / ((_268 * 9999.990234375f) + 0.009999999776482582f));
+    _287 = saturate((_150 - (_269 * 1000.0f)) / ((_269 * 9999.990234375f) + 0.009999999776482582f));
+    _301 = ((_285 * _285) * (3.0f - (_285 * 2.0f)));
+    _302 = ((_286 * _286) * (3.0f - (_286 * 2.0f)));
+    _303 = ((_287 * _287) * (3.0f - (_287 * 2.0f)));
+  } else {
+    _301 = 1.0f;
+    _302 = 1.0f;
+    _303 = 1.0f;
+  }
+  if (((bool)(((bool)(((bool)(((bool)(!(cb0_097x == 0.0f))) || ((bool)(!(cb0_102x == 0.0f))))) || ((bool)(!(cb0_103x == 0.0f))))) || ((bool)(!(cb0_104x == 0.0f))))) || ((bool)(!(cb0_105x == 0.0f)))) {
+    _324 = saturate(select((((_159 - (((float4)(t4.Sample(s4, float2(_136, _137)))).x)) + ((((View_448[3].z) - _159) + ((View_448[2].z) * _150)) * select(((View_448[3].w) < 1.0f), 0.0f, 1.0f))) > 0.0005000000237487257f), 1.0f, 0.0f) + select(((((float4)(t4.Sample(s4, float2(_136, _137)))).x) > 0.0005000000237487257f), 0.0f, 1.0f));
+    _338 = max(_324, (1.0f - saturate(max(cb0_097x, cb0_102x))));
+    _339 = max(_324, (1.0f - saturate(max(cb0_097x, cb0_103x))));
+    _340 = max(_324, (1.0f - saturate(max(cb0_097x, cb0_104x))));
+  } else {
+    _338 = 1.0f;
+    _339 = 1.0f;
+    _340 = 1.0f;
+  }
+  _341 = TEXCOORD_2.w * 543.3099975585938f;
+  _345 = frac(sin(_341 + TEXCOORD_2.z) * 493013.0f);
+  if (cb0_096x > 0.0f) {
+    _368 = ((cb0_096x * (frac((sin((TEXCOORD_2.z + 33.9900016784668f) + _341) * 493013.0f) + 7.177000045776367f) - _345)) + _345);
+    _369 = ((cb0_096x * (frac((sin((TEXCOORD_2.z + 66.98999786376953f) + _341) * 493013.0f) + 14.298999786376953f) - _345)) + _345);
+  } else {
+    _368 = _345;
+    _369 = _345;
+  }
+  if (cb0_099z > 0.0f) {
+    _391 = (((((_303 * _223) * _340) * cb0_099z) * ((sin((((TEXCOORD_3.y * 10.0f) + 10.0f) + (_345 * 0.0020000000949949026f)) + (View_2376 * 4.0f)) * 0.5f) + 0.5f)) + 1.0f);
+  } else {
+    _391 = 1.0f;
+  }
+  _394 = (_302 * _222) * _339;
+  _395 = _394 * cb0_099y;
+  if (cb0_099y > 0.0f) {
+    _400 = View_2376 * 0.00016666666488163173f;
+    _404 = frac(abs(_400));
+    _409 = ((TEXCOORD_3.y * 111000.0f) + 111000.0f) * select((_400 >= (-0.0f - _400)), _404, (-0.0f - _404));
+    _415 = (0.5f - frac(sin(dot(float2(_409, _409), float2(12.989800453186035f, 78.23300170898438f))) * 43758.546875f)) * 0.014999999664723873f;
+    _422 = (((_395 * 0.5f) * _415) + _136);
+    _423 = ((_415 * _395) + _137);
+  } else {
+    _422 = _136;
+    _423 = _137;
+  }
+  _428 = cb0_095z * (1.0f - (_345 * _345));
+  _433 = (_428 * (TEXCOORD_2.x - _422)) + _422;
+  _434 = (_428 * (TEXCOORD_2.y - _423)) + _423;
+  _449 = _433 - (((cb0_048x * _122) + cb0_048z) * cb0_047z);
+  _450 = _434 - (((cb0_048y * _123) + cb0_048w) * cb0_047w);
+  _460 = cb0_117z * cb0_116x;
+  _461 = cb0_117z * cb0_116y;
+  _462 = (cb0_117x == 0.0f);
+  _472 = (cb0_113z * _122) + cb0_113x;
+  _473 = (cb0_113w * _123) + cb0_113y;
+  _484 = float((int)(((int)(uint)((bool)(_472 > 0.0f))) - ((int)(uint)((bool)(_472 < 0.0f)))));
+  _485 = float((int)(((int)(uint)((bool)(_473 > 0.0f))) - ((int)(uint)((bool)(_473 < 0.0f)))));
+  _490 = saturate(abs(_472) - cb0_116z);
+  _491 = saturate(abs(_473) - cb0_116z);
+  _501 = _473 - ((_491 * _460) * _485);
+  _503 = _473 - ((_491 * _461) * _485);
+  _504 = (cb0_117x > 0.0f);
+  if (_504) {
+    _511 = (_501 - (cb0_117w * 0.4000000059604645f));
+    _512 = (_503 - (cb0_117w * 0.20000000298023224f));
+  } else {
+    _511 = _501;
+    _512 = _503;
+  }
+  _547 = t0.Sample(s0, float2(min(max(_433, cb0_053x), cb0_053z), min(max(_434, cb0_053y), cb0_053w)));
+  if (_504) {
+    _585 = saturate(((((_547.y * 0.5870000123977661f) - cb0_117y) + (_547.x * 0.29899999499320984f)) + (_547.z * 0.11400000005960464f)) * 10.0f);
+    _589 = (_585 * _585) * (3.0f - (_585 * 2.0f));
+    _603 = ((((_547.x - (((float4)(t0.Sample(s0, float2(min(max(((((cb0_048x * ((cb0_114z * (_472 - ((_490 * select(_462, _460, cb0_116x)) * _484))) + cb0_114x)) + cb0_048z) * cb0_047z) + _449), cb0_053x), cb0_053z), min(max(((((cb0_048y * ((cb0_114w * _511) + cb0_114y)) + cb0_048w) * cb0_047w) + _450), cb0_053y), cb0_053w))))).x)) + (_589 * ((((float4)(t0.Sample(s0, float2(min(max(((((cb0_048x * ((cb0_114z * (_472 - ((_490 * select(_462, _460, cb0_116x)) * _484))) + cb0_114x)) + cb0_048z) * cb0_047z) + _449), cb0_053x), cb0_053z), min(max(((((cb0_048y * ((cb0_114w * _511) + cb0_114y)) + cb0_048w) * cb0_047w) + _450), cb0_053y), cb0_053w))))).x) - _547.x))) * cb0_117x) + (((float4)(t0.Sample(s0, float2(min(max(((((cb0_048x * ((cb0_114z * (_472 - ((_490 * select(_462, _460, cb0_116x)) * _484))) + cb0_114x)) + cb0_048z) * cb0_047z) + _449), cb0_053x), cb0_053z), min(max(((((cb0_048y * ((cb0_114w * _511) + cb0_114y)) + cb0_048w) * cb0_047w) + _450), cb0_053y), cb0_053w))))).x));
+    _604 = ((((_547.y - (((float4)(t0.Sample(s0, float2(min(max(((((cb0_048x * ((cb0_114z * (_472 - ((_490 * select(_462, _461, cb0_116y)) * _484))) + cb0_114x)) + cb0_048z) * cb0_047z) + _449), cb0_053x), cb0_053z), min(max(((((cb0_048y * ((cb0_114w * _512) + cb0_114y)) + cb0_048w) * cb0_047w) + _450), cb0_053y), cb0_053w))))).y)) + (_589 * ((((float4)(t0.Sample(s0, float2(min(max(((((cb0_048x * ((cb0_114z * (_472 - ((_490 * select(_462, _461, cb0_116y)) * _484))) + cb0_114x)) + cb0_048z) * cb0_047z) + _449), cb0_053x), cb0_053z), min(max(((((cb0_048y * ((cb0_114w * _512) + cb0_114y)) + cb0_048w) * cb0_047w) + _450), cb0_053y), cb0_053w))))).y) - _547.y))) * cb0_117x) + (((float4)(t0.Sample(s0, float2(min(max(((((cb0_048x * ((cb0_114z * (_472 - ((_490 * select(_462, _461, cb0_116y)) * _484))) + cb0_114x)) + cb0_048z) * cb0_047z) + _449), cb0_053x), cb0_053z), min(max(((((cb0_048y * ((cb0_114w * _512) + cb0_114y)) + cb0_048w) * cb0_047w) + _450), cb0_053y), cb0_053w))))).y));
+  } else {
+    _603 = (((float4)(t0.Sample(s0, float2(min(max(((((cb0_048x * ((cb0_114z * (_472 - ((_490 * select(_462, _460, cb0_116x)) * _484))) + cb0_114x)) + cb0_048z) * cb0_047z) + _449), cb0_053x), cb0_053z), min(max(((((cb0_048y * ((cb0_114w * _511) + cb0_114y)) + cb0_048w) * cb0_047w) + _450), cb0_053y), cb0_053w))))).x);
+    _604 = (((float4)(t0.Sample(s0, float2(min(max(((((cb0_048x * ((cb0_114z * (_472 - ((_490 * select(_462, _461, cb0_116y)) * _484))) + cb0_114x)) + cb0_048z) * cb0_047z) + _449), cb0_053x), cb0_053z), min(max(((((cb0_048y * ((cb0_114w * _512) + cb0_114y)) + cb0_048w) * cb0_047w) + _450), cb0_053y), cb0_053w))))).y);
+  }
+  _607 = saturate(cb0_098x);
+  _609 = saturate(cb0_098y);
+  if (_607 > 0.0f) {
+    _620 = saturate(((_603 * 0.29899999499320984f) + (_547.z * 0.11400000005960464f)) + (_604 * 0.5870000123977661f));
+    _626 = ((_620 * _620) * (saturate(1.0f - cb0_098z) * 2.0f)) * (3.0f - (_620 * 2.0f));
+    _633 = max(sqrt(((_603 * _603) + (_547.z * _547.z)) + (_604 * _604)), 0.014999999664723873f);
+    _634 = _603 / _633;
+    _635 = _604 / _633;
+    _636 = _547.z / _633;
+    _646 = log2(_626);
+    _665 = ((_301 * _221) * _338) * _607;
+    _676 = (((((lerp(_634, 1.0f, 0.25f)) * (((_609 * 0.17000000178813934f) + 0.029999999329447746f) + _626)) - _603) * _665) + _603);
+    _677 = (((((((_609 * 0.18000000715255737f) + 0.05000000074505806f) + exp2(_646 * 0.8999999761581421f)) * (lerp(_635, 1.0f, 0.25f))) - _604) * _665) + _604);
+    _678 = (((((((_609 * 0.17999999225139618f) + 0.07999999821186066f) + exp2(_646 * 0.949999988079071f)) * (lerp(_636, 1.0f, 0.25f))) - _547.z) * _665) + _547.z);
+  } else {
+    _676 = _603;
+    _677 = _604;
+    _678 = _547.z;
+  }
+  _681 = saturate(cb0_099x);
+  _682 = _394 * _681;
+  if (_681 > 0.0f) {
+    _693 = (sin(((_123 * 640.0f) + 640.0f) - (View_2376 * 10.0f)) * 0.5f) + 1.0f;
+    _707 = ((((_693 * _676) - _676) * _682) + _676);
+    _708 = ((((_693 * _677) - _677) * _682) + _677);
+    _709 = ((((_693 * _678) - _678) * _682) + _678);
+  } else {
+    _707 = _676;
+    _708 = _677;
+    _709 = _678;
+  }
+  _718 = log2(max(dot(float3(_707, _708, _709), float3(cb0_042y, cb0_042z, cb0_042w)), cb0_041z));
+  _736 = t7.Sample(s7, float3((cb0_046x * TEXCOORD_4.x), (cb0_046y * TEXCOORD_4.y), ((((cb0_041x * _718) + cb0_041y) * 0.96875f) + 0.015625f)));
+  _743 = select((_736.y < 0.0010000000474974513f), (((float4)(t8.Sample(s8, float2(TEXCOORD_4.x, TEXCOORD_4.y)))).x), (_736.x / _736.y));
+  _746 = log2(TEXCOORD_1.x);
+  _748 = (_743 + _746) + (((((float4)(t8.Sample(s8, float2(TEXCOORD_4.x, TEXCOORD_4.y)))).x) - _743) * cb0_045y);
+  _754 = _746 + _718;
+  _756 = _748 - log2((TEXCOORD_1.y * 0.18000000715255737f) * cb0_045z);
+  _757 = (_756 > 0.0f);
+  if (_757) {
+    _769 = max(0.0f, (_756 - cb0_046z));
+  } else {
+    _769 = min(0.0f, (cb0_046w + _756));
+  }
+  _799 = t1.Sample(s1, float2(min(max(((cb0_068x * _433) + cb0_068z), cb0_060x), cb0_060z), min(max(((cb0_068y * _434) + cb0_068w), cb0_060y), cb0_060w)));
+  APPLY_BLOOM(_799);
+  [branch]
+  if (!(cb0_085x == 0)) {
+    _826 = (cb0_085z != 0);
+    _829 = t2.Sample(s2, float2(select(_826, _433, min(max(((cb0_076x * _433) + cb0_076z), cb0_075x), cb0_075z)), select(_826, _434, min(max(((cb0_076y * _434) + cb0_076w), cb0_075y), cb0_075w))));
+    _837 = (_829.x + _799.x);
+    _838 = (_829.y + _799.y);
+    _839 = (_829.z + _799.z);
+  } else {
+    _837 = _799.x;
+    _838 = _799.y;
+    _839 = _799.z;
+  }
+  [branch]
+  if (!(cb0_085y == 0)) {
+    _843 = t3.Sample(s3, float2(_433, _434));
+    _851 = (_843.x + _837);
+    _852 = (_843.y + _838);
+    _853 = (_843.z + _839);
+  } else {
+    _851 = _837;
+    _852 = _838;
+    _853 = _839;
+  }
+  _854 = exp2((((_748 - _754) + ((_754 - _748) * cb0_045x)) - _769) + (_769 * select(_757, cb0_044z, cb0_044w))) * TEXCOORD_1.x;
+  _879 = TEXCOORD_1.z + -1.0f;
+  _881 = TEXCOORD_1.w + -1.0f;
+  _884 = ((_879 + (cb0_090x * 2.0f)) * cb0_088z) * cb0_088x;
+  _886 = ((_881 + (cb0_090y * 2.0f)) * cb0_088w) * cb0_088x;
+  _893 = 1.0f / ((((saturate(cb0_089w) * 9.0f) + 1.0f) * dot(float2(_884, _886), float2(_884, _886))) + 1.0f);
+  _894 = _893 * _893;
+  _895 = cb0_090z + 1.0f;
+  _923 = ((_879 + (cb0_093x * 2.0f)) * cb0_091z) * cb0_091x;
+  _925 = ((_881 + (cb0_093y * 2.0f)) * cb0_091w) * cb0_091x;
+  _932 = 1.0f / ((((saturate(cb0_092w) * 9.0f) + 1.0f) * dot(float2(_923, _925), float2(_923, _925))) + 1.0f);
+  _933 = _932 * _932;
+  _934 = cb0_093z + 1.0f;
+  _956 = ((((_851 + ((_854 * _707) * cb0_086x)) * _391) * ((_894 * (_895 - cb0_089x)) + cb0_089x)) * ((_933 * (_934 - cb0_092x)) + cb0_092x)) * ((cb0_095x * _345) + cb0_095y);
+  _960 = ((((_852 + ((_854 * _708) * cb0_086y)) * _391) * ((_894 * (_895 - cb0_089y)) + cb0_089y)) * ((_933 * (_934 - cb0_092y)) + cb0_092y)) * ((cb0_095x * _368) + cb0_095y);
+  _964 = ((((_853 + ((_854 * _709) * cb0_086z)) * _391) * ((_894 * (_895 - cb0_089z)) + cb0_089z)) * ((_933 * (_934 - cb0_092z)) + cb0_092z)) * ((cb0_095x * _369) + cb0_095y);
+  CAPTURE_UNTONEMAPPED(float3(_956, _960, _964));
+  [branch]
+  if (WUWA_TM_IS(1)) {
+    _997 = ((((_956 * 1.3600000143051147f) + 0.04699999839067459f) * _956) / ((((_956 * 0.9599999785423279f) + 0.5600000023841858f) * _956) + 0.14000000059604645f));
+    _998 = ((((_960 * 1.3600000143051147f) + 0.04699999839067459f) * _960) / ((((_960 * 0.9599999785423279f) + 0.5600000023841858f) * _960) + 0.14000000059604645f));
+    _999 = ((((_964 * 1.3600000143051147f) + 0.04699999839067459f) * _964) / ((((_964 * 0.9599999785423279f) + 0.5600000023841858f) * _964) + 0.14000000059604645f));
+  } else {
+    _997 = _956;
+    _998 = _960;
+    _999 = _964;
+  }
+  [branch]
+  if (WUWA_TM_IS(2)) {
+    _1009 = 1.0049500465393066f - (0.16398000717163086f / (_997 + -0.19505000114440918f));
+    _1010 = 1.0049500465393066f - (0.16398000717163086f / (_998 + -0.19505000114440918f));
+    _1011 = 1.0049500465393066f - (0.16398000717163086f / (_999 + -0.19505000114440918f));
+    _1031 = (((_997 - _1009) * select((_997 > 0.6000000238418579f), 0.0f, 1.0f)) + _1009);
+    _1032 = (((_998 - _1010) * select((_998 > 0.6000000238418579f), 0.0f, 1.0f)) + _1010);
+    _1033 = (((_999 - _1011) * select((_999 > 0.6000000238418579f), 0.0f, 1.0f)) + _1011);
+  } else {
+    _1031 = _997;
+    _1032 = _998;
+    _1033 = _999;
+  }
+  [branch]
+  if (WUWA_TM_IS(3)) {
+    _1039 = cb0_037y * _1031;
+    _1040 = cb0_037y * _1032;
+    _1041 = cb0_037y * _1033;
+    _1044 = cb0_037z * cb0_037w;
+    _1054 = cb0_038y * cb0_038x;
+    _1065 = cb0_038z * cb0_038x;
+    _1072 = cb0_038y / cb0_038z;
+    _1080 = (((((_1044 + _1039) * _1031) + _1054) / (_1065 + ((_1039 + cb0_037z) * _1031))) - _1072);
+    _1081 = (((((_1044 + _1040) * _1032) + _1054) / (_1065 + ((_1040 + cb0_037z) * _1032))) - _1072);
+    _1082 = (((((_1044 + _1041) * _1033) + _1054) / (_1065 + ((_1041 + cb0_037z) * _1033))) - _1072);
+  } else {
+    _1080 = _1031;
+    _1081 = _1032;
+    _1082 = _1033;
+  }
+  [branch]
+  if (!(cb0_105w == 0)) {
+    if (!(cb0_106x == 1.0f)) {
+      _1092 = (cb0_106x * 0.699999988079071f) + 0.30000001192092896f;
+      _1097 = (_1092 * _1080);
+      _1098 = (_1092 * _1081);
+      _1099 = (_1092 * _1082);
+    } else {
+      _1097 = _1080;
+      _1098 = _1081;
+      _1099 = _1082;
+    }
+  } else {
+    _1097 = _1080;
+    _1098 = _1081;
+    _1099 = _1082;
+  }
+  APPLY_EXTENDED_TONEMAP(_1097, _1098, _1099);
+  _1120 = (saturate((log2(_1097 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
+  _1121 = (saturate((log2(_1098 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
+  _1122 = (saturate((log2(_1099 + 0.002667719265446067f) * 0.0714285746216774f) + 0.6107269525527954f) * 0.96875f) + 0.015625f;
+  _1123 = t9.Sample(s9, float3(_1120, _1121, _1122));
+  [branch]
+  if (!(cb0_107w == 0)) {
+    _1156 = select((((uint)(uint(float((uint)((int)((uint)(uint(round((((float4)(t6.Sample(s6, float2(min(max(((cb0_084x * _433) + cb0_084z), cb0_083x), cb0_083z), min(max(((cb0_084y * _434) + cb0_084w), cb0_083y), cb0_083w))))).w) * 255.0f))) & 15))))) & -4) == 12), 1.0f, 0.0f);
+    _1157 = t10.Sample(s10, float3(_1120, _1121, _1122));
+    _1171 = (lerp(_1157.x, _1123.x, _1156));
+    _1172 = (lerp(_1157.y, _1123.y, _1156));
+    _1173 = (lerp(_1157.z, _1123.z, _1156));
+  } else {
+    _1171 = _1123.x;
+    _1172 = _1123.y;
+    _1173 = _1123.z;
+  }
+  _1174 = _1173 * 1.0499999523162842f;
+  _1175 = _1172 * 1.0499999523162842f;
+  _1176 = _1171 * 1.0499999523162842f;
+  _1184 = ((_345 * 0.00390625f) + -0.001953125f) + _1176;
+  _1185 = ((_368 * 0.00390625f) + -0.001953125f) + _1175;
+  _1186 = ((_369 * 0.00390625f) + -0.001953125f) + _1174;
+  [branch]
+  if (!(cb0_106w == 0)) {
+    _1198 = (pow(_1184, 0.012683313339948654f));
+    _1199 = (pow(_1185, 0.012683313339948654f));
+    _1200 = (pow(_1186, 0.012683313339948654f));
+    _1233 = max(6.103519990574569e-05f, ((exp2(log2(max(0.0f, (_1198 + -0.8359375f)) / (18.8515625f - (_1198 * 18.6875f))) * 6.277394771575928f) * 10000.0f) / cb0_106z));
+    _1234 = max(6.103519990574569e-05f, ((exp2(log2(max(0.0f, (_1199 + -0.8359375f)) / (18.8515625f - (_1199 * 18.6875f))) * 6.277394771575928f) * 10000.0f) / cb0_106z));
+    _1235 = max(6.103519990574569e-05f, ((exp2(log2(max(0.0f, (_1200 + -0.8359375f)) / (18.8515625f - (_1200 * 18.6875f))) * 6.277394771575928f) * 10000.0f) / cb0_106z));
+    _1261 = min((_1233 * 12.920000076293945f), ((exp2(log2(max(_1233, 0.0031306699384003878f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f));
+    _1262 = min((_1234 * 12.920000076293945f), ((exp2(log2(max(_1234, 0.0031306699384003878f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f));
+    _1263 = min((_1235 * 12.920000076293945f), ((exp2(log2(max(_1235, 0.0031306699384003878f)) * 0.4166666567325592f) * 1.0549999475479126f) + -0.054999999701976776f));
+  } else {
+    _1261 = _1184;
+    _1262 = _1185;
+    _1263 = _1186;
+  }
+  SV_Target.x = _1261;
+  SV_Target.y = _1262;
+  SV_Target.z = _1263;
+  SV_Target.xyz = wuwa::InvertAndApplyDisplayMap(SV_Target.xyz);
+  SV_Target.w = (dot(float3(_1176, _1175, _1174), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f)));
+  CLAMP_IF_SDR(SV_Target.w);
+  return SV_Target;
+}
