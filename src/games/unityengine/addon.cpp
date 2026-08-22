@@ -1042,6 +1042,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberLinearOnDraw(0x13EE3146),
     UberLinearOnDraw(0x32A94D85),
     UberLinearOnDraw(0x1F2E8B17),
+    UberLinearOnDraw(0x8F94BF7D),
     UberGammaOnDraw(0x6A501208),
     UberGammaOnDraw(0xE3B6F1F7),
     UberGammaOnDraw(0xA6918C83),
@@ -3160,6 +3161,15 @@ void AddSmolInternalLutUpgrade() {
       });
 }
 
+void AddUnormInternalLutUpgrade() {
+      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .dimensions = {1024,32},
+          .usage_include = reshade::api::resource_usage::render_target,
+      });
+}
+
 void AddGamePatches() {
   auto process_path = renodx::utils::platform::GetCurrentProcessPath();
   auto filename = process_path.filename().string();
@@ -3171,7 +3181,7 @@ void AddGamePatches() {
     shader_injection.isClamped = 2.f;
   } else if (filename == "TheEternalDie.exe") {
     AddLiRTEDUpgrades();
-  } else if (filename == "Dimhaven Enigmas.exe" || filename == "Dimhaven - The Lost Source.exe") {
+  } else if (filename == "Dimhaven Enigmas.exe" || filename == "Dimhaven - The Lost Source.exe" || filename == "Carpenter.exe") {
     AddIndex0Upgrade();
   } else if (filename == "OPUS_ Prism Peak.exe"){
     AddSmolInternalLutUpgrade();
@@ -3190,6 +3200,8 @@ void AddGamePatches() {
     shader_injection.isClamped = 2.f;
     } else if(filename == "It Steals.exe"){
     shader_injection.isClamped = 3.f;
+    } else if(filename == "ParasiteMutant_Demo.exe" || filename == "ParasiteMutant.exe"){
+    AddUnormInternalLutUpgrade();
   } else {
     return;
   }
@@ -3301,6 +3313,14 @@ const std::unordered_map<
             {
                 {"Swapchain_Encoding", 1.f},
                 {"Blit_Copy_Hack", 0.f},
+            },
+        },
+        {
+            "Carpenter.exe",
+            {
+                {"Upgrade_R8G8B8A8_TYPELESS", UPGRADE_TYPE_NONE},
+                {"Upgrade_R10G10B10A2_TYPELESS", UPGRADE_TYPE_OUTPUT_SIZE},
+                {"Upgrade_R11G11B10_FLOAT", UPGRADE_TYPE_OUTPUT_SIZE},
             },
         },
         {
