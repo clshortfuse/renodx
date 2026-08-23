@@ -40,10 +40,16 @@ renodx_check_minimum_tool_version(
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 set(SHADER_NDEBUG_FLAG "")
+set(SHADER_SLANG_NDEBUG_FLAG "")
+set(SHADER_GLSLANG_NDEBUG_FLAG "")
 if(CMAKE_CONFIGURATION_TYPES)
   set(SHADER_NDEBUG_FLAG "$<$<NOT:$<CONFIG:Debug>>:/DNDEBUG>")
+  set(SHADER_SLANG_NDEBUG_FLAG "$<$<NOT:$<CONFIG:Debug>>:-DNDEBUG>")
+  set(SHADER_GLSLANG_NDEBUG_FLAG "$<$<NOT:$<CONFIG:Debug>>:-DNDEBUG>")
 elseif(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(SHADER_NDEBUG_FLAG /DNDEBUG)
+  set(SHADER_SLANG_NDEBUG_FLAG -DNDEBUG)
+  set(SHADER_GLSLANG_NDEBUG_FLAG -DNDEBUG)
 endif()
 
 project(renodx VERSION 0.1.0 LANGUAGES CXX)
@@ -319,6 +325,9 @@ function(build_shader_target ADDON ADDON_PATH)
     set(SHADER_FLAGS ${SHADER_FLAGS} -entry main)
     set(SHADER_FLAGS ${SHADER_FLAGS} -Wno-30056)
     set(SHADER_FLAGS ${SHADER_FLAGS} -Wno-15205)
+    if(SHADER_SLANG_NDEBUG_FLAG)
+      set(SHADER_FLAGS ${SHADER_FLAGS} ${SHADER_SLANG_NDEBUG_FLAG})
+    endif()
 
     if(SHADER_TARGET AND (SHADER_HASH OR SHADER_NAME))
       if(SHADER_TARGET STREQUAL "frag" OR SHADER_TARGET STREQUAL "vert" OR SHADER_TARGET STREQUAL "comp")
@@ -464,7 +473,9 @@ function(build_shader_target ADDON ADDON_PATH)
 
     if(GLSL_BACKEND STREQUAL "vk")
       set(SPIRV_COMPILE_COMMAND
-        ${GLSLANG_BIN} -V --target-env vulkan1.3 -S ${SHADER_STAGE} -o ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}.spv ${FILE})
+        ${GLSLANG_BIN} -V --target-env vulkan1.3 -S ${SHADER_STAGE} -O
+        ${SHADER_GLSLANG_NDEBUG_FLAG}
+        -o ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}.spv ${FILE})
       add_stage_spirv_shader(${GLSL_OUTPUT_STEM})
     else()
       if(GLSL_BACKEND STREQUAL "gl")
