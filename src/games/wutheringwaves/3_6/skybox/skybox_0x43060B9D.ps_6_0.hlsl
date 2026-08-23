@@ -812,6 +812,11 @@ OutputSignature main(
   _168 = (Material_000[5].x) * _163;
   _169 = (Material_000[5].y) * _163;
   _170 = (Material_000[5].z) * _163;
+  if (RENODX_WUWA_HDR_SUN > 0.5f) {
+    _168 *= SUNMOON_BOOST;
+    _169 *= SUNMOON_BOOST;
+    _170 *= SUNMOON_BOOST;
+  }
   _172 = sqrt(dot(float3(_107, _108, _109), float3(_107, _108, _109)));
   _173 = _107 / _172;
   _174 = _108 / _172;
@@ -838,6 +843,7 @@ OutputSignature main(
   _310 = (((_261 * _236.x) * _297) * (Material_000[18].x)) * _309;
   _311 = (((_261 * _236.y) * _297) * (Material_000[18].y)) * _309;
   _312 = (((_261 * _236.z) * _297) * (Material_000[18].z)) * _309;
+
   _318 = saturate(dot(float3(_173, _174, _175), float3((Material_000[2].x), (Material_000[2].y), (Material_000[2].z))));
   _327 = select((_318 <= 2.980232949312267e-08f), 0.0f, exp2((120.0f - ((Material_512[2].x) * 119.0f)) * log2(_318)));
   _328 = _327 * _327;
@@ -850,6 +856,7 @@ OutputSignature main(
   _394 = (((Material_000[26].x) - _373) * _387) + _373;
   _395 = (((Material_000[26].y) - _374) * _387) + _374;
   _396 = (((Material_000[26].z) - _375) * _387) + _375;
+  
   _405 = (Material_512[3].y) * select((_159 <= 2.980232949312267e-08f), 0.0f, exp2(log2(_159) * (Material_512[3].x)));
   _417 = (_394 + ((((((Material_000[7].x) * _185) + _168) + _310) + (_328 * (Material_000[20].x))) * (Material_512[2].y))) + (((Material_000[28].x) - _394) * _405);
   _419 = (_395 + ((((((Material_000[7].y) * _185) + _169) + _311) + (_328 * (Material_000[20].y))) * (Material_512[2].y))) + (((Material_000[28].y) - _395) * _405);
@@ -906,12 +913,6 @@ OutputSignature main(
   _596 = (((((_310 + _168) - _417) + _569) + ((Material_512[4].z) * (_572 - _569))) * (Material_512[4].w)) + _417;
   _597 = (((((_311 + _169) - _419) + _570) + ((Material_512[4].z) * (_572 - _570))) * (Material_512[4].w)) + _419;
   _598 = (((((_312 + _170) - _421) + _571) + ((Material_512[4].z) * (_572 - _571))) * (Material_512[4].w)) + _421;
-  // Boost sun & moon disc brightness
-  if (RENODX_WUWA_HDR_SUN > 0.5f) {
-    _596 *= SUNMOON_BOOST;
-    _597 *= SUNMOON_BOOST;
-    _598 *= SUNMOON_BOOST;
-  }
   [branch]
   if (!(((Primitive_428 & 1) | View_2560) == 0)) {
     _639 = asint((((SV_Position.w * SV_Position.z) / SV_Position.w) - (VELOCITY_PREV_POS.z / VELOCITY_PREV_POS.w)));
