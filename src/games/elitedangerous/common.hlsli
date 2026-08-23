@@ -40,4 +40,25 @@ float3 FinalizeOutput(float3 color) {
   return color;
 }
 
+/// Identity through anchor to every derivative; then approaches peak
+/// monotonically and concave down. Requires anchor < peak and compression_strength >= 1.
+#define APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(T)                                                      \
+  T ApplyAnchoredCInfinityShoulder(T color, T peak, T anchor, float compression_strength) {                \
+    T shoulder_range = peak - anchor;                                                                      \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                                  \
+    T flat_weight = exp2(-shoulder_range / (compression_strength * distance_from_anchor));                 \
+    T response_denominator = mad(distance_from_anchor, flat_weight, shoulder_range);                       \
+    return mad(shoulder_range, distance_from_anchor / response_denominator, color - distance_from_anchor); \
+  }
+
+APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(float)
+APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(float3)
+#undef APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR
+
+float ApplyAnchoredCInfinityShoulderMaxChannelScale(float3 color, float peak, float anchor, float compression_strength) {
+  float max_channel = renodx::math::Max(abs(color));
+  float compressed_max = ApplyAnchoredCInfinityShoulder(max_channel, peak, anchor, compression_strength);
+  return renodx::math::DivideSafe(compressed_max, max_channel, 1.f);
+}
+
 #endif  // RENODX_ELITEDANGEROUS_COMMON_HLSLI_
