@@ -19,7 +19,7 @@ inline constexpr float kNativeUiHalfExtent = 0.5f;
 inline constexpr float kDefaultTargetAspect = 3440.f / 1440.f;
 
 constexpr float CalculateUiHalfExtent(float aspect_ratio) {
-  return kNativeUiHalfExtent * kVanillaAspect / aspect_ratio;
+  return kNativeUiHalfExtent * aspect_ratio / kVanillaAspect;
 }
 
 struct ActiveValues {

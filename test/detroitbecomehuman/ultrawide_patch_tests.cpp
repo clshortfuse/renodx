@@ -159,7 +159,7 @@ int main(int argc, char** argv) {
                  == ultrawide::RuntimePatchId::kAspectGetter
           && ultrawide::kRuntimePatchPlan[ultrawide::kUiPatchIndex]
                  == ultrawide::RuntimePatchId::kUiHalfExtent,
-      "the production patch plan must contain aspect and UI compensation redirects");
+      "the production patch plan must contain scene and UI projection redirects");
 
   passed &= Expect(
       NearlyEqual(
@@ -167,25 +167,25 @@ int main(int argc, char** argv) {
           ultrawide::kNativeUiHalfExtent),
       "16:9 must preserve the native UI half-extent");
   passed &= Expect(
-      NearlyEqual(ultrawide::CalculateUiHalfExtent(2560.f / 1080.f), 0.375f),
-      "2560x1080 must cancel the ultrawide UI enlargement");
+      NearlyEqual(ultrawide::CalculateUiHalfExtent(2560.f / 1080.f), 0.6666667f),
+      "2560x1080 must shrink the complete UI projection to 16:9 visual size");
   passed &= Expect(
-      NearlyEqual(ultrawide::CalculateUiHalfExtent(3440.f / 1440.f), 16.f / 43.f),
-      "3440x1440 must preserve the 16:9 UI size");
+      NearlyEqual(ultrawide::CalculateUiHalfExtent(3440.f / 1440.f), 43.f / 64.f),
+      "3440x1440 must shrink the complete UI projection by 32/43");
   passed &= Expect(
-      NearlyEqual(ultrawide::CalculateUiHalfExtent(32.f / 9.f), 0.25f),
-      "32:9 must preserve the 16:9 UI size");
+      NearlyEqual(ultrawide::CalculateUiHalfExtent(32.f / 9.f), 1.f),
+      "32:9 must shrink the complete UI projection to half width and height");
 
   const auto auto_3440 = ultrawide::CalculateActiveValues(3440u, 1440u, true);
   passed &= Expect(
       NearlyEqual(auto_3440.aspect_ratio, 3440.f / 1440.f)
-          && NearlyEqual(auto_3440.ui_half_extent, 16.f / 43.f),
-      "Auto must use exact 3440x1440 scene and UI compensation values");
+          && NearlyEqual(auto_3440.ui_half_extent, 43.f / 64.f),
+      "Auto must use exact 3440x1440 scene and UI projection values");
   const auto off_3440 = ultrawide::CalculateActiveValues(3440u, 1440u, false);
   passed &= Expect(
       NearlyEqual(off_3440.aspect_ratio, ultrawide::kVanillaAspect)
           && NearlyEqual(off_3440.ui_half_extent, ultrawide::kNativeUiHalfExtent),
-      "Off must restore vanilla scene and UI values");
+      "Off must restore vanilla scene and UI projection values");
   const auto auto_16_9 = ultrawide::CalculateActiveValues(1920u, 1080u, true);
   passed &= Expect(
       NearlyEqual(auto_16_9.aspect_ratio, ultrawide::kVanillaAspect)

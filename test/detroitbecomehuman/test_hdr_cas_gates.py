@@ -1099,7 +1099,7 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertNotIn('"AspectRatioMode"', body)
         self.assertIn("OnAspectRatioModeChanged();", body)
 
-    def test_ultrawide_compensates_scaleform_for_scene_aspect(self):
+    def test_ultrawide_compensates_complete_scaleform_projection(self):
         addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
         ultrawide = (SOURCE_DIR / "ultrawide.hpp").read_text(encoding="utf-8")
 
@@ -1111,6 +1111,11 @@ class HDRAndCASGateTests(unittest.TestCase):
         self.assertIn("RuntimePatchId::kUiHalfExtent", ultrawide)
         self.assertIn("ultrawide::kRuntimePatchPlan.size()", addon)
         self.assertIn("ui_half_extent_bits", addon)
+        self.assertNotIn("OnUltrawideScaleformReplace", addon)
+        self.assertNotIn("0xF5685E7D", addon)
+        self.assertNotIn("0xCC4CD90F", addon)
+        self.assertFalse((SOURCE_DIR / "hdr" / "ui_solid_0xF5685E7D.vert.slang").exists())
+        self.assertFalse((SOURCE_DIR / "hdr" / "ui_alpha_mask_0xCC4CD90F.vert.slang").exists())
 
     def test_stable_swapchain_skips_redundant_resource_queries(self):
         addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")

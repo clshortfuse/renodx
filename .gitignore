@@ -57,3 +57,4 @@ __pycache__/
 .venv-analysis/
 tmp/*
 dist/**
+release/

@@ -494,7 +494,7 @@ void ApplyAspectRatioMode(float selected_mode) {
     LogUltrawide(
         reshade::log::level::info,
         std::format(
-            "aspect mode changed: swapchain {}x{}, aspect {:.6f}, UI half-extent {:.6f}, mode {}.",
+            "aspect mode changed: swapchain {}x{}, scene aspect {:.6f}, Scaleform half-extent {:.6f}, mode {}.",
             width,
             height,
             values.aspect_ratio,
@@ -708,7 +708,9 @@ void* AllocateNearPatchData(
     if (memory_info.State == MEM_FREE) {
       const auto candidate = align_up(region_base);
       if (candidate + page_size <= region_end
-          && ultrawide::CalculateRipDisplacement(aspect_next_instruction, candidate).has_value()
+          && ultrawide::CalculateRipDisplacement(
+                 aspect_next_instruction, candidate)
+                 .has_value()
           && ultrawide::CalculateRipDisplacement(
                  ui_next_instruction, candidate + sizeof(LONG))
                  .has_value()) {
@@ -783,7 +785,6 @@ bool InstallUltrawidePatch() {
       &candidate.original_displacements[ultrawide::kUiPatchIndex],
       candidate.displacement_addresses[ultrawide::kUiPatchIndex],
       sizeof(std::int32_t));
-
   const auto aspect_original_target = reinterpret_cast<std::uintptr_t>(
                                           aspect_getter
                                           + ultrawide::kAspectGetterPatch.instruction.size())
@@ -882,7 +883,7 @@ bool InstallUltrawidePatch() {
   LogUltrawide(
       reshade::log::level::info,
       std::format(
-          "automatic override installed for Build 12158144: swapchain {}x{}, aspect {:.6f}, UI half-extent {:.6f}, mode {}.",
+          "automatic override installed for Build 12158144: swapchain {}x{}, scene aspect {:.6f}, Scaleform half-extent {:.6f}, mode {}.",
           width,
           height,
           values.aspect_ratio,
@@ -922,7 +923,7 @@ void RestoreUltrawidePatch() {
   ultrawide_patch = {};
   LogUltrawide(
       reshade::log::level::info,
-      "original aspect and UI half-extent instructions restored.");
+      "original scene aspect and Scaleform projection instructions restored.");
 }
 
 ShaderInjectData shader_injection;
@@ -2659,7 +2660,7 @@ renodx::utils::settings::Settings settings =
                 .can_reset = true,
                 .label = "Aspect Ratio",
                 .section = "Ultrawide",
-                .tooltip = "Auto uses the Vulkan swapchain ratio for the scene and compensates Scaleform so UI keeps its 16:9 visual size.",
+                .tooltip = "Auto expands the game render to the Vulkan swapchain ratio and keeps the complete Scaleform UI at its 16:9 visual size.",
                 .labels = {"Vanilla 16:9", "Auto (Ultrawide)"},
                 .on_change_value = [](float, float current) {
                   ApplyAspectRatioMode(current);
@@ -2667,7 +2668,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "Ultrawide is signature-gated to Steam Build 12158144. At 3440x1440 Auto uses a 43:18 scene while preserving the 16:9 UI size.",
+                .label = "Ultrawide is signature-gated to Steam Build 12158144. At 3440x1440 Auto uses a 43:18 scene and a centered 16:9-size UI.",
                 .section = "Ultrawide",
             }},
 #else
@@ -2858,7 +2859,7 @@ bool UpdateUltrawideFromSwapchain(
     LogUltrawide(
         reshade::log::level::info,
         std::format(
-            "swapchain {}x{} detected (aspect {:.6f}, UI half-extent {:.6f}).",
+            "swapchain {}x{} detected (scene aspect {:.6f}; Scaleform half-extent {:.6f}).",
             width,
             height,
             values.aspect_ratio,
