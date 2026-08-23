@@ -24,7 +24,7 @@ struct ShaderInjectData {
   float color_grade_shadows;
   float color_grade_contrast;
   float color_grade_saturation;
-  float color_grade_blowout;
+  float tone_map_dechroma;
 
   float tone_map_scaling;
 
@@ -87,7 +87,7 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_TONE_MAP_SHADOWS                  shader_injection.color_grade_shadows
 #define RENODX_TONE_MAP_CONTRAST                 shader_injection.color_grade_contrast
 #define RENODX_TONE_MAP_SATURATION               shader_injection.color_grade_saturation
-#define RENODX_TONE_MAP_DECHROMA                 shader_injection.color_grade_blowout
+#define RENODX_TONE_MAP_DECHROMA                 shader_injection.tone_map_dechroma
 #define RENODX_TONE_MAP_SCALING                  shader_injection.tone_map_scaling
 
 // #define RENODX_TONE_MAP_HUE_CORRECTION           1.f
