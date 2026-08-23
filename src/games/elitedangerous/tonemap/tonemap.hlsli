@@ -1,5 +1,5 @@
 #include "../common.hlsli"
-#include "./psychov25/customtest25.hlsli"
+#include "./psychov/customtest30.hlsli"
 
 static const float MID_GRAY_IN = 0.119121851127f;
 static const float MID_GRAY_OUT = 0.163979921774f;
@@ -215,23 +215,25 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
         ApplyAnchoredCInfinityShoulder(abs(untonemapped), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, MID_GRAY_OUT, 1.5f),
         untonemapped);
   } else {  // Custom
-
-    tonemapped = ApplyCustomPsychoV25ToneMap(
+    tonemapped = renodx::tonemap::psychov::psychotm_custom_test30(
         untonemapped,
         RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS,
+        1.f,
         RENODX_TONE_MAP_HIGHLIGHTS,
         RENODX_TONE_MAP_SHADOWS,
         1.55f * RENODX_TONE_MAP_CONTRAST,
         0.10f * pow(0.85f, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+        1.f,
+        1.f,
         RENODX_TONE_MAP_SATURATION,
         RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
         RENODX_TONE_MAP_DECHROMA,
         MID_GRAY_IN,
         MID_GRAY_OUT,
-        0.35f,
-        0.3,
+        1.f,
+        renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_DISPLAY_P3,
         1.5f,
-        renodx::tonemap::psychov::PSYCHO25_TARGET_GAMUT_DISPLAY_P3);
+        0.7f);
   }
 
   return renodx::color::gamma::EncodeSafe(tonemapped, 2.2f);
