@@ -13,8 +13,6 @@ struct ShaderInjectData {
   float color_grade_hue_correction;
   float color_grade_hue_emulation;
   float color_grade_chrominance_emulation;
-  float color_grade_hue_piecewise_a;
-  float color_grade_hue_piecewise_b;
 
   float tone_map_type;
   float tone_map_hdr_video;
@@ -35,7 +33,6 @@ struct ShaderInjectData {
   float wuwa_tonemapper;
   float wuwa_lut_lightness;
   float wuwa_bloom;
-  float wuwa_blowout;
   float wuwa_hdr_sun;
 
   float ui_visibility;
@@ -73,11 +70,8 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION 0.f
 #define RENODX_PER_CHANNEL_HUE_SHIFT             0.f
 
-#define RENODX_PSYCHOV_HUE_RESTORE               shader_injection.color_grade_hue_correction
 #define RENODX_PSYCHOV_HUE_EMULATION             shader_injection.color_grade_hue_emulation
 #define RENODX_PSYCHOV_CHROMA_EMULATION          shader_injection.color_grade_chrominance_emulation
-#define RENODX_PSYCHOV_HUE_PIECEWISE_A           shader_injection.color_grade_hue_piecewise_a
-#define RENODX_PSYCHOV_HUE_PIECEWISE_B           shader_injection.color_grade_hue_piecewise_b
 
 #define RENODX_TONE_MAP_TYPE                     shader_injection.tone_map_type
 #define RENODX_TONE_MAP_HDR_VIDEO                shader_injection.tone_map_hdr_video
@@ -143,7 +137,6 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_WUWA_LUT_LIGHTNESS                shader_injection.wuwa_lut_lightness
 #define RENODX_WUWA_BLOOM                        shader_injection.wuwa_bloom
 #define RENODX_WUWA_GRAIN                        1.f
-#define RENODX_WUWA_BLOWOUT                      shader_injection.wuwa_blowout
 #define RENODX_WUWA_HDR_SUN                      shader_injection.wuwa_hdr_sun
 
 #define TEXT_OPACITY                             shader_injection.text_opacity * shader_injection.ui_visibility
