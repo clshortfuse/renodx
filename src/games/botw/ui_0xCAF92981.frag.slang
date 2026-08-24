@@ -1,0 +1,68 @@
+#version 450
+
+layout(set = 1, binding = 1, std140) uniform ufBlock {
+  ivec4 uf_remappedPS[2];
+  vec4 uf_fragCoordScale;
+}
+_68;
+
+layout(set = 1, binding = 0) uniform sampler2D textureUnitPS0;
+
+layout(location = 0) in vec4 passParameterSem0;
+layout(location = 1) in vec4 passParameterSem1;
+layout(location = 0) out vec4 passPixelColor0;
+
+float mul_nonIEEE(float a, float b) {
+  if ((a == 0.0) || (b == 0.0)) {
+    return 0.0;
+  }
+  return a * b;
+}
+
+void main() {
+  vec4 R0f = vec4(0.0);
+  vec4 R1f = vec4(0.0);
+  vec4 R123f = vec4(0.0);
+  vec4 R127f = vec4(0.0);
+  vec4 PV0f = vec4(0.0);
+  vec4 PV1f = vec4(0.0);
+  float PS0f = 0.0;
+  float PS1f = 0.0;
+  vec4 tempf = vec4(0.0);
+  ivec4 ARi = ivec4(0);
+  bool predResult = true;
+  R0f = passParameterSem0;
+  R1f = passParameterSem1;
+  R1f = texture(textureUnitPS0, R1f.xy);
+  float param = R1f.y;
+  float param_1 = intBitsToFloat(_68.uf_remappedPS[0].y);
+  R127f.z = mul_nonIEEE(param, param_1) + intBitsToFloat(_68.uf_remappedPS[1].y);
+  float param_2 = R1f.x;
+  float param_3 = intBitsToFloat(_68.uf_remappedPS[0].x);
+  R123f.w = mul_nonIEEE(param_2, param_3) + intBitsToFloat(_68.uf_remappedPS[1].x);
+  PV0f.w = R123f.w;
+  float param_4 = R1f.w;
+  float param_5 = intBitsToFloat(_68.uf_remappedPS[0].w);
+  R123f.x = mul_nonIEEE(param_4, param_5) + intBitsToFloat(_68.uf_remappedPS[1].w);
+  PV1f.x = R123f.x;
+  float param_6 = R1f.z;
+  float param_7 = intBitsToFloat(_68.uf_remappedPS[0].z);
+  R123f.y = mul_nonIEEE(param_6, param_7) + intBitsToFloat(_68.uf_remappedPS[1].z);
+  PV1f.y = R123f.y;
+  float param_8 = R0f.x;
+  float param_9 = PV0f.w;
+  R1f.x = mul_nonIEEE(param_8, param_9);
+  PS1f = R1f.x;
+  float param_10 = R0f.y;
+  float param_11 = R127f.z;
+  R1f.y = mul_nonIEEE(param_10, param_11);
+  float param_12 = R0f.z;
+  float param_13 = PV1f.y;
+  R1f.z = mul_nonIEEE(param_12, param_13);
+  float param_14 = R0f.w;
+  float param_15 = PV1f.x;
+  R1f.w = mul_nonIEEE(param_14, param_15);
+  passPixelColor0 = vec4(R1f.x, R1f.y, R1f.z, saturate(R1f.w));  // saturate alpha
+  passPixelColor0 = max(0, passPixelColor0);
+}
+

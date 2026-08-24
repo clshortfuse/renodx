@@ -21,22 +21,27 @@
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
 #include "./shared.h"
+#include "./utils/draw.hpp"
+#include "./utils/output.hpp"
 
 namespace {
 
+#define OutputTextureShaderEntry(crc32) \
+  {crc32, custom::passes::output::CreateCustomShader(crc32, __##crc32)}
+
 renodx::mods::shader::CustomShaders custom_shaders = {
     // Outputs
-    CustomShaderEntry(0xC6FBD9A4),
-    CustomShaderEntry(0x3B3FC437),
-    CustomShaderEntry(0xAB7215D2),
-    CustomShaderEntry(0xD1C5DCB9),
+    OutputTextureShaderEntry(0xC6FBD9A4),
+    OutputTextureShaderEntry(0x3B3FC437),
+    OutputTextureShaderEntry(0xAB7215D2),
+    OutputTextureShaderEntry(0xD1C5DCB9),
 
     // DOF
-    CustomShaderEntry(0x0A4344AF),
-    CustomShaderEntry(0x1F60EC02),
-    CustomShaderEntry(0x1FA67B57),
-    CustomShaderEntry(0x5B62AA56),
-    CustomShaderEntry(0xA18A5613),
+    OutputTextureShaderEntry(0x1F60EC02),
+    OutputTextureShaderEntry(0x1F60EC02),
+    OutputTextureShaderEntry(0x1FA67B57),
+    OutputTextureShaderEntry(0x5B62AA56),
+    OutputTextureShaderEntry(0xA18A5613),
 
     // UI
     CustomShaderEntry(0x7A973CE4),
@@ -198,6 +203,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
         .is_visible = []() { return settings[0]->GetValue() >= 1.f; },
     },
+    // new renodx::utils::settings::Setting{
+    //     .key = "SwapchainDebugSource",
+    //     .binding = &CUSTOM_SWAPCHAIN_DEBUG_SOURCE,
+    //     .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+    //     .default_value = 0.f,
+    //     .can_reset = false,
+    //     .label = "Swapchain Source",
+    //     .section = "Debug",
+    //     .labels = {"Swapchain Clone", "Swapchain Scratch", "Additional 0"},
+    // },
     new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "HDR Den Discord",
@@ -331,16 +346,25 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       // renodx::mods::shader::manual_shader_scheduling = true;
       renodx::mods::shader::allow_multiple_push_constants = true;
       renodx::mods::swapchain::use_resource_cloning = true;
+    //   custom::draw::use_original_swapchain_as_shader_resource = true;
+      custom::draw::AddShaderResource(
+          custom::passes::output::GetOutputForProxy,
+          custom::passes::output::RestoreOutputUAVState);
+      renodx::mods::swapchain::swap_chain_proxy_format = reshade::api::format::r16g16b16a16_unorm;
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r8g8b8a8_typeless,
-                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
-                                                                     .use_resource_view_cloning = true});
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_typeless,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+      });
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({.old_format = reshade::api::format::r8g8b8a8_unorm,
-                                                                     .new_format = reshade::api::format::r16g16b16a16_float,
-                                                                     .use_resource_view_cloning = true});
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
+          .old_format = reshade::api::format::r8g8b8a8_unorm,
+          .new_format = reshade::api::format::r16g16b16a16_float,
+          .use_resource_view_cloning = true,
+      });
 
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      renodx::mods::swapchain::resource_upgrade_infos.push_back({
           .old_format = reshade::api::format::r10g10b10a2_unorm,
           .new_format = reshade::api::format::r16g16b16a16_float,
           .use_resource_view_cloning = true,
@@ -362,6 +386,8 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
 
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::swapchain::Use(fdw_reason, &shader_injection);
+  custom::draw::Use(fdw_reason);
+  custom::passes::output::Use(fdw_reason);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
   return TRUE;

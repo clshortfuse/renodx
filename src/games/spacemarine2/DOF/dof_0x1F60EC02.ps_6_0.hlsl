@@ -1,3 +1,5 @@
+#include "../shared.h"
+
 Texture2D<float4> COMBINE_BACKBUFFER : register(t0, space2);
 
 Texture2D<float4> COMBINE_BLURRED_BB : register(t1, space2);
@@ -15,20 +17,23 @@ cbuffer CB_PASS_COMBINE_EFFECTS : register(b4) {
 
 SamplerState PS_SAMPLERS[12] : register(s0, space1);
 
-float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float2 TEXCOORD : TEXCOORD
-) : SV_Target {
+float4 main(noperspective float4 SV_Position : SV_Position,
+            linear float2 TEXCOORD : TEXCOORD)
+    : SV_Target {
   float4 SV_Target;
-  float4 _8 = COMBINE_BACKBUFFER.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
+  float4 _8 = COMBINE_BACKBUFFER.Sample(PS_SAMPLERS[4],
+                                        float2((TEXCOORD.x), (TEXCOORD.y)));
+  _8.rgb = renodx::draw::InvertIntermediatePass(_8.rgb);
   float _12 = (TEXCOORD.x) + -0.5f;
   float _13 = (TEXCOORD.y) + -0.5f;
   float _14 = dot(float2(_12, _13), float2(_12, _13));
-  float4 _18 = COMBINE_MASK.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
+  float4 _18 =
+      COMBINE_MASK.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
   float _22 = (CB_PASS_COMBINE_EFFECTS_003w) * (_18.w);
   float _23 = 1.0f - _22;
-  float4 _24 = COMBINE_BLURRED_BB.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
-  float _28 = (CB_PASS_COMBINE_EFFECTS_002w) * _14;
+  float4 _24 = COMBINE_BLURRED_BB.Sample(PS_SAMPLERS[4],
+                                         float2((TEXCOORD.x), (TEXCOORD.y)));
+  float _28 = (CB_PASS_COMBINE_EFFECTS_002w)*_14;
   float _29 = _28 * _28;
   float _30 = _29 * (CB_PASS_COMBINE_EFFECTS_002z);
   float _32 = (CB_PASS_COMBINE_EFFECTS_003z) + _30;
@@ -43,7 +48,7 @@ float4 main(
   float _41 = _38 + (_8.x);
   float _42 = _39 + (_8.y);
   float _43 = _40 + (_8.z);
-  float _46 = (CB_PASS_COMBINE_EFFECTS_003y) * _14;
+  float _46 = (CB_PASS_COMBINE_EFFECTS_003y)*_14;
   float _47 = sin(_46);
   float _48 = min(_47, (CB_PASS_COMBINE_EFFECTS_003x));
   float _49 = 1.0f - _48;
@@ -54,5 +59,8 @@ float4 main(
   SV_Target.y = _51;
   SV_Target.z = _52;
   SV_Target.w = 0.0f;
+  SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
+  SV_Target.a = saturate(SV_Target.a);
+
   return SV_Target;
 }

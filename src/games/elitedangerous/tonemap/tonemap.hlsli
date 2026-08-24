@@ -1,4 +1,9 @@
 #include "../common.hlsli"
+#include "./test24.hlsli"
+
+static const float MID_GRAY_IN = 0.119121851127f;
+static const float MID_GRAY_OUT = 0.163979921774f;
+static const float MID_GRAY_SLOPE = 1.95752308422f;
 
 float3 ApplyAdaptiveMBPurity(float3 lms_input, float3 adaptive_neutral_lms, float purity_scale) {
   if (abs(purity_scale - 1.f) <= 1e-5f) return lms_input;
@@ -40,19 +45,23 @@ float Shadows(float x, float shadows, float mid_gray = 0.18f) {
   }
 }
 
-float ContrastAndFlare(float x, float contrast, float flare, float mid_gray = 0.18f) {
-  if (contrast == 1.f && flare == 0.f) return x;
-  float x_normalized = x / mid_gray;
-  float flare_ratio = renodx::math::DivideSafe(x_normalized + flare, x_normalized, 1.f);
-  return pow(x_normalized, contrast * flare_ratio) * mid_gray;
-}
+#define CONTRAST_AND_FLARE_GENERATOR(T)                                                                       \
+  T ContrastAndFlare(T x, float contrast, float flare, T mid_gray_in = (T)0.18f, T mid_gray_out = (T)0.18f) { \
+    T x_normalized = x / mid_gray_in;                                                                         \
+    T flare_ratio = (T)1.f + renodx::math::DivideSafe(flare, x_normalized + flare, (T)0.f);                   \
+    return pow(x_normalized, contrast * flare_ratio) * mid_gray_out;                                          \
+  }
+
+CONTRAST_AND_FLARE_GENERATOR(float)
+CONTRAST_AND_FLARE_GENERATOR(float3)
+#undef CONTRAST_AND_FLARE_GENERATOR
 
 float3 ApplyLuminanceGradingLMS(float3 color_lms, float exposure, float highlights, float shadows, float contrast, float flare, float mid_gray_yf = 0.18f) {
   float yf = max(0.f, renodx::color::yf::from::LMS(color_lms));
   float yf_adjusted = yf * exposure;
   yf_adjusted = renodx::color::grade::Highlights(yf_adjusted, highlights, mid_gray_yf);
   yf_adjusted = renodx::color::grade::Shadows(yf_adjusted, shadows, mid_gray_yf);
-  yf_adjusted = ContrastAndFlare(yf_adjusted, contrast, flare, mid_gray_yf);
+  yf_adjusted = ContrastAndFlare(yf_adjusted, contrast, flare, mid_gray_yf, mid_gray_yf);
   return color_lms * renodx::math::DivideSafe(yf_adjusted, yf, 1.f);
 }
 
@@ -62,43 +71,60 @@ float3 ApplyLuminanceGradingBT2020(float3 color_bt2020, float exposure, float hi
   return renodx::color::bt2020::from::LMS(color_lms);
 }
 
-float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float purity_highlights, float dechroma, float3 mid_gray_lms = 0.18f) {
-  if (purity_scale == 1.f && purity_highlights == 0.f && dechroma == 0.f) return color_lms;
+float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float highlight_saturation, float dechroma, float3 adaptive_neutral_lms = 0.18f) {
+  if (purity_scale == 1.f && highlight_saturation == 1.f && dechroma == 0.f) return color_lms;
 
-  float lum_target = max(0.f, renodx::color::yf::from::LMS(color_lms));
+  if (dechroma != 0.f || highlight_saturation != 1.f) {
+    float luminance = renodx::color::yf::from::LMS(color_lms);
+    float neutral_luminance = renodx::color::yf::from::LMS(adaptive_neutral_lms);
 
-  if (dechroma != 0.f) {
-    purity_scale *= lerp(1.f, 0.f, saturate(pow(lum_target / (10000.f / 100.f), 1.f - dechroma)));
-  }
+    // Ramp purity grading over 2.75 decades above the adaptive neutral.
+    static const float INVERSE_HIGHLIGHT_RANGE_STOPS = 1.f / (2.75f * log2(10.f));
+    static const float HIGHLIGHT_ROLLOFF_CUBIC_BLEND = 0.5f;
+    static const float HIGHLIGHT_PURITY_STRENGTH = 2.f / 3.f;
 
-  if (purity_highlights != 0.f) {
-    float percent_max = saturate(lum_target * 100.f / 10000.f);
-    float blowout_change = pow(1.f - percent_max, 100.f * abs(purity_highlights));
-    if (purity_highlights < 0.f) {
-      blowout_change = 2.f - blowout_change;
+    float luminance_from_neutral = max(luminance, neutral_luminance) / neutral_luminance;
+    float rolloff_position = saturate(log2(luminance_from_neutral) * INVERSE_HIGHLIGHT_RANGE_STOPS);
+
+    float rolloff_position_squared = rolloff_position * rolloff_position;
+    float rolloff = rolloff_position_squared * rolloff_position * mad(rolloff_position, mad(6.f, rolloff_position, -15.f), 10.f);
+
+    // Base smootherstep brings dechroma into the midtones while remaining monotonic and C2.
+    if (dechroma != 0.f) {
+      purity_scale *= mad(-dechroma, rolloff, 1.f);
     }
-    purity_scale *= blowout_change;
+
+    if (highlight_saturation != 1.f) {
+      // Blend smootherstep squared and cubed for a later, gentler C2 progression.
+      float highlight_rolloff = rolloff * rolloff * mad(HIGHLIGHT_ROLLOFF_CUBIC_BLEND, rolloff, 1.f - HIGHLIGHT_ROLLOFF_CUBIC_BLEND);
+      purity_scale *= mad(highlight_saturation - 1.f, highlight_rolloff * HIGHLIGHT_PURITY_STRENGTH, 1.f);
+    }
   }
 
   if (purity_scale != 1.f) {
-    color_lms = ApplyAdaptiveMBPurity(color_lms, mid_gray_lms, purity_scale);
+    color_lms = ApplyAdaptiveMBPurity(color_lms, adaptive_neutral_lms, purity_scale);
   }
 
   return color_lms;
 }
 
-float3 ApplyPurityGradingBT2020(float3 color_bt2020, float purity_scale, float purity_highlights, float dechroma) {
+float3 ApplyPurityGradingBT2020(float3 color_bt2020, float purity_scale, float highlight_saturation, float dechroma) {
   float3 color_lms = renodx::color::lms::from::BT2020(color_bt2020);
-  color_lms = ApplyPurityGradingLMS(color_lms, purity_scale, purity_highlights, dechroma, renodx::color::lms::from::BT2020(0.18f.xxx));
+  color_lms = ApplyPurityGradingLMS(color_lms, purity_scale, highlight_saturation, dechroma, renodx::color::lms::from::BT2020(0.18f.xxx));
   return renodx::color::bt2020::from::LMS(color_lms);
 }
 
-float3 ApplyAnchoredAdaptationContrast(float3 color, float contrast,
-                                       float3 anchor_in = 0.18f, float3 anchor_out = 0.18f,
-                                       float flare = 0.f) {
+float3 ApplyAnchoredAdaptationContrast(
+    float3 color,
+    float contrast,
+    float3 anchor_in = 0.18f,
+    float3 anchor_out = 0.18f,
+    float flare = 0.f,
+    float highlights = 1.f,
+    float shadows = 1.f) {
   float3 ax = abs(color);
   float3 normalized = ax / anchor_in;
-  float3 flare_ratio = renodx::math::DivideSafe(normalized + flare, normalized, 1.f);
+  float3 flare_ratio = 1.f + renodx::math::DivideSafe(flare, normalized + flare, 0.f);
   float3 exponent = contrast * flare_ratio;
 
   float3 ax_n = pow(ax, exponent);
@@ -107,8 +133,194 @@ float3 ApplyAnchoredAdaptationContrast(float3 color, float contrast,
   float3 response_baseline = ax / (ax + anchor_in);
   float3 gain = renodx::math::DivideSafe(response_target, response_baseline, 0.f);
 
-  float3 contrasted = renodx::math::CopySign(ax * gain, color);
-  return contrasted * (anchor_out / anchor_in);
+  float3 contrasted_normalized = ax * gain / anchor_in;
+
+  if (highlights != 1.f) {
+    float3 highlight_distance = max(contrasted_normalized - 1.f, 0.f);
+    contrasted_normalized += highlight_distance * (pow(1.f + highlight_distance * highlight_distance, (highlights - 1.f) / 2.f) - 1.f);
+  }
+
+  if (shadows != 1.f) {
+    float3 shadow_distance = max(1.f - contrasted_normalized, 0.f);
+    contrasted_normalized *= pow(1.f + shadow_distance * shadow_distance * shadow_distance, shadows - 1.f);
+  }
+
+  return renodx::math::CopySign(contrasted_normalized * anchor_out, color);
+}
+
+float3 ApplyAnchoredPowerContrast(
+    float3 color,
+    float contrast,
+    float3 anchor_in = 0.18f,
+    float3 anchor_out = 0.18f,
+    float flare = 0.f,
+    float highlights = 1.f,
+    float shadows = 1.f) {
+  float3 ax = abs(color);
+  float3 normalized = ax / anchor_in;
+  float3 flare_ratio = 1.f + renodx::math::DivideSafe(flare, normalized + flare, 0.f);
+
+  float3 contrasted_normalized = pow(normalized, contrast * flare_ratio);
+
+  if (highlights != 1.f) {
+    float3 highlight_distance = max(contrasted_normalized - 1.f, 0.f);
+    contrasted_normalized += highlight_distance * (pow(1.f + highlight_distance * highlight_distance, (highlights - 1.f) / 2.f) - 1.f);
+  }
+
+  if (shadows != 1.f) {
+    float3 shadow_distance = max(1.f - contrasted_normalized, 0.f);
+    contrasted_normalized *= pow(1.f + shadow_distance * shadow_distance * shadow_distance, shadows - 1.f);
+  }
+
+  return renodx::math::CopySign(contrasted_normalized * anchor_out, color);
+}
+
+// Exact power contrast through the anchor, then C2 divisive normalization of
+// highlight contrast displacement to a maximum magnitude of one stop.
+float3 ApplyAnchoredBoundedPowerContrast(
+    float3 color,
+    float contrast,
+    float3 anchor_in = 0.18f,
+    float3 anchor_out = 0.18f,
+    float flare = 0.f,
+    float highlights = 1.f,
+    float shadows = 1.f) {
+  float3 ax = abs(color);
+  float3 normalized = ax / anchor_in;
+  float3 exponent = contrast;
+
+  if (flare > 0.f) {
+    float3 shadow_weight = saturate(1.f - normalized);
+    shadow_weight *= shadow_weight;
+    exponent *= 1.f + flare * shadow_weight / (normalized + flare);
+  }
+
+  float3 input_stops = log2(normalized);
+  float3 highlight_stops = max(input_stops, 0.f);
+  float3 contrast_displacement = (contrast - 1.f) * highlight_stops;
+  float3 normalized_displacement = contrast_displacement * rsqrt(mad(contrast_displacement, contrast_displacement, 1.f));
+  float3 output_stops = mad(exponent, min(input_stops, 0.f), highlight_stops + normalized_displacement);
+  float3 contrasted_normalized = exp2(output_stops);
+
+  if (highlights != 1.f) {
+    float3 highlight_distance = max(contrasted_normalized - 1.f, 0.f);
+    contrasted_normalized += highlight_distance * (pow(1.f + highlight_distance * highlight_distance, (highlights - 1.f) / 2.f) - 1.f);
+  }
+
+  if (shadows != 1.f) {
+    float3 shadow_distance = max(1.f - contrasted_normalized, 0.f);
+    contrasted_normalized *= pow(1.f + shadow_distance * shadow_distance * shadow_distance, shadows - 1.f);
+  }
+
+  return renodx::math::CopySign(contrasted_normalized * anchor_out, color);
+}
+
+// Exact power contrast through the anchor to every derivative, with C-infinity
+// flare and grading joins, then smoothly bounds highlight displacement to one stop.
+float3 ApplyAnchoredCInfinityBoundedPowerContrast(
+    float3 color,
+    float contrast,
+    float3 anchor_in = 0.18f,
+    float3 anchor_out = 0.18f,
+    float flare = 0.f,
+    float highlights = 1.f,
+    float shadows = 1.f) {
+  float3 ax = abs(color);
+  float3 normalized = ax / anchor_in;
+  float3 exponent = contrast;
+
+  [branch]
+  if (flare > 0.f) {
+    float3 shadow_distance = saturate(1.f - normalized);
+    float3 flat_shadow_weight = exp2(-normalized / shadow_distance);
+    exponent *= mad(flat_shadow_weight, flare / (normalized + flare), 1.f);
+  }
+
+  float3 input_stops = log2(normalized);
+  float3 highlight_stops = max(input_stops, 0.f);
+  float3 contrast_displacement = (contrast - 1.f) * highlight_stops;
+  float3 displacement_magnitude = abs(contrast_displacement);
+  float3 bounded_displacement = contrast_displacement / mad(displacement_magnitude, exp2(-1.f / displacement_magnitude), 1.f);
+  float3 output_stops = mad(exponent, min(input_stops, 0.f), highlight_stops + bounded_displacement);
+  float3 contrasted_normalized = exp2(output_stops);
+
+  [branch]
+  if (highlights != 1.f) {
+    float3 highlight_distance = max(contrasted_normalized - 1.f, 0.f);
+    float3 highlight_distance_squared = highlight_distance * highlight_distance;
+    float3 flat_highlight_distance = (1.f + highlight_distance_squared) * exp2(-1.f / highlight_distance_squared);
+    contrasted_normalized += highlight_distance * (pow(1.f + flat_highlight_distance, (highlights - 1.f) / 2.f) - 1.f);
+  }
+
+  [branch]
+  if (shadows != 1.f) {
+    float3 shadow_distance = saturate(1.f - contrasted_normalized);
+    float3 shadow_distance_squared = shadow_distance * shadow_distance;
+    float3 flat_shadow_distance = shadow_distance_squared * shadow_distance * exp2(1.f - 1.f / shadow_distance_squared);
+    contrasted_normalized *= pow(1.f + flat_shadow_distance, shadows - 1.f);
+  }
+
+  return renodx::math::CopySign(contrasted_normalized * anchor_out, color);
+}
+
+/// Identity through anchor; then approaches peak monotonically and concave down.
+/// The anchor join is C2 continuous. Requires anchor < peak and compression_strength >= 1.
+#define APPLYANCHOREDCUBICSHOULDER_GENERATOR(T)                                                          \
+  T ApplyAnchoredCubicShoulder(T color, T peak, T anchor, float compression_strength) {                  \
+    T shoulder_range = peak - anchor;                                                                    \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                                \
+    T weighted_distance = compression_strength * distance_from_anchor;                                   \
+    T response_numerator = distance_from_anchor * (shoulder_range + weighted_distance);                  \
+    T response_denominator = mad(                                                                        \
+        shoulder_range, shoulder_range, weighted_distance * (shoulder_range + distance_from_anchor));    \
+    return mad(shoulder_range, response_numerator / response_denominator, color - distance_from_anchor); \
+  }
+
+/// Identity through anchor; reaches peak at clip, then remains flat.
+/// Monotonic, concave down, and C2 when clip meets the calculated minimum.
+#define APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(T)                                                                        \
+  T ApplyAnchoredCubicShoulder(T color, T peak, T anchor, float compression_strength, T clip) {                             \
+    T shoulder_range = peak - anchor;                                                                                       \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                                                   \
+    T input_range = clip - anchor;                                                                                          \
+    T clipped_distance = min(distance_from_anchor, input_range);                                                            \
+    T clip_position = clipped_distance / input_range;                                                                       \
+    T clip_position_squared = clip_position * clip_position;                                                                \
+    T clip_position_cubed = clip_position_squared * clip_position;                                                          \
+    T residual_weight = (T)1.f - clip_position_cubed * mad(clip_position, mad((T)6.f, clip_position, (T) - 15.f), (T)10.f); \
+    T weighted_distance = compression_strength * clipped_distance;                                                          \
+    T response_numerator = clipped_distance * (shoulder_range + weighted_distance);                                         \
+    T remaining_distance = shoulder_range * mad(compression_strength - 1.f, clipped_distance, shoulder_range);              \
+    T response_denominator = mad(residual_weight, remaining_distance, response_numerator);                                  \
+    return mad(shoulder_range, response_numerator / response_denominator, color - distance_from_anchor);                    \
+  }
+
+APPLYANCHOREDCUBICSHOULDER_GENERATOR(float)
+APPLYANCHOREDCUBICSHOULDER_GENERATOR(float3)
+APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(float)
+APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR(float3)
+#undef APPLYANCHOREDCUBICSHOULDER_GENERATOR
+#undef APPLYANCHOREDCUBICSHOULDER_CLIP_GENERATOR
+
+/// Identity through anchor to every derivative; then approaches peak
+/// monotonically and concave down. Requires anchor < peak and compression_strength >= 1.
+#define APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(T)                                                      \
+  T ApplyAnchoredCInfinityShoulder(T color, T peak, T anchor, float compression_strength) {                \
+    T shoulder_range = peak - anchor;                                                                      \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                                  \
+    T flat_weight = exp2(-shoulder_range / (compression_strength * distance_from_anchor));                 \
+    T response_denominator = mad(distance_from_anchor, flat_weight, shoulder_range);                       \
+    return mad(shoulder_range, distance_from_anchor / response_denominator, color - distance_from_anchor); \
+  }
+
+APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(float)
+APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(float3)
+#undef APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR
+
+float ApplyAnchoredCInfinityShoulderMaxChannelScale(float3 color, float peak, float anchor, float compression_strength) {
+  float max_channel = renodx::math::Max(abs(color));
+  float compressed_max = ApplyAnchoredCInfinityShoulder(max_channel, peak, anchor, compression_strength);
+  return renodx::math::DivideSafe(compressed_max, max_channel, 1.f);
 }
 
 /// Elite Dangerous vanilla SDR tonemapper.
@@ -164,7 +376,7 @@ float3 ApplyPreLUTToneMapAndGammaEncode(float3 untonemapped) {
   if (RENODX_TONE_MAP_TYPE == 0.f) {
     tonemapped_gamma = ApplyVanillaTonemap(untonemapped);
   } else if (RENODX_TONE_MAP_TYPE == 1.f) {
-    float sdr_blend_strength = 0.5f;
+    float sdr_blend_strength = 0.f;
     float3 tonemapped = ApplyExtendedVanillaTonemap(untonemapped, sdr_blend_strength);
     if (RENODX_TONE_MAP_PER_CHANNEL == 0.f) {
       float perch_yf = renodx::color::yf::from::BT709(tonemapped);
@@ -186,7 +398,11 @@ float3 ApplyLUT(float3 lut_input_gamma, Texture3D<float4> lut_texture, SamplerSt
 
   float maxch_scale = 1.f;
   if (RENODX_TONE_MAP_TYPE != 0.f) {
-    maxch_scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(lut_input_linear);
+    if (RENODX_TONE_MAP_TYPE == 1.f) {  // Vanilla+
+      maxch_scale = ApplyAnchoredCInfinityShoulderMaxChannelScale(lut_input_linear, 1.f, MID_GRAY_OUT, 1.5f);
+    } else {  // Custom
+      maxch_scale = ApplyAnchoredCInfinityShoulderMaxChannelScale(lut_input_linear, 1.f, MID_GRAY_IN, 1.5f);
+    }
     lut_input_linear *= maxch_scale;
     lut_input_gamma = renodx::color::gamma::Encode(lut_input_linear, 2.2f);
   }
@@ -209,16 +425,13 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
 
   float3 untonemapped = renodx::color::gamma::DecodeSafe(untonemapped_gamma, 2.2f);
 
-  const float MID_GRAY_IN = 0.119121851127f;
-  const float MID_GRAY_OUT = 0.163979921774f;
-
   float3 tonemapped;
-  if (RENODX_TONE_MAP_TYPE == 1.f) {
-    untonemapped = renodx::color::bt2020::from::BT709(untonemapped);
+  if (RENODX_TONE_MAP_TYPE == 1.f) {  // Vanilla+
+    untonemapped = max(0, renodx::color::bt2020::from::BT709(untonemapped));
 
     // Apply BT.2020 luminance and purity grading.
     untonemapped = ApplyLuminanceGradingBT2020(untonemapped,
-                                               RENODX_TONE_MAP_EXPOSURE,
+                                               1.f,
                                                RENODX_TONE_MAP_HIGHLIGHTS,
                                                RENODX_TONE_MAP_SHADOWS,
                                                RENODX_TONE_MAP_CONTRAST,
@@ -226,95 +439,82 @@ float3 ApplyPostLUTToneMap(float3 untonemapped_gamma) {
                                                MID_GRAY_OUT);
     untonemapped = ApplyPurityGradingBT2020(untonemapped,
                                             RENODX_TONE_MAP_SATURATION,
-                                            -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
+                                            RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
                                             RENODX_TONE_MAP_DECHROMA);
+    untonemapped = max(untonemapped, 1e-7f);
 
-    tonemapped = renodx::tonemap::neutwo::PerChannel(untonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    tonemapped = ApplyAnchoredCInfinityShoulder(untonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, MID_GRAY_OUT, 1.5f);
     tonemapped = renodx::color::bt709::from::BT2020(tonemapped);
-  } else {
+  } else {  // Custom
     float3 untonemapped_lms = max(0, renodx::color::lms::from::BT709(untonemapped));
     float3 current_adaptive_state_lms = renodx::color::lms::from::BT709(MID_GRAY_IN);
     float3 desired_background_state_lms = renodx::color::lms::from::BT709(MID_GRAY_OUT);
-    float3 peak_lms = renodx::color::lms::from::BT709(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    float3 peak_lms = renodx::color::lms::from::BT2020(RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
 
-    // Apply anchored LMS contrast.
-    float3 tonemapped_lms = ApplyAnchoredAdaptationContrast(untonemapped_lms, 1.78107f, current_adaptive_state_lms, desired_background_state_lms, 0.0025f);
+// Apply anchored LMS contrast.
+#if 0
+    float3 graded_lms = ApplyAnchoredAdaptationContrast(untonemapped_lms,
+                                                        (1.745f) * RENODX_TONE_MAP_CONTRAST,
+                                                        current_adaptive_state_lms, desired_background_state_lms,
+                                                        0.10f * pow(0.77f, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                                        RENODX_TONE_MAP_HIGHLIGHTS,
+                                                        RENODX_TONE_MAP_SHADOWS);
+#else
+    float3 graded_lms = ApplyAnchoredCInfinityBoundedPowerContrast(untonemapped_lms,
+                                                                   (1.55f) * RENODX_TONE_MAP_CONTRAST,
+                                                                   current_adaptive_state_lms, desired_background_state_lms,
+                                                                   0.10f * pow(0.85f, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                                                   RENODX_TONE_MAP_HIGHLIGHTS,
+                                                                   RENODX_TONE_MAP_SHADOWS);
+#endif
 
     // Apply LMS luminance and purity grading.
-    float output_mid_gray = renodx::color::yf::from::LMS(desired_background_state_lms);
-    tonemapped_lms = ApplyLuminanceGradingLMS(tonemapped_lms,
-                                              RENODX_TONE_MAP_EXPOSURE,
-                                              RENODX_TONE_MAP_HIGHLIGHTS,
-                                              RENODX_TONE_MAP_SHADOWS,
-                                              RENODX_TONE_MAP_CONTRAST,
-                                              0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
-                                              output_mid_gray);
-    tonemapped_lms = ApplyPurityGradingLMS(tonemapped_lms,
-                                           RENODX_TONE_MAP_SATURATION,
-                                           -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
-                                           RENODX_TONE_MAP_DECHROMA,
-                                           desired_background_state_lms);
+    graded_lms = ApplyPurityGradingLMS(graded_lms,
+                                       RENODX_TONE_MAP_SATURATION,
+                                       RENODX_TONE_MAP_HIGHLIGHT_SATURATION,
+                                       RENODX_TONE_MAP_DECHROMA,
+                                       desired_background_state_lms);
 
-    // Convert source to adapted weighted LMS.
-    float3 source_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(untonemapped_lms, current_adaptive_state_lms);
+#if 1
+    // Restore the pre-contrast adaptive-MB hue direction before compression,
+    // using input midgray rather than peak as full to-white progress.
+    float to_white_progress = renodx::math::DivideSafe(
+        renodx::color::yf::from::LMS(untonemapped_lms),
+        renodx::color::yf::from::LMS(current_adaptive_state_lms),
+        1.f);
+    float3 hue_corrected_lms = renodx_custom::tonemap::psychov::psycho24_ApplyManualHueDirection(
+        graded_lms,
+        untonemapped_lms,
+        current_adaptive_state_lms,
+        to_white_progress);
+    float3 shoulder_input_lms = lerp(graded_lms, hue_corrected_lms, 0.3f);
+#else
+    float3 shoulder_input_lms = graded_lms;
+#endif
 
-    // Convert target to adapted weighted LMS.
-    float3 display_scaled_relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(tonemapped_lms, desired_background_state_lms);
+    float3 compressed_lms = ApplyAnchoredCInfinityShoulder(
+        shoulder_input_lms,
+        peak_lms,
+        desired_background_state_lms,
+        1.5f);
 
-    // Psychov-style MB hue direction restore.
-    {
-      float3 mb_source = renodx::color::macleod_boynton::from::WeightedLMS(source_relative_weighted);
-      float3 mb_display_target = renodx::color::macleod_boynton::from::WeightedLMS(display_scaled_relative_weighted);
-      float3 mb_adapted_bg = renodx::color::macleod_boynton::from::LMS(1.f);
-
-      float2 source_offset = mb_source.xy - mb_adapted_bg.xy;
-      float2 display_target_offset = mb_display_target.xy - mb_adapted_bg.xy;
-
-      float src2 = dot(source_offset, source_offset);
-      float display_tgt2 = dot(display_target_offset, display_target_offset);
-
-      if (src2 > 1e-7f && display_tgt2 > 1e-7f) {
-        float target_radius = sqrt(display_tgt2);
-        float2 source_dir = source_offset * rsqrt(src2);
-        float2 display_target_dir = display_target_offset * rsqrt(display_tgt2);
-
-        float restore_weight = 0.5f;
-
-        float2 blended_dir = lerp(display_target_dir, source_dir, restore_weight);
-        float blended_len2 = dot(blended_dir, blended_dir);
-        blended_dir = (blended_len2 > 1e-7f) ? (blended_dir * rsqrt(blended_len2)) : display_target_dir;
-
-        float2 mb_restored_xy = mb_adapted_bg.xy + blended_dir * target_radius;
-        float3 mb_restored = float3(mb_restored_xy, mb_display_target.z);
-
-        display_scaled_relative_weighted = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(mb_restored);
-      }
-    }
-
-    // Psychov-style BT.2020-bound adaptive weighted LMS gamut compression.
-    display_scaled_relative_weighted = renodx::tonemap::psychov::psycho17_GamutCompressAdaptiveRelativeWeightedLMSBound(
+    // Test24 adaptive weighted-LMS compression against the BT.2020 boundary.
+    float3 display_scaled_relative_weighted = renodx_custom::tonemap::psychov::psycho24_ToAdaptiveRelativeWeightedLMS(
+        compressed_lms,
+        desired_background_state_lms);
+    display_scaled_relative_weighted = renodx::color::gamut::GamutCompressWeightedLMSCoreRGBBoundFromAdaptiveWeightedInput(
         display_scaled_relative_weighted,
         desired_background_state_lms,
         renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
         1.f);
 
-    // Return compressed target to LMS.
-    tonemapped_lms = renodx::color::macleod_boynton::UnweighLMS(
-        renodx::tonemap::psychov::psycho17_FromAdaptiveRelativeWeightedLMS(display_scaled_relative_weighted, desired_background_state_lms));
+    float3 gamut_mapped_bt709 = renodx::color::bt709::from::LMS(
+        renodx::color::macleod_boynton::UnweighLMS(
+            renodx_custom::tonemap::psychov::psycho24_FromAdaptiveRelativeWeightedLMS(
+                display_scaled_relative_weighted,
+                desired_background_state_lms)));
 
-    // Compress channels to desaturate and hue shift highlights, then restore luminance.
-    float tonemapped_yf = renodx::color::yf::from::LMS(tonemapped_lms);
-    tonemapped_lms = renodx::tonemap::neutwo::PerChannel(tonemapped_lms, peak_lms);
-    float tonemapped_neutwo_yf = renodx::color::yf::from::LMS(tonemapped_lms);
-    tonemapped_lms *= renodx::math::DivideSafe(tonemapped_yf, tonemapped_neutwo_yf, 1.f);
-
-    // Convert to BT.2020 for max channel peak limiting.
-    float3 tonemapped_bt2020 = renodx::color::bt2020::from::LMS(tonemapped_lms);
-    tonemapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(
-        max(0, tonemapped_bt2020),
-        RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
-
-    tonemapped = renodx::color::bt709::from::BT2020(tonemapped_bt2020);
+    tonemapped = gamut_mapped_bt709;
   }
 
   return renodx::color::gamma::EncodeSafe(tonemapped, 2.2f);

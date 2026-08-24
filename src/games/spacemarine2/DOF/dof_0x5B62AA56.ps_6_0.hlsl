@@ -1,3 +1,5 @@
+#include "../shared.h"
+
 Texture2D<float4> DOF_BUFFER_0 : register(t0, space2);
 
 cbuffer CB_SCREEN_RECT_DATA : register(b2) {
@@ -10,23 +12,28 @@ cbuffer CB_PASS_DOF : register(b4) {
 
 SamplerState PS_SAMPLERS[12] : register(s0, space1);
 
-float4 main(
-  noperspective float4 SV_Position : SV_Position,
-  linear float2 TEXCOORD : TEXCOORD
-) : SV_Target {
+float4 main(noperspective float4 SV_Position : SV_Position,
+            linear float2 TEXCOORD : TEXCOORD)
+    : SV_Target {
   float4 SV_Target;
   float _10 = (CB_SCREEN_RECT_DATA_000y) * (CB_PASS_DOF_000x);
   float _11 = _10 * 3.200000047683716f;
   float _12 = (TEXCOORD.y) - _11;
   float4 _14 = DOF_BUFFER_0.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), _12));
+  _14.rgb = renodx::draw::InvertIntermediatePass(_14.rgb);
   float _19 = _10 * 1.3333333730697632f;
   float _20 = (TEXCOORD.y) - _19;
   float4 _22 = DOF_BUFFER_0.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), _20));
-  float4 _28 = DOF_BUFFER_0.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
+  _22.rgb = renodx::draw::InvertIntermediatePass(_22.rgb);
+  float4 _28 =
+      DOF_BUFFER_0.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), (TEXCOORD.y)));
+  _28.rgb = renodx::draw::InvertIntermediatePass(_28.rgb);
   float _33 = _19 + (TEXCOORD.y);
   float4 _35 = DOF_BUFFER_0.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), _33));
+  _35.rgb = renodx::draw::InvertIntermediatePass(_35.rgb);
   float _40 = _11 + (TEXCOORD.y);
   float4 _42 = DOF_BUFFER_0.Sample(PS_SAMPLERS[4], float2((TEXCOORD.x), _40));
+  _42.rgb = renodx::draw::InvertIntermediatePass(_42.rgb);
   float _47 = (_28.x) * 0.2532773017883301f;
   float _48 = (_28.y) * 0.2532773017883301f;
   float _49 = (_28.z) * 0.2532773017883301f;
@@ -58,11 +65,15 @@ float4 main(
   float _75 = saturate(_71);
   float _76 = _72 * 0.5f;
   float _77 = _75 * 0.5f;
-  float _78 = dot(float4(_76, _73, _74, _77), float4((_14.w), (_22.w), (_35.w), (_42.w)));
+  float _78 = dot(float4(_76, _73, _74, _77),
+                  float4((_14.w), (_22.w), (_35.w), (_42.w)));
   float _79 = _78 + (_28.w);
   SV_Target.x = _55;
   SV_Target.y = _61;
   SV_Target.z = _67;
   SV_Target.w = _79;
+  SV_Target.rgb = renodx::draw::RenderIntermediatePass(SV_Target.rgb);
+  SV_Target.a = saturate(SV_Target.a);
+
   return SV_Target;
 }

@@ -42,7 +42,8 @@ SamplerState s0_space2[] : register(s0, space2);
 float4 main(
     noperspective float4 SV_Position: SV_Position,
     linear float2 TEXCOORD: TEXCOORD,
-    linear float3 TEXCOORD_1: TEXCOORD1) : SV_Target {
+    linear float3 TEXCOORD_1: TEXCOORD1)
+    : SV_Target {
   float4 SV_Target;
   float4 _14 = t5_space1.Sample(s0_space2[(g_rage_dynamicsamplerindices_000 + 0u)], float2(TEXCOORD.x, TEXCOORD.y));
   float _17 = select((_14.x < 0.003921568859368563f), 0.0f, 1.0f);
