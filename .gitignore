@@ -58,3 +58,18 @@ __pycache__/
 tmp/*
 dist/**
 release/
+
+# Graphify: keep the current shareable graph; ignore local/runtime artifacts.
+**/graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+**/graphify-out/cache/
+**/graphify-out/memory/
+**/graphify-out/reflections/
+
+**/graphify-out/.graphify_label_batches/
+**/graphify-out/.graphify_labels_candidate.json
+**/graphify-out/.graphify_labels.json.sig
+**/graphify-out/.graphify_learning.json
+**/graphify-out/.graphify_python
+**/graphify-out/.graphify_root
+**/graphify-out/.vocab.txt
+**/graphify-out/cost.json
