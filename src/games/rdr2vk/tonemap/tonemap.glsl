@@ -71,8 +71,13 @@ vec3 ApplyAnchoredAdaptationContrast(
     float shadows) {
   vec3 ax = abs(color);
   vec3 normalized = ax / anchor_in;
-  vec3 flare_ratio = vec3(1.0) + DivideSafe(vec3(flare), normalized + flare, vec3(0.0));
-  vec3 exponent = contrast * flare_ratio;
+  vec3 exponent = vec3(contrast);
+
+  if (flare > 0.0) {
+    vec3 shadow_distance = clamp(vec3(1.0) - normalized, vec3(0.0), vec3(1.0));
+    vec3 flat_shadow_weight = exp2(-normalized / shadow_distance);
+    exponent *= fma(flat_shadow_weight, vec3(flare) / (normalized + flare), vec3(1.0));
+  }
 
   vec3 ax_n = pow(ax, exponent);
   vec3 anchor_n = pow(anchor_in, exponent);
@@ -183,6 +188,104 @@ vec3 ApplyAnchoredCInfinityBoundedPowerContrast(
   return sign(color) * contrasted_normalized * anchor_out;
 }
 
+vec3 CustomCInfinityTransition(vec3 position) {
+  position = clamp(position, vec3(0.0), vec3(1.0));
+  return vec3(1.0) / (vec3(1.0) + exp2((vec3(1.0) - 2.0 * position) / (position * (vec3(1.0) - position))));
+}
+
+vec3 ApplyAnchoredTonalGrading(
+    vec3 color,
+    vec3 anchor_in,
+    vec3 anchor_out,
+    float contrast,
+    float flare,
+    float highlight_contrast,
+    float shadow_contrast,
+    float highlights,
+    float shadows) {
+  if (contrast == 1.0 && flare == 0.0
+      && highlight_contrast == 1.0 && shadow_contrast == 1.0
+      && highlights == 1.0 && shadows == 1.0
+      && all(equal(anchor_in, anchor_out))) {
+    return color;
+  }
+
+  vec3 normalized = color / anchor_in;
+  vec3 graded_normalized = normalized;
+
+  // Power contrast below the anchor and bounded log-domain contrast above it.
+  // Flare increases only the deep-shadow exponent.
+  if (contrast != 1.0 || flare > 0.0) {
+    vec3 exponent = vec3(contrast);
+
+    if (flare > 0.0) {
+      vec3 shadow_distance = clamp(vec3(1.0) - normalized, vec3(0.0), vec3(1.0));
+      vec3 flat_shadow_weight = exp2(-normalized / shadow_distance);
+      exponent *= fma(flat_shadow_weight, vec3(flare) / (normalized + flare), vec3(1.0));
+    }
+
+    vec3 input_stops = log2(normalized);
+    vec3 highlight_stops = max(input_stops, vec3(0.0));
+    vec3 output_highlight_stops = highlight_stops;
+
+    if (contrast != 1.0) {
+      vec3 displacement = (contrast - 1.0) * highlight_stops;
+      vec3 displacement_magnitude = abs(displacement);
+      output_highlight_stops += displacement
+                                / fma(displacement_magnitude,
+                                      exp2(-vec3(1.0) / displacement_magnitude),
+                                      vec3(1.0));
+    }
+
+    graded_normalized = exp2(fma(exponent, min(input_stops, vec3(0.0)), output_highlight_stops));
+  }
+
+  if (highlight_contrast != 1.0) {
+    vec3 distance = max(graded_normalized - 1.0, vec3(0.0));
+    vec3 distance_squared = distance * distance;
+    vec3 flat_distance = (vec3(1.0) + distance_squared) * exp2(-vec3(1.0) / distance_squared);
+    graded_normalized += distance
+                         * (pow(vec3(1.0) + flat_distance,
+                                vec3(0.5 * (highlight_contrast - 1.0)))
+                            - 1.0);
+  }
+
+  if (shadow_contrast != 1.0) {
+    vec3 distance = clamp(vec3(1.0) - graded_normalized, vec3(0.0), vec3(1.0));
+    vec3 distance_squared = distance * distance;
+    vec3 flat_distance = distance_squared * distance * exp2(vec3(1.0) - vec3(1.0) / distance_squared);
+    graded_normalized *= pow(vec3(1.0) + flat_distance, vec3(shadow_contrast - 1.0));
+  }
+
+  if (highlights != 1.0 || shadows != 1.0) {
+    const float TONAL_OFFSET_START_STOPS = 1.0;
+    const float TONAL_OFFSET_END_STOPS = 8.0;
+    const float TONAL_OFFSET_INVERSE_RANGE_STOPS =
+        1.0 / (TONAL_OFFSET_END_STOPS - TONAL_OFFSET_START_STOPS);
+
+    vec3 tonal_stops = log2(graded_normalized);
+    vec3 tonal_displacement = vec3(0.0);
+
+    if (highlights != 1.0) {
+      float adjustment = highlights - 1.0;
+      float displacement = adjustment * fma(1.5, abs(adjustment), 0.5);
+      vec3 weight = CustomCInfinityTransition((tonal_stops - TONAL_OFFSET_START_STOPS) * TONAL_OFFSET_INVERSE_RANGE_STOPS);
+      tonal_displacement = fma(vec3(displacement), weight, tonal_displacement);
+    }
+
+    if (shadows != 1.0) {
+      float adjustment = shadows - 1.0;
+      float displacement = adjustment * fma(1.5, abs(adjustment), 0.5);
+      vec3 weight = CustomCInfinityTransition((-TONAL_OFFSET_START_STOPS - tonal_stops) * TONAL_OFFSET_INVERSE_RANGE_STOPS);
+      tonal_displacement = fma(vec3(displacement), weight, tonal_displacement);
+    }
+
+    graded_normalized *= exp2(tonal_displacement);
+  }
+
+  return graded_normalized * anchor_out;
+}
+
 // Identity through anchor to every derivative; then approaches peak
 // monotonically and concave down. Requires anchor < peak and compression_strength >= 1.
 float ApplyAnchoredCInfinityShoulder(float color, float peak, float anchor, float compression_strength) {
@@ -241,8 +344,8 @@ vec3 ApplyToneMap(vec3 _676, bool _679, float _638, float _m6, uint _m4, float _
       float anchor_out = rdr2_tonemap_Apply(pivot_point, A, B, C, D, E, F, white_precompute);
       vec3 anchor_out_lms = renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(anchor_out));
       float pivot_slope = rdr2_tonemap_Derivative(pivot_point, A, B, C, D, E, F) * white_precompute;
-      tonemapped = ApplyAnchoredAdaptationContrast(untonemapped, (2.0 * pivot_slope * pivot_point / anchor_out - 1.0) * 1.22, renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(pivot_point)), anchor_out_lms, 0.10f * pow(0.72f, 10.f), 1.f, 1.f);
-      // tonemapped = ApplyAnchoredCInfinityBoundedPowerContrast(untonemapped, (pivot_slope * pivot_point / anchor_out), renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(pivot_point)), anchor_out_lms, 0.10f * pow(0.72f, 10.f), 1.f, 1.f);
+      // tonemapped = ApplyAnchoredAdaptationContrast(untonemapped, (2.0 * pivot_slope * pivot_point / anchor_out - 1.0) * 1.22, renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(pivot_point)), anchor_out_lms, 0.10f * pow(0.72f, 10.f), 1.f, 1.f);
+      tonemapped = ApplyAnchoredTonalGrading(untonemapped, renodx_tonemap_psycho22_StockmanLMSFromBT709(vec3(pivot_point)), anchor_out_lms, (pivot_slope * pivot_point / anchor_out), 0.f, 1.f, (30.f / 50.f), 1.f, (1.f / 50.f));
 
       vec3 precompression_lms = tonemapped;
       float precompression_yf = renodx_color_yf_from_LMS(precompression_lms);
