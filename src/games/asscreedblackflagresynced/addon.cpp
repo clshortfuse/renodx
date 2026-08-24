@@ -135,11 +135,11 @@ renodx::utils::settings::Settings settings = {
         .key = "ToneMapType",
         .binding = &shader_injection.tone_map_type,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
+        .default_value = 2.f,
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type. Toggle in-game HDR setting or restart game to take effect.",
-        .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Customized)"},
+        .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Enhanced)"},
         .on_change_value = &OnToneMapLutControlledSettingChanged,
     },
     new renodx::utils::settings::Setting{
