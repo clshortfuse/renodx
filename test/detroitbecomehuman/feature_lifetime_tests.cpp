@@ -6,7 +6,7 @@
 #include <iostream>
 #include <vector>
 
-#include "../../src/games/detroitbecomehuman/dlss/feature_recording_registry.hpp"
+#include "../../src/games/detroitbecomehuman-effects/dlss/feature_recording_registry.hpp"
 #include "../../src/utils/dlss/feature_lifetime.hpp"
 
 namespace dlss = renodx::games::detroitbecomehuman::dlss;

@@ -23,7 +23,12 @@ SOURCE_DIR = _parse_arguments()
 SCENE_SOURCE = SOURCE_DIR / "hdr" / "scene_0xEBFBDDB1.comp.slang"
 ADDON_SOURCE = SOURCE_DIR / "addon.cpp"
 SHARED_SOURCE = SOURCE_DIR / "shared.h"
-TEMPORAL_AUX_SOURCE = SOURCE_DIR / "dlss" / "temporal_aux.comp.vk.glsl"
+TEMPORAL_AUX_SOURCE = (
+    SOURCE_DIR.parent
+    / "detroitbecomehuman-effects"
+    / "dlss"
+    / "temporal_aux.comp.vk.glsl"
+)
 HDR_INTERMEDIATE_SOURCE = SOURCE_DIR / "hdr" / "hdr_intermediate.hlsli"
 PSYCHOV24_SOURCE = (
     SOURCE_DIR.parents[1] / "shaders" / "tonemap" / "psychov" / "test24.hlsl"

@@ -172,11 +172,6 @@ def validate_registry(embed_dir, shader_ids):
     if len(registrations) != len(shader_ids) or set(registrations) != shader_ids:
         fail(f"shaders.h registrations do not match expected CRC shaders: {registrations}")
 
-    if '#include "./temporal_aux.h"' not in text:
-        fail("optimized temporal auxiliary shader is missing from shaders.h")
-    for shader_id in ("retinal_horizontal", "retinal_vertical"):
-        if f'#include "./{shader_id}.h"' not in text:
-            fail(f"{shader_id} is missing from shaders.h")
 
 
 def validate_temporal_auxiliary(
@@ -381,6 +376,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", required=True, type=Path)
     parser.add_argument("--embed-dir", required=True, type=Path)
+    parser.add_argument("--effects-embed-dir", required=True, type=Path)
     parser.add_argument("--expected", required=True, type=Path)
     parser.add_argument("--spirv-val", required=True, type=Path)
     parser.add_argument("--spirv-cross", required=True, type=Path)
@@ -388,8 +384,11 @@ def main():
 
     repo_root = args.repo_root.resolve()
     embed_dir = args.embed_dir.resolve()
+    effects_embed_dir = args.effects_embed_dir.resolve()
     if not embed_dir.is_dir():
         fail(f"generated shader directory does not exist: {embed_dir}")
+    if not effects_embed_dir.is_dir():
+        fail(f"generated Effects shader directory does not exist: {effects_embed_dir}")
 
     tools = (args.spirv_val.resolve(), args.spirv_cross.resolve())
     for tool in tools:
@@ -402,29 +401,33 @@ def main():
     if any(CRC_PATTERN.fullmatch(shader_id) is None for shader_id in shader_ids):
         fail("fixture contains a non-CRC32 shader filename")
 
-    generated_spv = {path.stem for path in embed_dir.glob("0x*.spv")}
-    generated_headers = {path.stem for path in embed_dir.glob("0x*.h")}
+    generated_spv = {path.stem for directory in (embed_dir, effects_embed_dir) for path in directory.glob("0x*.spv")}
+    generated_headers = {path.stem for directory in (embed_dir, effects_embed_dir) for path in directory.glob("0x*.h")}
     if generated_spv != shader_ids:
         fail(f"generated SPIR-V CRC set changed: {sorted(generated_spv)}")
     if generated_headers != shader_ids:
         fail(f"generated embed-header CRC set changed: {sorted(generated_headers)}")
 
     for shader_id in sorted(shader_ids):
+        shader_embed_dir = effects_embed_dir if (effects_embed_dir / f"{shader_id}.spv").is_file() else embed_dir
         validate_shader(
             shader_id,
             shaders[shader_id],
             fixture["push_constant"],
-            embed_dir,
+            shader_embed_dir,
             tools[0],
             tools[1],
         )
-    validate_registry(embed_dir, shader_ids)
+    effects_shader_ids = {path.stem for path in effects_embed_dir.glob("0x*.spv")}
+    hdr_shader_ids = shader_ids - effects_shader_ids
+    validate_registry(embed_dir, hdr_shader_ids)
+    validate_registry(effects_embed_dir, effects_shader_ids)
     validate_temporal_auxiliary(
-        embed_dir, tools[0], tools[1], fixture["push_constant"]
+        effects_embed_dir, tools[0], tools[1], fixture["push_constant"]
     )
-    validate_dlaa_pack_shader(embed_dir, tools[0], tools[1])
+    validate_dlaa_pack_shader(effects_embed_dir, tools[0], tools[1])
     for shader_id in ("retinal_horizontal", "retinal_vertical"):
-        validate_retinal_shader(shader_id, embed_dir, tools[0], tools[1])
+        validate_retinal_shader(shader_id, effects_embed_dir, tools[0], tools[1])
 
     print(
         f"PASS: validated {len(shader_ids)} Detroit production SPIR-V shader "

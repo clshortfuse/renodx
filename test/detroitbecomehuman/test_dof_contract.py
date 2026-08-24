@@ -6,10 +6,10 @@ from pathlib import Path
 
 
 DOF_SHADERS = {
-    "0xE9907978": "effects/dof_split_0xE9907978.comp.slang",
-    "0x747E19D2": "effects/dof_gather_0x747E19D2.comp.slang",
-    "0x508514FB": "effects/dof_fill_0x508514FB.comp.slang",
-    "0xAC7A8193": "effects/dof_composite_0xAC7A8193.comp.slang",
+    "0xE9907978": "../detroitbecomehuman-effects/effects/dof_split_0xE9907978.comp.slang",
+    "0x747E19D2": "../detroitbecomehuman-effects/effects/dof_gather_0x747E19D2.comp.slang",
+    "0x508514FB": "../detroitbecomehuman-effects/effects/dof_fill_0x508514FB.comp.slang",
+    "0xAC7A8193": "../detroitbecomehuman-effects/effects/dof_composite_0xAC7A8193.comp.slang",
 }
 
 
@@ -200,7 +200,8 @@ def main():
     )
 
     addon = (source_dir / "addon.cpp").read_text(encoding="utf-8")
-    dof_runtime = (source_dir / "effects" / "dof_runtime.hpp").read_text(encoding="utf-8")
+    effects_dir = source_dir.parent / "detroitbecomehuman-effects"
+    dof_runtime = (effects_dir / "effects" / "dof_runtime.hpp").read_text(encoding="utf-8")
     for shader_hash in DOF_SHADERS:
         require(
             addon,
@@ -386,7 +387,7 @@ def main():
     for shader_hash, filename in DOF_SHADERS.items():
         source = (source_dir / filename).read_text(encoding="utf-8")
         sources[shader_hash] = source
-        require(source, r'#include\s+"\.\./shared\.h"', f"{shader_hash} lacks injected settings")
+        require(source, r'#include\s+"\.\./\.\./detroitbecomehuman/shared\.h"', f"{shader_hash} lacks injected settings")
         require(
             source,
             r"local_size_x\s*=\s*8[\s\S]*?local_size_y\s*=\s*8",
@@ -563,13 +564,13 @@ def main():
         "effects/retinal_horizontal.comp.slang",
         "effects/retinal_vertical.comp.slang",
     ):
-        retinal_shader = (source_dir / filename).read_text(encoding="utf-8")
+        retinal_shader = (effects_dir / filename).read_text(encoding="utf-8")
         require(
             retinal_shader,
             r'#include\s+"retinal_filter_common\.slang"',
             f"{filename} must use the shared Watson filter",
         )
-    retinal_common = (source_dir / "effects" / "retinal_filter_common.slang").read_text(
+    retinal_common = (effects_dir / "effects" / "retinal_filter_common.slang").read_text(
         encoding="utf-8"
     )
     require(
@@ -600,7 +601,7 @@ def main():
     )
     validate_retinal_linear_gaussian_math()
 
-    capture = (source_dir / "effects" / "retinal_capture.hpp").read_text(encoding="utf-8")
+    capture = (effects_dir / "effects" / "retinal_capture.hpp").read_text(encoding="utf-8")
     require(
         capture,
         r"push_constant_size\s*!=\s*kShaderInjectDataSize[\s\S]*?"
@@ -608,7 +609,7 @@ def main():
         r"RestoreDofCompositeComputeState",
         "Retinal capture must validate and restore the native push payload",
     )
-    runtime = (source_dir / "effects" / "retinal_runtime.hpp").read_text(encoding="utf-8")
+    runtime = (effects_dir / "effects" / "retinal_runtime.hpp").read_text(encoding="utf-8")
     require(
         runtime,
         r"owner_device_\s*!=\s*nullptr[\s\S]*?owner_device_\s*!=\s*device[\s\S]*?"
@@ -629,7 +630,7 @@ def main():
         r"kBypassedZeroEffect[\s\S]*?CaptureCompositeOutput",
         "zero Retinal strength or sigma must bypass capture and both dispatches",
     )
-    vulkan_layer = (source_dir / "dlss" / "vulkan_layer.cpp").read_text(
+    vulkan_layer = (effects_dir / "dlss" / "vulkan_layer.cpp").read_text(
         encoding="utf-8"
     )
     require(

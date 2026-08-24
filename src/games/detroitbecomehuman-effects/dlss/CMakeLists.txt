@@ -53,11 +53,6 @@ target_link_libraries(detroitbecomehuman-effects PRIVATE
   "$<$<NOT:$<CONFIG:Debug>>:${DETROIT_DLSS_NGX_LIB_DIR}/nvsdk_ngx_khr_s.lib>"
 )
 
-target_include_directories(detroitbecomehuman-effects BEFORE PRIVATE
-  "${CMAKE_BINARY_DIR}/detroitbecomehuman.include"
-)
-add_dependencies(detroitbecomehuman-effects detroitbecomehuman-shaders)
-
 add_custom_target(detroitbecomehuman_dlss_runtime_copy
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${DETROIT_DLSS_NGX_DLL}"

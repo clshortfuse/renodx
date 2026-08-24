@@ -21,24 +21,25 @@ def main() -> None:
     args = parser.parse_args()
 
     source_dir = args.source_dir
-    source = (source_dir / "dlss" / "vulkan_layer.cpp").read_text(encoding="utf-8")
-    adapter = (source_dir / "dlss" / "adapter_runtime.cpp").read_text(encoding="utf-8")
-    adapter_header = (source_dir / "dlss" / "adapter_runtime.hpp").read_text(
+    effects_dir = source_dir.parent / "detroitbecomehuman-effects"
+    source = (effects_dir / "dlss" / "vulkan_layer.cpp").read_text(encoding="utf-8")
+    adapter = (effects_dir / "dlss" / "adapter_runtime.cpp").read_text(encoding="utf-8")
+    adapter_header = (effects_dir / "dlss" / "adapter_runtime.hpp").read_text(
         encoding="utf-8"
     )
-    bootstrap = (source_dir / "dlss" / "embedded_bootstrap.hpp").read_text(
+    bootstrap = (effects_dir / "dlss" / "embedded_bootstrap.hpp").read_text(
         encoding="utf-8"
     )
-    temporal = (source_dir / "dlss" / "temporal_capture.hpp").read_text(encoding="utf-8")
-    temporal_mode_state = (source_dir / "dlss" / "temporal_mode_state.hpp").read_text(
+    temporal = (effects_dir / "dlss" / "temporal_capture.hpp").read_text(encoding="utf-8")
+    temporal_mode_state = (effects_dir / "dlss" / "temporal_mode_state.hpp").read_text(
         encoding="utf-8"
     )
     addon = (source_dir / "addon.cpp").read_text(encoding="utf-8")
-    bridge = (source_dir / "dlss" / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
+    bridge = (effects_dir / "dlss" / "dlss_bridge_client.hpp").read_text(encoding="utf-8")
     effects_addon = (
         source_dir.parent / "detroitbecomehuman-effects" / "addon.cpp"
     ).read_text(encoding="utf-8")
-    cmake = (source_dir / "dlss" / "CMakeLists.txt").read_text(encoding="utf-8")
+    cmake = (effects_dir / "dlss" / "CMakeLists.txt").read_text(encoding="utf-8")
 
     # Bootstrap remains early so NGX extensions are present at device creation.
     for hook in (

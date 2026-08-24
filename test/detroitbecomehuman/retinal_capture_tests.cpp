@@ -6,7 +6,7 @@
 #include <iostream>
 #include <string_view>
 
-#include "src/games/detroitbecomehuman/effects/retinal_capture.hpp"
+#include "src/games/detroitbecomehuman-effects/effects/retinal_capture.hpp"
 
 namespace {
 

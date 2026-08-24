@@ -44,7 +44,7 @@
 #include <vector>
 
 #include "dlss_bridge_abi.h"
-#include "../supported_build.hpp"
+#include "../../detroitbecomehuman/supported_build.hpp"
 #include "taa_contract.hpp"
 #include "adapter_runtime.hpp"
 #include "embedded_bootstrap.hpp"

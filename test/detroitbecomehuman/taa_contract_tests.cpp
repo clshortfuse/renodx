@@ -14,8 +14,8 @@
 #include <string_view>
 #include <type_traits>
 
-#include "src/games/detroitbecomehuman/dlss/dlss_bridge_abi.h"
-#include "src/games/detroitbecomehuman/dlss/taa_contract.hpp"
+#include "src/games/detroitbecomehuman-effects/dlss/dlss_bridge_abi.h"
+#include "src/games/detroitbecomehuman-effects/dlss/taa_contract.hpp"
 
 namespace {
 

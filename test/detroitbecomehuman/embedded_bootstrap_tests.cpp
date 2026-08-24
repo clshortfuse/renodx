@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "src/games/detroitbecomehuman/dlss/embedded_bootstrap.hpp"
+#include "src/games/detroitbecomehuman-effects/dlss/embedded_bootstrap.hpp"
 
 namespace embedded =
     renodx::games::detroitbecomehuman::dlss::embedded;

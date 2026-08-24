@@ -396,6 +396,7 @@ class Runtime {
       owner_device_ = nullptr;
       return false;
     }
+#ifdef DETROIT_EFFECTS_ADDON
     if (!CreatePipeline(
             device,
             __retinal_horizontal.data(),
@@ -411,6 +412,11 @@ class Runtime {
       return false;
     }
     return true;
+#else
+    DestroyPipelines(device);
+    owner_device_ = nullptr;
+    return false;
+#endif
   }
 
   [[nodiscard]] bool CreatePipeline(

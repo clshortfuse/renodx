@@ -7,8 +7,8 @@
 #include <limits>
 #include <string_view>
 
-#include "src/games/detroitbecomehuman/effects/dof_runtime.hpp"
-#include "src/games/detroitbecomehuman/effects/retinal_math.hpp"
+#include "src/games/detroitbecomehuman-effects/effects/dof_runtime.hpp"
+#include "src/games/detroitbecomehuman-effects/effects/retinal_math.hpp"
 
 namespace {
 

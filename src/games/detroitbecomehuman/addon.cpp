@@ -30,7 +30,9 @@
 
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
-#include <embed/temporal_aux_exact.h>
+#ifdef DETROIT_EFFECTS_ADDON
+#include <embed/temporal_aux.h>
+#endif
 #include <include/reshade.hpp>
 
 #include "../../mods/shader.hpp"
@@ -39,14 +41,14 @@
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
 #include "../../utils/swapchain.hpp"
-#include "./dlss/embedded_bootstrap.hpp"
-#include "./debug/render_debug.hpp"
-#include "./effects/dof_runtime.hpp"
-#include "./effects/retinal_capture.hpp"
-#include "./effects/retinal_observability.hpp"
+#include "../detroitbecomehuman-effects/dlss/embedded_bootstrap.hpp"
+#include "../detroitbecomehuman-effects/debug/render_debug.hpp"
+#include "../detroitbecomehuman-effects/effects/dof_runtime.hpp"
+#include "../detroitbecomehuman-effects/effects/retinal_capture.hpp"
+#include "../detroitbecomehuman-effects/effects/retinal_observability.hpp"
 #include "./hdr/peak_brightness.hpp"
 #include "./shared.h"
-#include "./dlss/temporal_capture.hpp"
+#include "../detroitbecomehuman-effects/dlss/temporal_capture.hpp"
 #include "./ultrawide.hpp"
 
 #ifndef DETROIT_EFFECTS_ADDON
@@ -1786,7 +1788,7 @@ renodx::mods::shader::CustomShaders effect_shaders = {
                                               }},
     {supported_build::kTemporalAaShaderCrc, {
                                                 .crc32 = supported_build::kTemporalAaShaderCrc,
-                                                .code = __temporal_aux_exact,
+                                                .code = __temporal_aux,
                                                 .on_replace = &OnTemporalAuxiliaryReplace,
                                             }},
 };

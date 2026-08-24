@@ -32,7 +32,7 @@
 #include "../../../utils/shader.hpp"
 #include "dlss_bridge_client.hpp"
 #include "embedded_bootstrap.hpp"
-#include "../supported_build.hpp"
+#include "../../detroitbecomehuman/supported_build.hpp"
 #include "taa_contract.hpp"
 #include "temporal_mode_state.hpp"
 

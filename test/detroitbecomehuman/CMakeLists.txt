@@ -4,6 +4,8 @@ set(DETROIT_TEST_SOURCE_DIR
     "${RENODX_TEST_REPO_ROOT}/src/games/detroitbecomehuman")
 set(DETROIT_GENERATED_EMBED_DIR
     "${CMAKE_BINARY_DIR}/detroitbecomehuman.include/embed")
+set(DETROIT_EFFECTS_GENERATED_EMBED_DIR
+    "${CMAKE_BINARY_DIR}/detroitbecomehuman-effects.include/embed")
 set(DETROIT_SPIRV_VAL
     "${RENODX_TEST_REPO_ROOT}/bin/spirv-val.exe")
 set(DETROIT_SPIRV_CROSS
@@ -332,6 +334,7 @@ add_test(
           ${CMAKE_CURRENT_SOURCE_DIR}/verify_shader_contract.py
           --repo-root ${RENODX_TEST_REPO_ROOT}
           --embed-dir ${DETROIT_GENERATED_EMBED_DIR}
+          --effects-embed-dir ${DETROIT_EFFECTS_GENERATED_EMBED_DIR}
           --expected ${CMAKE_CURRENT_SOURCE_DIR}/expected_shader_interfaces.json
           --spirv-val ${DETROIT_SPIRV_VAL}
           --spirv-cross ${DETROIT_SPIRV_CROSS}

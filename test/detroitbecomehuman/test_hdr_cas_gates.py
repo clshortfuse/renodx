@@ -504,22 +504,23 @@ class HDRAndCASGateTests(unittest.TestCase):
             encoding="utf-8"
         )
         addon = (SOURCE_DIR / "addon.cpp").read_text(encoding="utf-8")
-        temporal_capture = (SOURCE_DIR / "dlss" / "temporal_capture.hpp").read_text(
+        temporal_capture = (SOURCE_DIR.parent / "detroitbecomehuman-effects" / "dlss" / "temporal_capture.hpp").read_text(
             encoding="utf-8"
         )
+        effects_dir = SOURCE_DIR.parent / "detroitbecomehuman-effects"
         pack_shader = (
-            SOURCE_DIR
+            effects_dir
             / "dlss"
             / "shaders"
             / "detroit_dlss_pack_color.comp.slang"
         ).read_text(encoding="utf-8")
         adapter_runtime = (
-            SOURCE_DIR / "dlss" / "adapter_runtime.cpp"
+            effects_dir / "dlss" / "adapter_runtime.cpp"
         ).read_text(encoding="utf-8")
         vulkan_layer = (
-            SOURCE_DIR / "dlss" / "vulkan_layer.cpp"
+            effects_dir / "dlss" / "vulkan_layer.cpp"
         ).read_text(encoding="utf-8")
-        bridge_abi = (SOURCE_DIR / "dlss" / "dlss_bridge_abi.h").read_text(
+        bridge_abi = (effects_dir / "dlss" / "dlss_bridge_abi.h").read_text(
             encoding="utf-8"
         )
 
@@ -1025,11 +1026,11 @@ class HDRAndCASGateTests(unittest.TestCase):
             self.assertNotIn(f".on_drawn = &{callback}", addon)
         self.assertRegex(
             addon,
-            r"kTemporalAaShaderCrc,[\s\S]*?\.code\s*=\s*__temporal_aux_exact,[\s\S]*?"
+            r"kTemporalAaShaderCrc,[\s\S]*?\.code\s*=\s*__temporal_aux,[\s\S]*?"
             r"\.on_replace\s*=\s*&OnTemporalAuxiliaryReplace,",
         )
 
-        auxiliary_shader = (SOURCE_DIR / "dlss" / "temporal_aux.comp.vk.glsl").read_text(
+        auxiliary_shader = (effects_dir / "dlss" / "temporal_aux.comp.vk.glsl").read_text(
             encoding="utf-8"
         )
         self.assertIn(
@@ -1046,10 +1047,10 @@ class HDRAndCASGateTests(unittest.TestCase):
             self.assertIn(history_output, auxiliary_shader)
 
         adapter_runtime = (
-            SOURCE_DIR / "dlss" / "adapter_runtime.cpp"
+            effects_dir / "dlss" / "adapter_runtime.cpp"
         ).read_text(encoding="utf-8")
         prepare_shader = (
-            SOURCE_DIR
+            effects_dir
             / "dlss"
             / "shaders"
             / "detroit_dlss_prepare_color_motion.comp.slang"

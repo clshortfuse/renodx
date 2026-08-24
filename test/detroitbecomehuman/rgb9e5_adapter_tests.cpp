@@ -10,8 +10,8 @@
 #include <limits>
 #include <string_view>
 
-#include "src/games/detroitbecomehuman/dlss/adapter_shaders.hpp"
-#include "src/games/detroitbecomehuman/dlss/rgb9e5_adapter.hpp"
+#include "src/games/detroitbecomehuman-effects/dlss/adapter_shaders.hpp"
+#include "src/games/detroitbecomehuman-effects/dlss/rgb9e5_adapter.hpp"
 
 namespace {
 

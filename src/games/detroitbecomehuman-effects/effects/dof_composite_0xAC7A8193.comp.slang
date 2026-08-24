@@ -1,6 +1,6 @@
 #version 450
 
-#include "../shared.h"
+#include "../../detroitbecomehuman/shared.h"
 #include "../debug/render_debug_common.slang"
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
