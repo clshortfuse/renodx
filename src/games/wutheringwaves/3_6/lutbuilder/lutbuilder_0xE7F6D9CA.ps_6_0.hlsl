@@ -1,4 +1,4 @@
-#include "../../common.hlsli"
+#include "../../lutbuilder.hlsli"
 
 Texture2D<float4> t0 : register(t0);
 

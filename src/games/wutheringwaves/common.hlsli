@@ -29,28 +29,7 @@
 
 #define CLAMP_IF_SDR(c) ((c) = ((RENODX_TONE_MAP_TYPE == 0.f) ? saturate((c)) : (c)))
 
-#define CLAMP_IF_SDR3(r, g, b) { if (RENODX_TONE_MAP_TYPE == 0.f) { (r) = saturate((r)); (g) = saturate((g)); (b) = saturate((b)); } }
-
 #define CAPTURE_UNTONEMAPPED(c) const float3 untonemapped = (c).rgb
-
-#define CAPTURE_TONEMAPPED(c) const float3 tonemapped = (c).rgb
-
-#define CAPTURE_UNGRADED(c1, c2, c3) const float3 ungraded = float3((c1), (c2), (c3))
-
-#define HANDLE_LUT_OUTPUT(c) (c).rgb = HandleLUTOutput((c).rgb, untonemapped, tonemapped)
-#define HANDLE_LUT_OUTPUT3(c1, c2, c3) { \
-    float3 lut_output = float3(c1, c2, c3); \
-    lut_output = HandleLUTOutput(lut_output, untonemapped, tonemapped); \
-    c1 = lut_output.r; c2 = lut_output.g; c3 = lut_output.b; \
-}
-
-#define HANDLE_LUT_OUTPUT3_FADE(c1, c2, c3, tex, samp) { \
-  float3 lut_output = float3(c1, c2, c3); \
-  lut_output = HandleLUTOutput(lut_output, untonemapped, tonemapped, tex, samp); \
-  c1 = lut_output.r; c2 = lut_output.g; c3 = lut_output.b; \
-}
-
-#define HANDLE_LUT_OUTPUT_FADE(c, tex, samp) (c).rgb = HandleLUTOutput((c).rgb, untonemapped, tonemapped, tex, samp)
 
 #define GENERATE_INVERSION(c1, c2, c3) \
     const float3 inverted = renodx::draw::InvertIntermediatePass(float3(c1, c2, c3)); \
@@ -183,74 +162,6 @@ static inline float3 ApplyHueCorrection(float3 mapped_bt709) {
   return renodx::color::bt709::clamp::AP1(corrected);
 }
 
-namespace lut {
-
-static inline float PrepareLinearInput(inout float r, inout float g, inout float b) {
-  float3 lut_linear_input = max(0.f, float3(r, g, b));
-  float lut_sampling_scale = 1.0f;
-
-  if (RENODX_TONE_MAP_TYPE != 0.0f) {
-    lut_sampling_scale = renodx::tonemap::neutwo::ComputeMaxChannelScale(lut_linear_input);
-    lut_linear_input *= lut_sampling_scale;
-  }
-
-  r = lut_linear_input.r;
-  g = lut_linear_input.g;
-  b = lut_linear_input.b;
-  return lut_sampling_scale;
-}
-
-static inline float NormalizeEncodedInput(inout float r, inout float g, inout float b) {
-  float lut_sample_max_channel = renodx::math::Max(r, g, b, 1.0f);
-  float3 lut_input_srgb = saturate(float3(r, g, b) / lut_sample_max_channel);
-  r = lut_input_srgb.r;
-  g = lut_input_srgb.g;
-  b = lut_input_srgb.b;
-  return lut_sample_max_channel;
-}
-
-static inline void ApplySampleMaxChannel(inout float r, inout float g, inout float b, float lut_sample_max_channel) {
-  r *= lut_sample_max_channel;
-  g *= lut_sample_max_channel;
-  b *= lut_sample_max_channel;
-}
-
-static inline void ApplyInverseSamplingScale(inout float r, inout float g, inout float b, float lut_sampling_scale) {
-  if (RENODX_TONE_MAP_TYPE != 0.0f) {
-    float inv_lut_sampling_scale = 1.0f / max(lut_sampling_scale, 1e-6f);
-    r *= inv_lut_sampling_scale;
-    g *= inv_lut_sampling_scale;
-    b *= inv_lut_sampling_scale;
-  }
-}
-
-static inline void PreserveReferenceLightness(inout float r, inout float g, inout float b, float3 reference_bt709) {
-  if (RENODX_TONE_MAP_TYPE == 0.f || RENODX_WUWA_LUT_LIGHTNESS >= 1.f) {
-    return;
-  }
-  float3 lut_lab = renodx::color::oklab::from::BT709(float3(r, g, b));
-  float3 ref_lab = renodx::color::oklab::from::BT709(reference_bt709);
-  lut_lab.x = lerp(ref_lab.x, lut_lab.x, RENODX_WUWA_LUT_LIGHTNESS);
-  float3 result = renodx::color::bt709::clamp::AP1(renodx::color::bt709::from::OkLab(lut_lab));
-  r = result.r;
-  g = result.g;
-  b = result.b;
-}
-
-
-static inline void ApplyLutStrength(inout float r, inout float g, inout float b, float3 ungraded) {
-  float3 ungraded_bt709 = renodx::color::bt709::from::AP1(ungraded);
-  float3 graded_lab = renodx::color::oklab::from::BT709(float3(r, g, b));
-  float3 ungraded_lab = renodx::color::oklab::from::BT709(ungraded_bt709);
-  graded_lab.yz = lerp(ungraded_lab.yz, graded_lab.yz, RENODX_WUWA_LUT_STRENGTH);
-  float3 result = renodx::color::bt709::clamp::AP1(renodx::color::bt709::from::OkLab(graded_lab));
-  r = result.r;
-  g = result.g;
-  b = result.b;
-}
-
-}
-
 static const float3x3 DCIP3_to_BT2020_MAT = float3x3(
     0.75383303, 0.19859737, 0.04756960,
     0.04574385, 0.94177722, 0.01247893,
@@ -374,73 +285,3 @@ static inline float3 InvertAndApplyDisplayMap(float3 input_bt709) {
 }
 
 }
-
-static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, float3 tonemapped) {
-  // Reverse the output shader's post-LUT scaling.
-  lut_output /= 1.0499999523162842f;
-
-  CLAMP_IF_SDR(lut_output);
-
-  lut_output = renodx::draw::InvertIntermediatePass(lut_output);
-
-  if (RENODX_TONE_MAP_TYPE != 0) {
-    if (RENODX_COLOR_GRADE_STRENGTH == 0) {
-      lut_output = untonemapped;
-    } else {
-        lut_output =
-          renodx::draw::ApplyPerChannelCorrection(untonemapped,
-                                                  lut_output,
-                                                  RENODX_PER_CHANNEL_BLOWOUT_RESTORATION,
-                                                  RENODX_PER_CHANNEL_HUE_CORRECTION,
-                                                  RENODX_PER_CHANNEL_CHROMINANCE_CORRECTION,
-                                                  RENODX_PER_CHANNEL_HUE_SHIFT);
-
-        lut_output =
-            renodx::tonemap::UpgradeToneMap(
-                untonemapped,
-                tonemapped,
-                lut_output,
-                RENODX_COLOR_GRADE_STRENGTH,
-                1.f);
-    }
-
-    lut_output = renodx::draw::ToneMapPass(lut_output);
-  }
-
-  lut_output = renodx::draw::RenderIntermediatePass(lut_output);
-
-  return lut_output;
-}
-
-static inline float3 HandleLUTOutput(float3 lut_output, float3 untonemapped, float3 tonemapped, Texture3D<float4> lut_texture, SamplerState lut_sampler) {
-  float min_uv = 0.015625f;
-  float max_uv = 0.984375f;
-  float3 a = lut_texture.SampleLevel(lut_sampler, float3(min_uv, min_uv, min_uv), 0).rgb;
-  float3 b = lut_texture.SampleLevel(lut_sampler, float3(max_uv, max_uv, max_uv), 0).rgb;
-  float3 c = lut_texture.SampleLevel(lut_sampler, float3(0.5f, 0.5f, 0.5f), 0).rgb;
-
-  float3 d = abs(a - b);
-  float max_delta = max(d.r, max(d.g, d.b));
-  float uniform_fade = 1.0f - smoothstep(0.0f, 0.01f, max_delta);
-
-  float3 max_v = max(a, max(b, c));
-  float3 min_v = min(a, min(b, c));
-  float max_chroma = max(max_v.r - min_v.r, max(max_v.g - min_v.g, max_v.b - min_v.b));
-  float chroma_fade = 1.0f - smoothstep(0.0f, 0.05f, max_chroma);
-
-  float fade_amount = max(uniform_fade, chroma_fade);
-  float3 graded_output = HandleLUTOutput(lut_output, untonemapped, tonemapped);
-  float3 original_output = renodx::draw::RenderIntermediatePass(lut_output);
-
-  return lerp(graded_output, original_output, fade_amount);
-}
-
-#define GENERATE_LUT_OUTPUT(T)                                          \
-  static inline T GenerateLUTOutput(T graded_bt709) {                   \
-    graded_bt709 = renodx::draw::RenderIntermediatePass(graded_bt709);  \
-    graded_bt709 /= 1.0499999523162842f;                                \
-    return graded_bt709;                                                \
-  }
-
-GENERATE_LUT_OUTPUT(float3)
-GENERATE_LUT_OUTPUT(float4)
