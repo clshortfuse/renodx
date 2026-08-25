@@ -45,6 +45,8 @@ struct ShaderInjectData {
   float wuwa_tonemap_strength;
   float wuwa_lut_strength;
   float custom_random_pad2;
+
+  float hans_mode;
 };
 
 #ifndef __cplusplus
@@ -147,6 +149,8 @@ cbuffer injected_buffer : register(b13) {
 
 #define RENODX_WUWA_TONEMAP_STRENGTH            shader_injection.wuwa_tonemap_strength
 #define RENODX_WUWA_LUT_STRENGTH                shader_injection.wuwa_lut_strength
+
+#define RENODX_HANS_MODE                        shader_injection.hans_mode
 
 #include "../../shaders/renodx.hlsl"
 #endif
