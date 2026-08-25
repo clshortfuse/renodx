@@ -47,6 +47,7 @@ struct ShaderInjectData {
   float custom_random_pad2;
 
   float hans_mode;
+  float film_grain;
 };
 
 #ifndef __cplusplus
@@ -151,6 +152,7 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_WUWA_LUT_STRENGTH                shader_injection.wuwa_lut_strength
 
 #define RENODX_HANS_MODE                        shader_injection.hans_mode
+#define RENODX_FILM_GRAIN                       shader_injection.film_grain
 
 #include "../../shaders/renodx.hlsl"
 #endif
