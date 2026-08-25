@@ -1,4 +1,4 @@
-#include "../../common.hlsl"
+#include "../../common.hlsli"
 
 // ======== SUN & MOON BOOST ========
 static const float SUNMOON_BOOST = 2.0f;   // Boost multiplier for sun/moon
