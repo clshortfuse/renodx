@@ -134,6 +134,22 @@ void HandleOutputModeSetting(float requested) {
   output_restart_required.store(needs_restart, std::memory_order_release);
 }
 
+void OnPeakBrightnessSettingsChanged() {
+  if (peak_brightness_source < 0.5f) {
+    auto* swapchain = tracked_swapchain.load(std::memory_order_acquire);
+    if (swapchain != nullptr) {
+      RefreshDetectedPeak(swapchain);
+      return;
+    }
+  }
+  ResolvePeakBrightness();
+}
+
+void OnPresetChanged() {
+  HandleOutputModeSetting(requested_output_mode);
+  OnPeakBrightnessSettingsChanged();
+}
+
 bool OnPostProcessDraw(reshade::api::command_list*) {
   shader_injection.scene_path_active =
       pipeline_variants::UsesModifiedPostProcess()
@@ -276,17 +292,9 @@ renodx::utils::settings::Settings settings =
                   .label = "Peak Brightness Source",
                   .section = "Tone Mapping",
                    .labels = {"Auto", "Manual"},
-                   .on_change_value = [](float, float) {
-                     if (peak_brightness_source < 0.5f) {
-                       auto* swapchain = tracked_swapchain.load(
-                           std::memory_order_acquire);
-                       if (swapchain != nullptr) {
-                         RefreshDetectedPeak(swapchain);
-                         return;
-                       }
-                     }
-                     ResolvePeakBrightness();
-                   },
+                    .on_change_value = [](float, float) {
+                      OnPeakBrightnessSettingsChanged();
+                    },
               }));
           defaults.insert(
               defaults.begin() + 4,
@@ -439,6 +447,8 @@ bool AttachAddon(HMODULE module) {
     return false;
   }
 
+  renodx::utils::settings::on_preset_changed_callbacks.emplace_back(
+      &OnPresetChanged);
   renodx::utils::settings::Use(
       DLL_PROCESS_ATTACH,
       &settings,

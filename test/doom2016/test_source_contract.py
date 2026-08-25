@@ -190,6 +190,26 @@ def main() -> None:
             "DOOM must not use the live pipeline-destruction path")
     require("RemoveRuntimeReplacements" not in addon + cache,
             "Preset Off must select originals without destroying live pipelines")
+    require(re.search(
+        r"void\s+OnPresetChanged\(\)\s*\{[\s\S]*?"
+        r"HandleOutputModeSetting\(requested_output_mode\);[\s\S]*?"
+        r"OnPeakBrightnessSettingsChanged\(\);[\s\S]*?\}",
+        addon,
+    ) is not None,
+            "preset changes must resynchronize output status and effective peak")
+    require(re.search(
+        r"on_preset_changed_callbacks\.emplace_back\(\s*"
+        r"&OnPresetChanged\s*\);",
+        addon,
+    ) is not None,
+            "DOOM must register its post-load preset synchronization callback")
+    require(re.search(
+        r"void\s+OnPeakBrightnessSettingsChanged\(\)\s*\{[\s\S]*?"
+        r"RefreshDetectedPeak\(swapchain\);[\s\S]*?"
+        r"ResolvePeakBrightness\(\);[\s\S]*?\}",
+        addon,
+    ) is not None,
+            "Auto/Manual peak settings must resolve immediately after preset load")
     require("inverse_tonemap" not in (common + output).lower(),
             "final-frame inverse tone mapping is forbidden")
     require("scene_path_active" in output and "samp_tex0" in output,
