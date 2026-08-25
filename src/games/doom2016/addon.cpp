@@ -8,6 +8,8 @@
 
 #include <windows.h>
 
+#include <dxgi1_6.h>
+
 #include <atomic>
 #include <cmath>
 #include <format>
@@ -121,9 +123,84 @@ void ResolvePeakBrightness() {
   UpdatePeakBrightnessStatus();
 }
 
+std::optional<float> DetectPeakNits(HWND window) {
+  if (window == nullptr) return std::nullopt;
+
+  static const auto create_dxgi_factory = []() {
+    const HMODULE dxgi_module = LoadLibraryW(L"dxgi.dll");
+    return dxgi_module == nullptr
+               ? static_cast<decltype(&CreateDXGIFactory1)>(nullptr)
+               : reinterpret_cast<decltype(&CreateDXGIFactory1)>(
+                     GetProcAddress(dxgi_module, "CreateDXGIFactory1"));
+  }();
+  if (create_dxgi_factory == nullptr) return std::nullopt;
+
+  const HMONITOR monitor = MonitorFromWindow(
+      window,
+      MONITOR_DEFAULTTONEAREST);
+  if (monitor == nullptr) return std::nullopt;
+
+  IDXGIFactory1* factory = nullptr;
+  const HRESULT factory_result =
+      create_dxgi_factory(IID_PPV_ARGS(&factory));
+  if (FAILED(factory_result) || factory == nullptr) {
+    return std::nullopt;
+  }
+
+  std::optional<float> peak_nits = std::nullopt;
+  for (UINT adapter_index = 0u;
+       !peak_nits.has_value();
+       ++adapter_index) {
+    IDXGIAdapter1* adapter = nullptr;
+    const HRESULT adapter_result = factory->EnumAdapters1(
+        adapter_index,
+        &adapter);
+    if (adapter_result == DXGI_ERROR_NOT_FOUND) break;
+    if (FAILED(adapter_result) || adapter == nullptr) continue;
+
+    for (UINT output_index = 0u;
+         !peak_nits.has_value();
+         ++output_index) {
+      IDXGIOutput* output = nullptr;
+      const HRESULT output_result = adapter->EnumOutputs(
+          output_index,
+          &output);
+      if (output_result == DXGI_ERROR_NOT_FOUND) break;
+      if (FAILED(output_result) || output == nullptr) continue;
+
+      IDXGIOutput6* output6 = nullptr;
+      const HRESULT output6_result = output->QueryInterface(
+          IID_PPV_ARGS(&output6));
+      output->Release();
+      if (FAILED(output6_result) || output6 == nullptr) continue;
+
+      DXGI_OUTPUT_DESC1 output_desc = {};
+      const HRESULT description_result = output6->GetDesc1(&output_desc);
+      output6->Release();
+      if (FAILED(description_result)
+          || output_desc.Monitor != monitor
+          || (output_desc.ColorSpace
+                  != DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+              && output_desc.ColorSpace
+                  != DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709)
+          || !std::isfinite(output_desc.MaxLuminance)
+          || output_desc.MaxLuminance < 48.f
+          || output_desc.MaxLuminance > 4000.f) {
+        continue;
+      }
+      peak_nits = output_desc.MaxLuminance;
+    }
+
+    adapter->Release();
+  }
+
+  factory->Release();
+  return peak_nits;
+}
+
 void RefreshDetectedPeak(reshade::api::swapchain* swapchain) {
   if (swapchain == nullptr || peak_brightness_source >= 0.5f) return;
-  detected_peak_nits = renodx::utils::swapchain::GetPeakNits(
+  detected_peak_nits = DetectPeakNits(
       static_cast<HWND>(swapchain->get_hwnd()));
   ResolvePeakBrightness();
 }

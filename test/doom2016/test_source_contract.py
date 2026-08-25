@@ -210,6 +210,13 @@ def main() -> None:
         addon,
     ) is not None,
             "Auto/Manual peak settings must resolve immediately after preset load")
+    require("DetectPeakNits" in addon
+            and "MonitorFromWindow" in addon
+            and "EnumAdapters1" in addon
+            and "EnumOutputs" in addon,
+            "Vulkan Auto Peak must resolve monitor metadata without Detroit helpers")
+    require("renodx::utils::swapchain::GetPeakNits" not in addon,
+            "DOOM must not depend on the Detroit-only HWND peak overload")
     require("inverse_tonemap" not in (common + output).lower(),
             "final-frame inverse tone mapping is forbidden")
     require("scene_path_active" in output and "samp_tex0" in output,
