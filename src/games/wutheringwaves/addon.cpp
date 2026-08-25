@@ -324,11 +324,12 @@ void OnVideoDrawn(reshade::api::command_list* cmd_list) {
 }
 
 void RegisterVideoDrawProbes() {
-  for (const auto shader_hash : {0xDBEC487Cu, 0x43483FD7u, 0x2ECEC145u}) {
-    auto shader = custom_shaders.find(shader_hash);
-    if (shader != custom_shaders.end()) {
-      shader->second.on_drawn = &OnVideoDrawn;
-    }
+  // Hook the YUV conversion draw (decoder -> RGB) so the post pass runs on
+  // the raw decoded frame before the presentation shaders uses it.
+  const auto shader_hash = 0x2065A2FCu;
+  auto shader = custom_shaders.find(shader_hash);
+  if (shader != custom_shaders.end()) {
+    shader->second.on_drawn = &OnVideoDrawn;
   }
 }
 
@@ -530,6 +531,16 @@ renodx::utils::settings::Settings settings = {
         .section = "Video",
         .tooltip = "Controls HAnS local highlight analysis for SDR video.",
         .labels = {"Off", "On"},
+        .tint = tint_video,
+      },
+      new renodx::utils::settings::Setting{
+        .key = "VideoFilmGrain",
+        .binding = &shader_injection.film_grain,
+        .value_type = renodx::utils::settings::SettingValueType::BOOLEAN,
+        .default_value = 1.f,
+        .label = "Film Grain",
+        .section = "Video",
+        .tooltip = "Applies film grain to videos.",
         .tint = tint_video,
       },
     new renodx::utils::settings::Setting {
@@ -1124,6 +1135,15 @@ void AddAdvancedSettings() {
           .usage_include = reshade::api::resource_usage::render_target
       });
   }
+
+  // Upgrade the YUV video decode output (2560x1080 b8g8r8a8_typeless)
+  renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
+      .old_format = reshade::api::format::b8g8r8a8_typeless,
+      .new_format = reshade::api::format::r16g16b16a16_float,
+      .dimensions = {.width = 2560, .height = 1080, .depth = -1},
+      .use_resource_view_cloning = true,
+      .usage_include = reshade::api::resource_usage::render_target,
+  });
 
   const std::vector<float> letterbox_aspect_ratios = {3840.f / 1620.f, 2880.f / 1216.f};
   // Upgrade letterbox cutscene resources
