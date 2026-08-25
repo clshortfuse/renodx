@@ -6,7 +6,6 @@
 
 #include <windows.h>
 
-#include <bcrypt.h>
 #include <detours.h>
 #include <vulkan/vulkan.h>
 
@@ -16,7 +15,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -87,143 +85,6 @@ inline std::atomic_uint64_t created_pipeline_count = 0u;
 inline std::atomic_uint64_t selected_pipeline_bind_count = 0u;
 inline std::atomic_uint64_t failed_pipeline_count = 0u;
 inline std::atomic_uint32_t first_execution_mask = 0u;
-
-inline std::wstring GetExecutablePath() {
-  std::vector<wchar_t> buffer(1024u);
-  for (;;) {
-    const DWORD length = GetModuleFileNameW(
-        nullptr,
-        buffer.data(),
-        static_cast<DWORD>(buffer.size()));
-    if (length == 0u) return {};
-    if (length < buffer.size() - 1u) {
-      return std::wstring(buffer.data(), length);
-    }
-    buffer.resize(buffer.size() * 2u);
-  }
-}
-
-inline bool HashFileSha256(
-    const std::filesystem::path& path,
-    std::array<std::uint8_t, 32u>* digest) {
-  if (digest == nullptr) return false;
-  BCRYPT_ALG_HANDLE algorithm = nullptr;
-  BCRYPT_HASH_HANDLE hash = nullptr;
-  HANDLE file = INVALID_HANDLE_VALUE;
-  std::vector<std::uint8_t> hash_object;
-  bool success = false;
-  do {
-    if (BCryptOpenAlgorithmProvider(
-            &algorithm,
-            BCRYPT_SHA256_ALGORITHM,
-            nullptr,
-            0u)
-        < 0) {
-      break;
-    }
-    DWORD object_size = 0u;
-    DWORD copied = 0u;
-    if (BCryptGetProperty(
-            algorithm,
-            BCRYPT_OBJECT_LENGTH,
-            reinterpret_cast<PUCHAR>(&object_size),
-            sizeof(object_size),
-            &copied,
-            0u)
-        < 0) {
-      break;
-    }
-    hash_object.resize(object_size);
-    if (BCryptCreateHash(
-            algorithm,
-            &hash,
-            hash_object.data(),
-            static_cast<ULONG>(hash_object.size()),
-            nullptr,
-            0u,
-            0u)
-        < 0) {
-      break;
-    }
-    file = CreateFileW(
-        path.c_str(),
-        GENERIC_READ,
-        FILE_SHARE_READ | FILE_SHARE_DELETE,
-        nullptr,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-        nullptr);
-    if (file == INVALID_HANDLE_VALUE) break;
-    std::array<std::uint8_t, 64u * 1024u> buffer = {};
-    for (;;) {
-      DWORD bytes_read = 0u;
-      if (ReadFile(
-              file,
-              buffer.data(),
-              static_cast<DWORD>(buffer.size()),
-              &bytes_read,
-              nullptr)
-          == FALSE) {
-        break;
-      }
-      if (bytes_read == 0u) {
-        success = BCryptFinishHash(
-                      hash,
-                      digest->data(),
-                      static_cast<ULONG>(digest->size()),
-                      0u)
-                  >= 0;
-        break;
-      }
-      if (BCryptHashData(hash, buffer.data(), bytes_read, 0u) < 0) break;
-    }
-  } while (false);
-  if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
-  if (hash != nullptr) BCryptDestroyHash(hash);
-  if (algorithm != nullptr) BCryptCloseAlgorithmProvider(algorithm, 0u);
-  return success;
-}
-
-inline bool CheckSupportedExecutable() {
-  const std::filesystem::path executable(GetExecutablePath());
-  if (_wcsicmp(
-          executable.filename().c_str(),
-          std::filesystem::path(supported_build::kExecutableName)
-              .wstring()
-              .c_str())
-      != 0) {
-    return false;
-  }
-  WIN32_FILE_ATTRIBUTE_DATA attributes = {};
-  if (GetFileAttributesExW(
-          executable.c_str(),
-          GetFileExInfoStandard,
-          &attributes)
-      == FALSE) {
-    return false;
-  }
-  const std::uint64_t size =
-      static_cast<std::uint64_t>(attributes.nFileSizeHigh) << 32u
-      | attributes.nFileSizeLow;
-  if (size != supported_build::kExecutableSize) return false;
-  std::array<std::uint8_t, 32u> digest = {};
-  if (!HashFileSha256(executable, &digest)) return false;
-  constexpr char kHex[] = "0123456789ABCDEF";
-  std::array<char, 64u> digest_hex = {};
-  for (std::size_t index = 0u; index < digest.size(); ++index) {
-    digest_hex[index * 2u] = kHex[digest[index] >> 4u];
-    digest_hex[index * 2u + 1u] = kHex[digest[index] & 0x0Fu];
-  }
-  return std::string_view(digest_hex.data(), digest_hex.size())
-         == supported_build::kExecutableSha256;
-}
-
-inline bool IsSupportedExecutable() {
-  static std::once_flag once;
-  static bool supported = false;
-  std::call_once(once, [] { supported = CheckSupportedExecutable(); });
-  return supported;
-}
 
 inline std::shared_ptr<DeviceData> FindDevice(VkDevice device) {
   const std::shared_lock lock(devices_mutex);
@@ -478,13 +339,6 @@ inline bool BuildVariants(
   const bool post_process =
       shader_hash == supported_build::kPostProcessShaderCrc;
   if (!ShouldCreateTarget(post_process)) return true;
-  if (!IsSupportedExecutable()) {
-    failed_pipeline_count.fetch_add(1u, std::memory_order_relaxed);
-    reshade::log::message(
-        reshade::log::level::error,
-        "DOOM 2016 HDR: executable identity mismatch; native variants are disabled.");
-    return false;
-  }
 
   {
     std::ostringstream message;

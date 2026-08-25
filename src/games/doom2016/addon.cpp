@@ -434,7 +434,7 @@ renodx::utils::settings::Settings settings =
             }},
             {{
                 .value_type = renodx::utils::settings::SettingValueType::TEXT,
-                .label = "GOG DOOMx64vk.exe only. HDR10 is a true pre-SDR path through the captured float carrier; Auto HDR and RTX HDR must be disabled.",
+                .label = "Steam/GOG DOOMx64vk.exe Vulkan builds. HDR10 is a true pre-SDR path through the captured float carrier; Auto HDR and RTX HDR must be disabled.",
                 .section = "About",
             }},
             {{
@@ -622,7 +622,7 @@ bool AttachAddon(HMODULE module) {
 
 extern "C" __declspec(dllexport) constexpr const char* NAME = "RenoDX";
 extern "C" __declspec(dllexport) constexpr const char* DESCRIPTION =
-    "RenoDX HDR for DOOM (2016) (GOG, Vulkan, experimental)";
+    "RenoDX HDR for DOOM (2016) (Steam/GOG, Vulkan, experimental)";
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
   if (reason == DLL_PROCESS_ATTACH) {

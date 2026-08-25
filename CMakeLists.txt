@@ -703,7 +703,7 @@ foreach(FILE ${ADDON_FILES})
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include)
   if(ADDON STREQUAL "doom2016")
     find_package(Vulkan REQUIRED)
-    target_link_libraries(${ADDON} PRIVATE Vulkan::Vulkan bcrypt)
+    target_link_libraries(${ADDON} PRIVATE Vulkan::Vulkan)
   endif()
   #target_compile_definitions(${ADDON} PRIVATE _UNICODE)
   set_target_properties(${ADDON}

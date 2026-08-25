@@ -122,12 +122,14 @@ def main() -> None:
     assert deploy["reshade_version_range"] == ">=6.8.0 <6.9.0"
     assert deploy["game_exe"] == "DOOMx64vk.exe"
     assert deploy["api"] == "vulkan"
-    assert deploy["platform"] == "gog"
+    assert "platform" not in deploy
+    assert deploy["steam_appid"] == 379720
     assert deploy["gog_product_id"] == 1390579243
     assert deploy["architecture"] == ["x64"]
     notes = "\n".join(metadata["notes"])
     assert "A32DF8FFA042090F14FE0A200F1C5D7DDDF9C947FAC223916C252F826F1ECF11" in notes
-    assert "Steam and OpenGL are not supported" in notes
+    assert "user-confirmed Steam Vulkan build" in notes
+    assert "OpenGL is not supported" in notes
     assert "Preset Off" in notes and "restart" in notes
     assert "VK_EXT_hdr_metadata" in notes
     assert "PsychoV-25" in notes and "provisional" in notes

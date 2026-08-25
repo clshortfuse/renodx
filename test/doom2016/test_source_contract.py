@@ -157,7 +157,7 @@ def main() -> None:
             "P25 NRG include guard was not corrected game-locally")
 
     p30 = normalized_bytes(source_dir / "psychov_test30.hlsli")
-    require(P30_ORIGINAL_SHA256 in (source_dir / "README.md").read_text(encoding="utf-8"),
+    require(P30_ORIGINAL_SHA256 in supported,
             "PsychoV-30 supplied raw source SHA is not recorded")
     require(sha256(reconstruct_p30_source(p30)) == P30_ORIGINAL_NORMALIZED_SHA256,
             "PsychoV-30 changed beyond the approved game-local include path")
@@ -180,9 +180,15 @@ def main() -> None:
             and "vkGetDeviceProcAddr" in cache
             and "HookCreateShaderModule" in cache,
             "early native Vulkan shader/pipeline hooks are missing")
-    require("IsSupportedExecutable()" in cache
-            and "kExecutableSize = 101520384ull" in supported,
-            "native Vulkan variants are not gated to the inspected executable")
+    require("IsSupportedExecutable" not in cache
+            and "CheckSupportedExecutable" not in cache
+            and "HashFileSha256" not in cache
+            and "executable identity mismatch" not in cache,
+            "Steam/GOG production must not be blocked by executable identity")
+    require("kPostProcessShaderCrc" in cache
+            and "kOutputShaderCrc" in cache
+            and "shader_hashes[index]" in cache,
+            "native Vulkan variants must remain shader-CRC gated")
     require("PFN_vkDestroyPipeline" in cache
             and "data->destroy_pipeline" in cache,
             "native variant destruction must flow through ReShade tracking")
