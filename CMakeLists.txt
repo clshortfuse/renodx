@@ -328,6 +328,12 @@ function(build_shader_target ADDON ADDON_PATH)
     if(SHADER_SLANG_NDEBUG_FLAG)
       set(SHADER_FLAGS ${SHADER_FLAGS} ${SHADER_SLANG_NDEBUG_FLAG})
     endif()
+    unset(SLANG_SPIRV_TARGET_FLAGS)
+    if(ADDON STREQUAL "doom2016")
+      # The inspected DOOM build creates a Vulkan 1.1 device, whose shader
+      # environment accepts at most SPIR-V 1.3. Slang otherwise emits 1.5.
+      set(SLANG_SPIRV_TARGET_FLAGS -profile glsl_450+spirv_1_3)
+    endif()
 
     if(SHADER_TARGET AND (SHADER_HASH OR SHADER_NAME))
       if(SHADER_TARGET STREQUAL "frag" OR SHADER_TARGET STREQUAL "vert" OR SHADER_TARGET STREQUAL "comp")
@@ -340,13 +346,13 @@ function(build_shader_target ADDON ADDON_PATH)
           set(SHADER_STAGE "compute")
         endif()
         set(SPIRV_COMPILE_COMMAND
-          ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_HASH}.spv)
+          ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv ${SLANG_SPIRV_TARGET_FLAGS} -o ${EMBED_FOLDER}/${SHADER_HASH}.spv)
 
         if(SHADER_HASH)
           add_stage_spirv_shader(${SHADER_HASH})
         else()
           set(SPIRV_COMPILE_COMMAND
-            ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv -o ${EMBED_FOLDER}/${SHADER_NAME}.spv)
+            ${SHADER_COMPILER} ${FILE} -stage ${SHADER_STAGE} ${SHADER_FLAGS} -target spirv ${SLANG_SPIRV_TARGET_FLAGS} -o ${EMBED_FOLDER}/${SHADER_NAME}.spv)
           add_stage_spirv_shader(${SHADER_NAME})
         endif()
       else()
@@ -675,6 +681,10 @@ file(GLOB ADDON_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/**/**/ad
 foreach(FILE ${ADDON_FILES})
   cmake_path(GET FILE PARENT_PATH ADDON_PATH)
   cmake_path(GET ADDON_PATH FILENAME ADDON) # treat as filename
+  if(ADDON STREQUAL "doom2016" AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(STATUS "Skipping ${ADDON}: 64-bit only")
+    continue()
+  endif()
   add_compile_options(/bigobj)
   add_compile_definitions(NOMINMAX)
   add_library(${ADDON} MODULE ${FILE})
@@ -691,6 +701,10 @@ foreach(FILE ${ADDON_FILES})
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/DLSS/include)
   target_include_directories(${ADDON} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/reshade)
   target_include_directories(${ADDON} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include)
+  if(ADDON STREQUAL "doom2016")
+    find_package(Vulkan REQUIRED)
+    target_link_libraries(${ADDON} PRIVATE Vulkan::Vulkan bcrypt)
+  endif()
   #target_compile_definitions(${ADDON} PRIVATE _UNICODE)
   set_target_properties(${ADDON}
     PROPERTIES
@@ -699,6 +713,9 @@ foreach(FILE ${ADDON_FILES})
   )
 endforeach()
 
+if(RENODX_BUILD_TESTS AND TARGET doom2016-shaders)
+  add_dependencies(renodx_test_suites doom2016-shaders)
+endif()
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
 

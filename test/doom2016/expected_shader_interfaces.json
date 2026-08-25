@@ -1,0 +1,72 @@
+{
+  "postprocess": {
+    "stage": "frag",
+    "push": true,
+    "files": [
+      "postprocess_vanilla.spv",
+      "postprocess_psychov17.spv",
+      "postprocess_psychov22.spv",
+      "postprocess_psychov24.spv",
+      "postprocess_psychov25.spv",
+      "postprocess_psychov30.spv",
+      "postprocess_renodrt.spv"
+    ],
+    "inputs": {"2": "vec4"},
+    "outputs": {"0": "vec4", "1": "vec4"},
+    "ubos": {"0:2": 528, "0:3": 112},
+    "textures": [
+      "0:4", "0:5", "0:6", "0:7", "0:8",
+      "0:9", "0:10", "0:11", "0:12", "0:13",
+      "0:14", "0:15", "0:16", "0:17", "0:18"
+    ]
+  },
+  "output": {
+    "stage": "frag",
+    "push": true,
+    "files": ["viewcolor_output.spv"],
+    "inputs": {},
+    "outputs": {"0": "vec4"},
+    "ubos": {"0:0": 48, "0:1": 48},
+    "textures": ["0:2", "0:3"]
+  },
+  "proxy_vertex": {
+    "stage": "vert",
+    "push": false,
+    "files": ["swap_chain_proxy_vertex_shader.spv"],
+    "inputs": {},
+    "outputs": {"0": "vec2"},
+    "ubos": {},
+    "textures": [],
+    "separate_images": [],
+    "separate_samplers": []
+  },
+  "proxy_pixel": {
+    "stage": "frag",
+    "push": false,
+    "files": ["swap_chain_proxy_pixel_shader.spv"],
+    "inputs": {"0": "vec2"},
+    "outputs": {"0": "vec4"},
+    "ubos": {},
+    "textures": [],
+    "separate_images": ["0:0"],
+    "separate_samplers": ["0:1"]
+  },
+  "push_constants": [
+    ["peak_white_nits", 0],
+    ["diffuse_white_nits", 4],
+    ["graphics_white_nits", 8],
+    ["output_mode", 12],
+    ["tone_map_type", 16],
+    ["tone_map_exposure", 20],
+    ["tone_map_highlights", 24],
+    ["tone_map_shadows", 28],
+    ["tone_map_contrast", 32],
+    ["tone_map_saturation", 36],
+    ["tone_map_highlight_saturation", 40],
+    ["psychov_cone_response", 44],
+    ["psychov_exposure_match", 48],
+    ["psychov_vanilla_slope", 52],
+    ["scene_path_active", 56],
+    ["scene_bt2020", 60]
+  ]
+}
