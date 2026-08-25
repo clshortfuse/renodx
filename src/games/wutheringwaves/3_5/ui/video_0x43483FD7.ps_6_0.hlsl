@@ -1347,10 +1347,6 @@ float4 main(
     _353 = _178;
   }
 
-  
-  float3 _video_hdr = AutoHDRVideo(float3(_351, _352, _353), SV_Position.xy);
-
-
   SV_Target.x = (-0.0f - min((-0.0f - _351), 0.0f));
   SV_Target.y = (-0.0f - min((-0.0f - _352), 0.0f));
   SV_Target.z = (-0.0f - min((-0.0f - _353), 0.0f));
