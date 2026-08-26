@@ -1374,9 +1374,24 @@ float4 main(
       (SV_Position.y - View_2144.y) * View_2160.w
   );
 
-  bool isLocation = (local.x <= 0.25f) && (local.y >= 0.975f);
-  bool isUuid = (local.x >= 0.85f) && (local.y >= 0.97f);
-  bool isPing = (local.x >= 0.925f) && (local.y <= 0.1f);
+  // Letterbox-aware local.y, shared by the region-hiding logic.
+  bool isLetterboxed = (View_2128.y < 0.9f);
+  float local_y = local.y;
+  float content_scale = 1.0f;
+  float letterbox_offset = 0.0f;
+  if (isLetterboxed) {
+    content_scale = View_2128.y;
+    letterbox_offset = (1.0f - content_scale) * 0.5f;
+    local_y = (local.y - letterbox_offset) / content_scale;
+  }
+
+  // Thresholds tuned per-mode: in fullscreen the status text sits at the very
+  // screen edges (0.97+), but in letterbox the remap compresses it to ~0.90+.
+  float bottom_threshold = isLetterboxed ? 0.95f : 0.975f;
+  float top_threshold = isLetterboxed ? 0.15f : 0.10f;
+  bool isLocation = (local.x <= 0.25f) && (local_y >= bottom_threshold);
+  bool isUuid = (local.x >= 0.85f) && (local_y >= bottom_threshold);
+  bool isPing = (local.x >= 0.925f) && (local_y <= top_threshold);
 
   if (isLocation || isUuid || isPing) {
     SV_Target.w *= STATUS_TEXT_OPACITY;
