@@ -1006,6 +1006,16 @@ renodx::utils::settings::Settings info_settings = {
         },
     },
     new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "spiwar's Ko-Fi",
+        .section = "Links",
+        .group = "button-line-2",
+        .tint = 0xFF5A16,
+        .on_change = []() {
+          renodx::utils::platform::LaunchURL("https://ko-fi.com/spiwar");
+        },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::TEXT,
         .label = std::string("Build: ") + renodx::utils::date::ISO_DATE_TIME,
         .section = "About",
