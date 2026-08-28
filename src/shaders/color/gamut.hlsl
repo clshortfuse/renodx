@@ -528,7 +528,8 @@ float ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromWeightedInput(
     float2 bound_r,
     float2 bound_g,
     float2 bound_b,
-    float strength) {
+    float strength,
+    bool compress_in_gamut = false) {
   float3 lms_weighted_clamped = ClampWeightedLMSToCIE1702(max(lms_weighted_input, 0));
   float3 mb = renodx::color::macleod_boynton::from::WeightedLMS(lms_weighted_clamped);
   float y_mb = mb.z;
@@ -553,14 +554,15 @@ float ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromWeightedInput(
 
   float t_hard = saturate(t_peak);
   float t_soft = NeutwoScaleFromRayT(min(t_peak, t_clip), t_clip);
-  float soft_mix = saturate(strength) * SoftCompressionActivationFromRayT(t_peak);
+  float soft_mix = saturate(strength) * (compress_in_gamut ? 1.f : SoftCompressionActivationFromRayT(t_peak));
   return lerp(t_hard, t_soft, soft_mix);
 }
 
 float ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromWeightedInput(
     float3 lms_weighted_input,
     float3x3 bound_rgb_to_lms_weighted_mat,
-    float strength) {
+    float strength,
+    bool compress_in_gamut = false) {
   float2 bound_r;
   float2 bound_g;
   float2 bound_b;
@@ -570,14 +572,16 @@ float ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromWeightedInput(
       bound_r,
       bound_g,
       bound_b,
-      strength);
+      strength,
+      compress_in_gamut);
 }
 
 float ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromAdaptiveWeightedInput(
     float3 lms_weighted_input,
     float3 current_adaptive_state_lms,
     float3x3 bound_rgb_to_lms_weighted_mat,
-    float strength) {
+    float strength,
+    bool compress_in_gamut = false) {
   float2 bound_r;
   float2 bound_g;
   float2 bound_b;
@@ -592,7 +596,8 @@ float ComputeGamutCompressionScaleWeightedLMSCoreRGBBoundFromAdaptiveWeightedInp
       bound_r,
       bound_g,
       bound_b,
-      strength);
+      strength,
+      compress_in_gamut);
 }
 
 float3 CompressWeightedLMSFromCIE1702White(float3 lms_weighted_input, float compression_scale) {
@@ -637,7 +642,8 @@ float3 DecompressWeightedLMSFromCIE1702White(float3 lms_weighted_input, float co
 float ComputeGamutCompressionScaleBT709AdaptiveD65(
     float3 bt709_input,
     float3 current_adaptive_state_lms,
-    float strength = 1.f) {
+    float strength = 1.f,
+    bool compress_in_gamut = false) {
   float3 lms_input = renodx::color::lms::from::BT709(bt709_input);
   float3 lms_weighted_relative = renodx::math::DivideSafe(
       renodx::color::macleod_boynton::WeighLMS(lms_input),
@@ -647,7 +653,8 @@ float ComputeGamutCompressionScaleBT709AdaptiveD65(
       lms_weighted_relative,
       current_adaptive_state_lms,
       renodx::color::macleod_boynton::BT709_TO_LMS_WEIGHTED_MAT,
-      strength);
+      strength,
+      compress_in_gamut);
 }
 
 float3 GamutCompressBT709AdaptiveD65(
