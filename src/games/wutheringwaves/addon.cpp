@@ -850,6 +850,19 @@ renodx::utils::settings::Settings settings = {
       .tooltip = "Boosts sun, moon, and glow brightness in the skybox.",
       .tint = tint_post_processing,
     },
+    new renodx::utils::settings::Setting{
+      .key = "FilmGrain",
+      .binding = &shader_injection.wuwa_grain,
+      .default_value = 50.f,
+      .label = "Film Grain",
+      .section = "Post-Processing",
+      .tooltip = "Applies film grain to the final image.",
+      .tint = tint_post_processing,
+      .min = 0.f,
+      .max = 100.f,
+      .parse = [](float value) { return value * 0.02f; },
+      .is_enabled = []() { return shader_injection.film_grain != 0.f; },
+    },
 };
 
 enum Preset : uint8_t {

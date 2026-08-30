@@ -260,28 +260,39 @@ static inline void ApplyExtendedFromCoeffs(
 
 }
 
-static inline float3 ApplyDisplayMap(float3 input_bt709) {
-  if (RENODX_TONE_MAP_TYPE == 0.f) {
-    return renodx::draw::RenderIntermediatePass(input_bt709);
+static inline float3 ApplyFinalFilmGrain(float3 output, float2 position) {
+  if (RENODX_FILM_GRAIN > 0.f) {
+    const float2 grain_xy = renodx::random::Hash33(float3(position, CUSTOM_RANDOM)).xy;
+    output = renodx::effects::ApplyFilmGrain(
+        output, grain_xy, CUSTOM_RANDOM, RENODX_WUWA_GRAIN * 0.03f);
   }
-
-  // Apply hue correction cause the game still seems to need it.
-  input_bt709 = ApplyHueCorrection(input_bt709);
-
-
-  if (RENODX_TONE_MAP_SCALING != 0.f) {
-    return renodx::draw::RenderIntermediatePass(input_bt709);
-  }
-
-  // N2 Display-mapping to peak if on extended path
-  float3 input_bt2020 = renodx::color::bt2020::from::BT709(max(0.f, input_bt709));
-  float3 mapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(input_bt2020, WUWA_PEAK_SCALING);
-  float3 mapped_bt709 = renodx::color::bt709::from::BT2020(mapped_bt2020);
-  return renodx::draw::RenderIntermediatePass(mapped_bt709);
+  return output;
 }
 
-static inline float3 InvertAndApplyDisplayMap(float3 input_bt709) {
-  return ApplyDisplayMap(renodx::draw::InvertIntermediatePass(input_bt709));
+static inline float3 ApplyDisplayMap(float3 input_bt709, float2 position = float2(0.f, 0.f)) {
+  float3 output;
+  if (RENODX_TONE_MAP_TYPE == 0.f) {
+    output = renodx::draw::RenderIntermediatePass(input_bt709);
+  } else {
+    // Apply hue correction cause the game still seems to need it.
+    input_bt709 = ApplyHueCorrection(input_bt709);
+
+    if (RENODX_TONE_MAP_SCALING != 0.f) {
+      output = renodx::draw::RenderIntermediatePass(input_bt709);
+    } else {
+      // N2 Display-mapping to peak if on extended path
+      float3 input_bt2020 = renodx::color::bt2020::from::BT709(max(0.f, input_bt709));
+      float3 mapped_bt2020 = renodx::tonemap::neutwo::MaxChannel(input_bt2020, WUWA_PEAK_SCALING);
+      float3 mapped_bt709 = renodx::color::bt709::from::BT2020(mapped_bt2020);
+      output = renodx::draw::RenderIntermediatePass(mapped_bt709);
+    }
+  }
+
+  return ApplyFinalFilmGrain(output, position);
+}
+
+static inline float3 InvertAndApplyDisplayMap(float3 input_bt709, float2 position = float2(0.f, 0.f)) {
+  return ApplyDisplayMap(renodx::draw::InvertIntermediatePass(input_bt709), position);
 }
 
 }
