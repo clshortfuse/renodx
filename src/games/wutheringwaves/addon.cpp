@@ -1163,8 +1163,8 @@ void AddAdvancedSettings() {
   renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
       .old_format = reshade::api::format::b8g8r8a8_typeless,
       .new_format = reshade::api::format::r16g16b16a16_float,
-      .dimensions = {.width = 2560, .height = 1080, .depth = -1},
       .use_resource_view_cloning = true,
+      .dimensions = {.width = 2560, .height = 1080, .depth = -1},
       .usage_include = reshade::api::resource_usage::render_target,
   });
 
