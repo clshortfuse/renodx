@@ -860,8 +860,8 @@ renodx::utils::settings::Settings settings = {
       .tint = tint_post_processing,
       .min = 0.f,
       .max = 100.f,
-      .parse = [](float value) { return value * 0.02f; },
       .is_enabled = []() { return shader_injection.film_grain != 0.f; },
+      .parse = [](float value) { return value * 0.02f; },
     },
 };
 
