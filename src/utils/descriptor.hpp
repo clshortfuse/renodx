@@ -82,6 +82,21 @@ struct __declspec(uuid("018fa2c9-7a8b-76dc-bc84-87c53574223f")) DeviceData {
   std::shared_mutex mutex;
 };
 
+static bool TryGetDescriptorHeapOffset(
+    reshade::api::device* device,
+    reshade::api::descriptor_table table,
+    uint32_t binding,
+    uint32_t array_offset,
+    reshade::api::descriptor_heap* heap,
+    uint32_t* offset) {
+  if (device == nullptr || heap == nullptr || offset == nullptr) return false;
+
+  *heap = {0};
+  *offset = 0u;
+  device->get_descriptor_heap_offset(table, binding, array_offset, heap, offset);
+  return heap->handle != 0u;
+}
+
 static reshade::api::resource_view GetResourceViewFromDescriptorUpdate(
     const reshade::api::descriptor_table_update update,
     uint32_t index = 0) {
@@ -158,6 +173,7 @@ static bool OnUpdateDescriptorTables(
     const reshade::api::descriptor_table_update* updates) {
   if (count == 0u) return false;
   if (!shared.data->trace_descriptor_tables) return false;
+  assert(device != nullptr);
 
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return false;
@@ -177,9 +193,10 @@ static bool OnUpdateDescriptorTables(
     }
 #endif
 
-    uint32_t offset;
-    reshade::api::descriptor_heap heap;
+    uint32_t offset = 0u;
+    reshade::api::descriptor_heap heap = {0};
     device->get_descriptor_heap_offset(update.table, update.binding, update.array_offset, &heap, &offset);
+    assert(heap.handle != 0u);
 
 #ifdef DEBUG_LEVEL_2
     {
@@ -268,6 +285,7 @@ static bool OnCopyDescriptorTables(
     const reshade::api::descriptor_table_copy* copies) {
   if (count == 0u) return false;
   if (!shared.data->trace_descriptor_tables) return false;
+  assert(device != nullptr);
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return false;
   const std::unique_lock lock(data->mutex);
@@ -289,21 +307,22 @@ static bool OnCopyDescriptorTables(
     }
 #endif
 
-    uint32_t src_offset;
-    reshade::api::descriptor_heap src_heap;
+    uint32_t src_offset = 0u;
+    reshade::api::descriptor_heap src_heap = {0};
     device->get_descriptor_heap_offset(
         copy.source_table,
         copy.source_binding,
         copy.source_array_offset,
         &src_heap, &src_offset);
 
-    uint32_t dst_offset;
-    reshade::api::descriptor_heap dst_heap;
+    uint32_t dst_offset = 0u;
+    reshade::api::descriptor_heap dst_heap = {0};
     device->get_descriptor_heap_offset(
         copy.dest_table,
         copy.dest_binding,
         copy.dest_array_offset,
         &dst_heap, &dst_offset);
+    assert(src_heap.handle != 0u && dst_heap.handle != 0u);
 #ifdef DEBUG_LEVEL_2
     std::stringstream s;
     s << "utils::descriptor::OnCopyDescriptorTables(copy descriptor table entry: "
@@ -383,8 +402,11 @@ static reshade::api::descriptor_table_update* CloneDescriptorTableUpdates(
       case reshade::api::descriptor_type::constant_buffer_with_dynamic_offset:
       case reshade::api::descriptor_type::shader_storage_buffer_with_dynamic_offset:
 #else
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch"
       case static_cast<reshade::api::descriptor_type>(8u):  // VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
       case static_cast<reshade::api::descriptor_type>(9u):  // VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC
+#pragma clang diagnostic pop
 #endif
         descriptor_size = sizeof(reshade::api::buffer_range) * update.count;
         break;
@@ -524,8 +546,8 @@ static void Use(DWORD fdw_reason) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (shared.RegisterModule([](SharedData& data) {
-        data.trace_descriptor_tables = data.trace_descriptor_tables || trace_descriptor_tables;
-      })) {
+            data.trace_descriptor_tables = data.trace_descriptor_tables || trace_descriptor_tables;
+          })) {
         reshade::log::message(reshade::log::level::info, "DescriptorTableUtil attached.");
       }
       shared.RegisterEvent<reshade::addon_event::init_device>(OnInitDevice);
