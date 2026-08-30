@@ -1225,7 +1225,7 @@ float4 main(
   SV_Target.x = ((cb0_108x * (lerp(_1045, _1048, _1012))) + _994);
   SV_Target.y = ((cb0_108x * (lerp(_1046, _1049, _1012))) + _995);
   SV_Target.z = (((lerp(_1047, _1050, _1012)) * cb0_108x) + _996);
-  SV_Target.rgb = wuwa::ApplyDisplayMap(SV_Target.rgb);
+  SV_Target.rgb = wuwa::ApplyDisplayMap(SV_Target.rgb, SV_Position.xy);
   SV_Target.w = (dot(float3(_909, _908, _907), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f)));
   CLAMP_IF_SDR(SV_Target.w);
   return SV_Target;

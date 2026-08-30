@@ -990,7 +990,7 @@ float4 main(
   SV_Target.x = _723;
   SV_Target.y = _724;
   SV_Target.z = _725;
-  SV_Target.xyz = wuwa::InvertAndApplyDisplayMap(SV_Target.xyz);
+  SV_Target.xyz = wuwa::InvertAndApplyDisplayMap(SV_Target.xyz, SV_Position.xy);
   SV_Target.w = (dot(float3(_638, _637, _636), float3(0.29899999499320984f, 0.5870000123977661f, 0.11400000005960464f)));
   CLAMP_IF_SDR(SV_Target.w);
   return SV_Target;

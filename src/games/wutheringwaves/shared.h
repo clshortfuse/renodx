@@ -44,7 +44,7 @@ struct ShaderInjectData {
   float custom_random;
   float wuwa_tonemap_strength;
   float wuwa_lut_strength;
-  float custom_random_pad2;
+  float wuwa_grain;
 
   float hans_mode;
   float film_grain;
@@ -139,7 +139,7 @@ cbuffer injected_buffer : register(b13) {
 #define RENODX_WUWA_TM                           shader_injection.wuwa_tonemapper
 #define RENODX_WUWA_LUT_LIGHTNESS                shader_injection.wuwa_lut_lightness
 #define RENODX_WUWA_BLOOM                        shader_injection.wuwa_bloom
-#define RENODX_WUWA_GRAIN                        1.f
+#define RENODX_WUWA_GRAIN                        shader_injection.wuwa_grain
 #define RENODX_WUWA_HDR_SUN                      shader_injection.wuwa_hdr_sun
 
 #define TEXT_OPACITY                             shader_injection.text_opacity * shader_injection.ui_visibility

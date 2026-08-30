@@ -16,8 +16,8 @@ static const float HANS_RESPONSE_GAMMA = 0.8f;  // Shapes the map response
 static const float HANS_FLOOR = 0.20f;          // Minimum boost availability outside highlights
 static const float HANS_STRENGTH = 1.0f;        // Overall HAnS blend strength.
 
-// Film grain 
-static const float GRAIN_STRENGTH = 0.02f;  // very sensitive, go up to 0.03-0.06
+// Film grain
+static const float GRAIN_STRENGTH = 0.03f;  // very sensitive, go up to 0.03-0.06
 
 // ---- Deband tuning ----
 
