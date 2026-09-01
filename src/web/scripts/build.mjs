@@ -3,7 +3,7 @@
  * Build script for RenoDX web UI
  * Copies source files to githubrelease/ for deployment
  */
-import { copyFileSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { copyFileSync, mkdirSync, readdirSync, rmSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -23,6 +23,7 @@ copyFileSync(join(srcDir, 'index.html'), join(outDir, 'index.html'));
 
 console.log('Copying script.mjs as app.mjs...');
 copyFileSync(join(srcDir, 'script.mjs'), join(outDir, 'app.mjs'));
+rmSync(join(outDir, 'icon-aliases.js'), { force: true });
 
 // Copy static assets
 console.log('Copying static assets...');
