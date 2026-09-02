@@ -4414,7 +4414,8 @@ void OnInitSwapchain(reshade::api::swapchain* swapchain, bool resize) {
     }
   }
 
-  if (renodx::utils::device_proxy::shared.data->use_device_proxy.load(std::memory_order_relaxed)
+  if (renodx::utils::device_proxy::shared.data != nullptr
+      && renodx::utils::device_proxy::shared.data->use_device_proxy.load(std::memory_order_relaxed)
       && !renodx::utils::device_proxy::shared.data->remove_device_proxy.load(std::memory_order_relaxed)
       && GetSelectedDeviceData() == device_data) {
     (void)UpdateDeviceProxyHwndOverride(device_data);
@@ -4440,7 +4441,8 @@ void OnDestroySwapchain(reshade::api::swapchain* swapchain, bool resize) {
     }
   }
 
-  if (renodx::utils::device_proxy::shared.data->use_device_proxy.load(std::memory_order_relaxed)
+  if (renodx::utils::device_proxy::shared.data != nullptr
+      && renodx::utils::device_proxy::shared.data->use_device_proxy.load(std::memory_order_relaxed)
       && !renodx::utils::device_proxy::shared.data->remove_device_proxy.load(std::memory_order_relaxed)
       && GetSelectedDeviceData() == device_data) {
     (void)UpdateDeviceProxyHwndOverride(device_data);
@@ -9362,11 +9364,9 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::shader::dump::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
-      renodx::utils::device_upgrade::Use(fdw_reason);
-      renodx::utils::device_proxy::Use(fdw_reason);
-      renodx::utils::resource::replace::Use(fdw_reason);
-      renodx::utils::resource::replace::SetEnabled(true);
-      renodx::utils::resource::replace::SetProvider(LoadBootTextureReplacement);
+      // Detroit already owns the Vulkan output path. This capture-only DevKit
+      // keeps passive tracking/snapshot services and deliberately avoids the
+      // mutating device-upgrade, proxy and resource-replacement subsystems.
       renodx::utils::resource::Use(fdw_reason);
 
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
@@ -9407,10 +9407,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       renodx::utils::shader::Use(fdw_reason);
       renodx::utils::shader::dump::Use(fdw_reason);
       renodx::utils::swapchain::Use(fdw_reason);
-      renodx::utils::device_upgrade::Use(fdw_reason);
-      renodx::utils::device_proxy::Use(fdw_reason);
-      renodx::utils::resource::replace::Use(fdw_reason);
-      renodx::utils::resource::replace::SetProvider({});
       renodx::utils::resource::Use(fdw_reason);
 
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);

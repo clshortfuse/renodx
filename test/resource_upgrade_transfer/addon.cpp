@@ -37,33 +37,55 @@ void OnInitDevice(reshade::api::device* device) {
 
 bool OnInspectCopyTextureToBuffer(
     reshade::api::command_list* cmd_list,
-  reshade::api::resource source,
-  uint32_t source_subresource,
-  const reshade::api::subresource_box* source_box,
+    reshade::api::resource source,
+    uint32_t source_subresource,
+    const reshade::api::subresource_box* source_box,
     reshade::api::resource dest,
     uint64_t dest_offset,
-  uint32_t row_length,
-  uint32_t slice_height) {
+    uint32_t row_length,
+    uint32_t slice_height) {
   if (GetEnvironmentVariableW(L"RENODX_TRANSFER_INSPECT_UPGRADED", nullptr, 0u) == 0u) return false;
 
   renodx::utils::resource::upgrade::CopyRedirectTexture source_texture;
   if (!renodx::utils::resource::upgrade::GetCopyRedirectTexture(source, &source_texture)
-    || source_texture.clone.handle == 0u) {
+      || source_texture.clone.handle == 0u) {
     return false;
   }
 
   cmd_list->copy_texture_to_buffer(
-    source_texture.clone,
-    source_subresource,
-    source_box,
+      source_texture.clone,
+      source_subresource,
+      source_box,
       dest,
       dest_offset,
-    row_length,
-    slice_height);
+      row_length,
+      slice_height);
   reshade::log::message(
       reshade::log::level::info,
-    "Copied upgraded texture into the application buffer for test inspection.");
+      "Copied upgraded texture into the application buffer for test inspection.");
   return false;
+}
+
+void OnObserveAlphaSwizzleView(
+    reshade::api::device* device,
+    reshade::api::resource resource,
+    reshade::api::resource_usage,
+    const reshade::api::resource_view_desc& desc,
+    reshade::api::resource_view) {
+  if (GetEnvironmentVariableW(L"RENODX_TRANSFER_ALPHA_SWIZZLE_VIEW", nullptr, 0u) == 0u
+      || device->get_api() != reshade::api::device_api::vulkan
+      || desc.format != reshade::api::format::a8_unorm) {
+    return;
+  }
+
+  const auto resource_desc = device->get_resource_desc(resource);
+  if (resource_desc.texture.format == reshade::api::format::r8_unorm
+      && resource_desc.texture.width == 3u
+      && resource_desc.texture.height == 5u) {
+    reshade::log::message(
+        reshade::log::level::info,
+        "Observed preserved Vulkan alpha-swizzle view descriptor.");
+  }
 }
 
 }  // namespace
@@ -87,8 +109,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD reason, LPVOID) {
       renodx::utils::resource::upgrade::Use(reason);
       reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
       reshade::register_event<reshade::addon_event::copy_texture_to_buffer>(OnInspectCopyTextureToBuffer);
+      reshade::register_event<reshade::addon_event::init_resource_view>(OnObserveAlphaSwizzleView);
       break;
     case DLL_PROCESS_DETACH:
+      reshade::unregister_event<reshade::addon_event::init_resource_view>(OnObserveAlphaSwizzleView);
       reshade::unregister_event<reshade::addon_event::copy_texture_to_buffer>(OnInspectCopyTextureToBuffer);
       reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
       renodx::utils::resource::upgrade::Use(reason);

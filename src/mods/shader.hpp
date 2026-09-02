@@ -182,6 +182,8 @@ static thread_local std::unordered_map<uint64_t, std::vector<std::vector<reshade
 
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
+// Reuse the injection range owned by another pinned RenoDX add-on.
+static bool use_shared_pipeline_injection = false;
 static bool use_pipeline_layout_cloning = false;
 static bool manual_shader_scheduling = false;
 static bool force_pipeline_cloning = false;
@@ -2217,8 +2219,10 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
       attached = true;
       reshade::log::message(reshade::log::level::info, "mods::shader attached.");
 
-      reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+      if (!use_shared_pipeline_injection) {
+        reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
+        reshade::register_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+      }
 
       // Copy from wrapper's native map into runtime mutable map
       custom_shaders.clear();
@@ -2285,12 +2289,13 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
         reshade::log::message(reshade::log::level::info, s.str().c_str());
       }
 
-      if (mods::shader::use_pipeline_layout_cloning || (new_injections != nullptr)) {
-        if (new_injections != nullptr) {
-          shader_injection_size = sizeof(T) / sizeof(uint32_t);
-          shader_injection = reinterpret_cast<float*>(new_injections);
-        }
+      if (new_injections != nullptr) {
+        shader_injection_size = sizeof(T) / sizeof(uint32_t);
+        shader_injection = reinterpret_cast<float*>(new_injections);
+      }
 
+      if (!use_shared_pipeline_injection
+          && (mods::shader::use_pipeline_layout_cloning || (new_injections != nullptr))) {
         if (!mods::shader::use_pipeline_layout_cloning) {
           reshade::register_event<reshade::addon_event::create_pipeline_layout>(OnCreatePipelineLayout);
         }
@@ -2315,22 +2320,26 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
     case DLL_PROCESS_DETACH:
       if (!attached) return;
       attached = false;
-      reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
-      reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+      if (!use_shared_pipeline_injection) {
+        reshade::unregister_event<reshade::addon_event::init_device>(OnInitDevice);
+        reshade::unregister_event<reshade::addon_event::destroy_device>(OnDestroyDevice);
+      }
 
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
 
       renodx::utils::command_action::Unregister(OnCommandAction);
       renodx::utils::command_action::Use(fdw_reason);
 
-      reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(OnCreatePipelineLayout);
+      if (!use_shared_pipeline_injection) {
+        reshade::unregister_event<reshade::addon_event::create_pipeline_layout>(OnCreatePipelineLayout);
 
-      reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
-      reshade::unregister_event<reshade::addon_event::destroy_pipeline_layout>(OnDestroyPipelineLayout);
+        reshade::unregister_event<reshade::addon_event::init_pipeline_layout>(OnInitPipelineLayout);
+        reshade::unregister_event<reshade::addon_event::destroy_pipeline_layout>(OnDestroyPipelineLayout);
 
-      reshade::unregister_event<reshade::addon_event::push_constants>(OnPushConstants);
-      reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
-      reshade::unregister_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
+        reshade::unregister_event<reshade::addon_event::push_constants>(OnPushConstants);
+        reshade::unregister_event<reshade::addon_event::push_descriptors>(OnPushDescriptors);
+        reshade::unregister_event<reshade::addon_event::bind_descriptor_tables>(OnBindDescriptorTables);
+      }
 
       break;
   }

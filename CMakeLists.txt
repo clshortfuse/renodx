@@ -54,6 +54,10 @@ endif()
 
 project(renodx VERSION 0.1.0 LANGUAGES CXX)
 
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  add_subdirectory(src/utils/dlss)
+endif()
+
 option(RENODX_BUILD_TESTS "Build D3D12 regression tests" OFF)
 if(RENODX_BUILD_TESTS)
   enable_testing()
@@ -138,6 +142,7 @@ endfunction()
 function(build_shader_target ADDON ADDON_PATH)
   set(EMBED_FOLDER ${CMAKE_CURRENT_BINARY_DIR}/${ADDON}.include/embed)
   unset(SHADER_BINARIES)
+  unset(SHADER_HEADER_FILES)
   macro(add_stage_spirv_shader OUTPUT_STEM)
     list(FIND SHADER_BINARIES ${EMBED_FOLDER}/${OUTPUT_STEM}.spv SHADER_BINARY_INDEX)
     if(SHADER_BINARY_INDEX EQUAL -1)
@@ -164,6 +169,7 @@ function(build_shader_target ADDON ADDON_PATH)
     list(APPEND SHADER_BINARIES ${EMBED_FOLDER}/${OUTPUT_STEM}.cso)
   endmacro()
   file(GLOB_RECURSE SHADER_HLSL_SOURCES CONFIGURE_DEPENDS ${ADDON_PATH}/*.hlsl)
+  list(FILTER SHADER_HLSL_SOURCES INCLUDE REGEX "^${ADDON_PATH}/")
   foreach(FILE ${SHADER_HLSL_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
@@ -306,6 +312,7 @@ function(build_shader_target ADDON ADDON_PATH)
   endforeach()
 
   file(GLOB_RECURSE SHADER_SLANG_SOURCES CONFIGURE_DEPENDS ${ADDON_PATH}/*.slang)
+  list(FILTER SHADER_SLANG_SOURCES INCLUDE REGEX "^${ADDON_PATH}/")
   foreach(FILE ${SHADER_SLANG_SOURCES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
@@ -383,6 +390,7 @@ function(build_shader_target ADDON ADDON_PATH)
   endforeach()
 
   file(GLOB_RECURSE SHADER_CSO_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.cso)
+  list(FILTER SHADER_CSO_FILES INCLUDE REGEX "^${ADDON_PATH}/")
   foreach(FILE ${SHADER_CSO_FILES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
@@ -404,6 +412,7 @@ function(build_shader_target ADDON ADDON_PATH)
   endforeach()
 
   file(GLOB_RECURSE SHADER_GLSL_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.glsl)
+  list(FILTER SHADER_GLSL_FILES INCLUDE REGEX "^${ADDON_PATH}/")
   unset(GLSL_OUTPUT_STEMS)
   foreach(FILE ${SHADER_GLSL_FILES})
     cmake_path(GET FILE FILENAME FILENAME)
@@ -472,8 +481,12 @@ function(build_shader_target ADDON ADDON_PATH)
     endif()
 
     if(GLSL_BACKEND STREQUAL "vk")
+      set(GLSL_OPTIMIZATION_ARGS -O)
+      if(ADDON MATCHES "^detroitbecomehuman" AND GLSL_OUTPUT_STEM STREQUAL "temporal_aux")
+        set(GLSL_OPTIMIZATION_ARGS -Os)
+      endif()
       set(SPIRV_COMPILE_COMMAND
-        ${GLSLANG_BIN} -V --target-env vulkan1.3 -S ${SHADER_STAGE} -O
+        ${GLSLANG_BIN} -V --target-env vulkan1.3 -S ${SHADER_STAGE} ${GLSL_OPTIMIZATION_ARGS}
         ${SHADER_GLSLANG_NDEBUG_FLAG}
         -o ${EMBED_FOLDER}/${GLSL_OUTPUT_STEM}.spv ${FILE})
       add_stage_spirv_shader(${GLSL_OUTPUT_STEM})
@@ -490,6 +503,7 @@ function(build_shader_target ADDON ADDON_PATH)
   endforeach()
 
   file(GLOB_RECURSE SHADER_SPV_FILES CONFIGURE_DEPENDS ${ADDON_PATH}/*.spv)
+  list(FILTER SHADER_SPV_FILES INCLUDE REGEX "^${ADDON_PATH}/")
   foreach(FILE ${SHADER_SPV_FILES})
     cmake_path(GET FILE FILENAME FILENAME)
     cmake_path(GET FILE PARENT_PATH TARGET_PATH)
@@ -615,9 +629,15 @@ function(build_shader_target ADDON ADDON_PATH)
 
 
   set(SHADERS_H_FILE ${EMBED_FOLDER}/shaders.h)
-  file(GENERATE OUTPUT ${SHADERS_H_FILE} CONTENT "${SHADERS_H_OUTPUT}")
+  set(SHADERS_H_TEMPLATE ${EMBED_FOLDER}/shaders.h.in)
+  file(GENERATE OUTPUT ${SHADERS_H_TEMPLATE} CONTENT "${SHADERS_H_OUTPUT}")
+  add_custom_command(
+    OUTPUT ${SHADERS_H_FILE}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SHADERS_H_TEMPLATE} ${SHADERS_H_FILE}
+    DEPENDS ${SHADERS_H_TEMPLATE} ${SHADER_HEADER_FILES}
+  )
 
-  add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES})
+  add_custom_target(${ADDON}-shaders DEPENDS ${SHADER_HEADER_FILES} ${SHADERS_H_FILE})
 
 endfunction()
 
@@ -675,10 +695,18 @@ file(GLOB ADDON_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/**/**/ad
 foreach(FILE ${ADDON_FILES})
   cmake_path(GET FILE PARENT_PATH ADDON_PATH)
   cmake_path(GET ADDON_PATH FILENAME ADDON) # treat as filename
+  if(ADDON MATCHES "^detroitbecomehuman" AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(STATUS "Skipping ${ADDON}: 64-bit only")
+    continue()
+  endif()
   add_compile_options(/bigobj)
   add_compile_definitions(NOMINMAX)
   add_library(${ADDON} MODULE ${FILE})
-  build_shader_target(${ADDON} ${ADDON_PATH})
+  set(ADDON_SHADER_PATH ${ADDON_PATH})
+  if(ADDON STREQUAL "detroitbecomehuman")
+    set(ADDON_SHADER_PATH ${ADDON_PATH}/hdr)
+  endif()
+  build_shader_target(${ADDON} ${ADDON_SHADER_PATH})
   generate_resource_rc(${ADDON})
   add_dependencies(${ADDON} ${ADDON}-shaders)
   add_dependencies(${ADDON} detours)
@@ -698,6 +726,14 @@ foreach(FILE ${ADDON_FILES})
     SUFFIX ${TARGET_SUFFIX}
   )
 endforeach()
+
+if(RENODX_BUILD_TESTS AND TARGET detroitbecomehuman-shaders)
+  add_dependencies(renodx_test_suites detroitbecomehuman-shaders)
+endif()
+
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  add_subdirectory(src/games/detroitbecomehuman-effects/dlss)
+endif()
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})

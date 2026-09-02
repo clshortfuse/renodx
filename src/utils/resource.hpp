@@ -664,7 +664,7 @@ inline reshade::api::resource GetResourceFromView(
 
   switch (device->get_api()) {
     case reshade::api::device_api::vulkan:
-    case reshade::api::device_api::d3d12: {
+    case reshade::api::device_api::d3d12:  {
       reshade::api::resource resource = {0u};
       bool destroyed = true;
       const auto found = GetResourceViewInfo(view, [&resource, &destroyed](const ResourceViewInfo& resource_view_info) {
@@ -1097,6 +1097,11 @@ inline void OnDestroyResource(reshade::api::device* device, reshade::api::resour
     should_run_after_destroy_callbacks = true;
   });
   if (!found) {
+    if (device != nullptr && device->get_api() == reshade::api::device_api::vulkan) {
+      log::w("utils::resource::OnDestroyResource(Ignoring untracked Vulkan resource: ",
+             log::AsPtr(resource.handle), ")");
+      return;
+    }
     log::e("utils::resource::OnDestroyResource(Resource not found for handle: ",
            log::AsPtr(resource.handle), ")");
     assert(found);

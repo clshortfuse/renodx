@@ -28,11 +28,12 @@
 #include <include/reshade.hpp>
 
 #include "../../../utils/exr.hpp"
-#include "../../../utils/mcp/types.hpp"
 #include "../../../utils/mcp/arguments.hpp"
+#include "../../../utils/mcp/types.hpp"
 #include "../../../utils/png.hpp"
 #include "../../../utils/resource.hpp"
 #include "resource_handle.hpp"
+#include "resource_readback.hpp"
 #include "resource_view_summary.hpp"
 
 namespace renodx::addons::devkit::mcp::resource_analysis {
@@ -111,6 +112,7 @@ struct AnalysisTarget {
   reshade::api::resource resolved_resource = {0u};
   reshade::api::resource_desc resolved_resource_desc;
   bool used_clone = false;
+  bool is_swap_chain = false;
 };
 
 struct ScalarStats {
@@ -177,6 +179,7 @@ inline void to_json(json& j, const RatioStats& value) {
   reshade::api::resource clone_resource = {0u};
   reshade::api::resource_desc clone_resource_desc = {};
   bool resource_destroyed = false;
+  bool is_swap_chain = false;
   const auto found_resource_info = renodx::utils::resource::GetResourceInfo(resource_view_info->original_resource, [&](const renodx::utils::resource::ResourceInfo& info) {
     resolved_resource = info.resource;
     resolved_resource_desc = info.desc;
@@ -184,6 +187,7 @@ inline void to_json(json& j, const RatioStats& value) {
     clone_resource = info.clone;
     clone_resource_desc = info.clone_desc;
     resource_destroyed = info.destroyed;
+    is_swap_chain = info.is_swap_chain;
   });
   if (!found_resource_info || resource_destroyed) {
     throw std::runtime_error("The selected resource view points to a destroyed resource.");
@@ -196,6 +200,7 @@ inline void to_json(json& j, const RatioStats& value) {
       .resolved_resource = resolved_resource,
       .resolved_resource_desc = resolved_resource_desc,
       .used_clone = false,
+      .is_swap_chain = is_swap_chain,
   };
 
   if (prefer_clone) {
@@ -211,6 +216,7 @@ inline void to_json(json& j, const RatioStats& value) {
     target.resolved_resource = clone_resource;
     target.resolved_resource_desc = clone_resource_desc;
     target.used_clone = true;
+    target.is_swap_chain = false;
   }
 
   return target;
@@ -688,30 +694,72 @@ inline void EncodePreviewPixel(
   const auto analysis_format = target.resolved_view_desc.format != reshade::api::format::unknown
                                    ? target.resolved_view_desc.format
                                    : intermediate_format;
+  const auto readback_plan = resource_readback::BuildPlan(
+      device->get_api(),
+      target.is_swap_chain,
+      intermediate_format,
+      width,
+      height);
 
   reshade::api::resource intermediate = {0u};
+  const auto intermediate_desc = readback_plan.use_buffer
+                                     ? reshade::api::resource_desc(
+                                           static_cast<std::uint64_t>(readback_plan.slice_pitch),
+                                           reshade::api::memory_heap::gpu_to_cpu,
+                                           reshade::api::resource_usage::copy_dest)
+                                     : reshade::api::resource_desc(
+                                           width,
+                                           height,
+                                           1,
+                                           1,
+                                           intermediate_format,
+                                           1,
+                                           reshade::api::memory_heap::gpu_to_cpu,
+                                           reshade::api::resource_usage::copy_dest);
+  if (readback_plan.use_buffer && readback_plan.slice_pitch == 0u) {
+    return ToolResult{
+        .text = "Failed to calculate the Vulkan swapchain readback buffer size.",
+        .structured_content = json{{"error", "Failed to calculate the Vulkan swapchain readback buffer size."}},
+        .is_error = true,
+    };
+  }
   if (!device->create_resource(
-          reshade::api::resource_desc(
-              width,
-              height,
-              1,
-              1,
-              intermediate_format,
-              1,
-              reshade::api::memory_heap::gpu_to_cpu,
-              reshade::api::resource_usage::copy_dest),
+          intermediate_desc,
           nullptr,
           reshade::api::resource_usage::copy_dest,
           &intermediate)) {
     return ToolResult{
-        .text = "Failed to create a GPU-to-CPU readback resource.",
-        .structured_content = json{{"error", "Failed to create a GPU-to-CPU readback resource."}},
+        .text = readback_plan.use_buffer
+                    ? "Failed to create a GPU-to-CPU Vulkan swapchain readback buffer."
+                    : "Failed to create a GPU-to-CPU readback resource.",
+        .structured_content = json{{"error", readback_plan.use_buffer
+                                                 ? "Failed to create a GPU-to-CPU Vulkan swapchain readback buffer."
+                                                 : "Failed to create a GPU-to-CPU readback resource."}},
         .is_error = true,
     };
   }
 
   auto* cmd_list = queue->get_immediate_command_list();
-  cmd_list->copy_texture_region(target.resolved_resource, subresource, nullptr, intermediate, 0, nullptr);
+  if (readback_plan.use_buffer) {
+    cmd_list->barrier(
+        target.resolved_resource,
+        readback_plan.source_before_copy,
+        readback_plan.source_during_copy);
+    cmd_list->copy_texture_to_buffer(
+        target.resolved_resource,
+        subresource,
+        nullptr,
+        intermediate,
+        0u,
+        width,
+        height);
+    cmd_list->barrier(
+        target.resolved_resource,
+        readback_plan.source_during_copy,
+        readback_plan.source_after_copy);
+  } else {
+    cmd_list->copy_texture_region(target.resolved_resource, subresource, nullptr, intermediate, 0, nullptr);
+  }
   queue->flush_immediate_command_list();
   queue->wait_idle();
 
@@ -721,7 +769,35 @@ inline void EncodePreviewPixel(
       .is_error = true,
   };
   reshade::api::subresource_data mapped_data = {};
-  if (device->map_texture_region(intermediate, 0, nullptr, reshade::api::map_access::read_only, &mapped_data)) {
+  void* mapped_buffer_data = nullptr;
+  const auto mapped = readback_plan.use_buffer
+                          ? device->map_buffer_region(
+                                intermediate,
+                                0u,
+                                readback_plan.slice_pitch,
+                                reshade::api::map_access::read_only,
+                                &mapped_buffer_data)
+                          : device->map_texture_region(
+                                intermediate,
+                                0,
+                                nullptr,
+                                reshade::api::map_access::read_only,
+                                &mapped_data);
+  if (readback_plan.use_buffer && mapped) {
+    mapped_data = {
+        .data = mapped_buffer_data,
+        .row_pitch = readback_plan.row_pitch,
+        .slice_pitch = readback_plan.slice_pitch,
+    };
+  }
+  const auto unmap_readback = [&]() {
+    if (readback_plan.use_buffer) {
+      device->unmap_buffer_region(intermediate);
+    } else {
+      device->unmap_texture_region(intermediate, 0);
+    }
+  };
+  if (mapped) {
     double channel_min[4] = {
         std::numeric_limits<double>::infinity(),
         std::numeric_limits<double>::infinity(),
@@ -855,7 +931,7 @@ inline void EncodePreviewPixel(
     }
 
     if (!supported_format) {
-      device->unmap_texture_region(intermediate, 0);
+      unmap_readback();
       const auto error = std::format("Readback is not implemented for format {}.", FormatFormat(context, analysis_format));
       tool_result = ToolResult{
           .text = error,
@@ -996,7 +1072,7 @@ inline void EncodePreviewPixel(
         }
       }
 
-      device->unmap_texture_region(intermediate, 0);
+      unmap_readback();
 
       if (output_error.has_value()) {
         tool_result = ToolResult{

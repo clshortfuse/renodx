@@ -1,0 +1,18 @@
+Detroit: Become Human RenoDX experimental package - uninstall
+
+1. Fully close Detroit: Become Human.
+2. Remove only the package files that are present beside DetroitBecomeHuman.exe:
+   renodx-detroitbecomehuman.addon64
+   nvngx_dlss.dll
+3. Remove renodx-devkit.addon64 or renodx-devkit.addon64.disabled only if it
+   was installed specifically for Detroit diagnostics.
+4. Do not remove ReShade64.dll, ReShade.ini, ReShadePreset.ini, or the
+   reshade-shaders directory when another ReShade add-on or effect uses them.
+5. The package does not replace the game's archives or GraphicOptions.JSON.
+   RenoDX values remain in ReShade.ini under [renodx] and [renodx-presetN]
+   and may be removed manually after uninstalling the add-on.
+6. Optionally remove renodx-detroitbecomehuman.addon64 from
+   ADDON.LoadFromDllMain and the RENODX_DETROIT_DLSS section in ReShade.ini.
+
+After uninstalling RenoDX, Auto HDR or NVIDIA RTX HDR may be enabled again if
+desired. Do not run either HDR injector together with this package.

@@ -1,0 +1,75 @@
+{
+  "executable": {
+    "size": 57986328,
+    "sha256": "ECF52321921387E683904E089082D76B973326FC093AF14E524056715519C1CF"
+  },
+  "module": {
+    "offset": 45656803,
+    "size": 37236,
+    "crc32": "0xB5506A45",
+    "magic": 119734787,
+    "version": 66304,
+    "generator": 524295,
+    "bound": 6229,
+    "schema": 0
+  },
+  "entry_point": {
+    "name": "main",
+    "mode": "comp",
+    "workgroup_size": [8, 8, 1]
+  },
+  "descriptors": [
+    { "kind": "textures", "set": 0, "binding": 0, "name": "PrevAADepthTex", "type": "sampler2D" },
+    { "kind": "textures", "set": 0, "binding": 1, "name": "CurrColorTex", "type": "sampler2D" },
+    { "kind": "textures", "set": 0, "binding": 2, "name": "PrevColorTex", "type": "sampler2D" },
+    { "kind": "textures", "set": 0, "binding": 3, "name": "CurrZBuffer", "type": "sampler2D" },
+    { "kind": "textures", "set": 0, "binding": 4, "name": "MotionVectorTex", "type": "sampler2D" },
+    { "kind": "textures", "set": 0, "binding": 5, "name": "AvgLumMap", "type": "sampler2D" },
+    { "kind": "textures", "set": 0, "binding": 6, "name": "TAAFlagsTexture", "type": "usampler2D" },
+    { "kind": "textures", "set": 0, "binding": 7, "name": "PrevSpeedAndFlagsTex", "type": "usampler2D" },
+    { "kind": "images", "set": 0, "binding": 16, "name": "OutColorPass", "type": "uimage2D", "format": "r32ui" },
+    { "kind": "images", "set": 0, "binding": 17, "name": "OutAADepth", "type": "image2D", "format": "r16f" },
+    { "kind": "images", "set": 0, "binding": 18, "name": "OutPrevSpeedAndFlagsTex", "type": "uimage2D", "format": "r16ui" },
+    { "kind": "images", "set": 0, "binding": 19, "name": "HalfResContours", "type": "uimage2D", "format": "r8ui" },
+    { "kind": "ubos", "set": 0, "binding": 52, "name": "dyn_CONSTANT_BUFFER_BLOCK_0", "block_size": 496 }
+  ],
+  "constant_block": {
+    "outer_name": "dyn_CONSTANT_BUFFER_BLOCK_0",
+    "member_name": "_TAA",
+    "name": "TEMPORAL_AA_CONSTANT_BUFFER",
+    "size": 496,
+    "members": [
+      { "name": "_mSpaceConvMatrices", "type": "TAA_SPACE_CONV_MATRICES", "offset": 0, "array": [2], "array_stride": 128 },
+      { "name": "_vfProjSetup", "type": "vec4", "offset": 256 },
+      { "name": "_vfRenderTargetSize_InvSize", "type": "vec4", "offset": 272 },
+      { "name": "_vfSrcTextureSize_InvSize", "type": "vec4", "offset": 288 },
+      { "name": "_viViewportOrigin_Size", "type": "ivec4", "offset": 304 },
+      { "name": "_viViewportTopLeftMinusOne", "type": "ivec4", "offset": 320 },
+      { "name": "_vfViewportOrigin_TopLeftUpsampled", "type": "vec4", "offset": 336 },
+      { "name": "_fHistoryBlendFactor", "type": "float", "offset": 352 },
+      { "name": "_fResponsiveBlendFactor", "type": "float", "offset": 356 },
+      { "name": "_fRainSlopeDampingFactor", "type": "float", "offset": 360 },
+      { "name": "_fDisocclusionDepthThreshold", "type": "float", "offset": 364 },
+      { "name": "_vfDejitterWeights0", "type": "vec4", "offset": 368 },
+      { "name": "_vfDejitterWeights1", "type": "vec4", "offset": 384 },
+      { "name": "_vfPixelToClipSpace", "type": "vec4", "offset": 400 },
+      { "name": "_fContourDepthThreshold", "type": "float", "offset": 416 },
+      { "name": "_fMinExposure", "type": "float", "offset": 420 },
+      { "name": "_fPreviousFrameExposureCompensation", "type": "float", "offset": 424 },
+      { "name": "_iPadding0", "type": "int", "offset": 428 },
+      { "name": "_fJitterCoordX", "type": "float", "offset": 432 },
+      { "name": "_fJitterCoordY", "type": "float", "offset": 436 },
+      { "name": "_fUpsamplingFactor", "type": "float", "offset": 440 },
+      { "name": "_fInvUpsamplingFactor", "type": "float", "offset": 444 },
+      { "name": "_vfResampledUVToRenderedUVScale", "type": "vec4", "offset": 448 },
+      { "name": "_uDebugFrameIndex", "type": "uint", "offset": 464 },
+      { "name": "_uEnableContourAA", "type": "uint", "offset": 468 },
+      { "name": "_fPrevUpsamplingFactor", "type": "float", "offset": 472 },
+      { "name": "_iPadding1", "type": "uint", "offset": 476 },
+      { "name": "_uDebugVisualizeOptions", "type": "uint", "offset": 480 },
+      { "name": "_uDebugFeaturesSet", "type": "uint", "offset": 484 },
+      { "name": "_uPixelHistoryDebugCoordX", "type": "uint", "offset": 488 },
+      { "name": "_uPixelHistoryDebugCoordY", "type": "uint", "offset": 492 }
+    ]
+  }
+}
