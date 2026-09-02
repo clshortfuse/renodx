@@ -25,9 +25,9 @@
 
   <mdw-top-app-bar id="site-header" size="small" color="surface" raised-color="surface-container" role="navigation" aria-label="RenoDX privacy navigation">
     <a class="brand" href="./" slot="leading" aria-label="RenoDX home">
-      <mdw-box inline row y="center" gap="12" ink="on-surface">
+      <mdw-box row y="center" gap="12" ink="on-surface">
         <img class="brand-logo" src="./renodx-logo.png" alt="">
-        <mdw-title size="large" text-padding="0">RenoDX</mdw-title>
+        <mdw-title size="large" text-leading="20" text-padding-bottom="4">RenoDX</mdw-title>
       </mdw-box>
     </a>
     <mdw-box class="site-nav" slot="trailing" row gap="4" padding-x="8" y="center">
@@ -38,25 +38,25 @@
   <main id="main-content">
     <mdw-box color="surface-container-low">
       <mdw-box class="site-shell" padding="pane" padding-y="24" gap="24">
-        <mdw-label ink="primary" size="large" text-padding="0">RenoDX project policy</mdw-label>
-        <mdw-display role="heading" aria-level="1" size="medium" text-padding="0">Privacy policy.</mdw-display>
-        <mdw-body class="measure" ink="on-surface-variant" size="large" text-padding="0">This policy explains what information the RenoDX website, official Discord bot, and related community services process, why it is used, and how to request access or deletion.</mdw-body>
+        <mdw-label ink="primary" size="large" text-leading="16" text-padding-bottom="4">RenoDX project policy</mdw-label>
+        <mdw-display role="heading" aria-level="1" size="medium" text-leading="48" text-padding-bottom="4">Privacy policy.</mdw-display>
+        <mdw-body class="measure" ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">This policy explains what information the RenoDX website, official Discord bot, and related community services process, why it is used, and how to request access or deletion.</mdw-body>
         <mdw-box row wrap gap="24">
-          <mdw-label ink="on-surface-variant" size="medium" text-padding="0">Effective September 1, 2026</mdw-label>
-          <mdw-label ink="on-surface-variant" size="medium" text-padding="0">Last updated September 1, 2026</mdw-label>
+          <mdw-label ink="on-surface-variant" size="medium" text-leading="12" text-padding-bottom="4">Effective September 1, 2026</mdw-label>
+          <mdw-label ink="on-surface-variant" size="medium" text-leading="12" text-padding-bottom="4">Last updated September 2, 2026</mdw-label>
         </mdw-box>
       </mdw-box>
     </mdw-box>
 
     <mdw-box class="site-shell policy-shell" padding="pane" padding-y="24" gap="24">
       <mdw-card filled color="primary-container" shape-style="large" padding="24" gap="8">
-        <mdw-title size="large" text-padding="0">The short version</mdw-title>
-        <mdw-body ink="on-primary-container" size="large" text-padding="0">RenoDX does not sell personal information, run behavioral advertising, or use first-party analytics cookies. The Discord bot processes only the information needed to respond to commands, retain requested settings, keep the service secure, and diagnose failures.</mdw-body>
+        <mdw-title size="large" text-leading="24" text-padding-bottom="4">The short version</mdw-title>
+        <mdw-body ink="on-primary-container" size="large" text-leading="20" text-padding-bottom="4">RenoDX does not sell personal information, run behavioral advertising, or use first-party analytics cookies. Official Discord bots process only the information needed to provide requested features, retain requested settings, keep the service secure, and diagnose failures.</mdw-body>
       </mdw-card>
 
       <mdw-grid gap="24" y="start">
         <mdw-card class="policy-nav" outlined shape-style="large" padding="16" gap="4" col-span-4="4" col-span-8="2" col-span-12="3" role="navigation" aria-label="Privacy policy sections">
-          <mdw-label ink="on-surface-variant" size="medium" text-padding="0">On this page</mdw-label>
+          <mdw-label ink="on-surface-variant" size="medium" text-leading="12" text-padding-bottom="4">On this page</mdw-label>
           <mdw-button href="#scope">Scope</mdw-button>
           <mdw-button href="#information">Information processed</mdw-button>
           <mdw-button href="#use">How it is used</mdw-button>
@@ -72,19 +72,19 @@
 
         <mdw-box class="policy-copy" gap="24" col-span-4="4" col-span-8="6" col-span-12="9" role="article">
           <mdw-box id="scope" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">Scope</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">This policy applies to <strong>renodx.com</strong>, official RenoDX Discord applications, and services operated by the RenoDX project that link to this page. It does not cover third-party websites, game publishers, mod distribution platforms, Discord itself, or community services that RenoDX does not operate.</mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">RenoDX is an independent open-source project. References to “RenoDX,” “we,” “us,” or “our” in this policy mean the maintainers operating these project services.</mdw-body>
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">Scope</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">This policy applies to <strong>renodx.com</strong>, official RenoDX Discord applications, and services operated by the RenoDX project that link to this page. It does not cover third-party websites, game publishers, mod distribution platforms, Discord itself, or community services that RenoDX does not operate.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">RenoDX is an independent open-source project. References to “RenoDX,” “we,” “us,” or “our” in this policy mean the maintainers operating these project services.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="information" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">Information we process</mdw-headline>
-            <mdw-title role="heading" aria-level="3" size="large" text-padding="0">Website access</mdw-title>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">The RenoDX website is a static site and does not use first-party analytics cookies or advertising trackers. Hosting and content-delivery providers may automatically receive standard request information such as an IP address, browser or user-agent information, requested URL, timestamp, and security diagnostics.</mdw-body>
-            <mdw-title role="heading" aria-level="3" size="large" text-padding="0">Discord bot interactions</mdw-title>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">When a person invokes an official RenoDX bot, Discord may provide information required to handle that interaction, including:</mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">Information we process</mdw-headline>
+            <mdw-title role="heading" aria-level="3" size="large" text-leading="24" text-padding-bottom="4">Website access</mdw-title>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">The RenoDX website is a static site and does not use first-party analytics cookies or advertising trackers. Hosting and content-delivery providers may automatically receive standard request information such as an IP address, browser or user-agent information, requested URL, timestamp, and security diagnostics.</mdw-body>
+            <mdw-title role="heading" aria-level="3" size="large" text-leading="24" text-padding-bottom="4">Discord bot interactions</mdw-title>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">When a person invokes an official RenoDX bot, Discord may provide information required to handle that interaction, including:</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">
               <ul>
                 <li>Discord user ID, username, and display name;</li>
                 <li>server (guild), channel, role, and permission identifiers;</li>
@@ -92,19 +92,22 @@
                 <li>timestamps and Discord interaction identifiers.</li>
               </ul>
             </mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">The bot does not read unrelated message content. If a feature requires message content or an attachment, that information is processed only when a user directly submits it to the bot or invokes the feature on that content.</mdw-body>
-            <mdw-title role="heading" aria-level="3" size="large" text-padding="0">Settings and operational records</mdw-title>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">The service may store server or user preferences requested through bot commands. It may also create limited error, rate-limit, abuse-prevention, and security records containing identifiers, timestamps, command names, and technical diagnostics.</mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">Do not submit passwords, payment details, government identifiers, private keys, health information, or other sensitive personal information through RenoDX bot commands.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Official bots do not read unrelated message content. When authorized RenoDX staff invoke a feature that requires message context, the Discord bot may process messages, author names, timestamps, attachment or sticker names, and source links from the content explicitly selected for that request. It does not collect direct messages, private discussions, unrelated channels, or attachment contents for this purpose.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">The Discord bot may also process user and server identifiers, moderation actions, reasons, supporting information, and timestamps when authorized staff use moderation features such as warnings, restrictions, removals, or bans. Moderation decisions are made by authorized staff, not by the bot.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Automated tools may process message content to provide a requested bot feature. Discord message content is not used to train or fine-tune artificial-intelligence or machine-learning models, make moderation decisions, profile users, advertise, or sell data. Generated content is reviewed by authorized staff before publication. RenoDX will identify any external provider that receives message content before using that provider.</mdw-body>
+            <mdw-title role="heading" aria-level="3" size="large" text-leading="24" text-padding-bottom="4">Settings and operational records</mdw-title>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">The service may store server or user preferences requested through bot commands. It may also create limited error, rate-limit, abuse-prevention, and security records containing identifiers, timestamps, command names, and technical diagnostics.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Do not submit passwords, payment details, government identifiers, private keys, health information, or other sensitive personal information through RenoDX bot commands.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="use" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">How information is used</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">Information is processed only as needed to:</mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">How information is used</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Information is processed only as needed to:</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">
               <ul>
                 <li>respond to commands and provide requested bot features;</li>
+                <li>carry out moderation actions requested by authorized server staff and maintain necessary moderation records;</li>
                 <li>apply server permissions, preferences, and configuration;</li>
                 <li>prevent spam, abuse, fraud, and security incidents;</li>
                 <li>diagnose errors, monitor reliability, and improve project services;</li>
@@ -112,14 +115,14 @@
                 <li>comply with applicable law and enforce service rules.</li>
               </ul>
             </mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">Where a legal basis is required, processing is based on providing the service a user requests, the project's legitimate interests in operating a reliable and secure service, consent where requested, or compliance with legal obligations.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Where a legal basis is required, processing is based on providing the service a user requests, the project's legitimate interests in operating a reliable and secure service, consent where requested, or compliance with legal obligations.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="sharing" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">When information is shared</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">RenoDX does not sell personal information. Information may be disclosed only:</mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">When information is shared</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">RenoDX does not sell personal information. Information may be disclosed only:</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">
               <ul>
                 <li>to Discord as necessary to receive and answer interactions;</li>
                 <li>to infrastructure, hosting, storage, monitoring, or content-delivery providers acting on the project's behalf;</li>
@@ -128,60 +131,63 @@
                 <li>when required by law or reasonably necessary to protect users, the project, or the public.</li>
               </ul>
             </mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">Third-party providers process information under their own terms and privacy policies. Discord's practices are described in the <a href="https://discord.com/privacy" target="_blank" rel="noopener" aria-label="Discord Privacy Policy (opens in a new tab)">Discord Privacy Policy</a>.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Third-party providers process information under their own terms and privacy policies. Discord's practices are described in the <a href="https://discord.com/privacy" target="_blank" rel="noopener" aria-label="Discord Privacy Policy (opens in a new tab)">Discord Privacy Policy</a>.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="retention" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">Retention</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">Retention</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">
               <ul>
                 <li><strong>Command payloads:</strong> Unless a command clearly indicates that it saves information, command content is processed transiently and is not retained after the interaction completes.</li>
+                <li><strong>Message content:</strong> Source content and private generated output are processed temporarily and deleted when the request is completed, discarded, or expires. Content published through the bot remains in Discord under the server's normal retention practices and can be corrected or deleted by moderators.</li>
+                <li><strong>Moderation records:</strong> Records of staff-directed actions are retained while needed to administer server rules, review actions, resolve appeals or disputes, prevent abuse, or comply with legal obligations.</li>
                 <li><strong>Requested settings:</strong> Server and user preferences are retained while needed to provide requested bot functionality.</li>
-                <li><strong>Operational logs:</strong> Error and security logs are retained while needed to operate, secure, troubleshoot, and support the service, investigate abuse or security incidents, or comply with legal obligations.</li>
+                <li><strong>Operational logs:</strong> Limited identifiers, command records, and technical diagnostics are retained while needed to operate, secure, troubleshoot, and support the service, investigate abuse or security incidents, or comply with legal obligations. Source message text and private generated output are not included in operational logs.</li>
                 <li><strong>Backups:</strong> Residual copies may remain in backups until overwritten or deleted through their normal lifecycle.</li>
               </ul>
             </mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">Discord API Data is deleted when required by the Discord Developer Terms or applicable law, including when it is no longer necessary for permitted bot functionality or in response to a valid request from Discord or the applicable user.</mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">Information may be aggregated or de-identified so it can no longer reasonably identify a user or server. Such data may be retained for project statistics and reliability work.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Discord API Data is deleted when required by the Discord Developer Terms or applicable law, including when it is no longer necessary for permitted bot functionality or in response to a valid request from Discord or the applicable user.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Information may be aggregated or de-identified so it can no longer reasonably identify a user or server. Such data may be retained for project statistics and reliability work.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="security" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">Security</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">RenoDX uses reasonable technical and organizational safeguards appropriate to an open-source community service, including access controls and restricted maintainer access. No online service can guarantee absolute security.</mdw-body>
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">Security</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">RenoDX uses reasonable technical and organizational safeguards appropriate to an open-source community service, including access controls and restricted maintainer access. No online service can guarantee absolute security.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="choices" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">Your choices and rights</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">Depending on location, a person may have rights to access, correct, delete, restrict, or object to processing of personal information, or to receive a portable copy. Users can also stop using bot commands, reset available settings, ask a server administrator to remove the bot, or leave a server.</mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">To make a request, email <a href="mailto:privacy@renodx.com">privacy@renodx.com</a> with the Discord user ID and, if relevant, server ID connected to the request. Additional verification may be required before acting on a request. Do not include sensitive information in the email.</mdw-body>
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">Your choices and rights</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Depending on location, a person may have rights to access, correct, delete, restrict, or object to processing of personal information, or to receive a portable copy. Users can also stop using bot commands, reset available settings, ask a server administrator to remove the bot, or leave a server.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">To make a request, email <a href="mailto:privacy@renodx.com">privacy@renodx.com</a> with the Discord user ID and, if relevant, server ID connected to the request. Additional verification may be required before acting on a request. Do not include sensitive information in the email.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">The Discord bot does not maintain a separate archive of source messages processed temporarily for requested features. A person may include a relevant Discord message link in a request for correction or deletion. Questions or appeals concerning moderation actions should be directed through the RenoDX community's moderation process.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="children" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">Children</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">RenoDX services are not directed to children below the minimum age required to use Discord or consent to data processing in their jurisdiction. The project does not knowingly collect personal information from children below that age. Contact us if such information may have been provided.</mdw-body>
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">Children</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">RenoDX services are not directed to children below the minimum age required to use Discord or consent to data processing in their jurisdiction. The project does not knowingly collect personal information from children below that age. Contact us if such information may have been provided.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="international" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">International processing</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">Project maintainers and service providers may operate in multiple countries. Information may therefore be processed outside a user's country, where privacy laws may differ. Appropriate safeguards will be used where required by applicable law.</mdw-body>
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">International processing</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">Project maintainers and service providers may operate in multiple countries. Information may therefore be processed outside a user's country, where privacy laws may differ. Appropriate safeguards will be used where required by applicable law.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="changes" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">Changes to this policy</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">This policy may change as project services evolve or legal requirements change. The updated version will be posted on this page with a new “Last updated” date. Material changes may also be announced through RenoDX community channels.</mdw-body>
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">Changes to this policy</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">This policy may change as project services evolve or legal requirements change. The updated version will be posted on this page with a new “Last updated” date. Material changes may also be announced through RenoDX community channels.</mdw-body>
           </mdw-box>
           <mdw-divider></mdw-divider>
 
           <mdw-box id="contact" gap="16">
-            <mdw-headline role="heading" aria-level="2" size="medium" text-padding="0">Contact</mdw-headline>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">For privacy questions, data requests, or concerns, contact <a href="mailto:privacy@renodx.com">privacy@renodx.com</a>. General project discussion and support are available through the <a href="https://discord.gg/renodx" target="_blank" rel="noopener" aria-label="RenoDX Discord community (opens in a new tab)">RenoDX Discord community</a> and <a href="https://github.com/clshortfuse/renodx" target="_blank" rel="noopener" aria-label="RenoDX on GitHub (opens in a new tab)">RenoDX on GitHub</a>.</mdw-body>
-            <mdw-body ink="on-surface-variant" size="large" text-padding="0">This privacy policy is for RenoDX project services and is not a policy issued by or on behalf of Discord Inc.</mdw-body>
+            <mdw-headline role="heading" aria-level="2" size="medium" text-leading="32" text-padding-bottom="4">Contact</mdw-headline>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">For privacy questions, data requests, or concerns, contact <a href="mailto:privacy@renodx.com">privacy@renodx.com</a>. General project discussion and support are available through the <a href="https://discord.gg/renodx" target="_blank" rel="noopener" aria-label="RenoDX Discord community (opens in a new tab)">RenoDX Discord community</a> and <a href="https://github.com/clshortfuse/renodx" target="_blank" rel="noopener" aria-label="RenoDX on GitHub (opens in a new tab)">RenoDX on GitHub</a>.</mdw-body>
+            <mdw-body ink="on-surface-variant" size="large" text-leading="20" text-padding-bottom="4">This privacy policy is for RenoDX project services and is not a policy issued by or on behalf of Discord Inc.</mdw-body>
           </mdw-box>
         </mdw-box>
       </mdw-grid>
@@ -195,8 +201,8 @@
           <mdw-box row y="center" gap="12">
             <img class="brand-logo" src="./renodx-logo.png" alt="">
             <mdw-box gap="4">
-              <mdw-title size="medium" text-padding="0">RenoDX</mdw-title>
-              <mdw-body ink="on-surface-variant" size="small" text-padding="0">Renovation Engine for DirectX games.</mdw-body>
+              <mdw-title size="medium" text-leading="20" text-padding-bottom="4">RenoDX</mdw-title>
+              <mdw-body ink="on-surface-variant" size="small" text-leading="12" text-padding-bottom="4">Renovation Engine for DirectX games.</mdw-body>
             </mdw-box>
           </mdw-box>
           <mdw-box row wrap gap="4" role="navigation" aria-label="Footer navigation">
@@ -209,8 +215,8 @@
         </mdw-box>
         <mdw-divider></mdw-divider>
         <mdw-box row wrap x="between" gap="12">
-          <mdw-body ink="on-surface-variant" size="small" text-padding="0">© 2026 RenoDX contributors.</mdw-body>
-          <mdw-body ink="on-surface-variant" size="small" text-padding="0">RenoDX is an independent open-source project.</mdw-body>
+          <mdw-body ink="on-surface-variant" size="small" text-leading="12" text-padding-bottom="4">© 2026 RenoDX contributors.</mdw-body>
+          <mdw-body ink="on-surface-variant" size="small" text-leading="12" text-padding-bottom="4">RenoDX is an independent open-source project.</mdw-body>
         </mdw-box>
       </mdw-box>
     </mdw-box>
