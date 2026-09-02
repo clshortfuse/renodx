@@ -628,11 +628,13 @@ endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(STATUS "Detected 64-bit build")
+  set(RENODX_TARGET_ARCHITECTURE "x64")
   set(DETOURS_ARCH "X64")
   set(VCVARS_ARG "x64")
   set(TARGET_SUFFIX ".addon64")
 else()
   message(STATUS "Detected 32-bit build")
+  set(RENODX_TARGET_ARCHITECTURE "x86")
   set(VCVARS_ARG "x86")
   set(DETOURS_ARCH "X86")
   set(TARGET_SUFFIX ".addon32")
@@ -672,9 +674,39 @@ add_dependencies(detours detours_build)
 
 
 file(GLOB ADDON_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/**/**/addon.cpp)
+set(SKIPPED_ADDON_TARGETS "")
 foreach(FILE ${ADDON_FILES})
   cmake_path(GET FILE PARENT_PATH ADDON_PATH)
   cmake_path(GET ADDON_PATH FILENAME ADDON) # treat as filename
+
+  set(ADDON_METADATA_PATH "${ADDON_PATH}/metadata.json")
+  if(EXISTS "${ADDON_METADATA_PATH}")
+    file(READ "${ADDON_METADATA_PATH}" ADDON_METADATA_JSON)
+    string(JSON ADDON_ARCHITECTURE_COUNT
+      ERROR_VARIABLE ADDON_ARCHITECTURE_ERROR
+      LENGTH "${ADDON_METADATA_JSON}" deploy architecture)
+
+    set(ADDON_ARCHITECTURES "x64")
+    if(ADDON_ARCHITECTURE_ERROR STREQUAL "NOTFOUND" AND ADDON_ARCHITECTURE_COUNT GREATER 0)
+      set(ADDON_ARCHITECTURES "")
+      math(EXPR ADDON_ARCHITECTURE_LAST_INDEX "${ADDON_ARCHITECTURE_COUNT} - 1")
+      foreach(ADDON_ARCHITECTURE_INDEX RANGE ${ADDON_ARCHITECTURE_LAST_INDEX})
+        string(JSON ADDON_ARCHITECTURE GET "${ADDON_METADATA_JSON}" deploy architecture ${ADDON_ARCHITECTURE_INDEX})
+        string(TOLOWER "${ADDON_ARCHITECTURE}" ADDON_ARCHITECTURE)
+        if(ADDON_ARCHITECTURE MATCHES "^(x86|x64|arm64)$")
+          list(APPEND ADDON_ARCHITECTURES "${ADDON_ARCHITECTURE}")
+        endif()
+      endforeach()
+      if(NOT ADDON_ARCHITECTURES)
+        set(ADDON_ARCHITECTURES "x64")
+      endif()
+    endif()
+
+    if(NOT RENODX_TARGET_ARCHITECTURE IN_LIST ADDON_ARCHITECTURES)
+      list(APPEND SKIPPED_ADDON_TARGETS "${ADDON}")
+      continue()
+    endif()
+  endif()
   add_compile_options(/bigobj)
   add_compile_definitions(NOMINMAX)
   add_library(${ADDON} MODULE ${FILE})
@@ -698,6 +730,9 @@ foreach(FILE ${ADDON_FILES})
     SUFFIX ${TARGET_SUFFIX}
   )
 endforeach()
+
+list(LENGTH SKIPPED_ADDON_TARGETS SKIPPED_ADDON_TARGET_COUNT)
+message(STATUS "Skipped ${SKIPPED_ADDON_TARGET_COUNT} game addon targets not listed for ${RENODX_TARGET_ARCHITECTURE}")
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
