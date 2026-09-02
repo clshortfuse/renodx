@@ -43,10 +43,10 @@ float3 GameScale(float3 color) {
 float4 FinalizeOutput(float4 color) {
   if (injectedData.toneMapGammaCorrection) {
     color.rgb = renodx::color::gamma::DecodeSafe(color.rgb, 2.2f);
-    color.rgb *= injectedData.toneMapUINits / renodx::color::srgb::REFERENCE_WHITE;
   } else {
     color.rgb = renodx::color::srgb::DecodeSafe(color.rgb);
-    color.rgb *= injectedData.toneMapUINits / renodx::color::srgb::REFERENCE_WHITE;
   }
+  color.rgb = renodx::color::bt2020::from::BT709(color.rgb);
+  color.rgb = renodx::color::pq::EncodeSafe(color.rgb, injectedData.toneMapUINits);
   return color;
 }

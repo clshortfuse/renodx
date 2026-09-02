@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#001f1f">
+  <meta name="description" content="Current RenoDX game-specific addons, downloads, the community mod list, and support resources.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Mods and Downloads | RenoDX">
+  <meta property="og:description" content="Current game-specific RenoDX addon builds and related support resources.">
+  <meta property="og:url" content="https://renodx.com/mods">
+  <meta name="twitter:card" content="summary">
+  <title>Mods and Downloads | RenoDX</title>
+  <link rel="canonical" href="https://renodx.com/mods">
+  <link rel="icon" href="./renodx-logo.png" type="image/png">
+  <link rel="manifest" href="./site.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@shortfuse/materialdesignweb@0.11.4?color=00ffff&amp;lightness=dark"></script>
+  <script src="./app.mjs"></script>
+</head>
+
+<body>
+  <a id="skip-link" href="#main-content">Skip to content</a>
+
+  <mdw-top-app-bar id="site-header" size="small" color="surface" raised-color="surface-container" role="navigation" aria-label="RenoDX mods navigation">
+    <a class="brand" href="./" slot="leading" aria-label="RenoDX home">
+      <mdw-box inline row y="center" gap="12" ink="on-surface">
+        <img class="brand-logo" src="./renodx-logo.png" alt="">
+        <mdw-title size="large" text-padding="0">RenoDX</mdw-title>
+      </mdw-box>
+    </a>
+    <mdw-box class="site-nav" slot="trailing" row gap="4" padding-x="8" y="center">
+      <mdw-button class="secondary-nav" href="./">Home</mdw-button>
+      <mdw-button class="secondary-nav" href="./mods.html">Mods</mdw-button>
+      <mdw-button filled icon="code" href="https://github.com/clshortfuse/renodx" target="_blank" rel="noopener" aria-label="View Source (opens in a new tab)">View Source</mdw-button>
+    </mdw-box>
+  </mdw-top-app-bar>
+
+  <main id="main-content">
+    <mdw-box color="surface-container-low">
+      <mdw-box class="site-shell" padding="pane" padding-y="24" gap="24">
+        <mdw-label ink="primary" size="large" text-padding="0">RenoDX mods</mdw-label>
+        <mdw-display role="heading" aria-level="1" size="medium" text-padding="0">Find a game-specific addon.</mdw-display>
+        <mdw-body class="measure" ink="on-surface-variant" size="large" text-padding="0">Search official RenoDX mods by supported game, or check the community mod list for additional builds, installation information, and game-specific notes.</mdw-body>
+        <mdw-box row wrap gap="12">
+          <mdw-button filled icon="search" href="#official-mods">Search official mods</mdw-button>
+          <mdw-button outlined icon="open_in_new" href="https://github.com/clshortfuse/renodx/wiki/Mods" target="_blank" rel="noopener" aria-label="Community mod list (opens in a new tab)">Community mod list</mdw-button>
+        </mdw-box>
+      </mdw-box>
+    </mdw-box>
+
+    <mdw-box id="official-mods" class="site-shell" padding="pane" padding-y="24">
+      <rdx-mod-browser></rdx-mod-browser>
+    </mdw-box>
+
+    <mdw-box color="surface-container-low">
+      <mdw-box class="site-shell" padding="pane" padding-y="24">
+        <mdw-grid gap="24" y="start">
+          <mdw-box col-span-4="4" col-span-8="8" col-span-12="6" gap="16">
+            <mdw-label ink="primary" size="large" text-padding="0">Community resources and support</mdw-label>
+            <mdw-headline role="heading" aria-level="2" size="large" text-padding="0">Installation and compatibility information.</mdw-headline>
+          </mdw-box>
+          <mdw-box col-span-4="4" col-span-8="8" col-span-12="6" gap="24">
+            <mdw-body ink="on-surface-variant" size="large" text-padding="0">The community mod list covers installation, additional builds, and game-specific notes. Support is available through the RenoDX Discord community.</mdw-body>
+            <mdw-box row wrap gap="12">
+              <mdw-button filled icon="open_in_new" href="https://github.com/clshortfuse/renodx/wiki/Mods" target="_blank" rel="noopener" aria-label="Community mod list (opens in a new tab)">Community mod list</mdw-button>
+              <mdw-button outlined icon="forum" href="https://discord.gg/renodx" target="_blank" rel="noopener" aria-label="Discord (opens in a new tab)">Discord</mdw-button>
+            </mdw-box>
+          </mdw-box>
+        </mdw-grid>
+      </mdw-box>
+    </mdw-box>
+  </main>
+
+  <footer>
+    <mdw-box color="surface-container">
+      <mdw-box class="site-shell" padding="pane" padding-y="24" gap="24">
+        <mdw-box row wrap x="between" y="center" gap="24">
+          <mdw-box row y="center" gap="12">
+            <img class="brand-logo" src="./renodx-logo.png" alt="">
+            <mdw-box gap="4">
+              <mdw-title size="medium" text-padding="0">RenoDX</mdw-title>
+              <mdw-body ink="on-surface-variant" size="small" text-padding="0">Renovation Engine for DirectX games.</mdw-body>
+            </mdw-box>
+          </mdw-box>
+          <mdw-box row wrap gap="4" role="navigation" aria-label="Footer navigation">
+            <mdw-button href="./">Home</mdw-button>
+            <mdw-button icon="open_in_new" href="https://github.com/clshortfuse/renodx/wiki/Mods" target="_blank" rel="noopener" aria-label="Community mods (opens in a new tab)">Community mods</mdw-button>
+            <mdw-button href="https://discord.gg/renodx" target="_blank" rel="noopener" aria-label="Discord (opens in a new tab)">Discord</mdw-button>
+            <mdw-button href="https://github.com/clshortfuse/renodx" target="_blank" rel="noopener" aria-label="GitHub (opens in a new tab)">GitHub</mdw-button>
+            <mdw-button href="./privacy.html">Privacy</mdw-button>
+          </mdw-box>
+        </mdw-box>
+        <mdw-divider></mdw-divider>
+        <mdw-box row wrap x="between" gap="12">
+          <mdw-body ink="on-surface-variant" size="small" text-padding="0">© 2026 RenoDX contributors.</mdw-body>
+          <mdw-body ink="on-surface-variant" size="small" text-padding="0">RenoDX is an independent open-source project.</mdw-body>
+        </mdw-box>
+      </mdw-box>
+    </mdw-box>
+  </footer>
+
+</body>
+
+</html>

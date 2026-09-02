@@ -4,6 +4,9 @@
 #define FORCE_HDR10    1    // fixes NVAPI washed out issue
 #define HUE_SHIFT_FIRE 0.f  // experimental, re7/8 shaders not collected yet
 
+#define RENODX_COLOR_GRADE_HIGHLIGHTS_VERSION 4
+#define RENODX_COLOR_GRADE_SHADOWS_VERSION    4
+
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {
@@ -12,6 +15,7 @@ struct ShaderInjectData {
   float diffuse_white_nits;
   float graphics_white_nits;
   float gamma_correction;
+  float tone_map_working_color_space;
 
   float tone_map_exposure;
   float tone_map_highlights;
@@ -39,11 +43,12 @@ cbuffer cb13 : register(b0, space50) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
-#define RENODX_TONE_MAP_TYPE       shader_injection.tone_map_type
-#define RENODX_PEAK_WHITE_NITS     shader_injection.peak_white_nits
-#define RENODX_DIFFUSE_WHITE_NITS  shader_injection.diffuse_white_nits
-#define RENODX_GRAPHICS_WHITE_NITS shader_injection.graphics_white_nits
-#define RENODX_GAMMA_CORRECTION    shader_injection.gamma_correction
+#define RENODX_TONE_MAP_TYPE                shader_injection.tone_map_type
+#define RENODX_PEAK_WHITE_NITS              shader_injection.peak_white_nits
+#define RENODX_DIFFUSE_WHITE_NITS           shader_injection.diffuse_white_nits
+#define RENODX_GRAPHICS_WHITE_NITS          shader_injection.graphics_white_nits
+#define RENODX_GAMMA_CORRECTION             shader_injection.gamma_correction
+#define RENODX_TONE_MAP_WORKING_COLOR_SPACE shader_injection.tone_map_working_color_space  // 0 - BT.709, 1 - LMS
 
 #define RENODX_TONE_MAP_EXPOSURE             shader_injection.tone_map_exposure
 #define RENODX_TONE_MAP_HIGHLIGHTS           shader_injection.tone_map_highlights

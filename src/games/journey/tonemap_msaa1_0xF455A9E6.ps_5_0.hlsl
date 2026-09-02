@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "./common.hlsli"
 
 // ---- Created with 3Dmigoto v1.4.1 on Sun May  4 15:04:46 2025
 
@@ -48,9 +48,11 @@ void main(
   r0.xyz = r1.xyz + r0.xyz;
 
   float3 hdr_color = r0.rgb;
-  float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
+  float3 hdr_color_tm = renodx::tonemap::neutwo::ComputeBT709Scale(hdr_color);
+  if (RENODX_TONE_MAP_TYPE > 0) {
+    r0.rgb = (hdr_color * hdr_color_tm);
+  }
   
-  if (RENODX_TONE_MAP_TYPE == 0) {
   r1.xyz = float3(-0.00400000019, -0.00400000019, -0.00400000019);
   r0.xyz = r1.xyz + r0.xyz;
   r0.xyz = max(float3(0,0,0), r0.xyz);
@@ -64,25 +66,10 @@ void main(
   r0.xyz = float3(0.0599999987,0.0599999987,0.0599999987) + r0.xyz;
   r0.xyz = r1.xyz / r0.xyz;
   o0.xyz = r0.xyz;
-  } else {
-    r1.xyz = float3(-0.00300000019, -0.00300000019, -0.00300000019);
-    r0.xyz = r1.xyz + r0.xyz;
-    r0.xyz = max(float3(0, 0, 0), r0.xyz);
-    r0.xyz = min(float3(64, 64, 64), r0.xyz);
-    r1.xyz = float3(6.49999981, 6.49999981, 6.49999981) * r0.xyz;
-    r1.xyz = float3(0.5, 0.5, 0.5) + r1.xyz;
-    r1.xyz = r1.xyz * r0.xyz;
-    r2.xyz = float3(4.59999981, 4.59999981, 4.59999981) * r0.xyz;
-    r2.xyz = float3(1.30000005, 1.30000005, 1.30000005) + r2.xyz;
-    r0.xyz = r2.xyz * r0.xyz;
-    r0.xyz = float3(0.0509999987, 0.0509999987, 0.0509999987) + r0.xyz;
-    r0.xyz = r1.xyz / r0.xyz;
-    o0.xyz = r0.xyz;
-  }
 
   float3 sdr_color = renodx::color::srgb::DecodeSafe(o0.rgb);
-  o0.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, v1);
-  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
+  float3 output_color = DisplayMap(hdr_color, hdr_color_tm, sdr_color);
+  o0.rgb = renodx::color::srgb::EncodeSafe(output_color);
   
   o0.w = 1;
   return;

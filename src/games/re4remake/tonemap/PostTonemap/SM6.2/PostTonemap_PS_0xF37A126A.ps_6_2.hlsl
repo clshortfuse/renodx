@@ -54,9 +54,9 @@ float4 main(
   SV_Target.z = _119;
   SV_Target.w = 1.0f;
 
-  if (TONE_MAP_TYPE != 0) {
-    SV_Target.rgb = ApplyToneMap(SV_Target.rgb, SV_Position.xy);
-  }
+#if 1
+  SV_Target.rgb = ApplyToneMap(SV_Target.rgb, SV_Position.xy);
+#endif
 
   return SV_Target;
 }

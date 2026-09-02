@@ -41,6 +41,18 @@ build32.vs/**
 bin/**
 **/.vshistory/
 .cache/**
+__pycache__/
+*.py[cod]
+
+# Local modder deployment options and secrets
 .env
+.env.*
+!.env.example
 .vscode/mcp.json
 .kiro/
+.tmp/
+.codex-dumps/
+.dotnet/
+.test/
+.venv-analysis/
+tmp/*

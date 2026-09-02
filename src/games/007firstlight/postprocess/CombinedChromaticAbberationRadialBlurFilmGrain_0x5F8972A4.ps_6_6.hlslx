@@ -1,0 +1,293 @@
+struct S_cbCombinedChromaticAbberationRadialBlurFilmGrain {
+  float2 vCenter;
+  float2 vOffsetR_CA;
+  float2 vOffsetG_CA;
+  float2 vOffsetB_CA;
+  float fPower_CA;
+  float fStrength_CA;
+  float2 vLimits_RB;
+  float fRadius_RB;
+  float fAmount_RB;
+  int nSamples_RB;
+  uint _pad_0;
+  float2 vRandOffset;
+  float fNoiseIntensity;
+  uint _pad_1;
+  float2 vTilingNoiseTexture;
+  uint _pad_2;
+  uint _pad_3;
+};
+
+Texture2D<float4> srvRadialBlurInput : register(t0);
+
+Texture2D<float> srvNoise : register(t1);
+
+cbuffer _cbCombinedChromaticAbberationRadialBlurFilmGrain : register(b5) {
+  S_cbCombinedChromaticAbberationRadialBlurFilmGrain cbCombinedChromaticAbberationRadialBlurFilmGrain : packoffset(c000.x);
+};
+
+SamplerState samplerPointWrapNode : register(s1);
+
+SamplerState samplerLinearClampNode : register(s4);
+
+float4 main(
+    precise noperspective float4 SV_Position: SV_Position,
+    linear float4 COLOR: COLOR,
+    linear float2 TEXCOORD: TEXCOORD)
+    : SV_Target {
+  float4 SV_Target;
+  float _59;
+  float _60;
+  float _61;
+  float _62;
+  float _63;
+  float _64;
+  float _65;
+  float _66;
+  float _67;
+  float _68;
+  float _69;
+  float _156;
+  float _157;
+  float _158;
+  float _180;
+  float _181;
+  float _182;
+  float _183;
+  float _184;
+  float _195;
+  float _196;
+  float _197;
+  float _198;
+  int _199;
+  float _233;
+  float _234;
+  float _235;
+  float _236;
+  float _277;
+  float _278;
+  float _279;
+  float _337;
+  float _338;
+  float _339;
+  float4 _15;
+  float _22;
+  float _23;
+  float _31;
+  float _35;
+  float _36;
+  float _40;
+  float _41;
+  float _44;
+  float _45;
+  float _77;
+  float _78;
+  float _79;
+  float _83;
+  float _86;
+  float _94;
+  uint _96;
+  float _97;
+  float _117;
+  float _119;
+  float _120;
+  float _121;
+  float _128;
+  float _129;
+  float _130;
+  float _163;
+  float _170;
+  float _173;
+  float _188;
+  float _191;
+  float _192;
+  float _202;
+  float _204;
+  float _207;
+  float _208;
+  float4 _228;
+  float _237;
+  float _238;
+  float _239;
+  uint _240;
+  float4 _266;
+  float _280;
+  float _281;
+  float _282;
+  float _298;
+  float _300;
+  float _301;
+  float _302;
+  float _309;
+  float _310;
+  float _311;
+  [branch]
+  if (cbCombinedChromaticAbberationRadialBlurFilmGrain.fStrength_CA == 0.0f) {
+    _15 = srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
+    _59 = 0.0f;
+    _66 = _15.x;
+    _67 = _15.y;
+    _68 = _15.z;
+    _69 = _15.w;
+  } else {
+    _22 = mad(TEXCOORD.x, 2.0f, -1.0f);
+    _23 = mad(TEXCOORD.y, 2.0f, -1.0f);
+    _31 = saturate(cbCombinedChromaticAbberationRadialBlurFilmGrain.fStrength_CA) * exp2(log2(saturate(dot(float2(_22, _23), float2(_22, _23)) * 0.5f)) * cbCombinedChromaticAbberationRadialBlurFilmGrain.fPower_CA);
+    _35 = cbCombinedChromaticAbberationRadialBlurFilmGrain.vOffsetR_CA.x * _31;
+    _36 = cbCombinedChromaticAbberationRadialBlurFilmGrain.vOffsetR_CA.y * _31;
+    _40 = cbCombinedChromaticAbberationRadialBlurFilmGrain.vOffsetG_CA.x * _31;
+    _41 = cbCombinedChromaticAbberationRadialBlurFilmGrain.vOffsetG_CA.y * _31;
+    _44 = cbCombinedChromaticAbberationRadialBlurFilmGrain.vOffsetB_CA.x * _31;
+    _45 = cbCombinedChromaticAbberationRadialBlurFilmGrain.vOffsetB_CA.y * _31;
+    _59 = 1.0f;
+    _60 = _35;
+    _61 = _36;
+    _62 = _40;
+    _63 = _41;
+    _64 = _44;
+    _65 = _45;
+    _66 = (((float4)(srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2((_35 + TEXCOORD.x), (_36 + TEXCOORD.y)), 0.0f))).x);
+    _67 = (((float4)(srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2((_40 + TEXCOORD.x), (_41 + TEXCOORD.y)), 0.0f))).y);
+    _68 = (((float4)(srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2((_44 + TEXCOORD.x), (_45 + TEXCOORD.y)), 0.0f))).z);
+    _69 = 1.0f;
+  }
+  _77 = float((int)(cbCombinedChromaticAbberationRadialBlurFilmGrain.nSamples_RB));
+  _78 = TEXCOORD.x - cbCombinedChromaticAbberationRadialBlurFilmGrain.vCenter.x;
+  _79 = TEXCOORD.y - cbCombinedChromaticAbberationRadialBlurFilmGrain.vCenter.y;
+  _83 = sqrt((_78 * _78) + (_79 * _79));
+  _86 = saturate(_83 / (cbCombinedChromaticAbberationRadialBlurFilmGrain.vLimits_RB.y * 0.5f));
+  _94 = exp2(log2((_86 * _86) * (3.0f - (_86 * 2.0f))) * 1.5f) * _77;
+  _96 = uint(floor(_94));
+  _97 = frac(_94);
+  if ((_83 < cbCombinedChromaticAbberationRadialBlurFilmGrain.vLimits_RB.x) || (_96 == 0)) {
+    do {
+      _156 = _66;
+      _157 = _67;
+      _158 = _68;
+      if (cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity > 0.0f) {
+        _117 = srvNoise.SampleLevel(samplerPointWrapNode, float2(((cbCombinedChromaticAbberationRadialBlurFilmGrain.vTilingNoiseTexture.x * TEXCOORD.x) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vRandOffset.x), ((cbCombinedChromaticAbberationRadialBlurFilmGrain.vTilingNoiseTexture.y * TEXCOORD.y) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vRandOffset.y)), 0.0f);
+        _119 = _66 * _66;
+        _120 = _67 * _67;
+        _121 = _68 * _68;
+        _128 = (_117.x * (1.0f - _119)) * 2.0f;
+        _129 = (_117.x * (1.0f - _120)) * 2.0f;
+        _130 = (_117.x * (1.0f - _121)) * 2.0f;
+        _156 = sqrt(((((lerp(_128, 1.0f, _119))*_119) - _119) * cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity) + _119);
+        _157 = sqrt(((((lerp(_129, 1.0f, _120))*_120) - _120) * cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity) + _120);
+        _158 = sqrt(((((lerp(_130, 1.0f, _121))*_121) - _121) * cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity) + _121);
+      }
+      SV_Target.x = _156;
+      SV_Target.y = _157;
+      SV_Target.z = _158;
+      SV_Target.w = _69;
+    } while (false);
+  } else {
+    _163 = saturate((_83 - cbCombinedChromaticAbberationRadialBlurFilmGrain.vLimits_RB.x) / (cbCombinedChromaticAbberationRadialBlurFilmGrain.vLimits_RB.y - cbCombinedChromaticAbberationRadialBlurFilmGrain.vLimits_RB.x));
+    _170 = ((_163 * _163) * (3.0f - (_163 * 2.0f))) * cbCombinedChromaticAbberationRadialBlurFilmGrain.fAmount_RB;
+    _173 = saturate(cbCombinedChromaticAbberationRadialBlurFilmGrain.fRadius_RB * _83);
+    do {
+      if ((uint)_96 > (uint)1) {
+        _195 = _59;
+        _196 = _66;
+        _197 = _67;
+        _198 = _68;
+        _199 = 1;
+        bool _loop_break_0 = false;
+        while (true) {
+          _202 = _170 * _173;
+          _204 = 1.0f - (_202 * (float((uint)_199) / _77));
+          _207 = (_204 * _78) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vCenter.x;
+          _208 = (_204 * _79) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vCenter.y;
+          do {
+            if (_195 > 0.0f) {
+              _233 = saturate(_195 + -0.5f);
+              _234 = (((float4)(srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2((_207 + _60), (_208 + _61)), 0.0f))).x);
+              _235 = (((float4)(srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2((_207 + _62), (_208 + _63)), 0.0f))).y);
+              _236 = (((float4)(srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2((_207 + _64), (_208 + _65)), 0.0f))).z);
+            } else {
+              _228 = srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2(_207, _208), 0.0f);
+              _233 = _195;
+              _234 = _228.x;
+              _235 = _228.y;
+              _236 = _228.z;
+            }
+            _237 = _198 + _236;
+            _238 = _197 + _235;
+            _239 = _196 + _234;
+            _240 = _199 + 1u;
+            if ((_240 == _96)) {
+              break;
+            } else {
+              _195 = _233;
+              _196 = _239;
+              _197 = _238;
+              _198 = _237;
+              _199 = _240;
+            }
+            _180 = _202;
+            _181 = _233;
+            _182 = _239;
+            _183 = _238;
+            _184 = _237;
+          } while (false);
+          if (_loop_break_0) {
+            _loop_break_0 = false;
+            continue;
+          }
+          break;
+        }
+      } else {
+        _180 = (_170 * _173);
+        _181 = _59;
+        _182 = _66;
+        _183 = _67;
+        _184 = _68;
+      }
+      _188 = 1.0f - (_180 * (float((uint)_96) / _77));
+      _191 = (_188 * _78) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vCenter.x;
+      _192 = (_188 * _79) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vCenter.y;
+      do {
+        _277 = _182;
+        _278 = _183;
+        _279 = _184;
+        if (_97 > 9.999999747378752e-06f) {
+          if (_181 > 0.0f) {
+            _277 = (((((float4)(srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2((_191 + _60), (_192 + _61)), 0.0f))).x) * _97) + _182);
+            _278 = (((((float4)(srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2((_191 + _62), (_192 + _63)), 0.0f))).y) * _97) + _183);
+            _279 = (((((float4)(srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2((_191 + _64), (_192 + _65)), 0.0f))).z) * _97) + _184);
+          } else {
+            _266 = srvRadialBlurInput.SampleLevel(samplerLinearClampNode, float2(_191, _192), 0.0f);
+            _277 = ((_266.x * _97) + _182);
+            _278 = ((_266.y * _97) + _183);
+            _279 = ((_266.z * _97) + _184);
+          }
+        }
+        _280 = _277 / _94;
+        _281 = _278 / _94;
+        _282 = _279 / _94;
+        do {
+          _337 = _280;
+          _338 = _281;
+          _339 = _282;
+          if (cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity > 0.0f) {
+            _298 = srvNoise.SampleLevel(samplerPointWrapNode, float2(((cbCombinedChromaticAbberationRadialBlurFilmGrain.vTilingNoiseTexture.x * TEXCOORD.x) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vRandOffset.x), ((cbCombinedChromaticAbberationRadialBlurFilmGrain.vTilingNoiseTexture.y * TEXCOORD.y) + cbCombinedChromaticAbberationRadialBlurFilmGrain.vRandOffset.y)), 0.0f);
+            _300 = _280 * _280;
+            _301 = _281 * _281;
+            _302 = _282 * _282;
+            _309 = (_298.x * (1.0f - _300)) * 2.0f;
+            _310 = (_298.x * (1.0f - _301)) * 2.0f;
+            _311 = (_298.x * (1.0f - _302)) * 2.0f;
+            _337 = sqrt(((((lerp(_309, 1.0f, _300))*_300) - _300) * cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity) + _300);
+            _338 = sqrt(((((lerp(_310, 1.0f, _301))*_301) - _301) * cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity) + _301);
+            _339 = sqrt(((((lerp(_311, 1.0f, _302))*_302) - _302) * cbCombinedChromaticAbberationRadialBlurFilmGrain.fNoiseIntensity) + _302);
+          }
+          SV_Target.x = _337;
+          SV_Target.y = _338;
+          SV_Target.z = _339;
+          SV_Target.w = 1.0f;
+        } while (false);
+      } while (false);
+    } while (false);
+  }
+  return SV_Target;
+}

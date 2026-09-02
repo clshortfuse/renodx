@@ -1,16 +1,164 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RenoDX - Mod Downloads</title>
-  <!-- Material Design Web Components via CDN (no build required) -->
-  <script src="https://cdn.jsdelivr.net/npm/@shortfuse/materialdesignweb?color=00191a"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#001f1f">
+  <meta name="description" content="RenoDX is an open-source framework for game-specific HDR output, shader replacement, resource upgrades, and graphics controls.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="RenoDX | Renovation Engine for DirectX Games">
+  <meta property="og:description" content="An open-source framework for game-specific rendering upgrades through ReShade addons.">
+  <meta property="og:url" content="https://renodx.com/">
+  <meta name="twitter:card" content="summary">
+  <title>RenoDX | Renovation Engine for DirectX Games</title>
+  <link rel="canonical" href="https://renodx.com/">
+  <link rel="icon" href="./renodx-logo.png" type="image/png">
+  <link rel="manifest" href="./site.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@shortfuse/materialdesignweb@0.11.4?color=00ffff&amp;lightness=dark"></script>
+  <script src="./app.mjs"></script>
 </head>
+
 <body>
-  <rdx-app></rdx-app>
-  <script type="module" src="./app.mjs"></script>
+  <a id="skip-link" href="#main-content">Skip to content</a>
+
+  <mdw-top-app-bar id="site-header" size="small" color="surface" raised-color="surface-container" role="navigation" aria-label="RenoDX navigation">
+    <a class="brand" href="#home" slot="leading" aria-label="RenoDX home">
+      <mdw-box inline row y="center" gap="12" ink="on-surface">
+        <img class="brand-logo" src="./renodx-logo.png" alt="">
+        <mdw-title size="large" text-padding="0">RenoDX</mdw-title>
+      </mdw-box>
+    </a>
+    <mdw-box class="site-nav" slot="trailing" row gap="4" padding-x="8" y="center">
+      <mdw-button class="secondary-nav" href="#product">Product</mdw-button>
+      <mdw-button class="secondary-nav" href="./mods.html">Mods</mdw-button>
+      <mdw-button class="secondary-nav" href="#support">Support</mdw-button>
+      <mdw-button class="secondary-nav" href="#open-source">Open source</mdw-button>
+      <mdw-button filled href="./mods.html">Browse Mods</mdw-button>
+    </mdw-box>
+  </mdw-top-app-bar>
+
+  <main id="main-content">
+    <section id="home">
+      <mdw-box class="site-shell" padding="pane" padding-y="24">
+        <mdw-grid gap="24" y="center">
+          <mdw-box col-span-4="4" col-span-8="8" col-span-12="7" gap="24">
+            <mdw-label ink="primary" size="large" text-padding="0">Renovation Engine for DirectX games</mdw-label>
+            <mdw-display role="heading" aria-level="1" size="large" text-padding="0">Game-specific rendering, rebuilt.</mdw-display>
+            <mdw-body ink="on-surface-variant" size="large" text-padding="0">RenoDX is an open-source framework for modifying DirectX game rendering through ReShade addons. It provides the foundation for HDR output, shader replacement, resource upgrades, overlays, and persistent graphics settings.</mdw-body>
+            <mdw-box row wrap gap="12">
+              <mdw-button filled icon="sports_esports" href="./mods.html">Browse Mods</mdw-button>
+              <mdw-button outlined icon="code" href="https://github.com/clshortfuse/renodx" target="_blank" rel="noopener" aria-label="View Source (opens in a new tab)">View Source</mdw-button>
+            </mdw-box>
+          </mdw-box>
+
+          <mdw-card elevated shape-style="extra-large" color="primary-container" col-span-4="4" col-span-8="8" col-span-12="5">
+            <img class="hero-logo" src="./renodx-logo-wide.png" alt="RenoDX">
+          </mdw-card>
+        </mdw-grid>
+      </mdw-box>
+    </section>
+
+    <section id="product">
+      <mdw-box color="surface-container-low">
+        <mdw-box class="site-shell" padding="pane" padding-y="24" gap="24">
+          <mdw-grid gap="24" y="end">
+            <mdw-box col-span-4="4" col-span-8="8" col-span-12="7" gap="16">
+              <mdw-label ink="primary" size="large" text-padding="0">The product</mdw-label>
+              <mdw-headline role="heading" aria-level="2" size="large" text-padding="0">A framework for game-specific graphics mods.</mdw-headline>
+            </mdw-box>
+            <mdw-body col-span-4="4" col-span-8="8" col-span-12="5" ink="on-surface-variant" size="large" text-padding="0">Each RenoDX mod is built around the rendering pipeline of an individual game. This allows modifications to operate on the relevant scene, interface, post-processing, and output passes instead of applying one generic effect to every title.</mdw-body>
+          </mdw-grid>
+
+          <mdw-grid gap="16" y="stretch">
+            <mdw-card filled shape-style="large" color="surface-container-high" padding="24" gap="16" col-span-4="4" col-span-8="4" col-span-12="4">
+              <mdw-icon ink="primary" icon="hdr_on"></mdw-icon>
+              <mdw-title role="heading" aria-level="3" size="large" text-padding="0">HDR output</mdw-title>
+              <mdw-body ink="on-surface-variant" size="large" text-padding="0">Mods can provide game-aware tone mapping and HDR display output while retaining the intended color grading and presentation.</mdw-body>
+            </mdw-card>
+            <mdw-card filled shape-style="large" color="surface-container-high" padding="24" gap="16" col-span-4="4" col-span-8="4" col-span-12="4">
+              <mdw-icon ink="primary" icon="deployed_code"></mdw-icon>
+              <mdw-title role="heading" aria-level="3" size="large" text-padding="0">Rendering changes</mdw-title>
+              <mdw-body ink="on-surface-variant" size="large" text-padding="0">Runtime shader replacement and resource upgrades support targeted fixes and deeper rendering-path modifications.</mdw-body>
+            </mdw-card>
+            <mdw-card filled shape-style="large" color="surface-container-high" padding="24" gap="16" col-span-4="4" col-span-8="8" col-span-12="4">
+              <mdw-icon ink="primary" icon="tune"></mdw-icon>
+              <mdw-title role="heading" aria-level="3" size="large" text-padding="0">Game controls</mdw-title>
+              <mdw-body ink="on-surface-variant" size="large" text-padding="0">In-game overlays expose settings appropriate to each mod and retain configuration between sessions.</mdw-body>
+            </mdw-card>
+          </mdw-grid>
+        </mdw-box>
+      </mdw-box>
+    </section>
+
+    <section id="support">
+      <mdw-box class="site-shell" padding="pane" padding-y="24">
+        <mdw-grid gap="24" y="start">
+          <mdw-box col-span-4="4" col-span-8="8" col-span-12="6" gap="16">
+            <mdw-label ink="primary" size="large" text-padding="0">Installation and support</mdw-label>
+            <mdw-headline role="heading" aria-level="2" size="large" text-padding="0">Installation information and community assistance.</mdw-headline>
+          </mdw-box>
+          <mdw-box col-span-4="4" col-span-8="8" col-span-12="6" gap="24">
+            <mdw-body ink="on-surface-variant" size="large" text-padding="0">The community mod list contains installation instructions, downloads, and game-specific notes. The Discord community provides support for setup, compatibility, and mod configuration.</mdw-body>
+            <mdw-box row wrap gap="12">
+              <mdw-button filled icon="open_in_new" href="https://github.com/clshortfuse/renodx/wiki/Mods" target="_blank" rel="noopener" aria-label="Community mod list (opens in a new tab)">Community mod list</mdw-button>
+              <mdw-button outlined icon="forum" href="https://discord.gg/renodx" target="_blank" rel="noopener" aria-label="Discord (opens in a new tab)">Discord</mdw-button>
+            </mdw-box>
+          </mdw-box>
+        </mdw-grid>
+      </mdw-box>
+    </section>
+
+    <section id="open-source">
+      <mdw-box color="surface-container-low">
+        <mdw-box class="site-shell" padding="pane" padding-y="24">
+          <mdw-grid gap="24" y="start">
+            <mdw-box col-span-4="4" col-span-8="8" col-span-12="6" gap="16">
+              <mdw-label ink="primary" size="large" text-padding="0">Open source</mdw-label>
+              <mdw-headline role="heading" aria-level="2" size="large" text-padding="0">Built in public.</mdw-headline>
+            </mdw-box>
+            <mdw-box col-span-4="4" col-span-8="8" col-span-12="6" gap="24">
+              <mdw-body ink="on-surface-variant" size="large" text-padding="0">The repository contains the framework, shared shader libraries, utilities, game integrations, development tools, and contribution documentation.</mdw-body>
+              <mdw-box row wrap gap="12">
+                <mdw-button outlined icon="code" href="https://github.com/clshortfuse/renodx" target="_blank" rel="noopener" aria-label="GitHub (opens in a new tab)">GitHub</mdw-button>
+                <mdw-button outlined icon="handshake" href="https://github.com/clshortfuse/renodx/blob/main/docs/CONTRIBUTING.md" target="_blank" rel="noopener" aria-label="Contributing (opens in a new tab)">Contributing</mdw-button>
+              </mdw-box>
+            </mdw-box>
+          </mdw-grid>
+        </mdw-box>
+      </mdw-box>
+    </section>
+  </main>
+
+  <footer>
+    <mdw-box color="surface-container">
+      <mdw-box class="site-shell" padding="pane" padding-y="24" gap="24">
+        <mdw-box row wrap x="between" y="center" gap="24">
+          <mdw-box row y="center" gap="12">
+            <img class="brand-logo" src="./renodx-logo.png" alt="">
+            <mdw-box gap="4">
+              <mdw-title size="medium" text-padding="0">RenoDX</mdw-title>
+              <mdw-body ink="on-surface-variant" size="small" text-padding="0">Renovation Engine for DirectX games.</mdw-body>
+            </mdw-box>
+          </mdw-box>
+          <mdw-box row wrap gap="4" role="navigation" aria-label="Footer navigation">
+            <mdw-button href="./mods.html">Mods</mdw-button>
+            <mdw-button icon="open_in_new" href="https://github.com/clshortfuse/renodx/wiki/Mods" target="_blank" rel="noopener" aria-label="Community mods (opens in a new tab)">Community mods</mdw-button>
+            <mdw-button href="https://discord.gg/renodx" target="_blank" rel="noopener" aria-label="Discord (opens in a new tab)">Discord</mdw-button>
+            <mdw-button href="https://github.com/clshortfuse/renodx" target="_blank" rel="noopener" aria-label="GitHub (opens in a new tab)">GitHub</mdw-button>
+            <mdw-button href="./privacy.html">Privacy</mdw-button>
+          </mdw-box>
+        </mdw-box>
+        <mdw-divider></mdw-divider>
+        <mdw-box row wrap x="between" gap="12">
+          <mdw-body ink="on-surface-variant" size="small" text-padding="0">© 2026 RenoDX contributors.</mdw-body>
+          <mdw-body ink="on-surface-variant" size="small" text-padding="0">RenoDX is an independent open-source project.</mdw-body>
+        </mdw-box>
+      </mdw-box>
+    </mdw-box>
+  </footer>
 </body>
 
 </html>

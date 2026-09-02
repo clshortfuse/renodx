@@ -7,8 +7,6 @@
 
 // #define DEBUG_LEVEL_0
 
-#include <atomic>
-
 #include <deps/imgui/imgui.h>
 #include <embed/shaders.h>
 #include <include/reshade.hpp>
@@ -23,7 +21,7 @@ namespace {
 
 ShaderInjectData shader_injection;
 
-std::atomic_uint64_t g_current_uav0 = 0;
+thread_local uint64_t g_current_uav0 = 0;
 
 bool OnToneMapDraw(reshade::api::command_list* cmd_list) {
   reshade::api::resource_view current_uav0 = {g_current_uav0};

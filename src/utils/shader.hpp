@@ -15,6 +15,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <shared_mutex>
 #include <span>
@@ -27,13 +28,14 @@
 
 #include "./bitwise.hpp"
 #include "./cross_addon.hpp"
+#include "./cstring.hpp"
 #include "./data.hpp"
-#include "./directx.hpp"
 #include "./format.hpp"
 #include "./hash.hpp"
 #include "./log.hpp"
 #include "./pipeline.hpp"
 #include "./pipeline_layout.hpp"
+
 
 namespace renodx::utils::shader {
 
@@ -82,10 +84,20 @@ static void AddShaderReplacement(
   auto* desc = static_cast<reshade::api::shader_desc*>(subobject->data);
   assert(desc != nullptr);
   if (desc == nullptr) return;
+  /*
+    Some games use different entry points (e.g. ps_main) but we hardcode main as
+    entry point in our slang compiler. Reshade converts null entry_point to main
+    but we'd rather manually control it ourselves
+  */
+  if (desc->entry_point != nullptr) {
+    std::free(const_cast<char*>(desc->entry_point));
+    desc->entry_point = nullptr;
+  }
+  desc->entry_point = renodx::utils::CloneCString("main");
+
   if (desc->code_size != 0u) {
     free(const_cast<void*>(desc->code));  // Release clone's shader
   }
-
   desc->code_size = new_shader.size();
   if (desc->code_size == 0) {
     desc->code = nullptr;
@@ -129,17 +141,20 @@ struct PipelineShaderDetails {
   cross_addon::unordered_set<uint32_t> shader_hashes;
   reshade::api::pipeline replacement_pipeline = {0};
   reshade::api::pipeline_stage replacement_stages = static_cast<reshade::api::pipeline_stage>(0u);
-  [[deprecated("Use injection_layout and injection_index instead.")]]
-  const renodx::utils::pipeline_layout::PipelineLayoutData* layout_data = nullptr;
   bool initialized_replacement = false;
 
   std::optional<cross_addon::string> tag;
   bool destroyed = false;
   bool is_replacement = false;
 
+  reshade::api::pipeline_layout replacement_layout = {0u};
   reshade::api::pipeline_layout injection_layout = {0u};
   int32_t injection_index = -1;
   int32_t injection_register_index = -1;
+  int32_t injection_constant_buffer_offset = 0;
+  reshade::api::shader_stage injection_visibility = reshade::api::shader_stage::all;
+  // Per-pipeline cache of allocated descriptor table handles keyed by layout param.
+  cross_addon::vector<reshade::api::descriptor_table> descriptor_tables;
   cross_addon::unordered_map<
       renodx::utils::pipeline_layout::DescriptorBindingKey,
       renodx::utils::pipeline_layout::DescriptorPushLocation,
@@ -158,15 +173,20 @@ struct PipelineShaderDetails {
         device(device),
         layout(layout) {
     pipeline_layout::GetPipelineLayoutData(layout, [&](const auto& layout_data) {
+      this->replacement_layout = layout_data->replacement_layout;
       this->injection_layout = layout_data->injection_layout;
       this->injection_index = layout_data->injection_index;
       this->injection_register_index = layout_data->injection_register_index;
+      this->injection_constant_buffer_offset = layout_data->injection_constant_buffer_offset;
+      if (layout_data->injection_index >= 0
+          && static_cast<size_t>(layout_data->injection_index) < layout_data->params.size()
+          && layout_data->params[layout_data->injection_index].type == reshade::api::pipeline_layout_param_type::push_constants) {
+        this->injection_visibility = layout_data->params[layout_data->injection_index].push_constants.visibility;
+      }
       this->descriptor_push_locations.clear();
       this->descriptor_push_locations.insert(
           layout_data->descriptor_push_locations.begin(),
           layout_data->descriptor_push_locations.end());
-
-      this->layout_data = layout_data;
     });
     reshade::api::pipeline_subobject* replacement_subobjects = nullptr;
     for (uint32_t i = 0; i < subobject_count; ++i) {
@@ -186,6 +206,7 @@ struct PipelineShaderDetails {
           continue;
       }
 
+      const auto is_vulkan = device->get_api() == reshade::api::device_api::vulkan;
       const reshade::api::shader_desc desc = *static_cast<const reshade::api::shader_desc*>(subobject.data);
 
       std::stringstream s;
@@ -194,9 +215,11 @@ struct PipelineShaderDetails {
       s << ", Index: " << i;
       s << ", Type: " << subobject.type;
       s << ", Stage: " << COMPATIBLE_STAGES[shader_type_index];
+      if (is_vulkan) {
+        s << ", Entry Point: " << desc.entry_point;
+      }
       s << ", Count: " << subobject.count;
       s << ", Code Size: " << desc.code_size;
-
       if (desc.code_size == 0) {
         s << ", Code: (empty)";
         s << ")";
@@ -307,8 +330,8 @@ struct PipelineShaderDetails {
       reshade::api::pipeline new_pipeline;
 
       auto create_layout = this->injection_layout != 0u ? this->injection_layout : layout;
-      if (this->layout_data != nullptr && this->layout_data->replacement_layout.handle != 0u) {
-        create_layout = this->layout_data->replacement_layout;
+      if (this->replacement_layout.handle != 0u) {
+        create_layout = this->replacement_layout;
       }
 
       const bool built_pipeline_ok = device->create_pipeline(
@@ -377,6 +400,7 @@ struct __declspec(uuid("8707f724-c7e5-420e-89d6-cc032c732d2d")) CommandListData 
   std::array<StageState, 3> stage_states = EMPTY_STAGE_STATES;
 };
 
+[[deprecated("Use GetPipelineShaderDetails<F> or UpdatePipelineShaderDetails<F>")]] [[nodiscard]]
 inline PipelineShaderDetails* GetPipelineShaderDetails(const reshade::api::pipeline& pipeline) {
   PipelineShaderDetails* details = nullptr;
 
@@ -395,10 +419,40 @@ inline PipelineShaderDetails* GetPipelineShaderDetails(const reshade::api::pipel
   return details;
 }
 
+template <typename F>
+inline bool GetPipelineShaderDetails(const reshade::api::pipeline& pipeline, F&& f) {
+  if (pipeline.handle == 0u) return false;
+
+  bool found = false;
+  shared.data->pipeline_shader_details.if_contains(
+      pipeline.handle,
+      [&f, &found](const std::pair<const uint64_t, PipelineShaderDetails>& pair) {
+        std::invoke(std::forward<F>(f), pair.second);
+        found = true;
+      });
+  return found;
+}
+
+template <typename F>
+inline bool UpdatePipelineShaderDetails(const reshade::api::pipeline& pipeline, F&& f) {
+  if (pipeline.handle == 0u) return false;
+
+  bool updated = false;
+  shared.data->pipeline_shader_details.modify_if(
+      pipeline.handle,
+      [&f, &updated](std::pair<const uint64_t, PipelineShaderDetails>& pair) {
+        std::invoke(std::forward<F>(f), pair.second);
+        updated = true;
+      });
+  return updated;
+}
+
 inline void PopulateStageState(StageState* stage_state) {
   if (stage_state->pipeline == 0u) return;
   if (stage_state->pipeline_details != nullptr) return;
-  stage_state->pipeline_details = GetPipelineShaderDetails(stage_state->pipeline);
+  GetPipelineShaderDetails(stage_state->pipeline, [&](const PipelineShaderDetails& details) {
+    stage_state->pipeline_details = const_cast<PipelineShaderDetails*>(&details);
+  });
 }
 
 inline StageState* GetCurrentVertexState(CommandListData* cmd_list_data) {
@@ -507,8 +561,8 @@ static bool BuildReplacementPipeline(PipelineShaderDetails* details) {
   if (replacement_subobjects != nullptr) {
     reshade::api::pipeline new_pipeline;
     auto layout = details->injection_layout != 0u ? details->injection_layout : details->layout;
-    if (details->layout_data != nullptr && details->layout_data->replacement_layout.handle != 0u) {
-      layout = details->layout_data->replacement_layout;
+    if (details->replacement_layout.handle != 0u) {
+      layout = details->replacement_layout;
     }
 
     const bool built_pipeline_ok = details->device->create_pipeline(
@@ -571,7 +625,7 @@ inline bool ApplyReplacement(reshade::api::command_list* cmd_list, StageState* s
     std::stringstream s;
     s << "utils::shader::ApplyReplacement(Applying replacement ";
     s << stage_state->stage;
-    s << ", pipeline: " << static_cast<uintptr_t>(details->replacement_pipeline.handle);
+    s << ", pipeline: " << PRINT_PTR(details->replacement_pipeline.handle);
     s << ", shader: " << PRINT_CRC32(GetCurrentShaderHash(stage_state));
     s << ")";
     reshade::log::message(reshade::log::level::debug, s.str().c_str());
@@ -729,13 +783,13 @@ static void OnInitDevice(reshade::api::device* device) {
                             ShaderBytecodeMap& dest,
                             const std::string& type = "") {
     for (const auto& [shader_hash, replacement] : source) {
-      auto [iterator, is_new] = dest.emplace(std::pair<reshade::api::device*, uint32_t>({device, shader_hash}), replacement);
+      const auto [iterator, is_new] = dest.insert_or_assign(DeviceShaderKey{device, shader_hash}, replacement);
       std::stringstream s;
       s << "utils::shader::OnInitDevice(";
       if (is_new) {
         s << "Registered ";
       } else {
-        s << "Ovewriting ";
+        s << "Overwriting ";
       }
       s << type;
       s << " replacement: ";
@@ -776,6 +830,24 @@ static void OnDestroyDevice(reshade::api::device* device) {
   for (const auto& pipeline_handle : pipeline_handles) {
     shared.data->pipeline_shader_details.erase(pipeline_handle);
   }
+
+  auto erase_device_entries = [device](auto& map) {
+    std::vector<DeviceShaderKey> keys;
+    map.for_each([&](const auto& pair) {
+      if (pair.first.first == device) {
+        keys.emplace_back(pair.first);
+      }
+    });
+    for (const auto& key : keys) {
+      map.erase(key);
+    }
+  };
+  erase_device_entries(shared.data->compile_time_replacements);
+  erase_device_entries(shared.data->runtime_replacements);
+  erase_device_entries(shared.data->shader_replacements);
+  erase_device_entries(shared.data->shader_replacements_inverse);
+  erase_device_entries(shared.data->shader_pipeline_handles);
+  runtime_replacement_count = shared.data->runtime_replacements.size();
 }
 
 inline void OnInitCommandList(reshade::api::command_list* cmd_list) {
@@ -830,6 +902,8 @@ static bool OnCreatePipeline(
             auto new_size = replacement.size();
 
             desc->code_size = new_size;
+            // unify entry points
+            desc->entry_point = "main";
 
             if (new_size == 0) {
               desc->code = nullptr;
@@ -1018,24 +1092,25 @@ static std::optional<std::vector<uint8_t>> GetShaderData(
 static std::optional<std::vector<uint8_t>> GetShaderData(
     const reshade::api::pipeline& pipeline,
     const uint32_t& shader_hash) {
-  auto* details = GetPipelineShaderDetails(pipeline);
-  if (details != nullptr) {
-    for (const auto& info : details->subobject_shaders) {
+  std::optional<std::vector<uint8_t>> shader_data = std::nullopt;
+  GetPipelineShaderDetails(pipeline, [&](const PipelineShaderDetails& details) {
+    for (const auto& info : details.subobject_shaders) {
       if (info.shader_hash != shader_hash) continue;
-      return GetShaderData(*details, info);
+      shader_data = GetShaderData(details, info);
+      return;
     }
-  }
-  return std::nullopt;
+  });
+  return shader_data;
 }
 
 static std::optional<std::vector<uint8_t>> GetShaderData(
     const reshade::api::pipeline& pipeline,
     const PipelineSubobjectShaderInfo& info) {
-  auto* details = GetPipelineShaderDetails(pipeline);
-  if (details != nullptr) {
-    return GetShaderData(*details, info);
-  }
-  return std::nullopt;
+  std::optional<std::vector<uint8_t>> shader_data = std::nullopt;
+  GetPipelineShaderDetails(pipeline, [&](const PipelineShaderDetails& details) {
+    shader_data = GetShaderData(details, info);
+  });
+  return shader_data;
 }
 
 static std::optional<std::vector<uint8_t>> GetShaderData(const StageState* stage_state, const int& index) {

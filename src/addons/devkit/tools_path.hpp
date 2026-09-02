@@ -16,6 +16,7 @@
 #include "../../utils/mcp/types.hpp"
 #include "../../utils/path.hpp"
 #include "../../utils/shader_compiler_directx.hpp"
+#include "../../utils/shader_compiler_vulkan.hpp"
 
 namespace renodx::addons::devkit::tools_path {
 
@@ -27,6 +28,9 @@ struct Status {
   bool has_dxcompiler_dll = false;
   bool has_cmd_decompiler = false;
   bool has_dxil_spirv = false;
+  bool has_slangc = false;
+  bool has_glslang = false;
+  bool has_spirv_dis = false;
   bool has_spirv_cross = false;
 };
 
@@ -50,6 +54,10 @@ struct Status {
   status.has_dxcompiler_dll = renodx::utils::path::CheckExistsFile(status.configured_path / "dxcompiler.dll");
   status.has_cmd_decompiler = renodx::utils::path::CheckExistsFile(status.configured_path / "cmd_Decompiler.exe");
   status.has_dxil_spirv = renodx::utils::path::CheckExistsFile(status.configured_path / "dxil-spirv.exe");
+  status.has_slangc = renodx::utils::path::CheckExistsFile(status.configured_path / "slangc.exe");
+  status.has_glslang = renodx::utils::path::CheckExistsFile(status.configured_path / "glslang.exe")
+                       || renodx::utils::path::CheckExistsFile(status.configured_path / "glslangValidator.exe");
+  status.has_spirv_dis = renodx::utils::path::CheckExistsFile(status.configured_path / "spirv-dis.exe");
   status.has_spirv_cross = renodx::utils::path::CheckExistsFile(status.configured_path / "spirv-cross.exe");
 
   return status;
@@ -62,6 +70,9 @@ inline void to_json(json& j, const Status& status) {
       {"hasDxcompilerDll", status.has_dxcompiler_dll},
       {"hasCmdDecompiler", status.has_cmd_decompiler},
       {"hasDxilSpirv", status.has_dxil_spirv},
+      {"hasSlangc", status.has_slangc},
+      {"hasGlslang", status.has_glslang},
+      {"hasSpirvDis", status.has_spirv_dis},
       {"hasSpirvCross", status.has_spirv_cross},
   };
 }
@@ -70,13 +81,14 @@ inline void to_json(json& j, const Status& status) {
   if (tools_path.has_value()) {
     const auto trimmed_path = TrimTrailingWhitespace(*tools_path);
     renodx::utils::shader::compiler::directx::SetToolsPath(trimmed_path);
+    renodx::utils::shader::compiler::vulkan::SetToolsPath(trimmed_path);
     reshade::set_config_value(nullptr, "renodx-dev", "ToolsPath", trimmed_path.c_str());
   }
 
   const auto status = GetStatus();
   if (status.configured_path.empty()) {
     return ToolResult{
-        .text = "No devkit tools directory is configured. DXC will use the process DLL search path.",
+        .text = "No devkit tools directory is configured. DXC will use the process DLL search path, and Vulkan tools will be auto-discovered.",
         .structured_content = status,
     };
   }

@@ -920,6 +920,8 @@ float4 main(
 
   wuwa::lut::ApplyInverseSamplingScale(linear_output.r, linear_output.g, linear_output.b, lut_sampling_scale);
 
+  wuwa::lut::PreserveReferenceLightness(linear_output.r, linear_output.g, linear_output.b, bt709_tonemapped);
+
   float3 scaled = float3(cb0_044y, cb0_044z, cb0_044w) * (((cb0_026y + (cb0_026x * linear_output)) * linear_output) + cb0_026z);
   float3 output = ((float3(cb0_045x, cb0_045y, cb0_045z) - scaled) * cb0_045w) + scaled;
 

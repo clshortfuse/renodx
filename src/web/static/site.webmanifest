@@ -1,0 +1,17 @@
+{
+  "name": "RenoDX",
+  "short_name": "RenoDX",
+  "description": "Renovation Engine for DirectX games",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#00050d",
+  "theme_color": "#000b14",
+  "icons": [
+    {
+      "src": "./renodx-logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

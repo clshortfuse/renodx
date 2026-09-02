@@ -5,6 +5,7 @@
 #include "./colorgrade.hlsl"
 #include "./lut.hlsl"
 #include "./tonemap/aces.hlsl"
+#include "./tonemap/allenwp.hlsl"
 #include "./tonemap/daniele.hlsl"
 #include "./tonemap/dice.hlsl"
 #include "./tonemap/frostbite.hlsl"

@@ -109,14 +109,14 @@ sequenceDiagram
 - `renodx_list_connections` includes `bridgeInfo` so MCP clients can inspect the active bridge version/build.
 - `devkit_status` includes `serverInfo` so MCP clients can inspect the connected devkit backend version/build.
 - Snapshot-backed inspection tools stay empty until a frame snapshot is queued and captured with `devkit_queue_snapshot`.
-- `devkit_set_tools_path` should usually point at the repo `bin` directory when a game ships conflicting shader tool binaries.
+- `devkit_set_tools_path` should usually point at the repo `bin` directory for the DirectX and Vulkan shader tools, especially when a game ships conflicting binaries.
 - Default devkit content folders live under `renodx-dev/`:
   `live/`, `dump/`, and `boot/`.
 - `boot/` contains decoded PNG texture replacements for early upload paths like `create_resource` + `initial_data`.
 - Boot texture replacement is create-time only; it does not scan `live/` for runtime hotswap replacements.
 - Use `devkit_dump_texture_replace_observation` with `outputPath` set to the `boot/` directory to create the canonical replacement filename, edit that PNG, then reload with `devkit_reload_texture_replace_boot_cache` or restart the game.
 - Use resource clone tools for immediate live hotswap comparison.
-- Shader decompilation is best-effort. Disassembly is generally available first; decompilation may still be unavailable for some older DirectX shader formats.
+- Shader decompilation is best-effort. Disassembly is generally available first. DXBC SM4/5 decompilation uses `cmd_Decompiler.exe` from the configured tools path; DXIL SM6 decompilation uses the internal DXC decompiler path.
 
 ## Why `ToolContext` Exists
 

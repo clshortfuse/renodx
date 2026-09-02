@@ -106,7 +106,7 @@ float3 ApplyLiliumRCAS(
     int2 coord,
     float sharpness_strength) {
   float kDefaultNormalization = 100.f;
-  if (TONE_MAP_TYPE != 0.f) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     kDefaultNormalization = RENODX_PEAK_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     if (RENODX_GAMMA_CORRECTION != 0.f) {
       kDefaultNormalization = renodx::color::correct::Gamma(kDefaultNormalization, true);
@@ -123,7 +123,7 @@ float3 ApplyLiliumRCAS(
     float sharpness_strength,
     int2 tex_max) {
   float kDefaultNormalization = 100.f;
-  if (TONE_MAP_TYPE != 0.f) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     kDefaultNormalization = RENODX_PEAK_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     if (RENODX_GAMMA_CORRECTION != 0.f) {
       kDefaultNormalization = renodx::color::correct::Gamma(kDefaultNormalization, true);
@@ -214,7 +214,7 @@ float3 ApplyLiliumRCASFromSamples(
     float3 h,
     float sharpness_strength) {
   float kDefaultNormalization = 100.f;
-  if (TONE_MAP_TYPE != 0.f) {
+  if (RENODX_TONE_MAP_TYPE != 0.f) {
     kDefaultNormalization = RENODX_PEAK_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
     if (RENODX_GAMMA_CORRECTION != 0.f) {
       kDefaultNormalization = renodx::color::correct::Gamma(kDefaultNormalization, true);

@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 // ---- Created with 3Dmigoto v1.4.1 on Tue Jul 29 11:22:49 2025
 
@@ -85,6 +85,6 @@ void main(
   o1.w = r1.y;
   o2.w = r1.z;
   o2.x = 0;
-  o0.rgb = saturate(o0.rgb);
+  o0.rgb = renodx::tonemap::neutwo::BT709(o0.rgb);
   return;
 }

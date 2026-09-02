@@ -1,8 +1,8 @@
-float4 UniformPixelVector_0 : register( c0 );
-float4 UniformPixelVector_1 : register( c4 );
-float4 UniformPixelVector_2 : register( c5 );
-float4 UniformPixelScalars_0 : register( c6 );
-float4 UniformPixelScalars_1 : register( c7 );
+float4 UniformPixelVector_0 : register(c0);
+float4 UniformPixelVector_1 : register(c4);
+float4 UniformPixelVector_2 : register(c5);
+float4 UniformPixelScalars_0 : register(c6);
+float4 UniformPixelScalars_1 : register(c7);
 float MatInverseGamma : register(c8);
 sampler2D Texture2D_0 : register(s0);
 sampler2D Texture2D_1 : register(s1);

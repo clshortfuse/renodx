@@ -1,4 +1,4 @@
-#include "./common.hlsl"
+#include "./common.hlsli"
 
 // ---- Created with 3Dmigoto v1.4.1 on Mon Jun  2 09:44:30 2025
 
@@ -46,17 +46,16 @@ void main(
   r1.xyzw = BlurredImage.Sample(BlurredImageSampler_s, v1.xy).xyzw;
   r0.w = saturate(1 + -r1.w);
   r0.xyz = r0.xyz * r0.www + r1.xyz;
-
-  float3 hdr_color = r0.rgb;
-  float3 hdr_color_tm = HermiteSplineRolloff(r0.rgb);
-
-  if (SHADOWS_DESATURATION == 0) {
-    r0.xyz = saturate(-SceneShadowsAndDesaturation.xyz) + r0.xyz;
-  } else {
+  float3 scene_color = r0.xyz;
+  if (RENODX_TONE_MAP_TYPE == 0) {
     r0.xyz = saturate(-SceneShadowsAndDesaturation.xyz + r0.xyz);
+    r0.xyz = SceneInverseHighLights.xyz * r0.xyz;
+    r0.xyz = max(float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05), abs(r0.xyz));
+  } else {
+    r0.xyz = max(0, -SceneShadowsAndDesaturation.xyz + r0.xyz);
+    r0.xyz = SceneInverseHighLights.xyz * r0.xyz;
+    r0.xyz = max(0, abs(r0.xyz));
   }
-  r0.xyz = SceneInverseHighLights.xyz * r0.xyz;
-  r0.xyz = max(float3(9.99999975e-05,9.99999975e-05,9.99999975e-05), abs(r0.xyz));
   r0.xyz = log2(r0.xyz);
   r0.xyz = SceneMidTones.xyz * r0.xyz;
   r0.xyz = exp2(r0.xyz);
@@ -67,20 +66,24 @@ void main(
   r0.x = log2(r0.x);
   o1.x = 0.25 * r0.x;
   r0.xyz = r1.xyz + r0.www;
+  if (RENODX_TONE_MAP_TYPE > 0) {
+    r0.rgb = lerp(max(0, scene_color), r0.rgb, RENODX_COLOR_GRADE_STRENGTH);
+  }
   if (RENODX_TONE_MAP_TYPE == 0) {
     r0.xyz = saturate(GammaColorScaleAndInverse.xyz * r0.xyz);
+    r0.xyz = max(float3(9.99999975e-05, 9.99999975e-05, 9.99999975e-05), r0.xyz);
   } else {
-    r0.xyz = GammaColorScaleAndInverse.xyz * r0.xyz;
+    r0.xyz = max(0, GammaColorScaleAndInverse.xyz * r0.xyz);
+    r0.xyz = max(0, r0.xyz);
   }
-  r0.xyz = max(float3(9.99999975e-05,9.99999975e-05,9.99999975e-05), r0.xyz);
   r0.xyz = log2(r0.xyz);
   r0.xyz = GammaColorScaleAndInverse.www * r0.xyz;
   o0.xyz = exp2(r0.xyz);
 
-  float3 sdr_color = renodx::color::srgb::DecodeSafe(o0.rgb);
-  o0.rgb = ToneMapPass(hdr_color, sdr_color, hdr_color_tm, v1);
-  o0.rgb = renodx::draw::RenderIntermediatePass(o0.rgb);
-  
+  float3 hdr_color = renodx::color::srgb::DecodeSafe(o0.rgb);
+  float3 output_color = DisplayMap(hdr_color, v1.xy);
+  o0.rgb = renodx::draw::RenderIntermediatePass(output_color);
+
   o0.w = 0;
   return;
 }

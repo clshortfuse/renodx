@@ -30,6 +30,8 @@
 #include "../utils/command_action.hpp"
 #include "../utils/constants.hpp"
 #include "../utils/data.hpp"
+#include "../utils/descriptor.hpp"
+#include "../utils/device.hpp"
 #include "../utils/format.hpp"
 #include "../utils/resource.hpp"
 #include "../utils/shader.hpp"
@@ -44,6 +46,7 @@ inline bool OnBypassShaderDraw(reshade::api::command_list* cmd_list) { return fa
 struct ViewBinding {
   reshade::api::descriptor_type type = static_cast<reshade::api::descriptor_type>(0u);
   uint32_t slot = 0u;
+  // Maps directly to the register space on DirectX and descriptor set on Vulkan.
   uint32_t space = 50u;
   std::function<reshade::api::resource_view(reshade::api::command_list*)> get_view = nullptr;
 };
@@ -138,6 +141,19 @@ inline CustomShader CreateDirectXShader(
   return shader;
 }
 
+inline CustomShader CreateOpenGLVulkanShader(
+    std::uint32_t crc32,
+    std::span<const std::uint8_t> gl_code,
+    std::span<const std::uint8_t> vk_code) {
+  CustomShader shader = {};
+  shader.crc32 = crc32;
+  shader.code_by_device = {
+      {reshade::api::device_api::opengl, gl_code},
+      {reshade::api::device_api::vulkan, vk_code},
+  };
+  return shader;
+}
+
 // clang-format off
 #define BypassShaderEntry(__crc32__)               {__crc32__, renodx::mods::shader::CreateBypassShader(__crc32__)}
 #define CustomShaderEntry(crc32)                   {crc32, renodx::mods::shader::CreateCustomShader(crc32, __##crc32)}
@@ -152,9 +168,17 @@ inline CustomShader CreateDirectXShader(
                      __crc32__,                               \
                      RENODX_JOIN_MACRO(__##__crc32__, _dx11), \
                      RENODX_JOIN_MACRO(__##__crc32__, _dx12))}
+#define CustomOpenGLVulkanShaders(__crc32__)                     \
+  {                                                              \
+      __crc32__, renodx::mods::shader::CreateOpenGLVulkanShader( \
+                     __crc32__,                                  \
+                     RENODX_JOIN_MACRO(__##__crc32__, _gl),      \
+                     RENODX_JOIN_MACRO(__##__crc32__, _vk))}
 
-static thread_local std::vector<reshade::api::pipeline_layout_param*> created_params;
-static thread_local std::unordered_map<uint32_t, reshade::api::pipeline_layout_param*> rebuilt_params;
+static thread_local std::vector<std::vector<reshade::api::pipeline_layout_param>> created_params;
+static thread_local std::vector<std::vector<std::vector<reshade::api::descriptor_range>>> created_descriptor_ranges;
+static thread_local std::unordered_map<uint64_t, std::vector<reshade::api::pipeline_layout_param>> rebuilt_params;
+static thread_local std::unordered_map<uint64_t, std::vector<std::vector<reshade::api::descriptor_range>>> rebuilt_descriptor_ranges;
 
 static float* shader_injection = nullptr;
 static size_t shader_injection_size = 0;
@@ -169,6 +193,7 @@ static float* resource_tag_float = nullptr;
 static int32_t expected_constant_buffer_index = -1;
 static uint32_t expected_constant_buffer_space = 0;
 static uint32_t constant_buffer_offset = 0;
+static auto minimum_constant_buffer_stages = reshade::api::shader_stage::pixel | reshade::api::shader_stage::compute;
 
 static renodx::utils::data::ParallelNodeHashMap<uint32_t, CustomShader> custom_shaders;
 
@@ -187,8 +212,8 @@ struct __declspec(uuid("018e7b9c-23fd-7863-baf8-a8dad2a6db9d")) DeviceData {
   // bool force_pipeline_cloning = false;
   int32_t expected_constant_buffer_index = -1;
   uint32_t expected_constant_buffer_space = 0;
-  std::vector<reshade::api::descriptor_range> injected_descriptor_ranges;
-  std::optional<reshade::api::pipeline_layout_param> injected_descriptor_param = std::nullopt;
+  std::vector<std::vector<reshade::api::descriptor_range>> injected_descriptor_range_groups;
+  std::vector<reshade::api::pipeline_layout_param> injected_descriptor_params;
 };
 
 static void OnInitDevice(reshade::api::device* device) {
@@ -200,23 +225,86 @@ static void OnInitDevice(reshade::api::device* device) {
 
   auto* data = renodx::utils::data::Create<DeviceData>(device);
   data->expected_constant_buffer_index = expected_constant_buffer_index;
-  data->injected_descriptor_ranges.clear();
-  data->injected_descriptor_param = std::nullopt;
+  data->injected_descriptor_range_groups.clear();
+  data->injected_descriptor_params.clear();
 
+  const auto device_api = device->get_api();
+  if (device_api == reshade::api::device_api::vulkan) {
+    std::map<std::pair<uint32_t, uint32_t>, reshade::api::descriptor_range> descriptor_ranges_by_binding;
+    uint32_t max_space = 0u;
+
+    for (const auto& [shader_hash, custom_shader] : custom_shaders) {
+      (void)shader_hash;
+      for (const auto& view_binding : custom_shader.views) {
+        assert(view_binding.get_view != nullptr);
+
+        const auto key = std::make_pair(view_binding.space, view_binding.slot);
+        auto range_it = descriptor_ranges_by_binding.find(key);
+
+        if (range_it == descriptor_ranges_by_binding.end()) {
+          descriptor_ranges_by_binding[key] = {
+              .binding = view_binding.slot,
+              .dx_register_index = view_binding.slot,
+              .dx_register_space = view_binding.space,
+              .count = 1u,
+              .visibility = reshade::api::shader_stage::all,
+              .array_size = 1u,
+              .type = view_binding.type,
+          };
+        } else if (range_it->second.type != view_binding.type) {
+          std::stringstream error;
+          error << "mods::shader::OnInitDevice(";
+          error << "Conflicting Vulkan descriptor types at set " << view_binding.space;
+          error << ", binding " << view_binding.slot;
+          error << ")";
+          reshade::log::message(reshade::log::level::error, error.str().c_str());
+          data->injected_descriptor_range_groups.clear();
+          data->injected_descriptor_params.clear();
+          return;
+        }
+
+        max_space = std::max(max_space, view_binding.space);
+      }
+    }
+
+    if (!descriptor_ranges_by_binding.empty()) {
+      data->injected_descriptor_range_groups.resize(max_space + 1);
+      for (auto& [key, range] : descriptor_ranges_by_binding) {
+        data->injected_descriptor_range_groups[key.first].push_back(range);
+      }
+
+      data->injected_descriptor_params.reserve(max_space + 1);
+      for (uint32_t set = 0; set <= max_space; ++set) {
+        const auto& ranges = data->injected_descriptor_range_groups[set];
+        if (ranges.empty()) {
+          data->injected_descriptor_params.emplace_back(
+              static_cast<uint32_t>(0u),
+              static_cast<const reshade::api::descriptor_range*>(nullptr));
+        } else {
+          data->injected_descriptor_params.emplace_back(static_cast<uint32_t>(ranges.size()), ranges.data());
+        }
+      }
+    }
+    data->use_pipeline_layout_cloning = use_pipeline_layout_cloning;
+    data->expected_constant_buffer_space = expected_constant_buffer_space;
+    return;
+  }
+
+  std::vector<reshade::api::descriptor_range> ranges;
   for (const auto& [shader_hash, custom_shader] : custom_shaders) {
     (void)shader_hash;
     for (const auto& view_binding : custom_shader.views) {
       assert(view_binding.get_view != nullptr);
 
       auto range_it = std::ranges::find_if(
-          data->injected_descriptor_ranges,
+          ranges,
           [&](const reshade::api::descriptor_range& range) {
             return range.type == view_binding.type
                    && range.dx_register_space == view_binding.space;
           });
 
-      if (range_it == data->injected_descriptor_ranges.end()) {
-        data->injected_descriptor_ranges.push_back({
+      if (range_it == ranges.end()) {
+        ranges.push_back({
             .binding = 0u,
             .dx_register_index = view_binding.slot,
             .dx_register_space = view_binding.space,
@@ -238,7 +326,7 @@ static void OnInitDevice(reshade::api::device* device) {
   }
 
   std::ranges::sort(
-      data->injected_descriptor_ranges,
+      ranges,
       [](const reshade::api::descriptor_range& lhs, const reshade::api::descriptor_range& rhs) {
         if (lhs.type != rhs.type) return lhs.type < rhs.type;
         if (lhs.dx_register_space != rhs.dx_register_space) return lhs.dx_register_space < rhs.dx_register_space;
@@ -246,29 +334,33 @@ static void OnInitDevice(reshade::api::device* device) {
       });
 
   uint32_t binding = 0u;
-  for (auto& range : data->injected_descriptor_ranges) {
+  for (auto& range : ranges) {
     range.binding = binding;
     binding += range.count;
   }
 
-  if (!data->injected_descriptor_ranges.empty()) {
-    if (data->injected_descriptor_ranges.size() > 1u) {
+  if (!ranges.empty()) {
+    if (ranges.size() > 1u) {
+      data->injected_descriptor_range_groups.resize(1);
+      data->injected_descriptor_range_groups[0] = ranges;
       reshade::api::pipeline_layout_param descriptor_param = {};
       descriptor_param.type = reshade::api::pipeline_layout_param_type::push_descriptors_with_ranges;
-      descriptor_param.descriptor_table.count = static_cast<uint32_t>(data->injected_descriptor_ranges.size());
-      descriptor_param.descriptor_table.ranges = data->injected_descriptor_ranges.data();
-      data->injected_descriptor_param = descriptor_param;
+      descriptor_param.descriptor_table.count = static_cast<uint32_t>(ranges.size());
+      descriptor_param.descriptor_table.ranges = data->injected_descriptor_range_groups[0].data();
+      data->injected_descriptor_params.emplace_back(descriptor_param);
     } else {
-      data->injected_descriptor_param = reshade::api::pipeline_layout_param(
+      data->injected_descriptor_range_groups.resize(1);
+      data->injected_descriptor_range_groups[0] = ranges;
+      data->injected_descriptor_params.emplace_back(reshade::api::pipeline_layout_param(
           reshade::api::descriptor_range{
               .binding = 0,
-              .dx_register_index = data->injected_descriptor_ranges.front().dx_register_index,
-              .dx_register_space = data->injected_descriptor_ranges.front().dx_register_space,
+              .dx_register_index = ranges.front().dx_register_index,
+              .dx_register_space = ranges.front().dx_register_space,
               .count = binding,
               .visibility = reshade::api::shader_stage::all,
               .array_size = 1,
-              .type = data->injected_descriptor_ranges.front().type,
-          });
+              .type = ranges.front().type,
+          }));
     }
   }
   switch (device->get_api()) {
@@ -292,6 +384,99 @@ static void OnDestroyDevice(reshade::api::device* device) {
   device->destroy_private_data<DeviceData>();
 }
 
+static bool MergeVulkanDescriptorParameters(
+    const std::vector<reshade::api::pipeline_layout_param>& injected_params,
+    const std::vector<uint32_t>& existing_set_param_indexes,
+    std::vector<reshade::api::pipeline_layout_param>& params,
+    std::vector<std::vector<reshade::api::descriptor_range>>& descriptor_ranges) {
+  assert(params.size() == descriptor_ranges.size());
+  const auto existing_sets = static_cast<uint32_t>(existing_set_param_indexes.size());
+  for (uint32_t set_index = 0; set_index < injected_params.size() && set_index < existing_sets; ++set_index) {
+    const auto& injected_param = injected_params[set_index];
+    if (injected_param.descriptor_table.count == 0u) continue;
+
+    const auto original_param_index = existing_set_param_indexes[set_index];
+    auto& original_param = params[original_param_index];
+
+    if (original_param.type == reshade::api::pipeline_layout_param_type::descriptor_table
+        && injected_param.type == reshade::api::pipeline_layout_param_type::descriptor_table) {
+      auto& merged_ranges = descriptor_ranges[original_param_index];
+      if (original_param.descriptor_table.count != 0u) {
+        merged_ranges.assign(
+            original_param.descriptor_table.ranges,
+            original_param.descriptor_table.ranges + original_param.descriptor_table.count);
+      }
+
+      for (uint32_t injected_range_index = 0u;
+           injected_range_index < injected_param.descriptor_table.count;
+           ++injected_range_index) {
+        const auto& injected_range = injected_param.descriptor_table.ranges[injected_range_index];
+        assert(injected_range.count == 1u && injected_range.array_size == 1u);
+        if (injected_range.count != 1u || injected_range.array_size != 1u) return false;
+
+        bool binding_exists = false;
+        bool binding_conflict = false;
+        for (auto& original_range : merged_ranges) {
+          if (original_range.count == 0u) continue;
+          const auto original_last_binding = original_range.count == UINT32_MAX
+                                                 ? UINT32_MAX
+                                                 : original_range.binding
+                                                       + original_range.count
+                                                       - original_range.array_size;
+          if (injected_range.binding < original_range.binding
+              || injected_range.binding > original_last_binding) {
+            continue;
+          }
+          if (original_range.type != injected_range.type) {
+            binding_conflict = true;
+            break;
+          }
+          original_range.visibility |= injected_range.visibility;
+          binding_exists = true;
+          break;
+        }
+
+        if (binding_conflict) {
+          // Descriptor requirements are shared by all custom shaders, so an unrelated shader may
+          // conflict with the current pipeline layout. Preserve the game's set and continue with
+          // later sets instead of making descriptor injection depend on pipeline layout order.
+          merged_ranges.clear();
+          break;
+        }
+
+        if (!binding_exists) {
+          merged_ranges.push_back(injected_range);
+        }
+      }
+
+      if (merged_ranges.empty()) continue;
+
+      std::ranges::sort(
+          merged_ranges,
+          [](const auto& lhs, const auto& rhs) { return lhs.binding < rhs.binding; });
+      original_param.descriptor_table.count = static_cast<uint32_t>(merged_ranges.size());
+      original_param.descriptor_table.ranges = merged_ranges.data();
+      continue;
+    }
+
+    // Preserve the known-working RenoVK behavior for incompatible parameter types too.
+  }
+  return true;
+}
+
+static std::vector<uint32_t> GetVulkanDescriptorSetParamIndexes(
+    const reshade::api::pipeline_layout_param* params,
+    uint32_t param_count) {
+  std::vector<uint32_t> indexes;
+  indexes.reserve(param_count);
+  for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
+    if (params[param_index].type != reshade::api::pipeline_layout_param_type::push_constants) {
+      indexes.push_back(param_index);
+    }
+  }
+  return indexes;
+}
+
 // Shader Injection
 static bool OnCreatePipelineLayout(
     reshade::api::device* device,
@@ -301,6 +486,7 @@ static bool OnCreatePipelineLayout(
   uint32_t pc_count = 0;
   uint32_t pdss_index = -1;
   uint32_t dword_count = 0;
+  uint32_t vk_pc_offset = 0;
   if (param_count == 0) {
     std::stringstream s;
     s << "mods::shader::OnCreatePipelineLayout(";
@@ -337,6 +523,28 @@ static bool OnCreatePipelineLayout(
   bool is_dx = (device_api == reshade::api::device_api::d3d9
                 || device_api == reshade::api::device_api::d3d11
                 || device_api == reshade::api::device_api::d3d12);
+  bool is_vulkan = device_api == reshade::api::device_api::vulkan;
+
+  // Track existing push constant range (for Vulkan) so we can extend it
+  int32_t vk_expand_pc_index = -1;
+  // all shader stages include properietary stages (e.g. Huawei)
+  auto pc_unused_stages = is_vulkan ? minimum_constant_buffer_stages : reshade::api::shader_stage::all;
+  auto found_full_stage_pc_match = false;
+
+  auto scan_vulkan_pc = [&](const reshade::api::pipeline_layout_param& param, uint32_t param_index) {
+    if (!found_full_stage_pc_match) {
+      const auto& current_visibility = param.push_constants.visibility;
+      // pc param has all relevant stages
+      found_full_stage_pc_match = renodx::utils::bitwise::HasFlag(current_visibility, minimum_constant_buffer_stages);
+
+      pc_unused_stages = renodx::utils::bitwise::UnsetFlag(pc_unused_stages, current_visibility);
+      // TODO(Ritsu): Handle multiple PCs with single flags (e.g. PC0 compute only, PC1 pixel only)
+      // If a pipeline has at least one of the stages
+      if (found_full_stage_pc_match || renodx::utils::bitwise::HasAnyFlag(current_visibility, minimum_constant_buffer_stages)) {
+        vk_expand_pc_index = param_index;
+      }
+    }
+  };
 
   for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
     const auto& param = params[param_index];
@@ -357,12 +565,18 @@ static bool OnCreatePipelineLayout(
         }
       }
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_constants) {
-      dword_count += param.push_constants.count;
       pc_count++;
       if (is_dx
           && param.push_constants.dx_register_space == data->expected_constant_buffer_space
           && cbv_index < param.push_constants.dx_register_index + param.push_constants.count) {
         cbv_index = param.push_constants.dx_register_index + param.push_constants.count;
+      } else if (is_vulkan) {
+        vk_pc_offset = std::max(
+            vk_pc_offset,
+            param.push_constants.binding + param.push_constants.count);
+        scan_vulkan_pc(param, param_index);
+      } else {
+        dword_count += param.push_constants.count;
       }
     } else if (is_dx && param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
       if (device_api == reshade::api::device_api::d3d12) {
@@ -482,7 +696,9 @@ static bool OnCreatePipelineLayout(
     }
   }
 
-  if (pc_count != 0 && !allow_multiple_push_constants) {
+  const bool expand_vulkan_push_constants = is_vulkan && vk_expand_pc_index != -1 && found_full_stage_pc_match;
+
+  if (pc_count != 0 && !allow_multiple_push_constants && !expand_vulkan_push_constants) {
     std::stringstream s;
     s << "mods::shader::OnCreatePipelineLayout(";
     s << "Pipeline layout already has push constants: " << pc_count;
@@ -500,41 +716,59 @@ static bool OnCreatePipelineLayout(
   uint32_t descriptor_count = 0u;
   const reshade::api::descriptor_range* descriptor_ranges = nullptr;
   uint32_t descriptor_range_count = 0u;
-  const bool has_descriptor_injection = data != nullptr && !data->injected_descriptor_ranges.empty();
-  if (has_descriptor_injection) {
-    descriptor_ranges = data->injected_descriptor_ranges.data();
-    descriptor_range_count = static_cast<uint32_t>(data->injected_descriptor_ranges.size());
-    descriptor_type = data->injected_descriptor_ranges.front().type;
-    descriptor_register_index = static_cast<int32_t>(data->injected_descriptor_ranges.front().dx_register_index);
-    descriptor_register_space = data->injected_descriptor_ranges.front().dx_register_space;
-    for (const auto& range : data->injected_descriptor_ranges) {
+  const bool has_descriptor_injection = data != nullptr && !data->injected_descriptor_params.empty();
+
+  if (has_descriptor_injection && !is_vulkan) {
+    descriptor_ranges = data->injected_descriptor_range_groups[0].data();
+    descriptor_range_count = static_cast<uint32_t>(data->injected_descriptor_range_groups[0].size());
+    descriptor_type = data->injected_descriptor_range_groups[0].front().type;
+    descriptor_register_index = static_cast<int32_t>(data->injected_descriptor_range_groups[0].front().dx_register_index);
+    descriptor_register_space = data->injected_descriptor_range_groups[0].front().dx_register_space;
+    for (const auto& range : data->injected_descriptor_range_groups[0]) {
       descriptor_count += range.count;
     }
   }
-  const auto* injected_descriptor_param =
-      has_descriptor_injection && data->injected_descriptor_param.has_value()
-          ? &data->injected_descriptor_param.value()
-          : nullptr;
-  assert(!has_descriptor_injection || injected_descriptor_param != nullptr);
+  const auto* injected_descriptor_param = has_descriptor_injection && !is_vulkan ? data->injected_descriptor_params.data() : nullptr;
+  assert(!has_descriptor_injection || injected_descriptor_param != nullptr || (is_vulkan && has_descriptor_injection));
 
   const bool has_constant_injection = shader_injection_size != 0u;
+  uint32_t existing_set_count = 0u;
+  if (is_vulkan && has_descriptor_injection) {
+    for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
+      if (params[param_index].type != reshade::api::pipeline_layout_param_type::push_constants) {
+        existing_set_count++;
+      }
+    }
+  }
+
+  uint32_t added_descriptor_param_count = 0u;
+  if (has_descriptor_injection) {
+    if (is_vulkan) {
+      added_descriptor_param_count = data->injected_descriptor_params.size() > existing_set_count
+                                         ? static_cast<uint32_t>(data->injected_descriptor_params.size() - existing_set_count)
+                                         : 0u;
+    } else {
+      added_descriptor_param_count = 1u;
+    }
+  }
   const uint32_t added_params =
-      (has_constant_injection ? 1u : 0u)
-      + (has_descriptor_injection ? 1u : 0u);
-  if (added_params == 0u) {
+      (has_constant_injection && !expand_vulkan_push_constants ? 1u : 0u)
+      + added_descriptor_param_count;
+  if (!has_descriptor_injection && added_params == 0u && !expand_vulkan_push_constants) {
     return false;
   }
 
   const uint32_t old_count = param_count;
   const uint32_t new_count = old_count + added_params;
-  auto* new_params = reinterpret_cast<reshade::api::pipeline_layout_param*>(malloc(sizeof(reshade::api::pipeline_layout_param) * new_count));
+  std::vector<reshade::api::pipeline_layout_param> new_params(new_count);
+  std::vector<std::vector<reshade::api::descriptor_range>> new_descriptor_ranges(new_count);
 
   uint32_t injection_index = old_count;
   uint32_t descriptor_injection_index = old_count;
   uint32_t insert_index = old_count;
   uint32_t descriptor_injection_cost = 0u;
   uint32_t constant_injection_cost = 0u;
-  if (has_descriptor_injection) {
+  if (has_descriptor_injection && !is_vulkan) {
     const auto descriptor_param = *injected_descriptor_param;
     if (device_api == reshade::api::device_api::d3d12) {
       if (descriptor_param.type == reshade::api::pipeline_layout_param_type::push_descriptors
@@ -581,15 +815,47 @@ static bool OnCreatePipelineLayout(
   }
 
   if (!is_dx || pdss_index == -1) {
-    memcpy(new_params, params, sizeof(reshade::api::pipeline_layout_param) * old_count);
+    for (uint32_t param_index = 0u; param_index < old_count; ++param_index) {
+      new_params[param_index] = params[param_index];
+    }
   } else {
-    memcpy(new_params, params, sizeof(reshade::api::pipeline_layout_param) * pdss_index);
+    for (uint32_t param_index = 0u; param_index < pdss_index; ++param_index) {
+      new_params[param_index] = params[param_index];
+    }
     insert_index = pdss_index;
-    memcpy(new_params + pdss_index + added_params, params + pdss_index, sizeof(reshade::api::pipeline_layout_param) * (old_count - pdss_index));
+    for (uint32_t param_index = pdss_index; param_index < old_count; ++param_index) {
+      new_params[param_index + added_params] = params[param_index];
+    }
+  }
+
+  if (has_descriptor_injection && is_vulkan) {
+    const auto existing_set_param_indexes = GetVulkanDescriptorSetParamIndexes(params, old_count);
+
+    if (!MergeVulkanDescriptorParameters(
+            (data->injected_descriptor_params),
+            existing_set_param_indexes,
+            new_params,
+            new_descriptor_ranges)) {
+      reshade::log::message(
+          reshade::log::level::error,
+          "mods::shader::OnCreatePipelineLayout(Vulkan descriptor binding conflict)");
+      return false;
+    }
+
+    // New Vulkan sets are appended later once the injection index is known.
   }
 
   if (has_constant_injection) {
-    injection_index = insert_index++;
+    if (expand_vulkan_push_constants) {
+#ifdef DEBUG_LEVEL_1
+      // Vulkan expand PC: injection_index must point to an existing push constant param.
+      assert(static_cast<uint32_t>(vk_expand_pc_index) < old_count && "Vulkan expand PC index out of bounds.");
+      assert(params[vk_expand_pc_index].type == reshade::api::pipeline_layout_param_type::push_constants && "Vulkan expand PC target is not a push constant param.");
+#endif
+      injection_index = static_cast<uint32_t>(vk_expand_pc_index);
+    } else {
+      injection_index = insert_index++;
+    }
 
     const uint32_t slots = shader_injection_size;
     const uint32_t used_dword_count = dword_count + descriptor_injection_cost;
@@ -602,19 +868,22 @@ static bool OnCreatePipelineLayout(
       s << ", descriptor_injection_cost: " << descriptor_injection_cost;
       s << ")";
       reshade::log::message(reshade::log::level::warning, s.str().c_str());
-      free(new_params);
       return false;
     }
 
     constant_injection_cost = std::min(slots, remaining_dword_count);
-    new_params[injection_index] = reshade::api::pipeline_layout_param(
-        reshade::api::constant_range{
-            .binding = 0,
-            .dx_register_index = cbv_index,
-            .dx_register_space = data->expected_constant_buffer_space,
-            .count = constant_injection_cost,
-            .visibility = reshade::api::shader_stage::all,
-        });
+    if (expand_vulkan_push_constants) {
+      new_params[injection_index].push_constants.count += constant_injection_cost;
+    } else {
+      new_params[injection_index] = reshade::api::pipeline_layout_param(
+          reshade::api::constant_range{
+              .binding = is_vulkan ? vk_pc_offset : 0,
+              .dx_register_index = cbv_index,
+              .dx_register_space = data->expected_constant_buffer_space,
+              .count = constant_injection_cost,
+              .visibility = is_vulkan ? pc_unused_stages : reshade::api::shader_stage::all,
+          });
+    }
 
     if (slots > remaining_dword_count) {
       std::stringstream s;
@@ -629,13 +898,24 @@ static bool OnCreatePipelineLayout(
   }
 
   if (has_descriptor_injection) {
-    descriptor_injection_index = insert_index++;
-    new_params[descriptor_injection_index] = *injected_descriptor_param;
+    descriptor_injection_index = insert_index;
+    if (is_vulkan) {
+      // For Vulkan: Add empty descriptor params for sets beyond the existing sets
+      const uint32_t existing_sets = existing_set_count;
+      for (uint32_t set_index = existing_sets; set_index < data->injected_descriptor_params.size(); ++set_index) {
+        new_params[insert_index++] = data->injected_descriptor_params[set_index];
+      }
+    } else {
+      // For DX: Add only the first descriptor param
+      new_params[descriptor_injection_index] = *injected_descriptor_param;
+      insert_index++;
+    }
   }
 
-  created_params.push_back(new_params);
+  created_descriptor_ranges.push_back(std::move(new_descriptor_ranges));
+  created_params.push_back(std::move(new_params));
+  params = created_params.back().data();
   param_count = new_count;
-  params = new_params;
 
   const uint32_t final_dword_count = dword_count + constant_injection_cost + descriptor_injection_cost;
   std::stringstream s;
@@ -651,19 +931,29 @@ static bool OnCreatePipelineLayout(
   }
   if (has_descriptor_injection) {
     if (has_constant_injection) s << ", ";
-    s << "will insert descriptor type " << descriptor_type;
-    s << " at root_index " << descriptor_injection_index;
-    s << " mapped to register " << descriptor_register_index;
-    s << " space " << descriptor_register_space;
-    s << " count " << descriptor_count;
+    if (is_vulkan) {
+      s << "will insert vulkan descriptor sets from " << descriptor_injection_index;
+      s << " count " << data->injected_descriptor_params.size();
+    } else {
+      s << "will insert descriptor type " << descriptor_type;
+      s << " at root_index " << descriptor_injection_index;
+      s << " mapped to register " << descriptor_register_index;
+      s << " space " << descriptor_register_space;
+      s << " count " << descriptor_count;
+    }
   }
   s << " creating new size of " << new_count;
   if (device_api == reshade::api::device_api::d3d12) {
     s << ", root_dwords: " << dword_count << " => " << final_dword_count;
     s << ", constant_injection_cost: " << constant_injection_cost;
     s << ", descriptor_injection_cost: " << descriptor_injection_cost;
+  } else if (is_vulkan && (has_constant_injection || has_descriptor_injection)) {
+    s << ", vulkan_binding_offset: " << vk_pc_offset;
+    if (has_descriptor_injection) {
+      s << ", descriptor_sets: " << data->injected_descriptor_params.size();
+    }
   }
-  s << ", newParams: " << reinterpret_cast<uintptr_t>(new_params);
+  s << ", newParams: " << reinterpret_cast<uintptr_t>(params);
   s << " )";
   reshade::log::message(reshade::log::level::info, s.str().c_str());
 
@@ -677,12 +967,13 @@ static void OnInitPipelineLayout(
     const reshade::api::pipeline_layout_param* params,
     reshade::api::pipeline_layout layout) {
   assert(layout.handle != 0u);
-
+  const auto original_layout = layout;
   if (on_init_pipeline_layout != nullptr) {
     if (!on_init_pipeline_layout(device, layout, {params, param_count})) return;
   }
   int32_t injection_index = -1;
   int32_t descriptor_injection_index = -1;
+  int32_t injection_constant_buffer_offset = 0;
   auto device_api = device->get_api();
   auto* data = renodx::utils::data::Get<DeviceData>(device);
   if (data == nullptr) return;
@@ -691,32 +982,36 @@ static void OnInitPipelineLayout(
   uint32_t pc_count = 0;
   uint32_t pdss_index = -1;
   uint32_t dword_count = 0;
+  uint32_t vk_pc_offset = 0;
 
   bool is_dx = (device_api == reshade::api::device_api::d3d9
                 || device_api == reshade::api::device_api::d3d11
                 || device_api == reshade::api::device_api::d3d12);
+  bool is_vulkan = device_api == reshade::api::device_api::vulkan;
+  int32_t vk_expand_pc_index = -1;
+  auto pc_unused_stages = is_vulkan ? minimum_constant_buffer_stages : reshade::api::shader_stage::all;
+  auto found_full_stage_pc_match = false;
   auto descriptor_type = static_cast<reshade::api::descriptor_type>(0u);
   int32_t descriptor_register_index = 0;
   uint32_t descriptor_register_space = 50u;
   uint32_t descriptor_count = 0u;
   const reshade::api::descriptor_range* descriptor_ranges = nullptr;
   uint32_t descriptor_range_count = 0u;
-  const bool has_descriptor_injection = data != nullptr && !data->injected_descriptor_ranges.empty();
-  if (has_descriptor_injection) {
-    descriptor_ranges = data->injected_descriptor_ranges.data();
-    descriptor_range_count = static_cast<uint32_t>(data->injected_descriptor_ranges.size());
-    descriptor_type = data->injected_descriptor_ranges.front().type;
-    descriptor_register_index = static_cast<int32_t>(data->injected_descriptor_ranges.front().dx_register_index);
-    descriptor_register_space = data->injected_descriptor_ranges.front().dx_register_space;
-    for (const auto& range : data->injected_descriptor_ranges) {
-      descriptor_count += range.count;
+  const bool has_descriptor_injection = data != nullptr && !data->injected_descriptor_params.empty();
+  if (has_descriptor_injection && !is_vulkan) {
+    descriptor_ranges = data->injected_descriptor_range_groups[0].data();
+    descriptor_range_count = static_cast<uint32_t>(data->injected_descriptor_range_groups[0].size());
+    if (descriptor_range_count > 0u) {
+      descriptor_type = data->injected_descriptor_range_groups[0].front().type;
+      descriptor_register_index = static_cast<int32_t>(data->injected_descriptor_range_groups[0].front().dx_register_index);
+      descriptor_register_space = data->injected_descriptor_range_groups[0].front().dx_register_space;
+      for (const auto& range : data->injected_descriptor_range_groups[0]) {
+        descriptor_count += range.count;
+      }
     }
   }
-  const auto* injected_descriptor_param =
-      has_descriptor_injection && data->injected_descriptor_param.has_value()
-          ? &data->injected_descriptor_param.value()
-          : nullptr;
-  assert(!has_descriptor_injection || injected_descriptor_param != nullptr);
+  const auto* injected_descriptor_param = has_descriptor_injection && !is_vulkan ? data->injected_descriptor_params.data() : nullptr;
+  assert(!has_descriptor_injection || injected_descriptor_param != nullptr || (is_vulkan && has_descriptor_injection));
 
   const bool has_constant_injection = shader_injection_size != 0u;
 
@@ -747,6 +1042,21 @@ static void OnInitPipelineLayout(
           param.push_constants.dx_register_space == data->expected_constant_buffer_space
           && cbv_index < param.push_constants.dx_register_index + param.push_constants.count) {
         cbv_index = param.push_constants.dx_register_index + param.push_constants.count;
+      }
+
+      if (is_vulkan) {
+        vk_pc_offset = std::max(
+            vk_pc_offset,
+            param.push_constants.binding + param.push_constants.count);
+        if (!found_full_stage_pc_match) {
+          const auto& current_visibility = param.push_constants.visibility;
+          found_full_stage_pc_match = renodx::utils::bitwise::HasFlag(current_visibility, minimum_constant_buffer_stages);
+
+          pc_unused_stages = renodx::utils::bitwise::UnsetFlag(pc_unused_stages, current_visibility);
+          if (found_full_stage_pc_match || renodx::utils::bitwise::HasAnyFlag(current_visibility, minimum_constant_buffer_stages)) {
+            vk_expand_pc_index = param_index;
+          }
+        }
       }
     } else if (param.type == reshade::api::pipeline_layout_param_type::push_descriptors) {
       if (device_api == reshade::api::device_api::d3d12 && param.push_descriptors.count != 0u) {
@@ -841,6 +1151,7 @@ static void OnInitPipelineLayout(
   }
 
   reshade::api::pipeline_layout injection_layout = layout;
+  const bool expand_vulkan_push_constants = is_vulkan && vk_expand_pc_index != -1 && found_full_stage_pc_match;
   if (device_api == reshade::api::device_api::d3d9) {
     if (has_constant_injection) {
       reshade::api::pipeline_layout_param new_params;
@@ -866,33 +1177,73 @@ static void OnInitPipelineLayout(
     if (data->use_pipeline_layout_cloning) {
       const uint32_t old_count = param_count;
       uint32_t new_count = old_count;
-      reshade::api::pipeline_layout_param* new_params = nullptr;
+      std::vector<reshade::api::pipeline_layout_param> new_params;
+      std::vector<std::vector<reshade::api::descriptor_range>> new_descriptor_ranges;
+      const auto existing_set_param_indexes = is_vulkan
+                                                  ? GetVulkanDescriptorSetParamIndexes(params, old_count)
+                                                  : std::vector<uint32_t>{};
+      const auto existing_set_count = static_cast<uint32_t>(existing_set_param_indexes.size());
+      uint32_t added_descriptor_param_count = 0u;
+      if (has_descriptor_injection) {
+        if (is_vulkan) {
+          added_descriptor_param_count = data->injected_descriptor_params.size() > existing_set_count
+                                             ? static_cast<uint32_t>(data->injected_descriptor_params.size() - existing_set_count)
+                                             : 0u;
+        } else {
+          added_descriptor_param_count = 1u;
+        }
+      }
       const uint32_t added_params =
-          (has_constant_injection ? 1u : 0u)
-          + (has_descriptor_injection ? 1u : 0u);
-      if (added_params != 0u) {
+          (has_constant_injection && !expand_vulkan_push_constants ? 1u : 0u)
+          + added_descriptor_param_count;
+      if (added_params != 0u || (has_constant_injection && expand_vulkan_push_constants)) {
         if (data->expected_constant_buffer_index != -1) {
           cbv_index = data->expected_constant_buffer_index;
         }
 
         new_count = old_count + added_params;
 
-        new_params = reinterpret_cast<reshade::api::pipeline_layout_param*>(malloc(sizeof(reshade::api::pipeline_layout_param) * new_count));
+        new_params.resize(new_count);
+        new_descriptor_ranges.resize(new_count);
         uint32_t insert_index = old_count;
         if (!is_dx || pdss_index == -1) {
-          memcpy(new_params, params, sizeof(reshade::api::pipeline_layout_param) * old_count);
+          for (uint32_t param_index = 0u; param_index < old_count; ++param_index) {
+            new_params[param_index] = params[param_index];
+          }
         } else {
-          memcpy(new_params, params, sizeof(reshade::api::pipeline_layout_param) * pdss_index);
+          for (uint32_t param_index = 0u; param_index < pdss_index; ++param_index) {
+            new_params[param_index] = params[param_index];
+          }
           insert_index = pdss_index;
-          memcpy(new_params + pdss_index + added_params, params + pdss_index, sizeof(reshade::api::pipeline_layout_param) * (old_count - pdss_index));
+          for (uint32_t param_index = pdss_index; param_index < old_count; ++param_index) {
+            new_params[param_index + added_params] = params[param_index];
+          }
+        }
+
+        // Merge descriptor parameters for Vulkan when cloning
+        if (is_vulkan && has_descriptor_injection) {
+          if (!MergeVulkanDescriptorParameters(
+                  data->injected_descriptor_params,
+                  existing_set_param_indexes,
+                  new_params,
+                  new_descriptor_ranges)) {
+            reshade::log::message(
+                reshade::log::level::error,
+                "mods::shader::OnInitPipelineLayout(Vulkan descriptor binding conflict)");
+            return;
+          }
         }
 
         if (has_constant_injection) {
-          injection_index = static_cast<int32_t>(insert_index++);
+          if (expand_vulkan_push_constants) {
+            injection_index = vk_expand_pc_index;
+          } else {
+            injection_index = static_cast<int32_t>(insert_index++);
+          }
 
           const uint32_t slots = shader_injection_size;
           uint32_t descriptor_injection_cost = 0u;
-          if (has_descriptor_injection) {
+          if (has_descriptor_injection && !is_vulkan) {
             const auto descriptor_param = *injected_descriptor_param;
             if (descriptor_param.type == reshade::api::pipeline_layout_param_type::push_descriptors
                 && descriptor_param.push_descriptors.count != 0u) {
@@ -933,17 +1284,31 @@ static void OnInitPipelineLayout(
               }
             }
           }
-          const uint32_t used_dword_count = dword_count + descriptor_injection_cost;
-          const uint32_t remaining_dword_count = used_dword_count >= 64u ? 0u : 64u - used_dword_count;
+          uint32_t remaining_dword_count = slots;
+          if (device_api == reshade::api::device_api::d3d12) {
+            const uint32_t used_dword_count = dword_count + descriptor_injection_cost;
+            remaining_dword_count = used_dword_count >= 64u ? 0u : 64u - used_dword_count;
+          }
 
-          new_params[injection_index] = reshade::api::pipeline_layout_param(
-              reshade::api::constant_range{
-                  .binding = 0,
-                  .dx_register_index = cbv_index,
-                  .dx_register_space = data->expected_constant_buffer_space,
-                  .count = std::min(slots, remaining_dword_count),
-                  .visibility = reshade::api::shader_stage::all,
-              });
+          if (expand_vulkan_push_constants) {
+            new_params[injection_index].push_constants.count += std::min(slots, remaining_dword_count);
+          } else {
+            new_params[injection_index] = reshade::api::pipeline_layout_param(
+                reshade::api::constant_range{
+                    .binding = is_vulkan ? vk_pc_offset : 0,
+                    .dx_register_index = cbv_index,
+                    .dx_register_space = data->expected_constant_buffer_space,
+                    .count = std::min(slots, remaining_dword_count),
+                    .visibility = is_vulkan ? pc_unused_stages : reshade::api::shader_stage::all,
+                });
+          }
+          if (is_vulkan) {
+            const auto& injection_param = new_params[injection_index].push_constants;
+            injection_constant_buffer_offset = static_cast<int32_t>(
+                expand_vulkan_push_constants
+                    ? injection_param.binding + injection_param.count - std::min(slots, remaining_dword_count)
+                    : injection_param.binding);
+          }
 
           if (slots > remaining_dword_count) {
             std::stringstream s;
@@ -955,34 +1320,41 @@ static void OnInitPipelineLayout(
             s << ", descriptor_injection_cost: " << descriptor_injection_cost;
             s << " )";
             reshade::log::message(reshade::log::level::warning, s.str().c_str());
-            free(new_params);
-            new_params = nullptr;
             return;
           }
         }
 
         if (has_descriptor_injection) {
-          descriptor_injection_index = static_cast<int32_t>(insert_index++);
-          new_params[descriptor_injection_index] = *injected_descriptor_param;
+          descriptor_injection_index = static_cast<int32_t>(insert_index);
+          if (is_vulkan) {
+            descriptor_injection_index = static_cast<int32_t>(existing_set_count);
+            for (uint32_t set_index = existing_set_count; set_index < data->injected_descriptor_params.size(); ++set_index) {
+              new_params[insert_index++] = data->injected_descriptor_params[set_index];
+            }
+          } else {
+            // For DX: Add the single descriptor param
+            new_params[insert_index++] = *injected_descriptor_param;
+          }
         }
       } else {
-        new_params = reinterpret_cast<reshade::api::pipeline_layout_param*>(malloc(sizeof(reshade::api::pipeline_layout_param) * old_count));
-        memcpy(new_params, params, sizeof(reshade::api::pipeline_layout_param) * old_count);
+        new_params.resize(old_count);
+        new_descriptor_ranges.resize(old_count);
+        for (uint32_t param_index = 0u; param_index < old_count; ++param_index) {
+          new_params[param_index] = params[param_index];
+        }
       }
 
       {
         std::stringstream s;
-        s << "mods::shader::OnInitPipelineLayout(Cloning D3D12 Layout ";
+        s << "mods::shader::OnInitPipelineLayout(Cloning D3D12/Vulkan Layout ";
         s << PRINT_PTR(layout.handle);
         s << ")";
         reshade::log::message(reshade::log::level::debug, s.str().c_str());
       }
 
-      auto result = device->create_pipeline_layout(new_count, &new_params[0], &injection_layout);
-      free(new_params);
-      new_params = nullptr;
+      auto result = device->create_pipeline_layout(new_count, new_params.data(), &injection_layout);
       std::stringstream s;
-      s << "mods::shader::OnInitPipelineLayout(Cloning D3D12 Layout ";
+      s << "mods::shader::OnInitPipelineLayout(Cloning D3D12/Vulkan Layout ";
       s << PRINT_PTR(layout.handle);
       s << " => ";
       s << PRINT_PTR(injection_layout.handle);
@@ -993,16 +1365,20 @@ static void OnInitPipelineLayout(
       }
       if (has_descriptor_injection) {
         s << ", descriptor_index: " << descriptor_injection_index;
-        s << ", descriptor_register: " << descriptor_register_index;
-        s << ", descriptor_space: " << descriptor_register_space;
-        s << ", descriptor_count: " << descriptor_count;
+        if (is_vulkan) {
+          s << ", descriptor_sets: " << data->injected_descriptor_params.size();
+        } else {
+          s << ", descriptor_register: " << descriptor_register_index;
+          s << ", descriptor_space: " << descriptor_register_space;
+          s << ", descriptor_count: " << descriptor_count;
+        }
       }
       s << ": " << (result ? "OK" : "FAILED");
       s << ")";
       reshade::log::message(result ? reshade::log::level::info : reshade::log::level::error, s.str().c_str());
 
     } else {
-      if (created_params.empty()) {
+      if (created_params.empty() || created_descriptor_ranges.empty()) {
         // No injected params
         std::stringstream s;
         s << "mods::shader::OnInitPipelineLayout(";
@@ -1014,10 +1390,16 @@ static void OnInitPipelineLayout(
       };
 
       cbv_index = 0;
+      uint32_t vk_injection_end = 0u;
+      uint32_t current_set_index = 0u;
       for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
         switch (params[param_index].type) {
           case reshade::api::pipeline_layout_param_type::push_constants:
-            if (has_constant_injection && params[param_index].push_constants.dx_register_space == data->expected_constant_buffer_space) {
+            if (is_vulkan) {
+              vk_injection_end = std::max(
+                  vk_injection_end,
+                  params[param_index].push_constants.binding + params[param_index].push_constants.count);
+            } else if (has_constant_injection && params[param_index].push_constants.dx_register_space == data->expected_constant_buffer_space) {
               injection_index = static_cast<int32_t>(param_index);
               cbv_index = params[param_index].push_constants.dx_register_index;
             }
@@ -1035,7 +1417,7 @@ static void OnInitPipelineLayout(
                       std::span(params[param_index].descriptor_table.ranges, descriptor_range_count),
                       std::span(descriptor_ranges, descriptor_range_count),
                       matches_descriptor_range)) {
-                descriptor_injection_index = static_cast<int32_t>(param_index);
+                descriptor_injection_index = static_cast<int32_t>(is_vulkan ? current_set_index : param_index);
               }
             }
             break;
@@ -1045,19 +1427,37 @@ static void OnInitPipelineLayout(
                 && params[param_index].push_descriptors.dx_register_index == static_cast<uint32_t>(descriptor_register_index)
                 && params[param_index].push_descriptors.dx_register_space == descriptor_register_space
                 && params[param_index].push_descriptors.count == descriptor_count) {
-              descriptor_injection_index = static_cast<int32_t>(param_index);
+              descriptor_injection_index = static_cast<int32_t>(is_vulkan ? current_set_index : param_index);
             }
             break;
           default:
             break;
         }
+        if (is_vulkan && params[param_index].type != reshade::api::pipeline_layout_param_type::push_constants) {
+          current_set_index++;
+        }
       }
 
       // Releasing params will break other addons that listen for init_pipeline_layout (eg: devkit)
-      rebuilt_params[layout.handle] = created_params.back();
+      rebuilt_descriptor_ranges[layout.handle] = std::move(created_descriptor_ranges.back());
+      created_descriptor_ranges.pop_back();
+      rebuilt_params[layout.handle] = std::move(created_params.back());
       created_params.pop_back();
 
-      if (injection_index == -1) {
+      if (is_vulkan && has_constant_injection) {
+        for (uint32_t param_index = 0; param_index < param_count; ++param_index) {
+          if (params[param_index].type != reshade::api::pipeline_layout_param_type::push_constants) continue;
+          const auto& push_constants = params[param_index].push_constants;
+          if (push_constants.binding + push_constants.count == vk_injection_end
+              && push_constants.count >= shader_injection_size
+              && renodx::utils::bitwise::HasAnyFlag(push_constants.visibility, minimum_constant_buffer_stages)) {
+            injection_index = static_cast<int32_t>(param_index);
+            break;
+          }
+        }
+      }
+
+      if (has_constant_injection && injection_index == -1) {
         std::stringstream s;
         s << "mods::shader::OnInitPipelineLayout(";
         s << "Injection index not found for ";
@@ -1065,6 +1465,16 @@ static void OnInitPipelineLayout(
         s << " )";
         reshade::log::message(reshade::log::level::warning, s.str().c_str());
         return;
+      }
+      if (is_vulkan && has_constant_injection) {
+        const auto& injection_param = params[injection_index];
+        const auto binding = static_cast<int32_t>(injection_param.push_constants.binding);
+        const auto count = static_cast<int32_t>(injection_param.push_constants.count);
+        const auto slots = static_cast<int32_t>(shader_injection_size);
+        // Expanded range keeps old binding and increases count; appended range's binding is already the injection offset.
+        injection_constant_buffer_offset = count > slots
+                                               ? (binding + count - slots)
+                                               : binding;
       }
     }
 
@@ -1121,9 +1531,29 @@ static void OnInitPipelineLayout(
       pipeline_data.injection_index = injection_index;
       pipeline_data.injection_layout = injection_layout;
       pipeline_data.injection_register_index = cbv_index;
+      pipeline_data.injection_constant_buffer_offset = injection_constant_buffer_offset;
       pipeline_data.descriptor_push_locations.clear();
-      if (has_descriptor_injection && descriptor_injection_index != -1) {
-        for (const auto& range : data->injected_descriptor_ranges) {
+      if (has_descriptor_injection && is_vulkan) {
+        for (uint32_t set_index = 0u; set_index < data->injected_descriptor_range_groups.size(); ++set_index) {
+          const auto& ranges = data->injected_descriptor_range_groups[set_index];
+          for (const auto& range : ranges) {
+            for (uint32_t offset = 0u; offset < range.count; ++offset) {
+              pipeline_data.descriptor_push_locations.insert_or_assign(
+                  {
+                      range.type,
+                      range.dx_register_index + offset,
+                      range.dx_register_space,
+                  },
+                  utils::pipeline_layout::DescriptorPushLocation{
+                      set_index,
+                      range.binding + offset,
+                  });
+            }
+          }
+        }
+      }
+      if (has_descriptor_injection && !is_vulkan && descriptor_injection_index != -1) {
+        for (const auto& range : data->injected_descriptor_range_groups[0]) {
           for (uint32_t offset = 0u; offset < range.count; ++offset) {
             pipeline_data.descriptor_push_locations.insert_or_assign(
                 {
@@ -1144,11 +1574,14 @@ static void OnInitPipelineLayout(
 
   std::stringstream s;
   s << "mods::shader::OnInitPipelineLayout(";
-  s << PRINT_PTR(layout.handle);
+  s << PRINT_PTR(original_layout.handle);
   s << ", injection index: " << injection_index;
   s << ", descriptor injection index: " << descriptor_injection_index;
   s << ", descriptor injection count: " << (has_descriptor_injection ? descriptor_count : 0u);
   s << ", injection layout: " << PRINT_PTR(injection_layout.handle);
+  if (is_vulkan) {
+    s << ", injection offset: " << injection_constant_buffer_offset;
+  }
   if (is_dx) {
     s << ", cbvIndex:" << cbv_index;
   }
@@ -1166,10 +1599,8 @@ static void OnDestroyPipelineLayout(
   if (auto pair = rebuilt_params.find(layout.handle);
       pair != rebuilt_params.end()) {
     changed = true;
-    auto& created_params = pair->second;
-    // Possible risk of access violation on next event listener
-    free(created_params);
     rebuilt_params.erase(pair);
+    rebuilt_descriptor_ranges.erase(layout.handle);
   }
 
   if (!changed) return;
@@ -1190,11 +1621,12 @@ inline void OnPushConstants(
     uint32_t count,
     const void* values) {
   reshade::api::pipeline_layout cloned_layout;
-  if (!utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto& layout_data) {
-        cloned_layout = layout_data->injection_layout;
-      })) {
-    // not found
-    return;
+  {
+    const bool found_layout_data = utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto* pipeline_layout_data) {
+      cloned_layout = pipeline_layout_data->replacement_layout;
+    });
+    if (!found_layout_data) return;
+    if (cloned_layout == 0u) return;
   }
 
 #ifdef DEBUG_LEVEL_2
@@ -1218,18 +1650,21 @@ inline void OnPushDescriptors(
     reshade::api::pipeline_layout layout,
     uint32_t layout_param,
     const reshade::api::descriptor_table_update& update) {
+  const bool is_vulkan = cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan;
   reshade::api::pipeline_layout cloned_layout;
-
-  if (!utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto& layout_data) {
-        cloned_layout = layout_data->injection_layout;
-      })) {
-    // not found
-    return;
+  {
+    const bool found_layout_data = utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto* pipeline_layout_data) {
+      cloned_layout = pipeline_layout_data->replacement_layout;
+    });
+    if (!found_layout_data) return;
+    if (cloned_layout == 0u) return;
   }
 
   cmd_list->push_descriptors(stages, cloned_layout, layout_param, update);
-  // Switch back stage
-  cmd_list->push_descriptors(stages, layout, layout_param, update);
+  if (!is_vulkan) {
+    // Pushing twice messes up Vulkan's descriptors, unlike DX12
+    cmd_list->push_descriptors(stages, layout, layout_param, update);
+  }
 }
 
 inline void OnBindDescriptorTables(
@@ -1239,13 +1674,14 @@ inline void OnBindDescriptorTables(
     uint32_t first,
     uint32_t count,
     const reshade::api::descriptor_table* tables) {
+  const bool is_vulkan = cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan;
   reshade::api::pipeline_layout cloned_layout;
-
-  if (!utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto& pipeline_data) {
-        cloned_layout = pipeline_data->injection_layout;
-      })) {
-    // not found
-    return;
+  {
+    const bool found_layout_data = utils::pipeline_layout::GetPipelineLayoutData(layout, [&](const auto* pipeline_layout_data) {
+      cloned_layout = pipeline_layout_data->replacement_layout;
+    });
+    if (!found_layout_data) return;
+    if (cloned_layout == 0u) return;
   }
 
   for (uint32_t i = 0; i < count; ++i) {
@@ -1260,7 +1696,10 @@ inline void OnBindDescriptorTables(
     reshade::log::message(reshade::log::level::info, s.str().c_str());
 #endif
     cmd_list->bind_descriptor_table(stages, cloned_layout, (first + i), tables[i]);
-    cmd_list->bind_descriptor_table(stages, layout, (first + i), tables[i]);
+    if (!is_vulkan) {
+      // Avoid replacing in vulkan
+      cmd_list->bind_descriptor_table(stages, layout, (first + i), tables[i]);
+    }
   }
 }
 
@@ -1376,15 +1815,23 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
         return response;
       }
 
+      auto visibility = reshade::api::shader_stage::all;
+      if (!use_pipeline_layout_cloning) {
+        visibility = state.pipeline_details->injection_visibility;
+      }
+      const uint32_t injection_offset = constant_buffer_offset != 0
+                                            ? constant_buffer_offset
+                                            : state.pipeline_details->injection_constant_buffer_offset;
       renodx::utils::constants::PushShaderInjections(
           context.cmd_list,
           state.pipeline_details->injection_layout,
           static_cast<uint32_t>(state.pipeline_details->injection_index),
           shader_stage == renodx::utils::shader::COMPUTE_INDEX,
           {shader_injection, shader_injection_size},
-          constant_buffer_offset,
+          injection_offset,
           resource_tag_float,
-          resource_tag);
+          resource_tag,
+          visibility);
       if (revert_constant_buffer_ranges) {
         switch (context.cmd_list->get_device()->get_api()) {
           case reshade::api::device_api::d3d10:
@@ -1399,8 +1846,22 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
       }
     }
 
+    const bool applied_replacement = utils::shader::ApplyReplacement(context.cmd_list, &state);
+
     if (!custom_shader_info->views.empty()) {
-      if (state.pipeline_details->injection_layout == 0u) {
+      if (use_pipeline_layout_cloning && !applied_replacement) {
+#ifdef DEBUG_LEVEL_0
+        std::stringstream s;
+        s << "mods::shader::OnCommandAction(";
+        s << "descriptor injection unavailable for shader ";
+        s << PRINT_CRC32(custom_shader_info->crc32);
+        s << ": replacement pipeline was not applied";
+        s << ", pipeline: " << PRINT_PTR(state.pipeline_details->pipeline.handle);
+        s << ", injection layout: " << PRINT_PTR(state.pipeline_details->injection_layout.handle);
+        s << ")";
+        reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+      } else if (state.pipeline_details->injection_layout == 0u) {
         assert(false && "custom shader view binding requires an injection layout");
 #ifdef DEBUG_LEVEL_0
         std::stringstream s;
@@ -1505,6 +1966,8 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
               return lhs.binding < rhs.binding;
             });
 
+        const bool use_descriptor_tables = context.cmd_list->get_device()->get_api() == reshade::api::device_api::vulkan;
+
         static thread_local std::vector<reshade::api::resource_view> descriptor_views;
         if (descriptor_views.size() < pending_view_push_count) {
           descriptor_views.resize(pending_view_push_count);
@@ -1529,27 +1992,81 @@ inline constexpr auto OnCommandAction = []<typename T, typename Context>(
             ++span_end;
           }
 
-          context.cmd_list->push_descriptors(
-              descriptor_stages,
-              state.pipeline_details->injection_layout,
-              first_view_push.layout_param,
-              reshade::api::descriptor_table_update{
-                  .table = {},
-                  .binding = first_view_push.binding,
-                  .array_offset = 0,
-                  .count = descriptor_view_count,
-                  .type = first_view_push.type,
-                  .descriptors = descriptor_views.data(),
-              });
+          reshade::api::descriptor_table table = {};
+          if (use_descriptor_tables) {
+            if (first_view_push.layout_param < state.pipeline_details->descriptor_tables.size()) {
+              table = state.pipeline_details->descriptor_tables[first_view_push.layout_param];
+            }
+
+            if (table.handle == 0u) {
+              if (!renodx::utils::descriptor::GetOrAllocateDescriptorTable(
+                      context.cmd_list->get_device(),
+                      state.pipeline_details->layout,
+                      state.pipeline_details->injection_layout,
+                      first_view_push.layout_param,
+                      &table)) {
+#ifdef DEBUG_LEVEL_0
+                std::stringstream s;
+                s << "mods::shader::OnCommandAction(";
+                s << "descriptor table allocation failed for shader ";
+                s << PRINT_CRC32(custom_shader_info->crc32);
+                s << ": set=" << first_view_push.layout_param;
+                s << ", pipeline: " << PRINT_PTR(state.pipeline_details->pipeline.handle);
+                s << ", injection layout: " << PRINT_PTR(state.pipeline_details->injection_layout.handle);
+                s << ")";
+                reshade::log::message(reshade::log::level::warning, s.str().c_str());
+#endif
+                return response;
+              }
+            }
+
+            if (state.pipeline_details->descriptor_tables.size() <= first_view_push.layout_param) {
+              state.pipeline_details->descriptor_tables.resize(first_view_push.layout_param + 1u);
+            }
+            state.pipeline_details->descriptor_tables[first_view_push.layout_param] = table;
+          }
+
+          const reshade::api::descriptor_table_update update{
+              .table = table,
+              .binding = first_view_push.binding,
+              .array_offset = 0,
+              .count = descriptor_view_count,
+              .type = first_view_push.type,
+              .descriptors = descriptor_views.data(),
+          };
+
+          if (use_descriptor_tables) {
+            context.cmd_list->get_device()->update_descriptor_tables(1u, &update);
+            context.cmd_list->bind_descriptor_tables(
+                descriptor_stages,
+                state.pipeline_details->injection_layout,
+                first_view_push.layout_param,
+                1u,
+                &table);
+          } else if (descriptor_stages == reshade::api::shader_stage::all_graphics
+                     && context.cmd_list->get_device()->get_api() == reshade::api::device_api::d3d12
+                     && first_view_push.type == reshade::api::descriptor_type::buffer_unordered_access_view
+                     && first_view_push.binding == 0u
+                     && descriptor_view_count == 1u) {
+            // ReShade binds D3D12 graphics buffer UAV root descriptors as SRVs.
+            // Bypass that setter for this root-descriptor case instead of issuing
+            // an invalid graphics SRV bind before the native UAV bind.
+            auto* native_cmd_list = reinterpret_cast<ID3D12GraphicsCommandList*>(context.cmd_list->get_native());
+            native_cmd_list->SetGraphicsRootUnorderedAccessView(
+                first_view_push.layout_param,
+                context.cmd_list->get_device()->get_resource_view_gpu_address(descriptor_views[0]));
+          } else {
+            context.cmd_list->push_descriptors(
+                descriptor_stages,
+                state.pipeline_details->injection_layout,
+                first_view_push.layout_param,
+                update);
+          }
 
           span_begin = span_end;
         }
       }
     }
-
-    // Perform bind
-
-    utils::shader::ApplyReplacement(context.cmd_list, &state);
 
     return response;
   };
@@ -1641,12 +2158,23 @@ inline void OnPresent(
     if (state->last_pipeline != 0u) {
       auto* details = renodx::utils::shader::GetPipelineShaderDetails(state->last_pipeline);
       if (details != nullptr && details->injection_layout != 0u && details->injection_index != -1) {
+        const uint32_t injection_offset = constant_buffer_offset != 0
+                                              ? constant_buffer_offset
+                                              : details->injection_constant_buffer_offset;
+        auto visibility = reshade::api::shader_stage::all;
+        if (!use_pipeline_layout_cloning) {
+          visibility = details->injection_visibility;
+        }
         renodx::utils::constants::PushShaderInjections(
             cmd_list,
             details->injection_layout,
-            static_cast<uint32_t>(details->injection_index),
+            details->injection_index,
             false,
-            {shader_injection, shader_injection_size});
+            {shader_injection, shader_injection_size},
+            injection_offset,
+            nullptr,
+            0.f,
+            visibility);
       }
     }
   }
@@ -1677,6 +2205,7 @@ static void Use(DWORD fdw_reason, const CustomShaderList& new_custom_shaders, T*
     renodx::utils::swapchain::Use(fdw_reason);
   }
   renodx::utils::pipeline_layout::Use(fdw_reason);
+  renodx::utils::descriptor::Use(fdw_reason);
   if (revert_constant_buffer_ranges) {
     renodx::utils::constants::capture_push_descriptors = true;
     renodx::utils::constants::Use(fdw_reason);

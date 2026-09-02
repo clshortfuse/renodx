@@ -3,9 +3,11 @@
   "id": "acecombat7",
   "title": "Ace Combat 7",
   "maintainers": [
-    "MapleHinata"
+    "Maple"
   ],
-  "status": "beta",
+  "notes": [
+    "Superseded by Generic Unreal Engine mod"
+  ],
   "deploy": {
     "steam_appid": 502500
   }

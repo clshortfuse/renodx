@@ -22,7 +22,7 @@ float4 main(
     noperspective float4 SV_Position: SV_Position,
     linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
-  if (TONE_MAP_TYPE != 0) {
+  if (RENODX_TONE_MAP_TYPE != 0) {
     return GenerateOutput(tLinearImage, PointBorder, TEXCOORD);
   }
 

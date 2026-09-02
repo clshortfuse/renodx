@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -219,6 +220,9 @@ class RenderPass {
 
   std::unordered_map<ConstantBuffersSlots, std::span<const float>, ConstantBuffersSlotsHash> push_constants;
 
+  reshade::api::render_pass_load_op render_target_load_op = reshade::api::render_pass_load_op::load;
+  reshade::api::render_pass_store_op render_target_store_op = reshade::api::render_pass_store_op::store;
+
   bool auto_generate_descriptor_table_updates{true};
   std::vector<reshade::api::descriptor_table_update> descriptor_table_updates;
   std::vector<reshade::api::descriptor_table> descriptor_tables;
@@ -260,6 +264,7 @@ class RenderPass {
 
     auto* device = cmd_list->get_device();
     if (device == nullptr) return false;
+    const auto is_vulkan = device->get_api() == reshade::api::device_api::vulkan;
 
 #ifdef DEBUG_LEVEL_2
     reshade::log::message(reshade::log::level::info, "utils::render::RenderPass(DEBUG_LEVEL_2 active)");
@@ -335,8 +340,65 @@ class RenderPass {
 
     if (this->auto_generate_descriptor_table_updates) {
       descriptor_table_updates.clear();
+
+      if (is_vulkan) {
+        uint32_t current_vk_binding = 0;
+
+        // Match HLSL register declaration order in Vulkan set 0. SRV -> Sampler -> UAV
+        // Vulkan binding is based on order
+        if (!this->shader_resource_slots.views.empty()) {
+          const auto srv_count = static_cast<uint32_t>(this->shader_resource_slots.views.size());
+          descriptor_table_updates.push_back({
+              .table = {},
+              .binding = current_vk_binding,
+              .array_offset = 0,
+              .count = srv_count,
+              .type = reshade::api::descriptor_type::texture_shader_resource_view,
+              .descriptors = this->shader_resource_slots.views.data(),
+          });
+          current_vk_binding += srv_count;
+        }
+
+        if (!samplers.empty()) {
+          const auto sampler_count = static_cast<uint32_t>(samplers.size());
+          descriptor_table_updates.push_back({
+              .table = {},
+              .binding = current_vk_binding,
+              .array_offset = 0,
+              .count = sampler_count,
+              .type = reshade::api::descriptor_type::sampler,
+              .descriptors = samplers.data(),
+          });
+          current_vk_binding += sampler_count;
+        }
+
+        if (!this->unordered_access_slots.views.empty()) {
+          const auto uav_count = static_cast<uint32_t>(this->unordered_access_slots.views.size());
+          descriptor_table_updates.push_back({
+              .table = {},
+              .binding = current_vk_binding,
+              .array_offset = 0,
+              .count = uav_count,
+              .type = reshade::api::descriptor_type::texture_unordered_access_view,
+              .descriptors = this->unordered_access_slots.views.data(),
+          });
+          current_vk_binding += uav_count;
+        }
+
+#ifdef DEBUG_LEVEL_2
+        if (!descriptor_table_updates.empty()) {
+          uint32_t expected_binding = 0;
+          for (const auto& update : descriptor_table_updates) {
+            assert(update.binding == expected_binding && "Vulkan binding index out of order in descriptor_table_updates.");
+            expected_binding += update.count;
+          }
+          assert(expected_binding == current_vk_binding && "Vulkan final binding mismatch with cumulative count.");
+        }
+#endif
+      }
+
       // Samplers
-      if (!samplers.empty()) {
+      if (!is_vulkan && !samplers.empty()) {
         descriptor_table_updates.push_back({
             .table = {},
             .binding = 0,
@@ -348,7 +410,7 @@ class RenderPass {
       }
 
       // SRVs
-      if (!this->shader_resource_slots.views.empty()) {
+      if (!is_vulkan && !this->shader_resource_slots.views.empty()) {
         descriptor_table_updates.push_back({
             .table = {},
             .binding = 0,
@@ -360,7 +422,7 @@ class RenderPass {
       }
 
       // UAVs
-      if (!this->unordered_access_slots.views.empty()) {
+      if (!is_vulkan && !this->unordered_access_slots.views.empty()) {
         descriptor_table_updates.push_back({
             .table = {},
             .binding = 0,
@@ -370,6 +432,7 @@ class RenderPass {
             .descriptors = this->unordered_access_slots.views.data(),
         });
       }
+
       this->auto_generate_descriptor_table_updates = false;
     }
 
@@ -420,8 +483,67 @@ class RenderPass {
           + (this->shader_resource_slots.views.empty() ? 0u : 1u)
           + (this->unordered_access_slots.views.empty() ? 0u : 1u));
       std::vector<reshade::api::pipeline_layout_param> layout_params = {};
+
+      if (is_vulkan) {
+        uint32_t current_vk_binding = 0;
+
+        if (!this->shader_resource_slots.views.empty()) {
+          const auto srv_count = static_cast<uint32_t>(this->shader_resource_slots.views.size());
+          descriptor_ranges.push_back({
+              .binding = current_vk_binding,
+              .dx_register_index = 0,
+              .dx_register_space = 0,
+              .count = srv_count,
+              .visibility = reshade::api::shader_stage::all,
+              .array_size = 1,
+              .type = reshade::api::descriptor_type::texture_shader_resource_view,
+          });
+          current_vk_binding += srv_count;
+        }
+
+        if (!samplers.empty()) {
+          const auto sampler_count = static_cast<uint32_t>(samplers.size());
+          descriptor_ranges.push_back({
+              .binding = current_vk_binding,
+              .dx_register_index = 0,
+              .dx_register_space = 0,
+              .count = sampler_count,
+              .visibility = reshade::api::shader_stage::all,
+              .array_size = 1,
+              .type = reshade::api::descriptor_type::sampler,
+          });
+          current_vk_binding += sampler_count;
+        }
+
+        if (!this->unordered_access_slots.views.empty()) {
+          const auto uav_count = static_cast<uint32_t>(this->unordered_access_slots.views.size());
+          descriptor_ranges.push_back({
+              .binding = current_vk_binding,
+              .dx_register_index = 0,
+              .dx_register_space = 0,
+              .count = uav_count,
+              .visibility = reshade::api::shader_stage::all,
+              .array_size = 1,
+              .type = reshade::api::descriptor_type::texture_unordered_access_view,
+          });
+          current_vk_binding += uav_count;
+        }
+
+        if (!descriptor_ranges.empty()) {
+          layout_params.emplace_back(static_cast<uint32_t>(descriptor_ranges.size()), descriptor_ranges.data());
+#ifdef DEBUG_LEVEL_2
+          // Verify binding indexes are monotonically increasing within the Vulkan set.
+          uint32_t expected_binding = 0;
+          for (uint32_t i = 0; i < static_cast<uint32_t>(descriptor_ranges.size()); ++i) {
+            assert(descriptor_ranges[i].binding == expected_binding && "Vulkan descriptor range binding out of order.");
+            expected_binding += descriptor_ranges[i].count;
+          }
+#endif
+        }
+      }
+
       // Samplers
-      if (!samplers.empty()) {
+      if (!is_vulkan && !samplers.empty()) {
         descriptor_ranges.push_back({
             .binding = 0,
             .dx_register_index = 0,
@@ -434,7 +556,7 @@ class RenderPass {
         layout_params.emplace_back(1, &descriptor_ranges.back());
       }
 
-      if (!this->shader_resource_slots.views.empty()) {
+      if (!is_vulkan && !this->shader_resource_slots.views.empty()) {
         descriptor_ranges.push_back({
             .binding = 0,
             .dx_register_index = 0,
@@ -447,7 +569,7 @@ class RenderPass {
         layout_params.emplace_back(1, &descriptor_ranges.back());
       }
 
-      if (!this->unordered_access_slots.views.empty()) {
+      if (!is_vulkan && !this->unordered_access_slots.views.empty()) {
         descriptor_ranges.push_back({
             .binding = 0,
             .dx_register_index = 0,
@@ -575,6 +697,8 @@ class RenderPass {
       while (insert_index < render_target_views_size) {
         reshade::api::render_pass_render_target_desc rt_desc{
             .view = {this->render_target_slots.views[insert_index]},
+            .load_op = this->render_target_load_op,
+            .store_op = this->render_target_store_op,
         };
         this->render_target_slots.render_pass_descs[insert_index] = rt_desc;
         ++insert_index;
@@ -595,9 +719,19 @@ class RenderPass {
         return true;
       }
 
-      if (this->descriptor_tables.size() != this->descriptor_table_updates.size()) {
+      const uint32_t descriptor_table_count = is_vulkan ? 1u : static_cast<uint32_t>(this->descriptor_table_updates.size());
+#ifdef DEBUG_LEVEL_1
+      if (is_vulkan) {
+        assert(descriptor_table_count == 1u && "Vulkan should always allocate exactly 1 descriptor table.");
+      }
+#endif
+      // Vulkan descriptor sets may still be referenced by pending command
+      // buffers. RenderPass bindings remain stable until the table is destroyed,
+      // so initialize a Vulkan table only when it is newly allocated.
+      bool descriptor_table_update_required = !is_vulkan;
+      if (this->descriptor_tables.size() != descriptor_table_count) {
         this->DestroyDescriptorTables(device);
-        this->descriptor_tables.assign(this->descriptor_table_updates.size(), reshade::api::descriptor_table{});
+        this->descriptor_tables.assign(descriptor_table_count, reshade::api::descriptor_table{});
 
         for (uint32_t index = 0; index < static_cast<uint32_t>(this->descriptor_tables.size()); ++index) {
           if (!device->allocate_descriptor_table(this->layout, index, &this->descriptor_tables[index])) {
@@ -606,13 +740,16 @@ class RenderPass {
           }
         }
         this->generated_descriptor_tables = true;
+        descriptor_table_update_required = true;
       }
 
-      std::vector<reshade::api::descriptor_table_update> table_updates = this->descriptor_table_updates;
-      for (size_t i = 0; i < table_updates.size(); ++i) {
-        table_updates[i].table = this->descriptor_tables[i];
+      if (descriptor_table_update_required) {
+        std::vector<reshade::api::descriptor_table_update> table_updates = this->descriptor_table_updates;
+        for (size_t i = 0; i < table_updates.size(); ++i) {
+          table_updates[i].table = is_vulkan ? this->descriptor_tables[0] : this->descriptor_tables[i];
+        }
+        device->update_descriptor_tables(static_cast<uint32_t>(table_updates.size()), table_updates.data());
       }
-      device->update_descriptor_tables(static_cast<uint32_t>(table_updates.size()), table_updates.data());
       return true;
     };
 
@@ -680,22 +817,18 @@ class RenderPass {
 
           if (!has_desc) {
             const auto& rtv = this->render_target_slots.views[i];
-            auto original_resource = renodx::utils::resource::GetResourceFromView(rtv);
-            if (original_resource.handle != 0u) {
-              desc = renodx::utils::resource::GetResourceDesc(device, original_resource);
-              has_desc = desc.type != reshade::api::resource_type::unknown;
-            } else {
-              auto resource = renodx::utils::resource::GetResourceFromView(device, rtv);
-              if (resource.handle == 0) {
+
+            auto resource = renodx::utils::resource::GetResourceFromView(device, rtv);
+            if (resource.handle == 0u) {
 #ifdef DEBUG_LEVEL_2
-                reshade::log::message(reshade::log::level::warning, "utils::render::RenderPass(get_resource_from_view failed)");
+              reshade::log::message(reshade::log::level::warning, "utils::render::RenderPass(get_resource_from_view failed)");
 #endif
-                assert(false);
-                return false;
-              }
-              desc = renodx::utils::resource::GetResourceDesc(device, resource);
-              has_desc = desc.type != reshade::api::resource_type::unknown;
+              assert(false);
+              return false;
             }
+
+            desc = renodx::utils::resource::GetResourceDesc(device, resource);
+            has_desc = desc.type != reshade::api::resource_type::unknown;
           }
 
           if (!has_desc || desc.type == reshade::api::resource_type::unknown) {

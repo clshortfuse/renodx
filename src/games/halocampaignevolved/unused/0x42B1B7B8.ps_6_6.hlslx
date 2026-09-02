@@ -1,0 +1,148 @@
+Texture2D<float4> t0 : register(t0);
+
+Texture2D<float4> t1 : register(t1);
+
+cbuffer cb0 : register(b0) {
+  float4 NV12ConvertUB_000[4] : packoffset(c000.x);
+  float4 NV12ConvertUB_064[4] : packoffset(c004.x);
+  int NV12ConvertUB_128 : packoffset(c008.x);
+  int NV12ConvertUB_132 : packoffset(c008.y);
+  int NV12ConvertUB_136 : packoffset(c008.z);
+  int NV12ConvertUB_140 : packoffset(c008.w);
+  float2 NV12ConvertUB_144 : packoffset(c009.x);
+  int NV12ConvertUB_152 : packoffset(c009.z);
+  int NV12ConvertUB_156 : packoffset(c009.w);
+  int NV12ConvertUB_160 : packoffset(c010.x);
+  int NV12ConvertUB_164 : packoffset(c010.y);
+  int NV12ConvertUB_168 : packoffset(c010.z);
+  int NV12ConvertUB_172 : packoffset(c010.w);
+  int NV12ConvertUB_176 : packoffset(c011.x);
+};
+
+SamplerState s0 : register(s0);
+
+SamplerState s1 : register(s1);
+
+// DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
+uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+
+float4 main(
+  precise noperspective float4 SV_Position : SV_Position,
+  linear float2 TEXCOORD : TEXCOORD
+) : SV_Target {
+  float4 SV_Target;
+  float _12;
+  float _13;
+  float4 _16;
+  float4 _20;
+  bool _25;
+  float _26;
+  float _27;
+  float _63;
+  float _64;
+  float _65;
+  float _160;
+  float _161;
+  float _162;
+  float _211;
+  float _212;
+  float _213;
+  float _67;
+  float _68;
+  float _69;
+  float _101;
+  float _102;
+  float _103;
+  float _163;
+  float _164;
+  float _165;
+  float _167;
+  float _168;
+  float _169;
+  float _170;
+  float _171;
+  float _172;
+  float _173;
+  float _174;
+  float _175;
+  _12 = NV12ConvertUB_144.x * TEXCOORD.x;
+  _13 = NV12ConvertUB_144.y * TEXCOORD.y;
+  _16 = t0.Sample(s0, float2(_12, _13));
+  _20 = t1.Sample(s1, float2(_12, _13));
+  _25 = (NV12ConvertUB_140 != 0);
+  _26 = select(_25, _20.y, _20.x);
+  _27 = select(_25, _20.x, _20.y);
+  _63 = max(dot(float4((NV12ConvertUB_000[0].x), (NV12ConvertUB_000[0].y), (NV12ConvertUB_000[0].z), (NV12ConvertUB_000[0].w)), float4(_16.x, _26, _27, 1.0f)), 0.0f);
+  _64 = max(dot(float4((NV12ConvertUB_000[1].x), (NV12ConvertUB_000[1].y), (NV12ConvertUB_000[1].z), (NV12ConvertUB_000[1].w)), float4(_16.x, _26, _27, 1.0f)), 0.0f);
+  _65 = max(dot(float4((NV12ConvertUB_000[2].x), (NV12ConvertUB_000[2].y), (NV12ConvertUB_000[2].z), (NV12ConvertUB_000[2].w)), float4(_16.x, _26, _27, 1.0f)), 0.0f);
+  switch ((int)(NV12ConvertUB_132)) {
+    case 2: {
+      _67 = max(6.103519990574569e-05f, _63);
+      _68 = max(6.103519990574569e-05f, _64);
+      _69 = max(6.103519990574569e-05f, _65);
+      _160 = select((_67 > 0.040449999272823334f), exp2(log2((_67 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_67 * 0.07739938050508499f));
+      _161 = select((_68 > 0.040449999272823334f), exp2(log2((_68 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_68 * 0.07739938050508499f));
+      _162 = select((_69 > 0.040449999272823334f), exp2(log2((_69 * 0.9478672742843628f) + 0.05213269963860512f) * 2.4000000953674316f), (_69 * 0.07739938050508499f));
+      break;
+    }
+    case 3: {
+      _101 = (pow(_63, 0.012683313339948654f));
+      _102 = (pow(_64, 0.012683313339948654f));
+      _103 = (pow(_65, 0.012683313339948654f));
+      _160 = (exp2(log2(max(0.0f, (_101 + -0.8359375f)) / (18.8515625f - (_101 * 18.6875f))) * 6.277394771575928f) * 10000.0f);
+      _161 = (exp2(log2(max(0.0f, (_102 + -0.8359375f)) / (18.8515625f - (_102 * 18.6875f))) * 6.277394771575928f) * 10000.0f);
+      _162 = (exp2(log2(max(0.0f, (_103 + -0.8359375f)) / (18.8515625f - (_103 * 18.6875f))) * 6.277394771575928f) * 10000.0f);
+      break;
+    }
+    case 12: {
+      _160 = select((_63 >= 0.16736099123954773f), ((exp2((_63 * 12.995534896850586f) + -5.335410118103027f) * 0.1899999976158142f) + -0.009999999776482582f), ((_63 * 0.1510130614042282f) + -0.014023696072399616f));
+      _161 = select((_64 >= 0.16736099123954773f), ((exp2((_64 * 12.995534896850586f) + -5.335410118103027f) * 0.1899999976158142f) + -0.009999999776482582f), ((_64 * 0.1510130614042282f) + -0.014023696072399616f));
+      _162 = select((_65 >= 0.16736099123954773f), ((exp2((_65 * 12.995534896850586f) + -5.335410118103027f) * 0.1899999976158142f) + -0.009999999776482582f), ((_65 * 0.1510130614042282f) + -0.014023696072399616f));
+      break;
+    }
+    default: {
+      _160 = _63;
+      _161 = _64;
+      _162 = _65;
+      break;
+    }
+  }
+  _163 = dot(float4((NV12ConvertUB_064[0].x), (NV12ConvertUB_064[0].y), (NV12ConvertUB_064[0].z), (NV12ConvertUB_064[0].w)), float4(_160, _161, _162, 1.0f));
+  _164 = dot(float4((NV12ConvertUB_064[1].x), (NV12ConvertUB_064[1].y), (NV12ConvertUB_064[1].z), (NV12ConvertUB_064[1].w)), float4(_160, _161, _162, 1.0f));
+  _165 = dot(float4((NV12ConvertUB_064[2].x), (NV12ConvertUB_064[2].y), (NV12ConvertUB_064[2].z), (NV12ConvertUB_064[2].w)), float4(_160, _161, _162, 1.0f));
+  switch ((int)(NV12ConvertUB_136)) {
+    case 1: {
+      _167 = max(0.0f, _163);
+      _168 = max(0.0f, _164);
+      _169 = max(0.0f, _165);
+      _170 = _167 * 2.0f;
+      _171 = _168 * 2.0f;
+      _172 = _169 * 2.0f;
+      _173 = _167 * 0.30000001192092896f;
+      _174 = _168 * 0.30000001192092896f;
+      _175 = _169 * 0.30000001192092896f;
+      _211 = ((((((_173 + 0.05000000074505806f) * _170) + 0.004000000189989805f) / (((_173 + 0.5f) * _170) + 0.06000000238418579f)) + -0.06666666269302368f) * 1.3790643215179443f);
+      _212 = ((((((_174 + 0.05000000074505806f) * _171) + 0.004000000189989805f) / (((_174 + 0.5f) * _171) + 0.06000000238418579f)) + -0.06666666269302368f) * 1.3790643215179443f);
+      _213 = ((((((_175 + 0.05000000074505806f) * _172) + 0.004000000189989805f) / (((_175 + 0.5f) * _172) + 0.06000000238418579f)) + -0.06666666269302368f) * 1.3790643215179443f);
+      break;
+    }
+    case 2: {
+      _211 = (_163 / (_163 + 1.0f));
+      _212 = (_164 / (_164 + 1.0f));
+      _213 = (_165 / (_165 + 1.0f));
+      break;
+    }
+    default: {
+      _211 = _163;
+      _212 = _164;
+      _213 = _165;
+      break;
+    }
+  }
+  SV_Target.x = _211;
+  SV_Target.y = _212;
+  SV_Target.z = _213;
+  SV_Target.w = 1.0f;
+  return SV_Target;
+}

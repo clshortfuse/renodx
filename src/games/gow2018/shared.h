@@ -13,9 +13,6 @@
 // #define RENODX_TONE_MAP_SATURATION  1.f
 // #define RENODX_TONE_MAP_BLOWOUT     0.f
 // #define RENODX_TONE_MAP_HUE_SHIFT   0.2f
-// #define RENODX_COLOR_GRADE_STRENGTH 1.f
-// #define RENODX_COLOR_GRADE_SCALING  1.f
-// #define CUSTOM_BLOOM                1.f
 // #define RENODX_USE_PQ_ENCODING      1u
 // #define RENODX_OVERRIDE_BRIGHTNESS  1u
 
@@ -36,9 +33,6 @@ struct ShaderInjectData {
   float tone_map_flare;
   float tone_map_hue_shift;
   float gamma_correction;
-  float color_grade_strength;
-  float color_grade_scaling;
-  float custom_bloom;
   float tone_map_override_brightness;
   float custom_hdr10_encoding;
 };
@@ -62,9 +56,6 @@ cbuffer cb11 : register(b11) {
 #define RENODX_TONE_MAP_BLOWOUT              shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                shader_injection.tone_map_flare
 #define RENODX_TONE_MAP_HUE_SHIFT            shader_injection.tone_map_hue_shift
-#define RENODX_COLOR_GRADE_STRENGTH          shader_injection.color_grade_strength
-#define RENODX_COLOR_GRADE_SCALING           shader_injection.color_grade_scaling
-#define CUSTOM_BLOOM                         shader_injection.custom_bloom
 #define RENODX_USE_PQ_ENCODING               shader_injection.custom_hdr10_encoding
 #define RENODX_OVERRIDE_BRIGHTNESS           shader_injection.tone_map_override_brightness
 

@@ -1,7 +1,7 @@
 #ifndef SRC_BALDURSGATE3_SHARED_H
 #define SRC_BALDURSGATE3_SHARED_H
 
-#define RENODX_TONE_MAP_TYPE 2.f
+#define RENODX_TONE_MAP_TYPE 1.f
 
 // Must be 32bit aligned
 // Should be 4x32

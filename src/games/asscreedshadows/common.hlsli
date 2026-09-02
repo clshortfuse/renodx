@@ -46,102 +46,96 @@ float3 HueAndChrominanceOKLab(
   return incorrect_color;
 }
 
-float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
-  if (config.exposure == 1.f && config.shadows == 1.f && config.highlights == 1.f && config.contrast == 1.f && config.flare == 0.f) {
-    return untonemapped;
-  }
-  float3 color = untonemapped;
+float ContrastAndFlare(float x, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
+  if (contrast == 1.f && flare == 0.f && contrast_highlights == 1.f && contrast_shadows == 1.f) return x;
 
-  color *= config.exposure;
-
-  const float y_normalized = y / mid_gray;
-  const float highlight_mask = 1.f / mid_gray;
-  const float shadow_mask = mid_gray;
-
-  // contrast & flare
-  float flare = renodx::math::DivideSafe(y_normalized + config.flare, y_normalized, 1.f);
-  float exponent = config.contrast * flare;
-  const float y_contrasted = pow(y_normalized, exponent);
-
-  // highlights
-  float y_highlighted = pow(y_contrasted, config.highlights);
-  y_highlighted = lerp(y_contrasted, y_highlighted, saturate(y_contrasted / highlight_mask));
-
-  // shadows
-  float y_shadowed = pow(y_highlighted, -1.f * (config.shadows - 2.f));
-  y_shadowed = lerp(y_shadowed, y_highlighted, saturate(y_highlighted / shadow_mask));
-
-  const float y_final = y_shadowed * mid_gray;
-
-  color *= (y > 0 ? (y_final / y) : 0);
-
-  return color;
+  const float x_normalized = x / mid_gray;
+  const float split_contrast = renodx::math::Select(x < mid_gray, contrast_shadows, contrast_highlights);
+  float flare_ratio = renodx::math::DivideSafe(x_normalized + flare, x_normalized, 1.f);
+  float exponent = contrast * split_contrast * flare_ratio;
+  return pow(x_normalized, exponent) * mid_gray;
 }
 
-float3 ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(float3 ungraded_ap1, float3 hue_reference_color_ap1, float y, renodx::color::grade::Config config) {
-  float3 color_ap1 = ungraded_ap1;
-  if (config.saturation != 1.f || config.dechroma != 0.f || config.hue_correction_strength != 0.f || config.blowout != 0.f) {
-    float3 color = renodx::color::bt709::from::AP1(ungraded_ap1);
-    float3 hue_reference_color = renodx::color::bt709::from::AP1(hue_reference_color_ap1);
+float3 ApplyAdaptiveMBPurity(float3 lms_input, float3 adaptive_neutral_lms, float purity_scale) {
+  if (abs(purity_scale - 1.f) <= 1e-5f) return lms_input;
 
-    float3 perceptual_new = renodx::color::oklab::from::BT709(color);
+  float3 relative_weighted = renodx::tonemap::psychov::psycho17_ToAdaptiveRelativeWeightedLMS(lms_input, adaptive_neutral_lms);
+  float3 mb = renodx::color::macleod_boynton::from::WeightedLMS(relative_weighted);
+  float3 mb_neutral = renodx::color::macleod_boynton::from::LMS(1.f.xxx);
+  float2 mb_scaled_xy = lerp(mb_neutral.xy, mb.xy, purity_scale);
+  float3 relative_weighted_out = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(float3(mb_scaled_xy, mb.z));
 
-    if (config.hue_correction_strength != 0.f) {
-      float3 perceptual_old = renodx::color::oklab::from::BT709(hue_reference_color);
+  return renodx::color::macleod_boynton::UnweighLMS(
+      renodx::tonemap::psychov::psycho17_FromAdaptiveRelativeWeightedLMS(relative_weighted_out, adaptive_neutral_lms));
+}
 
-      // Save chrominance to apply black
-      float chrominance_pre_adjust = distance(perceptual_new.yz, 0);
-
-      perceptual_new.yz = lerp(perceptual_new.yz, perceptual_old.yz, config.hue_correction_strength);
-
-      float chrominance_post_adjust = distance(perceptual_new.yz, 0);
-
-      // Apply back previous chrominance
-      perceptual_new.yz *= renodx::math::DivideSafe(chrominance_pre_adjust, chrominance_post_adjust, 1.f);
-    }
-
-    if (config.dechroma != 0.f) {
-      perceptual_new.yz *= lerp(1.f, 0.f, saturate(pow(y / (10000.f / 100.f), (1.f - config.dechroma))));
-    }
-
-    if (config.blowout != 0.f) {
-      float percent_max = saturate(y * 100.f / 10000.f);
-      // positive = 1 to 0, negative = 1 to 2
-      float blowout_strength = 100.f;
-      float blowout_change = pow(1.f - percent_max, blowout_strength * abs(config.blowout));
-      if (config.blowout < 0) {
-        blowout_change = (2.f - blowout_change);
-      }
-
-      perceptual_new.yz *= blowout_change;
-    }
-
-    perceptual_new.yz *= config.saturation;
-
-    color = renodx::color::bt709::from::OkLab(perceptual_new);
-
-    color_ap1 = max(0, renodx::color::ap1::from::BT709(color));
+float ApplyLuminanceGradingChannel(float channel, float gamma, float exposure, float highlights, float shadows, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
+  float channel_adjusted = channel * exposure;
+  if (gamma != 1.f) {
+    channel_adjusted = renodx::math::Select(channel_adjusted < 1.f, pow(channel_adjusted, gamma), channel_adjusted);
   }
+  channel_adjusted = renodx::color::grade::Highlights(channel_adjusted, highlights, mid_gray);
+  channel_adjusted = renodx::color::grade::Shadows(channel_adjusted, shadows, mid_gray);
+  channel_adjusted = ContrastAndFlare(channel_adjusted, contrast, contrast_highlights, contrast_shadows, flare, mid_gray);
+  return channel_adjusted;
+}
+
+float3 ApplyLuminanceGradingAP1(float3 color, float gamma, float exposure, float highlights, float shadows, float contrast, float contrast_highlights, float contrast_shadows, float flare, float mid_gray = 0.18f) {
+  float y = max(0.f, renodx::color::yf::from::AP1(color));
+  float y_adjusted = ApplyLuminanceGradingChannel(y, gamma, exposure, highlights, shadows, contrast, contrast_highlights, contrast_shadows, flare, mid_gray);
+  float3 color_adjusted = color * renodx::math::DivideSafe(y_adjusted, y, 1.f);
+
+  return color_adjusted;
+}
+
+float3 ApplyPurityGradingLMS(float3 color_lms, float purity_scale, float purity_highlights, float dechroma, float3 mid_gray_lms = 0.18f) {
+  if (purity_scale == 1.f && purity_highlights == 0.f && dechroma == 0.f) return color_lms;
+
+  float lum_target = max(0.f, renodx::color::yf::from::LMS(color_lms));
+
+  if (dechroma != 0.f) {
+    purity_scale *= lerp(1.f, 0.f, saturate(pow(lum_target / (10000.f / 100.f), 1.f - dechroma)));
+  }
+
+  if (purity_highlights != 0.f) {
+    float percent_max = saturate(lum_target * 100.f / 10000.f);
+    float blowout_change = pow(1.f - percent_max, 100.f * abs(purity_highlights));
+    if (purity_highlights < 0.f) {
+      blowout_change = 2.f - blowout_change;
+    }
+    purity_scale *= blowout_change;
+  }
+
+  if (purity_scale != 1.f) {
+    color_lms = ApplyAdaptiveMBPurity(color_lms, mid_gray_lms, purity_scale);
+  }
+
+  return color_lms;
+}
+
+float3 ApplyUserGradingAP1(float3 color_ap1, float mid_gray = 0.18f) {
+  color_ap1 = ApplyLuminanceGradingAP1(color_ap1,
+                                       1.f,
+                                       RENODX_TONE_MAP_EXPOSURE,
+                                       RENODX_TONE_MAP_HIGHLIGHTS,
+                                       RENODX_TONE_MAP_SHADOWS,
+                                       RENODX_TONE_MAP_CONTRAST,
+                                       1.f,
+                                       1.f,
+                                       0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f),
+                                       mid_gray);
+
+  float3 color_lms = renodx::color::lms::from::AP1(color_ap1);
+  color_lms = ApplyPurityGradingLMS(
+      color_lms,
+      RENODX_TONE_MAP_SATURATION,
+      -1.f * (RENODX_TONE_MAP_HIGHLIGHT_SATURATION - 1.f),
+      RENODX_TONE_MAP_DECHROMA,
+      renodx::color::lms::from::AP1(mid_gray.xxx));
+
+  color_ap1 = renodx::color::ap1::from::LMS(color_lms);
+
   return color_ap1;
-}
-
-float3 ApplyUserColorGradingAP1(float3 ungraded_ap1) {
-  renodx::color::grade::Config cg_config = renodx::color::grade::config::Create();
-  cg_config.exposure = RENODX_TONE_MAP_EXPOSURE;
-  cg_config.highlights = RENODX_TONE_MAP_HIGHLIGHTS;
-  cg_config.shadows = RENODX_TONE_MAP_SHADOWS;
-  cg_config.contrast = RENODX_TONE_MAP_CONTRAST;
-  cg_config.flare = 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f);
-  cg_config.saturation = RENODX_TONE_MAP_SATURATION;
-  cg_config.dechroma = RENODX_TONE_MAP_BLOWOUT;
-  cg_config.hue_correction_strength = 0.f;  // no hue correction
-  cg_config.blowout = 0.f;                  // no highlight saturation
-  float ungraded_y = LuminosityFromAP1LuminanceNormalized(ungraded_ap1);
-
-  float3 graded_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(ungraded_ap1, ungraded_y, cg_config);
-  graded_ap1 = ApplySaturationBlowoutHueCorrectionHighlightSaturationAP1(graded_ap1, ungraded_ap1, ungraded_y, cg_config);
-
-  return graded_ap1;
 }
 
 float3 GammaCorrectHuePreserving(float3 incorrect_color) {

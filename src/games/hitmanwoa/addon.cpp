@@ -12,8 +12,6 @@
 #include <include/reshade.hpp>
 
 #include <embed/shaders.h>
-
-#include <include/reshade.hpp>
 #include "../../mods/shader.hpp"
 #include "../../utils/date.hpp"
 #include "../../utils/settings.hpp"
@@ -66,6 +64,7 @@ void OnPresent(
 
 void Initialize() {
   g_current_use_shaders = -1.0f;
+  renodx::utils::shader::use_replace_async = true;
   reshade::register_event<reshade::addon_event::present>(OnPresent);
 }
 
@@ -247,12 +246,16 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         return device->get_api() == reshade::api::device_api::d3d12;  // So overlays dont kill the game
       };
 
+      // Replacement-only mod: do not inject cbuffers/root constants into Hitman root signatures to ensure stability
+      renodx::mods::shader::on_create_pipeline_layout = [](auto, auto) {
+        return false;
+      };
+
       if (!initialized) {
-        renodx::mods::shader::force_pipeline_cloning = true;
-        renodx::mods::shader::expected_constant_buffer_index = 13;
-        renodx::mods::shader::expected_constant_buffer_space = 50;
-        renodx::mods::shader::allow_multiple_push_constants = true;
-        renodx::utils::shader::use_replace_async = true;
+        // renodx::mods::shader::force_pipeline_cloning = true;
+
+        // renodx::utils::shader::use_replace_on_bind = false;
+        // renodx::utils::shader::use_replace_on_create = false;
 
 #if FORCE_HDR10
         if (!hdr10_init_event_registered) {

@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 // ---- Created with 3Dmigoto v1.4.1 on Wed Jul  9 15:57:03 2025
 
@@ -31,13 +31,11 @@ void main(
   r0.xy = texUvOffset.Sample(LinearClampSampler_s, v1.xy).xy;
   r0.xy = r0.xy;
   //r0.xy = v1.xy + r0.xy;
-  
-  if (shader_injection.barrel_distortion == 0) {
+  if (BARREL_DISTORTION == 0) {
     r0.xy = v1.xy;
   } else {
     r0.xy = v1.xy + r0.xy;
   }
-
   r0.xyz = texColor.Sample(LinearClampSampler_s, r0.xy).xyz;
   r0.xyz = r0.xyz;
   r1.xyz = colorCorrect._m00_m10_m20 * r0.xxx;

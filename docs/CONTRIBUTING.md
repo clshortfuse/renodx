@@ -8,8 +8,9 @@ RenoDX is an engine for modifying DirectX games. Recommended configuration:
 * [llvm](https://github.com/llvm/llvm-project/releases/) - Used for compiling, linting and formatting
 * [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) - For faster building
 * [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/) - Used to build addons and compile HLSL. Minimum supported version: `10.0.26100.0`
+* [glslang](https://github.com/KhronosGroup/glslang/releases) - Compiles explicitly tagged `.gl.glsl` and `.vk.glsl` files to OpenGL- and Vulkan-targeted SPIR-V. CMake accepts the current `glslang.exe` standalone tool or the legacy `glslangValidator.exe` name, checking `bin` before optional fallback locations.
 * [DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler/releases/) - Provides `dxc.exe` and `dxcompiler.dll` for Shader Model 6.x compilation and devkit tooling. DXC-based decompilation is also used by devkit where supported. Some releases also include `dxil.dll`, but it is not required for the RenoDX MCP workflow.
-* [cmd_decompiler.exe](https://github.com/bo3b/3Dmigoto/releases/tag/1.3.16) - Decompiles upto Shader Model 5.0 to HLSL
+* [cmd_decompiler.exe](https://github.com/bo3b/3Dmigoto/releases) - Decompiles upto Shader Model 5.0 to HLSL
 * [slangc.exe](https://github.com/shader-slang/slang/releases) - Compiles .slang files for DXBC, DXIL, and SPIR-V
 
 
@@ -29,31 +30,30 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-dev-env.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-dev-env.ps1 -Update
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-dev-env.ps1 -Install
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-dev-env.ps1 -Bin .\bin -Install
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-dev-env.ps1 -Update -Tools dxc,slang,glslang
 ```
 
 - The default invocation is a preview. It does not change files. Instead it reports the Windows SDK version it found and the current versus configured versions for the managed toolchain components.
 - `-Install` creates `.\bin` when needed, applies managed tool installs or updates, attempts Windows SDK installation when the SDK is missing, and copies `fxc.exe` into `.\bin` when the SDK is already installed.
 - Use `-Bin` when running the script outside the repo root. The default `bin` path is relative to the current working directory, not the script directory.
+- Use `-Tools` to limit setup to a comma-separated selection of `dxc`, `slang`, `glslang`, and `3dmigoto`.
 - `-Update` re-runs the same version-aware checks and applies managed tool installs or updates without attempting Windows SDK installation. If the SDK is already installed, it can still copy `fxc.exe` into `.\bin`.
 - The script will not downgrade a newer local managed tool install. It updates only when the configured package is newer than the installed one. It does not currently force-refresh same-version cached tool archives.
 - When you use the in-game devkit overlay or MCP workflow, point `devkit_set_tools_path` at this same `.\bin` directory if the game ships a conflicting `dxcompiler.dll` or other toolchain helpers.
 
-Manual tool setup is still supported if you prefer to manage `.\bin` yourself.
+Managed tool minimum versions have a single source in `cmake/tool-versions.cmake`. The setup script reads that CMake file rather than maintaining another set of version constants. To print the currently configured versions, run:
 
-* `mkdir bin`
-* `curl -L -o dxc.zip https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2602/dxc_2026_02_20.zip`
-* `curl -L -o slang.zip https://github.com/shader-slang/slang/releases/download/v2025.16.1/slang-2025.16.1-windows-x86_64.zip`
-* `curl -L -o cmd_Decompiler-1.3.16.zip https://github.com/bo3b/3Dmigoto/releases/download/1.3.16/cmd_Decompiler-1.3.16.zip`
-* `powershell -Command "Expand-Archive -Path dxc.zip -DestinationPath dxc_temp -Force; Copy-Item dxc_temp\bin\x64\* .\bin -Force; Remove-Item dxc_temp -Recurse -Force"`
-* `powershell -Command "Expand-Archive -Path slang.zip -DestinationPath slang_temp -Force; Copy-Item slang_temp\bin\* .\bin -Force; Remove-Item slang_temp -Recurse -Force"`
-* `powershell -Command "Expand-Archive -Path cmd_Decompiler-1.3.16.zip -DestinationPath 3dmigoto_temp -Force; Copy-Item (Get-ChildItem 3dmigoto_temp -Recurse -Filter cmd_Decompiler.exe | Select-Object -First 1).FullName .\bin\cmd_Decompiler.exe -Force; Remove-Item 3dmigoto_temp -Recurse -Force"`
-* `del dxc.zip`
-* `del slang.zip`
-* `del cmd_Decompiler-1.3.16.zip`
+```powershell
+cmake -P .\cmake\tool-versions.cmake
+```
+
+Manual tool setup is still supported if you prefer to manage `.\bin` yourself. Download the corresponding Windows x64 archives from the release pages linked above, then copy `dxc.exe` with `dxcompiler.dll`, `slangc.exe`, `glslang.exe`, and `cmd_Decompiler.exe` into `.\bin`. CMake checks the reported DXC, Slang, and glslang semantic versions during configuration and warns about versions older than the configured minimums; newer compatible versions are accepted. Run `scripts/setup-dev-env.ps1 -Update` to update managed tools to those configured versions.
 
 Install the Windows SDK if it is not already present. The setup script will attempt this automatically when run with `-Install`, or you can do it manually:
 
 * `winget install --id Microsoft.WindowsSDK -e --silent`
+
+The setup script downloads the official Windows release archive for the configured glslang minimum version. The standalone compiler in `.\bin` is sufficient for GLSL builds.
 
 Use Windows SDK `10.0.26100.0` or newer. `fxc.exe` comes from the Windows SDK. CMake can find it in the SDK install path, and the setup script will also copy it into `.\bin` when it can. The DXC package should provide `dxc.exe` together with `dxcompiler.dll`; some DXC releases also ship `dxil.dll`, which is fine to keep alongside them in `.\bin` but is not required by the current devkit MCP path. `slangc.exe` and `cmd_Decompiler.exe` are also expected there unless you have an equivalent toolchain arrangement of your own.
 

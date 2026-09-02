@@ -1,4 +1,4 @@
-#include "./shared.h"
+#include "./common.hlsli"
 
 // ---- Created with 3Dmigoto v1.4.1 on Fri Jun 20 20:06:03 2025
 
@@ -183,6 +183,5 @@ void main(
   // r0.xyz = InstanceConsts[0].yyy * r0.xyz;
   // o0.xyz = exp2(r0.xyz);
   o0.rgb = renodx::draw::RenderIntermediatePass(r0.rgb);
-
   return;
 }

@@ -12,6 +12,7 @@
 #include <mmiscapi.h>
 #include <winsock.h>
 
+#include <cassert>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -20,9 +21,10 @@
 #include <shared_mutex>
 #include <span>
 #include <string>
-#include <cassert>
 #include <vector>
 
+
+#include "./cstring.hpp"
 #include "./path.hpp"
 
 _COM_SMARTPTR_TYPEDEF(IDxcCompiler, __uuidof(IDxcCompiler));
@@ -84,7 +86,7 @@ class FxcD3DInclude : public ID3DInclude {
       }
       file_paths.emplace_back(output, new_path);
 
-      *ppData = _strdup(output.c_str());
+      *ppData = renodx::utils::CloneCString(output.c_str());
       *pBytes = static_cast<UINT>(output.size());
 
     } catch (...) {
@@ -114,7 +116,7 @@ class FxcD3DInclude : public ID3DInclude {
       }
     }
 
-    free(const_cast<void*>(pData));
+    std::free(const_cast<void*>(pData));
     return S_OK;
   }
 };

@@ -1,8 +1,6 @@
 #ifndef SRC_ASSCREEDORIGINS_ODYSSEY_SHARED_H_
 #define SRC_ASSCREEDORIGINS_ODYSSEY_SHARED_H_
 
-#define RENODX_GAME_GAMMA_CORRECTION 1u
-
 // Must be 32bit aligned
 // Should be 4x32
 struct ShaderInjectData {

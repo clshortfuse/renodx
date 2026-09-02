@@ -1,0 +1,6 @@
+#define TONEMAPPER_LAYOUT_BASE
+#define TONEMAPPER_USE_BLOOM 1
+#define TONEMAPPER_USE_GLARE 1
+#define TONEMAPPER_USE_COLOR_FILTER 1
+
+#include "tonemapper.hlsl"

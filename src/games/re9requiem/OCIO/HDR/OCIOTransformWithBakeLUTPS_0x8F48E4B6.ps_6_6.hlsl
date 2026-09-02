@@ -57,27 +57,34 @@ float4 main(
     linear float2 TEXCOORD: TEXCOORD)
     : SV_Target {
   float4 SV_Target;
+  SV_Target.w = 1.0f;
+
   float4 _11 = SrcTexture.SampleLevel(PointBorder, float2(TEXCOORD.x, TEXCOORD.y), 0.0f);
 
-#if SKIP_OCIO_LUT
-  SV_Target.rgb = _11.rgb;
-  SV_Target.rgb = renodx::color::bt2020::from::AP1(SV_Target.rgb);
-  if (RENODX_GAMMA_CORRECTION != 0.f) {
-    SV_Target.rgb = renodx::color::correct::GammaSafe(SV_Target.rgb);
-  }
-  SV_Target.rgb = renodx::color::pq::EncodeSafe(SV_Target.rgb, 100.f);
-  return SV_Target;
-#endif
-
-#if 1
   if (TONE_MAP_TYPE != 0.f) {
-    _11.rgb = ApplyCustomGrading(_11.rgb);
-  }
-  float _17 = SetPreExposureForOCIOLUT();
+    float3 untonemapped_ap1 = _11.rgb;
+#if 1
+    return float4(ApplyToneMapEncodePQ(untonemapped_ap1, displayMaxNits, whitePaperNits, TEXCOORD), SV_Target.w);
+    // return float4(renodx_custom::aces::rrtodt_academy_rec2020_1000nits_15nits_st2084::Apply(untonemapped_ap1), SV_Target.w);
 #else
-  float _17 = whitePaperNits * 0.009999999776482582f;
-#endif
+    SV_Target.rgb = renodx_custom::aces::odt_srgb_100nits_dim::Apply(
+        renodx_custom::aces::rrt::ApplyToODTInputFromAP1(_11.rgb));
 
+    if (RENODX_GAMMA_CORRECTION != 0.f) {
+      SV_Target.rgb = renodx::color::gamma::DecodeSafe(SV_Target.rgb);
+    } else {
+      SV_Target.rgb = renodx::color::srgb::DecodeSafe(SV_Target.rgb);
+    }
+
+    SV_Target.rgb = renodx::color::bt2020::from::BT709(SV_Target.rgb);
+    SV_Target.rgb *= RENODX_DIFFUSE_WHITE_NITS;
+    SV_Target.rgb = renodx::color::pq::EncodeSafe(SV_Target.rgb, 1.f);
+
+    return SV_Target;
+#endif
+  }
+
+  float _17 = whitePaperNits * 0.01f;
   float _18 = _17 * _11.x;
   float _19 = _17 * _11.y;
   float _20 = _17 * _11.z;
@@ -85,60 +92,14 @@ float4 main(
   float _50;
   float _65;
 
-#if 0
-  if (!(_18 <= 0.0f)) {
-    if (_18 < 3.0517578125e-05f) {
-      _35 = ((log2((_18 * 0.5f) + 1.52587890625e-05f) * 0.05707760155200958f) + 0.5547950267791748f);
-    } else {
-      _35 = ((log2(_18) * 0.05707760155200958f) + 0.5547950267791748f);
-    }
-  } else {
-    _35 = -0.35844698548316956f;
-  }
-  if (!(_19 <= 0.0f)) {
-    if (_19 < 3.0517578125e-05f) {
-      _50 = ((log2((_19 * 0.5f) + 1.52587890625e-05f) * 0.05707760155200958f) + 0.5547950267791748f);
-    } else {
-      _50 = ((log2(_19) * 0.05707760155200958f) + 0.5547950267791748f);
-    }
-  } else {
-    _50 = -0.35844698548316956f;
-  }
-  if (!(_20 <= 0.0f)) {
-    if (_20 < 3.0517578125e-05f) {
-      _65 = ((log2((_20 * 0.5f) + 1.52587890625e-05f) * 0.05707760155200958f) + 0.5547950267791748f);
-    } else {
-      _65 = ((log2(_20) * 0.05707760155200958f) + 0.5547950267791748f);
-    }
-  } else {
-    _65 = -0.35844698548316956f;
-  }
-#else
-  if (RENODX_LUT_SHAPER == 0.f) {
-    _35 = renodx::color::acescc::Encode(_18);
-    _50 = renodx::color::acescc::Encode(_19);
-    _65 = renodx::color::acescc::Encode(_20);
-  } else {
-    _35 = renodx::color::pq::Encode(_18, 100.f);
-    _50 = renodx::color::pq::Encode(_19, 100.f);
-    _65 = renodx::color::pq::Encode(_20, 100.f);
-  }
-#endif
+  _35 = renodx::color::acescc::Encode(_18);
+  _50 = renodx::color::acescc::Encode(_19);
+  _65 = renodx::color::acescc::Encode(_20);
 
-  float3 _74;
-  if (TONE_MAP_TYPE == 0.f) {
-    _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f).rgb;
-  } else {
-    _74 = renodx::lut::SampleTetrahedral(SrcLUT, float3(_35, _50, _65), 64u).rgb;
-  }
-
-#if 1
-  _74.rgb = ApplyPostToneMapProcessingPQInput(_74.rgb, TEXCOORD, _11.rgb, SrcLUT, TrilinearClamp);
-#endif
+  float3 _74 = SrcLUT.SampleLevel(TrilinearClamp, float3(((_35 * 0.984375f) + 0.0078125f), ((_50 * 0.984375f) + 0.0078125f), ((_65 * 0.984375f) + 0.0078125f)), 0.0f).rgb;
 
   SV_Target.x = _74.x;
   SV_Target.y = _74.y;
   SV_Target.z = _74.z;
-  SV_Target.w = 1.0f;
   return SV_Target;
 }

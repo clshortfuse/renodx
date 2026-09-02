@@ -1,36 +1,97 @@
 #include "./shared.h"
 #define cmp -
 
-float Highlights(float x, float highlights, float mid_gray) {
-  if (highlights == 1.f) return x;
+float3 ApplyPerChannelPurityAndHueBT2020(
+    float3 source_bt2020,
+    float3 target_bt2020,
+    float purity_amount,
+    float hue_amount) {
+  const float epsilon = 1e-7f;
+  float3 background_state_lms = renodx::color::lms::from::BT2020(0.18f.xxx);
+  float3 source_lms = renodx::color::lms::from::BT2020(source_bt2020);
+  float3 target_lms = renodx::color::lms::from::BT2020(target_bt2020);
 
-  if (highlights > 1.f) {
-    // value = max(x, lerp(x, mid_gray * pow(x / mid_gray, highlights), x));
-    return max(x,
-               lerp(x, mid_gray * pow(x / mid_gray, highlights),
-                    renodx::tonemap::ExponentialRollOff(x, 1.f, 1.1f)));
-  } else {  // highlights < 1.f
-    x /= mid_gray;
-    return lerp(x, pow(x, highlights), step(1.f, x)) * mid_gray;
+  // Express both colors relative to the same D65 background in physiologically
+  // weighted LMS, then separate carried Yf from MacLeod-Boynton chromaticity.
+  float3 source_relative_weighted = renodx::math::DivideSafe(renodx::color::macleod_boynton::WeighLMS(source_lms), background_state_lms, 0.f);
+  float3 target_relative_weighted = renodx::math::DivideSafe(renodx::color::macleod_boynton::WeighLMS(target_lms), background_state_lms, 0.f);
+  float3 source_mb = renodx::color::macleod_boynton::from::WeightedLMS(source_relative_weighted);
+  float3 target_mb = renodx::color::macleod_boynton::from::WeightedLMS(target_relative_weighted);
+  float2 mb_white = renodx::color::macleod_boynton::from::LMS(1.f.xxx).xy;
+  float2 source_offset = source_mb.xy - mb_white;
+  float2 target_offset = target_mb.xy - mb_white;
+  float source_length_squared = dot(source_offset, source_offset);
+  float target_length_squared = dot(target_offset, target_offset);
+  float source_radius = sqrt(max(source_length_squared, 0.f));
+  float target_radius = sqrt(max(target_length_squared, 0.f));
+
+  float2 source_direction = source_radius > epsilon
+                                ? source_offset / source_radius
+                                : float2(1.f, 0.f);
+  float2 target_direction = target_radius > epsilon
+                                ? target_offset / target_radius
+                                : source_direction;
+  if (source_radius <= epsilon) {
+    source_direction = target_direction;
   }
-}
 
-float Shadows(float x, float shadows, float mid_gray) {
-  if (shadows == 1.f) return x;
+  float2 output_direction = lerp(target_direction, source_direction, hue_amount);
+  float output_direction_length_squared = dot(output_direction, output_direction);
+  output_direction = output_direction_length_squared > epsilon
+                         ? output_direction * rsqrt(output_direction_length_squared)
+                         : target_direction;
 
-  const float ratio = max(renodx::math::DivideSafe(x, mid_gray, 0.f), 0.f);
-  const float base_term = x * mid_gray;
-  const float base_scale = renodx::math::DivideSafe(base_term, ratio, 0.f);
+  // Normalize purity against the BT.2020 boundary for each hue. Equal purity
+  // therefore means an equal fraction of the display's available chroma, not
+  // an equal raw MB radius across unequally sized hue directions.
+  float2 gamut_r;
+  float2 gamut_g;
+  float2 gamut_b;
+  renodx::color::gamut::MakeRGBTriangleInMBAdaptiveWeighted(
+      renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT,
+      background_state_lms,
+      gamut_r,
+      gamut_g,
+      gamut_b);
 
-  if (shadows > 1.f) {
-    float raised = x * (1.f + renodx::math::DivideSafe(base_term, pow(ratio, shadows), 0.f));
-    float reference = x * (1.f + base_scale);
-    return max(x, x + (raised - reference));
-  } else {  // shadows < 1.f
-    float lowered = x * (1.f - renodx::math::DivideSafe(base_term, pow(ratio, 2.f - shadows), 0.f));
-    float reference = x * (1.f - base_scale);
-    return clamp(x + (lowered - reference), 0.f, x);
-  }
+  bool has_source_boundary;
+  bool has_target_boundary;
+  bool has_output_boundary;
+  float source_boundary_radius = renodx::color::gamut::RayMaxT_RGBTriangleInMB(
+      mb_white,
+      source_direction,
+      gamut_r,
+      gamut_g,
+      gamut_b,
+      has_source_boundary);
+  float target_boundary_radius = renodx::color::gamut::RayMaxT_RGBTriangleInMB(
+      mb_white,
+      target_direction,
+      gamut_r,
+      gamut_g,
+      gamut_b,
+      has_target_boundary);
+  float output_boundary_radius = renodx::color::gamut::RayMaxT_RGBTriangleInMB(
+      mb_white,
+      output_direction,
+      gamut_r,
+      gamut_g,
+      gamut_b,
+      has_output_boundary);
+
+  float source_purity = has_source_boundary
+                            ? saturate(renodx::math::DivideSafe(source_radius, source_boundary_radius, 0.f))
+                            : 0.f;
+  float target_purity = has_target_boundary
+                            ? saturate(renodx::math::DivideSafe(target_radius, target_boundary_radius, 0.f))
+                            : 0.f;
+  float output_purity = lerp(target_purity, source_purity, purity_amount);
+  float output_radius = has_output_boundary
+                            ? output_purity * output_boundary_radius
+                            : lerp(target_radius, source_radius, saturate(purity_amount));
+
+  float3 output_relative_weighted = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(float3(mb_white + output_direction * output_radius, target_mb.z));
+  return renodx::color::bt2020::from::LMS(renodx::color::macleod_boynton::UnweighLMS(output_relative_weighted * background_state_lms));
 }
 
 float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemapped, float y, renodx::color::grade::Config config, float mid_gray = 0.18f) {
@@ -47,15 +108,11 @@ float3 ApplyExposureContrastFlareHighlightsShadowsByLuminance(float3 untonemappe
   float exponent = config.contrast * flare;
   const float y_contrasted = pow(y_normalized, exponent) * mid_gray;
 
-// highlights
-#if 0
-  // const float highlights = 1 + (sign(config.highlights - 1) * pow(abs(config.highlights - 1), 10.f));
-  // float y_highlighted = renodx::color::grade::Highlights(y_contrasted, config.highlights, mid_gray);
-#else
-  float y_highlighted = Highlights(y_contrasted, config.highlights, mid_gray);
-#endif
+  // highlights
+  float y_highlighted = renodx::color::grade::Highlights(y_contrasted, config.highlights, mid_gray);
+
   // shadows
-  float y_shadowed = Shadows(y_highlighted, config.shadows, mid_gray);
+  float y_shadowed = renodx::color::grade::Shadows(y_highlighted, config.shadows, mid_gray);
 
   const float y_final = y_shadowed;
 
@@ -171,7 +228,7 @@ renodx::color::grade::Config CreateColorGradeConfig() {
 }
 
 float3 GamutCompressBT2020(float3 color_bt2020) {
-  float grayscale = renodx::color::y::from::BT2020(color_bt2020);
+  float grayscale = renodx::color::yf::from::BT2020(color_bt2020);
 
   const float MID_GRAY_LINEAR = 1 / (pow(10, 0.75));                          // ~0.18f
   const float MID_GRAY_PERCENT = 0.5f;                                        // 50%
@@ -197,48 +254,43 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float peak_nits, float diff
 
   // custom grading
   renodx::color::grade::Config cg_config = CreateColorGradeConfig();
-  float y = renodx::color::y::from::AP1(untonemapped_ap1);
+  float y = renodx::color::yf::from::AP1(untonemapped_ap1);
   untonemapped_ap1 = ApplyExposureContrastFlareHighlightsShadowsByLuminance(untonemapped_ap1, y, cg_config);
 
   float3 tonemapped_bt709;
   if (tone_map_type == 2.f) {  // regular ACES with gamma correction
 
-#if RENODX_GAME_GAMMA_CORRECTION
     aces_max = renodx::color::correct::Gamma(aces_max, true);
     aces_min = renodx::color::correct::Gamma(aces_min, true);
-#endif
 
     float3 tonemapped_ap1 = renodx::tonemap::aces::ODT(untonemapped_ap1, aces_min * 48.f, aces_max * 48.f, renodx::color::IDENTITY_MAT) / 48.f;
     tonemapped_ap1 = max(0, tonemapped_ap1);
     tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
 
-#if RENODX_GAME_GAMMA_CORRECTION
     tonemapped_bt709 = renodx::color::correct::GammaSafe(tonemapped_bt709);
-#endif
-  } else {  // customized version of ACES, by luminance for midtones and shadows and per-channel for highlights, lowers min nits instead of 2.2 emulation
-#if RENODX_GAME_GAMMA_CORRECTION
+  } else {  // customized luminance ACES with per-channel purity and partial hue, lowers min nits instead of 2.2 emulation
     aces_min /= 5.f;
-#endif
 
     renodx::tonemap::aces::ODTConfig ODT_config = renodx::tonemap::aces::CreateODTConfig(aces_min * 48.f, aces_max * 48.f);
 
     // luminance tonemap
-    float y_in = renodx::color::y::from::AP1(untonemapped_ap1);
+    float y_in = renodx::color::yf::from::AP1(untonemapped_ap1);
     float y_out = renodx::tonemap::aces::ODTToneMap(y_in, ODT_config) / 48.f;
     float3 tonemapped_lum_ap1 = (renodx::color::correct::Luminance(untonemapped_ap1, y_in, y_out));
 
     // per channel tonemap
-    float3 tonemapped_perch_ap1 = (renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / 48.f);
+    float3 tonemapped_perch_ap1 = renodx::tonemap::aces::ODTToneMap(untonemapped_ap1, ODT_config) / 48.f;
 
-    // blend luminance and per channel
-    const float blending_ratio = renodx::color::y::from::AP1(tonemapped_lum_ap1);
-    float3 tonemapped_ap1 = lerp(tonemapped_lum_ap1, tonemapped_perch_ap1, saturate(blending_ratio));  // take highlights from per channel
-
-    // take chrominance from per channel
-    tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
-    float3 tonemapped_perch_bt709 = renodx::color::bt709::from::AP1(tonemapped_perch_ap1);
-    tonemapped_bt709 = renodx::color::correct::Chrominance(tonemapped_bt709, tonemapped_perch_bt709);
-    tonemapped_bt709 = renodx::color::bt709::clamp::AP1(tonemapped_bt709);
+    // Take full purity and partial hue from the per-channel tonemap.
+    float3 tonemapped_source_bt2020 = renodx::color::bt2020::from::AP1(max(0.f, tonemapped_perch_ap1));
+    float3 tonemapped_target_bt2020 = renodx::color::bt2020::from::AP1(max(0.f, tonemapped_lum_ap1));
+    float hue_amount = lerp(0.5f, 1.f, saturate((y_out - 0.1f) / 0.9f));
+    float3 tonemapped_appearance_bt2020 = ApplyPerChannelPurityAndHueBT2020(
+        tonemapped_source_bt2020,
+        tonemapped_target_bt2020,
+        1.f,
+        hue_amount);
+    tonemapped_bt709 = renodx::color::bt709::from::AP1(max(0.f, renodx::color::ap1::from::BT2020(tonemapped_appearance_bt2020)));
   }
 
   tonemapped_bt709 = ApplySaturationBlowoutHueCorrectionHighlightSaturation(tonemapped_bt709, renodx::color::bt709::from::AP1(untonemapped_ap1), y, cg_config);
