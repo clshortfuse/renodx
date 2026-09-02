@@ -1,0 +1,41 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/gh/clshortfuse/renodx/renodx-metadata-schema.json",
+  "id": "doom2016",
+  "title": "DOOM (2016)",
+  "variant": "Steam/GOG Vulkan",
+  "summary": "Experimental RenoDX HDR10 tone mapping and color grading for Vulkan builds of DOOM (2016).",
+  "tags": [
+    "HDR",
+    "HDR10",
+    "Vulkan"
+  ],
+  "status": "experimental",
+  "version": "0.1.0-dev.1",
+  "notes": [
+    "Tested on the inspected GOG Vulkan x64 build and a user-confirmed Steam Vulkan build; other builds remain shader-contract gated.",
+    "Inspected GOG DOOMx64vk.exe SHA-256: A32DF8FFA042090F14FE0A200F1C5D7DDDF9C947FAC223916C252F826F1ECF11.",
+    "Steam app ID: 379720.",
+    "Requires ReShade 6.8.0 Full Add-On and DOOMx64vk.exe.",
+    "OpenGL is not supported.",
+    "Auto HDR and NVIDIA RTX HDR must be disabled.",
+    "HDR10 format and color space are selected when the Vulkan swapchain is created; changing Output Mode requires a game restart until a safe DOOM swapchain-recreation trigger is proven.",
+    "Preset Off saves neutral SDR and Vanilla settings, but a restart is required to restore the original Vulkan swapchain and output path.",
+    "VK_EXT_hdr_metadata is not enabled by the inspected executable/ReShade device path, so explicit static HDR metadata is not yet published by this experimental build.",
+    "PsychoV-25 full-resolution performance and subtitles, automap, all loading transitions and every video path remain provisional acceptance areas.",
+    "Disable third-party implicit Vulkan layers such as RTSS, OBS Vulkan capture and Steam overlay/Fossilize when using the HDR proxy; DOOM's built-in performance statistics overlay is not RTSS."
+  ],
+  "deploy": {
+    "reshade_version_range": ">=6.8.0 <6.9.0",
+    "game_exe": "DOOMx64vk.exe",
+    "process_name": "DOOMx64vk.exe",
+    "api": "vulkan",
+    "steam_appid": 379720,
+    "gog_product_id": 1390579243,
+    "architecture": [
+      "x64"
+    ],
+    "detection": {
+      "probe_process_by_name": true
+    }
+  }
+}
