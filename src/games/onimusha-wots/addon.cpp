@@ -33,7 +33,7 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "ACES"},
+        .labels = {"Vanilla", "RenoDX (Vanilla+)", "RenoDX (Custom)"},
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapPeakNits",
@@ -53,7 +53,7 @@ renodx::utils::settings::Settings settings = {
         .default_value = 1.f,
         .label = "Apply Pre Tone Map Curve",
         .section = "Tone Mapping",
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapACESMidGray",
@@ -64,10 +64,10 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Selects the ACES mid-gray target:\n"
                    "4.8 is ACES reference behavior.\n"
-                   "10.0 matches the SDR tonemapper [RRT + ODT.Academy.RGBmonitor_100nits_dim / ODT.Academy.Rec709_100nits_dim].\n"
+                   "10.0 roughly matches the SDR tonemapper.\n"
                    "15.0 matches the HDR tonemapper [RRTODT.Academy.Rec2020_1000nits_15nits_ST2084].",
         .labels = {"4.8 (Reference ACES)", "10.0 (Matches SDR)", "15.0 (Matches HDR)"},
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 1.f; },
     },
     new renodx::utils::settings::Setting{
         .key = "ToneMapGameNits",
@@ -89,18 +89,7 @@ renodx::utils::settings::Settings settings = {
         .section = "Tone Mapping",
         .tooltip = "Emulates a 2.2 EOTF",
         .labels = {"Off", "2.2", "Lower ACES Min Nits"},
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ToneMapScaling",
-        .binding = &shader_injection.tone_map_scaling,
-        .value_type = renodx::utils::settings::SettingValueType::INTEGER,
-        .default_value = 1.f,
-        .label = "Scaling",
-        .section = "Tone Mapping",
-        .tooltip = "Luminance scales colors consistently while per channel matches the original behavior of the tonemapper",
-        .labels = {"Luminance", "Per Channel"},
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
+        .is_enabled = []() { return shader_injection.tone_map_type == 1.f; },
     },
     // new renodx::utils::settings::Setting{
     //     .key = "ToneMapHueRetention",
@@ -156,17 +145,6 @@ renodx::utils::settings::Settings settings = {
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
     },
     new renodx::utils::settings::Setting{
-        .key = "ColorGradeGamma",
-        .binding = &shader_injection.tone_map_gamma,
-        .default_value = 1.f,
-        .label = "Gamma",
-        .section = "Color Grading",
-        .min = 0.75f,
-        .max = 1.25f,
-        .format = "%.2f",
-        .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-    },
-    new renodx::utils::settings::Setting{
         .key = "ColorGradeHighlights",
         .binding = &shader_injection.tone_map_highlights,
         .default_value = 50.f,
@@ -214,16 +192,6 @@ renodx::utils::settings::Settings settings = {
         .section = "Color Grading",
         .max = 100.f,
         .is_enabled = []() { return shader_injection.tone_map_type != 0; },
-        .parse = [](float value) { return value * 0.02f; },
-    },
-    new renodx::utils::settings::Setting{
-        .key = "ColorGradeAdaptationContrast",
-        .binding = &shader_injection.tone_map_adaptation_contrast,
-        .default_value = 50.f,
-        .label = "Adaptation Contrast",
-        .section = "Color Grading",
-        .max = 100.f,
-        .is_enabled = []() { return shader_injection.tone_map_type != 0.f; },
         .parse = [](float value) { return value * 0.02f; },
     },
     new renodx::utils::settings::Setting{
@@ -281,7 +249,7 @@ renodx::utils::settings::Settings settings = {
     new renodx::utils::settings::Setting{
         .key = "ColorGradeLUTScaling",
         .binding = &shader_injection.color_grade_lut_scaling,
-        .default_value = 0.f,
+        .default_value = 100.f,
         .label = "LUT Scaling",
         .section = "Color Grading",
         .tooltip = "Scales the color grade LUT to full range when size is clamped.",
@@ -331,7 +299,6 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"EOTFEmulation", 1.f},
-              {"ToneMapScaling", 1.f},
               {"ColorGradeLUTScaling", 0.f},
           });
         },
@@ -349,8 +316,22 @@ renodx::utils::settings::Settings settings = {
               {"ToneMapGameNits", 150.f},
               {"EOTFEmulation", 0.f},
               {"ToneMapApplyPreToneMapCurve", 0.f},
-              {"ToneMapScaling", 1.f},
               {"ColorGradeLUTScaling", 0.f},
+          });
+        },
+    },
+    new renodx::utils::settings::Setting{
+        .value_type = renodx::utils::settings::SettingValueType::BUTTON,
+        .label = "Recommended Settings",
+        .section = "Options",
+        .group = "button-line-0",
+        .on_change = []() {
+          renodx::utils::settings::ResetSettings();
+          renodx::utils::settings::UpdateSettings({
+              {"ToneMapType", 2.f},
+              {"ColorGradeContrast", 70.f},
+              {"FxNoise", 0.f},
+              {"FxGrainStrength", 25.f},
           });
         },
     },
@@ -424,8 +405,6 @@ void OnPresetOff() {
       {"ToneMapUINits", 203.f},
       {"ToneMapApplyPreToneMapCurve", 0.f},
       {"ToneMapACESMidGray", 2.f},
-      {"ToneMapScaling", 1.f},
-      {"ToneMapHueRetention", 0.f},
       {"EOTFEmulation", 0.f},
       {"UIEOTFEmulation", 0.f},
       {"UIVisibility", 1.f},
@@ -435,7 +414,6 @@ void OnPresetOff() {
       {"ColorGradeShadows", 50.f},
       {"ColorGradeShadowContrast", 50.f},
       {"ColorGradeContrast", 50.f},
-      {"ColorGradeAdaptationContrast", 50.f},
       {"ColorGradeGamma", 1.f},
       {"ColorGradeSaturation", 50.f},
       {"ColorGradeHighlightSaturation", 50.f},
