@@ -1,5 +1,5 @@
-#ifndef SRC_PRAGMATA_SHARED_H_
-#define SRC_PRAGMATA_SHARED_H_
+#ifndef SRC_ONIMUSHA_WOTS_SHARED_H_
+#define SRC_ONIMUSHA_WOTS_SHARED_H_
 
 // Must be 32bit aligned
 // Should be 4x32
@@ -35,7 +35,7 @@ struct ShaderInjectData {
 };
 
 #ifndef __cplusplus
-cbuffer cb13 : register(b0, space50) {
+cbuffer shader_injection : register(b0, space50) {
   ShaderInjectData shader_injection : packoffset(c0);
 }
 
@@ -72,4 +72,4 @@ cbuffer cb13 : register(b0, space50) {
 
 #endif
 
-#endif  // SRC_PRAGMATA_SHARED_H_
+#endif  // SRC_ONIMUSHA_WOTS_SHARED_H_
