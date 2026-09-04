@@ -1,5 +1,5 @@
 #define TONE_MAP_PARAM_CBUFFER_REGISTER b1
-#include "./PostProcess.hlsli"
+#include "../PostProcess.hlsli"
 
 struct RGCParam {
   float CyanLimit;
