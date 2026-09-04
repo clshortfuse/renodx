@@ -329,7 +329,6 @@ renodx::utils::settings::Settings settings = {
           renodx::utils::settings::ResetSettings();
           renodx::utils::settings::UpdateSettings({
               {"ToneMapType", 2.f},
-              {"ColorGradeContrast", 70.f},
               {"FxNoise", 0.f},
               {"FxGrainStrength", 25.f},
           });
@@ -459,8 +458,6 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
 
-      renodx::utils::random::binds.push_back(&shader_injection.custom_random);  // film grain
-
       break;
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);  // detect peak nits
@@ -469,7 +466,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       break;
   }
 
-  renodx::utils::random::Use(fdw_reason);  // film grain
+  renodx::utils::random::Use(fdw_reason, {&shader_injection.custom_random});  // film grain
   renodx::utils::settings::Use(fdw_reason, &settings, &OnPresetOff);
   renodx::mods::shader::Use(fdw_reason, custom_shaders, &shader_injection);
 
