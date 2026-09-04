@@ -105,7 +105,7 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
         RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS,
         RENODX_TONE_MAP_CONTRAST, 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS,
         RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_DECHROMA,
-        0.45f, 0.1f, 0.f, 1.f, renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_BT2020, 1.5f, 0.f);
+        0.45f, 0.1f, 0.f, 1.f, renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_BT2020, 1.5f, 0.7f);
     tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
   }
 
