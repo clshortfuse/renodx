@@ -16,6 +16,7 @@
 // #define RENODX_TONE_MAP_FLARE                  0
 // #define RENODX_TONE_MAP_HUE_CORRECTION         1.f
 // #define RENODX_TONE_MAP_HUE_SHIFT              0
+// #define RENODX_TONE_MAP_HUE_METHOD             0
 // #define RENODX_TONE_MAP_WORKING_COLOR_SPACE    color::convert::COLOR_SPACE_BT709
 // #define RENODX_TONE_MAP_CLAMP_COLOR_SPACE      color::convert::COLOR_SPACE_NONE
 // #define RENODX_TONE_MAP_CLAMP_PEAK             color::convert::COLOR_SPACE_BT709
@@ -79,6 +80,8 @@ struct ShaderInjectData {
   float reno_drt_tone_map_method;
   float status_text_opacity;
   float ping_text_opacity;
+  float latency_text_opacity;
+  float latency_bar_draw_opacity;
   float custom_random;
   float custom_grain_strength;
   float vignette_strength;
@@ -87,7 +90,17 @@ struct ShaderInjectData {
   float bloom_strength;
   float godrays_intensity;
   float perchannelblowout;
-  float ao_intensity;
+  float fog_modification;        
+  float shadow_hardening;
+  float chromatic_aberration_strength;
+  float disable_game_ao;
+  float cubemap_ambient_link;
+  float glass_transparency;
+  float improved_ssr;
+  float tech_test_look;
+  float ui_aspect_ratio;
+  float improved_gtao;
+  float fake_cloud_shadows;
 };
 
 #ifndef __cplusplus
@@ -126,8 +139,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_SWAP_CHAIN_GAMMA_CORRECTION   shader_injection.swap_chain_gamma_correction
 // #define RENODX_SWAP_CHAIN_DECODING_COLOR_SPACE shader_injection.swap_chain_decoding_color_space
 #define RENODX_SWAP_CHAIN_CUSTOM_COLOR_SPACE shader_injection.swap_chain_custom_color_space
-// #define RENODX_SWAP_CHAIN_SCALING_NITS         shader_injection.swap_chain_scaling_nits
-// #define RENODX_SWAP_CHAIN_CLAMP_NITS           shader_injection.swap_chain_clamp_nits
+#define RENODX_SWAP_CHAIN_SCALING_NITS         (shader_injection.swap_chain_encoding < 4.f ? 1.f : shader_injection.graphics_white_nits)
+#define RENODX_SWAP_CHAIN_CLAMP_NITS           (shader_injection.swap_chain_encoding < 4.f ? 1.f : shader_injection.peak_white_nits)
 #define RENODX_SWAP_CHAIN_CLAMP_COLOR_SPACE    shader_injection.swap_chain_clamp_color_space
 #define RENODX_SWAP_CHAIN_ENCODING             shader_injection.swap_chain_encoding
 #define RENODX_SWAP_CHAIN_ENCODING_COLOR_SPACE shader_injection.swap_chain_encoding_color_space
@@ -135,6 +148,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_VIDEO_NITS                      shader_injection.tone_map_video_nits
 #define RENODX_RENO_DRT_TONE_MAP_METHOD        shader_injection.reno_drt_tone_map_method
 #define PING_TEXT_OPACITY                      shader_injection.ping_text_opacity
+#define LATENCY_TEXT_OPACITY                   shader_injection.latency_text_opacity
+#define LATENCY_BAR_DRAW_OPACITY               shader_injection.latency_bar_draw_opacity
 #define STATUS_TEXT_OPACITY                    shader_injection.status_text_opacity
 #define CUSTOM_RANDOM                          shader_injection.custom_random
 #define CUSTOM_GRAIN_STRENGTH                  shader_injection.custom_grain_strength
@@ -144,7 +159,28 @@ cbuffer shader_injection : register(b13) {
 #define BLOOM_STRENGTH                         shader_injection.bloom_strength
 #define GODRAYS_INTENSITY                      shader_injection.godrays_intensity
 #define PER_CHANNEL_BLOWOUT                    shader_injection.perchannelblowout
-#define AO_INTENSITY                           shader_injection.ao_intensity
+#define SHADOW_HARDENING                       shader_injection.shadow_hardening
+#define CHROMATIC_ABERRATION_STRENGTH          shader_injection.chromatic_aberration_strength
+#define FOG_MODIFICATION                       shader_injection.fog_modification
+#define GLASS_TRANSPARENCY                     shader_injection.glass_transparency
+#define TECH_TEST_LOOK                         shader_injection.tech_test_look
+#define UI_ASPECT_RATIO                        shader_injection.ui_aspect_ratio
+#define AO_RADIUS                              4.0
+#define AO_RADIUS_SCALE                        1.0
+#define AO_FALLOFF_RANGE                       1.0
+#define AO_DISTRIBUTION_POWER                  2.0
+#define AO_THIN_OCCLUDER                       2.0
+#define AO_GAMMA                               2.2
+#define AO_TEMPORAL_FRAME                      64.0
+#define AO_MIP_BIAS                            4.0
+#define AO_DIRECTION_COUNT                     6.0
+#define AO_STEP_COUNT                          6.0
+#define AO_NORMAL_ATTENUATION                  0.05
+#define AO_THICKNESS                           0.5
+#define AO_DENOISER_BLUR_BETA                  0.0
+#define AO_BITMASK                             1.0
+#define IMPROVED_GTAO                          shader_injection.improved_gtao
+#define FAKE_CLOUD_SHADOWS                     shader_injection.fake_cloud_shadows
 
 #include "../../shaders/renodx.hlsl"
 
