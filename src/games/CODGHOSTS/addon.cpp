@@ -29,9 +29,9 @@
 #include "./shared.h"
 
 #ifndef RENODX_GHOSTS_TONEMAPPER_LAYOUT_VERSION
-#error "CODGHOSTS: shared.h is outdated. Replace shared.h with the Pragmap V2 tonemapper version from the same package."
+#error "CODGHOSTS: shared.h is outdated. Replace shared.h with the Pragmap tonemapper version from the same package."
 #elif RENODX_GHOSTS_TONEMAPPER_LAYOUT_VERSION < 3
-#error "CODGHOSTS: shared.h is missing the Pragmap V2 addon-control fields. Replace shared.h from the same package."
+#error "CODGHOSTS: shared.h is missing the Pragmap addon-control fields. Replace shared.h from the same package."
 #endif
 
 namespace {
@@ -49,7 +49,7 @@ float current_settings_mode = 0;
 
 constexpr float TONE_MAP_TYPE_VANILLA = 0.f;
 constexpr float TONE_MAP_TYPE_RENODRT = 3.f;
-constexpr float TONE_MAP_TYPE_PRAGMAPV2 = 4.f;
+constexpr float TONE_MAP_TYPE_PRAGMAP = 4.f;
 
 inline bool IsCustomToneMapperEnabled() {
   return shader_injection.tone_map_type != TONE_MAP_TYPE_VANILLA;
@@ -59,8 +59,8 @@ inline bool IsRenoDRTEnabled() {
   return shader_injection.tone_map_type == TONE_MAP_TYPE_RENODRT;
 }
 
-inline bool IsPragmapV2Enabled() {
-  return shader_injection.tone_map_type == TONE_MAP_TYPE_PRAGMAPV2;
+inline bool IsPragmapEnabled() {
+  return shader_injection.tone_map_type == TONE_MAP_TYPE_PRAGMAP;
 }
 
 renodx::utils::settings::Settings settings = {
@@ -83,11 +83,11 @@ renodx::utils::settings::Settings settings = {
         .label = "Tone Mapper",
         .section = "Tone Mapping",
         .tooltip = "Sets the tone mapper type",
-        .labels = {"Vanilla", "RenoDRT", "Pragmap V2"},
+        .labels = {"Vanilla", "RenoDRT", "Pragmap"},
         .parse = [](float value) {
           if (value < 0.5f) return TONE_MAP_TYPE_VANILLA;
           if (value < 1.5f) return TONE_MAP_TYPE_RENODRT;
-          return TONE_MAP_TYPE_PRAGMAPV2;
+          return TONE_MAP_TYPE_PRAGMAP;
         },
         .is_visible = []() { return current_settings_mode >= 1; },
     },
@@ -302,66 +302,66 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.02f; },
     },
     // -------------------------------------------------------------------------
-    // Pragmap V2 controls
+    // Pragmap controls
     // -------------------------------------------------------------------------
     //
-    // These settings are only shown in Advanced mode while Pragmap V2 is the
+    // These settings are only shown in Advanced mode while Pragmap is the
     // selected tone mapper.
     new renodx::utils::settings::Setting{
         .key = "PragmapHueStrength",
         .binding = &shader_injection.pragmap_hue_strength,
         .default_value = 25.f,
         .label = "Hue Strength",
-        .section = "Pragmap V2",
-        .tooltip = "Pragmap highlight hue response. 25% preserves the original Pragmap V2 default. Values above 25% are expanded in the shader for a stronger useful range.",
+        .section = "Pragmap",
+        .tooltip = "Pragmap highlight hue response. 25% preserves the original Pragmap default. Values above 25% are expanded in the shader for a stronger useful range.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.0f%%",
         .parse = [](float value) { return value * 0.01f; },
-        .is_enabled = []() { return IsPragmapV2Enabled(); },
-        .is_visible = []() { return current_settings_mode >= 2 && IsPragmapV2Enabled(); },
+        .is_enabled = []() { return IsPragmapEnabled(); },
+        .is_visible = []() { return current_settings_mode >= 2 && IsPragmapEnabled(); },
     },
     new renodx::utils::settings::Setting{
         .key = "PragmapBlowoutStrength",
         .binding = &shader_injection.pragmap_blowout_strength,
         .default_value = 20.f,
         .label = "Blowout",
-        .section = "Pragmap V2",
+        .section = "Pragmap",
         .tooltip = "Pragmap highlight dechroma/blowout. 20% preserves the original default. Values above 20% are expanded in the shader for a stronger useful range.",
         .min = 0.f,
         .max = 100.f,
         .format = "%.0f%%",
         .parse = [](float value) { return value * 0.01f; },
-        .is_enabled = []() { return IsPragmapV2Enabled(); },
-        .is_visible = []() { return current_settings_mode >= 2 && IsPragmapV2Enabled(); },
+        .is_enabled = []() { return IsPragmapEnabled(); },
+        .is_visible = []() { return current_settings_mode >= 2 && IsPragmapEnabled(); },
     },
     new renodx::utils::settings::Setting{
         .key = "PragmapShoulder",
         .binding = &shader_injection.pragmap_shoulder,
         .default_value = 80.f,
         .label = "Shoulder",
-        .section = "Pragmap V2",
+        .section = "Pragmap",
         .tooltip = "Controls an external post-Pragmap peak shoulder. 80% keeps the original Pragmap output unchanged; moving it applies an extra shoulder stage after Pragmap.",
         .min = 1.f,
         .max = 99.f,
         .format = "%.0f%%",
         .parse = [](float value) { return value * 0.01f; },
-        .is_enabled = []() { return IsPragmapV2Enabled(); },
-        .is_visible = []() { return current_settings_mode >= 2 && IsPragmapV2Enabled(); },
+        .is_enabled = []() { return IsPragmapEnabled(); },
+        .is_visible = []() { return current_settings_mode >= 2 && IsPragmapEnabled(); },
     },
     new renodx::utils::settings::Setting{
         .key = "PragmapShoulderCompression",
         .binding = &shader_injection.pragmap_shoulder_compression,
         .default_value = 75.f,
         .label = "Shoulder Compression",
-        .section = "Pragmap V2",
-        .tooltip = "Controls an external post-Pragmap overshoot-compression stage. 75% keeps the original Pragmap output unchanged. Higher values add extra near-peak compression after Pragmap.",
+        .section = "Pragmap",
+        .tooltip = "Controls Pragmap's main luminance shoulder compression. 75% = the original Pragmap toneCompression value of 1.50. Lower values compress less; higher values compress highlights more strongly.",
         .min = 1.f,
         .max = 400.f,
         .format = "%.0f%%",
         .parse = [](float value) { return value * 0.01f; },
-        .is_enabled = []() { return IsPragmapV2Enabled(); },
-        .is_visible = []() { return current_settings_mode >= 2 && IsPragmapV2Enabled(); },
+        .is_enabled = []() { return IsPragmapEnabled(); },
+        .is_visible = []() { return current_settings_mode >= 2 && IsPragmapEnabled(); },
     },
     new renodx::utils::settings::Setting{
         .key = "ColorGradeScene",
@@ -373,6 +373,35 @@ renodx::utils::settings::Settings settings = {
         .max = 100.f,
         .is_enabled = []() { return IsCustomToneMapperEnabled(); },
         .parse = [](float value) { return value * 0.01f; },
+    },
+
+    new renodx::utils::settings::Setting{
+        .key = "AutoExposureStrength",
+        .binding = &shader_injection.fxAutoExposure,
+        .default_value = 100.f,
+        .label = "Auto Exposure Strength",
+        .section = "Effects",
+        .tooltip = "Reduces the magnitude of the game's incoming exposure changes in HDR. 100% = original game exposure, 60% = calmer HDR adaptation, 0% = neutral exposure scale of 1.0. This damps pumping/flicker but does not add temporal history.",
+        .min = 0.f,
+        .max = 100.f,
+        .format = "%.0f%%",
+        .parse = [](float value) { return value * 0.01f; },
+        .is_enabled = []() { return IsCustomToneMapperEnabled(); },
+        .is_visible = []() { return false; },
+    },
+    new renodx::utils::settings::Setting{
+        .key = "AutoExposureAdaptationSpeed",
+        .binding = &shader_injection.auto_exposure_adaptation_speed,
+        .default_value = 20.f,
+        .label = "Auto Exposure Adapt Speed",
+        .section = "Effects",
+        .tooltip = "Controls how quickly the game exposure adapts over time. 100% = original game adaptation speed, 35% = calmer HDR adaptation, 0% = exposure is effectively held. This changes the temporal adaptation rate itself, unlike Auto Exposure Strength which only reduces the size of the exposure change.",
+        .min = 0.f,
+        .max = 100.f,
+        .format = "%.0f%%",
+        .parse = [](float value) { return value * 0.01f; },
+        .is_enabled = []() { return IsCustomToneMapperEnabled(); },
+        .is_visible = []() { return current_settings_mode >= 1; },
     },
     new renodx::utils::settings::Setting{
         .key = "BlurStrength",

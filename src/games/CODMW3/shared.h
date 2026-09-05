@@ -1,9 +1,9 @@
 #ifndef SRC_CODMW3_SHARED_H_
 #define SRC_CODMW3_SHARED_H_
 
+
+
 #define RENODX_PSYCHOV24_SLIDER_LAYOUT_VERSION 1
-
-
 // Tone mapper IDs used by Addon.cpp and HLSL.
 #define RENODX_TONE_MAP_TYPE_VANILLA   0.f
 #define RENODX_TONE_MAP_TYPE_RENODRT   3.f
@@ -12,8 +12,7 @@
 
 // Must be 32-bit aligned.
 // Keep the original first 32 float layout stable for the DX9/ps_3_0 c50-c57 path.
-// PsychoV24's original controls remain at c58/c59.
-// New Test24-specific controls are appended at c60.
+// New PsychoV24 controls are appended at c58, not inserted in the middle.
 struct ShaderInjectData {
   float peak_white_nits;
   float diffuse_white_nits;
@@ -72,7 +71,7 @@ struct ShaderInjectData {
 
 
   // PsychoV24 controls.
-  // These stay at the same c58/c59 positions used by the previous Psycho build.
+  // These remain at the same c58/c59 positions used by the previous build.
   float psychov24_compression;
   float psychov24_gamut_compression;
   float psychov24_gamut_mode;
@@ -80,13 +79,12 @@ struct ShaderInjectData {
 
   // c59
   float psychov24_cone_response;  // x
-  float padding3;                 // y
-  float padding4;                 // z
-  float padding5;                 // w
-
+  float bloom_brightness;         // y
+  float bloom_flare_size;         // z
+  float hdr_boost;                // w
 
   // c60
-  // Appended so the original c50-c59 layout remains unchanged.
+  // Appended so the original c50-c59 DX9 layout remains byte-for-byte stable.
   float psychov24_highlight_saturation;  // x
   float psychov24_gamut_hue_restore;     // y
   float psychov24_padding0;              // z
@@ -102,9 +100,9 @@ struct ShaderInjectData {
 
 // DX9/SM3 path.
 // c50-c57 preserve the original layout.
-// c58 adds custom_flip_uv_y plus the original PsychoV24 controls.
-// c59 contains PsychoV24 cone response.
-// c60 contains PsychoV24 Highlight Saturation and Gamut Hue Restore.
+// c58 adds custom_flip_uv_y plus the first PsychoV24 controls.
+// c59 adds PsychoV24 cone response, bloom controls, and HDR Boost.
+// c60 adds PsychoV24 highlight saturation and gamut hue restoration.
 float4 shader_injection[11] : register(c50);
 
 
@@ -158,9 +156,10 @@ float4 shader_injection[11] : register(c50);
 #define RENODX_PSYCHOV24_COMPRESSION           shader_injection[8][1]
 #define RENODX_PSYCHOV24_GAMUT_COMPRESSION     shader_injection[8][2]
 #define RENODX_PSYCHOV24_GAMUT_MODE            shader_injection[8][3]
-
 #define RENODX_PSYCHOV24_CONE_RESPONSE         shader_injection[9][0]
-
+#define RENODX_BLOOM_BRIGHTNESS                shader_injection[9][1]
+#define RENODX_BLOOM_FLARE_SIZE                shader_injection[9][2]
+#define RENODX_HDR_BOOST                       shader_injection[9][3]
 #define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION shader_injection[10][0]
 #define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE    shader_injection[10][1]
 
@@ -235,6 +234,9 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_PSYCHOV24_CONE_RESPONSE         shader_injection.psychov24_cone_response
 #define RENODX_PSYCHOV24_HIGHLIGHT_SATURATION shader_injection.psychov24_highlight_saturation
 #define RENODX_PSYCHOV24_GAMUT_HUE_RESTORE    shader_injection.psychov24_gamut_hue_restore
+#define RENODX_BLOOM_BRIGHTNESS                shader_injection.bloom_brightness
+#define RENODX_BLOOM_FLARE_SIZE                shader_injection.bloom_flare_size
+#define RENODX_HDR_BOOST                       shader_injection.hdr_boost
 
 
 #endif

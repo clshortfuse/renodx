@@ -43,6 +43,36 @@ float3 fGamma : register(c1);
 #define RENODX_FINAL_HDR_BOOST_END 4.00f
 #endif
 
+
+// ------------------------------------------------------------
+// HDR -> SDR reference reconstruction
+// ------------------------------------------------------------
+
+// Start of the per-channel HDR shoulder used ONLY to construct the
+// temporary SDR reference for the original game gamma/post-process.
+//
+// Values at or below this point are unchanged. Values above it roll
+// smoothly toward the configured HDR display peak.
+#ifndef RENODX_FINAL_GRADING_HDR_ROLLOFF_START
+#define RENODX_FINAL_GRADING_HDR_ROLLOFF_START 1.00f
+#endif
+
+// 0.0 = automatically use PeakWhiteNits / DiffuseWhiteNits.
+//
+// The luminance rolloff maps this exact scene-linear value to SDR 1.0.
+#ifndef RENODX_FINAL_GRADING_WHITE_CLIP
+#define RENODX_FINAL_GRADING_WHITE_CLIP 0.0f
+#endif
+
+// Restores hue after the luminance-tonemapped SDR reference is forced
+// into the legal 0..1 SDR cube.
+//
+// 0.0 = keep ordinary clipped SDR hue
+// 1.0 = preserve the hue of the per-channel HDR-rolled reference
+#ifndef RENODX_FINAL_GRADING_HUE_CORRECTION
+#define RENODX_FINAL_GRADING_HUE_CORRECTION 1.0f
+#endif
+
 #ifndef RENODX_VANILLA_CLAMP_TO_SDR
 #define RENODX_VANILLA_CLAMP_TO_SDR 1
 #endif
@@ -321,6 +351,328 @@ float3 ApplyHDRBoost(float3 c)
     return SafePositive(c * boost_scale);
 }
 
+
+// ------------------------------------------------------------
+// SDR-reference / RestorePostProcess helpers
+// ------------------------------------------------------------
+
+static const float3 RENODX_FINAL_LUMINANCE_WEIGHTS =
+    float3(0.2126f, 0.7152f, 0.0722f);
+
+float GetFinalLuminance(float3 color)
+{
+    return dot(
+        max(color, 0.0f.xxx),
+        RENODX_FINAL_LUMINANCE_WEIGHTS
+    );
+}
+
+float GetFinalHDRPeakValue()
+{
+    return max(
+        RENODX_PEAK_WHITE_NITS
+        / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f),
+        1.0f
+    );
+}
+
+float GetFinalGradingWhiteClip()
+{
+    if (RENODX_FINAL_GRADING_WHITE_CLIP > 1.0f)
+    {
+        return RENODX_FINAL_GRADING_WHITE_CLIP;
+    }
+
+    return max(
+        GetFinalHDRPeakValue(),
+        1.0001f
+    );
+}
+
+// Per-channel shoulder used before converting the HDR signal to the SDR
+// post-process reference.
+//
+// At the shoulder the slope is 1.0. At very large values the result
+// asymptotically approaches hdr_peak.
+float FinalRolloffChannelToHDRPeak(
+    float value,
+    float hdr_peak
+)
+{
+    value = max(value, 0.0f);
+    hdr_peak = max(hdr_peak, 1.0001f);
+
+    float rolloff_start = clamp(
+        RENODX_FINAL_GRADING_HDR_ROLLOFF_START,
+        0.0f,
+        hdr_peak - 0.0001f
+    );
+
+    if (value <= rolloff_start)
+    {
+        return value;
+    }
+
+    float shoulder_range =
+        hdr_peak - rolloff_start;
+
+    float excess =
+        value - rolloff_start;
+
+    float compressed_excess =
+        shoulder_range
+        * excess
+        / max(
+            excess + shoulder_range,
+            0.000001f
+        );
+
+    return rolloff_start + compressed_excess;
+}
+
+float3 FinalPerChannelRolloffToHDRPeak(
+    float3 color,
+    float hdr_peak
+)
+{
+    color = SafePositive(color);
+
+    return SafePositive(
+        float3(
+            FinalRolloffChannelToHDRPeak(color.r, hdr_peak),
+            FinalRolloffChannelToHDRPeak(color.g, hdr_peak),
+            FinalRolloffChannelToHDRPeak(color.b, hdr_peak)
+        )
+    );
+}
+
+// Extended-Reinhard luminance shoulder.
+//
+// f(W) == 1.0 exactly, so white_clip is the exact scene-linear value
+// that becomes SDR white.
+//
+// RGB is scaled by one luminance ratio, so this stage itself preserves hue.
+float FinalExactWhiteClipRolloff(
+    float value,
+    float white_clip
+)
+{
+    value = max(value, 0.0f);
+    white_clip = max(white_clip, 0.0001f);
+
+    float white_clip_squared =
+        white_clip * white_clip;
+
+    float mapped =
+        value
+        * (1.0f + value / white_clip_squared)
+        / (1.0f + value);
+
+    return saturate(mapped);
+}
+
+float3 FinalRolloffToSDRByLuminance(
+    float3 hdr_color,
+    float white_clip
+)
+{
+    hdr_color = SafePositive(hdr_color);
+
+    float hdr_luminance =
+        GetFinalLuminance(hdr_color);
+
+    if (hdr_luminance <= 0.000001f)
+    {
+        return 0.0f.xxx;
+    }
+
+    float sdr_luminance =
+        FinalExactWhiteClipRolloff(
+            hdr_luminance,
+            white_clip
+        );
+
+    float luminance_scale =
+        sdr_luminance
+        / hdr_luminance;
+
+    return SafePositive(
+        hdr_color * luminance_scale
+    );
+}
+
+// The luminance shoulder can still leave an individual RGB channel above 1.
+// Build the real clipped SDR representation, then restore the hue ratios from
+// the per-channel HDR-rolled reference without allowing values above SDR white.
+float3 FinalCorrectSDRBlowoutHue(
+    float3 hue_reference,
+    float3 clipped_sdr
+)
+{
+    hue_reference = SafePositive(hue_reference);
+    clipped_sdr = saturate(clipped_sdr);
+
+    float reference_max =
+        GetMaxChannel(hue_reference);
+
+    float clipped_max =
+        GetMaxChannel(clipped_sdr);
+
+    if (
+        reference_max <= 0.000001f
+        || clipped_max <= 0.000001f
+    )
+    {
+        return clipped_sdr;
+    }
+
+    float3 hue_preserved =
+        hue_reference
+        * (clipped_max / reference_max);
+
+    hue_preserved =
+        saturate(hue_preserved);
+
+    return lerp(
+        clipped_sdr,
+        hue_preserved,
+        saturate(RENODX_FINAL_GRADING_HUE_CORRECTION)
+    );
+}
+
+// Run the exact original SDR gamma/post-process on a legal linear-SDR
+// reference and return the result in linear light.
+//
+// The game's post-process is:
+//   linear -> sRGB encode -> original shader
+//          -> sRGB decode -> fGamma -> sRGB encode
+//
+// ApplyOriginalVanillaTonemapperSDR() contains the original middle portion.
+float3 SampleOriginalGameGammaFromSDRReference(
+    float3 linear_sdr_reference
+)
+{
+    linear_sdr_reference =
+        saturate(
+            SafePositive(linear_sdr_reference)
+        );
+
+    float3 encoded_reference =
+        LinearToSRGB3(
+            linear_sdr_reference
+        );
+
+    float3 graded_encoded =
+        ApplyOriginalVanillaTonemapperSDR(
+            encoded_reference
+        );
+
+    return SafePositive(
+        SRGBToLinear3_NoSaturate(
+            graded_encoded
+        )
+    );
+}
+
+// Restore both the luminance and chrominance change measured from the SDR
+// post-process onto the real HDR signal.
+//
+// This replaces the old strategy of directly applying fGamma to the HDR
+// signal. The SDR post-process is sampled in its native range, while the
+// original HDR luminance range remains available for RenoDRT/PsychoV24.
+float3 RestoreFinalPostProcess(
+    float3 hdr_source,
+    float3 sdr_before_post_process,
+    float3 sdr_after_post_process
+)
+{
+    hdr_source =
+        SafePositive(hdr_source);
+
+    sdr_before_post_process =
+        SafePositive(sdr_before_post_process);
+
+    sdr_after_post_process =
+        SafePositive(sdr_after_post_process);
+
+    float hdr_luminance =
+        GetFinalLuminance(hdr_source);
+
+    float before_luminance =
+        GetFinalLuminance(sdr_before_post_process);
+
+    float after_luminance =
+        GetFinalLuminance(sdr_after_post_process);
+
+    // Near black there is not enough stable normalized chroma information.
+    // Use the measured linear post-process delta instead.
+    if (
+        hdr_luminance <= 0.000001f
+        || before_luminance <= 0.000001f
+        || after_luminance <= 0.000001f
+    )
+    {
+        return SafePositive(
+            hdr_source
+            + (
+                sdr_after_post_process
+                - sdr_before_post_process
+            )
+        );
+    }
+
+    // Luminance change produced by the original post-process.
+    float luminance_ratio =
+        after_luminance
+        / before_luminance;
+
+    float restored_luminance =
+        hdr_luminance
+        * luminance_ratio;
+
+    // Luminance-normalized RGB acts as a simple chrominance representation.
+    float3 hdr_chrominance =
+        hdr_source
+        / hdr_luminance;
+
+    float3 before_chrominance =
+        sdr_before_post_process
+        / before_luminance;
+
+    float3 after_chrominance =
+        sdr_after_post_process
+        / after_luminance;
+
+    float3 chrominance_delta =
+        after_chrominance
+        - before_chrominance;
+
+    float3 restored_chrominance =
+        max(
+            hdr_chrominance
+            + chrominance_delta,
+            0.0f.xxx
+        );
+
+    float3 restored_color =
+        restored_chrominance
+        * restored_luminance;
+
+    // max(..., 0) can slightly alter luminance. Renormalize so the measured
+    // luminance delta remains exact.
+    float actual_luminance =
+        GetFinalLuminance(restored_color);
+
+    if (actual_luminance > 0.000001f)
+    {
+        restored_color *=
+            restored_luminance
+            / actual_luminance;
+    }
+
+    return SafePositive(restored_color);
+}
+
 // ------------------------------------------------------------
 // PsychoV24 HDR branch
 // ------------------------------------------------------------
@@ -413,35 +765,133 @@ float4 main(float2 texcoord : TEXCOORD) : COLOR
     // ------------------------------------------------------------
     // HDR modes:
     //
-    // RenoDRT:
-    //   Decode final input -> original fGamma -> HDR boost
-    //   -> RenoDX ToneMapPass -> RenderIntermediatePass.
-    //
-    // PsychoV24:
-    //   Decode final input -> original fGamma -> HDR boost
-    //   -> psychotm_test24 -> RenderIntermediatePass.
+    // RenoDRT / PsychoV24:
+    //   Decode final input
+    //   -> HDR boost
+    //   -> per-channel rolloff to HDR peak
+    //   -> exact-white-clip luminance rolloff to SDR
+    //   -> hue-correct SDR blowout
+    //   -> sample original fGamma post-process in SDR
+    //   -> restore its luminance + chrominance deltas onto HDR
+    //   -> selected HDR display mapper
+    //   -> RenderIntermediatePass.
     // ------------------------------------------------------------
 
-    float3 hdr_color = DecodeFinalInputForHDR(color.rgb);
+    // Decode the real HDR signal first. This stays available at full
+    // scene-linear range; the SDR rolloffs below are used only to construct
+    // a temporary reference for sampling the game's original post-process.
+    float3 hdr_color =
+        DecodeFinalInputForHDR(
+            color.rgb
+        );
+
+    // Treat HDR boost as a pre-tonemap control, matching the newer
+    // LUT/post-process reconstruction path.
+    hdr_color =
+        ApplyHDRBoost(
+            hdr_color
+        );
 
 #if RENODX_FINAL_APPLY_GAME_GAMMA
-    hdr_color = ApplyOriginalGameGamma(hdr_color);
+
+    // ------------------------------------------------------------
+    // 1. Per-channel rolloff toward HDR peak
+    // ------------------------------------------------------------
+
+    float hdr_peak =
+        GetFinalHDRPeakValue();
+
+    float3 per_channel_reference =
+        FinalPerChannelRolloffToHDRPeak(
+            hdr_color,
+            hdr_peak
+        );
+
+
+    // ------------------------------------------------------------
+    // 2. Exact-white-clip luminance rolloff into SDR
+    // ------------------------------------------------------------
+
+    float grading_white_clip =
+        GetFinalGradingWhiteClip();
+
+    float3 sdr_luminance_reference =
+        FinalRolloffToSDRByLuminance(
+            per_channel_reference,
+            grading_white_clip
+        );
+
+
+    // ------------------------------------------------------------
+    // 3. Fit to SDR and hue-correct channel blowout
+    // ------------------------------------------------------------
+
+    float3 clipped_sdr_reference =
+        saturate(
+            sdr_luminance_reference
+        );
+
+    float3 sdr_reference =
+        FinalCorrectSDRBlowoutHue(
+            per_channel_reference,
+            clipped_sdr_reference
+        );
+
+    sdr_reference =
+        saturate(
+            sdr_reference
+        );
+
+
+    // ------------------------------------------------------------
+    // 4. Sample the original game gamma/post-process in SDR
+    // ------------------------------------------------------------
+
+    float3 graded_sdr =
+        SampleOriginalGameGammaFromSDRReference(
+            sdr_reference
+        );
+
+
+    // ------------------------------------------------------------
+    // 5. Restore post-process luminance + chrominance onto HDR
+    // ------------------------------------------------------------
+
+    hdr_color =
+        RestoreFinalPostProcess(
+            hdr_color,
+            sdr_reference,
+            graded_sdr
+        );
+
 #endif
 
-    hdr_color = ApplyHDRBoost(hdr_color);
+
+    // ------------------------------------------------------------
+    // 6. Selected HDR display mapper
+    // ------------------------------------------------------------
 
 #if RENODX_USE_PSYCHOV24
     if (IsPsychoV24Mode())
     {
-        hdr_color = ApplyPsychoV24HDRTonemap(hdr_color);
+        hdr_color =
+            ApplyPsychoV24HDRTonemap(
+                hdr_color
+            );
     }
     else
     {
-        hdr_color = ApplyRenoDXHDRTonemap(hdr_color);
+        hdr_color =
+            ApplyRenoDXHDRTonemap(
+                hdr_color
+            );
     }
 #else
     // If PsychoV24 was not compiled in, never leave the HDR path untonemapped.
-    hdr_color = ApplyRenoDXHDRTonemap(hdr_color);
+    hdr_color =
+        ApplyRenoDXHDRTonemap(
+            hdr_color
+        );
 #endif
 
     color.rgb = renodx::draw::RenderIntermediatePass(SafePositive(hdr_color));

@@ -92,6 +92,13 @@ struct ShaderInjectData {
   float psychov24_cone_response;
   float psychov24_highlight_saturation;
   float psychov24_gamut_hue_restore;
+
+  // HDR inverse-tonemap boost. Keep this final row 16-byte aligned for the
+  // injected constant buffer; reserved fields are intentionally unused.
+  float hdr_boost;
+  float reserved_hdr_boost_1;
+  float reserved_hdr_boost_2;
+  float reserved_hdr_boost_3;
 };
 
 #ifndef __cplusplus
@@ -123,6 +130,7 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_HIGHLIGHT_SATURATION    shader_injection.tone_map_highlight_saturation
 #define RENODX_TONE_MAP_BLOWOUT                 shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                   shader_injection.tone_map_flare
+#define CUSTOM_HDR_BOOST                        shader_injection.hdr_boost
 
 #ifndef RENODX_TONE_MAP_TYPE_PSYCHOV24
 #define RENODX_TONE_MAP_TYPE_PSYCHOV24 24.f
@@ -166,6 +174,22 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_RENO_DRT_TONE_MAP_METHOD         renodx::tonemap::renodrt::config::tone_map_method::REINHARD
 
 #include "../../shaders/renodx.hlsl"
+
+// Expands brighter scene-linear values before the HDR tone mapper while
+// leaving darker values increasingly untouched. A power of 0 disables it.
+float3 HDRBoost(float3 color, float power = 0.20f, float normalization_point = 0.02f) {
+  if (power == 0.f) return color;
+
+  float smoothing = power * 2.f;
+  color = max(
+      color,
+      lerp(
+          color,
+          normalization_point * pow(max(color / normalization_point, 0.f), 1.f + power),
+          color / ((color / smoothing) + 1.f)));
+
+  return color;
+}
 
 #endif  // __cplusplus
 

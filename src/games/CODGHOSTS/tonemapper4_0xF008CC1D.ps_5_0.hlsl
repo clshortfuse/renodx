@@ -1,18 +1,18 @@
 #include "./shared.h"
 
 // ============================================================================
-// Pragmap V2 - third HDR tonemapper
+// Pragmap - third HDR tonemapper
 // ============================================================================
 //
 // Internal tone-map IDs:
 //   0 = Vanilla
 //   3 = RenoDRT / Ghosts-faithful HDR
-//   4 = Pragmap V2
-#ifndef RENODX_TONE_MAP_TYPE_PRAGMAPV2
-#define RENODX_TONE_MAP_TYPE_PRAGMAPV2 4.0f
+//   4 = Pragmap
+#ifndef RENODX_TONE_MAP_TYPE_PRAGMAP
+#define RENODX_TONE_MAP_TYPE_PRAGMAP 4.0f
 #endif
 
-#include "./PragmapV2.hlsl"
+#include "./pragmap.hlsl"
 
 
 // Tonemapper 4 (0xF008CC1D) - Ghosts-faithful RenoDX HDR conversion.
@@ -157,6 +157,10 @@ float SafeFinitePositive1(float value)
 
 float3 SafePositive(float3 color)
 {
+    // Preferred first-pass NaN fix for HDR color paths: clamp negatives away
+    // before the per-channel finite/FP16 sanitization below.
+    color = max(color, float3(0.0f, 0.0f, 0.0f));
+
     return float3(
         SafeFinitePositive1(color.r),
         SafeFinitePositive1(color.g),
@@ -263,6 +267,69 @@ float GhostsSafePowPositive1(
     );
 }
 
+// ============================================================================
+// HDR auto-exposure strength
+// ============================================================================
+//
+// The game supplies `sceneScale` through TEXCOORD2. These shaders do not own
+// the temporal exposure adaptation itself, so they cannot add proper history-
+// based smoothing here.
+//
+// Instead, this reduces the MAGNITUDE of the incoming exposure changes in
+// exposure/log2 space:
+//
+//     1.00 = original game exposure
+//     0.50 = half of the exposure change in stops
+//     0.00 = neutral scale of 1.0
+//
+// Vanilla mode bypasses this helper and keeps the original game sceneScale.
+float ApplyGhostsAutoExposureStrength(float sceneScale)
+{
+    sceneScale =
+        GhostsFiniteSigned1(
+            sceneScale
+        );
+
+    float strength =
+        saturate(
+            GhostsFiniteSigned1(
+                RENODX_GHOSTS_AUTO_EXPOSURE_STRENGTH
+            )
+        );
+
+    // Preserve original behavior exactly at 100%.
+    if (strength >= 0.999999f)
+        return sceneScale;
+
+    // 0% = neutral exposure multiplier.
+    if (strength <= 0.000001f)
+        return 1.0f;
+
+    // Exposure is multiplicative, so interpolate toward 1.0 in stops rather
+    // than linearly. This damps frame-to-frame pumping without imposing an SDR
+    // clamp or reducing HDR headroom.
+    float safeSceneScale =
+        max(
+            sceneScale,
+            0.000001f
+        );
+
+    float exposureStops =
+        log2(
+            safeSceneScale
+        );
+
+    float adjustedSceneScale =
+        exp2(
+            exposureStops * strength
+        );
+
+    return SafeFinitePositive1(
+        adjustedSceneScale
+    );
+}
+
+
 
 float SmoothCubic01(float value)
 {
@@ -361,11 +428,11 @@ bool IsVanillaMode()
     return modeDelta > -0.5f && modeDelta < 0.5f;
 }
 
-bool IsPragmapV2Mode()
+bool IsPragmapMode()
 {
     float modeDelta =
         RENODX_TONE_MAP_TYPE
-        - RENODX_TONE_MAP_TYPE_PRAGMAPV2;
+        - RENODX_TONE_MAP_TYPE_PRAGMAP;
 
     return modeDelta > -0.5f
         && modeDelta < 0.5f;
@@ -390,6 +457,203 @@ float SafeDivideSigned1(float numerator, float denominator)
 // -----------------------------------------------------------------------------
 
 // Exact original rational curve before the pass's final SDR clamp.
+// ============================================================================
+// Actual original-SDR luminance match
+// ============================================================================
+//
+// The target is the REAL Ghosts SDR result, not a luminance-compressed copy of
+// the HDR tonemapper output.
+//
+// Full SDR luminance guidance is kept through the 0.18 scene pivot, then
+// released by PRE-TONEMAP scene brightness. The SDR white shoulder also
+// releases the match so HDR highlights are not pulled back to SDR clipping.
+#ifndef RENODX_GHOSTS_SDR_LUMA_MATCH_FULL
+#define RENODX_GHOSTS_SDR_LUMA_MATCH_FULL 0.18f
+#endif
+
+#ifndef RENODX_GHOSTS_SDR_LUMA_MATCH_END
+#define RENODX_GHOSTS_SDR_LUMA_MATCH_END 1.10f
+#endif
+
+#ifndef RENODX_GHOSTS_SDR_LUMA_MATCH_STRENGTH
+#define RENODX_GHOSTS_SDR_LUMA_MATCH_STRENGTH 1.00f
+#endif
+
+#ifndef RENODX_GHOSTS_SDR_LUMA_MATCH_MIN_SCALE
+#define RENODX_GHOSTS_SDR_LUMA_MATCH_MIN_SCALE 0.25f
+#endif
+
+#ifndef RENODX_GHOSTS_SDR_LUMA_MATCH_MAX_SCALE
+#define RENODX_GHOSTS_SDR_LUMA_MATCH_MAX_SCALE 4.00f
+#endif
+
+#ifndef RENODX_GHOSTS_SDR_LUMA_RELEASE_START
+#define RENODX_GHOSTS_SDR_LUMA_RELEASE_START 0.55f
+#endif
+
+#ifndef RENODX_GHOSTS_SDR_LUMA_RELEASE_END
+#define RENODX_GHOSTS_SDR_LUMA_RELEASE_END 0.90f
+#endif
+
+float ComputeGhostsActualSDRLumaWeight(float3 actualSDRColor)
+{
+    actualSDRColor =
+        saturate(
+            SafePositive(
+                max(actualSDRColor, 0.0f)
+            )
+        );
+
+    const float epsilon = 0.000001f;
+
+    float startPoint =
+        max(
+            RENODX_GHOSTS_SDR_LUMA_RELEASE_START,
+            0.0f
+        );
+
+    float endPoint =
+        max(
+            RENODX_GHOSTS_SDR_LUMA_RELEASE_END,
+            startPoint + epsilon
+        );
+
+    float sdrPeak =
+        MaxRGB(
+            actualSDRColor
+        );
+
+    float shoulderAmount =
+        SmoothCubic01(
+            (sdrPeak - startPoint)
+            / (endPoint - startPoint)
+        );
+
+    return 1.0f - shoulderAmount;
+}
+
+float3 ApplyGhostsActualSDRLuminanceMatch(
+    float3 hdrColor,
+    float3 actualSDRColor,
+    float3 preTonemapColor)
+{
+    hdrColor =
+        SafePositive(
+            max(hdrColor, 0.0f)
+        );
+
+    actualSDRColor =
+        saturate(
+            SafePositive(
+                max(actualSDRColor, 0.0f)
+            )
+        );
+
+    preTonemapColor =
+        SafePositive(
+            max(preTonemapColor, 0.0f)
+        );
+
+    const float epsilon = 0.000001f;
+
+    float hdrY =
+        max(
+            renodx::color::y::from::BT709(hdrColor),
+            epsilon
+        );
+
+    float sdrY =
+        max(
+            renodx::color::y::from::BT709(actualSDRColor),
+            0.0f
+        );
+
+    float targetScale =
+        sdrY / hdrY;
+
+    targetScale =
+        clamp(
+            targetScale,
+            max(
+                RENODX_GHOSTS_SDR_LUMA_MATCH_MIN_SCALE,
+                epsilon
+            ),
+            max(
+                RENODX_GHOSTS_SDR_LUMA_MATCH_MAX_SCALE,
+                RENODX_GHOSTS_SDR_LUMA_MATCH_MIN_SCALE
+            )
+        );
+
+    float scenePeak =
+        MaxRGB(
+            preTonemapColor
+        );
+
+    float fullPoint =
+        max(
+            RENODX_GHOSTS_SDR_LUMA_MATCH_FULL,
+            0.0f
+        );
+
+    float endPoint =
+        max(
+            RENODX_GHOSTS_SDR_LUMA_MATCH_END,
+            fullPoint + epsilon
+        );
+
+    float release =
+        saturate(
+            (scenePeak - fullPoint)
+            / (endPoint - fullPoint)
+        );
+
+    float smoothRelease =
+        SmoothCubic01(
+            release
+        );
+
+    // Earlier than normal smoothstep so the SDR shoulder cannot become a
+    // horizontal HDR shelf.
+    float earlyRelease =
+        sqrt(
+            max(
+                smoothRelease,
+                0.0f
+            )
+        );
+
+    float sdrWeight =
+        ComputeGhostsActualSDRLumaWeight(
+            actualSDRColor
+        );
+
+    float matchWeight =
+        (1.0f - earlyRelease)
+        * sdrWeight
+        * saturate(
+            RENODX_GHOSTS_SDR_LUMA_MATCH_STRENGTH
+        );
+
+    float safeScale =
+        max(
+            targetScale,
+            epsilon
+        );
+
+    float appliedScale =
+        exp2(
+            log2(safeScale)
+            * matchWeight
+        );
+
+    return SafePositive(
+        max(
+            hdrColor * appliedScale,
+            0.0f
+        )
+    );
+}
+
 float3 ApplyOriginalRationalTonemapUnclamped(float3 sceneColor)
 {
     sceneColor =
@@ -686,7 +950,7 @@ float3 ApplyHDRDisplayMap(float3 sceneColor)
 }
 
 // ============================================================================
-// Pragmap V2 HDR display mapper
+// Pragmap HDR display mapper
 // ============================================================================
 //
 // Pragmap is a complete display mapper and therefore runs as a PARALLEL branch
@@ -694,7 +958,186 @@ float3 ApplyHDRDisplayMap(float3 sceneColor)
 //
 // It receives pre-tonemap linear color and uses peak brightness relative to
 // diffuse white, matching the RenoDX HDR-domain convention used by this mod.
-float3 ApplyPragmapV2Tonemap(float3 linearColor)
+// ============================================================================
+// Ghosts-side Pragmap main shoulder control
+// ============================================================================
+//
+// pragmap.hlsl stays completely untouched.
+//
+// Stock Pragmap uses:
+//
+//     toneCompression = 1.50
+//
+// for BOTH the luminance shoulder and max-channel blowout shoulder.
+//
+// The addon Shoulder Compression slider stores 0.75 at its default, so this
+// wrapper maps:
+//
+//     0.75 * 2.0 = 1.50
+//
+// That makes the slider control Pragmap's MAIN shoulder instead of only an
+// extra near-peak post-process stage.
+float3 ApplyPragmapWithMainCompression(
+    float3 color,
+    float peak,
+    float hueStrength,
+    float blowoutStrength,
+    float mainCompression)
+{
+    color =
+        SafePositive(
+            max(color, 0.0f)
+        );
+
+    peak =
+        max(
+            GhostsFiniteSigned1(peak),
+            0.000001f
+        );
+
+    mainCompression =
+        max(
+            GhostsFiniteSigned1(mainCompression),
+            0.01f
+        );
+
+    float y1 =
+        max(
+            renodx::color::y::from::BT709(color),
+            0.0f
+        );
+
+    float y2 =
+        anchoredCInfinityShoulder(
+            y1,
+            peak,
+            toneAnchor,
+            mainCompression
+        );
+
+    y2 =
+        SafeFinitePositive1(
+            y2
+        );
+
+    float m1 =
+        max(
+            color.r,
+            max(color.g, color.b)
+        );
+
+    float m2 =
+        anchoredCInfinityShoulder(
+            m1,
+            peak,
+            toneAnchor,
+            mainCompression
+        );
+
+    m2 =
+        SafeFinitePositive1(
+            m2
+        );
+
+    float mDiff =
+        saturate(
+            renodx::math::DivideSafe(
+                m2,
+                m1,
+                1.0f
+            )
+        );
+
+    float hueDriver =
+        renodx::math::DivideSafe(
+            y2 - toneAnchor,
+            peak - toneAnchor,
+            0.0f
+        );
+
+    float3 jzazbz =
+        jzazbzFromBt709(
+            color
+        );
+
+    jzazbz =
+        GhostsFiniteSigned3(
+            jzazbz
+        );
+
+    jzazbz =
+        hueShiftBezoldBrucke(
+            jzazbz,
+            hueDriver,
+            hueStrength
+        );
+
+    jzazbz =
+        GhostsFiniteSigned3(
+            jzazbz
+        );
+
+    float3 blownOutColor =
+        jzazbz;
+
+    blownOutColor.yz *=
+        mDiff;
+
+    jzazbz =
+        lerp(
+            jzazbz,
+            blownOutColor,
+            blowoutStrength
+        );
+
+    jzazbz =
+        GhostsFiniteSigned3(
+            jzazbz
+        );
+
+    color =
+        bt709FromJzAzBz(
+            jzazbz
+        );
+
+    color =
+        SafePositive(
+            max(color, 0.0f)
+        );
+
+    float reconstructedY =
+        max(
+            renodx::color::y::from::BT709(color),
+            0.000001f
+        );
+
+    color *=
+        renodx::math::DivideSafe(
+            y2,
+            reconstructedY,
+            1.0f
+        );
+
+    color =
+        SafePositive(
+            max(color, 0.0f)
+        );
+
+    // Keep Pragmap's original final overshoot correction unchanged.
+    color =
+        overshootCorrection(
+            color,
+            peak,
+            overshootShoulder,
+            0.75f
+        );
+
+    return SafePositive(
+        max(color, 0.0f)
+    );
+}
+
+float3 ApplyPragmapTonemap(float3 linearColor)
 {
     linearColor =
         SafePositive(
@@ -723,12 +1166,7 @@ float3 ApplyPragmapV2Tonemap(float3 linearColor)
             65504.0f
         );
 
-    // HDR color itself remains unclamped above 1.0.
-    //
-    // The original Pragmap Hue/Blowout defaults are quite subtle in this game.
-    // Preserve those defaults EXACTLY, but expand the upper part of each UI
-    // slider so 100% produces a clearly stronger testable effect.
-
+    // Hue control.
     float hueControl =
         saturate(
             GhostsFiniteSigned1(
@@ -755,6 +1193,7 @@ float3 ApplyPragmapV2Tonemap(float3 linearColor)
             );
     }
 
+    // Blowout control.
     float blowoutControl =
         saturate(
             GhostsFiniteSigned1(
@@ -781,6 +1220,7 @@ float3 ApplyPragmapV2Tonemap(float3 linearColor)
             );
     }
 
+    // Shoulder position remains a separate optional final-stage control.
     float pragmapShoulder =
         clamp(
             GhostsFiniteSigned1(
@@ -790,31 +1230,38 @@ float3 ApplyPragmapV2Tonemap(float3 linearColor)
             0.99f
         );
 
-    // Keep PragmapV2.hlsl completely unmodified in this variant.
+    // Shoulder Compression now controls Pragmap's MAIN toneCompression.
     //
-    // Because the original Pragmap implementation hardcodes its internal
-    // shoulder values, these two controls are applied as an OPTIONAL extra
-    // post-Pragmap overshoot stage. At the original defaults:
+    // Existing addon parse:
+    //     75% -> 0.75
     //
-    //     shoulder = 0.80
-    //     compression = 0.75
+    // Stock Pragmap:
+    //     toneCompression = 1.50
     //
-    // this extra stage is bypassed so the exact original Pragmap output is
-    // preserved.
-    float pragmapShoulderCompression =
-        max(
+    // Therefore:
+    //     effectiveMainCompression = sliderValue * 2.0
+    float compressionControl =
+        clamp(
             GhostsFiniteSigned1(
                 RENODX_PRAGMAP_SHOULDER_COMPRESSION
             ),
-            0.01f
+            0.01f,
+            4.0f
+        );
+
+    float pragmapMainCompression =
+        max(
+            compressionControl * 2.0f,
+            0.02f
         );
 
     float3 mappedColor =
-        pragmap(
+        ApplyPragmapWithMainCompression(
             linearColor,
             displayPeak,
             pragmapHueStrength,
-            pragmapBlowoutStrength
+            pragmapBlowoutStrength,
+            pragmapMainCompression
         );
 
     mappedColor =
@@ -822,25 +1269,22 @@ float3 ApplyPragmapV2Tonemap(float3 linearColor)
             max(mappedColor, 0.0f)
         );
 
-    const float pragmapDefaultShoulder = 0.80f;
-    const float pragmapDefaultShoulderCompression = 0.75f;
+    // Keep Shoulder independent from Shoulder Compression.
+    //
+    // Changing only Shoulder from the stock 0.80 adds an extra final-stage
+    // shoulder-position override. Its compression stays at stock 0.75.
+    const float pragmapDefaultShoulder =
+        0.80f;
 
     float shoulderDelta =
         GhostsFiniteSigned1(
-            pragmapShoulder - pragmapDefaultShoulder
-        );
-
-    float shoulderCompressionDelta =
-        GhostsFiniteSigned1(
-            pragmapShoulderCompression
-            - pragmapDefaultShoulderCompression
+            pragmapShoulder
+            - pragmapDefaultShoulder
         );
 
     bool useExtraShoulderStage =
         shoulderDelta > 0.000001f
-        || shoulderDelta < -0.000001f
-        || shoulderCompressionDelta > 0.000001f
-        || shoulderCompressionDelta < -0.000001f;
+        || shoulderDelta < -0.000001f;
 
     if (useExtraShoulderStage)
     {
@@ -849,7 +1293,7 @@ float3 ApplyPragmapV2Tonemap(float3 linearColor)
                 mappedColor,
                 displayPeak,
                 pragmapShoulder,
-                pragmapShoulderCompression
+                0.75f
             );
 
         mappedColor =
@@ -875,50 +1319,64 @@ float3 ApplySelectedHDRDisplayMap(float3 sceneColor)
             max(sceneColor, 0.0f)
         );
 
-    // Explicit initialization avoids old FXC X4000 data-flow warnings.
+    // =====================================================================
+    // Shared SDR-anchored carrier
+    // =====================================================================
+    //
+    // This non-LUT pass cannot perform the later LUT reconstruction used by
+    // Tonemappers 1/2/5, but it still must preserve the same Ghosts SDR
+    // luminance relationship before selecting an HDR mapper.
+
+    float3 extendedScene =
+        ApplyOriginalLinearPiecewiseExtension(
+            sceneColor
+        );
+
+    extendedScene =
+        SafePositive(
+            max(extendedScene, 0.0f)
+        );
+
     float3 selectedHDR =
         0.0f.xxx;
 
     [branch]
-    if (IsPragmapV2Mode())
+    if (IsPragmapMode())
     {
-        // Pragmap V2 owns display mapping in this mode.
         selectedHDR =
-            ApplyPragmapV2Tonemap(
-                sceneColor
+            ApplyPragmapTonemap(
+                extendedScene
             );
     }
     else
     {
-        // -------------------------------------------------------------
-        // RenoDRT / Ghosts-faithful HDR path
-        // -------------------------------------------------------------
-        //
-        // Original curve through the mid-gray pivot
-        // -> first-derivative linear extension
-        // -> per-channel Hermite rolloff
-        // -> hue-direction correction.
-
-        float3 extendedScene =
-            ApplyOriginalLinearPiecewiseExtension(
-                sceneColor
+        float safePeakWhite =
+            GhostsSafePositiveParameter1(
+                RENODX_PEAK_WHITE_NITS,
+                1000.0f
             );
 
-        extendedScene =
-            SafePositive(
-                max(extendedScene, 0.0f)
+        float safeDiffuseWhite =
+            max(
+                GhostsSafePositiveParameter1(
+                    RENODX_DIFFUSE_WHITE_NITS,
+                    203.0f
+                ),
+                1.0f
             );
 
         float displayPeak =
-            max(
-                RENODX_PEAK_WHITE_NITS
-                / max(RENODX_DIFFUSE_WHITE_NITS, 1.0f),
-                1.000001f
+            clamp(
+                safePeakWhite / safeDiffuseWhite,
+                1.000001f,
+                65504.0f
             );
 
         float whiteClip =
             max(
-                RENODX_TONEMAPPER_WHITE_CLIP,
+                GhostsFiniteSigned1(
+                    RENODX_TONEMAPPER_WHITE_CLIP
+                ),
                 displayPeak + 0.000001f
             );
 
@@ -927,11 +1385,21 @@ float3 ApplySelectedHDRDisplayMap(float3 sceneColor)
                 extendedScene
             );
 
+        rolloffInput =
+            SafePositive(
+                max(rolloffInput, 0.0f)
+            );
+
         float3 hdrRolloff =
             renodx::tonemap::HermiteSplinePerChannelRolloff(
                 rolloffInput,
                 displayPeak,
                 whiteClip
+            );
+
+        hdrRolloff =
+            SafePositive(
+                max(hdrRolloff, 0.0f)
             );
 
         hdrRolloff =
@@ -1249,6 +1717,18 @@ void main(
         GhostsFiniteSigned1(
             sceneScale
         );
+
+    // HDR-only exposure damping.
+    //
+    // Vanilla keeps the exact incoming game exposure. RenoDRT and Pragmap use
+    // the user-controlled strength to reduce rapid exposure pumping.
+    if (!IsVanillaMode())
+    {
+        sceneScale =
+            ApplyGhostsAutoExposureStrength(
+                sceneScale
+            );
+    }
 float3 sceneColor =
         SafePositive(
             source.rgb
@@ -1285,8 +1765,17 @@ float3 sceneColor =
     float3 hdrColor =
         ApplySelectedHDRDisplayMap(preTonemapColor);
 
+    // No 3D LUT exists in this pass, but its lower/midtone luminance still
+    // follows the REAL original Ghosts SDR rational result.
+    hdrColor =
+        ApplyGhostsActualSDRLuminanceMatch(
+            hdrColor,
+            sdrReference,
+            preTonemapColor
+        );
+
     // No Texture3D LUT exists in this pass, so there is no SDR LUT
-    // compression / UpgradeToneMap stage to apply.
+    // transfer stage to apply.
 
 #if RENODX_GHOSTS_ROLLOFF_TEST_USE_HIGHLIGHT_RESTORE
 

@@ -734,6 +734,7 @@ const reshade::api::format scene_intermediate_formats[] = {
 
 const float scene_intermediate_aspect_ratios[] = {
     16.f / 9.f,    // Standard widescreen
+    16.f / 10.f,
     24.f / 10.f,   // 3840x1600
     43.f / 18.f,   // 3440x1440
     64.f / 27.f,   // 5120x2160

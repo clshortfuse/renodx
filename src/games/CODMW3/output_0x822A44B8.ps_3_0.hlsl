@@ -288,6 +288,149 @@ float3 ApplyRenoDXTonemap(float3 linearColor)
 }
 
 
+
+// ============================================================================
+// Post-tonemap bloom / highlight headroom restoration
+// ============================================================================
+//
+// RenoDRT / PsychoV24 may compress bright scene values before later WaW bloom
+// or post-processing sees them. Preserve the existing tonemapped image, then
+// restore only the source energy that originally existed above 1.0.
+//
+// RENODX_BLOOM_BRIGHTNESS controls ONLY this restored HDR excess:
+//
+//   0.0 = no restoration; exact existing tonemapped output
+//   1.0 = restore the original missing >1.0 source headroom
+//   2.0 = twice the source excess, bounded by configured display headroom
+//
+// This leaves all existing RenoDX / Psycho sliders fully active because their
+// tonemapped result remains the base image.
+// ============================================================================
+
+float3 RestorePostTonemapBloomHeadroom(
+    float3 preTonemapColor,
+    float3 postTonemapColor)
+{
+    preTonemapColor =
+        SafePositive(
+            preTonemapColor
+        );
+
+    postTonemapColor =
+        SafePositive(
+            postTonemapColor
+        );
+
+    float bloomStrength =
+        max(
+            (float)RENODX_BLOOM_BRIGHTNESS,
+            0.0f
+        );
+
+    if (bloomStrength <= 0.0f)
+        return postTonemapColor;
+
+    float sourcePeak =
+        max(
+            preTonemapColor.r,
+            max(
+                preTonemapColor.g,
+                preTonemapColor.b
+            )
+        );
+
+    // SDR-range pixels have no HDR excess to restore.
+    if (sourcePeak <= 1.0f)
+        return postTonemapColor;
+
+    float mappedPeak =
+        max(
+            postTonemapColor.r,
+            max(
+                postTonemapColor.g,
+                postTonemapColor.b
+            )
+        );
+
+    float displayPeak =
+        max(
+            RENODX_PEAK_WHITE_NITS
+            / max(
+                RENODX_DIFFUSE_WHITE_NITS,
+                1.0f
+            ),
+            1.0f
+        );
+
+    // Scale only the original HDR excess above SDR white.
+    // This keeps the Bloom Strength slider meaningful instead of multiplying
+    // the complete scene image.
+    float sourceExcess =
+        sourcePeak
+        - 1.0f;
+
+    float targetPeak =
+        min(
+            1.0f
+            + sourceExcess
+            * bloomStrength,
+            displayPeak
+        );
+
+    // Never reduce the normal tonemapper result.
+    if (targetPeak <= mappedPeak)
+        return postTonemapColor;
+
+    // Restore with the source highlight's RGB ratios rather than per-channel
+    // clipping, so saturated highlights retain their hue.
+    float3 sourceShape =
+        preTonemapColor
+        / max(
+            sourcePeak,
+            1e-6f
+        );
+
+    float missingPeak =
+        targetPeak
+        - mappedPeak;
+
+    float3 restoredColor =
+        postTonemapColor
+        + sourceShape
+        * missingPeak;
+
+    restoredColor =
+        SafePositive(
+            restoredColor
+        );
+
+    // Final configured-display guard. Use one common scale to avoid changing
+    // hue if the additive restoration slightly overshoots the target peak.
+    float restoredPeak =
+        max(
+            restoredColor.r,
+            max(
+                restoredColor.g,
+                restoredColor.b
+            )
+        );
+
+    if (restoredPeak > displayPeak)
+    {
+        restoredColor *=
+            displayPeak
+            / max(
+                restoredPeak,
+                1e-6f
+            );
+    }
+
+    return SafePositive(
+        restoredColor
+    );
+}
+
+
 // ============================================================================
 // Main shader
 // ============================================================================
@@ -464,6 +607,25 @@ float4 main(PS_INPUT input) : COLOR0
         SafePositive(
             intermediateColor
         );
+
+
+    // ========================================================================
+    // Restore HDR bloom / highlight headroom AFTER RenoDX intermediate output
+    // ========================================================================
+    //
+    // The existing RenoDX/Psycho result remains the base image. The Bloom
+    // Strength slider controls only the missing >1.0 source excess.
+    // ========================================================================
+
+    if (!IsVanillaMode())
+    {
+        intermediateColor =
+            RestorePostTonemapBloomHeadroom(
+                linearOutput,
+                intermediateColor
+            );
+    }
+
 
 
     // ========================================================================

@@ -1,7 +1,7 @@
 #ifndef SRC_GHOSTS_SHARED_H_
 #define SRC_GHOSTS_SHARED_H_
 
-#define RENODX_GHOSTS_TONEMAPPER_LAYOUT_VERSION 3
+#define RENODX_GHOSTS_TONEMAPPER_LAYOUT_VERSION 4
 
 // Must be 32-bit aligned.
 // Existing fields stay in their original order; custom controls are appended.
@@ -42,7 +42,7 @@ struct ShaderInjectData {
   float custom_flip_uv_y;
 
   // Legacy PsychoV24 storage retained only to keep all later injected
-  // constant-buffer offsets unchanged. Pragmap V2 does not use these fields.
+  // constant-buffer offsets unchanged. Pragmap does not use these fields.
   float psychov24_compression;
   float psychov24_gamut_compression;
   float psychov24_gamut_mode;
@@ -57,7 +57,7 @@ struct ShaderInjectData {
   float blur_strength;
   float blur_padding0;
 
-  // Pragmap V2 controls.
+  // Pragmap controls.
   //
   // These are appended AFTER all existing fields so every previous injected
   // constant-buffer offset remains unchanged.
@@ -65,6 +65,14 @@ struct ShaderInjectData {
   float pragmap_blowout_strength;
   float pragmap_shoulder;
   float pragmap_shoulder_compression;
+
+  // Temporal exposure adaptation control.
+  // 1.0 = original game adaptation speed.
+  // 0.0 = exposure is effectively held/frozen.
+  float auto_exposure_adaptation_speed;
+  float auto_exposure_adaptation_padding0;
+  float auto_exposure_adaptation_padding1;
+  float auto_exposure_adaptation_padding2;
 };
 
 #ifndef __cplusplus
@@ -97,8 +105,8 @@ cbuffer shader_injection : register(b13) {
 #define RENODX_TONE_MAP_BLOWOUT               shader_injection.tone_map_blowout
 #define RENODX_TONE_MAP_FLARE                 shader_injection.tone_map_flare
 
-#ifndef RENODX_TONE_MAP_TYPE_PRAGMAPV2
-#define RENODX_TONE_MAP_TYPE_PRAGMAPV2 4.f
+#ifndef RENODX_TONE_MAP_TYPE_PRAGMAP
+#define RENODX_TONE_MAP_TYPE_PRAGMAP 4.f
 #endif
 
 #ifndef RENODX_PRAGMAP_HUE_STRENGTH
@@ -119,6 +127,14 @@ cbuffer shader_injection : register(b13) {
 
 #ifndef RENODX_BLUR_STRENGTH
 #define RENODX_BLUR_STRENGTH shader_injection.blur_strength
+#endif
+
+#ifndef RENODX_GHOSTS_AUTO_EXPOSURE_STRENGTH
+#define RENODX_GHOSTS_AUTO_EXPOSURE_STRENGTH shader_injection.fxAutoExposure
+#endif
+
+#ifndef RENODX_GHOSTS_AUTO_EXPOSURE_ADAPTATION_SPEED
+#define RENODX_GHOSTS_AUTO_EXPOSURE_ADAPTATION_SPEED shader_injection.auto_exposure_adaptation_speed
 #endif
 
 #define RENODX_COLOR_GRADE_STRENGTH            shader_injection.color_grade_strength

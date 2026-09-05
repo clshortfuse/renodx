@@ -10,6 +10,7 @@
 
 #include <deps/imgui/imgui.h>
 #include <include/reshade.hpp>
+#include <Windows.h>
 
 #include <embed/shaders.h>
 
@@ -89,6 +90,7 @@ ShaderInjectData shader_injection;
 
 float current_settings_mode = 0;
 float dx9_auto_output_unclamp_mode = 2.f;
+float force_windowed_borderless = 1.f;
 
 constexpr float TONE_MAP_TYPE_VANILLA = 0.f;
 constexpr float TONE_MAP_TYPE_RENODRT = 3.f;
@@ -2124,6 +2126,112 @@ bool TryRedirectDX9CloneReadbackToOriginal(
   return true;
 }
 
+// Reusable CPU-visible FP16 staging surface for GetRenderTargetData.
+// The old path allocated and destroyed this surface for every incompatible
+// FP16 -> 8-bit readback. Caching it removes that repeated D3D9 resource churn.
+struct DX9ReadbackStagingCache {
+  reshade::api::device* device = nullptr;
+  reshade::api::resource resource = {0u};
+  reshade::api::resource_desc desc = {};
+};
+
+std::mutex g_dx9_readback_staging_mutex;
+DX9ReadbackStagingCache g_dx9_readback_staging_cache;
+
+bool DX9StagingDescMatches(
+    const reshade::api::resource_desc& cached,
+    const reshade::api::resource_desc& wanted) {
+  if (cached.type == reshade::api::resource_type::unknown
+      || wanted.type == reshade::api::resource_type::unknown) {
+    return false;
+  }
+
+  return cached.type == wanted.type
+      && cached.heap == wanted.heap
+      && cached.usage == wanted.usage
+      && cached.texture.format == wanted.texture.format
+      && cached.texture.width == wanted.texture.width
+      && cached.texture.height == wanted.texture.height
+      && cached.texture.depth_or_layers == wanted.texture.depth_or_layers
+      && cached.texture.levels == wanted.texture.levels
+      && cached.texture.samples == wanted.texture.samples;
+}
+
+bool EnsureDX9ReadbackStaging(
+    reshade::api::device* device,
+    const reshade::api::resource_desc& wanted_desc,
+    reshade::api::resource& staging) {
+  if (device == nullptr) return false;
+
+  auto& cache = g_dx9_readback_staging_cache;
+
+  if (cache.device == device && cache.resource.handle != 0u) {
+    // IMPORTANT: Do not trust only the descriptor we saved when the staging
+    // surface was created. A D3D9 Reset can invalidate the underlying surface
+    // while leaving this cached handle value non-zero (and handles may later be
+    // recycled). Re-query RenoDX's live resource tracker before every reuse.
+    const reshade::api::resource_desc live_desc =
+        renodx::utils::resource::GetResourceDesc(device, cache.resource);
+
+    if (live_desc.type != reshade::api::resource_type::unknown
+        && live_desc.heap == reshade::api::memory_heap::gpu_to_cpu
+        && DX9StagingDescMatches(live_desc, wanted_desc)) {
+      // Refresh the saved copy as well, then reuse only the proven-live surface.
+      cache.desc = live_desc;
+      staging = cache.resource;
+      return true;
+    }
+
+    // If it is still a live resource but no longer matches, explicitly release
+    // it. If tracking says it is already gone, never call destroy_resource on
+    // the stale handle -- just forget it and allocate a fresh staging surface.
+    if (live_desc.type != reshade::api::resource_type::unknown) {
+      device->destroy_resource(cache.resource);
+    }
+
+    cache = {};
+  } else if (cache.device != device) {
+    // Device changed/reset. The old device owns any old allocation; do not call
+    // through a potentially dead device pointer from this new callback.
+    cache = {};
+  }
+
+  cache.device = device;
+
+  if (!device->create_resource(
+          wanted_desc,
+          nullptr,
+          reshade::api::resource_usage::copy_dest,
+          &cache.resource)) {
+    cache = {};
+    return false;
+  }
+
+  cache.desc = wanted_desc;
+  staging = cache.resource;
+  return true;
+}
+
+// Called only while g_dx9_readback_staging_mutex is already held.
+void InvalidateDX9ReadbackStaging(reshade::api::device* device) {
+  auto& cache = g_dx9_readback_staging_cache;
+
+  if (device != nullptr
+      && cache.device == device
+      && cache.resource.handle != 0u) {
+    device->destroy_resource(cache.resource);
+  }
+
+  cache = {};
+}
+
+void ClearDX9ReadbackStagingCache() {
+  // DLL_PROCESS_DETACH runs under the loader lock, so do not wait on the staging
+  // mutex or call through a possibly-destroyed D3D9 device here. The D3D9 device
+  // owns the cached allocation and frees it during device/process teardown.
+  g_dx9_readback_staging_cache = {};
+}
+
 bool TryConvertDX9FloatReadbackToSDR(
     reshade::api::command_list* cmd_list,
     const DX9CopyEndpoint& source_endpoint,
@@ -2167,13 +2275,17 @@ bool TryConvertDX9FloatReadbackToSDR(
   staging_desc.texture.samples = 1u;
 
   reshade::api::resource staging = {0u};
-  if (!device->create_resource(
+
+  // One cached staging surface is shared by D3D9 readbacks. Hold the lock across
+  // copy/map/CPU conversion so another callback cannot overwrite it mid-readback.
+  std::scoped_lock staging_lock(g_dx9_readback_staging_mutex);
+
+  if (!EnsureDX9ReadbackStaging(
+          device,
           staging_desc,
-          nullptr,
-          reshade::api::resource_usage::copy_dest,
-          &staging)) {
+          staging)) {
     LogDX9ReadbackFailure(
-        "Could not create the float16 CPU staging surface",
+        "Could not create/reuse the float16 CPU staging surface",
         float_source_desc,
         dest_desc);
     return false;
@@ -2191,7 +2303,7 @@ bool TryConvertDX9FloatReadbackToSDR(
           nullptr,
           reshade::api::map_access::read_only,
           &source_data)) {
-    device->destroy_resource(staging);
+    InvalidateDX9ReadbackStaging(device);
     LogDX9ReadbackFailure(
         "Could not map the float16 CPU staging surface",
         float_source_desc,
@@ -2207,7 +2319,6 @@ bool TryConvertDX9FloatReadbackToSDR(
           reshade::api::map_access::write_only,
           &dest_data)) {
     device->unmap_texture_region(staging, 0u);
-    device->destroy_resource(staging);
     LogDX9ReadbackFailure(
         "Could not map the game's 8-bit readback surface",
         float_source_desc,
@@ -2248,7 +2359,6 @@ bool TryConvertDX9FloatReadbackToSDR(
 
   device->unmap_texture_region(dest, 0u);
   device->unmap_texture_region(staging, 0u);
-  device->destroy_resource(staging);
 
   if (g_dx9_readback_success_logs < 8u) {
     ++g_dx9_readback_success_logs;
@@ -2984,16 +3094,137 @@ const auto UPGRADE_TYPE_OUTPUT_SIZE = 1.f;
 const auto UPGRADE_TYPE_OUTPUT_RATIO = 2.f;
 const auto UPGRADE_TYPE_ANY = 3.f;
 
+// ============================================================================
+// D3D9 windowed -> borderless windowed, sized from the real backbuffer
+// ============================================================================
+//
+// Do not derive borderless size from GetClientRect() and do not blindly stretch
+// the HWND to the monitor. Both can disagree with an explicitly-sized D3D9
+// backbuffer.
+//
+// Instead, OnPresent obtains the ACTUAL swapchain backbuffer resource and passes
+// its texture dimensions here. A borderless popup has no non-client frame, so
+// making its outer size equal to the backbuffer size also makes its client area
+// equal to the backbuffer size.
+//
+// This keeps the game's D3D9 presentation/readback dimensions coherent and does
+// not modify any of the DX9 CPU blit/readback handlers below.
+
+void ApplyWindowedBorderless(
+    HWND hwnd,
+    uint32_t backbuffer_width,
+    uint32_t backbuffer_height) {
+  if (force_windowed_borderless < 0.5f) return;
+  if (hwnd == nullptr || !IsWindow(hwnd)) return;
+  if (backbuffer_width == 0u || backbuffer_height == 0u) return;
+
+  const LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+  const LONG_PTR ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+
+  // Never touch child windows.
+  if ((style & WS_CHILD) != 0) return;
+
+  // Only convert a normal framed/windowed HWND.
+  // An exclusive/fullscreen popup normally has none of these frame bits, so it
+  // remains completely untouched.
+  constexpr LONG_PTR WINDOWED_FRAME_BITS =
+      WS_CAPTION | WS_THICKFRAME | WS_BORDER | WS_DLGFRAME;
+
+  if ((style & WINDOWED_FRAME_BITS) == 0) return;
+
+  HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+
+  MONITORINFO monitor_info = {};
+  monitor_info.cbSize = sizeof(monitor_info);
+  if (!GetMonitorInfoW(monitor, &monitor_info)) return;
+
+  const RECT& monitor_rect = monitor_info.rcMonitor;
+  const int monitor_width = monitor_rect.right - monitor_rect.left;
+  const int monitor_height = monitor_rect.bottom - monitor_rect.top;
+
+  const int target_width = static_cast<int>(backbuffer_width);
+  const int target_height = static_cast<int>(backbuffer_height);
+
+  // Full native-resolution windowed mode becomes monitor-filling borderless.
+  // Smaller D3D9 backbuffers stay at their actual render size and are centered.
+  const int target_x =
+      (target_width == monitor_width)
+          ? monitor_rect.left
+          : monitor_rect.left + ((monitor_width - target_width) / 2);
+
+  const int target_y =
+      (target_height == monitor_height)
+          ? monitor_rect.top
+          : monitor_rect.top + ((monitor_height - target_height) / 2);
+
+  LONG_PTR borderless_style = style;
+  borderless_style &= ~(WS_CAPTION | WS_THICKFRAME | WS_BORDER | WS_DLGFRAME |
+                        WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+  borderless_style |= WS_POPUP | WS_VISIBLE;
+
+  LONG_PTR borderless_ex_style = ex_style;
+  borderless_ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE |
+                           WS_EX_STATICEDGE | WS_EX_WINDOWEDGE);
+
+  if (borderless_style != style) {
+    SetWindowLongPtrW(hwnd, GWL_STYLE, borderless_style);
+  }
+
+  if (borderless_ex_style != ex_style) {
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, borderless_ex_style);
+  }
+
+  // Do not force Z-order/focus changes. Only apply the frame change, position,
+  // and dimensions that correspond to the real D3D9 backbuffer.
+  SetWindowPos(
+      hwnd,
+      nullptr,
+      target_x,
+      target_y,
+      target_width,
+      target_height,
+      SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE |
+          SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+}
+
 void OnPresent(reshade::api::command_queue* queue,
                reshade::api::swapchain* swapchain,
                const reshade::api::rect* source_rect,
                const reshade::api::rect* dest_rect,
                uint32_t dirty_rect_count,
                const reshade::api::rect* dirty_rects) {
+  if (queue == nullptr) return;
+
   auto* device = queue->get_device();
+  if (device == nullptr) return;
+
   if (device->get_api() == reshade::api::device_api::opengl) {
     shader_injection.custom_flip_uv_y = 1.f;
   }
+
+  if (swapchain == nullptr) return;
+
+  HWND hwnd = reinterpret_cast<HWND>(swapchain->get_hwnd());
+  if (hwnd == nullptr) return;
+
+  uint32_t backbuffer_width = 0u;
+  uint32_t backbuffer_height = 0u;
+
+  // Use the real presentation resource dimensions. This is the important
+  // difference from the previous borderless attempts.
+  const reshade::api::resource backbuffer = swapchain->get_back_buffer(0u);
+  if (backbuffer.handle != 0u) {
+    const reshade::api::resource_desc backbuffer_desc =
+        device->get_resource_desc(backbuffer);
+
+    backbuffer_width = backbuffer_desc.texture.width;
+    backbuffer_height = backbuffer_desc.texture.height;
+  }
+
+  ApplyWindowedBorderless(
+      hwnd,
+      backbuffer_width,
+      backbuffer_height);
 }
 
 bool initialized = false;
@@ -3033,6 +3264,10 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
             },
         };
 
+        // Always register Present so Windowed Borderless works even when the
+        // display proxy is disabled.
+        reshade::register_event<reshade::addon_event::present>(OnPresent);
+
         {
           auto* setting = new renodx::utils::settings::Setting{
               .key = "SwapChainForceBorderless",
@@ -3051,6 +3286,27 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           };
           renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
           renodx::mods::swapchain::force_borderless = (setting->GetValue() == 1.f);
+          settings.push_back(setting);
+        }
+
+        {
+          auto* setting = new renodx::utils::settings::Setting{
+              .key = "SwapChainWindowedBorderless",
+              .binding = &force_windowed_borderless,
+              .value_type = renodx::utils::settings::SettingValueType::INTEGER,
+              .default_value = 1.f,
+              .label = "Windowed Borderless",
+              .section = "Display Output",
+              .tooltip = "Converts normal Windowed mode to borderless using the actual D3D9 swapchain backbuffer dimensions. Use the monitor native resolution for full-monitor borderless.",
+              .labels = {
+                  "Disabled",
+                  "Enabled",
+              },
+              .is_global = true,
+              .is_visible = []() { return true; },
+          };
+          renodx::utils::settings::LoadSetting(renodx::utils::settings::global_name, setting);
+          force_windowed_borderless = setting->GetValue();
           settings.push_back(setting);
         }
 
@@ -3111,9 +3367,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           bool use_device_proxy = setting->GetValue() == 1.f;
           renodx::mods::swapchain::use_device_proxy = use_device_proxy;
           renodx::mods::swapchain::set_color_space = !use_device_proxy;
-          if (use_device_proxy) {
-            reshade::register_event<reshade::addon_event::present>(OnPresent);
-          } else {
+          if (!use_device_proxy) {
             shader_injection.custom_flip_uv_y = 0.f;
           }
           settings.push_back(setting);
@@ -3195,32 +3449,39 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
         // enabled so clears, RTVs and SRV variants continue to reference the same
         // upgraded resource.
        
-        // Keep B8G8R8A8_UNORM upgraded by 16:9 aspect ratio. Do not restrict this
-        // rule to one fixed resolution; BO1 can use different 16:9 scene sizes.
-        renodx::mods::swapchain::resource_upgrade_infos.push_back({
-            .old_format = reshade::api::format::b8g8r8a8_unorm,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-             .ignore_size = false,
-              .use_resource_view_cloning = true,
-              .use_resource_view_hot_swap = false,
-              .aspect_ratio = 16.f / 9.f,
-              .aspect_ratio_tolerance = 0.001f,
-              .usage_include = reshade::api::resource_usage::render_target,
-              .name = "Scene Intermediate",
-        }); 
+        const reshade::api::format scene_intermediate_formats[] = {
+    reshade::api::format::r8g8b8a8_unorm,
+    reshade::api::format::r8g8b8a8_typeless,
+    reshade::api::format::r8g8b8a8_unorm_srgb,
+    reshade::api::format::b8g8r8a8_unorm,
+    reshade::api::format::r10g10b10a2_unorm,
+    reshade::api::format::b10g10r10a2_unorm,
+};
 
-        renodx::mods::swapchain::resource_upgrade_infos.push_back({
-            .old_format = reshade::api::format::r16g16b16a16_unorm,
-            .new_format = reshade::api::format::r16g16b16a16_float,
-             .ignore_size = false,
-              .use_resource_view_cloning = true,
-              .use_resource_view_hot_swap = false,
-              .aspect_ratio = 16.f / 9.f,
-              .aspect_ratio_tolerance = 0.001f,
-              .usage_include = reshade::api::resource_usage::render_target,
-              .name = "Scene Intermediate",
-        }); 
+const float scene_intermediate_aspect_ratios[] = {
+    16.f / 9.f,    // Standard widescreen
+    16.f / 10.f,
+    24.f / 10.f,   // 3840x1600
+    43.f / 18.f,   // 3440x1440
+    64.f / 27.f,   // 5120x2160
+};
 
+for (const auto old_format : scene_intermediate_formats) {
+  for (const float aspect_ratio : scene_intermediate_aspect_ratios) {
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = old_format,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .ignore_size = false,
+        .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = false,
+        .aspect_ratio = aspect_ratio,
+        .aspect_ratio_tolerance = 0.001f,
+        .usage_include = reshade::api::resource_usage::render_target,
+        .name = "Scene Intermediate",
+    });
+  }
+}
+      
 
 
      
@@ -3239,6 +3500,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
       }
       break;
     case DLL_PROCESS_DETACH:
+      ClearDX9ReadbackStagingCache();
       reshade::unregister_event<reshade::addon_event::create_pipeline>(
           OnCreatePipelineDX9AutoOutputUnclamp);
       ClearDX9AutoOutputUnclampCache();

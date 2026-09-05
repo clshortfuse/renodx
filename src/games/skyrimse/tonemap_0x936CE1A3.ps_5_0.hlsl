@@ -217,7 +217,7 @@ void main(
     r0.xyz = r0.xyz * (lumAdjusted / lum);
 
     // Bloom (pre-tonemap)
-    const float bloomStrength = 0.0;
+    const float bloomStrength = 1.0;
     r0.xyz = (r1.xyz * saturate(cb2[2].x - renodx::color::y::from::BT709(r0.xyz))) * bloomStrength + r0.xyz;
 
     // Clean
@@ -228,6 +228,10 @@ void main(
 
     // Linearize to BT.709 scene-linear for RenoDRT/PsychoV24.
     r0.xyz = renodx::color::gamma::DecodeSafe(r0.xyz);
+
+    // HDR Boost / inverse tone mapping. Applied only to the custom HDR path,
+    // after eye adaptation and before either HDR tone mapper.
+    r0.xyz = HDRBoost(r0.xyz, CUSTOM_HDR_BOOST);
 
     if (IsPsychoV24Mode()) {
       r0.xyz = ApplyPsychoV24HDRTonemap(r0.xyz);

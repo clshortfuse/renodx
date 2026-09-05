@@ -1,51 +1,29 @@
-Call of Duty: Ghosts - Pragmap V2 tonemappers (UNMODIFIED Pragmap core)
+COD Ghosts - Auto Exposure Adaptation Speed Slider
 
-What this package does
-======================
-This variant keeps PragmapV2.hlsl COMPLETELY UNMODIFIED.
-
-The five tonemappers still expose the Pragmap addon controls, but the controls
-are handled externally in the tonemappers:
-
-- Hue Strength
-- Blowout
-- Shoulder
-- Shoulder Compression
-
-Behavior
-========
-Hue Strength and Blowout
-------------------------
-These still feed directly into the ORIGINAL pragmap() function:
-
-    pragmap(color, peak, hueStrength, blowoutStrength)
-
-The expanded upper-range mapping from the previous package is preserved so the
-controls remain easy to see in-game.
-
-Shoulder and Shoulder Compression
----------------------------------
-Because PragmapV2.hlsl is untouched, its internal 0.8 shoulder and internal
-compression behavior remain hardcoded.
-
-So in this package, Shoulder and Shoulder Compression are applied as an
-OPTIONAL EXTRA post-Pragmap overshoot stage using overshootCorrection().
-
-Defaults are chosen so the stage is bypassed by default:
-
-    Shoulder             = 80% -> 0.80
-    Shoulder Compression = 75% -> 0.75
-
-At those defaults, the output matches the original Pragmap output exactly.
-Moving those controls applies an extra post-Pragmap shaping stage.
-
-Files included
-==============
-- PragmapV2.hlsl  (original, unmodified)
+Files included:
+- 0xBAF5EC49.ps_5_0.hlsl
 - shared.h
 - addon.cpp
-- tonemapper_0x9B6E3C62.ps_5_0.hlsl
-- tonemapper2_0x3953C72A.ps_5_0.hlsl
-- tonemapper3_0xE73A0FFC.ps_5_0.hlsl
-- tonemapper4_0xF008CC1D.ps_5_0.hlsl
-- tonemapper5_0xD1DAA81A.ps_5_0.hlsl
+
+What changed:
+1. Added a new RenoDX slider: Auto Exposure Adapt Speed
+2. Added a new injected field in shared.h:
+   auto_exposure_adaptation_speed
+3. Rewrote the exposure adaptation shader in a human-readable form.
+4. The slider directly scales the temporal adaptation step:
+   100% = original game speed
+    35% = calmer default for HDR
+     0% = effectively frozen exposure
+
+Important:
+- This shader is the temporal eye-adaptation pass, not the final tonemapper.
+- You should save 0xBAF5EC49.ps_5_0.hlsl over the actual hash filename for this shader once you identify it in your project/trace.
+- shared.h and addon.cpp are based on the current CODGHOSTS_AutoExposureStrength version.
+
+Suggested starting values:
+- Auto Exposure Strength: 60%
+- Auto Exposure Adapt Speed: 35%
+
+If adaptation still flickers too much:
+- Lower Adapt Speed first.
+- If the exposure amount is still too aggressive, then lower Auto Exposure Strength too.

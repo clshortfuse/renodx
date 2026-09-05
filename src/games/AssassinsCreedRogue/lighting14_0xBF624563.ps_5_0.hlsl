@@ -385,7 +385,7 @@ void main(
   r2.xyz = r2.xyz * r0.xxx;
   r0.xyz = r1.yzw * r0.xxx;
   r0.xyz = float3(0.0199999996,0.0199999996,0.0199999996) * r0.xyz;
-  o0.xyz = EncodeSRGBOutput(o0.xyz);
   o0.xyz = r2.xyz * r0.www + r0.xyz;
+  o0.xyz = EncodeSRGBOutput(o0.xyz);
   return;
 }

@@ -110,6 +110,18 @@ renodx::utils::settings::Settings settings = {
         .max = 500.f,
     },
     new renodx::utils::settings::Setting{
+        .key = "ToneMapHDRBoost",
+        .binding = &shader_injection.hdr_boost,
+        .default_value = 35.f,
+        .label = "HDR Boost",
+        .section = "Tone Mapping",
+        .tooltip = "Expands bright scene values before tone mapping to create stronger HDR highlights. 0 disables the boost.",
+        .min = 0.f,
+        .max = 50.f,
+        .is_enabled = []() { return IsCustomToneMapperEnabled(); },
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .key = "GammaCorrection",
         .binding = &shader_injection.gamma_correction,
         .value_type = renodx::utils::settings::SettingValueType::INTEGER,
@@ -702,33 +714,48 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lpv_reserved) {
           }
         }
 
+        // Upgrade only render-target resources and keep resource-view cloning
+        // enabled so clears, RTVs and SRV variants continue to reference the same
+        // upgraded resource.
+       
+        const reshade::api::format scene_intermediate_formats[] = {
+    reshade::api::format::r8g8b8a8_unorm,
+    reshade::api::format::r8g8b8a8_typeless,
+    reshade::api::format::r8g8b8a8_unorm_srgb,
+    reshade::api::format::b8g8r8a8_unorm,
+    reshade::api::format::r10g10b10a2_unorm,
+    reshade::api::format::b10g10r10a2_unorm,
+};
+
+const float scene_intermediate_aspect_ratios[] = {
+    16.f / 9.f,    // Standard widescreen
+    16.f / 10.f,
+    24.f / 10.f,   // 3840x1600
+    43.f / 18.f,   // 3440x1440
+    64.f / 27.f,   // 5120x2160
+};
+
+for (const auto old_format : scene_intermediate_formats) {
+  for (const float aspect_ratio : scene_intermediate_aspect_ratios) {
+    renodx::mods::swapchain::resource_upgrade_infos.push_back({
+        .old_format = old_format,
+        .new_format = reshade::api::format::r16g16b16a16_float,
+        .ignore_size = false,
+        .use_resource_view_cloning = true,
+          .use_resource_view_hot_swap = false,
+        .aspect_ratio = aspect_ratio,
+        .aspect_ratio_tolerance = 0.001f,
+        .usage_include = reshade::api::resource_usage::render_target,
+        .name = "Scene Intermediate",
+    });
+  }
+}
+      
+
         initialized = true;
       }
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_typeless,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r8g8b8a8_unorm_srgb,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::b8g8r8a8_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::r10g10b10a2_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
-      renodx::mods::swapchain::swap_chain_upgrade_targets.push_back({
-          .old_format = reshade::api::format::b10g10r10a2_unorm,
-          .new_format = reshade::api::format::r16g16b16a16_float,
-      });
       break;
+
     case DLL_PROCESS_DETACH:
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
       reshade::unregister_addon(h_module);
