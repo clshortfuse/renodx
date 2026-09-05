@@ -573,6 +573,48 @@ float3 psycho30_AnchorSourcePositiveTotalToYf(float3 source_rgb) {
              : PSYCHO30_D65_WHITE_LMS * source_total;
 }
 
+// Keep the custom source inside the positive AP1 gamut cone, then trace any
+// remaining non-physical cone response toward same-Yf D65 until LMS is valid.
+float3 psycho30_ClampSourceAP1ToPositiveLMS(float3 source_bt709) {
+  float3 source_lms = mul(
+      PSYCHO30_BT709_TO_LMS_MAT,
+      renodx::color::bt709::clamp::AP1(source_bt709));
+  if (all(source_lms >= float3(0.f, 0.f, 0.f))) {
+    return source_lms;
+  }
+
+  float source_yf = renodx::color::yf::from::LMS(source_lms);
+  if (!(source_yf > PSYCHO30_EPSILON)
+      || isnan(source_yf)
+      || isinf(source_yf)) {
+    return float3(0.f, 0.f, 0.f);
+  }
+
+  float3 neutral_lms = PSYCHO30_D65_WHITE_LMS
+                       * (source_yf / PSYCHO30_D65_WHITE_YF);
+  float3 residual = source_lms - neutral_lms;
+  float3 lower_fraction = renodx::math::Select(
+      residual < float3(
+          -PSYCHO30_EPSILON,
+          -PSYCHO30_EPSILON,
+          -PSYCHO30_EPSILON),
+      neutral_lms
+          / max(
+              -residual,
+              float3(
+                  PSYCHO30_EPSILON,
+                  PSYCHO30_EPSILON,
+                  PSYCHO30_EPSILON)),
+      float3(
+          PSYCHO30_LARGE_SUPPORT,
+          PSYCHO30_LARGE_SUPPORT,
+          PSYCHO30_LARGE_SUPPORT));
+  float boundary_fraction = min(1.f, renodx::math::Min(lower_fraction));
+  return max(
+      neutral_lms + residual * boundary_fraction,
+      float3(0.f, 0.f, 0.f));
+}
+
 float psycho30_GradeQuinticUnitRamp(float t) {
   t = saturate(t);
   return t * t * t * (t * (t * 6.f - 15.f) + 10.f);
@@ -1540,6 +1582,11 @@ float3 psychotm_test30(
 static const int PSYCHO30_TARGET_GAMUT_BT709 = 0;
 static const int PSYCHO30_TARGET_GAMUT_BT2020 = 1;
 static const int PSYCHO30_TARGET_GAMUT_DISPLAY_P3 = 3;
+
+#ifndef PSYCHO30_CUSTOM_SKIP_SANITIZATION
+#define PSYCHO30_CUSTOM_SKIP_SANITIZATION 0
+#endif
+
 static const int PSYCHO30_CUSTOM_GAMUT_MAPPING_EXACT_PROJECTION = 0;
 static const int PSYCHO30_CUSTOM_GAMUT_MAPPING_SOFT_RADIAL = 1;
 static const float PSYCHO30_CUSTOM_GAMUT_COMPRESSION_KNEE = 0.9f;
@@ -2052,19 +2099,22 @@ float3 psychograde_custom_test30(
     float dechroma = 0.f,
     float3 current_adaptive_state_bt709 = 0.18f,
     float3 current_background_state_bt709 = 0.18f) {
-  float3 sanitized_input = renodx::math::ZeroNaN(bt709_linear_input);
-  sanitized_input = renodx::math::Select(
-      isinf(sanitized_input),
+#if PSYCHO30_CUSTOM_SKIP_SANITIZATION
+  float3 source_bt709 = bt709_linear_input * exposure;
+#else
+  float3 finite_input = renodx::math::ZeroNaN(bt709_linear_input);
+  finite_input = renodx::math::Select(
+      isinf(finite_input),
       renodx::math::CopySign(
           float3(
               PSYCHO30_MAX_FINITE_INPUT,
               PSYCHO30_MAX_FINITE_INPUT,
               PSYCHO30_MAX_FINITE_INPUT),
-          sanitized_input),
-      sanitized_input);
-
-  float3 source_lms = psycho30_AnchorSourcePositiveTotalToYf(
-      sanitized_input * exposure);
+          finite_input),
+      finite_input);
+  float3 source_bt709 = finite_input * exposure;
+#endif
+  float3 source_lms = psycho30_ClampSourceAP1ToPositiveLMS(source_bt709);
   if (all(source_lms == float3(0.f, 0.f, 0.f))) {
     return float3(0.f, 0.f, 0.f);
   }
@@ -2119,20 +2169,23 @@ float3 psychotm_custom_test30(
     float compression = 1.5f,
     float mean_a2_source_weight = 1.f,
     int gamut_mapping_method = PSYCHO30_CUSTOM_GAMUT_MAPPING_SOFT_RADIAL) {
-  // Use the corrected Test30 input sanitization and source-boundary policy.
-  float3 sanitized_input = renodx::math::ZeroNaN(bt709_linear_input);
-  sanitized_input = renodx::math::Select(
-      isinf(sanitized_input),
+#if PSYCHO30_CUSTOM_SKIP_SANITIZATION
+  float3 source_bt709 = bt709_linear_input * exposure;
+#else
+  // Sanitize non-finite values before the independent AP1/LMS gamut policy.
+  float3 finite_input = renodx::math::ZeroNaN(bt709_linear_input);
+  finite_input = renodx::math::Select(
+      isinf(finite_input),
       renodx::math::CopySign(
           float3(
               PSYCHO30_MAX_FINITE_INPUT,
               PSYCHO30_MAX_FINITE_INPUT,
               PSYCHO30_MAX_FINITE_INPUT),
-          sanitized_input),
-      sanitized_input);
-  float3 exposed_input = sanitized_input * exposure;
-
-  float3 source_lms = psycho30_AnchorSourcePositiveTotalToYf(exposed_input);
+          finite_input),
+      finite_input);
+  float3 source_bt709 = finite_input * exposure;
+#endif
+  float3 source_lms = psycho30_ClampSourceAP1ToPositiveLMS(source_bt709);
   if (all(source_lms == float3(0.f, 0.f, 0.f))) {
     return float3(0.f, 0.f, 0.f);
   }

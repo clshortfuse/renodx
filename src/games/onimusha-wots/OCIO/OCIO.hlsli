@@ -62,19 +62,16 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
     // ACES_MAX and ACES_MIN are pre-adjusted in order to account for the post-tonemap diffuse white scalar which we define as `10.f * ACES_MID`
     float ACES_MID;
     float EXP_SHIFT_REFERENCE_MAX;
-    float EXP_SHIFT_REFERENCE_MIN;
+    float EXP_SHIFT_REFERENCE_MIN = 0.0001f;
     if (TONE_MAP_ACES_MID_GRAY == 0.f) {
       ACES_MID = 4.8f;
       EXP_SHIFT_REFERENCE_MAX = 48.f;
-      EXP_SHIFT_REFERENCE_MIN = 0.02f;
     } else if (TONE_MAP_ACES_MID_GRAY == 1.f) {
       ACES_MID = 10.f;
       EXP_SHIFT_REFERENCE_MAX = 100.f;
-      EXP_SHIFT_REFERENCE_MIN = 0.02f;
     } else {
       ACES_MID = 15.f;
       EXP_SHIFT_REFERENCE_MAX = 1000.f;
-      EXP_SHIFT_REFERENCE_MIN = 0.0001f;
     }
     const float ACES_DIFFUSE = ACES_MID * 10.f;
     const float ACES_MIN = 0.0001f;
@@ -85,7 +82,7 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
       aces_max = renodx::color::correct::Gamma(aces_max, true);
       aces_min = renodx::color::correct::Gamma(aces_min, true);
     } else if (RENODX_GAMMA_CORRECTION == 2.f) {
-      aces_min /= 10.f;
+      aces_min /= 10000.f;
     }
 
     renodx::tonemap::aces::ODTConfig ODT_config = renodx_custom::tonemap::aces::CreateODTConfig(aces_min * ACES_DIFFUSE, aces_max * ACES_DIFFUSE, ACES_MID, true, EXP_SHIFT_REFERENCE_MAX, EXP_SHIFT_REFERENCE_MIN);
@@ -105,9 +102,9 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
     float3 tonemapped_bt709 = renodx::tonemap::psychov::psychotm_custom_test30(
         untonemapped_bt709,
         RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, RENODX_TONE_MAP_EXPOSURE, RENODX_TONE_MAP_HIGHLIGHTS, RENODX_TONE_MAP_SHADOWS,
-        cone_response_exponent * RENODX_TONE_MAP_CONTRAST, 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS,
+        cone_response_exponent * RENODX_TONE_MAP_CONTRAST, 0.10f * pow(0.78f, 10.f) + 0.10f * pow(RENODX_TONE_MAP_FLARE, 10.f), RENODX_TONE_MAP_CONTRAST_HIGHLIGHTS, RENODX_TONE_MAP_CONTRAST_SHADOWS,
         RENODX_TONE_MAP_SATURATION, RENODX_TONE_MAP_HIGHLIGHT_SATURATION, RENODX_TONE_MAP_DECHROMA,
-        0.45f, 0.1f, 0.f, 1.f, renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_BT2020, 1.5f, 0.7f);
+        0.51f, 0.1f, 0.f, 1.f, renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_BT2020, 1.5f, 0.7f);
     tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
   }
 
