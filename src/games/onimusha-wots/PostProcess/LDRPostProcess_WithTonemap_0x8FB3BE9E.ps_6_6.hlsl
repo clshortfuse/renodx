@@ -1,5 +1,5 @@
 #define TONE_MAP_PARAM_CBUFFER_REGISTER b2
-#include "./PostProcess.hlsli"
+#include "PostProcess.hlsli"
 
 struct RGCParam {
   float CyanLimit;
@@ -19,7 +19,6 @@ struct RGCParam {
 struct RadialBlurComputeResult {
   float computeAlpha;
 };
-
 
 Texture2D<float> ReadonlyDepth : register(t0);
 
@@ -172,6 +171,8 @@ cbuffer CBControl : register(b4) {
   uint cPassEnabled : packoffset(c000.w);
   row_major float4x4 fOCIOTransformMatrix : packoffset(c001.x);
   RGCParam cbControlRGCParam : packoffset(c005.x);
+  float ocioParam_whitePaperNitsDiv100 : packoffset(c008.x);
+  float3 ocioParam_reserved : packoffset(c008.y);
 };
 
 SamplerState PointClamp : register(s1, space32);
@@ -185,14 +186,18 @@ SamplerState BilinearBorder : register(s6, space32);
 SamplerState TrilinearClamp : register(s9, space32);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position,
-  linear float4 Kerare : Kerare,
-  linear float Exposure : Exposure
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position,
+    linear float4 Kerare: Kerare,
+    linear float Exposure: Exposure)
+    : SV_Target {
   float4 SV_Target;
   bool _37;
   bool _43;

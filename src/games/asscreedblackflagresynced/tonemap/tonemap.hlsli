@@ -1,99 +1,148 @@
 #include "../common.hlsli"
+#include "./customtest30.hlsli"
 
-struct ImmortalsToneMapConfig {
-  float slope;
-  float toe_threshold;
-  float toe_slope;
-  float black_offset;
-  float peak_luminance;
-  float shoulder_start;
-  float shoulder_scale;
-  float shoulder_overage;
-  bool has_toe;
-};
-
-ImmortalsToneMapConfig CreateImmortalsToneMapConfig(
-    float slope,
-    float toe_threshold,
-    float shoulder_start,
-    float toe_slope,
-    float black_offset,
-    float peak_nits) {
-  ImmortalsToneMapConfig config;
-  config.slope = slope;
-  config.toe_threshold = toe_threshold;
-  config.toe_slope = toe_slope;
-  config.black_offset = black_offset;
-  config.peak_luminance = peak_nits * 0.00999999977648258209228515625f;
-  config.has_toe = config.toe_threshold > 9.9999997473787516355514526367188e-06f;
-
-  float toe_to_peak_range = mad(peak_nits, 0.00999999977648258209228515625f, -config.toe_threshold);
-  float shoulder_start_output = mad(toe_to_peak_range, shoulder_start, config.toe_threshold);
-  config.shoulder_start = ((toe_to_peak_range * shoulder_start) / config.slope) + config.toe_threshold;
-  config.shoulder_scale = (config.peak_luminance * config.slope) / mad(peak_nits, 0.00999999977648258209228515625f, -shoulder_start_output);
-  config.shoulder_overage = mad(-peak_nits, 0.00999999977648258209228515625f, shoulder_start_output);
-  return config;
-}
-
-#define IMMORTALS_TONEMAP_GENERATOR(T)                                                                                                                                                                       \
-  T ApplyImmortalsToneMap(T untonemapped_ap1, ImmortalsToneMapConfig config, out T precompression_ap1) {                                                                                                     \
-    T input_scaled = abs(untonemapped_ap1 * 0.00999999977648258209228515625f);                                                                                                                               \
-    T toe_ratio = input_scaled / config.toe_threshold;                                                                                                                                                       \
-    T toe_ratio_sat = saturate(toe_ratio);                                                                                                                                                                   \
-    T toe_ratio_sat_sq = toe_ratio_sat * toe_ratio_sat;                                                                                                                                                      \
-    T toe_smooth = mad(toe_ratio_sat, -2.f, 3.f);                                                                                                                                                            \
-    T in_shoulder = renodx::math::Select(input_scaled > config.shoulder_start, (T)1.f, (T)0.f);                                                                                                              \
-    T toe_curve = renodx::math::Select(config.has_toe, mad(exp2(log2(abs(toe_ratio)) * config.toe_slope), config.toe_threshold, config.black_offset), config.black_offset);                                  \
-    T toe_weight = mad(-toe_smooth, toe_ratio_sat_sq, 1.f);                                                                                                                                                  \
-    T linear_curve = mad(input_scaled - config.toe_threshold, config.slope, config.toe_threshold);                                                                                                           \
-    T linear_weight = mad(toe_smooth, toe_ratio_sat_sq, -1.f) + 1.f;                                                                                                                                         \
-    T precompression_curve = (toe_weight * toe_curve) + (linear_weight * linear_curve);                                                                                                                      \
-    T shoulder_curve = config.peak_luminance + (exp2(((config.shoulder_scale * (input_scaled - config.shoulder_start)) / config.peak_luminance) * (-1.44269502162933349609375f)) * config.shoulder_overage); \
-    precompression_ap1 = precompression_curve * 100.f;                                                                                                                                                       \
-    return lerp(precompression_curve, shoulder_curve, in_shoulder) * 100.f;                                                                                                                                  \
-  }                                                                                                                                                                                                          \
-  T ApplyImmortalsToneMap(T untonemapped_ap1, ImmortalsToneMapConfig config) {                                                                                                                               \
-    T precompression_ap1;                                                                                                                                                                                    \
-    return ApplyImmortalsToneMap(untonemapped_ap1, config, precompression_ap1);                                                                                                                              \
+#define ANVIL_ENGINE_TONEMAP_GENERATOR(T)                                                                                                \
+  T EvaluateAnvilEngineToeAndLinear(T input, float linear_slope, float toe_end, float toe_power, float toe_offset) {                     \
+    T input_abs = abs(input);                                                                                                            \
+    bool toe_enabled = toe_end > 1e-5f;                                                                                                  \
+    T toe_progress_unclamped = input_abs / toe_end;                                                                                      \
+    T toe_progress = saturate(toe_progress_unclamped);                                                                                   \
+    T toe_progress_squared = toe_progress * toe_progress;                                                                                \
+    T smoothstep_factor = mad(toe_progress, -2.f, 3.f);                                                                                  \
+    T toe_output = renodx::math::Select(toe_enabled, mad(pow(abs(toe_progress_unclamped), toe_power), toe_end, toe_offset), toe_offset); \
+    T toe_blend_weight = mad(-smoothstep_factor, toe_progress_squared, 1.f);                                                             \
+    T linear_output = mad(input_abs - toe_end, linear_slope, toe_end);                                                                   \
+    T toe_to_linear_blend = mad(smoothstep_factor, toe_progress_squared, -1.f) + 1.f;                                                    \
+    T toe_linear_output = (toe_blend_weight * toe_output) + (toe_to_linear_blend * linear_output);                                       \
+    return toe_linear_output;                                                                                                            \
+  }                                                                                                                                      \
+  T ApplyAnvilEngineToneMapShoulder(T toe_linear_output, float toe_end, float peak_ratio, float shoulder_start) {                        \
+    float toe_to_peak_output_range = peak_ratio - toe_end;                                                                               \
+    float shoulder_start_output = mad(toe_to_peak_output_range, shoulder_start, toe_end);                                                \
+    return renodx::tonemap::ExponentialRollOff(toe_linear_output, shoulder_start_output, peak_ratio);                                    \
+  }                                                                                                                                      \
+  T ApplyAnvilEngineToneMap(                                                                                                             \
+      T input, float linear_slope, float toe_end, float toe_power, float toe_offset, float peak_ratio, float shoulder_start) {           \
+    return ApplyAnvilEngineToneMapShoulder(                                                                                              \
+        EvaluateAnvilEngineToeAndLinear(input, linear_slope, toe_end, toe_power, toe_offset), toe_end, peak_ratio, shoulder_start);      \
   }
 
-IMMORTALS_TONEMAP_GENERATOR(float)
-IMMORTALS_TONEMAP_GENERATOR(float3)
-#undef IMMORTALS_TONEMAP_GENERATOR
+ANVIL_ENGINE_TONEMAP_GENERATOR(float)
+ANVIL_ENGINE_TONEMAP_GENERATOR(float3)
+#undef ANVIL_ENGINE_TONEMAP_GENERATOR
 
-static const float PSYCHO23_LOCAL_EPSILON = 1e-6f;
-static const float PSYCHO23_LOCAL_REFERENCE_SIMULTANEOUS_RANGE_LOG10 = 3.7f;
-static const float PSYCHO23_LOCAL_REFERENCE_CENTERED_RANGE_SIDE_COUNT = 2.f;
-static const float PSYCHO23_LOCAL_HEADROOM_RATIO_FALLBACK = 1.f;
-static const float PSYCHO23_LOCAL_MIN_AUTO_COMPRESSION = 1.f;
+#define CUSTOM_ANVIL_ENGINE_TONEMAP_GENERATOR(T)                                                                                            \
+  T EvaluateCustomAnvilEngineToeAndLinear(T input, float linear_slope, float toe_end, float toe_power, float toe_offset, float toe_flare) { \
+    T linear_output = mad(input - toe_end, linear_slope, toe_end);                                                                          \
+    if (toe_end <= 1e-5f) return linear_output;                                                                                             \
+    T toe_progress = saturate(input / toe_end);                                                                                             \
+    T effective_toe_power = toe_power;                                                                                                      \
+    [branch]                                                                                                                                \
+    if (toe_flare > 0.f) {                                                                                                                  \
+      T shadow_distance = 1.f - toe_progress;                                                                                               \
+      T flat_shadow_weight = exp2(-toe_progress / shadow_distance);                                                                         \
+      effective_toe_power *= mad(flat_shadow_weight, toe_flare / (toe_progress + toe_flare), 1.f);                                          \
+    }                                                                                                                                       \
+    T toe_output = mad(pow(toe_progress, effective_toe_power), toe_end, toe_offset);                                                        \
+    T toe_to_linear_blend = rcp(1.f + exp2((1.f - 2.f * toe_progress) / (toe_progress * (1.f - toe_progress))));                            \
+    return mad(toe_to_linear_blend, linear_output - toe_output, toe_output);                                                                \
+  }
 
-// Empirical signed-opponent appearance controls from PsychoV23.
-static const float PSYCHO23_LOCAL_RED_RETENTION = 1.5f;
-static const float PSYCHO23_LOCAL_GREEN_RETENTION = 2.f;
-static const float PSYCHO23_LOCAL_BLUE_RETENTION = 1.f;
-static const float PSYCHO23_LOCAL_YELLOW_RETENTION = 3.f;
+CUSTOM_ANVIL_ENGINE_TONEMAP_GENERATOR(float)
+CUSTOM_ANVIL_ENGINE_TONEMAP_GENERATOR(float3)
+#undef CUSTOM_ANVIL_ENGINE_TONEMAP_GENERATOR
 
-float Psycho23YfFromLMS(float3 lms) {
-  float3 weighted_lms = renodx::color::macleod_boynton::WeighLMS(lms);
-  return max(weighted_lms.x + weighted_lms.y, PSYCHO23_LOCAL_EPSILON);
-}
+float3 ApplyCustomAnvilEnginePsychoV30ToneMap(
+    float3 untonemapped_ap1,
+    float peak_value,
+    float linear_slope,
+    float toe_end,
+    float toe_power,
+    float toe_offset,
+    float toe_flare,
+    float post_saturation,
+    float shoulder_start,
+    float mean_a2_source_weight = 1.f,
+    int target_gamut_mode = renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_BT2020,
+    float compression = 1.5f,
+    float gamut_compression = 1.f) {
+  float3 finite_ap1_input = renodx::math::ZeroNaN(untonemapped_ap1);
+  finite_ap1_input = renodx::math::Select(
+      isinf(finite_ap1_input),
+      renodx::math::CopySign(renodx::tonemap::psychov::PSYCHO30_MAX_FINITE_INPUT.xxx, finite_ap1_input),
+      finite_ap1_input);
+  float3 finite_bt709_input = renodx::math::ZeroNaN(renodx::color::bt709::from::AP1(finite_ap1_input));
+  finite_bt709_input = renodx::math::Select(
+      isinf(finite_bt709_input),
+      renodx::math::CopySign(renodx::tonemap::psychov::PSYCHO30_MAX_FINITE_INPUT.xxx, finite_bt709_input),
+      finite_bt709_input);
 
-float Psycho23AutoCompressionFromCenteredReferenceRange(float anchor_out_yf, float peak_yf) {
-  float peak_over_anchor = renodx::math::DivideSafe(
-      max(peak_yf, PSYCHO23_LOCAL_EPSILON),
-      max(anchor_out_yf, PSYCHO23_LOCAL_EPSILON),
-      PSYCHO23_LOCAL_HEADROOM_RATIO_FALLBACK);
-  peak_over_anchor = max(peak_over_anchor, 1.f + PSYCHO23_LOCAL_EPSILON);
+  float3 source_lms = renodx::tonemap::psychov::psycho30_AnchorSourcePositiveTotalToYf(finite_bt709_input);
+  if (all(source_lms == 0.f.xxx)) return 0.f.xxx;
 
-  float reference_one_side_range_log10 =
-      PSYCHO23_LOCAL_REFERENCE_SIMULTANEOUS_RANGE_LOG10
-      / PSYCHO23_LOCAL_REFERENCE_CENTERED_RANGE_SIDE_COUNT;
-  float actual_above_adaptation_range_log10 =
-      max(log10(peak_over_anchor), PSYCHO23_LOCAL_EPSILON);
+  float input_adaptive_anchor = toe_end + ((shoulder_start - toe_end) / linear_slope);
+  float3 input_adaptive_anchor_lms = input_adaptive_anchor * renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS;
+  float3 output_adaptive_anchor_lms = shoulder_start * renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS;
+  float3 target_peak_lms = peak_value * renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS;
 
-  return max(
-      reference_one_side_range_log10 / actual_above_adaptation_range_log10,
-      PSYCHO23_LOCAL_MIN_AUTO_COMPRESSION);
+  float3 toe_linear_lms =
+      EvaluateCustomAnvilEngineToeAndLinear(
+          source_lms / renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS,
+          linear_slope,
+          toe_end,
+          toe_power,
+          toe_offset,
+          toe_flare)
+      * renodx::tonemap::psychov::PSYCHO30_D65_WHITE_LMS;
+  float3 response_lms = renodx::tonemap::psychov::psycho30_ApplyAnchoredCInfinityShoulder(
+      toe_linear_lms,
+      target_peak_lms,
+      output_adaptive_anchor_lms,
+      compression);
+  if (post_saturation != 1.f) {
+    response_lms = renodx::tonemap::psychov::psycho30_ApplyAdaptiveLMSPurity(
+        response_lms,
+        output_adaptive_anchor_lms,
+        post_saturation);
+    response_lms = max(response_lms, 0.f);
+  }
+
+  float response_yf;
+  uint response_valid;
+  float3 desired_coord = renodx::tonemap::psychov::psycho30_MeanA2ResponseFromCustomResponse(
+      source_lms / input_adaptive_anchor_lms,
+      response_lms / target_peak_lms,
+      mean_a2_source_weight,
+      response_yf,
+      response_valid);
+  if (response_valid == 0u) return 0.f.xxx;
+
+  float3 selected_coord = desired_coord;
+  if (gamut_compression != 0.f) {
+    uint solve_valid;
+    float3 solved_coord = renodx::tonemap::psychov::psycho30_ApplyCustomSoftRadialGamutCompression(
+        desired_coord,
+        response_yf,
+        target_gamut_mode,
+        solve_valid);
+    if (solve_valid == 0u) return 0.f.xxx;
+    selected_coord = gamut_compression == 1.f
+                         ? solved_coord
+                         : lerp(desired_coord, solved_coord, gamut_compression);
+  }
+
+  float output_a = selected_coord.y * rsqrt(3.f)
+                   + renodx::tonemap::psychov::PSYCHO30_D65_ALPHA_DELTA
+                         * selected_coord.x * rsqrt(2.f)
+                   - selected_coord.z * rsqrt(6.f);
+  float3 output_bt709 = peak_value
+                        * (output_a
+                           + selected_coord.x * renodx::tonemap::psychov::PSYCHO30_BT709_A2_X_RGB
+                           + selected_coord.z * renodx::tonemap::psychov::PSYCHO30_BT709_A2_Z_RGB);
+  float3 output_ap1 = renodx::color::ap1::from::BT709(output_bt709);
+  return !any(isnan(output_ap1)) && !any(isinf(output_ap1))
+             ? output_ap1
+             : 0.f.xxx;
 }
 
 float3 Psycho23ToAdaptiveRelativeWeightedLMS(
@@ -123,285 +172,63 @@ float3 Psycho23GamutCompressAdaptiveRelativeWeightedLMSBound(
       strength);
 }
 
-float3 Psycho23AdaptiveRelativeWeightedNeutral() {
-  return renodx::color::macleod_boynton::WeighLMS(1.f.xxx);
-}
-
-float3 Psycho23OpponentACCFromWeightedDelta(float3 delta_weighted_lms) {
-  float3 neutral_weighted = Psycho23AdaptiveRelativeWeightedNeutral();
-  float m_to_l = renodx::math::DivideSafe(
-      neutral_weighted.x,
-      neutral_weighted.y,
-      0.f);
-  float s_to_lm = renodx::math::DivideSafe(
-      neutral_weighted.x + neutral_weighted.y,
-      neutral_weighted.z,
-      0.f);
-
-  return float3(
-      delta_weighted_lms.x + delta_weighted_lms.y,
-      delta_weighted_lms.x - m_to_l * delta_weighted_lms.y,
-      -delta_weighted_lms.x - delta_weighted_lms.y
-          + s_to_lm * delta_weighted_lms.z);
-}
-
-float3 Psycho23WeightedDeltaFromOpponentACC(float3 acc) {
-  float3 neutral_weighted = Psycho23AdaptiveRelativeWeightedNeutral();
-  float m_to_l = renodx::math::DivideSafe(
-      neutral_weighted.x,
-      neutral_weighted.y,
-      0.f);
-  float s_to_lm = renodx::math::DivideSafe(
-      neutral_weighted.x + neutral_weighted.y,
-      neutral_weighted.z,
-      0.f);
-
-  float delta_m = renodx::math::DivideSafe(acc.x - acc.y, 1.f + m_to_l, 0.f);
-  float delta_l = acc.x - delta_m;
-  float delta_s = renodx::math::DivideSafe(acc.z + acc.x, s_to_lm, 0.f);
-  return float3(delta_l, delta_m, delta_s);
-}
-
-float Psycho23SignedOpponentRetention(float white_progress, float retention_exponent) {
-  return 1.f - pow(saturate(white_progress), max(retention_exponent, PSYCHO23_LOCAL_EPSILON));
-}
-
-float3 Psycho23ApplySignedOpponentRetention(
-    float3 compressed_lms,
-    float3 source_lms,
-    float3 adaptive_state_lms,
-    float3 peak_lms,
-    float white_progress) {
-  if (white_progress <= 0.f
-      || min(source_lms.x, min(source_lms.y, source_lms.z)) <= 0.f) {
-    return compressed_lms;
-  }
-
-  float3 source_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
-      source_lms,
-      adaptive_state_lms);
-  float3 adapted_neutral = Psycho23AdaptiveRelativeWeightedNeutral();
-  float adapted_neutral_yf = adapted_neutral.x + adapted_neutral.y;
-  float source_yf = source_weighted.x + source_weighted.y;
-
-  if (source_yf <= PSYCHO23_LOCAL_EPSILON
-      || adapted_neutral_yf <= PSYCHO23_LOCAL_EPSILON) {
-    return compressed_lms;
-  }
-
-  float3 source_neutral = adapted_neutral
-                          * renodx::math::DivideSafe(source_yf, adapted_neutral_yf, 1.f);
-  float3 source_acc =
-      Psycho23OpponentACCFromWeightedDelta(source_weighted - source_neutral)
-      / source_yf;
-
-  float red_retention = Psycho23SignedOpponentRetention(
-      white_progress,
-      PSYCHO23_LOCAL_RED_RETENTION);
-  float green_retention = Psycho23SignedOpponentRetention(
-      white_progress,
-      PSYCHO23_LOCAL_GREEN_RETENTION);
-  float blue_retention = Psycho23SignedOpponentRetention(
-      white_progress,
-      PSYCHO23_LOCAL_BLUE_RETENTION);
-  float yellow_retention = Psycho23SignedOpponentRetention(
-      white_progress,
-      PSYCHO23_LOCAL_YELLOW_RETENTION);
-
-  float rg_out = max(source_acc.y, 0.f) * red_retention
-                 - max(-source_acc.y, 0.f) * green_retention;
-  float yv_out = max(source_acc.z, 0.f) * blue_retention
-                 - max(-source_acc.z, 0.f) * yellow_retention;
-
-  float3 compressed_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
-      compressed_lms,
-      adaptive_state_lms);
-  float target_yf = compressed_weighted.x + compressed_weighted.y;
-  if (target_yf <= PSYCHO23_LOCAL_EPSILON) {
-    return compressed_lms;
-  }
-
-  float3 peak_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
-      peak_lms,
-      adaptive_state_lms);
-  float peak_weighted_yf = peak_weighted.x + peak_weighted.y;
-  if (peak_weighted_yf <= PSYCHO23_LOCAL_EPSILON) {
-    return compressed_lms;
-  }
-
-  float3 target_neutral = peak_weighted * renodx::math::DivideSafe(target_yf, peak_weighted_yf, 1.f);
-  float3 target_delta = Psycho23WeightedDeltaFromOpponentACC(
-      float3(0.f, rg_out * target_yf, yv_out * target_yf));
-  float3 output_lms = renodx::color::macleod_boynton::UnweighLMS(
-      Psycho23FromAdaptiveRelativeWeightedLMS(
-          target_neutral + target_delta,
-          adaptive_state_lms));
-
-  float compressed_yf = Psycho23YfFromLMS(compressed_lms);
-  float output_yf = Psycho23YfFromLMS(output_lms);
-  if (output_yf <= PSYCHO23_LOCAL_EPSILON) {
-    return compressed_lms;
-  }
-
-  return output_lms * renodx::math::DivideSafe(compressed_yf, output_yf, 1.f);
-}
-
-float3 ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
-    float3 precompression_lms,
-    float3 compressed_lms,
-    float3 input_adaptive_state_lms,
-    float3 output_anchor_lms,
-    float3 peak_white_lms,
-    float3x3 gamut_bound_rgb_to_lms_weighted_mat,
-    float hue_restore = 1.f,
-    float gamut_compression = 1.f) {
-  float anchor_yf = Psycho23YfFromLMS(output_anchor_lms);
-  float peak_yf = Psycho23YfFromLMS(peak_white_lms);
-  float output_yf = Psycho23YfFromLMS(compressed_lms);
-
-  // Test23 measures white convergence in the compression power domain. Derive
-  // the same progress from the actual Immortals output instead of assuming its
-  // shoulder follows PsychoV's analytic compression curve.
-  float compression_power = Psycho23AutoCompressionFromCenteredReferenceRange(
-      anchor_yf,
-      peak_yf);
-  float anchor_over_peak = saturate(renodx::math::DivideSafe(anchor_yf, peak_yf, 1.f));
-  float output_over_peak = max(renodx::math::DivideSafe(output_yf, peak_yf, 0.f), 0.f);
-  float anchor_powered = pow(max(anchor_over_peak, 1e-6f), compression_power);
-  float white_progress = saturate(renodx::math::DivideSafe(
-      pow(output_over_peak, compression_power) - anchor_powered,
-      1.f - anchor_powered,
-      0.f));
-
-  float3 opponent_retained_lms = Psycho23ApplySignedOpponentRetention(
-      compressed_lms,
-      precompression_lms,
-      input_adaptive_state_lms,
-      peak_white_lms,
-      white_progress);
-  float3 hue_restored_lms = lerp(
-      compressed_lms,
-      opponent_retained_lms,
-      saturate(hue_restore));
-
-  float3 display_relative_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
-      hue_restored_lms,
-      input_adaptive_state_lms);
-
-  if (gamut_compression != 0.f) {
-    display_relative_weighted = Psycho23GamutCompressAdaptiveRelativeWeightedLMSBound(
-        display_relative_weighted,
-        input_adaptive_state_lms,
-        gamut_bound_rgb_to_lms_weighted_mat,
-        gamut_compression);
-  }
-
-  return renodx::color::macleod_boynton::UnweighLMS(
-      Psycho23FromAdaptiveRelativeWeightedLMS(
-          display_relative_weighted,
-          input_adaptive_state_lms));
-}
-
 float3 BuildToneMapLUTOutput(float3 untonemapped_ap1, float exposure, float display_peak_nits, bool hdr_enabled) {
+  untonemapped_ap1 /= 100.f;
+
   // The game uses twice the SDR exposure by default when HDR is enabled.
   float diffuse_white_nits = (exposure / 64.f) * 203.f;
   float target_peak_ratio = display_peak_nits / diffuse_white_nits;
   float3 tonemapped_bt709;
 
   if (RENODX_TONE_MAP_TYPE == 2.f) {
+    int target_gamut_mode = renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_DISPLAY_P3;
     if (!hdr_enabled) {
       target_peak_ratio = 1.f;
+      target_gamut_mode = renodx::tonemap::psychov::PSYCHO30_TARGET_GAMUT_BT709;
     }
-#if 1
-    float slope = 1.5f;
-    float shoulder_start = 0.5f;
-    float toe_threshold = 0.05f;
-    float toe_slope = 1.325f;
-    float black_offset = 0.f;
-    ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(
-        slope,
-        toe_threshold,
-        shoulder_start,
-        toe_slope,
-        black_offset,
-        target_peak_ratio * 100.f);
 
-    float3 ap1_white_lms = renodx::color::lms::from::AP1(1.f.xxx);
-    float3 untonemapped_lms = max(renodx::color::lms::from::AP1(untonemapped_ap1), 0.f);
-    float3 precompression_lms;
-    float3 tonemapped_lms = ApplyImmortalsToneMap(untonemapped_lms / ap1_white_lms, config, precompression_lms) * ap1_white_lms / 100.f;
-    precompression_lms = precompression_lms / 100.f * ap1_white_lms;
+    float linear_slope = 1.625f;
+    float shoulder_start = 0.18f;
+    float toe_end = 0.05f;
+    float toe_power = 1.15f;
+    float toe_offset = 0.f;
+    float toe_flare = 0.1f * pow(0.875f, 10.f);
+    float post_saturation = 1.f;
 
-    // The curve has no isolated inflection between its convex toe and concave shoulder.
-    // Fix the output anchor at SDR midgray and solve its input anchor from the linear section.
-    const float output_anchor = 0.18f;
-    const float input_adaptive_anchor = 100.f * (toe_threshold + ((output_anchor - toe_threshold) / slope));
-    float3 input_adaptive_anchor_lms = renodx::color::lms::from::AP1(input_adaptive_anchor.xxx);
-    float3 output_anchor_lms = renodx::color::lms::from::AP1(output_anchor.xxx);
-    float3 peak_white_lms = target_peak_ratio * ap1_white_lms;
-
-    tonemapped_lms = ApplyPsycho23SignedOpponentRetentionAndGamutCompressionLMS(
-        precompression_lms,
-        tonemapped_lms,
-        input_adaptive_anchor_lms,
-        output_anchor_lms,
-        peak_white_lms,
-        hdr_enabled ? renodx::color::macleod_boynton::BT2020_TO_LMS_WEIGHTED_MAT
-                    : renodx::color::macleod_boynton::BT709_TO_LMS_WEIGHTED_MAT,
-        1.f,
-        1.f);
-    tonemapped_bt709 = renodx::color::bt709::from::LMS(tonemapped_lms);
-#else
-    tonemapped_bt709 = renodx::tonemap::psychov::psychotm_test23(
-        renodx::color::bt709::from::AP1(untonemapped_ap1),
+    float3 tonemapped_ap1 = ApplyCustomAnvilEnginePsychoV30ToneMap(
+        untonemapped_ap1,
         target_peak_ratio,
+        linear_slope,
+        toe_end,
+        toe_power,
+        toe_offset,
+        toe_flare,
+        post_saturation,
+        shoulder_start,
         1.f,
-        1.f,
-        1.f,
-        1.f,
-        1.f,
-        1.f,
-        100.f,
-        1.f,
-        1.f,
-        0,
-        1.18f,
-        26.1406f.xxx,
-        0.3671f.xxx,
-        1.f,
-        1,
-        1.f,
-        0.f);
-#endif
+        target_gamut_mode);
+    tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
+
   } else {
     if (RENODX_GAME_GAMMA_CORRECTION != 0.f) {
       target_peak_ratio = renodx::color::correct::GammaSafe(target_peak_ratio, true);
     }
 
-    float slope = 1.5f;
+    float linear_slope = 1.5f;
     float shoulder_start = 0.5f;
-    float toe_threshold = 0.05f;
-    float toe_slope = 1.f;
-    float black_offset = 0.f;
+    float toe_end = 0.05f;
+    float toe_power = 1.f;
+    float toe_offset = 0.f;
     if (!hdr_enabled) {
       target_peak_ratio = 1.f;
     }
 
-    ImmortalsToneMapConfig config = CreateImmortalsToneMapConfig(
-        slope,
-        toe_threshold,
-        shoulder_start,
-        toe_slope,
-        black_offset,
-        target_peak_ratio * 100.f);
-    float3 tonemapped_ap1 = ApplyImmortalsToneMap(untonemapped_ap1, config) / 100.f;
+    float3 tonemapped_ap1 = ApplyAnvilEngineToneMap(untonemapped_ap1, linear_slope, toe_end, toe_power, toe_offset, target_peak_ratio, shoulder_start);
     tonemapped_bt709 = renodx::color::bt709::from::AP1(tonemapped_ap1);
 
     const float output_anchor = 0.18f;
-    const float input_adaptive_anchor =
-        100.f * (toe_threshold + ((output_anchor - toe_threshold) / slope));
-    float3 input_adaptive_anchor_lms =
-        renodx::color::lms::from::AP1(input_adaptive_anchor.xxx);
+    const float input_adaptive_anchor = toe_end + ((output_anchor - toe_end) / linear_slope);
+    float3 input_adaptive_anchor_lms = renodx::color::lms::from::AP1(input_adaptive_anchor.xxx);
     float3 tonemapped_lms = renodx::color::lms::from::BT709(tonemapped_bt709);
     float3 tonemapped_relative_weighted = Psycho23ToAdaptiveRelativeWeightedLMS(
         tonemapped_lms,

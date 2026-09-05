@@ -1,5 +1,5 @@
 #define TONE_MAP_PARAM_CBUFFER_REGISTER b4
-#include "./PostProcess.hlsli"
+#include "PostProcess.hlsli"
 
 struct RGCParam {
   float CyanLimit;
@@ -19,7 +19,6 @@ struct RGCParam {
 struct RadialBlurComputeResult {
   float computeAlpha;
 };
-
 
 ByteAddressBuffer WhitePtSrv : register(t0);
 
@@ -213,6 +212,8 @@ cbuffer CBControl : register(b6) {
   uint cPassEnabled : packoffset(c000.w);
   row_major float4x4 fOCIOTransformMatrix : packoffset(c001.x);
   RGCParam cbControlRGCParam : packoffset(c005.x);
+  float ocioParam_whitePaperNitsDiv100 : packoffset(c008.x);
+  float3 ocioParam_reserved : packoffset(c008.y);
 };
 
 cbuffer UserShaderLDRPostProcessSettings : register(b7) {
@@ -251,14 +252,18 @@ SamplerState TrilinearClamp : register(s9, space32);
 SamplerState AutomaticWrap : register(s0);
 
 // DXIL FirstbitHi: returns bit position counting from MSB (leading zeros count)
-uint firstbithigh_msb(int value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
-uint firstbithigh_msb(uint value) { return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value)); }
+uint firstbithigh_msb(int value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
+uint firstbithigh_msb(uint value) {
+  return (value == 0) ? 0xFFFFFFFF : (31u - firstbithigh(value));
+}
 
 float4 main(
-  precise noperspective float4 SV_Position : SV_Position,
-  linear float4 Kerare : Kerare,
-  linear float Exposure : Exposure
-) : SV_Target {
+    precise noperspective float4 SV_Position: SV_Position,
+    linear float4 Kerare: Kerare,
+    linear float Exposure: Exposure)
+    : SV_Target {
   float4 SV_Target;
   float _46;
   float _47;
@@ -1456,7 +1461,8 @@ float4 main(
   }
 #endif
   if (VAR_EnableCustomColorCorrect > 0.0f) {
-    uint2 _2047; RE_POSTPROCESS_Stencil.GetDimensions(_2047.x, _2047.y);
+    uint2 _2047;
+    RE_POSTPROCESS_Stencil.GetDimensions(_2047.x, _2047.y);
     _2059 = (float)((uint)((uint)((uint)((uint)(((uint2)(RE_POSTPROCESS_Stencil.Load(int3(int((screenInverseSize.x * SV_Position.x) * float((int)((int)(_2047.x)))), int((screenInverseSize.y * SV_Position.y) * float((int)((int)(_2047.y)))), 0)))).y)) >> 4)));
     if ((VAR_ExColorCorrectTargetStencilID == _2059) || (VAR_ExColorCorrectTargetStencilID_2 == _2059)) {
       do {
@@ -1624,7 +1630,8 @@ float4 main(
   }
 #endif
   if (VAR_EnableHighlightTarget > 0.0f) {
-    uint2 _2418; RE_POSTPROCESS_Stencil.GetDimensions(_2418.x, _2418.y);
+    uint2 _2418;
+    RE_POSTPROCESS_Stencil.GetDimensions(_2418.x, _2418.y);
     if (VAR_TargetStencilID == ((float)((uint)((uint)((uint)((uint)(((uint2)(RE_POSTPROCESS_Stencil.Load(int3(int(float((int)((int)(_2418.x))) * _2218), int(float((int)((int)(_2418.y))) * _2219), 0)))).y)) >> 4))))) {
       _2460 = (VAR_TargetColorMod.x * _2406);
       _2461 = (VAR_TargetColorMod.y * _2407);

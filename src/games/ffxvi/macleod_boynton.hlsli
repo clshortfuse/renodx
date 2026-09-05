@@ -723,12 +723,13 @@ float3 CorrectHueAndPurityMBGated(
 
 // Single-reference MB correction with luminosity-gated hue:
 // - Purity from reference is always applied at full strength.
-// - Hue from reference is gated by LMS luminosity ramp (1.55 * L + M).
+// - Hue from reference ramps from a configurable minimum by LMS luminosity (1.55 * L + M).
 float3 CorrectHueLuminosityGatedAndPurityMB(
     float3 target_color_bt709,
     float3 reference_color_bt709,
     float hue_lum_ramp_start = 0.5f,
     float hue_lum_ramp_end = 1.f,
+  float minimum_hue_blend = 0.f,
     float purity_scale = 1.f,
     float curve_gamma = 1.f,
     float2 mb_white_override = float2(-1.f, -1.f),
@@ -745,8 +746,9 @@ float3 CorrectHueLuminosityGatedAndPurityMB(
   }
 
   float target_luminosity = 1.55f * target_lms.x + target_lms.y;
-  float hue_blend = saturate(renodx::math::DivideSafe(
+  float hue_ramp = saturate(renodx::math::DivideSafe(
       target_luminosity - hue_lum_ramp_start, hue_lum_ramp_end - hue_lum_ramp_start, 0.f));
+  float hue_blend = lerp(minimum_hue_blend, 1.f, hue_ramp);
 
   float2 white = (mb_white_override.x >= 0.f && mb_white_override.y >= 0.f)
                      ? mb_white_override

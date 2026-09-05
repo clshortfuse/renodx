@@ -41,7 +41,7 @@ static float linearStart = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_linearStart : renod
 static float toe = (TONE_MAP_TYPE == 0.f) ? ORIGINAL_toe : 1.f;
 
 float3 ApplyCapcomExponentialToneMap(float3 color) {
-  if (tonemapParam_isHDRMode == 0.f || (TONE_MAP_APPLY_PRE_TONE_MAP_CURVE && TONE_MAP_TYPE)) {
+  if (tonemapParam_isHDRMode == 0.f || (TONE_MAP_APPLY_PRE_TONE_MAP_CURVE && TONE_MAP_TYPE == 1.f)) {
     float3 t = color * invLinearBegin;  // color / linearBegin
 
     float3 toeSmooth = select(color < linearBegin, t * t * (3.f - 2.f * t), 1.f);  // smoothstep(0, linearBegin, color)
@@ -110,18 +110,18 @@ float3 PrintPostProcessCbuffers(float3 color, float2 uv) {
 }
 #endif  // TONE_MAP_PARAM_CBUFFER_REGISTER
 
-float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
-  const float3 added_gamma = black_gamma;
+float3 Unclamp(float3 original, float3 black, float3 mid_gray, float3 neutral) {
+  const float3 added_gamma = black;
 
-  const float mid_gray_average = (mid_gray_gamma.r + mid_gray_gamma.g + mid_gray_gamma.b) / 3.f;
+  const float mid_gray_average = renodx::math::Average(mid_gray);
 
   // Remove from 0 to mid-gray
   const float shadow_length = mid_gray_average;
-  const float shadow_stop = max(neutral_gamma.r, max(neutral_gamma.g, neutral_gamma.b));
-  const float3 floor_remove = added_gamma * max(0, shadow_length - shadow_stop) / shadow_length;
+  const float shadow_stop = renodx::math::Max(neutral);
+  const float3 floor_remove = added_gamma * renodx::math::DivideSafe(max(0, shadow_length - shadow_stop), shadow_length, 0.f);
 
-  const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
-  return unclamped_gamma;
+  const float3 unclamped = max(0, original - floor_remove);
+  return unclamped;
 }
 
 float3 SampleAndBlendLUTs(
@@ -201,7 +201,7 @@ float3 ApplyColorGradingLUTs(
     float lut_black_y = renodx::color::y::from::AP1(lut_black);
     if (lut_black_y > 0.f) {
       float3 lut_mid = SampleAndBlendLUTs(
-          lut_black,
+          0.18f,
           fTextureBlendRate,
           fTextureBlendRate2,
           fTextureSize,
@@ -212,22 +212,13 @@ float3 ApplyColorGradingLUTs(
           tTextureMap2,
           TrilinearClamp);
 
-      float3 unclamped_gamma = Unclamp(
-          renodx::color::srgb::EncodeSafe(color_output),
-          renodx::color::srgb::EncodeSafe(lut_black),
-          renodx::color::srgb::EncodeSafe(lut_mid),
-          renodx::color::srgb::EncodeSafe(color_input));
+      float3 unclamped_linear = Unclamp(color_output, lut_black, lut_mid, color_input);
 
-      float3 unclamped_linear = renodx::color::srgb::DecodeSafe(unclamped_gamma);
-
-      color_output *= lerp(
-          1.f,
-          renodx::math::DivideSafe(YfFromAP1(unclamped_linear), YfFromAP1(color_output), 1.f),
-          COLOR_GRADE_LUT_SCALING);
+      color_output = lerp(color_output, unclamped_linear, COLOR_GRADE_LUT_SCALING);
     }
   }
 
-  return color_output;
+  return max(0, color_output);
 }
 
 void ApplyColorCorrectTexturePass(
