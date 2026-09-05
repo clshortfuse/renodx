@@ -110,18 +110,18 @@ float3 PrintPostProcessCbuffers(float3 color, float2 uv) {
 }
 #endif  // TONE_MAP_PARAM_CBUFFER_REGISTER
 
-float3 Unclamp(float3 original_gamma, float3 black_gamma, float3 mid_gray_gamma, float3 neutral_gamma) {
-  const float3 added_gamma = black_gamma;
+float3 Unclamp(float3 original, float3 black, float3 mid_gray, float3 neutral) {
+  const float3 added_gamma = black;
 
-  const float mid_gray_average = renodx::math::Average(mid_gray_gamma);
+  const float mid_gray_average = renodx::math::Average(mid_gray);
 
   // Remove from 0 to mid-gray
   const float shadow_length = mid_gray_average;
-  const float shadow_stop = renodx::math::Max(neutral_gamma);
+  const float shadow_stop = renodx::math::Max(neutral);
   const float3 floor_remove = added_gamma * renodx::math::DivideSafe(max(0, shadow_length - shadow_stop), shadow_length, 0.f);
 
-  const float3 unclamped_gamma = max(0, original_gamma - floor_remove);
-  return unclamped_gamma;
+  const float3 unclamped = max(0, original - floor_remove);
+  return unclamped;
 }
 
 float3 SampleAndBlendLUTs(
@@ -212,14 +212,13 @@ float3 ApplyColorGradingLUTs(
           tTextureMap2,
           TrilinearClamp);
 
-      float3 unclamped_gamma = Unclamp(color_output, lut_black, lut_mid, color_input);
-      float3 unclamped_linear = (unclamped_gamma);
+      float3 unclamped_linear = Unclamp(color_output, lut_black, lut_mid, color_input);
 
       color_output = lerp(color_output, unclamped_linear, COLOR_GRADE_LUT_SCALING);
     }
   }
 
-  return color_output;
+  return max(0, color_output);
 }
 
 void ApplyColorCorrectTexturePass(
