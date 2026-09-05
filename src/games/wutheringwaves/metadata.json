@@ -3,13 +3,18 @@
   "id": "wutheringwaves",
   "title": "Wuthering Waves",
   "maintainers": [
-    "Wuwano"
+    "Wuwano",
+    "spiwar"
   ],
   "status": "stable",
   "urls": [
     {
       "url": "https://discord.com/invite/renodx",
       "kind": "discord"
+    },
+    {
+      "url": "https://ko-fi.com/spiwar",
+      "kind": "donate"
     }
   ],
   "header": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3513350/def229d7f1bf39fab1ccf752b49654017e13ef53/header.jpg",
