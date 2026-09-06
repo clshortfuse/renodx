@@ -96,7 +96,7 @@ float3 ApplyToneMapEncodePQ(float3 untonemapped_ap1, float cbuffer_peak_nits, fl
 
     tonemapped_bt2020 = renodx::color::bt2020::from::BT709(tonemapped_bt709);
   } else {
-    const float cone_response_exponent = 1.4f;
+    const float cone_response_exponent = 1.26f;
 
     float3 untonemapped_bt709 = renodx::color::bt709::from::AP1(untonemapped_ap1);
     float3 tonemapped_bt709 = renodx::tonemap::psychov::psychotm_custom_test30(
