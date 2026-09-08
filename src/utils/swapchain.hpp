@@ -124,8 +124,28 @@ static reshade::api::resource_view& GetDepthStencil(reshade::api::command_list* 
 };
 
 static bool IsDirectX(reshade::api::swapchain* swapchain) {
+  if (swapchain == nullptr) return false;
   auto* device = swapchain->get_device();
   return device::IsDirectX(device);
+}
+
+static bool IsVR(reshade::api::swapchain* swapchain) {
+  if (swapchain == nullptr) return false;
+  return swapchain->get_hwnd() == nullptr;
+}
+
+static bool ShouldSkipVREyeSubmission(reshade::api::swapchain* swapchain, const reshade::api::rect* dest_rect) {
+  if (swapchain == nullptr) return false;
+  // In OpenVR/OpenComposite and VR runtimes, swapchains are virtual (get_hwnd() == nullptr)
+  // and ReShade invokes addon_event::present once per eye submission:
+  // Eye 0 (Left): dest_rect->left == 0
+  // Eye 1 (Right): dest_rect->left > 0
+  // Skipping Eye 0 presentation ensures the stereo buffer is evaluated exactly once per VR frame
+  // (when both eyes are updated), preventing 2x GPU load, stereo lighting desync, and flickering.
+  if (swapchain->get_hwnd() == nullptr && dest_rect != nullptr && dest_rect->left == 0) {
+    return true;
+  }
+  return false;
 }
 
 static bool IsDXGI(reshade::api::swapchain* swapchain) {
@@ -716,6 +736,7 @@ static void OnPresent(
     const reshade::api::rect* dest_rect,
     uint32_t dirty_rect_count,
     const reshade::api::rect* dirty_rects) {
+  if (ShouldSkipVREyeSubmission(swapchain, dest_rect)) return;
   if (last_fps_limit != fps_limit) {
     busy_spin_duration = std::chrono::nanoseconds(0);
     wait_latency_history.clear();
