@@ -129,6 +129,8 @@ static bool IsDirectX(reshade::api::swapchain* swapchain) {
 }
 
 static bool IsDXGI(reshade::api::swapchain* swapchain) {
+  if (swapchain == nullptr) return false;
+  if (swapchain->get_hwnd() == nullptr) return false;
   auto* device = swapchain->get_device();
   return device::IsDXGI(device);
 }
