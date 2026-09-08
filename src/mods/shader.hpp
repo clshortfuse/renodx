@@ -2142,9 +2142,11 @@ inline void OnPresent(
     reshade::api::command_queue* queue,
     reshade::api::swapchain* swapchain,
     const reshade::api::rect* /*source_rect*/,
-    const reshade::api::rect* /*dest_rect*/,
+    const reshade::api::rect* dest_rect,
     uint32_t /*dirty_rect_count*/,
     const reshade::api::rect* /*dirty_rects*/) {
+  if (utils::swapchain::ShouldSkipVREyeSubmission(swapchain, dest_rect)) return;
+
   auto* data = renodx::utils::data::Get<DeviceData>(swapchain->get_device());
   if (data == nullptr) return;
 
