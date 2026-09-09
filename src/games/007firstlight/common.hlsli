@@ -75,12 +75,25 @@ float3 GetDebugOverlayOutput(renodx::canvas::Context context, bool gamma_output 
              : output;
 }
 
-float ComputeMaxChCompressionScale(float3 untonemapped, float gray = 0.18f, float peak = 1.f, float clip = 100.f) {
-  float max_channel = renodx::math::Max(untonemapped);
-  float compressed_max_channel = renodx::math::Select(max_channel <= gray, max_channel, renodx::tonemap::Neutwo(max_channel, peak, clip, gray));
-  float scale = renodx::math::DivideSafe(compressed_max_channel, max_channel, 1.f);
+/// Identity through anchor to every derivative; then approaches peak
+/// monotonically and concave down. Requires anchor < peak and compression_strength >= 1.
+#define APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(T)                                                      \
+  T ApplyAnchoredCInfinityShoulder(T color, T peak, T anchor = 0.18f, float compression_strength = 1.5f) { \
+    T shoulder_range = peak - anchor;                                                                      \
+    T distance_from_anchor = max(color - anchor, (T)0.f);                                                  \
+    T flat_weight = exp2(-shoulder_range / (compression_strength * distance_from_anchor));                 \
+    T response_denominator = mad(distance_from_anchor, flat_weight, shoulder_range);                       \
+    return mad(shoulder_range, distance_from_anchor / response_denominator, color - distance_from_anchor); \
+  }
 
-  return scale;
+APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(float)
+APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR(float3)
+#undef APPLYANCHORED_CINFINITY_SHOULDER_GENERATOR
+
+float ApplyAnchoredCInfinityShoulderMaxChannelScale(float3 color, float peak = 1.f, float anchor = 0.18f, float compression_strength = 1.5f) {
+  float max_channel = renodx::math::Max(abs(color));
+  float compressed_max = ApplyAnchoredCInfinityShoulder(max_channel, peak, anchor, compression_strength);
+  return renodx::math::DivideSafe(compressed_max, max_channel, 1.f);
 }
 
 float3 RenderIntermediatePass(float3 color) {

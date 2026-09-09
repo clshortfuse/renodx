@@ -36,14 +36,14 @@ float3 ApplyToneMap(float3 untonemapped, float film_white_clip) {
 
   if (TONE_MAP_TYPE != 0.f) {
     FilmTonemapConfig film_tonemap_config = CreateFilmTonemapConfig(100.f);
-    const float sdr_blend_strength = 0.88f;
+    const float sdr_blend_strength = 0.75f;
 
     // branch tonemapper at (0.18, f(0.18)) and blend towards SDR so it isn't overly bright
     float3 per_channel_tonemapped = ApplyFilmToneMapExtended(untonemapped, film_tonemap_config, sdr_blend_strength);
 
     // add extra hue shifts and blowout based on user's peak setting
     // restore luminance afterwards so that max channel scaling to user peak can be deferred to the end
-    float3 hue_and_purity_reference = renodx::tonemap::neutwo::PerChannel(per_channel_tonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    float3 hue_and_purity_reference = ApplyAnchoredCInfinityShoulder(per_channel_tonemapped, RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.18f);
     if (RENODX_TONE_MAP_SCALING == 0.f) {  // luminance tonemapping with purity and some hues from per channel
       float y_in = renodx::color::yf::from::BT709(untonemapped);
       float y_out = ApplyFilmToneMapExtended(y_in, film_tonemap_config, sdr_blend_strength);
@@ -90,7 +90,7 @@ float3 SampleSRGBColorCorrectionLUT(float3 color, float hdr_scale, float hdr_hea
 
     color = max(0, color);
 #if POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_FILM || POSTCHAINMERGE_TONEMAP_TYPE == POSTCHAINMERGE_TONEMAP_NONE
-    float maxch_scale = ComputeMaxChCompressionScale(color);
+    float maxch_scale = ApplyAnchoredCInfinityShoulderMaxChannelScale(color);
 #else  // don't use max channel scaling with SDR tonemappers
     float maxch_scale = 1.f;
 #endif
@@ -161,7 +161,7 @@ float3 FinalizeOutput(float3 color) {
     color = ApplyCustomGrading(color);
 
     // bt.2020 max channel display mapping
-    color = renodx::tonemap::neutwo::MaxChannel(max(0, color), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS);
+    color = ApplyAnchoredCInfinityShoulder(max(0, color), RENODX_PEAK_WHITE_NITS / RENODX_DIFFUSE_WHITE_NITS, 0.18f);
     color *= RENODX_DIFFUSE_WHITE_NITS / RENODX_GRAPHICS_WHITE_NITS;
 
     color = renodx::color::bt709::from::BT2020(color);

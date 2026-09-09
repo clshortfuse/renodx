@@ -178,10 +178,10 @@ FilmTonemapConfig CreateFilmTonemapConfig(float film_white_clip) {
   float toe_width = (1.0f - cbPostChainMerge.fFilmToe) + cbPostChainMerge.fFilmBlackClip;
   float shoulder_width = (1.0f - cbPostChainMerge.fFilmShoulder) + film_white_clip;
 
-  config.toe_start = ((0.8199999928474426f - cbPostChainMerge.fFilmToe) / cbPostChainMerge.fFilmSlope) + -0.7329999804496765f;
+  config.toe_start = ((0.82f - cbPostChainMerge.fFilmToe) / cbPostChainMerge.fFilmSlope) + -0.7329999804496765f;
   config.toe_range = toe_width * 2.0f;
   config.toe_exponent_scale = ((cbPostChainMerge.fFilmSlope * -2.0f) / toe_width) * 1.4426950216293335f;
-  config.shoulder_start = ((cbPostChainMerge.fFilmShoulder + -0.18000000715255737f) / cbPostChainMerge.fFilmSlope) + -0.7329999804496765f;
+  config.shoulder_start = ((cbPostChainMerge.fFilmShoulder + -0.18f) / cbPostChainMerge.fFilmSlope) + -0.7329999804496765f;
   config.shoulder_white = film_white_clip + 1.0f;
   config.shoulder_range = shoulder_width * 2.0f;
   config.shoulder_exponent_scale = ((cbPostChainMerge.fFilmSlope * 2.0f) / shoulder_width) * 1.4426950216293335f;
@@ -196,15 +196,15 @@ FilmTonemapConfig CreateFilmTonemapConfig(float film_white_clip) {
 #define APPLY_FILM_TONEMAP_GENERATOR(T)                                                                                                                                                                                    \
   T ApplyFilmToneMap(T untonemapped, const FilmTonemapConfig config) {                                                                                                                                                     \
     T log_value = log2(untonemapped) * 0.3010300099849701f;                                                                                                                                                                \
-    T linear_value = ((log_value + 0.7329999804496765f) * cbPostChainMerge.fFilmSlope) + 0.18000000715255737f;                                                                                                             \
+    T linear_value = ((log_value + 0.7329999804496765f) * cbPostChainMerge.fFilmSlope) + 0.18f;                                                                                                                            \
     T toe_delta = log_value - config.toe_start;                                                                                                                                                                            \
     T toe_value = select((log_value < config.toe_start), ((config.toe_range / (exp2(config.toe_exponent_scale * toe_delta) + 1.0f)) - cbPostChainMerge.fFilmBlackClip), linear_value);                                     \
     T mid_blend = saturate(toe_delta / config.mid_range);                                                                                                                                                                  \
     T film_blend = select(config.invert_mid_range, (1.0f - mid_blend), mid_blend);                                                                                                                                         \
     T shoulder_value = select((log_value > config.shoulder_start), (config.shoulder_white - (config.shoulder_range / (exp2(config.shoulder_exponent_scale * (log_value - config.shoulder_start)) + 1.0f))), linear_value); \
-    T tonemapped = select((untonemapped < 1.0000000036274937e-15f), config.black_level, (((film_blend * film_blend) * (shoulder_value - toe_value)) * (3.0f - (film_blend * 2.0f))) + toe_value);                          \
+    T tonemapped = select((untonemapped < 1.0e-15f), config.black_level, (((film_blend * film_blend) * (shoulder_value - toe_value)) * (3.0f - (film_blend * 2.0f))) + toe_value);                                         \
     if (config.use_toe_linear_interp) {                                                                                                                                                                                    \
-      return (saturate(exp2(log2(untonemapped / cbPostChainMerge.fFilmToeLinearInterp) * 0.6000000238418579f)) * (tonemapped - untonemapped)) + untonemapped;                                                              \
+      return (saturate(exp2(log2(untonemapped / cbPostChainMerge.fFilmToeLinearInterp) * 0.6f)) * (tonemapped - untonemapped)) + untonemapped;                                                                             \
     }                                                                                                                                                                                                                      \
     return tonemapped;                                                                                                                                                                                                     \
   }                                                                                                                                                                                                                        \
