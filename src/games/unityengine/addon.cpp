@@ -1156,6 +1156,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberNeutralGammaOnDraw(0x0EA73DAA),
     UberNeutralLinearOnDraw(0x01FDB021),
     UberNeutralLinearOnDraw(0x6A5ACB6F),
+    UberNeutralLinearOnDraw(0x6FE59891),
     UberNeutralLinearOnDraw(0x009A1C24),
     UberNeutralLinearOnDraw(0x9C04ADC2),
     UberNeutralLinearOnDraw(0x27A965AF),
@@ -1463,6 +1464,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     Builder3OnDraw(0xF9658F60), // SadCatStudios_ColorGradingLut
     Builder1OnDraw(0x6C531A2E), // SadCatStudios_ColorGradingLut
     UberHDLinearOnDraw(0xFF079BBC), // SadCatS
+    CustomShaderEntryCallback(0xC4B616D2, &CountLinear),    // ShaderGraphs_MetaSourceCombine
     // tudios_FinalBlit
     UberHDLinearOnDraw(0x99B7B0BF), // SadCatStudios_FinalBlit
     CustomShaderEntryCallback(0x459D4153, &CountLinear),    // Colour Correction
@@ -1977,6 +1979,7 @@ const ShaderItem INITIAL_SHADERS[] = {
     UberGammaOnDraw(0xB5D55000),
     UberGammaOnDraw(0xB7AC8C16),
     UberGammaOnDraw(0xB339A072),
+    UberLinearOnDraw(0xB354D940),
     UberGammaOnDraw(0xB811DE51),
     UberGammaOnDraw(0xBB6740C1),
     UberGammaOnDraw(0xBC98901E),

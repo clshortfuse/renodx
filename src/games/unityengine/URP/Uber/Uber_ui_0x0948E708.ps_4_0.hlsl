@@ -26,6 +26,11 @@ void main(
   r0.xyzw = r0.xyzw * float4(-0.333333343,-0.333333343,-0.666666687,-0.666666687) + v1.xyxy;
   r2.xyzw = t0.SampleBias(s0_s, r0.xy, cb0[5].x).xyzw;
   r0.xyzw = t0.SampleBias(s0_s, r0.zw, cb0[5].x).xyzw;
+  if (injectedData.countOld < injectedData.countNew) {
+    r0.xyz = InvertToneMapScale(r0.xyz);
+    r1.xyz = InvertToneMapScale(r1.xyz);
+    r2.xyz = InvertToneMapScale(r2.xyz);
+  }
   r3.xyzw = t1.SampleBias(s0_s, v1.xy, cb0[5].x).xyzw;
   if (cb0[135].x > 0) {
     r1.yzw = r3.xyz * r3.www;
@@ -75,7 +80,7 @@ void main(
   } else {
     r0.xyz = renodx::lut::SampleTetrahedral(t2, r0.xyz, cb0[132].z + 1u);
   }
-  if (injectedData.countOld == injectedData.countNew) {
+  if (injectedData.countOld <= injectedData.countNew) {
     r0.xyz = PostToneMapScale(r0.xyz);
   }
   o0.xyz = r0.xyz;
