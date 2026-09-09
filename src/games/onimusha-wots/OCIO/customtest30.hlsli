@@ -2167,7 +2167,7 @@ float3 psychotm_custom_test30(
     float gamut_compression = 1.f,
     int gamut_compression_mode = PSYCHO30_TARGET_GAMUT_BT2020,
     float compression = 1.5f,
-    float mean_a2_source_weight = 1.f,
+    float mean_a2_source_weight = 0.7f,
     int gamut_mapping_method = PSYCHO30_CUSTOM_GAMUT_MAPPING_SOFT_RADIAL) {
 #if PSYCHO30_CUSTOM_SKIP_SANITIZATION
   float3 source_bt709 = bt709_linear_input * exposure;

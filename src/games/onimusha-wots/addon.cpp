@@ -277,6 +277,16 @@ renodx::utils::settings::Settings settings = {
         .parse = [](float value) { return value * 0.01f; },
     },
     new renodx::utils::settings::Setting{
+        .key = "FogBrightness",
+        .binding = &shader_injection.custom_fog_brightness,
+        .default_value = 100.f,
+        .label = "Fog Brightness",
+        .section = "Fog",
+        .min = 0.f,
+        .max = 100.f,
+        .parse = [](float value) { return value * 0.01f; },
+    },
+    new renodx::utils::settings::Setting{
         .value_type = renodx::utils::settings::SettingValueType::BUTTON,
         .label = "Reset All",
         .section = "Options",
@@ -422,6 +432,7 @@ void OnPresetOff() {
       {"ColorGradeLUTScaling", 0.f},
       {"FxNoise", 100.f},
       {"FxGrainStrength", 0.f},
+      {"FogBrightness", 100.f},
   });
 }
 

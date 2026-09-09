@@ -32,6 +32,7 @@ struct ShaderInjectData {
   float custom_noise;
   float custom_random;
   float custom_grain_strength;
+  float custom_fog_brightness;
 };
 
 #ifndef __cplusplus
@@ -67,6 +68,8 @@ cbuffer shader_injection : register(b0, space50) {
 #define CUSTOM_NOISE          shader_injection.custom_noise
 #define CUSTOM_RANDOM         shader_injection.custom_random
 #define CUSTOM_GRAIN_STRENGTH shader_injection.custom_grain_strength
+
+#define CUSTOM_FOG_BRIGHTNESS shader_injection.custom_fog_brightness
 
 #include "../../shaders/renodx.hlsl"
 
