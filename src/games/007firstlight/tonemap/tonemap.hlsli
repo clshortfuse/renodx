@@ -111,52 +111,89 @@ float3 ReinhardPiecewise(float3 x, float x_max, float3 shoulder) {
   return ReinhardPiecewise(x, x_max.xxx, shoulder);
 }
 
-float3 TransferPurityAndWeightedHueFromLMS(
-    float3 lms_source,
-    float3 lms_target,
-    float purity_loss_hue_power = 1.f,
-    float baseline_hue_amount = 0.f,
-    float purity_amount = 1.f,
-    float clamp_purity_loss = 0.f,
-    float eps = 1e-7f,
-    bool compress_bt2020 = false) {
-  float3 mb_source = renodx::color::macleod_boynton::from::LMS(lms_source);
-  float3 mb_target = renodx::color::macleod_boynton::from::LMS(lms_target);
-  float2 mb_white = renodx::color::macleod_boynton::from::D65XY();
+static const float3x3 DISPLAYP3_TO_LMS_WEIGHTED_MAT = mul(
+    renodx::color::macleod_boynton::XYZ_TO_LMS_WEIGHTED_MAT,
+    renodx::color::DISPLAYP3_TO_XYZ_MAT);
 
-  float2 source_offset = mb_source.xy - mb_white;
-  float2 target_offset = mb_target.xy - mb_white;
-  float src_radius = length(source_offset);
-  float tgt_radius = length(target_offset);
-  if (tgt_radius <= eps) return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(lms_target, 1.f) : lms_target;
+float3 ApplyPerChannelPurityAndHue(
+    float3 source_bt709,
+    float3 target_bt709,
+    float3x3 limiting_primaries_to_lms_weighted_mat,
+    float purity_amount,
+    float hue_amount,
+    float purity_compression_knee = 0.9f) {
+  const float epsilon = 1e-7f;
+  float3 background_state_lms = renodx::color::lms::from::BT709(0.18f.xxx);
+  float3 source_lms = renodx::color::lms::from::BT709(source_bt709);
+  float3 target_lms = renodx::color::lms::from::BT709(target_bt709);
 
-  // Per-channel hue weight from purity delta:
-  // - purity gain  (source radius > target radius): less source hue, down to 0
-  // - no change    (source radius == target radius): 0.5 source hue
-  // - purity loss  (source radius < target radius): more source hue, up to 1
-  float no_change_distance = max(tgt_radius - eps, eps);
-  float purity_delta = src_radius - tgt_radius;
-  float raw_hue_amount = saturate(0.5f - (purity_delta / (2.f * no_change_distance)));
-  float purity_loss_hue_signal = saturate((raw_hue_amount - 0.5f) * 2.f);
-  purity_loss_hue_signal = 1.f - pow(1.f - purity_loss_hue_signal, max(purity_loss_hue_power, eps));
-  float purity_loss_hue_amount = 0.5f + (0.5f * purity_loss_hue_signal);
-  float hue_amount = lerp(raw_hue_amount, purity_loss_hue_amount, step(0.5f, raw_hue_amount));
-  hue_amount = max(hue_amount, saturate(baseline_hue_amount));
+  // Express both colors relative to the same D65 background in physiologically
+  // weighted LMS, then separate carried Yf from MacLeod-Boynton chromaticity.
+  float3 source_relative_weighted = renodx::math::DivideSafe(
+      renodx::color::macleod_boynton::WeighLMS(source_lms), background_state_lms, 0.f);
+  float3 target_relative_weighted = renodx::math::DivideSafe(
+      renodx::color::macleod_boynton::WeighLMS(target_lms), background_state_lms, 0.f);
+  float3 source_mb = renodx::color::macleod_boynton::from::WeightedLMS(source_relative_weighted);
+  float3 target_mb = renodx::color::macleod_boynton::from::WeightedLMS(target_relative_weighted);
+  float2 mb_white = renodx::color::macleod_boynton::from::LMS(1.f.xxx).xy;
+  float2 source_offset = source_mb.xy - mb_white;
+  float2 target_offset = target_mb.xy - mb_white;
+  float source_radius = sqrt(max(dot(source_offset, source_offset), 0.f));
+  float target_radius = sqrt(max(dot(target_offset, target_offset), 0.f));
 
-  float2 source_hue_offset = source_offset * (tgt_radius / max(src_radius, eps));
-  float2 hue_offset = lerp(target_offset, source_hue_offset, hue_amount);
-  float hue_radius = length(hue_offset);
+  float2 source_direction = source_radius > epsilon
+                                ? source_offset / source_radius
+                                : float2(1.f, 0.f);
+  float2 target_direction = target_radius > epsilon
+                                ? target_offset / target_radius
+                                : source_direction;
+  if (source_radius <= epsilon) {
+    source_direction = target_direction;
+  }
 
-  if (hue_radius <= eps) return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(lms_target, 1.f) : lms_target;
+  float2 output_direction = lerp(target_direction, source_direction, hue_amount);
+  float output_direction_length_squared = dot(output_direction, output_direction);
+  output_direction = output_direction_length_squared > epsilon
+                         ? output_direction * rsqrt(output_direction_length_squared)
+                         : target_direction;
 
-  float transfer_scale = src_radius / max(hue_radius, eps);
-  float no_purity_loss_scale = max(transfer_scale, 1.f);
-  transfer_scale = lerp(transfer_scale, no_purity_loss_scale, clamp_purity_loss);
-  float scale = lerp(1.f, transfer_scale, purity_amount);
-  float2 mb_scaled = mb_white + hue_offset * scale;
+  // Preserve absolute purity while changing hue, then compress against the
+  // selected limiting-gamut boundary along the output hue.
+  float2 gamut_r;
+  float2 gamut_g;
+  float2 gamut_b;
+  renodx::color::gamut::MakeRGBTriangleInMBAdaptiveWeighted(
+      limiting_primaries_to_lms_weighted_mat,
+      background_state_lms,
+      gamut_r,
+      gamut_g,
+      gamut_b);
 
-  float3 output_lms = renodx::color::lms::from::MacLeodBoynton(float3(mb_scaled, mb_target.z));
-  return compress_bt2020 ? renodx::color::gamut::GamutCompressLMSBoundBT2020(output_lms, 1.f) : output_lms;
+  bool has_output_boundary;
+  float output_boundary_radius = renodx::color::gamut::RayMaxT_RGBTriangleInMB(
+      mb_white, output_direction, gamut_r, gamut_g, gamut_b, has_output_boundary);
+
+  float desired_radius = lerp(target_radius, source_radius, saturate(purity_amount));
+  float output_purity = has_output_boundary
+                            ? max(renodx::math::DivideSafe(desired_radius, output_boundary_radius, 0.f), 0.f)
+                            : 0.f;
+
+  float purity_knee = saturate(purity_compression_knee);
+  float purity_range = max(1.f - purity_knee, epsilon);
+  float purity_excess = max(output_purity - purity_knee, 0.f);
+  float compressed_purity = purity_knee
+                            + (purity_excess * purity_range
+                               * rsqrt(mad(purity_excess, purity_excess, purity_range * purity_range)));
+  output_purity = lerp(output_purity, compressed_purity, step(purity_knee, output_purity));
+
+  float output_radius = has_output_boundary
+                            ? output_purity * output_boundary_radius
+                            : desired_radius;
+
+  float3 output_relative_weighted = renodx::color::macleod_boynton::WeightedLMSFromMacleodBoynton(
+      float3(mb_white + output_direction * output_radius, target_mb.z));
+    return renodx::color::bt709::from::LMS(
+      renodx::color::macleod_boynton::UnweighLMS(output_relative_weighted * background_state_lms));
 }
 
 struct FilmTonemapConfig {
@@ -194,19 +231,26 @@ FilmTonemapConfig CreateFilmTonemapConfig(float film_white_clip) {
 }
 
 #define APPLY_FILM_TONEMAP_GENERATOR(T)                                                                                                                                                                                    \
-  T ApplyFilmToneMap(T untonemapped, const FilmTonemapConfig config) {                                                                                                                                                     \
+  T ApplyFilmToneMap(T untonemapped, const FilmTonemapConfig config, bool apply_shoulder) {                                                                                                                                \
     T log_value = log2(untonemapped) * 0.3010300099849701f;                                                                                                                                                                \
     T linear_value = ((log_value + 0.7329999804496765f) * cbPostChainMerge.fFilmSlope) + 0.18f;                                                                                                                            \
     T toe_delta = log_value - config.toe_start;                                                                                                                                                                            \
     T toe_value = select((log_value < config.toe_start), ((config.toe_range / (exp2(config.toe_exponent_scale * toe_delta) + 1.0f)) - cbPostChainMerge.fFilmBlackClip), linear_value);                                     \
     T mid_blend = saturate(toe_delta / config.mid_range);                                                                                                                                                                  \
     T film_blend = select(config.invert_mid_range, (1.0f - mid_blend), mid_blend);                                                                                                                                         \
-    T shoulder_value = select((log_value > config.shoulder_start), (config.shoulder_white - (config.shoulder_range / (exp2(config.shoulder_exponent_scale * (log_value - config.shoulder_start)) + 1.0f))), linear_value); \
+    T shoulder_value = linear_value;                                                                                                                                                                                       \
+    [branch]                                                                                                                                                                                                               \
+    if (apply_shoulder) {                                                                                                                                                                                                  \
+      shoulder_value = select((log_value > config.shoulder_start), (config.shoulder_white - (config.shoulder_range / (exp2(config.shoulder_exponent_scale * (log_value - config.shoulder_start)) + 1.0f))), linear_value); \
+    }                                                                                                                                                                                                                      \
     T tonemapped = select((untonemapped < 1.0e-15f), config.black_level, (((film_blend * film_blend) * (shoulder_value - toe_value)) * (3.0f - (film_blend * 2.0f))) + toe_value);                                         \
     if (config.use_toe_linear_interp) {                                                                                                                                                                                    \
       return (saturate(exp2(log2(untonemapped / cbPostChainMerge.fFilmToeLinearInterp) * 0.6f)) * (tonemapped - untonemapped)) + untonemapped;                                                                             \
     }                                                                                                                                                                                                                      \
     return tonemapped;                                                                                                                                                                                                     \
+  }                                                                                                                                                                                                                        \
+  T ApplyFilmToneMap(T untonemapped, const FilmTonemapConfig config) {                                                                                                                                                     \
+    return ApplyFilmToneMap(untonemapped, config, true);                                                                                                                                                                   \
   }                                                                                                                                                                                                                        \
   T ApplyFilmToneMap(T untonemapped, float film_white_clip) {                                                                                                                                                              \
     return ApplyFilmToneMap(untonemapped, CreateFilmTonemapConfig(film_white_clip));                                                                                                                                       \
@@ -214,37 +258,34 @@ FilmTonemapConfig CreateFilmTonemapConfig(float film_white_clip) {
 
 APPLY_FILM_TONEMAP_GENERATOR(float)
 APPLY_FILM_TONEMAP_GENERATOR(float3)
+APPLY_FILM_TONEMAP_GENERATOR(float4)
 
 #undef APPLY_FILM_TONEMAP_GENERATOR
 
-float ComputeFilmTonemapSlopeAtInput(const FilmTonemapConfig config, float input) {
+float ComputeFilmTonemapSlopeAtInput(const FilmTonemapConfig config, float input, bool apply_shoulder = true) {
   float eps = max(input * (1.0f / 1024.0f), 1e-5f);
-  float low = ApplyFilmToneMap(input - eps, config);
-  float high = ApplyFilmToneMap(input + eps, config);
+  float low = ApplyFilmToneMap(input - eps, config, apply_shoulder);
+  float high = ApplyFilmToneMap(input + eps, config, apply_shoulder);
 
   return (high - low) / (2.0f * eps);
 }
 
-#define APPLY_FILM_TONEMAP_EXTENDED_GENERATOR(T)                                                                          \
-  T ApplyFilmToneMapExtended(T untonemapped, T tonemapped, const FilmTonemapConfig config, float tonemapped_lerp = 0.f) { \
-    const float pivot_input = 0.18f;                                                                                      \
-    const float pivot_output = ApplyFilmToneMap(0.18, config); /* no longer 0.18 in/out*/                                 \
-    float pivot_slope = ComputeFilmTonemapSlopeAtInput(config, pivot_input);                                              \
-    T extended_tonemapped = (pivot_slope * (untonemapped - pivot_input)) + pivot_output;                                  \
-    extended_tonemapped = lerp(extended_tonemapped, tonemapped, tonemapped_lerp);                                         \
-                                                                                                                          \
-    return select((untonemapped < (T)pivot_input), tonemapped, extended_tonemapped);                                      \
-  }                                                                                                                       \
-  T ApplyFilmToneMapExtended(T untonemapped, const FilmTonemapConfig config, float tonemapped_lerp = 0.f) {               \
-    T tonemapped = ApplyFilmToneMap(untonemapped, config);                                                                \
-    return ApplyFilmToneMapExtended(untonemapped, tonemapped, config, tonemapped_lerp);                                   \
-  }                                                                                                                       \
-  T ApplyFilmToneMapExtended(T untonemapped, float film_white_clip, float tonemapped_lerp = 0.f) {                        \
-    return ApplyFilmToneMapExtended(untonemapped, CreateFilmTonemapConfig(film_white_clip), tonemapped_lerp);             \
+#define APPLY_FILM_TONEMAP_EXTENDED_GENERATOR(T)                                                                                   \
+  T ApplyFilmToneMapExtended(T untonemapped, const FilmTonemapConfig config, float branching_point, float tonemapped_lerp = 0.f) { \
+    const float branching_output = ApplyFilmToneMap(branching_point, config, false);                                               \
+    const float branching_slope = ComputeFilmTonemapSlopeAtInput(config, branching_point, false);                                  \
+    T shoulderless_tonemapped = ApplyFilmToneMap(untonemapped, config, false);                                                     \
+    T extended_tonemapped = mad((T)branching_slope, untonemapped - (T)branching_point, (T)branching_output);                       \
+    T tonemapped = select((untonemapped > (T)branching_point), extended_tonemapped, shoulderless_tonemapped);                      \
+    return lerp(tonemapped, shoulderless_tonemapped, tonemapped_lerp);                                                             \
+  }                                                                                                                                \
+  T ApplyFilmToneMapExtended(T untonemapped, float film_white_clip, float branching_point, float tonemapped_lerp = 0.f) {          \
+    return ApplyFilmToneMapExtended(untonemapped, CreateFilmTonemapConfig(film_white_clip), branching_point, tonemapped_lerp);     \
   }
 
 APPLY_FILM_TONEMAP_EXTENDED_GENERATOR(float)
 APPLY_FILM_TONEMAP_EXTENDED_GENERATOR(float3)
+APPLY_FILM_TONEMAP_EXTENDED_GENERATOR(float4)
 
 #undef APPLY_FILM_TONEMAP_EXTENDED_GENERATOR
 
